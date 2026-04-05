@@ -4,6 +4,7 @@ import {
   badges,
   userBadges,
   users,
+  userSessions,
   quizzes,
   quizVersions,
   quizQuestions,
@@ -52,6 +53,14 @@ export const usersRelations = relations(users, ({ many }) => ({
   quizInstances: many(quizInstances),
   quizInstancePlayers: many(quizInstancePlayers),
   tournamentParticipants: many(tournamentParticipants),
+  userSessions: many(userSessions), // thêm dòng này
+}));
+
+export const userSessionsRelations = relations(userSessions, ({ one }) => ({
+  user: one(users, {
+    fields: [userSessions.userId],
+    references: [users.userId],
+  }),
 }));
 
 export const quizzesRelations = relations(quizzes, ({ one, many }) => ({
