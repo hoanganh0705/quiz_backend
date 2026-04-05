@@ -15,16 +15,9 @@ import {
   bigint,
   numeric,
   pgEnum,
-  customType,
   type AnyPgColumn,
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
-
-const citext = customType<{ data: string }>({
-  dataType() {
-    return 'citext';
-  },
-});
 
 export const badgeConditionType = pgEnum('badge_condition_type', [
   'quizzes_completed',
@@ -93,8 +86,9 @@ export const users = pgTable(
   'users',
   {
     userId: uuid('user_id').defaultRandom().primaryKey().notNull(),
-    username: citext('username').notNull(),
-    email: citext('email').notNull(),
+    username: text().notNull(),
+    email: text().notNull(),
+    passwordHash: text('password_hash').notNull(),
     displayName: text('display_name'),
     avatarUrl: text('avatar_url'),
     bio: text(),
@@ -126,6 +120,39 @@ export const users = pgTable(
       sql`(length((username)::text) >= 3) AND (length((username)::text) <= 50)`,
     ),
     check('users_xp_nonneg', sql`xp_total >= 0`),
+  ],
+);
+
+export const userSessions = pgTable(
+  'user_sessions',
+  {
+    sessionId: uuid('session_id').defaultRandom().primaryKey().notNull(),
+    userId: uuid('user_id').notNull(),
+    refreshTokenHash: text('refresh_token_hash').notNull(),
+    deviceInfo: text('device_info'), // browser, mobile, etc.
+    ipAddress: text('ip_address'),
+    expiresAt: timestamp('expires_at', { withTimezone: true, mode: 'string' }).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' })
+      .defaultNow()
+      .notNull(),
+    lastUsedAt: timestamp('last_used_at', { withTimezone: true, mode: 'string' })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    index('idx_user_sessions_user_id').using(
+      'btree',
+      table.userId.asc().nullsLast().op('uuid_ops'),
+    ),
+    index('idx_user_sessions_expires_at').using(
+      'btree',
+      table.expiresAt.asc().nullsLast().op('timestamptz_ops'),
+    ),
+    foreignKey({
+      columns: [table.userId],
+      foreignColumns: [users.userId],
+      name: 'user_sessions_user_id_fkey',
+    }).onDelete('cascade'),
   ],
 );
 
