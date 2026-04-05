@@ -116,6 +116,24 @@ export class AuthService {
       });
   }
 
+  async logout(refreshToken: string): Promise<void> {
+    const refreshTokenHash = createHash('sha256').update(refreshToken).digest('hex');
+    const nowIso = new Date().toISOString();
+
+    await this.db
+      .update(userSessions)
+      .set({
+        revokedAt: nowIso,
+        lastUsedAt: nowIso,
+      })
+      .where(
+        and(eq(userSessions.refreshTokenHash, refreshTokenHash), isNull(userSessions.revokedAt)),
+      )
+      .catch(() => {
+        throw new InternalServerErrorException('Failed to revoke user session');
+      });
+  }
+
   async refreshToken(refreshToken: string): Promise<RefreshTokenResult> {
     let payload: RefreshTokenPayload;
 
@@ -145,6 +163,7 @@ export class AuthService {
           eq(userSessions.refreshTokenHash, refreshTokenHash),
           eq(userSessions.userId, payload.sub),
           gt(userSessions.expiresAt, nowIso),
+          isNull(userSessions.revokedAt),
         ),
       )
       .limit(1)
