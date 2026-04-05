@@ -26,6 +26,15 @@ export class AuthController {
     });
   }
 
+  private clearRefreshTokenCookie(response: Response): void {
+    response.clearCookie('refreshToken', {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      path: '/auth/refresh-token',
+    });
+  }
+
   private getRefreshTokenFromCookies(cookies: unknown): string | null {
     if (!cookies || typeof cookies !== 'object') {
       return null;
@@ -52,6 +61,20 @@ export class AuthController {
     return {
       accessToken: refreshResult.accessToken,
     };
+  }
+
+  @Post('logout')
+  async logout(
+    @Req() request: Request,
+    @Res({ passthrough: true }) response: Response,
+  ): Promise<void> {
+    const refreshToken = this.getRefreshTokenFromCookies(request.cookies as unknown);
+
+    if (refreshToken) {
+      await this.authService.logout(refreshToken);
+    }
+
+    this.clearRefreshTokenCookie(response);
   }
 
   @Post('login')
