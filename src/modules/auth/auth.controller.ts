@@ -26,21 +26,13 @@ export class AuthController {
     });
   }
 
-  private extractRefreshTokenFromCookie(request: Request): string | null {
-    const cookieHeader = request.headers.cookie;
-    if (!cookieHeader) {
+  private getRefreshTokenFromCookies(cookies: unknown): string | null {
+    if (!cookies || typeof cookies !== 'object') {
       return null;
     }
 
-    const cookies = cookieHeader.split(';');
-    for (const cookie of cookies) {
-      const [name, ...valueParts] = cookie.trim().split('=');
-      if (name === 'refreshToken') {
-        return decodeURIComponent(valueParts.join('='));
-      }
-    }
-
-    return null;
+    const candidate = (cookies as Record<string, unknown>).refreshToken;
+    return typeof candidate === 'string' ? candidate : null;
   }
 
   @Post('refresh-token')
@@ -48,7 +40,8 @@ export class AuthController {
     @Req() request: Request,
     @Res({ passthrough: true }) response: Response,
   ): Promise<RefreshTokenResponseDto> {
-    const refreshToken = this.extractRefreshTokenFromCookie(request);
+    const refreshToken = this.getRefreshTokenFromCookies(request.cookies as unknown);
+
     if (!refreshToken) {
       throw new UnauthorizedException('Refresh token cookie is missing');
     }
