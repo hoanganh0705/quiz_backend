@@ -1,12 +1,81 @@
-import { Body, Controller, Post, Res } from '@nestjs/common';
-import type { Response } from 'express';
-import { AuthService, type RegisterResult } from './auth.service';
+import { Body, Controller, Post, Req, Res, UnauthorizedException } from '@nestjs/common';
+import type { Request, Response } from 'express';
+import {
+  AuthService,
+  type LoginResult,
+  type RefreshTokenResult,
+  type RegisterResult,
+} from './auth.service';
+import { LoginDto } from './dto/request/login.dto';
+import { LoginResponseDto } from './dto/response/login-response.dto';
 import { RegisterDto } from './dto/request/register.dto';
 import { RegisterResponseDto } from './dto/response/register-response.dto';
+import { RefreshTokenResponseDto } from './dto/response/refresh-token-response.dto';
 
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
+
+  private setRefreshTokenCookie(response: Response, refreshToken: string): void {
+    response.cookie('refreshToken', refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      maxAge: AuthService.REFRESH_TOKEN_COOKIE_MAX_AGE_MS,
+      path: '/auth/refresh-token',
+    });
+  }
+
+  private extractRefreshTokenFromCookie(request: Request): string | null {
+    const cookieHeader = request.headers.cookie;
+    if (!cookieHeader) {
+      return null;
+    }
+
+    const cookies = cookieHeader.split(';');
+    for (const cookie of cookies) {
+      const [name, ...valueParts] = cookie.trim().split('=');
+      if (name === 'refreshToken') {
+        return decodeURIComponent(valueParts.join('='));
+      }
+    }
+
+    return null;
+  }
+
+  @Post('refresh-token')
+  async refreshToken(
+    @Req() request: Request,
+    @Res({ passthrough: true }) response: Response,
+  ): Promise<RefreshTokenResponseDto> {
+    const refreshToken = this.extractRefreshTokenFromCookie(request);
+    if (!refreshToken) {
+      throw new UnauthorizedException('Refresh token cookie is missing');
+    }
+
+    const refreshResult: RefreshTokenResult = await this.authService.refreshToken(refreshToken);
+    this.setRefreshTokenCookie(response, refreshResult.refreshToken);
+
+    return {
+      accessToken: refreshResult.accessToken,
+    };
+  }
+
+  @Post('login')
+  async login(
+    @Body() loginDto: LoginDto,
+    @Res({ passthrough: true }) response: Response,
+  ): Promise<LoginResponseDto> {
+    const loginResult: LoginResult = await this.authService.login(loginDto);
+    this.setRefreshTokenCookie(response, loginResult.refreshToken);
+
+    return {
+      userId: loginResult.userId,
+      username: loginResult.username,
+      email: loginResult.email,
+      accessToken: loginResult.accessToken,
+    };
+  }
 
   @Post('register')
   async register(
@@ -14,14 +83,7 @@ export class AuthController {
     @Res({ passthrough: true }) response: Response,
   ): Promise<RegisterResponseDto> {
     const registerResult: RegisterResult = await this.authService.register(registerDto);
-
-    response.cookie('refreshToken', registerResult.refreshToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
-      maxAge: AuthService.REFRESH_TOKEN_COOKIE_MAX_AGE_MS,
-      path: '/auth/refresh-token',
-    });
+    this.setRefreshTokenCookie(response, registerResult.refreshToken);
 
     return {
       userId: registerResult.userId,
