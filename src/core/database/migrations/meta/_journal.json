@@ -22,6 +22,13 @@
       "when": 1775380955964,
       "tag": "0002_silent_umar",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1775397600000,
+      "tag": "0003_warm_terrax",
+      "breakpoints": true
     }
   ]
 }
