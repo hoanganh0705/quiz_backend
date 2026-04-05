@@ -1,0 +1,56 @@
+import {
+  Injectable,
+  UnauthorizedException,
+  type CanActivate,
+  type ExecutionContext,
+} from '@nestjs/common';
+import { JwtService } from '@nestjs/jwt';
+import type { Request } from 'express';
+
+export type JwtUserPayload = {
+  sub: string;
+  username: string;
+  email: string;
+};
+
+type AuthenticatedRequest = Request & {
+  user?: JwtUserPayload;
+};
+
+@Injectable()
+export class JwtGuard implements CanActivate {
+  constructor(private readonly jwtService: JwtService) {}
+
+  private getAccessTokenSecret(): string {
+    return process.env.JWT_ACCESS_TOKEN_SECRET ?? process.env.JWT_SECRET ?? 'access-dev-secret';
+  }
+
+  async canActivate(context: ExecutionContext): Promise<boolean> {
+    const request = context.switchToHttp().getRequest<AuthenticatedRequest>();
+    const authHeader = request.headers.authorization;
+
+    if (!authHeader) {
+      throw new UnauthorizedException('Authorization header is missing');
+    }
+
+    const [scheme, token] = authHeader.split(' ');
+    if (scheme !== 'Bearer' || !token) {
+      throw new UnauthorizedException('Invalid authorization header format');
+    }
+
+    try {
+      const payload = await this.jwtService.verifyAsync<JwtUserPayload>(token, {
+        secret: this.getAccessTokenSecret(),
+      });
+
+      if (!payload?.sub) {
+        throw new UnauthorizedException('Invalid access token payload');
+      }
+
+      request.user = payload;
+      return true;
+    } catch {
+      throw new UnauthorizedException('Invalid or expired access token');
+    }
+  }
+}
