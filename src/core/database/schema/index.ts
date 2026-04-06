@@ -50,6 +50,8 @@ export const tournamentStatus = pgEnum('tournament_status', [
   'cancelled',
 ]);
 
+export const userRole = pgEnum('user_role', ['admin', 'moderator', 'creator', 'user']);
+
 export const tags = pgTable(
   'tags',
   {
@@ -90,6 +92,7 @@ export const users = pgTable(
     email: text().notNull(),
     passwordHash: text('password_hash').notNull(),
     displayName: text('display_name'),
+    role: userRole().default('user').notNull(),
     avatarUrl: text('avatar_url'),
     bio: text(),
     xpTotal: integer('xp_total').default(0).notNull(),
@@ -520,6 +523,8 @@ export const quizAttempts = pgTable(
     contextType: text('context_type').default('solo').notNull(),
     contextRefId: uuid('context_ref_id'),
     status: text().default('started').notNull(),
+    scorePercent: numeric('score_percent', { precision: 5, scale: 2 }),
+    correctCount: integer('correct_count'),
     startedAt: timestamp('started_at', { withTimezone: true, mode: 'string' })
       .defaultNow()
       .notNull(),
@@ -562,6 +567,11 @@ export const quizAttempts = pgTable(
       'quiz_attempts_status_check',
       sql`status = ANY (ARRAY['started'::text, 'completed'::text, 'abandoned'::text])`,
     ),
+    check(
+      'quiz_attempts_score_percent_range',
+      sql`score_percent IS NULL OR (score_percent >= 0 AND score_percent <= 100)`,
+    ),
+    check('quiz_attempts_correct_count_nonneg', sql`correct_count IS NULL OR correct_count >= 0`),
   ],
 );
 
