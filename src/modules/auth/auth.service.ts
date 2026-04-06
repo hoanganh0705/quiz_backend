@@ -13,6 +13,7 @@ import { userSessions, users } from '../../core/database/schema';
 import { RegisterDto } from './dto/request/register.dto';
 import { createHash } from 'crypto';
 import { LoginDto } from './dto/request/login.dto';
+import type { UserRole } from '../../common/decorators/roles.decorator';
 
 export type RegisterResult = {
   userId: string;
@@ -40,6 +41,7 @@ type AuthIdentity = {
   userId: string;
   username: string;
   email: string;
+  role: UserRole;
 };
 
 type AuthTokens = {
@@ -77,6 +79,7 @@ export class AuthService {
         sub: identity.userId,
         username: identity.username,
         email: identity.email,
+        role: identity.role,
       },
       {
         secret: this.getAccessTokenSecret(),
@@ -180,6 +183,7 @@ export class AuthService {
         userId: users.userId,
         username: users.username,
         email: users.email,
+        role: users.role,
       })
       .from(users)
       .where(and(eq(users.userId, existingSession.userId), isNull(users.deletedAt)))
@@ -196,6 +200,7 @@ export class AuthService {
       userId: user.userId,
       username: user.username,
       email: user.email,
+      role: user.role,
     };
     const tokens = await this.issueTokens(identity);
     const nextRefreshTokenHash = createHash('sha256').update(tokens.refreshToken).digest('hex');
@@ -226,6 +231,7 @@ export class AuthService {
         userId: users.userId,
         username: users.username,
         email: users.email,
+        role: users.role,
         passwordHash: users.passwordHash,
       })
       .from(users)
@@ -248,6 +254,7 @@ export class AuthService {
       userId: foundUser.userId,
       username: foundUser.username,
       email: foundUser.email,
+      role: foundUser.role,
     };
     const tokens = await this.issueTokens(identity);
     await this.createUserSession(identity.userId, tokens.refreshToken);
@@ -298,6 +305,7 @@ export class AuthService {
         userId: users.userId,
         username: users.username,
         email: users.email,
+        role: users.role,
         createdAt: users.createdAt,
       })
       .catch(() => {
@@ -308,6 +316,7 @@ export class AuthService {
       userId: createdUser.userId,
       username: createdUser.username,
       email: createdUser.email,
+      role: createdUser.role,
     };
     const tokens = await this.issueTokens(identity);
     await this.createUserSession(identity.userId, tokens.refreshToken);
