@@ -8,10 +8,14 @@ import {
 import { Reflector } from '@nestjs/core';
 import { ROLES_KEY, type UserRole } from '../decorators/roles.decorator';
 import type { JwtUserPayload } from './jwt.guard';
+import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 
 @Injectable()
 export class RolesGuard implements CanActivate {
-  constructor(private readonly reflector: Reflector) {}
+  constructor(
+    private readonly reflector: Reflector,
+    @InjectPinoLogger(RolesGuard.name) private readonly logger: PinoLogger,
+  ) {}
 
   private isUserRole(value: unknown): value is UserRole {
     return value === 'admin' || value === 'moderator' || value === 'creator' || value === 'user';
@@ -54,17 +58,19 @@ export class RolesGuard implements CanActivate {
     const user = request.user;
 
     if (!this.hasJwtUserShape(user)) {
+      this.logger.warn({ event: 'roles_guard_unauthenticated' });
       throw new UnauthorizedException('User is not authenticated');
     }
 
-    const userRoleCandidate = (user as { role: unknown }).role;
-    if (!this.isUserRole(userRoleCandidate)) {
-      throw new UnauthorizedException('User role is invalid');
-    }
-
-    const userRole = userRoleCandidate;
+    const userRole = user.role;
 
     if (!normalizedRoles.includes(userRole)) {
+      this.logger.warn({
+        event: 'roles_guard_forbidden',
+        userId: user.sub,
+        userRole,
+        requiredRoles: normalizedRoles,
+      });
       throw new ForbiddenException('You do not have permission to access this resource');
     }
 
