@@ -1,12 +1,11 @@
-import {
-  ArgumentsHost,
-  Catch,
-  ExceptionFilter,
-  HttpException,
-  HttpStatus,
-  Logger,
-} from '@nestjs/common';
+import { ArgumentsHost, Catch, ExceptionFilter, HttpException, HttpStatus } from '@nestjs/common';
 import type { Request, Response } from 'express';
+import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
+
+type RequestWithLogger = Request & {
+  id?: string;
+  log?: Pick<PinoLogger, 'warn' | 'error'>;
+};
 
 type HttpExceptionResponseShape = {
   message?: string | string[];
@@ -15,13 +14,14 @@ type HttpExceptionResponseShape = {
 
 @Catch()
 export class GlobalExceptionFilter implements ExceptionFilter {
-  private readonly logger = new Logger(GlobalExceptionFilter.name);
+  constructor(@InjectPinoLogger(GlobalExceptionFilter.name) private readonly logger: PinoLogger) {}
 
   catch(exception: unknown, host: ArgumentsHost): void {
     const isProduction = process.env.NODE_ENV === 'production';
     const ctx = host.switchToHttp();
     const response = ctx.getResponse<Response>();
-    const request = ctx.getRequest<Request>();
+    const request = ctx.getRequest<RequestWithLogger>();
+    const requestLogger = this.getRequestLogger(request);
 
     let statusCode = HttpStatus.INTERNAL_SERVER_ERROR;
     let message: string | string[] = 'Internal server error';
@@ -41,17 +41,55 @@ export class GlobalExceptionFilter implements ExceptionFilter {
         message = exception.message;
         error = exception.name;
       }
+
+      if (statusCode >= HttpStatus.INTERNAL_SERVER_ERROR) {
+        requestLogger.error({
+          event: 'http_server_error',
+          method: request.method,
+          url: request.url,
+          statusCode,
+          error,
+          details: message,
+        });
+      } else {
+        requestLogger.warn({
+          event: 'http_client_error',
+          method: request.method,
+          url: request.url,
+          statusCode,
+          error,
+          details: message,
+        });
+      }
     } else if (exception instanceof Error) {
       message = isProduction ? 'Internal server error' : exception.message;
       error = 'InternalServerError';
 
       if (isProduction) {
-        this.logger.error(exception.message);
+        requestLogger.error({
+          event: 'unhandled_exception',
+          method: request.method,
+          url: request.url,
+          errorName: exception.name,
+          errorMessage: exception.message,
+        });
       } else {
-        this.logger.error(exception.message, exception.stack);
+        requestLogger.error({
+          event: 'unhandled_exception',
+          method: request.method,
+          url: request.url,
+          errorName: exception.name,
+          errorMessage: exception.message,
+          stack: exception.stack,
+        });
       }
     } else {
-      this.logger.error('Unhandled non-error exception', String(exception));
+      requestLogger.error({
+        event: 'unhandled_non_error_exception',
+        method: request.method,
+        url: request.url,
+        exception: String(exception),
+      });
     }
 
     if (isProduction && statusCode >= HttpStatus.INTERNAL_SERVER_ERROR) {
@@ -64,10 +102,15 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       statusCode,
       message,
       error,
+      requestId: request.id,
       path: request.url,
       method: request.method,
       timestamp: new Date().toISOString(),
     });
+  }
+
+  private getRequestLogger(request: RequestWithLogger): Pick<PinoLogger, 'warn' | 'error'> {
+    return request.log ?? this.logger;
   }
 
   private isHttpExceptionResponseShape(value: unknown): value is HttpExceptionResponseShape {
