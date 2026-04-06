@@ -14,6 +14,7 @@ import { RegisterDto } from './dto/request/register.dto';
 import { createHash } from 'crypto';
 import { LoginDto } from './dto/request/login.dto';
 import type { UserRole } from '../../common/decorators/roles.decorator';
+import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 
 export type RegisterResult = {
   userId: string;
@@ -59,6 +60,7 @@ export class AuthService {
   constructor(
     @Inject(DRIZZLE) private readonly db: DrizzleDB,
     private readonly jwtService: JwtService,
+    @InjectPinoLogger(AuthService.name) private readonly logger: PinoLogger,
   ) {}
 
   static readonly ACCESS_TOKEN_EXPIRES_IN = '15m';
@@ -145,6 +147,7 @@ export class AuthService {
         secret: this.getRefreshTokenSecret(),
       });
     } catch {
+      this.logger.warn({ event: 'auth_refresh_token_invalid' });
       throw new UnauthorizedException('Invalid or expired refresh token');
     }
 
@@ -175,6 +178,7 @@ export class AuthService {
       });
 
     if (!existingSession) {
+      this.logger.warn({ event: 'auth_refresh_session_not_found', userId: payload.sub });
       throw new UnauthorizedException('Refresh session not found or expired');
     }
 
@@ -193,6 +197,10 @@ export class AuthService {
       });
 
     if (!user) {
+      this.logger.warn({
+        event: 'auth_refresh_user_not_found',
+        userId: existingSession.userId,
+      });
       throw new UnauthorizedException('User not found');
     }
 
@@ -242,11 +250,13 @@ export class AuthService {
       });
 
     if (!foundUser) {
+      this.logger.warn({ event: 'auth_login_user_not_found', email: normalizedEmail });
       throw new UnauthorizedException('Invalid email or password');
     }
 
     const isPasswordValid = await bcrypt.compare(loginDto.password, foundUser.passwordHash);
     if (!isPasswordValid) {
+      this.logger.warn({ event: 'auth_login_invalid_password', userId: foundUser.userId });
       throw new UnauthorizedException('Invalid email or password');
     }
 
@@ -289,6 +299,10 @@ export class AuthService {
       });
 
     if (existingUser) {
+      this.logger.warn({
+        event: 'auth_register_conflict',
+        email: normalizedEmail,
+      });
       throw new ConflictException('Username or email already exists');
     }
 

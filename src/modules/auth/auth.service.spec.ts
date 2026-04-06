@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { JwtService } from '@nestjs/jwt';
+import { getLoggerToken } from 'nestjs-pino';
 import { AuthService } from './auth.service';
 import { DRIZZLE } from '../../core/database/database.module';
 
@@ -11,6 +12,11 @@ describe('AuthService', () => {
   };
   const jwtServiceMock = {
     signAsync: jest.fn(),
+  };
+  const pinoLoggerMock = {
+    info: jest.fn(),
+    warn: jest.fn(),
+    error: jest.fn(),
   };
 
   beforeEach(async () => {
@@ -24,6 +30,10 @@ describe('AuthService', () => {
         {
           provide: JwtService,
           useValue: jwtServiceMock,
+        },
+        {
+          provide: getLoggerToken(AuthService.name),
+          useValue: pinoLoggerMock,
         },
       ],
     }).compile();
