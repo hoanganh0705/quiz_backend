@@ -21,12 +21,11 @@
     "db:start": "docker start quizdb || docker run -d --name quizdb -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=quizdb -p 5432:5432 -v quizdb_data:/var/lib/postgresql postgres:18",
     "db:stop": "docker stop quizdb",
     "db:reset": "docker rm -f quizdb && docker volume rm quizdb_data",
-    "db:generate:migration:file": "pnpm drizzle-kit generate",
-    "db:update:migration": "pnpm drizzle-kit migrate",
+    "db:generate": "pnpm drizzle-kit generate",
+    "db:migrate": "pnpm drizzle-kit migrate",
     "db:push": "pnpm drizzle-kit push",
-    "db:migration:check": "pnpm drizzle-kit check",
-    "db:introspect": "pnpm drizzle-kit introspect",
-    "db:generate": "pnpm drizzle-kit generate"
+    "db:check": "pnpm drizzle-kit check",
+    "db:introspect": "pnpm drizzle-kit introspect"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.1",
