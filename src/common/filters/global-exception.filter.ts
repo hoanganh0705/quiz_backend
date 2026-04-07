@@ -102,14 +102,17 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     }
 
     response.status(statusCode).json({
-      success: false,
-      statusCode,
-      message,
-      error,
-      requestId: request.id,
-      path: request.url,
-      method: request.method,
-      timestamp: new Date().toISOString(),
+      data: {
+        statusCode,
+        message,
+        error,
+        requestId: request.id,
+        path: request.url,
+        method: request.method,
+      },
+      meta: {
+        timestamp: new Date().toISOString(),
+      },
     });
   }
 
