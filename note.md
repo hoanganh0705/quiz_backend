@@ -1,23 +1,3 @@
-**Thứ tự implement chi tiết:**
-
----
-
-**Giai đoạn 1 — Foundation**
-
-1. Thêm `role` enum + column vào `users` schema → generate + migrate
-2. Tạo `RolesGuard` trong `src/common/guards/roles.guard.ts`
-3. Tạo `@Roles()` decorator trong `src/common/decorators/roles.decorator.ts`
-4. Setup rate limiting — cài `@nestjs/throttler`, config trong `AppModule`
-
----
-
-**Giai đoạn 2 — User**
-
-5. PATCH `/users/me` — update display name, bio, avatar
-6. PATCH `/users/me/settings` — update settings jsonb
-
----
-
 **Giai đoạn 3 — Category**
 
 7. Tạo `src/modules/category/` với đầy đủ module, service, controller, dto

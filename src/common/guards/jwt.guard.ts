@@ -9,13 +9,13 @@ import { JwtService } from '@nestjs/jwt';
 import type { Request } from 'express';
 import type { UserRole } from '../decorators/roles.decorator';
 
-export type JwtUserPayload = {
+export type JwtPayload = {
   sub: string;
   role: UserRole;
 };
 
 type AuthenticatedRequest = Request & {
-  user?: JwtUserPayload;
+  user?: JwtPayload;
 };
 
 @Injectable()
@@ -48,7 +48,7 @@ export class JwtGuard implements CanActivate {
     }
 
     try {
-      const payload = await this.jwtService.verifyAsync<JwtUserPayload>(token, {
+      const payload = await this.jwtService.verifyAsync<JwtPayload>(token, {
         secret: this.getAccessTokenSecret(),
       });
 

@@ -34,6 +34,11 @@ export type AuthTokens = {
   refreshToken: string;
 };
 
+export type AccessTokenPayload = {
+  sub: string;
+  role: UserRole;
+};
+
 export type RefreshTokenPayload = {
   sub: string;
   type?: string;

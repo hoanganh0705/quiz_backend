@@ -1,9 +1,9 @@
 import { createParamDecorator, ExecutionContext, UnauthorizedException } from '@nestjs/common';
-import type { JwtUserPayload } from '../guards/jwt.guard';
+import type { JwtPayload } from '../guards/jwt.guard';
 
 export const CurrentUser = createParamDecorator(
-  (data: keyof JwtUserPayload | undefined, ctx: ExecutionContext) => {
-    const request = ctx.switchToHttp().getRequest<{ user?: JwtUserPayload }>();
+  (data: keyof JwtPayload | undefined, ctx: ExecutionContext) => {
+    const request = ctx.switchToHttp().getRequest<{ user?: JwtPayload }>();
     const user = request.user;
 
     if (!user) {
