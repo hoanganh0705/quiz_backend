@@ -1,23 +1,35 @@
 import { Global, Module } from '@nestjs/common';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { Pool } from 'pg';
 import * as schema from './schema';
 import * as relations from './schema/relations';
 
-const db = drizzle(new Pool({ connectionString: process.env.DATABASE_URL }), {
-  schema: { ...schema, ...relations },
-});
+const createDrizzleDb = (connectionString: string) =>
+  drizzle(new Pool({ connectionString }), {
+    schema: { ...schema, ...relations },
+  });
 
-export type DrizzleDB = typeof db;
+export type DrizzleDB = ReturnType<typeof createDrizzleDb>;
 
 export const DRIZZLE = Symbol('DRIZZLE');
 
 @Global()
 @Module({
+  imports: [ConfigModule],
   providers: [
     {
       provide: DRIZZLE,
-      useValue: db,
+      inject: [ConfigService],
+      useFactory: (configService: ConfigService) => {
+        const databaseUrl = configService.get<string>('DATABASE_URL');
+
+        if (!databaseUrl) {
+          throw new Error('Missing DATABASE_URL configuration');
+        }
+
+        return createDrizzleDb(databaseUrl);
+      },
     },
   ],
   exports: [DRIZZLE],
