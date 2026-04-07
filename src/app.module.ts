@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { ConfigModule } from '@nestjs/config';
 import { APP_FILTER } from '@nestjs/core';
 import { UserModule } from './modules/user/user.module';
 import { AuthModule } from './modules/auth/auth.module';
@@ -8,7 +9,17 @@ import { CommonModule } from './common/common.module';
 import { GlobalExceptionFilter } from './common/filters/global-exception.filter';
 
 @Module({
-  imports: [CoreLoggerModule, DatabaseModule, UserModule, AuthModule, CommonModule],
+  imports: [
+    ConfigModule.forRoot({
+      isGlobal: true,
+      expandVariables: true,
+    }),
+    CoreLoggerModule,
+    DatabaseModule,
+    UserModule,
+    AuthModule,
+    CommonModule,
+  ],
   providers: [
     {
       provide: APP_FILTER,

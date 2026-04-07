@@ -1,25 +1,29 @@
 import { Body, Controller, Post, Req, Res, UnauthorizedException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import type { Request, Response } from 'express';
-import {
-  AuthService,
-  type LoginResult,
-  type RefreshTokenResult,
-  type RegisterResult,
-} from './auth.service';
+import { AuthService } from './auth.service';
 import { LoginDto } from './dto/request/login.dto';
 import { LoginResponseDto } from './dto/response/login-response.dto';
 import { RegisterDto } from './dto/request/register.dto';
 import { RegisterResponseDto } from './dto/response/register-response.dto';
 import { RefreshTokenResponseDto } from './dto/response/refresh-token-response.dto';
+import { LoginResult, RefreshTokenResult, RegisterResult } from './types/auth.types';
 
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(
+    private readonly authService: AuthService,
+    private readonly configService: ConfigService,
+  ) {}
+
+  private isProduction(): boolean {
+    return this.configService.get<string>('NODE_ENV') === 'production';
+  }
 
   private setRefreshTokenCookie(response: Response, refreshToken: string): void {
     response.cookie('refreshToken', refreshToken, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      secure: this.isProduction(),
       sameSite: 'strict',
       maxAge: AuthService.REFRESH_TOKEN_COOKIE_MAX_AGE_MS,
       path: '/auth/refresh-token',
@@ -29,7 +33,7 @@ export class AuthController {
   private clearRefreshTokenCookie(response: Response): void {
     response.clearCookie('refreshToken', {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      secure: this.isProduction(),
       sameSite: 'strict',
       path: '/auth/refresh-token',
     });

@@ -4,6 +4,7 @@ import {
   type CanActivate,
   type ExecutionContext,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import type { Request } from 'express';
 import type { UserRole } from '../decorators/roles.decorator';
@@ -21,10 +22,17 @@ type AuthenticatedRequest = Request & {
 
 @Injectable()
 export class JwtGuard implements CanActivate {
-  constructor(private readonly jwtService: JwtService) {}
+  constructor(
+    private readonly jwtService: JwtService,
+    private readonly configService: ConfigService,
+  ) {}
 
   private getAccessTokenSecret(): string {
-    return process.env.JWT_ACCESS_TOKEN_SECRET ?? process.env.JWT_SECRET ?? 'access-dev-secret';
+    return (
+      this.configService.get<string>('JWT_ACCESS_TOKEN_SECRET') ??
+      this.configService.get<string>('JWT_SECRET') ??
+      'access-dev-secret'
+    );
   }
 
   async canActivate(context: ExecutionContext): Promise<boolean> {

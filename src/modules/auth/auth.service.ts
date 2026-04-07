@@ -7,58 +7,28 @@ import {
 } from '@nestjs/common';
 import { and, eq, gt, isNull, or, sql } from 'drizzle-orm';
 import * as bcrypt from 'bcrypt';
+import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { DRIZZLE, type DrizzleDB } from '../../core/database/database.module';
 import { userSessions, users } from '../../core/database/schema';
 import { RegisterDto } from './dto/request/register.dto';
 import { createHash } from 'crypto';
 import { LoginDto } from './dto/request/login.dto';
-import type { UserRole } from '../../common/decorators/roles.decorator';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
-
-export type RegisterResult = {
-  userId: string;
-  username: string;
-  email: string;
-  createdAt: string;
-  accessToken: string;
-  refreshToken: string;
-};
-
-export type LoginResult = {
-  userId: string;
-  username: string;
-  email: string;
-  accessToken: string;
-  refreshToken: string;
-};
-
-export type RefreshTokenResult = {
-  accessToken: string;
-  refreshToken: string;
-};
-
-type AuthIdentity = {
-  userId: string;
-  username: string;
-  email: string;
-  role: UserRole;
-};
-
-type AuthTokens = {
-  accessToken: string;
-  refreshToken: string;
-};
-
-type RefreshTokenPayload = {
-  sub: string;
-  type?: string;
-};
+import {
+  AuthIdentity,
+  AuthTokens,
+  LoginResult,
+  RefreshTokenPayload,
+  RefreshTokenResult,
+  RegisterResult,
+} from './types/auth.types';
 
 @Injectable()
 export class AuthService {
   constructor(
     @Inject(DRIZZLE) private readonly db: DrizzleDB,
+    private readonly configService: ConfigService,
     private readonly jwtService: JwtService,
     @InjectPinoLogger(AuthService.name) private readonly logger: PinoLogger,
   ) {}
@@ -68,11 +38,19 @@ export class AuthService {
   static readonly REFRESH_TOKEN_COOKIE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 
   private getAccessTokenSecret(): string {
-    return process.env.JWT_ACCESS_TOKEN_SECRET ?? process.env.JWT_SECRET ?? 'access-dev-secret';
+    return (
+      this.configService.get<string>('JWT_ACCESS_TOKEN_SECRET') ??
+      this.configService.get<string>('JWT_SECRET') ??
+      'access-dev-secret'
+    );
   }
 
   private getRefreshTokenSecret(): string {
-    return process.env.JWT_REFRESH_TOKEN_SECRET ?? process.env.JWT_SECRET ?? 'refresh-dev-secret';
+    return (
+      this.configService.get<string>('JWT_REFRESH_TOKEN_SECRET') ??
+      this.configService.get<string>('JWT_SECRET') ??
+      'refresh-dev-secret'
+    );
   }
 
   private async issueTokens(identity: AuthIdentity): Promise<AuthTokens> {
