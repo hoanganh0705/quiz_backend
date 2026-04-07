@@ -3,7 +3,7 @@ import * as bcrypt from 'bcrypt';
 import { and, inArray, isNull, or, sql } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { Pool } from 'pg';
-import { categories, users } from '../schema';
+import { categories, tags, users } from '../schema';
 import * as schema from '../schema';
 import * as relations from '../schema/relations';
 
@@ -43,6 +43,16 @@ type NormalizedCategorySeed = {
   slug: string;
   description: string;
   imageUrl: string;
+};
+
+type RawTagSeed = {
+  name: string;
+  slug: string;
+};
+
+type NormalizedTagSeed = {
+  name: string;
+  slug: string;
 };
 
 type SeedSummary = {
@@ -135,6 +145,41 @@ const CATEGORY_SEEDS: readonly RawCategorySeed[] = [
   },
 ];
 
+const TAG_SEEDS: readonly RawTagSeed[] = [
+  {
+    name: 'Physics',
+    slug: 'physics',
+  },
+  {
+    name: 'Chemistry',
+    slug: 'chemistry',
+  },
+  {
+    name: 'Biology',
+    slug: 'biology',
+  },
+  {
+    name: 'Math',
+    slug: 'math',
+  },
+  {
+    name: 'Programming',
+    slug: 'programming',
+  },
+  {
+    name: 'Algorithms',
+    slug: 'algorithms',
+  },
+  {
+    name: 'General Knowledge',
+    slug: 'general-knowledge',
+  },
+  {
+    name: 'World History',
+    slug: 'world-history',
+  },
+];
+
 const databaseUrl = process.env.DATABASE_URL;
 
 if (!databaseUrl) {
@@ -199,6 +244,12 @@ const normalizeCategorySeeds = (input: readonly RawCategorySeed[]): NormalizedCa
     slug: normalizeSlug(seed.slug || seed.name),
     description: trimText(seed.description),
     imageUrl: trimText(seed.imageUrl),
+  }));
+
+const normalizeTagSeeds = (input: readonly RawTagSeed[]): NormalizedTagSeed[] =>
+  input.map((seed) => ({
+    name: trimText(seed.name),
+    slug: normalizeSlug(seed.slug || seed.name),
   }));
 
 const assertUniqueBy = <T>(
@@ -405,9 +456,85 @@ const seedCategoriesDomain = (rawSeeds: readonly RawCategorySeed[]): SeedDomain 
   },
 });
 
+const seedTagsDomain = (rawSeeds: readonly RawTagSeed[]): SeedDomain => ({
+  domain: 'tags',
+  run: async (tx: SeedTx, context: SeedContext): Promise<SeedSummary> => {
+    const seeds = normalizeTagSeeds(rawSeeds);
+
+    assertUniqueBy(seeds, (seed) => seed.slug, 'tag slug');
+    assertUniqueBy(seeds, (seed) => seed.name.toLowerCase(), 'tag name (case-insensitive)');
+
+    const slugs = seeds.map((seed) => seed.slug);
+    const normalizedNames = seeds.map((seed) => seed.name.toLowerCase());
+    const lowerNameExpression = sql<string>`lower(${tags.name})`;
+
+    const existingTags = await tx
+      .select({
+        tagId: tags.tagId,
+        slug: tags.slug,
+        name: tags.name,
+      })
+      .from(tags)
+      .where(
+        and(
+          isNull(tags.deletedAt),
+          or(inArray(tags.slug, slugs), inArray(lowerNameExpression, normalizedNames)),
+        ),
+      );
+
+    const existingBySlug = new Map(existingTags.map((row) => [row.slug, row]));
+    const existingByLowerName = new Map(existingTags.map((row) => [row.name.toLowerCase(), row]));
+
+    for (const seed of seeds) {
+      const bySlug = existingBySlug.get(seed.slug);
+      const byName = existingByLowerName.get(seed.name.toLowerCase());
+
+      if (bySlug && byName && bySlug.tagId !== byName.tagId) {
+        throw new Error(`Conflicting tag seed for slug=${seed.slug} and name=${seed.name}`);
+      }
+    }
+
+    const touchedRows = await tx
+      .insert(tags)
+      .values(
+        seeds.map((seed) => ({
+          name: seed.name,
+          slug: seed.slug,
+          updatedAt: context.nowIso,
+        })),
+      )
+      .onConflictDoUpdate({
+        target: tags.slug,
+        targetWhere: isNull(tags.deletedAt),
+        set: {
+          name: sql`excluded.name`,
+          updatedAt: context.nowIso,
+        },
+        setWhere: sql`
+          ${tags.name} IS DISTINCT FROM excluded.name
+        `,
+      })
+      .returning({
+        inserted: sql<boolean>`xmax = 0`,
+      });
+
+    const inserted = touchedRows.filter((row) => row.inserted).length;
+    const updated = touchedRows.length - inserted;
+    const skipped = seeds.length - touchedRows.length;
+
+    return {
+      domain: 'tags',
+      inserted,
+      updated,
+      skipped,
+    };
+  },
+});
+
 const SEED_DOMAINS: readonly SeedDomain[] = [
   seedUsersDomain(USER_SEEDS),
   seedCategoriesDomain(CATEGORY_SEEDS),
+  seedTagsDomain(TAG_SEEDS),
   // Add future domains here:
   // seedQuizzesDomain(...),
   // seedQuizVersionsDomain(...),
