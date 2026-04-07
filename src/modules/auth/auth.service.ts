@@ -16,6 +16,7 @@ import { createHash } from 'crypto';
 import { LoginDto } from './dto/request/login.dto';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import {
+  AccessTokenPayload,
   AuthIdentity,
   AuthTokens,
   LoginResult,
@@ -56,27 +57,25 @@ export class AuthService {
   }
 
   private async issueTokens(identity: AuthIdentity): Promise<AuthTokens> {
-    const accessToken = await this.jwtService.signAsync(
-      {
-        sub: identity.userId,
-        role: identity.role,
-      },
-      {
-        secret: this.getAccessTokenSecret(),
-        expiresIn: AuthService.ACCESS_TOKEN_EXPIRES_IN,
-      },
-    );
+    const accessTokenPayload: AccessTokenPayload = {
+      sub: identity.userId,
+      role: identity.role,
+    };
 
-    const refreshToken = await this.jwtService.signAsync(
-      {
-        sub: identity.userId,
-        type: 'refresh',
-      },
-      {
-        secret: this.getRefreshTokenSecret(),
-        expiresIn: AuthService.REFRESH_TOKEN_EXPIRES_IN,
-      },
-    );
+    const accessToken = await this.jwtService.signAsync(accessTokenPayload, {
+      secret: this.getAccessTokenSecret(),
+      expiresIn: AuthService.ACCESS_TOKEN_EXPIRES_IN,
+    });
+
+    const refreshTokenPayload: RefreshTokenPayload = {
+      sub: identity.userId,
+      type: 'refresh',
+    };
+
+    const refreshToken = await this.jwtService.signAsync(refreshTokenPayload, {
+      secret: this.getRefreshTokenSecret(),
+      expiresIn: AuthService.REFRESH_TOKEN_EXPIRES_IN,
+    });
 
     return { accessToken, refreshToken };
   }

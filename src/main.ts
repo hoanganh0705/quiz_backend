@@ -10,6 +10,8 @@ async function bootstrap() {
   app.enableCors();
   app.use(helmet());
   app.use(cookieParser());
+  app.setGlobalPrefix('api/v1');
+  app.enableShutdownHooks();
 
   // set global pipes for validation
   app.useGlobalPipes(

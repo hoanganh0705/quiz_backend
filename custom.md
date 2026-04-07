@@ -1,9 +1,3 @@
-## 11. 🔥 Rate limit
-
-👉 chống spam
-
----
-
 ## 12. 🔥 Cache (Redis)
 
 👉 ví dụ:
