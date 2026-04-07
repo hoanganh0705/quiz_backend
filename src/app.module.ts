@@ -10,6 +10,7 @@ import { CommonModule } from './common/common.module';
 import { GlobalExceptionFilter } from './common/filters/global-exception.filter';
 import { ResponseFormatInterceptor } from './common/interceptors/response-format.interceptor';
 import { CategoryModule } from './modules/category/category.module';
+import { TagModule } from './modules/tag/tag.module';
 
 @Module({
   imports: [
@@ -37,6 +38,7 @@ import { CategoryModule } from './modules/category/category.module';
     AuthModule,
     CommonModule,
     CategoryModule,
+    TagModule,
   ],
   providers: [
     {
