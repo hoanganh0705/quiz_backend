@@ -9,6 +9,7 @@ import { CoreLoggerModule } from './core/logger/logger.module';
 import { CommonModule } from './common/common.module';
 import { GlobalExceptionFilter } from './common/filters/global-exception.filter';
 import { ResponseFormatInterceptor } from './common/interceptors/response-format.interceptor';
+import { CategoryModule } from './modules/category/category.module';
 
 @Module({
   imports: [
@@ -35,6 +36,7 @@ import { ResponseFormatInterceptor } from './common/interceptors/response-format
     UserModule,
     AuthModule,
     CommonModule,
+    CategoryModule,
   ],
   providers: [
     {

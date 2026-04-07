@@ -7,7 +7,7 @@ import {
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { ROLES_KEY, type UserRole } from '../decorators/roles.decorator';
-import type { JwtUserPayload } from './jwt.guard';
+import type { JwtPayload } from './jwt.guard';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 
 @Injectable()
@@ -21,7 +21,7 @@ export class RolesGuard implements CanActivate {
     return value === 'admin' || value === 'moderator' || value === 'creator' || value === 'user';
   }
 
-  private hasJwtUserShape(user: unknown): user is JwtUserPayload {
+  private hasJwtUserShape(user: unknown): user is JwtPayload {
     if (!user || typeof user !== 'object') {
       return false;
     }
