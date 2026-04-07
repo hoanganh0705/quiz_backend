@@ -40,16 +40,18 @@ export class AuthService {
   private getAccessTokenSecret(): string {
     return (
       this.configService.get<string>('JWT_ACCESS_TOKEN_SECRET') ??
-      this.configService.get<string>('JWT_SECRET') ??
-      'access-dev-secret'
+      (() => {
+        throw new Error('JWT_ACCESS_TOKEN_SECRET is not defined in environment variables');
+      })()
     );
   }
 
   private getRefreshTokenSecret(): string {
     return (
       this.configService.get<string>('JWT_REFRESH_TOKEN_SECRET') ??
-      this.configService.get<string>('JWT_SECRET') ??
-      'refresh-dev-secret'
+      (() => {
+        throw new Error('JWT_REFRESH_TOKEN_SECRET is not defined in environment variables');
+      })()
     );
   }
 
@@ -57,8 +59,6 @@ export class AuthService {
     const accessToken = await this.jwtService.signAsync(
       {
         sub: identity.userId,
-        username: identity.username,
-        email: identity.email,
         role: identity.role,
       },
       {

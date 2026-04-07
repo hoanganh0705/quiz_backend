@@ -27,12 +27,7 @@ export class RolesGuard implements CanActivate {
     }
 
     const maybeUser = user as Record<string, unknown>;
-    return (
-      typeof maybeUser.sub === 'string' &&
-      typeof maybeUser.username === 'string' &&
-      typeof maybeUser.email === 'string' &&
-      this.isUserRole(maybeUser.role)
-    );
+    return typeof maybeUser.sub === 'string' && this.isUserRole(maybeUser.role);
   }
 
   private normalizeRequiredRoles(roles: unknown): UserRole[] {
