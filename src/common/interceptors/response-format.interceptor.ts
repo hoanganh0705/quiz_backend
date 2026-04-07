@@ -17,6 +17,11 @@ type FormattedResponse<T, TMeta extends ResponseMeta = ResponseMeta> = {
   meta: TMeta;
 };
 
+type PaginatedPayload = {
+  items: unknown;
+  pagination: Record<string, unknown>;
+};
+
 const TEMPORAL_KEY_PATTERN = /(time|timestamp|date|at)$/i;
 
 @Injectable()
@@ -36,8 +41,20 @@ export class ResponseFormatInterceptor<T> implements NestInterceptor<T, Formatte
           };
         }
 
+        const normalizedPayload = this.normalizeTemporalFields(payload ?? null);
+
+        if (this.isPaginatedPayload(normalizedPayload)) {
+          return {
+            data: normalizedPayload.items as T,
+            meta: {
+              timestamp: new Date().toISOString(),
+              pagination: normalizedPayload.pagination,
+            },
+          };
+        }
+
         return {
-          data: this.normalizeTemporalFields(payload ?? null) as T | null,
+          data: normalizedPayload as T | null,
           meta: {
             timestamp: new Date().toISOString(),
           },
@@ -87,6 +104,28 @@ export class ResponseFormatInterceptor<T> implements NestInterceptor<T, Formatte
     const timestamp = metaRecord.timestamp;
 
     if (typeof timestamp !== 'string') {
+      return false;
+    }
+
+    return true;
+  }
+
+  private isPaginatedPayload(value: unknown): value is PaginatedPayload {
+    if (!value || typeof value !== 'object') {
+      return false;
+    }
+
+    const candidate = value as Record<string, unknown>;
+
+    if (!('items' in candidate) || !('pagination' in candidate)) {
+      return false;
+    }
+
+    if (!candidate.pagination || typeof candidate.pagination !== 'object') {
+      return false;
+    }
+
+    if (Array.isArray(candidate.pagination)) {
       return false;
     }
 
