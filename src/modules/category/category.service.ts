@@ -14,23 +14,11 @@ import { UpdateCategoryDto } from './dto/request/update-category.dto';
 import { CategoryListResponseDto } from './dto/response/category-list-response.dto';
 import { CategoryResponseDto } from './dto/response/category-response.dto';
 import { DeleteCategoryResponseDto } from './dto/response/delete-category-response.dto';
-
-type CategoryPatch = {
-  name?: string;
-  description?: string | null;
-  slug?: string;
-  imageUrl?: string | null;
-};
-
-type CategoryCursorPayload = {
-  createdAt: string;
-  categoryId: string;
-};
-
-type ListCategoriesCursorQuery = {
-  cursor?: string;
-  limit?: number;
-};
+import {
+  CategoryCursorPayload,
+  CategoryPatch,
+  ListCategoriesCursorQuery,
+} from './types/category.types';
 
 @Injectable()
 export class CategoryService {
