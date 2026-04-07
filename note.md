@@ -1,14 +1,3 @@
-**Giai đoạn 3 — Category**
-
-7. Tạo `src/modules/category/` với đầy đủ module, service, controller, dto
-8. GET `/categories` — list active với pagination
-9. GET `/categories/:slug` — get by slug
-10. POST `/categories` — create, admin only
-11. PATCH `/categories/:id` — update, admin only
-12. DELETE `/categories/:id` — soft delete, admin only
-
----
-
 **Giai đoạn 4 — Tag**
 
 13. Tạo `src/modules/tag/` với đầy đủ module, service, controller, dto
