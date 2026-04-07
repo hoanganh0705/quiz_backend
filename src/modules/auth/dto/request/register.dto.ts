@@ -3,8 +3,8 @@ import { IsEmail, IsString, Length, MinLength, Matches, MaxLength } from 'class-
 export class RegisterDto {
   @IsString()
   @Length(3, 50)
-  @Matches(/^[a-zA-Z0-9_]+$/, {
-    message: 'Username can only contain letters, numbers, and underscores.',
+  @Matches(/^[a-zA-Z0-9._-]+$/, {
+    message: 'Username can only contain letters, numbers, periods, underscores, and hyphens.',
   })
   username!: string;
 

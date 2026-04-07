@@ -1,3 +1,5 @@
+import { TokenResponseDto } from './token-response.dto';
+
 export class RefreshTokenResponseDto {
-  accessToken!: string;
+  token!: TokenResponseDto;
 }

@@ -11,8 +11,6 @@ import type { UserRole } from '../decorators/roles.decorator';
 
 export type JwtUserPayload = {
   sub: string;
-  username: string;
-  email: string;
   role: UserRole;
 };
 
@@ -30,8 +28,9 @@ export class JwtGuard implements CanActivate {
   private getAccessTokenSecret(): string {
     return (
       this.configService.get<string>('JWT_ACCESS_TOKEN_SECRET') ??
-      this.configService.get<string>('JWT_SECRET') ??
-      'access-dev-secret'
+      (() => {
+        throw new Error('JWT_ACCESS_TOKEN_SECRET is not defined in environment variables');
+      })()
     );
   }
 
