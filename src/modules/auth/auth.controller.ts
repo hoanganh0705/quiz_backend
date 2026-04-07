@@ -1,5 +1,6 @@
 import { Body, Controller, Post, Req, Res, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { Throttle } from '@nestjs/throttler';
 import type { Request, Response } from 'express';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/request/login.dto';
@@ -8,6 +9,7 @@ import { RegisterDto } from './dto/request/register.dto';
 import { RegisterResponseDto } from './dto/response/register-response.dto';
 import { RefreshTokenResponseDto } from './dto/response/refresh-token-response.dto';
 import { LoginResult, RefreshTokenResult, RegisterResult } from './types/auth.types';
+import { LogoutResponseDto } from './dto/response/logout-response.dto';
 
 @Controller('auth')
 export class AuthController {
@@ -49,6 +51,7 @@ export class AuthController {
   }
 
   @Post('refresh-token')
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
   async refreshToken(
     @Req() request: Request,
     @Res({ passthrough: true }) response: Response,
@@ -73,7 +76,7 @@ export class AuthController {
   async logout(
     @Req() request: Request,
     @Res({ passthrough: true }) response: Response,
-  ): Promise<void> {
+  ): Promise<LogoutResponseDto> {
     const refreshToken = this.getRefreshTokenFromCookies(request.cookies as unknown);
 
     if (refreshToken) {
@@ -81,9 +84,14 @@ export class AuthController {
     }
 
     this.clearRefreshTokenCookie(response);
+
+    return {
+      message: 'Logged out successfully',
+    };
   }
 
   @Post('login')
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
   async login(
     @Body() loginDto: LoginDto,
     @Res({ passthrough: true }) response: Response,
@@ -102,6 +110,7 @@ export class AuthController {
   }
 
   @Post('register')
+  @Throttle({ default: { limit: 3, ttl: 60_000 } })
   async register(
     @Body() registerDto: RegisterDto,
     @Res({ passthrough: true }) response: Response,
