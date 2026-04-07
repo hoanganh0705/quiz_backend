@@ -1,10 +1,12 @@
-import { Controller, Get, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Patch, UseGuards } from '@nestjs/common';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { JwtGuard } from '../../common/guards/jwt.guard';
+import { UpdateMeSettingsDto } from './dto/request/update-me-settings.dto';
+import { UpdateMeDto } from './dto/request/update-me.dto';
 import { UserMeResponseDto } from './dto/response/user-me-response.dto';
 import { UserService } from './user.service';
 
-@Controller('user')
+@Controller(['user', 'users'])
 export class UserController {
   constructor(private readonly userService: UserService) {}
 
@@ -12,5 +14,23 @@ export class UserController {
   @UseGuards(JwtGuard)
   me(@CurrentUser('sub') userId: string): Promise<UserMeResponseDto> {
     return this.userService.getMeById(userId);
+  }
+
+  @Patch('me')
+  @UseGuards(JwtGuard)
+  updateMe(
+    @CurrentUser('sub') userId: string,
+    @Body() payload: UpdateMeDto,
+  ): Promise<UserMeResponseDto> {
+    return this.userService.updateMeById(userId, payload);
+  }
+
+  @Patch('me/settings')
+  @UseGuards(JwtGuard)
+  updateMeSettings(
+    @CurrentUser('sub') userId: string,
+    @Body() payload: UpdateMeSettingsDto,
+  ): Promise<UserMeResponseDto> {
+    return this.userService.updateMeSettingsById(userId, payload);
   }
 }
