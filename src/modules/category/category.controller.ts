@@ -21,7 +21,7 @@ import { CategoryResponseDto } from './dto/response/category-response.dto';
 import { DeleteCategoryResponseDto } from './dto/response/delete-category-response.dto';
 import { CategoryService } from './category.service';
 
-@Controller(['category', 'categories'])
+@Controller('categories')
 export class CategoryController {
   constructor(private readonly categoryService: CategoryService) {}
 

@@ -6,7 +6,7 @@ import { UpdateMeDto } from './dto/request/update-me.dto';
 import { UserMeResponseDto } from './dto/response/user-me-response.dto';
 import { UserService } from './user.service';
 
-@Controller(['user', 'users'])
+@Controller('users')
 export class UserController {
   constructor(private readonly userService: UserService) {}
 
