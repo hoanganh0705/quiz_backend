@@ -1,12 +1,17 @@
 import { Global, Module } from '@nestjs/common';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { LoggerModule } from 'nestjs-pino';
-import { pinoHttpConfig } from './pino.config';
+import { createPinoHttpConfig } from './pino.config';
 
 @Global()
 @Module({
   imports: [
-    LoggerModule.forRoot({
-      pinoHttp: pinoHttpConfig,
+    ConfigModule,
+    LoggerModule.forRootAsync({
+      inject: [ConfigService],
+      useFactory: (configService: ConfigService) => ({
+        pinoHttp: createPinoHttpConfig(configService),
+      }),
     }),
   ],
   exports: [LoggerModule],

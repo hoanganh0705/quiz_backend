@@ -1,6 +1,7 @@
 import { ArgumentsHost, Catch, ExceptionFilter, HttpException, HttpStatus } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import type { Request, Response } from 'express';
-import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
+import { PinoLogger } from 'nestjs-pino';
 
 type RequestWithLogger = Request & {
   id?: string;
@@ -14,10 +15,13 @@ type HttpExceptionResponseShape = {
 
 @Catch()
 export class GlobalExceptionFilter implements ExceptionFilter {
-  constructor(@InjectPinoLogger(GlobalExceptionFilter.name) private readonly logger: PinoLogger) {}
+  constructor(
+    private readonly logger: PinoLogger,
+    private readonly configService: ConfigService,
+  ) {}
 
   catch(exception: unknown, host: ArgumentsHost): void {
-    const isProduction = process.env.NODE_ENV === 'production';
+    const isProduction = this.configService.get<string>('NODE_ENV') === 'production';
     const ctx = host.switchToHttp();
     const response = ctx.getResponse<Response>();
     const request = ctx.getRequest<RequestWithLogger>();

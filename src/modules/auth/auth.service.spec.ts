@@ -1,4 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { getLoggerToken } from 'nestjs-pino';
 import { AuthService } from './auth.service';
@@ -12,6 +13,9 @@ describe('AuthService', () => {
   };
   const jwtServiceMock = {
     signAsync: jest.fn(),
+  };
+  const configServiceMock = {
+    get: jest.fn(),
   };
   const pinoLoggerMock = {
     info: jest.fn(),
@@ -30,6 +34,10 @@ describe('AuthService', () => {
         {
           provide: JwtService,
           useValue: jwtServiceMock,
+        },
+        {
+          provide: ConfigService,
+          useValue: configServiceMock,
         },
         {
           provide: getLoggerToken(AuthService.name),

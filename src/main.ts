@@ -1,6 +1,7 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import cookieParser from 'cookie-parser';
 
 async function bootstrap() {
@@ -16,6 +17,9 @@ async function bootstrap() {
       transform: true, // tự động transform type
     }),
   );
-  await app.listen(process.env.PORT ?? 3000);
+  const configService = app.get(ConfigService);
+  const port = Number(configService.get<string>('PORT') ?? 3000);
+
+  await app.listen(port);
 }
 void bootstrap();
