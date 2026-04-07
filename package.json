@@ -20,6 +20,7 @@
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "db:start": "docker start quizdb || docker run -d --name quizdb -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=quizdb -p 5432:5432 -v quizdb_data:/var/lib/postgresql postgres:18",
     "db:stop": "docker stop quizdb",
+    "db:cleanall": "docker exec -i quizdb psql -U postgres -d quizdb -c \"DO \\$\\$ DECLARE r RECORD; BEGIN FOR r IN (SELECT tablename FROM pg_tables WHERE schemaname = 'public') LOOP EXECUTE 'TRUNCATE TABLE ' || quote_ident(r.tablename) || ' RESTART IDENTITY CASCADE'; END LOOP; END \\$\\$;\"",
     "db:reset": "docker rm -f quizdb && docker volume rm quizdb_data",
     "db:generate": "pnpm drizzle-kit generate",
     "db:migrate": "pnpm drizzle-kit migrate",

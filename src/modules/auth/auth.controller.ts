@@ -63,7 +63,9 @@ export class AuthController {
     this.setRefreshTokenCookie(response, refreshResult.refreshToken);
 
     return {
-      accessToken: refreshResult.accessToken,
+      token: {
+        accessToken: refreshResult.accessToken,
+      },
     };
   }
 
@@ -93,7 +95,9 @@ export class AuthController {
       userId: loginResult.userId,
       username: loginResult.username,
       email: loginResult.email,
-      accessToken: loginResult.accessToken,
+      token: {
+        accessToken: loginResult.accessToken,
+      },
     };
   }
 
@@ -110,7 +114,9 @@ export class AuthController {
       username: registerResult.username,
       email: registerResult.email,
       createdAt: registerResult.createdAt,
-      accessToken: registerResult.accessToken,
+      token: {
+        accessToken: registerResult.accessToken,
+      },
     };
   }
 }
