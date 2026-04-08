@@ -11,6 +11,7 @@ import { GlobalExceptionFilter } from './common/filters/global-exception.filter'
 import { ResponseFormatInterceptor } from './common/interceptors/response-format.interceptor';
 import { CategoryModule } from './modules/category/category.module';
 import { TagModule } from './modules/tag/tag.module';
+import { QuizModule } from './modules/quiz/quiz.module';
 
 @Module({
   imports: [
@@ -39,6 +40,7 @@ import { TagModule } from './modules/tag/tag.module';
     CommonModule,
     CategoryModule,
     TagModule,
+    QuizModule,
   ],
   providers: [
     {
