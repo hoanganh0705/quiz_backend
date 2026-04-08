@@ -1,14 +1,3 @@
-**Giai đoạn 4 — Tag**
-
-13. Tạo `src/modules/tag/` với đầy đủ module, service, controller, dto
-14. GET `/tags` — list active với pagination
-15. GET `/tags/:slug` — get by slug
-16. POST `/tags` — create, admin only
-17. PATCH `/tags/:id` — update, admin only
-18. DELETE `/tags/:id` — soft delete, admin only
-
----
-
 **Giai đoạn 5 — Quiz**
 
 19. Tạo `src/modules/quiz/` với đầy đủ module, service, controller, dto
