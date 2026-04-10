@@ -66,12 +66,22 @@ type SeedContext = {
   nowIso: string;
 };
 
+const requireSeedPassword = (envKey: string): string => {
+  const value = process.env[envKey];
+
+  if (!value || value.trim().length === 0) {
+    throw new Error(`${envKey} is required to run seeds`);
+  }
+
+  return value;
+};
+
 const USER_SEEDS: readonly RawUserSeed[] = [
   // Keep full enum coverage so auth/authorization tests exercise every user_role.
   {
     email: 'admin@quiz.local',
     username: 'admin_master',
-    password: 'Admin@123',
+    password: requireSeedPassword('SEED_ADMIN_PASSWORD'),
     role: 'admin',
     displayName: 'Quiz Admin',
     bio: 'Platform administrator account for managing users and content.',
@@ -80,7 +90,7 @@ const USER_SEEDS: readonly RawUserSeed[] = [
   {
     email: 'moderator@quiz.local',
     username: 'community_moderator',
-    password: 'Moderator@123',
+    password: requireSeedPassword('SEED_MODERATOR_PASSWORD'),
     role: 'moderator',
     displayName: 'Quiz Moderator',
     bio: 'Moderator account for reviewing reports and moderating content.',
@@ -89,7 +99,7 @@ const USER_SEEDS: readonly RawUserSeed[] = [
   {
     email: 'creator@quiz.local',
     username: 'content_creator',
-    password: 'Creator@123',
+    password: requireSeedPassword('SEED_CREATOR_PASSWORD'),
     role: 'creator',
     displayName: 'Quiz Creator',
     bio: 'Content creator account for drafting and publishing quiz content.',
@@ -98,7 +108,7 @@ const USER_SEEDS: readonly RawUserSeed[] = [
   {
     email: 'user@quiz.local',
     username: 'learner_user',
-    password: 'Learner@123',
+    password: requireSeedPassword('SEED_USER_PASSWORD'),
     role: 'user',
     displayName: 'Learner User',
     bio: 'Standard learner account for attempting quizzes.',
@@ -181,6 +191,12 @@ const TAG_SEEDS: readonly RawTagSeed[] = [
 ];
 
 const databaseUrl = process.env.DATABASE_URL;
+const isProduction = process.env.NODE_ENV === 'production';
+const allowProdSeed = process.env.ALLOW_PROD_SEED === 'true';
+
+if (isProduction && !allowProdSeed) {
+  throw new Error('Refusing to run seed in production. Set ALLOW_PROD_SEED=true to override.');
+}
 
 if (!databaseUrl) {
   throw new Error('DATABASE_URL is required to run seeds');
@@ -566,10 +582,10 @@ const runSeed = async (): Promise<void> => {
     );
   }
 
-  console.log('Seeded users (email / password):');
+  console.log('Seeded users (email / role):');
 
   for (const user of USER_SEEDS) {
-    console.log(`- ${normalizeEmail(user.email)} / ${user.password} (${user.role})`);
+    console.log(`- ${normalizeEmail(user.email)} (${user.role})`);
   }
 };
 

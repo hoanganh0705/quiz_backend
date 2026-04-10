@@ -7,17 +7,20 @@ import { AuthModule } from './modules/auth/auth.module';
 import { DatabaseModule } from './core/database/database.module';
 import { CoreLoggerModule } from './core/logger/logger.module';
 import { CommonModule } from './common/common.module';
+import { JwtGuard } from './common/guards/jwt.guard';
 import { GlobalExceptionFilter } from './common/filters/global-exception.filter';
 import { ResponseFormatInterceptor } from './common/interceptors/response-format.interceptor';
 import { CategoryModule } from './modules/category/category.module';
 import { TagModule } from './modules/tag/tag.module';
 import { QuizModule } from './modules/quiz/quiz.module';
+import { validateEnv } from './core/config/env.validation';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      expandVariables: true,
+      expandVariables: true, //  allow env like FOO='${BAR}_suffix' to be expanded to the value of BAR + '_suffix'
+      validate: validateEnv,
     }),
     ThrottlerModule.forRoot({
       throttlers: [
@@ -46,6 +49,10 @@ import { QuizModule } from './modules/quiz/quiz.module';
     {
       provide: APP_GUARD,
       useClass: ThrottlerGuard,
+    },
+    {
+      provide: APP_GUARD,
+      useClass: JwtGuard,
     },
     {
       provide: APP_INTERCEPTOR,

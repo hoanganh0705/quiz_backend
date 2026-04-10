@@ -16,12 +16,17 @@ import { DeleteTagResponseDto } from './dto/response/delete-tag-response.dto';
 import { TagListResponseDto } from './dto/response/tag-list-response.dto';
 import { TagResponseDto } from './dto/response/tag-response.dto';
 import { TagCursorPayload, TagPatch } from './types/tag.types';
+import {
+  decodeBase64JsonCursor,
+  encodeBase64JsonCursor,
+  isIsoDateString,
+  isStringMatchingPattern,
+} from '../../common/utils/cursor.util';
+import { buildSlug, normalizeSlugOrThrow } from '../../common/utils/slug.util';
 
 @Injectable()
 export class TagService {
   constructor(@Inject(DRIZZLE) private readonly db: DrizzleDB) {}
-
-  private static readonly SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
   private readonly cursorTagIdPattern =
     /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -36,59 +41,24 @@ export class TagService {
     throw new InternalServerErrorException('Tag operation failed');
   }
 
-  private buildSlug(input: string): string {
-    return input
-      .trim()
-      .toLowerCase()
-      .replace(/[^a-z0-9\s-]/g, '')
-      .replace(/\s+/g, '-')
-      .replace(/-+/g, '-')
-      .replace(/^-+|-+$/g, '');
-  }
-
-  private normalizeSlugOrThrow(input: string): string {
-    const slug = input.trim().toLowerCase();
-    if (!slug) {
-      throw new BadRequestException('Tag slug cannot be empty');
-    }
-
-    if (!TagService.SLUG_PATTERN.test(slug)) {
-      throw new BadRequestException(
-        'Tag slug must be lowercase and can only contain letters, numbers, and hyphens',
-      );
-    }
-
-    return slug;
-  }
-
   private decodeCursor(cursor: string): TagCursorPayload {
-    try {
-      const decoded = Buffer.from(cursor, 'base64url').toString('utf8');
-      const parsed = JSON.parse(decoded) as Partial<TagCursorPayload>;
+    const parsed = decodeBase64JsonCursor<TagCursorPayload>(cursor);
 
-      if (
-        typeof parsed.createdAt !== 'string' ||
-        Number.isNaN(Date.parse(parsed.createdAt)) ||
-        typeof parsed.tagId !== 'string' ||
-        !this.cursorTagIdPattern.test(parsed.tagId)
-      ) {
-        throw new Error('Invalid cursor payload');
-      }
-
-      return {
-        createdAt: parsed.createdAt,
-        tagId: parsed.tagId,
-      };
-    } catch {
+    if (
+      !isIsoDateString(parsed.createdAt) ||
+      !isStringMatchingPattern(parsed.tagId, this.cursorTagIdPattern)
+    ) {
       throw new BadRequestException('Invalid cursor');
     }
+
+    return {
+      createdAt: parsed.createdAt,
+      tagId: parsed.tagId,
+    };
   }
 
   private encodeCursor(tag: Pick<TagResponseDto, 'createdAt' | 'tagId'>): string {
-    return Buffer.from(
-      JSON.stringify({ createdAt: tag.createdAt, tagId: tag.tagId }),
-      'utf8',
-    ).toString('base64url');
+    return encodeBase64JsonCursor({ createdAt: tag.createdAt, tagId: tag.tagId });
   }
 
   private async getActiveTagById(tagId: string): Promise<TagResponseDto> {
@@ -154,7 +124,11 @@ export class TagService {
   }
 
   async getActiveTagBySlug(slug: string): Promise<TagResponseDto> {
-    const normalizedSlug = this.normalizeSlugOrThrow(slug);
+    const normalizedSlug = normalizeSlugOrThrow(slug, {
+      emptyMessage: 'Tag slug cannot be empty',
+      invalidMessage:
+        'Tag slug must be lowercase and can only contain letters, numbers, and hyphens',
+    });
 
     const [tag] = await this.db
       .select({
@@ -177,9 +151,11 @@ export class TagService {
 
   async createTag(payload: CreateTagDto): Promise<TagResponseDto> {
     const name = payload.name.trim();
-    const slug = payload.slug
-      ? this.normalizeSlugOrThrow(payload.slug)
-      : this.normalizeSlugOrThrow(this.buildSlug(name));
+    const slug = normalizeSlugOrThrow(payload.slug ?? buildSlug(name), {
+      emptyMessage: 'Tag slug cannot be empty',
+      invalidMessage:
+        'Tag slug must be lowercase and can only contain letters, numbers, and hyphens',
+    });
 
     const nowIso = new Date().toISOString();
 
@@ -213,7 +189,11 @@ export class TagService {
     }
 
     if (Object.prototype.hasOwnProperty.call(payload, 'slug') && payload.slug !== undefined) {
-      patch.slug = this.normalizeSlugOrThrow(payload.slug);
+      patch.slug = normalizeSlugOrThrow(payload.slug, {
+        emptyMessage: 'Tag slug cannot be empty',
+        invalidMessage:
+          'Tag slug must be lowercase and can only contain letters, numbers, and hyphens',
+      });
     }
 
     if (Object.keys(patch).length === 0) {

@@ -34,10 +34,6 @@ export class AuthService {
     @InjectPinoLogger(AuthService.name) private readonly logger: PinoLogger,
   ) {}
 
-  static readonly ACCESS_TOKEN_EXPIRES_IN = '15m';
-  static readonly REFRESH_TOKEN_EXPIRES_IN = '7d';
-  static readonly REFRESH_TOKEN_COOKIE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
-
   private getAccessTokenSecret(): string {
     return (
       this.configService.get<string>('JWT_ACCESS_TOKEN_SECRET') ??
@@ -56,6 +52,47 @@ export class AuthService {
     );
   }
 
+  private getTokenExpiresInSeconds(configKey: string): number {
+    const rawValue = this.configService.get<string>(configKey);
+    if (!rawValue) {
+      throw new Error(`${configKey} is not defined in environment variables`);
+    }
+
+    const trimmedValue = rawValue.trim().toLowerCase();
+    const matchedValue = trimmedValue.match(/^(\d+)([smhd])?$/);
+    if (!matchedValue) {
+      throw new Error(
+        `${configKey} has invalid format. Expected number or number with one of: s, m, h, d`,
+      );
+    }
+
+    const amount = Number(matchedValue[1]);
+    const unit = matchedValue[2] ?? 's';
+
+    switch (unit) {
+      case 's':
+        return amount;
+      case 'm':
+        return amount * 60;
+      case 'h':
+        return amount * 60 * 60;
+      case 'd':
+        return amount * 60 * 60 * 24;
+      default:
+        throw new Error(`${configKey} has unsupported unit`);
+    }
+  }
+
+  private getRefreshTokenCookieMaxAgeMs(): number {
+    const rawValue = this.configService.get<number>('REFRESH_TOKEN_COOKIE_MAX_AGE_MS');
+
+    if (typeof rawValue !== 'number' || !Number.isInteger(rawValue) || rawValue <= 0) {
+      throw new Error('REFRESH_TOKEN_COOKIE_MAX_AGE_MS must be a positive integer');
+    }
+
+    return rawValue;
+  }
+
   private async issueTokens(identity: AuthIdentity): Promise<AuthTokens> {
     const accessTokenPayload: AccessTokenPayload = {
       sub: identity.userId,
@@ -64,7 +101,7 @@ export class AuthService {
 
     const accessToken = await this.jwtService.signAsync(accessTokenPayload, {
       secret: this.getAccessTokenSecret(),
-      expiresIn: AuthService.ACCESS_TOKEN_EXPIRES_IN,
+      expiresIn: this.getTokenExpiresInSeconds('ACCESS_TOKEN_EXPIRES_IN'),
     });
 
     const refreshTokenPayload: RefreshTokenPayload = {
@@ -74,7 +111,7 @@ export class AuthService {
 
     const refreshToken = await this.jwtService.signAsync(refreshTokenPayload, {
       secret: this.getRefreshTokenSecret(),
-      expiresIn: AuthService.REFRESH_TOKEN_EXPIRES_IN,
+      expiresIn: this.getTokenExpiresInSeconds('REFRESH_TOKEN_EXPIRES_IN'),
     });
 
     return { accessToken, refreshToken };
@@ -82,9 +119,7 @@ export class AuthService {
 
   private async createUserSession(userId: string, refreshToken: string): Promise<void> {
     const refreshTokenHash = createHash('sha256').update(refreshToken).digest('hex');
-    const expiresAt = new Date(
-      Date.now() + AuthService.REFRESH_TOKEN_COOKIE_MAX_AGE_MS,
-    ).toISOString();
+    const expiresAt = new Date(Date.now() + this.getRefreshTokenCookieMaxAgeMs()).toISOString();
 
     await this.db
       .insert(userSessions)
@@ -189,9 +224,7 @@ export class AuthService {
     };
     const tokens = await this.issueTokens(identity);
     const nextRefreshTokenHash = createHash('sha256').update(tokens.refreshToken).digest('hex');
-    const expiresAt = new Date(
-      Date.now() + AuthService.REFRESH_TOKEN_COOKIE_MAX_AGE_MS,
-    ).toISOString();
+    const expiresAt = new Date(Date.now() + this.getRefreshTokenCookieMaxAgeMs()).toISOString();
 
     await this.db
       .update(userSessions)
