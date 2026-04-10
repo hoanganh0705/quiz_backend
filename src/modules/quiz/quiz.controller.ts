@@ -9,8 +9,8 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { Public } from '../../common/decorators/public.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
-import { JwtGuard } from '../../common/guards/jwt.guard';
 import type { JwtPayload } from '../../common/guards/jwt.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { CreateQuizDto } from './dto/request/create-quiz.dto';
@@ -27,7 +27,7 @@ export class QuizController {
   constructor(private readonly quizService: QuizService) {}
 
   @Post()
-  @UseGuards(JwtGuard, RolesGuard)
+  @UseGuards(RolesGuard)
   @Roles('creator')
   createQuiz(
     @CurrentUser() user: JwtPayload,
@@ -37,17 +37,19 @@ export class QuizController {
   }
 
   @Get()
+  @Public()
   listQuizzes(@Query() query: ListQuizzesQueryDto): Promise<QuizListResponseDto> {
     return this.quizService.listQuizzes(query);
   }
 
   @Get(':slug')
+  @Public()
   getQuizBySlug(@Param('slug') slug: string): Promise<QuizResponseDto> {
     return this.quizService.getQuizBySlug(slug);
   }
 
   @Post(':id/versions')
-  @UseGuards(JwtGuard, RolesGuard)
+  @UseGuards(RolesGuard)
   @Roles('creator', 'admin')
   createQuizVersion(
     @Param('id', new ParseUUIDPipe()) quizId: string,
@@ -58,7 +60,7 @@ export class QuizController {
   }
 
   @Get(':id/versions')
-  @UseGuards(JwtGuard, RolesGuard)
+  @UseGuards(RolesGuard)
   @Roles('creator', 'admin')
   listQuizVersions(
     @Param('id', new ParseUUIDPipe()) quizId: string,

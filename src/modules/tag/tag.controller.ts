@@ -10,8 +10,8 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
+import { Public } from '../../common/decorators/public.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
-import { JwtGuard } from '../../common/guards/jwt.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { CreateTagDto } from './dto/request/create-tag.dto';
 import { ListTagsQueryDto } from './dto/request/list-tags-query.dto';
@@ -26,24 +26,26 @@ export class TagController {
   constructor(private readonly tagService: TagService) {}
 
   @Get()
+  @Public()
   listTags(@Query() query: ListTagsQueryDto): Promise<TagListResponseDto> {
     return this.tagService.listActiveTags(query);
   }
 
   @Get(':slug')
+  @Public()
   getTagBySlug(@Param('slug') slug: string): Promise<TagResponseDto> {
     return this.tagService.getActiveTagBySlug(slug);
   }
 
   @Post()
-  @UseGuards(JwtGuard, RolesGuard)
+  @UseGuards(RolesGuard)
   @Roles('admin')
   createTag(@Body() payload: CreateTagDto): Promise<TagResponseDto> {
     return this.tagService.createTag(payload);
   }
 
   @Patch(':id')
-  @UseGuards(JwtGuard, RolesGuard)
+  @UseGuards(RolesGuard)
   @Roles('admin')
   updateTag(
     @Param('id', new ParseUUIDPipe()) tagId: string,
@@ -53,7 +55,7 @@ export class TagController {
   }
 
   @Delete(':id')
-  @UseGuards(JwtGuard, RolesGuard)
+  @UseGuards(RolesGuard)
   @Roles('admin')
   deleteTag(@Param('id', new ParseUUIDPipe()) tagId: string): Promise<DeleteTagResponseDto> {
     return this.tagService.softDeleteTagById(tagId);

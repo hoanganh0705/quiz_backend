@@ -132,7 +132,7 @@ export const userSessions = pgTable(
     sessionId: uuid('session_id').defaultRandom().primaryKey().notNull(),
     userId: uuid('user_id').notNull(),
     refreshTokenHash: text('refresh_token_hash').notNull(),
-    deviceInfo: text('device_info'), // browser, mobile, etc.
+    deviceInfo: text('device_info'),
     ipAddress: text('ip_address'),
     expiresAt: timestamp('expires_at', { withTimezone: true, mode: 'string' }).notNull(),
     createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' })

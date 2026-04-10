@@ -1,6 +1,5 @@
-import { Body, Controller, Get, Patch, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Patch } from '@nestjs/common';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
-import { JwtGuard } from '../../common/guards/jwt.guard';
 import { UpdateMeSettingsDto } from './dto/request/update-me-settings.dto';
 import { UpdateMeDto } from './dto/request/update-me.dto';
 import { UserMeResponseDto } from './dto/response/user-me-response.dto';
@@ -11,13 +10,11 @@ export class UserController {
   constructor(private readonly userService: UserService) {}
 
   @Get('me')
-  @UseGuards(JwtGuard)
   me(@CurrentUser('sub') userId: string): Promise<UserMeResponseDto> {
     return this.userService.getMeById(userId);
   }
 
   @Patch('me')
-  @UseGuards(JwtGuard)
   updateMe(
     @CurrentUser('sub') userId: string,
     @Body() payload: UpdateMeDto,
@@ -26,7 +23,6 @@ export class UserController {
   }
 
   @Patch('me/settings')
-  @UseGuards(JwtGuard)
   updateMeSettings(
     @CurrentUser('sub') userId: string,
     @Body() payload: UpdateMeSettingsDto,
