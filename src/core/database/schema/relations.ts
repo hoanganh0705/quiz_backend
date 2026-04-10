@@ -53,7 +53,7 @@ export const usersRelations = relations(users, ({ many }) => ({
   quizInstances: many(quizInstances),
   quizInstancePlayers: many(quizInstancePlayers),
   tournamentParticipants: many(tournamentParticipants),
-  userSessions: many(userSessions), // thêm dòng này
+  userSessions: many(userSessions),
 }));
 
 export const userSessionsRelations = relations(userSessions, ({ one }) => ({
@@ -78,7 +78,7 @@ export const quizzesRelations = relations(quizzes, ({ one, many }) => ({
   }),
   quizCategories: many(quizCategories),
   quizTags: many(quizTags),
-  quizStats: many(quizStats),
+  quizStats: one(quizStats),
   quizReviews: many(quizReviews),
   bookmarkedQuizzes: many(bookmarkedQuizzes),
 }));

@@ -10,8 +10,8 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
+import { Public } from '../../common/decorators/public.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
-import { JwtGuard } from '../../common/guards/jwt.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { CreateCategoryDto } from './dto/request/create-category.dto';
 import { ListCategoriesQueryDto } from './dto/request/list-categories-query.dto';
@@ -26,24 +26,26 @@ export class CategoryController {
   constructor(private readonly categoryService: CategoryService) {}
 
   @Get()
+  @Public()
   listCategories(@Query() query: ListCategoriesQueryDto): Promise<CategoryListResponseDto> {
     return this.categoryService.listActiveCategories(query);
   }
 
   @Get(':slug')
+  @Public()
   getCategoryBySlug(@Param('slug') slug: string): Promise<CategoryResponseDto> {
     return this.categoryService.getActiveCategoryBySlug(slug);
   }
 
   @Post()
-  @UseGuards(JwtGuard, RolesGuard)
+  @UseGuards(RolesGuard)
   @Roles('admin')
   createCategory(@Body() payload: CreateCategoryDto): Promise<CategoryResponseDto> {
     return this.categoryService.createCategory(payload);
   }
 
   @Patch(':id')
-  @UseGuards(JwtGuard, RolesGuard)
+  @UseGuards(RolesGuard)
   @Roles('admin')
   updateCategory(
     @Param('id', new ParseUUIDPipe()) categoryId: string,
@@ -53,7 +55,7 @@ export class CategoryController {
   }
 
   @Delete(':id')
-  @UseGuards(JwtGuard, RolesGuard)
+  @UseGuards(RolesGuard)
   @Roles('admin')
   deleteCategory(
     @Param('id', new ParseUUIDPipe()) categoryId: string,

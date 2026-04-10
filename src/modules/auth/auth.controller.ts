@@ -2,6 +2,7 @@ import { Body, Controller, Post, Req, Res, UnauthorizedException } from '@nestjs
 import { ConfigService } from '@nestjs/config';
 import { Throttle } from '@nestjs/throttler';
 import type { Request, Response } from 'express';
+import { Public } from '../../common/decorators/public.decorator';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/request/login.dto';
 import { LoginResponseDto } from './dto/response/login-response.dto';
@@ -11,6 +12,7 @@ import { RefreshTokenResponseDto } from './dto/response/refresh-token-response.d
 import { LoginResult, RefreshTokenResult, RegisterResult } from './types/auth.types';
 import { LogoutResponseDto } from './dto/response/logout-response.dto';
 
+@Public()
 @Controller('auth')
 export class AuthController {
   constructor(
@@ -22,13 +24,23 @@ export class AuthController {
     return this.configService.get<string>('NODE_ENV') === 'production';
   }
 
+  private getRefreshTokenCookieMaxAgeMs(): number {
+    const rawValue = this.configService.get<number>('REFRESH_TOKEN_COOKIE_MAX_AGE_MS');
+
+    if (typeof rawValue !== 'number' || !Number.isInteger(rawValue) || rawValue <= 0) {
+      throw new Error('REFRESH_TOKEN_COOKIE_MAX_AGE_MS must be a positive integer');
+    }
+
+    return rawValue;
+  }
+
   private setRefreshTokenCookie(response: Response, refreshToken: string): void {
     response.cookie('refreshToken', refreshToken, {
       httpOnly: true,
       secure: this.isProduction(),
       sameSite: 'strict',
-      maxAge: AuthService.REFRESH_TOKEN_COOKIE_MAX_AGE_MS,
-      path: '/auth/refresh-token',
+      maxAge: this.getRefreshTokenCookieMaxAgeMs(),
+      path: '/',
     });
   }
 
@@ -37,7 +49,7 @@ export class AuthController {
       httpOnly: true,
       secure: this.isProduction(),
       sameSite: 'strict',
-      path: '/auth/refresh-token',
+      path: '/',
     });
   }
 

@@ -28,6 +28,14 @@ import { QuizResponseDto } from './dto/response/quiz-response.dto';
 import { ListQuizzesQueryDto } from './dto/request/list-quizzes-query.dto';
 import { QuizListResponseDto } from './dto/response/quiz-list-response.dto';
 import { QuizVersionListResponseDto } from './dto/response/quiz-version-list-response.dto';
+import {
+  decodeBase64JsonCursor,
+  encodeBase64JsonCursor,
+  isIsoDateString,
+  isStringMatchingPattern,
+} from '../../common/utils/cursor.util';
+import { buildSlug, normalizeSlugOrThrow } from '../../common/utils/slug.util';
+import { normalizeNullableText } from '../../common/utils/text.util';
 
 type QuizWithPublishedVersionRow = {
   quizId: string;
@@ -66,107 +74,53 @@ export class QuizService {
   private readonly uuidPattern =
     /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-  private normalizeNullableText(value: string | null | undefined): string | null | undefined {
-    if (value === undefined) {
-      return undefined;
-    }
-
-    if (value === null) {
-      return null;
-    }
-
-    const trimmed = value.trim();
-    return trimmed.length === 0 ? null : trimmed;
-  }
-
-  private buildSlug(input: string): string {
-    return input
-      .trim()
-      .toLowerCase()
-      .replace(/[^a-z0-9\s-]/g, '')
-      .replace(/\s+/g, '-')
-      .replace(/-+/g, '-')
-      .replace(/^-+|-+$/g, '');
-  }
-
-  private normalizeSlugOrThrow(input: string): string {
-    const slug = input.trim().toLowerCase();
-
-    if (!slug) {
-      throw new BadRequestException('Quiz slug cannot be empty');
-    }
-
-    if (!QuizService.QUIZ_SLUG_PATTERN.test(slug)) {
-      throw new BadRequestException(
-        'Quiz slug must be lowercase and can only contain letters, numbers, and hyphens',
-      );
-    }
-
-    return slug;
-  }
-
   private isCreatorOrAdmin(role: UserRole): boolean {
     return role === 'creator' || role === 'admin';
   }
 
-  private parseUuidFromCursor(value: unknown, fieldName: string): string {
-    if (typeof value !== 'string' || !this.uuidPattern.test(value)) {
-      throw new BadRequestException(`Invalid cursor: ${fieldName}`);
-    }
-
-    return value;
-  }
-
-  private parseDateFromCursor(value: unknown, fieldName: string): string {
-    if (typeof value !== 'string' || Number.isNaN(Date.parse(value))) {
-      throw new BadRequestException(`Invalid cursor: ${fieldName}`);
-    }
-
-    return value;
-  }
-
   private decodeQuizCursor(cursor: string): QuizCursorPayload {
-    try {
-      const decoded = Buffer.from(cursor, 'base64url').toString('utf8');
-      const parsed = JSON.parse(decoded) as Partial<QuizCursorPayload>;
+    const parsed = decodeBase64JsonCursor<QuizCursorPayload>(cursor);
 
-      return {
-        createdAt: this.parseDateFromCursor(parsed.createdAt, 'createdAt'),
-        quizId: this.parseUuidFromCursor(parsed.quizId, 'quizId'),
-      };
-    } catch {
+    if (
+      !isIsoDateString(parsed.createdAt) ||
+      !isStringMatchingPattern(parsed.quizId, this.uuidPattern)
+    ) {
       throw new BadRequestException('Invalid cursor');
     }
+
+    return {
+      createdAt: parsed.createdAt,
+      quizId: parsed.quizId,
+    };
   }
 
   private decodeQuizVersionCursor(cursor: string): QuizVersionCursorPayload {
-    try {
-      const decoded = Buffer.from(cursor, 'base64url').toString('utf8');
-      const parsed = JSON.parse(decoded) as Partial<QuizVersionCursorPayload>;
+    const parsed = decodeBase64JsonCursor<QuizVersionCursorPayload>(cursor);
 
-      return {
-        createdAt: this.parseDateFromCursor(parsed.createdAt, 'createdAt'),
-        quizVersionId: this.parseUuidFromCursor(parsed.quizVersionId, 'quizVersionId'),
-      };
-    } catch {
+    if (
+      !isIsoDateString(parsed.createdAt) ||
+      !isStringMatchingPattern(parsed.quizVersionId, this.uuidPattern)
+    ) {
       throw new BadRequestException('Invalid cursor');
     }
+
+    return {
+      createdAt: parsed.createdAt,
+      quizVersionId: parsed.quizVersionId,
+    };
   }
 
   private encodeQuizCursor(quiz: Pick<QuizResponseDto, 'createdAt' | 'quizId'>): string {
-    return Buffer.from(
-      JSON.stringify({ createdAt: quiz.createdAt, quizId: quiz.quizId }),
-      'utf8',
-    ).toString('base64url');
+    return encodeBase64JsonCursor({ createdAt: quiz.createdAt, quizId: quiz.quizId });
   }
 
   private encodeQuizVersionCursor(
     version: Pick<QuizVersionResponseDto, 'createdAt' | 'quizVersionId'>,
   ): string {
-    return Buffer.from(
-      JSON.stringify({ createdAt: version.createdAt, quizVersionId: version.quizVersionId }),
-      'utf8',
-    ).toString('base64url');
+    return encodeBase64JsonCursor({
+      createdAt: version.createdAt,
+      quizVersionId: version.quizVersionId,
+    });
   }
 
   private mapQuizRow(row: QuizWithPublishedVersionRow): QuizResponseDto {
@@ -347,11 +301,21 @@ export class QuizService {
   async createQuiz(user: JwtPayload, payload: CreateQuizDto): Promise<QuizResponseDto> {
     const title = payload.title.trim();
     const slug = payload.slug
-      ? this.normalizeSlugOrThrow(payload.slug)
-      : this.normalizeSlugOrThrow(this.buildSlug(title));
-    const description = this.normalizeNullableText(payload.description);
-    const requirements = this.normalizeNullableText(payload.requirements);
-    const imageUrl = this.normalizeNullableText(payload.imageUrl);
+      ? normalizeSlugOrThrow(payload.slug, {
+          pattern: QuizService.QUIZ_SLUG_PATTERN,
+          emptyMessage: 'Quiz slug cannot be empty',
+          invalidMessage:
+            'Quiz slug must be lowercase and can only contain letters, numbers, and hyphens',
+        })
+      : normalizeSlugOrThrow(buildSlug(title), {
+          pattern: QuizService.QUIZ_SLUG_PATTERN,
+          emptyMessage: 'Quiz slug cannot be empty',
+          invalidMessage:
+            'Quiz slug must be lowercase and can only contain letters, numbers, and hyphens',
+        });
+    const description = normalizeNullableText(payload.description);
+    const requirements = normalizeNullableText(payload.requirements);
+    const imageUrl = normalizeNullableText(payload.imageUrl);
     const categoryIds = this.normalizeLinkIds(payload.categoryIds);
     const tagIds = this.normalizeLinkIds(payload.tagIds);
     const nowIso = new Date().toISOString();
@@ -522,7 +486,12 @@ export class QuizService {
   }
 
   async getQuizBySlug(slug: string): Promise<QuizResponseDto> {
-    const normalizedSlug = this.normalizeSlugOrThrow(slug);
+    const normalizedSlug = normalizeSlugOrThrow(slug, {
+      pattern: QuizService.QUIZ_SLUG_PATTERN,
+      emptyMessage: 'Quiz slug cannot be empty',
+      invalidMessage:
+        'Quiz slug must be lowercase and can only contain letters, numbers, and hyphens',
+    });
 
     const [row] = await this.db
       .select({
