@@ -19,6 +19,14 @@ import {
   CategoryPatch,
   ListCategoriesCursorQuery,
 } from './types/category.types';
+import {
+  decodeBase64JsonCursor,
+  encodeBase64JsonCursor,
+  isIsoDateString,
+  isStringMatchingPattern,
+} from '../../common/utils/cursor.util';
+import { buildSlug, normalizeSlugOrThrow } from '../../common/utils/slug.util';
+import { normalizeNullableText } from '../../common/utils/text.util';
 
 @Injectable()
 export class CategoryService {
@@ -37,57 +45,27 @@ export class CategoryService {
     throw new InternalServerErrorException('Category operation failed');
   }
 
-  private buildSlug(input: string): string {
-    return input
-      .trim()
-      .toLowerCase()
-      .replace(/[^a-z0-9\s-]/g, '')
-      .replace(/\s+/g, '-')
-      .replace(/-+/g, '-')
-      .replace(/^-+|-+$/g, '');
-  }
-
-  private normalizeNullableText(value: string | null | undefined): string | null | undefined {
-    if (value === undefined) {
-      return undefined;
-    }
-
-    if (value === null) {
-      return null;
-    }
-
-    const trimmed = value.trim();
-    return trimmed.length === 0 ? null : trimmed;
-  }
-
   private decodeCursor(cursor: string): CategoryCursorPayload {
-    try {
-      const decoded = Buffer.from(cursor, 'base64url').toString('utf8');
-      const parsed = JSON.parse(decoded) as Partial<CategoryCursorPayload>;
+    const parsed = decodeBase64JsonCursor<CategoryCursorPayload>(cursor);
 
-      if (
-        typeof parsed.createdAt !== 'string' ||
-        Number.isNaN(Date.parse(parsed.createdAt)) ||
-        typeof parsed.categoryId !== 'string' ||
-        !this.categoryIdPattern.test(parsed.categoryId)
-      ) {
-        throw new Error('Invalid cursor payload');
-      }
-
-      return {
-        createdAt: parsed.createdAt,
-        categoryId: parsed.categoryId,
-      };
-    } catch {
+    if (
+      !isIsoDateString(parsed.createdAt) ||
+      !isStringMatchingPattern(parsed.categoryId, this.categoryIdPattern)
+    ) {
       throw new BadRequestException('Invalid cursor');
     }
+
+    return {
+      createdAt: parsed.createdAt,
+      categoryId: parsed.categoryId,
+    };
   }
 
   private encodeCursor(category: Pick<CategoryResponseDto, 'createdAt' | 'categoryId'>): string {
-    return Buffer.from(
-      JSON.stringify({ createdAt: category.createdAt, categoryId: category.categoryId }),
-      'utf8',
-    ).toString('base64url');
+    return encodeBase64JsonCursor({
+      createdAt: category.createdAt,
+      categoryId: category.categoryId,
+    });
   }
 
   private async getActiveCategoryById(categoryId: string): Promise<CategoryResponseDto> {
@@ -162,7 +140,11 @@ export class CategoryService {
   }
 
   async getActiveCategoryBySlug(slug: string): Promise<CategoryResponseDto> {
-    const normalizedSlug = slug.trim().toLowerCase();
+    const normalizedSlug = normalizeSlugOrThrow(slug, {
+      emptyMessage: 'Category slug cannot be empty',
+      invalidMessage:
+        'Category slug must be lowercase and can only contain letters, numbers, and hyphens',
+    });
 
     const [category] = await this.db
       .select({
@@ -187,14 +169,20 @@ export class CategoryService {
 
   async createCategory(payload: CreateCategoryDto): Promise<CategoryResponseDto> {
     const name = payload.name.trim();
-    const slug = (payload.slug?.trim().toLowerCase() ?? this.buildSlug(name)).trim();
+    const slug = payload.slug
+      ? normalizeSlugOrThrow(payload.slug, {
+          emptyMessage: 'Category slug cannot be empty',
+          invalidMessage:
+            'Category slug must be lowercase and can only contain letters, numbers, and hyphens',
+        })
+      : normalizeSlugOrThrow(buildSlug(name), {
+          emptyMessage: 'Category slug cannot be empty',
+          invalidMessage:
+            'Category slug must be lowercase and can only contain letters, numbers, and hyphens',
+        });
 
-    if (!slug) {
-      throw new BadRequestException('Category slug cannot be empty');
-    }
-
-    const description = this.normalizeNullableText(payload.description);
-    const imageUrl = this.normalizeNullableText(payload.imageUrl);
+    const description = normalizeNullableText(payload.description);
+    const imageUrl = normalizeNullableText(payload.imageUrl);
 
     const [duplicateCategory] = await this.db
       .select({
@@ -254,15 +242,19 @@ export class CategoryService {
     }
 
     if (Object.prototype.hasOwnProperty.call(payload, 'description')) {
-      patch.description = this.normalizeNullableText(payload.description);
+      patch.description = normalizeNullableText(payload.description);
     }
 
     if (Object.prototype.hasOwnProperty.call(payload, 'slug') && payload.slug !== undefined) {
-      patch.slug = payload.slug.trim().toLowerCase();
+      patch.slug = normalizeSlugOrThrow(payload.slug, {
+        emptyMessage: 'Category slug cannot be empty',
+        invalidMessage:
+          'Category slug must be lowercase and can only contain letters, numbers, and hyphens',
+      });
     }
 
     if (Object.prototype.hasOwnProperty.call(payload, 'imageUrl')) {
-      patch.imageUrl = this.normalizeNullableText(payload.imageUrl);
+      patch.imageUrl = normalizeNullableText(payload.imageUrl);
     }
 
     if (Object.keys(patch).length === 0) {
