@@ -55,4 +55,71 @@ export class AuthConfig {
 
     return rawValue;
   }
+
+  get maxActiveSessionsPerUser(): number {
+    const rawValue = this.configService.get<number>('MAX_ACTIVE_SESSIONS_PER_USER');
+
+    if (rawValue === undefined) {
+      return 5;
+    }
+
+    if (typeof rawValue !== 'number' || !Number.isInteger(rawValue) || rawValue <= 0) {
+      throw new Error('MAX_ACTIVE_SESSIONS_PER_USER must be a positive integer');
+    }
+
+    return rawValue;
+  }
+
+  get accessTokenIssuer(): string {
+    const rawValue = this.configService.get<string>('JWT_ACCESS_TOKEN_ISSUER');
+
+    if (!rawValue || rawValue.trim().length === 0) {
+      return 'quiz-backend';
+    }
+
+    return rawValue.trim();
+  }
+
+  get accessTokenAudience(): string {
+    const rawValue = this.configService.get<string>('JWT_ACCESS_TOKEN_AUDIENCE');
+
+    if (!rawValue || rawValue.trim().length === 0) {
+      return 'quiz-client';
+    }
+
+    return rawValue.trim();
+  }
+
+  get refreshReuseGraceWindowSeconds(): number {
+    const rawValue = this.configService.get<number>('REFRESH_TOKEN_REUSE_GRACE_WINDOW_SECONDS');
+
+    if (rawValue === undefined) {
+      return 10;
+    }
+
+    if (typeof rawValue !== 'number' || !Number.isInteger(rawValue) || rawValue <= 0) {
+      throw new Error('REFRESH_TOKEN_REUSE_GRACE_WINDOW_SECONDS must be a positive integer');
+    }
+
+    return rawValue;
+  }
+
+  get refreshReuseGraceWindowMs(): number {
+    return this.refreshReuseGraceWindowSeconds * 1_000;
+  }
+
+  get isSessionBindingStrict(): boolean {
+    const rawValue = this.configService.get<string | boolean>('SESSION_BINDING_STRICT');
+
+    if (typeof rawValue === 'boolean') {
+      return rawValue;
+    }
+
+    if (typeof rawValue !== 'string') {
+      return false;
+    }
+
+    const normalizedValue = rawValue.trim().toLowerCase();
+    return normalizedValue === 'true' || normalizedValue === '1' || normalizedValue === 'yes';
+  }
 }
