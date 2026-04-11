@@ -24,6 +24,22 @@ import {
 } from '../../common/utils/cursor.util';
 import { buildSlug, normalizeSlugOrThrow } from '../../common/utils/slug.util';
 
+type TagRow = {
+  tagId: string;
+  name: string;
+  slug: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+const TAG_COLUMNS = {
+  tagId: tags.tagId,
+  name: tags.name,
+  slug: tags.slug,
+  createdAt: tags.createdAt,
+  updatedAt: tags.updatedAt,
+};
+
 @Injectable()
 export class TagService {
   constructor(@Inject(DRIZZLE) private readonly db: DrizzleDB) {}
@@ -57,19 +73,23 @@ export class TagService {
     };
   }
 
-  private encodeCursor(tag: Pick<TagResponseDto, 'createdAt' | 'tagId'>): string {
+  private encodeCursor(tag: Pick<TagRow, 'createdAt' | 'tagId'>): string {
     return encodeBase64JsonCursor({ createdAt: tag.createdAt, tagId: tag.tagId });
   }
 
-  private async getActiveTagById(tagId: string): Promise<TagResponseDto> {
+  private toTagResponse(tag: TagRow): TagResponseDto {
+    return {
+      tagId: tag.tagId,
+      name: tag.name,
+      slug: tag.slug,
+      createdAt: tag.createdAt,
+      updatedAt: tag.updatedAt,
+    };
+  }
+
+  private async getActiveTagById(tagId: string): Promise<TagRow> {
     const [tag] = await this.db
-      .select({
-        tagId: tags.tagId,
-        name: tags.name,
-        slug: tags.slug,
-        createdAt: tags.createdAt,
-        updatedAt: tags.updatedAt,
-      })
+      .select(TAG_COLUMNS)
       .from(tags)
       .where(and(eq(tags.tagId, tagId), isNull(tags.deletedAt)))
       .limit(1);
@@ -78,7 +98,7 @@ export class TagService {
       throw new NotFoundException('Tag not found');
     }
 
-    return tag;
+    return tag as TagRow;
   }
 
   async listActiveTags(query: ListTagsQueryDto): Promise<TagListResponseDto> {
@@ -94,13 +114,7 @@ export class TagService {
       : undefined;
 
     const rows = await this.db
-      .select({
-        tagId: tags.tagId,
-        name: tags.name,
-        slug: tags.slug,
-        createdAt: tags.createdAt,
-        updatedAt: tags.updatedAt,
-      })
+      .select(TAG_COLUMNS)
       .from(tags)
       .where(
         cursorCondition ? and(isNull(tags.deletedAt), cursorCondition) : isNull(tags.deletedAt),
@@ -109,7 +123,8 @@ export class TagService {
       .limit(limit + 1);
 
     const hasNextPage = rows.length > limit;
-    const items = hasNextPage ? rows.slice(0, limit) : rows;
+    const itemRows = hasNextPage ? rows.slice(0, limit) : rows;
+    const items = itemRows.map((row) => this.toTagResponse(row as TagRow));
     const lastItem = items.at(-1);
     const nextCursor = hasNextPage && lastItem ? this.encodeCursor(lastItem) : null;
 
@@ -131,13 +146,7 @@ export class TagService {
     });
 
     const [tag] = await this.db
-      .select({
-        tagId: tags.tagId,
-        name: tags.name,
-        slug: tags.slug,
-        createdAt: tags.createdAt,
-        updatedAt: tags.updatedAt,
-      })
+      .select(TAG_COLUMNS)
       .from(tags)
       .where(and(eq(tags.slug, normalizedSlug), isNull(tags.deletedAt)))
       .limit(1);
@@ -146,7 +155,7 @@ export class TagService {
       throw new NotFoundException('Tag not found');
     }
 
-    return tag;
+    return this.toTagResponse(tag as TagRow);
   }
 
   async createTag(payload: CreateTagDto): Promise<TagResponseDto> {
@@ -167,21 +176,13 @@ export class TagService {
         createdAt: nowIso,
         updatedAt: nowIso,
       })
-      .returning({
-        tagId: tags.tagId,
-        name: tags.name,
-        slug: tags.slug,
-        createdAt: tags.createdAt,
-        updatedAt: tags.updatedAt,
-      })
+      .returning(TAG_COLUMNS)
       .catch((error: unknown) => this.mapUniqueConflict(error, 'Tag name or slug already exists'));
 
-    return createdTag;
+    return this.toTagResponse(createdTag as TagRow);
   }
 
   async updateTagById(tagId: string, payload: UpdateTagDto): Promise<TagResponseDto> {
-    const existingTag = await this.getActiveTagById(tagId);
-
     const patch: TagPatch = {};
 
     if (Object.prototype.hasOwnProperty.call(payload, 'name') && payload.name !== undefined) {
@@ -197,26 +198,25 @@ export class TagService {
     }
 
     if (Object.keys(patch).length === 0) {
-      return existingTag;
+      const tag = await this.getActiveTagById(tagId);
+      return this.toTagResponse(tag);
     }
 
-    const isNameUnchanged = patch.name === undefined || patch.name === existingTag.name;
-    const isSlugUnchanged = patch.slug === undefined || patch.slug === existingTag.slug;
-
-    if (isNameUnchanged && isSlugUnchanged) {
-      return existingTag;
-    }
-
-    await this.db
+    const [updatedTag] = await this.db
       .update(tags)
       .set({
         ...patch,
         updatedAt: new Date().toISOString(),
       })
       .where(and(eq(tags.tagId, tagId), isNull(tags.deletedAt)))
+      .returning(TAG_COLUMNS)
       .catch((error: unknown) => this.mapUniqueConflict(error, 'Tag name or slug already exists'));
 
-    return this.getActiveTagById(tagId);
+    if (!updatedTag) {
+      throw new NotFoundException('Tag not found');
+    }
+
+    return this.toTagResponse(updatedTag as TagRow);
   }
 
   async softDeleteTagById(tagId: string): Promise<DeleteTagResponseDto> {
