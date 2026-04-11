@@ -6,7 +6,7 @@ import {
   InternalServerErrorException,
   NotFoundException,
 } from '@nestjs/common';
-import { and, desc, eq, isNull, ne, or, sql } from 'drizzle-orm';
+import { and, desc, eq, isNull, or, sql } from 'drizzle-orm';
 import { DRIZZLE, type DrizzleDB } from '../../core/database/database.module';
 import { categories } from '../../core/database/schema';
 import { CreateCategoryDto } from './dto/request/create-category.dto';
@@ -27,6 +27,26 @@ import {
 } from '../../common/utils/cursor.util';
 import { buildSlug, normalizeSlugOrThrow } from '../../common/utils/slug.util';
 import { normalizeNullableText } from '../../common/utils/text.util';
+
+type CategoryRow = {
+  categoryId: string;
+  name: string;
+  description: string | null;
+  slug: string;
+  imageUrl: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+const CATEGORY_COLUMNS = {
+  categoryId: categories.categoryId,
+  name: categories.name,
+  description: categories.description,
+  slug: categories.slug,
+  imageUrl: categories.imageUrl,
+  createdAt: categories.createdAt,
+  updatedAt: categories.updatedAt,
+};
 
 @Injectable()
 export class CategoryService {
@@ -61,24 +81,28 @@ export class CategoryService {
     };
   }
 
-  private encodeCursor(category: Pick<CategoryResponseDto, 'createdAt' | 'categoryId'>): string {
+  private encodeCursor(category: Pick<CategoryRow, 'createdAt' | 'categoryId'>): string {
     return encodeBase64JsonCursor({
       createdAt: category.createdAt,
       categoryId: category.categoryId,
     });
   }
 
-  private async getActiveCategoryById(categoryId: string): Promise<CategoryResponseDto> {
+  private toCategoryResponse(category: CategoryRow): CategoryResponseDto {
+    return {
+      categoryId: category.categoryId,
+      name: category.name,
+      description: category.description,
+      slug: category.slug,
+      imageUrl: category.imageUrl,
+      createdAt: category.createdAt,
+      updatedAt: category.updatedAt,
+    };
+  }
+
+  private async getActiveCategoryById(categoryId: string): Promise<CategoryRow> {
     const [category] = await this.db
-      .select({
-        categoryId: categories.categoryId,
-        name: categories.name,
-        description: categories.description,
-        slug: categories.slug,
-        imageUrl: categories.imageUrl,
-        createdAt: categories.createdAt,
-        updatedAt: categories.updatedAt,
-      })
+      .select(CATEGORY_COLUMNS)
       .from(categories)
       .where(and(eq(categories.categoryId, categoryId), isNull(categories.deletedAt)))
       .limit(1);
@@ -87,7 +111,7 @@ export class CategoryService {
       throw new NotFoundException('Category not found');
     }
 
-    return category;
+    return category as CategoryRow;
   }
 
   async listActiveCategories(query: ListCategoriesCursorQuery): Promise<CategoryListResponseDto> {
@@ -106,15 +130,7 @@ export class CategoryService {
       : undefined;
 
     const rows = await this.db
-      .select({
-        categoryId: categories.categoryId,
-        name: categories.name,
-        description: categories.description,
-        slug: categories.slug,
-        imageUrl: categories.imageUrl,
-        createdAt: categories.createdAt,
-        updatedAt: categories.updatedAt,
-      })
+      .select(CATEGORY_COLUMNS)
       .from(categories)
       .where(
         cursorCondition
@@ -125,7 +141,8 @@ export class CategoryService {
       .limit(limit + 1);
 
     const hasNextPage = rows.length > limit;
-    const items = hasNextPage ? rows.slice(0, limit) : rows;
+    const itemRows = hasNextPage ? rows.slice(0, limit) : rows;
+    const items = itemRows.map((row) => this.toCategoryResponse(row as CategoryRow));
     const lastItem = items.at(-1);
     const nextCursor = hasNextPage && lastItem ? this.encodeCursor(lastItem) : null;
 
@@ -147,15 +164,7 @@ export class CategoryService {
     });
 
     const [category] = await this.db
-      .select({
-        categoryId: categories.categoryId,
-        name: categories.name,
-        description: categories.description,
-        slug: categories.slug,
-        imageUrl: categories.imageUrl,
-        createdAt: categories.createdAt,
-        updatedAt: categories.updatedAt,
-      })
+      .select(CATEGORY_COLUMNS)
       .from(categories)
       .where(and(eq(categories.slug, normalizedSlug), isNull(categories.deletedAt)))
       .limit(1);
@@ -164,7 +173,7 @@ export class CategoryService {
       throw new NotFoundException('Category not found');
     }
 
-    return category;
+    return this.toCategoryResponse(category as CategoryRow);
   }
 
   async createCategory(payload: CreateCategoryDto): Promise<CategoryResponseDto> {
@@ -184,23 +193,6 @@ export class CategoryService {
     const description = normalizeNullableText(payload.description);
     const imageUrl = normalizeNullableText(payload.imageUrl);
 
-    const [duplicateCategory] = await this.db
-      .select({
-        categoryId: categories.categoryId,
-      })
-      .from(categories)
-      .where(
-        and(
-          isNull(categories.deletedAt),
-          or(sql`lower(${categories.name}) = ${name.toLowerCase()}`, eq(categories.slug, slug)),
-        ),
-      )
-      .limit(1);
-
-    if (duplicateCategory) {
-      throw new ConflictException('Category name or slug already exists');
-    }
-
     const nowIso = new Date().toISOString();
 
     const [createdCategory] = await this.db
@@ -213,28 +205,18 @@ export class CategoryService {
         createdAt: nowIso,
         updatedAt: nowIso,
       })
-      .returning({
-        categoryId: categories.categoryId,
-        name: categories.name,
-        description: categories.description,
-        slug: categories.slug,
-        imageUrl: categories.imageUrl,
-        createdAt: categories.createdAt,
-        updatedAt: categories.updatedAt,
-      })
+      .returning(CATEGORY_COLUMNS)
       .catch((error: unknown) =>
         this.mapUniqueConflict(error, 'Category name or slug already exists'),
       );
 
-    return createdCategory;
+    return this.toCategoryResponse(createdCategory as CategoryRow);
   }
 
   async updateCategoryById(
     categoryId: string,
     payload: UpdateCategoryDto,
   ): Promise<CategoryResponseDto> {
-    const existingCategory = await this.getActiveCategoryById(categoryId);
-
     const patch: CategoryPatch = {};
 
     if (Object.prototype.hasOwnProperty.call(payload, 'name') && payload.name !== undefined) {
@@ -258,45 +240,27 @@ export class CategoryService {
     }
 
     if (Object.keys(patch).length === 0) {
-      return existingCategory;
+      const category = await this.getActiveCategoryById(categoryId);
+      return this.toCategoryResponse(category);
     }
 
-    const nextName = patch.name ?? existingCategory.name;
-    const nextSlug = patch.slug ?? existingCategory.slug;
-
-    const [duplicateCategory] = await this.db
-      .select({
-        categoryId: categories.categoryId,
-      })
-      .from(categories)
-      .where(
-        and(
-          isNull(categories.deletedAt),
-          ne(categories.categoryId, categoryId),
-          or(
-            sql`lower(${categories.name}) = ${nextName.toLowerCase()}`,
-            eq(categories.slug, nextSlug),
-          ),
-        ),
-      )
-      .limit(1);
-
-    if (duplicateCategory) {
-      throw new ConflictException('Category name or slug already exists');
-    }
-
-    await this.db
+    const [updatedCategory] = await this.db
       .update(categories)
       .set({
         ...patch,
         updatedAt: new Date().toISOString(),
       })
       .where(and(eq(categories.categoryId, categoryId), isNull(categories.deletedAt)))
+      .returning(CATEGORY_COLUMNS)
       .catch((error: unknown) =>
         this.mapUniqueConflict(error, 'Category name or slug already exists'),
       );
 
-    return this.getActiveCategoryById(categoryId);
+    if (!updatedCategory) {
+      throw new NotFoundException('Category not found');
+    }
+
+    return this.toCategoryResponse(updatedCategory as CategoryRow);
   }
 
   async softDeleteCategoryById(categoryId: string): Promise<DeleteCategoryResponseDto> {
