@@ -28,7 +28,10 @@
     "db:push": "pnpm drizzle-kit push",
     "db:check": "pnpm drizzle-kit check",
     "db:introspect": "pnpm drizzle-kit introspect",
-    "db:seed": "node -r ts-node/register src/core/database/seeds/seed.ts"
+    "db:seed": "node -r ts-node/register src/core/database/seeds/seed.ts",
+    "redis:start": "docker start quizredis || docker run -d --name quizredis -p 6379:6379 redis:8",
+    "redis:stop": "docker stop quizredis",
+    "redis:reset": "docker rm -f quizredis"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.1",
@@ -45,6 +48,7 @@
     "dotenv": "^17.4.0",
     "drizzle-orm": "^0.45.2",
     "helmet": "^8.1.0",
+    "ioredis": "^5.10.1",
     "nestjs-pino": "^4.6.1",
     "pg": "^8.20.0",
     "pino": "^10.3.1",

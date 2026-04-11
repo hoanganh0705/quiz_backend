@@ -75,6 +75,7 @@ const parseBoolean = (env: Record<string, unknown>, key: string, fallback: boole
 
 export const validateEnv = (env: Record<string, unknown>) => {
   const databaseUrl = parseRequiredString(env, 'DATABASE_URL');
+  const redisUrl = parseRequiredString(env, 'REDIS_URL');
   const jwtAccessTokenSecret = parseRequiredString(env, 'JWT_ACCESS_TOKEN_SECRET');
   const jwtRefreshTokenSecret = parseRequiredString(env, 'JWT_REFRESH_TOKEN_SECRET');
   const accessTokenExpiresIn = parseRequiredString(env, 'ACCESS_TOKEN_EXPIRES_IN').toLowerCase();
@@ -111,6 +112,7 @@ export const validateEnv = (env: Record<string, unknown>) => {
 
   return {
     DATABASE_URL: databaseUrl,
+    REDIS_URL: redisUrl,
     JWT_ACCESS_TOKEN_SECRET: jwtAccessTokenSecret,
     JWT_REFRESH_TOKEN_SECRET: jwtRefreshTokenSecret,
     ACCESS_TOKEN_EXPIRES_IN: accessTokenExpiresIn,

@@ -2,8 +2,8 @@ import { Inject, Injectable, InternalServerErrorException } from '@nestjs/common
 import { Cron } from '@nestjs/schedule';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { and, isNull, lt } from 'drizzle-orm';
-import { DRIZZLE, type DrizzleDB } from '../../core/database/database.module';
-import { userSessions } from '../../core/database/schema';
+import { DRIZZLE, type DrizzleDB } from '../../../core/database/database.module';
+import { userSessions } from '../../../core/database/schema';
 
 @Injectable()
 export class AuthSessionCleanupService {
