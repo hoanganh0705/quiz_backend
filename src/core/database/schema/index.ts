@@ -137,8 +137,9 @@ export const userSessions = pgTable(
     jti: uuid('jti').notNull(),
     userId: uuid('user_id').notNull(),
     refreshTokenHash: text('refresh_token_hash').notNull(),
-    reuseCount: integer('reuse_count').default(0).notNull(),
-    deviceInfo: text('device_info'),
+    deviceBrowser: text('device_browser'),
+    deviceOs: text('device_os'),
+    deviceType: text('device_type').default('unknown').notNull(),
     ipAddress: text('ip_address'),
     expiresAt: timestamp('expires_at', { withTimezone: true, mode: 'string' }).notNull(),
     createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' })
