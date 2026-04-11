@@ -10,7 +10,7 @@ export class AuthCookieService {
     response.cookie('refreshToken', refreshToken, {
       httpOnly: true,
       secure: this.authConfig.isProduction,
-      sameSite: 'strict',
+      sameSite: 'lax',
       maxAge: this.authConfig.refreshTokenCookieMaxAgeMs,
       path: '/',
     });
@@ -20,7 +20,7 @@ export class AuthCookieService {
     response.clearCookie('refreshToken', {
       httpOnly: true,
       secure: this.authConfig.isProduction,
-      sameSite: 'strict',
+      sameSite: 'lax',
       path: '/',
     });
   }
