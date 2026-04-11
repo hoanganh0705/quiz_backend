@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { ConfigService } from '@nestjs/config';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
+import { AuthCookieService } from './auth-cookie.service';
 
 describe('AuthController', () => {
   let controller: AuthController;
@@ -11,8 +11,10 @@ describe('AuthController', () => {
     login: jest.fn(),
     register: jest.fn(),
   };
-  const configServiceMock = {
-    get: jest.fn(),
+  const authCookieServiceMock = {
+    setRefreshTokenCookie: jest.fn(),
+    clearRefreshTokenCookie: jest.fn(),
+    getRefreshTokenFromCookies: jest.fn(),
   };
 
   beforeEach(async () => {
@@ -24,8 +26,8 @@ describe('AuthController', () => {
           useValue: authServiceMock,
         },
         {
-          provide: ConfigService,
-          useValue: configServiceMock,
+          provide: AuthCookieService,
+          useValue: authCookieServiceMock,
         },
       ],
     }).compile();
