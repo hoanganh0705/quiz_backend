@@ -12,7 +12,7 @@ import { RefreshTokenResponseDto } from './dto/response/refresh-token-response.d
 import { LoginResult, RefreshTokenResult, RegisterResult } from './types/auth.types';
 import { SessionRequestContext } from './types/auth.types';
 import { LogoutResponseDto } from './dto/response/logout-response.dto';
-import { AuthCookieService } from './auth-cookie.service';
+import { AuthCookieService } from './services/auth-cookie.service';
 
 @Controller('auth')
 export class AuthController {
