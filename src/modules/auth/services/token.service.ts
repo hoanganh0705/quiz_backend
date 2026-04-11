@@ -18,7 +18,6 @@ export class TokenService {
 
   async issueTokens(identity: AuthIdentity): Promise<AuthTokens> {
     const refreshTokenJti = randomUUID();
-
     const accessTokenPayload: AccessTokenPayload = {
       sub: identity.userId,
       role: identity.role,

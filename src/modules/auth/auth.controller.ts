@@ -10,40 +10,17 @@ import { RegisterDto } from './dto/request/register.dto';
 import { RegisterResponseDto } from './dto/response/register-response.dto';
 import { RefreshTokenResponseDto } from './dto/response/refresh-token-response.dto';
 import { LoginResult, RefreshTokenResult, RegisterResult } from './types/auth.types';
-import { SessionRequestContext } from './types/auth.types';
 import { LogoutResponseDto } from './dto/response/logout-response.dto';
 import { AuthCookieService } from './services/auth-cookie.service';
+import { AuthRequestContextService } from './services/auth-request-context.service';
 
 @Controller('auth')
 export class AuthController {
   constructor(
     private readonly authService: AuthService,
     private readonly authCookieService: AuthCookieService,
+    private readonly authRequestContextService: AuthRequestContextService,
   ) {}
-
-  private extractIpAddress(request: Request): string | null {
-    const forwardedFor = request.headers['x-forwarded-for'];
-
-    if (typeof forwardedFor === 'string' && forwardedFor.length > 0) {
-      const [firstIp] = forwardedFor.split(',');
-      return firstIp?.trim() || null;
-    }
-
-    if (Array.isArray(forwardedFor) && forwardedFor.length > 0) {
-      return forwardedFor[0]?.trim() || null;
-    }
-
-    return request.ip || null;
-  }
-
-  private getSessionRequestContext(request: Request): SessionRequestContext {
-    const userAgentHeader = request.headers['user-agent'];
-
-    return {
-      ipAddress: this.extractIpAddress(request),
-      userAgent: typeof userAgentHeader === 'string' ? userAgentHeader : null,
-    };
-  }
 
   @Post('register')
   @Public()
@@ -51,11 +28,11 @@ export class AuthController {
   async register(
     @Body() registerDto: RegisterDto,
     @Req() request: Request,
-    @Res({ passthrough: true }) response: Response,
+    @Res({ passthrough: true }) response: Response, // không cần dùng res.json() vì Nest sẽ tự làm cho và nếu không dùng passthrough thì có thể khiến không dùng được interceptor các kiểu...
   ): Promise<RegisterResponseDto> {
     const registerResult: RegisterResult = await this.authService.register(
       registerDto,
-      this.getSessionRequestContext(request),
+      this.authRequestContextService.getSessionRequestContext(request),
     );
     this.authCookieService.setRefreshTokenCookie(response, registerResult.refreshToken);
 
@@ -80,7 +57,7 @@ export class AuthController {
   ): Promise<LoginResponseDto> {
     const loginResult: LoginResult = await this.authService.login(
       loginDto,
-      this.getSessionRequestContext(request),
+      this.authRequestContextService.getSessionRequestContext(request),
     );
     this.authCookieService.setRefreshTokenCookie(response, loginResult.refreshToken);
 
@@ -111,7 +88,7 @@ export class AuthController {
 
     const refreshResult: RefreshTokenResult = await this.authService.refreshToken(
       refreshToken,
-      this.getSessionRequestContext(request),
+      this.authRequestContextService.getSessionRequestContext(request),
     );
     this.authCookieService.setRefreshTokenCookie(response, refreshResult.refreshToken);
 

@@ -34,6 +34,28 @@ export class RedisService implements OnModuleDestroy {
     return count;
   }
 
+  async incrementCounterWithInitialTtlSeconds(key: string, ttlSeconds: number): Promise<number> {
+    if (!Number.isInteger(ttlSeconds) || ttlSeconds <= 0) {
+      throw new Error('ttlSeconds must be a positive integer');
+    }
+
+    const luaScript = `
+    local current = redis.call("INCR", KEYS[1])
+    if current == 1 then
+      redis.call("EXPIRE", KEYS[1], ARGV[1])
+    end
+    return current
+  `;
+
+    const count = await this.client.eval(luaScript, 1, key, ttlSeconds);
+
+    if (typeof count !== 'number') {
+      throw new Error('Failed to increment redis counter with ttl');
+    }
+
+    return count;
+  }
+
   async onModuleDestroy(): Promise<void> {
     await this.client.quit();
   }
