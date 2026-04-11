@@ -12,7 +12,6 @@ import { JwtService } from '@nestjs/jwt';
 import { DRIZZLE, type DrizzleDB } from '../../core/database/database.module';
 import { userSessions, users } from '../../core/database/schema';
 import { RegisterDto } from './dto/request/register.dto';
-import { createHash } from 'crypto';
 import { LoginDto } from './dto/request/login.dto';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import {
@@ -24,6 +23,13 @@ import {
   RefreshTokenResult,
   RegisterResult,
 } from './types/auth.types';
+import {
+  getAccessTokenSecret,
+  getRefreshTokenCookieMaxAgeMs,
+  getRefreshTokenSecret,
+  getTokenExpiresInSeconds,
+} from './auth.config';
+import { CryptoService } from '../../common/service/crypto.service';
 
 @Injectable()
 export class AuthService {
@@ -31,67 +37,9 @@ export class AuthService {
     @Inject(DRIZZLE) private readonly db: DrizzleDB,
     private readonly configService: ConfigService,
     private readonly jwtService: JwtService,
+    private readonly cryptoService: CryptoService,
     @InjectPinoLogger(AuthService.name) private readonly logger: PinoLogger,
   ) {}
-
-  private getAccessTokenSecret(): string {
-    return (
-      this.configService.get<string>('JWT_ACCESS_TOKEN_SECRET') ??
-      (() => {
-        throw new Error('JWT_ACCESS_TOKEN_SECRET is not defined in environment variables');
-      })()
-    );
-  }
-
-  private getRefreshTokenSecret(): string {
-    return (
-      this.configService.get<string>('JWT_REFRESH_TOKEN_SECRET') ??
-      (() => {
-        throw new Error('JWT_REFRESH_TOKEN_SECRET is not defined in environment variables');
-      })()
-    );
-  }
-
-  private getTokenExpiresInSeconds(configKey: string): number {
-    const rawValue = this.configService.get<string>(configKey);
-    if (!rawValue) {
-      throw new Error(`${configKey} is not defined in environment variables`);
-    }
-
-    const trimmedValue = rawValue.trim().toLowerCase();
-    const matchedValue = trimmedValue.match(/^(\d+)([smhd])?$/);
-    if (!matchedValue) {
-      throw new Error(
-        `${configKey} has invalid format. Expected number or number with one of: s, m, h, d`,
-      );
-    }
-
-    const amount = Number(matchedValue[1]);
-    const unit = matchedValue[2] ?? 's';
-
-    switch (unit) {
-      case 's':
-        return amount;
-      case 'm':
-        return amount * 60;
-      case 'h':
-        return amount * 60 * 60;
-      case 'd':
-        return amount * 60 * 60 * 24;
-      default:
-        throw new Error(`${configKey} has unsupported unit`);
-    }
-  }
-
-  private getRefreshTokenCookieMaxAgeMs(): number {
-    const rawValue = this.configService.get<number>('REFRESH_TOKEN_COOKIE_MAX_AGE_MS');
-
-    if (typeof rawValue !== 'number' || !Number.isInteger(rawValue) || rawValue <= 0) {
-      throw new Error('REFRESH_TOKEN_COOKIE_MAX_AGE_MS must be a positive integer');
-    }
-
-    return rawValue;
-  }
 
   private async issueTokens(identity: AuthIdentity): Promise<AuthTokens> {
     const accessTokenPayload: AccessTokenPayload = {
@@ -100,8 +48,8 @@ export class AuthService {
     };
 
     const accessToken = await this.jwtService.signAsync(accessTokenPayload, {
-      secret: this.getAccessTokenSecret(),
-      expiresIn: this.getTokenExpiresInSeconds('ACCESS_TOKEN_EXPIRES_IN'),
+      secret: getAccessTokenSecret(this.configService),
+      expiresIn: getTokenExpiresInSeconds(this.configService, 'ACCESS_TOKEN_EXPIRES_IN'),
     });
 
     const refreshTokenPayload: RefreshTokenPayload = {
@@ -110,16 +58,18 @@ export class AuthService {
     };
 
     const refreshToken = await this.jwtService.signAsync(refreshTokenPayload, {
-      secret: this.getRefreshTokenSecret(),
-      expiresIn: this.getTokenExpiresInSeconds('REFRESH_TOKEN_EXPIRES_IN'),
+      secret: getRefreshTokenSecret(this.configService),
+      expiresIn: getTokenExpiresInSeconds(this.configService, 'REFRESH_TOKEN_EXPIRES_IN'),
     });
 
     return { accessToken, refreshToken };
   }
 
   private async createUserSession(userId: string, refreshToken: string): Promise<void> {
-    const refreshTokenHash = createHash('sha256').update(refreshToken).digest('hex');
-    const expiresAt = new Date(Date.now() + this.getRefreshTokenCookieMaxAgeMs()).toISOString();
+    const refreshTokenHash = this.cryptoService.hashSha256(refreshToken);
+    const expiresAt = new Date(
+      Date.now() + getRefreshTokenCookieMaxAgeMs(this.configService),
+    ).toISOString();
 
     await this.db
       .insert(userSessions)
@@ -134,7 +84,7 @@ export class AuthService {
   }
 
   async logout(refreshToken: string): Promise<void> {
-    const refreshTokenHash = createHash('sha256').update(refreshToken).digest('hex');
+    const refreshTokenHash = this.cryptoService.hashSha256(refreshToken);
     const nowIso = new Date().toISOString();
 
     await this.db
@@ -156,7 +106,7 @@ export class AuthService {
 
     try {
       payload = await this.jwtService.verifyAsync<RefreshTokenPayload>(refreshToken, {
-        secret: this.getRefreshTokenSecret(),
+        secret: getRefreshTokenSecret(this.configService),
       });
     } catch {
       this.logger.warn({ event: 'auth_refresh_token_invalid' });
@@ -167,7 +117,7 @@ export class AuthService {
       throw new UnauthorizedException('Invalid refresh token payload');
     }
 
-    const refreshTokenHash = createHash('sha256').update(refreshToken).digest('hex');
+    const refreshTokenHash = this.cryptoService.hashSha256(refreshToken);
     const nowIso = new Date().toISOString();
 
     const [existingSession] = await this.db
@@ -223,8 +173,10 @@ export class AuthService {
       role: user.role,
     };
     const tokens = await this.issueTokens(identity);
-    const nextRefreshTokenHash = createHash('sha256').update(tokens.refreshToken).digest('hex');
-    const expiresAt = new Date(Date.now() + this.getRefreshTokenCookieMaxAgeMs()).toISOString();
+    const nextRefreshTokenHash = this.cryptoService.hashSha256(tokens.refreshToken);
+    const expiresAt = new Date(
+      Date.now() + getRefreshTokenCookieMaxAgeMs(this.configService),
+    ).toISOString();
 
     await this.db
       .update(userSessions)
