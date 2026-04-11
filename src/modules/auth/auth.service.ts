@@ -7,7 +7,6 @@ import {
 } from '@nestjs/common';
 import { and, eq, gt, isNull, or, sql } from 'drizzle-orm';
 import * as bcrypt from 'bcrypt';
-import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { DRIZZLE, type DrizzleDB } from '../../core/database/database.module';
 import { userSessions, users } from '../../core/database/schema';
@@ -23,19 +22,14 @@ import {
   RefreshTokenResult,
   RegisterResult,
 } from './types/auth.types';
-import {
-  getAccessTokenSecret,
-  getRefreshTokenCookieMaxAgeMs,
-  getRefreshTokenSecret,
-  getTokenExpiresInSeconds,
-} from './auth.config';
+import { AuthConfig } from './auth.config';
 import { CryptoService } from '../../common/service/crypto.service';
 
 @Injectable()
 export class AuthService {
   constructor(
     @Inject(DRIZZLE) private readonly db: DrizzleDB,
-    private readonly configService: ConfigService,
+    private readonly authConfig: AuthConfig,
     private readonly jwtService: JwtService,
     private readonly cryptoService: CryptoService,
     @InjectPinoLogger(AuthService.name) private readonly logger: PinoLogger,
@@ -48,8 +42,8 @@ export class AuthService {
     };
 
     const accessToken = await this.jwtService.signAsync(accessTokenPayload, {
-      secret: getAccessTokenSecret(this.configService),
-      expiresIn: getTokenExpiresInSeconds(this.configService, 'ACCESS_TOKEN_EXPIRES_IN'),
+      secret: this.authConfig.accessTokenSecret,
+      expiresIn: this.authConfig.accessTokenExpiresInSeconds,
     });
 
     const refreshTokenPayload: RefreshTokenPayload = {
@@ -58,8 +52,8 @@ export class AuthService {
     };
 
     const refreshToken = await this.jwtService.signAsync(refreshTokenPayload, {
-      secret: getRefreshTokenSecret(this.configService),
-      expiresIn: getTokenExpiresInSeconds(this.configService, 'REFRESH_TOKEN_EXPIRES_IN'),
+      secret: this.authConfig.refreshTokenSecret,
+      expiresIn: this.authConfig.refreshTokenExpiresInSeconds,
     });
 
     return { accessToken, refreshToken };
@@ -68,7 +62,7 @@ export class AuthService {
   private async createUserSession(userId: string, refreshToken: string): Promise<void> {
     const refreshTokenHash = this.cryptoService.hashSha256(refreshToken);
     const expiresAt = new Date(
-      Date.now() + getRefreshTokenCookieMaxAgeMs(this.configService),
+      Date.now() + this.authConfig.refreshTokenCookieMaxAgeMs,
     ).toISOString();
 
     await this.db
@@ -106,7 +100,7 @@ export class AuthService {
 
     try {
       payload = await this.jwtService.verifyAsync<RefreshTokenPayload>(refreshToken, {
-        secret: getRefreshTokenSecret(this.configService),
+        secret: this.authConfig.refreshTokenSecret,
       });
     } catch {
       this.logger.warn({ event: 'auth_refresh_token_invalid' });
@@ -175,7 +169,7 @@ export class AuthService {
     const tokens = await this.issueTokens(identity);
     const nextRefreshTokenHash = this.cryptoService.hashSha256(tokens.refreshToken);
     const expiresAt = new Date(
-      Date.now() + getRefreshTokenCookieMaxAgeMs(this.configService),
+      Date.now() + this.authConfig.refreshTokenCookieMaxAgeMs,
     ).toISOString();
 
     await this.db

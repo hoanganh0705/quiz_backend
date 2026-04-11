@@ -1,9 +1,10 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { getLoggerToken } from 'nestjs-pino';
 import { AuthService } from './auth.service';
 import { DRIZZLE } from '../../core/database/database.module';
+import { AuthConfig } from './auth.config';
+import { CryptoService } from '../../common/service/crypto.service';
 
 describe('AuthService', () => {
   let service: AuthService;
@@ -14,8 +15,15 @@ describe('AuthService', () => {
   const jwtServiceMock = {
     signAsync: jest.fn(),
   };
-  const configServiceMock = {
-    get: jest.fn(),
+  const authConfigMock = {
+    accessTokenSecret: 'access-secret',
+    refreshTokenSecret: 'refresh-secret',
+    accessTokenExpiresInSeconds: 60,
+    refreshTokenExpiresInSeconds: 120,
+    refreshTokenCookieMaxAgeMs: 60_000,
+  };
+  const cryptoServiceMock = {
+    hashSha256: jest.fn(),
   };
   const pinoLoggerMock = {
     info: jest.fn(),
@@ -36,8 +44,12 @@ describe('AuthService', () => {
           useValue: jwtServiceMock,
         },
         {
-          provide: ConfigService,
-          useValue: configServiceMock,
+          provide: AuthConfig,
+          useValue: authConfigMock,
+        },
+        {
+          provide: CryptoService,
+          useValue: cryptoServiceMock,
         },
         {
           provide: getLoggerToken(AuthService.name),
