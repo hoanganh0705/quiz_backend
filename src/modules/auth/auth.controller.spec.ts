@@ -6,6 +6,7 @@ import { AuthCookieService } from './auth-cookie.service';
 describe('AuthController', () => {
   let controller: AuthController;
   const authServiceMock = {
+    logoutAll: jest.fn(),
     logout: jest.fn(),
     refreshToken: jest.fn(),
     login: jest.fn(),

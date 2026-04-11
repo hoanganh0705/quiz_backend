@@ -32,14 +32,22 @@ export type AuthIdentity = {
 export type AuthTokens = {
   accessToken: string;
   refreshToken: string;
+  refreshTokenJti: string;
 };
 
 export type AccessTokenPayload = {
   sub: string;
   role: UserRole;
+  iss: string;
+  aud: string;
 };
 
 export type RefreshTokenPayload = {
   sub: string;
-  type?: string;
+  jti: string;
+};
+
+export type SessionRequestContext = {
+  ipAddress: string | null;
+  userAgent: string | null;
 };
