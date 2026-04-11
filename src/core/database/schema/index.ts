@@ -111,8 +111,12 @@ export const users = pgTable(
     index('idx_users_active_created_at')
       .using('btree', table.createdAt.asc().nullsLast().op('timestamptz_ops'))
       .where(sql`(deleted_at IS NULL)`),
-    unique('uq_users_email').on(table.email),
-    unique('uq_users_username').on(table.username),
+    uniqueIndex('uq_users_email_active')
+      .using('btree', table.email.asc().nullsLast().op('text_ops'))
+      .where(sql`deleted_at IS NULL`),
+    uniqueIndex('uq_users_username_active')
+      .using('btree', table.username.asc().nullsLast().op('text_ops'))
+      .where(sql`deleted_at IS NULL`),
     check('users_email_len', sql`(length((email)::text) >= 3) AND (length((email)::text) <= 255)`),
     check('users_email_like', sql`POSITION(('@'::text) IN (email)) > 1`),
     check('users_settings_object', sql`jsonb_typeof(settings) = 'object'::text`),
@@ -130,8 +134,10 @@ export const userSessions = pgTable(
   'user_sessions',
   {
     sessionId: uuid('session_id').defaultRandom().primaryKey().notNull(),
+    jti: uuid('jti').notNull(),
     userId: uuid('user_id').notNull(),
     refreshTokenHash: text('refresh_token_hash').notNull(),
+    reuseCount: integer('reuse_count').default(0).notNull(),
     deviceInfo: text('device_info'),
     ipAddress: text('ip_address'),
     expiresAt: timestamp('expires_at', { withTimezone: true, mode: 'string' }).notNull(),
@@ -144,13 +150,27 @@ export const userSessions = pgTable(
     revokedAt: timestamp('revoked_at', { withTimezone: true, mode: 'string' }),
   },
   (table) => [
+    unique('uq_user_sessions_jti').on(table.jti),
     index('idx_user_sessions_user_id').using(
       'btree',
       table.userId.asc().nullsLast().op('uuid_ops'),
     ),
+    index('idx_user_sessions_jti_user').using(
+      'btree',
+      table.jti.asc().nullsLast().op('uuid_ops'),
+      table.userId.asc().nullsLast().op('uuid_ops'),
+    ),
+    index('idx_user_sessions_active')
+      .using('btree', table.userId.asc().nullsLast().op('uuid_ops'))
+      .where(sql`revoked_at IS NULL`),
     index('idx_user_sessions_expires_at').using(
       'btree',
       table.expiresAt.asc().nullsLast().op('timestamptz_ops'),
+    ),
+    index('idx_user_sessions_user_last_used_at').using(
+      'btree',
+      table.userId.asc().nullsLast().op('uuid_ops'),
+      table.lastUsedAt.asc().nullsLast().op('timestamptz_ops'),
     ),
     foreignKey({
       columns: [table.userId],

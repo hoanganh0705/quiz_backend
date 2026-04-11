@@ -46,6 +46,33 @@ const parsePositiveInteger = (
   return parsed;
 };
 
+const parseBoolean = (env: Record<string, unknown>, key: string, fallback: boolean): boolean => {
+  const rawValue = env[key];
+
+  if (rawValue === undefined || rawValue === null || rawValue === '') {
+    return fallback;
+  }
+
+  if (typeof rawValue === 'boolean') {
+    return rawValue;
+  }
+
+  if (typeof rawValue !== 'string') {
+    throw new Error(`${key} must be a boolean`);
+  }
+
+  const normalizedValue = rawValue.trim().toLowerCase();
+  if (normalizedValue === 'true' || normalizedValue === '1' || normalizedValue === 'yes') {
+    return true;
+  }
+
+  if (normalizedValue === 'false' || normalizedValue === '0' || normalizedValue === 'no') {
+    return false;
+  }
+
+  throw new Error(`${key} must be a boolean`);
+};
+
 export const validateEnv = (env: Record<string, unknown>) => {
   const databaseUrl = parseRequiredString(env, 'DATABASE_URL');
   const jwtAccessTokenSecret = parseRequiredString(env, 'JWT_ACCESS_TOKEN_SECRET');
@@ -53,6 +80,15 @@ export const validateEnv = (env: Record<string, unknown>) => {
   const accessTokenExpiresIn = parseRequiredString(env, 'ACCESS_TOKEN_EXPIRES_IN').toLowerCase();
   const refreshTokenExpiresIn = parseRequiredString(env, 'REFRESH_TOKEN_EXPIRES_IN').toLowerCase();
   const refreshTokenCookieMaxAgeMs = parsePositiveInteger(env, 'REFRESH_TOKEN_COOKIE_MAX_AGE_MS');
+  const maxActiveSessionsPerUser = parsePositiveInteger(env, 'MAX_ACTIVE_SESSIONS_PER_USER', 5);
+  const refreshTokenReuseGraceWindowSeconds = parsePositiveInteger(
+    env,
+    'REFRESH_TOKEN_REUSE_GRACE_WINDOW_SECONDS',
+    10,
+  );
+  const jwtAccessTokenIssuer = parseRequiredString(env, 'JWT_ACCESS_TOKEN_ISSUER');
+  const jwtAccessTokenAudience = parseRequiredString(env, 'JWT_ACCESS_TOKEN_AUDIENCE');
+  const sessionBindingStrict = parseBoolean(env, 'SESSION_BINDING_STRICT', false);
   const port = parsePositiveInteger(env, 'PORT', 3000);
   const rawNodeEnv = env.NODE_ENV;
   const nodeEnvRaw =
@@ -80,6 +116,11 @@ export const validateEnv = (env: Record<string, unknown>) => {
     ACCESS_TOKEN_EXPIRES_IN: accessTokenExpiresIn,
     REFRESH_TOKEN_EXPIRES_IN: refreshTokenExpiresIn,
     REFRESH_TOKEN_COOKIE_MAX_AGE_MS: refreshTokenCookieMaxAgeMs,
+    MAX_ACTIVE_SESSIONS_PER_USER: maxActiveSessionsPerUser,
+    REFRESH_TOKEN_REUSE_GRACE_WINDOW_SECONDS: refreshTokenReuseGraceWindowSeconds,
+    JWT_ACCESS_TOKEN_ISSUER: jwtAccessTokenIssuer,
+    JWT_ACCESS_TOKEN_AUDIENCE: jwtAccessTokenAudience,
+    SESSION_BINDING_STRICT: sessionBindingStrict,
     PORT: port,
     NODE_ENV: nodeEnvRaw as NodeEnv,
     CORS_ORIGINS: corsOrigins,

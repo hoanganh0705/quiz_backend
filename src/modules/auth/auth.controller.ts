@@ -2,6 +2,7 @@ import { Body, Controller, Post, Req, Res, UnauthorizedException } from '@nestjs
 import { Throttle } from '@nestjs/throttler';
 import type { Request, Response } from 'express';
 import { Public } from '../../common/decorators/public.decorator';
+import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/request/login.dto';
 import { LoginResponseDto } from './dto/response/login-response.dto';
@@ -9,10 +10,10 @@ import { RegisterDto } from './dto/request/register.dto';
 import { RegisterResponseDto } from './dto/response/register-response.dto';
 import { RefreshTokenResponseDto } from './dto/response/refresh-token-response.dto';
 import { LoginResult, RefreshTokenResult, RegisterResult } from './types/auth.types';
+import { SessionRequestContext } from './types/auth.types';
 import { LogoutResponseDto } from './dto/response/logout-response.dto';
 import { AuthCookieService } from './auth-cookie.service';
 
-@Public()
 @Controller('auth')
 export class AuthController {
   constructor(
@@ -20,7 +21,81 @@ export class AuthController {
     private readonly authCookieService: AuthCookieService,
   ) {}
 
+  private extractIpAddress(request: Request): string | null {
+    const forwardedFor = request.headers['x-forwarded-for'];
+
+    if (typeof forwardedFor === 'string' && forwardedFor.length > 0) {
+      const [firstIp] = forwardedFor.split(',');
+      return firstIp?.trim() || null;
+    }
+
+    if (Array.isArray(forwardedFor) && forwardedFor.length > 0) {
+      return forwardedFor[0]?.trim() || null;
+    }
+
+    return request.ip || null;
+  }
+
+  private getSessionRequestContext(request: Request): SessionRequestContext {
+    const userAgentHeader = request.headers['user-agent'];
+
+    return {
+      ipAddress: this.extractIpAddress(request),
+      userAgent: typeof userAgentHeader === 'string' ? userAgentHeader : null,
+    };
+  }
+
+  @Post('register')
+  @Public()
+  @Throttle({ default: { limit: 3, ttl: 60_000 } })
+  async register(
+    @Body() registerDto: RegisterDto,
+    @Req() request: Request,
+    @Res({ passthrough: true }) response: Response,
+  ): Promise<RegisterResponseDto> {
+    const registerResult: RegisterResult = await this.authService.register(
+      registerDto,
+      this.getSessionRequestContext(request),
+    );
+    this.authCookieService.setRefreshTokenCookie(response, registerResult.refreshToken);
+
+    return {
+      userId: registerResult.userId,
+      username: registerResult.username,
+      email: registerResult.email,
+      createdAt: registerResult.createdAt,
+      token: {
+        accessToken: registerResult.accessToken,
+      },
+    };
+  }
+
+  @Post('login')
+  @Public()
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  async login(
+    @Body() loginDto: LoginDto,
+    @Req() request: Request,
+    @Res({ passthrough: true }) response: Response,
+  ): Promise<LoginResponseDto> {
+    const loginResult: LoginResult = await this.authService.login(
+      loginDto,
+      this.getSessionRequestContext(request),
+    );
+    this.authCookieService.setRefreshTokenCookie(response, loginResult.refreshToken);
+
+    return {
+      userId: loginResult.userId,
+      username: loginResult.username,
+      email: loginResult.email,
+      token: {
+        accessToken: loginResult.accessToken,
+      },
+    };
+  }
+
   @Post('refresh-token')
+  @Public()
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
   async refreshToken(
     @Req() request: Request,
@@ -34,7 +109,10 @@ export class AuthController {
       throw new UnauthorizedException('Refresh token cookie is missing');
     }
 
-    const refreshResult: RefreshTokenResult = await this.authService.refreshToken(refreshToken);
+    const refreshResult: RefreshTokenResult = await this.authService.refreshToken(
+      refreshToken,
+      this.getSessionRequestContext(request),
+    );
     this.authCookieService.setRefreshTokenCookie(response, refreshResult.refreshToken);
 
     return {
@@ -45,6 +123,7 @@ export class AuthController {
   }
 
   @Post('logout')
+  @Public()
   async logout(
     @Req() request: Request,
     @Res({ passthrough: true }) response: Response,
@@ -64,42 +143,16 @@ export class AuthController {
     };
   }
 
-  @Post('login')
-  @Throttle({ default: { limit: 5, ttl: 60_000 } })
-  async login(
-    @Body() loginDto: LoginDto,
+  @Post('logout-all')
+  async logoutAll(
+    @CurrentUser('sub') userId: string,
     @Res({ passthrough: true }) response: Response,
-  ): Promise<LoginResponseDto> {
-    const loginResult: LoginResult = await this.authService.login(loginDto);
-    this.authCookieService.setRefreshTokenCookie(response, loginResult.refreshToken);
+  ): Promise<LogoutResponseDto> {
+    await this.authService.logoutAll(userId);
+    this.authCookieService.clearRefreshTokenCookie(response);
 
     return {
-      userId: loginResult.userId,
-      username: loginResult.username,
-      email: loginResult.email,
-      token: {
-        accessToken: loginResult.accessToken,
-      },
-    };
-  }
-
-  @Post('register')
-  @Throttle({ default: { limit: 3, ttl: 60_000 } })
-  async register(
-    @Body() registerDto: RegisterDto,
-    @Res({ passthrough: true }) response: Response,
-  ): Promise<RegisterResponseDto> {
-    const registerResult: RegisterResult = await this.authService.register(registerDto);
-    this.authCookieService.setRefreshTokenCookie(response, registerResult.refreshToken);
-
-    return {
-      userId: registerResult.userId,
-      username: registerResult.username,
-      email: registerResult.email,
-      createdAt: registerResult.createdAt,
-      token: {
-        accessToken: registerResult.accessToken,
-      },
+      message: 'Logged out from all sessions successfully',
     };
   }
 }

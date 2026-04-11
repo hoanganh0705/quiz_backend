@@ -1,0 +1,1 @@
+ALTER TABLE "user_sessions" ADD COLUMN "reuse_count" integer DEFAULT 0 NOT NULL;

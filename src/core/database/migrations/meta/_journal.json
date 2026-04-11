@@ -43,6 +43,34 @@
       "when": 1775482955070,
       "tag": "0005_fixed_post",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1775878783606,
+      "tag": "0006_furry_dreadnoughts",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1775880047381,
+      "tag": "0007_glossy_king_cobra",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1775880160882,
+      "tag": "0008_high_quentin_quire",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1775882062443,
+      "tag": "0009_soft_zodiak",
+      "breakpoints": true
     }
   ]
 }
