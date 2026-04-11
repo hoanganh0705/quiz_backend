@@ -69,44 +69,59 @@ export class SecurityService {
   }
 
   isSameSessionContext(
-    session: { ipAddress: string | null; deviceInfo: string | null },
+    session: {
+      deviceBrowser: string | null;
+      deviceType: string;
+    },
     context: SessionRequestContext,
   ): boolean {
-    const hasSessionIp = typeof session.ipAddress === 'string' && session.ipAddress.length > 0;
-    const hasContextIp = typeof context.ipAddress === 'string' && context.ipAddress.length > 0;
-    const hasSessionDevice =
-      typeof session.deviceInfo === 'string' && session.deviceInfo.length > 0;
-    const hasContextDevice = typeof context.userAgent === 'string' && context.userAgent.length > 0;
+    const hasSessionBrowser =
+      typeof session.deviceBrowser === 'string' && session.deviceBrowser.length > 0;
+    const hasContextBrowser =
+      typeof context.deviceBrowser === 'string' && context.deviceBrowser.length > 0;
+    const hasSessionDeviceType =
+      typeof session.deviceType === 'string' && session.deviceType.length > 0;
+    const hasContextDeviceType =
+      typeof context.deviceType === 'string' && context.deviceType.length > 0;
 
-    const ipMatches = !hasSessionIp || !hasContextIp || session.ipAddress === context.ipAddress;
-    const deviceMatches =
-      !hasSessionDevice || !hasContextDevice || session.deviceInfo === context.userAgent;
+    const canCompareBrowser = hasSessionBrowser && hasContextBrowser;
+    const canCompareDeviceType = hasSessionDeviceType && hasContextDeviceType;
 
-    return ipMatches && deviceMatches;
+    const browserMatches = !canCompareBrowser || session.deviceBrowser === context.deviceBrowser;
+    const deviceTypeMatches = !canCompareDeviceType || session.deviceType === context.deviceType;
+
+    return browserMatches && deviceTypeMatches;
   }
 
   evaluateSessionBinding(
     session: {
       ipAddress: string | null;
-      deviceInfo: string | null;
+      deviceBrowser: string | null;
+      deviceOs: string | null;
+      deviceType: string;
       userId: string;
       jti: string;
     },
     context: SessionRequestContext,
   ): { shouldReject: boolean } {
     const hasSessionIp = !!session.ipAddress;
-    const hasSessionDevice = !!session.deviceInfo;
     const hasRequestIp = !!context.ipAddress;
-    const hasRequestDevice = !!context.userAgent;
+    const hasSessionDeviceBrowser = !!session.deviceBrowser;
+    const hasRequestDeviceBrowser = !!context.deviceBrowser;
+    const hasSessionDeviceType = !!session.deviceType;
+    const hasRequestDeviceType = !!context.deviceType;
 
-    const ipMismatch = hasSessionIp
-      ? !hasRequestIp || session.ipAddress !== context.ipAddress
+    const canCompareIp = hasSessionIp && hasRequestIp;
+    const ipChanged = canCompareIp && session.ipAddress !== context.ipAddress;
+    const deviceBrowserMismatch = hasSessionDeviceBrowser
+      ? !hasRequestDeviceBrowser || session.deviceBrowser !== context.deviceBrowser
       : false;
-    const deviceMismatch = hasSessionDevice
-      ? !hasRequestDevice || session.deviceInfo !== context.userAgent
+    const deviceTypeMismatch = hasSessionDeviceType
+      ? !hasRequestDeviceType || session.deviceType !== context.deviceType
       : false;
+    const deviceMismatch = deviceBrowserMismatch || deviceTypeMismatch;
 
-    if (!ipMismatch && !deviceMismatch) {
+    if (!ipChanged && !deviceMismatch) {
       return { shouldReject: false };
     }
 
@@ -118,13 +133,19 @@ export class SecurityService {
       jti: session.jti,
       storedIpAddress: session.ipAddress,
       requestIpAddress: context.ipAddress,
-      storedUserAgent: session.deviceInfo,
-      requestUserAgent: context.userAgent,
+      storedDeviceBrowser: session.deviceBrowser,
+      requestDeviceBrowser: context.deviceBrowser,
+      storedDeviceOs: session.deviceOs,
+      requestDeviceOs: context.deviceOs,
+      storedDeviceType: session.deviceType,
+      requestDeviceType: context.deviceType,
+      ipChanged,
+      deviceMismatch,
       strictMode: this.authConfig.isSessionBindingStrict,
     });
 
     return {
-      shouldReject: this.authConfig.isSessionBindingStrict && (ipMismatch || deviceMismatch),
+      shouldReject: this.authConfig.isSessionBindingStrict && deviceMismatch,
     };
   }
 
@@ -141,7 +162,12 @@ export class SecurityService {
       return false;
     }
 
-    const nextReuseCount = await this.sessionService.incrementReuseCount(session.sessionId);
+    const reuseCounterKey = `auth:refresh_reuse:${payload.jti}`;
+    const nextReuseCount = await this.redisService.incrementCounterWithInitialTtlSeconds(
+      reuseCounterKey,
+      this.authConfig.refreshTokenExpiresInSeconds,
+    );
+
     if (nextReuseCount > 1) {
       this.logger.warn({
         event: 'auth_refresh_reuse_grace_window_abuse_detected',

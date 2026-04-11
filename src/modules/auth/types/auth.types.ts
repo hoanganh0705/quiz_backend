@@ -47,7 +47,12 @@ export type RefreshTokenPayload = {
   jti: string;
 };
 
+export type SessionDeviceType = 'mobile' | 'desktop' | 'tablet' | 'unknown';
+
 export type SessionRequestContext = {
   ipAddress: string | null;
   userAgent: string | null;
+  deviceBrowser: string | null;
+  deviceOs: string | null;
+  deviceType: SessionDeviceType;
 };
