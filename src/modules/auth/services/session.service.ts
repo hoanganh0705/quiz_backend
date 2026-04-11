@@ -1,5 +1,5 @@
 import { Inject, Injectable, InternalServerErrorException } from '@nestjs/common';
-import { and, asc, desc, eq, gt, isNull, lt, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, isNull, lt } from 'drizzle-orm';
 import { DRIZZLE, type DrizzleDB } from '../../../core/database/database.module';
 import { userSessions } from '../../../core/database/schema';
 import { AuthConfig } from '../auth.config';
@@ -11,9 +11,10 @@ export type SessionRecord = {
   jti: string;
   userId: string;
   refreshTokenHash: string;
-  reuseCount: number;
   ipAddress: string | null;
-  deviceInfo: string | null;
+  deviceBrowser: string | null;
+  deviceOs: string | null;
+  deviceType: string;
   lastUsedAt: string;
   revokedAt: string | null;
   expiresAt: string;
@@ -24,9 +25,10 @@ const SESSION_LOOKUP_COLUMNS = {
   jti: userSessions.jti,
   userId: userSessions.userId,
   refreshTokenHash: userSessions.refreshTokenHash,
-  reuseCount: userSessions.reuseCount,
   ipAddress: userSessions.ipAddress,
-  deviceInfo: userSessions.deviceInfo,
+  deviceBrowser: userSessions.deviceBrowser,
+  deviceOs: userSessions.deviceOs,
+  deviceType: userSessions.deviceType,
   lastUsedAt: userSessions.lastUsedAt,
   revokedAt: userSessions.revokedAt,
   expiresAt: userSessions.expiresAt,
@@ -63,9 +65,10 @@ export class SessionService {
         jti: refreshTokenJti,
         userId,
         refreshTokenHash,
-        reuseCount: 0,
         ipAddress: context.ipAddress,
-        deviceInfo: context.userAgent,
+        deviceBrowser: context.deviceBrowser,
+        deviceOs: context.deviceOs,
+        deviceType: context.deviceType,
         expiresAt,
       })
       .catch(() => {
@@ -125,9 +128,10 @@ export class SessionService {
       .set({
         jti: tokens.refreshTokenJti,
         refreshTokenHash: nextRefreshTokenHash,
-        reuseCount: 0,
         ipAddress: context.ipAddress,
-        deviceInfo: context.userAgent,
+        deviceBrowser: context.deviceBrowser,
+        deviceOs: context.deviceOs,
+        deviceType: context.deviceType,
         expiresAt,
         lastUsedAt: nowIso,
       })
@@ -182,27 +186,6 @@ export class SessionService {
       .catch(() => {
         throw new InternalServerErrorException('Failed to revoke user session by token hash');
       });
-  }
-
-  async incrementReuseCount(sessionId: string): Promise<number> {
-    const [updatedSession] = await this.db
-      .update(userSessions)
-      .set({
-        reuseCount: sql`${userSessions.reuseCount} + 1`,
-      })
-      .where(eq(userSessions.sessionId, sessionId))
-      .returning({
-        reuseCount: userSessions.reuseCount,
-      })
-      .catch(() => {
-        throw new InternalServerErrorException('Failed to update session reuse count');
-      });
-
-    if (!updatedSession) {
-      throw new InternalServerErrorException('Failed to update session reuse count');
-    }
-
-    return updatedSession.reuseCount;
   }
 
   async softRevokeExpiredSessions(): Promise<number> {

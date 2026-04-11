@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { AuthCookieService } from './services/auth-cookie.service';
+import { AuthRequestContextService } from './services/auth-request-context.service';
 
 describe('AuthController', () => {
   let controller: AuthController;
@@ -17,6 +18,9 @@ describe('AuthController', () => {
     clearRefreshTokenCookie: jest.fn(),
     getRefreshTokenFromCookies: jest.fn(),
   };
+  const authRequestContextServiceMock = {
+    getSessionRequestContext: jest.fn(),
+  };
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -29,6 +33,10 @@ describe('AuthController', () => {
         {
           provide: AuthCookieService,
           useValue: authCookieServiceMock,
+        },
+        {
+          provide: AuthRequestContextService,
+          useValue: authRequestContextServiceMock,
         },
       ],
     }).compile();

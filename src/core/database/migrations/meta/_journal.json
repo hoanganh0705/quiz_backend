@@ -71,6 +71,13 @@
       "when": 1775882062443,
       "tag": "0009_soft_zodiak",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1775913054809,
+      "tag": "0010_military_gwen_stacy",
+      "breakpoints": true
     }
   ]
 }
