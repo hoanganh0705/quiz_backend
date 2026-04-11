@@ -1,26 +1,39 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { JwtService } from '@nestjs/jwt';
 import { getLoggerToken } from 'nestjs-pino';
 import { AuthService } from './auth.service';
-import { DRIZZLE } from '../../core/database/database.module';
-import { AuthConfig } from './auth.config';
 import { CryptoService } from '../../common/service/crypto.service';
+import { UserRepository } from './repositories/user.repository';
+import { TokenService } from './services/token.service';
+import { SessionService } from './services/session.service';
+import { SecurityService } from './services/security.service';
 
 describe('AuthService', () => {
   let service: AuthService;
-  const dbMock = {
-    select: jest.fn(),
-    insert: jest.fn(),
+  const userRepositoryMock = {
+    ensureEmailAndUsernameAvailable: jest.fn(),
+    createUser: jest.fn(),
+    findActiveByEmailWithPassword: jest.fn(),
+    findActiveIdentityById: jest.fn(),
   };
-  const jwtServiceMock = {
-    signAsync: jest.fn(),
+  const tokenServiceMock = {
+    issueTokens: jest.fn(),
+    verifyRefreshToken: jest.fn(),
+    tryVerifyRefreshToken: jest.fn(),
   };
-  const authConfigMock = {
-    accessTokenSecret: 'access-secret',
-    refreshTokenSecret: 'refresh-secret',
-    accessTokenExpiresInSeconds: 60,
-    refreshTokenExpiresInSeconds: 120,
-    refreshTokenCookieMaxAgeMs: 60_000,
+  const sessionServiceMock = {
+    createSession: jest.fn(),
+    getSessionByJtiAndUserId: jest.fn(),
+    findLatestActiveSessionByUserId: jest.fn(),
+    rotateSession: jest.fn(),
+    revokeSessionByJti: jest.fn(),
+    revokeSessionByRefreshTokenHash: jest.fn(),
+    revokeAllActiveSessions: jest.fn(),
+  };
+  const securityServiceMock = {
+    enforceLoginRateLimit: jest.fn(),
+    enforceRefreshRateLimit: jest.fn(),
+    evaluateSessionBinding: jest.fn(),
+    handleGraceWindowReuse: jest.fn(),
   };
   const cryptoServiceMock = {
     hashSha256: jest.fn(),
@@ -36,16 +49,20 @@ describe('AuthService', () => {
       providers: [
         AuthService,
         {
-          provide: DRIZZLE,
-          useValue: dbMock,
+          provide: UserRepository,
+          useValue: userRepositoryMock,
         },
         {
-          provide: JwtService,
-          useValue: jwtServiceMock,
+          provide: TokenService,
+          useValue: tokenServiceMock,
         },
         {
-          provide: AuthConfig,
-          useValue: authConfigMock,
+          provide: SessionService,
+          useValue: sessionServiceMock,
+        },
+        {
+          provide: SecurityService,
+          useValue: securityServiceMock,
         },
         {
           provide: CryptoService,

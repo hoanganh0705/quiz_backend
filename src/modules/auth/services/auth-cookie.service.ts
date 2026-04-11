@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import type { Response } from 'express';
-import { AuthConfig } from './auth.config';
+import { AuthConfig } from '../auth.config';
 
 @Injectable()
 export class AuthCookieService {

@@ -14,6 +14,7 @@ import { CategoryModule } from './modules/category/category.module';
 import { TagModule } from './modules/tag/tag.module';
 import { QuizModule } from './modules/quiz/quiz.module';
 import { validateEnv } from './core/config/env.validation';
+import { RedisModule } from './core/redis/redis.module';
 
 @Module({
   imports: [
@@ -37,6 +38,7 @@ import { validateEnv } from './core/config/env.validation';
       },
     }),
     CoreLoggerModule,
+    RedisModule,
     DatabaseModule,
     UserModule,
     AuthModule,
