@@ -11,6 +11,7 @@ import { RegisterResponseDto } from './dto/response/register-response.dto';
 import { RefreshTokenResponseDto } from './dto/response/refresh-token-response.dto';
 import { LoginResult, RefreshTokenResult, RegisterResult } from './types/auth.types';
 import { LogoutResponseDto } from './dto/response/logout-response.dto';
+import { getRefreshTokenCookieMaxAgeMs, isProduction } from './auth.config';
 
 @Public()
 @Controller('auth')
@@ -20,26 +21,12 @@ export class AuthController {
     private readonly configService: ConfigService,
   ) {}
 
-  private isProduction(): boolean {
-    return this.configService.get<string>('NODE_ENV') === 'production';
-  }
-
-  private getRefreshTokenCookieMaxAgeMs(): number {
-    const rawValue = this.configService.get<number>('REFRESH_TOKEN_COOKIE_MAX_AGE_MS');
-
-    if (typeof rawValue !== 'number' || !Number.isInteger(rawValue) || rawValue <= 0) {
-      throw new Error('REFRESH_TOKEN_COOKIE_MAX_AGE_MS must be a positive integer');
-    }
-
-    return rawValue;
-  }
-
   private setRefreshTokenCookie(response: Response, refreshToken: string): void {
     response.cookie('refreshToken', refreshToken, {
       httpOnly: true,
-      secure: this.isProduction(),
+      secure: isProduction(this.configService),
       sameSite: 'strict',
-      maxAge: this.getRefreshTokenCookieMaxAgeMs(),
+      maxAge: getRefreshTokenCookieMaxAgeMs(this.configService),
       path: '/',
     });
   }
@@ -47,7 +34,7 @@ export class AuthController {
   private clearRefreshTokenCookie(response: Response): void {
     response.clearCookie('refreshToken', {
       httpOnly: true,
-      secure: this.isProduction(),
+      secure: isProduction(this.configService),
       sameSite: 'strict',
       path: '/',
     });
