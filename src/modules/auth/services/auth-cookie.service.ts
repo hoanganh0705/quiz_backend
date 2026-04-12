@@ -25,6 +25,7 @@ export class AuthCookieService {
     });
   }
 
+  // cookies can be of various types depending on how the cookie parsing middleware is set up, so we need to be defensive here, cookies structure is an object with string keys and string values due to cookie-parser, but we can't guarantee that at the type level, so we need to check it at runtime
   getRefreshTokenFromCookies(cookies: unknown): string | null {
     if (!cookies || typeof cookies !== 'object') {
       return null;

@@ -54,6 +54,7 @@ export class TokenService {
 
   async verifyRefreshToken(refreshToken: string): Promise<RefreshTokenPayload> {
     try {
+      // check if the token is valid, not expired and signer with the correct secret, if not valid/expired it will throw so we don't need to manually check exp or anything, we just catch the error and throw a generic unauthorized exception
       const decodedPayload: unknown = await this.jwtService.verifyAsync(refreshToken, {
         secret: this.authConfig.refreshTokenSecret,
       });
@@ -61,7 +62,6 @@ export class TokenService {
       if (!this.isRefreshTokenPayload(decodedPayload)) {
         throw new UnauthorizedException('Invalid refresh token payload');
       }
-
       return decodedPayload;
     } catch {
       throw new UnauthorizedException('Invalid or expired refresh token');
