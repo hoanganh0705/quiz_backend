@@ -11,7 +11,7 @@ import {
   RegisterResult,
   SessionRequestContext,
 } from './types/auth.types';
-import { UserRepository } from './repositories/user.repository';
+import { UserRepository } from '../../core/database/repositories/user.repository';
 import { TokenService } from './services/token.service';
 import { SessionService } from './services/session.service';
 import { SecurityService } from './services/security.service';
