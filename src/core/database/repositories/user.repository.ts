@@ -5,8 +5,8 @@ import {
   InternalServerErrorException,
 } from '@nestjs/common';
 import { and, eq, isNull, or } from 'drizzle-orm';
-import { DRIZZLE, type DrizzleDB } from '../../../core/database/database.module';
-import { users } from '../../../core/database/schema';
+import { DRIZZLE, type DrizzleDB } from '../database.module';
+import { users } from '../schema';
 
 const USER_IDENTITY_COLUMNS = {
   userId: users.userId,
@@ -83,6 +83,8 @@ export class UserRepository {
         throw new InternalServerErrorException('Failed to fetch user');
       });
 
+    // Type assertion is needed here because Drizzle's type inference doesn't narrow the type based on the query conditions, it says that foundUser can be  UserWithPasswordRow or undefined
+    // if the left side of the nullish coalescing operator is undefined, it will return null, which matches our return type of UserWithPasswordRow | null
     return (foundUser as UserWithPasswordRow | undefined) ?? null;
   }
 

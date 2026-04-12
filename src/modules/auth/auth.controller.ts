@@ -1,5 +1,4 @@
 import { Body, Controller, Post, Req, Res, UnauthorizedException } from '@nestjs/common';
-import { Throttle } from '@nestjs/throttler';
 import type { Request, Response } from 'express';
 import { Public } from '../../common/decorators/public.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -24,7 +23,6 @@ export class AuthController {
 
   @Post('register')
   @Public()
-  @Throttle({ default: { limit: 3, ttl: 60_000 } })
   async register(
     @Body() registerDto: RegisterDto,
     @Req() request: Request,
@@ -49,7 +47,6 @@ export class AuthController {
 
   @Post('login')
   @Public()
-  @Throttle({ default: { limit: 5, ttl: 60_000 } })
   async login(
     @Body() loginDto: LoginDto,
     @Req() request: Request,
@@ -73,7 +70,6 @@ export class AuthController {
 
   @Post('refresh-token')
   @Public()
-  @Throttle({ default: { limit: 10, ttl: 60_000 } })
   async refreshToken(
     @Req() request: Request,
     @Res({ passthrough: true }) response: Response,

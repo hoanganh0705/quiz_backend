@@ -27,7 +27,7 @@ import { RedisModule } from './core/redis/redis.module';
       throttlers: [
         {
           name: 'default',
-          limit: 60,
+          limit: 100,
           ttl: 60_000,
         },
       ],
@@ -50,11 +50,11 @@ import { RedisModule } from './core/redis/redis.module';
   providers: [
     {
       provide: APP_GUARD,
-      useClass: ThrottlerGuard,
+      useClass: JwtGuard,
     },
     {
       provide: APP_GUARD,
-      useClass: JwtGuard,
+      useClass: ThrottlerGuard,
     },
     {
       provide: APP_INTERCEPTOR,

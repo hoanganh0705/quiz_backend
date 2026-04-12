@@ -3,7 +3,8 @@ import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { AuthConfig } from '../auth.config';
 import { SessionRequestContext, RefreshTokenPayload } from '../types/auth.types';
 import { RedisService } from '../../../core/redis/redis.service';
-import { SessionRecord, SessionService } from './session.service';
+import { SessionService } from './session.service';
+import { type SessionRecord } from '../../../core/database/repositories/user-session.repository';
 
 type RateLimitBucket = 'login_ip' | 'login_user' | 'refresh_ip' | 'refresh_user';
 
@@ -31,9 +32,10 @@ export class SecurityService {
     }
   }
 
+  // In this case we use redis because it's a distributed in-memory data store that can be accessed by multiple instances of our application, making it ideal for implementing rate limiting in a scalable way. By using Redis to track the number of requests from each IP address or user ID, we can ensure that the rate limits are enforced consistently across all instances of our application, preventing abuse and protecting our resources from being overwhelmed by too many requests. If we restart the application, the rate limit counters will be reset, which is generally acceptable for rate limiting purposes since it prevents long-term blocking of users and allows them to try again after a short period. However, if we needed to persist rate limit data across restarts, we could configure Redis to use persistence options like RDB snapshots or AOF logs, but for typical rate limiting use cases, in-memory storage is sufficient and even desirable to allow automatic reset of limits after a restart.
   private async enforceRateLimit(bucket: RateLimitBucket, key: string): Promise<void> {
     const { limit, windowMs } = this.getRateLimitConfig(bucket);
-    const rateKey = `auth_rate_limit:${bucket}:${key}`;
+    const rateKey = `auth_rate_limit:${bucket}:${key}`; // string datatype is used for Redis keys (key-value pairs) and it's a common convention to use colons to separate different parts of the key for better readability and organization
     const count = await this.redisService.incrementWindowCounter(rateKey, windowMs);
 
     if (count > limit) {

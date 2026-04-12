@@ -17,6 +17,7 @@ export class RedisService implements OnModuleDestroy {
   }
 
   async incrementWindowCounter(key: string, windowMs: number): Promise<number> {
+    // The Lua script atomically increments the counter and sets the expiration if it's the first increment
     const luaScript = `
     local current = redis.call("INCR", KEYS[1])
     if current == 1 then
@@ -25,6 +26,8 @@ export class RedisService implements OnModuleDestroy {
     return current
   `;
 
+    // execute the Lua script with the key and window duration in milliseconds as arguments
+    // 1 indicates that there is one key being passed to the script, which is the rate limit key we want to increment and set expiration for
     const count = await this.client.eval(luaScript, 1, key, windowMs);
 
     if (typeof count !== 'number') {
