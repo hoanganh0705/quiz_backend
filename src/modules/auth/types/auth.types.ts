@@ -1,4 +1,4 @@
-import { UserRole } from '../../../common/decorators/roles.decorator';
+import { UserRole } from '@/common/decorators/roles.decorator';
 
 export type RegisterResult = {
   userId: string;

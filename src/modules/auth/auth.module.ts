@@ -10,10 +10,10 @@ import { TokenService } from './services/token.service';
 import { SessionService } from './services/session.service';
 import { SecurityService } from './services/security.service';
 import { AuthRequestContextService } from './services/auth-request-context.service';
-import { CommonModule } from '../../common/common.module';
+import { CommonModule } from '@/common/common.module';
 import { DeviceParserService } from './services/device-parser.service';
-import { DatabaseModule } from '../../core/database/database.module';
-import { RedisModule } from '../../core/redis/redis.module';
+import { DatabaseModule } from '@/core/database/database.module';
+import { RedisModule } from '@/core/redis/redis.module';
 
 @Module({
   // import JwtModule to use its exported services (e.g., JwtService) in AuthService
