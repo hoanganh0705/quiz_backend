@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
-import { UserSessionRepository } from '../../../core/database/repositories/user-session.repository';
+import { UserSessionRepository } from '@/core/database/repositories/user-session.repository';
 
 @Injectable()
 export class AuthSessionCleanupService {

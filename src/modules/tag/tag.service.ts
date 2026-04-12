@@ -7,8 +7,8 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { and, desc, eq, isNull, or, sql } from 'drizzle-orm';
-import { DRIZZLE, type DrizzleDB } from '../../core/database/database.module';
-import { tags } from '../../core/database/schema';
+import { DRIZZLE, type DrizzleDB } from '@/core/database/database.module';
+import { tags } from '@/core/database/schema';
 import { CreateTagDto } from './dto/request/create-tag.dto';
 import { ListTagsQueryDto } from './dto/request/list-tags-query.dto';
 import { UpdateTagDto } from './dto/request/update-tag.dto';
@@ -21,8 +21,8 @@ import {
   encodeBase64JsonCursor,
   isIsoDateString,
   isStringMatchingPattern,
-} from '../../common/utils/cursor.util';
-import { buildSlug, normalizeSlugOrThrow } from '../../common/utils/slug.util';
+} from '@/common/utils/cursor.util';
+import { buildSlug, normalizeSlugOrThrow } from '@/common/utils/slug.util';
 
 type TagRow = {
   tagId: string;

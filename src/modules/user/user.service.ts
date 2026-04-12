@@ -1,11 +1,11 @@
 import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { and, eq, isNull, sql } from 'drizzle-orm';
-import { DRIZZLE, type DrizzleDB } from '../../core/database/database.module';
-import { users } from '../../core/database/schema';
+import { DRIZZLE, type DrizzleDB } from '@/core/database/database.module';
+import { users } from '@/core/database/schema';
 import { UpdateMeDto } from './dto/request/update-me.dto';
 import { UpdateMeSettingsDto } from './dto/request/update-me-settings.dto';
 import { UserMeResponseDto } from './dto/response/user-me-response.dto';
-import { normalizeNullableText } from '../../common/utils/text.util';
+import { normalizeNullableText } from '@/common/utils/text.util';
 
 type UserMeRow = {
   userId: string;

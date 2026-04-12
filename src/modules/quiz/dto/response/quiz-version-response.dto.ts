@@ -1,4 +1,4 @@
-import { QuizDifficulty, QuizVersionStatus } from '../../types/quiz.types';
+import { QuizDifficulty, QuizVersionStatus } from '@/modules/quiz/types/quiz.types';
 
 export class QuizVersionResponseDto {
   quizVersionId!: string;

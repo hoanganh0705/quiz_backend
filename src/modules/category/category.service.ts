@@ -7,8 +7,8 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { and, desc, eq, isNull, or, sql } from 'drizzle-orm';
-import { DRIZZLE, type DrizzleDB } from '../../core/database/database.module';
-import { categories } from '../../core/database/schema';
+import { DRIZZLE, type DrizzleDB } from '@/core/database/database.module';
+import { categories } from '@/core/database/schema';
 import { CreateCategoryDto } from './dto/request/create-category.dto';
 import { UpdateCategoryDto } from './dto/request/update-category.dto';
 import { CategoryListResponseDto } from './dto/response/category-list-response.dto';
@@ -24,9 +24,9 @@ import {
   encodeBase64JsonCursor,
   isIsoDateString,
   isStringMatchingPattern,
-} from '../../common/utils/cursor.util';
-import { buildSlug, normalizeSlugOrThrow } from '../../common/utils/slug.util';
-import { normalizeNullableText } from '../../common/utils/text.util';
+} from '@/common/utils/cursor.util';
+import { buildSlug, normalizeSlugOrThrow } from '@/common/utils/slug.util';
+import { normalizeNullableText } from '@/common/utils/text.util';
 
 type CategoryRow = {
   categoryId: string;

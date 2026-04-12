@@ -8,11 +8,11 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
-import { CurrentUser } from '../../common/decorators/current-user.decorator';
-import { Public } from '../../common/decorators/public.decorator';
-import { Roles } from '../../common/decorators/roles.decorator';
-import type { JwtPayload } from '../../common/guards/jwt.guard';
-import { RolesGuard } from '../../common/guards/roles.guard';
+import { CurrentUser } from '@/common/decorators/current-user.decorator';
+import { Public } from '@/common/decorators/public.decorator';
+import { Roles } from '@/common/decorators/roles.decorator';
+import type { JwtPayload } from '@/common/guards/jwt.guard';
+import { RolesGuard } from '@/common/guards/roles.guard';
 import { CreateQuizDto } from './dto/request/create-quiz.dto';
 import { QuizVersionResponseDto } from './dto/response/quiz-version-response.dto';
 import { QuizService } from './quiz.service';
