@@ -10,9 +10,9 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
-import { Public } from '../../common/decorators/public.decorator';
-import { Roles } from '../../common/decorators/roles.decorator';
-import { RolesGuard } from '../../common/guards/roles.guard';
+import { Public } from '@/common/decorators/public.decorator';
+import { Roles } from '@/common/decorators/roles.decorator';
+import { RolesGuard } from '@/common/guards/roles.guard';
 import { CreateTagDto } from './dto/request/create-tag.dto';
 import { ListTagsQueryDto } from './dto/request/list-tags-query.dto';
 import { UpdateTagDto } from './dto/request/update-tag.dto';

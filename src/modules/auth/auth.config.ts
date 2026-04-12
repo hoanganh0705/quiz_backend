@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { parseDurationToSeconds } from '../../core/utils/duration.util';
+import { parseDurationToSeconds } from '@/core/utils/duration.util';
 
 @Injectable()
 export class AuthConfig {

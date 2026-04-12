@@ -2,7 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { getLoggerToken } from 'nestjs-pino';
 import { AuthService } from './auth.service';
 import { CryptoService } from '../../common/service/crypto.service';
-import { UserRepository } from './repositories/user.repository';
+import { UserRepository } from '../../core/database/repositories/user.repository';
 import { TokenService } from './services/token.service';
 import { SessionService } from './services/session.service';
 import { SecurityService } from './services/security.service';

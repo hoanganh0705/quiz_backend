@@ -1,5 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { DRIZZLE } from '../../core/database/database.module';
+import { DRIZZLE } from '@/core/database/database.module';
 import { TagService } from './tag.service';
 
 describe('TagService', () => {

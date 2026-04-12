@@ -9,10 +9,10 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { and, desc, eq, isNull, or, sql, type SQL } from 'drizzle-orm';
-import { UserRole } from '../../common/decorators/roles.decorator';
-import { JwtPayload } from '../../common/guards/jwt.guard';
-import { DRIZZLE, type DrizzleDB } from '../../core/database/database.module';
-import { quizCategories, quizTags, quizVersions, quizzes } from '../../core/database/schema';
+import { UserRole } from '@/common/decorators/roles.decorator';
+import { JwtPayload } from '@/common/guards/jwt.guard';
+import { DRIZZLE, type DrizzleDB } from '@/core/database/database.module';
+import { quizCategories, quizTags, quizVersions, quizzes } from '@/core/database/schema';
 import { CreateQuizDto } from './dto/request/create-quiz.dto';
 import { CreateQuizVersionDto } from './dto/request/create-quiz-version.dto';
 import { ListQuizVersionsQueryDto } from './dto/request/list-quiz-versions-query.dto';
@@ -33,9 +33,9 @@ import {
   encodeBase64JsonCursor,
   isIsoDateString,
   isStringMatchingPattern,
-} from '../../common/utils/cursor.util';
-import { buildSlug, normalizeSlugOrThrow } from '../../common/utils/slug.util';
-import { normalizeNullableText } from '../../common/utils/text.util';
+} from '@/common/utils/cursor.util';
+import { buildSlug, normalizeSlugOrThrow } from '@/common/utils/slug.util';
+import { normalizeNullableText } from '@/common/utils/text.util';
 
 type QuizWithPublishedVersionRow = {
   quizId: string;
