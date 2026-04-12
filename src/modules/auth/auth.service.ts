@@ -1,7 +1,7 @@
 import { ConflictException, Injectable, UnauthorizedException } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
-import { CryptoService } from '../../common/service/crypto.service';
+import { CryptoService } from '@/common/service/crypto.service';
 import { LoginDto } from './dto/request/login.dto';
 import { RegisterDto } from './dto/request/register.dto';
 import {
@@ -11,7 +11,7 @@ import {
   RegisterResult,
   SessionRequestContext,
 } from './types/auth.types';
-import { UserRepository } from '../../core/database/repositories/user.repository';
+import { UserRepository } from '@/core/database/repositories/user.repository';
 import { TokenService } from './services/token.service';
 import { SessionService } from './services/session.service';
 import { SecurityService } from './services/security.service';

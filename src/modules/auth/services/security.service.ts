@@ -2,9 +2,9 @@ import { HttpException, HttpStatus, Injectable, UnauthorizedException } from '@n
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { AuthConfig } from '../auth.config';
 import { SessionRequestContext, RefreshTokenPayload } from '../types/auth.types';
-import { RedisService } from '../../../core/redis/redis.service';
+import { RedisService } from '@/core/redis/redis.service';
 import { SessionService } from './session.service';
-import { type SessionRecord } from '../../../core/database/repositories/user-session.repository';
+import { type SessionRecord } from '@/core/database/repositories/user-session.repository';
 
 type RateLimitBucket = 'login_ip' | 'login_user' | 'refresh_ip' | 'refresh_user';
 

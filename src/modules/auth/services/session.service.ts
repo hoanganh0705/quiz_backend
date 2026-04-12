@@ -1,11 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import { AuthConfig } from '../auth.config';
 import { AuthTokens, SessionRequestContext } from '../types/auth.types';
-import { CryptoService } from '../../../common/service/crypto.service';
+import { CryptoService } from '@/common/service/crypto.service';
 import {
   UserSessionRepository,
   type SessionRecord,
-} from '../../../core/database/repositories/user-session.repository';
+} from '@/core/database/repositories/user-session.repository';
 
 @Injectable()
 export class SessionService {
