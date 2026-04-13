@@ -51,8 +51,11 @@ export class AuthService {
     const tokenHash = this.cryptoService.hashSha256(rawToken);
     const expiresAtIso = this.getVerificationExpiryIso();
 
+    // Write token state first, then enqueue email.
+    // If enqueue fails, no email is sent and user can recover via resend endpoint.
+    // This avoids ever sending an email link whose token is not persisted.
     await this.userRepository.setEmailVerificationToken(userId, tokenHash, expiresAtIso);
-    await this.emailService.enqueueVerificationEmail(email, rawToken);
+    await this.emailService.enqueueVerificationEmail(email, rawToken, userId);
   }
 
   private toAuthIdentity(user: {
@@ -213,7 +216,9 @@ export class AuthService {
     const user: { userId: string; email: string } | null =
       await this.userRepository.findUserByActiveVerificationToken(tokenHash, nowIso);
     if (!user) {
-      throw new UnauthorizedException('Invalid or expired verification token');
+      throw new UnauthorizedException(
+        'Invalid or expired token. Please request a new verification email.',
+      );
     }
 
     await this.userRepository.markEmailAsVerified(user.userId, nowIso);
@@ -274,10 +279,11 @@ export class AuthService {
 
     const identity = this.toAuthIdentity(foundUser);
     const tokens = await this.tokenService.issueTokens(identity);
+    const { accessToken, refreshToken } = tokens;
 
     await this.sessionService.createSession(
       identity.userId,
-      tokens.refreshToken,
+      refreshToken,
       tokens.refreshTokenJti,
       context,
     );
@@ -286,8 +292,8 @@ export class AuthService {
       userId: identity.userId,
       username: identity.username,
       email: identity.email,
-      accessToken: tokens.accessToken,
-      refreshToken: tokens.refreshToken,
+      accessToken,
+      refreshToken,
     };
   }
 
