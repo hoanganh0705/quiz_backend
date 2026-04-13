@@ -20,7 +20,7 @@ import { SessionService } from './services/session.service';
 import { SecurityService } from './services/security.service';
 import { type SessionRecord } from '@/core/database/repositories/user-session.repository';
 import { AuthConfig } from './auth.config';
-import { VerificationEmailService } from './services/verification-email.service';
+import { EmailService } from '@/modules/email/email.service';
 
 @Injectable()
 export class AuthService {
@@ -31,7 +31,7 @@ export class AuthService {
     private readonly securityService: SecurityService,
     private readonly cryptoService: CryptoService,
     private readonly authConfig: AuthConfig,
-    private readonly verificationEmailService: VerificationEmailService,
+    private readonly emailService: EmailService,
     @InjectPinoLogger(AuthService.name) private readonly logger: PinoLogger,
   ) {}
 
@@ -52,7 +52,7 @@ export class AuthService {
     const expiresAtIso = this.getVerificationExpiryIso();
 
     await this.userRepository.setEmailVerificationToken(userId, tokenHash, expiresAtIso);
-    this.verificationEmailService.sendVerificationEmail(email, rawToken);
+    await this.emailService.enqueueVerificationEmail(email, rawToken);
   }
 
   private toAuthIdentity(user: {
@@ -231,7 +231,8 @@ export class AuthService {
 
   async resendVerificationEmail(email: string): Promise<{ message: string }> {
     const normalizedEmail = email.trim().toLowerCase();
-    const foundUser = await this.userRepository.findActiveByEmailWithPassword(normalizedEmail);
+    const foundUser: { userId: string; email: string; isVerified: boolean } | null =
+      await this.userRepository.findActiveVerificationStatusByEmail(normalizedEmail);
 
     // Do not reveal account existence/verification state.
     if (!foundUser || foundUser.isVerified) {
@@ -281,7 +282,13 @@ export class AuthService {
       context,
     );
 
-    return { ...identity, ...tokens };
+    return {
+      userId: identity.userId,
+      username: identity.username,
+      email: identity.email,
+      accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken,
+    };
   }
 
   /*

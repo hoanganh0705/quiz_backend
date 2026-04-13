@@ -37,6 +37,12 @@ type UserVerificationRow = {
   email: string;
 };
 
+type UserVerificationStatusRow = {
+  userId: string;
+  email: string;
+  isVerified: boolean;
+};
+
 @Injectable()
 export class UserRepository {
   constructor(@Inject(DRIZZLE) private readonly db: DrizzleDB) {}
@@ -140,10 +146,31 @@ export class UserRepository {
     return (user as UserIdentityRow | undefined) ?? null;
   }
 
+  async findActiveVerificationStatusByEmail(
+    email: string,
+  ): Promise<UserVerificationStatusRow | null> {
+    const [user] = await this.db
+      .select({
+        userId: users.userId,
+        email: users.email,
+        isVerified: users.isVerified,
+      })
+      .from(users)
+      .where(and(isNull(users.deletedAt), eq(users.email, email)))
+      .limit(1)
+      .catch(() => {
+        throw new InternalServerErrorException('Failed to fetch user verification status');
+      });
+
+    return (user as UserVerificationStatusRow | undefined) ?? null;
+  }
+
   async findUserByActiveVerificationToken(
     tokenHash: string,
     nowIso: string,
   ): Promise<UserVerificationRow | null> {
+    // `isVerified = false` ensures token is one-time use: once verification succeeds,
+    // user becomes verified and subsequent reuse attempts cannot match this query.
     const [user] = await this.db
       .select({
         userId: users.userId,
