@@ -14,7 +14,7 @@ import { CommonModule } from '@/common/common.module';
 import { DeviceParserService } from './services/device-parser.service';
 import { DatabaseModule } from '@/core/database/database.module';
 import { RedisModule } from '@/core/redis/redis.module';
-import { VerificationEmailService } from './services/verification-email.service';
+import { EmailModule } from '@/modules/email/email.module';
 
 @Module({
   // import JwtModule to use its exported services (e.g., JwtService) in AuthService
@@ -24,6 +24,7 @@ import { VerificationEmailService } from './services/verification-email.service'
     CommonModule,
     DatabaseModule,
     RedisModule,
+    EmailModule,
   ],
   controllers: [AuthController],
   providers: [
@@ -36,7 +37,6 @@ import { VerificationEmailService } from './services/verification-email.service'
     SecurityService,
     AuthRequestContextService,
     DeviceParserService,
-    VerificationEmailService,
   ], // what can be injected into constructors of other providers in this module
   exports: [AuthService], // export AuthService for use in other modules
 })
