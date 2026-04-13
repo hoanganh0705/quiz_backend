@@ -45,6 +45,8 @@ export class AuthController {
 
   @Post('verify-email')
   @Public()
+  // Optional production hardening:
+  // add @Throttle({ default: { limit: 10, ttl: 60_000 } }) here.
   async verifyEmail(@Body() verifyEmailDto: VerifyEmailDto): Promise<VerifyEmailResponseDto> {
     const verifyResult: VerifyEmailResult = await this.authService.verifyEmail(
       verifyEmailDto.token,
@@ -57,6 +59,8 @@ export class AuthController {
 
   @Post('resend-verification-email')
   @Public()
+  // Optional production hardening:
+  // add @Throttle({ default: { limit: 5, ttl: 60_000 } }) here.
   async resendVerificationEmail(
     @Body() resendVerificationDto: ResendVerificationDto,
   ): Promise<VerifyEmailResponseDto> {

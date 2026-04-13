@@ -7,7 +7,7 @@ import { TokenService } from './services/token.service';
 import { SessionService } from './services/session.service';
 import { SecurityService } from './services/security.service';
 import { AuthConfig } from './auth.config';
-import { VerificationEmailService } from './services/verification-email.service';
+import { EmailService } from '@/modules/email/email.service';
 
 describe('AuthService', () => {
   let service: AuthService;
@@ -15,6 +15,7 @@ describe('AuthService', () => {
     ensureEmailAndUsernameAvailable: jest.fn(),
     createUser: jest.fn(),
     findActiveByEmailWithPassword: jest.fn(),
+    findActiveVerificationStatusByEmail: jest.fn(),
     findActiveIdentityById: jest.fn(),
   };
   const tokenServiceMock = {
@@ -48,8 +49,8 @@ describe('AuthService', () => {
   const authConfigMock = {
     emailVerificationTokenTtlSeconds: 1800,
   };
-  const verificationEmailServiceMock = {
-    sendVerificationEmail: jest.fn(),
+  const emailServiceMock = {
+    enqueueVerificationEmail: jest.fn(),
   };
 
   beforeEach(async () => {
@@ -85,8 +86,8 @@ describe('AuthService', () => {
           useValue: authConfigMock,
         },
         {
-          provide: VerificationEmailService,
-          useValue: verificationEmailServiceMock,
+          provide: EmailService,
+          useValue: emailServiceMock,
         },
       ],
     }).compile();
