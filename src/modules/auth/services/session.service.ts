@@ -46,8 +46,12 @@ export class SessionService {
     await this.enforceActiveSessionLimit(userId);
   }
 
-  async getSessionByJtiAndUserId(jti: string, userId: string): Promise<SessionRecord | null> {
-    return await this.userSessionRepository.getSessionByJtiAndUserId(jti, userId);
+  async getSessionByJtiAndUserId(
+    jti: string,
+    userId: string,
+    nowIso: string,
+  ): Promise<SessionRecord | null> {
+    return await this.userSessionRepository.getSessionByJtiAndUserId(jti, userId, nowIso);
   }
 
   async findLatestActiveSessionByUserId(

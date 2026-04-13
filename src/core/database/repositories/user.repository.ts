@@ -4,7 +4,7 @@ import {
   Injectable,
   InternalServerErrorException,
 } from '@nestjs/common';
-import { and, eq, isNull, or } from 'drizzle-orm';
+import { and, eq, gt, isNull, or } from 'drizzle-orm';
 import { DRIZZLE, type DrizzleDB } from '../database.module';
 import { users } from '../schema';
 
@@ -24,10 +24,17 @@ type UserIdentityRow = {
 
 type UserWithPasswordRow = UserIdentityRow & {
   passwordHash: string;
+  isVerified: boolean;
 };
 
 type CreatedUserRow = UserIdentityRow & {
   createdAt: string;
+  isVerified: boolean;
+};
+
+type UserVerificationRow = {
+  userId: string;
+  email: string;
 };
 
 @Injectable()
@@ -62,6 +69,7 @@ export class UserRepository {
       .returning({
         ...USER_IDENTITY_COLUMNS,
         createdAt: users.createdAt,
+        isVerified: users.isVerified,
       })
       .catch(() => {
         throw new InternalServerErrorException('Failed to create user');
@@ -75,6 +83,7 @@ export class UserRepository {
       .select({
         ...USER_IDENTITY_COLUMNS,
         passwordHash: users.passwordHash,
+        isVerified: users.isVerified,
       })
       .from(users)
       .where(and(isNull(users.deletedAt), eq(users.email, email)))
@@ -99,5 +108,76 @@ export class UserRepository {
       });
 
     return (user as UserIdentityRow | undefined) ?? null;
+  }
+
+  async setEmailVerificationToken(
+    userId: string,
+    tokenHash: string,
+    expiresAtIso: string,
+  ): Promise<void> {
+    await this.db
+      .update(users)
+      .set({
+        emailVerificationTokenHash: tokenHash,
+        emailVerificationExpiresAt: expiresAtIso,
+      })
+      .where(and(eq(users.userId, userId), isNull(users.deletedAt)))
+      .catch(() => {
+        throw new InternalServerErrorException('Failed to save email verification token');
+      });
+  }
+
+  async findActiveByEmail(email: string): Promise<UserIdentityRow | null> {
+    const [user] = await this.db
+      .select(USER_IDENTITY_COLUMNS)
+      .from(users)
+      .where(and(isNull(users.deletedAt), eq(users.email, email)))
+      .limit(1)
+      .catch(() => {
+        throw new InternalServerErrorException('Failed to fetch user');
+      });
+
+    return (user as UserIdentityRow | undefined) ?? null;
+  }
+
+  async findUserByActiveVerificationToken(
+    tokenHash: string,
+    nowIso: string,
+  ): Promise<UserVerificationRow | null> {
+    const [user] = await this.db
+      .select({
+        userId: users.userId,
+        email: users.email,
+      })
+      .from(users)
+      .where(
+        and(
+          isNull(users.deletedAt),
+          eq(users.isVerified, false),
+          eq(users.emailVerificationTokenHash, tokenHash),
+          gt(users.emailVerificationExpiresAt, nowIso),
+        ),
+      )
+      .limit(1)
+      .catch(() => {
+        throw new InternalServerErrorException('Failed to fetch user by verification token');
+      });
+
+    return (user as UserVerificationRow | undefined) ?? null;
+  }
+
+  async markEmailAsVerified(userId: string, nowIso: string): Promise<void> {
+    await this.db
+      .update(users)
+      .set({
+        isVerified: true,
+        emailVerifiedAt: nowIso,
+        emailVerificationTokenHash: null,
+        emailVerificationExpiresAt: null,
+      })
+      .where(and(eq(users.userId, userId), isNull(users.deletedAt)))
+      .catch(() => {
+        throw new InternalServerErrorException('Failed to verify user email');
+      });
   }
 }
