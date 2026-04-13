@@ -95,6 +95,13 @@ export const users = pgTable(
     role: userRole().default('user').notNull(),
     avatarUrl: text('avatar_url'),
     bio: text(),
+    isVerified: boolean('is_verified').default(false).notNull(),
+    emailVerificationTokenHash: text('email_verification_token_hash'),
+    emailVerificationExpiresAt: timestamp('email_verification_expires_at', {
+      withTimezone: true,
+      mode: 'string',
+    }),
+    emailVerifiedAt: timestamp('email_verified_at', { withTimezone: true, mode: 'string' }),
     xpTotal: integer('xp_total').default(0).notNull(),
     currentStreak: integer('current_streak').default(0).notNull(),
     longestStreak: integer('longest_streak').default(0).notNull(),

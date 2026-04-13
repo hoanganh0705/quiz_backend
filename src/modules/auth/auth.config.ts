@@ -122,4 +122,61 @@ export class AuthConfig {
     const normalizedValue = rawValue.trim().toLowerCase();
     return normalizedValue === 'true' || normalizedValue === '1' || normalizedValue === 'yes';
   }
+
+  get emailVerificationTokenTtlSeconds(): number {
+    const rawValue = this.configService.get<number>('EMAIL_VERIFICATION_TOKEN_TTL_SECONDS');
+
+    if (rawValue === undefined) {
+      return 1_800;
+    }
+
+    if (typeof rawValue !== 'number' || !Number.isInteger(rawValue) || rawValue <= 0) {
+      throw new Error('EMAIL_VERIFICATION_TOKEN_TTL_SECONDS must be a positive integer');
+    }
+
+    return rawValue;
+  }
+
+  get emailVerificationBaseUrl(): string {
+    const rawValue = this.configService.get<string>('EMAIL_VERIFICATION_BASE_URL');
+
+    if (!rawValue || rawValue.trim().length === 0) {
+      return 'http://localhost:3000/verify-email';
+    }
+
+    return rawValue.trim();
+  }
+
+  get emailFromAddress(): string {
+    // Placeholder; set EMAIL_FROM_ADDRESS for real delivery provider.
+    const rawValue = this.configService.get<string>('EMAIL_FROM_ADDRESS');
+
+    if (!rawValue || rawValue.trim().length === 0) {
+      return 'SET_ME_EMAIL_FROM_ADDRESS@example.com';
+    }
+
+    return rawValue.trim();
+  }
+
+  get emailFromName(): string {
+    // Placeholder; set EMAIL_FROM_NAME for real delivery provider.
+    const rawValue = this.configService.get<string>('EMAIL_FROM_NAME');
+
+    if (!rawValue || rawValue.trim().length === 0) {
+      return 'SET_ME_EMAIL_FROM_NAME';
+    }
+
+    return rawValue.trim();
+  }
+
+  get emailProvider(): string {
+    // Placeholder; set EMAIL_PROVIDER for real delivery provider.
+    const rawValue = this.configService.get<string>('EMAIL_PROVIDER');
+
+    if (!rawValue || rawValue.trim().length === 0) {
+      return 'SET_ME_EMAIL_PROVIDER';
+    }
+
+    return rawValue.trim();
+  }
 }

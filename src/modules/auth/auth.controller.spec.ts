@@ -12,6 +12,8 @@ describe('AuthController', () => {
     refreshToken: jest.fn(),
     login: jest.fn(),
     register: jest.fn(),
+    verifyEmail: jest.fn(),
+    resendVerificationEmail: jest.fn(),
   };
   const authCookieServiceMock = {
     setRefreshTokenCookie: jest.fn(),
