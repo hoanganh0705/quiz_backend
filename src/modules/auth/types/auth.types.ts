@@ -5,8 +5,11 @@ export type RegisterResult = {
   username: string;
   email: string;
   createdAt: string;
-  accessToken: string;
-  refreshToken: string;
+  message: string;
+};
+
+export type VerifyEmailResult = {
+  message: string;
 };
 
 export type LoginResult = {
