@@ -1,4 +1,5 @@
 import { Body, Controller, Post, Req, Res, UnauthorizedException } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import type { Request, Response } from 'express';
 import { Public } from '@/common/decorators/public.decorator';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
@@ -45,8 +46,7 @@ export class AuthController {
 
   @Post('verify-email')
   @Public()
-  // Optional production hardening:
-  // add @Throttle({ default: { limit: 10, ttl: 60_000 } }) here.
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
   async verifyEmail(@Body() verifyEmailDto: VerifyEmailDto): Promise<VerifyEmailResponseDto> {
     const verifyResult: VerifyEmailResult = await this.authService.verifyEmail(
       verifyEmailDto.token,
@@ -59,8 +59,7 @@ export class AuthController {
 
   @Post('resend-verification-email')
   @Public()
-  // Optional production hardening:
-  // add @Throttle({ default: { limit: 5, ttl: 60_000 } }) here.
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
   async resendVerificationEmail(
     @Body() resendVerificationDto: ResendVerificationDto,
   ): Promise<VerifyEmailResponseDto> {

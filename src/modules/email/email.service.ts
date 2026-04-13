@@ -16,11 +16,11 @@ export class EmailService implements OnModuleDestroy {
     await this.emailQueue.close();
   }
 
-  async enqueueVerificationEmail(email: string, token: string): Promise<void> {
+  async enqueueVerificationEmail(email: string, token: string, userId?: string): Promise<void> {
     try {
       const job = await this.emailQueue.add(
         EMAIL_JOB_NAMES.SEND_VERIFICATION_EMAIL,
-        { email, token },
+        { email, token, userId },
         {
           attempts: 5,
           backoff: {
@@ -42,12 +42,13 @@ export class EmailService implements OnModuleDestroy {
         event: 'email_job_enqueued',
         jobId: job.id,
         jobName: job.name,
-        email,
+        userId,
       });
     } catch (error) {
       this.logger.error({
         event: 'email_job_enqueue_failed',
-        email,
+        jobName: EMAIL_JOB_NAMES.SEND_VERIFICATION_EMAIL,
+        userId,
         message: error instanceof Error ? error.message : 'Unknown enqueue error',
       });
 
