@@ -124,6 +124,9 @@ export const users = pgTable(
     uniqueIndex('uq_users_username_active')
       .using('btree', table.username.asc().nullsLast().op('text_ops'))
       .where(sql`deleted_at IS NULL`),
+    index('idx_users_email_verification_token_active')
+      .using('btree', table.emailVerificationTokenHash.asc().nullsLast().op('text_ops'))
+      .where(sql`deleted_at IS NULL AND is_verified = false`),
     check('users_email_len', sql`(length((email)::text) >= 3) AND (length((email)::text) <= 255)`),
     check('users_email_like', sql`POSITION(('@'::text) IN (email)) > 1`),
     check('users_settings_object', sql`jsonb_typeof(settings) = 'object'::text`),
