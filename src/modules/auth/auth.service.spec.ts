@@ -6,6 +6,8 @@ import { UserRepository } from '../../core/database/repositories/user.repository
 import { TokenService } from './services/token.service';
 import { SessionService } from './services/session.service';
 import { SecurityService } from './services/security.service';
+import { AuthConfig } from './auth.config';
+import { VerificationEmailService } from './services/verification-email.service';
 
 describe('AuthService', () => {
   let service: AuthService;
@@ -43,6 +45,12 @@ describe('AuthService', () => {
     warn: jest.fn(),
     error: jest.fn(),
   };
+  const authConfigMock = {
+    emailVerificationTokenTtlSeconds: 1800,
+  };
+  const verificationEmailServiceMock = {
+    sendVerificationEmail: jest.fn(),
+  };
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -71,6 +79,14 @@ describe('AuthService', () => {
         {
           provide: getLoggerToken(AuthService.name),
           useValue: pinoLoggerMock,
+        },
+        {
+          provide: AuthConfig,
+          useValue: authConfigMock,
+        },
+        {
+          provide: VerificationEmailService,
+          useValue: verificationEmailServiceMock,
         },
       ],
     }).compile();

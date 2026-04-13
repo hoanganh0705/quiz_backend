@@ -8,10 +8,18 @@ import { LoginResponseDto } from './dto/response/login-response.dto';
 import { RegisterDto } from './dto/request/register.dto';
 import { RegisterResponseDto } from './dto/response/register-response.dto';
 import { RefreshTokenResponseDto } from './dto/response/refresh-token-response.dto';
-import { LoginResult, RefreshTokenResult, RegisterResult } from './types/auth.types';
+import {
+  LoginResult,
+  RefreshTokenResult,
+  RegisterResult,
+  VerifyEmailResult,
+} from './types/auth.types';
 import { LogoutResponseDto } from './dto/response/logout-response.dto';
 import { AuthCookieService } from './services/auth-cookie.service';
 import { AuthRequestContextService } from './services/auth-request-context.service';
+import { VerifyEmailDto } from './dto/request/verify-email.dto';
+import { VerifyEmailResponseDto } from './dto/response/verify-email-response.dto';
+import { ResendVerificationDto } from './dto/request/resend-verification.dto';
 
 @Controller('auth')
 export class AuthController {
@@ -23,26 +31,36 @@ export class AuthController {
 
   @Post('register')
   @Public()
-  async register(
-    @Body() registerDto: RegisterDto,
-    @Req() request: Request,
-    @Res({ passthrough: true }) response: Response, // không cần dùng res.json() vì Nest sẽ tự làm cho và nếu không dùng passthrough thì có thể khiến không dùng được interceptor các kiểu...
-  ): Promise<RegisterResponseDto> {
-    const registerResult: RegisterResult = await this.authService.register(
-      registerDto,
-      this.authRequestContextService.getSessionRequestContext(request),
-    );
-    this.authCookieService.setRefreshTokenCookie(response, registerResult.refreshToken);
+  async register(@Body() registerDto: RegisterDto): Promise<RegisterResponseDto> {
+    const registerResult: RegisterResult = await this.authService.register(registerDto);
 
     return {
       userId: registerResult.userId,
       username: registerResult.username,
       email: registerResult.email,
       createdAt: registerResult.createdAt,
-      token: {
-        accessToken: registerResult.accessToken,
-      },
+      message: registerResult.message,
     };
+  }
+
+  @Post('verify-email')
+  @Public()
+  async verifyEmail(@Body() verifyEmailDto: VerifyEmailDto): Promise<VerifyEmailResponseDto> {
+    const verifyResult: VerifyEmailResult = await this.authService.verifyEmail(
+      verifyEmailDto.token,
+    );
+
+    return {
+      message: verifyResult.message,
+    };
+  }
+
+  @Post('resend-verification-email')
+  @Public()
+  async resendVerificationEmail(
+    @Body() resendVerificationDto: ResendVerificationDto,
+  ): Promise<VerifyEmailResponseDto> {
+    return await this.authService.resendVerificationEmail(resendVerificationDto.email);
   }
 
   @Post('login')

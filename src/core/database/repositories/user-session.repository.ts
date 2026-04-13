@@ -53,11 +53,22 @@ export class UserSessionRepository {
       });
   }
 
-  async getSessionByJtiAndUserId(jti: string, userId: string): Promise<SessionRecord | null> {
+  async getSessionByJtiAndUserId(
+    jti: string,
+    userId: string,
+    nowIso: string,
+  ): Promise<SessionRecord | null> {
     const [session] = await this.db
       .select(SESSION_LOOKUP_COLUMNS)
       .from(userSessions)
-      .where(and(eq(userSessions.jti, jti), eq(userSessions.userId, userId)))
+      .where(
+        and(
+          eq(userSessions.jti, jti),
+          eq(userSessions.userId, userId),
+          isNull(userSessions.revokedAt),
+          gt(userSessions.expiresAt, nowIso),
+        ),
+      )
       .limit(1)
       .catch(() => {
         throw new InternalServerErrorException('Failed to fetch user session');
