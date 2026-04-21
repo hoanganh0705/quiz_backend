@@ -32,16 +32,11 @@ export class AuthController {
 
   @Post('register')
   @Public()
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
   async register(@Body() registerDto: RegisterDto): Promise<RegisterResponseDto> {
     const registerResult: RegisterResult = await this.authService.register(registerDto);
 
-    return {
-      userId: registerResult.userId,
-      username: registerResult.username,
-      email: registerResult.email,
-      createdAt: registerResult.createdAt,
-      message: registerResult.message,
-    };
+    return registerResult;
   }
 
   @Post('verify-email')
@@ -117,6 +112,7 @@ export class AuthController {
   }
 
   @Post('logout')
+  // Intentionally public: allows clients to clear refresh cookies even if the access token is expired.
   @Public()
   async logout(
     @Req() request: Request,

@@ -2,13 +2,15 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { NestExpressApplication } from '@nestjs/platform-express';
 import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule, { bufferLogs: true }); // bufferLogs: true để đảm bảo log được ghi lại ngay cả khi app chưa sẵn sàng để xử lý request, tránh mất log quan trọng trong quá trình khởi động
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, { bufferLogs: true }); // bufferLogs: true để đảm bảo log được ghi lại ngay cả khi app chưa sẵn sàng để xử lý request, tránh mất log quan trọng trong quá trình khởi động
   const configService = app.get(ConfigService);
   const isProduction = configService.get<string>('NODE_ENV') === 'production';
+  const trustProxy = configService.get<boolean>('TRUST_PROXY') ?? false;
   const rawCorsOrigins = configService.get<string>('CORS_ORIGINS') ?? '';
   const corsOrigins = rawCorsOrigins
     .split(',')
@@ -21,6 +23,7 @@ async function bootstrap() {
   });
   app.use(helmet());
   app.use(cookieParser());
+  app.set('trust proxy', trustProxy);
   app.setGlobalPrefix('api/v1');
   app.enableShutdownHooks(); // enableShutdownHooks để NestJS có thể lắng nghe các sự kiện shutdown của hệ thống, giúp thực hiện các công việc dọn dẹp trước khi ứng dụng tắt, như đóng kết nối database, giải phóng tài nguyên, v.v.
 

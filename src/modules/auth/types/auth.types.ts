@@ -1,10 +1,6 @@
 import { UserRole } from '@/common/decorators/roles.decorator';
 
 export type RegisterResult = {
-  userId: string;
-  username: string;
-  email: string;
-  createdAt: string;
   message: string;
 };
 
@@ -48,6 +44,8 @@ export type AccessTokenPayload = {
 export type RefreshTokenPayload = {
   sub: string;
   jti: string;
+  exp?: number;
+  iat?: number;
 };
 
 export type SessionDeviceType = 'mobile' | 'desktop' | 'tablet' | 'unknown';

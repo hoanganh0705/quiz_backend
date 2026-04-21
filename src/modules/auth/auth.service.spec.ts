@@ -24,7 +24,7 @@ describe('AuthService', () => {
     tryVerifyRefreshToken: jest.fn(),
   };
   const sessionServiceMock = {
-    createSession: jest.fn(),
+    createSessionWithActiveLimit: jest.fn(),
     getSessionByJtiAndUserId: jest.fn(),
     findLatestActiveSessionByUserId: jest.fn(),
     rotateSession: jest.fn(),
