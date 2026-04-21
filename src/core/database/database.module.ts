@@ -5,8 +5,11 @@ import { drizzle } from 'drizzle-orm/node-postgres';
 import { Pool } from 'pg';
 import * as schema from './schema';
 import * as relations from './schema/relations';
+import { DRIZZLE } from './drizzle.constants';
 import { UserSessionRepository } from './repositories/user-session.repository';
 import { UserRepository } from './repositories/user.repository';
+
+export { DRIZZLE } from './drizzle.constants';
 
 const createDrizzleDb = (connectionString: string) => {
   const pool = new Pool({ connectionString });
@@ -17,8 +20,6 @@ const createDrizzleDb = (connectionString: string) => {
 };
 
 export type DrizzleDB = ReturnType<typeof createDrizzleDb>;
-
-export const DRIZZLE = Symbol('DRIZZLE');
 
 @Global()
 @Module({

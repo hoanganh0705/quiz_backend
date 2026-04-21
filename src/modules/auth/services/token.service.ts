@@ -49,7 +49,15 @@ export class TokenService {
     }
 
     const candidate = payload as Record<string, unknown>;
-    return typeof candidate.sub === 'string' && typeof candidate.jti === 'string';
+    const hasRequiredFields =
+      typeof candidate.sub === 'string' && typeof candidate.jti === 'string';
+    if (!hasRequiredFields) {
+      return false;
+    }
+
+    const expOk = candidate.exp === undefined || typeof candidate.exp === 'number';
+    const iatOk = candidate.iat === undefined || typeof candidate.iat === 'number';
+    return expOk && iatOk;
   }
 
   async verifyRefreshToken(refreshToken: string): Promise<RefreshTokenPayload> {

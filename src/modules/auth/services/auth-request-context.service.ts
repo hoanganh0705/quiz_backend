@@ -8,15 +8,10 @@ export class AuthRequestContextService {
   constructor(private readonly deviceParserService: DeviceParserService) {}
 
   extractIpAddress(request: Request): string | null {
-    const forwardedFor = request.headers['x-forwarded-for'];
-
-    if (typeof forwardedFor === 'string' && forwardedFor.length > 0) {
-      const [firstIp] = forwardedFor.split(',');
-      return firstIp?.trim() || null;
-    }
-
-    if (Array.isArray(forwardedFor) && forwardedFor.length > 0) {
-      return forwardedFor[0]?.trim() || null;
+    // NOTE: request.ips is derived from X-Forwarded-For and is only trustworthy when the
+    // application is behind a trusted reverse proxy with Express "trust proxy" configured.
+    if (Array.isArray(request.ips) && request.ips.length > 0) {
+      return request.ips[0] ?? null;
     }
 
     return request.ip || null;

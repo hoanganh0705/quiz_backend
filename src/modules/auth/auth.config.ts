@@ -6,26 +6,25 @@ import { parseDurationToSeconds } from '@/core/utils/duration.util';
 export class AuthConfig {
   constructor(private readonly configService: ConfigService) {}
 
+  private getRequiredStringConfig(key: string): string {
+    return (
+      this.configService.get<string>(key) ??
+      (() => {
+        throw new Error(`${key} is not defined in environment variables`);
+      })()
+    );
+  }
+
   get isProduction(): boolean {
     return this.configService.get<string>('NODE_ENV') === 'production';
   }
 
   get accessTokenSecret(): string {
-    return (
-      this.configService.get<string>('JWT_ACCESS_TOKEN_SECRET') ??
-      (() => {
-        throw new Error('JWT_ACCESS_TOKEN_SECRET is not defined in environment variables');
-      })()
-    );
+    return this.getRequiredStringConfig('JWT_ACCESS_TOKEN_SECRET');
   }
 
   get refreshTokenSecret(): string {
-    return (
-      this.configService.get<string>('JWT_REFRESH_TOKEN_SECRET') ??
-      (() => {
-        throw new Error('JWT_REFRESH_TOKEN_SECRET is not defined in environment variables');
-      })()
-    );
+    return this.getRequiredStringConfig('JWT_REFRESH_TOKEN_SECRET');
   }
 
   get accessTokenExpiresInSeconds(): number {
@@ -56,6 +55,10 @@ export class AuthConfig {
     return rawValue;
   }
 
+  get refreshSessionTtlMs(): number {
+    return Math.min(this.refreshTokenCookieMaxAgeMs, this.refreshTokenExpiresInSeconds * 1_000);
+  }
+
   get maxActiveSessionsPerUser(): number {
     const rawValue = this.configService.get<number>('MAX_ACTIVE_SESSIONS_PER_USER');
 
@@ -71,23 +74,11 @@ export class AuthConfig {
   }
 
   get accessTokenIssuer(): string {
-    const rawValue = this.configService.get<string>('JWT_ACCESS_TOKEN_ISSUER');
-
-    if (!rawValue || rawValue.trim().length === 0) {
-      return 'quiz-backend';
-    }
-
-    return rawValue.trim();
+    return this.getRequiredStringConfig('JWT_ACCESS_TOKEN_ISSUER').trim();
   }
 
   get accessTokenAudience(): string {
-    const rawValue = this.configService.get<string>('JWT_ACCESS_TOKEN_AUDIENCE');
-
-    if (!rawValue || rawValue.trim().length === 0) {
-      return 'quiz-client';
-    }
-
-    return rawValue.trim();
+    return this.getRequiredStringConfig('JWT_ACCESS_TOKEN_AUDIENCE').trim();
   }
 
   get refreshReuseGraceWindowSeconds(): number {
@@ -142,39 +133,6 @@ export class AuthConfig {
 
     if (!rawValue || rawValue.trim().length === 0) {
       return 'http://localhost:3000/verify-email';
-    }
-
-    return rawValue.trim();
-  }
-
-  get emailFromAddress(): string {
-    // Placeholder; set EMAIL_FROM_ADDRESS for real delivery provider.
-    const rawValue = this.configService.get<string>('EMAIL_FROM_ADDRESS');
-
-    if (!rawValue || rawValue.trim().length === 0) {
-      return 'SET_ME_EMAIL_FROM_ADDRESS@example.com';
-    }
-
-    return rawValue.trim();
-  }
-
-  get emailFromName(): string {
-    // Placeholder; set EMAIL_FROM_NAME for real delivery provider.
-    const rawValue = this.configService.get<string>('EMAIL_FROM_NAME');
-
-    if (!rawValue || rawValue.trim().length === 0) {
-      return 'SET_ME_EMAIL_FROM_NAME';
-    }
-
-    return rawValue.trim();
-  }
-
-  get emailProvider(): string {
-    // Placeholder; set EMAIL_PROVIDER for real delivery provider.
-    const rawValue = this.configService.get<string>('EMAIL_PROVIDER');
-
-    if (!rawValue || rawValue.trim().length === 0) {
-      return 'SET_ME_EMAIL_PROVIDER';
     }
 
     return rawValue.trim();

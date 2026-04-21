@@ -1,6 +1,7 @@
 import { Inject, Injectable, InternalServerErrorException } from '@nestjs/common';
-import { and, asc, desc, eq, gt, isNull, lt, inArray } from 'drizzle-orm';
-import { DRIZZLE, type DrizzleDB } from '../database.module';
+import { and, asc, desc, eq, gt, isNull, lt, inArray, sql } from 'drizzle-orm';
+import { DRIZZLE } from '../drizzle.constants';
+import type { DrizzleDB } from '../database.module';
 import { userSessions } from '../schema';
 
 export type SessionRecord = {
@@ -35,19 +36,64 @@ const SESSION_LOOKUP_COLUMNS = {
 export class UserSessionRepository {
   constructor(@Inject(DRIZZLE) private readonly db: DrizzleDB) {}
 
-  async createSession(data: {
-    jti: string;
-    userId: string;
-    refreshTokenHash: string;
-    ipAddress: string | null;
-    deviceBrowser: string | null;
-    deviceOs: string | null;
-    deviceType: string;
-    expiresAt: string;
-  }): Promise<void> {
+  async createSessionWithActiveLimit(
+    data: {
+      jti: string;
+      userId: string;
+      refreshTokenHash: string;
+      ipAddress: string | null;
+      deviceBrowser: string | null;
+      deviceOs: string | null;
+      deviceType: string;
+      expiresAt: string;
+    },
+    nowIso: string,
+    maxActiveSessionsPerUser: number,
+  ): Promise<void> {
+    if (!Number.isInteger(maxActiveSessionsPerUser) || maxActiveSessionsPerUser <= 0) {
+      throw new InternalServerErrorException('Invalid max active sessions configuration');
+    }
+
     await this.db
-      .insert(userSessions)
-      .values(data)
+      .transaction(async (tx) => {
+        // Serialize session creation/enforcement per user to avoid race conditions that could
+        // temporarily exceed maxActiveSessionsPerUser.
+        await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${data.userId}))`);
+
+        await tx.insert(userSessions).values(data);
+
+        const activeSessions = await tx
+          .select({
+            sessionId: userSessions.sessionId,
+          })
+          .from(userSessions)
+          .where(
+            and(
+              eq(userSessions.userId, data.userId),
+              isNull(userSessions.revokedAt),
+              gt(userSessions.expiresAt, nowIso),
+            ),
+          )
+          .orderBy(asc(userSessions.lastUsedAt), asc(userSessions.createdAt));
+
+        if (activeSessions.length <= maxActiveSessionsPerUser) {
+          return;
+        }
+
+        const sessionsToRevoke = activeSessions.slice(
+          0,
+          activeSessions.length - maxActiveSessionsPerUser,
+        );
+        const sessionIdsToRevoke = sessionsToRevoke.map((s) => s.sessionId);
+
+        await tx
+          .update(userSessions)
+          .set({
+            revokedAt: nowIso,
+            lastUsedAt: nowIso,
+          })
+          .where(inArray(userSessions.sessionId, sessionIdsToRevoke));
+      })
       .catch(() => {
         throw new InternalServerErrorException('Failed to create user session');
       });
@@ -178,19 +224,6 @@ export class UserSessionRepository {
       });
 
     return revokedRows;
-  }
-
-  async getActiveSessionIdsOrderedByLastUsed(userId: string): Promise<{ sessionId: string }[]> {
-    return await this.db
-      .select({
-        sessionId: userSessions.sessionId,
-      })
-      .from(userSessions)
-      .where(and(eq(userSessions.userId, userId), isNull(userSessions.revokedAt)))
-      .orderBy(asc(userSessions.lastUsedAt), asc(userSessions.createdAt))
-      .catch(() => {
-        throw new InternalServerErrorException('Failed to fetch active sessions');
-      });
   }
 
   async revokeSessionsByIds(sessionIds: string[], nowIso: string): Promise<void> {
