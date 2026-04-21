@@ -16,7 +16,7 @@ export class SessionService {
   ) {}
 
   private getRefreshTokenExpiresAtIso(): string {
-    return new Date(Date.now() + this.authConfig.refreshTokenCookieMaxAgeMs).toISOString();
+    return new Date(Date.now() + this.authConfig.refreshSessionTtlMs).toISOString();
   }
 
   private getNowIso(): string {
@@ -31,19 +31,22 @@ export class SessionService {
   ): Promise<void> {
     const refreshTokenHash = this.cryptoService.hashSha256(refreshToken);
     const expiresAt = this.getRefreshTokenExpiresAtIso();
+    const nowIso = this.getNowIso();
 
-    await this.userSessionRepository.createSession({
-      jti: refreshTokenJti,
-      userId,
-      refreshTokenHash,
-      ipAddress: context.ipAddress,
-      deviceBrowser: context.deviceBrowser,
-      deviceOs: context.deviceOs,
-      deviceType: context.deviceType,
-      expiresAt,
-    });
-
-    await this.enforceActiveSessionLimit(userId);
+    await this.userSessionRepository.createSessionWithActiveLimit(
+      {
+        jti: refreshTokenJti,
+        userId,
+        refreshTokenHash,
+        ipAddress: context.ipAddress,
+        deviceBrowser: context.deviceBrowser,
+        deviceOs: context.deviceOs,
+        deviceType: context.deviceType,
+        expiresAt,
+      },
+      nowIso,
+      this.authConfig.maxActiveSessionsPerUser,
+    );
   }
 
   async getSessionByJtiAndUserId(
@@ -95,29 +98,5 @@ export class SessionService {
   async revokeSessionByRefreshTokenHash(refreshTokenHash: string): Promise<void> {
     const nowIso = this.getNowIso();
     await this.userSessionRepository.revokeSessionByRefreshTokenHash(refreshTokenHash, nowIso);
-  }
-
-  async softRevokeExpiredSessions(): Promise<number> {
-    const nowIso = this.getNowIso();
-    const revokedRows = await this.userSessionRepository.revokeExpiredSessions(nowIso);
-    return revokedRows.length;
-  }
-
-  private async enforceActiveSessionLimit(userId: string): Promise<void> {
-    const activeSessions =
-      await this.userSessionRepository.getActiveSessionIdsOrderedByLastUsed(userId);
-
-    if (activeSessions.length <= this.authConfig.maxActiveSessionsPerUser) {
-      return;
-    }
-
-    const sessionsToRevoke = activeSessions.slice(
-      0,
-      activeSessions.length - this.authConfig.maxActiveSessionsPerUser,
-    );
-
-    const nowIso = this.getNowIso();
-    const sessionIdsToRevoke = sessionsToRevoke.map((s) => s.sessionId);
-    await this.userSessionRepository.revokeSessionsByIds(sessionIdsToRevoke, nowIso);
   }
 }

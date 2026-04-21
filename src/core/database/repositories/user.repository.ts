@@ -5,7 +5,8 @@ import {
   InternalServerErrorException,
 } from '@nestjs/common';
 import { and, eq, gt, isNull, or } from 'drizzle-orm';
-import { DRIZZLE, type DrizzleDB } from '../database.module';
+import { DRIZZLE } from '../drizzle.constants';
+import type { DrizzleDB } from '../database.module';
 import { users } from '../schema';
 
 const USER_IDENTITY_COLUMNS = {

@@ -1,6 +1,6 @@
 import { ConflictException, Injectable, UnauthorizedException } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
-import { randomBytes } from 'crypto';
+import { randomBytes, timingSafeEqual } from 'crypto';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { CryptoService } from '@/common/service/crypto.service';
 import { LoginDto } from './dto/request/login.dto';
@@ -24,6 +24,13 @@ import { EmailService } from '@/modules/email/email.service';
 
 @Injectable()
 export class AuthService {
+  private static readonly RESEND_VERIFICATION_GENERIC_MESSAGE =
+    'If this email exists and is not verified, a verification email has been sent.';
+  private static readonly REGISTER_GENERIC_MESSAGE =
+    'If your registration can be completed, a verification email will be sent.';
+  private static readonly DUMMY_PASSWORD_HASH =
+    '$2b$12$4HFj7c4f1QH7wHTQXhH1ueYCMr5xM9A2m8K6q9M2m6I6QfZlq6QmW';
+
   constructor(
     private readonly userRepository: UserRepository,
     private readonly tokenService: TokenService,
@@ -77,6 +84,21 @@ export class AuthService {
     throw new UnauthorizedException(message);
   }
 
+  private isSha256HexEqual(left: string, right: string): boolean {
+    try {
+      const leftBuf = Buffer.from(left, 'hex');
+      const rightBuf = Buffer.from(right, 'hex');
+
+      if (leftBuf.length !== rightBuf.length) {
+        return false;
+      }
+
+      return timingSafeEqual(leftBuf, rightBuf);
+    } catch {
+      return false;
+    }
+  }
+
   /**
    * Resolves the session that should be used for the refresh.
    *
@@ -120,8 +142,6 @@ export class AuthService {
       event: 'auth_refresh_invalid_or_missing_session',
       userId: payload.sub,
       jti: payload.jti,
-      ipAddress: context.ipAddress,
-      userAgent: context.userAgent,
     });
 
     return this.revokeAndReject(
@@ -145,7 +165,7 @@ export class AuthService {
     context: SessionRequestContext,
     nowIso: string,
   ): Promise<void> {
-    if (session.refreshTokenHash === refreshTokenHash) {
+    if (this.isSha256HexEqual(session.refreshTokenHash, refreshTokenHash)) {
       return;
     }
 
@@ -165,8 +185,6 @@ export class AuthService {
       userId: payload.sub,
       sessionId: session.sessionId,
       jti: payload.jti,
-      ipAddress: context.ipAddress,
-      userAgent: context.userAgent,
     });
 
     return this.revokeAndReject(
@@ -179,6 +197,27 @@ export class AuthService {
     const normalizedEmail = registerDto.email.trim().toLowerCase();
     const normalizedUsername = registerDto.username.trim().toLowerCase();
 
+    const existingUser: { userId: string; email: string; isVerified: boolean } | null =
+      await this.userRepository.findActiveVerificationStatusByEmail(normalizedEmail);
+
+    if (existingUser) {
+      if (!existingUser.isVerified) {
+        try {
+          await this.issueAndSendVerificationToken(existingUser.userId, existingUser.email);
+        } catch (error) {
+          this.logger.error({
+            event: 'auth_register_existing_unverified_enqueue_failed',
+            userId: existingUser.userId,
+            message: error instanceof Error ? error.message : 'Unknown enqueue error',
+          });
+        }
+      }
+
+      return {
+        message: AuthService.REGISTER_GENERIC_MESSAGE,
+      };
+    }
+
     try {
       await this.userRepository.ensureEmailAndUsernameAvailable(
         normalizedEmail,
@@ -186,7 +225,10 @@ export class AuthService {
       );
     } catch (error) {
       if (error instanceof ConflictException) {
-        this.logger.warn({ event: 'auth_register_conflict', email: normalizedEmail });
+        this.logger.warn({ event: 'auth_register_conflict' });
+        return {
+          message: AuthService.REGISTER_GENERIC_MESSAGE,
+        };
       }
       throw error;
     }
@@ -198,14 +240,18 @@ export class AuthService {
       passwordHash,
     );
 
-    await this.issueAndSendVerificationToken(createdUser.userId, createdUser.email);
+    try {
+      await this.issueAndSendVerificationToken(createdUser.userId, createdUser.email);
+    } catch (error) {
+      this.logger.error({
+        event: 'auth_register_verification_enqueue_failed',
+        userId: createdUser.userId,
+        message: error instanceof Error ? error.message : 'Unknown enqueue error',
+      });
+    }
 
     return {
-      userId: createdUser.userId,
-      username: createdUser.username,
-      email: createdUser.email,
-      createdAt: createdUser.createdAt,
-      message: 'Registration successful. Please verify your email before logging in.',
+      message: AuthService.REGISTER_GENERIC_MESSAGE,
     };
   }
 
@@ -215,22 +261,17 @@ export class AuthService {
 
     const user: { userId: string; email: string } | null =
       await this.userRepository.findUserByActiveVerificationToken(tokenHash, nowIso);
-    if (!user) {
-      throw new UnauthorizedException(
-        'Invalid or expired token. Please request a new verification email.',
-      );
+    if (user) {
+      await this.userRepository.markEmailAsVerified(user.userId, nowIso);
+
+      this.logger.info({
+        event: 'auth_email_verified',
+        userId: user.userId,
+      });
     }
 
-    await this.userRepository.markEmailAsVerified(user.userId, nowIso);
-
-    this.logger.info({
-      event: 'auth_email_verified',
-      userId: user.userId,
-      email: user.email,
-    });
-
     return {
-      message: 'Email verified successfully. Please log in to continue.',
+      message: 'Verification processed. If valid, your email is now verified.',
     };
   }
 
@@ -242,14 +283,22 @@ export class AuthService {
     // Do not reveal account existence/verification state.
     if (!foundUser || foundUser.isVerified) {
       return {
-        message: 'If this email exists and is not verified, a verification email has been sent.',
+        message: AuthService.RESEND_VERIFICATION_GENERIC_MESSAGE,
       };
     }
 
-    await this.issueAndSendVerificationToken(foundUser.userId, foundUser.email);
+    try {
+      await this.issueAndSendVerificationToken(foundUser.userId, foundUser.email);
+    } catch (error) {
+      this.logger.error({
+        event: 'auth_resend_verification_email_enqueue_failed',
+        userId: foundUser.userId,
+        message: error instanceof Error ? error.message : 'Unknown enqueue error',
+      });
+    }
 
     return {
-      message: 'If this email exists and is not verified, a verification email has been sent.',
+      message: AuthService.RESEND_VERIFICATION_GENERIC_MESSAGE,
     };
   }
 
@@ -260,13 +309,31 @@ export class AuthService {
     const foundUser = await this.userRepository.findActiveByEmailWithPassword(normalizedEmail);
 
     if (!foundUser) {
-      this.logger.warn({ event: 'auth_login_user_not_found', email: normalizedEmail });
+      // Keep similar compute cost across failure paths to reduce timing-based account probing.
+      await bcrypt.compare(loginDto.password, AuthService.DUMMY_PASSWORD_HASH);
+      this.logger.warn({ event: 'auth_login_failed' });
       throw new UnauthorizedException('Invalid email or password');
     }
 
     if (!foundUser.isVerified) {
-      this.logger.warn({ event: 'auth_login_email_not_verified', userId: foundUser.userId });
-      throw new UnauthorizedException('Email is not verified');
+      // Keep similar compute cost across failure paths to reduce timing-based account probing.
+      await bcrypt.compare(loginDto.password, AuthService.DUMMY_PASSWORD_HASH);
+      this.logger.warn({ event: 'auth_login_failed', userId: foundUser.userId });
+      // Fire-and-forget so login timing is not coupled to Redis/queue/provider latency.
+      void this.securityService
+        .tryAcquireLoginUnverifiedVerificationEmailSlot(foundUser.userId)
+        .then((canEnqueue) => {
+          if (!canEnqueue) return;
+          return this.issueAndSendVerificationToken(foundUser.userId, foundUser.email);
+        })
+        .catch((error) => {
+          this.logger.error({
+            event: 'auth_login_unverified_enqueue_failed',
+            userId: foundUser.userId,
+            message: error instanceof Error ? error.message : 'Unknown enqueue error',
+          });
+        });
+      throw new UnauthorizedException('Invalid email or password');
     }
 
     await this.securityService.enforceLoginRateLimit(context, foundUser.userId);
@@ -322,8 +389,6 @@ export class AuthService {
         userId: payload.sub,
         sessionId: existingSession.sessionId,
         jti: payload.jti,
-        ipAddress: context.ipAddress,
-        userAgent: context.userAgent,
       });
       throw new UnauthorizedException('Session context mismatch');
     }
