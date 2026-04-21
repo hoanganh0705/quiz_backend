@@ -90,6 +90,7 @@ export const validateEnv = (env: Record<string, unknown>) => {
   const jwtAccessTokenIssuer = parseRequiredString(env, 'JWT_ACCESS_TOKEN_ISSUER');
   const jwtAccessTokenAudience = parseRequiredString(env, 'JWT_ACCESS_TOKEN_AUDIENCE');
   const sessionBindingStrict = parseBoolean(env, 'SESSION_BINDING_STRICT', false);
+  const trustProxy = parseBoolean(env, 'TRUST_PROXY', false);
   const port = parsePositiveInteger(env, 'PORT', 3000);
   const rawNodeEnv = env.NODE_ENV;
   const nodeEnvRaw =
@@ -123,6 +124,7 @@ export const validateEnv = (env: Record<string, unknown>) => {
     JWT_ACCESS_TOKEN_ISSUER: jwtAccessTokenIssuer,
     JWT_ACCESS_TOKEN_AUDIENCE: jwtAccessTokenAudience,
     SESSION_BINDING_STRICT: sessionBindingStrict,
+    TRUST_PROXY: trustProxy,
     PORT: port,
     NODE_ENV: nodeEnvRaw as NodeEnv,
     CORS_ORIGINS: corsOrigins,

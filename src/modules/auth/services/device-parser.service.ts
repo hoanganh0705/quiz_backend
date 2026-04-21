@@ -25,6 +25,7 @@ export class DeviceParserService {
       };
     }
 
+    // ua-parser-js has ESM/CJS interop quirks; this cast keeps a stable constructor type boundary.
     const UAParser = UAParserImport as unknown as UAParserCtor;
 
     const parser = new UAParser(userAgent);

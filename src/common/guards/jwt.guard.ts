@@ -37,6 +37,24 @@ export class JwtGuard implements CanActivate {
     );
   }
 
+  private getAccessTokenIssuer(): string {
+    return (
+      this.configService.get<string>('JWT_ACCESS_TOKEN_ISSUER') ??
+      (() => {
+        throw new Error('JWT_ACCESS_TOKEN_ISSUER is not defined in environment variables');
+      })()
+    );
+  }
+
+  private getAccessTokenAudience(): string {
+    return (
+      this.configService.get<string>('JWT_ACCESS_TOKEN_AUDIENCE') ??
+      (() => {
+        throw new Error('JWT_ACCESS_TOKEN_AUDIENCE is not defined in environment variables');
+      })()
+    );
+  }
+
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
       context.getHandler(),
@@ -62,6 +80,8 @@ export class JwtGuard implements CanActivate {
     try {
       const payload = await this.jwtService.verifyAsync<JwtPayload>(token, {
         secret: this.getAccessTokenSecret(),
+        issuer: this.getAccessTokenIssuer(),
+        audience: this.getAccessTokenAudience(),
       });
 
       if (!payload?.sub || !payload.role) {

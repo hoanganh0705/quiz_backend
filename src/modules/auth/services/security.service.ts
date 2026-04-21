@@ -10,6 +10,8 @@ type RateLimitBucket = 'login_ip' | 'login_user' | 'refresh_ip' | 'refresh_user'
 
 @Injectable()
 export class SecurityService {
+  private static readonly LOGIN_UNVERIFIED_VERIFICATION_EMAIL_COOLDOWN_SECONDS = 10 * 60;
+
   constructor(
     private readonly authConfig: AuthConfig,
     private readonly redisService: RedisService,
@@ -32,7 +34,7 @@ export class SecurityService {
     }
   }
 
-  // In this case we use redis because it's a distributed in-memory data store that can be accessed by multiple instances of our application, making it ideal for implementing rate limiting in a scalable way. By using Redis to track the number of requests from each IP address or user ID, we can ensure that the rate limits are enforced consistently across all instances of our application, preventing abuse and protecting our resources from being overwhelmed by too many requests. If we restart the application, the rate limit counters will be reset, which is generally acceptable for rate limiting purposes since it prevents long-term blocking of users and allows them to try again after a short period. However, if we needed to persist rate limit data across restarts, we could configure Redis to use persistence options like RDB snapshots or AOF logs, but for typical rate limiting use cases, in-memory storage is sufficient and even desirable to allow automatic reset of limits after a restart.
+  // Redis keeps rate limiting consistent across multiple API instances.
   private async enforceRateLimit(bucket: RateLimitBucket, key: string): Promise<void> {
     const { limit, windowMs } = this.getRateLimitConfig(bucket);
     const rateKey = `auth_rate_limit:${bucket}:${key}`; // string datatype is used for Redis keys (key-value pairs) and it's a common convention to use colons to separate different parts of the key for better readability and organization
@@ -57,6 +59,27 @@ export class SecurityService {
   async enforceRefreshRateLimit(context: SessionRequestContext, userId: string): Promise<void> {
     await this.enforceRateLimit('refresh_ip', context.ipAddress ?? 'unknown');
     await this.enforceRateLimit('refresh_user', userId);
+  }
+
+  async tryAcquireLoginUnverifiedVerificationEmailSlot(userId: string): Promise<boolean> {
+    const cooldownKey = `auth:login_unverified_verification_email:${userId}`;
+
+    try {
+      return await this.redisService.setIfNotExistsWithTtlSeconds(
+        cooldownKey,
+        '1',
+        SecurityService.LOGIN_UNVERIFIED_VERIFICATION_EMAIL_COOLDOWN_SECONDS,
+      );
+    } catch (error) {
+      this.logger.error({
+        event: 'auth_login_unverified_verification_email_cooldown_failed',
+        userId,
+        message: error instanceof Error ? error.message : 'Unknown redis error',
+      });
+
+      // Fail closed (no enqueue) so we don't spam the email provider during Redis incidents.
+      return false;
+    }
   }
 
   isRefreshTokenWithinGraceWindow(lastUsedAt: string, nowIso: string): boolean {
@@ -133,20 +156,20 @@ export class SecurityService {
         : 'auth_session_binding_suspicious',
       userId: session.userId,
       jti: session.jti,
-      storedIpAddress: session.ipAddress,
-      requestIpAddress: context.ipAddress,
-      storedDeviceBrowser: session.deviceBrowser,
-      requestDeviceBrowser: context.deviceBrowser,
-      storedDeviceOs: session.deviceOs,
-      requestDeviceOs: context.deviceOs,
-      storedDeviceType: session.deviceType,
-      requestDeviceType: context.deviceType,
+      hasStoredIpAddress: hasSessionIp,
+      hasRequestIpAddress: hasRequestIp,
+      hasStoredDeviceBrowser: hasSessionDeviceBrowser,
+      hasRequestDeviceBrowser: hasRequestDeviceBrowser,
+      hasStoredDeviceType: hasSessionDeviceType,
+      hasRequestDeviceType: hasRequestDeviceType,
       ipChanged,
       deviceMismatch,
       strictMode: this.authConfig.isSessionBindingStrict,
     });
 
     return {
+      // We intentionally do not reject on IP changes alone because IP churn is common (mobile networks,
+      // corporate NATs, ISP rebalancing). In strict mode we only reject on device mismatch.
       shouldReject: this.authConfig.isSessionBindingStrict && deviceMismatch,
     };
   }
@@ -165,9 +188,25 @@ export class SecurityService {
     }
 
     const reuseCounterKey = `auth:refresh_reuse:${payload.jti}`;
+
+    const parsedNowMs = Date.parse(nowIso);
+    const nowUnixSeconds = Number.isFinite(parsedNowMs) ? Math.floor(parsedNowMs / 1000) : null;
+
+    const remainingLifetimeSeconds =
+      typeof payload.exp === 'number' &&
+      Number.isFinite(payload.exp) &&
+      typeof nowUnixSeconds === 'number'
+        ? Math.max(1, payload.exp - nowUnixSeconds)
+        : this.authConfig.refreshTokenExpiresInSeconds;
+
+    const reuseCounterTtlSeconds = Math.min(
+      remainingLifetimeSeconds,
+      this.authConfig.refreshTokenExpiresInSeconds,
+    );
+
     const nextReuseCount = await this.redisService.incrementCounterWithInitialTtlSeconds(
       reuseCounterKey,
-      this.authConfig.refreshTokenExpiresInSeconds,
+      reuseCounterTtlSeconds,
     );
 
     if (nextReuseCount > 1) {
@@ -177,8 +216,6 @@ export class SecurityService {
         jti: payload.jti,
         sessionId: session.sessionId,
         reuseCount: nextReuseCount,
-        ipAddress: context.ipAddress,
-        userAgent: context.userAgent,
       });
 
       await this.sessionService.revokeAllActiveSessions(payload.sub);
@@ -193,8 +230,6 @@ export class SecurityService {
       jti: payload.jti,
       sessionId: session.sessionId,
       reuseCount: nextReuseCount,
-      ipAddress: context.ipAddress,
-      userAgent: context.userAgent,
     });
 
     return true;

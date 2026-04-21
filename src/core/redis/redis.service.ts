@@ -59,6 +59,19 @@ export class RedisService implements OnModuleDestroy {
     return count;
   }
 
+  async setIfNotExistsWithTtlSeconds(
+    key: string,
+    value: string,
+    ttlSeconds: number,
+  ): Promise<boolean> {
+    if (!Number.isInteger(ttlSeconds) || ttlSeconds <= 0) {
+      throw new Error('ttlSeconds must be a positive integer');
+    }
+
+    const result = await this.client.set(key, value, 'EX', ttlSeconds, 'NX');
+    return result === 'OK';
+  }
+
   async onModuleDestroy(): Promise<void> {
     await this.client.quit();
   }

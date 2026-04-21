@@ -1,5 +1,4 @@
 import { Module } from '@nestjs/common';
-import { JwtModule } from '@nestjs/jwt';
 import { ScheduleModule } from '@nestjs/schedule';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
@@ -17,15 +16,7 @@ import { RedisModule } from '@/core/redis/redis.module';
 import { EmailModule } from '@/modules/email/email.module';
 
 @Module({
-  // import JwtModule to use its exported services (e.g., JwtService) in AuthService
-  imports: [
-    JwtModule.register({}),
-    ScheduleModule.forRoot(),
-    CommonModule,
-    DatabaseModule,
-    RedisModule,
-    EmailModule,
-  ],
+  imports: [ScheduleModule.forRoot(), CommonModule, DatabaseModule, RedisModule, EmailModule],
   controllers: [AuthController],
   providers: [
     AuthService,
@@ -37,7 +28,7 @@ import { EmailModule } from '@/modules/email/email.module';
     SecurityService,
     AuthRequestContextService,
     DeviceParserService,
-  ], // what can be injected into constructors of other providers in this module
-  exports: [AuthService], // export AuthService for use in other modules
+  ],
+  exports: [AuthService],
 })
 export class AuthModule {}
