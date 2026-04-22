@@ -1,5 +1,4 @@
 import { Module } from '@nestjs/common';
-import { ScheduleModule } from '@nestjs/schedule';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { AuthConfig } from './auth.config';
@@ -16,7 +15,7 @@ import { RedisModule } from '@/core/redis/redis.module';
 import { EmailModule } from '@/modules/email/email.module';
 
 @Module({
-  imports: [ScheduleModule.forRoot(), CommonModule, DatabaseModule, RedisModule, EmailModule],
+  imports: [CommonModule, DatabaseModule, RedisModule, EmailModule],
   controllers: [AuthController],
   providers: [
     AuthService,

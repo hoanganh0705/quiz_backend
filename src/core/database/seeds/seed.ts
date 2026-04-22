@@ -7,7 +7,7 @@ import { categories, tags, users } from '../schema';
 import * as schema from '../schema';
 import * as relations from '../schema/relations';
 
-type UserRole = 'admin' | 'moderator' | 'creator' | 'user';
+type UserRole = 'admin' | 'moderator' | 'user';
 
 type RawUserSeed = {
   email: string;
@@ -97,12 +97,12 @@ const USER_SEEDS: readonly RawUserSeed[] = [
     avatarUrl: 'https://images.unsplash.com/photo-1547425260-76bcadfb4f2c',
   },
   {
-    email: 'creator@quiz.local',
-    username: 'content_creator',
-    password: requireSeedPassword('SEED_CREATOR_PASSWORD'),
-    role: 'creator',
-    displayName: 'Quiz Creator',
-    bio: 'Content creator account for drafting and publishing quiz content.',
+    email: 'author@quiz.local',
+    username: 'content_author',
+    password: requireSeedPassword('SEED_USER_PASSWORD'),
+    role: 'user',
+    displayName: 'Quiz Author',
+    bio: 'Author account for drafting and publishing own quiz content.',
     avatarUrl: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330',
   },
   {

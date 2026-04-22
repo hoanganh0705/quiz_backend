@@ -20,7 +20,7 @@ type UserIdentityRow = {
   userId: string;
   username: string;
   email: string;
-  role: 'admin' | 'moderator' | 'creator' | 'user';
+  role: 'admin' | 'moderator' | 'user';
 };
 
 type UserWithPasswordRow = UserIdentityRow & {

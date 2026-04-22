@@ -1,14 +1,13 @@
 import {
   ForbiddenException,
   Injectable,
-  UnauthorizedException,
   type CanActivate,
   type ExecutionContext,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { ROLES_KEY, type UserRole } from '../decorators/roles.decorator';
-import type { JwtPayload } from './jwt.guard';
+import { ROLES_KEY, isUserRole, type UserRole } from '../decorators/roles.decorator';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
+import { assertRequestUser } from './request-user.util';
 
 @Injectable()
 export class RolesGuard implements CanActivate {
@@ -17,25 +16,12 @@ export class RolesGuard implements CanActivate {
     @InjectPinoLogger(RolesGuard.name) private readonly logger: PinoLogger,
   ) {}
 
-  private isUserRole(value: unknown): value is UserRole {
-    return value === 'admin' || value === 'moderator' || value === 'creator' || value === 'user';
-  }
-
-  private hasJwtUserShape(user: unknown): user is JwtPayload {
-    if (!user || typeof user !== 'object') {
-      return false;
-    }
-
-    const maybeUser = user as Record<string, unknown>;
-    return typeof maybeUser.sub === 'string' && this.isUserRole(maybeUser.role);
-  }
-
   private normalizeRequiredRoles(roles: unknown): UserRole[] {
     if (!Array.isArray(roles)) {
       return [];
     }
 
-    return roles.filter((role): role is UserRole => this.isUserRole(role));
+    return roles.filter((role): role is UserRole => isUserRole(role));
   }
 
   canActivate(context: ExecutionContext): boolean {
@@ -50,19 +36,18 @@ export class RolesGuard implements CanActivate {
     }
 
     const request = context.switchToHttp().getRequest<{ user?: unknown }>();
-    const user = request.user;
+    const requestUser = assertRequestUser(request.user, {
+      logger: this.logger,
+      unauthenticatedEvent: 'roles_guard_unauthenticated',
+      invalidRoleEvent: 'roles_guard_invalid_role',
+    });
 
-    if (!this.hasJwtUserShape(user)) {
-      this.logger.warn({ event: 'roles_guard_unauthenticated' });
-      throw new UnauthorizedException('User is not authenticated');
-    }
-
-    const userRole = user.role;
+    const userRole = requestUser.role;
 
     if (!normalizedRoles.includes(userRole)) {
       this.logger.warn({
         event: 'roles_guard_forbidden',
-        userId: user.sub,
+        userId: requestUser.sub,
         userRole,
         requiredRoles: normalizedRoles,
       });
