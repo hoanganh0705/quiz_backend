@@ -34,13 +34,20 @@ export class SecurityService {
     }
   }
 
-  // Redis keeps rate limiting consistent across multiple API instances.
+  // Global ThrottlerGuard provides coarse, application-wide IP throttling; this Redis layer enforces auth-specific limits.
   private async enforceRateLimit(bucket: RateLimitBucket, key: string): Promise<void> {
     const { limit, windowMs } = this.getRateLimitConfig(bucket);
-    const rateKey = `auth_rate_limit:${bucket}:${key}`; // string datatype is used for Redis keys (key-value pairs) and it's a common convention to use colons to separate different parts of the key for better readability and organization
+    const rateKey = `auth:rate_limit:${bucket}:${key}`;
     const count = await this.redisService.incrementWindowCounter(rateKey, windowMs);
 
     if (count > limit) {
+      this.logger.warn({
+        event: 'auth_rate_limit_exceeded',
+        bucket,
+        key,
+        count,
+        limit,
+      });
       throw new HttpException(
         'Too many requests. Please try again later.',
         HttpStatus.TOO_MANY_REQUESTS,
@@ -49,6 +56,7 @@ export class SecurityService {
   }
 
   async enforceLoginRateLimit(context: SessionRequestContext, userId?: string): Promise<void> {
+    // First gate by IP, then (when known) by user identity to resist distributed attempts.
     await this.enforceRateLimit('login_ip', context.ipAddress ?? 'unknown');
 
     if (userId) {
@@ -57,6 +65,7 @@ export class SecurityService {
   }
 
   async enforceRefreshRateLimit(context: SessionRequestContext, userId: string): Promise<void> {
+    // Refresh flow is user-authenticated, so always enforce both IP and user buckets.
     await this.enforceRateLimit('refresh_ip', context.ipAddress ?? 'unknown');
     await this.enforceRateLimit('refresh_user', userId);
   }

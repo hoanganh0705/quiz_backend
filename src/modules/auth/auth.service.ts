@@ -315,6 +315,8 @@ export class AuthService {
       throw new UnauthorizedException('Invalid email or password');
     }
 
+    await this.securityService.enforceLoginRateLimit(context, foundUser.userId);
+
     if (!foundUser.isVerified) {
       // Keep similar compute cost across failure paths to reduce timing-based account probing.
       await bcrypt.compare(loginDto.password, AuthService.DUMMY_PASSWORD_HASH);
@@ -335,8 +337,6 @@ export class AuthService {
         });
       throw new UnauthorizedException('Invalid email or password');
     }
-
-    await this.securityService.enforceLoginRateLimit(context, foundUser.userId);
 
     const isPasswordValid = await bcrypt.compare(loginDto.password, foundUser.passwordHash);
     if (!isPasswordValid) {
