@@ -9,7 +9,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { and, desc, eq, isNull, or, sql, type SQL } from 'drizzle-orm';
-import { UserRole } from '@/common/decorators/roles.decorator';
+import { hasPermission, Permission } from '@/common/authz/permissions';
 import { JwtPayload } from '@/common/guards/jwt.guard';
 import { DRIZZLE, type DrizzleDB } from '@/core/database/database.module';
 import { quizCategories, quizTags, quizVersions, quizzes } from '@/core/database/schema';
@@ -28,6 +28,7 @@ import { QuizResponseDto } from './dto/response/quiz-response.dto';
 import { ListQuizzesQueryDto } from './dto/request/list-quizzes-query.dto';
 import { QuizListResponseDto } from './dto/response/quiz-list-response.dto';
 import { QuizVersionListResponseDto } from './dto/response/quiz-version-list-response.dto';
+import { UpdateQuizVersionDto } from './dto/request/update-quiz-version.dto';
 import {
   decodeBase64JsonCursor,
   encodeBase64JsonCursor,
@@ -36,6 +37,7 @@ import {
 } from '@/common/utils/cursor.util';
 import { buildSlug, normalizeSlugOrThrow } from '@/common/utils/slug.util';
 import { normalizeNullableText } from '@/common/utils/text.util';
+import { canEditQuizVersion, canManageOwnOrAny } from './quiz-authorization.helper';
 
 type QuizWithPublishedVersionRow = {
   quizId: string;
@@ -65,6 +67,25 @@ type QuizWithPublishedVersionRow = {
   publishedVersionUpdatedAt: string | null;
 };
 
+type QuizVersionDetailRow = {
+  quizVersionId: string;
+  quizId: string;
+  versionNumber: number;
+  status: QuizVersionStatus;
+  difficulty: QuizDifficulty;
+  durationMs: number;
+  passingScorePercent: number;
+  rewardXp: number;
+  createdByUserId: string | null;
+  createdAt: string;
+  publishedAt: string | null;
+  archivedAt: string | null;
+  updatedAt: string;
+  quizCreatorId: string | null;
+  quizIsVerified: boolean;
+  quizIsHidden: boolean;
+};
+
 @Injectable()
 export class QuizService {
   constructor(@Inject(DRIZZLE) private readonly db: DrizzleDB) {}
@@ -73,10 +94,6 @@ export class QuizService {
 
   private readonly uuidPattern =
     /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-
-  private isCreatorOrAdmin(role: UserRole): boolean {
-    return role === 'creator' || role === 'admin';
-  }
 
   private decodeQuizCursor(cursor: string): QuizCursorPayload {
     const parsed = decodeBase64JsonCursor<QuizCursorPayload>(cursor);
@@ -234,19 +251,128 @@ export class QuizService {
   }
 
   private async assertQuizManagePermission(quizId: string, user: JwtPayload): Promise<void> {
-    if (!this.isCreatorOrAdmin(user.role)) {
+    const quiz = await this.getActiveQuizRecordById(quizId);
+    const isOwner = !!quiz.creatorId && quiz.creatorId === user.sub;
+
+    const canManage = canManageOwnOrAny({
+      isOwner,
+      canManageAny: hasPermission(user.role, Permission.QUIZ_VERSION_CREATE_ANY),
+      canManageOwn: hasPermission(user.role, Permission.QUIZ_VERSION_CREATE_OWN),
+    });
+
+    if (!canManage) {
       throw new ForbiddenException('You do not have permission to manage this quiz');
     }
+  }
 
-    const quiz = await this.getActiveQuizRecordById(quizId);
+  private async getQuizVersionDetailById(quizVersionId: string): Promise<QuizVersionDetailRow> {
+    const [row] = await this.db
+      .select({
+        quizVersionId: quizVersions.quizVersionId,
+        quizId: quizVersions.quizId,
+        versionNumber: quizVersions.versionNumber,
+        status: quizVersions.status,
+        difficulty: quizVersions.difficulty,
+        durationMs: quizVersions.durationMs,
+        passingScorePercent: quizVersions.passingScorePercent,
+        rewardXp: quizVersions.rewardXp,
+        createdByUserId: quizVersions.createdByUserId,
+        createdAt: quizVersions.createdAt,
+        publishedAt: quizVersions.publishedAt,
+        archivedAt: quizVersions.archivedAt,
+        updatedAt: quizVersions.updatedAt,
+        quizCreatorId: quizzes.creatorId,
+        quizIsVerified: quizzes.isVerified,
+        quizIsHidden: quizzes.isHidden,
+      })
+      .from(quizVersions)
+      .innerJoin(quizzes, eq(quizVersions.quizId, quizzes.quizId))
+      .where(and(eq(quizVersions.quizVersionId, quizVersionId), isNull(quizzes.deletedAt)))
+      .limit(1);
 
-    if (user.role === 'admin') {
-      return;
+    if (!row) {
+      throw new NotFoundException('Quiz version not found');
     }
 
-    if (!quiz.creatorId || quiz.creatorId !== user.sub) {
-      throw new ForbiddenException('Only the quiz creator can manage this quiz');
+    return row;
+  }
+
+  private async getQuizVersionResponseById(quizVersionId: string): Promise<QuizVersionResponseDto> {
+    const [version] = await this.db
+      .select({
+        quizVersionId: quizVersions.quizVersionId,
+        quizId: quizVersions.quizId,
+        versionNumber: quizVersions.versionNumber,
+        status: quizVersions.status,
+        difficulty: quizVersions.difficulty,
+        durationMs: quizVersions.durationMs,
+        passingScorePercent: quizVersions.passingScorePercent,
+        rewardXp: quizVersions.rewardXp,
+        createdByUserId: quizVersions.createdByUserId,
+        createdAt: quizVersions.createdAt,
+        publishedAt: quizVersions.publishedAt,
+        archivedAt: quizVersions.archivedAt,
+        updatedAt: quizVersions.updatedAt,
+      })
+      .from(quizVersions)
+      .where(eq(quizVersions.quizVersionId, quizVersionId))
+      .limit(1);
+
+    if (!version) {
+      throw new NotFoundException('Quiz version not found');
     }
+
+    return version;
+  }
+
+  private async createDraftFromSourceVersion(
+    sourceVersion: QuizVersionDetailRow,
+    user: JwtPayload,
+    payload?: UpdateQuizVersionDto,
+  ): Promise<QuizVersionResponseDto> {
+    const nowIso = new Date().toISOString();
+
+    const [maxRow] = await this.db
+      .select({
+        maxVersionNumber: sql<number>`coalesce(max(${quizVersions.versionNumber}), 0)`,
+      })
+      .from(quizVersions)
+      .where(eq(quizVersions.quizId, sourceVersion.quizId));
+
+    const nextVersionNumber = (maxRow?.maxVersionNumber ?? 0) + 1;
+
+    const [createdVersion] = await this.db
+      .insert(quizVersions)
+      .values({
+        quizId: sourceVersion.quizId,
+        versionNumber: nextVersionNumber,
+        status: 'draft',
+        difficulty: payload?.difficulty ?? sourceVersion.difficulty,
+        durationMs: payload?.durationMs ?? sourceVersion.durationMs,
+        passingScorePercent: payload?.passingScorePercent ?? sourceVersion.passingScorePercent,
+        rewardXp: payload?.rewardXp ?? sourceVersion.rewardXp,
+        createdByUserId: user.sub,
+        createdAt: nowIso,
+        updatedAt: nowIso,
+      })
+      .returning({
+        quizVersionId: quizVersions.quizVersionId,
+        quizId: quizVersions.quizId,
+        versionNumber: quizVersions.versionNumber,
+        status: quizVersions.status,
+        difficulty: quizVersions.difficulty,
+        durationMs: quizVersions.durationMs,
+        passingScorePercent: quizVersions.passingScorePercent,
+        rewardXp: quizVersions.rewardXp,
+        createdByUserId: quizVersions.createdByUserId,
+        createdAt: quizVersions.createdAt,
+        publishedAt: quizVersions.publishedAt,
+        archivedAt: quizVersions.archivedAt,
+        updatedAt: quizVersions.updatedAt,
+      })
+      .catch((error: unknown) => this.mapVersionInsertError(error));
+
+    return createdVersion;
   }
 
   private normalizeLinkIds(values?: string[]): CreateQuizLinkIds {
@@ -547,21 +673,23 @@ export class QuizService {
     await this.assertQuizManagePermission(quizId, user);
 
     if (payload.sourceVersionId) {
-      const [sourceVersion] = await this.db
-        .select({
-          quizVersionId: quizVersions.quizVersionId,
-        })
-        .from(quizVersions)
-        .where(
-          and(
-            eq(quizVersions.quizId, quizId),
-            eq(quizVersions.quizVersionId, payload.sourceVersionId),
-          ),
-        )
-        .limit(1);
+      const sourceVersion = await this.getQuizVersionDetailById(payload.sourceVersionId);
 
-      if (!sourceVersion) {
-        throw new NotFoundException('Source version not found for this quiz');
+      if (sourceVersion.quizId !== quizId) {
+        throw new BadRequestException('Invalid source version');
+      }
+
+      const isSourceOwner =
+        !!sourceVersion.quizCreatorId && sourceVersion.quizCreatorId === user.sub;
+
+      const canUseSourceVersion = canManageOwnOrAny({
+        isOwner: isSourceOwner,
+        canManageAny: hasPermission(user.role, Permission.QUIZ_VERSION_CREATE_ANY),
+        canManageOwn: hasPermission(user.role, Permission.QUIZ_VERSION_CREATE_OWN),
+      });
+
+      if (!canUseSourceVersion) {
+        throw new ForbiddenException('You do not have permission to use this source version');
       }
     }
 
@@ -613,7 +741,18 @@ export class QuizService {
     user: JwtPayload,
     query: ListQuizVersionsQueryDto,
   ): Promise<QuizVersionListResponseDto> {
-    await this.assertQuizManagePermission(quizId, user);
+    const quiz = await this.getActiveQuizRecordById(quizId);
+    const isOwner = !!quiz.creatorId && quiz.creatorId === user.sub;
+
+    const canView = canManageOwnOrAny({
+      isOwner,
+      canManageAny: hasPermission(user.role, Permission.QUIZ_VERSION_VIEW_ANY),
+      canManageOwn: hasPermission(user.role, Permission.QUIZ_VERSION_VIEW_OWN),
+    });
+
+    if (!canView) {
+      throw new ForbiddenException('You do not have permission to view quiz versions');
+    }
 
     const limit = query.limit ?? 10;
     const cursorValue = typeof query.cursor === 'string' ? query.cursor : undefined;
@@ -666,5 +805,184 @@ export class QuizService {
         hasNextPage,
       },
     };
+  }
+
+  async updateQuizVersion(
+    quizVersionId: string,
+    user: JwtPayload,
+    payload: UpdateQuizVersionDto,
+  ): Promise<QuizVersionResponseDto> {
+    const version = await this.getQuizVersionDetailById(quizVersionId);
+    const isOwner = !!version.quizCreatorId && version.quizCreatorId === user.sub;
+
+    const canEditOwn = hasPermission(user.role, Permission.QUIZ_VERSION_EDIT_OWN);
+    const canEditAny = hasPermission(user.role, Permission.QUIZ_VERSION_EDIT_ANY);
+
+    if (version.status === 'archived') {
+      throw new BadRequestException('Archived versions are immutable and cannot be edited');
+    }
+
+    if (version.status === 'published') {
+      const canCreateDraft = canManageOwnOrAny({
+        isOwner,
+        canManageAny: canEditAny,
+        canManageOwn: canEditOwn,
+      });
+
+      if (!canCreateDraft) {
+        throw new ForbiddenException(
+          'You do not have permission to create a draft from this version',
+        );
+      }
+
+      return this.createDraftFromSourceVersion(version, user, payload);
+    }
+
+    if (
+      !canEditQuizVersion({
+        status: version.status,
+        isOwner,
+        canEditAny,
+        canEditOwn,
+      })
+    ) {
+      throw new ForbiddenException('Only draft versions can be edited');
+    }
+
+    const nowIso = new Date().toISOString();
+
+    await this.db
+      .update(quizVersions)
+      .set({
+        difficulty: payload.difficulty ?? version.difficulty,
+        durationMs: payload.durationMs ?? version.durationMs,
+        passingScorePercent: payload.passingScorePercent ?? version.passingScorePercent,
+        rewardXp: payload.rewardXp ?? version.rewardXp,
+        updatedAt: nowIso,
+      })
+      .where(eq(quizVersions.quizVersionId, quizVersionId));
+
+    return this.getQuizVersionResponseById(quizVersionId);
+  }
+
+  async publishQuizVersion(
+    quizVersionId: string,
+    user: JwtPayload,
+  ): Promise<QuizVersionResponseDto> {
+    return this.db.transaction(async (tx): Promise<QuizVersionResponseDto> => {
+      const [version] = await tx
+        .select({
+          quizVersionId: quizVersions.quizVersionId,
+          quizId: quizVersions.quizId,
+          versionNumber: quizVersions.versionNumber,
+          status: quizVersions.status,
+          difficulty: quizVersions.difficulty,
+          durationMs: quizVersions.durationMs,
+          passingScorePercent: quizVersions.passingScorePercent,
+          rewardXp: quizVersions.rewardXp,
+          createdByUserId: quizVersions.createdByUserId,
+          createdAt: quizVersions.createdAt,
+          publishedAt: quizVersions.publishedAt,
+          archivedAt: quizVersions.archivedAt,
+          updatedAt: quizVersions.updatedAt,
+          quizCreatorId: quizzes.creatorId,
+          quizIsVerified: quizzes.isVerified,
+          quizIsHidden: quizzes.isHidden,
+        })
+        .from(quizVersions)
+        .innerJoin(quizzes, eq(quizVersions.quizId, quizzes.quizId))
+        .where(and(eq(quizVersions.quizVersionId, quizVersionId), isNull(quizzes.deletedAt)))
+        .limit(1);
+
+      if (!version) {
+        throw new NotFoundException('Quiz version not found');
+      }
+
+      if (version.status === 'published') {
+        return this.getQuizVersionResponseById(quizVersionId);
+      }
+
+      if (version.status === 'archived') {
+        throw new BadRequestException('Archived versions cannot be published');
+      }
+
+      if (version.status !== 'draft') {
+        throw new BadRequestException('Only draft versions can be published');
+      }
+
+      const isOwner = !!version.quizCreatorId && version.quizCreatorId === user.sub;
+
+      const canPublish = canManageOwnOrAny({
+        isOwner,
+        canManageAny: hasPermission(user.role, Permission.QUIZ_VERSION_PUBLISH_ANY),
+        canManageOwn: hasPermission(user.role, Permission.QUIZ_VERSION_PUBLISH_OWN),
+      });
+
+      if (!canPublish) {
+        throw new ForbiddenException('You do not have permission to publish this quiz version');
+      }
+
+      const canVerify = hasPermission(user.role, Permission.QUIZ_VERIFY);
+
+      if ((!version.quizIsVerified || version.quizIsHidden) && !canVerify) {
+        throw new ForbiddenException('Cannot publish unverified or hidden quiz');
+      }
+
+      const nowIso = new Date().toISOString();
+
+      await tx
+        .update(quizVersions)
+        .set({
+          status: 'archived',
+          archivedAt: nowIso,
+          updatedAt: nowIso,
+        })
+        .where(
+          and(
+            eq(quizVersions.quizId, version.quizId),
+            eq(quizVersions.status, 'published'),
+            sql`${quizVersions.quizVersionId} <> ${quizVersionId}`,
+          ),
+        );
+
+      const [publishedVersion] = await tx
+        .update(quizVersions)
+        .set({
+          status: 'published',
+          publishedAt: nowIso,
+          archivedAt: null,
+          updatedAt: nowIso,
+        })
+        .where(and(eq(quizVersions.quizVersionId, quizVersionId), eq(quizVersions.status, 'draft')))
+        .returning({
+          quizVersionId: quizVersions.quizVersionId,
+          quizId: quizVersions.quizId,
+          versionNumber: quizVersions.versionNumber,
+          status: quizVersions.status,
+          difficulty: quizVersions.difficulty,
+          durationMs: quizVersions.durationMs,
+          passingScorePercent: quizVersions.passingScorePercent,
+          rewardXp: quizVersions.rewardXp,
+          createdByUserId: quizVersions.createdByUserId,
+          createdAt: quizVersions.createdAt,
+          publishedAt: quizVersions.publishedAt,
+          archivedAt: quizVersions.archivedAt,
+          updatedAt: quizVersions.updatedAt,
+        });
+
+      if (!publishedVersion) {
+        return this.getQuizVersionResponseById(quizVersionId);
+      }
+
+      await tx
+        .update(quizzes)
+        .set({
+          publishedVersionId: quizVersionId,
+          updatedAt: nowIso,
+        })
+        .where(eq(quizzes.quizId, version.quizId));
+
+      return publishedVersion;
+    });
   }
 }

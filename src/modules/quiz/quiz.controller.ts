@@ -8,11 +8,12 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
+import { Permission } from '@/common/authz/permissions';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
+import { Permissions } from '@/common/decorators/permissions.decorator';
 import { Public } from '@/common/decorators/public.decorator';
-import { Roles } from '@/common/decorators/roles.decorator';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
-import { RolesGuard } from '@/common/guards/roles.guard';
+import { PermissionsGuard } from '@/common/guards/permissions.guard';
 import { CreateQuizDto } from './dto/request/create-quiz.dto';
 import { QuizVersionResponseDto } from './dto/response/quiz-version-response.dto';
 import { QuizService } from './quiz.service';
@@ -27,8 +28,8 @@ export class QuizController {
   constructor(private readonly quizService: QuizService) {}
 
   @Post()
-  @UseGuards(RolesGuard)
-  @Roles('creator')
+  @UseGuards(PermissionsGuard)
+  @Permissions(Permission.QUIZ_CREATE)
   createQuiz(
     @CurrentUser() user: JwtPayload,
     @Body() payload: CreateQuizDto,
@@ -49,8 +50,8 @@ export class QuizController {
   }
 
   @Post(':id/versions')
-  @UseGuards(RolesGuard)
-  @Roles('creator', 'admin')
+  @UseGuards(PermissionsGuard)
+  @Permissions(Permission.QUIZ_VERSION_CREATE_OWN, Permission.QUIZ_VERSION_CREATE_ANY)
   createQuizVersion(
     @Param('id', new ParseUUIDPipe()) quizId: string,
     @CurrentUser() user: JwtPayload,
@@ -60,8 +61,8 @@ export class QuizController {
   }
 
   @Get(':id/versions')
-  @UseGuards(RolesGuard)
-  @Roles('creator', 'admin')
+  @UseGuards(PermissionsGuard)
+  @Permissions(Permission.QUIZ_VERSION_VIEW_OWN, Permission.QUIZ_VERSION_VIEW_ANY)
   listQuizVersions(
     @Param('id', new ParseUUIDPipe()) quizId: string,
     @CurrentUser() user: JwtPayload,
