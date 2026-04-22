@@ -44,6 +44,8 @@ export type AccessTokenPayload = {
 export type RefreshTokenPayload = {
   sub: string;
   jti: string;
+  iss: string;
+  aud: string;
   exp?: number;
   iat?: number;
 };

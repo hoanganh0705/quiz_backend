@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
+import { ScheduleModule } from '@nestjs/schedule';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { UserModule } from './modules/user/user.module';
 import { AuthModule } from './modules/auth/auth.module';
@@ -37,6 +38,7 @@ import { RedisModule } from './core/redis/redis.module';
         return path.startsWith('/internal');
       },
     }),
+    ScheduleModule.forRoot(),
     CoreLoggerModule,
     RedisModule,
     DatabaseModule,
@@ -48,13 +50,14 @@ import { RedisModule } from './core/redis/redis.module';
     QuizModule,
   ],
   providers: [
-    {
-      provide: APP_GUARD,
-      useClass: JwtGuard,
-    },
+    // Execute coarse throttling first to reduce JWT verification load during abusive traffic.
     {
       provide: APP_GUARD,
       useClass: ThrottlerGuard,
+    },
+    {
+      provide: APP_GUARD,
+      useClass: JwtGuard,
     },
     {
       provide: APP_INTERCEPTOR,

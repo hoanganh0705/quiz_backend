@@ -50,7 +50,7 @@ export const tournamentStatus = pgEnum('tournament_status', [
   'cancelled',
 ]);
 
-export const userRole = pgEnum('user_role', ['admin', 'moderator', 'creator', 'user']);
+export const userRole = pgEnum('user_role', ['admin', 'moderator', 'user']);
 
 export const tags = pgTable(
   'tags',

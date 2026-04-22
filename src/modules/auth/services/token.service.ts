@@ -33,11 +33,16 @@ export class TokenService {
     const refreshTokenPayload: RefreshTokenPayload = {
       sub: identity.userId,
       jti: refreshTokenJti,
+      // Keep claim parity with access tokens so verification policy stays consistent.
+      iss: this.authConfig.accessTokenIssuer,
+      aud: this.authConfig.accessTokenAudience,
     };
 
     const refreshToken = await this.jwtService.signAsync(refreshTokenPayload, {
       secret: this.authConfig.refreshTokenSecret,
       expiresIn: this.authConfig.refreshTokenExpiresInSeconds,
+      issuer: this.authConfig.accessTokenIssuer,
+      audience: this.authConfig.accessTokenAudience,
     });
 
     return { accessToken, refreshToken, refreshTokenJti };
@@ -50,7 +55,10 @@ export class TokenService {
 
     const candidate = payload as Record<string, unknown>;
     const hasRequiredFields =
-      typeof candidate.sub === 'string' && typeof candidate.jti === 'string';
+      typeof candidate.sub === 'string' &&
+      typeof candidate.jti === 'string' &&
+      typeof candidate.iss === 'string' &&
+      typeof candidate.aud === 'string';
     if (!hasRequiredFields) {
       return false;
     }
@@ -62,9 +70,11 @@ export class TokenService {
 
   async verifyRefreshToken(refreshToken: string): Promise<RefreshTokenPayload> {
     try {
-      // check if the token is valid, not expired and signer with the correct secret, if not valid/expired it will throw so we don't need to manually check exp or anything, we just catch the error and throw a generic unauthorized exception
+      // Enforce secret + issuer + audience so refresh tokens are scoped to this service context.
       const decodedPayload: unknown = await this.jwtService.verifyAsync(refreshToken, {
         secret: this.authConfig.refreshTokenSecret,
+        issuer: this.authConfig.accessTokenIssuer,
+        audience: this.authConfig.accessTokenAudience,
       });
 
       if (!this.isRefreshTokenPayload(decodedPayload)) {
