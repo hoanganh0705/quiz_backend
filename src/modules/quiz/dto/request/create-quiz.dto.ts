@@ -1,4 +1,4 @@
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import {
   ArrayMaxSize,
   ArrayUnique,
@@ -17,13 +17,18 @@ import {
   MinLength,
   ValidateNested,
 } from 'class-validator';
-
-const QUIZ_SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
-const QUIZ_DIFFICULTIES = ['easy', 'medium', 'hard'] as const;
+import { DEFAULT_SLUG_PATTERN } from '@/common/utils/slug.util';
+import {
+  trimString,
+  trimStringToLowerCase,
+  trimStringToNullIfBlank,
+} from '@/common/utils/text.util';
+import { QUIZ_SLUG_INVALID_MESSAGE } from '../../quiz.constants';
+import { QUIZ_DIFFICULTIES, type QuizDifficulty } from '../../types/quiz.types';
 
 class CreateInitialQuizVersionDto {
   @IsIn(QUIZ_DIFFICULTIES)
-  difficulty!: (typeof QUIZ_DIFFICULTIES)[number];
+  difficulty!: QuizDifficulty;
 
   @Type(() => Number)
   @IsInt()
@@ -43,30 +48,35 @@ class CreateInitialQuizVersionDto {
 }
 
 export class CreateQuizDto {
+  @Transform(({ value }: { value: unknown }) => trimString(value))
   @IsString()
   @MinLength(1)
   @MaxLength(255)
   title!: string;
 
   @IsOptional()
+  @Transform(({ value }: { value: unknown }) => trimStringToNullIfBlank(value))
   @IsString()
   @MaxLength(2000)
   description?: string | null;
 
   @IsOptional()
+  @Transform(({ value }: { value: unknown }) => trimStringToLowerCase(value))
   @IsString()
   @MaxLength(120)
-  @Matches(QUIZ_SLUG_PATTERN, {
-    message: 'Slug must be lowercase and can only contain letters, numbers, and hyphens',
+  @Matches(DEFAULT_SLUG_PATTERN, {
+    message: QUIZ_SLUG_INVALID_MESSAGE,
   })
   slug?: string;
 
   @IsOptional()
+  @Transform(({ value }: { value: unknown }) => trimStringToNullIfBlank(value))
   @IsString()
   @MaxLength(5000)
   requirements?: string | null;
 
   @IsOptional()
+  @Transform(({ value }: { value: unknown }) => trimStringToNullIfBlank(value))
   @IsUrl({ require_tld: false })
   @MaxLength(2048)
   imageUrl?: string | null;

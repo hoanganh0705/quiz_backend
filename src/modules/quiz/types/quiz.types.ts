@@ -1,3 +1,5 @@
+export const QUIZ_DIFFICULTIES = ['easy', 'medium', 'hard'] as const;
+
 export type QuizDifficulty = 'easy' | 'medium' | 'hard';
 
 export type QuizVersionStatus = 'draft' | 'published' | 'archived';
