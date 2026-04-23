@@ -1,5 +1,5 @@
 import { SetMetadata } from '@nestjs/common';
-import { Permission } from '@/common/authz/permissions';
+import { Permission } from '@/modules/auth/authz/permissions';
 
 export const PERMISSIONS_KEY = 'permissions';
 

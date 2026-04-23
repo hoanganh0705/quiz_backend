@@ -9,7 +9,7 @@ import { Reflector } from '@nestjs/core';
 import { JwtService } from '@nestjs/jwt';
 import type { Request } from 'express';
 import { IS_PUBLIC_KEY } from '../decorators/public.decorator';
-import type { UserRole } from '../decorators/roles.decorator';
+import type { UserRole } from '../../modules/auth/decorators/roles.decorator';
 
 export type JwtPayload = {
   sub: string;

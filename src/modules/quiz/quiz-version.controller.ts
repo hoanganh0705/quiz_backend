@@ -1,15 +1,13 @@
-import { Body, Controller, Param, ParseUUIDPipe, Patch, Post, UseGuards } from '@nestjs/common';
-import { Permission } from '@/common/authz/permissions';
+import { Body, Controller, Param, ParseUUIDPipe, Patch, Post } from '@nestjs/common';
+import { Permission } from '@/modules/auth/authz/permissions';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
-import { Permissions } from '@/common/decorators/permissions.decorator';
+import { Permissions } from '@/modules/auth/decorators/permissions.decorator';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
-import { PermissionsGuard } from '@/common/guards/permissions.guard';
 import { UpdateQuizVersionDto } from './dto/request/update-quiz-version.dto';
 import { QuizVersionResponseDto } from './dto/response/quiz-version-response.dto';
 import { QuizService } from './quiz.service';
 
 @Controller('quiz-versions')
-@UseGuards(PermissionsGuard)
 export class QuizVersionController {
   constructor(private readonly quizService: QuizService) {}
 

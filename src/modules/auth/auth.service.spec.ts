@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getLoggerToken } from 'nestjs-pino';
 import { AuthService } from './auth.service';
-import { CryptoService } from '../../common/service/crypto.service';
+import { CryptoService } from './services/crypto.service';
 import { UserRepository } from '../../core/database/repositories/user.repository';
 import { TokenService } from './services/token.service';
 import { SessionService } from './services/session.service';
@@ -17,6 +17,9 @@ describe('AuthService', () => {
     findActiveByEmailWithPassword: jest.fn(),
     findActiveVerificationStatusByEmail: jest.fn(),
     findActiveIdentityById: jest.fn(),
+    setEmailVerificationToken: jest.fn(),
+    findUserByActiveVerificationToken: jest.fn(),
+    markEmailAsVerified: jest.fn(),
   };
   const tokenServiceMock = {
     issueTokens: jest.fn(),
@@ -24,7 +27,7 @@ describe('AuthService', () => {
     tryVerifyRefreshToken: jest.fn(),
   };
   const sessionServiceMock = {
-    createSessionWithActiveLimit: jest.fn(),
+    createSession: jest.fn(),
     getSessionByJtiAndUserId: jest.fn(),
     findLatestActiveSessionByUserId: jest.fn(),
     rotateSession: jest.fn(),

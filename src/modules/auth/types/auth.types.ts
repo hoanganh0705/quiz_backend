@@ -1,4 +1,4 @@
-import { UserRole } from '@/common/decorators/roles.decorator';
+import { UserRole } from '@/modules/auth/decorators/roles.decorator';
 
 export type RegisterResult = {
   message: string;
