@@ -37,7 +37,18 @@ import {
 } from '@/common/utils/cursor.util';
 import { buildSlug, normalizeSlugOrThrow } from '@/common/utils/slug.util';
 import { normalizeNullableText } from '@/common/utils/text.util';
-import { canEditQuizVersion, canManageOwnOrAny } from './quiz-authorization.helper';
+import {
+  canEditQuizVersion,
+  canManageOwnOrAny,
+  canPublishQuizVersion,
+} from './quiz-authorization.helper';
+import {
+  QUIZ_LINK_IDS_INVALID_MESSAGE,
+  QUIZ_SLUG_CONFLICT_MESSAGE,
+  QUIZ_SLUG_EMPTY_MESSAGE,
+  QUIZ_SLUG_INVALID_MESSAGE,
+  QUIZ_VERSION_CONFLICT_MESSAGE,
+} from './quiz.constants';
 
 type QuizWithPublishedVersionRow = {
   quizId: string;
@@ -89,8 +100,6 @@ type QuizVersionDetailRow = {
 @Injectable()
 export class QuizService {
   constructor(@Inject(DRIZZLE) private readonly db: DrizzleDB) {}
-
-  private static readonly QUIZ_SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
   private readonly uuidPattern =
     /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -207,7 +216,7 @@ export class QuizService {
     const maybePgError = error as { code?: string; constraint?: string };
 
     if (maybePgError.code === '23505') {
-      throw new ConflictException('Quiz version already exists');
+      throw new ConflictException(QUIZ_VERSION_CONFLICT_MESSAGE);
     }
 
     if (maybePgError.code === '23503') {
@@ -221,11 +230,11 @@ export class QuizService {
     const maybePgError = error as { code?: string; constraint?: string };
 
     if (maybePgError.code === '23505') {
-      throw new ConflictException('Quiz slug already exists');
+      throw new ConflictException(QUIZ_SLUG_CONFLICT_MESSAGE);
     }
 
     if (maybePgError.code === '23503') {
-      throw new BadRequestException('One or more category IDs or tag IDs do not exist');
+      throw new BadRequestException(QUIZ_LINK_IDS_INVALID_MESSAGE);
     }
 
     throw new InternalServerErrorException('Quiz operation failed');
@@ -248,6 +257,13 @@ export class QuizService {
     }
 
     return quiz;
+  }
+
+  private normalizeQuizSlug(slug: string): string {
+    return normalizeSlugOrThrow(slug, {
+      emptyMessage: QUIZ_SLUG_EMPTY_MESSAGE,
+      invalidMessage: QUIZ_SLUG_INVALID_MESSAGE,
+    });
   }
 
   private async assertQuizManagePermission(quizId: string, user: JwtPayload): Promise<void> {
@@ -426,19 +442,7 @@ export class QuizService {
 
   async createQuiz(user: JwtPayload, payload: CreateQuizDto): Promise<QuizResponseDto> {
     const title = payload.title.trim();
-    const slug = payload.slug
-      ? normalizeSlugOrThrow(payload.slug, {
-          pattern: QuizService.QUIZ_SLUG_PATTERN,
-          emptyMessage: 'Quiz slug cannot be empty',
-          invalidMessage:
-            'Quiz slug must be lowercase and can only contain letters, numbers, and hyphens',
-        })
-      : normalizeSlugOrThrow(buildSlug(title), {
-          pattern: QuizService.QUIZ_SLUG_PATTERN,
-          emptyMessage: 'Quiz slug cannot be empty',
-          invalidMessage:
-            'Quiz slug must be lowercase and can only contain letters, numbers, and hyphens',
-        });
+    const slug = this.normalizeQuizSlug(payload.slug ?? buildSlug(title));
     const description = normalizeNullableText(payload.description);
     const requirements = normalizeNullableText(payload.requirements);
     const imageUrl = normalizeNullableText(payload.imageUrl);
@@ -612,12 +616,7 @@ export class QuizService {
   }
 
   async getQuizBySlug(slug: string): Promise<QuizResponseDto> {
-    const normalizedSlug = normalizeSlugOrThrow(slug, {
-      pattern: QuizService.QUIZ_SLUG_PATTERN,
-      emptyMessage: 'Quiz slug cannot be empty',
-      invalidMessage:
-        'Quiz slug must be lowercase and can only contain letters, numbers, and hyphens',
-    });
+    const normalizedSlug = this.normalizeQuizSlug(slug);
 
     const [row] = await this.db
       .select({
@@ -701,6 +700,7 @@ export class QuizService {
       .where(eq(quizVersions.quizId, quizId));
 
     const versionNumber = (maxRow?.maxVersionNumber ?? 0) + 1;
+    const nowIso = new Date().toISOString();
 
     const [createdVersion] = await this.db
       .insert(quizVersions)
@@ -713,8 +713,8 @@ export class QuizService {
         passingScorePercent: payload.passingScorePercent,
         rewardXp: payload.rewardXp,
         createdByUserId: user.sub,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
+        createdAt: nowIso,
+        updatedAt: nowIso,
       })
       .returning({
         quizVersionId: quizVersions.quizVersionId,
@@ -912,20 +912,18 @@ export class QuizService {
 
       const isOwner = !!version.quizCreatorId && version.quizCreatorId === user.sub;
 
-      const canPublish = canManageOwnOrAny({
+      const canPublish = canPublishQuizVersion({
+        status: version.status,
         isOwner,
-        canManageAny: hasPermission(user.role, Permission.QUIZ_VERSION_PUBLISH_ANY),
-        canManageOwn: hasPermission(user.role, Permission.QUIZ_VERSION_PUBLISH_OWN),
+        canPublishAny: hasPermission(user.role, Permission.QUIZ_VERSION_PUBLISH_ANY),
+        canPublishOwn: hasPermission(user.role, Permission.QUIZ_VERSION_PUBLISH_OWN),
+        quizIsVerified: version.quizIsVerified,
+        quizIsHidden: version.quizIsHidden,
+        canVerify: hasPermission(user.role, Permission.QUIZ_VERIFY),
       });
 
       if (!canPublish) {
         throw new ForbiddenException('You do not have permission to publish this quiz version');
-      }
-
-      const canVerify = hasPermission(user.role, Permission.QUIZ_VERIFY);
-
-      if ((!version.quizIsVerified || version.quizIsHidden) && !canVerify) {
-        throw new ForbiddenException('Cannot publish unverified or hidden quiz');
       }
 
       const nowIso = new Date().toISOString();
