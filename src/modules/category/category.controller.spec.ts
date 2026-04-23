@@ -1,7 +1,4 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { ConfigService } from '@nestjs/config';
-import { JwtService } from '@nestjs/jwt';
-import { getLoggerToken } from 'nestjs-pino';
 import { CategoryController } from './category.controller';
 import { CategoryService } from './category.service';
 
@@ -13,28 +10,9 @@ describe('CategoryController', () => {
       controllers: [CategoryController],
       providers: [
         {
-          provide: JwtService,
-          useValue: {
-            verifyAsync: jest.fn(),
-          },
-        },
-        {
-          provide: ConfigService,
-          useValue: {
-            get: jest.fn(),
-          },
-        },
-        {
           provide: CategoryService,
           useValue: {
             listActiveCategories: jest.fn(),
-          },
-        },
-        {
-          provide: getLoggerToken('RolesGuard'),
-          useValue: {
-            warn: jest.fn(),
-            error: jest.fn(),
           },
         },
       ],

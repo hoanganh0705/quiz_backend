@@ -1,19 +1,9 @@
-import {
-  Body,
-  Controller,
-  Get,
-  Param,
-  ParseUUIDPipe,
-  Post,
-  Query,
-  UseGuards,
-} from '@nestjs/common';
-import { Permission } from '@/common/authz/permissions';
+import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Query } from '@nestjs/common';
+import { Permission } from '@/modules/auth/authz/permissions';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
-import { Permissions } from '@/common/decorators/permissions.decorator';
+import { Permissions } from '@/modules/auth/decorators/permissions.decorator';
 import { Public } from '@/common/decorators/public.decorator';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
-import { PermissionsGuard } from '@/common/guards/permissions.guard';
 import { CreateQuizDto } from './dto/request/create-quiz.dto';
 import { QuizVersionResponseDto } from './dto/response/quiz-version-response.dto';
 import { QuizService } from './quiz.service';
@@ -28,7 +18,6 @@ export class QuizController {
   constructor(private readonly quizService: QuizService) {}
 
   @Post()
-  @UseGuards(PermissionsGuard)
   @Permissions(Permission.QUIZ_CREATE)
   createQuiz(
     @CurrentUser() user: JwtPayload,
@@ -50,7 +39,6 @@ export class QuizController {
   }
 
   @Post(':id/versions')
-  @UseGuards(PermissionsGuard)
   @Permissions(Permission.QUIZ_VERSION_CREATE_OWN, Permission.QUIZ_VERSION_CREATE_ANY)
   createQuizVersion(
     @Param('id', new ParseUUIDPipe()) quizId: string,
@@ -61,7 +49,6 @@ export class QuizController {
   }
 
   @Get(':id/versions')
-  @UseGuards(PermissionsGuard)
   @Permissions(Permission.QUIZ_VERSION_VIEW_OWN, Permission.QUIZ_VERSION_VIEW_ANY)
   listQuizVersions(
     @Param('id', new ParseUUIDPipe()) quizId: string,
