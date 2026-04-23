@@ -6,6 +6,7 @@ import { UpdateMeDto } from './dto/request/update-me.dto';
 import { UpdateMeSettingsDto } from './dto/request/update-me-settings.dto';
 import { UserMeResponseDto } from './dto/response/user-me-response.dto';
 import { normalizeNullableText } from '@/common/utils/text.util';
+import { hasOwn, isObjectRecord } from '@/common/utils/object.util';
 
 type UserMeRow = {
   userId: string;
@@ -41,14 +42,6 @@ const USER_ME_COLUMNS = {
 export class UserService {
   constructor(@Inject(DRIZZLE) private readonly db: DrizzleDB) {}
 
-  private isObjectRecord(value: unknown): value is Record<string, unknown> {
-    return (
-      Object.prototype.toString.call(value) === '[object Object]' &&
-      value !== null &&
-      !Array.isArray(value)
-    );
-  }
-
   private toUserMeResponse(user: UserMeRow): UserMeResponseDto {
     return {
       userId: user.userId,
@@ -60,7 +53,7 @@ export class UserService {
       xpTotal: user.xpTotal,
       currentStreak: user.currentStreak,
       longestStreak: user.longestStreak,
-      settings: this.isObjectRecord(user.settings) ? user.settings : {},
+      settings: isObjectRecord(user.settings) ? user.settings : {},
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,
     };
@@ -91,15 +84,15 @@ export class UserService {
       avatarUrl?: string | null;
     } = {};
 
-    if (Object.prototype.hasOwnProperty.call(payload, 'displayName')) {
+    if (hasOwn(payload, 'displayName')) {
       profilePatch.displayName = normalizeNullableText(payload.displayName);
     }
 
-    if (Object.prototype.hasOwnProperty.call(payload, 'bio')) {
+    if (hasOwn(payload, 'bio')) {
       profilePatch.bio = normalizeNullableText(payload.bio);
     }
 
-    if (Object.prototype.hasOwnProperty.call(payload, 'avatarUrl')) {
+    if (hasOwn(payload, 'avatarUrl')) {
       profilePatch.avatarUrl = normalizeNullableText(payload.avatarUrl);
     }
 
@@ -127,7 +120,7 @@ export class UserService {
     userId: string,
     payload: UpdateMeSettingsDto,
   ): Promise<UserMeResponseDto> {
-    if (!this.isObjectRecord(payload.settings)) {
+    if (!isObjectRecord(payload.settings)) {
       throw new BadRequestException('settings must be an object');
     }
 
