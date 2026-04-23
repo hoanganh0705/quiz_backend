@@ -132,7 +132,7 @@ export class AuthService {
 
     const isGraceReuse =
       latestSession &&
-      (await this.securityService.handleGraceWindowReuse(latestSession, context, nowIso, payload));
+      this.securityService.canUseRefreshReuseGraceWindow(latestSession, context, nowIso);
 
     if (isGraceReuse) {
       return latestSession;
