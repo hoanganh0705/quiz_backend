@@ -2,9 +2,10 @@ import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { randomUUID } from 'crypto';
 import {
-  AccessTokenPayload,
+  AccessTokenClaims,
   AuthIdentity,
   AuthTokens,
+  RefreshTokenClaims,
   RefreshTokenPayload,
 } from '../types/auth.types';
 import { AuthConfig } from '../auth.config';
@@ -18,24 +19,21 @@ export class TokenService {
 
   async issueTokens(identity: AuthIdentity): Promise<AuthTokens> {
     const refreshTokenJti = randomUUID();
-    const accessTokenPayload: AccessTokenPayload = {
+    const accessTokenPayload: AccessTokenClaims = {
       sub: identity.userId,
       role: identity.role,
-      iss: this.authConfig.accessTokenIssuer,
-      aud: this.authConfig.accessTokenAudience,
     };
 
     const accessToken = await this.jwtService.signAsync(accessTokenPayload, {
       secret: this.authConfig.accessTokenSecret,
       expiresIn: this.authConfig.accessTokenExpiresInSeconds,
+      issuer: this.authConfig.accessTokenIssuer,
+      audience: this.authConfig.accessTokenAudience,
     });
 
-    const refreshTokenPayload: RefreshTokenPayload = {
+    const refreshTokenPayload: RefreshTokenClaims = {
       sub: identity.userId,
       jti: refreshTokenJti,
-      // Keep claim parity with access tokens so verification policy stays consistent.
-      iss: this.authConfig.accessTokenIssuer,
-      aud: this.authConfig.accessTokenAudience,
     };
 
     const refreshToken = await this.jwtService.signAsync(refreshTokenPayload, {
@@ -58,7 +56,9 @@ export class TokenService {
       typeof candidate.sub === 'string' &&
       typeof candidate.jti === 'string' &&
       typeof candidate.iss === 'string' &&
-      typeof candidate.aud === 'string';
+      (typeof candidate.aud === 'string' ||
+        (Array.isArray(candidate.aud) &&
+          candidate.aud.every((audience) => typeof audience === 'string')));
     if (!hasRequiredFields) {
       return false;
     }

@@ -1,6 +1,6 @@
 import { UnauthorizedException } from '@nestjs/common';
 import type { PinoLogger } from 'nestjs-pino';
-import { isUserRole, type UserRole } from '@/modules/auth/decorators/roles.decorator';
+import { isUserRole, type UserRole } from '@/common/types/user-role.type';
 
 type RequestUser = {
   sub?: unknown;

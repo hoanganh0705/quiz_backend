@@ -9,7 +9,6 @@ type ParsedDeviceInfo = {
   deviceType: SessionDeviceType;
 };
 
-// 👇 define constructor type (safe boundary)
 type UAParserCtor = new (ua?: string) => {
   getResult(): IResult;
 };
