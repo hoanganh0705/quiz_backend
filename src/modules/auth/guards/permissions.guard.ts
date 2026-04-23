@@ -7,9 +7,9 @@ import {
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
-import { hasPermission, Permission } from '@/common/authz/permissions';
-import { PERMISSIONS_KEY } from '@/common/decorators/permissions.decorator';
-import { assertRequestUser } from './request-user.util';
+import { hasPermission, Permission } from '@/modules/auth/authz/permissions';
+import { PERMISSIONS_KEY } from '@/modules/auth/decorators/permissions.decorator';
+import { assertRequestUser } from '../utils/request-user.util';
 
 @Injectable()
 export class PermissionsGuard implements CanActivate {

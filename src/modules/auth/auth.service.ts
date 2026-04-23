@@ -2,7 +2,7 @@ import { ConflictException, Injectable, UnauthorizedException } from '@nestjs/co
 import * as bcrypt from 'bcrypt';
 import { randomBytes, timingSafeEqual } from 'crypto';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
-import { CryptoService } from '@/common/service/crypto.service';
+import { CryptoService } from '@/modules/auth/services/crypto.service';
 import { LoginDto } from './dto/request/login.dto';
 import { RegisterDto } from './dto/request/register.dto';
 import {

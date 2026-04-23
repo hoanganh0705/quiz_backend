@@ -16,6 +16,8 @@ import { TagModule } from './modules/tag/tag.module';
 import { QuizModule } from './modules/quiz/quiz.module';
 import { validateEnv } from './core/config/env.validation';
 import { RedisModule } from './core/redis/redis.module';
+import { RolesGuard } from './modules/auth/guards/roles.guard';
+import { PermissionsGuard } from './modules/auth/guards/permissions.guard';
 
 @Module({
   imports: [
@@ -58,6 +60,14 @@ import { RedisModule } from './core/redis/redis.module';
     {
       provide: APP_GUARD,
       useClass: JwtGuard,
+    },
+    {
+      provide: APP_GUARD,
+      useClass: RolesGuard,
+    },
+    {
+      provide: APP_GUARD,
+      useClass: PermissionsGuard,
     },
     {
       provide: APP_INTERCEPTOR,
