@@ -23,6 +23,12 @@ import {
   isStringMatchingPattern,
 } from '@/common/utils/cursor.util';
 import { buildSlug, normalizeSlugOrThrow } from '@/common/utils/slug.util';
+import { hasOwn } from '@/common/utils/object.util';
+import {
+  TAG_SLUG_EMPTY_MESSAGE,
+  TAG_SLUG_INVALID_MESSAGE,
+  TAG_UNIQUE_CONFLICT_MESSAGE,
+} from './tag.constants';
 
 type TagRow = {
   tagId: string;
@@ -87,6 +93,13 @@ export class TagService {
     };
   }
 
+  private normalizeTagSlug(slug: string): string {
+    return normalizeSlugOrThrow(slug, {
+      emptyMessage: TAG_SLUG_EMPTY_MESSAGE,
+      invalidMessage: TAG_SLUG_INVALID_MESSAGE,
+    });
+  }
+
   private async getActiveTagById(tagId: string): Promise<TagRow> {
     const [tag] = await this.db
       .select(TAG_COLUMNS)
@@ -139,11 +152,7 @@ export class TagService {
   }
 
   async getActiveTagBySlug(slug: string): Promise<TagResponseDto> {
-    const normalizedSlug = normalizeSlugOrThrow(slug, {
-      emptyMessage: 'Tag slug cannot be empty',
-      invalidMessage:
-        'Tag slug must be lowercase and can only contain letters, numbers, and hyphens',
-    });
+    const normalizedSlug = this.normalizeTagSlug(slug);
 
     const [tag] = await this.db
       .select(TAG_COLUMNS)
@@ -160,11 +169,7 @@ export class TagService {
 
   async createTag(payload: CreateTagDto): Promise<TagResponseDto> {
     const name = payload.name.trim();
-    const slug = normalizeSlugOrThrow(payload.slug ?? buildSlug(name), {
-      emptyMessage: 'Tag slug cannot be empty',
-      invalidMessage:
-        'Tag slug must be lowercase and can only contain letters, numbers, and hyphens',
-    });
+    const slug = this.normalizeTagSlug(payload.slug ?? buildSlug(name));
 
     const nowIso = new Date().toISOString();
 
@@ -177,7 +182,7 @@ export class TagService {
         updatedAt: nowIso,
       })
       .returning(TAG_COLUMNS)
-      .catch((error: unknown) => this.mapUniqueConflict(error, 'Tag name or slug already exists'));
+      .catch((error: unknown) => this.mapUniqueConflict(error, TAG_UNIQUE_CONFLICT_MESSAGE));
 
     return this.toTagResponse(createdTag as TagRow);
   }
@@ -185,16 +190,12 @@ export class TagService {
   async updateTagById(tagId: string, payload: UpdateTagDto): Promise<TagResponseDto> {
     const patch: TagPatch = {};
 
-    if (Object.prototype.hasOwnProperty.call(payload, 'name') && payload.name !== undefined) {
+    if (hasOwn(payload, 'name') && payload.name !== undefined) {
       patch.name = payload.name.trim();
     }
 
-    if (Object.prototype.hasOwnProperty.call(payload, 'slug') && payload.slug !== undefined) {
-      patch.slug = normalizeSlugOrThrow(payload.slug, {
-        emptyMessage: 'Tag slug cannot be empty',
-        invalidMessage:
-          'Tag slug must be lowercase and can only contain letters, numbers, and hyphens',
-      });
+    if (hasOwn(payload, 'slug') && payload.slug !== undefined) {
+      patch.slug = this.normalizeTagSlug(payload.slug);
     }
 
     if (Object.keys(patch).length === 0) {
@@ -210,7 +211,7 @@ export class TagService {
       })
       .where(and(eq(tags.tagId, tagId), isNull(tags.deletedAt)))
       .returning(TAG_COLUMNS)
-      .catch((error: unknown) => this.mapUniqueConflict(error, 'Tag name or slug already exists'));
+      .catch((error: unknown) => this.mapUniqueConflict(error, TAG_UNIQUE_CONFLICT_MESSAGE));
 
     if (!updatedTag) {
       throw new NotFoundException('Tag not found');
