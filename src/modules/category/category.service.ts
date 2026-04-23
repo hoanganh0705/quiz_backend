@@ -27,6 +27,12 @@ import {
 } from '@/common/utils/cursor.util';
 import { buildSlug, normalizeSlugOrThrow } from '@/common/utils/slug.util';
 import { normalizeNullableText } from '@/common/utils/text.util';
+import { hasOwn } from '@/common/utils/object.util';
+import {
+  CATEGORY_SLUG_EMPTY_MESSAGE,
+  CATEGORY_SLUG_INVALID_MESSAGE,
+  CATEGORY_UNIQUE_CONFLICT_MESSAGE,
+} from './category.constants';
 
 type CategoryRow = {
   categoryId: string;
@@ -100,6 +106,13 @@ export class CategoryService {
     };
   }
 
+  private normalizeCategorySlug(slug: string): string {
+    return normalizeSlugOrThrow(slug, {
+      emptyMessage: CATEGORY_SLUG_EMPTY_MESSAGE,
+      invalidMessage: CATEGORY_SLUG_INVALID_MESSAGE,
+    });
+  }
+
   private async getActiveCategoryById(categoryId: string): Promise<CategoryRow> {
     const [category] = await this.db
       .select(CATEGORY_COLUMNS)
@@ -157,11 +170,7 @@ export class CategoryService {
   }
 
   async getActiveCategoryBySlug(slug: string): Promise<CategoryResponseDto> {
-    const normalizedSlug = normalizeSlugOrThrow(slug, {
-      emptyMessage: 'Category slug cannot be empty',
-      invalidMessage:
-        'Category slug must be lowercase and can only contain letters, numbers, and hyphens',
-    });
+    const normalizedSlug = this.normalizeCategorySlug(slug);
 
     const [category] = await this.db
       .select(CATEGORY_COLUMNS)
@@ -178,17 +187,7 @@ export class CategoryService {
 
   async createCategory(payload: CreateCategoryDto): Promise<CategoryResponseDto> {
     const name = payload.name.trim();
-    const slug = payload.slug
-      ? normalizeSlugOrThrow(payload.slug, {
-          emptyMessage: 'Category slug cannot be empty',
-          invalidMessage:
-            'Category slug must be lowercase and can only contain letters, numbers, and hyphens',
-        })
-      : normalizeSlugOrThrow(buildSlug(name), {
-          emptyMessage: 'Category slug cannot be empty',
-          invalidMessage:
-            'Category slug must be lowercase and can only contain letters, numbers, and hyphens',
-        });
+    const slug = this.normalizeCategorySlug(payload.slug ?? buildSlug(name));
 
     const description = normalizeNullableText(payload.description);
     const imageUrl = normalizeNullableText(payload.imageUrl);
@@ -206,9 +205,7 @@ export class CategoryService {
         updatedAt: nowIso,
       })
       .returning(CATEGORY_COLUMNS)
-      .catch((error: unknown) =>
-        this.mapUniqueConflict(error, 'Category name or slug already exists'),
-      );
+      .catch((error: unknown) => this.mapUniqueConflict(error, CATEGORY_UNIQUE_CONFLICT_MESSAGE));
 
     return this.toCategoryResponse(createdCategory as CategoryRow);
   }
@@ -219,23 +216,19 @@ export class CategoryService {
   ): Promise<CategoryResponseDto> {
     const patch: CategoryPatch = {};
 
-    if (Object.prototype.hasOwnProperty.call(payload, 'name') && payload.name !== undefined) {
+    if (hasOwn(payload, 'name') && payload.name !== undefined) {
       patch.name = payload.name.trim();
     }
 
-    if (Object.prototype.hasOwnProperty.call(payload, 'description')) {
+    if (hasOwn(payload, 'description')) {
       patch.description = normalizeNullableText(payload.description);
     }
 
-    if (Object.prototype.hasOwnProperty.call(payload, 'slug') && payload.slug !== undefined) {
-      patch.slug = normalizeSlugOrThrow(payload.slug, {
-        emptyMessage: 'Category slug cannot be empty',
-        invalidMessage:
-          'Category slug must be lowercase and can only contain letters, numbers, and hyphens',
-      });
+    if (hasOwn(payload, 'slug') && payload.slug !== undefined) {
+      patch.slug = this.normalizeCategorySlug(payload.slug);
     }
 
-    if (Object.prototype.hasOwnProperty.call(payload, 'imageUrl')) {
+    if (hasOwn(payload, 'imageUrl')) {
       patch.imageUrl = normalizeNullableText(payload.imageUrl);
     }
 
@@ -252,9 +245,7 @@ export class CategoryService {
       })
       .where(and(eq(categories.categoryId, categoryId), isNull(categories.deletedAt)))
       .returning(CATEGORY_COLUMNS)
-      .catch((error: unknown) =>
-        this.mapUniqueConflict(error, 'Category name or slug already exists'),
-      );
+      .catch((error: unknown) => this.mapUniqueConflict(error, CATEGORY_UNIQUE_CONFLICT_MESSAGE));
 
     if (!updatedCategory) {
       throw new NotFoundException('Category not found');
