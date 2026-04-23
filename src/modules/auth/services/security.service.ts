@@ -127,6 +127,17 @@ export class SecurityService {
     return browserMatches && deviceTypeMatches;
   }
 
+  canUseRefreshReuseGraceWindow(
+    session: SessionRecord,
+    context: SessionRequestContext,
+    nowIso: string,
+  ): boolean {
+    return (
+      this.isRefreshTokenWithinGraceWindow(session.lastUsedAt, nowIso) &&
+      this.isSameSessionContext(session, context)
+    );
+  }
+
   evaluateSessionBinding(
     session: {
       ipAddress: string | null;
@@ -189,10 +200,7 @@ export class SecurityService {
     nowIso: string,
     payload: RefreshTokenPayload,
   ): Promise<boolean> {
-    const isWithinGraceWindow = this.isRefreshTokenWithinGraceWindow(session.lastUsedAt, nowIso);
-    const isSameContext = this.isSameSessionContext(session, context);
-
-    if (!isWithinGraceWindow || !isSameContext) {
+    if (!this.canUseRefreshReuseGraceWindow(session, context, nowIso)) {
       return false;
     }
 

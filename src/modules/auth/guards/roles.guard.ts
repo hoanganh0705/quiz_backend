@@ -5,7 +5,8 @@ import {
   type ExecutionContext,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { ROLES_KEY, isUserRole, type UserRole } from '../decorators/roles.decorator';
+import { isUserRole, type UserRole } from '@/common/types/user-role.type';
+import { ROLES_KEY } from '../decorators/roles.decorator';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { assertRequestUser } from '../utils/request-user.util';
 

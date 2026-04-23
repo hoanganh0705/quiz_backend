@@ -9,7 +9,7 @@ import { Reflector } from '@nestjs/core';
 import { JwtService } from '@nestjs/jwt';
 import type { Request } from 'express';
 import { IS_PUBLIC_KEY } from '../decorators/public.decorator';
-import type { UserRole } from '../../modules/auth/decorators/roles.decorator';
+import { isUserRole, type UserRole } from '../types/user-role.type';
 
 export type JwtPayload = {
   sub: string;
@@ -84,7 +84,7 @@ export class JwtGuard implements CanActivate {
         audience: this.getAccessTokenAudience(),
       });
 
-      if (!payload?.sub || !payload.role) {
+      if (!payload?.sub || !isUserRole(payload.role)) {
         throw new UnauthorizedException('Invalid access token payload');
       }
 

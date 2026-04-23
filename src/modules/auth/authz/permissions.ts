@@ -1,4 +1,4 @@
-import type { UserRole } from '@/modules/auth/decorators/roles.decorator';
+import type { UserRole } from '@/common/types/user-role.type';
 
 export enum Permission {
   QUIZ_CREATE = 'QUIZ_CREATE',
