@@ -87,6 +87,11 @@ export const validateEnv = (env: Record<string, unknown>) => {
     'REFRESH_TOKEN_REUSE_GRACE_WINDOW_SECONDS',
     10,
   );
+  const emailVerificationTokenTtlSeconds = parsePositiveInteger(
+    env,
+    'EMAIL_VERIFICATION_TOKEN_TTL_SECONDS',
+    1_800,
+  );
   const jwtAccessTokenIssuer = parseRequiredString(env, 'JWT_ACCESS_TOKEN_ISSUER');
   const jwtAccessTokenAudience = parseRequiredString(env, 'JWT_ACCESS_TOKEN_AUDIENCE');
   const sessionBindingStrict = parseBoolean(env, 'SESSION_BINDING_STRICT', false);
@@ -98,6 +103,10 @@ export const validateEnv = (env: Record<string, unknown>) => {
       ? rawNodeEnv.trim().toLowerCase()
       : 'development';
   const corsOrigins = typeof env.CORS_ORIGINS === 'string' ? env.CORS_ORIGINS : '';
+  const emailVerificationBaseUrl =
+    typeof env.EMAIL_VERIFICATION_BASE_URL === 'string'
+      ? env.EMAIL_VERIFICATION_BASE_URL.trim()
+      : '';
 
   if (!TOKEN_EXPIRES_IN_PATTERN.test(accessTokenExpiresIn)) {
     throw new Error('ACCESS_TOKEN_EXPIRES_IN has invalid format. Use number or number + s/m/h/d');
@@ -121,6 +130,7 @@ export const validateEnv = (env: Record<string, unknown>) => {
     REFRESH_TOKEN_COOKIE_MAX_AGE_MS: refreshTokenCookieMaxAgeMs,
     MAX_ACTIVE_SESSIONS_PER_USER: maxActiveSessionsPerUser,
     REFRESH_TOKEN_REUSE_GRACE_WINDOW_SECONDS: refreshTokenReuseGraceWindowSeconds,
+    EMAIL_VERIFICATION_TOKEN_TTL_SECONDS: emailVerificationTokenTtlSeconds,
     JWT_ACCESS_TOKEN_ISSUER: jwtAccessTokenIssuer,
     JWT_ACCESS_TOKEN_AUDIENCE: jwtAccessTokenAudience,
     SESSION_BINDING_STRICT: sessionBindingStrict,
@@ -128,5 +138,6 @@ export const validateEnv = (env: Record<string, unknown>) => {
     PORT: port,
     NODE_ENV: nodeEnvRaw as NodeEnv,
     CORS_ORIGINS: corsOrigins,
+    EMAIL_VERIFICATION_BASE_URL: emailVerificationBaseUrl,
   };
 };

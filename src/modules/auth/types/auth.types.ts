@@ -1,4 +1,4 @@
-import { UserRole } from '@/modules/auth/decorators/roles.decorator';
+import type { UserRole } from '@/common/types/user-role.type';
 
 export type RegisterResult = {
   message: string;
@@ -37,15 +37,25 @@ export type AuthTokens = {
 export type AccessTokenPayload = {
   sub: string;
   role: UserRole;
-  iss: string;
-  aud: string;
+  iss?: string;
+  aud?: string | string[];
+  exp?: number;
+  iat?: number;
 };
 
-export type RefreshTokenPayload = {
+export type AccessTokenClaims = {
+  sub: string;
+  role: UserRole;
+};
+
+export type RefreshTokenClaims = {
   sub: string;
   jti: string;
+};
+
+export type RefreshTokenPayload = RefreshTokenClaims & {
   iss: string;
-  aud: string;
+  aud: string | string[];
   exp?: number;
   iat?: number;
 };
