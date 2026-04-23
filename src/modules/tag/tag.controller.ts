@@ -8,11 +8,9 @@ import {
   Patch,
   Post,
   Query,
-  UseGuards,
 } from '@nestjs/common';
 import { Public } from '@/common/decorators/public.decorator';
-import { Roles } from '@/common/decorators/roles.decorator';
-import { RolesGuard } from '@/common/guards/roles.guard';
+import { Roles } from '@/modules/auth/decorators/roles.decorator';
 import { CreateTagDto } from './dto/request/create-tag.dto';
 import { ListTagsQueryDto } from './dto/request/list-tags-query.dto';
 import { UpdateTagDto } from './dto/request/update-tag.dto';
@@ -38,14 +36,12 @@ export class TagController {
   }
 
   @Post()
-  @UseGuards(RolesGuard)
   @Roles('admin')
   createTag(@Body() payload: CreateTagDto): Promise<TagResponseDto> {
     return this.tagService.createTag(payload);
   }
 
   @Patch(':id')
-  @UseGuards(RolesGuard)
   @Roles('admin')
   updateTag(
     @Param('id', new ParseUUIDPipe()) tagId: string,
@@ -55,7 +51,6 @@ export class TagController {
   }
 
   @Delete(':id')
-  @UseGuards(RolesGuard)
   @Roles('admin')
   deleteTag(@Param('id', new ParseUUIDPipe()) tagId: string): Promise<DeleteTagResponseDto> {
     return this.tagService.softDeleteTagById(tagId);

@@ -7,7 +7,7 @@ import {
 import { Reflector } from '@nestjs/core';
 import { ROLES_KEY, isUserRole, type UserRole } from '../decorators/roles.decorator';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
-import { assertRequestUser } from './request-user.util';
+import { assertRequestUser } from '../utils/request-user.util';
 
 @Injectable()
 export class RolesGuard implements CanActivate {

@@ -8,11 +8,9 @@ import {
   Patch,
   Post,
   Query,
-  UseGuards,
 } from '@nestjs/common';
 import { Public } from '@/common/decorators/public.decorator';
-import { Roles } from '@/common/decorators/roles.decorator';
-import { RolesGuard } from '@/common/guards/roles.guard';
+import { Roles } from '@/modules/auth/decorators/roles.decorator';
 import { CreateCategoryDto } from './dto/request/create-category.dto';
 import { ListCategoriesQueryDto } from './dto/request/list-categories-query.dto';
 import { UpdateCategoryDto } from './dto/request/update-category.dto';
@@ -38,14 +36,12 @@ export class CategoryController {
   }
 
   @Post()
-  @UseGuards(RolesGuard)
   @Roles('admin')
   createCategory(@Body() payload: CreateCategoryDto): Promise<CategoryResponseDto> {
     return this.categoryService.createCategory(payload);
   }
 
   @Patch(':id')
-  @UseGuards(RolesGuard)
   @Roles('admin')
   updateCategory(
     @Param('id', new ParseUUIDPipe()) categoryId: string,
@@ -55,7 +51,6 @@ export class CategoryController {
   }
 
   @Delete(':id')
-  @UseGuards(RolesGuard)
   @Roles('admin')
   deleteCategory(
     @Param('id', new ParseUUIDPipe()) categoryId: string,
