@@ -1,7 +1,6 @@
 import { Type } from 'class-transformer';
 import { IsIn, IsInt, IsOptional, IsUUID, Max, Min } from 'class-validator';
-
-const QUIZ_DIFFICULTIES = ['easy', 'medium', 'hard'] as const;
+import { QUIZ_DIFFICULTIES, type QuizDifficulty } from '../../types/quiz.types';
 
 export class CreateQuizVersionDto {
   @IsOptional()
@@ -9,7 +8,7 @@ export class CreateQuizVersionDto {
   sourceVersionId?: string;
 
   @IsIn(QUIZ_DIFFICULTIES)
-  difficulty!: (typeof QUIZ_DIFFICULTIES)[number];
+  difficulty!: QuizDifficulty;
 
   @Type(() => Number)
   @IsInt()
