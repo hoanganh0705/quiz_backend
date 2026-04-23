@@ -13,6 +13,10 @@ describe('TagController', () => {
           provide: TagService,
           useValue: {
             listActiveTags: jest.fn(),
+            getActiveTagBySlug: jest.fn(),
+            createTag: jest.fn(),
+            updateTagById: jest.fn(),
+            softDeleteTagById: jest.fn(),
           },
         },
       ],
