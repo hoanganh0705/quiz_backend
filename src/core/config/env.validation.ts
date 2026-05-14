@@ -107,6 +107,12 @@ export const validateEnv = (env: Record<string, unknown>) => {
     typeof env.EMAIL_VERIFICATION_BASE_URL === 'string'
       ? env.EMAIL_VERIFICATION_BASE_URL.trim()
       : '';
+  const emailProvider = parseRequiredString(env, 'EMAIL_PROVIDER');
+  const emailFromAddress = parseRequiredString(env, 'EMAIL_FROM_ADDRESS');
+  const emailFromName = parseRequiredString(env, 'EMAIL_FROM_NAME');
+  const resendApiKey = parseRequiredString(env, 'RESEND_API_KEY');
+  const emailSendTimeoutMs = parsePositiveInteger(env, 'EMAIL_SEND_TIMEOUT_MS', 5_000);
+  const emailQueueConcurrency = parsePositiveInteger(env, 'EMAIL_QUEUE_CONCURRENCY', 5);
 
   if (!TOKEN_EXPIRES_IN_PATTERN.test(accessTokenExpiresIn)) {
     throw new Error('ACCESS_TOKEN_EXPIRES_IN has invalid format. Use number or number + s/m/h/d');
@@ -139,5 +145,11 @@ export const validateEnv = (env: Record<string, unknown>) => {
     NODE_ENV: nodeEnvRaw as NodeEnv,
     CORS_ORIGINS: corsOrigins,
     EMAIL_VERIFICATION_BASE_URL: emailVerificationBaseUrl,
+    EMAIL_PROVIDER: emailProvider,
+    EMAIL_FROM_ADDRESS: emailFromAddress,
+    EMAIL_FROM_NAME: emailFromName,
+    RESEND_API_KEY: resendApiKey,
+    EMAIL_SEND_TIMEOUT_MS: emailSendTimeoutMs,
+    EMAIL_QUEUE_CONCURRENCY: emailQueueConcurrency,
   };
 };
