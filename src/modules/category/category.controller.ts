@@ -10,7 +10,7 @@ import {
   Query,
 } from '@nestjs/common';
 import { Public } from '@/common/decorators/public.decorator';
-import { Roles } from '@/modules/auth/decorators/roles.decorator';
+import { Roles } from '@/common/authorization/decorators/roles.decorator';
 import { CreateCategoryDto } from './dto/request/create-category.dto';
 import { ListCategoriesQueryDto } from './dto/request/list-categories-query.dto';
 import { UpdateCategoryDto } from './dto/request/update-category.dto';
