@@ -1,7 +1,7 @@
 import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Query } from '@nestjs/common';
-import { Permission } from '@/modules/auth/authz/permissions';
+import { Permission } from '@/common/authorization/permissions';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
-import { Permissions } from '@/modules/auth/decorators/permissions.decorator';
+import { Permissions } from '@/common/authorization/decorators/permissions.decorator';
 import { Public } from '@/common/decorators/public.decorator';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
 import { CreateQuizDto } from './dto/request/create-quiz.dto';

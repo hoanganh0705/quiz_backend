@@ -1,7 +1,7 @@
 import { Body, Controller, Param, ParseUUIDPipe, Patch, Post } from '@nestjs/common';
-import { Permission } from '@/modules/auth/authz/permissions';
+import { Permission } from '@/common/authorization/permissions';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
-import { Permissions } from '@/modules/auth/decorators/permissions.decorator';
+import { Permissions } from '@/common/authorization/decorators/permissions.decorator';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
 import { UpdateQuizVersionDto } from './dto/request/update-quiz-version.dto';
 import { QuizVersionResponseDto } from './dto/response/quiz-version-response.dto';

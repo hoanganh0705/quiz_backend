@@ -1,35 +1,59 @@
 import { Module } from '@nestjs/common';
-import { AuthController } from './auth.controller';
-import { AuthService } from './auth.service';
+import { AuthController } from './transport/controller/auth.controller';
+import { AuthApplicationService } from './application/auth.application.service';
+import { AuthResponseMapper } from './mappers/auth-response.mapper';
+import { AuthService } from './domain/auth.service';
 import { AuthConfig } from './auth.config';
-import { AuthCookieService } from './services/auth-cookie.service';
-import { AuthSessionCleanupService } from './services/auth-session-cleanup.service';
-import { TokenService } from './services/token.service';
-import { SessionService } from './services/session.service';
-import { SecurityService } from './services/security.service';
-import { AuthRequestContextService } from './services/auth-request-context.service';
+import { AuthCookieService } from './transport/cookies/auth-cookie.service';
+import { AuthSessionCleanupService } from './infrastructure/auth-session-cleanup.service';
+import { JwtTokenAdapter } from './infrastructure/jwt-token.adapter';
+import { SessionService } from './domain/session.service';
+import { SecurityService } from './domain/security.service';
+import { AuthRequestContextService } from './infrastructure/auth-request-context.service';
 import { CommonModule } from '@/common/common.module';
-import { DeviceParserService } from './services/device-parser.service';
-import { CryptoService } from './services/crypto.service';
+import { DeviceParserService } from './infrastructure/device-parser.service';
+import { CryptoAdapter } from './infrastructure/crypto.adapter';
+import { RequestContextInterceptor } from './transport/interceptors/request-context.interceptor';
+import { RefreshTokenInterceptor } from './transport/interceptors/refresh-token.interceptor';
 import { DatabaseModule } from '@/core/database/database.module';
 import { RedisModule } from '@/core/redis/redis.module';
 import { EmailModule } from '@/modules/email/email.module';
+import { TOKEN_PROVIDER } from './domain/ports/token.provider';
+import { CRYPTO_PROVIDER } from './domain/ports/crypto.provider';
+import { USER_REPOSITORY_PORT } from './domain/ports/user-repository.port';
+import { SESSION_REPOSITORY_PORT } from './domain/ports/session-repository.port';
+import { EMAIL_PROVIDER } from './domain/ports/email.provider';
+import { CACHE_PROVIDER } from './domain/ports/cache.provider';
+import { UserRepository } from '@/core/database/repositories/user.repository';
+import { UserSessionRepository } from '@/core/database/repositories/user-session.repository';
+import { RedisService } from '@/core/redis/redis.service';
+import { EmailService } from '@/modules/email/email.service';
+import { AuthDomainExceptionFilter } from './transport/filters/auth-domain-exception.filter';
 
 @Module({
   imports: [CommonModule, DatabaseModule, RedisModule, EmailModule],
   controllers: [AuthController],
   providers: [
+    AuthApplicationService,
+    AuthResponseMapper,
     AuthService,
     AuthConfig,
     AuthCookieService,
     AuthSessionCleanupService,
-    TokenService,
     SessionService,
     SecurityService,
     AuthRequestContextService,
     DeviceParserService,
-    CryptoService,
+    RequestContextInterceptor,
+    RefreshTokenInterceptor,
+    AuthDomainExceptionFilter,
+    { provide: TOKEN_PROVIDER, useClass: JwtTokenAdapter },
+    { provide: CRYPTO_PROVIDER, useClass: CryptoAdapter },
+    { provide: USER_REPOSITORY_PORT, useExisting: UserRepository },
+    { provide: SESSION_REPOSITORY_PORT, useExisting: UserSessionRepository },
+    { provide: EMAIL_PROVIDER, useExisting: EmailService },
+    { provide: CACHE_PROVIDER, useExisting: RedisService },
   ],
-  exports: [AuthService],
+  exports: [AuthApplicationService, AuthService],
 })
 export class AuthModule {}
