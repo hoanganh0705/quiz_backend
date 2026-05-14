@@ -1,0 +1,62 @@
+import type { UserRole } from '@/common/types/user-role.type';
+
+export type AuthIdentity = {
+  userId: string;
+  username: string;
+  email: string;
+  role: UserRole;
+};
+
+export type AuthTokens = {
+  accessToken: string;
+  refreshToken: string;
+  refreshTokenJti: string;
+};
+
+export type AccessTokenPayload = {
+  sub: string;
+  role: UserRole;
+  iss?: string;
+  aud?: string | string[];
+  exp?: number;
+  iat?: number;
+};
+
+export type AccessTokenClaims = {
+  sub: string;
+  role: UserRole;
+};
+
+export type RefreshTokenClaims = {
+  sub: string;
+  jti: string;
+};
+
+export type RefreshTokenPayload = RefreshTokenClaims & {
+  iss: string;
+  aud: string | string[];
+  exp?: number;
+  iat?: number;
+};
+
+export type SessionDeviceType = 'mobile' | 'desktop' | 'tablet' | 'unknown';
+
+export type SessionRequestContext = {
+  ipAddress: string | null;
+  userAgent: string | null;
+  deviceBrowser: string | null;
+  deviceOs: string | null;
+  deviceType: SessionDeviceType;
+};
+
+export type AuthCookieInstructions = {
+  refreshToken?: string;
+  clearRefreshToken?: boolean;
+};
+
+export type AuthRequestContext = {
+  session: SessionRequestContext;
+  setRefreshToken: (token: string) => void;
+  clearRefreshToken: () => void;
+  getCookieInstructions: () => Readonly<AuthCookieInstructions>;
+};

@@ -10,7 +10,7 @@ import {
   Query,
 } from '@nestjs/common';
 import { Public } from '@/common/decorators/public.decorator';
-import { Roles } from '@/modules/auth/decorators/roles.decorator';
+import { Roles } from '@/common/authorization/decorators/roles.decorator';
 import { CreateTagDto } from './dto/request/create-tag.dto';
 import { ListTagsQueryDto } from './dto/request/list-tags-query.dto';
 import { UpdateTagDto } from './dto/request/update-tag.dto';
