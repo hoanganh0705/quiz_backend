@@ -16,8 +16,8 @@ import { TagModule } from './modules/tag/tag.module';
 import { QuizModule } from './modules/quiz/quiz.module';
 import { validateEnv } from './core/config/env.validation';
 import { RedisModule } from './core/redis/redis.module';
-import { RolesGuard } from './modules/auth/guards/roles.guard';
-import { PermissionsGuard } from './modules/auth/guards/permissions.guard';
+import { RolesGuard } from './common/authorization/guards/roles.guard';
+import { PermissionsGuard } from './common/authorization/guards/permissions.guard';
 
 @Module({
   imports: [

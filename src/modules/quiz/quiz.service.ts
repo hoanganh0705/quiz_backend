@@ -9,7 +9,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { and, desc, eq, isNull, or, sql, type SQL } from 'drizzle-orm';
-import { hasPermission, Permission } from '@/modules/auth/authz/permissions';
+import { hasPermission, Permission } from '@/common/authorization/permissions';
 import { JwtPayload } from '@/common/guards/jwt.guard';
 import { DRIZZLE, type DrizzleDB } from '@/core/database/database.module';
 import { quizCategories, quizTags, quizVersions, quizzes } from '@/core/database/schema';
@@ -41,7 +41,7 @@ import {
   canEditQuizVersion,
   canManageOwnOrAny,
   canPublishQuizVersion,
-} from './quiz-authorization.helper';
+} from './authz/quiz-authorization.helper';
 import {
   QUIZ_LINK_IDS_INVALID_MESSAGE,
   QUIZ_SLUG_CONFLICT_MESSAGE,

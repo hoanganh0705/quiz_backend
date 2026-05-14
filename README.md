@@ -54,7 +54,7 @@ src/
   common/        Shared framework utilities: public/current-user decorators, filters, guards, interceptors, utils.
   core/          Infrastructure: config validation, database, logger, Redis, low-level utilities.
   modules/       Feature modules: auth, user, category, tag, quiz, email.
-  types/         Local ambient type declarations.
+docs/            Project planning notes and roadmap.
 test/            E2E test configuration and specs.
 ```
 

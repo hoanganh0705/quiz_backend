@@ -3,9 +3,10 @@ import { Queue } from 'bullmq';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { EMAIL_JOB_NAMES, EMAIL_QUEUE_TOKENS } from './email.constants';
 import type { SendVerificationEmailJobData } from './email.types';
+import type { EmailProvider } from '@/modules/auth/domain/ports/email.provider';
 
 @Injectable()
-export class EmailService implements OnModuleDestroy {
+export class EmailService implements EmailProvider, OnModuleDestroy {
   constructor(
     @Inject(EMAIL_QUEUE_TOKENS.QUEUE)
     private readonly emailQueue: Queue<SendVerificationEmailJobData>,
