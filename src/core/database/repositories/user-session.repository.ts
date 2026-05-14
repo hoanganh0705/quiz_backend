@@ -3,20 +3,12 @@ import { and, asc, desc, eq, gt, isNull, lt, inArray, sql } from 'drizzle-orm';
 import { DRIZZLE } from '../drizzle.constants';
 import type { DrizzleDB } from '../database.module';
 import { userSessions } from '../schema';
+import type {
+  SessionRepositoryPort,
+  SessionRecord,
+} from '@/modules/auth/domain/ports/session-repository.port';
 
-export type SessionRecord = {
-  sessionId: string;
-  jti: string;
-  userId: string;
-  refreshTokenHash: string;
-  ipAddress: string | null;
-  deviceBrowser: string | null;
-  deviceOs: string | null;
-  deviceType: string;
-  lastUsedAt: string;
-  revokedAt: string | null;
-  expiresAt: string;
-};
+export type { SessionRecord };
 
 const SESSION_LOOKUP_COLUMNS = {
   sessionId: userSessions.sessionId,
@@ -33,7 +25,7 @@ const SESSION_LOOKUP_COLUMNS = {
 };
 
 @Injectable()
-export class UserSessionRepository {
+export class UserSessionRepository implements SessionRepositoryPort {
   constructor(@Inject(DRIZZLE) private readonly db: DrizzleDB) {}
 
   async createSessionWithActiveLimit(

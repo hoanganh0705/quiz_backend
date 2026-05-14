@@ -1,13 +1,10 @@
-import {
-  ConflictException,
-  Inject,
-  Injectable,
-  InternalServerErrorException,
-} from '@nestjs/common';
+import { Inject, Injectable, InternalServerErrorException } from '@nestjs/common';
 import { and, eq, gt, isNull, or } from 'drizzle-orm';
 import { DRIZZLE } from '../drizzle.constants';
 import type { DrizzleDB } from '../database.module';
 import { users } from '../schema';
+import type { UserRepositoryPort } from '@/modules/auth/domain/ports/user-repository.port';
+import { ResourceConflictError } from '@/modules/auth/domain/errors';
 
 const USER_IDENTITY_COLUMNS = {
   userId: users.userId,
@@ -45,7 +42,7 @@ type UserVerificationStatusRow = {
 };
 
 @Injectable()
-export class UserRepository {
+export class UserRepository implements UserRepositoryPort {
   constructor(@Inject(DRIZZLE) private readonly db: DrizzleDB) {}
 
   async ensureEmailAndUsernameAvailable(email: string, username: string): Promise<void> {
@@ -61,7 +58,7 @@ export class UserRepository {
       });
 
     if (existingUser) {
-      throw new ConflictException('Username or email already exists');
+      throw new ResourceConflictError('Username or email already exists');
     }
   }
 
