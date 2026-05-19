@@ -18,12 +18,12 @@ async function bootstrap() {
     .filter((origin) => origin.length > 0);
 
   app.enableCors({
-    origin: corsOrigins.length > 0 ? corsOrigins : isProduction ? false : true,
-    credentials: true,
+    origin: corsOrigins.length > 0 ? corsOrigins : isProduction ? false : true, // if CORS_ORIGINS env var is set, use it; otherwise, if in production, disable CORS; if in development, allow all origins
+    credentials: true, // allow cookies to be sent in CORS requests, useful when frontend and backend are on different domains/ports and you want to maintain sessions or authentication state via cookies
   });
   app.use(helmet());
   app.use(cookieParser());
-  app.set('trust proxy', trustProxy);
+  app.set('trust proxy', trustProxy); // set up trust proxy so that app can correctly identify client IP and protocol when behind a proxy, which is important for security and logging purposes. If TRUST_PROXY env var is true, it will trust the X-Forwarded-* headers from the proxy; if false, it will not trust those headers and will use the direct connection info instead.
   app.setGlobalPrefix('api/v1');
   app.enableShutdownHooks(); // enableShutdownHooks để NestJS có thể lắng nghe các sự kiện shutdown của hệ thống, giúp thực hiện các công việc dọn dẹp trước khi ứng dụng tắt, như đóng kết nối database, giải phóng tài nguyên, v.v.
 

@@ -16,6 +16,8 @@ import type {
   RegisterResult,
   VerifyEmailResult,
 } from '../types/auth-result.types';
+
+// service should not know about controllers, dtos, or response mappers to maintain clean separation between domain and transport layers
 import { USER_REPOSITORY_PORT, type UserRepositoryPort } from './ports/user-repository.port';
 import { TOKEN_PROVIDER, type TokenProvider } from './ports/token.provider';
 import { SessionService } from './session.service';
