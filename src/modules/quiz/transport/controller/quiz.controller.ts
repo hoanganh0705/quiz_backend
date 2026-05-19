@@ -27,6 +27,7 @@ import { ListQuizVersionsQueryDto } from '../../dto/request/list-quiz-versions-q
 import { QuizVersionListResponseDto } from '../../dto/response/quiz-version-list-response.dto';
 import { QuizVersionResponseDto } from '../../dto/response/quiz-version-response.dto';
 import { CreateQuizQuestionDto } from '@/modules/quiz/dto/request/create-quiz-question.dto';
+import { CreateQuizQuestionsDto } from '@/modules/quiz/dto/request/create-quiz-questions.dto';
 import { QuizQuestionResponseDto } from '@/modules/quiz/dto/response/quiz-question-response.dto';
 import { QuizDomainExceptionFilter } from '../filters/quiz-domain-exception.filter';
 
@@ -102,5 +103,16 @@ export class QuizController {
     @Body() payload: CreateQuizQuestionDto,
   ): Promise<QuizQuestionResponseDto> {
     return this.quizApplicationService.createQuizQuestion(quizId, quizVersionId, user, payload);
+  }
+
+  @Post(':id/versions/:versionId/questions/bulk')
+  @Permissions(Permission.QUIZ_VERSION_EDIT_OWN, Permission.QUIZ_VERSION_EDIT_ANY)
+  createQuizQuestions(
+    @Param('id', new ParseUUIDPipe()) quizId: string,
+    @Param('versionId', new ParseUUIDPipe()) quizVersionId: string,
+    @CurrentUser() user: JwtPayload,
+    @Body() payload: CreateQuizQuestionsDto,
+  ): Promise<QuizQuestionResponseDto[]> {
+    return this.quizApplicationService.createQuizQuestions(quizId, quizVersionId, user, payload);
   }
 }

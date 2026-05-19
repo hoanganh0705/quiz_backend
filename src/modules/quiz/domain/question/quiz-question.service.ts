@@ -2,6 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { hasPermission, Permission } from '@/common/authorization/permissions';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
 import { CreateQuizQuestionDto } from '../../dto/request/create-quiz-question.dto';
+import { CreateQuizQuestionsDto } from '../../dto/request/create-quiz-questions.dto';
 import { normalizeNullableText } from '@/common/utils/text.util';
 import { canEditQuizVersion } from '../../authz/quiz-authorization.helper';
 import {
@@ -85,16 +86,23 @@ export class QuizQuestionService {
     }
   }
 
-  async getQuestionsByVersionId(quizVersionId: string): Promise<QuizQuestionJoinRow[]> {
-    return this.quizQuestionRepository.getQuestionsByVersionId(quizVersionId);
+  private assertUniqueQuestionPositions(questions: CreateQuizQuestionsDto['questions']): void {
+    const positions = new Set<number>();
+
+    for (const question of questions) {
+      if (positions.has(question.position)) {
+        throw new QuizConflictError(QUIZ_QUESTION_POSITION_CONFLICT_MESSAGE);
+      }
+
+      positions.add(question.position);
+    }
   }
 
-  async createQuizQuestion(
+  private async assertCanCreateQuestions(
     quizId: string,
     quizVersionId: string,
     user: JwtPayload,
-    payload: CreateQuizQuestionDto,
-  ): Promise<QuizQuestionJoinRow[]> {
+  ): Promise<void> {
     const version = await this.quizVersionRepository.getQuizVersionDetailById(quizVersionId);
 
     if (!version) {
@@ -123,6 +131,19 @@ export class QuizQuestionService {
 
       throw new QuizForbiddenError('You do not have permission to edit this quiz version');
     }
+  }
+
+  async getQuestionsByVersionId(quizVersionId: string): Promise<QuizQuestionJoinRow[]> {
+    return this.quizQuestionRepository.getQuestionsByVersionId(quizVersionId);
+  }
+
+  async createQuizQuestion(
+    quizId: string,
+    quizVersionId: string,
+    user: JwtPayload,
+    payload: CreateQuizQuestionDto,
+  ): Promise<QuizQuestionJoinRow[]> {
+    await this.assertCanCreateQuestions(quizId, quizVersionId, user);
 
     const nowIso = new Date().toISOString();
     const questionText = payload.questionText.trim();
@@ -158,6 +179,54 @@ export class QuizQuestionService {
 
     if (rows.length === 0) {
       throw new QuizNotFoundError('Quiz question not found');
+    }
+
+    return rows;
+  }
+
+  async createQuizQuestions(
+    quizId: string,
+    quizVersionId: string,
+    user: JwtPayload,
+    payload: CreateQuizQuestionsDto,
+  ): Promise<QuizQuestionJoinRow[]> {
+    await this.assertCanCreateQuestions(quizId, quizVersionId, user);
+    this.assertUniqueQuestionPositions(payload.questions);
+
+    const nowIso = new Date().toISOString();
+    const questions = payload.questions.map((question) => {
+      const answerOptions = this.normalizeAnswerOptions(question.answerOptions);
+      this.assertValidAnswerOptions(answerOptions);
+
+      return {
+        quizVersionId,
+        position: question.position,
+        questionText: question.questionText.trim(),
+        imageUrl: normalizeNullableText(question.imageUrl) ?? null,
+        createdAt: nowIso,
+        updatedAt: nowIso,
+        answerOptions: answerOptions.map((option) => ({
+          position: option.position,
+          value: option.value.trim(),
+          isCorrect: option.isCorrect,
+          createdAt: nowIso,
+        })),
+      };
+    });
+
+    let questionIds: string[] = [];
+
+    try {
+      const result = await this.quizQuestionRepository.createQuestionsWithOptions(questions);
+      questionIds = result.questionIds;
+    } catch (error: unknown) {
+      this.mapQuestionInsertError(error);
+    }
+
+    const rows = await this.quizQuestionRepository.getQuestionsByIds(questionIds);
+
+    if (rows.length === 0) {
+      throw new QuizNotFoundError('Quiz questions not found');
     }
 
     return rows;

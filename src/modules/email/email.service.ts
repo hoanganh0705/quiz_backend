@@ -1,9 +1,9 @@
-import { Inject, Injectable, InternalServerErrorException, OnModuleDestroy } from '@nestjs/common';
+import { Inject, Injectable, OnModuleDestroy } from '@nestjs/common';
 import { Queue } from 'bullmq';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { EMAIL_JOB_NAMES, EMAIL_QUEUE_TOKENS } from './email.constants';
 import type { SendVerificationEmailJobData } from './email.types';
-import type { EmailProvider } from '@/modules/auth/domain/ports/email.provider';
+import type { EmailProvider } from '@/common/ports/email.provider';
 
 @Injectable()
 export class EmailService implements EmailProvider, OnModuleDestroy {
@@ -53,7 +53,7 @@ export class EmailService implements EmailProvider, OnModuleDestroy {
         message: error instanceof Error ? error.message : 'Unknown enqueue error',
       });
 
-      throw new InternalServerErrorException('Unable to queue verification email');
+      throw new Error('Unable to queue verification email');
     }
   }
 }

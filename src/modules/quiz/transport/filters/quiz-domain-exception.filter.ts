@@ -1,10 +1,4 @@
-import {
-  Catch,
-  HttpException,
-  HttpStatus,
-  type ExceptionFilter,
-  type ArgumentsHost,
-} from '@nestjs/common';
+import { Catch, HttpStatus, type ExceptionFilter, type ArgumentsHost } from '@nestjs/common';
 import type { Response } from 'express';
 import {
   QuizDomainError,
@@ -14,6 +8,14 @@ import {
   QuizValidationError,
   QuizVersionImmutableError,
 } from '../../domain/errors';
+
+const HTTP_ERROR_NAMES: Record<number, string> = {
+  [HttpStatus.BAD_REQUEST]: 'Bad Request',
+  [HttpStatus.FORBIDDEN]: 'Forbidden',
+  [HttpStatus.NOT_FOUND]: 'Not Found',
+  [HttpStatus.CONFLICT]: 'Conflict',
+  [HttpStatus.INTERNAL_SERVER_ERROR]: 'Internal Server Error',
+};
 
 /**
  * Maps domain-layer errors to HTTP responses so the domain can remain
@@ -31,7 +33,7 @@ export class QuizDomainExceptionFilter implements ExceptionFilter {
     response.status(status).json({
       statusCode: status,
       message,
-      error: HttpException.createBody('', '', status).error ?? 'Error',
+      error: HTTP_ERROR_NAMES[status] ?? 'Error',
     });
   }
 
