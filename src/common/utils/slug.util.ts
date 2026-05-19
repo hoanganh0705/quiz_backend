@@ -1,5 +1,3 @@
-import { BadRequestException } from '@nestjs/common';
-
 export const DEFAULT_SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
 export const buildSlug = (input: string): string =>
@@ -22,13 +20,13 @@ export const normalizeSlugOrThrow = (
   const slug = input.trim().toLowerCase();
 
   if (!slug) {
-    throw new BadRequestException(options?.emptyMessage ?? 'Slug cannot be empty');
+    throw new Error(options?.emptyMessage ?? 'Slug cannot be empty');
   }
 
   const pattern = options?.pattern ?? DEFAULT_SLUG_PATTERN;
 
   if (!pattern.test(slug)) {
-    throw new BadRequestException(
+    throw new Error(
       options?.invalidMessage ??
         'Slug must be lowercase and can only contain letters, numbers, and hyphens',
     );

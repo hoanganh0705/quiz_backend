@@ -14,6 +14,7 @@ import { ListQuizVersionsQueryDto } from '../dto/request/list-quiz-versions-quer
 import { UpdateQuizVersionDto } from '../dto/request/update-quiz-version.dto';
 import { UpdateQuizDto } from '@/modules/quiz/dto/request/update-quiz.dto';
 import { CreateQuizQuestionDto } from '@/modules/quiz/dto/request/create-quiz-question.dto';
+import { CreateQuizQuestionsDto } from '@/modules/quiz/dto/request/create-quiz-questions.dto';
 import { QuizResponseDto } from '../dto/response/quiz-response.dto';
 import { QuizListResponseDto } from '../dto/response/quiz-list-response.dto';
 import { QuizVersionResponseDto } from '../dto/response/quiz-version-response.dto';
@@ -132,5 +133,21 @@ export class QuizApplicationService {
 
     const questions = this.quizQuestionResponseMapper.toQuestionResponses(rows);
     return questions[0];
+  }
+
+  async createQuizQuestions(
+    quizId: string,
+    quizVersionId: string,
+    user: JwtPayload,
+    payload: CreateQuizQuestionsDto,
+  ): Promise<QuizQuestionResponseDto[]> {
+    const rows = await this.quizQuestionService.createQuizQuestions(
+      quizId,
+      quizVersionId,
+      user,
+      payload,
+    );
+
+    return this.quizQuestionResponseMapper.toQuestionResponses(rows);
   }
 }
