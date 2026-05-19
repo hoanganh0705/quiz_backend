@@ -1,4 +1,5 @@
 import { QuizDifficulty, QuizVersionStatus } from '@/modules/quiz/types/quiz.types';
+import { QuizQuestionResponseDto } from './quiz-question-response.dto';
 
 export class QuizVersionResponseDto {
   quizVersionId!: string;
@@ -14,4 +15,5 @@ export class QuizVersionResponseDto {
   publishedAt!: string | null;
   archivedAt!: string | null;
   updatedAt!: string;
+  questions?: QuizQuestionResponseDto[];
 }
