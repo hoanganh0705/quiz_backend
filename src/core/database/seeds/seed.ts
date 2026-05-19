@@ -345,7 +345,11 @@ const seedUsersDomain = (rawSeeds: readonly RawUserSeed[]): SeedDomain => ({
           bio: seed.bio,
           avatarUrl: seed.avatarUrl,
           settings: seed.settings,
+          isVerified: true,
+          emailVerificationTokenHash: null,
+          emailVerificationExpiresAt: null,
           updatedAt: context.nowIso,
+          emailVerifiedAt: context.nowIso,
         };
       }),
     );
@@ -362,6 +366,10 @@ const seedUsersDomain = (rawSeeds: readonly RawUserSeed[]): SeedDomain => ({
           displayName: sql`excluded.display_name`,
           bio: sql`excluded.bio`,
           avatarUrl: sql`excluded.avatar_url`,
+          isVerified: true,
+          emailVerificationTokenHash: null,
+          emailVerificationExpiresAt: null,
+          emailVerifiedAt: sql`COALESCE(${users.emailVerifiedAt}, excluded.email_verified_at)`,
           updatedAt: context.nowIso,
         },
         setWhere: sql`
@@ -370,6 +378,10 @@ const seedUsersDomain = (rawSeeds: readonly RawUserSeed[]): SeedDomain => ({
           OR ${users.displayName} IS DISTINCT FROM excluded.display_name
           OR ${users.bio} IS DISTINCT FROM excluded.bio
           OR ${users.avatarUrl} IS DISTINCT FROM excluded.avatar_url
+          OR ${users.isVerified} IS DISTINCT FROM true
+          OR ${users.emailVerifiedAt} IS NULL
+          OR ${users.emailVerificationTokenHash} IS NOT NULL
+          OR ${users.emailVerificationExpiresAt} IS NOT NULL
         `,
       })
       .returning({

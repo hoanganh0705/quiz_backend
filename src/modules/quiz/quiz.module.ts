@@ -17,9 +17,10 @@ import { QUIZ_QUESTION_REPOSITORY_PORT } from './domain/ports/quiz-question-repo
 import { QuizRepository } from '@/core/database/repositories/quiz.repository';
 import { QuizVersionRepository } from '@/core/database/repositories/quiz-version.repository';
 import { QuizQuestionRepository } from '@/core/database/repositories/quiz-question.repository';
+import { LoggerModule } from 'nestjs-pino';
 
 @Module({
-  imports: [DatabaseModule],
+  imports: [DatabaseModule, LoggerModule.forRoot()],
   providers: [
     // Application
     QuizApplicationService,

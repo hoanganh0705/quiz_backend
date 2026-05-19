@@ -1,6 +1,7 @@
 import {
   ForbiddenException,
   Injectable,
+  Optional,
   type CanActivate,
   type ExecutionContext,
 } from '@nestjs/common';
@@ -15,7 +16,7 @@ import { assertRequestUser } from '../utils/request-user.util';
 export class RolesGuard implements CanActivate {
   constructor(
     private readonly reflector: Reflector,
-    @InjectPinoLogger(RolesGuard.name) private readonly logger: PinoLogger,
+    @Optional() @InjectPinoLogger(RolesGuard.name) private readonly logger?: PinoLogger,
   ) {}
 
   private normalizeRequiredRoles(roles: unknown): UserRole[] {
@@ -56,7 +57,7 @@ export class RolesGuard implements CanActivate {
     const userRole = requestUser.role;
 
     if (!normalizedRoles.includes(userRole)) {
-      this.logger.warn({
+      this.logger?.warn({
         event: 'roles_guard_forbidden',
         userId: requestUser.sub,
         userRole,

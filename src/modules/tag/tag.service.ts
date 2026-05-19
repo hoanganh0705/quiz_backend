@@ -221,6 +221,8 @@ export class TagService {
   }
 
   async softDeleteTagById(tagId: string): Promise<DeleteTagResponseDto> {
+    await this.getActiveTagById(tagId);
+
     const nowIso = new Date().toISOString();
 
     await this.db
