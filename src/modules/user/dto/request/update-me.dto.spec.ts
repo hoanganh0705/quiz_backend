@@ -1,3 +1,4 @@
+/// <reference types="jest" />
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
 import { UpdateMeDto } from './update-me.dto';

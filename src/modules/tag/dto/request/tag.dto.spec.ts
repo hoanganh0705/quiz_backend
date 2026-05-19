@@ -1,3 +1,4 @@
+/// <reference types="jest" />
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
 import { CreateTagDto } from './create-tag.dto';
