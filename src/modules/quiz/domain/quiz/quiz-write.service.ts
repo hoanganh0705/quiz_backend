@@ -19,12 +19,14 @@ import {
   QuizValidationError,
   QuizDomainError,
 } from '../errors';
-
+import { InjectPinoLogger } from 'nestjs-pino/InjectPinoLogger';
+import { PinoLogger } from 'nestjs-pino/PinoLogger';
 @Injectable()
 export class QuizWriteService {
   constructor(
     @Inject(QUIZ_REPOSITORY_PORT) private readonly quizRepository: QuizRepositoryPort,
     private readonly quizReadService: QuizReadService,
+    @InjectPinoLogger(QuizWriteService.name) private readonly logger: PinoLogger,
   ) {}
 
   private assertQuizOwnerOrAdmin(quizCreatorId: string | null, user: JwtPayload): void {
@@ -94,6 +96,11 @@ export class QuizWriteService {
 
       createdQuizId = createdQuiz.quizId;
     } catch (error: unknown) {
+      this.logger.error({
+        error,
+        payload,
+        userId: user.sub,
+      });
       this.mapQuizCreateError(error);
     }
 
