@@ -10,6 +10,7 @@ import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { hasPermission, Permission } from '../permissions';
 import { PERMISSIONS_KEY } from '../decorators/permissions.decorator';
 import { assertRequestUser } from '../utils/request-user.util';
+import { IS_PUBLIC_KEY } from '@/common/decorators/public.decorator';
 
 @Injectable()
 export class PermissionsGuard implements CanActivate {
@@ -19,6 +20,15 @@ export class PermissionsGuard implements CanActivate {
   ) {}
 
   canActivate(context: ExecutionContext): boolean {
+    const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
+      context.getHandler(),
+      context.getClass(),
+    ]);
+
+    if (isPublic) {
+      return true;
+    }
+
     const requiredPermissions = this.reflector.getAllAndOverride<Permission[]>(PERMISSIONS_KEY, [
       context.getHandler(),
       context.getClass(),
