@@ -9,6 +9,7 @@ import {
   AttemptListResponseDto,
   SubmitAnswerResponseDto,
   AbandonAttemptResponseDto,
+  CompleteAttemptResponseDto,
 } from '../dto/response';
 
 @Injectable()
@@ -102,6 +103,21 @@ export class AttemptApplicationService {
               ).toString('base64')
             : null,
       },
+    };
+  }
+
+  async completeAttempt(attemptId: string, user: JwtPayload): Promise<CompleteAttemptResponseDto> {
+    const result = await this.attemptService.completeAttempt(attemptId, user);
+
+    return {
+      attemptId: result.attemptId,
+      quizId: result.quizId,
+      status: result.status,
+      scorePercent: result.scorePercent,
+      correctCount: result.correctCount,
+      timeTakenMs: result.timeTakenMs,
+      xpEarned: result.xpEarned,
+      finishedAt: result.finishedAt ?? new Date().toISOString(),
     };
   }
 

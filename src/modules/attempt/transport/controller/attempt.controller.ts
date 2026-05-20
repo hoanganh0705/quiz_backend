@@ -17,6 +17,7 @@ import {
   AttemptListResponseDto,
   SubmitAnswerResponseDto,
   AbandonAttemptResponseDto,
+  CompleteAttemptResponseDto,
 } from '../../dto/response';
 import { AttemptDomainExceptionFilter } from '../filters/attempt-domain-exception.filter';
 
@@ -67,6 +68,14 @@ export class AttemptController {
     @CurrentUser() user: JwtPayload,
   ): Promise<AbandonAttemptResponseDto> {
     return this.attemptApplicationService.abandonAttempt(attemptId, user);
+  }
+
+  @Post('attempts/:attemptId/complete')
+  async completeAttempt(
+    @Param('attemptId', new ParseUUIDPipe()) attemptId: string,
+    @CurrentUser() user: JwtPayload,
+  ): Promise<CompleteAttemptResponseDto> {
+    return this.attemptApplicationService.completeAttempt(attemptId, user);
   }
 
   @Get('users/me/attempts')
