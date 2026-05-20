@@ -1,18 +1,3 @@
-**Giai đoạn 5 — Quiz**
-
-19. Tạo `src/modules/quiz/` với đầy đủ module, service, controller, dto
-20. POST `/quizzes` — tạo quiz + version đầu tiên cùng lúc, creator only
-21. GET `/quizzes` — list với filter difficulty, category, tag, pagination
-22. GET `/quizzes/:slug` — detail kèm published version + questions
-23. PATCH `/quizzes/:id` — update metadata, chỉ creator hoặc admin
-24. DELETE `/quizzes/:id` — soft delete, chỉ creator hoặc admin
-25. POST `/quizzes/:id/versions` — tạo version mới từ version cũ
-26. GET `/quizzes/:id/versions` — list versions
-27. POST `/quizzes/:id/versions/:versionId/publish` — publish version, update `published_version_id`
-28. POST `/quizzes/:id/versions/:versionId/questions` — thêm câu hỏi kèm answer options
-
----
-
 **Giai đoạn 6 — Quiz Attempt**
 
 29. Tạo `src/modules/attempt/` với đầy đủ module, service, controller, dto
