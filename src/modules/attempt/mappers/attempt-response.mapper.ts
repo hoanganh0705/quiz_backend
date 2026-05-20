@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { AttemptResponseDto, AttemptSummaryResponseDto, AttemptAnswerResponseDto } from '../dto/response';
-import type { AttemptDetailRow, AttemptRow, AttemptAnswerRow } from '../domain/ports';
+import type { AttemptDetailRow, AttemptAnswerRow } from '../domain/ports';
+import type { AttemptListRow } from '../domain/ports';
 
 @Injectable()
 export class AttemptResponseMapper {
@@ -34,14 +35,14 @@ export class AttemptResponseMapper {
     };
   }
 
-  toAttemptSummaryResponse(attempt: AttemptRow): AttemptSummaryResponseDto {
+  toAttemptSummaryResponse(attempt: AttemptListRow): AttemptSummaryResponseDto {
     return {
       attemptId: attempt.attemptId,
-      quizId: attempt.quizVersionId,
-      quizTitle: '',
-      quizSlug: '',
-      versionNumber: 0,
-      difficulty: '',
+      quizId: attempt.quizId,
+      quizTitle: attempt.quizTitle,
+      quizSlug: attempt.quizSlug,
+      versionNumber: attempt.versionNumber,
+      difficulty: attempt.difficulty,
       contextType: attempt.contextType,
       status: attempt.status,
       scorePercent: attempt.scorePercent,
@@ -52,7 +53,7 @@ export class AttemptResponseMapper {
     };
   }
 
-  toAttemptResponses(attempts: AttemptRow[]): AttemptSummaryResponseDto[] {
+  toAttemptResponses(attempts: AttemptListRow[]): AttemptSummaryResponseDto[] {
     return attempts.map((attempt) => this.toAttemptSummaryResponse(attempt));
   }
 
