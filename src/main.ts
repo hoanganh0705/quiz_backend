@@ -35,7 +35,7 @@ async function bootstrap() {
       transform: true, // tự động transform type, ví dụ query param là string nhưng DTO định nghĩa là number thì sẽ tự động transform sang number
     }),
   );
-  const port = configService.get<number>('PORT') ?? 3000;
+  const port = configService.get<number>('PORT') ?? 8080;
 
   await app.listen(port);
 }
