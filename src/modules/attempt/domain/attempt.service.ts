@@ -210,6 +210,78 @@ export class AttemptService {
     return abandoned;
   }
 
+  async completeAttempt(attemptId: string, user: JwtPayload) {
+    const nowIso = new Date().toISOString();
+
+    const attemptDetail = await this.attemptRepository.getAttemptDetailById(attemptId);
+
+    if (!attemptDetail) {
+      throw new AttemptNotFoundError(ATTEMPT_NOT_FOUND_MESSAGE);
+    }
+
+    if (attemptDetail.userId !== user.sub && user.role !== 'admin') {
+      throw new AttemptForbiddenError(ATTEMPT_FORBIDDEN_MESSAGE);
+    }
+
+    if (attemptDetail.status !== 'started') {
+      throw new AttemptAlreadyFinishedError(ATTEMPT_ALREADY_FINISHED_MESSAGE);
+    }
+
+    const answers = await this.attemptRepository.getAttemptAnswersByAttemptId(attemptId);
+
+    const correctCount = answers.filter((a) => a.isCorrect === true).length;
+    const totalQuestions = answers.length;
+
+    const scorePercent =
+      totalQuestions > 0
+        ? ((correctCount / totalQuestions) * 100).toFixed(2)
+        : '0.00';
+
+    const timeTakenMs =
+      attemptDetail.startedAt && attemptDetail.finishedAt
+        ? new Date(attemptDetail.finishedAt).getTime() - new Date(attemptDetail.startedAt).getTime()
+        : 0;
+
+    const scoreNum = parseFloat(scorePercent);
+    const xpEarned = scoreNum >= attemptDetail.passingScorePercent ? attemptDetail.rewardXp : 0;
+
+    const completed = await this.attemptRepository.completeAttempt({
+      attemptId,
+      scorePercent,
+      correctCount,
+      timeTakenMs,
+      xpEarned,
+      nowIso,
+    });
+
+    await this.attemptRepository.upsertQuizStats({
+      quizId: attemptDetail.quizId,
+      scorePercent,
+      nowIso,
+    });
+
+    if (xpEarned > 0) {
+      await this.attemptRepository.addUserXp({
+        userId: attemptDetail.userId,
+        xpToAdd: xpEarned,
+      });
+    }
+
+    this.logger.info({
+      event: 'attempt_completed',
+      attemptId,
+      userId: attemptDetail.userId,
+      quizId: attemptDetail.quizId,
+      correctCount,
+      totalQuestions,
+      scorePercent,
+      xpEarned,
+      passed: xpEarned > 0,
+    });
+
+    return { ...completed, quizId: attemptDetail.quizId };
+  }
+
   async listMyAttempts(
     user: JwtPayload,
     limit: number,
