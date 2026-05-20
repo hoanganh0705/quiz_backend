@@ -2,11 +2,12 @@ import { Inject, Injectable } from '@nestjs/common';
 import { and, desc, eq, isNull, or, sql } from 'drizzle-orm';
 import { DRIZZLE } from '../drizzle.constants';
 import type { DrizzleDB } from '../database.module';
-import { quizAttempts, quizAnswerOptions, quizQuestions, quizVersions, quizzes, quizAttemptAnswers } from '../schema';
+import { quizAttempts, quizAnswerOptions, quizQuestions, quizVersions, quizzes, quizAttemptAnswers, quizStats, users } from '../schema';
 import type { AttemptContextType } from '@/modules/attempt/types/attempt.types';
 import type {
   AttemptRow,
   AttemptDetailRow,
+  AttemptListRow,
   AttemptAnswerRow,
   AttemptRepositoryPort,
 } from '@/modules/attempt/domain/ports';
@@ -119,7 +120,7 @@ export class AttemptRepository implements AttemptRepositoryPort {
     userId: string;
     limit: number;
     cursor?: { startedAt: string; attemptId: string } | null;
-  }): Promise<AttemptRow[]> {
+  }): Promise<AttemptListRow[]> {
     const cursorCondition = params.cursor
       ? or(
           sql`${quizAttempts.startedAt} < ${params.cursor.startedAt}`,
@@ -146,8 +147,15 @@ export class AttemptRepository implements AttemptRepositoryPort {
         xpEarned: quizAttempts.xpEarned,
         createdAt: quizAttempts.createdAt,
         updatedAt: quizAttempts.updatedAt,
+        quizId: quizzes.quizId,
+        quizTitle: quizzes.title,
+        quizSlug: quizzes.slug,
+        versionNumber: quizVersions.versionNumber,
+        difficulty: quizVersions.difficulty,
       })
       .from(quizAttempts)
+      .innerJoin(quizVersions, eq(quizAttempts.quizVersionId, quizVersions.quizVersionId))
+      .innerJoin(quizzes, eq(quizVersions.quizId, quizzes.quizId))
       .where(
         params.cursor
           ? and(eq(quizAttempts.userId, params.userId), cursorCondition)
@@ -156,7 +164,7 @@ export class AttemptRepository implements AttemptRepositoryPort {
       .orderBy(desc(quizAttempts.startedAt), desc(quizAttempts.attemptId))
       .limit(params.limit + 1);
 
-    return rows as AttemptRow[];
+    return rows as AttemptListRow[];
   }
 
   async createAttempt(params: {
@@ -318,5 +326,105 @@ export class AttemptRepository implements AttemptRepositoryPort {
       .limit(1);
 
     return row !== undefined;
+  }
+
+  async completeAttempt(params: {
+    attemptId: string;
+    scorePercent: string;
+    correctCount: number;
+    timeTakenMs: number;
+    xpEarned: number;
+    nowIso: string;
+  }): Promise<AttemptRow> {
+    const [updated] = await this.db
+      .update(quizAttempts)
+      .set({
+        status: 'completed',
+        scorePercent: params.scorePercent,
+        correctCount: params.correctCount,
+        timeTakenMs: params.timeTakenMs,
+        xpEarned: params.xpEarned,
+        finishedAt: params.nowIso,
+        updatedAt: params.nowIso,
+      })
+      .where(
+        and(
+          eq(quizAttempts.attemptId, params.attemptId),
+          eq(quizAttempts.status, 'started'),
+        ),
+      )
+      .returning({
+        attemptId: quizAttempts.attemptId,
+        userId: quizAttempts.userId,
+        quizVersionId: quizAttempts.quizVersionId,
+        contextType: quizAttempts.contextType,
+        contextRefId: quizAttempts.contextRefId,
+        status: quizAttempts.status,
+        scorePercent: quizAttempts.scorePercent,
+        correctCount: quizAttempts.correctCount,
+        startedAt: quizAttempts.startedAt,
+        finishedAt: quizAttempts.finishedAt,
+        timeTakenMs: quizAttempts.timeTakenMs,
+        xpEarned: quizAttempts.xpEarned,
+        createdAt: quizAttempts.createdAt,
+        updatedAt: quizAttempts.updatedAt,
+      });
+
+    return updated as AttemptRow;
+  }
+
+  async upsertQuizStats(params: {
+    quizId: string;
+    scorePercent: string;
+    nowIso: string;
+  }): Promise<void> {
+    const existing = await this.db
+      .select({
+        totalAttempts: quizStats.totalAttempts,
+        totalPlayers: quizStats.totalPlayers,
+        avgScorePercent: quizStats.avgScorePercent,
+      })
+      .from(quizStats)
+      .where(eq(quizStats.quizId, params.quizId))
+      .limit(1);
+
+    if (existing.length === 0 || !existing[0]) {
+      await this.db.insert(quizStats).values({
+        quizId: params.quizId,
+        totalAttempts: 1,
+        totalPlayers: 1,
+        avgScorePercent: params.scorePercent,
+        lastAttemptAt: params.nowIso,
+        updatedAt: params.nowIso,
+      });
+      return;
+    }
+
+    const current = existing[0]!;
+    const newTotalAttempts = Number(current.totalAttempts) + 1;
+
+    // Recalculate running average: new_avg = old_avg + (new_value - old_avg) / n
+    const oldAvg = parseFloat(current.avgScorePercent);
+    const newScore = parseFloat(params.scorePercent);
+    const newAvg = oldAvg + (newScore - oldAvg) / newTotalAttempts;
+
+    await this.db
+      .update(quizStats)
+      .set({
+        totalAttempts: newTotalAttempts,
+        avgScorePercent: newAvg.toFixed(2),
+        lastAttemptAt: params.nowIso,
+        updatedAt: params.nowIso,
+      })
+      .where(eq(quizStats.quizId, params.quizId));
+  }
+
+  async addUserXp(params: { userId: string; xpToAdd: number }): Promise<void> {
+    await this.db
+      .update(users)
+      .set({
+        xpTotal: sql`${users.xpTotal} + ${params.xpToAdd}`,
+      })
+      .where(eq(users.userId, params.userId));
   }
 }

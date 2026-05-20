@@ -53,6 +53,28 @@ export type AttemptAnswerRow = {
   isCorrect: boolean | null;
 };
 
+export type AttemptListRow = {
+  attemptId: string;
+  userId: string;
+  quizVersionId: string;
+  contextType: AttemptContextType;
+  contextRefId: string | null;
+  status: AttemptStatus;
+  scorePercent: string | null;
+  correctCount: number | null;
+  startedAt: string;
+  finishedAt: string | null;
+  timeTakenMs: number | null;
+  xpEarned: number;
+  createdAt: string;
+  updatedAt: string;
+  quizId: string;
+  quizTitle: string;
+  quizSlug: string;
+  versionNumber: number;
+  difficulty: QuizDifficulty;
+};
+
 export interface AttemptRepositoryPort {
   getAttemptById(attemptId: string): Promise<AttemptRow | null>;
 
@@ -64,7 +86,7 @@ export interface AttemptRepositoryPort {
     userId: string;
     limit: number;
     cursor?: { startedAt: string; attemptId: string } | null;
-  }): Promise<AttemptRow[]>;
+  }): Promise<AttemptListRow[]>;
 
   createAttempt(params: {
     userId: string;
@@ -94,6 +116,26 @@ export interface AttemptRepositoryPort {
   checkAnswerOptionBelongsToQuestion(questionId: string, optionId: string): Promise<boolean>;
 
   checkAnswerExists(attemptId: string, questionId: string): Promise<boolean>;
+
+  completeAttempt(params: {
+    attemptId: string;
+    scorePercent: string;
+    correctCount: number;
+    timeTakenMs: number;
+    xpEarned: number;
+    nowIso: string;
+  }): Promise<AttemptRow>;
+
+  upsertQuizStats(params: {
+    quizId: string;
+    scorePercent: string;
+    nowIso: string;
+  }): Promise<void>;
+
+  addUserXp(params: {
+    userId: string;
+    xpToAdd: number;
+  }): Promise<void>;
 }
 
 export const ATTEMPT_REPOSITORY_PORT = Symbol('ATTEMPT_REPOSITORY_PORT');

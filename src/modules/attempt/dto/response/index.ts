@@ -70,3 +70,14 @@ export class AbandonAttemptResponseDto {
   finishedAt!: string;
   message!: string;
 }
+
+export class CompleteAttemptResponseDto {
+  attemptId!: string;
+  quizId!: string;
+  status!: string;
+  scorePercent!: string | null;
+  correctCount!: number | null;
+  timeTakenMs!: number | null;
+  xpEarned!: number;
+  finishedAt!: string;
+}
