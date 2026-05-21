@@ -45,5 +45,6 @@ import { LoggerModule } from 'nestjs-pino';
     { provide: QUIZ_QUESTION_REPOSITORY_PORT, useExisting: QuizQuestionRepository },
   ],
   controllers: [QuizController, QuizVersionController],
+  exports: [QUIZ_REPOSITORY_PORT],
 })
 export class QuizModule {}
