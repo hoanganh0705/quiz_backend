@@ -29,6 +29,6 @@ import { QuizModule } from '@/modules/quiz/quiz.module';
     { provide: ATTEMPT_REPOSITORY_PORT, useExisting: AttemptRepository },
   ],
   controllers: [AttemptController],
-  exports: [AttemptApplicationService],
+  exports: [AttemptApplicationService, ATTEMPT_REPOSITORY_PORT],
 })
 export class AttemptModule {}

@@ -17,6 +17,7 @@ import { QuizModule } from './modules/quiz/quiz.module';
 import { AttemptModule } from './modules/attempt/attempt.module';
 import { BookmarkModule } from './modules/bookmark/bookmark.module';
 import { ReviewModule } from './modules/review/review.module';
+import { TournamentModule } from './modules/tournament/tournament.module';
 import { validateEnv } from './core/config/env.validation';
 import { RedisModule } from './core/redis/redis.module';
 import { RolesGuard } from './common/authorization/guards/roles.guard';
@@ -56,6 +57,7 @@ import { PermissionsGuard } from './common/authorization/guards/permissions.guar
     AttemptModule,
     BookmarkModule,
     ReviewModule,
+    TournamentModule,
   ],
   providers: [
     // Execute coarse throttling first to reduce JWT verification load during abusive traffic.
