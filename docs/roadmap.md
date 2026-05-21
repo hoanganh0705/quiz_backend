@@ -1,14 +1,4 @@
 
-**Giai đoạn 7 — Bookmark**
-
-36. Tạo `src/modules/bookmark/` với đầy đủ module, service, controller, dto
-37. GET `/bookmarks/collections` — list collections của user hiện tại
-38. POST `/bookmarks/collections` — tạo collection
-39. POST `/bookmarks/collections/:id/quizzes` — bookmark quiz
-40. DELETE `/bookmarks/collections/:id/quizzes/:quizId` — bỏ bookmark
-
----
-
 **Giai đoạn 8 — Quiz Review**
 
 41. Tạo `src/modules/review/` với đầy đủ module, service, controller, dto
