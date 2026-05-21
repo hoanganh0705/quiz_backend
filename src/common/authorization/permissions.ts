@@ -12,6 +12,11 @@ export enum Permission {
   QUIZ_VERSION_EDIT_ANY = 'QUIZ_VERSION_EDIT_ANY',
   QUIZ_VERSION_PUBLISH_OWN = 'QUIZ_VERSION_PUBLISH_OWN',
   QUIZ_VERSION_PUBLISH_ANY = 'QUIZ_VERSION_PUBLISH_ANY',
+
+  TOURNAMENT_CREATE = 'TOURNAMENT_CREATE',
+  TOURNAMENT_VIEW = 'TOURNAMENT_VIEW',
+  TOURNAMENT_REGISTER = 'TOURNAMENT_REGISTER',
+  TOURNAMENT_ATTEMPT = 'TOURNAMENT_ATTEMPT',
 }
 
 export const ROLE_PERMISSIONS: Record<UserRole, readonly Permission[]> = {
@@ -26,11 +31,18 @@ export const ROLE_PERMISSIONS: Record<UserRole, readonly Permission[]> = {
     Permission.QUIZ_VERSION_EDIT_ANY,
     Permission.QUIZ_VERSION_PUBLISH_OWN,
     Permission.QUIZ_VERSION_PUBLISH_ANY,
+    Permission.TOURNAMENT_CREATE,
+    Permission.TOURNAMENT_VIEW,
+    Permission.TOURNAMENT_REGISTER,
+    Permission.TOURNAMENT_ATTEMPT,
   ],
   moderator: [
     Permission.QUIZ_VERSION_VIEW_ANY,
     Permission.QUIZ_VERSION_PUBLISH_ANY,
     Permission.QUIZ_VERIFY,
+    Permission.TOURNAMENT_VIEW,
+    Permission.TOURNAMENT_REGISTER,
+    Permission.TOURNAMENT_ATTEMPT,
   ],
   user: [
     Permission.QUIZ_CREATE,
@@ -38,6 +50,9 @@ export const ROLE_PERMISSIONS: Record<UserRole, readonly Permission[]> = {
     Permission.QUIZ_VERSION_VIEW_OWN,
     Permission.QUIZ_VERSION_EDIT_OWN,
     Permission.QUIZ_VERSION_PUBLISH_OWN,
+    Permission.TOURNAMENT_VIEW,
+    Permission.TOURNAMENT_REGISTER,
+    Permission.TOURNAMENT_ATTEMPT,
   ],
 };
 

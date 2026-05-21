@@ -1,17 +1,8 @@
 
-**Giai đoạn 8 — Quiz Review**
-
-41. Tạo `src/modules/review/` với đầy đủ module, service, controller, dto
-42. POST `/quizzes/:id/reviews` — tạo review, check user đã complete attempt chưa
-43. GET `/quizzes/:id/reviews` — list với pagination
-44. PATCH `/quizzes/:id/reviews` — update review của chính mình
-45. DELETE `/quizzes/:id/reviews` — xoá review của chính mình
-
----
 
 **Giai đoạn 9 — Tournament**
 
-46. Tạo `src/modules/tournament/` với đầy đủ module, service, controller, dto
+46. Tạo `src/modules/tournament/`
 47. POST `/tournaments` — tạo tournament, admin only
 48. GET `/tournaments` — list với filter status, difficulty, category, pagination
 49. GET `/tournaments/:id` — detail kèm rounds
