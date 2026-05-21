@@ -8,9 +8,10 @@ import { AttemptController } from './transport/controller/attempt.controller';
 import { AttemptDomainExceptionFilter } from './transport/filters/attempt-domain-exception.filter';
 import { ATTEMPT_REPOSITORY_PORT } from './domain/ports';
 import { AttemptRepository } from '@/core/database/repositories/attempt.repository';
+import { QuizModule } from '@/modules/quiz/quiz.module';
 
 @Module({
-  imports: [DatabaseModule, LoggerModule.forRoot()],
+  imports: [DatabaseModule, LoggerModule.forRoot(), QuizModule],
   providers: [
     // Application
     AttemptApplicationService,
