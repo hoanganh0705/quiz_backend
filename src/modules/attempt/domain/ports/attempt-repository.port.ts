@@ -136,6 +136,14 @@ export interface AttemptRepositoryPort {
     userId: string;
     xpToAdd: number;
   }): Promise<void>;
+
+  createTournamentAttempt(params: {
+    userId: string;
+    quizVersionId: string;
+    tournamentId: string;
+    roundId: string;
+    nowIso: string;
+  }): Promise<AttemptRow>;
 }
 
 export const ATTEMPT_REPOSITORY_PORT = Symbol('ATTEMPT_REPOSITORY_PORT');
