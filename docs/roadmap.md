@@ -1,14 +1,3 @@
-**Giai đoạn 6 — Quiz Attempt**
-
-29. Tạo `src/modules/attempt/` với đầy đủ module, service, controller, dto
-30. POST `/quizzes/:id/attempts` — tạo attempt mới, check quiz published, check không có attempt đang chạy
-31. POST `/attempts/:id/answers` — submit một câu trả lời
-32. POST `/attempts/:id/complete` — complete attempt, tính `score_percent`, `correct_count`, `xp_earned`, update `quiz_stats`, update user `xp_total`
-33. POST `/attempts/:id/abandon` — abandon attempt
-34. GET `/attempts/:id` — get detail kèm answers và kết quả
-35. GET `/users/me/attempts` — lịch sử với pagination
-
----
 
 **Giai đoạn 7 — Bookmark**
 

@@ -8,6 +8,8 @@ import * as relations from './schema/relations';
 import { DRIZZLE } from './drizzle.constants';
 import { UserSessionRepository } from './repositories/user-session.repository';
 import { UserRepository } from './repositories/user.repository';
+import { AttemptRepository } from './repositories/attempt.repository';
+import { BookmarkRepository } from './repositories/bookmark.repository';
 import { QuizRepository } from './repositories/quiz.repository';
 import { QuizVersionRepository } from './repositories/quiz-version.repository';
 import { QuizQuestionRepository } from './repositories/quiz-question.repository';
@@ -43,6 +45,8 @@ export type DrizzleDB = ReturnType<typeof createDrizzleDb>;
     },
     UserSessionRepository,
     UserRepository,
+    AttemptRepository,
+    BookmarkRepository,
     QuizRepository,
     QuizVersionRepository,
     QuizQuestionRepository,
@@ -51,6 +55,8 @@ export type DrizzleDB = ReturnType<typeof createDrizzleDb>;
     DRIZZLE,
     UserSessionRepository,
     UserRepository,
+    AttemptRepository,
+    BookmarkRepository,
     QuizRepository,
     QuizVersionRepository,
     QuizQuestionRepository,
