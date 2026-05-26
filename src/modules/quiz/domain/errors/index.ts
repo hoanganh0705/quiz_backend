@@ -5,4 +5,5 @@ export {
   QuizConflictError,
   QuizValidationError,
   QuizVersionImmutableError,
+  QuizInsufficientQuestionsError,
 } from './quiz-domain.errors';

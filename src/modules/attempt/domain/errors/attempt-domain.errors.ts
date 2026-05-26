@@ -47,12 +47,6 @@ export class QuizNotPublishedError extends AttemptValidationError {
   }
 }
 
-export class QuizInsufficientQuestionsError extends AttemptValidationError {
-  constructor(message = 'Quiz is not available for attempts') {
-    super(message);
-  }
-}
-
 export class AttemptQuestionInvalidError extends AttemptValidationError {
   constructor(message = 'Question is invalid for this attempt') {
     super(message);

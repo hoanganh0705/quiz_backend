@@ -3,10 +3,12 @@ import { hasPermission, Permission } from '@/common/authorization/permissions';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
 import {
   QUIZ_VERSION_REPOSITORY_PORT,
+  QUIZ_QUESTION_REPOSITORY_PORT,
   type QuizVersionRepositoryPort,
   type QuizVersionDetailRow,
   type QuizVersionRow,
-} from '../ports/quiz-version-repository.port';
+  type QuizQuestionRepositoryPort,
+} from '../ports';
 import { CreateQuizVersionDto } from '../../dto/request/create-quiz-version.dto';
 import { ListQuizVersionsQueryDto } from '../../dto/request/list-quiz-versions-query.dto';
 import { UpdateQuizVersionDto } from '../../dto/request/update-quiz-version.dto';
@@ -15,7 +17,11 @@ import {
   canManageOwnOrAny,
   canPublishQuizVersion,
 } from '../../authz/quiz-authorization.helper';
-import { QUIZ_VERSION_CONFLICT_MESSAGE } from '../../quiz.constants';
+import {
+  QUIZ_VERSION_CONFLICT_MESSAGE,
+  MIN_QUESTIONS_TO_PUBLISH,
+  QUIZ_INSUFFICIENT_QUESTIONS_MESSAGE,
+} from '../../quiz.constants';
 import { QuizReadService } from '../quiz/quiz-read.service';
 import { decodeQuizVersionCursor, encodeQuizVersionCursor } from '../shared/quiz-utils';
 import {
@@ -24,6 +30,7 @@ import {
   QuizConflictError,
   QuizValidationError,
   QuizVersionImmutableError,
+  QuizInsufficientQuestionsError,
   QuizDomainError,
 } from '../errors';
 
@@ -32,6 +39,8 @@ export class QuizVersionService {
   constructor(
     @Inject(QUIZ_VERSION_REPOSITORY_PORT)
     private readonly quizVersionRepository: QuizVersionRepositoryPort,
+    @Inject(QUIZ_QUESTION_REPOSITORY_PORT)
+    private readonly quizQuestionRepository: QuizQuestionRepositoryPort,
     private readonly quizReadService: QuizReadService,
   ) {}
 
@@ -289,6 +298,15 @@ export class QuizVersionService {
 
     if (!canPublish) {
       throw new QuizForbiddenError('You do not have permission to publish this quiz version');
+    }
+
+    // Business invariant: enforce minimum question count BEFORE allowing publish.
+    // This guarantees that every published version is always attemptable.
+    // Draft versions intentionally allow 0 questions so creators can save partial work.
+    const questionCount =
+      await this.quizQuestionRepository.countQuestionsByVersionId(quizVersionId);
+    if (questionCount < MIN_QUESTIONS_TO_PUBLISH) {
+      throw new QuizInsufficientQuestionsError(QUIZ_INSUFFICIENT_QUESTIONS_MESSAGE);
     }
 
     const nowIso = new Date().toISOString();
