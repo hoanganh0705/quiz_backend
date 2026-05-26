@@ -39,24 +39,15 @@ export class InstanceDomainExceptionFilter implements ExceptionFilter {
   }
 
   private mapToHttp(error: InstanceDomainError): { status: number; message: string } {
-    if (
-      error instanceof InstanceNotFoundError ||
-      error instanceof PlayerNotInInstanceError
-    ) {
+    if (error instanceof InstanceNotFoundError || error instanceof PlayerNotInInstanceError) {
       return { status: HttpStatus.NOT_FOUND, message: error.message };
     }
 
-    if (
-      error instanceof InstanceForbiddenError ||
-      error instanceof InstanceNotHostError
-    ) {
+    if (error instanceof InstanceForbiddenError || error instanceof InstanceNotHostError) {
       return { status: HttpStatus.FORBIDDEN, message: error.message };
     }
 
-    if (
-      error instanceof InstanceConflictError ||
-      error instanceof PlayerAlreadyJoinedError
-    ) {
+    if (error instanceof InstanceConflictError || error instanceof PlayerAlreadyJoinedError) {
       return { status: HttpStatus.CONFLICT, message: error.message };
     }
 

@@ -19,7 +19,10 @@ export class TournamentApplicationService {
     private readonly mapper: TournamentResponseMapper,
   ) {}
 
-  async createTournament(user: JwtPayload, payload: CreateTournamentDto): Promise<TournamentResponseDto> {
+  async createTournament(
+    user: JwtPayload,
+    payload: CreateTournamentDto,
+  ): Promise<TournamentResponseDto> {
     const result = await this.tournamentService.createTournament(user, payload);
     return this.mapper.toTournamentResponse(result);
   }
@@ -51,7 +54,10 @@ export class TournamentApplicationService {
     return this.mapper.toTournamentDetailResponse(detail, rounds);
   }
 
-  async registerForTournament(tournamentId: string, user: JwtPayload): Promise<RegisterTournamentResponseDto> {
+  async registerForTournament(
+    tournamentId: string,
+    user: JwtPayload,
+  ): Promise<RegisterTournamentResponseDto> {
     const participant = await this.tournamentService.registerForTournament(tournamentId, user);
 
     return {

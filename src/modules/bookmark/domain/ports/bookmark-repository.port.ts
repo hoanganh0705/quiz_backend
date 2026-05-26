@@ -45,10 +45,7 @@ export interface BookmarkRepositoryPort {
   }): Promise<BookmarkCollectionRow>;
 
   // Bookmark operations
-  getBookmarkedQuiz(
-    collectionId: string,
-    quizId: string,
-  ): Promise<BookmarkedQuizRow | null>;
+  getBookmarkedQuiz(collectionId: string, quizId: string): Promise<BookmarkedQuizRow | null>;
 
   listBookmarksInCollection(collectionId: string): Promise<BookmarkedQuizDetailRow[]>;
 
