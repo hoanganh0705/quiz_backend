@@ -2,6 +2,8 @@ import {
   Body,
   Controller,
   Get,
+  HttpCode,
+  HttpStatus,
   Param,
   ParseUUIDPipe,
   Post,
@@ -65,11 +67,12 @@ export class AttemptController {
   }
 
   @Post('attempts/:attemptId/answers')
+  @HttpCode(HttpStatus.CREATED)
   @ApiOperation({
     summary: 'Submit answer',
-    description: 'Submits an answer for a specific question within an active attempt.',
+    description: 'Creates an answer record for a specific question within an active attempt.',
   })
-  @ApiOkResponse({ description: 'Answer recorded', type: SubmitAnswerResponseDto })
+  @ApiCreatedResponse({ description: 'Answer recorded', type: SubmitAnswerResponseDto })
   async submitAnswer(
     @Param('attemptId', new ParseUUIDPipe()) attemptId: string,
     @CurrentUser() user: JwtPayload,
@@ -85,6 +88,7 @@ export class AttemptController {
   }
 
   @Post('attempts/:attemptId/abandon')
+  @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Abandon attempt',
     description:
