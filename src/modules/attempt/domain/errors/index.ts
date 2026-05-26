@@ -7,4 +7,6 @@ export {
   AttemptAlreadyStartedError,
   AttemptAlreadyFinishedError,
   QuizNotPublishedError,
+  QuizInsufficientQuestionsError,
+  AttemptQuestionInvalidError,
 } from './attempt-domain.errors';

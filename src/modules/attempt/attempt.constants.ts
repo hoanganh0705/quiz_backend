@@ -1,4 +1,5 @@
 export const QUIZ_NOT_PUBLISHED_MESSAGE = 'This quiz is not published and cannot be attempted';
+export const QUIZ_INSUFFICIENT_QUESTIONS_MESSAGE = 'Quiz is not available for attempts';
 export const ATTEMPT_NOT_FOUND_MESSAGE = 'Quiz attempt not found';
 export const ATTEMPT_FORBIDDEN_MESSAGE = 'You do not have permission to access this attempt';
 export const ATTEMPT_ALREADY_STARTED_MESSAGE =
@@ -11,3 +12,5 @@ export const ATTEMPT_QUESTION_ALREADY_ANSWERED_MESSAGE =
   'This question has already been answered in this attempt';
 export const ATTEMPT_NOT_STARTED_OR_FINISHED_MESSAGE =
   'Only started or completed attempts can be abandoned';
+export const ATTEMPT_QUESTION_INVALID_MESSAGE = 'Question is invalid for this attempt';
+export const MIN_QUESTIONS_PER_VERSION = 5;
