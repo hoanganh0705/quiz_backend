@@ -65,6 +65,7 @@ export class TournamentService {
       tournamentId: result.tournamentId,
       userId: user.sub,
       title: payload.title,
+      difficulty: payload.difficulty,
     });
 
     return this.tournamentRepository.getTournamentById(
