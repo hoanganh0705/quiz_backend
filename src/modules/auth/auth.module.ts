@@ -29,9 +29,10 @@ import { UserSessionRepository } from '@/core/database/repositories/user-session
 import { RedisService } from '@/core/redis/redis.service';
 import { EmailService } from '@/modules/email/email.service';
 import { AuthDomainExceptionFilter } from './transport/filters/auth-domain-exception.filter';
+import { LoggerModule } from 'nestjs-pino';
 
 @Module({
-  imports: [CommonModule, DatabaseModule, RedisModule, EmailModule],
+  imports: [CommonModule, DatabaseModule, RedisModule, EmailModule, LoggerModule.forRoot()],
   controllers: [AuthController],
   providers: [
     AuthApplicationService,

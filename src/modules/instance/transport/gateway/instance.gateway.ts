@@ -8,7 +8,8 @@ import {
   MessageBody,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
-import { UseGuards, UseFilters } from '@nestjs/common';
+import { UseFilters, UseGuards } from '@nestjs/common';
+import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { WsJwtGuard } from '@/common/guards/ws-jwt.guard';
 import { WsCurrentUser } from '@/common/decorators/ws-current-user.decorator';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
@@ -33,7 +34,11 @@ export class InstanceGateway implements OnGatewayConnection, OnGatewayDisconnect
 
   private roomStates: Map<string, RoomState> = new Map();
 
-  constructor(private readonly instanceService: InstanceService) {}
+  constructor(
+    private readonly instanceService: InstanceService,
+    @InjectPinoLogger(InstanceGateway.name)
+    private readonly logger: PinoLogger,
+  ) {}
 
   handleConnection(client: Socket): void {
     this.logger.info({ event: 'client_connected', socketId: client.id });
@@ -233,13 +238,5 @@ export class InstanceGateway implements OnGatewayConnection, OnGatewayDisconnect
       instanceId: data.instanceId,
       userId: user.sub,
     });
-  }
-
-  private get logger() {
-    return {
-      info: (obj: Record<string, unknown>) => {
-        console.log(JSON.stringify({ ...obj, source: 'InstanceGateway' }));
-      },
-    };
   }
 }

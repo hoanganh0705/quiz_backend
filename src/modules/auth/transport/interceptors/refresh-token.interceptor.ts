@@ -1,5 +1,6 @@
 import { Injectable, NestInterceptor, ExecutionContext, CallHandler } from '@nestjs/common';
-import { tap, type Observable } from 'rxjs';
+import { finalize, type Observable } from 'rxjs';
+import type { Response } from 'express';
 import { AuthCookieService } from '../cookies/auth-cookie.service';
 import type { AuthRequestContext } from '../../types/auth-context.types';
 
@@ -16,8 +17,9 @@ export class RefreshTokenInterceptor implements NestInterceptor {
     const response = context.switchToHttp().getResponse();
     const request = context.switchToHttp().getRequest<RequestWithAuthContext>();
 
+    // need to explain why use finalize over tap here
     return next.handle().pipe(
-      tap(() => {
+      finalize(() => {
         const authContext = request.authContext;
         if (!authContext) {
           return;
