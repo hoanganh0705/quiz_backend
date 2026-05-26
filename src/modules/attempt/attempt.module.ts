@@ -1,6 +1,5 @@
 import { Module } from '@nestjs/common';
 import { DatabaseModule } from '@/core/database/database.module';
-import { LoggerModule } from 'nestjs-pino';
 import { AttemptApplicationService } from './application/attempt.application.service';
 import { AttemptService } from './domain/attempt.service';
 import { AttemptResponseMapper } from './mappers/attempt-response.mapper';
@@ -11,7 +10,7 @@ import { AttemptRepository } from '@/core/database/repositories/attempt.reposito
 import { QuizModule } from '@/modules/quiz/quiz.module';
 
 @Module({
-  imports: [DatabaseModule, LoggerModule.forRoot(), QuizModule],
+  imports: [DatabaseModule, QuizModule],
   providers: [
     // Application
     AttemptApplicationService,
