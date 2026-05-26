@@ -332,6 +332,30 @@ export class AttemptRepository implements AttemptRepositoryPort {
     return row !== undefined;
   }
 
+  async countQuestionsByVersionId(quizVersionId: string): Promise<number> {
+    const [row] = await this.db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(quizQuestions)
+      .where(eq(quizQuestions.quizVersionId, quizVersionId));
+
+    return row?.count ?? 0;
+  }
+
+  async checkQuestionBelongsToVersion(questionId: string, quizVersionId: string): Promise<boolean> {
+    const [row] = await this.db
+      .select({ questionId: quizQuestions.questionId })
+      .from(quizQuestions)
+      .where(
+        and(
+          eq(quizQuestions.questionId, questionId),
+          eq(quizQuestions.quizVersionId, quizVersionId),
+        ),
+      )
+      .limit(1);
+
+    return row !== undefined;
+  }
+
   async completeAttempt(params: {
     attemptId: string;
     scorePercent: string;

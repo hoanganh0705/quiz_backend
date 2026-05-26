@@ -12,10 +12,14 @@ import {
   AttemptForbiddenError,
   AttemptAlreadyStartedError,
   AttemptAlreadyFinishedError,
+  AttemptValidationError,
   QuizNotPublishedError,
+  QuizInsufficientQuestionsError,
+  AttemptQuestionInvalidError,
 } from './errors';
 import {
   QUIZ_NOT_PUBLISHED_MESSAGE,
+  QUIZ_INSUFFICIENT_QUESTIONS_MESSAGE,
   ATTEMPT_ALREADY_STARTED_MESSAGE,
   ATTEMPT_ALREADY_FINISHED_MESSAGE,
   ATTEMPT_NOT_FOUND_MESSAGE,
@@ -23,6 +27,8 @@ import {
   ATTEMPT_NOT_STARTED_OR_FINISHED_MESSAGE,
   ATTEMPT_QUESTION_ALREADY_ANSWERED_MESSAGE,
   ATTEMPT_OPTION_INVALID_MESSAGE,
+  ATTEMPT_QUESTION_INVALID_MESSAGE,
+  MIN_QUESTIONS_PER_VERSION,
 } from '../attempt.constants';
 
 @Injectable()
@@ -58,6 +64,24 @@ export class AttemptService {
         userId: user.sub,
       });
       throw new QuizNotPublishedError(QUIZ_NOT_PUBLISHED_MESSAGE);
+    }
+
+    // Issue 1: Reject attempts on versions with fewer than the minimum required questions.
+    // This check is intentionally placed before the active-attempt check to fail fast on
+    // a misconfigured quiz rather than surfacing a duplicate-attempt error.
+    const questionCount = await this.attemptRepository.countQuestionsByVersionId(
+      quiz.publishedVersionId,
+    );
+    if (questionCount < MIN_QUESTIONS_PER_VERSION) {
+      this.logger.warn({
+        event: 'attempt_start_insufficient_questions',
+        quizId,
+        quizVersionId: quiz.publishedVersionId,
+        questionCount,
+        required: MIN_QUESTIONS_PER_VERSION,
+        userId: user.sub,
+      });
+      throw new QuizInsufficientQuestionsError(QUIZ_INSUFFICIENT_QUESTIONS_MESSAGE);
     }
 
     const existingActiveAttempt = await this.attemptRepository.getActiveAttemptByUserAndVersion(
@@ -132,6 +156,23 @@ export class AttemptService {
       throw new AttemptAlreadyFinishedError(ATTEMPT_ALREADY_FINISHED_MESSAGE);
     }
 
+    // Issue 2: Verify the question exists and belongs to this attempt's quiz version.
+    // This prevents cross-quiz submissions and tampering with arbitrary question IDs.
+    const questionBelongs = await this.attemptRepository.checkQuestionBelongsToVersion(
+      questionId,
+      attempt.quizVersionId,
+    );
+    if (!questionBelongs) {
+      this.logger.warn({
+        event: 'attempt_submit_invalid_question',
+        attemptId,
+        questionId,
+        quizVersionId: attempt.quizVersionId,
+        userId: user.sub,
+      });
+      throw new AttemptQuestionInvalidError(ATTEMPT_QUESTION_INVALID_MESSAGE);
+    }
+
     if (selectedOptionId) {
       const belongs = await this.attemptRepository.checkAnswerOptionBelongsToQuestion(
         questionId,
@@ -143,8 +184,11 @@ export class AttemptService {
           attemptId,
           questionId,
           selectedOptionId,
+          userId: user.sub,
         });
-        throw new AttemptAlreadyFinishedError(ATTEMPT_OPTION_INVALID_MESSAGE);
+        // Use AttemptValidationError (400 Bad Request) — an invalid option reference
+        // is a client validation error, not a conflict state.
+        throw new AttemptValidationError(ATTEMPT_OPTION_INVALID_MESSAGE);
       }
     }
 
@@ -154,7 +198,9 @@ export class AttemptService {
         event: 'attempt_submit_duplicate_question',
         attemptId,
         questionId,
+        userId: user.sub,
       });
+      // This is a true conflict: the answer already exists for this question.
       throw new AttemptAlreadyFinishedError(ATTEMPT_QUESTION_ALREADY_ANSWERED_MESSAGE);
     }
 
