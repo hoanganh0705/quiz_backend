@@ -39,11 +39,11 @@ export class TournamentDomainExceptionFilter implements ExceptionFilter {
 
   private mapToHttp(error: TournamentDomainError): { status: number; message: string } {
     if (error instanceof TournamentNotFoundError) {
-      return { status: HttpStatus.NOT_FOUND, message: error.message };
+      return { status: HttpStatus.NOT_FOUND, message: 'Tournament not found' };
     }
 
     if (error instanceof TournamentForbiddenError) {
-      return { status: HttpStatus.FORBIDDEN, message: error.message };
+      return { status: HttpStatus.FORBIDDEN, message: 'You do not have permission to perform this action' };
     }
 
     if (
@@ -51,7 +51,7 @@ export class TournamentDomainExceptionFilter implements ExceptionFilter {
       error instanceof TournamentAlreadyRegisteredError ||
       error instanceof TournamentAttemptAlreadyExistsError
     ) {
-      return { status: HttpStatus.CONFLICT, message: error.message };
+      return { status: HttpStatus.CONFLICT, message: 'Resource already exists' };
     }
 
     if (
@@ -60,13 +60,13 @@ export class TournamentDomainExceptionFilter implements ExceptionFilter {
       error instanceof TournamentValidationError ||
       error instanceof TournamentRoundNotOpenError
     ) {
-      return { status: HttpStatus.BAD_REQUEST, message: error.message };
+      return { status: HttpStatus.BAD_REQUEST, message: 'Invalid request data' };
     }
 
     if (error instanceof TournamentRoundNotFoundError) {
-      return { status: HttpStatus.NOT_FOUND, message: error.message };
+      return { status: HttpStatus.NOT_FOUND, message: 'Tournament round not found' };
     }
 
-    return { status: HttpStatus.INTERNAL_SERVER_ERROR, message: error.message };
+    return { status: HttpStatus.INTERNAL_SERVER_ERROR, message: 'Internal server error' };
   }
 }
