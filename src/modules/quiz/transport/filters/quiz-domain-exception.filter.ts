@@ -7,6 +7,7 @@ import {
   QuizConflictError,
   QuizValidationError,
   QuizVersionImmutableError,
+  QuizInsufficientQuestionsError,
 } from '../../domain/errors';
 
 const HTTP_ERROR_NAMES: Record<number, string> = {
@@ -14,6 +15,7 @@ const HTTP_ERROR_NAMES: Record<number, string> = {
   [HttpStatus.FORBIDDEN]: 'Forbidden',
   [HttpStatus.NOT_FOUND]: 'Not Found',
   [HttpStatus.CONFLICT]: 'Conflict',
+  [HttpStatus.UNPROCESSABLE_ENTITY]: 'Unprocessable Entity',
   [HttpStatus.INTERNAL_SERVER_ERROR]: 'Internal Server Error',
 };
 
@@ -52,6 +54,10 @@ export class QuizDomainExceptionFilter implements ExceptionFilter {
 
     if (error instanceof QuizValidationError) {
       return { status: HttpStatus.BAD_REQUEST, message: 'Invalid request data' };
+    }
+
+    if (error instanceof QuizInsufficientQuestionsError) {
+      return { status: HttpStatus.UNPROCESSABLE_ENTITY, message: error.message };
     }
 
     if (error instanceof QuizVersionImmutableError) {

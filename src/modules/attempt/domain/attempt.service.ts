@@ -14,12 +14,10 @@ import {
   AttemptAlreadyFinishedError,
   AttemptValidationError,
   QuizNotPublishedError,
-  QuizInsufficientQuestionsError,
   AttemptQuestionInvalidError,
 } from './errors';
 import {
   QUIZ_NOT_PUBLISHED_MESSAGE,
-  QUIZ_INSUFFICIENT_QUESTIONS_MESSAGE,
   ATTEMPT_ALREADY_STARTED_MESSAGE,
   ATTEMPT_ALREADY_FINISHED_MESSAGE,
   ATTEMPT_NOT_FOUND_MESSAGE,
@@ -28,8 +26,11 @@ import {
   ATTEMPT_QUESTION_ALREADY_ANSWERED_MESSAGE,
   ATTEMPT_OPTION_INVALID_MESSAGE,
   ATTEMPT_QUESTION_INVALID_MESSAGE,
-  MIN_QUESTIONS_PER_VERSION,
 } from '../attempt.constants';
+// Defensive import: the authoritative minimum is enforced at publish-time in QuizVersionService.
+// This constant is kept here only as a last-resort runtime guard — it should never fire
+// for versions that passed publish-time validation.
+import { MIN_QUESTIONS_TO_PUBLISH } from '@/modules/quiz/quiz.constants';
 
 @Injectable()
 export class AttemptService {
@@ -66,22 +67,25 @@ export class AttemptService {
       throw new QuizNotPublishedError(QUIZ_NOT_PUBLISHED_MESSAGE);
     }
 
-    // Issue 1: Reject attempts on versions with fewer than the minimum required questions.
-    // This check is intentionally placed before the active-attempt check to fail fast on
-    // a misconfigured quiz rather than surfacing a duplicate-attempt error.
+    // Belt-and-suspenders defensive check: reject attempts on versions that somehow have
+    // fewer questions than the publish-time minimum. This should NEVER fire because
+    // QuizVersionService.publishQuizVersion() already blocks publish when questionCount < MIN_QUESTIONS_TO_PUBLISH.
+    // If this does fire, it indicates a bug in publish validation or a race condition.
     const questionCount = await this.attemptRepository.countQuestionsByVersionId(
       quiz.publishedVersionId,
     );
-    if (questionCount < MIN_QUESTIONS_PER_VERSION) {
-      this.logger.warn({
+    if (questionCount < MIN_QUESTIONS_TO_PUBLISH) {
+      this.logger.error({
         event: 'attempt_start_insufficient_questions',
         quizId,
         quizVersionId: quiz.publishedVersionId,
         questionCount,
-        required: MIN_QUESTIONS_PER_VERSION,
+        required: MIN_QUESTIONS_TO_PUBLISH,
         userId: user.sub,
+        message:
+          'Published quiz version has fewer questions than the publish-time minimum. Investigate publish validation.',
       });
-      throw new QuizInsufficientQuestionsError(QUIZ_INSUFFICIENT_QUESTIONS_MESSAGE);
+      throw new QuizNotPublishedError(QUIZ_NOT_PUBLISHED_MESSAGE);
     }
 
     const existingActiveAttempt = await this.attemptRepository.getActiveAttemptByUserAndVersion(

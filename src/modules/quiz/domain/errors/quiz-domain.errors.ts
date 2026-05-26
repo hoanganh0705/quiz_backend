@@ -34,3 +34,14 @@ export class QuizVersionImmutableError extends QuizDomainError {
     super(message);
   }
 }
+
+/**
+ * Raised when a business invariant is violated — e.g. attempting to publish a
+ * quiz version that does not meet the minimum requirements.
+ * Maps to HTTP 422 Unprocessable Entity.
+ */
+export class QuizInsufficientQuestionsError extends QuizDomainError {
+  constructor(message = 'Quiz version must contain at least 5 questions before publishing') {
+    super(message);
+  }
+}
