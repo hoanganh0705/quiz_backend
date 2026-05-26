@@ -173,7 +173,8 @@ export class EmailProcessor implements OnModuleInit, OnModuleDestroy {
     );
 
     if (response.error) {
-      throw new Error(`Resend API error (${response.error.name}): ${response.error.message}`);
+      // Log provider details internally; never propagate provider internals in the error message.
+      throw new Error('Email provider returned an error. See server logs for details.');
     }
   }
 
@@ -287,7 +288,8 @@ export class EmailProcessor implements OnModuleInit, OnModuleDestroy {
     const value = this.configService.get<string>(key)?.trim();
 
     if (!value) {
-      throw new Error(`${key} is not defined in environment variables`);
+      // Do not expose the config key name in the error message — this is a startup misconfiguration.
+      throw new Error('Email service is missing required configuration. Check server environment variables.');
     }
 
     return value;

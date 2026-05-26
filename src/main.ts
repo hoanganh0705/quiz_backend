@@ -52,12 +52,11 @@ async function bootstrap() {
   }
   app.enableShutdownHooks(); // enableShutdownHooks để NestJS có thể lắng nghe các sự kiện shutdown của hệ thống, giúp thực hiện các công việc dọn dẹp trước khi ứng dụng tắt, như đóng kết nối database, giải phóng tài nguyên, v.v.
 
-  // set global pipes for validation
   app.useGlobalPipes(
     new ValidationPipe({
-      whitelist: true, // tự động strip các field không có trong DTO
-      forbidNonWhitelisted: true, // throw error nếu có field lạ
-      transform: true, // tự động transform type, ví dụ query param là string nhưng DTO định nghĩa là number thì sẽ tự động transform sang number
+      whitelist: true,           // Strip properties not defined in the DTO
+      forbidNonWhitelisted: true, // Reject requests with unknown properties
+      transform: true,           // Auto-transform payload types to match DTO declarations
     }),
   );
   const port = configService.get<number>('PORT') ?? 8080;
