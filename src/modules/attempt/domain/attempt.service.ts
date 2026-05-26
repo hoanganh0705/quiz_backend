@@ -233,9 +233,7 @@ export class AttemptService {
     const totalQuestions = answers.length;
 
     const scorePercent =
-      totalQuestions > 0
-        ? ((correctCount / totalQuestions) * 100).toFixed(2)
-        : '0.00';
+      totalQuestions > 0 ? ((correctCount / totalQuestions) * 100).toFixed(2) : '0.00';
 
     const timeTakenMs =
       attemptDetail.startedAt && attemptDetail.finishedAt

@@ -44,7 +44,10 @@ export class BookmarkRepository implements BookmarkRepositoryPort {
         quizCount: sql<number>`count(${bookmarkedQuizzes.bookmarkId})`.as('quiz_count'),
       })
       .from(bookmarkCollections)
-      .leftJoin(bookmarkedQuizzes, eq(bookmarkCollections.collectionId, bookmarkedQuizzes.collectionId))
+      .leftJoin(
+        bookmarkedQuizzes,
+        eq(bookmarkCollections.collectionId, bookmarkedQuizzes.collectionId),
+      )
       .where(eq(bookmarkCollections.userId, userId))
       .groupBy(bookmarkCollections.collectionId)
       .orderBy(bookmarkCollections.createdAt);
@@ -79,10 +82,7 @@ export class BookmarkRepository implements BookmarkRepositoryPort {
     return created as BookmarkCollectionRow;
   }
 
-  async getBookmarkedQuiz(
-    collectionId: string,
-    quizId: string,
-  ): Promise<BookmarkedQuizRow | null> {
+  async getBookmarkedQuiz(collectionId: string, quizId: string): Promise<BookmarkedQuizRow | null> {
     const [row] = await this.db
       .select({
         bookmarkId: bookmarkedQuizzes.bookmarkId,
@@ -94,10 +94,7 @@ export class BookmarkRepository implements BookmarkRepositoryPort {
       })
       .from(bookmarkedQuizzes)
       .where(
-        and(
-          eq(bookmarkedQuizzes.collectionId, collectionId),
-          eq(bookmarkedQuizzes.quizId, quizId),
-        ),
+        and(eq(bookmarkedQuizzes.collectionId, collectionId), eq(bookmarkedQuizzes.quizId, quizId)),
       )
       .limit(1);
 
@@ -159,10 +156,7 @@ export class BookmarkRepository implements BookmarkRepositoryPort {
     await this.db
       .delete(bookmarkedQuizzes)
       .where(
-        and(
-          eq(bookmarkedQuizzes.collectionId, collectionId),
-          eq(bookmarkedQuizzes.quizId, quizId),
-        ),
+        and(eq(bookmarkedQuizzes.collectionId, collectionId), eq(bookmarkedQuizzes.quizId, quizId)),
       );
   }
 

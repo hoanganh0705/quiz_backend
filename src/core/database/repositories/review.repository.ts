@@ -25,12 +25,7 @@ export class ReviewRepository implements ReviewRepositoryPort {
         updatedAt: quizReviews.updatedAt,
       })
       .from(quizReviews)
-      .where(
-        and(
-          eq(quizReviews.quizId, quizId),
-          eq(quizReviews.userId, userId),
-        ),
-      )
+      .where(and(eq(quizReviews.quizId, quizId), eq(quizReviews.userId, userId)))
       .limit(1);
 
     return (row as ReviewRow | undefined) ?? null;
@@ -177,12 +172,7 @@ export class ReviewRepository implements ReviewRepositoryPort {
       .select({ difficulty: quizVersions.difficulty })
       .from(quizVersions)
       .innerJoin(quizzes, eq(quizVersions.quizId, quizzes.quizId))
-      .where(
-        and(
-          eq(quizzes.quizId, quizId),
-          eq(quizVersions.status, 'published'),
-        ),
-      )
+      .where(and(eq(quizzes.quizId, quizId), eq(quizVersions.status, 'published')))
       .limit(1);
 
     return (row?.difficulty as string | null) ?? null;

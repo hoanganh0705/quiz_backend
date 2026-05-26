@@ -1,9 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
-import {
-  REVIEW_REPOSITORY_PORT,
-  type ReviewRepositoryPort,
-} from './ports/review-repository.port';
+import { REVIEW_REPOSITORY_PORT, type ReviewRepositoryPort } from './ports/review-repository.port';
 import { QUIZ_REPOSITORY_PORT } from '@/modules/quiz/domain/ports';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
 import {

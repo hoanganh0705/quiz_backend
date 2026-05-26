@@ -135,7 +135,8 @@ export class InstanceGateway implements OnGatewayConnection, OnGatewayDisconnect
   @SubscribeMessage('answer_submitted')
   async handleAnswerSubmitted(
     @ConnectedSocket() client: Socket,
-    @MessageBody() data: { instanceId: string; questionId: string; selectedOptionId: string; timeTakenMs: number },
+    @MessageBody()
+    data: { instanceId: string; questionId: string; selectedOptionId: string; timeTakenMs: number },
     @WsCurrentUser() user: JwtPayload,
   ): Promise<{ event: string; data: Record<string, unknown> }> {
     this.logger.info({

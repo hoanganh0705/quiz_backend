@@ -17,6 +17,7 @@ import {
   MinLength,
   ValidateNested,
 } from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { DEFAULT_SLUG_PATTERN } from '@/common/utils/slug.util';
 import {
   trimString,
@@ -27,20 +28,29 @@ import { QUIZ_SLUG_INVALID_MESSAGE } from '../../quiz.constants';
 import { QUIZ_DIFFICULTIES, type QuizDifficulty } from '../../types/quiz.types';
 
 class CreateInitialQuizVersionDto {
+  @ApiProperty({ description: 'Quiz difficulty level', enum: QUIZ_DIFFICULTIES, example: 'medium' })
   @IsIn(QUIZ_DIFFICULTIES)
   difficulty!: QuizDifficulty;
 
+  @ApiProperty({ description: 'Time limit in milliseconds', minimum: 1, example: 600000 })
   @Type(() => Number)
   @IsInt()
   @Min(1)
   durationMs!: number;
 
+  @ApiProperty({
+    description: 'Minimum score percent required to pass',
+    minimum: 0,
+    maximum: 100,
+    example: 70,
+  })
   @Type(() => Number)
   @IsInt()
   @Min(0)
   @Max(100)
   passingScorePercent!: number;
 
+  @ApiProperty({ description: 'XP reward for passing the quiz', minimum: 0, example: 100 })
   @Type(() => Number)
   @IsInt()
   @Min(0)
@@ -48,18 +58,38 @@ class CreateInitialQuizVersionDto {
 }
 
 export class CreateQuizDto {
+  @ApiProperty({
+    description: 'Quiz title',
+    minLength: 1,
+    maxLength: 255,
+    example: 'JavaScript Fundamentals',
+  })
   @Transform(({ value }: { value: unknown }) => trimString(value))
   @IsString()
   @MinLength(1)
   @MaxLength(255)
   title!: string;
 
+  @ApiPropertyOptional({
+    description: 'Quiz description',
+    maxLength: 2000,
+    example:
+      'Test your knowledge of JavaScript fundamentals including variables, functions, and DOM manipulation.',
+    nullable: true,
+  })
   @IsOptional()
   @Transform(({ value }: { value: unknown }) => trimStringToNullIfBlank(value))
   @IsString()
   @MaxLength(2000)
   description?: string | null;
 
+  @ApiPropertyOptional({
+    description: 'URL-friendly slug (auto-generated from title if omitted)',
+    maxLength: 120,
+    pattern: DEFAULT_SLUG_PATTERN.source,
+    example: 'javascript-fundamentals',
+    nullable: true,
+  })
   @IsOptional()
   @Transform(({ value }: { value: unknown }) => trimStringToLowerCase(value))
   @IsString()
@@ -69,26 +99,56 @@ export class CreateQuizDto {
   })
   slug?: string;
 
+  @ApiPropertyOptional({
+    description: 'Prerequisites or requirements to attempt this quiz',
+    maxLength: 5000,
+    nullable: true,
+  })
   @IsOptional()
   @Transform(({ value }: { value: unknown }) => trimStringToNullIfBlank(value))
   @IsString()
   @MaxLength(5000)
   requirements?: string | null;
 
+  @ApiPropertyOptional({
+    description: 'Quiz cover image URL',
+    maxLength: 2048,
+    format: 'uri',
+    nullable: true,
+  })
   @IsOptional()
   @Transform(({ value }: { value: unknown }) => trimStringToNullIfBlank(value))
   @IsUrl({ require_tld: false })
   @MaxLength(2048)
   imageUrl?: string | null;
 
+  @ApiPropertyOptional({
+    description: 'Whether the quiz is featured on the home page',
+    default: false,
+    example: true,
+    nullable: true,
+  })
   @IsOptional()
   @IsBoolean()
   isFeatured?: boolean;
 
+  @ApiPropertyOptional({
+    description: 'Whether the quiz is hidden from public listings',
+    default: false,
+    example: false,
+    nullable: true,
+  })
   @IsOptional()
   @IsBoolean()
   isHidden?: boolean;
 
+  @ApiPropertyOptional({
+    description: 'UUIDs of associated categories (max 50)',
+    maxItems: 50,
+    format: 'uuid',
+    example: ['660e8400-e29b-41d4-a716-446655440000'],
+    nullable: true,
+  })
   @IsOptional()
   @IsArray()
   @ArrayMaxSize(50)
@@ -96,6 +156,13 @@ export class CreateQuizDto {
   @IsUUID('4', { each: true })
   categoryIds?: string[];
 
+  @ApiPropertyOptional({
+    description: 'UUIDs of associated tags (max 50)',
+    maxItems: 50,
+    format: 'uuid',
+    example: ['770e8400-e29b-41d4-a716-446655440000'],
+    nullable: true,
+  })
   @IsOptional()
   @IsArray()
   @ArrayMaxSize(50)
@@ -103,6 +170,10 @@ export class CreateQuizDto {
   @IsUUID('4', { each: true })
   tagIds?: string[];
 
+  @ApiProperty({
+    description: 'Initial version metadata for the quiz',
+    type: () => CreateInitialQuizVersionDto,
+  })
   @ValidateNested()
   @Type(() => CreateInitialQuizVersionDto)
   initialVersion!: CreateInitialQuizVersionDto;

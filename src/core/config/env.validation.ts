@@ -114,6 +114,11 @@ export const validateEnv = (env: Record<string, unknown>) => {
   const emailSendTimeoutMs = parsePositiveInteger(env, 'EMAIL_SEND_TIMEOUT_MS', 5_000);
   const emailQueueConcurrency = parsePositiveInteger(env, 'EMAIL_QUEUE_CONCURRENCY', 5);
 
+  const appName = typeof env.APP_NAME === 'string' ? env.APP_NAME.trim() : 'Quiz API';
+  const appVersion = typeof env.APP_VERSION === 'string' ? env.APP_VERSION.trim() : '1.0';
+  const appDescription = typeof env.APP_DESCRIPTION === 'string' ? env.APP_DESCRIPTION.trim() : '';
+  const appUrl = typeof env.APP_URL === 'string' ? env.APP_URL.trim() : '';
+
   if (!TOKEN_EXPIRES_IN_PATTERN.test(accessTokenExpiresIn)) {
     throw new Error('ACCESS_TOKEN_EXPIRES_IN has invalid format. Use number or number + s/m/h/d');
   }
@@ -151,5 +156,9 @@ export const validateEnv = (env: Record<string, unknown>) => {
     RESEND_API_KEY: resendApiKey,
     EMAIL_SEND_TIMEOUT_MS: emailSendTimeoutMs,
     EMAIL_QUEUE_CONCURRENCY: emailQueueConcurrency,
+    APP_NAME: appName,
+    APP_VERSION: appVersion,
+    APP_DESCRIPTION: appDescription,
+    APP_URL: appUrl,
   };
 };
