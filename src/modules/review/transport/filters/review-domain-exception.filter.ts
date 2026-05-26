@@ -34,21 +34,21 @@ export class ReviewDomainExceptionFilter implements ExceptionFilter {
 
   private mapToHttp(error: ReviewDomainError): { status: number; message: string } {
     if (error instanceof ReviewNotFoundError) {
-      return { status: HttpStatus.NOT_FOUND, message: error.message };
+      return { status: HttpStatus.NOT_FOUND, message: 'Review not found' };
     }
 
     if (error instanceof ReviewForbiddenError) {
-      return { status: HttpStatus.FORBIDDEN, message: error.message };
+      return { status: HttpStatus.FORBIDDEN, message: 'You do not have permission to perform this action' };
     }
 
     if (error instanceof ReviewConflictError) {
-      return { status: HttpStatus.CONFLICT, message: error.message };
+      return { status: HttpStatus.CONFLICT, message: 'Resource already exists' };
     }
 
     if (error instanceof ReviewValidationError || error instanceof ReviewAttemptRequiredError) {
-      return { status: HttpStatus.BAD_REQUEST, message: error.message };
+      return { status: HttpStatus.BAD_REQUEST, message: 'Invalid request data' };
     }
 
-    return { status: HttpStatus.INTERNAL_SERVER_ERROR, message: error.message };
+    return { status: HttpStatus.INTERNAL_SERVER_ERROR, message: 'Internal server error' };
   }
 }

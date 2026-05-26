@@ -41,11 +41,11 @@ export class AttemptDomainExceptionFilter implements ExceptionFilter {
 
   private mapToHttp(error: AttemptDomainError): { status: number; message: string } {
     if (error instanceof AttemptNotFoundError) {
-      return { status: HttpStatus.NOT_FOUND, message: error.message };
+      return { status: HttpStatus.NOT_FOUND, message: 'Quiz attempt not found' };
     }
 
     if (error instanceof AttemptForbiddenError) {
-      return { status: HttpStatus.FORBIDDEN, message: error.message };
+      return { status: HttpStatus.FORBIDDEN, message: 'You do not have permission to access this attempt' };
     }
 
     if (
@@ -53,18 +53,18 @@ export class AttemptDomainExceptionFilter implements ExceptionFilter {
       error instanceof AttemptAlreadyStartedError ||
       error instanceof AttemptAlreadyFinishedError
     ) {
-      return { status: HttpStatus.CONFLICT, message: error.message };
+      return { status: HttpStatus.CONFLICT, message: 'Attempt conflict' };
     }
 
     if (error instanceof QuizNotPublishedError) {
-      return { status: HttpStatus.BAD_REQUEST, message: error.message };
+      return { status: HttpStatus.BAD_REQUEST, message: 'This quiz is not available for attempts' };
     }
 
     if (error instanceof AttemptValidationError) {
-      return { status: HttpStatus.BAD_REQUEST, message: error.message };
+      return { status: HttpStatus.BAD_REQUEST, message: 'Invalid request data' };
     }
 
     // Fallback for any AttemptDomainError subclass not explicitly mapped.
-    return { status: HttpStatus.INTERNAL_SERVER_ERROR, message: error.message };
+    return { status: HttpStatus.INTERNAL_SERVER_ERROR, message: 'Internal server error' };
   }
 }
