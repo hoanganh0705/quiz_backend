@@ -28,7 +28,12 @@
     "db:push": "pnpm drizzle-kit push",
     "db:check": "pnpm drizzle-kit check",
     "db:introspect": "pnpm drizzle-kit introspect",
-    "db:seed": "node -r ts-node/register src/core/database/seeds/seed.ts",
+    "db:seed": "node -r ts-node/register src/commands/seed/index.ts",
+    "db:seed:foundation": "node -r ts-node/register src/commands/seed/index.ts foundation",
+    "db:seed:development": "node -r ts-node/register src/commands/seed/index.ts development",
+    "db:seed:scenarios": "node -r ts-node/register src/commands/seed/index.ts scenarios",
+    "db:seed:all": "node -r ts-node/register src/commands/seed/index.ts all",
+    "seed:reset": "pnpm db:cleanall && pnpm db:seed:all",
     "redis:start": "docker start quizredis || docker run -d --name quizredis -p 6379:6379 redis:8",
     "redis:stop": "docker stop quizredis",
     "redis:reset": "docker rm -f quizredis"
