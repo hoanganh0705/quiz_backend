@@ -31,6 +31,16 @@ The API is served under the global prefix:
 /api/v1
 ```
 
+When `NODE_ENV` is not `production` (or `SWAGGER_ENABLED=true`), interactive API docs are available at:
+
+```text
+http://localhost:8080/api/v1/docs
+```
+
+OpenAPI JSON: `http://localhost:8080/api/v1/docs/openapi.json`
+
+Use **Authorize** in Swagger UI with a Bearer access token for protected routes.
+
 ## Useful Scripts
 
 ```bash

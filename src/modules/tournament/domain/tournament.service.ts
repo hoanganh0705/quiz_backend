@@ -67,7 +67,9 @@ export class TournamentService {
       title: payload.title,
     });
 
-    return this.tournamentRepository.getTournamentById(result.tournamentId) as Promise<TournamentRow>;
+    return this.tournamentRepository.getTournamentById(
+      result.tournamentId,
+    ) as Promise<TournamentRow>;
   }
 
   async listTournaments(
@@ -85,7 +87,9 @@ export class TournamentService {
     const limit = query.limit ?? 20;
     const cursorValue = typeof query.cursor === 'string' ? query.cursor : undefined;
     const cursor: TournamentCursorPayload | null = cursorValue
-      ? (JSON.parse(Buffer.from(cursorValue, 'base64').toString('utf-8')) as TournamentCursorPayload)
+      ? (JSON.parse(
+          Buffer.from(cursorValue, 'base64').toString('utf-8'),
+        ) as TournamentCursorPayload)
       : null;
 
     const rows = await this.tournamentRepository.listTournaments({
@@ -134,7 +138,10 @@ export class TournamentService {
     return this.tournamentRepository.getRoundsByTournament(tournamentId);
   }
 
-  async registerForTournament(tournamentId: string, user: JwtPayload): Promise<TournamentParticipantRow> {
+  async registerForTournament(
+    tournamentId: string,
+    user: JwtPayload,
+  ): Promise<TournamentParticipantRow> {
     const nowIso = new Date().toISOString();
 
     const tournament = await this.tournamentRepository.getTournamentById(tournamentId);

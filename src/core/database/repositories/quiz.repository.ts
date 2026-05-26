@@ -101,13 +101,7 @@ export class QuizRepository implements QuizRepositoryPort {
       })
       .from(quizzes)
       .leftJoin(quizVersions, eq(quizzes.publishedVersionId, quizVersions.quizVersionId))
-      .where(
-        and(
-          eq(quizzes.slug, slug),
-          isNull(quizzes.deletedAt),
-          eq(quizzes.isHidden, false),
-        ),
-      )
+      .where(and(eq(quizzes.slug, slug), isNull(quizzes.deletedAt), eq(quizzes.isHidden, false)))
       .limit(1);
 
     return (row as QuizWithPublishedVersionRow | undefined) ?? null;
@@ -158,7 +152,10 @@ export class QuizRepository implements QuizRepositoryPort {
       filters.push(
         or(
           sql`${quizzes.createdAt} < ${params.cursor.createdAt}`,
-          and(eq(quizzes.createdAt, params.cursor.createdAt), sql`${quizzes.quizId} < ${params.cursor.quizId}`),
+          and(
+            eq(quizzes.createdAt, params.cursor.createdAt),
+            sql`${quizzes.quizId} < ${params.cursor.quizId}`,
+          ),
         ) as SQL,
       );
     }

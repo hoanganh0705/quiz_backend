@@ -34,10 +34,7 @@ export class AttemptApplicationService {
     return this.buildStartedAttemptResponse(result);
   }
 
-  async getAttemptById(
-    attemptId: string,
-    user: JwtPayload,
-  ): Promise<AttemptResponseDto> {
+  async getAttemptById(attemptId: string, user: JwtPayload): Promise<AttemptResponseDto> {
     const attempt = await this.attemptService.getAttemptById(attemptId, user);
     const answers = await this.attemptService.getAnswersByAttemptId(attemptId);
 
@@ -62,10 +59,7 @@ export class AttemptApplicationService {
     return this.attemptResponseMapper.toSubmitAnswerResponse(answer);
   }
 
-  async abandonAttempt(
-    attemptId: string,
-    user: JwtPayload,
-  ): Promise<AbandonAttemptResponseDto> {
+  async abandonAttempt(attemptId: string, user: JwtPayload): Promise<AbandonAttemptResponseDto> {
     const attempt = await this.attemptService.abandonAttempt(attemptId, user);
 
     return {
@@ -121,9 +115,20 @@ export class AttemptApplicationService {
     };
   }
 
-  private buildStartedAttemptResponse(
-    attempt: { attemptId: string; userId: string; quizVersionId: string; contextType: string; contextRefId: string | null; status: string; scorePercent: string | null; correctCount: number | null; startedAt: string; finishedAt: string | null; timeTakenMs: number | null; xpEarned: number },
-  ): AttemptResponseDto {
+  private buildStartedAttemptResponse(attempt: {
+    attemptId: string;
+    userId: string;
+    quizVersionId: string;
+    contextType: string;
+    contextRefId: string | null;
+    status: string;
+    scorePercent: string | null;
+    correctCount: number | null;
+    startedAt: string;
+    finishedAt: string | null;
+    timeTakenMs: number | null;
+    xpEarned: number;
+  }): AttemptResponseDto {
     return {
       attemptId: attempt.attemptId,
       userId: attempt.userId,

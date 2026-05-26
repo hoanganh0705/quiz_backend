@@ -37,7 +37,9 @@ export class QuizInstanceRepository implements QuizInstanceRepositoryPort {
     return { instanceId: result.instanceId };
   }
 
-  async getInstanceById(instanceId: string): Promise<import('@/modules/instance/domain/ports').QuizInstanceRow | null> {
+  async getInstanceById(
+    instanceId: string,
+  ): Promise<import('@/modules/instance/domain/ports').QuizInstanceRow | null> {
     const [row] = await this.db
       .select({
         instanceId: quizInstances.instanceId,
@@ -90,7 +92,9 @@ export class QuizInstanceRepository implements QuizInstanceRepositoryPort {
       .where(eq(quizInstances.instanceId, instanceId))
       .limit(1);
 
-    return (row as import('@/modules/instance/domain/ports').QuizInstanceDetailRow | undefined) ?? null;
+    return (
+      (row as import('@/modules/instance/domain/ports').QuizInstanceDetailRow | undefined) ?? null
+    );
   }
 
   async updateInstanceStatus(params: {
@@ -129,14 +133,13 @@ export class QuizInstanceRepository implements QuizInstanceRepositoryPort {
       })
       .from(quizInstancePlayers)
       .where(
-        and(
-          eq(quizInstancePlayers.instanceId, instanceId),
-          eq(quizInstancePlayers.userId, userId),
-        ),
+        and(eq(quizInstancePlayers.instanceId, instanceId), eq(quizInstancePlayers.userId, userId)),
       )
       .limit(1);
 
-    return (row as import('@/modules/instance/domain/ports').QuizInstancePlayerRow | undefined) ?? null;
+    return (
+      (row as import('@/modules/instance/domain/ports').QuizInstancePlayerRow | undefined) ?? null
+    );
   }
 
   async getPlayerById(
@@ -156,7 +159,9 @@ export class QuizInstanceRepository implements QuizInstanceRepositoryPort {
       .where(eq(quizInstancePlayers.instancePlayerId, instancePlayerId))
       .limit(1);
 
-    return (row as import('@/modules/instance/domain/ports').QuizInstancePlayerRow | undefined) ?? null;
+    return (
+      (row as import('@/modules/instance/domain/ports').QuizInstancePlayerRow | undefined) ?? null
+    );
   }
 
   async getPlayerDetail(
@@ -179,14 +184,14 @@ export class QuizInstanceRepository implements QuizInstanceRepositoryPort {
       .from(quizInstancePlayers)
       .innerJoin(users, eq(quizInstancePlayers.userId, users.userId))
       .where(
-        and(
-          eq(quizInstancePlayers.instanceId, instanceId),
-          eq(quizInstancePlayers.userId, userId),
-        ),
+        and(eq(quizInstancePlayers.instanceId, instanceId), eq(quizInstancePlayers.userId, userId)),
       )
       .limit(1);
 
-    return (row as import('@/modules/instance/domain/ports').QuizInstancePlayerDetailRow | undefined) ?? null;
+    return (
+      (row as import('@/modules/instance/domain/ports').QuizInstancePlayerDetailRow | undefined) ??
+      null
+    );
   }
 
   async listPlayers(

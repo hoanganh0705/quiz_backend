@@ -1,16 +1,25 @@
 import { Transform } from 'class-transformer';
 import { IsOptional, IsString, Matches, MaxLength, MinLength } from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { DEFAULT_SLUG_PATTERN } from '@/common/utils/slug.util';
 import { trimString, trimStringToLowerCase } from '@/common/utils/text.util';
 import { TAG_SLUG_INVALID_MESSAGE } from '../../tag.constants';
 
 export class CreateTagDto {
+  @ApiProperty({ description: 'Tag name', minLength: 1, maxLength: 120, example: 'JavaScript' })
   @Transform(({ value }: { value: unknown }) => trimString(value))
   @IsString()
   @MinLength(1)
   @MaxLength(120)
   name!: string;
 
+  @ApiPropertyOptional({
+    description: 'URL-friendly slug (auto-generated from name if omitted)',
+    maxLength: 120,
+    pattern: DEFAULT_SLUG_PATTERN.source,
+    example: 'javascript',
+    nullable: true,
+  })
   @IsOptional()
   @Transform(({ value }: { value: unknown }) => trimStringToLowerCase(value))
   @IsString()

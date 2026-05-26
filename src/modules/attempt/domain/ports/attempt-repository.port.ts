@@ -80,7 +80,10 @@ export interface AttemptRepositoryPort {
 
   getAttemptDetailById(attemptId: string): Promise<AttemptDetailRow | null>;
 
-  getActiveAttemptByUserAndVersion(userId: string, quizVersionId: string): Promise<AttemptRow | null>;
+  getActiveAttemptByUserAndVersion(
+    userId: string,
+    quizVersionId: string,
+  ): Promise<AttemptRow | null>;
 
   listAttemptsByUser(params: {
     userId: string;
@@ -126,16 +129,9 @@ export interface AttemptRepositoryPort {
     nowIso: string;
   }): Promise<AttemptRow>;
 
-  upsertQuizStats(params: {
-    quizId: string;
-    scorePercent: string;
-    nowIso: string;
-  }): Promise<void>;
+  upsertQuizStats(params: { quizId: string; scorePercent: string; nowIso: string }): Promise<void>;
 
-  addUserXp(params: {
-    userId: string;
-    xpToAdd: number;
-  }): Promise<void>;
+  addUserXp(params: { userId: string; xpToAdd: number }): Promise<void>;
 
   createTournamentAttempt(params: {
     userId: string;
