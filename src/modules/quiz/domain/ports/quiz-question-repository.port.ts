@@ -47,6 +47,12 @@ export interface QuizQuestionRepositoryPort {
       }[];
     }[],
   ): Promise<{ questionIds: string[] }>;
+
+  /**
+   * Returns the total number of questions belonging to a quiz version.
+   * Used to enforce publish-time business invariants and runtime safety guards.
+   */
+  countQuestionsByVersionId(quizVersionId: string): Promise<number>;
 }
 
 export const QUIZ_QUESTION_REPOSITORY_PORT = Symbol('QUIZ_QUESTION_REPOSITORY_PORT');

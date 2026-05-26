@@ -39,13 +39,13 @@ export class InstanceGateway implements OnGatewayConnection, OnGatewayDisconnect
     this.logger.info({ event: 'client_connected', socketId: client.id });
   }
 
-  async handleDisconnect(client: Socket): Promise<void> {
+  handleDisconnect(client: Socket): void {
     this.logger.info({ event: 'client_disconnected', socketId: client.id });
 
     for (const [roomId, room] of this.roomStates.entries()) {
       if (room.socketToUser.has(client.id)) {
         room.socketToUser.delete(client.id);
-        client.leave(roomId);
+        void client.leave(roomId);
         this.server.to(roomId).emit('player_left', {
           socketId: client.id,
           remainingPlayers: room.socketToUser.size,
@@ -70,7 +70,7 @@ export class InstanceGateway implements OnGatewayConnection, OnGatewayDisconnect
 
     const instance = await this.instanceService.getInstanceById(instanceId);
 
-    client.join(instanceId);
+    await client.join(instanceId);
 
     if (!this.roomStates.has(instanceId)) {
       this.roomStates.set(instanceId, { socketToUser: new Map() });
@@ -133,12 +133,12 @@ export class InstanceGateway implements OnGatewayConnection, OnGatewayDisconnect
 
   @UseGuards(WsJwtGuard)
   @SubscribeMessage('answer_submitted')
-  async handleAnswerSubmitted(
+  handleAnswerSubmitted(
     @ConnectedSocket() client: Socket,
     @MessageBody()
     data: { instanceId: string; questionId: string; selectedOptionId: string; timeTakenMs: number },
     @WsCurrentUser() user: JwtPayload,
-  ): Promise<{ event: string; data: Record<string, unknown> }> {
+  ): { event: string; data: Record<string, unknown> } {
     this.logger.info({
       event: 'ws_answer_submitted',
       instanceId: data.instanceId,
