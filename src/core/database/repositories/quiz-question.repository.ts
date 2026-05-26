@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { eq, inArray } from 'drizzle-orm';
+import { eq, inArray, sql } from 'drizzle-orm';
 import { DRIZZLE } from '../drizzle.constants';
 import type { DrizzleDB } from '../database.module';
 import { quizAnswerOptions, quizQuestions } from '../schema';
@@ -181,5 +181,14 @@ export class QuizQuestionRepository implements QuizQuestionRepositoryPort {
     });
 
     return { questionIds };
+  }
+
+  async countQuestionsByVersionId(quizVersionId: string): Promise<number> {
+    const [row] = await this.db
+      .select({ count: sql<number>`count(${quizQuestions.questionId})` })
+      .from(quizQuestions)
+      .where(eq(quizQuestions.quizVersionId, quizVersionId));
+
+    return row?.count ?? 0;
   }
 }

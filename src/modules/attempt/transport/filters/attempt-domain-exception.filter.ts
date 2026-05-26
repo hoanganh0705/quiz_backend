@@ -9,7 +9,6 @@ import {
   AttemptAlreadyStartedError,
   AttemptAlreadyFinishedError,
   QuizNotPublishedError,
-  QuizInsufficientQuestionsError,
   AttemptQuestionInvalidError,
 } from '../../domain/errors';
 
@@ -59,8 +58,8 @@ export class AttemptDomainExceptionFilter implements ExceptionFilter {
       return { status: HttpStatus.CONFLICT, message: 'Attempt conflict' };
     }
 
-    if (error instanceof QuizNotPublishedError || error instanceof QuizInsufficientQuestionsError) {
-      return { status: HttpStatus.UNPROCESSABLE_ENTITY, message: 'Quiz is not available for attempts' };
+    if (error instanceof QuizNotPublishedError) {
+      return { status: HttpStatus.UNPROCESSABLE_ENTITY, message: error.message };
     }
 
     if (error instanceof AttemptQuestionInvalidError) {
