@@ -9,6 +9,8 @@ import {
   AttemptAlreadyStartedError,
   AttemptAlreadyFinishedError,
   QuizNotPublishedError,
+  QuizInsufficientQuestionsError,
+  AttemptQuestionInvalidError,
 } from '../../domain/errors';
 
 const HTTP_ERROR_NAMES: Record<number, string> = {
@@ -16,6 +18,7 @@ const HTTP_ERROR_NAMES: Record<number, string> = {
   [HttpStatus.FORBIDDEN]: 'Forbidden',
   [HttpStatus.NOT_FOUND]: 'Not Found',
   [HttpStatus.CONFLICT]: 'Conflict',
+  [HttpStatus.UNPROCESSABLE_ENTITY]: 'Unprocessable Entity',
   [HttpStatus.INTERNAL_SERVER_ERROR]: 'Internal Server Error',
 };
 
@@ -56,8 +59,12 @@ export class AttemptDomainExceptionFilter implements ExceptionFilter {
       return { status: HttpStatus.CONFLICT, message: 'Attempt conflict' };
     }
 
-    if (error instanceof QuizNotPublishedError) {
-      return { status: HttpStatus.BAD_REQUEST, message: 'This quiz is not available for attempts' };
+    if (error instanceof QuizNotPublishedError || error instanceof QuizInsufficientQuestionsError) {
+      return { status: HttpStatus.UNPROCESSABLE_ENTITY, message: 'Quiz is not available for attempts' };
+    }
+
+    if (error instanceof AttemptQuestionInvalidError) {
+      return { status: HttpStatus.UNPROCESSABLE_ENTITY, message: 'Question is invalid for this attempt' };
     }
 
     if (error instanceof AttemptValidationError) {
