@@ -45,7 +45,10 @@ export class QuizDomainExceptionFilter implements ExceptionFilter {
     }
 
     if (error instanceof QuizForbiddenError) {
-      return { status: HttpStatus.FORBIDDEN, message: 'You do not have permission to perform this action' };
+      return {
+        status: HttpStatus.FORBIDDEN,
+        message: 'You do not have permission to perform this action',
+      };
     }
 
     if (error instanceof QuizConflictError) {
