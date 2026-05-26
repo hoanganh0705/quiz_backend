@@ -1,6 +1,5 @@
 import { Module } from '@nestjs/common';
 import { DatabaseModule } from '@/core/database/database.module';
-import { LoggerModule } from 'nestjs-pino';
 import { ReviewApplicationService } from './application/review.application.service';
 import { ReviewService } from './domain/review.service';
 import { ReviewResponseMapper } from './mappers/review-response.mapper';
@@ -11,7 +10,7 @@ import { ReviewRepository } from '@/core/database/repositories/review.repository
 import { QuizModule } from '@/modules/quiz/quiz.module';
 
 @Module({
-  imports: [DatabaseModule, LoggerModule.forRoot(), QuizModule],
+  imports: [DatabaseModule, QuizModule],
   providers: [
     // Application
     ReviewApplicationService,

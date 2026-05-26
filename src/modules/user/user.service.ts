@@ -1,46 +1,19 @@
 import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common';
-import { and, eq, isNull, sql } from 'drizzle-orm';
-import { DRIZZLE, type DrizzleDB } from '@/core/database/database.module';
-import { users } from '@/core/database/schema';
+import type { UserRepositoryPort } from './domain/ports/user-repository.port';
+import { USER_REPOSITORY_PORT } from './domain/ports/user-repository.port';
 import { UpdateMeDto } from './dto/request/update-me.dto';
 import { UpdateMeSettingsDto } from './dto/request/update-me-settings.dto';
 import { UserMeResponseDto } from './dto/response/user-me-response.dto';
 import { normalizeNullableText } from '@/common/utils/text.util';
 import { hasOwn, isObjectRecord } from '@/common/utils/object.util';
-
-type UserMeRow = {
-  userId: string;
-  username: string;
-  email: string;
-  displayName: string | null;
-  avatarUrl: string | null;
-  bio: string | null;
-  xpTotal: number;
-  currentStreak: number;
-  longestStreak: number;
-  settings: unknown;
-  createdAt: string;
-  updatedAt: string;
-};
-
-const USER_ME_COLUMNS = {
-  userId: users.userId,
-  username: users.username,
-  email: users.email,
-  displayName: users.displayName,
-  avatarUrl: users.avatarUrl,
-  bio: users.bio,
-  xpTotal: users.xpTotal,
-  currentStreak: users.currentStreak,
-  longestStreak: users.longestStreak,
-  settings: users.settings,
-  createdAt: users.createdAt,
-  updatedAt: users.updatedAt,
-};
+import type { UserMeRow } from './domain/ports/user-repository.port';
 
 @Injectable()
 export class UserService {
-  constructor(@Inject(DRIZZLE) private readonly db: DrizzleDB) {}
+  constructor(
+    @Inject(USER_REPOSITORY_PORT)
+    private readonly userRepository: UserRepositoryPort,
+  ) {}
 
   private toUserMeResponse(user: UserMeRow): UserMeResponseDto {
     return {
@@ -60,17 +33,13 @@ export class UserService {
   }
 
   private async getActiveUserById(userId: string): Promise<UserMeResponseDto> {
-    const [user] = await this.db
-      .select(USER_ME_COLUMNS)
-      .from(users)
-      .where(and(eq(users.userId, userId), isNull(users.deletedAt)))
-      .limit(1);
+    const user = await this.userRepository.findMeById(userId);
 
     if (!user) {
       throw new NotFoundException('User not found');
     }
 
-    return this.toUserMeResponse(user as UserMeRow);
+    return this.toUserMeResponse(user);
   }
 
   async getMeById(userId: string): Promise<UserMeResponseDto> {
@@ -100,20 +69,14 @@ export class UserService {
       return this.getActiveUserById(userId);
     }
 
-    const [updatedUser] = await this.db
-      .update(users)
-      .set({
-        ...profilePatch,
-        updatedAt: new Date().toISOString(),
-      })
-      .where(and(eq(users.userId, userId), isNull(users.deletedAt)))
-      .returning(USER_ME_COLUMNS);
+    const nowIso = new Date().toISOString();
+    const updatedUser = await this.userRepository.updateProfile(userId, profilePatch, nowIso);
 
     if (!updatedUser) {
       throw new NotFoundException('User not found');
     }
 
-    return this.toUserMeResponse(updatedUser as UserMeRow);
+    return this.toUserMeResponse(updatedUser);
   }
 
   async updateMeSettingsById(
@@ -124,20 +87,13 @@ export class UserService {
       throw new BadRequestException('settings must be an object');
     }
 
-    const [updatedUser] = await this.db
-      .update(users)
-      .set({
-        // Merge in DB to keep the operation atomic and avoid lost updates under concurrent writes.
-        settings: sql`${users.settings} || ${JSON.stringify(payload.settings)}::jsonb`,
-        updatedAt: new Date().toISOString(),
-      })
-      .where(and(eq(users.userId, userId), isNull(users.deletedAt)))
-      .returning(USER_ME_COLUMNS);
+    const nowIso = new Date().toISOString();
+    const updatedUser = await this.userRepository.updateSettings(userId, payload.settings, nowIso);
 
     if (!updatedUser) {
       throw new NotFoundException('User not found');
     }
 
-    return this.toUserMeResponse(updatedUser as UserMeRow);
+    return this.toUserMeResponse(updatedUser);
   }
 }
