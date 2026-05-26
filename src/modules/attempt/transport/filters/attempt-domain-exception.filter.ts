@@ -47,7 +47,10 @@ export class AttemptDomainExceptionFilter implements ExceptionFilter {
     }
 
     if (error instanceof AttemptForbiddenError) {
-      return { status: HttpStatus.FORBIDDEN, message: 'You do not have permission to access this attempt' };
+      return {
+        status: HttpStatus.FORBIDDEN,
+        message: 'You do not have permission to access this attempt',
+      };
     }
 
     if (
@@ -63,7 +66,10 @@ export class AttemptDomainExceptionFilter implements ExceptionFilter {
     }
 
     if (error instanceof AttemptQuestionInvalidError) {
-      return { status: HttpStatus.UNPROCESSABLE_ENTITY, message: 'Question is invalid for this attempt' };
+      return {
+        status: HttpStatus.UNPROCESSABLE_ENTITY,
+        message: 'Question is invalid for this attempt',
+      };
     }
 
     if (error instanceof AttemptValidationError) {
