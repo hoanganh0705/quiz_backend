@@ -1,6 +1,5 @@
 import { Module } from '@nestjs/common';
 import { DatabaseModule } from '@/core/database/database.module';
-import { LoggerModule } from 'nestjs-pino';
 import { BookmarkApplicationService } from './application/bookmark.application.service';
 import { BookmarkService } from './domain/bookmark.service';
 import { BookmarkResponseMapper } from './mappers/bookmark-response.mapper';
@@ -11,7 +10,7 @@ import { BookmarkRepository } from '@/core/database/repositories/bookmark.reposi
 import { QuizModule } from '@/modules/quiz/quiz.module';
 
 @Module({
-  imports: [DatabaseModule, LoggerModule.forRoot(), QuizModule],
+  imports: [DatabaseModule, QuizModule],
   providers: [
     // Application
     BookmarkApplicationService,

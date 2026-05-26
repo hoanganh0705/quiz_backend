@@ -22,6 +22,7 @@ export class AuthCookieService {
       httpOnly: true,
       secure: this.authConfig.isProduction,
       sameSite: 'lax',
+      maxAge: 0,
       path: '/',
     });
   }

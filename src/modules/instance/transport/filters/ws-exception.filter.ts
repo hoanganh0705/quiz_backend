@@ -1,10 +1,15 @@
-import { Catch, ArgumentsHost } from '@nestjs/common';
+import { Catch, ArgumentsHost, UnauthorizedException } from '@nestjs/common';
 
 @Catch()
 export class WsExceptionFilter {
-  catch(_exception: unknown, host: ArgumentsHost): void {
+  catch(exception: unknown, host: ArgumentsHost): void {
     const client = host.switchToWs().getClient();
-    // Never expose raw exception details over WebSocket.
-    client.emit('error', { message: 'An unexpected error occurred' });
+
+    if (exception instanceof UnauthorizedException) {
+      client.emit('error', { code: 'UNAUTHORIZED', message: 'Authentication required' });
+      return;
+    }
+
+    client.emit('error', { code: 'INTERNAL_ERROR', message: 'An unexpected error occurred' });
   }
 }
