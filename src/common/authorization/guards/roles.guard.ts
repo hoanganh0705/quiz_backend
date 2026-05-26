@@ -1,22 +1,21 @@
 import {
   ForbiddenException,
   Injectable,
-  Optional,
   type CanActivate,
   type ExecutionContext,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { isUserRole, type UserRole } from '@/common/types/user-role.type';
-import { IS_PUBLIC_KEY } from '@/common/decorators/public.decorator';
-import { ROLES_KEY } from '../decorators/roles.decorator';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { assertRequestUser } from '../utils/request-user.util';
+import { IS_PUBLIC_KEY } from '@/common/decorators/public.decorator';
+import { ROLES_KEY } from '../decorators/roles.decorator';
+import { isUserRole, type UserRole } from '@/common/types/user-role.type';
 
 @Injectable()
 export class RolesGuard implements CanActivate {
   constructor(
     private readonly reflector: Reflector,
-    @Optional() @InjectPinoLogger(RolesGuard.name) private readonly logger?: PinoLogger,
+    @InjectPinoLogger(RolesGuard.name) private readonly logger: PinoLogger,
   ) {}
 
   private normalizeRequiredRoles(roles: unknown): UserRole[] {
@@ -57,7 +56,7 @@ export class RolesGuard implements CanActivate {
     const userRole = requestUser.role;
 
     if (!normalizedRoles.includes(userRole)) {
-      this.logger?.warn({
+      this.logger.warn({
         event: 'roles_guard_forbidden',
         userId: requestUser.sub,
         userRole,

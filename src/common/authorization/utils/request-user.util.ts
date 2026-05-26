@@ -8,7 +8,7 @@ type RequestUser = {
 };
 
 type RequestUserAssertionOptions = {
-  logger?: PinoLogger;
+  logger: PinoLogger;
   unauthenticatedEvent: string;
   invalidRoleEvent: string;
 };
@@ -25,19 +25,17 @@ export const assertRequestUser = (
   const requestUser: RequestUser | null = user && typeof user === 'object' ? user : null;
 
   if (!requestUser || typeof requestUser.sub !== 'string') {
-    options.logger?.warn({
+    options.logger.warn({
       event: options.unauthenticatedEvent,
       userId: requestUser?.sub,
-      userRole: requestUser?.role,
     });
     throw new UnauthorizedException('User is not authenticated');
   }
 
   if (!isUserRole(requestUser.role)) {
-    options.logger?.warn({
+    options.logger.warn({
       event: options.invalidRoleEvent,
       userId: requestUser.sub,
-      userRole: requestUser.role,
     });
     throw new UnauthorizedException('Invalid user role in token');
   }
