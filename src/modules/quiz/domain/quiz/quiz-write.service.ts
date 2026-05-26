@@ -97,9 +97,9 @@ export class QuizWriteService {
       createdQuizId = createdQuiz.quizId;
     } catch (error: unknown) {
       this.logger.error({
-        error,
-        payload,
+        event: 'quiz_create_failed',
         userId: user.sub,
+        errorCode: (error as { code?: string })?.code ?? 'UNKNOWN',
       });
       this.mapQuizCreateError(error);
     }

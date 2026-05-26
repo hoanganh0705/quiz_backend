@@ -39,26 +39,26 @@ export class QuizDomainExceptionFilter implements ExceptionFilter {
 
   private mapToHttp(error: QuizDomainError): { status: number; message: string } {
     if (error instanceof QuizNotFoundError) {
-      return { status: HttpStatus.NOT_FOUND, message: error.message };
+      return { status: HttpStatus.NOT_FOUND, message: 'Quiz not found' };
     }
 
     if (error instanceof QuizForbiddenError) {
-      return { status: HttpStatus.FORBIDDEN, message: error.message };
+      return { status: HttpStatus.FORBIDDEN, message: 'You do not have permission to perform this action' };
     }
 
     if (error instanceof QuizConflictError) {
-      return { status: HttpStatus.CONFLICT, message: error.message };
+      return { status: HttpStatus.CONFLICT, message: 'Resource already exists' };
     }
 
     if (error instanceof QuizValidationError) {
-      return { status: HttpStatus.BAD_REQUEST, message: error.message };
+      return { status: HttpStatus.BAD_REQUEST, message: 'Invalid request data' };
     }
 
     if (error instanceof QuizVersionImmutableError) {
-      return { status: HttpStatus.BAD_REQUEST, message: error.message };
+      return { status: HttpStatus.BAD_REQUEST, message: 'This quiz version cannot be modified' };
     }
 
     // Fallback for any QuizDomainError subclass not explicitly mapped.
-    return { status: HttpStatus.INTERNAL_SERVER_ERROR, message: error.message };
+    return { status: HttpStatus.INTERNAL_SERVER_ERROR, message: 'Internal server error' };
   }
 }

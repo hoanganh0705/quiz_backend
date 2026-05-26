@@ -36,21 +36,21 @@ export class BookmarkDomainExceptionFilter implements ExceptionFilter {
 
   private mapToHttp(error: BookmarkDomainError): { status: number; message: string } {
     if (error instanceof CollectionNotFoundError || error instanceof BookmarkNotFoundError) {
-      return { status: HttpStatus.NOT_FOUND, message: error.message };
+      return { status: HttpStatus.NOT_FOUND, message: 'Resource not found' };
     }
 
     if (error instanceof CollectionForbiddenError || error instanceof BookmarkForbiddenError) {
-      return { status: HttpStatus.FORBIDDEN, message: error.message };
+      return { status: HttpStatus.FORBIDDEN, message: 'You do not have permission to perform this action' };
     }
 
     if (error instanceof CollectionConflictError || error instanceof BookmarkConflictError) {
-      return { status: HttpStatus.CONFLICT, message: error.message };
+      return { status: HttpStatus.CONFLICT, message: 'Resource already exists' };
     }
 
     if (error instanceof BookmarkValidationError) {
-      return { status: HttpStatus.BAD_REQUEST, message: error.message };
+      return { status: HttpStatus.BAD_REQUEST, message: 'Invalid request data' };
     }
 
-    return { status: HttpStatus.INTERNAL_SERVER_ERROR, message: error.message };
+    return { status: HttpStatus.INTERNAL_SERVER_ERROR, message: 'Internal server error' };
   }
 }

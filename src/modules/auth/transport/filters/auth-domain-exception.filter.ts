@@ -37,21 +37,26 @@ export class AuthDomainExceptionFilter implements ExceptionFilter {
   }
 
   private mapToHttp(error: AuthDomainError): { status: number; message: string } {
-    if (
-      error instanceof InvalidCredentialsError ||
-      error instanceof InvalidRefreshTokenError ||
-      error instanceof TokenReuseDetectedError ||
-      error instanceof SessionContextMismatchError ||
-      error instanceof UserNotFoundError
-    ) {
-      return { status: HttpStatus.UNAUTHORIZED, message: error.message };
+    if (error instanceof InvalidCredentialsError) {
+      return { status: HttpStatus.UNAUTHORIZED, message: 'Invalid credentials provided.' };
     }
-
+    if (error instanceof InvalidRefreshTokenError) {
+      return { status: HttpStatus.UNAUTHORIZED, message: 'Invalid refresh token.' };
+    }
+    if (error instanceof TokenReuseDetectedError) {
+      return { status: HttpStatus.UNAUTHORIZED, message: 'Token reuse detected.' };
+    }
+    if (error instanceof SessionContextMismatchError) {
+      return { status: HttpStatus.UNAUTHORIZED, message: 'Session context mismatch.' };
+    }
+    if (error instanceof UserNotFoundError) {
+      return { status: HttpStatus.UNAUTHORIZED, message: 'User not found.' };
+    }
     if (error instanceof RateLimitExceededError) {
-      return { status: HttpStatus.TOO_MANY_REQUESTS, message: error.message };
+      return { status: HttpStatus.TOO_MANY_REQUESTS, message: 'Rate limit exceeded.' };
     }
 
     // Fallback for any AuthDomainError subclass not explicitly mapped.
-    return { status: HttpStatus.INTERNAL_SERVER_ERROR, message: error.message };
+    return { status: HttpStatus.INTERNAL_SERVER_ERROR, message: 'An internal authentication error occurred.' };
   }
 }

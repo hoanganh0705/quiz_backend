@@ -40,15 +40,15 @@ export class InstanceDomainExceptionFilter implements ExceptionFilter {
 
   private mapToHttp(error: InstanceDomainError): { status: number; message: string } {
     if (error instanceof InstanceNotFoundError || error instanceof PlayerNotInInstanceError) {
-      return { status: HttpStatus.NOT_FOUND, message: error.message };
+      return { status: HttpStatus.NOT_FOUND, message: 'Resource not found' };
     }
 
     if (error instanceof InstanceForbiddenError || error instanceof InstanceNotHostError) {
-      return { status: HttpStatus.FORBIDDEN, message: error.message };
+      return { status: HttpStatus.FORBIDDEN, message: 'You do not have permission to perform this action' };
     }
 
     if (error instanceof InstanceConflictError || error instanceof PlayerAlreadyJoinedError) {
-      return { status: HttpStatus.CONFLICT, message: error.message };
+      return { status: HttpStatus.CONFLICT, message: 'Resource already exists' };
     }
 
     if (
@@ -58,9 +58,9 @@ export class InstanceDomainExceptionFilter implements ExceptionFilter {
       error instanceof InstanceAlreadyStartedError ||
       error instanceof InstanceAlreadyClosedError
     ) {
-      return { status: HttpStatus.BAD_REQUEST, message: error.message };
+      return { status: HttpStatus.BAD_REQUEST, message: 'Invalid request data' };
     }
 
-    return { status: HttpStatus.INTERNAL_SERVER_ERROR, message: error.message };
+    return { status: HttpStatus.INTERNAL_SERVER_ERROR, message: 'Internal server error' };
   }
 }
