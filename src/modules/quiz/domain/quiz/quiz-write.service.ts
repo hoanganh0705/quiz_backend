@@ -104,6 +104,8 @@ export class QuizWriteService {
       this.mapQuizCreateError(error);
     }
 
+    this.logger.info({ event: 'quiz_created', quizId: createdQuizId, userId: user.sub });
+
     return this.quizReadService.getQuizById(createdQuizId);
   }
 
@@ -174,8 +176,16 @@ export class QuizWriteService {
         nowIso,
       });
     } catch (error: unknown) {
+      this.logger.error({
+        event: 'quiz_update_failed',
+        quizId,
+        userId: user.sub,
+        errorCode: (error as { code?: string })?.code ?? 'UNKNOWN',
+      });
       this.mapQuizUpdateError(error);
     }
+
+    this.logger.info({ event: 'quiz_updated', quizId, userId: user.sub });
 
     return this.quizReadService.getQuizById(quizId);
   }
@@ -187,6 +197,8 @@ export class QuizWriteService {
     const nowIso = new Date().toISOString();
 
     await this.quizRepository.softDeleteQuiz(quizId, nowIso);
+
+    this.logger.info({ event: 'quiz_deleted', quizId, userId: user.sub });
 
     return { message: 'Quiz deleted successfully' };
   }

@@ -1,22 +1,21 @@
 import {
   ForbiddenException,
   Injectable,
-  Optional,
   type CanActivate,
   type ExecutionContext,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
-import { hasPermission, Permission } from '../permissions';
-import { PERMISSIONS_KEY } from '../decorators/permissions.decorator';
 import { assertRequestUser } from '../utils/request-user.util';
 import { IS_PUBLIC_KEY } from '@/common/decorators/public.decorator';
+import { hasPermission, Permission } from '../permissions';
+import { PERMISSIONS_KEY } from '../decorators/permissions.decorator';
 
 @Injectable()
 export class PermissionsGuard implements CanActivate {
   constructor(
     private readonly reflector: Reflector,
-    @Optional() @InjectPinoLogger(PermissionsGuard.name) private readonly logger?: PinoLogger,
+    @InjectPinoLogger(PermissionsGuard.name) private readonly logger: PinoLogger,
   ) {}
 
   canActivate(context: ExecutionContext): boolean {
@@ -50,7 +49,7 @@ export class PermissionsGuard implements CanActivate {
       hasPermission(requestUser.role, permission),
     );
     if (!allowed) {
-      this.logger?.warn({
+      this.logger.warn({
         event: 'permissions_guard_forbidden',
         userId: requestUser.sub,
         userRole: requestUser.role,

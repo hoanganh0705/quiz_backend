@@ -198,8 +198,6 @@ export class AuthService {
     this.logger.warn({
       event: 'auth_refresh_reuse_detected_hash_mismatch',
       userId: payload.sub,
-      sessionId: session.sessionId,
-      jti: payload.jti,
     });
 
     return this.revokeAndReject(
@@ -410,7 +408,7 @@ export class AuthService {
 
     const user = await this.userRepository.findActiveIdentityById(existingSession.userId);
     if (!user) {
-      this.logger.warn({ event: 'auth_refresh_user_not_found', userId: existingSession.userId });
+      this.logger.warn({ event: 'auth_refresh_user_not_found' });
       throw new UserNotFoundError();
     }
 
@@ -430,7 +428,7 @@ export class AuthService {
       return;
     }
 
-    this.logger.warn({ event: 'auth_logout_fallback_to_hash' });
+    this.logger.info({ event: 'auth_logout_fallback_to_hash', reason: 'refresh_token_not_jwt' });
     const refreshTokenHash = this.cryptoService.hashSha256(refreshToken);
     await this.sessionService.revokeSessionByRefreshTokenHash(refreshTokenHash);
   }

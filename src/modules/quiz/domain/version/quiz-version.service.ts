@@ -1,5 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { hasPermission, Permission } from '@/common/authorization/permissions';
+import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
 import {
   QUIZ_VERSION_REPOSITORY_PORT,
@@ -42,6 +43,7 @@ export class QuizVersionService {
     @Inject(QUIZ_QUESTION_REPOSITORY_PORT)
     private readonly quizQuestionRepository: QuizQuestionRepositoryPort,
     private readonly quizReadService: QuizReadService,
+    @InjectPinoLogger(QuizVersionService.name) private readonly logger: PinoLogger,
   ) {}
 
   private mapVersionInsertError(error: unknown): never {
@@ -88,6 +90,12 @@ export class QuizVersionService {
         nowIso,
       });
     } catch (error: unknown) {
+      this.logger.error({
+        event: 'quiz_version_draft_from_source_failed',
+        sourceVersionId: sourceVersion.quizVersionId,
+        userId: user.sub,
+        errorCode: (error as { code?: string })?.code ?? 'UNKNOWN',
+      });
       this.mapVersionInsertError(error);
     }
   }
@@ -130,7 +138,7 @@ export class QuizVersionService {
     const nowIso = new Date().toISOString();
 
     try {
-      return await this.quizVersionRepository.createQuizVersion({
+      const result = await this.quizVersionRepository.createQuizVersion({
         quizId,
         versionNumber,
         difficulty: payload.difficulty,
@@ -140,7 +148,24 @@ export class QuizVersionService {
         createdByUserId: user.sub,
         nowIso,
       });
+
+      this.logger.info({
+        event: 'quiz_version_created',
+        quizId,
+        versionId: result.quizVersionId,
+        versionNumber,
+        userId: user.sub,
+        sourceVersionId: payload.sourceVersionId ?? null,
+      });
+
+      return result;
     } catch (error: unknown) {
+      this.logger.error({
+        event: 'quiz_version_create_failed',
+        quizId,
+        userId: user.sub,
+        errorCode: (error as { code?: string })?.code ?? 'UNKNOWN',
+      });
       this.mapVersionInsertError(error);
     }
   }
@@ -297,6 +322,11 @@ export class QuizVersionService {
     });
 
     if (!canPublish) {
+      this.logger.warn({
+        event: 'quiz_version_publish_forbidden',
+        quizVersionId,
+        userId: user.sub,
+      });
       throw new QuizForbiddenError('You do not have permission to publish this quiz version');
     }
 
@@ -306,6 +336,13 @@ export class QuizVersionService {
     const questionCount =
       await this.quizQuestionRepository.countQuestionsByVersionId(quizVersionId);
     if (questionCount < MIN_QUESTIONS_TO_PUBLISH) {
+      this.logger.warn({
+        event: 'quiz_version_publish_insufficient_questions',
+        quizVersionId,
+        quizId: version.quizId,
+        questionCount,
+        required: MIN_QUESTIONS_TO_PUBLISH,
+      });
       throw new QuizInsufficientQuestionsError(QUIZ_INSUFFICIENT_QUESTIONS_MESSAGE);
     }
 
@@ -321,11 +358,22 @@ export class QuizVersionService {
       const current = await this.quizVersionRepository.getQuizVersionById(quizVersionId);
 
       if (!current) {
+        this.logger.error({
+          event: 'quiz_version_publish_unexpected_null',
+          quizVersionId,
+        });
         throw new QuizNotFoundError('Quiz version not found');
       }
 
       return current;
     }
+
+    this.logger.info({
+      event: 'quiz_version_published',
+      quizVersionId,
+      quizId: version.quizId,
+      userId: user.sub,
+    });
 
     return publishedVersion;
   }

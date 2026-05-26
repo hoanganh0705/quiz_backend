@@ -6,6 +6,7 @@ import {
   InternalServerErrorException,
   NotFoundException,
 } from '@nestjs/common';
+import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { and, desc, eq, isNull, or, sql } from 'drizzle-orm';
 import { DRIZZLE, type DrizzleDB } from '@/core/database/database.module';
 import { tags } from '@/core/database/schema';
@@ -48,7 +49,10 @@ const TAG_COLUMNS = {
 
 @Injectable()
 export class TagService {
-  constructor(@Inject(DRIZZLE) private readonly db: DrizzleDB) {}
+  constructor(
+    @Inject(DRIZZLE) private readonly db: DrizzleDB,
+    @InjectPinoLogger(TagService.name) private readonly logger: PinoLogger,
+  ) {}
 
   private readonly cursorTagIdPattern =
     /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -173,18 +177,31 @@ export class TagService {
 
     const nowIso = new Date().toISOString();
 
-    const [createdTag] = await this.db
-      .insert(tags)
-      .values({
+    let createdTag: TagRow | undefined;
+
+    try {
+      [createdTag] = await this.db
+        .insert(tags)
+        .values({
+          name,
+          slug,
+          createdAt: nowIso,
+          updatedAt: nowIso,
+        })
+        .returning(TAG_COLUMNS);
+    } catch (error: unknown) {
+      this.logger.error({
+        event: 'tag_create_failed',
         name,
         slug,
-        createdAt: nowIso,
-        updatedAt: nowIso,
-      })
-      .returning(TAG_COLUMNS)
-      .catch((error: unknown) => this.mapUniqueConflict(error, TAG_UNIQUE_CONFLICT_MESSAGE));
+        errorCode: (error as { code?: string })?.code ?? 'UNKNOWN',
+      });
+      this.mapUniqueConflict(error, TAG_UNIQUE_CONFLICT_MESSAGE);
+    }
 
-    return this.toTagResponse(createdTag as TagRow);
+    this.logger.info({ event: 'tag_created', tagId: createdTag.tagId, slug });
+
+    return this.toTagResponse(createdTag);
   }
 
   async updateTagById(tagId: string, payload: UpdateTagDto): Promise<TagResponseDto> {
@@ -211,11 +228,21 @@ export class TagService {
       })
       .where(and(eq(tags.tagId, tagId), isNull(tags.deletedAt)))
       .returning(TAG_COLUMNS)
-      .catch((error: unknown) => this.mapUniqueConflict(error, TAG_UNIQUE_CONFLICT_MESSAGE));
+      .catch((error: unknown) => {
+        this.logger.error({
+          event: 'tag_update_failed',
+          tagId,
+          errorCode: (error as { code?: string })?.code ?? 'UNKNOWN',
+        });
+        this.mapUniqueConflict(error, TAG_UNIQUE_CONFLICT_MESSAGE);
+      });
 
     if (!updatedTag) {
+      this.logger.warn({ event: 'tag_update_not_found', tagId });
       throw new NotFoundException('Tag not found');
     }
+
+    this.logger.info({ event: 'tag_updated', tagId });
 
     return this.toTagResponse(updatedTag as TagRow);
   }
@@ -232,6 +259,8 @@ export class TagService {
         updatedAt: nowIso,
       })
       .where(and(eq(tags.tagId, tagId), isNull(tags.deletedAt)));
+
+    this.logger.info({ event: 'tag_deleted', tagId });
 
     return {
       message: 'Tag deleted successfully',

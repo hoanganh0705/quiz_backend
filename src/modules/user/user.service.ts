@@ -1,4 +1,5 @@
 import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import type { UserRepositoryPort } from './domain/ports/user-repository.port';
 import { USER_REPOSITORY_PORT } from './domain/ports/user-repository.port';
 import { UpdateMeDto } from './dto/request/update-me.dto';
@@ -13,6 +14,7 @@ export class UserService {
   constructor(
     @Inject(USER_REPOSITORY_PORT)
     private readonly userRepository: UserRepositoryPort,
+    @InjectPinoLogger(UserService.name) private readonly logger: PinoLogger,
   ) {}
 
   private toUserMeResponse(user: UserMeRow): UserMeResponseDto {
@@ -73,8 +75,11 @@ export class UserService {
     const updatedUser = await this.userRepository.updateProfile(userId, profilePatch, nowIso);
 
     if (!updatedUser) {
+      this.logger.warn({ event: 'user_profile_update_not_found', userId });
       throw new NotFoundException('User not found');
     }
+
+    this.logger.info({ event: 'user_profile_updated', userId });
 
     return this.toUserMeResponse(updatedUser);
   }
@@ -91,8 +96,11 @@ export class UserService {
     const updatedUser = await this.userRepository.updateSettings(userId, payload.settings, nowIso);
 
     if (!updatedUser) {
+      this.logger.warn({ event: 'user_settings_update_not_found', userId });
       throw new NotFoundException('User not found');
     }
+
+    this.logger.info({ event: 'user_settings_updated', userId });
 
     return this.toUserMeResponse(updatedUser);
   }
