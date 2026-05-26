@@ -10,7 +10,10 @@ import {
   categories,
   users,
 } from '@/core/database/schema';
-import type { TournamentDifficulty, TournamentParticipantStatus } from '@/modules/tournament/types/tournament.types';
+import type {
+  TournamentDifficulty,
+  TournamentParticipantStatus,
+} from '@/modules/tournament/types/tournament.types';
 import type {
   TournamentRepositoryPort,
   TournamentRow,
@@ -67,11 +70,17 @@ export class TournamentRepository implements TournamentRepositoryPort {
         updatedAt: tournaments.updatedAt,
         categoryName: categories.name,
         categorySlug: categories.slug,
-        totalParticipants: sql<number>`count(${tournamentParticipants.participantId}) over (partition by ${tournamentParticipants.tournamentId})`.as('total_participants'),
+        totalParticipants:
+          sql<number>`count(${tournamentParticipants.participantId}) over (partition by ${tournamentParticipants.tournamentId})`.as(
+            'total_participants',
+          ),
       })
       .from(tournaments)
       .leftJoin(categories, eq(tournaments.categoryId, categories.categoryId))
-      .leftJoin(tournamentParticipants, eq(tournaments.tournamentId, tournamentParticipants.tournamentId))
+      .leftJoin(
+        tournamentParticipants,
+        eq(tournaments.tournamentId, tournamentParticipants.tournamentId),
+      )
       .where(and(eq(tournaments.tournamentId, tournamentId), isNull(tournaments.deletedAt)))
       .limit(1);
 
@@ -287,7 +296,9 @@ export class TournamentRepository implements TournamentRepositoryPort {
     return (row as TournamentRoundRow | undefined) ?? null;
   }
 
-  async getRoundDetailById(roundId: string): Promise<import('@/modules/tournament/domain/ports').TournamentRoundDetailRow | null> {
+  async getRoundDetailById(
+    roundId: string,
+  ): Promise<import('@/modules/tournament/domain/ports').TournamentRoundDetailRow | null> {
     // Not implemented yet - returns null, can be extended later
     return null;
   }

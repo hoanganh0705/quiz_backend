@@ -45,10 +45,7 @@ export class ReviewDomainExceptionFilter implements ExceptionFilter {
       return { status: HttpStatus.CONFLICT, message: error.message };
     }
 
-    if (
-      error instanceof ReviewValidationError ||
-      error instanceof ReviewAttemptRequiredError
-    ) {
+    if (error instanceof ReviewValidationError || error instanceof ReviewAttemptRequiredError) {
       return { status: HttpStatus.BAD_REQUEST, message: error.message };
     }
 

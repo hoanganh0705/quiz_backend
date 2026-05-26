@@ -2,7 +2,16 @@ import { Inject, Injectable } from '@nestjs/common';
 import { and, desc, eq, isNull, or, sql } from 'drizzle-orm';
 import { DRIZZLE } from '../drizzle.constants';
 import type { DrizzleDB } from '../database.module';
-import { quizAttempts, quizAnswerOptions, quizQuestions, quizVersions, quizzes, quizAttemptAnswers, quizStats, users } from '../schema';
+import {
+  quizAttempts,
+  quizAnswerOptions,
+  quizQuestions,
+  quizVersions,
+  quizzes,
+  quizAttemptAnswers,
+  quizStats,
+  users,
+} from '../schema';
 import type { AttemptContextType } from '@/modules/attempt/types/attempt.types';
 import type {
   AttemptRow,
@@ -71,12 +80,7 @@ export class AttemptRepository implements AttemptRepositoryPort {
       .from(quizAttempts)
       .innerJoin(quizVersions, eq(quizAttempts.quizVersionId, quizVersions.quizVersionId))
       .innerJoin(quizzes, eq(quizVersions.quizId, quizzes.quizId))
-      .where(
-        and(
-          eq(quizAttempts.attemptId, attemptId),
-          isNull(quizzes.deletedAt),
-        ),
-      )
+      .where(and(eq(quizAttempts.attemptId, attemptId), isNull(quizzes.deletedAt)))
       .limit(1);
 
     return (row as AttemptDetailRow | undefined) ?? null;
@@ -259,7 +263,10 @@ export class AttemptRepository implements AttemptRepositoryPort {
         isCorrect: quizAnswerOptions.isCorrect,
       })
       .from(quizAttemptAnswers)
-      .leftJoin(quizAnswerOptions, eq(quizAttemptAnswers.selectedOptionId, quizAnswerOptions.optionId))
+      .leftJoin(
+        quizAnswerOptions,
+        eq(quizAttemptAnswers.selectedOptionId, quizAnswerOptions.optionId),
+      )
       .where(eq(quizAttemptAnswers.attemptId, attemptId))
       .orderBy(quizAttemptAnswers.answeredAt);
 
@@ -303,10 +310,7 @@ export class AttemptRepository implements AttemptRepositoryPort {
       .select({ optionId: quizAnswerOptions.optionId })
       .from(quizAnswerOptions)
       .where(
-        and(
-          eq(quizAnswerOptions.optionId, optionId),
-          eq(quizAnswerOptions.questionId, questionId),
-        ),
+        and(eq(quizAnswerOptions.optionId, optionId), eq(quizAnswerOptions.questionId, questionId)),
       )
       .limit(1);
 
@@ -347,12 +351,7 @@ export class AttemptRepository implements AttemptRepositoryPort {
         finishedAt: params.nowIso,
         updatedAt: params.nowIso,
       })
-      .where(
-        and(
-          eq(quizAttempts.attemptId, params.attemptId),
-          eq(quizAttempts.status, 'started'),
-        ),
-      )
+      .where(and(eq(quizAttempts.attemptId, params.attemptId), eq(quizAttempts.status, 'started')))
       .returning({
         attemptId: quizAttempts.attemptId,
         userId: quizAttempts.userId,

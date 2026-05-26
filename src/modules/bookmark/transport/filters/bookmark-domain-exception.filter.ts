@@ -35,24 +35,15 @@ export class BookmarkDomainExceptionFilter implements ExceptionFilter {
   }
 
   private mapToHttp(error: BookmarkDomainError): { status: number; message: string } {
-    if (
-      error instanceof CollectionNotFoundError ||
-      error instanceof BookmarkNotFoundError
-    ) {
+    if (error instanceof CollectionNotFoundError || error instanceof BookmarkNotFoundError) {
       return { status: HttpStatus.NOT_FOUND, message: error.message };
     }
 
-    if (
-      error instanceof CollectionForbiddenError ||
-      error instanceof BookmarkForbiddenError
-    ) {
+    if (error instanceof CollectionForbiddenError || error instanceof BookmarkForbiddenError) {
       return { status: HttpStatus.FORBIDDEN, message: error.message };
     }
 
-    if (
-      error instanceof CollectionConflictError ||
-      error instanceof BookmarkConflictError
-    ) {
+    if (error instanceof CollectionConflictError || error instanceof BookmarkConflictError) {
       return { status: HttpStatus.CONFLICT, message: error.message };
     }
 
