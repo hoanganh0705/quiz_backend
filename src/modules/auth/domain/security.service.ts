@@ -170,17 +170,10 @@ export class SecurityService {
     }
 
     this.logger.warn({
-      event: this.authConfig.isSessionBindingStrict
-        ? 'auth_refresh_session_binding_mismatch'
-        : 'auth_session_binding_suspicious',
+      event: 'auth_refresh_session_binding_changed',
       userId: session.userId,
-      jti: session.jti,
       hasStoredIpAddress: hasSessionIp,
       hasRequestIpAddress: hasRequestIp,
-      hasStoredDeviceBrowser: hasSessionDeviceBrowser,
-      hasRequestDeviceBrowser: hasRequestDeviceBrowser,
-      hasStoredDeviceType: hasSessionDeviceType,
-      hasRequestDeviceType: hasRequestDeviceType,
       ipChanged,
       deviceMismatch,
       strictMode: this.authConfig.isSessionBindingStrict,
@@ -238,10 +231,9 @@ export class SecurityService {
       throw new TokenReuseDetectedError();
     }
 
-    this.logger.warn({
+    this.logger.info({
       event: 'auth_refresh_reuse_within_grace_window',
       userId: payload.sub,
-      jti: payload.jti,
       sessionId: session.sessionId,
       reuseCount: nextReuseCount,
     });

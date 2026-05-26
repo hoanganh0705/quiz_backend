@@ -1,4 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
+import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { hasPermission, Permission } from '@/common/authorization/permissions';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
 import { CreateQuizQuestionDto } from '../../dto/request/create-quiz-question.dto';
@@ -34,6 +35,7 @@ export class QuizQuestionService {
     private readonly quizQuestionRepository: QuizQuestionRepositoryPort,
     @Inject(QUIZ_VERSION_REPOSITORY_PORT)
     private readonly quizVersionRepository: QuizVersionRepositoryPort,
+    @InjectPinoLogger(QuizQuestionService.name) private readonly logger: PinoLogger,
   ) {}
 
   private mapQuestionInsertError(error: unknown): never {
@@ -172,14 +174,28 @@ export class QuizQuestionService {
 
       questionId = createdQuestion.questionId;
     } catch (error: unknown) {
+      this.logger.error({
+        event: 'quiz_question_create_failed',
+        quizVersionId,
+        userId: user.sub,
+        errorCode: (error as { code?: string })?.code ?? 'UNKNOWN',
+      });
       this.mapQuestionInsertError(error);
     }
 
     const rows = await this.quizQuestionRepository.getQuestionById(questionId);
 
     if (rows.length === 0) {
+      this.logger.error({ event: 'quiz_question_created_but_not_found', questionId });
       throw new QuizNotFoundError('Quiz question not found');
     }
+
+    this.logger.info({
+      event: 'quiz_question_created',
+      questionId,
+      quizVersionId,
+      userId: user.sub,
+    });
 
     return rows;
   }
@@ -220,14 +236,29 @@ export class QuizQuestionService {
       const result = await this.quizQuestionRepository.createQuestionsWithOptions(questions);
       questionIds = result.questionIds;
     } catch (error: unknown) {
+      this.logger.error({
+        event: 'quiz_questions_batch_create_failed',
+        quizVersionId,
+        userId: user.sub,
+        count: payload.questions.length,
+        errorCode: (error as { code?: string })?.code ?? 'UNKNOWN',
+      });
       this.mapQuestionInsertError(error);
     }
 
     const rows = await this.quizQuestionRepository.getQuestionsByIds(questionIds);
 
     if (rows.length === 0) {
+      this.logger.error({ event: 'quiz_questions_created_but_not_found', questionIds });
       throw new QuizNotFoundError('Quiz questions not found');
     }
+
+    this.logger.info({
+      event: 'quiz_questions_batch_created',
+      count: rows.length,
+      quizVersionId,
+      userId: user.sub,
+    });
 
     return rows;
   }

@@ -6,6 +6,7 @@ import {
   InternalServerErrorException,
   NotFoundException,
 } from '@nestjs/common';
+import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { and, desc, eq, isNull, or, sql } from 'drizzle-orm';
 import { DRIZZLE, type DrizzleDB } from '@/core/database/database.module';
 import { categories } from '@/core/database/schema';
@@ -56,7 +57,10 @@ const CATEGORY_COLUMNS = {
 
 @Injectable()
 export class CategoryService {
-  constructor(@Inject(DRIZZLE) private readonly db: DrizzleDB) {}
+  constructor(
+    @Inject(DRIZZLE) private readonly db: DrizzleDB,
+    @InjectPinoLogger(CategoryService.name) private readonly logger: PinoLogger,
+  ) {}
 
   private readonly categoryIdPattern =
     /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -194,20 +198,33 @@ export class CategoryService {
 
     const nowIso = new Date().toISOString();
 
-    const [createdCategory] = await this.db
-      .insert(categories)
-      .values({
+    let createdCategory: CategoryRow | undefined;
+
+    try {
+      [createdCategory] = await this.db
+        .insert(categories)
+        .values({
+          name,
+          slug,
+          description,
+          imageUrl,
+          createdAt: nowIso,
+          updatedAt: nowIso,
+        })
+        .returning(CATEGORY_COLUMNS);
+    } catch (error: unknown) {
+      this.logger.error({
+        event: 'category_create_failed',
         name,
         slug,
-        description,
-        imageUrl,
-        createdAt: nowIso,
-        updatedAt: nowIso,
-      })
-      .returning(CATEGORY_COLUMNS)
-      .catch((error: unknown) => this.mapUniqueConflict(error, CATEGORY_UNIQUE_CONFLICT_MESSAGE));
+        errorCode: (error as { code?: string })?.code ?? 'UNKNOWN',
+      });
+      this.mapUniqueConflict(error, CATEGORY_UNIQUE_CONFLICT_MESSAGE);
+    }
 
-    return this.toCategoryResponse(createdCategory as CategoryRow);
+    this.logger.info({ event: 'category_created', categoryId: createdCategory.categoryId, slug });
+
+    return this.toCategoryResponse(createdCategory);
   }
 
   async updateCategoryById(
@@ -245,11 +262,21 @@ export class CategoryService {
       })
       .where(and(eq(categories.categoryId, categoryId), isNull(categories.deletedAt)))
       .returning(CATEGORY_COLUMNS)
-      .catch((error: unknown) => this.mapUniqueConflict(error, CATEGORY_UNIQUE_CONFLICT_MESSAGE));
+      .catch((error: unknown) => {
+        this.logger.error({
+          event: 'category_update_failed',
+          categoryId,
+          errorCode: (error as { code?: string })?.code ?? 'UNKNOWN',
+        });
+        this.mapUniqueConflict(error, CATEGORY_UNIQUE_CONFLICT_MESSAGE);
+      });
 
     if (!updatedCategory) {
+      this.logger.warn({ event: 'category_update_not_found', categoryId });
       throw new NotFoundException('Category not found');
     }
+
+    this.logger.info({ event: 'category_updated', categoryId });
 
     return this.toCategoryResponse(updatedCategory as CategoryRow);
   }
@@ -266,6 +293,8 @@ export class CategoryService {
         updatedAt: nowIso,
       })
       .where(and(eq(categories.categoryId, categoryId), isNull(categories.deletedAt)));
+
+    this.logger.info({ event: 'category_deleted', categoryId });
 
     return {
       message: 'Category deleted successfully',
