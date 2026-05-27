@@ -25,12 +25,12 @@ import { UpdateCategoryDto } from './dto/request/update-category.dto';
 import { CategoryListResponseDto } from './dto/response/category-list-response.dto';
 import { CategoryResponseDto } from './dto/response/category-response.dto';
 import { DeleteCategoryResponseDto } from './dto/response/delete-category-response.dto';
-import { CategoryService } from './category.service';
+import { CategoryApplicationService } from './application/category.application.service';
 
 @ApiTags('categories')
 @Controller('categories')
 export class CategoryController {
-  constructor(private readonly categoryService: CategoryService) {}
+  constructor(private readonly categoryApplicationService: CategoryApplicationService) {}
 
   @Get()
   @Public()
@@ -40,7 +40,7 @@ export class CategoryController {
   })
   @ApiOkResponse({ description: 'Categories returned', type: CategoryListResponseDto })
   listCategories(@Query() query: ListCategoriesQueryDto): Promise<CategoryListResponseDto> {
-    return this.categoryService.listActiveCategories(query);
+    return this.categoryApplicationService.listCategories(query);
   }
 
   @Get(':slug')
@@ -52,7 +52,7 @@ export class CategoryController {
   @ApiOkResponse({ description: 'Category found', type: CategoryResponseDto })
   @ApiNotFoundResponse({ description: 'Category not found' })
   getCategoryBySlug(@Param('slug') slug: string): Promise<CategoryResponseDto> {
-    return this.categoryService.getActiveCategoryBySlug(slug);
+    return this.categoryApplicationService.getCategoryBySlug(slug);
   }
 
   @Post()
@@ -64,7 +64,7 @@ export class CategoryController {
   })
   @ApiCreatedResponse({ description: 'Category created', type: CategoryResponseDto })
   createCategory(@Body() payload: CreateCategoryDto): Promise<CategoryResponseDto> {
-    return this.categoryService.createCategory(payload);
+    return this.categoryApplicationService.createCategory(payload);
   }
 
   @Patch(':id')
@@ -80,7 +80,7 @@ export class CategoryController {
     @Param('id', new ParseUUIDPipe()) categoryId: string,
     @Body() payload: UpdateCategoryDto,
   ): Promise<CategoryResponseDto> {
-    return this.categoryService.updateCategoryById(categoryId, payload);
+    return this.categoryApplicationService.updateCategory(categoryId, payload);
   }
 
   @Delete(':id')
@@ -95,6 +95,6 @@ export class CategoryController {
   deleteCategory(
     @Param('id', new ParseUUIDPipe()) categoryId: string,
   ): Promise<DeleteCategoryResponseDto> {
-    return this.categoryService.softDeleteCategoryById(categoryId);
+    return this.categoryApplicationService.deleteCategory(categoryId);
   }
 }
