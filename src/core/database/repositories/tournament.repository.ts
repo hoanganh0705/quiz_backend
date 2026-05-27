@@ -115,7 +115,7 @@ export class TournamentRepository implements TournamentRepositoryPort {
     }
 
     if (params.filters?.difficulty) {
-      filters.push(eq(tournaments.difficulty, params.filters.difficulty as TournamentDifficulty));
+      filters.push(eq(tournaments.difficulty, params.filters.difficulty));
     }
 
     if (params.filters?.categoryId) {
@@ -296,11 +296,12 @@ export class TournamentRepository implements TournamentRepositoryPort {
     return (row as TournamentRoundRow | undefined) ?? null;
   }
 
-  async getRoundDetailById(
+  getRoundDetailById(
     roundId: string,
   ): Promise<import('@/modules/tournament/domain/ports').TournamentRoundDetailRow | null> {
     // Not implemented yet - returns null, can be extended later
-    return null;
+    void roundId;
+    return Promise.resolve(null);
   }
 
   async getRoundsByTournament(tournamentId: string): Promise<TournamentRoundRow[]> {
