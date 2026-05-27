@@ -1,6 +1,6 @@
 import { Transform } from 'class-transformer';
 import { IsOptional, IsString, IsUrl, Matches, MaxLength, MinLength } from 'class-validator';
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { ApiPropertyOptional } from '@nestjs/swagger';
 import { DEFAULT_SLUG_PATTERN } from '@/common/utils/slug.util';
 import {
   trimString,

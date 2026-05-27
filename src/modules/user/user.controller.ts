@@ -4,13 +4,13 @@ import { CurrentUser } from '@/common/decorators/current-user.decorator';
 import { UpdateMeSettingsDto } from './dto/request/update-me-settings.dto';
 import { UpdateMeDto } from './dto/request/update-me.dto';
 import { UserMeResponseDto } from './dto/response/user-me-response.dto';
-import { UserService } from './user.service';
+import { UserApplicationService } from './application/user.application.service';
 
 @ApiTags('users')
 @ApiBearerAuth()
 @Controller('users')
 export class UserController {
-  constructor(private readonly userService: UserService) {}
+  constructor(private readonly userApplicationService: UserApplicationService) {}
 
   @Get('me')
   @ApiOperation({
@@ -20,7 +20,7 @@ export class UserController {
   })
   @ApiOkResponse({ description: 'Profile returned', type: UserMeResponseDto })
   me(@CurrentUser('sub') userId: string): Promise<UserMeResponseDto> {
-    return this.userService.getMeById(userId);
+    return this.userApplicationService.getMe(userId);
   }
 
   @Patch('me')
@@ -33,7 +33,7 @@ export class UserController {
     @CurrentUser('sub') userId: string,
     @Body() payload: UpdateMeDto,
   ): Promise<UserMeResponseDto> {
-    return this.userService.updateMeById(userId, payload);
+    return this.userApplicationService.updateProfile(userId, payload);
   }
 
   @Patch('me/settings')
@@ -46,6 +46,6 @@ export class UserController {
     @CurrentUser('sub') userId: string,
     @Body() payload: UpdateMeSettingsDto,
   ): Promise<UserMeResponseDto> {
-    return this.userService.updateMeSettingsById(userId, payload);
+    return this.userApplicationService.updateSettings(userId, payload);
   }
 }

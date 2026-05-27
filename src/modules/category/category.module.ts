@@ -1,11 +1,20 @@
 import { Module } from '@nestjs/common';
-import { CategoryService } from './category.service';
 import { CategoryController } from './category.controller';
+import { CategoryApplicationService } from './application/category.application.service';
+import { CategoryDomainService } from './domain/category.service';
+import { CategoryRepository } from './infrastructure/category.repository';
 import { DatabaseModule } from '@/core/database/database.module';
+import { CATEGORY_REPOSITORY_PORT } from './domain/ports';
 
 @Module({
   imports: [DatabaseModule],
-  providers: [CategoryService],
   controllers: [CategoryController],
+  providers: [
+    CategoryApplicationService,
+    CategoryDomainService,
+    CategoryRepository,
+    { provide: CATEGORY_REPOSITORY_PORT, useClass: CategoryRepository },
+  ],
+  exports: [CategoryApplicationService, CATEGORY_REPOSITORY_PORT],
 })
 export class CategoryModule {}
