@@ -7,7 +7,7 @@ import { InstanceResponseMapper } from './mappers/instance-response.mapper';
 import { InstanceDomainExceptionFilter } from './transport/filters/instance-domain-exception.filter';
 import { WsExceptionFilter } from './transport/filters/ws-exception.filter';
 import { QUIZ_INSTANCE_REPOSITORY_PORT } from './domain/ports';
-import { QuizInstanceRepository } from '@/core/database/repositories/quiz-instance.repository';
+import { QuizInstanceRepository } from './infrastructure/repositories/quiz-instance.repository';
 import { JwtModule } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 

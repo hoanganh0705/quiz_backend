@@ -3,7 +3,7 @@ import { DRIZZLE } from '@/core/database/drizzle.constants';
 import type { DrizzleDB } from '@/core/database/database.module';
 import { tags } from '@/core/database/schema';
 import { and, desc, eq, isNull, or, sql } from 'drizzle-orm';
-import type { TagRepositoryPort, TagRow } from '../domain/ports/tag-repository.port';
+import type { TagRepositoryPort, TagRow } from '../../domain/ports/tag-repository.port';
 
 const TAG_COLUMNS = {
   tagId: tags.tagId,

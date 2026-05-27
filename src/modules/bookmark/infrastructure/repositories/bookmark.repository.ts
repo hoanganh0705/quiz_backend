@@ -1,8 +1,8 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { and, eq, sql } from 'drizzle-orm';
 import type { AnyPgColumn } from 'drizzle-orm/pg-core';
-import { DRIZZLE } from '../drizzle.constants';
-import type { DrizzleDB } from '../database.module';
+import { DRIZZLE } from '@/core/database/drizzle.constants';
+import type { DrizzleDB } from '@/core/database/database.module';
 import { bookmarkCollections, bookmarkedQuizzes, quizzes } from '@/core/database/schema';
 import type {
   BookmarkCollectionRow,
