@@ -1,8 +1,8 @@
 import { Inject, Injectable, InternalServerErrorException } from '@nestjs/common';
 import { and, eq, gt, isNull, or, sql } from 'drizzle-orm';
-import { DRIZZLE } from '../drizzle.constants';
-import type { DrizzleDB } from '../database.module';
-import { users } from '../schema';
+import { DRIZZLE } from '@/core/database/drizzle.constants';
+import type { DrizzleDB } from '@/core/database/database.module';
+import { users } from '@/core/database/schema';
 import type { UserRepositoryPort } from '@/modules/auth/domain/ports/user-repository.port';
 import type { UserMeRow } from '@/modules/user/domain/ports/user-repository.port';
 import { ResourceConflictError } from '@/modules/auth/domain/errors';
@@ -218,7 +218,7 @@ export class UserRepository implements UserRepositoryPort {
       })
       .where(and(eq(users.userId, userId), isNull(users.deletedAt)))
       .catch(() => {
-        throw new InternalServerErrorException('Failed to verify user email');
+        throw new InternalServerErrorException('Failed to mark email as verified');
       });
   }
 
@@ -233,42 +233,5 @@ export class UserRepository implements UserRepositoryPort {
       });
 
     return (user as UserMeRow | undefined) ?? null;
-  }
-
-  async updateProfile(
-    userId: string,
-    patch: { displayName?: string | null; bio?: string | null; avatarUrl?: string | null },
-    nowIso: string,
-  ): Promise<UserMeRow | null> {
-    const [updated] = await this.db
-      .update(users)
-      .set({ ...patch, updatedAt: nowIso })
-      .where(and(eq(users.userId, userId), isNull(users.deletedAt)))
-      .returning(USER_ME_COLUMNS)
-      .catch(() => {
-        throw new InternalServerErrorException('Failed to update user profile');
-      });
-
-    return (updated as UserMeRow | undefined) ?? null;
-  }
-
-  async updateSettings(
-    userId: string,
-    settings: Record<string, unknown>,
-    nowIso: string,
-  ): Promise<UserMeRow | null> {
-    const [updated] = await this.db
-      .update(users)
-      .set({
-        settings: sql`${users.settings} || ${JSON.stringify(settings)}::jsonb`,
-        updatedAt: nowIso,
-      })
-      .where(and(eq(users.userId, userId), isNull(users.deletedAt)))
-      .returning(USER_ME_COLUMNS)
-      .catch(() => {
-        throw new InternalServerErrorException('Failed to update user settings');
-      });
-
-    return (updated as UserMeRow | undefined) ?? null;
   }
 }
