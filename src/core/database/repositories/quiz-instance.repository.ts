@@ -1,5 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { and, count, desc, eq } from 'drizzle-orm';
+import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 import { DRIZZLE } from '@/core/database/drizzle.constants';
 import type { DrizzleDB } from '@/core/database/database.module';
 import {
@@ -11,6 +12,28 @@ import {
   quizAttempts,
 } from '@/core/database/schema';
 import type { QuizInstanceRepositoryPort } from '@/modules/instance/domain/ports';
+
+const QUIZ_INSTANCE_COLUMNS = quizInstances as unknown as {
+  quizVersionId: AnyPgColumn;
+  hostUserId: AnyPgColumn;
+};
+
+const QUIZ_VERSION_COLUMNS = quizVersions as unknown as {
+  quizVersionId: AnyPgColumn;
+  quizId: AnyPgColumn;
+  versionNumber: AnyPgColumn;
+  difficulty: AnyPgColumn;
+  durationMs: AnyPgColumn;
+  passingScorePercent: AnyPgColumn;
+  rewardXp: AnyPgColumn;
+};
+
+const QUIZ_COLUMNS = quizzes as unknown as {
+  quizId: AnyPgColumn;
+  title: AnyPgColumn;
+  slug: AnyPgColumn;
+  creatorId: AnyPgColumn;
+};
 
 @Injectable()
 export class QuizInstanceRepository implements QuizInstanceRepositoryPort {
@@ -73,22 +96,25 @@ export class QuizInstanceRepository implements QuizInstanceRepositoryPort {
         startedAt: quizInstances.startedAt,
         closedAt: quizInstances.closedAt,
         updatedAt: quizInstances.updatedAt,
-        versionNumber: quizVersions.versionNumber,
-        difficulty: quizVersions.difficulty,
-        durationMs: quizVersions.durationMs,
-        passingScorePercent: quizVersions.passingScorePercent,
-        rewardXp: quizVersions.rewardXp,
-        quizId: quizzes.quizId,
-        quizTitle: quizzes.title,
-        quizSlug: quizzes.slug,
-        quizCreatorId: quizzes.creatorId,
+        versionNumber: QUIZ_VERSION_COLUMNS.versionNumber,
+        difficulty: QUIZ_VERSION_COLUMNS.difficulty,
+        durationMs: QUIZ_VERSION_COLUMNS.durationMs,
+        passingScorePercent: QUIZ_VERSION_COLUMNS.passingScorePercent,
+        rewardXp: QUIZ_VERSION_COLUMNS.rewardXp,
+        quizId: QUIZ_COLUMNS.quizId,
+        quizTitle: QUIZ_COLUMNS.title,
+        quizSlug: QUIZ_COLUMNS.slug,
+        quizCreatorId: QUIZ_COLUMNS.creatorId,
         hostUsername: users.username,
         hostDisplayName: users.displayName,
       })
       .from(quizInstances)
-      .innerJoin(quizVersions, eq(quizInstances.quizVersionId, quizVersions.quizVersionId))
-      .innerJoin(quizzes, eq(quizVersions.quizId, quizzes.quizId))
-      .innerJoin(users, eq(quizInstances.hostUserId, users.userId))
+      .innerJoin(
+        quizVersions,
+        eq(QUIZ_INSTANCE_COLUMNS.quizVersionId, QUIZ_VERSION_COLUMNS.quizVersionId),
+      )
+      .innerJoin(quizzes, eq(QUIZ_VERSION_COLUMNS.quizId, QUIZ_COLUMNS.quizId))
+      .innerJoin(users, eq(QUIZ_INSTANCE_COLUMNS.hostUserId, users.userId))
       .where(eq(quizInstances.instanceId, instanceId))
       .limit(1);
 

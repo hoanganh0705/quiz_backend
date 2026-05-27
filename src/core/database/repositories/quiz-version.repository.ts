@@ -1,8 +1,9 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { and, desc, eq, isNull, or, sql } from 'drizzle-orm';
+import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 import { DRIZZLE } from '../drizzle.constants';
 import type { DrizzleDB } from '../database.module';
-import { quizVersions, quizzes } from '../schema';
+import { quizVersions, quizzes } from '@/core/database/schema';
 import type {
   QuizVersionDetailRow,
   QuizVersionRepositoryPort,
@@ -11,6 +12,30 @@ import type {
 import type { QuizDifficulty } from '@/modules/quiz/types/quiz.types';
 import type { UpdateQuizVersionDto } from '@/modules/quiz/dto/request/update-quiz-version.dto';
 
+const QUIZ_VERSION_COLUMNS = quizVersions as unknown as {
+  quizVersionId: AnyPgColumn;
+  quizId: AnyPgColumn;
+  versionNumber: AnyPgColumn;
+  status: AnyPgColumn;
+  difficulty: AnyPgColumn;
+  durationMs: AnyPgColumn;
+  passingScorePercent: AnyPgColumn;
+  rewardXp: AnyPgColumn;
+  createdByUserId: AnyPgColumn;
+  createdAt: AnyPgColumn;
+  publishedAt: AnyPgColumn;
+  archivedAt: AnyPgColumn;
+  updatedAt: AnyPgColumn;
+};
+
+const QUIZ_COLUMNS = quizzes as unknown as {
+  quizId: AnyPgColumn;
+  creatorId: AnyPgColumn;
+  isVerified: AnyPgColumn;
+  isHidden: AnyPgColumn;
+  deletedAt: AnyPgColumn;
+};
+
 @Injectable()
 export class QuizVersionRepository implements QuizVersionRepositoryPort {
   constructor(@Inject(DRIZZLE) private readonly db: DrizzleDB) {}
@@ -18,26 +43,28 @@ export class QuizVersionRepository implements QuizVersionRepositoryPort {
   async getQuizVersionDetailById(quizVersionId: string): Promise<QuizVersionDetailRow | null> {
     const [row] = await this.db
       .select({
-        quizVersionId: quizVersions.quizVersionId,
-        quizId: quizVersions.quizId,
-        versionNumber: quizVersions.versionNumber,
-        status: quizVersions.status,
-        difficulty: quizVersions.difficulty,
-        durationMs: quizVersions.durationMs,
-        passingScorePercent: quizVersions.passingScorePercent,
-        rewardXp: quizVersions.rewardXp,
-        createdByUserId: quizVersions.createdByUserId,
-        createdAt: quizVersions.createdAt,
-        publishedAt: quizVersions.publishedAt,
-        archivedAt: quizVersions.archivedAt,
-        updatedAt: quizVersions.updatedAt,
-        quizCreatorId: quizzes.creatorId,
-        quizIsVerified: quizzes.isVerified,
-        quizIsHidden: quizzes.isHidden,
+        quizVersionId: QUIZ_VERSION_COLUMNS.quizVersionId,
+        quizId: QUIZ_VERSION_COLUMNS.quizId,
+        versionNumber: QUIZ_VERSION_COLUMNS.versionNumber,
+        status: QUIZ_VERSION_COLUMNS.status,
+        difficulty: QUIZ_VERSION_COLUMNS.difficulty,
+        durationMs: QUIZ_VERSION_COLUMNS.durationMs,
+        passingScorePercent: QUIZ_VERSION_COLUMNS.passingScorePercent,
+        rewardXp: QUIZ_VERSION_COLUMNS.rewardXp,
+        createdByUserId: QUIZ_VERSION_COLUMNS.createdByUserId,
+        createdAt: QUIZ_VERSION_COLUMNS.createdAt,
+        publishedAt: QUIZ_VERSION_COLUMNS.publishedAt,
+        archivedAt: QUIZ_VERSION_COLUMNS.archivedAt,
+        updatedAt: QUIZ_VERSION_COLUMNS.updatedAt,
+        quizCreatorId: QUIZ_COLUMNS.creatorId,
+        quizIsVerified: QUIZ_COLUMNS.isVerified,
+        quizIsHidden: QUIZ_COLUMNS.isHidden,
       })
       .from(quizVersions)
-      .innerJoin(quizzes, eq(quizVersions.quizId, quizzes.quizId))
-      .where(and(eq(quizVersions.quizVersionId, quizVersionId), isNull(quizzes.deletedAt)))
+      .innerJoin(quizzes, eq(QUIZ_VERSION_COLUMNS.quizId, QUIZ_COLUMNS.quizId))
+      .where(
+        and(eq(QUIZ_VERSION_COLUMNS.quizVersionId, quizVersionId), isNull(QUIZ_COLUMNS.deletedAt)),
+      )
       .limit(1);
 
     return (row as QuizVersionDetailRow | undefined) ?? null;
@@ -283,7 +310,7 @@ export class QuizVersionRepository implements QuizVersionRepositoryPort {
           publishedVersionId: params.quizVersionId,
           updatedAt: params.nowIso,
         })
-        .where(eq(quizzes.quizId, params.quizId));
+        .where(eq(QUIZ_COLUMNS.quizId, params.quizId));
 
       return publishedVersion as QuizVersionRow;
     });
