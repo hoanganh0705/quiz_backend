@@ -6,9 +6,9 @@ import { TournamentResponseMapper } from './mappers/tournament-response.mapper';
 import { TournamentController } from './transport/controller/tournament.controller';
 import { TournamentDomainExceptionFilter } from './transport/filters/tournament-domain-exception.filter';
 import { TOURNAMENT_REPOSITORY_PORT } from './domain/ports';
-import { TournamentRepository } from '@/core/database/repositories/tournament.repository';
+import { TournamentRepository } from './infrastructure/repositories/tournament.repository';
 import { ATTEMPT_REPOSITORY_PORT } from '@/modules/attempt/domain/ports';
-import { AttemptRepository } from '@/core/database/repositories/attempt.repository';
+import { AttemptRepository } from '@/modules/attempt/infrastructure/repositories/attempt.repository';
 
 @Module({
   imports: [DatabaseModule],

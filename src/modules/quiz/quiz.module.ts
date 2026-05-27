@@ -14,9 +14,9 @@ import { QuizDomainExceptionFilter } from './transport/filters/quiz-domain-excep
 import { QUIZ_REPOSITORY_PORT } from './domain/ports/quiz-repository.port';
 import { QUIZ_VERSION_REPOSITORY_PORT } from './domain/ports/quiz-version-repository.port';
 import { QUIZ_QUESTION_REPOSITORY_PORT } from './domain/ports/quiz-question-repository.port';
-import { QuizRepository } from '@/core/database/repositories/quiz.repository';
-import { QuizVersionRepository } from '@/core/database/repositories/quiz-version.repository';
-import { QuizQuestionRepository } from '@/core/database/repositories/quiz-question.repository';
+import { QuizRepository } from './infrastructure/repositories/quiz.repository';
+import { QuizVersionRepository } from './infrastructure/repositories/quiz-version.repository';
+import { QuizQuestionRepository } from './infrastructure/repositories/quiz-question.repository';
 
 @Module({
   imports: [DatabaseModule],

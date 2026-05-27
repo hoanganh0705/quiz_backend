@@ -3,7 +3,7 @@ import { DRIZZLE } from '@/core/database/drizzle.constants';
 import type { DrizzleDB } from '@/core/database/database.module';
 import { categories } from '@/core/database/schema';
 import { and, desc, eq, isNull, or, sql } from 'drizzle-orm';
-import type { CategoryRepositoryPort, CategoryRow } from '../domain/ports/category-repository.port';
+import type { CategoryRepositoryPort, CategoryRow } from '../../domain/ports/category-repository.port';
 
 const CATEGORY_COLUMNS = {
   categoryId: categories.categoryId,

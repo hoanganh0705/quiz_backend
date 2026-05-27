@@ -1,8 +1,8 @@
 import { Inject, Injectable, InternalServerErrorException } from '@nestjs/common';
 import { and, asc, desc, eq, gt, isNull, lt, inArray, sql } from 'drizzle-orm';
-import { DRIZZLE } from '../drizzle.constants';
-import type { DrizzleDB } from '../database.module';
-import { userSessions } from '../schema';
+import { DRIZZLE } from '@/core/database/drizzle.constants';
+import type { DrizzleDB } from '@/core/database/database.module';
+import { userSessions } from '@/core/database/schema';
 import type {
   SessionRepositoryPort,
   SessionRecord,
