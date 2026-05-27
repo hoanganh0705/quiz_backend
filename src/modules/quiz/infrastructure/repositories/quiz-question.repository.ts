@@ -1,8 +1,8 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { eq, inArray, sql } from 'drizzle-orm';
-import { DRIZZLE } from '../drizzle.constants';
-import type { DrizzleDB } from '../database.module';
-import { quizAnswerOptions, quizQuestions } from '../schema';
+import { DRIZZLE } from '@/core/database/drizzle.constants';
+import type { DrizzleDB } from '@/core/database/database.module';
+import { quizAnswerOptions, quizQuestions } from '@/core/database/schema';
 import type { QuizQuestionJoinRow, QuizQuestionRepositoryPort } from '@/modules/quiz/domain/ports';
 
 @Injectable()

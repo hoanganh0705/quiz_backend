@@ -3,7 +3,7 @@ import { DRIZZLE } from '@/core/database/drizzle.constants';
 import type { DrizzleDB } from '@/core/database/database.module';
 import { users } from '@/core/database/schema';
 import { and, eq, isNull, sql } from 'drizzle-orm';
-import type { UserMeRow, UserRepositoryPort } from '../domain/ports/user-repository.port';
+import type { UserMeRow, UserRepositoryPort } from '../../domain/ports/user-repository.port';
 
 const USER_ME_COLUMNS = {
   userId: users.userId,
