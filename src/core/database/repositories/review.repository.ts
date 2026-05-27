@@ -1,13 +1,31 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { and, desc, eq, or, sql } from 'drizzle-orm';
+import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 import { DRIZZLE } from '../drizzle.constants';
 import type { DrizzleDB } from '../database.module';
-import { quizReviews, users, quizzes, quizAttempts, quizVersions } from '../schema';
+import { quizReviews, users, quizzes, quizAttempts, quizVersions } from '@/core/database/schema';
 import type {
   ReviewRow,
   ReviewDetailRow,
   ReviewRepositoryPort,
 } from '@/modules/review/domain/ports';
+
+const QUIZ_COLUMNS = quizzes as unknown as {
+  quizId: AnyPgColumn;
+};
+
+const QUIZ_VERSION_COLUMNS = quizVersions as unknown as {
+  quizVersionId: AnyPgColumn;
+  quizId: AnyPgColumn;
+  difficulty: AnyPgColumn;
+  status: AnyPgColumn;
+};
+
+const QUIZ_ATTEMPT_COLUMNS = quizAttempts as unknown as {
+  quizVersionId: AnyPgColumn;
+  userId: AnyPgColumn;
+  status: AnyPgColumn;
+};
 
 @Injectable()
 export class ReviewRepository implements ReviewRepositoryPort {
@@ -154,12 +172,15 @@ export class ReviewRepository implements ReviewRepositoryPort {
     const [row] = await this.db
       .select({ attemptId: quizAttempts.attemptId })
       .from(quizAttempts)
-      .innerJoin(quizVersions, eq(quizAttempts.quizVersionId, quizVersions.quizVersionId))
+      .innerJoin(
+        quizVersions,
+        eq(QUIZ_ATTEMPT_COLUMNS.quizVersionId, QUIZ_VERSION_COLUMNS.quizVersionId),
+      )
       .where(
         and(
-          eq(quizVersions.quizId, quizId),
-          eq(quizAttempts.userId, userId),
-          eq(quizAttempts.status, 'completed'),
+          eq(QUIZ_VERSION_COLUMNS.quizId, quizId),
+          eq(QUIZ_ATTEMPT_COLUMNS.userId, userId),
+          eq(QUIZ_ATTEMPT_COLUMNS.status, 'completed'),
         ),
       )
       .limit(1);
@@ -169,10 +190,10 @@ export class ReviewRepository implements ReviewRepositoryPort {
 
   async getPublishedQuizVersionDifficulty(quizId: string): Promise<string | null> {
     const [row] = await this.db
-      .select({ difficulty: quizVersions.difficulty })
+      .select({ difficulty: QUIZ_VERSION_COLUMNS.difficulty })
       .from(quizVersions)
-      .innerJoin(quizzes, eq(quizVersions.quizId, quizzes.quizId))
-      .where(and(eq(quizzes.quizId, quizId), eq(quizVersions.status, 'published')))
+      .innerJoin(quizzes, eq(QUIZ_VERSION_COLUMNS.quizId, QUIZ_COLUMNS.quizId))
+      .where(and(eq(QUIZ_COLUMNS.quizId, quizId), eq(QUIZ_VERSION_COLUMNS.status, 'published')))
       .limit(1);
 
     return (row?.difficulty as string | null) ?? null;

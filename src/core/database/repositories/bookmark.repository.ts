@@ -1,8 +1,9 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, eq, count, sql } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
+import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 import { DRIZZLE } from '../drizzle.constants';
 import type { DrizzleDB } from '../database.module';
-import { bookmarkCollections, bookmarkedQuizzes, quizzes } from '../schema';
+import { bookmarkCollections, bookmarkedQuizzes, quizzes } from '@/core/database/schema';
 import type {
   BookmarkCollectionRow,
   BookmarkCollectionWithCountRow,
@@ -10,6 +11,15 @@ import type {
   BookmarkedQuizDetailRow,
   BookmarkRepositoryPort,
 } from '@/modules/bookmark/domain/ports';
+
+const QUIZ_COLUMNS = quizzes as unknown as {
+  quizId: AnyPgColumn;
+  title: AnyPgColumn;
+  slug: AnyPgColumn;
+  imageUrl: AnyPgColumn;
+  isFeatured: AnyPgColumn;
+  publishedVersionId: AnyPgColumn;
+};
 
 @Injectable()
 export class BookmarkRepository implements BookmarkRepositoryPort {
@@ -110,15 +120,15 @@ export class BookmarkRepository implements BookmarkRepositoryPort {
         notes: bookmarkedQuizzes.notes,
         bookmarkedAt: bookmarkedQuizzes.bookmarkedAt,
         updatedAt: bookmarkedQuizzes.updatedAt,
-        quizTitle: quizzes.title,
-        quizSlug: quizzes.slug,
-        quizImageUrl: quizzes.imageUrl,
-        quizIsFeatured: quizzes.isFeatured,
-        quizPublishedVersionId: quizzes.publishedVersionId,
+        quizTitle: QUIZ_COLUMNS.title,
+        quizSlug: QUIZ_COLUMNS.slug,
+        quizImageUrl: QUIZ_COLUMNS.imageUrl,
+        quizIsFeatured: QUIZ_COLUMNS.isFeatured,
+        quizPublishedVersionId: QUIZ_COLUMNS.publishedVersionId,
         quizDifficulty: sql<string | null>`NULL`.as('quiz_difficulty'),
       })
       .from(bookmarkedQuizzes)
-      .innerJoin(quizzes, eq(bookmarkedQuizzes.quizId, quizzes.quizId))
+      .innerJoin(quizzes, eq(bookmarkedQuizzes.quizId, QUIZ_COLUMNS.quizId))
       .where(eq(bookmarkedQuizzes.collectionId, collectionId))
       .orderBy(bookmarkedQuizzes.bookmarkedAt);
 

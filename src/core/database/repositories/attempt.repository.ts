@@ -1,5 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { and, desc, eq, isNull, or, sql } from 'drizzle-orm';
+import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 import { DRIZZLE } from '../drizzle.constants';
 import type { DrizzleDB } from '../database.module';
 import {
@@ -11,7 +12,7 @@ import {
   quizAttemptAnswers,
   quizStats,
   users,
-} from '../schema';
+} from '@/core/database/schema';
 import type { AttemptContextType } from '@/modules/attempt/types/attempt.types';
 import type {
   AttemptRow,
@@ -20,6 +21,32 @@ import type {
   AttemptAnswerRow,
   AttemptRepositoryPort,
 } from '@/modules/attempt/domain/ports';
+
+const QUIZ_COLUMNS = quizzes as unknown as {
+  quizId: AnyPgColumn;
+  title: AnyPgColumn;
+  slug: AnyPgColumn;
+  creatorId: AnyPgColumn;
+  deletedAt: AnyPgColumn;
+};
+
+const QUIZ_VERSION_COLUMNS = quizVersions as unknown as {
+  quizVersionId: AnyPgColumn;
+  quizId: AnyPgColumn;
+  versionNumber: AnyPgColumn;
+  difficulty: AnyPgColumn;
+  durationMs: AnyPgColumn;
+  passingScorePercent: AnyPgColumn;
+  rewardXp: AnyPgColumn;
+};
+
+const QUIZ_ATTEMPT_COLUMNS = quizAttempts as unknown as {
+  attemptId: AnyPgColumn;
+  quizVersionId: AnyPgColumn;
+  userId: AnyPgColumn;
+  status: AnyPgColumn;
+  startedAt: AnyPgColumn;
+};
 
 @Injectable()
 export class AttemptRepository implements AttemptRepositoryPort {
@@ -67,20 +94,23 @@ export class AttemptRepository implements AttemptRepositoryPort {
         xpEarned: quizAttempts.xpEarned,
         createdAt: quizAttempts.createdAt,
         updatedAt: quizAttempts.updatedAt,
-        quizId: quizzes.quizId,
-        quizTitle: quizzes.title,
-        quizSlug: quizzes.slug,
-        quizCreatorId: quizzes.creatorId,
-        versionNumber: quizVersions.versionNumber,
-        difficulty: quizVersions.difficulty,
-        durationMs: quizVersions.durationMs,
-        passingScorePercent: quizVersions.passingScorePercent,
-        rewardXp: quizVersions.rewardXp,
+        quizId: QUIZ_COLUMNS.quizId,
+        quizTitle: QUIZ_COLUMNS.title,
+        quizSlug: QUIZ_COLUMNS.slug,
+        quizCreatorId: QUIZ_COLUMNS.creatorId,
+        versionNumber: QUIZ_VERSION_COLUMNS.versionNumber,
+        difficulty: QUIZ_VERSION_COLUMNS.difficulty,
+        durationMs: QUIZ_VERSION_COLUMNS.durationMs,
+        passingScorePercent: QUIZ_VERSION_COLUMNS.passingScorePercent,
+        rewardXp: QUIZ_VERSION_COLUMNS.rewardXp,
       })
       .from(quizAttempts)
-      .innerJoin(quizVersions, eq(quizAttempts.quizVersionId, quizVersions.quizVersionId))
-      .innerJoin(quizzes, eq(quizVersions.quizId, quizzes.quizId))
-      .where(and(eq(quizAttempts.attemptId, attemptId), isNull(quizzes.deletedAt)))
+      .innerJoin(
+        quizVersions,
+        eq(QUIZ_ATTEMPT_COLUMNS.quizVersionId, QUIZ_VERSION_COLUMNS.quizVersionId),
+      )
+      .innerJoin(quizzes, eq(QUIZ_VERSION_COLUMNS.quizId, QUIZ_COLUMNS.quizId))
+      .where(and(eq(QUIZ_ATTEMPT_COLUMNS.attemptId, attemptId), isNull(QUIZ_COLUMNS.deletedAt)))
       .limit(1);
 
     return (row as AttemptDetailRow | undefined) ?? null;
@@ -151,15 +181,18 @@ export class AttemptRepository implements AttemptRepositoryPort {
         xpEarned: quizAttempts.xpEarned,
         createdAt: quizAttempts.createdAt,
         updatedAt: quizAttempts.updatedAt,
-        quizId: quizzes.quizId,
-        quizTitle: quizzes.title,
-        quizSlug: quizzes.slug,
-        versionNumber: quizVersions.versionNumber,
-        difficulty: quizVersions.difficulty,
+        quizId: QUIZ_COLUMNS.quizId,
+        quizTitle: QUIZ_COLUMNS.title,
+        quizSlug: QUIZ_COLUMNS.slug,
+        versionNumber: QUIZ_VERSION_COLUMNS.versionNumber,
+        difficulty: QUIZ_VERSION_COLUMNS.difficulty,
       })
       .from(quizAttempts)
-      .innerJoin(quizVersions, eq(quizAttempts.quizVersionId, quizVersions.quizVersionId))
-      .innerJoin(quizzes, eq(quizVersions.quizId, quizzes.quizId))
+      .innerJoin(
+        quizVersions,
+        eq(QUIZ_ATTEMPT_COLUMNS.quizVersionId, QUIZ_VERSION_COLUMNS.quizVersionId),
+      )
+      .innerJoin(quizzes, eq(QUIZ_VERSION_COLUMNS.quizId, QUIZ_COLUMNS.quizId))
       .where(
         params.cursor
           ? and(eq(quizAttempts.userId, params.userId), cursorCondition)
@@ -423,7 +456,7 @@ export class AttemptRepository implements AttemptRepositoryPort {
       return;
     }
 
-    const current = existing[0]!;
+    const current = existing[0];
     const newTotalAttempts = Number(current.totalAttempts) + 1;
 
     // Recalculate running average: new_avg = old_avg + (new_value - old_avg) / n
