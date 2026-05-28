@@ -3,6 +3,7 @@ import { DRIZZLE } from '@/core/database/drizzle.constants';
 import type { DrizzleDB } from '@/core/database/database.module';
 import { tags } from '@/core/database/schema';
 import { and, desc, eq, isNull, or, sql } from 'drizzle-orm';
+import { TagSlugConflictError } from '../../domain/errors';
 import type { TagRepositoryPort, TagRow } from '../../domain/ports/tag-repository.port';
 
 const TAG_COLUMNS = {
@@ -63,17 +64,25 @@ export class TagRepository implements TagRepositoryPort {
   }
 
   async create(params: { name: string; slug: string; nowIso: string }): Promise<TagRow> {
-    const [row] = await this.db
-      .insert(tags)
-      .values({
-        name: params.name,
-        slug: params.slug,
-        createdAt: params.nowIso,
-        updatedAt: params.nowIso,
-      })
-      .returning(TAG_COLUMNS);
+    try {
+      const [row] = await this.db
+        .insert(tags)
+        .values({
+          name: params.name,
+          slug: params.slug,
+          createdAt: params.nowIso,
+          updatedAt: params.nowIso,
+        })
+        .returning(TAG_COLUMNS);
 
-    return row as TagRow;
+      return row as TagRow;
+    } catch (error: unknown) {
+      const pg = error as { code?: string };
+      if (pg.code === '23505') {
+        throw new TagSlugConflictError();
+      }
+      throw error;
+    }
   }
 
   async update(params: {
@@ -81,19 +90,30 @@ export class TagRepository implements TagRepositoryPort {
     patch: { name?: string; slug?: string };
     nowIso: string;
   }): Promise<TagRow | null> {
-    const [row] = await this.db
-      .update(tags)
-      .set({ ...params.patch, updatedAt: params.nowIso })
-      .where(and(eq(tags.tagId, params.tagId), isNull(tags.deletedAt)))
-      .returning(TAG_COLUMNS);
+    try {
+      const [row] = await this.db
+        .update(tags)
+        .set({ ...params.patch, updatedAt: params.nowIso })
+        .where(and(eq(tags.tagId, params.tagId), isNull(tags.deletedAt)))
+        .returning(TAG_COLUMNS);
 
-    return (row as TagRow | undefined) ?? null;
+      return (row as TagRow | undefined) ?? null;
+    } catch (error: unknown) {
+      const pg = error as { code?: string };
+      if (pg.code === '23505') {
+        throw new TagSlugConflictError();
+      }
+      throw error;
+    }
   }
 
-  async softDelete(tagId: string, nowIso: string): Promise<void> {
-    await this.db
+  async softDelete(tagId: string, nowIso: string): Promise<boolean> {
+    const [row] = await this.db
       .update(tags)
       .set({ deletedAt: nowIso, updatedAt: nowIso })
-      .where(and(eq(tags.tagId, tagId), isNull(tags.deletedAt)));
+      .where(and(eq(tags.tagId, tagId), isNull(tags.deletedAt)))
+      .returning({ tagId: tags.tagId });
+
+    return Boolean(row);
   }
 }
