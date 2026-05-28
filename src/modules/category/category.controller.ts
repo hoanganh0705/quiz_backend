@@ -8,6 +8,7 @@ import {
   Patch,
   Post,
   Query,
+  UseFilters,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -26,9 +27,17 @@ import { CategoryListResponseDto } from './dto/response/category-list-response.d
 import { CategoryResponseDto } from './dto/response/category-response.dto';
 import { DeleteCategoryResponseDto } from './dto/response/delete-category-response.dto';
 import { CategoryApplicationService } from './application/category.application.service';
+import { CategoryDomainExceptionFilter } from './transport/filters/category-domain-exception.filter';
+import { CategoryCursorMapper } from './mappers/category-cursor.mapper';
+import type {
+  CreateCategoryCommand,
+  ListCategoriesQuery,
+  UpdateCategoryCommand,
+} from './domain/types/category-commands';
 
 @ApiTags('categories')
 @Controller('categories')
+@UseFilters(CategoryDomainExceptionFilter)
 export class CategoryController {
   constructor(private readonly categoryApplicationService: CategoryApplicationService) {}
 
@@ -40,7 +49,12 @@ export class CategoryController {
   })
   @ApiOkResponse({ description: 'Categories returned', type: CategoryListResponseDto })
   listCategories(@Query() query: ListCategoriesQueryDto): Promise<CategoryListResponseDto> {
-    return this.categoryApplicationService.listCategories(query);
+    const command: ListCategoriesQuery = {
+      limit: query.limit,
+      cursor: query.cursor ? CategoryCursorMapper.parse(query.cursor) : null,
+    };
+
+    return this.categoryApplicationService.listCategories(command);
   }
 
   @Get(':slug')
@@ -64,7 +78,14 @@ export class CategoryController {
   })
   @ApiCreatedResponse({ description: 'Category created', type: CategoryResponseDto })
   createCategory(@Body() payload: CreateCategoryDto): Promise<CategoryResponseDto> {
-    return this.categoryApplicationService.createCategory(payload);
+    const command: CreateCategoryCommand = {
+      name: payload.name,
+      description: payload.description,
+      slug: payload.slug,
+      imageUrl: payload.imageUrl,
+    };
+
+    return this.categoryApplicationService.createCategory(command);
   }
 
   @Patch(':id')
@@ -80,7 +101,14 @@ export class CategoryController {
     @Param('id', new ParseUUIDPipe()) categoryId: string,
     @Body() payload: UpdateCategoryDto,
   ): Promise<CategoryResponseDto> {
-    return this.categoryApplicationService.updateCategory(categoryId, payload);
+    const command: UpdateCategoryCommand = {
+      name: payload.name,
+      description: payload.description,
+      slug: payload.slug,
+      imageUrl: payload.imageUrl,
+    };
+
+    return this.categoryApplicationService.updateCategory(categoryId, command);
   }
 
   @Delete(':id')

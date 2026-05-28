@@ -1,6 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { CategoryResponseDto } from './category-response.dto';
-import { PaginationMetaDto } from '@/common/swagger/swagger-schemas';
 
 export class CategoryPaginationResponseDto {
   @ApiProperty({ description: 'Number of items returned in this page', example: 20 })
