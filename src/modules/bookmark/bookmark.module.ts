@@ -8,7 +8,6 @@ import { BookmarkDomainExceptionFilter } from './transport/filters/bookmark-doma
 import { BOOKMARK_REPOSITORY_PORT } from './domain/ports';
 import { BookmarkRepository } from './infrastructure/repositories/bookmark.repository';
 import { QuizModule } from '@/modules/quiz/quiz.module';
-
 @Module({
   imports: [DatabaseModule, QuizModule],
   providers: [

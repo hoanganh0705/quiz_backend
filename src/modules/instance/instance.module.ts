@@ -10,7 +10,6 @@ import { QUIZ_INSTANCE_REPOSITORY_PORT } from './domain/ports';
 import { QuizInstanceRepository } from './infrastructure/repositories/quiz-instance.repository';
 import { JwtModule } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
-
 @Module({
   imports: [
     DatabaseModule,

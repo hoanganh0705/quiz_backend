@@ -2,7 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { DRIZZLE } from '@/core/database/drizzle.constants';
 import type { DrizzleDB } from '@/core/database/database.module';
 import { users } from '@/core/database/schema';
-import { and, eq, isNull, sql } from 'drizzle-orm';
+import { and, eq, isNull } from 'drizzle-orm';
 import type { UserMeRow, UserRepositoryPort } from '../../domain/ports/user-repository.port';
 
 const USER_ME_COLUMNS = {
@@ -56,7 +56,7 @@ export class UserRepository implements UserRepositoryPort {
     const [updated] = await this.db
       .update(users)
       .set({
-        settings: sql`${users.settings} || ${JSON.stringify(settings)}::jsonb`,
+        settings,
         updatedAt: nowIso,
       })
       .where(and(eq(users.userId, userId), isNull(users.deletedAt)))

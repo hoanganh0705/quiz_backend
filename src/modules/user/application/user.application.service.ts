@@ -4,6 +4,7 @@ import { UserResponseMapper } from '../mappers/user-response.mapper';
 import { UpdateMeDto } from '../dto/request/update-me.dto';
 import { UpdateMeSettingsDto } from '../dto/request/update-me-settings.dto';
 import type { UserMeResponseDto } from '../dto/response/user-me-response.dto';
+import type { UpdateProfileCommand, UpdateSettingsCommand } from '../domain/types/user-commands';
 
 @Injectable()
 export class UserApplicationService {
@@ -14,13 +15,21 @@ export class UserApplicationService {
     return UserResponseMapper.toUserMeResponse(row);
   }
 
-  async updateProfile(userId: string, payload: UpdateMeDto): Promise<UserMeResponseDto> {
-    const row = await this.userDomainService.updateProfile(userId, payload);
+  async updateProfile(userId: string, dto: UpdateMeDto): Promise<UserMeResponseDto> {
+    const command: UpdateProfileCommand = {
+      displayName: dto.displayName,
+      bio: dto.bio,
+      avatarUrl: dto.avatarUrl,
+    };
+    const row = await this.userDomainService.updateProfile(userId, command);
     return UserResponseMapper.toUserMeResponse(row);
   }
 
-  async updateSettings(userId: string, payload: UpdateMeSettingsDto): Promise<UserMeResponseDto> {
-    const row = await this.userDomainService.updateSettings(userId, payload);
+  async updateSettings(userId: string, dto: UpdateMeSettingsDto): Promise<UserMeResponseDto> {
+    const command: UpdateSettingsCommand = {
+      settings: dto.settings,
+    };
+    const row = await this.userDomainService.updateSettings(userId, command);
     return UserResponseMapper.toUserMeResponse(row);
   }
 }

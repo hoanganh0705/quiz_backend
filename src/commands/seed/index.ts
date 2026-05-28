@@ -1,6 +1,7 @@
 import 'dotenv/config';
-import { db, closePool, type SeedContext } from '../infrastructure';
-import { logger } from '../infrastructure/seed-logger';
+import { closePool } from './infrastructure';
+import { logger } from './infrastructure/seed-logger';
+import type { SeedSummary } from './infrastructure/types';
 
 import {
   runUsersSeed,
@@ -32,14 +33,15 @@ const parseTarget = (): SeedTarget => {
 };
 
 const runFoundation = async (): Promise<void> => {
-  const summaries = await logger.group('Foundation seeds', async () => {
-    const results = [];
+  let summaries: SeedSummary[] = [];
+  await logger.group('Foundation seeds', async () => {
+    const results: SeedSummary[] = [];
     // Order: badges (no FK deps) → users (needed by quiz/attempt seeds) → categories/tags
     results.push(await runBadgesSeed());
     results.push(await runUsersSeed());
     results.push(await runCategoriesSeed());
     results.push(await runTagsSeed());
-    return results.flat();
+    summaries = results;
   });
   console.log('\nFoundation summary:');
   for (const s of summaries) {
@@ -48,14 +50,15 @@ const runFoundation = async (): Promise<void> => {
 };
 
 const runDevelopment = async (): Promise<void> => {
-  const summaries = await logger.group('Development seeds', async () => {
-    const results = [];
+  let summaries: SeedSummary[] = [];
+  await logger.group('Development seeds', async () => {
+    const results: SeedSummary[] = [];
     // Order: quizzes (base) → attempts → bookmarks/reviews (depend on users + quizzes)
-    results.push(await runQuizSeed());
-    results.push(await runAttemptSeed());
-    results.push(await runBookmarkSeed());
-    results.push(await runReviewSeed());
-    return results.flat();
+    results.push(...(await runQuizSeed()));
+    results.push(...(await runAttemptSeed()));
+    results.push(...(await runBookmarkSeed()));
+    results.push(...(await runReviewSeed()));
+    summaries = results;
   });
   console.log('\nDevelopment summary:');
   for (const s of summaries) {
@@ -64,11 +67,12 @@ const runDevelopment = async (): Promise<void> => {
 };
 
 const runScenarios = async (): Promise<void> => {
-  const summaries = await logger.group('Scenario seeds', async () => {
-    const results = [];
-    results.push(await runTournamentSeed());
-    results.push(await runInstanceSeed());
-    return results.flat();
+  let summaries: SeedSummary[] = [];
+  await logger.group('Scenario seeds', async () => {
+    const results: SeedSummary[] = [];
+    results.push(...(await runTournamentSeed()));
+    results.push(...(await runInstanceSeed()));
+    summaries = results;
   });
   console.log('\nScenario summary:');
   for (const s of summaries) {
