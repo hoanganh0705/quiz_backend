@@ -23,6 +23,7 @@ import { validateEnv } from './core/config/env.validation';
 import { RedisModule } from './core/redis/redis.module';
 import { RolesGuard } from './common/authorization/guards/roles.guard';
 import { PermissionsGuard } from './common/authorization/guards/permissions.guard';
+import { LoggerModule } from 'nestjs-pino';
 
 @Module({
   imports: [
@@ -47,6 +48,7 @@ import { PermissionsGuard } from './common/authorization/guards/permissions.guar
     }),
     ScheduleModule.forRoot(),
     CoreLoggerModule,
+    LoggerModule.forRoot(),
     RedisModule,
     DatabaseModule,
     UserModule,

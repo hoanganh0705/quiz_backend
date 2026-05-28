@@ -9,7 +9,6 @@ import { TOURNAMENT_REPOSITORY_PORT } from './domain/ports';
 import { TournamentRepository } from './infrastructure/repositories/tournament.repository';
 import { ATTEMPT_REPOSITORY_PORT } from '@/modules/attempt/domain/ports';
 import { AttemptRepository } from '@/modules/attempt/infrastructure/repositories/attempt.repository';
-
 @Module({
   imports: [DatabaseModule],
   providers: [

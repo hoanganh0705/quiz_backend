@@ -1,14 +1,16 @@
-import { Body, Controller, Get, Patch } from '@nestjs/common';
+import { Body, Controller, Get, Patch, UseFilters } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiOkResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
 import { UpdateMeSettingsDto } from './dto/request/update-me-settings.dto';
 import { UpdateMeDto } from './dto/request/update-me.dto';
 import { UserMeResponseDto } from './dto/response/user-me-response.dto';
 import { UserApplicationService } from './application/user.application.service';
+import { UserDomainExceptionFilter } from './transport/filters/user-domain-exception.filter';
 
 @ApiTags('users')
 @ApiBearerAuth()
 @Controller('users')
+@UseFilters(UserDomainExceptionFilter)
 export class UserController {
   constructor(private readonly userApplicationService: UserApplicationService) {}
 
