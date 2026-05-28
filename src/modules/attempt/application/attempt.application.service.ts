@@ -2,7 +2,6 @@ import { Injectable } from '@nestjs/common';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
 import { AttemptService } from '../domain/attempt.service';
 import { AttemptResponseMapper } from '../mappers/attempt-response.mapper';
-import type { AttemptContextType } from '../types/attempt.types';
 import { StartAttemptDto } from '../dto/request';
 import {
   AttemptResponseDto,

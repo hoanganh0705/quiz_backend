@@ -3,7 +3,7 @@ import {
   ExecutionContext,
   InternalServerErrorException,
 } from '@nestjs/common';
-import type { AuthRequestContext } from '../../types/auth-context.types';
+import type { AuthRequestContext } from '../types/auth-http-context.types';
 
 type RequestWithAuthContext = {
   authContext?: AuthRequestContext;
