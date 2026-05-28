@@ -1,13 +1,18 @@
-import { ConflictException, NotFoundException } from '@nestjs/common';
-
-export class TagNotFoundError extends NotFoundException {
-  constructor() {
-    super('Tag not found');
+export class TagDomainError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = this.constructor.name;
   }
 }
 
-export class TagSlugConflictError extends ConflictException {
-  constructor() {
-    super('A tag with this slug already exists');
+export class TagNotFoundError extends TagDomainError {
+  constructor(message = 'Tag not found') {
+    super(message);
+  }
+}
+
+export class TagSlugConflictError extends TagDomainError {
+  constructor(message = 'A tag with this slug already exists') {
+    super(message);
   }
 }
