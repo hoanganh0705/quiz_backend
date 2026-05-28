@@ -25,7 +25,13 @@ import { LogoutResponseDto } from '../../dto/response/logout-response.dto';
 import { VerifyEmailDto } from '../../dto/request/verify-email.dto';
 import { VerifyEmailResponseDto } from '../../dto/response/verify-email-response.dto';
 import { ResendVerificationDto } from '../../dto/request/resend-verification.dto';
-import type { AuthRequestContext } from '../../types/auth-context.types';
+import type { AuthRequestContext } from '../types/auth-http-context.types';
+import type {
+  LoginCommand,
+  RegisterCommand,
+  ResendVerificationEmailCommand,
+  VerifyEmailCommand,
+} from '../../domain/types/auth-commands';
 
 @ApiTags('auth')
 @Controller('auth')
@@ -45,7 +51,13 @@ export class AuthController {
   @ApiCreatedResponse({ description: 'Account created successfully', type: RegisterResponseDto })
   @ApiBadRequestResponse({ description: 'Validation failed or email/username already in use' })
   async register(@Body() registerDto: RegisterDto): Promise<RegisterResponseDto> {
-    return this.authApplicationService.register(registerDto);
+    const command: RegisterCommand = {
+      username: registerDto.username,
+      email: registerDto.email,
+      password: registerDto.password,
+    };
+
+    return this.authApplicationService.register(command);
   }
 
   @Public()
@@ -58,7 +70,11 @@ export class AuthController {
   @ApiOkResponse({ description: 'Email verified successfully', type: VerifyEmailResponseDto })
   @ApiBadRequestResponse({ description: 'Invalid or expired token' })
   async verifyEmail(@Body() verifyEmailDto: VerifyEmailDto): Promise<VerifyEmailResponseDto> {
-    return this.authApplicationService.verifyEmail(verifyEmailDto);
+    const command: VerifyEmailCommand = {
+      token: verifyEmailDto.token,
+    };
+
+    return this.authApplicationService.verifyEmail(command);
   }
 
   @Public()
@@ -74,7 +90,11 @@ export class AuthController {
   async resendVerificationEmail(
     @Body() resendVerificationDto: ResendVerificationDto,
   ): Promise<VerifyEmailResponseDto> {
-    return this.authApplicationService.resendVerificationEmail(resendVerificationDto);
+    const command: ResendVerificationEmailCommand = {
+      email: resendVerificationDto.email,
+    };
+
+    return this.authApplicationService.resendVerificationEmail(command);
   }
 
   @Public()
@@ -90,7 +110,15 @@ export class AuthController {
     @Body() loginDto: LoginDto,
     @RequestContext() context: AuthRequestContext,
   ): Promise<LoginResponseDto> {
-    return this.authApplicationService.login(loginDto, context);
+    const command: LoginCommand = {
+      email: loginDto.email,
+      password: loginDto.password,
+    };
+
+    const loginResult: { response: LoginResponseDto; refreshToken: string } =
+      await this.authApplicationService.login(command, context.session);
+    context.setRefreshToken(loginResult.refreshToken);
+    return loginResult.response;
   }
 
   @Public()
@@ -106,7 +134,10 @@ export class AuthController {
     @RefreshToken({ required: true }) refreshToken: string,
     @RequestContext() context: AuthRequestContext,
   ): Promise<RefreshTokenResponseDto> {
-    return this.authApplicationService.refreshToken(refreshToken, context);
+    const refreshResult: { response: RefreshTokenResponseDto; refreshToken: string } =
+      await this.authApplicationService.refreshToken(refreshToken, context.session);
+    context.setRefreshToken(refreshResult.refreshToken);
+    return refreshResult.response;
   }
 
   @Public()
@@ -121,7 +152,9 @@ export class AuthController {
     @RefreshToken() refreshToken: string | null,
     @RequestContext() context: AuthRequestContext,
   ): Promise<LogoutResponseDto> {
-    return this.authApplicationService.logout(refreshToken, context);
+    const response = await this.authApplicationService.logout(refreshToken);
+    context.clearRefreshToken();
+    return response;
   }
 
   @Post('logout-all')
@@ -135,6 +168,8 @@ export class AuthController {
     @CurrentUser('sub') userId: string,
     @RequestContext() context: AuthRequestContext,
   ): Promise<LogoutResponseDto> {
-    return this.authApplicationService.logoutAll(userId, context);
+    const response = await this.authApplicationService.logoutAll(userId);
+    context.clearRefreshToken();
+    return response;
   }
 }

@@ -7,9 +7,9 @@ import type {
   AuthTokens,
   RefreshTokenClaims,
   RefreshTokenPayload,
-} from '../types/auth-context.types';
-import { AuthConfig } from '../auth.config';
-import type { TokenProvider } from '../domain/ports/token.provider';
+} from '../../types/auth-context.types';
+import { AuthConfig } from '../../auth.config';
+import type { TokenProvider } from '../../domain/ports/token.provider';
 
 @Injectable()
 export class JwtTokenAdapter implements TokenProvider {
@@ -26,10 +26,10 @@ export class JwtTokenAdapter implements TokenProvider {
     };
 
     const accessToken = await this.jwtService.signAsync(accessTokenPayload, {
-      secret: this.authConfig.accessTokenSecret,
-      expiresIn: this.authConfig.accessTokenExpiresInSeconds,
-      issuer: this.authConfig.accessTokenIssuer,
-      audience: this.authConfig.accessTokenAudience,
+      secret: this.authConfig.tokens.access.secret,
+      expiresIn: this.authConfig.tokens.access.expiresInSeconds,
+      issuer: this.authConfig.tokens.access.issuer,
+      audience: this.authConfig.tokens.access.audience,
     });
 
     const refreshTokenPayload: RefreshTokenClaims = {
@@ -38,10 +38,10 @@ export class JwtTokenAdapter implements TokenProvider {
     };
 
     const refreshToken = await this.jwtService.signAsync(refreshTokenPayload, {
-      secret: this.authConfig.refreshTokenSecret,
-      expiresIn: this.authConfig.refreshTokenExpiresInSeconds,
-      issuer: this.authConfig.accessTokenIssuer,
-      audience: this.authConfig.accessTokenAudience,
+      secret: this.authConfig.tokens.refresh.secret,
+      expiresIn: this.authConfig.tokens.refresh.expiresInSeconds,
+      issuer: this.authConfig.tokens.refresh.issuer,
+      audience: this.authConfig.tokens.refresh.audience,
     });
 
     return { accessToken, refreshToken, refreshTokenJti };
@@ -73,9 +73,9 @@ export class JwtTokenAdapter implements TokenProvider {
     try {
       // Enforce secret + issuer + audience so refresh tokens are scoped to this service context.
       const decodedPayload: unknown = await this.jwtService.verifyAsync(refreshToken, {
-        secret: this.authConfig.refreshTokenSecret,
-        issuer: this.authConfig.accessTokenIssuer,
-        audience: this.authConfig.accessTokenAudience,
+        secret: this.authConfig.tokens.refresh.secret,
+        issuer: this.authConfig.tokens.refresh.issuer,
+        audience: this.authConfig.tokens.refresh.audience,
       });
 
       if (!this.isRefreshTokenPayload(decodedPayload)) {
