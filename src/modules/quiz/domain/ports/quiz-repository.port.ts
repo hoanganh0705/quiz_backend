@@ -87,6 +87,11 @@ export interface QuizRepositoryPort {
     filters?: QuizListFilters;
   }): Promise<QuizWithPublishedVersionRow[]>;
 
+  /**
+   * @transactional
+   * Creates a quiz with its initial version and category/tag links in a single atomic transaction.
+   * If any step fails, the entire operation is rolled back.
+   */
   createQuizWithInitialVersion(payload: CreateQuizPayload): Promise<{ quizId: string }>;
 
   updateQuizWithLinks(params: {

@@ -19,3 +19,4 @@ export {
   type QuizQuestionJoinRow,
   type QuizQuestionRepositoryPort,
 } from './quiz-question-repository.port';
+export { QUIZ_DOMAIN_EVENT_BUS, type QuizDomainEventBusPort } from './quiz-domain-event-bus.port';

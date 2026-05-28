@@ -3,7 +3,33 @@ import { eq, inArray, sql } from 'drizzle-orm';
 import { DRIZZLE } from '@/core/database/drizzle.constants';
 import type { DrizzleDB } from '@/core/database/database.module';
 import { quizAnswerOptions, quizQuestions } from '@/core/database/schema';
+import {
+  QuizQuestionPositionConflictError,
+  QuizAnswerOptionPositionConflictError,
+  QuizMultipleCorrectOptionsError,
+  QuizDomainError,
+} from '@/modules/quiz/domain/errors';
+import {
+  QUIZ_QUESTION_POSITION_CONFLICT_MESSAGE,
+  QUIZ_QUESTION_OPTION_POSITION_CONFLICT_MESSAGE,
+  QUIZ_QUESTION_CORRECT_OPTION_MESSAGE,
+} from '@/modules/quiz/quiz.constants';
 import type { QuizQuestionJoinRow, QuizQuestionRepositoryPort } from '@/modules/quiz/domain/ports';
+
+const QUIZ_QUESTION_JOIN_PROJECTION = {
+  questionId: quizQuestions.questionId,
+  quizVersionId: quizQuestions.quizVersionId,
+  position: quizQuestions.position,
+  questionText: quizQuestions.questionText,
+  imageUrl: quizQuestions.imageUrl,
+  createdAt: quizQuestions.createdAt,
+  updatedAt: quizQuestions.updatedAt,
+  optionId: quizAnswerOptions.optionId,
+  optionPosition: quizAnswerOptions.position,
+  optionValue: quizAnswerOptions.value,
+  optionIsCorrect: quizAnswerOptions.isCorrect,
+  optionCreatedAt: quizAnswerOptions.createdAt,
+};
 
 @Injectable()
 export class QuizQuestionRepository implements QuizQuestionRepositoryPort {
@@ -11,20 +37,7 @@ export class QuizQuestionRepository implements QuizQuestionRepositoryPort {
 
   async getQuestionsByVersionId(quizVersionId: string): Promise<QuizQuestionJoinRow[]> {
     const rows = await this.db
-      .select({
-        questionId: quizQuestions.questionId,
-        quizVersionId: quizQuestions.quizVersionId,
-        position: quizQuestions.position,
-        questionText: quizQuestions.questionText,
-        imageUrl: quizQuestions.imageUrl,
-        createdAt: quizQuestions.createdAt,
-        updatedAt: quizQuestions.updatedAt,
-        optionId: quizAnswerOptions.optionId,
-        optionPosition: quizAnswerOptions.position,
-        optionValue: quizAnswerOptions.value,
-        optionIsCorrect: quizAnswerOptions.isCorrect,
-        optionCreatedAt: quizAnswerOptions.createdAt,
-      })
+      .select(QUIZ_QUESTION_JOIN_PROJECTION)
       .from(quizQuestions)
       .leftJoin(quizAnswerOptions, eq(quizQuestions.questionId, quizAnswerOptions.questionId))
       .where(eq(quizQuestions.quizVersionId, quizVersionId))
@@ -35,20 +48,7 @@ export class QuizQuestionRepository implements QuizQuestionRepositoryPort {
 
   async getQuestionById(questionId: string): Promise<QuizQuestionJoinRow[]> {
     const rows = await this.db
-      .select({
-        questionId: quizQuestions.questionId,
-        quizVersionId: quizQuestions.quizVersionId,
-        position: quizQuestions.position,
-        questionText: quizQuestions.questionText,
-        imageUrl: quizQuestions.imageUrl,
-        createdAt: quizQuestions.createdAt,
-        updatedAt: quizQuestions.updatedAt,
-        optionId: quizAnswerOptions.optionId,
-        optionPosition: quizAnswerOptions.position,
-        optionValue: quizAnswerOptions.value,
-        optionIsCorrect: quizAnswerOptions.isCorrect,
-        optionCreatedAt: quizAnswerOptions.createdAt,
-      })
+      .select(QUIZ_QUESTION_JOIN_PROJECTION)
       .from(quizQuestions)
       .leftJoin(quizAnswerOptions, eq(quizQuestions.questionId, quizAnswerOptions.questionId))
       .where(eq(quizQuestions.questionId, questionId))
@@ -63,20 +63,7 @@ export class QuizQuestionRepository implements QuizQuestionRepositoryPort {
     }
 
     const rows = await this.db
-      .select({
-        questionId: quizQuestions.questionId,
-        quizVersionId: quizQuestions.quizVersionId,
-        position: quizQuestions.position,
-        questionText: quizQuestions.questionText,
-        imageUrl: quizQuestions.imageUrl,
-        createdAt: quizQuestions.createdAt,
-        updatedAt: quizQuestions.updatedAt,
-        optionId: quizAnswerOptions.optionId,
-        optionPosition: quizAnswerOptions.position,
-        optionValue: quizAnswerOptions.value,
-        optionIsCorrect: quizAnswerOptions.isCorrect,
-        optionCreatedAt: quizAnswerOptions.createdAt,
-      })
+      .select(QUIZ_QUESTION_JOIN_PROJECTION)
       .from(quizQuestions)
       .leftJoin(quizAnswerOptions, eq(quizQuestions.questionId, quizAnswerOptions.questionId))
       .where(inArray(quizQuestions.questionId, questionIds))
@@ -99,35 +86,39 @@ export class QuizQuestionRepository implements QuizQuestionRepositoryPort {
       createdAt: string;
     }[];
   }): Promise<{ questionId: string }> {
-    const result = await this.db.transaction(async (tx) => {
-      const [createdQuestion] = await tx
-        .insert(quizQuestions)
-        .values({
-          quizVersionId: params.quizVersionId,
-          position: params.position,
-          questionText: params.questionText,
-          imageUrl: params.imageUrl,
-          createdAt: params.createdAt,
-          updatedAt: params.updatedAt,
-        })
-        .returning({
-          questionId: quizQuestions.questionId,
-        });
+    try {
+      const result = await this.db.transaction(async (tx) => {
+        const [createdQuestion] = await tx
+          .insert(quizQuestions)
+          .values({
+            quizVersionId: params.quizVersionId,
+            position: params.position,
+            questionText: params.questionText,
+            imageUrl: params.imageUrl,
+            createdAt: params.createdAt,
+            updatedAt: params.updatedAt,
+          })
+          .returning({
+            questionId: quizQuestions.questionId,
+          });
 
-      await tx.insert(quizAnswerOptions).values(
-        params.answerOptions.map((option) => ({
-          questionId: createdQuestion.questionId,
-          position: option.position,
-          value: option.value,
-          isCorrect: option.isCorrect,
-          createdAt: option.createdAt,
-        })),
-      );
+        await tx.insert(quizAnswerOptions).values(
+          params.answerOptions.map((option) => ({
+            questionId: createdQuestion.questionId,
+            position: option.position,
+            value: option.value,
+            isCorrect: option.isCorrect,
+            createdAt: option.createdAt,
+          })),
+        );
 
-      return createdQuestion;
-    });
+        return createdQuestion;
+      });
 
-    return { questionId: result.questionId };
+      return { questionId: result.questionId };
+    } catch (error) {
+      this.mapInsertError(error);
+    }
   }
 
   async createQuestionsWithOptions(
@@ -146,41 +137,45 @@ export class QuizQuestionRepository implements QuizQuestionRepositoryPort {
       }[];
     }[],
   ): Promise<{ questionIds: string[] }> {
-    const questionIds = await this.db.transaction(async (tx) => {
-      const createdQuestionIds: string[] = [];
+    try {
+      const questionIds = await this.db.transaction(async (tx) => {
+        const createdQuestionIds: string[] = [];
 
-      for (const question of params) {
-        const [createdQuestion] = await tx
-          .insert(quizQuestions)
-          .values({
-            quizVersionId: question.quizVersionId,
-            position: question.position,
-            questionText: question.questionText,
-            imageUrl: question.imageUrl,
-            createdAt: question.createdAt,
-            updatedAt: question.updatedAt,
-          })
-          .returning({
-            questionId: quizQuestions.questionId,
-          });
+        for (const question of params) {
+          const [createdQuestion] = await tx
+            .insert(quizQuestions)
+            .values({
+              quizVersionId: question.quizVersionId,
+              position: question.position,
+              questionText: question.questionText,
+              imageUrl: question.imageUrl,
+              createdAt: question.createdAt,
+              updatedAt: question.updatedAt,
+            })
+            .returning({
+              questionId: quizQuestions.questionId,
+            });
 
-        createdQuestionIds.push(createdQuestion.questionId);
+          createdQuestionIds.push(createdQuestion.questionId);
 
-        await tx.insert(quizAnswerOptions).values(
-          question.answerOptions.map((option) => ({
-            questionId: createdQuestion.questionId,
-            position: option.position,
-            value: option.value,
-            isCorrect: option.isCorrect,
-            createdAt: option.createdAt,
-          })),
-        );
-      }
+          await tx.insert(quizAnswerOptions).values(
+            question.answerOptions.map((option) => ({
+              questionId: createdQuestion.questionId,
+              position: option.position,
+              value: option.value,
+              isCorrect: option.isCorrect,
+              createdAt: option.createdAt,
+            })),
+          );
+        }
 
-      return createdQuestionIds;
-    });
+        return createdQuestionIds;
+      });
 
-    return { questionIds };
+      return { questionIds };
+    } catch (error) {
+      this.mapInsertError(error);
+    }
   }
 
   async countQuestionsByVersionId(quizVersionId: string): Promise<number> {
@@ -190,5 +185,27 @@ export class QuizQuestionRepository implements QuizQuestionRepositoryPort {
       .where(eq(quizQuestions.quizVersionId, quizVersionId));
 
     return row?.count ?? 0;
+  }
+
+  private mapInsertError(error: unknown): never {
+    const maybePgError = error as { code?: string; constraint?: string };
+
+    if (maybePgError.code === '23505') {
+      if (maybePgError.constraint === 'uq_quiz_questions_version_position') {
+        throw new QuizQuestionPositionConflictError(QUIZ_QUESTION_POSITION_CONFLICT_MESSAGE);
+      }
+
+      if (maybePgError.constraint === 'uq_quiz_answer_options_question_position') {
+        throw new QuizAnswerOptionPositionConflictError(
+          QUIZ_QUESTION_OPTION_POSITION_CONFLICT_MESSAGE,
+        );
+      }
+
+      if (maybePgError.constraint === 'uq_quiz_answer_options_one_correct') {
+        throw new QuizMultipleCorrectOptionsError(QUIZ_QUESTION_CORRECT_OPTION_MESSAGE);
+      }
+    }
+
+    throw new QuizDomainError('Quiz question operation failed');
   }
 }

@@ -14,7 +14,7 @@ import { Permission } from '@/common/authorization/permissions';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
 import { Permissions } from '@/common/authorization/decorators/permissions.decorator';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
-import { QuizApplicationService } from '../../application/quiz.application.service';
+import { QuizVersionApplicationService } from '../../application/quiz-version.application.service';
 import { UpdateQuizVersionDto } from '../../dto/request/update-quiz-version.dto';
 import { QuizVersionResponseDto } from '../../dto/response/quiz-version-response.dto';
 import { QuizDomainExceptionFilter } from '../filters/quiz-domain-exception.filter';
@@ -23,7 +23,7 @@ import { QuizDomainExceptionFilter } from '../filters/quiz-domain-exception.filt
 @Controller('quiz-versions')
 @UseFilters(QuizDomainExceptionFilter)
 export class QuizVersionController {
-  constructor(private readonly quizApplicationService: QuizApplicationService) {}
+  constructor(private readonly quizVersionApplicationService: QuizVersionApplicationService) {}
 
   @Patch(':id')
   @Permissions(Permission.QUIZ_VERSION_EDIT_OWN, Permission.QUIZ_VERSION_EDIT_ANY)
@@ -39,7 +39,7 @@ export class QuizVersionController {
     @CurrentUser() user: JwtPayload,
     @Body() payload: UpdateQuizVersionDto,
   ): Promise<QuizVersionResponseDto> {
-    return this.quizApplicationService.updateQuizVersion(quizVersionId, user, payload);
+    return this.quizVersionApplicationService.updateQuizVersion(quizVersionId, user, payload);
   }
 
   @Post(':id/publish')
@@ -60,6 +60,6 @@ export class QuizVersionController {
     @Param('id', new ParseUUIDPipe()) quizVersionId: string,
     @CurrentUser() user: JwtPayload,
   ): Promise<QuizVersionResponseDto> {
-    return this.quizApplicationService.publishQuizVersion(quizVersionId, user);
+    return this.quizVersionApplicationService.publishQuizVersion(quizVersionId, user);
   }
 }
