@@ -1,51 +1,41 @@
-import { Injectable } from '@nestjs/common';
-import { QuizQuestionResponseDto } from '../dto/response/quiz-question-response.dto';
 import type { QuizQuestionJoinRow } from '../domain/ports/quiz-question-repository.port';
+import type { QuizQuestionResponseDto } from '../dto/response/quiz-question-response.dto';
+import {
+  hydrateQuestions,
+  type QuizQuestionAggregate,
+} from '../infrastructure/repositories/hydrators/quiz-question.hydrator';
 
-@Injectable()
+/**
+ * Pure stateless mapper — no DI needed.
+ * Translates flat QuizQuestionJoinRow join results into structured QuizQuestionResponseDto[].
+ * Delegates row-to-aggregate hydration to quiz-question.hydrator.
+ */
 export class QuizQuestionResponseMapper {
-  toQuestionResponses(rows: QuizQuestionJoinRow[]): QuizQuestionResponseDto[] {
+  static toQuestionResponses(rows: QuizQuestionJoinRow[]): QuizQuestionResponseDto[] {
     if (rows.length === 0) {
       return [];
     }
 
-    const questionMap = new Map<string, QuizQuestionResponseDto>();
+    const questions = hydrateQuestions(rows);
+    return questions.map((q) => QuizQuestionResponseMapper.toQuestionResponse(q));
+  }
 
-    for (const row of rows) {
-      const existing = questionMap.get(row.questionId);
-
-      if (!existing) {
-        questionMap.set(row.questionId, {
-          questionId: row.questionId,
-          quizVersionId: row.quizVersionId,
-          position: row.position,
-          questionText: row.questionText,
-          imageUrl: row.imageUrl,
-          createdAt: row.createdAt,
-          updatedAt: row.updatedAt,
-          answerOptions: [],
-        });
-      }
-
-      if (row.optionId) {
-        const question = questionMap.get(row.questionId)!;
-        question.answerOptions.push({
-          optionId: row.optionId,
-          position: row.optionPosition ?? 0,
-          value: row.optionValue ?? '',
-          isCorrect: row.optionIsCorrect ?? false,
-          createdAt: row.optionCreatedAt ?? '',
-        });
-      }
-    }
-
-    const questions = Array.from(questionMap.values());
-
-    questions.sort((a, b) => a.position - b.position);
-    for (const question of questions) {
-      question.answerOptions.sort((a, b) => a.position - b.position);
-    }
-
-    return questions;
+  private static toQuestionResponse(question: QuizQuestionAggregate): QuizQuestionResponseDto {
+    return {
+      questionId: question.questionId,
+      quizVersionId: question.quizVersionId,
+      position: question.position,
+      questionText: question.questionText,
+      imageUrl: question.imageUrl,
+      createdAt: question.createdAt,
+      updatedAt: question.updatedAt,
+      answerOptions: question.answerOptions.map((option) => ({
+        optionId: option.optionId,
+        position: option.position,
+        value: option.value,
+        isCorrect: option.isCorrect,
+        createdAt: option.createdAt,
+      })),
+    };
   }
 }

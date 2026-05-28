@@ -4,13 +4,15 @@ import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 import { DRIZZLE } from '@/core/database/drizzle.constants';
 import type { DrizzleDB } from '@/core/database/database.module';
 import { quizVersions, quizzes } from '@/core/database/schema';
+import { QuizConflictError, QuizDomainError } from '@/modules/quiz/domain/errors';
+import { QUIZ_VERSION_CONFLICT_MESSAGE } from '@/modules/quiz/quiz.constants';
 import type {
   QuizVersionDetailRow,
   QuizVersionRepositoryPort,
   QuizVersionRow,
 } from '@/modules/quiz/domain/ports';
 import type { QuizDifficulty } from '@/modules/quiz/types/quiz.types';
-import type { UpdateQuizVersionDto } from '@/modules/quiz/dto/request/update-quiz-version.dto';
+import type { UpdateQuizVersionCommand } from '@/modules/quiz/domain/types';
 
 const QUIZ_VERSION_COLUMNS = quizVersions as unknown as {
   quizVersionId: AnyPgColumn;
@@ -34,6 +36,22 @@ const QUIZ_COLUMNS = quizzes as unknown as {
   isVerified: AnyPgColumn;
   isHidden: AnyPgColumn;
   deletedAt: AnyPgColumn;
+};
+
+const QUIZ_VERSION_PROJECTION = {
+  quizVersionId: quizVersions.quizVersionId,
+  quizId: quizVersions.quizId,
+  versionNumber: quizVersions.versionNumber,
+  status: quizVersions.status,
+  difficulty: quizVersions.difficulty,
+  durationMs: quizVersions.durationMs,
+  passingScorePercent: quizVersions.passingScorePercent,
+  rewardXp: quizVersions.rewardXp,
+  createdByUserId: quizVersions.createdByUserId,
+  createdAt: quizVersions.createdAt,
+  publishedAt: quizVersions.publishedAt,
+  archivedAt: quizVersions.archivedAt,
+  updatedAt: quizVersions.updatedAt,
 };
 
 @Injectable()
@@ -72,21 +90,7 @@ export class QuizVersionRepository implements QuizVersionRepositoryPort {
 
   async getQuizVersionById(quizVersionId: string): Promise<QuizVersionRow | null> {
     const [row] = await this.db
-      .select({
-        quizVersionId: quizVersions.quizVersionId,
-        quizId: quizVersions.quizId,
-        versionNumber: quizVersions.versionNumber,
-        status: quizVersions.status,
-        difficulty: quizVersions.difficulty,
-        durationMs: quizVersions.durationMs,
-        passingScorePercent: quizVersions.passingScorePercent,
-        rewardXp: quizVersions.rewardXp,
-        createdByUserId: quizVersions.createdByUserId,
-        createdAt: quizVersions.createdAt,
-        publishedAt: quizVersions.publishedAt,
-        archivedAt: quizVersions.archivedAt,
-        updatedAt: quizVersions.updatedAt,
-      })
+      .select(QUIZ_VERSION_PROJECTION)
       .from(quizVersions)
       .where(eq(quizVersions.quizVersionId, quizVersionId))
       .limit(1);
@@ -110,21 +114,7 @@ export class QuizVersionRepository implements QuizVersionRepositoryPort {
       : undefined;
 
     const rows = await this.db
-      .select({
-        quizVersionId: quizVersions.quizVersionId,
-        quizId: quizVersions.quizId,
-        versionNumber: quizVersions.versionNumber,
-        status: quizVersions.status,
-        difficulty: quizVersions.difficulty,
-        durationMs: quizVersions.durationMs,
-        passingScorePercent: quizVersions.passingScorePercent,
-        rewardXp: quizVersions.rewardXp,
-        createdByUserId: quizVersions.createdByUserId,
-        createdAt: quizVersions.createdAt,
-        publishedAt: quizVersions.publishedAt,
-        archivedAt: quizVersions.archivedAt,
-        updatedAt: quizVersions.updatedAt,
-      })
+      .select(QUIZ_VERSION_PROJECTION)
       .from(quizVersions)
       .where(
         cursorCondition
@@ -147,79 +137,59 @@ export class QuizVersionRepository implements QuizVersionRepositoryPort {
     createdByUserId: string;
     nowIso: string;
   }): Promise<QuizVersionRow> {
-    const [createdVersion] = await this.db
-      .insert(quizVersions)
-      .values({
-        quizId: params.quizId,
-        versionNumber: params.versionNumber,
-        status: 'draft',
-        difficulty: params.difficulty,
-        durationMs: params.durationMs,
-        passingScorePercent: params.passingScorePercent,
-        rewardXp: params.rewardXp,
-        createdByUserId: params.createdByUserId,
-        createdAt: params.nowIso,
-        updatedAt: params.nowIso,
-      })
-      .returning({
-        quizVersionId: quizVersions.quizVersionId,
-        quizId: quizVersions.quizId,
-        versionNumber: quizVersions.versionNumber,
-        status: quizVersions.status,
-        difficulty: quizVersions.difficulty,
-        durationMs: quizVersions.durationMs,
-        passingScorePercent: quizVersions.passingScorePercent,
-        rewardXp: quizVersions.rewardXp,
-        createdByUserId: quizVersions.createdByUserId,
-        createdAt: quizVersions.createdAt,
-        publishedAt: quizVersions.publishedAt,
-        archivedAt: quizVersions.archivedAt,
-        updatedAt: quizVersions.updatedAt,
-      });
+    try {
+      const [createdVersion] = await this.db
+        .insert(quizVersions)
+        .values({
+          quizId: params.quizId,
+          versionNumber: params.versionNumber,
+          status: 'draft',
+          difficulty: params.difficulty,
+          durationMs: params.durationMs,
+          passingScorePercent: params.passingScorePercent,
+          rewardXp: params.rewardXp,
+          createdByUserId: params.createdByUserId,
+          createdAt: params.nowIso,
+          updatedAt: params.nowIso,
+        })
+        .returning(QUIZ_VERSION_PROJECTION);
 
-    return createdVersion as QuizVersionRow;
+      return createdVersion as QuizVersionRow;
+    } catch (error) {
+      this.mapInsertError(error);
+    }
   }
 
   async createDraftFromSourceVersion(params: {
     sourceVersion: QuizVersionDetailRow;
     userId: string;
-    payload?: UpdateQuizVersionDto;
+    command?: UpdateQuizVersionCommand;
     nowIso: string;
   }): Promise<QuizVersionRow> {
-    const nextVersionNumber = await this.getNextVersionNumber(params.sourceVersion.quizId);
+    try {
+      const nextVersionNumber = await this.getNextVersionNumber(params.sourceVersion.quizId);
 
-    const [createdVersion] = await this.db
-      .insert(quizVersions)
-      .values({
-        quizId: params.sourceVersion.quizId,
-        versionNumber: nextVersionNumber,
-        status: 'draft',
-        difficulty: params.payload?.difficulty ?? params.sourceVersion.difficulty,
-        durationMs: params.payload?.durationMs ?? params.sourceVersion.durationMs,
-        passingScorePercent:
-          params.payload?.passingScorePercent ?? params.sourceVersion.passingScorePercent,
-        rewardXp: params.payload?.rewardXp ?? params.sourceVersion.rewardXp,
-        createdByUserId: params.userId,
-        createdAt: params.nowIso,
-        updatedAt: params.nowIso,
-      })
-      .returning({
-        quizVersionId: quizVersions.quizVersionId,
-        quizId: quizVersions.quizId,
-        versionNumber: quizVersions.versionNumber,
-        status: quizVersions.status,
-        difficulty: quizVersions.difficulty,
-        durationMs: quizVersions.durationMs,
-        passingScorePercent: quizVersions.passingScorePercent,
-        rewardXp: quizVersions.rewardXp,
-        createdByUserId: quizVersions.createdByUserId,
-        createdAt: quizVersions.createdAt,
-        publishedAt: quizVersions.publishedAt,
-        archivedAt: quizVersions.archivedAt,
-        updatedAt: quizVersions.updatedAt,
-      });
+      const [createdVersion] = await this.db
+        .insert(quizVersions)
+        .values({
+          quizId: params.sourceVersion.quizId,
+          versionNumber: nextVersionNumber,
+          status: 'draft',
+          difficulty: params.command?.difficulty ?? params.sourceVersion.difficulty,
+          durationMs: params.command?.durationMs ?? params.sourceVersion.durationMs,
+          passingScorePercent:
+            params.command?.passingScorePercent ?? params.sourceVersion.passingScorePercent,
+          rewardXp: params.command?.rewardXp ?? params.sourceVersion.rewardXp,
+          createdByUserId: params.userId,
+          createdAt: params.nowIso,
+          updatedAt: params.nowIso,
+        })
+        .returning(QUIZ_VERSION_PROJECTION);
 
-    return createdVersion as QuizVersionRow;
+      return createdVersion as QuizVersionRow;
+    } catch (error) {
+      this.mapInsertError(error);
+    }
   }
 
   async getNextVersionNumber(quizId: string): Promise<number> {
@@ -254,65 +224,69 @@ export class QuizVersionRepository implements QuizVersionRepositoryPort {
     quizVersionId: string;
     nowIso: string;
   }): Promise<QuizVersionRow | null> {
-    return this.db.transaction(async (tx) => {
-      await tx
-        .update(quizVersions)
-        .set({
-          status: 'archived',
-          archivedAt: params.nowIso,
-          updatedAt: params.nowIso,
-        })
-        .where(
-          and(
-            eq(quizVersions.quizId, params.quizId),
-            eq(quizVersions.status, 'published'),
-            sql`${quizVersions.quizVersionId} <> ${params.quizVersionId}`,
-          ),
-        );
+    try {
+      return await this.db.transaction(async (tx) => {
+        await tx
+          .update(quizVersions)
+          .set({
+            status: 'archived',
+            archivedAt: params.nowIso,
+            updatedAt: params.nowIso,
+          })
+          .where(
+            and(
+              eq(quizVersions.quizId, params.quizId),
+              eq(quizVersions.status, 'published'),
+              sql`${quizVersions.quizVersionId} <> ${params.quizVersionId}`,
+            ),
+          );
 
-      const [publishedVersion] = await tx
-        .update(quizVersions)
-        .set({
-          status: 'published',
-          publishedAt: params.nowIso,
-          archivedAt: null,
-          updatedAt: params.nowIso,
-        })
-        .where(
-          and(
-            eq(quizVersions.quizVersionId, params.quizVersionId),
-            eq(quizVersions.status, 'draft'),
-          ),
-        )
-        .returning({
-          quizVersionId: quizVersions.quizVersionId,
-          quizId: quizVersions.quizId,
-          versionNumber: quizVersions.versionNumber,
-          status: quizVersions.status,
-          difficulty: quizVersions.difficulty,
-          durationMs: quizVersions.durationMs,
-          passingScorePercent: quizVersions.passingScorePercent,
-          rewardXp: quizVersions.rewardXp,
-          createdByUserId: quizVersions.createdByUserId,
-          createdAt: quizVersions.createdAt,
-          publishedAt: quizVersions.publishedAt,
-          archivedAt: quizVersions.archivedAt,
-          updatedAt: quizVersions.updatedAt,
-        });
+        const [publishedVersion] = await tx
+          .update(quizVersions)
+          .set({
+            status: 'published',
+            publishedAt: params.nowIso,
+            archivedAt: null,
+            updatedAt: params.nowIso,
+          })
+          .where(
+            and(
+              eq(quizVersions.quizVersionId, params.quizVersionId),
+              eq(quizVersions.status, 'draft'),
+            ),
+          )
+          .returning(QUIZ_VERSION_PROJECTION);
 
-      if (!publishedVersion) {
-        return null;
-      }
+        if (!publishedVersion) {
+          return null;
+        }
 
-      await tx
-        .update(quizzes)
-        .set({
-          publishedVersionId: params.quizVersionId,
-          updatedAt: params.nowIso,
-        })
-        .where(eq(QUIZ_COLUMNS.quizId, params.quizId));
+        await tx
+          .update(quizzes)
+          .set({
+            publishedVersionId: params.quizVersionId,
+            updatedAt: params.nowIso,
+          })
+          .where(eq(QUIZ_COLUMNS.quizId, params.quizId));
 
-      return publishedVersion as QuizVersionRow;
-    });
+        return publishedVersion as QuizVersionRow;
+      });
+    } catch (error) {
+      this.mapInsertError(error);
+    }
+  }
+
+  private mapInsertError(error: unknown): never {
+    const maybePgError = error as { code?: string; constraint?: string };
+
+    if (maybePgError.code === '23505') {
+      throw new QuizConflictError(QUIZ_VERSION_CONFLICT_MESSAGE);
+    }
+
+    if (maybePgError.code === '23503') {
+      throw new QuizConflictError('Quiz not found');
+    }
+
+    throw new QuizDomainError('Quiz version operation failed');
   }
 }

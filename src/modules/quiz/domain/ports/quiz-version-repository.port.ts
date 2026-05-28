@@ -1,5 +1,5 @@
 import type { QuizDifficulty, QuizVersionStatus } from '../../types/quiz.types';
-import type { UpdateQuizVersionDto } from '../../dto/request/update-quiz-version.dto';
+import type { UpdateQuizVersionCommand } from '../types/quiz-version-commands';
 
 export type QuizVersionRow = {
   quizVersionId: string;
@@ -53,7 +53,7 @@ export interface QuizVersionRepositoryPort {
   createDraftFromSourceVersion(params: {
     sourceVersion: QuizVersionDetailRow;
     userId: string;
-    payload?: UpdateQuizVersionDto;
+    command?: UpdateQuizVersionCommand;
     nowIso: string;
   }): Promise<QuizVersionRow>;
 
@@ -70,11 +70,29 @@ export interface QuizVersionRepositoryPort {
     };
   }): Promise<void>;
 
+  /**
+   * @transactional
+   * Archives the currently published version and publishes the target version in a single atomic transaction.
+   * Also updates the quiz's publishedVersionId FK.
+   * If any step fails, the entire operation is rolled back.
+   */
   publishQuizVersionAndSetQuiz(params: {
     quizId: string;
     quizVersionId: string;
     nowIso: string;
   }): Promise<QuizVersionRow | null>;
+
+  /**
+   * @transactional
+   * Creates a new draft version by deep-copying all questions from the source version.
+   * The entire copy operation (version + questions + options) is atomic.
+   */
+  createDraftFromSourceVersion(params: {
+    sourceVersion: QuizVersionDetailRow;
+    userId: string;
+    command?: UpdateQuizVersionCommand;
+    nowIso: string;
+  }): Promise<QuizVersionRow>;
 }
 
 export const QUIZ_VERSION_REPOSITORY_PORT = Symbol('QUIZ_VERSION_REPOSITORY_PORT');

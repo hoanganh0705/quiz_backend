@@ -17,6 +17,12 @@ export class QuizForbiddenError extends QuizDomainError {
   }
 }
 
+export class QuizSlugConflictError extends QuizDomainError {
+  constructor(message = 'A quiz with this slug already exists') {
+    super(message);
+  }
+}
+
 export class QuizConflictError extends QuizDomainError {
   constructor(message = 'Resource conflict') {
     super(message);
@@ -35,13 +41,26 @@ export class QuizVersionImmutableError extends QuizDomainError {
   }
 }
 
-/**
- * Raised when a business invariant is violated — e.g. attempting to publish a
- * quiz version that does not meet the minimum requirements.
- * Maps to HTTP 422 Unprocessable Entity.
- */
 export class QuizInsufficientQuestionsError extends QuizDomainError {
   constructor(message = 'Quiz version must contain at least 5 questions before publishing') {
+    super(message);
+  }
+}
+
+export class QuizQuestionPositionConflictError extends QuizDomainError {
+  constructor(message = 'A question with this position already exists in the quiz version') {
+    super(message);
+  }
+}
+
+export class QuizAnswerOptionPositionConflictError extends QuizDomainError {
+  constructor(message = 'An answer option with this position already exists in the question') {
+    super(message);
+  }
+}
+
+export class QuizMultipleCorrectOptionsError extends QuizDomainError {
+  constructor(message = 'A question must have exactly one correct answer option') {
     super(message);
   }
 }
