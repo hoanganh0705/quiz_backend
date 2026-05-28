@@ -54,9 +54,9 @@ async function bootstrap() {
 
   app.useGlobalPipes(
     new ValidationPipe({
-      whitelist: true,           // Strip properties not defined in the DTO
+      whitelist: true, // Strip properties not defined in the DTO
       forbidNonWhitelisted: true, // Reject requests with unknown properties
-      transform: true,           // Auto-transform payload types to match DTO declarations
+      transform: true, // Auto-transform payload types to match DTO declarations
     }),
   );
   const port = configService.get<number>('PORT') ?? 8080;

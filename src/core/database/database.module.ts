@@ -6,16 +6,14 @@ import { Pool } from 'pg';
 import * as schema from './schema';
 import * as relations from './schema/relations';
 import { DRIZZLE } from './drizzle.constants';
-import { UserSessionRepository } from './repositories/user-session.repository';
-import { UserRepository } from './repositories/user.repository';
-import { AttemptRepository } from './repositories/attempt.repository';
-import { BookmarkRepository } from './repositories/bookmark.repository';
-import { ReviewRepository } from './repositories/review.repository';
-import { QuizRepository } from './repositories/quiz.repository';
-import { QuizVersionRepository } from './repositories/quiz-version.repository';
-import { QuizQuestionRepository } from './repositories/quiz-question.repository';
-
-export { DRIZZLE } from './drizzle.constants';
+import { UserSessionRepository } from '@/modules/auth/infrastructure/repositories/user-session.repository';
+import { UserRepository } from '@/modules/user/infrastructure/repositories/user.repository';
+import { AttemptRepository } from '@/modules/attempt/infrastructure/repositories/attempt.repository';
+import { BookmarkRepository } from '@/modules/bookmark/infrastructure/repositories/bookmark.repository';
+import { ReviewRepository } from '@/modules/review/infrastructure/repositories/review.repository';
+import { QuizRepository } from '@/modules/quiz/infrastructure/repositories/quiz.repository';
+import { QuizVersionRepository } from '@/modules/quiz/infrastructure/repositories/quiz-version.repository';
+import { QuizQuestionRepository } from '@/modules/quiz/infrastructure/repositories/quiz-question.repository';
 
 const createDrizzleDb = (connectionString: string) => {
   const pool = new Pool({ connectionString });

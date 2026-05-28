@@ -1,9 +1,11 @@
 import type { UserMeRow } from '../domain/ports/user-repository.port';
 import type { UserMeResponseDto } from '../dto/response/user-me-response.dto';
 import { isObjectRecord } from '@/common/utils/object.util';
+import { Injectable } from '@nestjs/common';
 
+@Injectable()
 export class UserResponseMapper {
-  static toUserMeResponse(row: UserMeRow): UserMeResponseDto {
+  toUserMeResponse(row: UserMeRow): UserMeResponseDto {
     return {
       userId: row.userId,
       username: row.username,

@@ -1,10 +1,9 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
-import { UpdateMeDto } from '../../dto/request/update-me.dto';
-import { UpdateMeSettingsDto } from '../../dto/request/update-me-settings.dto';
 import type { UserMeRow } from './ports/user-repository.port';
 import { USER_REPOSITORY_PORT, type UserRepositoryPort } from './ports/user-repository.port';
 import { UserNotFoundError } from './errors';
+import type { UpdateProfileCommand, UpdateSettingsCommand } from './types/user-commands';
 
 @Injectable()
 export class UserDomainService {
@@ -25,23 +24,23 @@ export class UserDomainService {
     return user;
   }
 
-  async updateProfile(userId: string, payload: UpdateMeDto): Promise<UserMeRow> {
+  async updateProfile(userId: string, command: UpdateProfileCommand): Promise<UserMeRow> {
     const patch: {
       displayName?: string | null;
       bio?: string | null;
       avatarUrl?: string | null;
     } = {};
 
-    if ('displayName' in payload && payload.displayName !== undefined) {
-      patch.displayName = payload.displayName?.trim() ?? null;
+    if ('displayName' in command && command.displayName !== undefined) {
+      patch.displayName = command.displayName?.trim() ?? null;
     }
 
-    if ('bio' in payload) {
-      patch.bio = payload.bio?.trim() ?? null;
+    if ('bio' in command) {
+      patch.bio = command.bio?.trim() ?? null;
     }
 
-    if ('avatarUrl' in payload) {
-      patch.avatarUrl = payload.avatarUrl?.trim() ?? null;
+    if ('avatarUrl' in command) {
+      patch.avatarUrl = command.avatarUrl?.trim() ?? null;
     }
 
     if (Object.keys(patch).length === 0) {
@@ -61,12 +60,8 @@ export class UserDomainService {
     return updated;
   }
 
-  async updateSettings(userId: string, payload: UpdateMeSettingsDto): Promise<UserMeRow> {
-    const settings = payload.settings;
-
-    if (typeof settings !== 'object' || settings === null || Array.isArray(settings)) {
-      throw new Error('settings must be a plain object');
-    }
+  async updateSettings(userId: string, command: UpdateSettingsCommand): Promise<UserMeRow> {
+    const settings = command.settings;
 
     const nowIso = new Date().toISOString();
     const updated = await this.userRepository.updateSettings(userId, settings, nowIso);
