@@ -8,7 +8,6 @@ import { AttemptDomainExceptionFilter } from './transport/filters/attempt-domain
 import { ATTEMPT_REPOSITORY_PORT } from './domain/ports';
 import { AttemptRepository } from './infrastructure/repositories/attempt.repository';
 import { QuizModule } from '@/modules/quiz/quiz.module';
-
 @Module({
   imports: [DatabaseModule, QuizModule],
   providers: [

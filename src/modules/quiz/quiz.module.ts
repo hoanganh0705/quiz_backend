@@ -17,7 +17,6 @@ import { QUIZ_QUESTION_REPOSITORY_PORT } from './domain/ports/quiz-question-repo
 import { QuizRepository } from './infrastructure/repositories/quiz.repository';
 import { QuizVersionRepository } from './infrastructure/repositories/quiz-version.repository';
 import { QuizQuestionRepository } from './infrastructure/repositories/quiz-question.repository';
-
 @Module({
   imports: [DatabaseModule],
   providers: [

@@ -5,7 +5,11 @@ import { TagCursorMapper } from '../mappers/tag-cursor.mapper';
 import type { TagListResponseDto } from '../dto/response/tag-list-response.dto';
 import type { TagResponseDto } from '../dto/response/tag-response.dto';
 import type { DeleteTagResponseDto } from '../dto/response/delete-tag-response.dto';
-import type { CreateTagCommand, ListTagsQuery, UpdateTagCommand } from '../domain/types/tag-commands';
+import type {
+  CreateTagCommand,
+  ListTagsQuery,
+  UpdateTagCommand,
+} from '../domain/types/tag-commands';
 
 @Injectable()
 export class TagApplicationService {

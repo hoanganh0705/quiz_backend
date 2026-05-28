@@ -16,7 +16,7 @@ export class TagCursorMapper {
       throw new Error('Invalid cursor');
     }
 
-    return { createdAt: parsed.createdAt, tagId: parsed.tagId };
+    return { createdAt: parsed.createdAt, tagId: parsed.tagId ?? '' };
   }
 
   static serialize(tag: Pick<TagRow, 'createdAt' | 'tagId'>): string {

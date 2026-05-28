@@ -8,7 +8,6 @@ import { ReviewDomainExceptionFilter } from './transport/filters/review-domain-e
 import { REVIEW_REPOSITORY_PORT } from './domain/ports';
 import { ReviewRepository } from './infrastructure/repositories/review.repository';
 import { QuizModule } from '@/modules/quiz/quiz.module';
-
 @Module({
   imports: [DatabaseModule, QuizModule],
   providers: [

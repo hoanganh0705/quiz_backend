@@ -31,11 +31,10 @@ import { UserSessionRepository } from './infrastructure/repositories/user-sessio
 import { RedisService } from '@/core/redis/redis.service';
 import { EmailService } from '@/modules/email/email.service';
 import { AuthDomainExceptionFilter } from './transport/filters/auth-domain-exception.filter';
-import { LoggerModule } from 'nestjs-pino';
 import { VerificationTokenService } from './domain/verification-token.service';
 
 @Module({
-  imports: [CommonModule, DatabaseModule, RedisModule, EmailModule, LoggerModule.forRoot()],
+  imports: [CommonModule, DatabaseModule, RedisModule, EmailModule],
   controllers: [AuthController],
   providers: [
     AuthApplicationService,
@@ -54,6 +53,8 @@ import { VerificationTokenService } from './domain/verification-token.service';
     RequestContextInterceptor,
     RefreshTokenInterceptor,
     AuthDomainExceptionFilter,
+    UserRepository,
+    UserSessionRepository,
     { provide: TOKEN_PROVIDER, useClass: JwtTokenAdapter },
     { provide: CRYPTO_PROVIDER, useClass: CryptoAdapter },
     { provide: USER_REPOSITORY_PORT, useExisting: UserRepository },
