@@ -6,12 +6,31 @@ import {
 } from '../ports/quiz-question-repository.port';
 import type { QuizWithPublishedVersionRow, QuizRecordRow } from '../ports/quiz-repository.port';
 import type { QuizQuestionJoinRow } from '../ports/quiz-question-repository.port';
-import { ListQuizzesQueryDto } from '../../dto/request/list-quizzes-query.dto';
+import type { ListQuizzesQuery } from '../types/list-quizzes.query';
+import type { QuizCursor } from '../ports/quiz-repository.port';
 import { QuizNotFoundError } from '../errors';
-import { decodeQuizCursor, encodeQuizCursor, normalizeQuizSlug } from '../shared/quiz-utils';
+import { normalizeQuizSlug } from '../slug/quiz-slug';
+import type { QuizDifficulty } from '../../types/quiz.types';
 
+export type ListQuizzesResult = {
+  rows: QuizWithPublishedVersionRow[];
+  limit: number;
+  hasNextPage: boolean;
+  nextCursor: QuizCursor | null;
+};
+
+/**
+ * QuizQueryService — Query orchestration for the Quiz aggregate.
+ *
+ * Responsibilities:
+ *  - Load quiz records by ID or slug
+ *  - Paginate quiz listings with cursor semantics
+ *  - Fetch associated question sets for the published version
+ *
+ * Read-only: never mutates state. All write operations live in QuizCommandService.
+ */
 @Injectable()
-export class QuizReadService {
+export class QuizQueryService {
   constructor(
     @Inject(QUIZ_REPOSITORY_PORT) private readonly quizRepository: QuizRepositoryPort,
     @Inject(QUIZ_QUESTION_REPOSITORY_PORT)
@@ -38,35 +57,28 @@ export class QuizReadService {
     return row;
   }
 
-  async listQuizzes(query: ListQuizzesQueryDto): Promise<{
-    rows: QuizWithPublishedVersionRow[];
-    limit: number;
-    hasNextPage: boolean;
-    nextCursor: string | null;
-  }> {
-    const limit = query.limit ?? 10;
-    const cursorValue = typeof query.cursor === 'string' ? query.cursor : undefined;
-    const cursor = cursorValue ? decodeQuizCursor(cursorValue) : null;
-
+  async listQuizzes(query: ListQuizzesQuery): Promise<ListQuizzesResult> {
     const rows = await this.quizRepository.listQuizzes({
-      limit,
-      cursor,
-      filters: {
-        difficulty: query.difficulty,
-        categoryId: query.categoryId,
-        tagId: query.tagId,
-      },
+      limit: query.limit,
+      cursor: query.cursor,
+      filters: query.filters
+        ? {
+            ...query.filters,
+            difficulty: query.filters.difficulty as QuizDifficulty | undefined,
+          }
+        : undefined,
     });
 
-    const hasNextPage = rows.length > limit;
-    const items = hasNextPage ? rows.slice(0, limit) : rows;
+    const hasNextPage = rows.length > query.limit;
+    const items = hasNextPage ? rows.slice(0, query.limit) : rows;
     const lastItem = items.at(-1);
 
     return {
       rows: items,
-      limit,
+      limit: query.limit,
       hasNextPage,
-      nextCursor: hasNextPage && lastItem ? encodeQuizCursor(lastItem) : null,
+      nextCursor:
+        hasNextPage && lastItem ? { createdAt: lastItem.createdAt, quizId: lastItem.quizId } : null,
     };
   }
 

@@ -17,6 +17,11 @@ export interface QuizQuestionRepositoryPort {
   getQuestionsByVersionId(quizVersionId: string): Promise<QuizQuestionJoinRow[]>;
   getQuestionById(questionId: string): Promise<QuizQuestionJoinRow[]>;
   getQuestionsByIds(questionIds: string[]): Promise<QuizQuestionJoinRow[]>;
+  /**
+   * @transactional
+   * Creates a question with its answer options in a single atomic transaction.
+   * If any step fails, the entire operation is rolled back.
+   */
   createQuestionWithOptions(params: {
     quizVersionId: string;
     position: number;
@@ -31,6 +36,11 @@ export interface QuizQuestionRepositoryPort {
       createdAt: string;
     }[];
   }): Promise<{ questionId: string }>;
+  /**
+   * @transactional
+   * Creates multiple questions with their answer options in a single atomic transaction.
+   * All questions and options are created together or not at all.
+   */
   createQuestionsWithOptions(
     params: {
       quizVersionId: string;

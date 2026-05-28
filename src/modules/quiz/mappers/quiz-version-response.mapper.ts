@@ -1,10 +1,12 @@
-import { Injectable } from '@nestjs/common';
-import { QuizVersionResponseDto } from '../dto/response/quiz-version-response.dto';
 import type { QuizVersionRow } from '../domain/ports/quiz-version-repository.port';
+import type { QuizVersionResponseDto } from '../dto/response/quiz-version-response.dto';
 
-@Injectable()
+/**
+ * Pure stateless mapper — no DI needed.
+ * Translates QuizVersionRow database projections to QuizVersionResponseDto.
+ */
 export class QuizVersionResponseMapper {
-  toQuizVersionResponse(row: QuizVersionRow): QuizVersionResponseDto {
+  static toQuizVersionResponse(row: QuizVersionRow): QuizVersionResponseDto {
     return {
       quizVersionId: row.quizVersionId,
       quizId: row.quizId,

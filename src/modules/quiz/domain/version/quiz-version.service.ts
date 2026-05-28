@@ -1,39 +1,36 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { hasPermission, Permission } from '@/common/authorization/permissions';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
 import {
   QUIZ_VERSION_REPOSITORY_PORT,
   QUIZ_QUESTION_REPOSITORY_PORT,
+  QUIZ_DOMAIN_EVENT_BUS,
   type QuizVersionRepositoryPort,
-  type QuizVersionDetailRow,
   type QuizVersionRow,
   type QuizQuestionRepositoryPort,
 } from '../ports';
-import { CreateQuizVersionDto } from '../../dto/request/create-quiz-version.dto';
-import { ListQuizVersionsQueryDto } from '../../dto/request/list-quiz-versions-query.dto';
-import { UpdateQuizVersionDto } from '../../dto/request/update-quiz-version.dto';
+import type { CreateQuizVersionCommand } from '../types/create-quiz-version.command';
+import type { UpdateQuizVersionCommand } from '../types/quiz-version-commands';
+import type { ListQuizVersionsQuery } from '../types/list-quiz-versions.query';
 import {
-  canEditQuizVersion,
-  canManageOwnOrAny,
-  canPublishQuizVersion,
-} from '../../authz/quiz-authorization.helper';
-import {
-  QUIZ_VERSION_CONFLICT_MESSAGE,
   MIN_QUESTIONS_TO_PUBLISH,
   QUIZ_INSUFFICIENT_QUESTIONS_MESSAGE,
 } from '../../quiz.constants';
-import { QuizReadService } from '../quiz/quiz-read.service';
-import { decodeQuizVersionCursor, encodeQuizVersionCursor } from '../shared/quiz-utils';
-import {
-  QuizNotFoundError,
-  QuizForbiddenError,
-  QuizConflictError,
-  QuizValidationError,
-  QuizVersionImmutableError,
-  QuizInsufficientQuestionsError,
-  QuizDomainError,
-} from '../errors';
+import { QuizQueryService } from '../quiz/quiz-query.service';
+import type { QuizVersionCursor } from '../ports';
+import { QuizNotFoundError, QuizForbiddenError, QuizInsufficientQuestionsError } from '../errors';
+import { assertCanEditOrDraftFrom, isAlreadyPublished } from './quiz-version-state-machine';
+import { QuizPolicy } from '../policies/quiz.policy';
+import { QuizVersionPolicy } from '../policies/quiz-version.policy';
+import { QuizVersionCreatedEvent, QuizVersionPublishedEvent } from '../events/quiz-domain.events';
+import { QuizDomainEventBus } from '../events/quiz-domain.event-bus';
+
+export type ListQuizVersionsResult = {
+  rows: QuizVersionRow[];
+  limit: number;
+  hasNextPage: boolean;
+  nextCursor: QuizVersionCursor | null;
+};
 
 @Injectable()
 export class QuizVersionService {
@@ -42,74 +39,24 @@ export class QuizVersionService {
     private readonly quizVersionRepository: QuizVersionRepositoryPort,
     @Inject(QUIZ_QUESTION_REPOSITORY_PORT)
     private readonly quizQuestionRepository: QuizQuestionRepositoryPort,
-    private readonly quizReadService: QuizReadService,
+    private readonly quizQueryService: QuizQueryService,
+    @Inject(QUIZ_DOMAIN_EVENT_BUS) private readonly eventBus: QuizDomainEventBus,
     @InjectPinoLogger(QuizVersionService.name) private readonly logger: PinoLogger,
   ) {}
-
-  private mapVersionInsertError(error: unknown): never {
-    const maybePgError = error as { code?: string; constraint?: string };
-
-    if (maybePgError.code === '23505') {
-      throw new QuizConflictError(QUIZ_VERSION_CONFLICT_MESSAGE);
-    }
-
-    if (maybePgError.code === '23503') {
-      throw new QuizNotFoundError('Quiz not found');
-    }
-
-    throw new QuizDomainError('Quiz version operation failed');
-  }
-
-  private async assertQuizManagePermission(quizId: string, user: JwtPayload): Promise<void> {
-    const quiz = await this.quizReadService.getActiveQuizRecordById(quizId);
-    const isOwner = !!quiz.creatorId && quiz.creatorId === user.sub;
-
-    const canManage = canManageOwnOrAny({
-      isOwner,
-      canManageAny: hasPermission(user.role, Permission.QUIZ_VERSION_CREATE_ANY),
-      canManageOwn: hasPermission(user.role, Permission.QUIZ_VERSION_CREATE_OWN),
-    });
-
-    if (!canManage) {
-      throw new QuizForbiddenError('You do not have permission to manage this quiz');
-    }
-  }
-
-  private async createDraftFromSourceVersion(
-    sourceVersion: QuizVersionDetailRow,
-    user: JwtPayload,
-    payload?: UpdateQuizVersionDto,
-  ): Promise<QuizVersionRow> {
-    const nowIso = new Date().toISOString();
-
-    try {
-      return await this.quizVersionRepository.createDraftFromSourceVersion({
-        sourceVersion,
-        userId: user.sub,
-        payload,
-        nowIso,
-      });
-    } catch (error: unknown) {
-      this.logger.error({
-        event: 'quiz_version_draft_from_source_failed',
-        sourceVersionId: sourceVersion.quizVersionId,
-        userId: user.sub,
-        errorCode: (error as { code?: string })?.code ?? 'UNKNOWN',
-      });
-      this.mapVersionInsertError(error);
-    }
-  }
 
   async createQuizVersion(
     quizId: string,
     user: JwtPayload,
-    payload: CreateQuizVersionDto,
+    command: CreateQuizVersionCommand,
   ): Promise<QuizVersionRow> {
-    await this.assertQuizManagePermission(quizId, user);
+    const quiz = await this.quizQueryService.getActiveQuizRecordById(quizId);
+    const isOwner = QuizPolicy.isOwner(quiz.creatorId, user);
+    QuizVersionPolicy.assertCanCreate(isOwner, user);
+    const nowIso = new Date().toISOString();
 
-    if (payload.sourceVersionId) {
+    if (command.sourceVersionId) {
       const sourceVersion = await this.quizVersionRepository.getQuizVersionDetailById(
-        payload.sourceVersionId,
+        command.sourceVersionId,
       );
 
       if (!sourceVersion) {
@@ -117,35 +64,22 @@ export class QuizVersionService {
       }
 
       if (sourceVersion.quizId !== quizId) {
-        throw new QuizValidationError('Invalid source version');
+        throw new QuizNotFoundError('Source version not found');
       }
 
-      const isSourceOwner =
-        !!sourceVersion.quizCreatorId && sourceVersion.quizCreatorId === user.sub;
-
-      const canUseSourceVersion = canManageOwnOrAny({
-        isOwner: isSourceOwner,
-        canManageAny: hasPermission(user.role, Permission.QUIZ_VERSION_CREATE_ANY),
-        canManageOwn: hasPermission(user.role, Permission.QUIZ_VERSION_CREATE_OWN),
-      });
+      const isSourceOwner = QuizPolicy.isOwner(sourceVersion.quizCreatorId, user);
+      const canUseSourceVersion =
+        QuizVersionPolicy.getEditTransition(sourceVersion.status, isSourceOwner, user) !==
+        'blocked';
 
       if (!canUseSourceVersion) {
         throw new QuizForbiddenError('You do not have permission to use this source version');
       }
-    }
 
-    const versionNumber = await this.quizVersionRepository.getNextVersionNumber(quizId);
-    const nowIso = new Date().toISOString();
-
-    try {
-      const result = await this.quizVersionRepository.createQuizVersion({
-        quizId,
-        versionNumber,
-        difficulty: payload.difficulty,
-        durationMs: payload.durationMs,
-        passingScorePercent: payload.passingScorePercent,
-        rewardXp: payload.rewardXp,
-        createdByUserId: user.sub,
+      const result = await this.quizVersionRepository.createDraftFromSourceVersion({
+        sourceVersion,
+        userId: user.sub,
+        command,
         nowIso,
       });
 
@@ -153,72 +87,87 @@ export class QuizVersionService {
         event: 'quiz_version_created',
         quizId,
         versionId: result.quizVersionId,
-        versionNumber,
+        versionNumber: result.versionNumber,
         userId: user.sub,
-        sourceVersionId: payload.sourceVersionId ?? null,
+        sourceVersionId: command.sourceVersionId,
       });
 
+      this.eventBus.emitQuizVersionCreated(
+        new QuizVersionCreatedEvent(
+          result.quizVersionId,
+          quizId,
+          user.sub,
+          result.versionNumber,
+          nowIso,
+        ),
+      );
+
       return result;
-    } catch (error: unknown) {
-      this.logger.error({
-        event: 'quiz_version_create_failed',
-        quizId,
-        userId: user.sub,
-        errorCode: (error as { code?: string })?.code ?? 'UNKNOWN',
-      });
-      this.mapVersionInsertError(error);
     }
+
+    const versionNumber = await this.quizVersionRepository.getNextVersionNumber(quizId);
+
+    const result = await this.quizVersionRepository.createQuizVersion({
+      quizId,
+      versionNumber,
+      difficulty: command.difficulty,
+      durationMs: command.durationMs,
+      passingScorePercent: command.passingScorePercent,
+      rewardXp: command.rewardXp,
+      createdByUserId: user.sub,
+      nowIso,
+    });
+
+    this.logger.info({
+      event: 'quiz_version_created',
+      quizId,
+      versionId: result.quizVersionId,
+      versionNumber,
+      userId: user.sub,
+    });
+
+    this.eventBus.emitQuizVersionCreated(
+      new QuizVersionCreatedEvent(result.quizVersionId, quizId, user.sub, versionNumber, nowIso),
+    );
+
+    return result;
   }
 
   async listQuizVersions(
     quizId: string,
     user: JwtPayload,
-    query: ListQuizVersionsQueryDto,
-  ): Promise<{
-    rows: QuizVersionRow[];
-    limit: number;
-    hasNextPage: boolean;
-    nextCursor: string | null;
-  }> {
-    const quiz = await this.quizReadService.getActiveQuizRecordById(quizId);
-    const isOwner = !!quiz.creatorId && quiz.creatorId === user.sub;
+    query: ListQuizVersionsQuery,
+  ): Promise<ListQuizVersionsResult> {
+    const quiz = await this.quizQueryService.getActiveQuizRecordById(quizId);
+    const isOwner = QuizPolicy.isOwner(quiz.creatorId, user);
 
-    const canView = canManageOwnOrAny({
-      isOwner,
-      canManageAny: hasPermission(user.role, Permission.QUIZ_VERSION_VIEW_ANY),
-      canManageOwn: hasPermission(user.role, Permission.QUIZ_VERSION_VIEW_OWN),
-    });
-
-    if (!canView) {
-      throw new QuizForbiddenError('You do not have permission to view quiz versions');
-    }
-
-    const limit = query.limit ?? 10;
-    const cursorValue = typeof query.cursor === 'string' ? query.cursor : undefined;
-    const cursor = cursorValue ? decodeQuizVersionCursor(cursorValue) : null;
+    QuizVersionPolicy.assertCanView(isOwner, user);
 
     const rows = await this.quizVersionRepository.listQuizVersions({
       quizId,
-      limit,
-      cursor,
+      limit: query.limit,
+      cursor: query.cursor,
     });
 
-    const hasNextPage = rows.length > limit;
-    const items = hasNextPage ? rows.slice(0, limit) : rows;
+    const hasNextPage = rows.length > query.limit;
+    const items = hasNextPage ? rows.slice(0, query.limit) : rows;
     const lastItem = items.at(-1);
 
     return {
       rows: items,
-      limit,
+      limit: query.limit,
       hasNextPage,
-      nextCursor: hasNextPage && lastItem ? encodeQuizVersionCursor(lastItem) : null,
+      nextCursor:
+        hasNextPage && lastItem
+          ? { createdAt: lastItem.createdAt, quizVersionId: lastItem.quizVersionId }
+          : null,
     };
   }
 
   async updateQuizVersion(
     quizVersionId: string,
     user: JwtPayload,
-    payload: UpdateQuizVersionDto,
+    command: UpdateQuizVersionCommand,
   ): Promise<QuizVersionRow> {
     const version = await this.quizVersionRepository.getQuizVersionDetailById(quizVersionId);
 
@@ -226,51 +175,29 @@ export class QuizVersionService {
       throw new QuizNotFoundError('Quiz version not found');
     }
 
-    const isOwner = !!version.quizCreatorId && version.quizCreatorId === user.sub;
+    const isOwner = QuizPolicy.isOwner(version.quizCreatorId, user);
 
-    const canEditOwn = hasPermission(user.role, Permission.QUIZ_VERSION_EDIT_OWN);
-    const canEditAny = hasPermission(user.role, Permission.QUIZ_VERSION_EDIT_ANY);
+    const transition = assertCanEditOrDraftFrom(version.status, isOwner, user);
 
-    if (version.status === 'archived') {
-      throw new QuizVersionImmutableError('Archived versions are immutable and cannot be edited');
-    }
-
-    if (version.status === 'published') {
-      const canCreateDraft = canManageOwnOrAny({
-        isOwner,
-        canManageAny: canEditAny,
-        canManageOwn: canEditOwn,
+    if (transition === 'draft-from-published') {
+      return this.quizVersionRepository.createDraftFromSourceVersion({
+        sourceVersion: version,
+        userId: user.sub,
+        command,
+        nowIso: new Date().toISOString(),
       });
-
-      if (!canCreateDraft) {
-        throw new QuizForbiddenError(
-          'You do not have permission to create a draft from this version',
-        );
-      }
-
-      return this.createDraftFromSourceVersion(version, user, payload);
     }
 
-    if (
-      !canEditQuizVersion({
-        status: version.status,
-        isOwner,
-        canEditAny,
-        canEditOwn,
-      })
-    ) {
-      throw new QuizForbiddenError('Only draft versions can be edited');
-    }
-
+    // transition === 'edit' (draft)
     const nowIso = new Date().toISOString();
 
     await this.quizVersionRepository.updateQuizVersion({
       quizVersionId,
       patch: {
-        difficulty: payload.difficulty ?? version.difficulty,
-        durationMs: payload.durationMs ?? version.durationMs,
-        passingScorePercent: payload.passingScorePercent ?? version.passingScorePercent,
-        rewardXp: payload.rewardXp ?? version.rewardXp,
+        difficulty: command.difficulty ?? version.difficulty,
+        durationMs: command.durationMs ?? version.durationMs,
+        passingScorePercent: command.passingScorePercent ?? version.passingScorePercent,
+        rewardXp: command.rewardXp ?? version.rewardXp,
         updatedAt: nowIso,
       },
     });
@@ -291,48 +218,35 @@ export class QuizVersionService {
       throw new QuizNotFoundError('Quiz version not found');
     }
 
-    if (version.status === 'published') {
+    // Idempotent: already published → return current state without further side-effects.
+    if (isAlreadyPublished(version.status)) {
       const current = await this.quizVersionRepository.getQuizVersionById(quizVersionId);
-
-      if (!current) {
-        throw new QuizNotFoundError('Quiz version not found');
-      }
-
+      if (!current) throw new QuizNotFoundError('Quiz version not found');
       return current;
     }
 
-    if (version.status === 'archived') {
-      throw new QuizVersionImmutableError('Archived versions cannot be published');
+    const isOwner = QuizPolicy.isOwner(version.quizCreatorId, user);
+
+    // Throws QuizValidationError or QuizForbiddenError as appropriate.
+    try {
+      QuizVersionPolicy.assertCanPublish(
+        version.status,
+        isOwner,
+        user,
+        version.quizIsVerified,
+        version.quizIsHidden,
+      );
+    } catch (err) {
+      if (err instanceof QuizForbiddenError) {
+        this.logger.warn({
+          event: 'quiz_version_publish_forbidden',
+          quizVersionId,
+          userId: user.sub,
+        });
+      }
+      throw err;
     }
 
-    if (version.status !== 'draft') {
-      throw new QuizValidationError('Only draft versions can be published');
-    }
-
-    const isOwner = !!version.quizCreatorId && version.quizCreatorId === user.sub;
-
-    const canPublish = canPublishQuizVersion({
-      status: version.status,
-      isOwner,
-      canPublishAny: hasPermission(user.role, Permission.QUIZ_VERSION_PUBLISH_ANY),
-      canPublishOwn: hasPermission(user.role, Permission.QUIZ_VERSION_PUBLISH_OWN),
-      quizIsVerified: version.quizIsVerified,
-      quizIsHidden: version.quizIsHidden,
-      canVerify: hasPermission(user.role, Permission.QUIZ_VERIFY),
-    });
-
-    if (!canPublish) {
-      this.logger.warn({
-        event: 'quiz_version_publish_forbidden',
-        quizVersionId,
-        userId: user.sub,
-      });
-      throw new QuizForbiddenError('You do not have permission to publish this quiz version');
-    }
-
-    // Business invariant: enforce minimum question count BEFORE allowing publish.
-    // This guarantees that every published version is always attemptable.
-    // Draft versions intentionally allow 0 questions so creators can save partial work.
     const questionCount =
       await this.quizQuestionRepository.countQuestionsByVersionId(quizVersionId);
     if (questionCount < MIN_QUESTIONS_TO_PUBLISH) {
@@ -374,6 +288,16 @@ export class QuizVersionService {
       quizId: version.quizId,
       userId: user.sub,
     });
+
+    this.eventBus.emitQuizVersionPublished(
+      new QuizVersionPublishedEvent(
+        quizVersionId,
+        version.quizId,
+        user.sub,
+        publishedVersion.versionNumber,
+        nowIso,
+      ),
+    );
 
     return publishedVersion;
   }

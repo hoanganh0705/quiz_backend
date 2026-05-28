@@ -1,153 +1,93 @@
 import { Injectable } from '@nestjs/common';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
-import { QuizReadService } from '../domain/quiz/quiz-read.service';
-import { QuizWriteService } from '../domain/quiz/quiz-write.service';
-import { QuizVersionService } from '../domain/version/quiz-version.service';
-import { QuizQuestionService } from '../domain/question/quiz-question.service';
+import { QuizCommandService } from '../domain/quiz/quiz-command.service';
+import { QuizQueryService } from '../domain/quiz/quiz-query.service';
 import { QuizResponseMapper } from '../mappers/quiz-response.mapper';
-import { QuizVersionResponseMapper } from '../mappers/quiz-version-response.mapper';
 import { QuizQuestionResponseMapper } from '../mappers/quiz-question-response.mapper';
+import { QuizCursorMapper } from '../mappers/quiz-cursor.mapper';
 import { CreateQuizDto } from '../dto/request/create-quiz.dto';
+import { UpdateQuizDto } from '../dto/request/update-quiz.dto';
 import { ListQuizzesQueryDto } from '../dto/request/list-quizzes-query.dto';
-import { CreateQuizVersionDto } from '../dto/request/create-quiz-version.dto';
-import { ListQuizVersionsQueryDto } from '../dto/request/list-quiz-versions-query.dto';
-import { UpdateQuizVersionDto } from '../dto/request/update-quiz-version.dto';
-import { UpdateQuizDto } from '@/modules/quiz/dto/request/update-quiz.dto';
-import { CreateQuizQuestionDto } from '@/modules/quiz/dto/request/create-quiz-question.dto';
-import { CreateQuizQuestionsDto } from '@/modules/quiz/dto/request/create-quiz-questions.dto';
-import { QuizResponseDto } from '../dto/response/quiz-response.dto';
-import { QuizListResponseDto } from '../dto/response/quiz-list-response.dto';
-import { QuizVersionResponseDto } from '../dto/response/quiz-version-response.dto';
-import { QuizVersionListResponseDto } from '../dto/response/quiz-version-list-response.dto';
-import { DeleteQuizResponseDto } from '@/modules/quiz/dto/response/delete-quiz-response.dto';
-import { QuizQuestionResponseDto } from '@/modules/quiz/dto/response/quiz-question-response.dto';
+import type { QuizResponseDto } from '../dto/response/quiz-response.dto';
+import type { QuizListResponseDto } from '../dto/response/quiz-list-response.dto';
+import type { DeleteQuizResponseDto } from '../dto/response/delete-quiz-response.dto';
+import type { CreateQuizCommand, UpdateQuizCommand } from '../domain/types';
+import type { QuizDifficulty } from '../types/quiz.types';
 
 @Injectable()
 export class QuizApplicationService {
   constructor(
-    private readonly quizReadService: QuizReadService,
-    private readonly quizWriteService: QuizWriteService,
-    private readonly quizVersionService: QuizVersionService,
-    private readonly quizQuestionService: QuizQuestionService,
-    private readonly quizResponseMapper: QuizResponseMapper,
-    private readonly quizVersionResponseMapper: QuizVersionResponseMapper,
-    private readonly quizQuestionResponseMapper: QuizQuestionResponseMapper,
+    private readonly quizQueryService: QuizQueryService,
+    private readonly quizCommandService: QuizCommandService,
   ) {}
 
-  async createQuiz(user: JwtPayload, payload: CreateQuizDto): Promise<QuizResponseDto> {
-    const result = await this.quizWriteService.createQuiz(user, payload);
-    return this.quizResponseMapper.toQuizResponse(result);
+  async createQuiz(user: JwtPayload, dto: CreateQuizDto): Promise<QuizResponseDto> {
+    const command: CreateQuizCommand = {
+      creatorId: user.sub,
+      title: dto.title,
+      slug: dto.slug as string,
+      description: dto.description ?? null,
+      requirements: dto.requirements ?? null,
+      imageUrl: dto.imageUrl ?? null,
+      isFeatured: dto.isFeatured ?? false,
+      isHidden: dto.isHidden ?? false,
+      initialVersion: dto.initialVersion,
+      categoryIds: dto.categoryIds ?? [],
+      tagIds: dto.tagIds ?? [],
+    };
+    const result = await this.quizCommandService.createQuiz(user, command);
+    return QuizResponseMapper.toQuizResponse(result);
   }
 
-  async listQuizzes(query: ListQuizzesQueryDto): Promise<QuizListResponseDto> {
-    const result = await this.quizReadService.listQuizzes(query);
+  async listQuizzes(dto: ListQuizzesQueryDto): Promise<QuizListResponseDto> {
+    const limit = dto.limit ?? 20;
+    const cursor = dto.cursor ? QuizCursorMapper.parse(dto.cursor) : null;
+
+    const result = await this.quizQueryService.listQuizzes({
+      limit,
+      cursor,
+      filters: {
+        difficulty: dto.difficulty as QuizDifficulty,
+        categoryId: dto.categoryId,
+        tagId: dto.tagId,
+      },
+    });
 
     return {
-      items: result.rows.map((row) => this.quizResponseMapper.toQuizResponse(row)),
+      items: result.rows.map((row) => QuizResponseMapper.toQuizResponse(row)),
       pagination: {
         limit: result.limit,
-        nextCursor: result.nextCursor,
+        nextCursor: result.nextCursor ? QuizCursorMapper.serialize(result.nextCursor) : null,
         hasNextPage: result.hasNextPage,
       },
     };
   }
 
   async getQuizBySlug(slug: string): Promise<QuizResponseDto> {
-    const { row, questions } = await this.quizReadService.getQuizBySlug(slug);
-
+    const { row, questions } = await this.quizQueryService.getQuizBySlug(slug);
     const mappedQuestions = questions
-      ? this.quizQuestionResponseMapper.toQuestionResponses(questions)
+      ? QuizQuestionResponseMapper.toQuestionResponses(questions)
       : undefined;
-
-    return this.quizResponseMapper.toQuizResponse(row, mappedQuestions);
+    return QuizResponseMapper.toQuizResponse(row, mappedQuestions);
   }
 
-  async updateQuiz(
-    quizId: string,
-    user: JwtPayload,
-    payload: UpdateQuizDto,
-  ): Promise<QuizResponseDto> {
-    const result = await this.quizWriteService.updateQuiz(quizId, user, payload);
-    return this.quizResponseMapper.toQuizResponse(result);
+  async updateQuiz(quizId: string, user: JwtPayload, dto: UpdateQuizDto): Promise<QuizResponseDto> {
+    const command: UpdateQuizCommand = {
+      title: dto.title,
+      description: dto.description,
+      slug: dto.slug,
+      requirements: dto.requirements,
+      imageUrl: dto.imageUrl,
+      isFeatured: dto.isFeatured,
+      isHidden: dto.isHidden,
+      categoryIds: dto.categoryIds,
+      tagIds: dto.tagIds,
+    };
+    const result = await this.quizCommandService.updateQuiz(quizId, user, command);
+    return QuizResponseMapper.toQuizResponse(result);
   }
 
   async deleteQuiz(quizId: string, user: JwtPayload): Promise<DeleteQuizResponseDto> {
-    return this.quizWriteService.softDeleteQuizById(quizId, user);
-  }
-
-  async createQuizVersion(
-    quizId: string,
-    user: JwtPayload,
-    payload: CreateQuizVersionDto,
-  ): Promise<QuizVersionResponseDto> {
-    const result = await this.quizVersionService.createQuizVersion(quizId, user, payload);
-    return this.quizVersionResponseMapper.toQuizVersionResponse(result);
-  }
-
-  async listQuizVersions(
-    quizId: string,
-    user: JwtPayload,
-    query: ListQuizVersionsQueryDto,
-  ): Promise<QuizVersionListResponseDto> {
-    const result = await this.quizVersionService.listQuizVersions(quizId, user, query);
-
-    return {
-      items: result.rows.map((row) => this.quizVersionResponseMapper.toQuizVersionResponse(row)),
-      pagination: {
-        limit: result.limit,
-        nextCursor: result.nextCursor,
-        hasNextPage: result.hasNextPage,
-      },
-    };
-  }
-
-  async updateQuizVersion(
-    quizVersionId: string,
-    user: JwtPayload,
-    payload: UpdateQuizVersionDto,
-  ): Promise<QuizVersionResponseDto> {
-    const result = await this.quizVersionService.updateQuizVersion(quizVersionId, user, payload);
-    return this.quizVersionResponseMapper.toQuizVersionResponse(result);
-  }
-
-  async publishQuizVersion(
-    quizVersionId: string,
-    user: JwtPayload,
-  ): Promise<QuizVersionResponseDto> {
-    const result = await this.quizVersionService.publishQuizVersion(quizVersionId, user);
-    return this.quizVersionResponseMapper.toQuizVersionResponse(result);
-  }
-
-  async createQuizQuestion(
-    quizId: string,
-    quizVersionId: string,
-    user: JwtPayload,
-    payload: CreateQuizQuestionDto,
-  ): Promise<QuizQuestionResponseDto> {
-    const rows = await this.quizQuestionService.createQuizQuestion(
-      quizId,
-      quizVersionId,
-      user,
-      payload,
-    );
-
-    const questions = this.quizQuestionResponseMapper.toQuestionResponses(rows);
-    return questions[0];
-  }
-
-  async createQuizQuestions(
-    quizId: string,
-    quizVersionId: string,
-    user: JwtPayload,
-    payload: CreateQuizQuestionsDto,
-  ): Promise<QuizQuestionResponseDto[]> {
-    const rows = await this.quizQuestionService.createQuizQuestions(
-      quizId,
-      quizVersionId,
-      user,
-      payload,
-    );
-
-    return this.quizQuestionResponseMapper.toQuestionResponses(rows);
+    return this.quizCommandService.softDeleteQuizById(quizId, user);
   }
 }
