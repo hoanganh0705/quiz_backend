@@ -98,7 +98,7 @@ export class SecurityService {
       return false;
     }
 
-    return nowMs - lastUsedMs <= this.authConfig.refreshReuseGraceWindowMs;
+    return nowMs - lastUsedMs <= this.authConfig.sessions.refreshReuseGraceWindowMs;
   }
 
   isSameSessionContext(
@@ -176,13 +176,13 @@ export class SecurityService {
       hasRequestIpAddress: hasRequestIp,
       ipChanged,
       deviceMismatch,
-      strictMode: this.authConfig.isSessionBindingStrict,
+      strictMode: this.authConfig.sessions.isBindingStrict,
     });
 
     return {
       // We intentionally do not reject on IP changes alone because IP churn is common (mobile networks,
       // corporate NATs, ISP rebalancing). In strict mode we only reject on device mismatch.
-      shouldReject: this.authConfig.isSessionBindingStrict && deviceMismatch,
+      shouldReject: this.authConfig.sessions.isBindingStrict && deviceMismatch,
     };
   }
 
@@ -206,11 +206,11 @@ export class SecurityService {
       Number.isFinite(payload.exp) &&
       typeof nowUnixSeconds === 'number'
         ? Math.max(1, payload.exp - nowUnixSeconds)
-        : this.authConfig.refreshTokenExpiresInSeconds;
+        : this.authConfig.tokens.refresh.expiresInSeconds;
 
     const reuseCounterTtlSeconds = Math.min(
       remainingLifetimeSeconds,
-      this.authConfig.refreshTokenExpiresInSeconds,
+      this.authConfig.tokens.refresh.expiresInSeconds,
     );
 
     const nextReuseCount = await this.cacheProvider.incrementCounterWithInitialTtlSeconds(

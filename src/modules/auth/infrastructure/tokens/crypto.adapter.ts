@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { createHash } from 'crypto';
-import type { CryptoProvider } from '../domain/ports/crypto.provider';
+import type { CryptoProvider } from '../../domain/ports/crypto.provider';
 
 @Injectable()
 export class CryptoAdapter implements CryptoProvider {

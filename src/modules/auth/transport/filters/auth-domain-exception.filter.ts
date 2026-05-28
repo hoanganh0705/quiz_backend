@@ -57,6 +57,9 @@ export class AuthDomainExceptionFilter implements ExceptionFilter {
     }
 
     // Fallback for any AuthDomainError subclass not explicitly mapped.
-    return { status: HttpStatus.INTERNAL_SERVER_ERROR, message: 'An internal authentication error occurred.' };
+    return {
+      status: HttpStatus.INTERNAL_SERVER_ERROR,
+      message: 'An internal authentication error occurred.',
+    };
   }
 }

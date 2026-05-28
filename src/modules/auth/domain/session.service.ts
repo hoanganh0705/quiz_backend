@@ -19,7 +19,7 @@ export class SessionService {
   ) {}
 
   private getRefreshTokenExpiresAtIso(): string {
-    return new Date(Date.now() + this.authConfig.refreshSessionTtlMs).toISOString();
+    return new Date(Date.now() + this.authConfig.sessions.refreshSessionTtlMs).toISOString();
   }
 
   private getNowIso(): string {
@@ -48,7 +48,7 @@ export class SessionService {
         expiresAt,
       },
       nowIso,
-      this.authConfig.maxActiveSessionsPerUser,
+      this.authConfig.sessions.maxActiveSessionsPerUser,
     );
   }
 
