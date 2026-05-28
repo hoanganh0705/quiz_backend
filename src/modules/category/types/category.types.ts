@@ -9,8 +9,3 @@ export type CategoryCursorPayload = {
   createdAt: string;
   categoryId: string;
 };
-
-export type ListCategoriesCursorQuery = {
-  cursor?: string;
-  limit?: number;
-};

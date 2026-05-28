@@ -32,7 +32,7 @@ export interface CategoryRepositoryPort {
     };
     nowIso: string;
   }): Promise<CategoryRow | null>;
-  softDelete(categoryId: string, nowIso: string): Promise<void>;
+  softDelete(categoryId: string, nowIso: string): Promise<boolean>;
 }
 
 export const CATEGORY_REPOSITORY_PORT = Symbol('CATEGORY_REPOSITORY_PORT');

@@ -3,7 +3,11 @@ import { DRIZZLE } from '@/core/database/drizzle.constants';
 import type { DrizzleDB } from '@/core/database/database.module';
 import { categories } from '@/core/database/schema';
 import { and, desc, eq, isNull, or, sql } from 'drizzle-orm';
-import type { CategoryRepositoryPort, CategoryRow } from '../../domain/ports/category-repository.port';
+import { CategorySlugConflictError } from '../../domain/errors';
+import type {
+  CategoryRepositoryPort,
+  CategoryRow,
+} from '../../domain/ports/category-repository.port';
 
 const CATEGORY_COLUMNS = {
   categoryId: categories.categoryId,
@@ -76,19 +80,27 @@ export class CategoryRepository implements CategoryRepositoryPort {
     imageUrl: string | null;
     nowIso: string;
   }): Promise<CategoryRow> {
-    const [row] = await this.db
-      .insert(categories)
-      .values({
-        name: params.name,
-        slug: params.slug,
-        description: params.description,
-        imageUrl: params.imageUrl,
-        createdAt: params.nowIso,
-        updatedAt: params.nowIso,
-      })
-      .returning(CATEGORY_COLUMNS);
+    try {
+      const [row] = await this.db
+        .insert(categories)
+        .values({
+          name: params.name,
+          slug: params.slug,
+          description: params.description,
+          imageUrl: params.imageUrl,
+          createdAt: params.nowIso,
+          updatedAt: params.nowIso,
+        })
+        .returning(CATEGORY_COLUMNS);
 
-    return row as CategoryRow;
+      return row as CategoryRow;
+    } catch (error: unknown) {
+      const pg = error as { code?: string };
+      if (pg.code === '23505') {
+        throw new CategorySlugConflictError();
+      }
+      throw error;
+    }
   }
 
   async update(params: {
@@ -101,19 +113,30 @@ export class CategoryRepository implements CategoryRepositoryPort {
     };
     nowIso: string;
   }): Promise<CategoryRow | null> {
-    const [row] = await this.db
-      .update(categories)
-      .set({ ...params.patch, updatedAt: params.nowIso })
-      .where(and(eq(categories.categoryId, params.categoryId), isNull(categories.deletedAt)))
-      .returning(CATEGORY_COLUMNS);
+    try {
+      const [row] = await this.db
+        .update(categories)
+        .set({ ...params.patch, updatedAt: params.nowIso })
+        .where(and(eq(categories.categoryId, params.categoryId), isNull(categories.deletedAt)))
+        .returning(CATEGORY_COLUMNS);
 
-    return (row as CategoryRow | undefined) ?? null;
+      return (row as CategoryRow | undefined) ?? null;
+    } catch (error: unknown) {
+      const pg = error as { code?: string };
+      if (pg.code === '23505') {
+        throw new CategorySlugConflictError();
+      }
+      throw error;
+    }
   }
 
-  async softDelete(categoryId: string, nowIso: string): Promise<void> {
-    await this.db
+  async softDelete(categoryId: string, nowIso: string): Promise<boolean> {
+    const [row] = await this.db
       .update(categories)
       .set({ deletedAt: nowIso, updatedAt: nowIso })
-      .where(and(eq(categories.categoryId, categoryId), isNull(categories.deletedAt)));
+      .where(and(eq(categories.categoryId, categoryId), isNull(categories.deletedAt)))
+      .returning({ categoryId: categories.categoryId });
+
+    return Boolean(row);
   }
 }

@@ -1,24 +1,31 @@
 import { Injectable } from '@nestjs/common';
 import { CategoryDomainService } from '../domain/category.service';
 import { CategoryResponseMapper } from '../mappers/category-response.mapper';
-import { CreateCategoryDto } from '../dto/request/create-category.dto';
-import { UpdateCategoryDto } from '../dto/request/update-category.dto';
-import { ListCategoriesQueryDto } from '../dto/request/list-categories-query.dto';
+import { CategoryCursorMapper } from '../mappers/category-cursor.mapper';
 import type { CategoryListResponseDto } from '../dto/response/category-list-response.dto';
 import type { CategoryResponseDto } from '../dto/response/category-response.dto';
 import type { DeleteCategoryResponseDto } from '../dto/response/delete-category-response.dto';
+import type {
+  CreateCategoryCommand,
+  ListCategoriesQuery,
+  UpdateCategoryCommand,
+} from '../domain/types/category-commands';
 
 @Injectable()
 export class CategoryApplicationService {
   constructor(private readonly categoryDomainService: CategoryDomainService) {}
 
-  async listCategories(query: ListCategoriesQueryDto): Promise<CategoryListResponseDto> {
+  async listCategories(query: ListCategoriesQuery): Promise<CategoryListResponseDto> {
     const { items, limit, hasNextPage, nextCursor } =
       await this.categoryDomainService.listCategories(query);
 
     return {
       items: items.map((item) => CategoryResponseMapper.toResponse(item)),
-      pagination: { limit, hasNextPage, nextCursor },
+      pagination: {
+        limit,
+        hasNextPage,
+        nextCursor: nextCursor ? CategoryCursorMapper.serialize(nextCursor) : null,
+      },
     };
   }
 
@@ -27,14 +34,14 @@ export class CategoryApplicationService {
     return CategoryResponseMapper.toResponse(row);
   }
 
-  async createCategory(payload: CreateCategoryDto): Promise<CategoryResponseDto> {
+  async createCategory(payload: CreateCategoryCommand): Promise<CategoryResponseDto> {
     const row = await this.categoryDomainService.createCategory(payload);
     return CategoryResponseMapper.toResponse(row);
   }
 
   async updateCategory(
     categoryId: string,
-    payload: UpdateCategoryDto,
+    payload: UpdateCategoryCommand,
   ): Promise<CategoryResponseDto> {
     const row = await this.categoryDomainService.updateCategory(categoryId, payload);
     return CategoryResponseMapper.toResponse(row);
