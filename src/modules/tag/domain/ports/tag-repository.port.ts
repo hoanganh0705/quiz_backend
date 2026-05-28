@@ -19,7 +19,7 @@ export interface TagRepositoryPort {
     patch: { name?: string; slug?: string };
     nowIso: string;
   }): Promise<TagRow | null>;
-  softDelete(tagId: string, nowIso: string): Promise<void>;
+  softDelete(tagId: string, nowIso: string): Promise<boolean>;
 }
 
 export const TAG_REPOSITORY_PORT = Symbol('TAG_REPOSITORY_PORT');

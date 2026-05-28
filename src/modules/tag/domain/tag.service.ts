@@ -1,20 +1,19 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
-import { CreateTagDto } from '../../dto/request/create-tag.dto';
-import { UpdateTagDto } from '../../dto/request/update-tag.dto';
 import { buildSlug, normalizeSlugOrThrow } from '@/common/utils/slug.util';
 import { hasOwn } from '@/common/utils/object.util';
-import { TAG_SLUG_EMPTY_MESSAGE, TAG_SLUG_INVALID_MESSAGE } from '../../tag.constants';
-import { TAG_REPOSITORY_PORT, type TagRepositoryPort, type TagRow } from './ports';
-import { TagNotFoundError, TagSlugConflictError } from './errors';
-import type { TagCursorPayload, TagPatch } from '../../types/tag.types';
-import { decodeBase64JsonCursor, encodeBase64JsonCursor } from '@/common/utils/cursor.util';
+import { TAG_SLUG_EMPTY_MESSAGE, TAG_SLUG_INVALID_MESSAGE } from '../tag.constants';
+import {
+  TAG_REPOSITORY_PORT,
+  type TagRepositoryPort,
+  type TagRow,
+} from './ports/tag-repository.port';
+import { TagNotFoundError } from './errors';
+import type { TagPatch } from '../types/tag.types';
+import type { CreateTagCommand, ListTagsQuery, UpdateTagCommand } from './types/tag-commands';
 
 @Injectable()
 export class TagDomainService {
-  private readonly tagIdPattern =
-    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-
   constructor(
     @Inject(TAG_REPOSITORY_PORT)
     private readonly tagRepository: TagRepositoryPort,
@@ -28,39 +27,14 @@ export class TagDomainService {
     });
   }
 
-  private decodeCursor(cursor: string): TagCursorPayload {
-    const parsed = decodeBase64JsonCursor<TagCursorPayload>(cursor);
-
-    if (
-      !this.isIsoDateString(parsed.createdAt) ||
-      !this.isStringMatchingPattern(parsed.tagId, this.tagIdPattern)
-    ) {
-      throw new Error('Invalid cursor');
-    }
-
-    return { createdAt: parsed.createdAt, tagId: parsed.tagId };
-  }
-
-  private encodeCursor(tag: Pick<TagRow, 'createdAt' | 'tagId'>): string {
-    return encodeBase64JsonCursor({ createdAt: tag.createdAt, tagId: tag.tagId });
-  }
-
-  private isIsoDateString(value: unknown): value is string {
-    if (typeof value !== 'string') return false;
-    return /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(value);
-  }
-
-  private isStringMatchingPattern(value: unknown, pattern: RegExp): boolean {
-    return typeof value === 'string' && pattern.test(value);
-  }
-
-  async listTags(query: {
-    cursor?: string;
-    limit?: number;
-  }): Promise<{ items: TagRow[]; limit: number; hasNextPage: boolean; nextCursor: string | null }> {
+  async listTags(query: ListTagsQuery): Promise<{
+    items: TagRow[];
+    limit: number;
+    hasNextPage: boolean;
+    nextCursor: Pick<TagRow, 'createdAt' | 'tagId'> | null;
+  }> {
     const limit = query.limit ?? 10;
-    const cursorValue = typeof query.cursor === 'string' ? query.cursor : undefined;
-    const cursor = cursorValue ? this.decodeCursor(cursorValue) : null;
+    const cursor = query.cursor ?? null;
 
     const rows = await this.tagRepository.findMany({ limit: limit + 1, cursor });
 
@@ -72,7 +46,7 @@ export class TagDomainService {
       items,
       limit,
       hasNextPage,
-      nextCursor: hasNextPage && lastItem ? this.encodeCursor(lastItem) : null,
+      nextCursor: hasNextPage && lastItem ? lastItem : null,
     };
   }
 
@@ -88,7 +62,7 @@ export class TagDomainService {
     return tag;
   }
 
-  async createTag(payload: CreateTagDto): Promise<TagRow> {
+  async createTag(payload: CreateTagCommand): Promise<TagRow> {
     const name = payload.name.trim();
     const slug = this.normalizeSlug(payload.slug ?? buildSlug(name));
     const nowIso = new Date().toISOString();
@@ -98,16 +72,12 @@ export class TagDomainService {
     try {
       tag = await this.tagRepository.create({ name, slug, nowIso });
     } catch (error: unknown) {
-      const pg = error as { code?: string };
       this.logger.error({
         event: 'tag_create_failed',
         name,
         slug,
-        errorCode: pg.code ?? 'UNKNOWN',
+        errorName: error instanceof Error ? error.name : 'UNKNOWN',
       });
-      if (pg.code === '23505') {
-        throw new TagSlugConflictError();
-      }
       throw error;
     }
 
@@ -116,7 +86,7 @@ export class TagDomainService {
     return tag;
   }
 
-  async updateTag(tagId: string, payload: UpdateTagDto): Promise<TagRow> {
+  async updateTag(tagId: string, payload: UpdateTagCommand): Promise<TagRow> {
     const patch: TagPatch = {};
 
     if (hasOwn(payload, 'name') && payload.name !== undefined) {
@@ -142,15 +112,11 @@ export class TagDomainService {
     try {
       updated = await this.tagRepository.update({ tagId, patch, nowIso });
     } catch (error: unknown) {
-      const pg = error as { code?: string };
       this.logger.error({
         event: 'tag_update_failed',
         tagId,
-        errorCode: pg.code ?? 'UNKNOWN',
+        errorName: error instanceof Error ? error.name : 'UNKNOWN',
       });
-      if (pg.code === '23505') {
-        throw new TagSlugConflictError();
-      }
       throw error;
     }
 
@@ -166,7 +132,11 @@ export class TagDomainService {
 
   async deleteTag(tagId: string): Promise<void> {
     const nowIso = new Date().toISOString();
-    await this.tagRepository.softDelete(tagId, nowIso);
+    const deleted = await this.tagRepository.softDelete(tagId, nowIso);
+    if (!deleted) {
+      this.logger.warn({ event: 'tag_delete_not_found', tagId });
+      throw new TagNotFoundError();
+    }
     this.logger.info({ event: 'tag_deleted', tagId });
   }
 }
