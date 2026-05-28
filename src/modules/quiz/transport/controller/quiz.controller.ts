@@ -23,6 +23,8 @@ import { Permissions } from '@/common/authorization/decorators/permissions.decor
 import { Public } from '@/common/decorators/public.decorator';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
 import { QuizApplicationService } from '../../application/quiz.application.service';
+import { QuizVersionApplicationService } from '../../application/quiz-version.application.service';
+import { QuizQuestionApplicationService } from '../../application/quiz-question.application.service';
 import { CreateQuizDto } from '../../dto/request/create-quiz.dto';
 import { QuizResponseDto } from '../../dto/response/quiz-response.dto';
 import { QuizListResponseDto } from '../../dto/response/quiz-list-response.dto';
@@ -42,7 +44,11 @@ import { QuizDomainExceptionFilter } from '../filters/quiz-domain-exception.filt
 @Controller('quizzes')
 @UseFilters(QuizDomainExceptionFilter)
 export class QuizController {
-  constructor(private readonly quizApplicationService: QuizApplicationService) {}
+  constructor(
+    private readonly quizApplicationService: QuizApplicationService,
+    private readonly quizVersionApplicationService: QuizVersionApplicationService,
+    private readonly quizQuestionApplicationService: QuizQuestionApplicationService,
+  ) {}
 
   @Post()
   @Permissions(Permission.QUIZ_CREATE)
@@ -128,7 +134,7 @@ export class QuizController {
     @CurrentUser() user: JwtPayload,
     @Body() payload: CreateQuizVersionDto,
   ): Promise<QuizVersionResponseDto> {
-    return this.quizApplicationService.createQuizVersion(quizId, user, payload);
+    return this.quizVersionApplicationService.createQuizVersion(quizId, user, payload);
   }
 
   @Get(':id/versions')
@@ -145,7 +151,7 @@ export class QuizController {
     @CurrentUser() user: JwtPayload,
     @Query() query: ListQuizVersionsQueryDto,
   ): Promise<QuizVersionListResponseDto> {
-    return this.quizApplicationService.listQuizVersions(quizId, user, query);
+    return this.quizVersionApplicationService.listQuizVersions(quizId, user, query);
   }
 
   @Post(':id/versions/:versionId/questions')
@@ -163,7 +169,12 @@ export class QuizController {
     @CurrentUser() user: JwtPayload,
     @Body() payload: CreateQuizQuestionDto,
   ): Promise<QuizQuestionResponseDto> {
-    return this.quizApplicationService.createQuizQuestion(quizId, quizVersionId, user, payload);
+    return this.quizQuestionApplicationService.createQuizQuestion(
+      quizId,
+      quizVersionId,
+      user,
+      payload,
+    );
   }
 
   @Post(':id/versions/:versionId/questions/bulk')
@@ -181,6 +192,11 @@ export class QuizController {
     @CurrentUser() user: JwtPayload,
     @Body() payload: CreateQuizQuestionsDto,
   ): Promise<QuizQuestionResponseDto[]> {
-    return this.quizApplicationService.createQuizQuestions(quizId, quizVersionId, user, payload);
+    return this.quizQuestionApplicationService.createQuizQuestions(
+      quizId,
+      quizVersionId,
+      user,
+      payload,
+    );
   }
 }

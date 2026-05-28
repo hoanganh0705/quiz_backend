@@ -4,6 +4,15 @@ import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 import { DRIZZLE } from '@/core/database/drizzle.constants';
 import type { DrizzleDB } from '@/core/database/database.module';
 import { quizCategories, quizTags, quizVersions, quizzes } from '@/core/database/schema';
+import {
+  QuizSlugConflictError,
+  QuizValidationError,
+  QuizDomainError,
+} from '@/modules/quiz/domain/errors';
+import {
+  QUIZ_SLUG_CONFLICT_MESSAGE,
+  QUIZ_LINK_IDS_INVALID_MESSAGE,
+} from '@/modules/quiz/quiz.constants';
 import type {
   CreateQuizPayload,
   QuizCursor,
@@ -45,16 +54,46 @@ const QUIZ_VERSION_COLUMNS = quizVersions as unknown as {
   updatedAt: AnyPgColumn;
 };
 
+const QUIZ_RECORD_PROJECTION = {
+  quizId: QUIZ_COLUMNS.quizId,
+  creatorId: QUIZ_COLUMNS.creatorId,
+};
+
+const QUIZ_WITH_VERSION_PROJECTION = {
+  quizId: QUIZ_COLUMNS.quizId,
+  creatorId: QUIZ_COLUMNS.creatorId,
+  title: QUIZ_COLUMNS.title,
+  description: QUIZ_COLUMNS.description,
+  slug: QUIZ_COLUMNS.slug,
+  requirements: QUIZ_COLUMNS.requirements,
+  imageUrl: QUIZ_COLUMNS.imageUrl,
+  isFeatured: QUIZ_COLUMNS.isFeatured,
+  isHidden: QUIZ_COLUMNS.isHidden,
+  isVerified: QUIZ_COLUMNS.isVerified,
+  publishedVersionId: QUIZ_COLUMNS.publishedVersionId,
+  createdAt: QUIZ_COLUMNS.createdAt,
+  updatedAt: QUIZ_COLUMNS.updatedAt,
+  publishedVersionQuizVersionId: QUIZ_VERSION_COLUMNS.quizVersionId,
+  publishedVersionVersionNumber: QUIZ_VERSION_COLUMNS.versionNumber,
+  publishedVersionStatus: QUIZ_VERSION_COLUMNS.status,
+  publishedVersionDifficulty: QUIZ_VERSION_COLUMNS.difficulty,
+  publishedVersionDurationMs: QUIZ_VERSION_COLUMNS.durationMs,
+  publishedVersionPassingScorePercent: QUIZ_VERSION_COLUMNS.passingScorePercent,
+  publishedVersionRewardXp: QUIZ_VERSION_COLUMNS.rewardXp,
+  publishedVersionCreatedByUserId: QUIZ_VERSION_COLUMNS.createdByUserId,
+  publishedVersionCreatedAt: QUIZ_VERSION_COLUMNS.createdAt,
+  publishedVersionPublishedAt: QUIZ_VERSION_COLUMNS.publishedAt,
+  publishedVersionArchivedAt: QUIZ_VERSION_COLUMNS.archivedAt,
+  publishedVersionUpdatedAt: QUIZ_VERSION_COLUMNS.updatedAt,
+};
+
 @Injectable()
 export class QuizRepository implements QuizRepositoryPort {
   constructor(@Inject(DRIZZLE) private readonly db: DrizzleDB) {}
 
   async getActiveQuizRecordById(quizId: string): Promise<QuizRecordRow | null> {
     const [quiz] = await this.db
-      .select({
-        quizId: QUIZ_COLUMNS.quizId,
-        creatorId: QUIZ_COLUMNS.creatorId,
-      })
+      .select(QUIZ_RECORD_PROJECTION)
       .from(quizzes)
       .where(and(eq(QUIZ_COLUMNS.quizId, quizId), isNull(QUIZ_COLUMNS.deletedAt)))
       .limit(1);
@@ -66,33 +105,7 @@ export class QuizRepository implements QuizRepositoryPort {
     quizId: string,
   ): Promise<QuizWithPublishedVersionRow | null> {
     const [row] = await this.db
-      .select({
-        quizId: QUIZ_COLUMNS.quizId,
-        creatorId: QUIZ_COLUMNS.creatorId,
-        title: QUIZ_COLUMNS.title,
-        description: QUIZ_COLUMNS.description,
-        slug: QUIZ_COLUMNS.slug,
-        requirements: QUIZ_COLUMNS.requirements,
-        imageUrl: QUIZ_COLUMNS.imageUrl,
-        isFeatured: QUIZ_COLUMNS.isFeatured,
-        isHidden: QUIZ_COLUMNS.isHidden,
-        isVerified: QUIZ_COLUMNS.isVerified,
-        publishedVersionId: QUIZ_COLUMNS.publishedVersionId,
-        createdAt: QUIZ_COLUMNS.createdAt,
-        updatedAt: QUIZ_COLUMNS.updatedAt,
-        publishedVersionQuizVersionId: QUIZ_VERSION_COLUMNS.quizVersionId,
-        publishedVersionVersionNumber: QUIZ_VERSION_COLUMNS.versionNumber,
-        publishedVersionStatus: QUIZ_VERSION_COLUMNS.status,
-        publishedVersionDifficulty: QUIZ_VERSION_COLUMNS.difficulty,
-        publishedVersionDurationMs: QUIZ_VERSION_COLUMNS.durationMs,
-        publishedVersionPassingScorePercent: QUIZ_VERSION_COLUMNS.passingScorePercent,
-        publishedVersionRewardXp: QUIZ_VERSION_COLUMNS.rewardXp,
-        publishedVersionCreatedByUserId: QUIZ_VERSION_COLUMNS.createdByUserId,
-        publishedVersionCreatedAt: QUIZ_VERSION_COLUMNS.createdAt,
-        publishedVersionPublishedAt: QUIZ_VERSION_COLUMNS.publishedAt,
-        publishedVersionArchivedAt: QUIZ_VERSION_COLUMNS.archivedAt,
-        publishedVersionUpdatedAt: QUIZ_VERSION_COLUMNS.updatedAt,
-      })
+      .select(QUIZ_WITH_VERSION_PROJECTION)
       .from(quizzes)
       .leftJoin(
         quizVersions,
@@ -108,33 +121,7 @@ export class QuizRepository implements QuizRepositoryPort {
     slug: string,
   ): Promise<QuizWithPublishedVersionRow | null> {
     const [row] = await this.db
-      .select({
-        quizId: QUIZ_COLUMNS.quizId,
-        creatorId: QUIZ_COLUMNS.creatorId,
-        title: QUIZ_COLUMNS.title,
-        description: QUIZ_COLUMNS.description,
-        slug: QUIZ_COLUMNS.slug,
-        requirements: QUIZ_COLUMNS.requirements,
-        imageUrl: QUIZ_COLUMNS.imageUrl,
-        isFeatured: QUIZ_COLUMNS.isFeatured,
-        isHidden: QUIZ_COLUMNS.isHidden,
-        isVerified: QUIZ_COLUMNS.isVerified,
-        publishedVersionId: QUIZ_COLUMNS.publishedVersionId,
-        createdAt: QUIZ_COLUMNS.createdAt,
-        updatedAt: QUIZ_COLUMNS.updatedAt,
-        publishedVersionQuizVersionId: QUIZ_VERSION_COLUMNS.quizVersionId,
-        publishedVersionVersionNumber: QUIZ_VERSION_COLUMNS.versionNumber,
-        publishedVersionStatus: QUIZ_VERSION_COLUMNS.status,
-        publishedVersionDifficulty: QUIZ_VERSION_COLUMNS.difficulty,
-        publishedVersionDurationMs: QUIZ_VERSION_COLUMNS.durationMs,
-        publishedVersionPassingScorePercent: QUIZ_VERSION_COLUMNS.passingScorePercent,
-        publishedVersionRewardXp: QUIZ_VERSION_COLUMNS.rewardXp,
-        publishedVersionCreatedByUserId: QUIZ_VERSION_COLUMNS.createdByUserId,
-        publishedVersionCreatedAt: QUIZ_VERSION_COLUMNS.createdAt,
-        publishedVersionPublishedAt: QUIZ_VERSION_COLUMNS.publishedAt,
-        publishedVersionArchivedAt: QUIZ_VERSION_COLUMNS.archivedAt,
-        publishedVersionUpdatedAt: QUIZ_VERSION_COLUMNS.updatedAt,
-      })
+      .select(QUIZ_WITH_VERSION_PROJECTION)
       .from(quizzes)
       .leftJoin(
         quizVersions,
@@ -206,33 +193,7 @@ export class QuizRepository implements QuizRepositoryPort {
     }
 
     const rows = await this.db
-      .select({
-        quizId: QUIZ_COLUMNS.quizId,
-        creatorId: QUIZ_COLUMNS.creatorId,
-        title: QUIZ_COLUMNS.title,
-        description: QUIZ_COLUMNS.description,
-        slug: QUIZ_COLUMNS.slug,
-        requirements: QUIZ_COLUMNS.requirements,
-        imageUrl: QUIZ_COLUMNS.imageUrl,
-        isFeatured: QUIZ_COLUMNS.isFeatured,
-        isHidden: QUIZ_COLUMNS.isHidden,
-        isVerified: QUIZ_COLUMNS.isVerified,
-        publishedVersionId: QUIZ_COLUMNS.publishedVersionId,
-        createdAt: QUIZ_COLUMNS.createdAt,
-        updatedAt: QUIZ_COLUMNS.updatedAt,
-        publishedVersionQuizVersionId: QUIZ_VERSION_COLUMNS.quizVersionId,
-        publishedVersionVersionNumber: QUIZ_VERSION_COLUMNS.versionNumber,
-        publishedVersionStatus: QUIZ_VERSION_COLUMNS.status,
-        publishedVersionDifficulty: QUIZ_VERSION_COLUMNS.difficulty,
-        publishedVersionDurationMs: QUIZ_VERSION_COLUMNS.durationMs,
-        publishedVersionPassingScorePercent: QUIZ_VERSION_COLUMNS.passingScorePercent,
-        publishedVersionRewardXp: QUIZ_VERSION_COLUMNS.rewardXp,
-        publishedVersionCreatedByUserId: QUIZ_VERSION_COLUMNS.createdByUserId,
-        publishedVersionCreatedAt: QUIZ_VERSION_COLUMNS.createdAt,
-        publishedVersionPublishedAt: QUIZ_VERSION_COLUMNS.publishedAt,
-        publishedVersionArchivedAt: QUIZ_VERSION_COLUMNS.archivedAt,
-        publishedVersionUpdatedAt: QUIZ_VERSION_COLUMNS.updatedAt,
-      })
+      .select(QUIZ_WITH_VERSION_PROJECTION)
       .from(quizzes)
       .leftJoin(
         quizVersions,
@@ -248,65 +209,69 @@ export class QuizRepository implements QuizRepositoryPort {
   async createQuizWithInitialVersion(payload: CreateQuizPayload): Promise<{ quizId: string }> {
     const { nowIso } = payload;
 
-    const result = await this.db.transaction(async (tx) => {
-      const [quiz] = await tx
-        .insert(quizzes)
-        .values({
-          creatorId: payload.creatorId,
-          title: payload.title,
-          slug: payload.slug,
-          description: payload.description,
-          requirements: payload.requirements,
-          imageUrl: payload.imageUrl,
-          isFeatured: payload.isFeatured,
-          isHidden: payload.isHidden,
-          isVerified: false,
+    try {
+      const result = await this.db.transaction(async (tx) => {
+        const [quiz] = await tx
+          .insert(quizzes)
+          .values({
+            creatorId: payload.creatorId,
+            title: payload.title,
+            slug: payload.slug,
+            description: payload.description,
+            requirements: payload.requirements,
+            imageUrl: payload.imageUrl,
+            isFeatured: payload.isFeatured,
+            isHidden: payload.isHidden,
+            isVerified: false,
+            createdAt: nowIso,
+            updatedAt: nowIso,
+          })
+          .returning({
+            quizId: QUIZ_COLUMNS.quizId,
+          });
+
+        const quizId = quiz.quizId as string;
+
+        await tx.insert(quizVersions).values({
+          quizId,
+          versionNumber: 1,
+          status: 'draft',
+          difficulty: payload.initialVersion.difficulty,
+          durationMs: payload.initialVersion.durationMs,
+          passingScorePercent: payload.initialVersion.passingScorePercent,
+          rewardXp: payload.initialVersion.rewardXp,
+          createdByUserId: payload.creatorId,
           createdAt: nowIso,
           updatedAt: nowIso,
-        })
-        .returning({
-          quizId: QUIZ_COLUMNS.quizId,
         });
 
-      const quizId = quiz.quizId as string;
+        if (payload.categoryIds.length > 0) {
+          await tx.insert(quizCategories).values(
+            payload.categoryIds.map((categoryId) => ({
+              quizId,
+              categoryId,
+              createdAt: nowIso,
+            })),
+          );
+        }
 
-      await tx.insert(quizVersions).values({
-        quizId,
-        versionNumber: 1,
-        status: 'draft',
-        difficulty: payload.initialVersion.difficulty,
-        durationMs: payload.initialVersion.durationMs,
-        passingScorePercent: payload.initialVersion.passingScorePercent,
-        rewardXp: payload.initialVersion.rewardXp,
-        createdByUserId: payload.creatorId,
-        createdAt: nowIso,
-        updatedAt: nowIso,
+        if (payload.tagIds.length > 0) {
+          await tx.insert(quizTags).values(
+            payload.tagIds.map((tagId) => ({
+              quizId,
+              tagId,
+              createdAt: nowIso,
+            })),
+          );
+        }
+
+        return { quizId };
       });
 
-      if (payload.categoryIds.length > 0) {
-        await tx.insert(quizCategories).values(
-          payload.categoryIds.map((categoryId) => ({
-            quizId,
-            categoryId,
-            createdAt: nowIso,
-          })),
-        );
-      }
-
-      if (payload.tagIds.length > 0) {
-        await tx.insert(quizTags).values(
-          payload.tagIds.map((tagId) => ({
-            quizId,
-            tagId,
-            createdAt: nowIso,
-          })),
-        );
-      }
-
-      return { quizId };
-    });
-
-    return { quizId: result.quizId };
+      return { quizId: result.quizId };
+    } catch (error) {
+      this.mapCreateError(error);
+    }
   }
 
   async updateQuizWithLinks(params: {
@@ -324,45 +289,49 @@ export class QuizRepository implements QuizRepositoryPort {
     tagIds: string[] | null;
     nowIso: string;
   }): Promise<void> {
-    await this.db.transaction(async (tx) => {
-      if (Object.keys(params.patch).length > 0) {
-        await tx
-          .update(quizzes)
-          .set({
-            ...params.patch,
-            updatedAt: params.nowIso,
-          })
-          .where(and(eq(QUIZ_COLUMNS.quizId, params.quizId), isNull(QUIZ_COLUMNS.deletedAt)));
-      }
-
-      if (params.categoryIds) {
-        await tx.delete(quizCategories).where(eq(QUIZ_COLUMNS.quizId, params.quizId));
-
-        if (params.categoryIds.length > 0) {
-          await tx.insert(quizCategories).values(
-            params.categoryIds.map((categoryId) => ({
-              quizId: params.quizId,
-              categoryId,
-              createdAt: params.nowIso,
-            })),
-          );
+    try {
+      await this.db.transaction(async (tx) => {
+        if (Object.keys(params.patch).length > 0) {
+          await tx
+            .update(quizzes)
+            .set({
+              ...params.patch,
+              updatedAt: params.nowIso,
+            })
+            .where(and(eq(QUIZ_COLUMNS.quizId, params.quizId), isNull(QUIZ_COLUMNS.deletedAt)));
         }
-      }
 
-      if (params.tagIds) {
-        await tx.delete(quizTags).where(eq(QUIZ_COLUMNS.quizId, params.quizId));
+        if (params.categoryIds) {
+          await tx.delete(quizCategories).where(eq(QUIZ_COLUMNS.quizId, params.quizId));
 
-        if (params.tagIds.length > 0) {
-          await tx.insert(quizTags).values(
-            params.tagIds.map((tagId) => ({
-              quizId: params.quizId,
-              tagId,
-              createdAt: params.nowIso,
-            })),
-          );
+          if (params.categoryIds.length > 0) {
+            await tx.insert(quizCategories).values(
+              params.categoryIds.map((categoryId) => ({
+                quizId: params.quizId,
+                categoryId,
+                createdAt: params.nowIso,
+              })),
+            );
+          }
         }
-      }
-    });
+
+        if (params.tagIds) {
+          await tx.delete(quizTags).where(eq(QUIZ_COLUMNS.quizId, params.quizId));
+
+          if (params.tagIds.length > 0) {
+            await tx.insert(quizTags).values(
+              params.tagIds.map((tagId) => ({
+                quizId: params.quizId,
+                tagId,
+                createdAt: params.nowIso,
+              })),
+            );
+          }
+        }
+      });
+    } catch (error) {
+      this.mapUpdateError(error);
+    }
   }
 
   async softDeleteQuiz(quizId: string, nowIso: string): Promise<void> {
@@ -373,5 +342,33 @@ export class QuizRepository implements QuizRepositoryPort {
         updatedAt: nowIso,
       })
       .where(and(eq(QUIZ_COLUMNS.quizId, quizId), isNull(QUIZ_COLUMNS.deletedAt)));
+  }
+
+  private mapCreateError(error: unknown): never {
+    const maybePgError = error as { code?: string; constraint?: string };
+
+    if (maybePgError.code === '23505') {
+      throw new QuizSlugConflictError(QUIZ_SLUG_CONFLICT_MESSAGE);
+    }
+
+    if (maybePgError.code === '23503') {
+      throw new QuizValidationError(QUIZ_LINK_IDS_INVALID_MESSAGE);
+    }
+
+    throw new QuizDomainError('Quiz operation failed');
+  }
+
+  private mapUpdateError(error: unknown): never {
+    const maybePgError = error as { code?: string };
+
+    if (maybePgError.code === '23505') {
+      throw new QuizSlugConflictError(QUIZ_SLUG_CONFLICT_MESSAGE);
+    }
+
+    if (maybePgError.code === '23503') {
+      throw new QuizValidationError(QUIZ_LINK_IDS_INVALID_MESSAGE);
+    }
+
+    throw new QuizDomainError('Quiz operation failed');
   }
 }
