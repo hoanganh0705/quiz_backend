@@ -1,13 +1,18 @@
-import { ConflictException, NotFoundException } from '@nestjs/common';
-
-export class CategoryNotFoundError extends NotFoundException {
-  constructor() {
-    super('Category not found');
+export class CategoryDomainError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = this.constructor.name;
   }
 }
 
-export class CategorySlugConflictError extends ConflictException {
-  constructor() {
-    super('A category with this slug already exists');
+export class CategoryNotFoundError extends CategoryDomainError {
+  constructor(message = 'Category not found') {
+    super(message);
+  }
+}
+
+export class CategorySlugConflictError extends CategoryDomainError {
+  constructor(message = 'A category with this slug already exists') {
+    super(message);
   }
 }
