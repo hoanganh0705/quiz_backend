@@ -1,6 +1,6 @@
 import { Transform } from 'class-transformer';
 import { IsOptional, IsString, Matches, MaxLength, MinLength } from 'class-validator';
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { ApiPropertyOptional } from '@nestjs/swagger';
 import { DEFAULT_SLUG_PATTERN } from '@/common/utils/slug.util';
 import { trimString, trimStringToLowerCase } from '@/common/utils/text.util';
 import { TAG_SLUG_INVALID_MESSAGE } from '../../tag.constants';
