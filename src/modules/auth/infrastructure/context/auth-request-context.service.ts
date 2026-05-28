@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import type { Request } from 'express';
-import type { SessionRequestContext } from '../types/auth-context.types';
+import type { SessionRequestContext } from '../../types/auth-context.types';
 import { DeviceParserService } from './device-parser.service';
 
 @Injectable()

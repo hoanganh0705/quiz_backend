@@ -2,17 +2,19 @@ import { Module } from '@nestjs/common';
 import { AuthController } from './transport/controller/auth.controller';
 import { AuthApplicationService } from './application/auth.application.service';
 import { AuthResponseMapper } from './mappers/auth-response.mapper';
-import { AuthService } from './domain/auth.service';
+import { AuthLoginService } from './domain/auth-login.service';
+import { AuthRefreshService } from './domain/auth-refresh.service';
+import { AuthRegistrationService } from './domain/auth-registration.service';
 import { AuthConfig } from './auth.config';
 import { AuthCookieService } from './transport/cookies/auth-cookie.service';
-import { AuthSessionCleanupService } from './infrastructure/auth-session-cleanup.service';
-import { JwtTokenAdapter } from './infrastructure/jwt-token.adapter';
+import { AuthSessionCleanupService } from './infrastructure/session/auth-session-cleanup.service';
+import { JwtTokenAdapter } from './infrastructure/tokens/jwt-token.adapter';
 import { SessionService } from './domain/session.service';
 import { SecurityService } from './domain/security.service';
-import { AuthRequestContextService } from './infrastructure/auth-request-context.service';
+import { AuthRequestContextService } from './infrastructure/context/auth-request-context.service';
 import { CommonModule } from '@/common/common.module';
-import { DeviceParserService } from './infrastructure/device-parser.service';
-import { CryptoAdapter } from './infrastructure/crypto.adapter';
+import { DeviceParserService } from './infrastructure/context/device-parser.service';
+import { CryptoAdapter } from './infrastructure/tokens/crypto.adapter';
 import { RequestContextInterceptor } from './transport/interceptors/request-context.interceptor';
 import { RefreshTokenInterceptor } from './transport/interceptors/refresh-token.interceptor';
 import { DatabaseModule } from '@/core/database/database.module';
@@ -30,6 +32,7 @@ import { RedisService } from '@/core/redis/redis.service';
 import { EmailService } from '@/modules/email/email.service';
 import { AuthDomainExceptionFilter } from './transport/filters/auth-domain-exception.filter';
 import { LoggerModule } from 'nestjs-pino';
+import { VerificationTokenService } from './domain/verification-token.service';
 
 @Module({
   imports: [CommonModule, DatabaseModule, RedisModule, EmailModule, LoggerModule.forRoot()],
@@ -37,12 +40,15 @@ import { LoggerModule } from 'nestjs-pino';
   providers: [
     AuthApplicationService,
     AuthResponseMapper,
-    AuthService,
+    AuthRegistrationService,
+    AuthLoginService,
+    AuthRefreshService,
     AuthConfig,
     AuthCookieService,
     AuthSessionCleanupService,
     SessionService,
     SecurityService,
+    VerificationTokenService,
     AuthRequestContextService,
     DeviceParserService,
     RequestContextInterceptor,
@@ -55,6 +61,6 @@ import { LoggerModule } from 'nestjs-pino';
     { provide: EMAIL_PROVIDER, useExisting: EmailService },
     { provide: CACHE_PROVIDER, useExisting: RedisService },
   ],
-  exports: [AuthApplicationService, AuthService],
+  exports: [AuthApplicationService],
 })
 export class AuthModule {}

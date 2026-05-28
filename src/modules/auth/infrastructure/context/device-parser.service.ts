@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import UAParserImport from 'ua-parser-js';
 import type { IResult } from 'ua-parser-js';
-import type { SessionDeviceType } from '../types/auth-context.types';
+import type { SessionDeviceType } from '../../types/auth-context.types';
 
 type ParsedDeviceInfo = {
   browser: string | null;

@@ -10,9 +10,9 @@ export class AuthCookieService {
   setRefreshTokenCookie(response: Response, refreshToken: string): void {
     response.cookie('refreshToken', refreshToken, {
       httpOnly: true,
-      secure: this.authConfig.isProduction,
+      secure: this.authConfig.environment.isProduction,
       sameSite: 'lax',
-      maxAge: this.authConfig.refreshTokenCookieMaxAgeMs,
+      maxAge: this.authConfig.sessions.refreshTokenCookieMaxAgeMs,
       path: '/',
     });
   }
@@ -20,7 +20,7 @@ export class AuthCookieService {
   clearRefreshTokenCookie(response: Response): void {
     response.clearCookie('refreshToken', {
       httpOnly: true,
-      secure: this.authConfig.isProduction,
+      secure: this.authConfig.environment.isProduction,
       sameSite: 'lax',
       maxAge: 0,
       path: '/',
