@@ -17,9 +17,14 @@ import {
   ApiCreatedResponse,
   ApiNotFoundResponse,
   ApiBearerAuth,
+  ApiUnauthorizedResponse,
+  ApiForbiddenResponse,
+  ApiBadRequestResponse,
+  ApiInternalServerErrorResponse,
 } from '@nestjs/swagger';
 import { Public } from '@/common/decorators/public.decorator';
 import { Roles } from '@/common/authorization/decorators/roles.decorator';
+import { ApiAuth, ApiValidationRequest } from '@/common/swagger/swagger-decorators';
 import { CreateTagDto } from './dto/request/create-tag.dto';
 import { ListTagsQueryDto } from './dto/request/list-tags-query.dto';
 import { UpdateTagDto } from './dto/request/update-tag.dto';
@@ -44,6 +49,7 @@ export class TagController {
     description: 'Returns a paginated, cursor-based list of active tags.',
   })
   @ApiOkResponse({ description: 'Tags returned', type: TagListResponseDto })
+  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
   listTags(@Query() query: ListTagsQueryDto): Promise<TagListResponseDto> {
     const command: ListTagsQuery = {
       limit: query.limit,
@@ -61,6 +67,7 @@ export class TagController {
   })
   @ApiOkResponse({ description: 'Tag found', type: TagResponseDto })
   @ApiNotFoundResponse({ description: 'Tag not found' })
+  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
   getTagBySlug(@Param('slug') slug: string): Promise<TagResponseDto> {
     return this.tagApplicationService.getTagBySlug(slug);
   }
@@ -68,11 +75,16 @@ export class TagController {
   @Post()
   @Roles('admin')
   @ApiBearerAuth()
+  @ApiAuth()
   @ApiOperation({
     summary: 'Create tag',
     description: 'Creates a new quiz tag. Requires admin role.',
   })
   @ApiCreatedResponse({ description: 'Tag created', type: TagResponseDto })
+  @ApiBadRequestResponse({ description: 'Validation failed' })
+  @ApiNotFoundResponse({ description: 'Tag not found' })
+  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  @ApiValidationRequest()
   createTag(@Body() payload: CreateTagDto): Promise<TagResponseDto> {
     const command: CreateTagCommand = {
       name: payload.name,
@@ -85,12 +97,16 @@ export class TagController {
   @Patch(':id')
   @Roles('admin')
   @ApiBearerAuth()
+  @ApiAuth()
   @ApiOperation({
     summary: 'Update tag',
     description: 'Updates an existing tag by ID. Requires admin role.',
   })
   @ApiOkResponse({ description: 'Tag updated', type: TagResponseDto })
   @ApiNotFoundResponse({ description: 'Tag not found' })
+  @ApiBadRequestResponse({ description: 'Validation failed' })
+  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  @ApiValidationRequest()
   updateTag(
     @Param('id', new ParseUUIDPipe()) tagId: string,
     @Body() payload: UpdateTagDto,
@@ -106,9 +122,11 @@ export class TagController {
   @Delete(':id')
   @Roles('admin')
   @ApiBearerAuth()
+  @ApiAuth()
   @ApiOperation({ summary: 'Delete tag', description: 'Soft-deletes a tag. Requires admin role.' })
   @ApiOkResponse({ description: 'Tag deleted', type: DeleteTagResponseDto })
   @ApiNotFoundResponse({ description: 'Tag not found' })
+  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
   deleteTag(@Param('id', new ParseUUIDPipe()) tagId: string): Promise<DeleteTagResponseDto> {
     return this.tagApplicationService.deleteTag(tagId);
   }

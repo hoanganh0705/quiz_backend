@@ -6,7 +6,7 @@ export class RegisterDto {
     description: 'Unique username (letters, numbers, periods, underscores, hyphens)',
     minLength: 3,
     maxLength: 50,
-    pattern: '/^[a-zA-Z0-9._-]+$/',
+    pattern: '^[a-zA-Z0-9._-]+$',
     example: 'alice_wonder',
   })
   @IsString()
@@ -32,6 +32,7 @@ export class RegisterDto {
     minLength: 6,
     maxLength: 100,
     example: 'Str0ng!Pass',
+    writeOnly: true,
   })
   @IsString()
   @MinLength(6)

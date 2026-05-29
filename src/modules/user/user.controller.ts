@@ -1,6 +1,17 @@
 import { Body, Controller, Get, Patch, UseFilters } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiOkResponse, ApiBearerAuth } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiOkResponse,
+  ApiBearerAuth,
+  ApiUnauthorizedResponse,
+  ApiForbiddenResponse,
+  ApiNotFoundResponse,
+  ApiBadRequestResponse,
+  ApiInternalServerErrorResponse,
+} from '@nestjs/swagger';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
+import { ApiValidationRequest } from '@/common/swagger/swagger-decorators';
 import { UpdateMeSettingsDto } from './dto/request/update-me-settings.dto';
 import { UpdateMeDto } from './dto/request/update-me.dto';
 import { UserMeResponseDto } from './dto/response/user-me-response.dto';
@@ -9,6 +20,8 @@ import { UserDomainExceptionFilter } from './transport/filters/user-domain-excep
 
 @ApiTags('users')
 @ApiBearerAuth()
+@ApiUnauthorizedResponse({ description: 'Missing or invalid authentication token' })
+@ApiForbiddenResponse({ description: 'Authenticated user lacks required role or permission' })
 @Controller('users')
 @UseFilters(UserDomainExceptionFilter)
 export class UserController {
@@ -21,6 +34,8 @@ export class UserController {
       "Returns the authenticated user's full profile including XP, streaks, and settings.",
   })
   @ApiOkResponse({ description: 'Profile returned', type: UserMeResponseDto })
+  @ApiNotFoundResponse({ description: 'User not found' })
+  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
   me(@CurrentUser('sub') userId: string): Promise<UserMeResponseDto> {
     return this.userApplicationService.getMe(userId);
   }
@@ -31,6 +46,10 @@ export class UserController {
     description: "Updates the authenticated user's display name, bio, or avatar URL.",
   })
   @ApiOkResponse({ description: 'Profile updated', type: UserMeResponseDto })
+  @ApiNotFoundResponse({ description: 'User not found' })
+  @ApiBadRequestResponse({ description: 'Validation failed' })
+  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  @ApiValidationRequest()
   updateMe(
     @CurrentUser('sub') userId: string,
     @Body() payload: UpdateMeDto,
@@ -44,6 +63,10 @@ export class UserController {
     description: "Replaces the authenticated user's entire settings object.",
   })
   @ApiOkResponse({ description: 'Settings updated', type: UserMeResponseDto })
+  @ApiNotFoundResponse({ description: 'User not found' })
+  @ApiBadRequestResponse({ description: 'Validation failed' })
+  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  @ApiValidationRequest()
   updateMeSettings(
     @CurrentUser('sub') userId: string,
     @Body() payload: UpdateMeSettingsDto,

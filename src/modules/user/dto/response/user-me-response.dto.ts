@@ -18,6 +18,7 @@ export class UserMeResponseDto {
 
   @ApiPropertyOptional({
     description: 'Avatar image URL',
+    format: 'uri',
     example: 'https://example.com/avatars/alice.jpg',
     nullable: true,
   })

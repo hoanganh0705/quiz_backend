@@ -17,9 +17,12 @@ import {
   ApiCreatedResponse,
   ApiNotFoundResponse,
   ApiBearerAuth,
+  ApiBadRequestResponse,
+  ApiInternalServerErrorResponse,
 } from '@nestjs/swagger';
 import { Public } from '@/common/decorators/public.decorator';
 import { Roles } from '@/common/authorization/decorators/roles.decorator';
+import { ApiAuth, ApiValidationRequest } from '@/common/swagger/swagger-decorators';
 import { CreateCategoryDto } from './dto/request/create-category.dto';
 import { ListCategoriesQueryDto } from './dto/request/list-categories-query.dto';
 import { UpdateCategoryDto } from './dto/request/update-category.dto';
@@ -48,6 +51,7 @@ export class CategoryController {
     description: 'Returns a paginated, cursor-based list of active categories.',
   })
   @ApiOkResponse({ description: 'Categories returned', type: CategoryListResponseDto })
+  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
   listCategories(@Query() query: ListCategoriesQueryDto): Promise<CategoryListResponseDto> {
     const command: ListCategoriesQuery = {
       limit: query.limit,
@@ -65,6 +69,7 @@ export class CategoryController {
   })
   @ApiOkResponse({ description: 'Category found', type: CategoryResponseDto })
   @ApiNotFoundResponse({ description: 'Category not found' })
+  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
   getCategoryBySlug(@Param('slug') slug: string): Promise<CategoryResponseDto> {
     return this.categoryApplicationService.getCategoryBySlug(slug);
   }
@@ -72,11 +77,16 @@ export class CategoryController {
   @Post()
   @Roles('admin')
   @ApiBearerAuth()
+  @ApiAuth()
   @ApiOperation({
     summary: 'Create category',
     description: 'Creates a new quiz category. Requires admin role.',
   })
   @ApiCreatedResponse({ description: 'Category created', type: CategoryResponseDto })
+  @ApiBadRequestResponse({ description: 'Validation failed' })
+  @ApiNotFoundResponse({ description: 'Category not found' })
+  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  @ApiValidationRequest()
   createCategory(@Body() payload: CreateCategoryDto): Promise<CategoryResponseDto> {
     const command: CreateCategoryCommand = {
       name: payload.name,
@@ -91,12 +101,16 @@ export class CategoryController {
   @Patch(':id')
   @Roles('admin')
   @ApiBearerAuth()
+  @ApiAuth()
   @ApiOperation({
     summary: 'Update category',
     description: 'Updates an existing category by ID. Requires admin role.',
   })
   @ApiOkResponse({ description: 'Category updated', type: CategoryResponseDto })
   @ApiNotFoundResponse({ description: 'Category not found' })
+  @ApiBadRequestResponse({ description: 'Validation failed' })
+  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  @ApiValidationRequest()
   updateCategory(
     @Param('id', new ParseUUIDPipe()) categoryId: string,
     @Body() payload: UpdateCategoryDto,
@@ -114,12 +128,14 @@ export class CategoryController {
   @Delete(':id')
   @Roles('admin')
   @ApiBearerAuth()
+  @ApiAuth()
   @ApiOperation({
     summary: 'Delete category',
     description: 'Soft-deletes a category. Requires admin role.',
   })
   @ApiOkResponse({ description: 'Category deleted', type: DeleteCategoryResponseDto })
   @ApiNotFoundResponse({ description: 'Category not found' })
+  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
   deleteCategory(
     @Param('id', new ParseUUIDPipe()) categoryId: string,
   ): Promise<DeleteCategoryResponseDto> {

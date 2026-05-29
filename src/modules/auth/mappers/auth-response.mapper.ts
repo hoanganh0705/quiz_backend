@@ -10,7 +10,6 @@ import { RefreshTokenResponseDto } from '../dto/response/refresh-token-response.
 import { LogoutResponseDto } from '../dto/response/logout-response.dto';
 import { RegisterResponseDto } from '../dto/response/register-response.dto';
 import { VerifyEmailResponseDto } from '../dto/response/verify-email-response.dto';
-import { TokenResponseDto } from '../dto/response/token-response.dto';
 
 @Injectable()
 export class AuthResponseMapper {
@@ -19,13 +18,13 @@ export class AuthResponseMapper {
     dto.userId = result.userId;
     dto.username = result.username;
     dto.email = result.email;
-    dto.token = this.toTokenResponseDto(result.accessToken);
+    dto.accessToken = result.accessToken;
     return dto;
   }
 
   toRefreshTokenResponse(result: RefreshTokenResult): RefreshTokenResponseDto {
     const dto = new RefreshTokenResponseDto();
-    dto.token = this.toTokenResponseDto(result.accessToken);
+    dto.accessToken = result.accessToken;
     return dto;
   }
 
@@ -44,12 +43,6 @@ export class AuthResponseMapper {
   toVerifyEmailResponse(result: VerifyEmailResult): VerifyEmailResponseDto {
     const dto = new VerifyEmailResponseDto();
     dto.message = result.message;
-    return dto;
-  }
-
-  private toTokenResponseDto(accessToken: string): TokenResponseDto {
-    const dto = new TokenResponseDto();
-    dto.accessToken = accessToken;
     return dto;
   }
 }

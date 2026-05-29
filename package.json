@@ -36,7 +36,9 @@
     "seed:reset": "pnpm db:cleanall && pnpm db:seed:all",
     "redis:start": "docker start quizredis || docker run -d --name quizredis -p 6379:6379 redis:8",
     "redis:stop": "docker stop quizredis",
-    "redis:reset": "docker rm -f quizredis"
+    "redis:reset": "docker rm -f quizredis",
+    "redis:cleanall": "docker exec -i quizredis redis-cli FLUSHALL",
+    "generate:openapi": "curl http://localhost:8080/api/v1/docs/openapi.json > docs/generated/openapi.json"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.1",
