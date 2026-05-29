@@ -350,21 +350,6 @@ export class AttemptRepository implements AttemptRepositoryPort {
     return row !== undefined;
   }
 
-  async checkAnswerExists(attemptId: string, questionId: string): Promise<boolean> {
-    const [row] = await this.db
-      .select({ attemptAnswerId: quizAttemptAnswers.attemptAnswerId })
-      .from(quizAttemptAnswers)
-      .where(
-        and(
-          eq(quizAttemptAnswers.attemptId, attemptId),
-          eq(quizAttemptAnswers.questionId, questionId),
-        ),
-      )
-      .limit(1);
-
-    return row !== undefined;
-  }
-
   async countQuestionsByVersionId(quizVersionId: string): Promise<number> {
     const [row] = await this.db
       .select({ count: sql<number>`count(*)::int` })
@@ -389,99 +374,99 @@ export class AttemptRepository implements AttemptRepositoryPort {
     return row !== undefined;
   }
 
-  async completeAttempt(params: {
+  async completeAttemptAndSideEffects(params: {
     attemptId: string;
     scorePercent: string;
     correctCount: number;
     timeTakenMs: number;
     xpEarned: number;
     nowIso: string;
-  }): Promise<AttemptRow> {
-    const [updated] = await this.db
-      .update(quizAttempts)
-      .set({
-        status: 'completed',
-        scorePercent: params.scorePercent,
-        correctCount: params.correctCount,
-        timeTakenMs: params.timeTakenMs,
-        xpEarned: params.xpEarned,
-        finishedAt: params.nowIso,
-        updatedAt: params.nowIso,
-      })
-      .where(and(eq(quizAttempts.attemptId, params.attemptId), eq(quizAttempts.status, 'started')))
-      .returning({
-        attemptId: quizAttempts.attemptId,
-        userId: quizAttempts.userId,
-        quizVersionId: quizAttempts.quizVersionId,
-        contextType: quizAttempts.contextType,
-        contextRefId: quizAttempts.contextRefId,
-        status: quizAttempts.status,
-        scorePercent: quizAttempts.scorePercent,
-        correctCount: quizAttempts.correctCount,
-        startedAt: quizAttempts.startedAt,
-        finishedAt: quizAttempts.finishedAt,
-        timeTakenMs: quizAttempts.timeTakenMs,
-        xpEarned: quizAttempts.xpEarned,
-        createdAt: quizAttempts.createdAt,
-        updatedAt: quizAttempts.updatedAt,
-      });
-
-    return updated as AttemptRow;
-  }
-
-  async upsertQuizStats(params: {
     quizId: string;
-    scorePercent: string;
-    nowIso: string;
-  }): Promise<void> {
-    const existing = await this.db
-      .select({
-        totalAttempts: quizStats.totalAttempts,
-        totalPlayers: quizStats.totalPlayers,
-        avgScorePercent: quizStats.avgScorePercent,
-      })
-      .from(quizStats)
-      .where(eq(quizStats.quizId, params.quizId))
-      .limit(1);
+    userId: string;
+  }): Promise<AttemptRow> {
+    return this.db.transaction(async (tx) => {
+      const [updated] = await tx
+        .update(quizAttempts)
+        .set({
+          status: 'completed',
+          scorePercent: params.scorePercent,
+          correctCount: params.correctCount,
+          timeTakenMs: params.timeTakenMs,
+          xpEarned: params.xpEarned,
+          finishedAt: params.nowIso,
+          updatedAt: params.nowIso,
+        })
+        .where(
+          and(eq(quizAttempts.attemptId, params.attemptId), eq(quizAttempts.status, 'started')),
+        )
+        .returning({
+          attemptId: quizAttempts.attemptId,
+          userId: quizAttempts.userId,
+          quizVersionId: quizAttempts.quizVersionId,
+          contextType: quizAttempts.contextType,
+          contextRefId: quizAttempts.contextRefId,
+          status: quizAttempts.status,
+          scorePercent: quizAttempts.scorePercent,
+          correctCount: quizAttempts.correctCount,
+          startedAt: quizAttempts.startedAt,
+          finishedAt: quizAttempts.finishedAt,
+          timeTakenMs: quizAttempts.timeTakenMs,
+          xpEarned: quizAttempts.xpEarned,
+          createdAt: quizAttempts.createdAt,
+          updatedAt: quizAttempts.updatedAt,
+        });
 
-    if (existing.length === 0 || !existing[0]) {
-      await this.db.insert(quizStats).values({
-        quizId: params.quizId,
-        totalAttempts: 1,
-        totalPlayers: 1,
-        avgScorePercent: params.scorePercent,
-        lastAttemptAt: params.nowIso,
-        updatedAt: params.nowIso,
-      });
-      return;
-    }
+      if (!updated) {
+        throw new Error('Failed to complete attempt - record not found or already completed');
+      }
 
-    const current = existing[0];
-    const newTotalAttempts = Number(current.totalAttempts) + 1;
+      const [statsRow] = await tx
+        .select({
+          totalAttempts: quizStats.totalAttempts,
+          totalPlayers: quizStats.totalPlayers,
+          avgScorePercent: quizStats.avgScorePercent,
+        })
+        .from(quizStats)
+        .where(eq(quizStats.quizId, params.quizId))
+        .limit(1);
 
-    // Recalculate running average: new_avg = old_avg + (new_value - old_avg) / n
-    const oldAvg = parseFloat(current.avgScorePercent);
-    const newScore = parseFloat(params.scorePercent);
-    const newAvg = oldAvg + (newScore - oldAvg) / newTotalAttempts;
+      if (!statsRow) {
+        await tx.insert(quizStats).values({
+          quizId: params.quizId,
+          totalAttempts: 1,
+          totalPlayers: 1,
+          avgScorePercent: params.scorePercent,
+          lastAttemptAt: params.nowIso,
+          updatedAt: params.nowIso,
+        });
+      } else {
+        const newTotalAttempts = Number(statsRow.totalAttempts) + 1;
+        const oldAvg = parseFloat(statsRow.avgScorePercent);
+        const newScore = parseFloat(params.scorePercent);
+        const newAvg = oldAvg + (newScore - oldAvg) / newTotalAttempts;
 
-    await this.db
-      .update(quizStats)
-      .set({
-        totalAttempts: newTotalAttempts,
-        avgScorePercent: newAvg.toFixed(2),
-        lastAttemptAt: params.nowIso,
-        updatedAt: params.nowIso,
-      })
-      .where(eq(quizStats.quizId, params.quizId));
-  }
+        await tx
+          .update(quizStats)
+          .set({
+            totalAttempts: newTotalAttempts,
+            avgScorePercent: newAvg.toFixed(2),
+            lastAttemptAt: params.nowIso,
+            updatedAt: params.nowIso,
+          })
+          .where(eq(quizStats.quizId, params.quizId));
+      }
 
-  async addUserXp(params: { userId: string; xpToAdd: number }): Promise<void> {
-    await this.db
-      .update(users)
-      .set({
-        xpTotal: sql`${users.xpTotal} + ${params.xpToAdd}`,
-      })
-      .where(eq(users.userId, params.userId));
+      if (params.xpEarned > 0) {
+        await tx
+          .update(users)
+          .set({
+            xpTotal: sql`${users.xpTotal} + ${params.xpEarned}`,
+          })
+          .where(eq(users.userId, params.userId));
+      }
+
+      return updated as AttemptRow;
+    });
   }
 
   async createTournamentAttempt(params: {

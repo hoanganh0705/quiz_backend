@@ -5,11 +5,10 @@ import { CategoryDomainService } from './domain/category.service';
 import { CategoryRepository } from './infrastructure/repositories/category.repository';
 import { DatabaseModule } from '@/core/database/database.module';
 import { CATEGORY_REPOSITORY_PORT } from './domain/ports';
-import { CategoryResponseMapper } from './mappers/category-response.mapper';
-import { CategoryCursorMapper } from './mappers/category-cursor.mapper';
+
 @Module({
   imports: [DatabaseModule],
-  controllers: [CategoryController, CategoryResponseMapper, CategoryCursorMapper],
+  controllers: [CategoryController],
   providers: [
     CategoryApplicationService,
     CategoryDomainService,

@@ -7,7 +7,8 @@ import {
   AttemptConflictError,
   AttemptValidationError,
   AttemptAlreadyStartedError,
-  AttemptAlreadyFinishedError,
+  AttemptNotActiveError,
+  AttemptQuestionAlreadyAnsweredError,
   QuizNotPublishedError,
   AttemptQuestionInvalidError,
 } from '../../domain/errors';
@@ -56,7 +57,8 @@ export class AttemptDomainExceptionFilter implements ExceptionFilter {
     if (
       error instanceof AttemptConflictError ||
       error instanceof AttemptAlreadyStartedError ||
-      error instanceof AttemptAlreadyFinishedError
+      error instanceof AttemptNotActiveError ||
+      error instanceof AttemptQuestionAlreadyAnsweredError
     ) {
       return { status: HttpStatus.CONFLICT, message: 'Attempt conflict' };
     }

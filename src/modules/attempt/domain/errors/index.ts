@@ -5,7 +5,8 @@ export {
   AttemptConflictError,
   AttemptValidationError,
   AttemptAlreadyStartedError,
-  AttemptAlreadyFinishedError,
+  AttemptNotActiveError,
+  AttemptQuestionAlreadyAnsweredError,
   QuizNotPublishedError,
   AttemptQuestionInvalidError,
 } from './attempt-domain.errors';

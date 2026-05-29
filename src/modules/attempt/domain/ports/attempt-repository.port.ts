@@ -118,8 +118,6 @@ export interface AttemptRepositoryPort {
 
   checkAnswerOptionBelongsToQuestion(questionId: string, optionId: string): Promise<boolean>;
 
-  checkAnswerExists(attemptId: string, questionId: string): Promise<boolean>;
-
   /**
    * Returns the total number of questions for a given quiz version.
    * Used to enforce a minimum question count before an attempt can be started.
@@ -132,18 +130,21 @@ export interface AttemptRepositoryPort {
    */
   checkQuestionBelongsToVersion(questionId: string, quizVersionId: string): Promise<boolean>;
 
-  completeAttempt(params: {
+  /**
+   * @transactional
+   * Completes an attempt and all its side effects (quiz stats, XP) in a single atomic transaction.
+   * All writes commit together or rollback together.
+   */
+  completeAttemptAndSideEffects(params: {
     attemptId: string;
     scorePercent: string;
     correctCount: number;
     timeTakenMs: number;
     xpEarned: number;
     nowIso: string;
+    quizId: string;
+    userId: string;
   }): Promise<AttemptRow>;
-
-  upsertQuizStats(params: { quizId: string; scorePercent: string; nowIso: string }): Promise<void>;
-
-  addUserXp(params: { userId: string; xpToAdd: number }): Promise<void>;
 
   createTournamentAttempt(params: {
     userId: string;
