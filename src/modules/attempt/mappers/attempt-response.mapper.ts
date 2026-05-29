@@ -13,7 +13,7 @@ export class AttemptResponseMapper {
     attempt: AttemptDetailRow,
     answers: AttemptAnswerRow[],
   ): AttemptResponseDto {
-    const groupedAnswers = this.groupAnswers(answers);
+    const deduplicatedAnswers = this.deduplicateAnswers(answers);
 
     return {
       attemptId: attempt.attemptId,
@@ -35,7 +35,7 @@ export class AttemptResponseMapper {
       finishedAt: attempt.finishedAt,
       timeTakenMs: attempt.timeTakenMs,
       xpEarned: attempt.xpEarned,
-      answers: groupedAnswers,
+      answers: deduplicatedAnswers,
     };
   }
 
@@ -72,7 +72,12 @@ export class AttemptResponseMapper {
     };
   }
 
-  private groupAnswers(answers: AttemptAnswerRow[]): AttemptAnswerResponseDto[] {
+  /**
+   * Deduplicates answers that may appear multiple times due to LEFT JOIN with quizAnswerOptions.
+   * The quizAttemptAnswers table has one row per answer, but LEFT JOIN can produce duplicate
+   * rows when joining with optional answer option data.
+   */
+  private deduplicateAnswers(answers: AttemptAnswerRow[]): AttemptAnswerResponseDto[] {
     const seen = new Set<string>();
 
     const result: AttemptAnswerResponseDto[] = [];

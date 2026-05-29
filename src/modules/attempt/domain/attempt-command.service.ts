@@ -1,17 +1,18 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
+import { isPostgresUniqueViolation } from '@/common/utils/db-error.util';
+import type { JwtPayload } from '@/common/guards/jwt.guard';
 import {
   ATTEMPT_REPOSITORY_PORT,
   type AttemptRepositoryPort,
 } from './ports/attempt-repository.port';
-import { QUIZ_REPOSITORY_PORT } from '@/modules/quiz/domain/ports';
-import type { JwtPayload } from '@/common/guards/jwt.guard';
 import type { AttemptContextType } from '../types/attempt.types';
 import {
   AttemptNotFoundError,
   AttemptForbiddenError,
+  AttemptNotActiveError,
+  AttemptQuestionAlreadyAnsweredError,
   AttemptAlreadyStartedError,
-  AttemptAlreadyFinishedError,
   AttemptValidationError,
   QuizNotPublishedError,
   AttemptQuestionInvalidError,
@@ -19,7 +20,6 @@ import {
 import {
   QUIZ_NOT_PUBLISHED_MESSAGE,
   ATTEMPT_ALREADY_STARTED_MESSAGE,
-  ATTEMPT_ALREADY_FINISHED_MESSAGE,
   ATTEMPT_NOT_FOUND_MESSAGE,
   ATTEMPT_FORBIDDEN_MESSAGE,
   ATTEMPT_NOT_STARTED_OR_FINISHED_MESSAGE,
@@ -27,25 +27,26 @@ import {
   ATTEMPT_OPTION_INVALID_MESSAGE,
   ATTEMPT_QUESTION_INVALID_MESSAGE,
 } from '../attempt.constants';
-// Defensive import: the authoritative minimum is enforced at publish-time in QuizVersionService.
-// This constant is kept here only as a last-resort runtime guard — it should never fire
-// for versions that passed publish-time validation.
 import { MIN_QUESTIONS_TO_PUBLISH } from '@/modules/quiz/quiz.constants';
+import { AttemptQueryService } from './attempt-query.service';
+import { AttemptScoringService } from './attempt-scoring.service';
 
+/**
+ * AttemptCommandService — Mutation operations for the Attempt aggregate.
+ *
+ * Responsibilities:
+ *  - Start, abandon, complete attempts
+ *  - Submit answers
+ *  - Enforce business rules and authorization
+ *  - Coordinate transactional side effects
+ */
 @Injectable()
-export class AttemptService {
+export class AttemptCommandService {
   constructor(
     @Inject(ATTEMPT_REPOSITORY_PORT)
     private readonly attemptRepository: AttemptRepositoryPort,
-    @Inject(QUIZ_REPOSITORY_PORT)
-    private readonly quizRepository: {
-      getQuizWithPublishedVersionById: (quizId: string) => Promise<{
-        publishedVersionId: string | null;
-        title: string;
-        slug: string;
-      } | null>;
-    },
-    @InjectPinoLogger(AttemptService.name)
+    private readonly attemptQueryService: AttemptQueryService,
+    @InjectPinoLogger(AttemptCommandService.name)
     private readonly logger: PinoLogger,
   ) {}
 
@@ -57,7 +58,7 @@ export class AttemptService {
   ) {
     const nowIso = new Date().toISOString();
 
-    const quiz = await this.quizRepository.getQuizWithPublishedVersionById(quizId);
+    const quiz = await this.attemptQueryService.checkQuizPublishStatus(quizId);
     if (!quiz || !quiz.publishedVersionId) {
       this.logger.warn({
         event: 'attempt_start_quiz_not_published',
@@ -67,10 +68,6 @@ export class AttemptService {
       throw new QuizNotPublishedError(QUIZ_NOT_PUBLISHED_MESSAGE);
     }
 
-    // Belt-and-suspenders defensive check: reject attempts on versions that somehow have
-    // fewer questions than the publish-time minimum. This should NEVER fire because
-    // QuizVersionService.publishQuizVersion() already blocks publish when questionCount < MIN_QUESTIONS_TO_PUBLISH.
-    // If this does fire, it indicates a bug in publish validation or a race condition.
     const questionCount = await this.attemptRepository.countQuestionsByVersionId(
       quiz.publishedVersionId,
     );
@@ -123,20 +120,6 @@ export class AttemptService {
     return attempt;
   }
 
-  async getAttemptById(attemptId: string, user: JwtPayload) {
-    const attempt = await this.attemptRepository.getAttemptDetailById(attemptId);
-
-    if (!attempt) {
-      throw new AttemptNotFoundError(ATTEMPT_NOT_FOUND_MESSAGE);
-    }
-
-    if (attempt.userId !== user.sub && user.role !== 'admin') {
-      throw new AttemptForbiddenError(ATTEMPT_FORBIDDEN_MESSAGE);
-    }
-
-    return attempt;
-  }
-
   async submitAnswer(
     attemptId: string,
     questionId: string,
@@ -157,11 +140,9 @@ export class AttemptService {
     }
 
     if (attempt.status !== 'started') {
-      throw new AttemptAlreadyFinishedError(ATTEMPT_ALREADY_FINISHED_MESSAGE);
+      throw new AttemptNotActiveError(ATTEMPT_NOT_STARTED_OR_FINISHED_MESSAGE);
     }
 
-    // Issue 2: Verify the question exists and belongs to this attempt's quiz version.
-    // This prevents cross-quiz submissions and tampering with arbitrary question IDs.
     const questionBelongs = await this.attemptRepository.checkQuestionBelongsToVersion(
       questionId,
       attempt.quizVersionId,
@@ -190,42 +171,41 @@ export class AttemptService {
           selectedOptionId,
           userId: user.sub,
         });
-        // Use AttemptValidationError (400 Bad Request) — an invalid option reference
-        // is a client validation error, not a conflict state.
         throw new AttemptValidationError(ATTEMPT_OPTION_INVALID_MESSAGE);
       }
     }
 
-    const alreadyAnswered = await this.attemptRepository.checkAnswerExists(attemptId, questionId);
-    if (alreadyAnswered) {
-      this.logger.warn({
-        event: 'attempt_submit_duplicate_question',
+    try {
+      const answer = await this.attemptRepository.submitAnswer({
+        attemptId,
+        userId: user.sub,
+        questionId,
+        selectedOptionId,
+        nowIso,
+        timeTakenMs,
+      });
+
+      this.logger.info({
+        event: 'attempt_answer_submitted',
         attemptId,
         questionId,
-        userId: user.sub,
+        selectedOptionId,
+        answeredAt: answer.answeredAt,
       });
-      // This is a true conflict: the answer already exists for this question.
-      throw new AttemptAlreadyFinishedError(ATTEMPT_QUESTION_ALREADY_ANSWERED_MESSAGE);
+
+      return answer;
+    } catch (error) {
+      if (isPostgresUniqueViolation(error)) {
+        this.logger.warn({
+          event: 'attempt_submit_duplicate_question',
+          attemptId,
+          questionId,
+          userId: user.sub,
+        });
+        throw new AttemptQuestionAlreadyAnsweredError(ATTEMPT_QUESTION_ALREADY_ANSWERED_MESSAGE);
+      }
+      throw error;
     }
-
-    const answer = await this.attemptRepository.submitAnswer({
-      attemptId,
-      userId: user.sub,
-      questionId,
-      selectedOptionId,
-      nowIso,
-      timeTakenMs,
-    });
-
-    this.logger.info({
-      event: 'attempt_answer_submitted',
-      attemptId,
-      questionId,
-      selectedOptionId,
-      answeredAt: answer.answeredAt,
-    });
-
-    return answer;
   }
 
   async abandonAttempt(attemptId: string, user: JwtPayload) {
@@ -242,7 +222,7 @@ export class AttemptService {
     }
 
     if (attempt.status !== 'started') {
-      throw new AttemptAlreadyFinishedError(ATTEMPT_NOT_STARTED_OR_FINISHED_MESSAGE);
+      throw new AttemptNotActiveError(ATTEMPT_NOT_STARTED_OR_FINISHED_MESSAGE);
     }
 
     const abandoned = await this.attemptRepository.abandonAttempt({
@@ -274,46 +254,24 @@ export class AttemptService {
     }
 
     if (attemptDetail.status !== 'started') {
-      throw new AttemptAlreadyFinishedError(ATTEMPT_ALREADY_FINISHED_MESSAGE);
+      throw new AttemptNotActiveError(ATTEMPT_NOT_STARTED_OR_FINISHED_MESSAGE);
     }
 
     const answers = await this.attemptRepository.getAttemptAnswersByAttemptId(attemptId);
 
-    const correctCount = answers.filter((a) => a.isCorrect === true).length;
-    const totalQuestions = answers.length;
+    const { correctCount, scorePercent, timeTakenMs, xpEarned } =
+      AttemptScoringService.computeScoringResult(attemptDetail, answers, nowIso);
 
-    const scorePercent =
-      totalQuestions > 0 ? ((correctCount / totalQuestions) * 100).toFixed(2) : '0.00';
-
-    const timeTakenMs =
-      attemptDetail.startedAt && attemptDetail.finishedAt
-        ? new Date(attemptDetail.finishedAt).getTime() - new Date(attemptDetail.startedAt).getTime()
-        : 0;
-
-    const scoreNum = parseFloat(scorePercent);
-    const xpEarned = scoreNum >= attemptDetail.passingScorePercent ? attemptDetail.rewardXp : 0;
-
-    const completed = await this.attemptRepository.completeAttempt({
+    const completed = await this.attemptRepository.completeAttemptAndSideEffects({
       attemptId,
       scorePercent,
       correctCount,
       timeTakenMs,
       xpEarned,
       nowIso,
-    });
-
-    await this.attemptRepository.upsertQuizStats({
       quizId: attemptDetail.quizId,
-      scorePercent,
-      nowIso,
+      userId: attemptDetail.userId,
     });
-
-    if (xpEarned > 0) {
-      await this.attemptRepository.addUserXp({
-        userId: attemptDetail.userId,
-        xpToAdd: xpEarned,
-      });
-    }
 
     this.logger.info({
       event: 'attempt_completed',
@@ -321,30 +279,12 @@ export class AttemptService {
       userId: attemptDetail.userId,
       quizId: attemptDetail.quizId,
       correctCount,
-      totalQuestions,
+      totalQuestions: answers.length,
       scorePercent,
       xpEarned,
       passed: xpEarned > 0,
     });
 
     return { ...completed, quizId: attemptDetail.quizId };
-  }
-
-  async listMyAttempts(
-    user: JwtPayload,
-    limit: number,
-    cursor?: { startedAt: string; attemptId: string } | null,
-  ) {
-    const rows = await this.attemptRepository.listAttemptsByUser({
-      userId: user.sub,
-      limit,
-      cursor,
-    });
-
-    return rows;
-  }
-
-  async getAnswersByAttemptId(attemptId: string) {
-    return this.attemptRepository.getAttemptAnswersByAttemptId(attemptId);
   }
 }

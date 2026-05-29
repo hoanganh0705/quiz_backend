@@ -1,6 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
-import { AttemptService } from '../domain/attempt.service';
+import { encodeBase64JsonCursor } from '@/common/utils/cursor.util';
+import { AttemptCommandService } from '../domain/attempt-command.service';
+import { AttemptQueryService } from '../domain/attempt-query.service';
 import { AttemptResponseMapper } from '../mappers/attempt-response.mapper';
 import { StartAttemptDto } from '../dto/request';
 import {
@@ -14,7 +16,8 @@ import {
 @Injectable()
 export class AttemptApplicationService {
   constructor(
-    private readonly attemptService: AttemptService,
+    private readonly attemptCommandService: AttemptCommandService,
+    private readonly attemptQueryService: AttemptQueryService,
     private readonly attemptResponseMapper: AttemptResponseMapper,
   ) {}
 
@@ -23,19 +26,22 @@ export class AttemptApplicationService {
     user: JwtPayload,
     payload: StartAttemptDto,
   ): Promise<AttemptResponseDto> {
-    const result = await this.attemptService.startAttempt(
+    const attempt = await this.attemptCommandService.startAttempt(
       quizId,
       user,
       payload.contextType ?? 'solo',
       payload.contextRefId ?? null,
     );
 
-    return this.buildStartedAttemptResponse(result);
+    const detail = await this.attemptQueryService.getAttemptById(attempt.attemptId, user);
+    const answers = await this.attemptQueryService.getAnswersByAttemptId(attempt.attemptId);
+
+    return this.attemptResponseMapper.toAttemptDetailResponse(detail, answers);
   }
 
   async getAttemptById(attemptId: string, user: JwtPayload): Promise<AttemptResponseDto> {
-    const attempt = await this.attemptService.getAttemptById(attemptId, user);
-    const answers = await this.attemptService.getAnswersByAttemptId(attemptId);
+    const attempt = await this.attemptQueryService.getAttemptById(attemptId, user);
+    const answers = await this.attemptQueryService.getAnswersByAttemptId(attemptId);
 
     return this.attemptResponseMapper.toAttemptDetailResponse(attempt, answers);
   }
@@ -47,7 +53,7 @@ export class AttemptApplicationService {
     timeTakenMs: number | null | undefined,
     user: JwtPayload,
   ): Promise<SubmitAnswerResponseDto> {
-    const answer = await this.attemptService.submitAnswer(
+    const answer = await this.attemptCommandService.submitAnswer(
       attemptId,
       questionId,
       selectedOptionId,
@@ -59,7 +65,7 @@ export class AttemptApplicationService {
   }
 
   async abandonAttempt(attemptId: string, user: JwtPayload): Promise<AbandonAttemptResponseDto> {
-    const attempt = await this.attemptService.abandonAttempt(attemptId, user);
+    const attempt = await this.attemptCommandService.abandonAttempt(attemptId, user);
 
     return {
       attemptId: attempt.attemptId,
@@ -74,11 +80,10 @@ export class AttemptApplicationService {
     limit: number,
     cursor?: { startedAt: string; attemptId: string } | null,
   ): Promise<AttemptListResponseDto> {
-    const rows = await this.attemptService.listMyAttempts(user, limit, cursor);
+    const rows = await this.attemptQueryService.listMyAttempts(user, limit, cursor);
 
     const hasNextPage = rows.length > limit;
     const items = hasNextPage ? rows.slice(0, limit) : rows;
-
     const lastItem = items.at(-1);
 
     return {
@@ -88,19 +93,17 @@ export class AttemptApplicationService {
         hasNextPage,
         nextCursor:
           hasNextPage && lastItem
-            ? Buffer.from(
-                JSON.stringify({
-                  startedAt: lastItem.startedAt,
-                  attemptId: lastItem.attemptId,
-                }),
-              ).toString('base64')
+            ? encodeBase64JsonCursor({
+                startedAt: lastItem.startedAt,
+                attemptId: lastItem.attemptId,
+              })
             : null,
       },
     };
   }
 
   async completeAttempt(attemptId: string, user: JwtPayload): Promise<CompleteAttemptResponseDto> {
-    const result = await this.attemptService.completeAttempt(attemptId, user);
+    const result = await this.attemptCommandService.completeAttempt(attemptId, user);
 
     return {
       attemptId: result.attemptId,
@@ -111,44 +114,6 @@ export class AttemptApplicationService {
       timeTakenMs: result.timeTakenMs,
       xpEarned: result.xpEarned,
       finishedAt: result.finishedAt ?? new Date().toISOString(),
-    };
-  }
-
-  private buildStartedAttemptResponse(attempt: {
-    attemptId: string;
-    userId: string;
-    quizVersionId: string;
-    contextType: string;
-    contextRefId: string | null;
-    status: string;
-    scorePercent: string | null;
-    correctCount: number | null;
-    startedAt: string;
-    finishedAt: string | null;
-    timeTakenMs: number | null;
-    xpEarned: number;
-  }): AttemptResponseDto {
-    return {
-      attemptId: attempt.attemptId,
-      userId: attempt.userId,
-      quizId: attempt.quizVersionId,
-      quizTitle: '',
-      quizSlug: '',
-      versionNumber: 0,
-      difficulty: '',
-      durationMs: 0,
-      passingScorePercent: 0,
-      rewardXp: 0,
-      contextType: attempt.contextType,
-      contextRefId: attempt.contextRefId,
-      status: attempt.status,
-      scorePercent: attempt.scorePercent,
-      correctCount: attempt.correctCount,
-      startedAt: attempt.startedAt,
-      finishedAt: attempt.finishedAt,
-      timeTakenMs: attempt.timeTakenMs,
-      xpEarned: attempt.xpEarned,
-      answers: [],
     };
   }
 }
