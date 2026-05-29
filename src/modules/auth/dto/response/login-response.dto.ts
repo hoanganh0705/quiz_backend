@@ -1,5 +1,4 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { TokenResponseDto } from './token-response.dto';
 
 export class LoginResponseDto {
   @ApiProperty({
@@ -14,6 +13,10 @@ export class LoginResponseDto {
   @ApiProperty({ description: 'Email address', example: 'alice@example.com' })
   email!: string;
 
-  @ApiProperty({ description: 'JWT access token', type: () => TokenResponseDto })
-  token!: TokenResponseDto;
+  @ApiProperty({
+    description: 'JWT access token for authenticated requests',
+    example:
+      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI1NTBlODQwMC1lMjliLTIxZDQtYTcxNi00NDY2NTU0NDAwMDAiLCJyb2xlIjoidXNlciIsImlhdCI6MTcwOTAwMDAwMCwiZXhwIjoxNzA5MDAwNjAwfQ.sig',
+  })
+  accessToken!: string;
 }

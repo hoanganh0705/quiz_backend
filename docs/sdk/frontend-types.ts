@@ -1,2 +1,0 @@
-// Frontend Types SDK
-// TODO
