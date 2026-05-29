@@ -35,8 +35,14 @@ export class AttemptAlreadyStartedError extends AttemptConflictError {
   }
 }
 
-export class AttemptAlreadyFinishedError extends AttemptConflictError {
-  constructor(message = 'This attempt has already been completed or abandoned') {
+export class AttemptNotActiveError extends AttemptConflictError {
+  constructor(message = 'Attempt is not active (already completed or abandoned)') {
+    super(message);
+  }
+}
+
+export class AttemptQuestionAlreadyAnsweredError extends AttemptConflictError {
+  constructor(message = 'This question has already been answered in this attempt') {
     super(message);
   }
 }
