@@ -40,7 +40,10 @@ export class BookmarkDomainExceptionFilter implements ExceptionFilter {
     }
 
     if (error instanceof CollectionForbiddenError || error instanceof BookmarkForbiddenError) {
-      return { status: HttpStatus.FORBIDDEN, message: 'You do not have permission to perform this action' };
+      return {
+        status: HttpStatus.FORBIDDEN,
+        message: 'You do not have permission to perform this action',
+      };
     }
 
     if (error instanceof CollectionConflictError || error instanceof BookmarkConflictError) {

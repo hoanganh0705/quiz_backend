@@ -6,10 +6,12 @@ import {
   ApiOkResponse,
   ApiUnauthorizedResponse,
   ApiBadRequestResponse,
+  ApiInternalServerErrorResponse,
 } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import { Public } from '@/common/decorators/public.decorator';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
+import { ApiAuth } from '@/common/swagger/swagger-decorators';
 import { RefreshToken } from '../decorators/refresh-token.decorator';
 import { RequestContext } from '../decorators/request-context.decorator';
 import { RequestContextInterceptor } from '../interceptors/request-context.interceptor';
@@ -50,6 +52,7 @@ export class AuthController {
   })
   @ApiCreatedResponse({ description: 'Account created successfully', type: RegisterResponseDto })
   @ApiBadRequestResponse({ description: 'Validation failed or email/username already in use' })
+  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
   async register(@Body() registerDto: RegisterDto): Promise<RegisterResponseDto> {
     const command: RegisterCommand = {
       username: registerDto.username,
@@ -69,6 +72,7 @@ export class AuthController {
   })
   @ApiOkResponse({ description: 'Email verified successfully', type: VerifyEmailResponseDto })
   @ApiBadRequestResponse({ description: 'Invalid or expired token' })
+  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
   async verifyEmail(@Body() verifyEmailDto: VerifyEmailDto): Promise<VerifyEmailResponseDto> {
     const command: VerifyEmailCommand = {
       token: verifyEmailDto.token,
@@ -87,6 +91,7 @@ export class AuthController {
   })
   @ApiOkResponse({ description: 'Verification email sent', type: VerifyEmailResponseDto })
   @ApiBadRequestResponse({ description: 'Invalid email address' })
+  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
   async resendVerificationEmail(
     @Body() resendVerificationDto: ResendVerificationDto,
   ): Promise<VerifyEmailResponseDto> {
@@ -101,11 +106,13 @@ export class AuthController {
   @Post('login')
   @ApiOperation({
     summary: 'Log in',
-    description: 'Authenticates with email and password and returns a JWT access token.',
+    description:
+      'Authenticates with email and password and returns a JWT access token. Device information is collected for security purposes.',
   })
   @ApiOkResponse({ description: 'Login successful', type: LoginResponseDto })
   @ApiUnauthorizedResponse({ description: 'Invalid email or password' })
   @ApiBadRequestResponse({ description: 'Validation failed' })
+  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
   async login(
     @Body() loginDto: LoginDto,
     @RequestContext() context: AuthRequestContext,
@@ -130,6 +137,7 @@ export class AuthController {
   @ApiOkResponse({ description: 'Token refreshed', type: RefreshTokenResponseDto })
   @ApiUnauthorizedResponse({ description: 'Missing or invalid refresh token' })
   @ApiBadRequestResponse({ description: 'Validation failed' })
+  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
   async refreshToken(
     @RefreshToken({ required: true }) refreshToken: string,
     @RequestContext() context: AuthRequestContext,
@@ -145,9 +153,10 @@ export class AuthController {
   @ApiOperation({
     summary: 'Log out',
     description:
-      'Clears the refresh token cookie. The access token remains valid until it expires.',
+      'Clears the refresh token cookie. The access token remains valid until it expires. Requires the refresh token cookie to be present.',
   })
   @ApiOkResponse({ description: 'Logged out successfully', type: LogoutResponseDto })
+  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
   async logout(
     @RefreshToken() refreshToken: string | null,
     @RequestContext() context: AuthRequestContext,
@@ -157,6 +166,7 @@ export class AuthController {
     return response;
   }
 
+  @ApiAuth()
   @Post('logout-all')
   @ApiOperation({
     summary: 'Log out all sessions',
@@ -164,6 +174,7 @@ export class AuthController {
       'Invalidates ALL active sessions for the authenticated user and clears the refresh token cookie.',
   })
   @ApiOkResponse({ description: 'All sessions terminated', type: LogoutResponseDto })
+  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
   async logoutAll(
     @CurrentUser('sub') userId: string,
     @RequestContext() context: AuthRequestContext,

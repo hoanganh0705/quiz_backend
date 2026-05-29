@@ -15,6 +15,7 @@ export class LoginDto {
     minLength: 6,
     maxLength: 100,
     example: 'Str0ng!Pass',
+    writeOnly: true,
   })
   @IsString()
   @MinLength(6)
