@@ -2,13 +2,16 @@ import { Injectable } from '@nestjs/common';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
 import { BookmarkService } from '../domain/bookmark.service';
 import { BookmarkResponseMapper } from '../mappers/bookmark-response.mapper';
-import { CreateCollectionDto, AddBookmarkDto } from '../dto/request';
+import { CreateCollectionDto, AddBookmarkDto, UpdateCollectionDto } from '../dto/request';
+
 import {
   BookmarkCollectionListResponseDto,
   CreateCollectionResponseDto,
   AddBookmarkResponseDto,
   BookmarkListResponseDto,
   RemoveBookmarkResponseDto,
+  UpdateCollectionResponseDto,
+  DeleteCollectionResponseDto,
 } from '../dto/response';
 
 @Injectable()
@@ -73,5 +76,29 @@ export class BookmarkApplicationService {
     return {
       items: rows.map((row) => this.bookmarkResponseMapper.toBookmarkedQuizResponse(row)),
     };
+  }
+
+  async updateCollection(
+    collectionId: string,
+    payload: UpdateCollectionDto,
+    user: JwtPayload,
+  ): Promise<UpdateCollectionResponseDto> {
+    const collection = await this.bookmarkService.updateCollection(
+      collectionId,
+      user,
+      payload.name,
+      payload.description,
+    );
+
+    return this.bookmarkResponseMapper.toUpdateCollectionResponse(collection);
+  }
+
+  async deleteCollection(
+    collectionId: string,
+    user: JwtPayload,
+  ): Promise<DeleteCollectionResponseDto> {
+    await this.bookmarkService.deleteCollection(collectionId, user);
+
+    return { message: 'Collection deleted successfully' };
   }
 }

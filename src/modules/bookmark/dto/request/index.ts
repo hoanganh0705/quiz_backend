@@ -33,6 +33,36 @@ export class CreateCollectionDto {
   description?: string | null;
 }
 
+export class UpdateCollectionDto {
+  @ApiPropertyOptional({
+    description: 'Updated collection name',
+    minLength: 1,
+    maxLength: 100,
+    example: 'My Favorite Quizzes',
+  })
+  @IsOptional()
+  @Transform(({ value }: { value: unknown }) => {
+    if (typeof value === 'string') {
+      return value.trim();
+    }
+    return value;
+  })
+  @IsString()
+  @MinLength(1)
+  @MaxLength(100)
+  name?: string;
+
+  @ApiPropertyOptional({
+    description: 'Updated collection description',
+    maxLength: 500,
+    nullable: true,
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  description?: string | null;
+}
+
 export class AddBookmarkDto {
   @ApiProperty({
     description: 'UUID of the quiz to bookmark',

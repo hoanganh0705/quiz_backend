@@ -4,7 +4,9 @@ import {
   BookmarkedQuizResponseDto,
   CreateCollectionResponseDto,
   AddBookmarkResponseDto,
+  UpdateCollectionResponseDto,
 } from '../dto/response';
+
 import type {
   BookmarkCollectionRow,
   BookmarkCollectionWithCountRow,
@@ -56,6 +58,16 @@ export class BookmarkResponseMapper {
       quizDifficulty: row.quizDifficulty,
       notes: row.notes,
       bookmarkedAt: row.bookmarkedAt,
+    };
+  }
+
+  toUpdateCollectionResponse(row: BookmarkCollectionRow): UpdateCollectionResponseDto {
+    return {
+      collectionId: row.collectionId,
+      name: row.name,
+      description: row.description,
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
     };
   }
 }
