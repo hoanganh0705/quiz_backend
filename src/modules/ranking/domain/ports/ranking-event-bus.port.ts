@@ -23,7 +23,7 @@ export interface RankingDomainEventBusPort {
    * Subscribe to ranking domain events.
    * Returns an unsubscribe function.
    */
-  subscribe(handler: (event: RankingDomainEvent) => void): () => void;
+  subscribe(handler: (event: PublishedRankingDomainEvent) => void): () => void;
 
   /**
    * Publish an XpAdded event.
@@ -79,7 +79,7 @@ export interface ExternalEventBusPort {
 /**
  * Union type of all events that can be published.
  */
-export type RankingDomainEvent =
+export type PublishedRankingDomainEvent =
   | XpAddedEvent
   | RankChangedEvent
   | PeakRankAchievedEvent

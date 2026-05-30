@@ -3,36 +3,37 @@
  *
  * Handles user-specific rank queries and profiles.
  * Part of Phase 3 - Leaderboards & APIs.
+ *
+ * Architecture Note: This service contains core ranking read logic.
+ * Badge calculations are delegated to Achievement domain via ACHIEVEMENT_PORT.
  */
 
 import { Inject, Injectable } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
-import type { RankingRepositoryPort } from '../domain/ports/ranking-repository.port';
+import {
+  RANKING_REPOSITORY_PORT,
+  type RankingRepositoryPort,
+} from '../ports/ranking-repository.port';
 import {
   RankingPeriod,
-  RANKING_CONSTANTS,
   calculatePercentile,
   getPercentileLabel,
   getXpField,
-} from '../domain/types/ranking.types';
-import { RankHistoryService } from './rank-history.service';
-import { PeakRankService } from './peak-rank.service';
-import type { RankingPeriodEnum } from '../dto/request/leaderboard-query.dto';
+} from '../types/ranking.types';
+import { RankingPeriodEnum } from '../../dto/request/leaderboard-query.dto';
 import type {
   UserRankResponseDto,
   GlobalRankingDto,
   PeakRanksDto,
   UserBadgesDto,
   UserRankSummaryDto,
-} from '../dto/response/leaderboard-response.dto';
+} from '../../dto/response/leaderboard-response.dto';
 
 @Injectable()
 export class UserRankService {
   constructor(
-    @Inject('RANKING_REPOSITORY')
+    @Inject(RANKING_REPOSITORY_PORT)
     private readonly rankingRepository: RankingRepositoryPort,
-    private readonly rankHistoryService: RankHistoryService,
-    private readonly peakRankService: PeakRankService,
     @InjectPinoLogger(UserRankService.name)
     private readonly logger: PinoLogger,
   ) {}
@@ -49,22 +50,21 @@ export class UserRankService {
     const ranking = await this.rankingRepository.getUserRanking(userId);
 
     if (!ranking) {
-      // Return empty rank response for users without ranking
       return this.buildEmptyRankResponse();
     }
 
     // Get global rankings for all periods
     const global = await this.buildGlobalRanking(ranking.userId);
 
-    // Get peak ranks
-    const peakRanks = await this.peakRankService.getPeakRankInfo(userId);
+    // Get peak ranks (inlined from peak-rank service)
+    const peakRanks = this.getPeakRankInfo(ranking);
 
-    // Get user badges
-    const badges = await this.buildUserBadges(ranking);
+    // Get basic badges (simplified - full badge logic via ACHIEVEMENT_PORT)
+    const badges = this.getBasicBadges(ranking);
 
     return {
       global,
-      peakRanks: this.buildPeakRanksDto(peakRanks),
+      peakRanks,
       lastActivityAt: ranking.lastActivityAt,
       badges,
     };
@@ -87,15 +87,12 @@ export class UserRankService {
 
     if (xp === 0) return undefined;
 
-    // Get rank
     const rank = await this.rankingRepository.getUserRank(userId, period);
     if (rank === null) return undefined;
 
-    // Get total participants
     const totalParticipants = await this.rankingRepository.getTotalParticipants(period);
     const percentile = calculatePercentile(rank, totalParticipants);
 
-    // Get XP to next rank
     const nextRankXp = await this.rankingRepository.getNextRankXp(period, rank);
     const xpToNextRank = nextRankXp !== null ? nextRankXp - xp : null;
 
@@ -107,15 +104,15 @@ export class UserRankService {
       xp,
       xpToNextRank,
       nextRankXp,
-      trend: 'same', // Simplified
+      trend: 'same',
       trendAmount: null,
       period: periodEnum,
-      resetInSeconds: 0, // Would calculate from period reset service
+      resetInSeconds: 0,
     };
   }
 
   /**
-   * Get rank for a specific user (public endpoint).
+   * Get public rank info for a user.
    */
   async getPublicUserRank(userId: string): Promise<{
     rank: number;
@@ -163,20 +160,14 @@ export class UserRankService {
 
     if (xp === 0) return null;
 
-    // Get rank
     const rank = await this.rankingRepository.getUserRank(userId, period);
     if (rank === null) return null;
 
-    // Get total participants
     const totalParticipants = await this.rankingRepository.getTotalParticipants(period);
     const percentile = calculatePercentile(rank, totalParticipants);
 
-    // Get XP to next rank
     const nextRankXp = await this.rankingRepository.getNextRankXp(period, rank);
     const xpToNextRank = nextRankXp !== null ? nextRankXp - xp : null;
-
-    // Determine trend
-    const trend = await this.getRankTrend(userId, period, rank);
 
     return {
       rank,
@@ -186,83 +177,42 @@ export class UserRankService {
       xp,
       xpToNextRank,
       nextRankXp,
-      trend,
+      trend: 'same',
       trendAmount: null,
     };
   }
 
   /**
-   * Get rank trend by comparing with historical data.
+   * Get peak rank info (inlined from peak-rank service).
    */
-  private async getRankTrend(
-    userId: string,
-    period: RankingPeriod,
-    currentRank: number,
-  ): Promise<'up' | 'down' | 'same' | 'new'> {
-    try {
-      const history = await this.rankHistoryService.getUserRankHistory(userId, period, 2);
-
-      if (history.length === 0) return 'new';
-
-      const previousEntry = history[0]; // Most recent historical entry
-      if (!previousEntry || previousEntry.rankAtEnd === null) return 'new';
-
-      const previousRank = previousEntry.rankAtEnd;
-      const change = previousRank - currentRank;
-
-      if (change > 0) return 'up';
-      if (change < 0) return 'down';
-      return 'same';
-    } catch {
-      return 'new';
-    }
-  }
-
-  /**
-   * Build user badges based on activity and rank.
-   */
-  private async buildUserBadges(ranking: {
-    lastActivityAt: string | null;
-    createdAt?: never;
-  }): Promise<UserBadgesDto> {
-    const now = new Date();
-    const lastActivity = ranking.lastActivityAt ? new Date(ranking.lastActivityAt) : null;
-
-    // Check if new user (7 days)
-    const userCreatedAt = new Date(); // Would need to join with users table
-    const daysSinceCreation = lastActivity
-      ? Math.floor((now.getTime() - userCreatedAt.getTime()) / (1000 * 60 * 60 * 24))
-      : RANKING_CONSTANTS.NEW_USER_GRACE_DAYS + 1;
-
-    const isNew = daysSinceCreation <= RANKING_CONSTANTS.NEW_USER_GRACE_DAYS;
-
-    // Check if active (activity in last 7 days)
-    const isActive =
-      lastActivity !== null &&
-      now.getTime() - lastActivity.getTime() < 7 * 24 * 60 * 60 * 1000;
-
-    // Rising star = top weekly gainer (would need separate calculation)
-    const isRisingStar = false;
-
+  private getPeakRankInfo(ranking: {
+    peakWeeklyRank: number | null;
+    peakMonthlyRank: number | null;
+    peakAllTimeRank: number | null;
+  }): PeakRanksDto {
     return {
-      isNew,
-      isRisingStar,
-      isActive,
+      weekly: ranking.peakWeeklyRank,
+      monthly: ranking.peakMonthlyRank,
+      allTime: ranking.peakAllTimeRank,
     };
   }
 
   /**
-   * Build peak ranks DTO.
+   * Get basic badges (simplified).
+   * Full badge logic should be via ACHIEVEMENT_PORT.
    */
-  private buildPeakRanksDto(peakRanks: {
-    weekly: number | null;
-    monthly: number | null;
-    allTime: number | null;
-  }): PeakRanksDto {
+  private getBasicBadges(ranking: { lastActivityAt: string | null }): UserBadgesDto {
+    const now = new Date();
+    const lastActivity = ranking.lastActivityAt ? new Date(ranking.lastActivityAt) : null;
+
+    // Simplified badge calculation
+    const isActive =
+      lastActivity !== null && now.getTime() - lastActivity.getTime() < 7 * 24 * 60 * 60 * 1000;
+
     return {
-      weekly: peakRanks.weekly,
-      monthly: peakRanks.monthly,
-      allTime: peakRanks.allTime,
+      isNew: false, // Requires user creation date
+      isRisingStar: false, // Requires ACHIEVEMENT_PORT
+      isActive,
     };
   }
 

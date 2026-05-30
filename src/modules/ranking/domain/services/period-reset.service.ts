@@ -17,18 +17,18 @@
 
 import { Inject, Injectable } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
-import type { RankingRepositoryPort } from '../domain/ports/ranking-repository.port';
-import type { RankingDomainEventBusPort } from '../domain/ports/ranking-event-bus.port';
-import { RankingPeriod } from '../domain/types/ranking.types';
-import type { PeriodResetResult } from '../domain/types/ranking.types';
-import { PeriodResetError } from '../domain/errors/ranking-domain.errors';
+import { RANKING_REPOSITORY_PORT, type RankingRepositoryPort } from '../ports/ranking-repository.port';
+import { RANKING_DOMAIN_EVENT_BUS, type RankingDomainEventBusPort } from '../ports/ranking-event-bus.port';
+import { RankingPeriod } from '../types/ranking.types';
+import type { PeriodResetResult } from '../types/ranking.types';
+import { PeriodResetError } from '../errors/ranking-domain.errors';
 
 @Injectable()
 export class PeriodResetService {
   constructor(
-    @Inject('RANKING_REPOSITORY')
+    @Inject(RANKING_REPOSITORY_PORT)
     private readonly rankingRepository: RankingRepositoryPort,
-    @Inject('RANKING_DOMAIN_EVENT_BUS')
+    @Inject(RANKING_DOMAIN_EVENT_BUS)
     private readonly eventBus: RankingDomainEventBusPort,
     @InjectPinoLogger(PeriodResetService.name)
     private readonly logger: PinoLogger,
