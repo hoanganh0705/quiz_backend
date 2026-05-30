@@ -15,20 +15,18 @@ import {
   ApiNotFoundResponse,
   ApiQuery,
 } from '@nestjs/swagger';
+import { CurrentUser } from '@/common/decorators/current-user.decorator';
 import { Public } from '@/common/decorators/public.decorator';
-import { JwtAuthGuard } from '@/common/guards/jwt-auth.guard';
-import { RankingDomainExceptionFilter } from './transport/filters/ranking-domain-exception.filter';
-import { LeaderboardService } from './application/leaderboard.service';
-import { UserRankService } from './application/user-rank.service';
-import {
-  LeaderboardQueryDto,
-  RankingPeriodEnum,
-} from './dto/request/leaderboard-query.dto';
+import { JwtGuard, type JwtPayload } from '@/common/guards/jwt.guard';
+import { RankingDomainExceptionFilter } from '../filters/ranking-domain-exception.filter';
+import { LeaderboardService } from '../../domain/services/leaderboard.service';
+import { UserRankService } from '../../domain/services/user-rank.service';
+import { LeaderboardQueryDto, RankingPeriodEnum } from '../../dto/request/leaderboard-query.dto';
 import {
   LeaderboardResponseDto,
   UserRankResponseDto,
   UserRankSummaryDto,
-} from './dto/response/leaderboard-response.dto';
+} from '../../dto/response/leaderboard-response.dto';
 
 @ApiTags('leaderboard')
 @Controller('leaderboard')
@@ -49,9 +47,7 @@ export class RankingController {
   @ApiQuery({ name: 'period', enum: RankingPeriodEnum, required: false })
   @ApiQuery({ name: 'limit', required: false, type: Number })
   @ApiQuery({ name: 'offset', required: false, type: Number })
-  async getGlobalLeaderboard(
-    @Query() query: LeaderboardQueryDto,
-  ): Promise<LeaderboardResponseDto> {
+  async getGlobalLeaderboard(@Query() query: LeaderboardQueryDto): Promise<LeaderboardResponseDto> {
     return this.leaderboardService.getGlobalLeaderboard({
       period: query.period ?? RankingPeriodEnum.ALL_TIME,
       limit: query.limit ?? 100,
@@ -60,43 +56,24 @@ export class RankingController {
   }
 
   @Get('me')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtGuard)
   @ApiBearerAuth()
   @ApiOperation({
     summary: 'Get current user rank',
-    description: 'Returns the authenticated user\'s rank information across all periods.',
+    description: "Returns the authenticated user's rank information across all periods.",
   })
   @ApiOkResponse({ description: 'User rank returned', type: UserRankResponseDto })
   @ApiUnauthorizedResponse({ description: 'Missing or invalid token' })
-  async getMyRank(): Promise<UserRankResponseDto> {
-    // Note: In a real implementation, this would get the user ID from the JWT
-    // For now, this is a placeholder that returns the structure
-    return {
-      global: {
-        weekly: null,
-        monthly: null,
-        allTime: null,
-      },
-      peakRanks: {
-        weekly: null,
-        monthly: null,
-        allTime: null,
-      },
-      lastActivityAt: null,
-      badges: {
-        isNew: true,
-        isRisingStar: false,
-        isActive: false,
-      },
-    };
+  async getMyRank(@CurrentUser() user: JwtPayload): Promise<UserRankResponseDto> {
+    return this.userRankService.getUserRank(user.sub);
   }
 
   @Get('me/rank')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtGuard)
   @ApiBearerAuth()
   @ApiOperation({
     summary: 'Get current user rank for specific period',
-    description: 'Returns the authenticated user\'s rank for a specific period.',
+    description: "Returns the authenticated user's rank for a specific period.",
   })
   @ApiOkResponse({ description: 'User rank returned', type: UserRankSummaryDto })
   @ApiUnauthorizedResponse({ description: 'Missing or invalid token' })
@@ -104,9 +81,12 @@ export class RankingController {
   @ApiQuery({ name: 'period', enum: RankingPeriodEnum, required: false })
   async getMyRankForPeriod(
     @Query() query: LeaderboardQueryDto,
+    @CurrentUser() user: JwtPayload,
   ): Promise<UserRankSummaryDto | undefined> {
-    // Note: In a real implementation, this would get the user ID from the JWT
-    return undefined;
+    return this.userRankService.getUserRankForPeriod(
+      user.sub,
+      query.period ?? RankingPeriodEnum.ALL_TIME,
+    );
   }
 
   @Get(':userId')
@@ -117,9 +97,7 @@ export class RankingController {
   })
   @ApiOkResponse({ description: 'User rank returned', type: UserRankResponseDto })
   @ApiNotFoundResponse({ description: 'User not found' })
-  async getUserRank(
-    @Param('userId') userId: string,
-  ): Promise<UserRankResponseDto> {
+  async getUserRank(@Param('userId') userId: string): Promise<UserRankResponseDto> {
     return this.userRankService.getUserRank(userId);
   }
 
@@ -127,7 +105,7 @@ export class RankingController {
   @Public()
   @ApiOperation({
     summary: 'Get user rank for specific period',
-    description: 'Returns the user\'s rank for a specific period.',
+    description: "Returns the user's rank for a specific period.",
   })
   @ApiOkResponse({ description: 'User rank returned', type: UserRankSummaryDto })
   @ApiNotFoundResponse({ description: 'User not found or has no rank' })

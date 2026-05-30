@@ -2,13 +2,10 @@
  * Ranking Domain Event Bus Implementation
  *
  * Simple in-process event bus using the observer pattern.
+ * Located in domain layer per Quiz module conventions.
  */
 
 import { Injectable } from '@nestjs/common';
-import type {
-  RankingDomainEventBusPort,
-  ExternalEventBusPort,
-} from '../../domain/ports/ranking-event-bus.port';
 import type {
   XpAddedEvent,
   RankChangedEvent,
@@ -17,8 +14,17 @@ import type {
   PeriodResetCompletedEvent,
   RankingMilestoneEvent,
   ConsistencyCheckEvent,
-  ExternalXpEarnedEvent,
-} from '../../domain/events/ranking-domain.events';
+} from './ranking-domain.events';
+import { RankingDomainEventBusPort } from '../ports';
+
+type RankingDomainEvent =
+  | XpAddedEvent
+  | RankChangedEvent
+  | PeakRankAchievedEvent
+  | PeriodResetInitiatedEvent
+  | PeriodResetCompletedEvent
+  | RankingMilestoneEvent
+  | ConsistencyCheckEvent;
 
 /**
  * In-memory event bus for ranking domain events.
@@ -75,12 +81,3 @@ export class RankingDomainEventBus implements RankingDomainEventBusPort {
     this.emit(event);
   }
 }
-
-type RankingDomainEvent =
-  | XpAddedEvent
-  | RankChangedEvent
-  | PeakRankAchievedEvent
-  | PeriodResetInitiatedEvent
-  | PeriodResetCompletedEvent
-  | RankingMilestoneEvent
-  | ConsistencyCheckEvent;

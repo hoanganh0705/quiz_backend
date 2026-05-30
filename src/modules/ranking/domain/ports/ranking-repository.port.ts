@@ -63,11 +63,7 @@ export interface RankingRepositoryPort {
 
   createUserRanking(userId: string): Promise<UserRankingRow>;
 
-  updateXp(params: {
-    userId: string;
-    amount: number;
-    now: Date;
-  }): Promise<UserRankingRow>;
+  updateXp(params: { userId: string; amount: number; now: Date }): Promise<UserRankingRow>;
 
   markDirty(userIds: string[]): Promise<void>;
 
@@ -76,17 +72,9 @@ export interface RankingRepositoryPort {
   clearDirtyFlags(userIds: string[]): Promise<void>;
 
   // Rank Operations
-  updateRank(params: {
-    userId: string;
-    period: RankingPeriod;
-    rank: number;
-  }): Promise<void>;
+  updateRank(params: { userId: string; period: RankingPeriod; rank: number }): Promise<void>;
 
-  updatePeakRank(params: {
-    userId: string;
-    period: RankingPeriod;
-    rank: number;
-  }): Promise<boolean>;
+  updatePeakRank(params: { userId: string; period: RankingPeriod; rank: number }): Promise<boolean>;
 
   // Leaderboard Operations
   getLeaderboard(params: {
@@ -125,4 +113,19 @@ export interface RankingRepositoryPort {
   findXpMismatches(): Promise<{ userId: string; storedXp: number; expectedXp: number }[]>;
 
   findMissingRanks(): Promise<string[]>;
+
+  // Inactivity Support (Phase 4)
+  getInactiveUsers(daysInactive: number, limit?: number): Promise<UserRankingRow[]>;
+
+  getUserWithCreationDate(
+    userId: string,
+  ): Promise<{ ranking: UserRankingRow | null; createdAt: string } | null>;
+
+  getActiveUsers(daysActive: number, limit?: number): Promise<UserRankingRow[]>;
+
+  getTopWeeklyGainers(limit?: number): Promise<{ userId: string; weeklyXp: number }[]>;
+
+  isUserInTopWeeklyPercent(userId: string, percent: number): Promise<boolean>;
 }
+
+export const RANKING_REPOSITORY_PORT: unique symbol = Symbol('RANKING_REPOSITORY_PORT');

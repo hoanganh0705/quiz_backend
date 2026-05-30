@@ -2,19 +2,26 @@
  * Ranking Event Handler
  *
  * Handles events from other domains (e.g., xp.earned from attempt domain).
- * Part of Phase 1 & 2 Integration.
+ * Placed in domain/events/ to match quiz module conventions where the
+ * event bus and related event infrastructure live in domain/events/.
  */
 
 import { Inject, Injectable, OnModuleInit } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
-import { XpIngestionService } from '../application/xp-ingestion.service';
-import type { ExternalEventBusPort } from '../domain/ports/ranking-event-bus.port';
+import type { ExternalXpEarnedEvent } from './ranking-domain.events';
+import { XpIngestionService } from '../services/xp-ingestion.service';
+import {
+  EXTERNAL_EVENT_BUS,
+  type ExternalEventBusPort,
+} from '../ports/ranking-event-bus.port';
 
 @Injectable()
 export class RankingEventHandler implements OnModuleInit {
+  private unsubscribeFn?: () => void;
+
   constructor(
     private readonly xpIngestionService: XpIngestionService,
-    @Inject('EXTERNAL_EVENT_BUS')
+    @Inject(EXTERNAL_EVENT_BUS)
     private readonly externalEventBus: ExternalEventBusPort,
     @InjectPinoLogger(RankingEventHandler.name)
     private readonly logger: PinoLogger,
@@ -24,12 +31,8 @@ export class RankingEventHandler implements OnModuleInit {
     this.subscribeToExternalEvents();
   }
 
-  /**
-   * Subscribe to events from other domains.
-   */
   private subscribeToExternalEvents(): void {
-    // Listen for XP earned events from attempt domain
-    const unsubscribe = this.externalEventBus.subscribe(
+    this.unsubscribeFn = this.externalEventBus.subscribe(
       'external.xp.earned',
       this.handleXpEarned.bind(this),
     );
@@ -37,25 +40,13 @@ export class RankingEventHandler implements OnModuleInit {
     this.logger.info({
       event: 'ranking_event_handler_subscribed',
     });
-
-    // Store unsubscribe function for cleanup if needed
-    this.unsubscribeFn = unsubscribe;
   }
 
-  private unsubscribeFn?: () => void;
-
-  /**
-   * Handle XP earned events from other domains.
-   */
-  private async handleXpEarned(event: {
-    userId: string;
-    amount: number;
-    source: string;
-    attemptId?: string;
-    tournamentId?: string;
-    categoryId?: string;
-    timestamp: Date;
-  }): Promise<void> {
+  private async handleXpEarned(
+    event: Omit<ExternalXpEarnedEvent, 'eventType'> & {
+      eventType?: ExternalXpEarnedEvent['eventType'];
+    },
+  ): Promise<void> {
     this.logger.debug({
       event: 'external_xp_event_received',
       userId: event.userId,
