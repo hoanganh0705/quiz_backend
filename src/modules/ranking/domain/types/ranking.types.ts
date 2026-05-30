@@ -199,6 +199,72 @@ export interface PeriodResetResult {
 }
 
 // ============================================
+// INACTIVITY TYPES (Phase 4)
+// ============================================
+
+export enum InactivityStatus {
+  ACTIVE = 'active',
+  WARNING = 'warning', // 30-90 days inactive
+  DORMANT = 'dormant', // 90+ days inactive
+}
+
+export interface InactivityInfo {
+  status: InactivityStatus;
+  daysSinceLastActivity: number;
+  canAppearInWeeklyMonthly: boolean;
+  canAppearInAllTime: boolean;
+}
+
+export interface ReturningUserInfo {
+  isReturning: boolean;
+  wasInactive: boolean;
+  daysSinceLastActivity: number;
+  welcomeBackMessage: boolean;
+  lastRankBeforeInactivity: number | null;
+}
+
+// ============================================
+// NOTIFICATION TYPES (Phase 4)
+// ============================================
+
+export enum RankNotificationType {
+  TOP_10_ACHIEVED = 'rank.milestone.top10',
+  TOP_100_ACHIEVED = 'rank.milestone.top100',
+  TOP_1000_ACHIEVED = 'rank.milestone.top1000',
+  RANK_1_ACHIEVED = 'rank.milestone.rank1',
+  RANK_IMPROVEMENT = 'rank.improvement',
+  WEEKLY_WINNER = 'rank.weekly.winner',
+  MONTHLY_WINNER = 'rank.monthly.winner',
+  NEW_PERSONAL_BEST = 'rank.personal.best',
+}
+
+export interface RankNotification {
+  id: string;
+  userId: string;
+  type: RankNotificationType;
+  title: string;
+  body: string;
+  period: RankingPeriod;
+  rank: number;
+  previousRank?: number;
+  metadata?: Record<string, unknown>;
+  createdAt: Date;
+  readAt?: Date;
+}
+
+// ============================================
+// BADGE TYPES (Phase 4)
+// ============================================
+
+export interface UserRankingBadges {
+  isNew: boolean; // < 7 days
+  isRisingStar: boolean; // Top weekly gainer
+  isActive: boolean; // Activity in last 7 days
+  isReturning: boolean; // Returning from inactivity
+  isVeteran: boolean; // > 1 year active
+}
+
+// ============================================
 // CONSTANTS
 // ============================================
 
@@ -217,11 +283,15 @@ export const RANKING_CONSTANTS = {
   NEW_USER_GRACE_DAYS: 7,
   INACTIVITY_WARNING_DAYS: 30,
   INACTIVITY_CUTOFF_DAYS: 90,
+  VETERAN_THRESHOLD_DAYS: 365,
 
   // Rank thresholds for milestones
   TOP_10_THRESHOLD: 10,
   TOP_100_THRESHOLD: 100,
   TOP_1000_THRESHOLD: 1000,
+
+  // Notification thresholds
+  MIN_RANK_IMPROVEMENT_FOR_NOTIFICATION: 5,
 
   // Percentile labels
   PERCENTILE_LABELS: {
@@ -232,6 +302,24 @@ export const RANKING_CONSTANTS = {
     50: 'Top Half',
     0: 'Keep Climbing!',
   } as Record<number, string>,
+
+  // Inactivity thresholds (in days)
+  INACTIVITY_STATUS: {
+    ACTIVE_MAX: 7, // Active: within 7 days
+    WARNING_MAX: 90, // Warning: 8-90 days
+    // Dormant: 90+ days
+  },
+
+  // Notification templates
+  NOTIFICATION_TITLES: {
+    top10: "You're in the Top 10!",
+    top100: 'New Personal Best!',
+    top1000: 'Rank Milestone!',
+    rank1: "You're #1!",
+    improvement: '+{amount} positions!',
+    weeklyWinner: 'Weekly Winner!',
+    monthlyWinner: 'Monthly Winner!',
+  } as Record<string, string>,
 } as const;
 
 // ============================================
@@ -270,7 +358,9 @@ export function getRankField(period: RankingPeriod): 'allTimeRank' | 'weeklyRank
   return mapping[period];
 }
 
-export function getPeakRankField(period: RankingPeriod): 'peakAllTimeRank' | 'peakWeeklyRank' | 'peakMonthlyRank' {
+export function getPeakRankField(
+  period: RankingPeriod,
+): 'peakAllTimeRank' | 'peakWeeklyRank' | 'peakMonthlyRank' {
   const mapping: Record<RankingPeriod, 'peakAllTimeRank' | 'peakWeeklyRank' | 'peakMonthlyRank'> = {
     [RankingPeriod.ALL_TIME]: 'peakAllTimeRank',
     [RankingPeriod.WEEKLY]: 'peakWeeklyRank',

@@ -18,19 +18,18 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { NodePgDatabase } from 'drizzle-orm/node-postgres';
-import { eq, sql, and } from 'drizzle-orm';
-import { userRanking, users } from '@/core/database/schema';
-import type { RankingRepositoryPort, LeaderboardRow } from '../domain/ports/ranking-repository.port';
-import { RANKING_CONSTANTS, RankingPeriod } from '../domain/types/ranking.types';
-import type { RankCalculationResult, ConsistencyReport, RankingIssue } from '../domain/types/ranking.types';
-import { RankCalculationError } from '../domain/errors/ranking-domain.errors';
+import { sql } from 'drizzle-orm';
+import { RANKING_REPOSITORY_PORT, type RankingRepositoryPort } from '../ports/ranking-repository.port';
+import { RANKING_CONSTANTS, RankingPeriod } from '../types/ranking.types';
+import type { RankCalculationResult, ConsistencyReport, RankingIssue } from '../types/ranking.types';
+import { RankCalculationError } from '../errors/ranking-domain.errors';
 
 @Injectable()
 export class RankCalculationService {
   constructor(
     @Inject('DATABASE')
     private readonly db: NodePgDatabase,
-    @Inject('RANKING_REPOSITORY')
+    @Inject(RANKING_REPOSITORY_PORT)
     private readonly rankingRepository: RankingRepositoryPort,
     @InjectPinoLogger(RankCalculationService.name)
     private readonly logger: PinoLogger,
@@ -116,14 +115,15 @@ export class RankCalculationService {
 
     // For each user, calculate their rank by counting users with higher XP
     for (const userId of userIds) {
-      const userRanking = await this.rankingRepository.getUserRanking(userId);
-      if (!userRanking) continue;
+      const userRankingRow = await this.rankingRepository.getUserRanking(userId);
+      if (!userRankingRow) continue;
 
-      const userXp = userRanking[this.getXpFieldName(period)];
+      const userXp = userRankingRow[this.getXpFieldName(period)];
       if (userXp <= 0) continue;
 
       // Calculate rank by counting users with higher XP
       const rank = await this.calculateUserRank(userId, period);
+      if (rank === null) continue;
 
       // Update the rank
       await this.rankingRepository.updateRank({
@@ -223,7 +223,6 @@ export class RankCalculationService {
    * This is called by the batch processor.
    *
    * @param limit - Maximum number of users to process
-   * @param period - Optional specific period, or all periods
    */
   async processDirtyRankings(limit = RANKING_CONSTANTS.INCREMENTAL_BATCH_SIZE): Promise<number> {
     const dirtyUsers = await this.rankingRepository.getDirtyUsers(limit);
@@ -342,9 +341,9 @@ export class RankCalculationService {
 
   private getRankColumn(period: RankingPeriod): string {
     const mapping: Record<RankingPeriod, string> = {
-      [RankingPeriod.ALL_TIME]: 'allTimeRank',
-      [RankingPeriod.WEEKLY]: 'weeklyRank',
-      [RankingPeriod.MONTHLY]: 'monthlyRank',
+      [RankingPeriod.ALL_TIME]: 'all_time_rank',
+      [RankingPeriod.WEEKLY]: 'weekly_rank',
+      [RankingPeriod.MONTHLY]: 'monthly_rank',
     };
     return mapping[period];
   }

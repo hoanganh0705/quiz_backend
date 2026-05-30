@@ -3,27 +3,28 @@
  *
  * Handles XP events from various sources and updates user rankings.
  * Part of Phase 1 - Foundation.
+ *
+ * Architecture Note: XP ingestion is core ranking logic.
+ * Notification delivery is delegated via NotificationPort to Notification domain.
  */
 
 import { Inject, Injectable } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
-import type { RankingRepositoryPort } from '../domain/ports/ranking-repository.port';
-import type { RankingDomainEventBusPort } from '../domain/ports/ranking-event-bus.port';
-import { RANKING_CONSTANTS, RankingPeriod } from '../domain/types/ranking.types';
-import type { ExternalXpEarnedEvent } from '../domain/events/ranking-domain.events';
-import { InvalidXpEventError } from '../domain/errors/ranking-domain.errors';
+import { RANKING_REPOSITORY_PORT, type RankingRepositoryPort } from '../ports/ranking-repository.port';
+import { RANKING_DOMAIN_EVENT_BUS, type RankingDomainEventBusPort } from '../ports/ranking-event-bus.port';
+import { RankingPeriod } from '../types/ranking.types';
+import type { ExternalXpEarnedEvent } from '../events/ranking-domain.events';
+import { InvalidXpEventError } from '../errors/ranking-domain.errors';
 import { RankCalculationService } from './rank-calculation.service';
-import { PeakRankService } from './peak-rank.service';
 
 @Injectable()
 export class XpIngestionService {
   constructor(
-    @Inject('RANKING_REPOSITORY')
+    @Inject(RANKING_REPOSITORY_PORT)
     private readonly rankingRepository: RankingRepositoryPort,
-    @Inject('RANKING_DOMAIN_EVENT_BUS')
+    @Inject(RANKING_DOMAIN_EVENT_BUS)
     private readonly eventBus: RankingDomainEventBusPort,
     private readonly rankCalculationService: RankCalculationService,
-    private readonly peakRankService: PeakRankService,
     @InjectPinoLogger(XpIngestionService.name)
     private readonly logger: PinoLogger,
   ) {}
@@ -54,7 +55,7 @@ export class XpIngestionService {
       now,
     });
 
-    // Emit XpAdded event
+    // Emit XpAdded event for other domains to react
     this.eventBus.emitXpAdded({
       eventType: 'xp.added',
       userId: event.userId,
