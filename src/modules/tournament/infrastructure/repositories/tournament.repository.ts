@@ -235,11 +235,6 @@ export class TournamentRepository implements TournamentRepositoryPort {
 
     return (row as TournamentParticipantRow | undefined) ?? null;
   }
-
-  async getParticipantById(participantId: string): Promise<TournamentParticipantRow | null> {
-    return this.getParticipant(participantId);
-  }
-
   async registerParticipant(params: {
     tournamentId: string;
     userId: string;
@@ -256,6 +251,58 @@ export class TournamentRepository implements TournamentRepositoryPort {
         status: 'active' as TournamentParticipantStatus,
         updatedAt: params.nowIso,
       })
+      .returning({
+        participantId: tournamentParticipants.participantId,
+        tournamentId: tournamentParticipants.tournamentId,
+        userId: tournamentParticipants.userId,
+        registeredAt: tournamentParticipants.registeredAt,
+        totalScore: tournamentParticipants.totalScore,
+        totalTimeMs: tournamentParticipants.totalTimeMs,
+        rankFinal: tournamentParticipants.rankFinal,
+        status: tournamentParticipants.status,
+        updatedAt: tournamentParticipants.updatedAt,
+      });
+
+    return row as TournamentParticipantRow;
+  }
+
+  async withdrawParticipant(
+    participantId: string,
+    nowIso: string,
+  ): Promise<TournamentParticipantRow> {
+    const [row] = await this.db
+      .update(tournamentParticipants)
+      .set({
+        status: 'withdrawn' as TournamentParticipantStatus,
+        updatedAt: nowIso,
+      })
+      .where(eq(tournamentParticipants.participantId, participantId))
+      .returning({
+        participantId: tournamentParticipants.participantId,
+        tournamentId: tournamentParticipants.tournamentId,
+        userId: tournamentParticipants.userId,
+        registeredAt: tournamentParticipants.registeredAt,
+        totalScore: tournamentParticipants.totalScore,
+        totalTimeMs: tournamentParticipants.totalTimeMs,
+        rankFinal: tournamentParticipants.rankFinal,
+        status: tournamentParticipants.status,
+        updatedAt: tournamentParticipants.updatedAt,
+      });
+
+    return row as TournamentParticipantRow;
+  }
+
+  async reactivateParticipant(
+    participantId: string,
+    nowIso: string,
+  ): Promise<TournamentParticipantRow> {
+    const [row] = await this.db
+      .update(tournamentParticipants)
+      .set({
+        status: 'active' as TournamentParticipantStatus,
+        updatedAt: nowIso,
+      })
+      .where(eq(tournamentParticipants.participantId, participantId))
       .returning({
         participantId: tournamentParticipants.participantId,
         tournamentId: tournamentParticipants.tournamentId,
