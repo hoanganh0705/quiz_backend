@@ -7,28 +7,27 @@
 
 import { Inject, Injectable } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
-import type { RankingRepositoryPort, LeaderboardRow } from '../domain/ports/ranking-repository.port';
+import type { RankingRepositoryPort, LeaderboardRow } from '../ports/ranking-repository.port';
 import {
   RankingPeriod,
-  RANKING_CONSTANTS,
   calculatePercentile,
   getPercentileLabel,
   getXpField,
-} from '../domain/types/ranking.types';
-import type { PeriodInfo } from '../domain/types/ranking.types';
+} from '../types/ranking.types';
+import { RANKING_REPOSITORY_PORT } from '../ports/ranking-repository.port';
 import { PeriodResetService } from './period-reset.service';
-import type { RankingPeriodEnum } from '../dto/request/leaderboard-query.dto';
+import { RankingPeriodEnum } from '../../dto/request/leaderboard-query.dto';
 import type {
   LeaderboardResponseDto,
   LeaderboardEntryDto,
   PeriodInfoDto,
   UserRankPositionDto,
-} from '../dto/response/leaderboard-response.dto';
+} from '../../dto/response/leaderboard-response.dto';
 
 @Injectable()
 export class LeaderboardService {
   constructor(
-    @Inject('RANKING_REPOSITORY')
+    @Inject(RANKING_REPOSITORY_PORT)
     private readonly rankingRepository: RankingRepositoryPort,
     private readonly periodResetService: PeriodResetService,
     @InjectPinoLogger(LeaderboardService.name)
@@ -70,7 +69,7 @@ export class LeaderboardService {
     // Get current user's position if authenticated
     let userPosition: UserRankPositionDto | undefined;
     if (currentUserId) {
-      userPosition = await this.getUserPosition(currentUserId, period);
+      userPosition = await this.getUserPosition(currentUserId, periodEnum);
     }
 
     // Build period info
@@ -154,7 +153,6 @@ export class LeaderboardService {
 
     for (let i = 0; i < entries.length; i++) {
       const entry = entries[i];
-      const displayRank = offset + i + 1;
 
       // Check for tie with previous entry
       const prevEntry = i > 0 ? entries[i - 1] : null;

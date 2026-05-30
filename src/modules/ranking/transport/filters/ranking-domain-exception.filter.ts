@@ -33,8 +33,8 @@ export class RankingDomainExceptionFilter implements ExceptionFilter {
       if (typeof exceptionResponse === 'string') {
         message = exceptionResponse;
       } else if (typeof exceptionResponse === 'object') {
-        message = `${(exceptionResponse as { message?: string }).message ?? exceptionResponse.toString()}`;
-        code = (exceptionResponse as { code?: string }).code ?? this.getCodeFromStatus(status);
+        message = this.extractMessage(exceptionResponse);
+        code = this.extractCode(exceptionResponse) ?? this.getCodeFromStatus(status);
       }
     } else if (exception instanceof Error) {
       message = exception.message;
@@ -53,7 +53,32 @@ export class RankingDomainExceptionFilter implements ExceptionFilter {
     });
   }
 
-  private getCodeFromStatus(status: number): string {
+  private extractMessage(exceptionResponse: object): string {
+    if ('message' in exceptionResponse) {
+      const { message } = exceptionResponse as { message?: unknown };
+
+      if (typeof message === 'string') {
+        return message;
+      }
+
+      if (Array.isArray(message)) {
+        return message.filter((item): item is string => typeof item === 'string').join(', ');
+      }
+    }
+
+    return 'Unexpected error';
+  }
+
+  private extractCode(exceptionResponse: object): string | undefined {
+    if ('code' in exceptionResponse) {
+      const { code } = exceptionResponse as { code?: unknown };
+      return typeof code === 'string' ? code : undefined;
+    }
+
+    return undefined;
+  }
+
+  private getCodeFromStatus(status: HttpStatus): string {
     switch (status) {
       case HttpStatus.BAD_REQUEST:
         return 'BAD_REQUEST';

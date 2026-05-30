@@ -4,49 +4,45 @@
  * Core ranking domain module providing XP aggregation, rank calculation,
  * leaderboards, and period management.
  *
- * Phase 1: Foundation - XP ingestion, rank calculation
- * Phase 2: Core Features - Period resets, peak tracking, history
- * Phase 3: Leaderboards & APIs - Public endpoints, caching
+ * Architecture follows the same conventions as Quiz, Attempt, Auth, and User modules:
+ * - domain/: Business logic (services, types, errors, events, ports)
+ * - infrastructure/: Implementations (repositories)
+ * - transport/: HTTP layer (controllers, filters)
+ * - application/: Orchestration (schedulers, background jobs)
  */
 
-import { Module, Global } from '@nestjs/common';
+import { Module } from '@nestjs/common';
 
 // Infrastructure
 import { RankingRepository } from './infrastructure/repositories/ranking.repository';
-import { RankingDomainEventBus } from './infrastructure/events/ranking-domain.event-bus';
+
+// Domain Events
+import { RankingDomainEventBus } from './domain/events/ranking-domain.event-bus';
+import { RankingEventHandler } from './domain/events/ranking.event-handler';
 
 // Domain Ports
-import {
-  RANKING_REPOSITORY_PORT,
-  RankingRepositoryPort,
-} from './domain/ports/ranking-repository.port';
+import { RANKING_REPOSITORY_PORT } from './domain/ports/ranking-repository.port';
 import {
   RANKING_DOMAIN_EVENT_BUS,
-  RankingDomainEventBusPort,
   EXTERNAL_EVENT_BUS,
-  ExternalEventBusPort,
 } from './domain/ports/ranking-event-bus.port';
 
-// Application Services (Phase 1 & 2)
-import { XpIngestionService } from './application/xp-ingestion.service';
-import { RankCalculationService } from './application/rank-calculation.service';
-import { PeakRankService } from './application/peak-rank.service';
-import { PeriodResetService } from './application/period-reset.service';
-import { RankHistoryService } from './application/rank-history.service';
-import { RankingSchedulerService } from './application/ranking-scheduler.service';
-import { RankingEventHandler } from './application/ranking-event-handler';
+// Domain Services
+import {
+  XpIngestionService,
+  RankCalculationService,
+  LeaderboardService,
+  UserRankService,
+  PeriodResetService,
+} from './domain/services';
 
-// Application Services (Phase 3)
-import { LeaderboardService } from './application/leaderboard.service';
-import { UserRankService } from './application/user-rank.service';
+// Application Services
+import { RankingApplicationService } from './application/ranking.application.service';
 
-// Controller
-import { RankingController } from './ranking.controller';
-
-// Exception Filter
+// Transport
+import { RankingController } from './transport/controller/ranking.controller';
 import { RankingDomainExceptionFilter } from './transport/filters/ranking-domain-exception.filter';
 
-@Global()
 @Module({
   providers: [
     // Infrastructure
@@ -60,27 +56,27 @@ import { RankingDomainExceptionFilter } from './transport/filters/ranking-domain
     },
     {
       provide: RANKING_DOMAIN_EVENT_BUS,
-      useClass: RankingDomainEventBus,
+      useExisting: RankingDomainEventBus,
     },
     {
       provide: EXTERNAL_EVENT_BUS,
       useExisting: RankingDomainEventBus,
     },
 
-    // Phase 1 & 2 Services
+    // Domain Services
     XpIngestionService,
     RankCalculationService,
-    PeakRankService,
-    PeriodResetService,
-    RankHistoryService,
-    RankingSchedulerService,
-    RankingEventHandler,
-
-    // Phase 3 Services
     LeaderboardService,
     UserRankService,
+    PeriodResetService,
 
-    // Exception Filter
+    // Application Services
+    RankingApplicationService,
+
+    // Domain Events
+    RankingEventHandler,
+
+    // Transport
     RankingDomainExceptionFilter,
   ],
   controllers: [RankingController],
@@ -90,17 +86,15 @@ import { RankingDomainExceptionFilter } from './transport/filters/ranking-domain
     RANKING_DOMAIN_EVENT_BUS,
     EXTERNAL_EVENT_BUS,
 
-    // Phase 1 & 2 Services
+    // Domain Services
     XpIngestionService,
     RankCalculationService,
-    PeakRankService,
-    PeriodResetService,
-    RankHistoryService,
-    RankingSchedulerService,
-
-    // Phase 3 Services
     LeaderboardService,
     UserRankService,
+    PeriodResetService,
+
+    // Application Services
+    RankingApplicationService,
   ],
 })
 export class RankingModule {}
