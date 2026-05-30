@@ -92,6 +92,44 @@ export class BookmarkRepository implements BookmarkRepositoryPort {
     return created as BookmarkCollectionRow;
   }
 
+  async updateCollection(params: {
+    collectionId: string;
+    name?: string;
+    description?: string | null;
+    nowIso: string;
+  }): Promise<BookmarkCollectionRow> {
+    const setValues: Record<string, unknown> = { updatedAt: params.nowIso };
+
+    if (params.name !== undefined) {
+      setValues['name'] = params.name;
+    }
+
+    if (params.description !== undefined) {
+      setValues['description'] = params.description;
+    }
+
+    const [updated] = await this.db
+      .update(bookmarkCollections)
+      .set(setValues)
+      .where(eq(bookmarkCollections.collectionId, params.collectionId))
+      .returning({
+        collectionId: bookmarkCollections.collectionId,
+        userId: bookmarkCollections.userId,
+        name: bookmarkCollections.name,
+        description: bookmarkCollections.description,
+        createdAt: bookmarkCollections.createdAt,
+        updatedAt: bookmarkCollections.updatedAt,
+      });
+
+    return updated as BookmarkCollectionRow;
+  }
+
+  async deleteCollection(collectionId: string): Promise<void> {
+    await this.db
+      .delete(bookmarkCollections)
+      .where(eq(bookmarkCollections.collectionId, collectionId));
+  }
+
   async getBookmarkedQuiz(collectionId: string, quizId: string): Promise<BookmarkedQuizRow | null> {
     const [row] = await this.db
       .select({

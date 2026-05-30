@@ -5,9 +5,11 @@ import {
   Get,
   Param,
   ParseUUIDPipe,
+  Patch,
   Post,
   UseFilters,
 } from '@nestjs/common';
+
 import {
   ApiTags,
   ApiOperation,
@@ -17,20 +19,26 @@ import {
   ApiNotFoundResponse,
   ApiConflictResponse,
   ApiBadRequestResponse,
+  ApiForbiddenResponse,
   ApiInternalServerErrorResponse,
 } from '@nestjs/swagger';
+
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
 import { ApiAuth, ApiValidationRequest } from '@/common/swagger/swagger-decorators';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
 import { BookmarkApplicationService } from '../../application/bookmark.application.service';
-import { CreateCollectionDto, AddBookmarkDto } from '../../dto/request';
+import { CreateCollectionDto, AddBookmarkDto, UpdateCollectionDto } from '../../dto/request';
+
 import {
   BookmarkCollectionListResponseDto,
   CreateCollectionResponseDto,
   AddBookmarkResponseDto,
   RemoveBookmarkResponseDto,
   BookmarkListResponseDto,
+  UpdateCollectionResponseDto,
+  DeleteCollectionResponseDto,
 } from '../../dto/response';
+
 import { BookmarkDomainExceptionFilter } from '../filters/bookmark-domain-exception.filter';
 
 @ApiTags('bookmarks')
@@ -112,6 +120,7 @@ export class BookmarkController {
   })
   @ApiOkResponse({ description: 'Bookmark removed', type: RemoveBookmarkResponseDto })
   @ApiNotFoundResponse({ description: 'Collection or bookmark not found' })
+  @ApiForbiddenResponse({ description: 'Not the collection owner' })
   @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
   async removeBookmark(
     @Param('collectionId', new ParseUUIDPipe()) collectionId: string,
@@ -119,5 +128,43 @@ export class BookmarkController {
     @CurrentUser() user: JwtPayload,
   ): Promise<RemoveBookmarkResponseDto> {
     return this.bookmarkApplicationService.removeBookmark(collectionId, quizId, user);
+  }
+
+  @Patch('collections/:collectionId')
+  @ApiAuth()
+  @ApiOperation({
+    summary: 'Update collection',
+    description: 'Updates the name and/or description of a bookmark collection.',
+  })
+  @ApiOkResponse({ description: 'Collection updated', type: UpdateCollectionResponseDto })
+  @ApiNotFoundResponse({ description: 'Collection not found' })
+  @ApiForbiddenResponse({ description: 'Not the collection owner' })
+  @ApiConflictResponse({ description: 'A collection with this name already exists' })
+  @ApiBadRequestResponse({ description: 'Validation failed' })
+  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  @ApiValidationRequest()
+  async updateCollection(
+    @Param('collectionId', new ParseUUIDPipe()) collectionId: string,
+    @CurrentUser() user: JwtPayload,
+    @Body() payload: UpdateCollectionDto,
+  ): Promise<UpdateCollectionResponseDto> {
+    return this.bookmarkApplicationService.updateCollection(collectionId, payload, user);
+  }
+
+  @Delete('collections/:collectionId')
+  @ApiAuth()
+  @ApiOperation({
+    summary: 'Delete collection',
+    description: 'Deletes a bookmark collection and all its bookmarked quizzes.',
+  })
+  @ApiOkResponse({ description: 'Collection deleted', type: DeleteCollectionResponseDto })
+  @ApiNotFoundResponse({ description: 'Collection not found' })
+  @ApiForbiddenResponse({ description: 'Not the collection owner' })
+  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  async deleteCollection(
+    @Param('collectionId', new ParseUUIDPipe()) collectionId: string,
+    @CurrentUser() user: JwtPayload,
+  ): Promise<DeleteCollectionResponseDto> {
+    return this.bookmarkApplicationService.deleteCollection(collectionId, user);
   }
 }
