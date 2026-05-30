@@ -20,18 +20,26 @@ import {
   TournamentRegistrationClosedError,
   TournamentFullError,
   TournamentAlreadyRegisteredError,
+  TournamentForbiddenError,
   TournamentRoundNotFoundError,
   TournamentRoundNotOpenError,
   TournamentAttemptAlreadyExistsError,
+  TournamentNotRegisteredError,
+  TournamentUnregisterClosedError,
+  TournamentAlreadyWithdrawnError,
 } from './errors';
 import {
   TOURNAMENT_NOT_FOUND_MESSAGE,
   TOURNAMENT_REGISTRATION_CLOSED_MESSAGE,
   TOURNAMENT_FULL_MESSAGE,
   TOURNAMENT_ALREADY_REGISTERED_MESSAGE,
+  TOURNAMENT_FORBIDDEN_MESSAGE,
   TOURNAMENT_ROUND_NOT_FOUND_MESSAGE,
   TOURNAMENT_ROUND_NOT_OPEN_MESSAGE,
   TOURNAMENT_ATTEMPT_ALREADY_EXISTS_MESSAGE,
+  TOURNAMENT_NOT_REGISTERED_MESSAGE,
+  TOURNAMENT_UNREGISTER_CLOSED_MESSAGE,
+  TOURNAMENT_ALREADY_WITHDRAWN_MESSAGE,
 } from '../tournament.constants';
 
 @Injectable()
@@ -44,6 +52,22 @@ export class TournamentService {
     @InjectPinoLogger(TournamentService.name)
     private readonly logger: PinoLogger,
   ) {}
+
+  // ---------------------------------------------------------------------------
+  // Private helpers
+  // ---------------------------------------------------------------------------
+
+  private async getActiveTournamentOrThrow(tournamentId: string): Promise<TournamentRow> {
+    const tournament = await this.tournamentRepository.getTournamentById(tournamentId);
+    if (!tournament) {
+      throw new TournamentNotFoundError(TOURNAMENT_NOT_FOUND_MESSAGE);
+    }
+    return tournament;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Tournament operations
+  // ---------------------------------------------------------------------------
 
   async createTournament(user: JwtPayload, payload: CreateTournamentDto): Promise<TournamentRow> {
     const nowIso = new Date().toISOString();
@@ -130,12 +154,7 @@ export class TournamentService {
   }
 
   async getTournamentRounds(tournamentId: string): Promise<TournamentRoundRow[]> {
-    const tournament = await this.tournamentRepository.getTournamentById(tournamentId);
-
-    if (!tournament) {
-      throw new TournamentNotFoundError(TOURNAMENT_NOT_FOUND_MESSAGE);
-    }
-
+    await this.getActiveTournamentOrThrow(tournamentId);
     return this.tournamentRepository.getRoundsByTournament(tournamentId);
   }
 
@@ -145,19 +164,12 @@ export class TournamentService {
   ): Promise<TournamentParticipantRow> {
     const nowIso = new Date().toISOString();
 
-    const tournament = await this.tournamentRepository.getTournamentById(tournamentId);
+    const tournament = await this.getActiveTournamentOrThrow(tournamentId);
 
-    if (!tournament) {
-      throw new TournamentNotFoundError(TOURNAMENT_NOT_FOUND_MESSAGE);
-    }
-
-    if (tournament.status !== 'upcoming' && tournament.status !== 'registration') {
-      throw new TournamentRegistrationClosedError(TOURNAMENT_REGISTRATION_CLOSED_MESSAGE);
-    }
-
-    const now = new Date();
-    const endDate = new Date(tournament.endAt);
-    if (now > endDate) {
+    // Registration is permitted exclusively when the tournament is in the `registration` phase.
+    // `upcoming` means the tournament exists but registration has not opened yet.
+    // We rely solely on the status state machine — not on timestamps.
+    if (tournament.status !== 'registration') {
       throw new TournamentRegistrationClosedError(TOURNAMENT_REGISTRATION_CLOSED_MESSAGE);
     }
 
@@ -174,6 +186,23 @@ export class TournamentService {
     );
 
     if (existingParticipant) {
+      // A withdrawn participant is allowed to re-register during the registration window.
+      if (existingParticipant.status === 'withdrawn') {
+        const reactivated = await this.tournamentRepository.reactivateParticipant(
+          existingParticipant.participantId,
+          nowIso,
+        );
+
+        this.logger.info({
+          event: 'tournament_reregistered',
+          tournamentId,
+          userId: user.sub,
+          participantId: reactivated.participantId,
+        });
+
+        return reactivated;
+      }
+
       throw new TournamentAlreadyRegisteredError(TOURNAMENT_ALREADY_REGISTERED_MESSAGE);
     }
 
@@ -193,13 +222,54 @@ export class TournamentService {
     return participant;
   }
 
-  async getLeaderboard(tournamentId: string): Promise<TournamentLeaderboardEntry[]> {
-    const tournament = await this.tournamentRepository.getTournamentById(tournamentId);
+  async unregisterFromTournament(
+    tournamentId: string,
+    user: JwtPayload,
+  ): Promise<TournamentParticipantRow> {
+    const nowIso = new Date().toISOString();
 
-    if (!tournament) {
-      throw new TournamentNotFoundError(TOURNAMENT_NOT_FOUND_MESSAGE);
+    const tournament = await this.getActiveTournamentOrThrow(tournamentId);
+
+    // Unregistration is permitted only during the `registration` phase, mirroring the registration rule.
+    // Once the tournament moves to `ongoing` or later, withdrawals are no longer accepted.
+    if (tournament.status !== 'registration') {
+      throw new TournamentUnregisterClosedError(TOURNAMENT_UNREGISTER_CLOSED_MESSAGE);
     }
 
+    const participant = await this.tournamentRepository.getParticipantByUserAndTournament(
+      user.sub,
+      tournamentId,
+    );
+
+    if (!participant) {
+      throw new TournamentNotRegisteredError(TOURNAMENT_NOT_REGISTERED_MESSAGE);
+    }
+
+    if (participant.status === 'withdrawn') {
+      throw new TournamentAlreadyWithdrawnError(TOURNAMENT_ALREADY_WITHDRAWN_MESSAGE);
+    }
+
+    if (participant.status === 'disqualified') {
+      throw new TournamentForbiddenError(TOURNAMENT_FORBIDDEN_MESSAGE);
+    }
+
+    const withdrawn = await this.tournamentRepository.withdrawParticipant(
+      participant.participantId,
+      nowIso,
+    );
+
+    this.logger.info({
+      event: 'tournament_unregistered',
+      tournamentId,
+      userId: user.sub,
+      participantId: participant.participantId,
+    });
+
+    return withdrawn;
+  }
+
+  async getLeaderboard(tournamentId: string): Promise<TournamentLeaderboardEntry[]> {
+    await this.getActiveTournamentOrThrow(tournamentId);
     return this.tournamentRepository.getLeaderboard(tournamentId);
   }
 
@@ -210,11 +280,7 @@ export class TournamentService {
   ): Promise<{ attemptId: string; quizVersionId: string; participantId: string }> {
     const nowIso = new Date().toISOString();
 
-    const tournament = await this.tournamentRepository.getTournamentById(tournamentId);
-
-    if (!tournament) {
-      throw new TournamentNotFoundError(TOURNAMENT_NOT_FOUND_MESSAGE);
-    }
+    await this.getActiveTournamentOrThrow(tournamentId);
 
     const round = await this.tournamentRepository.getRoundById(roundId);
 
@@ -231,8 +297,10 @@ export class TournamentService {
       tournamentId,
     );
 
-    if (!participant) {
-      throw new TournamentNotFoundError('You are not registered for this tournament');
+    // FIX: use TournamentNotRegisteredError (→ 404) instead of the misleading
+    // TournamentNotFoundError that was previously thrown here.
+    if (!participant || participant.status !== 'active') {
+      throw new TournamentNotRegisteredError(TOURNAMENT_NOT_REGISTERED_MESSAGE);
     }
 
     const existingRoundParticipant = await this.tournamentRepository.getRoundParticipant(

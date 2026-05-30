@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   ParseUUIDPipe,
@@ -8,6 +9,7 @@ import {
   Query,
   UseFilters,
 } from '@nestjs/common';
+
 import {
   ApiTags,
   ApiOperation,
@@ -35,7 +37,9 @@ import {
   TournamentLeaderboardResponseDto,
   RegisterTournamentResponseDto,
   StartTournamentAttemptResponseDto,
+  UnregisterTournamentResponseDto,
 } from '../../dto/response';
+
 import { TournamentDomainExceptionFilter } from '../filters/tournament-domain-exception.filter';
 
 @ApiTags('tournaments')
@@ -153,5 +157,29 @@ export class TournamentController {
     @CurrentUser() user: JwtPayload,
   ): Promise<StartTournamentAttemptResponseDto> {
     return this.tournamentApplicationService.startRoundAttempt(tournamentId, roundId, user);
+  }
+
+  @Delete(':id/register')
+  @Permissions(Permission.TOURNAMENT_REGISTER)
+  @ApiAuth()
+  @ApiOperation({
+    summary: 'Unregister from tournament',
+    description:
+      'Withdraws the authenticated user from a tournament. Only allowed when the tournament status is `registration`. Requires `tournament:register` permission.',
+  })
+  @ApiOkResponse({
+    description: 'Withdrawn successfully',
+    type: UnregisterTournamentResponseDto,
+  })
+  @ApiNotFoundResponse({ description: 'Tournament not found or you are not registered' })
+  @ApiConflictResponse({ description: 'You have already withdrawn from this tournament' })
+  @ApiForbiddenResponse({ description: 'Disqualified participants cannot withdraw' })
+  @ApiBadRequestResponse({ description: 'Tournament is not in a state that allows unregistration' })
+  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  unregisterFromTournament(
+    @Param('id', new ParseUUIDPipe()) tournamentId: string,
+    @CurrentUser() user: JwtPayload,
+  ): Promise<UnregisterTournamentResponseDto> {
+    return this.tournamentApplicationService.unregisterFromTournament(tournamentId, user);
   }
 }

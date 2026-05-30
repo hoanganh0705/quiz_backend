@@ -12,6 +12,9 @@ import {
   TournamentRoundNotFoundError,
   TournamentRoundNotOpenError,
   TournamentAttemptAlreadyExistsError,
+  TournamentNotRegisteredError,
+  TournamentUnregisterClosedError,
+  TournamentAlreadyWithdrawnError,
 } from '../../domain/errors';
 
 const HTTP_ERROR_NAMES: Record<number, string> = {
@@ -38,33 +41,38 @@ export class TournamentDomainExceptionFilter implements ExceptionFilter {
   }
 
   private mapToHttp(error: TournamentDomainError): { status: number; message: string } {
-    if (error instanceof TournamentNotFoundError) {
-      return { status: HttpStatus.NOT_FOUND, message: 'Tournament not found' };
+    if (error instanceof TournamentNotFoundError || error instanceof TournamentNotRegisteredError) {
+      return { status: HttpStatus.NOT_FOUND, message: error.message };
+    }
+
+    if (error instanceof TournamentRoundNotFoundError) {
+      return { status: HttpStatus.NOT_FOUND, message: 'Tournament round not found' };
     }
 
     if (error instanceof TournamentForbiddenError) {
-      return { status: HttpStatus.FORBIDDEN, message: 'You do not have permission to perform this action' };
+      return {
+        status: HttpStatus.FORBIDDEN,
+        message: 'You do not have permission to perform this action',
+      };
     }
 
     if (
       error instanceof TournamentConflictError ||
       error instanceof TournamentAlreadyRegisteredError ||
-      error instanceof TournamentAttemptAlreadyExistsError
+      error instanceof TournamentAttemptAlreadyExistsError ||
+      error instanceof TournamentAlreadyWithdrawnError
     ) {
-      return { status: HttpStatus.CONFLICT, message: 'Resource already exists' };
+      return { status: HttpStatus.CONFLICT, message: error.message };
     }
 
     if (
       error instanceof TournamentRegistrationClosedError ||
       error instanceof TournamentFullError ||
       error instanceof TournamentValidationError ||
-      error instanceof TournamentRoundNotOpenError
+      error instanceof TournamentRoundNotOpenError ||
+      error instanceof TournamentUnregisterClosedError
     ) {
-      return { status: HttpStatus.BAD_REQUEST, message: 'Invalid request data' };
-    }
-
-    if (error instanceof TournamentRoundNotFoundError) {
-      return { status: HttpStatus.NOT_FOUND, message: 'Tournament round not found' };
+      return { status: HttpStatus.BAD_REQUEST, message: error.message };
     }
 
     return { status: HttpStatus.INTERNAL_SERVER_ERROR, message: 'Internal server error' };
