@@ -19,6 +19,9 @@ import { BookmarkModule } from './modules/bookmark/bookmark.module';
 import { ReviewModule } from './modules/review/review.module';
 import { TournamentModule } from './modules/tournament/tournament.module';
 import { InstanceModule } from './modules/instance/instance.module';
+import { RankingModule } from './modules/ranking/ranking.module';
+import { AchievementModule } from './modules/achievement/achievement.module';
+import { NotificationModule } from './modules/notification/notification.module';
 import { validateEnv } from './core/config/env.validation';
 import { RedisModule } from './core/redis/redis.module';
 import { RolesGuard } from './common/authorization/guards/roles.guard';
@@ -62,6 +65,9 @@ import { LoggerModule } from 'nestjs-pino';
     ReviewModule,
     TournamentModule,
     InstanceModule,
+    RankingModule,
+    AchievementModule,
+    NotificationModule,
   ],
   providers: [
     // Execute coarse throttling first to reduce JWT verification load during abusive traffic.
