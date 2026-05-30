@@ -9,3 +9,7 @@ export * from './period-reset.service';
 export * from './rank-history.service';
 export * from './ranking-scheduler.service';
 export * from './ranking-event-handler';
+
+// Phase 3
+export * from './leaderboard.service';
+export * from './user-rank.service';
