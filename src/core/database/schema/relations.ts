@@ -26,6 +26,8 @@ import {
   tournaments,
   tournamentParticipants,
   tournamentRoundParticipants,
+  userRanking,
+  rankHistory,
 } from '.';
 
 export const userBadgesRelations = relations(userBadges, ({ one }) => ({
@@ -39,12 +41,29 @@ export const userBadgesRelations = relations(userBadges, ({ one }) => ({
   }),
 }));
 
+export const userRankingRelations = relations(userRanking, ({ one, many }) => ({
+  user: one(users, {
+    fields: [userRanking.userId],
+    references: [users.userId],
+  }),
+  rankHistories: many(rankHistory),
+}));
+
+export const rankHistoryRelations = relations(rankHistory, ({ one }) => ({
+  user: one(users, {
+    fields: [rankHistory.userId],
+    references: [users.userId],
+  }),
+}));
+
 export const badgesRelations = relations(badges, ({ many }) => ({
   userBadges: many(userBadges),
 }));
 
-export const usersRelations = relations(users, ({ many }) => ({
+export const usersRelations = relations(users, ({ many, one }) => ({
   userBadges: many(userBadges),
+  userRanking: one(userRanking),
+  rankHistories: many(rankHistory),
   quizzes: many(quizzes),
   quizVersions: many(quizVersions),
   quizAttempts: many(quizAttempts),
