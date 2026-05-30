@@ -123,13 +123,15 @@ export interface TournamentRepositoryPort {
     tournamentId: string,
   ): Promise<TournamentParticipantRow | null>;
 
-  getParticipantById(participantId: string): Promise<TournamentParticipantRow | null>;
-
   registerParticipant(params: {
     tournamentId: string;
     userId: string;
     nowIso: string;
   }): Promise<TournamentParticipantRow>;
+
+  withdrawParticipant(participantId: string, nowIso: string): Promise<TournamentParticipantRow>;
+
+  reactivateParticipant(participantId: string, nowIso: string): Promise<TournamentParticipantRow>;
 
   getRoundById(roundId: string): Promise<TournamentRoundRow | null>;
 

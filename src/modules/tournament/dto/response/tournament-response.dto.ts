@@ -291,3 +291,11 @@ export class StartTournamentAttemptResponseDto {
   @ApiProperty({ description: 'Attempt start message', example: 'Round started. Good luck!' })
   message!: string;
 }
+
+export class UnregisterTournamentResponseDto {
+  @ApiProperty({
+    description: 'Unregister result message',
+    example: 'Successfully withdrawn from the tournament',
+  })
+  message!: string;
+}

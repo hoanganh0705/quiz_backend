@@ -64,3 +64,23 @@ export class TournamentAttemptAlreadyExistsError extends TournamentDomainError {
     super(message);
   }
 }
+
+export class TournamentNotRegisteredError extends TournamentDomainError {
+  constructor(message = 'You are not registered for this tournament') {
+    super(message);
+  }
+}
+
+export class TournamentUnregisterClosedError extends TournamentDomainError {
+  constructor(
+    message = 'You can only unregister from an upcoming or registration-phase tournament',
+  ) {
+    super(message);
+  }
+}
+
+export class TournamentAlreadyWithdrawnError extends TournamentDomainError {
+  constructor(message = 'You have already withdrawn from this tournament') {
+    super(message);
+  }
+}
