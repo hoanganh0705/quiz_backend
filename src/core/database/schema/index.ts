@@ -221,6 +221,105 @@ export const userBadges = pgTable(
   ],
 );
 
+export const userRanking = pgTable(
+  'user_ranking',
+  {
+    userId: uuid('user_id').primaryKey().notNull(),
+    allTimeXp: integer('all_time_xp').default(0).notNull(),
+    weeklyXp: integer('weekly_xp').default(0).notNull(),
+    monthlyXp: integer('monthly_xp').default(0).notNull(),
+    allTimeRank: integer('all_time_rank'),
+    weeklyRank: integer('weekly_rank'),
+    monthlyRank: integer('monthly_rank'),
+    updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'string' })
+      .defaultNow()
+      .notNull(),
+    // Phase 1 enhancements
+    lastWeeklyResetAt: timestamp('last_weekly_reset_at', { withTimezone: true, mode: 'string' }),
+    lastMonthlyResetAt: timestamp('last_monthly_reset_at', { withTimezone: true, mode: 'string' }),
+    peakAllTimeRank: integer('peak_all_time_rank'),
+    peakWeeklyRank: integer('peak_weekly_rank'),
+    peakMonthlyRank: integer('peak_monthly_rank'),
+    peakRankAchievedAt: timestamp('peak_rank_achieved_at', { withTimezone: true, mode: 'string' }),
+    lastActivityAt: timestamp('last_activity_at', { withTimezone: true, mode: 'string' }),
+    isDirty: boolean('is_dirty').default(false).notNull(),
+  },
+  (table) => [
+    index('idx_user_ranking_all_time_rank').using(
+      'btree',
+      table.allTimeRank.asc().nullsLast().op('int4_ops'),
+    ),
+    index('idx_user_ranking_weekly_rank').using(
+      'btree',
+      table.weeklyRank.asc().nullsLast().op('int4_ops'),
+    ),
+    index('idx_user_ranking_monthly_rank').using(
+      'btree',
+      table.monthlyRank.asc().nullsLast().op('int4_ops'),
+    ),
+    index('idx_user_ranking_dirty').using('btree', table.isDirty.asc().nullsLast().op('bool_ops')),
+    foreignKey({
+      columns: [table.userId],
+      foreignColumns: [users.userId],
+      name: 'user_ranking_user_id_fkey',
+    }).onDelete('cascade'),
+    check('user_ranking_all_time_xp_nonneg', sql`all_time_xp >= 0`),
+    check('user_ranking_weekly_xp_nonneg', sql`weekly_xp >= 0`),
+    check('user_ranking_monthly_xp_nonneg', sql`monthly_xp >= 0`),
+    check(
+      'user_ranking_all_time_rank_positive',
+      sql`(all_time_rank IS NULL) OR (all_time_rank > 0)`,
+    ),
+    check('user_ranking_weekly_rank_positive', sql`(weekly_rank IS NULL) OR (weekly_rank > 0)`),
+    check('user_ranking_monthly_rank_positive', sql`(monthly_rank IS NULL) OR (monthly_rank > 0)`),
+  ],
+);
+
+/**
+ * Rank History Table - Stores historical ranking snapshots for archival purposes.
+ * Used for weekly/monthly resets and historical analysis.
+ */
+export const rankHistory = pgTable(
+  'rank_history',
+  {
+    historyId: uuid('history_id').defaultRandom().primaryKey().notNull(),
+    userId: uuid('user_id').notNull(),
+    period: text('period').notNull(), // 'weekly' | 'monthly' | 'all_time'
+    periodStart: timestamp('period_start', { withTimezone: true, mode: 'string' }),
+    periodEnd: timestamp('period_end', { withTimezone: true, mode: 'string' }),
+    xpAtStart: integer('xp_at_start').default(0).notNull(),
+    xpAtEnd: integer('xp_at_end').default(0).notNull(),
+    rankAtEnd: integer('rank_at_end'),
+    peakRank: integer('peak_rank'),
+    peakXp: integer('peak_xp'),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    index('idx_rank_history_user_id').using('btree', table.userId.asc().nullsLast().op('uuid_ops')),
+    index('idx_rank_history_period').using('btree', table.period.asc().nullsLast().op('text_ops')),
+    index('idx_rank_history_user_period').using(
+      'btree',
+      table.userId.asc().nullsLast().op('uuid_ops'),
+      table.period.asc().nullsLast().op('text_ops'),
+    ),
+    index('idx_rank_history_created_at').using(
+      'btree',
+      table.createdAt.asc().nullsLast().op('timestamptz_ops'),
+    ),
+    foreignKey({
+      columns: [table.userId],
+      foreignColumns: [users.userId],
+      name: 'rank_history_user_id_fkey',
+    }).onDelete('cascade'),
+    check(
+      'rank_history_period_valid',
+      sql`period = ANY (ARRAY['weekly'::text, 'monthly'::text, 'all_time'::text])`,
+    ),
+  ],
+);
+
 export const badges = pgTable(
   'badges',
   {

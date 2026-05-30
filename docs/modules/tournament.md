@@ -1,3 +1,0 @@
-# Tournament Module
-
-<!-- TODO -->
