@@ -44,6 +44,15 @@ export interface BookmarkRepositoryPort {
     nowIso: string;
   }): Promise<BookmarkCollectionRow>;
 
+  updateCollection(params: {
+    collectionId: string;
+    name?: string;
+    description?: string | null;
+    nowIso: string;
+  }): Promise<BookmarkCollectionRow>;
+
+  deleteCollection(collectionId: string): Promise<void>;
+
   // Bookmark operations
   getBookmarkedQuiz(collectionId: string, quizId: string): Promise<BookmarkedQuizRow | null>;
 

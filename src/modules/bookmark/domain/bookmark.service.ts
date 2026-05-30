@@ -3,6 +3,7 @@ import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import {
   BOOKMARK_REPOSITORY_PORT,
   type BookmarkRepositoryPort,
+  type BookmarkCollectionRow,
 } from './ports/bookmark-repository.port';
 import { QUIZ_REPOSITORY_PORT } from '@/modules/quiz/domain/ports';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
@@ -34,6 +35,31 @@ export class BookmarkService {
     private readonly logger: PinoLogger,
   ) {}
 
+  // ---------------------------------------------------------------------------
+  // Private helpers
+  // ---------------------------------------------------------------------------
+
+  private async getOwnedCollectionOrThrow(
+    collectionId: string,
+    user: JwtPayload,
+  ): Promise<BookmarkCollectionRow> {
+    const collection = await this.bookmarkRepository.getCollectionById(collectionId);
+
+    if (!collection) {
+      throw new CollectionNotFoundError(COLLECTION_NOT_FOUND_MESSAGE);
+    }
+
+    if (collection.userId !== user.sub && user.role !== 'admin') {
+      throw new CollectionForbiddenError(COLLECTION_FORBIDDEN_MESSAGE);
+    }
+
+    return collection;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Collection operations
+  // ---------------------------------------------------------------------------
+
   async listCollections(user: JwtPayload) {
     return this.bookmarkRepository.listCollectionsByUser(user.sub);
   }
@@ -58,13 +84,64 @@ export class BookmarkService {
       return collection;
     } catch (error) {
       const pgError = error as { code?: string; constraint?: string };
-      if (pgError.code === '23505' && pgError.constraint === 'uq_bookmark_collections_pair') {
+      if (pgError.code === '23505' && pgError.constraint === 'uq_bookmark_collections_user_name') {
         this.logger.warn({ event: 'collection_create_name_conflict', userId: user.sub, name });
         throw new CollectionConflictError(COLLECTION_NAME_CONFLICT_MESSAGE);
       }
       throw error;
     }
   }
+
+  async updateCollection(
+    collectionId: string,
+    user: JwtPayload,
+    name: string | undefined,
+    description: string | null | undefined,
+  ) {
+    await this.getOwnedCollectionOrThrow(collectionId, user);
+
+    const nowIso = new Date().toISOString();
+
+    try {
+      const updated = await this.bookmarkRepository.updateCollection({
+        collectionId,
+        name,
+        description,
+        nowIso,
+      });
+
+      this.logger.info({
+        event: 'collection_updated',
+        collectionId,
+        userId: user.sub,
+      });
+
+      return updated;
+    } catch (error) {
+      const pgError = error as { code?: string; constraint?: string };
+      if (pgError.code === '23505' && pgError.constraint === 'uq_bookmark_collections_user_name') {
+        this.logger.warn({ event: 'collection_update_name_conflict', userId: user.sub, name });
+        throw new CollectionConflictError(COLLECTION_NAME_CONFLICT_MESSAGE);
+      }
+      throw error;
+    }
+  }
+
+  async deleteCollection(collectionId: string, user: JwtPayload) {
+    await this.getOwnedCollectionOrThrow(collectionId, user);
+
+    await this.bookmarkRepository.deleteCollection(collectionId);
+
+    this.logger.info({
+      event: 'collection_deleted',
+      collectionId,
+      userId: user.sub,
+    });
+  }
+
+  // ---------------------------------------------------------------------------
+  // Bookmark operations
+  // ---------------------------------------------------------------------------
 
   async addBookmark(
     collectionId: string,
@@ -74,15 +151,7 @@ export class BookmarkService {
   ) {
     const nowIso = new Date().toISOString();
 
-    const collection = await this.bookmarkRepository.getCollectionById(collectionId);
-
-    if (!collection) {
-      throw new CollectionNotFoundError(COLLECTION_NOT_FOUND_MESSAGE);
-    }
-
-    if (collection.userId !== user.sub && user.role !== 'admin') {
-      throw new CollectionForbiddenError(COLLECTION_FORBIDDEN_MESSAGE);
-    }
+    await this.getOwnedCollectionOrThrow(collectionId, user);
 
     const quiz = await this.quizRepository.getActiveQuizRecordById(quizId);
     if (!quiz) {
@@ -107,7 +176,7 @@ export class BookmarkService {
       return bookmark;
     } catch (error) {
       const pgError = error as { code?: string; constraint?: string };
-      if (pgError.code === '23505' && pgError.constraint === 'uq_bookmark_quizzes_pair') {
+      if (pgError.code === '23505' && pgError.constraint === 'uq_bookmarked_quizzes_pair') {
         this.logger.warn({
           event: 'bookmark_duplicate',
           collectionId,
@@ -121,15 +190,7 @@ export class BookmarkService {
   }
 
   async removeBookmark(collectionId: string, quizId: string, user: JwtPayload) {
-    const collection = await this.bookmarkRepository.getCollectionById(collectionId);
-
-    if (!collection) {
-      throw new CollectionNotFoundError(COLLECTION_NOT_FOUND_MESSAGE);
-    }
-
-    if (collection.userId !== user.sub && user.role !== 'admin') {
-      throw new CollectionForbiddenError(COLLECTION_FORBIDDEN_MESSAGE);
-    }
+    await this.getOwnedCollectionOrThrow(collectionId, user);
 
     const existing = await this.bookmarkRepository.getBookmarkedQuiz(collectionId, quizId);
     if (!existing) {
@@ -147,15 +208,7 @@ export class BookmarkService {
   }
 
   async listBookmarksInCollection(collectionId: string, user: JwtPayload) {
-    const collection = await this.bookmarkRepository.getCollectionById(collectionId);
-
-    if (!collection) {
-      throw new CollectionNotFoundError(COLLECTION_NOT_FOUND_MESSAGE);
-    }
-
-    if (collection.userId !== user.sub && user.role !== 'admin') {
-      throw new CollectionForbiddenError(COLLECTION_FORBIDDEN_MESSAGE);
-    }
+    await this.getOwnedCollectionOrThrow(collectionId, user);
 
     return this.bookmarkRepository.listBookmarksInCollection(collectionId);
   }
