@@ -10,6 +10,7 @@ import {
   TournamentLeaderboardResponseDto,
   RegisterTournamentResponseDto,
   StartTournamentAttemptResponseDto,
+  UnregisterTournamentResponseDto,
 } from '../dto/response';
 
 @Injectable()
@@ -90,5 +91,14 @@ export class TournamentApplicationService {
       participantId: result.participantId,
       message: 'Attempt started successfully. Use the attempt endpoint to continue.',
     };
+  }
+
+  async unregisterFromTournament(
+    tournamentId: string,
+    user: JwtPayload,
+  ): Promise<UnregisterTournamentResponseDto> {
+    await this.tournamentService.unregisterFromTournament(tournamentId, user);
+
+    return { message: 'Successfully withdrawn from the tournament' };
   }
 }
