@@ -85,7 +85,9 @@ export class PrivacyFilter {
     return {
       statistics: visibility.showStatistics ? sections.statistics : this.getEmptyStatistics(),
       ranking: visibility.showStatistics ? sections.ranking : this.getEmptyRanking(),
-      achievements: visibility.showAchievements ? sections.achievements : this.getEmptyAchievements(),
+      achievements: visibility.showAchievements
+        ? sections.achievements
+        : this.getEmptyAchievements(),
       activity: visibility.showActivity
         ? this.filterActivity(sections.activity, context)
         : this.getEmptyActivity(),
@@ -95,19 +97,15 @@ export class PrivacyFilter {
   /**
    * Filter activity timeline based on privacy settings.
    */
-  static filterActivity(
-    activity: ActivityView | null,
-    context: PrivacyContext,
-  ): ActivityView {
+  static filterActivity(activity: ActivityView | null, context: PrivacyContext): ActivityView {
     if (!activity) {
       return this.getEmptyActivity();
     }
 
     return {
       recentAttempts: activity.recentAttempts,
-      recentTournaments: context.isOwner || activity.recentTournaments
-        ? activity.recentTournaments
-        : [],
+      recentTournaments:
+        context.isOwner || activity.recentTournaments ? activity.recentTournaments : [],
       timeline: activity.timeline.filter((event) => {
         if (event.metadata?.visibility === 'private' && !context.isOwner) {
           return false;
@@ -139,10 +137,7 @@ export class PrivacyFilter {
   /**
    * Filter ranking data for privacy.
    */
-  static filterRanking(
-    ranking: RankingView | null,
-    showRankImprovement: boolean,
-  ): RankingView {
+  static filterRanking(ranking: RankingView | null, showRankImprovement: boolean): RankingView {
     if (!ranking) {
       return this.getEmptyRanking();
     }

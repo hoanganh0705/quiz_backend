@@ -5,7 +5,7 @@
  * Profile domain never owns ranking data; it only queries it.
  */
 
-import type { RankInfo, RankingView } from '../../types/profile.types';
+import { RankInfo, RankingView } from '../types';
 
 export const RANKING_QUERY_PORT = Symbol('RANKING_QUERY_PORT');
 

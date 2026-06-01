@@ -19,15 +19,16 @@ import {
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 
-export const badgeConditionType = pgEnum('badge_condition_type', [
-  'quizzes_completed',
-  'quizzes_passed',
-  'streak_days',
-  'xp_earned',
-  'tournaments_won',
-  'perfect_score',
-]);
 export const badgeType = pgEnum('badge_type', ['diamond', 'platinum', 'gold', 'silver', 'bronze']);
+export const badgeRuleType = pgEnum('badge_rule_type', [
+  'count',
+  'rank',
+  'rank_period',
+  'streak',
+  'tournament_win',
+  'perfect_score',
+  'xp_total',
+]);
 export const quizDifficulty = pgEnum('quiz_difficulty', ['easy', 'medium', 'hard']);
 export const quizInstanceStatus = pgEnum('quiz_instance_status', [
   'open',
@@ -206,6 +207,7 @@ export const userBadges = pgTable(
     userId: uuid('user_id').notNull(),
     badgeId: uuid('badge_id').notNull(),
     earnedAt: timestamp('earned_at', { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+    progress: jsonb('progress').default({}).notNull(),
     metadata: jsonb().default({}).notNull(),
   },
   (table) => [
@@ -214,6 +216,10 @@ export const userBadges = pgTable(
       table.badgeId.asc().nullsLast().op('uuid_ops'),
     ),
     index('idx_user_badges_user_id').using('btree', table.userId.asc().nullsLast().op('uuid_ops')),
+    index('idx_user_badges_earned_at').using(
+      'btree',
+      table.earnedAt.desc().nullsLast().op('timestamptz_ops'),
+    ),
     foreignKey({
       columns: [table.badgeId],
       foreignColumns: [badges.badgeId],
@@ -225,6 +231,7 @@ export const userBadges = pgTable(
       name: 'user_badges_user_id_fkey',
     }).onDelete('cascade'),
     unique('uq_user_badges_user_badge').on(table.badgeId, table.userId),
+    check('user_badges_progress_object', sql`jsonb_typeof(progress) = 'object'::text`),
     check('user_badges_metadata_object', sql`jsonb_typeof(metadata) = 'object'::text`),
   ],
 );
@@ -336,8 +343,7 @@ export const badges = pgTable(
     type: badgeType().notNull(),
     name: text().notNull(),
     description: text(),
-    conditionType: badgeConditionType('condition_type').notNull(),
-    conditionValue: integer('condition_value').notNull(),
+    iconUrl: text('icon_url'),
     isActive: boolean('is_active').default(true).notNull(),
     createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' })
       .defaultNow()
@@ -347,16 +353,66 @@ export const badges = pgTable(
       .notNull(),
   },
   (table) => [
-    index('idx_badges_condition_type').using(
-      'btree',
-      table.conditionType.asc().nullsLast().op('enum_ops'),
-    ),
     unique('uq_badges_slug').on(table.slug),
-    check('badges_condition_value_positive', sql`condition_value > 0`),
+    index('idx_badges_type').using('btree', table.type.asc().nullsLast().op('enum_ops')),
+    index('idx_badges_active').using('btree', table.isActive.asc().nullsLast().op('bool_ops')),
     check('badges_name_nonblank', sql`length(btrim(name)) > 0`),
     check(
       'badges_slug_format',
       sql`(slug = lower(slug)) AND (slug ~ '^[a-z0-9]+(?:-[a-z0-9]+)*$'::text)`,
+    ),
+  ],
+);
+
+/**
+ * Badge Rules Table
+ *
+ * Flexible rule configuration for badge conditions.
+ * Each badge can have multiple rules that must all be satisfied.
+ *
+ * Rule config examples:
+ * - { "metric": "quizzes_completed", "threshold": 10, "operator": ">=" }
+ * - { "metric": "period_rank", "period": "weekly", "threshold": 10, "operator": "<=" }
+ * - { "metric": "streak_days", "threshold": 30, "operator": ">=" }
+ * - { "metric": "tournaments_won", "threshold": 3, "operator": ">=" }
+ * - { "metric": "perfect_scores", "threshold": 10, "operator": ">=" }
+ * - { "metric": "xp_total", "threshold": 5000, "operator": ">=" }
+ */
+export const badgeRules = pgTable(
+  'badge_rules',
+  {
+    ruleId: uuid('rule_id').defaultRandom().primaryKey().notNull(),
+    badgeId: uuid('badge_id').notNull(),
+    ruleType: badgeRuleType('rule_type').notNull(),
+    priority: integer('priority').default(0).notNull(),
+    config: jsonb().notNull().default({}).notNull(),
+    isActive: boolean('is_active').default(true).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    index('idx_badge_rules_badge_id').using(
+      'btree',
+      table.badgeId.asc().nullsLast().op('uuid_ops'),
+    ),
+    index('idx_badge_rules_rule_type').using(
+      'btree',
+      table.ruleType.asc().nullsLast().op('enum_ops'),
+    ),
+    index('idx_badge_rules_active_priority').using(
+      'btree',
+      table.isActive.asc().nullsLast().op('bool_ops'),
+      table.priority.desc().nullsLast().op('int4_ops'),
+    ),
+    foreignKey({
+      columns: [table.badgeId],
+      foreignColumns: [badges.badgeId],
+      name: 'badge_rules_badge_id_fkey',
+    }).onDelete('cascade'),
+    check(
+      'badge_rules_config_not_null',
+      sql`config IS NOT NULL AND jsonb_typeof(config) = 'object'`,
     ),
   ],
 );
@@ -1282,8 +1338,6 @@ export const userActivityEvents = pgTable(
     eventId: uuid('event_id').defaultRandom().primaryKey().notNull(),
     userId: uuid('user_id').notNull(),
     eventType: activityEventType().notNull(),
-    title: text().notNull(),
-    description: text(),
     metadata: jsonb('metadata').default({}).notNull(),
     visibility: text('visibility').default('public').notNull(),
     occurredAt: timestamp('occurred_at', { withTimezone: true, mode: 'string' })
@@ -1318,7 +1372,7 @@ export const userActivityEvents = pgTable(
       'user_activity_events_visibility_check',
       sql`visibility = ANY (ARRAY['public'::text, 'private'::text])`,
     ),
-    check('user_activity_events_title_nonblank', sql`length(btrim(title)) > 0`),
     check('user_activity_events_metadata_object', sql`jsonb_typeof(metadata) = 'object'::text`),
+    check('user_activity_events_metadata_not_empty', sql`metadata <> '{}'::jsonb`),
   ],
 );

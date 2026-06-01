@@ -8,13 +8,12 @@
 import { Inject, Injectable, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { ActivityTimelineService } from '../services/activity-timeline.service';
-import { ActivityEventRepositoryPort, ACTIVITY_EVENT_REPOSITORY_PORT } from '../ports/profile-repository.port';
-import {
+import type {
+  ExternalDomainEvent,
   ExternalToProfileEventBusPort,
-  EXTERNAL_TO_PROFILE_EVENT_BUS,
-  type ExternalDomainEvent,
 } from '../ports/profile-event-bus.port';
-import type { ActivityEventType } from '../types/profile.types';
+import { EXTERNAL_TO_PROFILE_EVENT_BUS } from '../ports/profile-event-bus.port';
+import { ActivityEventType } from '../types/profile.types';
 
 /**
  * Maps external event types to profile activity event types.
@@ -32,75 +31,86 @@ const EXTERNAL_TO_ACTIVITY_TYPE_MAP: Record<string, ActivityEventType | null> = 
 };
 
 /**
- * Maps external events to human-readable titles.
+ * Maps external events to structured metadata (facts only, no presentation).
  */
-const EVENT_TITLES: Record<string, (event: ExternalDomainEvent) => string> = {
-  'attempt.completed': (e) => `Completed "${(e as Extract<ExternalDomainEvent, { eventType: 'attempt.completed' }>).quizTitle}"`,
+const EVENT_METADATA_TRANSFORMERS: Record<
+  string,
+  (event: ExternalDomainEvent) => Record<string, unknown>
+> = {
+  'attempt.completed': (e) => {
+    const ev = e as Extract<ExternalDomainEvent, { eventType: 'attempt.completed' }>;
+    return {
+      attemptId: ev.attemptId,
+      quizId: ev.quizId,
+      scorePercent: ev.scorePercent,
+      xpEarned: ev.xpEarned,
+      correctCount: ev.correctCount,
+      totalQuestions: ev.totalQuestions,
+    };
+  },
   'achievement.awarded': (e) => {
     const ev = e as Extract<ExternalDomainEvent, { eventType: 'achievement.awarded' }>;
-    return `Earned ${ev.achievementType} achievement`;
+    return {
+      badgeType: ev.badgeType,
+      achievementType: ev.achievementType,
+    };
   },
   'badge.earned': (e) => {
     const ev = e as Extract<ExternalDomainEvent, { eventType: 'badge.earned' }>;
-    return `Earned badge: ${ev.badgeName}`;
+    return {
+      badgeId: ev.badgeId,
+    };
   },
   'tournament.joined': (e) => {
     const ev = e as Extract<ExternalDomainEvent, { eventType: 'tournament.joined' }>;
-    return `Joined tournament "${ev.tournamentTitle}"`;
+    return {
+      tournamentId: ev.tournamentId,
+    };
   },
   'tournament.completed': (e) => {
     const ev = e as Extract<ExternalDomainEvent, { eventType: 'tournament.completed' }>;
-    return `Finished tournament "${ev.tournamentTitle}" at rank #${ev.rank}`;
+    return {
+      tournamentId: ev.tournamentId,
+      finalRank: ev.rank,
+      totalParticipants: ev.totalParticipants,
+    };
   },
   'tournament.won': (e) => {
     const ev = e as Extract<ExternalDomainEvent, { eventType: 'tournament.won' }>;
-    return `Won tournament "${ev.tournamentTitle}"${ev.prize ? ` (${ev.prize})` : ''}`;
+    return {
+      tournamentId: ev.tournamentId,
+      prize: ev.prize,
+    };
   },
   'rank.improved': (e) => {
     const ev = e as Extract<ExternalDomainEvent, { eventType: 'rank.improved' }>;
-    const periodLabel = ev.period === 'all_time' ? 'global' : ev.period;
-    return `Improved to rank #${ev.newRank} (${periodLabel})`;
+    return {
+      newRank: ev.newRank,
+      previousRank: ev.previousRank,
+      period: ev.period,
+    };
   },
   'rank.milestone': (e) => {
     const ev = e as Extract<ExternalDomainEvent, { eventType: 'rank.milestone' }>;
-    return `Reached ${ev.milestoneType.replace('top', 'Top ').replace('rank1', '#1')} on leaderboard!`;
+    return {
+      rank:
+        ev.milestoneType === 'rank1'
+          ? 1
+          : ev.milestoneType === 'top10'
+            ? 10
+            : ev.milestoneType === 'top100'
+              ? 100
+              : 1000,
+      period: ev.period,
+    };
   },
   'streak.milestone': (e) => {
     const ev = e as Extract<ExternalDomainEvent, { eventType: 'streak.milestone' }>;
-    return `Achieved ${ev.streakDays}-day activity streak!`;
-  },
-};
-
-/**
- * Maps external events to descriptions.
- */
-const EVENT_DESCRIPTIONS: Record<string, (event: ExternalDomainEvent) => string | undefined> = {
-  'attempt.completed': (e) => {
-    const ev = e as Extract<ExternalDomainEvent, { eventType: 'attempt.completed' }>;
-    return `Score: ${ev.scorePercent.toFixed(1)}% (${ev.correctCount}/${ev.totalQuestions} correct) • +${ev.xpEarned} XP`;
-  },
-  'achievement.awarded': () => undefined,
-  'badge.earned': () => undefined,
-  'tournament.joined': () => undefined,
-  'tournament.completed': (e) => {
-    const ev = e as Extract<ExternalDomainEvent, { eventType: 'tournament.completed' }>;
-    return `Ranked #${ev.rank} out of ${ev.totalParticipants} participants`;
-  },
-  'tournament.won': () => undefined,
-  'rank.improved': (e) => {
-    const ev = e as Extract<ExternalDomainEvent, { eventType: 'rank.improved' }>;
-    if (ev.previousRank === null) {
-      return `New rank achieved!`;
-    }
-    return `Moved up ${ev.previousRank - ev.newRank} positions`;
-  },
-  'rank.milestone': (e) => {
-    const ev = e as Extract<ExternalDomainEvent, { eventType: 'rank.milestone' }>;
-    return `Top ${(100 - ev.percentile).toFixed(1)}% of all players`;
-  },
-  'streak.milestone': (e) => {
-    const ev = e as Extract<ExternalDomainEvent, { eventType: 'streak.milestone' }>;
-    return `Previous streak: ${ev.previousStreak} days`;
+    return {
+      streakDays: ev.streakDays,
+      streakType: 'current',
+      previousStreak: ev.previousStreak,
+    };
   },
 };
 
@@ -166,11 +176,9 @@ export class ProfileEventHandler implements OnModuleInit, OnModuleDestroy {
       await this.timelineService.recordEvent({
         userId: event.userId,
         eventType: activityType,
-        title: EVENT_TITLES[event.eventType]?.(event) ?? event.eventType,
-        description: EVENT_DESCRIPTIONS[event.eventType]?.(event),
-        metadata: event as Record<string, unknown>,
+        metadata: EVENT_METADATA_TRANSFORMERS[event.eventType]?.(event),
         visibility: 'public',
-        occurredAt: event.timestamp,
+        occurredAt: 'timestamp' in event ? event.timestamp : event.awardedAt,
       });
 
       this.logger.debug({
