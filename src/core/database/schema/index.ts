@@ -28,6 +28,18 @@ export const badgeRuleType = pgEnum('badge_rule_type', [
   'tournament_win',
   'perfect_score',
   'xp_total',
+  'seasonal',
+  'social',
+]);
+export const badgeCategory = pgEnum('badge_category', [
+  'quiz',
+  'xp',
+  'ranking',
+  'tournament',
+  'consistency',
+  'event',
+  'special',
+  'seasonal',
 ]);
 export const quizDifficulty = pgEnum('quiz_difficulty', ['easy', 'medium', 'hard']);
 export const quizInstanceStatus = pgEnum('quiz_instance_status', [
@@ -207,8 +219,12 @@ export const userBadges = pgTable(
     userId: uuid('user_id').notNull(),
     badgeId: uuid('badge_id').notNull(),
     earnedAt: timestamp('earned_at', { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+    badgeVersion: text('badge_version').default('1.0.0').notNull(),
     progress: jsonb('progress').default({}).notNull(),
     metadata: jsonb().default({}).notNull(),
+    expiresAt: timestamp('expires_at', { withTimezone: true, mode: 'string' }),
+    revokedAt: timestamp('revoked_at', { withTimezone: true, mode: 'string' }),
+    revocationReason: text('revocation_reason'),
   },
   (table) => [
     index('idx_user_badges_badge_id').using(
@@ -219,6 +235,10 @@ export const userBadges = pgTable(
     index('idx_user_badges_earned_at').using(
       'btree',
       table.earnedAt.desc().nullsLast().op('timestamptz_ops'),
+    ),
+    index('idx_user_badges_active').using(
+      'btree',
+      table.revokedAt.asc().nullsLast().op('timestamptz_ops'),
     ),
     foreignKey({
       columns: [table.badgeId],
@@ -341,10 +361,16 @@ export const badges = pgTable(
     badgeId: uuid('badge_id').defaultRandom().primaryKey().notNull(),
     slug: text().notNull(),
     type: badgeType().notNull(),
+    category: badgeCategory().notNull(),
     name: text().notNull(),
     description: text(),
     iconUrl: text('icon_url'),
     isActive: boolean('is_active').default(true).notNull(),
+    isHidden: boolean('is_hidden').default(false).notNull(),
+    version: text('version').default('1.0.0').notNull(),
+    validFrom: timestamp('valid_from', { withTimezone: true, mode: 'string' }),
+    validUntil: timestamp('valid_until', { withTimezone: true, mode: 'string' }),
+    evaluationMode: text('evaluation_mode').default('immediate').notNull(), // 'immediate' | 'deferred' | 'both'
     createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' })
       .defaultNow()
       .notNull(),
@@ -355,11 +381,20 @@ export const badges = pgTable(
   (table) => [
     unique('uq_badges_slug').on(table.slug),
     index('idx_badges_type').using('btree', table.type.asc().nullsLast().op('enum_ops')),
+    index('idx_badges_category').using('btree', table.category.asc().nullsLast().op('enum_ops')),
     index('idx_badges_active').using('btree', table.isActive.asc().nullsLast().op('bool_ops')),
+    index('idx_badges_evaluation_mode').using(
+      'btree',
+      table.evaluationMode.asc().nullsLast().op('text_ops'),
+    ),
     check('badges_name_nonblank', sql`length(btrim(name)) > 0`),
     check(
       'badges_slug_format',
       sql`(slug = lower(slug)) AND (slug ~ '^[a-z0-9]+(?:-[a-z0-9]+)*$'::text)`,
+    ),
+    check(
+      'badges_evaluation_mode_check',
+      sql`evaluation_mode = ANY (ARRAY['immediate'::text, 'deferred'::text, 'both'::text])`,
     ),
   ],
 );
