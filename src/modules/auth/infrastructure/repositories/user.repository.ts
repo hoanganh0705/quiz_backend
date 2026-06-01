@@ -2,7 +2,7 @@ import { Inject, Injectable, InternalServerErrorException } from '@nestjs/common
 import { and, eq, gt, isNull, or, sql } from 'drizzle-orm';
 import { DRIZZLE } from '@/core/database/drizzle.constants';
 import type { DrizzleDB } from '@/core/database/database.module';
-import { users } from '@/core/database/schema';
+import { users, userProfiles } from '@/core/database/schema';
 import type { UserRepositoryPort } from '@/modules/auth/domain/ports/user-repository.port';
 import type { UserMeRow } from '@/modules/user/domain/ports/user-repository.port';
 import { ResourceConflictError } from '@/modules/auth/domain/errors';
@@ -12,21 +12,6 @@ const USER_IDENTITY_COLUMNS = {
   username: users.username,
   email: users.email,
   role: users.role,
-};
-
-const USER_ME_COLUMNS = {
-  userId: users.userId,
-  username: users.username,
-  email: users.email,
-  displayName: users.displayName,
-  avatarUrl: users.avatarUrl,
-  bio: users.bio,
-  xpTotal: users.xpTotal,
-  currentStreak: users.currentStreak,
-  longestStreak: users.longestStreak,
-  settings: users.settings,
-  createdAt: users.createdAt,
-  updatedAt: users.updatedAt,
 };
 
 type UserIdentityRow = {
@@ -224,8 +209,22 @@ export class UserRepository implements UserRepositoryPort {
 
   async findMeById(userId: string): Promise<UserMeRow | null> {
     const [user] = await this.db
-      .select(USER_ME_COLUMNS)
+      .select({
+        userId: users.userId,
+        username: users.username,
+        email: users.email,
+        xpTotal: users.xpTotal,
+        currentStreak: users.currentStreak,
+        longestStreak: users.longestStreak,
+        settings: users.settings,
+        createdAt: users.createdAt,
+        updatedAt: users.updatedAt,
+        displayName: userProfiles.displayName,
+        avatarUrl: userProfiles.avatarUrl,
+        bio: userProfiles.bio,
+      })
       .from(users)
+      .leftJoin(userProfiles, eq(users.userId, userProfiles.userId))
       .where(and(eq(users.userId, userId), isNull(users.deletedAt)))
       .limit(1)
       .catch(() => {
