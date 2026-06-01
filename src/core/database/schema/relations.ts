@@ -28,6 +28,9 @@ import {
   tournamentRoundParticipants,
   userRanking,
   rankHistory,
+  userProfiles,
+  userProfileSettings,
+  userActivityEvents,
 } from '.';
 
 export const userBadgesRelations = relations(userBadges, ({ one }) => ({
@@ -73,6 +76,9 @@ export const usersRelations = relations(users, ({ many, one }) => ({
   quizInstancePlayers: many(quizInstancePlayers),
   tournamentParticipants: many(tournamentParticipants),
   userSessions: many(userSessions),
+  userProfile: one(userProfiles),
+  userProfileSettings: one(userProfileSettings),
+  activityEvents: many(userActivityEvents),
 }));
 
 export const userSessionsRelations = relations(userSessions, ({ one }) => ({
@@ -333,3 +339,24 @@ export const tournamentRoundParticipantsRelations = relations(
     }),
   }),
 );
+
+export const userProfilesRelations = relations(userProfiles, ({ one }) => ({
+  user: one(users, {
+    fields: [userProfiles.userId],
+    references: [users.userId],
+  }),
+}));
+
+export const userProfileSettingsRelations = relations(userProfileSettings, ({ one }) => ({
+  user: one(users, {
+    fields: [userProfileSettings.userId],
+    references: [users.userId],
+  }),
+}));
+
+export const userActivityEventsRelations = relations(userActivityEvents, ({ one }) => ({
+  user: one(users, {
+    fields: [userActivityEvents.userId],
+    references: [users.userId],
+  }),
+}));

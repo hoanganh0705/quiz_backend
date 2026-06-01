@@ -9,6 +9,7 @@ import {
   quizVersions,
   quizzes,
   users,
+  userProfiles,
   quizAttempts,
 } from '@/core/database/schema';
 import type { QuizInstanceRepositoryPort } from '@/modules/instance/domain/ports';
@@ -106,7 +107,7 @@ export class QuizInstanceRepository implements QuizInstanceRepositoryPort {
         quizSlug: QUIZ_COLUMNS.slug,
         quizCreatorId: QUIZ_COLUMNS.creatorId,
         hostUsername: users.username,
-        hostDisplayName: users.displayName,
+        hostDisplayName: userProfiles.displayName,
       })
       .from(quizInstances)
       .innerJoin(
@@ -115,6 +116,7 @@ export class QuizInstanceRepository implements QuizInstanceRepositoryPort {
       )
       .innerJoin(quizzes, eq(QUIZ_VERSION_COLUMNS.quizId, QUIZ_COLUMNS.quizId))
       .innerJoin(users, eq(QUIZ_INSTANCE_COLUMNS.hostUserId, users.userId))
+      .leftJoin(userProfiles, eq(users.userId, userProfiles.userId))
       .where(eq(quizInstances.instanceId, instanceId))
       .limit(1);
 
@@ -204,11 +206,12 @@ export class QuizInstanceRepository implements QuizInstanceRepositoryPort {
         joinedAt: quizInstancePlayers.joinedAt,
         leftAt: quizInstancePlayers.leftAt,
         username: users.username,
-        displayName: users.displayName,
-        avatarUrl: users.avatarUrl,
+        displayName: userProfiles.displayName,
+        avatarUrl: userProfiles.avatarUrl,
       })
       .from(quizInstancePlayers)
       .innerJoin(users, eq(quizInstancePlayers.userId, users.userId))
+      .leftJoin(userProfiles, eq(users.userId, userProfiles.userId))
       .where(
         and(eq(quizInstancePlayers.instanceId, instanceId), eq(quizInstancePlayers.userId, userId)),
       )
@@ -318,14 +321,15 @@ export class QuizInstanceRepository implements QuizInstanceRepositoryPort {
         joinedAt: quizInstancePlayers.joinedAt,
         leftAt: quizInstancePlayers.leftAt,
         username: users.username,
-        displayName: users.displayName,
-        avatarUrl: users.avatarUrl,
+        displayName: userProfiles.displayName,
+        avatarUrl: userProfiles.avatarUrl,
         scorePercent: quizAttempts.scorePercent,
         correctCount: quizAttempts.correctCount,
         timeTakenMs: quizAttempts.timeTakenMs,
       })
       .from(quizInstancePlayers)
       .innerJoin(users, eq(quizInstancePlayers.userId, users.userId))
+      .leftJoin(userProfiles, eq(users.userId, userProfiles.userId))
       .leftJoin(quizAttempts, eq(quizInstancePlayers.attemptId, quizAttempts.attemptId))
       .where(eq(quizInstancePlayers.instanceId, instanceId))
       .orderBy(desc(quizAttempts.scorePercent), quizAttempts.timeTakenMs);
