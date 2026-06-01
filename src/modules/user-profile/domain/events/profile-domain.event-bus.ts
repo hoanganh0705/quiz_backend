@@ -12,10 +12,7 @@ import type {
 } from '../events/profile.events';
 import { ProfileDomainEventBusPort } from '../ports/profile-event-bus.port';
 
-type ProfileEvent =
-  | ProfileInitializedEvent
-  | ProfileUpdatedEvent
-  | ProfileVisibilityChangedEvent;
+type ProfileEvent = ProfileInitializedEvent | ProfileUpdatedEvent | ProfileVisibilityChangedEvent;
 
 /**
  * In-memory event bus for profile domain events.

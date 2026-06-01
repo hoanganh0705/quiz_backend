@@ -6,8 +6,9 @@
 
 import { Inject, Injectable } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
+import type { ActivityEventRepositoryPort } from '../ports/profile-repository.port';
 import type { ActivityEventRow } from '../types/profile.types';
-import { ActivityEventRepositoryPort, ACTIVITY_EVENT_REPOSITORY_PORT } from '../ports/profile-repository.port';
+import { ACTIVITY_EVENT_REPOSITORY_PORT } from '../ports/profile-repository.port';
 
 @Injectable()
 export class ActivityTimelineService {
@@ -21,14 +22,19 @@ export class ActivityTimelineService {
   /**
    * Get enriched activity timeline for a user.
    */
-  async getTimeline(userId: string, params?: {
-    limit?: number;
-    offset?: number;
-    includePrivate?: boolean;
-    eventTypes?: string[];
-  }): Promise<ActivityEventRow[]> {
+  async getTimeline(
+    userId: string,
+    params?: {
+      limit?: number;
+      offset?: number;
+      includePrivate?: boolean;
+      eventTypes?: string[];
+    },
+  ): Promise<ActivityEventRow[]> {
     const events = params?.eventTypes?.length
-      ? await this.activityRepository.getEventsByType(userId, params.eventTypes as never, { limit: params.limit })
+      ? await this.activityRepository.getEventsByType(userId, params.eventTypes as never, {
+          limit: params.limit,
+        })
       : await this.activityRepository.getTimeline(userId, {
           limit: params?.limit,
           offset: params?.offset,
@@ -44,8 +50,6 @@ export class ActivityTimelineService {
   async recordEvent(params: {
     userId: string;
     eventType: string;
-    title: string;
-    description?: string;
     metadata?: Record<string, unknown>;
     visibility?: 'public' | 'private';
     occurredAt?: Date;
@@ -59,8 +63,6 @@ export class ActivityTimelineService {
     return this.activityRepository.recordEvent({
       userId: params.userId,
       eventType: params.eventType as never,
-      title: params.title,
-      description: params.description,
       metadata: params.metadata,
       visibility: params.visibility,
       occurredAt: params.occurredAt,

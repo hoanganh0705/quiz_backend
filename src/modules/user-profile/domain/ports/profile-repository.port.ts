@@ -4,7 +4,12 @@
  * Interface for profile data access within the Profile domain.
  */
 
-import type { ProfileRow, ProfileSettingsRow, ActivityEventRow, ActivityEventType } from '../types/profile.types';
+import type {
+  ProfileRow,
+  ProfileSettingsRow,
+  ActivityEventRow,
+  ActivityEventType,
+} from '../types/profile.types';
 
 export const PROFILE_REPOSITORY_PORT = Symbol('PROFILE_REPOSITORY_PORT');
 
@@ -68,7 +73,12 @@ export interface ProfileSettingsRepositoryPort {
    */
   updateVisibilityFlag(
     userId: string,
-    flag: 'showStatistics' | 'showAchievements' | 'showActivity' | 'showRankImprovement' | 'showTournamentActivity',
+    flag:
+      | 'showStatistics'
+      | 'showAchievements'
+      | 'showActivity'
+      | 'showRankImprovement'
+      | 'showTournamentActivity',
     value: boolean,
   ): Promise<ProfileSettingsRow>;
 }
@@ -82,8 +92,6 @@ export interface ActivityEventRepositoryPort {
   recordEvent(params: {
     userId: string;
     eventType: ActivityEventType;
-    title: string;
-    description?: string;
     metadata?: Record<string, unknown>;
     visibility?: 'public' | 'private';
     occurredAt?: Date;
@@ -92,18 +100,25 @@ export interface ActivityEventRepositoryPort {
   /**
    * Get activity timeline for a user.
    */
-  getTimeline(userId: string, params?: {
-    limit?: number;
-    offset?: number;
-    includePrivate?: boolean;
-  }): Promise<ActivityEventRow[]>;
+  getTimeline(
+    userId: string,
+    params?: {
+      limit?: number;
+      offset?: number;
+      includePrivate?: boolean;
+    },
+  ): Promise<ActivityEventRow[]>;
 
   /**
    * Get events of specific types.
    */
-  getEventsByType(userId: string, eventTypes: ActivityEventType[], params?: {
-    limit?: number;
-  }): Promise<ActivityEventRow[]>;
+  getEventsByType(
+    userId: string,
+    eventTypes: ActivityEventType[],
+    params?: {
+      limit?: number;
+    },
+  ): Promise<ActivityEventRow[]>;
 
   /**
    * Delete old events (for cleanup).

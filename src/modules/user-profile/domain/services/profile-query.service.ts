@@ -7,6 +7,15 @@
 
 import { Inject, Injectable } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
+import type { AchievementQueryPort } from '../ports/achievement-query.port';
+import type { AttemptQueryPort } from '../ports/attempt-query.port';
+import type {
+  ActivityEventRepositoryPort,
+  ProfileRepositoryPort,
+  ProfileSettingsRepositoryPort,
+} from '../ports/profile-repository.port';
+import type { RankingQueryPort } from '../ports/ranking-query.port';
+import type { TournamentQueryPort } from '../ports/tournament-query.port';
 import type {
   ProfileReadModel,
   StatisticsView,
@@ -15,14 +24,18 @@ import type {
   ActivityView,
   FullProfileReadModel,
 } from '../types/profile.types';
-import { RankingQueryPort, RANKING_QUERY_PORT } from '../ports/ranking-query.port';
-import { AchievementQueryPort, ACHIEVEMENT_QUERY_PORT } from '../ports/achievement-query.port';
-import { AttemptQueryPort, ATTEMPT_QUERY_PORT } from '../ports/attempt-query.port';
-import { TournamentQueryPort, TOURNAMENT_QUERY_PORT } from '../ports/tournament-query.port';
-import { ProfileRepositoryPort, PROFILE_REPOSITORY_PORT } from '../ports/profile-repository.port';
-import { ProfileSettingsRepositoryPort, PROFILE_SETTINGS_REPOSITORY_PORT } from '../ports/profile-repository.port';
-import { ActivityEventRepositoryPort, ACTIVITY_EVENT_REPOSITORY_PORT } from '../ports/profile-repository.port';
-import { UserQueryPort, USER_QUERY_PORT } from '../ports/user-query.port';
+import { RANKING_QUERY_PORT } from '../ports/ranking-query.port';
+import { ACHIEVEMENT_QUERY_PORT } from '../ports/achievement-query.port';
+import { ATTEMPT_QUERY_PORT } from '../ports/attempt-query.port';
+import { TOURNAMENT_QUERY_PORT } from '../ports/tournament-query.port';
+import {
+  PROFILE_REPOSITORY_PORT,
+  PROFILE_SETTINGS_REPOSITORY_PORT,
+  ACTIVITY_EVENT_REPOSITORY_PORT,
+} from '../ports/profile-repository.port';
+import type { UserQueryPort } from '../ports/user-query.port';
+import { USER_QUERY_PORT } from '../ports/user-query.port';
+import { ActivityMessageService } from './activity-message.service';
 
 @Injectable()
 export class ProfileQueryService {
@@ -43,6 +56,7 @@ export class ProfileQueryService {
     private readonly tournamentQuery: TournamentQueryPort,
     @Inject(ACTIVITY_EVENT_REPOSITORY_PORT)
     private readonly activityRepository: ActivityEventRepositoryPort,
+    private readonly activityMessageService: ActivityMessageService,
     @InjectPinoLogger(ProfileQueryService.name)
     private readonly logger: PinoLogger,
   ) {}
@@ -50,10 +64,7 @@ export class ProfileQueryService {
   /**
    * Get the full profile read model for a user.
    */
-  async getFullProfile(
-    userId: string,
-    requesterId?: string,
-  ): Promise<FullProfileReadModel | null> {
+  async getFullProfile(userId: string, requesterId?: string): Promise<FullProfileReadModel | null> {
     const profile = await this.profileRepository.getProfile(userId);
     const userBasic = await this.userQuery.getBasicInfo(userId);
 
@@ -71,15 +82,10 @@ export class ProfileQueryService {
       return null;
     }
 
-    // Compose all parts in parallel
-    const [
-      identity,
-      statistics,
-      ranking,
-      achievements,
-      activity,
-    ] = await Promise.all([
-      this.buildIdentity(profile, userBasic),
+    const identity = this.buildIdentity(profile, userBasic);
+
+    // Compose the async sections in parallel
+    const [statistics, ranking, achievements, activity] = await Promise.all([
       this.buildStatistics(userId, settings),
       this.buildRanking(userId, settings),
       this.buildAchievements(userId, profile.pinnedBadgeIds, settings),
@@ -109,10 +115,10 @@ export class ProfileQueryService {
     return this.buildIdentity(profile, userBasic);
   }
 
-  private async buildIdentity(
+  private buildIdentity(
     profile: Awaited<ReturnType<ProfileRepositoryPort['getProfile']>>,
     userBasic: Awaited<ReturnType<UserQueryPort['getBasicInfo']>>,
-  ): Promise<ProfileReadModel> {
+  ): ProfileReadModel {
     return {
       userId: userBasic!.userId,
       username: userBasic!.username,
@@ -208,7 +214,7 @@ export class ProfileQueryService {
 
     // Filter pinned badges
     const pinnedBadges = pinnedBadgeIds
-      .map(id => allBadges.find(b => b.badgeId === id))
+      .map((id) => allBadges.find((b) => b.badgeId === id))
       .filter((b): b is NonNullable<typeof b> => b !== undefined);
 
     return {
@@ -245,14 +251,20 @@ export class ProfileQueryService {
     return {
       recentAttempts,
       recentTournaments,
-      timeline: timeline.map(event => ({
-        eventId: event.eventId,
-        eventType: event.eventType,
-        title: event.title,
-        description: event.description,
-        metadata: event.metadata,
-        occurredAt: event.occurredAt,
-      })),
+      timeline: timeline.map((event) => {
+        const message = this.activityMessageService.generateMessage(
+          event.eventType,
+          event.metadata,
+        );
+        return {
+          eventId: event.eventId,
+          eventType: event.eventType,
+          title: message.title,
+          description: message.description,
+          metadata: event.metadata,
+          occurredAt: event.occurredAt,
+        };
+      }),
     };
   }
 }
