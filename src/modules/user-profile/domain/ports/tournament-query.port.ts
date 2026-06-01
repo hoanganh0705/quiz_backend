@@ -5,7 +5,7 @@
  * Profile domain never owns tournament data; it only queries and displays it.
  */
 
-import type { TournamentSummary, StatisticsView } from '../../types/profile.types';
+import { StatisticsView, TournamentSummary } from '../types';
 
 export const TOURNAMENT_QUERY_PORT = Symbol('TOURNAMENT_QUERY_PORT');
 
@@ -13,7 +13,9 @@ export interface TournamentQueryPort {
   /**
    * Get tournament statistics for a user.
    */
-  getUserTournamentStats(userId: string): Promise<Pick<StatisticsView, 'totalTournamentsJoined' | 'totalTournamentsWon'>>;
+  getUserTournamentStats(
+    userId: string,
+  ): Promise<Pick<StatisticsView, 'totalTournamentsJoined' | 'totalTournamentsWon'>>;
 
   /**
    * Get recent tournament participations for a user.

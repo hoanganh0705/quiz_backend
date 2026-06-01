@@ -5,9 +5,8 @@
  * Implements layered caching with event-driven invalidation.
  */
 
-import { Inject, Injectable } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
-import { InjectCacheManager, CacheManager } from '@nestjs/cache-manager';
 import type { StatisticsView, RankingView, ActivityView } from '../types/profile.types';
 
 export const PROFILE_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes for stats
@@ -23,131 +22,164 @@ export const CACHE_KEYS = {
 
 @Injectable()
 export class ProfileCacheService {
+  private readonly cache = new Map<string, { value: unknown; expiresAt: number }>();
+
   constructor(
-    @InjectCacheManager()
-    private readonly cacheManager: CacheManager,
     @InjectPinoLogger(ProfileCacheService.name)
     private readonly logger: PinoLogger,
   ) {}
 
+  private getValue<T>(key: string): T | undefined {
+    const entry = this.cache.get(key);
+
+    if (!entry) {
+      return undefined;
+    }
+
+    if (Date.now() >= entry.expiresAt) {
+      this.cache.delete(key);
+      return undefined;
+    }
+
+    return entry.value as T;
+  }
+
+  private setValue(key: string, value: unknown, ttlMs: number): void {
+    this.cache.set(key, {
+      value,
+      expiresAt: Date.now() + ttlMs,
+    });
+  }
+
+  private deleteValue(key: string): void {
+    this.cache.delete(key);
+  }
+
   /**
    * Get statistics from cache.
    */
-  async getStatistics(userId: string): Promise<StatisticsView | null | undefined> {
+  getStatistics(userId: string): Promise<StatisticsView | undefined> {
     const key = CACHE_KEYS.statistics(userId);
-    return this.cacheManager.get<StatisticsView>(key);
+    return Promise.resolve(this.getValue<StatisticsView>(key));
   }
 
   /**
    * Set statistics in cache.
    */
-  async setStatistics(userId: string, statistics: StatisticsView): Promise<void> {
+  setStatistics(userId: string, statistics: StatisticsView): Promise<void> {
     const key = CACHE_KEYS.statistics(userId);
-    await this.cacheManager.set(key, statistics, PROFILE_CACHE_TTL_MS);
+    this.setValue(key, statistics, PROFILE_CACHE_TTL_MS);
     this.logger.debug({
       event: 'cache_set',
       key,
       ttl: PROFILE_CACHE_TTL_MS,
     });
+    return Promise.resolve();
   }
 
   /**
    * Get ranking from cache.
    */
-  async getRanking(userId: string): Promise<RankingView | null | undefined> {
+  getRanking(userId: string): Promise<RankingView | undefined> {
     const key = CACHE_KEYS.ranking(userId);
-    return this.cacheManager.get<RankingView>(key);
+    return Promise.resolve(this.getValue<RankingView>(key));
   }
 
   /**
    * Set ranking in cache.
    */
-  async setRanking(userId: string, ranking: RankingView): Promise<void> {
+  setRanking(userId: string, ranking: RankingView): Promise<void> {
     const key = CACHE_KEYS.ranking(userId);
-    await this.cacheManager.set(key, ranking, RANKING_CACHE_TTL_MS);
+    this.setValue(key, ranking, RANKING_CACHE_TTL_MS);
     this.logger.debug({
       event: 'cache_set',
       key,
       ttl: RANKING_CACHE_TTL_MS,
     });
+    return Promise.resolve();
   }
 
   /**
    * Get activity from cache.
    */
-  async getActivity(userId: string): Promise<ActivityView | null | undefined> {
+  getActivity(userId: string): Promise<ActivityView | undefined> {
     const key = CACHE_KEYS.activity(userId);
-    return this.cacheManager.get<ActivityView>(key);
+    return Promise.resolve(this.getValue<ActivityView>(key));
   }
 
   /**
    * Set activity in cache.
    */
-  async setActivity(userId: string, activity: ActivityView): Promise<void> {
+  setActivity(userId: string, activity: ActivityView): Promise<void> {
     const key = CACHE_KEYS.activity(userId);
-    await this.cacheManager.set(key, activity, ACTIVITY_CACHE_TTL_MS);
+    this.setValue(key, activity, ACTIVITY_CACHE_TTL_MS);
     this.logger.debug({
       event: 'cache_set',
       key,
       ttl: ACTIVITY_CACHE_TTL_MS,
     });
+    return Promise.resolve();
   }
 
   /**
    * Get full profile from cache.
    */
-  async getFullProfile(userId: string): Promise<Record<string, unknown> | null | undefined> {
+  getFullProfile(userId: string): Promise<Record<string, unknown> | undefined> {
     const key = CACHE_KEYS.fullProfile(userId);
-    return this.cacheManager.get(key);
+    return Promise.resolve(this.getValue<Record<string, unknown>>(key));
   }
 
   /**
    * Set full profile in cache.
    */
-  async setFullProfile(userId: string, profile: Record<string, unknown>): Promise<void> {
+  setFullProfile(userId: string, profile: Record<string, unknown>): Promise<void> {
     const key = CACHE_KEYS.fullProfile(userId);
-    await this.cacheManager.set(key, profile, PROFILE_CACHE_TTL_MS);
+    this.setValue(key, profile, PROFILE_CACHE_TTL_MS);
     this.logger.debug({
       event: 'cache_set',
       key,
       ttl: PROFILE_CACHE_TTL_MS,
     });
+    return Promise.resolve();
   }
 
   /**
    * Invalidate statistics cache.
    */
-  async invalidateStatistics(userId: string): Promise<void> {
+  invalidateStatistics(userId: string): Promise<void> {
     const key = CACHE_KEYS.statistics(userId);
-    await this.cacheManager.del(key);
+    this.deleteValue(key);
     this.logger.debug({
       event: 'cache_invalidated',
       key,
     });
+    return Promise.resolve();
   }
 
   /**
    * Invalidate ranking cache.
    */
-  async invalidateRanking(userId: string): Promise<void> {
+  invalidateRanking(userId: string): Promise<void> {
     const key = CACHE_KEYS.ranking(userId);
-    await this.cacheManager.del(key);
+    this.deleteValue(key);
     this.logger.debug({
       event: 'cache_invalidated',
       key,
     });
+    return Promise.resolve();
   }
 
   /**
    * Invalidate activity cache.
    */
-  async invalidateActivity(userId: string): Promise<void> {
+  invalidateActivity(userId: string): Promise<void> {
     const key = CACHE_KEYS.activity(userId);
-    await this.cacheManager.del(key);
+    this.deleteValue(key);
     this.logger.debug({
       event: 'cache_invalidated',
       key,
     });
+    return Promise.resolve();
   }
 
   /**
@@ -158,7 +190,7 @@ export class ProfileCacheService {
       this.invalidateStatistics(userId),
       this.invalidateRanking(userId),
       this.invalidateActivity(userId),
-      this.cacheManager.del(CACHE_KEYS.fullProfile(userId)),
+      Promise.resolve(this.deleteValue(CACHE_KEYS.fullProfile(userId))),
     ]);
     this.logger.debug({
       event: 'cache_all_invalidated',
@@ -169,10 +201,7 @@ export class ProfileCacheService {
   /**
    * Handle cache invalidation based on external events.
    */
-  async handleExternalEvent(event: {
-    userId: string;
-    eventType: string;
-  }): Promise<void> {
+  async handleExternalEvent(event: { userId: string; eventType: string }): Promise<void> {
     switch (event.eventType) {
       case 'attempt.completed':
         await this.invalidateStatistics(event.userId);

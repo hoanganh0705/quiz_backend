@@ -55,8 +55,6 @@ export interface ActivityEventRow {
   eventId: string;
   userId: string;
   eventType: ActivityEventType;
-  title: string;
-  description: string | null;
   metadata: Record<string, unknown>;
   visibility: 'public' | 'private';
   occurredAt: string;

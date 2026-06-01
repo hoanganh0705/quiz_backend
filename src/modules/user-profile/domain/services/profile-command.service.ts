@@ -6,10 +6,12 @@
 
 import { Inject, Injectable } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
-import {
+import type {
   ProfileRepositoryPort,
-  PROFILE_REPOSITORY_PORT,
   ProfileSettingsRepositoryPort,
+} from '../ports/profile-repository.port';
+import {
+  PROFILE_REPOSITORY_PORT,
   PROFILE_SETTINGS_REPOSITORY_PORT,
 } from '../ports/profile-repository.port';
 import type { ProfileRow, ProfileSettingsRow } from '../types/profile.types';
@@ -28,7 +30,9 @@ export class ProfileCommandService {
   /**
    * Initialize a profile for a new user.
    */
-  async initializeProfile(userId: string): Promise<{ profile: ProfileRow; settings: ProfileSettingsRow }> {
+  async initializeProfile(
+    userId: string,
+  ): Promise<{ profile: ProfileRow; settings: ProfileSettingsRow }> {
     const [profile, settings] = await Promise.all([
       this.profileRepository.createProfile(userId),
       this.settingsRepository.createSettings(userId),
@@ -90,7 +94,12 @@ export class ProfileCommandService {
    */
   async updateVisibilityFlag(
     userId: string,
-    flag: 'showStatistics' | 'showAchievements' | 'showActivity' | 'showRankImprovement' | 'showTournamentActivity',
+    flag:
+      | 'showStatistics'
+      | 'showAchievements'
+      | 'showActivity'
+      | 'showRankImprovement'
+      | 'showTournamentActivity',
     value: boolean,
   ): Promise<ProfileSettingsRow> {
     return this.settingsRepository.updateVisibilityFlag(userId, flag, value);
