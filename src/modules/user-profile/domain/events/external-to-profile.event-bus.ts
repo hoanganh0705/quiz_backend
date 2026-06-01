@@ -6,7 +6,10 @@
  */
 
 import { Injectable } from '@nestjs/common';
-import type { ExternalToProfileEventBusPort, ExternalDomainEvent } from '../ports/profile-event-bus.port';
+import type {
+  ExternalToProfileEventBusPort,
+  ExternalDomainEvent,
+} from '../ports/profile-event-bus.port';
 
 type EventHandler = (event: ExternalDomainEvent) => void | Promise<void>;
 

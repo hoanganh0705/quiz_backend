@@ -16,6 +16,7 @@ import { Module } from '@nestjs/common';
 import { ProfileQueryService } from './domain/services/profile-query.service';
 import { ProfileCommandService } from './domain/services/profile-command.service';
 import { ActivityTimelineService } from './domain/services/activity-timeline.service';
+import { ActivityMessageService } from './domain/services/activity-message.service';
 import { StatisticsAggregationService } from './domain/services/statistics-aggregation.service';
 import { ProfileCacheService } from './domain/services/profile-cache.service';
 import { ProfileDomainEventBus } from './domain/events/profile-domain.event-bus';
@@ -28,6 +29,7 @@ import { ProfileEventHandler } from './domain/events/profile-event-handler';
     ProfileQueryService,
     ProfileCommandService,
     ActivityTimelineService,
+    ActivityMessageService,
     StatisticsAggregationService,
     ProfileCacheService,
     // Event infrastructure
@@ -39,6 +41,7 @@ import { ProfileEventHandler } from './domain/events/profile-event-handler';
     ProfileQueryService,
     ProfileCommandService,
     ActivityTimelineService,
+    ActivityMessageService,
     StatisticsAggregationService,
     ProfileCacheService,
     ProfileDomainEventBus,

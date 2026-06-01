@@ -84,15 +84,23 @@ export type RawBadgeSeed = {
   type: 'diamond' | 'platinum' | 'gold' | 'silver' | 'bronze';
   name: string;
   description: string;
-  conditionType:
-    | 'quizzes_completed'
-    | 'quizzes_passed'
-    | 'streak_days'
-    | 'xp_earned'
-    | 'tournaments_won'
-    | 'perfect_score';
-  conditionValue: number;
+  iconUrl?: string;
   isActive: boolean;
+  rules: BadgeRuleSeed[];
+};
+
+export type BadgeRuleSeed = {
+  ruleType:
+    | 'count'
+    | 'rank'
+    | 'rank_period'
+    | 'streak'
+    | 'tournament_win'
+    | 'perfect_score'
+    | 'xp_total';
+  priority?: number;
+  config: Record<string, unknown>;
+  isActive?: boolean;
 };
 
 export type QuizSeed = {

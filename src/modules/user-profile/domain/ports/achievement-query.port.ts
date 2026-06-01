@@ -5,7 +5,7 @@
  * Profile domain never owns badge data; it only queries and displays it.
  */
 
-import type { BadgeView } from '../../types/profile.types';
+import { BadgeView } from '../types';
 
 export const ACHIEVEMENT_QUERY_PORT = Symbol('ACHIEVEMENT_QUERY_PORT');
 

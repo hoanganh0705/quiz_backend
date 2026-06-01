@@ -15,33 +15,24 @@ export class ProfileDomainError extends Error {
 
 export class ProfileNotFoundError extends ProfileDomainError {
   constructor(userId: string) {
-    super(
-      `Profile not found for user: ${userId}`,
-      'PROFILE_NOT_FOUND',
-      { userId },
-    );
+    super(`Profile not found for user: ${userId}`, 'PROFILE_NOT_FOUND', { userId });
     this.name = 'ProfileNotFoundError';
   }
 }
 
 export class ProfileAccessDeniedError extends ProfileDomainError {
   constructor(userId: string) {
-    super(
-      `Access denied to profile: ${userId}`,
-      'PROFILE_ACCESS_DENIED',
-      { userId },
-    );
+    super(`Access denied to profile: ${userId}`, 'PROFILE_ACCESS_DENIED', { userId });
     this.name = 'ProfileAccessDeniedError';
   }
 }
 
 export class ProfileUpdateError extends ProfileDomainError {
   constructor(userId: string, reason: string) {
-    super(
-      `Failed to update profile for user ${userId}: ${reason}`,
-      'PROFILE_UPDATE_ERROR',
-      { userId, reason },
-    );
+    super(`Failed to update profile for user ${userId}: ${reason}`, 'PROFILE_UPDATE_ERROR', {
+      userId,
+      reason,
+    });
     this.name = 'ProfileUpdateError';
   }
 }

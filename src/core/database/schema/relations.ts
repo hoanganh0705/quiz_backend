@@ -2,6 +2,7 @@
 import { relations } from 'drizzle-orm/relations';
 import {
   badges,
+  badgeRules,
   userBadges,
   users,
   userSessions,
@@ -33,17 +34,6 @@ import {
   userActivityEvents,
 } from '.';
 
-export const userBadgesRelations = relations(userBadges, ({ one }) => ({
-  badge: one(badges, {
-    fields: [userBadges.badgeId],
-    references: [badges.badgeId],
-  }),
-  user: one(users, {
-    fields: [userBadges.userId],
-    references: [users.userId],
-  }),
-}));
-
 export const userRankingRelations = relations(userRanking, ({ one, many }) => ({
   user: one(users, {
     fields: [userRanking.userId],
@@ -61,6 +51,25 @@ export const rankHistoryRelations = relations(rankHistory, ({ one }) => ({
 
 export const badgesRelations = relations(badges, ({ many }) => ({
   userBadges: many(userBadges),
+  badgeRules: many(badgeRules),
+}));
+
+export const badgeRulesRelations = relations(badgeRules, ({ one }) => ({
+  badge: one(badges, {
+    fields: [badgeRules.badgeId],
+    references: [badges.badgeId],
+  }),
+}));
+
+export const userBadgesRelations = relations(userBadges, ({ one }) => ({
+  badge: one(badges, {
+    fields: [userBadges.badgeId],
+    references: [badges.badgeId],
+  }),
+  user: one(users, {
+    fields: [userBadges.userId],
+    references: [users.userId],
+  }),
 }));
 
 export const usersRelations = relations(users, ({ many, one }) => ({

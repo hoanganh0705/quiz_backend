@@ -7,16 +7,15 @@
 
 import { Inject, Injectable } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
-import type {
-  StatisticsView,
-  RankingView,
-  ActivityView,
-  RankInfo,
-} from '../types/profile.types';
-import { RankingQueryPort, RANKING_QUERY_PORT } from '../ports/ranking-query.port';
-import { AchievementQueryPort, ACHIEVEMENT_QUERY_PORT } from '../ports/achievement-query.port';
-import { AttemptQueryPort, ATTEMPT_QUERY_PORT } from '../ports/attempt-query.port';
-import { TournamentQueryPort, TOURNAMENT_QUERY_PORT } from '../ports/tournament-query.port';
+import type { AchievementQueryPort } from '../ports/achievement-query.port';
+import type { AttemptQueryPort } from '../ports/attempt-query.port';
+import type { RankingQueryPort } from '../ports/ranking-query.port';
+import type { TournamentQueryPort } from '../ports/tournament-query.port';
+import type { StatisticsView, RankingView, ActivityView } from '../types/profile.types';
+import { RANKING_QUERY_PORT } from '../ports/ranking-query.port';
+import { ACHIEVEMENT_QUERY_PORT } from '../ports/achievement-query.port';
+import { ATTEMPT_QUERY_PORT } from '../ports/attempt-query.port';
+import { TOURNAMENT_QUERY_PORT } from '../ports/tournament-query.port';
 import { ProfileCacheService } from './profile-cache.service';
 
 export interface StatisticsAggregationResult {
@@ -109,7 +108,7 @@ export class StatisticsAggregationService {
       userId,
     });
 
-    const activity = await this.computeActivity(userId);
+    const activity = this.computeActivity();
     await this.cacheService.setActivity(userId, activity);
 
     return activity;
@@ -119,12 +118,7 @@ export class StatisticsAggregationService {
    * Compute statistics from source domains.
    */
   private async computeStatistics(userId: string): Promise<StatisticsView> {
-    const [
-      totalXp,
-      attemptStats,
-      tournamentStats,
-      longestStreak,
-    ] = await Promise.all([
+    const [totalXp, attemptStats, tournamentStats, longestStreak] = await Promise.all([
       this.rankingQuery.getTotalXp(userId),
       this.attemptQuery.getUserStatistics(userId),
       this.tournamentQuery.getUserTournamentStats(userId),
@@ -149,11 +143,7 @@ export class StatisticsAggregationService {
    * Compute ranking view from source domains.
    */
   private async computeRanking(userId: string): Promise<RankingView> {
-    const [
-      globalRank,
-      weeklyRank,
-      monthlyRank,
-    ] = await Promise.all([
+    const [globalRank, weeklyRank, monthlyRank] = await Promise.all([
       this.rankingQuery.getRankInfo(userId, 'all_time'),
       this.rankingQuery.getRankInfo(userId, 'weekly'),
       this.rankingQuery.getRankInfo(userId, 'monthly'),
@@ -199,7 +189,7 @@ export class StatisticsAggregationService {
    * Compute activity view.
    * This is a placeholder - actual implementation would query the activity repository.
    */
-  private async computeActivity(userId: string): Promise<ActivityView> {
+  private computeActivity(): ActivityView {
     return {
       recentAttempts: [],
       recentTournaments: [],
@@ -228,9 +218,10 @@ export class StatisticsAggregationService {
       };
     }
 
-    const percentile = globalRank.totalParticipants > 0
-      ? (globalRank.rank! / globalRank.totalParticipants) * 100
-      : 0;
+    const percentile =
+      globalRank.totalParticipants > 0
+        ? (globalRank.rank! / globalRank.totalParticipants) * 100
+        : 0;
 
     return {
       percentile,
