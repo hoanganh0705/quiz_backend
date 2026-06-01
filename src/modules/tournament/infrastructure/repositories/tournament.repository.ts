@@ -9,6 +9,7 @@ import {
   tournamentRoundParticipants,
   categories,
   users,
+  userProfiles,
 } from '@/core/database/schema';
 import type {
   TournamentDifficulty,
@@ -450,11 +451,12 @@ export class TournamentRepository implements TournamentRepositoryPort {
         status: tournamentParticipants.status,
         updatedAt: tournamentParticipants.updatedAt,
         username: users.username,
-        displayName: users.displayName,
-        avatarUrl: users.avatarUrl,
+        displayName: userProfiles.displayName,
+        avatarUrl: userProfiles.avatarUrl,
       })
       .from(tournamentParticipants)
       .innerJoin(users, eq(tournamentParticipants.userId, users.userId))
+      .leftJoin(userProfiles, eq(users.userId, userProfiles.userId))
       .where(
         and(
           eq(tournamentParticipants.tournamentId, tournamentId),

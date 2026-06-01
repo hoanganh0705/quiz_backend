@@ -9,7 +9,7 @@ import {
   normalizeUserSeeds,
 } from '../infrastructure/utils';
 import type { NormalizedUserSeed, RawUserSeed, SeedDomain, SeedSummary } from '../infrastructure/types';
-import { users } from '@/core/database/schema';
+import { users, userProfiles } from '@/core/database/schema';
 
 const USER_SEEDS: readonly RawUserSeed[] = [
   {
@@ -124,9 +124,6 @@ export const createUsersDomain = (): SeedDomain => ({
           username: seed.username,
           passwordHash,
           role: seed.role,
-          displayName: seed.displayName,
-          bio: seed.bio,
-          avatarUrl: seed.avatarUrl,
           settings: seed.settings,
           isVerified: true,
           emailVerificationTokenHash: null,
@@ -146,9 +143,6 @@ export const createUsersDomain = (): SeedDomain => ({
         set: {
           username: sql`excluded.username`,
           role: sql`excluded.role`,
-          displayName: sql`excluded.display_name`,
-          bio: sql`excluded.bio`,
-          avatarUrl: sql`excluded.avatar_url`,
           isVerified: true,
           emailVerificationTokenHash: null,
           emailVerificationExpiresAt: null,
@@ -158,9 +152,6 @@ export const createUsersDomain = (): SeedDomain => ({
         setWhere: sql`
           ${users.username} IS DISTINCT FROM excluded.username
           OR ${users.role} IS DISTINCT FROM excluded.role
-          OR ${users.displayName} IS DISTINCT FROM excluded.display_name
-          OR ${users.bio} IS DISTINCT FROM excluded.bio
-          OR ${users.avatarUrl} IS DISTINCT FROM excluded.avatar_url
           OR ${users.isVerified} IS DISTINCT FROM true
           OR ${users.emailVerifiedAt} IS NULL
           OR ${users.emailVerificationTokenHash} IS NOT NULL
