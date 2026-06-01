@@ -3,7 +3,7 @@ import * as bcrypt from 'bcrypt';
 import { and, inArray, isNull, or, sql } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { Pool } from 'pg';
-import { categories, tags, users } from '../schema';
+import { categories, tags, users, userProfiles } from '../schema';
 import * as schema from '../schema';
 import * as relations from '../schema/relations';
 
@@ -341,9 +341,6 @@ const seedUsersDomain = (rawSeeds: readonly RawUserSeed[]): SeedDomain => ({
           username: seed.username,
           passwordHash,
           role: seed.role,
-          displayName: seed.displayName,
-          bio: seed.bio,
-          avatarUrl: seed.avatarUrl,
           settings: seed.settings,
           isVerified: true,
           emailVerificationTokenHash: null,
@@ -363,9 +360,6 @@ const seedUsersDomain = (rawSeeds: readonly RawUserSeed[]): SeedDomain => ({
         set: {
           username: sql`excluded.username`,
           role: sql`excluded.role`,
-          displayName: sql`excluded.display_name`,
-          bio: sql`excluded.bio`,
-          avatarUrl: sql`excluded.avatar_url`,
           isVerified: true,
           emailVerificationTokenHash: null,
           emailVerificationExpiresAt: null,
@@ -375,9 +369,6 @@ const seedUsersDomain = (rawSeeds: readonly RawUserSeed[]): SeedDomain => ({
         setWhere: sql`
           ${users.username} IS DISTINCT FROM excluded.username
           OR ${users.role} IS DISTINCT FROM excluded.role
-          OR ${users.displayName} IS DISTINCT FROM excluded.display_name
-          OR ${users.bio} IS DISTINCT FROM excluded.bio
-          OR ${users.avatarUrl} IS DISTINCT FROM excluded.avatar_url
           OR ${users.isVerified} IS DISTINCT FROM true
           OR ${users.emailVerifiedAt} IS NULL
           OR ${users.emailVerificationTokenHash} IS NOT NULL
@@ -394,6 +385,86 @@ const seedUsersDomain = (rawSeeds: readonly RawUserSeed[]): SeedDomain => ({
 
     return {
       domain: 'users',
+      inserted,
+      updated,
+      skipped,
+    };
+  },
+});
+
+const seedUserProfilesDomain = (rawSeeds: readonly RawUserSeed[]): SeedDomain => ({
+  domain: 'user_profiles',
+  run: async (tx: SeedTx, context: SeedContext): Promise<SeedSummary> => {
+    const seeds = normalizeUserSeeds(rawSeeds);
+    const emails = seeds.map((seed) => seed.email);
+
+    const existingUsers = await tx
+      .select({
+        userId: users.userId,
+        email: users.email,
+      })
+      .from(users)
+      .where(
+        and(
+          isNull(users.deletedAt),
+          inArray(users.email, emails),
+        ),
+      );
+
+    const existingByEmail = new Map(existingUsers.map((row) => [normalizeEmail(row.email), row]));
+
+    const upsertValues: Array<{
+      userId: string;
+      displayName: string;
+      bio: string;
+      avatarUrl: string;
+      updatedAt: string;
+    }> = [];
+
+    for (const seed of seeds) {
+      const user = existingByEmail.get(seed.email);
+      if (user) {
+        upsertValues.push({
+          userId: user.userId,
+          displayName: seed.displayName,
+          bio: seed.bio,
+          avatarUrl: seed.avatarUrl,
+          updatedAt: context.nowIso,
+        });
+      }
+    }
+
+    if (upsertValues.length === 0) {
+      return { domain: 'user_profiles', inserted: 0, updated: 0, skipped: seeds.length };
+    }
+
+    const touchedRows = await tx
+      .insert(userProfiles)
+      .values(upsertValues)
+      .onConflictDoUpdate({
+        target: userProfiles.userId,
+        set: {
+          displayName: sql`excluded.display_name`,
+          bio: sql`excluded.bio`,
+          avatarUrl: sql`excluded.avatar_url`,
+          updatedAt: context.nowIso,
+        },
+        setWhere: sql`
+          ${userProfiles.displayName} IS DISTINCT FROM excluded.display_name
+          OR ${userProfiles.bio} IS DISTINCT FROM excluded.bio
+          OR ${userProfiles.avatarUrl} IS DISTINCT FROM excluded.avatar_url
+        `,
+      })
+      .returning({
+        inserted: sql<boolean>`xmax = 0`,
+      });
+
+    const inserted = touchedRows.filter((row) => row.inserted).length;
+    const updated = touchedRows.length - inserted;
+    const skipped = seeds.length - upsertValues.length;
+
+    return {
+      domain: 'user_profiles',
       inserted,
       updated,
       skipped,
@@ -561,6 +632,7 @@ const seedTagsDomain = (rawSeeds: readonly RawTagSeed[]): SeedDomain => ({
 
 const SEED_DOMAINS: readonly SeedDomain[] = [
   seedUsersDomain(USER_SEEDS),
+  seedUserProfilesDomain(USER_SEEDS),
   seedCategoriesDomain(CATEGORY_SEEDS),
   seedTagsDomain(TAG_SEEDS),
   // Add future domains here:

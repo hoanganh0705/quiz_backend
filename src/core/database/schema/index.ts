@@ -52,6 +52,17 @@ export const tournamentStatus = pgEnum('tournament_status', [
 
 export const userRole = pgEnum('user_role', ['admin', 'moderator', 'user']);
 
+export const activityEventType = pgEnum('activity_event_type', [
+  'attempt_completed',
+  'achievement_awarded',
+  'tournament_joined',
+  'tournament_completed',
+  'tournament_won',
+  'rank_improved',
+  'rank_milestone',
+  'streak_milestone',
+]);
+
 export const tags = pgTable(
   'tags',
   {
@@ -91,10 +102,7 @@ export const users = pgTable(
     username: text().notNull(),
     email: text().notNull(),
     passwordHash: text('password_hash').notNull(),
-    displayName: text('display_name'),
     role: userRole().default('user').notNull(),
-    avatarUrl: text('avatar_url'),
-    bio: text(),
     isVerified: boolean('is_verified').default(false).notNull(),
     emailVerificationTokenHash: text('email_verification_token_hash'),
     emailVerificationExpiresAt: timestamp('email_verification_expires_at', {
@@ -1198,5 +1206,119 @@ export const tournamentRoundParticipants = pgTable(
     ),
     check('tournament_round_participants_round_score_nonneg', sql`round_score >= 0`),
     check('tournament_round_participants_round_time_ms_nonneg', sql`round_time_ms >= 0`),
+  ],
+);
+
+export const userProfiles = pgTable(
+  'user_profiles',
+  {
+    profileId: uuid('profile_id').defaultRandom().primaryKey().notNull(),
+    userId: uuid('user_id').notNull().unique(),
+    displayName: text('display_name'),
+    avatarUrl: text('avatar_url'),
+    bio: text(),
+    tagline: text('tagline'),
+    pinnedBadgeIds: jsonb('pinned_badge_ids').default([]).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'string' })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    index('idx_user_profiles_user_id').using(
+      'btree',
+      table.userId.asc().nullsLast().op('uuid_ops'),
+    ),
+    foreignKey({
+      columns: [table.userId],
+      foreignColumns: [users.userId],
+      name: 'user_profiles_user_id_fkey',
+    }).onDelete('cascade'),
+    check(
+      'user_profiles_display_name_len',
+      sql`(display_name IS NULL) OR (length(btrim(display_name)) >= 1 AND length(btrim(display_name)) <= 100)`,
+    ),
+    check('user_profiles_tagline_len', sql`(tagline IS NULL) OR (length(btrim(tagline)) <= 160)`),
+    check('user_profiles_pinned_badges_array', sql`jsonb_typeof(pinned_badge_ids) = 'array'`),
+  ],
+);
+
+export const userProfileSettings = pgTable(
+  'user_profile_settings',
+  {
+    settingsId: uuid('settings_id').defaultRandom().primaryKey().notNull(),
+    userId: uuid('user_id').notNull().unique(),
+    isPublic: boolean('is_public').default(true).notNull(),
+    showStatistics: boolean('show_statistics').default(true).notNull(),
+    showAchievements: boolean('show_achievements').default(true).notNull(),
+    showActivity: boolean('show_activity').default(true).notNull(),
+    showRankImprovement: boolean('show_rank_improvement').default(true).notNull(),
+    showTournamentActivity: boolean('show_tournament_activity').default(true).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'string' })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    index('idx_user_profile_settings_user_id').using(
+      'btree',
+      table.userId.asc().nullsLast().op('uuid_ops'),
+    ),
+    foreignKey({
+      columns: [table.userId],
+      foreignColumns: [users.userId],
+      name: 'user_profile_settings_user_id_fkey',
+    }).onDelete('cascade'),
+  ],
+);
+
+export const userActivityEvents = pgTable(
+  'user_activity_events',
+  {
+    eventId: uuid('event_id').defaultRandom().primaryKey().notNull(),
+    userId: uuid('user_id').notNull(),
+    eventType: activityEventType().notNull(),
+    title: text().notNull(),
+    description: text(),
+    metadata: jsonb('metadata').default({}).notNull(),
+    visibility: text('visibility').default('public').notNull(),
+    occurredAt: timestamp('occurred_at', { withTimezone: true, mode: 'string' })
+      .defaultNow()
+      .notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    index('idx_user_activity_events_user_occurred').using(
+      'btree',
+      table.userId.asc().nullsLast().op('uuid_ops'),
+      table.occurredAt.desc().nullsLast().op('timestamptz_ops'),
+    ),
+    index('idx_user_activity_events_user_type').using(
+      'btree',
+      table.userId.asc().nullsLast().op('uuid_ops'),
+      table.eventType.asc().nullsLast().op('enum_ops'),
+    ),
+    index('idx_user_activity_events_visibility').using(
+      'btree',
+      table.visibility.asc().nullsLast().op('text_ops'),
+      table.occurredAt.desc().nullsLast().op('timestamptz_ops'),
+    ),
+    foreignKey({
+      columns: [table.userId],
+      foreignColumns: [users.userId],
+      name: 'user_activity_events_user_id_fkey',
+    }).onDelete('cascade'),
+    check(
+      'user_activity_events_visibility_check',
+      sql`visibility = ANY (ARRAY['public'::text, 'private'::text])`,
+    ),
+    check('user_activity_events_title_nonblank', sql`length(btrim(title)) > 0`),
+    check('user_activity_events_metadata_object', sql`jsonb_typeof(metadata) = 'object'::text`),
   ],
 );
