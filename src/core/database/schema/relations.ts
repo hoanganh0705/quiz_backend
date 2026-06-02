@@ -35,6 +35,10 @@ import {
   friendships,
   blockedUsers,
   userFollows,
+  discussionThreads,
+  discussionComments,
+  discussionVotes,
+  discussionReports,
 } from '.';
 
 export const userRankingRelations = relations(userRanking, ({ one, many }) => ({
@@ -98,6 +102,11 @@ export const usersRelations = relations(users, ({ many, one }) => ({
   blockedByUsers: many(blockedUsers, { relationName: 'blocked' }),
   followers: many(userFollows, { relationName: 'follower' }),
   following: many(userFollows, { relationName: 'following' }),
+  // Discussion relations
+  discussionThreads: many(discussionThreads),
+  discussionComments: many(discussionComments),
+  discussionVotes: many(discussionVotes),
+  discussionReports: many(discussionReports),
 }));
 
 export const userSessionsRelations = relations(userSessions, ({ one }) => ({
@@ -125,6 +134,7 @@ export const quizzesRelations = relations(quizzes, ({ one, many }) => ({
   quizStats: one(quizStats),
   quizReviews: many(quizReviews),
   bookmarkedQuizzes: many(bookmarkedQuizzes),
+  discussionThreads: many(discussionThreads),
 }));
 
 export const quizVersionsRelations = relations(quizVersions, ({ one, many }) => ({
@@ -418,5 +428,62 @@ export const userFollowsRelations = relations(userFollows, ({ one }) => ({
     fields: [userFollows.followingId],
     references: [users.userId],
     relationName: 'following',
+  }),
+}));
+
+// Discussion Domain Relations
+
+export const discussionThreadsRelations = relations(discussionThreads, ({ one, many }) => ({
+  quiz: one(quizzes, {
+    fields: [discussionThreads.quizId],
+    references: [quizzes.quizId],
+  }),
+  author: one(users, {
+    fields: [discussionThreads.authorId],
+    references: [users.userId],
+  }),
+  comments: many(discussionComments),
+  votes: many(discussionVotes),
+  reports: many(discussionReports),
+}));
+
+export const discussionCommentsRelations = relations(discussionComments, ({ one, many }) => ({
+  thread: one(discussionThreads, {
+    fields: [discussionComments.threadId],
+    references: [discussionThreads.threadId],
+  }),
+  author: one(users, {
+    fields: [discussionComments.authorId],
+    references: [users.userId],
+  }),
+  parentComment: one(discussionComments, {
+    fields: [discussionComments.parentCommentId],
+    references: [discussionComments.commentId],
+    relationName: 'discussionCommentParent',
+  }),
+  replies: many(discussionComments, {
+    relationName: 'discussionCommentParent',
+  }),
+  votes: many(discussionVotes),
+  reports: many(discussionReports),
+}));
+
+export const discussionVotesRelations = relations(discussionVotes, ({ one }) => ({
+  user: one(users, {
+    fields: [discussionVotes.userId],
+    references: [users.userId],
+  }),
+}));
+
+export const discussionReportsRelations = relations(discussionReports, ({ one }) => ({
+  reporter: one(users, {
+    fields: [discussionReports.reporterId],
+    references: [users.userId],
+    relationName: 'discussionReportReporter',
+  }),
+  reviewedBy: one(users, {
+    fields: [discussionReports.reviewedByUserId],
+    references: [users.userId],
+    relationName: 'discussionReportReviewer',
   }),
 }));
