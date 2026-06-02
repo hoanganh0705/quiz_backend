@@ -17,8 +17,6 @@ import {
   ApiCreatedResponse,
   ApiNotFoundResponse,
   ApiBearerAuth,
-  ApiUnauthorizedResponse,
-  ApiForbiddenResponse,
   ApiBadRequestResponse,
   ApiInternalServerErrorResponse,
 } from '@nestjs/swagger';
@@ -34,7 +32,11 @@ import { TagResponseDto } from './dto/response/tag-response.dto';
 import { TagApplicationService } from './application/tag.application.service';
 import { TagDomainExceptionFilter } from './transport/filters/tag-domain-exception.filter';
 import { TagCursorMapper } from './mappers/tag-cursor.mapper';
-import type { CreateTagCommand, ListTagsQuery, UpdateTagCommand } from './domain/types/tag-commands';
+import type {
+  CreateTagCommand,
+  ListTagsQuery,
+  UpdateTagCommand,
+} from './domain/types/tag-commands';
 
 @ApiTags('tags')
 @Controller('tags')

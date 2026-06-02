@@ -16,11 +16,7 @@ import type {
 export class SocialApplicationService {
   constructor(private readonly socialService: SocialService) {}
 
-  async searchUsers(
-    user: JwtPayload,
-    query: string,
-    limit: number,
-  ): Promise<SearchableUser[]> {
+  async searchUsers(user: JwtPayload, query: string, limit: number): Promise<SearchableUser[]> {
     return this.socialService.searchUsers(user.sub, query, limit);
   }
 
@@ -32,10 +28,7 @@ export class SocialApplicationService {
     return this.socialService.getFriendLeaderboard(user.sub, period, limit);
   }
 
-  async sendFriendRequest(
-    user: JwtPayload,
-    addresseeId: string,
-  ): Promise<FriendRequest> {
+  async sendFriendRequest(user: JwtPayload, addresseeId: string): Promise<FriendRequest> {
     return this.socialService.sendFriendRequest(user.sub, { addresseeId });
   }
 
@@ -47,10 +40,7 @@ export class SocialApplicationService {
     return this.socialService.respondToFriendRequest(user.sub, friendshipId, accept);
   }
 
-  async cancelFriendRequest(
-    user: JwtPayload,
-    friendshipId: string,
-  ): Promise<void> {
+  async cancelFriendRequest(user: JwtPayload, friendshipId: string): Promise<void> {
     return this.socialService.cancelFriendRequest(user.sub, friendshipId);
   }
 
@@ -81,11 +71,7 @@ export class SocialApplicationService {
     return this.socialService.removeFriend(user.sub, friendId);
   }
 
-  async blockUser(
-    user: JwtPayload,
-    blockedId: string,
-    reason?: string,
-  ): Promise<void> {
+  async blockUser(user: JwtPayload, blockedId: string, reason?: string): Promise<void> {
     return this.socialService.blockUser(user.sub, blockedId, reason);
   }
 
@@ -127,10 +113,7 @@ export class SocialApplicationService {
     return { items: result, hasNextPage };
   }
 
-  async getRelationshipStatus(
-    user: JwtPayload,
-    targetId: string,
-  ): Promise<RelationshipStatus> {
+  async getRelationshipStatus(user: JwtPayload, targetId: string): Promise<RelationshipStatus> {
     return this.socialService.getRelationshipStatus(user.sub, targetId);
   }
 

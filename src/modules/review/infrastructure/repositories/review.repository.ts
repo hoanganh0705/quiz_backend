@@ -3,7 +3,14 @@ import { and, desc, eq, or, sql } from 'drizzle-orm';
 import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 import { DRIZZLE } from '@/core/database/drizzle.constants';
 import type { DrizzleDB } from '@/core/database/database.module';
-import { quizReviews, users, quizzes, quizAttempts, quizVersions, userProfiles } from '@/core/database/schema';
+import {
+  quizReviews,
+  users,
+  quizzes,
+  quizAttempts,
+  quizVersions,
+  userProfiles,
+} from '@/core/database/schema';
 import type {
   ReviewRow,
   ReviewDetailRow,

@@ -47,7 +47,10 @@ export class SocialDomainExceptionFilter implements ExceptionFilter {
     }
 
     if (error instanceof SelfFriendRequestError) {
-      return { status: HttpStatus.BAD_REQUEST, message: 'You cannot send a friend request to yourself' };
+      return {
+        status: HttpStatus.BAD_REQUEST,
+        message: 'You cannot send a friend request to yourself',
+      };
     }
 
     if (error instanceof AlreadyFriendsError) {
@@ -55,7 +58,10 @@ export class SocialDomainExceptionFilter implements ExceptionFilter {
     }
 
     if (error instanceof BlockedUserError) {
-      return { status: HttpStatus.FORBIDDEN, message: 'Cannot perform this action on a blocked user' };
+      return {
+        status: HttpStatus.FORBIDDEN,
+        message: 'Cannot perform this action on a blocked user',
+      };
     }
 
     if (error instanceof UserBlockedError) {

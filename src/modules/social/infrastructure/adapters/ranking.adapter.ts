@@ -6,10 +6,10 @@
 
 import { Inject, Injectable } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
-import { RANKING_PORT, type RankingPort, type RankingEntry } from '../ports/ranking.port';
 import { RANKING_REPOSITORY_PORT } from '@/modules/ranking/domain/ports/ranking-repository.port';
 import type { RankingRepositoryPort } from '@/modules/ranking/domain/ports/ranking-repository.port';
 import { RankingPeriod } from '@/modules/ranking/domain/types/ranking.types';
+import { RankingEntry, RankingPort } from '../../domain/ports';
 
 @Injectable()
 export class RankingAdapter implements RankingPort {
@@ -56,7 +56,10 @@ export class RankingAdapter implements RankingPort {
     return this.rankingRepository.getTotalParticipants(rankingPeriod);
   }
 
-  async getUserRank(userId: string, period: 'weekly' | 'monthly' | 'all_time'): Promise<number | null> {
+  async getUserRank(
+    userId: string,
+    period: 'weekly' | 'monthly' | 'all_time',
+  ): Promise<number | null> {
     const rankingPeriod = this.mapToRankingPeriod(period);
     return this.rankingRepository.getUserRank(userId, rankingPeriod);
   }
