@@ -8,11 +8,29 @@ import type {
   Following,
   SocialCounts,
   RelationshipStatus,
+  SearchableUser,
+  FriendLeaderboard,
 } from '../domain/types/social.types';
 
 @Injectable()
 export class SocialApplicationService {
   constructor(private readonly socialService: SocialService) {}
+
+  async searchUsers(
+    user: JwtPayload,
+    query: string,
+    limit: number,
+  ): Promise<SearchableUser[]> {
+    return this.socialService.searchUsers(user.sub, query, limit);
+  }
+
+  async getFriendLeaderboard(
+    user: JwtPayload,
+    period: 'weekly' | 'monthly' | 'all_time',
+    limit: number = 20,
+  ): Promise<FriendLeaderboard> {
+    return this.socialService.getFriendLeaderboard(user.sub, period, limit);
+  }
 
   async sendFriendRequest(
     user: JwtPayload,
