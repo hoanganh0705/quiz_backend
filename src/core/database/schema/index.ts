@@ -19,6 +19,236 @@ import {
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 
+export const discussionThreadStatus = pgEnum('discussion_thread_status', [
+  'open',
+  'closed',
+  'hidden',
+  'deleted',
+]);
+
+export const discussionContentStatus = pgEnum('discussion_content_status', [
+  'visible',
+  'hidden',
+  'deleted',
+]);
+
+export const discussionVoteValue = pgEnum('discussion_vote_value', ['upvote', 'downvote']);
+
+export const discussionReportStatus = pgEnum('discussion_report_status', [
+  'open',
+  'reviewed',
+  'dismissed',
+  'actioned',
+]);
+
+export const discussionReportTargetType = pgEnum('discussion_report_target_type', [
+  'thread',
+  'comment',
+  'reply',
+]);
+
+export const discussionThreads = pgTable(
+  'discussion_threads',
+  {
+    threadId: uuid('thread_id').defaultRandom().primaryKey().notNull(),
+    quizId: uuid('quiz_id').notNull(),
+    authorId: uuid('author_id').notNull(),
+    title: text().notNull(),
+    body: text().notNull(),
+    status: discussionThreadStatus().default('open').notNull(),
+    commentsCount: integer('comments_count').default(0).notNull(),
+    votesCount: integer('votes_count').default(0).notNull(),
+    upvotesCount: integer('upvotes_count').default(0).notNull(),
+    downvotesCount: integer('downvotes_count').default(0).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'string' })
+      .defaultNow()
+      .notNull(),
+    deletedAt: timestamp('deleted_at', { withTimezone: true, mode: 'string' }),
+  },
+  (table) => [
+    index('idx_discussion_threads_quiz_created')
+      .using(
+        'btree',
+        table.quizId.asc().nullsLast().op('uuid_ops'),
+        table.createdAt.desc().nullsLast().op('timestamptz_ops'),
+      )
+      .where(sql`deleted_at IS NULL`),
+    index('idx_discussion_threads_author_created')
+      .using(
+        'btree',
+        table.authorId.asc().nullsLast().op('uuid_ops'),
+        table.createdAt.desc().nullsLast().op('timestamptz_ops'),
+      )
+      .where(sql`deleted_at IS NULL`),
+    uniqueIndex('uq_discussion_threads_quiz_author_title_active')
+      .using('btree', table.quizId.asc().nullsLast().op('uuid_ops'), sql`lower(title)`)
+      .where(sql`deleted_at IS NULL`),
+    check('discussion_threads_title_nonblank', sql`length(btrim(title)) > 0`),
+    check('discussion_threads_body_nonblank', sql`length(btrim(body)) > 0`),
+    foreignKey({
+      columns: [table.quizId],
+      foreignColumns: [quizzes.quizId],
+      name: 'discussion_threads_quiz_id_fkey',
+    }).onDelete('cascade'),
+    foreignKey({
+      columns: [table.authorId],
+      foreignColumns: [users.userId],
+      name: 'discussion_threads_author_id_fkey',
+    }).onDelete('cascade'),
+  ],
+);
+
+export const discussionComments = pgTable(
+  'discussion_comments',
+  {
+    commentId: uuid('comment_id').defaultRandom().primaryKey().notNull(),
+    threadId: uuid('thread_id').notNull(),
+    authorId: uuid('author_id').notNull(),
+    parentCommentId: uuid('parent_comment_id'),
+    body: text().notNull(),
+    status: discussionContentStatus().default('visible').notNull(),
+    repliesCount: integer('replies_count').default(0).notNull(),
+    votesCount: integer('votes_count').default(0).notNull(),
+    upvotesCount: integer('upvotes_count').default(0).notNull(),
+    downvotesCount: integer('downvotes_count').default(0).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'string' })
+      .defaultNow()
+      .notNull(),
+    deletedAt: timestamp('deleted_at', { withTimezone: true, mode: 'string' }),
+  },
+  (table) => [
+    index('idx_discussion_comments_thread_created')
+      .using(
+        'btree',
+        table.threadId.asc().nullsLast().op('uuid_ops'),
+        table.createdAt.asc().nullsLast().op('timestamptz_ops'),
+      )
+      .where(sql`deleted_at IS NULL`),
+    index('idx_discussion_comments_parent_created')
+      .using(
+        'btree',
+        table.parentCommentId.asc().nullsLast().op('uuid_ops'),
+        table.createdAt.asc().nullsLast().op('timestamptz_ops'),
+      )
+      .where(sql`deleted_at IS NULL`),
+    index('idx_discussion_comments_author_created')
+      .using(
+        'btree',
+        table.authorId.asc().nullsLast().op('uuid_ops'),
+        table.createdAt.asc().nullsLast().op('timestamptz_ops'),
+      )
+      .where(sql`deleted_at IS NULL`),
+    check('discussion_comments_body_nonblank', sql`length(btrim(body)) > 0`),
+    foreignKey({
+      columns: [table.threadId],
+      foreignColumns: [discussionThreads.threadId],
+      name: 'discussion_comments_thread_id_fkey',
+    }).onDelete('cascade'),
+    foreignKey({
+      columns: [table.authorId],
+      foreignColumns: [users.userId],
+      name: 'discussion_comments_author_id_fkey',
+    }).onDelete('cascade'),
+    foreignKey({
+      columns: [table.parentCommentId],
+      foreignColumns: [table.commentId],
+      name: 'discussion_comments_parent_comment_id_fkey',
+    }).onDelete('cascade'),
+  ],
+);
+
+export const discussionVotes = pgTable(
+  'discussion_votes',
+  {
+    voteId: uuid('vote_id').defaultRandom().primaryKey().notNull(),
+    userId: uuid('user_id').notNull(),
+    targetType: discussionReportTargetType('target_type').notNull(),
+    targetId: uuid('target_id').notNull(),
+    value: discussionVoteValue().notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'string' })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex('uq_discussion_votes_user_target').using(
+      'btree',
+      table.userId.asc().nullsLast().op('uuid_ops'),
+      table.targetType.asc().nullsLast().op('enum_ops'),
+      table.targetId.asc().nullsLast().op('uuid_ops'),
+    ),
+    index('idx_discussion_votes_target').using(
+      'btree',
+      table.targetType.asc().nullsLast().op('enum_ops'),
+      table.targetId.asc().nullsLast().op('uuid_ops'),
+    ),
+    foreignKey({
+      columns: [table.userId],
+      foreignColumns: [users.userId],
+      name: 'discussion_votes_user_id_fkey',
+    }).onDelete('cascade'),
+  ],
+);
+
+export const discussionReports = pgTable(
+  'discussion_reports',
+  {
+    reportId: uuid('report_id').defaultRandom().primaryKey().notNull(),
+    reporterId: uuid('reporter_id').notNull(),
+    targetType: discussionReportTargetType('target_type').notNull(),
+    targetId: uuid('target_id').notNull(),
+    reason: text().notNull(),
+    details: text('details'),
+    status: discussionReportStatus().default('open').notNull(),
+    reviewedByUserId: uuid('reviewed_by_user_id'),
+    reviewedAt: timestamp('reviewed_at', { withTimezone: true, mode: 'string' }),
+    actionTaken: boolean('action_taken').default(false).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'string' })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    index('idx_discussion_reports_status_created').using(
+      'btree',
+      table.status.asc().nullsLast().op('enum_ops'),
+      table.createdAt.desc().nullsLast().op('timestamptz_ops'),
+    ),
+    index('idx_discussion_reports_target').using(
+      'btree',
+      table.targetType.asc().nullsLast().op('enum_ops'),
+      table.targetId.asc().nullsLast().op('uuid_ops'),
+    ),
+    uniqueIndex('uq_discussion_reports_reporter_target').using(
+      'btree',
+      table.reporterId.asc().nullsLast().op('uuid_ops'),
+      table.targetType.asc().nullsLast().op('enum_ops'),
+      table.targetId.asc().nullsLast().op('uuid_ops'),
+    ),
+    foreignKey({
+      columns: [table.reporterId],
+      foreignColumns: [users.userId],
+      name: 'discussion_reports_reporter_id_fkey',
+    }).onDelete('cascade'),
+    foreignKey({
+      columns: [table.reviewedByUserId],
+      foreignColumns: [users.userId],
+      name: 'discussion_reports_reviewed_by_user_id_fkey',
+    }).onDelete('set null'),
+    check('discussion_reports_reason_nonblank', sql`length(btrim(reason)) > 0`),
+  ],
+);
+
 export const badgeType = pgEnum('badge_type', ['diamond', 'platinum', 'gold', 'silver', 'bronze']);
 export const badgeRuleType = pgEnum('badge_rule_type', [
   'count',
@@ -724,15 +954,11 @@ export const quizStats = pgTable(
     avgRating: numeric('avg_rating', { precision: 3, scale: 2 }).default('0').notNull(),
     ratingCount: integer('rating_count').default(0).notNull(),
     bookmarkCount: integer('bookmark_count').default(0).notNull(),
-    completionRate: numeric('completion_rate', { precision: 5, scale: 2 })
-      .default('0')
-      .notNull(),
+    completionRate: numeric('completion_rate', { precision: 5, scale: 2 }).default('0').notNull(),
     popularityScore: numeric('popularity_score', { precision: 10, scale: 4 })
       .default('0')
       .notNull(),
-    trendingScore: numeric('trending_score', { precision: 10, scale: 4 })
-      .default('0')
-      .notNull(),
+    trendingScore: numeric('trending_score', { precision: 10, scale: 4 }).default('0').notNull(),
     lastCalculatedAt: timestamp('last_calculated_at', {
       withTimezone: true,
       mode: 'string',
@@ -772,10 +998,16 @@ export const quizStats = pgTable(
     ),
     check('quiz_stats_total_attempts_nonneg', sql`total_attempts >= 0`),
     check('quiz_stats_total_players_nonneg', sql`total_players >= 0`),
-    check('quiz_stats_avg_rating_range', sql`(avg_rating >= (0)::numeric) AND (avg_rating <= (5)::numeric)`),
+    check(
+      'quiz_stats_avg_rating_range',
+      sql`(avg_rating >= (0)::numeric) AND (avg_rating <= (5)::numeric)`,
+    ),
     check('quiz_stats_rating_count_nonneg', sql`rating_count >= 0`),
     check('quiz_stats_bookmark_count_nonneg', sql`bookmark_count >= 0`),
-    check('quiz_stats_completion_rate_range', sql`(completion_rate >= (0)::numeric) AND (completion_rate <= (100)::numeric)`),
+    check(
+      'quiz_stats_completion_rate_range',
+      sql`(completion_rate >= (0)::numeric) AND (completion_rate <= (100)::numeric)`,
+    ),
   ],
 );
 
@@ -1474,18 +1706,17 @@ export const friendships = pgTable(
       'btree',
       table.addresseeId.asc().nullsLast().op('uuid_ops'),
     ),
-    index('idx_friendships_status').using(
-      'btree',
-      table.status.asc().nullsLast().op('enum_ops'),
-    ),
+    index('idx_friendships_status').using('btree', table.status.asc().nullsLast().op('enum_ops')),
     index('idx_friendships_deleted_at').using(
       'btree',
       table.deletedAt.asc().nullsLast().op('timestamptz_ops'),
     ),
-    uniqueIndex('uq_friendships_pair').on(
-      table.requesterId.asc().nullsLast().op('uuid_ops'),
-      table.addresseeId.asc().nullsLast().op('uuid_ops'),
-    ).where(sql`deleted_at IS NULL`),
+    uniqueIndex('uq_friendships_pair')
+      .on(
+        table.requesterId.asc().nullsLast().op('uuid_ops'),
+        table.addresseeId.asc().nullsLast().op('uuid_ops'),
+      )
+      .where(sql`deleted_at IS NULL`),
     foreignKey({
       columns: [table.requesterId],
       foreignColumns: [users.userId],
@@ -1525,10 +1756,12 @@ export const blockedUsers = pgTable(
       'btree',
       table.deletedAt.asc().nullsLast().op('timestamptz_ops'),
     ),
-    uniqueIndex('uq_blocked_users_pair').on(
-      table.blockerId.asc().nullsLast().op('uuid_ops'),
-      table.blockedId.asc().nullsLast().op('uuid_ops'),
-    ).where(sql`deleted_at IS NULL`),
+    uniqueIndex('uq_blocked_users_pair')
+      .on(
+        table.blockerId.asc().nullsLast().op('uuid_ops'),
+        table.blockedId.asc().nullsLast().op('uuid_ops'),
+      )
+      .where(sql`deleted_at IS NULL`),
     foreignKey({
       columns: [table.blockerId],
       foreignColumns: [users.userId],
@@ -1567,10 +1800,12 @@ export const userFollows = pgTable(
       'btree',
       table.deletedAt.asc().nullsLast().op('timestamptz_ops'),
     ),
-    uniqueIndex('uq_user_follows_pair').on(
-      table.followerId.asc().nullsLast().op('uuid_ops'),
-      table.followingId.asc().nullsLast().op('uuid_ops'),
-    ).where(sql`deleted_at IS NULL`),
+    uniqueIndex('uq_user_follows_pair')
+      .on(
+        table.followerId.asc().nullsLast().op('uuid_ops'),
+        table.followingId.asc().nullsLast().op('uuid_ops'),
+      )
+      .where(sql`deleted_at IS NULL`),
     foreignKey({
       columns: [table.followerId],
       foreignColumns: [users.userId],
