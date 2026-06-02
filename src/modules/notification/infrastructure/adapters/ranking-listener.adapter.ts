@@ -11,8 +11,10 @@ import {
   RANKING_DOMAIN_EVENT_BUS,
   type RankingDomainEventBusPort,
   type PublishedRankingDomainEvent,
-} from '../../../ranking/domain/ports/ranking-event-bus.port';
+} from '@/modules/ranking';
 import { RankNotificationService } from '../../domain/services/rank-notification.service';
+import { NOTIFICATION_REPOSITORY_PORT } from '../../domain/ports/notification-ports';
+import type { NotificationRepositoryPort } from '../../domain/ports/notification-ports';
 
 @Injectable()
 export class RankingListenerAdapter implements OnModuleInit, OnModuleDestroy {
@@ -22,6 +24,8 @@ export class RankingListenerAdapter implements OnModuleInit, OnModuleDestroy {
     private readonly rankNotificationService: RankNotificationService,
     @Inject(RANKING_DOMAIN_EVENT_BUS)
     private readonly eventBus: RankingDomainEventBusPort,
+    @Inject(NOTIFICATION_REPOSITORY_PORT)
+    private readonly notificationRepository: NotificationRepositoryPort,
     @InjectPinoLogger(RankingListenerAdapter.name)
     private readonly logger: PinoLogger,
   ) {}
@@ -67,7 +71,11 @@ export class RankingListenerAdapter implements OnModuleInit, OnModuleDestroy {
 
     const improvement = event.previousRank - event.newRank;
 
-    if (improvement >= 5) {
+    // Get user's threshold preference
+    const prefs = await this.notificationRepository.getPreferences(event.userId);
+    const threshold = prefs?.rankImprovementThreshold ?? 5;
+
+    if (improvement >= threshold) {
       try {
         await this.rankNotificationService.notifyRankImprovement({
           userId: event.userId,

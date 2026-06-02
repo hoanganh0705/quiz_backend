@@ -6,11 +6,13 @@
 
 import { Inject, Injectable } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
-import { RANK_NOTIFICATION_TITLES, RANK_NOTIFICATION_BODIES } from '../types/notification.types';
-import type {
+import {
+  RANK_NOTIFICATION_TITLES,
+  RANK_NOTIFICATION_BODIES,
   RankNotificationParams,
   RankImprovementParams,
   PeriodWinnerParams,
+  NotificationType,
 } from '../types/notification.types';
 import { NOTIFICATION_REPOSITORY_PORT } from '../../infrastructure/repositories/notification.repository';
 import type { NotificationRepositoryPort } from '../../infrastructure/repositories/notification.repository';
@@ -110,14 +112,14 @@ export class RankNotificationService {
 
   private async sendNotification(params: {
     userId: string;
-    type: string;
+    type: NotificationType;
     title: string;
     body: string;
     metadata?: Record<string, unknown>;
   }): Promise<void> {
     await this.channelService.send({
       userId: params.userId,
-      type: params.type as never,
+      type: params.type,
       title: params.title,
       body: params.body,
       metadata: params.metadata,

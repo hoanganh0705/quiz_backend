@@ -16,3 +16,18 @@ export class NotificationListResponseDto {
   unreadCount: number;
   hasNextPage: boolean;
 }
+
+export class NotificationPreferencesResponseDto {
+  inAppEnabled: boolean;
+  emailEnabled: boolean;
+  pushEnabled: boolean;
+  achievementEnabled: boolean;
+  tournamentEnabled: boolean;
+  rankEnabled: boolean;
+  friendEnabled: boolean;
+  summaryEnabled: boolean;
+  marketingEnabled: boolean;
+  rankImprovementThreshold: number;
+  quietHoursStart: string | null;
+  quietHoursEnd: string | null;
+}
