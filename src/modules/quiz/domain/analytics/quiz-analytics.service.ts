@@ -66,8 +66,8 @@ export class QuizAnalyticsService {
     ]);
 
     await this.analyticsRepository.upsertQuizStats(quizId, {
-      totalAttempts: String(totalAttempts),
-      totalPlayers: String(uniquePlayers),
+      totalAttempts,
+      totalPlayers: uniquePlayers,
       avgScorePercent: String(averageScore.toFixed(2)),
       completionRate: String(completionRate.toFixed(2)),
       lastAttemptAt: nowIso,
@@ -161,7 +161,7 @@ export class QuizAnalyticsService {
     this.logger.info({ event: 'refresh_all_trending_scores_start' });
 
     const allStats = await this.analyticsRepository.getAllQuizStats();
-    const quizIds = allStats.map(s => s.quizId as string);
+    const quizIds = allStats.map((s) => s.quizId);
 
     const scores = await this.trendingService.refreshTrendingScores(quizIds);
     const nowIso = new Date().toISOString();
@@ -183,7 +183,7 @@ export class QuizAnalyticsService {
     this.logger.info({ event: 'refresh_all_popularity_scores_start' });
 
     const allStats = await this.analyticsRepository.getAllQuizStats();
-    const quizIds = allStats.map(s => s.quizId as string);
+    const quizIds = allStats.map((s) => s.quizId);
 
     const scores = await this.popularityService.refreshPopularityScores(quizIds);
     const nowIso = new Date().toISOString();
@@ -227,7 +227,7 @@ export class QuizAnalyticsService {
     const allStats = await this.analyticsRepository.getAllQuizStats();
 
     for (const stat of allStats) {
-      const quizId = stat.quizId as string;
+      const quizId = stat.quizId;
 
       try {
         await Promise.all([
@@ -263,7 +263,7 @@ export class QuizAnalyticsService {
     const allStats = await this.analyticsRepository.getAllQuizStats();
 
     for (const stat of allStats) {
-      const quizId = stat.quizId as string;
+      const quizId = stat.quizId;
 
       // Check for negative values
       if (Number(stat.totalAttempts) < 0) {

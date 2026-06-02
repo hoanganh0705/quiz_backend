@@ -12,10 +12,10 @@ export class AnalyticsSchedulerService {
   ) {}
 
   /**
-   * Refresh trending scores every 15 minutes
+   * Refresh trending scores every 5 minutes
    * Keeps trending scores current
    */
-  @Cron(CronExpression.EVERY_15_MINUTES)
+  @Cron(CronExpression.EVERY_5_MINUTES)
   async handleTrendingRefresh(): Promise<void> {
     this.logger.info({ event: 'cron_trending_refresh_start' });
     try {

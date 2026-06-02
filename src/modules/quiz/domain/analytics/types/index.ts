@@ -1,5 +1,3 @@
-import type { QuizStatsRow } from '@/core/database/schema';
-
 export interface QuizMetrics {
   totalAttempts: number;
   uniquePlayers: number;
@@ -100,7 +98,7 @@ export interface ReviewAggregation {
   ratingCount: number;
 }
 
-export type QuizStatsRow = InstanceType<typeof import('@/core/database/schema').quizStats.$inferSelect>;
+export type QuizStatsRow = (typeof import('@/core/database/schema').quizStats)['$inferSelect'];
 
 export interface QuizStatsWithQuiz extends QuizStatsRow {
   title: string;
