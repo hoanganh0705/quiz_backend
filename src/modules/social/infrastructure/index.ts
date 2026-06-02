@@ -1,1 +1,1 @@
-export * from './social.schema';
+export * from './repositories/social.repository';

@@ -4,6 +4,7 @@ import { SocialApplicationService } from './application/social-application.servi
 import { SocialService } from './domain/services/social.service';
 import { SocialRepository } from './infrastructure/repositories/social.repository';
 import { SocialController } from './transport/controller/social.controller';
+import { SocialDomainExceptionFilter } from './transport/filters/social-domain-exception.filter';
 import { SOCIAL_REPOSITORY_PORT } from './domain/ports/social-ports';
 import { UserModule } from '@/modules/user/user.module';
 
@@ -13,6 +14,7 @@ import { UserModule } from '@/modules/user/user.module';
     SocialApplicationService,
     SocialService,
     SocialRepository,
+    SocialDomainExceptionFilter,
     { provide: SOCIAL_REPOSITORY_PORT, useExisting: SocialRepository },
   ],
   controllers: [SocialController],

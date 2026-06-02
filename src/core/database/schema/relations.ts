@@ -32,6 +32,9 @@ import {
   userProfiles,
   userProfileSettings,
   userActivityEvents,
+  friendships,
+  blockedUsers,
+  userFollows,
 } from '.';
 
 export const userRankingRelations = relations(userRanking, ({ one, many }) => ({
@@ -88,6 +91,13 @@ export const usersRelations = relations(users, ({ many, one }) => ({
   userProfile: one(userProfiles),
   userProfileSettings: one(userProfileSettings),
   activityEvents: many(userActivityEvents),
+  // Social relations
+  sentFriendRequests: many(friendships, { relationName: 'friendshipRequester' }),
+  receivedFriendRequests: many(friendships, { relationName: 'friendshipAddressee' }),
+  blockedUsers: many(blockedUsers, { relationName: 'blocker' }),
+  blockedByUsers: many(blockedUsers, { relationName: 'blocked' }),
+  followers: many(userFollows, { relationName: 'follower' }),
+  following: many(userFollows, { relationName: 'following' }),
 }));
 
 export const userSessionsRelations = relations(userSessions, ({ one }) => ({
@@ -367,5 +377,46 @@ export const userActivityEventsRelations = relations(userActivityEvents, ({ one 
   user: one(users, {
     fields: [userActivityEvents.userId],
     references: [users.userId],
+  }),
+}));
+
+// Social Domain Relations
+
+export const friendshipsRelations = relations(friendships, ({ one }) => ({
+  requester: one(users, {
+    fields: [friendships.requesterId],
+    references: [users.userId],
+    relationName: 'friendshipRequester',
+  }),
+  addressee: one(users, {
+    fields: [friendships.addresseeId],
+    references: [users.userId],
+    relationName: 'friendshipAddressee',
+  }),
+}));
+
+export const blockedUsersRelations = relations(blockedUsers, ({ one }) => ({
+  blocker: one(users, {
+    fields: [blockedUsers.blockerId],
+    references: [users.userId],
+    relationName: 'blocker',
+  }),
+  blocked: one(users, {
+    fields: [blockedUsers.blockedId],
+    references: [users.userId],
+    relationName: 'blocked',
+  }),
+}));
+
+export const userFollowsRelations = relations(userFollows, ({ one }) => ({
+  follower: one(users, {
+    fields: [userFollows.followerId],
+    references: [users.userId],
+    relationName: 'follower',
+  }),
+  following: one(users, {
+    fields: [userFollows.followingId],
+    references: [users.userId],
+    relationName: 'following',
   }),
 }));
