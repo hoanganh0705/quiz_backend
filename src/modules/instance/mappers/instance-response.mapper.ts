@@ -1,11 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import type {
   QuizInstanceDetailRow,
-  QuizInstanceRow,
   QuizInstancePlayerRow,
   InstanceLeaderboardEntry,
 } from '../domain/ports';
-import type { QuizInstancePlayerDetailRow } from '../domain/ports';
 import {
   InstanceDetailResponseDto,
   InstanceLeaderboardEntryDto,
@@ -14,10 +12,7 @@ import {
 
 @Injectable()
 export class InstanceResponseMapper {
-  toInstanceDetailResponse(
-    row: QuizInstanceDetailRow,
-    players: QuizInstancePlayerRow[],
-  ): InstanceDetailResponseDto {
+  toInstanceDetailResponse(row: QuizInstanceDetailRow): InstanceDetailResponseDto {
     return {
       instanceId: row.instanceId,
       quizVersionId: row.quizVersionId,

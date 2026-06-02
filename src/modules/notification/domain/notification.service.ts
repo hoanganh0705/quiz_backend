@@ -1,8 +1,9 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
-import { NOTIFICATION_REPOSITORY_PORT, type NotificationRepositoryPort } from '../ports/notification-ports';
-import type { Notification, CreateNotificationParams, NotificationListParams } from '../types/notification.types';
-import { NotificationNotFoundError, NotificationForbiddenError } from '../errors/notification.errors';
+import { NOTIFICATION_REPOSITORY_PORT, type NotificationRepositoryPort } from './ports';
+import type { CreateNotificationParams, NotificationListParams } from './types';
+import type { Notification as DomainNotification } from './types';
+import { NotificationForbiddenError, NotificationNotFoundError } from './errors';
 
 @Injectable()
 export class NotificationService {
@@ -13,7 +14,7 @@ export class NotificationService {
     private readonly logger: PinoLogger,
   ) {}
 
-  async create(params: CreateNotificationParams): Promise<Notification> {
+  async create(params: CreateNotificationParams): Promise<DomainNotification> {
     const notification = await this.notificationRepository.create(params);
 
     this.logger.info({
@@ -29,8 +30,8 @@ export class NotificationService {
   async getNotifications(
     userId: string,
     params: NotificationListParams,
-  ): Promise<Notification[]> {
-    return this.notificationRepository.findByUser({ ...params, limit: params.limit });
+  ): Promise<DomainNotification[]> {
+    return this.notificationRepository.findByUser({ ...params, userId, limit: params.limit });
   }
 
   async getUnreadCount(userId: string): Promise<number> {

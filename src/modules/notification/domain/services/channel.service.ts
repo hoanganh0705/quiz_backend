@@ -12,8 +12,7 @@ import type {
   NotificationChannel,
   NotificationPreferencesRow,
 } from '../types/notification.types';
-import { NOTIFICATION_REPOSITORY_PORT } from '../../infrastructure/repositories/notification.repository';
-import type { NotificationRepositoryPort } from '../../infrastructure/repositories/notification.repository';
+import { NOTIFICATION_REPOSITORY_PORT, type NotificationRepositoryPort } from '../ports';
 
 @Injectable()
 export class NotificationChannelService {
@@ -35,7 +34,7 @@ export class NotificationChannelService {
     metadata?: Record<string, unknown>;
     channels?: NotificationChannel[];
   }): Promise<void> {
-    const channels = params.channels ?? ['in_app'] as NotificationChannel[];
+    const channels = params.channels ?? (['in_app'] as NotificationChannel[]);
 
     for (const channel of channels) {
       await this.sendToChannel(params, channel);

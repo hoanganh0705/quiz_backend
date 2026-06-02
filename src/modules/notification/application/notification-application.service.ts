@@ -1,12 +1,10 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
 import { NotificationService } from '../domain/notification.service';
-import {
-  NOTIFICATION_REPOSITORY_PORT,
-  NotificationRepositoryPort,
-} from '../domain/ports/notification-ports';
+import { NOTIFICATION_REPOSITORY_PORT } from '../domain/ports/notification-ports';
+import type { NotificationRepositoryPort } from '../domain/ports/notification-ports';
 import type {
-  Notification,
+  Notification as DomainNotification,
   NotificationListParams,
   CreateNotificationParams,
   NotificationPreferencesRow,
@@ -26,7 +24,7 @@ export class NotificationApplicationService {
     limit: number,
     cursor?: { createdAt: string; notificationId: string } | null,
     unreadOnly?: boolean,
-  ): Promise<{ items: Notification[]; unreadCount: number; hasNextPage: boolean }> {
+  ): Promise<{ items: DomainNotification[]; unreadCount: number; hasNextPage: boolean }> {
     const params: NotificationListParams = { limit, cursor, unreadOnly };
 
     const [notifications, unreadCount] = await Promise.all([
@@ -56,7 +54,7 @@ export class NotificationApplicationService {
     await this.notificationService.deleteNotification(notificationId, user.sub);
   }
 
-  async createNotification(params: CreateNotificationParams): Promise<Notification> {
+  async createNotification(params: CreateNotificationParams): Promise<DomainNotification> {
     return this.notificationService.create(params);
   }
 

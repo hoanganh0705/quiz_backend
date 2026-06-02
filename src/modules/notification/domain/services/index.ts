@@ -1,4 +1,3 @@
-export * from './notification.service';
 export * from './rank-notification.service';
 export * from './channel.service';
 export * from './achievement-notification.service';
