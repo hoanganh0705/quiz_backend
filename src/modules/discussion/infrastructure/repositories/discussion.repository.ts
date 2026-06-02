@@ -30,17 +30,7 @@ import type {
   ReviewReportParams,
   DiscussionVoteValue,
 } from '../../domain/types';
-import {
-  eq,
-  and,
-  inArray,
-  sql,
-  desc,
-  asc,
-  lte,
-  gte,
-  isNull,
-} from 'drizzle-orm';
+import { eq, and, inArray, sql, desc, asc, lte, gte, isNull } from 'drizzle-orm';
 
 @Injectable()
 export class DiscussionRepository implements DISCUSSION_REPOSITORY_PORT {
@@ -67,12 +57,7 @@ export class DiscussionRepository implements DISCUSSION_REPOSITORY_PORT {
     const [thread] = await this.db
       .select()
       .from(discussionThreads)
-      .where(
-        and(
-          eq(discussionThreads.threadId, threadId),
-          isNull(discussionThreads.deletedAt),
-        ),
-      );
+      .where(and(eq(discussionThreads.threadId, threadId), isNull(discussionThreads.deletedAt)));
 
     if (!thread) return null;
     return this.enrichThread(thread as DiscussionThreadRow);
@@ -85,16 +70,11 @@ export class DiscussionRepository implements DISCUSSION_REPOSITORY_PORT {
     const [thread] = await this.db
       .select()
       .from(discussionThreads)
-      .where(
-        and(
-          eq(discussionThreads.threadId, threadId),
-          isNull(discussionThreads.deletedAt),
-        ),
-      );
+      .where(and(eq(discussionThreads.threadId, threadId), isNull(discussionThreads.deletedAt)));
 
     if (!thread) return null;
 
-    const enriched = this.enrichThread(thread as DiscussionThreadRow);
+    const enriched = await this.enrichThread(thread as DiscussionThreadRow);
 
     let userVote: DiscussionVoteValue | null = null;
     if (userId) {
@@ -138,14 +118,16 @@ export class DiscussionRepository implements DISCUSSION_REPOSITORY_PORT {
 
     const commentsWithReplies = topLevelComments.map((row) => {
       const comment = row.comment as DiscussionCommentRow;
+      const commentId = row.comment.commentId;
       const enrichedComment = this.enrichComment(comment, {
-        username: row.authorUsername as string,
-        displayName: row.authorDisplayName as string | null,
-        avatarUrl: row.authorAvatarUrl as string | null,
+        username: row.authorUsername,
+        displayName: row.authorDisplayName,
+        avatarUrl: row.authorAvatarUrl,
       });
       return {
         ...enrichedComment,
-        replies: repliesByParent.get(comment.commentId) ?? [],
+        replies: repliesByParent.get(commentId) ?? [],
+        userVote: null,
       };
     });
 
@@ -189,7 +171,7 @@ export class DiscussionRepository implements DISCUSSION_REPOSITORY_PORT {
       : undefined;
 
     if (cursorCondition) {
-      conditions.push(cursorCondition as ReturnType<typeof eq> | ReturnType<typeof gte> | ReturnType<typeof lte>);
+      conditions.push(cursorCondition);
     }
 
     const rows = await this.db
@@ -206,12 +188,14 @@ export class DiscussionRepository implements DISCUSSION_REPOSITORY_PORT {
       .orderBy(orderDir(orderCol))
       .limit(limit + 1);
 
-    return rows.map((row) =>
-      this.enrichThread(row.thread as DiscussionThreadRow, {
-        username: row.authorUsername as string,
-        displayName: row.authorDisplayName as string | null,
-        avatarUrl: row.authorAvatarUrl as string | null,
-      }),
+    return Promise.all(
+      rows.map((row) =>
+        this.enrichThread(row.thread as DiscussionThreadRow, {
+          username: row.authorUsername,
+          displayName: row.authorDisplayName,
+          avatarUrl: row.authorAvatarUrl,
+        }),
+      ),
     );
   }
 
@@ -236,10 +220,7 @@ export class DiscussionRepository implements DISCUSSION_REPOSITORY_PORT {
     return this.enrichThread(updated as DiscussionThreadRow);
   }
 
-  async softDeleteThread(params: {
-    threadId: string;
-    authorId: string;
-  }): Promise<void> {
+  async softDeleteThread(params: { threadId: string; authorId: string }): Promise<void> {
     const now = new Date().toISOString();
     await this.db
       .update(discussionThreads)
@@ -317,21 +298,15 @@ export class DiscussionRepository implements DISCUSSION_REPOSITORY_PORT {
       .innerJoin(users, eq(discussionComments.authorId, users.userId))
       .leftJoin(userProfiles, eq(users.userId, userProfiles.userId))
       .where(
-        and(
-          eq(discussionComments.commentId, commentId),
-          isNull(discussionComments.deletedAt),
-        ),
+        and(eq(discussionComments.commentId, commentId), isNull(discussionComments.deletedAt)),
       );
 
     if (!row) return null;
-    return this.enrichComment(
-      row.comment as DiscussionCommentRow,
-      {
-        username: row.authorUsername as string,
-        displayName: row.authorDisplayName as string | null,
-        avatarUrl: row.authorAvatarUrl as string | null,
-      },
-    );
+    return this.enrichComment(row.comment as DiscussionCommentRow, {
+      username: row.authorUsername,
+      displayName: row.authorDisplayName,
+      avatarUrl: row.authorAvatarUrl,
+    });
   }
 
   async listComments(params: ListCommentsParams): Promise<DiscussionCommentWithReplies[]> {
@@ -366,13 +341,15 @@ export class DiscussionRepository implements DISCUSSION_REPOSITORY_PORT {
       .orderBy(asc(discussionComments.createdAt))
       .limit(limit + 1);
 
-    return rows.map((row) =>
-      this.enrichComment(row.comment as DiscussionCommentRow, {
-        username: row.authorUsername as string,
-        displayName: row.authorDisplayName as string | null,
-        avatarUrl: row.authorAvatarUrl as string | null,
+    return rows.map((row) => ({
+      ...this.enrichComment(row.comment as DiscussionCommentRow, {
+        username: row.authorUsername,
+        displayName: row.authorDisplayName,
+        avatarUrl: row.authorAvatarUrl,
       }),
-    ) as DiscussionCommentWithReplies[];
+      replies: [],
+      userVote: null,
+    }));
   }
 
   async getRepliesByParentIds(
@@ -406,9 +383,9 @@ export class DiscussionRepository implements DISCUSSION_REPOSITORY_PORT {
       if (count < limitPerParent) {
         result.push(
           this.enrichComment(row.comment as DiscussionCommentRow, {
-            username: row.authorUsername as string,
-            displayName: row.authorDisplayName as string | null,
-            avatarUrl: row.authorAvatarUrl as string | null,
+            username: row.authorUsername,
+            displayName: row.authorDisplayName,
+            avatarUrl: row.authorAvatarUrl,
           }),
         );
         countByParent.set(parentId, count + 1);
@@ -418,10 +395,7 @@ export class DiscussionRepository implements DISCUSSION_REPOSITORY_PORT {
     return result;
   }
 
-  async getCommentReplies(
-    parentCommentId: string,
-    limit: number,
-  ): Promise<DiscussionComment[]> {
+  async getCommentReplies(parentCommentId: string, limit: number): Promise<DiscussionComment[]> {
     const rows = await this.db
       .select({
         comment: discussionComments,
@@ -443,9 +417,9 @@ export class DiscussionRepository implements DISCUSSION_REPOSITORY_PORT {
 
     return rows.map((row) =>
       this.enrichComment(row.comment as DiscussionCommentRow, {
-        username: row.authorUsername as string,
-        displayName: row.authorDisplayName as string | null,
-        avatarUrl: row.authorAvatarUrl as string | null,
+        username: row.authorUsername,
+        displayName: row.authorDisplayName,
+        avatarUrl: row.authorAvatarUrl,
       }),
     );
   }
@@ -470,10 +444,7 @@ export class DiscussionRepository implements DISCUSSION_REPOSITORY_PORT {
     return this.enrichComment(updated as DiscussionCommentRow);
   }
 
-  async softDeleteComment(params: {
-    commentId: string;
-    authorId: string;
-  }): Promise<void> {
+  async softDeleteComment(params: { commentId: string; authorId: string }): Promise<void> {
     const now = new Date().toISOString();
     await this.db
       .update(discussionComments)
@@ -501,12 +472,7 @@ export class DiscussionRepository implements DISCUSSION_REPOSITORY_PORT {
     await this.db
       .update(discussionComments)
       .set({ deletedAt: now, updatedAt: now, status: 'deleted' })
-      .where(
-        and(
-          eq(discussionComments.threadId, threadId),
-          isNull(discussionComments.deletedAt),
-        ),
-      );
+      .where(and(eq(discussionComments.threadId, threadId), isNull(discussionComments.deletedAt)));
   }
 
   async incrementCommentRepliesCount(commentId: string, delta: number): Promise<void> {
@@ -547,11 +513,7 @@ export class DiscussionRepository implements DISCUSSION_REPOSITORY_PORT {
         value: params.value,
       })
       .onConflictDoUpdate({
-        target: [
-          discussionVotes.userId,
-          discussionVotes.targetType,
-          discussionVotes.targetId,
-        ],
+        target: [discussionVotes.userId, discussionVotes.targetType, discussionVotes.targetId],
         set: {
           value: params.value,
           updatedAt: new Date().toISOString(),
@@ -665,7 +627,7 @@ export class DiscussionRepository implements DISCUSSION_REPOSITORY_PORT {
 
   // ─── ENRICHERS ──────────────────────────────────────────────────────────────
 
-  private enrichThread(
+  private async enrichThread(
     thread: DiscussionThreadRow,
     overrideAuthor?: {
       username: string;
@@ -713,9 +675,9 @@ export class DiscussionRepository implements DISCUSSION_REPOSITORY_PORT {
       authorId: thread.author_id,
       author: {
         userId: thread.author_id,
-        username: (userRow?.username ?? '') as string,
-        displayName: (userRow?.displayName ?? null) as string | null,
-        avatarUrl: (userRow?.avatarUrl ?? null) as string | null,
+        username: userRow?.username ?? '',
+        displayName: userRow?.displayName ?? null,
+        avatarUrl: userRow?.avatarUrl ?? null,
       },
       title: thread.title,
       body: thread.body,
@@ -744,9 +706,9 @@ export class DiscussionRepository implements DISCUSSION_REPOSITORY_PORT {
       authorId: comment.author_id,
       author: {
         userId: comment.author_id,
-        username: (author?.username ?? '') as string,
-        displayName: (author?.displayName ?? null) as string | null,
-        avatarUrl: (author?.avatarUrl ?? null) as string | null,
+        username: author?.username ?? '',
+        displayName: author?.displayName ?? null,
+        avatarUrl: author?.avatarUrl ?? null,
       },
       parentCommentId: comment.parent_comment_id,
       body: comment.body,

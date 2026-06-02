@@ -1,4 +1,4 @@
-import { Module, forwardRef } from '@nestjs/common';
+import { Module } from '@nestjs/common';
 import { DatabaseModule } from '@/core/database/database.module';
 import { AttemptApplicationService } from './application/attempt.application.service';
 import { AttemptCommandService } from './domain/attempt-command.service';

@@ -47,12 +47,12 @@ export interface DiscussionComment {
 
 export interface DiscussionCommentWithReplies extends DiscussionComment {
   replies: DiscussionComment[];
-  userVote?: DiscussionVoteValue | null;
+  userVote: DiscussionVoteValue | null;
 }
 
 export interface DiscussionThreadDetail extends Omit<DiscussionThread, 'author'> {
   author: DiscussionThreadAuthor;
-  userVote?: DiscussionVoteValue | null;
+  userVote: DiscussionVoteValue | null;
   comments: DiscussionCommentWithReplies[];
 }
 
