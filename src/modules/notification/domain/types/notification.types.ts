@@ -1,20 +1,29 @@
-import type { notificationType, notificationChannel } from '@/modules/notification/infrastructure/notification.schema';
+import type {
+  notificationType,
+  notificationChannel,
+  notifications,
+  notificationPreferences,
+} from '@/modules/notification/infrastructure/notification.schema';
+
+export type NotificationType = (typeof notificationType.enumValues)[number];
+export type NotificationChannel = (typeof notificationChannel.enumValues)[number];
 
 export interface Notification {
   notificationId: string;
   userId: string;
-  type: typeof notificationType;
+  type: NotificationType;
   title: string;
   message: string;
   metadata: Record<string, unknown>;
-  channel: typeof notificationChannel;
+  channel: NotificationChannel;
   isRead: boolean;
   readAt: string | null;
   expiresAt: string | null;
   createdAt: string;
+  deletedAt: string | null;
 }
 
-export interface NotificationPreferences {
+export interface NotificationPreferencesRow {
   preferencesId: string;
   userId: string;
   inAppEnabled: boolean;
@@ -26,18 +35,20 @@ export interface NotificationPreferences {
   friendEnabled: boolean;
   summaryEnabled: boolean;
   marketingEnabled: boolean;
+  rankImprovementThreshold: number;
   quietHoursStart: string | null;
   quietHoursEnd: string | null;
   updatedAt: string;
+  createdAt: string;
 }
 
 export interface CreateNotificationParams {
   userId: string;
-  type: 'achievement_earned' | 'badge_unlocked' | 'tournament_invite' | 'tournament_starting' | 'tournament_completed' | 'rank_improved' | 'streak_milestone' | 'friend_request' | 'friend_accepted' | 'quiz_commented' | 'weekly_summary' | 'system_announcement';
+  type: NotificationType;
   title: string;
   message: string;
   metadata?: Record<string, unknown>;
-  channel?: 'in_app' | 'email' | 'push';
+  channel?: NotificationChannel;
   expiresAt?: string;
 }
 
@@ -46,3 +57,56 @@ export interface NotificationListParams {
   cursor?: { createdAt: string; notificationId: string } | null;
   unreadOnly?: boolean;
 }
+
+export interface UpdatePreferencesParams {
+  inAppEnabled?: boolean;
+  emailEnabled?: boolean;
+  pushEnabled?: boolean;
+  achievementEnabled?: boolean;
+  tournamentEnabled?: boolean;
+  rankEnabled?: boolean;
+  friendEnabled?: boolean;
+  summaryEnabled?: boolean;
+  marketingEnabled?: boolean;
+  rankImprovementThreshold?: number;
+  quietHoursStart?: string | null;
+  quietHoursEnd?: string | null;
+}
+
+// Rank notification params
+export interface RankNotificationParams {
+  userId: string;
+  rank: number;
+  period: string;
+  milestone: 'top10' | 'top100' | 'top1000' | 'rank1';
+  percentile: number;
+}
+
+export interface RankImprovementParams {
+  userId: string;
+  previousRank: number;
+  newRank: number;
+  period: string;
+  improvement: number;
+}
+
+export interface PeriodWinnerParams {
+  userId: string;
+  period: string;
+  isWeekly: boolean;
+}
+
+// Notification titles and bodies
+export const RANK_NOTIFICATION_TITLES: Record<string, string> = {
+  top10: 'Top 10 Achieved!',
+  top100: 'Top 100 Achieved!',
+  top1000: 'Top 1000 Achieved!',
+  rank1: 'You are #1!',
+};
+
+export const RANK_NOTIFICATION_BODIES: Record<string, string> = {
+  top10: 'Congratulations! You have reached the top 10!',
+  top100: 'Amazing! You have reached the top 100!',
+  top1000: 'Great job! You have reached the top 1000!',
+  rank1: 'You are the top ranked player!',
+};
