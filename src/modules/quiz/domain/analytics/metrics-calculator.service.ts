@@ -2,8 +2,8 @@ import { Inject, Injectable } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { DRIZZLE } from '@/core/database/drizzle.constants';
 import type { DrizzleDB } from '@/core/database/database.module';
-import { quizAttempts, quizVersions, quizReviews, bookmarkedQuizzes, quizzes } from '@/core/database/schema';
-import { count, eq, and, sql, isNull, gte, inArray } from 'drizzle-orm';
+import { quizAttempts, quizVersions, quizReviews, bookmarkedQuizzes } from '@/core/database/schema';
+import { count, eq, and, sql, gte } from 'drizzle-orm';
 
 @Injectable()
 export class MetricsCalculatorService {
@@ -17,13 +17,10 @@ export class MetricsCalculatorService {
     const result = await this.db
       .select({ count: count() })
       .from(quizAttempts)
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-member-access
       .innerJoin(quizVersions, eq(quizAttempts.quizVersionId, quizVersions.quizVersionId))
-      .where(
-        and(
-          eq(quizVersions.quizId, quizId),
-          eq(quizAttempts.status, 'completed'),
-        ),
-      );
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+      .where(and(eq(quizVersions.quizId, quizId), eq(quizAttempts.status, 'completed')));
 
     return Number(result[0]?.count ?? 0);
   }
@@ -32,44 +29,24 @@ export class MetricsCalculatorService {
     const result = await this.db
       .select({ count: count(sql`DISTINCT ${quizAttempts.userId}`) })
       .from(quizAttempts)
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-member-access
       .innerJoin(quizVersions, eq(quizAttempts.quizVersionId, quizVersions.quizVersionId))
-      .where(
-        and(
-          eq(quizVersions.quizId, quizId),
-          eq(quizAttempts.status, 'completed'),
-        ),
-      );
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+      .where(and(eq(quizVersions.quizId, quizId), eq(quizAttempts.status, 'completed')));
 
     return Number(result[0]?.count ?? 0);
   }
 
   async calculateAverageScore(quizId: string): Promise<number> {
-    const result = await this.db
-      .select({
-        avg: sql<number>`COALESCE(AVG(${quizAttempts.scorePercent}::numeric), 0)`,
-      })
-      .from(quizAttempts)
-      .innerJoin(quizVersions, eq(quizAttempts.quizVersionId, quizVersions.quizVersionId))
-      .where(
-        and(
-          eq(quizVersions.quizId, quizId),
-          eq(quizAttempts.status, 'completed'),
-          isNull(quizAttempts.scorePercent),
-        ),
-      );
-
     const withScore = await this.db
       .select({
         avg: sql<number>`COALESCE(AVG(${quizAttempts.scorePercent}::numeric), 0)`,
       })
       .from(quizAttempts)
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-member-access
       .innerJoin(quizVersions, eq(quizAttempts.quizVersionId, quizVersions.quizVersionId))
-      .where(
-        and(
-          eq(quizVersions.quizId, quizId),
-          eq(quizAttempts.status, 'completed'),
-        ),
-      );
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+      .where(and(eq(quizVersions.quizId, quizId), eq(quizAttempts.status, 'completed')));
 
     return Number(withScore[0]?.avg ?? 0);
   }
@@ -78,9 +55,11 @@ export class MetricsCalculatorService {
     const totalResult = await this.db
       .select({ count: count() })
       .from(quizAttempts)
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-member-access
       .innerJoin(quizVersions, eq(quizAttempts.quizVersionId, quizVersions.quizVersionId))
       .where(
         and(
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
           eq(quizVersions.quizId, quizId),
           sql`${quizAttempts.status} IN ('started', 'completed')`,
         ),
@@ -95,13 +74,10 @@ export class MetricsCalculatorService {
     const completedResult = await this.db
       .select({ count: count() })
       .from(quizAttempts)
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-member-access
       .innerJoin(quizVersions, eq(quizAttempts.quizVersionId, quizVersions.quizVersionId))
-      .where(
-        and(
-          eq(quizVersions.quizId, quizId),
-          eq(quizAttempts.status, 'completed'),
-        ),
-      );
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+      .where(and(eq(quizVersions.quizId, quizId), eq(quizAttempts.status, 'completed')));
 
     const completed = Number(completedResult[0]?.count ?? 0);
 
@@ -145,29 +121,47 @@ export class MetricsCalculatorService {
     const bookmarkWeight = 2;
     const reviewWeight = 3;
 
-    const attemptScore = await this.calculateRecentAttemptsScore(quizId, sevenDaysAgo, attemptWeight);
-    const bookmarkScore = await this.calculateRecentBookmarksScore(quizId, sevenDaysAgo, bookmarkWeight);
+    const attemptScore = await this.calculateRecentAttemptsScore(
+      quizId,
+      sevenDaysAgo,
+      attemptWeight,
+    );
+    const bookmarkScore = await this.calculateRecentBookmarksScore(
+      quizId,
+      sevenDaysAgo,
+      bookmarkWeight,
+    );
     const reviewScore = await this.calculateRecentReviewsScore(quizId, sevenDaysAgo, reviewWeight);
 
     return attemptScore + bookmarkScore + reviewScore;
   }
 
-  private async calculateRecentAttemptsScore(quizId: string, since: Date, weight: number): Promise<number> {
+  private async calculateRecentAttemptsScore(
+    quizId: string,
+    since: Date,
+    weight: number,
+  ): Promise<number> {
     const attempts = await this.db
       .select({ createdAt: quizAttempts.createdAt })
       .from(quizAttempts)
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-member-access
       .innerJoin(quizVersions, eq(quizAttempts.quizVersionId, quizVersions.quizVersionId))
       .where(
-        and(
-          eq(quizVersions.quizId, quizId),
-          gte(quizAttempts.createdAt, since.toISOString()),
-        ),
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+        and(eq(quizVersions.quizId, quizId), gte(quizAttempts.createdAt, since.toISOString())),
       );
 
-    return this.applyTimeDecay(attempts.map(a => a.createdAt), weight);
+    return this.applyTimeDecay(
+      attempts.map((a) => a.createdAt),
+      weight,
+    );
   }
 
-  private async calculateRecentBookmarksScore(quizId: string, since: Date, weight: number): Promise<number> {
+  private async calculateRecentBookmarksScore(
+    quizId: string,
+    since: Date,
+    weight: number,
+  ): Promise<number> {
     const bookmarks = await this.db
       .select({ bookmarkedAt: bookmarkedQuizzes.bookmarkedAt })
       .from(bookmarkedQuizzes)
@@ -178,21 +172,26 @@ export class MetricsCalculatorService {
         ),
       );
 
-    return this.applyTimeDecay(bookmarks.map(b => b.bookmarkedAt), weight);
+    return this.applyTimeDecay(
+      bookmarks.map((b) => b.bookmarkedAt),
+      weight,
+    );
   }
 
-  private async calculateRecentReviewsScore(quizId: string, since: Date, weight: number): Promise<number> {
+  private async calculateRecentReviewsScore(
+    quizId: string,
+    since: Date,
+    weight: number,
+  ): Promise<number> {
     const reviews = await this.db
       .select({ createdAt: quizReviews.createdAt })
       .from(quizReviews)
-      .where(
-        and(
-          eq(quizReviews.quizId, quizId),
-          gte(quizReviews.createdAt, since.toISOString()),
-        ),
-      );
+      .where(and(eq(quizReviews.quizId, quizId), gte(quizReviews.createdAt, since.toISOString())));
 
-    return this.applyTimeDecay(reviews.map(r => r.createdAt), weight);
+    return this.applyTimeDecay(
+      reviews.map((r) => r.createdAt),
+      weight,
+    );
   }
 
   private applyTimeDecay(timestamps: (string | null)[], baseWeight: number): number {
