@@ -12,16 +12,20 @@ import {
   RankNotificationService,
   AchievementNotificationService,
   TournamentNotificationService,
+  SocialNotificationService,
 } from './domain/services';
 import {
   RankingListenerAdapter,
   AchievementListenerAdapter,
   TournamentListenerAdapter,
+  SocialListenerAdapter,
+  SocialEventHandler,
 } from './infrastructure/adapters';
 import { RankingModule } from '@/modules/ranking';
+import { SocialModule } from '@/modules/social';
 
 @Module({
-  imports: [DatabaseModule, RankingModule],
+  imports: [DatabaseModule, RankingModule, SocialModule],
   providers: [
     // Infrastructure - Repository
     NotificationRepository,
@@ -36,11 +40,14 @@ import { RankingModule } from '@/modules/ranking';
     RankNotificationService,
     AchievementNotificationService,
     TournamentNotificationService,
+    SocialNotificationService,
 
     // Infrastructure - Event Listeners
     RankingListenerAdapter,
     AchievementListenerAdapter,
     TournamentListenerAdapter,
+    SocialListenerAdapter,
+    SocialEventHandler,
 
     // Application
     NotificationApplicationService,
@@ -56,6 +63,7 @@ import { RankingModule } from '@/modules/ranking';
     RankNotificationService,
     AchievementNotificationService,
     TournamentNotificationService,
+    SocialNotificationService,
 
     // Application
     NotificationApplicationService,

@@ -6,6 +6,8 @@ import { SocialRepository } from './infrastructure/repositories/social.repositor
 import { SocialController } from './transport/controller/social.controller';
 import { SocialDomainExceptionFilter } from './transport/filters/social-domain-exception.filter';
 import { SOCIAL_REPOSITORY_PORT } from './domain/ports/social-ports';
+import { SOCIAL_DOMAIN_EVENT_BUS } from './domain/events';
+import { SocialDomainEventBus } from './domain/events/social-domain.event-bus';
 import { UserModule } from '@/modules/user/user.module';
 
 @Module({
@@ -15,9 +17,16 @@ import { UserModule } from '@/modules/user/user.module';
     SocialService,
     SocialRepository,
     SocialDomainExceptionFilter,
+    SocialDomainEventBus,
     { provide: SOCIAL_REPOSITORY_PORT, useExisting: SocialRepository },
+    { provide: SOCIAL_DOMAIN_EVENT_BUS, useExisting: SocialDomainEventBus },
   ],
   controllers: [SocialController],
-  exports: [SocialService, SocialApplicationService],
+  exports: [
+    SocialService,
+    SocialApplicationService,
+    SOCIAL_DOMAIN_EVENT_BUS,
+    SocialDomainEventBus,
+  ],
 })
 export class SocialModule {}
