@@ -6,17 +6,12 @@ import { DiscussionRepository } from './infrastructure/repositories/discussion.r
 import { QuizExistenceAdapter } from './infrastructure/adapters/quiz-existence.adapter';
 import { DiscussionController } from './transport/controller/discussion.controller';
 import { DiscussionDomainExceptionFilter } from './transport/controller/filters/discussion-domain-exception.filter';
-import {
-  DISCUSSION_REPOSITORY_PORT,
-  QUIZ_EXISTENCE_PORT,
-} from './domain/ports';
-import {
-  DISCUSSION_DOMAIN_EVENT_BUS,
-  DiscussionDomainEventBus,
-} from './domain/events';
+import { DISCUSSION_REPOSITORY_PORT, QUIZ_EXISTENCE_PORT } from './domain/ports';
+import { DISCUSSION_DOMAIN_EVENT_BUS, DiscussionDomainEventBus } from './domain/events';
+import { QuizModule } from '@/modules/quiz/quiz.module';
 
 @Module({
-  imports: [DatabaseModule],
+  imports: [DatabaseModule, QuizModule],
   providers: [
     DiscussionApplicationService,
     DiscussionService,

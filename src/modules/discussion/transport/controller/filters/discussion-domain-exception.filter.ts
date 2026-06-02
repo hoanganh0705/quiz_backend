@@ -1,4 +1,4 @@
-import { Catch, ArgumentsHost, HttpException, HttpStatus } from '@nestjs/common';
+import { Catch, ArgumentsHost, HttpStatus } from '@nestjs/common';
 import { Response } from 'express';
 import {
   DiscussionError,
@@ -8,11 +8,12 @@ import {
   CommentForbiddenError,
   ThreadClosedError,
   ThreadNotActiveError,
-  DuplicateVoteError,
   SelfVoteError,
   SelfReportError,
   DuplicateReportError,
-} from '../../../../domain/errors';
+  ReportNotFoundError,
+  ReportReviewForbiddenError,
+} from '../../../domain/errors';
 
 @Catch(DiscussionError)
 export class DiscussionDomainExceptionFilter {
@@ -34,14 +35,16 @@ export class DiscussionDomainExceptionFilter {
       status = HttpStatus.CONFLICT;
     } else if (exception instanceof ThreadNotActiveError) {
       status = HttpStatus.CONFLICT;
-    } else if (exception instanceof DuplicateVoteError) {
-      status = HttpStatus.CONFLICT;
     } else if (exception instanceof SelfVoteError) {
       status = HttpStatus.FORBIDDEN;
     } else if (exception instanceof SelfReportError) {
       status = HttpStatus.FORBIDDEN;
     } else if (exception instanceof DuplicateReportError) {
       status = HttpStatus.CONFLICT;
+    } else if (exception instanceof ReportNotFoundError) {
+      status = HttpStatus.NOT_FOUND;
+    } else if (exception instanceof ReportReviewForbiddenError) {
+      status = HttpStatus.FORBIDDEN;
     }
 
     response.status(status).json({

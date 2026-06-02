@@ -21,7 +21,7 @@ import {
   BOOKMARK_NOT_FOUND_MESSAGE,
   BOOKMARK_QUIZ_ALREADY_EXISTS_MESSAGE,
 } from '../bookmark.constants';
-import type { AnalyticsEventHandler } from '@/modules/quiz/domain/analytics/analytics-event-handler';
+import { AnalyticsEventHandler } from '@/modules/quiz/domain/analytics/analytics-event-handler';
 
 @Injectable()
 export class BookmarkService {
@@ -32,7 +32,7 @@ export class BookmarkService {
     private readonly quizRepository: {
       getActiveQuizRecordById: (quizId: string) => Promise<{ quizId: string } | null>;
     },
-    @Inject(forwardRef(() => require('@/modules/quiz/quiz.module').AnalyticsEventHandler))
+    @Inject(forwardRef(() => AnalyticsEventHandler))
     private readonly analyticsEventHandler: AnalyticsEventHandler,
     @InjectPinoLogger(BookmarkService.name)
     private readonly logger: PinoLogger,

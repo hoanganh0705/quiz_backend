@@ -24,7 +24,7 @@ import {
 } from '@nestjs/swagger';
 import { ApiAuth, ApiValidationRequest } from '@/common/swagger/swagger-decorators';
 import { RequireAuth } from '@/common/guards/jwt.guard';
-import { Permissions } from '@/common/authorization/permissions.decorator';
+import { Roles } from '@/common/authorization/decorators/roles.decorator';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
 import { DiscussionApplicationService } from '@/modules/discussion/application/discussion-application.service';
@@ -32,7 +32,6 @@ import {
   ThreadDto,
   ThreadDetailDto,
   CommentDto,
-  CommentWithRepliesDto,
   PaginatedThreadsDto,
   PaginatedCommentsDto,
   PaginatedReportsDto,
@@ -168,7 +167,7 @@ export class DiscussionController {
 
   @Post('threads/:threadId/hide')
   @ApiAuth()
-  @Permissions('admin', 'moderator')
+  @Roles('admin', 'moderator')
   @ApiOperation({ summary: 'Hide a thread (moderator only)' })
   @ApiOkResponse({ description: 'Thread hidden' })
   @ApiNotFoundResponse({ description: 'Thread not found' })
@@ -265,7 +264,7 @@ export class DiscussionController {
 
   @Post('comments/:commentId/hide')
   @ApiAuth()
-  @Permissions('admin', 'moderator')
+  @Roles('admin', 'moderator')
   @ApiOperation({ summary: 'Hide a comment (moderator only)' })
   @ApiOkResponse({ description: 'Comment hidden' })
   @ApiNotFoundResponse({ description: 'Comment not found' })
@@ -289,10 +288,7 @@ export class DiscussionController {
   @ApiForbiddenResponse({ description: 'Cannot vote on own content' })
   @ApiBadRequestResponse({ description: 'Validation failed' })
   @ApiValidationRequest()
-  async vote(
-    @CurrentUser() user: JwtPayload,
-    @Body() dto: VoteDto,
-  ): Promise<{ message: string }> {
+  async vote(@CurrentUser() user: JwtPayload, @Body() dto: VoteDto): Promise<{ message: string }> {
     await this.discussionService.vote(user, dto.targetType, dto.targetId, dto.value);
     return { message: 'Vote recorded' };
   }
@@ -338,7 +334,7 @@ export class DiscussionController {
 
   @Post('reports/:reportId/review')
   @ApiAuth()
-  @Permissions('admin', 'moderator')
+  @Roles('admin', 'moderator')
   @ApiOperation({ summary: 'Review and resolve a report (moderator only)' })
   @ApiOkResponse({ description: 'Report reviewed' })
   @ApiNotFoundResponse({ description: 'Report not found' })
@@ -356,7 +352,7 @@ export class DiscussionController {
 
   @Get('reports')
   @ApiAuth()
-  @Permissions('admin', 'moderator')
+  @Roles('admin', 'moderator')
   @ApiOperation({ summary: 'List reports for moderation review (moderator only)' })
   @ApiOkResponse({ description: 'Reports returned', type: PaginatedReportsDto })
   @ApiForbiddenResponse({ description: 'Not a moderator' })

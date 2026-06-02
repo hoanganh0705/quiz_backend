@@ -1,10 +1,7 @@
 import { Injectable, NestInterceptor, ExecutionContext, CallHandler } from '@nestjs/common';
 import type { Observable } from 'rxjs';
 import type { Request } from 'express';
-import type {
-  AuthCookieInstructions,
-  AuthRequestContext,
-} from '../types/auth-http-context.types';
+import type { AuthCookieInstructions, AuthRequestContext } from '../types/auth-http-context.types';
 import { AuthRequestContextService } from '../../infrastructure/context/auth-request-context.service';
 
 type RequestWithAuthContext = Request & {
