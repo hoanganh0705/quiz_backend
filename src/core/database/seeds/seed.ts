@@ -404,12 +404,7 @@ const seedUserProfilesDomain = (rawSeeds: readonly RawUserSeed[]): SeedDomain =>
         email: users.email,
       })
       .from(users)
-      .where(
-        and(
-          isNull(users.deletedAt),
-          inArray(users.email, emails),
-        ),
-      );
+      .where(and(isNull(users.deletedAt), inArray(users.email, emails)));
 
     const existingByEmail = new Map(existingUsers.map((row) => [normalizeEmail(row.email), row]));
 
