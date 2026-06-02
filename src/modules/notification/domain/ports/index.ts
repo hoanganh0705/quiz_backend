@@ -1,5 +1,1 @@
-/**
- * Notification Domain Ports
- */
-
-export * from './notification.port';
+export * from './notification-ports';

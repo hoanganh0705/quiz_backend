@@ -1,77 +1,48 @@
-/**
- * Notification Domain Types
- */
+import type { notificationType, notificationChannel } from '@/modules/notification/infrastructure/notification.schema';
 
-// ============================================
-// ENUMS
-// ============================================
-
-export enum NotificationChannel {
-  IN_APP = 'in_app',
-  EMAIL = 'email',
-  PUSH = 'push',
-}
-
-export enum NotificationType {
-  RANK_ACHIEVEMENT = 'rank_achievement',
-  RANK_IMPROVEMENT = 'rank_improvement',
-  PERIOD_WINNER = 'period_winner',
-  WEEKLY_SUMMARY = 'weekly_summary',
-  SYSTEM = 'system',
-}
-
-// ============================================
-// TYPES
-// ============================================
-
-export interface RankNotificationParams {
+export interface Notification {
+  notificationId: string;
   userId: string;
-  rank: number;
-  period: string;
-  milestone: 'top10' | 'top100' | 'top1000' | 'rank1';
-  percentile: number;
-}
-
-export interface RankImprovementParams {
-  userId: string;
-  previousRank: number;
-  newRank: number;
-  period: string;
-  improvement: number;
-}
-
-export interface PeriodWinnerParams {
-  userId: string;
-  period: string;
-  isWeekly: boolean;
-}
-
-export interface NotificationRecord {
-  id: string;
-  userId: string;
-  type: NotificationType;
+  type: typeof notificationType;
   title: string;
-  body: string;
-  metadata?: Record<string, unknown>;
-  channel: NotificationChannel;
-  readAt?: Date;
-  createdAt: Date;
+  message: string;
+  metadata: Record<string, unknown>;
+  channel: typeof notificationChannel;
+  isRead: boolean;
+  readAt: string | null;
+  expiresAt: string | null;
+  createdAt: string;
 }
 
-// ============================================
-// CONSTANTS
-// ============================================
+export interface NotificationPreferences {
+  preferencesId: string;
+  userId: string;
+  inAppEnabled: boolean;
+  emailEnabled: boolean;
+  pushEnabled: boolean;
+  achievementEnabled: boolean;
+  tournamentEnabled: boolean;
+  rankEnabled: boolean;
+  friendEnabled: boolean;
+  summaryEnabled: boolean;
+  marketingEnabled: boolean;
+  quietHoursStart: string | null;
+  quietHoursEnd: string | null;
+  updatedAt: string;
+}
 
-export const RANK_NOTIFICATION_TITLES: Record<string, string> = {
-  top10: "You're in the Top 10!",
-  top100: 'New Personal Best!',
-  top1000: 'Rank Milestone!',
-  rank1: "You're #1!",
-};
+export interface CreateNotificationParams {
+  userId: string;
+  type: 'achievement_earned' | 'badge_unlocked' | 'tournament_invite' | 'tournament_starting' | 'tournament_completed' | 'rank_improved' | 'streak_milestone' | 'friend_request' | 'friend_accepted' | 'quiz_commented' | 'weekly_summary' | 'system_announcement';
+  title: string;
+  message: string;
+  metadata?: Record<string, unknown>;
+  channel?: 'in_app' | 'email' | 'push';
+  expiresAt?: string;
+}
 
-export const RANK_NOTIFICATION_BODIES: Record<string, string> = {
-  top10: 'Congratulations! You have reached the top 10 rankings.',
-  top100: 'Great job! You have achieved a new personal best rank.',
-  top1000: 'Well done! You have reached a new rank milestone.',
-  rank1: 'Congratulations! You are now the #1 ranked player!',
-};
+export interface NotificationListParams {
+  limit: number;
+  cursor?: { createdAt: string; notificationId: string } | null;
+  unreadOnly?: boolean;
+}
