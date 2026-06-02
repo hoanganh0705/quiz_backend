@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, forwardRef } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { isPostgresUniqueViolation } from '@/common/utils/db-error.util';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
@@ -30,6 +30,7 @@ import {
 import { MIN_QUESTIONS_TO_PUBLISH } from '@/modules/quiz/quiz.constants';
 import { AttemptQueryService } from './attempt-query.service';
 import { AttemptScoringService } from './attempt-scoring.service';
+import type { AnalyticsEventHandler } from '@/modules/quiz/domain/analytics/analytics-event-handler';
 
 /**
  * AttemptCommandService — Mutation operations for the Attempt aggregate.
@@ -46,6 +47,8 @@ export class AttemptCommandService {
     @Inject(ATTEMPT_REPOSITORY_PORT)
     private readonly attemptRepository: AttemptRepositoryPort,
     private readonly attemptQueryService: AttemptQueryService,
+    @Inject(forwardRef(() => require('@/modules/quiz/quiz.module').AnalyticsEventHandler))
+    private readonly analyticsEventHandler: AnalyticsEventHandler,
     @InjectPinoLogger(AttemptCommandService.name)
     private readonly logger: PinoLogger,
   ) {}
@@ -284,6 +287,9 @@ export class AttemptCommandService {
       xpEarned,
       passed: xpEarned > 0,
     });
+
+    // Refresh quiz analytics
+    await this.analyticsEventHandler.onAttemptCompleted(attemptDetail.quizId);
 
     return { ...completed, quizId: attemptDetail.quizId };
   }

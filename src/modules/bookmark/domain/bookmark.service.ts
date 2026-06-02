@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, forwardRef } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import {
   BOOKMARK_REPOSITORY_PORT,
@@ -21,6 +21,7 @@ import {
   BOOKMARK_NOT_FOUND_MESSAGE,
   BOOKMARK_QUIZ_ALREADY_EXISTS_MESSAGE,
 } from '../bookmark.constants';
+import type { AnalyticsEventHandler } from '@/modules/quiz/domain/analytics/analytics-event-handler';
 
 @Injectable()
 export class BookmarkService {
@@ -31,6 +32,8 @@ export class BookmarkService {
     private readonly quizRepository: {
       getActiveQuizRecordById: (quizId: string) => Promise<{ quizId: string } | null>;
     },
+    @Inject(forwardRef(() => require('@/modules/quiz/quiz.module').AnalyticsEventHandler))
+    private readonly analyticsEventHandler: AnalyticsEventHandler,
     @InjectPinoLogger(BookmarkService.name)
     private readonly logger: PinoLogger,
   ) {}
@@ -173,6 +176,9 @@ export class BookmarkService {
         userId: user.sub,
       });
 
+      // Refresh quiz analytics
+      await this.analyticsEventHandler.onBookmarkAdded(quizId);
+
       return bookmark;
     } catch (error) {
       const pgError = error as { code?: string; constraint?: string };
@@ -205,6 +211,9 @@ export class BookmarkService {
       quizId,
       userId: user.sub,
     });
+
+    // Refresh quiz analytics
+    await this.analyticsEventHandler.onBookmarkRemoved(quizId);
   }
 
   async listBookmarksInCollection(collectionId: string, user: JwtPayload) {
