@@ -19,10 +19,32 @@ import { Inject, Injectable } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { sql } from 'drizzle-orm';
-import { RANKING_REPOSITORY_PORT, type RankingRepositoryPort } from '../ports/ranking-repository.port';
+import {
+  RANKING_REPOSITORY_PORT,
+  type RankingRepositoryPort,
+} from '../ports/ranking-repository.port';
 import { RANKING_CONSTANTS, RankingPeriod } from '../types/ranking.types';
-import type { RankCalculationResult, ConsistencyReport, RankingIssue } from '../types/ranking.types';
+import type {
+  RankCalculationResult,
+  ConsistencyReport,
+  RankingIssue,
+} from '../types/ranking.types';
 import { RankCalculationError } from '../errors/ranking-domain.errors';
+
+interface RankedRow extends Record<string, unknown> {
+  user_id: string;
+  xp: number;
+  rank: number;
+  dense_rank: number;
+}
+
+interface CountRow extends Record<string, unknown> {
+  rank: number;
+}
+
+interface DenseRankRow extends Record<string, unknown> {
+  dense_rank: number;
+}
 
 @Injectable()
 export class RankCalculationService {
@@ -44,7 +66,6 @@ export class RankCalculationService {
    */
   async calculateAllRanks(period: RankingPeriod): Promise<RankCalculationResult[]> {
     const xpColumn = this.getXpColumn(period);
-    const rankColumn = this.getRankColumn(period);
 
     this.logger.info({
       event: 'rank_calculation_started',
@@ -55,7 +76,8 @@ export class RankCalculationService {
       // Use raw SQL with both RANK() and DENSE_RANK()
       // RANK() assigns the same rank to ties but leaves gaps
       // DENSE_RANK() assigns the same rank to ties without gaps
-      const results = await this.db.execute(sql`
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+      const results = await this.db.execute<RankedRow>(sql`
         WITH ranked AS (
           SELECT
             ur.user_id,
@@ -74,8 +96,9 @@ export class RankCalculationService {
         SELECT * FROM ranked
       `);
 
-      const rankResults: RankCalculationResult[] = results.rows.map((row) => ({
-        userId: row.user_id as string,
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+      const rankResults: RankCalculationResult[] = (results.rows as RankedRow[]).map((row) => ({
+        userId: row.user_id,
         period,
         rank: Number(row.rank),
         denseRank: Number(row.dense_rank),
@@ -107,8 +130,6 @@ export class RankCalculationService {
    */
   async recalculateRanksForUsers(userIds: string[], period: RankingPeriod): Promise<void> {
     if (userIds.length === 0) return;
-
-    const xpColumn = this.getXpColumn(period);
 
     // First, mark all affected users as dirty
     await this.rankingRepository.markDirty(userIds);
@@ -158,7 +179,8 @@ export class RankCalculationService {
     if (userXp <= 0) return null;
 
     // Count users with strictly higher XP
-    const result = await this.db.execute(sql`
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+    const result = await this.db.execute<CountRow>(sql`
       SELECT COUNT(*) + 1 as rank
       FROM user_ranking ur
       INNER JOIN users u ON u.user_id = ur.user_id
@@ -166,7 +188,8 @@ export class RankCalculationService {
         AND u.deleted_at IS NULL
     `);
 
-    return Number(result.rows[0]?.rank ?? 0) || null;
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+    return Number((result.rows[0] as CountRow | undefined)?.rank ?? 0) || null;
   }
 
   /**
@@ -187,7 +210,8 @@ export class RankCalculationService {
     if (userXp <= 0) return null;
 
     // Count users with strictly higher XP (dense rank calculation)
-    const result = await this.db.execute(sql`
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+    const result = await this.db.execute<DenseRankRow>(sql`
       SELECT COUNT(DISTINCT ur.${sql.raw(xpColumn)}) + 1 as dense_rank
       FROM user_ranking ur
       INNER JOIN users u ON u.user_id = ur.user_id
@@ -195,7 +219,8 @@ export class RankCalculationService {
         AND u.deleted_at IS NULL
     `);
 
-    return Number(result.rows[0]?.dense_rank ?? 0) || null;
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+    return Number((result.rows[0] as DenseRankRow | undefined)?.dense_rank ?? 0) || null;
   }
 
   /**
@@ -229,7 +254,7 @@ export class RankCalculationService {
 
     if (dirtyUsers.length === 0) return 0;
 
-    const userIds = dirtyUsers.map(u => u.userId);
+    const userIds = dirtyUsers.map((u) => u.userId);
 
     // Process all periods
     for (const period of [RankingPeriod.WEEKLY, RankingPeriod.MONTHLY, RankingPeriod.ALL_TIME]) {
@@ -265,7 +290,11 @@ export class RankCalculationService {
 
       // Fix missing ranks
       for (const userId of missingRanks) {
-        for (const period of [RankingPeriod.WEEKLY, RankingPeriod.MONTHLY, RankingPeriod.ALL_TIME]) {
+        for (const period of [
+          RankingPeriod.WEEKLY,
+          RankingPeriod.MONTHLY,
+          RankingPeriod.ALL_TIME,
+        ]) {
           const rank = await this.calculateUserRank(userId, period);
           if (rank !== null) {
             await this.rankingRepository.updateRank({ userId, period, rank });
@@ -311,9 +340,7 @@ export class RankCalculationService {
     const rankColumn = this.getRankColumn(period);
 
     // Build batch update query
-    const updates = results.map(r =>
-      `('${r.userId}', ${r.rank}, ${r.denseRank})`
-    );
+    const updates = results.map((r) => `('${r.userId}', ${r.rank}, ${r.denseRank})`);
 
     // Use a single UPDATE with a VALUES clause for efficiency
     await this.db.execute(sql`

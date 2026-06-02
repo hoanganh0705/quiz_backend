@@ -1,14 +1,13 @@
+import { sql } from 'drizzle-orm';
 import {
   pgTable,
   index,
   uuid,
   text,
   timestamp,
-  boolean,
   uniqueIndex,
   pgEnum,
   check,
-  sql,
 } from 'drizzle-orm/pg-core';
 
 export const friendshipStatus = pgEnum('friendship_status', [
@@ -41,18 +40,12 @@ export const friendships = pgTable(
       'btree',
       table.addresseeId.asc().nullsLast().op('uuid_ops'),
     ),
-    index('idx_friendships_status').using(
-      'btree',
-      table.status.asc().nullsLast().op('enum_ops'),
-    ),
+    index('idx_friendships_status').using('btree', table.status.asc().nullsLast().op('enum_ops')),
     uniqueIndex('uq_friendships_pair').on(
       table.requesterId.asc().nullsLast().op('uuid_ops'),
       table.addresseeId.asc().nullsLast().op('uuid_ops'),
     ),
-    check(
-      'friendships_no_self_request',
-      sql`requester_id != addressee_id`,
-    ),
+    check('friendships_no_self_request', sql`requester_id != addressee_id`),
   ],
 );
 
@@ -80,10 +73,7 @@ export const blockedUsers = pgTable(
       table.blockerId.asc().nullsLast().op('uuid_ops'),
       table.blockedId.asc().nullsLast().op('uuid_ops'),
     ),
-    check(
-      'blocked_users_no_self_block',
-      sql`blocker_id != blocked_id`,
-    ),
+    check('blocked_users_no_self_block', sql`blocker_id != blocked_id`),
   ],
 );
 
@@ -110,9 +100,6 @@ export const userFollows = pgTable(
       table.followerId.asc().nullsLast().op('uuid_ops'),
       table.followingId.asc().nullsLast().op('uuid_ops'),
     ),
-    check(
-      'user_follows_no_self_follow',
-      sql`follower_id != following_id`,
-    ),
+    check('user_follows_no_self_follow', sql`follower_id != following_id`),
   ],
 );

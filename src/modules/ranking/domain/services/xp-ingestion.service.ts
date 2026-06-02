@@ -10,8 +10,14 @@
 
 import { Inject, Injectable } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
-import { RANKING_REPOSITORY_PORT, type RankingRepositoryPort } from '../ports/ranking-repository.port';
-import { RANKING_DOMAIN_EVENT_BUS, type RankingDomainEventBusPort } from '../ports/ranking-event-bus.port';
+import {
+  RANKING_REPOSITORY_PORT,
+  type RankingRepositoryPort,
+} from '../ports/ranking-repository.port';
+import {
+  RANKING_DOMAIN_EVENT_BUS,
+  type RankingDomainEventBusPort,
+} from '../ports/ranking-event-bus.port';
 import { RankingPeriod } from '../types/ranking.types';
 import type { ExternalXpEarnedEvent } from '../events/ranking-domain.events';
 import { InvalidXpEventError } from '../errors/ranking-domain.errors';

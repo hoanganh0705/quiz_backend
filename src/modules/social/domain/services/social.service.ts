@@ -1,14 +1,10 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { SOCIAL_REPOSITORY_PORT, type SocialRepositoryPort } from '../ports/social-ports';
-import {
-  SOCIAL_DOMAIN_EVENT_BUS,
-  type SocialDomainEventBusPort,
-} from '../ports';
+import { SOCIAL_DOMAIN_EVENT_BUS, type SocialDomainEventBusPort } from '../ports';
 import { USER_SEARCH_PORT, type UserSearchPort } from '../ports/user-search.port';
 import { RANKING_PORT, type RankingPort } from '../ports/ranking.port';
 import type {
-  Friendship,
   FriendRequest,
   Friend,
   Follower,
@@ -46,14 +42,20 @@ export class SocialService {
     private readonly logger: PinoLogger,
   ) {}
 
-  async sendFriendRequest(requesterId: string, params: CreateFriendRequestParams): Promise<FriendRequest> {
+  async sendFriendRequest(
+    requesterId: string,
+    params: CreateFriendRequestParams,
+  ): Promise<FriendRequest> {
     const { addresseeId } = params;
 
     if (requesterId === addresseeId) {
       throw new SelfFriendRequestError();
     }
 
-    const relationship = await this.socialRepository.getRelationshipStatus(requesterId, addresseeId);
+    const relationship = await this.socialRepository.getRelationshipStatus(
+      requesterId,
+      addresseeId,
+    );
 
     if (relationship.isBlocked) {
       throw new BlockedUserError();
@@ -117,10 +119,7 @@ export class SocialService {
       throw new FriendRequestForbiddenError();
     }
 
-    await this.socialRepository.respondToFriendRequest(
-      { friendshipId, accept },
-      userId,
-    );
+    await this.socialRepository.respondToFriendRequest({ friendshipId, accept }, userId);
 
     this.logger.info({
       event: accept ? 'friend_request_accepted' : 'friend_request_rejected',
@@ -256,9 +255,11 @@ export class SocialService {
     });
   }
 
-  async getBlockedUsers(blockerId: string): Promise<{ blockedId: string; reason: string | null }[]> {
+  async getBlockedUsers(
+    blockerId: string,
+  ): Promise<{ blockedId: string; reason: string | null }[]> {
     const blocked = await this.socialRepository.getBlockedUsers(blockerId);
-    return blocked.map(b => ({ blockedId: b.blockedId, reason: b.reason }));
+    return blocked.map((b) => ({ blockedId: b.blockedId, reason: b.reason }));
   }
 
   async followUser(followerId: string, followingId: string): Promise<void> {
@@ -336,7 +337,11 @@ export class SocialService {
    * Excludes blocked users and the current user.
    * Returns users with their relationship status to the searcher.
    */
-  async searchUsers(searcherId: string, query: string, limit: number = 20): Promise<SearchableUser[]> {
+  async searchUsers(
+    searcherId: string,
+    query: string,
+    limit: number = 20,
+  ): Promise<SearchableUser[]> {
     if (!query || query.trim().length < 2) {
       return [];
     }
@@ -372,7 +377,7 @@ export class SocialService {
     );
 
     // Filter out blocked users
-    const filteredUsers = searchableUsers.filter(u => !u.isBlocked);
+    const filteredUsers = searchableUsers.filter((u) => !u.isBlocked);
 
     this.logger.debug({
       event: 'user_search_completed',
@@ -413,14 +418,14 @@ export class SocialService {
     }
 
     // Get friend IDs
-    const friendIds = friends.map(f => f.userId);
+    const friendIds = friends.map((f) => f.userId);
 
     // Get rankings for friends
     const rankings = await this.ranking.getRankingsForUsers(friendIds, period);
 
     // Build entries with rankings
     const entries: FriendRankingEntry[] = friends
-      .map(friend => {
+      .map((friend) => {
         const ranking = rankings.get(friend.userId);
         return {
           rank: 0, // Will be calculated
@@ -432,7 +437,7 @@ export class SocialService {
           friendSince: friend.friendSince,
         };
       })
-      .filter(e => e.xp > 0) // Only include friends with XP
+      .filter((e) => e.xp > 0) // Only include friends with XP
       .sort((a, b) => b.xp - a.xp); // Sort by XP descending
 
     // Assign ranks (handle ties)
@@ -447,7 +452,7 @@ export class SocialService {
     }
 
     // Get current user's rank in the friend leaderboard
-    const currentUserEntry = entries.find(e => e.userId === userId);
+    const currentUserEntry = entries.find((e) => e.userId === userId);
     const currentUserRank = currentUserEntry?.rank ?? null;
 
     // Apply limit
