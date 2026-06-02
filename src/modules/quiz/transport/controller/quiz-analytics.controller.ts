@@ -49,7 +49,7 @@ export class QuizAnalyticsController {
 
     return {
       period: 'weekly',
-      quizzes: quizzes.map(q => ({
+      quizzes: quizzes.map((q) => ({
         rank: q.rank,
         quizId: q.quizId,
         title: q.title,
@@ -71,7 +71,7 @@ export class QuizAnalyticsController {
     const quizzes = await this.quizAnalyticsService.getPopularQuizzes(limit, categoryId);
 
     return {
-      quizzes: quizzes.map(q => ({
+      quizzes: quizzes.map((q) => ({
         rank: q.rank,
         quizId: q.quizId,
         title: q.title,
@@ -107,7 +107,7 @@ export class QuizAnalyticsController {
         averageScore: analytics.summary.averageScore,
         averageRating: analytics.summary.averageRating,
       },
-      topQuizzes: analytics.topQuizzes.map(q => ({
+      topQuizzes: analytics.topQuizzes.map((q) => ({
         rank: q.rank,
         quizId: q.quizId,
         title: q.title,
