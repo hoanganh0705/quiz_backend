@@ -7,9 +7,11 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { BadgeType } from '../types/achievement.types';
-import { UserBadge } from '../types/achievement.types';
 import { ACHIEVEMENT_REPOSITORY_PORT } from '../../infrastructure/repositories/achievement.repository';
-import type { AchievementRepositoryPort } from '../../infrastructure/repositories/achievement.repository';
+import type {
+  AchievementRepositoryPort,
+  UserBadgeRow,
+} from '../../infrastructure/repositories/achievement.repository';
 
 @Injectable()
 export class BadgeEvaluationService {
@@ -90,7 +92,7 @@ export class BadgeEvaluationService {
   /**
    * Get all badges for a user.
    */
-  async getUserBadges(userId: string): Promise<UserBadge[]> {
+  async getUserBadges(userId: string): Promise<UserBadgeRow[]> {
     return this.achievementRepository.getUserBadges(userId);
   }
 }

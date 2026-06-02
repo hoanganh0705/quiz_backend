@@ -13,7 +13,6 @@ import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { ACHIEVEMENT_REPOSITORY_PORT } from '../../infrastructure/repositories/achievement.repository';
 import type { AchievementRepositoryPort } from '../../infrastructure/repositories/achievement.repository';
 import type { BadgeDefinitionRow } from '../../infrastructure/repositories/achievement.repository';
-import type { RarityTier } from './rare-badge.service';
 
 export interface PlatformAchievementStats {
   totalBadges: number;
@@ -92,15 +91,10 @@ export class BadgeAnalyticsService {
     const badges = await this.achievementRepository.getAllActiveBadges();
 
     let totalAwards = 0;
-    let uniqueEarners = 0;
-    let awardsLast24Hours = 0;
-    let awardsLast7Days = 0;
-    let awardsLast30Days = 0;
-
-    const now = new Date();
-    const dayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-    const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-    const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    const uniqueEarners = 0;
+    const awardsLast24Hours = 0;
+    const awardsLast7Days = 0;
+    const awardsLast30Days = 0;
 
     for (const badge of badges) {
       const earnerCount = await this.achievementRepository.getBadgeEarnersCount(badge.badgeId);
@@ -133,12 +127,6 @@ export class BadgeAnalyticsService {
 
     const earnerCount = await this.achievementRepository.getBadgeEarnersCount(badgeId);
     const topEarners = await this.getTopEarners(badgeId, 5);
-
-    // Calculate time-based metrics
-    const now = new Date();
-    const dayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-    const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-    const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
 
     return {
       badgeId,
@@ -209,8 +197,7 @@ export class BadgeAnalyticsService {
         (badgesByCategory[userBadge.badge.category] ?? 0) + 1;
 
       // Count by type
-      badgesByTier[userBadge.badge.type] =
-        (badgesByTier[userBadge.badge.type] ?? 0) + 1;
+      badgesByTier[userBadge.badge.type] = (badgesByTier[userBadge.badge.type] ?? 0) + 1;
     }
 
     // Calculate achievement rate (badges per week)
@@ -221,7 +208,10 @@ export class BadgeAnalyticsService {
         oldestAward = badge.earnedAt;
       }
     }
-    const weeksActive = Math.max(1, Math.ceil((now.getTime() - oldestAward.getTime()) / (7 * 24 * 60 * 60 * 1000)));
+    const weeksActive = Math.max(
+      1,
+      Math.ceil((now.getTime() - oldestAward.getTime()) / (7 * 24 * 60 * 60 * 1000)),
+    );
     const achievementRate = userBadges.length / weeksActive;
 
     // Calculate recent activity (last 7 days grouped by day)
@@ -241,13 +231,13 @@ export class BadgeAnalyticsService {
 
     // Calculate completion percentage
     const allBadges = await this.achievementRepository.getAllActiveBadges();
-    const completionPercentage = allBadges.length > 0
-      ? (userBadges.length / allBadges.length) * 100
-      : 0;
+    const completionPercentage =
+      allBadges.length > 0 ? (userBadges.length / allBadges.length) * 100 : 0;
 
     // Determine next milestone
     const milestones = [1, 5, 10, 25, 50, 100, 250, 500];
-    const nextMilestone = milestones.find((m) => m > userBadges.length) ?? milestones[milestones.length - 1];
+    const nextMilestone =
+      milestones.find((m) => m > userBadges.length) ?? milestones[milestones.length - 1];
 
     return {
       userId,
@@ -267,7 +257,7 @@ export class BadgeAnalyticsService {
   /**
    * Get trend analysis for badges over time.
    */
-  async getTrendAnalysis(days: number = 30): Promise<TrendAnalysis[]> {
+  getTrendAnalysis(days: number = 30): Promise<TrendAnalysis[]> {
     const trends: TrendAnalysis[] = [];
     const now = new Date();
 
@@ -285,7 +275,7 @@ export class BadgeAnalyticsService {
       });
     }
 
-    return trends;
+    return Promise.resolve(trends);
   }
 
   /**
@@ -323,7 +313,9 @@ export class BadgeAnalyticsService {
   /**
    * Get time until next milestone for a user.
    */
-  async getTimeToNextMilestone(userId: string): Promise<{ milestone: number; estimatedDays: number } | null> {
+  async getTimeToNextMilestone(
+    userId: string,
+  ): Promise<{ milestone: number; estimatedDays: number } | null> {
     const userBadges = await this.achievementRepository.getUserBadgesWithDetails(userId);
     const currentCount = userBadges.length;
 
@@ -336,9 +328,8 @@ export class BadgeAnalyticsService {
     const analytics = await this.getUserAnalytics(userId);
     const badgesNeeded = nextMilestone - currentCount;
 
-    const estimatedDays = analytics.achievementRate > 0
-      ? Math.ceil(badgesNeeded / analytics.achievementRate * 7)
-      : 0;
+    const estimatedDays =
+      analytics.achievementRate > 0 ? Math.ceil((badgesNeeded / analytics.achievementRate) * 7) : 0;
 
     return {
       milestone: nextMilestone,
@@ -349,7 +340,10 @@ export class BadgeAnalyticsService {
   /**
    * Get top earners for a badge.
    */
-  private async getTopEarners(badgeId: string, limit: number): Promise<{ userId: string; earnedAt: Date }[]> {
+  private getTopEarners(
+    badgeId: string,
+    limit: number,
+  ): Promise<{ userId: string; earnedAt: Date }[]> {
     // In a real implementation, this would query userBadges ordered by earnedAt
     this.logger.debug({
       event: 'get_top_earners',
@@ -357,7 +351,7 @@ export class BadgeAnalyticsService {
       limit,
     });
 
-    return [];
+    return Promise.resolve([]);
   }
 
   /**

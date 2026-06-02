@@ -56,8 +56,8 @@ export class RankAchievementService {
   ): Promise<void> {
     await this.achievementRepository.awardBadge({
       userId,
-      badgeType,
-      awardedAt: new Date(),
+      badgeId: badgeType,
+      earnedAt: new Date(),
       metadata,
     });
 

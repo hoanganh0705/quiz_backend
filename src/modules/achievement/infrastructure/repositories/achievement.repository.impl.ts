@@ -6,22 +6,19 @@
 
 import { Inject, Injectable } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
-import { and, eq, desc, isNull, sql, count } from 'drizzle-orm';
+import { and, eq, desc, isNull, count } from 'drizzle-orm';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import type * as schema from '@/core/database/schema';
 import {
   badges,
   badgeRules,
   userBadges,
-  type badgeCategory,
+  badgeType,
+  badgeCategory,
+  badgeRuleType,
 } from '@/core/database/schema';
-import type { BadgeRuleType } from '@/core/database/schema';
 import type { AchievementRepositoryPort } from './achievement.repository';
-import type {
-  UserBadgeRow,
-  BadgeDefinitionRow,
-  BadgeRuleRow,
-} from './achievement.repository';
+import type { UserBadgeRow, BadgeDefinitionRow, BadgeRuleRow } from './achievement.repository';
 
 @Injectable()
 export class AchievementRepository implements AchievementRepositoryPort {
@@ -56,7 +53,8 @@ export class AchievementRepository implements AchievementRepositoryPort {
     metadata?: Record<string, unknown>;
     expiresAt?: Date;
   }): Promise<UserBadgeRow> {
-    const now = params.earnedAt ?? new Date();
+    const earnedAt = (params.earnedAt ?? new Date()).toISOString();
+    const expiresAt = params.expiresAt ? params.expiresAt.toISOString() : null;
 
     const result = await this.db
       .insert(userBadges)
@@ -64,10 +62,10 @@ export class AchievementRepository implements AchievementRepositoryPort {
         userId: params.userId,
         badgeId: params.badgeId,
         badgeVersion: params.badgeVersion ?? '1.0.0',
-        earnedAt: now,
+        earnedAt,
         progress: params.progress ?? {},
         metadata: params.metadata ?? {},
-        expiresAt: params.expiresAt ?? null,
+        expiresAt,
       })
       .returning()
       .execute();
@@ -83,18 +81,7 @@ export class AchievementRepository implements AchievementRepositoryPort {
       badgeId: params.badgeId,
     });
 
-    return {
-      userBadgeId: row.user_badge_id,
-      userId: row.user_id,
-      badgeId: row.badge_id,
-      earnedAt: row.earned_at,
-      badgeVersion: row.badge_version,
-      progress: row.progress as Record<string, unknown>,
-      metadata: row.metadata as Record<string, unknown>,
-      expiresAt: row.expires_at,
-      revokedAt: row.revoked_at,
-      revocationReason: row.revocation_reason,
-    };
+    return this.mapUserBadgeRow(row);
   }
 
   async getUserBadges(userId: string): Promise<UserBadgeRow[]> {
@@ -104,18 +91,7 @@ export class AchievementRepository implements AchievementRepositoryPort {
       .where(and(eq(userBadges.userId, userId), isNull(userBadges.revokedAt)))
       .orderBy(desc(userBadges.earnedAt));
 
-    return results.map((row) => ({
-      userBadgeId: row.user_badge_id,
-      userId: row.user_id,
-      badgeId: row.badge_id,
-      earnedAt: row.earned_at,
-      badgeVersion: row.badge_version,
-      progress: row.progress as Record<string, unknown>,
-      metadata: row.metadata as Record<string, unknown>,
-      expiresAt: row.expires_at,
-      revokedAt: row.revoked_at,
-      revocationReason: row.revocation_reason,
-    }));
+    return results.map((row) => this.mapUserBadgeRow(row));
   }
 
   async getUserBadgesWithDetails(
@@ -129,120 +105,31 @@ export class AchievementRepository implements AchievementRepositoryPort {
       .orderBy(desc(userBadges.earnedAt));
 
     return results.map((row) => ({
-      userBadgeId: row.user_badges.user_badge_id,
-      userId: row.user_badges.user_id,
-      badgeId: row.user_badges.badge_id,
-      earnedAt: row.user_badges.earned_at,
-      badgeVersion: row.user_badges.badge_version,
-      progress: row.user_badges.progress as Record<string, unknown>,
-      metadata: row.user_badges.metadata as Record<string, unknown>,
-      expiresAt: row.user_badges.expires_at,
-      revokedAt: row.user_badges.revoked_at,
-      revocationReason: row.user_badges.revocation_reason,
-      badge: {
-        badgeId: row.badges.badge_id,
-        slug: row.badges.slug,
-        type: row.badges.type,
-        category: row.badges.category as (typeof badgeCategory.enumValues)[number],
-        name: row.badges.name,
-        description: row.badges.description,
-        iconUrl: row.badges.icon_url,
-        isActive: row.badges.is_active,
-        isHidden: row.badges.is_hidden,
-        version: row.badges.version,
-        validFrom: row.badges.valid_from,
-        validUntil: row.badges.valid_until,
-        evaluationMode: row.badges.evaluation_mode,
-        createdAt: row.badges.created_at,
-        updatedAt: row.badges.updated_at,
-      },
+      ...this.mapUserBadgeRow(row.user_badges),
+      badge: this.mapBadgeRow(row.badges),
     }));
   }
 
   async getBadgeById(badgeId: string): Promise<BadgeDefinitionRow | null> {
-    const results = await this.db
-      .select()
-      .from(badges)
-      .where(eq(badges.badgeId, badgeId))
-      .limit(1);
+    const results = await this.db.select().from(badges).where(eq(badges.badgeId, badgeId)).limit(1);
 
     if (results.length === 0) return null;
 
-    const row = results[0];
-    return {
-      badgeId: row.badge_id,
-      slug: row.slug,
-      type: row.type,
-      category: row.category as (typeof badgeCategory.enumValues)[number],
-      name: row.name,
-      description: row.description,
-      iconUrl: row.icon_url,
-      isActive: row.is_active,
-      isHidden: row.is_hidden,
-      version: row.version,
-      validFrom: row.valid_from,
-      validUntil: row.valid_until,
-      evaluationMode: row.evaluation_mode,
-      createdAt: row.created_at,
-      updatedAt: row.updated_at,
-    };
+    return this.mapBadgeRow(results[0]);
   }
 
   async getBadgeBySlug(slug: string): Promise<BadgeDefinitionRow | null> {
-    const results = await this.db
-      .select()
-      .from(badges)
-      .where(eq(badges.slug, slug))
-      .limit(1);
+    const results = await this.db.select().from(badges).where(eq(badges.slug, slug)).limit(1);
 
     if (results.length === 0) return null;
 
-    const row = results[0];
-    return {
-      badgeId: row.badge_id,
-      slug: row.slug,
-      type: row.type,
-      category: row.category as (typeof badgeCategory.enumValues)[number],
-      name: row.name,
-      description: row.description,
-      iconUrl: row.icon_url,
-      isActive: row.is_active,
-      isHidden: row.is_hidden,
-      version: row.version,
-      validFrom: row.valid_from,
-      validUntil: row.valid_until,
-      evaluationMode: row.evaluation_mode,
-      createdAt: row.created_at,
-      updatedAt: row.updated_at,
-    };
+    return this.mapBadgeRow(results[0]);
   }
 
   async getAllActiveBadges(): Promise<BadgeDefinitionRow[]> {
-    const now = new Date();
-    const results = await this.db
-      .select()
-      .from(badges)
-      .where(eq(badges.isActive, true));
+    const results = await this.db.select().from(badges).where(eq(badges.isActive, true));
 
-    return results
-      .filter((row) => this.isBadgeValid(row))
-      .map((row) => ({
-        badgeId: row.badge_id,
-        slug: row.slug,
-        type: row.type,
-        category: row.category as (typeof badgeCategory.enumValues)[number],
-        name: row.name,
-        description: row.description,
-        iconUrl: row.icon_url,
-        isActive: row.is_active,
-        isHidden: row.is_hidden,
-        version: row.version,
-        validFrom: row.valid_from,
-        validUntil: row.valid_until,
-        evaluationMode: row.evaluation_mode,
-        createdAt: row.created_at,
-        updatedAt: row.updated_at,
-      }));
+    return results.filter((row) => this.isBadgeValid(row)).map((row) => this.mapBadgeRow(row));
   }
 
   async getBadgeRules(badgeId: string): Promise<BadgeRuleRow[]> {
@@ -252,15 +139,7 @@ export class AchievementRepository implements AchievementRepositoryPort {
       .where(and(eq(badgeRules.badgeId, badgeId), eq(badgeRules.isActive, true)))
       .orderBy(desc(badgeRules.priority));
 
-    return results.map((row) => ({
-      ruleId: row.rule_id,
-      badgeId: row.badge_id,
-      ruleType: row.rule_type as (typeof BadgeRuleType.enumValues)[number],
-      priority: row.priority,
-      config: row.config as Record<string, unknown>,
-      isActive: row.is_active,
-      createdAt: row.created_at,
-    }));
+    return results.map((row) => this.mapBadgeRuleRow(row));
   }
 
   async getAllActiveRules(): Promise<BadgeRuleRow[]> {
@@ -271,19 +150,11 @@ export class AchievementRepository implements AchievementRepositoryPort {
       .where(and(eq(badgeRules.isActive, true), eq(badges.isActive, true)))
       .orderBy(desc(badgeRules.priority));
 
-    return results.map((row) => ({
-      ruleId: row.badge_rules.rule_id,
-      badgeId: row.badge_rules.badge_id,
-      ruleType: row.badge_rules.rule_type as (typeof BadgeRuleType.enumValues)[number],
-      priority: row.badge_rules.priority,
-      config: row.badge_rules.config as Record<string, unknown>,
-      isActive: row.badge_rules.is_active,
-      createdAt: row.badge_rules.created_at,
-    }));
+    return results.map((row) => this.mapBadgeRuleRow(row.badge_rules));
   }
 
   async getRulesByType(
-    ruleType: (typeof BadgeRuleType.enumValues)[number],
+    ruleType: (typeof badgeRuleType.enumValues)[number],
   ): Promise<BadgeRuleRow[]> {
     const results = await this.db
       .select()
@@ -298,15 +169,7 @@ export class AchievementRepository implements AchievementRepositoryPort {
       )
       .orderBy(desc(badgeRules.priority));
 
-    return results.map((row) => ({
-      ruleId: row.badge_rules.rule_id,
-      badgeId: row.badge_rules.badge_id,
-      ruleType: row.badge_rules.rule_type as (typeof BadgeRuleType.enumValues)[number],
-      priority: row.badge_rules.priority,
-      config: row.badge_rules.config as Record<string, unknown>,
-      isActive: row.badge_rules.is_active,
-      createdAt: row.badge_rules.created_at,
-    }));
+    return results.map((row) => this.mapBadgeRuleRow(row.badge_rules));
   }
 
   async getBadgesByCategory(
@@ -317,25 +180,7 @@ export class AchievementRepository implements AchievementRepositoryPort {
       .from(badges)
       .where(and(eq(badges.category, category), eq(badges.isActive, true)));
 
-    return results
-      .filter((row) => this.isBadgeValid(row))
-      .map((row) => ({
-        badgeId: row.badge_id,
-        slug: row.slug,
-        type: row.type,
-        category: row.category as (typeof badgeCategory.enumValues)[number],
-        name: row.name,
-        description: row.description,
-        iconUrl: row.icon_url,
-        isActive: row.is_active,
-        isHidden: row.is_hidden,
-        version: row.version,
-        validFrom: row.valid_from,
-        validUntil: row.valid_until,
-        evaluationMode: row.evaluation_mode,
-        createdAt: row.created_at,
-        updatedAt: row.updated_at,
-      }));
+    return results.filter((row) => this.isBadgeValid(row)).map((row) => this.mapBadgeRow(row));
   }
 
   async updateBadgeProgress(
@@ -356,10 +201,7 @@ export class AchievementRepository implements AchievementRepositoryPort {
       .execute();
   }
 
-  async getBadgeProgress(
-    userId: string,
-    badgeId: string,
-  ): Promise<Record<string, unknown> | null> {
+  async getBadgeProgress(userId: string, badgeId: string): Promise<Record<string, unknown> | null> {
     const results = await this.db
       .select({ progress: userBadges.progress })
       .from(userBadges)
@@ -380,7 +222,7 @@ export class AchievementRepository implements AchievementRepositoryPort {
     await this.db
       .update(userBadges)
       .set({
-        revokedAt: new Date(),
+        revokedAt: new Date().toISOString(),
         revocationReason: reason,
       })
       .where(
@@ -401,12 +243,16 @@ export class AchievementRepository implements AchievementRepositoryPort {
   }
 
   isBadgeValid(badge: {
-    validFrom: Date | null;
-    validUntil: Date | null;
+    validFrom: Date | string | null;
+    validUntil: Date | string | null;
   }): boolean {
     const now = new Date();
-    if (badge.validFrom && now < badge.validFrom) return false;
-    if (badge.validUntil && now > badge.validUntil) return false;
+    const validFrom =
+      typeof badge.validFrom === 'string' ? new Date(badge.validFrom) : badge.validFrom;
+    const validUntil =
+      typeof badge.validUntil === 'string' ? new Date(badge.validUntil) : badge.validUntil;
+    if (validFrom && now < validFrom) return false;
+    if (validUntil && now > validUntil) return false;
     return true;
   }
 
@@ -418,18 +264,7 @@ export class AchievementRepository implements AchievementRepositoryPort {
       .orderBy(desc(userBadges.earnedAt))
       .limit(limit);
 
-    return results.map((row) => ({
-      userBadgeId: row.user_badge_id,
-      userId: row.user_id,
-      badgeId: row.badge_id,
-      earnedAt: row.earned_at,
-      badgeVersion: row.badge_version,
-      progress: row.progress as Record<string, unknown>,
-      metadata: row.metadata as Record<string, unknown>,
-      expiresAt: row.expires_at,
-      revokedAt: row.revoked_at,
-      revocationReason: row.revocation_reason,
-    }));
+    return results.map((row) => this.mapUserBadgeRow(row));
   }
 
   async countUserBadges(userId: string): Promise<number> {
@@ -441,12 +276,17 @@ export class AchievementRepository implements AchievementRepositoryPort {
     return result[0]?.count ?? 0;
   }
 
-  async countUserBadgesByType(userId: string, type: string): Promise<number> {
+  async countUserBadgesByType(
+    userId: string,
+    type: (typeof badgeType.enumValues)[number],
+  ): Promise<number> {
     const result = await this.db
       .select({ count: count() })
       .from(userBadges)
       .innerJoin(badges, eq(userBadges.badgeId, badges.badgeId))
-      .where(and(eq(userBadges.userId, userId), eq(badges.type, type), isNull(userBadges.revokedAt)));
+      .where(
+        and(eq(userBadges.userId, userId), eq(badges.type, type), isNull(userBadges.revokedAt)),
+      );
 
     return result[0]?.count ?? 0;
   }
@@ -458,5 +298,57 @@ export class AchievementRepository implements AchievementRepositoryPort {
       .where(and(eq(userBadges.badgeId, badgeId), isNull(userBadges.revokedAt)));
 
     return result[0]?.count ?? 0;
+  }
+
+  private toDate(value: string | Date | null): Date | null {
+    if (!value) return null;
+    return value instanceof Date ? value : new Date(value);
+  }
+
+  private mapUserBadgeRow(row: typeof userBadges.$inferSelect): UserBadgeRow {
+    return {
+      userBadgeId: row.userBadgeId,
+      userId: row.userId,
+      badgeId: row.badgeId,
+      earnedAt: this.toDate(row.earnedAt) ?? new Date(0),
+      badgeVersion: row.badgeVersion,
+      progress: row.progress as Record<string, unknown>,
+      metadata: row.metadata as Record<string, unknown>,
+      expiresAt: this.toDate(row.expiresAt),
+      revokedAt: this.toDate(row.revokedAt),
+      revocationReason: row.revocationReason,
+    };
+  }
+
+  private mapBadgeRow(row: typeof badges.$inferSelect): BadgeDefinitionRow {
+    return {
+      badgeId: row.badgeId,
+      slug: row.slug,
+      type: row.type,
+      category: row.category,
+      name: row.name,
+      description: row.description,
+      iconUrl: row.iconUrl,
+      isActive: row.isActive,
+      isHidden: row.isHidden,
+      version: row.version,
+      validFrom: this.toDate(row.validFrom),
+      validUntil: this.toDate(row.validUntil),
+      evaluationMode: row.evaluationMode,
+      createdAt: this.toDate(row.createdAt) ?? new Date(0),
+      updatedAt: this.toDate(row.updatedAt) ?? new Date(0),
+    };
+  }
+
+  private mapBadgeRuleRow(row: typeof badgeRules.$inferSelect): BadgeRuleRow {
+    return {
+      ruleId: row.ruleId,
+      badgeId: row.badgeId,
+      ruleType: row.ruleType,
+      priority: row.priority,
+      config: row.config as Record<string, unknown>,
+      isActive: row.isActive,
+      createdAt: this.toDate(row.createdAt) ?? new Date(0),
+    };
   }
 }
