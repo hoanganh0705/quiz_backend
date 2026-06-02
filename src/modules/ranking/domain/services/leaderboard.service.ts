@@ -94,7 +94,10 @@ export class LeaderboardService {
   /**
    * Get user position for a specific period.
    */
-  async getUserPosition(userId: string, periodEnum: RankingPeriodEnum): Promise<UserRankPositionDto | undefined> {
+  async getUserPosition(
+    userId: string,
+    periodEnum: RankingPeriodEnum,
+  ): Promise<UserRankPositionDto | undefined> {
     const period = this.enumToPeriod(periodEnum);
 
     const ranking = await this.rankingRepository.getUserRanking(userId);
@@ -136,7 +139,7 @@ export class LeaderboardService {
   /**
    * Get period information including reset time.
    */
-  async getPeriodInfo(periodEnum: RankingPeriodEnum): Promise<PeriodInfoDto> {
+  getPeriodInfo(periodEnum: RankingPeriodEnum): PeriodInfoDto {
     const period = this.enumToPeriod(periodEnum);
     return this.buildPeriodInfo(period);
   }
@@ -189,7 +192,7 @@ export class LeaderboardService {
       case RankingPeriod.WEEKLY: {
         // Start of current week (Monday)
         const day = now.getUTCDay();
-        const diff = (day === 0 ? -6 : 1 - day);
+        const diff = day === 0 ? -6 : 1 - day;
         start = new Date(now);
         start.setUTCDate(now.getUTCDate() + diff);
         start.setUTCHours(0, 0, 0, 0);

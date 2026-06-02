@@ -8,7 +8,6 @@ import type {
   Following,
   SocialCounts,
   RelationshipStatus,
-  CreateFriendRequestParams,
   RespondToFriendRequestParams,
 } from '../types/social.types';
 
@@ -21,18 +20,18 @@ export interface SocialRepositoryPort {
   getPendingRequests(addresseeId: string): Promise<FriendRequest[]>;
   getSentRequests(requesterId: string): Promise<FriendRequest[]>;
   respondToFriendRequest(params: RespondToFriendRequestParams, requesterId: string): Promise<void>;
-  
+
   // Friends
   getFriends(userId: string, limit: number, cursor?: string | null): Promise<Friend[]>;
   getFriendCount(userId: string): Promise<number>;
   removeFriend(userId: string, friendId: string): Promise<void>;
-  
+
   // Blocking
   blockUser(blockerId: string, blockedId: string, reason?: string): Promise<BlockedUser>;
   unblockUser(blockerId: string, blockedId: string): Promise<void>;
   isBlocked(blockerId: string, blockedId: string): Promise<boolean>;
   getBlockedUsers(blockerId: string): Promise<BlockedUser[]>;
-  
+
   // Following
   followUser(followerId: string, followingId: string): Promise<UserFollow>;
   unfollowUser(followerId: string, followingId: string): Promise<void>;
@@ -41,7 +40,7 @@ export interface SocialRepositoryPort {
   getFollowerCount(userId: string): Promise<number>;
   getFollowingCount(userId: string): Promise<number>;
   isFollowing(followerId: string, followingId: string): Promise<boolean>;
-  
+
   // Relationship
   getRelationshipStatus(userId: string, targetId: string): Promise<RelationshipStatus>;
   getSocialCounts(userId: string): Promise<SocialCounts>;

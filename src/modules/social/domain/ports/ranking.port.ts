@@ -16,7 +16,10 @@ export interface RankingPort {
    * @param userIds - Array of user IDs to get rankings for
    * @param period - Ranking period (weekly, monthly, all_time)
    */
-  getRankingsForUsers(userIds: string[], period: 'weekly' | 'monthly' | 'all_time'): Promise<Map<string, RankingEntry>>;
+  getRankingsForUsers(
+    userIds: string[],
+    period: 'weekly' | 'monthly' | 'all_time',
+  ): Promise<Map<string, RankingEntry>>;
 
   /**
    * Get the total number of participants in a ranking period.

@@ -16,6 +16,7 @@ import {
   REVIEW_ATTEMPT_REQUIRED_MESSAGE,
 } from '../review.constants';
 import type { AnalyticsEventHandler } from '@/modules/quiz/domain/analytics/analytics-event-handler';
+import { QuizModule } from '@/modules/quiz/quiz.module';
 
 @Injectable()
 export class ReviewService {
@@ -26,7 +27,7 @@ export class ReviewService {
     private readonly quizRepository: {
       getActiveQuizRecordById: (quizId: string) => Promise<{ quizId: string } | null>;
     },
-    @Inject(forwardRef(() => require('@/modules/quiz/quiz.module').AnalyticsEventHandler))
+    @Inject(forwardRef(() => QuizModule))
     private readonly analyticsEventHandler: AnalyticsEventHandler,
     @InjectPinoLogger(ReviewService.name)
     private readonly logger: PinoLogger,
