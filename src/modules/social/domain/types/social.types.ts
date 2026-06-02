@@ -81,3 +81,33 @@ export interface RespondToFriendRequestParams {
   friendshipId: string;
   accept: boolean;
 }
+
+export interface UserSearchResult {
+  userId: string;
+  username: string;
+  displayName: string | null;
+  avatarUrl: string | null;
+}
+
+export interface SearchableUser extends UserSearchResult {
+  isFriend: boolean;
+  hasPendingRequest: boolean;
+  isBlocked: boolean;
+}
+
+export interface FriendRankingEntry {
+  rank: number;
+  userId: string;
+  username: string;
+  displayName: string | null;
+  avatarUrl: string | null;
+  xp: number;
+  friendSince: string;
+}
+
+export interface FriendLeaderboard {
+  period: 'weekly' | 'monthly' | 'all_time';
+  entries: FriendRankingEntry[];
+  currentUserRank: number | null;
+  totalParticipants: number;
+}

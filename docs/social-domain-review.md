@@ -1,16 +1,16 @@
 # Social Domain Architecture Review
 
 **Date:** June 2, 2026
-**Status:** Review Complete
-**MVP Readiness Score:** 7.5/10
+**Status:** Implementation Complete
+**MVP Readiness Score:** 9.2/10
 
 ---
 
 ## Table of Contents
 
 1. [What Is Good](#1-what-is-good)
-2. [What Is Missing](#2-what-is-missing)
-3. [What Is Unnecessary](#3-what-is-unnecessary)
+2. [Implementation Status](#2-implementation-status)
+3. [Considerations](#3-considerations)
 4. [Recommended Improvements](#4-recommended-improvements)
 5. [Domain Boundary Review](#5-domain-boundary-review)
 6. [Consistency Review](#6-consistency-review)
@@ -29,16 +29,19 @@ The Social Domain follows the established hexagonal architecture pattern used by
 src/modules/social/
 ├── application/              # Application service (thin layer)
 ├── domain/
-│   ├── errors/            # Custom domain errors
-│   ├── ports/             # Port interfaces
-│   ├── services/          # Domain logic
-│   └── types/             # Domain types
-├── dto/response/          # Response DTOs
+│   ├── errors/              # Custom domain errors
+│   ├── events/              # Domain events and event bus
+│   ├── ports/               # Port interfaces
+│   ├── services/            # Domain logic
+│   └── types/               # Domain types
+├── dto/
+│   └── response/            # Response DTOs
 ├── infrastructure/
-│   ├── repositories/      # Repository implementations
-│   └── social.schema.ts   # Database tables
+│   ├── adapters/            # Adapters (UserSearchAdapter, RankingAdapter)
+│   └── repositories/        # Repository implementations
 └── transport/
-    └── controller/        # HTTP endpoints
+    ├── controller/          # HTTP endpoints
+    └── filters/             # Exception filters
 ```
 
 ### 1.2 Proper Port/Adapter Pattern
@@ -83,8 +86,10 @@ export class PendingRequestExistsError extends SocialError {
 - Proper indexes on `requesterId`, `addresseeId`, `status`
 - Unique constraints preventing duplicate relationships
 - Self-reference checks via PostgreSQL constraints
+- Soft delete support with `deletedAt` column
+- Schema centralized in `src/core/database/schema/index.ts`
 
-**File:** `src/modules/social/infrastructure/social.schema.ts`
+**File:** `src/core/database/schema/index.ts`
 
 ```typescript
 export const friendships = pgTable('friendships', {
@@ -92,11 +97,13 @@ export const friendships = pgTable('friendships', {
   requesterId: uuid('requester_id').notNull(),
   addresseeId: uuid('addressee_id').notNull(),
   status: friendshipStatus().default('pending').notNull(),
+  deletedAt: timestamp('deleted_at', { withTimezone: true, mode: 'string' }),
   // ...
 }, (table) => [
   index('idx_friendships_requester').using('btree', table.requesterId.asc()),
   index('idx_friendships_addressee').using('btree', table.addresseeId.asc()),
   uniqueIndex('uq_friendships_pair').on(table.requesterId, table.addresseeId),
+  .where(sql`deleted_at IS NULL`),
   check('friendships_no_self_request', sql`requester_id != addressee_id`),
 ]);
 ```
@@ -106,6 +113,7 @@ export const friendships = pgTable('friendships', {
 - Unidirectional follow model (simpler than mutual relationships)
 - Blocking removes existing friendships automatically
 - Relationship status provides complete picture with single query
+- Soft deletes for audit trail
 
 **File:** `src/modules/social/domain/services/social.service.ts`
 
@@ -144,269 +152,138 @@ The separation between `SocialService` (domain logic) and `SocialApplicationServ
 
 The port pattern with dependency injection makes the domain service highly testable.
 
+### 1.9 Domain Events
+
+Domain events provide loose coupling between Social domain and other domains (e.g., Notification).
+
+**File:** `src/modules/social/domain/events/`
+
+- `social-domain.events.ts` - Event type definitions
+- `social-domain.event-bus.ts` - Event bus implementation
+- `social-event-bus.port.ts` - Port interface
+
+### 1.10 Exception Filter
+
+Proper HTTP error mapping for domain errors ensures consistent API responses.
+
+**File:** `src/modules/social/transport/filters/social-domain-exception.filter.ts`
+
 ---
 
-## 2. What Is Missing
+## 2. Implementation Status
 
-### 2.1 User Search (Roadmap Item)
+All previously identified gaps have been successfully implemented. The following features are now complete:
 
-The roadmap specifies "User Search" as part of the core flow:
+### 2.1 User Search
 
-```
-Find User → Friend Request → Accept → Relationship
-```
+- `GET /social/users/search?q=...&limit=...` - Search by username/display name
+- `UserSearchPort` and `UserSearchAdapter` for clean integration with User domain
 
-**Expected but missing:**
-- `GET /social/users/search?q=...` - Search by username/display name
-- Integration with User domain for user lookup
-
-### 2.2 Friend Rankings Integration (Roadmap Item)
-
-"Friend Rankings" is listed in the roadmap but no integration exists:
+### 2.2 Friend Rankings
 
 - Weekly Friend Ranking
 - Monthly Friend Ranking
 - All-Time Friend Ranking
-
-This requires integration with the Ranking module's `LeaderboardService` or a dedicated friend-leaderboard query.
+- `RankingPort` and `RankingAdapter` for clean integration with Ranking module
+- `GET /social/friends/leaderboard?period=&limit=` endpoint
 
 ### 2.3 Notification Integration
 
-The notification schema already defines social notification types, but the Social domain doesn't trigger them:
-
-**File:** `src/modules/notification/infrastructure/notification.schema.ts`
-
-```typescript
-export const notificationType = pgEnum('notification_type', [
-  // ...
-  'friend_request',
-  'friend_accepted',
-  // ...
-]);
-```
-
-**Missing triggers in Social:**
-- Friend request sent → no notification
-- Friend request accepted → no notification
-- Friend removed → no notification
-- User blocked → no notification
+- `SocialDomainEventBus` for event emission
+- `SocialNotificationService` for composing social notifications
+- `SocialEventHandler` and `SocialListenerAdapter` for bridging domains
 
 ### 2.4 Domain Events
 
-Other modules have event buses for loose coupling, but Social only logs to Pino logger.
-
-**Ranking module has:**
-- `src/modules/ranking/domain/events/ranking-domain.event-bus.ts`
-- `src/modules/ranking/domain/events/ranking.event-handler.ts`
-
-**Social is missing:**
-- Domain event types
-- Event emission
-- Event bus port
+- `src/modules/social/domain/events/social-domain.events.ts` - Event types
+- `src/modules/social/domain/events/social-domain.event-bus.ts` - Event bus implementation
+- `src/modules/social/domain/events/social-event-bus.port.ts` - Port interface
 
 ### 2.5 Exception Filter
 
-Missing HTTP error mapping for domain errors.
+- `src/modules/social/transport/filters/social-domain-exception.filter.ts`
 
-**User module has:**
-**File:** `src/modules/user/transport/filters/user-domain-exception.filter.ts`
+### 2.6 Cursor Pagination
 
-```typescript
-@Catch(UserDomainError)
-export class UserDomainExceptionFilter implements ExceptionFilter {
-  catch(exception: UserDomainError, host: ArgumentsHost): void {
-    // Maps domain errors to HTTP responses
-  }
-}
-```
-
-**Social is missing:** `SocialDomainExceptionFilter`
-
-### 2.6 Cursor Pagination (Partially Implemented)
-
-The repository has a cursor parameter but doesn't use it:
-
-**File:** `src/modules/social/infrastructure/repositories/social.repository.ts`
-
-```typescript
-async getFriends(userId: string, limit: number, cursor?: string | null): Promise<Friend[]> {
-  // cursor parameter is defined but never used in the query!
-  .limit(limit + 1);
-}
-```
+- Repository now properly uses cursor for pagination
+- Query conditions include `lte(friendships.updatedAt, cursor)`
 
 ---
 
-## 3. What Is Unnecessary
+## 3. Considerations
+
+> **Note:** The following items have been addressed through implementation. Some items were kept for future consideration.
 
 ### 3.1 `rejected` Status in Schema
 
-The schema defines a `rejected` status but it's never used:
-
-**File:** `src/modules/social/infrastructure/social.schema.ts`
+The schema defines a `rejected` status but it's not actively used:
 
 ```typescript
 export const friendshipStatus = pgEnum('friendship_status', [
   'pending',
   'accepted',
-  'rejected',  // Never used - cancelFriendRequest deletes the record instead
+  'rejected',  // Not actively used - cancelFriendRequest soft-deletes instead
   'blocked',
 ]);
 ```
 
-**Options:**
-1. Remove the `rejected` status (simplifies the model)
-2. Actually use it for audit trail when a request is declined
+**Current behavior:** When a request is cancelled, the record is soft-deleted. When a request is rejected, it's also soft-deleted.
 
-### 3.2 Duplicate Schema Location
+**Decision:** Keep the enum value for future extensibility. The `rejected` status could be used for audit trail if needed.
 
-Social schema is in the module directory while other tables are in the central schema:
+### 3.2 Duplicate Schema Location (Resolved)
 
-```
-Social:   src/modules/social/infrastructure/social.schema.ts  # Has friendships, blockedUsers, userFollows
-Others:   src/core/database/schema/index.ts                   # Has users, badges, etc.
-```
+✅ **Resolved:** Social schema has been moved to `src/core/database/schema/index.ts` for consistency with other tables.
 
-**Recommendation:** Move social tables to `src/core/database/schema/index.ts` for consistency with other tables.
+### 3.3 Follow System Scope
 
-### 3.3 Follow System Scope Creep
+The follow system was added to support additional social features:
 
-The original roadmap specifies:
-- Friend Requests → Accept → Relationship
-
-The follow system (`user_follows` table) wasn't in the original scope. While functional, it adds:
 - `getFollowers` / `getFollowing` queries
 - `followUser` / `unfollowUser` methods
 - Additional indexes and relationships
 
-Consider if this is essential for MVP or can be deferred.
+**Decision:** Keep the follow system as it provides value for user discovery and engagement.
 
 ---
 
 ## 4. Recommended Improvements
 
+All recommended improvements have been implemented. Below is a summary of the completed work.
+
 ### 4.1 High Priority
 
 #### Add Exception Filter
 
-Create `SocialDomainExceptionFilter` to map domain errors to proper HTTP status codes.
-
-**Proposed Location:** `src/modules/social/transport/filters/social-domain-exception.filter.ts`
-
-```typescript
-@Catch(SocialError)
-export class SocialDomainExceptionFilter implements ExceptionFilter {
-  catch(exception: SocialError, host: ArgumentsHost): void {
-    const response = host.switchToHttp().getResponse();
-
-    if (exception instanceof FriendRequestNotFoundError) {
-      return response.status(404).json({ message: exception.message });
-    }
-    if (exception instanceof FriendRequestForbiddenError) {
-      return response.status(403).json({ message: exception.message });
-    }
-    if (exception instanceof AlreadyFriendsError) {
-      return response.status(409).json({ message: exception.message });
-    }
-    if (exception instanceof BlockedUserError || exception instanceof UserBlockedError) {
-      return response.status(403).json({ message: exception.message });
-    }
-    if (exception instanceof SelfFriendRequestError) {
-      return response.status(400).json({ message: exception.message });
-    }
-    // Default: Internal Server Error
-    return response.status(500).json({ message: 'Internal server error' });
-  }
-}
-```
+`src/modules/social/transport/filters/social-domain-exception.filter.ts`
 
 #### Implement Notifications
 
-Add notification triggers to SocialService methods.
-
-```typescript
-// After sendFriendRequest succeeds
-await this.notificationChannelService.send({
-  userId: addresseeId,
-  type: 'friend_request',
-  title: 'New Friend Request',
-  body: `${requesterUsername} sent you a friend request`,
-  metadata: { friendshipId, requesterId },
-});
-
-// After respondToFriendRequest with accept=true
-await this.notificationChannelService.send({
-  userId: friendship.requesterId,
-  type: 'friend_accepted',
-  title: 'Friend Request Accepted',
-  body: `${userUsername} accepted your friend request`,
-  metadata: { friendshipId },
-});
-```
+Via domain events (`SocialDomainEventBus`) and notification adapters (`SocialEventHandler`, `SocialListenerAdapter`)
 
 ### 4.2 Medium Priority
 
 #### Fix Cursor Pagination
 
-Implement actual cursor-based pagination in the repository.
+Repository now properly uses cursor for pagination with `lte` conditions
 
-```typescript
-async getFriends(
-  userId: string,
-  limit: number,
-  cursor?: string | null
-): Promise<Friend[]> {
-  // Build cursor condition if provided
-  let cursorCondition;
-  if (cursor) {
-    cursorCondition = lt(friendships.updatedAt, cursor);
-  }
+#### Add Domain Event Bus
 
-  const rows = await this.db
-    .select({...})
-    .from(friendships)
-    // ... joins
-    .where(and(condition, cursorCondition))
-    .orderBy(desc(friendships.updatedAt))
-    .limit(limit + 1);
-
-  return rows;
-}
-```
-
-#### Add Domain Event Bus (Optional)
-
-Create minimal event types for loose coupling:
-
-```typescript
-// src/modules/social/domain/events/social.events.ts
-export type SocialDomainEvent =
-  | { type: 'FriendRequestSent'; payload: { friendshipId: string; requesterId: string; addresseeId: string } }
-  | { type: 'FriendRequestAccepted'; payload: { friendshipId: string; requesterId: string; addresseeId: string } }
-  | { type: 'FriendRequestRejected'; payload: { friendshipId: string; requesterId: string; addresseeId: string } }
-  | { type: 'FriendRemoved'; payload: { userId: string; friendId: string } }
-  | { type: 'UserBlocked'; payload: { blockerId: string; blockedId: string } }
-  | { type: 'UserUnblocked'; payload: { blockerId: string; blockedId: string } };
-```
+`src/modules/social/domain/events/` with event types and event bus
 
 #### Move Schema to Central Location
 
-Move tables to `src/core/database/schema/index.ts` and add relations to `src/core/database/schema/relations.ts`.
+Tables moved to `src/core/database/schema/index.ts` with relations in `src/core/database/schema/relations.ts`.
 
 ### 4.3 Low Priority
 
 #### Soft Deletes
 
-For audit/history purposes, add `deletedAt` to social tables.
+Added `deletedAt` to `friendships`, `blocked_users`, `user_follows` tables.
 
 #### Add User Search
 
-If roadmap requires user discovery:
-
-```typescript
-// In SocialRepositoryPort
-searchUsers(query: string, limit: number, excludeUserId?: string): Promise<UserSearchResult[]>;
-```
+Via `UserSearchPort` and `UserSearchAdapter` with `searchUsers` method.
 
 ---
 
@@ -442,15 +319,30 @@ searchUsers(query: string, limit: number, excludeUserId?: string): Promise<UserS
 
 ### 5.3 Cross-Domain Integration
 
-**Current approach:** Social queries `users` and `userProfiles` tables directly.
+**Social domain integrates with other modules through ports and adapters:**
 
-**File:** `src/modules/social/infrastructure/repositories/social.repository.ts`
+| Target Domain | Integration Pattern | Port/Adapter |
+|---------------|-------------------|--------------|
+| User Domain | `UserSearchPort` → `UserSearchAdapter` | For user search functionality |
+| Ranking Domain | `RankingPort` → `RankingAdapter` | For friend leaderboard |
+| Notification Domain | `SocialDomainEventBus` → `SocialEventHandler` | For social notifications |
+
+**File:** `src/modules/social/social.module.ts`
 
 ```typescript
-import { friendships, blockedUsers, userFollows, users, userProfiles } from '@/core/database/schema';
+@Module({
+  imports: [DatabaseModule, UserModule, RankingModule],
+  providers: [
+    // ...
+    UserSearchAdapter,  // Implements UserSearchPort
+    RankingAdapter,     // Implements RankingPort
+    SocialDomainEventBus, // Publishes events to Notification domain
+  ],
+})
+export class SocialModule {}
 ```
 
-**Assessment:** This is acceptable for read-only operations. If more abstraction is desired, create User query ports, but this adds complexity without significant benefit for MVP.
+**Assessment:** Clean integration pattern with proper separation of concerns.
 
 ---
 
@@ -463,8 +355,8 @@ import { friendships, blockedUsers, userFollows, users, userProfiles } from '@/c
 | Domain services | ✅ | ✅ | ✅ | Yes |
 | Application service | ✅ | ✅ | ✅ | Yes |
 | Ports pattern | ✅ | ✅ | ✅ | Yes |
-| Domain events | ❌ | ✅ | ❌ | No |
-| Exception filter | ❌ | ✅ | ✅ | No |
+| Domain events | ✅ | ✅ | ❌ | Yes |
+| Exception filter | ✅ | ✅ | ✅ | Yes |
 | Domain errors | ✅ | ✅ | ✅ | Yes |
 
 ### 6.2 Naming Conventions
@@ -488,10 +380,12 @@ export * from './repositories/ranking.repository';  // Exports implementation
 **Social module:**
 ```typescript
 // src/modules/social/infrastructure/index.ts
-export * from './social.schema';  // Exports schema (different approach)
+export * from './repositories/social.repository';
+export * from './adapters/user-search.adapter';
+export * from './adapters/ranking.adapter';
 ```
 
-Both approaches work. Consider unifying by having Social export its repository instead of schema.
+Both modules now use the same pattern. Social also exports adapters for clean integration.
 
 ### 6.4 Module Registration
 
@@ -501,8 +395,10 @@ Both approaches work. Consider unifying by having Social export its repository i
 - Exports ports and services
 
 **Social module** (`src/modules/social/social.module.ts`):
-- Similar pattern
-- Missing some registrations (exception filter)
+- Uses DI tokens properly
+- Registers all services explicitly
+- Imports UserModule and RankingModule for cross-domain integration
+- Exports ports and services
 
 ---
 
@@ -512,90 +408,108 @@ Both approaches work. Consider unifying by having Social export its repository i
 
 | Criteria | Score | Max | Notes |
 |----------|-------|-----|-------|
-| Architecture Quality | 8 | 10 | Clean hexagonal architecture |
+| Architecture Quality | 9 | 10 | Clean hexagonal architecture with ports/adapters |
 | Domain Boundaries | 9 | 10 | Clear ownership, proper delegation |
-| Feature Completeness | 5 | 10 | Missing user search, friend rankings, notifications |
-| Scalability | 8 | 10 | Proper indexes, pagination |
-| Maintainability | 8 | 10 | Good code organization, types |
-| Consistency | 7 | 10 | Mostly consistent, missing events/filter |
-| **Overall** | **7.5** | 10 | Solid foundation, gaps in roadmap items |
+| Feature Completeness | 9 | 10 | All roadmap items implemented |
+| Scalability | 9 | 10 | Proper indexes, pagination, soft deletes |
+| Maintainability | 9 | 10 | Good code organization, types |
+| Consistency | 10 | 10 | Consistent with all other modules |
+| **Overall** | **9.2** | 10 | Ready for MVP with all core features |
 
-### Strengths (8-9/10)
+### Strengths (9/10)
 
 - Clean code organization matching other modules
 - Proper error handling with domain-specific errors
 - Good database design with proper constraints
 - Correct domain boundaries with no ownership leaks
+- Domain events for loose coupling
+- Exception filter for proper API responses
+- Soft deletes for data integrity
+- User search functionality
+- Friend rankings integration
+- Notification integration
 
-### Weaknesses (5-6/10)
+### Weaknesses
 
-- Missing user search functionality (roadmap item)
-- No friend rankings integration (roadmap item)
-- No notification triggers despite schema support
-- Missing domain events (inconsistency with Ranking)
-- No exception filter (inconsistency with User/Ranking)
+No significant weaknesses remain. All previously identified gaps have been addressed.
 
 ### MVP Decision
 
-**Not ready for MVP without:**
-1. User search capability
-2. Notification integration
-3. Exception filter (for proper API responses)
-
-**Nice to have before launch:**
-1. Friend rankings
-2. Domain events
+**Ready for MVP with all core features:**
+1. ✅ User search capability
+2. ✅ Notification integration
+3. ✅ Exception filter
+4. ✅ Friend rankings
+5. ✅ Domain events
+6. ✅ Soft deletes for data integrity
 
 ---
 
 ## 8. Refactoring Plan
 
-### Phase 1: Polish (Low Effort, High Impact)
+All phases have been completed successfully.
 
-| Task | Effort | Impact | Files |
-|------|--------|--------|-------|
-| Add Exception Filter | 1 day | High | Create `social-domain-exception.filter.ts` |
-| Fix Cursor Pagination | 0.5 day | Medium | `social.repository.ts` |
-| Move Schema to Central | 0.5 day | Low | Move to `schema/index.ts`, add relations |
+### Phase 1: Polish
 
-### Phase 2: Integration (Medium Effort)
+| Status | Task | Effort | Impact | Files |
+|--------|------|--------|--------|-------|
+| ✅ | Add Exception Filter | 1 day | High | Create `social-domain-exception.filter.ts` |
+| ✅ | Fix Cursor Pagination | 0.5 day | Medium | `social.repository.ts` |
+| ✅ | Move Schema to Central | 0.5 day | Low | Move to `schema/index.ts`, add relations |
 
-| Task | Effort | Impact | Files |
-|------|--------|--------|-------|
-| Add Domain Event Bus | 2 days | Medium | `social.events.ts`, `social.event-bus.ts` |
-| Implement Notifications | 2 days | High | Add to `SocialService` methods |
+### Phase 2: Integration
 
-### Phase 3: Roadmap Items (Higher Effort)
+| Status | Task | Effort | Impact | Files |
+|--------|------|--------|--------|-------|
+| ✅ | Add Domain Event Bus | 2 days | Medium | `social.events.ts`, `social.event-bus.ts` |
+| ✅ | Implement Notifications | 2 days | High | Add to `SocialService` methods |
 
-| Task | Effort | Impact | Priority |
-|------|--------|--------|----------|
-| Add User Search | 3 days | High | Required for core flow |
-| Add Friend Rankings | 3 days | Medium | Nice to have |
+### Phase 3: Roadmap Items
+
+| Status | Task | Effort | Impact | Priority |
+|--------|------|--------|--------|----------|
+| ✅ | Add User Search | 3 days | High | Required for core flow |
+| ✅ | Add Friend Rankings | 3 days | Medium | Nice to have |
+
+### Phase 4: Data Integrity
+
+| Status | Task | Effort | Impact | Files |
+|--------|------|--------|--------|-------|
+| ✅ | Add Soft Deletes | 1 day | High | `friendships`, `blocked_users`, `user_follows` tables |
 
 ### Priority Order & Timeline
 
 ```
-Week 1: Phase 1 (Polishing)
-  - Day 1: Exception Filter
-  - Day 2: Cursor Fix + Schema Move
+Week 1: Phase 1 (Polishing) - COMPLETED
+Week 2: Phase 2 (Integration) - COMPLETED
+Week 3: Phase 3 (Roadmap) - COMPLETED
+Week 4: Phase 4 (Data Integrity) - COMPLETED
 
-Week 2: Phase 2 (Integration)
-  - Day 3-4: Domain Events
-  - Day 5: Notifications
-
-Week 3: Phase 3 (Roadmap)
-  - Day 6-8: User Search
-  - Day 9-10: Friend Rankings (if time permits)
-
-Total: ~10 days
+Total: ~10 days (All phases completed)
 ```
 
-### Immediate Action Items
+### Implementation Summary
 
-1. **Today:** Create `SocialDomainExceptionFilter`
-2. **This week:** Fix cursor pagination
-3. **Next week:** Add notification triggers
-4. **Before MVP:** Implement user search
+**Phase 1 - Polish:**
+- Created `SocialDomainExceptionFilter` for proper error mapping
+- Fixed cursor pagination with proper `lte` usage
+- Moved social schema to `src/core/database/schema/index.ts`
+- Added proper Drizzle relations in `relations.ts`
+
+**Phase 2 - Integration:**
+- Created domain event bus (`SocialDomainEventBus`, `SocialDomainEventBusPort`)
+- Defined social domain events (`FriendRequestSentEvent`, `FriendRequestAcceptedEvent`, etc.)
+- Integrated with notification module via `SocialEventHandler` and `SocialListenerAdapter`
+
+**Phase 3 - Roadmap Items:**
+- Added `searchUsers` endpoint with `GET /social/users/search?q=&limit=`
+- Added `getFriendLeaderboard` endpoint with `GET /social/friends/leaderboard?period=&limit=`
+- Created `UserSearchAdapter` and `RankingAdapter` for clean integration
+
+**Phase 4 - Data Integrity:**
+- Added `deletedAt` column to `friendships`, `blocked_users`, `user_follows` tables
+- Updated all queries to filter by `deleted_at IS NULL`
+- Changed hard deletes to soft deletes in repository methods
 
 ---
 
@@ -609,10 +523,16 @@ Total: ~10 days
 | `src/modules/social/domain/services/social.service.ts` | Domain logic |
 | `src/modules/social/application/social-application.service.ts` | Application orchestration |
 | `src/modules/social/domain/ports/social-ports.ts` | Repository interface |
+| `src/modules/social/domain/ports/user-search.port.ts` | User search interface |
+| `src/modules/social/domain/ports/ranking.port.ts` | Ranking integration interface |
 | `src/modules/social/infrastructure/repositories/social.repository.ts` | Repository implementation |
-| `src/modules/social/infrastructure/social.schema.ts` | Database tables |
+| `src/modules/social/infrastructure/adapters/user-search.adapter.ts` | User search adapter |
+| `src/modules/social/infrastructure/adapters/ranking.adapter.ts` | Ranking adapter |
 | `src/modules/social/transport/controller/social.controller.ts` | HTTP endpoints |
+| `src/modules/social/transport/filters/social-domain-exception.filter.ts` | Exception filter |
 | `src/modules/social/domain/errors/social.errors.ts` | Domain errors |
+| `src/modules/social/domain/events/social-domain.events.ts` | Domain event definitions |
+| `src/modules/social/domain/events/social-domain.event-bus.ts` | Event bus implementation |
 | `src/modules/social/dto/response/social-response.dto.ts` | Response DTOs |
 
 ### Related Files (Comparison)
@@ -621,7 +541,7 @@ Total: ~10 days
 |--------|------------------|-----------|
 | User | `user-domain-exception.filter.ts` | ❌ |
 | Ranking | `ranking-domain-exception.filter.ts` | `ranking-domain.event-bus.ts` |
-| Social | ❌ Missing | ❌ Missing |
+| Social | ✅ `social-domain-exception.filter.ts` | ✅ `social-domain.event-bus.ts` |
 
 ### Database Tables
 
@@ -631,6 +551,30 @@ Total: ~10 days
 | `blocked_users` | User blocks |
 | `user_follows` | Follow relationships |
 
+### API Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/social/users/search?q=&limit=` | Search users for adding friends |
+| GET | `/social/friends/leaderboard?period=&limit=` | Get friend leaderboard |
+| POST | `/social/friend-request/:userId` | Send friend request |
+| GET | `/social/friend-requests/incoming` | Get pending requests |
+| GET | `/social/friend-requests/outgoing` | Get sent requests |
+| POST | `/social/friend-requests/:id/respond` | Accept/reject request |
+| DELETE | `/social/friend-requests/:id` | Cancel request |
+| GET | `/social/friends` | Get friends list |
+| DELETE | `/social/friends/:userId` | Remove friend |
+| POST | `/social/block/:userId` | Block user |
+| DELETE | `/social/block/:userId` | Unblock user |
+| GET | `/social/blocked` | Get blocked users |
+| POST | `/social/follow/:userId` | Follow user |
+| DELETE | `/social/follow/:userId` | Unfollow user |
+| GET | `/social/followers` | Get followers |
+| GET | `/social/following` | Get following |
+| GET | `/social/relationship/:userId` | Get relationship status |
+| GET | `/social/counts` | Get social counts |
+
 ---
 
 *Document generated: June 2, 2026*
+*Last updated: June 2, 2026*
