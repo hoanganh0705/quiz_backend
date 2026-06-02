@@ -1,4 +1,9 @@
-import type { Notification, NotificationPreferencesRow, CreateNotificationParams, NotificationListParams } from '../types/notification.types';
+import type {
+  Notification,
+  NotificationPreferencesRow,
+  CreateNotificationParams,
+  NotificationListParams,
+} from '../types/notification.types';
 
 export const NOTIFICATION_REPOSITORY_PORT = Symbol('NOTIFICATION_REPOSITORY_PORT');
 export const NOTIFICATION_SERVICE_PORT = Symbol('NOTIFICATION_SERVICE_PORT');
@@ -16,7 +21,10 @@ export interface NotificationRepositoryPort {
 
   // Preferences
   getPreferences(userId: string): Promise<NotificationPreferencesRow | null>;
-  upsertPreferences(userId: string, prefs: Partial<NotificationPreferencesRow>): Promise<NotificationPreferencesRow>;
+  upsertPreferences(
+    userId: string,
+    prefs: Partial<NotificationPreferencesRow>,
+  ): Promise<NotificationPreferencesRow>;
 }
 
 export interface NotificationServicePort {

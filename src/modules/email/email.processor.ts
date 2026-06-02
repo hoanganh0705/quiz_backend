@@ -289,7 +289,9 @@ export class EmailProcessor implements OnModuleInit, OnModuleDestroy {
 
     if (!value) {
       // Do not expose the config key name in the error message — this is a startup misconfiguration.
-      throw new Error('Email service is missing required configuration. Check server environment variables.');
+      throw new Error(
+        'Email service is missing required configuration. Check server environment variables.',
+      );
     }
 
     return value;

@@ -11,7 +11,10 @@ import {
   Body,
 } from '@nestjs/common';
 import { NotificationApplicationService } from '@/modules/notification/application/notification-application.service';
-import { NotificationListResponseDto, NotificationResponseDto, NotificationPreferencesResponseDto } from '@/modules/notification/dto/response';
+import {
+  NotificationListResponseDto,
+  NotificationPreferencesResponseDto,
+} from '@/modules/notification/dto/response';
 import { RequireAuth } from '@/common/guards/jwt.guard';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
 import { User } from '@/common/decorators/user.decorator';
@@ -29,7 +32,12 @@ export class NotificationController {
     @Query('cursor') cursor?: string,
     @Query('unreadOnly', new DefaultValuePipe(false)) unreadOnly?: boolean,
   ): Promise<NotificationListResponseDto> {
-    const parsedCursor = cursor ? JSON.parse(Buffer.from(cursor, 'base64').toString()) : null;
+    const parsedCursor: { createdAt: string; notificationId: string } | null = cursor
+      ? (JSON.parse(Buffer.from(cursor, 'base64').toString()) as {
+          createdAt: string;
+          notificationId: string;
+        })
+      : null;
 
     const result = await this.notificationService.getNotifications(
       user,
@@ -39,7 +47,7 @@ export class NotificationController {
     );
 
     return {
-      items: result.items.map(n => ({
+      items: result.items.map((n) => ({
         notificationId: n.notificationId,
         userId: n.userId,
         type: n.type,
