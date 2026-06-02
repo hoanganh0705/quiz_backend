@@ -1,5 +1,1 @@
-/**
- * Notification Application
- */
-
-export * from './notification.application.service';
+export * from './notification-application.service';
