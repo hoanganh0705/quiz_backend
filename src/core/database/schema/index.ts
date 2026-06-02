@@ -713,6 +713,23 @@ export const quizStats = pgTable(
     updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'string' })
       .defaultNow()
       .notNull(),
+    // Analytics extension fields
+    avgRating: numeric('avg_rating', { precision: 3, scale: 2 }).default('0').notNull(),
+    ratingCount: integer('rating_count').default(0).notNull(),
+    bookmarkCount: integer('bookmark_count').default(0).notNull(),
+    completionRate: numeric('completion_rate', { precision: 5, scale: 2 })
+      .default('0')
+      .notNull(),
+    popularityScore: numeric('popularity_score', { precision: 10, scale: 4 })
+      .default('0')
+      .notNull(),
+    trendingScore: numeric('trending_score', { precision: 10, scale: 4 })
+      .default('0')
+      .notNull(),
+    lastCalculatedAt: timestamp('last_calculated_at', {
+      withTimezone: true,
+      mode: 'string',
+    }),
   },
   (table) => [
     index('idx_quiz_stats_avg_score_percent_desc').using(
@@ -729,6 +746,14 @@ export const quizStats = pgTable(
       table.totalAttempts.desc().nullsFirst().op('int8_ops'),
       table.quizId.asc().nullsLast().op('uuid_ops'),
     ),
+    index('idx_quiz_stats_popularity_score_desc').using(
+      'btree',
+      table.popularityScore.desc().nullsFirst().op('numeric_ops'),
+    ),
+    index('idx_quiz_stats_trending_score_desc').using(
+      'btree',
+      table.trendingScore.desc().nullsFirst().op('numeric_ops'),
+    ),
     foreignKey({
       columns: [table.quizId],
       foreignColumns: [(quizzes as { quizId: AnyPgColumn }).quizId],
@@ -740,6 +765,10 @@ export const quizStats = pgTable(
     ),
     check('quiz_stats_total_attempts_nonneg', sql`total_attempts >= 0`),
     check('quiz_stats_total_players_nonneg', sql`total_players >= 0`),
+    check('quiz_stats_avg_rating_range', sql`(avg_rating >= (0)::numeric) AND (avg_rating <= (5)::numeric)`),
+    check('quiz_stats_rating_count_nonneg', sql`rating_count >= 0`),
+    check('quiz_stats_bookmark_count_nonneg', sql`bookmark_count >= 0`),
+    check('quiz_stats_completion_rate_range', sql`(completion_rate >= (0)::numeric) AND (completion_rate <= (100)::numeric)`),
   ],
 );
 

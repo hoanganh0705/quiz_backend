@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, forwardRef } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { REVIEW_REPOSITORY_PORT, type ReviewRepositoryPort } from './ports/review-repository.port';
 import { QUIZ_REPOSITORY_PORT } from '@/modules/quiz/domain/ports';
@@ -15,6 +15,7 @@ import {
   REVIEW_QUIZ_USER_CONFLICT_MESSAGE,
   REVIEW_ATTEMPT_REQUIRED_MESSAGE,
 } from '../review.constants';
+import type { AnalyticsEventHandler } from '@/modules/quiz/domain/analytics/analytics-event-handler';
 
 @Injectable()
 export class ReviewService {
@@ -25,6 +26,8 @@ export class ReviewService {
     private readonly quizRepository: {
       getActiveQuizRecordById: (quizId: string) => Promise<{ quizId: string } | null>;
     },
+    @Inject(forwardRef(() => require('@/modules/quiz/quiz.module').AnalyticsEventHandler))
+    private readonly analyticsEventHandler: AnalyticsEventHandler,
     @InjectPinoLogger(ReviewService.name)
     private readonly logger: PinoLogger,
   ) {}
@@ -79,6 +82,9 @@ export class ReviewService {
         rating,
       });
 
+      // Refresh quiz analytics
+      await this.analyticsEventHandler.onReviewSubmitted(quizId);
+
       return review;
     } catch (error) {
       const pgError = error as { code?: string; constraint?: string };
@@ -129,6 +135,9 @@ export class ReviewService {
       rating,
     });
 
+    // Refresh quiz analytics
+    await this.analyticsEventHandler.onReviewSubmitted(quizId);
+
     return updated;
   }
 
@@ -149,5 +158,8 @@ export class ReviewService {
       reviewId: existing.reviewId,
       userId: user.sub,
     });
+
+    // Refresh quiz analytics
+    await this.analyticsEventHandler.onReviewDeleted(quizId);
   }
 }
