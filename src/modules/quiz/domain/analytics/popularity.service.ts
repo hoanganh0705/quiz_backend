@@ -23,7 +23,9 @@ export class PopularityService {
         maxRatings: sql<number>`MAX(${quizStats.ratingCount})::int`,
       })
       .from(quizStats)
-      .where(sql`${quizStats.totalAttempts} > 0 OR ${quizStats.bookmarkCount} > 0 OR ${quizStats.ratingCount} > 0`);
+      .where(
+        sql`${quizStats.totalAttempts} > 0 OR ${quizStats.bookmarkCount} > 0 OR ${quizStats.ratingCount} > 0`,
+      );
 
     const maxAttempts = Number(stats[0]?.maxAttempts ?? 0);
     const maxBookmarks = Number(stats[0]?.maxBookmarks ?? 0);
@@ -49,9 +51,9 @@ export class PopularityService {
       })
       .from(quizStats);
 
-    const maxAttempts = Math.max(...stats.map(s => Number(s.totalAttempts)), 1);
-    const maxBookmarks = Math.max(...stats.map(s => Number(s.bookmarkCount)), 1);
-    const maxRatings = Math.max(...stats.map(s => Number(s.ratingCount)), 1);
+    const maxAttempts = Math.max(...stats.map((s) => Number(s.totalAttempts)), 1);
+    const maxBookmarks = Math.max(...stats.map((s) => Number(s.bookmarkCount)), 1);
+    const maxRatings = Math.max(...stats.map((s) => Number(s.ratingCount)), 1);
 
     for (const quizId of quizIds) {
       try {

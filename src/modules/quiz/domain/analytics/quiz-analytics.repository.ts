@@ -11,28 +11,17 @@ import {
   quizCategories,
   categories,
 } from '@/core/database/schema';
-import {
-  QUIZ_ANALYTICS_REPOSITORY_PORT,
-  type QuizAnalyticsRepositoryPort,
-  type AttemptAggregation,
-  type ReviewAggregation,
-  type TrendingQuiz,
-  type PopularQuiz,
-  type CategoryAnalytics,
-  type CreatorAnalytics,
-  type QuizStatsRow,
-} from '@/modules/quiz/domain/analytics/ports';
+
 import { eq, sql, desc, and, isNull, gte, count, inArray } from 'drizzle-orm';
+import { QuizAnalyticsRepositoryPort } from './ports';
+import { AttemptAggregation, QuizStatsRow } from './types';
 
 @Injectable()
 export class QuizAnalyticsRepository implements QuizAnalyticsRepositoryPort {
   constructor(@Inject(DRIZZLE) private readonly db: DrizzleDB) {}
 
   async getQuizStats(quizId: string): Promise<QuizStatsRow | null> {
-    const [stats] = await this.db
-      .select()
-      .from(quizStats)
-      .where(eq(quizStats.quizId, quizId));
+    const [stats] = await this.db.select().from(quizStats).where(eq(quizStats.quizId, quizId));
 
     return stats ?? null;
   }
@@ -79,7 +68,7 @@ export class QuizAnalyticsRepository implements QuizAnalyticsRepositoryPort {
       .from(quizVersions)
       .where(eq(quizVersions.quizId, quizId));
 
-    const versionIdList = versionIds.map(v => v.quizVersionId);
+    const versionIdList = versionIds.map((v) => v.quizVersionId);
 
     if (versionIdList.length === 0) {
       return {
@@ -157,8 +146,8 @@ export class QuizAnalyticsRepository implements QuizAnalyticsRepositoryPort {
         .from(quizCategories)
         .where(eq(quizCategories.categoryId, categoryId));
 
-      const categoryQuizIdSet = new Set(categoryQuizIds.map(c => c.quizId));
-      filtered = results.filter(r => categoryQuizIdSet.has(r.quizId)).slice(0, limit);
+      const categoryQuizIdSet = new Set(categoryQuizIds.map((c) => c.quizId));
+      filtered = results.filter((r) => categoryQuizIdSet.has(r.quizId)).slice(0, limit);
     }
 
     const now = new Date();
@@ -211,8 +200,8 @@ export class QuizAnalyticsRepository implements QuizAnalyticsRepositoryPort {
         .from(quizCategories)
         .where(eq(quizCategories.categoryId, categoryId));
 
-      const categoryQuizIdSet = new Set(categoryQuizIds.map(c => c.quizId));
-      filtered = results.filter(r => categoryQuizIdSet.has(r.quizId)).slice(0, limit);
+      const categoryQuizIdSet = new Set(categoryQuizIds.map((c) => c.quizId));
+      filtered = results.filter((r) => categoryQuizIdSet.has(r.quizId)).slice(0, limit);
     }
 
     const popularQuizzes: PopularQuiz[] = filtered.map((row, i) => ({
@@ -253,7 +242,7 @@ export class QuizAnalyticsRepository implements QuizAnalyticsRepositoryPort {
       .from(quizCategories)
       .where(eq(quizCategories.categoryId, categoryId));
 
-    const quizIdList = categoryQuizIds.map(c => c.quizId);
+    const quizIdList = categoryQuizIds.map((c) => c.quizId);
 
     if (quizIdList.length === 0) {
       return {
@@ -281,9 +270,14 @@ export class QuizAnalyticsRepository implements QuizAnalyticsRepositoryPort {
 
     const totalAttempts = stats.reduce((sum, s) => sum + Number(s.totalAttempts), 0);
     const totalPlayers = stats.reduce((sum, s) => sum + Number(s.totalPlayers), 0);
-    const activeQuizzes = stats.filter(s => s.lastAttemptAt && s.lastAttemptAt >= thirtyDaysAgo).length;
+    const activeQuizzes = stats.filter(
+      (s) => s.lastAttemptAt && s.lastAttemptAt >= thirtyDaysAgo,
+    ).length;
 
-    const totalRatingSum = stats.reduce((sum, s) => sum + Number(s.avgRating) * Number(s.ratingCount), 0);
+    const totalRatingSum = stats.reduce(
+      (sum, s) => sum + Number(s.avgRating) * Number(s.ratingCount),
+      0,
+    );
     const totalRatingCount = stats.reduce((sum, s) => sum + Number(s.ratingCount), 0);
 
     const topQuizzes = await this.getPopularQuizzes(5, categoryId);
@@ -296,9 +290,13 @@ export class QuizAnalyticsRepository implements QuizAnalyticsRepositoryPort {
         activeQuizzes,
         totalAttempts,
         totalPlayers,
-        averageScore: totalAttempts > 0
-          ? stats.reduce((sum, s) => sum + Number(s.avgScorePercent) * Number(s.totalAttempts), 0) / totalAttempts
-          : 0,
+        averageScore:
+          totalAttempts > 0
+            ? stats.reduce(
+                (sum, s) => sum + Number(s.avgScorePercent) * Number(s.totalAttempts),
+                0,
+              ) / totalAttempts
+            : 0,
         averageRating: totalRatingCount > 0 ? totalRatingSum / totalRatingCount : 0,
       },
       topQuizzes,
@@ -312,10 +310,8 @@ export class QuizAnalyticsRepository implements QuizAnalyticsRepositoryPort {
       .from(quizzes)
       .where(and(eq(quizzes.creatorId, userId), isNull(quizzes.deletedAt)));
 
-    const quizIdList = creatorQuizzes.map(q => q.quizId);
-    const publishedQuizIds = creatorQuizzes
-      .filter(() => true)
-      .map(q => q.quizId);
+    const quizIdList = creatorQuizzes.map((q) => q.quizId);
+    const publishedQuizIds = creatorQuizzes.filter(() => true).map((q) => q.quizId);
 
     if (quizIdList.length === 0) {
       return {
@@ -332,20 +328,21 @@ export class QuizAnalyticsRepository implements QuizAnalyticsRepositoryPort {
       };
     }
 
-    const stats = quizIdList.length > 0
-      ? await this.db
-          .select()
-          .from(quizStats)
-          .where(inArray(quizStats.quizId, quizIdList))
-      : [];
+    const stats =
+      quizIdList.length > 0
+        ? await this.db.select().from(quizStats).where(inArray(quizStats.quizId, quizIdList))
+        : [];
 
     const totalAttempts = stats.reduce((sum, s) => sum + Number(s.totalAttempts), 0);
     const totalPlayers = stats.reduce((sum, s) => sum + Number(s.totalPlayers), 0);
 
-    const totalRatingSum = stats.reduce((sum, s) => sum + Number(s.avgRating) * Number(s.ratingCount), 0);
+    const totalRatingSum = stats.reduce(
+      (sum, s) => sum + Number(s.avgRating) * Number(s.ratingCount),
+      0,
+    );
     const totalRatingCount = stats.reduce((sum, s) => sum + Number(s.ratingCount), 0);
 
-    const quizMap = new Map(creatorQuizzes.map(q => [q.quizId, q.title]));
+    const quizMap = new Map(creatorQuizzes.map((q) => [q.quizId, q.title]));
 
     const sortedByPopularity = [...stats].sort(
       (a, b) => Number(b.popularityScore) - Number(a.popularityScore),
@@ -399,7 +396,7 @@ export class QuizAnalyticsRepository implements QuizAnalyticsRepositoryPort {
       .from(quizVersions)
       .where(eq(quizVersions.quizId, quizId));
 
-    const versionIdList = versionIds.map(v => v.quizVersionId);
+    const versionIdList = versionIds.map((v) => v.quizVersionId);
 
     if (versionIdList.length === 0) {
       return 0;
@@ -409,10 +406,7 @@ export class QuizAnalyticsRepository implements QuizAnalyticsRepositoryPort {
       .select({ count: count() })
       .from(quizAttempts)
       .where(
-        and(
-          inArray(quizAttempts.quizVersionId, versionIdList),
-          gte(quizAttempts.createdAt, since),
-        ),
+        and(inArray(quizAttempts.quizVersionId, versionIdList), gte(quizAttempts.createdAt, since)),
       );
 
     return Number(result[0]?.count ?? 0);
