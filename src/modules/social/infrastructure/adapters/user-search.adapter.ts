@@ -7,9 +7,9 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { USER_REPOSITORY_PORT } from '@/modules/user/domain/ports/user-repository.port';
-import type { UserRepositoryPort, UserSearchResult as UserRepoSearchResult } from '@/modules/user/domain/ports/user-repository.port';
-import { USER_SEARCH_PORT, type UserSearchPort } from '../ports/user-search.port';
-import type { UserSearchResult } from '../types/social.types';
+import type { UserRepositoryPort } from '@/modules/user/domain/ports/user-repository.port';
+import { UserSearchPort } from '../../domain/ports';
+import { UserSearchResult } from '../../domain/types';
 
 @Injectable()
 export class UserSearchAdapter implements UserSearchPort {
@@ -20,7 +20,11 @@ export class UserSearchAdapter implements UserSearchPort {
     private readonly logger: PinoLogger,
   ) {}
 
-  async searchUsers(query: string, limit: number, excludeUserId?: string): Promise<UserSearchResult[]> {
+  async searchUsers(
+    query: string,
+    limit: number,
+    excludeUserId?: string,
+  ): Promise<UserSearchResult[]> {
     this.logger.debug({
       event: 'user_search_requested',
       query,

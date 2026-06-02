@@ -1,8 +1,14 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { DRIZZLE } from '@/core/database/drizzle.constants';
 import type { DrizzleDB } from '@/core/database/database.module';
-import { friendships, blockedUsers, userFollows, users, userProfiles } from '@/core/database/schema';
-import { SOCIAL_REPOSITORY_PORT, type SocialRepositoryPort } from '../../domain/ports/social-ports';
+import {
+  friendships,
+  blockedUsers,
+  userFollows,
+  users,
+  userProfiles,
+} from '@/core/database/schema';
+import { type SocialRepositoryPort } from '../../domain/ports/social-ports';
 import type {
   Friendship,
   BlockedUser,
@@ -11,11 +17,10 @@ import type {
   Friend,
   Follower,
   Following,
-  SocialCounts,
-  RelationshipStatus,
   RespondToFriendRequestParams,
 } from '../../domain/types/social.types';
 import { eq, and, or, sql, desc, count, lte, isNull } from 'drizzle-orm';
+import type { SocialCounts, RelationshipStatus } from '../../domain/types/social.types';
 
 @Injectable()
 export class SocialRepository implements SocialRepositoryPort {
@@ -34,7 +39,7 @@ export class SocialRepository implements SocialRepositoryPort {
     return friendship as Friendship;
   }
 
-  async getFriendRequest(friendshipId: string): Promise<Friendship | null> {
+  async getFriendRequest(friendshipId: string): Promise<Friendship> {
     const [friendship] = await this.db
       .select()
       .from(friendships)
@@ -65,13 +70,13 @@ export class SocialRepository implements SocialRepositoryPort {
       )
       .orderBy(desc(friendships.createdAt));
 
-    return rows.map(r => ({
-      friendshipId: r.friendshipId as string,
-      requesterId: r.requesterId as string,
-      requesterUsername: r.username as string,
-      requesterDisplayName: r.displayName as string | null,
-      requesterAvatarUrl: r.avatarUrl as string | null,
-      createdAt: r.createdAt as string,
+    return rows.map((r) => ({
+      friendshipId: r.friendshipId,
+      requesterId: r.requesterId,
+      requesterUsername: r.username,
+      requesterDisplayName: r.displayName,
+      requesterAvatarUrl: r.avatarUrl,
+      createdAt: r.createdAt,
     }));
   }
 
@@ -98,17 +103,20 @@ export class SocialRepository implements SocialRepositoryPort {
       )
       .orderBy(desc(friendships.createdAt));
 
-    return rows.map(r => ({
-      friendshipId: r.friendshipId as string,
-      requesterId: r.requesterId as string,
-      requesterUsername: r.username as string,
-      requesterDisplayName: r.displayName as string | null,
-      requesterAvatarUrl: r.avatarUrl as string | null,
-      createdAt: r.createdAt as string,
+    return rows.map((r) => ({
+      friendshipId: r.friendshipId,
+      requesterId: r.requesterId,
+      requesterUsername: r.username,
+      requesterDisplayName: r.displayName,
+      requesterAvatarUrl: r.avatarUrl,
+      createdAt: r.createdAt,
     }));
   }
 
-  async respondToFriendRequest(params: RespondToFriendRequestParams, requesterId: string): Promise<void> {
+  async respondToFriendRequest(
+    params: RespondToFriendRequestParams,
+    requesterId: string,
+  ): Promise<void> {
     const newStatus = params.accept ? 'accepted' : 'rejected';
 
     await this.db
@@ -126,7 +134,7 @@ export class SocialRepository implements SocialRepositoryPort {
       );
   }
 
-  async getFriends(userId: string, limit: number, cursor?: string | null): Promise<Friend[]> {
+  async getFriends(userId: string, limit: number, cursor?: string): Promise<Friend[]> {
     const baseCondition = or(
       eq(friendships.requesterId, userId),
       eq(friendships.addresseeId, userId),
@@ -135,7 +143,12 @@ export class SocialRepository implements SocialRepositoryPort {
     const cursorCondition = cursor ? lte(friendships.updatedAt, cursor) : undefined;
 
     const whereClause = cursor
-      ? and(baseCondition, eq(friendships.status, 'accepted'), isNull(friendships.deletedAt), cursorCondition)
+      ? and(
+          baseCondition,
+          eq(friendships.status, 'accepted'),
+          isNull(friendships.deletedAt),
+          cursorCondition,
+        )
       : and(baseCondition, eq(friendships.status, 'accepted'), isNull(friendships.deletedAt));
 
     const rows = await this.db
@@ -148,19 +161,22 @@ export class SocialRepository implements SocialRepositoryPort {
         avatarUrl: userProfiles.avatarUrl,
       })
       .from(friendships)
-      .innerJoin(users, sql`CASE WHEN ${friendships.requesterId} = ${userId} THEN ${friendships.addresseeId} ELSE ${friendships.requesterId} END = ${users.userId}`)
+      .innerJoin(
+        users,
+        sql`CASE WHEN ${friendships.requesterId} = ${userId} THEN ${friendships.addresseeId} ELSE ${friendships.requesterId} END = ${users.userId}`,
+      )
       .leftJoin(userProfiles, eq(users.userId, userProfiles.userId))
       .where(whereClause)
       .orderBy(desc(friendships.updatedAt))
       .limit(limit + 1);
 
-    return rows.map(r => ({
-      friendshipId: r.friendshipId as string,
-      userId: r.userId as string,
-      username: r.username as string,
-      displayName: r.displayName as string | null,
-      avatarUrl: r.avatarUrl as string | null,
-      friendSince: r.createdAt as string,
+    return rows.map((r) => ({
+      friendshipId: r.friendshipId,
+      userId: r.userId,
+      username: r.username,
+      displayName: r.displayName,
+      avatarUrl: r.avatarUrl,
+      friendSince: r.createdAt,
     }));
   }
 
@@ -170,10 +186,7 @@ export class SocialRepository implements SocialRepositoryPort {
       .from(friendships)
       .where(
         and(
-          or(
-            eq(friendships.requesterId, userId),
-            eq(friendships.addresseeId, userId),
-          ),
+          or(eq(friendships.requesterId, userId), eq(friendships.addresseeId, userId)),
           eq(friendships.status, 'accepted'),
           isNull(friendships.deletedAt),
         ),
@@ -190,14 +203,8 @@ export class SocialRepository implements SocialRepositoryPort {
       .where(
         and(
           or(
-            and(
-              eq(friendships.requesterId, userId),
-              eq(friendships.addresseeId, friendId),
-            ),
-            and(
-              eq(friendships.requesterId, friendId),
-              eq(friendships.addresseeId, userId),
-            ),
+            and(eq(friendships.requesterId, userId), eq(friendships.addresseeId, friendId)),
+            and(eq(friendships.requesterId, friendId), eq(friendships.addresseeId, userId)),
           ),
           eq(friendships.status, 'accepted'),
         ),
@@ -205,8 +212,6 @@ export class SocialRepository implements SocialRepositoryPort {
   }
 
   async blockUser(blockerId: string, blockedId: string, reason?: string): Promise<BlockedUser> {
-    const now = new Date().toISOString();
-
     // Check if already blocked (not deleted)
     const existing = await this.db
       .select()
@@ -228,12 +233,7 @@ export class SocialRepository implements SocialRepositoryPort {
     const previouslyBlocked = await this.db
       .select()
       .from(blockedUsers)
-      .where(
-        and(
-          eq(blockedUsers.blockerId, blockerId),
-          eq(blockedUsers.blockedId, blockedId),
-        ),
-      )
+      .where(and(eq(blockedUsers.blockerId, blockerId), eq(blockedUsers.blockedId, blockedId)))
       .limit(1);
 
     if (previouslyBlocked.length > 0) {
@@ -264,12 +264,7 @@ export class SocialRepository implements SocialRepositoryPort {
     await this.db
       .update(blockedUsers)
       .set({ deletedAt: now })
-      .where(
-        and(
-          eq(blockedUsers.blockerId, blockerId),
-          eq(blockedUsers.blockedId, blockedId),
-        ),
-      );
+      .where(and(eq(blockedUsers.blockerId, blockerId), eq(blockedUsers.blockedId, blockedId)));
   }
 
   async isBlocked(blockerId: string, blockedId: string): Promise<boolean> {
@@ -291,12 +286,7 @@ export class SocialRepository implements SocialRepositoryPort {
     const rows = await this.db
       .select()
       .from(blockedUsers)
-      .where(
-        and(
-          eq(blockedUsers.blockerId, blockerId),
-          isNull(blockedUsers.deletedAt),
-        ),
-      )
+      .where(and(eq(blockedUsers.blockerId, blockerId), isNull(blockedUsers.deletedAt)))
       .orderBy(desc(blockedUsers.createdAt));
 
     return rows as BlockedUser[];
@@ -319,15 +309,10 @@ export class SocialRepository implements SocialRepositoryPort {
     await this.db
       .update(userFollows)
       .set({ deletedAt: now })
-      .where(
-        and(
-          eq(userFollows.followerId, followerId),
-          eq(userFollows.followingId, followingId),
-        ),
-      );
+      .where(and(eq(userFollows.followerId, followerId), eq(userFollows.followingId, followingId)));
   }
 
-  async getFollowers(userId: string, limit: number, cursor?: string | null): Promise<Follower[]> {
+  async getFollowers(userId: string, limit: number, cursor?: string): Promise<Follower[]> {
     const baseCondition = eq(userFollows.followingId, userId);
     const cursorCondition = cursor ? lte(userFollows.createdAt, cursor) : undefined;
 
@@ -351,17 +336,17 @@ export class SocialRepository implements SocialRepositoryPort {
       .orderBy(desc(userFollows.createdAt))
       .limit(limit + 1);
 
-    return rows.map(r => ({
-      followId: r.followId as string,
-      userId: r.userId as string,
-      username: r.username as string,
-      displayName: r.displayName as string | null,
-      avatarUrl: r.avatarUrl as string | null,
-      followedAt: r.createdAt as string,
+    return rows.map((r) => ({
+      followId: r.followId,
+      userId: r.userId,
+      username: r.username,
+      displayName: r.displayName,
+      avatarUrl: r.avatarUrl,
+      followedAt: r.createdAt,
     }));
   }
 
-  async getFollowing(userId: string, limit: number, cursor?: string | null): Promise<Following[]> {
+  async getFollowing(userId: string, limit: number, cursor?: string): Promise<Following[]> {
     const baseCondition = eq(userFollows.followerId, userId);
     const cursorCondition = cursor ? lte(userFollows.createdAt, cursor) : undefined;
 
@@ -385,13 +370,13 @@ export class SocialRepository implements SocialRepositoryPort {
       .orderBy(desc(userFollows.createdAt))
       .limit(limit + 1);
 
-    return rows.map(r => ({
-      followId: r.followId as string,
-      userId: r.userId as string,
-      username: r.username as string,
-      displayName: r.displayName as string | null,
-      avatarUrl: r.avatarUrl as string | null,
-      followedAt: r.createdAt as string,
+    return rows.map((r) => ({
+      followId: r.followId,
+      userId: r.userId,
+      username: r.username,
+      displayName: r.displayName,
+      avatarUrl: r.avatarUrl,
+      followedAt: r.createdAt,
     }));
   }
 
@@ -399,12 +384,7 @@ export class SocialRepository implements SocialRepositoryPort {
     const result = await this.db
       .select({ count: count() })
       .from(userFollows)
-      .where(
-        and(
-          eq(userFollows.followingId, userId),
-          isNull(userFollows.deletedAt),
-        ),
-      );
+      .where(and(eq(userFollows.followingId, userId), isNull(userFollows.deletedAt)));
 
     return Number(result[0]?.count ?? 0);
   }
@@ -413,12 +393,7 @@ export class SocialRepository implements SocialRepositoryPort {
     const result = await this.db
       .select({ count: count() })
       .from(userFollows)
-      .where(
-        and(
-          eq(userFollows.followerId, userId),
-          isNull(userFollows.deletedAt),
-        ),
-      );
+      .where(and(eq(userFollows.followerId, userId), isNull(userFollows.deletedAt)));
 
     return Number(result[0]?.count ?? 0);
   }
@@ -436,7 +411,6 @@ export class SocialRepository implements SocialRepositoryPort {
       );
 
     return Number(result?.count ?? 0) > 0;
-  }
   }
 
   async getRelationshipStatus(userId: string, targetId: string): Promise<RelationshipStatus> {
@@ -461,6 +435,7 @@ export class SocialRepository implements SocialRepositoryPort {
             isNull(friendships.deletedAt),
           ),
         ),
+
       this.db
         .select({ count: count() })
         .from(friendships)
@@ -472,6 +447,7 @@ export class SocialRepository implements SocialRepositoryPort {
             isNull(friendships.deletedAt),
           ),
         ),
+
       this.db
         .select({ count: count() })
         .from(userFollows)
@@ -482,6 +458,7 @@ export class SocialRepository implements SocialRepositoryPort {
             isNull(userFollows.deletedAt),
           ),
         ),
+
       this.db
         .select({ count: count() })
         .from(userFollows)
@@ -492,6 +469,7 @@ export class SocialRepository implements SocialRepositoryPort {
             isNull(userFollows.deletedAt),
           ),
         ),
+
       this.isBlocked(userId, targetId),
       this.isBlocked(targetId, userId),
     ]);

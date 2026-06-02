@@ -31,11 +31,6 @@ import { RankingModule } from '@/modules/ranking/ranking.module';
     { provide: RANKING_PORT, useExisting: RankingAdapter },
   ],
   controllers: [SocialController],
-  exports: [
-    SocialService,
-    SocialApplicationService,
-    SOCIAL_DOMAIN_EVENT_BUS,
-    SocialDomainEventBus,
-  ],
+  exports: [SocialService, SocialApplicationService, SOCIAL_DOMAIN_EVENT_BUS, SocialDomainEventBus],
 })
 export class SocialModule {}

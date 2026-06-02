@@ -38,7 +38,10 @@ export class ReviewDomainExceptionFilter implements ExceptionFilter {
     }
 
     if (error instanceof ReviewForbiddenError) {
-      return { status: HttpStatus.FORBIDDEN, message: 'You do not have permission to perform this action' };
+      return {
+        status: HttpStatus.FORBIDDEN,
+        message: 'You do not have permission to perform this action',
+      };
     }
 
     if (error instanceof ReviewConflictError) {
