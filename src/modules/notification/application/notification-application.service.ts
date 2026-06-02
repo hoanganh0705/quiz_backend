@@ -1,11 +1,25 @@
 import { Injectable } from '@nestjs/common';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
 import { NotificationService } from '../domain/notification.service';
-import type { Notification, NotificationListParams, CreateNotificationParams } from '../domain/types/notification.types';
+import {
+  NOTIFICATION_REPOSITORY_PORT,
+  NotificationRepositoryPort,
+} from '../domain/ports/notification-ports';
+import type {
+  Notification,
+  NotificationListParams,
+  CreateNotificationParams,
+  NotificationPreferencesRow,
+  UpdatePreferencesParams,
+} from '../domain/types/notification.types';
 
 @Injectable()
 export class NotificationApplicationService {
-  constructor(private readonly notificationService: NotificationService) {}
+  constructor(
+    private readonly notificationService: NotificationService,
+    @Inject(NOTIFICATION_REPOSITORY_PORT)
+    private readonly notificationRepository: NotificationRepositoryPort,
+  ) {}
 
   async getNotifications(
     user: JwtPayload,
@@ -48,5 +62,33 @@ export class NotificationApplicationService {
 
   async getUnreadCount(user: JwtPayload): Promise<number> {
     return this.notificationService.getUnreadCount(user.sub);
+  }
+
+  /**
+   * Get user notification preferences.
+   */
+  async getPreferences(user: JwtPayload): Promise<NotificationPreferencesRow | null> {
+    return this.notificationRepository.getPreferences(user.sub);
+  }
+
+  /**
+   * Update user notification preferences.
+   */
+  async updatePreferences(
+    user: JwtPayload,
+    params: UpdatePreferencesParams,
+  ): Promise<NotificationPreferencesRow> {
+    return this.notificationRepository.upsertPreferences(user.sub, params);
+  }
+
+  /**
+   * Get or create default preferences for a user.
+   */
+  async getOrCreatePreferences(user: JwtPayload): Promise<NotificationPreferencesRow> {
+    const existing = await this.notificationRepository.getPreferences(user.sub);
+    if (existing) {
+      return existing;
+    }
+    return this.notificationRepository.upsertPreferences(user.sub, {});
   }
 }
