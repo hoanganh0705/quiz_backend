@@ -53,3 +53,30 @@ export class BlockedUserDto {
   blockedId: string;
   reason: string | null;
 }
+
+export class SearchableUserDto {
+  userId: string;
+  username: string;
+  displayName: string | null;
+  avatarUrl: string | null;
+  isFriend: boolean;
+  hasPendingRequest: boolean;
+  isBlocked: boolean;
+}
+
+export class FriendRankingEntryDto {
+  rank: number;
+  userId: string;
+  username: string;
+  displayName: string | null;
+  avatarUrl: string | null;
+  xp: number;
+  friendSince: string;
+}
+
+export class FriendLeaderboardDto {
+  period: 'weekly' | 'monthly' | 'all_time';
+  entries: FriendRankingEntryDto[];
+  currentUserRank: number | null;
+  totalParticipants: number;
+}

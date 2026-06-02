@@ -5,6 +5,8 @@ import {
   SOCIAL_DOMAIN_EVENT_BUS,
   type SocialDomainEventBusPort,
 } from '../ports';
+import { USER_SEARCH_PORT, type UserSearchPort } from '../ports/user-search.port';
+import { RANKING_PORT, type RankingPort } from '../ports/ranking.port';
 import type {
   Friendship,
   FriendRequest,
@@ -14,6 +16,9 @@ import type {
   SocialCounts,
   RelationshipStatus,
   CreateFriendRequestParams,
+  SearchableUser,
+  FriendLeaderboard,
+  FriendRankingEntry,
 } from '../types/social.types';
 import {
   SelfFriendRequestError,
@@ -33,6 +38,10 @@ export class SocialService {
     private readonly socialRepository: SocialRepositoryPort,
     @Inject(SOCIAL_DOMAIN_EVENT_BUS)
     private readonly eventBus: SocialDomainEventBusPort,
+    @Inject(USER_SEARCH_PORT)
+    private readonly userSearch: UserSearchPort,
+    @Inject(RANKING_PORT)
+    private readonly ranking: RankingPort,
     @InjectPinoLogger(SocialService.name)
     private readonly logger: PinoLogger,
   ) {}
@@ -320,5 +329,143 @@ export class SocialService {
 
   async getSocialCounts(userId: string): Promise<SocialCounts> {
     return this.socialRepository.getSocialCounts(userId);
+  }
+
+  /**
+   * Search users for adding as friends.
+   * Excludes blocked users and the current user.
+   * Returns users with their relationship status to the searcher.
+   */
+  async searchUsers(searcherId: string, query: string, limit: number = 20): Promise<SearchableUser[]> {
+    if (!query || query.trim().length < 2) {
+      return [];
+    }
+
+    this.logger.debug({
+      event: 'user_search_initiated',
+      searcherId,
+      query,
+      limit,
+    });
+
+    // Search users (excludes the searcher by default)
+    const users = await this.userSearch.searchUsers(query.trim(), limit, searcherId);
+
+    if (users.length === 0) {
+      return [];
+    }
+
+    // Get relationship status for each user
+    const searchableUsers: SearchableUser[] = await Promise.all(
+      users.map(async (user) => {
+        const status = await this.socialRepository.getRelationshipStatus(searcherId, user.userId);
+        return {
+          userId: user.userId,
+          username: user.username,
+          displayName: user.displayName,
+          avatarUrl: user.avatarUrl,
+          isFriend: status.isFriend,
+          hasPendingRequest: status.hasPendingRequest,
+          isBlocked: status.isBlocked,
+        };
+      }),
+    );
+
+    // Filter out blocked users
+    const filteredUsers = searchableUsers.filter(u => !u.isBlocked);
+
+    this.logger.debug({
+      event: 'user_search_completed',
+      searcherId,
+      query,
+      resultsCount: filteredUsers.length,
+    });
+
+    return filteredUsers;
+  }
+
+  /**
+   * Get leaderboard of friends sorted by XP.
+   * Supports weekly, monthly, and all-time rankings.
+   */
+  async getFriendLeaderboard(
+    userId: string,
+    period: 'weekly' | 'monthly' | 'all_time',
+    limit: number = 20,
+  ): Promise<FriendLeaderboard> {
+    this.logger.debug({
+      event: 'friend_leaderboard_requested',
+      userId,
+      period,
+      limit,
+    });
+
+    // Get all friends
+    const friends = await this.socialRepository.getFriends(userId, 1000, null);
+
+    if (friends.length === 0) {
+      return {
+        period,
+        entries: [],
+        currentUserRank: null,
+        totalParticipants: 0,
+      };
+    }
+
+    // Get friend IDs
+    const friendIds = friends.map(f => f.userId);
+
+    // Get rankings for friends
+    const rankings = await this.ranking.getRankingsForUsers(friendIds, period);
+
+    // Build entries with rankings
+    const entries: FriendRankingEntry[] = friends
+      .map(friend => {
+        const ranking = rankings.get(friend.userId);
+        return {
+          rank: 0, // Will be calculated
+          userId: friend.userId,
+          username: friend.username,
+          displayName: friend.displayName,
+          avatarUrl: friend.avatarUrl,
+          xp: ranking?.xp ?? 0,
+          friendSince: friend.friendSince,
+        };
+      })
+      .filter(e => e.xp > 0) // Only include friends with XP
+      .sort((a, b) => b.xp - a.xp); // Sort by XP descending
+
+    // Assign ranks (handle ties)
+    let currentRank = 0;
+    let currentXp = -1;
+    for (let i = 0; i < entries.length; i++) {
+      if (entries[i].xp !== currentXp) {
+        currentRank = i + 1;
+        currentXp = entries[i].xp;
+      }
+      entries[i].rank = currentRank;
+    }
+
+    // Get current user's rank in the friend leaderboard
+    const currentUserEntry = entries.find(e => e.userId === userId);
+    const currentUserRank = currentUserEntry?.rank ?? null;
+
+    // Apply limit
+    const limitedEntries = entries.slice(0, limit);
+
+    this.logger.debug({
+      event: 'friend_leaderboard_completed',
+      userId,
+      period,
+      totalFriends: friends.length,
+      rankedFriends: entries.length,
+    });
+
+    return {
+      period,
+      entries: limitedEntries,
+      currentUserRank,
+      totalParticipants: entries.length,
+    };
   }
 }

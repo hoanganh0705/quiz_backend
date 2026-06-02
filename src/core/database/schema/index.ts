@@ -1463,6 +1463,7 @@ export const friendships = pgTable(
     updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'string' })
       .defaultNow()
       .notNull(),
+    deletedAt: timestamp('deleted_at', { withTimezone: true, mode: 'string' }),
   },
   (table) => [
     index('idx_friendships_requester').using(
@@ -1477,10 +1478,14 @@ export const friendships = pgTable(
       'btree',
       table.status.asc().nullsLast().op('enum_ops'),
     ),
+    index('idx_friendships_deleted_at').using(
+      'btree',
+      table.deletedAt.asc().nullsLast().op('timestamptz_ops'),
+    ),
     uniqueIndex('uq_friendships_pair').on(
       table.requesterId.asc().nullsLast().op('uuid_ops'),
       table.addresseeId.asc().nullsLast().op('uuid_ops'),
-    ),
+    ).where(sql`deleted_at IS NULL`),
     foreignKey({
       columns: [table.requesterId],
       foreignColumns: [users.userId],
@@ -1505,6 +1510,7 @@ export const blockedUsers = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' })
       .defaultNow()
       .notNull(),
+    deletedAt: timestamp('deleted_at', { withTimezone: true, mode: 'string' }),
   },
   (table) => [
     index('idx_blocked_users_blocker').using(
@@ -1515,10 +1521,14 @@ export const blockedUsers = pgTable(
       'btree',
       table.blockedId.asc().nullsLast().op('uuid_ops'),
     ),
+    index('idx_blocked_users_deleted_at').using(
+      'btree',
+      table.deletedAt.asc().nullsLast().op('timestamptz_ops'),
+    ),
     uniqueIndex('uq_blocked_users_pair').on(
       table.blockerId.asc().nullsLast().op('uuid_ops'),
       table.blockedId.asc().nullsLast().op('uuid_ops'),
-    ),
+    ).where(sql`deleted_at IS NULL`),
     foreignKey({
       columns: [table.blockerId],
       foreignColumns: [users.userId],
@@ -1542,6 +1552,7 @@ export const userFollows = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' })
       .defaultNow()
       .notNull(),
+    deletedAt: timestamp('deleted_at', { withTimezone: true, mode: 'string' }),
   },
   (table) => [
     index('idx_user_follows_follower').using(
@@ -1552,10 +1563,14 @@ export const userFollows = pgTable(
       'btree',
       table.followingId.asc().nullsLast().op('uuid_ops'),
     ),
+    index('idx_user_follows_deleted_at').using(
+      'btree',
+      table.deletedAt.asc().nullsLast().op('timestamptz_ops'),
+    ),
     uniqueIndex('uq_user_follows_pair').on(
       table.followerId.asc().nullsLast().op('uuid_ops'),
       table.followingId.asc().nullsLast().op('uuid_ops'),
-    ),
+    ).where(sql`deleted_at IS NULL`),
     foreignKey({
       columns: [table.followerId],
       foreignColumns: [users.userId],

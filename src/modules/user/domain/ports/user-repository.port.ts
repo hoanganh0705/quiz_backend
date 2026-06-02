@@ -13,8 +13,16 @@ export interface UserMeRow {
   updatedAt: string;
 }
 
+export interface UserSearchResult {
+  userId: string;
+  username: string;
+  displayName: string | null;
+  avatarUrl: string | null;
+}
+
 export interface UserRepositoryPort {
   findMeById(userId: string): Promise<UserMeRow | null>;
+  searchUsers(query: string, limit: number, excludeUserId?: string): Promise<UserSearchResult[]>;
   updateProfile(
     userId: string,
     patch: {

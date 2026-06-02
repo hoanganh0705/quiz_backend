@@ -2,8 +2,8 @@ import { Inject, Injectable } from '@nestjs/common';
 import { DRIZZLE } from '@/core/database/drizzle.constants';
 import type { DrizzleDB } from '@/core/database/database.module';
 import { users, userProfiles } from '@/core/database/schema';
-import { and, eq, isNull } from 'drizzle-orm';
-import type { UserMeRow, UserRepositoryPort } from '../../domain/ports/user-repository.port';
+import { and, eq, isNull, or, ilike } from 'drizzle-orm';
+import type { UserMeRow, UserSearchResult, UserRepositoryPort } from '../../domain/ports/user-repository.port';
 
 @Injectable()
 export class UserRepository implements UserRepositoryPort {
@@ -31,6 +31,39 @@ export class UserRepository implements UserRepositoryPort {
       .limit(1);
 
     return (user as UserMeRow | undefined) ?? null;
+  }
+
+  async searchUsers(query: string, limit: number, excludeUserId?: string): Promise<UserSearchResult[]> {
+    // Sanitize query for LIKE pattern
+    const searchPattern = `%${query}%`;
+
+    // Build base conditions
+    const baseConditions = [
+      isNull(users.deletedAt),
+      or(
+        ilike(users.username, searchPattern),
+        ilike(userProfiles.displayName, searchPattern),
+      ),
+    ];
+
+    // Add exclusion if provided
+    const allConditions = excludeUserId
+      ? [...baseConditions, eq(users.userId, excludeUserId)]
+      : baseConditions;
+
+    const rows = await this.db
+      .select({
+        userId: users.userId,
+        username: users.username,
+        displayName: userProfiles.displayName,
+        avatarUrl: userProfiles.avatarUrl,
+      })
+      .from(users)
+      .leftJoin(userProfiles, eq(users.userId, userProfiles.userId))
+      .where(and(...allConditions))
+      .limit(limit);
+
+    return rows as UserSearchResult[];
   }
 
   async updateProfile(
