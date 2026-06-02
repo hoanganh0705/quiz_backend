@@ -84,10 +84,7 @@ export class BadgeVersioningService {
   /**
    * Increment a semantic version.
    */
-  incrementVersion(
-    version: string,
-    type: 'major' | 'minor' | 'patch',
-  ): string {
+  incrementVersion(version: string, type: 'major' | 'minor' | 'patch'): string {
     const parsed = this.parseVersion(version);
 
     switch (type) {
@@ -155,7 +152,11 @@ export class BadgeVersioningService {
     }
 
     if (updates.description !== undefined && updates.description !== badge.description) {
-      changes.push({ field: 'description', oldValue: badge.description, newValue: updates.description });
+      changes.push({
+        field: 'description',
+        oldValue: badge.description,
+        newValue: updates.description,
+      });
     }
 
     if (updates.iconUrl !== undefined && updates.iconUrl !== badge.iconUrl) {
@@ -175,7 +176,11 @@ export class BadgeVersioningService {
     }
 
     if (updates.validUntil !== undefined && updates.validUntil !== badge.validUntil) {
-      changes.push({ field: 'validUntil', oldValue: badge.validUntil, newValue: updates.validUntil });
+      changes.push({
+        field: 'validUntil',
+        oldValue: badge.validUntil,
+        newValue: updates.validUntil,
+      });
     }
 
     if (updates.isHidden !== undefined && updates.isHidden !== badge.isHidden) {
@@ -209,34 +214,36 @@ export class BadgeVersioningService {
 
     const earnerCount = await this.achievementRepository.getBadgeEarnersCount(badgeId);
 
-    return [{
-      badgeId: badge.badgeId,
-      slug: badge.slug,
-      currentVersion: badge.version,
-      totalVersions: 1,
-      latestChange: badge.updatedAt,
-      previousEarnersCount: earnerCount,
-      isLatestVersion: true,
-    }];
+    return [
+      {
+        badgeId: badge.badgeId,
+        slug: badge.slug,
+        currentVersion: badge.version,
+        totalVersions: 1,
+        latestChange: badge.updatedAt,
+        previousEarnersCount: earnerCount,
+        isLatestVersion: true,
+      },
+    ];
   }
 
   /**
    * Get badges that have newer versions available.
    */
-  async getOutdatedBadges(): Promise<BadgeDefinitionRow[]> {
+  getOutdatedBadges(): Promise<BadgeDefinitionRow[]> {
     // In a real implementation, this would query for badges where
     // there's a newer version available
     this.logger.debug({
       event: 'get_outdated_badges',
     });
 
-    return [];
+    return Promise.resolve([]);
   }
 
   /**
    * Compare badges across versions for display.
    */
-  async compareBadgeVersions(
+  compareBadgeVersions(
     badgeId: string,
     version1: string,
     version2: string,
@@ -249,7 +256,7 @@ export class BadgeVersioningService {
       version2,
     });
 
-    return [];
+    return Promise.resolve([]);
   }
 
   /**

@@ -5,9 +5,19 @@
 export * from './badge-evaluation.service';
 export * from './rank-achievement.service';
 export * from './consistency.service';
-export * from './rule-engine.service';
+export {
+  RuleEngineService,
+  type EvaluationContext,
+  type RuleConfig as RuleEngineRuleConfig,
+  type EvaluationResult as RuleEngineEvaluationResult,
+} from './rule-engine.service';
 export * from './progress-tracking.service';
-export * from './scheduled-evaluation.service';
+export {
+  ScheduledEvaluationService,
+  type ScheduledEvaluationConfig,
+  type EvaluationResult as ScheduledEvaluationResult,
+  type BatchEvaluationResult,
+} from './scheduled-evaluation.service';
 export * from './badge-notification.service';
 export * from './achievement-history.service';
 export * from './seasonal-badge.service';

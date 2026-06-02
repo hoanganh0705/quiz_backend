@@ -83,7 +83,7 @@ export class BadgeNotificationService {
     };
 
     if (this.notificationConfig.groupSimilar) {
-      await this.queueGroupedNotification(userId, payload);
+      this.queueGroupedNotification(userId, payload);
     } else {
       await this.sendNotification(payload);
     }
@@ -92,10 +92,7 @@ export class BadgeNotificationService {
   /**
    * Queue a notification for grouping with similar notifications.
    */
-  private async queueGroupedNotification(
-    userId: string,
-    payload: BadgeNotificationPayload,
-  ): Promise<void> {
+  private queueGroupedNotification(userId: string, payload: BadgeNotificationPayload): void {
     const existing = this.pendingNotifications.get(userId) ?? [];
     existing.push(payload);
     this.pendingNotifications.set(userId, existing);
@@ -135,7 +132,9 @@ export class BadgeNotificationService {
   /**
    * Group notifications by category.
    */
-  private groupNotifications(notifications: BadgeNotificationPayload[]): BadgeNotificationPayload[] {
+  private groupNotifications(
+    notifications: BadgeNotificationPayload[],
+  ): BadgeNotificationPayload[] {
     const groups: Map<string, BadgeNotificationPayload[]> = new Map();
 
     for (const notification of notifications) {
@@ -226,63 +225,71 @@ export class BadgeNotificationService {
   /**
    * Send in-app notification.
    */
-  private async sendInAppNotification(
+  private sendInAppNotification(
     payload: BadgeNotificationPayload,
     event: AchievementDomainEvent,
   ): Promise<void> {
     // This would integrate with a notification service
     this.logger.info({
       event: 'in_app_notification_sent',
+      achievementEvent: event,
       userId: payload.userId,
       badgeSlug: payload.badge.slug,
       badgeName: payload.badge.name,
       category: payload.badge.category,
     });
+    return Promise.resolve();
   }
 
   /**
    * Send webhook notification.
    */
-  private async sendWebhookNotification(
+  private sendWebhookNotification(
     payload: BadgeNotificationPayload,
     event: AchievementDomainEvent,
   ): Promise<void> {
     // This would call external webhooks
     this.logger.info({
       event: 'webhook_notification_sent',
+      achievementEvent: event,
       userId: payload.userId,
       badgeSlug: payload.badge.slug,
     });
+    return Promise.resolve();
   }
 
   /**
    * Send email notification.
    */
-  private async sendEmailNotification(
+  private sendEmailNotification(
     payload: BadgeNotificationPayload,
     event: AchievementDomainEvent,
   ): Promise<void> {
     // This would integrate with an email service
     this.logger.info({
       event: 'email_notification_sent',
+      achievementEvent: event,
       userId: payload.userId,
       badgeSlug: payload.badge.slug,
     });
+    return Promise.resolve();
   }
 
   /**
    * Send push notification.
    */
-  private async sendPushNotification(
+  private sendPushNotification(
     payload: BadgeNotificationPayload,
     event: AchievementDomainEvent,
   ): Promise<void> {
     // This would integrate with a push notification service
     this.logger.info({
       event: 'push_notification_sent',
+      achievementEvent: event,
       userId: payload.userId,
       badgeSlug: payload.badge.slug,
     });
+    return Promise.resolve();
   }
 
   /**
