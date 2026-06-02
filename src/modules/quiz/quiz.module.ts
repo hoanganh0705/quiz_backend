@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { DatabaseModule } from '@/core/database/database.module';
 
 // Application Services
@@ -12,6 +12,18 @@ import { QuizCommandService } from './domain/quiz/quiz-command.service';
 import { QuizVersionService } from './domain/version/quiz-version.service';
 import { QuizQuestionService } from './domain/question/quiz-question.service';
 
+// Analytics Domain Services
+import {
+  QuizAnalyticsService,
+  MetricsCalculatorService,
+  TrendingService,
+  PopularityService,
+  QUIZ_ANALYTICS_REPOSITORY_PORT,
+} from './domain/analytics';
+import { QuizAnalyticsRepository } from './domain/analytics/quiz-analytics.repository';
+import { AnalyticsSchedulerService } from './scheduler';
+import { AnalyticsEventHandler } from './domain/analytics/analytics-event-handler';
+
 // Domain Events
 import { QuizDomainEventBus } from './domain/events/quiz-domain.event-bus';
 import { QUIZ_DOMAIN_EVENT_BUS } from './domain/ports/quiz-domain-event-bus.port';
@@ -19,6 +31,7 @@ import { QUIZ_DOMAIN_EVENT_BUS } from './domain/ports/quiz-domain-event-bus.port
 // Transport
 import { QuizController } from './transport/controller/quiz.controller';
 import { QuizVersionController } from './transport/controller/quiz-version.controller';
+import { QuizAnalyticsController } from './transport/controller/quiz-analytics.controller';
 import { QuizDomainExceptionFilter } from './transport/filters/quiz-domain-exception.filter';
 
 // Repository Ports
@@ -45,6 +58,15 @@ import { QuizQuestionRepository } from './infrastructure/repositories/quiz-quest
     QuizVersionService,
     QuizQuestionService,
 
+    // Analytics Domain Services
+    QuizAnalyticsService,
+    MetricsCalculatorService,
+    TrendingService,
+    PopularityService,
+    QuizAnalyticsRepository,
+    AnalyticsSchedulerService,
+    AnalyticsEventHandler,
+
     // Exception Filter
     QuizDomainExceptionFilter,
 
@@ -58,11 +80,18 @@ import { QuizQuestionRepository } from './infrastructure/repositories/quiz-quest
     { provide: QUIZ_VERSION_REPOSITORY_PORT, useExisting: QuizVersionRepository },
     { provide: QUIZ_QUESTION_REPOSITORY_PORT, useExisting: QuizQuestionRepository },
     { provide: QUIZ_DOMAIN_EVENT_BUS, useExisting: QuizDomainEventBus },
+    { provide: QUIZ_ANALYTICS_REPOSITORY_PORT, useExisting: QuizAnalyticsRepository },
 
     // Domain Event Bus
     QuizDomainEventBus,
   ],
-  controllers: [QuizController, QuizVersionController],
-  exports: [QUIZ_REPOSITORY_PORT, QUIZ_DOMAIN_EVENT_BUS],
+  controllers: [QuizController, QuizVersionController, QuizAnalyticsController],
+  exports: [
+    QUIZ_REPOSITORY_PORT,
+    QUIZ_DOMAIN_EVENT_BUS,
+    QuizAnalyticsService,
+    MetricsCalculatorService,
+    AnalyticsEventHandler,
+  ],
 })
 export class QuizModule {}

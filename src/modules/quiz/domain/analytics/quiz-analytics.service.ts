@@ -1,0 +1,219 @@
+import { Inject, Injectable } from '@nestjs/common';
+import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
+import { MetricsCalculatorService } from './metrics-calculator.service';
+import { TrendingService } from './trending.service';
+import { PopularityService } from './popularity.service';
+import { QUIZ_ANALYTICS_REPOSITORY_PORT, type QuizAnalyticsRepositoryPort } from './ports';
+import { QuizNotFoundError } from './errors';
+import type {
+  QuizAnalytics,
+  TrendingQuiz,
+  PopularQuiz,
+  CategoryAnalytics,
+  CreatorAnalytics,
+} from './types';
+
+@Injectable()
+export class QuizAnalyticsService {
+  constructor(
+    @Inject(QUIZ_ANALYTICS_REPOSITORY_PORT)
+    private readonly analyticsRepository: QuizAnalyticsRepositoryPort,
+    private readonly metricsCalculator: MetricsCalculatorService,
+    private readonly trendingService: TrendingService,
+    private readonly popularityService: PopularityService,
+    @InjectPinoLogger(QuizAnalyticsService.name)
+    private readonly logger: PinoLogger,
+  ) {}
+
+  async getQuizAnalytics(quizId: string): Promise<QuizAnalytics> {
+    const stats = await this.analyticsRepository.getQuizStats(quizId);
+
+    if (!stats) {
+      throw new QuizNotFoundError(quizId);
+    }
+
+    return {
+      quizId,
+      metrics: {
+        totalAttempts: Number(stats.totalAttempts),
+        uniquePlayers: Number(stats.totalPlayers),
+        averageScore: Number(stats.avgScorePercent),
+        completionRate: Number(stats.completionRate),
+      },
+      reviewMetrics: {
+        averageRating: Number(stats.avgRating),
+        ratingCount: Number(stats.ratingCount),
+      },
+      engagementMetrics: {
+        bookmarkCount: Number(stats.bookmarkCount),
+      },
+      popularity: {
+        popularityScore: Number(stats.popularityScore),
+        trendingScore: Number(stats.trendingScore),
+      },
+      lastUpdated: stats.lastCalculatedAt ?? stats.updatedAt,
+    };
+  }
+
+  async refreshQuizMetrics(quizId: string): Promise<void> {
+    const nowIso = new Date().toISOString();
+
+    const [totalAttempts, uniquePlayers, averageScore, completionRate] = await Promise.all([
+      this.metricsCalculator.calculateTotalAttempts(quizId),
+      this.metricsCalculator.calculateUniquePlayers(quizId),
+      this.metricsCalculator.calculateAverageScore(quizId),
+      this.metricsCalculator.calculateCompletionRate(quizId),
+    ]);
+
+    await this.analyticsRepository.upsertQuizStats(quizId, {
+      totalAttempts: String(totalAttempts),
+      totalPlayers: String(uniquePlayers),
+      avgScorePercent: String(averageScore.toFixed(2)),
+      completionRate: String(completionRate.toFixed(2)),
+      lastAttemptAt: nowIso,
+      lastCalculatedAt: nowIso,
+    });
+
+    this.logger.info({
+      event: 'quiz_metrics_refreshed',
+      quizId,
+      totalAttempts,
+      uniquePlayers,
+      averageScore,
+      completionRate,
+    });
+  }
+
+  async refreshReviewMetrics(quizId: string): Promise<void> {
+    const nowIso = new Date().toISOString();
+
+    const [averageRating, ratingCount] = await Promise.all([
+      this.metricsCalculator.calculateAverageRating(quizId),
+      this.metricsCalculator.calculateRatingCount(quizId),
+    ]);
+
+    await this.analyticsRepository.upsertQuizStats(quizId, {
+      avgRating: String(averageRating.toFixed(2)),
+      ratingCount,
+      lastCalculatedAt: nowIso,
+    });
+
+    this.logger.info({
+      event: 'review_metrics_refreshed',
+      quizId,
+      averageRating,
+      ratingCount,
+    });
+  }
+
+  async refreshBookmarkMetrics(quizId: string): Promise<void> {
+    const nowIso = new Date().toISOString();
+
+    const bookmarkCount = await this.metricsCalculator.calculateBookmarkCount(quizId);
+
+    await this.analyticsRepository.upsertQuizStats(quizId, {
+      bookmarkCount,
+      lastCalculatedAt: nowIso,
+    });
+
+    this.logger.info({
+      event: 'bookmark_metrics_refreshed',
+      quizId,
+      bookmarkCount,
+    });
+  }
+
+  async refreshTrendingScore(quizId: string): Promise<void> {
+    const nowIso = new Date().toISOString();
+
+    const trendingScore = await this.trendingService.calculateTrendingScore(quizId);
+
+    await this.analyticsRepository.upsertQuizStats(quizId, {
+      trendingScore: String(trendingScore.toFixed(4)),
+      lastCalculatedAt: nowIso,
+    });
+
+    this.logger.info({
+      event: 'trending_score_refreshed',
+      quizId,
+      trendingScore,
+    });
+  }
+
+  async refreshPopularityScore(quizId: string): Promise<void> {
+    const nowIso = new Date().toISOString();
+
+    const popularityScore = await this.popularityService.calculatePopularityScore(quizId);
+
+    await this.analyticsRepository.upsertQuizStats(quizId, {
+      popularityScore: String(popularityScore.toFixed(4)),
+      lastCalculatedAt: nowIso,
+    });
+
+    this.logger.info({
+      event: 'popularity_score_refreshed',
+      quizId,
+      popularityScore,
+    });
+  }
+
+  async refreshAllTrendingScores(): Promise<void> {
+    this.logger.info({ event: 'refresh_all_trending_scores_start' });
+
+    const allStats = await this.analyticsRepository.getAllQuizStats();
+    const quizIds = allStats.map(s => s.quizId as string);
+
+    const scores = await this.trendingService.refreshTrendingScores(quizIds);
+    const nowIso = new Date().toISOString();
+
+    for (const [quizId, score] of scores) {
+      await this.analyticsRepository.upsertQuizStats(quizId, {
+        trendingScore: String(score.toFixed(4)),
+        lastCalculatedAt: nowIso,
+      });
+    }
+
+    this.logger.info({
+      event: 'refresh_all_trending_scores_complete',
+      quizCount: scores.size,
+    });
+  }
+
+  async refreshAllPopularityScores(): Promise<void> {
+    this.logger.info({ event: 'refresh_all_popularity_scores_start' });
+
+    const allStats = await this.analyticsRepository.getAllQuizStats();
+    const quizIds = allStats.map(s => s.quizId as string);
+
+    const scores = await this.popularityService.refreshPopularityScores(quizIds);
+    const nowIso = new Date().toISOString();
+
+    for (const [quizId, score] of scores) {
+      await this.analyticsRepository.upsertQuizStats(quizId, {
+        popularityScore: String(score.toFixed(4)),
+        lastCalculatedAt: nowIso,
+      });
+    }
+
+    this.logger.info({
+      event: 'refresh_all_popularity_scores_complete',
+      quizCount: scores.size,
+    });
+  }
+
+  async getTrendingQuizzes(limit: number, categoryId?: string): Promise<TrendingQuiz[]> {
+    return this.analyticsRepository.getTrendingQuizzes(limit, categoryId);
+  }
+
+  async getPopularQuizzes(limit: number, categoryId?: string): Promise<PopularQuiz[]> {
+    return this.analyticsRepository.getPopularQuizzes(limit, categoryId);
+  }
+
+  async getCategoryAnalytics(categoryId: string): Promise<CategoryAnalytics | null> {
+    return this.analyticsRepository.getCategoryAnalytics(categoryId);
+  }
+
+  async getCreatorAnalytics(userId: string): Promise<CreatorAnalytics | null> {
+    return this.analyticsRepository.getCreatorAnalytics(userId);
+  }
+}
