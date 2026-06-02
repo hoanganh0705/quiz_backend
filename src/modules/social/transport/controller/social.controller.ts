@@ -8,6 +8,8 @@ import {
   SocialCountsDto,
   RelationshipStatusDto,
   BlockedUserDto,
+  SearchableUserDto,
+  FriendLeaderboardDto,
 } from '@/modules/social/dto/response';
 import { RequireAuth } from '@/common/guards/jwt.guard';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
@@ -19,6 +21,26 @@ import { SocialDomainExceptionFilter } from './filters/social-domain-exception.f
 @UseFilters(SocialDomainExceptionFilter)
 export class SocialController {
   constructor(private readonly socialService: SocialApplicationService) {}
+
+  // User Search
+  @Get('users/search')
+  async searchUsers(
+    @User() user: JwtPayload,
+    @Query('q') query: string,
+    @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit: number,
+  ): Promise<SearchableUserDto[]> {
+    return this.socialService.searchUsers(user, query, limit);
+  }
+
+  // Friend Leaderboard
+  @Get('friends/leaderboard')
+  async getFriendLeaderboard(
+    @User() user: JwtPayload,
+    @Query('period', new DefaultValuePipe('weekly')) period: 'weekly' | 'monthly' | 'all_time',
+    @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit: number,
+  ): Promise<FriendLeaderboardDto> {
+    return this.socialService.getFriendLeaderboard(user, period, limit);
+  }
 
   // Friend Requests
   @Post('friend-request/:userId')
