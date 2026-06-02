@@ -1,33 +1,20 @@
-/**
- * Notification Domain Errors
- */
-
-export class NotificationDomainError extends Error {
-  constructor(
-    message: string,
-    public readonly code: string,
-    public readonly context?: Record<string, unknown>,
-  ) {
+export class NotificationError extends Error {
+  constructor(message: string) {
     super(message);
-    this.name = 'NotificationDomainError';
+    this.name = 'NotificationError';
   }
 }
 
-export class NotificationSendError extends NotificationDomainError {
-  constructor(userId: string, reason: string) {
-    super(`Failed to send notification to user ${userId}: ${reason}`, 'NOTIFICATION_SEND_ERROR', {
-      userId,
-      reason,
-    });
-    this.name = 'NotificationSendError';
-  }
-}
-
-export class NotificationNotFoundError extends NotificationDomainError {
-  constructor(notificationId: string) {
-    super(`Notification not found: ${notificationId}`, 'NOTIFICATION_NOT_FOUND', {
-      notificationId,
-    });
+export class NotificationNotFoundError extends NotificationError {
+  constructor(id: string) {
+    super(`Notification not found: ${id}`);
     this.name = 'NotificationNotFoundError';
+  }
+}
+
+export class NotificationForbiddenError extends NotificationError {
+  constructor() {
+    super('You do not have permission to access this notification');
+    this.name = 'NotificationForbiddenError';
   }
 }
