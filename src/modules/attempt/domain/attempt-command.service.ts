@@ -30,7 +30,7 @@ import {
 import { MIN_QUESTIONS_TO_PUBLISH } from '@/modules/quiz/quiz.constants';
 import { AttemptQueryService } from './attempt-query.service';
 import { AttemptScoringService } from './attempt-scoring.service';
-import type { AnalyticsEventHandler } from '@/modules/quiz/domain/analytics/analytics-event-handler';
+import { AnalyticsEventHandler } from '@/modules/quiz/domain/analytics/analytics-event-handler';
 
 /**
  * AttemptCommandService — Mutation operations for the Attempt aggregate.
@@ -47,7 +47,7 @@ export class AttemptCommandService {
     @Inject(ATTEMPT_REPOSITORY_PORT)
     private readonly attemptRepository: AttemptRepositoryPort,
     private readonly attemptQueryService: AttemptQueryService,
-    @Inject(forwardRef(() => require('@/modules/quiz/quiz.module').AnalyticsEventHandler))
+    @Inject(forwardRef(() => AnalyticsEventHandler))
     private readonly analyticsEventHandler: AnalyticsEventHandler,
     @InjectPinoLogger(AttemptCommandService.name)
     private readonly logger: PinoLogger,

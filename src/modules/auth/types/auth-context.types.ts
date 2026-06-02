@@ -48,4 +48,3 @@ export type SessionRequestContext = {
   deviceOs: string | null;
   deviceType: SessionDeviceType;
 };
-

@@ -182,12 +182,16 @@ export class DiscussionApplicationService {
     status: 'reviewed' | 'dismissed' | 'actioned',
     actionTaken = false,
   ): Promise<void> {
-    return this.discussionService.reviewReport(reportId, status, actionTaken);
+    return this.discussionService.reviewReport(reportId, user.sub, status, actionTaken);
   }
 
   async listReports(
     user: JwtPayload,
-    filters: { status?: 'open' | 'reviewed' | 'dismissed' | 'actioned'; limit?: number; cursor?: string | null },
+    filters: {
+      status?: 'open' | 'reviewed' | 'dismissed' | 'actioned';
+      limit?: number;
+      cursor?: string | null;
+    },
   ): Promise<{ items: DiscussionReport[]; hasNextPage: boolean }> {
     return this.discussionService.listReports(filters);
   }
