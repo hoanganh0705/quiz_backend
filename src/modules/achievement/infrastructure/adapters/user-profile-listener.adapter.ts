@@ -12,6 +12,7 @@
 import { Inject, Injectable, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { RuleEngineService } from '../../domain/services/rule-engine.service';
+import { ACHIEVEMENT_REPOSITORY_PORT } from '../../infrastructure/repositories/achievement.repository';
 import type { AchievementRepositoryPort } from '../../infrastructure/repositories/achievement.repository';
 
 export interface ProfileInitializedEvent {
@@ -34,7 +35,10 @@ export interface ProfileVisibilityChangedEvent {
   readonly timestamp: Date;
 }
 
-export type ProfileDomainEvent = ProfileInitializedEvent | ProfileUpdatedEvent | ProfileVisibilityChangedEvent;
+export type ProfileDomainEvent =
+  | ProfileInitializedEvent
+  | ProfileUpdatedEvent
+  | ProfileVisibilityChangedEvent;
 
 @Injectable()
 export class UserProfileEventListenerAdapter implements OnModuleInit, OnModuleDestroy {
@@ -95,7 +99,7 @@ export class UserProfileEventListenerAdapter implements OnModuleInit, OnModuleDe
    * Handle profile updated event.
    * Used for certain progress-based achievements.
    */
-  async handleProfileUpdated(event: ProfileUpdatedEvent): Promise<void> {
+  handleProfileUpdated(event: ProfileUpdatedEvent): void {
     try {
       // Profile updates don't typically trigger badges directly
       // but we log for potential future use
@@ -116,7 +120,7 @@ export class UserProfileEventListenerAdapter implements OnModuleInit, OnModuleDe
   /**
    * Handle profile visibility changed event.
    */
-  async handleProfileVisibilityChanged(event: ProfileVisibilityChangedEvent): Promise<void> {
+  handleProfileVisibilityChanged(event: ProfileVisibilityChangedEvent): void {
     try {
       // Visibility changes might trigger social badges in the future
       this.logger.debug({

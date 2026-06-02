@@ -90,7 +90,7 @@ export const discussionThreads = pgTable(
     check('discussion_threads_body_nonblank', sql`length(btrim(body)) > 0`),
     foreignKey({
       columns: [table.quizId],
-      foreignColumns: [quizzes.quizId],
+      foreignColumns: [(quizzes as { quizId: AnyPgColumn }).quizId],
       name: 'discussion_threads_quiz_id_fkey',
     }).onDelete('cascade'),
     foreignKey({

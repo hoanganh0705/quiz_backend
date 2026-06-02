@@ -15,7 +15,10 @@ import { Cron, CronExpression, SchedulerRegistry } from '@nestjs/schedule';
 import { ACHIEVEMENT_REPOSITORY_PORT } from '../../infrastructure/repositories/achievement.repository';
 import type { AchievementRepositoryPort } from '../../infrastructure/repositories/achievement.repository';
 import { RuleEngineService } from './rule-engine.service';
-import type { BadgeDefinitionRow, BadgeRuleRow } from '../../infrastructure/repositories/achievement.repository';
+import type {
+  BadgeDefinitionRow,
+  BadgeRuleRow,
+} from '../../infrastructure/repositories/achievement.repository';
 
 export interface ScheduledEvaluationConfig {
   enabled: boolean;
@@ -184,7 +187,6 @@ export class ScheduledEvaluationService implements OnModuleInit, OnModuleDestroy
   private async evaluateBadge(badge: BadgeDefinitionRow): Promise<EvaluationResult[]> {
     const rules = await this.achievementRepository.getBadgeRules(badge.badgeId);
     const results: EvaluationResult[] = [];
-    let errors = 0;
 
     // For each rule, find eligible users and award
     for (const rule of rules) {
@@ -214,7 +216,6 @@ export class ScheduledEvaluationService implements OnModuleInit, OnModuleDestroy
               slug: badge.slug,
             });
           } catch (error) {
-            errors++;
             results.push({
               badgeId: badge.badgeId,
               slug: badge.slug,
@@ -234,15 +235,15 @@ export class ScheduledEvaluationService implements OnModuleInit, OnModuleDestroy
    * Find users eligible for a specific rule.
    * This would typically query external domains for activity data.
    */
-  private async findEligibleUsers(rule: BadgeRuleRow): Promise<string[]> {
+  private findEligibleUsers(rule: BadgeRuleRow): Promise<string[]> {
     // This is a placeholder - in reality, this would:
     // 1. Query user domain for active users
     // 2. Query attempt domain for quiz completion counts
     // 3. Query ranking domain for rank data
     // 4. Query user domain for streak data
 
-    const config = rule.config as Record<string, unknown>;
-    const threshold = (config.threshold as number) ?? 1;
+    const config = rule.config;
+    const threshold = typeof config.threshold === 'number' ? config.threshold : 1;
 
     // Placeholder: return empty array - actual implementation would query other domains
     this.logger.debug({
@@ -252,7 +253,7 @@ export class ScheduledEvaluationService implements OnModuleInit, OnModuleDestroy
       threshold,
     });
 
-    return [];
+    return Promise.resolve([]);
   }
 
   /**
@@ -266,11 +267,11 @@ export class ScheduledEvaluationService implements OnModuleInit, OnModuleDestroy
 
     const streakRules = await this.achievementRepository.getRulesByType('streak');
     const results: EvaluationResult[] = [];
-    let awardedBadges = 0;
+    const awardedBadges = 0;
 
     for (const rule of streakRules) {
-      const config = rule.config as Record<string, unknown>;
-      const threshold = (config.threshold as number) ?? 7;
+      const config = rule.config;
+      const threshold = typeof config.threshold === 'number' ? config.threshold : 7;
 
       // Placeholder: would query User Domain for streak data
       this.logger.debug({

@@ -9,8 +9,10 @@ import { Inject, Injectable } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { ACHIEVEMENT_REPOSITORY_PORT } from '../../infrastructure/repositories/achievement.repository';
 import type { AchievementRepositoryPort } from '../../infrastructure/repositories/achievement.repository';
-import { AchievementDomainEvent } from '../events/achievement.events';
-import type { BadgeDefinitionRow, BadgeRuleRow } from '../../infrastructure/repositories/achievement.repository';
+import type {
+  BadgeDefinitionRow,
+  BadgeRuleRow,
+} from '../../infrastructure/repositories/achievement.repository';
 
 export interface EvaluationContext {
   userId: string;
@@ -204,10 +206,10 @@ export class RuleEngineService {
     context: EvaluationContext,
   ): Promise<EvaluationResult> {
     const badge = this.badgeDefinitionsCache.get(rule.badgeId)!;
-    const config = rule.config as RuleConfig;
+    const config = rule.config as unknown as RuleConfig;
 
     try {
-      const conditionMet = await this.checkCondition(rule.ruleType, config, context);
+      const conditionMet = this.checkCondition(rule.ruleType, config, context);
 
       if (conditionMet) {
         const alreadyHas = await this.achievementRepository.hasBadge(context.userId, rule.badgeId);
@@ -231,7 +233,7 @@ export class RuleEngineService {
         slug: badge.slug,
         name: badge.name,
         awarded: false,
-        progress: await this.calculateProgress(rule, context),
+        progress: this.calculateProgress(rule, context),
       };
     } catch (error) {
       this.logger.error({
@@ -253,11 +255,12 @@ export class RuleEngineService {
   /**
    * Check if a rule's condition is met.
    */
-  private async checkCondition(
+  private checkCondition(
     ruleType: string,
     config: RuleConfig,
     context: EvaluationContext,
-  ): Promise<boolean> {
+  ): boolean {
+    void ruleType;
     const currentValue = this.extractMetricValue(config.metric, context);
 
     if (currentValue === null) {
@@ -335,20 +338,21 @@ export class RuleEngineService {
   /**
    * Calculate progress for a rule.
    */
-  private async calculateProgress(
+  private calculateProgress(
     rule: BadgeRuleRow,
     context: EvaluationContext,
-  ): Promise<Record<string, unknown>> {
-    const config = rule.config as RuleConfig;
+  ): Record<string, unknown> {
+    const config = rule.config as unknown as RuleConfig;
     const currentValue = this.extractMetricValue(config.metric, context);
     const threshold = config.threshold ?? 1;
 
     return {
       current: currentValue ?? 0,
       target: threshold,
-      percentage: currentValue !== null && threshold > 0
-        ? Math.min(100, Math.round((currentValue / threshold) * 100))
-        : 0,
+      percentage:
+        currentValue !== null && threshold > 0
+          ? Math.min(100, Math.round((currentValue / threshold) * 100))
+          : 0,
     };
   }
 

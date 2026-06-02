@@ -97,14 +97,22 @@ export interface BaseRuleConfig {
  * Count-based rule: "Complete X quizzes"
  */
 export interface CountRuleConfig extends BaseRuleConfig {
-  metric: RuleMetric.QUIZZES_COMPLETED | RuleMetric.PERFECT_SCORES | RuleMetric.TOURNAMENTS_WON | RuleMetric.TOURNAMENTS_PARTICIPATED;
+  metric:
+    | RuleMetric.QUIZZES_COMPLETED
+    | RuleMetric.PERFECT_SCORES
+    | RuleMetric.TOURNAMENTS_WON
+    | RuleMetric.TOURNAMENTS_PARTICIPATED;
 }
 
 /**
  * Rank-based rule: "Reach rank X"
  */
 export interface RankRuleConfig extends BaseRuleConfig {
-  metric: RuleMetric.PERIOD_RANK | RuleMetric.ALL_TIME_RANK | RuleMetric.CURRENT_RANK | RuleMetric.BEST_RANK;
+  metric:
+    | RuleMetric.PERIOD_RANK
+    | RuleMetric.ALL_TIME_RANK
+    | RuleMetric.CURRENT_RANK
+    | RuleMetric.BEST_RANK;
   period?: 'daily' | 'weekly' | 'monthly' | 'all_time';
 }
 
@@ -229,7 +237,9 @@ export function validateRuleConfig(config: unknown): ValidationResult {
     metric === RuleMetric.MONTHLY_XP
   ) {
     if (cfg.period && !['daily', 'weekly', 'monthly', 'all_time'].includes(cfg.period as string)) {
-      errors.push(`Invalid period: ${cfg.period}`);
+      const periodValue =
+        typeof cfg.period === 'string' ? cfg.period : (JSON.stringify(cfg.period) ?? 'unknown');
+      errors.push(`Invalid period: ${periodValue}`);
     }
   }
 
@@ -270,24 +280,27 @@ export function createRuleConfigBuilder(): RuleConfigBuilder {
   let period: 'daily' | 'weekly' | 'monthly' | 'all_time' | undefined;
   let gracePeriodDays: number | undefined;
 
-  return {
-    withMetric(m: RuleMetric): RuleConfigBuilder {
+  const builder: RuleConfigBuilder = {
+    withMetric(this: RuleConfigBuilder, m: RuleMetric): RuleConfigBuilder {
       metric = m;
       return this;
     },
-    withThreshold(t: number): RuleConfigBuilder {
+    withThreshold(this: RuleConfigBuilder, t: number): RuleConfigBuilder {
       threshold = t;
       return this;
     },
-    withOperator(o: RuleOperator): RuleConfigBuilder {
+    withOperator(this: RuleConfigBuilder, o: RuleOperator): RuleConfigBuilder {
       operator = o;
       return this;
     },
-    withPeriod(p: 'daily' | 'weekly' | 'monthly' | 'all_time'): RuleConfigBuilder {
+    withPeriod(
+      this: RuleConfigBuilder,
+      p: 'daily' | 'weekly' | 'monthly' | 'all_time',
+    ): RuleConfigBuilder {
       period = p;
       return this;
     },
-    withGracePeriod(days: number): RuleConfigBuilder {
+    withGracePeriod(this: RuleConfigBuilder, days: number): RuleConfigBuilder {
       gracePeriodDays = days;
       return this;
     },
@@ -309,6 +322,8 @@ export function createRuleConfigBuilder(): RuleConfigBuilder {
       return config as unknown as RuleConfig;
     },
   };
+
+  return builder;
 }
 
 // ============================================

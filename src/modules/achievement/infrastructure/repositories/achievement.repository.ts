@@ -4,7 +4,7 @@
  * Defines the interface for achievement data access.
  */
 
-import type { BadgeRuleType, badgeCategory } from '@/core/database/schema';
+import type { badgeRuleType, badgeCategory, badgeType } from '@/core/database/schema';
 
 export type UserBadgeRow = {
   userBadgeId: string;
@@ -22,7 +22,7 @@ export type UserBadgeRow = {
 export type BadgeDefinitionRow = {
   badgeId: string;
   slug: string;
-  type: string;
+  type: (typeof badgeType.enumValues)[number];
   category: (typeof badgeCategory.enumValues)[number];
   name: string;
   description: string | null;
@@ -40,7 +40,7 @@ export type BadgeDefinitionRow = {
 export type BadgeRuleRow = {
   ruleId: string;
   badgeId: string;
-  ruleType: (typeof BadgeRuleType.enumValues)[number];
+  ruleType: (typeof badgeRuleType.enumValues)[number];
   priority: number;
   config: Record<string, unknown>;
   isActive: boolean;
@@ -74,7 +74,9 @@ export interface AchievementRepositoryPort {
   /**
    * Get all active badges for a user, with badge details.
    */
-  getUserBadgesWithDetails(userId: string): Promise<(UserBadgeRow & { badge: BadgeDefinitionRow })[]>;
+  getUserBadgesWithDetails(
+    userId: string,
+  ): Promise<(UserBadgeRow & { badge: BadgeDefinitionRow })[]>;
 
   /**
    * Get badge definition by ID.
@@ -104,7 +106,7 @@ export interface AchievementRepositoryPort {
   /**
    * Get rules by type (for event-based evaluation).
    */
-  getRulesByType(ruleType: (typeof BadgeRuleType.enumValues)[number]): Promise<BadgeRuleRow[]>;
+  getRulesByType(ruleType: (typeof badgeRuleType.enumValues)[number]): Promise<BadgeRuleRow[]>;
 
   /**
    * Get badges by category.
@@ -130,11 +132,7 @@ export interface AchievementRepositoryPort {
   /**
    * Revoke a badge (for error correction only).
    */
-  revokeBadge(
-    userId: string,
-    badgeId: string,
-    reason: string,
-  ): Promise<void>;
+  revokeBadge(userId: string, badgeId: string, reason: string): Promise<void>;
 
   /**
    * Check if badge is currently valid (not expired, within validFrom/validUntil).
@@ -154,7 +152,10 @@ export interface AchievementRepositoryPort {
   /**
    * Count badges by type for a user.
    */
-  countUserBadgesByType(userId: string, type: string): Promise<number>;
+  countUserBadgesByType(
+    userId: string,
+    type: (typeof badgeType.enumValues)[number],
+  ): Promise<number>;
 
   /**
    * Get badge earners count.
