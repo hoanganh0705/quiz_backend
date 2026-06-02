@@ -15,7 +15,7 @@ import type {
   RelationshipStatus,
   RespondToFriendRequestParams,
 } from '../../domain/types/social.types';
-import { eq, and, or, sql, desc, count } from 'drizzle-orm';
+import { eq, and, or, sql, desc, count, lte } from 'drizzle-orm';
 
 @Injectable()
 export class SocialRepository implements SocialRepositoryPort {
@@ -130,6 +130,13 @@ export class SocialRepository implements SocialRepositoryPort {
       eq(friendships.addresseeId, userId),
     );
 
+    // Build cursor condition for pagination
+    const cursorCondition = cursor ? lte(friendships.updatedAt, cursor) : undefined;
+
+    const whereClause = cursorCondition
+      ? and(condition, eq(friendships.status, 'accepted'), cursorCondition)
+      : and(condition, eq(friendships.status, 'accepted'));
+
     const rows = await this.db
       .select({
         friendshipId: friendships.friendshipId,
@@ -142,7 +149,7 @@ export class SocialRepository implements SocialRepositoryPort {
       .from(friendships)
       .innerJoin(users, sql`CASE WHEN ${friendships.requesterId} = ${userId} THEN ${friendships.addresseeId} ELSE ${friendships.requesterId} END = ${users.userId}`)
       .leftJoin(userProfiles, eq(users.userId, userProfiles.userId))
-      .where(and(condition, eq(friendships.status, 'accepted')))
+      .where(whereClause)
       .orderBy(desc(friendships.updatedAt))
       .limit(limit + 1);
 
@@ -265,6 +272,13 @@ export class SocialRepository implements SocialRepositoryPort {
   }
 
   async getFollowers(userId: string, limit: number, cursor?: string | null): Promise<Follower[]> {
+    // Build cursor condition for pagination
+    const cursorCondition = cursor ? lte(userFollows.createdAt, cursor) : undefined;
+
+    const whereClause = cursorCondition
+      ? and(eq(userFollows.followingId, userId), cursorCondition)
+      : eq(userFollows.followingId, userId);
+
     const rows = await this.db
       .select({
         followId: userFollows.followId,
@@ -277,7 +291,7 @@ export class SocialRepository implements SocialRepositoryPort {
       .from(userFollows)
       .innerJoin(users, eq(userFollows.followerId, users.userId))
       .leftJoin(userProfiles, eq(users.userId, userProfiles.userId))
-      .where(eq(userFollows.followingId, userId))
+      .where(whereClause)
       .orderBy(desc(userFollows.createdAt))
       .limit(limit + 1);
 
@@ -292,6 +306,13 @@ export class SocialRepository implements SocialRepositoryPort {
   }
 
   async getFollowing(userId: string, limit: number, cursor?: string | null): Promise<Following[]> {
+    // Build cursor condition for pagination
+    const cursorCondition = cursor ? lte(userFollows.createdAt, cursor) : undefined;
+
+    const whereClause = cursorCondition
+      ? and(eq(userFollows.followerId, userId), cursorCondition)
+      : eq(userFollows.followerId, userId);
+
     const rows = await this.db
       .select({
         followId: userFollows.followId,
@@ -304,7 +325,7 @@ export class SocialRepository implements SocialRepositoryPort {
       .from(userFollows)
       .innerJoin(users, eq(userFollows.followingId, users.userId))
       .leftJoin(userProfiles, eq(users.userId, userProfiles.userId))
-      .where(eq(userFollows.followerId, userId))
+      .where(whereClause)
       .orderBy(desc(userFollows.createdAt))
       .limit(limit + 1);
 

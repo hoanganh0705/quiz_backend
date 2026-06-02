@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Delete, Param, Query, ParseIntPipe, DefaultValuePipe, Body } from '@nestjs/common';
+import { Controller, Get, Post, Delete, Param, Query, ParseIntPipe, DefaultValuePipe, Body, UseFilters } from '@nestjs/common';
 import { SocialApplicationService } from '@/modules/social/application/social-application.service';
 import {
   FriendRequestDto,
@@ -12,9 +12,11 @@ import {
 import { RequireAuth } from '@/common/guards/jwt.guard';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
 import { User } from '@/common/decorators/user.decorator';
+import { SocialDomainExceptionFilter } from './filters/social-domain-exception.filter';
 
 @Controller('social')
 @RequireAuth()
+@UseFilters(SocialDomainExceptionFilter)
 export class SocialController {
   constructor(private readonly socialService: SocialApplicationService) {}
 
