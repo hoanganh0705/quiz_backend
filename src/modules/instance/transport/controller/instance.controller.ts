@@ -45,7 +45,9 @@ export class InstanceController {
   })
   @ApiCreatedResponse({ description: 'Instance created', type: CreateInstanceResponseDto })
   @ApiNotFoundResponse({ description: 'Quiz version not found' })
-  @ApiForbiddenResponse({ description: 'You do not have permission to create an instance for this quiz' })
+  @ApiForbiddenResponse({
+    description: 'You do not have permission to create an instance for this quiz',
+  })
   @ApiBadRequestResponse({ description: 'Validation failed' })
   @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
   @ApiValidationRequest()
@@ -77,7 +79,7 @@ export class InstanceController {
     @Param('id', new ParseUUIDPipe()) instanceId: string,
   ): Promise<InstanceDetailResponseDto> {
     return this.instanceService.getInstanceById(instanceId).then((row) => {
-      return this.mapper.toInstanceDetailResponse(row, []);
+      return this.mapper.toInstanceDetailResponse(row);
     });
   }
 
@@ -89,7 +91,9 @@ export class InstanceController {
   })
   @ApiOkResponse({ description: 'Joined successfully', type: JoinInstanceResponseDto })
   @ApiNotFoundResponse({ description: 'Instance not found' })
-  @ApiConflictResponse({ description: 'You are already a player in this instance or instance is full' })
+  @ApiConflictResponse({
+    description: 'You are already a player in this instance or instance is full',
+  })
   @ApiBadRequestResponse({ description: 'Instance is not open for joining' })
   @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
   joinInstance(

@@ -2,10 +2,7 @@ import { Module } from '@nestjs/common';
 import { DatabaseModule } from '@/core/database/database.module';
 import { NotificationApplicationService } from './application/notification-application.service';
 import { NotificationService } from './domain/notification.service';
-import {
-  NotificationRepository,
-  NOTIFICATION_REPOSITORY_PORT,
-} from './infrastructure/repositories/notification.repository';
+import { NotificationRepository } from './infrastructure/repositories/notification.repository';
 import { NotificationController } from './transport/controller/notification.controller';
 import {
   NotificationChannelService,
@@ -23,6 +20,7 @@ import {
 } from './infrastructure/adapters';
 import { RankingModule } from '@/modules/ranking';
 import { SocialModule } from '@/modules/social';
+import { NOTIFICATION_REPOSITORY_PORT } from './domain/ports';
 
 @Module({
   imports: [DatabaseModule, RankingModule, SocialModule],

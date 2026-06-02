@@ -11,7 +11,6 @@ import {
   INSTANCE_ALREADY_STARTED_MESSAGE,
   INSTANCE_ALREADY_CLOSED_MESSAGE,
   PLAYER_ALREADY_JOINED_MESSAGE,
-  PLAYER_NOT_IN_INSTANCE_MESSAGE,
 } from '../instance.constants';
 import {
   InstanceNotFoundError,
@@ -21,7 +20,6 @@ import {
   InstanceAlreadyStartedError,
   InstanceAlreadyClosedError,
   PlayerAlreadyJoinedError,
-  PlayerNotInInstanceError,
 } from './errors';
 
 @Injectable()

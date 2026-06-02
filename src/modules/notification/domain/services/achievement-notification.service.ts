@@ -65,7 +65,9 @@ export class AchievementNotificationService {
   /**
    * Send a badge unlocked notification (alias for achievement_earned).
    */
-  async notifyBadgeUnlocked(params: Omit<AchievementNotificationParams, 'achievementType'>): Promise<void> {
+  async notifyBadgeUnlocked(
+    params: Omit<AchievementNotificationParams, 'achievementType'>,
+  ): Promise<void> {
     const title = 'Badge Unlocked!';
     const body = `You unlocked the "${params.badgeName}" badge!`;
 

@@ -1,98 +1,292 @@
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+
 export class QuizMetricsDto {
-  totalAttempts: number;
-  uniquePlayers: number;
-  averageScore: number;
-  completionRate: number;
+  @ApiProperty({ description: 'Total number of quiz attempts', example: 1250 })
+  totalAttempts!: number;
+
+  @ApiProperty({ description: 'Number of unique players who attempted the quiz', example: 820 })
+  uniquePlayers!: number;
+
+  @ApiProperty({
+    description: 'Average score percent across all attempts (0–100)',
+    example: 72.4,
+  })
+  averageScore!: number;
+
+  @ApiProperty({
+    description: 'Proportion of attempts that reached the end (0–1)',
+    example: 0.85,
+  })
+  completionRate!: number;
 }
 
 export class ReviewMetricsDto {
-  averageRating: number;
-  ratingCount: number;
+  @ApiProperty({
+    description: 'Average user rating (1–5)',
+    example: 4.3,
+  })
+  averageRating!: number;
+
+  @ApiProperty({ description: 'Total number of ratings submitted', example: 312 })
+  ratingCount!: number;
 }
 
 export class EngagementMetricsDto {
-  bookmarkCount: number;
+  @ApiProperty({ description: 'Number of times the quiz has been bookmarked', example: 95 })
+  bookmarkCount!: number;
 }
 
 export class PopularityDto {
-  popularityScore: number;
-  trendingScore: number;
+  @ApiProperty({ description: 'Composite popularity score', example: 87.6 })
+  popularityScore!: number;
+
+  @ApiProperty({ description: 'Short-term trending score based on recent activity', example: 45.2 })
+  trendingScore!: number;
+
+  @ApiPropertyOptional({ description: 'Overall popularity rank position', example: 12 })
   rank?: number;
 }
 
 export class QuizAnalyticsResponseDto {
-  quizId: string;
-  metrics: QuizMetricsDto;
-  reviewMetrics: ReviewMetricsDto;
-  engagementMetrics: EngagementMetricsDto;
-  popularity: PopularityDto;
-  lastUpdated: string;
+  @ApiProperty({
+    description: 'Quiz identifier',
+    format: 'uuid',
+    example: '660e8400-e29b-41d4-a716-446655440000',
+  })
+  quizId!: string;
+
+  @ApiProperty({ description: 'Quiz attempt and score metrics', type: () => QuizMetricsDto })
+  metrics!: QuizMetricsDto;
+
+  @ApiProperty({ description: 'User review metrics', type: () => ReviewMetricsDto })
+  reviewMetrics!: ReviewMetricsDto;
+
+  @ApiProperty({ description: 'Engagement metrics', type: () => EngagementMetricsDto })
+  engagementMetrics!: EngagementMetricsDto;
+
+  @ApiProperty({ description: 'Popularity and trending scores', type: () => PopularityDto })
+  popularity!: PopularityDto;
+
+  @ApiProperty({
+    description: 'Timestamp of the last analytics refresh (ISO 8601)',
+    example: '2025-06-01T00:00:00.000Z',
+  })
+  lastUpdated!: string;
 }
 
 export class TrendingQuizItemDto {
-  rank: number;
-  quizId: string;
-  title: string;
-  slug: string;
-  imageUrl: string | null;
-  trendingScore: number;
-  totalAttempts: number;
-  recentAttempts: number;
+  @ApiProperty({ description: 'Trending rank position', example: 1 })
+  rank!: number;
+
+  @ApiProperty({
+    description: 'Quiz identifier',
+    format: 'uuid',
+    example: '660e8400-e29b-41d4-a716-446655440000',
+  })
+  quizId!: string;
+
+  @ApiProperty({ description: 'Quiz title', example: 'JavaScript Fundamentals' })
+  title!: string;
+
+  @ApiProperty({ description: 'URL-friendly quiz slug', example: 'javascript-fundamentals' })
+  slug!: string;
+
+  @ApiPropertyOptional({
+    description: 'Quiz cover image URL',
+    format: 'uri',
+    example: 'https://example.com/covers/js.png',
+    nullable: true,
+  })
+  imageUrl!: string | null;
+
+  @ApiProperty({ description: 'Trending score for this period', example: 45.2 })
+  trendingScore!: number;
+
+  @ApiProperty({ description: 'Total number of attempts', example: 1250 })
+  totalAttempts!: number;
+
+  @ApiProperty({ description: 'Attempts in the current trending window', example: 320 })
+  recentAttempts!: number;
 }
 
 export class TrendingQuizzesResponseDto {
-  period: 'daily' | 'weekly';
-  quizzes: TrendingQuizItemDto[];
-  lastUpdated: string;
+  @ApiProperty({
+    description: 'Trending period',
+    enum: ['daily', 'weekly'],
+    example: 'weekly',
+  })
+  period!: 'daily' | 'weekly';
+
+  @ApiProperty({
+    description: 'Trending quiz items sorted by rank',
+    type: () => [TrendingQuizItemDto],
+  })
+  quizzes!: TrendingQuizItemDto[];
+
+  @ApiProperty({
+    description: 'Timestamp of the last trending refresh (ISO 8601)',
+    example: '2025-06-01T00:00:00.000Z',
+  })
+  lastUpdated!: string;
 }
 
 export class PopularQuizItemDto {
-  rank: number;
-  quizId: string;
-  title: string;
-  slug: string;
-  imageUrl: string | null;
-  popularityScore: number;
-  totalAttempts: number;
-  averageRating: number;
-  bookmarkCount: number;
+  @ApiProperty({ description: 'Popularity rank position', example: 1 })
+  rank!: number;
+
+  @ApiProperty({
+    description: 'Quiz identifier',
+    format: 'uuid',
+    example: '660e8400-e29b-41d4-a716-446655440000',
+  })
+  quizId!: string;
+
+  @ApiProperty({ description: 'Quiz title', example: 'JavaScript Fundamentals' })
+  title!: string;
+
+  @ApiProperty({ description: 'URL-friendly quiz slug', example: 'javascript-fundamentals' })
+  slug!: string;
+
+  @ApiPropertyOptional({
+    description: 'Quiz cover image URL',
+    format: 'uri',
+    example: 'https://example.com/covers/js.png',
+    nullable: true,
+  })
+  imageUrl!: string | null;
+
+  @ApiProperty({ description: 'Composite popularity score', example: 87.6 })
+  popularityScore!: number;
+
+  @ApiProperty({ description: 'Total number of attempts', example: 1250 })
+  totalAttempts!: number;
+
+  @ApiProperty({ description: 'Average user rating (1–5)', example: 4.3 })
+  averageRating!: number;
+
+  @ApiProperty({ description: 'Number of bookmarks', example: 95 })
+  bookmarkCount!: number;
 }
 
 export class PopularQuizzesResponseDto {
-  quizzes: PopularQuizItemDto[];
-  lastUpdated: string;
+  @ApiProperty({
+    description: 'Popular quiz items sorted by rank',
+    type: () => [PopularQuizItemDto],
+  })
+  quizzes!: PopularQuizItemDto[];
+
+  @ApiProperty({
+    description: 'Timestamp of the last popularity refresh (ISO 8601)',
+    example: '2025-06-01T00:00:00.000Z',
+  })
+  lastUpdated!: string;
 }
 
 export class CategorySummaryDto {
-  totalQuizzes: number;
-  activeQuizzes: number;
-  totalAttempts: number;
-  totalPlayers: number;
-  averageScore: number;
-  averageRating: number;
+  @ApiProperty({ description: 'Total quizzes in this category', example: 48 })
+  totalQuizzes!: number;
+
+  @ApiProperty({ description: 'Quizzes that are currently published and active', example: 40 })
+  activeQuizzes!: number;
+
+  @ApiProperty({ description: 'Total attempts across all quizzes in this category', example: 5200 })
+  totalAttempts!: number;
+
+  @ApiProperty({ description: 'Unique players across all quizzes in this category', example: 3100 })
+  totalPlayers!: number;
+
+  @ApiProperty({ description: 'Average score percent across the category (0–100)', example: 68.5 })
+  averageScore!: number;
+
+  @ApiProperty({ description: 'Average rating across the category (1–5)', example: 4.1 })
+  averageRating!: number;
 }
 
 export class CategoryAnalyticsResponseDto {
-  categoryId: string;
-  categoryName: string;
-  summary: CategorySummaryDto;
-  topQuizzes: PopularQuizItemDto[];
-  lastUpdated: string;
+  @ApiProperty({
+    description: 'Category identifier',
+    format: 'uuid',
+    example: '550e8400-e29b-41d4-a716-446655440000',
+  })
+  categoryId!: string;
+
+  @ApiProperty({ description: 'Category display name', example: 'Programming' })
+  categoryName!: string;
+
+  @ApiProperty({ description: 'Aggregate summary metrics', type: () => CategorySummaryDto })
+  summary!: CategorySummaryDto;
+
+  @ApiProperty({
+    description: 'Top performing quizzes in this category',
+    type: () => [PopularQuizItemDto],
+  })
+  topQuizzes!: PopularQuizItemDto[];
+
+  @ApiProperty({
+    description: 'Timestamp of the last analytics refresh (ISO 8601)',
+    example: '2025-06-01T00:00:00.000Z',
+  })
+  lastUpdated!: string;
+}
+
+export class CreatorWorstQuizDto {
+  @ApiProperty({
+    description: 'Quiz identifier',
+    format: 'uuid',
+    example: '660e8400-e29b-41d4-a716-446655440000',
+  })
+  quizId!: string;
+
+  @ApiProperty({ description: 'Quiz title', example: 'Advanced Algorithms' })
+  title!: string;
+
+  @ApiProperty({ description: 'Average score percent (0–100)', example: 31.2 })
+  averageScore!: number;
 }
 
 export class CreatorAnalyticsResponseDto {
-  userId: string;
-  totalQuizzes: number;
-  publishedQuizzes: number;
-  totalAttempts: number;
-  totalPlayers: number;
-  totalReviews: number;
-  averageRating: number;
-  topPerformingQuiz: PopularQuizItemDto | null;
-  worstPerformingQuiz: {
-    quizId: string;
-    title: string;
-    averageScore: number;
-  } | null;
-  lastUpdated: string;
+  @ApiProperty({
+    description: 'Creator user identifier',
+    format: 'uuid',
+    example: '550e8400-e29b-41d4-a716-446655440000',
+  })
+  userId!: string;
+
+  @ApiProperty({ description: 'Total quizzes created', example: 12 })
+  totalQuizzes!: number;
+
+  @ApiProperty({ description: 'Quizzes that are currently published', example: 9 })
+  publishedQuizzes!: number;
+
+  @ApiProperty({ description: 'Total attempts across all creator quizzes', example: 4800 })
+  totalAttempts!: number;
+
+  @ApiProperty({ description: 'Unique players across all creator quizzes', example: 2900 })
+  totalPlayers!: number;
+
+  @ApiProperty({ description: 'Total reviews received', example: 310 })
+  totalReviews!: number;
+
+  @ApiProperty({ description: 'Average rating across all creator quizzes (1–5)', example: 4.4 })
+  averageRating!: number;
+
+  @ApiPropertyOptional({
+    description: 'The top performing quiz by popularity',
+    type: () => PopularQuizItemDto,
+    nullable: true,
+  })
+  topPerformingQuiz!: PopularQuizItemDto | null;
+
+  @ApiPropertyOptional({
+    description: 'The worst performing quiz by average score',
+    type: () => CreatorWorstQuizDto,
+    nullable: true,
+  })
+  worstPerformingQuiz!: CreatorWorstQuizDto | null;
+
+  @ApiProperty({
+    description: 'Timestamp of the last analytics refresh (ISO 8601)',
+    example: '2025-06-01T00:00:00.000Z',
+  })
+  lastUpdated!: string;
 }
