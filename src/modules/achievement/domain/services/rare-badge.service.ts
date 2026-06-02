@@ -17,15 +17,14 @@ import { Inject, Injectable } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { ACHIEVEMENT_REPOSITORY_PORT } from '../../infrastructure/repositories/achievement.repository';
 import type { AchievementRepositoryPort } from '../../infrastructure/repositories/achievement.repository';
-import type { BadgeDefinitionRow } from '../../infrastructure/repositories/achievement.repository';
 
 export enum RarityTier {
-  COMMON = 'common',           // > 1000 earners
-  UNCOMMON = 'uncommon',       // 100-1000 earners
-  RARE = 'rare',               // 10-100 earners
-  EPIC = 'epic',               // 1-10 earners
-  LEGENDARY = 'legendary',      // First 10 users to earn it
-  EXCLUSIVE = 'exclusive',      // Limited-time, never repeatable
+  COMMON = 'common', // > 1000 earners
+  UNCOMMON = 'uncommon', // 100-1000 earners
+  RARE = 'rare', // 10-100 earners
+  EPIC = 'epic', // 1-10 earners
+  LEGENDARY = 'legendary', // First 10 users to earn it
+  EXCLUSIVE = 'exclusive', // Limited-time, never repeatable
 }
 
 export interface BadgeRarityInfo {
@@ -212,7 +211,12 @@ export class RareBadgeService {
 
     // Sort by rarity (rarest first)
     discoveries.sort((a, b) => {
-      const tierOrder = [RarityTier.LEGENDARY, RarityTier.EPIC, RarityTier.RARE, RarityTier.UNCOMMON];
+      const tierOrder = [
+        RarityTier.LEGENDARY,
+        RarityTier.EPIC,
+        RarityTier.RARE,
+        RarityTier.UNCOMMON,
+      ];
       return tierOrder.indexOf(a.tier) - tierOrder.indexOf(b.tier);
     });
 
@@ -222,7 +226,7 @@ export class RareBadgeService {
   /**
    * Get the user's earner rank for a badge.
    */
-  async getEarnerRank(userId: string, badgeId: string): Promise<number | null> {
+  getEarnerRank(userId: string, badgeId: string): Promise<number | null> {
     // In a real implementation, this would query userBadges ordered by earnedAt
     // and find the user's position
     this.logger.debug({
@@ -231,13 +235,16 @@ export class RareBadgeService {
       badgeId,
     });
 
-    return null;
+    return Promise.resolve(null);
   }
 
   /**
    * Get first earners of a badge (pioneers).
    */
-  async getFirstEarners(badgeId: string, limit: number = 10): Promise<{ userId: string; earnedAt: Date }[]> {
+  getFirstEarners(
+    badgeId: string,
+    limit: number = 10,
+  ): Promise<{ userId: string; earnedAt: Date }[]> {
     // In a real implementation, this would query userBadges ordered by earnedAt ASC
     this.logger.debug({
       event: 'get_first_earners',
@@ -245,7 +252,7 @@ export class RareBadgeService {
       limit,
     });
 
-    return [];
+    return Promise.resolve([]);
   }
 
   /**
@@ -357,14 +364,14 @@ export class RareBadgeService {
   /**
    * Get top achievement hunters.
    */
-  async getTopAchievementHunters(limit: number = 10): Promise<AchievementHunterProfile[]> {
+  getTopAchievementHunters(limit: number = 10): Promise<AchievementHunterProfile[]> {
     // In a real implementation, this would aggregate scores across all users
     this.logger.debug({
       event: 'get_top_hunters',
       limit,
     });
 
-    return [];
+    return Promise.resolve([]);
   }
 
   /**

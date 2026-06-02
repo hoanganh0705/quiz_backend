@@ -49,10 +49,7 @@ export class ProgressTrackingService {
   /**
    * Get progress for a specific badge.
    */
-  async getBadgeProgress(
-    userId: string,
-    badgeId: string,
-  ): Promise<ProgressResponse | null> {
+  async getBadgeProgress(userId: string, badgeId: string): Promise<ProgressResponse | null> {
     const badge = await this.achievementRepository.getBadgeById(badgeId);
     if (!badge) return null;
 
@@ -105,7 +102,10 @@ export class ProgressTrackingService {
         continue;
       }
 
-      const storedProgress = await this.achievementRepository.getBadgeProgress(userId, badgeId);
+      const storedProgress = await this.achievementRepository.getBadgeProgress(
+        userId,
+        badge.badgeId,
+      );
       const visibility = this.determineVisibility(badge, storedProgress);
 
       // Only include if visibility allows showing
@@ -141,7 +141,8 @@ export class ProgressTrackingService {
       isComplete: current >= target,
     };
 
-    await this.achievementRepository.updateBadgeProgress(userId, badgeId, progress);
+    const progressRecord: Record<string, unknown> = { ...progress };
+    await this.achievementRepository.updateBadgeProgress(userId, badgeId, progressRecord);
 
     this.logger.debug({
       event: 'progress_updated',
@@ -224,7 +225,11 @@ export class ProgressTrackingService {
   /**
    * Calculate progress for streak-based badges.
    */
-  async calculateStreakProgress(userId: string, badgeId: string, streakDays: number): Promise<ProgressUpdate> {
+  async calculateStreakProgress(
+    userId: string,
+    badgeId: string,
+    streakDays: number,
+  ): Promise<ProgressUpdate> {
     const badge = await this.achievementRepository.getBadgeById(badgeId);
     if (!badge) {
       return {
@@ -260,7 +265,11 @@ export class ProgressTrackingService {
   /**
    * Calculate progress for rank-based badges.
    */
-  async calculateRankProgress(userId: string, badgeId: string, currentRank: number): Promise<ProgressUpdate> {
+  async calculateRankProgress(
+    userId: string,
+    badgeId: string,
+    currentRank: number,
+  ): Promise<ProgressUpdate> {
     const badge = await this.achievementRepository.getBadgeById(badgeId);
     if (!badge) {
       return {

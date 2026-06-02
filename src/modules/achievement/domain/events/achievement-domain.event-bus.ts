@@ -103,15 +103,17 @@ export class AchievementDomainEventBus {
   /**
    * Publish a badge earned event.
    */
-  emitBadgeEarned(params: {
-    userId: string;
-    badgeSlug: string;
-    badgeName: string;
-  }): void {
+  emitBadgeEarned(params: { userId: string; badgeSlug: string; badgeName: string }): void {
     const event = {
       eventType: 'badge.earned' as const,
       userId: params.userId,
-      badgeType: params.badgeSlug as 'rising_star' | 'veteran' | 'newcomer' | 'top10' | 'top100' | 'top1000',
+      badgeType: params.badgeSlug as
+        | 'rising_star'
+        | 'veteran'
+        | 'newcomer'
+        | 'top10'
+        | 'top100'
+        | 'top1000',
       awardedAt: new Date(),
     };
 
@@ -121,10 +123,7 @@ export class AchievementDomainEventBus {
   /**
    * Publish a streak milestone event.
    */
-  emitStreakMilestone(params: {
-    userId: string;
-    streakDays: number;
-  }): void {
+  emitStreakMilestone(params: { userId: string; streakDays: number }): void {
     const event = {
       eventType: 'streak.milestone' as const,
       userId: params.userId,

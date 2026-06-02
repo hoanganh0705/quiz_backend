@@ -99,11 +99,7 @@ export class BadgeRevocationService {
 
     try {
       // Revoke the badge
-      await this.achievementRepository.revokeBadge(
-        request.userId,
-        request.badgeId,
-        request.reason,
-      );
+      await this.achievementRepository.revokeBadge(request.userId, request.badgeId, request.reason);
 
       const revocation: RevocationRecord = {
         userBadgeId: '', // Would be populated from actual result
@@ -198,7 +194,7 @@ export class BadgeRevocationService {
   /**
    * Get revocation history for a badge.
    */
-  async getBadgeRevocationHistory(badgeId: string): Promise<RevocationRecord[]> {
+  getBadgeRevocationHistory(badgeId: string): Promise<RevocationRecord[]> {
     // In a real implementation, this would query the userBadges table
     // for revoked records
     this.logger.debug({
@@ -206,13 +202,13 @@ export class BadgeRevocationService {
       badgeId,
     });
 
-    return [];
+    return Promise.resolve([]);
   }
 
   /**
    * Get revocation history for a user.
    */
-  async getUserRevocationHistory(userId: string): Promise<RevocationRecord[]> {
+  getUserRevocationHistory(userId: string): Promise<RevocationRecord[]> {
     // In a real implementation, this would query the userBadges table
     // for revoked records
     this.logger.debug({
@@ -220,13 +216,13 @@ export class BadgeRevocationService {
       userId,
     });
 
-    return [];
+    return Promise.resolve([]);
   }
 
   /**
    * Get revocation statistics.
    */
-  async getRevocationStats(): Promise<{
+  getRevocationStats(): Promise<{
     totalRevocations: number;
     byReason: Record<string, number>;
     recentRevocations: RevocationRecord[];
@@ -236,11 +232,11 @@ export class BadgeRevocationService {
       event: 'get_revocation_stats',
     });
 
-    return {
+    return Promise.resolve({
       totalRevocations: 0,
       byReason: {},
       recentRevocations: [],
-    };
+    });
   }
 
   /**
@@ -302,9 +298,7 @@ export class BadgeRevocationService {
     additionalDetails?: string,
   ): RevocationRequest {
     const baseReason = REVOCATION_REASON_MESSAGES[reasonCode];
-    const fullReason = additionalDetails
-      ? `${baseReason}: ${additionalDetails}`
-      : baseReason;
+    const fullReason = additionalDetails ? `${baseReason}: ${additionalDetails}` : baseReason;
 
     return {
       userId,

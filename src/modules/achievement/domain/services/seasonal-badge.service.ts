@@ -70,7 +70,7 @@ export class SeasonalBadgeService {
    * Get all active seasonal badges.
    */
   async getActiveSeasonalBadges(): Promise<BadgeDefinitionRow[]> {
-    await this.refreshCacheIfNeeded();
+    this.refreshCacheIfNeeded();
     return this.achievementRepository.getBadgesByCategory('seasonal');
   }
 
@@ -80,7 +80,7 @@ export class SeasonalBadgeService {
   async getBadgesBySeason(seasonId: string): Promise<BadgeDefinitionRow[]> {
     const allBadges = await this.achievementRepository.getAllActiveBadges();
     return allBadges.filter((badge) => {
-      const config = badge.metadata as SeasonalBadgeConfig | undefined;
+      const config = this.getSeasonConfig(badge);
       return config?.seasonId === seasonId;
     });
   }
@@ -108,10 +108,13 @@ export class SeasonalBadgeService {
     const now = new Date();
 
     // Group badges by season
-    const seasonsMap = new Map<string, { badges: BadgeDefinitionRow[]; config?: SeasonalBadgeConfig }>();
+    const seasonsMap = new Map<
+      string,
+      { badges: BadgeDefinitionRow[]; config?: SeasonalBadgeConfig }
+    >();
 
     for (const badge of seasonalBadges) {
-      const config = badge.metadata as SeasonalBadgeConfig | undefined;
+      const config = this.getSeasonConfig(badge);
       const seasonId = config?.seasonId ?? 'unknown';
 
       const existing = seasonsMap.get(seasonId) ?? { badges: [], config };
@@ -126,7 +129,7 @@ export class SeasonalBadgeService {
       // Find earliest start and latest end from badges
       let startDate = now;
       let endDate = now;
-      let name = data.config?.seasonName ?? seasonId;
+      const name = data.config?.seasonName ?? seasonId;
 
       for (const badge of data.badges) {
         if (badge.validFrom && badge.validFrom < startDate) {
@@ -147,9 +150,10 @@ export class SeasonalBadgeService {
         status = 'active';
       }
 
-      const daysRemaining = status === 'ended'
-        ? 0
-        : Math.ceil((endDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+      const daysRemaining =
+        status === 'ended'
+          ? 0
+          : Math.ceil((endDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
 
       statuses.push({
         seasonId,
@@ -169,9 +173,7 @@ export class SeasonalBadgeService {
   /**
    * Create a new seasonal event with badges.
    */
-  async createSeasonalEvent(
-    event: Omit<SeasonalEvent, 'id'>,
-  ): Promise<SeasonalEvent> {
+  createSeasonalEvent(event: Omit<SeasonalEvent, 'id'>): SeasonalEvent {
     const seasonId = `${event.name.toLowerCase().replace(/\s+/g, '-')}-${event.startDate.getFullYear()}`;
 
     const createdEvent: SeasonalEvent = {
@@ -299,13 +301,17 @@ export class SeasonalBadgeService {
   /**
    * Refresh the cache if needed.
    */
-  private async refreshCacheIfNeeded(): Promise<void> {
+  private refreshCacheIfNeeded(): void {
     const now = Date.now();
     if (now - this.cacheTimestamp < this.CACHE_TTL_MS) {
       return;
     }
 
     this.cacheTimestamp = now;
+  }
+
+  private getSeasonConfig(badge: BadgeDefinitionRow): SeasonalBadgeConfig | undefined {
+    return (badge as { metadata?: SeasonalBadgeConfig }).metadata;
   }
 
   /**

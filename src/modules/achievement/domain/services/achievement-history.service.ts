@@ -14,7 +14,10 @@ import { Inject, Injectable } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { ACHIEVEMENT_REPOSITORY_PORT } from '../../infrastructure/repositories/achievement.repository';
 import type { AchievementRepositoryPort } from '../../infrastructure/repositories/achievement.repository';
-import type { UserBadgeRow, BadgeDefinitionRow } from '../../infrastructure/repositories/achievement.repository';
+import type {
+  UserBadgeRow,
+  BadgeDefinitionRow,
+} from '../../infrastructure/repositories/achievement.repository';
 
 export interface AchievementHistoryEntry {
   userBadgeId: string;
@@ -113,14 +116,14 @@ export class AchievementHistoryService {
   /**
    * Get a specific history entry.
    */
-  async getHistoryEntry(userBadgeId: string): Promise<AchievementHistoryEntry | null> {
+  getHistoryEntry(userBadgeId: string): Promise<AchievementHistoryEntry | null> {
     // This would require a method to get a single userBadge by ID
     // For now, return null - actual implementation would query by userBadgeId
     this.logger.debug({
       event: 'get_history_entry',
       userBadgeId,
     });
-    return null;
+    return Promise.resolve(null);
   }
 
   /**
@@ -166,8 +169,9 @@ export class AchievementHistoryService {
    */
   async getBadgeHistory(
     badgeId: string,
-    options: Partial<HistoryQueryOptions> = {},
+    _options: Partial<HistoryQueryOptions> = {},
   ): Promise<AchievementHistoryEntry[]> {
+    void _options;
     const badge = await this.achievementRepository.getBadgeById(badgeId);
     if (!badge) return [];
 
@@ -206,7 +210,7 @@ export class AchievementHistoryService {
   /**
    * Check if a badge was previously revoked for a user.
    */
-  async wasBadgePreviouslyRevoked(userId: string, badgeId: string): Promise<boolean> {
+  wasBadgePreviouslyRevoked(userId: string, badgeId: string): Promise<boolean> {
     // This would query the userBadges table for revoked records
     // For now, return false - actual implementation would check
     this.logger.debug({
@@ -214,30 +218,27 @@ export class AchievementHistoryService {
       userId,
       badgeId,
     });
-    return false;
+    return Promise.resolve(false);
   }
 
   /**
    * Get recently awarded badges across all users.
    * Useful for activity feeds and leaderboards.
    */
-  async getRecentAwards(limit: number = 20): Promise<AchievementHistoryEntry[]> {
+  getRecentAwards(limit: number = 20): Promise<AchievementHistoryEntry[]> {
     // This would query the userBadges table ordered by earnedAt DESC
     this.logger.debug({
       event: 'get_recent_awards',
       limit,
     });
 
-    return [];
+    return Promise.resolve([]);
   }
 
   /**
    * Get awards by category.
    */
-  async getAwardsByCategory(
-    category: string,
-    limit: number = 50,
-  ): Promise<AchievementHistoryEntry[]> {
+  getAwardsByCategory(category: string, limit: number = 50): Promise<AchievementHistoryEntry[]> {
     // This would query and filter by category
     this.logger.debug({
       event: 'get_awards_by_category',
@@ -245,7 +246,7 @@ export class AchievementHistoryService {
       limit,
     });
 
-    return [];
+    return Promise.resolve([]);
   }
 
   /**
@@ -284,16 +285,17 @@ export class AchievementHistoryService {
     if (history.length === 0) return 0;
 
     // Get date range
-    const firstAward = history.reduce((oldest, entry) =>
-      entry.earnedAt < oldest ? entry.earnedAt : oldest,
+    const firstAward = history.reduce(
+      (oldest, entry) => (entry.earnedAt < oldest ? entry.earnedAt : oldest),
+      history[0].earnedAt,
     );
-    const lastAward = history.reduce((newest, entry) =>
-      entry.earnedAt > newest ? entry.earnedAt : newest,
+    const lastAward = history.reduce(
+      (newest, entry) => (entry.earnedAt > newest ? entry.earnedAt : newest),
+      history[0].earnedAt,
     );
 
-    const daysActive = Math.ceil(
-      (lastAward.getTime() - firstAward.getTime()) / (1000 * 60 * 60 * 24),
-    ) + 1;
+    const daysActive =
+      Math.ceil((lastAward.getTime() - firstAward.getTime()) / (1000 * 60 * 60 * 24)) + 1;
 
     return daysActive > 0 ? summary.totalBadges / daysActive : 0;
   }
@@ -306,9 +308,7 @@ export class AchievementHistoryService {
 
     // Return badges at milestone positions
     const milestones = [0, 9, 24, 49, 99, 199, 499, 999];
-    return milestones
-      .filter((idx) => idx < history.length)
-      .map((idx) => history[idx]);
+    return milestones.filter((idx) => idx < history.length).map((idx) => history[idx]);
   }
 
   /**
