@@ -1,9 +1,21 @@
-import { Controller, Get, Post, Delete, Param, Query, ParseIntPipe, DefaultValuePipe, Body } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Patch,
+  Delete,
+  Param,
+  Query,
+  ParseIntPipe,
+  DefaultValuePipe,
+  Body,
+} from '@nestjs/common';
 import { NotificationApplicationService } from '@/modules/notification/application/notification-application.service';
-import { NotificationListResponseDto, NotificationResponseDto } from '@/modules/notification/dto/response';
+import { NotificationListResponseDto, NotificationResponseDto, NotificationPreferencesResponseDto } from '@/modules/notification/dto/response';
 import { RequireAuth } from '@/common/guards/jwt.guard';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
 import { User } from '@/common/decorators/user.decorator';
+import { UpdatePreferencesDto } from '@/modules/notification/dto/request';
 
 @Controller('notifications')
 @RequireAuth()
@@ -72,5 +84,47 @@ export class NotificationController {
   ): Promise<{ message: string }> {
     await this.notificationService.deleteNotification(notificationId, user);
     return { message: 'Notification deleted' };
+  }
+
+  // Preferences endpoints
+  @Get('preferences')
+  async getPreferences(@User() user: JwtPayload): Promise<NotificationPreferencesResponseDto> {
+    const prefs = await this.notificationService.getOrCreatePreferences(user);
+    return {
+      inAppEnabled: prefs.inAppEnabled,
+      emailEnabled: prefs.emailEnabled,
+      pushEnabled: prefs.pushEnabled,
+      achievementEnabled: prefs.achievementEnabled,
+      tournamentEnabled: prefs.tournamentEnabled,
+      rankEnabled: prefs.rankEnabled,
+      friendEnabled: prefs.friendEnabled,
+      summaryEnabled: prefs.summaryEnabled,
+      marketingEnabled: prefs.marketingEnabled,
+      rankImprovementThreshold: prefs.rankImprovementThreshold,
+      quietHoursStart: prefs.quietHoursStart,
+      quietHoursEnd: prefs.quietHoursEnd,
+    };
+  }
+
+  @Patch('preferences')
+  async updatePreferences(
+    @User() user: JwtPayload,
+    @Body() updateDto: UpdatePreferencesDto,
+  ): Promise<NotificationPreferencesResponseDto> {
+    const prefs = await this.notificationService.updatePreferences(user, updateDto);
+    return {
+      inAppEnabled: prefs.inAppEnabled,
+      emailEnabled: prefs.emailEnabled,
+      pushEnabled: prefs.pushEnabled,
+      achievementEnabled: prefs.achievementEnabled,
+      tournamentEnabled: prefs.tournamentEnabled,
+      rankEnabled: prefs.rankEnabled,
+      friendEnabled: prefs.friendEnabled,
+      summaryEnabled: prefs.summaryEnabled,
+      marketingEnabled: prefs.marketingEnabled,
+      rankImprovementThreshold: prefs.rankImprovementThreshold,
+      quietHoursStart: prefs.quietHoursStart,
+      quietHoursEnd: prefs.quietHoursEnd,
+    };
   }
 }
