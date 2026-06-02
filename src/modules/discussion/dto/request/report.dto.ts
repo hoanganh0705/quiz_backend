@@ -1,6 +1,5 @@
 import { IsIn, IsOptional, IsString, IsUUID, MaxLength, MinLength } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { trimStringToNullIfBlank } from '@/common/utils/text.util';
 
 export class ReportDto {
   @ApiProperty({

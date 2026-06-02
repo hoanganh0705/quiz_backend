@@ -6,10 +6,7 @@ import {
   type DiscussionRepositoryPort,
 } from '../ports';
 import type { QuizExistencePort } from '../ports/quiz-existence.port';
-import {
-  DISCUSSION_DOMAIN_EVENT_BUS,
-  type DiscussionDomainEventBusPort,
-} from '../events';
+import { DISCUSSION_DOMAIN_EVENT_BUS, type DiscussionDomainEventBusPort } from '../events';
 import type {
   DiscussionThread,
   DiscussionThreadDetail,
@@ -34,11 +31,9 @@ import {
   CommentForbiddenError,
   ThreadClosedError,
   ThreadNotActiveError,
-  DuplicateVoteError,
   SelfVoteError,
   SelfReportError,
   DuplicateReportError,
-  ReportReviewForbiddenError,
 } from '../errors';
 
 @Injectable()
@@ -102,7 +97,12 @@ export class DiscussionService {
     if (thread.authorId !== userId) throw new ThreadForbiddenError();
 
     await this.repo.updateThreadStatus({ threadId, status: 'closed' });
-    this.eventBus.emitThreadClosed({ eventType: 'thread_closed', threadId, authorId: userId, timestamp: new Date() });
+    this.eventBus.emitThreadClosed({
+      eventType: 'thread_closed',
+      threadId,
+      authorId: userId,
+      timestamp: new Date(),
+    });
     this.logger.info({ event: 'thread_closed', threadId });
   }
 
@@ -123,7 +123,12 @@ export class DiscussionService {
 
     await this.repo.softDeleteCommentsByThread(threadId);
     await this.repo.softDeleteThread({ threadId, authorId });
-    this.eventBus.emitThreadDeleted({ eventType: 'thread_deleted', threadId, authorId, timestamp: new Date() });
+    this.eventBus.emitThreadDeleted({
+      eventType: 'thread_deleted',
+      threadId,
+      authorId,
+      timestamp: new Date(),
+    });
     this.logger.info({ event: 'thread_deleted', threadId });
   }
 
@@ -133,7 +138,12 @@ export class DiscussionService {
     if (thread.status === 'deleted') throw new ThreadNotActiveError();
 
     await this.repo.updateThreadStatus({ threadId, status: 'hidden' });
-    this.eventBus.emitThreadHidden({ eventType: 'thread_hidden', threadId, moderatorId, timestamp: new Date() });
+    this.eventBus.emitThreadHidden({
+      eventType: 'thread_hidden',
+      threadId,
+      moderatorId,
+      timestamp: new Date(),
+    });
     this.logger.info({ event: 'thread_hidden', threadId, moderatorId });
   }
 
@@ -170,7 +180,7 @@ export class DiscussionService {
       commentId: comment.commentId,
       threadId: params.threadId,
       authorId: params.authorId,
-      parentCommentId: params.parentCommentId,
+      parentCommentId: params.parentCommentId ?? null,
       isReply: params.parentCommentId !== null,
       timestamp: new Date(),
     });

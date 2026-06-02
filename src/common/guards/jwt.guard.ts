@@ -1,6 +1,8 @@
 import {
+  applyDecorators,
   Injectable,
   UnauthorizedException,
+  UseGuards,
   type CanActivate,
   type ExecutionContext,
 } from '@nestjs/common';
@@ -95,3 +97,5 @@ export class JwtGuard implements CanActivate {
     }
   }
 }
+
+export const RequireAuth = () => applyDecorators(UseGuards(JwtGuard));
