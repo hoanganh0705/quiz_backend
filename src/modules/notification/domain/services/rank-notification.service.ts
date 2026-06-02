@@ -14,9 +14,8 @@ import {
   PeriodWinnerParams,
   NotificationType,
 } from '../types/notification.types';
-import { NOTIFICATION_REPOSITORY_PORT } from '../../infrastructure/repositories/notification.repository';
-import type { NotificationRepositoryPort } from '../../infrastructure/repositories/notification.repository';
 import { NotificationChannelService } from './channel.service';
+import { NOTIFICATION_REPOSITORY_PORT, type NotificationRepositoryPort } from '../ports';
 
 @Injectable()
 export class RankNotificationService {

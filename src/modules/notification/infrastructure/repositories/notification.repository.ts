@@ -4,23 +4,22 @@ import type { DrizzleDB } from '@/core/database/database.module';
 import {
   notifications,
   notificationPreferences,
-  notificationType,
-  notificationChannel,
 } from '@/modules/notification/infrastructure/notification.schema';
-import { NOTIFICATION_REPOSITORY_PORT, type NotificationRepositoryPort } from '../ports/notification-ports';
-import type {
-  Notification,
-  NotificationPreferencesRow,
+
+import { eq, and, desc, sql, isNull, or } from 'drizzle-orm';
+import { NotificationRepositoryPort } from '../../domain/ports';
+import type { Notification as DomainNotification } from '../../domain/types';
+import {
   CreateNotificationParams,
   NotificationListParams,
-} from '../types/notification.types';
-import { eq, and, desc, sql, lt, isNull, or } from 'drizzle-orm';
+  NotificationPreferencesRow,
+} from '../../domain/types';
 
 @Injectable()
 export class NotificationRepository implements NotificationRepositoryPort {
   constructor(@Inject(DRIZZLE) private readonly db: DrizzleDB) {}
 
-  async create(params: CreateNotificationParams): Promise<Notification> {
+  async create(params: CreateNotificationParams): Promise<DomainNotification> {
     const [notification] = await this.db
       .insert(notifications)
       .values({
@@ -37,7 +36,7 @@ export class NotificationRepository implements NotificationRepositoryPort {
     return this.mapToNotification(notification);
   }
 
-  async findById(id: string): Promise<Notification | null> {
+  async findById(id: string): Promise<DomainNotification | null> {
     const [notification] = await this.db
       .select()
       .from(notifications)
@@ -46,7 +45,9 @@ export class NotificationRepository implements NotificationRepositoryPort {
     return notification ? this.mapToNotification(notification) : null;
   }
 
-  async findByUser(params: NotificationListParams & { userId: string }): Promise<Notification[]> {
+  async findByUser(
+    params: NotificationListParams & { userId: string },
+  ): Promise<DomainNotification[]> {
     const conditions = [eq(notifications.userId, params.userId), isNull(notifications.deletedAt)];
 
     if (params.cursor) {
@@ -57,7 +58,7 @@ export class NotificationRepository implements NotificationRepositoryPort {
             eq(notifications.createdAt, params.cursor.createdAt),
             sql`${notifications.notificationId} < ${params.cursor.notificationId}`,
           ),
-        ) as any,
+        )!,
       );
     }
 
@@ -73,7 +74,7 @@ export class NotificationRepository implements NotificationRepositoryPort {
       .limit(params.limit + 1);
 
     const results = await query;
-    return results.map(this.mapToNotification);
+    return results.map((row) => this.mapToNotification(row));
   }
 
   async countUnread(userId: string): Promise<number> {
@@ -122,10 +123,7 @@ export class NotificationRepository implements NotificationRepositoryPort {
     await this.db
       .delete(notifications)
       .where(
-        and(
-          eq(notifications.notificationId, notificationId),
-          eq(notifications.userId, userId),
-        ),
+        and(eq(notifications.notificationId, notificationId), eq(notifications.userId, userId)),
       );
   }
 
@@ -211,15 +209,15 @@ export class NotificationRepository implements NotificationRepositoryPort {
     }
   }
 
-  private mapToNotification(row: typeof notifications.$inferSelect): Notification {
+  private mapToNotification(row: typeof notifications.$inferSelect): DomainNotification {
     return {
       notificationId: row.notificationId,
       userId: row.userId,
-      type: row.type as Notification['type'],
+      type: row.type,
       title: row.title,
       message: row.message,
       metadata: row.metadata as Record<string, unknown>,
-      channel: row.channel as Notification['channel'],
+      channel: row.channel,
       isRead: row.isRead,
       readAt: row.readAt,
       expiresAt: row.expiresAt,
@@ -228,7 +226,9 @@ export class NotificationRepository implements NotificationRepositoryPort {
     };
   }
 
-  private mapToPreferences(row: typeof notificationPreferences.$inferSelect): NotificationPreferencesRow {
+  private mapToPreferences(
+    row: typeof notificationPreferences.$inferSelect,
+  ): NotificationPreferencesRow {
     return {
       preferencesId: row.preferencesId,
       userId: row.userId,
@@ -252,13 +252,14 @@ export class NotificationRepository implements NotificationRepositoryPort {
   private stripPreferenceFields(
     prefs: Partial<NotificationPreferencesRow>,
   ): Partial<typeof notificationPreferences.$inferInsert> {
-    const {
-      preferencesId,
-      userId,
-      createdAt,
-      updatedAt,
-      ...rest
-    } = prefs as any;
+    const { preferencesId, userId, createdAt, updatedAt, ...rest } = prefs as Required<
+      Pick<NotificationPreferencesRow, 'preferencesId' | 'userId' | 'createdAt' | 'updatedAt'>
+    > &
+      Partial<NotificationPreferencesRow>;
+    void preferencesId;
+    void userId;
+    void createdAt;
+    void updatedAt;
     return rest;
   }
 }

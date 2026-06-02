@@ -5,7 +5,7 @@
  * This adapter bridges the Achievement domain to the Notification domain.
  */
 
-import { Inject, Injectable, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
+import { Injectable, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { AchievementNotificationService } from '../../domain/services/achievement-notification.service';
 
@@ -38,7 +38,10 @@ export interface StreakMilestoneEvent {
   readonly timestamp: Date;
 }
 
-export type AchievementDomainEvent = AchievementAwardedEvent | BadgeEarnedEvent | StreakMilestoneEvent;
+export type AchievementDomainEvent =
+  | AchievementAwardedEvent
+  | BadgeEarnedEvent
+  | StreakMilestoneEvent;
 
 @Injectable()
 export class AchievementListenerAdapter implements OnModuleInit, OnModuleDestroy {
@@ -71,7 +74,6 @@ export class AchievementListenerAdapter implements OnModuleInit, OnModuleDestroy
         badgeType: event.badgeType,
         badgeName: event.badgeType.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase()),
         category: event.achievementType,
-        rank: event.rank,
       });
 
       this.logger.info({
@@ -98,7 +100,9 @@ export class AchievementListenerAdapter implements OnModuleInit, OnModuleDestroy
       await this.achievementNotificationService.notifyBadgeUnlocked({
         userId: event.userId,
         badgeType: event.badgeType,
-        badgeName: event.badgeName ?? event.badgeType.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase()),
+        badgeName:
+          event.badgeName ??
+          event.badgeType.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase()),
         badgeDescription: event.badgeDescription,
         badgeIconUrl: event.badgeIconUrl,
         category: event.category ?? 'general',

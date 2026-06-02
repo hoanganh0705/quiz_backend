@@ -8,9 +8,9 @@ import {
   jsonb,
   pgEnum,
   check,
-  sql,
   integer,
 } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm/sql/sql';
 
 export const notificationType = pgEnum('notification_type', [
   'achievement_earned',
@@ -30,11 +30,7 @@ export const notificationType = pgEnum('notification_type', [
   'system_announcement',
 ]);
 
-export const notificationChannel = pgEnum('notification_channel', [
-  'in_app',
-  'email',
-  'push',
-]);
+export const notificationChannel = pgEnum('notification_channel', ['in_app', 'email', 'push']);
 
 export const notifications = pgTable(
   'notifications',
@@ -77,10 +73,7 @@ export const notifications = pgTable(
       )
       .where(sql`deleted_at IS NULL`),
     index('idx_notifications_expires_at')
-      .using(
-        'btree',
-        table.expiresAt.asc().nullsLast().op('timestamptz_ops'),
-      )
+      .using('btree', table.expiresAt.asc().nullsLast().op('timestamptz_ops'))
       .where(sql`expires_at IS NOT NULL`),
     check('notifications_metadata_object', sql`jsonb_typeof(metadata) = 'object'::text`),
   ],
