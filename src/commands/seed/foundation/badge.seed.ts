@@ -2,7 +2,7 @@ import { and, eq, sql } from 'drizzle-orm';
 import { db, type SeedTx, type SeedContext } from '../infrastructure';
 import { assertUniqueBy, normalizeSlug } from '../infrastructure/utils';
 import type { RawBadgeSeed, SeedDomain, SeedSummary } from '../infrastructure/types';
-import { badges, badgeRules } from '@/core/database/schema';
+import { badges, badgeRules, badgeRuleType } from '@/core/database/schema';
 
 const BADGE_SEEDS: readonly RawBadgeSeed[] = [
   // Quiz completion badges
@@ -314,6 +314,7 @@ export const createBadgesDomain = (): SeedDomain => ({
     // Insert badges
     const badgeUpsertValues = BADGE_SEEDS.map((badge) => ({
       slug: normalizeSlug(badge.slug),
+      category: 'quiz' as const,
       type: badge.type,
       name: badge.name.trim(),
       description: badge.description?.trim() ?? null,
@@ -351,7 +352,7 @@ export const createBadgesDomain = (): SeedDomain => ({
     // Insert badge rules
     const ruleUpsertValues: Array<{
       badgeId: string;
-      ruleType: string;
+      ruleType: typeof badgeRuleType.enumValues[number];
       priority: number;
       config: Record<string, unknown>;
       isActive: boolean;

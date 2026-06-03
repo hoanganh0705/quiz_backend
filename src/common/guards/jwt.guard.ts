@@ -16,6 +16,7 @@ import { isUserRole, type UserRole } from '../types/user-role.type';
 export type JwtPayload = {
   sub: string;
   role: UserRole;
+  sessionId?: string;
 };
 
 type AuthenticatedRequest = Request & {

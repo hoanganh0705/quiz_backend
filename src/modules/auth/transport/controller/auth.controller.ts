@@ -49,7 +49,7 @@ import {
 } from '../../dto/response/password-reset.dto';
 import {
   SessionListResponseDto,
-  SecurityDashboardDto,
+  AccountSecurityDto,
   SessionManagementResultDto,
 } from '../../dto/response/session-management.dto';
 import type { AuthRequestContext } from '../types/auth-http-context.types';
@@ -225,11 +225,11 @@ export class AuthController {
   @ApiOkResponse({ description: 'Active sessions retrieved', type: SessionListResponseDto })
   @ApiUnauthorizedResponse({ description: 'Not authenticated' })
   @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
-  getActiveSessions(
+  async getActiveSessions(
     @CurrentUser('sub') userId: string,
     @CurrentUser('sessionId') currentSessionId: string,
-  ): SessionListResponseDto {
-    return this.authApplicationService.getActiveSessions(userId, currentSessionId);
+  ): Promise<SessionListResponseDto> {
+    return await this.authApplicationService.getActiveSessions(userId, currentSessionId);
   }
 
   @ApiAuth()
@@ -244,12 +244,12 @@ export class AuthController {
   @ApiNotFoundResponse({ description: 'Session not found' })
   @ApiUnauthorizedResponse({ description: 'Not authenticated or session not owned by user' })
   @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
-  revokeSession(
+  async revokeSession(
     @CurrentUser('sub') userId: string,
     @CurrentUser('sessionId') currentSessionId: string,
     @Param('sessionId') sessionId: string,
-  ): SessionManagementResultDto {
-    return this.authApplicationService.revokeSession(userId, sessionId, currentSessionId);
+  ): Promise<SessionManagementResultDto> {
+    return await this.authApplicationService.revokeSession(userId, sessionId, currentSessionId);
   }
 
   @ApiAuth()
@@ -261,11 +261,11 @@ export class AuthController {
   @ApiOkResponse({ description: 'Other sessions revoked', type: SessionManagementResultDto })
   @ApiUnauthorizedResponse({ description: 'Not authenticated' })
   @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
-  logoutOtherDevices(
+  async logoutOtherDevices(
     @CurrentUser('sub') userId: string,
     @CurrentUser('sessionId') currentSessionId: string,
-  ): SessionManagementResultDto {
-    return this.authApplicationService.revokeAllOtherSessions(userId, currentSessionId);
+  ): Promise<SessionManagementResultDto> {
+    return await this.authApplicationService.revokeAllOtherSessions(userId, currentSessionId);
   }
 
   @ApiAuth()
@@ -274,11 +274,11 @@ export class AuthController {
     summary: 'Account security dashboard',
     description: 'Returns security-related information about the authenticated user account.',
   })
-  @ApiOkResponse({ description: 'Security dashboard retrieved', type: SecurityDashboardDto })
+  @ApiOkResponse({ description: 'Security dashboard retrieved', type: AccountSecurityDto })
   @ApiUnauthorizedResponse({ description: 'Not authenticated' })
   @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
-  getSecurityDashboard(@CurrentUser('sub') userId: string): SecurityDashboardDto {
-    return this.authApplicationService.getSecurityDashboard(userId);
+  async getSecurityDashboard(@CurrentUser('sub') userId: string): Promise<AccountSecurityDto> {
+    return await this.authApplicationService.getSecurityDashboard(userId);
   }
 
   // ─── FEATURE 2: Password Reset ────────────────────────────────────────────
@@ -299,15 +299,11 @@ export class AuthController {
   @ApiBadRequestResponse({ description: 'Validation failed' })
   @ApiTooManyRequestsResponse({ description: 'Too many requests' })
   @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
-  forgotPassword(
+  async forgotPassword(
     @Body() forgotPasswordDto: ForgotPasswordDto,
-    @RequestContext() context: AuthRequestContext,
-  ): ForgotPasswordResponseDto {
+  ): Promise<ForgotPasswordResponseDto> {
     const command: ForgotPasswordCommand = { email: forgotPasswordDto.email };
-    return this.authApplicationService.forgotPassword(
-      command,
-      context.session.ipAddress ?? undefined,
-    );
+    return await this.authApplicationService.forgotPassword(command);
   }
 
   @Public()
@@ -321,12 +317,14 @@ export class AuthController {
   @ApiOkResponse({ description: 'Password reset successfully', type: ResetPasswordResponseDto })
   @ApiBadRequestResponse({ description: 'Invalid or expired token, or password policy violation' })
   @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
-  resetPassword(@Body() resetPasswordDto: ResetPasswordDto): ResetPasswordResponseDto {
+  async resetPassword(
+    @Body() resetPasswordDto: ResetPasswordDto,
+  ): Promise<ResetPasswordResponseDto> {
     const command: ResetPasswordCommand = {
       token: resetPasswordDto.token,
       newPassword: resetPasswordDto.newPassword,
     };
-    return this.authApplicationService.resetPassword(command);
+    return await this.authApplicationService.resetPassword(command);
   }
 
   @ApiAuth()
@@ -341,16 +339,16 @@ export class AuthController {
   @ApiUnauthorizedResponse({ description: 'Invalid current password' })
   @ApiBadRequestResponse({ description: 'Password policy violation' })
   @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
-  changePassword(
+  async changePassword(
     @CurrentUser('sub') userId: string,
     @CurrentUser('sessionId') currentSessionId: string,
     @Body() changePasswordDto: ChangePasswordDto,
-  ): LogoutResponseDto {
+  ): Promise<LogoutResponseDto> {
     const command: ChangePasswordCommand = {
       userId,
       currentPassword: changePasswordDto.currentPassword,
       newPassword: changePasswordDto.newPassword,
     };
-    return this.authApplicationService.changePassword(command, currentSessionId);
+    return await this.authApplicationService.changePassword(command, currentSessionId);
   }
 }

@@ -1,6 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { randomUUID } from 'crypto';
-import { AuthConfig } from '../auth.config';
+import { SessionConfig } from '../config/session.config';
 import type { AuthTokens, SessionRequestContext } from '../types/auth-context.types';
 import { CRYPTO_PROVIDER, type CryptoProvider } from './ports/crypto.provider';
 import {
@@ -14,13 +13,13 @@ export class SessionService {
   constructor(
     @Inject(SESSION_REPOSITORY_PORT)
     private readonly userSessionRepository: SessionRepositoryPort,
-    private readonly authConfig: AuthConfig,
+    private readonly sessionConfig: SessionConfig,
     @Inject(CRYPTO_PROVIDER)
     private readonly cryptoService: CryptoProvider,
   ) {}
 
   private getRefreshTokenExpiresAtIso(): string {
-    return new Date(Date.now() + this.authConfig.sessions.refreshSessionTtlMs).toISOString();
+    return new Date(Date.now() + this.sessionConfig.refreshSessionTtlMs).toISOString();
   }
 
   private getNowIso(): string {
@@ -50,7 +49,7 @@ export class SessionService {
         expiresAt,
       },
       nowIso,
-      this.authConfig.sessions.maxActiveSessionsPerUser,
+      this.sessionConfig.maxActiveSessionsPerUser,
       explicitSessionId,
     );
   }
@@ -109,6 +108,26 @@ export class SessionService {
     await this.userSessionRepository.revokeOtherSessionsByUserId(userId, sessionId, nowIso);
   }
 
+  async revokeOtherActiveSessionsAndReturnCount(
+    userId: string,
+    currentSessionId: string,
+  ): Promise<number> {
+    const nowIso = this.getNowIso();
+    const sessions = await this.userSessionRepository.findActiveSessionsByUserId(userId, nowIso);
+    const otherSessions = sessions.filter((s) => s.sessionId !== currentSessionId);
+    const revokedCount = otherSessions.length;
+
+    if (revokedCount > 0) {
+      await this.userSessionRepository.revokeOtherSessionsByUserId(
+        userId,
+        currentSessionId,
+        nowIso,
+      );
+    }
+
+    return revokedCount;
+  }
+
   async revokeSessionById(sessionId: string): Promise<void> {
     const nowIso = this.getNowIso();
     await this.userSessionRepository.revokeSessionById(sessionId, nowIso);
@@ -130,7 +149,7 @@ export class SessionService {
   }
 
   async getCurrentSessionIdByUserId(userId: string): Promise<string | null> {
-    const latestSession = await this.findLatestActiveSessionByUserId(userId);
+    const latestSession = await this.findLatestActiveSessionByUserId(userId, this.getNowIso());
     return latestSession?.sessionId ?? null;
   }
 }

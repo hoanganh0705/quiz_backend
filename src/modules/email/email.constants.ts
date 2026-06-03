@@ -8,4 +8,5 @@ export const EMAIL_QUEUE_TOKENS = {
 
 export const EMAIL_JOB_NAMES = {
   SEND_VERIFICATION_EMAIL: 'sendVerificationEmail',
+  SEND_PASSWORD_RESET_EMAIL: 'sendPasswordResetEmail',
 } as const;

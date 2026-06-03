@@ -8,23 +8,29 @@ import { AuthRegistrationService } from './domain/auth-registration.service';
 import { PasswordResetService } from './domain/password-reset.service';
 import { ChangePasswordService } from './domain/change-password.service';
 import { SessionManagementService } from './domain/session-management.service';
-import { AuthSecurityEventBus } from './domain/events/auth-security-event-bus';
+import { AuthSecurityEventPublisher } from './domain/events/auth-security-event-bus';
 import { AUTH_SECURITY_EVENT_BUS } from './domain/events/auth-security-event-bus.port';
-import { AuthConfig } from './auth.config';
+import { TokenConfig } from './config/token.config';
+import { SessionConfig } from './config/session.config';
+import { EmailVerificationConfig } from './config/email-verification.config';
+import { PasswordResetConfig } from './config/password-reset.config';
 import { AuthCookieService } from './transport/cookies/auth-cookie.service';
 import { AuthSessionCleanupService } from './infrastructure/session/auth-session-cleanup.service';
 import { JwtTokenAdapter } from './infrastructure/tokens/jwt-token.adapter';
 import { SessionService } from './domain/session.service';
 import { SecurityService } from './domain/security.service';
+import { AccountSecurityService } from './domain/account-security.service';
 import { AuthRequestContextService } from './infrastructure/context/auth-request-context.service';
 import { CommonModule } from '@/common/common.module';
 import { DeviceParserService } from './infrastructure/context/device-parser.service';
+import { PasswordAdapter } from './infrastructure/security/password.adapter';
 import { CryptoAdapter } from './infrastructure/tokens/crypto.adapter';
 import { RequestContextInterceptor } from './transport/interceptors/request-context.interceptor';
 import { RefreshTokenInterceptor } from './transport/interceptors/refresh-token.interceptor';
 import { DatabaseModule } from '@/core/database/database.module';
 import { RedisModule } from '@/core/redis/redis.module';
 import { EmailModule } from '@/modules/email/email.module';
+import { PASSWORD_PROVIDER } from './domain/ports/password.provider';
 import { TOKEN_PROVIDER } from './domain/ports/token.provider';
 import { CRYPTO_PROVIDER } from './domain/ports/crypto.provider';
 import { USER_REPOSITORY_PORT } from './domain/ports/user-repository.port';
@@ -42,21 +48,30 @@ import { VerificationTokenService } from './domain/verification-token.service';
   imports: [CommonModule, DatabaseModule, RedisModule, EmailModule],
   controllers: [AuthController],
   providers: [
+    // Application
     AuthApplicationService,
     AuthResponseMapper,
+    // Domain services
     AuthRegistrationService,
     AuthLoginService,
     AuthRefreshService,
     PasswordResetService,
     ChangePasswordService,
     SessionManagementService,
-    AuthSecurityEventBus,
-    AuthConfig,
-    AuthCookieService,
-    AuthSessionCleanupService,
+    VerificationTokenService,
     SessionService,
     SecurityService,
-    VerificationTokenService,
+    AccountSecurityService,
+    // Event publisher
+    AuthSecurityEventPublisher,
+    // Config classes
+    TokenConfig,
+    SessionConfig,
+    EmailVerificationConfig,
+    PasswordResetConfig,
+    // Infrastructure
+    AuthCookieService,
+    AuthSessionCleanupService,
     AuthRequestContextService,
     DeviceParserService,
     RequestContextInterceptor,
@@ -64,13 +79,16 @@ import { VerificationTokenService } from './domain/verification-token.service';
     AuthDomainExceptionFilter,
     UserRepository,
     UserSessionRepository,
+    // Port adapters
     { provide: TOKEN_PROVIDER, useClass: JwtTokenAdapter },
     { provide: CRYPTO_PROVIDER, useClass: CryptoAdapter },
+    { provide: PASSWORD_PROVIDER, useClass: PasswordAdapter },
+    // Port bindings
     { provide: USER_REPOSITORY_PORT, useExisting: UserRepository },
     { provide: SESSION_REPOSITORY_PORT, useExisting: UserSessionRepository },
     { provide: EMAIL_PROVIDER, useExisting: EmailService },
     { provide: CACHE_PROVIDER, useExisting: RedisService },
-    { provide: AUTH_SECURITY_EVENT_BUS, useExisting: AuthSecurityEventBus },
+    { provide: AUTH_SECURITY_EVENT_BUS, useExisting: AuthSecurityEventPublisher },
   ],
   exports: [AuthApplicationService],
 })

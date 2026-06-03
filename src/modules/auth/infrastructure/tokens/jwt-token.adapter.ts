@@ -8,14 +8,14 @@ import type {
   RefreshTokenClaims,
   RefreshTokenPayload,
 } from '../../types/auth-context.types';
-import { AuthConfig } from '../../auth.config';
-import type { TokenProvider } from '../../domain/ports/token.provider';
+import type { TokenProvider } from '@/modules/auth/domain/ports/token.provider';
+import { TokenConfig } from '../../config/token.config';
 
 @Injectable()
 export class JwtTokenAdapter implements TokenProvider {
   constructor(
     private readonly jwtService: JwtService,
-    private readonly authConfig: AuthConfig,
+    private readonly tokenConfig: TokenConfig,
   ) {}
 
   async issueTokens(identity: AuthIdentity, sessionId?: string): Promise<AuthTokens> {
@@ -27,10 +27,10 @@ export class JwtTokenAdapter implements TokenProvider {
     };
 
     const accessToken = await this.jwtService.signAsync(accessTokenPayload, {
-      secret: this.authConfig.tokens.access.secret,
-      expiresIn: this.authConfig.tokens.access.expiresInSeconds,
-      issuer: this.authConfig.tokens.access.issuer,
-      audience: this.authConfig.tokens.access.audience,
+      secret: this.tokenConfig.access.secret,
+      expiresIn: this.tokenConfig.access.expiresInSeconds,
+      issuer: this.tokenConfig.access.issuer,
+      audience: this.tokenConfig.access.audience,
     });
 
     const refreshTokenPayload: RefreshTokenClaims = {
@@ -39,10 +39,10 @@ export class JwtTokenAdapter implements TokenProvider {
     };
 
     const refreshToken = await this.jwtService.signAsync(refreshTokenPayload, {
-      secret: this.authConfig.tokens.refresh.secret,
-      expiresIn: this.authConfig.tokens.refresh.expiresInSeconds,
-      issuer: this.authConfig.tokens.refresh.issuer,
-      audience: this.authConfig.tokens.refresh.audience,
+      secret: this.tokenConfig.refresh.secret,
+      expiresIn: this.tokenConfig.refresh.expiresInSeconds,
+      issuer: this.tokenConfig.refresh.issuer,
+      audience: this.tokenConfig.refresh.audience,
     });
 
     return { accessToken, refreshToken, refreshTokenJti };
@@ -61,6 +61,7 @@ export class JwtTokenAdapter implements TokenProvider {
       (typeof candidate.aud === 'string' ||
         (Array.isArray(candidate.aud) &&
           candidate.aud.every((audience) => typeof audience === 'string')));
+
     if (!hasRequiredFields) {
       return false;
     }
@@ -72,11 +73,10 @@ export class JwtTokenAdapter implements TokenProvider {
 
   async verifyRefreshToken(refreshToken: string): Promise<RefreshTokenPayload> {
     try {
-      // Enforce secret + issuer + audience so refresh tokens are scoped to this service context.
       const decodedPayload: unknown = await this.jwtService.verifyAsync(refreshToken, {
-        secret: this.authConfig.tokens.refresh.secret,
-        issuer: this.authConfig.tokens.refresh.issuer,
-        audience: this.authConfig.tokens.refresh.audience,
+        secret: this.tokenConfig.refresh.secret,
+        issuer: this.tokenConfig.refresh.issuer,
+        audience: this.tokenConfig.refresh.audience,
       });
 
       if (!this.isRefreshTokenPayload(decodedPayload)) {
@@ -90,7 +90,7 @@ export class JwtTokenAdapter implements TokenProvider {
 
   async tryVerifyRefreshToken(refreshToken: string): Promise<RefreshTokenPayload | null> {
     try {
-      return this.verifyRefreshToken(refreshToken);
+      return await this.verifyRefreshToken(refreshToken);
     } catch {
       return null;
     }
