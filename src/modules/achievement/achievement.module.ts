@@ -25,6 +25,7 @@
  */
 
 import { Module } from '@nestjs/common';
+import { DRIZZLE } from '@/core/database/drizzle.constants';
 
 // Database
 import { DatabaseModule } from '@/core/database/database.module';
@@ -64,6 +65,10 @@ import { RankingModule } from '@/modules/ranking/ranking.module';
 @Module({
   imports: [DatabaseModule, RankingModule],
   providers: [
+    {
+      provide: 'DATABASE',
+      useExisting: DRIZZLE,
+    },
     // Domain Event Bus
     AchievementDomainEventBus,
 

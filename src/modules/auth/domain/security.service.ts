@@ -1,6 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
-import { AuthConfig } from '../auth.config';
+import { SessionConfig } from '../config/session.config';
+import { TokenConfig } from '../config/token.config';
 import type { SessionRequestContext, RefreshTokenPayload } from '../types/auth-context.types';
 import { CACHE_PROVIDER, type CacheProvider } from './ports/cache.provider';
 import { SessionService } from './session.service';
@@ -14,7 +15,8 @@ export class SecurityService {
   private static readonly LOGIN_UNVERIFIED_VERIFICATION_EMAIL_COOLDOWN_SECONDS = 10 * 60;
 
   constructor(
-    private readonly authConfig: AuthConfig,
+    private readonly sessionConfig: SessionConfig,
+    private readonly tokenConfig: TokenConfig,
     @Inject(CACHE_PROVIDER)
     private readonly cacheProvider: CacheProvider,
     private readonly sessionService: SessionService,
@@ -98,7 +100,7 @@ export class SecurityService {
       return false;
     }
 
-    return nowMs - lastUsedMs <= this.authConfig.sessions.refreshReuseGraceWindowMs;
+    return nowMs - lastUsedMs <= this.sessionConfig.refreshReuseGraceWindowMs;
   }
 
   isSameSessionContext(
@@ -176,13 +178,13 @@ export class SecurityService {
       hasRequestIpAddress: hasRequestIp,
       ipChanged,
       deviceMismatch,
-      strictMode: this.authConfig.sessions.isBindingStrict,
+      strictMode: this.sessionConfig.isBindingStrict,
     });
 
     return {
       // We intentionally do not reject on IP changes alone because IP churn is common (mobile networks,
       // corporate NATs, ISP rebalancing). In strict mode we only reject on device mismatch.
-      shouldReject: this.authConfig.sessions.isBindingStrict && deviceMismatch,
+      shouldReject: this.sessionConfig.isBindingStrict && deviceMismatch,
     };
   }
 
@@ -206,11 +208,11 @@ export class SecurityService {
       Number.isFinite(payload.exp) &&
       typeof nowUnixSeconds === 'number'
         ? Math.max(1, payload.exp - nowUnixSeconds)
-        : this.authConfig.tokens.refresh.expiresInSeconds;
+        : this.tokenConfig.refresh.expiresInSeconds;
 
     const reuseCounterTtlSeconds = Math.min(
       remainingLifetimeSeconds,
-      this.authConfig.tokens.refresh.expiresInSeconds,
+      this.tokenConfig.refresh.expiresInSeconds,
     );
 
     const nextReuseCount = await this.cacheProvider.incrementCounterWithInitialTtlSeconds(

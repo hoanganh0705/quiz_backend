@@ -1,52 +1,22 @@
 import { Injectable } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
-import type { AuthSecurityEventBusPort } from './auth-security-event-bus.port';
+import type { AuthSecurityEventPublisherPort } from './auth-security-event-bus.port';
 import type {
   PasswordResetRequestedEvent,
   PasswordResetCompletedEvent,
   PasswordChangedEvent,
   SessionRevokedEvent,
   AllOtherSessionsRevokedEvent,
-  AuthSecurityEvent,
 } from './auth-security.events';
 
 @Injectable()
-export class AuthSecurityEventBus implements AuthSecurityEventBusPort {
-  private handlers: Array<(event: AuthSecurityEvent) => void> = [];
+export class AuthSecurityEventPublisher implements AuthSecurityEventPublisherPort {
+  constructor(
+    @InjectPinoLogger(AuthSecurityEventPublisher.name) private readonly logger: PinoLogger,
+  ) {}
 
-  constructor(@InjectPinoLogger(AuthSecurityEventBus.name) private readonly logger: PinoLogger) {}
-
-  subscribe(handler: (event: AuthSecurityEvent) => void): () => void {
-    this.handlers.push(handler);
-    return () => {
-      const index = this.handlers.indexOf(handler);
-      if (index !== -1) {
-        this.handlers.splice(index, 1);
-      }
-    };
-  }
-
-  private emit(event: AuthSecurityEvent): void {
-    this.logger.info({
-      event: `auth_security_${event.eventType}`,
-      ...this.serializeEvent(event),
-    });
-
-    for (const handler of this.handlers) {
-      try {
-        handler(event);
-      } catch (error) {
-        this.logger.error({
-          event: 'auth_security_event_handler_error',
-          eventType: event.eventType,
-          message: error instanceof Error ? error.message : 'Unknown handler error',
-        });
-      }
-    }
-  }
-
-  private serializeEvent(event: AuthSecurityEvent): Record<string, unknown> {
-    const { eventType, timestamp, ...rest } = event;
+  private serialize(eventType: string, data: Record<string, unknown>): Record<string, unknown> {
+    const { timestamp, ...rest } = data;
     return {
       eventType,
       timestamp: timestamp instanceof Date ? timestamp.toISOString() : timestamp,
@@ -54,23 +24,38 @@ export class AuthSecurityEventBus implements AuthSecurityEventBusPort {
     };
   }
 
-  emitPasswordResetRequested(event: PasswordResetRequestedEvent): void {
-    this.emit(event);
+  publishPasswordResetRequested(event: PasswordResetRequestedEvent): void {
+    this.logger.info({
+      event: 'auth_security_password_reset_requested',
+      ...this.serialize(event.eventType, event as unknown as Record<string, unknown>),
+    });
   }
 
-  emitPasswordResetCompleted(event: PasswordResetCompletedEvent): void {
-    this.emit(event);
+  publishPasswordResetCompleted(event: PasswordResetCompletedEvent): void {
+    this.logger.info({
+      event: 'auth_security_password_reset_completed',
+      ...this.serialize(event.eventType, event as unknown as Record<string, unknown>),
+    });
   }
 
-  emitPasswordChanged(event: PasswordChangedEvent): void {
-    this.emit(event);
+  publishPasswordChanged(event: PasswordChangedEvent): void {
+    this.logger.info({
+      event: 'auth_security_password_changed',
+      ...this.serialize(event.eventType, event as unknown as Record<string, unknown>),
+    });
   }
 
-  emitSessionRevoked(event: SessionRevokedEvent): void {
-    this.emit(event);
+  publishSessionRevoked(event: SessionRevokedEvent): void {
+    this.logger.info({
+      event: 'auth_security_session_revoked',
+      ...this.serialize(event.eventType, event as unknown as Record<string, unknown>),
+    });
   }
 
-  emitAllOtherSessionsRevoked(event: AllOtherSessionsRevokedEvent): void {
-    this.emit(event);
+  publishAllOtherSessionsRevoked(event: AllOtherSessionsRevokedEvent): void {
+    this.logger.info({
+      event: 'auth_security_all_other_sessions_revoked',
+      ...this.serialize(event.eventType, event as unknown as Record<string, unknown>),
+    });
   }
 }

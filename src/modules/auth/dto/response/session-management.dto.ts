@@ -36,7 +36,7 @@ export class SessionManagementResultDto {
   message!: string;
 }
 
-export class SecurityDashboardDto {
+export class AccountSecurityDto {
   @ApiProperty({ description: 'Whether the account email is verified' })
   emailVerified!: boolean;
 

@@ -45,15 +45,13 @@ export interface UserRepositoryPort {
     email: string,
   ): Promise<{ userId: string; email: string; isVerified: boolean } | null>;
 
-  getSecurityDashboard(userId: string): Promise<{
+  getSecurityMetadata(userId: string): Promise<{
     emailVerified: boolean;
     lastPasswordChangedAt: string | null;
     lastLoginAt: string | null;
   } | null>;
 
   updatePasswordHash(userId: string, passwordHash: string, nowIso: string): Promise<void>;
-
-  verifyPasswordHash(passwordHash: string, storedHash: string): Promise<boolean>;
 
   createPasswordResetToken(userId: string, tokenHash: string, expiresAt: string): Promise<void>;
 

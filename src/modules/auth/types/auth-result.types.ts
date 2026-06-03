@@ -36,7 +36,7 @@ export type SessionManagementResult = {
   message: string;
 };
 
-export type SecurityDashboardResult = {
+export type AccountSecurityResult = {
   emailVerified: boolean;
   activeSessionCount: number;
   lastSuccessfulLoginAt: string | null;

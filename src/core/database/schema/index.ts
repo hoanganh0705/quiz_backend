@@ -449,6 +449,32 @@ export const userSessions = pgTable(
   ],
 );
 
+export const passwordResetTokens = pgTable(
+  'password_reset_tokens',
+  {
+    passwordResetTokenId: uuid('password_reset_token_id').defaultRandom().primaryKey().notNull(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.userId, { onDelete: 'cascade' }),
+    tokenHash: text('token_hash').notNull(),
+    expiresAt: timestamp('expires_at', { withTimezone: true, mode: 'string' }).notNull(),
+    usedAt: timestamp('used_at', { withTimezone: true, mode: 'string' }),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' })
+      .defaultNow()
+      .notNull(),
+    revokedAt: timestamp('revoked_at', { withTimezone: true, mode: 'string' }),
+    isActive: boolean('is_active').default(true).notNull(),
+  },
+  (table) => [
+    index('idx_password_reset_tokens_user_active')
+      .using('btree', table.userId.asc().nullsLast().op('uuid_ops'))
+      .where(sql`is_active = true AND used_at IS NULL AND revoked_at IS NULL`),
+    index('idx_password_reset_tokens_hash_active')
+      .using('btree', table.tokenHash.asc().nullsLast().op('text_ops'))
+      .where(sql`is_active = true AND used_at IS NULL AND revoked_at IS NULL`),
+  ],
+);
+
 export const userBadges = pgTable(
   'user_badges',
   {

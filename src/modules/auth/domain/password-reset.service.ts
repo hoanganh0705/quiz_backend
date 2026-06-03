@@ -1,13 +1,14 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { randomBytes } from 'crypto';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
-import { AuthConfig } from '../auth.config';
+import { PasswordResetConfig } from '../config/password-reset.config';
 import { CRYPTO_PROVIDER, type CryptoProvider } from './ports/crypto.provider';
+import { PASSWORD_PROVIDER, type PasswordProvider } from './ports/password.provider';
 import { EMAIL_PROVIDER, type EmailProvider } from './ports/email.provider';
 import { USER_REPOSITORY_PORT, type UserRepositoryPort } from './ports/user-repository.port';
 import { SessionService } from './session.service';
 import { InvalidTokenError } from './errors';
-import { AUTH_SECURITY_EVENT_BUS, type AuthSecurityEventBusPort } from './events';
+import { AUTH_SECURITY_EVENT_BUS, type AuthSecurityEventPublisherPort } from './events';
 
 @Injectable()
 export class PasswordResetService {
@@ -19,12 +20,14 @@ export class PasswordResetService {
     private readonly userRepository: UserRepositoryPort,
     @Inject(CRYPTO_PROVIDER)
     private readonly cryptoService: CryptoProvider,
-    private readonly authConfig: AuthConfig,
+    @Inject(PASSWORD_PROVIDER)
+    private readonly passwordProvider: PasswordProvider,
+    private readonly passwordResetConfig: PasswordResetConfig,
     @Inject(EMAIL_PROVIDER)
     private readonly emailService: EmailProvider,
     private readonly sessionService: SessionService,
     @Inject(AUTH_SECURITY_EVENT_BUS)
-    private readonly eventBus: AuthSecurityEventBusPort,
+    private readonly eventBus: AuthSecurityEventPublisherPort,
     @InjectPinoLogger(PasswordResetService.name) private readonly logger: PinoLogger,
   ) {}
 
@@ -33,9 +36,7 @@ export class PasswordResetService {
   }
 
   private getResetExpiryIso(): string {
-    return new Date(
-      Date.now() + this.authConfig.passwordReset.tokenTtlSeconds * 1_000,
-    ).toISOString();
+    return new Date(Date.now() + this.passwordResetConfig.tokenTtlSeconds * 1_000).toISOString();
   }
 
   async requestPasswordReset(email: string, ipAddress?: string): Promise<{ message: string }> {
@@ -56,7 +57,7 @@ export class PasswordResetService {
 
     await this.userRepository.createPasswordResetToken(user.userId, tokenHash, expiresAt);
 
-    this.eventBus.emitPasswordResetRequested({
+    this.eventBus.publishPasswordResetRequested({
       eventType: 'password_reset_requested',
       userId: user.userId,
       email: normalizedEmail,
@@ -98,13 +99,13 @@ export class PasswordResetService {
     }
 
     const { userId, email } = tokenData;
-    const passwordHash = await this.cryptoService.hashBcrypt(newPassword);
+    const passwordHash = await this.passwordProvider.hash(newPassword);
 
     await this.userRepository.updatePasswordHash(userId, passwordHash, nowIso);
     await this.userRepository.markPasswordResetTokenUsed(tokenHash, nowIso);
     await this.sessionService.revokeAllActiveSessions(userId);
 
-    this.eventBus.emitPasswordResetCompleted({
+    this.eventBus.publishPasswordResetCompleted({
       eventType: 'password_reset_completed',
       userId,
       email,

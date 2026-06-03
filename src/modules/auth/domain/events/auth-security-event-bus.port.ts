@@ -4,16 +4,14 @@ import type {
   PasswordChangedEvent,
   SessionRevokedEvent,
   AllOtherSessionsRevokedEvent,
-  AuthSecurityEvent,
 } from './auth-security.events';
 
-export interface AuthSecurityEventBusPort {
-  subscribe(handler: (event: AuthSecurityEvent) => void): () => void;
-  emitPasswordResetRequested(event: PasswordResetRequestedEvent): void;
-  emitPasswordResetCompleted(event: PasswordResetCompletedEvent): void;
-  emitPasswordChanged(event: PasswordChangedEvent): void;
-  emitSessionRevoked(event: SessionRevokedEvent): void;
-  emitAllOtherSessionsRevoked(event: AllOtherSessionsRevokedEvent): void;
+export interface AuthSecurityEventPublisherPort {
+  publishPasswordResetRequested(event: PasswordResetRequestedEvent): void;
+  publishPasswordResetCompleted(event: PasswordResetCompletedEvent): void;
+  publishPasswordChanged(event: PasswordChangedEvent): void;
+  publishSessionRevoked(event: SessionRevokedEvent): void;
+  publishAllOtherSessionsRevoked(event: AllOtherSessionsRevokedEvent): void;
 }
 
 export const AUTH_SECURITY_EVENT_BUS = Symbol('AUTH_SECURITY_EVENT_BUS');

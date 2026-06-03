@@ -2,14 +2,16 @@ import { Inject, Injectable, OnModuleDestroy } from '@nestjs/common';
 import { Queue } from 'bullmq';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { EMAIL_JOB_NAMES, EMAIL_QUEUE_TOKENS } from './email.constants';
-import type { SendVerificationEmailJobData } from './email.types';
+import type { SendVerificationEmailJobData, SendPasswordResetEmailJobData } from './email.types';
 import type { EmailProvider } from '@/common/ports/email.provider';
 
 @Injectable()
 export class EmailService implements EmailProvider, OnModuleDestroy {
   constructor(
     @Inject(EMAIL_QUEUE_TOKENS.QUEUE)
-    private readonly emailQueue: Queue<SendVerificationEmailJobData>,
+    private readonly emailQueue: Queue<
+      SendVerificationEmailJobData | SendPasswordResetEmailJobData
+    >,
     @InjectPinoLogger(EmailService.name) private readonly logger: PinoLogger,
   ) {}
 
@@ -54,6 +56,46 @@ export class EmailService implements EmailProvider, OnModuleDestroy {
       });
 
       throw new Error('Unable to queue verification email');
+    }
+  }
+
+  async enqueuePasswordResetEmail(email: string, token: string, userId: string): Promise<void> {
+    try {
+      const job = await this.emailQueue.add(
+        EMAIL_JOB_NAMES.SEND_PASSWORD_RESET_EMAIL,
+        { email, token, userId },
+        {
+          attempts: 5,
+          backoff: {
+            type: 'exponential',
+            delay: 5_000,
+          },
+          removeOnComplete: {
+            age: 86_400,
+            count: 1_000,
+          },
+          removeOnFail: {
+            age: 604_800,
+            count: 5_000,
+          },
+        },
+      );
+
+      this.logger.info({
+        event: 'email_password_reset_job_enqueued',
+        jobId: job.id,
+        jobName: job.name,
+        userId,
+      });
+    } catch (error) {
+      this.logger.error({
+        event: 'email_password_reset_job_enqueue_failed',
+        jobName: EMAIL_JOB_NAMES.SEND_PASSWORD_RESET_EMAIL,
+        userId,
+        message: error instanceof Error ? error.message : 'Unknown enqueue error',
+      });
+
+      throw new Error('Unable to queue password reset email');
     }
   }
 }

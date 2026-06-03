@@ -1,5 +1,4 @@
 import { Inject, Injectable } from '@nestjs/common';
-import * as bcrypt from 'bcrypt';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import type {
   RegisterCommand,
@@ -8,6 +7,7 @@ import type {
 } from './types/auth-commands';
 import type { RegisterResult, VerifyEmailResult } from '../types/auth-result.types';
 import { CRYPTO_PROVIDER, type CryptoProvider } from './ports/crypto.provider';
+import { PASSWORD_PROVIDER, type PasswordProvider } from './ports/password.provider';
 import { USER_REPOSITORY_PORT, type UserRepositoryPort } from './ports/user-repository.port';
 import { ResourceConflictError } from './errors';
 import { VerificationTokenService } from './verification-token.service';
@@ -24,6 +24,8 @@ export class AuthRegistrationService {
     private readonly userRepository: UserRepositoryPort,
     @Inject(CRYPTO_PROVIDER)
     private readonly cryptoService: CryptoProvider,
+    @Inject(PASSWORD_PROVIDER)
+    private readonly passwordProvider: PasswordProvider,
     private readonly verificationTokenService: VerificationTokenService,
     @InjectPinoLogger(AuthRegistrationService.name) private readonly logger: PinoLogger,
   ) {}
@@ -71,7 +73,7 @@ export class AuthRegistrationService {
       throw error;
     }
 
-    const passwordHash = await bcrypt.hash(registerCommand.password, 12);
+    const passwordHash = await this.passwordProvider.hash(registerCommand.password);
     const createdUser = await this.userRepository.createUser(
       normalizedEmail,
       normalizedUsername,
@@ -123,7 +125,6 @@ export class AuthRegistrationService {
     const foundUser: { userId: string; email: string; isVerified: boolean } | null =
       await this.userRepository.findActiveVerificationStatusByEmail(normalizedEmail);
 
-    // Do not reveal account existence/verification state.
     if (!foundUser || foundUser.isVerified) {
       return {
         message: AuthRegistrationService.RESEND_VERIFICATION_GENERIC_MESSAGE,
@@ -146,20 +147,5 @@ export class AuthRegistrationService {
     return {
       message: AuthRegistrationService.RESEND_VERIFICATION_GENERIC_MESSAGE,
     };
-  }
-
-  async getSecurityDashboard(userId: string): Promise<{
-    emailVerified: boolean;
-    lastPasswordChangedAt: string | null;
-    lastLoginAt: string | null;
-  }> {
-    const dashboard = await this.userRepository.getSecurityDashboard(userId);
-    return (
-      dashboard ?? {
-        emailVerified: false,
-        lastPasswordChangedAt: null,
-        lastLoginAt: null,
-      }
-    );
   }
 }
