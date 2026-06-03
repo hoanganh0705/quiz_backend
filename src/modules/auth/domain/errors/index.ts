@@ -7,4 +7,7 @@ export {
   UserNotFoundError,
   RateLimitExceededError,
   ResourceConflictError,
+  SessionNotFoundError,
+  InvalidTokenError,
+  InvalidPasswordError,
 } from './auth-domain.errors';

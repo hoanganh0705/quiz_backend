@@ -1,7 +1,7 @@
 import type { AuthIdentity, AuthTokens, RefreshTokenPayload } from '../../types/auth-context.types';
 
 export interface TokenProvider {
-  issueTokens(identity: AuthIdentity): Promise<AuthTokens>;
+  issueTokens(identity: AuthIdentity, sessionId?: string): Promise<AuthTokens>;
   verifyRefreshToken(refreshToken: string): Promise<RefreshTokenPayload>;
   tryVerifyRefreshToken(refreshToken: string): Promise<RefreshTokenPayload | null>;
 }

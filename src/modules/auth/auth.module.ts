@@ -5,6 +5,11 @@ import { AuthResponseMapper } from './mappers/auth-response.mapper';
 import { AuthLoginService } from './domain/auth-login.service';
 import { AuthRefreshService } from './domain/auth-refresh.service';
 import { AuthRegistrationService } from './domain/auth-registration.service';
+import { PasswordResetService } from './domain/password-reset.service';
+import { ChangePasswordService } from './domain/change-password.service';
+import { SessionManagementService } from './domain/session-management.service';
+import { AuthSecurityEventBus } from './domain/events/auth-security-event-bus';
+import { AUTH_SECURITY_EVENT_BUS } from './domain/events/auth-security-event-bus.port';
 import { AuthConfig } from './auth.config';
 import { AuthCookieService } from './transport/cookies/auth-cookie.service';
 import { AuthSessionCleanupService } from './infrastructure/session/auth-session-cleanup.service';
@@ -42,6 +47,10 @@ import { VerificationTokenService } from './domain/verification-token.service';
     AuthRegistrationService,
     AuthLoginService,
     AuthRefreshService,
+    PasswordResetService,
+    ChangePasswordService,
+    SessionManagementService,
+    AuthSecurityEventBus,
     AuthConfig,
     AuthCookieService,
     AuthSessionCleanupService,
@@ -61,6 +70,7 @@ import { VerificationTokenService } from './domain/verification-token.service';
     { provide: SESSION_REPOSITORY_PORT, useExisting: UserSessionRepository },
     { provide: EMAIL_PROVIDER, useExisting: EmailService },
     { provide: CACHE_PROVIDER, useExisting: RedisService },
+    { provide: AUTH_SECURITY_EVENT_BUS, useExisting: AuthSecurityEventBus },
   ],
   exports: [AuthApplicationService],
 })

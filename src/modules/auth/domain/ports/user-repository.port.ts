@@ -44,6 +44,27 @@ export interface UserRepositoryPort {
   findActiveVerificationStatusByEmail(
     email: string,
   ): Promise<{ userId: string; email: string; isVerified: boolean } | null>;
+
+  getSecurityDashboard(userId: string): Promise<{
+    emailVerified: boolean;
+    lastPasswordChangedAt: string | null;
+    lastLoginAt: string | null;
+  } | null>;
+
+  updatePasswordHash(userId: string, passwordHash: string, nowIso: string): Promise<void>;
+
+  verifyPasswordHash(passwordHash: string, storedHash: string): Promise<boolean>;
+
+  createPasswordResetToken(userId: string, tokenHash: string, expiresAt: string): Promise<void>;
+
+  findActivePasswordResetTokenByHash(
+    tokenHash: string,
+    nowIso: string,
+  ): Promise<{ userId: string; email: string } | null>;
+
+  markPasswordResetTokenUsed(tokenHash: string, nowIso: string): Promise<void>;
+
+  revokeAllActivePasswordResetTokensForUser(userId: string, nowIso: string): Promise<void>;
 }
 
 export const USER_REPOSITORY_PORT = Symbol('USER_REPOSITORY_PORT');

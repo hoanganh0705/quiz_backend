@@ -12,9 +12,33 @@ export type LoginResult = {
   email: string;
   accessToken: string;
   refreshToken: string;
+  sessionId: string;
 };
 
 export type RefreshTokenResult = {
   accessToken: string;
   refreshToken: string;
+};
+
+export type ForgotPasswordResult = {
+  message: string;
+};
+
+export type ResetPasswordResult = {
+  message: string;
+};
+
+export type ChangePasswordResult = {
+  message: string;
+};
+
+export type SessionManagementResult = {
+  message: string;
+};
+
+export type SecurityDashboardResult = {
+  emailVerified: boolean;
+  activeSessionCount: number;
+  lastSuccessfulLoginAt: string | null;
+  lastPasswordChangeAt: string | null;
 };

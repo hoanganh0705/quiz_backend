@@ -46,3 +46,21 @@ export class ResourceConflictError extends AuthDomainError {
     super(message);
   }
 }
+
+export class SessionNotFoundError extends AuthDomainError {
+  constructor(message = 'Session not found') {
+    super(message);
+  }
+}
+
+export class InvalidTokenError extends AuthDomainError {
+  constructor(message = 'Invalid or expired token') {
+    super(message);
+  }
+}
+
+export class InvalidPasswordError extends AuthDomainError {
+  constructor(message = 'Invalid current password') {
+    super(message);
+  }
+}
