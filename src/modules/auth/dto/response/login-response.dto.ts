@@ -19,4 +19,10 @@ export class LoginResponseDto {
       'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI1NTBlODQwMC1lMjliLTIxZDQtYTcxNi00NDY2NTU0NDAwMDAiLCJyb2xlIjoidXNlciIsImlhdCI6MTcwOTAwMDAwMCwiZXhwIjoxNzA5MDAwNjAwfQ.sig',
   })
   accessToken!: string;
+
+  @ApiProperty({
+    description: 'Current session identifier for session management operations',
+    example: '7c9e6679-7425-40de-944b-e07fc1f90ae7',
+  })
+  sessionId!: string;
 }

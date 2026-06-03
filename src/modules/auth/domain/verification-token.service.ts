@@ -18,7 +18,6 @@ export class VerificationTokenService {
   ) {}
 
   private generateVerificationToken(): string {
-    // 32 random bytes => 64-char hex token.
     return randomBytes(32).toString('hex');
   }
 
@@ -33,9 +32,6 @@ export class VerificationTokenService {
     const tokenHash = this.cryptoService.hashSha256(rawToken);
     const expiresAtIso = this.getVerificationExpiryIso();
 
-    // Write token state first, then enqueue email.
-    // If enqueue fails, no email is sent and user can recover via resend endpoint.
-    // This avoids ever sending an email link whose token is not persisted.
     await this.userRepository.setEmailVerificationToken(userId, tokenHash, expiresAtIso);
 
     await this.emailService.enqueueVerificationEmail(email, rawToken, userId);

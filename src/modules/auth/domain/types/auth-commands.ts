@@ -16,3 +16,27 @@ export type VerifyEmailCommand = {
 export type ResendVerificationEmailCommand = {
   email: string;
 };
+
+export type ForgotPasswordCommand = {
+  email: string;
+};
+
+export type ResetPasswordCommand = {
+  token: string;
+  newPassword: string;
+};
+
+export type ChangePasswordCommand = {
+  userId: string;
+  currentPassword: string;
+  newPassword: string;
+};
+
+export type RevokeSessionCommand = {
+  sessionId: string;
+  currentSessionId?: string;
+};
+
+export type LogoutOtherSessionsCommand = {
+  currentSessionId: string;
+};

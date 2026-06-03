@@ -1,5 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
+import { randomUUID } from 'crypto';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import type { LoginCommand } from './types/auth-commands';
 import type { AuthIdentity, SessionRequestContext } from '../types/auth-context.types';
@@ -87,22 +88,24 @@ export class AuthLoginService {
     }
 
     const identity = this.toAuthIdentity(foundUser);
-    const tokens = await this.tokenService.issueTokens(identity);
-    const { accessToken, refreshToken } = tokens;
+    const sessionId = randomUUID();
+    const tokens = await this.tokenService.issueTokens(identity, sessionId);
 
     await this.sessionService.createSession(
       identity.userId,
-      refreshToken,
+      tokens.refreshToken,
       tokens.refreshTokenJti,
       context,
+      sessionId,
     );
 
     return {
       userId: identity.userId,
       username: identity.username,
       email: identity.email,
-      accessToken,
-      refreshToken,
+      accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken,
+      sessionId,
     };
   }
 }

@@ -147,4 +147,19 @@ export class AuthRegistrationService {
       message: AuthRegistrationService.RESEND_VERIFICATION_GENERIC_MESSAGE,
     };
   }
+
+  async getSecurityDashboard(userId: string): Promise<{
+    emailVerified: boolean;
+    lastPasswordChangedAt: string | null;
+    lastLoginAt: string | null;
+  }> {
+    const dashboard = await this.userRepository.getSecurityDashboard(userId);
+    return (
+      dashboard ?? {
+        emailVerified: false,
+        lastPasswordChangedAt: null,
+        lastLoginAt: null,
+      }
+    );
+  }
 }
