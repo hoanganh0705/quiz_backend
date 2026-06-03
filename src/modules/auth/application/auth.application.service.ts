@@ -6,6 +6,7 @@ import { AuthRegistrationService } from '../domain/auth-registration.service';
 import { PasswordResetService } from '../domain/password-reset.service';
 import { ChangePasswordService } from '../domain/change-password.service';
 import { SessionManagementService } from '../domain/session-management.service';
+import { AccountSecurityService } from '../domain/account-security.service';
 import type {
   LoginCommand,
   RegisterCommand,
@@ -14,8 +15,6 @@ import type {
   ForgotPasswordCommand,
   ResetPasswordCommand,
   ChangePasswordCommand,
-  RevokeSessionCommand,
-  LogoutOtherSessionsCommand,
 } from '../domain/types/auth-commands';
 import { LoginResponseDto } from '../dto/response/login-response.dto';
 import { RefreshTokenResponseDto } from '../dto/response/refresh-token-response.dto';
@@ -28,7 +27,7 @@ import {
 } from '../dto/response/password-reset.dto';
 import {
   SessionListResponseDto,
-  SecurityDashboardDto,
+  AccountSecurityDto,
   SessionManagementResultDto,
 } from '../dto/response/session-management.dto';
 import { AuthResponseMapper } from '../mappers/auth-response.mapper';
@@ -53,6 +52,7 @@ export class AuthApplicationService {
     private readonly passwordResetService: PasswordResetService,
     private readonly changePasswordService: ChangePasswordService,
     private readonly sessionManagementService: SessionManagementService,
+    private readonly accountSecurityService: AccountSecurityService,
     private readonly authResponseMapper: AuthResponseMapper,
   ) {}
 
@@ -146,10 +146,7 @@ export class AuthApplicationService {
     userId: string,
     currentSessionId: string,
   ): Promise<SessionListResponseDto> {
-    const sessions = await this.sessionManagementService.getActiveSessions(
-      userId,
-      currentSessionId,
-    );
+    const sessions = await this.sessionManagementService.getActiveSessions(userId);
     return {
       sessions: sessions.map((session) => ({
         sessionId: session.sessionId,
@@ -185,15 +182,17 @@ export class AuthApplicationService {
     };
   }
 
-  async getSecurityDashboard(userId: string): Promise<SecurityDashboardDto> {
-    const dashboard = await this.authRegistrationService.getSecurityDashboard(userId);
-    const activeSessionCount = await this.sessionManagementService.getActiveSessionCount(userId);
+  async getSecurityDashboard(userId: string): Promise<AccountSecurityDto> {
+    const [metadata, activeSessionCount] = await Promise.all([
+      this.accountSecurityService.getAccountSecurity(userId),
+      this.accountSecurityService.getActiveSessionCount(userId),
+    ]);
 
     return {
-      emailVerified: dashboard.emailVerified,
+      emailVerified: metadata.emailVerified,
       activeSessionCount,
-      lastSuccessfulLoginAt: dashboard.lastLoginAt,
-      lastPasswordChangeAt: dashboard.lastPasswordChangedAt,
+      lastSuccessfulLoginAt: metadata.lastLoginAt,
+      lastPasswordChangeAt: metadata.lastPasswordChangedAt,
     };
   }
 }

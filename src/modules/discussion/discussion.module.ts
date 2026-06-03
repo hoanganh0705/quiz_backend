@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { JwtModule } from '@nestjs/jwt';
 import { DatabaseModule } from '@/core/database/database.module';
 import { DiscussionApplicationService } from './application/discussion-application.service';
 import { DiscussionService } from './domain/services/discussion.service';
@@ -11,7 +12,7 @@ import { DISCUSSION_DOMAIN_EVENT_BUS, DiscussionDomainEventBus } from './domain/
 import { QuizModule } from '@/modules/quiz/quiz.module';
 
 @Module({
-  imports: [DatabaseModule, QuizModule],
+  imports: [DatabaseModule, QuizModule, JwtModule],
   providers: [
     DiscussionApplicationService,
     DiscussionService,

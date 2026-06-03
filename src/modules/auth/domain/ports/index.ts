@@ -1,5 +1,6 @@
 export { type TokenProvider, TOKEN_PROVIDER } from './token.provider';
 export { type CryptoProvider, CRYPTO_PROVIDER } from './crypto.provider';
+export { type PasswordProvider, PASSWORD_PROVIDER } from './password.provider';
 export { type UserRepositoryPort, USER_REPOSITORY_PORT } from './user-repository.port';
 export {
   type SessionRepositoryPort,
@@ -10,5 +11,5 @@ export { type EmailProvider, EMAIL_PROVIDER } from './email.provider';
 export { type CacheProvider, CACHE_PROVIDER } from './cache.provider';
 export {
   AUTH_SECURITY_EVENT_BUS,
-  type AuthSecurityEventBusPort,
-} from './events/auth-security-event-bus.port';
+  type AuthSecurityEventPublisherPort,
+} from '../events/auth-security-event-bus.port';
