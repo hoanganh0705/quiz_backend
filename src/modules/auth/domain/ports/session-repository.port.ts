@@ -26,7 +26,8 @@ export interface SessionRepositoryPort {
     },
     nowIso: string,
     maxActiveSessionsPerUser: number,
-  ): Promise<void>;
+    explicitSessionId?: string,
+  ): Promise<string>;
 
   getSessionByJtiAndUserId(
     jti: string,
@@ -35,6 +36,14 @@ export interface SessionRepositoryPort {
   ): Promise<SessionRecord | null>;
 
   findLatestActiveSessionByUserId(userId: string, nowIso: string): Promise<SessionRecord | null>;
+
+  findActiveSessionsByUserId(userId: string, nowIso: string): Promise<SessionRecord[]>;
+
+  findSessionByIdAndUserId(
+    sessionId: string,
+    userId: string,
+    nowIso: string,
+  ): Promise<SessionRecord | null>;
 
   updateSessionForRotation(
     sessionId: string,
@@ -52,9 +61,15 @@ export interface SessionRepositoryPort {
 
   revokeSessionsByUserId(userId: string, nowIso: string): Promise<void>;
 
+  revokeOtherSessionsByUserId(userId: string, sessionId: string, nowIso: string): Promise<void>;
+
+  revokeSessionById(sessionId: string, nowIso: string): Promise<void>;
+
   revokeSessionByJti(jti: string, nowIso: string): Promise<void>;
 
   revokeSessionByRefreshTokenHash(refreshTokenHash: string, nowIso: string): Promise<void>;
+
+  countActiveSessionsByUserId(userId: string, nowIso: string): Promise<number>;
 }
 
 export const SESSION_REPOSITORY_PORT = Symbol('SESSION_REPOSITORY_PORT');

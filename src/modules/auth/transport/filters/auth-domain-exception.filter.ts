@@ -14,6 +14,9 @@ import {
   SessionContextMismatchError,
   UserNotFoundError,
   RateLimitExceededError,
+  SessionNotFoundError,
+  InvalidTokenError,
+  InvalidPasswordError,
 } from '../../domain/errors';
 
 /**
@@ -54,6 +57,15 @@ export class AuthDomainExceptionFilter implements ExceptionFilter {
     }
     if (error instanceof RateLimitExceededError) {
       return { status: HttpStatus.TOO_MANY_REQUESTS, message: 'Rate limit exceeded.' };
+    }
+    if (error instanceof SessionNotFoundError) {
+      return { status: HttpStatus.NOT_FOUND, message: 'Session not found.' };
+    }
+    if (error instanceof InvalidTokenError) {
+      return { status: HttpStatus.BAD_REQUEST, message: 'Invalid or expired token.' };
+    }
+    if (error instanceof InvalidPasswordError) {
+      return { status: HttpStatus.UNAUTHORIZED, message: 'Invalid current password.' };
     }
 
     // Fallback for any AuthDomainError subclass not explicitly mapped.

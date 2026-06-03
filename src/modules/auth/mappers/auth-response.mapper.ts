@@ -19,6 +19,7 @@ export class AuthResponseMapper {
     dto.username = result.username;
     dto.email = result.email;
     dto.accessToken = result.accessToken;
+    dto.sessionId = (result as LoginResult & { sessionId?: string }).sessionId ?? '';
     return dto;
   }
 

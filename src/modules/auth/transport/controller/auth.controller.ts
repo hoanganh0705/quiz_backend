@@ -1,4 +1,13 @@
-import { Body, Controller, Post, UseFilters, UseInterceptors } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Post,
+  UseFilters,
+  UseInterceptors,
+  Get,
+  Delete,
+  Param,
+} from '@nestjs/common';
 import {
   ApiTags,
   ApiOperation,
@@ -7,6 +16,8 @@ import {
   ApiUnauthorizedResponse,
   ApiBadRequestResponse,
   ApiInternalServerErrorResponse,
+  ApiNotFoundResponse,
+  ApiTooManyRequestsResponse,
 } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import { Public } from '@/common/decorators/public.decorator';
@@ -27,12 +38,29 @@ import { LogoutResponseDto } from '../../dto/response/logout-response.dto';
 import { VerifyEmailDto } from '../../dto/request/verify-email.dto';
 import { VerifyEmailResponseDto } from '../../dto/response/verify-email-response.dto';
 import { ResendVerificationDto } from '../../dto/request/resend-verification.dto';
+import {
+  ForgotPasswordDto,
+  ResetPasswordDto,
+  ChangePasswordDto,
+} from '../../dto/request/password-reset.dto';
+import {
+  ForgotPasswordResponseDto,
+  ResetPasswordResponseDto,
+} from '../../dto/response/password-reset.dto';
+import {
+  SessionListResponseDto,
+  SecurityDashboardDto,
+  SessionManagementResultDto,
+} from '../../dto/response/session-management.dto';
 import type { AuthRequestContext } from '../types/auth-http-context.types';
 import type {
   LoginCommand,
   RegisterCommand,
   ResendVerificationEmailCommand,
   VerifyEmailCommand,
+  ForgotPasswordCommand,
+  ResetPasswordCommand,
+  ChangePasswordCommand,
 } from '../../domain/types/auth-commands';
 
 @ApiTags('auth')
@@ -122,7 +150,7 @@ export class AuthController {
       password: loginDto.password,
     };
 
-    const loginResult: { response: LoginResponseDto; refreshToken: string } =
+    const loginResult: { response: LoginResponseDto; refreshToken: string; sessionId: string } =
       await this.authApplicationService.login(command, context.session);
     context.setRefreshToken(loginResult.refreshToken);
     return loginResult.response;
@@ -182,5 +210,147 @@ export class AuthController {
     const response = await this.authApplicationService.logoutAll(userId);
     context.clearRefreshToken();
     return response;
+  }
+
+  // ─── FEATURE 1: Session Management ───────────────────────────────────────
+
+  @ApiAuth()
+  @Get('sessions')
+  @ApiOperation({
+    summary: 'List active sessions',
+    description:
+      'Returns all active sessions for the authenticated user, ordered by most recent activity. ' +
+      'The current session is marked with isCurrentSession: true.',
+  })
+  @ApiOkResponse({ description: 'Active sessions retrieved', type: SessionListResponseDto })
+  @ApiUnauthorizedResponse({ description: 'Not authenticated' })
+  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  getActiveSessions(
+    @CurrentUser('sub') userId: string,
+    @CurrentUser('sessionId') currentSessionId: string,
+  ): SessionListResponseDto {
+    return this.authApplicationService.getActiveSessions(userId, currentSessionId);
+  }
+
+  @ApiAuth()
+  @Delete('sessions/:sessionId')
+  @ApiOperation({
+    summary: 'Revoke a session',
+    description:
+      'Revokes a specific session. If the target is the current session, the user is logged out. ' +
+      'Otherwise only the target session is invalidated.',
+  })
+  @ApiOkResponse({ description: 'Session revoked', type: SessionManagementResultDto })
+  @ApiNotFoundResponse({ description: 'Session not found' })
+  @ApiUnauthorizedResponse({ description: 'Not authenticated or session not owned by user' })
+  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  revokeSession(
+    @CurrentUser('sub') userId: string,
+    @CurrentUser('sessionId') currentSessionId: string,
+    @Param('sessionId') sessionId: string,
+  ): SessionManagementResultDto {
+    return this.authApplicationService.revokeSession(userId, sessionId, currentSessionId);
+  }
+
+  @ApiAuth()
+  @Post('sessions/logout-others')
+  @ApiOperation({
+    summary: 'Log out all other devices',
+    description: 'Keeps the current session and revokes every other active session for the user.',
+  })
+  @ApiOkResponse({ description: 'Other sessions revoked', type: SessionManagementResultDto })
+  @ApiUnauthorizedResponse({ description: 'Not authenticated' })
+  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  logoutOtherDevices(
+    @CurrentUser('sub') userId: string,
+    @CurrentUser('sessionId') currentSessionId: string,
+  ): SessionManagementResultDto {
+    return this.authApplicationService.revokeAllOtherSessions(userId, currentSessionId);
+  }
+
+  @ApiAuth()
+  @Get('security/dashboard')
+  @ApiOperation({
+    summary: 'Account security dashboard',
+    description: 'Returns security-related information about the authenticated user account.',
+  })
+  @ApiOkResponse({ description: 'Security dashboard retrieved', type: SecurityDashboardDto })
+  @ApiUnauthorizedResponse({ description: 'Not authenticated' })
+  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  getSecurityDashboard(@CurrentUser('sub') userId: string): SecurityDashboardDto {
+    return this.authApplicationService.getSecurityDashboard(userId);
+  }
+
+  // ─── FEATURE 2: Password Reset ────────────────────────────────────────────
+
+  @Public()
+  @Throttle({ default: { limit: 3, ttl: 60_000 } })
+  @Post('forgot-password')
+  @ApiOperation({
+    summary: 'Request password reset',
+    description:
+      'Sends a password reset email if the account exists. ' +
+      'Always returns a generic success message to prevent email enumeration.',
+  })
+  @ApiOkResponse({
+    description: 'Password reset email sent (if account exists)',
+    type: ForgotPasswordResponseDto,
+  })
+  @ApiBadRequestResponse({ description: 'Validation failed' })
+  @ApiTooManyRequestsResponse({ description: 'Too many requests' })
+  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  forgotPassword(
+    @Body() forgotPasswordDto: ForgotPasswordDto,
+    @RequestContext() context: AuthRequestContext,
+  ): ForgotPasswordResponseDto {
+    const command: ForgotPasswordCommand = { email: forgotPasswordDto.email };
+    return this.authApplicationService.forgotPassword(
+      command,
+      context.session.ipAddress ?? undefined,
+    );
+  }
+
+  @Public()
+  @Post('reset-password')
+  @ApiOperation({
+    summary: 'Reset password',
+    description:
+      'Resets the account password using a valid token. ' +
+      'All active sessions are immediately invalidated after a successful reset.',
+  })
+  @ApiOkResponse({ description: 'Password reset successfully', type: ResetPasswordResponseDto })
+  @ApiBadRequestResponse({ description: 'Invalid or expired token, or password policy violation' })
+  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  resetPassword(@Body() resetPasswordDto: ResetPasswordDto): ResetPasswordResponseDto {
+    const command: ResetPasswordCommand = {
+      token: resetPasswordDto.token,
+      newPassword: resetPasswordDto.newPassword,
+    };
+    return this.authApplicationService.resetPassword(command);
+  }
+
+  @ApiAuth()
+  @Post('change-password')
+  @ApiOperation({
+    summary: 'Change password',
+    description:
+      'Changes the account password for an authenticated user. ' +
+      'Requires the current password and terminates all other active sessions.',
+  })
+  @ApiOkResponse({ description: 'Password changed successfully', type: LogoutResponseDto })
+  @ApiUnauthorizedResponse({ description: 'Invalid current password' })
+  @ApiBadRequestResponse({ description: 'Password policy violation' })
+  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  changePassword(
+    @CurrentUser('sub') userId: string,
+    @CurrentUser('sessionId') currentSessionId: string,
+    @Body() changePasswordDto: ChangePasswordDto,
+  ): LogoutResponseDto {
+    const command: ChangePasswordCommand = {
+      userId,
+      currentPassword: changePasswordDto.currentPassword,
+      newPassword: changePasswordDto.newPassword,
+    };
+    return this.authApplicationService.changePassword(command, currentSessionId);
   }
 }

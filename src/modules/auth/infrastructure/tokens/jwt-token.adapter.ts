@@ -18,11 +18,12 @@ export class JwtTokenAdapter implements TokenProvider {
     private readonly authConfig: AuthConfig,
   ) {}
 
-  async issueTokens(identity: AuthIdentity): Promise<AuthTokens> {
+  async issueTokens(identity: AuthIdentity, sessionId?: string): Promise<AuthTokens> {
     const refreshTokenJti = randomUUID();
     const accessTokenPayload: AccessTokenClaims = {
       sub: identity.userId,
       role: identity.role,
+      ...(sessionId ? { sessionId } : {}),
     };
 
     const accessToken = await this.jwtService.signAsync(accessTokenPayload, {

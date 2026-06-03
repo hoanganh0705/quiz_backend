@@ -1,4 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
+import { randomUUID } from 'crypto';
 import { AuthConfig } from '../auth.config';
 import type { AuthTokens, SessionRequestContext } from '../types/auth-context.types';
 import { CRYPTO_PROVIDER, type CryptoProvider } from './ports/crypto.provider';
@@ -31,12 +32,13 @@ export class SessionService {
     refreshToken: string,
     refreshTokenJti: string,
     context: SessionRequestContext,
-  ): Promise<void> {
+    explicitSessionId?: string,
+  ): Promise<string> {
     const refreshTokenHash = this.cryptoService.hashSha256(refreshToken);
     const expiresAt = this.getRefreshTokenExpiresAtIso();
     const nowIso = this.getNowIso();
 
-    await this.userSessionRepository.createSessionWithActiveLimit(
+    return this.userSessionRepository.createSessionWithActiveLimit(
       {
         jti: refreshTokenJti,
         userId,
@@ -49,6 +51,7 @@ export class SessionService {
       },
       nowIso,
       this.authConfig.sessions.maxActiveSessionsPerUser,
+      explicitSessionId,
     );
   }
 
@@ -65,6 +68,14 @@ export class SessionService {
     nowIso: string,
   ): Promise<SessionRecord | null> {
     return this.userSessionRepository.findLatestActiveSessionByUserId(userId, nowIso);
+  }
+
+  async findActiveSessionsByUserId(userId: string): Promise<SessionRecord[]> {
+    return this.userSessionRepository.findActiveSessionsByUserId(userId, this.getNowIso());
+  }
+
+  async findSessionByIdAndUserId(sessionId: string, userId: string): Promise<SessionRecord | null> {
+    return this.userSessionRepository.findSessionByIdAndUserId(sessionId, userId, this.getNowIso());
   }
 
   async rotateSession(
@@ -93,6 +104,16 @@ export class SessionService {
     await this.userSessionRepository.revokeSessionsByUserId(userId, nowIso);
   }
 
+  async revokeOtherActiveSessions(userId: string, sessionId: string): Promise<void> {
+    const nowIso = this.getNowIso();
+    await this.userSessionRepository.revokeOtherSessionsByUserId(userId, sessionId, nowIso);
+  }
+
+  async revokeSessionById(sessionId: string): Promise<void> {
+    const nowIso = this.getNowIso();
+    await this.userSessionRepository.revokeSessionById(sessionId, nowIso);
+  }
+
   async revokeSessionByJti(jti: string): Promise<void> {
     const nowIso = this.getNowIso();
     await this.userSessionRepository.revokeSessionByJti(jti, nowIso);
@@ -101,5 +122,15 @@ export class SessionService {
   async revokeSessionByRefreshTokenHash(refreshTokenHash: string): Promise<void> {
     const nowIso = this.getNowIso();
     await this.userSessionRepository.revokeSessionByRefreshTokenHash(refreshTokenHash, nowIso);
+  }
+
+  async countActiveSessionsByUserId(userId: string): Promise<number> {
+    const nowIso = this.getNowIso();
+    return this.userSessionRepository.countActiveSessionsByUserId(userId, nowIso);
+  }
+
+  async getCurrentSessionIdByUserId(userId: string): Promise<string | null> {
+    const latestSession = await this.findLatestActiveSessionByUserId(userId);
+    return latestSession?.sessionId ?? null;
   }
 }

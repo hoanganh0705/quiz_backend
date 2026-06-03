@@ -1,8 +1,9 @@
 import { Inject, Injectable, InternalServerErrorException } from '@nestjs/common';
-import { and, eq, gt, isNull, or } from 'drizzle-orm';
+import { and, eq, isNull, or, sql, max, gt } from 'drizzle-orm';
+import * as bcrypt from 'bcrypt';
 import { DRIZZLE } from '@/core/database/drizzle.constants';
 import type { DrizzleDB } from '@/core/database/database.module';
-import { users, userProfiles } from '@/core/database/schema';
+import { users, userProfiles, userSessions, passwordResetTokens } from '@/core/database/schema';
 import type { UserRepositoryPort } from '@/modules/auth/domain/ports/user-repository.port';
 import type { UserMeRow } from '@/modules/user/domain/ports/user-repository.port';
 import { ResourceConflictError } from '@/modules/auth/domain/errors';
@@ -232,5 +233,150 @@ export class UserRepository implements UserRepositoryPort {
       });
 
     return (user as UserMeRow | undefined) ?? null;
+  }
+
+  async getSecurityDashboard(userId: string): Promise<{
+    emailVerified: boolean;
+    lastPasswordChangedAt: string | null;
+    lastLoginAt: string | null;
+  } | null> {
+    const [user] = await this.db
+      .select({
+        isVerified: users.isVerified,
+        passwordChangedAt: users.updatedAt,
+      })
+      .from(users)
+      .where(and(eq(users.userId, userId), isNull(users.deletedAt)))
+      .limit(1)
+      .catch(() => {
+        throw new InternalServerErrorException('Failed to fetch user security data');
+      });
+
+    if (!user) {
+      return null;
+    }
+
+    const nowIso = new Date().toISOString();
+    const [lastSession] = await this.db
+      .select({ lastUsedAt: max(userSessions.lastUsedAt) })
+      .from(userSessions)
+      .where(
+        and(
+          eq(userSessions.userId, userId),
+          isNull(userSessions.revokedAt),
+          sql`${userSessions.expiresAt} > ${nowIso}`,
+        ),
+      )
+      .catch(() => null);
+
+    return {
+      emailVerified: user.isVerified,
+      lastPasswordChangedAt: user.passwordChangedAt,
+      lastLoginAt: lastSession?.lastUsedAt ?? null,
+    };
+  }
+
+  async updatePasswordHash(userId: string, passwordHash: string, nowIso: string): Promise<void> {
+    await this.db
+      .update(users)
+      .set({
+        passwordHash,
+        updatedAt: nowIso,
+      })
+      .where(and(eq(users.userId, userId), isNull(users.deletedAt)))
+      .catch(() => {
+        throw new InternalServerErrorException('Failed to update password');
+      });
+  }
+
+  async verifyPasswordHash(passwordHash: string, storedHash: string): Promise<boolean> {
+    return bcrypt.compare(passwordHash, storedHash);
+  }
+
+  async createPasswordResetToken(
+    userId: string,
+    tokenHash: string,
+    expiresAt: string,
+  ): Promise<void> {
+    await this.revokeAllActivePasswordResetTokensForUser(userId, new Date().toISOString());
+
+    await this.db
+      .insert(passwordResetTokens)
+      .values({
+        userId,
+        tokenHash,
+        expiresAt,
+        isActive: true,
+      })
+      .catch(() => {
+        throw new InternalServerErrorException('Failed to create password reset token');
+      });
+  }
+
+  async findActivePasswordResetTokenByHash(
+    tokenHash: string,
+    nowIso: string,
+  ): Promise<{ userId: string; email: string } | null> {
+    const [record] = await this.db
+      .select({
+        userId: passwordResetTokens.userId,
+        email: users.email,
+      })
+      .from(passwordResetTokens)
+      .innerJoin(users, eq(passwordResetTokens.userId, users.userId))
+      .where(
+        and(
+          eq(passwordResetTokens.tokenHash, tokenHash),
+          eq(passwordResetTokens.isActive, true),
+          sql`${passwordResetTokens.expiresAt} > ${nowIso}`,
+          isNull(passwordResetTokens.usedAt),
+          isNull(passwordResetTokens.revokedAt),
+          isNull(users.deletedAt),
+        ),
+      )
+      .limit(1)
+      .catch(() => {
+        throw new InternalServerErrorException('Failed to find password reset token');
+      });
+
+    return (record as { userId: string; email: string } | undefined) ?? null;
+  }
+
+  async markPasswordResetTokenUsed(tokenHash: string, nowIso: string): Promise<void> {
+    await this.db
+      .update(passwordResetTokens)
+      .set({
+        usedAt: nowIso,
+        isActive: false,
+      })
+      .where(
+        and(
+          eq(passwordResetTokens.tokenHash, tokenHash),
+          eq(passwordResetTokens.isActive, true),
+          isNull(passwordResetTokens.usedAt),
+        ),
+      )
+      .catch(() => {
+        throw new InternalServerErrorException('Failed to mark password reset token as used');
+      });
+  }
+
+  async revokeAllActivePasswordResetTokensForUser(userId: string, nowIso: string): Promise<void> {
+    await this.db
+      .update(passwordResetTokens)
+      .set({
+        revokedAt: nowIso,
+        isActive: false,
+      })
+      .where(
+        and(
+          eq(passwordResetTokens.userId, userId),
+          eq(passwordResetTokens.isActive, true),
+          isNull(passwordResetTokens.usedAt),
+        ),
+      )
+      .catch(() => {
+        throw new InternalServerErrorException('Failed to revoke active password reset tokens');
+      });
   }
 }
