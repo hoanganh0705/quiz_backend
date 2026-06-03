@@ -25,6 +25,7 @@ export type AccessTokenPayload = {
 export type AccessTokenClaims = {
   sub: string;
   role: UserRole;
+  sessionId?: string;
 };
 
 export type RefreshTokenClaims = {

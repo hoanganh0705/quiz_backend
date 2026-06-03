@@ -8,3 +8,7 @@ export {
 } from './session-repository.port';
 export { type EmailProvider, EMAIL_PROVIDER } from './email.provider';
 export { type CacheProvider, CACHE_PROVIDER } from './cache.provider';
+export {
+  AUTH_SECURITY_EVENT_BUS,
+  type AuthSecurityEventBusPort,
+} from './events/auth-security-event-bus.port';

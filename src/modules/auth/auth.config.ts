@@ -80,6 +80,13 @@ export class AuthConfig {
     };
   }
 
+  get passwordReset(): { tokenTtlSeconds: number; baseUrl: string } {
+    return {
+      tokenTtlSeconds: this.getPasswordResetTokenTtlSeconds(),
+      baseUrl: this.getPasswordResetBaseUrl(),
+    };
+  }
+
   private getAccessTokenExpiresInSeconds(): number {
     const rawValue = this.configService.get<string>('ACCESS_TOKEN_EXPIRES_IN');
     if (!rawValue) {
@@ -170,6 +177,30 @@ export class AuthConfig {
 
     if (!rawValue || rawValue.trim().length === 0) {
       return 'http://localhost:3000/verify-email';
+    }
+
+    return rawValue.trim();
+  }
+
+  private getPasswordResetTokenTtlSeconds(): number {
+    const rawValue = this.configService.get<number>('PASSWORD_RESET_TOKEN_TTL_SECONDS');
+
+    if (rawValue === undefined) {
+      return 3_600;
+    }
+
+    if (typeof rawValue !== 'number' || !Number.isInteger(rawValue) || rawValue <= 0) {
+      throw new Error('PASSWORD_RESET_TOKEN_TTL_SECONDS must be a positive integer');
+    }
+
+    return rawValue;
+  }
+
+  private getPasswordResetBaseUrl(): string {
+    const rawValue = this.configService.get<string>('PASSWORD_RESET_BASE_URL');
+
+    if (!rawValue || rawValue.trim().length === 0) {
+      return 'http://localhost:3000/reset-password';
     }
 
     return rawValue.trim();

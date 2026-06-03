@@ -1,5 +1,6 @@
 import { Inject, Injectable, InternalServerErrorException } from '@nestjs/common';
-import { and, asc, desc, eq, gt, isNull, lt, inArray, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, isNull, inArray, lt, sql } from 'drizzle-orm';
+import { randomUUID } from 'crypto';
 import { DRIZZLE } from '@/core/database/drizzle.constants';
 import type { DrizzleDB } from '@/core/database/database.module';
 import { userSessions } from '@/core/database/schema';
@@ -41,18 +42,26 @@ export class UserSessionRepository implements SessionRepositoryPort {
     },
     nowIso: string,
     maxActiveSessionsPerUser: number,
-  ): Promise<void> {
+    explicitSessionId?: string,
+  ): Promise<string> {
     if (!Number.isInteger(maxActiveSessionsPerUser) || maxActiveSessionsPerUser <= 0) {
       throw new InternalServerErrorException('Invalid max active sessions configuration');
     }
 
+    let createdSessionId: string = '';
+
     await this.db
       .transaction(async (tx) => {
-        // Serialize session creation/enforcement per user to avoid race conditions that could
-        // temporarily exceed maxActiveSessionsPerUser.
         await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${data.userId}))`);
 
-        await tx.insert(userSessions).values(data);
+        const sessionIdToUse = explicitSessionId ?? randomUUID();
+
+        const [created] = await tx
+          .insert(userSessions)
+          .values({ ...data, sessionId: sessionIdToUse })
+          .returning({ sessionId: userSessions.sessionId });
+
+        createdSessionId = created?.sessionId ?? sessionIdToUse;
 
         const activeSessions = await tx
           .select({
@@ -89,6 +98,8 @@ export class UserSessionRepository implements SessionRepositoryPort {
       .catch(() => {
         throw new InternalServerErrorException('Failed to create user session');
       });
+
+    return createdSessionId;
   }
 
   async getSessionByJtiAndUserId(
@@ -138,6 +149,49 @@ export class UserSessionRepository implements SessionRepositoryPort {
     return (latestSession as SessionRecord | undefined) ?? null;
   }
 
+  async findActiveSessionsByUserId(userId: string, nowIso: string): Promise<SessionRecord[]> {
+    const sessions = await this.db
+      .select(SESSION_LOOKUP_COLUMNS)
+      .from(userSessions)
+      .where(
+        and(
+          eq(userSessions.userId, userId),
+          isNull(userSessions.revokedAt),
+          gt(userSessions.expiresAt, nowIso),
+        ),
+      )
+      .orderBy(desc(userSessions.lastUsedAt), desc(userSessions.createdAt))
+      .catch(() => {
+        throw new InternalServerErrorException('Failed to fetch active user sessions');
+      });
+
+    return sessions as SessionRecord[];
+  }
+
+  async findSessionByIdAndUserId(
+    sessionId: string,
+    userId: string,
+    nowIso: string,
+  ): Promise<SessionRecord | null> {
+    const [session] = await this.db
+      .select(SESSION_LOOKUP_COLUMNS)
+      .from(userSessions)
+      .where(
+        and(
+          eq(userSessions.sessionId, sessionId),
+          eq(userSessions.userId, userId),
+          isNull(userSessions.revokedAt),
+          gt(userSessions.expiresAt, nowIso),
+        ),
+      )
+      .limit(1)
+      .catch(() => {
+        throw new InternalServerErrorException('Failed to fetch user session by id');
+      });
+
+    return (session as SessionRecord | undefined) ?? null;
+  }
+
   async updateSessionForRotation(
     sessionId: string,
     data: {
@@ -170,6 +224,42 @@ export class UserSessionRepository implements SessionRepositoryPort {
       .where(and(eq(userSessions.userId, userId), isNull(userSessions.revokedAt)))
       .catch(() => {
         throw new InternalServerErrorException('Failed to revoke user sessions');
+      });
+  }
+
+  async revokeOtherSessionsByUserId(
+    userId: string,
+    sessionId: string,
+    nowIso: string,
+  ): Promise<void> {
+    await this.db
+      .update(userSessions)
+      .set({
+        revokedAt: nowIso,
+        lastUsedAt: nowIso,
+      })
+      .where(
+        and(
+          eq(userSessions.userId, userId),
+          isNull(userSessions.revokedAt),
+          sql`${userSessions.sessionId} <> ${sessionId}`,
+        ),
+      )
+      .catch(() => {
+        throw new InternalServerErrorException('Failed to revoke other user sessions');
+      });
+  }
+
+  async revokeSessionById(sessionId: string, nowIso: string): Promise<void> {
+    await this.db
+      .update(userSessions)
+      .set({
+        revokedAt: nowIso,
+        lastUsedAt: nowIso,
+      })
+      .where(and(eq(userSessions.sessionId, sessionId), isNull(userSessions.revokedAt)))
+      .catch(() => {
+        throw new InternalServerErrorException('Failed to revoke user session by id');
       });
   }
 
@@ -231,5 +321,23 @@ export class UserSessionRepository implements SessionRepositoryPort {
       .catch(() => {
         throw new InternalServerErrorException('Failed to revoke sessions');
       });
+  }
+
+  async countActiveSessionsByUserId(userId: string, nowIso: string): Promise<number> {
+    const [result] = await this.db
+      .select({ count: sql<number>`count(*)` })
+      .from(userSessions)
+      .where(
+        and(
+          eq(userSessions.userId, userId),
+          isNull(userSessions.revokedAt),
+          gt(userSessions.expiresAt, nowIso),
+        ),
+      )
+      .catch(() => {
+        throw new InternalServerErrorException('Failed to count active sessions');
+      });
+
+    return result?.count ?? 0;
   }
 }
