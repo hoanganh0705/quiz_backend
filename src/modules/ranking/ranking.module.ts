@@ -12,6 +12,8 @@
  */
 
 import { Module } from '@nestjs/common';
+import { JwtModule } from '@nestjs/jwt';
+import { DRIZZLE } from '@/core/database/drizzle.constants';
 
 // Infrastructure
 import { RankingRepository } from './infrastructure/repositories/ranking.repository';
@@ -44,7 +46,12 @@ import { RankingController } from './transport/controller/ranking.controller';
 import { RankingDomainExceptionFilter } from './transport/filters/ranking-domain-exception.filter';
 
 @Module({
+  imports: [JwtModule],
   providers: [
+    {
+      provide: 'DATABASE',
+      useExisting: DRIZZLE,
+    },
     // Infrastructure
     RankingRepository,
     RankingDomainEventBus,

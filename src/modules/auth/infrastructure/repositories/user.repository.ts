@@ -1,6 +1,5 @@
 import { Inject, Injectable, InternalServerErrorException } from '@nestjs/common';
 import { and, eq, isNull, or, sql, max, gt } from 'drizzle-orm';
-import * as bcrypt from 'bcrypt';
 import { DRIZZLE } from '@/core/database/drizzle.constants';
 import type { DrizzleDB } from '@/core/database/database.module';
 import { users, userProfiles, userSessions, passwordResetTokens } from '@/core/database/schema';
@@ -235,7 +234,7 @@ export class UserRepository implements UserRepositoryPort {
     return (user as UserMeRow | undefined) ?? null;
   }
 
-  async getSecurityDashboard(userId: string): Promise<{
+  async getSecurityMetadata(userId: string): Promise<{
     emailVerified: boolean;
     lastPasswordChangedAt: string | null;
     lastLoginAt: string | null;
@@ -257,7 +256,7 @@ export class UserRepository implements UserRepositoryPort {
     }
 
     const nowIso = new Date().toISOString();
-    const [lastSession] = await this.db
+    const lastSession = (await this.db
       .select({ lastUsedAt: max(userSessions.lastUsedAt) })
       .from(userSessions)
       .where(
@@ -267,7 +266,7 @@ export class UserRepository implements UserRepositoryPort {
           sql`${userSessions.expiresAt} > ${nowIso}`,
         ),
       )
-      .catch(() => null);
+      .catch(() => null)) as { lastUsedAt: string | null } | null;
 
     return {
       emailVerified: user.isVerified,
@@ -287,10 +286,6 @@ export class UserRepository implements UserRepositoryPort {
       .catch(() => {
         throw new InternalServerErrorException('Failed to update password');
       });
-  }
-
-  async verifyPasswordHash(passwordHash: string, storedHash: string): Promise<boolean> {
-    return bcrypt.compare(passwordHash, storedHash);
   }
 
   async createPasswordResetToken(

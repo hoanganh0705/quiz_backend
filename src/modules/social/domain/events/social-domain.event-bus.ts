@@ -5,10 +5,7 @@
  */
 
 import { Injectable } from '@nestjs/common';
-import type {
-  SocialDomainEventBusPort,
-  SocialDomainEvent,
-} from './social-event-bus.port';
+import type { SocialDomainEventBusPort, SocialDomainEvent } from './social-event-bus.port';
 import type {
   FriendRequestSentEvent,
   FriendRequestAcceptedEvent,

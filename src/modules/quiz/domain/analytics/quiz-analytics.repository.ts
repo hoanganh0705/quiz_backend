@@ -11,35 +11,44 @@ import {
   quizCategories,
   categories,
 } from '@/core/database/schema';
-
 import { eq, sql, desc, and, isNull, gte, count, inArray } from 'drizzle-orm';
-import { QuizAnalyticsRepositoryPort } from './ports';
-import { AttemptAggregation, QuizStatsRow } from './types';
+import type {
+  AttemptAggregation,
+  ReviewAggregation,
+  TrendingQuiz,
+  PopularQuiz,
+  CategoryAnalytics,
+  CreatorAnalytics,
+  QuizStatsRow,
+} from './types';
+import type { QuizAnalyticsRepositoryPort } from './ports/quiz-analytics.repository-port';
 
 @Injectable()
 export class QuizAnalyticsRepository implements QuizAnalyticsRepositoryPort {
   constructor(@Inject(DRIZZLE) private readonly db: DrizzleDB) {}
 
+  // ─── STATS ──────────────────────────────────────────────────────────────────
+
   async getQuizStats(quizId: string): Promise<QuizStatsRow | null> {
     const [stats] = await this.db.select().from(quizStats).where(eq(quizStats.quizId, quizId));
-
     return stats ?? null;
   }
 
   async upsertQuizStats(quizId: string, data: Partial<QuizStatsRow>): Promise<void> {
+    // bigint { mode: 'number' } → number, numeric columns → string
     await this.db
       .insert(quizStats)
       .values({
         quizId,
-        totalAttempts: data.totalAttempts ?? '0',
-        totalPlayers: data.totalPlayers ?? '0',
-        avgScorePercent: data.avgScorePercent ?? '0',
-        avgRating: data.avgRating ?? '0',
+        totalAttempts: data.totalAttempts ?? 0, // bigint mode:'number' → number
+        totalPlayers: data.totalPlayers ?? 0, // bigint mode:'number' → number
+        avgScorePercent: data.avgScorePercent ?? '0', // numeric → string
+        avgRating: data.avgRating ?? '0', // numeric → string
         ratingCount: data.ratingCount ?? 0,
         bookmarkCount: data.bookmarkCount ?? 0,
-        completionRate: data.completionRate ?? '0',
-        popularityScore: data.popularityScore ?? '0',
-        trendingScore: data.trendingScore ?? '0',
+        completionRate: data.completionRate ?? '0', // numeric → string
+        popularityScore: data.popularityScore ?? '0', // numeric → string
+        trendingScore: data.trendingScore ?? '0', // numeric → string
         lastAttemptAt: data.lastAttemptAt ?? null,
         lastCalculatedAt: data.lastCalculatedAt ?? null,
       })
@@ -62,24 +71,24 @@ export class QuizAnalyticsRepository implements QuizAnalyticsRepositoryPort {
       });
   }
 
+  async getAllQuizStats(): Promise<QuizStatsRow[]> {
+    return this.db.select().from(quizStats);
+  }
+
+  // ─── AGGREGATIONS ───────────────────────────────────────────────────────────
+
   async aggregateAttemptsByQuiz(quizId: string): Promise<AttemptAggregation> {
     const versionIds = await this.db
       .select({ quizVersionId: quizVersions.quizVersionId })
       .from(quizVersions)
       .where(eq(quizVersions.quizId, quizId));
 
-    const versionIdList = versionIds.map((v) => v.quizVersionId);
-
+    const versionIdList = versionIds.map((v: { quizVersionId: string }) => v.quizVersionId);
     if (versionIdList.length === 0) {
-      return {
-        totalAttempts: 0,
-        completedAttempts: 0,
-        uniquePlayers: 0,
-        averageScore: 0,
-      };
+      return { totalAttempts: 0, completedAttempts: 0, uniquePlayers: 0, averageScore: 0 };
     }
 
-    const stats = await this.db
+    const [stats] = await this.db
       .select({
         totalAttempts: count(),
         completedAttempts: sql<number>`SUM(CASE WHEN ${quizAttempts.status} = 'completed' THEN 1 ELSE 0 END)`,
@@ -90,15 +99,15 @@ export class QuizAnalyticsRepository implements QuizAnalyticsRepositoryPort {
       .where(inArray(quizAttempts.quizVersionId, versionIdList));
 
     return {
-      totalAttempts: Number(stats[0]?.totalAttempts ?? 0),
-      completedAttempts: Number(stats[0]?.completedAttempts ?? 0),
-      uniquePlayers: Number(stats[0]?.uniquePlayers ?? 0),
-      averageScore: Number(stats[0]?.averageScore ?? 0),
+      totalAttempts: Number(stats?.totalAttempts ?? 0),
+      completedAttempts: Number(stats?.completedAttempts ?? 0),
+      uniquePlayers: Number(stats?.uniquePlayers ?? 0),
+      averageScore: Number(stats?.averageScore ?? 0),
     };
   }
 
   async aggregateReviewsByQuiz(quizId: string): Promise<ReviewAggregation> {
-    const stats = await this.db
+    const [stats] = await this.db
       .select({
         averageRating: sql<number>`AVG(${quizReviews.rating}::numeric)`,
         ratingCount: count(),
@@ -107,22 +116,24 @@ export class QuizAnalyticsRepository implements QuizAnalyticsRepositoryPort {
       .where(eq(quizReviews.quizId, quizId));
 
     return {
-      averageRating: Number(stats[0]?.averageRating ?? 0),
-      ratingCount: Number(stats[0]?.ratingCount ?? 0),
+      averageRating: Number(stats?.averageRating ?? 0),
+      ratingCount: Number(stats?.ratingCount ?? 0),
     };
   }
 
   async aggregateBookmarksByQuiz(quizId: string): Promise<number> {
-    const result = await this.db
+    const [result] = await this.db
       .select({ count: count() })
       .from(bookmarkedQuizzes)
       .where(eq(bookmarkedQuizzes.quizId, quizId));
 
-    return Number(result[0]?.count ?? 0);
+    return Number(result?.count ?? 0);
   }
 
+  // ─── TRENDING & POPULAR ─────────────────────────────────────────────────────
+
   async getTrendingQuizzes(limit: number, categoryId?: string): Promise<TrendingQuiz[]> {
-    let query = this.db
+    const results = await this.db
       .select({
         quizId: quizStats.quizId,
         title: quizzes.title,
@@ -137,9 +148,15 @@ export class QuizAnalyticsRepository implements QuizAnalyticsRepositoryPort {
       .orderBy(desc(quizStats.trendingScore))
       .limit(limit);
 
-    const results = await query;
-
-    let filtered = results;
+    // Filter by category in application layer (avoids complex join + re-ranking)
+    let filtered: Array<{
+      quizId: string;
+      title: string;
+      slug: string;
+      imageUrl: string | null;
+      trendingScore: unknown;
+      totalAttempts: unknown;
+    }> = results;
     if (categoryId) {
       const categoryQuizIds = await this.db
         .select({ quizId: quizCategories.quizId })
@@ -150,14 +167,11 @@ export class QuizAnalyticsRepository implements QuizAnalyticsRepositoryPort {
       filtered = results.filter((r) => categoryQuizIdSet.has(r.quizId)).slice(0, limit);
     }
 
-    const now = new Date();
-    const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-
+    // Fetch recentAttempts sequentially to avoid N parallel DB hammers on large lists
     const trendingQuizzes: TrendingQuiz[] = [];
     for (let i = 0; i < filtered.length; i++) {
       const row = filtered[i];
-      const recentAttempts = await this.getRecentAttemptsByQuiz(row.quizId, 168);
-
+      const recentAttempts = await this.getRecentAttemptsByQuiz(row.quizId as string, 168);
       trendingQuizzes.push({
         rank: i + 1,
         quizId: row.quizId as string,
@@ -174,7 +188,7 @@ export class QuizAnalyticsRepository implements QuizAnalyticsRepositoryPort {
   }
 
   async getPopularQuizzes(limit: number, categoryId?: string): Promise<PopularQuiz[]> {
-    let query = this.db
+    const results = await this.db
       .select({
         quizId: quizStats.quizId,
         title: quizzes.title,
@@ -191,9 +205,16 @@ export class QuizAnalyticsRepository implements QuizAnalyticsRepositoryPort {
       .orderBy(desc(quizStats.popularityScore))
       .limit(limit);
 
-    const results = await query;
-
-    let filtered = results;
+    let filtered: Array<{
+      quizId: string;
+      title: string;
+      slug: string;
+      imageUrl: string | null;
+      popularityScore: unknown;
+      totalAttempts: unknown;
+      avgRating: unknown;
+      bookmarkCount: unknown;
+    }> = results;
     if (categoryId) {
       const categoryQuizIds = await this.db
         .select({ quizId: quizCategories.quizId })
@@ -204,7 +225,7 @@ export class QuizAnalyticsRepository implements QuizAnalyticsRepositoryPort {
       filtered = results.filter((r) => categoryQuizIdSet.has(r.quizId)).slice(0, limit);
     }
 
-    const popularQuizzes: PopularQuiz[] = filtered.map((row, i) => ({
+    return filtered.map((row, i) => ({
       rank: i + 1,
       quizId: row.quizId as string,
       title: row.title,
@@ -215,27 +236,18 @@ export class QuizAnalyticsRepository implements QuizAnalyticsRepositoryPort {
       averageRating: Number(row.avgRating),
       bookmarkCount: Number(row.bookmarkCount),
     }));
-
-    return popularQuizzes;
   }
 
-  async getAllQuizStats(): Promise<QuizStatsRow[]> {
-    return this.db.select().from(quizStats);
-  }
+  // ─── ANALYTICS ──────────────────────────────────────────────────────────────
 
   async getCategoryAnalytics(categoryId: string): Promise<CategoryAnalytics | null> {
-    const category = await this.db
-      .select({
-        categoryId: categories.categoryId,
-        name: categories.name,
-      })
+    const [category] = await this.db
+      .select({ categoryId: categories.categoryId, name: categories.name })
       .from(categories)
       .where(eq(categories.categoryId, categoryId))
       .limit(1);
 
-    if (!category[0]) {
-      return null;
-    }
+    if (!category) return null;
 
     const categoryQuizIds = await this.db
       .select({ quizId: quizCategories.quizId })
@@ -247,7 +259,7 @@ export class QuizAnalyticsRepository implements QuizAnalyticsRepositoryPort {
     if (quizIdList.length === 0) {
       return {
         categoryId,
-        categoryName: category[0].name,
+        categoryName: category.name,
         summary: {
           totalQuizzes: 0,
           activeQuizzes: 0,
@@ -266,6 +278,7 @@ export class QuizAnalyticsRepository implements QuizAnalyticsRepositoryPort {
       .from(quizStats)
       .where(inArray(quizStats.quizId, quizIdList));
 
+    // Compute cutoff once, not inside .filter() on every iteration
     const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
 
     const totalAttempts = stats.reduce((sum, s) => sum + Number(s.totalAttempts), 0);
@@ -273,47 +286,66 @@ export class QuizAnalyticsRepository implements QuizAnalyticsRepositoryPort {
     const activeQuizzes = stats.filter(
       (s) => s.lastAttemptAt && s.lastAttemptAt >= thirtyDaysAgo,
     ).length;
-
     const totalRatingSum = stats.reduce(
       (sum, s) => sum + Number(s.avgRating) * Number(s.ratingCount),
       0,
     );
     const totalRatingCount = stats.reduce((sum, s) => sum + Number(s.ratingCount), 0);
-
-    const topQuizzes = await this.getPopularQuizzes(5, categoryId);
+    const averageScore =
+      totalAttempts > 0
+        ? stats.reduce((sum, s) => sum + Number(s.avgScorePercent) * Number(s.totalAttempts), 0) /
+          totalAttempts
+        : 0;
 
     return {
       categoryId,
-      categoryName: category[0].name,
+      categoryName: category.name,
       summary: {
         totalQuizzes: quizIdList.length,
         activeQuizzes,
         totalAttempts,
         totalPlayers,
-        averageScore:
-          totalAttempts > 0
-            ? stats.reduce(
-                (sum, s) => sum + Number(s.avgScorePercent) * Number(s.totalAttempts),
-                0,
-              ) / totalAttempts
-            : 0,
+        averageScore,
         averageRating: totalRatingCount > 0 ? totalRatingSum / totalRatingCount : 0,
       },
-      topQuizzes,
+      topQuizzes: await this.getPopularQuizzes(5, categoryId),
       lastUpdated: new Date().toISOString(),
     };
   }
 
   async getCreatorAnalytics(userId: string): Promise<CreatorAnalytics | null> {
-    const creatorQuizzes = await this.db
-      .select({ quizId: quizzes.quizId, title: quizzes.title })
+    // Fetch quizzes + stats in one join — phiên bản 2 approach, tránh 2 round-trips
+    const creatorQuizzes: Array<{
+      quizId: string;
+      title: string;
+      slug: string;
+      imageUrl: string | null;
+      totalAttempts: unknown;
+      totalPlayers: unknown;
+      avgRating: unknown;
+      ratingCount: unknown;
+      popularityScore: unknown;
+      bookmarkCount: unknown;
+      avgScorePercent: unknown;
+    }> = await this.db
+      .select({
+        quizId: quizzes.quizId,
+        title: quizzes.title,
+        slug: quizzes.slug,
+        imageUrl: quizzes.imageUrl,
+        totalAttempts: quizStats.totalAttempts,
+        totalPlayers: quizStats.totalPlayers,
+        avgRating: quizStats.avgRating,
+        ratingCount: quizStats.ratingCount,
+        popularityScore: quizStats.popularityScore,
+        bookmarkCount: quizStats.bookmarkCount,
+        avgScorePercent: quizStats.avgScorePercent,
+      })
       .from(quizzes)
+      .leftJoin(quizStats, eq(quizStats.quizId, quizzes.quizId))
       .where(and(eq(quizzes.creatorId, userId), isNull(quizzes.deletedAt)));
 
-    const quizIdList = creatorQuizzes.map((q) => q.quizId);
-    const publishedQuizIds = creatorQuizzes.filter(() => true).map((q) => q.quizId);
-
-    if (quizIdList.length === 0) {
+    if (creatorQuizzes.length === 0) {
       return {
         userId,
         totalQuizzes: 0,
@@ -328,87 +360,76 @@ export class QuizAnalyticsRepository implements QuizAnalyticsRepositoryPort {
       };
     }
 
-    const stats =
-      quizIdList.length > 0
-        ? await this.db.select().from(quizStats).where(inArray(quizStats.quizId, quizIdList))
-        : [];
-
-    const totalAttempts = stats.reduce((sum, s) => sum + Number(s.totalAttempts), 0);
-    const totalPlayers = stats.reduce((sum, s) => sum + Number(s.totalPlayers), 0);
-
-    const totalRatingSum = stats.reduce(
-      (sum, s) => sum + Number(s.avgRating) * Number(s.ratingCount),
+    const totalAttempts = creatorQuizzes.reduce((sum, q) => sum + Number(q.totalAttempts ?? 0), 0);
+    const totalPlayers = creatorQuizzes.reduce((sum, q) => sum + Number(q.totalPlayers ?? 0), 0);
+    const totalRatingSum = creatorQuizzes.reduce(
+      (sum, q) => sum + Number(q.avgRating ?? 0) * Number(q.ratingCount ?? 0),
       0,
     );
-    const totalRatingCount = stats.reduce((sum, s) => sum + Number(s.ratingCount), 0);
+    const totalRatingCount = creatorQuizzes.reduce((sum, q) => sum + Number(q.ratingCount ?? 0), 0);
 
-    const quizMap = new Map(creatorQuizzes.map((q) => [q.quizId, q.title]));
-
-    const sortedByPopularity = [...stats].sort(
-      (a, b) => Number(b.popularityScore) - Number(a.popularityScore),
+    const sortedByPopularity = [...creatorQuizzes].sort(
+      (a, b) => Number(b.popularityScore ?? 0) - Number(a.popularityScore ?? 0),
+    );
+    const sortedByScore = [...creatorQuizzes].sort(
+      (a, b) => Number(a.avgScorePercent ?? 0) - Number(b.avgScorePercent ?? 0),
     );
 
-    const topPerformingQuiz = sortedByPopularity[0]
-      ? {
-          rank: 1,
-          quizId: sortedByPopularity[0].quizId as string,
-          title: quizMap.get(sortedByPopularity[0].quizId as string) ?? '',
-          slug: '',
-          imageUrl: null,
-          popularityScore: Number(sortedByPopularity[0].popularityScore),
-          totalAttempts: Number(sortedByPopularity[0].totalAttempts),
-          averageRating: Number(sortedByPopularity[0].avgRating),
-          bookmarkCount: Number(sortedByPopularity[0].bookmarkCount),
-        }
-      : null;
-
-    const sortedByScore = [...stats].sort(
-      (a, b) => Number(a.avgScorePercent) - Number(b.avgScorePercent),
-    );
-
-    const worstPerformingQuiz = sortedByScore[0]
-      ? {
-          quizId: sortedByScore[0].quizId as string,
-          title: quizMap.get(sortedByScore[0].quizId as string) ?? '',
-          averageScore: Number(sortedByScore[0].avgScorePercent),
-        }
-      : null;
+    const top = sortedByPopularity[0];
+    const worst = sortedByScore[0];
 
     return {
       userId,
       totalQuizzes: creatorQuizzes.length,
-      publishedQuizzes: publishedQuizIds.length,
+      publishedQuizzes: creatorQuizzes.length, // all non-deleted = published
       totalAttempts,
       totalPlayers,
       totalReviews: totalRatingCount,
       averageRating: totalRatingCount > 0 ? totalRatingSum / totalRatingCount : 0,
-      topPerformingQuiz,
-      worstPerformingQuiz,
+      topPerformingQuiz: top
+        ? {
+            rank: 1,
+            quizId: top.quizId as string,
+            title: top.title,
+            slug: top.slug,
+            imageUrl: top.imageUrl,
+            popularityScore: Number(top.popularityScore ?? 0),
+            totalAttempts: Number(top.totalAttempts ?? 0),
+            averageRating: Number(top.avgRating ?? 0),
+            bookmarkCount: Number(top.bookmarkCount ?? 0),
+          }
+        : null,
+      worstPerformingQuiz: worst
+        ? {
+            quizId: worst.quizId as string,
+            title: worst.title,
+            averageScore: Number(worst.avgScorePercent ?? 0),
+          }
+        : null,
       lastUpdated: new Date().toISOString(),
     };
   }
 
+  // ─── HELPERS ────────────────────────────────────────────────────────────────
+
   async getRecentAttemptsByQuiz(quizId: string, hours: number): Promise<number> {
     const since = new Date(Date.now() - hours * 60 * 60 * 1000).toISOString();
 
-    const versionIds = await this.db
+    const versionIds: Array<{ quizVersionId: string }> = await this.db
       .select({ quizVersionId: quizVersions.quizVersionId })
       .from(quizVersions)
       .where(eq(quizVersions.quizId, quizId));
 
     const versionIdList = versionIds.map((v) => v.quizVersionId);
+    if (versionIdList.length === 0) return 0;
 
-    if (versionIdList.length === 0) {
-      return 0;
-    }
-
-    const result = await this.db
+    const [result] = await this.db
       .select({ count: count() })
       .from(quizAttempts)
       .where(
         and(inArray(quizAttempts.quizVersionId, versionIdList), gte(quizAttempts.createdAt, since)),
       );
 
-    return Number(result[0]?.count ?? 0);
+    return Number(result?.count ?? 0);
   }
 }

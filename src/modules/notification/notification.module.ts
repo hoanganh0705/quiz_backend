@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { JwtModule } from '@nestjs/jwt';
 import { DatabaseModule } from '@/core/database/database.module';
 import { NotificationApplicationService } from './application/notification-application.service';
 import { NotificationService } from './domain/notification.service';
@@ -23,7 +24,7 @@ import { SocialModule } from '@/modules/social';
 import { NOTIFICATION_REPOSITORY_PORT } from './domain/ports';
 
 @Module({
-  imports: [DatabaseModule, RankingModule, SocialModule],
+  imports: [DatabaseModule, RankingModule, SocialModule, JwtModule],
   providers: [
     // Infrastructure - Repository
     NotificationRepository,

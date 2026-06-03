@@ -2,12 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { SessionService } from './session.service';
 import { SessionNotFoundError } from './errors';
-import {
-  AUTH_SECURITY_EVENT_BUS,
-  type AuthSecurityEventBusPort,
-  SessionRevokedEvent,
-  AllOtherSessionsRevokedEvent,
-} from './events';
+import { AUTH_SECURITY_EVENT_BUS, type AuthSecurityEventPublisherPort } from './events';
 
 export type ActiveSessionInfo = {
   sessionId: string;
@@ -23,11 +18,11 @@ export class SessionManagementService {
   constructor(
     private readonly sessionService: SessionService,
     @Inject(AUTH_SECURITY_EVENT_BUS)
-    private readonly eventBus: AuthSecurityEventBusPort,
+    private readonly eventBus: AuthSecurityEventPublisherPort,
     @InjectPinoLogger(SessionManagementService.name) private readonly logger: PinoLogger,
   ) {}
 
-  async getActiveSessions(userId: string, currentSessionId: string): Promise<ActiveSessionInfo[]> {
+  async getActiveSessions(userId: string): Promise<ActiveSessionInfo[]> {
     const sessions = await this.sessionService.findActiveSessionsByUserId(userId);
 
     return sessions.map((session) => ({
@@ -54,7 +49,7 @@ export class SessionManagementService {
 
     await this.sessionService.revokeSessionById(targetSessionId);
 
-    this.eventBus.emitSessionRevoked({
+    this.eventBus.publishSessionRevoked({
       eventType: 'session_revoked',
       userId,
       sessionId: targetSessionId,
@@ -75,13 +70,12 @@ export class SessionManagementService {
     currentSessionId: string,
     ipAddress?: string,
   ): Promise<number> {
-    const sessionsBefore = await this.sessionService.findActiveSessionsByUserId(userId);
-    const otherSessions = sessionsBefore.filter((s) => s.sessionId !== currentSessionId);
-    const revokedCount = otherSessions.length;
+    const revokedCount = await this.sessionService.revokeOtherActiveSessionsAndReturnCount(
+      userId,
+      currentSessionId,
+    );
 
-    await this.sessionService.revokeOtherActiveSessions(userId, currentSessionId);
-
-    this.eventBus.emitAllOtherSessionsRevoked({
+    this.eventBus.publishAllOtherSessionsRevoked({
       eventType: 'all_other_sessions_revoked',
       userId,
       currentSessionId,

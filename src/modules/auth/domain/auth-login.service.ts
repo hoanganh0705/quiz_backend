@@ -1,5 +1,4 @@
 import { Inject, Injectable } from '@nestjs/common';
-import * as bcrypt from 'bcrypt';
 import { randomUUID } from 'crypto';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import type { LoginCommand } from './types/auth-commands';
@@ -7,6 +6,7 @@ import type { AuthIdentity, SessionRequestContext } from '../types/auth-context.
 import type { LoginResult } from '../types/auth-result.types';
 import { USER_REPOSITORY_PORT, type UserRepositoryPort } from './ports/user-repository.port';
 import { TOKEN_PROVIDER, type TokenProvider } from './ports/token.provider';
+import { PASSWORD_PROVIDER, type PasswordProvider } from './ports/password.provider';
 import { SessionService } from './session.service';
 import { SecurityService } from './security.service';
 import { InvalidCredentialsError } from './errors';
@@ -14,14 +14,13 @@ import { VerificationTokenService } from './verification-token.service';
 
 @Injectable()
 export class AuthLoginService {
-  private static readonly DUMMY_PASSWORD_HASH =
-    '$2b$12$4HFj7c4f1QH7wHTQXhH1ueYCMr5xM9A2m8K6q9M2m6I6QfZlq6QmW';
-
   constructor(
     @Inject(USER_REPOSITORY_PORT)
     private readonly userRepository: UserRepositoryPort,
     @Inject(TOKEN_PROVIDER)
     private readonly tokenService: TokenProvider,
+    @Inject(PASSWORD_PROVIDER)
+    private readonly passwordProvider: PasswordProvider,
     private readonly sessionService: SessionService,
     private readonly securityService: SecurityService,
     private readonly verificationTokenService: VerificationTokenService,
@@ -49,8 +48,10 @@ export class AuthLoginService {
     const foundUser = await this.userRepository.findActiveByEmailWithPassword(normalizedEmail);
 
     if (!foundUser) {
-      // Keep similar compute cost across failure paths to reduce timing-based account probing.
-      await bcrypt.compare(loginCommand.password, AuthLoginService.DUMMY_PASSWORD_HASH);
+      await this.passwordProvider.verify(
+        loginCommand.password,
+        this.passwordProvider.getDummyHash(),
+      );
       this.logger.warn({ event: 'auth_login_failed' });
       throw new InvalidCredentialsError();
     }
@@ -58,10 +59,11 @@ export class AuthLoginService {
     await this.securityService.enforceLoginRateLimit(context, foundUser.userId);
 
     if (!foundUser.isVerified) {
-      // Keep similar compute cost across failure paths to reduce timing-based account probing.
-      await bcrypt.compare(loginCommand.password, AuthLoginService.DUMMY_PASSWORD_HASH);
+      await this.passwordProvider.verify(
+        loginCommand.password,
+        this.passwordProvider.getDummyHash(),
+      );
       this.logger.warn({ event: 'auth_login_failed', userId: foundUser.userId });
-      // Fire-and-forget so login timing is not coupled to Redis/queue/provider latency.
       void this.securityService
         .tryAcquireLoginUnverifiedVerificationEmailSlot(foundUser.userId)
         .then((canEnqueue) => {
@@ -81,7 +83,10 @@ export class AuthLoginService {
       throw new InvalidCredentialsError();
     }
 
-    const isPasswordValid = await bcrypt.compare(loginCommand.password, foundUser.passwordHash);
+    const isPasswordValid = await this.passwordProvider.verify(
+      loginCommand.password,
+      foundUser.passwordHash,
+    );
     if (!isPasswordValid) {
       this.logger.warn({ event: 'auth_login_invalid_password', userId: foundUser.userId });
       throw new InvalidCredentialsError();

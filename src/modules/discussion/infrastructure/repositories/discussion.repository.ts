@@ -1,8 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { DRIZZLE } from '@/core/database/drizzle.constants';
 import type { DrizzleDB } from '@/core/database/database.module';
-
-export const MAX_REPLIES_PER_COMMENT = 100;
 import {
   discussionThreads,
   discussionComments,
@@ -11,7 +9,6 @@ import {
   users,
   userProfiles,
 } from '@/core/database/schema';
-import { DISCUSSION_REPOSITORY_PORT } from '../../domain/ports';
 import type {
   DiscussionThread,
   DiscussionThreadDetail,
@@ -31,9 +28,51 @@ import type {
   DiscussionVoteValue,
 } from '../../domain/types';
 import { eq, and, inArray, sql, desc, asc, lte, gte, isNull } from 'drizzle-orm';
+import type { DiscussionRepositoryPort } from '../../domain/ports';
+
+export const MAX_REPLIES_PER_COMMENT = 100;
+
+// Drizzle trả về camelCase — dùng camelCase cho tất cả row types
+type DiscussionThreadRow = {
+  threadId: string;
+  quizId: string;
+  authorId: string;
+  title: string;
+  body: string;
+  status: any;
+  commentsCount: number;
+  votesCount: number;
+  upvotesCount: number;
+  downvotesCount: number;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt: string | null;
+};
+
+type DiscussionCommentRow = {
+  commentId: string;
+  threadId: string;
+  authorId: string;
+  parentCommentId: string | null;
+  body: string;
+  status: any;
+  repliesCount: number;
+  votesCount: number;
+  upvotesCount: number;
+  downvotesCount: number;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt: string | null;
+};
+
+type AuthorInfo = {
+  username: string;
+  displayName: string | null;
+  avatarUrl: string | null;
+};
 
 @Injectable()
-export class DiscussionRepository implements DISCUSSION_REPOSITORY_PORT {
+export class DiscussionRepository implements DiscussionRepositoryPort {
   constructor(@Inject(DRIZZLE) private readonly db: DrizzleDB) {}
 
   // ─── THREADS ────────────────────────────────────────────────────────────────
@@ -50,7 +89,7 @@ export class DiscussionRepository implements DISCUSSION_REPOSITORY_PORT {
       })
       .returning();
 
-    return this.enrichThread(thread as DiscussionThreadRow);
+    return this.enrichThread(thread as unknown as DiscussionThreadRow);
   }
 
   async getThreadById(threadId: string): Promise<DiscussionThread | null> {
@@ -60,7 +99,7 @@ export class DiscussionRepository implements DISCUSSION_REPOSITORY_PORT {
       .where(and(eq(discussionThreads.threadId, threadId), isNull(discussionThreads.deletedAt)));
 
     if (!thread) return null;
-    return this.enrichThread(thread as DiscussionThreadRow);
+    return this.enrichThread(thread as unknown as DiscussionThreadRow);
   }
 
   async getThreadDetail(
@@ -74,14 +113,14 @@ export class DiscussionRepository implements DISCUSSION_REPOSITORY_PORT {
 
     if (!thread) return null;
 
-    const enriched = await this.enrichThread(thread as DiscussionThreadRow);
+    const enriched = await this.enrichThread(thread as unknown as DiscussionThreadRow);
 
     let userVote: DiscussionVoteValue | null = null;
     if (userId) {
       userVote = await this.getUserVote(userId, 'thread', threadId);
     }
 
-    // Get top-level comments (no parent) with their replies
+    // Lấy top-level comments kèm author info trong một query
     const topLevelComments = await this.db
       .select({
         comment: discussionComments,
@@ -101,11 +140,10 @@ export class DiscussionRepository implements DISCUSSION_REPOSITORY_PORT {
       )
       .orderBy(asc(discussionComments.createdAt));
 
-    // Collect top-level comment IDs
     const topLevelCommentIds = topLevelComments.map((row) => row.comment.commentId);
 
-    // Batch-fetch all replies for all top-level comments in one query — avoids N round-trips
-    const allReplies = topLevelCommentIds.length
+    // Batch-fetch tất cả replies trong một query — tránh N round-trips
+    const allReplies: DiscussionComment[] = topLevelCommentIds.length
       ? await this.getRepliesByParentIds(topLevelCommentIds, MAX_REPLIES_PER_COMMENT)
       : [];
 
@@ -116,9 +154,8 @@ export class DiscussionRepository implements DISCUSSION_REPOSITORY_PORT {
       repliesByParent.get(parentId)!.push(reply);
     }
 
-    const commentsWithReplies = topLevelComments.map((row) => {
-      const comment = row.comment as DiscussionCommentRow;
-      const commentId = row.comment.commentId;
+    const commentsWithReplies: DiscussionCommentWithReplies[] = topLevelComments.map((row) => {
+      const comment = row.comment as unknown as DiscussionCommentRow;
       const enrichedComment = this.enrichComment(comment, {
         username: row.authorUsername,
         displayName: row.authorDisplayName,
@@ -126,16 +163,12 @@ export class DiscussionRepository implements DISCUSSION_REPOSITORY_PORT {
       });
       return {
         ...enrichedComment,
-        replies: repliesByParent.get(commentId) ?? [],
+        replies: repliesByParent.get(row.comment.commentId) ?? [],
         userVote: null,
       };
     });
 
-    return {
-      ...enriched,
-      userVote,
-      comments: commentsWithReplies,
-    };
+    return { ...enriched, userVote, comments: commentsWithReplies };
   }
 
   async listThreads(params: ListThreadsParams): Promise<DiscussionThread[]> {
@@ -170,9 +203,7 @@ export class DiscussionRepository implements DISCUSSION_REPOSITORY_PORT {
         : lte(orderCol, cursor)
       : undefined;
 
-    if (cursorCondition) {
-      conditions.push(cursorCondition);
-    }
+    if (cursorCondition) conditions.push(cursorCondition);
 
     const rows = await this.db
       .select({
@@ -190,7 +221,7 @@ export class DiscussionRepository implements DISCUSSION_REPOSITORY_PORT {
 
     return Promise.all(
       rows.map((row) =>
-        this.enrichThread(row.thread as DiscussionThreadRow, {
+        this.enrichThread(row.thread as unknown as DiscussionThreadRow, {
           username: row.authorUsername,
           displayName: row.authorDisplayName,
           avatarUrl: row.authorAvatarUrl,
@@ -217,7 +248,7 @@ export class DiscussionRepository implements DISCUSSION_REPOSITORY_PORT {
       .returning();
 
     if (!updated) throw new Error('Thread not found or not authorized');
-    return this.enrichThread(updated as DiscussionThreadRow);
+    return this.enrichThread(updated as unknown as DiscussionThreadRow);
   }
 
   async softDeleteThread(params: { threadId: string; authorId: string }): Promise<void> {
@@ -258,12 +289,14 @@ export class DiscussionRepository implements DISCUSSION_REPOSITORY_PORT {
     deltaUpvotes: number,
     deltaDownvotes: number,
   ): Promise<void> {
+    // Tính tổng delta trước trong JS để tránh lỗi SQL với nhiều tham số liên tiếp
+    const totalDelta = deltaUpvotes + deltaDownvotes;
     await this.db
       .update(discussionThreads)
       .set({
         upvotesCount: sql`${discussionThreads.upvotesCount} + ${deltaUpvotes}`,
         downvotesCount: sql`${discussionThreads.downvotesCount} + ${deltaDownvotes}`,
-        votesCount: sql`${discussionThreads.votesCount} + ${deltaUpvotes + deltaDownvotes}`,
+        votesCount: sql`${discussionThreads.votesCount} + ${totalDelta}`,
         updatedAt: new Date().toISOString(),
       })
       .where(eq(discussionThreads.threadId, threadId));
@@ -283,7 +316,7 @@ export class DiscussionRepository implements DISCUSSION_REPOSITORY_PORT {
       })
       .returning();
 
-    return this.enrichComment(comment as DiscussionCommentRow);
+    return this.enrichComment(comment as unknown as DiscussionCommentRow);
   }
 
   async getCommentById(commentId: string): Promise<DiscussionComment | null> {
@@ -302,7 +335,7 @@ export class DiscussionRepository implements DISCUSSION_REPOSITORY_PORT {
       );
 
     if (!row) return null;
-    return this.enrichComment(row.comment as DiscussionCommentRow, {
+    return this.enrichComment(row.comment as unknown as DiscussionCommentRow, {
       username: row.authorUsername,
       displayName: row.authorDisplayName,
       avatarUrl: row.authorAvatarUrl,
@@ -317,15 +350,14 @@ export class DiscussionRepository implements DISCUSSION_REPOSITORY_PORT {
       isNull(discussionComments.deletedAt),
     ];
 
+    // Hỗ trợ lọc theo parentCommentId: null = top-level, string = replies của comment cụ thể
     if (parentCommentId === null || parentCommentId === undefined) {
       conditions.push(isNull(discussionComments.parentCommentId));
     } else {
       conditions.push(eq(discussionComments.parentCommentId, parentCommentId));
     }
 
-    if (cursor) {
-      conditions.push(gte(discussionComments.createdAt, cursor));
-    }
+    if (cursor) conditions.push(gte(discussionComments.createdAt, cursor));
 
     const rows = await this.db
       .select({
@@ -341,13 +373,25 @@ export class DiscussionRepository implements DISCUSSION_REPOSITORY_PORT {
       .orderBy(asc(discussionComments.createdAt))
       .limit(limit + 1);
 
+    const parentIds = rows.map((row) => row.comment.commentId);
+    const replies: DiscussionComment[] = parentIds.length
+      ? await this.getRepliesByParentIds(parentIds, MAX_REPLIES_PER_COMMENT)
+      : [];
+
+    const repliesByParent = new Map<string, DiscussionComment[]>();
+    for (const reply of replies) {
+      const pid = reply.parentCommentId!;
+      if (!repliesByParent.has(pid)) repliesByParent.set(pid, []);
+      repliesByParent.get(pid)!.push(reply);
+    }
+
     return rows.map((row) => ({
-      ...this.enrichComment(row.comment as DiscussionCommentRow, {
+      ...this.enrichComment(row.comment as unknown as DiscussionCommentRow, {
         username: row.authorUsername,
         displayName: row.authorDisplayName,
         avatarUrl: row.authorAvatarUrl,
       }),
-      replies: [],
+      replies: repliesByParent.get(row.comment.commentId) ?? [],
       userVote: null,
     }));
   }
@@ -356,6 +400,8 @@ export class DiscussionRepository implements DISCUSSION_REPOSITORY_PORT {
     parentIds: string[],
     limitPerParent: number,
   ): Promise<DiscussionComment[]> {
+    if (parentIds.length === 0) return [];
+
     const rows = await this.db
       .select({
         comment: discussionComments,
@@ -374,6 +420,7 @@ export class DiscussionRepository implements DISCUSSION_REPOSITORY_PORT {
       )
       .orderBy(asc(discussionComments.createdAt));
 
+    // Giới hạn số reply mỗi parent ngay tại application layer
     const result: DiscussionComment[] = [];
     const countByParent = new Map<string, number>();
 
@@ -382,7 +429,7 @@ export class DiscussionRepository implements DISCUSSION_REPOSITORY_PORT {
       const count = countByParent.get(parentId) ?? 0;
       if (count < limitPerParent) {
         result.push(
-          this.enrichComment(row.comment as DiscussionCommentRow, {
+          this.enrichComment(row.comment as unknown as DiscussionCommentRow, {
             username: row.authorUsername,
             displayName: row.authorDisplayName,
             avatarUrl: row.authorAvatarUrl,
@@ -416,7 +463,7 @@ export class DiscussionRepository implements DISCUSSION_REPOSITORY_PORT {
       .limit(limit);
 
     return rows.map((row) =>
-      this.enrichComment(row.comment as DiscussionCommentRow, {
+      this.enrichComment(row.comment as unknown as DiscussionCommentRow, {
         username: row.authorUsername,
         displayName: row.authorDisplayName,
         avatarUrl: row.authorAvatarUrl,
@@ -427,10 +474,7 @@ export class DiscussionRepository implements DISCUSSION_REPOSITORY_PORT {
   async updateComment(params: UpdateCommentParams): Promise<DiscussionComment> {
     const [updated] = await this.db
       .update(discussionComments)
-      .set({
-        body: params.body,
-        updatedAt: new Date().toISOString(),
-      })
+      .set({ body: params.body, updatedAt: new Date().toISOString() })
       .where(
         and(
           eq(discussionComments.commentId, params.commentId),
@@ -441,7 +485,7 @@ export class DiscussionRepository implements DISCUSSION_REPOSITORY_PORT {
       .returning();
 
     if (!updated) throw new Error('Comment not found or not authorized');
-    return this.enrichComment(updated as DiscussionCommentRow);
+    return this.enrichComment(updated as unknown as DiscussionCommentRow);
   }
 
   async softDeleteComment(params: { commentId: string; authorId: string }): Promise<void> {
@@ -490,18 +534,19 @@ export class DiscussionRepository implements DISCUSSION_REPOSITORY_PORT {
     deltaUpvotes: number,
     deltaDownvotes: number,
   ): Promise<void> {
+    const totalDelta = deltaUpvotes + deltaDownvotes;
     await this.db
       .update(discussionComments)
       .set({
         upvotesCount: sql`${discussionComments.upvotesCount} + ${deltaUpvotes}`,
         downvotesCount: sql`${discussionComments.downvotesCount} + ${deltaDownvotes}`,
-        votesCount: sql`${discussionComments.votesCount} + ${deltaUpvotes + deltaDownvotes}`,
+        votesCount: sql`${discussionComments.votesCount} + ${totalDelta}`,
         updatedAt: new Date().toISOString(),
       })
       .where(eq(discussionComments.commentId, commentId));
   }
 
-  // ─── VOTES ─────────────────────────────────────────────────────────────────
+  // ─── VOTES ──────────────────────────────────────────────────────────────────
 
   async upsertVote(params: VoteParams): Promise<DiscussionVote> {
     const [vote] = await this.db
@@ -588,14 +633,14 @@ export class DiscussionRepository implements DISCUSSION_REPOSITORY_PORT {
   }
 
   async listReports(params: {
-    status?: string;
+    status?: 'open' | 'reviewed' | 'dismissed' | 'actioned';
     limit?: number;
     cursor?: string | null;
   }): Promise<DiscussionReport[]> {
     const { status, limit = 20, cursor } = params;
-    const conditions = [];
+    const conditions: any[] = [];
 
-    if (status) conditions.push(eq(discussionReports.status, status as DiscussionReportStatus));
+    if (status) conditions.push(eq(discussionReports.status, status));
     if (cursor) conditions.push(lte(discussionReports.createdAt, cursor));
 
     const rows = await this.db
@@ -625,136 +670,73 @@ export class DiscussionRepository implements DISCUSSION_REPOSITORY_PORT {
     return updated as DiscussionReport;
   }
 
-  // ─── ENRICHERS ──────────────────────────────────────────────────────────────
+  // ─── PRIVATE HELPERS ────────────────────────────────────────────────────────
 
   private async enrichThread(
     thread: DiscussionThreadRow,
-    overrideAuthor?: {
-      username: string;
-      displayName: string | null;
-      avatarUrl: string | null;
-    },
+    overrideAuthor?: AuthorInfo,
   ): Promise<DiscussionThread> {
+    let author: AuthorInfo;
+
     if (overrideAuthor) {
-      return {
-        threadId: thread.thread_id,
-        quizId: thread.quiz_id,
-        authorId: thread.author_id,
-        author: {
-          userId: thread.author_id,
-          username: overrideAuthor.username,
-          displayName: overrideAuthor.displayName,
-          avatarUrl: overrideAuthor.avatarUrl,
-        },
-        title: thread.title,
-        body: thread.body,
-        status: thread.status,
-        commentsCount: thread.comments_count,
-        votesCount: thread.votes_count,
-        upvotesCount: thread.upvotes_count,
-        downvotesCount: thread.downvotes_count,
-        createdAt: thread.created_at,
-        updatedAt: thread.updated_at,
-        deletedAt: thread.deleted_at,
-      };
-    }
+      author = overrideAuthor;
+    } else {
+      const [userRow] = await this.db
+        .select({
+          username: users.username,
+          displayName: userProfiles.displayName,
+          avatarUrl: userProfiles.avatarUrl,
+        })
+        .from(users)
+        .leftJoin(userProfiles, eq(users.userId, userProfiles.userId))
+        .where(eq(users.userId, thread.authorId));
 
-    const [userRow] = await this.db
-      .select({
-        username: users.username,
-        displayName: userProfiles.displayName,
-        avatarUrl: userProfiles.avatarUrl,
-      })
-      .from(users)
-      .leftJoin(userProfiles, eq(users.userId, userProfiles.userId))
-      .where(eq(users.userId, thread.author_id));
-
-    return {
-      threadId: thread.thread_id,
-      quizId: thread.quiz_id,
-      authorId: thread.author_id,
-      author: {
-        userId: thread.author_id,
+      author = {
         username: userRow?.username ?? '',
         displayName: userRow?.displayName ?? null,
         avatarUrl: userRow?.avatarUrl ?? null,
-      },
+      };
+    }
+
+    return {
+      threadId: thread.threadId,
+      quizId: thread.quizId,
+      authorId: thread.authorId,
+      author: { userId: thread.authorId, ...author },
       title: thread.title,
       body: thread.body,
       status: thread.status,
-      commentsCount: thread.comments_count,
-      votesCount: thread.votes_count,
-      upvotesCount: thread.upvotes_count,
-      downvotesCount: thread.downvotes_count,
-      createdAt: thread.created_at,
-      updatedAt: thread.updated_at,
-      deletedAt: thread.deleted_at,
+      commentsCount: thread.commentsCount,
+      votesCount: thread.votesCount,
+      upvotesCount: thread.upvotesCount,
+      downvotesCount: thread.downvotesCount,
+      createdAt: thread.createdAt,
+      updatedAt: thread.updatedAt,
+      deletedAt: thread.deletedAt,
     };
   }
 
-  private enrichComment(
-    comment: DiscussionCommentRow,
-    author?: {
-      username: string;
-      displayName: string | null;
-      avatarUrl: string | null;
-    },
-  ): DiscussionComment {
+  private enrichComment(comment: DiscussionCommentRow, author?: AuthorInfo): DiscussionComment {
     return {
-      commentId: comment.comment_id,
-      threadId: comment.thread_id,
-      authorId: comment.author_id,
+      commentId: comment.commentId,
+      threadId: comment.threadId,
+      authorId: comment.authorId,
       author: {
-        userId: comment.author_id,
+        userId: comment.authorId,
         username: author?.username ?? '',
         displayName: author?.displayName ?? null,
         avatarUrl: author?.avatarUrl ?? null,
       },
-      parentCommentId: comment.parent_comment_id,
+      parentCommentId: comment.parentCommentId,
       body: comment.body,
       status: comment.status,
-      repliesCount: comment.replies_count,
-      votesCount: comment.votes_count,
-      upvotesCount: comment.upvotes_count,
-      downvotesCount: comment.downvotes_count,
-      createdAt: comment.created_at,
-      updatedAt: comment.updated_at,
-      deletedAt: comment.deleted_at,
+      repliesCount: comment.repliesCount,
+      votesCount: comment.votesCount,
+      upvotesCount: comment.upvotesCount,
+      downvotesCount: comment.downvotesCount,
+      createdAt: comment.createdAt,
+      updatedAt: comment.updatedAt,
+      deletedAt: comment.deletedAt,
     };
   }
 }
-
-// Raw row types matching DB schema
-type DiscussionThreadRow = {
-  thread_id: string;
-  quiz_id: string;
-  author_id: string;
-  title: string;
-  body: string;
-  status: string;
-  comments_count: number;
-  votes_count: number;
-  upvotes_count: number;
-  downvotes_count: number;
-  created_at: string;
-  updated_at: string;
-  deleted_at: string | null;
-};
-
-type DiscussionCommentRow = {
-  comment_id: string;
-  thread_id: string;
-  author_id: string;
-  parent_comment_id: string | null;
-  body: string;
-  status: string;
-  replies_count: number;
-  votes_count: number;
-  upvotes_count: number;
-  downvotes_count: number;
-  created_at: string;
-  updated_at: string;
-  deleted_at: string | null;
-};
-
-type DiscussionReportStatus = 'open' | 'reviewed' | 'dismissed' | 'actioned';
