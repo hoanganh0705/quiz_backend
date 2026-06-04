@@ -6,9 +6,8 @@ import { CRYPTO_PROVIDER, type CryptoProvider } from './ports/crypto.provider';
 import { PASSWORD_PROVIDER, type PasswordProvider } from './ports/password.provider';
 import { EMAIL_PROVIDER, type EmailProvider } from './ports/email.provider';
 import { USER_REPOSITORY_PORT, type UserRepositoryPort } from './ports/user-repository.port';
-import { SessionService } from './session.service';
+import { normalizeEmail } from './utils/normalization.utils';
 import { InvalidTokenError } from './errors';
-import { AUTH_SECURITY_EVENT_BUS, type AuthSecurityEventPublisherPort } from './events';
 
 @Injectable()
 export class PasswordResetService {
@@ -25,9 +24,6 @@ export class PasswordResetService {
     private readonly passwordResetConfig: PasswordResetConfig,
     @Inject(EMAIL_PROVIDER)
     private readonly emailService: EmailProvider,
-    private readonly sessionService: SessionService,
-    @Inject(AUTH_SECURITY_EVENT_BUS)
-    private readonly eventBus: AuthSecurityEventPublisherPort,
     @InjectPinoLogger(PasswordResetService.name) private readonly logger: PinoLogger,
   ) {}
 
@@ -40,7 +36,7 @@ export class PasswordResetService {
   }
 
   async requestPasswordReset(email: string, ipAddress?: string): Promise<{ message: string }> {
-    const normalizedEmail = email.trim().toLowerCase();
+    const normalizedEmail = normalizeEmail(email);
     const user = await this.userRepository.findActiveVerificationStatusByEmail(normalizedEmail);
 
     if (!user) {
@@ -57,11 +53,9 @@ export class PasswordResetService {
 
     await this.userRepository.createPasswordResetToken(user.userId, tokenHash, expiresAt);
 
-    this.eventBus.publishPasswordResetRequested({
-      eventType: 'password_reset_requested',
+    this.logger.info({
+      event: 'auth_password_reset_requested',
       userId: user.userId,
-      email: normalizedEmail,
-      timestamp: new Date(),
       ipAddress,
     });
 
@@ -86,37 +80,42 @@ export class PasswordResetService {
     const tokenHash = this.cryptoService.hashSha256(token);
     const nowIso = new Date().toISOString();
 
-    const tokenData = await this.userRepository.findActivePasswordResetTokenByHash(
+    // Idempotency guard: check token state before spending CPU on bcrypt.
+    // If the token was already consumed, fail fast without hashing the password.
+    const existing = await this.userRepository.findActivePasswordResetTokenByHash(
       tokenHash,
       nowIso,
     );
-
-    if (!tokenData) {
-      this.logger.warn({
-        event: 'auth_password_reset_invalid_token',
-      });
+    if (!existing) {
+      this.logger.warn({ event: 'auth_password_reset_idempotent_replay' });
       throw new InvalidTokenError('Invalid or expired password reset token');
     }
 
-    const { userId, email } = tokenData;
-    const passwordHash = await this.passwordProvider.hash(newPassword);
+    let userId: string;
+    try {
+      const passwordHash = await this.passwordProvider.hash(newPassword);
 
-    await this.userRepository.updatePasswordHash(userId, passwordHash, nowIso);
-    await this.userRepository.markPasswordResetTokenUsed(tokenHash, nowIso);
-    await this.sessionService.revokeAllActiveSessions(userId);
+      const result = await this.userRepository.consumePasswordResetTokenAndResetPassword({
+        tokenHash,
+        passwordHash,
+        nowIso,
+        eventPayload: { eventType: 'password_reset_completed', timestamp: nowIso, ipAddress },
+      });
+      userId = result.userId;
+    } catch (error) {
+      if (error instanceof InvalidTokenError) {
+        // Token was consumed between the pre-check and the atomic call — safe to replay.
+        this.logger.warn({ event: 'auth_password_reset_concurrent_consumption' });
+        throw error;
+      }
+      this.logger.error({
+        event: 'auth_password_reset_atomic_operation_failed',
+        message: error instanceof Error ? error.message : 'Unknown error',
+      });
+      throw error;
+    }
 
-    this.eventBus.publishPasswordResetCompleted({
-      eventType: 'password_reset_completed',
-      userId,
-      email,
-      timestamp: new Date(),
-      ipAddress,
-    });
-
-    this.logger.info({
-      event: 'auth_password_reset_completed',
-      userId,
-    });
+    this.logger.info({ event: 'auth_password_reset_completed', userId });
 
     return {
       message: 'Password has been reset successfully. Please log in with your new password.',

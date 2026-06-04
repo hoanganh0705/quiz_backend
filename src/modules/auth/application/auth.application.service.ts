@@ -1,5 +1,4 @@
 import { Injectable } from '@nestjs/common';
-import { InvalidCredentialsError } from '../domain/errors';
 import type { SessionRequestContext } from '../types/auth-context.types';
 import { AuthLoginService } from '../domain/auth-login.service';
 import { AuthRefreshService } from '../domain/auth-refresh.service';
@@ -233,17 +232,11 @@ export class AuthApplicationService {
     password: string,
     ipAddress?: string,
   ): Promise<DeleteAccountResponseDto> {
-    const result = await this.credentialVerificationService.verifyPassword(userId, password);
-    if (!result.valid) {
-      throw new InvalidCredentialsError();
-    }
-
-    const identity = await this.accountSecurityService.getCurrentUser(userId);
-    const deletionResult = await this.accountDeletionService.deleteAccount(
+    const result = await this.accountDeletionService.deleteAccountWithCredentialVerification(
       userId,
-      identity.email,
+      password,
       ipAddress,
     );
-    return this.authResponseMapper.toDeleteAccountResponse(deletionResult);
+    return this.authResponseMapper.toDeleteAccountResponse(result);
   }
 }

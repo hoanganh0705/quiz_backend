@@ -14,6 +14,7 @@ import { TokenConfig } from './config/token.config';
 import { SessionConfig } from './config/session.config';
 import { EmailVerificationConfig } from './config/email-verification.config';
 import { PasswordResetConfig } from './config/password-reset.config';
+import { SecurityConfig } from './config/security.config';
 import { AuthCookieService } from './transport/cookies/auth-cookie.service';
 import { AuthSessionCleanupService } from './infrastructure/session/auth-session-cleanup.service';
 import { JwtTokenAdapter } from './infrastructure/tokens/jwt-token.adapter';
@@ -46,6 +47,8 @@ import { RedisService } from '@/core/redis/redis.service';
 import { EmailService } from '@/modules/email/email.service';
 import { AuthDomainExceptionFilter } from './transport/filters/auth-domain-exception.filter';
 import { VerificationTokenService } from './domain/verification-token.service';
+import { OutboxAdapter } from './infrastructure/outbox/outbox.adapter';
+import { OUTBOX_PORT } from './domain/ports/outbox.port';
 
 @Module({
   imports: [CommonModule, DatabaseModule, RedisModule, EmailModule],
@@ -75,6 +78,7 @@ import { VerificationTokenService } from './domain/verification-token.service';
     SessionConfig,
     EmailVerificationConfig,
     PasswordResetConfig,
+    SecurityConfig,
     // Infrastructure
     AuthCookieService,
     AuthSessionCleanupService,
@@ -95,6 +99,8 @@ import { VerificationTokenService } from './domain/verification-token.service';
     { provide: EMAIL_PROVIDER, useExisting: EmailService },
     { provide: CACHE_PROVIDER, useExisting: RedisService },
     { provide: AUTH_SECURITY_EVENT_BUS, useExisting: AuthSecurityEventPublisher },
+    { provide: OUTBOX_PORT, useExisting: OutboxAdapter },
+    OutboxAdapter,
   ],
   exports: [AuthApplicationService],
 })
