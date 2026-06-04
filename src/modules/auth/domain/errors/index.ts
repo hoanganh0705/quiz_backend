@@ -13,3 +13,9 @@ export {
   DeletionFailedError,
   PasswordReuseError,
 } from './auth-domain.errors';
+
+export {
+  InvalidOAuthTokenError,
+  OAuthAccountAlreadyExistsError,
+  OAuthAccountLinkingRequiredError,
+} from './oauth/errors';

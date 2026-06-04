@@ -60,6 +60,7 @@ import { CheckUsernameDto } from '../../dto/request/check-username.dto';
 import { CheckUsernameResponseDto } from '../../dto/response/check-username-response.dto';
 import { DeleteAccountDto } from '../../dto/request/delete-account.dto';
 import { DeleteAccountResponseDto } from '../../dto/response/delete-account-response.dto';
+import { GoogleLoginDto } from '../../dto/request/google-login.dto';
 import type { AuthRequestContext } from '../types/auth-http-context.types';
 import type {
   LoginCommand,
@@ -161,6 +162,29 @@ export class AuthController {
 
     const loginResult: { response: LoginResponseDto; refreshToken: string; sessionId: string } =
       await this.authApplicationService.login(command, context.session);
+    context.setRefreshToken(loginResult.refreshToken);
+    return loginResult.response;
+  }
+
+  @Public()
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @Post('oauth/google')
+  @ApiOperation({
+    summary: 'Log in with Google',
+    description:
+      'Authenticates using a Google ID token and returns a JWT access token. ' +
+      'If no account exists for the Google user, one is created automatically.',
+  })
+  @ApiOkResponse({ description: 'Login successful', type: LoginResponseDto })
+  @ApiUnauthorizedResponse({ description: 'Invalid or expired Google ID token' })
+  @ApiBadRequestResponse({ description: 'Validation failed' })
+  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  async googleLogin(
+    @Body() googleLoginDto: GoogleLoginDto,
+    @RequestContext() context: AuthRequestContext,
+  ): Promise<LoginResponseDto> {
+    const loginResult: { response: LoginResponseDto; refreshToken: string; sessionId: string } =
+      await this.authApplicationService.googleLogin(googleLoginDto.idToken, context.session);
     context.setRefreshToken(loginResult.refreshToken);
     return loginResult.response;
   }

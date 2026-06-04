@@ -39,6 +39,7 @@ import {
   discussionComments,
   discussionVotes,
   discussionReports,
+  oauthAccounts,
 } from '.';
 
 export const userRankingRelations = relations(userRanking, ({ one, many }) => ({
@@ -485,5 +486,12 @@ export const discussionReportsRelations = relations(discussionReports, ({ one })
     fields: [discussionReports.reviewedByUserId],
     references: [users.userId],
     relationName: 'discussionReportReviewer',
+  }),
+}));
+
+export const oauthAccountsRelations = relations(oauthAccounts, ({ one }) => ({
+  user: one(users, {
+    fields: [oauthAccounts.userId],
+    references: [users.userId],
   }),
 }));
