@@ -13,19 +13,12 @@ export class CredentialVerificationService {
   ) {}
 
   async verifyPassword(userId: string, password: string): Promise<CredentialVerificationResult> {
-    const identity = await this.userRepository.findActiveIdentityById(userId);
-    if (!identity) {
+    const credentials = await this.userRepository.findActiveUserCredentialsById(userId);
+    if (!credentials) {
       return { valid: false };
     }
 
-    const userWithPassword = await this.userRepository.findActiveByEmailWithPassword(
-      identity.email,
-    );
-    if (!userWithPassword) {
-      return { valid: false };
-    }
-
-    const valid = await this.passwordProvider.verify(password, userWithPassword.passwordHash);
+    const valid = await this.passwordProvider.verify(password, credentials.passwordHash);
     return { valid };
   }
 }

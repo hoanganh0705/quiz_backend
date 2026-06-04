@@ -178,13 +178,13 @@ export class SecurityService {
       hasRequestIpAddress: hasRequestIp,
       ipChanged,
       deviceMismatch,
-      strictMode: this.sessionConfig.isBindingStrict,
+      strictMode: this.sessionConfig.enforceDeviceBinding,
     });
 
     return {
       // We intentionally do not reject on IP changes alone because IP churn is common (mobile networks,
       // corporate NATs, ISP rebalancing). In strict mode we only reject on device mismatch.
-      shouldReject: this.sessionConfig.isBindingStrict && deviceMismatch,
+      shouldReject: this.sessionConfig.enforceDeviceBinding && deviceMismatch,
     };
   }
 

@@ -1,11 +1,24 @@
 import { Inject, Injectable, InternalServerErrorException } from '@nestjs/common';
-import { and, eq, isNull, or, sql, max, gt } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNull, or, sql, max, gt } from 'drizzle-orm';
 import { DRIZZLE } from '@/core/database/drizzle.constants';
 import type { DrizzleDB } from '@/core/database/database.module';
-import { users, userProfiles, userSessions, passwordResetTokens } from '@/core/database/schema';
+import {
+  users,
+  userProfiles,
+  userSessions,
+  passwordResetTokens,
+  passwordHistory,
+} from '@/core/database/schema';
 import type { UserRepositoryPort } from '@/modules/auth/domain/ports/user-repository.port';
 import type { UserMeRow } from '@/modules/user/domain/ports/user-repository.port';
-import { ResourceConflictError } from '@/modules/auth/domain/errors';
+import { OUTBOX_PORT } from '@/modules/auth/domain/ports/outbox.port';
+import type { OutboxPort } from '@/modules/auth/domain/ports/outbox.port';
+import {
+  ResourceConflictError,
+  InvalidTokenError,
+  DeletionFailedError,
+  UserNotFoundError,
+} from '@/modules/auth/domain/errors';
 import { AuthIdentity } from '../../types/auth-context.types';
 
 const USER_IDENTITY_COLUMNS = {
@@ -45,7 +58,10 @@ type UserVerificationStatusRow = {
 
 @Injectable()
 export class UserRepository implements UserRepositoryPort {
-  constructor(@Inject(DRIZZLE) private readonly db: DrizzleDB) {}
+  constructor(
+    @Inject(DRIZZLE) private readonly db: DrizzleDB,
+    @Inject(OUTBOX_PORT) private readonly outbox: OutboxPort,
+  ) {}
 
   async ensureEmailAndUsernameAvailable(email: string, username: string): Promise<void> {
     const [existingUser] = await this.db
@@ -97,6 +113,27 @@ export class UserRepository implements UserRepositoryPort {
           }
         | undefined) ?? null
     );
+  }
+
+  async findActiveUserCredentialsById(userId: string): Promise<{
+    userId: string;
+    email: string;
+    passwordHash: string;
+  } | null> {
+    const [user] = await this.db
+      .select({
+        userId: users.userId,
+        email: users.email,
+        passwordHash: users.passwordHash,
+      })
+      .from(users)
+      .where(and(eq(users.userId, userId), isNull(users.deletedAt)))
+      .limit(1)
+      .catch(() => {
+        throw new InternalServerErrorException('Failed to fetch user credentials');
+      });
+
+    return (user as { userId: string; email: string; passwordHash: string } | undefined) ?? null;
   }
 
   async createUser(email: string, username: string, passwordHash: string): Promise<CreatedUserRow> {
@@ -166,19 +203,6 @@ export class UserRepository implements UserRepositoryPort {
       .catch(() => {
         throw new InternalServerErrorException('Failed to save email verification token');
       });
-  }
-
-  async findActiveByEmail(email: string): Promise<UserIdentityRow | null> {
-    const [user] = await this.db
-      .select(USER_IDENTITY_COLUMNS)
-      .from(users)
-      .where(and(isNull(users.deletedAt), eq(users.email, email)))
-      .limit(1)
-      .catch(() => {
-        throw new InternalServerErrorException('Failed to fetch user');
-      });
-
-    return (user as UserIdentityRow | undefined) ?? null;
   }
 
   async findActiveVerificationStatusByEmail(
@@ -278,7 +302,7 @@ export class UserRepository implements UserRepositoryPort {
       .limit(1)
       .catch(() => null);
 
-    return result === undefined;
+    return (result?.length ?? 0) === 0;
   }
 
   async isUsernameAvailable(username: string): Promise<boolean> {
@@ -289,20 +313,7 @@ export class UserRepository implements UserRepositoryPort {
       .limit(1)
       .catch(() => null);
 
-    return result === undefined;
-  }
-
-  async softDeleteUser(userId: string, nowIso: string): Promise<void> {
-    await this.db
-      .update(users)
-      .set({
-        deletedAt: nowIso,
-        updatedAt: nowIso,
-      })
-      .where(and(eq(users.userId, userId), isNull(users.deletedAt)))
-      .catch(() => {
-        throw new InternalServerErrorException('Failed to delete user account');
-      });
+    return (result?.length ?? 0) === 0;
   }
 
   async getSecurityMetadata(userId: string): Promise<{
@@ -313,7 +324,7 @@ export class UserRepository implements UserRepositoryPort {
     const [user] = await this.db
       .select({
         isVerified: users.isVerified,
-        passwordChangedAt: users.updatedAt,
+        passwordChangedAt: users.passwordChangedAt,
       })
       .from(users)
       .where(and(eq(users.userId, userId), isNull(users.deletedAt)))
@@ -341,22 +352,20 @@ export class UserRepository implements UserRepositoryPort {
 
     return {
       emailVerified: user.isVerified,
-      lastPasswordChangedAt: user.passwordChangedAt,
+      lastPasswordChangedAt: user.passwordChangedAt ?? null,
       lastLoginAt: lastSession?.lastUsedAt ?? null,
     };
   }
 
-  async updatePasswordHash(userId: string, passwordHash: string, nowIso: string): Promise<void> {
-    await this.db
-      .update(users)
-      .set({
-        passwordHash,
-        updatedAt: nowIso,
-      })
-      .where(and(eq(users.userId, userId), isNull(users.deletedAt)))
-      .catch(() => {
-        throw new InternalServerErrorException('Failed to update password');
-      });
+  async getRecentPasswordHashes(userId: string, count: number): Promise<string[]> {
+    const rows = await this.db
+      .select({ passwordHash: passwordHistory.passwordHash })
+      .from(passwordHistory)
+      .where(eq(passwordHistory.userId, userId))
+      .orderBy(desc(passwordHistory.createdAt))
+      .limit(count);
+
+    return rows.map((row) => row.passwordHash);
   }
 
   async createPasswordResetToken(
@@ -364,29 +373,39 @@ export class UserRepository implements UserRepositoryPort {
     tokenHash: string,
     expiresAt: string,
   ): Promise<void> {
-    await this.revokeAllActivePasswordResetTokensForUser(userId, new Date().toISOString());
+    // Both revocation of old tokens and insertion of the new token must happen atomically.
+    // If the process crashes between the revoke and the insert, all active tokens are
+    // invalidated but no new token exists — locking the user out of their account.
+    // Wrapping both in a single transaction eliminates this failure window.
+    const nowIso = new Date().toISOString();
+    await this.db.transaction(async (tx) => {
+      await tx
+        .update(passwordResetTokens)
+        .set({ revokedAt: nowIso, isActive: false })
+        .where(
+          and(
+            eq(passwordResetTokens.userId, userId),
+            eq(passwordResetTokens.isActive, true),
+            isNull(passwordResetTokens.usedAt),
+          ),
+        );
 
-    await this.db
-      .insert(passwordResetTokens)
-      .values({
+      await tx.insert(passwordResetTokens).values({
         userId,
         tokenHash,
         expiresAt,
         isActive: true,
-      })
-      .catch(() => {
-        throw new InternalServerErrorException('Failed to create password reset token');
       });
+    });
   }
 
   async findActivePasswordResetTokenByHash(
     tokenHash: string,
     nowIso: string,
-  ): Promise<{ userId: string; email: string } | null> {
+  ): Promise<{ userId: string } | null> {
     const [record] = await this.db
       .select({
         userId: passwordResetTokens.userId,
-        email: users.email,
       })
       .from(passwordResetTokens)
       .innerJoin(users, eq(passwordResetTokens.userId, users.userId))
@@ -405,26 +424,7 @@ export class UserRepository implements UserRepositoryPort {
         throw new InternalServerErrorException('Failed to find password reset token');
       });
 
-    return (record as { userId: string; email: string } | undefined) ?? null;
-  }
-
-  async markPasswordResetTokenUsed(tokenHash: string, nowIso: string): Promise<void> {
-    await this.db
-      .update(passwordResetTokens)
-      .set({
-        usedAt: nowIso,
-        isActive: false,
-      })
-      .where(
-        and(
-          eq(passwordResetTokens.tokenHash, tokenHash),
-          eq(passwordResetTokens.isActive, true),
-          isNull(passwordResetTokens.usedAt),
-        ),
-      )
-      .catch(() => {
-        throw new InternalServerErrorException('Failed to mark password reset token as used');
-      });
+    return (record as { userId: string } | undefined) ?? null;
   }
 
   async revokeAllActivePasswordResetTokensForUser(userId: string, nowIso: string): Promise<void> {
@@ -444,5 +444,263 @@ export class UserRepository implements UserRepositoryPort {
       .catch(() => {
         throw new InternalServerErrorException('Failed to revoke active password reset tokens');
       });
+  }
+
+  /**
+   * Atomically consumes a password-reset token, updates the user's password hash,
+   * and revokes all active sessions.
+   *
+   * Race-condition fix: uses pg_advisory_xact_lock(hashtext(userId)) scoped to the
+   * user, so concurrent requests for the same user serialize at the advisory lock.
+   * The lock is held for the duration of the transaction only. Lightweight compared
+   * to SELECT FOR UPDATE — it does not block concurrent reads of the token row.
+   * If the token is invalid, the lookup returns null before any lock is acquired.
+   *
+   * @throws {InvalidTokenError} token not found, expired, already used, or user deleted
+   */
+  async consumePasswordResetTokenAndResetPassword(params: {
+    tokenHash: string;
+    passwordHash: string;
+    nowIso: string;
+    eventPayload?: Record<string, unknown>;
+  }): Promise<{ userId: string }> {
+    const { tokenHash, passwordHash, nowIso, eventPayload } = params;
+
+    // Step 1: lightweight lookup to get the userId (no lock held).
+    // Returns null fast if the token is invalid — avoids acquiring any lock.
+    const [tokenLookup] = await this.db
+      .select({ userId: passwordResetTokens.userId })
+      .from(passwordResetTokens)
+      .innerJoin(users, eq(passwordResetTokens.userId, users.userId))
+      .where(
+        and(
+          eq(passwordResetTokens.tokenHash, tokenHash),
+          eq(passwordResetTokens.isActive, true),
+          sql`${passwordResetTokens.expiresAt} > ${nowIso}`,
+          isNull(passwordResetTokens.usedAt),
+          isNull(passwordResetTokens.revokedAt),
+          isNull(users.deletedAt),
+        ),
+      )
+      .limit(1)
+      .catch(() => {
+        throw new InternalServerErrorException('Failed to validate password reset token');
+      });
+
+    if (!tokenLookup) {
+      throw new InvalidTokenError('Invalid or expired password reset token');
+    }
+
+    const userId = tokenLookup.userId;
+
+    // Step 2: acquire advisory lock scoped to this userId, then do all writes atomically.
+    // pg_advisory_xact_lock is transaction-scoped — automatically released on commit/rollback.
+    // Concurrent requests for the SAME user serialize here; requests for different users proceed in parallel.
+    await this.db.transaction(async (tx) => {
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${userId}))`);
+
+      // Re-validate the token inside the lock in case it was consumed by a concurrent request.
+      const [tokenRecord] = await tx
+        .select({ userId: passwordResetTokens.userId })
+        .from(passwordResetTokens)
+        .where(
+          and(
+            eq(passwordResetTokens.tokenHash, tokenHash),
+            eq(passwordResetTokens.isActive, true),
+            sql`${passwordResetTokens.expiresAt} > ${nowIso}`,
+            isNull(passwordResetTokens.usedAt),
+          ),
+        )
+        .limit(1);
+
+      if (!tokenRecord) {
+        throw new InvalidTokenError('Invalid or expired password reset token');
+      }
+
+      await tx
+        .update(users)
+        .set({ passwordHash, passwordChangedAt: nowIso, updatedAt: nowIso })
+        .where(and(eq(users.userId, userId), isNull(users.deletedAt)));
+
+      await tx
+        .update(passwordResetTokens)
+        .set({ usedAt: nowIso, isActive: false })
+        .where(
+          and(
+            eq(passwordResetTokens.tokenHash, tokenHash),
+            eq(passwordResetTokens.userId, userId),
+            eq(passwordResetTokens.isActive, true),
+          ),
+        );
+
+      await tx
+        .update(userSessions)
+        .set({ revokedAt: nowIso })
+        .where(and(eq(userSessions.userId, userId), isNull(userSessions.revokedAt)));
+
+      if (eventPayload) {
+        await this.outbox.scheduleEvent(
+          {
+            aggregateType: 'password_reset',
+            eventType: 'password_reset_completed',
+            payload: eventPayload,
+            nowIso,
+          },
+          tx,
+        );
+      }
+    });
+
+    return { userId };
+  }
+
+  /**
+   * Atomically soft-deletes a user and revokes all their active sessions.
+   *
+   * Serializes this deletion against any concurrent reset-password or change-password
+   * operation for the same user via pg_advisory_xact_lock. Without this lock,
+   * a reset-password flow could update the password hash of a deleted user after
+   * the soft-delete commits, creating a "zombie" account that responds to auth
+   * but is invisible in normal queries.
+   *
+   * @throws {DeletionFailedError} user not found or already deleted
+   */
+  async deleteAccountAndRevokeSessions(params: {
+    userId: string;
+    nowIso: string;
+    eventPayload?: Record<string, unknown>;
+  }): Promise<void> {
+    const { userId, nowIso, eventPayload } = params;
+
+    const [user] = await this.db
+      .select({ userId: users.userId })
+      .from(users)
+      .where(and(eq(users.userId, userId), isNull(users.deletedAt)))
+      .limit(1)
+      .catch(() => {
+        throw new InternalServerErrorException('Failed to validate user before deletion');
+      });
+
+    if (!user) {
+      throw new DeletionFailedError('User not found or already deleted');
+    }
+
+    await this.db.transaction(async (tx) => {
+      // Acquire per-user advisory lock before any destructive writes.
+      // Concurrent reset-password / change-password calls for the same user will block here.
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${userId}))`);
+
+      await tx
+        .update(users)
+        .set({ deletedAt: nowIso, updatedAt: nowIso })
+        .where(and(eq(users.userId, userId), isNull(users.deletedAt)));
+
+      await tx
+        .update(userSessions)
+        .set({ revokedAt: nowIso })
+        .where(and(eq(userSessions.userId, userId), isNull(userSessions.revokedAt)));
+
+      if (eventPayload) {
+        await this.outbox.scheduleEvent(
+          { aggregateType: 'account', eventType: 'account_deleted', payload: eventPayload, nowIso },
+          tx,
+        );
+      }
+    });
+  }
+
+  /**
+   * Atomically updates a user's password hash, archives the previous hash to
+   * password history (pruning oldest entries when the cap is exceeded), and
+   * revokes all sessions except the current one.
+   *
+   * Serialization: pg_advisory_xact_lock(hashtext(userId)) is held for the
+   * duration of the transaction, blocking any concurrent change-password,
+   * reset-password, or account-deletion for the same user.
+   *
+   * @throws {UserNotFoundError} user not found or already deleted
+   */
+  async changePasswordAndRevokeOtherSessions(params: {
+    userId: string;
+    passwordHash: string;
+    currentSessionId: string;
+    nowIso: string;
+    previousPasswordHash: string | null;
+    maxHistorySize: number;
+    eventPayload?: Record<string, unknown>;
+  }): Promise<void> {
+    const {
+      userId,
+      passwordHash,
+      currentSessionId,
+      nowIso,
+      previousPasswordHash,
+      maxHistorySize,
+      eventPayload,
+    } = params;
+
+    const [user] = await this.db
+      .select({ userId: users.userId })
+      .from(users)
+      .where(and(eq(users.userId, userId), isNull(users.deletedAt)))
+      .limit(1)
+      .catch(() => {
+        throw new InternalServerErrorException('Failed to validate user before password change');
+      });
+
+    if (!user) {
+      throw new UserNotFoundError('User not found or already deleted');
+    }
+
+    await this.db.transaction(async (tx) => {
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${userId}))`);
+
+      if (previousPasswordHash !== null) {
+        await tx.insert(passwordHistory).values({
+          userId,
+          passwordHash: previousPasswordHash,
+          createdAt: nowIso,
+        });
+
+        const allEntries = await tx
+          .select({ historyId: passwordHistory.historyId })
+          .from(passwordHistory)
+          .where(eq(passwordHistory.userId, userId))
+          .orderBy(desc(passwordHistory.createdAt));
+
+        if (allEntries.length > maxHistorySize) {
+          const idsToDelete = allEntries.slice(maxHistorySize).map((e) => e.historyId);
+          await tx.delete(passwordHistory).where(inArray(passwordHistory.historyId, idsToDelete));
+        }
+      }
+
+      await tx
+        .update(users)
+        .set({ passwordHash, passwordChangedAt: nowIso, updatedAt: nowIso })
+        .where(and(eq(users.userId, userId), isNull(users.deletedAt)));
+
+      await tx
+        .update(userSessions)
+        .set({ revokedAt: nowIso })
+        .where(
+          and(
+            eq(userSessions.userId, userId),
+            isNull(userSessions.revokedAt),
+            sql`${userSessions.sessionId} <> ${currentSessionId}`,
+          ),
+        );
+
+      if (eventPayload) {
+        await this.outbox.scheduleEvent(
+          {
+            aggregateType: 'account',
+            eventType: 'password_changed',
+            payload: eventPayload,
+            nowIso,
+          },
+          tx,
+        );
+      }
+    });
   }
 }

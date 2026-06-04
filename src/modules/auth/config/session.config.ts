@@ -40,7 +40,7 @@ export class SessionConfig {
     return rawValue;
   }
 
-  get isBindingStrict(): boolean {
+  get enforceDeviceBinding(): boolean {
     const rawValue = this.configService.get<string | boolean>('SESSION_BINDING_STRICT');
     if (typeof rawValue === 'boolean') return rawValue;
     if (typeof rawValue !== 'string') return false;

@@ -59,6 +59,26 @@ export interface SessionRepositoryPort {
     },
   ): Promise<void>;
 
+  /**
+   * Atomically rotates a session's refresh token and refreshes lastUsedAt, within a
+   * pg_advisory_xact_lock scoped to the sessionId. This prevents two concurrent
+   * refresh requests for the same session from racing — without the lock, the second
+   * request overwrites the first's token hash, making the first token invalid.
+   */
+  rotateSessionWithLock(
+    sessionId: string,
+    data: {
+      jti: string;
+      refreshTokenHash: string;
+      ipAddress: string | null;
+      deviceBrowser: string | null;
+      deviceOs: string | null;
+      deviceType: string;
+      expiresAt: string;
+      lastUsedAt: string;
+    },
+  ): Promise<void>;
+
   revokeSessionsByUserId(userId: string, nowIso: string): Promise<void>;
 
   revokeOtherSessionsByUserId(userId: string, sessionId: string, nowIso: string): Promise<void>;

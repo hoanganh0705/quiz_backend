@@ -9,6 +9,7 @@ import { TOKEN_PROVIDER, type TokenProvider } from './ports/token.provider';
 import { PASSWORD_PROVIDER, type PasswordProvider } from './ports/password.provider';
 import { SessionService } from './session.service';
 import { SecurityService } from './security.service';
+import { normalizeEmail } from './utils/normalization.utils';
 import { InvalidCredentialsError } from './errors';
 import { VerificationTokenService } from './verification-token.service';
 
@@ -44,7 +45,7 @@ export class AuthLoginService {
   async login(loginCommand: LoginCommand, context: SessionRequestContext): Promise<LoginResult> {
     await this.securityService.enforceLoginRateLimit(context);
 
-    const normalizedEmail = loginCommand.email.trim().toLowerCase();
+    const normalizedEmail = normalizeEmail(loginCommand.email);
     const foundUser = await this.userRepository.findActiveByEmailWithPassword(normalizedEmail);
 
     if (!foundUser) {

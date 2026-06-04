@@ -56,7 +56,7 @@ export class AuthConfig {
     refreshSessionTtlMs: number;
     maxActiveSessionsPerUser: number;
     refreshReuseGraceWindowMs: number;
-    isBindingStrict: boolean;
+    enforceDeviceBinding: boolean;
   } {
     const refreshTokenCookieMaxAgeMs = this.getRefreshTokenCookieMaxAgeMs();
     const refreshTokenExpiresInSeconds = this.getRefreshTokenExpiresInSeconds();
@@ -69,7 +69,7 @@ export class AuthConfig {
       ),
       maxActiveSessionsPerUser: this.getMaxActiveSessionsPerUser(),
       refreshReuseGraceWindowMs: this.getRefreshReuseGraceWindowSeconds() * 1_000,
-      isBindingStrict: this.getIsSessionBindingStrict(),
+      enforceDeviceBinding: this.getEnforceDeviceBinding(),
     };
   }
 
@@ -143,7 +143,7 @@ export class AuthConfig {
     return rawValue;
   }
 
-  private getIsSessionBindingStrict(): boolean {
+  private getEnforceDeviceBinding(): boolean {
     const rawValue = this.configService.get<string | boolean>('SESSION_BINDING_STRICT');
 
     if (typeof rawValue === 'boolean') {

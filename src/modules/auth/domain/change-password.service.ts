@@ -2,9 +2,8 @@ import { Inject, Injectable } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { USER_REPOSITORY_PORT, type UserRepositoryPort } from './ports/user-repository.port';
 import { PASSWORD_PROVIDER, type PasswordProvider } from './ports/password.provider';
-import { SessionService } from './session.service';
-import { InvalidPasswordError } from './errors';
-import { AUTH_SECURITY_EVENT_BUS, type AuthSecurityEventPublisherPort } from './events';
+import { SecurityConfig } from '../config/security.config';
+import { InvalidPasswordError, PasswordReuseError, UserNotFoundError } from './errors';
 
 @Injectable()
 export class ChangePasswordService {
@@ -13,9 +12,7 @@ export class ChangePasswordService {
     private readonly userRepository: UserRepositoryPort,
     @Inject(PASSWORD_PROVIDER)
     private readonly passwordProvider: PasswordProvider,
-    private readonly sessionService: SessionService,
-    @Inject(AUTH_SECURITY_EVENT_BUS)
-    private readonly eventBus: AuthSecurityEventPublisherPort,
+    private readonly securityConfig: SecurityConfig,
     @InjectPinoLogger(ChangePasswordService.name) private readonly logger: PinoLogger,
   ) {}
 
@@ -26,49 +23,77 @@ export class ChangePasswordService {
     currentSessionId: string,
     ipAddress?: string,
   ): Promise<{ message: string }> {
-    const identity = await this.userRepository.findActiveIdentityById(userId);
-    if (!identity) {
-      throw new InvalidPasswordError();
-    }
-
-    const userWithPassword = await this.userRepository.findActiveByEmailWithPassword(
-      identity.email,
-    );
-    if (!userWithPassword) {
-      throw new InvalidPasswordError();
+    const credentials = await this.userRepository.findActiveUserCredentialsById(userId);
+    if (!credentials) {
+      throw new UserNotFoundError();
     }
 
     const isCurrentPasswordValid = await this.passwordProvider.verify(
       currentPassword,
-      userWithPassword.passwordHash,
+      credentials.passwordHash,
     );
 
     if (!isCurrentPasswordValid) {
-      this.logger.warn({
-        event: 'auth_change_password_invalid_current_password',
-        userId,
-      });
+      this.logger.warn({ event: 'auth_change_password_invalid_current_password', userId });
       throw new InvalidPasswordError();
+    }
+
+    // Enforce reuse policy against the current password hash first (fast path).
+    const isReused = await this.passwordProvider.verify(newPassword, credentials.passwordHash);
+    if (isReused) {
+      this.logger.warn({ event: 'auth_change_password_reuse_detected', userId });
+      throw new PasswordReuseError();
+    }
+
+    // Check recent history hashes. If any match, reject with PasswordReuseError.
+    const historyHashes = await this.userRepository.getRecentPasswordHashes(
+      userId,
+      this.securityConfig.maxPasswordHistorySize,
+    );
+
+    for (const historicalHash of historyHashes) {
+      const matchesHistory = await this.passwordProvider.verify(newPassword, historicalHash);
+      if (matchesHistory) {
+        this.logger.warn({ event: 'auth_change_password_reuse_detected', userId });
+        throw new PasswordReuseError();
+      }
     }
 
     const nowIso = new Date().toISOString();
     const newPasswordHash = await this.passwordProvider.hash(newPassword);
 
-    await this.userRepository.updatePasswordHash(userId, newPasswordHash, nowIso);
-    await this.sessionService.revokeOtherActiveSessions(userId, currentSessionId);
+    // The repository owns the transaction: it atomically archives the old hash to
+    // password_history (pruning if needed), updates the user's password,
+    // revokes all other sessions, and writes the outbox event.
+    // All four operations share one pg_advisory_xact_lock.
+    try {
+      await this.userRepository.changePasswordAndRevokeOtherSessions({
+        userId,
+        passwordHash: newPasswordHash,
+        currentSessionId,
+        nowIso,
+        previousPasswordHash: credentials.passwordHash,
+        maxHistorySize: this.securityConfig.maxPasswordHistorySize,
+        eventPayload: { eventType: 'password_changed', userId, timestamp: nowIso, ipAddress },
+      });
+    } catch (error) {
+      if (error instanceof UserNotFoundError) {
+        this.logger.error({
+          event: 'auth_change_password_atomic_operation_failed',
+          userId,
+          message: error instanceof Error ? error.message : 'Unknown error',
+        });
+        throw error;
+      }
+      this.logger.error({
+        event: 'auth_change_password_atomic_operation_failed',
+        userId,
+        message: error instanceof Error ? error.message : 'Unknown error',
+      });
+      throw error;
+    }
 
-    this.eventBus.publishPasswordChanged({
-      eventType: 'password_changed',
-      userId,
-      email: identity.email,
-      timestamp: new Date(),
-      ipAddress,
-    });
-
-    this.logger.info({
-      event: 'auth_password_changed',
-      userId,
-    });
+    this.logger.info({ event: 'auth_password_changed', userId });
 
     return { message: 'Password changed successfully. All other sessions have been logged out.' };
   }
