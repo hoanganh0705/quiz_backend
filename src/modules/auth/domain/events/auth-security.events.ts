@@ -1,3 +1,11 @@
+export interface AccountDeletedEvent {
+  readonly eventType: 'account_deleted';
+  readonly userId: string;
+  readonly email: string;
+  readonly timestamp: Date;
+  readonly ipAddress?: string;
+}
+
 export interface PasswordResetRequestedEvent {
   readonly eventType: 'password_reset_requested';
   readonly userId: string;
@@ -40,6 +48,7 @@ export interface AllOtherSessionsRevokedEvent {
 }
 
 export type AuthSecurityEvent =
+  | AccountDeletedEvent
   | PasswordResetRequestedEvent
   | PasswordResetCompletedEvent
   | PasswordChangedEvent

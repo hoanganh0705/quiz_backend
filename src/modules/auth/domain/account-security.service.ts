@@ -1,6 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { USER_REPOSITORY_PORT, type UserRepositoryPort } from './ports/user-repository.port';
 import { SessionService } from './session.service';
+import type { CurrentUserResult } from '../types/auth-result.types';
 
 export type AccountSecurityMetadata = {
   emailVerified: boolean;
@@ -15,6 +16,20 @@ export class AccountSecurityService {
     private readonly userRepository: UserRepositoryPort,
     private readonly sessionService: SessionService,
   ) {}
+
+  async getCurrentUser(userId: string): Promise<CurrentUserResult> {
+    const profile = await this.userRepository.findActiveUserProfile(userId);
+    if (!profile) {
+      throw new Error('User not found');
+    }
+    return {
+      userId: profile.userId,
+      username: profile.username,
+      email: profile.email,
+      role: profile.role,
+      isVerified: profile.isVerified,
+    };
+  }
 
   async getAccountSecurity(userId: string): Promise<AccountSecurityMetadata> {
     const metadata = await this.userRepository.getSecurityMetadata(userId);

@@ -52,6 +52,14 @@ import {
   AccountSecurityDto,
   SessionManagementResultDto,
 } from '../../dto/response/session-management.dto';
+import { CurrentUserResponseDto } from '../../dto/response/current-user-response.dto';
+import { VerifyPasswordResponseDto } from '../../dto/response/verify-password-response.dto';
+import { CheckEmailDto } from '../../dto/request/check-email.dto';
+import { CheckEmailResponseDto } from '../../dto/response/check-email-response.dto';
+import { CheckUsernameDto } from '../../dto/request/check-username.dto';
+import { CheckUsernameResponseDto } from '../../dto/response/check-username-response.dto';
+import { DeleteAccountDto } from '../../dto/request/delete-account.dto';
+import { DeleteAccountResponseDto } from '../../dto/response/delete-account-response.dto';
 import type { AuthRequestContext } from '../types/auth-http-context.types';
 import type {
   LoginCommand,
@@ -62,6 +70,7 @@ import type {
   ResetPasswordCommand,
   ChangePasswordCommand,
 } from '../../domain/types/auth-commands';
+import { VerifyPasswordDto } from '../../dto/request/verify-password.dto';
 
 @ApiTags('auth')
 @Controller('auth')
@@ -350,5 +359,102 @@ export class AuthController {
       newPassword: changePasswordDto.newPassword,
     };
     return await this.authApplicationService.changePassword(command, currentSessionId);
+  }
+
+  // ─── FEATURE 3: Account Profile ──────────────────────────────────────────
+
+  @ApiAuth()
+  @Get('me')
+  @ApiOperation({
+    summary: 'Get current user profile',
+    description:
+      'Returns the authenticated user profile (userId, username, email, role, isVerified).',
+  })
+  @ApiOkResponse({ description: 'Current user profile retrieved', type: CurrentUserResponseDto })
+  @ApiUnauthorizedResponse({ description: 'Not authenticated' })
+  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  async getCurrentUser(@CurrentUser('sub') userId: string): Promise<CurrentUserResponseDto> {
+    return await this.authApplicationService.getCurrentUser(userId);
+  }
+
+  // ─── FEATURE 4: Availability Check ───────────────────────────────────────
+
+  @Public()
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @Post('check-email')
+  @ApiOperation({
+    summary: 'Check email availability',
+    description:
+      'Checks whether an email address is available for registration. ' +
+      'Does not reveal whether an account exists.',
+  })
+  @ApiOkResponse({ description: 'Email availability checked', type: CheckEmailResponseDto })
+  @ApiBadRequestResponse({ description: 'Validation failed' })
+  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  async checkEmail(@Body() dto: CheckEmailDto): Promise<CheckEmailResponseDto> {
+    return await this.authApplicationService.checkEmailAvailability(dto.email);
+  }
+
+  @Public()
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @Post('check-username')
+  @ApiOperation({
+    summary: 'Check username availability',
+    description:
+      'Checks whether a username is available for registration. ' +
+      'Does not reveal whether an account exists.',
+  })
+  @ApiOkResponse({ description: 'Username availability checked', type: CheckUsernameResponseDto })
+  @ApiBadRequestResponse({ description: 'Validation failed' })
+  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  async checkUsername(@Body() dto: CheckUsernameDto): Promise<CheckUsernameResponseDto> {
+    return await this.authApplicationService.checkUsernameAvailability(dto.username);
+  }
+
+  // ─── FEATURE 5: Password Verification ────────────────────────────────────
+
+  @ApiAuth()
+  @Post('verify-password')
+  @ApiOperation({
+    summary: 'Verify current password',
+    description:
+      "Verifies the authenticated user's current password without issuing tokens or sessions. " +
+      'Intended as a confirmation step before sensitive operations.',
+  })
+  @ApiOkResponse({ description: 'Password verification result', type: VerifyPasswordResponseDto })
+  @ApiUnauthorizedResponse({ description: 'Not authenticated' })
+  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  async verifyPassword(
+    @CurrentUser('sub') userId: string,
+    @Body() dto: VerifyPasswordDto,
+  ): Promise<VerifyPasswordResponseDto> {
+    return await this.authApplicationService.verifyPassword(userId, dto.password);
+  }
+
+  // ─── FEATURE 6: Account Deletion ─────────────────────────────────────────
+
+  @ApiAuth()
+  @Delete('account')
+  @ApiOperation({
+    summary: 'Delete account',
+    description:
+      "Permanently deletes the authenticated user's account after password confirmation. " +
+      'All active sessions are terminated immediately.',
+  })
+  @ApiOkResponse({ description: 'Account deleted', type: DeleteAccountResponseDto })
+  @ApiUnauthorizedResponse({ description: 'Not authenticated or invalid password' })
+  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  async deleteAccount(
+    @CurrentUser('sub') userId: string,
+    @Body() dto: DeleteAccountDto,
+    @RequestContext() context: AuthRequestContext,
+  ): Promise<DeleteAccountResponseDto> {
+    const response = await this.authApplicationService.deleteAccount(
+      userId,
+      dto.password,
+      context.session.ipAddress ?? undefined,
+    );
+    context.clearRefreshToken();
+    return response;
   }
 }

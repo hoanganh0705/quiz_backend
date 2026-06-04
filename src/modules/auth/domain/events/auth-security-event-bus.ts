@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import type { AuthSecurityEventPublisherPort } from './auth-security-event-bus.port';
 import type {
+  AccountDeletedEvent,
   PasswordResetRequestedEvent,
   PasswordResetCompletedEvent,
   PasswordChangedEvent,
@@ -22,6 +23,13 @@ export class AuthSecurityEventPublisher implements AuthSecurityEventPublisherPor
       timestamp: timestamp instanceof Date ? timestamp.toISOString() : timestamp,
       ...rest,
     };
+  }
+
+  publishAccountDeleted(event: AccountDeletedEvent): void {
+    this.logger.info({
+      event: 'auth_security_account_deleted',
+      ...this.serialize(event.eventType, event as unknown as Record<string, unknown>),
+    });
   }
 
   publishPasswordResetRequested(event: PasswordResetRequestedEvent): void {

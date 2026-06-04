@@ -20,6 +20,9 @@ import { JwtTokenAdapter } from './infrastructure/tokens/jwt-token.adapter';
 import { SessionService } from './domain/session.service';
 import { SecurityService } from './domain/security.service';
 import { AccountSecurityService } from './domain/account-security.service';
+import { CredentialVerificationService } from './domain/credential-verification.service';
+import { AccountDeletionService } from './domain/account-deletion.service';
+import { RegistrationAvailabilityService } from './domain/registration-availability.service';
 import { AuthRequestContextService } from './infrastructure/context/auth-request-context.service';
 import { CommonModule } from '@/common/common.module';
 import { DeviceParserService } from './infrastructure/context/device-parser.service';
@@ -62,6 +65,9 @@ import { VerificationTokenService } from './domain/verification-token.service';
     SessionService,
     SecurityService,
     AccountSecurityService,
+    CredentialVerificationService,
+    AccountDeletionService,
+    RegistrationAvailabilityService,
     // Event publisher
     AuthSecurityEventPublisher,
     // Config classes
