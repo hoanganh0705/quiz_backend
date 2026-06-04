@@ -192,6 +192,29 @@ export class UserSessionRepository implements SessionRepositoryPort {
     return (session as SessionRecord | undefined) ?? null;
   }
 
+  async rotateSessionWithLock(
+    sessionId: string,
+    data: {
+      jti: string;
+      refreshTokenHash: string;
+      ipAddress: string | null;
+      deviceBrowser: string | null;
+      deviceOs: string | null;
+      deviceType: string;
+      expiresAt: string;
+      lastUsedAt: string;
+    },
+  ): Promise<void> {
+    await this.db.transaction(async (tx) => {
+      // Serializes concurrent refresh-token rotations for the same sessionId.
+      // Two concurrent rotations without the lock: both read session, both write,
+      // second write overwrites the first → first token becomes permanently invalid.
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${sessionId}))`);
+
+      await tx.update(userSessions).set(data).where(eq(userSessions.sessionId, sessionId));
+    });
+  }
+
   async updateSessionForRotation(
     sessionId: string,
     data: {

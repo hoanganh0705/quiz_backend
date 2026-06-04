@@ -10,4 +10,6 @@ export {
   SessionNotFoundError,
   InvalidTokenError,
   InvalidPasswordError,
+  DeletionFailedError,
+  PasswordReuseError,
 } from './auth-domain.errors';

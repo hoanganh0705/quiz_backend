@@ -13,3 +13,4 @@ export {
   AUTH_SECURITY_EVENT_BUS,
   type AuthSecurityEventPublisherPort,
 } from '../events/auth-security-event-bus.port';
+export { type OutboxPort, OUTBOX_PORT } from './outbox.port';

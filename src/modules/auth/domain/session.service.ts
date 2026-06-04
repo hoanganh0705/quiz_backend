@@ -86,7 +86,10 @@ export class SessionService {
     const nextRefreshTokenHash = this.cryptoService.hashSha256(tokens.refreshToken);
     const expiresAt = this.getRefreshTokenExpiresAtIso();
 
-    await this.userSessionRepository.updateSessionForRotation(sessionId, {
+    // Uses rotateSessionWithLock which holds pg_advisory_xact_lock(hashtext(sessionId))
+    // for the duration of the transaction — preventing concurrent refresh requests for
+    // the same session from racing and overwriting each other's token hash.
+    await this.userSessionRepository.rotateSessionWithLock(sessionId, {
       jti: tokens.refreshTokenJti,
       refreshTokenHash: nextRefreshTokenHash,
       ipAddress: context.ipAddress,

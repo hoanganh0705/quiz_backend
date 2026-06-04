@@ -360,6 +360,7 @@ export const users = pgTable(
       mode: 'string',
     }),
     emailVerifiedAt: timestamp('email_verified_at', { withTimezone: true, mode: 'string' }),
+    passwordChangedAt: timestamp('password_changed_at', { withTimezone: true, mode: 'string' }),
     xpTotal: integer('xp_total').default(0).notNull(),
     currentStreak: integer('current_streak').default(0).notNull(),
     longestStreak: integer('longest_streak').default(0).notNull(),
@@ -472,6 +473,56 @@ export const passwordResetTokens = pgTable(
     index('idx_password_reset_tokens_hash_active')
       .using('btree', table.tokenHash.asc().nullsLast().op('text_ops'))
       .where(sql`is_active = true AND used_at IS NULL AND revoked_at IS NULL`),
+  ],
+);
+
+export const passwordHistory = pgTable(
+  'password_history',
+  {
+    historyId: uuid('history_id').defaultRandom().primaryKey().notNull(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.userId, { onDelete: 'cascade' }),
+    passwordHash: text('password_hash').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    index('idx_password_history_user_created').using(
+      'btree',
+      table.userId.asc().nullsLast().op('uuid_ops'),
+      table.createdAt.desc().nullsLast().op('timestamptz_ops'),
+    ),
+    foreignKey({
+      columns: [table.userId],
+      foreignColumns: [users.userId],
+      name: 'password_history_user_id_fkey',
+    }).onDelete('cascade'),
+  ],
+);
+
+export const outboxEvents = pgTable(
+  'outbox_events',
+  {
+    eventId: uuid('event_id').defaultRandom().primaryKey().notNull(),
+    aggregateType: text('aggregate_type').notNull(),
+    eventType: text('event_type').notNull(),
+    payload: jsonb('payload').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' })
+      .defaultNow()
+      .notNull(),
+    processedAt: timestamp('processed_at', { withTimezone: true, mode: 'string' }),
+  },
+  (table) => [
+    index('idx_outbox_events_unprocessed').using(
+      'btree',
+      table.processedAt.asc().nullsLast().op('timestamptz_ops'),
+    ),
+    index('idx_outbox_events_created').using(
+      'btree',
+      table.createdAt.asc().nullsLast().op('timestamptz_ops'),
+    ),
   ],
 );
 
