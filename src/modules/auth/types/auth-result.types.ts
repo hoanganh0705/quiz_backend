@@ -42,3 +42,23 @@ export type AccountSecurityResult = {
   lastSuccessfulLoginAt: string | null;
   lastPasswordChangeAt: string | null;
 };
+
+export type AvailabilityResult = {
+  available: boolean;
+};
+
+export type CredentialVerificationResult = {
+  valid: boolean;
+};
+
+export type AccountDeletionResult = {
+  message: string;
+};
+
+export type CurrentUserResult = {
+  userId: string;
+  username: string;
+  email: string;
+  role: 'admin' | 'moderator' | 'user';
+  isVerified: boolean;
+};

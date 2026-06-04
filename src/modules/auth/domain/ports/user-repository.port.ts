@@ -17,6 +17,14 @@ export interface UserRepositoryPort {
     role: AuthIdentity['role'];
   } | null>;
 
+  findActiveUserProfile(userId: string): Promise<{
+    userId: string;
+    username: string;
+    email: string;
+    role: AuthIdentity['role'];
+    isVerified: boolean;
+  } | null>;
+
   createUser(
     email: string,
     username: string,
@@ -44,6 +52,12 @@ export interface UserRepositoryPort {
   findActiveVerificationStatusByEmail(
     email: string,
   ): Promise<{ userId: string; email: string; isVerified: boolean } | null>;
+
+  isEmailAvailable(email: string): Promise<boolean>;
+
+  isUsernameAvailable(username: string): Promise<boolean>;
+
+  softDeleteUser(userId: string, nowIso: string): Promise<void>;
 
   getSecurityMetadata(userId: string): Promise<{
     emailVerified: boolean;
