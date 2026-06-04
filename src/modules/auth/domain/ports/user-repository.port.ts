@@ -1,6 +1,19 @@
 import type { AuthIdentity } from '../../types/auth-context.types';
 
 export interface UserRepositoryPort {
+  /**
+   * Finds an active user by email for OAuth linking decisions.
+   * Returns only identity fields needed for the OAuth login flow.
+   */
+  findActiveIdentityByEmail(email: string): Promise<{
+    userId: string;
+    username: string;
+    email: string;
+    isVerified: boolean;
+    role: AuthIdentity['role'];
+  } | null>;
+
+  findActiveByEmailWithPassword(email: string): Promise<{
   findActiveByEmailWithPassword(email: string): Promise<{
     userId: string;
     username: string;
