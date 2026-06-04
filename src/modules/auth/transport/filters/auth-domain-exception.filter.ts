@@ -20,6 +20,8 @@ import {
   InvalidPasswordError,
   DeletionFailedError,
   PasswordReuseError,
+  InvalidOAuthTokenError,
+  OAuthAccountLinkingRequiredError,
 } from '../../domain/errors';
 
 /**
@@ -78,6 +80,12 @@ export class AuthDomainExceptionFilter implements ExceptionFilter {
       return { status: HttpStatus.CONFLICT, message: 'Account deletion failed.' };
     }
     if (error instanceof PasswordReuseError) {
+      return { status: HttpStatus.CONFLICT, message: error.message };
+    }
+    if (error instanceof InvalidOAuthTokenError) {
+      return { status: HttpStatus.UNAUTHORIZED, message: 'Invalid or expired OAuth credentials.' };
+    }
+    if (error instanceof OAuthAccountLinkingRequiredError) {
       return { status: HttpStatus.CONFLICT, message: error.message };
     }
 

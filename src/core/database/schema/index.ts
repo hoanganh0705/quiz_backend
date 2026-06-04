@@ -1896,3 +1896,47 @@ export const userFollows = pgTable(
     check('user_follows_no_self_follow', sql`follower_id != following_id`),
   ],
 );
+
+// ─── OAuth ────────────────────────────────────────────────────────────────────
+
+/**
+ * OAuth account links: connects an external identity (Google, GitHub, Apple, Microsoft)
+ * to an internal user. The `oauth_accounts.email` is intentionally omitted — email
+ * is always sourced from `users.email`.
+ *
+ * Provider validity is enforced at the application layer, not via a database CHECK
+ * constraint. This keeps the schema future-proof for new providers.
+ */
+export const oauthAccounts = pgTable(
+  'oauth_accounts',
+  {
+    oauthAccountId: uuid('oauth_account_id').defaultRandom().primaryKey().notNull(),
+    userId: uuid('user_id').notNull(),
+    provider: text('provider').notNull(),
+    providerUserId: text('provider_user_id').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex('uq_oauth_accounts_provider_provider_user_id').using(
+      'btree',
+      table.provider.asc().nullsLast().op('text_ops'),
+      table.providerUserId.asc().nullsLast().op('text_ops'),
+    ),
+    uniqueIndex('uq_oauth_accounts_user_id_provider').using(
+      'btree',
+      table.userId.asc().nullsLast().op('uuid_ops'),
+      table.provider.asc().nullsLast().op('text_ops'),
+    ),
+    index('idx_oauth_accounts_user_id').using(
+      'btree',
+      table.userId.asc().nullsLast().op('uuid_ops'),
+    ),
+    foreignKey({
+      columns: [table.userId],
+      foreignColumns: [users.userId],
+      name: 'oauth_accounts_user_id_fkey',
+    }).onDelete('cascade'),
+  ],
+);
