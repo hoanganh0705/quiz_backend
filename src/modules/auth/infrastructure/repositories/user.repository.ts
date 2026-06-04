@@ -6,6 +6,7 @@ import { users, userProfiles, userSessions, passwordResetTokens } from '@/core/d
 import type { UserRepositoryPort } from '@/modules/auth/domain/ports/user-repository.port';
 import type { UserMeRow } from '@/modules/user/domain/ports/user-repository.port';
 import { ResourceConflictError } from '@/modules/auth/domain/errors';
+import { AuthIdentity } from '../../types/auth-context.types';
 
 const USER_IDENTITY_COLUMNS = {
   userId: users.userId,
@@ -61,6 +62,41 @@ export class UserRepository implements UserRepositoryPort {
     if (existingUser) {
       throw new ResourceConflictError('Username or email already exists');
     }
+  }
+
+  async findActiveUserProfile(userId: string): Promise<{
+    userId: string;
+    username: string;
+    email: string;
+    role: AuthIdentity['role'];
+    isVerified: boolean;
+  } | null> {
+    const [user] = await this.db
+      .select({
+        userId: users.userId,
+        username: users.username,
+        email: users.email,
+        role: users.role,
+        isVerified: users.isVerified,
+      })
+      .from(users)
+      .where(and(eq(users.userId, userId), isNull(users.deletedAt)))
+      .limit(1)
+      .catch(() => {
+        throw new InternalServerErrorException('Failed to fetch user profile');
+      });
+
+    return (
+      (user as
+        | {
+            userId: string;
+            username: string;
+            email: string;
+            role: 'admin' | 'moderator' | 'user';
+            isVerified: boolean;
+          }
+        | undefined) ?? null
+    );
   }
 
   async createUser(email: string, username: string, passwordHash: string): Promise<CreatedUserRow> {
@@ -232,6 +268,41 @@ export class UserRepository implements UserRepositoryPort {
       });
 
     return (user as UserMeRow | undefined) ?? null;
+  }
+
+  async isEmailAvailable(email: string): Promise<boolean> {
+    const result = await this.db
+      .select({ userId: users.userId })
+      .from(users)
+      .where(and(isNull(users.deletedAt), eq(users.email, email)))
+      .limit(1)
+      .catch(() => null);
+
+    return result === undefined;
+  }
+
+  async isUsernameAvailable(username: string): Promise<boolean> {
+    const result = await this.db
+      .select({ userId: users.userId })
+      .from(users)
+      .where(and(isNull(users.deletedAt), eq(users.username, username)))
+      .limit(1)
+      .catch(() => null);
+
+    return result === undefined;
+  }
+
+  async softDeleteUser(userId: string, nowIso: string): Promise<void> {
+    await this.db
+      .update(users)
+      .set({
+        deletedAt: nowIso,
+        updatedAt: nowIso,
+      })
+      .where(and(eq(users.userId, userId), isNull(users.deletedAt)))
+      .catch(() => {
+        throw new InternalServerErrorException('Failed to delete user account');
+      });
   }
 
   async getSecurityMetadata(userId: string): Promise<{

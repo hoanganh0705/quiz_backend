@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { InvalidCredentialsError } from '../domain/errors';
 import type { SessionRequestContext } from '../types/auth-context.types';
 import { AuthLoginService } from '../domain/auth-login.service';
 import { AuthRefreshService } from '../domain/auth-refresh.service';
@@ -7,6 +8,9 @@ import { PasswordResetService } from '../domain/password-reset.service';
 import { ChangePasswordService } from '../domain/change-password.service';
 import { SessionManagementService } from '../domain/session-management.service';
 import { AccountSecurityService } from '../domain/account-security.service';
+import { CredentialVerificationService } from '../domain/credential-verification.service';
+import { AccountDeletionService } from '../domain/account-deletion.service';
+import { RegistrationAvailabilityService } from '../domain/registration-availability.service';
 import type {
   LoginCommand,
   RegisterCommand,
@@ -30,6 +34,11 @@ import {
   AccountSecurityDto,
   SessionManagementResultDto,
 } from '../dto/response/session-management.dto';
+import { CurrentUserResponseDto } from '../dto/response/current-user-response.dto';
+import { VerifyPasswordResponseDto } from '../dto/response/verify-password-response.dto';
+import { CheckEmailResponseDto } from '../dto/response/check-email-response.dto';
+import { CheckUsernameResponseDto } from '../dto/response/check-username-response.dto';
+import { DeleteAccountResponseDto } from '../dto/response/delete-account-response.dto';
 import { AuthResponseMapper } from '../mappers/auth-response.mapper';
 
 type LoginApplicationResult = {
@@ -53,6 +62,9 @@ export class AuthApplicationService {
     private readonly changePasswordService: ChangePasswordService,
     private readonly sessionManagementService: SessionManagementService,
     private readonly accountSecurityService: AccountSecurityService,
+    private readonly credentialVerificationService: CredentialVerificationService,
+    private readonly accountDeletionService: AccountDeletionService,
+    private readonly registrationAvailabilityService: RegistrationAvailabilityService,
     private readonly authResponseMapper: AuthResponseMapper,
   ) {}
 
@@ -194,5 +206,44 @@ export class AuthApplicationService {
       lastSuccessfulLoginAt: metadata.lastLoginAt,
       lastPasswordChangeAt: metadata.lastPasswordChangedAt,
     };
+  }
+
+  async getCurrentUser(userId: string): Promise<CurrentUserResponseDto> {
+    const result = await this.accountSecurityService.getCurrentUser(userId);
+    return this.authResponseMapper.toCurrentUserResponse(result);
+  }
+
+  async checkEmailAvailability(email: string): Promise<CheckEmailResponseDto> {
+    const result = await this.registrationAvailabilityService.checkEmailAvailability(email);
+    return this.authResponseMapper.toCheckEmailResponse(result);
+  }
+
+  async checkUsernameAvailability(username: string): Promise<CheckUsernameResponseDto> {
+    const result = await this.registrationAvailabilityService.checkUsernameAvailability(username);
+    return this.authResponseMapper.toCheckUsernameResponse(result);
+  }
+
+  async verifyPassword(userId: string, password: string): Promise<VerifyPasswordResponseDto> {
+    const result = await this.credentialVerificationService.verifyPassword(userId, password);
+    return this.authResponseMapper.toVerifyPasswordResponse(result);
+  }
+
+  async deleteAccount(
+    userId: string,
+    password: string,
+    ipAddress?: string,
+  ): Promise<DeleteAccountResponseDto> {
+    const result = await this.credentialVerificationService.verifyPassword(userId, password);
+    if (!result.valid) {
+      throw new InvalidCredentialsError();
+    }
+
+    const identity = await this.accountSecurityService.getCurrentUser(userId);
+    const deletionResult = await this.accountDeletionService.deleteAccount(
+      userId,
+      identity.email,
+      ipAddress,
+    );
+    return this.authResponseMapper.toDeleteAccountResponse(deletionResult);
   }
 }

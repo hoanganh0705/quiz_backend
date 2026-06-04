@@ -1,4 +1,5 @@
 import type {
+  AccountDeletedEvent,
   PasswordResetRequestedEvent,
   PasswordResetCompletedEvent,
   PasswordChangedEvent,
@@ -7,6 +8,7 @@ import type {
 } from './auth-security.events';
 
 export interface AuthSecurityEventPublisherPort {
+  publishAccountDeleted(event: AccountDeletedEvent): void;
   publishPasswordResetRequested(event: PasswordResetRequestedEvent): void;
   publishPasswordResetCompleted(event: PasswordResetCompletedEvent): void;
   publishPasswordChanged(event: PasswordChangedEvent): void;
