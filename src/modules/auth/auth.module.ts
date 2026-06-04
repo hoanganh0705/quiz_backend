@@ -15,6 +15,7 @@ import { SessionConfig } from './config/session.config';
 import { EmailVerificationConfig } from './config/email-verification.config';
 import { PasswordResetConfig } from './config/password-reset.config';
 import { SecurityConfig } from './config/security.config';
+import { GoogleOAuthConfig } from './config/google-oauth.config';
 import { AuthCookieService } from './transport/cookies/auth-cookie.service';
 import { AuthSessionCleanupService } from './infrastructure/session/auth-session-cleanup.service';
 import { JwtTokenAdapter } from './infrastructure/tokens/jwt-token.adapter';
@@ -49,6 +50,11 @@ import { AuthDomainExceptionFilter } from './transport/filters/auth-domain-excep
 import { VerificationTokenService } from './domain/verification-token.service';
 import { OutboxAdapter } from './infrastructure/outbox/outbox.adapter';
 import { OUTBOX_PORT } from './domain/ports/outbox.port';
+import { OAuthLoginService } from './domain/oauth/oauth-login.service';
+import { OAuthAccountRepository } from './infrastructure/oauth/oauth-account.repository';
+import { GoogleOAuthAdapter } from './infrastructure/oauth/google-oauth.adapter';
+import { OAUTH_ACCOUNT_REPOSITORY_PORT } from './domain/oauth/ports/oauth-account-repository.port';
+import { OAUTH_PROVIDER_PORT } from './domain/oauth/ports/oauth-provider.port';
 
 @Module({
   imports: [CommonModule, DatabaseModule, RedisModule, EmailModule],
@@ -100,7 +106,14 @@ import { OUTBOX_PORT } from './domain/ports/outbox.port';
     { provide: CACHE_PROVIDER, useExisting: RedisService },
     { provide: AUTH_SECURITY_EVENT_BUS, useExisting: AuthSecurityEventPublisher },
     { provide: OUTBOX_PORT, useExisting: OutboxAdapter },
+    { provide: OAUTH_PROVIDER_PORT, useExisting: GoogleOAuthAdapter },
+    { provide: OAUTH_ACCOUNT_REPOSITORY_PORT, useExisting: OAuthAccountRepository },
+    // OAuth providers and infrastructure
     OutboxAdapter,
+    GoogleOAuthConfig,
+    GoogleOAuthAdapter,
+    OAuthAccountRepository,
+    OAuthLoginService,
   ],
   exports: [AuthApplicationService],
 })

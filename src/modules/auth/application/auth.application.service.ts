@@ -19,6 +19,7 @@ import type {
   ResetPasswordCommand,
   ChangePasswordCommand,
 } from '../domain/types/auth-commands';
+import { OAuthLoginService as OAuthLoginServiceClass } from '../domain/oauth/oauth-login.service';
 import { LoginResponseDto } from '../dto/response/login-response.dto';
 import { RefreshTokenResponseDto } from '../dto/response/refresh-token-response.dto';
 import { LogoutResponseDto } from '../dto/response/logout-response.dto';
@@ -65,6 +66,7 @@ export class AuthApplicationService {
     private readonly accountDeletionService: AccountDeletionService,
     private readonly registrationAvailabilityService: RegistrationAvailabilityService,
     private readonly authResponseMapper: AuthResponseMapper,
+    private readonly oauthLoginService: OAuthLoginServiceClass,
   ) {}
 
   async register(registerCommand: RegisterCommand): Promise<RegisterResponseDto> {
@@ -90,6 +92,18 @@ export class AuthApplicationService {
     session: SessionRequestContext,
   ): Promise<LoginApplicationResult> {
     const result = await this.authLoginService.login(loginCommand, session);
+    return {
+      response: this.authResponseMapper.toLoginResponse(result),
+      refreshToken: result.refreshToken,
+      sessionId: result.sessionId,
+    };
+  }
+
+  async googleLogin(
+    idToken: string,
+    session: SessionRequestContext,
+  ): Promise<LoginApplicationResult> {
+    const result = await this.oauthLoginService.login({ provider: 'google', idToken }, session);
     return {
       response: this.authResponseMapper.toLoginResponse(result),
       refreshToken: result.refreshToken,

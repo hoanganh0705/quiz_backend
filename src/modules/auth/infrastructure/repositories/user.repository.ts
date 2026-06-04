@@ -63,6 +63,41 @@ export class UserRepository implements UserRepositoryPort {
     @Inject(OUTBOX_PORT) private readonly outbox: OutboxPort,
   ) {}
 
+  async findActiveIdentityByEmail(email: string): Promise<{
+    userId: string;
+    username: string;
+    email: string;
+    isVerified: boolean;
+    role: 'admin' | 'moderator' | 'user';
+  } | null> {
+    const [user] = await this.db
+      .select({
+        userId: users.userId,
+        username: users.username,
+        email: users.email,
+        isVerified: users.isVerified,
+        role: users.role,
+      })
+      .from(users)
+      .where(and(isNull(users.deletedAt), eq(users.email, email.toLowerCase())))
+      .limit(1)
+      .catch(() => {
+        throw new InternalServerErrorException('Failed to fetch user identity by email');
+      });
+
+    return (
+      (user as
+        | {
+            userId: string;
+            username: string;
+            email: string;
+            isVerified: boolean;
+            role: 'admin' | 'moderator' | 'user';
+          }
+        | undefined) ?? null
+    );
+  }
+
   async ensureEmailAndUsernameAvailable(email: string, username: string): Promise<void> {
     const [existingUser] = await this.db
       .select({
