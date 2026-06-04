@@ -64,3 +64,15 @@ export class InvalidPasswordError extends AuthDomainError {
     super(message);
   }
 }
+
+export class DeletionFailedError extends AuthDomainError {
+  constructor(message = 'Account deletion failed') {
+    super(message);
+  }
+}
+
+export class PasswordReuseError extends AuthDomainError {
+  constructor(message = 'Password has been used recently. Please choose a different password.') {
+    super(message);
+  }
+}

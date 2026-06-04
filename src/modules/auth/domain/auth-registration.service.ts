@@ -9,7 +9,8 @@ import type { RegisterResult, VerifyEmailResult } from '../types/auth-result.typ
 import { CRYPTO_PROVIDER, type CryptoProvider } from './ports/crypto.provider';
 import { PASSWORD_PROVIDER, type PasswordProvider } from './ports/password.provider';
 import { USER_REPOSITORY_PORT, type UserRepositoryPort } from './ports/user-repository.port';
-import { ResourceConflictError } from './errors';
+import { normalizeEmail, normalizeUsername } from './utils/normalization.utils';
+import { InternalServerErrorException } from '@nestjs/common';
 import { VerificationTokenService } from './verification-token.service';
 
 @Injectable()
@@ -31,8 +32,8 @@ export class AuthRegistrationService {
   ) {}
 
   async register(registerCommand: RegisterCommand): Promise<RegisterResult> {
-    const normalizedEmail = registerCommand.email.trim().toLowerCase();
-    const normalizedUsername = registerCommand.username.trim().toLowerCase();
+    const normalizedEmail = normalizeEmail(registerCommand.email);
+    const normalizedUsername = normalizeUsername(registerCommand.username);
 
     const existingUser: { userId: string; email: string; isVerified: boolean } | null =
       await this.userRepository.findActiveVerificationStatusByEmail(normalizedEmail);
@@ -58,27 +59,32 @@ export class AuthRegistrationService {
       };
     }
 
+    // Remove the pre-check availability guard: it creates a TOCTOU race where two
+    // concurrent registrations with the same email both pass the check and one fails
+    // on the unique constraint with a 500 error. Instead, we rely on the unique
+    // constraint as the single source of truth and convert DB constraint errors to
+    // 409 Conflict responses (BLOCK-4 fix).
+    const passwordHash = await this.passwordProvider.hash(registerCommand.password);
+
+    let createdUser: Awaited<ReturnType<UserRepositoryPort['createUser']>>;
     try {
-      await this.userRepository.ensureEmailAndUsernameAvailable(
+      createdUser = await this.userRepository.createUser(
         normalizedEmail,
         normalizedUsername,
+        passwordHash,
       );
     } catch (error) {
-      if (error instanceof ResourceConflictError) {
-        this.logger.warn({ event: 'auth_register_conflict' });
-        return {
-          message: AuthRegistrationService.REGISTER_GENERIC_MESSAGE,
-        };
+      if (
+        error instanceof InternalServerErrorException &&
+        (error.message.includes('unique') ||
+          error.message.includes('duplicate') ||
+          error.message.includes('key'))
+      ) {
+        this.logger.warn({ event: 'auth_register_duplicate_constraint' });
+        return { message: AuthRegistrationService.REGISTER_GENERIC_MESSAGE };
       }
       throw error;
     }
-
-    const passwordHash = await this.passwordProvider.hash(registerCommand.password);
-    const createdUser = await this.userRepository.createUser(
-      normalizedEmail,
-      normalizedUsername,
-      passwordHash,
-    );
 
     try {
       await this.verificationTokenService.issueAndSendVerificationToken(
@@ -121,7 +127,7 @@ export class AuthRegistrationService {
   async resendVerificationEmail(
     command: ResendVerificationEmailCommand,
   ): Promise<VerifyEmailResult> {
-    const normalizedEmail = command.email.trim().toLowerCase();
+    const normalizedEmail = normalizeEmail(command.email);
     const foundUser: { userId: string; email: string; isVerified: boolean } | null =
       await this.userRepository.findActiveVerificationStatusByEmail(normalizedEmail);
 

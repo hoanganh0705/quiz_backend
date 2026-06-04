@@ -5,6 +5,7 @@ import {
   type ExceptionFilter,
   type ArgumentsHost,
 } from '@nestjs/common';
+import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import type { Response } from 'express';
 import {
   AuthDomainError,
@@ -17,6 +18,8 @@ import {
   SessionNotFoundError,
   InvalidTokenError,
   InvalidPasswordError,
+  DeletionFailedError,
+  PasswordReuseError,
 } from '../../domain/errors';
 
 /**
@@ -26,6 +29,10 @@ import {
  */
 @Catch(AuthDomainError)
 export class AuthDomainExceptionFilter implements ExceptionFilter {
+  constructor(
+    @InjectPinoLogger(AuthDomainExceptionFilter.name) private readonly logger: PinoLogger,
+  ) {}
+
   catch(exception: AuthDomainError, host: ArgumentsHost): void {
     const ctx = host.switchToHttp();
     const response = ctx.getResponse<Response>();
@@ -67,8 +74,22 @@ export class AuthDomainExceptionFilter implements ExceptionFilter {
     if (error instanceof InvalidPasswordError) {
       return { status: HttpStatus.UNAUTHORIZED, message: 'Invalid current password.' };
     }
+    if (error instanceof DeletionFailedError) {
+      return { status: HttpStatus.CONFLICT, message: 'Account deletion failed.' };
+    }
+    if (error instanceof PasswordReuseError) {
+      return { status: HttpStatus.CONFLICT, message: error.message };
+    }
 
-    // Fallback for any AuthDomainError subclass not explicitly mapped.
+    // Any unrecognised domain error subclass falls through here. Log with error type
+    // name so it surfaces in observability and can be explicitly handled in a patch.
+    this.logger.error({
+      event: 'auth_unhandled_domain_error',
+      errorType: error.constructor.name,
+      errorMessage: error.message,
+      stack: error.stack,
+    });
+
     return {
       status: HttpStatus.INTERNAL_SERVER_ERROR,
       message: 'An internal authentication error occurred.',

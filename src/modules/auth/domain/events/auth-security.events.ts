@@ -1,7 +1,6 @@
 export interface AccountDeletedEvent {
   readonly eventType: 'account_deleted';
   readonly userId: string;
-  readonly email: string;
   readonly timestamp: Date;
   readonly ipAddress?: string;
 }
@@ -9,7 +8,6 @@ export interface AccountDeletedEvent {
 export interface PasswordResetRequestedEvent {
   readonly eventType: 'password_reset_requested';
   readonly userId: string;
-  readonly email: string;
   readonly timestamp: Date;
   readonly ipAddress?: string;
 }
@@ -17,7 +15,6 @@ export interface PasswordResetRequestedEvent {
 export interface PasswordResetCompletedEvent {
   readonly eventType: 'password_reset_completed';
   readonly userId: string;
-  readonly email: string;
   readonly timestamp: Date;
   readonly ipAddress?: string;
 }
@@ -25,7 +22,6 @@ export interface PasswordResetCompletedEvent {
 export interface PasswordChangedEvent {
   readonly eventType: 'password_changed';
   readonly userId: string;
-  readonly email: string;
   readonly timestamp: Date;
   readonly ipAddress?: string;
 }

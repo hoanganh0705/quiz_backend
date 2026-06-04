@@ -1,5 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { USER_REPOSITORY_PORT, type UserRepositoryPort } from './ports/user-repository.port';
+import { normalizeEmail, normalizeUsername } from './utils/normalization.utils';
 import type { AvailabilityResult } from '../types/auth-result.types';
 
 @Injectable()
@@ -10,13 +11,13 @@ export class RegistrationAvailabilityService {
   ) {}
 
   async checkEmailAvailability(email: string): Promise<AvailabilityResult> {
-    const normalizedEmail = email.trim().toLowerCase();
+    const normalizedEmail = normalizeEmail(email);
     const available = await this.userRepository.isEmailAvailable(normalizedEmail);
     return { available };
   }
 
   async checkUsernameAvailability(username: string): Promise<AvailabilityResult> {
-    const normalizedUsername = username.trim().toLowerCase();
+    const normalizedUsername = normalizeUsername(username);
     const available = await this.userRepository.isUsernameAvailable(normalizedUsername);
     return { available };
   }

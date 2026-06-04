@@ -1,6 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { USER_REPOSITORY_PORT, type UserRepositoryPort } from './ports/user-repository.port';
 import { SessionService } from './session.service';
+import { UserNotFoundError } from './errors';
 import type { CurrentUserResult } from '../types/auth-result.types';
 
 export type AccountSecurityMetadata = {
@@ -20,7 +21,7 @@ export class AccountSecurityService {
   async getCurrentUser(userId: string): Promise<CurrentUserResult> {
     const profile = await this.userRepository.findActiveUserProfile(userId);
     if (!profile) {
-      throw new Error('User not found');
+      throw new UserNotFoundError();
     }
     return {
       userId: profile.userId,
@@ -33,13 +34,14 @@ export class AccountSecurityService {
 
   async getAccountSecurity(userId: string): Promise<AccountSecurityMetadata> {
     const metadata = await this.userRepository.getSecurityMetadata(userId);
-    return (
-      metadata ?? {
-        emailVerified: false,
-        lastPasswordChangedAt: null,
-        lastLoginAt: null,
-      }
-    );
+    if (!metadata) {
+      throw new UserNotFoundError();
+    }
+    return {
+      emailVerified: metadata.emailVerified,
+      lastPasswordChangedAt: metadata.lastPasswordChangedAt,
+      lastLoginAt: metadata.lastLoginAt,
+    };
   }
 
   async getActiveSessionCount(userId: string): Promise<number> {
