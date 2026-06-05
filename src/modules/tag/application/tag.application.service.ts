@@ -3,6 +3,9 @@ import { TagDomainService } from '../domain/tag.service';
 import { TagResponseMapper } from '../mappers/tag-response.mapper';
 import { TagCursorMapper } from '../mappers/tag-cursor.mapper';
 import { FollowedTagCursorMapper } from '../mappers/followed-tag-cursor.mapper';
+import { TagAnalyticsResponseMapper } from '../mappers/tag-analytics-response.mapper';
+import { QuizApplicationService } from '@/modules/quiz/application/quiz.application.service';
+import { QuizAnalyticsService } from '@/modules/quiz/domain/analytics';
 import type {
   RankedTagsResponseDto,
   RankedTagResponseDto,
@@ -22,7 +25,6 @@ import type {
 } from '../domain/types/tag-commands';
 import type { TagRow, FollowedTagRow, RankedTagRow } from '../domain/ports/tag-repository.port';
 import { TagAnalyticsNotFoundError } from '../domain/errors';
-import { QuizApplicationService } from '@/modules/quiz/application/quiz.application.service';
 import type { ListQuizzesQueryDto } from '@/modules/quiz/dto/request/list-quizzes-query.dto';
 import type { QuizListResponseDto } from '@/modules/quiz/dto/response/quiz-list-response.dto';
 import { DeleteTagResponseDto, TagListResponseDto, TagResponseDto } from '../dto/response';
@@ -32,6 +34,7 @@ export class TagApplicationService {
   constructor(
     private readonly tagDomainService: TagDomainService,
     private readonly quizApplicationService: QuizApplicationService,
+    private readonly quizAnalyticsService: QuizAnalyticsService,
   ) {}
 
   async listTags(query: ListTagsQuery): Promise<TagListResponseDto> {
@@ -66,10 +69,7 @@ export class TagApplicationService {
 
   async getRelatedTags(slug: string, query: RelatedTagsQuery): Promise<RelatedTagsResponseDto> {
     const items = await this.tagDomainService.getRelatedTags(slug, query);
-
-    return {
-      items: items.map((item) => this.toTagResponse(item)),
-    };
+    return { items: items.map((item) => this.toTagResponse(item)) };
   }
 
   async createTag(payload: CreateTagCommand): Promise<TagResponseDto> {

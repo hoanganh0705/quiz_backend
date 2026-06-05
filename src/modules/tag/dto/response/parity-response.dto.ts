@@ -1,4 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { Type } from 'class-transformer';
 import { TagResponseDto } from './tag-response.dto';
 
 export class RankedTagResponseDto {
@@ -122,13 +123,15 @@ export class TagAnalyticsResponseDto {
   @ApiProperty({ format: 'uuid' })
   tagId!: string;
 
-  @ApiProperty({ example: 'Science' })
+  @ApiProperty({ example: 'JavaScript' })
   tagName!: string;
 
   @ApiProperty({ type: TagAnalyticsSummaryDto })
+  @Type(() => TagAnalyticsSummaryDto)
   summary!: TagAnalyticsSummaryDto;
 
   @ApiProperty({ type: [TagAnalyticsTopQuizDto] })
+  @Type(() => TagAnalyticsTopQuizDto)
   topQuizzes!: TagAnalyticsTopQuizDto[];
 
   @ApiProperty({ example: '2026-06-05T01:00:00.000Z' })
