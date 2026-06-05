@@ -3,6 +3,7 @@ import type { JwtPayload } from '@/common/guards/jwt.guard';
 import { QuizQueryService } from '../domain/quiz/quiz-query.service';
 import { QuizCommandService } from '../domain/quiz/quiz-command.service';
 import { QuizResponseMapper, QuizQuestionResponseMapper, QuizStatsResponseMapper } from '../mappers';
+import { CreatorQuizAnalyticsResponseMapper } from '../mappers/creator-quiz-analytics-response.mapper';
 import { QuizCursorMapper } from '../mappers/quiz-cursor.mapper';
 import { CreateQuizDto } from '../dto/request/create-quiz.dto';
 import { UpdateQuizDto } from '../dto/request/update-quiz.dto';
@@ -12,6 +13,7 @@ import { ListQuizzesQueryDto } from '../dto/request/list-quizzes-query.dto';
 import type { QuizResponseDto } from '../dto/response/quiz-response.dto';
 import type { QuizListResponseDto } from '../dto/response/quiz-list-response.dto';
 import type { QuizStatsResponseDto } from '../dto/response/quiz-stats-response.dto';
+import type { CreatorQuizAnalyticsDto } from '../dto/response/quiz-analytics.dto';
 import type { RelatedQuizzesResponseDto } from '../dto/response/related-quizzes-response.dto';
 import type { DeleteQuizResponseDto } from '../dto/response/delete-quiz-response.dto';
 import type {
@@ -139,6 +141,68 @@ export class QuizApplicationService {
         hasNextPage: result.hasNextPage,
       },
     };
+  }
+
+  async listMyQuizzes(userId: string, dto: ListQuizzesQueryDto): Promise<QuizListResponseDto> {
+    const limit = dto.limit ?? 20;
+    const cursor = dto.cursor ? QuizCursorMapper.parse(dto.cursor) : null;
+
+    const result = await this.quizQueryService.listUserQuizzes(userId, {
+      limit,
+      cursor,
+    });
+
+    return {
+      items: result.rows.map((row) => QuizResponseMapper.toQuizResponse(row)),
+      pagination: {
+        limit: result.limit,
+        nextCursor: result.nextCursor ? QuizCursorMapper.serialize(result.nextCursor) : null,
+        hasNextPage: result.hasNextPage,
+      },
+    };
+  }
+
+  async listMyDraftQuizzes(userId: string, dto: ListQuizzesQueryDto): Promise<QuizListResponseDto> {
+    const limit = dto.limit ?? 20;
+    const cursor = dto.cursor ? QuizCursorMapper.parse(dto.cursor) : null;
+
+    const result = await this.quizQueryService.listDraftQuizzes(userId, {
+      limit,
+      cursor,
+    });
+
+    return {
+      items: result.rows.map((row) => QuizResponseMapper.toQuizResponse(row)),
+      pagination: {
+        limit: result.limit,
+        nextCursor: result.nextCursor ? QuizCursorMapper.serialize(result.nextCursor) : null,
+        hasNextPage: result.hasNextPage,
+      },
+    };
+  }
+
+  async listMyPublishedQuizzes(userId: string, dto: ListQuizzesQueryDto): Promise<QuizListResponseDto> {
+    const limit = dto.limit ?? 20;
+    const cursor = dto.cursor ? QuizCursorMapper.parse(dto.cursor) : null;
+
+    const result = await this.quizQueryService.listPublishedQuizzes(userId, {
+      limit,
+      cursor,
+    });
+
+    return {
+      items: result.rows.map((row) => QuizResponseMapper.toQuizResponse(row)),
+      pagination: {
+        limit: result.limit,
+        nextCursor: result.nextCursor ? QuizCursorMapper.serialize(result.nextCursor) : null,
+        hasNextPage: result.hasNextPage,
+      },
+    };
+  }
+
+  async getMyQuizAnalytics(userId: string): Promise<CreatorQuizAnalyticsDto> {
+    const analytics = await this.quizQueryService.getCreatorAnalytics(userId);
+    return CreatorQuizAnalyticsResponseMapper.toResponse(analytics);
   }
 
   async updateQuiz(quizId: string, user: JwtPayload, dto: UpdateQuizDto): Promise<QuizResponseDto> {

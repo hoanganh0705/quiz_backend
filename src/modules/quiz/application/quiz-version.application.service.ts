@@ -2,11 +2,12 @@ import { Injectable } from '@nestjs/common';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
 import { QuizVersionService } from '../domain/version/quiz-version.service';
 import { QuizVersionResponseMapper } from '../mappers/quiz-version-response.mapper';
+import { QuizQuestionResponseMapper } from '../mappers/quiz-question-response.mapper';
 import { QuizVersionCursorMapper } from '../mappers/quiz-cursor.mapper';
 import { CreateQuizVersionDto } from '../dto/request/create-quiz-version.dto';
 import { UpdateQuizVersionDto } from '../dto/request/update-quiz-version.dto';
 import { ListQuizVersionsQueryDto } from '../dto/request/list-quiz-versions-query.dto';
-import type { QuizVersionResponseDto } from '../dto/response/quiz-version-response.dto';
+import type { QuizVersionResponseDto, QuizVersionDetailResponseDto } from '../dto/response/quiz-version-response.dto';
 import type { QuizVersionListResponseDto } from '../dto/response/quiz-version-list-response.dto';
 import type { CreateQuizVersionCommand } from '../domain/types/create-quiz-version.command';
 import type { UpdateQuizVersionCommand } from '../domain/types/quiz-version-commands';
@@ -51,6 +52,23 @@ export class QuizVersionApplicationService {
         hasNextPage: result.hasNextPage,
       },
     };
+  }
+
+  async getQuizVersionDetail(
+    quizId: string,
+    quizVersionId: string,
+    user: JwtPayload,
+  ): Promise<QuizVersionDetailResponseDto> {
+    const { version, questions } = await this.quizVersionService.getQuizVersionDetail(
+      quizId,
+      quizVersionId,
+      user,
+    );
+
+    return QuizVersionResponseMapper.toQuizVersionDetailResponse(
+      version,
+      QuizQuestionResponseMapper.toQuestionResponses(questions),
+    );
   }
 
   async updateQuizVersion(
