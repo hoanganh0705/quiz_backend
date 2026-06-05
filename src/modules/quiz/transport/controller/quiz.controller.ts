@@ -37,7 +37,6 @@ import { QuizListResponseDto } from '../../dto/response/quiz-list-response.dto';
 import { QuizStatsResponseDto } from '../../dto/response/quiz-stats-response.dto';
 import { CreatorQuizAnalyticsDto } from '../../dto/response/quiz-analytics.dto';
 import { FeaturedQuizzesQueryDto } from '../../dto/request/featured-quizzes-query.dto';
-import { RecommendedQuizzesQueryDto } from '../../dto/request/recommended-quizzes-query.dto';
 import { RelatedQuizzesQueryDto } from '../../dto/request/related-quizzes-query.dto';
 import { RelatedQuizzesResponseDto } from '../../dto/response/related-quizzes-response.dto';
 import { ListQuizzesQueryDto } from '../../dto/request/list-quizzes-query.dto';
@@ -46,11 +45,14 @@ import { DeleteQuizResponseDto } from '@/modules/quiz/dto/response/delete-quiz-r
 import { CreateQuizVersionDto } from '../../dto/request/create-quiz-version.dto';
 import { ListQuizVersionsQueryDto } from '../../dto/request/list-quiz-versions-query.dto';
 import { QuizVersionListResponseDto } from '../../dto/response/quiz-version-list-response.dto';
-import { QuizVersionResponseDto, QuizVersionDetailResponseDto } from '../../dto/response/quiz-version-response.dto';
 import { CreateQuizQuestionDto } from '@/modules/quiz/dto/request/create-quiz-question.dto';
 import { CreateQuizQuestionsDto } from '@/modules/quiz/dto/request/create-quiz-questions.dto';
 import { QuizQuestionResponseDto } from '@/modules/quiz/dto/response/quiz-question-response.dto';
 import { QuizDomainExceptionFilter } from '../filters/quiz-domain-exception.filter';
+import {
+  QuizVersionDetailResponseDto,
+  QuizVersionResponseDto,
+} from '../../dto/response/quiz-version-response.dto';
 
 @ApiTags('quizzes')
 @Controller('quizzes')
@@ -170,7 +172,8 @@ export class QuizController {
   @Public()
   @ApiOperation({
     summary: 'Featured quizzes',
-    description: 'Returns active, published featured quizzes ordered by most recently featured first.',
+    description:
+      'Returns active, published featured quizzes ordered by most recently featured first.',
   })
   @ApiOkResponse({ description: 'Featured quizzes returned', type: RelatedQuizzesResponseDto })
   @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
@@ -195,7 +198,8 @@ export class QuizController {
   @Public()
   @ApiOperation({
     summary: 'Similar quizzes',
-    description: 'Returns related quizzes ranked by shared categories, shared tags, and popularity.',
+    description:
+      'Returns related quizzes ranked by shared categories, shared tags, and popularity.',
   })
   @ApiOkResponse({ description: 'Related quizzes returned', type: RelatedQuizzesResponseDto })
   @ApiNotFoundResponse({ description: 'Quiz not found' })
