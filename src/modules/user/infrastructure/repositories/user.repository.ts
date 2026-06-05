@@ -1,14 +1,47 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { DRIZZLE } from '@/core/database/drizzle.constants';
 import type { DrizzleDB } from '@/core/database/database.module';
+import {
+  badges,
+  categories,
+  quizAttempts,
+  quizCategories,
+  quizTags,
+  quizVersions,
+  tags,
+  userBadges,
+  userProfiles,
+  userRanking,
+  users,
+} from '@/core/database/schema';
+import { and, count, desc, eq, ilike, isNull, or, sql } from 'drizzle-orm';
+import type { UserAnalytics } from '../../domain/types/user-analytics';
+import type {
+  UserBadgeRow,
 import { userActivityEvents, users, userProfiles } from '@/core/database/schema';
 import { and, desc, eq, ilike, isNull, or, sql } from 'drizzle-orm';
 import type {
   UserActivityRow,
   UserMeRow,
+  UserRankingRow,
   UserSearchResult,
   UserRepositoryPort,
 } from '../../domain/ports/user-repository.port';
+
+export const USER_BADGE_COLUMNS = {
+  userBadgeId: userBadges.userBadgeId,
+  badgeId: badges.badgeId,
+  name: badges.name,
+  description: badges.description,
+  earnedAt: userBadges.earnedAt,
+};
+
+export const USER_RANKING_COLUMNS = {
+  userId: userRanking.userId,
+  globalRank: userRanking.allTimeRank,
+  totalScore: userRanking.allTimeXp,
+  updatedAt: userRanking.updatedAt,
+};
 
 @Injectable()
 export class UserRepository implements UserRepositoryPort {
@@ -38,21 +71,140 @@ export class UserRepository implements UserRepositoryPort {
     return (user as UserMeRow | undefined) ?? null;
   }
 
+  async listUserBadges(params: {
+    userId: string;
+    limit: number;
+    cursor?: { earnedAt: string; userBadgeId: string } | null;
+  }): Promise<UserBadgeRow[]> {
+    const { userId, limit, cursor } = params;
+
+    const cursorCondition = cursor
+      ? or(
+          sql`${userBadges.earnedAt} < ${cursor.earnedAt}`,
+          and(
+            eq(userBadges.earnedAt, cursor.earnedAt),
+            sql`${userBadges.userBadgeId} < ${cursor.userBadgeId}`,
+          ),
+        )
+      : undefined;
+
+    const baseCondition = and(
+      eq(userBadges.userId, userId),
+      isNull(userBadges.revokedAt),
+      eq(badges.isActive, true),
+      eq(badges.isHidden, false),
+    );
+
+    const whereClause = cursorCondition ? and(baseCondition, cursorCondition) : baseCondition;
+
+    return this.db
+      .select(USER_BADGE_COLUMNS)
+      .from(userBadges)
+      .innerJoin(badges, eq(userBadges.badgeId, badges.badgeId))
+      .where(whereClause)
+      .orderBy(desc(userBadges.earnedAt), desc(userBadges.userBadgeId))
+      .limit(limit + 1);
+  }
+
+  async getUserRanking(userId: string): Promise<UserRankingRow | null> {
+    const [ranking] = await this.db
+      .select(USER_RANKING_COLUMNS)
+      .from(userRanking)
+      .innerJoin(users, eq(userRanking.userId, users.userId))
+      .where(and(eq(userRanking.userId, userId), isNull(users.deletedAt)))
+      .limit(1);
+
+    return ranking ?? null;
+  }
+
+  async getUserAnalytics(userId: string): Promise<UserAnalytics | null> {
+    const [summary] = await this.db
+      .select({
+        totalAttempts: count(),
+        completedQuizzes: sql<number>`COUNT(DISTINCT CASE WHEN ${quizAttempts.status} = 'completed' THEN ${quizVersions.quizId} END)`,
+        averageScore: sql<number>`ROUND(COALESCE(AVG(CASE WHEN ${quizAttempts.status} = 'completed' THEN ${quizAttempts.scorePercent}::numeric END), 0), 1)`,
+        lastUpdated: sql<string>`MAX(${quizAttempts.updatedAt})`,
+      })
+      .from(quizAttempts)
+      .innerJoin(quizVersions, eq(quizAttempts.quizVersionId, quizVersions.quizVersionId))
+      .innerJoin(users, eq(quizAttempts.userId, users.userId))
+      .where(and(eq(quizAttempts.userId, userId), isNull(users.deletedAt)));
+
+    const totalAttempts = Number(summary?.totalAttempts ?? 0);
+
+    if (totalAttempts === 0) {
+      return null;
+    }
+
+    const [favoriteCategory] = await this.db
+      .select({
+        categoryId: categories.categoryId,
+        name: categories.name,
+        totalAttempts: count(),
+      })
+      .from(quizAttempts)
+      .innerJoin(quizVersions, eq(quizAttempts.quizVersionId, quizVersions.quizVersionId))
+      .innerJoin(quizCategories, eq(quizVersions.quizId, quizCategories.quizId))
+      .innerJoin(categories, eq(quizCategories.categoryId, categories.categoryId))
+      .innerJoin(users, eq(quizAttempts.userId, users.userId))
+      .where(
+        and(eq(quizAttempts.userId, userId), isNull(users.deletedAt), isNull(categories.deletedAt)),
+      )
+      .groupBy(categories.categoryId, categories.name)
+      .orderBy(desc(count()), categories.name)
+      .limit(1);
+
+    const [favoriteTag] = await this.db
+      .select({
+        tagId: tags.tagId,
+        name: tags.name,
+        totalAttempts: count(),
+      })
+      .from(quizAttempts)
+      .innerJoin(quizVersions, eq(quizAttempts.quizVersionId, quizVersions.quizVersionId))
+      .innerJoin(quizTags, eq(quizVersions.quizId, quizTags.quizId))
+      .innerJoin(tags, eq(quizTags.tagId, tags.tagId))
+      .innerJoin(users, eq(quizAttempts.userId, users.userId))
+      .where(and(eq(quizAttempts.userId, userId), isNull(users.deletedAt), isNull(tags.deletedAt)))
+      .groupBy(tags.tagId, tags.name)
+      .orderBy(desc(count()), tags.name)
+      .limit(1);
+
+    return {
+      userId,
+      summary: {
+        totalAttempts,
+        completedQuizzes: Number(summary?.completedQuizzes ?? 0),
+        averageScore: Number(summary?.averageScore ?? 0),
+      },
+      favoriteCategory: favoriteCategory
+        ? {
+            categoryId: favoriteCategory.categoryId,
+            name: favoriteCategory.name,
+          }
+        : null,
+      favoriteTag: favoriteTag
+        ? {
+            tagId: favoriteTag.tagId,
+            name: favoriteTag.name,
+          }
+        : null,
+      lastUpdated: summary?.lastUpdated ?? new Date().toISOString(),
+    };
+  }
+
   async searchUsers(
     query: string,
     limit: number,
     excludeUserId?: string,
   ): Promise<UserSearchResult[]> {
-    // Sanitize query for LIKE pattern
     const searchPattern = `%${query}%`;
 
-    // Build base conditions
     const baseConditions = [
       isNull(users.deletedAt),
       or(ilike(users.username, searchPattern), ilike(userProfiles.displayName, searchPattern)),
     ];
 
-    // Add exclusion if provided
     const allConditions = excludeUserId
       ? [...baseConditions, eq(users.userId, excludeUserId)]
       : baseConditions;
