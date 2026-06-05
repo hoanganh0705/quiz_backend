@@ -14,6 +14,7 @@ import {
   quizCategories,
   quizTags,
   tags,
+  tagFollows,
   quizStats,
   quizAttempts,
   quizAttemptAnswers,
@@ -111,6 +112,8 @@ export const usersRelations = relations(users, ({ many, one }) => ({
   discussionReports: many(discussionReports),
   // Category relations
   categoryFollows: many(categoryFollows),
+  // Tag relations
+  tagFollows: many(tagFollows),
 }));
 
 export const userSessionsRelations = relations(userSessions, ({ one }) => ({
@@ -209,6 +212,18 @@ export const quizTagsRelations = relations(quizTags, ({ one }) => ({
 
 export const tagsRelations = relations(tags, ({ many }) => ({
   quizTags: many(quizTags),
+  tagFollows: many(tagFollows),
+}));
+
+export const tagFollowsRelations = relations(tagFollows, ({ one }) => ({
+  user: one(users, {
+    fields: [tagFollows.userId],
+    references: [users.userId],
+  }),
+  tag: one(tags, {
+    fields: [tagFollows.tagId],
+    references: [tags.tagId],
+  }),
 }));
 
 export const quizStatsRelations = relations(quizStats, ({ one }) => ({
