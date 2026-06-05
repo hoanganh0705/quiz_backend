@@ -37,6 +37,12 @@ export type QuizListFilters = {
   difficulty?: QuizDifficulty;
   categoryId?: string;
   tagId?: string;
+  creatorId?: string;
+};
+
+export type FindRelatedQuizzesParams = {
+  slug: string;
+  limit: number;
 };
 
 export type QuizCursor = {
@@ -74,6 +80,22 @@ export type UpdateQuizPatch = {
   isHidden?: boolean;
 };
 
+export type QuizStatsRow = {
+  quizId: string;
+  totalAttempts: number;
+  totalPlayers: number;
+  avgScorePercent: string;
+  avgRating: string;
+  ratingCount: number;
+  bookmarkCount: number;
+  completionRate: string;
+  popularityScore: string;
+  trendingScore: string;
+  lastAttemptAt: string | null;
+  lastCalculatedAt: string | null;
+  updatedAt: string;
+};
+
 export interface QuizRepositoryPort {
   getActiveQuizRecordById(quizId: string): Promise<QuizRecordRow | null>;
 
@@ -86,6 +108,12 @@ export interface QuizRepositoryPort {
     cursor?: QuizCursor | null;
     filters?: QuizListFilters;
   }): Promise<QuizWithPublishedVersionRow[]>;
+
+  findFeaturedQuizzes(limit: number): Promise<QuizWithPublishedVersionRow[]>;
+
+  findRelatedQuizzes(params: FindRelatedQuizzesParams): Promise<QuizWithPublishedVersionRow[]>;
+
+  getQuizStats(quizId: string): Promise<QuizStatsRow | null>;
 
   /**
    * @transactional
