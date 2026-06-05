@@ -11,6 +11,7 @@ import type {
   PopularQuiz,
   CategoryAnalytics,
   CreatorAnalytics,
+  TagAnalytics,
 } from './types';
 
 @Injectable()
@@ -215,6 +216,10 @@ export class QuizAnalyticsService {
 
   async getCreatorAnalytics(userId: string): Promise<CreatorAnalytics | null> {
     return this.analyticsRepository.getCreatorAnalytics(userId);
+  }
+
+  async getTagAnalytics(tagId: string): Promise<TagAnalytics | null> {
+    return this.analyticsRepository.getTagAnalytics(tagId);
   }
 
   /**
