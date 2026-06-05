@@ -1,4 +1,4 @@
-import { AuthDomainError } from './auth-domain.errors';
+import { AuthDomainError } from '../errors/auth-domain.errors';
 
 /**
  * Thrown when the provider token (ID token, access token, auth code) fails

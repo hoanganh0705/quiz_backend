@@ -8,8 +8,7 @@ import {
 } from '../../domain/oauth/ports/oauth-provider.port';
 import { GoogleOAuthConfig } from '../../config/google-oauth.config';
 import { InvalidOAuthTokenError } from '../../domain/oauth/errors';
-
-export const GOOGLE_OAUTH_ADAPTER = Symbol('GOOGLE_OAUTH_ADAPTER');
+import { OAuthMetricsService } from '../../domain/oauth/oauth-metrics.service';
 
 @Injectable()
 export class GoogleOAuthAdapter implements OAuthProviderPort {
@@ -19,6 +18,7 @@ export class GoogleOAuthAdapter implements OAuthProviderPort {
 
   constructor(
     private readonly googleConfig: GoogleOAuthConfig,
+    private readonly metrics: OAuthMetricsService,
     @InjectPinoLogger(GoogleOAuthAdapter.name) private readonly logger: PinoLogger,
   ) {
     this.client = new OAuth2Client(googleConfig.clientId);
@@ -31,6 +31,8 @@ export class GoogleOAuthAdapter implements OAuthProviderPort {
         provider: this.provider,
         reason: 'missing_id_token',
       });
+      this.metrics.recordInvalidToken(this.provider);
+      this.metrics.recordAuthenticationFailed(this.provider, 'missing_id_token');
       throw new InvalidOAuthTokenError('Google authentication requires an idToken');
     }
 
@@ -47,6 +49,8 @@ export class GoogleOAuthAdapter implements OAuthProviderPort {
           provider: this.provider,
           reason: 'null_payload',
         });
+        this.metrics.recordInvalidToken(this.provider);
+        this.metrics.recordAuthenticationFailed(this.provider, 'null_payload');
         throw new InvalidOAuthTokenError('Google token payload is null');
       }
 
@@ -59,6 +63,8 @@ export class GoogleOAuthAdapter implements OAuthProviderPort {
           expectedDomain: hostedDomain,
           actualDomain: payload_.hd ?? null,
         });
+        this.metrics.recordInvalidToken(this.provider);
+        this.metrics.recordAuthenticationFailed(this.provider, 'wrong_hosted_domain');
         throw new InvalidOAuthTokenError(`Must use a ${hostedDomain} Google account`);
       }
 
@@ -72,6 +78,11 @@ export class GoogleOAuthAdapter implements OAuthProviderPort {
         provider: this.provider,
         reason: error instanceof Error ? error.message : 'unknown_verification_error',
       });
+      this.metrics.recordInvalidToken(this.provider);
+      this.metrics.recordAuthenticationFailed(
+        this.provider,
+        error instanceof Error ? error.message : 'unknown_verification_error',
+      );
       throw new InvalidOAuthTokenError('Google token validation failed');
     }
   }

@@ -1,8 +1,12 @@
 import { Catch, HttpStatus, type ArgumentsHost, type ExceptionFilter } from '@nestjs/common';
 import type { Response } from 'express';
 import {
+  CategoryAlreadyActiveError,
+  CategoryAnalyticsNotFoundError,
   CategoryDomainError,
+  CategoryFollowNotAllowedError,
   CategoryNotFoundError,
+  CategoryRestoreInvariantError,
   CategorySlugConflictError,
 } from '../../domain/errors';
 
@@ -38,8 +42,27 @@ export class CategoryDomainExceptionFilter implements ExceptionFilter {
       return { status: HttpStatus.NOT_FOUND, message: 'Category not found' };
     }
 
+    if (error instanceof CategoryAnalyticsNotFoundError) {
+      return { status: HttpStatus.NOT_FOUND, message: 'Category analytics not found' };
+    }
+
     if (error instanceof CategorySlugConflictError) {
       return { status: HttpStatus.CONFLICT, message: 'A category with this slug already exists' };
+    }
+
+    if (error instanceof CategoryAlreadyActiveError) {
+      return {
+        status: HttpStatus.CONFLICT,
+        message: 'Category is already active and cannot be restored',
+      };
+    }
+
+    if (error instanceof CategoryFollowNotAllowedError) {
+      return { status: HttpStatus.NOT_FOUND, message: 'Category not found' };
+    }
+
+    if (error instanceof CategoryRestoreInvariantError) {
+      return { status: HttpStatus.INTERNAL_SERVER_ERROR, message: 'Internal server error' };
     }
 
     return { status: HttpStatus.INTERNAL_SERVER_ERROR, message: 'Internal server error' };

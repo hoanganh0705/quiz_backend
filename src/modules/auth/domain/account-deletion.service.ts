@@ -5,6 +5,9 @@ import { PASSWORD_PROVIDER, type PasswordProvider } from './ports/password.provi
 import { InvalidCredentialsError, DeletionFailedError } from './errors';
 import type { AccountDeletionResult } from '../types/auth-result.types';
 
+const ACCOUNT_DELETION_SUCCESS_MESSAGE =
+  'Account deleted successfully. All sessions have been terminated.';
+
 @Injectable()
 export class AccountDeletionService {
   constructor(
@@ -56,6 +59,6 @@ export class AccountDeletionService {
 
     this.logger.info({ event: 'auth_account_deleted', userId });
 
-    return { message: 'Account deleted successfully. All sessions have been terminated.' };
+    return { message: ACCOUNT_DELETION_SUCCESS_MESSAGE };
   }
 }

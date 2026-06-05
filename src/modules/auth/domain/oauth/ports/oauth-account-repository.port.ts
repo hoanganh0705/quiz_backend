@@ -1,4 +1,5 @@
 import type { OAuthAccountRecord, OAuthProvider } from '../oauth.types';
+import type { UserRole } from '@/common/types/user-role.type';
 
 /**
  * Port for OAuth account persistence.
@@ -40,7 +41,7 @@ export interface OAuthAccountRepositoryPort {
     userId: string;
     username: string;
     email: string;
-    role: string;
+    role: UserRole;
     oauthAccountId: string;
   }>;
 
