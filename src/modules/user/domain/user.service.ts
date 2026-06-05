@@ -1,9 +1,10 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
-import type { UserMeRow } from './ports/user-repository.port';
+import type { UserActivityRow, UserMeRow } from './ports/user-repository.port';
 import { USER_REPOSITORY_PORT, type UserRepositoryPort } from './ports/user-repository.port';
 import { UserNotFoundError } from './errors';
 import type { UpdateProfileCommand, UpdateSettingsCommand } from './types/user-commands';
+import type { ListUserActivityQuery } from './types/list-user-activity.query';
 
 @Injectable()
 export class UserDomainService {
@@ -74,5 +75,38 @@ export class UserDomainService {
     this.logger.info({ event: 'user_settings_updated', userId });
 
     return updated;
+  }
+
+  async listUserActivity(
+    userId: string,
+    query: ListUserActivityQuery,
+  ): Promise<{
+    items: UserActivityRow[];
+    limit: number;
+    hasNextPage: boolean;
+    nextCursor: { createdAt: string; eventId: string } | null;
+  }> {
+    const limit = query.limit ?? 20;
+    const cursor = query.cursor ?? null;
+
+    const rows = await this.userRepository.listUserActivity({
+      userId,
+      limit,
+      cursor,
+    });
+
+    const hasNextPage = rows.length > limit;
+    const items = hasNextPage ? rows.slice(0, limit) : rows;
+    const lastItem = items.at(-1);
+
+    return {
+      items,
+      limit,
+      hasNextPage,
+      nextCursor:
+        hasNextPage && lastItem
+          ? { createdAt: lastItem.createdAt, eventId: lastItem.eventId }
+          : null,
+    };
   }
 }
