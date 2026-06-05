@@ -34,6 +34,11 @@ import { QuizQuestionApplicationService } from '../../application/quiz-question.
 import { CreateQuizDto } from '../../dto/request/create-quiz.dto';
 import { QuizResponseDto } from '../../dto/response/quiz-response.dto';
 import { QuizListResponseDto } from '../../dto/response/quiz-list-response.dto';
+import { QuizStatsResponseDto } from '../../dto/response/quiz-stats-response.dto';
+import { FeaturedQuizzesQueryDto } from '../../dto/request/featured-quizzes-query.dto';
+import { RecommendedQuizzesQueryDto } from '../../dto/request/recommended-quizzes-query.dto';
+import { RelatedQuizzesQueryDto } from '../../dto/request/related-quizzes-query.dto';
+import { RelatedQuizzesResponseDto } from '../../dto/response/related-quizzes-response.dto';
 import { ListQuizzesQueryDto } from '../../dto/request/list-quizzes-query.dto';
 import { UpdateQuizDto } from '@/modules/quiz/dto/request/update-quiz.dto';
 import { DeleteQuizResponseDto } from '@/modules/quiz/dto/response/delete-quiz-response.dto';
@@ -87,6 +92,55 @@ export class QuizController {
   @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
   listQuizzes(@Query() query: ListQuizzesQueryDto): Promise<QuizListResponseDto> {
     return this.quizApplicationService.listQuizzes(query);
+  }
+
+  @Get('featured')
+  @Public()
+  @ApiOperation({
+    summary: 'Featured quizzes',
+    description: 'Returns active, published featured quizzes ordered by most recently featured first.',
+  })
+  @ApiOkResponse({ description: 'Featured quizzes returned', type: RelatedQuizzesResponseDto })
+  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  getFeaturedQuizzes(@Query() query: FeaturedQuizzesQueryDto): Promise<RelatedQuizzesResponseDto> {
+    return this.quizApplicationService.getFeaturedQuizzes(query);
+  }
+
+  @Get(':id/stats')
+  @Public()
+  @ApiOperation({
+    summary: 'Quiz stats',
+    description: 'Returns aggregated statistics for a quiz.',
+  })
+  @ApiOkResponse({ description: 'Quiz stats returned', type: QuizStatsResponseDto })
+  @ApiNotFoundResponse({ description: 'Quiz not found' })
+  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  getQuizStats(@Param('id', new ParseUUIDPipe()) quizId: string): Promise<QuizStatsResponseDto> {
+    return this.quizApplicationService.getQuizStats(quizId);
+  }
+
+  @Get(':slug/similar')
+  @Public()
+  @ApiOperation({
+    summary: 'Similar quizzes',
+    description: 'Returns related quizzes ranked by shared categories, shared tags, and popularity.',
+  })
+  @ApiOkResponse({ description: 'Related quizzes returned', type: RelatedQuizzesResponseDto })
+  @ApiNotFoundResponse({ description: 'Quiz not found' })
+  @ApiBadRequestResponse({ description: 'Validation failed' })
+  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  @ApiValidationRequest()
+  async getRelatedQuizzes(
+    @Param('slug') slug: string,
+    @Query() query: RelatedQuizzesQueryDto,
+  ): Promise<RelatedQuizzesResponseDto> {
+    const relatedQuizzesQuery = {
+      limit: query.limit ?? 10,
+    };
+
+    const response = await this.quizApplicationService.getRelatedQuizzes(slug, relatedQuizzesQuery);
+
+    return response;
   }
 
   @Get(':slug')

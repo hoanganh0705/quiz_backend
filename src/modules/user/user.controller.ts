@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Patch, Query, UseFilters } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Query, UseFilters } from '@nestjs/common';
 import {
   ApiTags,
   ApiOperation,
@@ -12,6 +12,11 @@ import {
 } from '@nestjs/swagger';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
 import { ApiValidationRequest } from '@/common/swagger/swagger-decorators';
+import { QuizApplicationService } from '@/modules/quiz/application/quiz.application.service';
+import { RecommendedQuizzesQueryDto } from '@/modules/quiz/dto/request/recommended-quizzes-query.dto';
+import { ListQuizzesQueryDto } from '@/modules/quiz/dto/request/list-quizzes-query.dto';
+import { QuizListResponseDto } from '@/modules/quiz/dto/response/quiz-list-response.dto';
+import { RelatedQuizzesResponseDto } from '@/modules/quiz/dto/response/related-quizzes-response.dto';
 import { ListUserActivityQueryDto } from './dto/request/list-user-activity-query.dto';
 import { UpdateMeSettingsDto } from './dto/request/update-me-settings.dto';
 import { UpdateMeDto } from './dto/request/update-me.dto';
@@ -33,7 +38,46 @@ import { UserBadgeCursorMapper } from './mappers/user-badge-cursor.mapper';
 @Controller('users')
 @UseFilters(UserDomainExceptionFilter)
 export class UserController {
-  constructor(private readonly userApplicationService: UserApplicationService) {}
+  constructor(
+    private readonly userApplicationService: UserApplicationService,
+    private readonly quizApplicationService: QuizApplicationService,
+  ) {}
+
+  @Get('me/recommended-quizzes')
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Get recommended quizzes',
+    description:
+      "Returns personalized quiz recommendations for the authenticated user based on their attempt history, ranked by category match, tag match, popularity, and trending score.",
+  })
+  @ApiOkResponse({ description: 'Recommended quizzes returned', type: RelatedQuizzesResponseDto })
+  @ApiUnauthorizedResponse({ description: 'Missing or invalid authentication token' })
+  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  @ApiValidationRequest()
+  getRecommendedQuizzes(
+    @CurrentUser('sub') userId: string,
+    @Query() query: RecommendedQuizzesQueryDto,
+  ): Promise<RelatedQuizzesResponseDto> {
+    return this.quizApplicationService.getRecommendedQuizzes(userId, query);
+  }
+
+  @Get(':userId/quizzes')
+  @ApiOperation({
+    summary: 'List quizzes created by user',
+    description:
+      "Returns a paginated, cursor-based list of quizzes created by the specified user, ordered by newest first.",
+  })
+  @ApiOkResponse({ description: 'Quizzes returned', type: QuizListResponseDto })
+  @ApiNotFoundResponse({ description: 'User not found' })
+  @ApiBadRequestResponse({ description: 'Validation failed' })
+  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  @ApiValidationRequest()
+  listUserQuizzes(
+    @Param('userId') userId: string,
+    @Query() query: ListQuizzesQueryDto,
+  ): Promise<QuizListResponseDto> {
+    return this.quizApplicationService.listQuizzesByCreator(userId, query);
+  }
 
   @Get('me')
   @ApiOperation({
@@ -66,6 +110,11 @@ export class UserController {
     const cursor = query.cursor ? UserBadgeCursorMapper.parse(query.cursor) : null;
 
     return this.userApplicationService.listUserBadges(userId, {
+      limit: query.limit,
+      cursor,
+    });
+  }
+
   @Get('me/activity')
   @ApiOperation({
     summary: 'My activity',

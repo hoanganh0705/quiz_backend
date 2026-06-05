@@ -3,3 +3,7 @@ export * from './quiz-version-commands';
 export * from './quiz-question.commands';
 export * from './list-quizzes.query';
 export * from './list-quiz-versions.query';
+export * from './quiz-stats';
+export * from './related-quizzes.query';
+export * from './featured-quizzes.query';
+export * from './recommended-quizzes.query';

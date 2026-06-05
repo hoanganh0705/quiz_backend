@@ -1,8 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
-import type { UserBadgeRow, UserMeRow, UserRankingRow } from './ports/user-repository.port';
-import { USER_REPOSITORY_PORT, type UserRepositoryPort } from './ports/user-repository.port';
-import { UserAnalyticsNotFoundError, UserNotFoundError, UserRankingNotFoundError } from './errors';
+import type { UserBadgeRow } from './ports/user-repository.port';
+import { UserAnalyticsNotFoundError, UserRankingNotFoundError } from './errors';
 import type {
   ListUserBadgesQuery,
   UpdateProfileCommand,
@@ -19,7 +18,6 @@ function calculateLevel(totalXp: number): number {
 import type { UserActivityRow, UserMeRow } from './ports/user-repository.port';
 import { USER_REPOSITORY_PORT, type UserRepositoryPort } from './ports/user-repository.port';
 import { UserNotFoundError } from './errors';
-import type { UpdateProfileCommand, UpdateSettingsCommand } from './types/user-commands';
 import type { ListUserActivityQuery } from './types/list-user-activity.query';
 
 @Injectable()

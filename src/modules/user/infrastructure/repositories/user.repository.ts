@@ -9,6 +9,7 @@ import {
   quizTags,
   quizVersions,
   tags,
+  userActivityEvents,
   userBadges,
   userProfiles,
   userRanking,
@@ -17,11 +18,8 @@ import {
 import { and, count, desc, eq, ilike, isNull, or, sql } from 'drizzle-orm';
 import type { UserAnalytics } from '../../domain/types/user-analytics';
 import type {
-  UserBadgeRow,
-import { userActivityEvents, users, userProfiles } from '@/core/database/schema';
-import { and, desc, eq, ilike, isNull, or, sql } from 'drizzle-orm';
-import type {
   UserActivityRow,
+  UserBadgeRow,
   UserMeRow,
   UserRankingRow,
   UserSearchResult,
