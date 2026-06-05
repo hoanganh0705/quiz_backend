@@ -26,28 +26,28 @@ import { Roles } from '@/common/authorization/decorators/roles.decorator';
 import { ApiAuth, ApiValidationRequest } from '@/common/swagger/swagger-decorators';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
-import { CreateCategoryDto } from './dto/request/create-category.dto';
-import { ListCategoriesQueryDto } from './dto/request/list-categories-query.dto';
-import { UpdateCategoryDto } from './dto/request/update-category.dto';
-import { CategoryRankingQueryDto } from './dto/request/category-ranking-query.dto';
-import { RelatedCategoriesQueryDto } from './dto/request/related-categories-query.dto';
-import { ListQuizzesQueryDto } from '../quiz/dto/request/list-quizzes-query.dto';
-import { CategoryListResponseDto } from './dto/response/category-list-response.dto';
-import { CategoryResponseDto } from './dto/response/category-response.dto';
-import { DeleteCategoryResponseDto } from './dto/response/delete-category-response.dto';
-import { RankedCategoriesResponseDto } from './dto/response/ranked-categories-response.dto';
-import { CategoryFollowMessageResponseDto } from './dto/response/category-follow-message-response.dto';
-import { CategoryAnalyticsResponseDto } from './dto/response/category-analytics-response.dto';
-import { RelatedCategoriesResponseDto } from './dto/response/related-categories-response.dto';
-import { CategoryApplicationService } from './application/category.application.service';
-import { CategoryDomainExceptionFilter } from './transport/filters/category-domain-exception.filter';
-import { CategoryCursorMapper } from './mappers/category-cursor.mapper';
+import { CreateCategoryDto } from '../../dto/request/create-category.dto';
+import { ListCategoriesQueryDto } from '../../dto/request/list-categories-query.dto';
+import { UpdateCategoryDto } from '../../dto/request/update-category.dto';
+import { CategoryRankingQueryDto } from '../../dto/request/category-ranking-query.dto';
+import { RelatedCategoriesQueryDto } from '../../dto/request/related-categories-query.dto';
+import { ListQuizzesQueryDto } from '../../../quiz/dto/request/list-quizzes-query.dto';
+import { CategoryListResponseDto } from '../../dto/response/category-list-response.dto';
+import { CategoryResponseDto } from '../../dto/response/category-response.dto';
+import { DeleteCategoryResponseDto } from '../../dto/response/delete-category-response.dto';
+import { RankedCategoriesResponseDto } from '../../dto/response/ranked-categories-response.dto';
+import { CategoryFollowMessageResponseDto } from '../../dto/response/category-follow-message-response.dto';
+import { CategoryAnalyticsResponseDto } from '../../dto/response/category-analytics-response.dto';
+import { RelatedCategoriesResponseDto } from '../../dto/response/related-categories-response.dto';
+import { CategoryApplicationService } from '../../application/category.application.service';
+import { CategoryDomainExceptionFilter } from '../filters/category-domain-exception.filter';
+import { CategoryCursorMapper } from '../../mappers/category-cursor.mapper';
 import type {
   CreateCategoryCommand,
   ListCategoriesQuery,
   RelatedCategoriesQuery,
   UpdateCategoryCommand,
-} from './domain/types/category-commands';
+} from '../../domain/types/category-commands';
 
 @ApiTags('categories')
 @Controller('categories')
@@ -114,10 +114,10 @@ export class CategoryController {
       limit: query.limit ?? 10,
     };
 
-    const response = (await this.categoryApplicationService.getRelatedCategories(
+    const response = await this.categoryApplicationService.getRelatedCategories(
       slug,
       relatedCategoriesQuery,
-    )) as RelatedCategoriesResponseDto;
+    );
 
     return response;
   }

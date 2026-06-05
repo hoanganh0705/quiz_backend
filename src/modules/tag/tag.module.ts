@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { TagController } from './tag.controller';
+import { TagController } from './transport/controllers/tag.controller';
 import { UserTagController } from './transport/controllers/user-tag.controller';
 import { TagApplicationService } from './application/tag.application.service';
 import { TagDomainService } from './domain/tag.service';
