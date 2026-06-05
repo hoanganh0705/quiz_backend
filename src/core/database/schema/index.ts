@@ -1995,3 +1995,48 @@ export const categoryFollows = pgTable(
     }).onDelete('cascade'),
   ],
 );
+
+/**
+ * User → Tag follow-through table.
+ * Supports soft-delete so re-following a previously unfollowed tag restores
+ * the existing row instead of inserting a duplicate. A partial unique index
+ * enforces at most one *active* follow per (user, tag) pair without preventing
+ * historical deleted rows.
+ */
+export const tagFollows = pgTable(
+  'tag_follows',
+  {
+    followId: uuid('follow_id').defaultRandom().primaryKey().notNull(),
+    userId: uuid('user_id').notNull(),
+    tagId: uuid('tag_id').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' })
+      .defaultNow()
+      .notNull(),
+    deletedAt: timestamp('deleted_at', { withTimezone: true, mode: 'string' }),
+  },
+  (table) => [
+    uniqueIndex('uq_tag_follows_user_tag_active')
+      .using(
+        'btree',
+        table.userId.asc().nullsLast().op('uuid_ops'),
+        table.tagId.asc().nullsLast().op('uuid_ops'),
+      )
+      .where(sql`deleted_at IS NULL`),
+    index('idx_tag_follows_user_id').using('btree', table.userId.asc().nullsLast().op('uuid_ops')),
+    index('idx_tag_follows_tag_id').using('btree', table.tagId.asc().nullsLast().op('uuid_ops')),
+    index('idx_tag_follows_deleted_at').using(
+      'btree',
+      table.deletedAt.asc().nullsLast().op('timestamptz_ops'),
+    ),
+    foreignKey({
+      columns: [table.userId],
+      foreignColumns: [users.userId],
+      name: 'tag_follows_user_id_fkey',
+    }).onDelete('cascade'),
+    foreignKey({
+      columns: [table.tagId],
+      foreignColumns: [tags.tagId],
+      name: 'tag_follows_tag_id_fkey',
+    }).onDelete('cascade'),
+  ],
+);

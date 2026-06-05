@@ -14,3 +14,16 @@ export type ListTagsQuery = {
   cursor?: TagCursorPayload | null;
   limit?: number;
 };
+
+export type ListFollowedTagsQuery = {
+  limit?: number;
+  cursor?: { followedAt: string; followId: string } | null;
+};
+
+export type TagRankingQuery = {
+  limit: number;
+};
+
+export type RelatedTagsQuery = {
+  limit: number;
+};

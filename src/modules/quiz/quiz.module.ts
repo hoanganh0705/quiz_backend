@@ -89,6 +89,7 @@ import { QuizQuestionRepository } from './infrastructure/repositories/quiz-quest
   exports: [
     QUIZ_REPOSITORY_PORT,
     QUIZ_DOMAIN_EVENT_BUS,
+    QuizApplicationService,
     QuizAnalyticsService,
     MetricsCalculatorService,
     AnalyticsEventHandler,
