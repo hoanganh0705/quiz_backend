@@ -37,6 +37,13 @@ export interface UserSearchResult {
   avatarUrl: string | null;
 }
 
+export interface UserActivityRow {
+  eventId: string;
+  eventType: string;
+  createdAt: string;
+  metadata: unknown;
+}
+
 export interface UserRepositoryPort {
   findMeById(userId: string): Promise<UserMeRow | null>;
   listUserBadges(params: {
@@ -47,6 +54,11 @@ export interface UserRepositoryPort {
   getUserRanking(userId: string): Promise<UserRankingRow | null>;
   getUserAnalytics(userId: string): Promise<UserAnalytics | null>;
   searchUsers(query: string, limit: number, excludeUserId?: string): Promise<UserSearchResult[]>;
+  listUserActivity(params: {
+    userId: string;
+    limit: number;
+    cursor?: { createdAt: string; eventId: string } | null;
+  }): Promise<UserActivityRow[]>;
   updateProfile(
     userId: string,
     patch: {

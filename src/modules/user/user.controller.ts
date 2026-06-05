@@ -12,14 +12,17 @@ import {
 } from '@nestjs/swagger';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
 import { ApiValidationRequest } from '@/common/swagger/swagger-decorators';
+import { ListUserActivityQueryDto } from './dto/request/list-user-activity-query.dto';
 import { UpdateMeSettingsDto } from './dto/request/update-me-settings.dto';
 import { UpdateMeDto } from './dto/request/update-me.dto';
 import { ListUserBadgesQueryDto } from './dto/request/list-user-badges-query.dto';
+import { UserActivityResponseDto } from './dto/response/user-activity-response.dto';
 import { UserMeResponseDto } from './dto/response/user-me-response.dto';
 import { UserBadgesResponseDto } from './dto/response/user-badges-response.dto';
 import { UserRankingResponseDto } from './dto/response/user-ranking-response.dto';
 import { UserAnalyticsResponseDto } from './dto/response/user-analytics-response.dto';
 import { UserApplicationService } from './application/user.application.service';
+import { UserActivityCursorMapper } from './mappers/user-activity-cursor.mapper';
 import { UserDomainExceptionFilter } from './transport/filters/user-domain-exception.filter';
 import { UserBadgeCursorMapper } from './mappers/user-badge-cursor.mapper';
 
@@ -63,6 +66,21 @@ export class UserController {
     const cursor = query.cursor ? UserBadgeCursorMapper.parse(query.cursor) : null;
 
     return this.userApplicationService.listUserBadges(userId, {
+  @Get('me/activity')
+  @ApiOperation({
+    summary: 'My activity',
+    description:
+      "Returns the authenticated user's activity events, cursor-paginated and ordered by most recent activity.",
+  })
+  @ApiOkResponse({ description: 'Activity returned', type: UserActivityResponseDto })
+  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  listUserActivity(
+    @CurrentUser('sub') userId: string,
+    @Query() query: ListUserActivityQueryDto,
+  ): Promise<UserActivityResponseDto> {
+    const cursor = query.cursor ? UserActivityCursorMapper.parse(query.cursor) : null;
+
+    return this.userApplicationService.listUserActivity(userId, {
       limit: query.limit,
       cursor,
     });
