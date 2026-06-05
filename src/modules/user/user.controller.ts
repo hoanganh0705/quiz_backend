@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Patch, UseFilters } from '@nestjs/common';
+import { Body, Controller, Get, Patch, Query, UseFilters } from '@nestjs/common';
 import {
   ApiTags,
   ApiOperation,
@@ -12,10 +12,13 @@ import {
 } from '@nestjs/swagger';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
 import { ApiValidationRequest } from '@/common/swagger/swagger-decorators';
+import { ListUserActivityQueryDto } from './dto/request/list-user-activity-query.dto';
 import { UpdateMeSettingsDto } from './dto/request/update-me-settings.dto';
 import { UpdateMeDto } from './dto/request/update-me.dto';
+import { UserActivityResponseDto } from './dto/response/user-activity-response.dto';
 import { UserMeResponseDto } from './dto/response/user-me-response.dto';
 import { UserApplicationService } from './application/user.application.service';
+import { UserActivityCursorMapper } from './mappers/user-activity-cursor.mapper';
 import { UserDomainExceptionFilter } from './transport/filters/user-domain-exception.filter';
 
 @ApiTags('users')
@@ -38,6 +41,26 @@ export class UserController {
   @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
   me(@CurrentUser('sub') userId: string): Promise<UserMeResponseDto> {
     return this.userApplicationService.getMe(userId);
+  }
+
+  @Get('me/activity')
+  @ApiOperation({
+    summary: 'My activity',
+    description:
+      "Returns the authenticated user's activity events, cursor-paginated and ordered by most recent activity.",
+  })
+  @ApiOkResponse({ description: 'Activity returned', type: UserActivityResponseDto })
+  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  listUserActivity(
+    @CurrentUser('sub') userId: string,
+    @Query() query: ListUserActivityQueryDto,
+  ): Promise<UserActivityResponseDto> {
+    const cursor = query.cursor ? UserActivityCursorMapper.parse(query.cursor) : null;
+
+    return this.userApplicationService.listUserActivity(userId, {
+      limit: query.limit,
+      cursor,
+    });
   }
 
   @Patch('me')

@@ -1,10 +1,15 @@
 import { Injectable } from '@nestjs/common';
 import { UserDomainService } from '../domain/user.service';
 import { UserResponseMapper } from '../mappers/user-response.mapper';
+import { UserActivityCursorMapper } from '../mappers/user-activity-cursor.mapper';
 import { UpdateMeDto } from '../dto/request/update-me.dto';
 import { UpdateMeSettingsDto } from '../dto/request/update-me-settings.dto';
+import type { UserActivityResponseDto } from '../dto/response/user-activity-response.dto';
 import type { UserMeResponseDto } from '../dto/response/user-me-response.dto';
+import type { UserActivityRow } from '../domain/ports/user-repository.port';
+import type { ListUserActivityQuery } from '../domain/types/list-user-activity.query';
 import type { UpdateProfileCommand, UpdateSettingsCommand } from '../domain/types/user-commands';
+import { isObjectRecord } from '@/common/utils/object.util';
 
 @Injectable()
 export class UserApplicationService {
@@ -31,5 +36,33 @@ export class UserApplicationService {
     };
     const row = await this.userDomainService.updateSettings(userId, command);
     return UserResponseMapper.toUserMeResponse(row);
+  }
+
+  async listUserActivity(
+    userId: string,
+    query: ListUserActivityQuery,
+  ): Promise<UserActivityResponseDto> {
+    const { items, limit, hasNextPage, nextCursor } = await this.userDomainService.listUserActivity(
+      userId,
+      query,
+    );
+
+    return {
+      items: items.map((item) => this.toUserActivityItem(item)),
+      pagination: {
+        limit,
+        hasNextPage,
+        nextCursor: nextCursor ? UserActivityCursorMapper.serialize(nextCursor) : null,
+      },
+    };
+  }
+
+  private toUserActivityItem(item: UserActivityRow): UserActivityResponseDto['items'][number] {
+    return {
+      eventId: item.eventId,
+      eventType: item.eventType,
+      createdAt: item.createdAt,
+      metadata: isObjectRecord(item.metadata) ? item.metadata : {},
+    };
   }
 }
