@@ -1,6 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
+const MISSING_ENVIRONMENT_VARIABLE_SUFFIX = 'environment variable is not set';
+
 /**
  * Google OAuth configuration.
  * Loaded from environment variables so credentials are never hardcoded.
@@ -9,12 +11,17 @@ import { ConfigService } from '@nestjs/config';
 export class GoogleOAuthConfig {
   constructor(private readonly configService: ConfigService) {}
 
-  get clientId(): string {
-    const value = this.configService.get<string>('GOOGLE_CLIENT_ID');
+  private getRequiredString(key: string): string {
+    const value = this.configService.get<string>(key);
     if (!value) {
-      throw new Error('GOOGLE_CLIENT_ID environment variable is not set');
+      throw new Error(`${key} ${MISSING_ENVIRONMENT_VARIABLE_SUFFIX}`);
     }
+
     return value;
+  }
+
+  get clientId(): string {
+    return this.getRequiredString('GOOGLE_CLIENT_ID');
   }
 
   /**

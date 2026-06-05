@@ -14,7 +14,6 @@ export interface UserRepositoryPort {
   } | null>;
 
   findActiveByEmailWithPassword(email: string): Promise<{
-  findActiveByEmailWithPassword(email: string): Promise<{
     userId: string;
     username: string;
     email: string;

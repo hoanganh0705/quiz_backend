@@ -50,11 +50,22 @@ import { AuthDomainExceptionFilter } from './transport/filters/auth-domain-excep
 import { VerificationTokenService } from './domain/verification-token.service';
 import { OutboxAdapter } from './infrastructure/outbox/outbox.adapter';
 import { OUTBOX_PORT } from './domain/ports/outbox.port';
+
+// OAuth domain
 import { OAuthLoginService } from './domain/oauth/oauth-login.service';
 import { OAuthAccountRepository } from './infrastructure/oauth/oauth-account.repository';
 import { GoogleOAuthAdapter } from './infrastructure/oauth/google-oauth.adapter';
 import { OAUTH_ACCOUNT_REPOSITORY_PORT } from './domain/oauth/ports/oauth-account-repository.port';
 import { OAUTH_PROVIDER_PORT } from './domain/oauth/ports/oauth-provider.port';
+import { OAuthDomainEventPublisher } from './domain/oauth/events/oauth-domain-event-publisher';
+import { OAUTH_DOMAIN_EVENT_PUBLISHER } from './domain/oauth/events/oauth-domain-event-publisher.port';
+import { OAuthMetricsService } from './domain/oauth/oauth-metrics.service';
+import { OAuthProviderRegistryAdapter } from './domain/oauth/oauth-provider-registry.adapter';
+import { OAUTH_PROVIDER_REGISTRY } from './domain/oauth/ports/oauth-provider-registry.port';
+import { OAuthIdentityResolver } from './domain/oauth/oauth-identity-resolver';
+import { OAuthAccountLinker } from './domain/oauth/oauth-account-linker';
+import { OAuthSessionIssuer } from './domain/oauth/oauth-session-issuer';
+import { OAuthEventService } from './domain/oauth/oauth-event.service';
 
 @Module({
   imports: [CommonModule, DatabaseModule, RedisModule, EmailModule],
@@ -106,13 +117,31 @@ import { OAUTH_PROVIDER_PORT } from './domain/oauth/ports/oauth-provider.port';
     { provide: CACHE_PROVIDER, useExisting: RedisService },
     { provide: AUTH_SECURITY_EVENT_BUS, useExisting: AuthSecurityEventPublisher },
     { provide: OUTBOX_PORT, useExisting: OutboxAdapter },
-    { provide: OAUTH_PROVIDER_PORT, useExisting: GoogleOAuthAdapter },
     { provide: OAUTH_ACCOUNT_REPOSITORY_PORT, useExisting: OAuthAccountRepository },
-    // OAuth providers and infrastructure
+    // OAuth multi-provider: each provider adapter is registered as a multi-provider token.
+    // OAuthProviderRegistryAdapter collects all of them via @Inject(OAUTH_PROVIDER_PORT).
+    // Adding new providers (GitHub, Apple, Microsoft) requires only adding them here.
+    {
+      provide: OAUTH_PROVIDER_PORT,
+      useFactory: (adapter: GoogleOAuthAdapter) => adapter,
+      inject: [GoogleOAuthAdapter],
+    },
+    // OAuth domain event publisher
+    { provide: OAUTH_DOMAIN_EVENT_PUBLISHER, useExisting: OAuthDomainEventPublisher },
+    // OAuth provider registry
+    { provide: OAUTH_PROVIDER_REGISTRY, useExisting: OAuthProviderRegistryAdapter },
+    // OAuth infrastructure and services
     OutboxAdapter,
     GoogleOAuthConfig,
     GoogleOAuthAdapter,
     OAuthAccountRepository,
+    OAuthDomainEventPublisher,
+    OAuthMetricsService,
+    OAuthProviderRegistryAdapter,
+    OAuthIdentityResolver,
+    OAuthAccountLinker,
+    OAuthSessionIssuer,
+    OAuthEventService,
     OAuthLoginService,
   ],
   exports: [AuthApplicationService],

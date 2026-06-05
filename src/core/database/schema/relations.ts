@@ -40,6 +40,7 @@ import {
   discussionVotes,
   discussionReports,
   oauthAccounts,
+  categoryFollows,
 } from '.';
 
 export const userRankingRelations = relations(userRanking, ({ one, many }) => ({
@@ -108,6 +109,8 @@ export const usersRelations = relations(users, ({ many, one }) => ({
   discussionComments: many(discussionComments),
   discussionVotes: many(discussionVotes),
   discussionReports: many(discussionReports),
+  // Category relations
+  categoryFollows: many(categoryFollows),
 }));
 
 export const userSessionsRelations = relations(userSessions, ({ one }) => ({
@@ -190,6 +193,7 @@ export const quizCategoriesRelations = relations(quizCategories, ({ one }) => ({
 export const categoriesRelations = relations(categories, ({ many }) => ({
   quizCategories: many(quizCategories),
   tournaments: many(tournaments),
+  categoryFollows: many(categoryFollows),
 }));
 
 export const quizTagsRelations = relations(quizTags, ({ one }) => ({
@@ -493,5 +497,18 @@ export const oauthAccountsRelations = relations(oauthAccounts, ({ one }) => ({
   user: one(users, {
     fields: [oauthAccounts.userId],
     references: [users.userId],
+  }),
+}));
+
+// Category Follows Relations
+
+export const categoryFollowsRelations = relations(categoryFollows, ({ one }) => ({
+  user: one(users, {
+    fields: [categoryFollows.userId],
+    references: [users.userId],
+  }),
+  category: one(categories, {
+    fields: [categoryFollows.categoryId],
+    references: [categories.categoryId],
   }),
 }));
