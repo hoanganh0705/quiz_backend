@@ -10,3 +10,15 @@ export class UserNotFoundError extends UserDomainError {
     super(message);
   }
 }
+
+export class UserRankingNotFoundError extends UserDomainError {
+  constructor(message = 'User ranking not found') {
+    super(message);
+  }
+}
+
+export class UserAnalyticsNotFoundError extends UserDomainError {
+  constructor(message = 'User analytics not found') {
+    super(message);
+  }
+}

@@ -1,3 +1,5 @@
+import type { UserAnalytics } from '../types/user-analytics';
+
 export interface UserMeRow {
   userId: string;
   username: string;
@@ -10,6 +12,21 @@ export interface UserMeRow {
   longestStreak: number;
   settings: unknown;
   createdAt: string;
+  updatedAt: string;
+}
+
+export interface UserBadgeRow {
+  userBadgeId: string;
+  badgeId: string;
+  name: string;
+  description: string | null;
+  earnedAt: string;
+}
+
+export interface UserRankingRow {
+  userId: string;
+  globalRank: number | null;
+  totalScore: number;
   updatedAt: string;
 }
 
@@ -29,6 +46,13 @@ export interface UserActivityRow {
 
 export interface UserRepositoryPort {
   findMeById(userId: string): Promise<UserMeRow | null>;
+  listUserBadges(params: {
+    userId: string;
+    limit: number;
+    cursor?: { earnedAt: string; userBadgeId: string } | null;
+  }): Promise<UserBadgeRow[]>;
+  getUserRanking(userId: string): Promise<UserRankingRow | null>;
+  getUserAnalytics(userId: string): Promise<UserAnalytics | null>;
   searchUsers(query: string, limit: number, excludeUserId?: string): Promise<UserSearchResult[]>;
   listUserActivity(params: {
     userId: string;
