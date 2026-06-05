@@ -9,6 +9,9 @@ import { USER_REPOSITORY_PORT, type UserRepositoryPort } from './ports/user-repo
 import { normalizeEmail } from './utils/normalization.utils';
 import { InvalidTokenError } from './errors';
 
+const PASSWORD_RESET_SUCCESS_MESSAGE =
+  'Password has been reset successfully. Please log in with your new password.';
+
 @Injectable()
 export class PasswordResetService {
   private static readonly GENERIC_MESSAGE =
@@ -118,7 +121,7 @@ export class PasswordResetService {
     this.logger.info({ event: 'auth_password_reset_completed', userId });
 
     return {
-      message: 'Password has been reset successfully. Please log in with your new password.',
+      message: PASSWORD_RESET_SUCCESS_MESSAGE,
     };
   }
 

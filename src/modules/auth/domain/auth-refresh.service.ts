@@ -15,6 +15,8 @@ import { CRYPTO_PROVIDER, type CryptoProvider } from './ports/crypto.provider';
 import { USER_REPOSITORY_PORT, type UserRepositoryPort } from './ports/user-repository.port';
 import { SessionContextMismatchError, TokenReuseDetectedError, UserNotFoundError } from './errors';
 
+const REFRESH_TOKEN_REUSE_MESSAGE = 'Refresh token reuse detected. All sessions have been revoked';
+
 @Injectable()
 export class AuthRefreshService {
   constructor(
@@ -43,7 +45,10 @@ export class AuthRefreshService {
     };
   }
 
-  private async revokeAndReject(userId: string, message: string): Promise<never> {
+  private async revokeAndReject(
+    userId: string,
+    message = REFRESH_TOKEN_REUSE_MESSAGE,
+  ): Promise<never> {
     await this.sessionService.revokeAllActiveSessions(userId);
     throw new TokenReuseDetectedError(message);
   }
@@ -97,10 +102,7 @@ export class AuthRefreshService {
       jti: payload.jti,
     });
 
-    return this.revokeAndReject(
-      payload.sub,
-      'Refresh token reuse detected. All sessions have been revoked',
-    );
+    return this.revokeAndReject(payload.sub);
   }
 
   private async verifySessionIntegrity(
@@ -130,10 +132,7 @@ export class AuthRefreshService {
       userId: payload.sub,
     });
 
-    return this.revokeAndReject(
-      payload.sub,
-      'Refresh token reuse detected. All sessions have been revoked',
-    );
+    return this.revokeAndReject(payload.sub);
   }
 
   async refreshToken(

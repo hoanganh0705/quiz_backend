@@ -18,4 +18,4 @@ export {
   InvalidOAuthTokenError,
   OAuthAccountAlreadyExistsError,
   OAuthAccountLinkingRequiredError,
-} from './oauth/errors';
+} from '../oauth/errors';

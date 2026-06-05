@@ -18,3 +18,16 @@ export type ListCategoriesQuery = {
   cursor?: CategoryCursorPayload | null;
   limit?: number;
 };
+
+export type ListFollowedCategoriesQuery = {
+  limit?: number;
+  cursor?: { followedAt: string; followId: string } | null;
+};
+
+export type CategoryRankingQuery = {
+  limit: number;
+};
+
+export type RelatedCategoriesQuery = {
+  limit: number;
+};

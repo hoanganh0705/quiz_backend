@@ -8,12 +8,21 @@ import {
   CATEGORY_REPOSITORY_PORT,
   type CategoryRepositoryPort,
   type CategoryRow,
+  type FollowedCategoryRow,
+  type RankedCategoryRow,
 } from '../domain/ports';
-import { CategoryNotFoundError } from '../domain/errors';
+import {
+  CategoryAlreadyActiveError,
+  CategoryNotFoundError,
+  CategoryRestoreInvariantError,
+} from '../domain/errors';
 import type { CategoryPatch } from '../types/category.types';
 import type {
   CreateCategoryCommand,
   ListCategoriesQuery,
+  ListFollowedCategoriesQuery,
+  CategoryRankingQuery,
+  RelatedCategoriesQuery,
   UpdateCategoryCommand,
 } from './types/category-commands';
 
@@ -41,7 +50,7 @@ export class CategoryDomainService {
     const limit = query.limit ?? 10;
     const cursor = query.cursor ?? null;
 
-    const rows = await this.categoryRepository.findMany({ limit: limit + 1, cursor });
+    const rows = await this.categoryRepository.findMany({ limit, cursor });
 
     const hasNextPage = rows.length > limit;
     const items = hasNextPage ? rows.slice(0, limit) : rows;
@@ -55,6 +64,17 @@ export class CategoryDomainService {
     };
   }
 
+  async getCategoryById(categoryId: string): Promise<CategoryRow> {
+    const category = await this.categoryRepository.findById(categoryId);
+
+    if (!category) {
+      this.logger.warn({ event: 'category_get_by_id_not_found', categoryId });
+      throw new CategoryNotFoundError();
+    }
+
+    return category;
+  }
+
   async getCategoryBySlug(slug: string): Promise<CategoryRow> {
     const normalizedSlug = this.normalizeSlug(slug);
     const category = await this.categoryRepository.findBySlug(normalizedSlug);
@@ -65,6 +85,20 @@ export class CategoryDomainService {
     }
 
     return category;
+  }
+
+  async getRelatedCategories(slug: string, query: RelatedCategoriesQuery): Promise<CategoryRow[]> {
+    const normalizedSlug = this.normalizeSlug(slug);
+    const relatedCategories = await this.categoryRepository.findRelatedBySlug({
+      slug: normalizedSlug,
+      limit: query.limit,
+    });
+
+    if (relatedCategories.length === 0) {
+      await this.getCategoryBySlug(normalizedSlug);
+    }
+
+    return relatedCategories;
   }
 
   async createCategory(payload: CreateCategoryCommand): Promise<CategoryRow> {
@@ -119,12 +153,7 @@ export class CategoryDomainService {
     }
 
     if (Object.keys(patch).length === 0) {
-      const existing = await this.categoryRepository.findById(categoryId);
-      if (!existing) {
-        this.logger.warn({ event: 'category_update_not_found', categoryId });
-        throw new CategoryNotFoundError();
-      }
-      return existing;
+      return this.getCategoryById(categoryId);
     }
 
     const nowIso = new Date().toISOString();
@@ -159,5 +188,91 @@ export class CategoryDomainService {
       throw new CategoryNotFoundError();
     }
     this.logger.info({ event: 'category_deleted', categoryId });
+  }
+
+  async restoreCategory(categoryId: string): Promise<CategoryRow> {
+    const existing = await this.categoryRepository.findByIdIncludingDeleted(categoryId);
+
+    if (!existing) {
+      this.logger.warn({ event: 'category_restore_not_found', categoryId });
+      throw new CategoryNotFoundError();
+    }
+
+    if (existing.deletedAt === null) {
+      this.logger.warn({ event: 'category_restore_already_active', categoryId });
+      throw new CategoryAlreadyActiveError();
+    }
+
+    const nowIso = new Date().toISOString();
+
+    const restored = await this.categoryRepository.restore(categoryId, nowIso);
+    if (!restored) {
+      this.logger.error({ event: 'category_restore_invariant_violation', categoryId });
+      throw new CategoryRestoreInvariantError();
+    }
+
+    this.logger.info({ event: 'category_restored', categoryId });
+    return restored;
+  }
+
+  async followCategory(userId: string, categoryId: string): Promise<void> {
+    await this.getCategoryById(categoryId);
+
+    const nowIso = new Date().toISOString();
+    const follow = await this.categoryRepository.followCategory({ userId, categoryId, nowIso });
+
+    this.logger.info({
+      event: 'category_followed',
+      userId,
+      categoryId,
+      followId: follow.followId,
+    });
+  }
+
+  async unfollowCategory(userId: string, categoryId: string): Promise<void> {
+    const nowIso = new Date().toISOString();
+    await this.categoryRepository.unfollowCategory({ userId, categoryId, nowIso });
+    this.logger.info({ event: 'category_unfollowed', userId, categoryId });
+  }
+
+  async listFollowedCategories(
+    userId: string,
+    query: ListFollowedCategoriesQuery,
+  ): Promise<{
+    items: FollowedCategoryRow[];
+    limit: number;
+    hasNextPage: boolean;
+    nextCursor: { followedAt: string; followId: string } | null;
+  }> {
+    const limit = query.limit ?? 10;
+    const cursor = query.cursor ?? null;
+
+    const rows = await this.categoryRepository.listFollowedCategories({
+      userId,
+      limit,
+      cursor,
+    });
+
+    const hasNextPage = rows.length > limit;
+    const items = hasNextPage ? rows.slice(0, limit) : rows;
+    const lastItem = items.at(-1);
+
+    return {
+      items,
+      limit,
+      hasNextPage,
+      nextCursor:
+        hasNextPage && lastItem
+          ? { followedAt: lastItem.followedAt, followId: lastItem.followId }
+          : null,
+    };
+  }
+
+  async getPopularCategories(query: CategoryRankingQuery): Promise<RankedCategoryRow[]> {
+    return this.categoryRepository.getPopularCategories(query.limit);
+  }
+
+  async getTrendingCategories(query: CategoryRankingQuery): Promise<RankedCategoryRow[]> {
+    return this.categoryRepository.getTrendingCategories(query.limit);
   }
 }

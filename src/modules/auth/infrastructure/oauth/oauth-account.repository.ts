@@ -1,29 +1,15 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { DRIZZLE } from '@/core/database/drizzle.constants';
 import type { DrizzleDB } from '@/core/database/database.module';
 import { oauthAccounts, users } from '@/core/database/schema';
 import type { OAuthAccountRepositoryPort } from '../../domain/oauth/ports/oauth-account-repository.port';
-import { OAuthAccountAlreadyExistsError } from '../../domain/oauth/errors';
-import { deriveUsernameCandidates } from '../../domain/oauth/utils/derive-username-candidates';
+import { deriveOAuthUsername } from '../../domain/oauth/utils/derive-oauth-username';
 import type { OAuthAccountRecord, OAuthProvider } from '../../domain/oauth/oauth.types';
 import type { OutboxPort } from '../../domain/ports/outbox.port';
 import { OUTBOX_PORT } from '../../domain/ports/outbox.port';
-import { AuthIdentity } from '../../types/auth-context.types';
 
-/** Sentinel value stored in `users.password_hash` for OAuth-only accounts. */
-export const OAUTH_NO_PASSWORD_HASH = '__OAUTH_NO_PASSWORD__';
-
-type UserIdentityRow = {
-  userId: string;
-  username: string;
-  email: string;
-  role: 'admin' | 'moderator' | 'user';
-};
-
-type UserWithIdentityRow = UserIdentityRow & {
-  oauthAccountId: string;
-};
+const OAUTH_NO_PASSWORD_HASH = '__OAUTH_NO_PASSWORD__';
 
 @Injectable()
 export class OAuthAccountRepository implements OAuthAccountRepositoryPort {
@@ -45,14 +31,12 @@ export class OAuthAccountRepository implements OAuthAccountRepositoryPort {
         createdAt: oauthAccounts.createdAt,
       })
       .from(oauthAccounts)
-      .where(eq(oauthAccounts.providerUserId, providerUserId))
+      .where(
+        and(eq(oauthAccounts.providerUserId, providerUserId), eq(oauthAccounts.provider, provider)),
+      )
       .limit(1);
 
-    if (!row || row.provider !== provider) {
-      return null;
-    }
-
-    return row as OAuthAccountRecord;
+    return (row as OAuthAccountRecord) ?? null;
   }
 
   async findByUserIdAndProvider(
@@ -68,14 +52,10 @@ export class OAuthAccountRepository implements OAuthAccountRepositoryPort {
         createdAt: oauthAccounts.createdAt,
       })
       .from(oauthAccounts)
-      .where(eq(oauthAccounts.userId, userId))
-      .limit(10);
+      .where(and(eq(oauthAccounts.userId, userId), eq(oauthAccounts.provider, provider)))
+      .limit(1);
 
-    if (!row || row.provider !== provider) {
-      return null;
-    }
-
-    return row as OAuthAccountRecord;
+    return (row as OAuthAccountRecord) ?? null;
   }
 
   async createOAuthUserWithLink(params: {
@@ -86,74 +66,44 @@ export class OAuthAccountRepository implements OAuthAccountRepositoryPort {
     userId: string;
     username: string;
     email: string;
-    role: string;
+    role: 'admin' | 'moderator' | 'user';
     oauthAccountId: string;
   }> {
     const preGeneratedUserId = crypto.randomUUID();
-    const usernameCandidates = deriveUsernameCandidates(params.email, preGeneratedUserId);
+    const username = deriveOAuthUsername(params.email, preGeneratedUserId);
     const nowIso = new Date().toISOString();
 
     const result = await this.db.transaction(async (tx) => {
-      let selectedUsername: string | null = null;
-      let finalUserId: string | null = null;
-
-      for (const candidate of usernameCandidates) {
-        try {
-          await tx.execute(
-            // Using raw SQL for savepoint management as Drizzle doesn't natively support savepoints
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            (tx as any).dynamicRef?.('savepoint') ?? (() => {}),
-          );
-          // Try insert directly — if it fails with 23505 (unique violation), try next candidate
-          const [inserted] = await tx
-            .insert(users)
-            .values({
-              userId: preGeneratedUserId,
-              email: params.email.toLowerCase(),
-              username: candidate,
-              passwordHash: OAUTH_NO_PASSWORD_HASH,
-              isVerified: true,
-            })
-            .returning({ userId: users.userId, username: users.username });
-
-          if (inserted) {
-            selectedUsername = inserted.username;
-            finalUserId = inserted.userId;
-            break;
-          }
-        } catch (err: unknown) {
-          const code = (err as { code?: string })?.code;
-          if (code !== '23505') {
-            throw err;
-          }
-          // Unique constraint violation on username — try next candidate
-        }
-      }
-
-      if (!selectedUsername || !finalUserId) {
-        throw new Error('All username candidates are taken. Please try a different email.');
-      }
+      // Single deterministic insert — no retry loop, no savepoints
+      const [inserted] = await tx
+        .insert(users)
+        .values({
+          userId: preGeneratedUserId,
+          email: params.email.toLowerCase(),
+          username,
+          passwordHash: OAUTH_NO_PASSWORD_HASH,
+          isVerified: true,
+        })
+        .returning({ userId: users.userId, username: users.username });
 
       const [oauthAccount] = await tx
         .insert(oauthAccounts)
         .values({
-          userId: finalUserId,
+          userId: preGeneratedUserId,
           provider: params.provider,
           providerUserId: params.providerUserId,
         })
-        .returning({
-          oauthAccountId: oauthAccounts.oauthAccountId,
-        });
+        .returning({ oauthAccountId: oauthAccounts.oauthAccountId });
 
       await this.outbox.scheduleEvent(
         {
           aggregateType: 'oauth_account',
           eventType: 'oauth_account_created',
           payload: {
-            userId: finalUserId,
+            userId: preGeneratedUserId,
             provider: params.provider,
             providerUserId: params.providerUserId,
-            username: selectedUsername,
+            username,
           },
           nowIso,
         },
@@ -161,21 +111,15 @@ export class OAuthAccountRepository implements OAuthAccountRepositoryPort {
       );
 
       return {
-        userId: finalUserId,
-        username: selectedUsername,
+        userId: preGeneratedUserId,
+        username: inserted.username,
         email: params.email.toLowerCase(),
         role: 'user' as const,
         oauthAccountId: oauthAccount.oauthAccountId,
       };
     });
 
-    return result as {
-      userId: string;
-      username: string;
-      email: string;
-      role: string;
-      oauthAccountId: string;
-    };
+    return result;
   }
 
   async linkOAuthAccountToExistingUser(params: {
@@ -185,8 +129,8 @@ export class OAuthAccountRepository implements OAuthAccountRepositoryPort {
   }): Promise<OAuthAccountRecord> {
     const nowIso = new Date().toISOString();
 
-    const [oauthAccount] = await this.db.transaction(async (tx) => {
-      const [record] = await tx
+    const result = await this.db.transaction(async (tx) => {
+      const record = await tx
         .insert(oauthAccounts)
         .values({
           userId: params.userId,
@@ -218,6 +162,6 @@ export class OAuthAccountRepository implements OAuthAccountRepositoryPort {
       return record;
     });
 
-    return oauthAccount as OAuthAccountRecord;
+    return result as unknown as OAuthAccountRecord;
   }
 }

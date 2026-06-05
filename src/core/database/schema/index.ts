@@ -1940,3 +1940,58 @@ export const oauthAccounts = pgTable(
     }).onDelete('cascade'),
   ],
 );
+
+// ─── Category Follows ──────────────────────────────────────────────────────────
+
+/**
+ * Tracks which users follow which categories.
+ * Soft-delete is used for unfollowing so that re-follows are distinguishable
+ * from first-time follows and audit history is preserved.
+ *
+ * The partial unique index enforces at most one *active* follow per (user, category)
+ * pair without preventing the same pair from having a historical deleted row.
+ */
+export const categoryFollows = pgTable(
+  'category_follows',
+  {
+    followId: uuid('follow_id').defaultRandom().primaryKey().notNull(),
+    userId: uuid('user_id').notNull(),
+    categoryId: uuid('category_id').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' })
+      .defaultNow()
+      .notNull(),
+    deletedAt: timestamp('deleted_at', { withTimezone: true, mode: 'string' }),
+  },
+  (table) => [
+    // Enforce at most one active follow per (user, category)
+    uniqueIndex('uq_category_follows_user_category_active')
+      .using(
+        'btree',
+        table.userId.asc().nullsLast().op('uuid_ops'),
+        table.categoryId.asc().nullsLast().op('uuid_ops'),
+      )
+      .where(sql`deleted_at IS NULL`),
+    index('idx_category_follows_user_id').using(
+      'btree',
+      table.userId.asc().nullsLast().op('uuid_ops'),
+    ),
+    index('idx_category_follows_category_id').using(
+      'btree',
+      table.categoryId.asc().nullsLast().op('uuid_ops'),
+    ),
+    index('idx_category_follows_deleted_at').using(
+      'btree',
+      table.deletedAt.asc().nullsLast().op('timestamptz_ops'),
+    ),
+    foreignKey({
+      columns: [table.userId],
+      foreignColumns: [users.userId],
+      name: 'category_follows_user_id_fkey',
+    }).onDelete('cascade'),
+    foreignKey({
+      columns: [table.categoryId],
+      foreignColumns: [categories.categoryId],
+      name: 'category_follows_category_id_fkey',
+    }).onDelete('cascade'),
+  ],
+);
