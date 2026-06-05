@@ -212,6 +212,119 @@ export class QuizRepository implements QuizRepositoryPort {
     return rows as QuizWithPublishedVersionRow[];
   }
 
+  async listByCreatorId(params: {
+    creatorId: string;
+    limit: number;
+    cursor?: QuizCursor | null;
+  }): Promise<QuizWithPublishedVersionRow[]> {
+    const filters: SQL[] = [
+      isNull(QUIZ_COLUMNS.deletedAt),
+      eq(QUIZ_COLUMNS.isHidden, false),
+      eq(QUIZ_COLUMNS.creatorId, params.creatorId),
+    ];
+
+    if (params.cursor) {
+      filters.push(
+        or(
+          sql`${QUIZ_COLUMNS.createdAt} < ${params.cursor.createdAt}`,
+          and(
+            eq(QUIZ_COLUMNS.createdAt, params.cursor.createdAt),
+            sql`${QUIZ_COLUMNS.quizId} < ${params.cursor.quizId}`,
+          ),
+        ) as SQL,
+      );
+    }
+
+    const rows = await this.db
+      .select(QUIZ_WITH_VERSION_PROJECTION)
+      .from(quizzes)
+      .leftJoin(
+        quizVersions,
+        eq(QUIZ_COLUMNS.publishedVersionId, QUIZ_VERSION_COLUMNS.quizVersionId),
+      )
+      .where(and(...filters))
+      .orderBy(desc(QUIZ_COLUMNS.createdAt), desc(QUIZ_COLUMNS.quizId))
+      .limit(params.limit + 1);
+
+    return rows as QuizWithPublishedVersionRow[];
+  }
+
+  async listDraftsByCreatorId(params: {
+    creatorId: string;
+    limit: number;
+    cursor?: QuizCursor | null;
+  }): Promise<QuizWithPublishedVersionRow[]> {
+    const filters: SQL[] = [
+      isNull(QUIZ_COLUMNS.deletedAt),
+      eq(QUIZ_COLUMNS.isHidden, false),
+      eq(QUIZ_COLUMNS.creatorId, params.creatorId),
+      eq(QUIZ_VERSION_COLUMNS.status, 'draft'),
+    ];
+
+    if (params.cursor) {
+      filters.push(
+        or(
+          sql`${QUIZ_COLUMNS.createdAt} < ${params.cursor.createdAt}`,
+          and(
+            eq(QUIZ_COLUMNS.createdAt, params.cursor.createdAt),
+            sql`${QUIZ_COLUMNS.quizId} < ${params.cursor.quizId}`,
+          ),
+        ) as SQL,
+      );
+    }
+
+    const rows = await this.db
+      .select(QUIZ_WITH_VERSION_PROJECTION)
+      .from(quizzes)
+      .leftJoin(
+        quizVersions,
+        eq(QUIZ_COLUMNS.publishedVersionId, QUIZ_VERSION_COLUMNS.quizVersionId),
+      )
+      .where(and(...filters))
+      .orderBy(desc(QUIZ_COLUMNS.createdAt), desc(QUIZ_COLUMNS.quizId))
+      .limit(params.limit + 1);
+
+    return rows as QuizWithPublishedVersionRow[];
+  }
+
+  async listPublishedByCreatorId(params: {
+    creatorId: string;
+    limit: number;
+    cursor?: QuizCursor | null;
+  }): Promise<QuizWithPublishedVersionRow[]> {
+    const filters: SQL[] = [
+      isNull(QUIZ_COLUMNS.deletedAt),
+      eq(QUIZ_COLUMNS.isHidden, false),
+      eq(QUIZ_COLUMNS.creatorId, params.creatorId),
+      eq(QUIZ_VERSION_COLUMNS.status, 'published'),
+    ];
+
+    if (params.cursor) {
+      filters.push(
+        or(
+          sql`${QUIZ_COLUMNS.createdAt} < ${params.cursor.createdAt}`,
+          and(
+            eq(QUIZ_COLUMNS.createdAt, params.cursor.createdAt),
+            sql`${QUIZ_COLUMNS.quizId} < ${params.cursor.quizId}`,
+          ),
+        ) as SQL,
+      );
+    }
+
+    const rows = await this.db
+      .select(QUIZ_WITH_VERSION_PROJECTION)
+      .from(quizzes)
+      .leftJoin(
+        quizVersions,
+        eq(QUIZ_COLUMNS.publishedVersionId, QUIZ_VERSION_COLUMNS.quizVersionId),
+      )
+      .where(and(...filters))
+      .orderBy(desc(QUIZ_COLUMNS.createdAt), desc(QUIZ_COLUMNS.quizId))
+      .limit(params.limit + 1);
+
+    return rows as QuizWithPublishedVersionRow[];
+  }
+
   async findFeaturedQuizzes(limit: number): Promise<QuizWithPublishedVersionRow[]> {
     const rows = await this.db
       .select(QUIZ_WITH_VERSION_PROJECTION)

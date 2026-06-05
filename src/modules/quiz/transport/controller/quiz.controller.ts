@@ -35,8 +35,8 @@ import { CreateQuizDto } from '../../dto/request/create-quiz.dto';
 import { QuizResponseDto } from '../../dto/response/quiz-response.dto';
 import { QuizListResponseDto } from '../../dto/response/quiz-list-response.dto';
 import { QuizStatsResponseDto } from '../../dto/response/quiz-stats-response.dto';
+import { CreatorQuizAnalyticsDto } from '../../dto/response/quiz-analytics.dto';
 import { FeaturedQuizzesQueryDto } from '../../dto/request/featured-quizzes-query.dto';
-import { RecommendedQuizzesQueryDto } from '../../dto/request/recommended-quizzes-query.dto';
 import { RelatedQuizzesQueryDto } from '../../dto/request/related-quizzes-query.dto';
 import { RelatedQuizzesResponseDto } from '../../dto/response/related-quizzes-response.dto';
 import { ListQuizzesQueryDto } from '../../dto/request/list-quizzes-query.dto';
@@ -45,11 +45,14 @@ import { DeleteQuizResponseDto } from '@/modules/quiz/dto/response/delete-quiz-r
 import { CreateQuizVersionDto } from '../../dto/request/create-quiz-version.dto';
 import { ListQuizVersionsQueryDto } from '../../dto/request/list-quiz-versions-query.dto';
 import { QuizVersionListResponseDto } from '../../dto/response/quiz-version-list-response.dto';
-import { QuizVersionResponseDto } from '../../dto/response/quiz-version-response.dto';
 import { CreateQuizQuestionDto } from '@/modules/quiz/dto/request/create-quiz-question.dto';
 import { CreateQuizQuestionsDto } from '@/modules/quiz/dto/request/create-quiz-questions.dto';
 import { QuizQuestionResponseDto } from '@/modules/quiz/dto/response/quiz-question-response.dto';
 import { QuizDomainExceptionFilter } from '../filters/quiz-domain-exception.filter';
+import {
+  QuizVersionDetailResponseDto,
+  QuizVersionResponseDto,
+} from '../../dto/response/quiz-version-response.dto';
 
 @ApiTags('quizzes')
 @Controller('quizzes')
@@ -94,11 +97,83 @@ export class QuizController {
     return this.quizApplicationService.listQuizzes(query);
   }
 
+  @Get('me')
+  @ApiBearerAuth()
+  @ApiAuth()
+  @ApiOperation({
+    summary: 'List my quizzes',
+    description:
+      'Returns a paginated, cursor-based list of quizzes created by the authenticated user, ordered by newest first.',
+  })
+  @ApiOkResponse({ description: 'Quizzes returned', type: QuizListResponseDto })
+  @ApiBadRequestResponse({ description: 'Validation failed' })
+  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  @ApiValidationRequest()
+  listMyQuizzes(
+    @CurrentUser('sub') userId: string,
+    @Query() query: ListQuizzesQueryDto,
+  ): Promise<QuizListResponseDto> {
+    return this.quizApplicationService.listMyQuizzes(userId, query);
+  }
+
+  @Get('me/drafts')
+  @ApiBearerAuth()
+  @ApiAuth()
+  @ApiOperation({
+    summary: 'List my draft quizzes',
+    description:
+      'Returns a paginated, cursor-based list of draft quizzes owned by the authenticated user, ordered by newest first.',
+  })
+  @ApiOkResponse({ description: 'Draft quizzes returned', type: QuizListResponseDto })
+  @ApiBadRequestResponse({ description: 'Validation failed' })
+  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  @ApiValidationRequest()
+  listMyDraftQuizzes(
+    @CurrentUser('sub') userId: string,
+    @Query() query: ListQuizzesQueryDto,
+  ): Promise<QuizListResponseDto> {
+    return this.quizApplicationService.listMyDraftQuizzes(userId, query);
+  }
+
+  @Get('me/published')
+  @ApiBearerAuth()
+  @ApiAuth()
+  @ApiOperation({
+    summary: 'List my published quizzes',
+    description:
+      'Returns a paginated, cursor-based list of published quizzes owned by the authenticated user, ordered by newest first.',
+  })
+  @ApiOkResponse({ description: 'Published quizzes returned', type: QuizListResponseDto })
+  @ApiBadRequestResponse({ description: 'Validation failed' })
+  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  @ApiValidationRequest()
+  listMyPublishedQuizzes(
+    @CurrentUser('sub') userId: string,
+    @Query() query: ListQuizzesQueryDto,
+  ): Promise<QuizListResponseDto> {
+    return this.quizApplicationService.listMyPublishedQuizzes(userId, query);
+  }
+
+  @Get('me/analytics')
+  @ApiBearerAuth()
+  @ApiAuth()
+  @ApiOperation({
+    summary: 'Get my quiz analytics',
+    description:
+      'Returns creator-level analytics aggregated across all quizzes owned by the authenticated user.',
+  })
+  @ApiOkResponse({ description: 'Quiz analytics returned', type: CreatorQuizAnalyticsDto })
+  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  getMyQuizAnalytics(@CurrentUser('sub') userId: string): Promise<CreatorQuizAnalyticsDto> {
+    return this.quizApplicationService.getMyQuizAnalytics(userId);
+  }
+
   @Get('featured')
   @Public()
   @ApiOperation({
     summary: 'Featured quizzes',
-    description: 'Returns active, published featured quizzes ordered by most recently featured first.',
+    description:
+      'Returns active, published featured quizzes ordered by most recently featured first.',
   })
   @ApiOkResponse({ description: 'Featured quizzes returned', type: RelatedQuizzesResponseDto })
   @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
@@ -123,7 +198,8 @@ export class QuizController {
   @Public()
   @ApiOperation({
     summary: 'Similar quizzes',
-    description: 'Returns related quizzes ranked by shared categories, shared tags, and popularity.',
+    description:
+      'Returns related quizzes ranked by shared categories, shared tags, and popularity.',
   })
   @ApiOkResponse({ description: 'Related quizzes returned', type: RelatedQuizzesResponseDto })
   @ApiNotFoundResponse({ description: 'Quiz not found' })
@@ -243,6 +319,27 @@ export class QuizController {
     @Query() query: ListQuizVersionsQueryDto,
   ): Promise<QuizVersionListResponseDto> {
     return this.quizVersionApplicationService.listQuizVersions(quizId, user, query);
+  }
+
+  @Get(':id/versions/:versionId')
+  @Permissions(Permission.QUIZ_VERSION_VIEW_OWN, Permission.QUIZ_VERSION_VIEW_ANY)
+  @ApiBearerAuth()
+  @ApiAuth()
+  @ApiOperation({
+    summary: 'Get quiz version detail',
+    description:
+      'Returns complete details of a single quiz version. Requires `quiz-version:view:own` or `quiz-version:view:any`.',
+  })
+  @ApiOkResponse({ description: 'Quiz version returned', type: QuizVersionDetailResponseDto })
+  @ApiNotFoundResponse({ description: 'Quiz or version not found' })
+  @ApiForbiddenResponse({ description: 'You do not have permission to view this quiz version' })
+  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  getQuizVersionDetail(
+    @Param('id', new ParseUUIDPipe()) quizId: string,
+    @Param('versionId', new ParseUUIDPipe()) quizVersionId: string,
+    @CurrentUser() user: JwtPayload,
+  ): Promise<QuizVersionDetailResponseDto> {
+    return this.quizVersionApplicationService.getQuizVersionDetail(quizId, quizVersionId, user);
   }
 
   @Post(':id/versions/:versionId/questions')

@@ -12,6 +12,7 @@ import {
 import type { CreateQuizVersionCommand } from '../types/create-quiz-version.command';
 import type { UpdateQuizVersionCommand } from '../types/quiz-version-commands';
 import type { ListQuizVersionsQuery } from '../types/list-quiz-versions.query';
+import type { QuizQuestionJoinRow } from '../ports/quiz-question-repository.port';
 import {
   MIN_QUESTIONS_TO_PUBLISH,
   QUIZ_INSUFFICIENT_QUESTIONS_MESSAGE,
@@ -162,6 +163,30 @@ export class QuizVersionService {
           ? { createdAt: lastItem.createdAt, quizVersionId: lastItem.quizVersionId }
           : null,
     };
+  }
+
+  async getQuizVersionDetail(
+    quizId: string,
+    quizVersionId: string,
+    user: JwtPayload,
+  ): Promise<{ version: QuizVersionDetailRow; questions: QuizQuestionJoinRow[] }> {
+    const quiz = await this.quizQueryService.getActiveQuizRecordById(quizId);
+    const isOwner = QuizPolicy.isOwner(quiz.creatorId, user);
+
+    QuizVersionPolicy.assertCanView(isOwner, user);
+
+    const version = await this.quizVersionRepository.getQuizVersionDetailByQuizId({
+      quizId,
+      quizVersionId,
+    });
+
+    if (!version) {
+      throw new QuizNotFoundError('Quiz version not found');
+    }
+
+    const questions = await this.quizQuestionRepository.getQuestionsByVersionId(quizVersionId);
+
+    return { version, questions };
   }
 
   async updateQuizVersion(

@@ -97,17 +97,14 @@ export interface TagAnalytics {
 export interface CreatorAnalytics {
   userId: string;
   totalQuizzes: number;
+  draftQuizzes: number;
   publishedQuizzes: number;
   totalAttempts: number;
   totalPlayers: number;
-  totalReviews: number;
+  averageScore: number;
   averageRating: number;
-  topPerformingQuiz: PopularQuiz | null;
-  worstPerformingQuiz: {
-    quizId: string;
-    title: string;
-    averageScore: number;
-  } | null;
+  totalBookmarks: number;
+  totalReviews: number;
   lastUpdated: string;
 }
 
