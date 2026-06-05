@@ -4,7 +4,6 @@ import {
   QuizAnalyticsResponseDto,
   TrendingQuizzesResponseDto,
   PopularQuizzesResponseDto,
-  CategoryAnalyticsResponseDto,
   CreatorAnalyticsResponseDto,
 } from '@/modules/quiz/dto/response';
 
@@ -83,42 +82,6 @@ export class QuizAnalyticsController {
         bookmarkCount: q.bookmarkCount,
       })),
       lastUpdated: new Date().toISOString(),
-    };
-  }
-
-  @Get('categories/:categoryId/analytics')
-  async getCategoryAnalytics(
-    @Param('categoryId') categoryId: string,
-  ): Promise<CategoryAnalyticsResponseDto | null> {
-    const analytics = await this.quizAnalyticsService.getCategoryAnalytics(categoryId);
-
-    if (!analytics) {
-      return null;
-    }
-
-    return {
-      categoryId: analytics.categoryId,
-      categoryName: analytics.categoryName,
-      summary: {
-        totalQuizzes: analytics.summary.totalQuizzes,
-        activeQuizzes: analytics.summary.activeQuizzes,
-        totalAttempts: analytics.summary.totalAttempts,
-        totalPlayers: analytics.summary.totalPlayers,
-        averageScore: analytics.summary.averageScore,
-        averageRating: analytics.summary.averageRating,
-      },
-      topQuizzes: analytics.topQuizzes.map((q) => ({
-        rank: q.rank,
-        quizId: q.quizId,
-        title: q.title,
-        slug: q.slug,
-        imageUrl: q.imageUrl,
-        popularityScore: q.popularityScore,
-        totalAttempts: q.totalAttempts,
-        averageRating: q.averageRating,
-        bookmarkCount: q.bookmarkCount,
-      })),
-      lastUpdated: analytics.lastUpdated,
     };
   }
 

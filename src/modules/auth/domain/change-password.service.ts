@@ -16,6 +16,41 @@ export class ChangePasswordService {
     @InjectPinoLogger(ChangePasswordService.name) private readonly logger: PinoLogger,
   ) {}
 
+  private async hasPasswordBeenReused(
+    userId: string,
+    newPassword: string,
+    currentPasswordHash: string,
+  ): Promise<boolean> {
+    if (await this.passwordProvider.verify(newPassword, currentPasswordHash)) {
+      return true;
+    }
+
+    const historyHashes = await this.userRepository.getRecentPasswordHashes(
+      userId,
+      this.securityConfig.maxPasswordHistorySize,
+    );
+
+    for (const historicalHash of historyHashes) {
+      if (await this.passwordProvider.verify(newPassword, historicalHash)) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  private logPasswordReuse(userId: string): void {
+    this.logger.warn({ event: 'auth_change_password_reuse_detected', userId });
+  }
+
+  private logAtomicFailure(userId: string, error: unknown): void {
+    this.logger.error({
+      event: 'auth_change_password_atomic_operation_failed',
+      userId,
+      message: error instanceof Error ? error.message : 'Unknown error',
+    });
+  }
+
   async changePassword(
     userId: string,
     currentPassword: string,
@@ -38,25 +73,9 @@ export class ChangePasswordService {
       throw new InvalidPasswordError();
     }
 
-    // Enforce reuse policy against the current password hash first (fast path).
-    const isReused = await this.passwordProvider.verify(newPassword, credentials.passwordHash);
-    if (isReused) {
-      this.logger.warn({ event: 'auth_change_password_reuse_detected', userId });
+    if (await this.hasPasswordBeenReused(userId, newPassword, credentials.passwordHash)) {
+      this.logPasswordReuse(userId);
       throw new PasswordReuseError();
-    }
-
-    // Check recent history hashes. If any match, reject with PasswordReuseError.
-    const historyHashes = await this.userRepository.getRecentPasswordHashes(
-      userId,
-      this.securityConfig.maxPasswordHistorySize,
-    );
-
-    for (const historicalHash of historyHashes) {
-      const matchesHistory = await this.passwordProvider.verify(newPassword, historicalHash);
-      if (matchesHistory) {
-        this.logger.warn({ event: 'auth_change_password_reuse_detected', userId });
-        throw new PasswordReuseError();
-      }
     }
 
     const nowIso = new Date().toISOString();
@@ -77,19 +96,7 @@ export class ChangePasswordService {
         eventPayload: { eventType: 'password_changed', userId, timestamp: nowIso, ipAddress },
       });
     } catch (error) {
-      if (error instanceof UserNotFoundError) {
-        this.logger.error({
-          event: 'auth_change_password_atomic_operation_failed',
-          userId,
-          message: error instanceof Error ? error.message : 'Unknown error',
-        });
-        throw error;
-      }
-      this.logger.error({
-        event: 'auth_change_password_atomic_operation_failed',
-        userId,
-        message: error instanceof Error ? error.message : 'Unknown error',
-      });
+      this.logAtomicFailure(userId, error);
       throw error;
     }
 

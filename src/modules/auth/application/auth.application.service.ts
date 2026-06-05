@@ -1,5 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import type { SessionRequestContext } from '../types/auth-context.types';
+import type {
+  LoginResult,
+  RefreshTokenResult,
+  ForgotPasswordResult,
+  ResetPasswordResult,
+} from '../types/auth-result.types';
 import { AuthLoginService } from '../domain/auth-login.service';
 import { AuthRefreshService } from '../domain/auth-refresh.service';
 import { AuthRegistrationService } from '../domain/auth-registration.service';
@@ -52,6 +58,12 @@ type RefreshTokenApplicationResult = {
   refreshToken: string;
 };
 
+type SessionResponse = SessionListResponseDto['sessions'][number];
+
+type ActiveSessionResult = Awaited<
+  ReturnType<SessionManagementService['getActiveSessions']>
+>[number];
+
 @Injectable()
 export class AuthApplicationService {
   constructor(
@@ -92,23 +104,18 @@ export class AuthApplicationService {
     session: SessionRequestContext,
   ): Promise<LoginApplicationResult> {
     const result = await this.authLoginService.login(loginCommand, session);
-    return {
-      response: this.authResponseMapper.toLoginResponse(result),
-      refreshToken: result.refreshToken,
-      sessionId: result.sessionId,
-    };
+    return this.toLoginApplicationResult(result);
   }
 
   async googleLogin(
     idToken: string,
     session: SessionRequestContext,
   ): Promise<LoginApplicationResult> {
-    const result = await this.oauthLoginService.login({ provider: 'google', idToken }, session);
-    return {
-      response: this.authResponseMapper.toLoginResponse(result),
-      refreshToken: result.refreshToken,
-      sessionId: result.sessionId,
-    };
+    const result = await this.oauthLoginService.login(
+      { provider: 'google', authentication: { idToken } },
+      session,
+    );
+    return this.toLoginApplicationResult(result);
   }
 
   async refreshToken(
@@ -116,10 +123,7 @@ export class AuthApplicationService {
     session: SessionRequestContext,
   ): Promise<RefreshTokenApplicationResult> {
     const result = await this.authRefreshService.refreshToken(refreshToken, session);
-    return {
-      response: this.authResponseMapper.toRefreshTokenResponse(result),
-      refreshToken: result.refreshToken,
-    };
+    return this.toRefreshTokenApplicationResult(result);
   }
 
   async logout(refreshToken: string | null): Promise<LogoutResponseDto> {
@@ -141,7 +145,7 @@ export class AuthApplicationService {
     const result = await this.passwordResetService.requestPasswordReset(
       forgotPasswordCommand.email,
     );
-    return { message: result.message };
+    return this.toMessageResponse(result);
   }
 
   async resetPassword(
@@ -151,7 +155,7 @@ export class AuthApplicationService {
       resetPasswordCommand.token,
       resetPasswordCommand.newPassword,
     );
-    return { message: result.message };
+    return this.toMessageResponse(result);
   }
 
   async changePassword(
@@ -173,15 +177,7 @@ export class AuthApplicationService {
   ): Promise<SessionListResponseDto> {
     const sessions = await this.sessionManagementService.getActiveSessions(userId);
     return {
-      sessions: sessions.map((session) => ({
-        sessionId: session.sessionId,
-        deviceBrowser: session.deviceBrowser,
-        deviceOs: session.deviceOs,
-        deviceType: session.deviceType,
-        ipAddress: session.ipAddress,
-        lastActiveAt: session.lastActiveAt,
-        isCurrentSession: session.sessionId === currentSessionId,
-      })),
+      sessions: sessions.map((session) => this.toSessionResponse(session, currentSessionId)),
     };
   }
 
@@ -252,5 +248,38 @@ export class AuthApplicationService {
       ipAddress,
     );
     return this.authResponseMapper.toDeleteAccountResponse(result);
+  }
+
+  private toLoginApplicationResult(result: LoginResult): LoginApplicationResult {
+    return {
+      response: this.authResponseMapper.toLoginResponse(result),
+      refreshToken: result.refreshToken,
+      sessionId: result.sessionId,
+    };
+  }
+
+  private toRefreshTokenApplicationResult(
+    result: RefreshTokenResult,
+  ): RefreshTokenApplicationResult {
+    return {
+      response: this.authResponseMapper.toRefreshTokenResponse(result),
+      refreshToken: result.refreshToken,
+    };
+  }
+
+  private toMessageResponse(result: ForgotPasswordResult): ForgotPasswordResponseDto;
+  private toMessageResponse(result: ResetPasswordResult): ResetPasswordResponseDto;
+  private toMessageResponse(result: { message: string }): { message: string } {
+    return { message: result.message };
+  }
+
+  private toSessionResponse(
+    session: ActiveSessionResult,
+    currentSessionId: string,
+  ): SessionResponse {
+    return {
+      ...session,
+      isCurrentSession: session.sessionId === currentSessionId,
+    };
   }
 }
