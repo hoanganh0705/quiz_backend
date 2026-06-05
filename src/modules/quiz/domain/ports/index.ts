@@ -1,10 +1,12 @@
 export {
   QUIZ_REPOSITORY_PORT,
   type CreateQuizPayload,
+  type FindRelatedQuizzesParams,
   type QuizCursor,
   type QuizListFilters,
   type QuizRecordRow,
   type QuizRepositoryPort,
+  type QuizStatsRow,
   type QuizWithPublishedVersionRow,
 } from './quiz-repository.port';
 export {

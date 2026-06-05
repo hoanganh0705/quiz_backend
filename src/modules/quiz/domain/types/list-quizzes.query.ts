@@ -7,5 +7,6 @@ export type ListQuizzesQuery = {
     difficulty?: string;
     categoryId?: string;
     tagId?: string;
+    creatorId?: string;
   };
 };

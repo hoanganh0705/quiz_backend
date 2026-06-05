@@ -18,7 +18,6 @@ import type {
 } from '../domain/types/user-commands';
 import type { UserActivityRow } from '../domain/ports/user-repository.port';
 import type { ListUserActivityQuery } from '../domain/types/list-user-activity.query';
-import type { UpdateProfileCommand, UpdateSettingsCommand } from '../domain/types/user-commands';
 import { isObjectRecord } from '@/common/utils/object.util';
 
 @Injectable()
