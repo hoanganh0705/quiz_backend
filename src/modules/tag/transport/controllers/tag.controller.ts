@@ -44,7 +44,6 @@ import { TagCursorMapper } from '../../mappers/tag-cursor.mapper';
 import type {
   CreateTagCommand,
   ListTagsQuery,
-  RelatedTagsQuery,
   UpdateTagCommand,
 } from '../../domain/types/tag-commands';
 import type { ListQuizzesQueryDto } from '@/modules/quiz/dto/request/list-quizzes-query.dto';
@@ -123,9 +122,7 @@ export class TagController {
   @Public()
   @ApiOperation({
     summary: 'Tag analytics',
-    description:
-      'Returns aggregated analytics for all quizzes with this tag. ' +
-      'NOTE: This endpoint is not yet implemented and returns 404.',
+    description: 'Returns aggregated analytics for all quizzes with this tag.',
   })
   @ApiOkResponse({ description: 'Analytics returned', type: TagAnalyticsResponseDto })
   @ApiNotFoundResponse({ description: 'Tag or analytics not found' })
