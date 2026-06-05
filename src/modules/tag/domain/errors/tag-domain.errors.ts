@@ -11,12 +11,6 @@ export class TagNotFoundError extends TagDomainError {
   }
 }
 
-export class TagAnalyticsNotFoundError extends TagDomainError {
-  constructor(message = 'Tag analytics not found') {
-    super(message);
-  }
-}
-
 export class TagSlugConflictError extends TagDomainError {
   constructor(message = 'A tag with this slug already exists') {
     super(message);
