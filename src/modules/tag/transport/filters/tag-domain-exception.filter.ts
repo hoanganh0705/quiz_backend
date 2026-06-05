@@ -1,6 +1,14 @@
 import { Catch, HttpStatus, type ArgumentsHost, type ExceptionFilter } from '@nestjs/common';
 import type { Response } from 'express';
-import { TagDomainError, TagNotFoundError, TagSlugConflictError } from '../../domain/errors';
+import {
+  TagAlreadyActiveError,
+  TagAnalyticsNotFoundError,
+  TagDomainError,
+  TagFollowNotAllowedError,
+  TagNotFoundError,
+  TagRestoreInvariantError,
+  TagSlugConflictError,
+} from '../../domain/errors';
 
 const HTTP_ERROR_NAMES: Record<number, string> = {
   [HttpStatus.BAD_REQUEST]: 'Bad Request',
@@ -9,11 +17,6 @@ const HTTP_ERROR_NAMES: Record<number, string> = {
   [HttpStatus.INTERNAL_SERVER_ERROR]: 'Internal Server Error',
 };
 
-/**
- * Maps domain-layer errors to HTTP responses so the domain can remain
- * free of framework-specific exception types while preserving identical
- * HTTP status codes and response bodies.
- */
 @Catch(TagDomainError)
 export class TagDomainExceptionFilter implements ExceptionFilter {
   catch(exception: TagDomainError, host: ArgumentsHost): void {
@@ -34,8 +37,27 @@ export class TagDomainExceptionFilter implements ExceptionFilter {
       return { status: HttpStatus.NOT_FOUND, message: 'Tag not found' };
     }
 
+    if (error instanceof TagAnalyticsNotFoundError) {
+      return { status: HttpStatus.NOT_FOUND, message: 'Tag analytics not found' };
+    }
+
     if (error instanceof TagSlugConflictError) {
       return { status: HttpStatus.CONFLICT, message: 'A tag with this slug already exists' };
+    }
+
+    if (error instanceof TagAlreadyActiveError) {
+      return {
+        status: HttpStatus.CONFLICT,
+        message: 'Tag is already active and cannot be restored',
+      };
+    }
+
+    if (error instanceof TagFollowNotAllowedError) {
+      return { status: HttpStatus.NOT_FOUND, message: 'Tag not found' };
+    }
+
+    if (error instanceof TagRestoreInvariantError) {
+      return { status: HttpStatus.INTERNAL_SERVER_ERROR, message: 'Internal server error' };
     }
 
     return { status: HttpStatus.INTERNAL_SERVER_ERROR, message: 'Internal server error' };
