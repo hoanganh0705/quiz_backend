@@ -119,6 +119,7 @@ export class TagRepository implements TagRepositoryPort {
       .from(tags)
       .innerJoin(quizTags, eq(quizTags.tagId, tags.tagId))
       .innerJoin(sourceQuizIds, eq(sourceQuizIds.quizId, quizTags.quizId))
+      .innerJoin(quizzes, eq((quizzes as { quizId: AnyPgColumn }).quizId, quizTags.quizId))
       .where(
         and(
           isNull(tags.deletedAt),
@@ -127,7 +128,6 @@ export class TagRepository implements TagRepositoryPort {
           eq((quizzes as { isHidden: AnyPgColumn }).isHidden, false),
         ),
       )
-      .innerJoin(quizzes, eq((quizzes as { quizId: AnyPgColumn }).quizId, quizTags.quizId))
       .groupBy(tags.tagId, tags.name, tags.slug, tags.createdAt, tags.updatedAt)
       .orderBy(desc(sql<number>`COUNT(DISTINCT ${quizTags.quizId})`), asc(tags.name))
       .limit(limit);

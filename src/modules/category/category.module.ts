@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { CategoryController } from './category.controller';
+import { CategoryController } from './transport/controllers/category.controller';
 import { UserCategoryController } from './transport/controllers/user-category.controller';
 import { CategoryApplicationService } from './application/category.application.service';
 import { CategoryDomainService } from './domain/category.service';

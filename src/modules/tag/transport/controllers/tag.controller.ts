@@ -26,29 +26,30 @@ import { Roles } from '@/common/authorization/decorators/roles.decorator';
 import { ApiAuth, ApiValidationRequest } from '@/common/swagger/swagger-decorators';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
-import { CreateTagDto } from './dto/request/create-tag.dto';
-import { ListTagsQueryDto } from './dto/request/list-tags-query.dto';
-import { UpdateTagDto } from './dto/request/update-tag.dto';
-import { TagRankingQueryDto } from './dto/request/tag-ranking-query.dto';
-import { DeleteTagResponseDto } from './dto/response/delete-tag-response.dto';
+import { CreateTagDto } from '../../dto/request/create-tag.dto';
+import { ListTagsQueryDto } from '../../dto/request/list-tags-query.dto';
+import { UpdateTagDto } from '../../dto/request/update-tag.dto';
+import { TagRankingQueryDto } from '../../dto/request/tag-ranking-query.dto';
+import { RelatedTagsQueryDto } from '../../dto/request/related-tags-query.dto';
+import { DeleteTagResponseDto } from '../../dto/response/delete-tag-response.dto';
 import {
   RankedTagsResponseDto,
   RelatedTagsResponseDto,
   TagFollowMessageResponseDto,
   TagAnalyticsResponseDto,
-} from './dto/response/parity-response.dto';
-import { TagApplicationService } from './application/tag.application.service';
-import { TagDomainExceptionFilter } from './transport/filters/tag-domain-exception.filter';
-import { TagCursorMapper } from './mappers/tag-cursor.mapper';
+} from '../../dto/response/parity-response.dto';
+import { TagApplicationService } from '../../application/tag.application.service';
+import { TagDomainExceptionFilter } from '../filters/tag-domain-exception.filter';
+import { TagCursorMapper } from '../../mappers/tag-cursor.mapper';
 import type {
   CreateTagCommand,
   ListTagsQuery,
   RelatedTagsQuery,
   UpdateTagCommand,
-} from './domain/types/tag-commands';
+} from '../../domain/types/tag-commands';
 import type { ListQuizzesQueryDto } from '@/modules/quiz/dto/request/list-quizzes-query.dto';
 import type { QuizListResponseDto } from '@/modules/quiz/dto/response/quiz-list-response.dto';
-import { TagListResponseDto, TagResponseDto } from './dto/response';
+import { TagListResponseDto, TagResponseDto } from '../../dto/response';
 
 @ApiTags('tags')
 @Controller('tags')
@@ -112,17 +113,19 @@ export class TagController {
   @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
   getRelatedTags(
     @Param('slug') slug: string,
-    @Query() query: TagRankingQueryDto,
+    @Query() query: RelatedTagsQueryDto,
   ): Promise<RelatedTagsResponseDto> {
-    const q: RelatedTagsQuery = { limit: query.limit ?? 10 };
-    return this.tagApplicationService.getRelatedTags(slug, q);
+    const relatedTagsQuery = { limit: query.limit ?? 10 };
+    return this.tagApplicationService.getRelatedTags(slug, relatedTagsQuery);
   }
 
   @Get(':id/analytics')
   @Public()
   @ApiOperation({
     summary: 'Tag analytics',
-    description: 'Returns aggregated analytics for all quizzes with this tag.',
+    description:
+      'Returns aggregated analytics for all quizzes with this tag. ' +
+      'NOTE: This endpoint is not yet implemented and returns 404.',
   })
   @ApiOkResponse({ description: 'Analytics returned', type: TagAnalyticsResponseDto })
   @ApiNotFoundResponse({ description: 'Tag or analytics not found' })
@@ -227,6 +230,7 @@ export class TagController {
   })
   @ApiCreatedResponse({ description: 'Tag created', type: TagResponseDto })
   @ApiBadRequestResponse({ description: 'Validation failed' })
+  @ApiConflictResponse({ description: 'A tag with this slug already exists' })
   @ApiNotFoundResponse({ description: 'Tag not found' })
   @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
   @ApiValidationRequest()
@@ -246,6 +250,7 @@ export class TagController {
   @ApiOkResponse({ description: 'Tag updated', type: TagResponseDto })
   @ApiNotFoundResponse({ description: 'Tag not found' })
   @ApiBadRequestResponse({ description: 'Validation failed' })
+  @ApiConflictResponse({ description: 'A tag with this slug already exists' })
   @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
   @ApiValidationRequest()
   updateTag(
