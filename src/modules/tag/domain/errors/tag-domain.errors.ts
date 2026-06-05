@@ -34,3 +34,9 @@ export class TagFollowNotAllowedError extends TagDomainError {
     super(message);
   }
 }
+
+export class TagAnalyticsNotFoundError extends TagDomainError {
+  constructor(message = 'Tag analytics not found') {
+    super(message);
+  }
+}

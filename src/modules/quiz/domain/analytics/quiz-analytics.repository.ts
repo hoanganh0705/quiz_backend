@@ -10,6 +10,8 @@ import {
   bookmarkedQuizzes,
   quizCategories,
   categories,
+  tags,
+  quizTags,
 } from '@/core/database/schema';
 import { eq, sql, desc, and, isNull, gte, count, inArray } from 'drizzle-orm';
 import type {
@@ -19,6 +21,7 @@ import type {
   PopularQuiz,
   CategoryAnalytics,
   CreatorAnalytics,
+  TagAnalytics,
   QuizStatsRow,
 } from './types';
 import type { QuizAnalyticsRepositoryPort } from './ports/quiz-analytics.repository-port';
@@ -410,7 +413,117 @@ export class QuizAnalyticsRepository implements QuizAnalyticsRepositoryPort {
     };
   }
 
+  // ─── TAG ANALYTICS ──────────────────────────────────────────────────────────
+
+  async getTagAnalytics(tagId: string): Promise<TagAnalytics | null> {
+    const [tag] = await this.db
+      .select({ tagId: tags.tagId, name: tags.name })
+      .from(tags)
+      .where(eq(tags.tagId, tagId))
+      .limit(1);
+
+    if (!tag) return null;
+
+    const tagQuizIds = await this.db
+      .select({ quizId: quizTags.quizId })
+      .from(quizTags)
+      .where(eq(quizTags.tagId, tagId));
+
+    const quizIdList = tagQuizIds.map((t) => t.quizId);
+
+    if (quizIdList.length === 0) {
+      return {
+        tagId,
+        tagName: tag.name,
+        summary: {
+          totalQuizzes: 0,
+          activeQuizzes: 0,
+          totalAttempts: 0,
+          totalPlayers: 0,
+          averageScore: 0,
+          averageRating: 0,
+        },
+        topQuizzes: [],
+        lastUpdated: new Date().toISOString(),
+      };
+    }
+
+    const stats = await this.db
+      .select()
+      .from(quizStats)
+      .where(inArray(quizStats.quizId, quizIdList));
+
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+
+    const totalAttempts = stats.reduce((sum, s) => sum + Number(s.totalAttempts), 0);
+    const totalPlayers = stats.reduce((sum, s) => sum + Number(s.totalPlayers), 0);
+    const activeQuizzes = stats.filter(
+      (s) => s.lastAttemptAt && s.lastAttemptAt >= thirtyDaysAgo,
+    ).length;
+    const totalRatingSum = stats.reduce(
+      (sum, s) => sum + Number(s.avgRating) * Number(s.ratingCount),
+      0,
+    );
+    const totalRatingCount = stats.reduce((sum, s) => sum + Number(s.ratingCount), 0);
+    const averageScore =
+      totalAttempts > 0
+        ? stats.reduce((sum, s) => sum + Number(s.avgScorePercent) * Number(s.totalAttempts), 0) /
+          totalAttempts
+        : 0;
+
+    return {
+      tagId,
+      tagName: tag.name,
+      summary: {
+        totalQuizzes: quizIdList.length,
+        activeQuizzes,
+        totalAttempts,
+        totalPlayers,
+        averageScore,
+        averageRating: totalRatingCount > 0 ? totalRatingSum / totalRatingCount : 0,
+      },
+      topQuizzes: await this.getPopularQuizzesByTag(5, quizIdList),
+      lastUpdated: new Date().toISOString(),
+    };
+  }
+
   // ─── HELPERS ────────────────────────────────────────────────────────────────
+
+  async getPopularQuizzesByTag(
+    limit: number,
+    tagQuizIds: string[],
+  ): Promise<TagAnalytics['topQuizzes']> {
+    if (tagQuizIds.length === 0) return [];
+
+    const results = await this.db
+      .select({
+        quizId: quizStats.quizId,
+        title: quizzes.title,
+        slug: quizzes.slug,
+        imageUrl: quizzes.imageUrl,
+        popularityScore: quizStats.popularityScore,
+        totalAttempts: quizStats.totalAttempts,
+        avgRating: quizStats.avgRating,
+        bookmarkCount: quizStats.bookmarkCount,
+      })
+      .from(quizStats)
+      .innerJoin(quizzes, eq(quizStats.quizId, quizzes.quizId))
+      .where(and(inArray(quizStats.quizId, tagQuizIds), isNull(quizzes.deletedAt)))
+      .orderBy(desc(quizStats.popularityScore))
+      .limit(limit);
+
+    return results.map((row, i) => ({
+      rank: i + 1,
+      quizId: row.quizId as string,
+      title: row.title,
+      slug: row.slug,
+      imageUrl: row.imageUrl,
+      popularityScore: Number(row.popularityScore),
+      totalAttempts: Number(row.totalAttempts),
+      averageRating: Number(row.avgRating),
+      bookmarkCount: Number(row.bookmarkCount),
+    }));
+  }
 
   async getRecentAttemptsByQuiz(quizId: string, hours: number): Promise<number> {
     const since = new Date(Date.now() - hours * 60 * 60 * 1000).toISOString();
