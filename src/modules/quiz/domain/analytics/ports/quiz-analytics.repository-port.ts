@@ -26,7 +26,7 @@ export interface QuizAnalyticsRepositoryPort {
 
   getCategoryAnalytics(categoryId: string): Promise<CategoryAnalytics | null>;
 
-  getCreatorAnalytics(userId: string): Promise<CreatorAnalytics | null>;
+  getCreatorAnalytics(userId: string): Promise<CreatorAnalytics>;
 
   getTagAnalytics(tagId: string): Promise<TagAnalytics | null>;
 

@@ -316,100 +316,44 @@ export class QuizAnalyticsRepository implements QuizAnalyticsRepositoryPort {
     };
   }
 
-  async getCreatorAnalytics(userId: string): Promise<CreatorAnalytics | null> {
-    // Fetch quizzes + stats in one join — phiên bản 2 approach, tránh 2 round-trips
-    const creatorQuizzes: Array<{
-      quizId: string;
-      title: string;
-      slug: string;
-      imageUrl: string | null;
-      totalAttempts: unknown;
-      totalPlayers: unknown;
-      avgRating: unknown;
-      ratingCount: unknown;
-      popularityScore: unknown;
-      bookmarkCount: unknown;
-      avgScorePercent: unknown;
-    }> = await this.db
+  async getCreatorAnalytics(userId: string): Promise<CreatorAnalytics> {
+    const [row] = await this.db
       .select({
-        quizId: quizzes.quizId,
-        title: quizzes.title,
-        slug: quizzes.slug,
-        imageUrl: quizzes.imageUrl,
-        totalAttempts: quizStats.totalAttempts,
-        totalPlayers: quizStats.totalPlayers,
-        avgRating: quizStats.avgRating,
-        ratingCount: quizStats.ratingCount,
-        popularityScore: quizStats.popularityScore,
-        bookmarkCount: quizStats.bookmarkCount,
-        avgScorePercent: quizStats.avgScorePercent,
+        totalQuizzes: sql<number>`count(*)`,
+        draftQuizzes: sql<number>`count(*) filter (where ${quizVersions.status} = 'draft')`,
+        publishedQuizzes: sql<number>`count(*) filter (where ${quizVersions.status} = 'published')`,
+        totalAttempts: sql<number>`coalesce(sum(${quizStats.totalAttempts}), 0)`,
+        totalPlayers: sql<number>`coalesce(sum(${quizStats.totalPlayers}), 0)`,
+        totalScoreWeighted: sql<number>`coalesce(sum(${quizStats.avgScorePercent}::numeric * ${quizStats.totalAttempts}), 0)`,
+        totalAttemptsWeight: sql<number>`coalesce(sum(${quizStats.totalAttempts}), 0)`,
+        totalRatingWeighted: sql<number>`coalesce(sum(${quizStats.avgRating}::numeric * ${quizStats.ratingCount}), 0)`,
+        totalRatingCount: sql<number>`coalesce(sum(${quizStats.ratingCount}), 0)`,
+        totalBookmarks: sql<number>`coalesce(sum(${quizStats.bookmarkCount}), 0)`,
+        lastUpdated: sql<string>`coalesce(max(${quizStats.lastCalculatedAt}), max(${quizStats.updatedAt}), now()::text)`,
       })
       .from(quizzes)
+      .leftJoin(quizVersions, eq(quizzes.publishedVersionId, quizVersions.quizVersionId))
       .leftJoin(quizStats, eq(quizStats.quizId, quizzes.quizId))
       .where(and(eq(quizzes.creatorId, userId), isNull(quizzes.deletedAt)));
 
-    if (creatorQuizzes.length === 0) {
-      return {
-        userId,
-        totalQuizzes: 0,
-        publishedQuizzes: 0,
-        totalAttempts: 0,
-        totalPlayers: 0,
-        totalReviews: 0,
-        averageRating: 0,
-        topPerformingQuiz: null,
-        worstPerformingQuiz: null,
-        lastUpdated: new Date().toISOString(),
-      };
-    }
-
-    const totalAttempts = creatorQuizzes.reduce((sum, q) => sum + Number(q.totalAttempts ?? 0), 0);
-    const totalPlayers = creatorQuizzes.reduce((sum, q) => sum + Number(q.totalPlayers ?? 0), 0);
-    const totalRatingSum = creatorQuizzes.reduce(
-      (sum, q) => sum + Number(q.avgRating ?? 0) * Number(q.ratingCount ?? 0),
-      0,
-    );
-    const totalRatingCount = creatorQuizzes.reduce((sum, q) => sum + Number(q.ratingCount ?? 0), 0);
-
-    const sortedByPopularity = [...creatorQuizzes].sort(
-      (a, b) => Number(b.popularityScore ?? 0) - Number(a.popularityScore ?? 0),
-    );
-    const sortedByScore = [...creatorQuizzes].sort(
-      (a, b) => Number(a.avgScorePercent ?? 0) - Number(b.avgScorePercent ?? 0),
-    );
-
-    const top = sortedByPopularity[0];
-    const worst = sortedByScore[0];
-
     return {
       userId,
-      totalQuizzes: creatorQuizzes.length,
-      publishedQuizzes: creatorQuizzes.length, // all non-deleted = published
-      totalAttempts,
-      totalPlayers,
-      totalReviews: totalRatingCount,
-      averageRating: totalRatingCount > 0 ? totalRatingSum / totalRatingCount : 0,
-      topPerformingQuiz: top
-        ? {
-            rank: 1,
-            quizId: top.quizId as string,
-            title: top.title,
-            slug: top.slug,
-            imageUrl: top.imageUrl,
-            popularityScore: Number(top.popularityScore ?? 0),
-            totalAttempts: Number(top.totalAttempts ?? 0),
-            averageRating: Number(top.avgRating ?? 0),
-            bookmarkCount: Number(top.bookmarkCount ?? 0),
-          }
-        : null,
-      worstPerformingQuiz: worst
-        ? {
-            quizId: worst.quizId as string,
-            title: worst.title,
-            averageScore: Number(worst.avgScorePercent ?? 0),
-          }
-        : null,
-      lastUpdated: new Date().toISOString(),
+      totalQuizzes: Number(row?.totalQuizzes ?? 0),
+      draftQuizzes: Number(row?.draftQuizzes ?? 0),
+      publishedQuizzes: Number(row?.publishedQuizzes ?? 0),
+      totalAttempts: Number(row?.totalAttempts ?? 0),
+      totalPlayers: Number(row?.totalPlayers ?? 0),
+      averageScore:
+        Number(row?.totalAttemptsWeight ?? 0) > 0
+          ? Number(row?.totalScoreWeighted ?? 0) / Number(row?.totalAttemptsWeight ?? 0)
+          : 0,
+      averageRating:
+        Number(row?.totalRatingCount ?? 0) > 0
+          ? Number(row?.totalRatingWeighted ?? 0) / Number(row?.totalRatingCount ?? 0)
+          : 0,
+      totalBookmarks: Number(row?.totalBookmarks ?? 0),
+      totalReviews: Number(row?.totalRatingCount ?? 0),
+      lastUpdated: row?.lastUpdated ?? new Date().toISOString(),
     };
   }
 

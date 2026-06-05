@@ -4,7 +4,6 @@ import {
   QuizAnalyticsResponseDto,
   TrendingQuizzesResponseDto,
   PopularQuizzesResponseDto,
-  CreatorAnalyticsResponseDto,
 } from '@/modules/quiz/dto/response';
 
 @Controller()

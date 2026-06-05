@@ -32,6 +32,8 @@ const QUIZ_VERSION_COLUMNS = quizVersions as unknown as {
 
 const QUIZ_COLUMNS = quizzes as unknown as {
   quizId: AnyPgColumn;
+  title: AnyPgColumn;
+  description: AnyPgColumn;
   creatorId: AnyPgColumn;
   isVerified: AnyPgColumn;
   isHidden: AnyPgColumn;
@@ -74,6 +76,8 @@ export class QuizVersionRepository implements QuizVersionRepositoryPort {
         publishedAt: QUIZ_VERSION_COLUMNS.publishedAt,
         archivedAt: QUIZ_VERSION_COLUMNS.archivedAt,
         updatedAt: QUIZ_VERSION_COLUMNS.updatedAt,
+        title: quizzes.title,
+        description: quizzes.description,
         quizCreatorId: QUIZ_COLUMNS.creatorId,
         quizIsVerified: QUIZ_COLUMNS.isVerified,
         quizIsHidden: QUIZ_COLUMNS.isHidden,
@@ -82,6 +86,45 @@ export class QuizVersionRepository implements QuizVersionRepositoryPort {
       .innerJoin(quizzes, eq(QUIZ_VERSION_COLUMNS.quizId, QUIZ_COLUMNS.quizId))
       .where(
         and(eq(QUIZ_VERSION_COLUMNS.quizVersionId, quizVersionId), isNull(QUIZ_COLUMNS.deletedAt)),
+      )
+      .limit(1);
+
+    return (row as QuizVersionDetailRow | undefined) ?? null;
+  }
+
+  async getQuizVersionDetailByQuizId(params: {
+    quizId: string;
+    quizVersionId: string;
+  }): Promise<QuizVersionDetailRow | null> {
+    const [row] = await this.db
+      .select({
+        quizVersionId: QUIZ_VERSION_COLUMNS.quizVersionId,
+        quizId: QUIZ_VERSION_COLUMNS.quizId,
+        versionNumber: QUIZ_VERSION_COLUMNS.versionNumber,
+        status: QUIZ_VERSION_COLUMNS.status,
+        difficulty: QUIZ_VERSION_COLUMNS.difficulty,
+        durationMs: QUIZ_VERSION_COLUMNS.durationMs,
+        passingScorePercent: QUIZ_VERSION_COLUMNS.passingScorePercent,
+        rewardXp: QUIZ_VERSION_COLUMNS.rewardXp,
+        createdByUserId: QUIZ_VERSION_COLUMNS.createdByUserId,
+        createdAt: QUIZ_VERSION_COLUMNS.createdAt,
+        publishedAt: QUIZ_VERSION_COLUMNS.publishedAt,
+        archivedAt: QUIZ_VERSION_COLUMNS.archivedAt,
+        updatedAt: QUIZ_VERSION_COLUMNS.updatedAt,
+        title: quizzes.title,
+        description: quizzes.description,
+        quizCreatorId: QUIZ_COLUMNS.creatorId,
+        quizIsVerified: QUIZ_COLUMNS.isVerified,
+        quizIsHidden: QUIZ_COLUMNS.isHidden,
+      })
+      .from(quizVersions)
+      .innerJoin(quizzes, eq(QUIZ_VERSION_COLUMNS.quizId, QUIZ_COLUMNS.quizId))
+      .where(
+        and(
+          eq(QUIZ_VERSION_COLUMNS.quizVersionId, params.quizVersionId),
+          eq(QUIZ_VERSION_COLUMNS.quizId, params.quizId),
+          isNull(QUIZ_COLUMNS.deletedAt),
+        ),
       )
       .limit(1);
 
