@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Patch, UseFilters } from '@nestjs/common';
+import { Body, Controller, Get, Patch, Query, UseFilters } from '@nestjs/common';
 import {
   ApiTags,
   ApiOperation,
@@ -14,9 +14,14 @@ import { CurrentUser } from '@/common/decorators/current-user.decorator';
 import { ApiValidationRequest } from '@/common/swagger/swagger-decorators';
 import { UpdateMeSettingsDto } from './dto/request/update-me-settings.dto';
 import { UpdateMeDto } from './dto/request/update-me.dto';
+import { ListUserBadgesQueryDto } from './dto/request/list-user-badges-query.dto';
 import { UserMeResponseDto } from './dto/response/user-me-response.dto';
+import { UserBadgesResponseDto } from './dto/response/user-badges-response.dto';
+import { UserRankingResponseDto } from './dto/response/user-ranking-response.dto';
+import { UserAnalyticsResponseDto } from './dto/response/user-analytics-response.dto';
 import { UserApplicationService } from './application/user.application.service';
 import { UserDomainExceptionFilter } from './transport/filters/user-domain-exception.filter';
+import { UserBadgeCursorMapper } from './mappers/user-badge-cursor.mapper';
 
 @ApiTags('users')
 @ApiBearerAuth()
@@ -38,6 +43,55 @@ export class UserController {
   @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
   me(@CurrentUser('sub') userId: string): Promise<UserMeResponseDto> {
     return this.userApplicationService.getMe(userId);
+  }
+
+  @Get('me/badges')
+  @ApiOperation({
+    summary: 'List my badges',
+    description:
+      "Returns the authenticated user's earned badges, cursor-paginated and ordered by most recently earned.",
+  })
+  @ApiOkResponse({ description: 'Badges returned', type: UserBadgesResponseDto })
+  @ApiNotFoundResponse({ description: 'User not found' })
+  @ApiBadRequestResponse({ description: 'Validation failed' })
+  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  @ApiValidationRequest()
+  listMyBadges(
+    @CurrentUser('sub') userId: string,
+    @Query() query: ListUserBadgesQueryDto,
+  ): Promise<UserBadgesResponseDto> {
+    const cursor = query.cursor ? UserBadgeCursorMapper.parse(query.cursor) : null;
+
+    return this.userApplicationService.listUserBadges(userId, {
+      limit: query.limit,
+      cursor,
+    });
+  }
+
+  @Get('me/ranking')
+  @ApiOperation({
+    summary: 'Get my ranking',
+    description:
+      "Returns the authenticated user's current ranking summary using the existing user_ranking table.",
+  })
+  @ApiOkResponse({ description: 'Ranking returned', type: UserRankingResponseDto })
+  @ApiNotFoundResponse({ description: 'User or ranking record not found' })
+  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  getMyRanking(@CurrentUser('sub') userId: string): Promise<UserRankingResponseDto> {
+    return this.userApplicationService.getUserRanking(userId);
+  }
+
+  @Get('me/analytics')
+  @ApiOperation({
+    summary: 'Get my analytics',
+    description:
+      "Returns the authenticated user's quiz analytics including attempt summary and favorite category/tag.",
+  })
+  @ApiOkResponse({ description: 'Analytics returned', type: UserAnalyticsResponseDto })
+  @ApiNotFoundResponse({ description: 'User not found or no analytics data available' })
+  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  getMyAnalytics(@CurrentUser('sub') userId: string): Promise<UserAnalyticsResponseDto> {
+    return this.userApplicationService.getUserAnalytics(userId);
   }
 
   @Patch('me')
