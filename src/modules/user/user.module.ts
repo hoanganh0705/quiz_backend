@@ -6,9 +6,10 @@ import { UserRepository } from './infrastructure/repositories/user.repository';
 import { DatabaseModule } from '@/core/database/database.module';
 import { USER_REPOSITORY_PORT } from './domain/ports/user-repository.port';
 import { UserDomainExceptionFilter } from './transport/filters/user-domain-exception.filter';
+import { QuizModule } from '@/modules/quiz/quiz.module';
 
 @Module({
-  imports: [DatabaseModule],
+  imports: [DatabaseModule, QuizModule],
   controllers: [UserController],
   providers: [
     UserApplicationService,

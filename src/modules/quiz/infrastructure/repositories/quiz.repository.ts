@@ -15,10 +15,12 @@ import {
 } from '@/modules/quiz/quiz.constants';
 import type {
   CreateQuizPayload,
+  FindRelatedQuizzesParams,
   QuizCursor,
   QuizListFilters,
   QuizRecordRow,
   QuizRepositoryPort,
+  QuizStatsRow,
   QuizWithPublishedVersionRow,
 } from '@/modules/quiz/domain/ports';
 
@@ -180,6 +182,10 @@ export class QuizRepository implements QuizRepositoryPort {
       );
     }
 
+    if (params.filters?.creatorId) {
+      filters.push(eq(QUIZ_COLUMNS.creatorId, params.filters.creatorId));
+    }
+
     if (params.cursor) {
       filters.push(
         or(
@@ -204,6 +210,168 @@ export class QuizRepository implements QuizRepositoryPort {
       .limit(params.limit + 1);
 
     return rows as QuizWithPublishedVersionRow[];
+  }
+
+  async findFeaturedQuizzes(limit: number): Promise<QuizWithPublishedVersionRow[]> {
+    const rows = await this.db
+      .select(QUIZ_WITH_VERSION_PROJECTION)
+      .from(quizzes)
+      .innerJoin(
+        quizVersions,
+        eq(QUIZ_COLUMNS.publishedVersionId, QUIZ_VERSION_COLUMNS.quizVersionId),
+      )
+      .where(
+        and(
+          isNull(QUIZ_COLUMNS.deletedAt),
+          eq(QUIZ_COLUMNS.isHidden, false),
+          eq(QUIZ_COLUMNS.isFeatured, true),
+        ),
+      )
+      .orderBy(desc(QUIZ_COLUMNS.updatedAt), desc(QUIZ_COLUMNS.quizId))
+      .limit(limit);
+
+    return rows as QuizWithPublishedVersionRow[];
+  }
+
+  async findRelatedQuizzes(params: FindRelatedQuizzesParams): Promise<QuizWithPublishedVersionRow[]> {
+    const rows = await this.db
+      .select({
+        ...QUIZ_WITH_VERSION_PROJECTION,
+        categoryMatchCount: sql<number>`(
+          select count(distinct qc.category_id)
+          from ${quizCategories} qc
+          where qc.quiz_id = ${QUIZ_COLUMNS.quizId}
+            and qc.category_id in (
+              select src_qc.category_id
+              from ${quizCategories} src_qc
+              inner join ${quizzes} src_q on src_q.quiz_id = src_qc.quiz_id
+              where src_q.slug = ${params.slug}
+                and src_q.deleted_at is null
+            )
+        )`,
+        tagMatchCount: sql<number>`(
+          select count(distinct qt.tag_id)
+          from ${quizTags} qt
+          where qt.quiz_id = ${QUIZ_COLUMNS.quizId}
+            and qt.tag_id in (
+              select src_qt.tag_id
+              from ${quizTags} src_qt
+              inner join ${quizzes} src_q on src_q.quiz_id = src_qt.quiz_id
+              where src_q.slug = ${params.slug}
+                and src_q.deleted_at is null
+            )
+        )`,
+        popularityScoreSort: sql<number>`coalesce((
+          select qs.popularity_score::numeric
+          from quiz_stats qs
+          where qs.quiz_id = ${QUIZ_COLUMNS.quizId}
+        ), 0)`,
+      })
+      .from(quizzes)
+      .leftJoin(
+        quizVersions,
+        eq(QUIZ_COLUMNS.publishedVersionId, QUIZ_VERSION_COLUMNS.quizVersionId),
+      )
+      .where(
+        and(
+          isNull(QUIZ_COLUMNS.deletedAt),
+          eq(QUIZ_COLUMNS.isHidden, false),
+          sql`${QUIZ_COLUMNS.quizId} <> (
+            select src.quiz_id
+            from ${quizzes} src
+            where src.slug = ${params.slug}
+              and src.deleted_at is null
+            limit 1
+          )`,
+          sql`(
+            exists (
+              select 1
+              from ${quizCategories} qc_match
+              where qc_match.quiz_id = ${QUIZ_COLUMNS.quizId}
+                and qc_match.category_id in (
+                  select src_qc.category_id
+                  from ${quizCategories} src_qc
+                  inner join ${quizzes} src_q on src_q.quiz_id = src_qc.quiz_id
+                  where src_q.slug = ${params.slug}
+                    and src_q.deleted_at is null
+                )
+            )
+            or exists (
+              select 1
+              from ${quizTags} qt_match
+              where qt_match.quiz_id = ${QUIZ_COLUMNS.quizId}
+                and qt_match.tag_id in (
+                  select src_qt.tag_id
+                  from ${quizTags} src_qt
+                  inner join ${quizzes} src_q on src_q.quiz_id = src_qt.quiz_id
+                  where src_q.slug = ${params.slug}
+                    and src_q.deleted_at is null
+                )
+            )
+          )`,
+        ),
+      )
+      .orderBy(
+        desc(sql`(
+          select count(distinct qc.category_id)
+          from ${quizCategories} qc
+          where qc.quiz_id = ${QUIZ_COLUMNS.quizId}
+            and qc.category_id in (
+              select src_qc.category_id
+              from ${quizCategories} src_qc
+              inner join ${quizzes} src_q on src_q.quiz_id = src_qc.quiz_id
+              where src_q.slug = ${params.slug}
+                and src_q.deleted_at is null
+            )
+        )`),
+        desc(sql`(
+          select count(distinct qt.tag_id)
+          from ${quizTags} qt
+          where qt.quiz_id = ${QUIZ_COLUMNS.quizId}
+            and qt.tag_id in (
+              select src_qt.tag_id
+              from ${quizTags} src_qt
+              inner join ${quizzes} src_q on src_q.quiz_id = src_qt.quiz_id
+              where src_q.slug = ${params.slug}
+                and src_q.deleted_at is null
+            )
+        )`),
+        desc(sql`coalesce((
+          select qs.popularity_score::numeric
+          from quiz_stats qs
+          where qs.quiz_id = ${QUIZ_COLUMNS.quizId}
+        ), 0)`),
+        desc(QUIZ_COLUMNS.createdAt),
+        desc(QUIZ_COLUMNS.quizId),
+      )
+      .limit(params.limit);
+
+    return rows as QuizWithPublishedVersionRow[];
+  }
+
+  async getQuizStats(quizId: string): Promise<QuizStatsRow | null> {
+    const [stats] = await this.db
+      .select({
+        quizId: QUIZ_COLUMNS.quizId,
+        totalAttempts: sql<number>`COALESCE(${sql.raw('qs.total_attempts')}, 0)`,
+        totalPlayers: sql<number>`COALESCE(${sql.raw('qs.total_players')}, 0)`,
+        avgScorePercent: sql<string>`COALESCE(${sql.raw('qs.avg_score_percent')}, '0')`,
+        avgRating: sql<string>`COALESCE(${sql.raw('qs.avg_rating')}, '0')`,
+        ratingCount: sql<number>`COALESCE(${sql.raw('qs.rating_count')}, 0)`,
+        bookmarkCount: sql<number>`COALESCE(${sql.raw('qs.bookmark_count')}, 0)`,
+        completionRate: sql<string>`COALESCE(${sql.raw('qs.completion_rate')}, '0')`,
+        popularityScore: sql<string>`COALESCE(${sql.raw('qs.popularity_score')}, '0')`,
+        trendingScore: sql<string>`COALESCE(${sql.raw('qs.trending_score')}, '0')`,
+        lastAttemptAt: sql<string | null>`qs.last_attempt_at`,
+        lastCalculatedAt: sql<string | null>`qs.last_calculated_at`,
+        updatedAt: sql<string>`COALESCE(${sql.raw('qs.updated_at')}, ${QUIZ_COLUMNS.updatedAt})`,
+      })
+      .from(quizzes)
+      .leftJoin(sql`quiz_stats qs`, sql`qs.quiz_id = ${QUIZ_COLUMNS.quizId}`)
+      .where(and(eq(QUIZ_COLUMNS.quizId, quizId), isNull(QUIZ_COLUMNS.deletedAt)))
+      .limit(1);
+
+    return (stats as QuizStatsRow | undefined) ?? null;
   }
 
   async createQuizWithInitialVersion(payload: CreateQuizPayload): Promise<{ quizId: string }> {

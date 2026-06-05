@@ -21,6 +21,8 @@ import {
   QUIZ_ANALYTICS_REPOSITORY_PORT,
 } from './domain/analytics';
 import { QuizAnalyticsRepository } from './domain/analytics/quiz-analytics.repository';
+import { QuizRecommendationRepository } from './infrastructure/repositories/quiz-recommendation.repository';
+import { QUIZ_RECOMMENDATION_REPOSITORY_PORT } from './domain/analytics/ports/quiz-recommendation.repository-port';
 import { AnalyticsSchedulerService } from './scheduler';
 import { AnalyticsEventHandler } from './domain/analytics/analytics-event-handler';
 
@@ -74,6 +76,7 @@ import { QuizQuestionRepository } from './infrastructure/repositories/quiz-quest
     QuizRepository,
     QuizVersionRepository,
     QuizQuestionRepository,
+    QuizRecommendationRepository,
 
     // Port → Implementation Bindings
     { provide: QUIZ_REPOSITORY_PORT, useExisting: QuizRepository },
@@ -81,6 +84,7 @@ import { QuizQuestionRepository } from './infrastructure/repositories/quiz-quest
     { provide: QUIZ_QUESTION_REPOSITORY_PORT, useExisting: QuizQuestionRepository },
     { provide: QUIZ_DOMAIN_EVENT_BUS, useExisting: QuizDomainEventBus },
     { provide: QUIZ_ANALYTICS_REPOSITORY_PORT, useExisting: QuizAnalyticsRepository },
+    { provide: QUIZ_RECOMMENDATION_REPOSITORY_PORT, useExisting: QuizRecommendationRepository },
 
     // Domain Event Bus
     QuizDomainEventBus,
@@ -93,6 +97,7 @@ import { QuizQuestionRepository } from './infrastructure/repositories/quiz-quest
     QuizAnalyticsService,
     MetricsCalculatorService,
     AnalyticsEventHandler,
+    QUIZ_RECOMMENDATION_REPOSITORY_PORT,
   ],
 })
 export class QuizModule {}
