@@ -1,6 +1,11 @@
 import { Catch, HttpStatus, type ArgumentsHost, type ExceptionFilter } from '@nestjs/common';
 import type { Response } from 'express';
-import { UserDomainError, UserNotFoundError } from '../../domain/errors';
+import {
+  UserAnalyticsNotFoundError,
+  UserDomainError,
+  UserNotFoundError,
+  UserRankingNotFoundError,
+} from '../../domain/errors';
 
 const HTTP_ERROR_NAMES: Record<number, string> = {
   [HttpStatus.NOT_FOUND]: 'Not Found',
@@ -30,6 +35,14 @@ export class UserDomainExceptionFilter implements ExceptionFilter {
   private mapToHttp(error: UserDomainError): { status: number; message: string } {
     if (error instanceof UserNotFoundError) {
       return { status: HttpStatus.NOT_FOUND, message: 'User not found' };
+    }
+
+    if (error instanceof UserRankingNotFoundError) {
+      return { status: HttpStatus.NOT_FOUND, message: 'User ranking not found' };
+    }
+
+    if (error instanceof UserAnalyticsNotFoundError) {
+      return { status: HttpStatus.NOT_FOUND, message: 'User analytics not found' };
     }
 
     return { status: HttpStatus.INTERNAL_SERVER_ERROR, message: 'Internal server error' };
