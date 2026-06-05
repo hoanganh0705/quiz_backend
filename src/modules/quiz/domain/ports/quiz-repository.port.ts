@@ -109,6 +109,24 @@ export interface QuizRepositoryPort {
     filters?: QuizListFilters;
   }): Promise<QuizWithPublishedVersionRow[]>;
 
+  listByCreatorId(params: {
+    creatorId: string;
+    limit: number;
+    cursor?: QuizCursor | null;
+  }): Promise<QuizWithPublishedVersionRow[]>;
+
+  listDraftsByCreatorId(params: {
+    creatorId: string;
+    limit: number;
+    cursor?: QuizCursor | null;
+  }): Promise<QuizWithPublishedVersionRow[]>;
+
+  listPublishedByCreatorId(params: {
+    creatorId: string;
+    limit: number;
+    cursor?: QuizCursor | null;
+  }): Promise<QuizWithPublishedVersionRow[]>;
+
   findFeaturedQuizzes(limit: number): Promise<QuizWithPublishedVersionRow[]>;
 
   findRelatedQuizzes(params: FindRelatedQuizzesParams): Promise<QuizWithPublishedVersionRow[]>;

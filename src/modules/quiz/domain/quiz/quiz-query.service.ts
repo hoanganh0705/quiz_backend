@@ -10,6 +10,8 @@ import type {
   RelatedQuizzesQuery,
   RecommendedQuizzesQuery,
 } from '../types';
+import { QUIZ_ANALYTICS_REPOSITORY_PORT, type QuizAnalyticsRepositoryPort } from '../analytics/ports';
+import type { CreatorAnalytics } from '../analytics/types';
 import type { QuizRecordRow } from '../ports/quiz-repository.port';
 import type { QuizQuestionJoinRow } from '../ports/quiz-question-repository.port';
 import type { ListQuizzesQuery } from '../types/list-quizzes.query';
@@ -49,6 +51,8 @@ export class QuizQueryService {
     private readonly quizQuestionRepository: QuizQuestionRepositoryPort,
     @Inject(QUIZ_RECOMMENDATION_REPOSITORY_PORT)
     private readonly recommendationRepository: QuizRecommendationRepositoryPort,
+    @Inject(QUIZ_ANALYTICS_REPOSITORY_PORT)
+    private readonly quizAnalyticsRepository: QuizAnalyticsRepositoryPort,
   ) {}
 
   async getActiveQuizRecordById(quizId: string): Promise<QuizRecordRow> {
@@ -143,6 +147,70 @@ export class QuizQueryService {
       nextCursor:
         hasNextPage && lastItem ? { createdAt: lastItem.createdAt, quizId: lastItem.quizId } : null,
     };
+  }
+
+  async listUserQuizzes(userId: string, query: ListQuizzesQuery): Promise<ListQuizzesResult> {
+    const rows = await this.quizRepository.listByCreatorId({
+      creatorId: userId,
+      limit: query.limit,
+      cursor: query.cursor,
+    });
+
+    const hasNextPage = rows.length > query.limit;
+    const items = hasNextPage ? rows.slice(0, query.limit) : rows;
+    const lastItem = items.at(-1);
+
+    return {
+      rows: items,
+      limit: query.limit,
+      hasNextPage,
+      nextCursor:
+        hasNextPage && lastItem ? { createdAt: lastItem.createdAt, quizId: lastItem.quizId } : null,
+    };
+  }
+
+  async listDraftQuizzes(userId: string, query: ListQuizzesQuery): Promise<ListQuizzesResult> {
+    const rows = await this.quizRepository.listDraftsByCreatorId({
+      creatorId: userId,
+      limit: query.limit,
+      cursor: query.cursor,
+    });
+
+    const hasNextPage = rows.length > query.limit;
+    const items = hasNextPage ? rows.slice(0, query.limit) : rows;
+    const lastItem = items.at(-1);
+
+    return {
+      rows: items,
+      limit: query.limit,
+      hasNextPage,
+      nextCursor:
+        hasNextPage && lastItem ? { createdAt: lastItem.createdAt, quizId: lastItem.quizId } : null,
+    };
+  }
+
+  async listPublishedQuizzes(userId: string, query: ListQuizzesQuery): Promise<ListQuizzesResult> {
+    const rows = await this.quizRepository.listPublishedByCreatorId({
+      creatorId: userId,
+      limit: query.limit,
+      cursor: query.cursor,
+    });
+
+    const hasNextPage = rows.length > query.limit;
+    const items = hasNextPage ? rows.slice(0, query.limit) : rows;
+    const lastItem = items.at(-1);
+
+    return {
+      rows: items,
+      limit: query.limit,
+      hasNextPage,
+      nextCursor:
+        hasNextPage && lastItem ? { createdAt: lastItem.createdAt, quizId: lastItem.quizId } : null,
+    };
+  }
+
+  async getCreatorAnalytics(userId: string): Promise<CreatorAnalytics> {
+    return this.quizAnalyticsRepository.getCreatorAnalytics(userId);
   }
 
   async getQuizBySlug(

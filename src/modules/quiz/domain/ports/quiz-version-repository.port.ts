@@ -18,6 +18,8 @@ export type QuizVersionRow = {
 };
 
 export type QuizVersionDetailRow = QuizVersionRow & {
+  title: string;
+  description: string | null;
   quizCreatorId: string | null;
   quizIsVerified: boolean;
   quizIsHidden: boolean;
@@ -30,6 +32,11 @@ export type QuizVersionCursor = {
 
 export interface QuizVersionRepositoryPort {
   getQuizVersionDetailById(quizVersionId: string): Promise<QuizVersionDetailRow | null>;
+
+  getQuizVersionDetailByQuizId(params: {
+    quizId: string;
+    quizVersionId: string;
+  }): Promise<QuizVersionDetailRow | null>;
 
   getQuizVersionById(quizVersionId: string): Promise<QuizVersionRow | null>;
 

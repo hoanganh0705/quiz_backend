@@ -229,22 +229,7 @@ export class CategoryAnalyticsResponseDto {
   lastUpdated!: string;
 }
 
-export class CreatorWorstQuizDto {
-  @ApiProperty({
-    description: 'Quiz identifier',
-    format: 'uuid',
-    example: '660e8400-e29b-41d4-a716-446655440000',
-  })
-  quizId!: string;
-
-  @ApiProperty({ description: 'Quiz title', example: 'Advanced Algorithms' })
-  title!: string;
-
-  @ApiProperty({ description: 'Average score percent (0–100)', example: 31.2 })
-  averageScore!: number;
-}
-
-export class CreatorAnalyticsResponseDto {
+export class CreatorQuizAnalyticsDto {
   @ApiProperty({
     description: 'Creator user identifier',
     format: 'uuid',
@@ -252,37 +237,32 @@ export class CreatorAnalyticsResponseDto {
   })
   userId!: string;
 
-  @ApiProperty({ description: 'Total quizzes created', example: 12 })
+  @ApiProperty({ description: 'Total quizzes created by the creator', example: 12 })
   totalQuizzes!: number;
 
-  @ApiProperty({ description: 'Quizzes that are currently published', example: 9 })
+  @ApiProperty({ description: 'Total draft quizzes owned by the creator', example: 3 })
+  draftQuizzes!: number;
+
+  @ApiProperty({ description: 'Total published quizzes owned by the creator', example: 9 })
   publishedQuizzes!: number;
 
   @ApiProperty({ description: 'Total attempts across all creator quizzes', example: 4800 })
   totalAttempts!: number;
 
-  @ApiProperty({ description: 'Unique players across all creator quizzes', example: 2900 })
+  @ApiProperty({ description: 'Total unique players across all creator quizzes', example: 2900 })
   totalPlayers!: number;
 
-  @ApiProperty({ description: 'Total reviews received', example: 310 })
-  totalReviews!: number;
+  @ApiProperty({ description: 'Average score across all creator quizzes (0–100)', example: 76.4 })
+  averageScore!: number;
 
   @ApiProperty({ description: 'Average rating across all creator quizzes (1–5)', example: 4.4 })
   averageRating!: number;
 
-  @ApiPropertyOptional({
-    description: 'The top performing quiz by popularity',
-    type: () => PopularQuizItemDto,
-    nullable: true,
-  })
-  topPerformingQuiz!: PopularQuizItemDto | null;
+  @ApiProperty({ description: 'Total bookmarks across all creator quizzes', example: 510 })
+  totalBookmarks!: number;
 
-  @ApiPropertyOptional({
-    description: 'The worst performing quiz by average score',
-    type: () => CreatorWorstQuizDto,
-    nullable: true,
-  })
-  worstPerformingQuiz!: CreatorWorstQuizDto | null;
+  @ApiProperty({ description: 'Total reviews across all creator quizzes', example: 310 })
+  totalReviews!: number;
 
   @ApiProperty({
     description: 'Timestamp of the last analytics refresh (ISO 8601)',
