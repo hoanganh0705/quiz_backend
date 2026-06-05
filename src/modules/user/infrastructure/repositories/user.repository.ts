@@ -18,6 +18,10 @@ import { and, count, desc, eq, ilike, isNull, or, sql } from 'drizzle-orm';
 import type { UserAnalytics } from '../../domain/types/user-analytics';
 import type {
   UserBadgeRow,
+import { userActivityEvents, users, userProfiles } from '@/core/database/schema';
+import { and, desc, eq, ilike, isNull, or, sql } from 'drizzle-orm';
+import type {
+  UserActivityRow,
   UserMeRow,
   UserRankingRow,
   UserSearchResult,
@@ -218,6 +222,41 @@ export class UserRepository implements UserRepositoryPort {
       .limit(limit);
 
     return rows as UserSearchResult[];
+  }
+
+  async listUserActivity(params: {
+    userId: string;
+    limit: number;
+    cursor?: { createdAt: string; eventId: string } | null;
+  }): Promise<UserActivityRow[]> {
+    const { userId, limit, cursor } = params;
+
+    const cursorCondition = cursor
+      ? or(
+          sql`${userActivityEvents.createdAt} < ${cursor.createdAt}`,
+          and(
+            eq(userActivityEvents.createdAt, cursor.createdAt),
+            sql`${userActivityEvents.eventId} < ${cursor.eventId}`,
+          ),
+        )
+      : undefined;
+
+    const baseCondition = eq(userActivityEvents.userId, userId);
+    const whereClause = cursorCondition ? and(baseCondition, cursorCondition) : baseCondition;
+
+    const rows = await this.db
+      .select({
+        eventId: userActivityEvents.eventId,
+        eventType: userActivityEvents.eventType,
+        createdAt: userActivityEvents.createdAt,
+        metadata: userActivityEvents.metadata,
+      })
+      .from(userActivityEvents)
+      .where(whereClause)
+      .orderBy(desc(userActivityEvents.createdAt), desc(userActivityEvents.eventId))
+      .limit(limit + 1);
+
+    return rows;
   }
 
   async updateProfile(
