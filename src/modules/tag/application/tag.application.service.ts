@@ -24,10 +24,10 @@ import type {
   UpdateTagCommand,
 } from '../domain/types/tag-commands';
 import type { TagRow, FollowedTagRow, RankedTagRow } from '../domain/ports/tag-repository.port';
-import { TagAnalyticsNotFoundError } from '../domain/errors';
 import type { ListQuizzesQueryDto } from '@/modules/quiz/dto/request/list-quizzes-query.dto';
 import type { QuizListResponseDto } from '@/modules/quiz/dto/response/quiz-list-response.dto';
 import { DeleteTagResponseDto, TagListResponseDto, TagResponseDto } from '../dto/response';
+import { TagAnalyticsNotFoundError } from '../domain/errors';
 
 @Injectable()
 export class TagApplicationService {
@@ -133,15 +133,13 @@ export class TagApplicationService {
 
   async getTagAnalytics(tagId: string): Promise<TagAnalyticsResponseDto> {
     await this.tagDomainService.getTagById(tagId);
+    const analytics = await this.quizAnalyticsService.getTagAnalytics(tagId);
 
-    // TODO: Integrate with QuizAnalyticsService once tag-level analytics
-    // are supported. Currently QuizAnalyticsService only supports
-    // getCategoryAnalytics() — tag analytics are not yet implemented.
-    // When implemented, replace this stub with:
-    //   const analytics = await this.quizAnalyticsService.getTagAnalytics(tagId);
-    //   if (!analytics) throw new TagAnalyticsNotFoundError();
-    //   return TagAnalyticsResponseMapper.toResponse(analytics);
-    throw new TagAnalyticsNotFoundError();
+    if (!analytics) {
+      throw new TagAnalyticsNotFoundError();
+    }
+
+    return TagAnalyticsResponseMapper.toResponse(analytics);
   }
 
   // ─── Mappers ──────────────────────────────────────────────────────────────────

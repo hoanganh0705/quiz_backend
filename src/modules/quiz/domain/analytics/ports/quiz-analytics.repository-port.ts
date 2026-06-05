@@ -5,6 +5,7 @@ import type {
   PopularQuiz,
   CategoryAnalytics,
   CreatorAnalytics,
+  TagAnalytics,
   QuizStatsRow,
 } from '../types';
 
@@ -26,6 +27,8 @@ export interface QuizAnalyticsRepositoryPort {
   getCategoryAnalytics(categoryId: string): Promise<CategoryAnalytics | null>;
 
   getCreatorAnalytics(userId: string): Promise<CreatorAnalytics | null>;
+
+  getTagAnalytics(tagId: string): Promise<TagAnalytics | null>;
 
   getRecentAttemptsByQuiz(quizId: string, hours: number): Promise<number>;
 }

@@ -1,12 +1,5 @@
 import type { TagAnalyticsResponseDto } from '../dto/response/parity-response.dto';
 
-/**
- * Tag analytics data structure.
- * Mirrors CategoryAnalytics but scoped to a tag.
- *
- * TODO: Wire this to QuizAnalyticsService once a tag-level analytics
- * method is added to the analytics repository port.
- */
 export interface TagAnalytics {
   tagId: string;
   tagName: string;
