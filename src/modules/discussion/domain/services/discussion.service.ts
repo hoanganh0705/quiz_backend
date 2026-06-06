@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, forwardRef } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import {
   DISCUSSION_REPOSITORY_PORT,
@@ -22,7 +22,12 @@ import type {
   ListThreadsParams,
   ListCommentsParams,
   ListReportsParams,
+  QuizDiscussionCursor,
+  QuizDiscussionListItem,
+  MyDiscussionListItem,
 } from '../types';
+import { USER_REPOSITORY_PORT, type UserRepositoryPort } from '@/modules/user/domain/ports/user-repository.port';
+import { UserNotFoundError } from '@/modules/user/domain/errors';
 import { isPostgresUniqueViolation } from '@/common/utils/db-error.util';
 import {
   ThreadNotFoundError,
@@ -43,6 +48,8 @@ export class DiscussionService {
     private readonly repo: DiscussionRepositoryPort,
     @Inject(QUIZ_EXISTENCE_PORT)
     private readonly quizExistence: QuizExistencePort,
+    @Inject(forwardRef(() => USER_REPOSITORY_PORT))
+    private readonly userRepository: UserRepositoryPort,
     @Inject(DISCUSSION_DOMAIN_EVENT_BUS)
     private readonly eventBus: DiscussionDomainEventBusPort,
     @InjectPinoLogger(DiscussionService.name)
@@ -77,6 +84,111 @@ export class DiscussionService {
     const items = await this.repo.listThreads({ ...params, limit: (params.limit ?? 20) + 1 });
     const hasNextPage = items.length > (params.limit ?? 20);
     return { items: hasNextPage ? items.slice(0, -1) : items, hasNextPage };
+  }
+
+  async listQuizDiscussions(
+    quizId: string,
+    query: { limit?: number; cursor?: QuizDiscussionCursor | null },
+  ): Promise<{
+    items: QuizDiscussionListItem[];
+    limit: number;
+    hasNextPage: boolean;
+    nextCursor: QuizDiscussionCursor | null;
+  }> {
+    const quizExists = await this.quizExistence.exists(quizId);
+    if (!quizExists) {
+      throw new Error('Quiz not found');
+    }
+
+    const limit = query.limit ?? 20;
+    const rows = await this.repo.listQuizDiscussions({
+      quizId,
+      limit,
+      cursor: query.cursor ?? null,
+    });
+
+    const hasNextPage = rows.length > limit;
+    const items = hasNextPage ? rows.slice(0, limit) : rows;
+    const lastItem = items.at(-1);
+
+    return {
+      items,
+      limit,
+      hasNextPage,
+      nextCursor:
+        hasNextPage && lastItem
+          ? { createdAt: lastItem.createdAt, threadId: lastItem.threadId }
+          : null,
+    };
+  }
+
+  async listMyDiscussions(
+    userId: string,
+    query: { limit?: number; cursor?: QuizDiscussionCursor | null },
+  ): Promise<{
+    items: MyDiscussionListItem[];
+    limit: number;
+    hasNextPage: boolean;
+    nextCursor: QuizDiscussionCursor | null;
+  }> {
+    const limit = query.limit ?? 20;
+    const rows = await this.repo.listMyDiscussions({
+      userId,
+      limit,
+      cursor: query.cursor ?? null,
+    });
+
+    const hasNextPage = rows.length > limit;
+    const items = hasNextPage ? rows.slice(0, limit) : rows;
+    const lastItem = items.at(-1);
+
+    return {
+      items,
+      limit,
+      hasNextPage,
+      nextCursor:
+        hasNextPage && lastItem
+          ? { createdAt: lastItem.createdAt, threadId: lastItem.threadId }
+          : null,
+    };
+  }
+
+  async listDiscussionsByUser(
+    userId: string,
+    query: { limit?: number; cursor?: QuizDiscussionCursor | null },
+  ): Promise<{
+    items: MyDiscussionListItem[];
+    limit: number;
+    hasNextPage: boolean;
+    nextCursor: QuizDiscussionCursor | null;
+  }> {
+    const user = await this.userRepository.findMeById(userId);
+
+    if (!user) {
+      this.logger.warn({ event: 'discussion_user_not_found', userId });
+      throw new UserNotFoundError();
+    }
+
+    const limit = query.limit ?? 20;
+    const rows = await this.repo.listDiscussionsByUser({
+      userId,
+      limit,
+      cursor: query.cursor ?? null,
+    });
+
+    const hasNextPage = rows.length > limit;
+    const items = hasNextPage ? rows.slice(0, limit) : rows;
+    const lastItem = items.at(-1);
+
+    return {
+      items,
+      limit,
+      hasNextPage,
+      nextCursor:
+        hasNextPage && lastItem
+          ? { createdAt: lastItem.createdAt, threadId: lastItem.threadId }
+          : null,
+    };
   }
 
   async updateThread(params: UpdateThreadParams): Promise<DiscussionThread> {

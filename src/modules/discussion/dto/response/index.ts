@@ -1,4 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+export * from './quiz-discussion-list-response.dto';
+export * from './my-discussions-response.dto';
 
 const THREAD_STATUS_VALUES = ['open', 'closed', 'hidden', 'deleted'] as const;
 const CONTENT_STATUS_VALUES = ['visible', 'hidden', 'deleted'] as const;
