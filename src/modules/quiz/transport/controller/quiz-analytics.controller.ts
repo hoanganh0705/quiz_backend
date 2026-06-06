@@ -4,6 +4,7 @@ import {
   QuizAnalyticsResponseDto,
   TrendingQuizzesResponseDto,
   PopularQuizzesResponseDto,
+  CreatorQuizAnalyticsDto,
 } from '@/modules/quiz/dto/response';
 
 @Controller()
@@ -87,7 +88,7 @@ export class QuizAnalyticsController {
   @Get('analytics/creator/:userId')
   async getCreatorAnalytics(
     @Param('userId') userId: string,
-  ): Promise<CreatorAnalyticsResponseDto | null> {
+  ): Promise<CreatorQuizAnalyticsDto | null> {
     const analytics = await this.quizAnalyticsService.getCreatorAnalytics(userId);
 
     if (!analytics) {
@@ -97,25 +98,14 @@ export class QuizAnalyticsController {
     return {
       userId: analytics.userId,
       totalQuizzes: analytics.totalQuizzes,
+      draftQuizzes: analytics.draftQuizzes,
       publishedQuizzes: analytics.publishedQuizzes,
       totalAttempts: analytics.totalAttempts,
       totalPlayers: analytics.totalPlayers,
-      totalReviews: analytics.totalReviews,
+      averageScore: analytics.averageScore,
       averageRating: analytics.averageRating,
-      topPerformingQuiz: analytics.topPerformingQuiz
-        ? {
-            rank: analytics.topPerformingQuiz.rank,
-            quizId: analytics.topPerformingQuiz.quizId,
-            title: analytics.topPerformingQuiz.title,
-            slug: analytics.topPerformingQuiz.slug,
-            imageUrl: analytics.topPerformingQuiz.imageUrl,
-            popularityScore: analytics.topPerformingQuiz.popularityScore,
-            totalAttempts: analytics.topPerformingQuiz.totalAttempts,
-            averageRating: analytics.topPerformingQuiz.averageRating,
-            bookmarkCount: analytics.topPerformingQuiz.bookmarkCount,
-          }
-        : null,
-      worstPerformingQuiz: analytics.worstPerformingQuiz,
+      totalBookmarks: analytics.totalBookmarks,
+      totalReviews: analytics.totalReviews,
       lastUpdated: analytics.lastUpdated,
     };
   }

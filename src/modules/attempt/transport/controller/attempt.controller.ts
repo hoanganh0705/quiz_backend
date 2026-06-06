@@ -32,6 +32,9 @@ import {
   SubmitAnswerResponseDto,
   AbandonAttemptResponseDto,
   CompleteAttemptResponseDto,
+  AttemptAnswersResponseDto,
+  AttemptAnalyticsResponseDto,
+  UserAttemptStatsResponseDto,
 } from '../../dto/response';
 import { AttemptDomainExceptionFilter } from '../filters/attempt-domain-exception.filter';
 
@@ -148,7 +151,8 @@ export class AttemptController {
   @ApiAuth()
   @ApiOperation({
     summary: 'List my attempts',
-    description: 'Returns a paginated list of all quiz attempts for the authenticated user.',
+    description:
+      'Returns a cursor-paginated list of quiz attempts for the authenticated user with optional filters for status, quiz, category, tag, and date range, plus sorting by created time, completion time, or score.',
   })
   @ApiOkResponse({ description: 'Attempts returned', type: AttemptListResponseDto })
   @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
@@ -156,7 +160,71 @@ export class AttemptController {
     @CurrentUser() user: JwtPayload,
     @Query() query: ListMyAttemptsQueryDto,
   ): Promise<AttemptListResponseDto> {
-    const limit = query.limit ?? 20;
-    return this.attemptApplicationService.listMyAttempts(user, limit);
+    return this.attemptApplicationService.listMyAttempts(user, {
+      limit: query.limit ?? 20,
+      cursor: query.cursor,
+      status: query.status,
+      quizId: query.quizId,
+      categoryId: query.categoryId,
+      tagId: query.tagId,
+      fromDate: query.fromDate,
+      toDate: query.toDate,
+      sortBy: query.sortBy,
+    });
+  }
+
+  @Get('users/me/attempts/stats')
+  @ApiAuth()
+  @ApiOperation({
+    summary: 'Get my attempt stats',
+    description:
+      'Returns aggregated statistics across all attempts owned by the authenticated user, including status counts, averages, total time spent, favorite category/tag, and the latest attempt timestamp.',
+  })
+  @ApiOkResponse({ description: 'Attempt statistics returned', type: UserAttemptStatsResponseDto })
+  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  async getMyAttemptStats(@CurrentUser() user: JwtPayload): Promise<UserAttemptStatsResponseDto> {
+    return this.attemptApplicationService.getMyAttemptStats(user);
+  }
+
+  @Get('attempts/:attemptId/answers')
+  @ApiAuth()
+  @ApiOperation({
+    summary: 'Get attempt answers',
+    description:
+      'Returns all answers submitted within a specific attempt. Only the attempt owner or an admin may access this endpoint.',
+  })
+  @ApiOkResponse({
+    description: 'Answers returned',
+    type: AttemptAnswersResponseDto,
+  })
+  @ApiNotFoundResponse({ description: 'Attempt not found' })
+  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  async getAttemptAnswers(
+    @Param('attemptId', new ParseUUIDPipe()) attemptId: string,
+    @CurrentUser() user: JwtPayload,
+  ): Promise<AttemptAnswersResponseDto> {
+    return this.attemptApplicationService.getAttemptAnswers(attemptId, user);
+  }
+
+  @Get('attempts/:attemptId/analytics')
+  @ApiAuth()
+  @ApiOperation({
+    summary: 'Get attempt analytics',
+    description:
+      'Returns detailed analytics for a completed attempt, including score, accuracy, answer breakdown, ' +
+      'time spent, and percentile rank against all other completed attempts for the same quiz version. ' +
+      'Attempt must be completed and must belong to the current user.',
+  })
+  @ApiOkResponse({
+    description: 'Analytics returned',
+    type: AttemptAnalyticsResponseDto,
+  })
+  @ApiNotFoundResponse({ description: 'Attempt not found' })
+  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  async getAttemptAnalytics(
+    @Param('attemptId', new ParseUUIDPipe()) attemptId: string,
+    @CurrentUser() user: JwtPayload,
+  ): Promise<AttemptAnalyticsResponseDto> {
+    return this.attemptApplicationService.getAttemptAnalytics(attemptId, user);
   }
 }

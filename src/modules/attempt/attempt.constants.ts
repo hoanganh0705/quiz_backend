@@ -12,3 +12,4 @@ export const ATTEMPT_QUESTION_ALREADY_ANSWERED_MESSAGE =
 export const ATTEMPT_NOT_STARTED_OR_FINISHED_MESSAGE =
   'Only started or completed attempts can be abandoned';
 export const ATTEMPT_QUESTION_INVALID_MESSAGE = 'Question is invalid for this attempt';
+export const ATTEMPT_NOT_COMPLETED_MESSAGE = 'Analytics are only available for completed attempts';
