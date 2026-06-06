@@ -7,7 +7,10 @@ import { QuizVersionCursorMapper } from '../mappers/quiz-cursor.mapper';
 import { CreateQuizVersionDto } from '../dto/request/create-quiz-version.dto';
 import { UpdateQuizVersionDto } from '../dto/request/update-quiz-version.dto';
 import { ListQuizVersionsQueryDto } from '../dto/request/list-quiz-versions-query.dto';
-import type { QuizVersionResponseDto, QuizVersionDetailResponseDto } from '../dto/response/quiz-version-response.dto';
+import type {
+  QuizVersionResponseDto,
+  QuizVersionDetailResponseDto,
+} from '../dto/response/quiz-version-response.dto';
 import type { QuizVersionListResponseDto } from '../dto/response/quiz-version-list-response.dto';
 import type { CreateQuizVersionCommand } from '../domain/types/create-quiz-version.command';
 import type { UpdateQuizVersionCommand } from '../domain/types/quiz-version-commands';

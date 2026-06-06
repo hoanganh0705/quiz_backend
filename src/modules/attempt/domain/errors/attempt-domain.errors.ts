@@ -58,3 +58,9 @@ export class AttemptQuestionInvalidError extends AttemptValidationError {
     super(message);
   }
 }
+
+export class AttemptNotCompletedError extends AttemptValidationError {
+  constructor(message = 'Analytics are only available for completed attempts') {
+    super(message);
+  }
+}

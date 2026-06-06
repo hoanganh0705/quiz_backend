@@ -12,6 +12,7 @@ import {
 import type { CreateQuizVersionCommand } from '../types/create-quiz-version.command';
 import type { UpdateQuizVersionCommand } from '../types/quiz-version-commands';
 import type { ListQuizVersionsQuery } from '../types/list-quiz-versions.query';
+import type { QuizVersionDetailRow } from '../ports/quiz-version-repository.port';
 import type { QuizQuestionJoinRow } from '../ports/quiz-question-repository.port';
 import {
   MIN_QUESTIONS_TO_PUBLISH,
