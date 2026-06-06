@@ -3,6 +3,7 @@ import {
   REVIEW_NOT_FOUND_MESSAGE,
   REVIEW_QUIZ_USER_CONFLICT_MESSAGE,
   REVIEW_ATTEMPT_REQUIRED_MESSAGE,
+  REVIEW_ALREADY_REPORTED_MESSAGE,
 } from '../../review.constants';
 
 export class ReviewDomainError extends Error {
@@ -38,6 +39,12 @@ export class ReviewValidationError extends ReviewDomainError {
 
 export class ReviewAttemptRequiredError extends ReviewDomainError {
   constructor(message = REVIEW_ATTEMPT_REQUIRED_MESSAGE) {
+    super(message);
+  }
+}
+
+export class ReviewAlreadyReportedError extends ReviewDomainError {
+  constructor(message = REVIEW_ALREADY_REPORTED_MESSAGE) {
     super(message);
   }
 }

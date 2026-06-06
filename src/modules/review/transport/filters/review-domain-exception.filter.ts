@@ -7,6 +7,7 @@ import {
   ReviewConflictError,
   ReviewValidationError,
   ReviewAttemptRequiredError,
+  ReviewAlreadyReportedError,
 } from '../../domain/errors';
 
 const HTTP_ERROR_NAMES: Record<number, string> = {
@@ -46,6 +47,13 @@ export class ReviewDomainExceptionFilter implements ExceptionFilter {
 
     if (error instanceof ReviewConflictError) {
       return { status: HttpStatus.CONFLICT, message: 'Resource already exists' };
+    }
+
+    if (error instanceof ReviewAlreadyReportedError) {
+      return {
+        status: HttpStatus.CONFLICT,
+        message: 'You have already reported this review',
+      };
     }
 
     if (error instanceof ReviewValidationError || error instanceof ReviewAttemptRequiredError) {
