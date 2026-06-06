@@ -8,6 +8,7 @@ import {
   ReviewForbiddenError,
   ReviewConflictError,
   ReviewAttemptRequiredError,
+  ReviewAlreadyReportedError,
 } from './errors';
 import {
   REVIEW_NOT_FOUND_MESSAGE,
@@ -16,6 +17,9 @@ import {
   REVIEW_ATTEMPT_REQUIRED_MESSAGE,
 } from '../review.constants';
 import { AnalyticsEventHandler } from '@/modules/quiz/domain/analytics/analytics-event-handler';
+import type { ReviewStatsResponseDto, ReviewDashboardResponseDto } from '../dto/response';
+import { QuizNotFoundError } from '@/modules/quiz/domain/errors';
+import { ReviewValidationError } from './errors';
 
 @Injectable()
 export class ReviewService {
@@ -100,8 +104,208 @@ export class ReviewService {
     quizId: string,
     limit: number,
     cursor?: { createdAt: string; reviewId: string } | null,
+    rating?: number,
   ) {
-    return this.reviewRepository.listReviewsByQuiz({ quizId, limit, cursor });
+    return this.reviewRepository.listReviewsByQuiz({ quizId, limit, cursor, rating });
+  }
+
+  async listUserReviews(
+    userId: string,
+    query: { limit?: number; cursor?: { createdAt: string; reviewId: string } | null },
+  ): Promise<{
+    items: import('./ports').MyReviewRow[];
+    limit: number;
+    hasNextPage: boolean;
+    nextCursor: { createdAt: string; reviewId: string } | null;
+  }> {
+    const limit = query.limit ?? 10;
+    const cursor = query.cursor ?? null;
+
+    const rows = await this.reviewRepository.listUserReviews({
+      userId,
+      limit,
+      cursor,
+    });
+
+    const hasNextPage = rows.length > limit;
+    const items = hasNextPage ? rows.slice(0, limit) : rows;
+    const lastItem = items.at(-1);
+
+    return {
+      items,
+      limit,
+      hasNextPage,
+      nextCursor:
+        hasNextPage && lastItem
+          ? { createdAt: lastItem.createdAt, reviewId: lastItem.reviewId }
+          : null,
+    };
+  }
+
+  async listReviewsByUser(
+    userId: string,
+    query: { limit?: number; cursor?: { createdAt: string; reviewId: string } | null },
+  ): Promise<{
+    items: import('./ports').MyReviewRow[];
+    limit: number;
+    hasNextPage: boolean;
+    nextCursor: { createdAt: string; reviewId: string } | null;
+  }> {
+    const limit = query.limit ?? 10;
+    const cursor = query.cursor ?? null;
+
+    const rows = await this.reviewRepository.listReviewsByUser({
+      userId,
+      limit,
+      cursor,
+    });
+
+    const hasNextPage = rows.length > limit;
+    const items = hasNextPage ? rows.slice(0, limit) : rows;
+    const lastItem = items.at(-1);
+
+    return {
+      items,
+      limit,
+      hasNextPage,
+      nextCursor:
+        hasNextPage && lastItem
+          ? { createdAt: lastItem.createdAt, reviewId: lastItem.reviewId }
+          : null,
+    };
+  }
+
+  async getReviewById(reviewId: string): Promise<import('./ports').ReviewDetailByIdRow> {
+    const review = await this.reviewRepository.findReviewById(reviewId);
+
+    if (!review) {
+      throw new ReviewNotFoundError(REVIEW_NOT_FOUND_MESSAGE);
+    }
+
+    return review;
+  }
+
+  async getQuizReviewStats(quizId: string): Promise<ReviewStatsResponseDto> {
+    const quiz = await this.quizRepository.getActiveQuizRecordById(quizId);
+
+    if (!quiz) {
+      throw new QuizNotFoundError();
+    }
+
+    const stats = await this.reviewRepository.getQuizReviewStats(quizId);
+
+    return {
+      averageRating: Number(stats?.averageRating ?? 0),
+      totalReviews: Number(stats?.totalReviews ?? 0),
+      ratingDistribution: {
+        '1': Number(stats?.rating1 ?? 0),
+        '2': Number(stats?.rating2 ?? 0),
+        '3': Number(stats?.rating3 ?? 0),
+        '4': Number(stats?.rating4 ?? 0),
+        '5': Number(stats?.rating5 ?? 0),
+      },
+    };
+  }
+
+  async getMyReviewDashboard(userId: string): Promise<ReviewDashboardResponseDto> {
+    const dashboard = await this.reviewRepository.getUserReviewDashboard(userId);
+
+    return {
+      totalReviews: Number(dashboard.totalReviews ?? 0),
+      averageRatingGiven: Number(dashboard.averageRatingGiven ?? 0),
+      favoriteCategory: dashboard.favoriteCategory,
+      favoriteTag: dashboard.favoriteTag,
+      lastUpdated: dashboard.lastUpdated,
+    };
+  }
+
+  async markReviewHelpful(reviewId: string, helpful: boolean, userId: string): Promise<void> {
+    const review = await this.reviewRepository.getReviewById(reviewId);
+
+    if (!review) {
+      throw new ReviewNotFoundError(REVIEW_NOT_FOUND_MESSAGE);
+    }
+
+    if (review.userId === userId) {
+      throw new ReviewValidationError('You cannot vote on your own review');
+    }
+
+    if (!helpful) {
+      await this.reviewRepository.removeReviewHelpfulVote({
+        reviewId,
+        userId,
+        nowIso: new Date().toISOString(),
+      });
+
+      this.logger.info({ event: 'review_helpful_vote_removed', reviewId, userId });
+      return;
+    }
+
+    const vote = await this.reviewRepository.markReviewHelpful({
+      reviewId,
+      userId,
+      nowIso: new Date().toISOString(),
+    });
+
+    this.logger.info({
+      event: 'review_marked_helpful',
+      reviewId,
+      userId,
+      voteId: vote.voteId,
+    });
+  }
+
+  async removeHelpfulVote(reviewId: string, userId: string): Promise<void> {
+    const review = await this.reviewRepository.getReviewById(reviewId);
+
+    if (!review) {
+      throw new ReviewNotFoundError(REVIEW_NOT_FOUND_MESSAGE);
+    }
+
+    await this.reviewRepository.removeReviewHelpfulVote({
+      reviewId,
+      userId,
+      nowIso: new Date().toISOString(),
+    });
+
+    this.logger.info({ event: 'review_helpful_vote_removed', reviewId, userId });
+  }
+
+  async reportReview(
+    reviewId: string,
+    reporterId: string,
+    reason: string,
+    details: string | null,
+  ): Promise<void> {
+    const review = await this.reviewRepository.getReviewById(reviewId);
+
+    if (!review) {
+      this.logger.warn({ event: 'review_report_review_not_found', reviewId, reporterId });
+      throw new ReviewNotFoundError(REVIEW_NOT_FOUND_MESSAGE);
+    }
+
+    const hasReported = await this.reviewRepository.hasUserReportedReview(reviewId, reporterId);
+
+    if (hasReported) {
+      this.logger.warn({ event: 'review_report_duplicate', reviewId, reporterId });
+      throw new ReviewAlreadyReportedError();
+    }
+
+    const report = await this.reviewRepository.createReport({
+      reviewId,
+      reporterId,
+      reason,
+      details,
+      nowIso: new Date().toISOString(),
+    });
+
+    this.logger.info({
+      event: 'review_report_created',
+      reportId: report.reportId,
+      reviewId,
+      reporterId,
+      status: report.status,
+    });
   }
 
   async updateReview(

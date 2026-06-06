@@ -2,12 +2,19 @@ import { Injectable } from '@nestjs/common';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
 import { ReviewService } from '../domain/review.service';
 import { ReviewResponseMapper } from '../mappers/review-response.mapper';
-import { CreateReviewDto, UpdateReviewDto } from '../dto/request';
+import { ReviewCursorMapper } from '../mappers/review-cursor.mapper';
+import { HelpfulReviewDto, ReportReviewDto, CreateReviewDto, UpdateReviewDto } from '../dto/request';
 import {
   ReviewListResponseDto,
   CreateReviewResponseDto,
   UpdateReviewResponseDto,
   DeleteReviewResponseDto,
+  MyReviewsResponseDto,
+  ReviewDetailResponseDto,
+  ReviewStatsResponseDto,
+  ReviewDashboardResponseDto,
+  HelpfulReviewResponseDto,
+  ReportReviewResponseDto,
 } from '../dto/response';
 
 @Injectable()
@@ -36,8 +43,9 @@ export class ReviewApplicationService {
     quizId: string,
     limit: number,
     cursor?: { createdAt: string; reviewId: string } | null,
+    rating?: number,
   ): Promise<ReviewListResponseDto> {
-    const rows = await this.reviewService.listReviews(quizId, limit, cursor);
+    const rows = await this.reviewService.listReviews(quizId, limit, cursor, rating);
 
     const hasNextPage = rows.length > limit;
     const items = hasNextPage ? rows.slice(0, limit) : rows;
@@ -48,17 +56,88 @@ export class ReviewApplicationService {
       pagination: {
         limit,
         hasNextPage,
-        nextCursor:
-          hasNextPage && lastItem
-            ? Buffer.from(
-                JSON.stringify({
-                  createdAt: lastItem.createdAt,
-                  reviewId: lastItem.reviewId,
-                }),
-              ).toString('base64')
-            : null,
+        nextCursor: lastItem && hasNextPage ? ReviewCursorMapper.serialize(lastItem) : null,
       },
     };
+  }
+
+  async listUserReviews(
+    userId: string,
+    query: { limit?: number; cursor?: { createdAt: string; reviewId: string } | null },
+  ): Promise<MyReviewsResponseDto> {
+    const { items, limit, hasNextPage, nextCursor } = await this.reviewService.listUserReviews(
+      userId,
+      query,
+    );
+
+    return {
+      items: this.reviewResponseMapper.toMyReviewItems(items),
+      pagination: {
+        limit,
+        hasNextPage,
+        nextCursor: nextCursor ? ReviewCursorMapper.serialize(nextCursor) : null,
+      },
+    };
+  }
+
+  async listReviewsByUser(
+    userId: string,
+    query: { limit?: number; cursor?: { createdAt: string; reviewId: string } | null },
+  ): Promise<MyReviewsResponseDto> {
+    const { items, limit, hasNextPage, nextCursor } = await this.reviewService.listReviewsByUser(
+      userId,
+      query,
+    );
+
+    return {
+      items: this.reviewResponseMapper.toMyReviewItems(items),
+      pagination: {
+        limit,
+        hasNextPage,
+        nextCursor: nextCursor ? ReviewCursorMapper.serialize(nextCursor) : null,
+      },
+    };
+  }
+
+  async getReviewById(reviewId: string): Promise<ReviewDetailResponseDto> {
+    const review = await this.reviewService.getReviewById(reviewId);
+    return this.reviewResponseMapper.toReviewDetailResponse(review);
+  }
+
+  async getQuizReviewStats(quizId: string): Promise<ReviewStatsResponseDto> {
+    return this.reviewService.getQuizReviewStats(quizId);
+  }
+
+  async getMyReviewDashboard(user: JwtPayload): Promise<ReviewDashboardResponseDto> {
+    return this.reviewService.getMyReviewDashboard(user.sub);
+  }
+
+  async markReviewHelpful(
+    reviewId: string,
+    payload: HelpfulReviewDto,
+    user: JwtPayload,
+  ): Promise<HelpfulReviewResponseDto> {
+    await this.reviewService.markReviewHelpful(reviewId, payload.helpful, user.sub);
+    return { message: 'Review marked as helpful' };
+  }
+
+  async removeHelpfulVote(reviewId: string, user: JwtPayload): Promise<HelpfulReviewResponseDto> {
+    await this.reviewService.removeHelpfulVote(reviewId, user.sub);
+    return { message: 'Helpful vote removed' };
+  }
+
+  async reportReview(
+    reviewId: string,
+    user: JwtPayload,
+    payload: ReportReviewDto,
+  ): Promise<ReportReviewResponseDto> {
+    await this.reviewService.reportReview(
+      reviewId,
+      user.sub,
+      payload.reason,
+      payload.details ?? null,
+    );
+    return { message: 'Review reported successfully' };
   }
 
   async updateReview(
