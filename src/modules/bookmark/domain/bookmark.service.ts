@@ -4,15 +4,23 @@ import {
   BOOKMARK_REPOSITORY_PORT,
   type BookmarkRepositoryPort,
   type BookmarkCollectionRow,
+  type UserBookmarkStatsRow,
+  type RecentBookmarkRow,
+  type RecentBookmarkCursor,
+  type BookmarkStatusRow,
+  type BookmarkSearchResult,
 } from './ports/bookmark-repository.port';
+import type { BookmarkCollectionAnalytics } from './types/bookmark-collection-analytics';
 import { QUIZ_REPOSITORY_PORT } from '@/modules/quiz/domain/ports';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
 import {
   CollectionNotFoundError,
+  BookmarkCollectionNotFoundError,
   CollectionForbiddenError,
   CollectionConflictError,
   BookmarkNotFoundError,
   BookmarkConflictError,
+  BookmarkAlreadyExistsError,
 } from './errors';
 import {
   COLLECTION_NOT_FOUND_MESSAGE,
@@ -65,6 +73,42 @@ export class BookmarkService {
 
   async listCollections(user: JwtPayload) {
     return this.bookmarkRepository.listCollectionsByUser(user.sub);
+  }
+
+  async getBookmarkStatus(userId: string, quizId: string): Promise<BookmarkStatusRow> {
+    return this.bookmarkRepository.getBookmarkStatus(userId, quizId);
+  }
+
+  async searchBookmarks(
+    userId: string,
+    query: { query: string; limit?: number; cursor?: RecentBookmarkCursor | null },
+  ): Promise<BookmarkSearchResult> {
+    const limit = query.limit ?? 10;
+    const cursor = query.cursor ?? null;
+
+    const rows = await this.bookmarkRepository.searchBookmarks({
+      userId,
+      query: query.query,
+      limit,
+      cursor,
+    });
+
+    const hasNextPage = rows.length > limit;
+    const items = hasNextPage ? rows.slice(0, limit) : rows;
+    const lastItem = items.at(-1);
+
+    return {
+      items,
+      limit,
+      hasNextPage,
+      nextCursor:
+        hasNextPage && lastItem
+          ? {
+              bookmarkedAt: lastItem.bookmarkedAt,
+              bookmarkId: lastItem.bookmarkId,
+            }
+          : null,
+    };
   }
 
   async createCollection(user: JwtPayload, name: string, description: string | null | undefined) {
@@ -195,6 +239,62 @@ export class BookmarkService {
     }
   }
 
+  async addBookmarksBulk(userId: string, collectionId: string, quizIds: string[]): Promise<number> {
+    const user = { sub: userId, role: 'user' } as JwtPayload;
+    await this.getOwnedCollectionOrThrow(collectionId, user);
+
+    const uniqueQuizIds = [...new Set(quizIds)];
+    if (uniqueQuizIds.length === 0) {
+      return 0;
+    }
+
+    const nowIso = new Date().toISOString();
+    const addedCount = await this.bookmarkRepository.addBookmarksBulk({
+      userId,
+      collectionId,
+      quizIds: uniqueQuizIds,
+      nowIso,
+    });
+
+    this.logger.info({
+      event: 'bulk_bookmarks_added',
+      collectionId,
+      userId,
+      requestedCount: quizIds.length,
+      uniqueCount: uniqueQuizIds.length,
+      addedCount,
+    });
+
+    return addedCount;
+  }
+
+  async removeBookmarksBulk(userId: string, collectionId: string, quizIds: string[]): Promise<number> {
+    const user = { sub: userId, role: 'user' } as JwtPayload;
+    await this.getOwnedCollectionOrThrow(collectionId, user);
+
+    const uniqueQuizIds = [...new Set(quizIds)];
+    if (uniqueQuizIds.length === 0) {
+      return 0;
+    }
+
+    const removedCount = await this.bookmarkRepository.removeBookmarksBulk({
+      userId,
+      collectionId,
+      quizIds: uniqueQuizIds,
+    });
+
+    this.logger.info({
+      event: 'bulk_bookmarks_removed',
+      collectionId,
+      userId,
+      requestedCount: quizIds.length,
+      uniqueCount: uniqueQuizIds.length,
+      removedCount,
+    });
+
+    return removedCount;
+  }
+
   async removeBookmark(collectionId: string, quizId: string, user: JwtPayload) {
     await this.getOwnedCollectionOrThrow(collectionId, user);
 
@@ -216,9 +316,123 @@ export class BookmarkService {
     await this.analyticsEventHandler.onBookmarkRemoved(quizId);
   }
 
+  async moveBookmark(
+    userId: string,
+    sourceCollectionId: string,
+    targetCollectionId: string,
+    quizId: string,
+  ): Promise<void> {
+    const sourceCollection = await this.bookmarkRepository.getCollectionById(sourceCollectionId);
+    if (!sourceCollection) {
+      throw new BookmarkCollectionNotFoundError(COLLECTION_NOT_FOUND_MESSAGE);
+    }
+
+    if (sourceCollection.userId !== userId) {
+      throw new CollectionForbiddenError(COLLECTION_FORBIDDEN_MESSAGE);
+    }
+
+    const targetCollection = await this.bookmarkRepository.getCollectionById(targetCollectionId);
+    if (!targetCollection) {
+      throw new BookmarkCollectionNotFoundError(COLLECTION_NOT_FOUND_MESSAGE);
+    }
+
+    if (targetCollection.userId !== userId) {
+      throw new CollectionForbiddenError(COLLECTION_FORBIDDEN_MESSAGE);
+    }
+
+    const existingSourceBookmark = await this.bookmarkRepository.getBookmarkedQuiz(
+      sourceCollectionId,
+      quizId,
+    );
+    if (!existingSourceBookmark) {
+      throw new BookmarkNotFoundError(BOOKMARK_NOT_FOUND_MESSAGE);
+    }
+
+    const existingTargetBookmark = await this.bookmarkRepository.getBookmarkedQuiz(
+      targetCollectionId,
+      quizId,
+    );
+    if (existingTargetBookmark) {
+      throw new BookmarkAlreadyExistsError(BOOKMARK_QUIZ_ALREADY_EXISTS_MESSAGE);
+    }
+
+    const nowIso = new Date().toISOString();
+    await this.bookmarkRepository.moveBookmark({
+      userId,
+      sourceCollectionId,
+      targetCollectionId,
+      quizId,
+      nowIso,
+    });
+
+    this.logger.info({
+      event: 'bookmark_moved',
+      userId,
+      sourceCollectionId,
+      targetCollectionId,
+      quizId,
+    });
+  }
+
   async listBookmarksInCollection(collectionId: string, user: JwtPayload) {
     await this.getOwnedCollectionOrThrow(collectionId, user);
 
     return this.bookmarkRepository.listBookmarksInCollection(collectionId);
+  }
+
+  async getRecentBookmarks(
+    userId: string,
+    query: { limit?: number; cursor?: RecentBookmarkCursor | null },
+  ): Promise<{
+    items: RecentBookmarkRow[];
+    limit: number;
+    hasNextPage: boolean;
+    nextCursor: RecentBookmarkCursor | null;
+  }> {
+    const limit = query.limit ?? 10;
+    const cursor = query.cursor ?? null;
+
+    const rows = await this.bookmarkRepository.listRecentBookmarks({
+      userId,
+      limit,
+      cursor,
+    });
+
+    const hasNextPage = rows.length > limit;
+    const items = hasNextPage ? rows.slice(0, limit) : rows;
+    const lastItem = items.at(-1);
+
+    return {
+      items,
+      limit,
+      hasNextPage,
+      nextCursor:
+        hasNextPage && lastItem
+          ? {
+              bookmarkedAt: lastItem.bookmarkedAt,
+              bookmarkId: lastItem.bookmarkId,
+            }
+          : null,
+    };
+  }
+
+  async getCollectionAnalytics(collectionId: string): Promise<BookmarkCollectionAnalytics> {
+    const collection = await this.bookmarkRepository.getCollectionById(collectionId);
+
+    if (!collection) {
+      throw new BookmarkCollectionNotFoundError();
+    }
+
+    const analytics = await this.bookmarkRepository.getCollectionAnalytics(collectionId);
+
+    if (!analytics) {
+      throw new BookmarkCollectionNotFoundError();
+    }
+
+    return analytics;
+  }
+
+  async getMyBookmarkStats(userId: string): Promise<UserBookmarkStatsRow> {
+    return this.bookmarkRepository.getUserBookmarkStats(userId);
   }
 }
