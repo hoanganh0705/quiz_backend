@@ -41,6 +41,13 @@ export const discussionReportStatus = pgEnum('discussion_report_status', [
   'actioned',
 ]);
 
+export const reviewReportStatus = pgEnum('review_report_status', [
+  'open',
+  'reviewed',
+  'dismissed',
+  'actioned',
+]);
+
 export const discussionReportTargetType = pgEnum('discussion_report_target_type', [
   'thread',
   'comment',
@@ -2038,5 +2045,91 @@ export const tagFollows = pgTable(
       foreignColumns: [tags.tagId],
       name: 'tag_follows_tag_id_fkey',
     }).onDelete('cascade'),
+  ],
+);
+
+export const reviewHelpfulVotes = pgTable(
+  'review_helpful_votes',
+  {
+    voteId: uuid('vote_id').defaultRandom().primaryKey().notNull(),
+    reviewId: uuid('review_id').notNull(),
+    userId: uuid('user_id').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex('uq_review_helpful_votes_review_user').using(
+      'btree',
+      table.reviewId.asc().nullsLast().op('uuid_ops'),
+      table.userId.asc().nullsLast().op('uuid_ops'),
+    ),
+    index('idx_review_helpful_votes_review_id').using(
+      'btree',
+      table.reviewId.asc().nullsLast().op('uuid_ops'),
+    ),
+    index('idx_review_helpful_votes_user_id').using(
+      'btree',
+      table.userId.asc().nullsLast().op('uuid_ops'),
+    ),
+    foreignKey({
+      columns: [table.reviewId],
+      foreignColumns: [quizReviews.reviewId],
+      name: 'review_helpful_votes_review_id_fkey',
+    }).onDelete('cascade'),
+    foreignKey({
+      columns: [table.userId],
+      foreignColumns: [users.userId],
+      name: 'review_helpful_votes_user_id_fkey',
+    }).onDelete('cascade'),
+  ],
+);
+
+export const reviewReports = pgTable(
+  'review_reports',
+  {
+    reportId: uuid('report_id').defaultRandom().primaryKey().notNull(),
+    reviewId: uuid('review_id').notNull(),
+    reporterId: uuid('reporter_id').notNull(),
+    reason: text().notNull(),
+    details: text('details'),
+    status: reviewReportStatus('status').default('open').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'string' })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex('uq_review_reports_review_reporter').using(
+      'btree',
+      table.reviewId.asc().nullsLast().op('uuid_ops'),
+      table.reporterId.asc().nullsLast().op('uuid_ops'),
+    ),
+    index('idx_review_reports_status_created').using(
+      'btree',
+      table.status.asc().nullsLast().op('enum_ops'),
+      table.createdAt.desc().nullsLast().op('timestamptz_ops'),
+    ),
+    index('idx_review_reports_review_id').using(
+      'btree',
+      table.reviewId.asc().nullsLast().op('uuid_ops'),
+    ),
+    index('idx_review_reports_reporter_id').using(
+      'btree',
+      table.reporterId.asc().nullsLast().op('uuid_ops'),
+    ),
+    foreignKey({
+      columns: [table.reviewId],
+      foreignColumns: [quizReviews.reviewId],
+      name: 'review_reports_review_id_fkey',
+    }).onDelete('cascade'),
+    foreignKey({
+      columns: [table.reporterId],
+      foreignColumns: [users.userId],
+      name: 'review_reports_reporter_id_fkey',
+    }).onDelete('cascade'),
+    check('review_reports_reason_nonblank', sql`length(btrim(reason)) > 0`),
   ],
 );
