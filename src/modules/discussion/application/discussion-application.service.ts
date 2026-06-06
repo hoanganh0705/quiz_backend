@@ -1,12 +1,16 @@
 import { Injectable } from '@nestjs/common';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
 import { DiscussionService } from '../domain/services/discussion.service';
+import { QuizDiscussionCursorMapper } from '../mappers/quiz-discussion-cursor.mapper';
 import type {
   DiscussionThread,
   DiscussionThreadDetail,
   DiscussionComment,
   DiscussionCommentWithReplies,
   DiscussionReport,
+  QuizDiscussionCursor,
+  QuizDiscussionListItem,
+  MyDiscussionListItem,
 } from '../domain/types';
 
 @Injectable()
@@ -46,6 +50,84 @@ export class DiscussionApplicationService {
     },
   ): Promise<{ items: DiscussionThread[]; hasNextPage: boolean }> {
     return this.discussionService.listThreads(filters);
+  }
+
+  async listQuizDiscussions(
+    quizId: string,
+    query: { limit?: number; cursor?: QuizDiscussionCursor | null },
+  ): Promise<{
+    items: QuizDiscussionListItem[];
+    pagination: {
+      limit: number;
+      hasNextPage: boolean;
+      nextCursor: string | null;
+    };
+  }> {
+    const { items, limit, hasNextPage, nextCursor } = await this.discussionService.listQuizDiscussions(
+      quizId,
+      query,
+    );
+
+    return {
+      items,
+      pagination: {
+        limit,
+        hasNextPage,
+        nextCursor: nextCursor ? QuizDiscussionCursorMapper.serialize(nextCursor) : null,
+      },
+    };
+  }
+
+  async listMyDiscussions(
+    userId: string,
+    query: { limit?: number; cursor?: QuizDiscussionCursor | null },
+  ): Promise<{
+    items: MyDiscussionListItem[];
+    pagination: {
+      limit: number;
+      hasNextPage: boolean;
+      nextCursor: string | null;
+    };
+  }> {
+    const { items, limit, hasNextPage, nextCursor } = await this.discussionService.listMyDiscussions(
+      userId,
+      query,
+    );
+
+    return {
+      items,
+      pagination: {
+        limit,
+        hasNextPage,
+        nextCursor: nextCursor ? QuizDiscussionCursorMapper.serialize(nextCursor) : null,
+      },
+    };
+  }
+
+  async listDiscussionsByUser(
+    userId: string,
+    query: { limit?: number; cursor?: QuizDiscussionCursor | null },
+  ): Promise<{
+    items: MyDiscussionListItem[];
+    pagination: {
+      limit: number;
+      hasNextPage: boolean;
+      nextCursor: string | null;
+    };
+  }> {
+    const { items, limit, hasNextPage, nextCursor } = await this.discussionService.listDiscussionsByUser(
+      userId,
+      query,
+    );
+
+    return {
+      items,
+      pagination: {
+        limit,
+        hasNextPage,
+        nextCursor: nextCursor ? QuizDiscussionCursorMapper.serialize(nextCursor) : null,
+      },
+    };
   }
 
   async updateThread(

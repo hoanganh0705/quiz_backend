@@ -6,4 +6,6 @@ export * from './vote.dto';
 export * from './report.dto';
 export * from './review-report.dto';
 export * from './list-query.dto';
+export * from './list-quiz-discussions-query.dto';
+export * from './list-my-discussions-query.dto';
 export * from './list-reports-query.dto';

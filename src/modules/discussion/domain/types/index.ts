@@ -28,6 +28,33 @@ export interface DiscussionThread {
   deletedAt: string | null;
 }
 
+export interface QuizDiscussionCursor {
+  createdAt: string;
+  threadId: string;
+}
+
+export interface QuizDiscussionListItem {
+  threadId: string;
+  quizId: string;
+  title: string;
+  author: DiscussionThreadAuthor;
+  commentCount: number;
+  voteCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface MyDiscussionListItem {
+  threadId: string;
+  quizId: string;
+  quizTitle: string;
+  title: string;
+  commentCount: number;
+  voteCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface DiscussionComment {
   commentId: string;
   threadId: string;
