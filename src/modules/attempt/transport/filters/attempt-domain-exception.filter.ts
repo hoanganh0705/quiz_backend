@@ -11,6 +11,7 @@ import {
   AttemptQuestionAlreadyAnsweredError,
   QuizNotPublishedError,
   AttemptQuestionInvalidError,
+  AttemptNotCompletedError,
 } from '../../domain/errors';
 
 const HTTP_ERROR_NAMES: Record<number, string> = {
@@ -71,6 +72,13 @@ export class AttemptDomainExceptionFilter implements ExceptionFilter {
       return {
         status: HttpStatus.UNPROCESSABLE_ENTITY,
         message: 'Question is invalid for this attempt',
+      };
+    }
+
+    if (error instanceof AttemptNotCompletedError) {
+      return {
+        status: HttpStatus.UNPROCESSABLE_ENTITY,
+        message: error.message,
       };
     }
 

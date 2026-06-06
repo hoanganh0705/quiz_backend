@@ -1,5 +1,195 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
+// ─── GET /users/me/attempts/stats ────────────────────────────────────────────
+
+export class AttemptStatsFavoriteCategoryDto {
+  @ApiProperty({
+    description: 'Category identifier',
+    format: 'uuid',
+    example: '550e8400-e29b-41d4-a716-446655440001',
+  })
+  categoryId!: string;
+
+  @ApiProperty({ description: 'Category display name', example: 'Science' })
+  name!: string;
+}
+
+export class AttemptStatsFavoriteTagDto {
+  @ApiProperty({
+    description: 'Tag identifier',
+    format: 'uuid',
+    example: '550e8400-e29b-41d4-a716-446655440002',
+  })
+  tagId!: string;
+
+  @ApiProperty({ description: 'Tag display name', example: 'Physics' })
+  name!: string;
+}
+
+export class UserAttemptStatsResponseDto {
+  @ApiProperty({ description: 'Total number of attempts ever started', example: 42 })
+  totalAttempts!: number;
+
+  @ApiProperty({ description: 'Number of attempts that reached completed status', example: 35 })
+  completedAttempts!: number;
+
+  @ApiProperty({ description: 'Number of attempts that were abandoned', example: 5 })
+  abandonedAttempts!: number;
+
+  @ApiProperty({
+    description: 'Average score across all completed attempts (0–100)',
+    example: 78.5,
+  })
+  averageScore!: number;
+
+  @ApiProperty({
+    description: 'Average accuracy across all completed attempts (0–100)',
+    example: 75.0,
+  })
+  averageAccuracy!: number;
+
+  @ApiProperty({
+    description: 'Total time spent across all attempts, in seconds',
+    example: 12540,
+  })
+  totalTimeSpentSeconds!: number;
+
+  @ApiPropertyOptional({
+    description: 'Category attempted most frequently. Null if no attempts have been made.',
+    type: () => AttemptStatsFavoriteCategoryDto,
+    nullable: true,
+  })
+  favoriteCategory!: AttemptStatsFavoriteCategoryDto | null;
+
+  @ApiPropertyOptional({
+    description: 'Tag attempted most frequently. Null if no attempts have been made.',
+    type: () => AttemptStatsFavoriteTagDto,
+    nullable: true,
+  })
+  favoriteTag!: AttemptStatsFavoriteTagDto | null;
+
+  @ApiPropertyOptional({
+    description: 'Timestamp of the most recent attempt (ISO 8601). Null if no attempts exist.',
+    example: '2025-06-05T14:30:00.000Z',
+    nullable: true,
+  })
+  lastAttemptAt!: string | null;
+}
+
+// ─── GET /attempts/:attemptId/analytics ──────────────────────────────────────
+
+export class AttemptAnalyticsResponseDto {
+  @ApiProperty({
+    description: 'Attempt identifier',
+    format: 'uuid',
+    example: '550e8400-e29b-41d4-a716-446655440099',
+  })
+  attemptId!: string;
+
+  @ApiPropertyOptional({
+    description: 'Final score as a percentage (0–100). Null if not yet scored.',
+    example: 82.5,
+    nullable: true,
+  })
+  score!: number | null;
+
+  @ApiPropertyOptional({
+    description:
+      'Accuracy: ratio of correct answers to total questions (0–100). Null when totalQuestions is 0.',
+    example: 80.0,
+    nullable: true,
+  })
+  accuracy!: number | null;
+
+  @ApiPropertyOptional({
+    description: 'Number of questions answered correctly.',
+    example: 16,
+    nullable: true,
+  })
+  correctAnswers!: number | null;
+
+  @ApiPropertyOptional({
+    description: 'Number of questions answered incorrectly (answered but wrong).',
+    example: 4,
+    nullable: true,
+  })
+  incorrectAnswers!: number | null;
+
+  @ApiProperty({
+    description: 'Number of questions that were not answered (skipped or never reached).',
+    example: 0,
+  })
+  unansweredQuestions!: number;
+
+  @ApiPropertyOptional({
+    description: 'Total time spent on the attempt in seconds. Null if not recorded.',
+    example: 345,
+    nullable: true,
+  })
+  timeSpentSeconds!: number | null;
+
+  @ApiProperty({
+    description:
+      'Percentile rank among all completed attempts for the same quiz version (0–100). ' +
+      'A value of 75 means this attempt scored better than 75% of peers.',
+    example: 75.0,
+  })
+  percentileRank!: number;
+
+  @ApiPropertyOptional({
+    description: 'Attempt completion timestamp (ISO 8601). Null if not yet completed.',
+    example: '2025-06-01T12:45:00.000Z',
+    nullable: true,
+  })
+  completedAt!: string | null;
+}
+
+// ─── GET /attempts/:attemptId/answers ────────────────────────────────────────
+
+export class AttemptAnswerItemDto {
+  @ApiProperty({
+    description: 'Question identifier',
+    format: 'uuid',
+    example: '550e8400-e29b-41d4-a716-446655440001',
+  })
+  questionId!: string;
+
+  @ApiProperty({
+    description: 'IDs of the selected option(s). Empty array if the question was skipped.',
+    type: [String],
+    format: 'uuid',
+    example: ['550e8400-e29b-41d4-a716-446655440010'],
+  })
+  selectedOptionIds!: string[];
+
+  @ApiPropertyOptional({
+    description: 'Whether the answer was correct (null until the attempt is completed)',
+    nullable: true,
+  })
+  isCorrect!: boolean | null;
+
+  @ApiProperty({
+    description: 'Answer submission timestamp (ISO 8601)',
+    example: '2025-06-01T12:05:00.000Z',
+  })
+  submittedAt!: string;
+}
+
+export class AttemptAnswersResponseDto {
+  @ApiProperty({
+    description: 'Attempt identifier',
+    format: 'uuid',
+    example: '550e8400-e29b-41d4-a716-446655440099',
+  })
+  attemptId!: string;
+
+  @ApiProperty({
+    description: 'All answers submitted within this attempt',
+    type: () => [AttemptAnswerItemDto],
+  })
+  answers!: AttemptAnswerItemDto[];
+}
+
 export class AttemptAnswerResponseDto {
   @ApiProperty({
     description: 'Unique answer record identifier',
