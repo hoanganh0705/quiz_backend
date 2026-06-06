@@ -8,6 +8,7 @@ import {
   discussionReports,
   users,
   userProfiles,
+  quizzes,
 } from '@/core/database/schema';
 import type {
   DiscussionThread,
@@ -26,6 +27,8 @@ import type {
   ReportParams,
   ReviewReportParams,
   DiscussionVoteValue,
+  QuizDiscussionListItem,
+  MyDiscussionListItem,
 } from '../../domain/types';
 import { eq, and, inArray, sql, desc, asc, lte, gte, isNull } from 'drizzle-orm';
 import type { DiscussionRepositoryPort } from '../../domain/ports';
@@ -228,6 +231,123 @@ export class DiscussionRepository implements DiscussionRepositoryPort {
         }),
       ),
     );
+  }
+
+  async listQuizDiscussions(params: {
+    quizId: string;
+    limit: number;
+    cursor?: { createdAt: string; threadId: string } | null;
+  }): Promise<QuizDiscussionListItem[]> {
+    const cursorCondition = params.cursor
+      ? sql`(
+          ${discussionThreads.createdAt} < ${params.cursor.createdAt}
+          OR (
+            ${discussionThreads.createdAt} = ${params.cursor.createdAt}
+            AND ${discussionThreads.threadId} < ${params.cursor.threadId}
+          )
+        )`
+      : undefined;
+
+    const rows = await this.db
+      .select({
+        threadId: discussionThreads.threadId,
+        quizId: discussionThreads.quizId,
+        title: discussionThreads.title,
+        commentCount: discussionThreads.commentsCount,
+        voteCount: discussionThreads.votesCount,
+        createdAt: discussionThreads.createdAt,
+        updatedAt: discussionThreads.updatedAt,
+        authorId: discussionThreads.authorId,
+        username: users.username,
+        displayName: userProfiles.displayName,
+        avatarUrl: userProfiles.avatarUrl,
+      })
+      .from(discussionThreads)
+      .innerJoin(users, eq(discussionThreads.authorId, users.userId))
+      .leftJoin(userProfiles, eq(users.userId, userProfiles.userId))
+      .where(
+        and(
+          eq(discussionThreads.quizId, params.quizId),
+          isNull(discussionThreads.deletedAt),
+          cursorCondition,
+        ),
+      )
+      .orderBy(desc(discussionThreads.createdAt), desc(discussionThreads.threadId))
+      .limit(params.limit + 1);
+
+    return rows.map((row) => ({
+      threadId: row.threadId,
+      quizId: row.quizId,
+      title: row.title,
+      author: {
+        userId: row.authorId,
+        username: row.username,
+        displayName: row.displayName,
+        avatarUrl: row.avatarUrl,
+      },
+      commentCount: row.commentCount,
+      voteCount: row.voteCount,
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+    }));
+  }
+
+  async listMyDiscussions(params: {
+    userId: string;
+    limit: number;
+    cursor?: { createdAt: string; threadId: string } | null;
+  }): Promise<MyDiscussionListItem[]> {
+    const cursorCondition = params.cursor
+      ? sql`(
+          ${discussionThreads.createdAt} < ${params.cursor.createdAt}
+          OR (
+            ${discussionThreads.createdAt} = ${params.cursor.createdAt}
+            AND ${discussionThreads.threadId} < ${params.cursor.threadId}
+          )
+        )`
+      : undefined;
+
+    const rows = await this.db
+      .select({
+        threadId: discussionThreads.threadId,
+        quizId: discussionThreads.quizId,
+        quizTitle: quizzes.title,
+        title: discussionThreads.title,
+        commentCount: discussionThreads.commentsCount,
+        voteCount: discussionThreads.votesCount,
+        createdAt: discussionThreads.createdAt,
+        updatedAt: discussionThreads.updatedAt,
+      })
+      .from(discussionThreads)
+      .innerJoin(quizzes, eq(discussionThreads.quizId, quizzes.quizId))
+      .where(
+        and(
+          eq(discussionThreads.authorId, params.userId),
+          isNull(discussionThreads.deletedAt),
+          cursorCondition,
+        ),
+      )
+      .orderBy(desc(discussionThreads.createdAt), desc(discussionThreads.threadId))
+      .limit(params.limit + 1);
+
+    return rows.map((row) => ({
+      threadId: row.threadId,
+      quizId: row.quizId,
+      quizTitle: row.quizTitle,
+      title: row.title,
+      commentCount: row.commentCount,
+      voteCount: row.voteCount,
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+    }));
+  }
+
+  async listDiscussionsByUser(params: {
+    userId: string;
+    limit: number;
+    cursor?: { createdAt: string; threadId: string } | null;
+  }): Promise<MyDiscussionListItem[]> {
+    return this.listMyDiscussions(params);
   }
 
   async updateThread(params: UpdateThreadParams): Promise<DiscussionThread> {

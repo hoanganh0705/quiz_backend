@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { DatabaseModule } from '@/core/database/database.module';
 import { DiscussionApplicationService } from './application/discussion-application.service';
@@ -6,13 +6,16 @@ import { DiscussionService } from './domain/services/discussion.service';
 import { DiscussionRepository } from './infrastructure/repositories/discussion.repository';
 import { QuizExistenceAdapter } from './infrastructure/adapters/quiz-existence.adapter';
 import { DiscussionController } from './transport/controller/discussion.controller';
+import { QuizDiscussionController } from './transport/controller/quiz-discussion.controller';
+import { UserDiscussionController } from './transport/controller/user-discussion.controller';
 import { DiscussionDomainExceptionFilter } from './transport/controller/filters/discussion-domain-exception.filter';
 import { DISCUSSION_REPOSITORY_PORT, QUIZ_EXISTENCE_PORT } from './domain/ports';
 import { DISCUSSION_DOMAIN_EVENT_BUS, DiscussionDomainEventBus } from './domain/events';
 import { QuizModule } from '@/modules/quiz/quiz.module';
+import { UserModule } from '@/modules/user/user.module';
 
 @Module({
-  imports: [DatabaseModule, QuizModule, JwtModule],
+  imports: [DatabaseModule, QuizModule, forwardRef(() => UserModule), JwtModule],
   providers: [
     DiscussionApplicationService,
     DiscussionService,
@@ -24,7 +27,7 @@ import { QuizModule } from '@/modules/quiz/quiz.module';
     { provide: QUIZ_EXISTENCE_PORT, useExisting: QuizExistenceAdapter },
     DiscussionDomainEventBus,
   ],
-  controllers: [DiscussionController],
+  controllers: [DiscussionController, QuizDiscussionController, UserDiscussionController],
   exports: [
     DiscussionService,
     DiscussionApplicationService,

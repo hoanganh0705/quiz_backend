@@ -15,6 +15,9 @@ import type {
   ReportParams,
   ReviewReportParams,
   DiscussionVoteValue,
+  QuizDiscussionListItem,
+  QuizDiscussionCursor,
+  MyDiscussionListItem,
 } from '../types';
 
 export * from './quiz-existence.port';
@@ -27,6 +30,21 @@ export interface DiscussionRepositoryPort {
   getThreadById(threadId: string): Promise<DiscussionThread | null>;
   getThreadDetail(threadId: string, userId?: string | null): Promise<DiscussionThreadDetail | null>;
   listThreads(params: ListThreadsParams): Promise<DiscussionThread[]>;
+  listQuizDiscussions(params: {
+    quizId: string;
+    limit: number;
+    cursor?: QuizDiscussionCursor | null;
+  }): Promise<QuizDiscussionListItem[]>;
+  listMyDiscussions(params: {
+    userId: string;
+    limit: number;
+    cursor?: QuizDiscussionCursor | null;
+  }): Promise<MyDiscussionListItem[]>;
+  listDiscussionsByUser(params: {
+    userId: string;
+    limit: number;
+    cursor?: QuizDiscussionCursor | null;
+  }): Promise<MyDiscussionListItem[]>;
   updateThread(params: UpdateThreadParams): Promise<DiscussionThread>;
   softDeleteThread(params: { threadId: string; authorId: string }): Promise<void>;
   updateThreadStatus(params: {
