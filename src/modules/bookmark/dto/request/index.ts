@@ -1,6 +1,17 @@
-import { Transform } from 'class-transformer';
-import { IsOptional, IsString, MaxLength, MinLength, IsUUID, Matches } from 'class-validator';
+import { Transform, Type } from 'class-transformer';
+import {
+  ArrayMaxSize,
+  IsArray,
+  IsOptional,
+  IsString,
+  MaxLength,
+  MinLength,
+  IsUUID,
+  Matches,
+} from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { ListRecentBookmarksQueryDto } from './list-recent-bookmarks-query.dto';
+import { SearchBookmarksQueryDto } from './search-bookmarks-query.dto';
 
 const DEFAULT_SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
@@ -83,6 +94,40 @@ export class AddBookmarkDto {
   notes?: string | null;
 }
 
+export class BulkAddBookmarksDto {
+  @ApiProperty({
+    description: 'List of quiz UUIDs to add to the collection. Maximum 100 items.',
+    type: [String],
+    maxItems: 100,
+    example: [
+      '660e8400-e29b-41d4-a716-446655440000',
+      '660e8400-e29b-41d4-a716-446655440001',
+    ],
+  })
+  @Type(() => String)
+  @IsArray()
+  @ArrayMaxSize(100)
+  @IsUUID('4', { each: true })
+  quizIds!: string[];
+}
+
+export class BulkRemoveBookmarksDto {
+  @ApiProperty({
+    description: 'List of quiz UUIDs to remove from the collection. Maximum 100 items.',
+    type: [String],
+    maxItems: 100,
+    example: [
+      '660e8400-e29b-41d4-a716-446655440000',
+      '660e8400-e29b-41d4-a716-446655440001',
+    ],
+  })
+  @Type(() => String)
+  @IsArray()
+  @ArrayMaxSize(100)
+  @IsUUID('4', { each: true })
+  quizIds!: string[];
+}
+
 export class UpdateBookmarkDto {
   @ApiPropertyOptional({
     description: 'Updated personal notes',
@@ -93,6 +138,24 @@ export class UpdateBookmarkDto {
   @IsString()
   @MaxLength(500)
   notes?: string | null;
+}
+
+export class MoveBookmarkDto {
+  @ApiProperty({
+    description: 'UUID of the quiz to move',
+    format: 'uuid',
+    example: '660e8400-e29b-41d4-a716-446655440000',
+  })
+  @IsUUID('4')
+  quizId!: string;
+
+  @ApiProperty({
+    description: 'UUID of the destination collection',
+    format: 'uuid',
+    example: '770e8400-e29b-41d4-a716-446655440001',
+  })
+  @IsUUID('4')
+  targetCollectionId!: string;
 }
 
 export class ListCollectionBookmarksQueryDto {
@@ -106,3 +169,5 @@ export class ListCollectionBookmarksQueryDto {
   @Matches(DEFAULT_SLUG_PATTERN)
   difficulty?: string;
 }
+
+export { ListRecentBookmarksQueryDto, SearchBookmarksQueryDto };
