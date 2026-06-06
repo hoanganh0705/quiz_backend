@@ -1,5 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { and, desc, eq, isNull, or, sql } from 'drizzle-orm';
+import type { SQL } from 'drizzle-orm';
 import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 import { DRIZZLE } from '@/core/database/drizzle.constants';
 import type { DrizzleDB } from '@/core/database/database.module';
@@ -11,14 +12,21 @@ import {
   quizzes,
   quizAttemptAnswers,
   quizStats,
+  quizCategories,
+  categories,
+  quizTags,
+  tags,
   users,
 } from '@/core/database/schema';
 import type { AttemptContextType } from '@/modules/attempt/types/attempt.types';
+import type { AttemptListCursorPayload, AttemptListSortField } from '@/modules/attempt/mappers/attempt-cursor.mapper';
 import type {
   AttemptRow,
   AttemptDetailRow,
   AttemptListRow,
   AttemptAnswerRow,
+  AttemptAnalyticsRow,
+  UserAttemptStatsRow,
   AttemptRepositoryPort,
 } from '@/modules/attempt/domain/ports';
 
@@ -47,6 +55,8 @@ const QUIZ_ATTEMPT_COLUMNS = quizAttempts as unknown as {
   status: AnyPgColumn;
   startedAt: AnyPgColumn;
 };
+
+const ATTEMPT_LIST_DEFAULT_SORT: AttemptListSortField = 'createdAt';
 
 @Injectable()
 export class AttemptRepository implements AttemptRepositoryPort {
@@ -153,17 +163,87 @@ export class AttemptRepository implements AttemptRepositoryPort {
   async listAttemptsByUser(params: {
     userId: string;
     limit: number;
-    cursor?: { startedAt: string; attemptId: string } | null;
+    cursor?: AttemptListCursorPayload | null;
+    status?: 'started' | 'completed' | 'abandoned';
+    quizId?: string;
+    categoryId?: string;
+    tagId?: string;
+    fromDate?: string;
+    toDate?: string;
+    sortBy: AttemptListSortField;
   }): Promise<AttemptListRow[]> {
+    const sortBy = params.sortBy ?? ATTEMPT_LIST_DEFAULT_SORT;
+
+    const sortColumn =
+      sortBy === 'completedAt'
+        ? quizAttempts.finishedAt
+        : sortBy === 'score'
+          ? quizAttempts.scorePercent
+          : quizAttempts.createdAt;
+
     const cursorCondition = params.cursor
-      ? or(
-          sql`${quizAttempts.startedAt} < ${params.cursor.startedAt}`,
-          and(
-            eq(quizAttempts.startedAt, params.cursor.startedAt),
-            sql`${quizAttempts.attemptId} < ${params.cursor.attemptId}`,
-          ),
-        )
+      ? sortBy === 'score'
+        ? or(
+            sql`${sortColumn}::numeric < ${params.cursor.sortValue as number}`,
+            and(
+              sql`${sortColumn}::numeric = ${params.cursor.sortValue as number}`,
+              sql`${quizAttempts.attemptId} < ${params.cursor.attemptId}`,
+            ),
+          )
+        : params.cursor.sortValue === null
+          ? sql`false`
+          : or(
+              sql`${sortColumn} < ${params.cursor.sortValue as string}`,
+              and(
+                eq(sortColumn, params.cursor.sortValue as string),
+                sql`${quizAttempts.attemptId} < ${params.cursor.attemptId}`,
+              ),
+            )
       : undefined;
+
+    const filters: SQL[] = [eq(quizAttempts.userId, params.userId), isNull(QUIZ_COLUMNS.deletedAt)];
+
+    if (params.status) {
+      filters.push(eq(quizAttempts.status, params.status));
+    }
+
+    if (params.quizId) {
+      filters.push(eq(QUIZ_COLUMNS.quizId, params.quizId));
+    }
+
+    if (params.categoryId) {
+      filters.push(
+        sql`EXISTS (
+          SELECT 1
+          FROM quiz_categories qc
+          WHERE qc.quiz_id = ${QUIZ_COLUMNS.quizId}
+            AND qc.category_id = ${params.categoryId}
+        )`,
+      );
+    }
+
+    if (params.tagId) {
+      filters.push(
+        sql`EXISTS (
+          SELECT 1
+          FROM quiz_tags qt
+          WHERE qt.quiz_id = ${QUIZ_COLUMNS.quizId}
+            AND qt.tag_id = ${params.tagId}
+        )`,
+      );
+    }
+
+    if (params.fromDate) {
+      filters.push(sql`${quizAttempts.createdAt} >= ${params.fromDate}`);
+    }
+
+    if (params.toDate) {
+      filters.push(sql`${quizAttempts.createdAt} <= ${params.toDate}`);
+    }
+
+    if (cursorCondition) {
+      filters.push(cursorCondition);
+    }
 
     const rows = await this.db
       .select({
@@ -186,6 +266,9 @@ export class AttemptRepository implements AttemptRepositoryPort {
         quizSlug: QUIZ_COLUMNS.slug,
         versionNumber: QUIZ_VERSION_COLUMNS.versionNumber,
         difficulty: QUIZ_VERSION_COLUMNS.difficulty,
+        sortCompletedAt: quizAttempts.finishedAt,
+        sortCreatedAt: quizAttempts.createdAt,
+        sortScore: sql<number | null>`${quizAttempts.scorePercent}::numeric`,
       })
       .from(quizAttempts)
       .innerJoin(
@@ -193,12 +276,8 @@ export class AttemptRepository implements AttemptRepositoryPort {
         eq(QUIZ_ATTEMPT_COLUMNS.quizVersionId, QUIZ_VERSION_COLUMNS.quizVersionId),
       )
       .innerJoin(quizzes, eq(QUIZ_VERSION_COLUMNS.quizId, QUIZ_COLUMNS.quizId))
-      .where(
-        params.cursor
-          ? and(eq(quizAttempts.userId, params.userId), cursorCondition)
-          : eq(quizAttempts.userId, params.userId),
-      )
-      .orderBy(desc(quizAttempts.startedAt), desc(quizAttempts.attemptId))
+      .where(and(...filters))
+      .orderBy(desc(sortColumn), desc(quizAttempts.attemptId))
       .limit(params.limit + 1);
 
     return rows as AttemptListRow[];
@@ -506,5 +585,140 @@ export class AttemptRepository implements AttemptRepositoryPort {
       });
 
     return created as AttemptRow;
+  }
+
+  /**
+   * Returns analytics for a completed attempt.
+   *
+   * The percentile rank is computed via PERCENT_RANK() over all completed
+   * attempts for the same quiz version, ordered by score ascending.
+   * A rank of 0.75 means this attempt scored better than 75 % of peers.
+   * totalQuestions is pulled from quiz_questions for the version.
+   */
+  async getAttemptAnalytics(attemptId: string): Promise<AttemptAnalyticsRow | null> {
+    const [row] = await this.db.execute<{
+      attempt_id: string;
+      quiz_version_id: string;
+      score_percent: string | null;
+      correct_count: number | null;
+      total_questions: number;
+      time_taken_ms: number | null;
+      percentile_rank: number;
+      finished_at: string | null;
+    }>(sql`
+      WITH ranked AS (
+        SELECT
+          attempt_id,
+          quiz_version_id,
+          score_percent,
+          correct_count,
+          time_taken_ms,
+          finished_at,
+          PERCENT_RANK() OVER (
+            PARTITION BY quiz_version_id
+            ORDER BY score_percent::numeric ASC
+          ) AS percentile_rank
+        FROM quiz_attempts
+        WHERE status = 'completed'
+      ),
+      question_counts AS (
+        SELECT quiz_version_id, COUNT(*) AS total_questions
+        FROM quiz_questions
+        GROUP BY quiz_version_id
+      )
+      SELECT
+        r.attempt_id,
+        r.quiz_version_id,
+        r.score_percent,
+        r.correct_count,
+        r.time_taken_ms,
+        r.finished_at,
+        COALESCE(qc.total_questions, 0)::int AS total_questions,
+        ROUND((r.percentile_rank * 100)::numeric, 2)::float8 AS percentile_rank
+      FROM ranked r
+      LEFT JOIN question_counts qc ON qc.quiz_version_id = r.quiz_version_id
+      WHERE r.attempt_id = ${attemptId}
+      LIMIT 1
+    `);
+
+    if (!row) return null;
+
+    return {
+      attemptId: row.attempt_id,
+      quizVersionId: row.quiz_version_id,
+      scorePercent: row.score_percent,
+      correctCount: row.correct_count !== null ? Number(row.correct_count) : null,
+      totalQuestions: Number(row.total_questions),
+      timeTakenMs: row.time_taken_ms !== null ? Number(row.time_taken_ms) : null,
+      percentileRank: Number(row.percentile_rank),
+      finishedAt: row.finished_at,
+    };
+  }
+
+  /**
+   * Returns aggregated attempt statistics for a given user.
+   *
+   * Mirrors the pattern used in UserRepository.getUserAnalytics:
+   *  - Query 1: status counts, average score, total time, last attempt timestamp
+   *  - Query 2: favorite category (most-attempted)
+   *  - Query 3: favorite tag (most-attempted)
+   *
+   * All aggregation logic lives here; no business logic.
+   */
+  async getUserAttemptStats(userId: string): Promise<UserAttemptStatsRow> {
+    const [summary] = await this.db
+      .select({
+        totalAttempts: sql<number>`COUNT(*)::int`,
+        completedAttempts: sql<number>`COUNT(*) FILTER (WHERE ${quizAttempts.status} = 'completed')::int`,
+        abandonedAttempts: sql<number>`COUNT(*) FILTER (WHERE ${quizAttempts.status} = 'abandoned')::int`,
+        averageScore: sql<number>`ROUND(COALESCE(AVG(CASE WHEN ${quizAttempts.status} = 'completed' THEN ${quizAttempts.scorePercent}::numeric END), 0), 2)`,
+        totalTimeTakenMs: sql<number>`COALESCE(SUM(${quizAttempts.timeTakenMs}), 0)::bigint`,
+        lastAttemptAt: sql<string | null>`MAX(${quizAttempts.startedAt})`,
+      })
+      .from(quizAttempts)
+      .where(eq(quizAttempts.userId, userId));
+
+    const [favoriteCategory] = await this.db
+      .select({
+        categoryId: categories.categoryId,
+        name: categories.name,
+      })
+      .from(quizAttempts)
+      .innerJoin(quizVersions, eq(quizAttempts.quizVersionId, quizVersions.quizVersionId))
+      .innerJoin(quizCategories, eq(quizVersions.quizId, quizCategories.quizId))
+      .innerJoin(categories, eq(quizCategories.categoryId, categories.categoryId))
+      .where(and(eq(quizAttempts.userId, userId), isNull(categories.deletedAt)))
+      .groupBy(categories.categoryId, categories.name)
+      .orderBy(desc(sql`COUNT(*)`), categories.name)
+      .limit(1);
+
+    const [favoriteTag] = await this.db
+      .select({
+        tagId: tags.tagId,
+        name: tags.name,
+      })
+      .from(quizAttempts)
+      .innerJoin(quizVersions, eq(quizAttempts.quizVersionId, quizVersions.quizVersionId))
+      .innerJoin(quizTags, eq(quizVersions.quizId, quizTags.quizId))
+      .innerJoin(tags, eq(quizTags.tagId, tags.tagId))
+      .where(and(eq(quizAttempts.userId, userId), isNull(tags.deletedAt)))
+      .groupBy(tags.tagId, tags.name)
+      .orderBy(desc(sql`COUNT(*)`), tags.name)
+      .limit(1);
+
+    return {
+      totalAttempts: Number(summary?.totalAttempts ?? 0),
+      completedAttempts: Number(summary?.completedAttempts ?? 0),
+      abandonedAttempts: Number(summary?.abandonedAttempts ?? 0),
+      averageScore: Number(summary?.averageScore ?? 0),
+      totalTimeTakenMs: Number(summary?.totalTimeTakenMs ?? 0),
+      lastAttemptAt: summary?.lastAttemptAt ?? null,
+      favoriteCategory: favoriteCategory
+        ? { categoryId: favoriteCategory.categoryId, name: favoriteCategory.name }
+        : null,
+      favoriteTag: favoriteTag
+        ? { tagId: favoriteTag.tagId, name: favoriteTag.name }
+        : null,
+    };
   }
 }

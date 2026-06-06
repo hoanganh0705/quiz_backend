@@ -1,9 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
-import { encodeBase64JsonCursor } from '@/common/utils/cursor.util';
 import { AttemptCommandService } from '../domain/attempt-command.service';
 import { AttemptQueryService } from '../domain/attempt-query.service';
 import { AttemptResponseMapper } from '../mappers/attempt-response.mapper';
+import { AttemptCursorMapper, type AttemptListSortField } from '../mappers/attempt-cursor.mapper';
 import { StartAttemptDto } from '../dto/request';
 import {
   AttemptResponseDto,
@@ -11,6 +11,9 @@ import {
   SubmitAnswerResponseDto,
   AbandonAttemptResponseDto,
   CompleteAttemptResponseDto,
+  AttemptAnswersResponseDto,
+  AttemptAnalyticsResponseDto,
+  UserAttemptStatsResponseDto,
 } from '../dto/response';
 
 @Injectable()
@@ -77,24 +80,52 @@ export class AttemptApplicationService {
 
   async listMyAttempts(
     user: JwtPayload,
-    limit: number,
-    cursor?: { startedAt: string; attemptId: string } | null,
+    params: {
+      limit: number;
+      cursor?: string;
+      status?: 'started' | 'completed' | 'abandoned';
+      quizId?: string;
+      categoryId?: string;
+      tagId?: string;
+      fromDate?: string;
+      toDate?: string;
+      sortBy?: AttemptListSortField;
+    },
   ): Promise<AttemptListResponseDto> {
-    const rows = await this.attemptQueryService.listMyAttempts(user, limit, cursor);
+    const sortBy = params.sortBy ?? 'createdAt';
+    const cursor = params.cursor ? AttemptCursorMapper.parse(params.cursor) : null;
 
-    const hasNextPage = rows.length > limit;
-    const items = hasNextPage ? rows.slice(0, limit) : rows;
+    const rows = await this.attemptQueryService.listMyAttempts(user, {
+      limit: params.limit,
+      cursor,
+      status: params.status,
+      quizId: params.quizId,
+      categoryId: params.categoryId,
+      tagId: params.tagId,
+      fromDate: params.fromDate,
+      toDate: params.toDate,
+      sortBy,
+    });
+
+    const hasNextPage = rows.length > params.limit;
+    const items = hasNextPage ? rows.slice(0, params.limit) : rows;
     const lastItem = items.at(-1);
 
     return {
       items: this.attemptResponseMapper.toAttemptResponses(items),
       pagination: {
-        limit,
+        limit: params.limit,
         hasNextPage,
         nextCursor:
           hasNextPage && lastItem
-            ? encodeBase64JsonCursor({
-                startedAt: lastItem.startedAt,
+            ? AttemptCursorMapper.serialize({
+                sortBy,
+                sortValue:
+                  sortBy === 'completedAt'
+                    ? lastItem.sortCompletedAt
+                    : sortBy === 'score'
+                      ? lastItem.sortScore
+                      : lastItem.sortCreatedAt,
                 attemptId: lastItem.attemptId,
               })
             : null,
@@ -115,5 +146,28 @@ export class AttemptApplicationService {
       xpEarned: result.xpEarned,
       finishedAt: result.finishedAt ?? new Date().toISOString(),
     };
+  }
+
+  async getAttemptAnswers(attemptId: string, user: JwtPayload): Promise<AttemptAnswersResponseDto> {
+    const { attempt, answers } = await this.attemptQueryService.getAttemptAnswers(attemptId, user);
+
+    return this.attemptResponseMapper.toAttemptAnswersResponse(attempt.attemptId, answers);
+  }
+
+  async getAttemptAnalytics(
+    attemptId: string,
+    user: JwtPayload,
+  ): Promise<AttemptAnalyticsResponseDto> {
+    const { analyticsRow, answeredCount } = await this.attemptQueryService.getAttemptAnalytics(
+      attemptId,
+      user,
+    );
+
+    return this.attemptResponseMapper.toAttemptAnalyticsResponse(analyticsRow, answeredCount);
+  }
+
+  async getMyAttemptStats(user: JwtPayload): Promise<UserAttemptStatsResponseDto> {
+    const stats = await this.attemptQueryService.getUserAttemptStats(user.sub);
+    return this.attemptResponseMapper.toUserAttemptStatsResponse(stats);
   }
 }
