@@ -3,11 +3,13 @@ import type { Response } from 'express';
 import {
   BookmarkDomainError,
   CollectionNotFoundError,
+  BookmarkCollectionNotFoundError,
   CollectionForbiddenError,
   CollectionConflictError,
   BookmarkNotFoundError,
   BookmarkForbiddenError,
   BookmarkConflictError,
+  BookmarkAlreadyExistsError,
   BookmarkValidationError,
 } from '../../domain/errors';
 
@@ -35,8 +37,18 @@ export class BookmarkDomainExceptionFilter implements ExceptionFilter {
   }
 
   private mapToHttp(error: BookmarkDomainError): { status: number; message: string } {
-    if (error instanceof CollectionNotFoundError || error instanceof BookmarkNotFoundError) {
-      return { status: HttpStatus.NOT_FOUND, message: 'Resource not found' };
+    if (
+      error instanceof CollectionNotFoundError ||
+      error instanceof BookmarkNotFoundError ||
+      error instanceof BookmarkCollectionNotFoundError
+    ) {
+      return {
+        status: HttpStatus.NOT_FOUND,
+        message:
+          error instanceof BookmarkCollectionNotFoundError
+            ? 'Bookmark collection analytics not found'
+            : 'Resource not found',
+      };
     }
 
     if (error instanceof CollectionForbiddenError || error instanceof BookmarkForbiddenError) {
@@ -46,7 +58,7 @@ export class BookmarkDomainExceptionFilter implements ExceptionFilter {
       };
     }
 
-    if (error instanceof CollectionConflictError || error instanceof BookmarkConflictError) {
+    if (error instanceof CollectionConflictError || error instanceof BookmarkConflictError || error instanceof BookmarkAlreadyExistsError) {
       return { status: HttpStatus.CONFLICT, message: 'Resource already exists' };
     }
 
