@@ -13,8 +13,9 @@ import { CurrentUser } from '@/common/decorators/current-user.decorator';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
 import { ApiAuth, ApiValidationRequest } from '@/common/swagger/swagger-decorators';
 import { DiscussionApplicationService } from '@/modules/discussion/application/discussion-application.service';
-import { ListMyDiscussionsQueryDto } from '@/modules/discussion/dto/request';
-import { MyDiscussionsResponseDto } from '@/modules/discussion/dto/response';
+import { ListMyCommentsQueryDto, ListMyDiscussionsQueryDto } from '@/modules/discussion/dto/request';
+import { MyCommentsResponseDto, MyDiscussionsResponseDto } from '@/modules/discussion/dto/response';
+import { MyCommentCursorMapper } from '@/modules/discussion/mappers/my-comment-cursor.mapper';
 import { QuizDiscussionCursorMapper } from '@/modules/discussion/mappers/quiz-discussion-cursor.mapper';
 import { DiscussionDomainExceptionFilter } from './filters/discussion-domain-exception.filter';
 
@@ -46,6 +47,56 @@ export class UserDiscussionController {
     return this.discussionApplicationService.listDiscussionsByUser(userId, {
       limit: query.limit,
       cursor: query.cursor ? QuizDiscussionCursorMapper.parse(query.cursor) : null,
+    });
+  }
+
+  @Get('users/:userId/comments')
+  @Public()
+  @ApiOperation({
+    summary: 'List user comments',
+    description:
+      'Returns public comments created by the specified user, cursor-paginated and ordered by newest first.',
+  })
+  @ApiOkResponse({
+    description: 'User comments returned',
+    type: MyCommentsResponseDto,
+  })
+  @ApiNotFoundResponse({ description: 'User not found' })
+  @ApiBadRequestResponse({ description: 'Validation failed' })
+  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  @ApiValidationRequest()
+  listCommentsByUser(
+    @Param('userId', new ParseUUIDPipe()) userId: string,
+    @Query() query: ListMyCommentsQueryDto,
+  ): Promise<MyCommentsResponseDto> {
+    return this.discussionApplicationService.listCommentsByUser(userId, {
+      limit: query.limit,
+      cursor: query.cursor ? MyCommentCursorMapper.parse(query.cursor) : null,
+    });
+  }
+
+  @Get('users/me/comments')
+  @ApiBearerAuth()
+  @ApiAuth()
+  @ApiOperation({
+    summary: 'My comments',
+    description:
+      'Returns comments created by the authenticated user, cursor-paginated and ordered by newest first.',
+  })
+  @ApiOkResponse({
+    description: 'My comments returned',
+    type: MyCommentsResponseDto,
+  })
+  @ApiBadRequestResponse({ description: 'Validation failed' })
+  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  @ApiValidationRequest()
+  listMyComments(
+    @CurrentUser() user: JwtPayload,
+    @Query() query: ListMyCommentsQueryDto,
+  ): Promise<MyCommentsResponseDto> {
+    return this.discussionApplicationService.listMyComments(user.sub, {
+      limit: query.limit,
+      cursor: query.cursor ? MyCommentCursorMapper.parse(query.cursor) : null,
     });
   }
 
