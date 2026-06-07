@@ -2,6 +2,10 @@ import { Injectable } from '@nestjs/common';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
 import { DiscussionService } from '../domain/services/discussion.service';
 import { QuizDiscussionCursorMapper } from '../mappers/quiz-discussion-cursor.mapper';
+import { MyCommentCursorMapper } from '../mappers/my-comment-cursor.mapper';
+import { TrendingDiscussionCursorMapper } from '../mappers/trending-discussion-cursor.mapper';
+import { UnansweredDiscussionCursorMapper } from '../mappers/unanswered-discussion-cursor.mapper';
+import { SearchDiscussionsCursorMapper } from '../mappers/search-discussions-cursor.mapper';
 import type {
   DiscussionThread,
   DiscussionThreadDetail,
@@ -11,6 +15,16 @@ import type {
   QuizDiscussionCursor,
   QuizDiscussionListItem,
   MyDiscussionListItem,
+  MyCommentCursor,
+  MyCommentListItem,
+  TrendingDiscussionCursor,
+  TrendingDiscussionListItem,
+  UnansweredDiscussionCursor,
+  UnansweredDiscussionListItem,
+  SearchDiscussionListItem,
+  SearchDiscussionsCursor,
+  ThreadStats,
+  MyDiscussionStats,
 } from '../domain/types';
 
 @Injectable()
@@ -128,6 +142,136 @@ export class DiscussionApplicationService {
         nextCursor: nextCursor ? QuizDiscussionCursorMapper.serialize(nextCursor) : null,
       },
     };
+  }
+
+  async listMyComments(
+    userId: string,
+    query: { limit?: number; cursor?: MyCommentCursor | null },
+  ): Promise<{
+    items: MyCommentListItem[];
+    pagination: {
+      limit: number;
+      hasNextPage: boolean;
+      nextCursor: string | null;
+    };
+  }> {
+    const { items, limit, hasNextPage, nextCursor } = await this.discussionService.listMyComments(
+      userId,
+      query,
+    );
+
+    return {
+      items,
+      pagination: {
+        limit,
+        hasNextPage,
+        nextCursor: nextCursor ? MyCommentCursorMapper.serialize(nextCursor) : null,
+      },
+    };
+  }
+
+  async listCommentsByUser(
+    userId: string,
+    query: { limit?: number; cursor?: MyCommentCursor | null },
+  ): Promise<{
+    items: MyCommentListItem[];
+    pagination: {
+      limit: number;
+      hasNextPage: boolean;
+      nextCursor: string | null;
+    };
+  }> {
+    const { items, limit, hasNextPage, nextCursor } = await this.discussionService.listCommentsByUser(
+      userId,
+      query,
+    );
+
+    return {
+      items,
+      pagination: {
+        limit,
+        hasNextPage,
+        nextCursor: nextCursor ? MyCommentCursorMapper.serialize(nextCursor) : null,
+      },
+    };
+  }
+
+  async listTrendingDiscussions(
+    query: { limit?: number; cursor?: TrendingDiscussionCursor | null },
+  ): Promise<{
+    items: TrendingDiscussionListItem[];
+    pagination: {
+      limit: number;
+      hasNextPage: boolean;
+      nextCursor: string | null;
+    };
+  }> {
+    const { items, limit, hasNextPage, nextCursor } = await this.discussionService.listTrendingDiscussions(
+      query,
+    );
+
+    return {
+      items,
+      pagination: {
+        limit,
+        hasNextPage,
+        nextCursor: nextCursor ? TrendingDiscussionCursorMapper.serialize(nextCursor) : null,
+      },
+    };
+  }
+
+  async listUnansweredDiscussions(
+    query: { limit?: number; cursor?: UnansweredDiscussionCursor | null },
+  ): Promise<{
+    items: UnansweredDiscussionListItem[];
+    pagination: {
+      limit: number;
+      hasNextPage: boolean;
+      nextCursor: string | null;
+    };
+  }> {
+    const { items, limit, hasNextPage, nextCursor } = await this.discussionService.listUnansweredDiscussions(
+      query,
+    );
+
+    return {
+      items,
+      pagination: {
+        limit,
+        hasNextPage,
+        nextCursor: nextCursor ? UnansweredDiscussionCursorMapper.serialize(nextCursor) : null,
+      },
+    };
+  }
+
+  async searchDiscussions(
+    query: { q?: string; limit?: number; cursor?: SearchDiscussionsCursor | null },
+  ): Promise<{
+    items: SearchDiscussionListItem[];
+    pagination: {
+      limit: number;
+      hasNextPage: boolean;
+      nextCursor: string | null;
+    };
+  }> {
+    const { items, limit, hasNextPage, nextCursor } = await this.discussionService.searchDiscussions(query);
+
+    return {
+      items,
+      pagination: {
+        limit,
+        hasNextPage,
+        nextCursor: nextCursor ? SearchDiscussionsCursorMapper.serialize(nextCursor) : null,
+      },
+    };
+  }
+
+  async getThreadStats(threadId: string): Promise<ThreadStats | null> {
+    return this.discussionService.getThreadStats(threadId);
+  }
+
+  async getMyDiscussionStats(user: JwtPayload): Promise<MyDiscussionStats> {
+    return this.discussionService.getMyDiscussionStats(user.sub);
   }
 
   async updateThread(

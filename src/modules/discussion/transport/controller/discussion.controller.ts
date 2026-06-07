@@ -21,7 +21,9 @@ import {
   ApiConflictResponse,
   ApiForbiddenResponse,
   ApiBadRequestResponse,
+  ApiInternalServerErrorResponse,
 } from '@nestjs/swagger';
+import { Public } from '@/common/decorators/public.decorator';
 import { ApiAuth, ApiValidationRequest } from '@/common/swagger/swagger-decorators';
 import { RequireAuth } from '@/common/guards/jwt.guard';
 import { Roles } from '@/common/authorization/decorators/roles.decorator';
@@ -35,6 +37,11 @@ import {
   PaginatedThreadsDto,
   PaginatedCommentsDto,
   PaginatedReportsDto,
+  TrendingDiscussionsResponseDto,
+  UnansweredDiscussionsResponseDto,
+  SearchDiscussionsResponseDto,
+  ThreadStatsResponseDto,
+  MyDiscussionStatsResponseDto,
 } from '@/modules/discussion/dto/response';
 import {
   CreateThreadDto,
@@ -48,8 +55,14 @@ import {
   ListThreadsQueryDto,
   ListCommentsQueryDto,
   ListReportsQueryDto,
+  ListTrendingDiscussionsQueryDto,
+  ListUnansweredDiscussionsQueryDto,
+  SearchDiscussionsQueryDto,
 } from '@/modules/discussion/dto/request';
 import { DiscussionDomainExceptionFilter } from './filters/discussion-domain-exception.filter';
+import { TrendingDiscussionCursorMapper } from '@/modules/discussion/mappers/trending-discussion-cursor.mapper';
+import { UnansweredDiscussionCursorMapper } from '@/modules/discussion/mappers/unanswered-discussion-cursor.mapper';
+import { SearchDiscussionsCursorMapper } from '@/modules/discussion/mappers/search-discussions-cursor.mapper';
 
 @ApiTags('discussions')
 @ApiBearerAuth()
@@ -60,6 +73,110 @@ export class DiscussionController {
   constructor(private readonly discussionService: DiscussionApplicationService) {}
 
   // ─── THREADS ──────────────────────────────────────────────────────────────
+
+  @Get('trending')
+  @Public()
+  @ApiOperation({
+    summary: 'List trending discussions',
+    description:
+      'Returns discussion threads ordered by a trending score that factors in votes, comments, and recent reply activity within the last 7 days.',
+  })
+  @ApiOkResponse({
+    description: 'Trending discussions returned',
+    type: TrendingDiscussionsResponseDto,
+  })
+  @ApiBadRequestResponse({ description: 'Validation failed' })
+  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  async listTrendingDiscussions(
+    @Query() query: ListTrendingDiscussionsQueryDto,
+  ): Promise<TrendingDiscussionsResponseDto> {
+    return this.discussionService.listTrendingDiscussions({
+      limit: query.limit,
+      cursor: query.cursor ? TrendingDiscussionCursorMapper.parse(query.cursor) : null,
+    });
+  }
+
+  @Get('unanswered')
+  @Public()
+  @ApiOperation({
+    summary: 'List unanswered discussions',
+    description:
+      'Returns open discussion threads that have not yet received any comments, ordered by newest first.',
+  })
+  @ApiOkResponse({
+    description: 'Unanswered discussions returned',
+    type: UnansweredDiscussionsResponseDto,
+  })
+  @ApiBadRequestResponse({ description: 'Validation failed' })
+  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  async listUnansweredDiscussions(
+    @Query() query: ListUnansweredDiscussionsQueryDto,
+  ): Promise<UnansweredDiscussionsResponseDto> {
+    return this.discussionService.listUnansweredDiscussions({
+      limit: query.limit,
+      cursor: query.cursor ? UnansweredDiscussionCursorMapper.parse(query.cursor) : null,
+    });
+  }
+
+  @Get('search')
+  @Public()
+  @ApiOperation({
+    summary: 'Search discussions',
+    description:
+      'Searches discussion threads by keyword in title and body, ordered by newest first.',
+  })
+  @ApiOkResponse({
+    description: 'Search results returned',
+    type: SearchDiscussionsResponseDto,
+  })
+  @ApiBadRequestResponse({ description: 'Validation failed' })
+  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  async searchDiscussions(
+    @Query() query: SearchDiscussionsQueryDto,
+  ): Promise<SearchDiscussionsResponseDto> {
+    return this.discussionService.searchDiscussions({
+      q: query.q,
+      limit: query.limit,
+      cursor: query.cursor ? SearchDiscussionsCursorMapper.parse(query.cursor) : null,
+    });
+  }
+
+  @Get('threads/:threadId/stats')
+  @Public()
+  @ApiOperation({
+    summary: 'Get thread statistics',
+    description:
+      'Returns aggregated statistics for a discussion thread including comments, replies, participants, votes, and latest activity.',
+  })
+  @ApiOkResponse({
+    description: 'Thread statistics returned',
+    type: ThreadStatsResponseDto,
+  })
+  @ApiNotFoundResponse({ description: 'Thread not found' })
+  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  async getThreadStats(
+    @Param('threadId', new ParseUUIDPipe()) threadId: string,
+  ): Promise<ThreadStatsResponseDto | null> {
+    return this.discussionService.getThreadStats(threadId);
+  }
+
+  @Get('me')
+  @ApiAuth()
+  @ApiOperation({
+    summary: 'Get my discussion stats',
+    description:
+      'Returns aggregated discussion statistics for the authenticated user including threads created, comments, replies, contributions, votes received, and latest activity.',
+  })
+  @ApiOkResponse({
+    description: 'Discussion statistics returned',
+    type: MyDiscussionStatsResponseDto,
+  })
+  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  async getMyDiscussionStats(
+    @CurrentUser() user: JwtPayload,
+  ): Promise<MyDiscussionStatsResponseDto> {
+    return this.discussionService.getMyDiscussionStats(user);
+  }
 
   @Post('threads')
   @ApiAuth()

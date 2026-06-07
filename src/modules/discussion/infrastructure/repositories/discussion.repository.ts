@@ -29,8 +29,14 @@ import type {
   DiscussionVoteValue,
   QuizDiscussionListItem,
   MyDiscussionListItem,
+  MyCommentListItem,
+  TrendingDiscussionListItem,
+  UnansweredDiscussionListItem,
+  SearchDiscussionListItem,
+  ThreadStats,
+  MyDiscussionStats,
 } from '../../domain/types';
-import { eq, and, inArray, sql, desc, asc, lte, gte, isNull } from 'drizzle-orm';
+import { eq, and, inArray, sql, desc, asc, lte, gte, isNull, ilike, count, isNotNull } from 'drizzle-orm';
 import type { DiscussionRepositoryPort } from '../../domain/ports';
 
 export const MAX_REPLIES_PER_COMMENT = 100;
@@ -348,6 +354,416 @@ export class DiscussionRepository implements DiscussionRepositoryPort {
     cursor?: { createdAt: string; threadId: string } | null;
   }): Promise<MyDiscussionListItem[]> {
     return this.listMyDiscussions(params);
+  }
+
+  async listMyComments(params: {
+    userId: string;
+    limit: number;
+    cursor?: { createdAt: string; commentId: string } | null;
+  }): Promise<MyCommentListItem[]> {
+    const cursorCondition = params.cursor
+      ? sql`(
+          ${discussionComments.createdAt} < ${params.cursor.createdAt}
+          OR (
+            ${discussionComments.createdAt} = ${params.cursor.createdAt}
+            AND ${discussionComments.commentId} < ${params.cursor.commentId}
+          )
+        )`
+      : undefined;
+
+    const rows = await this.db
+      .select({
+        commentId: discussionComments.commentId,
+        threadId: discussionComments.threadId,
+        threadTitle: discussionThreads.title,
+        quizId: discussionThreads.quizId,
+        content: discussionComments.body,
+        repliesCount: discussionComments.repliesCount,
+        votesCount: discussionComments.votesCount,
+        createdAt: discussionComments.createdAt,
+        updatedAt: discussionComments.updatedAt,
+      })
+      .from(discussionComments)
+      .innerJoin(discussionThreads, eq(discussionComments.threadId, discussionThreads.threadId))
+      .where(
+        and(
+          eq(discussionComments.authorId, params.userId),
+          isNull(discussionComments.deletedAt),
+          isNull(discussionThreads.deletedAt),
+          cursorCondition,
+        ),
+      )
+      .orderBy(desc(discussionComments.createdAt), desc(discussionComments.commentId))
+      .limit(params.limit + 1);
+
+    return rows.map((row) => ({
+      commentId: row.commentId,
+      threadId: row.threadId,
+      threadTitle: row.threadTitle,
+      quizId: row.quizId,
+      content: row.content,
+      repliesCount: row.repliesCount,
+      votesCount: row.votesCount,
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+    }));
+  }
+
+  async listCommentsByUser(params: {
+    userId: string;
+    limit: number;
+    cursor?: { createdAt: string; commentId: string } | null;
+  }): Promise<MyCommentListItem[]> {
+    return this.listMyComments(params);
+  }
+
+  async listTrendingDiscussions(params: {
+    limit: number;
+    cursor?: { score: number; threadId: string } | null;
+  }): Promise<TrendingDiscussionListItem[]> {
+    const cursorCondition = params.cursor
+      ? sql`(
+          (
+            ${discussionThreads.votesCount} * 3 +
+            ${discussionThreads.commentsCount} * 2 +
+            COALESCE(
+              (SELECT COUNT(*) FROM discussion_comments dc
+               WHERE dc.thread_id = ${discussionThreads.threadId}
+               AND dc.deleted_at IS NULL
+               AND dc.created_at > NOW() - INTERVAL '7 days')::int,
+              0
+            )
+          ) < ${params.cursor.score}
+          OR (
+            (
+              ${discussionThreads.votesCount} * 3 +
+              ${discussionThreads.commentsCount} * 2 +
+              COALESCE(
+                (SELECT COUNT(*) FROM discussion_comments dc
+                 WHERE dc.thread_id = ${discussionThreads.threadId}
+                 AND dc.deleted_at IS NULL
+                 AND dc.created_at > NOW() - INTERVAL '7 days')::int,
+                0
+              )
+            ) = ${params.cursor.score}
+            AND ${discussionThreads.threadId} > ${params.cursor.threadId}
+          )
+        )`
+      : undefined;
+
+    const rows = await this.db
+      .select({
+        threadId: discussionThreads.threadId,
+        quizId: discussionThreads.quizId,
+        title: discussionThreads.title,
+        commentCount: discussionThreads.commentsCount,
+        voteCount: discussionThreads.votesCount,
+        createdAt: discussionThreads.createdAt,
+        updatedAt: discussionThreads.updatedAt,
+        authorId: discussionThreads.authorId,
+        username: users.username,
+        displayName: userProfiles.displayName,
+        avatarUrl: userProfiles.avatarUrl,
+        replyCount: sql<number>`COALESCE(
+          (SELECT COUNT(*) FROM discussion_comments dc
+           WHERE dc.thread_id = ${discussionThreads.threadId}
+           AND dc.deleted_at IS NULL
+           AND dc.parent_comment_id IS NOT NULL)::int,
+          0
+        `,
+        latestActivityAt: sql<string>`GREATEST(
+          ${discussionThreads.updatedAt},
+          COALESCE(
+            (SELECT MAX(dc.created_at) FROM discussion_comments dc
+             WHERE dc.thread_id = ${discussionThreads.threadId}
+             AND dc.deleted_at IS NULL)::text,
+            ${discussionThreads.updatedAt}
+          )
+        )`,
+        trendingScore: sql<number>`(
+          ${discussionThreads.votesCount} * 3 +
+          ${discussionThreads.commentsCount} * 2 +
+          COALESCE(
+            (SELECT COUNT(*) FROM discussion_comments dc
+             WHERE dc.thread_id = ${discussionThreads.threadId}
+             AND dc.deleted_at IS NULL
+             AND dc.created_at > NOW() - INTERVAL '7 days')::int,
+            0
+          )
+        )::float`,
+      })
+      .from(discussionThreads)
+      .innerJoin(users, eq(discussionThreads.authorId, users.userId))
+      .leftJoin(userProfiles, eq(users.userId, userProfiles.userId))
+      .where(
+        and(
+          eq(discussionThreads.status, 'open'),
+          isNull(discussionThreads.deletedAt),
+          cursorCondition,
+        ),
+      )
+      .orderBy(desc(sql`(
+        ${discussionThreads.votesCount} * 3 +
+        ${discussionThreads.commentsCount} * 2 +
+        COALESCE(
+          (SELECT COUNT(*) FROM discussion_comments dc
+           WHERE dc.thread_id = ${discussionThreads.threadId}
+           AND dc.deleted_at IS NULL
+           AND dc.created_at > NOW() - INTERVAL '7 days')::int,
+          0
+        )
+      `)), desc(discussionThreads.threadId))
+      .limit(params.limit + 1);
+
+    return rows.map((row) => ({
+      threadId: row.threadId,
+      quizId: row.quizId,
+      title: row.title,
+      author: {
+        userId: row.authorId,
+        username: row.username,
+        displayName: row.displayName,
+        avatarUrl: row.avatarUrl,
+      },
+      commentCount: row.commentCount,
+      replyCount: Number(row.replyCount),
+      voteCount: row.voteCount,
+      latestActivityAt: row.latestActivityAt,
+      createdAt: row.createdAt,
+      trendingScore: Number(row.trendingScore),
+    }));
+  }
+
+  async listUnansweredDiscussions(params: {
+    limit: number;
+    cursor?: { createdAt: string; threadId: string } | null;
+  }): Promise<UnansweredDiscussionListItem[]> {
+    const cursorCondition = params.cursor
+      ? sql`(
+          ${discussionThreads.createdAt} < ${params.cursor.createdAt}
+          OR (
+            ${discussionThreads.createdAt} = ${params.cursor.createdAt}
+            AND ${discussionThreads.threadId} < ${params.cursor.threadId}
+          )
+        )`
+      : undefined;
+
+    const rows = await this.db
+      .select({
+        threadId: discussionThreads.threadId,
+        quizId: discussionThreads.quizId,
+        title: discussionThreads.title,
+        commentCount: discussionThreads.commentsCount,
+        createdAt: discussionThreads.createdAt,
+        updatedAt: discussionThreads.updatedAt,
+        authorId: discussionThreads.authorId,
+        username: users.username,
+        displayName: userProfiles.displayName,
+        avatarUrl: userProfiles.avatarUrl,
+      })
+      .from(discussionThreads)
+      .innerJoin(users, eq(discussionThreads.authorId, users.userId))
+      .leftJoin(userProfiles, eq(users.userId, userProfiles.userId))
+      .where(
+        and(
+          eq(discussionThreads.status, 'open'),
+          eq(discussionThreads.commentsCount, 0),
+          isNull(discussionThreads.deletedAt),
+          cursorCondition,
+        ),
+      )
+      .orderBy(desc(discussionThreads.createdAt), desc(discussionThreads.threadId))
+      .limit(params.limit + 1);
+
+    return rows.map((row) => ({
+      threadId: row.threadId,
+      quizId: row.quizId,
+      title: row.title,
+      author: {
+        userId: row.authorId,
+        username: row.username,
+        displayName: row.displayName,
+        avatarUrl: row.avatarUrl,
+      },
+      commentCount: row.commentCount,
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+    }));
+  }
+
+  async searchDiscussions(params: {
+    query: string;
+    limit: number;
+    cursor?: { createdAt: string; threadId: string } | null;
+  }): Promise<SearchDiscussionListItem[]> {
+    const searchPattern = `%${params.query}%`;
+    const searchCondition = sql`(
+      ${discussionThreads.title} ILIKE ${searchPattern}
+      OR ${discussionThreads.body} ILIKE ${searchPattern}
+    )`;
+
+    const cursorCondition = params.cursor
+      ? sql`(
+          ${discussionThreads.createdAt} < ${params.cursor.createdAt}
+          OR (
+            ${discussionThreads.createdAt} = ${params.cursor.createdAt}
+            AND ${discussionThreads.threadId} < ${params.cursor.threadId}
+          )
+        )`
+      : undefined;
+
+    const rows = await this.db
+      .select({
+        threadId: discussionThreads.threadId,
+        quizId: discussionThreads.quizId,
+        title: discussionThreads.title,
+        commentCount: discussionThreads.commentsCount,
+        createdAt: discussionThreads.createdAt,
+        updatedAt: discussionThreads.updatedAt,
+        authorId: discussionThreads.authorId,
+        username: users.username,
+        displayName: userProfiles.displayName,
+        avatarUrl: userProfiles.avatarUrl,
+      })
+      .from(discussionThreads)
+      .innerJoin(users, eq(discussionThreads.authorId, users.userId))
+      .leftJoin(userProfiles, eq(users.userId, userProfiles.userId))
+      .where(
+        and(
+          eq(discussionThreads.status, 'open'),
+          isNull(discussionThreads.deletedAt),
+          searchCondition,
+          cursorCondition,
+        ),
+      )
+      .orderBy(desc(discussionThreads.createdAt), desc(discussionThreads.threadId))
+      .limit(params.limit + 1);
+
+    return rows.map((row) => ({
+      threadId: row.threadId,
+      quizId: row.quizId,
+      title: row.title,
+      author: {
+        userId: row.authorId,
+        username: row.username,
+        displayName: row.displayName,
+        avatarUrl: row.avatarUrl,
+      },
+      commentCount: row.commentCount,
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+    }));
+  }
+
+  async getThreadStats(threadId: string): Promise<ThreadStats | null> {
+    const [thread] = await this.db
+      .select()
+      .from(discussionThreads)
+      .where(and(eq(discussionThreads.threadId, threadId), isNull(discussionThreads.deletedAt)));
+
+    if (!thread) return null;
+
+    const [stats] = await this.db
+      .select({
+        totalReplies: sql<number>`COALESCE(SUM(${discussionComments.repliesCount}), 0)::int`,
+        upvotes: discussionThreads.upvotesCount,
+        downvotes: discussionThreads.downvotesCount,
+        latestActivityAt: sql<string>`GREATEST(
+          ${discussionThreads.updatedAt},
+          COALESCE(
+            (SELECT MAX(dc.created_at) FROM discussion_comments dc
+             WHERE dc.thread_id = ${discussionThreads.threadId}
+             AND dc.deleted_at IS NULL)::text,
+            ${discussionThreads.updatedAt}
+          )
+        )`,
+      })
+      .from(discussionThreads)
+      .leftJoin(
+        discussionComments,
+        eq(discussionComments.threadId, discussionThreads.threadId),
+      )
+      .where(eq(discussionThreads.threadId, threadId))
+      .groupBy(
+        discussionThreads.threadId,
+        discussionThreads.upvotesCount,
+        discussionThreads.downvotesCount,
+        discussionThreads.updatedAt,
+      );
+
+    const [participantCount] = await this.db
+      .select({ count: count() })
+      .from(discussionComments)
+      .where(
+        and(
+          eq(discussionComments.threadId, threadId),
+          isNull(discussionComments.deletedAt),
+          isNotNull(discussionComments.authorId),
+        ),
+      );
+
+    return {
+      threadId,
+      totalComments: thread.commentsCount,
+      totalReplies: stats ? Number(stats.totalReplies) : 0,
+      totalParticipants: participantCount ? Number(participantCount.count) : 0,
+      upvotes: thread.upvotesCount,
+      downvotes: thread.downvotesCount,
+      latestActivityAt: stats?.latestActivityAt ?? thread.updatedAt,
+    };
+  }
+
+  async getMyDiscussionStats(userId: string): Promise<MyDiscussionStats> {
+    const [threadStats] = await this.db
+      .select({
+        totalThreadsCreated: count(discussionThreads.threadId),
+        totalReceivedVotes: sql<number>`COALESCE(SUM(${discussionThreads.votesCount})::int, 0)`,
+        latestThreadActivity: sql<string | null>`MAX(${discussionThreads.updatedAt})`,
+      })
+      .from(discussionThreads)
+      .where(
+        and(
+          eq(discussionThreads.authorId, userId),
+          isNull(discussionThreads.deletedAt),
+        ),
+      );
+
+    const [commentStats] = await this.db
+      .select({
+        totalCommentsCreated: count(discussionComments.commentId),
+        totalRepliesCreated: sql<number>`COALESCE(SUM(${discussionComments.repliesCount})::int, 0)`,
+        latestCommentActivity: sql<string | null>`MAX(${discussionComments.updatedAt})`,
+      })
+      .from(discussionComments)
+      .where(
+        and(
+          eq(discussionComments.authorId, userId),
+          isNull(discussionComments.deletedAt),
+        ),
+      );
+
+    const latestThread = threadStats?.latestThreadActivity;
+    const latestComment = commentStats?.latestCommentActivity;
+    const latestDiscussionActivityAt = !latestThread && !latestComment
+      ? null
+      : !latestThread
+        ? latestComment
+        : !latestComment
+          ? latestThread
+          : latestThread > latestComment
+            ? latestThread
+            : latestComment;
+
+    return {
+      totalThreadsCreated: threadStats ? Number(threadStats.totalThreadsCreated) : 0,
+      totalCommentsCreated: commentStats ? Number(commentStats.totalCommentsCreated) : 0,
+      totalRepliesCreated: commentStats ? Number(commentStats.totalRepliesCreated) : 0,
+      totalDiscussionContributions:
+        (threadStats ? Number(threadStats.totalThreadsCreated) : 0) +
+        (commentStats ? Number(commentStats.totalCommentsCreated) : 0),
+      totalReceivedVotes: threadStats ? Number(threadStats.totalReceivedVotes) : 0,
+      latestDiscussionActivityAt,
+    };
   }
 
   async updateThread(params: UpdateThreadParams): Promise<DiscussionThread> {
