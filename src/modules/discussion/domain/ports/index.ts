@@ -18,6 +18,14 @@ import type {
   QuizDiscussionListItem,
   QuizDiscussionCursor,
   MyDiscussionListItem,
+  MyCommentListItem,
+  MyCommentCursor,
+  TrendingDiscussionListItem,
+  TrendingDiscussionCursor,
+  UnansweredDiscussionListItem,
+  UnansweredDiscussionCursor,
+  SearchDiscussionListItem,
+  SearchDiscussionsCursor,
 } from '../types';
 
 export * from './quiz-existence.port';
@@ -45,6 +53,31 @@ export interface DiscussionRepositoryPort {
     limit: number;
     cursor?: QuizDiscussionCursor | null;
   }): Promise<MyDiscussionListItem[]>;
+  listMyComments(params: {
+    userId: string;
+    limit: number;
+    cursor?: MyCommentCursor | null;
+  }): Promise<MyCommentListItem[]>;
+  listCommentsByUser(params: {
+    userId: string;
+    limit: number;
+    cursor?: MyCommentCursor | null;
+  }): Promise<MyCommentListItem[]>;
+  listTrendingDiscussions(params: {
+    limit: number;
+    cursor?: TrendingDiscussionCursor | null;
+  }): Promise<TrendingDiscussionListItem[]>;
+  listUnansweredDiscussions(params: {
+    limit: number;
+    cursor?: UnansweredDiscussionCursor | null;
+  }): Promise<UnansweredDiscussionListItem[]>;
+  searchDiscussions(params: {
+    query: string;
+    limit: number;
+    cursor?: SearchDiscussionsCursor | null;
+  }): Promise<SearchDiscussionListItem[]>;
+  getThreadStats(threadId: string): Promise<ThreadStats | null>;
+  getMyDiscussionStats(userId: string): Promise<MyDiscussionStats>;
   updateThread(params: UpdateThreadParams): Promise<DiscussionThread>;
   softDeleteThread(params: { threadId: string; authorId: string }): Promise<void>;
   updateThreadStatus(params: {

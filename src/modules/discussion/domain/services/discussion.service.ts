@@ -25,6 +25,16 @@ import type {
   QuizDiscussionCursor,
   QuizDiscussionListItem,
   MyDiscussionListItem,
+  MyCommentCursor,
+  MyCommentListItem,
+  TrendingDiscussionCursor,
+  TrendingDiscussionListItem,
+  UnansweredDiscussionCursor,
+  UnansweredDiscussionListItem,
+  SearchDiscussionListItem,
+  SearchDiscussionsCursor,
+  ThreadStats,
+  MyDiscussionStats,
 } from '../types';
 import { USER_REPOSITORY_PORT, type UserRepositoryPort } from '@/modules/user/domain/ports/user-repository.port';
 import { UserNotFoundError } from '@/modules/user/domain/errors';
@@ -187,6 +197,171 @@ export class DiscussionService {
       nextCursor:
         hasNextPage && lastItem
           ? { createdAt: lastItem.createdAt, threadId: lastItem.threadId }
+          : null,
+    };
+  }
+
+  async listMyComments(
+    userId: string,
+    query: { limit?: number; cursor?: MyCommentCursor | null },
+  ): Promise<{
+    items: MyCommentListItem[];
+    limit: number;
+    hasNextPage: boolean;
+    nextCursor: MyCommentCursor | null;
+  }> {
+    const limit = query.limit ?? 20;
+    const rows = await this.repo.listMyComments({
+      userId,
+      limit,
+      cursor: query.cursor ?? null,
+    });
+
+    const hasNextPage = rows.length > limit;
+    const items = hasNextPage ? rows.slice(0, limit) : rows;
+    const lastItem = items.at(-1);
+
+    return {
+      items,
+      limit,
+      hasNextPage,
+      nextCursor:
+        hasNextPage && lastItem
+          ? { createdAt: lastItem.createdAt, commentId: lastItem.commentId }
+          : null,
+    };
+  }
+
+  async listTrendingDiscussions(
+    query: { limit?: number; cursor?: TrendingDiscussionCursor | null },
+  ): Promise<{
+    items: TrendingDiscussionListItem[];
+    limit: number;
+    hasNextPage: boolean;
+    nextCursor: TrendingDiscussionCursor | null;
+  }> {
+    const limit = query.limit ?? 20;
+    const rows = await this.repo.listTrendingDiscussions({
+      limit,
+      cursor: query.cursor ?? null,
+    });
+
+    const hasNextPage = rows.length > limit;
+    const items = hasNextPage ? rows.slice(0, limit) : rows;
+    const lastItem = items.at(-1);
+
+    return {
+      items,
+      limit,
+      hasNextPage,
+      nextCursor:
+        hasNextPage && lastItem
+          ? { score: lastItem.trendingScore, threadId: lastItem.threadId }
+          : null,
+    };
+  }
+
+  async listUnansweredDiscussions(
+    query: { limit?: number; cursor?: UnansweredDiscussionCursor | null },
+  ): Promise<{
+    items: UnansweredDiscussionListItem[];
+    limit: number;
+    hasNextPage: boolean;
+    nextCursor: UnansweredDiscussionCursor | null;
+  }> {
+    const limit = query.limit ?? 20;
+    const rows = await this.repo.listUnansweredDiscussions({
+      limit,
+      cursor: query.cursor ?? null,
+    });
+
+    const hasNextPage = rows.length > limit;
+    const items = hasNextPage ? rows.slice(0, limit) : rows;
+    const lastItem = items.at(-1);
+
+    return {
+      items,
+      limit,
+      hasNextPage,
+      nextCursor:
+        hasNextPage && lastItem
+          ? { createdAt: lastItem.createdAt, threadId: lastItem.threadId }
+          : null,
+    };
+  }
+
+  async searchDiscussions(
+    query: { q?: string; limit?: number; cursor?: SearchDiscussionsCursor | null },
+  ): Promise<{
+    items: SearchDiscussionListItem[];
+    limit: number;
+    hasNextPage: boolean;
+    nextCursor: SearchDiscussionsCursor | null;
+  }> {
+    const limit = query.limit ?? 20;
+    const rows = await this.repo.searchDiscussions({
+      query: query.q ?? '',
+      limit,
+      cursor: query.cursor ?? null,
+    });
+
+    const hasNextPage = rows.length > limit;
+    const items = hasNextPage ? rows.slice(0, limit) : rows;
+    const lastItem = items.at(-1);
+
+    return {
+      items,
+      limit,
+      hasNextPage,
+      nextCursor:
+        hasNextPage && lastItem
+          ? { createdAt: lastItem.createdAt, threadId: lastItem.threadId }
+          : null,
+    };
+  }
+
+  async getThreadStats(threadId: string): Promise<ThreadStats | null> {
+    return this.repo.getThreadStats(threadId);
+  }
+
+  async getMyDiscussionStats(userId: string): Promise<MyDiscussionStats> {
+    return this.repo.getMyDiscussionStats(userId);
+  }
+
+  async listCommentsByUser(
+    userId: string,
+    query: { limit?: number; cursor?: MyCommentCursor | null },
+  ): Promise<{
+    items: MyCommentListItem[];
+    limit: number;
+    hasNextPage: boolean;
+    nextCursor: MyCommentCursor | null;
+  }> {
+    const user = await this.userRepository.findMeById(userId);
+
+    if (!user) {
+      this.logger.warn({ event: 'discussion_comment_user_not_found', userId });
+      throw new UserNotFoundError();
+    }
+
+    const limit = query.limit ?? 20;
+    const rows = await this.repo.listCommentsByUser({
+      userId,
+      limit,
+      cursor: query.cursor ?? null,
+    });
+
+    const hasNextPage = rows.length > limit;
+    const items = hasNextPage ? rows.slice(0, limit) : rows;
+    const lastItem = items.at(-1);
+
+    return {
+      items,
+      limit,
+      hasNextPage,
+      nextCursor:
+        hasNextPage && lastItem
+          ? { createdAt: lastItem.createdAt, commentId: lastItem.commentId }
           : null,
     };
   }
