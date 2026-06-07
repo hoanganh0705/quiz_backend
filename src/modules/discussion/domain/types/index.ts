@@ -55,6 +55,90 @@ export interface MyDiscussionListItem {
   updatedAt: string;
 }
 
+export interface MyCommentCursor {
+  createdAt: string;
+  commentId: string;
+}
+
+export interface MyCommentListItem {
+  commentId: string;
+  threadId: string;
+  threadTitle: string;
+  quizId: string;
+  content: string;
+  createdAt: string;
+  updatedAt: string;
+  repliesCount: number;
+  votesCount: number;
+}
+
+export interface TrendingDiscussionCursor {
+  score: number;
+  threadId: string;
+}
+
+export interface TrendingDiscussionListItem {
+  threadId: string;
+  quizId: string;
+  title: string;
+  author: DiscussionThreadAuthor;
+  commentCount: number;
+  replyCount: number;
+  voteCount: number;
+  latestActivityAt: string;
+  createdAt: string;
+  trendingScore: number;
+}
+
+export interface UnansweredDiscussionCursor {
+  createdAt: string;
+  threadId: string;
+}
+
+export interface UnansweredDiscussionListItem {
+  threadId: string;
+  quizId: string;
+  title: string;
+  author: DiscussionThreadAuthor;
+  commentCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SearchDiscussionsCursor {
+  createdAt: string;
+  threadId: string;
+}
+
+export interface SearchDiscussionListItem {
+  threadId: string;
+  quizId: string;
+  title: string;
+  author: DiscussionThreadAuthor;
+  commentCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ThreadStats {
+  threadId: string;
+  totalComments: number;
+  totalReplies: number;
+  totalParticipants: number;
+  upvotes: number;
+  downvotes: number;
+  latestActivityAt: string;
+}
+
+export interface MyDiscussionStats {
+  totalThreadsCreated: number;
+  totalCommentsCreated: number;
+  totalRepliesCreated: number;
+  totalDiscussionContributions: number;
+  totalReceivedVotes: number;
+  latestDiscussionActivityAt: string | null;
+}
+
 export interface DiscussionComment {
   commentId: string;
   threadId: string;
