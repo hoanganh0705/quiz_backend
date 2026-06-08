@@ -1,5 +1,5 @@
 export type DiscussionThreadStatus = 'open' | 'closed' | 'hidden' | 'deleted';
-export type DiscussionContentStatus = 'visible' | 'hidden' | 'deleted';
+export type DiscussionContentStatus = 'visible' | 'hidden' | 'deleted' | 'accepted';
 export type DiscussionVoteValue = 'upvote' | 'downvote';
 export type DiscussionReportStatus = 'open' | 'reviewed' | 'dismissed' | 'actioned';
 export type DiscussionReportTargetType = 'thread' | 'comment' | 'reply';
@@ -72,6 +72,24 @@ export interface MyCommentListItem {
   votesCount: number;
 }
 
+export interface MyUpvotedThreadListItem {
+  threadId: string;
+  title: string;
+  voteCount: number;
+  commentCount: number;
+  createdAt: string;
+  upvotedAt: string;
+}
+
+export interface MyUpvotedCommentListItem {
+  commentId: string;
+  threadId: string;
+  content: string;
+  voteCount: number;
+  createdAt: string;
+  upvotedAt: string;
+}
+
 export interface TrendingDiscussionCursor {
   score: number;
   threadId: string;
@@ -118,6 +136,27 @@ export interface SearchDiscussionListItem {
   commentCount: number;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface RelatedDiscussionListItem {
+  threadId: string;
+  title: string;
+  commentCount: number;
+  voteCount: number;
+  relevanceScore: number;
+}
+
+export interface ThreadParticipantListItem {
+  userId: string;
+  username: string;
+  commentCount: number;
+}
+
+export interface PublicDiscussionProfile {
+  threadsCreated: number;
+  commentsCreated: number;
+  acceptedAnswers: number;
+  reputation: number;
 }
 
 export interface ThreadStats {
