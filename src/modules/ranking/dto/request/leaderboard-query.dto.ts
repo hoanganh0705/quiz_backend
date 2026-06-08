@@ -1,14 +1,18 @@
-/**
- * Leaderboard Request DTOs
- *
- * Query and request types for leaderboard endpoints.
- */
-
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsEnum, IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
+import {
+  IsDateString,
+  IsEnum,
+  IsInt,
+  IsOptional,
+  IsString,
+  Max,
+  Min,
+  ValidateIf,
+} from 'class-validator';
 
 export enum RankingPeriodEnum {
+  DAILY = 'daily',
   WEEKLY = 'weekly',
   MONTHLY = 'monthly',
   ALL_TIME = 'all_time',
@@ -68,4 +72,92 @@ export class UserRankQueryDto {
   @IsEnum(RankingPeriodEnum)
   @IsOptional()
   period?: RankingPeriodEnum = RankingPeriodEnum.ALL_TIME;
+}
+
+export class MyRankingHistoryQueryDto {
+  @ApiPropertyOptional({
+    description: 'Ranking history period',
+    enum: RankingPeriodEnum,
+    default: RankingPeriodEnum.ALL_TIME,
+  })
+  @IsEnum(RankingPeriodEnum)
+  @IsOptional()
+  period?: RankingPeriodEnum = RankingPeriodEnum.ALL_TIME;
+
+  @ApiPropertyOptional({
+    description: 'Start date filter in YYYY-MM-DD format',
+    example: '2026-01-01',
+  })
+  @ValidateIf((_, value: unknown) => value !== undefined)
+  @IsDateString()
+  @IsOptional()
+  from?: string;
+
+  @ApiPropertyOptional({
+    description: 'End date filter in YYYY-MM-DD format',
+    example: '2026-06-01',
+  })
+  @ValidateIf((_, value: unknown) => value !== undefined)
+  @IsDateString()
+  @IsOptional()
+  to?: string;
+}
+
+export class RankMovementQueryDto {
+  @ApiPropertyOptional({
+    description: 'Ranking movement period',
+    enum: RankingPeriodEnum,
+    default: RankingPeriodEnum.DAILY,
+  })
+  @IsEnum(RankingPeriodEnum)
+  @IsOptional()
+  period?: RankingPeriodEnum = RankingPeriodEnum.DAILY;
+}
+
+export class TopMoversQueryDto {
+  @ApiPropertyOptional({
+    description: 'Top movers period',
+    enum: [RankingPeriodEnum.DAILY, RankingPeriodEnum.WEEKLY, RankingPeriodEnum.MONTHLY],
+    default: RankingPeriodEnum.DAILY,
+  })
+  @IsEnum(RankingPeriodEnum)
+  @IsOptional()
+  period?: RankingPeriodEnum = RankingPeriodEnum.DAILY;
+
+  @ApiPropertyOptional({
+    description: 'Number of top movers to return',
+    default: 10,
+    minimum: 1,
+    maximum: 100,
+  })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  @IsOptional()
+  limit?: number = 10;
+}
+
+export class NearbyRanksQueryDto {
+  @ApiPropertyOptional({
+    description: 'Nearby ranks period',
+    enum: RankingPeriodEnum,
+    default: RankingPeriodEnum.ALL_TIME,
+  })
+  @IsEnum(RankingPeriodEnum)
+  @IsOptional()
+  period?: RankingPeriodEnum = RankingPeriodEnum.ALL_TIME;
+
+  @ApiPropertyOptional({
+    description: 'Number of ranks above and below to return',
+    default: 2,
+    minimum: 1,
+    maximum: 10,
+  })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(10)
+  @IsOptional()
+  radius?: number = 2;
 }

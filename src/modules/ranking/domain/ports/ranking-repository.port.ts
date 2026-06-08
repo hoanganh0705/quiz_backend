@@ -17,9 +17,11 @@ export type UserRankingRow = {
   lastWeeklyResetAt: string | null;
   lastMonthlyResetAt: string | null;
   peakAllTimeRank: number | null;
+  peakAllTimeRankAchievedAt: string | null;
   peakWeeklyRank: number | null;
+  peakWeeklyRankAchievedAt: string | null;
   peakMonthlyRank: number | null;
-  peakRankAchievedAt: string | null;
+  peakMonthlyRankAchievedAt: string | null;
   lastActivityAt: string | null;
   isDirty: boolean;
   updatedAt: string;
@@ -35,14 +37,10 @@ export type RankHistoryRow = {
   historyId: string;
   userId: string;
   period: RankingPeriod;
-  periodStart: string | null;
-  periodEnd: string | null;
-  xpAtStart: number;
-  xpAtEnd: number;
-  rankAtEnd: number | null;
-  peakRank: number | null;
-  peakXp: number | null;
-  createdAt: string;
+  snapshotDate: string;
+  rank: number;
+  xp: number;
+  recordedAt: string;
 };
 
 export type LeaderboardRow = {
@@ -53,6 +51,33 @@ export type LeaderboardRow = {
   xp: number;
   rank: number;
   denseRank: number;
+};
+
+export type PeakRanksRow = {
+  daily: { rank: number | null; achievedAt: string | null };
+  weekly: { rank: number | null; achievedAt: string | null };
+  monthly: { rank: number | null; achievedAt: string | null };
+  allTime: { rank: number | null; achievedAt: string | null };
+};
+
+export type RankSnapshotPairRow = {
+  current: RankHistoryRow | null;
+  previous: RankHistoryRow | null;
+};
+
+export type TopMoverRow = {
+  userId: string;
+  username: string;
+  currentRank: number;
+  previousRank: number;
+  change: number;
+};
+
+export type NearbyRankEntryRow = {
+  rank: number;
+  userId: string;
+  username: string;
+  xp: number;
 };
 
 export interface RankingRepositoryPort {
@@ -76,6 +101,8 @@ export interface RankingRepositoryPort {
 
   updatePeakRank(params: { userId: string; period: RankingPeriod; rank: number }): Promise<boolean>;
 
+  getPeakRanks(userId: string): Promise<PeakRanksRow>;
+
   // Leaderboard Operations
   getLeaderboard(params: {
     period: RankingPeriod;
@@ -93,16 +120,38 @@ export interface RankingRepositoryPort {
   createRankHistory(params: {
     userId: string;
     period: RankingPeriod;
-    periodStart: Date | null;
-    periodEnd: Date;
-    xpAtStart: number;
-    xpAtEnd: number;
-    rankAtEnd: number | null;
-    peakRank: number | null;
-    peakXp: number | null;
+    snapshotDate: Date;
+    rank: number;
+    xp: number;
+    recordedAt?: Date;
   }): Promise<RankHistoryRow>;
 
-  getRankHistory(userId: string, period: RankingPeriod, limit?: number): Promise<RankHistoryRow[]>;
+  getUserRankingHistory(params: {
+    userId: string;
+    period: RankingPeriod;
+    from?: Date;
+    to?: Date;
+  }): Promise<RankHistoryRow[]>;
+
+  getLatestRankSnapshots(params: {
+    userId: string;
+    period: RankingPeriod;
+  }): Promise<RankSnapshotPairRow>;
+
+  getTopMovers(params: {
+    period: RankingPeriod;
+    limit: number;
+  }): Promise<TopMoverRow[]>;
+
+  getNearbyRanks(params: {
+    userId: string;
+    period: RankingPeriod;
+    radius: number;
+  }): Promise<{
+    above: NearbyRankEntryRow[];
+    me: NearbyRankEntryRow | null;
+    below: NearbyRankEntryRow[];
+  }>;
 
   // Period Reset Operations
   resetPeriod(period: RankingPeriod, resetAt: Date): Promise<number>;

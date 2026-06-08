@@ -39,6 +39,12 @@ import {
 } from './domain/services';
 
 // Application Services
+import { GetMyPeakRanksQueryHandler } from './application/get-my-peak-ranks.query';
+import { GetMyRankMovementQueryHandler } from './application/get-my-rank-movement.query';
+import { GetMyRankingHistoryQueryHandler } from './application/get-my-ranking-history.query';
+import { GetNearbyRanksQueryHandler } from './application/get-nearby-ranks.query';
+import { GetTopMoversQueryHandler } from './application/get-top-movers.query';
+import { GetUserRankingHistoryQueryHandler } from './application/get-user-ranking-history.query';
 import { RankingApplicationService } from './application/ranking.application.service';
 
 // Transport
@@ -78,6 +84,12 @@ import { RankingDomainExceptionFilter } from './transport/filters/ranking-domain
     PeriodResetService,
 
     // Application Services
+    GetMyPeakRanksQueryHandler,
+    GetMyRankMovementQueryHandler,
+    GetMyRankingHistoryQueryHandler,
+    GetNearbyRanksQueryHandler,
+    GetTopMoversQueryHandler,
+    GetUserRankingHistoryQueryHandler,
     RankingApplicationService,
 
     // Domain Events
@@ -101,6 +113,12 @@ import { RankingDomainExceptionFilter } from './transport/filters/ranking-domain
     PeriodResetService,
 
     // Application Services
+    GetMyPeakRanksQueryHandler,
+    GetMyRankMovementQueryHandler,
+    GetMyRankingHistoryQueryHandler,
+    GetNearbyRanksQueryHandler,
+    GetTopMoversQueryHandler,
+    GetUserRankingHistoryQueryHandler,
     RankingApplicationService,
   ],
 })

@@ -14,18 +14,26 @@ import {
 } from '../domain/ports/ranking-event-bus.port';
 import { RankingPeriod } from '../domain/types/ranking.types';
 import { PeriodResetService, RankCalculationService } from '../domain/services';
+import {
+  RANKING_REPOSITORY_PORT,
+  type RankingRepositoryPort,
+} from '../domain/ports/ranking-repository.port';
 
 @Injectable()
 export class RankingApplicationService implements OnModuleInit, OnModuleDestroy {
   private isRunning = false;
   private schedulerInterval: NodeJS.Timeout | null = null;
   private consistencyInterval: NodeJS.Timeout | null = null;
+  private snapshotInterval: NodeJS.Timeout | null = null;
   private readonly SCHEDULER_INTERVAL_MS = 30_000; // 30 seconds
   private readonly CONSISTENCY_INTERVAL_MS = 3_600_000; // 1 hour
+  private readonly SNAPSHOT_INTERVAL_MS = 3_600_000; // 1 hour
 
   constructor(
     private readonly rankCalculationService: RankCalculationService,
     private readonly periodResetService: PeriodResetService,
+    @Inject(RANKING_REPOSITORY_PORT)
+    private readonly rankingRepository: RankingRepositoryPort,
     @Inject(RANKING_DOMAIN_EVENT_BUS)
     private readonly eventBus: RankingDomainEventBusPort,
     @InjectPinoLogger(RankingApplicationService.name)
@@ -39,11 +47,13 @@ export class RankingApplicationService implements OnModuleInit, OnModuleDestroy 
 
     this.startScheduler();
     this.startConsistencyChecker();
+    this.startSnapshotScheduler();
   }
 
   onModuleDestroy(): void {
     this.stopScheduler();
     this.stopConsistencyChecker();
+    this.stopSnapshotScheduler();
     this.logger.info({
       event: 'ranking_application_service_stopped',
     });
@@ -102,6 +112,26 @@ export class RankingApplicationService implements OnModuleInit, OnModuleDestroy 
     }
   }
 
+  private startSnapshotScheduler(): void {
+    if (this.snapshotInterval) return;
+
+    this.snapshotInterval = setInterval(() => {
+      void this.captureHistoricalSnapshots().catch((error: unknown) => {
+        this.logger.error({
+          event: 'ranking_snapshot_error',
+          error: error instanceof Error ? error.message : 'Unknown error',
+        });
+      });
+    }, this.SNAPSHOT_INTERVAL_MS);
+  }
+
+  private stopSnapshotScheduler(): void {
+    if (this.snapshotInterval) {
+      clearInterval(this.snapshotInterval);
+      this.snapshotInterval = null;
+    }
+  }
+
   private async runSchedulerCycle(): Promise<void> {
     const startTime = Date.now();
 
@@ -144,6 +174,91 @@ export class RankingApplicationService implements OnModuleInit, OnModuleDestroy 
         durationMs: Date.now() - startTime,
       });
     }
+  }
+
+  private async captureHistoricalSnapshots(): Promise<void> {
+    const snapshotTime = new Date();
+
+    await this.capturePeriodSnapshot(RankingPeriod.ALL_TIME, snapshotTime);
+    await this.capturePeriodSnapshot(RankingPeriod.WEEKLY, snapshotTime);
+    await this.capturePeriodSnapshot(RankingPeriod.MONTHLY, snapshotTime);
+    await this.capturePeriodSnapshot(RankingPeriod.DAILY, snapshotTime);
+  }
+
+  private async capturePeriodSnapshot(period: RankingPeriod, snapshotTime: Date): Promise<void> {
+    if (period === RankingPeriod.DAILY) {
+      const leaderboard = await this.rankingRepository.getLeaderboard({
+        period: RankingPeriod.ALL_TIME,
+        limit: 1000,
+        offset: 0,
+      });
+
+      await Promise.all(
+        leaderboard.map((entry) =>
+          this.rankingRepository.createRankHistory({
+            userId: entry.userId,
+            period: RankingPeriod.DAILY,
+            snapshotDate: this.getStartOfDay(snapshotTime),
+            rank: entry.rank,
+            xp: entry.xp,
+            recordedAt: snapshotTime,
+          }),
+        ),
+      );
+
+      return;
+    }
+
+    const leaderboard = await this.rankingRepository.getLeaderboard({
+      period,
+      limit: 1000,
+      offset: 0,
+    });
+
+    await Promise.all(
+      leaderboard.map((entry) =>
+        this.rankingRepository.createRankHistory({
+          userId: entry.userId,
+          period,
+          snapshotDate: this.getSnapshotDate(period, snapshotTime),
+          rank: entry.rank,
+          xp: entry.xp,
+          recordedAt: snapshotTime,
+        }),
+      ),
+    );
+  }
+
+  private getSnapshotDate(period: RankingPeriod, date: Date): Date {
+    switch (period) {
+      case RankingPeriod.DAILY:
+        return this.getStartOfDay(date);
+      case RankingPeriod.WEEKLY:
+        return this.getStartOfWeek(date);
+      case RankingPeriod.MONTHLY:
+        return this.getStartOfMonth(date);
+      case RankingPeriod.ALL_TIME:
+      default:
+        return this.getStartOfDay(date);
+    }
+  }
+
+  private getStartOfDay(date: Date): Date {
+    const snapshot = new Date(date);
+    snapshot.setUTCHours(0, 0, 0, 0);
+    return snapshot;
+  }
+
+  private getStartOfWeek(date: Date): Date {
+    const snapshot = this.getStartOfDay(date);
+    const day = snapshot.getUTCDay();
+    const diff = day === 0 ? -6 : 1 - day;
+    snapshot.setUTCDate(snapshot.getUTCDate() + diff);
+    return snapshot;
+  }
+
+  private getStartOfMonth(date: Date): Date {
+    return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1));
   }
 
   /**
