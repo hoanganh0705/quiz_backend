@@ -98,6 +98,14 @@ export interface MyDiscussionSubscriptionListItem {
   subscribedAt: string;
 }
 
+export interface MySavedThreadListItem {
+  threadId: string;
+  title: string;
+  commentCount: number;
+  voteCount: number;
+  savedAt: string;
+}
+
 export interface TrendingDiscussionCursor {
   score: number;
   threadId: string;

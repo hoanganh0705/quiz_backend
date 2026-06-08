@@ -12,6 +12,7 @@ export * from './list-my-comments-query.dto';
 export * from './list-my-upvoted-threads-query.dto';
 export * from './list-my-upvoted-comments-query.dto';
 export * from './list-my-discussion-subscriptions-query.dto';
+export * from './list-my-saved-threads-query.dto';
 export * from './list-trending-discussions-query.dto';
 export * from './list-unanswered-discussions-query.dto';
 export * from './search-discussions-query.dto';
