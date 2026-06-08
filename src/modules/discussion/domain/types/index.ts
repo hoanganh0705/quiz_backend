@@ -19,6 +19,10 @@ export interface DiscussionThread {
   title: string;
   body: string;
   status: DiscussionThreadStatus;
+  isSolved: boolean;
+  solvedAt: string | null;
+  solvedCommentId: string | null;
+  solvedBy: string | null;
   commentsCount: number;
   votesCount: number;
   upvotesCount: number;
@@ -296,6 +300,17 @@ export interface UpdateCommentParams {
   commentId: string;
   authorId: string;
   body: string;
+}
+
+export interface MarkThreadAsSolvedParams {
+  threadId: string;
+  commentId: string;
+  actorId: string;
+}
+
+export interface UnsolveThreadParams {
+  threadId: string;
+  actorId: string;
 }
 
 export interface DeleteCommentParams {

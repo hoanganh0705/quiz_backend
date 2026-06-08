@@ -54,6 +54,13 @@ export class ThreadNotActiveError extends DiscussionError {
   }
 }
 
+export class CommentThreadMismatchError extends DiscussionError {
+  constructor() {
+    super('The selected comment does not belong to this thread');
+    this.name = 'CommentThreadMismatchError';
+  }
+}
+
 export class SelfVoteError extends DiscussionError {
   constructor() {
     super('You cannot vote on your own content');
