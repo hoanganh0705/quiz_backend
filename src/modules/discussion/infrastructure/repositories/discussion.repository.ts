@@ -9,6 +9,7 @@ import {
   users,
   userProfiles,
   quizzes,
+  discussionThreadSubscriptions,
 } from '@/core/database/schema';
 import type {
   DiscussionThread,
@@ -32,6 +33,7 @@ import type {
   MyCommentListItem,
   MyUpvotedThreadListItem,
   MyUpvotedCommentListItem,
+  MyDiscussionSubscriptionListItem,
   TrendingDiscussionListItem,
   UnansweredDiscussionListItem,
   SearchDiscussionListItem,
@@ -107,6 +109,14 @@ type MyUpvotedCommentRow = {
   voteCount: number;
   createdAt: string;
   upvotedAt: string;
+};
+
+type MyDiscussionSubscriptionRow = {
+  threadId: string;
+  title: string;
+  commentCount: number;
+  voteCount: number;
+  subscribedAt: string;
 };
 
 @Injectable()
@@ -555,6 +565,85 @@ export class DiscussionRepository implements DiscussionRepositoryPort {
       })),
       total: Number(totalRow?.count ?? 0),
     };
+  }
+
+  async listMyDiscussionSubscriptions(params: {
+    userId: string;
+    page: number;
+    limit: number;
+  }): Promise<{ items: MyDiscussionSubscriptionListItem[]; total: number }> {
+    const offset = (params.page - 1) * params.limit;
+
+    const [totalRow] = await this.db
+      .select({ count: count() })
+      .from(discussionThreadSubscriptions)
+      .innerJoin(
+        discussionThreads,
+        eq(discussionThreadSubscriptions.threadId, discussionThreads.threadId),
+      )
+      .where(
+        and(
+          eq(discussionThreadSubscriptions.userId, params.userId),
+          isNull(discussionThreads.deletedAt),
+          eq(discussionThreads.status, 'open'),
+        ),
+      );
+
+    const rows = await this.db
+      .select({
+        threadId: discussionThreads.threadId,
+        title: discussionThreads.title,
+        commentCount: discussionThreads.commentsCount,
+        voteCount: discussionThreads.votesCount,
+        subscribedAt: discussionThreadSubscriptions.createdAt,
+      })
+      .from(discussionThreadSubscriptions)
+      .innerJoin(
+        discussionThreads,
+        eq(discussionThreadSubscriptions.threadId, discussionThreads.threadId),
+      )
+      .where(
+        and(
+          eq(discussionThreadSubscriptions.userId, params.userId),
+          isNull(discussionThreads.deletedAt),
+          eq(discussionThreads.status, 'open'),
+        ),
+      )
+      .orderBy(desc(discussionThreadSubscriptions.createdAt), desc(discussionThreads.threadId))
+      .limit(params.limit)
+      .offset(offset);
+
+    return {
+      items: (rows as MyDiscussionSubscriptionRow[]).map((row) => ({
+        threadId: row.threadId,
+        title: row.title,
+        commentCount: row.commentCount,
+        voteCount: row.voteCount,
+        subscribedAt: row.subscribedAt,
+      })),
+      total: Number(totalRow?.count ?? 0),
+    };
+  }
+
+  async subscribeToThread(params: { userId: string; threadId: string }): Promise<void> {
+    await this.db
+      .insert(discussionThreadSubscriptions)
+      .values({
+        userId: params.userId,
+        threadId: params.threadId,
+      })
+      .onConflictDoNothing();
+  }
+
+  async unsubscribeFromThread(params: { userId: string; threadId: string }): Promise<void> {
+    await this.db
+      .delete(discussionThreadSubscriptions)
+      .where(
+        and(
+          eq(discussionThreadSubscriptions.userId, params.userId),
+          eq(discussionThreadSubscriptions.threadId, params.threadId),
+        ),
+      );
   }
 
   async listCommentsByUser(params: {
