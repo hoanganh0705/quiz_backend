@@ -42,6 +42,8 @@ import type {
   RelatedDiscussionListItem,
   ThreadParticipantListItem,
   PublicDiscussionProfile,
+  MarkThreadAsSolvedParams,
+  UnsolveThreadParams,
 } from '../types';
 import { USER_REPOSITORY_PORT, type UserRepositoryPort } from '@/modules/user/domain/ports/user-repository.port';
 import { UserNotFoundError } from '@/modules/user/domain/errors';
@@ -53,6 +55,7 @@ import {
   CommentForbiddenError,
   ThreadClosedError,
   ThreadNotActiveError,
+  CommentThreadMismatchError,
   SelfVoteError,
   SelfReportError,
   DuplicateReportError,
@@ -427,6 +430,83 @@ export class DiscussionService {
     this.logger.info({ event: 'thread_unsaved', userId, threadId });
 
     return { success: true };
+  }
+
+  async markThreadAsSolved(params: MarkThreadAsSolvedParams): Promise<DiscussionThread> {
+    const thread = await this.repo.getThreadById(params.threadId);
+
+    if (!thread) {
+      this.logger.warn({ event: 'discussion_thread_not_found', threadId: params.threadId, actorId: params.actorId });
+      throw new ThreadNotFoundError(params.threadId);
+    }
+
+    if (thread.status === 'deleted') {
+      this.logger.warn({ event: 'discussion_thread_not_active', threadId: params.threadId, actorId: params.actorId });
+      throw new ThreadNotActiveError();
+    }
+
+    if (thread.authorId !== params.actorId) {
+      this.logger.warn({ event: 'discussion_thread_forbidden', threadId: params.threadId, actorId: params.actorId });
+      throw new ThreadForbiddenError();
+    }
+
+    const comment = await this.repo.getCommentById(params.commentId);
+
+    if (!comment) {
+      this.logger.warn({ event: 'discussion_comment_not_found', commentId: params.commentId, threadId: params.threadId });
+      throw new CommentNotFoundError(params.commentId);
+    }
+
+    if (comment.threadId !== params.threadId) {
+      this.logger.warn({
+        event: 'discussion_solve_comment_thread_mismatch',
+        threadId: params.threadId,
+        commentId: params.commentId,
+        commentThreadId: comment.threadId,
+        actorId: params.actorId,
+      });
+      throw new CommentThreadMismatchError();
+    }
+
+    const updated = await this.repo.markThreadAsSolved(params);
+
+    this.logger.info({
+      event: 'thread_marked_solved',
+      threadId: params.threadId,
+      commentId: params.commentId,
+      actorId: params.actorId,
+    });
+
+    return updated;
+  }
+
+  async unsolveThread(params: UnsolveThreadParams): Promise<DiscussionThread> {
+    const thread = await this.repo.getThreadById(params.threadId);
+
+    if (!thread) {
+      this.logger.warn({ event: 'discussion_thread_not_found', threadId: params.threadId, actorId: params.actorId });
+      throw new ThreadNotFoundError(params.threadId);
+    }
+
+    if (thread.status === 'deleted') {
+      this.logger.warn({ event: 'discussion_thread_not_active', threadId: params.threadId, actorId: params.actorId });
+      throw new ThreadNotActiveError();
+    }
+
+    if (thread.authorId !== params.actorId) {
+      this.logger.warn({ event: 'discussion_thread_forbidden', threadId: params.threadId, actorId: params.actorId });
+      throw new ThreadForbiddenError();
+    }
+
+    const updated = await this.repo.unsolveThread(params);
+
+    this.logger.info({
+      event: 'thread_unsolved',
+      threadId: params.threadId,
+      actorId: params.actorId,
+    });
+
+    return updated;
   }
 
   async listTrendingDiscussions(

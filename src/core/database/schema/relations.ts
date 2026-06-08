@@ -112,6 +112,9 @@ export const usersRelations = relations(users, ({ many, one }) => ({
   discussionComments: many(discussionComments),
   discussionVotes: many(discussionVotes),
   discussionReports: many(discussionReports),
+  discussionThreadSubscriptions: many(discussionThreadSubscriptions),
+  discussionSavedThreads: many(discussionSavedThreads),
+  solvedDiscussionThreads: many(discussionThreads, { relationName: 'discussionThreadSolver' }),
   // Category relations
   categoryFollows: many(categoryFollows),
   // Tag relations
@@ -464,6 +467,16 @@ export const discussionThreadsRelations = relations(discussionThreads, ({ one, m
     fields: [discussionThreads.authorId],
     references: [users.userId],
   }),
+  solvedComment: one(discussionComments, {
+    fields: [discussionThreads.solvedCommentId],
+    references: [discussionComments.commentId],
+    relationName: 'discussionThreadSolvedComment',
+  }),
+  solver: one(users, {
+    fields: [discussionThreads.solvedBy],
+    references: [users.userId],
+    relationName: 'discussionThreadSolver',
+  }),
   comments: many(discussionComments),
   votes: many(discussionVotes),
   reports: many(discussionReports),
@@ -487,6 +500,9 @@ export const discussionCommentsRelations = relations(discussionComments, ({ one,
   }),
   replies: many(discussionComments, {
     relationName: 'discussionCommentParent',
+  }),
+  solvedForThreads: many(discussionThreads, {
+    relationName: 'discussionThreadSolvedComment',
   }),
   votes: many(discussionVotes),
   reports: many(discussionReports),

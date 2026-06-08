@@ -67,6 +67,10 @@ export const discussionThreads = pgTable(
     votesCount: integer('votes_count').default(0).notNull(),
     upvotesCount: integer('upvotes_count').default(0).notNull(),
     downvotesCount: integer('downvotes_count').default(0).notNull(),
+    isSolved: boolean('is_solved').default(false).notNull(),
+    solvedAt: timestamp('solved_at', { withTimezone: true, mode: 'string' }),
+    solvedCommentId: uuid('solved_comment_id'),
+    solvedBy: uuid('solved_by'),
     createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' })
       .defaultNow()
       .notNull(),
@@ -105,6 +109,16 @@ export const discussionThreads = pgTable(
       foreignColumns: [users.userId],
       name: 'discussion_threads_author_id_fkey',
     }).onDelete('cascade'),
+    foreignKey({
+      columns: [table.solvedCommentId],
+      foreignColumns: [discussionComments.commentId],
+      name: 'discussion_threads_solved_comment_id_fkey',
+    }).onDelete('set null'),
+    foreignKey({
+      columns: [table.solvedBy],
+      foreignColumns: [users.userId],
+      name: 'discussion_threads_solved_by_fkey',
+    }).onDelete('set null'),
   ],
 );
 
