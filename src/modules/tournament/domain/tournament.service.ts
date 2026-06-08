@@ -11,10 +11,22 @@ import {
   type TournamentLeaderboardEntry,
   type TournamentListFilters,
   type TournamentCursorPayload,
+  type TournamentParticipantListItemRow,
+  type TournamentStandingRow,
+  type UpcomingTournamentRow,
+  type ActiveTournamentRow,
+  type CompletedTournamentRow,
+  type RelatedTournamentRow,
 } from './ports';
 import { ATTEMPT_REPOSITORY_PORT } from '@/modules/attempt/domain/ports';
 import type { AttemptRepositoryPort } from '@/modules/attempt/domain/ports';
 import { CreateTournamentDto } from '../dto/request';
+import type { GetTournamentParticipantsQuery } from './types/get-tournament-participants.query';
+import type { GetMyTournamentStandingQuery } from './types/get-my-tournament-standing.query';
+import type { GetUpcomingTournamentsQuery } from './types/get-upcoming-tournaments.query';
+import type { GetActiveTournamentsQuery } from './types/get-active-tournaments.query';
+import type { GetCompletedTournamentsQuery } from './types/get-completed-tournaments.query';
+import type { GetRelatedTournamentsQuery } from './types/get-related-tournaments.query';
 import {
   TournamentNotFoundError,
   TournamentRegistrationClosedError,
@@ -143,6 +155,110 @@ export class TournamentService {
     };
   }
 
+  async getUpcomingTournaments(
+    query: GetUpcomingTournamentsQuery,
+  ): Promise<{ items: UpcomingTournamentRow[]; total: number; page: number; limit: number }> {
+    const page = query.page;
+    const limit = query.limit;
+    const nowIso = new Date().toISOString();
+
+    const result = await this.tournamentRepository.listUpcomingTournaments({
+      page,
+      limit,
+      sortBy: query.sortBy,
+      nowIso,
+    });
+
+    this.logger.info({
+      event: 'tournaments_upcoming_listed',
+      page,
+      limit,
+      sortBy: query.sortBy,
+      total: result.total,
+    });
+
+    return {
+      items: result.items,
+      total: result.total,
+      page,
+      limit,
+    };
+  }
+
+  async getActiveTournaments(
+    query: GetActiveTournamentsQuery,
+  ): Promise<{ items: ActiveTournamentRow[]; total: number; page: number; limit: number }> {
+    const page = query.page;
+    const limit = query.limit;
+    const nowIso = new Date().toISOString();
+
+    const result = await this.tournamentRepository.listActiveTournaments({
+      page,
+      limit,
+      nowIso,
+    });
+
+    this.logger.info({
+      event: 'tournaments_active_listed',
+      page,
+      limit,
+      total: result.total,
+    });
+
+    return {
+      items: result.items,
+      total: result.total,
+      page,
+      limit,
+    };
+  }
+
+  async getCompletedTournaments(
+    query: GetCompletedTournamentsQuery,
+  ): Promise<{ items: CompletedTournamentRow[]; total: number; page: number; limit: number }> {
+    const page = query.page;
+    const limit = query.limit;
+    const nowIso = new Date().toISOString();
+
+    const result = await this.tournamentRepository.listCompletedTournaments({
+      page,
+      limit,
+      nowIso,
+    });
+
+    this.logger.info({
+      event: 'tournaments_completed_listed',
+      page,
+      limit,
+      total: result.total,
+    });
+
+    return {
+      items: result.items,
+      total: result.total,
+      page,
+      limit,
+    };
+  }
+
+  async getRelatedTournaments(
+    query: GetRelatedTournamentsQuery,
+  ): Promise<{ items: RelatedTournamentRow[] }> {
+    const result = await this.tournamentRepository.listRelatedTournaments({
+      tournamentId: query.tournamentId,
+      limit: query.limit,
+    });
+
+    this.logger.info({
+      event: 'tournaments_related_listed',
+      tournamentId: query.tournamentId,
+      limit: query.limit,
+      resultCount: result.items.length,
+    });
+
+    return result;
+  }
+
   async getTournamentById(tournamentId: string): Promise<TournamentDetailRow> {
     const row = await this.tournamentRepository.getTournamentDetailById(tournamentId);
 
@@ -156,6 +272,73 @@ export class TournamentService {
   async getTournamentRounds(tournamentId: string): Promise<TournamentRoundRow[]> {
     await this.getActiveTournamentOrThrow(tournamentId);
     return this.tournamentRepository.getRoundsByTournament(tournamentId);
+  }
+
+  async getTournamentParticipants(
+    query: GetTournamentParticipantsQuery,
+  ): Promise<{ items: TournamentParticipantListItemRow[]; total: number; page: number; limit: number }> {
+    await this.getActiveTournamentOrThrow(query.tournamentId);
+
+    const page = query.page;
+    const limit = query.limit;
+
+    const result = await this.tournamentRepository.listParticipants({
+      tournamentId: query.tournamentId,
+      page,
+      limit,
+    });
+
+    this.logger.info({
+      event: 'tournament_participants_listed',
+      tournamentId: query.tournamentId,
+      page,
+      limit,
+      total: result.total,
+    });
+
+    return {
+      items: result.items,
+      total: result.total,
+      page,
+      limit,
+    };
+  }
+
+  async getMyTournamentStanding(query: GetMyTournamentStandingQuery): Promise<TournamentStandingRow> {
+    await this.getActiveTournamentOrThrow(query.tournamentId);
+
+    const participant = await this.tournamentRepository.getParticipantByUserAndTournament(
+      query.userId,
+      query.tournamentId,
+    );
+
+    if (!participant) {
+      throw new TournamentNotRegisteredError(TOURNAMENT_NOT_REGISTERED_MESSAGE);
+    }
+
+    if (participant.status === 'withdrawn') {
+      throw new TournamentForbiddenError(TOURNAMENT_FORBIDDEN_MESSAGE);
+    }
+
+    const standing = await this.tournamentRepository.getParticipantStanding({
+      tournamentId: query.tournamentId,
+      userId: query.userId,
+    });
+
+    if (!standing) {
+      throw new TournamentForbiddenError(TOURNAMENT_FORBIDDEN_MESSAGE);
+    }
+
+    this.logger.info({
+      event: 'tournament_my_standing_retrieved',
+      tournamentId: query.tournamentId,
+      userId: query.userId,
+      rank: standing.rank,
+      score: standing.score,
+      participantCount: standing.participantCount,
+    });
+
+    return standing;
   }
 
   async registerForTournament(

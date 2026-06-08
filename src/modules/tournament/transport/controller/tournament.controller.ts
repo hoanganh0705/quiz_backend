@@ -29,12 +29,26 @@ import { Public } from '@/common/decorators/public.decorator';
 import { ApiAuth, ApiValidationRequest } from '@/common/swagger/swagger-decorators';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
 import { TournamentApplicationService } from '../../application/tournament.application.service';
-import { CreateTournamentDto, ListTournamentsQueryDto } from '../../dto/request';
+import {
+  CreateTournamentDto,
+  ListTournamentsQueryDto,
+  GetTournamentParticipantsQueryDto,
+  GetUpcomingTournamentsQueryDto,
+  GetActiveTournamentsQueryDto,
+  GetCompletedTournamentsQueryDto,
+  GetRelatedTournamentsQueryDto,
+} from '../../dto/request';
 import {
   TournamentResponseDto,
   TournamentDetailResponseDto,
   TournamentListResponseDto,
   TournamentLeaderboardResponseDto,
+  TournamentParticipantsResponseDto,
+  UpcomingTournamentsResponseDto,
+  ActiveTournamentsResponseDto,
+  CompletedTournamentsResponseDto,
+  RelatedTournamentsResponseDto,
+  MyTournamentStandingResponseDto,
   RegisterTournamentResponseDto,
   StartTournamentAttemptResponseDto,
   UnregisterTournamentResponseDto,
@@ -81,6 +95,76 @@ export class TournamentController {
     return this.tournamentApplicationService.listTournaments(query);
   }
 
+  @Get('upcoming')
+  @Public()
+  @ApiOperation({
+    summary: 'List upcoming tournaments',
+    description:
+      'Returns tournaments that have not started yet, paginated by page and limit and ordered by the selected upcoming sort option.',
+  })
+  @ApiOkResponse({ description: 'Upcoming tournaments returned', type: UpcomingTournamentsResponseDto })
+  @ApiBadRequestResponse({ description: 'Validation failed' })
+  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  @ApiValidationRequest()
+  getUpcomingTournaments(
+    @Query() query: GetUpcomingTournamentsQueryDto,
+  ): Promise<UpcomingTournamentsResponseDto> {
+    return this.tournamentApplicationService.getUpcomingTournaments(query);
+  }
+
+  @Get('active')
+  @Public()
+  @ApiOperation({
+    summary: 'List active tournaments',
+    description:
+      'Returns tournaments currently running, paginated by page and limit and ordered by the nearest ending tournament first.',
+  })
+  @ApiOkResponse({ description: 'Active tournaments returned', type: ActiveTournamentsResponseDto })
+  @ApiBadRequestResponse({ description: 'Validation failed' })
+  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  @ApiValidationRequest()
+  getActiveTournaments(
+    @Query() query: GetActiveTournamentsQueryDto,
+  ): Promise<ActiveTournamentsResponseDto> {
+    return this.tournamentApplicationService.getActiveTournaments(query);
+  }
+
+  @Get('completed')
+  @Public()
+  @ApiOperation({
+    summary: 'List completed tournaments',
+    description:
+      'Returns tournaments that have already ended, paginated by page and limit and ordered by newest completed first.',
+  })
+  @ApiOkResponse({ description: 'Completed tournaments returned', type: CompletedTournamentsResponseDto })
+  @ApiBadRequestResponse({ description: 'Validation failed' })
+  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  @ApiValidationRequest()
+  getCompletedTournaments(
+    @Query() query: GetCompletedTournamentsQueryDto,
+  ): Promise<CompletedTournamentsResponseDto> {
+    return this.tournamentApplicationService.getCompletedTournaments(query);
+  }
+
+  @Get(':id/related')
+  @Public()
+  @ApiOperation({
+    summary: 'List related tournaments',
+    description:
+      'Returns tournaments related to the specified tournament for discovery. Relatedness is determined by shared category, description keywords, and title similarity.',
+  })
+  @ApiOkResponse({ description: 'Related tournaments returned', type: RelatedTournamentsResponseDto })
+  @ApiNotFoundResponse({ description: 'Tournament not found' })
+  @ApiBadRequestResponse({ description: 'Validation failed' })
+  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  @ApiValidationRequest()
+  getRelatedTournaments(
+    @Param('id', new ParseUUIDPipe()) tournamentId: string,
+    @Query() query: GetRelatedTournamentsQueryDto,
+  ): Promise<RelatedTournamentsResponseDto> {
+    return this.tournamentApplicationService.getRelatedTournaments(tournamentId, query);
+  }
+
   @Get(':id')
   @Public()
   @ApiOperation({
@@ -94,6 +178,25 @@ export class TournamentController {
     @Param('id', new ParseUUIDPipe()) tournamentId: string,
   ): Promise<TournamentDetailResponseDto> {
     return this.tournamentApplicationService.getTournamentById(tournamentId);
+  }
+
+  @Get(':id/participants')
+  @Public()
+  @ApiOperation({
+    summary: 'List tournament participants',
+    description:
+      'Returns registered participants in the specified tournament, paginated by page and limit and ordered by most recent registration first.',
+  })
+  @ApiOkResponse({ description: 'Participants returned', type: TournamentParticipantsResponseDto })
+  @ApiNotFoundResponse({ description: 'Tournament not found' })
+  @ApiBadRequestResponse({ description: 'Validation failed' })
+  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  @ApiValidationRequest()
+  getTournamentParticipants(
+    @Param('id', new ParseUUIDPipe()) tournamentId: string,
+    @Query() query: GetTournamentParticipantsQueryDto,
+  ): Promise<TournamentParticipantsResponseDto> {
+    return this.tournamentApplicationService.getTournamentParticipants(tournamentId, query);
   }
 
   @Post(':id/register')
@@ -135,6 +238,24 @@ export class TournamentController {
     @Param('id', new ParseUUIDPipe()) tournamentId: string,
   ): Promise<TournamentLeaderboardResponseDto> {
     return this.tournamentApplicationService.getLeaderboard(tournamentId);
+  }
+
+  @Get(':id/my-standing')
+  @ApiAuth()
+  @ApiOperation({
+    summary: 'Get my tournament standing',
+    description:
+      'Returns the authenticated user\'s current standing within the specified tournament including rank, score, percentile, and participant count.',
+  })
+  @ApiOkResponse({ description: 'Standing returned', type: MyTournamentStandingResponseDto })
+  @ApiNotFoundResponse({ description: 'Tournament not found or you are not registered' })
+  @ApiForbiddenResponse({ description: 'You do not have permission to view your standing in this tournament' })
+  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  getMyTournamentStanding(
+    @Param('id', new ParseUUIDPipe()) tournamentId: string,
+    @CurrentUser('sub') userId: string,
+  ): Promise<MyTournamentStandingResponseDto> {
+    return this.tournamentApplicationService.getMyTournamentStanding(tournamentId, userId);
   }
 
   @Post(':id/rounds/:roundId/attempts')
