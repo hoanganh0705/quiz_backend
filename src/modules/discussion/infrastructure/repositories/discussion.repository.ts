@@ -10,6 +10,7 @@ import {
   userProfiles,
   quizzes,
   discussionThreadSubscriptions,
+  discussionSavedThreads,
 } from '@/core/database/schema';
 import type {
   DiscussionThread,
@@ -34,6 +35,7 @@ import type {
   MyUpvotedThreadListItem,
   MyUpvotedCommentListItem,
   MyDiscussionSubscriptionListItem,
+  MySavedThreadListItem,
   TrendingDiscussionListItem,
   UnansweredDiscussionListItem,
   SearchDiscussionListItem,
@@ -117,6 +119,14 @@ type MyDiscussionSubscriptionRow = {
   commentCount: number;
   voteCount: number;
   subscribedAt: string;
+};
+
+type MySavedThreadRow = {
+  threadId: string;
+  title: string;
+  commentCount: number;
+  voteCount: number;
+  savedAt: string;
 };
 
 @Injectable()
@@ -625,6 +635,58 @@ export class DiscussionRepository implements DiscussionRepositoryPort {
     };
   }
 
+  async listMySavedThreads(params: {
+    userId: string;
+    page: number;
+    limit: number;
+  }): Promise<{ items: MySavedThreadListItem[]; total: number }> {
+    const offset = (params.page - 1) * params.limit;
+
+    const [totalRow] = await this.db
+      .select({ count: count() })
+      .from(discussionSavedThreads)
+      .innerJoin(discussionThreads, eq(discussionSavedThreads.threadId, discussionThreads.threadId))
+      .where(
+        and(
+          eq(discussionSavedThreads.userId, params.userId),
+          isNull(discussionThreads.deletedAt),
+          eq(discussionThreads.status, 'open'),
+        ),
+      );
+
+    const rows = await this.db
+      .select({
+        threadId: discussionThreads.threadId,
+        title: discussionThreads.title,
+        commentCount: discussionThreads.commentsCount,
+        voteCount: discussionThreads.votesCount,
+        savedAt: discussionSavedThreads.createdAt,
+      })
+      .from(discussionSavedThreads)
+      .innerJoin(discussionThreads, eq(discussionSavedThreads.threadId, discussionThreads.threadId))
+      .where(
+        and(
+          eq(discussionSavedThreads.userId, params.userId),
+          isNull(discussionThreads.deletedAt),
+          eq(discussionThreads.status, 'open'),
+        ),
+      )
+      .orderBy(desc(discussionSavedThreads.createdAt), desc(discussionThreads.threadId))
+      .limit(params.limit)
+      .offset(offset);
+
+    return {
+      items: (rows as MySavedThreadRow[]).map((row) => ({
+        threadId: row.threadId,
+        title: row.title,
+        commentCount: row.commentCount,
+        voteCount: row.voteCount,
+        savedAt: row.savedAt,
+      })),
+      total: Number(totalRow?.count ?? 0),
+    };
+  }
+
   async subscribeToThread(params: { userId: string; threadId: string }): Promise<void> {
     await this.db
       .insert(discussionThreadSubscriptions)
@@ -642,6 +704,27 @@ export class DiscussionRepository implements DiscussionRepositoryPort {
         and(
           eq(discussionThreadSubscriptions.userId, params.userId),
           eq(discussionThreadSubscriptions.threadId, params.threadId),
+        ),
+      );
+  }
+
+  async saveThread(params: { userId: string; threadId: string }): Promise<void> {
+    await this.db
+      .insert(discussionSavedThreads)
+      .values({
+        userId: params.userId,
+        threadId: params.threadId,
+      })
+      .onConflictDoNothing();
+  }
+
+  async unsaveThread(params: { userId: string; threadId: string }): Promise<void> {
+    await this.db
+      .delete(discussionSavedThreads)
+      .where(
+        and(
+          eq(discussionSavedThreads.userId, params.userId),
+          eq(discussionSavedThreads.threadId, params.threadId),
         ),
       );
   }
