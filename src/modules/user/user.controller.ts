@@ -26,6 +26,8 @@ import { ListUserBadgesQueryDto } from './dto/request/list-user-badges-query.dto
 import { UserActivityResponseDto } from './dto/response/user-activity-response.dto';
 import { MyTournamentsResponseDto } from './dto/response/my-tournaments-response.dto';
 import { MyTournamentHistoryResponseDto } from './dto/response/my-tournament-history-response.dto';
+import { MyTournamentAnalyticsResponseDto } from './dto/response/my-tournament-analytics-response.dto';
+import { PublicTournamentProfileResponseDto } from './dto/response/public-tournament-profile-response.dto';
 import { UserMeResponseDto } from './dto/response/user-me-response.dto';
 import { UserBadgesResponseDto } from './dto/response/user-badges-response.dto';
 import { UserRankingResponseDto } from './dto/response/user-ranking-response.dto';
@@ -162,6 +164,42 @@ export class UserController {
     });
   }
 
+  @Get(':userId/tournament-history')
+  @ApiOperation({
+    summary: 'Get public tournament history',
+    description:
+      "Returns the specified user's completed tournament participation history, paginated by page and limit and ordered by most recent completion first.",
+  })
+  @ApiOkResponse({
+    description: 'Tournament history returned',
+    type: MyTournamentHistoryResponseDto,
+  })
+  @ApiNotFoundResponse({ description: 'User not found' })
+  @ApiBadRequestResponse({ description: 'Validation failed' })
+  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  @ApiValidationRequest()
+  getUserTournamentHistory(
+    @Param('userId') userId: string,
+    @Query() query: GetMyTournamentHistoryQueryDto,
+  ): Promise<MyTournamentHistoryResponseDto> {
+    return this.userApplicationService.getUserTournamentHistory(userId, query);
+  }
+
+  @Get(':userId/tournaments')
+  @ApiOperation({
+    summary: 'Get public tournament profile',
+    description:
+      "Returns the specified user's public tournament performance summary calculated from completed tournaments only.",
+  })
+  @ApiOkResponse({ description: 'Tournament profile returned', type: PublicTournamentProfileResponseDto })
+  @ApiNotFoundResponse({ description: 'User not found' })
+  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  getPublicTournamentProfile(
+    @Param('userId') userId: string,
+  ): Promise<PublicTournamentProfileResponseDto> {
+    return this.userApplicationService.getPublicTournamentProfile(userId);
+  }
+
   @Get('me/tournaments')
   @ApiOperation({
     summary: 'List my tournaments',
@@ -197,6 +235,20 @@ export class UserController {
     @Query() query: GetMyTournamentHistoryQueryDto,
   ): Promise<MyTournamentHistoryResponseDto> {
     return this.userApplicationService.getMyTournamentHistory(userId, query);
+  }
+
+  @Get('me/tournaments/analytics')
+  @ApiOperation({
+    summary: 'Get my tournament analytics',
+    description:
+      "Returns the authenticated user's tournament participation analytics calculated from completed tournaments.",
+  })
+  @ApiOkResponse({ description: 'Tournament analytics returned', type: MyTournamentAnalyticsResponseDto })
+  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  getMyTournamentAnalytics(
+    @CurrentUser('sub') userId: string,
+  ): Promise<MyTournamentAnalyticsResponseDto> {
+    return this.userApplicationService.getMyTournamentAnalytics(userId);
   }
 
   @Get('me/ranking')

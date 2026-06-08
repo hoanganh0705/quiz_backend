@@ -1641,6 +1641,7 @@ export const tournamentParticipants = pgTable(
     totalTimeMs: integer('total_time_ms').default(0).notNull(),
     rankFinal: smallint('rank_final'),
     status: text().default('active').notNull(),
+    withdrawnAt: timestamp('withdrawn_at', { withTimezone: true, mode: 'string' }),
     updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'string' })
       .defaultNow()
       .notNull(),

@@ -240,6 +240,28 @@ export class TournamentLeaderboardResponseDto {
   items!: TournamentLeaderboardEntryDto[];
 }
 
+export class TournamentWinnerDto {
+  @ApiProperty({ description: 'Final rank', example: 1 })
+  rank!: number;
+
+  @ApiProperty({ description: 'User identifier', example: '550e8400-e29b-41d4-a716-446655440000' })
+  userId!: string;
+
+  @ApiProperty({ description: 'Username', example: 'Anh' })
+  username!: string;
+
+  @ApiProperty({ description: 'Final score', example: 980 })
+  score!: number;
+
+  @ApiPropertyOptional({ description: 'Avatar image URL', format: 'uri', nullable: true })
+  avatarUrl!: string | null;
+}
+
+export class TournamentWinnersResponseDto {
+  @ApiProperty({ description: 'Final winners list', type: () => [TournamentWinnerDto] })
+  items!: TournamentWinnerDto[];
+}
+
 export class TournamentParticipantListItemDto {
   @ApiProperty({ description: 'User identifier', example: '550e8400-e29b-41d4-a716-446655440000' })
   userId!: string;
@@ -406,6 +428,38 @@ export class RelatedTournamentsResponseDto {
   items!: RelatedTournamentItemDto[];
 }
 
+export class TournamentStatsResponseDto {
+  @ApiProperty({ description: 'Tournament identifier', example: '660e8400-e29b-41d4-a716-446655440000' })
+  tournamentId!: string;
+
+  @ApiProperty({ description: 'Total registered participants', example: 523 })
+  participants!: number;
+
+  @ApiProperty({ description: 'Participants who completed the tournament', example: 410 })
+  completedParticipants!: number;
+
+  @ApiProperty({ description: 'Average final score', example: 72 })
+  averageScore!: number;
+
+  @ApiProperty({ description: 'Highest final score', example: 100, nullable: true })
+  highestScore!: number | null;
+
+  @ApiProperty({ description: 'Lowest final score', example: 12, nullable: true })
+  lowestScore!: number | null;
+
+  @ApiProperty({ description: 'Completion rate percentage', example: 78.39 })
+  completionRate!: number;
+
+  @ApiProperty({ description: 'Average final rank', example: 262, nullable: true })
+  averageRank!: number | null;
+
+  @ApiProperty({ description: 'Tournament start timestamp (ISO 8601)', example: '2026-06-01T00:00:00Z' })
+  startedAt!: string;
+
+  @ApiProperty({ description: 'Tournament end timestamp (ISO 8601)', example: '2026-06-10T00:00:00Z' })
+  endedAt!: string;
+}
+
 export class MyTournamentStandingResponseDto {
   @ApiProperty({ description: 'Current rank of the authenticated user', example: 23 })
   rank!: number;
@@ -478,4 +532,24 @@ export class UnregisterTournamentResponseDto {
     example: 'Successfully withdrawn from the tournament',
   })
   message!: string;
+}
+
+export class WithdrawTournamentResponseDto {
+  @ApiProperty({ description: 'Whether the withdrawal succeeded', example: true })
+  success!: boolean;
+
+  @ApiProperty({
+    description: 'Tournament identifier',
+    example: '660e8400-e29b-41d4-a716-446655440000',
+  })
+  tournamentId!: string;
+
+  @ApiProperty({ description: 'Updated participant status', example: 'withdrawn' })
+  status!: string;
+
+  @ApiProperty({
+    description: 'Withdrawal timestamp (ISO 8601)',
+    example: '2026-06-08T10:00:00Z',
+  })
+  withdrawnAt!: string;
 }

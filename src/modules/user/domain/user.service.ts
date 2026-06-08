@@ -1,6 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
-import type { MyTournamentHistoryRow, MyTournamentRow, UserActivityRow, UserBadgeRow, UserMeRow } from './ports/user-repository.port';
+import type { MyTournamentHistoryRow, MyTournamentRow, MyTournamentAnalyticsRow, PublicTournamentProfileRow, UserActivityRow, UserBadgeRow, UserMeRow } from './ports/user-repository.port';
 import { UserAnalyticsNotFoundError, UserRankingNotFoundError } from './errors';
 import type {
   ListUserBadgesQuery,
@@ -14,6 +14,9 @@ import { UserNotFoundError } from './errors';
 import type { ListUserActivityQuery } from './types/list-user-activity.query';
 import type { GetMyTournamentsQuery } from './types/get-my-tournaments.query';
 import type { GetMyTournamentHistoryQuery } from './types/get-my-tournament-history.query';
+import type { GetPublicTournamentProfileQuery } from './types/get-public-tournament-profile.query';
+import type { GetUserTournamentHistoryQuery } from './types/get-user-tournament-history.query';
+import type { GetMyTournamentAnalyticsQuery } from './types/get-my-tournament-analytics.query';
 
 const XP_PER_LEVEL = 500;
 
@@ -250,5 +253,69 @@ export class UserDomainService {
       page,
       limit,
     };
+  }
+
+  async getUserTournamentHistory(
+    query: GetUserTournamentHistoryQuery,
+  ): Promise<{ items: MyTournamentHistoryRow[]; total: number; page: number; limit: number }> {
+    await this.getMe(query.userId);
+
+    const page = query.page;
+    const limit = query.limit;
+
+    const result = await this.userRepository.listMyTournamentHistory({
+      userId: query.userId,
+      page,
+      limit,
+    });
+
+    this.logger.info({
+      event: 'user_public_tournament_history_listed',
+      userId: query.userId,
+      page,
+      limit,
+      total: result.total,
+    });
+
+    return {
+      items: result.items,
+      total: result.total,
+      page,
+      limit,
+    };
+  }
+
+  async getPublicTournamentProfile(
+    query: GetPublicTournamentProfileQuery,
+  ): Promise<PublicTournamentProfileRow> {
+    await this.getMe(query.userId);
+
+    const profile = await this.userRepository.getPublicTournamentProfile(query.userId);
+
+    this.logger.info({
+      event: 'user_public_tournament_profile_retrieved',
+      userId: query.userId,
+      tournamentsPlayed: profile.tournamentsPlayed,
+      tournamentsWon: profile.tournamentsWon,
+    });
+
+    return profile;
+  }
+
+  async getMyTournamentAnalytics(
+    query: GetMyTournamentAnalyticsQuery,
+  ): Promise<MyTournamentAnalyticsRow> {
+    await this.getMe(query.userId);
+
+    const analytics = await this.userRepository.getMyTournamentAnalytics(query.userId);
+
+    this.logger.info({
+      event: 'user_my_tournament_analytics_retrieved',
+      userId: query.userId,
+      tournamentsPlayed: analytics.tournamentsPlayed,
+      wins: analytics.wins,
+    });
+
+    return analytics;
   }
 }

@@ -17,3 +17,5 @@ export const TOURNAMENT_UNREGISTER_CLOSED_MESSAGE =
   'Tournament unregistration is only allowed during the registration phase';
 export const TOURNAMENT_ALREADY_WITHDRAWN_MESSAGE =
   'You have already withdrawn from this tournament';
+export const TOURNAMENT_WITHDRAW_CLOSED_MESSAGE =
+  'Tournament withdrawal is only allowed while the tournament is active';
