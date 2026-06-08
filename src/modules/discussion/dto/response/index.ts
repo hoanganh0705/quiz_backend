@@ -8,6 +8,7 @@ export * from './my-discussion-subscriptions-response.dto';
 export * from './my-saved-threads-response.dto';
 export * from './discussion-subscription-action-response.dto';
 export * from './discussion-saved-thread-action-response.dto';
+export * from './discussion-thread-solve-response.dto';
 export * from './trending-discussions-response.dto';
 export * from './unanswered-discussions-response.dto';
 export * from './search-discussions-response.dto';
@@ -81,6 +82,33 @@ export class ThreadDto {
     example: 'open',
   })
   status!: (typeof THREAD_STATUS_VALUES)[number];
+
+  @ApiPropertyOptional({
+    description: 'Whether the thread has been marked as solved',
+    example: false,
+  })
+  isSolved!: boolean;
+
+  @ApiPropertyOptional({
+    description: 'Timestamp when the thread was marked as solved',
+    nullable: true,
+    example: null,
+  })
+  solvedAt!: string | null;
+
+  @ApiPropertyOptional({
+    description: 'Selected solution comment identifier',
+    nullable: true,
+    example: null,
+  })
+  solvedCommentId!: string | null;
+
+  @ApiPropertyOptional({
+    description: 'User identifier who marked the thread as solved',
+    nullable: true,
+    example: null,
+  })
+  solvedBy!: string | null;
 
   @ApiProperty({ description: 'Total comment count', example: 12 })
   commentsCount!: number;

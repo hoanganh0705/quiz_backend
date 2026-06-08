@@ -8,6 +8,7 @@ import {
   CommentForbiddenError,
   ThreadClosedError,
   ThreadNotActiveError,
+  CommentThreadMismatchError,
   SelfVoteError,
   SelfReportError,
   DuplicateReportError,
@@ -35,6 +36,8 @@ export class DiscussionDomainExceptionFilter {
       status = HttpStatus.CONFLICT;
     } else if (exception instanceof ThreadNotActiveError) {
       status = HttpStatus.CONFLICT;
+    } else if (exception instanceof CommentThreadMismatchError) {
+      status = HttpStatus.BAD_REQUEST;
     } else if (exception instanceof SelfVoteError) {
       status = HttpStatus.FORBIDDEN;
     } else if (exception instanceof SelfReportError) {

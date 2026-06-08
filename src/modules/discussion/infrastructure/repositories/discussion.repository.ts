@@ -44,6 +44,8 @@ import type {
   PublicDiscussionProfile,
   ThreadStats,
   MyDiscussionStats,
+  MarkThreadAsSolvedParams,
+  UnsolveThreadParams,
 } from '../../domain/types';
 import { eq, and, inArray, sql, desc, asc, lte, gte, isNull, count, isNotNull } from 'drizzle-orm';
 import type { DiscussionRepositoryPort } from '../../domain/ports';
@@ -62,6 +64,10 @@ type DiscussionThreadRow = {
   votesCount: number;
   upvotesCount: number;
   downvotesCount: number;
+  isSolved: boolean;
+  solvedAt: string | null;
+  solvedCommentId: string | null;
+  solvedBy: string | null;
   createdAt: string;
   updatedAt: string;
   deletedAt: string | null;
@@ -727,6 +733,50 @@ export class DiscussionRepository implements DiscussionRepositoryPort {
           eq(discussionSavedThreads.threadId, params.threadId),
         ),
       );
+  }
+
+  async markThreadAsSolved(params: MarkThreadAsSolvedParams): Promise<DiscussionThread> {
+    const now = new Date().toISOString();
+
+    const [updated] = await this.db
+      .update(discussionThreads)
+      .set({
+        isSolved: true,
+        solvedAt: now,
+        solvedCommentId: params.commentId,
+        solvedBy: params.actorId,
+        updatedAt: now,
+      })
+      .where(eq(discussionThreads.threadId, params.threadId))
+      .returning();
+
+    if (!updated) {
+      throw new Error('Thread not found');
+    }
+
+    return this.enrichThread(updated as unknown as DiscussionThreadRow);
+  }
+
+  async unsolveThread(params: UnsolveThreadParams): Promise<DiscussionThread> {
+    const now = new Date().toISOString();
+
+    const [updated] = await this.db
+      .update(discussionThreads)
+      .set({
+        isSolved: false,
+        solvedAt: null,
+        solvedCommentId: null,
+        solvedBy: null,
+        updatedAt: now,
+      })
+      .where(eq(discussionThreads.threadId, params.threadId))
+      .returning();
+
+    if (!updated) {
+      throw new Error('Thread not found');
+    }
+
+    return this.enrichThread(updated as unknown as DiscussionThreadRow);
   }
 
   async listCommentsByUser(params: {
@@ -1744,6 +1794,10 @@ export class DiscussionRepository implements DiscussionRepositoryPort {
       title: thread.title,
       body: thread.body,
       status: thread.status,
+      isSolved: thread.isSolved,
+      solvedAt: thread.solvedAt,
+      solvedCommentId: thread.solvedCommentId,
+      solvedBy: thread.solvedBy,
       commentsCount: thread.commentsCount,
       votesCount: thread.votesCount,
       upvotesCount: thread.upvotesCount,

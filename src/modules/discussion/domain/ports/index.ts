@@ -1,4 +1,4 @@
-import type {
+import {
   DiscussionThread,
   DiscussionThreadDetail,
   DiscussionComment,
@@ -35,6 +35,8 @@ import type {
   PublicDiscussionProfile,
   MyDiscussionStats,
   ThreadStats,
+  MarkThreadAsSolvedParams,
+  UnsolveThreadParams,
 } from '../types';
 
 export * from './quiz-existence.port';
@@ -115,6 +117,8 @@ export interface DiscussionRepositoryPort {
   getThreadStats(threadId: string): Promise<ThreadStats | null>;
   getMyDiscussionStats(userId: string): Promise<MyDiscussionStats>;
   updateThread(params: UpdateThreadParams): Promise<DiscussionThread>;
+  markThreadAsSolved(params: MarkThreadAsSolvedParams): Promise<DiscussionThread>;
+  unsolveThread(params: UnsolveThreadParams): Promise<DiscussionThread>;
   softDeleteThread(params: { threadId: string; authorId: string }): Promise<void>;
   updateThreadStatus(params: {
     threadId: string;
