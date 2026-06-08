@@ -6,6 +6,46 @@
 
 import type { badgeRuleType, badgeCategory, badgeType } from '@/core/database/schema';
 
+export interface RevokedBadgeRecord {
+  userBadgeId: string;
+  userId: string;
+  badgeId: string;
+  badgeSlug: string;
+  badgeName: string;
+  revokedAt: Date;
+  revocationReason: string;
+}
+
+export type BadgeCatalogRow = {
+  badgeId: string;
+  name: string;
+  description: string | null;
+  rarity: string;
+  earnedCount: number;
+};
+
+export type FeaturedBadgeRow = {
+  badgeId: string;
+  badgeName: string;
+  rarity: string;
+};
+
+export type PublicAchievementProfileRow = {
+  userId: string;
+  totalBadges: number;
+  rareBadges: number;
+  highestRank: number | null;
+  featuredBadges: FeaturedBadgeRow[];
+};
+
+export type BadgeDetailsRow = {
+  badgeId: string;
+  name: string;
+  description: string | null;
+  rarity: string;
+  earnedCount: number;
+};
+
 export type UserBadgeRow = {
   userBadgeId: string;
   userId: string;
@@ -79,6 +119,21 @@ export interface AchievementRepositoryPort {
   ): Promise<(UserBadgeRow & { badge: BadgeDefinitionRow })[]>;
 
   /**
+   * Get the public badge catalog.
+   */
+  getBadgeCatalog(): Promise<BadgeCatalogRow[]>;
+
+  /**
+   * Get public achievement profile for a user.
+   */
+  getPublicAchievementProfile(userId: string): Promise<PublicAchievementProfileRow | null>;
+
+  /**
+   * Get badge details by ID with earners count.
+   */
+  getBadgeDetailsById(badgeId: string): Promise<BadgeDetailsRow | null>;
+
+  /**
    * Get badge definition by ID.
    */
   getBadgeById(badgeId: string): Promise<BadgeDefinitionRow | null>;
@@ -130,9 +185,9 @@ export interface AchievementRepositoryPort {
   getBadgeProgress(userId: string, badgeId: string): Promise<Record<string, unknown> | null>;
 
   /**
-   * Revoke a badge (for error correction only).
+   * Revoke a badge and return the audit record.
    */
-  revokeBadge(userId: string, badgeId: string, reason: string): Promise<void>;
+  revokeBadge(userId: string, badgeId: string, reason: string): Promise<RevokedBadgeRecord | null>;
 
   /**
    * Check if badge is currently valid (not expired, within validFrom/validUntil).

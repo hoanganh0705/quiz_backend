@@ -1,29 +1,3 @@
-/**
- * Achievement Module
- *
- * Handles badge evaluation, achievement tracking, and consistency rewards.
- *
- * Domain responsibilities:
- * - Badge definitions and taxonomy
- * - Achievement evaluation rules
- * - Badge awarding and revocation
- * - Achievement history (immutable records)
- * - Progress tracking
- * - Scheduled evaluation for deferred badges
- * - Notification delivery
- * - Seasonal/event badges
- * - Badge versioning
- * - Rarity and exclusive badges
- * - Analytics and statistics
- *
- * Integrates with:
- * - Ranking Domain: receives rank change events, XP events
- * - Attempt Domain: receives attempt completion events
- * - Tournament Domain: receives tournament win events
- * - User Profile Domain: receives profile created events
- * - User Domain: reads streak data (does NOT own streak calculation)
- */
-
 import { Module } from '@nestjs/common';
 import { DRIZZLE } from '@/core/database/drizzle.constants';
 
@@ -59,11 +33,18 @@ import { UserProfileEventListenerAdapter } from './infrastructure/adapters/user-
 // Application
 import { AchievementApplicationService } from './application/achievement.application.service';
 
+// Transport
+import { AchievementController } from './transport/controller/achievement.controller';
+import { AchievementDomainExceptionFilter } from './transport/filters/achievement-domain-exception.filter';
+
 // Ranking module for event bus
 import { RankingModule } from '@/modules/ranking/ranking.module';
+import { UserModule } from '@/modules/user/user.module';
+import { UserDomainService } from '../user/domain/user.service';
 
 @Module({
-  imports: [DatabaseModule, RankingModule],
+  imports: [DatabaseModule, RankingModule, UserModule],
+  controllers: [AchievementController],
   providers: [
     {
       provide: 'DATABASE',
@@ -86,6 +67,7 @@ import { RankingModule } from '@/modules/ranking/ranking.module';
     BadgeVersioningService,
     RareBadgeService,
     BadgeAnalyticsService,
+    UserDomainService,
 
     // Infrastructure - Repository
     AchievementRepository,
@@ -102,6 +84,9 @@ import { RankingModule } from '@/modules/ranking/ranking.module';
 
     // Application
     AchievementApplicationService,
+
+    // Exception Filter
+    AchievementDomainExceptionFilter,
   ],
   exports: [
     // Domain Event Bus
