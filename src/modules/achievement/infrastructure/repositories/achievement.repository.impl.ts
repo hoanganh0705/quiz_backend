@@ -6,19 +6,30 @@
 
 import { Inject, Injectable } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
-import { and, eq, desc, isNull, count } from 'drizzle-orm';
+import { and, eq, desc, isNull, count, sql, asc } from 'drizzle-orm';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import type * as schema from '@/core/database/schema';
 import {
   badges,
   badgeRules,
   userBadges,
+  userRanking,
+  users,
   badgeType,
   badgeCategory,
   badgeRuleType,
 } from '@/core/database/schema';
 import type { AchievementRepositoryPort } from './achievement.repository';
-import type { UserBadgeRow, BadgeDefinitionRow, BadgeRuleRow } from './achievement.repository';
+import type {
+  BadgeCatalogRow,
+  BadgeDetailsRow,
+  UserBadgeRow,
+  BadgeDefinitionRow,
+  BadgeRuleRow,
+  PublicAchievementProfileRow,
+  FeaturedBadgeRow,
+  RevokedBadgeRecord,
+} from './achievement.repository';
 
 @Injectable()
 export class AchievementRepository implements AchievementRepositoryPort {
@@ -108,6 +119,136 @@ export class AchievementRepository implements AchievementRepositoryPort {
       ...this.mapUserBadgeRow(row.user_badges),
       badge: this.mapBadgeRow(row.badges),
     }));
+  }
+
+  async getBadgeCatalog(): Promise<BadgeCatalogRow[]> {
+    const rarityRank = sql<number>`CASE
+      WHEN COUNT(${userBadges.userBadgeId}) >= 1000 THEN 5
+      WHEN COUNT(${userBadges.userBadgeId}) >= 500 THEN 4
+      WHEN COUNT(${userBadges.userBadgeId}) >= 100 THEN 3
+      WHEN COUNT(${userBadges.userBadgeId}) >= 10 THEN 2
+      ELSE 1
+    END`;
+
+    const results = await this.db
+      .select({
+        badgeId: badges.badgeId,
+        name: badges.name,
+        description: badges.description,
+        earnedCount: sql<number>`COUNT(${userBadges.userBadgeId})::int`,
+        rarityRank,
+      })
+      .from(badges)
+      .leftJoin(
+        userBadges,
+        and(eq(userBadges.badgeId, badges.badgeId), isNull(userBadges.revokedAt)),
+      )
+      .where(eq(badges.isActive, true))
+      .groupBy(badges.badgeId, badges.name, badges.description)
+      .orderBy(desc(rarityRank), asc(badges.name));
+
+    return results.map((row) => ({
+      badgeId: row.badgeId,
+      name: row.name,
+      description: row.description,
+      rarity: this.mapBadgeRarity(row.earnedCount),
+      earnedCount: row.earnedCount,
+    }));
+  }
+
+  async getPublicAchievementProfile(userId: string): Promise<PublicAchievementProfileRow | null> {
+    const userRows = await this.db
+      .select({ userId: users.userId })
+      .from(users)
+      .where(and(eq(users.userId, userId), isNull(users.deletedAt)))
+      .limit(1);
+
+    if (userRows.length === 0) {
+      return null;
+    }
+
+    const aggregateRows = await this.db
+      .select({
+        totalBadges: sql<number>`COUNT(${userBadges.userBadgeId})::int`,
+        highestRank: sql<number | null>`MIN(
+          LEAST(
+            COALESCE(${userRanking.allTimeRank}, 2147483647),
+            COALESCE(${userRanking.weeklyRank}, 2147483647),
+            COALESCE(${userRanking.monthlyRank}, 2147483647)
+          )
+        )`,
+      })
+      .from(users)
+      .leftJoin(userBadges, and(eq(userBadges.userId, users.userId), isNull(userBadges.revokedAt)))
+      .leftJoin(userRanking, eq(userRanking.userId, users.userId))
+      .where(and(eq(users.userId, userId), isNull(users.deletedAt)))
+      .groupBy(users.userId)
+      .limit(1);
+
+    const featuredRows = await this.db
+      .select({
+        badgeId: badges.badgeId,
+        badgeName: badges.name,
+        earnedCount: sql<number>`COUNT(${userBadges.userBadgeId}) OVER (PARTITION BY ${badges.badgeId})::int`,
+      })
+      .from(userBadges)
+      .innerJoin(badges, eq(userBadges.badgeId, badges.badgeId))
+      .where(and(eq(userBadges.userId, userId), isNull(userBadges.revokedAt)))
+      .orderBy(asc(sql`COUNT(${userBadges.userBadgeId}) OVER (PARTITION BY ${badges.badgeId})`), desc(userBadges.earnedAt))
+      .limit(5);
+
+    const featuredBadges: FeaturedBadgeRow[] = featuredRows.map((row) => ({
+      badgeId: row.badgeId,
+      badgeName: row.badgeName,
+      rarity: this.mapBadgeRarity(row.earnedCount),
+    }));
+
+    const rareBadges = featuredBadges.filter((badge) => ['rare', 'epic', 'legendary'].includes(badge.rarity)).length;
+    const aggregate = aggregateRows[0];
+
+    return {
+      userId,
+      totalBadges: aggregate?.totalBadges ?? 0,
+      rareBadges,
+      highestRank:
+        aggregate?.highestRank !== null && aggregate?.highestRank !== undefined && aggregate.highestRank < 2147483647
+          ? aggregate.highestRank
+          : null,
+      featuredBadges,
+    };
+  }
+
+  async getBadgeDetailsById(badgeId: string): Promise<BadgeDetailsRow | null> {
+    const results = await this.db
+      .select({
+        badgeId: badges.badgeId,
+        name: badges.name,
+        description: badges.description,
+        earnedCount: sql<number>`COUNT(${userBadges.userBadgeId})::int`,
+      })
+      .from(badges)
+      .leftJoin(
+        userBadges,
+        and(eq(userBadges.badgeId, badges.badgeId), isNull(userBadges.revokedAt)),
+      )
+      .where(eq(badges.badgeId, badgeId))
+      .groupBy(badges.badgeId, badges.name, badges.description)
+      .limit(1);
+
+    const row = results[0];
+    if (!row) {
+      return null;
+    }
+
+    const badgeDetails: BadgeDetailsRow = {
+      badgeId: row.badgeId,
+      name: row.name,
+      description: row.description,
+      rarity: this.mapBadgeRarity(row.earnedCount),
+      earnedCount: row.earnedCount,
+    };
+
+    return badgeDetails;
   }
 
   async getBadgeById(badgeId: string): Promise<BadgeDefinitionRow | null> {
@@ -218,8 +359,8 @@ export class AchievementRepository implements AchievementRepositoryPort {
     return results[0].progress as Record<string, unknown>;
   }
 
-  async revokeBadge(userId: string, badgeId: string, reason: string): Promise<void> {
-    await this.db
+  async revokeBadge(userId: string, badgeId: string, reason: string): Promise<RevokedBadgeRecord | null> {
+    const results = await this.db
       .update(userBadges)
       .set({
         revokedAt: new Date().toISOString(),
@@ -232,7 +373,23 @@ export class AchievementRepository implements AchievementRepositoryPort {
           isNull(userBadges.revokedAt),
         ),
       )
-      .execute();
+      .returning();
+
+    const revokedRow = results[0];
+    if (!revokedRow) {
+      return null;
+    }
+
+    const badgeResults = await this.db
+      .select({
+        badgeSlug: badges.slug,
+        badgeName: badges.name,
+      })
+      .from(badges)
+      .where(eq(badges.badgeId, badgeId))
+      .limit(1);
+
+    const badgeRow = badgeResults[0];
 
     this.logger.warn({
       event: 'badge_revoked',
@@ -240,6 +397,16 @@ export class AchievementRepository implements AchievementRepositoryPort {
       badgeId,
       reason,
     });
+
+    return {
+      userBadgeId: revokedRow.userBadgeId,
+      userId: revokedRow.userId,
+      badgeId: revokedRow.badgeId,
+      badgeSlug: badgeRow?.badgeSlug ?? '',
+      badgeName: badgeRow?.badgeName ?? '',
+      revokedAt: this.toDate(revokedRow.revokedAt) ?? new Date(),
+      revocationReason: revokedRow.revocationReason ?? reason,
+    };
   }
 
   isBadgeValid(badge: {
@@ -298,6 +465,14 @@ export class AchievementRepository implements AchievementRepositoryPort {
       .where(and(eq(userBadges.badgeId, badgeId), isNull(userBadges.revokedAt)));
 
     return result[0]?.count ?? 0;
+  }
+
+  private mapBadgeRarity(earnedCount: number): string {
+    if (earnedCount >= 1000) return 'common';
+    if (earnedCount >= 500) return 'uncommon';
+    if (earnedCount >= 100) return 'rare';
+    if (earnedCount >= 10) return 'epic';
+    return 'legendary';
   }
 
   private toDate(value: string | Date | null): Date | null {
