@@ -35,19 +35,19 @@ export class UserApplicationService {
       query,
     );
 
-    return {
-      items: items.map((item) => ({
-        badgeId: item.badgeId,
-        name: item.name,
-        description: item.description,
-        earnedAt: item.earnedAt,
-      })),
-      pagination: {
-        limit,
-        hasNextPage,
-        nextCursor: nextCursor ? UserBadgeCursorMapper.serialize(nextCursor) : null,
-      },
-    };
+    return this.toUserBadgesResponse(items, limit, hasNextPage, nextCursor);
+  }
+
+  async listBadgesByUserId(
+    userId: string,
+    query: ListUserBadgesQuery,
+  ): Promise<UserBadgesResponseDto> {
+    const { items, limit, hasNextPage, nextCursor } = await this.userDomainService.listUserBadges(
+      userId,
+      query,
+    );
+
+    return this.toUserBadgesResponse(items, limit, hasNextPage, nextCursor);
   }
 
   async getUserRanking(userId: string): Promise<UserRankingResponseDto> {
@@ -93,6 +93,27 @@ export class UserApplicationService {
         limit,
         hasNextPage,
         nextCursor: nextCursor ? UserActivityCursorMapper.serialize(nextCursor) : null,
+      },
+    };
+  }
+
+  private toUserBadgesResponse(
+    items: Awaited<ReturnType<UserDomainService['listUserBadges']>>['items'],
+    limit: number,
+    hasNextPage: boolean,
+    nextCursor: Awaited<ReturnType<UserDomainService['listUserBadges']>>['nextCursor'],
+  ): UserBadgesResponseDto {
+    return {
+      items: items.map((item) => ({
+        badgeId: item.badgeId,
+        name: item.name,
+        description: item.description,
+        earnedAt: item.earnedAt,
+      })),
+      pagination: {
+        limit,
+        hasNextPage,
+        nextCursor: nextCursor ? UserBadgeCursorMapper.serialize(nextCursor) : null,
       },
     };
   }

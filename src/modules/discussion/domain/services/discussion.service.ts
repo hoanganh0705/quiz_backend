@@ -27,6 +27,8 @@ import type {
   MyDiscussionListItem,
   MyCommentCursor,
   MyCommentListItem,
+  MyUpvotedThreadListItem,
+  MyUpvotedCommentListItem,
   TrendingDiscussionCursor,
   TrendingDiscussionListItem,
   UnansweredDiscussionCursor,
@@ -35,6 +37,9 @@ import type {
   SearchDiscussionsCursor,
   ThreadStats,
   MyDiscussionStats,
+  RelatedDiscussionListItem,
+  ThreadParticipantListItem,
+  PublicDiscussionProfile,
 } from '../types';
 import { USER_REPOSITORY_PORT, type UserRepositoryPort } from '@/modules/user/domain/ports/user-repository.port';
 import { UserNotFoundError } from '@/modules/user/domain/errors';
@@ -232,6 +237,66 @@ export class DiscussionService {
     };
   }
 
+  async listMyUpvotedThreads(
+    userId: string,
+    query: { page?: number; limit?: number },
+  ): Promise<{ items: MyUpvotedThreadListItem[]; total: number; page: number; limit: number }> {
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 20;
+
+    const result = await this.repo.listMyUpvotedThreads({
+      userId,
+      page,
+      limit,
+    });
+
+    this.logger.debug({
+      event: 'my_upvoted_threads_listed',
+      userId,
+      page,
+      limit,
+      total: result.total,
+      resultCount: result.items.length,
+    });
+
+    return {
+      items: result.items,
+      total: result.total,
+      page,
+      limit,
+    };
+  }
+
+  async listMyUpvotedComments(
+    userId: string,
+    query: { page?: number; limit?: number },
+  ): Promise<{ items: MyUpvotedCommentListItem[]; total: number; page: number; limit: number }> {
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 20;
+
+    const result = await this.repo.listMyUpvotedComments({
+      userId,
+      page,
+      limit,
+    });
+
+    this.logger.debug({
+      event: 'my_upvoted_comments_listed',
+      userId,
+      page,
+      limit,
+      total: result.total,
+      resultCount: result.items.length,
+    });
+
+    return {
+      items: result.items,
+      total: result.total,
+      page,
+      limit,
+    };
+  }
+
   async listTrendingDiscussions(
     query: { limit?: number; cursor?: TrendingDiscussionCursor | null },
   ): Promise<{
@@ -318,6 +383,70 @@ export class DiscussionService {
           ? { createdAt: lastItem.createdAt, threadId: lastItem.threadId }
           : null,
     };
+  }
+
+  async listRelatedDiscussions(
+    threadId: string,
+    query: { limit?: number },
+  ): Promise<RelatedDiscussionListItem[]> {
+    const thread = await this.repo.getThreadById(threadId);
+    if (!thread) {
+      this.logger.warn({ event: 'related_discussion_thread_not_found', threadId });
+      throw new ThreadNotFoundError(threadId);
+    }
+
+    const limit = Math.min(query.limit ?? 10, 10);
+    const items = await this.repo.findRelatedThreads({ threadId, limit });
+
+    this.logger.debug({
+      event: 'related_discussions_listed',
+      threadId,
+      requestedLimit: query.limit ?? 10,
+      appliedLimit: limit,
+      resultCount: items.length,
+    });
+
+    return items;
+  }
+
+  async listThreadParticipants(threadId: string): Promise<ThreadParticipantListItem[]> {
+    const thread = await this.repo.getThreadById(threadId);
+    if (!thread) {
+      this.logger.warn({ event: 'thread_participants_thread_not_found', threadId });
+      throw new ThreadNotFoundError(threadId);
+    }
+
+    const items = await this.repo.listThreadParticipants(threadId);
+
+    this.logger.debug({
+      event: 'thread_participants_listed',
+      threadId,
+      resultCount: items.length,
+    });
+
+    return items;
+  }
+
+  async getPublicDiscussionProfile(userId: string): Promise<PublicDiscussionProfile> {
+    const user = await this.userRepository.findMeById(userId);
+
+    if (!user) {
+      this.logger.warn({ event: 'discussion_profile_user_not_found', userId });
+      throw new UserNotFoundError();
+    }
+
+    const profile = await this.repo.getPublicDiscussionProfile(userId);
+
+    this.logger.debug({
+      event: 'discussion_profile_returned',
+      userId,
+      threadsCreated: profile.threadsCreated,
+      commentsCreated: profile.commentsCreated,
+      acceptedAnswers: profile.acceptedAnswers,
+      reputation: profile.reputation,
+    });
+
+    return profile;
   }
 
   async getThreadStats(threadId: string): Promise<ThreadStats | null> {

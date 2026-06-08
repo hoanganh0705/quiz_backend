@@ -40,6 +40,8 @@ import {
   TrendingDiscussionsResponseDto,
   UnansweredDiscussionsResponseDto,
   SearchDiscussionsResponseDto,
+  RelatedDiscussionsResponseDto,
+  ThreadParticipantsResponseDto,
   ThreadStatsResponseDto,
   MyDiscussionStatsResponseDto,
 } from '@/modules/discussion/dto/response';
@@ -58,6 +60,7 @@ import {
   ListTrendingDiscussionsQueryDto,
   ListUnansweredDiscussionsQueryDto,
   SearchDiscussionsQueryDto,
+  ListRelatedDiscussionsQueryDto,
 } from '@/modules/discussion/dto/request';
 import { DiscussionDomainExceptionFilter } from './filters/discussion-domain-exception.filter';
 import { TrendingDiscussionCursorMapper } from '@/modules/discussion/mappers/trending-discussion-cursor.mapper';
@@ -139,6 +142,48 @@ export class DiscussionController {
       limit: query.limit,
       cursor: query.cursor ? SearchDiscussionsCursorMapper.parse(query.cursor) : null,
     });
+  }
+
+  @Get('threads/:threadId/related')
+  @Public()
+  @ApiOperation({
+    summary: 'List related discussions',
+    description:
+      'Returns up to 10 discussion threads related to the specified thread based on quiz overlap, shared categories or tags, and similar title keywords.',
+  })
+  @ApiOkResponse({
+    description: 'Related discussions returned',
+    type: RelatedDiscussionsResponseDto,
+  })
+  @ApiNotFoundResponse({ description: 'Thread not found' })
+  @ApiBadRequestResponse({ description: 'Validation failed' })
+  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  async listRelatedDiscussions(
+    @Param('threadId', new ParseUUIDPipe()) threadId: string,
+    @Query() query: ListRelatedDiscussionsQueryDto,
+  ): Promise<RelatedDiscussionsResponseDto> {
+    return this.discussionService.listRelatedDiscussions(threadId, {
+      limit: query.limit,
+    });
+  }
+
+  @Get('threads/:threadId/participants')
+  @Public()
+  @ApiOperation({
+    summary: 'List thread participants',
+    description:
+      'Returns all unique users who participated in the specified thread, including the thread author and commenters, ordered by comment count descending.',
+  })
+  @ApiOkResponse({
+    description: 'Thread participants returned',
+    type: ThreadParticipantsResponseDto,
+  })
+  @ApiNotFoundResponse({ description: 'Thread not found' })
+  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  async listThreadParticipants(
+    @Param('threadId', new ParseUUIDPipe()) threadId: string,
+  ): Promise<ThreadParticipantsResponseDto> {
+    return this.discussionService.listThreadParticipants(threadId);
   }
 
   @Get('threads/:threadId/stats')
