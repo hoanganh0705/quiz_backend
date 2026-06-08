@@ -19,6 +19,16 @@ export interface BadgeEarnedEvent {
   readonly awardedAt: Date;
 }
 
+export interface BadgeRevokedEvent {
+  readonly eventType: 'badge.revoked';
+  readonly userId: string;
+  readonly badgeId: string;
+  readonly badgeType: string;
+  readonly revokedAt: Date;
+  readonly reason: string;
+  readonly revokedBy: string;
+}
+
 export interface StreakMilestoneEvent {
   readonly eventType: 'streak.milestone';
   readonly userId: string;
@@ -29,4 +39,5 @@ export interface StreakMilestoneEvent {
 export type AchievementDomainEvent =
   | AchievementAwardedEvent
   | BadgeEarnedEvent
+  | BadgeRevokedEvent
   | StreakMilestoneEvent;

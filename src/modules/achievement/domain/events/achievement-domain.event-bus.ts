@@ -121,6 +121,30 @@ export class AchievementDomainEventBus {
   }
 
   /**
+   * Publish a badge revoked event.
+   */
+  emitBadgeRevoked(params: {
+    userId: string;
+    badgeId: string;
+    badgeSlug: string;
+    revokedAt: Date;
+    reason: string;
+    revokedBy: string;
+  }): void {
+    const event = {
+      eventType: 'badge.revoked' as const,
+      userId: params.userId,
+      badgeId: params.badgeId,
+      badgeType: params.badgeSlug,
+      revokedAt: params.revokedAt,
+      reason: params.reason,
+      revokedBy: params.revokedBy,
+    };
+
+    this.publish(event);
+  }
+
+  /**
    * Publish a streak milestone event.
    */
   emitStreakMilestone(params: { userId: string; streakDays: number }): void {

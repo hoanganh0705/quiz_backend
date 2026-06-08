@@ -29,3 +29,20 @@ export class AchievementGrantError extends AchievementDomainError {
     this.name = 'AchievementGrantError';
   }
 }
+
+export class AchievementUserNotFoundError extends AchievementDomainError {
+  constructor(userId: string) {
+    super(`User not found: ${userId}`, 'ACHIEVEMENT_USER_NOT_FOUND', { userId });
+    this.name = 'AchievementUserNotFoundError';
+  }
+}
+
+export class UserBadgeOwnershipNotFoundError extends AchievementDomainError {
+  constructor(userId: string, badgeId: string) {
+    super(`Badge ${badgeId} not owned by user ${userId}`, 'USER_BADGE_OWNERSHIP_NOT_FOUND', {
+      userId,
+      badgeId,
+    });
+    this.name = 'UserBadgeOwnershipNotFoundError';
+  }
+}

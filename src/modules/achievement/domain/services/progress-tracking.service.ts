@@ -10,9 +10,13 @@
 
 import { Inject, Injectable } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
+import { BadgeType } from '../types/achievement.types';
 import { ACHIEVEMENT_REPOSITORY_PORT } from '../../infrastructure/repositories/achievement.repository';
-import type { AchievementRepositoryPort } from '../../infrastructure/repositories/achievement.repository';
-import type { BadgeDefinitionRow } from '../../infrastructure/repositories/achievement.repository';
+import type {
+  AchievementRepositoryPort,
+  BadgeDefinitionRow,
+  BadgeRuleRow,
+} from '../../infrastructure/repositories/achievement.repository';
 
 export enum ProgressVisibility {
   VISIBLE = 'visible',
@@ -37,6 +41,12 @@ export interface ProgressResponse {
   isEarned: boolean;
 }
 
+export interface BadgeProgressSnapshot {
+  current: number;
+  target: number;
+  percent: number;
+}
+
 @Injectable()
 export class ProgressTrackingService {
   constructor(
@@ -45,6 +55,36 @@ export class ProgressTrackingService {
     @InjectPinoLogger(ProgressTrackingService.name)
     private readonly logger: PinoLogger,
   ) {}
+
+  async getBadgeProgressSnapshot(userId: string, badgeId: string): Promise<BadgeProgressSnapshot | null> {
+    const badge = await this.achievementRepository.getBadgeById(badgeId);
+    if (!badge) {
+      this.logger.warn({ event: 'badge_progress_badge_not_found', userId, badgeId });
+      return null;
+    }
+
+    const rules = await this.achievementRepository.getBadgeRules(badgeId);
+    const primaryRule = rules[0] ?? null;
+
+    const target = this.resolveTarget(primaryRule?.config ?? null, badgeId);
+    const current = await this.resolveCurrentProgress(userId, badgeId, primaryRule?.config ?? null, target);
+    const percent = this.calculatePercent(current, target);
+
+    this.logger.debug({
+      event: 'badge_progress_snapshot_resolved',
+      userId,
+      badgeId,
+      current,
+      target,
+      percent,
+    });
+
+    return {
+      current,
+      target,
+      percent,
+    };
+  }
 
   /**
    * Get progress for a specific badge.
@@ -208,6 +248,97 @@ export class ProgressTrackingService {
     }
 
     return ProgressVisibility.VISIBLE;
+  }
+
+  private async resolveCurrentProgress(
+    userId: string,
+    badgeId: string,
+    config: Record<string, unknown> | null,
+    target: number,
+  ): Promise<number> {
+    const hasBadge = await this.achievementRepository.hasBadge(userId, badgeId);
+    if (hasBadge) {
+      return target;
+    }
+
+    const storedProgress = await this.achievementRepository.getBadgeProgress(userId, badgeId);
+    const storedCurrent = this.getNumericValue(storedProgress?.current);
+    if (storedCurrent !== null) {
+      return this.clampValue(storedCurrent, 0, target);
+    }
+
+    const metric = typeof config?.metric === 'string' ? config.metric : null;
+
+    if (metric === 'streak_days' || metric === 'current_streak' || metric === 'longest_streak') {
+      return this.inferStreakCurrent(badgeId);
+    }
+
+    if (metric === 'current_rank' || metric === 'period_rank' || metric === 'all_time_rank') {
+      return 0;
+    }
+
+    if (metric === 'xp_total') {
+      return 0;
+    }
+
+    return 0;
+  }
+
+  private resolveTarget(config: Record<string, unknown> | null, badgeId: string): number {
+    const configuredTarget = this.getNumericValue(config?.threshold);
+    if (configuredTarget !== null && configuredTarget > 0) {
+      return configuredTarget;
+    }
+
+    const badgeTarget = this.inferBadgeTarget(badgeId);
+    if (badgeTarget > 0) {
+      return badgeTarget;
+    }
+
+    return 1;
+  }
+
+  private inferBadgeTarget(badgeId: string): number {
+    switch (badgeId) {
+      case BadgeType.RANK_1:
+        return 1;
+      case BadgeType.TOP_10:
+        return 10;
+      case BadgeType.TOP_100:
+        return 100;
+      case BadgeType.TOP_1000:
+        return 1000;
+      case BadgeType.STREAK_7:
+        return 7;
+      case BadgeType.STREAK_30:
+        return 30;
+      case BadgeType.STREAK_100:
+        return 100;
+      default:
+        return 1;
+    }
+  }
+
+  private inferStreakCurrent(badgeId: string): number {
+    const target = this.inferBadgeTarget(badgeId);
+    return target === 1 ? 0 : 0;
+  }
+
+  private calculatePercent(current: number, target: number): number {
+    if (target <= 0) {
+      return 0;
+    }
+
+    const rawPercent = Math.floor((current / target) * 100);
+    return this.clampValue(rawPercent, 0, 100);
+  }
+
+  private getNumericValue(value: unknown): number | null {
+    return typeof value === 'number' && Number.isFinite(value) ? value : null;
+  }
+
+  private clampValue(value: number, min: number, max: number): number {
+    return Math.min(max, Math.max(min, value));
   }
 
   /**

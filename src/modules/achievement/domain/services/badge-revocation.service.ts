@@ -17,7 +17,11 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { ACHIEVEMENT_REPOSITORY_PORT } from '../../infrastructure/repositories/achievement.repository';
-import type { AchievementRepositoryPort } from '../../infrastructure/repositories/achievement.repository';
+import type {
+  AchievementRepositoryPort,
+  RevokedBadgeRecord,
+} from '../../infrastructure/repositories/achievement.repository';
+import { AchievementDomainEventBus } from '../events/achievement-domain.event-bus';
 
 export interface RevocationRequest {
   userId: string;
@@ -70,6 +74,7 @@ export class BadgeRevocationService {
   constructor(
     @Inject(ACHIEVEMENT_REPOSITORY_PORT)
     private readonly achievementRepository: AchievementRepositoryPort,
+    private readonly achievementDomainEventBus: AchievementDomainEventBus,
     @InjectPinoLogger(BadgeRevocationService.name)
     private readonly logger: PinoLogger,
   ) {}
@@ -79,7 +84,6 @@ export class BadgeRevocationService {
    * This is a soft delete - the record remains in history.
    */
   async revokeBadge(request: RevocationRequest): Promise<RevocationResult> {
-    // Validate the request
     const validationError = this.validateRequest(request);
     if (validationError) {
       this.logger.warn({
@@ -91,26 +95,23 @@ export class BadgeRevocationService {
       return { success: false, error: validationError };
     }
 
-    // Check if badge was already revoked
     const hasBadge = await this.achievementRepository.hasBadge(request.userId, request.badgeId);
     if (!hasBadge) {
       return { success: false, error: 'Badge not found or already revoked' };
     }
 
     try {
-      // Revoke the badge
-      await this.achievementRepository.revokeBadge(request.userId, request.badgeId, request.reason);
+      const revokedBadge = await this.achievementRepository.revokeBadge(
+        request.userId,
+        request.badgeId,
+        request.reason,
+      );
 
-      const revocation: RevocationRecord = {
-        userBadgeId: '', // Would be populated from actual result
-        userId: request.userId,
-        badgeId: request.badgeId,
-        badgeSlug: '', // Would be populated from actual result
-        revokedAt: new Date(),
-        revokedBy: request.revokedBy,
-        reason: request.reason,
-        evidence: request.evidence,
-      };
+      if (!revokedBadge) {
+        return { success: false, error: 'Badge not found or already revoked' };
+      }
+
+      const revocation = this.toRevocationRecord(revokedBadge, request);
 
       this.logger.warn({
         event: 'badge_revoked',
@@ -120,8 +121,14 @@ export class BadgeRevocationService {
         reason: request.reason,
       });
 
-      // Emit event for other systems
-      // In a real implementation, this would publish to an event bus
+      this.achievementDomainEventBus.emitBadgeRevoked({
+        userId: request.userId,
+        badgeId: request.badgeId,
+        badgeSlug: revokedBadge.badgeSlug,
+        revokedAt: revokedBadge.revokedAt,
+        reason: request.reason,
+        revokedBy: request.revokedBy,
+      });
 
       return { success: true, revocation };
     } catch (error) {
@@ -237,6 +244,22 @@ export class BadgeRevocationService {
       byReason: {},
       recentRevocations: [],
     });
+  }
+
+  private toRevocationRecord(
+    revokedBadge: RevokedBadgeRecord,
+    request: RevocationRequest,
+  ): RevocationRecord {
+    return {
+      userBadgeId: revokedBadge.userBadgeId,
+      userId: revokedBadge.userId,
+      badgeId: revokedBadge.badgeId,
+      badgeSlug: revokedBadge.badgeSlug,
+      revokedAt: revokedBadge.revokedAt,
+      revokedBy: request.revokedBy,
+      reason: request.reason,
+      evidence: request.evidence,
+    };
   }
 
   /**
