@@ -40,11 +40,12 @@ import {
   TrendingDiscussionsResponseDto,
   UnansweredDiscussionsResponseDto,
   SearchDiscussionsResponseDto,
-  RelatedDiscussionsResponseDto,
-  ThreadParticipantsResponseDto,
-  ThreadStatsResponseDto,
-  MyDiscussionStatsResponseDto,
-} from '@/modules/discussion/dto/response';
+    RelatedDiscussionsResponseDto,
+    ThreadParticipantsResponseDto,
+    ThreadStatsResponseDto,
+    MyDiscussionStatsResponseDto,
+    DiscussionSubscriptionActionResponseDto,
+  } from '@/modules/discussion/dto/response';
 import {
   CreateThreadDto,
   UpdateThreadDto,
@@ -223,18 +224,46 @@ export class DiscussionController {
     return this.discussionService.getMyDiscussionStats(user);
   }
 
-  @Post('threads')
+  @Post('threads/:threadId/subscribe')
   @ApiAuth()
-  @ApiOperation({ summary: 'Create a discussion thread' })
-  @ApiCreatedResponse({ description: 'Thread created', type: ThreadDto })
-  @ApiNotFoundResponse({ description: 'Quiz not found' })
+  @ApiOperation({
+    summary: 'Subscribe to discussion thread',
+    description:
+      'Subscribes the authenticated user to the specified discussion thread. The operation is idempotent and succeeds even if the user is already subscribed.',
+  })
+  @ApiOkResponse({
+    description: 'Subscription recorded successfully',
+    type: DiscussionSubscriptionActionResponseDto,
+  })
+  @ApiNotFoundResponse({ description: 'Thread not found' })
   @ApiBadRequestResponse({ description: 'Validation failed' })
-  @ApiValidationRequest()
-  async createThread(
+  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  async subscribeToThread(
     @CurrentUser() user: JwtPayload,
-    @Body() dto: CreateThreadDto,
-  ): Promise<ThreadDto> {
-    return this.discussionService.createThread(user, dto.quizId, dto.title, dto.body);
+    @Param('threadId', new ParseUUIDPipe()) threadId: string,
+  ): Promise<DiscussionSubscriptionActionResponseDto> {
+    return this.discussionService.subscribeToThread(user, threadId);
+  }
+
+  @Delete('threads/:threadId/subscribe')
+  @ApiAuth()
+  @ApiOperation({
+    summary: 'Unsubscribe from discussion thread',
+    description:
+      'Unsubscribes the authenticated user from the specified discussion thread. The operation is idempotent and succeeds even if no subscription exists.',
+  })
+  @ApiOkResponse({
+    description: 'Subscription removed successfully',
+    type: DiscussionSubscriptionActionResponseDto,
+  })
+  @ApiNotFoundResponse({ description: 'Thread not found' })
+  @ApiBadRequestResponse({ description: 'Validation failed' })
+  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  async unsubscribeFromThread(
+    @CurrentUser() user: JwtPayload,
+    @Param('threadId', new ParseUUIDPipe()) threadId: string,
+  ): Promise<DiscussionSubscriptionActionResponseDto> {
+    return this.discussionService.unsubscribeFromThread(user, threadId);
   }
 
   @Get('threads')

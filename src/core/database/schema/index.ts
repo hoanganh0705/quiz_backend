@@ -205,6 +205,43 @@ export const discussionVotes = pgTable(
   ],
 );
 
+export const discussionThreadSubscriptions = pgTable(
+  'discussion_thread_subscriptions',
+  {
+    userId: uuid('user_id').notNull(),
+    threadId: uuid('thread_id').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex('uq_discussion_thread_subscriptions_user_thread').using(
+      'btree',
+      table.userId.asc().nullsLast().op('uuid_ops'),
+      table.threadId.asc().nullsLast().op('uuid_ops'),
+    ),
+    index('idx_discussion_thread_subscriptions_user_created').using(
+      'btree',
+      table.userId.asc().nullsLast().op('uuid_ops'),
+      table.createdAt.desc().nullsLast().op('timestamptz_ops'),
+    ),
+    index('idx_discussion_thread_subscriptions_thread').using(
+      'btree',
+      table.threadId.asc().nullsLast().op('uuid_ops'),
+    ),
+    foreignKey({
+      columns: [table.userId],
+      foreignColumns: [users.userId],
+      name: 'discussion_thread_subscriptions_user_id_fkey',
+    }).onDelete('cascade'),
+    foreignKey({
+      columns: [table.threadId],
+      foreignColumns: [discussionThreads.threadId],
+      name: 'discussion_thread_subscriptions_thread_id_fkey',
+    }).onDelete('cascade'),
+  ],
+);
+
 export const discussionReports = pgTable(
   'discussion_reports',
   {

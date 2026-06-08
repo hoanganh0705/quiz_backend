@@ -18,12 +18,14 @@ import {
   ListMyDiscussionsQueryDto,
   ListMyUpvotedThreadsQueryDto,
   ListMyUpvotedCommentsQueryDto,
+  ListMyDiscussionSubscriptionsQueryDto,
 } from '@/modules/discussion/dto/request';
 import {
   MyCommentsResponseDto,
   MyDiscussionsResponseDto,
   MyUpvotedThreadsResponseDto,
   MyUpvotedCommentsResponseDto,
+  MyDiscussionSubscriptionsResponseDto,
   PublicDiscussionProfileResponseDto,
 } from '@/modules/discussion/dto/response';
 import { MyCommentCursorMapper } from '@/modules/discussion/mappers/my-comment-cursor.mapper';
@@ -177,6 +179,31 @@ export class UserDiscussionController {
     @Query() query: ListMyUpvotedCommentsQueryDto,
   ): Promise<MyUpvotedCommentsResponseDto> {
     return this.discussionApplicationService.listMyUpvotedComments(user, {
+      page: query.page,
+      limit: query.limit,
+    });
+  }
+
+  @Get('users/me/discussion-subscriptions')
+  @ApiBearerAuth()
+  @ApiAuth()
+  @ApiOperation({
+    summary: 'My discussion subscriptions',
+    description:
+      'Returns active discussion threads subscribed to by the authenticated user, paginated and ordered by the most recent subscription first.',
+  })
+  @ApiOkResponse({
+    description: 'Discussion subscriptions returned',
+    type: MyDiscussionSubscriptionsResponseDto,
+  })
+  @ApiBadRequestResponse({ description: 'Validation failed' })
+  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  @ApiValidationRequest()
+  listMyDiscussionSubscriptions(
+    @CurrentUser() user: JwtPayload,
+    @Query() query: ListMyDiscussionSubscriptionsQueryDto,
+  ): Promise<MyDiscussionSubscriptionsResponseDto> {
+    return this.discussionApplicationService.listMyDiscussionSubscriptions(user, {
       page: query.page,
       limit: query.limit,
     });

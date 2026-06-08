@@ -4,6 +4,8 @@ export * from './my-discussions-response.dto';
 export * from './my-comments-response.dto';
 export * from './my-upvoted-threads-response.dto';
 export * from './my-upvoted-comments-response.dto';
+export * from './my-discussion-subscriptions-response.dto';
+export * from './discussion-subscription-action-response.dto';
 export * from './trending-discussions-response.dto';
 export * from './unanswered-discussions-response.dto';
 export * from './search-discussions-response.dto';
@@ -14,7 +16,7 @@ export * from './thread-stats-response.dto';
 export * from './my-discussion-stats-response.dto';
 
 const THREAD_STATUS_VALUES = ['open', 'closed', 'hidden', 'deleted'] as const;
-const CONTENT_STATUS_VALUES = ['visible', 'hidden', 'deleted'] as const;
+const CONTENT_STATUS_VALUES = ['visible', 'hidden', 'deleted', 'accepted'] as const;
 const VOTE_VALUES = ['upvote', 'downvote'] as const;
 const REPORT_STATUS_VALUES = ['open', 'reviewed', 'dismissed', 'actioned'] as const;
 const REPORT_TARGET_TYPE_VALUES = ['thread', 'comment', 'reply'] as const;
