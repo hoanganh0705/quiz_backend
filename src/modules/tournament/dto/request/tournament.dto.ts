@@ -8,6 +8,10 @@ import {
   type TournamentStatus,
 } from '../../types/tournament.types';
 import { trimString, trimStringToNullIfBlank } from '@/common/utils/text.util';
+export { GetTournamentParticipantsQueryDto } from './get-tournament-participants-query.dto';
+
+export const UPCOMING_TOURNAMENT_SORT_OPTIONS = ['startAt', 'registrationDeadline'] as const;
+export type UpcomingTournamentSortOption = (typeof UPCOMING_TOURNAMENT_SORT_OPTIONS)[number];
 
 export class ListTournamentsQueryDto {
   @ApiPropertyOptional({
@@ -59,6 +63,108 @@ export class ListTournamentsQueryDto {
   @IsOptional()
   @IsUUID('4')
   categoryId?: string;
+}
+
+export class GetUpcomingTournamentsQueryDto {
+  @ApiPropertyOptional({
+    description: 'Page number (1-based)',
+    minimum: 1,
+    default: 1,
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  page?: number = 1;
+
+  @ApiPropertyOptional({
+    description: 'Maximum number of upcoming tournaments to return per page (1-100)',
+    minimum: 1,
+    maximum: 100,
+    default: 20,
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  limit?: number = 20;
+
+  @ApiPropertyOptional({
+    description: 'Sort upcoming tournaments by start date or registration deadline',
+    enum: UPCOMING_TOURNAMENT_SORT_OPTIONS,
+    default: 'startAt',
+  })
+  @IsOptional()
+  @IsIn(UPCOMING_TOURNAMENT_SORT_OPTIONS)
+  sortBy?: UpcomingTournamentSortOption = 'startAt';
+}
+
+export class GetActiveTournamentsQueryDto {
+  @ApiPropertyOptional({
+    description: 'Page number (1-based)',
+    minimum: 1,
+    default: 1,
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  page?: number = 1;
+
+  @ApiPropertyOptional({
+    description: 'Maximum number of active tournaments to return per page (1-100)',
+    minimum: 1,
+    maximum: 100,
+    default: 20,
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  limit?: number = 20;
+}
+
+export class GetCompletedTournamentsQueryDto {
+  @ApiPropertyOptional({
+    description: 'Page number (1-based)',
+    minimum: 1,
+    default: 1,
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  page?: number = 1;
+
+  @ApiPropertyOptional({
+    description: 'Maximum number of completed tournaments to return per page (1-100)',
+    minimum: 1,
+    maximum: 100,
+    default: 20,
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  limit?: number = 20;
+}
+
+export class GetRelatedTournamentsQueryDto {
+  @ApiPropertyOptional({
+    description: 'Maximum number of related tournaments to return',
+    minimum: 1,
+    maximum: 20,
+    default: 5,
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(20)
+  limit?: number = 5;
 }
 
 export class CreateTournamentDto {

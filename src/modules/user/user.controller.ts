@@ -18,10 +18,14 @@ import { ListQuizzesQueryDto } from '@/modules/quiz/dto/request/list-quizzes-que
 import { QuizListResponseDto } from '@/modules/quiz/dto/response/quiz-list-response.dto';
 import { RelatedQuizzesResponseDto } from '@/modules/quiz/dto/response/related-quizzes-response.dto';
 import { ListUserActivityQueryDto } from './dto/request/list-user-activity-query.dto';
+import { GetMyTournamentsQueryDto } from './dto/request/get-my-tournaments-query.dto';
+import { GetMyTournamentHistoryQueryDto } from './dto/request/get-my-tournament-history-query.dto';
 import { UpdateMeSettingsDto } from './dto/request/update-me-settings.dto';
 import { UpdateMeDto } from './dto/request/update-me.dto';
 import { ListUserBadgesQueryDto } from './dto/request/list-user-badges-query.dto';
 import { UserActivityResponseDto } from './dto/response/user-activity-response.dto';
+import { MyTournamentsResponseDto } from './dto/response/my-tournaments-response.dto';
+import { MyTournamentHistoryResponseDto } from './dto/response/my-tournament-history-response.dto';
 import { UserMeResponseDto } from './dto/response/user-me-response.dto';
 import { UserBadgesResponseDto } from './dto/response/user-badges-response.dto';
 import { UserRankingResponseDto } from './dto/response/user-ranking-response.dto';
@@ -156,6 +160,43 @@ export class UserController {
       limit: query.limit,
       cursor,
     });
+  }
+
+  @Get('me/tournaments')
+  @ApiOperation({
+    summary: 'List my tournaments',
+    description:
+      'Returns tournaments the authenticated user has registered for or participated in, paginated by page and limit and ordered by most recent registration first.',
+  })
+  @ApiOkResponse({ description: 'My tournaments returned', type: MyTournamentsResponseDto })
+  @ApiBadRequestResponse({ description: 'Validation failed' })
+  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  @ApiValidationRequest()
+  listMyTournaments(
+    @CurrentUser('sub') userId: string,
+    @Query() query: GetMyTournamentsQueryDto,
+  ): Promise<MyTournamentsResponseDto> {
+    return this.userApplicationService.getMyTournaments(userId, query);
+  }
+
+  @Get('me/tournament-history')
+  @ApiOperation({
+    summary: 'List my tournament history',
+    description:
+      'Returns completed tournament participation history for the authenticated user, paginated by page and limit and ordered by most recent completion first.',
+  })
+  @ApiOkResponse({
+    description: 'My tournament history returned',
+    type: MyTournamentHistoryResponseDto,
+  })
+  @ApiBadRequestResponse({ description: 'Validation failed' })
+  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  @ApiValidationRequest()
+  listMyTournamentHistory(
+    @CurrentUser('sub') userId: string,
+    @Query() query: GetMyTournamentHistoryQueryDto,
+  ): Promise<MyTournamentHistoryResponseDto> {
+    return this.userApplicationService.getMyTournamentHistory(userId, query);
   }
 
   @Get('me/ranking')

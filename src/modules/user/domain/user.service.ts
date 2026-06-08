@@ -1,6 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
-import type { UserBadgeRow } from './ports/user-repository.port';
+import type { MyTournamentHistoryRow, MyTournamentRow, UserActivityRow, UserBadgeRow, UserMeRow } from './ports/user-repository.port';
 import { UserAnalyticsNotFoundError, UserRankingNotFoundError } from './errors';
 import type {
   ListUserBadgesQuery,
@@ -9,16 +9,17 @@ import type {
   UserRankingSummary,
 } from './types/user-commands';
 import type { UserAnalytics } from './types/user-analytics';
+import { USER_REPOSITORY_PORT, type UserRepositoryPort } from './ports/user-repository.port';
+import { UserNotFoundError } from './errors';
+import type { ListUserActivityQuery } from './types/list-user-activity.query';
+import type { GetMyTournamentsQuery } from './types/get-my-tournaments.query';
+import type { GetMyTournamentHistoryQuery } from './types/get-my-tournament-history.query';
 
 const XP_PER_LEVEL = 500;
 
 function calculateLevel(totalXp: number): number {
   return Math.floor(totalXp / XP_PER_LEVEL) + 1;
 }
-import type { UserActivityRow, UserMeRow } from './ports/user-repository.port';
-import { USER_REPOSITORY_PORT, type UserRepositoryPort } from './ports/user-repository.port';
-import { UserNotFoundError } from './errors';
-import type { ListUserActivityQuery } from './types/list-user-activity.query';
 
 @Injectable()
 export class UserDomainService {
@@ -188,6 +189,66 @@ export class UserDomainService {
         hasNextPage && lastItem
           ? { createdAt: lastItem.createdAt, eventId: lastItem.eventId }
           : null,
+    };
+  }
+
+  async getMyTournaments(
+    query: GetMyTournamentsQuery,
+  ): Promise<{ items: MyTournamentRow[]; total: number; page: number; limit: number }> {
+    await this.getMe(query.userId);
+
+    const page = query.page;
+    const limit = query.limit;
+
+    const result = await this.userRepository.listMyTournaments({
+      userId: query.userId,
+      page,
+      limit,
+    });
+
+    this.logger.info({
+      event: 'user_my_tournaments_listed',
+      userId: query.userId,
+      page,
+      limit,
+      total: result.total,
+    });
+
+    return {
+      items: result.items,
+      total: result.total,
+      page,
+      limit,
+    };
+  }
+
+  async getMyTournamentHistory(
+    query: GetMyTournamentHistoryQuery,
+  ): Promise<{ items: MyTournamentHistoryRow[]; total: number; page: number; limit: number }> {
+    await this.getMe(query.userId);
+
+    const page = query.page;
+    const limit = query.limit;
+
+    const result = await this.userRepository.listMyTournamentHistory({
+      userId: query.userId,
+      page,
+      limit,
+    });
+
+    this.logger.info({
+      event: 'user_my_tournament_history_listed',
+      userId: query.userId,
+      page,
+      limit,
+      total: result.total,
+    });
+
+    return {
+      items: result.items,
+      total: result.total,
+      page,
+      limit,
     };
   }
 }

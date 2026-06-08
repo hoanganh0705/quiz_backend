@@ -70,6 +70,51 @@ export type TournamentParticipantDetailRow = TournamentParticipantRow & {
   avatarUrl: string | null;
 };
 
+export type TournamentParticipantListItemRow = {
+  userId: string;
+  username: string;
+  registeredAt: string;
+};
+
+export type TournamentStandingRow = {
+  rank: number;
+  score: number;
+  percentile: number;
+  participantCount: number;
+};
+
+export type UpcomingTournamentRow = {
+  tournamentId: string;
+  name: string;
+  description: string | null;
+  startAt: string;
+  endAt: string;
+  participantCount: number;
+};
+
+export type ActiveTournamentRow = {
+  tournamentId: string;
+  name: string;
+  startAt: string;
+  endAt: string;
+  participantCount: number;
+};
+
+export type CompletedTournamentRow = {
+  tournamentId: string;
+  name: string;
+  startAt: string;
+  endAt: string;
+  participantCount: number;
+};
+
+export type RelatedTournamentRow = {
+  tournamentId: string;
+  name: string;
+  startAt: string;
+  participantCount: number;
+};
+
 export type TournamentRoundParticipantRow = {
   roundParticipantId: string;
   roundId: string;
@@ -151,6 +196,41 @@ export interface TournamentRepositoryPort {
   }): Promise<TournamentRoundParticipantRow>;
 
   getLeaderboard(tournamentId: string): Promise<TournamentLeaderboardEntry[]>;
+
+  listParticipants(params: {
+    tournamentId: string;
+    page: number;
+    limit: number;
+  }): Promise<{ items: TournamentParticipantListItemRow[]; total: number }>;
+
+  getParticipantStanding(params: {
+    tournamentId: string;
+    userId: string;
+  }): Promise<TournamentStandingRow | null>;
+
+  listUpcomingTournaments(params: {
+    page: number;
+    limit: number;
+    sortBy: 'startAt' | 'registrationDeadline';
+    nowIso: string;
+  }): Promise<{ items: UpcomingTournamentRow[]; total: number }>;
+
+  listActiveTournaments(params: {
+    page: number;
+    limit: number;
+    nowIso: string;
+  }): Promise<{ items: ActiveTournamentRow[]; total: number }>;
+
+  listCompletedTournaments(params: {
+    page: number;
+    limit: number;
+    nowIso: string;
+  }): Promise<{ items: CompletedTournamentRow[]; total: number }>;
+
+  listRelatedTournaments(params: {
+    tournamentId: string;
+    limit: number;
+  }): Promise<RelatedTournamentRow[]>;
 
   countParticipants(tournamentId: string): Promise<number>;
 }
