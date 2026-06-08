@@ -23,7 +23,16 @@ import {
   RANKING_REPOSITORY_PORT,
   type RankingRepositoryPort,
 } from '../ports/ranking-repository.port';
-import { RANKING_CONSTANTS, RankingPeriod } from '../types/ranking.types';
+import {
+  RANKING_DOMAIN_EVENT_BUS,
+  type RankingDomainEventBusPort,
+} from '../ports/ranking-event-bus.port';
+import {
+  RANKING_CONSTANTS,
+  RankingMilestone,
+  RankingPeriod,
+  calculatePercentile,
+} from '../types/ranking.types';
 import type {
   RankCalculationResult,
   ConsistencyReport,
@@ -53,6 +62,8 @@ export class RankCalculationService {
     private readonly db: NodePgDatabase,
     @Inject(RANKING_REPOSITORY_PORT)
     private readonly rankingRepository: RankingRepositoryPort,
+    @Inject(RANKING_DOMAIN_EVENT_BUS)
+    private readonly eventBus: RankingDomainEventBusPort,
     @InjectPinoLogger(RankCalculationService.name)
     private readonly logger: PinoLogger,
   ) {}
@@ -339,18 +350,95 @@ export class RankCalculationService {
 
     const rankColumn = this.getRankColumn(period);
 
-    // Build batch update query
-    const updates = results.map((r) => `('${r.userId}', ${r.rank}, ${r.denseRank})`);
+    for (const result of results) {
+      await this.rankingRepository.updateRank({
+        userId: result.userId,
+        period,
+        rank: result.rank,
+      });
 
-    // Use a single UPDATE with a VALUES clause for efficiency
-    await this.db.execute(sql`
-      UPDATE user_ranking AS ur
-      SET
-        ${sql.raw(rankColumn)} = ranked.rank,
-        updated_at = NOW()
-      FROM (VALUES ${sql.raw(updates.join(', '))}) AS ranked(user_id, rank, dense_rank)
-      WHERE ur.user_id = ranked.user_id::uuid
-    `);
+      const peakUpdated = await this.rankingRepository.updatePeakRank({
+        userId: result.userId,
+        period,
+        rank: result.rank,
+      });
+
+      if (peakUpdated) {
+        this.eventBus.emitPeakRankAchieved({
+          eventType: 'peak.rank.achieved',
+          userId: result.userId,
+          period,
+          previousPeakRank: null,
+          newPeakRank: result.rank,
+          timestamp: new Date(),
+        });
+      }
+
+      await this.checkAndPersistMilestones(result.userId, period, result.rank, result.denseRank);
+    }
+
+    this.logger.debug({
+      event: 'batch_ranks_updated',
+      period,
+      usersAffected: results.length,
+      rankColumn,
+    });
+  }
+
+  private async checkAndPersistMilestones(
+    userId: string,
+    period: RankingPeriod,
+    rank: number,
+    denseRank: number,
+  ): Promise<void> {
+    const milestones = this.getMilestonesForRank(rank);
+
+    if (milestones.length === 0) {
+      return;
+    }
+
+    const totalParticipants = await this.rankingRepository.getTotalParticipants(period);
+    const percentile = calculatePercentile(denseRank, totalParticipants);
+
+    for (const milestone of milestones) {
+      const milestoneExists = await this.rankingRepository.hasMilestone({ userId, milestone });
+      if (milestoneExists) {
+        continue;
+      }
+
+      await this.rankingRepository.createMilestone({
+        userId,
+        milestone,
+        rank,
+        achievedAt: new Date(),
+      });
+
+      this.eventBus.emitRankingMilestone({
+        eventType: 'ranking.milestone',
+        userId,
+        period,
+        milestoneType: milestone,
+        rank,
+        percentile,
+        timestamp: new Date(),
+      });
+    }
+  }
+
+  private getMilestonesForRank(rank: number): RankingMilestone[] {
+    const thresholds: Array<{ milestone: RankingMilestone; rank: number }> = [
+      { milestone: RankingMilestone.TOP_1, rank: 1 },
+      { milestone: RankingMilestone.TOP_3, rank: 3 },
+      { milestone: RankingMilestone.TOP_10, rank: 10 },
+      { milestone: RankingMilestone.TOP_50, rank: 50 },
+      { milestone: RankingMilestone.TOP_100, rank: 100 },
+      { milestone: RankingMilestone.TOP_1000, rank: 1000 },
+      { milestone: RankingMilestone.TOP_10000, rank: 10000 },
+    ];
+
+    return thresholds
+      .filter((threshold) => rank <= threshold.rank)
+      .map((threshold) => threshold.milestone);
   }
 
   // ============================================
@@ -358,29 +446,29 @@ export class RankCalculationService {
   // ============================================
 
   private getXpColumn(period: RankingPeriod): string {
-    const mapping: Record<RankingPeriod, string> = {
+    const mapping: Partial<Record<RankingPeriod, string>> = {
       [RankingPeriod.ALL_TIME]: 'all_time_xp',
       [RankingPeriod.WEEKLY]: 'weekly_xp',
       [RankingPeriod.MONTHLY]: 'monthly_xp',
     };
-    return mapping[period];
+    return mapping[period] ?? 'all_time_xp';
   }
 
   private getRankColumn(period: RankingPeriod): string {
-    const mapping: Record<RankingPeriod, string> = {
+    const mapping: Partial<Record<RankingPeriod, string>> = {
       [RankingPeriod.ALL_TIME]: 'all_time_rank',
       [RankingPeriod.WEEKLY]: 'weekly_rank',
       [RankingPeriod.MONTHLY]: 'monthly_rank',
     };
-    return mapping[period];
+    return mapping[period] ?? 'all_time_rank';
   }
 
   private getXpFieldName(period: RankingPeriod): 'allTimeXp' | 'weeklyXp' | 'monthlyXp' {
-    const mapping: Record<RankingPeriod, 'allTimeXp' | 'weeklyXp' | 'monthlyXp'> = {
+    const mapping: Partial<Record<RankingPeriod, 'allTimeXp' | 'weeklyXp' | 'monthlyXp'>> = {
       [RankingPeriod.ALL_TIME]: 'allTimeXp',
       [RankingPeriod.WEEKLY]: 'weeklyXp',
       [RankingPeriod.MONTHLY]: 'monthlyXp',
     };
-    return mapping[period];
+    return mapping[period] ?? 'allTimeXp';
   }
 }

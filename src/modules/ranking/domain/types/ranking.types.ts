@@ -15,6 +15,16 @@ export enum RankingPeriod {
   ALL_TIME = 'all_time',
 }
 
+export enum RankingMilestone {
+  TOP_10000 = 'TOP_10000',
+  TOP_1000 = 'TOP_1000',
+  TOP_100 = 'TOP_100',
+  TOP_50 = 'TOP_50',
+  TOP_10 = 'TOP_10',
+  TOP_3 = 'TOP_3',
+  TOP_1 = 'TOP_1',
+}
+
 export enum RankTrend {
   UP = 'up',
   DOWN = 'down',
@@ -60,6 +70,14 @@ export interface RankHistoryRecord {
   recordedAt: Date;
 }
 
+export interface RankingMilestoneRecord {
+  id: string;
+  userId: string;
+  milestone: RankingMilestone;
+  rank: number;
+  achievedAt: Date;
+}
+
 // ============================================
 // EVENT TYPES
 // ============================================
@@ -85,7 +103,7 @@ export interface RankUpdatedEvent {
 export interface RankMilestoneEvent {
   userId: string;
   period: RankingPeriod;
-  milestone: 'top10' | 'top100' | 'top1000' | 'rank1';
+  milestone: RankingMilestone;
   rank: number;
   percentile: number;
   timestamp: Date;
@@ -338,30 +356,35 @@ export function calculatePercentile(rank: number, totalUsers: number): number {
 }
 
 export function getXpField(period: RankingPeriod): 'allTimeXp' | 'weeklyXp' | 'monthlyXp' {
-  const mapping: Record<RankingPeriod, 'allTimeXp' | 'weeklyXp' | 'monthlyXp'> = {
+  const mapping: Partial<Record<RankingPeriod, 'allTimeXp' | 'weeklyXp' | 'monthlyXp'>> = {
     [RankingPeriod.ALL_TIME]: 'allTimeXp',
     [RankingPeriod.WEEKLY]: 'weeklyXp',
     [RankingPeriod.MONTHLY]: 'monthlyXp',
   };
-  return mapping[period];
+
+  return mapping[period] ?? 'allTimeXp';
 }
 
 export function getRankField(period: RankingPeriod): 'allTimeRank' | 'weeklyRank' | 'monthlyRank' {
-  const mapping: Record<RankingPeriod, 'allTimeRank' | 'weeklyRank' | 'monthlyRank'> = {
+  const mapping: Partial<Record<RankingPeriod, 'allTimeRank' | 'weeklyRank' | 'monthlyRank'>> = {
     [RankingPeriod.ALL_TIME]: 'allTimeRank',
     [RankingPeriod.WEEKLY]: 'weeklyRank',
     [RankingPeriod.MONTHLY]: 'monthlyRank',
   };
-  return mapping[period];
+
+  return mapping[period] ?? 'allTimeRank';
 }
 
 export function getPeakRankField(
   period: RankingPeriod,
 ): 'peakAllTimeRank' | 'peakWeeklyRank' | 'peakMonthlyRank' {
-  const mapping: Record<RankingPeriod, 'peakAllTimeRank' | 'peakWeeklyRank' | 'peakMonthlyRank'> = {
+  const mapping: Partial<
+    Record<RankingPeriod, 'peakAllTimeRank' | 'peakWeeklyRank' | 'peakMonthlyRank'>
+  > = {
     [RankingPeriod.ALL_TIME]: 'peakAllTimeRank',
     [RankingPeriod.WEEKLY]: 'peakWeeklyRank',
     [RankingPeriod.MONTHLY]: 'peakMonthlyRank',
   };
-  return mapping[period];
+
+  return mapping[period] ?? 'peakAllTimeRank';
 }

@@ -24,6 +24,7 @@ import { RankingPeriodEnum } from '../../dto/request/leaderboard-query.dto';
 import type {
   UserRankResponseDto,
   GlobalRankingDto,
+  PeakRankDto,
   PeakRanksDto,
   PeakRanksResponseDto,
   UserBadgesDto,
@@ -118,7 +119,12 @@ export class UserRankService {
       nextRankXp,
       trend: 'same',
       trendAmount: null,
-      period: periodEnum,
+      period:
+        period === RankingPeriod.WEEKLY
+          ? 'weekly'
+          : period === RankingPeriod.MONTHLY
+            ? 'monthly'
+            : 'all_time',
       resetInSeconds: 0,
     };
   }
@@ -268,6 +274,7 @@ export class UserRankService {
    */
   private enumToPeriod(periodEnum: RankingPeriodEnum): RankingPeriod {
     const mapping: Record<RankingPeriodEnum, RankingPeriod> = {
+      [RankingPeriodEnum.DAILY]: RankingPeriod.DAILY,
       [RankingPeriodEnum.WEEKLY]: RankingPeriod.WEEKLY,
       [RankingPeriodEnum.MONTHLY]: RankingPeriod.MONTHLY,
       [RankingPeriodEnum.ALL_TIME]: RankingPeriod.ALL_TIME,

@@ -102,7 +102,7 @@ export class RankingListenerAdapter implements OnModuleInit, OnModuleDestroy {
         userId: event.userId,
         rank: event.rank,
         period: event.period,
-        milestone: event.milestoneType,
+        milestone: this.mapMilestone(event.milestoneType),
         percentile: event.percentile,
       });
     } catch (error) {
@@ -122,5 +122,24 @@ export class RankingListenerAdapter implements OnModuleInit, OnModuleDestroy {
       period: event.period,
       archivedRecords: event.archivedRecords,
     });
+  }
+
+  private mapMilestone(
+    milestone: Extract<PublishedRankingDomainEvent, { eventType: 'ranking.milestone' }>['milestoneType'],
+  ): 'top10' | 'top100' | 'top1000' | 'rank1' {
+    switch (milestone) {
+      case 'TOP_1':
+        return 'rank1';
+      case 'TOP_10':
+      case 'TOP_3':
+        return 'top10';
+      case 'TOP_50':
+      case 'TOP_100':
+        return 'top100';
+      case 'TOP_1000':
+      case 'TOP_10000':
+      default:
+        return 'top1000';
+    }
   }
 }
