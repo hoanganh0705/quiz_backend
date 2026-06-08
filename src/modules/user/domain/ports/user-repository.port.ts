@@ -59,7 +59,32 @@ export interface MyTournamentHistoryRow {
   tournamentName: string;
   finalRank: number | null;
   finalScore: number;
+  participantCount: number;
   completedAt: string;
+}
+
+export interface PublicTournamentProfileRow {
+  userId: string;
+  tournamentsPlayed: number;
+  tournamentsWon: number;
+  bestRank: number | null;
+  averageRank: number | null;
+  top10Finishes: number;
+  totalTournamentScore: number;
+  lastTournamentAt: string | null;
+}
+
+export interface MyTournamentAnalyticsRow {
+  tournamentsPlayed: number;
+  wins: number;
+  top3Finishes: number;
+  top10Finishes: number;
+  averageRank: number | null;
+  bestRank: number | null;
+  averageScore: number;
+  totalTournamentScore: number;
+  completionRate: number;
+  lastTournamentAt: string | null;
 }
 
 export interface UserRepositoryPort {
@@ -87,6 +112,8 @@ export interface UserRepositoryPort {
     page: number;
     limit: number;
   }): Promise<{ items: MyTournamentHistoryRow[]; total: number }>;
+  getPublicTournamentProfile(userId: string): Promise<PublicTournamentProfileRow>;
+  getMyTournamentAnalytics(userId: string): Promise<MyTournamentAnalyticsRow>;
   updateProfile(
     userId: string,
     patch: {

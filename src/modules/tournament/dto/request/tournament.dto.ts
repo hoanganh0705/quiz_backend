@@ -9,6 +9,7 @@ import {
 } from '../../types/tournament.types';
 import { trimString, trimStringToNullIfBlank } from '@/common/utils/text.util';
 export { GetTournamentParticipantsQueryDto } from './get-tournament-participants-query.dto';
+export { GetTournamentWinnersQueryDto } from './get-tournament-winners-query.dto';
 
 export const UPCOMING_TOURNAMENT_SORT_OPTIONS = ['startAt', 'registrationDeadline'] as const;
 export type UpcomingTournamentSortOption = (typeof UPCOMING_TOURNAMENT_SORT_OPTIONS)[number];
