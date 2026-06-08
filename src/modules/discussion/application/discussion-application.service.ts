@@ -32,6 +32,8 @@ import type {
   SearchDiscussionsCursor,
   ThreadStats,
   MyDiscussionStats,
+  MarkThreadAsSolvedParams,
+  UnsolveThreadParams,
 } from '../domain/types';
 
 @Injectable()
@@ -84,10 +86,8 @@ export class DiscussionApplicationService {
       nextCursor: string | null;
     };
   }> {
-    const { items, limit, hasNextPage, nextCursor } = await this.discussionService.listQuizDiscussions(
-      quizId,
-      query,
-    );
+    const { items, limit, hasNextPage, nextCursor } =
+      await this.discussionService.listQuizDiscussions(quizId, query);
 
     return {
       items,
@@ -110,10 +110,8 @@ export class DiscussionApplicationService {
       nextCursor: string | null;
     };
   }> {
-    const { items, limit, hasNextPage, nextCursor } = await this.discussionService.listMyDiscussions(
-      userId,
-      query,
-    );
+    const { items, limit, hasNextPage, nextCursor } =
+      await this.discussionService.listMyDiscussions(userId, query);
 
     return {
       items,
@@ -136,10 +134,8 @@ export class DiscussionApplicationService {
       nextCursor: string | null;
     };
   }> {
-    const { items, limit, hasNextPage, nextCursor } = await this.discussionService.listDiscussionsByUser(
-      userId,
-      query,
-    );
+    const { items, limit, hasNextPage, nextCursor } =
+      await this.discussionService.listDiscussionsByUser(userId, query);
 
     return {
       items,
@@ -194,7 +190,12 @@ export class DiscussionApplicationService {
   async listMyDiscussionSubscriptions(
     user: JwtPayload,
     query: { page?: number; limit?: number },
-  ): Promise<{ items: MyDiscussionSubscriptionListItem[]; total: number; page: number; limit: number }> {
+  ): Promise<{
+    items: MyDiscussionSubscriptionListItem[];
+    total: number;
+    page: number;
+    limit: number;
+  }> {
     return this.discussionService.listMyDiscussionSubscriptions(user.sub, query);
   }
 
@@ -232,10 +233,8 @@ export class DiscussionApplicationService {
       nextCursor: string | null;
     };
   }> {
-    const { items, limit, hasNextPage, nextCursor } = await this.discussionService.listCommentsByUser(
-      userId,
-      query,
-    );
+    const { items, limit, hasNextPage, nextCursor } =
+      await this.discussionService.listCommentsByUser(userId, query);
 
     return {
       items,
@@ -247,9 +246,10 @@ export class DiscussionApplicationService {
     };
   }
 
-  async listTrendingDiscussions(
-    query: { limit?: number; cursor?: TrendingDiscussionCursor | null },
-  ): Promise<{
+  async listTrendingDiscussions(query: {
+    limit?: number;
+    cursor?: TrendingDiscussionCursor | null;
+  }): Promise<{
     items: TrendingDiscussionListItem[];
     pagination: {
       limit: number;
@@ -257,9 +257,8 @@ export class DiscussionApplicationService {
       nextCursor: string | null;
     };
   }> {
-    const { items, limit, hasNextPage, nextCursor } = await this.discussionService.listTrendingDiscussions(
-      query,
-    );
+    const { items, limit, hasNextPage, nextCursor } =
+      await this.discussionService.listTrendingDiscussions(query);
 
     return {
       items,
@@ -271,9 +270,10 @@ export class DiscussionApplicationService {
     };
   }
 
-  async listUnansweredDiscussions(
-    query: { limit?: number; cursor?: UnansweredDiscussionCursor | null },
-  ): Promise<{
+  async listUnansweredDiscussions(query: {
+    limit?: number;
+    cursor?: UnansweredDiscussionCursor | null;
+  }): Promise<{
     items: UnansweredDiscussionListItem[];
     pagination: {
       limit: number;
@@ -281,9 +281,8 @@ export class DiscussionApplicationService {
       nextCursor: string | null;
     };
   }> {
-    const { items, limit, hasNextPage, nextCursor } = await this.discussionService.listUnansweredDiscussions(
-      query,
-    );
+    const { items, limit, hasNextPage, nextCursor } =
+      await this.discussionService.listUnansweredDiscussions(query);
 
     return {
       items,
@@ -295,9 +294,11 @@ export class DiscussionApplicationService {
     };
   }
 
-  async searchDiscussions(
-    query: { q?: string; limit?: number; cursor?: SearchDiscussionsCursor | null },
-  ): Promise<{
+  async searchDiscussions(query: {
+    q?: string;
+    limit?: number;
+    cursor?: SearchDiscussionsCursor | null;
+  }): Promise<{
     items: SearchDiscussionListItem[];
     pagination: {
       limit: number;
@@ -305,7 +306,8 @@ export class DiscussionApplicationService {
       nextCursor: string | null;
     };
   }> {
-    const { items, limit, hasNextPage, nextCursor } = await this.discussionService.searchDiscussions(query);
+    const { items, limit, hasNextPage, nextCursor } =
+      await this.discussionService.searchDiscussions(query);
 
     return {
       items,
@@ -363,6 +365,25 @@ export class DiscussionApplicationService {
 
   async reopenThread(user: JwtPayload, threadId: string): Promise<void> {
     return this.discussionService.reopenThread(threadId, user.sub);
+  }
+
+  async markThreadAsSolved(
+    user: JwtPayload,
+    threadId: string,
+    commentId: string,
+  ): Promise<DiscussionThread> {
+    return this.discussionService.markThreadAsSolved({
+      threadId,
+      commentId,
+      actorId: user.sub,
+    });
+  }
+
+  async unsolveThread(user: JwtPayload, threadId: string): Promise<DiscussionThread> {
+    return this.discussionService.unsolveThread({
+      threadId,
+      actorId: user.sub,
+    });
   }
 
   async deleteThread(user: JwtPayload, threadId: string): Promise<void> {

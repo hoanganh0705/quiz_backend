@@ -40,13 +40,15 @@ import {
   TrendingDiscussionsResponseDto,
   UnansweredDiscussionsResponseDto,
   SearchDiscussionsResponseDto,
-    RelatedDiscussionsResponseDto,
-    ThreadParticipantsResponseDto,
-    ThreadStatsResponseDto,
-    MyDiscussionStatsResponseDto,
-    DiscussionSubscriptionActionResponseDto,
-    DiscussionSavedThreadActionResponseDto,
-  } from '@/modules/discussion/dto/response';
+  RelatedDiscussionsResponseDto,
+  ThreadParticipantsResponseDto,
+  ThreadStatsResponseDto,
+  MyDiscussionStatsResponseDto,
+  DiscussionSubscriptionActionResponseDto,
+  DiscussionSavedThreadActionResponseDto,
+  DiscussionThreadSolveResponseDto,
+  DiscussionThreadUnsolveResponseDto,
+} from '@/modules/discussion/dto/response';
 import {
   CreateThreadDto,
   UpdateThreadDto,
@@ -63,6 +65,7 @@ import {
   ListUnansweredDiscussionsQueryDto,
   SearchDiscussionsQueryDto,
   ListRelatedDiscussionsQueryDto,
+  SolveThreadDto,
 } from '@/modules/discussion/dto/request';
 import { DiscussionDomainExceptionFilter } from './filters/discussion-domain-exception.filter';
 import { TrendingDiscussionCursorMapper } from '@/modules/discussion/mappers/trending-discussion-cursor.mapper';
@@ -383,6 +386,62 @@ export class DiscussionController {
   ): Promise<{ message: string }> {
     await this.discussionService.reopenThread(user, threadId);
     return { message: 'Thread reopened' };
+  }
+
+  @Post('threads/:threadId/solve')
+  @ApiAuth()
+  @ApiOperation({
+    summary: 'Mark thread as solved',
+    description: 'Marks a discussion thread as solved by selecting one of its comments as the accepted solution.',
+  })
+  @ApiOkResponse({
+    description: 'Thread marked as solved successfully',
+    type: DiscussionThreadSolveResponseDto,
+  })
+  @ApiNotFoundResponse({ description: 'Thread or comment not found' })
+  @ApiForbiddenResponse({ description: 'Only the thread owner can solve the thread' })
+  @ApiBadRequestResponse({ description: 'Validation failed' })
+  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  @ApiValidationRequest()
+  async markThreadAsSolved(
+    @CurrentUser() user: JwtPayload,
+    @Param('threadId', new ParseUUIDPipe()) threadId: string,
+    @Body() dto: SolveThreadDto,
+  ): Promise<DiscussionThreadSolveResponseDto> {
+    const thread = await this.discussionService.markThreadAsSolved(user, threadId, dto.commentId);
+
+    return {
+      threadId: thread.threadId,
+      isSolved: thread.isSolved,
+      solvedCommentId: thread.solvedCommentId,
+      solvedAt: thread.solvedAt,
+    };
+  }
+
+  @Delete('threads/:threadId/solve')
+  @ApiAuth()
+  @ApiOperation({
+    summary: 'Unsolve thread',
+    description: 'Removes the solved state from a discussion thread owned by the authenticated user.',
+  })
+  @ApiOkResponse({
+    description: 'Thread unsolved successfully',
+    type: DiscussionThreadUnsolveResponseDto,
+  })
+  @ApiNotFoundResponse({ description: 'Thread not found' })
+  @ApiForbiddenResponse({ description: 'Only the thread owner can unsolve the thread' })
+  @ApiBadRequestResponse({ description: 'Validation failed' })
+  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  async unsolveThread(
+    @CurrentUser() user: JwtPayload,
+    @Param('threadId', new ParseUUIDPipe()) threadId: string,
+  ): Promise<DiscussionThreadUnsolveResponseDto> {
+    const thread = await this.discussionService.unsolveThread(user, threadId);
+
+    return {
+      threadId: thread.threadId,
+      isSolved: thread.isSolved,
+    };
   }
 
   @Delete('threads/:threadId')
