@@ -22,6 +22,11 @@ import type {
   UnansweredDiscussionCursor,
   UnansweredDiscussionListItem,
   SearchDiscussionListItem,
+  RelatedDiscussionListItem,
+  ThreadParticipantListItem,
+  PublicDiscussionProfile,
+  MyUpvotedThreadListItem,
+  MyUpvotedCommentListItem,
   SearchDiscussionsCursor,
   ThreadStats,
   MyDiscussionStats,
@@ -170,6 +175,20 @@ export class DiscussionApplicationService {
     };
   }
 
+  async listMyUpvotedThreads(
+    user: JwtPayload,
+    query: { page?: number; limit?: number },
+  ): Promise<{ items: MyUpvotedThreadListItem[]; total: number; page: number; limit: number }> {
+    return this.discussionService.listMyUpvotedThreads(user.sub, query);
+  }
+
+  async listMyUpvotedComments(
+    user: JwtPayload,
+    query: { page?: number; limit?: number },
+  ): Promise<{ items: MyUpvotedCommentListItem[]; total: number; page: number; limit: number }> {
+    return this.discussionService.listMyUpvotedComments(user.sub, query);
+  }
+
   async listCommentsByUser(
     userId: string,
     query: { limit?: number; cursor?: MyCommentCursor | null },
@@ -264,6 +283,25 @@ export class DiscussionApplicationService {
         nextCursor: nextCursor ? SearchDiscussionsCursorMapper.serialize(nextCursor) : null,
       },
     };
+  }
+
+  async listRelatedDiscussions(
+    threadId: string,
+    query: { limit?: number },
+  ): Promise<{ items: RelatedDiscussionListItem[] }> {
+    const items = await this.discussionService.listRelatedDiscussions(threadId, query);
+
+    return { items };
+  }
+
+  async listThreadParticipants(threadId: string): Promise<{ items: ThreadParticipantListItem[] }> {
+    const items = await this.discussionService.listThreadParticipants(threadId);
+
+    return { items };
+  }
+
+  async getPublicDiscussionProfile(userId: string): Promise<PublicDiscussionProfile> {
+    return this.discussionService.getPublicDiscussionProfile(userId);
   }
 
   async getThreadStats(threadId: string): Promise<ThreadStats | null> {

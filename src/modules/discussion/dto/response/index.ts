@@ -2,9 +2,14 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 export * from './quiz-discussion-list-response.dto';
 export * from './my-discussions-response.dto';
 export * from './my-comments-response.dto';
+export * from './my-upvoted-threads-response.dto';
+export * from './my-upvoted-comments-response.dto';
 export * from './trending-discussions-response.dto';
 export * from './unanswered-discussions-response.dto';
 export * from './search-discussions-response.dto';
+export * from './related-discussions-response.dto';
+export * from './thread-participants-response.dto';
+export * from './public-discussion-profile-response.dto';
 export * from './thread-stats-response.dto';
 export * from './my-discussion-stats-response.dto';
 

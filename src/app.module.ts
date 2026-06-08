@@ -28,6 +28,7 @@ import { RedisModule } from './core/redis/redis.module';
 import { RolesGuard } from './common/authorization/guards/roles.guard';
 import { PermissionsGuard } from './common/authorization/guards/permissions.guard';
 import { LoggerModule } from 'nestjs-pino';
+import { SocialModule } from './modules/social/social.module';
 
 @Module({
   imports: [
@@ -70,6 +71,8 @@ import { LoggerModule } from 'nestjs-pino';
     AchievementModule,
     NotificationModule,
     DiscussionModule,
+    AchievementModule,
+    SocialModule,
   ],
   providers: [
     // Execute coarse throttling first to reduce JWT verification load during abusive traffic.
