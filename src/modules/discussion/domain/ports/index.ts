@@ -23,6 +23,7 @@ import type {
   MyUpvotedThreadListItem,
   MyUpvotedCommentListItem,
   MyDiscussionSubscriptionListItem,
+  MySavedThreadListItem,
   TrendingDiscussionListItem,
   TrendingDiscussionCursor,
   UnansweredDiscussionListItem,
@@ -81,8 +82,15 @@ export interface DiscussionRepositoryPort {
     page: number;
     limit: number;
   }): Promise<{ items: MyDiscussionSubscriptionListItem[]; total: number }>;
+  listMySavedThreads(params: {
+    userId: string;
+    page: number;
+    limit: number;
+  }): Promise<{ items: MySavedThreadListItem[]; total: number }>;
   subscribeToThread(params: { userId: string; threadId: string }): Promise<void>;
   unsubscribeFromThread(params: { userId: string; threadId: string }): Promise<void>;
+  saveThread(params: { userId: string; threadId: string }): Promise<void>;
+  unsaveThread(params: { userId: string; threadId: string }): Promise<void>;
   listCommentsByUser(params: {
     userId: string;
     limit: number;

@@ -45,6 +45,7 @@ import {
     ThreadStatsResponseDto,
     MyDiscussionStatsResponseDto,
     DiscussionSubscriptionActionResponseDto,
+    DiscussionSavedThreadActionResponseDto,
   } from '@/modules/discussion/dto/response';
 import {
   CreateThreadDto,
@@ -264,6 +265,48 @@ export class DiscussionController {
     @Param('threadId', new ParseUUIDPipe()) threadId: string,
   ): Promise<DiscussionSubscriptionActionResponseDto> {
     return this.discussionService.unsubscribeFromThread(user, threadId);
+  }
+
+  @Post('threads/:threadId/save')
+  @ApiAuth()
+  @ApiOperation({
+    summary: 'Save discussion thread',
+    description:
+      'Saves the specified discussion thread for the authenticated user. The operation is idempotent and succeeds even if the thread is already saved.',
+  })
+  @ApiOkResponse({
+    description: 'Thread saved successfully',
+    type: DiscussionSavedThreadActionResponseDto,
+  })
+  @ApiNotFoundResponse({ description: 'Thread not found' })
+  @ApiBadRequestResponse({ description: 'Validation failed' })
+  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  async saveThread(
+    @CurrentUser() user: JwtPayload,
+    @Param('threadId', new ParseUUIDPipe()) threadId: string,
+  ): Promise<DiscussionSavedThreadActionResponseDto> {
+    return this.discussionService.saveThread(user, threadId);
+  }
+
+  @Delete('threads/:threadId/save')
+  @ApiAuth()
+  @ApiOperation({
+    summary: 'Remove saved discussion thread',
+    description:
+      'Removes the specified saved discussion thread for the authenticated user. The operation is idempotent and succeeds even if the thread is not currently saved.',
+  })
+  @ApiOkResponse({
+    description: 'Saved thread removed successfully',
+    type: DiscussionSavedThreadActionResponseDto,
+  })
+  @ApiNotFoundResponse({ description: 'Thread not found' })
+  @ApiBadRequestResponse({ description: 'Validation failed' })
+  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  async unsaveThread(
+    @CurrentUser() user: JwtPayload,
+    @Param('threadId', new ParseUUIDPipe()) threadId: string,
+  ): Promise<DiscussionSavedThreadActionResponseDto> {
+    return this.discussionService.unsaveThread(user, threadId);
   }
 
   @Get('threads')

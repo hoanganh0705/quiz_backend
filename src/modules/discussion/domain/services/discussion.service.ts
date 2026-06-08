@@ -30,6 +30,7 @@ import type {
   MyUpvotedThreadListItem,
   MyUpvotedCommentListItem,
   MyDiscussionSubscriptionListItem,
+  MySavedThreadListItem,
   TrendingDiscussionCursor,
   TrendingDiscussionListItem,
   UnansweredDiscussionCursor,
@@ -328,6 +329,36 @@ export class DiscussionService {
     };
   }
 
+  async listMySavedThreads(
+    userId: string,
+    query: { page?: number; limit?: number },
+  ): Promise<{ items: MySavedThreadListItem[]; total: number; page: number; limit: number }> {
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 20;
+
+    const result = await this.repo.listMySavedThreads({
+      userId,
+      page,
+      limit,
+    });
+
+    this.logger.debug({
+      event: 'my_saved_threads_listed',
+      userId,
+      page,
+      limit,
+      total: result.total,
+      resultCount: result.items.length,
+    });
+
+    return {
+      items: result.items,
+      total: result.total,
+      page,
+      limit,
+    };
+  }
+
   async subscribeToThread(userId: string, threadId: string): Promise<{ success: true }> {
     const thread = await this.repo.getThreadById(threadId);
 
@@ -359,6 +390,41 @@ export class DiscussionService {
     await this.repo.unsubscribeFromThread({ userId, threadId });
 
     this.logger.info({ event: 'thread_unsubscribed', userId, threadId });
+
+    return { success: true };
+  }
+
+  async saveThread(userId: string, threadId: string): Promise<{ success: true }> {
+    const thread = await this.repo.getThreadById(threadId);
+
+    if (!thread) {
+      this.logger.warn({ event: 'discussion_thread_not_found', threadId, userId });
+      throw new ThreadNotFoundError(threadId);
+    }
+
+    if (thread.status !== 'open') {
+      this.logger.warn({ event: 'discussion_thread_not_active', threadId, userId, status: thread.status });
+      throw new ThreadNotActiveError();
+    }
+
+    await this.repo.saveThread({ userId, threadId });
+
+    this.logger.info({ event: 'thread_saved', userId, threadId });
+
+    return { success: true };
+  }
+
+  async unsaveThread(userId: string, threadId: string): Promise<{ success: true }> {
+    const thread = await this.repo.getThreadById(threadId);
+
+    if (!thread) {
+      this.logger.warn({ event: 'discussion_thread_not_found', threadId, userId });
+      throw new ThreadNotFoundError(threadId);
+    }
+
+    await this.repo.unsaveThread({ userId, threadId });
+
+    this.logger.info({ event: 'thread_unsaved', userId, threadId });
 
     return { success: true };
   }

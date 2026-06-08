@@ -41,6 +41,7 @@ import {
   discussionVotes,
   discussionReports,
   discussionThreadSubscriptions,
+  discussionSavedThreads,
   oauthAccounts,
   categoryFollows,
 } from '.';
@@ -467,6 +468,7 @@ export const discussionThreadsRelations = relations(discussionThreads, ({ one, m
   votes: many(discussionVotes),
   reports: many(discussionReports),
   subscriptions: many(discussionThreadSubscriptions),
+  savedThreads: many(discussionSavedThreads),
 }));
 
 export const discussionCommentsRelations = relations(discussionComments, ({ one, many }) => ({
@@ -517,6 +519,17 @@ export const discussionThreadSubscriptionsRelations = relations(discussionThread
   }),
   thread: one(discussionThreads, {
     fields: [discussionThreadSubscriptions.threadId],
+    references: [discussionThreads.threadId],
+  }),
+}));
+
+export const discussionSavedThreadsRelations = relations(discussionSavedThreads, ({ one }) => ({
+  user: one(users, {
+    fields: [discussionSavedThreads.userId],
+    references: [users.userId],
+  }),
+  thread: one(discussionThreads, {
+    fields: [discussionSavedThreads.threadId],
     references: [discussionThreads.threadId],
   }),
 }));
