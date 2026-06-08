@@ -2,12 +2,26 @@ import { Injectable } from '@nestjs/common';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
 import { TournamentService } from '../domain/tournament.service';
 import { TournamentResponseMapper } from '../mappers/tournament-response.mapper';
-import { CreateTournamentDto, ListTournamentsQueryDto } from '../dto/request';
+import {
+  CreateTournamentDto,
+  ListTournamentsQueryDto,
+  GetTournamentParticipantsQueryDto,
+  GetUpcomingTournamentsQueryDto,
+  GetActiveTournamentsQueryDto,
+  GetCompletedTournamentsQueryDto,
+  GetRelatedTournamentsQueryDto,
+} from '../dto/request';
 import {
   TournamentResponseDto,
   TournamentDetailResponseDto,
   TournamentListResponseDto,
   TournamentLeaderboardResponseDto,
+  TournamentParticipantsResponseDto,
+  UpcomingTournamentsResponseDto,
+  ActiveTournamentsResponseDto,
+  CompletedTournamentsResponseDto,
+  RelatedTournamentsResponseDto,
+  MyTournamentStandingResponseDto,
   RegisterTournamentResponseDto,
   StartTournamentAttemptResponseDto,
   UnregisterTournamentResponseDto,
@@ -49,10 +63,142 @@ export class TournamentApplicationService {
     };
   }
 
+  async getUpcomingTournaments(
+    query: GetUpcomingTournamentsQueryDto,
+  ): Promise<UpcomingTournamentsResponseDto> {
+    const result = await this.tournamentService.getUpcomingTournaments({
+      page: query.page ?? 1,
+      limit: query.limit ?? 20,
+      sortBy: query.sortBy ?? 'startAt',
+    });
+
+    return {
+      items: result.items.map((item) => ({
+        tournamentId: item.tournamentId,
+        name: item.name,
+        description: item.description,
+        startAt: item.startAt,
+        endAt: item.endAt,
+        participantCount: item.participantCount,
+      })),
+      pagination: {
+        total: result.total,
+        page: result.page,
+        limit: result.limit,
+      },
+    };
+  }
+
+  async getActiveTournaments(
+    query: GetActiveTournamentsQueryDto,
+  ): Promise<ActiveTournamentsResponseDto> {
+    const result = await this.tournamentService.getActiveTournaments({
+      page: query.page ?? 1,
+      limit: query.limit ?? 20,
+    });
+
+    return {
+      items: result.items.map((item) => ({
+        tournamentId: item.tournamentId,
+        name: item.name,
+        startAt: item.startAt,
+        endAt: item.endAt,
+        participantCount: item.participantCount,
+      })),
+      pagination: {
+        total: result.total,
+        page: result.page,
+        limit: result.limit,
+      },
+    };
+  }
+
+  async getCompletedTournaments(
+    query: GetCompletedTournamentsQueryDto,
+  ): Promise<CompletedTournamentsResponseDto> {
+    const result = await this.tournamentService.getCompletedTournaments({
+      page: query.page ?? 1,
+      limit: query.limit ?? 20,
+    });
+
+    return {
+      items: result.items.map((item) => ({
+        tournamentId: item.tournamentId,
+        name: item.name,
+        startAt: item.startAt,
+        endAt: item.endAt,
+        participantCount: item.participantCount,
+      })),
+      pagination: {
+        total: result.total,
+        page: result.page,
+        limit: result.limit,
+      },
+    };
+  }
+
+  async getRelatedTournaments(
+    tournamentId: string,
+    query: GetRelatedTournamentsQueryDto,
+  ): Promise<RelatedTournamentsResponseDto> {
+    const result = await this.tournamentService.getRelatedTournaments({
+      tournamentId,
+      limit: query.limit ?? 5,
+    });
+
+    return {
+      items: result.items.map((item) => ({
+        tournamentId: item.tournamentId,
+        name: item.name,
+        startAt: item.startAt,
+        participantCount: item.participantCount,
+      })),
+    };
+  }
+
   async getTournamentById(tournamentId: string): Promise<TournamentDetailResponseDto> {
     const detail = await this.tournamentService.getTournamentById(tournamentId);
     const rounds = await this.tournamentService.getTournamentRounds(tournamentId);
     return this.mapper.toTournamentDetailResponse(detail, rounds);
+  }
+
+  async getTournamentParticipants(
+    tournamentId: string,
+    query: GetTournamentParticipantsQueryDto,
+  ): Promise<TournamentParticipantsResponseDto> {
+    const result = await this.tournamentService.getTournamentParticipants({
+      tournamentId,
+      page: query.page ?? 1,
+      limit: query.limit ?? 20,
+    });
+
+    return {
+      items: result.items.map((item) => ({
+        userId: item.userId,
+        username: item.username,
+        registeredAt: item.registeredAt,
+      })),
+      pagination: {
+        total: result.total,
+        page: result.page,
+        limit: result.limit,
+      },
+      totalParticipants: result.total,
+    };
+  }
+
+  async getMyTournamentStanding(
+    tournamentId: string,
+    userId: string,
+  ): Promise<MyTournamentStandingResponseDto> {
+    const standing = await this.tournamentService.getMyTournamentStanding({ tournamentId, userId });
+
+    return {
+      rank: standing.rank,
+      score: standing.score,
+      percentile: standing.percentile,
+      participantCount: standing.participantCount,
+    };
   }
 
   async registerForTournament(

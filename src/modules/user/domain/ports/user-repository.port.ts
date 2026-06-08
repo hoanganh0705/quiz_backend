@@ -1,4 +1,5 @@
 import type { UserAnalytics } from '../types/user-analytics';
+import type { TournamentStatus } from '@/modules/tournament/types/tournament.types';
 
 export interface UserMeRow {
   userId: string;
@@ -44,6 +45,23 @@ export interface UserActivityRow {
   metadata: unknown;
 }
 
+export interface MyTournamentRow {
+  tournamentId: string;
+  name: string;
+  status: TournamentStatus;
+  registeredAt: string;
+  startAt: string;
+  endAt: string;
+}
+
+export interface MyTournamentHistoryRow {
+  tournamentId: string;
+  tournamentName: string;
+  finalRank: number | null;
+  finalScore: number;
+  completedAt: string;
+}
+
 export interface UserRepositoryPort {
   findMeById(userId: string): Promise<UserMeRow | null>;
   listUserBadges(params: {
@@ -59,6 +77,16 @@ export interface UserRepositoryPort {
     limit: number;
     cursor?: { createdAt: string; eventId: string } | null;
   }): Promise<UserActivityRow[]>;
+  listMyTournaments(params: {
+    userId: string;
+    page: number;
+    limit: number;
+  }): Promise<{ items: MyTournamentRow[]; total: number }>;
+  listMyTournamentHistory(params: {
+    userId: string;
+    page: number;
+    limit: number;
+  }): Promise<{ items: MyTournamentHistoryRow[]; total: number }>;
   updateProfile(
     userId: string,
     patch: {

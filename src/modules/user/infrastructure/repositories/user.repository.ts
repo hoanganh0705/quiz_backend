@@ -9,6 +9,8 @@ import {
   quizTags,
   quizVersions,
   tags,
+  tournamentParticipants,
+  tournaments,
   userActivityEvents,
   userBadges,
   userProfiles,
@@ -18,6 +20,8 @@ import {
 import { and, count, desc, eq, ilike, isNull, or, sql } from 'drizzle-orm';
 import type { UserAnalytics } from '../../domain/types/user-analytics';
 import type {
+  MyTournamentHistoryRow,
+  MyTournamentRow,
   UserActivityRow,
   UserBadgeRow,
   UserMeRow,
@@ -242,7 +246,7 @@ export class UserRepository implements UserRepositoryPort {
     const baseCondition = eq(userActivityEvents.userId, userId);
     const whereClause = cursorCondition ? and(baseCondition, cursorCondition) : baseCondition;
 
-    const rows = await this.db
+    return this.db
       .select({
         eventId: userActivityEvents.eventId,
         eventType: userActivityEvents.eventType,
@@ -253,8 +257,101 @@ export class UserRepository implements UserRepositoryPort {
       .where(whereClause)
       .orderBy(desc(userActivityEvents.createdAt), desc(userActivityEvents.eventId))
       .limit(limit + 1);
+  }
 
-    return rows;
+  async listMyTournaments(params: {
+    userId: string;
+    page: number;
+    limit: number;
+  }): Promise<{ items: MyTournamentRow[]; total: number }> {
+    const offset = (params.page - 1) * params.limit;
+
+    const [totalRow] = await this.db
+      .select({ count: count() })
+      .from(tournamentParticipants)
+      .innerJoin(tournaments, eq(tournamentParticipants.tournamentId, tournaments.tournamentId))
+      .innerJoin(users, eq(tournamentParticipants.userId, users.userId))
+      .where(
+        and(
+          eq(tournamentParticipants.userId, params.userId),
+          isNull(users.deletedAt),
+          isNull(tournaments.deletedAt),
+        ),
+      );
+
+    const items = await this.db
+      .select({
+        tournamentId: tournaments.tournamentId,
+        name: tournaments.title,
+        status: tournaments.status,
+        registeredAt: tournamentParticipants.registeredAt,
+        startAt: tournaments.startAt,
+        endAt: tournaments.endAt,
+      })
+      .from(tournamentParticipants)
+      .innerJoin(tournaments, eq(tournamentParticipants.tournamentId, tournaments.tournamentId))
+      .innerJoin(users, eq(tournamentParticipants.userId, users.userId))
+      .where(
+        and(
+          eq(tournamentParticipants.userId, params.userId),
+          isNull(users.deletedAt),
+          isNull(tournaments.deletedAt),
+        ),
+      )
+      .orderBy(
+        desc(tournamentParticipants.registeredAt),
+        desc(tournamentParticipants.participantId),
+      )
+      .limit(params.limit)
+      .offset(offset);
+
+    return {
+      items: items as MyTournamentRow[],
+      total: totalRow?.count ?? 0,
+    };
+  }
+
+  async listMyTournamentHistory(params: {
+    userId: string;
+    page: number;
+    limit: number;
+  }): Promise<{ items: MyTournamentHistoryRow[]; total: number }> {
+    const offset = (params.page - 1) * params.limit;
+
+    const baseConditions = and(
+      eq(tournamentParticipants.userId, params.userId),
+      eq(tournaments.status, 'finished'),
+      isNull(users.deletedAt),
+      isNull(tournaments.deletedAt),
+    );
+
+    const [totalRow] = await this.db
+      .select({ count: count() })
+      .from(tournamentParticipants)
+      .innerJoin(tournaments, eq(tournamentParticipants.tournamentId, tournaments.tournamentId))
+      .innerJoin(users, eq(tournamentParticipants.userId, users.userId))
+      .where(baseConditions);
+
+    const items = await this.db
+      .select({
+        tournamentId: tournaments.tournamentId,
+        tournamentName: tournaments.title,
+        finalRank: tournamentParticipants.rankFinal,
+        finalScore: tournamentParticipants.totalScore,
+        completedAt: tournaments.endAt,
+      })
+      .from(tournamentParticipants)
+      .innerJoin(tournaments, eq(tournamentParticipants.tournamentId, tournaments.tournamentId))
+      .innerJoin(users, eq(tournamentParticipants.userId, users.userId))
+      .where(baseConditions)
+      .orderBy(desc(tournaments.endAt), desc(tournamentParticipants.participantId))
+      .limit(params.limit)
+      .offset(offset);
+
+    return {
+      items: items as MyTournamentHistoryRow[],
+      total: totalRow?.count ?? 0,
+    };
   }
 
   async updateProfile(
