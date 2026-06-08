@@ -16,9 +16,9 @@ export const TOURNAMENT_ROUND_STATUSES = ['pending', 'open', 'running', 'finishe
 
 export type TournamentRoundStatus = 'pending' | 'open' | 'running' | 'finished';
 
-export const TOURNAMENT_PARTICIPANT_STATUSES = ['active', 'disqualified', 'withdrawn'] as const;
+export const TOURNAMENT_PARTICIPANT_STATUSES = ['registered', 'active', 'withdrawn', 'completed'] as const;
 
-export type TournamentParticipantStatus = 'active' | 'disqualified' | 'withdrawn';
+export type TournamentParticipantStatus = 'registered' | 'active' | 'withdrawn' | 'completed';
 
 export type TournamentCursorPayload = {
   createdAt: string;

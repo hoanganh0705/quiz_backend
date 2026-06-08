@@ -33,6 +33,7 @@ import {
   CreateTournamentDto,
   ListTournamentsQueryDto,
   GetTournamentParticipantsQueryDto,
+  GetTournamentWinnersQueryDto,
   GetUpcomingTournamentsQueryDto,
   GetActiveTournamentsQueryDto,
   GetCompletedTournamentsQueryDto,
@@ -44,14 +45,17 @@ import {
   TournamentListResponseDto,
   TournamentLeaderboardResponseDto,
   TournamentParticipantsResponseDto,
+  TournamentWinnersResponseDto,
   UpcomingTournamentsResponseDto,
   ActiveTournamentsResponseDto,
   CompletedTournamentsResponseDto,
   RelatedTournamentsResponseDto,
+  TournamentStatsResponseDto,
   MyTournamentStandingResponseDto,
   RegisterTournamentResponseDto,
   StartTournamentAttemptResponseDto,
   UnregisterTournamentResponseDto,
+  WithdrawTournamentResponseDto,
 } from '../../dto/response';
 
 import { TournamentDomainExceptionFilter } from '../filters/tournament-domain-exception.filter';
@@ -163,6 +167,41 @@ export class TournamentController {
     @Query() query: GetRelatedTournamentsQueryDto,
   ): Promise<RelatedTournamentsResponseDto> {
     return this.tournamentApplicationService.getRelatedTournaments(tournamentId, query);
+  }
+
+  @Get(':id/stats')
+  @Public()
+  @ApiOperation({
+    summary: 'Get tournament stats',
+    description:
+      'Returns aggregated statistics for the specified tournament including participation, score, completion, and ranking metrics.',
+  })
+  @ApiOkResponse({ description: 'Tournament stats returned', type: TournamentStatsResponseDto })
+  @ApiNotFoundResponse({ description: 'Tournament not found' })
+  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  getTournamentStats(
+    @Param('id', new ParseUUIDPipe()) tournamentId: string,
+  ): Promise<TournamentStatsResponseDto> {
+    return this.tournamentApplicationService.getTournamentStats(tournamentId);
+  }
+
+  @Get(':id/winners')
+  @Public()
+  @ApiOperation({
+    summary: 'Get tournament winners',
+    description:
+      'Returns the final winners leaderboard for a completed tournament ordered by final score and the existing tournament tie-breaker rules.',
+  })
+  @ApiOkResponse({ description: 'Tournament winners returned', type: TournamentWinnersResponseDto })
+  @ApiNotFoundResponse({ description: 'Tournament not found' })
+  @ApiBadRequestResponse({ description: 'Validation failed' })
+  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  @ApiValidationRequest()
+  getTournamentWinners(
+    @Param('id', new ParseUUIDPipe()) tournamentId: string,
+    @Query() query: GetTournamentWinnersQueryDto,
+  ): Promise<TournamentWinnersResponseDto> {
+    return this.tournamentApplicationService.getTournamentWinners(tournamentId, query);
   }
 
   @Get(':id')
@@ -294,7 +333,7 @@ export class TournamentController {
   })
   @ApiNotFoundResponse({ description: 'Tournament not found or you are not registered' })
   @ApiConflictResponse({ description: 'You have already withdrawn from this tournament' })
-  @ApiForbiddenResponse({ description: 'Disqualified participants cannot withdraw' })
+  @ApiForbiddenResponse({ description: 'Non-active participants cannot unregister' })
   @ApiBadRequestResponse({ description: 'Tournament is not in a state that allows unregistration' })
   @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
   unregisterFromTournament(
@@ -302,5 +341,27 @@ export class TournamentController {
     @CurrentUser() user: JwtPayload,
   ): Promise<UnregisterTournamentResponseDto> {
     return this.tournamentApplicationService.unregisterFromTournament(tournamentId, user);
+  }
+
+  @Post(':id/withdraw')
+  @Permissions(Permission.TOURNAMENT_REGISTER)
+  @ApiAuth()
+  @ApiOperation({
+    summary: 'Withdraw from active tournament',
+    description:
+      'Withdraws the authenticated participant from an active tournament while preserving historical participation records. Requires `tournament:register` permission.',
+  })
+  @ApiOkResponse({ description: 'Withdrawal successful', type: WithdrawTournamentResponseDto })
+  @ApiNotFoundResponse({ description: 'Tournament not found' })
+  @ApiForbiddenResponse({ description: 'You are not an active participant in this tournament' })
+  @ApiConflictResponse({
+    description: 'You have already withdrawn from this tournament or the tournament is not active',
+  })
+  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  withdrawFromTournament(
+    @Param('id', new ParseUUIDPipe()) tournamentId: string,
+    @CurrentUser() user: JwtPayload,
+  ): Promise<WithdrawTournamentResponseDto> {
+    return this.tournamentApplicationService.withdrawFromTournament(tournamentId, user);
   }
 }

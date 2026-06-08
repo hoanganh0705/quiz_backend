@@ -27,6 +27,12 @@ export class MyTournamentHistoryItemDto {
   score!: number;
 
   @ApiProperty({
+    description: 'Number of participants who finished the tournament',
+    example: 523,
+  })
+  participantCount!: number;
+
+  @ApiProperty({
     description: 'Timestamp when the tournament was completed',
     example: '2026-06-01T00:00:00Z',
   })

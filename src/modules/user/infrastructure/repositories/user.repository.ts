@@ -20,8 +20,10 @@ import {
 import { and, count, desc, eq, ilike, isNull, or, sql } from 'drizzle-orm';
 import type { UserAnalytics } from '../../domain/types/user-analytics';
 import type {
+  MyTournamentAnalyticsRow,
   MyTournamentHistoryRow,
   MyTournamentRow,
+  PublicTournamentProfileRow,
   UserActivityRow,
   UserBadgeRow,
   UserMeRow,
@@ -321,9 +323,20 @@ export class UserRepository implements UserRepositoryPort {
     const baseConditions = and(
       eq(tournamentParticipants.userId, params.userId),
       eq(tournaments.status, 'finished'),
+      sql`${tournamentParticipants.rankFinal} IS NOT NULL`,
       isNull(users.deletedAt),
       isNull(tournaments.deletedAt),
     );
+
+    const participantCountSubquery = this.db
+      .select({
+        tournamentId: tournamentParticipants.tournamentId,
+        participantCount: count(),
+      })
+      .from(tournamentParticipants)
+      .where(sql`${tournamentParticipants.rankFinal} IS NOT NULL`)
+      .groupBy(tournamentParticipants.tournamentId)
+      .as('participant_count_subquery');
 
     const [totalRow] = await this.db
       .select({ count: count() })
@@ -338,11 +351,16 @@ export class UserRepository implements UserRepositoryPort {
         tournamentName: tournaments.title,
         finalRank: tournamentParticipants.rankFinal,
         finalScore: tournamentParticipants.totalScore,
+        participantCount: participantCountSubquery.participantCount,
         completedAt: tournaments.endAt,
       })
       .from(tournamentParticipants)
       .innerJoin(tournaments, eq(tournamentParticipants.tournamentId, tournaments.tournamentId))
       .innerJoin(users, eq(tournamentParticipants.userId, users.userId))
+      .innerJoin(
+        participantCountSubquery,
+        eq(tournaments.tournamentId, participantCountSubquery.tournamentId),
+      )
       .where(baseConditions)
       .orderBy(desc(tournaments.endAt), desc(tournamentParticipants.participantId))
       .limit(params.limit)
@@ -351,6 +369,106 @@ export class UserRepository implements UserRepositoryPort {
     return {
       items: items as MyTournamentHistoryRow[],
       total: totalRow?.count ?? 0,
+    };
+  }
+
+  async getPublicTournamentProfile(userId: string): Promise<PublicTournamentProfileRow> {
+    const [profile] = await this.db
+      .select({
+        userId: users.userId,
+        tournamentsPlayed:
+          sql<number>`COUNT(CASE WHEN ${tournaments.tournamentId} IS NOT NULL THEN 1 END)`,
+        tournamentsWon:
+          sql<number>`COUNT(CASE WHEN ${tournaments.tournamentId} IS NOT NULL AND ${tournamentParticipants.rankFinal} = 1 THEN 1 END)`,
+        bestRank: sql<number | null>`MIN(${tournamentParticipants.rankFinal})`,
+        averageRank:
+          sql<number | null>`ROUND(AVG(CASE WHEN ${tournaments.tournamentId} IS NOT NULL THEN ${tournamentParticipants.rankFinal}::numeric END))`,
+        top10Finishes:
+          sql<number>`COUNT(CASE WHEN ${tournaments.tournamentId} IS NOT NULL AND ${tournamentParticipants.rankFinal} <= 10 THEN 1 END)`,
+        totalTournamentScore:
+          sql<number>`COALESCE(SUM(CASE WHEN ${tournaments.tournamentId} IS NOT NULL THEN ${tournamentParticipants.totalScore} ELSE 0 END), 0)`,
+        lastTournamentAt: sql<string | null>`MAX(${tournaments.endAt})`,
+      })
+      .from(users)
+      .leftJoin(
+        tournamentParticipants,
+        and(
+          eq(users.userId, tournamentParticipants.userId),
+          sql`${tournamentParticipants.rankFinal} IS NOT NULL`,
+        ),
+      )
+      .leftJoin(
+        tournaments,
+        and(
+          eq(tournamentParticipants.tournamentId, tournaments.tournamentId),
+          eq(tournaments.status, 'finished'),
+          isNull(tournaments.deletedAt),
+        ),
+      )
+      .where(and(eq(users.userId, userId), isNull(users.deletedAt)))
+      .groupBy(users.userId)
+      .limit(1);
+
+    return {
+      userId,
+      tournamentsPlayed: Number(profile?.tournamentsPlayed ?? 0),
+      tournamentsWon: Number(profile?.tournamentsWon ?? 0),
+      bestRank: profile?.bestRank ?? null,
+      averageRank: profile?.averageRank ?? null,
+      top10Finishes: Number(profile?.top10Finishes ?? 0),
+      totalTournamentScore: Number(profile?.totalTournamentScore ?? 0),
+      lastTournamentAt: profile?.lastTournamentAt ?? null,
+    };
+  }
+
+  async getMyTournamentAnalytics(userId: string): Promise<MyTournamentAnalyticsRow> {
+    const [analytics] = await this.db
+      .select({
+        tournamentsPlayed:
+          sql<number>`COUNT(CASE WHEN ${tournaments.tournamentId} IS NOT NULL THEN 1 END)`,
+        wins:
+          sql<number>`COUNT(CASE WHEN ${tournaments.tournamentId} IS NOT NULL AND ${tournamentParticipants.rankFinal} = 1 THEN 1 END)`,
+        top3Finishes:
+          sql<number>`COUNT(CASE WHEN ${tournaments.tournamentId} IS NOT NULL AND ${tournamentParticipants.rankFinal} <= 3 THEN 1 END)`,
+        top10Finishes:
+          sql<number>`COUNT(CASE WHEN ${tournaments.tournamentId} IS NOT NULL AND ${tournamentParticipants.rankFinal} <= 10 THEN 1 END)`,
+        averageRank:
+          sql<number | null>`ROUND(AVG(CASE WHEN ${tournaments.tournamentId} IS NOT NULL THEN ${tournamentParticipants.rankFinal}::numeric END))`,
+        bestRank: sql<number | null>`MIN(${tournamentParticipants.rankFinal})`,
+        averageScore:
+          sql<number>`COALESCE(ROUND(AVG(CASE WHEN ${tournaments.tournamentId} IS NOT NULL THEN ${tournamentParticipants.totalScore}::numeric END)), 0)`,
+        totalTournamentScore:
+          sql<number>`COALESCE(SUM(CASE WHEN ${tournaments.tournamentId} IS NOT NULL THEN ${tournamentParticipants.totalScore} ELSE 0 END), 0)`,
+        completionRate:
+          sql<number>`COALESCE(ROUND((COUNT(CASE WHEN ${tournaments.tournamentId} IS NOT NULL THEN 1 END)::numeric * 100.0) / NULLIF(COUNT(${tournamentParticipants.participantId}), 0)), 0)`,
+        lastTournamentAt: sql<string | null>`MAX(${tournaments.endAt})`,
+      })
+      .from(users)
+      .leftJoin(tournamentParticipants, eq(users.userId, tournamentParticipants.userId))
+      .leftJoin(
+        tournaments,
+        and(
+          eq(tournamentParticipants.tournamentId, tournaments.tournamentId),
+          eq(tournaments.status, 'finished'),
+          isNull(tournaments.deletedAt),
+          sql`${tournamentParticipants.rankFinal} IS NOT NULL`,
+        ),
+      )
+      .where(and(eq(users.userId, userId), isNull(users.deletedAt)))
+      .groupBy(users.userId)
+      .limit(1);
+
+    return {
+      tournamentsPlayed: Number(analytics?.tournamentsPlayed ?? 0),
+      wins: Number(analytics?.wins ?? 0),
+      top3Finishes: Number(analytics?.top3Finishes ?? 0),
+      top10Finishes: Number(analytics?.top10Finishes ?? 0),
+      averageRank: analytics?.averageRank ?? null,
+      bestRank: analytics?.bestRank ?? null,
+      averageScore: Number(analytics?.averageScore ?? 0),
+      totalTournamentScore: Number(analytics?.totalTournamentScore ?? 0),
+      completionRate: Number(analytics?.completionRate ?? 0),
+      lastTournamentAt: analytics?.lastTournamentAt ?? null,
     };
   }
 

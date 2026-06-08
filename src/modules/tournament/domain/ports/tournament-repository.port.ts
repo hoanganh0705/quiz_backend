@@ -61,6 +61,7 @@ export type TournamentParticipantRow = {
   totalTimeMs: number;
   rankFinal: number | null;
   status: TournamentParticipantStatus;
+  withdrawnAt: string | null;
   updatedAt: string;
 };
 
@@ -115,6 +116,19 @@ export type RelatedTournamentRow = {
   participantCount: number;
 };
 
+export type TournamentStatsRow = {
+  tournamentId: string;
+  participants: number;
+  completedParticipants: number;
+  averageScore: number;
+  highestScore: number | null;
+  lowestScore: number | null;
+  completionRate: number;
+  averageRank: number | null;
+  startedAt: string;
+  endedAt: string;
+};
+
 export type TournamentRoundParticipantRow = {
   roundParticipantId: string;
   roundId: string;
@@ -130,6 +144,14 @@ export type TournamentRoundParticipantRow = {
 
 export type TournamentLeaderboardEntry = TournamentParticipantDetailRow & {
   rank: number;
+};
+
+export type TournamentWinnerRow = {
+  rank: number;
+  userId: string;
+  username: string;
+  score: number;
+  avatarUrl: string | null;
 };
 
 export type TournamentListFilters = {
@@ -197,6 +219,8 @@ export interface TournamentRepositoryPort {
 
   getLeaderboard(tournamentId: string): Promise<TournamentLeaderboardEntry[]>;
 
+  getWinners(params: { tournamentId: string; limit: number }): Promise<TournamentWinnerRow[]>;
+
   listParticipants(params: {
     tournamentId: string;
     page: number;
@@ -231,6 +255,8 @@ export interface TournamentRepositoryPort {
     tournamentId: string;
     limit: number;
   }): Promise<RelatedTournamentRow[]>;
+
+  getTournamentStats(tournamentId: string): Promise<TournamentStatsRow>;
 
   countParticipants(tournamentId: string): Promise<number>;
 }

@@ -17,7 +17,14 @@ import {
   type ActiveTournamentRow,
   type CompletedTournamentRow,
   type RelatedTournamentRow,
+  type TournamentStatsRow,
+  type TournamentWinnerRow,
 } from './ports';
+import {
+  TOURNAMENT_DOMAIN_EVENT_BUS,
+  type TournamentDomainEventBusPort,
+} from './ports/tournament-domain-event-bus.port';
+import { TournamentParticipantWithdrawnEvent } from './events/tournament-participant-withdrawn.event';
 import { ATTEMPT_REPOSITORY_PORT } from '@/modules/attempt/domain/ports';
 import type { AttemptRepositoryPort } from '@/modules/attempt/domain/ports';
 import { CreateTournamentDto } from '../dto/request';
@@ -27,6 +34,9 @@ import type { GetUpcomingTournamentsQuery } from './types/get-upcoming-tournamen
 import type { GetActiveTournamentsQuery } from './types/get-active-tournaments.query';
 import type { GetCompletedTournamentsQuery } from './types/get-completed-tournaments.query';
 import type { GetRelatedTournamentsQuery } from './types/get-related-tournaments.query';
+import type { GetTournamentStatsQuery } from './types/get-tournament-stats.query';
+import type { GetTournamentWinnersQuery } from './types/get-tournament-winners.query';
+import type { WithdrawTournamentCommand } from './types/withdraw-tournament.command';
 import {
   TournamentNotFoundError,
   TournamentRegistrationClosedError,
@@ -39,6 +49,7 @@ import {
   TournamentNotRegisteredError,
   TournamentUnregisterClosedError,
   TournamentAlreadyWithdrawnError,
+  TournamentWithdrawClosedError,
 } from './errors';
 import {
   TOURNAMENT_NOT_FOUND_MESSAGE,
@@ -52,6 +63,7 @@ import {
   TOURNAMENT_NOT_REGISTERED_MESSAGE,
   TOURNAMENT_UNREGISTER_CLOSED_MESSAGE,
   TOURNAMENT_ALREADY_WITHDRAWN_MESSAGE,
+  TOURNAMENT_WITHDRAW_CLOSED_MESSAGE,
 } from '../tournament.constants';
 
 @Injectable()
@@ -61,6 +73,8 @@ export class TournamentService {
     private readonly tournamentRepository: TournamentRepositoryPort,
     @Inject(ATTEMPT_REPOSITORY_PORT)
     private readonly attemptRepository: AttemptRepositoryPort,
+    @Inject(TOURNAMENT_DOMAIN_EVENT_BUS)
+    private readonly eventBus: TournamentDomainEventBusPort,
     @InjectPinoLogger(TournamentService.name)
     private readonly logger: PinoLogger,
   ) {}
@@ -244,7 +258,7 @@ export class TournamentService {
   async getRelatedTournaments(
     query: GetRelatedTournamentsQuery,
   ): Promise<{ items: RelatedTournamentRow[] }> {
-    const result = await this.tournamentRepository.listRelatedTournaments({
+    const items = await this.tournamentRepository.listRelatedTournaments({
       tournamentId: query.tournamentId,
       limit: query.limit,
     });
@@ -253,10 +267,43 @@ export class TournamentService {
       event: 'tournaments_related_listed',
       tournamentId: query.tournamentId,
       limit: query.limit,
-      resultCount: result.items.length,
+      resultCount: items.length,
     });
 
-    return result;
+    return { items };
+  }
+
+  async getTournamentStats(query: GetTournamentStatsQuery): Promise<TournamentStatsRow> {
+    await this.getActiveTournamentOrThrow(query.tournamentId);
+
+    const stats = await this.tournamentRepository.getTournamentStats(query.tournamentId);
+
+    this.logger.info({
+      event: 'tournament_stats_retrieved',
+      tournamentId: query.tournamentId,
+      participants: stats.participants,
+      completedParticipants: stats.completedParticipants,
+    });
+
+    return stats;
+  }
+
+  async getTournamentWinners(query: GetTournamentWinnersQuery): Promise<TournamentWinnerRow[]> {
+    await this.getActiveTournamentOrThrow(query.tournamentId);
+
+    const winners = await this.tournamentRepository.getWinners({
+      tournamentId: query.tournamentId,
+      limit: query.limit,
+    });
+
+    this.logger.info({
+      event: 'tournament_winners_retrieved',
+      tournamentId: query.tournamentId,
+      limit: query.limit,
+      count: winners.length,
+    });
+
+    return winners;
   }
 
   async getTournamentById(tournamentId: string): Promise<TournamentDetailRow> {
@@ -432,7 +479,7 @@ export class TournamentService {
       throw new TournamentAlreadyWithdrawnError(TOURNAMENT_ALREADY_WITHDRAWN_MESSAGE);
     }
 
-    if (participant.status === 'disqualified') {
+    if (participant.status !== 'active' && participant.status !== 'registered') {
       throw new TournamentForbiddenError(TOURNAMENT_FORBIDDEN_MESSAGE);
     }
 
@@ -446,6 +493,56 @@ export class TournamentService {
       tournamentId,
       userId: user.sub,
       participantId: participant.participantId,
+    });
+
+    return withdrawn;
+  }
+
+  async withdrawFromTournament(command: WithdrawTournamentCommand): Promise<TournamentParticipantRow> {
+    const nowIso = new Date().toISOString();
+
+    const tournament = await this.getActiveTournamentOrThrow(command.tournamentId);
+
+    if (tournament.status !== 'ongoing') {
+      throw new TournamentWithdrawClosedError(TOURNAMENT_WITHDRAW_CLOSED_MESSAGE);
+    }
+
+    const participant = await this.tournamentRepository.getParticipantByUserAndTournament(
+      command.userId,
+      command.tournamentId,
+    );
+
+    if (!participant || participant.status === 'registered') {
+      throw new TournamentForbiddenError(TOURNAMENT_FORBIDDEN_MESSAGE);
+    }
+
+    if (participant.status === 'withdrawn') {
+      throw new TournamentAlreadyWithdrawnError(TOURNAMENT_ALREADY_WITHDRAWN_MESSAGE);
+    }
+
+    if (participant.status === 'completed') {
+      throw new TournamentWithdrawClosedError(TOURNAMENT_WITHDRAW_CLOSED_MESSAGE);
+    }
+
+    const withdrawn = await this.tournamentRepository.withdrawParticipant(
+      participant.participantId,
+      nowIso,
+    );
+
+    this.eventBus.publish(
+      new TournamentParticipantWithdrawnEvent(
+        command.tournamentId,
+        command.userId,
+        new Date(nowIso),
+      ),
+    );
+
+    this.logger.info({
+      event: 'tournament_participant_withdrawn',
+      tournamentId: command.tournamentId,
+      userId: command.userId,
+      participantId: participant.participantId,
+      withdrawnAt: nowIso,
     });
 
     return withdrawn;

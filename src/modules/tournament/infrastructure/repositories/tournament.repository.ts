@@ -31,6 +31,8 @@ import type {
   ActiveTournamentRow,
   CompletedTournamentRow,
   RelatedTournamentRow,
+  TournamentStatsRow,
+  TournamentWinnerRow,
 } from '@/modules/tournament/domain/ports';
 
 @Injectable()
@@ -320,7 +322,9 @@ export class TournamentRepository implements TournamentRepositoryPort {
       .select({
         tournamentId: tournaments.tournamentId,
         name: tournaments.title,
+        description: tournaments.description,
         startAt: tournaments.startAt,
+        categoryId: tournaments.categoryId,
         participantCount: sql<number>`count(${tournamentParticipants.participantId})`.as(
           'participant_count',
         ),
@@ -379,6 +383,48 @@ export class TournamentRepository implements TournamentRepositoryPort {
       .slice(0, params.limit);
 
     return scored as RelatedTournamentRow[];
+  }
+
+  async getTournamentStats(tournamentId: string): Promise<TournamentStatsRow> {
+    const [stats] = await this.db
+      .select({
+        tournamentId: tournaments.tournamentId,
+        participants: sql<number>`COUNT(${tournamentParticipants.participantId})`,
+        completedParticipants:
+          sql<number>`COUNT(CASE WHEN ${tournamentParticipants.rankFinal} IS NOT NULL THEN 1 END)`,
+        averageScore:
+          sql<number>`COALESCE(ROUND(AVG(CASE WHEN ${tournamentParticipants.rankFinal} IS NOT NULL THEN ${tournamentParticipants.totalScore}::numeric END)), 0)`,
+        highestScore:
+          sql<number | null>`MAX(CASE WHEN ${tournamentParticipants.rankFinal} IS NOT NULL THEN ${tournamentParticipants.totalScore} END)`,
+        lowestScore:
+          sql<number | null>`MIN(CASE WHEN ${tournamentParticipants.rankFinal} IS NOT NULL THEN ${tournamentParticipants.totalScore} END)`,
+        completionRate: sql<number>`COALESCE(ROUND((COUNT(CASE WHEN ${tournamentParticipants.rankFinal} IS NOT NULL THEN 1 END)::numeric * 100.0) / NULLIF(COUNT(${tournamentParticipants.participantId}), 0), 2), 0)`,
+        averageRank:
+          sql<number | null>`ROUND(AVG(CASE WHEN ${tournamentParticipants.rankFinal} IS NOT NULL THEN ${tournamentParticipants.rankFinal}::numeric END))`,
+        startedAt: tournaments.startAt,
+        endedAt: tournaments.endAt,
+      })
+      .from(tournaments)
+      .leftJoin(
+        tournamentParticipants,
+        eq(tournaments.tournamentId, tournamentParticipants.tournamentId),
+      )
+      .where(and(eq(tournaments.tournamentId, tournamentId), isNull(tournaments.deletedAt)))
+      .groupBy(tournaments.tournamentId, tournaments.startAt, tournaments.endAt)
+      .limit(1);
+
+    return {
+      tournamentId,
+      participants: Number(stats?.participants ?? 0),
+      completedParticipants: Number(stats?.completedParticipants ?? 0),
+      averageScore: Number(stats?.averageScore ?? 0),
+      highestScore: stats?.highestScore ?? null,
+      lowestScore: stats?.lowestScore ?? null,
+      completionRate: Number(stats?.completionRate ?? 0),
+      averageRank: stats?.averageRank ?? null,
+      startedAt: stats?.startedAt ?? '',
+      endedAt: stats?.endedAt ?? '',
+    };
   }
 
   async createTournament(params: {
@@ -484,6 +530,7 @@ export class TournamentRepository implements TournamentRepositoryPort {
         totalTimeMs: tournamentParticipants.totalTimeMs,
         rankFinal: tournamentParticipants.rankFinal,
         status: tournamentParticipants.status,
+        withdrawnAt: tournamentParticipants.withdrawnAt,
         updatedAt: tournamentParticipants.updatedAt,
       });
 
@@ -498,6 +545,7 @@ export class TournamentRepository implements TournamentRepositoryPort {
       .update(tournamentParticipants)
       .set({
         status: 'withdrawn' as TournamentParticipantStatus,
+        withdrawnAt: nowIso,
         updatedAt: nowIso,
       })
       .where(eq(tournamentParticipants.participantId, participantId))
@@ -510,6 +558,7 @@ export class TournamentRepository implements TournamentRepositoryPort {
         totalTimeMs: tournamentParticipants.totalTimeMs,
         rankFinal: tournamentParticipants.rankFinal,
         status: tournamentParticipants.status,
+        withdrawnAt: tournamentParticipants.withdrawnAt,
         updatedAt: tournamentParticipants.updatedAt,
       });
 
@@ -524,6 +573,7 @@ export class TournamentRepository implements TournamentRepositoryPort {
       .update(tournamentParticipants)
       .set({
         status: 'active' as TournamentParticipantStatus,
+        withdrawnAt: null,
         updatedAt: nowIso,
       })
       .where(eq(tournamentParticipants.participantId, participantId))
@@ -536,6 +586,7 @@ export class TournamentRepository implements TournamentRepositoryPort {
         totalTimeMs: tournamentParticipants.totalTimeMs,
         rankFinal: tournamentParticipants.rankFinal,
         status: tournamentParticipants.status,
+        withdrawnAt: tournamentParticipants.withdrawnAt,
         updatedAt: tournamentParticipants.updatedAt,
       });
 
@@ -672,6 +723,7 @@ export class TournamentRepository implements TournamentRepositoryPort {
         totalTimeMs: tournamentParticipants.totalTimeMs,
         rankFinal: tournamentParticipants.rankFinal,
         status: tournamentParticipants.status,
+        withdrawnAt: tournamentParticipants.withdrawnAt,
         updatedAt: tournamentParticipants.updatedAt,
         username: users.username,
         displayName: userProfiles.displayName,
@@ -692,6 +744,37 @@ export class TournamentRepository implements TournamentRepositoryPort {
       ...(row as Omit<TournamentLeaderboardEntry, 'rank'>),
       rank: index + 1,
     })) as TournamentLeaderboardEntry[];
+  }
+
+  async getWinners(params: { tournamentId: string; limit: number }): Promise<TournamentWinnerRow[]> {
+    const rows = await this.db
+      .select({
+        userId: tournamentParticipants.userId,
+        username: users.username,
+        score: tournamentParticipants.totalScore,
+        avatarUrl: userProfiles.avatarUrl,
+      })
+      .from(tournamentParticipants)
+      .innerJoin(users, eq(tournamentParticipants.userId, users.userId))
+      .leftJoin(userProfiles, eq(users.userId, userProfiles.userId))
+      .where(
+        and(
+          eq(tournamentParticipants.tournamentId, params.tournamentId),
+          sql`${tournamentParticipants.status} in ('active', 'completed')`,
+          isNull(tournamentParticipants.withdrawnAt),
+          isNull(users.deletedAt),
+        ),
+      )
+      .orderBy(desc(tournamentParticipants.totalScore), tournamentParticipants.totalTimeMs)
+      .limit(params.limit);
+
+    return rows.map((row, index) => ({
+      rank: index + 1,
+      userId: row.userId,
+      username: row.username,
+      score: row.score,
+      avatarUrl: row.avatarUrl,
+    }));
   }
 
   async listParticipants(params: {
