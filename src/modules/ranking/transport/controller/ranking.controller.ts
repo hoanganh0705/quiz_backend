@@ -31,6 +31,7 @@ import { LeaderboardService } from '../../domain/services/leaderboard.service';
 import { UserRankService } from '../../domain/services/user-rank.service';
 import {
   LeaderboardQueryDto,
+  LeaderboardDistributionQueryDto,
   MyRankingHistoryQueryDto,
   NearbyRanksQueryDto,
   RankMovementQueryDto,
@@ -38,22 +39,28 @@ import {
   TopMoversQueryDto,
 } from '../../dto/request/leaderboard-query.dto';
 import {
+  LeaderboardDistributionResponseDto,
   LeaderboardResponseDto,
   NearbyRanksResponseDto,
   PeakRanksResponseDto,
   PublicRankingHistoryResponseDto,
   RankMovementResponseDto,
   RankingHistoryResponseDto,
+  RankingMilestonesResponseDto,
   TopMoversResponseDto,
+  UserPercentileResponseDto,
   UserRankResponseDto,
   UserRankSummaryDto,
 } from '../../dto/response/leaderboard-response.dto';
+import { GetLeaderboardDistributionQueryHandler } from '../../application/get-leaderboard-distribution.query';
 import {
   GetMyRankingHistoryQueryHandler,
   mapRankingPeriodEnumToDomain,
 } from '../../application/get-my-ranking-history.query';
 import { GetMyPeakRanksQueryHandler } from '../../application/get-my-peak-ranks.query';
+import { GetMyPercentileQueryHandler } from '../../application/get-my-percentile.query';
 import { GetMyRankMovementQueryHandler } from '../../application/get-my-rank-movement.query';
+import { GetMyRankingMilestonesQueryHandler } from '../../application/get-my-ranking-milestones.query';
 import { GetNearbyRanksQueryHandler } from '../../application/get-nearby-ranks.query';
 import { GetTopMoversQueryHandler } from '../../application/get-top-movers.query';
 import { GetUserRankingHistoryQueryHandler } from '../../application/get-user-ranking-history.query';
@@ -65,9 +72,12 @@ export class RankingController {
   constructor(
     private readonly leaderboardService: LeaderboardService,
     private readonly userRankService: UserRankService,
+    private readonly getLeaderboardDistributionQueryHandler: GetLeaderboardDistributionQueryHandler,
     private readonly getMyRankingHistoryQueryHandler: GetMyRankingHistoryQueryHandler,
     private readonly getMyPeakRanksQueryHandler: GetMyPeakRanksQueryHandler,
+    private readonly getMyPercentileQueryHandler: GetMyPercentileQueryHandler,
     private readonly getMyRankMovementQueryHandler: GetMyRankMovementQueryHandler,
+    private readonly getMyRankingMilestonesQueryHandler: GetMyRankingMilestonesQueryHandler,
     private readonly getNearbyRanksQueryHandler: GetNearbyRanksQueryHandler,
     private readonly getTopMoversQueryHandler: GetTopMoversQueryHandler,
     private readonly getUserRankingHistoryQueryHandler: GetUserRankingHistoryQueryHandler,
@@ -88,6 +98,23 @@ export class RankingController {
       period: query.period ?? RankingPeriodEnum.ALL_TIME,
       limit: query.limit ?? 100,
       offset: query.offset ?? 0,
+    });
+  }
+
+  @Get('distribution')
+  @Public()
+  @ApiOperation({
+    summary: 'Get leaderboard distribution',
+    description: 'Returns distribution statistics for the active leaderboard in the selected period.',
+  })
+  @ApiOkResponse({ description: 'Leaderboard distribution returned', type: LeaderboardDistributionResponseDto })
+  @ApiBadRequestResponse({ description: 'Validation failed' })
+  @ApiQuery({ name: 'period', enum: RankingPeriodEnum, required: false })
+  async getLeaderboardDistribution(
+    @Query() query: LeaderboardDistributionQueryDto,
+  ): Promise<LeaderboardDistributionResponseDto> {
+    return this.getLeaderboardDistributionQueryHandler.execute({
+      period: mapRankingPeriodEnumToDomain(query.period ?? RankingPeriodEnum.ALL_TIME),
     });
   }
 
@@ -144,6 +171,44 @@ export class RankingController {
       user.sub,
       query.period ?? RankingPeriodEnum.ALL_TIME,
     );
+  }
+
+  @Get('me/percentile')
+  @UseGuards(JwtGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Get authenticated user percentile',
+    description: 'Returns the authenticated user percentile in the selected leaderboard period.',
+  })
+  @ApiOkResponse({ description: 'User percentile returned', type: UserPercentileResponseDto })
+  @ApiUnauthorizedResponse({ description: 'Missing or invalid token' })
+  @ApiBadRequestResponse({ description: 'Validation failed' })
+  @ApiQuery({ name: 'period', enum: RankingPeriodEnum, required: false })
+  async getMyPercentile(
+    @CurrentUser() user: JwtPayload,
+    @Query() query: LeaderboardDistributionQueryDto,
+  ): Promise<UserPercentileResponseDto> {
+    return this.getMyPercentileQueryHandler.execute({
+      userId: user.sub,
+      period: mapRankingPeriodEnumToDomain(query.period ?? RankingPeriodEnum.ALL_TIME),
+    });
+  }
+
+  @Get('me/milestones')
+  @UseGuards(JwtGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Get authenticated user ranking milestones',
+    description: 'Returns ranking milestones achieved by the authenticated user in chronological order.',
+  })
+  @ApiOkResponse({ description: 'Ranking milestones returned', type: RankingMilestonesResponseDto })
+  @ApiUnauthorizedResponse({ description: 'Missing or invalid token' })
+  async getMyRankingMilestones(
+    @CurrentUser() user: JwtPayload,
+  ): Promise<RankingMilestonesResponseDto> {
+    return this.getMyRankingMilestonesQueryHandler.execute({
+      userId: user.sub,
+    });
   }
 
   @Get('me/nearby')

@@ -161,3 +161,14 @@ export class NearbyRanksQueryDto {
   @IsOptional()
   radius?: number = 2;
 }
+
+export class LeaderboardDistributionQueryDto {
+  @ApiPropertyOptional({
+    description: 'Leaderboard distribution period',
+    enum: RankingPeriodEnum,
+    default: RankingPeriodEnum.ALL_TIME,
+  })
+  @IsEnum(RankingPeriodEnum)
+  @IsOptional()
+  period?: RankingPeriodEnum = RankingPeriodEnum.ALL_TIME;
+}

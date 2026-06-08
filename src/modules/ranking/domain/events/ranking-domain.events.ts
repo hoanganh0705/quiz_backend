@@ -4,7 +4,7 @@
  * Defines all events emitted by the Ranking Domain.
  */
 
-import { RankingPeriod } from '../types/ranking.types';
+import { RankingPeriod, RankingMilestone } from '../types/ranking.types';
 
 /**
  * Event emitted when XP is successfully added to a user's ranking.
@@ -75,7 +75,7 @@ export interface RankingMilestoneEvent {
   readonly eventType: 'ranking.milestone';
   readonly userId: string;
   readonly period: RankingPeriod;
-  readonly milestoneType: 'top10' | 'top100' | 'top1000' | 'rank1';
+  readonly milestoneType: RankingMilestone;
   readonly rank: number;
   readonly percentile: number;
   readonly timestamp: Date;

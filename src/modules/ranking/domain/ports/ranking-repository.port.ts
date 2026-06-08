@@ -4,7 +4,7 @@
  * Defines the interface for ranking data access.
  */
 
-import { RankingPeriod } from '../types/ranking.types';
+import { RankingPeriod, RankingMilestone } from '../types/ranking.types';
 
 export type UserRankingRow = {
   userId: string;
@@ -80,6 +80,30 @@ export type NearbyRankEntryRow = {
   xp: number;
 };
 
+export type RankingMilestoneRow = {
+  id: string;
+  userId: string;
+  milestone: RankingMilestone;
+  rank: number;
+  achievedAt: string;
+};
+
+export type LeaderboardDistributionBucketRow = {
+  label: string;
+  count: number;
+};
+
+export type LeaderboardDistributionRow = {
+  totalUsers: number;
+  remainingUsers: number;
+  buckets: LeaderboardDistributionBucketRow[];
+};
+
+export type UserPercentileRow = {
+  rank: number | null;
+  totalUsers: number;
+};
+
 export interface RankingRepositoryPort {
   // User Ranking Operations
   getUserRanking(userId: string): Promise<UserRankingRow | null>;
@@ -97,7 +121,7 @@ export interface RankingRepositoryPort {
   clearDirtyFlags(userIds: string[]): Promise<void>;
 
   // Rank Operations
-  updateRank(params: { userId: string; period: RankingPeriod; rank: number }): Promise<void>;
+  updateRank(params: { userId: string; period: RankingPeriod; rank: number }): Promise<number | null>;
 
   updatePeakRank(params: { userId: string; period: RankingPeriod; rank: number }): Promise<boolean>;
 
@@ -113,6 +137,8 @@ export interface RankingRepositoryPort {
   getTotalParticipants(period: RankingPeriod): Promise<number>;
 
   getUserRank(userId: string, period: RankingPeriod): Promise<number | null>;
+
+  getLeaderboardSize(period: RankingPeriod): Promise<number>;
 
   getNextRankXp(period: RankingPeriod, currentRank: number): Promise<number | null>;
 
@@ -152,6 +178,22 @@ export interface RankingRepositoryPort {
     me: NearbyRankEntryRow | null;
     below: NearbyRankEntryRow[];
   }>;
+
+  createMilestone(params: {
+    userId: string;
+    milestone: RankingMilestone;
+    rank: number;
+    achievedAt: Date;
+  }): Promise<RankingMilestoneRow>;
+
+  getUserMilestones(userId: string): Promise<RankingMilestoneRow[]>;
+
+  hasMilestone(params: {
+    userId: string;
+    milestone: RankingMilestone;
+  }): Promise<boolean>;
+
+  getLeaderboardDistribution(period: RankingPeriod): Promise<LeaderboardDistributionRow>;
 
   // Period Reset Operations
   resetPeriod(period: RankingPeriod, resetAt: Date): Promise<number>;

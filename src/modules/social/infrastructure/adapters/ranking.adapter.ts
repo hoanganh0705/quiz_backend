@@ -85,6 +85,7 @@ export class RankingAdapter implements RankingPort {
       case RankingPeriod.MONTHLY:
         return ranking.monthlyXp;
       case RankingPeriod.ALL_TIME:
+      case RankingPeriod.DAILY:
         return ranking.allTimeXp;
     }
   }
