@@ -25,6 +25,12 @@ import type {
   TournamentLeaderboardEntry,
   TournamentListFilters,
   TournamentCursorPayload,
+  TournamentParticipantListItemRow,
+  TournamentStandingRow,
+  UpcomingTournamentRow,
+  ActiveTournamentRow,
+  CompletedTournamentRow,
+  RelatedTournamentRow,
 } from '@/modules/tournament/domain/ports';
 
 @Injectable()
@@ -156,6 +162,223 @@ export class TournamentRepository implements TournamentRepositoryPort {
       .limit(params.limit + 1);
 
     return rows as TournamentRow[];
+  }
+
+  async listUpcomingTournaments(params: {
+    page: number;
+    limit: number;
+    sortBy: 'startAt' | 'registrationDeadline';
+    nowIso: string;
+  }): Promise<{ items: UpcomingTournamentRow[]; total: number }> {
+    const offset = (params.page - 1) * params.limit;
+    const conditions = and(isNull(tournaments.deletedAt), sql`${tournaments.startAt} > ${params.nowIso}`);
+
+    const [totalRow] = await this.db.select({ count: count() }).from(tournaments).where(conditions);
+
+    const participantCountSql = sql<number>`count(${tournamentParticipants.participantId})`;
+    const orderColumn =
+      params.sortBy === 'registrationDeadline' ? tournaments.createdAt : tournaments.startAt;
+
+    const items = await this.db
+      .select({
+        tournamentId: tournaments.tournamentId,
+        name: tournaments.title,
+        description: tournaments.description,
+        startAt: tournaments.startAt,
+        endAt: tournaments.endAt,
+        participantCount: participantCountSql.as('participant_count'),
+      })
+      .from(tournaments)
+      .leftJoin(
+        tournamentParticipants,
+        and(
+          eq(tournaments.tournamentId, tournamentParticipants.tournamentId),
+          eq(tournamentParticipants.status, 'active'),
+        ),
+      )
+      .where(conditions)
+      .groupBy(
+        tournaments.tournamentId,
+        tournaments.title,
+        tournaments.description,
+        tournaments.startAt,
+        tournaments.endAt,
+        orderColumn,
+      )
+      .orderBy(orderColumn, tournaments.tournamentId)
+      .limit(params.limit)
+      .offset(offset);
+
+    return {
+      items: items as UpcomingTournamentRow[],
+      total: totalRow?.count ?? 0,
+    };
+  }
+
+  async listActiveTournaments(params: {
+    page: number;
+    limit: number;
+    nowIso: string;
+  }): Promise<{ items: ActiveTournamentRow[]; total: number }> {
+    const offset = (params.page - 1) * params.limit;
+    const conditions = and(
+      isNull(tournaments.deletedAt),
+      sql`${tournaments.startAt} <= ${params.nowIso}`,
+      sql`${tournaments.endAt} >= ${params.nowIso}`,
+    );
+
+    const [totalRow] = await this.db.select({ count: count() }).from(tournaments).where(conditions);
+
+    const items = await this.db
+      .select({
+        tournamentId: tournaments.tournamentId,
+        name: tournaments.title,
+        startAt: tournaments.startAt,
+        endAt: tournaments.endAt,
+        participantCount: sql<number>`count(${tournamentParticipants.participantId})`.as(
+          'participant_count',
+        ),
+      })
+      .from(tournaments)
+      .leftJoin(
+        tournamentParticipants,
+        and(
+          eq(tournaments.tournamentId, tournamentParticipants.tournamentId),
+          eq(tournamentParticipants.status, 'active'),
+        ),
+      )
+      .where(conditions)
+      .groupBy(
+        tournaments.tournamentId,
+        tournaments.title,
+        tournaments.startAt,
+        tournaments.endAt,
+      )
+      .orderBy(tournaments.endAt, tournaments.tournamentId)
+      .limit(params.limit)
+      .offset(offset);
+
+    return {
+      items: items as ActiveTournamentRow[],
+      total: totalRow?.count ?? 0,
+    };
+  }
+
+  async listCompletedTournaments(params: {
+    page: number;
+    limit: number;
+    nowIso: string;
+  }): Promise<{ items: CompletedTournamentRow[]; total: number }> {
+    const offset = (params.page - 1) * params.limit;
+    const conditions = and(
+      isNull(tournaments.deletedAt),
+      sql`${tournaments.endAt} < ${params.nowIso}`,
+    );
+
+    const [totalRow] = await this.db.select({ count: count() }).from(tournaments).where(conditions);
+
+    const items = await this.db
+      .select({
+        tournamentId: tournaments.tournamentId,
+        name: tournaments.title,
+        startAt: tournaments.startAt,
+        endAt: tournaments.endAt,
+        participantCount: sql<number>`count(${tournamentParticipants.participantId})`.as(
+          'participant_count',
+        ),
+      })
+      .from(tournaments)
+      .leftJoin(
+        tournamentParticipants,
+        and(
+          eq(tournaments.tournamentId, tournamentParticipants.tournamentId),
+          eq(tournamentParticipants.status, 'active'),
+        ),
+      )
+      .where(conditions)
+      .groupBy(
+        tournaments.tournamentId,
+        tournaments.title,
+        tournaments.startAt,
+        tournaments.endAt,
+      )
+      .orderBy(desc(tournaments.endAt), desc(tournaments.tournamentId))
+      .limit(params.limit)
+      .offset(offset);
+
+    return {
+      items: items as CompletedTournamentRow[],
+      total: totalRow?.count ?? 0,
+    };
+  }
+
+  async listRelatedTournaments(params: {
+    tournamentId: string;
+    limit: number;
+  }): Promise<RelatedTournamentRow[]> {
+    const base = this.db
+      .select({
+        tournamentId: tournaments.tournamentId,
+        name: tournaments.title,
+        startAt: tournaments.startAt,
+        participantCount: sql<number>`count(${tournamentParticipants.participantId})`.as(
+          'participant_count',
+        ),
+      })
+      .from(tournaments)
+      .leftJoin(
+        tournamentParticipants,
+        and(
+          eq(tournaments.tournamentId, tournamentParticipants.tournamentId),
+          eq(tournamentParticipants.status, 'active'),
+        ),
+      )
+      .where(
+        and(
+          isNull(tournaments.deletedAt),
+          sql`${tournaments.tournamentId} != ${params.tournamentId}`,
+        ),
+      )
+      .groupBy(
+        tournaments.tournamentId,
+        tournaments.title,
+        tournaments.description,
+        tournaments.startAt,
+        tournaments.categoryId,
+      )
+      .orderBy(desc(tournaments.startAt), tournaments.tournamentId)
+      .limit(params.limit * 3);
+
+    const rows = await base;
+
+    const tournament = await this.getTournamentById(params.tournamentId);
+    if (!tournament) return [];
+
+    const titleWords = tournament.title
+      .toLowerCase()
+      .split(/\s+/)
+      .filter((w) => w.length > 2);
+
+    const scored = rows
+      .map((row) => {
+        let score = 0;
+        if (row.categoryId === tournament.categoryId) score += 3;
+        if (tournament.description) {
+          const words = tournament.description.toLowerCase().split(/\s+/).filter((w) => w.length > 2);
+          for (const word of words) {
+            if (row.description && row.description.toLowerCase().includes(word)) score += 1;
+          }
+        }
+        for (const word of titleWords) {
+          if (row.name.toLowerCase().includes(word)) score += 0.5;
+        }
+        return { ...row, score };
+      })
+      .filter((r) => r.score > 0)
+      .sort((a, b) => b.score - a.score || (a.startAt > b.startAt ? -1 : 1))
+      .slice(0, params.limit);
+
+    return scored as RelatedTournamentRow[];
   }
 
   async createTournament(params: {
@@ -469,6 +692,91 @@ export class TournamentRepository implements TournamentRepositoryPort {
       ...(row as Omit<TournamentLeaderboardEntry, 'rank'>),
       rank: index + 1,
     })) as TournamentLeaderboardEntry[];
+  }
+
+  async listParticipants(params: {
+    tournamentId: string;
+    page: number;
+    limit: number;
+  }): Promise<{ items: TournamentParticipantListItemRow[]; total: number }> {
+    const offset = (params.page - 1) * params.limit;
+    const conditions = and(
+      eq(tournamentParticipants.tournamentId, params.tournamentId),
+      eq(tournamentParticipants.status, 'active'),
+      isNull(users.deletedAt),
+    );
+
+    const [totalRow] = await this.db
+      .select({ count: count() })
+      .from(tournamentParticipants)
+      .innerJoin(users, eq(tournamentParticipants.userId, users.userId))
+      .where(conditions);
+
+    const items = await this.db
+      .select({
+        userId: tournamentParticipants.userId,
+        username: users.username,
+        registeredAt: tournamentParticipants.registeredAt,
+      })
+      .from(tournamentParticipants)
+      .innerJoin(users, eq(tournamentParticipants.userId, users.userId))
+      .where(conditions)
+      .orderBy(desc(tournamentParticipants.registeredAt), desc(tournamentParticipants.participantId))
+      .limit(params.limit)
+      .offset(offset);
+
+    return {
+      items: items as TournamentParticipantListItemRow[],
+      total: totalRow?.count ?? 0,
+    };
+  }
+
+  async getParticipantStanding(params: {
+    tournamentId: string;
+    userId: string;
+  }): Promise<TournamentStandingRow | null> {
+    const participant = await this.getParticipantByUserAndTournament(params.userId, params.tournamentId);
+
+    if (!participant || participant.status === 'withdrawn') {
+      return null;
+    }
+
+    const activeParticipants = await this.db
+      .select({
+        participantId: tournamentParticipants.participantId,
+        totalScore: tournamentParticipants.totalScore,
+        totalTimeMs: tournamentParticipants.totalTimeMs,
+      })
+      .from(tournamentParticipants)
+      .innerJoin(users, eq(tournamentParticipants.userId, users.userId))
+      .where(
+        and(
+          eq(tournamentParticipants.tournamentId, params.tournamentId),
+          eq(tournamentParticipants.status, 'active'),
+          isNull(users.deletedAt),
+        ),
+      )
+      .orderBy(desc(tournamentParticipants.totalScore), tournamentParticipants.totalTimeMs);
+
+    const participantCount = activeParticipants.length;
+    const participantIndex = activeParticipants.findIndex(
+      (row) => row.participantId === participant.participantId,
+    );
+
+    if (participantIndex === -1) {
+      return null;
+    }
+
+    const rank = participantIndex + 1;
+    const rankedBelow = participantCount - rank;
+    const percentile = participantCount <= 1 ? 0 : Math.round((rankedBelow / participantCount) * 100);
+
+    return {
+      rank,
+      score: participant.totalScore,
+      percentile,
+      participantCount,
+    };
   }
 
   async countParticipants(tournamentId: string): Promise<number> {
