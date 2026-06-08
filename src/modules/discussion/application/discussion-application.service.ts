@@ -27,6 +27,7 @@ import type {
   PublicDiscussionProfile,
   MyUpvotedThreadListItem,
   MyUpvotedCommentListItem,
+  MyDiscussionSubscriptionListItem,
   SearchDiscussionsCursor,
   ThreadStats,
   MyDiscussionStats,
@@ -187,6 +188,21 @@ export class DiscussionApplicationService {
     query: { page?: number; limit?: number },
   ): Promise<{ items: MyUpvotedCommentListItem[]; total: number; page: number; limit: number }> {
     return this.discussionService.listMyUpvotedComments(user.sub, query);
+  }
+
+  async listMyDiscussionSubscriptions(
+    user: JwtPayload,
+    query: { page?: number; limit?: number },
+  ): Promise<{ items: MyDiscussionSubscriptionListItem[]; total: number; page: number; limit: number }> {
+    return this.discussionService.listMyDiscussionSubscriptions(user.sub, query);
+  }
+
+  async subscribeToThread(user: JwtPayload, threadId: string): Promise<{ success: true }> {
+    return this.discussionService.subscribeToThread(user.sub, threadId);
+  }
+
+  async unsubscribeFromThread(user: JwtPayload, threadId: string): Promise<{ success: true }> {
+    return this.discussionService.unsubscribeFromThread(user.sub, threadId);
   }
 
   async listCommentsByUser(

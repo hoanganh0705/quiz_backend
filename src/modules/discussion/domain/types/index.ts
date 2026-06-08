@@ -90,6 +90,14 @@ export interface MyUpvotedCommentListItem {
   upvotedAt: string;
 }
 
+export interface MyDiscussionSubscriptionListItem {
+  threadId: string;
+  title: string;
+  commentCount: number;
+  voteCount: number;
+  subscribedAt: string;
+}
+
 export interface TrendingDiscussionCursor {
   score: number;
   threadId: string;
