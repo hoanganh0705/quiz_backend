@@ -7,7 +7,7 @@
 
 import { Inject, Injectable } from '@nestjs/common';
 import { NodePgDatabase } from 'drizzle-orm/node-postgres';
-import { eq, sql, desc, and, inArray } from 'drizzle-orm';
+import { eq, sql, desc, and, inArray, gte, lte, asc } from 'drizzle-orm';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import * as schema from '@/core/database/schema';
 import { userRanking, rankHistory } from '@/core/database/schema';
@@ -17,6 +17,9 @@ import type {
   UserRankingWithUserRow,
   RankHistoryRow,
   LeaderboardRow,
+  PeakRanksRow,
+  TopMoverRow,
+  NearbyRankEntryRow,
 } from '../../domain/ports/ranking-repository.port';
 import { RankingPeriod } from '../../domain/types/ranking.types';
 
@@ -26,6 +29,10 @@ type RawQueryResult<T> = {
 };
 
 type PeakRankField = 'peakAllTimeRank' | 'peakWeeklyRank' | 'peakMonthlyRank';
+type PeakAchievedAtField =
+  | 'peakAllTimeRankAchievedAt'
+  | 'peakWeeklyRankAchievedAt'
+  | 'peakMonthlyRankAchievedAt';
 
 @Injectable()
 export class RankingRepository implements RankingRepositoryPort {
@@ -57,9 +64,11 @@ export class RankingRepository implements RankingRepositoryPort {
         ur.last_weekly_reset_at as "lastWeeklyResetAt",
         ur.last_monthly_reset_at as "lastMonthlyResetAt",
         ur.peak_all_time_rank as "peakAllTimeRank",
+        ur.peak_all_time_rank_achieved_at as "peakAllTimeRankAchievedAt",
         ur.peak_weekly_rank as "peakWeeklyRank",
+        ur.peak_weekly_rank_achieved_at as "peakWeeklyRankAchievedAt",
         ur.peak_monthly_rank as "peakMonthlyRank",
-        ur.peak_rank_achieved_at as "peakRankAchievedAt",
+        ur.peak_monthly_rank_achieved_at as "peakMonthlyRankAchievedAt",
         ur.last_activity_at as "lastActivityAt",
         ur.is_dirty as "isDirty",
         ur.updated_at as "updatedAt",
@@ -184,19 +193,19 @@ export class RankingRepository implements RankingRepositoryPort {
     const { userId, period, rank } = params;
 
     const peakRankColumn = this.getPeakRankColumn(period);
+    const peakAchievedAtColumn = this.getPeakAchievedAtColumn(period);
     const current = await this.getUserRanking(userId);
 
     if (!current) return false;
 
     const currentPeakRank = current[peakRankColumn];
 
-    // Only update if new rank is better (lower number) or no peak exists
     if (currentPeakRank === null || rank < currentPeakRank) {
       await this.db
         .update(userRanking)
         .set({
           [peakRankColumn]: rank,
-          peakRankAchievedAt: new Date().toISOString(),
+          [peakAchievedAtColumn]: new Date().toISOString(),
         })
         .where(eq(userRanking.userId, userId));
 
@@ -204,6 +213,35 @@ export class RankingRepository implements RankingRepositoryPort {
     }
 
     return false;
+  }
+
+  async getPeakRanks(userId: string): Promise<PeakRanksRow> {
+    const ranking = await this.getUserRanking(userId);
+
+    if (!ranking) {
+      return {
+        daily: { rank: null, achievedAt: null },
+        weekly: { rank: null, achievedAt: null },
+        monthly: { rank: null, achievedAt: null },
+        allTime: { rank: null, achievedAt: null },
+      };
+    }
+
+    return {
+      daily: { rank: null, achievedAt: null },
+      weekly: {
+        rank: ranking.peakWeeklyRank,
+        achievedAt: ranking.peakWeeklyRankAchievedAt,
+      },
+      monthly: {
+        rank: ranking.peakMonthlyRank,
+        achievedAt: ranking.peakMonthlyRankAchievedAt,
+      },
+      allTime: {
+        rank: ranking.peakAllTimeRank,
+        achievedAt: ranking.peakAllTimeRankAchievedAt,
+      },
+    };
   }
 
   async getLeaderboard(params: {
@@ -300,44 +338,182 @@ export class RankingRepository implements RankingRepositoryPort {
   async createRankHistory(params: {
     userId: string;
     period: RankingPeriod;
-    periodStart: Date | null;
-    periodEnd: Date;
-    xpAtStart: number;
-    xpAtEnd: number;
-    rankAtEnd: number | null;
-    peakRank: number | null;
-    peakXp: number | null;
+    snapshotDate: Date;
+    rank: number;
+    xp: number;
+    recordedAt?: Date;
   }): Promise<RankHistoryRow> {
     const [result] = await this.db
       .insert(rankHistory)
       .values({
         userId: params.userId,
         period: params.period,
-        periodStart: params.periodStart?.toISOString() ?? null,
-        periodEnd: params.periodEnd.toISOString(),
-        xpAtStart: params.xpAtStart,
-        xpAtEnd: params.xpAtEnd,
-        rankAtEnd: params.rankAtEnd,
-        peakRank: params.peakRank,
-        peakXp: params.peakXp,
+        snapshotDate: params.snapshotDate.toISOString(),
+        rank: params.rank,
+        xp: params.xp,
+        recordedAt: params.recordedAt?.toISOString() ?? new Date().toISOString(),
       })
+      .onConflictDoNothing()
       .returning();
 
-    return result as RankHistoryRow;
+    if (result) {
+      return result as RankHistoryRow;
+    }
+
+    const existing = await this.db.query.rankHistory.findFirst({
+      where: and(
+        eq(rankHistory.userId, params.userId),
+        eq(rankHistory.period, params.period),
+        eq(rankHistory.snapshotDate, params.snapshotDate.toISOString()),
+      ),
+    });
+
+    if (!existing) {
+      throw new Error('Failed to persist rank history snapshot');
+    }
+
+    return existing as RankHistoryRow;
   }
 
-  async getRankHistory(
-    userId: string,
-    period: RankingPeriod,
-    limit = 10,
-  ): Promise<RankHistoryRow[]> {
+  async getUserRankingHistory(params: {
+    userId: string;
+    period: RankingPeriod;
+    from?: Date;
+    to?: Date;
+  }): Promise<RankHistoryRow[]> {
+    const conditions = [eq(rankHistory.userId, params.userId), eq(rankHistory.period, params.period)];
+
+    if (params.from) {
+      conditions.push(gte(rankHistory.snapshotDate, params.from.toISOString()));
+    }
+
+    if (params.to) {
+      conditions.push(lte(rankHistory.snapshotDate, params.to.toISOString()));
+    }
+
     const results = await this.db.query.rankHistory.findMany({
-      where: and(eq(rankHistory.userId, userId), eq(rankHistory.period, period)),
-      orderBy: desc(rankHistory.createdAt),
-      limit,
+      where: and(...conditions),
+      orderBy: [asc(rankHistory.snapshotDate), asc(rankHistory.recordedAt)],
     });
 
     return results as RankHistoryRow[];
+  }
+
+  async getLatestRankSnapshots(params: {
+    userId: string;
+    period: RankingPeriod;
+  }): Promise<import('../../domain/ports/ranking-repository.port').RankSnapshotPairRow> {
+    const snapshots = await this.db.query.rankHistory.findMany({
+      where: and(eq(rankHistory.userId, params.userId), eq(rankHistory.period, params.period)),
+      orderBy: [desc(rankHistory.snapshotDate), desc(rankHistory.recordedAt)],
+      limit: 2,
+    });
+
+    return {
+      current: (snapshots[0] as RankHistoryRow | undefined) ?? null,
+      previous: (snapshots[1] as RankHistoryRow | undefined) ?? null,
+    };
+  }
+
+  async getTopMovers(params: { period: RankingPeriod; limit: number }): Promise<TopMoverRow[]> {
+    const results = await this.executeRaw<TopMoverRow>(sql`
+      WITH ranked_history AS (
+        SELECT
+          rh.user_id,
+          rh.rank,
+          rh.snapshot_date,
+          rh.recorded_at,
+          ROW_NUMBER() OVER (
+            PARTITION BY rh.user_id
+            ORDER BY rh.snapshot_date DESC, rh.recorded_at DESC
+          ) AS snapshot_position
+        FROM rank_history rh
+        INNER JOIN users u ON u.user_id = rh.user_id
+        WHERE rh.period = ${params.period}
+          AND u.deleted_at IS NULL
+      ),
+      paired_snapshots AS (
+        SELECT
+          current_snapshot.user_id,
+          current_snapshot.rank AS current_rank,
+          previous_snapshot.rank AS previous_rank,
+          previous_snapshot.rank - current_snapshot.rank AS change
+        FROM ranked_history current_snapshot
+        INNER JOIN ranked_history previous_snapshot
+          ON previous_snapshot.user_id = current_snapshot.user_id
+         AND previous_snapshot.snapshot_position = 2
+        WHERE current_snapshot.snapshot_position = 1
+      )
+      SELECT
+        paired_snapshots.user_id AS "userId",
+        u.username AS username,
+        paired_snapshots.current_rank AS "currentRank",
+        paired_snapshots.previous_rank AS "previousRank",
+        paired_snapshots.change AS change
+      FROM paired_snapshots
+      INNER JOIN users u ON u.user_id = paired_snapshots.user_id
+      WHERE paired_snapshots.change > 0
+        AND u.deleted_at IS NULL
+      ORDER BY paired_snapshots.change DESC, paired_snapshots.current_rank ASC, u.username ASC
+      LIMIT ${params.limit}
+    `);
+
+    return results.rows;
+  }
+
+  async getNearbyRanks(params: {
+    userId: string;
+    period: RankingPeriod;
+    radius: number;
+  }): Promise<{
+    above: NearbyRankEntryRow[];
+    me: NearbyRankEntryRow | null;
+    below: NearbyRankEntryRow[];
+  }> {
+    const xpColumn = this.getXpColumn(params.period);
+
+    const results = await this.executeRaw<NearbyRankEntryRow & { position: 'above' | 'me' | 'below' }>(sql`
+      WITH ranked_users AS (
+        SELECT
+          u.user_id AS "userId",
+          u.username AS username,
+          ur.${sql.raw(xpColumn)} AS xp,
+          RANK() OVER (
+            ORDER BY ur.${sql.raw(xpColumn)} DESC, u.created_at ASC
+          ) AS rank
+        FROM user_ranking ur
+        INNER JOIN users u ON u.user_id = ur.user_id
+        WHERE ur.${sql.raw(xpColumn)} > 0
+          AND u.deleted_at IS NULL
+      ),
+      current_user AS (
+        SELECT *
+        FROM ranked_users
+        WHERE "userId" = ${params.userId}
+      )
+      SELECT
+        ranked_users.rank AS rank,
+        ranked_users."userId" AS "userId",
+        ranked_users.username AS username,
+        ranked_users.xp AS xp,
+        CASE
+          WHEN ranked_users."userId" = current_user."userId" THEN 'me'
+          WHEN ranked_users.rank < current_user.rank THEN 'above'
+          ELSE 'below'
+        END AS position
+      FROM ranked_users
+      CROSS JOIN current_user
+      WHERE ranked_users.rank BETWEEN current_user.rank - ${params.radius} AND current_user.rank + ${params.radius}
+      ORDER BY ranked_users.rank ASC, ranked_users.username ASC
+    `);
+
+    const me = results.rows.find((row) => row.position === 'me') ?? null;
+
+    return {
+      above: results.rows.filter((row) => row.position === 'above'),
+      me,
+      below: results.rows.filter((row) => row.position === 'below'),
+    };
   }
 
   async resetPeriod(period: RankingPeriod, resetAt: Date): Promise<number> {
@@ -347,7 +523,10 @@ export class RankingRepository implements RankingRepositoryPort {
     const rankFieldName = this.getRankFieldName(period);
     const resetAtIso = resetAt.toISOString();
 
-    // Archive current peak ranks before reset
+    if (period === RankingPeriod.DAILY || period === RankingPeriod.ALL_TIME) {
+      return 0;
+    }
+
     const usersToArchive = await this.executeRaw<{
       userId: string;
       xp: number | string;
@@ -358,32 +537,29 @@ export class RankingRepository implements RankingRepositoryPort {
         ur.${sql.raw(xpColumn)} as xp,
         ur.${sql.raw(rankColumn)} as rank
       FROM user_ranking ur
+      INNER JOIN users u ON u.user_id = ur.user_id
+      WHERE ur.${sql.raw(xpColumn)} > 0
+        AND u.deleted_at IS NULL
     `);
+
+    const snapshotDate = period === RankingPeriod.WEEKLY ? this.getWeekStart(resetAt) : this.getMonthStart(resetAt);
 
     for (const user of usersToArchive.rows) {
       const xpValue = Number(user.xp);
       const rankValue = user.rank;
 
-      // Only archive if user has activity
-      if (xpValue > 0) {
-        const current = await this.getUserRanking(user.userId);
-        if (current) {
-          await this.createRankHistory({
-            userId: user.userId,
-            period,
-            periodStart: current[resetColumn] ? new Date(current[resetColumn] as string) : null,
-            periodEnd: resetAt,
-            xpAtStart: 0, // Would need to track separately
-            xpAtEnd: xpValue,
-            rankAtEnd: rankValue,
-            peakRank: rankValue,
-            peakXp: xpValue,
-          });
-        }
+      if (xpValue > 0 && rankValue !== null) {
+        await this.createRankHistory({
+          userId: user.userId,
+          period,
+          snapshotDate,
+          rank: rankValue,
+          xp: xpValue,
+          recordedAt: resetAt,
+        });
       }
     }
 
-    // Reset XP and rank
     const resetResult = (await this.db
       .update(userRanking)
       .set({
@@ -523,39 +699,73 @@ export class RankingRepository implements RankingRepositoryPort {
   // ============================================
 
   private getXpColumn(period: RankingPeriod): string {
-    const mapping: Record<RankingPeriod, string> = {
+    const mapping: Partial<Record<RankingPeriod, string>> = {
       [RankingPeriod.ALL_TIME]: 'all_time_xp',
       [RankingPeriod.WEEKLY]: 'weekly_xp',
       [RankingPeriod.MONTHLY]: 'monthly_xp',
     };
-    return mapping[period];
+
+    if (period === RankingPeriod.DAILY) {
+      throw new Error('Daily leaderboard is not supported by user_ranking snapshots');
+    }
+
+    return mapping[period] ?? 'all_time_xp';
   }
 
   private getRankColumn(period: RankingPeriod): string {
-    const mapping: Record<RankingPeriod, string> = {
+    const mapping: Partial<Record<RankingPeriod, string>> = {
       [RankingPeriod.ALL_TIME]: 'all_time_rank',
       [RankingPeriod.WEEKLY]: 'weekly_rank',
       [RankingPeriod.MONTHLY]: 'monthly_rank',
     };
-    return mapping[period];
+
+    if (period === RankingPeriod.DAILY) {
+      throw new Error('Daily leaderboard is not supported by user_ranking snapshots');
+    }
+
+    return mapping[period] ?? 'all_time_rank';
   }
 
   private getRankFieldName(period: RankingPeriod): 'allTimeRank' | 'weeklyRank' | 'monthlyRank' {
-    const mapping: Record<RankingPeriod, 'allTimeRank' | 'weeklyRank' | 'monthlyRank'> = {
+    const mapping: Partial<Record<RankingPeriod, 'allTimeRank' | 'weeklyRank' | 'monthlyRank'>> = {
       [RankingPeriod.ALL_TIME]: 'allTimeRank',
       [RankingPeriod.WEEKLY]: 'weeklyRank',
       [RankingPeriod.MONTHLY]: 'monthlyRank',
     };
-    return mapping[period];
+
+    if (period === RankingPeriod.DAILY) {
+      throw new Error('Daily leaderboard is not supported by user_ranking snapshots');
+    }
+
+    return mapping[period] ?? 'allTimeRank';
   }
 
   private getPeakRankColumn(period: RankingPeriod): PeakRankField {
-    const mapping: Record<RankingPeriod, PeakRankField> = {
+    const mapping: Partial<Record<RankingPeriod, PeakRankField>> = {
       [RankingPeriod.ALL_TIME]: 'peakAllTimeRank',
       [RankingPeriod.WEEKLY]: 'peakWeeklyRank',
       [RankingPeriod.MONTHLY]: 'peakMonthlyRank',
     };
-    return mapping[period];
+
+    if (period === RankingPeriod.DAILY) {
+      throw new Error('Daily peak rank is not supported by user_ranking snapshots');
+    }
+
+    return mapping[period] ?? 'peakAllTimeRank';
+  }
+
+  private getPeakAchievedAtColumn(period: RankingPeriod): PeakAchievedAtField {
+    const mapping: Partial<Record<RankingPeriod, PeakAchievedAtField>> = {
+      [RankingPeriod.ALL_TIME]: 'peakAllTimeRankAchievedAt',
+      [RankingPeriod.WEEKLY]: 'peakWeeklyRankAchievedAt',
+      [RankingPeriod.MONTHLY]: 'peakMonthlyRankAchievedAt',
+    };
+
+    if (period === RankingPeriod.DAILY) {
+      throw new Error('Daily peak achieved-at is not supported by user_ranking snapshots');
+    }
+
+    return mapping[period] ?? 'peakAllTimeRankAchievedAt';
   }
 
   private async executeRaw<T>(query: ReturnType<typeof sql>): Promise<RawQueryResult<T>> {
@@ -563,21 +773,31 @@ export class RankingRepository implements RankingRepositoryPort {
   }
 
   private getResetColumn(period: RankingPeriod): string {
-    const mapping: Record<RankingPeriod, string> = {
+    const mapping: Partial<Record<RankingPeriod, string>> = {
       [RankingPeriod.ALL_TIME]: 'updatedAt',
       [RankingPeriod.WEEKLY]: 'lastWeeklyResetAt',
       [RankingPeriod.MONTHLY]: 'lastMonthlyResetAt',
     };
-    return mapping[period];
+
+    if (period === RankingPeriod.DAILY) {
+      throw new Error('Daily reset column is not supported by user_ranking snapshots');
+    }
+
+    return mapping[period] ?? 'updatedAt';
   }
 
   private getXpFieldName(period: RankingPeriod): 'allTimeXp' | 'weeklyXp' | 'monthlyXp' {
-    const mapping: Record<RankingPeriod, 'allTimeXp' | 'weeklyXp' | 'monthlyXp'> = {
+    const mapping: Partial<Record<RankingPeriod, 'allTimeXp' | 'weeklyXp' | 'monthlyXp'>> = {
       [RankingPeriod.ALL_TIME]: 'allTimeXp',
       [RankingPeriod.WEEKLY]: 'weeklyXp',
       [RankingPeriod.MONTHLY]: 'monthlyXp',
     };
-    return mapping[period];
+
+    if (period === RankingPeriod.DAILY) {
+      throw new Error('Daily XP field is not supported by user_ranking snapshots');
+    }
+
+    return mapping[period] ?? 'allTimeXp';
   }
 
   private getWeekStart(date: Date): Date {

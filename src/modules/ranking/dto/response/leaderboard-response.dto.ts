@@ -143,6 +143,144 @@ export class UserBadgesDto {
   isActive!: boolean;
 }
 
+export class RankingHistoryItemDto {
+  @ApiProperty({ description: 'Snapshot date in YYYY-MM-DD format', example: '2026-06-01' })
+  date!: string;
+
+  @ApiProperty({ description: 'User rank at the snapshot time', example: 142 })
+  rank!: number;
+}
+
+export class RankingHistoryResponseDto {
+  @ApiProperty({ description: 'Historical ranking snapshots', type: [RankingHistoryItemDto] })
+  items!: RankingHistoryItemDto[];
+}
+
+export class PublicRankingHistoryResponseDto {
+  @ApiProperty({
+    description: 'User identifier',
+    example: '550e8400-e29b-41d4-a716-446655440000',
+  })
+  userId!: string;
+
+  @ApiProperty({ description: 'Public username', example: 'Anh' })
+  username!: string;
+
+  @ApiProperty({ description: 'Historical ranking snapshots', type: [RankingHistoryItemDto] })
+  history!: RankingHistoryItemDto[];
+}
+
+export class PeakRankDto {
+  @ApiProperty({ description: 'Best rank achieved for the period', example: 1 })
+  rank!: number;
+
+  @ApiPropertyOptional({
+    description: 'Timestamp when the peak rank was achieved',
+    example: '2026-05-01T12:00:00Z',
+    nullable: true,
+  })
+  achievedAt!: string | null;
+}
+
+export class PeakRanksResponseDto {
+  @ApiPropertyOptional({ type: PeakRankDto, nullable: true })
+  daily!: PeakRankDto | null;
+
+  @ApiPropertyOptional({ type: PeakRankDto, nullable: true })
+  weekly!: PeakRankDto | null;
+
+  @ApiPropertyOptional({ type: PeakRankDto, nullable: true })
+  monthly!: PeakRankDto | null;
+
+  @ApiPropertyOptional({ type: PeakRankDto, nullable: true })
+  allTime!: PeakRankDto | null;
+}
+
+export class RankMovementResponseDto {
+  @ApiPropertyOptional({ description: 'Previous snapshot rank', example: 120, nullable: true })
+  previousRank!: number | null;
+
+  @ApiPropertyOptional({ description: 'Current snapshot rank', example: 95, nullable: true })
+  currentRank!: number | null;
+
+  @ApiPropertyOptional({
+    description: 'Rank change computed as previousRank - currentRank',
+    example: 25,
+    nullable: true,
+  })
+  change!: number | null;
+
+  @ApiProperty({
+    description: 'Movement direction',
+    enum: ['up', 'down', 'stable', 'unknown'],
+    example: 'up',
+  })
+  direction!: 'up' | 'down' | 'stable' | 'unknown';
+}
+
+export class TopMoverDto {
+  @ApiProperty({ description: 'User identifier', example: '550e8400-e29b-41d4-a716-446655440000' })
+  userId!: string;
+
+  @ApiProperty({ description: 'Public username', example: 'Anh' })
+  username!: string;
+
+  @ApiProperty({ description: 'Current snapshot rank', example: 34 })
+  currentRank!: number;
+
+  @ApiProperty({ description: 'Previous snapshot rank', example: 454 })
+  previousRank!: number;
+
+  @ApiProperty({
+    description: 'Positive rank change computed as previousRank - currentRank',
+    example: 420,
+  })
+  change!: number;
+}
+
+export class TopMoversResponseDto {
+  @ApiProperty({
+    description: 'Users with the largest positive ranking movement',
+    type: [TopMoverDto],
+  })
+  items!: TopMoverDto[];
+}
+
+export class NearbyRankEntryDto {
+  @ApiProperty({ description: 'User rank position', example: 50 })
+  rank!: number;
+
+  @ApiProperty({ description: 'User identifier', example: '550e8400-e29b-41d4-a716-446655440000' })
+  userId!: string;
+
+  @ApiProperty({ description: 'Public username', example: 'Anh' })
+  username!: string;
+
+  @ApiProperty({ description: 'Experience points in the selected period', example: 12450 })
+  xp!: number;
+}
+
+export class NearbyRanksResponseDto {
+  @ApiProperty({
+    description: 'Entries immediately above the authenticated user',
+    type: [NearbyRankEntryDto],
+  })
+  above!: NearbyRankEntryDto[];
+
+  @ApiPropertyOptional({
+    description: 'Authenticated user entry',
+    type: NearbyRankEntryDto,
+    nullable: true,
+  })
+  me!: NearbyRankEntryDto | null;
+
+  @ApiProperty({
+    description: 'Entries immediately below the authenticated user',
+    type: [NearbyRankEntryDto],
+  })
+  below!: NearbyRankEntryDto[];
+}
+
 export class LeaderboardResponseDto {
   @ApiProperty({ description: 'Leaderboard entries', type: [LeaderboardEntryDto] })
   entries!: LeaderboardEntryDto[];
