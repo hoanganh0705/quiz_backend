@@ -1,6 +1,6 @@
 import { Type } from 'class-transformer';
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsInt, IsOptional, Max, Min } from 'class-validator';
+import { IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
 
 export class ListTrendingDiscussionsQueryDto {
   @ApiPropertyOptional({
@@ -15,4 +15,13 @@ export class ListTrendingDiscussionsQueryDto {
   @Min(1)
   @Max(50)
   limit?: number = 20;
+
+  @ApiPropertyOptional({
+    description: 'Opaque cursor for pagination',
+    example:
+      'eyJzY29yZSI6MTIzLjQ1LCJ0aHJlYWRJZCI6IjY2MGU4NDAwLWUyOWItNDFkNC1hNzE2LTQ0NjY1NTQ0MDAwMCJ9',
+  })
+  @IsOptional()
+  @IsString()
+  cursor?: string;
 }

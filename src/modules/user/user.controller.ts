@@ -79,6 +79,29 @@ export class UserController {
     return this.quizApplicationService.listQuizzesByCreator(userId, query);
   }
 
+  @Get(':userId/badges')
+  @ApiOperation({
+    summary: 'List badges earned by user',
+    description:
+      'Returns the specified user\'s earned badges, cursor-paginated and ordered by most recently earned.',
+  })
+  @ApiOkResponse({ description: 'Badges returned', type: UserBadgesResponseDto })
+  @ApiNotFoundResponse({ description: 'User not found' })
+  @ApiBadRequestResponse({ description: 'Validation failed' })
+  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  @ApiValidationRequest()
+  listBadgesByUserId(
+    @Param('userId') userId: string,
+    @Query() query: ListUserBadgesQueryDto,
+  ): Promise<UserBadgesResponseDto> {
+    const cursor = query.cursor ? UserBadgeCursorMapper.parse(query.cursor) : null;
+
+    return this.userApplicationService.listBadgesByUserId(userId, {
+      limit: query.limit,
+      cursor,
+    });
+  }
+
   @Get('me')
   @ApiOperation({
     summary: 'Get current user profile',
