@@ -25,6 +25,7 @@ import type {
   UserRankResponseDto,
   GlobalRankingDto,
   PeakRanksDto,
+  PeakRanksResponseDto,
   UserBadgesDto,
   UserRankSummaryDto,
 } from '../../dto/response/leaderboard-response.dto';
@@ -53,13 +54,8 @@ export class UserRankService {
       return this.buildEmptyRankResponse();
     }
 
-    // Get global rankings for all periods
     const global = await this.buildGlobalRanking(ranking.userId);
-
-    // Get peak ranks (inlined from peak-rank service)
     const peakRanks = this.getPeakRankInfo(ranking);
-
-    // Get basic badges (simplified - full badge logic via ACHIEVEMENT_PORT)
     const badges = this.getBasicBadges(ranking);
 
     return {
@@ -67,6 +63,22 @@ export class UserRankService {
       peakRanks,
       lastActivityAt: ranking.lastActivityAt,
       badges,
+    };
+  }
+
+  async getMyPeakRanks(userId: string): Promise<PeakRanksResponseDto> {
+    this.logger.debug({
+      event: 'get_my_peak_ranks_from_service',
+      userId,
+    });
+
+    const peakRanks = await this.rankingRepository.getPeakRanks(userId);
+
+    return {
+      daily: this.toPeakRankDto(peakRanks.daily.rank, peakRanks.daily.achievedAt),
+      weekly: this.toPeakRankDto(peakRanks.weekly.rank, peakRanks.weekly.achievedAt),
+      monthly: this.toPeakRankDto(peakRanks.monthly.rank, peakRanks.monthly.achievedAt),
+      allTime: this.toPeakRankDto(peakRanks.allTime.rank, peakRanks.allTime.achievedAt),
     };
   }
 
@@ -194,6 +206,17 @@ export class UserRankService {
       weekly: ranking.peakWeeklyRank,
       monthly: ranking.peakMonthlyRank,
       allTime: ranking.peakAllTimeRank,
+    };
+  }
+
+  private toPeakRankDto(rank: number | null, achievedAt: string | null): PeakRankDto | null {
+    if (rank === null) {
+      return null;
+    }
+
+    return {
+      rank,
+      achievedAt,
     };
   }
 

@@ -148,6 +148,13 @@
       "when": 1780892339815,
       "tag": "0020_boring_marrow",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1780912342787,
+      "tag": "0021_ancient_freak",
+      "breakpoints": true
     }
   ]
 }
