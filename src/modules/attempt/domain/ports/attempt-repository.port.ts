@@ -1,5 +1,8 @@
 import type { AttemptStatus, AttemptContextType } from '../../types/attempt.types';
-import type { AttemptListCursorPayload, AttemptListSortField } from '../../mappers/attempt-cursor.mapper';
+import type {
+  AttemptListCursorPayload,
+  AttemptListSortField,
+} from '../../mappers/attempt-cursor.mapper';
 import type { QuizDifficulty } from '@/modules/quiz/types/quiz.types';
 
 export type AttemptRow = {

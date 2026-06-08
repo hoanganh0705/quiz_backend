@@ -19,7 +19,10 @@ import {
   users,
 } from '@/core/database/schema';
 import type { AttemptContextType } from '@/modules/attempt/types/attempt.types';
-import type { AttemptListCursorPayload, AttemptListSortField } from '@/modules/attempt/mappers/attempt-cursor.mapper';
+import type {
+  AttemptListCursorPayload,
+  AttemptListSortField,
+} from '@/modules/attempt/mappers/attempt-cursor.mapper';
 import type {
   AttemptRow,
   AttemptDetailRow,
@@ -716,9 +719,7 @@ export class AttemptRepository implements AttemptRepositoryPort {
       favoriteCategory: favoriteCategory
         ? { categoryId: favoriteCategory.categoryId, name: favoriteCategory.name }
         : null,
-      favoriteTag: favoriteTag
-        ? { tagId: favoriteTag.tagId, name: favoriteTag.name }
-        : null,
+      favoriteTag: favoriteTag ? { tagId: favoriteTag.tagId, name: favoriteTag.name } : null,
     };
   }
 }

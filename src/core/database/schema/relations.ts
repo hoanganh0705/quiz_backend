@@ -40,6 +40,7 @@ import {
   discussionComments,
   discussionVotes,
   discussionReports,
+  discussionThreadSubscriptions,
   oauthAccounts,
   categoryFollows,
 } from '.';
@@ -465,6 +466,7 @@ export const discussionThreadsRelations = relations(discussionThreads, ({ one, m
   comments: many(discussionComments),
   votes: many(discussionVotes),
   reports: many(discussionReports),
+  subscriptions: many(discussionThreadSubscriptions),
 }));
 
 export const discussionCommentsRelations = relations(discussionComments, ({ one, many }) => ({
@@ -505,6 +507,17 @@ export const discussionReportsRelations = relations(discussionReports, ({ one })
     fields: [discussionReports.reviewedByUserId],
     references: [users.userId],
     relationName: 'discussionReportReviewer',
+  }),
+}));
+
+export const discussionThreadSubscriptionsRelations = relations(discussionThreadSubscriptions, ({ one }) => ({
+  user: one(users, {
+    fields: [discussionThreadSubscriptions.userId],
+    references: [users.userId],
+  }),
+  thread: one(discussionThreads, {
+    fields: [discussionThreadSubscriptions.threadId],
+    references: [discussionThreads.threadId],
   }),
 }));
 
