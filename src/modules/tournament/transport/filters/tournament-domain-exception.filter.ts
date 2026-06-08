@@ -15,6 +15,7 @@ import {
   TournamentNotRegisteredError,
   TournamentUnregisterClosedError,
   TournamentAlreadyWithdrawnError,
+  TournamentWithdrawClosedError,
 } from '../../domain/errors';
 
 const HTTP_ERROR_NAMES: Record<number, string> = {
@@ -70,7 +71,8 @@ export class TournamentDomainExceptionFilter implements ExceptionFilter {
       error instanceof TournamentFullError ||
       error instanceof TournamentValidationError ||
       error instanceof TournamentRoundNotOpenError ||
-      error instanceof TournamentUnregisterClosedError
+      error instanceof TournamentUnregisterClosedError ||
+      error instanceof TournamentWithdrawClosedError
     ) {
       return { status: HttpStatus.BAD_REQUEST, message: error.message };
     }

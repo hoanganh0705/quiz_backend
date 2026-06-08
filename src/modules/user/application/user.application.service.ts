@@ -15,6 +15,8 @@ import type { UserRankingResponseDto } from '../dto/response/user-ranking-respon
 import type { UserAnalyticsResponseDto } from '../dto/response/user-analytics-response.dto';
 import type { MyTournamentsResponseDto } from '../dto/response/my-tournaments-response.dto';
 import type { MyTournamentHistoryResponseDto } from '../dto/response/my-tournament-history-response.dto';
+import type { MyTournamentAnalyticsResponseDto } from '../dto/response/my-tournament-analytics-response.dto';
+import type { PublicTournamentProfileResponseDto } from '../dto/response/public-tournament-profile-response.dto';
 import type {
   ListUserBadgesQuery,
   UpdateProfileCommand,
@@ -22,6 +24,8 @@ import type {
 } from '../domain/types/user-commands';
 import type { UserActivityRow } from '../domain/ports/user-repository.port';
 import type { ListUserActivityQuery } from '../domain/types/list-user-activity.query';
+import type { GetPublicTournamentProfileQuery } from '../domain/types/get-public-tournament-profile.query';
+import type { GetMyTournamentAnalyticsQuery } from '../domain/types/get-my-tournament-analytics.query';
 import { isObjectRecord } from '@/common/utils/object.util';
 
 @Injectable()
@@ -144,6 +148,7 @@ export class UserApplicationService {
         tournamentName: item.tournamentName,
         rank: item.finalRank,
         score: item.finalScore,
+        participantCount: item.participantCount,
         completedAt: item.completedAt,
       })),
       pagination: {
@@ -151,6 +156,65 @@ export class UserApplicationService {
         page: result.page,
         limit: result.limit,
       },
+    };
+  }
+
+  async getUserTournamentHistory(
+    userId: string,
+    query: GetMyTournamentHistoryQueryDto,
+  ): Promise<MyTournamentHistoryResponseDto> {
+    const result = await this.userDomainService.getUserTournamentHistory({
+      userId,
+      page: query.page ?? 1,
+      limit: query.limit ?? 20,
+    });
+
+    return {
+      items: result.items.map((item) => ({
+        tournamentId: item.tournamentId,
+        tournamentName: item.tournamentName,
+        rank: item.finalRank,
+        score: item.finalScore,
+        participantCount: item.participantCount,
+        completedAt: item.completedAt,
+      })),
+      pagination: {
+        total: result.total,
+        page: result.page,
+        limit: result.limit,
+      },
+    };
+  }
+
+  async getPublicTournamentProfile(userId: string): Promise<PublicTournamentProfileResponseDto> {
+    const profile = await this.userDomainService.getPublicTournamentProfile({ userId });
+
+    return {
+      userId: profile.userId,
+      tournamentsPlayed: profile.tournamentsPlayed,
+      tournamentsWon: profile.tournamentsWon,
+      bestRank: profile.bestRank,
+      averageRank: profile.averageRank,
+      top10Finishes: profile.top10Finishes,
+      totalTournamentScore: profile.totalTournamentScore,
+      lastTournamentAt: profile.lastTournamentAt,
+    };
+  }
+
+  async getMyTournamentAnalytics(userId: string): Promise<MyTournamentAnalyticsResponseDto> {
+    const analytics = await this.userDomainService.getMyTournamentAnalytics({ userId });
+
+    return {
+      tournamentsPlayed: analytics.tournamentsPlayed,
+      wins: analytics.wins,
+      top3Finishes: analytics.top3Finishes,
+      top10Finishes: analytics.top10Finishes,
+      averageRank: analytics.averageRank,
+      bestRank: analytics.bestRank,
+      averageScore: analytics.averageScore,
+      totalTournamentScore: analytics.totalTournamentScore,
+      completionRate: analytics.completionRate,
+      lastTournamentAt: analytics.lastTournamentAt,
     };
   }
 

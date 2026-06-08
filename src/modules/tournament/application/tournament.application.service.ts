@@ -6,6 +6,7 @@ import {
   CreateTournamentDto,
   ListTournamentsQueryDto,
   GetTournamentParticipantsQueryDto,
+  GetTournamentWinnersQueryDto,
   GetUpcomingTournamentsQueryDto,
   GetActiveTournamentsQueryDto,
   GetCompletedTournamentsQueryDto,
@@ -16,15 +17,18 @@ import {
   TournamentDetailResponseDto,
   TournamentListResponseDto,
   TournamentLeaderboardResponseDto,
+  TournamentWinnersResponseDto,
   TournamentParticipantsResponseDto,
   UpcomingTournamentsResponseDto,
   ActiveTournamentsResponseDto,
   CompletedTournamentsResponseDto,
   RelatedTournamentsResponseDto,
+  TournamentStatsResponseDto,
   MyTournamentStandingResponseDto,
   RegisterTournamentResponseDto,
   StartTournamentAttemptResponseDto,
   UnregisterTournamentResponseDto,
+  WithdrawTournamentResponseDto,
 } from '../dto/response';
 
 @Injectable()
@@ -156,6 +160,43 @@ export class TournamentApplicationService {
     };
   }
 
+  async getTournamentStats(tournamentId: string): Promise<TournamentStatsResponseDto> {
+    const stats = await this.tournamentService.getTournamentStats({ tournamentId });
+
+    return {
+      tournamentId: stats.tournamentId,
+      participants: stats.participants,
+      completedParticipants: stats.completedParticipants,
+      averageScore: stats.averageScore,
+      highestScore: stats.highestScore,
+      lowestScore: stats.lowestScore,
+      completionRate: stats.completionRate,
+      averageRank: stats.averageRank,
+      startedAt: stats.startedAt,
+      endedAt: stats.endedAt,
+    };
+  }
+
+  async getTournamentWinners(
+    tournamentId: string,
+    query: GetTournamentWinnersQueryDto,
+  ): Promise<TournamentWinnersResponseDto> {
+    const items = await this.tournamentService.getTournamentWinners({
+      tournamentId,
+      limit: query.limit ?? 10,
+    });
+
+    return {
+      items: items.map((item) => ({
+        rank: item.rank,
+        userId: item.userId,
+        username: item.username,
+        score: item.score,
+        avatarUrl: item.avatarUrl,
+      })),
+    };
+  }
+
   async getTournamentById(tournamentId: string): Promise<TournamentDetailResponseDto> {
     const detail = await this.tournamentService.getTournamentById(tournamentId);
     const rounds = await this.tournamentService.getTournamentRounds(tournamentId);
@@ -246,5 +287,22 @@ export class TournamentApplicationService {
     await this.tournamentService.unregisterFromTournament(tournamentId, user);
 
     return { message: 'Successfully withdrawn from the tournament' };
+  }
+
+  async withdrawFromTournament(
+    tournamentId: string,
+    user: JwtPayload,
+  ): Promise<WithdrawTournamentResponseDto> {
+    const participant = await this.tournamentService.withdrawFromTournament({
+      tournamentId,
+      userId: user.sub,
+    });
+
+    return {
+      success: true,
+      tournamentId: participant.tournamentId,
+      status: participant.status,
+      withdrawnAt: participant.withdrawnAt ?? participant.updatedAt,
+    };
   }
 }
