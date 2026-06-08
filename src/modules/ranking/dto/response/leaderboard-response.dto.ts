@@ -281,6 +281,87 @@ export class NearbyRanksResponseDto {
   below!: NearbyRankEntryDto[];
 }
 
+export class RankingMilestoneDto {
+  @ApiProperty({
+    description: 'Milestone identifier',
+    enum: ['TOP_10000', 'TOP_1000', 'TOP_100', 'TOP_50', 'TOP_10', 'TOP_3', 'TOP_1'],
+    example: 'TOP_100',
+  })
+  milestone!: 'TOP_10000' | 'TOP_1000' | 'TOP_100' | 'TOP_50' | 'TOP_10' | 'TOP_3' | 'TOP_1';
+
+  @ApiProperty({ description: 'Rank threshold achieved for this milestone', example: 100 })
+  rank!: number;
+
+  @ApiProperty({
+    description: 'Timestamp when the milestone was first achieved',
+    example: '2026-03-10T10:00:00Z',
+  })
+  achievedAt!: string;
+}
+
+export class RankingMilestonesResponseDto {
+  @ApiProperty({
+    description: 'Ranking milestones achieved by the authenticated user',
+    type: [RankingMilestoneDto],
+  })
+  items!: RankingMilestoneDto[];
+}
+
+export class LeaderboardDistributionBucketDto {
+  @ApiProperty({ description: 'Bucket label', example: 'Top 100' })
+  label!: string;
+
+  @ApiProperty({ description: 'Number of users in this bucket', example: 90 })
+  count!: number;
+}
+
+export class LeaderboardDistributionResponseDto {
+  @ApiProperty({ description: 'Total users in the selected leaderboard', example: 125430 })
+  totalUsers!: number;
+
+  @ApiProperty({ description: 'Users not included in the explicit top buckets', example: 115320 })
+  remainingUsers!: number;
+
+  @ApiProperty({
+    description: 'Distribution buckets for the selected leaderboard',
+    type: [LeaderboardDistributionBucketDto],
+  })
+  buckets!: LeaderboardDistributionBucketDto[];
+}
+
+export class UserPercentileResponseDto {
+  @ApiPropertyOptional({
+    description: 'Current user rank in the selected period',
+    example: 125,
+    nullable: true,
+  })
+  rank!: number | null;
+
+  @ApiProperty({ description: 'Total ranked users in the selected period', example: 10000 })
+  totalUsers!: number;
+
+  @ApiPropertyOptional({
+    description: 'Percent of ranked users that the authenticated user is ahead of',
+    example: 98.75,
+    nullable: true,
+  })
+  percentile!: number | null;
+
+  @ApiPropertyOptional({
+    description: 'Number of users the authenticated user is ahead of',
+    example: 9875,
+    nullable: true,
+  })
+  betterThanUsers!: number | null;
+
+  @ApiPropertyOptional({
+    description: 'Number of users ranked ahead of the authenticated user',
+    example: 124,
+    nullable: true,
+  })
+  worseThanUsers!: number | null;
+}
+
 export class LeaderboardResponseDto {
   @ApiProperty({ description: 'Leaderboard entries', type: [LeaderboardEntryDto] })
   entries!: LeaderboardEntryDto[];

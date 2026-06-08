@@ -243,6 +243,7 @@ export class LeaderboardService {
    */
   private enumToPeriod(periodEnum: RankingPeriodEnum): RankingPeriod {
     const mapping: Record<RankingPeriodEnum, RankingPeriod> = {
+      [RankingPeriodEnum.DAILY]: RankingPeriod.DAILY,
       [RankingPeriodEnum.WEEKLY]: RankingPeriod.WEEKLY,
       [RankingPeriodEnum.MONTHLY]: RankingPeriod.MONTHLY,
       [RankingPeriodEnum.ALL_TIME]: RankingPeriod.ALL_TIME,

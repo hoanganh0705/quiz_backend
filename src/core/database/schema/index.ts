@@ -776,6 +776,44 @@ export const rankHistory = pgTable(
   ],
 );
 
+export const rankingMilestones = pgTable(
+  'ranking_milestones',
+  {
+    id: uuid('id').defaultRandom().primaryKey().notNull(),
+    userId: uuid('user_id').notNull(),
+    milestone: text('milestone').notNull(),
+    rank: integer('rank').notNull(),
+    achievedAt: timestamp('achieved_at', { withTimezone: true, mode: 'string' })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    index('idx_ranking_milestones_user_id').using(
+      'btree',
+      table.userId.asc().nullsLast().op('uuid_ops'),
+    ),
+    index('idx_ranking_milestones_achieved_at').using(
+      'btree',
+      table.achievedAt.asc().nullsLast().op('timestamptz_ops'),
+    ),
+    uniqueIndex('uq_ranking_milestones_user_milestone').using(
+      'btree',
+      table.userId.asc().nullsLast().op('uuid_ops'),
+      table.milestone.asc().nullsLast().op('text_ops'),
+    ),
+    foreignKey({
+      columns: [table.userId],
+      foreignColumns: [users.userId],
+      name: 'ranking_milestones_user_id_fkey',
+    }).onDelete('cascade'),
+    check('ranking_milestones_rank_positive', sql`rank > 0`),
+    check(
+      'ranking_milestones_milestone_valid',
+      sql`milestone = ANY (ARRAY['TOP_10000'::text, 'TOP_1000'::text, 'TOP_100'::text, 'TOP_50'::text, 'TOP_10'::text, 'TOP_3'::text, 'TOP_1'::text])`,
+    ),
+  ],
+);
+
 export const badges = pgTable(
   'badges',
   {

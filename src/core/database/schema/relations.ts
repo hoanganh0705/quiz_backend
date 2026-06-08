@@ -528,16 +528,19 @@ export const discussionReportsRelations = relations(discussionReports, ({ one })
   }),
 }));
 
-export const discussionThreadSubscriptionsRelations = relations(discussionThreadSubscriptions, ({ one }) => ({
-  user: one(users, {
-    fields: [discussionThreadSubscriptions.userId],
-    references: [users.userId],
+export const discussionThreadSubscriptionsRelations = relations(
+  discussionThreadSubscriptions,
+  ({ one }) => ({
+    user: one(users, {
+      fields: [discussionThreadSubscriptions.userId],
+      references: [users.userId],
+    }),
+    thread: one(discussionThreads, {
+      fields: [discussionThreadSubscriptions.threadId],
+      references: [discussionThreads.threadId],
+    }),
   }),
-  thread: one(discussionThreads, {
-    fields: [discussionThreadSubscriptions.threadId],
-    references: [discussionThreads.threadId],
-  }),
-}));
+);
 
 export const discussionSavedThreadsRelations = relations(discussionSavedThreads, ({ one }) => ({
   user: one(users, {
