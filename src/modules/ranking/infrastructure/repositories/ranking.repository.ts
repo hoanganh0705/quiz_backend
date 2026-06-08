@@ -10,7 +10,7 @@ import { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { eq, sql, desc, and, inArray, gte, lte, asc } from 'drizzle-orm';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import * as schema from '@/core/database/schema';
-import { userRanking, rankHistory } from '@/core/database/schema';
+import { userRanking, rankHistory, rankingMilestones } from '@/core/database/schema';
 import type {
   RankingRepositoryPort,
   UserRankingRow,
@@ -20,8 +20,10 @@ import type {
   PeakRanksRow,
   TopMoverRow,
   NearbyRankEntryRow,
+  RankingMilestoneRow,
+  LeaderboardDistributionRow,
 } from '../../domain/ports/ranking-repository.port';
-import { RankingPeriod } from '../../domain/types/ranking.types';
+import { RankingPeriod, RankingMilestone } from '../../domain/types/ranking.types';
 
 type RawQueryResult<T> = {
   rows: T[];
@@ -174,15 +176,19 @@ export class RankingRepository implements RankingRepositoryPort {
       .where(inArray(userRanking.userId, userIds));
   }
 
-  async updateRank(params: { userId: string; period: RankingPeriod; rank: number }): Promise<void> {
+  async updateRank(params: { userId: string; period: RankingPeriod; rank: number }): Promise<number | null> {
     const { userId, period, rank } = params;
 
     const rankFieldName = this.getRankFieldName(period);
+    const current = await this.getUserRanking(userId);
+    const previousRank = current?.[rankFieldName] ?? null;
 
     await this.db
       .update(userRanking)
       .set({ [rankFieldName]: rank })
       .where(eq(userRanking.userId, userId));
+
+    return previousRank;
   }
 
   async updatePeakRank(params: {
@@ -292,6 +298,10 @@ export class RankingRepository implements RankingRepositoryPort {
     `);
 
     return Number(result.rows[0]?.count ?? 0);
+  }
+
+  async getLeaderboardSize(period: RankingPeriod): Promise<number> {
+    return this.getTotalParticipants(period);
   }
 
   async getUserRank(userId: string, period: RankingPeriod): Promise<number | null> {
@@ -513,6 +523,107 @@ export class RankingRepository implements RankingRepositoryPort {
       above: results.rows.filter((row) => row.position === 'above'),
       me,
       below: results.rows.filter((row) => row.position === 'below'),
+    };
+  }
+
+  async createMilestone(params: {
+    userId: string;
+    milestone: RankingMilestone;
+    rank: number;
+    achievedAt: Date;
+  }): Promise<RankingMilestoneRow> {
+    const [result] = await this.db
+      .insert(rankingMilestones)
+      .values({
+        userId: params.userId,
+        milestone: params.milestone,
+        rank: params.rank,
+        achievedAt: params.achievedAt.toISOString(),
+      })
+      .onConflictDoNothing()
+      .returning();
+
+    if (result) {
+      return result as RankingMilestoneRow;
+    }
+
+    const existing = await this.db.query.rankingMilestones.findFirst({
+      where: and(
+        eq(rankingMilestones.userId, params.userId),
+        eq(rankingMilestones.milestone, params.milestone),
+      ),
+    });
+
+    if (!existing) {
+      throw new Error('Failed to persist ranking milestone');
+    }
+
+    return existing as RankingMilestoneRow;
+  }
+
+  async getUserMilestones(userId: string): Promise<RankingMilestoneRow[]> {
+    const results = await this.db.query.rankingMilestones.findMany({
+      where: eq(rankingMilestones.userId, userId),
+      orderBy: [asc(rankingMilestones.achievedAt), asc(rankingMilestones.rank)],
+    });
+
+    return results as RankingMilestoneRow[];
+  }
+
+  async hasMilestone(params: { userId: string; milestone: RankingMilestone }): Promise<boolean> {
+    const result = await this.db.query.rankingMilestones.findFirst({
+      columns: { id: true },
+      where: and(
+        eq(rankingMilestones.userId, params.userId),
+        eq(rankingMilestones.milestone, params.milestone),
+      ),
+    });
+
+    return result !== undefined;
+  }
+
+  async getLeaderboardDistribution(period: RankingPeriod): Promise<LeaderboardDistributionRow> {
+    const xpColumn = this.getXpColumn(period);
+
+    const result = await this.executeRaw<{
+      totalUsers: number | string;
+      top10: number | string;
+      top100: number | string;
+      top1000: number | string;
+      top10000: number | string;
+    }>(sql`
+      SELECT
+        COUNT(*) AS "totalUsers",
+        LEAST(COUNT(*), 10) AS "top10",
+        LEAST(COUNT(*), 100) AS "top100",
+        LEAST(COUNT(*), 1000) AS "top1000",
+        LEAST(COUNT(*), 10000) AS "top10000"
+      FROM user_ranking ur
+      INNER JOIN users u ON u.user_id = ur.user_id
+      WHERE ur.${sql.raw(xpColumn)} > 0
+        AND u.deleted_at IS NULL
+    `);
+
+    const row = result.rows[0];
+    const totalUsers = Number(row?.totalUsers ?? 0);
+    const top10 = Number(row?.top10 ?? 0);
+    const top100 = Number(row?.top100 ?? 0);
+    const top1000 = Number(row?.top1000 ?? 0);
+    const top10000 = Number(row?.top10000 ?? 0);
+
+    const buckets = [
+      { label: 'Top 10', count: top10 },
+      { label: 'Top 100', count: Math.max(0, top100 - top10) },
+      { label: 'Top 1000', count: Math.max(0, top1000 - top100) },
+      { label: 'Top 10000', count: Math.max(0, top10000 - top1000) },
+    ].filter((bucket) => bucket.count > 0);
+
+    const remainingUsers = Math.max(0, totalUsers - top10000);
+
+    return {
+      totalUsers,
+      remainingUsers,
+      buckets,
     };
   }
 
