@@ -9,6 +9,7 @@
 // ============================================
 
 export enum RankingPeriod {
+  DAILY = 'daily',
   WEEKLY = 'weekly',
   MONTHLY = 'monthly',
   ALL_TIME = 'all_time',
@@ -53,14 +54,10 @@ export interface RankHistoryRecord {
   historyId: string;
   userId: string;
   period: RankingPeriod;
-  periodStart: Date | null;
-  periodEnd: Date | null;
-  xpAtStart: number;
-  xpAtEnd: number;
-  rankAtEnd: number | null;
-  peakRank: number | null;
-  peakXp: number | null;
-  createdAt: Date;
+  snapshotDate: Date;
+  rank: number;
+  xp: number;
+  recordedAt: Date;
 }
 
 // ============================================
