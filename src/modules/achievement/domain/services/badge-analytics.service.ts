@@ -13,6 +13,7 @@ import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { ACHIEVEMENT_REPOSITORY_PORT } from '../../infrastructure/repositories/achievement.repository';
 import type { AchievementRepositoryPort } from '../../infrastructure/repositories/achievement.repository';
 import type { BadgeDefinitionRow } from '../../infrastructure/repositories/achievement.repository';
+import { RarityTier } from './rare-badge.service';
 
 export interface PlatformAchievementStats {
   totalBadges: number;
@@ -75,14 +76,74 @@ export interface BadgePopularityRanking {
   trend: 'rising' | 'stable' | 'declining';
 }
 
+export interface UserBadgeAnalyticsSnapshot {
+  totalBadges: number;
+  rareBadges: number;
+  completionRate: number;
+  latestBadgeEarnedAt: Date | null;
+}
+
 @Injectable()
 export class BadgeAnalyticsService {
+  private readonly rarityThresholds = {
+    [RarityTier.COMMON]: 1000,
+    [RarityTier.UNCOMMON]: 100,
+    [RarityTier.RARE]: 10,
+    [RarityTier.EPIC]: 1,
+  } as const;
+
   constructor(
     @Inject(ACHIEVEMENT_REPOSITORY_PORT)
     private readonly achievementRepository: AchievementRepositoryPort,
     @InjectPinoLogger(BadgeAnalyticsService.name)
     private readonly logger: PinoLogger,
   ) {}
+
+  async getUserBadgeAnalyticsSnapshot(userId: string): Promise<UserBadgeAnalyticsSnapshot> {
+    const userBadges = await this.achievementRepository.getUserBadgesWithDetails(userId);
+    const allBadges = await this.achievementRepository.getAllActiveBadges();
+
+    let rareBadges = 0;
+    let latestBadgeEarnedAt: Date | null = null;
+
+    for (const userBadge of userBadges) {
+      const earnerCount = await this.achievementRepository.getBadgeEarnersCount(userBadge.badgeId);
+      const tier = this.getRarityTier(earnerCount);
+
+      if (
+        tier === RarityTier.RARE ||
+        tier === RarityTier.EPIC ||
+        tier === RarityTier.LEGENDARY ||
+        tier === RarityTier.EXCLUSIVE
+      ) {
+        rareBadges++;
+      }
+
+      if (!latestBadgeEarnedAt || userBadge.earnedAt > latestBadgeEarnedAt) {
+        latestBadgeEarnedAt = userBadge.earnedAt;
+      }
+    }
+
+    const rawCompletionRate =
+      allBadges.length > 0 ? (userBadges.length / allBadges.length) * 100 : 0;
+    const completionRate = Math.min(100, Math.max(0, Math.floor(rawCompletionRate)));
+
+    this.logger.debug({
+      event: 'user_badge_analytics_snapshot_resolved',
+      userId,
+      totalBadges: userBadges.length,
+      rareBadges,
+      completionRate,
+      latestBadgeEarnedAt: latestBadgeEarnedAt?.toISOString() ?? null,
+    });
+
+    return {
+      totalBadges: userBadges.length,
+      rareBadges,
+      completionRate,
+      latestBadgeEarnedAt,
+    };
+  }
 
   /**
    * Get platform-wide achievement statistics.
@@ -335,6 +396,22 @@ export class BadgeAnalyticsService {
       milestone: nextMilestone,
       estimatedDays,
     };
+  }
+
+  private getRarityTier(earnerCount: number): RarityTier {
+    if (earnerCount >= this.rarityThresholds[RarityTier.COMMON]) {
+      return RarityTier.COMMON;
+    }
+    if (earnerCount >= this.rarityThresholds[RarityTier.UNCOMMON]) {
+      return RarityTier.UNCOMMON;
+    }
+    if (earnerCount >= this.rarityThresholds[RarityTier.RARE]) {
+      return RarityTier.RARE;
+    }
+    if (earnerCount >= this.rarityThresholds[RarityTier.EPIC]) {
+      return RarityTier.EPIC;
+    }
+    return RarityTier.LEGENDARY;
   }
 
   /**
