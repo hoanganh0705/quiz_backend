@@ -13,6 +13,7 @@ import {
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
 import { ApiValidationRequest } from '@/common/swagger/swagger-decorators';
 import { QuizApplicationService } from '@/modules/quiz/application/quiz.application.service';
+import { CreatorQuizAnalyticsDto } from '@/modules/quiz/dto/response/quiz-analytics.dto';
 import { RecommendedQuizzesQueryDto } from '@/modules/quiz/dto/request/recommended-quizzes-query.dto';
 import { ListQuizzesQueryDto } from '@/modules/quiz/dto/request/list-quizzes-query.dto';
 import { QuizListResponseDto } from '@/modules/quiz/dto/response/quiz-list-response.dto';
@@ -54,7 +55,7 @@ export class UserController {
   @ApiOperation({
     summary: 'Get recommended quizzes',
     description:
-      "Returns personalized quiz recommendations for the authenticated user based on their attempt history, ranked by category match, tag match, popularity, and trending score.",
+      'Returns personalized quiz recommendations for the authenticated user based on their attempt history, ranked by category match, tag match, popularity, and trending score.',
   })
   @ApiOkResponse({ description: 'Recommended quizzes returned', type: RelatedQuizzesResponseDto })
   @ApiUnauthorizedResponse({ description: 'Missing or invalid authentication token' })
@@ -67,11 +68,24 @@ export class UserController {
     return this.quizApplicationService.getRecommendedQuizzes(userId, query);
   }
 
+  @Get(':userId/quizzes/analytics')
+  @ApiOperation({
+    summary: 'Get quiz analytics by creator',
+    description:
+      'Returns creator-level analytics aggregated across all quizzes owned by the specified user.',
+  })
+  @ApiOkResponse({ description: 'Quiz analytics returned', type: CreatorQuizAnalyticsDto })
+  @ApiNotFoundResponse({ description: 'User not found' })
+  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  getUserQuizAnalytics(@Param('userId') userId: string): Promise<CreatorQuizAnalyticsDto> {
+    return this.quizApplicationService.getMyQuizAnalytics(userId);
+  }
+
   @Get(':userId/quizzes')
   @ApiOperation({
     summary: 'List quizzes created by user',
     description:
-      "Returns a paginated, cursor-based list of quizzes created by the specified user, ordered by newest first.",
+      'Returns a paginated, cursor-based list of quizzes created by the specified user, ordered by newest first.',
   })
   @ApiOkResponse({ description: 'Quizzes returned', type: QuizListResponseDto })
   @ApiNotFoundResponse({ description: 'User not found' })
@@ -89,7 +103,7 @@ export class UserController {
   @ApiOperation({
     summary: 'List badges earned by user',
     description:
-      'Returns the specified user\'s earned badges, cursor-paginated and ordered by most recently earned.',
+      "Returns the specified user's earned badges, cursor-paginated and ordered by most recently earned.",
   })
   @ApiOkResponse({ description: 'Badges returned', type: UserBadgesResponseDto })
   @ApiNotFoundResponse({ description: 'User not found' })
@@ -191,7 +205,10 @@ export class UserController {
     description:
       "Returns the specified user's public tournament performance summary calculated from completed tournaments only.",
   })
-  @ApiOkResponse({ description: 'Tournament profile returned', type: PublicTournamentProfileResponseDto })
+  @ApiOkResponse({
+    description: 'Tournament profile returned',
+    type: PublicTournamentProfileResponseDto,
+  })
   @ApiNotFoundResponse({ description: 'User not found' })
   @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
   getPublicTournamentProfile(
@@ -243,7 +260,10 @@ export class UserController {
     description:
       "Returns the authenticated user's tournament participation analytics calculated from completed tournaments.",
   })
-  @ApiOkResponse({ description: 'Tournament analytics returned', type: MyTournamentAnalyticsResponseDto })
+  @ApiOkResponse({
+    description: 'Tournament analytics returned',
+    type: MyTournamentAnalyticsResponseDto,
+  })
   @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
   getMyTournamentAnalytics(
     @CurrentUser('sub') userId: string,

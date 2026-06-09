@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, desc, eq, isNull, sql, or, count } from 'drizzle-orm';
+import { and, asc, count, desc, eq, isNull, or, sql } from 'drizzle-orm';
 import { DRIZZLE } from '@/core/database/drizzle.constants';
 import type { DrizzleDB } from '@/core/database/database.module';
 import {
@@ -14,8 +14,10 @@ import {
 import type {
   TournamentDifficulty,
   TournamentParticipantStatus,
+  TournamentStatus,
 } from '@/modules/tournament/types/tournament.types';
 import type {
+  FinalizedTournamentParticipantRow,
   TournamentRepositoryPort,
   TournamentRow,
   TournamentDetailRow,
@@ -95,7 +97,6 @@ export class TournamentRepository implements TournamentRepositoryPort {
 
     if (!row) return null;
 
-    // Fetch total participants count
     const [countRow] = await this.db
       .select({ total: count() })
       .from(tournamentParticipants)
@@ -173,7 +174,10 @@ export class TournamentRepository implements TournamentRepositoryPort {
     nowIso: string;
   }): Promise<{ items: UpcomingTournamentRow[]; total: number }> {
     const offset = (params.page - 1) * params.limit;
-    const conditions = and(isNull(tournaments.deletedAt), sql`${tournaments.startAt} > ${params.nowIso}`);
+    const conditions = and(
+      isNull(tournaments.deletedAt),
+      sql`${tournaments.startAt} > ${params.nowIso}`,
+    );
 
     const [totalRow] = await this.db.select({ count: count() }).from(tournaments).where(conditions);
 
@@ -250,12 +254,7 @@ export class TournamentRepository implements TournamentRepositoryPort {
         ),
       )
       .where(conditions)
-      .groupBy(
-        tournaments.tournamentId,
-        tournaments.title,
-        tournaments.startAt,
-        tournaments.endAt,
-      )
+      .groupBy(tournaments.tournamentId, tournaments.title, tournaments.startAt, tournaments.endAt)
       .orderBy(tournaments.endAt, tournaments.tournamentId)
       .limit(params.limit)
       .offset(offset);
@@ -298,12 +297,7 @@ export class TournamentRepository implements TournamentRepositoryPort {
         ),
       )
       .where(conditions)
-      .groupBy(
-        tournaments.tournamentId,
-        tournaments.title,
-        tournaments.startAt,
-        tournaments.endAt,
-      )
+      .groupBy(tournaments.tournamentId, tournaments.title, tournaments.startAt, tournaments.endAt)
       .orderBy(desc(tournaments.endAt), desc(tournaments.tournamentId))
       .limit(params.limit)
       .offset(offset);
@@ -361,14 +355,17 @@ export class TournamentRepository implements TournamentRepositoryPort {
     const titleWords = tournament.title
       .toLowerCase()
       .split(/\s+/)
-      .filter((w) => w.length > 2);
+      .filter((word) => word.length > 2);
 
     const scored = rows
       .map((row) => {
         let score = 0;
         if (row.categoryId === tournament.categoryId) score += 3;
         if (tournament.description) {
-          const words = tournament.description.toLowerCase().split(/\s+/).filter((w) => w.length > 2);
+          const words = tournament.description
+            .toLowerCase()
+            .split(/\s+/)
+            .filter((word) => word.length > 2);
           for (const word of words) {
             if (row.description && row.description.toLowerCase().includes(word)) score += 1;
           }
@@ -378,7 +375,7 @@ export class TournamentRepository implements TournamentRepositoryPort {
         }
         return { ...row, score };
       })
-      .filter((r) => r.score > 0)
+      .filter((row) => row.score > 0)
       .sort((a, b) => b.score - a.score || (a.startAt > b.startAt ? -1 : 1))
       .slice(0, params.limit);
 
@@ -390,15 +387,15 @@ export class TournamentRepository implements TournamentRepositoryPort {
       .select({
         tournamentId: tournaments.tournamentId,
         participants: sql<number>`COUNT(${tournamentParticipants.participantId})`,
-        completedParticipants:
-          sql<number>`COUNT(CASE WHEN ${tournamentParticipants.rankFinal} IS NOT NULL THEN 1 END)`,
+        completedParticipants: sql<number>`COUNT(CASE WHEN ${tournamentParticipants.rankFinal} IS NOT NULL THEN 1 END)`,
         averageScore:
           sql<number>`COALESCE(ROUND(AVG(CASE WHEN ${tournamentParticipants.rankFinal} IS NOT NULL THEN ${tournamentParticipants.totalScore}::numeric END)), 0)`,
         highestScore:
           sql<number | null>`MAX(CASE WHEN ${tournamentParticipants.rankFinal} IS NOT NULL THEN ${tournamentParticipants.totalScore} END)`,
         lowestScore:
           sql<number | null>`MIN(CASE WHEN ${tournamentParticipants.rankFinal} IS NOT NULL THEN ${tournamentParticipants.totalScore} END)`,
-        completionRate: sql<number>`COALESCE(ROUND((COUNT(CASE WHEN ${tournamentParticipants.rankFinal} IS NOT NULL THEN 1 END)::numeric * 100.0) / NULLIF(COUNT(${tournamentParticipants.participantId}), 0), 2), 0)`,
+        completionRate:
+          sql<number>`COALESCE(ROUND((COUNT(CASE WHEN ${tournamentParticipants.rankFinal} IS NOT NULL THEN 1 END)::numeric * 100.0) / NULLIF(COUNT(${tournamentParticipants.participantId}), 0), 2), 0)`,
         averageRank:
           sql<number | null>`ROUND(AVG(CASE WHEN ${tournamentParticipants.rankFinal} IS NOT NULL THEN ${tournamentParticipants.rankFinal}::numeric END))`,
         startedAt: tournaments.startAt,
@@ -469,6 +466,7 @@ export class TournamentRepository implements TournamentRepositoryPort {
         totalTimeMs: tournamentParticipants.totalTimeMs,
         rankFinal: tournamentParticipants.rankFinal,
         status: tournamentParticipants.status,
+        withdrawnAt: tournamentParticipants.withdrawnAt,
         updatedAt: tournamentParticipants.updatedAt,
       })
       .from(tournamentParticipants)
@@ -492,6 +490,7 @@ export class TournamentRepository implements TournamentRepositoryPort {
         totalTimeMs: tournamentParticipants.totalTimeMs,
         rankFinal: tournamentParticipants.rankFinal,
         status: tournamentParticipants.status,
+        withdrawnAt: tournamentParticipants.withdrawnAt,
         updatedAt: tournamentParticipants.updatedAt,
       })
       .from(tournamentParticipants)
@@ -505,6 +504,7 @@ export class TournamentRepository implements TournamentRepositoryPort {
 
     return (row as TournamentParticipantRow | undefined) ?? null;
   }
+
   async registerParticipant(params: {
     tournamentId: string;
     userId: string;
@@ -621,7 +621,6 @@ export class TournamentRepository implements TournamentRepositoryPort {
   getRoundDetailById(
     roundId: string,
   ): Promise<import('@/modules/tournament/domain/ports').TournamentRoundDetailRow | null> {
-    // Not implemented yet - returns null, can be extended later
     void roundId;
     return Promise.resolve(null);
   }
@@ -746,9 +745,13 @@ export class TournamentRepository implements TournamentRepositoryPort {
     })) as TournamentLeaderboardEntry[];
   }
 
-  async getWinners(params: { tournamentId: string; limit: number }): Promise<TournamentWinnerRow[]> {
+  async getWinners(params: {
+    tournamentId: string;
+    limit: number;
+  }): Promise<TournamentWinnerRow[]> {
     const rows = await this.db
       .select({
+        rank: tournamentParticipants.rankFinal,
         userId: tournamentParticipants.userId,
         username: users.username,
         score: tournamentParticipants.totalScore,
@@ -760,16 +763,16 @@ export class TournamentRepository implements TournamentRepositoryPort {
       .where(
         and(
           eq(tournamentParticipants.tournamentId, params.tournamentId),
-          sql`${tournamentParticipants.status} in ('active', 'completed')`,
           isNull(tournamentParticipants.withdrawnAt),
           isNull(users.deletedAt),
+          sql`${tournamentParticipants.rankFinal} is not null`,
         ),
       )
-      .orderBy(desc(tournamentParticipants.totalScore), tournamentParticipants.totalTimeMs)
+      .orderBy(asc(tournamentParticipants.rankFinal))
       .limit(params.limit);
 
-    return rows.map((row, index) => ({
-      rank: index + 1,
+    return rows.map((row) => ({
+      rank: Number(row.rank),
       userId: row.userId,
       username: row.username,
       score: row.score,
@@ -804,7 +807,10 @@ export class TournamentRepository implements TournamentRepositoryPort {
       .from(tournamentParticipants)
       .innerJoin(users, eq(tournamentParticipants.userId, users.userId))
       .where(conditions)
-      .orderBy(desc(tournamentParticipants.registeredAt), desc(tournamentParticipants.participantId))
+      .orderBy(
+        desc(tournamentParticipants.registeredAt),
+        desc(tournamentParticipants.participantId),
+      )
       .limit(params.limit)
       .offset(offset);
 
@@ -818,7 +824,10 @@ export class TournamentRepository implements TournamentRepositoryPort {
     tournamentId: string;
     userId: string;
   }): Promise<TournamentStandingRow | null> {
-    const participant = await this.getParticipantByUserAndTournament(params.userId, params.tournamentId);
+    const participant = await this.getParticipantByUserAndTournament(
+      params.userId,
+      params.tournamentId,
+    );
 
     if (!participant || participant.status === 'withdrawn') {
       return null;
@@ -852,7 +861,8 @@ export class TournamentRepository implements TournamentRepositoryPort {
 
     const rank = participantIndex + 1;
     const rankedBelow = participantCount - rank;
-    const percentile = participantCount <= 1 ? 0 : Math.round((rankedBelow / participantCount) * 100);
+    const percentile =
+      participantCount <= 1 ? 0 : Math.round((rankedBelow / participantCount) * 100);
 
     return {
       rank,
@@ -874,5 +884,115 @@ export class TournamentRepository implements TournamentRepositoryPort {
       );
 
     return row?.count ?? 0;
+  }
+
+  async listTournamentsStartingSoon(params: {
+    windowStartIso: string;
+    windowEndIso: string;
+  }): Promise<TournamentRow[]> {
+    const rows = await this.db
+      .select({
+        tournamentId: tournaments.tournamentId,
+        title: tournaments.title,
+        description: tournaments.description,
+        difficulty: tournaments.difficulty,
+        status: tournaments.status,
+        prize: tournaments.prize,
+        startAt: tournaments.startAt,
+        endAt: tournaments.endAt,
+        maxParticipants: tournaments.maxParticipants,
+        categoryId: tournaments.categoryId,
+        createdAt: tournaments.createdAt,
+        updatedAt: tournaments.updatedAt,
+      })
+      .from(tournaments)
+      .where(
+        and(
+          isNull(tournaments.deletedAt),
+          eq(tournaments.status, 'upcoming' as TournamentStatus),
+          sql`${tournaments.startAt} >= ${params.windowStartIso}`,
+          sql`${tournaments.startAt} <= ${params.windowEndIso}`,
+        ),
+      )
+      .orderBy(asc(tournaments.startAt), asc(tournaments.tournamentId));
+
+    return rows as TournamentRow[];
+  }
+
+  async markTournamentStatus(params: {
+    tournamentId: string;
+    fromStatus: TournamentStatus;
+    toStatus: TournamentStatus;
+    nowIso: string;
+  }): Promise<TournamentRow | null> {
+    const [row] = await this.db
+      .update(tournaments)
+      .set({
+        status: params.toStatus,
+        updatedAt: params.nowIso,
+      })
+      .where(
+        and(
+          eq(tournaments.tournamentId, params.tournamentId),
+          eq(tournaments.status, params.fromStatus),
+          isNull(tournaments.deletedAt),
+        ),
+      )
+      .returning({
+        tournamentId: tournaments.tournamentId,
+        title: tournaments.title,
+        description: tournaments.description,
+        difficulty: tournaments.difficulty,
+        status: tournaments.status,
+        prize: tournaments.prize,
+        startAt: tournaments.startAt,
+        endAt: tournaments.endAt,
+        maxParticipants: tournaments.maxParticipants,
+        categoryId: tournaments.categoryId,
+        createdAt: tournaments.createdAt,
+        updatedAt: tournaments.updatedAt,
+      });
+
+    return (row as TournamentRow | undefined) ?? null;
+  }
+
+  async finalizeTournament(params: {
+    tournamentId: string;
+    nowIso: string;
+  }): Promise<FinalizedTournamentParticipantRow[]> {
+    const participants = await this.db
+      .select({
+        participantId: tournamentParticipants.participantId,
+        userId: tournamentParticipants.userId,
+      })
+      .from(tournamentParticipants)
+      .innerJoin(users, eq(tournamentParticipants.userId, users.userId))
+      .where(
+        and(
+          eq(tournamentParticipants.tournamentId, params.tournamentId),
+          isNull(tournamentParticipants.withdrawnAt),
+          isNull(users.deletedAt),
+        ),
+      )
+      .orderBy(desc(tournamentParticipants.totalScore), tournamentParticipants.totalTimeMs);
+
+    const totalParticipants = participants.length;
+
+    for (const [index, participant] of participants.entries()) {
+      await this.db
+        .update(tournamentParticipants)
+        .set({
+          rankFinal: index + 1,
+          status: 'completed' as TournamentParticipantStatus,
+          updatedAt: params.nowIso,
+        })
+        .where(eq(tournamentParticipants.participantId, participant.participantId));
+    }
+
+    return participants.map((participant, index) => ({
+      userId: participant.userId,
+      rank: index + 1,
+      totalParticipants,
+    }));
   }
 }

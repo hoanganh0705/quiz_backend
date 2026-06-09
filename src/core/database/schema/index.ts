@@ -15,9 +15,16 @@ import {
   bigint,
   numeric,
   pgEnum,
+  customType,
   type AnyPgColumn,
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
+
+const tsvector = customType<{ data: string }>({
+  dataType() {
+    return 'tsvector';
+  },
+});
 
 export const discussionThreadStatus = pgEnum('discussion_thread_status', [
   'open',
@@ -62,6 +69,10 @@ export const discussionThreads = pgTable(
     authorId: uuid('author_id').notNull(),
     title: text().notNull(),
     body: text().notNull(),
+    discussionSearchVector: tsvector('discussion_search_vector').generatedAlwaysAs(
+      (): ReturnType<typeof sql> =>
+        sql`setweight(to_tsvector('simple', coalesce(title, '')), 'A') || setweight(to_tsvector('english', coalesce(body, '')), 'B')`,
+    ),
     status: discussionThreadStatus().default('open').notNull(),
     commentsCount: integer('comments_count').default(0).notNull(),
     votesCount: integer('votes_count').default(0).notNull(),
@@ -93,6 +104,9 @@ export const discussionThreads = pgTable(
         table.authorId.asc().nullsLast().op('uuid_ops'),
         table.createdAt.desc().nullsLast().op('timestamptz_ops'),
       )
+      .where(sql`deleted_at IS NULL`),
+    index('idx_discussion_threads_search_vector')
+      .using('gin', table.discussionSearchVector)
       .where(sql`deleted_at IS NULL`),
     uniqueIndex('uq_discussion_threads_quiz_author_title_active')
       .using('btree', table.quizId.asc().nullsLast().op('uuid_ops'), sql`lower(title)`)
@@ -457,6 +471,7 @@ export const users = pgTable(
   {
     userId: uuid('user_id').defaultRandom().primaryKey().notNull(),
     username: text().notNull(),
+    userSearchVector: tsvector('user_search_vector'),
     email: text().notNull(),
     passwordHash: text('password_hash').notNull(),
     role: userRole().default('user').notNull(),
@@ -493,6 +508,9 @@ export const users = pgTable(
     index('idx_users_email_verification_token_active')
       .using('btree', table.emailVerificationTokenHash.asc().nullsLast().op('text_ops'))
       .where(sql`deleted_at IS NULL AND is_verified = false`),
+    index('idx_users_search_vector')
+      .using('gin', table.userSearchVector)
+      .where(sql`deleted_at IS NULL`),
     check('users_email_len', sql`(length((email)::text) >= 3) AND (length((email)::text) <= 255)`),
     check('users_email_like', sql`POSITION(('@'::text) IN (email)) > 1`),
     check('users_settings_object', sql`jsonb_typeof(settings) = 'object'::text`),
@@ -965,6 +983,10 @@ export const quizzes = pgTable(
     title: text().notNull(),
     description: text(),
     slug: text().notNull(),
+    quizSearchVector: tsvector('quiz_search_vector').generatedAlwaysAs(
+      (): ReturnType<typeof sql> =>
+        sql`setweight(to_tsvector('simple', coalesce(title, '')), 'A') || setweight(to_tsvector('english', coalesce(description, '')), 'B') || setweight(to_tsvector('simple', coalesce(slug, '')), 'A')`,
+    ),
     requirements: text(),
     imageUrl: text('image_url'),
     isFeatured: boolean('is_featured').default(false).notNull(),
@@ -994,6 +1016,9 @@ export const quizzes = pgTable(
     index('idx_quizzes_published_version_id')
       .using('btree', table.publishedVersionId.asc().nullsLast().op('uuid_ops'))
       .where(sql`(published_version_id IS NOT NULL)`),
+    index('idx_quizzes_search_vector')
+      .using('gin', table.quizSearchVector)
+      .where(sql`deleted_at IS NULL AND is_hidden = false`),
     uniqueIndex('uq_quizzes_slug_active')
       .using('btree', table.slug.asc().nullsLast().op('text_ops'))
       .where(sql`(deleted_at IS NULL)`),
@@ -2116,6 +2141,7 @@ export const notificationType = pgEnum('notification_type', [
   'discussion_mention',
   'discussion_solved',
   'badge_earned',
+  'badge_revoked',
   'tournament_started',
   'tournament_reminder',
   'rank_improved',
