@@ -1,5 +1,5 @@
 import { Inject, Injectable, InternalServerErrorException } from '@nestjs/common';
-import { and, desc, eq, inArray, isNull, or, sql, max, gt } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNull, sql, max, gt } from 'drizzle-orm';
 import { DRIZZLE } from '@/core/database/drizzle.constants';
 import type { DrizzleDB } from '@/core/database/database.module';
 import {
@@ -14,7 +14,6 @@ import type { UserMeRow } from '@/modules/user/domain/ports/user-repository.port
 import { OUTBOX_PORT } from '@/modules/auth/domain/ports/outbox.port';
 import type { OutboxPort } from '@/modules/auth/domain/ports/outbox.port';
 import {
-  ResourceConflictError,
   InvalidTokenError,
   DeletionFailedError,
   UserNotFoundError,
@@ -96,23 +95,6 @@ export class UserRepository implements UserRepositoryPort {
           }
         | undefined) ?? null
     );
-  }
-
-  async ensureEmailAndUsernameAvailable(email: string, username: string): Promise<void> {
-    const [existingUser] = await this.db
-      .select({
-        userId: users.userId,
-      })
-      .from(users)
-      .where(and(isNull(users.deletedAt), or(eq(users.email, email), eq(users.username, username))))
-      .limit(1)
-      .catch(() => {
-        throw new InternalServerErrorException('Failed to fetch user');
-      });
-
-    if (existingUser) {
-      throw new ResourceConflictError('Username or email already exists');
-    }
   }
 
   async findActiveUserProfile(userId: string): Promise<{
@@ -355,40 +337,42 @@ export class UserRepository implements UserRepositoryPort {
     emailVerified: boolean;
     lastPasswordChangedAt: string | null;
     lastLoginAt: string | null;
+    activeSessionCount: number;
   } | null> {
-    const [user] = await this.db
+    const nowIso = new Date().toISOString();
+
+    const [metadata] = await this.db
       .select({
-        isVerified: users.isVerified,
-        passwordChangedAt: users.passwordChangedAt,
+        emailVerified: users.isVerified,
+        lastPasswordChangedAt: users.passwordChangedAt,
+        lastLoginAt: max(userSessions.lastUsedAt),
+        activeSessionCount: sql<number>`count(${userSessions.sessionId})`,
       })
       .from(users)
+      .leftJoin(
+        userSessions,
+        and(
+          eq(userSessions.userId, users.userId),
+          isNull(userSessions.revokedAt),
+          sql`${userSessions.expiresAt} > ${nowIso}`,
+        ),
+      )
       .where(and(eq(users.userId, userId), isNull(users.deletedAt)))
+      .groupBy(users.userId, users.isVerified, users.passwordChangedAt)
       .limit(1)
       .catch(() => {
         throw new InternalServerErrorException('Failed to fetch user security data');
       });
 
-    if (!user) {
+    if (!metadata) {
       return null;
     }
 
-    const nowIso = new Date().toISOString();
-    const lastSession = (await this.db
-      .select({ lastUsedAt: max(userSessions.lastUsedAt) })
-      .from(userSessions)
-      .where(
-        and(
-          eq(userSessions.userId, userId),
-          isNull(userSessions.revokedAt),
-          sql`${userSessions.expiresAt} > ${nowIso}`,
-        ),
-      )
-      .catch(() => null)) as { lastUsedAt: string | null } | null;
-
     return {
-      emailVerified: user.isVerified,
-      lastPasswordChangedAt: user.passwordChangedAt ?? null,
-      lastLoginAt: lastSession?.lastUsedAt ?? null,
+      emailVerified: metadata.emailVerified,
+      lastPasswordChangedAt: metadata.lastPasswordChangedAt ?? null,
+      lastLoginAt: metadata.lastLoginAt ?? null,
+      activeSessionCount: Number(metadata.activeSessionCount ?? 0),
     };
   }
 

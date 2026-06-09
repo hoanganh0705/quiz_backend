@@ -35,6 +35,7 @@ import { RegisterDto } from '../../dto/request/register.dto';
 import { RegisterResponseDto } from '../../dto/response/register-response.dto';
 import { RefreshTokenResponseDto } from '../../dto/response/refresh-token-response.dto';
 import { LogoutResponseDto } from '../../dto/response/logout-response.dto';
+import { ChangePasswordResponseDto } from '../../dto/response/change-password-response.dto';
 import { VerifyEmailDto } from '../../dto/request/verify-email.dto';
 import { VerifyEmailResponseDto } from '../../dto/response/verify-email-response.dto';
 import { ResendVerificationDto } from '../../dto/request/resend-verification.dto';
@@ -268,9 +269,9 @@ export class AuthController {
   @ApiAuth()
   @Delete('sessions/:sessionId')
   @ApiOperation({
-    summary: 'Revoke a session',
+    summary: 'Revoke a session (legacy)',
     description:
-      'Revokes a specific session. If the target is the current session, the user is logged out. ' +
+      'Legacy route retained for compatibility. Revokes a specific session. If the target is the current session, the user is logged out. ' +
       'Otherwise only the target session is invalidated.',
   })
   @ApiOkResponse({ description: 'Session revoked', type: SessionManagementResultDto })
@@ -286,10 +287,26 @@ export class AuthController {
   }
 
   @ApiAuth()
-  @Post('sessions/logout-others')
+  @Delete('sessions/others')
   @ApiOperation({
     summary: 'Log out all other devices',
-    description: 'Keeps the current session and revokes every other active session for the user.',
+    description: 'Normalized REST route. Keeps the current session and revokes every other active session for the user.',
+  })
+  @ApiOkResponse({ description: 'Other sessions revoked', type: SessionManagementResultDto })
+  @ApiUnauthorizedResponse({ description: 'Not authenticated' })
+  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  async revokeOtherSessions(
+    @CurrentUser('sub') userId: string,
+    @CurrentUser('sessionId') currentSessionId: string,
+  ): Promise<SessionManagementResultDto> {
+    return await this.authApplicationService.revokeAllOtherSessions(userId, currentSessionId);
+  }
+
+  @ApiAuth()
+  @Post('sessions/logout-others')
+  @ApiOperation({
+    summary: 'Log out all other devices (legacy)',
+    description: 'Legacy route retained for compatibility. Keeps the current session and revokes every other active session for the user.',
   })
   @ApiOkResponse({ description: 'Other sessions revoked', type: SessionManagementResultDto })
   @ApiUnauthorizedResponse({ description: 'Not authenticated' })
@@ -368,7 +385,7 @@ export class AuthController {
       'Changes the account password for an authenticated user. ' +
       'Requires the current password and terminates all other active sessions.',
   })
-  @ApiOkResponse({ description: 'Password changed successfully', type: LogoutResponseDto })
+  @ApiOkResponse({ description: 'Password changed successfully', type: ChangePasswordResponseDto })
   @ApiUnauthorizedResponse({ description: 'Invalid current password' })
   @ApiBadRequestResponse({ description: 'Password policy violation' })
   @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
@@ -376,7 +393,7 @@ export class AuthController {
     @CurrentUser('sub') userId: string,
     @CurrentUser('sessionId') currentSessionId: string,
     @Body() changePasswordDto: ChangePasswordDto,
-  ): Promise<LogoutResponseDto> {
+  ): Promise<ChangePasswordResponseDto> {
     const command: ChangePasswordCommand = {
       userId,
       currentPassword: changePasswordDto.currentPassword,

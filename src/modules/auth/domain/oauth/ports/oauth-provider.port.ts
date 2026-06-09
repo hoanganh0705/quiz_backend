@@ -34,7 +34,7 @@ export type OAuthUserInfo = {
  * Provider tokens must NEVER be persisted after authentication completes.
  */
 export interface OAuthProviderPort {
-  readonly provider: 'google' | 'github' | 'apple' | 'microsoft';
+  readonly provider: 'google';
 
   /**
    * Authenticates a user via this provider.

@@ -150,9 +150,4 @@ export class SessionService {
     const nowIso = this.getNowIso();
     return this.userSessionRepository.countActiveSessionsByUserId(userId, nowIso);
   }
-
-  async getCurrentSessionIdByUserId(userId: string): Promise<string | null> {
-    const latestSession = await this.findLatestActiveSessionByUserId(userId, this.getNowIso());
-    return latestSession?.sessionId ?? null;
-  }
 }

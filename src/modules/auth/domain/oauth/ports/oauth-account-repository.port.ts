@@ -15,14 +15,6 @@ export interface OAuthAccountRepositoryPort {
   ): Promise<OAuthAccountRecord | null>;
 
   /**
-   * Finds an existing OAuth link by user ID and provider.
-   */
-  findByUserIdAndProvider(
-    userId: string,
-    provider: OAuthProvider,
-  ): Promise<OAuthAccountRecord | null>;
-
-  /**
    * Creates a new user and OAuth account link atomically.
    *
    * The repository generates a deterministic userId before any inserts,
@@ -37,6 +29,7 @@ export interface OAuthAccountRepositoryPort {
     provider: OAuthProvider;
     providerUserId: string;
     email: string;
+    username: string;
   }): Promise<{
     userId: string;
     username: string;

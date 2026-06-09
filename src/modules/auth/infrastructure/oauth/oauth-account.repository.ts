@@ -1,10 +1,9 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, eq } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { DRIZZLE } from '@/core/database/drizzle.constants';
 import type { DrizzleDB } from '@/core/database/database.module';
 import { oauthAccounts, users } from '@/core/database/schema';
 import type { OAuthAccountRepositoryPort } from '../../domain/oauth/ports/oauth-account-repository.port';
-import { deriveOAuthUsername } from '../../domain/oauth/utils/derive-oauth-username';
 import type { OAuthAccountRecord, OAuthProvider } from '../../domain/oauth/oauth.types';
 import type { OutboxPort } from '../../domain/ports/outbox.port';
 import { OUTBOX_PORT } from '../../domain/ports/outbox.port';
@@ -31,37 +30,21 @@ export class OAuthAccountRepository implements OAuthAccountRepositoryPort {
         createdAt: oauthAccounts.createdAt,
       })
       .from(oauthAccounts)
-      .where(
-        and(eq(oauthAccounts.providerUserId, providerUserId), eq(oauthAccounts.provider, provider)),
-      )
+      .where(eq(oauthAccounts.providerUserId, providerUserId))
       .limit(1);
 
-    return (row as OAuthAccountRecord) ?? null;
-  }
+    if (!row || row.provider !== provider) {
+      return null;
+    }
 
-  async findByUserIdAndProvider(
-    userId: string,
-    provider: OAuthProvider,
-  ): Promise<OAuthAccountRecord | null> {
-    const [row] = await this.db
-      .select({
-        oauthAccountId: oauthAccounts.oauthAccountId,
-        userId: oauthAccounts.userId,
-        provider: oauthAccounts.provider,
-        providerUserId: oauthAccounts.providerUserId,
-        createdAt: oauthAccounts.createdAt,
-      })
-      .from(oauthAccounts)
-      .where(and(eq(oauthAccounts.userId, userId), eq(oauthAccounts.provider, provider)))
-      .limit(1);
-
-    return (row as OAuthAccountRecord) ?? null;
+    return row as OAuthAccountRecord;
   }
 
   async createOAuthUserWithLink(params: {
     provider: OAuthProvider;
     providerUserId: string;
     email: string;
+    username: string;
   }): Promise<{
     userId: string;
     username: string;
@@ -70,17 +53,15 @@ export class OAuthAccountRepository implements OAuthAccountRepositoryPort {
     oauthAccountId: string;
   }> {
     const preGeneratedUserId = crypto.randomUUID();
-    const username = deriveOAuthUsername(params.email, preGeneratedUserId);
     const nowIso = new Date().toISOString();
 
     const result = await this.db.transaction(async (tx) => {
-      // Single deterministic insert — no retry loop, no savepoints
       const [inserted] = await tx
         .insert(users)
         .values({
           userId: preGeneratedUserId,
           email: params.email.toLowerCase(),
-          username,
+          username: params.username,
           passwordHash: OAUTH_NO_PASSWORD_HASH,
           isVerified: true,
         })
@@ -103,7 +84,7 @@ export class OAuthAccountRepository implements OAuthAccountRepositoryPort {
             userId: preGeneratedUserId,
             provider: params.provider,
             providerUserId: params.providerUserId,
-            username,
+            username: params.username,
           },
           nowIso,
         },

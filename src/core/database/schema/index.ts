@@ -638,6 +638,12 @@ export const outboxEvents = pgTable(
       .defaultNow()
       .notNull(),
     processedAt: timestamp('processed_at', { withTimezone: true, mode: 'string' }),
+    attemptCount: integer('attempt_count').default(0).notNull(),
+    lastAttemptAt: timestamp('last_attempt_at', { withTimezone: true, mode: 'string' }),
+    nextAttemptAt: timestamp('next_attempt_at', { withTimezone: true, mode: 'string' })
+      .defaultNow()
+      .notNull(),
+    lastError: text('last_error'),
   },
   (table) => [
     index('idx_outbox_events_unprocessed').using(
@@ -648,6 +654,48 @@ export const outboxEvents = pgTable(
       'btree',
       table.createdAt.asc().nullsLast().op('timestamptz_ops'),
     ),
+    index('idx_outbox_events_next_attempt').using(
+      'btree',
+      table.processedAt.asc().nullsLast().op('timestamptz_ops'),
+      table.nextAttemptAt.asc().nullsLast().op('timestamptz_ops'),
+      table.createdAt.asc().nullsLast().op('timestamptz_ops'),
+    ),
+  ],
+);
+
+export const authAuditLogs = pgTable(
+  'auth_audit_logs',
+  {
+    auditLogId: uuid('audit_log_id').defaultRandom().primaryKey().notNull(),
+    userId: uuid('user_id'),
+    eventType: text('event_type').notNull(),
+    ipAddress: text('ip_address'),
+    metadata: jsonb('metadata').default({}).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' })
+      .defaultNow()
+      .notNull(),
+    expiresAt: timestamp('expires_at', { withTimezone: true, mode: 'string' }).notNull(),
+  },
+  (table) => [
+    index('idx_auth_audit_logs_created').using(
+      'btree',
+      table.createdAt.asc().nullsLast().op('timestamptz_ops'),
+    ),
+    index('idx_auth_audit_logs_expires').using(
+      'btree',
+      table.expiresAt.asc().nullsLast().op('timestamptz_ops'),
+    ),
+    index('idx_auth_audit_logs_user_created').using(
+      'btree',
+      table.userId.asc().nullsLast().op('uuid_ops'),
+      table.createdAt.asc().nullsLast().op('timestamptz_ops'),
+    ),
+    foreignKey({
+      columns: [table.userId],
+      foreignColumns: [users.userId],
+      name: 'auth_audit_logs_user_id_fkey',
+    }).onDelete('set null'),
+    check('auth_audit_logs_metadata_object', sql`jsonb_typeof(metadata) = 'object'::text`),
   ],
 );
 

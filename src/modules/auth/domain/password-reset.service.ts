@@ -57,6 +57,14 @@ export class PasswordResetService {
     await this.userRepository.createPasswordResetToken(user.userId, tokenHash, expiresAt);
 
     this.logger.info({
+      event: 'auth_security_password_reset_requested',
+      eventType: 'password_reset_requested',
+      userId: user.userId,
+      timestamp: new Date().toISOString(),
+      ipAddress,
+    });
+
+    this.logger.info({
       event: 'auth_password_reset_requested',
       userId: user.userId,
       ipAddress,
@@ -102,7 +110,7 @@ export class PasswordResetService {
         tokenHash,
         passwordHash,
         nowIso,
-        eventPayload: { eventType: 'password_reset_completed', timestamp: nowIso, ipAddress },
+        eventPayload: { eventType: 'password_reset_completed', userId: existing.userId, timestamp: nowIso, ipAddress },
       });
       userId = result.userId;
     } catch (error) {
@@ -123,11 +131,5 @@ export class PasswordResetService {
     return {
       message: PASSWORD_RESET_SUCCESS_MESSAGE,
     };
-  }
-
-  async consumePasswordResetToken(token: string): Promise<{ userId: string } | null> {
-    const tokenHash = this.cryptoService.hashSha256(token);
-    const nowIso = new Date().toISOString();
-    return this.userRepository.findActivePasswordResetTokenByHash(tokenHash, nowIso);
   }
 }
