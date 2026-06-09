@@ -4,6 +4,10 @@ import { SOCIAL_REPOSITORY_PORT, type SocialRepositoryPort } from '../ports/soci
 import { SOCIAL_DOMAIN_EVENT_BUS, type SocialDomainEventBusPort } from '../ports';
 import { USER_SEARCH_PORT, type UserSearchPort } from '../ports/user-search.port';
 import { RANKING_PORT, type RankingPort } from '../ports/ranking.port';
+import {
+  USER_REPOSITORY_PORT,
+  type UserRepositoryPort,
+} from '@/modules/user/domain/ports/user-repository.port';
 import type {
   FriendRequest,
   Friend,
@@ -23,6 +27,10 @@ import type {
   PaginatedSocialFeedResult,
   PaginatedUserActivityResult,
   SocialFeedActivityType,
+  UserSocialStats,
+  MySocialAnalytics,
+  UsernameSuggestion,
+  TrendingUsersResult,
 } from '../types/social.types';
 import {
   SelfFriendRequestError,
@@ -33,6 +41,7 @@ import {
   FriendRequestNotFoundError,
   FriendRequestForbiddenError,
 } from '../errors/social.errors';
+import { UserNotFoundError } from '@/modules/user/domain/errors';
 import { isPostgresUniqueViolation } from '@/common/utils/db-error.util';
 
 @Injectable()
@@ -46,6 +55,8 @@ export class SocialService {
     private readonly userSearch: UserSearchPort,
     @Inject(RANKING_PORT)
     private readonly ranking: RankingPort,
+    @Inject(USER_REPOSITORY_PORT)
+    private readonly userRepository: UserRepositoryPort,
     @InjectPinoLogger(SocialService.name)
     private readonly logger: PinoLogger,
   ) {}
@@ -334,7 +345,10 @@ export class SocialService {
     page: number,
     limit: number,
   ): Promise<PaginatedFollowersResult> {
-    const relationship = await this.socialRepository.getRelationshipStatus(requesterId, targetUserId);
+    const relationship = await this.socialRepository.getRelationshipStatus(
+      requesterId,
+      targetUserId,
+    );
 
     if (relationship.isBlocked || relationship.isBlockedBy) {
       throw new BlockedUserError();
@@ -361,7 +375,10 @@ export class SocialService {
     page: number,
     limit: number,
   ): Promise<PaginatedFollowingResult> {
-    const relationship = await this.socialRepository.getRelationshipStatus(requesterId, targetUserId);
+    const relationship = await this.socialRepository.getRelationshipStatus(
+      requesterId,
+      targetUserId,
+    );
 
     if (relationship.isBlocked || relationship.isBlockedBy) {
       throw new BlockedUserError();
@@ -384,7 +401,10 @@ export class SocialService {
     page: number,
     limit: number,
   ): Promise<PaginatedMutualFriendsResult> {
-    const relationship = await this.socialRepository.getRelationshipStatus(requesterId, targetUserId);
+    const relationship = await this.socialRepository.getRelationshipStatus(
+      requesterId,
+      targetUserId,
+    );
 
     if (relationship.isBlocked || relationship.isBlockedBy) {
       throw new BlockedUserError();
@@ -407,7 +427,10 @@ export class SocialService {
     page: number,
     limit: number,
   ): Promise<PaginatedMutualFollowersResult> {
-    const relationship = await this.socialRepository.getRelationshipStatus(requesterId, targetUserId);
+    const relationship = await this.socialRepository.getRelationshipStatus(
+      requesterId,
+      targetUserId,
+    );
 
     if (relationship.isBlocked || relationship.isBlockedBy) {
       throw new BlockedUserError();
@@ -432,7 +455,7 @@ export class SocialService {
       limit,
     });
 
-    return this.socialRepository.getFeed(page, limit);
+    return await this.socialRepository.getFeed(page, limit);
   }
 
   async getUserActivity(
@@ -441,7 +464,10 @@ export class SocialService {
     page: number,
     limit: number,
   ): Promise<PaginatedUserActivityResult> {
-    const relationship = await this.socialRepository.getRelationshipStatus(requesterId, targetUserId);
+    const relationship = await this.socialRepository.getRelationshipStatus(
+      requesterId,
+      targetUserId,
+    );
 
     if (relationship.isBlocked || relationship.isBlockedBy) {
       throw new BlockedUserError();
@@ -486,15 +512,58 @@ export class SocialService {
       limit,
     });
 
-    return this.socialRepository.getSuggestions(userId, page, limit);
+    return await this.socialRepository.getSuggestions(userId, page, limit);
   }
 
   async getRelationshipStatus(userId: string, targetId: string): Promise<RelationshipStatus> {
-    return this.socialRepository.getRelationshipStatus(userId, targetId);
+    return await this.socialRepository.getRelationshipStatus(userId, targetId);
   }
 
   async getSocialCounts(userId: string): Promise<SocialCounts> {
-    return this.socialRepository.getSocialCounts(userId);
+    return await this.socialRepository.getSocialCounts(userId);
+  }
+
+  async getUserSocialStats(userId: string): Promise<UserSocialStats> {
+    const user = await this.userRepository.findMeById(userId);
+
+    if (!user) {
+      this.logger.warn({ event: 'social_user_stats_user_not_found', userId });
+      throw new UserNotFoundError();
+    }
+
+    return await this.socialRepository.getUserSocialStats(userId);
+  }
+
+  async getMySocialAnalytics(userId: string): Promise<MySocialAnalytics> {
+    const user = await this.userRepository.findMeById(userId);
+
+    if (!user) {
+      this.logger.warn({ event: 'social_my_analytics_user_not_found', userId });
+      throw new UserNotFoundError();
+    }
+
+    this.logger.debug({ event: 'social_my_analytics_requested', userId });
+
+    return await this.socialRepository.getSocialAnalytics(userId);
+  }
+
+  async getTrendingUsers(limit: number): Promise<TrendingUsersResult> {
+    this.logger.debug({
+      event: 'social_trending_users_requested',
+      limit,
+    });
+
+    return await this.socialRepository.getTrendingUsers(limit);
+  }
+
+  async searchUsernameSuggestions(query: string, limit: number): Promise<UsernameSuggestion[]> {
+    this.logger.debug({
+      event: 'social_username_suggestions_requested',
+      query,
+      limit,
+    });
+
+    return await this.userSearch.searchUsernameSuggestions(query, limit);
   }
 
   /**

@@ -17,6 +17,10 @@ import type {
   PaginatedMutualFollowersResult,
   PaginatedSocialFeedResult,
   PaginatedUserActivityResult,
+  UserSocialStats,
+  MySocialAnalytics,
+  UsernameSuggestion,
+  TrendingUsersResult,
 } from '../domain/types/social.types';
 
 @Injectable()
@@ -25,6 +29,14 @@ export class SocialApplicationService {
 
   async searchUsers(user: JwtPayload, query: string, limit: number): Promise<SearchableUser[]> {
     return this.socialService.searchUsers(user.sub, query, limit);
+  }
+
+  async searchUsernameSuggestions(query: string, limit: number): Promise<UsernameSuggestion[]> {
+    return this.socialService.searchUsernameSuggestions(query, limit);
+  }
+
+  async getTrendingUsers(limit: number): Promise<TrendingUsersResult> {
+    return this.socialService.getTrendingUsers(limit);
   }
 
   async getFriendLeaderboard(
@@ -183,5 +195,13 @@ export class SocialApplicationService {
 
   async getSocialCounts(user: JwtPayload): Promise<SocialCounts> {
     return this.socialService.getSocialCounts(user.sub);
+  }
+
+  async getUserSocialStats(userId: string): Promise<UserSocialStats> {
+    return this.socialService.getUserSocialStats(userId);
+  }
+
+  async getMySocialAnalytics(user: JwtPayload): Promise<MySocialAnalytics> {
+    return this.socialService.getMySocialAnalytics(user.sub);
   }
 }

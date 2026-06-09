@@ -14,6 +14,9 @@ import type {
   PaginatedSocialFeedResult,
   PaginatedUserActivityResult,
   SocialCounts,
+  UserSocialStats,
+  MySocialAnalytics,
+  TrendingUsersResult,
   RelationshipStatus,
   RespondToFriendRequestParams,
 } from '../types/social.types';
@@ -56,6 +59,9 @@ export interface SocialRepositoryPort {
     occurredAt: string;
     payload: Record<string, unknown>;
   }): Promise<void>;
+  getUserSocialStats(userId: string): Promise<UserSocialStats>;
+  getSocialAnalytics(userId: string): Promise<MySocialAnalytics>;
+  getTrendingUsers(limit: number): Promise<TrendingUsersResult>;
   getSuggestions(userId: string, page: number, limit: number): Promise<PaginatedSocialSuggestionsResult>;
   getFollowerCount(userId: string): Promise<number>;
   getFollowingCount(userId: string): Promise<number>;

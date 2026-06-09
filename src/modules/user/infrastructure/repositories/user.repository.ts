@@ -228,6 +228,19 @@ export class UserRepository implements UserRepositoryPort {
     return rows as UserSearchResult[];
   }
 
+  async searchUsernameSuggestions(query: string, limit: number): Promise<string[]> {
+    const prefixPattern = `${query}%`;
+
+    const rows = await this.db
+      .select({ username: users.username })
+      .from(users)
+      .where(and(isNull(users.deletedAt), ilike(users.username, prefixPattern)))
+      .orderBy(sql`CASE WHEN lower(${users.username}) = lower(${query}) THEN 0 ELSE 1 END`, users.username)
+      .limit(limit);
+
+    return rows.map((row) => row.username);
+  }
+
   async listUserActivity(params: {
     userId: string;
     limit: number;
