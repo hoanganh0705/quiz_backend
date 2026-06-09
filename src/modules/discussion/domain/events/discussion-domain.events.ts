@@ -61,6 +61,24 @@ export interface ContentReportedEvent {
   readonly timestamp: Date;
 }
 
+export interface DiscussionThreadCreatedEvent {
+  readonly eventType: 'discussion_thread_created';
+  readonly threadId: string;
+  readonly quizId: string;
+  readonly authorId: string;
+  readonly title: string;
+  readonly timestamp: Date;
+}
+
+export interface DiscussionThreadSolvedEvent {
+  readonly eventType: 'discussion_thread_solved';
+  readonly threadId: string;
+  readonly commentId: string;
+  readonly authorId: string;
+  readonly solverId: string;
+  readonly timestamp: Date;
+}
+
 export interface ReportReviewedEvent {
   readonly eventType: 'report_reviewed';
   readonly reportId: string;

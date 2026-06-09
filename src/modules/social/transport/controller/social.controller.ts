@@ -9,7 +9,17 @@ import {
   DefaultValuePipe,
   Body,
   UseFilters,
+  ParseUUIDPipe,
 } from '@nestjs/common';
+import {
+  ApiBadRequestResponse,
+  ApiBearerAuth,
+  ApiInternalServerErrorResponse,
+  ApiOkResponse,
+  ApiOperation,
+  ApiParam,
+  ApiTags,
+} from '@nestjs/swagger';
 import { SocialApplicationService } from '@/modules/social/application/social-application.service';
 import {
   FriendRequestDto,
@@ -21,12 +31,22 @@ import {
   BlockedUserDto,
   SearchableUserDto,
   FriendLeaderboardDto,
+  UserFollowersResponseDto,
+  UserFollowingResponseDto,
+  SocialSuggestionsResponseDto,
+  MutualFriendsResponseDto,
+  MutualFollowersResponseDto,
+  SocialFeedResponseDto,
+  UserActivityResponseDto,
 } from '@/modules/social/dto/response';
+import { GetSocialSuggestionsQueryDto, GetUserFollowersQueryDto } from '@/modules/social/dto/request';
 import { RequireAuth } from '@/common/guards/jwt.guard';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
 import { User } from '@/common/decorators/user.decorator';
 import { SocialDomainExceptionFilter } from '../filters/social-domain-exception.filter';
 
+@ApiTags('social')
+@ApiBearerAuth()
 @Controller('social')
 @RequireAuth()
 @UseFilters(SocialDomainExceptionFilter)
@@ -41,6 +61,70 @@ export class SocialController {
     @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit: number,
   ): Promise<SearchableUserDto[]> {
     return this.socialService.searchUsers(user, query, limit);
+  }
+
+  @Get('suggestions')
+  @ApiOperation({
+    summary: 'Get social suggestions',
+    description:
+      'Returns paginated suggested users to connect with, ranked by mutual friends and mutual followers.',
+  })
+  @ApiOkResponse({
+    description: 'Suggested users returned',
+    type: SocialSuggestionsResponseDto,
+  })
+  @ApiBadRequestResponse({ description: 'Validation failed' })
+  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  async getSuggestions(
+    @User() user: JwtPayload,
+    @Query() query: GetSocialSuggestionsQueryDto,
+  ): Promise<SocialSuggestionsResponseDto> {
+    return this.socialService.getSuggestions(user, query.page ?? 1, query.limit ?? 20);
+  }
+
+  @Get('feed')
+  @ApiOperation({
+    summary: 'Get social feed',
+    description:
+      'Returns a paginated unified social activity feed across supported modules, ordered by newest activity first.',
+  })
+  @ApiOkResponse({
+    description: 'Paginated social feed returned',
+    type: SocialFeedResponseDto,
+  })
+  @ApiBadRequestResponse({ description: 'Validation failed' })
+  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  async getFeed(
+    @User() user: JwtPayload,
+    @Query() query: GetUserFollowersQueryDto,
+  ): Promise<SocialFeedResponseDto> {
+    return this.socialService.getFeed(user, query.page ?? 1, query.limit ?? 20);
+  }
+
+  @Get('users/:userId/activity')
+  @ApiOperation({
+    summary: 'Get user public activity timeline',
+    description:
+      'Returns a paginated public activity timeline for the specified user, ordered by newest activity first.',
+  })
+  @ApiParam({
+    name: 'userId',
+    description: 'Target user identifier',
+    format: 'uuid',
+    example: '660e8400-e29b-41d4-a716-446655440000',
+  })
+  @ApiOkResponse({
+    description: 'Paginated public user activity returned',
+    type: UserActivityResponseDto,
+  })
+  @ApiBadRequestResponse({ description: 'Validation failed' })
+  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  async getUserActivity(
+    @User() user: JwtPayload,
+    @Param('userId', new ParseUUIDPipe()) targetUserId: string,
+    @Query() query: GetUserFollowersQueryDto,
+  ): Promise<UserActivityResponseDto> {
+    return this.socialService.getUserActivity(user, targetUserId, query.page ?? 1, query.limit ?? 20);
   }
 
   // Friend Leaderboard
@@ -170,6 +254,109 @@ export class SocialController {
     @Query('cursor') cursor?: string,
   ): Promise<{ items: FollowerDto[]; hasNextPage: boolean }> {
     return this.socialService.getFollowers(user, limit, cursor ?? null);
+  }
+
+  @Get('users/:userId/followers')
+  @ApiOperation({
+    summary: 'Get user followers',
+    description: 'Returns a paginated list of followers for the specified user, ordered by newest follow first.',
+  })
+  @ApiParam({
+    name: 'userId',
+    description: 'Target user identifier',
+    format: 'uuid',
+    example: '660e8400-e29b-41d4-a716-446655440000',
+  })
+  @ApiOkResponse({
+    description: 'Paginated followers returned',
+    type: UserFollowersResponseDto,
+  })
+  @ApiBadRequestResponse({ description: 'Validation failed' })
+  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  async getUserFollowers(
+    @User() user: JwtPayload,
+    @Param('userId', new ParseUUIDPipe()) targetUserId: string,
+    @Query() query: GetUserFollowersQueryDto,
+  ): Promise<UserFollowersResponseDto> {
+    return this.socialService.getFollowersOfUser(user, targetUserId, query.page ?? 1, query.limit ?? 20);
+  }
+
+  @Get('users/:userId/mutual-friends')
+  @ApiOperation({
+    summary: 'Get mutual friends',
+    description:
+      'Returns a paginated list of friends shared between the authenticated user and the specified user, ordered alphabetically by username.',
+  })
+  @ApiParam({
+    name: 'userId',
+    description: 'Target user identifier',
+    format: 'uuid',
+    example: '660e8400-e29b-41d4-a716-446655440000',
+  })
+  @ApiOkResponse({
+    description: 'Paginated mutual friends returned',
+    type: MutualFriendsResponseDto,
+  })
+  @ApiBadRequestResponse({ description: 'Validation failed' })
+  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  async getMutualFriends(
+    @User() user: JwtPayload,
+    @Param('userId', new ParseUUIDPipe()) targetUserId: string,
+    @Query() query: GetUserFollowersQueryDto,
+  ): Promise<MutualFriendsResponseDto> {
+    return this.socialService.getMutualFriends(user, targetUserId, query.page ?? 1, query.limit ?? 20);
+  }
+
+  @Get('users/:userId/mutual-followers')
+  @ApiOperation({
+    summary: 'Get mutual followers',
+    description:
+      'Returns a paginated list of users followed by both the authenticated user and the specified user, ordered alphabetically by username.',
+  })
+  @ApiParam({
+    name: 'userId',
+    description: 'Target user identifier',
+    format: 'uuid',
+    example: '660e8400-e29b-41d4-a716-446655440000',
+  })
+  @ApiOkResponse({
+    description: 'Paginated mutual followers returned',
+    type: MutualFollowersResponseDto,
+  })
+  @ApiBadRequestResponse({ description: 'Validation failed' })
+  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  async getMutualFollowers(
+    @User() user: JwtPayload,
+    @Param('userId', new ParseUUIDPipe()) targetUserId: string,
+    @Query() query: GetUserFollowersQueryDto,
+  ): Promise<MutualFollowersResponseDto> {
+    return this.socialService.getMutualFollowers(user, targetUserId, query.page ?? 1, query.limit ?? 20);
+  }
+
+  @Get('users/:userId/following')
+  @ApiOperation({
+    summary: 'Get user following',
+    description:
+      'Returns a paginated list of users followed by the specified user, ordered by newest follow first.',
+  })
+  @ApiParam({
+    name: 'userId',
+    description: 'Target user identifier',
+    format: 'uuid',
+    example: '660e8400-e29b-41d4-a716-446655440000',
+  })
+  @ApiOkResponse({
+    description: 'Paginated following returned',
+    type: UserFollowingResponseDto,
+  })
+  @ApiBadRequestResponse({ description: 'Validation failed' })
+  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  async getUserFollowing(
+    @User() user: JwtPayload,
+    @Param('userId', new ParseUUIDPipe()) targetUserId: string,
+    @Query() query: GetUserFollowersQueryDto,
+  ): Promise<UserFollowingResponseDto> {
+    return this.socialService.getFollowingOfUser(user, targetUserId, query.page ?? 1, query.limit ?? 20);
   }
 
   @Get('following')

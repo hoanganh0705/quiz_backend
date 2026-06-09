@@ -90,7 +90,18 @@ export class DiscussionService {
       authorId: params.authorId,
     });
 
-    return this.repo.createThread(params);
+    const thread = await this.repo.createThread(params);
+
+    this.eventBus.emitThreadCreated({
+      eventType: 'discussion_thread_created',
+      threadId: thread.threadId,
+      quizId: params.quizId,
+      authorId: params.authorId,
+      title: thread.title,
+      timestamp: new Date(),
+    });
+
+    return thread;
   }
 
   async getThread(threadId: string, userId?: string): Promise<DiscussionThreadDetail | null> {
@@ -469,6 +480,15 @@ export class DiscussionService {
     }
 
     const updated = await this.repo.markThreadAsSolved(params);
+
+    this.eventBus.emitThreadSolved({
+      eventType: 'discussion_thread_solved',
+      threadId: params.threadId,
+      commentId: params.commentId,
+      authorId: thread.authorId,
+      solverId: params.actorId,
+      timestamp: new Date(),
+    });
 
     this.logger.info({
       event: 'thread_marked_solved',
