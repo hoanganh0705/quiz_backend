@@ -45,20 +45,6 @@ export interface SessionRepositoryPort {
     nowIso: string,
   ): Promise<SessionRecord | null>;
 
-  updateSessionForRotation(
-    sessionId: string,
-    data: {
-      jti: string;
-      refreshTokenHash: string;
-      ipAddress: string | null;
-      deviceBrowser: string | null;
-      deviceOs: string | null;
-      deviceType: string;
-      expiresAt: string;
-      lastUsedAt: string;
-    },
-  ): Promise<void>;
-
   /**
    * Atomically rotates a session's refresh token and refreshes lastUsedAt, within a
    * pg_advisory_xact_lock scoped to the sessionId. This prevents two concurrent

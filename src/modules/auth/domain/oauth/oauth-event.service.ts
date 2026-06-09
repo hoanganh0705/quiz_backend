@@ -4,6 +4,7 @@ import type { OAuthProvider } from './oauth.types';
 import type { OutboxPort } from '../ports';
 import { OUTBOX_PORT } from '../ports';
 import { OAuthDomainEventPublisher } from './events/oauth-domain-event-publisher';
+import { OAuthMetricsService } from './oauth-metrics.service';
 
 /**
  * OAuthEventService
@@ -20,6 +21,7 @@ import { OAuthDomainEventPublisher } from './events/oauth-domain-event-publisher
 export class OAuthEventService {
   constructor(
     private readonly domainPublisher: OAuthDomainEventPublisher,
+    private readonly metrics: OAuthMetricsService,
     @Inject(OUTBOX_PORT) private readonly outbox: OutboxPort,
     @InjectPinoLogger(OAuthEventService.name) private readonly logger: PinoLogger,
   ) {}
@@ -30,6 +32,7 @@ export class OAuthEventService {
     providerUserId: string;
     username: string;
   }): void {
+    this.metrics.recordAccountCreated(params.provider);
     this.domainPublisher.publishOAuthAccountCreated({
       eventType: 'oauth_account_created',
       ...params,
@@ -42,6 +45,7 @@ export class OAuthEventService {
     provider: OAuthProvider;
     providerUserId: string;
   }): void {
+    this.metrics.recordAccountLinked(params.provider);
     this.domainPublisher.publishOAuthAccountLinked({
       eventType: 'oauth_account_linked',
       ...params,
@@ -50,6 +54,7 @@ export class OAuthEventService {
   }
 
   publishLoginSuccess(params: { userId: string; provider: OAuthProvider }): void {
+    this.metrics.recordLoginSuccess(params.provider);
     this.domainPublisher.publishOAuthLogin({
       eventType: 'oauth_login',
       ...params,
@@ -93,6 +98,7 @@ export class OAuthEventService {
     reason: string;
     userId?: string;
   }): Promise<void> {
+    this.metrics.recordLoginFailed(params.provider, params.reason);
     this.domainPublisher.publishOAuthLoginFailed({
       eventType: 'oauth_login_failed',
       ...params,

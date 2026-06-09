@@ -1,6 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { USER_REPOSITORY_PORT, type UserRepositoryPort } from './ports/user-repository.port';
-import { SessionService } from './session.service';
 import { UserNotFoundError } from './errors';
 import type { CurrentUserResult } from '../types/auth-result.types';
 
@@ -8,6 +7,7 @@ export type AccountSecurityMetadata = {
   emailVerified: boolean;
   lastPasswordChangedAt: string | null;
   lastLoginAt: string | null;
+  activeSessionCount: number;
 };
 
 @Injectable()
@@ -15,7 +15,6 @@ export class AccountSecurityService {
   constructor(
     @Inject(USER_REPOSITORY_PORT)
     private readonly userRepository: UserRepositoryPort,
-    private readonly sessionService: SessionService,
   ) {}
 
   async getCurrentUser(userId: string): Promise<CurrentUserResult> {
@@ -41,10 +40,7 @@ export class AccountSecurityService {
       emailVerified: metadata.emailVerified,
       lastPasswordChangedAt: metadata.lastPasswordChangedAt,
       lastLoginAt: metadata.lastLoginAt,
+      activeSessionCount: metadata.activeSessionCount,
     };
-  }
-
-  async getActiveSessionCount(userId: string): Promise<number> {
-    return this.sessionService.countActiveSessionsByUserId(userId);
   }
 }

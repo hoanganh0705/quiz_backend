@@ -1,11 +1,8 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { timingSafeEqual } from 'crypto';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
-import type {
-  AuthIdentity,
-  RefreshTokenPayload,
-  SessionRequestContext,
-} from '../types/auth-context.types';
+import type { RefreshTokenPayload, SessionRequestContext } from '../types/auth-context.types';
+import { toAuthIdentity } from '../types/auth-context.types';
 import type { RefreshTokenResult } from '../types/auth-result.types';
 import { TOKEN_PROVIDER, type TokenProvider } from './ports/token.provider';
 import { SessionService } from './session.service';
@@ -30,20 +27,6 @@ export class AuthRefreshService {
     private readonly userRepository: UserRepositoryPort,
     @InjectPinoLogger(AuthRefreshService.name) private readonly logger: PinoLogger,
   ) {}
-
-  private toAuthIdentity(user: {
-    userId: string;
-    username: string;
-    email: string;
-    role: AuthIdentity['role'];
-  }): AuthIdentity {
-    return {
-      userId: user.userId,
-      username: user.username,
-      email: user.email,
-      role: user.role,
-    };
-  }
 
   private async revokeAndReject(
     userId: string,
@@ -165,7 +148,7 @@ export class AuthRefreshService {
       throw new UserNotFoundError();
     }
 
-    const identity = this.toAuthIdentity(user);
+    const identity = toAuthIdentity(user);
     const tokens = await this.tokenService.issueTokens(identity);
 
     await this.sessionService.rotateSession(existingSession.sessionId, tokens, context, nowIso);

@@ -12,6 +12,7 @@ import type {
 import { LoginResponseDto } from '../dto/response/login-response.dto';
 import { RefreshTokenResponseDto } from '../dto/response/refresh-token-response.dto';
 import { LogoutResponseDto } from '../dto/response/logout-response.dto';
+import { ChangePasswordResponseDto } from '../dto/response/change-password-response.dto';
 import { RegisterResponseDto } from '../dto/response/register-response.dto';
 import { VerifyEmailResponseDto } from '../dto/response/verify-email-response.dto';
 import { CurrentUserResponseDto } from '../dto/response/current-user-response.dto';
@@ -40,6 +41,12 @@ export class AuthResponseMapper {
 
   toLogoutResponse(message: string): LogoutResponseDto {
     const dto = new LogoutResponseDto();
+    dto.message = message;
+    return dto;
+  }
+
+  toChangePasswordResponse(message: string): ChangePasswordResponseDto {
+    const dto = new ChangePasswordResponseDto();
     dto.message = message;
     return dto;
   }

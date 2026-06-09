@@ -2,7 +2,8 @@ import { Inject, Injectable } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import type { LoginCommand } from './types/auth-commands';
-import type { AuthIdentity, SessionRequestContext } from '../types/auth-context.types';
+import type { SessionRequestContext } from '../types/auth-context.types';
+import { toAuthIdentity } from '../types/auth-context.types';
 import type { LoginResult } from '../types/auth-result.types';
 import { USER_REPOSITORY_PORT, type UserRepositoryPort } from './ports/user-repository.port';
 import { TOKEN_PROVIDER, type TokenProvider } from './ports/token.provider';
@@ -27,20 +28,6 @@ export class AuthLoginService {
     private readonly verificationTokenService: VerificationTokenService,
     @InjectPinoLogger(AuthLoginService.name) private readonly logger: PinoLogger,
   ) {}
-
-  private toAuthIdentity(user: {
-    userId: string;
-    username: string;
-    email: string;
-    role: AuthIdentity['role'];
-  }): AuthIdentity {
-    return {
-      userId: user.userId,
-      username: user.username,
-      email: user.email,
-      role: user.role,
-    };
-  }
 
   async login(loginCommand: LoginCommand, context: SessionRequestContext): Promise<LoginResult> {
     await this.securityService.enforceLoginRateLimit(context);
@@ -93,7 +80,7 @@ export class AuthLoginService {
       throw new InvalidCredentialsError();
     }
 
-    const identity = this.toAuthIdentity(foundUser);
+    const identity = toAuthIdentity(foundUser);
     const sessionId = randomUUID();
     const tokens = await this.tokenService.issueTokens(identity, sessionId);
 

@@ -1,8 +1,7 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { SessionService } from './session.service';
 import { SessionNotFoundError } from './errors';
-import { AUTH_SECURITY_EVENT_BUS, type AuthSecurityEventPublisherPort } from './events';
 
 export type ActiveSessionInfo = {
   sessionId: string;
@@ -17,8 +16,6 @@ export type ActiveSessionInfo = {
 export class SessionManagementService {
   constructor(
     private readonly sessionService: SessionService,
-    @Inject(AUTH_SECURITY_EVENT_BUS)
-    private readonly eventBus: AuthSecurityEventPublisherPort,
     @InjectPinoLogger(SessionManagementService.name) private readonly logger: PinoLogger,
   ) {}
 
@@ -49,11 +46,12 @@ export class SessionManagementService {
 
     await this.sessionService.revokeSessionById(targetSessionId);
 
-    this.eventBus.publishSessionRevoked({
+    this.logger.info({
+      event: 'auth_security_session_revoked',
       eventType: 'session_revoked',
       userId,
       sessionId: targetSessionId,
-      timestamp: new Date(),
+      timestamp: new Date().toISOString(),
       revokedByIp: ipAddress,
     });
 
@@ -75,12 +73,13 @@ export class SessionManagementService {
       currentSessionId,
     );
 
-    this.eventBus.publishAllOtherSessionsRevoked({
+    this.logger.info({
+      event: 'auth_security_all_other_sessions_revoked',
       eventType: 'all_other_sessions_revoked',
       userId,
       currentSessionId,
       revokedSessionCount: revokedCount,
-      timestamp: new Date(),
+      timestamp: new Date().toISOString(),
       ipAddress,
     });
 

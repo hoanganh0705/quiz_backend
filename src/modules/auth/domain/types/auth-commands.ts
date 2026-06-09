@@ -31,12 +31,3 @@ export type ChangePasswordCommand = {
   currentPassword: string;
   newPassword: string;
 };
-
-export type RevokeSessionCommand = {
-  sessionId: string;
-  currentSessionId?: string;
-};
-
-export type LogoutOtherSessionsCommand = {
-  currentSessionId: string;
-};

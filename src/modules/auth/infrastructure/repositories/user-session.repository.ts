@@ -1,5 +1,5 @@
 import { Inject, Injectable, InternalServerErrorException } from '@nestjs/common';
-import { and, asc, desc, eq, gt, isNull, inArray, lt, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, inArray, isNull, lt, sql } from 'drizzle-orm';
 import { randomUUID } from 'crypto';
 import { DRIZZLE } from '@/core/database/drizzle.constants';
 import type { DrizzleDB } from '@/core/database/database.module';
@@ -215,28 +215,6 @@ export class UserSessionRepository implements SessionRepositoryPort {
     });
   }
 
-  async updateSessionForRotation(
-    sessionId: string,
-    data: {
-      jti: string;
-      refreshTokenHash: string;
-      ipAddress: string | null;
-      deviceBrowser: string | null;
-      deviceOs: string | null;
-      deviceType: string;
-      expiresAt: string;
-      lastUsedAt: string;
-    },
-  ): Promise<void> {
-    await this.db
-      .update(userSessions)
-      .set(data)
-      .where(eq(userSessions.sessionId, sessionId))
-      .catch(() => {
-        throw new InternalServerErrorException('Failed to rotate user session');
-      });
-  }
-
   async revokeSessionsByUserId(userId: string, nowIso: string): Promise<void> {
     await this.db
       .update(userSessions)
@@ -329,21 +307,6 @@ export class UserSessionRepository implements SessionRepositoryPort {
       });
 
     return revokedRows;
-  }
-
-  async revokeSessionsByIds(sessionIds: string[], nowIso: string): Promise<void> {
-    if (sessionIds.length === 0) return;
-
-    await this.db
-      .update(userSessions)
-      .set({
-        revokedAt: nowIso,
-        lastUsedAt: nowIso,
-      })
-      .where(inArray(userSessions.sessionId, sessionIds))
-      .catch(() => {
-        throw new InternalServerErrorException('Failed to revoke sessions');
-      });
   }
 
   async countActiveSessionsByUserId(userId: string, nowIso: string): Promise<number> {

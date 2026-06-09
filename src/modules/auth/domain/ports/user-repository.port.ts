@@ -56,8 +56,6 @@ export interface UserRepositoryPort {
     isVerified: boolean;
   }>;
 
-  ensureEmailAndUsernameAvailable(email: string, username: string): Promise<void>;
-
   setEmailVerificationToken(userId: string, tokenHash: string, expiresAtIso: string): Promise<void>;
 
   markEmailAsVerified(userId: string, nowIso: string): Promise<void>;
@@ -79,6 +77,7 @@ export interface UserRepositoryPort {
     emailVerified: boolean;
     lastPasswordChangedAt: string | null;
     lastLoginAt: string | null;
+    activeSessionCount: number;
   } | null>;
 
   /**
