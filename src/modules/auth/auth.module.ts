@@ -8,8 +8,6 @@ import { AuthRegistrationService } from './domain/auth-registration.service';
 import { PasswordResetService } from './domain/password-reset.service';
 import { ChangePasswordService } from './domain/change-password.service';
 import { SessionManagementService } from './domain/session-management.service';
-import { AuthSecurityEventPublisher } from './domain/events/auth-security-event-bus';
-import { AUTH_SECURITY_EVENT_BUS } from './domain/events/auth-security-event-bus.port';
 import { TokenConfig } from './config/token.config';
 import { SessionConfig } from './config/session.config';
 import { EmailVerificationConfig } from './config/email-verification.config';
@@ -49,6 +47,10 @@ import { EmailService } from '@/modules/email/email.service';
 import { AuthDomainExceptionFilter } from './transport/filters/auth-domain-exception.filter';
 import { VerificationTokenService } from './domain/verification-token.service';
 import { OutboxAdapter } from './infrastructure/outbox/outbox.adapter';
+import { OutboxProcessorService } from './infrastructure/outbox/outbox-processor.service';
+import { AuthAuditLogService } from './infrastructure/audit/auth-audit-log.service';
+import { AuthTransactionContext } from './infrastructure/transaction/auth-transaction.context';
+import { TransactionalInterceptor } from './infrastructure/transaction/transactional.interceptor';
 import { OUTBOX_PORT } from './domain/ports/outbox.port';
 
 // OAuth domain
@@ -66,7 +68,6 @@ import { OAuthIdentityResolver } from './domain/oauth/oauth-identity-resolver';
 import { OAuthAccountLinker } from './domain/oauth/oauth-account-linker';
 import { OAuthSessionIssuer } from './domain/oauth/oauth-session-issuer';
 import { OAuthEventService } from './domain/oauth/oauth-event.service';
-
 @Module({
   imports: [CommonModule, DatabaseModule, RedisModule, EmailModule],
   controllers: [AuthController],
@@ -88,8 +89,6 @@ import { OAuthEventService } from './domain/oauth/oauth-event.service';
     CredentialVerificationService,
     AccountDeletionService,
     RegistrationAvailabilityService,
-    // Event publisher
-    AuthSecurityEventPublisher,
     // Config classes
     TokenConfig,
     SessionConfig,
@@ -106,6 +105,9 @@ import { OAuthEventService } from './domain/oauth/oauth-event.service';
     AuthDomainExceptionFilter,
     UserRepository,
     UserSessionRepository,
+    AuthAuditLogService,
+    AuthTransactionContext,
+    TransactionalInterceptor,
     // Port adapters
     { provide: TOKEN_PROVIDER, useClass: JwtTokenAdapter },
     { provide: CRYPTO_PROVIDER, useClass: CryptoAdapter },
@@ -115,7 +117,6 @@ import { OAuthEventService } from './domain/oauth/oauth-event.service';
     { provide: SESSION_REPOSITORY_PORT, useExisting: UserSessionRepository },
     { provide: EMAIL_PROVIDER, useExisting: EmailService },
     { provide: CACHE_PROVIDER, useExisting: RedisService },
-    { provide: AUTH_SECURITY_EVENT_BUS, useExisting: AuthSecurityEventPublisher },
     { provide: OUTBOX_PORT, useExisting: OutboxAdapter },
     { provide: OAUTH_ACCOUNT_REPOSITORY_PORT, useExisting: OAuthAccountRepository },
     // OAuth multi-provider: each provider adapter is registered as a multi-provider token.
@@ -132,6 +133,7 @@ import { OAuthEventService } from './domain/oauth/oauth-event.service';
     { provide: OAUTH_PROVIDER_REGISTRY, useExisting: OAuthProviderRegistryAdapter },
     // OAuth infrastructure and services
     OutboxAdapter,
+    OutboxProcessorService,
     GoogleOAuthConfig,
     GoogleOAuthAdapter,
     OAuthAccountRepository,

@@ -3,7 +3,7 @@ import { randomUUID } from 'crypto';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import type { SessionRequestContext } from '../../types/auth-context.types';
 import type { LoginResult } from '../../types/auth-result.types';
-import type { AuthIdentity } from '../../types/auth-context.types';
+import { toAuthIdentity } from '../../types/auth-context.types';
 import { SessionService } from '../session.service';
 import { SecurityService } from '../security.service';
 import { TOKEN_PROVIDER, type TokenProvider } from '../ports/token.provider';
@@ -35,12 +35,7 @@ export class OAuthSessionIssuer {
   ): Promise<LoginResult> {
     await this.securityService.enforceLoginRateLimit(context, user.userId);
 
-    const identity: AuthIdentity = {
-      userId: user.userId,
-      username: user.username,
-      email: user.email,
-      role: user.role,
-    };
+    const identity = toAuthIdentity(user);
 
     const sessionId = randomUUID();
     const tokens = await this.tokenService.issueTokens(identity, sessionId);

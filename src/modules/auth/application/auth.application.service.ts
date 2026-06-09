@@ -29,6 +29,7 @@ import { OAuthLoginService as OAuthLoginServiceClass } from '../domain/oauth/oau
 import { LoginResponseDto } from '../dto/response/login-response.dto';
 import { RefreshTokenResponseDto } from '../dto/response/refresh-token-response.dto';
 import { LogoutResponseDto } from '../dto/response/logout-response.dto';
+import { ChangePasswordResponseDto } from '../dto/response/change-password-response.dto';
 import { RegisterResponseDto } from '../dto/response/register-response.dto';
 import { VerifyEmailResponseDto } from '../dto/response/verify-email-response.dto';
 import {
@@ -161,14 +162,14 @@ export class AuthApplicationService {
   async changePassword(
     changePasswordCommand: ChangePasswordCommand,
     currentSessionId: string,
-  ): Promise<LogoutResponseDto> {
+  ): Promise<ChangePasswordResponseDto> {
     const result = await this.changePasswordService.changePassword(
       changePasswordCommand.userId,
       changePasswordCommand.currentPassword,
       changePasswordCommand.newPassword,
       currentSessionId,
     );
-    return this.authResponseMapper.toLogoutResponse(result.message);
+    return this.authResponseMapper.toChangePasswordResponse(result.message);
   }
 
   async getActiveSessions(
@@ -204,14 +205,11 @@ export class AuthApplicationService {
   }
 
   async getSecurityDashboard(userId: string): Promise<AccountSecurityDto> {
-    const [metadata, activeSessionCount] = await Promise.all([
-      this.accountSecurityService.getAccountSecurity(userId),
-      this.accountSecurityService.getActiveSessionCount(userId),
-    ]);
+    const metadata = await this.accountSecurityService.getAccountSecurity(userId);
 
     return {
       emailVerified: metadata.emailVerified,
-      activeSessionCount,
+      activeSessionCount: metadata.activeSessionCount,
       lastSuccessfulLoginAt: metadata.lastLoginAt,
       lastPasswordChangeAt: metadata.lastPasswordChangedAt,
     };

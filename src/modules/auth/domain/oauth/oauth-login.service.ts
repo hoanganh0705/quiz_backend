@@ -1,5 +1,4 @@
 import { Injectable } from '@nestjs/common';
-import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import type { SessionRequestContext } from '../../types/auth-context.types';
 import type { LoginResult } from '../../types/auth-result.types';
 import type { OAuthProvider } from './oauth.types';
@@ -7,7 +6,6 @@ import { OAuthIdentityResolver } from './oauth-identity-resolver';
 import { OAuthAccountLinker } from './oauth-account-linker';
 import { OAuthSessionIssuer } from './oauth-session-issuer';
 import { OAuthEventService } from './oauth-event.service';
-import { OAuthMetricsService } from './oauth-metrics.service';
 import { OAuthAccountLinkingRequiredError } from './errors';
 import { RateLimitExceededError } from '../errors';
 import { OAuthAuthenticationPayload } from './ports/oauth-provider.port';
@@ -37,8 +35,6 @@ export class OAuthLoginService {
     private readonly accountLinker: OAuthAccountLinker,
     private readonly sessionIssuer: OAuthSessionIssuer,
     private readonly events: OAuthEventService,
-    private readonly metrics: OAuthMetricsService,
-    @InjectPinoLogger(OAuthLoginService.name) private readonly logger: PinoLogger,
   ) {}
 
   private async runWithRateLimitFailureEvent<T>(
@@ -55,7 +51,6 @@ export class OAuthLoginService {
           reason: 'rate_limit_exceeded',
           userId,
         });
-        this.metrics.recordLoginFailed(provider, 'rate_limit_exceeded');
       }
       throw error;
     }
@@ -83,7 +78,6 @@ export class OAuthLoginService {
       );
 
       const result = await this.sessionIssuer.issue(existingUser, context, command.provider);
-      this.metrics.recordLoginSuccess(command.provider);
       this.events.publishLoginSuccess({ userId: existingUser.userId, provider: command.provider });
       void this.events.scheduleLoginIntegrationEvent(existingUser.userId, command.provider);
       return result;
@@ -110,10 +104,8 @@ export class OAuthLoginService {
         provider: command.provider,
         providerUserId: claims.providerUserId,
       });
-      this.metrics.recordAccountLinked(command.provider);
 
       const result = await this.sessionIssuer.issue(linkableUser, context, command.provider);
-      this.metrics.recordLoginSuccess(command.provider);
       this.events.publishLoginSuccess({ userId: linkableUser.userId, provider: command.provider });
       void this.events.scheduleLoginIntegrationEvent(linkableUser.userId, command.provider);
       return result;
@@ -132,10 +124,8 @@ export class OAuthLoginService {
       providerUserId: claims.providerUserId,
       username: newUser.username,
     });
-    this.metrics.recordAccountCreated(command.provider);
 
     const result = await this.sessionIssuer.issue(newUser, context, command.provider);
-    this.metrics.recordLoginSuccess(command.provider);
     this.events.publishLoginSuccess({ userId: newUser.userId, provider: command.provider });
     void this.events.scheduleLoginIntegrationEvent(newUser.userId, command.provider);
     return result;

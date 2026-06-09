@@ -9,8 +9,4 @@ export {
 } from './session-repository.port';
 export { type EmailProvider, EMAIL_PROVIDER } from './email.provider';
 export { type CacheProvider, CACHE_PROVIDER } from './cache.provider';
-export {
-  AUTH_SECURITY_EVENT_BUS,
-  type AuthSecurityEventPublisherPort,
-} from '../events/auth-security-event-bus.port';
 export { type OutboxPort, OUTBOX_PORT } from './outbox.port';

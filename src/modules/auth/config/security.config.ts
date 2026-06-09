@@ -3,6 +3,9 @@ import { ConfigService } from '@nestjs/config';
 
 const POSITIVE_INTEGER_ERROR_SUFFIX = 'must be a positive integer';
 const DEFAULT_PASSWORD_HISTORY_SIZE = 5;
+const DEFAULT_AUTH_AUDIT_RETENTION_DAYS = 365;
+const DEFAULT_OUTBOX_MAX_RETRIES = 8;
+const DEFAULT_OUTBOX_BASE_DELAY_SECONDS = 30;
 
 /**
  * Security policy configuration.
@@ -33,5 +36,20 @@ export class SecurityConfig {
    */
   get maxPasswordHistorySize(): number {
     return this.getPositiveInteger('PASSWORD_HISTORY_SIZE', DEFAULT_PASSWORD_HISTORY_SIZE);
+  }
+
+  get authAuditRetentionDays(): number {
+    return this.getPositiveInteger('AUTH_AUDIT_RETENTION_DAYS', DEFAULT_AUTH_AUDIT_RETENTION_DAYS);
+  }
+
+  get outboxMaxRetries(): number {
+    return this.getPositiveInteger('AUTH_OUTBOX_MAX_RETRIES', DEFAULT_OUTBOX_MAX_RETRIES);
+  }
+
+  get outboxBaseDelaySeconds(): number {
+    return this.getPositiveInteger(
+      'AUTH_OUTBOX_BASE_DELAY_SECONDS',
+      DEFAULT_OUTBOX_BASE_DELAY_SECONDS,
+    );
   }
 }
