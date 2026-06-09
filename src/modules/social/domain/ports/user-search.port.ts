@@ -15,6 +15,13 @@ export interface UserSearchPort {
    * @param excludeUserId - Optional user ID to exclude from results
    */
   searchUsers(query: string, limit: number, excludeUserId?: string): Promise<UserSearchResult[]>;
+
+  /**
+   * Search username suggestions by prefix.
+   * @param query - Prefix query string
+   * @param limit - Maximum number of suggestions
+   */
+  searchUsernameSuggestions(query: string, limit: number): Promise<string[]>;
 }
 
 export const USER_SEARCH_PORT = Symbol('USER_SEARCH_PORT');

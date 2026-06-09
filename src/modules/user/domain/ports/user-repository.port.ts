@@ -38,6 +38,10 @@ export interface UserSearchResult {
   avatarUrl: string | null;
 }
 
+export interface UsernameSuggestionRow {
+  username: string;
+}
+
 export interface UserActivityRow {
   eventId: string;
   eventType: string;
@@ -97,6 +101,7 @@ export interface UserRepositoryPort {
   getUserRanking(userId: string): Promise<UserRankingRow | null>;
   getUserAnalytics(userId: string): Promise<UserAnalytics | null>;
   searchUsers(query: string, limit: number, excludeUserId?: string): Promise<UserSearchResult[]>;
+  searchUsernameSuggestions(query: string, limit: number): Promise<string[]>;
   listUserActivity(params: {
     userId: string;
     limit: number;

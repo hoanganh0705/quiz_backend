@@ -180,6 +180,36 @@ export interface SocialCounts {
   followingCount: number;
 }
 
+export interface UserSocialStats {
+  friends: number;
+  followers: number;
+  following: number;
+}
+
+export interface MySocialAnalytics {
+  friends: number;
+  followers: number;
+  following: number;
+  growth30Days: number;
+}
+
+export type UsernameSuggestion = string;
+
+export type TrendingReason = 'most_followed' | 'fastest_growing' | 'most_active' | 'rising_star';
+
+export interface TrendingUser {
+  userId: string;
+  username: string;
+  avatarUrl: string | null;
+  followers: number;
+  trendScore: number;
+  trendReason: TrendingReason;
+}
+
+export interface TrendingUsersResult {
+  items: TrendingUser[];
+}
+
 export interface RelationshipStatus {
   isFriend: boolean;
   hasPendingRequest: boolean;

@@ -27,6 +27,9 @@ import type {
   PaginatedSocialFeedResult,
   PaginatedUserActivityResult,
   SocialFeedActivityType,
+  UserSocialStats,
+  MySocialAnalytics,
+  TrendingUsersResult,
 } from '../../domain/types/social.types';
 import { eq, and, or, sql, desc, count, lte, isNull } from 'drizzle-orm';
 import type { SocialCounts, RelationshipStatus } from '../../domain/types/social.types';
@@ -372,7 +375,11 @@ export class SocialRepository implements SocialRepositoryPort {
     }));
   }
 
-  async getFollowersOfUser(userId: string, page: number, limit: number): Promise<PaginatedFollowersResult> {
+  async getFollowersOfUser(
+    userId: string,
+    page: number,
+    limit: number,
+  ): Promise<PaginatedFollowersResult> {
     const offset = (page - 1) * limit;
 
     const [rows, totalResult] = await Promise.all([
@@ -445,7 +452,11 @@ export class SocialRepository implements SocialRepositoryPort {
     }));
   }
 
-  async getFollowingOfUser(userId: string, page: number, limit: number): Promise<PaginatedFollowingResult> {
+  async getFollowingOfUser(
+    userId: string,
+    page: number,
+    limit: number,
+  ): Promise<PaginatedFollowingResult> {
     const offset = (page - 1) * limit;
 
     const [rows, totalResult] = await Promise.all([
@@ -768,7 +779,11 @@ export class SocialRepository implements SocialRepositoryPort {
     };
   }
 
-  async getSuggestions(userId: string, page: number, limit: number): Promise<PaginatedSocialSuggestionsResult> {
+  async getSuggestions(
+    userId: string,
+    page: number,
+    limit: number,
+  ): Promise<PaginatedSocialSuggestionsResult> {
     const offset = (page - 1) * limit;
 
     const candidates = sql<{
@@ -1045,6 +1060,160 @@ export class SocialRepository implements SocialRepositoryPort {
       friendCount,
       followerCount,
       followingCount,
+    };
+  }
+
+  async getUserSocialStats(userId: string): Promise<UserSocialStats> {
+    const [friends, followers, following] = await Promise.all([
+      this.getFriendCount(userId),
+      this.getFollowerCount(userId),
+      this.getFollowingCount(userId),
+    ]);
+
+    return {
+      friends,
+      followers,
+      following,
+    };
+  }
+
+  async getSocialAnalytics(userId: string): Promise<MySocialAnalytics> {
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+
+    const [friends, followers, following, followersThirtyDaysAgo] = await Promise.all([
+      this.getFriendCount(userId),
+      this.getFollowerCount(userId),
+      this.getFollowingCount(userId),
+      this.db
+        .select({ count: count() })
+        .from(userFollows)
+        .where(
+          and(
+            eq(userFollows.followingId, userId),
+            lte(userFollows.createdAt, thirtyDaysAgo),
+            or(isNull(userFollows.deletedAt), lte(userFollows.deletedAt, thirtyDaysAgo)),
+          ),
+        ),
+    ]);
+
+    const previousFollowers = Number(followersThirtyDaysAgo[0]?.count ?? 0);
+
+    return {
+      friends,
+      followers,
+      following,
+      growth30Days: followers - previousFollowers,
+    };
+  }
+
+  async getTrendingUsers(limit: number): Promise<TrendingUsersResult> {
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+
+    const rows = await this.db.execute(sql`
+      WITH follower_totals AS (
+        SELECT
+          ${userFollows.followingId} AS user_id,
+          COUNT(*)::int AS followers
+        FROM ${userFollows}
+        WHERE ${userFollows.deletedAt} IS NULL
+        GROUP BY ${userFollows.followingId}
+      ),
+      new_followers AS (
+        SELECT
+          ${userFollows.followingId} AS user_id,
+          COUNT(*)::int AS new_followers_last_30_days
+        FROM ${userFollows}
+        WHERE ${userFollows.deletedAt} IS NULL
+          AND ${userFollows.createdAt} >= ${thirtyDaysAgo}
+        GROUP BY ${userFollows.followingId}
+      ),
+      new_friendships AS (
+        SELECT
+          related.user_id,
+          COUNT(*)::int AS new_friendships_last_30_days
+        FROM (
+          SELECT ${friendships.requesterId} AS user_id
+          FROM ${friendships}
+          WHERE ${friendships.status} = 'accepted'
+            AND ${friendships.deletedAt} IS NULL
+            AND ${friendships.updatedAt} >= ${thirtyDaysAgo}
+          UNION ALL
+          SELECT ${friendships.addresseeId} AS user_id
+          FROM ${friendships}
+          WHERE ${friendships.status} = 'accepted'
+            AND ${friendships.deletedAt} IS NULL
+            AND ${friendships.updatedAt} >= ${thirtyDaysAgo}
+        ) related
+        GROUP BY related.user_id
+      ),
+      activity_counts AS (
+        SELECT
+          ${socialFeedActivities.userId} AS user_id,
+          COUNT(*)::int AS activity_count_last_30_days
+        FROM ${socialFeedActivities}
+        WHERE ${socialFeedActivities.occurredAt} >= ${thirtyDaysAgo}
+          AND ${socialFeedActivities.activityType} IN (
+            'badge_earned',
+            'tournament_joined',
+            'tournament_won',
+            'discussion_created',
+            'discussion_solved',
+            'rank_milestone'
+          )
+        GROUP BY ${socialFeedActivities.userId}
+      ),
+      scored_users AS (
+        SELECT
+          u.${users.userId} AS "userId",
+          u.${users.username} AS username,
+          up.${userProfiles.avatarUrl} AS "avatarUrl",
+          COALESCE(ft.followers, 0)::int AS followers,
+          COALESCE(nf.new_followers_last_30_days, 0)::int AS new_followers_last_30_days,
+          COALESCE(nfr.new_friendships_last_30_days, 0)::int AS new_friendships_last_30_days,
+          COALESCE(ac.activity_count_last_30_days, 0)::int AS activity_count_last_30_days,
+          (
+            COALESCE(ft.followers, 0)
+            + COALESCE(nf.new_followers_last_30_days, 0) * 5
+            + COALESCE(nfr.new_friendships_last_30_days, 0) * 3
+            + COALESCE(ac.activity_count_last_30_days, 0) * 2
+          )::int AS "trendScore"
+        FROM ${users} u
+        LEFT JOIN ${userProfiles} up ON up.${userProfiles.userId} = u.${users.userId}
+        LEFT JOIN follower_totals ft ON ft.user_id = u.${users.userId}
+        LEFT JOIN new_followers nf ON nf.user_id = u.${users.userId}
+        LEFT JOIN new_friendships nfr ON nfr.user_id = u.${users.userId}
+        LEFT JOIN activity_counts ac ON ac.user_id = u.${users.userId}
+        WHERE u.${users.deletedAt} IS NULL
+      )
+      SELECT
+        "userId",
+        username,
+        "avatarUrl",
+        followers,
+        "trendScore",
+        CASE
+          WHEN followers >= (new_followers_last_30_days * 5)
+            AND followers >= (activity_count_last_30_days * 2)
+            AND followers >= (new_friendships_last_30_days * 3)
+            THEN 'most_followed'
+          WHEN (new_followers_last_30_days * 5) >= followers
+            AND (new_followers_last_30_days * 5) >= (activity_count_last_30_days * 2)
+            AND (new_followers_last_30_days * 5) >= (new_friendships_last_30_days * 3)
+            THEN 'fastest_growing'
+          WHEN (activity_count_last_30_days * 2) >= followers
+            AND (activity_count_last_30_days * 2) >= (new_followers_last_30_days * 5)
+            AND (activity_count_last_30_days * 2) >= (new_friendships_last_30_days * 3)
+            THEN 'most_active'
+          ELSE 'rising_star'
+        END AS "trendReason"
+      FROM scored_users
+      WHERE "trendScore" > 0
+      ORDER BY "trendScore" DESC, followers DESC, username ASC
+      LIMIT ${limit}
+    `);
+
+    return {
+      items: rows.rows as TrendingUsersResult['items'],
     };
   }
 }

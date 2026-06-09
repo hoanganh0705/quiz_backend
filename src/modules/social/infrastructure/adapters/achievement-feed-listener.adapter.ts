@@ -1,12 +1,15 @@
-import { Inject, Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import { Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
-import { AchievementDomainEventBus } from '@/modules/achievement/domain/events';
+import {
+  AchievementDomainEventBus,
+  type EventSubscription,
+} from '@/modules/achievement/domain/events';
 import type { AchievementDomainEvent } from '@/modules/achievement/domain/events/achievement.events';
 import { SocialService } from '../../domain/services/social.service';
 
 @Injectable()
 export class AchievementFeedListenerAdapter implements OnModuleInit, OnModuleDestroy {
-  private unsubscribe: (() => void) | null = null;
+  private subscription: EventSubscription | null = null;
 
   constructor(
     private readonly achievementEventBus: AchievementDomainEventBus,
@@ -16,14 +19,14 @@ export class AchievementFeedListenerAdapter implements OnModuleInit, OnModuleDes
   ) {}
 
   onModuleInit(): void {
-    this.unsubscribe = this.achievementEventBus.subscribe((event) => {
+    this.subscription = this.achievementEventBus.subscribeAll((event) => {
       void this.handleEvent(event);
     });
   }
 
   onModuleDestroy(): void {
-    this.unsubscribe?.();
-    this.unsubscribe = null;
+    this.subscription?.unsubscribe();
+    this.subscription = null;
   }
 
   private async handleEvent(event: AchievementDomainEvent): Promise<void> {
