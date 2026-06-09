@@ -100,6 +100,7 @@ export class NotificationChannelService {
       case 'achievement_earned':
       case 'badge_unlocked':
       case 'badge_earned':
+      case 'badge_revoked':
       case 'streak_milestone':
         if (!prefs.achievementEnabled) return false;
         break;

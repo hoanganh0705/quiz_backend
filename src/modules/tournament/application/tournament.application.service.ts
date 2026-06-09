@@ -151,7 +151,7 @@ export class TournamentApplicationService {
     });
 
     return {
-      items: result.items.map((item) => ({
+      items: result.map((item) => ({
         tournamentId: item.tournamentId,
         name: item.name,
         startAt: item.startAt,

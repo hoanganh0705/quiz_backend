@@ -11,6 +11,7 @@ import {
   AchievementNotificationService,
   TournamentNotificationService,
   SocialNotificationService,
+  DiscussionNotificationService,
 } from './domain/services';
 import {
   RankingListenerAdapter,
@@ -18,53 +19,56 @@ import {
   TournamentListenerAdapter,
   SocialListenerAdapter,
   SocialEventHandler,
+  DiscussionListenerAdapter,
 } from './infrastructure/adapters';
 import { RankingModule } from '@/modules/ranking';
 import { SocialModule } from '@/modules/social';
+import { AchievementModule } from '@/modules/achievement/achievement.module';
+import { TournamentModule } from '@/modules/tournament/tournament.module';
+import { DiscussionModule } from '@/modules/discussion/discussion.module';
 import { NOTIFICATION_REPOSITORY_PORT } from './domain/ports';
 
 @Module({
-  imports: [DatabaseModule, RankingModule, SocialModule, JwtModule],
+  imports: [
+    DatabaseModule,
+    RankingModule,
+    SocialModule,
+    AchievementModule,
+    TournamentModule,
+    DiscussionModule,
+    JwtModule,
+  ],
   providers: [
-    // Infrastructure - Repository
     NotificationRepository,
     {
       provide: NOTIFICATION_REPOSITORY_PORT,
       useExisting: NotificationRepository,
     },
-
-    // Domain Services
     NotificationService,
     NotificationChannelService,
     RankNotificationService,
     AchievementNotificationService,
     TournamentNotificationService,
     SocialNotificationService,
-
-    // Infrastructure - Event Listeners
+    DiscussionNotificationService,
     RankingListenerAdapter,
     AchievementListenerAdapter,
     TournamentListenerAdapter,
     SocialListenerAdapter,
     SocialEventHandler,
-
-    // Application
+    DiscussionListenerAdapter,
     NotificationApplicationService,
   ],
   controllers: [NotificationController],
   exports: [
-    // Ports
     NOTIFICATION_REPOSITORY_PORT,
-
-    // Domain Services
     NotificationService,
     NotificationChannelService,
     RankNotificationService,
     AchievementNotificationService,
     TournamentNotificationService,
     SocialNotificationService,
-
-    // Application
+    DiscussionNotificationService,
     NotificationApplicationService,
   ],
 })

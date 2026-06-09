@@ -1,8 +1,13 @@
 import { Injectable } from '@nestjs/common';
+import { QuizAnalyticsService } from '../domain/analytics';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
 import { QuizQueryService } from '../domain/quiz/quiz-query.service';
 import { QuizCommandService } from '../domain/quiz/quiz-command.service';
-import { QuizResponseMapper, QuizQuestionResponseMapper, QuizStatsResponseMapper } from '../mappers';
+import {
+  QuizResponseMapper,
+  QuizQuestionResponseMapper,
+  QuizStatsResponseMapper,
+} from '../mappers';
 import { CreatorQuizAnalyticsResponseMapper } from '../mappers/creator-quiz-analytics-response.mapper';
 import { QuizCursorMapper } from '../mappers/quiz-cursor.mapper';
 import { CreateQuizDto } from '../dto/request/create-quiz.dto';
@@ -13,16 +18,14 @@ import { ListQuizzesQueryDto } from '../dto/request/list-quizzes-query.dto';
 import type { QuizResponseDto } from '../dto/response/quiz-response.dto';
 import type { QuizListResponseDto } from '../dto/response/quiz-list-response.dto';
 import type { QuizStatsResponseDto } from '../dto/response/quiz-stats-response.dto';
-import type { CreatorQuizAnalyticsDto } from '../dto/response/quiz-analytics.dto';
+import type {
+  CreatorQuizAnalyticsDto,
+  PopularQuizzesResponseDto,
+  TrendingQuizzesResponseDto,
+} from '../dto/response/quiz-analytics.dto';
 import type { RelatedQuizzesResponseDto } from '../dto/response/related-quizzes-response.dto';
 import type { DeleteQuizResponseDto } from '../dto/response/delete-quiz-response.dto';
-import type {
-  CreateQuizCommand,
-  FeaturedQuizzesQuery,
-  RelatedQuizzesQuery,
-  RecommendedQuizzesQuery,
-  UpdateQuizCommand,
-} from '../domain/types';
+import type { CreateQuizCommand, RelatedQuizzesQuery, UpdateQuizCommand } from '../domain/types';
 import type { QuizDifficulty } from '../types/quiz.types';
 
 @Injectable()
@@ -30,6 +33,7 @@ export class QuizApplicationService {
   constructor(
     private readonly quizQueryService: QuizQueryService,
     private readonly quizCommandService: QuizCommandService,
+    private readonly quizAnalyticsService: QuizAnalyticsService,
   ) {}
 
   async createQuiz(user: JwtPayload, dto: CreateQuizDto): Promise<QuizResponseDto> {
@@ -121,7 +125,10 @@ export class QuizApplicationService {
     };
   }
 
-  async listQuizzesByCreator(userId: string, dto: ListQuizzesQueryDto): Promise<QuizListResponseDto> {
+  async listQuizzesByCreator(
+    userId: string,
+    dto: ListQuizzesQueryDto,
+  ): Promise<QuizListResponseDto> {
     const limit = dto.limit ?? 20;
     const cursor = dto.cursor ? QuizCursorMapper.parse(dto.cursor) : null;
 
@@ -181,7 +188,10 @@ export class QuizApplicationService {
     };
   }
 
-  async listMyPublishedQuizzes(userId: string, dto: ListQuizzesQueryDto): Promise<QuizListResponseDto> {
+  async listMyPublishedQuizzes(
+    userId: string,
+    dto: ListQuizzesQueryDto,
+  ): Promise<QuizListResponseDto> {
     const limit = dto.limit ?? 20;
     const cursor = dto.cursor ? QuizCursorMapper.parse(dto.cursor) : null;
 
@@ -197,6 +207,47 @@ export class QuizApplicationService {
         nextCursor: result.nextCursor ? QuizCursorMapper.serialize(result.nextCursor) : null,
         hasNextPage: result.hasNextPage,
       },
+    };
+  }
+
+  async getTrendingQuizzes(
+    limit: number,
+    categoryId?: string,
+  ): Promise<TrendingQuizzesResponseDto> {
+    const quizzes = await this.quizAnalyticsService.getTrendingQuizzes(limit, categoryId);
+
+    return {
+      period: 'weekly',
+      quizzes: quizzes.map((q) => ({
+        rank: q.rank,
+        quizId: q.quizId,
+        title: q.title,
+        slug: q.slug,
+        imageUrl: q.imageUrl,
+        trendingScore: q.trendingScore,
+        totalAttempts: q.totalAttempts,
+        recentAttempts: q.recentAttempts,
+      })),
+      lastUpdated: new Date().toISOString(),
+    };
+  }
+
+  async getPopularQuizzes(limit: number, categoryId?: string): Promise<PopularQuizzesResponseDto> {
+    const quizzes = await this.quizAnalyticsService.getPopularQuizzes(limit, categoryId);
+
+    return {
+      quizzes: quizzes.map((q) => ({
+        rank: q.rank,
+        quizId: q.quizId,
+        title: q.title,
+        slug: q.slug,
+        imageUrl: q.imageUrl,
+        popularityScore: q.popularityScore,
+        totalAttempts: q.totalAttempts,
+        averageRating: q.averageRating,
+        bookmarkCount: q.bookmarkCount,
+      })),
+      lastUpdated: new Date().toISOString(),
     };
   }
 

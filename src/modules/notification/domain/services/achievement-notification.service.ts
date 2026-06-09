@@ -1,9 +1,3 @@
-/**
- * Achievement Notification Service
- *
- * Composes and sends achievement-related notifications.
- */
-
 import { Injectable } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { NotificationChannelService } from './channel.service';
@@ -22,6 +16,14 @@ export interface StreakNotificationParams {
   userId: string;
   streakDays: number;
   milestone: number;
+}
+
+export interface BadgeRevokedNotificationParams {
+  userId: string;
+  badgeId: string;
+  badgeType: string;
+  reason: string;
+  revokedBy: string;
 }
 
 @Injectable()
@@ -87,6 +89,30 @@ export class AchievementNotificationService {
 
     this.logger.info({
       event: 'badge_unlocked_notification_sent',
+      userId: params.userId,
+      badgeType: params.badgeType,
+    });
+  }
+
+  async notifyBadgeRevoked(params: BadgeRevokedNotificationParams): Promise<void> {
+    const title = 'Badge Revoked';
+    const body = `Your "${params.badgeType.replace(/_/g, ' ')}" badge was revoked.`;
+
+    await this.channelService.send({
+      userId: params.userId,
+      type: 'badge_revoked',
+      title,
+      body,
+      metadata: {
+        badgeId: params.badgeId,
+        badgeType: params.badgeType,
+        reason: params.reason,
+        revokedBy: params.revokedBy,
+      },
+    });
+
+    this.logger.info({
+      event: 'badge_revoked_notification_sent',
       userId: params.userId,
       badgeType: params.badgeType,
     });

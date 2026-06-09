@@ -4,11 +4,13 @@ import {
   Delete,
   Get,
   Param,
+  ParseIntPipe,
   ParseUUIDPipe,
   Patch,
   Post,
   Query,
   UseFilters,
+  DefaultValuePipe,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -35,7 +37,11 @@ import { CreateQuizDto } from '../../dto/request/create-quiz.dto';
 import { QuizResponseDto } from '../../dto/response/quiz-response.dto';
 import { QuizListResponseDto } from '../../dto/response/quiz-list-response.dto';
 import { QuizStatsResponseDto } from '../../dto/response/quiz-stats-response.dto';
-import { CreatorQuizAnalyticsDto } from '../../dto/response/quiz-analytics.dto';
+import {
+  CreatorQuizAnalyticsDto,
+  PopularQuizzesResponseDto,
+  TrendingQuizzesResponseDto,
+} from '../../dto/response/quiz-analytics.dto';
 import { FeaturedQuizzesQueryDto } from '../../dto/request/featured-quizzes-query.dto';
 import { RelatedQuizzesQueryDto } from '../../dto/request/related-quizzes-query.dto';
 import { RelatedQuizzesResponseDto } from '../../dto/response/related-quizzes-response.dto';
@@ -152,6 +158,40 @@ export class QuizController {
     @Query() query: ListQuizzesQueryDto,
   ): Promise<QuizListResponseDto> {
     return this.quizApplicationService.listMyPublishedQuizzes(userId, query);
+  }
+
+  @Get('trending')
+  @Public()
+  @ApiOperation({
+    summary: 'Trending quizzes',
+    description:
+      'Returns published quizzes ranked by recent engagement using the existing weekly trending calculation.',
+  })
+  @ApiOkResponse({ description: 'Trending quizzes returned', type: TrendingQuizzesResponseDto })
+  @ApiBadRequestResponse({ description: 'Validation failed' })
+  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  getTrendingQuizzes(
+    @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit: number,
+    @Query('categoryId') categoryId?: string,
+  ): Promise<TrendingQuizzesResponseDto> {
+    return this.quizApplicationService.getTrendingQuizzes(limit, categoryId);
+  }
+
+  @Get('popular')
+  @Public()
+  @ApiOperation({
+    summary: 'Popular quizzes',
+    description:
+      'Returns published quizzes ranked by the existing popularity score combining attempts, ratings, and bookmarks.',
+  })
+  @ApiOkResponse({ description: 'Popular quizzes returned', type: PopularQuizzesResponseDto })
+  @ApiBadRequestResponse({ description: 'Validation failed' })
+  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  getPopularQuizzes(
+    @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit: number,
+    @Query('categoryId') categoryId?: string,
+  ): Promise<PopularQuizzesResponseDto> {
+    return this.quizApplicationService.getPopularQuizzes(limit, categoryId);
   }
 
   @Get('me/analytics')

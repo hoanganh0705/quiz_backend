@@ -80,10 +80,6 @@ export class TournamentService {
     private readonly logger: PinoLogger,
   ) {}
 
-  // ---------------------------------------------------------------------------
-  // Private helpers
-  // ---------------------------------------------------------------------------
-
   private async getActiveTournamentOrThrow(tournamentId: string): Promise<TournamentRow> {
     const tournament = await this.tournamentRepository.getTournamentById(tournamentId);
     if (!tournament) {
@@ -91,10 +87,6 @@ export class TournamentService {
     }
     return tournament;
   }
-
-  // ---------------------------------------------------------------------------
-  // Tournament operations
-  // ---------------------------------------------------------------------------
 
   async createTournament(user: JwtPayload, payload: CreateTournamentDto): Promise<TournamentRow> {
     const nowIso = new Date().toISOString();
@@ -256,22 +248,9 @@ export class TournamentService {
     };
   }
 
-  async getRelatedTournaments(
-    query: GetRelatedTournamentsQuery,
-  ): Promise<{ items: RelatedTournamentRow[] }> {
-    const items = await this.tournamentRepository.listRelatedTournaments({
-      tournamentId: query.tournamentId,
-      limit: query.limit,
-    });
-
-    this.logger.info({
-      event: 'tournaments_related_listed',
-      tournamentId: query.tournamentId,
-      limit: query.limit,
-      resultCount: items.length,
-    });
-
-    return { items };
+  async getRelatedTournaments(query: GetRelatedTournamentsQuery): Promise<RelatedTournamentRow[]> {
+    await this.getActiveTournamentOrThrow(query.tournamentId);
+    return this.tournamentRepository.listRelatedTournaments(query);
   }
 
   async getTournamentStats(query: GetTournamentStatsQuery): Promise<TournamentStatsRow> {
@@ -322,9 +301,12 @@ export class TournamentService {
     return this.tournamentRepository.getRoundsByTournament(tournamentId);
   }
 
-  async getTournamentParticipants(
-    query: GetTournamentParticipantsQuery,
-  ): Promise<{ items: TournamentParticipantListItemRow[]; total: number; page: number; limit: number }> {
+  async getTournamentParticipants(query: GetTournamentParticipantsQuery): Promise<{
+    items: TournamentParticipantListItemRow[];
+    total: number;
+    page: number;
+    limit: number;
+  }> {
     await this.getActiveTournamentOrThrow(query.tournamentId);
 
     const page = query.page;
@@ -352,7 +334,9 @@ export class TournamentService {
     };
   }
 
-  async getMyTournamentStanding(query: GetMyTournamentStandingQuery): Promise<TournamentStandingRow> {
+  async getMyTournamentStanding(
+    query: GetMyTournamentStandingQuery,
+  ): Promise<TournamentStandingRow> {
     await this.getActiveTournamentOrThrow(query.tournamentId);
 
     const participant = await this.tournamentRepository.getParticipantByUserAndTournament(
@@ -397,18 +381,12 @@ export class TournamentService {
 
     const tournament = await this.getActiveTournamentOrThrow(tournamentId);
 
-    // Registration is permitted exclusively when the tournament is in the `registration` phase.
-    // `upcoming` means the tournament exists but registration has not opened yet.
-    // We rely solely on the status state machine — not on timestamps.
-    if (tournament.status !== 'registration') {
+    if (tournament.status === 'upcoming') {
       throw new TournamentRegistrationClosedError(TOURNAMENT_REGISTRATION_CLOSED_MESSAGE);
     }
 
-    if (tournament.maxParticipants !== null) {
-      const currentCount = await this.tournamentRepository.countParticipants(tournamentId);
-      if (currentCount >= tournament.maxParticipants) {
-        throw new TournamentFullError(TOURNAMENT_FULL_MESSAGE);
-      }
+    if (tournament.status !== 'registration') {
+      throw new TournamentRegistrationClosedError(TOURNAMENT_REGISTRATION_CLOSED_MESSAGE);
     }
 
     const existingParticipant = await this.tournamentRepository.getParticipantByUserAndTournament(
@@ -417,7 +395,6 @@ export class TournamentService {
     );
 
     if (existingParticipant) {
-      // A withdrawn participant is allowed to re-register during the registration window.
       if (existingParticipant.status === 'withdrawn') {
         const reactivated = await this.tournamentRepository.reactivateParticipant(
           existingParticipant.participantId,
@@ -425,7 +402,7 @@ export class TournamentService {
         );
 
         this.logger.info({
-          event: 'tournament_reregistered',
+          event: 'tournament_registration_reactivated',
           tournamentId,
           userId: user.sub,
           participantId: reactivated.participantId,
@@ -435,6 +412,13 @@ export class TournamentService {
       }
 
       throw new TournamentAlreadyRegisteredError(TOURNAMENT_ALREADY_REGISTERED_MESSAGE);
+    }
+
+    if (tournament.maxParticipants !== null) {
+      const leaderboard = await this.tournamentRepository.getLeaderboard(tournamentId);
+      if (leaderboard.length >= tournament.maxParticipants) {
+        throw new TournamentFullError(TOURNAMENT_FULL_MESSAGE);
+      }
     }
 
     const participant = await this.tournamentRepository.registerParticipant({
@@ -463,8 +447,6 @@ export class TournamentService {
 
     const tournament = await this.getActiveTournamentOrThrow(tournamentId);
 
-    // Unregistration is permitted only during the `registration` phase, mirroring the registration rule.
-    // Once the tournament moves to `ongoing` or later, withdrawals are no longer accepted.
     if (tournament.status !== 'registration') {
       throw new TournamentUnregisterClosedError(TOURNAMENT_UNREGISTER_CLOSED_MESSAGE);
     }
@@ -501,7 +483,9 @@ export class TournamentService {
     return withdrawn;
   }
 
-  async withdrawFromTournament(command: WithdrawTournamentCommand): Promise<TournamentParticipantRow> {
+  async withdrawFromTournament(
+    command: WithdrawTournamentCommand,
+  ): Promise<TournamentParticipantRow> {
     const nowIso = new Date().toISOString();
 
     const tournament = await this.getActiveTournamentOrThrow(command.tournamentId);
@@ -566,12 +550,11 @@ export class TournamentService {
     await this.getActiveTournamentOrThrow(tournamentId);
 
     const round = await this.tournamentRepository.getRoundById(roundId);
-
-    if (!round || round.tournamentId !== tournamentId) {
+    if (!round) {
       throw new TournamentRoundNotFoundError(TOURNAMENT_ROUND_NOT_FOUND_MESSAGE);
     }
 
-    if (round.status !== 'open' && round.status !== 'running') {
+    if (round.status !== 'open') {
       throw new TournamentRoundNotOpenError(TOURNAMENT_ROUND_NOT_OPEN_MESSAGE);
     }
 
@@ -579,11 +562,8 @@ export class TournamentService {
       user.sub,
       tournamentId,
     );
-
-    // FIX: use TournamentNotRegisteredError (→ 404) instead of the misleading
-    // TournamentNotFoundError that was previously thrown here.
     if (!participant || participant.status !== 'active') {
-      throw new TournamentNotRegisteredError(TOURNAMENT_NOT_REGISTERED_MESSAGE);
+      throw new TournamentForbiddenError(TOURNAMENT_FORBIDDEN_MESSAGE);
     }
 
     const existingRoundParticipant = await this.tournamentRepository.getRoundParticipant(
@@ -595,33 +575,31 @@ export class TournamentService {
       throw new TournamentAttemptAlreadyExistsError(TOURNAMENT_ATTEMPT_ALREADY_EXISTS_MESSAGE);
     }
 
-    const attempt = await this.attemptRepository.createTournamentAttempt({
+    const roundParticipant = existingRoundParticipant
+      ? existingRoundParticipant
+      : await this.tournamentRepository.createRoundParticipant({
+          roundId,
+          participantId: participant.participantId,
+          nowIso,
+        });
+
+    const roundDetail = await this.tournamentRepository.getRoundDetailById(roundId);
+    if (!roundDetail) {
+      throw new TournamentRoundNotFoundError(TOURNAMENT_ROUND_NOT_FOUND_MESSAGE);
+    }
+
+    const createdAttempt = await this.attemptRepository.createTournamentAttempt({
       userId: user.sub,
-      quizVersionId: round.quizVersionId,
+      quizVersionId: roundDetail.quizVersionId,
       tournamentId,
       roundId,
       nowIso,
-    });
-
-    await this.tournamentRepository.createRoundParticipant({
-      roundId,
-      participantId: participant.participantId,
-      nowIso,
-    });
-
-    this.logger.info({
-      event: 'tournament_round_attempt_started',
-      tournamentId,
-      roundId,
-      userId: user.sub,
-      participantId: participant.participantId,
-      attemptId: attempt.attemptId,
     });
 
     return {
-      attemptId: attempt.attemptId,
-      quizVersionId: attempt.quizVersionId,
-      participantId: participant.participantId,
+      attemptId: createdAttempt.attemptId,
+      quizVersionId: roundDetail.quizVersionId,
+      participantId: roundParticipant.participantId,
     };
   }
 }
