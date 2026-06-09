@@ -7,41 +7,15 @@
 
 import { Injectable, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
+import { AchievementDomainEventBus } from '@/modules/achievement/domain/events/achievement-domain.event-bus';
+import type {
+  AchievementDomainEvent as PublishedAchievementDomainEvent,
+  AchievementAwardedEvent as PublishedAchievementAwardedEvent,
+  BadgeEarnedEvent as PublishedBadgeEarnedEvent,
+  BadgeRevokedEvent as PublishedBadgeRevokedEvent,
+  StreakMilestoneEvent as PublishedStreakMilestoneEvent,
+} from '@/modules/achievement/domain/events/achievement.events';
 import { AchievementNotificationService } from '../../domain/services/achievement-notification.service';
-
-export interface AchievementAwardedEvent {
-  readonly eventType: 'achievement.awarded';
-  readonly userId: string;
-  readonly achievementType: string;
-  readonly badgeType: string;
-  readonly period?: string;
-  readonly rank?: number;
-  readonly timestamp: Date;
-}
-
-export interface BadgeEarnedEvent {
-  readonly eventType: 'badge.earned';
-  readonly userId: string;
-  readonly badgeType: string;
-  readonly badgeName?: string;
-  readonly badgeDescription?: string;
-  readonly badgeIconUrl?: string;
-  readonly category?: string;
-  readonly awardedAt: Date;
-}
-
-export interface StreakMilestoneEvent {
-  readonly eventType: 'streak.milestone';
-  readonly userId: string;
-  readonly streakDays: number;
-  readonly milestone: number;
-  readonly timestamp: Date;
-}
-
-export type AchievementDomainEvent =
-  | AchievementAwardedEvent
-  | BadgeEarnedEvent
-  | StreakMilestoneEvent;
 
 @Injectable()
 export class AchievementListenerAdapter implements OnModuleInit, OnModuleDestroy {
@@ -49,11 +23,14 @@ export class AchievementListenerAdapter implements OnModuleInit, OnModuleDestroy
 
   constructor(
     private readonly achievementNotificationService: AchievementNotificationService,
+    private readonly achievementEventBus: AchievementDomainEventBus,
     @InjectPinoLogger(AchievementListenerAdapter.name)
     private readonly logger: PinoLogger,
   ) {}
 
   onModuleInit(): void {
+    this.subscribe();
+
     this.logger.info({
       event: 'notification_achievement_listener_initialized',
     });
@@ -63,16 +40,40 @@ export class AchievementListenerAdapter implements OnModuleInit, OnModuleDestroy
     this.unsubscribe?.();
   }
 
-  /**
-   * Handle achievement awarded event from Achievement domain.
-   */
-  async handleAchievementAwarded(event: AchievementAwardedEvent): Promise<void> {
+  private subscribe(): void {
+    const subscription = this.achievementEventBus.subscribeAll((event) => {
+      void this.handleEvent(event);
+    });
+
+    this.unsubscribe = () => subscription.unsubscribe();
+  }
+
+  private async handleEvent(event: PublishedAchievementDomainEvent): Promise<void> {
+    switch (event.eventType) {
+      case 'achievement.awarded':
+        await this.handleAchievementAwarded(event);
+        break;
+      case 'badge.earned':
+        await this.handleBadgeEarned(event);
+        break;
+      case 'badge.revoked':
+        await this.handleBadgeRevoked(event);
+        break;
+      case 'streak.milestone':
+        await this.handleStreakMilestone(event);
+        break;
+    }
+  }
+
+  async handleAchievementAwarded(event: PublishedAchievementAwardedEvent): Promise<void> {
     try {
       await this.achievementNotificationService.notifyAchievementEarned({
         userId: event.userId,
         achievementType: event.achievementType,
         badgeType: event.badgeType,
-        badgeName: event.badgeType.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase()),
+        badgeName: event.badgeType
+          .replace(/_/g, ' ')
+          .replace(/\b\w/g, (letter) => letter.toUpperCase()),
         category: event.achievementType,
       });
 
@@ -92,20 +93,15 @@ export class AchievementListenerAdapter implements OnModuleInit, OnModuleDestroy
     }
   }
 
-  /**
-   * Handle badge earned event.
-   */
-  async handleBadgeEarned(event: BadgeEarnedEvent): Promise<void> {
+  async handleBadgeEarned(event: PublishedBadgeEarnedEvent): Promise<void> {
     try {
       await this.achievementNotificationService.notifyBadgeUnlocked({
         userId: event.userId,
         badgeType: event.badgeType,
-        badgeName:
-          event.badgeName ??
-          event.badgeType.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase()),
-        badgeDescription: event.badgeDescription,
-        badgeIconUrl: event.badgeIconUrl,
-        category: event.category ?? 'general',
+        badgeName: event.badgeType
+          .replace(/_/g, ' ')
+          .replace(/\b\w/g, (letter) => letter.toUpperCase()),
+        category: 'general',
       });
 
       this.logger.info({
@@ -123,22 +119,44 @@ export class AchievementListenerAdapter implements OnModuleInit, OnModuleDestroy
     }
   }
 
-  /**
-   * Handle streak milestone event.
-   */
-  async handleStreakMilestone(event: StreakMilestoneEvent): Promise<void> {
+  async handleBadgeRevoked(event: PublishedBadgeRevokedEvent): Promise<void> {
+    try {
+      await this.achievementNotificationService.notifyBadgeRevoked({
+        userId: event.userId,
+        badgeId: event.badgeId,
+        badgeType: event.badgeType,
+        reason: event.reason,
+        revokedBy: event.revokedBy,
+      });
+
+      this.logger.info({
+        event: 'badge_revoked_notification_triggered',
+        userId: event.userId,
+        badgeType: event.badgeType,
+      });
+    } catch (error) {
+      this.logger.error({
+        event: 'badge_revoked_notification_failed',
+        userId: event.userId,
+        badgeType: event.badgeType,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
+  }
+
+  async handleStreakMilestone(event: PublishedStreakMilestoneEvent): Promise<void> {
     try {
       await this.achievementNotificationService.notifyStreakMilestone({
         userId: event.userId,
         streakDays: event.streakDays,
-        milestone: event.milestone,
+        milestone: event.streakDays,
       });
 
       this.logger.info({
         event: 'streak_milestone_notification_triggered',
         userId: event.userId,
         streakDays: event.streakDays,
-        milestone: event.milestone,
+        milestone: event.streakDays,
       });
     } catch (error) {
       this.logger.error({

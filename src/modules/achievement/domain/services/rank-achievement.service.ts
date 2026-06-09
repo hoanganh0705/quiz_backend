@@ -1,9 +1,3 @@
-/**
- * Rank Achievement Service
- *
- * Evaluates and awards rank-based achievements.
- */
-
 import { Inject, Injectable } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { BadgeType } from '../types/achievement.types';
@@ -11,6 +5,7 @@ import { RankAchievementParams } from '../types/achievement.types';
 import { ACHIEVEMENT_REPOSITORY_PORT } from '../../infrastructure/repositories/achievement.repository';
 import type { AchievementRepositoryPort } from '../../infrastructure/repositories/achievement.repository';
 import { BadgeEvaluationService } from './badge-evaluation.service';
+import { AchievementDomainEventBus } from '../events/achievement-domain.event-bus';
 
 @Injectable()
 export class RankAchievementService {
@@ -18,6 +13,7 @@ export class RankAchievementService {
     @Inject(ACHIEVEMENT_REPOSITORY_PORT)
     private readonly achievementRepository: AchievementRepositoryPort,
     private readonly badgeEvaluationService: BadgeEvaluationService,
+    private readonly achievementDomainEventBus: AchievementDomainEventBus,
     @InjectPinoLogger(RankAchievementService.name)
     private readonly logger: PinoLogger,
   ) {}
@@ -54,12 +50,28 @@ export class RankAchievementService {
     badgeType: BadgeType,
     metadata?: Record<string, unknown>,
   ): Promise<void> {
-    await this.achievementRepository.awardBadge({
+    const userBadge = await this.achievementRepository.awardBadge({
       userId,
       badgeId: badgeType,
       earnedAt: new Date(),
       metadata,
     });
+    const badge = await this.achievementRepository.getBadgeById(userBadge.badgeId);
+
+    if (badge) {
+      this.achievementDomainEventBus.emitAchievementAwarded({
+        userId,
+        badgeId: badge.badgeId,
+        badge,
+        metadata,
+      });
+
+      this.achievementDomainEventBus.emitBadgeEarned({
+        userId,
+        badgeSlug: badge.slug,
+        badgeName: badge.name,
+      });
+    }
 
     this.logger.info({
       event: 'badge_awarded',
