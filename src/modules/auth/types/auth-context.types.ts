@@ -7,6 +7,22 @@ export type AuthIdentity = {
   role: UserRole;
 };
 
+export type AuthIdentityLike = {
+  userId: string;
+  username: string;
+  email: string;
+  role: UserRole;
+};
+
+export function toAuthIdentity(user: AuthIdentityLike): AuthIdentity {
+  return {
+    userId: user.userId,
+    username: user.username,
+    email: user.email,
+    role: user.role,
+  };
+}
+
 export type AuthTokens = {
   accessToken: string;
   refreshToken: string;

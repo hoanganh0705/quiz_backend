@@ -14,4 +14,4 @@ export type OAuthAccountRecord = {
  * OAuth Provider type.
  * Validated at the application layer, not enforced at the database level.
  */
-export type OAuthProvider = 'google' | 'github' | 'apple' | 'microsoft';
+export type OAuthProvider = 'google';

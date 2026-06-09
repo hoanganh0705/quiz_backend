@@ -3,6 +3,7 @@ import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import type { OAuthAccountRepositoryPort } from './ports/oauth-account-repository.port';
 import { OAUTH_ACCOUNT_REPOSITORY_PORT } from './ports/oauth-account-repository.port';
 import { USER_REPOSITORY_PORT, type UserRepositoryPort } from '../ports/user-repository.port';
+import { deriveOAuthUsername } from './utils/derive-oauth-username';
 import type { OAuthProvider } from './oauth.types';
 import type { OutboxPort } from '../ports/outbox.port';
 import { OUTBOX_PORT } from '../ports/outbox.port';
@@ -102,7 +103,11 @@ export class OAuthAccountLinker {
     role: UserRole;
     oauthAccountId: string;
   }> {
-    const result = await this.oauthAccountRepository.createOAuthUserWithLink(params);
+    const username = deriveOAuthUsername(params.email, crypto.randomUUID());
+    const result = await this.oauthAccountRepository.createOAuthUserWithLink({
+      ...params,
+      username,
+    });
     this.logger.info({
       event: 'oauth_account_created',
       userId: result.userId,

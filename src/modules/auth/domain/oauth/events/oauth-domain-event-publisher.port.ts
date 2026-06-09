@@ -9,7 +9,7 @@ import type {
  * Port for publishing OAuth Domain Events (in-process, fire-and-forget).
  *
  * Architecture:
- *   Domain Events  → OAuthSecurityEventPublisher  → in-process handlers (email, SIEM, analytics)
+ *   Domain Events  → OAuthDomainEventPublisher   → in-process handlers (email, SIEM, analytics)
  *   Integration Events → Outbox                 → durable, eventually-consistent consumers
  *
  * The OAuthLoginService never calls the outbox directly for domain events.
