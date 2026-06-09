@@ -38,8 +38,16 @@ import {
   MutualFollowersResponseDto,
   SocialFeedResponseDto,
   UserActivityResponseDto,
+  UserSocialStatsResponseDto,
+  MySocialAnalyticsResponseDto,
+  TrendingUsersListResponseDto,
 } from '@/modules/social/dto/response';
-import { GetSocialSuggestionsQueryDto, GetUserFollowersQueryDto } from '@/modules/social/dto/request';
+import {
+  GetSearchSuggestionsQueryDto,
+  GetSocialSuggestionsQueryDto,
+  GetTrendingUsersQueryDto,
+  GetUserFollowersQueryDto,
+} from '@/modules/social/dto/request';
 import { RequireAuth } from '@/common/guards/jwt.guard';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
 import { User } from '@/common/decorators/user.decorator';
@@ -54,6 +62,26 @@ export class SocialController {
   constructor(private readonly socialService: SocialApplicationService) {}
 
   // User Search
+  @Get('search/suggestions')
+  @ApiOperation({
+    summary: 'Get username search suggestions',
+    description:
+      'Returns lightweight username suggestions for autocomplete using case-insensitive prefix matching.',
+  })
+  @ApiOkResponse({
+    description: 'Username suggestions returned',
+    schema: {
+      type: 'array',
+      items: { type: 'string', example: 'anh' },
+      example: ['anh', 'annguyen', 'andrew'],
+    },
+  })
+  @ApiBadRequestResponse({ description: 'Validation failed' })
+  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  async getSearchSuggestions(@Query() query: GetSearchSuggestionsQueryDto): Promise<string[]> {
+    return this.socialService.searchUsernameSuggestions(query.q, query.limit ?? 10);
+  }
+
   @Get('users/search')
   async searchUsers(
     @User() user: JwtPayload,
@@ -101,6 +129,38 @@ export class SocialController {
     return this.socialService.getFeed(user, query.page ?? 1, query.limit ?? 20);
   }
 
+  @Get('me/analytics')
+  @ApiOperation({
+    summary: 'Get my social analytics',
+    description:
+      'Returns aggregate analytics for the authenticated user, including current social counts and net follower growth over the last 30 days.',
+  })
+  @ApiOkResponse({
+    description: 'Authenticated user social analytics returned',
+    type: MySocialAnalyticsResponseDto,
+  })
+  @ApiBadRequestResponse({ description: 'Validation failed' })
+  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  async getMySocialAnalytics(@User() user: JwtPayload): Promise<MySocialAnalyticsResponseDto> {
+    return this.socialService.getMySocialAnalytics(user);
+  }
+
+  @Get('users/trending')
+  @ApiOperation({
+    summary: 'Get trending users',
+    description:
+      'Returns trending public users ranked by follower base, recent follower growth, recent friendship growth, and recent social activity.',
+  })
+  @ApiOkResponse({
+    description: 'Trending users returned',
+    type: TrendingUsersListResponseDto,
+  })
+  @ApiBadRequestResponse({ description: 'Validation failed' })
+  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  async getTrendingUsers(@Query() query: GetTrendingUsersQueryDto): Promise<TrendingUsersListResponseDto> {
+    return this.socialService.getTrendingUsers(query.limit ?? 20);
+  }
+
   @Get('users/:userId/activity')
   @ApiOperation({
     summary: 'Get user public activity timeline',
@@ -125,6 +185,30 @@ export class SocialController {
     @Query() query: GetUserFollowersQueryDto,
   ): Promise<UserActivityResponseDto> {
     return this.socialService.getUserActivity(user, targetUserId, query.page ?? 1, query.limit ?? 20);
+  }
+
+  @Get('users/:userId/stats')
+  @ApiOperation({
+    summary: 'Get public social stats for a user',
+    description:
+      'Returns aggregate public social statistics for the specified user, including friends, followers, and following counts.',
+  })
+  @ApiParam({
+    name: 'userId',
+    description: 'Target user identifier',
+    format: 'uuid',
+    example: '660e8400-e29b-41d4-a716-446655440000',
+  })
+  @ApiOkResponse({
+    description: 'Public user social stats returned',
+    type: UserSocialStatsResponseDto,
+  })
+  @ApiBadRequestResponse({ description: 'Validation failed' })
+  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  async getUserSocialStats(
+    @Param('userId', new ParseUUIDPipe()) targetUserId: string,
+  ): Promise<UserSocialStatsResponseDto> {
+    return this.socialService.getUserSocialStats(targetUserId);
   }
 
   // Friend Leaderboard

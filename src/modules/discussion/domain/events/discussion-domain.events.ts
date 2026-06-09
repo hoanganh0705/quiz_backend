@@ -92,6 +92,8 @@ export type DiscussionDomainEvent =
   | CommentCreatedEvent
   | CommentDeletedEvent
   | CommentHiddenEvent
+  | DiscussionThreadCreatedEvent
+  | DiscussionThreadSolvedEvent
   | ThreadClosedEvent
   | ThreadDeletedEvent
   | ThreadHiddenEvent

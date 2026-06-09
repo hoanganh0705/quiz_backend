@@ -42,4 +42,22 @@ export class UserSearchAdapter implements UserSearchPort {
 
     return results;
   }
+
+  async searchUsernameSuggestions(query: string, limit: number): Promise<string[]> {
+    this.logger.debug({
+      event: 'username_suggestions_requested',
+      query,
+      limit,
+    });
+
+    const results = await this.userRepository.searchUsernameSuggestions(query, limit);
+
+    this.logger.debug({
+      event: 'username_suggestions_completed',
+      query,
+      resultsCount: results.length,
+    });
+
+    return results;
+  }
 }
