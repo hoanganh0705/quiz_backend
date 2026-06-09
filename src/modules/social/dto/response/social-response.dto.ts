@@ -463,6 +463,69 @@ export class SocialCountsDto {
   followingCount!: number;
 }
 
+export class UserSocialStatsResponseDto {
+  @ApiProperty({ description: 'Number of accepted friendships', example: 120 })
+  friends!: number;
+
+  @ApiProperty({ description: 'Number of followers', example: 450 })
+  followers!: number;
+
+  @ApiProperty({ description: 'Number of accounts the user is following', example: 78 })
+  following!: number;
+}
+
+export class MySocialAnalyticsResponseDto {
+  @ApiProperty({ description: 'Current accepted friendship count', example: 42 })
+  friends!: number;
+
+  @ApiProperty({ description: 'Current follower count', example: 120 })
+  followers!: number;
+
+  @ApiProperty({ description: 'Current following count', example: 88 })
+  following!: number;
+
+  @ApiProperty({ description: 'Net follower growth over the last 30 days', example: 12 })
+  growth30Days!: number;
+}
+
+export class TrendingUserResponseDto {
+  @ApiProperty({
+    description: 'User identifier',
+    format: 'uuid',
+    example: '660e8400-e29b-41d4-a716-446655440000',
+  })
+  userId!: string;
+
+  @ApiProperty({ description: 'Username', example: 'Anh' })
+  username!: string;
+
+  @ApiPropertyOptional({
+    description: 'Avatar URL',
+    format: 'uri',
+    example: 'https://example.com/avatars/anh.jpg',
+    nullable: true,
+  })
+  avatarUrl!: string | null;
+
+  @ApiProperty({ description: 'Current follower count', example: 1250 })
+  followers!: number;
+
+  @ApiProperty({ description: 'Weighted trending score', example: 842 })
+  trendScore!: number;
+
+  @ApiProperty({
+    description: 'Primary reason why this user is trending',
+    enum: ['most_followed', 'fastest_growing', 'most_active', 'rising_star'],
+    example: 'fastest_growing',
+  })
+  trendReason!: 'most_followed' | 'fastest_growing' | 'most_active' | 'rising_star';
+}
+
+export class TrendingUsersListResponseDto {
+  @ApiProperty({ description: 'Trending users', type: () => [TrendingUserResponseDto] })
+  items!: TrendingUserResponseDto[];
+}
+
 export class RelationshipStatusDto {
   @ApiProperty({ description: 'Whether the viewed user is a mutual friend', example: false })
   isFriend!: boolean;
