@@ -14,11 +14,12 @@ import { NotificationApplicationService } from '@/modules/notification/applicati
 import {
   NotificationListResponseDto,
   NotificationPreferencesResponseDto,
+  NotificationResponseDto,
 } from '@/modules/notification/dto/response';
 import { RequireAuth } from '@/common/guards/jwt.guard';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
 import { User } from '@/common/decorators/user.decorator';
-import { UpdatePreferencesDto } from '@/modules/notification/dto/request';
+import { UpdatePreferencesDto, GetNotificationsQueryDto } from '@/modules/notification/dto/request';
 
 @Controller('notifications')
 @RequireAuth()
@@ -31,6 +32,7 @@ export class NotificationController {
     @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit: number,
     @Query('cursor') cursor?: string,
     @Query('unreadOnly', new DefaultValuePipe(false)) unreadOnly?: boolean,
+    @Query() query?: GetNotificationsQueryDto,
   ): Promise<NotificationListResponseDto> {
     const parsedCursor: { createdAt: string; notificationId: string } | null = cursor
       ? (JSON.parse(Buffer.from(cursor, 'base64').toString()) as {
@@ -44,6 +46,7 @@ export class NotificationController {
       limit,
       parsedCursor,
       unreadOnly,
+      query?.includeArchived,
     );
 
     return {
@@ -70,6 +73,27 @@ export class NotificationController {
     return { count };
   }
 
+  @Get(':notificationId')
+  async getNotificationDetail(
+    @Param('notificationId') notificationId: string,
+    @User() user: JwtPayload,
+  ): Promise<NotificationResponseDto> {
+    const notification = await this.notificationService.getNotificationDetail(notificationId, user);
+
+    return {
+      notificationId: notification.notificationId,
+      userId: notification.userId,
+      type: notification.type,
+      title: notification.title,
+      message: notification.message,
+      metadata: notification.metadata,
+      channel: notification.channel,
+      isRead: notification.isRead,
+      readAt: notification.readAt,
+      createdAt: notification.createdAt,
+    };
+  }
+
   @Post(':notificationId/read')
   async markAsRead(
     @Param('notificationId') notificationId: string,
@@ -79,10 +103,34 @@ export class NotificationController {
     return { message: 'Notification marked as read' };
   }
 
+  @Post(':notificationId/unread')
+  async markAsUnread(
+    @Param('notificationId') notificationId: string,
+    @User() user: JwtPayload,
+  ): Promise<{ success: true; notificationId: string; read: false }> {
+    await this.notificationService.markAsUnread(notificationId, user);
+    return {
+      success: true,
+      notificationId,
+      read: false,
+    };
+  }
+
   @Post('read-all')
   async markAllAsRead(@User() user: JwtPayload): Promise<{ message: string }> {
     await this.notificationService.markAllAsRead(user);
     return { message: 'All notifications marked as read' };
+  }
+
+  @Delete('read')
+  async deleteReadNotifications(
+    @User() user: JwtPayload,
+  ): Promise<{ success: true; deletedCount: number }> {
+    const deletedCount = await this.notificationService.deleteReadNotifications(user);
+    return {
+      success: true,
+      deletedCount,
+    };
   }
 
   @Delete(':notificationId')

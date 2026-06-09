@@ -1,19 +1,36 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { DRIZZLE } from '@/core/database/drizzle.constants';
 import type { DrizzleDB } from '@/core/database/database.module';
-import {
-  notifications,
-  notificationPreferences,
-} from '@/modules/notification/infrastructure/notification.schema';
+import { notifications, notificationPreferences } from '@/core/database/schema';
 
-import { eq, and, desc, sql, isNull, or } from 'drizzle-orm';
+import { eq, and, desc, sql, isNull, or, inArray } from 'drizzle-orm';
 import { NotificationRepositoryPort } from '../../domain/ports';
 import type { Notification as DomainNotification } from '../../domain/types';
+import type { NotificationAnalytics } from '../../domain/types';
 import {
   CreateNotificationParams,
   NotificationListParams,
   NotificationPreferencesRow,
 } from '../../domain/types';
+
+const BADGE_TYPES = ['achievement_earned', 'badge_unlocked', 'badge_earned', 'streak_milestone'];
+const DISCUSSION_TYPES = ['discussion_reply', 'discussion_mention', 'discussion_solved'];
+const SOCIAL_TYPES = ['friend_request', 'friend_accepted', 'followed'];
+const RANKING_TYPES = [
+  'rank_achievement',
+  'rank_improvement',
+  'period_winner',
+  'rank_improved',
+  'rank_milestone',
+];
+const TOURNAMENT_TYPES = [
+  'tournament_invite',
+  'tournament_starting',
+  'tournament_completed',
+  'tournament_won',
+  'tournament_started',
+  'tournament_reminder',
+];
 
 @Injectable()
 export class NotificationRepository implements NotificationRepositoryPort {
@@ -48,7 +65,11 @@ export class NotificationRepository implements NotificationRepositoryPort {
   async findByUser(
     params: NotificationListParams & { userId: string },
   ): Promise<DomainNotification[]> {
-    const conditions = [eq(notifications.userId, params.userId), isNull(notifications.deletedAt)];
+    const conditions = [eq(notifications.userId, params.userId)];
+
+    if (!params.includeArchived) {
+      conditions.push(isNull(notifications.deletedAt));
+    }
 
     if (params.cursor) {
       conditions.push(
@@ -66,11 +87,15 @@ export class NotificationRepository implements NotificationRepositoryPort {
       conditions.push(eq(notifications.isRead, false));
     }
 
+    if (params.type) {
+      conditions.push(eq(notifications.type, params.type));
+    }
+
     const query = this.db
       .select()
       .from(notifications)
       .where(conditions.length > 0 ? and(...conditions) : undefined)
-      .orderBy(desc(notifications.createdAt))
+      .orderBy(desc(notifications.createdAt), desc(notifications.notificationId))
       .limit(params.limit + 1);
 
     const results = await query;
@@ -105,6 +130,19 @@ export class NotificationRepository implements NotificationRepositoryPort {
       );
   }
 
+  async markAsUnread(notificationId: string, userId: string): Promise<void> {
+    await this.db
+      .update(notifications)
+      .set({ isRead: false, readAt: null })
+      .where(
+        and(
+          eq(notifications.notificationId, notificationId),
+          eq(notifications.userId, userId),
+          isNull(notifications.deletedAt),
+        ),
+      );
+  }
+
   async markAllAsRead(userId: string): Promise<void> {
     await this.db
       .update(notifications)
@@ -118,8 +156,23 @@ export class NotificationRepository implements NotificationRepositoryPort {
       );
   }
 
+  async deleteReadNotifications(userId: string): Promise<number> {
+    const deletedAt = new Date().toISOString();
+    const result = await this.db
+      .update(notifications)
+      .set({ deletedAt })
+      .where(
+        and(
+          eq(notifications.userId, userId),
+          eq(notifications.isRead, true),
+          isNull(notifications.deletedAt),
+        ),
+      );
+
+    return Number(result.rowCount ?? 0);
+  }
+
   async delete(notificationId: string, userId: string): Promise<void> {
-    // Hard delete (for admin use cases)
     await this.db
       .delete(notifications)
       .where(
@@ -152,7 +205,31 @@ export class NotificationRepository implements NotificationRepositoryPort {
       );
   }
 
-  // Preferences methods
+  async getAnalytics(userId: string): Promise<NotificationAnalytics> {
+    const [result] = await this.db
+      .select({
+        total: sql<number>`count(*)::int`,
+        unread: sql<number>`count(*) filter (where ${notifications.isRead} = false)::int`,
+        badge: sql<number>`count(*) filter (where ${inArray(notifications.type, BADGE_TYPES as never)})::int`,
+        discussion: sql<number>`count(*) filter (where ${inArray(notifications.type, DISCUSSION_TYPES as never)})::int`,
+        social: sql<number>`count(*) filter (where ${inArray(notifications.type, SOCIAL_TYPES as never)})::int`,
+        ranking: sql<number>`count(*) filter (where ${inArray(notifications.type, RANKING_TYPES as never)})::int`,
+        tournament: sql<number>`count(*) filter (where ${inArray(notifications.type, TOURNAMENT_TYPES as never)})::int`,
+      })
+      .from(notifications)
+      .where(and(eq(notifications.userId, userId), isNull(notifications.deletedAt)));
+
+    return {
+      total: Number(result?.total ?? 0),
+      unread: Number(result?.unread ?? 0),
+      badge: Number(result?.badge ?? 0),
+      discussion: Number(result?.discussion ?? 0),
+      social: Number(result?.social ?? 0),
+      ranking: Number(result?.ranking ?? 0),
+      tournament: Number(result?.tournament ?? 0),
+    };
+  }
+
   async getPreferences(userId: string): Promise<NotificationPreferencesRow | null> {
     const [prefs] = await this.db
       .select()
@@ -169,7 +246,6 @@ export class NotificationRepository implements NotificationRepositoryPort {
     const existing = await this.getPreferences(userId);
 
     if (existing) {
-      // Update
       const [updated] = await this.db
         .update(notificationPreferences)
         .set({
@@ -181,7 +257,6 @@ export class NotificationRepository implements NotificationRepositoryPort {
 
       return this.mapToPreferences(updated);
     } else {
-      // Insert with defaults
       const defaults = {
         inAppEnabled: prefs.inAppEnabled ?? true,
         emailEnabled: prefs.emailEnabled ?? true,
@@ -190,6 +265,7 @@ export class NotificationRepository implements NotificationRepositoryPort {
         tournamentEnabled: prefs.tournamentEnabled ?? true,
         rankEnabled: prefs.rankEnabled ?? true,
         friendEnabled: prefs.friendEnabled ?? true,
+        discussionEnabled: prefs.discussionEnabled ?? true,
         summaryEnabled: prefs.summaryEnabled ?? true,
         marketingEnabled: prefs.marketingEnabled ?? false,
         rankImprovementThreshold: prefs.rankImprovementThreshold ?? 5,
@@ -239,6 +315,7 @@ export class NotificationRepository implements NotificationRepositoryPort {
       tournamentEnabled: row.tournamentEnabled,
       rankEnabled: row.rankEnabled,
       friendEnabled: row.friendEnabled,
+      discussionEnabled: row.discussionEnabled,
       summaryEnabled: row.summaryEnabled,
       marketingEnabled: row.marketingEnabled,
       rankImprovementThreshold: row.rankImprovementThreshold,

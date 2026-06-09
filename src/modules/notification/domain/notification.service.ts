@@ -38,6 +38,20 @@ export class NotificationService {
     return this.notificationRepository.countUnread(userId);
   }
 
+  async getNotificationDetail(notificationId: string, userId: string): Promise<DomainNotification> {
+    const notification = await this.notificationRepository.findById(notificationId);
+
+    if (!notification) {
+      throw new NotificationNotFoundError(notificationId);
+    }
+
+    if (notification.userId !== userId) {
+      throw new NotificationForbiddenError();
+    }
+
+    return notification;
+  }
+
   async markAsRead(notificationId: string, userId: string): Promise<void> {
     const notification = await this.notificationRepository.findById(notificationId);
 
@@ -58,6 +72,26 @@ export class NotificationService {
     });
   }
 
+  async markAsUnread(notificationId: string, userId: string): Promise<void> {
+    const notification = await this.notificationRepository.findById(notificationId);
+
+    if (!notification) {
+      throw new NotificationNotFoundError(notificationId);
+    }
+
+    if (notification.userId !== userId) {
+      throw new NotificationForbiddenError();
+    }
+
+    await this.notificationRepository.markAsUnread(notificationId, userId);
+
+    this.logger.info({
+      event: 'notification_marked_unread',
+      notificationId,
+      userId,
+    });
+  }
+
   async markAllAsRead(userId: string): Promise<void> {
     await this.notificationRepository.markAllAsRead(userId);
 
@@ -65,6 +99,18 @@ export class NotificationService {
       event: 'all_notifications_marked_read',
       userId,
     });
+  }
+
+  async deleteReadNotifications(userId: string): Promise<number> {
+    const deletedCount = await this.notificationRepository.deleteReadNotifications(userId);
+
+    this.logger.info({
+      event: 'read_notifications_deleted',
+      userId,
+      deletedCount,
+    });
+
+    return deletedCount;
   }
 
   async deleteNotification(notificationId: string, userId: string): Promise<void> {
