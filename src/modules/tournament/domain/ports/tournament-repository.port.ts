@@ -160,6 +160,12 @@ export type TournamentListFilters = {
   categoryId?: string;
 };
 
+export type FinalizedTournamentParticipantRow = {
+  userId: string;
+  rank: number;
+  totalParticipants: number;
+};
+
 export interface TournamentRepositoryPort {
   getTournamentById(tournamentId: string): Promise<TournamentRow | null>;
 
@@ -259,6 +265,23 @@ export interface TournamentRepositoryPort {
   getTournamentStats(tournamentId: string): Promise<TournamentStatsRow>;
 
   countParticipants(tournamentId: string): Promise<number>;
+
+  listTournamentsStartingSoon(params: {
+    windowStartIso: string;
+    windowEndIso: string;
+  }): Promise<TournamentRow[]>;
+
+  markTournamentStatus(params: {
+    tournamentId: string;
+    fromStatus: TournamentStatus;
+    toStatus: TournamentStatus;
+    nowIso: string;
+  }): Promise<TournamentRow | null>;
+
+  finalizeTournament(params: {
+    tournamentId: string;
+    nowIso: string;
+  }): Promise<FinalizedTournamentParticipantRow[]>;
 }
 
 export const TOURNAMENT_REPOSITORY_PORT = Symbol('TOURNAMENT_REPOSITORY_PORT');

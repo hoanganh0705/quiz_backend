@@ -29,6 +29,7 @@ import { RolesGuard } from './common/authorization/guards/roles.guard';
 import { PermissionsGuard } from './common/authorization/guards/permissions.guard';
 import { LoggerModule } from 'nestjs-pino';
 import { SocialModule } from './modules/social/social.module';
+import { SearchModule } from './modules/search/search.module';
 
 @Module({
   imports: [
@@ -73,6 +74,7 @@ import { SocialModule } from './modules/social/social.module';
     DiscussionModule,
     AchievementModule,
     SocialModule,
+    SearchModule,
   ],
   providers: [
     // Execute coarse throttling first to reduce JWT verification load during abusive traffic.

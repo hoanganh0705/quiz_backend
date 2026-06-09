@@ -169,6 +169,20 @@
       "when": 1780969151336,
       "tag": "0023_large_snowbird",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1780980661798,
+      "tag": "0024_faulty_mulholland_black",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1780981851085,
+      "tag": "0025_closed_ezekiel_stane",
+      "breakpoints": true
     }
   ]
 }
