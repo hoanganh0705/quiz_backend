@@ -1,4 +1,5 @@
 export interface TournamentDomainEventBusPort {
+  subscribe(handler: (event: unknown) => void): () => void;
   publish(event: unknown): void;
 }
 
