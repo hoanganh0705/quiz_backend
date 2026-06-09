@@ -45,6 +45,8 @@ import {
   discussionSavedThreads,
   oauthAccounts,
   categoryFollows,
+  notifications,
+  notificationPreferences,
 } from '.';
 
 export const userRankingRelations = relations(userRanking, ({ one, many }) => ({
@@ -117,6 +119,8 @@ export const usersRelations = relations(users, ({ many, one }) => ({
   discussionThreadSubscriptions: many(discussionThreadSubscriptions),
   discussionSavedThreads: many(discussionSavedThreads),
   solvedDiscussionThreads: many(discussionThreads, { relationName: 'discussionThreadSolver' }),
+  notifications: many(notifications),
+  notificationPreferences: one(notificationPreferences),
   // Category relations
   categoryFollows: many(categoryFollows),
   // Tag relations
