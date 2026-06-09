@@ -15,6 +15,14 @@ import type {
   SearchableUser,
   FriendLeaderboard,
   FriendRankingEntry,
+  PaginatedFollowersResult,
+  PaginatedFollowingResult,
+  PaginatedSocialSuggestionsResult,
+  PaginatedMutualFriendsResult,
+  PaginatedMutualFollowersResult,
+  PaginatedSocialFeedResult,
+  PaginatedUserActivityResult,
+  SocialFeedActivityType,
 } from '../types/social.types';
 import {
   SelfFriendRequestError,
@@ -320,8 +328,165 @@ export class SocialService {
     return this.socialRepository.getFollowers(userId, limit, cursor);
   }
 
+  async getFollowersOfUser(
+    requesterId: string,
+    targetUserId: string,
+    page: number,
+    limit: number,
+  ): Promise<PaginatedFollowersResult> {
+    const relationship = await this.socialRepository.getRelationshipStatus(requesterId, targetUserId);
+
+    if (relationship.isBlocked || relationship.isBlockedBy) {
+      throw new BlockedUserError();
+    }
+
+    this.logger.debug({
+      event: 'user_followers_requested',
+      requesterId,
+      targetUserId,
+      page,
+      limit,
+    });
+
+    return this.socialRepository.getFollowersOfUser(targetUserId, page, limit);
+  }
+
   async getFollowing(userId: string, limit: number, cursor?: string | null): Promise<Following[]> {
     return this.socialRepository.getFollowing(userId, limit, cursor);
+  }
+
+  async getFollowingOfUser(
+    requesterId: string,
+    targetUserId: string,
+    page: number,
+    limit: number,
+  ): Promise<PaginatedFollowingResult> {
+    const relationship = await this.socialRepository.getRelationshipStatus(requesterId, targetUserId);
+
+    if (relationship.isBlocked || relationship.isBlockedBy) {
+      throw new BlockedUserError();
+    }
+
+    this.logger.debug({
+      event: 'user_following_requested',
+      requesterId,
+      targetUserId,
+      page,
+      limit,
+    });
+
+    return this.socialRepository.getFollowingOfUser(targetUserId, page, limit);
+  }
+
+  async getMutualFriends(
+    requesterId: string,
+    targetUserId: string,
+    page: number,
+    limit: number,
+  ): Promise<PaginatedMutualFriendsResult> {
+    const relationship = await this.socialRepository.getRelationshipStatus(requesterId, targetUserId);
+
+    if (relationship.isBlocked || relationship.isBlockedBy) {
+      throw new BlockedUserError();
+    }
+
+    this.logger.debug({
+      event: 'mutual_friends_requested',
+      requesterId,
+      targetUserId,
+      page,
+      limit,
+    });
+
+    return this.socialRepository.getMutualFriends(requesterId, targetUserId, page, limit);
+  }
+
+  async getMutualFollowers(
+    requesterId: string,
+    targetUserId: string,
+    page: number,
+    limit: number,
+  ): Promise<PaginatedMutualFollowersResult> {
+    const relationship = await this.socialRepository.getRelationshipStatus(requesterId, targetUserId);
+
+    if (relationship.isBlocked || relationship.isBlockedBy) {
+      throw new BlockedUserError();
+    }
+
+    this.logger.debug({
+      event: 'mutual_followers_requested',
+      requesterId,
+      targetUserId,
+      page,
+      limit,
+    });
+
+    return this.socialRepository.getMutualFollowers(requesterId, targetUserId, page, limit);
+  }
+
+  async getFeed(userId: string, page: number, limit: number): Promise<PaginatedSocialFeedResult> {
+    this.logger.debug({
+      event: 'social_feed_requested',
+      userId,
+      page,
+      limit,
+    });
+
+    return this.socialRepository.getFeed(page, limit);
+  }
+
+  async getUserActivity(
+    requesterId: string,
+    targetUserId: string,
+    page: number,
+    limit: number,
+  ): Promise<PaginatedUserActivityResult> {
+    const relationship = await this.socialRepository.getRelationshipStatus(requesterId, targetUserId);
+
+    if (relationship.isBlocked || relationship.isBlockedBy) {
+      throw new BlockedUserError();
+    }
+
+    this.logger.debug({
+      event: 'social_user_activity_requested',
+      requesterId,
+      targetUserId,
+      page,
+      limit,
+    });
+
+    return this.socialRepository.findActivitiesByUserId(targetUserId, page, limit);
+  }
+
+  async recordFeedActivity(params: {
+    userId: string;
+    activityType: SocialFeedActivityType;
+    occurredAt: string;
+    payload: Record<string, unknown>;
+  }): Promise<void> {
+    this.logger.debug({
+      event: 'social_feed_activity_recorded',
+      userId: params.userId,
+      activityType: params.activityType,
+      occurredAt: params.occurredAt,
+    });
+
+    await this.socialRepository.createFeedActivity(params);
+  }
+
+  async getSuggestions(
+    userId: string,
+    page: number,
+    limit: number,
+  ): Promise<PaginatedSocialSuggestionsResult> {
+    this.logger.debug({
+      event: 'social_suggestions_requested',
+      userId,
+      page,
+      limit,
+    });
+
+    return this.socialRepository.getSuggestions(userId, page, limit);
   }
 
   async getRelationshipStatus(userId: string, targetId: string): Promise<RelationshipStatus> {

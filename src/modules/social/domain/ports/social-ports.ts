@@ -6,6 +6,13 @@ import type {
   Friend,
   Follower,
   Following,
+  PaginatedFollowersResult,
+  PaginatedFollowingResult,
+  PaginatedSocialSuggestionsResult,
+  PaginatedMutualFriendsResult,
+  PaginatedMutualFollowersResult,
+  PaginatedSocialFeedResult,
+  PaginatedUserActivityResult,
   SocialCounts,
   RelationshipStatus,
   RespondToFriendRequestParams,
@@ -36,7 +43,20 @@ export interface SocialRepositoryPort {
   followUser(followerId: string, followingId: string): Promise<UserFollow>;
   unfollowUser(followerId: string, followingId: string): Promise<void>;
   getFollowers(userId: string, limit: number, cursor?: string | null): Promise<Follower[]>;
+  getFollowersOfUser(userId: string, page: number, limit: number): Promise<PaginatedFollowersResult>;
   getFollowing(userId: string, limit: number, cursor?: string | null): Promise<Following[]>;
+  getFollowingOfUser(userId: string, page: number, limit: number): Promise<PaginatedFollowingResult>;
+  getMutualFriends(userId: string, targetUserId: string, page: number, limit: number): Promise<PaginatedMutualFriendsResult>;
+  getMutualFollowers(userId: string, targetUserId: string, page: number, limit: number): Promise<PaginatedMutualFollowersResult>;
+  getFeed(page: number, limit: number): Promise<PaginatedSocialFeedResult>;
+  findActivitiesByUserId(userId: string, page: number, limit: number): Promise<PaginatedUserActivityResult>;
+  createFeedActivity(params: {
+    userId: string;
+    activityType: string;
+    occurredAt: string;
+    payload: Record<string, unknown>;
+  }): Promise<void>;
+  getSuggestions(userId: string, page: number, limit: number): Promise<PaginatedSocialSuggestionsResult>;
   getFollowerCount(userId: string): Promise<number>;
   getFollowingCount(userId: string): Promise<number>;
   isFollowing(followerId: string, followingId: string): Promise<boolean>;

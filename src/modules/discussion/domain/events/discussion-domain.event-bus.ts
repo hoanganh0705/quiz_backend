@@ -13,6 +13,8 @@ import type {
   CommentCreatedEvent,
   CommentDeletedEvent,
   CommentHiddenEvent,
+  DiscussionThreadCreatedEvent,
+  DiscussionThreadSolvedEvent,
   ThreadClosedEvent,
   ThreadDeletedEvent,
   ThreadHiddenEvent,
@@ -53,6 +55,14 @@ export class DiscussionDomainEventBus implements DiscussionDomainEventBusPort {
   }
 
   emitCommentHidden(event: CommentHiddenEvent): void {
+    this.emit(event);
+  }
+
+  emitThreadCreated(event: DiscussionThreadCreatedEvent): void {
+    this.emit(event);
+  }
+
+  emitThreadSolved(event: DiscussionThreadSolvedEvent): void {
     this.emit(event);
   }
 

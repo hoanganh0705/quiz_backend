@@ -33,6 +33,7 @@ import {
   userProfiles,
   userProfileSettings,
   userActivityEvents,
+  socialFeedActivities,
   friendships,
   blockedUsers,
   userFollows,
@@ -100,6 +101,7 @@ export const usersRelations = relations(users, ({ many, one }) => ({
   userProfile: one(userProfiles),
   userProfileSettings: one(userProfileSettings),
   activityEvents: many(userActivityEvents),
+  socialFeedActivities: many(socialFeedActivities),
   // Social relations
   sentFriendRequests: many(friendships, { relationName: 'friendshipRequester' }),
   receivedFriendRequests: many(friendships, { relationName: 'friendshipAddressee' }),
