@@ -1,9 +1,9 @@
-import type {
+import {
   notificationType,
   notificationChannel,
-  notifications,
-  notificationPreferences,
-} from '@/modules/notification/infrastructure/notification.schema';
+  type notifications,
+  type notificationPreferences,
+} from '@/core/database/schema';
 
 export type NotificationType = (typeof notificationType.enumValues)[number];
 export type NotificationChannel = (typeof notificationChannel.enumValues)[number];
@@ -33,6 +33,7 @@ export interface NotificationPreferencesRow {
   tournamentEnabled: boolean;
   rankEnabled: boolean;
   friendEnabled: boolean;
+  discussionEnabled: boolean;
   summaryEnabled: boolean;
   marketingEnabled: boolean;
   rankImprovementThreshold: number;
@@ -56,6 +57,8 @@ export interface NotificationListParams {
   limit: number;
   cursor?: { createdAt: string; notificationId: string } | null;
   unreadOnly?: boolean;
+  includeArchived?: boolean;
+  type?: NotificationType;
 }
 
 export interface UpdatePreferencesParams {
@@ -66,11 +69,22 @@ export interface UpdatePreferencesParams {
   tournamentEnabled?: boolean;
   rankEnabled?: boolean;
   friendEnabled?: boolean;
+  discussionEnabled?: boolean;
   summaryEnabled?: boolean;
   marketingEnabled?: boolean;
   rankImprovementThreshold?: number;
   quietHoursStart?: string | null;
   quietHoursEnd?: string | null;
+}
+
+export interface NotificationAnalytics {
+  total: number;
+  unread: number;
+  badge: number;
+  discussion: number;
+  social: number;
+  ranking: number;
+  tournament: number;
 }
 
 // Rank notification params
@@ -96,7 +110,6 @@ export interface PeriodWinnerParams {
   isWeekly: boolean;
 }
 
-// Notification titles and bodies
 export const RANK_NOTIFICATION_TITLES: Record<string, string> = {
   top10: 'Top 10 Achieved!',
   top100: 'Top 100 Achieved!',
@@ -110,3 +123,9 @@ export const RANK_NOTIFICATION_BODIES: Record<string, string> = {
   top1000: 'Great job! You have reached the top 1000!',
   rank1: 'You are the top ranked player!',
 };
+
+export const NOTIFICATION_TYPE_VALUES = notificationType.enumValues;
+export type NotificationCategory = 'badge' | 'discussion' | 'social' | 'ranking' | 'tournament';
+
+export type NotificationRow = typeof notifications.$inferSelect;
+export type NotificationPreferencesDbRow = typeof notificationPreferences.$inferSelect;

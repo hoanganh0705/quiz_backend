@@ -24,8 +24,9 @@ export class NotificationApplicationService {
     limit: number,
     cursor?: { createdAt: string; notificationId: string } | null,
     unreadOnly?: boolean,
+    includeArchived?: boolean,
   ): Promise<{ items: DomainNotification[]; unreadCount: number; hasNextPage: boolean }> {
-    const params: NotificationListParams = { limit, cursor, unreadOnly };
+    const params: NotificationListParams = { limit, cursor, unreadOnly, includeArchived };
 
     const [notifications, unreadCount] = await Promise.all([
       this.notificationService.getNotifications(user.sub, params),
@@ -46,8 +47,20 @@ export class NotificationApplicationService {
     await this.notificationService.markAsRead(notificationId, user.sub);
   }
 
+  async markAsUnread(notificationId: string, user: JwtPayload): Promise<void> {
+    await this.notificationService.markAsUnread(notificationId, user.sub);
+  }
+
+  async getNotificationDetail(notificationId: string, user: JwtPayload): Promise<DomainNotification> {
+    return this.notificationService.getNotificationDetail(notificationId, user.sub);
+  }
+
   async markAllAsRead(user: JwtPayload): Promise<void> {
     await this.notificationService.markAllAsRead(user.sub);
+  }
+
+  async deleteReadNotifications(user: JwtPayload): Promise<number> {
+    return this.notificationService.deleteReadNotifications(user.sub);
   }
 
   async deleteNotification(notificationId: string, user: JwtPayload): Promise<void> {

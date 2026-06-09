@@ -1,10 +1,3 @@
-/**
- * Notification Channel Service
- *
- * Routes notifications to appropriate channels (in-app, email, push).
- * Checks user preferences before sending.
- */
-
 import { Inject, Injectable } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import type {
@@ -23,9 +16,6 @@ export class NotificationChannelService {
     private readonly logger: PinoLogger,
   ) {}
 
-  /**
-   * Send a notification through appropriate channels.
-   */
   async send(params: {
     userId: string;
     type: NotificationType;
@@ -51,7 +41,6 @@ export class NotificationChannelService {
     },
     channel: NotificationChannel,
   ): Promise<void> {
-    // Check user preferences
     const shouldSend = await this.shouldSendNotification(params.userId, params.type, channel);
     if (!shouldSend) {
       this.logger.info({
@@ -85,9 +74,6 @@ export class NotificationChannelService {
     }
   }
 
-  /**
-   * Check if a notification should be sent based on user preferences.
-   */
   private async shouldSendNotification(
     userId: string,
     type: NotificationType,
@@ -95,11 +81,9 @@ export class NotificationChannelService {
   ): Promise<boolean> {
     const prefs = await this.notificationRepository.getPreferences(userId);
     if (!prefs) {
-      // Default to allowing notification if no preferences set
       return true;
     }
 
-    // Check channel preference
     switch (channel) {
       case 'in_app':
         if (!prefs.inAppEnabled) return false;
@@ -112,36 +96,46 @@ export class NotificationChannelService {
         break;
     }
 
-    // Check content-type preference
     switch (type) {
       case 'achievement_earned':
       case 'badge_unlocked':
+      case 'badge_earned':
+      case 'streak_milestone':
         if (!prefs.achievementEnabled) return false;
         break;
       case 'rank_achievement':
       case 'rank_improvement':
       case 'period_winner':
+      case 'rank_improved':
+      case 'rank_milestone':
         if (!prefs.rankEnabled) return false;
         break;
       case 'tournament_invite':
       case 'tournament_starting':
       case 'tournament_completed':
       case 'tournament_won':
+      case 'tournament_started':
+      case 'tournament_reminder':
         if (!prefs.tournamentEnabled) return false;
         break;
       case 'friend_request':
       case 'friend_accepted':
+      case 'followed':
         if (!prefs.friendEnabled) return false;
+        break;
+      case 'discussion_reply':
+      case 'discussion_mention':
+      case 'discussion_solved':
+        if (!prefs.discussionEnabled) return false;
         break;
       case 'weekly_summary':
         if (!prefs.summaryEnabled) return false;
         break;
       case 'system_announcement':
-        // System announcements are always sent (unless channel is disabled)
+      case 'quiz_review_received':
         break;
     }
 
-    // Check quiet hours
     if (this.isInQuietHours(prefs)) {
       this.logger.info({
         event: 'notification_skipped_quiet_hours',
@@ -155,9 +149,6 @@ export class NotificationChannelService {
     return true;
   }
 
-  /**
-   * Check if current time is within quiet hours.
-   */
   private isInQuietHours(prefs: NotificationPreferencesRow): boolean {
     if (!prefs.quietHoursStart || !prefs.quietHoursEnd) {
       return false;
@@ -171,7 +162,6 @@ export class NotificationChannelService {
     const startTime = startHour * 60 + startMin;
     const endTime = endHour * 60 + endMin;
 
-    // Handle overnight quiet hours (e.g., 22:00 - 07:00)
     if (startTime > endTime) {
       return currentTime >= startTime || currentTime <= endTime;
     }
