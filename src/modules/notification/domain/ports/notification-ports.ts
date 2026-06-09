@@ -1,5 +1,6 @@
 import type {
   Notification,
+  NotificationAnalytics,
   NotificationPreferencesRow,
   CreateNotificationParams,
   NotificationListParams,
@@ -14,12 +15,15 @@ export interface NotificationRepositoryPort {
   findByUser(params: NotificationListParams & { userId: string }): Promise<Notification[]>;
   countUnread(userId: string): Promise<number>;
   markAsRead(notificationId: string, userId: string): Promise<void>;
+  markAsUnread(notificationId: string, userId: string): Promise<void>;
   markAllAsRead(userId: string): Promise<void>;
+  deleteReadNotifications(userId: string): Promise<number>;
   delete(notificationId: string, userId: string): Promise<void>;
   softDelete(notificationId: string, userId: string): Promise<void>;
   deleteExpired(): Promise<void>;
 
-  // Preferences
+  getAnalytics(userId: string): Promise<NotificationAnalytics>;
+
   getPreferences(userId: string): Promise<NotificationPreferencesRow | null>;
   upsertPreferences(
     userId: string,
@@ -32,7 +36,9 @@ export interface NotificationServicePort {
   getNotifications(userId: string, params: NotificationListParams): Promise<Notification[]>;
   getUnreadCount(userId: string): Promise<number>;
   markAsRead(notificationId: string, userId: string): Promise<void>;
+  markAsUnread(notificationId: string, userId: string): Promise<void>;
   markAllAsRead(userId: string): Promise<void>;
+  deleteReadNotifications(userId: string): Promise<number>;
   deleteNotification(notificationId: string, userId: string): Promise<void>;
 }
 
