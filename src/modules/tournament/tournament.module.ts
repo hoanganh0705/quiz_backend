@@ -36,6 +36,6 @@ import { InMemoryTournamentDomainEventBus } from './infrastructure/events/in-mem
     { provide: TOURNAMENT_DOMAIN_EVENT_BUS, useExisting: InMemoryTournamentDomainEventBus },
   ],
   controllers: [TournamentController],
-  exports: [TournamentApplicationService],
+  exports: [TournamentApplicationService, TOURNAMENT_DOMAIN_EVENT_BUS, InMemoryTournamentDomainEventBus],
 })
 export class TournamentModule {}

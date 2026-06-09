@@ -25,6 +25,7 @@ import {
   type TournamentDomainEventBusPort,
 } from './ports/tournament-domain-event-bus.port';
 import { TournamentParticipantWithdrawnEvent } from './events/tournament-participant-withdrawn.event';
+import { TournamentJoinedEvent } from './events/tournament-joined.event';
 import { ATTEMPT_REPOSITORY_PORT } from '@/modules/attempt/domain/ports';
 import type { AttemptRepositoryPort } from '@/modules/attempt/domain/ports';
 import { CreateTournamentDto } from '../dto/request';
@@ -448,6 +449,8 @@ export class TournamentService {
       userId: user.sub,
       participantId: participant.participantId,
     });
+
+    this.eventBus.publish(new TournamentJoinedEvent(tournamentId, user.sub, new Date(nowIso)));
 
     return participant;
   }

@@ -58,6 +58,122 @@ export interface Following {
   followedAt: string;
 }
 
+export interface PaginatedFollowersResult {
+  items: Array<{
+    userId: string;
+    username: string;
+    avatarUrl: string | null;
+    followedAt: string;
+  }>;
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+  };
+}
+
+export interface PaginatedFollowingResult {
+  items: Array<{
+    userId: string;
+    username: string;
+    avatarUrl: string | null;
+    followedAt: string;
+  }>;
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+  };
+}
+
+export interface SocialSuggestion {
+  userId: string;
+  username: string;
+  avatarUrl: string | null;
+  mutualFriends: number;
+  mutualFollowers: number;
+  reason: string;
+}
+
+export interface PaginatedSocialSuggestionsResult {
+  items: SocialSuggestion[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+  };
+}
+
+export interface PaginatedMutualFriendsResult {
+  items: Array<{
+    userId: string;
+    username: string;
+    avatarUrl: string | null;
+  }>;
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+  };
+}
+
+export interface PaginatedMutualFollowersResult {
+  items: Array<{
+    userId: string;
+    username: string;
+    avatarUrl: string | null;
+  }>;
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+  };
+}
+
+export type SocialFeedActivityType =
+  | 'badge_earned'
+  | 'badge_revoked'
+  | 'rank_milestone'
+  | 'peak_rank_achieved'
+  | 'tournament_joined'
+  | 'tournament_completed'
+  | 'tournament_won'
+  | 'discussion_created'
+  | 'discussion_solved';
+
+export interface SocialFeedActivity {
+  id: string;
+  type: SocialFeedActivityType;
+  occurredAt: string;
+  user: {
+    userId: string;
+    username: string;
+  };
+  payload: Record<string, unknown>;
+}
+
+export interface PaginatedSocialFeedResult {
+  items: SocialFeedActivity[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+  };
+}
+
+export interface PaginatedUserActivityResult {
+  items: Array<{
+    type: SocialFeedActivityType;
+    occurredAt: string;
+    payload: Record<string, unknown>;
+  }>;
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+  };
+}
+
 export interface SocialCounts {
   friendCount: number;
   followerCount: number;

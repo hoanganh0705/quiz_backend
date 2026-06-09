@@ -7,6 +7,7 @@ import {
   userFollows,
   users,
   userProfiles,
+  socialFeedActivities,
 } from '@/core/database/schema';
 import { type SocialRepositoryPort } from '../../domain/ports/social-ports';
 import type {
@@ -18,9 +19,20 @@ import type {
   Follower,
   Following,
   RespondToFriendRequestParams,
+  PaginatedFollowersResult,
+  PaginatedFollowingResult,
+  PaginatedSocialSuggestionsResult,
+  PaginatedMutualFriendsResult,
+  PaginatedMutualFollowersResult,
+  PaginatedSocialFeedResult,
+  PaginatedUserActivityResult,
+  SocialFeedActivityType,
 } from '../../domain/types/social.types';
 import { eq, and, or, sql, desc, count, lte, isNull } from 'drizzle-orm';
 import type { SocialCounts, RelationshipStatus } from '../../domain/types/social.types';
+
+const MUTUAL_FRIENDS_REASON_FALLBACK = 'Suggested based on mutual connections';
+const MUTUAL_FOLLOWERS_REASON_FALLBACK = 'Suggested based on mutual followers';
 
 @Injectable()
 export class SocialRepository implements SocialRepositoryPort {
@@ -37,6 +49,20 @@ export class SocialRepository implements SocialRepositoryPort {
       .returning();
 
     return friendship as Friendship;
+  }
+
+  async createFeedActivity(params: {
+    userId: string;
+    activityType: string;
+    occurredAt: string;
+    payload: Record<string, unknown>;
+  }): Promise<void> {
+    await this.db.insert(socialFeedActivities).values({
+      userId: params.userId,
+      activityType: params.activityType as SocialFeedActivityType,
+      occurredAt: params.occurredAt,
+      payload: params.payload,
+    });
   }
 
   async getFriendRequest(friendshipId: string): Promise<Friendship> {
@@ -346,6 +372,45 @@ export class SocialRepository implements SocialRepositoryPort {
     }));
   }
 
+  async getFollowersOfUser(userId: string, page: number, limit: number): Promise<PaginatedFollowersResult> {
+    const offset = (page - 1) * limit;
+
+    const [rows, totalResult] = await Promise.all([
+      this.db
+        .select({
+          userId: userFollows.followerId,
+          username: users.username,
+          avatarUrl: userProfiles.avatarUrl,
+          followedAt: userFollows.createdAt,
+        })
+        .from(userFollows)
+        .innerJoin(users, eq(userFollows.followerId, users.userId))
+        .leftJoin(userProfiles, eq(users.userId, userProfiles.userId))
+        .where(and(eq(userFollows.followingId, userId), isNull(userFollows.deletedAt)))
+        .orderBy(desc(userFollows.createdAt))
+        .limit(limit)
+        .offset(offset),
+      this.db
+        .select({ count: count() })
+        .from(userFollows)
+        .where(and(eq(userFollows.followingId, userId), isNull(userFollows.deletedAt))),
+    ]);
+
+    return {
+      items: rows.map((row) => ({
+        userId: row.userId,
+        username: row.username,
+        avatarUrl: row.avatarUrl,
+        followedAt: row.followedAt,
+      })),
+      pagination: {
+        page,
+        limit,
+        total: Number(totalResult[0]?.count ?? 0),
+      },
+    };
+  }
+
   async getFollowing(userId: string, limit: number, cursor?: string): Promise<Following[]> {
     const baseCondition = eq(userFollows.followerId, userId);
     const cursorCondition = cursor ? lte(userFollows.createdAt, cursor) : undefined;
@@ -378,6 +443,491 @@ export class SocialRepository implements SocialRepositoryPort {
       avatarUrl: r.avatarUrl,
       followedAt: r.createdAt,
     }));
+  }
+
+  async getFollowingOfUser(userId: string, page: number, limit: number): Promise<PaginatedFollowingResult> {
+    const offset = (page - 1) * limit;
+
+    const [rows, totalResult] = await Promise.all([
+      this.db
+        .select({
+          userId: userFollows.followingId,
+          username: users.username,
+          avatarUrl: userProfiles.avatarUrl,
+          followedAt: userFollows.createdAt,
+        })
+        .from(userFollows)
+        .innerJoin(users, eq(userFollows.followingId, users.userId))
+        .leftJoin(userProfiles, eq(users.userId, userProfiles.userId))
+        .where(and(eq(userFollows.followerId, userId), isNull(userFollows.deletedAt)))
+        .orderBy(desc(userFollows.createdAt))
+        .limit(limit)
+        .offset(offset),
+      this.db
+        .select({ count: count() })
+        .from(userFollows)
+        .where(and(eq(userFollows.followerId, userId), isNull(userFollows.deletedAt))),
+    ]);
+
+    return {
+      items: rows.map((row) => ({
+        userId: row.userId,
+        username: row.username,
+        avatarUrl: row.avatarUrl,
+        followedAt: row.followedAt,
+      })),
+      pagination: {
+        page,
+        limit,
+        total: Number(totalResult[0]?.count ?? 0),
+      },
+    };
+  }
+
+  async getMutualFriends(
+    userId: string,
+    targetUserId: string,
+    page: number,
+    limit: number,
+  ): Promise<PaginatedMutualFriendsResult> {
+    const offset = (page - 1) * limit;
+
+    const mutualFriendsQuery = sql<{
+      userId: string;
+      username: string;
+      avatarUrl: string | null;
+    }>`
+      WITH user_friends AS (
+        SELECT CASE
+          WHEN ${friendships.requesterId} = ${userId} THEN ${friendships.addresseeId}
+          ELSE ${friendships.requesterId}
+        END AS friend_id
+        FROM ${friendships}
+        WHERE (${friendships.requesterId} = ${userId} OR ${friendships.addresseeId} = ${userId})
+          AND ${friendships.status} = 'accepted'
+          AND ${friendships.deletedAt} IS NULL
+      ),
+      target_friends AS (
+        SELECT CASE
+          WHEN ${friendships.requesterId} = ${targetUserId} THEN ${friendships.addresseeId}
+          ELSE ${friendships.requesterId}
+        END AS friend_id
+        FROM ${friendships}
+        WHERE (${friendships.requesterId} = ${targetUserId} OR ${friendships.addresseeId} = ${targetUserId})
+          AND ${friendships.status} = 'accepted'
+          AND ${friendships.deletedAt} IS NULL
+      ),
+      shared_friends AS (
+        SELECT uf.friend_id AS user_id
+        FROM user_friends uf
+        INNER JOIN target_friends tf ON tf.friend_id = uf.friend_id
+        WHERE uf.friend_id NOT IN (
+          SELECT ${blockedUsers.blockedId}
+          FROM ${blockedUsers}
+          WHERE ${blockedUsers.blockerId} = ${userId}
+            AND ${blockedUsers.deletedAt} IS NULL
+          UNION
+          SELECT ${blockedUsers.blockerId}
+          FROM ${blockedUsers}
+          WHERE ${blockedUsers.blockedId} = ${userId}
+            AND ${blockedUsers.deletedAt} IS NULL
+          UNION
+          SELECT ${blockedUsers.blockedId}
+          FROM ${blockedUsers}
+          WHERE ${blockedUsers.blockerId} = ${targetUserId}
+            AND ${blockedUsers.deletedAt} IS NULL
+          UNION
+          SELECT ${blockedUsers.blockerId}
+          FROM ${blockedUsers}
+          WHERE ${blockedUsers.blockedId} = ${targetUserId}
+            AND ${blockedUsers.deletedAt} IS NULL
+        )
+      )
+      SELECT
+        u.${users.userId} AS "userId",
+        u.${users.username} AS username,
+        up.${userProfiles.avatarUrl} AS "avatarUrl"
+      FROM shared_friends sf
+      INNER JOIN ${users} u ON u.${users.userId} = sf.user_id
+      LEFT JOIN ${userProfiles} up ON up.${userProfiles.userId} = u.${users.userId}
+      WHERE u.${users.deletedAt} IS NULL
+    `;
+
+    const rowsPromise = this.db.execute(sql`
+      SELECT *
+      FROM (${mutualFriendsQuery}) mutual_friends
+      ORDER BY mutual_friends.username ASC
+      LIMIT ${limit}
+      OFFSET ${offset}
+    `);
+
+    const totalPromise = this.db.execute(sql`
+      SELECT COUNT(*)::int AS total
+      FROM (${mutualFriendsQuery}) mutual_friends
+    `);
+
+    const [rowsResult, totalResult] = await Promise.all([rowsPromise, totalPromise]);
+
+    const rows = rowsResult.rows as Array<{
+      userId: string;
+      username: string;
+      avatarUrl: string | null;
+    }>;
+    const total = Number((totalResult.rows[0] as { total?: number } | undefined)?.total ?? 0);
+
+    return {
+      items: rows.map((row) => ({
+        userId: row.userId,
+        username: row.username,
+        avatarUrl: row.avatarUrl,
+      })),
+      pagination: {
+        page,
+        limit,
+        total,
+      },
+    };
+  }
+
+  async getMutualFollowers(
+    userId: string,
+    targetUserId: string,
+    page: number,
+    limit: number,
+  ): Promise<PaginatedMutualFollowersResult> {
+    const offset = (page - 1) * limit;
+
+    const mutualFollowersQuery = sql<{
+      userId: string;
+      username: string;
+      avatarUrl: string | null;
+    }>`
+      WITH user_following AS (
+        SELECT ${userFollows.followingId} AS followed_user_id
+        FROM ${userFollows}
+        WHERE ${userFollows.followerId} = ${userId}
+          AND ${userFollows.deletedAt} IS NULL
+      ),
+      target_following AS (
+        SELECT ${userFollows.followingId} AS followed_user_id
+        FROM ${userFollows}
+        WHERE ${userFollows.followerId} = ${targetUserId}
+          AND ${userFollows.deletedAt} IS NULL
+      ),
+      shared_following AS (
+        SELECT uf.followed_user_id AS user_id
+        FROM user_following uf
+        INNER JOIN target_following tf ON tf.followed_user_id = uf.followed_user_id
+        WHERE uf.followed_user_id NOT IN (
+          SELECT ${blockedUsers.blockedId}
+          FROM ${blockedUsers}
+          WHERE ${blockedUsers.blockerId} = ${userId}
+            AND ${blockedUsers.deletedAt} IS NULL
+          UNION
+          SELECT ${blockedUsers.blockerId}
+          FROM ${blockedUsers}
+          WHERE ${blockedUsers.blockedId} = ${userId}
+            AND ${blockedUsers.deletedAt} IS NULL
+          UNION
+          SELECT ${blockedUsers.blockedId}
+          FROM ${blockedUsers}
+          WHERE ${blockedUsers.blockerId} = ${targetUserId}
+            AND ${blockedUsers.deletedAt} IS NULL
+          UNION
+          SELECT ${blockedUsers.blockerId}
+          FROM ${blockedUsers}
+          WHERE ${blockedUsers.blockedId} = ${targetUserId}
+            AND ${blockedUsers.deletedAt} IS NULL
+        )
+      )
+      SELECT
+        u.${users.userId} AS "userId",
+        u.${users.username} AS username,
+        up.${userProfiles.avatarUrl} AS "avatarUrl"
+      FROM shared_following sf
+      INNER JOIN ${users} u ON u.${users.userId} = sf.user_id
+      LEFT JOIN ${userProfiles} up ON up.${userProfiles.userId} = u.${users.userId}
+      WHERE u.${users.deletedAt} IS NULL
+    `;
+
+    const rowsPromise = this.db.execute(sql`
+      SELECT *
+      FROM (${mutualFollowersQuery}) mutual_followers
+      ORDER BY mutual_followers.username ASC
+      LIMIT ${limit}
+      OFFSET ${offset}
+    `);
+
+    const totalPromise = this.db.execute(sql`
+      SELECT COUNT(*)::int AS total
+      FROM (${mutualFollowersQuery}) mutual_followers
+    `);
+
+    const [rowsResult, totalResult] = await Promise.all([rowsPromise, totalPromise]);
+
+    const rows = rowsResult.rows as Array<{
+      userId: string;
+      username: string;
+      avatarUrl: string | null;
+    }>;
+    const total = Number((totalResult.rows[0] as { total?: number } | undefined)?.total ?? 0);
+
+    return {
+      items: rows.map((row) => ({
+        userId: row.userId,
+        username: row.username,
+        avatarUrl: row.avatarUrl,
+      })),
+      pagination: {
+        page,
+        limit,
+        total,
+      },
+    };
+  }
+
+  async getFeed(page: number, limit: number): Promise<PaginatedSocialFeedResult> {
+    const offset = (page - 1) * limit;
+
+    const [rows, totalResult] = await Promise.all([
+      this.db
+        .select({
+          id: socialFeedActivities.activityId,
+          type: socialFeedActivities.activityType,
+          occurredAt: socialFeedActivities.occurredAt,
+          userId: users.userId,
+          username: users.username,
+          payload: socialFeedActivities.payload,
+        })
+        .from(socialFeedActivities)
+        .innerJoin(users, eq(socialFeedActivities.userId, users.userId))
+        .where(isNull(users.deletedAt))
+        .orderBy(desc(socialFeedActivities.occurredAt), desc(socialFeedActivities.activityId))
+        .limit(limit)
+        .offset(offset),
+      this.db.select({ count: count() }).from(socialFeedActivities),
+    ]);
+
+    return {
+      items: rows.map((row) => ({
+        id: row.id,
+        type: row.type,
+        occurredAt: row.occurredAt,
+        user: {
+          userId: row.userId,
+          username: row.username,
+        },
+        payload: row.payload as Record<string, unknown>,
+      })),
+      pagination: {
+        page,
+        limit,
+        total: Number(totalResult[0]?.count ?? 0),
+      },
+    };
+  }
+
+  async findActivitiesByUserId(
+    userId: string,
+    page: number,
+    limit: number,
+  ): Promise<PaginatedUserActivityResult> {
+    const offset = (page - 1) * limit;
+
+    const [rows, totalResult] = await Promise.all([
+      this.db
+        .select({
+          type: socialFeedActivities.activityType,
+          occurredAt: socialFeedActivities.occurredAt,
+          payload: socialFeedActivities.payload,
+        })
+        .from(socialFeedActivities)
+        .innerJoin(users, eq(socialFeedActivities.userId, users.userId))
+        .where(and(eq(socialFeedActivities.userId, userId), isNull(users.deletedAt)))
+        .orderBy(desc(socialFeedActivities.occurredAt), desc(socialFeedActivities.activityId))
+        .limit(limit)
+        .offset(offset),
+      this.db
+        .select({ count: count() })
+        .from(socialFeedActivities)
+        .innerJoin(users, eq(socialFeedActivities.userId, users.userId))
+        .where(and(eq(socialFeedActivities.userId, userId), isNull(users.deletedAt))),
+    ]);
+
+    return {
+      items: rows.map((row) => ({
+        type: row.type,
+        occurredAt: row.occurredAt,
+        payload: row.payload as Record<string, unknown>,
+      })),
+      pagination: {
+        page,
+        limit,
+        total: Number(totalResult[0]?.count ?? 0),
+      },
+    };
+  }
+
+  async getSuggestions(userId: string, page: number, limit: number): Promise<PaginatedSocialSuggestionsResult> {
+    const offset = (page - 1) * limit;
+
+    const candidates = sql<{
+      userId: string;
+      username: string;
+      avatarUrl: string | null;
+      mutualFriends: number;
+      mutualFollowers: number;
+      score: number;
+    }>`
+      WITH my_friends AS (
+        SELECT CASE
+          WHEN ${friendships.requesterId} = ${userId} THEN ${friendships.addresseeId}
+          ELSE ${friendships.requesterId}
+        END AS friend_id
+        FROM ${friendships}
+        WHERE (${friendships.requesterId} = ${userId} OR ${friendships.addresseeId} = ${userId})
+          AND ${friendships.status} = 'accepted'
+          AND ${friendships.deletedAt} IS NULL
+      ),
+      my_following AS (
+        SELECT ${userFollows.followingId} AS following_id
+        FROM ${userFollows}
+        WHERE ${userFollows.followerId} = ${userId}
+          AND ${userFollows.deletedAt} IS NULL
+      ),
+      excluded_users AS (
+        SELECT ${userId}::uuid AS user_id
+        UNION
+        SELECT CASE
+          WHEN ${friendships.requesterId} = ${userId} THEN ${friendships.addresseeId}
+          ELSE ${friendships.requesterId}
+        END AS user_id
+        FROM ${friendships}
+        WHERE (${friendships.requesterId} = ${userId} OR ${friendships.addresseeId} = ${userId})
+          AND ${friendships.status} = 'accepted'
+          AND ${friendships.deletedAt} IS NULL
+        UNION
+        SELECT CASE
+          WHEN ${friendships.requesterId} = ${userId} THEN ${friendships.addresseeId}
+          ELSE ${friendships.requesterId}
+        END AS user_id
+        FROM ${friendships}
+        WHERE (${friendships.requesterId} = ${userId} OR ${friendships.addresseeId} = ${userId})
+          AND ${friendships.status} = 'pending'
+          AND ${friendships.deletedAt} IS NULL
+        UNION
+        SELECT ${blockedUsers.blockedId} AS user_id
+        FROM ${blockedUsers}
+        WHERE ${blockedUsers.blockerId} = ${userId}
+          AND ${blockedUsers.deletedAt} IS NULL
+        UNION
+        SELECT ${blockedUsers.blockerId} AS user_id
+        FROM ${blockedUsers}
+        WHERE ${blockedUsers.blockedId} = ${userId}
+          AND ${blockedUsers.deletedAt} IS NULL
+      ),
+      mutual_friend_counts AS (
+        SELECT
+          CASE
+            WHEN f2.${friendships.requesterId} = mf.friend_id THEN f2.${friendships.addresseeId}
+            ELSE f2.${friendships.requesterId}
+          END AS candidate_id,
+          COUNT(*)::int AS mutual_friends
+        FROM my_friends mf
+        JOIN ${friendships} f2
+          ON (f2.${friendships.requesterId} = mf.friend_id OR f2.${friendships.addresseeId} = mf.friend_id)
+         AND f2.${friendships.status} = 'accepted'
+         AND f2.${friendships.deletedAt} IS NULL
+        WHERE CASE
+            WHEN f2.${friendships.requesterId} = mf.friend_id THEN f2.${friendships.addresseeId}
+            ELSE f2.${friendships.requesterId}
+          END NOT IN (SELECT user_id FROM excluded_users)
+        GROUP BY 1
+      ),
+      mutual_follower_counts AS (
+        SELECT
+          uf2.${userFollows.followerId} AS candidate_id,
+          COUNT(*)::int AS mutual_followers
+        FROM my_following mf
+        JOIN ${userFollows} uf2
+          ON uf2.${userFollows.followingId} = mf.following_id
+         AND uf2.${userFollows.deletedAt} IS NULL
+        WHERE uf2.${userFollows.followerId} NOT IN (SELECT user_id FROM excluded_users)
+        GROUP BY 1
+      ),
+      ranked_candidates AS (
+        SELECT
+          u.${users.userId} AS user_id,
+          u.${users.username} AS username,
+          up.${userProfiles.avatarUrl} AS avatar_url,
+          COALESCE(mfc.mutual_friends, 0)::int AS mutual_friends,
+          COALESCE(mfol.mutual_followers, 0)::int AS mutual_followers,
+          (COALESCE(mfc.mutual_friends, 0) * 1000 + COALESCE(mfol.mutual_followers, 0) * 100)::int AS score
+        FROM ${users} u
+        LEFT JOIN ${userProfiles} up ON up.${userProfiles.userId} = u.${users.userId}
+        LEFT JOIN mutual_friend_counts mfc ON mfc.candidate_id = u.${users.userId}
+        LEFT JOIN mutual_follower_counts mfol ON mfol.candidate_id = u.${users.userId}
+        WHERE u.${users.deletedAt} IS NULL
+          AND u.${users.userId} NOT IN (SELECT user_id FROM excluded_users)
+          AND (COALESCE(mfc.mutual_friends, 0) > 0 OR COALESCE(mfol.mutual_followers, 0) > 0)
+      )
+      SELECT
+        user_id AS "userId",
+        username,
+        avatar_url AS "avatarUrl",
+        mutual_friends AS "mutualFriends",
+        mutual_followers AS "mutualFollowers",
+        score
+      FROM ranked_candidates
+    `;
+
+    const rowsPromise = this.db.execute(sql`
+      SELECT *
+      FROM (${candidates}) ranked
+      ORDER BY ranked.score DESC, ranked."mutualFriends" DESC, ranked."mutualFollowers" DESC, ranked.username ASC
+      LIMIT ${limit}
+      OFFSET ${offset}
+    `);
+
+    const totalPromise = this.db.execute(sql`
+      SELECT COUNT(*)::int AS total
+      FROM (${candidates}) ranked
+    `);
+
+    const [rowsResult, totalResult] = await Promise.all([rowsPromise, totalPromise]);
+
+    const rows = rowsResult.rows as Array<{
+      userId: string;
+      username: string;
+      avatarUrl: string | null;
+      mutualFriends: number;
+      mutualFollowers: number;
+      score: number;
+    }>;
+    const total = Number((totalResult.rows[0] as { total?: number } | undefined)?.total ?? 0);
+
+    return {
+      items: rows.map((row) => ({
+        userId: row.userId,
+        username: row.username,
+        avatarUrl: row.avatarUrl,
+        mutualFriends: Number(row.mutualFriends ?? 0),
+        mutualFollowers: Number(row.mutualFollowers ?? 0),
+        reason:
+          Number(row.mutualFriends ?? 0) > 0
+            ? `${Number(row.mutualFriends)} mutual friend${Number(row.mutualFriends) === 1 ? '' : 's'}`
+            : Number(row.mutualFollowers ?? 0) > 0
+              ? `${Number(row.mutualFollowers)} mutual follower${Number(row.mutualFollowers) === 1 ? '' : 's'}`
+              : Number(row.score ?? 0) > 0
+                ? MUTUAL_FOLLOWERS_REASON_FALLBACK
+                : MUTUAL_FRIENDS_REASON_FALLBACK,
+      })),
+      pagination: {
+        page,
+        limit,
+        total,
+      },
+    };
   }
 
   async getFollowerCount(userId: string): Promise<number> {

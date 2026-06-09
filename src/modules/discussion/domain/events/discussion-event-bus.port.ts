@@ -12,6 +12,8 @@ import type {
   ThreadDeletedEvent,
   ThreadHiddenEvent,
   ContentReportedEvent,
+  DiscussionThreadCreatedEvent,
+  DiscussionThreadSolvedEvent,
   ReportReviewedEvent,
 } from '../events/discussion-domain.events';
 
@@ -21,6 +23,8 @@ export interface DiscussionDomainEventBusPort {
   emitCommentCreated(event: CommentCreatedEvent): void;
   emitCommentDeleted(event: CommentDeletedEvent): void;
   emitCommentHidden(event: CommentHiddenEvent): void;
+  emitThreadCreated(event: DiscussionThreadCreatedEvent): void;
+  emitThreadSolved(event: DiscussionThreadSolvedEvent): void;
   emitThreadClosed(event: ThreadClosedEvent): void;
   emitThreadDeleted(event: ThreadDeletedEvent): void;
   emitThreadHidden(event: ThreadHiddenEvent): void;
@@ -32,6 +36,8 @@ export type DiscussionDomainEvent =
   | CommentCreatedEvent
   | CommentDeletedEvent
   | CommentHiddenEvent
+  | DiscussionThreadCreatedEvent
+  | DiscussionThreadSolvedEvent
   | ThreadClosedEvent
   | ThreadDeletedEvent
   | ThreadHiddenEvent

@@ -401,6 +401,18 @@ export const activityEventType = pgEnum('activity_event_type', [
   'streak_milestone',
 ]);
 
+export const socialFeedActivityType = pgEnum('social_feed_activity_type', [
+  'badge_earned',
+  'badge_revoked',
+  'rank_milestone',
+  'peak_rank_achieved',
+  'tournament_joined',
+  'tournament_completed',
+  'tournament_won',
+  'discussion_created',
+  'discussion_solved',
+]);
+
 export const friendshipStatus = pgEnum('friendship_status', [
   'pending',
   'accepted',
@@ -1900,6 +1912,46 @@ export const userActivityEvents = pgTable(
     ),
     check('user_activity_events_metadata_object', sql`jsonb_typeof(metadata) = 'object'::text`),
     check('user_activity_events_metadata_not_empty', sql`metadata <> '{}'::jsonb`),
+  ],
+);
+
+export const socialFeedActivities = pgTable(
+  'social_feed_activities',
+  {
+    activityId: uuid('activity_id').defaultRandom().primaryKey().notNull(),
+    userId: uuid('user_id').notNull(),
+    activityType: socialFeedActivityType('activity_type').notNull(),
+    payload: jsonb('payload').default({}).notNull(),
+    occurredAt: timestamp('occurred_at', { withTimezone: true, mode: 'string' })
+      .defaultNow()
+      .notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    index('idx_social_feed_activities_occurred').using(
+      'btree',
+      table.occurredAt.desc().nullsLast().op('timestamptz_ops'),
+      table.activityId.desc().nullsLast().op('uuid_ops'),
+    ),
+    index('idx_social_feed_activities_user_occurred').using(
+      'btree',
+      table.userId.asc().nullsLast().op('uuid_ops'),
+      table.occurredAt.desc().nullsLast().op('timestamptz_ops'),
+    ),
+    index('idx_social_feed_activities_type_occurred').using(
+      'btree',
+      table.activityType.asc().nullsLast().op('enum_ops'),
+      table.occurredAt.desc().nullsLast().op('timestamptz_ops'),
+    ),
+    foreignKey({
+      columns: [table.userId],
+      foreignColumns: [users.userId],
+      name: 'social_feed_activities_user_id_fkey',
+    }).onDelete('cascade'),
+    check('social_feed_activities_payload_object', sql`jsonb_typeof(payload) = 'object'::text`),
+    check('social_feed_activities_payload_not_empty', sql`payload <> '{}'::jsonb`),
   ],
 );
 

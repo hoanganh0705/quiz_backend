@@ -6,6 +6,8 @@ export type {
   ThreadDeletedEvent,
   ThreadHiddenEvent,
   ContentReportedEvent,
+  DiscussionThreadCreatedEvent,
+  DiscussionThreadSolvedEvent,
   ReportReviewedEvent,
   DiscussionDomainEvent,
 } from './discussion-domain.events';
