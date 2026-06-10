@@ -224,21 +224,13 @@ export class CategoryRepository implements CategoryRepositoryPort {
   }
 
   async restore(categoryId: string, nowIso: string): Promise<CategoryRow | null> {
-    try {
-      const [row] = await this.db
-        .update(categories)
-        .set({ deletedAt: null, updatedAt: nowIso })
-        .where(and(eq(categories.categoryId, categoryId), sql`${categories.deletedAt} IS NOT NULL`))
-        .returning(CATEGORY_COLUMNS);
+    const [row] = await this.db
+      .update(categories)
+      .set({ deletedAt: null, updatedAt: nowIso })
+      .where(and(eq(categories.categoryId, categoryId), sql`${categories.deletedAt} IS NOT NULL`))
+      .returning(CATEGORY_COLUMNS);
 
-      return row ?? null;
-    } catch (error: unknown) {
-      const pg = error as { code?: string };
-      if (pg.code === '23505') {
-        throw new CategorySlugConflictError();
-      }
-      throw error;
-    }
+    return row ?? null;
   }
 
   async followCategory(params: {
@@ -248,44 +240,26 @@ export class CategoryRepository implements CategoryRepositoryPort {
   }): Promise<CategoryFollowRow> {
     const { userId, categoryId, nowIso } = params;
 
-    const [existingActiveFollow] = await this.db
-      .select(FOLLOW_COLUMNS)
-      .from(categoryFollows)
-      .where(
-        and(
-          eq(categoryFollows.userId, userId),
-          eq(categoryFollows.categoryId, categoryId),
-          isNull(categoryFollows.deletedAt),
-        ),
-      )
-      .limit(1);
-
-    if (existingActiveFollow) {
-      return existingActiveFollow;
-    }
-
-    const [restoredFollow] = await this.db
-      .update(categoryFollows)
-      .set({ deletedAt: null, createdAt: nowIso })
-      .where(
-        and(
-          eq(categoryFollows.userId, userId),
-          eq(categoryFollows.categoryId, categoryId),
-          sql`${categoryFollows.deletedAt} IS NOT NULL`,
-        ),
-      )
-      .returning(FOLLOW_COLUMNS);
-
-    if (restoredFollow) {
-      return restoredFollow;
-    }
-
-    const [insertedFollow] = await this.db
+    const [upserted] = await this.db
       .insert(categoryFollows)
       .values({ userId, categoryId, createdAt: nowIso })
+      .onConflictDoUpdate({
+        target: [categoryFollows.userId, categoryFollows.categoryId],
+        set: { deletedAt: sql`NULL`, createdAt: nowIso },
+      })
       .returning(FOLLOW_COLUMNS);
 
-    return insertedFollow;
+    if (upserted) {
+      return upserted;
+    }
+
+    const [row] = await this.db
+      .select(FOLLOW_COLUMNS)
+      .from(categoryFollows)
+      .where(and(eq(categoryFollows.userId, userId), eq(categoryFollows.categoryId, categoryId)))
+      .limit(1);
+
+    return row;
   }
 
   async unfollowCategory(params: {

@@ -34,9 +34,3 @@ export class CategoryRestoreInvariantError extends CategoryDomainError {
     super(message);
   }
 }
-
-export class CategoryFollowNotAllowedError extends CategoryDomainError {
-  constructor(message = 'Cannot follow a deleted or inactive category') {
-    super(message);
-  }
-}

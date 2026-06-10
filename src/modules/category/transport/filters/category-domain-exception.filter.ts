@@ -4,7 +4,6 @@ import {
   CategoryAlreadyActiveError,
   CategoryAnalyticsNotFoundError,
   CategoryDomainError,
-  CategoryFollowNotAllowedError,
   CategoryNotFoundError,
   CategoryRestoreInvariantError,
   CategorySlugConflictError,
@@ -55,10 +54,6 @@ export class CategoryDomainExceptionFilter implements ExceptionFilter {
         status: HttpStatus.CONFLICT,
         message: 'Category is already active and cannot be restored',
       };
-    }
-
-    if (error instanceof CategoryFollowNotAllowedError) {
-      return { status: HttpStatus.NOT_FOUND, message: 'Category not found' };
     }
 
     if (error instanceof CategoryRestoreInvariantError) {

@@ -1,5 +1,5 @@
-import type { CategoryAnalytics } from '@/modules/quiz/domain/analytics/types';
-import type { CategoryAnalyticsResponseDto } from '../dto/response/category-analytics-response.dto';
+import type { CategoryAnalytics } from '../domain/analytics/types';
+import type { CategoryAnalyticsResponseDto } from '@/modules/category/dto/response/category-analytics-response.dto';
 
 export class CategoryAnalyticsResponseMapper {
   static toResponse(analytics: CategoryAnalytics): CategoryAnalyticsResponseDto {
