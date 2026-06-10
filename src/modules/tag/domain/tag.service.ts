@@ -10,8 +10,12 @@ import {
   type FollowedTagRow,
   type RankedTagRow,
 } from './ports/tag-repository.port';
-import { TagAlreadyActiveError, TagNotFoundError, TagRestoreInvariantError } from './errors';
-import type { TagPatch } from '../types/tag.types';
+import {
+  TagAlreadyActiveError,
+  TagNotFoundError,
+  TagRestoreInvariantError,
+  TagSlugConflictError,
+} from './errors';
 import type {
   CreateTagCommand,
   ListTagsQuery,
@@ -20,12 +24,31 @@ import type {
   RelatedTagsQuery,
   UpdateTagCommand,
 } from './types/tag-commands';
+import { TagRepositoryConstraintError } from '../infrastructure/repositories/tag.repository.errors';
+import {
+  TAG_DOMAIN_EVENT_BUS,
+  type TagDomainEventBusPort,
+} from './events/tag-domain-event-bus.port';
+import {
+  TagCreatedEvent,
+  TagUpdatedEvent,
+  TagDeletedEvent,
+  TagRestoredEvent,
+  TagFollowedEvent,
+  TagUnfollowedEvent,
+} from './events/tag-domain.events';
+import { RedisService } from '@/core/redis/redis.service';
+
+const RANKING_CACHE_TTL_MS = 60_000;
 
 @Injectable()
 export class TagDomainService {
   constructor(
     @Inject(TAG_REPOSITORY_PORT)
     private readonly tagRepository: TagRepositoryPort,
+    @Inject(TAG_DOMAIN_EVENT_BUS)
+    private readonly eventBus: TagDomainEventBusPort,
+    private readonly cache: RedisService,
     @InjectPinoLogger(TagDomainService.name) private readonly logger: PinoLogger,
   ) {}
 
@@ -112,16 +135,20 @@ export class TagDomainService {
         slug,
         errorName: error instanceof Error ? error.name : 'UNKNOWN',
       });
+      if (error instanceof TagRepositoryConstraintError && error.constraint === 'slug_conflict') {
+        throw new TagSlugConflictError();
+      }
       throw error;
     }
 
     this.logger.info({ event: 'tag_created', tagId: tag.tagId, slug });
+    this.eventBus.emitTagCreated(new TagCreatedEvent(tag.tagId, name, slug, nowIso));
 
     return tag;
   }
 
   async updateTag(tagId: string, payload: UpdateTagCommand): Promise<TagRow> {
-    const patch: TagPatch = {};
+    const patch: { name?: string; slug?: string } = {};
 
     if (hasOwn(payload, 'name') && payload.name !== undefined) {
       patch.name = payload.name.trim();
@@ -146,6 +173,9 @@ export class TagDomainService {
         tagId,
         errorName: error instanceof Error ? error.name : 'UNKNOWN',
       });
+      if (error instanceof TagRepositoryConstraintError && error.constraint === 'slug_conflict') {
+        throw new TagSlugConflictError();
+      }
       throw error;
     }
 
@@ -155,6 +185,7 @@ export class TagDomainService {
     }
 
     this.logger.info({ event: 'tag_updated', tagId });
+    this.eventBus.emitTagUpdated(new TagUpdatedEvent(tagId, nowIso));
 
     return updated;
   }
@@ -167,6 +198,8 @@ export class TagDomainService {
       throw new TagNotFoundError();
     }
     this.logger.info({ event: 'tag_deleted', tagId });
+    this.eventBus.emitTagDeleted(new TagDeletedEvent(tagId, nowIso));
+    await this.invalidateRankingCache();
   }
 
   async restoreTag(tagId: string): Promise<TagRow> {
@@ -184,16 +217,40 @@ export class TagDomainService {
 
     const nowIso = new Date().toISOString();
 
-    const restored = await this.tagRepository.restore(tagId, nowIso);
+    let restored: TagRow | null;
+
+    try {
+      restored = await this.tagRepository.restore(tagId, nowIso);
+    } catch (error: unknown) {
+      if (error instanceof TagRepositoryConstraintError && error.constraint === 'slug_conflict') {
+        this.logger.warn({ event: 'tag_restore_slug_conflict', tagId });
+        throw new TagSlugConflictError();
+      }
+      throw error;
+    }
+
     if (!restored) {
       this.logger.error({ event: 'tag_restore_invariant_violation', tagId });
       throw new TagRestoreInvariantError();
     }
 
     this.logger.info({ event: 'tag_restored', tagId });
+    this.eventBus.emitTagRestored(new TagRestoredEvent(tagId, nowIso));
+    await this.invalidateRankingCache();
     return restored;
   }
 
+  /**
+   * Follows a tag for the given user. Idempotent — calling this multiple times
+   * with the same user/tag pair has no additional effect after the first call.
+   *
+   * The repository implements three cases:
+   *   1. An active follow already exists → returns it as-is.
+   *   2. A soft-deleted follow exists → restores it.
+   *   3. No follow exists → creates a new one.
+   *
+   * Throws `TagNotFoundError` if the tag does not exist or is soft-deleted.
+   */
   async followTag(userId: string, tagId: string): Promise<void> {
     await this.getTagById(tagId);
 
@@ -206,12 +263,17 @@ export class TagDomainService {
       tagId,
       followId: follow.followId,
     });
+    this.eventBus.emitTagFollowed(new TagFollowedEvent(userId, tagId, follow.followId, nowIso));
   }
 
-  async unfollowTag(userId: string, tagId: string): Promise<void> {
+  async unfollowTag(userId: string, tagId: string): Promise<boolean> {
     const nowIso = new Date().toISOString();
-    await this.tagRepository.unfollowTag({ userId, tagId, nowIso });
-    this.logger.info({ event: 'tag_unfollowed', userId, tagId });
+    const result = await this.tagRepository.unfollowTag({ userId, tagId, nowIso });
+    this.logger.info({ event: 'tag_unfollowed', userId, tagId, unfollowed: result.unfollowed });
+    if (result.unfollowed) {
+      this.eventBus.emitTagUnfollowed(new TagUnfollowedEvent(userId, tagId, nowIso));
+    }
+    return result.unfollowed;
   }
 
   async listFollowedTags(
@@ -245,10 +307,39 @@ export class TagDomainService {
   }
 
   async getPopularTags(query: TagRankingQuery): Promise<RankedTagRow[]> {
-    return this.tagRepository.getPopularTags(query.limit);
+    const { limit } = query;
+    const version = await this.getRankingVersion();
+    const cacheKey = `tag:ranking:popular:${limit}:v${version}`;
+    const cached = await this.cache.get(cacheKey);
+    if (cached !== null) {
+      return JSON.parse(cached) as RankedTagRow[];
+    }
+    const rows = await this.tagRepository.getPopularTags(limit);
+    await this.cache.set(cacheKey, JSON.stringify(rows), RANKING_CACHE_TTL_MS);
+    return rows;
   }
 
   async getTrendingTags(query: TagRankingQuery): Promise<RankedTagRow[]> {
-    return this.tagRepository.getTrendingTags(query.limit);
+    const { limit } = query;
+    const version = await this.getRankingVersion();
+    const cacheKey = `tag:ranking:trending:${limit}:v${version}`;
+    const cached = await this.cache.get(cacheKey);
+    if (cached !== null) {
+      return JSON.parse(cached) as RankedTagRow[];
+    }
+    const rows = await this.tagRepository.getTrendingTags(limit);
+    await this.cache.set(cacheKey, JSON.stringify(rows), RANKING_CACHE_TTL_MS);
+    return rows;
+  }
+
+  private async invalidateRankingCache(): Promise<void> {
+    const key = 'tag:ranking:version';
+    const current = await this.cache.get(key);
+    await this.cache.set(key, String(Number(current ?? 0) + 1 || 1), 86_400_000);
+  }
+
+  private async getRankingVersion(): Promise<number> {
+    const version = await this.cache.get('tag:ranking:version');
+    return Number(version ?? '1');
   }
 }

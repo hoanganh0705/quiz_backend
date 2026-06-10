@@ -29,12 +29,6 @@ export class TagRestoreInvariantError extends TagDomainError {
   }
 }
 
-export class TagFollowNotAllowedError extends TagDomainError {
-  constructor(message = 'Cannot follow a deleted or inactive tag') {
-    super(message);
-  }
-}
-
 export class TagAnalyticsNotFoundError extends TagDomainError {
   constructor(message = 'Tag analytics not found') {
     super(message);

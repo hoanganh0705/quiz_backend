@@ -4,7 +4,6 @@ import {
   TagAlreadyActiveError,
   TagAnalyticsNotFoundError,
   TagDomainError,
-  TagFollowNotAllowedError,
   TagNotFoundError,
   TagRestoreInvariantError,
   TagSlugConflictError,
@@ -50,10 +49,6 @@ export class TagDomainExceptionFilter implements ExceptionFilter {
         status: HttpStatus.CONFLICT,
         message: 'Tag is already active and cannot be restored',
       };
-    }
-
-    if (error instanceof TagFollowNotAllowedError) {
-      return { status: HttpStatus.NOT_FOUND, message: 'Tag not found' };
     }
 
     if (error instanceof TagRestoreInvariantError) {

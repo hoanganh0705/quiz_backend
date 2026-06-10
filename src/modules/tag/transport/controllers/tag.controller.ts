@@ -10,6 +10,7 @@ import {
   Query,
   UseFilters,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import {
   ApiTags,
   ApiOperation,
@@ -47,8 +48,7 @@ import type {
   UpdateTagCommand,
 } from '../../domain/types/tag-commands';
 import type { ListQuizzesQueryDto } from '@/modules/quiz/dto/request/list-quizzes-query.dto';
-import type { QuizListResponseDto } from '@/modules/quiz/dto/response/quiz-list-response.dto';
-import { TagListResponseDto, TagResponseDto } from '../../dto/response';
+import { TagListResponseDto, TagResponseDto, TagQuizzesResponseDto } from '../../dto/response';
 
 @ApiTags('tags')
 @Controller('tags')
@@ -67,7 +67,7 @@ export class TagController {
   @ApiOkResponse({ description: 'Ranked tags returned', type: RankedTagsResponseDto })
   @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
   getPopularTags(@Query() query: TagRankingQueryDto): Promise<RankedTagsResponseDto> {
-    return this.tagApplicationService.getPopularTags({ limit: query.limit ?? 10 });
+    return this.tagApplicationService.getPopularTags({ limit: query.limit });
   }
 
   @Get('trending')
@@ -79,7 +79,7 @@ export class TagController {
   @ApiOkResponse({ description: 'Ranked tags returned', type: RankedTagsResponseDto })
   @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
   getTrendingTags(@Query() query: TagRankingQueryDto): Promise<RankedTagsResponseDto> {
-    return this.tagApplicationService.getTrendingTags({ limit: query.limit ?? 10 });
+    return this.tagApplicationService.getTrendingTags({ limit: query.limit });
   }
 
   // ─── Wildcard public routes ───────────────────────────────────────────────────
@@ -91,13 +91,13 @@ export class TagController {
     description:
       'Returns the same quiz list response as GET /quizzes, filtered to the given tag slug.',
   })
-  @ApiOkResponse({ description: 'Quizzes returned' })
+  @ApiOkResponse({ description: 'Quizzes returned', type: TagQuizzesResponseDto })
   @ApiNotFoundResponse({ description: 'Tag not found' })
   @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
   async getTagQuizzes(
     @Param('slug') slug: string,
     @Query() query: ListQuizzesQueryDto,
-  ): Promise<QuizListResponseDto> {
+  ): Promise<TagQuizzesResponseDto> {
     return this.tagApplicationService.getTagQuizzesBySlug(slug, query);
   }
 
@@ -136,6 +136,7 @@ export class TagController {
   // ─── Authenticated follow endpoints ──────────────────────────────────────────
 
   @Post(':id/follow')
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @ApiBearerAuth()
   @ApiAuth()
   @ApiOperation({
@@ -153,6 +154,7 @@ export class TagController {
   }
 
   @Delete(':id/follow')
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @ApiBearerAuth()
   @ApiAuth()
   @ApiOperation({

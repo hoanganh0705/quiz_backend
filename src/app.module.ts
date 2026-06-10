@@ -72,7 +72,6 @@ import { SearchModule } from './modules/search/search.module';
     AchievementModule,
     NotificationModule,
     DiscussionModule,
-    AchievementModule,
     SocialModule,
     SearchModule,
   ],
