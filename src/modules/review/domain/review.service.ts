@@ -2,6 +2,7 @@ import { Inject, Injectable, forwardRef } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { REVIEW_REPOSITORY_PORT, type ReviewRepositoryPort } from './ports/review-repository.port';
 import { QUIZ_REPOSITORY_PORT } from '@/modules/quiz/domain/ports';
+import { QuizAnalyticsService } from '@/modules/quiz/domain/analytics';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
 import {
   ReviewNotFoundError,
@@ -28,8 +29,12 @@ export class ReviewService {
     private readonly reviewRepository: ReviewRepositoryPort,
     @Inject(QUIZ_REPOSITORY_PORT)
     private readonly quizRepository: {
-      getActiveQuizRecordById: (quizId: string) => Promise<{ quizId: string } | null>;
+      getActiveQuizRecordById: (
+        quizId: string,
+      ) => Promise<{ quizId: string; creatorId: string | null } | null>;
     },
+    @Inject(QuizAnalyticsService)
+    private readonly quizAnalyticsService: QuizAnalyticsService,
     @Inject(forwardRef(() => AnalyticsEventHandler))
     private readonly analyticsEventHandler: AnalyticsEventHandler,
     @InjectPinoLogger(ReviewService.name)
@@ -105,8 +110,9 @@ export class ReviewService {
     limit: number,
     cursor?: { createdAt: string; reviewId: string } | null,
     rating?: number,
+    sort?: import('./ports').ReviewSort,
   ) {
-    return this.reviewRepository.listReviewsByQuiz({ quizId, limit, cursor, rating });
+    return this.reviewRepository.listReviewsByQuiz({ quizId, limit, cursor, rating, sort });
   }
 
   async listUserReviews(
@@ -183,6 +189,13 @@ export class ReviewService {
     }
 
     return review;
+  }
+
+  async getMyQuizReview(
+    quizId: string,
+    userId: string,
+  ): Promise<import('./ports').ReviewDetailByIdRow | null> {
+    return await this.reviewRepository.getMyQuizReview(quizId, userId);
   }
 
   async getQuizReviewStats(quizId: string): Promise<ReviewStatsResponseDto> {
@@ -365,5 +378,51 @@ export class ReviewService {
 
     // Refresh quiz analytics
     await this.analyticsEventHandler.onReviewDeleted(quizId);
+  }
+
+  async listReportedReviews(
+    reporterId: string,
+    query: { limit?: number; cursor?: { createdAt: string; reportId: string } | null },
+  ): Promise<{
+    items: import('./ports').ReportedReviewRow[];
+    limit: number;
+    hasNextPage: boolean;
+    nextCursor: { createdAt: string; reportId: string } | null;
+  }> {
+    const limit = query.limit ?? 10;
+    const cursor = query.cursor ?? null;
+
+    const rows = await this.reviewRepository.listReportedReviews({ reporterId, limit, cursor });
+
+    const hasNextPage = rows.length > limit;
+    const items = hasNextPage ? rows.slice(0, limit) : rows;
+    const lastItem = items.at(-1);
+
+    return {
+      items,
+      limit,
+      hasNextPage,
+      nextCursor:
+        hasNextPage && lastItem
+          ? { createdAt: lastItem.createdAt, reportId: lastItem.reportId }
+          : null,
+    };
+  }
+
+  async getCreatorQuizReviewAnalytics(
+    quizId: string,
+    user: JwtPayload,
+  ): Promise<import('@/modules/quiz/domain/analytics/types').QuizAnalytics> {
+    const quiz = await this.quizRepository.getActiveQuizRecordById(quizId);
+
+    if (!quiz) {
+      throw new QuizNotFoundError();
+    }
+
+    if (quiz.creatorId !== user.sub && user.role !== 'admin') {
+      throw new ReviewForbiddenError('You do not have permission to view analytics for this quiz');
+    }
+
+    return this.quizAnalyticsService.getQuizAnalytics(quizId);
   }
 }

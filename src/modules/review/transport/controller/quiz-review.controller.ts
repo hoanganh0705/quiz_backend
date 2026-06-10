@@ -20,13 +20,19 @@ import {
   ApiConflictResponse,
   ApiBadRequestResponse,
   ApiInternalServerErrorResponse,
+  ApiForbiddenResponse,
 } from '@nestjs/swagger';
 import { Public } from '@/common/decorators/public.decorator';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
 import { ApiAuth, ApiValidationRequest } from '@/common/swagger/swagger-decorators';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
 import { ReviewApplicationService } from '../../application/review.application.service';
-import { CreateReviewDto, UpdateReviewDto, ListReviewsQueryDto } from '../../dto/request';
+import {
+  CreateReviewDto,
+  UpdateReviewDto,
+  ListReviewsQueryDto,
+  ReviewSort,
+} from '../../dto/request';
 import {
   ReviewListResponseDto,
   CreateReviewResponseDto,
@@ -34,7 +40,9 @@ import {
   DeleteReviewResponseDto,
   ReviewDetailResponseDto,
   ReviewStatsResponseDto,
+  MyQuizReviewResponseDto,
 } from '../../dto/response';
+import { QuizAnalyticsResponseDto } from '@/modules/quiz/dto/response/quiz-analytics.dto';
 import { ReviewDomainExceptionFilter } from '../filters/review-domain-exception.filter';
 import { ReviewCursorMapper } from '../../mappers/review-cursor.mapper';
 
@@ -70,7 +78,8 @@ export class QuizReviewController {
   @Public()
   @ApiOperation({
     summary: 'List quiz reviews',
-    description: 'Returns a paginated list of reviews for a specific quiz.',
+    description:
+      'Returns a paginated list of reviews for a specific quiz. Supports optional filtering by star rating and sorting by newest (default), most helpful, highest rating, or lowest rating.',
   })
   @ApiOkResponse({ description: 'Reviews returned', type: ReviewListResponseDto })
   @ApiBadRequestResponse({ description: 'Validation failed' })
@@ -82,7 +91,13 @@ export class QuizReviewController {
   ): Promise<ReviewListResponseDto> {
     const limit = query.limit ?? 20;
     const cursor = query.cursor ? ReviewCursorMapper.parse(query.cursor) : null;
-    return this.reviewApplicationService.listReviews(quizId, limit, cursor, query.rating);
+    return this.reviewApplicationService.listReviews(
+      quizId,
+      limit,
+      cursor,
+      query.rating,
+      query.sort,
+    );
   }
 
   @Get(':quizId/reviews/stats')
@@ -98,6 +113,89 @@ export class QuizReviewController {
     @Param('quizId', new ParseUUIDPipe()) quizId: string,
   ): Promise<ReviewStatsResponseDto> {
     return this.reviewApplicationService.getQuizReviewStats(quizId);
+  }
+
+  @Get(':quizId/reviews/analytics')
+  @ApiBearerAuth()
+  @ApiAuth()
+  @ApiOperation({
+    summary: 'Get quiz review analytics',
+    description:
+      'Returns creator-level review analytics (ratings, distribution, engagement) for a specific quiz. Only the quiz creator or an admin can access this endpoint.',
+  })
+  @ApiOkResponse({
+    description: 'Quiz review analytics returned',
+    type: QuizAnalyticsResponseDto,
+    schema: {
+      example: {
+        quizId: '660e8400-e29b-41d4-a716-446655440000',
+        metrics: {
+          totalAttempts: 1250,
+          uniquePlayers: 820,
+          averageScore: 72.4,
+          completionRate: 0.85,
+        },
+        reviewMetrics: {
+          averageRating: 4.3,
+          ratingCount: 312,
+        },
+        engagementMetrics: {
+          bookmarkCount: 95,
+        },
+        popularity: {
+          popularityScore: 87.6,
+          trendingScore: 45.2,
+        },
+        lastUpdated: '2026-01-01T00:00:00.000Z',
+      },
+    },
+  })
+  @ApiNotFoundResponse({ description: 'Quiz not found' })
+  @ApiForbiddenResponse({
+    description: 'You do not have permission to view analytics for this quiz',
+  })
+  @ApiBadRequestResponse({ description: 'Invalid quiz ID format' })
+  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  async getCreatorQuizReviewAnalytics(
+    @Param('quizId', new ParseUUIDPipe()) quizId: string,
+    @CurrentUser() user: JwtPayload,
+  ): Promise<QuizAnalyticsResponseDto> {
+    return this.reviewApplicationService.getCreatorQuizReviewAnalytics(quizId, user);
+  }
+
+  @Get(':quizId/reviews/me')
+  @ApiAuth()
+  @ApiOperation({
+    summary: 'Get my review for a quiz',
+    description:
+      "Returns the authenticated user's existing review for a specific quiz, or null if no review exists.",
+  })
+  @ApiOkResponse({
+    description: 'My review returned (or null if no review)',
+    type: MyQuizReviewResponseDto,
+    schema: {
+      example: {
+        reviewId: '550e8400-e29b-41d4-a716-446655440099',
+        quizId: '660e8400-e29b-41d4-a716-446655440000',
+        quizTitle: 'JavaScript Fundamentals',
+        userId: '550e8400-e29b-41d4-a716-446655440000',
+        username: 'alice_wonder',
+        rating: 4,
+        content: 'Excellent quiz',
+        createdAt: '2026-01-01T00:00:00.000Z',
+        updatedAt: '2026-01-02T00:00:00.000Z',
+      },
+    },
+  })
+  @ApiNotFoundResponse({ description: 'Quiz not found' })
+  @ApiBadRequestResponse({ description: 'Invalid quiz ID format' })
+  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  @ApiValidationRequest()
+  async getMyQuizReview(
+    @Param('quizId', new ParseUUIDPipe()) quizId: string,
+    @CurrentUser() user: JwtPayload,
+  ): Promise<MyQuizReviewResponseDto | null> {
+    return this.reviewApplicationService.getMyQuizReview(quizId, user.sub);
   }
 
   @Patch(':quizId/reviews')
