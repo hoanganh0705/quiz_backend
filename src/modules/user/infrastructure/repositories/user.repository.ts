@@ -14,10 +14,11 @@ import {
   userActivityEvents,
   userBadges,
   userProfiles,
+  userProfileSettings,
   userRanking,
   users,
 } from '@/core/database/schema';
-import { and, count, desc, eq, ilike, isNull, or, sql } from 'drizzle-orm';
+import { and, count, desc, eq, isNull, or, sql } from 'drizzle-orm';
 import type { UserAnalytics } from '../../domain/types/user-analytics';
 import type {
   MyTournamentAnalyticsRow,
@@ -28,7 +29,6 @@ import type {
   UserBadgeRow,
   UserMeRow,
   UserRankingRow,
-  UserSearchResult,
   UserRepositoryPort,
 } from '../../domain/ports/user-repository.port';
 
@@ -73,6 +73,16 @@ export class UserRepository implements UserRepositoryPort {
       .limit(1);
 
     return (user as UserMeRow | undefined) ?? null;
+  }
+
+  async findUserProfileSettings(userId: string): Promise<{ isPublic: boolean } | null> {
+    const [row] = await this.db
+      .select({ isPublic: userProfileSettings.isPublic })
+      .from(userProfileSettings)
+      .where(eq(userProfileSettings.userId, userId))
+      .limit(1);
+
+    return row ?? null;
   }
 
   async listUserBadges(params: {
@@ -197,50 +207,6 @@ export class UserRepository implements UserRepositoryPort {
     };
   }
 
-  async searchUsers(
-    query: string,
-    limit: number,
-    excludeUserId?: string,
-  ): Promise<UserSearchResult[]> {
-    const searchPattern = `%${query}%`;
-
-    const baseConditions = [
-      isNull(users.deletedAt),
-      or(ilike(users.username, searchPattern), ilike(userProfiles.displayName, searchPattern)),
-    ];
-
-    const allConditions = excludeUserId
-      ? [...baseConditions, eq(users.userId, excludeUserId)]
-      : baseConditions;
-
-    const rows = await this.db
-      .select({
-        userId: users.userId,
-        username: users.username,
-        displayName: userProfiles.displayName,
-        avatarUrl: userProfiles.avatarUrl,
-      })
-      .from(users)
-      .leftJoin(userProfiles, eq(users.userId, userProfiles.userId))
-      .where(and(...allConditions))
-      .limit(limit);
-
-    return rows as UserSearchResult[];
-  }
-
-  async searchUsernameSuggestions(query: string, limit: number): Promise<string[]> {
-    const prefixPattern = `${query}%`;
-
-    const rows = await this.db
-      .select({ username: users.username })
-      .from(users)
-      .where(and(isNull(users.deletedAt), ilike(users.username, prefixPattern)))
-      .orderBy(sql`CASE WHEN lower(${users.username}) = lower(${query}) THEN 0 ELSE 1 END`, users.username)
-      .limit(limit);
-
-    return rows.map((row) => row.username);
-  }
-
   async listUserActivity(params: {
     userId: string;
     limit: number;
@@ -276,26 +242,32 @@ export class UserRepository implements UserRepositoryPort {
 
   async listMyTournaments(params: {
     userId: string;
-    page: number;
     limit: number;
-  }): Promise<{ items: MyTournamentRow[]; total: number }> {
-    const offset = (params.page - 1) * params.limit;
+    cursor?: { registeredAt: string; participantId: string } | null;
+  }): Promise<{ items: MyTournamentRow[]; hasNextPage: boolean }> {
+    const { userId, limit, cursor } = params;
 
-    const [totalRow] = await this.db
-      .select({ count: count() })
-      .from(tournamentParticipants)
-      .innerJoin(tournaments, eq(tournamentParticipants.tournamentId, tournaments.tournamentId))
-      .innerJoin(users, eq(tournamentParticipants.userId, users.userId))
-      .where(
-        and(
-          eq(tournamentParticipants.userId, params.userId),
-          isNull(users.deletedAt),
-          isNull(tournaments.deletedAt),
-        ),
-      );
+    const cursorCondition = cursor
+      ? or(
+          sql`${tournamentParticipants.registeredAt} < ${cursor.registeredAt}`,
+          and(
+            eq(tournamentParticipants.registeredAt, cursor.registeredAt),
+            sql`${tournamentParticipants.participantId} < ${cursor.participantId}`,
+          ),
+        )
+      : undefined;
 
-    const items = await this.db
+    const baseConditions = and(
+      eq(tournamentParticipants.userId, userId),
+      isNull(users.deletedAt),
+      isNull(tournaments.deletedAt),
+    );
+
+    const whereClause = cursorCondition ? and(baseConditions, cursorCondition) : baseConditions;
+
+    const rows = await this.db
       .select({
+        participantId: tournamentParticipants.participantId,
         tournamentId: tournaments.tournamentId,
         name: tournaments.title,
         status: tournaments.status,
@@ -306,40 +278,48 @@ export class UserRepository implements UserRepositoryPort {
       .from(tournamentParticipants)
       .innerJoin(tournaments, eq(tournamentParticipants.tournamentId, tournaments.tournamentId))
       .innerJoin(users, eq(tournamentParticipants.userId, users.userId))
-      .where(
-        and(
-          eq(tournamentParticipants.userId, params.userId),
-          isNull(users.deletedAt),
-          isNull(tournaments.deletedAt),
-        ),
-      )
+      .where(whereClause)
       .orderBy(
         desc(tournamentParticipants.registeredAt),
         desc(tournamentParticipants.participantId),
       )
-      .limit(params.limit)
-      .offset(offset);
+      .limit(limit + 1);
+
+    const hasNextPage = rows.length > limit;
+    const items = hasNextPage ? rows.slice(0, limit) : rows;
 
     return {
       items: items as MyTournamentRow[],
-      total: totalRow?.count ?? 0,
+      hasNextPage,
     };
   }
 
   async listMyTournamentHistory(params: {
     userId: string;
-    page: number;
     limit: number;
-  }): Promise<{ items: MyTournamentHistoryRow[]; total: number }> {
-    const offset = (params.page - 1) * params.limit;
+    cursor?: { completedAt: string; participantId: string } | null;
+  }): Promise<{ items: MyTournamentHistoryRow[]; hasNextPage: boolean }> {
+    const { userId, limit, cursor } = params;
+
+    const cursorCondition = cursor
+      ? or(
+          sql`${tournaments.endAt} < ${cursor.completedAt}`,
+          and(
+            eq(tournaments.endAt, cursor.completedAt),
+            sql`${tournamentParticipants.participantId} < ${cursor.participantId}`,
+          ),
+        )
+      : undefined;
 
     const baseConditions = and(
-      eq(tournamentParticipants.userId, params.userId),
+      eq(tournamentParticipants.userId, userId),
       eq(tournaments.status, 'finished'),
       sql`${tournamentParticipants.rankFinal} IS NOT NULL`,
       isNull(users.deletedAt),
       isNull(tournaments.deletedAt),
     );
+
+    const whereClause = cursorCondition ? and(baseConditions, cursorCondition) : baseConditions;
 
     const participantCountSubquery = this.db
       .select({
@@ -351,15 +331,9 @@ export class UserRepository implements UserRepositoryPort {
       .groupBy(tournamentParticipants.tournamentId)
       .as('participant_count_subquery');
 
-    const [totalRow] = await this.db
-      .select({ count: count() })
-      .from(tournamentParticipants)
-      .innerJoin(tournaments, eq(tournamentParticipants.tournamentId, tournaments.tournamentId))
-      .innerJoin(users, eq(tournamentParticipants.userId, users.userId))
-      .where(baseConditions);
-
-    const items = await this.db
+    const rows = await this.db
       .select({
+        participantId: tournamentParticipants.participantId,
         tournamentId: tournaments.tournamentId,
         tournamentName: tournaments.title,
         finalRank: tournamentParticipants.rankFinal,
@@ -374,14 +348,16 @@ export class UserRepository implements UserRepositoryPort {
         participantCountSubquery,
         eq(tournaments.tournamentId, participantCountSubquery.tournamentId),
       )
-      .where(baseConditions)
+      .where(whereClause)
       .orderBy(desc(tournaments.endAt), desc(tournamentParticipants.participantId))
-      .limit(params.limit)
-      .offset(offset);
+      .limit(limit + 1);
+
+    const hasNextPage = rows.length > limit;
+    const items = hasNextPage ? rows.slice(0, limit) : rows;
 
     return {
       items: items as MyTournamentHistoryRow[],
-      total: totalRow?.count ?? 0,
+      hasNextPage,
     };
   }
 
@@ -389,17 +365,14 @@ export class UserRepository implements UserRepositoryPort {
     const [profile] = await this.db
       .select({
         userId: users.userId,
-        tournamentsPlayed:
-          sql<number>`COUNT(CASE WHEN ${tournaments.tournamentId} IS NOT NULL THEN 1 END)`,
-        tournamentsWon:
-          sql<number>`COUNT(CASE WHEN ${tournaments.tournamentId} IS NOT NULL AND ${tournamentParticipants.rankFinal} = 1 THEN 1 END)`,
+        tournamentsPlayed: sql<number>`COUNT(CASE WHEN ${tournaments.tournamentId} IS NOT NULL THEN 1 END)`,
+        tournamentsWon: sql<number>`COUNT(CASE WHEN ${tournaments.tournamentId} IS NOT NULL AND ${tournamentParticipants.rankFinal} = 1 THEN 1 END)`,
         bestRank: sql<number | null>`MIN(${tournamentParticipants.rankFinal})`,
-        averageRank:
-          sql<number | null>`ROUND(AVG(CASE WHEN ${tournaments.tournamentId} IS NOT NULL THEN ${tournamentParticipants.rankFinal}::numeric END))`,
-        top10Finishes:
-          sql<number>`COUNT(CASE WHEN ${tournaments.tournamentId} IS NOT NULL AND ${tournamentParticipants.rankFinal} <= 10 THEN 1 END)`,
-        totalTournamentScore:
-          sql<number>`COALESCE(SUM(CASE WHEN ${tournaments.tournamentId} IS NOT NULL THEN ${tournamentParticipants.totalScore} ELSE 0 END), 0)`,
+        averageRank: sql<
+          number | null
+        >`ROUND(AVG(CASE WHEN ${tournaments.tournamentId} IS NOT NULL THEN ${tournamentParticipants.rankFinal}::numeric END))`,
+        top10Finishes: sql<number>`COUNT(CASE WHEN ${tournaments.tournamentId} IS NOT NULL AND ${tournamentParticipants.rankFinal} <= 10 THEN 1 END)`,
+        totalTournamentScore: sql<number>`COALESCE(SUM(CASE WHEN ${tournaments.tournamentId} IS NOT NULL THEN ${tournamentParticipants.totalScore} ELSE 0 END), 0)`,
         lastTournamentAt: sql<string | null>`MAX(${tournaments.endAt})`,
       })
       .from(users)
@@ -437,23 +410,17 @@ export class UserRepository implements UserRepositoryPort {
   async getMyTournamentAnalytics(userId: string): Promise<MyTournamentAnalyticsRow> {
     const [analytics] = await this.db
       .select({
-        tournamentsPlayed:
-          sql<number>`COUNT(CASE WHEN ${tournaments.tournamentId} IS NOT NULL THEN 1 END)`,
-        wins:
-          sql<number>`COUNT(CASE WHEN ${tournaments.tournamentId} IS NOT NULL AND ${tournamentParticipants.rankFinal} = 1 THEN 1 END)`,
-        top3Finishes:
-          sql<number>`COUNT(CASE WHEN ${tournaments.tournamentId} IS NOT NULL AND ${tournamentParticipants.rankFinal} <= 3 THEN 1 END)`,
-        top10Finishes:
-          sql<number>`COUNT(CASE WHEN ${tournaments.tournamentId} IS NOT NULL AND ${tournamentParticipants.rankFinal} <= 10 THEN 1 END)`,
-        averageRank:
-          sql<number | null>`ROUND(AVG(CASE WHEN ${tournaments.tournamentId} IS NOT NULL THEN ${tournamentParticipants.rankFinal}::numeric END))`,
+        tournamentsPlayed: sql<number>`COUNT(CASE WHEN ${tournaments.tournamentId} IS NOT NULL THEN 1 END)`,
+        wins: sql<number>`COUNT(CASE WHEN ${tournaments.tournamentId} IS NOT NULL AND ${tournamentParticipants.rankFinal} = 1 THEN 1 END)`,
+        top3Finishes: sql<number>`COUNT(CASE WHEN ${tournaments.tournamentId} IS NOT NULL AND ${tournamentParticipants.rankFinal} <= 3 THEN 1 END)`,
+        top10Finishes: sql<number>`COUNT(CASE WHEN ${tournaments.tournamentId} IS NOT NULL AND ${tournamentParticipants.rankFinal} <= 10 THEN 1 END)`,
+        averageRank: sql<
+          number | null
+        >`ROUND(AVG(CASE WHEN ${tournaments.tournamentId} IS NOT NULL THEN ${tournamentParticipants.rankFinal}::numeric END))`,
         bestRank: sql<number | null>`MIN(${tournamentParticipants.rankFinal})`,
-        averageScore:
-          sql<number>`COALESCE(ROUND(AVG(CASE WHEN ${tournaments.tournamentId} IS NOT NULL THEN ${tournamentParticipants.totalScore}::numeric END)), 0)`,
-        totalTournamentScore:
-          sql<number>`COALESCE(SUM(CASE WHEN ${tournaments.tournamentId} IS NOT NULL THEN ${tournamentParticipants.totalScore} ELSE 0 END), 0)`,
-        completionRate:
-          sql<number>`COALESCE(ROUND((COUNT(CASE WHEN ${tournaments.tournamentId} IS NOT NULL THEN 1 END)::numeric * 100.0) / NULLIF(COUNT(${tournamentParticipants.participantId}), 0)), 0)`,
+        averageScore: sql<number>`COALESCE(ROUND(AVG(CASE WHEN ${tournaments.tournamentId} IS NOT NULL THEN ${tournamentParticipants.totalScore}::numeric END)), 0)`,
+        totalTournamentScore: sql<number>`COALESCE(SUM(CASE WHEN ${tournaments.tournamentId} IS NOT NULL THEN ${tournamentParticipants.totalScore} ELSE 0 END), 0)`,
+        completionRate: sql<number>`COALESCE(ROUND((COUNT(CASE WHEN ${tournaments.tournamentId} IS NOT NULL THEN 1 END)::numeric * 100.0) / NULLIF(COUNT(${tournamentParticipants.participantId}), 0)), 0)`,
         lastTournamentAt: sql<string | null>`MAX(${tournaments.endAt})`,
       })
       .from(users)
@@ -490,26 +457,48 @@ export class UserRepository implements UserRepositoryPort {
     patch: { displayName?: string | null; bio?: string | null; avatarUrl?: string | null },
     nowIso: string,
   ): Promise<UserMeRow | null> {
-    await this.db
-      .insert(userProfiles)
-      .values({
-        userId,
-        displayName: patch.displayName ?? null,
-        avatarUrl: patch.avatarUrl ?? null,
-        bio: patch.bio ?? null,
-        updatedAt: nowIso,
-      })
-      .onConflictDoUpdate({
-        target: userProfiles.userId,
-        set: {
+    return this.db.transaction(async (tx) => {
+      await tx
+        .insert(userProfiles)
+        .values({
+          userId,
           displayName: patch.displayName ?? null,
           avatarUrl: patch.avatarUrl ?? null,
           bio: patch.bio ?? null,
           updatedAt: nowIso,
-        },
-      });
+        })
+        .onConflictDoUpdate({
+          target: userProfiles.userId,
+          set: {
+            displayName: patch.displayName ?? null,
+            avatarUrl: patch.avatarUrl ?? null,
+            bio: patch.bio ?? null,
+            updatedAt: nowIso,
+          },
+        });
 
-    return this.findMeById(userId);
+      const [user] = await tx
+        .select({
+          userId: users.userId,
+          username: users.username,
+          email: users.email,
+          xpTotal: users.xpTotal,
+          currentStreak: users.currentStreak,
+          longestStreak: users.longestStreak,
+          settings: users.settings,
+          createdAt: users.createdAt,
+          updatedAt: users.updatedAt,
+          displayName: userProfiles.displayName,
+          avatarUrl: userProfiles.avatarUrl,
+          bio: userProfiles.bio,
+        })
+        .from(users)
+        .leftJoin(userProfiles, eq(users.userId, userProfiles.userId))
+        .where(and(eq(users.userId, userId), isNull(users.deletedAt)))
+        .limit(1);
+
+      return (user as UserMeRow | undefined) ?? null;
+    });
   }
 
   async updateSettings(
@@ -517,28 +506,45 @@ export class UserRepository implements UserRepositoryPort {
     settings: Record<string, unknown>,
     nowIso: string,
   ): Promise<UserMeRow | null> {
-    const [updated] = await this.db
-      .update(users)
-      .set({
-        settings,
-        updatedAt: nowIso,
-      })
-      .where(and(eq(users.userId, userId), isNull(users.deletedAt)))
-      .returning({
-        userId: users.userId,
-        username: users.username,
-        email: users.email,
-        xpTotal: users.xpTotal,
-        currentStreak: users.currentStreak,
-        longestStreak: users.longestStreak,
-        settings: users.settings,
-        createdAt: users.createdAt,
-        updatedAt: users.updatedAt,
-      });
+    return this.db.transaction(async (tx) => {
+      const [updated] = await tx
+        .update(users)
+        .set({
+          settings,
+          updatedAt: nowIso,
+        })
+        .where(and(eq(users.userId, userId), isNull(users.deletedAt)))
+        .returning({
+          userId: users.userId,
+          username: users.username,
+          email: users.email,
+          xpTotal: users.xpTotal,
+          currentStreak: users.currentStreak,
+          longestStreak: users.longestStreak,
+          settings: users.settings,
+          createdAt: users.createdAt,
+          updatedAt: users.updatedAt,
+        });
 
-    if (!updated) return null;
+      if (!updated) return null;
 
-    const profile = await this.findMeById(userId);
-    return profile;
+      const [profile] = await tx
+        .select({
+          displayName: userProfiles.displayName,
+          avatarUrl: userProfiles.avatarUrl,
+          bio: userProfiles.bio,
+        })
+        .from(userProfiles)
+        .where(eq(userProfiles.userId, userId))
+        .limit(1);
+
+      return {
+        ...updated,
+        settings: updated.settings as Record<string, unknown>,
+        displayName: profile?.displayName ?? null,
+        avatarUrl: profile?.avatarUrl ?? null,
+        bio: profile?.bio ?? null,
+      };
+    });
   }
 }

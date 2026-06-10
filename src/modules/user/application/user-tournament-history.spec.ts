@@ -1,26 +1,37 @@
 /// <reference types="jest" />
 import { UserDomainService } from '../domain/user.service';
-import { UserNotFoundError } from '../domain/errors';
 
-describe('UserDomainService getUserTournamentHistory', () => {
+describe('UserDomainService getMyTournamentHistory', () => {
   const createService = () => {
     const userRepository = {
       findMeById: jest.fn(),
+      findUserProfileSettings: jest.fn(),
       listMyTournamentHistory: jest.fn(),
     } as unknown as ConstructorParameters<typeof UserDomainService>[0];
+
+    const eventBus = {
+      subscribe: jest.fn(),
+      emitProfileUpdated: jest.fn(),
+      emitSettingsUpdated: jest.fn(),
+    } as unknown as ConstructorParameters<typeof UserDomainService>[1];
 
     const logger = {
       info: jest.fn(),
       warn: jest.fn(),
       error: jest.fn(),
-    } as ConstructorParameters<typeof UserDomainService>[1];
+    } as ConstructorParameters<typeof UserDomainService>[2];
 
-    const service = new UserDomainService(userRepository as never, logger as never);
+    const service = new UserDomainService(
+      userRepository as never,
+      eventBus as never,
+      logger as never,
+    );
 
     return {
       service,
       userRepository: userRepository as {
         findMeById: jest.Mock;
+        findUserProfileSettings: jest.Mock;
         listMyTournamentHistory: jest.Mock;
       },
     };
@@ -28,10 +39,10 @@ describe('UserDomainService getUserTournamentHistory', () => {
 
   it('returns history retrieval result', async () => {
     const { service, userRepository } = createService();
-    userRepository.findMeById.mockResolvedValue({ userId: 'u-1' });
     userRepository.listMyTournamentHistory.mockResolvedValue({
       items: [
         {
+          participantId: 'p-1',
           tournamentId: 't-1',
           tournamentName: 'Spring Challenge',
           finalRank: 12,
@@ -40,35 +51,42 @@ describe('UserDomainService getUserTournamentHistory', () => {
           completedAt: '2026-06-01T00:00:00Z',
         },
       ],
-      total: 1,
+      hasNextPage: false,
     });
 
-    const result = await service.getUserTournamentHistory({ userId: 'u-1', page: 1, limit: 20 });
+    const result = await service.getMyTournamentHistory({
+      userId: 'u-1',
+      requesterId: 'u-1',
+      limit: 20,
+    });
 
     expect(result.items).toHaveLength(1);
-    expect(result.total).toBe(1);
+    expect(result.hasNextPage).toBe(false);
   });
 
   it('passes pagination to repository', async () => {
     const { service, userRepository } = createService();
-    userRepository.findMeById.mockResolvedValue({ userId: 'u-1' });
-    userRepository.listMyTournamentHistory.mockResolvedValue({ items: [], total: 0 });
+    userRepository.listMyTournamentHistory.mockResolvedValue({ items: [], hasNextPage: false });
 
-    await service.getUserTournamentHistory({ userId: 'u-1', page: 2, limit: 5 });
+    await service.getMyTournamentHistory({
+      userId: 'u-1',
+      requesterId: 'u-1',
+      limit: 5,
+    });
 
     expect(userRepository.listMyTournamentHistory).toHaveBeenCalledWith({
       userId: 'u-1',
-      page: 2,
       limit: 5,
+      cursor: null,
     });
   });
 
   it('keeps newest-first ordering from repository results', async () => {
     const { service, userRepository } = createService();
-    userRepository.findMeById.mockResolvedValue({ userId: 'u-1' });
     userRepository.listMyTournamentHistory.mockResolvedValue({
       items: [
         {
+          participantId: 'p-new',
           tournamentId: 't-new',
           tournamentName: 'Newest',
           finalRank: 3,
@@ -77,6 +95,7 @@ describe('UserDomainService getUserTournamentHistory', () => {
           completedAt: '2026-06-03T00:00:00Z',
         },
         {
+          participantId: 'p-old',
           tournamentId: 't-old',
           tournamentName: 'Older',
           finalRank: 8,
@@ -85,10 +104,14 @@ describe('UserDomainService getUserTournamentHistory', () => {
           completedAt: '2026-05-01T00:00:00Z',
         },
       ],
-      total: 2,
+      hasNextPage: false,
     });
 
-    const result = await service.getUserTournamentHistory({ userId: 'u-1', page: 1, limit: 20 });
+    const result = await service.getMyTournamentHistory({
+      userId: 'u-1',
+      requesterId: 'u-1',
+      limit: 20,
+    });
 
     expect(result.items[0]?.tournamentId).toBe('t-new');
     expect(result.items[1]?.tournamentId).toBe('t-old');
@@ -96,10 +119,10 @@ describe('UserDomainService getUserTournamentHistory', () => {
 
   it('returns completed tournaments only from repository results', async () => {
     const { service, userRepository } = createService();
-    userRepository.findMeById.mockResolvedValue({ userId: 'u-1' });
     userRepository.listMyTournamentHistory.mockResolvedValue({
       items: [
         {
+          participantId: 'p-finished',
           tournamentId: 't-finished',
           tournamentName: 'Finished',
           finalRank: 5,
@@ -108,22 +131,15 @@ describe('UserDomainService getUserTournamentHistory', () => {
           completedAt: '2026-05-01T00:00:00Z',
         },
       ],
-      total: 1,
+      hasNextPage: false,
     });
 
-    const result = await service.getUserTournamentHistory({ userId: 'u-1', page: 1, limit: 20 });
+    const result = await service.getMyTournamentHistory({
+      userId: 'u-1',
+      requesterId: 'u-1',
+      limit: 20,
+    });
 
-    expect(result.items).toEqual([
-      expect.objectContaining({ tournamentId: 't-finished' }),
-    ]);
-  });
-
-  it('throws when user is not found', async () => {
-    const { service, userRepository } = createService();
-    userRepository.findMeById.mockResolvedValue(null);
-
-    await expect(
-      service.getUserTournamentHistory({ userId: 'missing', page: 1, limit: 20 }),
-    ).rejects.toBeInstanceOf(UserNotFoundError);
+    expect(result.items).toEqual([expect.objectContaining({ tournamentId: 't-finished' })]);
   });
 });

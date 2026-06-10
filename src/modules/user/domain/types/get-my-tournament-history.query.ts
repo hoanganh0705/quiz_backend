@@ -1,5 +1,5 @@
 export type GetMyTournamentHistoryQuery = {
   userId: string;
-  page: number;
   limit: number;
+  cursor?: { completedAt: string; participantId: string } | null;
 };
