@@ -1,6 +1,9 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
+import { QuizListResponseDto } from '@/modules/quiz/dto/response/quiz-list-response.dto';
 import { TagResponseDto } from './tag-response.dto';
+
+export class TagQuizzesResponseDto extends QuizListResponseDto {}
 
 export class RankedTagResponseDto {
   @ApiProperty({ description: '1-based rank position' })
@@ -35,6 +38,9 @@ export class RelatedTagsResponseDto {
 export class TagFollowMessageResponseDto {
   @ApiProperty({ example: 'Tag followed successfully' })
   message!: string;
+
+  @ApiProperty({ example: true, description: 'Whether the requested follow state changed.' })
+  changed!: boolean;
 }
 
 export class FollowedTagItemDto {

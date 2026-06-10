@@ -18,6 +18,7 @@ import { ListQuizzesQueryDto } from '../dto/request/list-quizzes-query.dto';
 import type { QuizResponseDto } from '../dto/response/quiz-response.dto';
 import type { QuizListResponseDto } from '../dto/response/quiz-list-response.dto';
 import type { QuizStatsResponseDto } from '../dto/response/quiz-stats-response.dto';
+import type { QuizListingPort } from '../domain/analytics/ports/quiz-listing.port';
 import type {
   CreatorQuizAnalyticsDto,
   PopularQuizzesResponseDto,
@@ -29,7 +30,7 @@ import type { CreateQuizCommand, RelatedQuizzesQuery, UpdateQuizCommand } from '
 import type { QuizDifficulty } from '../types/quiz.types';
 
 @Injectable()
-export class QuizApplicationService {
+export class QuizApplicationService implements QuizListingPort {
   constructor(
     private readonly quizQueryService: QuizQueryService,
     private readonly quizCommandService: QuizCommandService,
@@ -274,5 +275,12 @@ export class QuizApplicationService {
 
   async deleteQuiz(quizId: string, user: JwtPayload): Promise<DeleteQuizResponseDto> {
     return this.quizCommandService.softDeleteQuizById(quizId, user);
+  }
+
+  async listQuizzesByTag(params: {
+    tagId: string;
+    dto: ListQuizzesQueryDto;
+  }): Promise<QuizListResponseDto> {
+    return this.listQuizzes({ ...params.dto, tagId: params.tagId });
   }
 }

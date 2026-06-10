@@ -73,6 +73,17 @@ export class RedisService implements CacheProvider, OnModuleDestroy {
     return result === 'OK';
   }
 
+  async get(key: string): Promise<string | null> {
+    return this.client.get(key);
+  }
+
+  async set(key: string, value: string, ttlMs: number): Promise<void> {
+    if (ttlMs <= 0) {
+      throw new Error('ttlMs must be a positive number');
+    }
+    await this.client.set(key, value, 'PX', ttlMs);
+  }
+
   async onModuleDestroy(): Promise<void> {
     await this.client.quit();
   }
