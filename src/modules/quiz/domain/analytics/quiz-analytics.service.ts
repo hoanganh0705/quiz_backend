@@ -3,7 +3,11 @@ import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { MetricsCalculatorService } from './metrics-calculator.service';
 import { TrendingService } from './trending.service';
 import { PopularityService } from './popularity.service';
-import { QUIZ_ANALYTICS_REPOSITORY_PORT, type QuizAnalyticsRepositoryPort } from './ports';
+import {
+  QUIZ_ANALYTICS_REPOSITORY_PORT,
+  type QuizAnalyticsPort,
+  type QuizAnalyticsRepositoryPort,
+} from './ports';
 import { QuizNotFoundError } from './errors';
 import type {
   QuizAnalytics,
@@ -15,7 +19,7 @@ import type {
 } from './types';
 
 @Injectable()
-export class QuizAnalyticsService {
+export class QuizAnalyticsService implements QuizAnalyticsPort {
   constructor(
     @Inject(QUIZ_ANALYTICS_REPOSITORY_PORT)
     private readonly analyticsRepository: QuizAnalyticsRepositoryPort,

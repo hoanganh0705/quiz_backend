@@ -4,15 +4,16 @@ import type { DrizzleDB } from '@/core/database/database.module';
 import { quizzes, tags, tagFollows, quizTags, quizStats } from '@/core/database/schema';
 import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 import { and, desc, eq, isNull, or, sql, asc, ne } from 'drizzle-orm';
-import { TagSlugConflictError } from '../../domain/errors';
 import type {
   TagRepositoryPort,
   TagRow,
-  TagRowWithDeleted,
-  TagFollowRow,
+  TagDeleteStatus,
+  FollowResult,
+  TagUnfollowResult,
   FollowedTagRow,
   RankedTagRow,
 } from '../../domain/ports/tag-repository.port';
+import { TagRepositoryConstraintError } from './tag.repository.errors';
 
 const TAG_COLUMNS = {
   tagId: tags.tagId,
@@ -25,13 +26,6 @@ const TAG_COLUMNS = {
 const TAG_COLUMNS_WITH_DELETED = {
   ...TAG_COLUMNS,
   deletedAt: tags.deletedAt,
-};
-
-const FOLLOW_COLUMNS = {
-  followId: tagFollows.followId,
-  userId: tagFollows.userId,
-  tagId: tagFollows.tagId,
-  createdAt: tagFollows.createdAt,
 };
 
 @Injectable()
@@ -48,7 +42,7 @@ export class TagRepository implements TagRepositoryPort {
     return row ?? null;
   }
 
-  async findByIdIncludingDeleted(tagId: string): Promise<TagRowWithDeleted | null> {
+  async findByIdIncludingDeleted(tagId: string): Promise<{ deletedAt: string | null } | null> {
     const [row] = await this.db
       .select(TAG_COLUMNS_WITH_DELETED)
       .from(tags)
@@ -151,7 +145,7 @@ export class TagRepository implements TagRepositoryPort {
     } catch (error: unknown) {
       const pg = error as { code?: string };
       if (pg.code === '23505') {
-        throw new TagSlugConflictError();
+        throw new TagRepositoryConstraintError('slug_conflict');
       }
       throw error;
     }
@@ -173,7 +167,7 @@ export class TagRepository implements TagRepositoryPort {
     } catch (error: unknown) {
       const pg = error as { code?: string };
       if (pg.code === '23505') {
-        throw new TagSlugConflictError();
+        throw new TagRepositoryConstraintError('slug_conflict');
       }
       throw error;
     }
@@ -201,7 +195,7 @@ export class TagRepository implements TagRepositoryPort {
     } catch (error: unknown) {
       const pg = error as { code?: string };
       if (pg.code === '23505') {
-        throw new TagSlugConflictError();
+        throw new TagRepositoryConstraintError('slug_conflict');
       }
       throw error;
     }
@@ -211,11 +205,11 @@ export class TagRepository implements TagRepositoryPort {
     userId: string;
     tagId: string;
     nowIso: string;
-  }): Promise<TagFollowRow> {
+  }): Promise<FollowResult> {
     const { userId, tagId, nowIso } = params;
 
     const [existingActiveFollow] = await this.db
-      .select(FOLLOW_COLUMNS)
+      .select({ followId: tagFollows.followId })
       .from(tagFollows)
       .where(
         and(
@@ -227,11 +221,11 @@ export class TagRepository implements TagRepositoryPort {
       .limit(1);
 
     if (existingActiveFollow) {
-      return existingActiveFollow as TagFollowRow;
+      return existingActiveFollow;
     }
 
     const [existingDeletedFollow] = await this.db
-      .select(FOLLOW_COLUMNS)
+      .select({ followId: tagFollows.followId })
       .from(tagFollows)
       .where(
         and(
@@ -247,9 +241,9 @@ export class TagRepository implements TagRepositoryPort {
         .update(tagFollows)
         .set({ deletedAt: null })
         .where(eq(tagFollows.followId, existingDeletedFollow.followId))
-        .returning(FOLLOW_COLUMNS);
+        .returning({ followId: tagFollows.followId });
 
-      return restored as TagFollowRow;
+      return restored!;
     }
 
     const [newFollow] = await this.db
@@ -259,15 +253,19 @@ export class TagRepository implements TagRepositoryPort {
         tagId,
         createdAt: nowIso,
       })
-      .returning(FOLLOW_COLUMNS);
+      .returning({ followId: tagFollows.followId });
 
-    return newFollow as TagFollowRow;
+    return newFollow!;
   }
 
-  async unfollowTag(params: { userId: string; tagId: string; nowIso: string }): Promise<void> {
+  async unfollowTag(params: {
+    userId: string;
+    tagId: string;
+    nowIso: string;
+  }): Promise<TagUnfollowResult> {
     const { userId, tagId, nowIso } = params;
 
-    await this.db
+    const [row] = await this.db
       .update(tagFollows)
       .set({ deletedAt: nowIso })
       .where(
@@ -276,7 +274,10 @@ export class TagRepository implements TagRepositoryPort {
           eq(tagFollows.tagId, tagId),
           isNull(tagFollows.deletedAt),
         ),
-      );
+      )
+      .returning({ followId: tagFollows.followId });
+
+    return { unfollowed: Boolean(row) };
   }
 
   async listFollowedTags(params: {

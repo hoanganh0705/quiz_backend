@@ -1,5 +1,9 @@
 import { decodeBase64JsonCursor, encodeBase64JsonCursor } from '@/common/utils/cursor.util';
-import type { FollowedTagCursorPayload } from '../types/tag.types';
+
+export type FollowedTagCursorPayload = {
+  followedAt: string;
+  followId: string;
+};
 
 export class FollowedTagCursorMapper {
   private static readonly uuidPattern =

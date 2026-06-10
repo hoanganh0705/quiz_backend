@@ -1,18 +1,22 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { TagDomainService } from '../domain/tag.service';
 import { TagResponseMapper } from '../mappers/tag-response.mapper';
+import { FollowedTagResponseMapper } from '../mappers/followed-tag-response.mapper';
+import { RankedTagResponseMapper } from '../mappers/ranked-tag-response.mapper';
 import { TagCursorMapper } from '../mappers/tag-cursor.mapper';
 import { FollowedTagCursorMapper } from '../mappers/followed-tag-cursor.mapper';
 import { TagAnalyticsResponseMapper } from '../mappers/tag-analytics-response.mapper';
-import { QuizApplicationService } from '@/modules/quiz/application/quiz.application.service';
-import { QuizAnalyticsService } from '@/modules/quiz/domain/analytics';
+import {
+  QUIZ_ANALYTICS_PORT,
+  QUIZ_LISTING_PORT,
+  type QuizAnalyticsPort,
+  type QuizListingPort,
+} from '@/modules/quiz/domain/analytics';
 import type {
   RankedTagsResponseDto,
-  RankedTagResponseDto,
   RelatedTagsResponseDto,
   TagFollowMessageResponseDto,
   FollowedTagsResponseDto,
-  FollowedTagItemDto,
   TagAnalyticsResponseDto,
 } from '../dto/response/parity-response.dto';
 import type {
@@ -23,9 +27,8 @@ import type {
   RelatedTagsQuery,
   UpdateTagCommand,
 } from '../domain/types/tag-commands';
-import type { TagRow, FollowedTagRow, RankedTagRow } from '../domain/ports/tag-repository.port';
+import type { TagRow } from '../domain/ports/tag-repository.port';
 import type { ListQuizzesQueryDto } from '@/modules/quiz/dto/request/list-quizzes-query.dto';
-import type { QuizListResponseDto } from '@/modules/quiz/dto/response/quiz-list-response.dto';
 import { DeleteTagResponseDto, TagListResponseDto, TagResponseDto } from '../dto/response';
 import { TagAnalyticsNotFoundError } from '../domain/errors';
 
@@ -33,8 +36,10 @@ import { TagAnalyticsNotFoundError } from '../domain/errors';
 export class TagApplicationService {
   constructor(
     private readonly tagDomainService: TagDomainService,
-    private readonly quizApplicationService: QuizApplicationService,
-    private readonly quizAnalyticsService: QuizAnalyticsService,
+    @Inject(QUIZ_LISTING_PORT)
+    private readonly quizListingService: QuizListingPort,
+    @Inject(QUIZ_ANALYTICS_PORT)
+    private readonly quizAnalyticsService: QuizAnalyticsPort,
   ) {}
 
   async listTags(query: ListTagsQuery): Promise<TagListResponseDto> {
@@ -58,12 +63,12 @@ export class TagApplicationService {
   async getTagQuizzesBySlug(
     slug: string,
     quizQuery: ListQuizzesQueryDto,
-  ): Promise<QuizListResponseDto> {
+  ): Promise<import('@/modules/quiz/dto/response/quiz-list-response.dto').QuizListResponseDto> {
     const tag = await this.tagDomainService.getTagBySlug(slug);
 
-    return this.quizApplicationService.listQuizzes({
-      ...quizQuery,
+    return this.quizListingService.listQuizzesByTag({
       tagId: tag.tagId,
+      dto: quizQuery,
     });
   }
 
@@ -94,12 +99,15 @@ export class TagApplicationService {
 
   async followTag(userId: string, tagId: string): Promise<TagFollowMessageResponseDto> {
     await this.tagDomainService.followTag(userId, tagId);
-    return { message: 'Tag followed successfully' };
+    return { message: 'Tag followed successfully', changed: true };
   }
 
   async unfollowTag(userId: string, tagId: string): Promise<TagFollowMessageResponseDto> {
-    await this.tagDomainService.unfollowTag(userId, tagId);
-    return { message: 'Tag unfollowed successfully' };
+    const unfollowed = await this.tagDomainService.unfollowTag(userId, tagId);
+    return {
+      message: unfollowed ? 'Tag unfollowed successfully' : 'Tag was not followed',
+      changed: unfollowed,
+    };
   }
 
   async listFollowedTags(
@@ -112,7 +120,7 @@ export class TagApplicationService {
     );
 
     return {
-      items: items.map((item) => this.toFollowedTagItem(item)),
+      items: items.map((item) => FollowedTagResponseMapper.toItem(item)),
       pagination: {
         limit,
         hasNextPage,
@@ -123,12 +131,12 @@ export class TagApplicationService {
 
   async getPopularTags(query: TagRankingQuery): Promise<RankedTagsResponseDto> {
     const items = await this.tagDomainService.getPopularTags(query);
-    return { items: items.map((item) => this.toRankedTagResponse(item)) };
+    return { items: items.map((item) => RankedTagResponseMapper.toResponse(item)) };
   }
 
   async getTrendingTags(query: TagRankingQuery): Promise<RankedTagsResponseDto> {
     const items = await this.tagDomainService.getTrendingTags(query);
-    return { items: items.map((item) => this.toRankedTagResponse(item)) };
+    return { items: items.map((item) => RankedTagResponseMapper.toResponse(item)) };
   }
 
   async getTagAnalytics(tagId: string): Promise<TagAnalyticsResponseDto> {
@@ -146,25 +154,5 @@ export class TagApplicationService {
 
   private toTagResponse(row: TagRow): TagResponseDto {
     return TagResponseMapper.toResponse(row);
-  }
-
-  private toFollowedTagItem(item: FollowedTagRow): FollowedTagItemDto {
-    return {
-      tagId: item.tagId,
-      name: item.name,
-      slug: item.slug,
-      followedAt: item.followedAt,
-    };
-  }
-
-  private toRankedTagResponse(item: RankedTagRow): RankedTagResponseDto {
-    return {
-      rank: item.rank,
-      tagId: item.tagId,
-      name: item.name,
-      slug: item.slug,
-      totalScore: item.totalScore,
-      totalAttempts: item.totalAttempts,
-    };
   }
 }

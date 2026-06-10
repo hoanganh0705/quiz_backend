@@ -19,6 +19,8 @@ import {
   TrendingService,
   PopularityService,
   QUIZ_ANALYTICS_REPOSITORY_PORT,
+  QUIZ_ANALYTICS_PORT,
+  QUIZ_LISTING_PORT,
 } from './domain/analytics';
 import { QuizAnalyticsRepository } from './domain/analytics/quiz-analytics.repository';
 import { QuizRecommendationRepository } from './infrastructure/repositories/quiz-recommendation.repository';
@@ -83,7 +85,9 @@ import { QuizQuestionRepository } from './infrastructure/repositories/quiz-quest
     { provide: QUIZ_QUESTION_REPOSITORY_PORT, useExisting: QuizQuestionRepository },
     { provide: QUIZ_DOMAIN_EVENT_BUS, useExisting: QuizDomainEventBus },
     { provide: QUIZ_ANALYTICS_REPOSITORY_PORT, useExisting: QuizAnalyticsRepository },
+    { provide: QUIZ_ANALYTICS_PORT, useExisting: QuizAnalyticsService },
     { provide: QUIZ_RECOMMENDATION_REPOSITORY_PORT, useExisting: QuizRecommendationRepository },
+    { provide: QUIZ_LISTING_PORT, useExisting: QuizApplicationService },
 
     // Domain Event Bus
     QuizDomainEventBus,
@@ -92,6 +96,8 @@ import { QuizQuestionRepository } from './infrastructure/repositories/quiz-quest
   exports: [
     QUIZ_REPOSITORY_PORT,
     QUIZ_DOMAIN_EVENT_BUS,
+    QUIZ_ANALYTICS_PORT,
+    QUIZ_LISTING_PORT,
     QuizApplicationService,
     QuizAnalyticsService,
     MetricsCalculatorService,
