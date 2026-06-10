@@ -37,6 +37,7 @@ import {
   ListRecentBookmarksQueryDto,
   SearchBookmarksQueryDto,
   MoveBookmarkDto,
+  UpdateBookmarkDto,
 } from '../../dto/request';
 
 import {
@@ -55,11 +56,11 @@ import {
   RecentBookmarksResponseDto,
   SearchBookmarksResponseDto,
   BookmarkCollectionAnalyticsResponseDto,
+  UpdateBookmarkResponseDto,
 } from '../../dto/response';
 
 import { BookmarkDomainExceptionFilter } from '../filters/bookmark-domain-exception.filter';
-import { RecentBookmarkCursorMapper } from '../../mappers/recent-bookmark-cursor.mapper';
-import { BookmarkSearchCursorMapper } from '../../mappers/bookmark-search-cursor.mapper';
+import { BookmarkCursorMapper } from '../../mappers/bookmark-cursor.mapper';
 
 @ApiTags('bookmarks')
 @ApiBearerAuth()
@@ -86,7 +87,7 @@ export class BookmarkController {
     return this.bookmarkApplicationService.searchBookmarks(user.sub, {
       q: query.q,
       limit: query.limit,
-      cursor: query.cursor ? BookmarkSearchCursorMapper.parse(query.cursor) : null,
+      cursor: query.cursor ? BookmarkCursorMapper.parse(query.cursor) : null,
     });
   }
 
@@ -105,7 +106,7 @@ export class BookmarkController {
   ): Promise<RecentBookmarksResponseDto> {
     return this.bookmarkApplicationService.getRecentBookmarks(user.sub, {
       limit: query.limit,
-      cursor: query.cursor ? RecentBookmarkCursorMapper.parse(query.cursor) : null,
+      cursor: query.cursor ? BookmarkCursorMapper.parse(query.cursor) : null,
     });
   }
 
@@ -140,7 +141,7 @@ export class BookmarkController {
     @Param('quizId', new ParseUUIDPipe()) quizId: string,
     @CurrentUser() user: JwtPayload,
   ): Promise<BookmarkStatusResponseDto> {
-    return this.bookmarkApplicationService.getBookmarkStatus(user.sub, quizId);
+    return this.bookmarkApplicationService.getBookmarkStatus(user, quizId);
   }
 
   @Get('collections')
@@ -202,11 +203,13 @@ export class BookmarkController {
     type: BookmarkCollectionAnalyticsResponseDto,
   })
   @ApiNotFoundResponse({ description: 'Bookmark collection analytics not found' })
+  @ApiForbiddenResponse({ description: 'You do not have permission to view this collection' })
   @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
   async getCollectionAnalytics(
     @Param('collectionId', new ParseUUIDPipe()) collectionId: string,
+    @CurrentUser() user: JwtPayload,
   ): Promise<BookmarkCollectionAnalyticsResponseDto> {
-    return this.bookmarkApplicationService.getCollectionAnalytics(collectionId);
+    return this.bookmarkApplicationService.getCollectionAnalytics(collectionId, user);
   }
 
   @Post('collections/:collectionId/quizzes')
@@ -284,6 +287,27 @@ export class BookmarkController {
     @CurrentUser() user: JwtPayload,
   ): Promise<RemoveBookmarkResponseDto> {
     return this.bookmarkApplicationService.removeBookmark(collectionId, quizId, user);
+  }
+
+  @Patch('collections/:collectionId/quizzes/:quizId')
+  @ApiAuth()
+  @ApiOperation({
+    summary: 'Update bookmark',
+    description: 'Updates personal notes on an existing bookmarked quiz.',
+  })
+  @ApiOkResponse({ description: 'Bookmark updated', type: UpdateBookmarkResponseDto })
+  @ApiNotFoundResponse({ description: 'Collection or bookmark not found' })
+  @ApiForbiddenResponse({ description: 'Not the collection owner' })
+  @ApiBadRequestResponse({ description: 'Validation failed' })
+  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  @ApiValidationRequest()
+  async updateBookmark(
+    @Param('collectionId', new ParseUUIDPipe()) collectionId: string,
+    @Param('quizId', new ParseUUIDPipe()) quizId: string,
+    @CurrentUser() user: JwtPayload,
+    @Body() payload: UpdateBookmarkDto,
+  ): Promise<UpdateBookmarkResponseDto> {
+    return this.bookmarkApplicationService.updateBookmark(collectionId, quizId, payload, user);
   }
 
   @Post('collections/:collectionId/move')

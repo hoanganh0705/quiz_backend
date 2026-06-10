@@ -138,9 +138,13 @@ export class BookmarkRepository implements BookmarkRepositoryPort {
   }
 
   async deleteCollection(collectionId: string): Promise<void> {
-    await this.db
-      .delete(bookmarkCollections)
-      .where(eq(bookmarkCollections.collectionId, collectionId));
+    await this.db.transaction(async (tx) => {
+      await tx.delete(bookmarkedQuizzes).where(eq(bookmarkedQuizzes.collectionId, collectionId));
+
+      await tx
+        .delete(bookmarkCollections)
+        .where(eq(bookmarkCollections.collectionId, collectionId));
+    });
   }
 
   async getBookmarkedQuiz(collectionId: string, quizId: string): Promise<BookmarkedQuizRow | null> {
@@ -176,11 +180,10 @@ export class BookmarkRepository implements BookmarkRepositoryPort {
         quizImageUrl: QUIZ_COLUMNS.imageUrl,
         quizIsFeatured: QUIZ_COLUMNS.isFeatured,
         quizPublishedVersionId: QUIZ_COLUMNS.publishedVersionId,
-        quizDifficulty: sql<string | null>`NULL`.as('quiz_difficulty'),
       })
       .from(bookmarkedQuizzes)
       .innerJoin(quizzes, eq(bookmarkedQuizzes.quizId, QUIZ_COLUMNS.quizId))
-      .where(eq(bookmarkedQuizzes.collectionId, collectionId))
+      .where(and(eq(bookmarkedQuizzes.collectionId, collectionId), isNull(quizzes.deletedAt)))
       .orderBy(bookmarkedQuizzes.bookmarkedAt);
 
     return rows as BookmarkedQuizDetailRow[];
@@ -197,8 +200,13 @@ export class BookmarkRepository implements BookmarkRepositoryPort {
         bookmarkedQuizzes,
         eq(bookmarkCollections.collectionId, bookmarkedQuizzes.collectionId),
       )
+      .innerJoin(quizzes, eq(bookmarkedQuizzes.quizId, quizzes.quizId))
       .where(
-        and(eq(bookmarkCollections.userId, userId), eq(bookmarkedQuizzes.quizId, quizId)),
+        and(
+          eq(bookmarkCollections.userId, userId),
+          eq(bookmarkedQuizzes.quizId, quizId),
+          isNull(quizzes.deletedAt),
+        ),
       )
       .orderBy(bookmarkCollections.name);
 
@@ -246,7 +254,7 @@ export class BookmarkRepository implements BookmarkRepositoryPort {
         eq(bookmarkedQuizzes.collectionId, bookmarkCollections.collectionId),
       )
       .innerJoin(quizzes, eq(bookmarkedQuizzes.quizId, quizzes.quizId))
-      .where(whereClause)
+      .where(and(whereClause, isNull(quizzes.deletedAt)))
       .orderBy(desc(bookmarkedQuizzes.bookmarkedAt), desc(bookmarkedQuizzes.bookmarkId))
       .limit(params.limit + 1);
 
@@ -300,7 +308,7 @@ export class BookmarkRepository implements BookmarkRepositoryPort {
         eq(bookmarkedQuizzes.collectionId, bookmarkCollections.collectionId),
       )
       .innerJoin(quizzes, eq(bookmarkedQuizzes.quizId, quizzes.quizId))
-      .where(whereClause)
+      .where(and(whereClause, isNull(quizzes.deletedAt)))
       .orderBy(desc(bookmarkedQuizzes.bookmarkedAt), desc(bookmarkedQuizzes.bookmarkId))
       .limit(params.limit + 1);
 
@@ -394,8 +402,26 @@ export class BookmarkRepository implements BookmarkRepositoryPort {
     targetCollectionId: string;
     quizId: string;
     nowIso: string;
+    verifySource?: boolean;
   }): Promise<void> {
     await this.db.transaction(async (tx) => {
+      if (params.verifySource) {
+        const [existing] = await tx
+          .select({ bookmarkId: bookmarkedQuizzes.bookmarkId })
+          .from(bookmarkedQuizzes)
+          .where(
+            and(
+              eq(bookmarkedQuizzes.collectionId, params.sourceCollectionId),
+              eq(bookmarkedQuizzes.quizId, params.quizId),
+            ),
+          )
+          .limit(1);
+
+        if (!existing) {
+          throw new Error('Bookmark not found in source collection');
+        }
+      }
+
       await tx
         .delete(bookmarkedQuizzes)
         .where(
@@ -422,6 +448,26 @@ export class BookmarkRepository implements BookmarkRepositoryPort {
       );
   }
 
+  async updateBookmark(params: {
+    collectionId: string;
+    quizId: string;
+    notes: string | null;
+    nowIso: string;
+  }): Promise<BookmarkedQuizRow> {
+    const [updated] = await this.db
+      .update(bookmarkedQuizzes)
+      .set({ notes: params.notes, updatedAt: params.nowIso })
+      .where(
+        and(
+          eq(bookmarkedQuizzes.collectionId, params.collectionId),
+          eq(bookmarkedQuizzes.quizId, params.quizId),
+        ),
+      )
+      .returning();
+
+    return updated as BookmarkedQuizRow;
+  }
+
   async getCollectionAnalytics(collectionId: string): Promise<BookmarkCollectionAnalytics | null> {
     const [collection] = await this.db
       .select({
@@ -437,78 +483,84 @@ export class BookmarkRepository implements BookmarkRepositoryPort {
       return null;
     }
 
-    const [summary] = await this.db
-      .select({
-        totalBookmarks: sql<number>`COUNT(${bookmarkedQuizzes.bookmarkId})::int`,
-        totalQuizzes: sql<number>`COUNT(DISTINCT ${bookmarkedQuizzes.quizId})::int`,
-        averageQuizRating: sql<number>`ROUND(COALESCE(AVG(${quizReviews.rating}::numeric), 0), 2)`,
-        uniqueCategories: sql<number>`COUNT(DISTINCT ${quizCategories.categoryId})::int`,
-        uniqueTags: sql<number>`COUNT(DISTINCT ${quizTags.tagId})::int`,
-      })
-      .from(bookmarkCollections)
-      .leftJoin(
-        bookmarkedQuizzes,
-        eq(bookmarkCollections.collectionId, bookmarkedQuizzes.collectionId),
-      )
-      .leftJoin(quizzes, eq(bookmarkedQuizzes.quizId, quizzes.quizId))
-      .leftJoin(quizReviews, eq(quizzes.quizId, quizReviews.quizId))
-      .leftJoin(quizCategories, eq(quizzes.quizId, quizCategories.quizId))
-      .leftJoin(quizTags, eq(quizzes.quizId, quizTags.quizId))
-      .where(and(eq(bookmarkCollections.collectionId, collectionId), isNull(quizzes.deletedAt)));
-
-    const topCategories = await this.db
-      .select({
-        categoryId: categories.categoryId,
-        name: categories.name,
-        slug: categories.slug,
-        bookmarkCount: sql<number>`COUNT(${bookmarkedQuizzes.bookmarkId})::int`,
-      })
-      .from(bookmarkedQuizzes)
-      .innerJoin(
-        bookmarkCollections,
-        eq(bookmarkedQuizzes.collectionId, bookmarkCollections.collectionId),
-      )
-      .innerJoin(quizzes, eq(bookmarkedQuizzes.quizId, quizzes.quizId))
-      .innerJoin(quizCategories, eq(quizzes.quizId, quizCategories.quizId))
-      .innerJoin(categories, eq(quizCategories.categoryId, categories.categoryId))
-      .where(
-        and(
-          eq(bookmarkCollections.collectionId, collectionId),
-          isNull(quizzes.deletedAt),
-          isNull(categories.deletedAt),
-        ),
-      )
-      .groupBy(categories.categoryId, categories.name, categories.slug)
-      .orderBy(desc(sql`COUNT(${bookmarkedQuizzes.bookmarkId})`), categories.name);
-
-    const topTags = await this.db
-      .select({
-        tagId: tags.tagId,
-        name: tags.name,
-        slug: tags.slug,
-        bookmarkCount: sql<number>`COUNT(${bookmarkedQuizzes.bookmarkId})::int`,
-      })
-      .from(bookmarkedQuizzes)
-      .innerJoin(
-        bookmarkCollections,
-        eq(bookmarkedQuizzes.collectionId, bookmarkCollections.collectionId),
-      )
-      .innerJoin(quizzes, eq(bookmarkedQuizzes.quizId, quizzes.quizId))
-      .innerJoin(quizTags, eq(quizzes.quizId, quizTags.quizId))
-      .innerJoin(tags, eq(quizTags.tagId, tags.tagId))
-      .where(and(eq(bookmarkCollections.collectionId, collectionId), isNull(quizzes.deletedAt), isNull(tags.deletedAt)))
-      .groupBy(tags.tagId, tags.name, tags.slug)
-      .orderBy(desc(sql`COUNT(${bookmarkedQuizzes.bookmarkId})`), tags.name);
+    const [summary, topCategories, topTags] = await Promise.all([
+      this.db
+        .select({
+          totalBookmarks: sql<number>`COUNT(${bookmarkedQuizzes.bookmarkId})::int`,
+          totalQuizzes: sql<number>`COUNT(DISTINCT ${bookmarkedQuizzes.quizId})::int`,
+          averageQuizRating: sql<number>`ROUND(COALESCE(AVG(${quizReviews.rating}::numeric), 0), 2)`,
+          uniqueCategories: sql<number>`COUNT(DISTINCT ${quizCategories.categoryId})::int`,
+          uniqueTags: sql<number>`COUNT(DISTINCT ${quizTags.tagId})::int`,
+        })
+        .from(bookmarkCollections)
+        .leftJoin(
+          bookmarkedQuizzes,
+          eq(bookmarkCollections.collectionId, bookmarkedQuizzes.collectionId),
+        )
+        .leftJoin(quizzes, eq(bookmarkedQuizzes.quizId, quizzes.quizId))
+        .leftJoin(quizReviews, eq(quizzes.quizId, quizReviews.quizId))
+        .leftJoin(quizCategories, eq(quizzes.quizId, quizCategories.quizId))
+        .leftJoin(quizTags, eq(quizzes.quizId, quizTags.quizId))
+        .where(and(eq(bookmarkCollections.collectionId, collectionId), isNull(quizzes.deletedAt))),
+      this.db
+        .select({
+          categoryId: categories.categoryId,
+          name: categories.name,
+          slug: categories.slug,
+          bookmarkCount: sql<number>`COUNT(${bookmarkedQuizzes.bookmarkId})::int`,
+        })
+        .from(bookmarkedQuizzes)
+        .innerJoin(
+          bookmarkCollections,
+          eq(bookmarkedQuizzes.collectionId, bookmarkCollections.collectionId),
+        )
+        .innerJoin(quizzes, eq(bookmarkedQuizzes.quizId, quizzes.quizId))
+        .innerJoin(quizCategories, eq(quizzes.quizId, quizCategories.quizId))
+        .innerJoin(categories, eq(quizCategories.categoryId, categories.categoryId))
+        .where(
+          and(
+            eq(bookmarkCollections.collectionId, collectionId),
+            isNull(quizzes.deletedAt),
+            isNull(categories.deletedAt),
+          ),
+        )
+        .groupBy(categories.categoryId, categories.name, categories.slug)
+        .orderBy(desc(sql`COUNT(${bookmarkedQuizzes.bookmarkId})`), categories.name),
+      this.db
+        .select({
+          tagId: tags.tagId,
+          name: tags.name,
+          slug: tags.slug,
+          bookmarkCount: sql<number>`COUNT(${bookmarkedQuizzes.bookmarkId})::int`,
+        })
+        .from(bookmarkedQuizzes)
+        .innerJoin(
+          bookmarkCollections,
+          eq(bookmarkedQuizzes.collectionId, bookmarkCollections.collectionId),
+        )
+        .innerJoin(quizzes, eq(bookmarkedQuizzes.quizId, quizzes.quizId))
+        .innerJoin(quizTags, eq(quizzes.quizId, quizTags.quizId))
+        .innerJoin(tags, eq(quizTags.tagId, tags.tagId))
+        .where(
+          and(
+            eq(bookmarkCollections.collectionId, collectionId),
+            isNull(quizzes.deletedAt),
+            isNull(tags.deletedAt),
+          ),
+        )
+        .groupBy(tags.tagId, tags.name, tags.slug)
+        .orderBy(desc(sql`COUNT(${bookmarkedQuizzes.bookmarkId})`), tags.name),
+    ]);
 
     return {
       collectionId: collection.collectionId,
       collectionName: collection.collectionName,
       summary: {
-        totalBookmarks: Number(summary?.totalBookmarks ?? 0),
-        totalQuizzes: Number(summary?.totalQuizzes ?? 0),
-        averageQuizRating: Number(summary?.averageQuizRating ?? 0),
-        uniqueCategories: Number(summary?.uniqueCategories ?? 0),
-        uniqueTags: Number(summary?.uniqueTags ?? 0),
+        totalBookmarks: Number(summary[0]?.totalBookmarks ?? 0),
+        totalQuizzes: Number(summary[0]?.totalQuizzes ?? 0),
+        averageQuizRating: Number(summary[0]?.averageQuizRating ?? 0),
+        uniqueCategories: Number(summary[0]?.uniqueCategories ?? 0),
+        uniqueTags: Number(summary[0]?.uniqueTags ?? 0),
       },
       topCategories: topCategories.map((category) => ({
         categoryId: category.categoryId,
@@ -524,31 +576,6 @@ export class BookmarkRepository implements BookmarkRepositoryPort {
       })),
       lastUpdated: collection.updatedAt,
     };
-  }
-
-  async checkCollectionOwnership(
-    collectionId: string,
-    userId: string,
-  ): Promise<BookmarkCollectionRow | null> {
-    const [row] = await this.db
-      .select({
-        collectionId: bookmarkCollections.collectionId,
-        userId: bookmarkCollections.userId,
-        name: bookmarkCollections.name,
-        description: bookmarkCollections.description,
-        createdAt: bookmarkCollections.createdAt,
-        updatedAt: bookmarkCollections.updatedAt,
-      })
-      .from(bookmarkCollections)
-      .where(
-        and(
-          eq(bookmarkCollections.collectionId, collectionId),
-          eq(bookmarkCollections.userId, userId),
-        ),
-      )
-      .limit(1);
-
-    return (row as BookmarkCollectionRow | undefined) ?? null;
   }
 
   /**

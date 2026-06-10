@@ -73,7 +73,7 @@ import { AttemptModule } from '@/modules/attempt/attempt.module';
     PopularityService,
     QuizAnalyticsRepository,
     AnalyticsSchedulerService,
-    { provide: AnalyticsEventHandler, useExisting: AnalyticsEventHandler },
+    AnalyticsEventHandler,
 
     // Infrastructure
     MetricsRepository,

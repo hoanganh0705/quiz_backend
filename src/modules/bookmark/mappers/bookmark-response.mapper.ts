@@ -55,7 +55,6 @@ export class BookmarkResponseMapper {
       quizSlug: row.quizSlug,
       quizImageUrl: row.quizImageUrl,
       quizIsFeatured: row.quizIsFeatured,
-      quizDifficulty: row.quizDifficulty,
       notes: row.notes,
       bookmarkedAt: row.bookmarkedAt,
     };

@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { forwardRef, Module } from '@nestjs/common';
 import { DatabaseModule } from '@/core/database/database.module';
 import { AttemptApplicationService } from './application/attempt.application.service';
 import { AttemptCommandService } from './domain/attempt-command.service';
@@ -14,7 +14,7 @@ import { AttemptDomainEventBootstrapService } from './domain/events/attempt-doma
 import { QuizModule } from '@/modules/quiz/quiz.module';
 
 @Module({
-  imports: [DatabaseModule, QuizModule],
+  imports: [DatabaseModule, forwardRef(() => QuizModule)],
   providers: [
     // Application
     AttemptApplicationService,

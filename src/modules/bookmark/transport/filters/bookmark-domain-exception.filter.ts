@@ -7,9 +7,7 @@ import {
   CollectionForbiddenError,
   CollectionConflictError,
   BookmarkNotFoundError,
-  BookmarkForbiddenError,
   BookmarkConflictError,
-  BookmarkAlreadyExistsError,
   BookmarkValidationError,
 } from '../../domain/errors';
 
@@ -51,14 +49,14 @@ export class BookmarkDomainExceptionFilter implements ExceptionFilter {
       };
     }
 
-    if (error instanceof CollectionForbiddenError || error instanceof BookmarkForbiddenError) {
+    if (error instanceof CollectionForbiddenError) {
       return {
         status: HttpStatus.FORBIDDEN,
         message: 'You do not have permission to perform this action',
       };
     }
 
-    if (error instanceof CollectionConflictError || error instanceof BookmarkConflictError || error instanceof BookmarkAlreadyExistsError) {
+    if (error instanceof CollectionConflictError || error instanceof BookmarkConflictError) {
       return { status: HttpStatus.CONFLICT, message: 'Resource already exists' };
     }
 
