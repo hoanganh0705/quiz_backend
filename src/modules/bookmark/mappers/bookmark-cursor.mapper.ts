@@ -1,16 +1,16 @@
 import { decodeBase64JsonCursor, encodeBase64JsonCursor } from '@/common/utils/cursor.util';
 
-export interface BookmarkSearchCursorPayload {
+export interface BookmarkCursorPayload {
   bookmarkedAt: string;
   bookmarkId: string;
 }
 
-export class BookmarkSearchCursorMapper {
+export class BookmarkCursorMapper {
   private static readonly uuidPattern =
     /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-  static parse(cursor: string): BookmarkSearchCursorPayload {
-    const parsed = decodeBase64JsonCursor<BookmarkSearchCursorPayload>(cursor);
+  static parse(cursor: string): BookmarkCursorPayload {
+    const parsed = decodeBase64JsonCursor<BookmarkCursorPayload>(cursor);
 
     if (!this.isIsoDateString(parsed.bookmarkedAt) || !this.isUuid(parsed.bookmarkId)) {
       throw new Error('Invalid cursor');
@@ -22,7 +22,7 @@ export class BookmarkSearchCursorMapper {
     };
   }
 
-  static serialize(payload: BookmarkSearchCursorPayload): string {
+  static serialize(payload: BookmarkCursorPayload): string {
     return encodeBase64JsonCursor({
       bookmarkedAt: payload.bookmarkedAt,
       bookmarkId: payload.bookmarkId,

@@ -9,7 +9,6 @@ import { DRIZZLE } from './drizzle.constants';
 import { UserSessionRepository } from '@/modules/auth/infrastructure/repositories/user-session.repository';
 import { UserRepository } from '@/modules/user/infrastructure/repositories/user.repository';
 import { AttemptRepository } from '@/modules/attempt/infrastructure/repositories/attempt.repository';
-import { BookmarkRepository } from '@/modules/bookmark/infrastructure/repositories/bookmark.repository';
 import { ReviewRepository } from '@/modules/review/infrastructure/repositories/review.repository';
 import { QuizRepository } from '@/modules/quiz/infrastructure/repositories/quiz.repository';
 import { QuizVersionRepository } from '@/modules/quiz/infrastructure/repositories/quiz-version.repository';
@@ -45,7 +44,6 @@ export type DrizzleDB = ReturnType<typeof createDrizzleDb>;
     UserSessionRepository,
     UserRepository,
     AttemptRepository,
-    BookmarkRepository,
     ReviewRepository,
     QuizRepository,
     QuizVersionRepository,
@@ -56,7 +54,6 @@ export type DrizzleDB = ReturnType<typeof createDrizzleDb>;
     UserSessionRepository,
     UserRepository,
     AttemptRepository,
-    BookmarkRepository,
     ReviewRepository,
     QuizRepository,
     QuizVersionRepository,

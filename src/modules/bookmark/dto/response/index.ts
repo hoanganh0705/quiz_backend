@@ -22,9 +22,6 @@ export class BookmarkedQuizResponseDto {
   @ApiProperty({ description: 'Whether the quiz is featured', example: true })
   quizIsFeatured!: boolean;
 
-  @ApiPropertyOptional({ description: 'Quiz difficulty', nullable: true })
-  quizDifficulty!: string | null;
-
   @ApiPropertyOptional({ description: 'Personal notes', nullable: true })
   notes!: string | null;
 
@@ -146,6 +143,23 @@ export class BulkRemoveBookmarksResponseDto {
     example: 2,
   })
   removedCount!: number;
+}
+
+export class UpdateBookmarkResponseDto {
+  @ApiProperty({ description: 'Bookmark record identifier', format: 'uuid' })
+  bookmarkId!: string;
+
+  @ApiProperty({ description: 'Collection identifier', format: 'uuid' })
+  collectionId!: string;
+
+  @ApiProperty({ description: 'Quiz identifier', format: 'uuid' })
+  quizId!: string;
+
+  @ApiPropertyOptional({ description: 'Updated personal notes', nullable: true })
+  notes!: string | null;
+
+  @ApiProperty({ description: 'Last update timestamp (ISO 8601)' })
+  updatedAt!: string;
 }
 
 export class BookmarkStatusCollectionDto {
