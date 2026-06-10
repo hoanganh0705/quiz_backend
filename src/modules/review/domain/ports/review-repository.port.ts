@@ -39,6 +39,13 @@ export type ReviewCursor = {
   reviewId: string;
 };
 
+export type ReviewSort = 'helpful' | 'newest' | 'highest_rating' | 'lowest_rating';
+
+export type ReportCursor = {
+  createdAt: string;
+  reportId: string;
+};
+
 export type ReviewStatsRow = {
   averageRating: number;
   totalReviews: number;
@@ -75,8 +82,24 @@ export type ReviewReportRow = {
   updatedAt: string;
 };
 
+export type ReportedReviewRow = {
+  reportId: string;
+  reviewId: string;
+  quizId: string;
+  quizTitle: string;
+  reviewerUsername: string;
+  rating: number;
+  content: string | null;
+  reason: string;
+  details: string | null;
+  status: 'open' | 'reviewed' | 'dismissed' | 'actioned';
+  createdAt: string;
+};
+
 export interface ReviewRepositoryPort {
   getReviewByQuizAndUser(quizId: string, userId: string): Promise<ReviewRow | null>;
+
+  getMyQuizReview(quizId: string, userId: string): Promise<import('@/modules/review/domain/ports').ReviewDetailByIdRow | null>;
 
   getReviewById(reviewId: string): Promise<ReviewRow | null>;
 
@@ -87,6 +110,7 @@ export interface ReviewRepositoryPort {
     limit: number;
     cursor?: ReviewCursor | null;
     rating?: number;
+    sort?: ReviewSort;
   }): Promise<ReviewDetailRow[]>;
 
   listUserReviews(params: {
@@ -113,6 +137,12 @@ export interface ReviewRepositoryPort {
 
   hasUserReportedReview(reviewId: string, reporterId: string): Promise<boolean>;
 
+  listReportedReviews(params: {
+    reporterId: string;
+    limit: number;
+    cursor?: ReportCursor | null;
+  }): Promise<ReportedReviewRow[]>;
+
   createReport(params: {
     reviewId: string;
     reporterId: string;
@@ -121,7 +151,11 @@ export interface ReviewRepositoryPort {
     nowIso: string;
   }): Promise<ReviewReportRow>;
 
-  removeReviewHelpfulVote(params: { reviewId: string; userId: string; nowIso: string }): Promise<void>;
+  removeReviewHelpfulVote(params: {
+    reviewId: string;
+    userId: string;
+    nowIso: string;
+  }): Promise<void>;
 
   createReview(params: {
     quizId: string;
