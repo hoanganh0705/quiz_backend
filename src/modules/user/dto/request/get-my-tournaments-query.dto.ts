@@ -1,29 +1,21 @@
-import { Type } from 'class-transformer';
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsInt, IsOptional, Max, Min } from 'class-validator';
+import { IsOptional, IsString } from 'class-validator';
 
 export class GetMyTournamentsQueryDto {
   @ApiPropertyOptional({
-    description: 'Page number (1-based)',
-    minimum: 1,
-    default: 1,
+    description: 'Cursor for pagination (base64-encoded { registeredAt, participantId })',
+    example: 'eyJyZWdpc3RlcmVkQXQiOiAiMjAyNi0wNi0wMVQwMDowMDowMFoiLCAicGFydGljaXBhbnRJZCI6ICI2NjBlODQwMC1lMjliLTMxZDQtYTcxNi00NDY2NTY1NDQwMDAifQ==',
   })
   @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  @Min(1)
-  page?: number = 1;
+  @IsString()
+  cursor?: string;
 
   @ApiPropertyOptional({
-    description: 'Maximum number of items to return per page (1-100)',
+    description: 'Maximum number of items to return (1-100)',
     minimum: 1,
     maximum: 100,
     default: 20,
   })
   @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  @Min(1)
-  @Max(100)
-  limit?: number = 20;
+  limit?: number;
 }
