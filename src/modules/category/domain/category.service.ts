@@ -5,7 +5,9 @@ import { hasOwn } from '@/common/utils/object.util';
 import { normalizeNullableText } from '@/common/utils/text.util';
 import { CATEGORY_SLUG_EMPTY_MESSAGE, CATEGORY_SLUG_INVALID_MESSAGE } from '../category.constants';
 import {
+  CATEGORY_DOMAIN_EVENT_BUS,
   CATEGORY_REPOSITORY_PORT,
+  type CategoryDomainEventBusPort,
   type CategoryRepositoryPort,
   type CategoryRow,
   type FollowedCategoryRow,
@@ -16,8 +18,8 @@ import {
   CategoryNotFoundError,
   CategoryRestoreInvariantError,
 } from '../domain/errors';
-import type { CategoryPatch } from '../types/category.types';
 import type {
+  CategoryPatch,
   CreateCategoryCommand,
   ListCategoriesQuery,
   ListFollowedCategoriesQuery,
@@ -31,6 +33,8 @@ export class CategoryDomainService {
   constructor(
     @Inject(CATEGORY_REPOSITORY_PORT)
     private readonly categoryRepository: CategoryRepositoryPort,
+    @Inject(CATEGORY_DOMAIN_EVENT_BUS)
+    private readonly eventBus: CategoryDomainEventBusPort,
     @InjectPinoLogger(CategoryDomainService.name) private readonly logger: PinoLogger,
   ) {}
 
@@ -129,6 +133,7 @@ export class CategoryDomainService {
     }
 
     this.logger.info({ event: 'category_created', categoryId: category.categoryId, slug });
+    this.eventBus.emitCategoryCreated({ categoryId: category.categoryId, slug, nowIso });
 
     return category;
   }
@@ -176,18 +181,22 @@ export class CategoryDomainService {
     }
 
     this.logger.info({ event: 'category_updated', categoryId });
+    this.eventBus.emitCategoryUpdated({ categoryId, slug: updated.slug, nowIso });
 
     return updated;
   }
 
   async deleteCategory(categoryId: string): Promise<void> {
-    const nowIso = new Date().toISOString();
-    const deleted = await this.categoryRepository.softDelete(categoryId, nowIso);
-    if (!deleted) {
+    const category = await this.categoryRepository.findByIdIncludingDeleted(categoryId);
+    if (!category) {
       this.logger.warn({ event: 'category_delete_not_found', categoryId });
       throw new CategoryNotFoundError();
     }
+
+    const nowIso = new Date().toISOString();
+    await this.categoryRepository.softDelete(categoryId, nowIso);
     this.logger.info({ event: 'category_deleted', categoryId });
+    this.eventBus.emitCategoryDeleted({ categoryId, slug: category.slug, nowIso });
   }
 
   async restoreCategory(categoryId: string): Promise<CategoryRow> {
@@ -212,6 +221,7 @@ export class CategoryDomainService {
     }
 
     this.logger.info({ event: 'category_restored', categoryId });
+    this.eventBus.emitCategoryRestored({ categoryId, slug: restored.slug, nowIso });
     return restored;
   }
 
@@ -219,20 +229,42 @@ export class CategoryDomainService {
     await this.getCategoryById(categoryId);
 
     const nowIso = new Date().toISOString();
-    const follow = await this.categoryRepository.followCategory({ userId, categoryId, nowIso });
 
-    this.logger.info({
-      event: 'category_followed',
-      userId,
-      categoryId,
-      followId: follow.followId,
-    });
+    try {
+      const follow = await this.categoryRepository.followCategory({ userId, categoryId, nowIso });
+
+      this.logger.info({
+        event: 'category_followed',
+        userId,
+        categoryId,
+        followId: follow.followId,
+      });
+    } catch (error: unknown) {
+      this.logger.error({
+        event: 'category_follow_failed',
+        userId,
+        categoryId,
+        errorName: error instanceof Error ? error.name : 'UNKNOWN',
+      });
+      throw error;
+    }
   }
 
   async unfollowCategory(userId: string, categoryId: string): Promise<void> {
     const nowIso = new Date().toISOString();
-    await this.categoryRepository.unfollowCategory({ userId, categoryId, nowIso });
-    this.logger.info({ event: 'category_unfollowed', userId, categoryId });
+
+    try {
+      await this.categoryRepository.unfollowCategory({ userId, categoryId, nowIso });
+      this.logger.info({ event: 'category_unfollowed', userId, categoryId });
+    } catch (error: unknown) {
+      this.logger.error({
+        event: 'category_unfollow_failed',
+        userId,
+        categoryId,
+        errorName: error instanceof Error ? error.name : 'UNKNOWN',
+      });
+      throw error;
+    }
   }
 
   async listFollowedCategories(

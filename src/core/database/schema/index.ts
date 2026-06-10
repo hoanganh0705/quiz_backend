@@ -1199,6 +1199,11 @@ export const quizCategories = pgTable(
       'btree',
       table.categoryId.asc().nullsLast().op('uuid_ops'),
     ),
+    index('idx_quiz_categories_category_quiz').using(
+      'btree',
+      table.categoryId.asc().nullsLast().op('uuid_ops'),
+      table.quizId.asc().nullsLast().op('uuid_ops'),
+    ),
     index('idx_quiz_categories_quiz_id').using(
       'btree',
       table.quizId.asc().nullsLast().op('uuid_ops'),

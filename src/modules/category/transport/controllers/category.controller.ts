@@ -34,18 +34,17 @@ import { RelatedCategoriesQueryDto } from '../../dto/request/related-categories-
 import { ListQuizzesQueryDto } from '../../../quiz/dto/request/list-quizzes-query.dto';
 import { CategoryListResponseDto } from '../../dto/response/category-list-response.dto';
 import { CategoryResponseDto } from '../../dto/response/category-response.dto';
-import { DeleteCategoryResponseDto } from '../../dto/response/delete-category-response.dto';
+import { MessageResponseDto } from '../../dto/response/message-response.dto';
 import { RankedCategoriesResponseDto } from '../../dto/response/ranked-categories-response.dto';
-import { CategoryFollowMessageResponseDto } from '../../dto/response/category-follow-message-response.dto';
 import { CategoryAnalyticsResponseDto } from '../../dto/response/category-analytics-response.dto';
 import { RelatedCategoriesResponseDto } from '../../dto/response/related-categories-response.dto';
 import { CategoryApplicationService } from '../../application/category.application.service';
+import { CategoryQueryService } from '../../application/category-query.service';
 import { CategoryDomainExceptionFilter } from '../filters/category-domain-exception.filter';
 import { CategoryCursorMapper } from '../../mappers/category-cursor.mapper';
 import type {
   CreateCategoryCommand,
   ListCategoriesQuery,
-  RelatedCategoriesQuery,
   UpdateCategoryCommand,
 } from '../../domain/types/category-commands';
 
@@ -53,7 +52,10 @@ import type {
 @Controller('categories')
 @UseFilters(CategoryDomainExceptionFilter)
 export class CategoryController {
-  constructor(private readonly categoryApplicationService: CategoryApplicationService) {}
+  constructor(
+    private readonly categoryApplicationService: CategoryApplicationService,
+    private readonly categoryQueryService: CategoryQueryService,
+  ) {}
 
   @Get('popular')
   @Public()
@@ -66,7 +68,7 @@ export class CategoryController {
   getPopularCategories(
     @Query() query: CategoryRankingQueryDto,
   ): Promise<RankedCategoriesResponseDto> {
-    return this.categoryApplicationService.getPopularCategories({ limit: query.limit ?? 10 });
+    return this.categoryQueryService.getPopularCategories({ limit: query.limit ?? 10 });
   }
 
   @Get('trending')
@@ -80,7 +82,7 @@ export class CategoryController {
   getTrendingCategories(
     @Query() query: CategoryRankingQueryDto,
   ): Promise<RankedCategoriesResponseDto> {
-    return this.categoryApplicationService.getTrendingCategories({ limit: query.limit ?? 10 });
+    return this.categoryQueryService.getTrendingCategories({ limit: query.limit ?? 10 });
   }
 
   @Get(':slug/quizzes')
@@ -94,7 +96,7 @@ export class CategoryController {
   @ApiNotFoundResponse({ description: 'Category not found' })
   @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
   getCategoryQuizzes(@Param('slug') slug: string, @Query() query: ListQuizzesQueryDto) {
-    return this.categoryApplicationService.getCategoryQuizzesBySlug(slug, query);
+    return this.categoryQueryService.getCategoryQuizzesBySlug(slug, query);
   }
 
   @Get(':slug/related')
@@ -106,20 +108,11 @@ export class CategoryController {
   @ApiOkResponse({ description: 'Related categories returned', type: RelatedCategoriesResponseDto })
   @ApiNotFoundResponse({ description: 'Category not found' })
   @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
-  async getRelatedCategories(
+  getRelatedCategories(
     @Param('slug') slug: string,
     @Query() query: RelatedCategoriesQueryDto,
   ): Promise<RelatedCategoriesResponseDto> {
-    const relatedCategoriesQuery: RelatedCategoriesQuery = {
-      limit: query.limit ?? 10,
-    };
-
-    const response = await this.categoryApplicationService.getRelatedCategories(
-      slug,
-      relatedCategoriesQuery,
-    );
-
-    return response;
+    return this.categoryQueryService.getRelatedCategories(slug, { limit: query.limit ?? 10 });
   }
 
   @Get(':id/analytics')
@@ -134,7 +127,7 @@ export class CategoryController {
   getCategoryAnalytics(
     @Param('id', new ParseUUIDPipe()) categoryId: string,
   ): Promise<CategoryAnalyticsResponseDto> {
-    return this.categoryApplicationService.getCategoryAnalytics(categoryId);
+    return this.categoryQueryService.getCategoryAnalytics(categoryId);
   }
 
   @Post(':id/follow')
@@ -144,13 +137,13 @@ export class CategoryController {
     summary: 'Follow a category',
     description: 'Adds the authenticated user to the category followers. Idempotent.',
   })
-  @ApiOkResponse({ description: 'Category followed', type: CategoryFollowMessageResponseDto })
+  @ApiOkResponse({ description: 'Category followed', type: MessageResponseDto })
   @ApiNotFoundResponse({ description: 'Category not found' })
   @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
   followCategory(
     @Param('id', new ParseUUIDPipe()) categoryId: string,
     @CurrentUser() user: JwtPayload,
-  ): Promise<CategoryFollowMessageResponseDto> {
+  ): Promise<MessageResponseDto> {
     return this.categoryApplicationService.followCategory(user.sub, categoryId);
   }
 
@@ -161,12 +154,12 @@ export class CategoryController {
     summary: 'Unfollow a category',
     description: 'Removes the authenticated user from the category followers. Idempotent.',
   })
-  @ApiOkResponse({ description: 'Category unfollowed', type: CategoryFollowMessageResponseDto })
+  @ApiOkResponse({ description: 'Category unfollowed', type: MessageResponseDto })
   @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
   unfollowCategory(
     @Param('id', new ParseUUIDPipe()) categoryId: string,
     @CurrentUser() user: JwtPayload,
-  ): Promise<CategoryFollowMessageResponseDto> {
+  ): Promise<MessageResponseDto> {
     return this.categoryApplicationService.unfollowCategory(user.sub, categoryId);
   }
 
@@ -202,7 +195,22 @@ export class CategoryController {
       cursor: query.cursor ? CategoryCursorMapper.parse(query.cursor) : null,
     };
 
-    return this.categoryApplicationService.listCategories(command);
+    return this.categoryQueryService.listCategories(command);
+  }
+
+  @Get(':id')
+  @Public()
+  @ApiOperation({
+    summary: 'Get category by ID',
+    description: 'Returns a single active category by its UUID.',
+  })
+  @ApiOkResponse({ description: 'Category found', type: CategoryResponseDto })
+  @ApiNotFoundResponse({ description: 'Category not found' })
+  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  getCategoryById(
+    @Param('id', new ParseUUIDPipe()) categoryId: string,
+  ): Promise<CategoryResponseDto> {
+    return this.categoryQueryService.getCategoryById(categoryId);
   }
 
   @Get(':slug')
@@ -215,7 +223,7 @@ export class CategoryController {
   @ApiNotFoundResponse({ description: 'Category not found' })
   @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
   getCategoryBySlug(@Param('slug') slug: string): Promise<CategoryResponseDto> {
-    return this.categoryApplicationService.getCategoryBySlug(slug);
+    return this.categoryQueryService.getCategoryBySlug(slug);
   }
 
   @Post()
@@ -277,12 +285,12 @@ export class CategoryController {
     summary: 'Delete category',
     description: 'Soft deletes a category by ID. Requires admin role.',
   })
-  @ApiOkResponse({ description: 'Category deleted', type: DeleteCategoryResponseDto })
+  @ApiOkResponse({ description: 'Category deleted', type: MessageResponseDto })
   @ApiNotFoundResponse({ description: 'Category not found' })
   @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
   deleteCategory(
     @Param('id', new ParseUUIDPipe()) categoryId: string,
-  ): Promise<DeleteCategoryResponseDto> {
+  ): Promise<MessageResponseDto> {
     return this.categoryApplicationService.deleteCategory(categoryId);
   }
 }
