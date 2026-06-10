@@ -3,6 +3,7 @@ import { eq, inArray, sql } from 'drizzle-orm';
 import { DRIZZLE } from '@/core/database/drizzle.constants';
 import type { DrizzleDB } from '@/core/database/database.module';
 import { quizAnswerOptions, quizQuestions } from '@/core/database/schema';
+import { isPostgresUniqueViolation } from '@/common/utils/db-error.util';
 import {
   QuizQuestionPositionConflictError,
   QuizAnswerOptionPositionConflictError,
@@ -188,9 +189,9 @@ export class QuizQuestionRepository implements QuizQuestionRepositoryPort {
   }
 
   private mapInsertError(error: unknown): never {
-    const maybePgError = error as { code?: string; constraint?: string };
+    if (isPostgresUniqueViolation(error)) {
+      const maybePgError = error as { constraint?: string };
 
-    if (maybePgError.code === '23505') {
       if (maybePgError.constraint === 'uq_quiz_questions_version_position') {
         throw new QuizQuestionPositionConflictError(QUIZ_QUESTION_POSITION_CONFLICT_MESSAGE);
       }

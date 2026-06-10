@@ -5,7 +5,7 @@ import { PasswordResetConfig } from '../config/password-reset.config';
 import { CRYPTO_PROVIDER, type CryptoProvider } from './ports/crypto.provider';
 import { PASSWORD_PROVIDER, type PasswordProvider } from './ports/password.provider';
 import { EMAIL_PROVIDER, type EmailProvider } from './ports/email.provider';
-import { USER_REPOSITORY_PORT, type UserRepositoryPort } from './ports/user-repository.port';
+import { AUTH_USER_REPOSITORY_PORT, type UserRepositoryPort } from './ports/user-repository.port';
 import { normalizeEmail } from './utils/normalization.utils';
 import { InvalidTokenError } from './errors';
 
@@ -18,7 +18,7 @@ export class PasswordResetService {
     'If the account exists, a password reset email has been sent.';
 
   constructor(
-    @Inject(USER_REPOSITORY_PORT)
+    @Inject(AUTH_USER_REPOSITORY_PORT)
     private readonly userRepository: UserRepositoryPort,
     @Inject(CRYPTO_PROVIDER)
     private readonly cryptoService: CryptoProvider,

@@ -46,6 +46,16 @@ export class QuizVersionService {
     @InjectPinoLogger(QuizVersionService.name) private readonly logger: PinoLogger,
   ) {}
 
+  private async refetchVersionOrThrow(quizVersionId: string): Promise<QuizVersionRow> {
+    const version = await this.quizVersionRepository.getQuizVersionById(quizVersionId);
+
+    if (!version) {
+      throw new QuizNotFoundError('Quiz version not found');
+    }
+
+    return version;
+  }
+
   async createQuizVersion(
     quizId: string,
     user: JwtPayload,
@@ -191,13 +201,14 @@ export class QuizVersionService {
   }
 
   async updateQuizVersion(
+    quizId: string,
     quizVersionId: string,
     user: JwtPayload,
     command: UpdateQuizVersionCommand,
   ): Promise<QuizVersionRow> {
     const version = await this.quizVersionRepository.getQuizVersionDetailById(quizVersionId);
 
-    if (!version) {
+    if (!version || version.quizId !== quizId) {
       throw new QuizNotFoundError('Quiz version not found');
     }
 
@@ -228,27 +239,25 @@ export class QuizVersionService {
       },
     });
 
-    const updated = await this.quizVersionRepository.getQuizVersionById(quizVersionId);
-
-    if (!updated) {
-      throw new QuizNotFoundError('Quiz version not found');
-    }
+    const updated = await this.refetchVersionOrThrow(quizVersionId);
 
     return updated;
   }
 
-  async publishQuizVersion(quizVersionId: string, user: JwtPayload): Promise<QuizVersionRow> {
+  async publishQuizVersion(
+    quizId: string,
+    quizVersionId: string,
+    user: JwtPayload,
+  ): Promise<QuizVersionRow> {
     const version = await this.quizVersionRepository.getQuizVersionDetailById(quizVersionId);
 
-    if (!version) {
+    if (!version || version.quizId !== quizId) {
       throw new QuizNotFoundError('Quiz version not found');
     }
 
     // Idempotent: already published → return current state without further side-effects.
     if (isAlreadyPublished(version.status)) {
-      const current = await this.quizVersionRepository.getQuizVersionById(quizVersionId);
-      if (!current) throw new QuizNotFoundError('Quiz version not found');
-      return current;
+      return this.refetchVersionOrThrow(quizVersionId);
     }
 
     const isOwner = QuizPolicy.isOwner(version.quizCreatorId, user);
@@ -295,15 +304,7 @@ export class QuizVersionService {
     });
 
     if (!publishedVersion) {
-      const current = await this.quizVersionRepository.getQuizVersionById(quizVersionId);
-
-      if (!current) {
-        this.logger.error({
-          event: 'quiz_version_publish_unexpected_null',
-          quizVersionId,
-        });
-        throw new QuizNotFoundError('Quiz version not found');
-      }
+      const current = await this.refetchVersionOrThrow(quizVersionId);
 
       return current;
     }

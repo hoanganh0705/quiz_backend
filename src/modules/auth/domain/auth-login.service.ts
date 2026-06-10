@@ -5,7 +5,7 @@ import type { LoginCommand } from './types/auth-commands';
 import type { SessionRequestContext } from '../types/auth-context.types';
 import { toAuthIdentity } from '../types/auth-context.types';
 import type { LoginResult } from '../types/auth-result.types';
-import { USER_REPOSITORY_PORT, type UserRepositoryPort } from './ports/user-repository.port';
+import { AUTH_USER_REPOSITORY_PORT, type UserRepositoryPort } from './ports/user-repository.port';
 import { TOKEN_PROVIDER, type TokenProvider } from './ports/token.provider';
 import { PASSWORD_PROVIDER, type PasswordProvider } from './ports/password.provider';
 import { SessionService } from './session.service';
@@ -17,7 +17,7 @@ import { VerificationTokenService } from './verification-token.service';
 @Injectable()
 export class AuthLoginService {
   constructor(
-    @Inject(USER_REPOSITORY_PORT)
+    @Inject(AUTH_USER_REPOSITORY_PORT)
     private readonly userRepository: UserRepositoryPort,
     @Inject(TOKEN_PROVIDER)
     private readonly tokenService: TokenProvider,

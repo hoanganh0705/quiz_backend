@@ -5,9 +5,13 @@ import {
   QuizNotFoundError,
   QuizForbiddenError,
   QuizConflictError,
+  QuizSlugConflictError,
   QuizValidationError,
   QuizVersionImmutableError,
   QuizInsufficientQuestionsError,
+  QuizQuestionPositionConflictError,
+  QuizAnswerOptionPositionConflictError,
+  QuizMultipleCorrectOptionsError,
 } from '../../domain/errors';
 
 const HTTP_ERROR_NAMES: Record<number, string> = {
@@ -51,12 +55,19 @@ export class QuizDomainExceptionFilter implements ExceptionFilter {
       };
     }
 
-    if (error instanceof QuizConflictError) {
-      return { status: HttpStatus.CONFLICT, message: 'Resource already exists' };
+    if (error instanceof QuizConflictError || error instanceof QuizSlugConflictError) {
+      return { status: HttpStatus.CONFLICT, message: error.message };
     }
 
-    if (error instanceof QuizValidationError) {
-      return { status: HttpStatus.BAD_REQUEST, message: 'Invalid request data' };
+    if (
+      error instanceof QuizQuestionPositionConflictError ||
+      error instanceof QuizAnswerOptionPositionConflictError
+    ) {
+      return { status: HttpStatus.CONFLICT, message: error.message };
+    }
+
+    if (error instanceof QuizValidationError || error instanceof QuizMultipleCorrectOptionsError) {
+      return { status: HttpStatus.BAD_REQUEST, message: error.message };
     }
 
     if (error instanceof QuizInsufficientQuestionsError) {

@@ -159,4 +159,4 @@ export interface UserRepositoryPort {
     eventPayload?: Record<string, unknown>;
   }): Promise<void>;
 }
-export const USER_REPOSITORY_PORT = Symbol('USER_REPOSITORY_PORT');
+export const AUTH_USER_REPOSITORY_PORT = Symbol('AUTH_USER_REPOSITORY_PORT');

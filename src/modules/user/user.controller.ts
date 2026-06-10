@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Query, UseFilters } from '@nestjs/common';
+import { Body, Controller, Get, Inject, Param, Patch, Query, UseFilters } from '@nestjs/common';
 import {
   ApiTags,
   ApiOperation,
@@ -33,13 +33,8 @@ import { UserBadgesResponseDto } from './dto/response/user-badges-response.dto';
 import { UserRankingResponseDto } from './dto/response/user-ranking-response.dto';
 import { UserAnalyticsResponseDto } from './dto/response/user-analytics-response.dto';
 import { UserApplicationService } from './application/user.application.service';
-import { UserActivityCursorMapper } from './mappers/user-activity-cursor.mapper';
 import { UserDomainExceptionFilter } from './transport/filters/user-domain-exception.filter';
-import { UserBadgeCursorMapper } from './mappers/user-badge-cursor.mapper';
-import type {
-  QUIZ_LISTING_PORT,
-  QuizListingPort,
-} from '@/modules/quiz/domain/analytics/ports/quiz-listing.port';
+import { QUIZ_LISTING_PORT, type QuizListingPort } from '@/modules/quiz/domain/analytics';
 
 @ApiTags('users')
 @ApiBearerAuth()
@@ -50,6 +45,7 @@ import type {
 export class UserController {
   constructor(
     private readonly userApplicationService: UserApplicationService,
+    @Inject(QUIZ_LISTING_PORT)
     private readonly quizListing: QuizListingPort,
   ) {}
 
@@ -118,11 +114,9 @@ export class UserController {
     @Query() query: ListUserBadgesQueryDto,
     @CurrentUser('sub') requesterId: string,
   ): Promise<UserBadgesResponseDto> {
-    const cursor = query.cursor ? UserBadgeCursorMapper.parse(query.cursor) : null;
-
     return this.userApplicationService.listUserBadges(userId, requesterId, {
       limit: query.limit,
-      cursor,
+      cursor: query.cursor,
     });
   }
 
@@ -154,11 +148,9 @@ export class UserController {
     @CurrentUser('sub') userId: string,
     @Query() query: ListUserBadgesQueryDto,
   ): Promise<UserBadgesResponseDto> {
-    const cursor = query.cursor ? UserBadgeCursorMapper.parse(query.cursor) : null;
-
     return this.userApplicationService.listUserBadges(userId, userId, {
       limit: query.limit,
-      cursor,
+      cursor: query.cursor,
     });
   }
 
@@ -174,11 +166,9 @@ export class UserController {
     @CurrentUser('sub') userId: string,
     @Query() query: ListUserActivityQueryDto,
   ): Promise<UserActivityResponseDto> {
-    const cursor = query.cursor ? UserActivityCursorMapper.parse(query.cursor) : null;
-
     return this.userApplicationService.listUserActivity(userId, {
       limit: query.limit,
-      cursor,
+      cursor: query.cursor,
     });
   }
 
@@ -201,7 +191,7 @@ export class UserController {
     @Query() query: GetMyTournamentHistoryQueryDto,
     @CurrentUser('sub') requesterId: string,
   ): Promise<MyTournamentHistoryResponseDto> {
-    return this.userApplicationService.getUserTournamentHistory(userId, requesterId, query);
+    return this.userApplicationService.getMyTournamentHistory(userId, requesterId, query);
   }
 
   @Get(':userId/tournaments')

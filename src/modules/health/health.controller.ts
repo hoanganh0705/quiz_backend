@@ -7,13 +7,13 @@ import { sql } from 'drizzle-orm';
 
 @ApiTags('health')
 @Controller('health')
-export class UserHealthController {
+export class HealthController {
   constructor(@Inject(DRIZZLE) private readonly db: DrizzleDB) {}
 
   @Get()
   @ApiOperation({
-    summary: 'User module readiness probe',
-    description: 'Verifies database connectivity for the user module.',
+    summary: 'Health check',
+    description: 'Verifies database connectivity.',
   })
   @ApiOkResponse({
     description: 'Health status',

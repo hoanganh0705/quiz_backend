@@ -102,6 +102,11 @@ export class QuizApplicationService implements QuizListingPort {
     };
   }
 
+  async getQuizById(quizId: string): Promise<QuizResponseDto> {
+    const quiz = await this.quizQueryService.getQuizById(quizId);
+    return QuizResponseMapper.toQuizResponse(quiz);
+  }
+
   async getQuizBySlug(slug: string): Promise<QuizResponseDto> {
     const { row, questions } = await this.quizQueryService.getQuizBySlug(slug);
     const mappedQuestions = questions
