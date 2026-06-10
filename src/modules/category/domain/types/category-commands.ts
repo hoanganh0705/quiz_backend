@@ -1,5 +1,12 @@
 import type { CategoryCursorPayload } from '../../types/category.types';
 
+export type CategoryPatch = {
+  name?: string;
+  description?: string | null;
+  slug?: string;
+  imageUrl?: string | null;
+};
+
 export type CreateCategoryCommand = {
   name: string;
   description?: string | null;
