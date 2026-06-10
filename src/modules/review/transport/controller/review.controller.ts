@@ -29,24 +29,14 @@ import { ReviewApplicationService } from '../../application/review.application.s
 import {
   HelpfulReviewDto,
   ReportReviewDto,
-  CreateReviewDto,
-  UpdateReviewDto,
-  ListReviewsQueryDto,
-  ListMyReviewsQueryDto,
 } from '../../dto/request';
 import {
-  ReviewListResponseDto,
-  CreateReviewResponseDto,
-  UpdateReviewResponseDto,
-  DeleteReviewResponseDto,
-  MyReviewsResponseDto,
   ReviewDetailResponseDto,
   ReviewDashboardResponseDto,
   HelpfulReviewResponseDto,
   ReportReviewResponseDto,
 } from '../../dto/response';
 import { ReviewDomainExceptionFilter } from '../filters/review-domain-exception.filter';
-import { ReviewCursorMapper } from '../../mappers/review-cursor.mapper';
 
 @ApiTags('reviews')
 @ApiBearerAuth()

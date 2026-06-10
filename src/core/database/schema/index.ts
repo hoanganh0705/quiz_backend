@@ -8,6 +8,7 @@ import {
   timestamp,
   unique,
   integer,
+  varchar,
   jsonb,
   foreignKey,
   boolean,
@@ -1513,12 +1514,18 @@ export const quizReviews = pgTable(
     updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'string' })
       .defaultNow()
       .notNull(),
+    helpfulCount: smallint('helpful_count').notNull().default(0),
   },
   (table) => [
     index('idx_quiz_reviews_quiz_created_at_desc').using(
       'btree',
       table.quizId.asc().nullsLast().op('uuid_ops'),
       table.createdAt.desc().nullsFirst().op('timestamptz_ops'),
+    ),
+    index('idx_quiz_reviews_quiz_rating').using(
+      'btree',
+      table.quizId.asc().nullsLast().op('uuid_ops'),
+      table.rating.desc().nullsLast().op('int2_ops'),
     ),
     index('idx_quiz_reviews_user_created_at_desc').using(
       'btree',
@@ -2578,5 +2585,30 @@ export const reviewReports = pgTable(
       name: 'review_reports_reporter_id_fkey',
     }).onDelete('cascade'),
     check('review_reports_reason_nonblank', sql`length(btrim(reason)) > 0`),
+  ],
+);
+
+export const idempotencyKeys = pgTable(
+  'idempotency_keys',
+  {
+    key: varchar('key', { length: 255 }).primaryKey().notNull(),
+    userId: uuid('user_id').notNull(),
+    operation: varchar('operation', { length: 64 }).notNull(),
+    response: jsonb('response'),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' })
+      .defaultNow()
+      .notNull(),
+    expiresAt: timestamp('expires_at', { withTimezone: true, mode: 'string' }).notNull(),
+  },
+  (table) => [
+    index('idx_idempotency_keys_expires_at').using(
+      'btree',
+      table.expiresAt.asc().nullsLast().op('timestamptz_ops'),
+    ),
+    index('idx_idempotency_keys_user_operation').using(
+      'btree',
+      table.userId.asc().nullsLast().op('uuid_ops'),
+      table.operation.asc().nullsLast().op('text_ops'),
+    ),
   ],
 );
