@@ -31,7 +31,6 @@ import {
   CreateReviewDto,
   UpdateReviewDto,
   ListReviewsQueryDto,
-  ReviewSort,
 } from '../../dto/request';
 import {
   ReviewListResponseDto,
@@ -40,11 +39,10 @@ import {
   DeleteReviewResponseDto,
   ReviewDetailResponseDto,
   ReviewStatsResponseDto,
-  MyQuizReviewResponseDto,
 } from '../../dto/response';
 import { QuizAnalyticsResponseDto } from '@/modules/quiz/dto/response/quiz-analytics.dto';
 import { ReviewDomainExceptionFilter } from '../filters/review-domain-exception.filter';
-import { ReviewCursorMapper } from '../../mappers/review-cursor.mapper';
+import { CursorMapper } from '../../mappers/review-cursor.mapper';
 
 @ApiTags('quizzes')
 @ApiBearerAuth()
@@ -90,7 +88,7 @@ export class QuizReviewController {
     @Query() query: ListReviewsQueryDto,
   ): Promise<ReviewListResponseDto> {
     const limit = query.limit ?? 20;
-    const cursor = query.cursor ? ReviewCursorMapper.parse(query.cursor) : null;
+    const cursor = query.cursor ? CursorMapper.parseReview(query.cursor) : null;
     return this.reviewApplicationService.listReviews(
       quizId,
       limit,
@@ -172,7 +170,7 @@ export class QuizReviewController {
   })
   @ApiOkResponse({
     description: 'My review returned (or null if no review)',
-    type: MyQuizReviewResponseDto,
+    type: ReviewDetailResponseDto,
     schema: {
       example: {
         reviewId: '550e8400-e29b-41d4-a716-446655440099',
@@ -194,7 +192,7 @@ export class QuizReviewController {
   async getMyQuizReview(
     @Param('quizId', new ParseUUIDPipe()) quizId: string,
     @CurrentUser() user: JwtPayload,
-  ): Promise<MyQuizReviewResponseDto | null> {
+  ): Promise<ReviewDetailResponseDto | null> {
     return this.reviewApplicationService.getMyQuizReview(quizId, user.sub);
   }
 
