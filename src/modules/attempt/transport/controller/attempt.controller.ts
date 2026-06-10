@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   HttpCode,
   HttpStatus,
@@ -32,6 +33,7 @@ import {
   SubmitAnswerResponseDto,
   AbandonAttemptResponseDto,
   CompleteAttemptResponseDto,
+  WithdrawAnswerResponseDto,
   AttemptAnswersResponseDto,
   AttemptAnalyticsResponseDto,
   UserAttemptStatsResponseDto,
@@ -108,6 +110,26 @@ export class AttemptController {
       payload.timeTakenMs,
       user,
     );
+  }
+
+  @Delete('attempts/:attemptId/answers/:questionId')
+  @HttpCode(HttpStatus.OK)
+  @ApiAuth()
+  @ApiOperation({
+    summary: 'Withdraw answer',
+    description:
+      'Deletes a previously submitted answer from an active attempt, allowing the user to skip or change their answer.',
+  })
+  @ApiOkResponse({ description: 'Answer withdrawn', type: WithdrawAnswerResponseDto })
+  @ApiNotFoundResponse({ description: 'Attempt or answer not found' })
+  @ApiConflictResponse({ description: 'Attempt is not in an active state' })
+  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  async withdrawAnswer(
+    @Param('attemptId', new ParseUUIDPipe()) attemptId: string,
+    @Param('questionId', new ParseUUIDPipe()) questionId: string,
+    @CurrentUser() user: JwtPayload,
+  ): Promise<WithdrawAnswerResponseDto> {
+    return this.attemptApplicationService.withdrawAnswer(attemptId, questionId, user);
   }
 
   @Post('attempts/:attemptId/abandon')

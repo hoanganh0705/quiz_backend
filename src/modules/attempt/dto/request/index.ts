@@ -157,4 +157,15 @@ export class SubmitAnswerDto {
   @IsInt()
   @Min(0)
   timeTakenMs?: number | null;
+
+  @ApiPropertyOptional({
+    description:
+      'Optional client-generated idempotency key. If provided, submitting the same answer ' +
+      'twice with the same key will return the existing answer record instead of raising a conflict.',
+    example: 'client-uuid-attempt-answer-001',
+    nullable: true,
+  })
+  @IsOptional()
+  @IsString()
+  idempotencyKey?: string;
 }

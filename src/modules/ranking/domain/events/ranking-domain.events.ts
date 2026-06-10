@@ -6,6 +6,9 @@
 
 import { RankingPeriod, RankingMilestone } from '../types/ranking.types';
 
+// Re-export ExternalXpEarnedEvent from the shared common location
+export type { ExternalXpEarnedEvent } from '@/common/events';
+
 /**
  * Event emitted when XP is successfully added to a user's ranking.
  */
@@ -102,17 +105,3 @@ export type RankingDomainEvent =
   | PeriodResetCompletedEvent
   | RankingMilestoneEvent
   | ConsistencyCheckEvent;
-
-/**
- * Event payloads for external consumption (XP earned from other domains).
- */
-export interface ExternalXpEarnedEvent {
-  readonly eventType: 'external.xp.earned';
-  readonly userId: string;
-  readonly amount: number;
-  readonly source: 'quiz_attempt' | 'tournament' | 'bonus' | 'achievement';
-  readonly attemptId?: string;
-  readonly tournamentId?: string;
-  readonly categoryId?: string;
-  readonly timestamp: Date;
-}

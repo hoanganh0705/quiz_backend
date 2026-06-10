@@ -68,12 +68,12 @@ export class AttemptApplicationService {
   }
 
   async abandonAttempt(attemptId: string, user: JwtPayload): Promise<AbandonAttemptResponseDto> {
-    const attempt = await this.attemptCommandService.abandonAttempt(attemptId, user);
+    const abandoned = await this.attemptCommandService.abandonAttempt(attemptId, user);
 
     return {
-      attemptId: attempt.attemptId,
-      status: attempt.status,
-      finishedAt: attempt.finishedAt ?? new Date().toISOString(),
+      attemptId: abandoned.attemptId,
+      status: abandoned.status,
+      finishedAt: abandoned.finishedAt ?? new Date().toISOString(),
       message: 'Attempt abandoned successfully',
     };
   }
@@ -169,5 +169,14 @@ export class AttemptApplicationService {
   async getMyAttemptStats(user: JwtPayload): Promise<UserAttemptStatsResponseDto> {
     const stats = await this.attemptQueryService.getUserAttemptStats(user.sub);
     return this.attemptResponseMapper.toUserAttemptStatsResponse(stats);
+  }
+
+  async withdrawAnswer(
+    attemptId: string,
+    questionId: string,
+    user: JwtPayload,
+  ): Promise<{ questionId: string; withdrawnAt: string }> {
+    await this.attemptCommandService.withdrawAnswer(attemptId, questionId, user);
+    return { questionId, withdrawnAt: new Date().toISOString() };
   }
 }

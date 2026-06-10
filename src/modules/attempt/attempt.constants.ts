@@ -5,7 +5,6 @@ export const ATTEMPT_ALREADY_STARTED_MESSAGE =
   'You already have an active attempt for this quiz version';
 export const ATTEMPT_ALREADY_FINISHED_MESSAGE =
   'This attempt has already been completed or abandoned';
-export const ATTEMPT_NOT_STARTED_MESSAGE = 'This attempt cannot be found or is not active';
 export const ATTEMPT_OPTION_INVALID_MESSAGE = 'Selected option does not belong to this question';
 export const ATTEMPT_QUESTION_ALREADY_ANSWERED_MESSAGE =
   'This question has already been answered in this attempt';

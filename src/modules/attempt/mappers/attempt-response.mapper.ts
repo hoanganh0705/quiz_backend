@@ -17,8 +17,6 @@ export class AttemptResponseMapper {
     attempt: AttemptDetailRow,
     answers: AttemptAnswerRow[],
   ): AttemptResponseDto {
-    const deduplicatedAnswers = this.deduplicateAnswers(answers);
-
     return {
       attemptId: attempt.attemptId,
       userId: attempt.userId,
@@ -39,7 +37,16 @@ export class AttemptResponseMapper {
       finishedAt: attempt.finishedAt,
       timeTakenMs: attempt.timeTakenMs,
       xpEarned: attempt.xpEarned,
-      answers: deduplicatedAnswers,
+      answers: answers.map(
+        (a): AttemptAnswerResponseDto => ({
+          attemptAnswerId: a.attemptAnswerId,
+          questionId: a.questionId,
+          selectedOptionId: a.selectedOptionId,
+          answeredAt: a.answeredAt,
+          timeTakenMs: a.timeTakenMs,
+          isCorrect: null,
+        }),
+      ),
     };
   }
 
@@ -72,7 +79,7 @@ export class AttemptResponseMapper {
       selectedOptionId: answer.selectedOptionId,
       answeredAt: answer.answeredAt,
       timeTakenMs: answer.timeTakenMs,
-      isCorrect: answer.isCorrect,
+      isCorrect: null,
     };
   }
 
@@ -92,38 +99,12 @@ export class AttemptResponseMapper {
       answers: answers.map(
         (a): AttemptAnswerItemDto => ({
           questionId: a.questionId,
-          selectedOptionIds: a.selectedOptionId ? [a.selectedOptionId] : [],
-          isCorrect: a.isCorrect,
+          selectedOptionId: a.selectedOptionId,
+          isCorrect: null,
           submittedAt: a.answeredAt,
         }),
       ),
     };
-  }
-
-  /**
-   * Deduplicates answers that may appear multiple times due to LEFT JOIN with quizAnswerOptions.
-   * The quizAttemptAnswers table has one row per answer, but LEFT JOIN can produce duplicate
-   * rows when joining with optional answer option data.
-   */
-  private deduplicateAnswers(answers: AttemptAnswerRow[]): AttemptAnswerResponseDto[] {
-    const seen = new Set<string>();
-
-    const result: AttemptAnswerResponseDto[] = [];
-    for (const answer of answers) {
-      if (!seen.has(answer.attemptAnswerId)) {
-        seen.add(answer.attemptAnswerId);
-        result.push({
-          attemptAnswerId: answer.attemptAnswerId,
-          questionId: answer.questionId,
-          selectedOptionId: answer.selectedOptionId,
-          answeredAt: answer.answeredAt,
-          timeTakenMs: answer.timeTakenMs,
-          isCorrect: answer.isCorrect,
-        });
-      }
-    }
-
-    return result;
   }
 
   /**
@@ -182,7 +163,6 @@ export class AttemptResponseMapper {
       completedAttempts: row.completedAttempts,
       abandonedAttempts: row.abandonedAttempts,
       averageScore: Number(row.averageScore.toFixed(2)),
-      averageAccuracy: Number(row.averageScore.toFixed(2)),
       totalTimeSpentSeconds: Number((row.totalTimeTakenMs / 1000).toFixed(2)),
       favoriteCategory: row.favoriteCategory,
       favoriteTag: row.favoriteTag,

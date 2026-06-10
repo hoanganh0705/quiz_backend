@@ -8,6 +8,9 @@ import { AttemptController } from './transport/controller/attempt.controller';
 import { AttemptDomainExceptionFilter } from './transport/filters/attempt-domain-exception.filter';
 import { ATTEMPT_REPOSITORY_PORT } from './domain/ports';
 import { AttemptRepository } from './infrastructure/repositories/attempt.repository';
+import { AttemptDomainEventBus } from './domain/events/attempt-domain.event-bus';
+import { ATTEMPT_DOMAIN_EVENT_BUS } from './domain/events/attempt-domain-event-bus.port';
+import { AttemptDomainEventBootstrapService } from './domain/events/attempt-domain-event-bootstrap.service';
 import { QuizModule } from '@/modules/quiz/quiz.module';
 
 @Module({
@@ -20,6 +23,12 @@ import { QuizModule } from '@/modules/quiz/quiz.module';
     AttemptCommandService,
     AttemptQueryService,
 
+    // Event Bus
+    AttemptDomainEventBus,
+
+    // Event Bootstrap
+    AttemptDomainEventBootstrapService,
+
     // Mapper
     AttemptResponseMapper,
 
@@ -28,8 +37,14 @@ import { QuizModule } from '@/modules/quiz/quiz.module';
 
     // Port bindings
     { provide: ATTEMPT_REPOSITORY_PORT, useExisting: AttemptRepository },
+    { provide: ATTEMPT_DOMAIN_EVENT_BUS, useExisting: AttemptDomainEventBus },
   ],
   controllers: [AttemptController],
-  exports: [AttemptApplicationService, ATTEMPT_REPOSITORY_PORT, AttemptCommandService],
+  exports: [
+    AttemptApplicationService,
+    ATTEMPT_REPOSITORY_PORT,
+    AttemptCommandService,
+    ATTEMPT_DOMAIN_EVENT_BUS,
+  ],
 })
 export class AttemptModule {}
