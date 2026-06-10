@@ -1,12 +1,13 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
-import { MetricsCalculatorService } from './metrics-calculator.service';
 import { TrendingService } from './trending.service';
 import { PopularityService } from './popularity.service';
 import {
   QUIZ_ANALYTICS_REPOSITORY_PORT,
+  METRICS_REPOSITORY_PORT,
   type QuizAnalyticsPort,
   type QuizAnalyticsRepositoryPort,
+  type MetricsRepositoryPort,
 } from './ports';
 import { QuizNotFoundError } from './errors';
 import type {
@@ -23,7 +24,8 @@ export class QuizAnalyticsService implements QuizAnalyticsPort {
   constructor(
     @Inject(QUIZ_ANALYTICS_REPOSITORY_PORT)
     private readonly analyticsRepository: QuizAnalyticsRepositoryPort,
-    private readonly metricsCalculator: MetricsCalculatorService,
+    @Inject(METRICS_REPOSITORY_PORT)
+    private readonly metricsRepository: MetricsRepositoryPort,
     private readonly trendingService: TrendingService,
     private readonly popularityService: PopularityService,
     @InjectPinoLogger(QuizAnalyticsService.name)
@@ -64,10 +66,10 @@ export class QuizAnalyticsService implements QuizAnalyticsPort {
     const nowIso = new Date().toISOString();
 
     const [totalAttempts, uniquePlayers, averageScore, completionRate] = await Promise.all([
-      this.metricsCalculator.calculateTotalAttempts(quizId),
-      this.metricsCalculator.calculateUniquePlayers(quizId),
-      this.metricsCalculator.calculateAverageScore(quizId),
-      this.metricsCalculator.calculateCompletionRate(quizId),
+      this.metricsRepository.calculateTotalAttempts(quizId),
+      this.metricsRepository.calculateUniquePlayers(quizId),
+      this.metricsRepository.calculateAverageScore(quizId),
+      this.metricsRepository.calculateCompletionRate(quizId),
     ]);
 
     await this.analyticsRepository.upsertQuizStats(quizId, {
@@ -93,8 +95,8 @@ export class QuizAnalyticsService implements QuizAnalyticsPort {
     const nowIso = new Date().toISOString();
 
     const [averageRating, ratingCount] = await Promise.all([
-      this.metricsCalculator.calculateAverageRating(quizId),
-      this.metricsCalculator.calculateRatingCount(quizId),
+      this.metricsRepository.calculateAverageRating(quizId),
+      this.metricsRepository.calculateRatingCount(quizId),
     ]);
 
     await this.analyticsRepository.upsertQuizStats(quizId, {
@@ -114,7 +116,7 @@ export class QuizAnalyticsService implements QuizAnalyticsPort {
   async refreshBookmarkMetrics(quizId: string): Promise<void> {
     const nowIso = new Date().toISOString();
 
-    const bookmarkCount = await this.metricsCalculator.calculateBookmarkCount(quizId);
+    const bookmarkCount = await this.metricsRepository.calculateBookmarkCount(quizId);
 
     await this.analyticsRepository.upsertQuizStats(quizId, {
       bookmarkCount,
@@ -171,12 +173,15 @@ export class QuizAnalyticsService implements QuizAnalyticsPort {
     const scores = await this.trendingService.refreshTrendingScores(quizIds);
     const nowIso = new Date().toISOString();
 
-    for (const [quizId, score] of scores) {
-      await this.analyticsRepository.upsertQuizStats(quizId, {
-        trendingScore: String(score.toFixed(4)),
-        lastCalculatedAt: nowIso,
-      });
-    }
+    await this.analyticsRepository.batchUpsertQuizStats(
+      Array.from(scores.entries()).map(([quizId, score]) => ({
+        quizId,
+        data: {
+          trendingScore: String(score.toFixed(4)),
+          lastCalculatedAt: nowIso,
+        },
+      })),
+    );
 
     this.logger.info({
       event: 'refresh_all_trending_scores_complete',
@@ -193,12 +198,15 @@ export class QuizAnalyticsService implements QuizAnalyticsPort {
     const scores = await this.popularityService.refreshPopularityScores(quizIds);
     const nowIso = new Date().toISOString();
 
-    for (const [quizId, score] of scores) {
-      await this.analyticsRepository.upsertQuizStats(quizId, {
-        popularityScore: String(score.toFixed(4)),
-        lastCalculatedAt: nowIso,
-      });
-    }
+    await this.analyticsRepository.batchUpsertQuizStats(
+      Array.from(scores.entries()).map(([quizId, score]) => ({
+        quizId,
+        data: {
+          popularityScore: String(score.toFixed(4)),
+          lastCalculatedAt: nowIso,
+        },
+      })),
+    );
 
     this.logger.info({
       event: 'refresh_all_popularity_scores_complete',

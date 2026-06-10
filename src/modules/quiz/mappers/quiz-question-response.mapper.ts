@@ -2,7 +2,7 @@ import type { QuizQuestionJoinRow } from '../domain/ports/quiz-question-reposito
 import type { QuizQuestionResponseDto } from '../dto/response/quiz-question-response.dto';
 import {
   hydrateQuestions,
-  type QuizQuestionAggregate,
+  type HydratedQuizQuestion,
 } from '../infrastructure/repositories/hydrators/quiz-question.hydrator';
 
 /**
@@ -20,7 +20,7 @@ export class QuizQuestionResponseMapper {
     return questions.map((q) => QuizQuestionResponseMapper.toQuestionResponse(q));
   }
 
-  private static toQuestionResponse(question: QuizQuestionAggregate): QuizQuestionResponseDto {
+  private static toQuestionResponse(question: HydratedQuizQuestion): QuizQuestionResponseDto {
     return {
       questionId: question.questionId,
       quizVersionId: question.quizVersionId,

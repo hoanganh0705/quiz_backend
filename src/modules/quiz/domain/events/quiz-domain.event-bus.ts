@@ -8,6 +8,7 @@ import type {
 } from './quiz-domain.events';
 import {
   type QuizDomainEventBusPort,
+  type QuizEventHandler,
   QUIZ_DOMAIN_EVENT_BUS,
 } from '../ports/quiz-domain-event-bus.port';
 
@@ -21,13 +22,9 @@ import {
  */
 @Injectable()
 export class QuizDomainEventBus implements QuizDomainEventBusPort {
-  private handlers: Array<(event: unknown) => void> = [];
+  private handlers: QuizEventHandler[] = [];
 
-  /**
-   * Subscribe to quiz domain events.
-   * Returns an unsubscribe function.
-   */
-  subscribe(handler: (event: unknown) => void): () => void {
+  subscribe(handler: QuizEventHandler): () => void {
     this.handlers.push(handler);
     return () => {
       const index = this.handlers.indexOf(handler);
@@ -37,9 +34,13 @@ export class QuizDomainEventBus implements QuizDomainEventBusPort {
     };
   }
 
-  emit(_event: unknown): void {
+  emit(event: unknown): void {
     for (const handler of this.handlers) {
-      handler(_event);
+      try {
+        handler(event);
+      } catch (error) {
+        console.error('[QuizDomainEventBus] Handler threw:', error);
+      }
     }
   }
 

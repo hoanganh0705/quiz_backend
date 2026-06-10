@@ -49,6 +49,7 @@ import { ListQuizzesQueryDto } from '../../dto/request/list-quizzes-query.dto';
 import { UpdateQuizDto } from '@/modules/quiz/dto/request/update-quiz.dto';
 import { DeleteQuizResponseDto } from '@/modules/quiz/dto/response/delete-quiz-response.dto';
 import { CreateQuizVersionDto } from '../../dto/request/create-quiz-version.dto';
+import { UpdateQuizVersionDto } from '../../dto/request/update-quiz-version.dto';
 import { ListQuizVersionsQueryDto } from '../../dto/request/list-quiz-versions-query.dto';
 import { QuizVersionListResponseDto } from '../../dto/response/quiz-version-list-response.dto';
 import { CreateQuizQuestionDto } from '@/modules/quiz/dto/request/create-quiz-question.dto';
@@ -221,6 +222,19 @@ export class QuizController {
     return this.quizApplicationService.getFeaturedQuizzes(query);
   }
 
+  @Get(':id')
+  @Public()
+  @ApiOperation({
+    summary: 'Get quiz by ID',
+    description: 'Returns a single quiz by its unique ID including the published version summary.',
+  })
+  @ApiOkResponse({ description: 'Quiz found', type: QuizResponseDto })
+  @ApiNotFoundResponse({ description: 'Quiz not found' })
+  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  getQuizById(@Param('id', new ParseUUIDPipe()) quizId: string): Promise<QuizResponseDto> {
+    return this.quizApplicationService.getQuizById(quizId);
+  }
+
   @Get(':id/stats')
   @Public()
   @ApiOperation({
@@ -380,6 +394,51 @@ export class QuizController {
     @CurrentUser() user: JwtPayload,
   ): Promise<QuizVersionDetailResponseDto> {
     return this.quizVersionApplicationService.getQuizVersionDetail(quizId, quizVersionId, user);
+  }
+
+  @Patch(':id/versions/:versionId')
+  @Permissions(Permission.QUIZ_VERSION_EDIT_OWN, Permission.QUIZ_VERSION_EDIT_ANY)
+  @ApiBearerAuth()
+  @ApiAuth()
+  @ApiOperation({
+    summary: 'Update quiz version',
+    description:
+      "Updates a quiz version's metadata (difficulty, duration, passing score, XP reward). Requires `quiz-version:edit:own` or `quiz-version:edit:any`.",
+  })
+  @ApiOkResponse({ description: 'Version updated', type: QuizVersionResponseDto })
+  @ApiNotFoundResponse({ description: 'Quiz or version not found' })
+  @ApiForbiddenResponse({ description: 'You do not have permission to edit this quiz version' })
+  @ApiBadRequestResponse({ description: 'Validation failed or quiz version is not editable' })
+  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  @ApiValidationRequest()
+  updateQuizVersion(
+    @Param('id', new ParseUUIDPipe()) quizId: string,
+    @Param('versionId', new ParseUUIDPipe()) quizVersionId: string,
+    @CurrentUser() user: JwtPayload,
+    @Body() payload: UpdateQuizVersionDto,
+  ): Promise<QuizVersionResponseDto> {
+    return this.quizVersionApplicationService.updateQuizVersion(quizId, quizVersionId, user, payload);
+  }
+
+  @Post(':id/versions/:versionId/publish')
+  @Permissions(Permission.QUIZ_VERSION_PUBLISH_OWN, Permission.QUIZ_VERSION_PUBLISH_ANY)
+  @ApiBearerAuth()
+  @ApiAuth()
+  @ApiOperation({
+    summary: 'Publish quiz version',
+    description: `Publishes a draft quiz version, making it available for attempts. Only one version per quiz can be published at a time. The version must contain at least ${5} questions. Requires \`quiz-version:publish:own\` or \`quiz-version:publish:any\`.`,
+  })
+  @ApiOkResponse({ description: 'Version published', type: QuizVersionResponseDto })
+  @ApiNotFoundResponse({ description: 'Quiz or version not found' })
+  @ApiForbiddenResponse({ description: 'You do not have permission to publish this quiz version' })
+  @ApiBadRequestResponse({ description: 'Validation failed or quiz version is not publishable' })
+  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  publishQuizVersion(
+    @Param('id', new ParseUUIDPipe()) quizId: string,
+    @Param('versionId', new ParseUUIDPipe()) quizVersionId: string,
+    @CurrentUser() user: JwtPayload,
+  ): Promise<QuizVersionResponseDto> {
+    return this.quizVersionApplicationService.publishQuizVersion(quizId, quizVersionId, user);
   }
 
   @Post(':id/versions/:versionId/questions')

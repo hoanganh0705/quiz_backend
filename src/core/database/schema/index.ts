@@ -733,6 +733,13 @@ export const userBadges = pgTable(
       table.revokedAt.asc().nullsLast().op('timestamptz_ops'),
       table.earnedAt.desc().nullsLast().op('timestamptz_ops'),
     ),
+    index('idx_user_badges_cursor_pagination').using(
+      'btree',
+      table.userId.asc().nullsLast().op('uuid_ops'),
+      table.revokedAt.asc().nullsLast().op('timestamptz_ops'),
+      table.earnedAt.desc().nullsLast().op('timestamptz_ops'),
+      table.userBadgeId.desc().nullsLast().op('uuid_ops'),
+    ),
     foreignKey({
       columns: [table.badgeId],
       foreignColumns: [badges.badgeId],
@@ -1121,6 +1128,11 @@ export const quizVersions = pgTable(
       'btree',
       table.quizId.asc().nullsLast().op('uuid_ops'),
     ),
+    index('idx_quiz_versions_quiz_status').using(
+      'btree',
+      table.quizId.asc().nullsLast().op('uuid_ops'),
+      table.status.asc().nullsLast().op('text_ops'),
+    ),
     foreignKey({
       columns: [table.createdByUserId],
       foreignColumns: [users.userId],
@@ -1373,6 +1385,12 @@ export const quizAttempts = pgTable(
       'btree',
       table.userId.asc().nullsLast().op('uuid_ops'),
       table.status.asc().nullsLast().op('text_ops'),
+    ),
+    index('idx_quiz_attempts_version_status_created').using(
+      'btree',
+      table.quizVersionId.asc().nullsLast().op('uuid_ops'),
+      table.status.asc().nullsLast().op('text_ops'),
+      table.createdAt.desc().nullsFirst().op('timestamptz_ops'),
     ),
     foreignKey({
       columns: [table.quizVersionId],
@@ -1818,6 +1836,17 @@ export const tournamentParticipants = pgTable(
       table.userId.asc().nullsLast().op('uuid_ops'),
       table.rankFinal.asc().nullsLast().op('int2_ops'),
     ).where(sql`rank_final IS NOT NULL`),
+    index('idx_tournament_participants_user_registered').using(
+      'btree',
+      table.userId.asc().nullsLast().op('uuid_ops'),
+      table.registeredAt.desc().nullsLast().op('timestamptz_ops'),
+      table.participantId.desc().nullsLast().op('uuid_ops'),
+    ),
+    index('idx_tournament_participants_user_completed').using(
+      'btree',
+      table.userId.asc().nullsLast().op('uuid_ops'),
+      table.participantId.desc().nullsLast().op('uuid_ops'),
+    ).where(sql`rank_final IS NOT NULL`),
     foreignKey({
       columns: [table.tournamentId],
       foreignColumns: [tournaments.tournamentId],
@@ -2000,6 +2029,12 @@ export const userActivityEvents = pgTable(
       'btree',
       table.userId.asc().nullsLast().op('uuid_ops'),
       table.createdAt.desc().nullsLast().op('timestamptz_ops'),
+    ),
+    index('idx_user_activity_events_cursor_pagination').using(
+      'btree',
+      table.userId.asc().nullsLast().op('uuid_ops'),
+      table.createdAt.desc().nullsLast().op('timestamptz_ops'),
+      table.eventId.desc().nullsLast().op('uuid_ops'),
     ),
     foreignKey({
       columns: [table.userId],

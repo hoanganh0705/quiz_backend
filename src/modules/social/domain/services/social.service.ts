@@ -2,12 +2,13 @@ import { BadRequestException, Inject, Injectable } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { SOCIAL_REPOSITORY_PORT, type SocialRepositoryPort } from '../ports/social-ports';
 import { SOCIAL_DOMAIN_EVENT_BUS, type SocialDomainEventBusPort } from '../ports';
-import { USER_SEARCH_PORT, type UserSearchPort } from '../ports/user-search.port';
+import { USER_SEARCH_PORT, type UserSearchPort } from '@/modules/user/domain/ports/user-search.port';
 import { RANKING_PORT, type RankingPort } from '../ports/ranking.port';
 import {
   USER_REPOSITORY_PORT,
   type UserRepositoryPort,
 } from '@/modules/user/domain/ports/user-repository.port';
+import type { UsernameSuggestion } from '@/modules/user/domain/ports/user-search.port';
 import type {
   FriendRequest,
   Friend,
@@ -29,7 +30,6 @@ import type {
   SocialFeedActivityType,
   UserSocialStats,
   MySocialAnalytics,
-  UsernameSuggestion,
   TrendingUsersResult,
 } from '../types/social.types';
 import {

@@ -80,7 +80,8 @@ export class SocialController {
   @ApiBadRequestResponse({ description: 'Validation failed' })
   @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
   async getSearchSuggestions(@Query() query: GetSearchSuggestionsQueryDto): Promise<string[]> {
-    return this.socialService.searchUsernameSuggestions(query.q, query.limit ?? 10);
+    const suggestions = await this.socialService.searchUsernameSuggestions(query.q, query.limit ?? 10);
+    return suggestions.map((s) => s.username);
   }
 
   @Throttle({ default: { limit: 20, ttl: 60_000 } })

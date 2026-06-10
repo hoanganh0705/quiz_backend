@@ -1,17 +1,21 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
-import { MetricsCalculatorService } from './metrics-calculator.service';
+import {
+  METRICS_REPOSITORY_PORT,
+  type MetricsRepositoryPort,
+} from './ports/metrics-repository.port';
 
 @Injectable()
 export class TrendingService {
   constructor(
-    private readonly metricsCalculator: MetricsCalculatorService,
+    @Inject(METRICS_REPOSITORY_PORT)
+    private readonly metricsRepository: MetricsRepositoryPort,
     @InjectPinoLogger(TrendingService.name)
     private readonly logger: PinoLogger,
   ) {}
 
   async calculateTrendingScore(quizId: string): Promise<number> {
-    return this.metricsCalculator.calculateTrendingScore(quizId);
+    return this.metricsRepository.calculateTrendingScore(quizId);
   }
 
   async refreshTrendingScores(quizIds: string[]): Promise<Map<string, number>> {

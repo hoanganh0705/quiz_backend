@@ -1,9 +1,9 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { DRIZZLE } from '@/core/database/drizzle.constants';
 import type { DrizzleDB } from '@/core/database/database.module';
-import { and, eq, ilike, isNull, or, sql } from 'drizzle-orm';
+import { and, eq, ilike, isNull, or } from 'drizzle-orm';
 import { userProfiles, users } from '@/core/database/schema';
-import type { UserSearchPort, UserSearchResult } from '../../domain/ports/user-search.port';
+import type { UserSearchPort, UserSearchResult, UsernameSuggestion } from '../../domain/ports/user-search.port';
 
 @Injectable()
 export class UserSearchAdapter implements UserSearchPort {
@@ -43,22 +43,25 @@ export class UserSearchAdapter implements UserSearchPort {
     return rows as UserSearchResult[];
   }
 
-  async searchUsernameSuggestions(query: string, limit: number): Promise<string[]> {
+  async searchUsernameSuggestions(query: string, limit: number): Promise<UsernameSuggestion[]> {
     if (!query || query.trim().length < 1) {
       return [];
     }
-    const prefixPattern = `${query}%`;
+
+    const searchPattern = `${query}%`;
 
     const rows = await this.db
-      .select({ username: users.username })
+      .select({
+        userId: users.userId,
+        username: users.username,
+        displayName: userProfiles.displayName,
+        avatarUrl: userProfiles.avatarUrl,
+      })
       .from(users)
-      .where(and(isNull(users.deletedAt), ilike(users.username, prefixPattern)))
-      .orderBy(
-        sql`CASE WHEN lower(${users.username}) = lower(${query}) THEN 0 ELSE 1 END`,
-        users.username,
-      )
+      .leftJoin(userProfiles, eq(users.userId, userProfiles.userId))
+      .where(and(isNull(users.deletedAt), ilike(users.username, searchPattern)))
       .limit(limit);
 
-    return rows.map((row) => row.username);
+    return rows as UsernameSuggestion[];
   }
 }

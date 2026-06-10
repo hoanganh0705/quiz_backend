@@ -1,12 +1,12 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { USER_REPOSITORY_PORT, type UserRepositoryPort } from './ports/user-repository.port';
+import { AUTH_USER_REPOSITORY_PORT, type UserRepositoryPort } from './ports/user-repository.port';
 import { normalizeEmail, normalizeUsername } from './utils/normalization.utils';
 import type { AvailabilityResult } from '../types/auth-result.types';
 
 @Injectable()
 export class RegistrationAvailabilityService {
   constructor(
-    @Inject(USER_REPOSITORY_PORT)
+    @Inject(AUTH_USER_REPOSITORY_PORT)
     private readonly userRepository: UserRepositoryPort,
   ) {}
 

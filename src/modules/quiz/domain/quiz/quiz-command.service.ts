@@ -38,6 +38,10 @@ export class QuizCommandService {
     @InjectPinoLogger(QuizCommandService.name) private readonly logger: PinoLogger,
   ) {}
 
+  private refetchQuiz(quizId: string): Promise<QuizWithPublishedVersionRow> {
+    return this.quizQueryService.getQuizById(quizId);
+  }
+
   async createQuiz(
     user: JwtPayload,
     command: CreateQuizCommand,
@@ -73,7 +77,7 @@ export class QuizCommandService {
 
     this.eventBus.emitQuizCreated(new QuizCreatedEvent(quizId, user.sub, normalizedSlug, nowIso));
 
-    return this.quizQueryService.getQuizById(quizId);
+    return this.refetchQuiz(quizId);
   }
 
   async updateQuiz(
@@ -129,7 +133,7 @@ export class QuizCommandService {
     const tagIds = hasTagIds ? normalizeLinkIds(command.tagIds ?? undefined) : null;
 
     if (Object.keys(patch).length === 0 && !hasCategoryIds && !hasTagIds) {
-      return this.quizQueryService.getQuizById(quizId);
+      return this.refetchQuiz(quizId);
     }
 
     const nowIso = new Date().toISOString();
@@ -146,7 +150,7 @@ export class QuizCommandService {
 
     this.eventBus.emitQuizUpdated(new QuizUpdatedEvent(quizId, user.sub, nowIso));
 
-    return this.quizQueryService.getQuizById(quizId);
+    return this.refetchQuiz(quizId);
   }
 
   async softDeleteQuizById(quizId: string, user: JwtPayload): Promise<{ message: string }> {

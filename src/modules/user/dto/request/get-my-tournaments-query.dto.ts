@@ -1,5 +1,6 @@
+import { Type } from 'class-transformer';
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsOptional, IsString } from 'class-validator';
+import { IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
 
 export class GetMyTournamentsQueryDto {
   @ApiPropertyOptional({
@@ -17,5 +18,9 @@ export class GetMyTournamentsQueryDto {
     default: 20,
   })
   @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(100)
   limit?: number;
 }

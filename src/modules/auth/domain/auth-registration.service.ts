@@ -8,7 +8,7 @@ import type {
 import type { RegisterResult, VerifyEmailResult } from '../types/auth-result.types';
 import { CRYPTO_PROVIDER, type CryptoProvider } from './ports/crypto.provider';
 import { PASSWORD_PROVIDER, type PasswordProvider } from './ports/password.provider';
-import { USER_REPOSITORY_PORT, type UserRepositoryPort } from './ports/user-repository.port';
+import { AUTH_USER_REPOSITORY_PORT, type UserRepositoryPort } from './ports/user-repository.port';
 import { normalizeEmail, normalizeUsername } from './utils/normalization.utils';
 import { InternalServerErrorException } from '@nestjs/common';
 import { VerificationTokenService } from './verification-token.service';
@@ -21,7 +21,7 @@ export class AuthRegistrationService {
     'If your registration can be completed, a verification email will be sent.';
 
   constructor(
-    @Inject(USER_REPOSITORY_PORT)
+    @Inject(AUTH_USER_REPOSITORY_PORT)
     private readonly userRepository: UserRepositoryPort,
     @Inject(CRYPTO_PROVIDER)
     private readonly cryptoService: CryptoProvider,
