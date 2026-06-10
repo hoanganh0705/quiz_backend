@@ -20,6 +20,7 @@ import {
   ApiParam,
   ApiTags,
 } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import { SocialApplicationService } from '@/modules/social/application/social-application.service';
 import {
   FriendRequestDto,
@@ -82,6 +83,7 @@ export class SocialController {
     return this.socialService.searchUsernameSuggestions(query.q, query.limit ?? 10);
   }
 
+  @Throttle({ default: { limit: 20, ttl: 60_000 } })
   @Get('users/search')
   async searchUsers(
     @User() user: JwtPayload,
@@ -157,7 +159,9 @@ export class SocialController {
   })
   @ApiBadRequestResponse({ description: 'Validation failed' })
   @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
-  async getTrendingUsers(@Query() query: GetTrendingUsersQueryDto): Promise<TrendingUsersListResponseDto> {
+  async getTrendingUsers(
+    @Query() query: GetTrendingUsersQueryDto,
+  ): Promise<TrendingUsersListResponseDto> {
     return this.socialService.getTrendingUsers(query.limit ?? 20);
   }
 
@@ -184,7 +188,12 @@ export class SocialController {
     @Param('userId', new ParseUUIDPipe()) targetUserId: string,
     @Query() query: GetUserFollowersQueryDto,
   ): Promise<UserActivityResponseDto> {
-    return this.socialService.getUserActivity(user, targetUserId, query.page ?? 1, query.limit ?? 20);
+    return this.socialService.getUserActivity(
+      user,
+      targetUserId,
+      query.page ?? 1,
+      query.limit ?? 20,
+    );
   }
 
   @Get('users/:userId/stats')
@@ -343,7 +352,8 @@ export class SocialController {
   @Get('users/:userId/followers')
   @ApiOperation({
     summary: 'Get user followers',
-    description: 'Returns a paginated list of followers for the specified user, ordered by newest follow first.',
+    description:
+      'Returns a paginated list of followers for the specified user, ordered by newest follow first.',
   })
   @ApiParam({
     name: 'userId',
@@ -362,7 +372,12 @@ export class SocialController {
     @Param('userId', new ParseUUIDPipe()) targetUserId: string,
     @Query() query: GetUserFollowersQueryDto,
   ): Promise<UserFollowersResponseDto> {
-    return this.socialService.getFollowersOfUser(user, targetUserId, query.page ?? 1, query.limit ?? 20);
+    return this.socialService.getFollowersOfUser(
+      user,
+      targetUserId,
+      query.page ?? 1,
+      query.limit ?? 20,
+    );
   }
 
   @Get('users/:userId/mutual-friends')
@@ -388,7 +403,12 @@ export class SocialController {
     @Param('userId', new ParseUUIDPipe()) targetUserId: string,
     @Query() query: GetUserFollowersQueryDto,
   ): Promise<MutualFriendsResponseDto> {
-    return this.socialService.getMutualFriends(user, targetUserId, query.page ?? 1, query.limit ?? 20);
+    return this.socialService.getMutualFriends(
+      user,
+      targetUserId,
+      query.page ?? 1,
+      query.limit ?? 20,
+    );
   }
 
   @Get('users/:userId/mutual-followers')
@@ -414,7 +434,12 @@ export class SocialController {
     @Param('userId', new ParseUUIDPipe()) targetUserId: string,
     @Query() query: GetUserFollowersQueryDto,
   ): Promise<MutualFollowersResponseDto> {
-    return this.socialService.getMutualFollowers(user, targetUserId, query.page ?? 1, query.limit ?? 20);
+    return this.socialService.getMutualFollowers(
+      user,
+      targetUserId,
+      query.page ?? 1,
+      query.limit ?? 20,
+    );
   }
 
   @Get('users/:userId/following')
@@ -440,7 +465,12 @@ export class SocialController {
     @Param('userId', new ParseUUIDPipe()) targetUserId: string,
     @Query() query: GetUserFollowersQueryDto,
   ): Promise<UserFollowingResponseDto> {
-    return this.socialService.getFollowingOfUser(user, targetUserId, query.page ?? 1, query.limit ?? 20);
+    return this.socialService.getFollowingOfUser(
+      user,
+      targetUserId,
+      query.page ?? 1,
+      query.limit ?? 20,
+    );
   }
 
   @Get('following')

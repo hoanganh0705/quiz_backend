@@ -5,21 +5,29 @@ describe('UserDomainService getMyTournamentAnalytics', () => {
   const createService = () => {
     const userRepository = {
       findMeById: jest.fn(),
+      findUserProfileSettings: jest.fn(),
       getMyTournamentAnalytics: jest.fn(),
     } as unknown as ConstructorParameters<typeof UserDomainService>[0];
+
+    const eventBus = {
+      subscribe: jest.fn(),
+      emitProfileUpdated: jest.fn(),
+      emitSettingsUpdated: jest.fn(),
+    } as unknown as ConstructorParameters<typeof UserDomainService>[1];
 
     const logger = {
       info: jest.fn(),
       warn: jest.fn(),
       error: jest.fn(),
-    } as ConstructorParameters<typeof UserDomainService>[1];
+    } as ConstructorParameters<typeof UserDomainService>[2];
 
-    const service = new UserDomainService(userRepository as never, logger as never);
+    const service = new UserDomainService(userRepository as never, eventBus as never, logger as never);
 
     return {
       service,
       userRepository: userRepository as {
         findMeById: jest.Mock;
+        findUserProfileSettings: jest.Mock;
         getMyTournamentAnalytics: jest.Mock;
       },
     };

@@ -40,14 +40,18 @@ export class MyTournamentHistoryItemDto {
 }
 
 export class MyTournamentHistoryPaginationDto {
-  @ApiProperty({ description: 'Total number of matching completed tournaments', example: 12 })
-  total!: number;
-
-  @ApiProperty({ description: 'Current page number', example: 1 })
-  page!: number;
-
   @ApiProperty({ description: 'Items per page', example: 20 })
   limit!: number;
+
+  @ApiProperty({ description: 'Whether more items exist after this page', example: true })
+  hasNextPage!: boolean;
+
+  @ApiProperty({
+    description: 'Cursor for the next page (base64-encoded { completedAt, participantId })',
+    nullable: true,
+    example: 'eyJjb21wbGV0ZWRBdCI6ICIyMDI2LTA2LTAxVDAwOjAwOjAwWiIsICJwYXJ0aWNpcGFudElkIjogIjY2MGU4NDgwLWUyOWItMzFkNC1hNzE2LTQ0NjY1NjU0NDAwMCJ9',
+  })
+  nextCursor!: string | null;
 }
 
 export class MyTournamentHistoryResponseDto {

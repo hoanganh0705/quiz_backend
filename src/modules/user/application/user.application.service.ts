@@ -4,6 +4,8 @@ import { UserResponseMapper } from '../mappers/user-response.mapper';
 import { UserBadgeCursorMapper } from '../mappers/user-badge-cursor.mapper';
 import { UserAnalyticsResponseMapper } from '../mappers/user-analytics-response.mapper';
 import { UserActivityCursorMapper } from '../mappers/user-activity-cursor.mapper';
+import { MyTournamentCursorMapper } from '../mappers/my-tournament-cursor.mapper';
+import { MyTournamentHistoryCursorMapper } from '../mappers/my-tournament-history-cursor.mapper';
 import { UpdateMeDto } from '../dto/request/update-me.dto';
 import { UpdateMeSettingsDto } from '../dto/request/update-me-settings.dto';
 import type { GetMyTournamentsQueryDto } from '../dto/request/get-my-tournaments-query.dto';
@@ -24,8 +26,6 @@ import type {
 } from '../domain/types/user-commands';
 import type { UserActivityRow } from '../domain/ports/user-repository.port';
 import type { ListUserActivityQuery } from '../domain/types/list-user-activity.query';
-import type { GetPublicTournamentProfileQuery } from '../domain/types/get-public-tournament-profile.query';
-import type { GetMyTournamentAnalyticsQuery } from '../domain/types/get-my-tournament-analytics.query';
 import { isObjectRecord } from '@/common/utils/object.util';
 
 @Injectable()
@@ -37,34 +37,27 @@ export class UserApplicationService {
     return UserResponseMapper.toUserMeResponse(row);
   }
 
-  async listUserBadges(userId: string, query: ListUserBadgesQuery): Promise<UserBadgesResponseDto> {
-    const { items, limit, hasNextPage, nextCursor } = await this.userDomainService.listUserBadges(
-      userId,
-      query,
-    );
-
-    return this.toUserBadgesResponse(items, limit, hasNextPage, nextCursor);
-  }
-
-  async listBadgesByUserId(
+  async listUserBadges(
     userId: string,
+    requesterId: string,
     query: ListUserBadgesQuery,
   ): Promise<UserBadgesResponseDto> {
     const { items, limit, hasNextPage, nextCursor } = await this.userDomainService.listUserBadges(
       userId,
+      requesterId,
       query,
     );
 
     return this.toUserBadgesResponse(items, limit, hasNextPage, nextCursor);
   }
 
-  async getUserRanking(userId: string): Promise<UserRankingResponseDto> {
-    const summary = await this.userDomainService.getUserRanking(userId);
+  async getUserRanking(userId: string, requesterId: string): Promise<UserRankingResponseDto> {
+    const summary = await this.userDomainService.getUserRanking(userId, requesterId);
     return summary;
   }
 
-  async getUserAnalytics(userId: string): Promise<UserAnalyticsResponseDto> {
-    const analytics = await this.userDomainService.getUserAnalytics(userId);
+  async getUserAnalytics(userId: string, requesterId: string): Promise<UserAnalyticsResponseDto> {
+    const analytics = await this.userDomainService.getUserAnalytics(userId, requesterId);
     return UserAnalyticsResponseMapper.toResponse(analytics);
   }
 
@@ -107,16 +100,21 @@ export class UserApplicationService {
 
   async getMyTournaments(
     userId: string,
+    requesterId: string,
     query: GetMyTournamentsQueryDto,
   ): Promise<MyTournamentsResponseDto> {
-    const result = await this.userDomainService.getMyTournaments({
-      userId,
-      page: query.page ?? 1,
-      limit: query.limit ?? 20,
-    });
+    const cursor = query.cursor ? MyTournamentCursorMapper.parse(query.cursor) : null;
+
+    const { items, limit, hasNextPage, nextCursor } =
+      await this.userDomainService.getMyTournaments({
+        userId,
+        requesterId,
+        limit: query.limit ?? 20,
+        cursor,
+      });
 
     return {
-      items: result.items.map((item) => ({
+      items: items.map((item) => ({
         tournamentId: item.tournamentId,
         name: item.name,
         status: item.status,
@@ -125,25 +123,32 @@ export class UserApplicationService {
         endAt: item.endAt,
       })),
       pagination: {
-        total: result.total,
-        page: result.page,
-        limit: result.limit,
+        limit,
+        hasNextPage,
+        nextCursor: nextCursor ? MyTournamentCursorMapper.serialize(nextCursor) : null,
       },
     };
   }
 
   async getMyTournamentHistory(
     userId: string,
+    requesterId: string,
     query: GetMyTournamentHistoryQueryDto,
   ): Promise<MyTournamentHistoryResponseDto> {
-    const result = await this.userDomainService.getMyTournamentHistory({
-      userId,
-      page: query.page ?? 1,
-      limit: query.limit ?? 20,
-    });
+    const cursor = query.cursor
+      ? MyTournamentHistoryCursorMapper.parse(query.cursor)
+      : null;
+
+    const { items, limit, hasNextPage, nextCursor } =
+      await this.userDomainService.getMyTournamentHistory({
+        userId,
+        requesterId,
+        limit: query.limit ?? 20,
+        cursor,
+      });
 
     return {
-      items: result.items.map((item) => ({
+      items: items.map((item) => ({
         tournamentId: item.tournamentId,
         tournamentName: item.tournamentName,
         rank: item.finalRank,
@@ -152,25 +157,34 @@ export class UserApplicationService {
         completedAt: item.completedAt,
       })),
       pagination: {
-        total: result.total,
-        page: result.page,
-        limit: result.limit,
+        limit,
+        hasNextPage,
+        nextCursor: nextCursor
+          ? MyTournamentHistoryCursorMapper.serialize(nextCursor)
+          : null,
       },
     };
   }
 
   async getUserTournamentHistory(
     userId: string,
+    requesterId: string,
     query: GetMyTournamentHistoryQueryDto,
   ): Promise<MyTournamentHistoryResponseDto> {
-    const result = await this.userDomainService.getUserTournamentHistory({
-      userId,
-      page: query.page ?? 1,
-      limit: query.limit ?? 20,
-    });
+    const cursor = query.cursor
+      ? MyTournamentHistoryCursorMapper.parse(query.cursor)
+      : null;
+
+    const { items, limit, hasNextPage, nextCursor } =
+      await this.userDomainService.getMyTournamentHistory({
+        userId,
+        requesterId,
+        limit: query.limit ?? 20,
+        cursor,
+      });
 
     return {
-      items: result.items.map((item) => ({
+      items: items.map((item) => ({
         tournamentId: item.tournamentId,
         tournamentName: item.tournamentName,
         rank: item.finalRank,
@@ -179,15 +193,20 @@ export class UserApplicationService {
         completedAt: item.completedAt,
       })),
       pagination: {
-        total: result.total,
-        page: result.page,
-        limit: result.limit,
+        limit,
+        hasNextPage,
+        nextCursor: nextCursor
+          ? MyTournamentHistoryCursorMapper.serialize(nextCursor)
+          : null,
       },
     };
   }
 
-  async getPublicTournamentProfile(userId: string): Promise<PublicTournamentProfileResponseDto> {
-    const profile = await this.userDomainService.getPublicTournamentProfile({ userId });
+  async getPublicTournamentProfile(
+    userId: string,
+    requesterId: string,
+  ): Promise<PublicTournamentProfileResponseDto> {
+    const profile = await this.userDomainService.getPublicTournamentProfile({ userId, requesterId });
 
     return {
       userId: profile.userId,

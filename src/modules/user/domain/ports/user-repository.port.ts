@@ -11,7 +11,7 @@ export interface UserMeRow {
   xpTotal: number;
   currentStreak: number;
   longestStreak: number;
-  settings: unknown;
+  settings: Record<string, unknown>;
   createdAt: string;
   updatedAt: string;
 }
@@ -31,17 +31,6 @@ export interface UserRankingRow {
   updatedAt: string;
 }
 
-export interface UserSearchResult {
-  userId: string;
-  username: string;
-  displayName: string | null;
-  avatarUrl: string | null;
-}
-
-export interface UsernameSuggestionRow {
-  username: string;
-}
-
 export interface UserActivityRow {
   eventId: string;
   eventType: string;
@@ -50,6 +39,7 @@ export interface UserActivityRow {
 }
 
 export interface MyTournamentRow {
+  participantId: string;
   tournamentId: string;
   name: string;
   status: TournamentStatus;
@@ -59,6 +49,7 @@ export interface MyTournamentRow {
 }
 
 export interface MyTournamentHistoryRow {
+  participantId: string;
   tournamentId: string;
   tournamentName: string;
   finalRank: number | null;
@@ -93,6 +84,7 @@ export interface MyTournamentAnalyticsRow {
 
 export interface UserRepositoryPort {
   findMeById(userId: string): Promise<UserMeRow | null>;
+  findUserProfileSettings(userId: string): Promise<{ isPublic: boolean } | null>;
   listUserBadges(params: {
     userId: string;
     limit: number;
@@ -100,8 +92,6 @@ export interface UserRepositoryPort {
   }): Promise<UserBadgeRow[]>;
   getUserRanking(userId: string): Promise<UserRankingRow | null>;
   getUserAnalytics(userId: string): Promise<UserAnalytics | null>;
-  searchUsers(query: string, limit: number, excludeUserId?: string): Promise<UserSearchResult[]>;
-  searchUsernameSuggestions(query: string, limit: number): Promise<string[]>;
   listUserActivity(params: {
     userId: string;
     limit: number;
@@ -109,14 +99,14 @@ export interface UserRepositoryPort {
   }): Promise<UserActivityRow[]>;
   listMyTournaments(params: {
     userId: string;
-    page: number;
     limit: number;
-  }): Promise<{ items: MyTournamentRow[]; total: number }>;
+    cursor?: { registeredAt: string; participantId: string } | null;
+  }): Promise<{ items: MyTournamentRow[]; hasNextPage: boolean }>;
   listMyTournamentHistory(params: {
     userId: string;
-    page: number;
     limit: number;
-  }): Promise<{ items: MyTournamentHistoryRow[]; total: number }>;
+    cursor?: { completedAt: string; participantId: string } | null;
+  }): Promise<{ items: MyTournamentHistoryRow[]; hasNextPage: boolean }>;
   getPublicTournamentProfile(userId: string): Promise<PublicTournamentProfileRow>;
   getMyTournamentAnalytics(userId: string): Promise<MyTournamentAnalyticsRow>;
   updateProfile(

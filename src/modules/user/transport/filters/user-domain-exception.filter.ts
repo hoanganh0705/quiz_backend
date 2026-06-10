@@ -4,11 +4,13 @@ import {
   UserAnalyticsNotFoundError,
   UserDomainError,
   UserNotFoundError,
+  UserProfilePrivateError,
   UserRankingNotFoundError,
 } from '../../domain/errors';
 
 const HTTP_ERROR_NAMES: Record<number, string> = {
   [HttpStatus.NOT_FOUND]: 'Not Found',
+  [HttpStatus.FORBIDDEN]: 'Forbidden',
   [HttpStatus.INTERNAL_SERVER_ERROR]: 'Internal Server Error',
 };
 
@@ -43,6 +45,10 @@ export class UserDomainExceptionFilter implements ExceptionFilter {
 
     if (error instanceof UserAnalyticsNotFoundError) {
       return { status: HttpStatus.NOT_FOUND, message: 'User analytics not found' };
+    }
+
+    if (error instanceof UserProfilePrivateError) {
+      return { status: HttpStatus.FORBIDDEN, message: error.message };
     }
 
     return { status: HttpStatus.INTERNAL_SERVER_ERROR, message: 'Internal server error' };
