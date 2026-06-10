@@ -157,8 +157,4 @@ export class AttemptQueryService {
   async getUserAttemptStats(userId: string) {
     return this.attemptRepository.getUserAttemptStats(userId);
   }
-
-  async checkQuizPublishStatus(quizId: string) {
-    return this.quizRepository.getQuizWithPublishedVersionById(quizId);
-  }
 }

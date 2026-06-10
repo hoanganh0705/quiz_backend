@@ -17,31 +17,25 @@ export class AttemptForbiddenError extends AttemptDomainError {
   }
 }
 
-export class AttemptConflictError extends AttemptDomainError {
-  constructor(message = 'Attempt conflict') {
-    super(message);
-  }
-}
-
 export class AttemptValidationError extends AttemptDomainError {
   constructor(message = 'Validation failed') {
     super(message);
   }
 }
 
-export class AttemptAlreadyStartedError extends AttemptConflictError {
+export class AttemptAlreadyStartedError extends AttemptDomainError {
   constructor(message = 'You already have an active attempt for this quiz version') {
     super(message);
   }
 }
 
-export class AttemptNotActiveError extends AttemptConflictError {
+export class AttemptNotActiveError extends AttemptDomainError {
   constructor(message = 'Attempt is not active (already completed or abandoned)') {
     super(message);
   }
 }
 
-export class AttemptQuestionAlreadyAnsweredError extends AttemptConflictError {
+export class AttemptQuestionAlreadyAnsweredError extends AttemptDomainError {
   constructor(message = 'This question has already been answered in this attempt') {
     super(message);
   }
@@ -55,6 +49,12 @@ export class QuizNotPublishedError extends AttemptValidationError {
 
 export class AttemptQuestionInvalidError extends AttemptValidationError {
   constructor(message = 'Question is invalid for this attempt') {
+    super(message);
+  }
+}
+
+export class AttemptAnswerNotFoundError extends AttemptDomainError {
+  constructor(message = 'Answer to withdraw not found') {
     super(message);
   }
 }
