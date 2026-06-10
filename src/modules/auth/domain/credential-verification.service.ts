@@ -1,12 +1,12 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { USER_REPOSITORY_PORT, type UserRepositoryPort } from './ports/user-repository.port';
+import { AUTH_USER_REPOSITORY_PORT, type UserRepositoryPort } from './ports/user-repository.port';
 import { PASSWORD_PROVIDER, type PasswordProvider } from './ports/password.provider';
 import type { CredentialVerificationResult } from '../types/auth-result.types';
 
 @Injectable()
 export class CredentialVerificationService {
   constructor(
-    @Inject(USER_REPOSITORY_PORT)
+    @Inject(AUTH_USER_REPOSITORY_PORT)
     private readonly userRepository: UserRepositoryPort,
     @Inject(PASSWORD_PROVIDER)
     private readonly passwordProvider: PasswordProvider,

@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
 import { SocialService } from '../domain/services/social.service';
+import type { UsernameSuggestion } from '@/modules/user/domain/ports/user-search.port';
 import type {
   FriendRequest,
   Friend,
@@ -19,7 +20,6 @@ import type {
   PaginatedUserActivityResult,
   UserSocialStats,
   MySocialAnalytics,
-  UsernameSuggestion,
   TrendingUsersResult,
 } from '../domain/types/social.types';
 

@@ -4,12 +4,13 @@ import { DRIZZLE } from '@/core/database/drizzle.constants';
 import type { DrizzleDB } from '@/core/database/database.module';
 import { quizAttempts, quizVersions, quizReviews, bookmarkedQuizzes } from '@/core/database/schema';
 import { count, eq, and, sql, gte } from 'drizzle-orm';
+import type { MetricsRepositoryPort } from '../../domain/analytics/ports/metrics-repository.port';
 
 @Injectable()
-export class MetricsCalculatorService {
+export class MetricsRepository implements MetricsRepositoryPort {
   constructor(
     @Inject(DRIZZLE) private readonly db: DrizzleDB,
-    @InjectPinoLogger(MetricsCalculatorService.name)
+    @InjectPinoLogger(MetricsRepository.name)
     private readonly logger: PinoLogger,
   ) {}
 
@@ -121,17 +122,11 @@ export class MetricsCalculatorService {
     const bookmarkWeight = 2;
     const reviewWeight = 3;
 
-    const attemptScore = await this.calculateRecentAttemptsScore(
-      quizId,
-      sevenDaysAgo,
-      attemptWeight,
-    );
-    const bookmarkScore = await this.calculateRecentBookmarksScore(
-      quizId,
-      sevenDaysAgo,
-      bookmarkWeight,
-    );
-    const reviewScore = await this.calculateRecentReviewsScore(quizId, sevenDaysAgo, reviewWeight);
+    const [attemptScore, bookmarkScore, reviewScore] = await Promise.all([
+      this.calculateRecentAttemptsScore(quizId, sevenDaysAgo, attemptWeight),
+      this.calculateRecentBookmarksScore(quizId, sevenDaysAgo, bookmarkWeight),
+      this.calculateRecentReviewsScore(quizId, sevenDaysAgo, reviewWeight),
+    ]);
 
     return attemptScore + bookmarkScore + reviewScore;
   }

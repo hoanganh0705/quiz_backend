@@ -36,7 +36,7 @@ import { EmailModule } from '@/modules/email/email.module';
 import { PASSWORD_PROVIDER } from './domain/ports/password.provider';
 import { TOKEN_PROVIDER } from './domain/ports/token.provider';
 import { CRYPTO_PROVIDER } from './domain/ports/crypto.provider';
-import { USER_REPOSITORY_PORT } from './domain/ports/user-repository.port';
+import { AUTH_USER_REPOSITORY_PORT } from './domain/ports/user-repository.port';
 import { SESSION_REPOSITORY_PORT } from './domain/ports/session-repository.port';
 import { EMAIL_PROVIDER } from './domain/ports/email.provider';
 import { CACHE_PROVIDER } from './domain/ports/cache.provider';
@@ -113,7 +113,7 @@ import { OAuthEventService } from './domain/oauth/oauth-event.service';
     { provide: CRYPTO_PROVIDER, useClass: CryptoAdapter },
     { provide: PASSWORD_PROVIDER, useClass: PasswordAdapter },
     // Port bindings
-    { provide: USER_REPOSITORY_PORT, useExisting: UserRepository },
+    { provide: AUTH_USER_REPOSITORY_PORT, useExisting: UserRepository },
     { provide: SESSION_REPOSITORY_PORT, useExisting: UserSessionRepository },
     { provide: EMAIL_PROVIDER, useExisting: EmailService },
     { provide: CACHE_PROVIDER, useExisting: RedisService },

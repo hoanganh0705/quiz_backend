@@ -1,6 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
-import { USER_REPOSITORY_PORT, type UserRepositoryPort } from './ports/user-repository.port';
+import { AUTH_USER_REPOSITORY_PORT, type UserRepositoryPort } from './ports/user-repository.port';
 import { PASSWORD_PROVIDER, type PasswordProvider } from './ports/password.provider';
 import { InvalidCredentialsError, DeletionFailedError } from './errors';
 import type { AccountDeletionResult } from '../types/auth-result.types';
@@ -11,7 +11,7 @@ const ACCOUNT_DELETION_SUCCESS_MESSAGE =
 @Injectable()
 export class AccountDeletionService {
   constructor(
-    @Inject(USER_REPOSITORY_PORT)
+    @Inject(AUTH_USER_REPOSITORY_PORT)
     private readonly userRepository: UserRepositoryPort,
     @Inject(PASSWORD_PROVIDER)
     private readonly passwordProvider: PasswordProvider,

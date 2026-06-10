@@ -1,7 +1,12 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
-import { MetricsCalculatorService } from './metrics-calculator.service';
-import { DRIZZLE } from '@/core/database/drizzle.constants';
+import {
+  METRICS_REPOSITORY_PORT,
+  type MetricsRepositoryPort,
+} from './ports/metrics-repository.port';
+import {
+  DRIZZLE,
+} from '@/core/database/drizzle.constants';
 import type { DrizzleDB } from '@/core/database/database.module';
 import { quizStats } from '@/core/database/schema';
 import { sql } from 'drizzle-orm';
@@ -9,7 +14,8 @@ import { sql } from 'drizzle-orm';
 @Injectable()
 export class PopularityService {
   constructor(
-    private readonly metricsCalculator: MetricsCalculatorService,
+    @Inject(METRICS_REPOSITORY_PORT)
+    private readonly metricsRepository: MetricsRepositoryPort,
     @Inject(DRIZZLE) private readonly db: DrizzleDB,
     @InjectPinoLogger(PopularityService.name)
     private readonly logger: PinoLogger,
@@ -31,7 +37,7 @@ export class PopularityService {
     const maxBookmarks = Number(stats[0]?.maxBookmarks ?? 0);
     const maxRatings = Number(stats[0]?.maxRatings ?? 0);
 
-    return this.metricsCalculator.calculatePopularityScore(
+    return this.metricsRepository.calculatePopularityScore(
       quizId,
       maxAttempts,
       maxBookmarks,
@@ -57,7 +63,7 @@ export class PopularityService {
 
     for (const quizId of quizIds) {
       try {
-        const score = await this.metricsCalculator.calculatePopularityScore(
+        const score = await this.metricsRepository.calculatePopularityScore(
           quizId,
           maxAttempts,
           maxBookmarks,

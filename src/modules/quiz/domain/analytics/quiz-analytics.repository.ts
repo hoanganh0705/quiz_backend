@@ -24,11 +24,48 @@ import type {
   TagAnalytics,
   QuizStatsRow,
 } from './types';
-import type { QuizAnalyticsRepositoryPort } from './ports/quiz-analytics.repository-port';
+import type {
+  QuizAnalyticsRepositoryPort,
+  QuizStatsUpsertPayload,
+} from './ports/quiz-analytics.repository-port';
 
 @Injectable()
 export class QuizAnalyticsRepository implements QuizAnalyticsRepositoryPort {
   constructor(@Inject(DRIZZLE) private readonly db: DrizzleDB) {}
+
+  private buildUpsertValues(quizId: string, data: Partial<QuizStatsRow>) {
+    return {
+      quizId,
+      totalAttempts: data.totalAttempts ?? 0,
+      totalPlayers: data.totalPlayers ?? 0,
+      avgScorePercent: data.avgScorePercent ?? '0',
+      avgRating: data.avgRating ?? '0',
+      ratingCount: data.ratingCount ?? 0,
+      bookmarkCount: data.bookmarkCount ?? 0,
+      completionRate: data.completionRate ?? '0',
+      popularityScore: data.popularityScore ?? '0',
+      trendingScore: data.trendingScore ?? '0',
+      lastAttemptAt: data.lastAttemptAt ?? null,
+      lastCalculatedAt: data.lastCalculatedAt ?? null,
+    };
+  }
+
+  private buildUpsertSet(data: Partial<QuizStatsRow>) {
+    return {
+      totalAttempts: data.totalAttempts ?? sql`${quizStats.totalAttempts}`,
+      totalPlayers: data.totalPlayers ?? sql`${quizStats.totalPlayers}`,
+      avgScorePercent: data.avgScorePercent ?? sql`${quizStats.avgScorePercent}`,
+      avgRating: data.avgRating ?? sql`${quizStats.avgRating}`,
+      ratingCount: data.ratingCount ?? sql`${quizStats.ratingCount}`,
+      bookmarkCount: data.bookmarkCount ?? sql`${quizStats.bookmarkCount}`,
+      completionRate: data.completionRate ?? sql`${quizStats.completionRate}`,
+      popularityScore: data.popularityScore ?? sql`${quizStats.popularityScore}`,
+      trendingScore: data.trendingScore ?? sql`${quizStats.trendingScore}`,
+      lastAttemptAt: data.lastAttemptAt ?? sql`${quizStats.lastAttemptAt}`,
+      lastCalculatedAt: data.lastCalculatedAt ?? sql`${quizStats.lastCalculatedAt}`,
+      updatedAt: new Date().toISOString(),
+    };
+  }
 
   // ─── STATS ──────────────────────────────────────────────────────────────────
 
@@ -38,40 +75,21 @@ export class QuizAnalyticsRepository implements QuizAnalyticsRepositoryPort {
   }
 
   async upsertQuizStats(quizId: string, data: Partial<QuizStatsRow>): Promise<void> {
-    // bigint { mode: 'number' } → number, numeric columns → string
     await this.db
       .insert(quizStats)
-      .values({
-        quizId,
-        totalAttempts: data.totalAttempts ?? 0, // bigint mode:'number' → number
-        totalPlayers: data.totalPlayers ?? 0, // bigint mode:'number' → number
-        avgScorePercent: data.avgScorePercent ?? '0', // numeric → string
-        avgRating: data.avgRating ?? '0', // numeric → string
-        ratingCount: data.ratingCount ?? 0,
-        bookmarkCount: data.bookmarkCount ?? 0,
-        completionRate: data.completionRate ?? '0', // numeric → string
-        popularityScore: data.popularityScore ?? '0', // numeric → string
-        trendingScore: data.trendingScore ?? '0', // numeric → string
-        lastAttemptAt: data.lastAttemptAt ?? null,
-        lastCalculatedAt: data.lastCalculatedAt ?? null,
-      })
+      .values(this.buildUpsertValues(quizId, data))
       .onConflictDoUpdate({
         target: quizStats.quizId,
-        set: {
-          totalAttempts: data.totalAttempts ?? sql`${quizStats.totalAttempts}`,
-          totalPlayers: data.totalPlayers ?? sql`${quizStats.totalPlayers}`,
-          avgScorePercent: data.avgScorePercent ?? sql`${quizStats.avgScorePercent}`,
-          avgRating: data.avgRating ?? sql`${quizStats.avgRating}`,
-          ratingCount: data.ratingCount ?? sql`${quizStats.ratingCount}`,
-          bookmarkCount: data.bookmarkCount ?? sql`${quizStats.bookmarkCount}`,
-          completionRate: data.completionRate ?? sql`${quizStats.completionRate}`,
-          popularityScore: data.popularityScore ?? sql`${quizStats.popularityScore}`,
-          trendingScore: data.trendingScore ?? sql`${quizStats.trendingScore}`,
-          lastAttemptAt: data.lastAttemptAt ?? sql`${quizStats.lastAttemptAt}`,
-          lastCalculatedAt: data.lastCalculatedAt ?? sql`${quizStats.lastCalculatedAt}`,
-          updatedAt: new Date().toISOString(),
-        },
+        set: this.buildUpsertSet(data),
       });
+  }
+
+  async batchUpsertQuizStats(entries: QuizStatsUpsertPayload[]): Promise<void> {
+    if (entries.length === 0) {
+      return;
+    }
+
+    await Promise.all(entries.map(({ quizId, data }) => this.upsertQuizStats(quizId, data)));
   }
 
   async getAllQuizStats(): Promise<QuizStatsRow[]> {

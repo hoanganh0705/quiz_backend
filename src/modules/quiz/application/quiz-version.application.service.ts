@@ -75,6 +75,7 @@ export class QuizVersionApplicationService {
   }
 
   async updateQuizVersion(
+    quizId: string,
     quizVersionId: string,
     user: JwtPayload,
     dto: UpdateQuizVersionDto,
@@ -85,15 +86,16 @@ export class QuizVersionApplicationService {
       passingScorePercent: dto.passingScorePercent,
       rewardXp: dto.rewardXp,
     };
-    const result = await this.quizVersionService.updateQuizVersion(quizVersionId, user, command);
+    const result = await this.quizVersionService.updateQuizVersion(quizId, quizVersionId, user, command);
     return QuizVersionResponseMapper.toQuizVersionResponse(result);
   }
 
   async publishQuizVersion(
+    quizId: string,
     quizVersionId: string,
     user: JwtPayload,
   ): Promise<QuizVersionResponseDto> {
-    const result = await this.quizVersionService.publishQuizVersion(quizVersionId, user);
+    const result = await this.quizVersionService.publishQuizVersion(quizId, quizVersionId, user);
     return QuizVersionResponseMapper.toQuizVersionResponse(result);
   }
 }

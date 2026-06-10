@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { USER_REPOSITORY_PORT, type UserRepositoryPort } from './ports/user-repository.port';
+import { AUTH_USER_REPOSITORY_PORT, type UserRepositoryPort } from './ports/user-repository.port';
 import { UserNotFoundError } from './errors';
 import type { CurrentUserResult } from '../types/auth-result.types';
 
@@ -13,7 +13,7 @@ export type AccountSecurityMetadata = {
 @Injectable()
 export class AccountSecurityService {
   constructor(
-    @Inject(USER_REPOSITORY_PORT)
+    @Inject(AUTH_USER_REPOSITORY_PORT)
     private readonly userRepository: UserRepositoryPort,
   ) {}
 

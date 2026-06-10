@@ -28,7 +28,7 @@ import { ACHIEVEMENT_REPOSITORY_PORT } from './infrastructure/repositories/achie
 import { RankingListenerAdapter } from './infrastructure/adapters/ranking-listener.adapter';
 import { AttemptEventListenerAdapter } from './infrastructure/adapters/attempt-listener.adapter';
 import { TournamentEventListenerAdapter } from './infrastructure/adapters/tournament-listener.adapter';
-import { UserProfileEventListenerAdapter } from './infrastructure/adapters/user-profile-listener.adapter';
+import { UserActivityListenerAdapter } from './infrastructure/adapters/user-activity-listener.adapter';
 
 // Application
 import { AchievementApplicationService } from './application/achievement.application.service';
@@ -37,13 +37,12 @@ import { AchievementApplicationService } from './application/achievement.applica
 import { AchievementController } from './transport/controller/achievement.controller';
 import { AchievementDomainExceptionFilter } from './transport/filters/achievement-domain-exception.filter';
 
-// Ranking module for event bus
-import { RankingModule } from '@/modules/ranking/ranking.module';
+// User module for activity event wiring
 import { UserModule } from '@/modules/user/user.module';
-import { UserDomainService } from '../user/domain/user.service';
+import { RankingModule } from '@/modules/ranking/ranking.module';
 
 @Module({
-  imports: [DatabaseModule, RankingModule, UserModule],
+  imports: [DatabaseModule, UserModule, RankingModule],
   controllers: [AchievementController],
   providers: [
     {
@@ -67,7 +66,6 @@ import { UserDomainService } from '../user/domain/user.service';
     BadgeVersioningService,
     RareBadgeService,
     BadgeAnalyticsService,
-    UserDomainService,
 
     // Infrastructure - Repository
     AchievementRepository,
@@ -80,7 +78,7 @@ import { UserDomainService } from '../user/domain/user.service';
     RankingListenerAdapter,
     AttemptEventListenerAdapter,
     TournamentEventListenerAdapter,
-    UserProfileEventListenerAdapter,
+    UserActivityListenerAdapter,
 
     // Application
     AchievementApplicationService,
@@ -113,7 +111,7 @@ import { UserDomainService } from '../user/domain/user.service';
     // Event Listeners
     AttemptEventListenerAdapter,
     TournamentEventListenerAdapter,
-    UserProfileEventListenerAdapter,
+    UserActivityListenerAdapter,
 
     // Application Service
     AchievementApplicationService,
