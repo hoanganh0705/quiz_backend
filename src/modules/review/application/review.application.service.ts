@@ -1,9 +1,10 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
 import type { QuizAnalyticsResponseDto } from '@/modules/quiz/dto/response/quiz-analytics.dto';
 import { ReviewService } from '../domain/review.service';
+import { IdempotencyService, IDEMPOTENCY_SERVICE } from '../domain/idempotency.service';
 import { ReviewResponseMapper } from '../mappers/review-response.mapper';
-import { ReviewCursorMapper, ReportCursorMapper } from '../mappers/review-cursor.mapper';
+import { CursorMapper } from '../mappers/review-cursor.mapper';
 import {
   HelpfulReviewDto,
   ReportReviewDto,
@@ -21,7 +22,6 @@ import {
   ReviewDashboardResponseDto,
   HelpfulReviewResponseDto,
   ReportReviewResponseDto,
-  MyQuizReviewResponseDto,
   ReportedReviewsResponseDto,
 } from '../dto/response';
 
@@ -29,6 +29,8 @@ import {
 export class ReviewApplicationService {
   constructor(
     private readonly reviewService: ReviewService,
+    @Inject(IDEMPOTENCY_SERVICE)
+    private readonly idempotencyService: IdempotencyService,
     private readonly reviewResponseMapper: ReviewResponseMapper,
   ) {}
 
@@ -37,6 +39,24 @@ export class ReviewApplicationService {
     payload: CreateReviewDto,
     user: JwtPayload,
   ): Promise<CreateReviewResponseDto> {
+    if (payload.idempotencyKey) {
+      const { response } = await this.idempotencyService.checkAndSet(
+        payload.idempotencyKey,
+        user.sub,
+        'createReview',
+        async () => {
+          const review = await this.reviewService.createReview(
+            quizId,
+            payload.rating,
+            payload.comment,
+            user,
+          );
+          return this.reviewResponseMapper.toCreateReviewResponse(review);
+        },
+      );
+      return response!;
+    }
+
     const review = await this.reviewService.createReview(
       quizId,
       payload.rating,
@@ -65,7 +85,7 @@ export class ReviewApplicationService {
       pagination: {
         limit,
         hasNextPage,
-        nextCursor: lastItem && hasNextPage ? ReviewCursorMapper.serialize(lastItem) : null,
+        nextCursor: lastItem && hasNextPage ? CursorMapper.serializeReview(lastItem) : null,
       },
     };
   }
@@ -84,7 +104,7 @@ export class ReviewApplicationService {
       pagination: {
         limit,
         hasNextPage,
-        nextCursor: nextCursor ? ReviewCursorMapper.serialize(nextCursor) : null,
+        nextCursor: nextCursor ? CursorMapper.serializeReview(nextCursor) : null,
       },
     };
   }
@@ -103,7 +123,7 @@ export class ReviewApplicationService {
       pagination: {
         limit,
         hasNextPage,
-        nextCursor: nextCursor ? ReviewCursorMapper.serialize(nextCursor) : null,
+        nextCursor: nextCursor ? CursorMapper.serializeReview(nextCursor) : null,
       },
     };
   }
@@ -113,16 +133,28 @@ export class ReviewApplicationService {
     return this.reviewResponseMapper.toReviewDetailResponse(review);
   }
 
-  async getMyQuizReview(quizId: string, userId: string): Promise<MyQuizReviewResponseDto | null> {
+  async getMyQuizReview(quizId: string, userId: string): Promise<ReviewDetailResponseDto | null> {
     const review = await this.reviewService.getMyQuizReview(quizId, userId);
     if (!review) {
       return null;
     }
-    return this.reviewResponseMapper.toMyQuizReviewResponse(review);
+    return this.reviewResponseMapper.toReviewDetailResponse(review);
   }
 
   async getQuizReviewStats(quizId: string): Promise<ReviewStatsResponseDto> {
-    return this.reviewService.getQuizReviewStats(quizId);
+    const stats = await this.reviewService.getQuizReviewStats(quizId);
+
+    return {
+      averageRating: Number(stats?.averageRating ?? 0),
+      totalReviews: Number(stats?.totalReviews ?? 0),
+      ratingDistribution: {
+        '1': Number(stats?.rating1 ?? 0),
+        '2': Number(stats?.rating2 ?? 0),
+        '3': Number(stats?.rating3 ?? 0),
+        '4': Number(stats?.rating4 ?? 0),
+        '5': Number(stats?.rating5 ?? 0),
+      },
+    };
   }
 
   async getMyReviewDashboard(user: JwtPayload): Promise<ReviewDashboardResponseDto> {
@@ -141,6 +173,19 @@ export class ReviewApplicationService {
     payload: HelpfulReviewDto,
     user: JwtPayload,
   ): Promise<HelpfulReviewResponseDto> {
+    if (payload.idempotencyKey) {
+      await this.idempotencyService.checkAndSet(
+        payload.idempotencyKey,
+        user.sub,
+        'markReviewHelpful',
+        async () => {
+          await this.reviewService.markReviewHelpful(reviewId, payload.helpful, user.sub);
+          return { message: 'Review marked as helpful' };
+        },
+      );
+      return { message: 'Review marked as helpful' };
+    }
+
     await this.reviewService.markReviewHelpful(reviewId, payload.helpful, user.sub);
     return { message: 'Review marked as helpful' };
   }
@@ -155,6 +200,24 @@ export class ReviewApplicationService {
     user: JwtPayload,
     payload: ReportReviewDto,
   ): Promise<ReportReviewResponseDto> {
+    if (payload.idempotencyKey) {
+      await this.idempotencyService.checkAndSet(
+        payload.idempotencyKey,
+        user.sub,
+        'reportReview',
+        async () => {
+          await this.reviewService.reportReview(
+            reviewId,
+            user.sub,
+            payload.reason,
+            payload.details ?? null,
+          );
+          return { message: 'Review reported successfully' };
+        },
+      );
+      return { message: 'Review reported successfully' };
+    }
+
     await this.reviewService.reportReview(
       reviewId,
       user.sub,
@@ -178,7 +241,7 @@ export class ReviewApplicationService {
       pagination: {
         limit,
         hasNextPage,
-        nextCursor: nextCursor ? ReportCursorMapper.serialize(nextCursor) : null,
+        nextCursor: nextCursor ? CursorMapper.serializeReport(nextCursor) : null,
       },
     };
   }
