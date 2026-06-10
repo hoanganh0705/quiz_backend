@@ -3,7 +3,6 @@ import {
   COLLECTION_FORBIDDEN_MESSAGE,
   BOOKMARK_QUIZ_ALREADY_EXISTS_MESSAGE,
   COLLECTION_NOT_FOUND_MESSAGE,
-  COLLECTION_ANALYTICS_NOT_FOUND_MESSAGE,
   COLLECTION_NAME_CONFLICT_MESSAGE,
 } from '../../bookmark.constants';
 
@@ -20,19 +19,7 @@ export class BookmarkNotFoundError extends BookmarkDomainError {
   }
 }
 
-export class BookmarkForbiddenError extends BookmarkDomainError {
-  constructor(message = COLLECTION_FORBIDDEN_MESSAGE) {
-    super(message);
-  }
-}
-
 export class BookmarkConflictError extends BookmarkDomainError {
-  constructor(message = BOOKMARK_QUIZ_ALREADY_EXISTS_MESSAGE) {
-    super(message);
-  }
-}
-
-export class BookmarkAlreadyExistsError extends BookmarkDomainError {
   constructor(message = BOOKMARK_QUIZ_ALREADY_EXISTS_MESSAGE) {
     super(message);
   }
@@ -51,7 +38,7 @@ export class CollectionNotFoundError extends BookmarkDomainError {
 }
 
 export class BookmarkCollectionNotFoundError extends BookmarkDomainError {
-  constructor(message = COLLECTION_ANALYTICS_NOT_FOUND_MESSAGE) {
+  constructor(message = COLLECTION_NOT_FOUND_MESSAGE) {
     super(message);
   }
 }
