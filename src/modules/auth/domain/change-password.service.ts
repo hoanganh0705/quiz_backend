@@ -1,6 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
-import { USER_REPOSITORY_PORT, type UserRepositoryPort } from './ports/user-repository.port';
+import { AUTH_USER_REPOSITORY_PORT, type UserRepositoryPort } from './ports/user-repository.port';
 import { PASSWORD_PROVIDER, type PasswordProvider } from './ports/password.provider';
 import { SecurityConfig } from '../config/security.config';
 import { InvalidPasswordError, PasswordReuseError, UserNotFoundError } from './errors';
@@ -8,7 +8,7 @@ import { InvalidPasswordError, PasswordReuseError, UserNotFoundError } from './e
 @Injectable()
 export class ChangePasswordService {
   constructor(
-    @Inject(USER_REPOSITORY_PORT)
+    @Inject(AUTH_USER_REPOSITORY_PORT)
     private readonly userRepository: UserRepositoryPort,
     @Inject(PASSWORD_PROVIDER)
     private readonly passwordProvider: PasswordProvider,

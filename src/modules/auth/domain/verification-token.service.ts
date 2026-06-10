@@ -3,12 +3,12 @@ import { randomBytes } from 'crypto';
 import { EmailVerificationConfig } from '../config/email-verification.config';
 import { CRYPTO_PROVIDER, type CryptoProvider } from './ports/crypto.provider';
 import { EMAIL_PROVIDER, type EmailProvider } from './ports/email.provider';
-import { USER_REPOSITORY_PORT, type UserRepositoryPort } from './ports/user-repository.port';
+import { AUTH_USER_REPOSITORY_PORT, type UserRepositoryPort } from './ports/user-repository.port';
 
 @Injectable()
 export class VerificationTokenService {
   constructor(
-    @Inject(USER_REPOSITORY_PORT)
+    @Inject(AUTH_USER_REPOSITORY_PORT)
     private readonly userRepository: UserRepositoryPort,
     @Inject(CRYPTO_PROVIDER)
     private readonly cryptoService: CryptoProvider,

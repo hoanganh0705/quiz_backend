@@ -19,13 +19,10 @@ import type { MyTournamentsResponseDto } from '../dto/response/my-tournaments-re
 import type { MyTournamentHistoryResponseDto } from '../dto/response/my-tournament-history-response.dto';
 import type { MyTournamentAnalyticsResponseDto } from '../dto/response/my-tournament-analytics-response.dto';
 import type { PublicTournamentProfileResponseDto } from '../dto/response/public-tournament-profile-response.dto';
-import type {
-  ListUserBadgesQuery,
-  UpdateProfileCommand,
-  UpdateSettingsCommand,
-} from '../domain/types/user-commands';
+import type { ListUserBadgesQueryDto } from '../dto/request/list-user-badges-query.dto';
+import type { ListUserActivityQueryDto } from '../dto/request/list-user-activity-query.dto';
+import type { UpdateProfileCommand, UpdateSettingsCommand } from '../domain/types/user-commands';
 import type { UserActivityRow } from '../domain/ports/user-repository.port';
-import type { ListUserActivityQuery } from '../domain/types/list-user-activity.query';
 import { isObjectRecord } from '@/common/utils/object.util';
 
 @Injectable()
@@ -40,12 +37,14 @@ export class UserApplicationService {
   async listUserBadges(
     userId: string,
     requesterId: string,
-    query: ListUserBadgesQuery,
+    query: ListUserBadgesQueryDto,
   ): Promise<UserBadgesResponseDto> {
+    const cursor = query.cursor ? UserBadgeCursorMapper.parse(query.cursor) : null;
+
     const { items, limit, hasNextPage, nextCursor } = await this.userDomainService.listUserBadges(
       userId,
       requesterId,
-      query,
+      { limit: query.limit, cursor },
     );
 
     return this.toUserBadgesResponse(items, limit, hasNextPage, nextCursor);
@@ -81,11 +80,13 @@ export class UserApplicationService {
 
   async listUserActivity(
     userId: string,
-    query: ListUserActivityQuery,
+    query: ListUserActivityQueryDto,
   ): Promise<UserActivityResponseDto> {
+    const cursor = query.cursor ? UserActivityCursorMapper.parse(query.cursor) : null;
+
     const { items, limit, hasNextPage, nextCursor } = await this.userDomainService.listUserActivity(
       userId,
-      query,
+      { limit: query.limit, cursor },
     );
 
     return {
@@ -105,13 +106,14 @@ export class UserApplicationService {
   ): Promise<MyTournamentsResponseDto> {
     const cursor = query.cursor ? MyTournamentCursorMapper.parse(query.cursor) : null;
 
-    const { items, limit, hasNextPage, nextCursor } =
-      await this.userDomainService.getMyTournaments({
+    const { items, limit, hasNextPage, nextCursor } = await this.userDomainService.getMyTournaments(
+      {
         userId,
         requesterId,
         limit: query.limit ?? 20,
         cursor,
-      });
+      },
+    );
 
     return {
       items: items.map((item) => ({
@@ -135,9 +137,7 @@ export class UserApplicationService {
     requesterId: string,
     query: GetMyTournamentHistoryQueryDto,
   ): Promise<MyTournamentHistoryResponseDto> {
-    const cursor = query.cursor
-      ? MyTournamentHistoryCursorMapper.parse(query.cursor)
-      : null;
+    const cursor = query.cursor ? MyTournamentHistoryCursorMapper.parse(query.cursor) : null;
 
     const { items, limit, hasNextPage, nextCursor } =
       await this.userDomainService.getMyTournamentHistory({
@@ -159,45 +159,7 @@ export class UserApplicationService {
       pagination: {
         limit,
         hasNextPage,
-        nextCursor: nextCursor
-          ? MyTournamentHistoryCursorMapper.serialize(nextCursor)
-          : null,
-      },
-    };
-  }
-
-  async getUserTournamentHistory(
-    userId: string,
-    requesterId: string,
-    query: GetMyTournamentHistoryQueryDto,
-  ): Promise<MyTournamentHistoryResponseDto> {
-    const cursor = query.cursor
-      ? MyTournamentHistoryCursorMapper.parse(query.cursor)
-      : null;
-
-    const { items, limit, hasNextPage, nextCursor } =
-      await this.userDomainService.getMyTournamentHistory({
-        userId,
-        requesterId,
-        limit: query.limit ?? 20,
-        cursor,
-      });
-
-    return {
-      items: items.map((item) => ({
-        tournamentId: item.tournamentId,
-        tournamentName: item.tournamentName,
-        rank: item.finalRank,
-        score: item.finalScore,
-        participantCount: item.participantCount,
-        completedAt: item.completedAt,
-      })),
-      pagination: {
-        limit,
-        hasNextPage,
-        nextCursor: nextCursor
-          ? MyTournamentHistoryCursorMapper.serialize(nextCursor)
-          : null,
+        nextCursor: nextCursor ? MyTournamentHistoryCursorMapper.serialize(nextCursor) : null,
       },
     };
   }
@@ -206,7 +168,10 @@ export class UserApplicationService {
     userId: string,
     requesterId: string,
   ): Promise<PublicTournamentProfileResponseDto> {
-    const profile = await this.userDomainService.getPublicTournamentProfile({ userId, requesterId });
+    const profile = await this.userDomainService.getPublicTournamentProfile({
+      userId,
+      requesterId,
+    });
 
     return {
       userId: profile.userId,

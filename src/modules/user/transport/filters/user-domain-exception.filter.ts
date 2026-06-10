@@ -19,9 +19,12 @@ const HTTP_ERROR_NAMES: Record<number, string> = {
  * free of framework-specific exception types while preserving identical
  * HTTP status codes and response bodies.
  */
-@Catch(UserDomainError)
+@Catch(UserDomainError, UserProfilePrivateError)
 export class UserDomainExceptionFilter implements ExceptionFilter {
-  catch(exception: UserDomainError, host: ArgumentsHost): void {
+  catch(
+    exception: UserDomainError | UserProfilePrivateError,
+    host: ArgumentsHost,
+  ): void {
     const ctx = host.switchToHttp();
     const response = ctx.getResponse<Response>();
 
@@ -34,7 +37,10 @@ export class UserDomainExceptionFilter implements ExceptionFilter {
     });
   }
 
-  private mapToHttp(error: UserDomainError): { status: number; message: string } {
+  private mapToHttp(error: UserDomainError | UserProfilePrivateError): {
+    status: number;
+    message: string;
+  } {
     if (error instanceof UserNotFoundError) {
       return { status: HttpStatus.NOT_FOUND, message: 'User not found' };
     }

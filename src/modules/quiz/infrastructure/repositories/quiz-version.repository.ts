@@ -4,6 +4,10 @@ import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 import { DRIZZLE } from '@/core/database/drizzle.constants';
 import type { DrizzleDB } from '@/core/database/database.module';
 import { quizVersions, quizzes } from '@/core/database/schema';
+import {
+  isPostgresUniqueViolation,
+  isPostgresForeignKeyViolation,
+} from '@/common/utils/db-error.util';
 import { QuizConflictError, QuizDomainError } from '@/modules/quiz/domain/errors';
 import { QUIZ_VERSION_CONFLICT_MESSAGE } from '@/modules/quiz/quiz.constants';
 import type {
@@ -320,13 +324,11 @@ export class QuizVersionRepository implements QuizVersionRepositoryPort {
   }
 
   private mapInsertError(error: unknown): never {
-    const maybePgError = error as { code?: string; constraint?: string };
-
-    if (maybePgError.code === '23505') {
+    if (isPostgresUniqueViolation(error)) {
       throw new QuizConflictError(QUIZ_VERSION_CONFLICT_MESSAGE);
     }
 
-    if (maybePgError.code === '23503') {
+    if (isPostgresForeignKeyViolation(error)) {
       throw new QuizConflictError('Quiz not found');
     }
 

@@ -1,4 +1,6 @@
-export class UserProfilePrivateError extends Error {
+import { UserDomainError } from './user-domain.errors';
+
+export class UserProfilePrivateError extends UserDomainError {
   readonly code = 'USER_PROFILE_PRIVATE';
 
   constructor(targetUserId: string) {

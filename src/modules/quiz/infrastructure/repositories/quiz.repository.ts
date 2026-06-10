@@ -5,6 +5,10 @@ import { DRIZZLE } from '@/core/database/drizzle.constants';
 import type { DrizzleDB } from '@/core/database/database.module';
 import { quizCategories, quizTags, quizVersions, quizzes } from '@/core/database/schema';
 import {
+  isPostgresUniqueViolation,
+  isPostgresForeignKeyViolation,
+} from '@/common/utils/db-error.util';
+import {
   QuizSlugConflictError,
   QuizValidationError,
   QuizDomainError,
@@ -626,13 +630,11 @@ export class QuizRepository implements QuizRepositoryPort {
   }
 
   private mapCreateError(error: unknown): never {
-    const maybePgError = error as { code?: string; constraint?: string };
-
-    if (maybePgError.code === '23505') {
+    if (isPostgresUniqueViolation(error)) {
       throw new QuizSlugConflictError(QUIZ_SLUG_CONFLICT_MESSAGE);
     }
 
-    if (maybePgError.code === '23503') {
+    if (isPostgresForeignKeyViolation(error)) {
       throw new QuizValidationError(QUIZ_LINK_IDS_INVALID_MESSAGE);
     }
 
@@ -640,13 +642,11 @@ export class QuizRepository implements QuizRepositoryPort {
   }
 
   private mapUpdateError(error: unknown): never {
-    const maybePgError = error as { code?: string };
-
-    if (maybePgError.code === '23505') {
+    if (isPostgresUniqueViolation(error)) {
       throw new QuizSlugConflictError(QUIZ_SLUG_CONFLICT_MESSAGE);
     }
 
-    if (maybePgError.code === '23503') {
+    if (isPostgresForeignKeyViolation(error)) {
       throw new QuizValidationError(QUIZ_LINK_IDS_INVALID_MESSAGE);
     }
 

@@ -9,7 +9,7 @@ import { SessionService } from './session.service';
 import { SecurityService } from './security.service';
 import { type SessionRecord } from './ports/session-repository.port';
 import { CRYPTO_PROVIDER, type CryptoProvider } from './ports/crypto.provider';
-import { USER_REPOSITORY_PORT, type UserRepositoryPort } from './ports/user-repository.port';
+import { AUTH_USER_REPOSITORY_PORT, type UserRepositoryPort } from './ports/user-repository.port';
 import { SessionContextMismatchError, TokenReuseDetectedError, UserNotFoundError } from './errors';
 
 const REFRESH_TOKEN_REUSE_MESSAGE = 'Refresh token reuse detected. All sessions have been revoked';
@@ -23,7 +23,7 @@ export class AuthRefreshService {
     private readonly securityService: SecurityService,
     @Inject(CRYPTO_PROVIDER)
     private readonly cryptoService: CryptoProvider,
-    @Inject(USER_REPOSITORY_PORT)
+    @Inject(AUTH_USER_REPOSITORY_PORT)
     private readonly userRepository: UserRepositoryPort,
     @InjectPinoLogger(AuthRefreshService.name) private readonly logger: PinoLogger,
   ) {}

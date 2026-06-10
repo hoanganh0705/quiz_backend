@@ -1,57 +1,26 @@
 import type { QuizCursor } from '../../domain/ports/quiz-repository.port';
 import type { QuizVersionCursor } from '../../domain/ports/quiz-version-repository.port';
-import { QuizValidationError } from '../../domain/errors';
-import {
-  encodeBase64JsonCursor,
-  decodeBase64JsonCursor,
-  isIsoDateString,
-} from '@/common/utils/cursor.util';
 
-// ---------------------------------------------------------------------------
-// Quiz cursor
-// ---------------------------------------------------------------------------
+function encode<T>(value: T): string {
+  return Buffer.from(JSON.stringify(value), 'utf8').toString('base64url');
+}
+
+function decode<T>(cursor: string): T {
+  return JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8')) as T;
+}
 
 export function encodeQuizCursor(cursor: QuizCursor): string {
-  return encodeBase64JsonCursor({ createdAt: cursor.createdAt, quizId: cursor.quizId });
+  return encode(cursor);
 }
 
-export function decodeQuizCursor(raw: string): QuizCursor {
-  try {
-    const parsed = decodeBase64JsonCursor<{ createdAt: unknown; quizId: unknown }>(raw);
-
-    if (!isIsoDateString(parsed.createdAt) || typeof parsed.quizId !== 'string') {
-      throw new QuizValidationError('Invalid cursor format');
-    }
-
-    return { createdAt: parsed.createdAt, quizId: parsed.quizId };
-  } catch (err) {
-    if (err instanceof QuizValidationError) throw err;
-    throw new QuizValidationError('Invalid cursor format');
-  }
+export function decodeQuizCursor(cursor: string): QuizCursor {
+  return decode<QuizCursor>(cursor);
 }
-
-// ---------------------------------------------------------------------------
-// Quiz version cursor
-// ---------------------------------------------------------------------------
 
 export function encodeVersionCursor(cursor: QuizVersionCursor): string {
-  return encodeBase64JsonCursor({
-    createdAt: cursor.createdAt,
-    quizVersionId: cursor.quizVersionId,
-  });
+  return encode(cursor);
 }
 
-export function decodeVersionCursor(raw: string): QuizVersionCursor {
-  try {
-    const parsed = decodeBase64JsonCursor<{ createdAt: unknown; quizVersionId: unknown }>(raw);
-
-    if (!isIsoDateString(parsed.createdAt) || typeof parsed.quizVersionId !== 'string') {
-      throw new QuizValidationError('Invalid cursor format');
-    }
-
-    return { createdAt: parsed.createdAt, quizVersionId: parsed.quizVersionId };
-  } catch (err) {
-    if (err instanceof QuizValidationError) throw err;
-    throw new QuizValidationError('Invalid cursor format');
-  }
+export function decodeVersionCursor(cursor: string): QuizVersionCursor {
+  return decode<QuizVersionCursor>(cursor);
 }

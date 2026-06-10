@@ -10,10 +10,7 @@ export type UpdateSettingsCommand = {
 
 export type ListUserBadgesQuery = {
   limit?: number;
-  cursor?: {
-    earnedAt: string;
-    userBadgeId: string;
-  } | null;
+  cursor?: { earnedAt: string; userBadgeId: string } | null;
 };
 
 export type UserRankingSummary = {

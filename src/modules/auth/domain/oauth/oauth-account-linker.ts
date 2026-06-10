@@ -2,7 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import type { OAuthAccountRepositoryPort } from './ports/oauth-account-repository.port';
 import { OAUTH_ACCOUNT_REPOSITORY_PORT } from './ports/oauth-account-repository.port';
-import { USER_REPOSITORY_PORT, type UserRepositoryPort } from '../ports/user-repository.port';
+import { AUTH_USER_REPOSITORY_PORT, type UserRepositoryPort } from '../ports/user-repository.port';
 import { deriveOAuthUsername } from './utils/derive-oauth-username';
 import type { OAuthProvider } from './oauth.types';
 import type { OutboxPort } from '../ports/outbox.port';
@@ -26,7 +26,7 @@ export class OAuthAccountLinker {
   constructor(
     @Inject(OAUTH_ACCOUNT_REPOSITORY_PORT)
     private readonly oauthAccountRepository: OAuthAccountRepositoryPort,
-    @Inject(USER_REPOSITORY_PORT)
+    @Inject(AUTH_USER_REPOSITORY_PORT)
     private readonly userRepository: UserRepositoryPort,
     @Inject(OUTBOX_PORT) private readonly outbox: OutboxPort,
     @InjectPinoLogger(OAuthAccountLinker.name) private readonly logger: PinoLogger,

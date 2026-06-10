@@ -195,8 +195,6 @@ export interface MySocialAnalytics {
   growth30Days: number;
 }
 
-export type UsernameSuggestion = string;
-
 export type TrendingReason = 'most_followed' | 'fastest_growing' | 'most_active' | 'rising_star';
 
 export interface TrendingUser {
