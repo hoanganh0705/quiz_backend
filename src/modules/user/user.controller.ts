@@ -12,7 +12,6 @@ import {
 } from '@nestjs/swagger';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
 import { ApiValidationRequest } from '@/common/swagger/swagger-decorators';
-import { QuizApplicationService } from '@/modules/quiz/application/quiz.application.service';
 import { CreatorQuizAnalyticsDto } from '@/modules/quiz/dto/response/quiz-analytics.dto';
 import { RecommendedQuizzesQueryDto } from '@/modules/quiz/dto/request/recommended-quizzes-query.dto';
 import { ListQuizzesQueryDto } from '@/modules/quiz/dto/request/list-quizzes-query.dto';
@@ -37,6 +36,10 @@ import { UserApplicationService } from './application/user.application.service';
 import { UserActivityCursorMapper } from './mappers/user-activity-cursor.mapper';
 import { UserDomainExceptionFilter } from './transport/filters/user-domain-exception.filter';
 import { UserBadgeCursorMapper } from './mappers/user-badge-cursor.mapper';
+import type {
+  QUIZ_LISTING_PORT,
+  QuizListingPort,
+} from '@/modules/quiz/domain/analytics/ports/quiz-listing.port';
 
 @ApiTags('users')
 @ApiBearerAuth()
@@ -47,7 +50,7 @@ import { UserBadgeCursorMapper } from './mappers/user-badge-cursor.mapper';
 export class UserController {
   constructor(
     private readonly userApplicationService: UserApplicationService,
-    private readonly quizApplicationService: QuizApplicationService,
+    private readonly quizListing: QuizListingPort,
   ) {}
 
   @Get('me/recommended-quizzes')
@@ -65,7 +68,7 @@ export class UserController {
     @CurrentUser('sub') userId: string,
     @Query() query: RecommendedQuizzesQueryDto,
   ): Promise<RelatedQuizzesResponseDto> {
-    return this.quizApplicationService.getRecommendedQuizzes(userId, query);
+    return this.quizListing.getRecommendedQuizzes(userId, query);
   }
 
   @Get(':userId/quizzes/analytics')
@@ -78,7 +81,7 @@ export class UserController {
   @ApiNotFoundResponse({ description: 'User not found' })
   @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
   getUserQuizAnalytics(@Param('userId') userId: string): Promise<CreatorQuizAnalyticsDto> {
-    return this.quizApplicationService.getMyQuizAnalytics(userId);
+    return this.quizListing.getMyQuizAnalytics(userId);
   }
 
   @Get(':userId/quizzes')
@@ -96,7 +99,7 @@ export class UserController {
     @Param('userId') userId: string,
     @Query() query: ListQuizzesQueryDto,
   ): Promise<QuizListResponseDto> {
-    return this.quizApplicationService.listQuizzesByCreator(userId, query);
+    return this.quizListing.listQuizzesByCreator(userId, query);
   }
 
   @Get(':userId/badges')
@@ -113,10 +116,11 @@ export class UserController {
   listBadgesByUserId(
     @Param('userId') userId: string,
     @Query() query: ListUserBadgesQueryDto,
+    @CurrentUser('sub') requesterId: string,
   ): Promise<UserBadgesResponseDto> {
     const cursor = query.cursor ? UserBadgeCursorMapper.parse(query.cursor) : null;
 
-    return this.userApplicationService.listBadgesByUserId(userId, {
+    return this.userApplicationService.listUserBadges(userId, requesterId, {
       limit: query.limit,
       cursor,
     });
@@ -152,7 +156,7 @@ export class UserController {
   ): Promise<UserBadgesResponseDto> {
     const cursor = query.cursor ? UserBadgeCursorMapper.parse(query.cursor) : null;
 
-    return this.userApplicationService.listUserBadges(userId, {
+    return this.userApplicationService.listUserBadges(userId, userId, {
       limit: query.limit,
       cursor,
     });
@@ -195,8 +199,9 @@ export class UserController {
   getUserTournamentHistory(
     @Param('userId') userId: string,
     @Query() query: GetMyTournamentHistoryQueryDto,
+    @CurrentUser('sub') requesterId: string,
   ): Promise<MyTournamentHistoryResponseDto> {
-    return this.userApplicationService.getUserTournamentHistory(userId, query);
+    return this.userApplicationService.getUserTournamentHistory(userId, requesterId, query);
   }
 
   @Get(':userId/tournaments')
@@ -213,8 +218,9 @@ export class UserController {
   @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
   getPublicTournamentProfile(
     @Param('userId') userId: string,
+    @CurrentUser('sub') requesterId: string,
   ): Promise<PublicTournamentProfileResponseDto> {
-    return this.userApplicationService.getPublicTournamentProfile(userId);
+    return this.userApplicationService.getPublicTournamentProfile(userId, requesterId);
   }
 
   @Get('me/tournaments')
@@ -231,7 +237,7 @@ export class UserController {
     @CurrentUser('sub') userId: string,
     @Query() query: GetMyTournamentsQueryDto,
   ): Promise<MyTournamentsResponseDto> {
-    return this.userApplicationService.getMyTournaments(userId, query);
+    return this.userApplicationService.getMyTournaments(userId, userId, query);
   }
 
   @Get('me/tournament-history')
@@ -251,7 +257,7 @@ export class UserController {
     @CurrentUser('sub') userId: string,
     @Query() query: GetMyTournamentHistoryQueryDto,
   ): Promise<MyTournamentHistoryResponseDto> {
-    return this.userApplicationService.getMyTournamentHistory(userId, query);
+    return this.userApplicationService.getMyTournamentHistory(userId, userId, query);
   }
 
   @Get('me/tournaments/analytics')
@@ -281,7 +287,7 @@ export class UserController {
   @ApiNotFoundResponse({ description: 'User or ranking record not found' })
   @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
   getMyRanking(@CurrentUser('sub') userId: string): Promise<UserRankingResponseDto> {
-    return this.userApplicationService.getUserRanking(userId);
+    return this.userApplicationService.getUserRanking(userId, userId);
   }
 
   @Get('me/analytics')
@@ -294,7 +300,7 @@ export class UserController {
   @ApiNotFoundResponse({ description: 'User not found or no analytics data available' })
   @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
   getMyAnalytics(@CurrentUser('sub') userId: string): Promise<UserAnalyticsResponseDto> {
-    return this.userApplicationService.getUserAnalytics(userId);
+    return this.userApplicationService.getUserAnalytics(userId, userId);
   }
 
   @Patch('me')

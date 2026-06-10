@@ -1,5 +1,5 @@
 export type GetMyTournamentsQuery = {
   userId: string;
-  page: number;
   limit: number;
+  cursor?: { registeredAt: string; participantId: string } | null;
 };

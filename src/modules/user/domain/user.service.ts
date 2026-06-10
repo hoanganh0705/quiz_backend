@@ -1,7 +1,19 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
-import type { MyTournamentHistoryRow, MyTournamentRow, MyTournamentAnalyticsRow, PublicTournamentProfileRow, UserActivityRow, UserBadgeRow, UserMeRow } from './ports/user-repository.port';
-import { UserAnalyticsNotFoundError, UserRankingNotFoundError } from './errors';
+import type {
+  MyTournamentHistoryRow,
+  MyTournamentRow,
+  MyTournamentAnalyticsRow,
+  PublicTournamentProfileRow,
+  UserActivityRow,
+  UserBadgeRow,
+  UserMeRow,
+} from './ports/user-repository.port';
+import {
+  UserAnalyticsNotFoundError,
+  UserProfilePrivateError,
+  UserRankingNotFoundError,
+} from './errors';
 import type {
   ListUserBadgesQuery,
   UpdateProfileCommand,
@@ -15,10 +27,10 @@ import type { ListUserActivityQuery } from './types/list-user-activity.query';
 import type { GetMyTournamentsQuery } from './types/get-my-tournaments.query';
 import type { GetMyTournamentHistoryQuery } from './types/get-my-tournament-history.query';
 import type { GetPublicTournamentProfileQuery } from './types/get-public-tournament-profile.query';
-import type { GetUserTournamentHistoryQuery } from './types/get-user-tournament-history.query';
 import type { GetMyTournamentAnalyticsQuery } from './types/get-my-tournament-analytics.query';
-
-const XP_PER_LEVEL = 500;
+import { XP_PER_LEVEL } from './constants/user.domain-constants';
+import { USER_DOMAIN_EVENT_BUS, type UserDomainEventBusPort } from './events/user-domain-event-bus.port';
+import { UserProfileUpdatedEvent, UserSettingsUpdatedEvent } from './events/user-domain.events';
 
 function calculateLevel(totalXp: number): number {
   return Math.floor(totalXp / XP_PER_LEVEL) + 1;
@@ -29,6 +41,8 @@ export class UserDomainService {
   constructor(
     @Inject(USER_REPOSITORY_PORT)
     private readonly userRepository: UserRepositoryPort,
+    @Inject(USER_DOMAIN_EVENT_BUS)
+    private readonly eventBus: UserDomainEventBusPort,
     @InjectPinoLogger(UserDomainService.name) private readonly logger: PinoLogger,
   ) {}
 
@@ -43,8 +57,22 @@ export class UserDomainService {
     return user;
   }
 
+  async isUserProfilePublic(targetUserId: string): Promise<boolean> {
+    const settings = await this.userRepository.findUserProfileSettings(targetUserId);
+    return settings?.isPublic ?? true;
+  }
+
+  async assertProfileVisible(targetUserId: string, requesterId: string): Promise<void> {
+    if (requesterId === targetUserId) return;
+    const isPublic = await this.isUserProfilePublic(targetUserId);
+    if (!isPublic) {
+      throw new UserProfilePrivateError(targetUserId);
+    }
+  }
+
   async listUserBadges(
     userId: string,
+    requesterId: string,
     query: ListUserBadgesQuery,
   ): Promise<{
     items: UserBadgeRow[];
@@ -52,7 +80,7 @@ export class UserDomainService {
     hasNextPage: boolean;
     nextCursor: { earnedAt: string; userBadgeId: string } | null;
   }> {
-    await this.getMe(userId);
+    await this.assertProfileVisible(userId, requesterId);
 
     const limit = query.limit ?? 10;
     const cursor = query.cursor ?? null;
@@ -78,8 +106,8 @@ export class UserDomainService {
     };
   }
 
-  async getUserRanking(userId: string): Promise<UserRankingSummary> {
-    await this.getMe(userId);
+  async getUserRanking(userId: string, requesterId: string): Promise<UserRankingSummary> {
+    await this.assertProfileVisible(userId, requesterId);
 
     const ranking = await this.userRepository.getUserRanking(userId);
 
@@ -97,8 +125,8 @@ export class UserDomainService {
     };
   }
 
-  async getUserAnalytics(userId: string): Promise<UserAnalytics> {
-    await this.getMe(userId);
+  async getUserAnalytics(userId: string, requesterId: string): Promise<UserAnalytics> {
+    await this.assertProfileVisible(userId, requesterId);
 
     const analytics = await this.userRepository.getUserAnalytics(userId);
 
@@ -143,6 +171,10 @@ export class UserDomainService {
 
     this.logger.info({ event: 'user_profile_updated', userId });
 
+    this.eventBus.emitProfileUpdated(
+      new UserProfileUpdatedEvent(userId, Object.keys(patch) as ('displayName' | 'bio' | 'avatarUrl')[], nowIso),
+    );
+
     return updated;
   }
 
@@ -158,6 +190,8 @@ export class UserDomainService {
     }
 
     this.logger.info({ event: 'user_settings_updated', userId });
+
+    this.eventBus.emitSettingsUpdated(new UserSettingsUpdatedEvent(userId, nowIso));
 
     return updated;
   }
@@ -196,99 +230,87 @@ export class UserDomainService {
   }
 
   async getMyTournaments(
-    query: GetMyTournamentsQuery,
-  ): Promise<{ items: MyTournamentRow[]; total: number; page: number; limit: number }> {
-    await this.getMe(query.userId);
+    query: GetMyTournamentsQuery & { requesterId: string },
+  ): Promise<{
+    items: MyTournamentRow[];
+    limit: number;
+    hasNextPage: boolean;
+    nextCursor: { registeredAt: string; participantId: string } | null;
+  }> {
+    await this.assertProfileVisible(query.userId, query.requesterId);
 
-    const page = query.page;
-    const limit = query.limit;
+    const limit = query.limit ?? 20;
+    const cursor = query.cursor ?? null;
 
-    const result = await this.userRepository.listMyTournaments({
+    const { items, hasNextPage } = await this.userRepository.listMyTournaments({
       userId: query.userId,
-      page,
       limit,
+      cursor,
     });
+
+    const lastItem = items.at(-1);
 
     this.logger.info({
       event: 'user_my_tournaments_listed',
       userId: query.userId,
-      page,
       limit,
-      total: result.total,
+      hasNextPage,
     });
 
     return {
-      items: result.items,
-      total: result.total,
-      page,
+      items,
       limit,
+      hasNextPage,
+      nextCursor:
+        hasNextPage && lastItem
+          ? { registeredAt: lastItem.registeredAt, participantId: lastItem.participantId }
+          : null,
     };
   }
 
   async getMyTournamentHistory(
-    query: GetMyTournamentHistoryQuery,
-  ): Promise<{ items: MyTournamentHistoryRow[]; total: number; page: number; limit: number }> {
-    await this.getMe(query.userId);
+    query: GetMyTournamentHistoryQuery & { requesterId: string },
+  ): Promise<{
+    items: MyTournamentHistoryRow[];
+    limit: number;
+    hasNextPage: boolean;
+    nextCursor: { completedAt: string; participantId: string } | null;
+  }> {
+    await this.assertProfileVisible(query.userId, query.requesterId);
 
-    const page = query.page;
-    const limit = query.limit;
+    const limit = query.limit ?? 20;
+    const cursor = query.cursor ?? null;
 
-    const result = await this.userRepository.listMyTournamentHistory({
+    const { items, hasNextPage } = await this.userRepository.listMyTournamentHistory({
       userId: query.userId,
-      page,
       limit,
+      cursor,
     });
+
+    const lastItem = items.at(-1);
 
     this.logger.info({
       event: 'user_my_tournament_history_listed',
       userId: query.userId,
-      page,
       limit,
-      total: result.total,
+      hasNextPage,
     });
 
     return {
-      items: result.items,
-      total: result.total,
-      page,
+      items,
       limit,
-    };
-  }
-
-  async getUserTournamentHistory(
-    query: GetUserTournamentHistoryQuery,
-  ): Promise<{ items: MyTournamentHistoryRow[]; total: number; page: number; limit: number }> {
-    await this.getMe(query.userId);
-
-    const page = query.page;
-    const limit = query.limit;
-
-    const result = await this.userRepository.listMyTournamentHistory({
-      userId: query.userId,
-      page,
-      limit,
-    });
-
-    this.logger.info({
-      event: 'user_public_tournament_history_listed',
-      userId: query.userId,
-      page,
-      limit,
-      total: result.total,
-    });
-
-    return {
-      items: result.items,
-      total: result.total,
-      page,
-      limit,
+      hasNextPage,
+      nextCursor:
+        hasNextPage && lastItem
+          ? { completedAt: lastItem.completedAt, participantId: lastItem.participantId }
+          : null,
     };
   }
 
   async getPublicTournamentProfile(
-    query: GetPublicTournamentProfileQuery,
+    query: GetPublicTournamentProfileQuery & { requesterId: string },
   ): Promise<PublicTournamentProfileRow> {
-    await this.getMe(query.userId);
+    await this.assertProfileVisible(query.userId, query.requesterId);
 
     const profile = await this.userRepository.getPublicTournamentProfile(query.userId);
 

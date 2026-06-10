@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { SOCIAL_REPOSITORY_PORT, type SocialRepositoryPort } from '../ports/social-ports';
 import { SOCIAL_DOMAIN_EVENT_BUS, type SocialDomainEventBusPort } from '../ports';
@@ -576,8 +576,8 @@ export class SocialService {
     query: string,
     limit: number = 20,
   ): Promise<SearchableUser[]> {
-    if (!query || query.trim().length < 2) {
-      return [];
+    if (query.trim().length < 2) {
+      throw new BadRequestException('Search query must be at least 2 characters');
     }
 
     this.logger.debug({

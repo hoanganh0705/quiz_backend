@@ -1,3 +1,5 @@
+import type { UserSearchResult } from '@/modules/user/domain/ports/user-search.port';
+
 export interface Friendship {
   friendshipId: string;
   requesterId: string;
@@ -228,13 +230,13 @@ export interface RespondToFriendRequestParams {
   accept: boolean;
 }
 
-export interface UserSearchResult {
-  userId: string;
-  username: string;
-  displayName: string | null;
-  avatarUrl: string | null;
-}
+// Canonical type lives in UserModule; re-export here for convenience
+export type { UserSearchResult } from '@/modules/user/domain/ports/user-search.port';
 
+/**
+ * Extend UserSearchResult with social relationship metadata.
+ * Lives in SocialModule because it only makes sense in a social context.
+ */
 export interface SearchableUser extends UserSearchResult {
   isFriend: boolean;
   hasPendingRequest: boolean;

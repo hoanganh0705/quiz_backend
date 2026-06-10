@@ -1,5 +1,4 @@
 export * from './repositories/social.repository';
-export * from './adapters/user-search.adapter';
 export * from './adapters/ranking.adapter';
 export * from './adapters/achievement-feed-listener.adapter';
 export * from './adapters/ranking-feed-listener.adapter';
