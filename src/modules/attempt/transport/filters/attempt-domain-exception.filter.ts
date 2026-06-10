@@ -4,7 +4,6 @@ import {
   AttemptDomainError,
   AttemptNotFoundError,
   AttemptForbiddenError,
-  AttemptConflictError,
   AttemptValidationError,
   AttemptAlreadyStartedError,
   AttemptNotActiveError,
@@ -56,7 +55,6 @@ export class AttemptDomainExceptionFilter implements ExceptionFilter {
     }
 
     if (
-      error instanceof AttemptConflictError ||
       error instanceof AttemptAlreadyStartedError ||
       error instanceof AttemptNotActiveError ||
       error instanceof AttemptQuestionAlreadyAnsweredError

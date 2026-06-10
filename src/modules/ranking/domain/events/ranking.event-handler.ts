@@ -10,7 +10,8 @@ import { Inject, Injectable, OnModuleInit } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import type { ExternalXpEarnedEvent } from './ranking-domain.events';
 import { XpIngestionService } from '../services/xp-ingestion.service';
-import { EXTERNAL_EVENT_BUS, type ExternalEventBusPort } from '../ports/ranking-event-bus.port';
+import { EXTERNAL_EVENT_BUS } from '@/common/events';
+import type { ExternalEventBusPort } from '@/common/events/common-external-event-bus';
 
 @Injectable()
 export class RankingEventHandler implements OnModuleInit {

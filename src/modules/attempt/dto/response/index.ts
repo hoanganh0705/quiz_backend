@@ -43,12 +43,6 @@ export class UserAttemptStatsResponseDto {
   averageScore!: number;
 
   @ApiProperty({
-    description: 'Average accuracy across all completed attempts (0–100)',
-    example: 75.0,
-  })
-  averageAccuracy!: number;
-
-  @ApiProperty({
     description: 'Total time spent across all attempts, in seconds',
     example: 12540,
   })
@@ -154,13 +148,13 @@ export class AttemptAnswerItemDto {
   })
   questionId!: string;
 
-  @ApiProperty({
-    description: 'IDs of the selected option(s). Empty array if the question was skipped.',
-    type: [String],
+  @ApiPropertyOptional({
+    description: 'Selected option identifier (null if the question was skipped)',
     format: 'uuid',
-    example: ['550e8400-e29b-41d4-a716-446655440010'],
+    nullable: true,
+    example: '550e8400-e29b-41d4-a716-446655440010',
   })
-  selectedOptionIds!: string[];
+  selectedOptionId!: string | null;
 
   @ApiPropertyOptional({
     description: 'Whether the answer was correct (null until the attempt is completed)',
@@ -455,4 +449,15 @@ export class CompleteAttemptResponseDto {
     example: '2025-06-01T12:45:00.000Z',
   })
   finishedAt!: string;
+}
+
+export class WithdrawAnswerResponseDto {
+  @ApiProperty({ description: 'Question identifier', example: '550e8400-e29b-41d4-a716-446655440001' })
+  questionId!: string;
+
+  @ApiProperty({
+    description: 'Withdrawal timestamp (ISO 8601)',
+    example: '2025-06-01T12:20:00.000Z',
+  })
+  withdrawnAt!: string;
 }

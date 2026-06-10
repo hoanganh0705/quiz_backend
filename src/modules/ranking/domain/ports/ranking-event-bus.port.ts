@@ -12,7 +12,6 @@ import type {
   PeriodResetCompletedEvent,
   RankingMilestoneEvent,
   ConsistencyCheckEvent,
-  ExternalXpEarnedEvent,
 } from '../events/ranking-domain.events';
 
 /**
@@ -62,21 +61,6 @@ export interface RankingDomainEventBusPort {
 }
 
 /**
- * External event bus for receiving events from other domains.
- */
-export interface ExternalEventBusPort {
-  /**
-   * Subscribe to external events (e.g., xp.earned from attempt domain).
-   */
-  subscribe(eventType: string, handler: (event: ExternalXpEarnedEvent) => void): () => void;
-
-  /**
-   * Publish an external event (for other domains to consume).
-   */
-  publish(event: ExternalXpEarnedEvent): void;
-}
-
-/**
  * Union type of all events that can be published.
  */
 export type PublishedRankingDomainEvent =
@@ -89,4 +73,3 @@ export type PublishedRankingDomainEvent =
   | ConsistencyCheckEvent;
 
 export const RANKING_DOMAIN_EVENT_BUS = Symbol('RANKING_DOMAIN_EVENT_BUS');
-export const EXTERNAL_EVENT_BUS = Symbol('EXTERNAL_EVENT_BUS');

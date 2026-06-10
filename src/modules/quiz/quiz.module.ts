@@ -29,6 +29,8 @@ import { QUIZ_RECOMMENDATION_REPOSITORY_PORT } from './domain/analytics/ports/qu
 import { AnalyticsSchedulerService } from './scheduler';
 import { AnalyticsEventHandler } from './domain/analytics/analytics-event-handler';
 import { QuizDomainEventBootstrapService } from './domain/events/quiz-domain-event-bootstrap.service';
+import { QuizAttemptEventHandler } from './domain/events/quiz-attempt-event-handler.service';
+import { QuizAttemptEventBootstrapService } from './domain/events/quiz-attempt-event-bootstrap.service';
 
 // Domain Events
 import { QuizDomainEventBus } from './domain/events/quiz-domain.event-bus';
@@ -48,8 +50,11 @@ import { QuizRepository } from './infrastructure/repositories/quiz.repository';
 import { QuizVersionRepository } from './infrastructure/repositories/quiz-version.repository';
 import { QuizQuestionRepository } from './infrastructure/repositories/quiz-question.repository';
 
+// Cross-module imports (for shared event buses)
+import { AttemptModule } from '@/modules/attempt/attempt.module';
+
 @Module({
-  imports: [DatabaseModule],
+  imports: [DatabaseModule, forwardRef(() => AttemptModule)],
   providers: [
     // Application Services
     QuizApplicationService,
@@ -75,6 +80,8 @@ import { QuizQuestionRepository } from './infrastructure/repositories/quiz-quest
 
     // Event Bootstrap
     QuizDomainEventBootstrapService,
+    QuizAttemptEventHandler,
+    QuizAttemptEventBootstrapService,
 
     // Exception Filter
     QuizDomainExceptionFilter,

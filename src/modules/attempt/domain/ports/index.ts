@@ -1,7 +1,6 @@
 export {
   type AttemptRow,
   type AttemptDetailRow,
-  type AttemptWithAnswersRow,
   type AttemptListRow,
   type AttemptAnswerRow,
   type AttemptAnalyticsRow,
