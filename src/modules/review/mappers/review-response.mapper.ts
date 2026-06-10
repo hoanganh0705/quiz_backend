@@ -23,6 +23,7 @@ export class ReviewResponseMapper {
       comment: row.comment,
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
+      helpfulCount: row.helpfulCount ?? 0,
     };
   }
 
@@ -38,6 +39,7 @@ export class ReviewResponseMapper {
       rating: row.rating,
       content: row.content,
       createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
     };
   }
 
@@ -56,6 +58,7 @@ export class ReviewResponseMapper {
       content: row.content,
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
+      helpfulCount: row.helpfulCount ?? 0,
     };
   }
 
@@ -106,6 +109,7 @@ export class ReviewResponseMapper {
       details: row.details,
       status: row.status,
       createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
     };
   }
 

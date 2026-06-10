@@ -1,5 +1,12 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
+export {
+  PlatformReportItemDto,
+  PlatformReportsPaginationDto,
+  PlatformReportsResponseDto,
+  UpdateReportStatusResponseDto,
+} from './admin-review.dto';
+
 export class ReviewResponseDto {
   @ApiProperty({
     description: 'Unique review identifier',
@@ -42,6 +49,12 @@ export class ReviewResponseDto {
     example: '2025-06-01T12:00:00.000Z',
   })
   updatedAt!: string;
+
+  @ApiProperty({
+    description: 'Number of users who found this review helpful',
+    example: 42,
+  })
+  helpfulCount!: number;
 }
 
 export class ReviewPaginationResponseDto {
@@ -97,6 +110,12 @@ export class MyReviewItemDto {
     example: '2026-01-01T00:00:00.000Z',
   })
   createdAt!: string;
+
+  @ApiPropertyOptional({
+    description: 'Last update timestamp (ISO 8601)',
+    example: '2026-01-02T00:00:00.000Z',
+  })
+  updatedAt!: string | null;
 }
 
 export class MyReviewsPaginationDto {
@@ -172,6 +191,12 @@ export class ReviewDetailResponseDto {
     example: '2026-01-02T00:00:00.000Z',
   })
   updatedAt!: string;
+
+  @ApiProperty({
+    description: 'Number of users who found this review helpful',
+    example: 42,
+  })
+  helpfulCount!: number;
 }
 
 export class ReviewRatingDistributionDto {
@@ -442,6 +467,12 @@ export class ReportedReviewItemDto {
     example: '2026-01-01T00:00:00.000Z',
   })
   createdAt!: string;
+
+  @ApiPropertyOptional({
+    description: 'Timestamp when the report was last updated (ISO 8601)',
+    example: '2026-01-02T00:00:00.000Z',
+  })
+  updatedAt!: string | null;
 }
 
 export class ReportedReviewsPaginationDto {

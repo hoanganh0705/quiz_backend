@@ -1,5 +1,9 @@
-import { Inject, Injectable, forwardRef } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
+import { sql } from 'drizzle-orm';
+import type { DrizzleDB } from '@/core/database/database.module';
+import { DRIZZLE } from '@/core/database/drizzle.constants';
+import { quizReviews } from '@/core/database/schema';
 import { REVIEW_REPOSITORY_PORT, type ReviewRepositoryPort } from './ports/review-repository.port';
 import { QUIZ_REPOSITORY_PORT } from '@/modules/quiz/domain/ports';
 import { QuizAnalyticsService } from '@/modules/quiz/domain/analytics';
@@ -10,6 +14,7 @@ import {
   ReviewConflictError,
   ReviewAttemptRequiredError,
   ReviewAlreadyReportedError,
+  ReviewValidationError,
 } from './errors';
 import {
   REVIEW_NOT_FOUND_MESSAGE,
@@ -17,14 +22,21 @@ import {
   REVIEW_QUIZ_USER_CONFLICT_MESSAGE,
   REVIEW_ATTEMPT_REQUIRED_MESSAGE,
 } from '../review.constants';
-import { AnalyticsEventHandler } from '@/modules/quiz/domain/analytics/analytics-event-handler';
-import type { ReviewStatsResponseDto, ReviewDashboardResponseDto } from '../dto/response';
-import { QuizNotFoundError } from '@/modules/quiz/domain/errors';
-import { ReviewValidationError } from './errors';
+import { REVIEW_ANALYTICS_PORT, type ReviewAnalyticsPort } from './events';
+import { ReviewSubmittedEvent, ReviewDeletedEvent } from './events';
+import type { ReviewStatsRow, ReviewDashboardRow } from './ports';
+import type { ReviewDashboardResponseDto } from '../dto/response';
+import {
+  type ReviewActor,
+  type ReviewTarget,
+  type ReviewQuizTarget,
+  ReviewAuthorizationPolicy,
+} from './policies';
 
 @Injectable()
 export class ReviewService {
   constructor(
+    @Inject(DRIZZLE) private readonly db: DrizzleDB,
     @Inject(REVIEW_REPOSITORY_PORT)
     private readonly reviewRepository: ReviewRepositoryPort,
     @Inject(QUIZ_REPOSITORY_PORT)
@@ -35,8 +47,8 @@ export class ReviewService {
     },
     @Inject(QuizAnalyticsService)
     private readonly quizAnalyticsService: QuizAnalyticsService,
-    @Inject(forwardRef(() => AnalyticsEventHandler))
-    private readonly analyticsEventHandler: AnalyticsEventHandler,
+    @Inject(REVIEW_ANALYTICS_PORT)
+    private readonly reviewAnalytics: ReviewAnalyticsPort,
     @InjectPinoLogger(ReviewService.name)
     private readonly logger: PinoLogger,
   ) {}
@@ -75,12 +87,28 @@ export class ReviewService {
     }
 
     try {
-      const review = await this.reviewRepository.createReview({
-        quizId,
-        userId: user.sub,
-        rating,
-        comment: comment ?? null,
-        nowIso,
+      const review = await this.db.transaction(async (tx) => {
+        const [created] = await tx
+          .insert(quizReviews)
+          .values({
+            quizId,
+            userId: user.sub,
+            rating,
+            comment: comment ?? null,
+            createdAt: nowIso,
+            updatedAt: nowIso,
+            helpfulCount: 0,
+          })
+          .returning({
+            reviewId: quizReviews.reviewId,
+            quizId: quizReviews.quizId,
+            userId: quizReviews.userId,
+            rating: quizReviews.rating,
+            comment: quizReviews.comment,
+            createdAt: quizReviews.createdAt,
+            updatedAt: quizReviews.updatedAt,
+          });
+        return created;
       });
 
       this.logger.info({
@@ -91,8 +119,9 @@ export class ReviewService {
         rating,
       });
 
-      // Refresh quiz analytics
-      await this.analyticsEventHandler.onReviewSubmitted(quizId);
+      await this.reviewAnalytics.handleReviewSubmitted(
+        new ReviewSubmittedEvent({ quizId, reviewId: review.reviewId, userId: user.sub, rating }),
+      );
 
       return review;
     } catch (error) {
@@ -157,28 +186,7 @@ export class ReviewService {
     hasNextPage: boolean;
     nextCursor: { createdAt: string; reviewId: string } | null;
   }> {
-    const limit = query.limit ?? 10;
-    const cursor = query.cursor ?? null;
-
-    const rows = await this.reviewRepository.listReviewsByUser({
-      userId,
-      limit,
-      cursor,
-    });
-
-    const hasNextPage = rows.length > limit;
-    const items = hasNextPage ? rows.slice(0, limit) : rows;
-    const lastItem = items.at(-1);
-
-    return {
-      items,
-      limit,
-      hasNextPage,
-      nextCursor:
-        hasNextPage && lastItem
-          ? { createdAt: lastItem.createdAt, reviewId: lastItem.reviewId }
-          : null,
-    };
+    return this.listUserReviews(userId, query);
   }
 
   async getReviewById(reviewId: string): Promise<import('./ports').ReviewDetailByIdRow> {
@@ -198,26 +206,14 @@ export class ReviewService {
     return await this.reviewRepository.getMyQuizReview(quizId, userId);
   }
 
-  async getQuizReviewStats(quizId: string): Promise<ReviewStatsResponseDto> {
+  async getQuizReviewStats(quizId: string): Promise<ReviewStatsRow | null> {
     const quiz = await this.quizRepository.getActiveQuizRecordById(quizId);
 
     if (!quiz) {
-      throw new QuizNotFoundError();
+      throw new ReviewNotFoundError('Quiz not found');
     }
 
-    const stats = await this.reviewRepository.getQuizReviewStats(quizId);
-
-    return {
-      averageRating: Number(stats?.averageRating ?? 0),
-      totalReviews: Number(stats?.totalReviews ?? 0),
-      ratingDistribution: {
-        '1': Number(stats?.rating1 ?? 0),
-        '2': Number(stats?.rating2 ?? 0),
-        '3': Number(stats?.rating3 ?? 0),
-        '4': Number(stats?.rating4 ?? 0),
-        '5': Number(stats?.rating5 ?? 0),
-      },
-    };
+    return this.reviewRepository.getQuizReviewStats(quizId);
   }
 
   async getMyReviewDashboard(userId: string): Promise<ReviewDashboardResponseDto> {
@@ -240,6 +236,7 @@ export class ReviewService {
     }
 
     if (review.userId === userId) {
+      this.logger.warn({ event: 'review_self_helpful_vote', reviewId, userId });
       throw new ReviewValidationError('You cannot vote on your own review');
     }
 
@@ -250,7 +247,9 @@ export class ReviewService {
         nowIso: new Date().toISOString(),
       });
 
-      this.logger.info({ event: 'review_helpful_vote_removed', reviewId, userId });
+      await this.reviewRepository.updateHelpfulCount(reviewId, -1);
+
+      this.logger.info({ event: 'review_helpful_vote_removed', reviewId, userId, helpful: false });
       return;
     }
 
@@ -260,10 +259,13 @@ export class ReviewService {
       nowIso: new Date().toISOString(),
     });
 
+    await this.reviewRepository.updateHelpfulCount(reviewId, 1);
+
     this.logger.info({
-      event: 'review_marked_helpful',
+      event: 'review_helpful_voted',
       reviewId,
       userId,
+      helpful: true,
       voteId: vote.voteId,
     });
   }
@@ -281,7 +283,9 @@ export class ReviewService {
       nowIso: new Date().toISOString(),
     });
 
-    this.logger.info({ event: 'review_helpful_vote_removed', reviewId, userId });
+    await this.reviewRepository.updateHelpfulCount(reviewId, -1);
+
+    this.logger.info({ event: 'review_helpful_vote_removed', reviewId, userId, helpful: false });
   }
 
   async reportReview(
@@ -300,7 +304,7 @@ export class ReviewService {
     const hasReported = await this.reviewRepository.hasUserReportedReview(reviewId, reporterId);
 
     if (hasReported) {
-      this.logger.warn({ event: 'review_report_duplicate', reviewId, reporterId });
+      this.logger.warn({ event: 'review_report_duplicate', reviewId, reporterId, reason });
       throw new ReviewAlreadyReportedError();
     }
 
@@ -313,10 +317,11 @@ export class ReviewService {
     });
 
     this.logger.info({
-      event: 'review_report_created',
+      event: 'review_reported',
       reportId: report.reportId,
       reviewId,
       reporterId,
+      reason,
       status: report.status,
     });
   }
@@ -334,7 +339,10 @@ export class ReviewService {
       throw new ReviewNotFoundError(REVIEW_NOT_FOUND_MESSAGE);
     }
 
-    if (existing.userId !== user.sub && user.role !== 'admin') {
+    const actor: ReviewActor = { sub: user.sub, role: user.role };
+    const target: ReviewTarget = { reviewId: existing.reviewId, userId: existing.userId };
+
+    if (!ReviewAuthorizationPolicy.canModify(actor, target)) {
       throw new ReviewForbiddenError(REVIEW_FORBIDDEN_MESSAGE);
     }
 
@@ -352,8 +360,9 @@ export class ReviewService {
       rating,
     });
 
-    // Refresh quiz analytics
-    await this.analyticsEventHandler.onReviewSubmitted(quizId);
+    await this.reviewAnalytics.handleReviewSubmitted(
+      new ReviewSubmittedEvent({ quizId, reviewId: existing.reviewId, userId: user.sub, rating }),
+    );
 
     return updated;
   }
@@ -364,11 +373,18 @@ export class ReviewService {
       throw new ReviewNotFoundError(REVIEW_NOT_FOUND_MESSAGE);
     }
 
-    if (existing.userId !== user.sub && user.role !== 'admin') {
+    const actorDelete: ReviewActor = { sub: user.sub, role: user.role };
+    const targetDelete: ReviewTarget = { reviewId: existing.reviewId, userId: existing.userId };
+
+    if (!ReviewAuthorizationPolicy.canModify(actorDelete, targetDelete)) {
       throw new ReviewForbiddenError(REVIEW_FORBIDDEN_MESSAGE);
     }
 
-    await this.reviewRepository.deleteReview(existing.reviewId);
+    await this.db.transaction(async (tx) => {
+      await tx.delete(quizReviews).where(
+        sql`${quizReviews.reviewId} = ${existing.reviewId}`,
+      );
+    });
 
     this.logger.info({
       event: 'review_deleted',
@@ -376,8 +392,9 @@ export class ReviewService {
       userId: user.sub,
     });
 
-    // Refresh quiz analytics
-    await this.analyticsEventHandler.onReviewDeleted(quizId);
+    await this.reviewAnalytics.handleReviewDeleted(
+      new ReviewDeletedEvent({ quizId, reviewId: existing.reviewId }),
+    );
   }
 
   async listReportedReviews(
@@ -413,13 +430,16 @@ export class ReviewService {
     quizId: string,
     user: JwtPayload,
   ): Promise<import('@/modules/quiz/domain/analytics/types').QuizAnalytics> {
+    const actor: ReviewActor = { sub: user.sub, role: user.role };
     const quiz = await this.quizRepository.getActiveQuizRecordById(quizId);
 
     if (!quiz) {
-      throw new QuizNotFoundError();
+      throw new ReviewNotFoundError('Quiz not found');
     }
 
-    if (quiz.creatorId !== user.sub && user.role !== 'admin') {
+    const analyticsTarget: ReviewQuizTarget = { quizId, creatorId: quiz.creatorId };
+
+    if (!ReviewAuthorizationPolicy.canViewAnalytics(actor, analyticsTarget)) {
       throw new ReviewForbiddenError('You do not have permission to view analytics for this quiz');
     }
 

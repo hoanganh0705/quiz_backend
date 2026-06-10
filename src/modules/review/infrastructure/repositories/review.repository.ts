@@ -27,6 +27,7 @@ import type {
   ReviewHelpfulVoteRow,
   ReviewReportRow,
   ReportedReviewRow,
+  PlatformReportRow,
 } from '@/modules/review/domain/ports';
 
 const QUIZ_COLUMNS = quizzes as unknown as {
@@ -125,6 +126,7 @@ export class ReviewRepository implements ReviewRepositoryPort {
         content: quizReviews.comment,
         createdAt: quizReviews.createdAt,
         updatedAt: quizReviews.updatedAt,
+        helpfulCount: quizReviews.helpfulCount,
       })
       .from(quizReviews)
       .innerJoin(quizzes, eq(quizReviews.quizId, quizzes.quizId))
@@ -157,33 +159,27 @@ export class ReviewRepository implements ReviewRepositoryPort {
         ? and(eq(quizReviews.quizId, params.quizId), eq(quizReviews.rating, params.rating))
         : eq(quizReviews.quizId, params.quizId);
 
-    if (params.sort === 'helpful') {
-      const voteCountSubquery = sql<number>`
-        COALESCE((
-          SELECT COUNT(*)
-          FROM ${reviewHelpfulVotes}
-          WHERE ${reviewHelpfulVotes.reviewId} = ${quizReviews.reviewId}
-        ), 0)
-      `.as('vote_count');
+    const baseSelect = {
+      reviewId: quizReviews.reviewId,
+      quizId: quizReviews.quizId,
+      userId: quizReviews.userId,
+      rating: quizReviews.rating,
+      comment: quizReviews.comment,
+      createdAt: quizReviews.createdAt,
+      updatedAt: quizReviews.updatedAt,
+      helpfulCount: quizReviews.helpfulCount,
+      username: users.username,
+      userAvatarUrl: userProfiles.avatarUrl,
+    };
 
+    if (params.sort === 'helpful') {
       const rows = await this.db
-        .select({
-          reviewId: quizReviews.reviewId,
-          quizId: quizReviews.quizId,
-          userId: quizReviews.userId,
-          rating: quizReviews.rating,
-          comment: quizReviews.comment,
-          createdAt: quizReviews.createdAt,
-          updatedAt: quizReviews.updatedAt,
-          username: users.username,
-          userAvatarUrl: userProfiles.avatarUrl,
-          voteCount: voteCountSubquery,
-        })
+        .select(baseSelect)
         .from(quizReviews)
         .innerJoin(users, eq(quizReviews.userId, users.userId))
         .leftJoin(userProfiles, eq(users.userId, userProfiles.userId))
         .where(params.cursor ? and(baseWhere, cursorCondition) : baseWhere)
-        .orderBy(desc(sql`'vote_count'::int`), desc(quizReviews.reviewId))
+        .orderBy(desc(quizReviews.helpfulCount), desc(quizReviews.reviewId))
         .limit(params.limit + 1);
 
       return rows as unknown as ReviewDetailRow[];
@@ -191,17 +187,7 @@ export class ReviewRepository implements ReviewRepositoryPort {
 
     if (params.sort === 'highest_rating') {
       const rows = await this.db
-        .select({
-          reviewId: quizReviews.reviewId,
-          quizId: quizReviews.quizId,
-          userId: quizReviews.userId,
-          rating: quizReviews.rating,
-          comment: quizReviews.comment,
-          createdAt: quizReviews.createdAt,
-          updatedAt: quizReviews.updatedAt,
-          username: users.username,
-          userAvatarUrl: userProfiles.avatarUrl,
-        })
+        .select(baseSelect)
         .from(quizReviews)
         .innerJoin(users, eq(quizReviews.userId, users.userId))
         .leftJoin(userProfiles, eq(users.userId, userProfiles.userId))
@@ -214,17 +200,7 @@ export class ReviewRepository implements ReviewRepositoryPort {
 
     if (params.sort === 'lowest_rating') {
       const rows = await this.db
-        .select({
-          reviewId: quizReviews.reviewId,
-          quizId: quizReviews.quizId,
-          userId: quizReviews.userId,
-          rating: quizReviews.rating,
-          comment: quizReviews.comment,
-          createdAt: quizReviews.createdAt,
-          updatedAt: quizReviews.updatedAt,
-          username: users.username,
-          userAvatarUrl: userProfiles.avatarUrl,
-        })
+        .select(baseSelect)
         .from(quizReviews)
         .innerJoin(users, eq(quizReviews.userId, users.userId))
         .leftJoin(userProfiles, eq(users.userId, userProfiles.userId))
@@ -236,17 +212,7 @@ export class ReviewRepository implements ReviewRepositoryPort {
     }
 
     const rows = await this.db
-      .select({
-        reviewId: quizReviews.reviewId,
-        quizId: quizReviews.quizId,
-        userId: quizReviews.userId,
-        rating: quizReviews.rating,
-        comment: quizReviews.comment,
-        createdAt: quizReviews.createdAt,
-        updatedAt: quizReviews.updatedAt,
-        username: users.username,
-        userAvatarUrl: userProfiles.avatarUrl,
-      })
+      .select(baseSelect)
       .from(quizReviews)
       .innerJoin(users, eq(quizReviews.userId, users.userId))
       .leftJoin(userProfiles, eq(users.userId, userProfiles.userId))
@@ -280,6 +246,7 @@ export class ReviewRepository implements ReviewRepositoryPort {
         rating: quizReviews.rating,
         content: quizReviews.comment,
         createdAt: quizReviews.createdAt,
+        updatedAt: quizReviews.updatedAt,
       })
       .from(quizReviews)
       .innerJoin(quizzes, eq(quizReviews.quizId, quizzes.quizId))
@@ -292,14 +259,6 @@ export class ReviewRepository implements ReviewRepositoryPort {
       .limit(params.limit + 1);
 
     return rows as MyReviewRow[];
-  }
-
-  async listReviewsByUser(params: {
-    userId: string;
-    limit: number;
-    cursor?: { createdAt: string; reviewId: string } | null;
-  }): Promise<MyReviewRow[]> {
-    return this.listUserReviews(params);
   }
 
   async getQuizReviewStats(quizId: string): Promise<ReviewStatsRow | null> {
@@ -444,6 +403,7 @@ export class ReviewRepository implements ReviewRepositoryPort {
         details: reviewReports.details,
         status: reviewReports.status,
         createdAt: reviewReports.createdAt,
+        updatedAt: reviewReports.updatedAt,
       })
       .from(reviewReports)
       .innerJoin(quizReviews, eq(reviewReports.reviewId, quizReviews.reviewId))
@@ -565,6 +525,13 @@ export class ReviewRepository implements ReviewRepositoryPort {
     await this.db.delete(quizReviews).where(eq(quizReviews.reviewId, reviewId));
   }
 
+  async updateHelpfulCount(reviewId: string, increment: number): Promise<void> {
+    await this.db
+      .update(quizReviews)
+      .set({ helpfulCount: sql`helpful_count + ${increment}` })
+      .where(eq(quizReviews.reviewId, reviewId));
+  }
+
   async hasCompletedAttempt(quizId: string, userId: string): Promise<boolean> {
     const [row] = await this.db
       .select({ attemptId: quizAttempts.attemptId })
@@ -585,14 +552,61 @@ export class ReviewRepository implements ReviewRepositoryPort {
     return row !== undefined;
   }
 
-  async getPublishedQuizVersionDifficulty(quizId: string): Promise<string | null> {
-    const [row] = await this.db
-      .select({ difficulty: QUIZ_VERSION_COLUMNS.difficulty })
-      .from(quizVersions)
-      .innerJoin(quizzes, eq(QUIZ_VERSION_COLUMNS.quizId, QUIZ_COLUMNS.quizId))
-      .where(and(eq(QUIZ_COLUMNS.quizId, quizId), eq(QUIZ_VERSION_COLUMNS.status, 'published')))
-      .limit(1);
+  async listPlatformReports(params: {
+    limit: number;
+    cursor?: { createdAt: string; reportId: string } | null;
+    status?: 'open' | 'reviewed' | 'dismissed' | 'actioned' | null;
+  }): Promise<PlatformReportRow[]> {
+    const cursorCondition = params.cursor
+      ? or(
+          sql`${reviewReports.createdAt} < ${params.cursor.createdAt}`,
+          and(
+            eq(reviewReports.createdAt, params.cursor.createdAt),
+            sql`${reviewReports.reportId} < ${params.cursor.reportId}`,
+          ),
+        )
+      : undefined;
 
-    return (row?.difficulty as string | null) ?? null;
+    const whereClauses = params.cursor ? [cursorCondition!] : [];
+    if (params.status) {
+      whereClauses.push(eq(reviewReports.status, params.status));
+    }
+
+    const rows = await this.db
+      .select({
+        reportId: reviewReports.reportId,
+        reviewId: reviewReports.reviewId,
+        quizId: quizReviews.quizId,
+        quizTitle: quizzes.title,
+        reviewerUsername: users.username,
+        reportedUserId: quizReviews.userId,
+        rating: quizReviews.rating,
+        content: quizReviews.comment,
+        reason: reviewReports.reason,
+        details: reviewReports.details,
+        status: reviewReports.status,
+        createdAt: reviewReports.createdAt,
+        updatedAt: reviewReports.updatedAt,
+      })
+      .from(reviewReports)
+      .innerJoin(quizReviews, eq(reviewReports.reviewId, quizReviews.reviewId))
+      .innerJoin(quizzes, eq(quizReviews.quizId, quizzes.quizId))
+      .innerJoin(users, eq(quizReviews.userId, users.userId))
+      .where(whereClauses.length > 0 ? and(...whereClauses) : undefined)
+      .orderBy(desc(reviewReports.createdAt), desc(reviewReports.reportId))
+      .limit(params.limit + 1);
+
+    return rows as unknown as PlatformReportRow[];
+  }
+
+  async updateReportStatus(params: {
+    reportId: string;
+    status: 'reviewed' | 'dismissed' | 'actioned';
+    nowIso: string;
+  }): Promise<void> {
+    await this.db
+      .update(reviewReports)
+      .set({ status: params.status, updatedAt: params.nowIso })
+      .where(eq(reviewReports.reportId, params.reportId));
   }
 }

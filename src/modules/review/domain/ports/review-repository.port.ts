@@ -11,6 +11,7 @@ export type ReviewRow = {
 export type ReviewDetailRow = ReviewRow & {
   username: string;
   userAvatarUrl: string | null;
+  helpfulCount?: number;
 };
 
 export type ReviewDetailByIdRow = {
@@ -23,6 +24,7 @@ export type ReviewDetailByIdRow = {
   content: string | null;
   createdAt: string;
   updatedAt: string;
+  helpfulCount?: number;
 };
 
 export type MyReviewRow = {
@@ -32,6 +34,7 @@ export type MyReviewRow = {
   rating: number;
   content: string | null;
   createdAt: string;
+  updatedAt: string;
 };
 
 export type ReviewCursor = {
@@ -39,7 +42,12 @@ export type ReviewCursor = {
   reviewId: string;
 };
 
-export type ReviewSort = 'helpful' | 'newest' | 'highest_rating' | 'lowest_rating';
+export enum ReviewSort {
+  HELPFUL = 'helpful',
+  NEWEST = 'newest',
+  HIGHEST_RATING = 'highest_rating',
+  LOWEST_RATING = 'lowest_rating',
+}
 
 export type ReportCursor = {
   createdAt: string;
@@ -94,6 +102,23 @@ export type ReportedReviewRow = {
   details: string | null;
   status: 'open' | 'reviewed' | 'dismissed' | 'actioned';
   createdAt: string;
+  updatedAt: string;
+};
+
+export type PlatformReportRow = {
+  reportId: string;
+  reviewId: string;
+  quizId: string;
+  quizTitle: string;
+  reviewerUsername: string;
+  reportedUserId: string;
+  rating: number;
+  content: string | null;
+  reason: string;
+  details: string | null;
+  status: 'open' | 'reviewed' | 'dismissed' | 'actioned';
+  createdAt: string;
+  updatedAt: string;
 };
 
 export interface ReviewRepositoryPort {
@@ -114,12 +139,6 @@ export interface ReviewRepositoryPort {
   }): Promise<ReviewDetailRow[]>;
 
   listUserReviews(params: {
-    userId: string;
-    limit: number;
-    cursor?: ReviewCursor | null;
-  }): Promise<MyReviewRow[]>;
-
-  listReviewsByUser(params: {
     userId: string;
     limit: number;
     cursor?: ReviewCursor | null;
@@ -174,9 +193,21 @@ export interface ReviewRepositoryPort {
 
   deleteReview(reviewId: string): Promise<void>;
 
+  updateHelpfulCount(reviewId: string, increment: number): Promise<void>;
+
   hasCompletedAttempt(quizId: string, userId: string): Promise<boolean>;
 
-  getPublishedQuizVersionDifficulty(quizId: string): Promise<string | null>;
+  listPlatformReports(params: {
+    limit: number;
+    cursor?: { createdAt: string; reportId: string } | null;
+    status?: 'open' | 'reviewed' | 'dismissed' | 'actioned' | null;
+  }): Promise<PlatformReportRow[]>;
+
+  updateReportStatus(params: {
+    reportId: string;
+    status: 'reviewed' | 'dismissed' | 'actioned';
+    nowIso: string;
+  }): Promise<void>;
 }
 
 export const REVIEW_REPOSITORY_PORT = Symbol('REVIEW_REPOSITORY_PORT');
