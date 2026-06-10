@@ -1,4 +1,3 @@
-import type { QuizDifficulty } from '@/modules/quiz/types/quiz.types';
 import type { BookmarkCollectionAnalytics } from '../types/bookmark-collection-analytics';
 
 export type BookmarkCollectionRow = {
@@ -28,7 +27,6 @@ export type BookmarkedQuizDetailRow = BookmarkedQuizRow & {
   quizSlug: string;
   quizImageUrl: string | null;
   quizIsFeatured: boolean;
-  quizDifficulty: QuizDifficulty | null;
   quizPublishedVersionId: string | null;
 };
 
@@ -137,14 +135,18 @@ export interface BookmarkRepositoryPort {
     targetCollectionId: string;
     quizId: string;
     nowIso: string;
+    /** When true, verifies the bookmark exists in source before moving; throws if not found. */
+    verifySource?: boolean;
   }): Promise<void>;
 
   removeBookmark(collectionId: string, quizId: string): Promise<void>;
 
-  checkCollectionOwnership(
-    collectionId: string,
-    userId: string,
-  ): Promise<BookmarkCollectionRow | null>;
+  updateBookmark(params: {
+    collectionId: string;
+    quizId: string;
+    notes: string | null;
+    nowIso: string;
+  }): Promise<BookmarkedQuizRow>;
 
   getCollectionAnalytics(collectionId: string): Promise<BookmarkCollectionAnalytics | null>;
 

@@ -1,16 +1,11 @@
-import { Inject, Injectable, forwardRef } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
+import { isPostgresForeignKeyViolation } from '@/common/utils/db-error.util';
 import {
   BOOKMARK_REPOSITORY_PORT,
   type BookmarkRepositoryPort,
   type BookmarkCollectionRow,
-  type UserBookmarkStatsRow,
-  type RecentBookmarkRow,
-  type RecentBookmarkCursor,
-  type BookmarkStatusRow,
-  type BookmarkSearchResult,
 } from './ports/bookmark-repository.port';
-import type { BookmarkCollectionAnalytics } from './types/bookmark-collection-analytics';
 import { QUIZ_REPOSITORY_PORT } from '@/modules/quiz/domain/ports';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
 import {
@@ -20,7 +15,6 @@ import {
   CollectionConflictError,
   BookmarkNotFoundError,
   BookmarkConflictError,
-  BookmarkAlreadyExistsError,
 } from './errors';
 import {
   COLLECTION_NOT_FOUND_MESSAGE,
@@ -29,10 +23,24 @@ import {
   BOOKMARK_NOT_FOUND_MESSAGE,
   BOOKMARK_QUIZ_ALREADY_EXISTS_MESSAGE,
 } from '../bookmark.constants';
-import { AnalyticsEventHandler } from '@/modules/quiz/domain/analytics/analytics-event-handler';
+import {
+  BOOKMARK_DOMAIN_EVENT_BUS,
+  type BookmarkDomainEventBusPort,
+} from './events/bookmark-domain-event-bus.port';
+import { BookmarkAddedEvent, BookmarkRemovedEvent } from './events/bookmark-domain.events';
 
+/**
+ * BookmarkCommandService — Mutation operations for the Bookmark aggregate.
+ *
+ * Responsibilities:
+ *  - Create, update, delete bookmark collections
+ *  - Add and remove bookmarks
+ *  - Move bookmarks between collections
+ *  - Enforce business rules and authorization
+ *  - Emit domain events after successful state transitions
+ */
 @Injectable()
-export class BookmarkService {
+export class BookmarkCommandService {
   constructor(
     @Inject(BOOKMARK_REPOSITORY_PORT)
     private readonly bookmarkRepository: BookmarkRepositoryPort,
@@ -40,15 +48,11 @@ export class BookmarkService {
     private readonly quizRepository: {
       getActiveQuizRecordById: (quizId: string) => Promise<{ quizId: string } | null>;
     },
-    @Inject(forwardRef(() => AnalyticsEventHandler))
-    private readonly analyticsEventHandler: AnalyticsEventHandler,
-    @InjectPinoLogger(BookmarkService.name)
+    @Inject(BOOKMARK_DOMAIN_EVENT_BUS)
+    private readonly eventBus: BookmarkDomainEventBusPort,
+    @InjectPinoLogger(BookmarkCommandService.name)
     private readonly logger: PinoLogger,
   ) {}
-
-  // ---------------------------------------------------------------------------
-  // Private helpers
-  // ---------------------------------------------------------------------------
 
   private async getOwnedCollectionOrThrow(
     collectionId: string,
@@ -65,50 +69,6 @@ export class BookmarkService {
     }
 
     return collection;
-  }
-
-  // ---------------------------------------------------------------------------
-  // Collection operations
-  // ---------------------------------------------------------------------------
-
-  async listCollections(user: JwtPayload) {
-    return this.bookmarkRepository.listCollectionsByUser(user.sub);
-  }
-
-  async getBookmarkStatus(userId: string, quizId: string): Promise<BookmarkStatusRow> {
-    return this.bookmarkRepository.getBookmarkStatus(userId, quizId);
-  }
-
-  async searchBookmarks(
-    userId: string,
-    query: { query: string; limit?: number; cursor?: RecentBookmarkCursor | null },
-  ): Promise<BookmarkSearchResult> {
-    const limit = query.limit ?? 10;
-    const cursor = query.cursor ?? null;
-
-    const rows = await this.bookmarkRepository.searchBookmarks({
-      userId,
-      query: query.query,
-      limit,
-      cursor,
-    });
-
-    const hasNextPage = rows.length > limit;
-    const items = hasNextPage ? rows.slice(0, limit) : rows;
-    const lastItem = items.at(-1);
-
-    return {
-      items,
-      limit,
-      hasNextPage,
-      nextCursor:
-        hasNextPage && lastItem
-          ? {
-              bookmarkedAt: lastItem.bookmarkedAt,
-              bookmarkId: lastItem.bookmarkId,
-            }
-          : null,
-    };
   }
 
   async createCollection(user: JwtPayload, name: string, description: string | null | undefined) {
@@ -186,10 +146,6 @@ export class BookmarkService {
     });
   }
 
-  // ---------------------------------------------------------------------------
-  // Bookmark operations
-  // ---------------------------------------------------------------------------
-
   async addBookmark(
     collectionId: string,
     quizId: string,
@@ -220,8 +176,9 @@ export class BookmarkService {
         userId: user.sub,
       });
 
-      // Refresh quiz analytics
-      await this.analyticsEventHandler.onBookmarkAdded(quizId);
+      this.eventBus.emitBookmarkAdded(
+        new BookmarkAddedEvent(bookmark.bookmarkId, collectionId, quizId, user.sub, nowIso),
+      );
 
       return bookmark;
     } catch (error) {
@@ -249,12 +206,29 @@ export class BookmarkService {
     }
 
     const nowIso = new Date().toISOString();
-    const addedCount = await this.bookmarkRepository.addBookmarksBulk({
-      userId,
-      collectionId,
-      quizIds: uniqueQuizIds,
-      nowIso,
-    });
+    let addedCount: number;
+
+    try {
+      addedCount = await this.bookmarkRepository.addBookmarksBulk({
+        userId,
+        collectionId,
+        quizIds: uniqueQuizIds,
+        nowIso,
+      });
+    } catch (error) {
+      if (isPostgresForeignKeyViolation(error)) {
+        this.logger.warn({
+          event: 'bulk_add_bookmarks_collection_deleted',
+          collectionId,
+          userId,
+          requestedCount: quizIds.length,
+        });
+        throw new BookmarkCollectionNotFoundError(
+          'Collection was deleted while processing this request. Please retry.',
+        );
+      }
+      throw error;
+    }
 
     this.logger.info({
       event: 'bulk_bookmarks_added',
@@ -268,7 +242,11 @@ export class BookmarkService {
     return addedCount;
   }
 
-  async removeBookmarksBulk(userId: string, collectionId: string, quizIds: string[]): Promise<number> {
+  async removeBookmarksBulk(
+    userId: string,
+    collectionId: string,
+    quizIds: string[],
+  ): Promise<number> {
     const user = { sub: userId, role: 'user' } as JwtPayload;
     await this.getOwnedCollectionOrThrow(collectionId, user);
 
@@ -303,6 +281,8 @@ export class BookmarkService {
       throw new BookmarkNotFoundError(BOOKMARK_NOT_FOUND_MESSAGE);
     }
 
+    const nowIso = new Date().toISOString();
+
     await this.bookmarkRepository.removeBookmark(collectionId, quizId);
 
     this.logger.info({
@@ -312,8 +292,9 @@ export class BookmarkService {
       userId: user.sub,
     });
 
-    // Refresh quiz analytics
-    await this.analyticsEventHandler.onBookmarkRemoved(quizId);
+    this.eventBus.emitBookmarkRemoved(
+      new BookmarkRemovedEvent(existing.bookmarkId, collectionId, quizId, user.sub, nowIso),
+    );
   }
 
   async moveBookmark(
@@ -340,29 +321,26 @@ export class BookmarkService {
       throw new CollectionForbiddenError(COLLECTION_FORBIDDEN_MESSAGE);
     }
 
-    const existingSourceBookmark = await this.bookmarkRepository.getBookmarkedQuiz(
-      sourceCollectionId,
-      quizId,
-    );
-    if (!existingSourceBookmark) {
-      throw new BookmarkNotFoundError(BOOKMARK_NOT_FOUND_MESSAGE);
-    }
-
+    // Check if quiz already exists in target (outside the transaction — fast path)
     const existingTargetBookmark = await this.bookmarkRepository.getBookmarkedQuiz(
       targetCollectionId,
       quizId,
     );
     if (existingTargetBookmark) {
-      throw new BookmarkAlreadyExistsError(BOOKMARK_QUIZ_ALREADY_EXISTS_MESSAGE);
+      throw new BookmarkConflictError(BOOKMARK_QUIZ_ALREADY_EXISTS_MESSAGE);
     }
 
     const nowIso = new Date().toISOString();
+
+    // verifySource=true moves existence check inside the transaction — prevents
+    // TOCTOU: a concurrent removeBookmark between our check and the delete.
     await this.bookmarkRepository.moveBookmark({
       userId,
       sourceCollectionId,
       targetCollectionId,
       quizId,
       nowIso,
+      verifySource: true,
     });
 
     this.logger.info({
@@ -374,65 +352,34 @@ export class BookmarkService {
     });
   }
 
-  async listBookmarksInCollection(collectionId: string, user: JwtPayload) {
+  async updateBookmark(
+    collectionId: string,
+    quizId: string,
+    notes: string | null | undefined,
+    user: JwtPayload,
+  ) {
     await this.getOwnedCollectionOrThrow(collectionId, user);
 
-    return this.bookmarkRepository.listBookmarksInCollection(collectionId);
-  }
+    const existing = await this.bookmarkRepository.getBookmarkedQuiz(collectionId, quizId);
+    if (!existing) {
+      throw new BookmarkNotFoundError(BOOKMARK_NOT_FOUND_MESSAGE);
+    }
 
-  async getRecentBookmarks(
-    userId: string,
-    query: { limit?: number; cursor?: RecentBookmarkCursor | null },
-  ): Promise<{
-    items: RecentBookmarkRow[];
-    limit: number;
-    hasNextPage: boolean;
-    nextCursor: RecentBookmarkCursor | null;
-  }> {
-    const limit = query.limit ?? 10;
-    const cursor = query.cursor ?? null;
-
-    const rows = await this.bookmarkRepository.listRecentBookmarks({
-      userId,
-      limit,
-      cursor,
+    const nowIso = new Date().toISOString();
+    const updated = await this.bookmarkRepository.updateBookmark({
+      collectionId,
+      quizId,
+      notes: notes ?? null,
+      nowIso,
     });
 
-    const hasNextPage = rows.length > limit;
-    const items = hasNextPage ? rows.slice(0, limit) : rows;
-    const lastItem = items.at(-1);
+    this.logger.info({
+      event: 'bookmark_updated',
+      collectionId,
+      quizId,
+      userId: user.sub,
+    });
 
-    return {
-      items,
-      limit,
-      hasNextPage,
-      nextCursor:
-        hasNextPage && lastItem
-          ? {
-              bookmarkedAt: lastItem.bookmarkedAt,
-              bookmarkId: lastItem.bookmarkId,
-            }
-          : null,
-    };
-  }
-
-  async getCollectionAnalytics(collectionId: string): Promise<BookmarkCollectionAnalytics> {
-    const collection = await this.bookmarkRepository.getCollectionById(collectionId);
-
-    if (!collection) {
-      throw new BookmarkCollectionNotFoundError();
-    }
-
-    const analytics = await this.bookmarkRepository.getCollectionAnalytics(collectionId);
-
-    if (!analytics) {
-      throw new BookmarkCollectionNotFoundError();
-    }
-
-    return analytics;
-  }
-
-  async getMyBookmarkStats(userId: string): Promise<UserBookmarkStatsRow> {
-    return this.bookmarkRepository.getUserBookmarkStats(userId);
+    return updated;
   }
 }

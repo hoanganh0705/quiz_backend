@@ -7,13 +7,10 @@ import {
   MaxLength,
   MinLength,
   IsUUID,
-  Matches,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { ListRecentBookmarksQueryDto } from './list-recent-bookmarks-query.dto';
 import { SearchBookmarksQueryDto } from './search-bookmarks-query.dto';
-
-const DEFAULT_SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
 export class CreateCollectionDto {
   @ApiProperty({
@@ -128,18 +125,6 @@ export class BulkRemoveBookmarksDto {
   quizIds!: string[];
 }
 
-export class UpdateBookmarkDto {
-  @ApiPropertyOptional({
-    description: 'Updated personal notes',
-    maxLength: 500,
-    nullable: true,
-  })
-  @IsOptional()
-  @IsString()
-  @MaxLength(500)
-  notes?: string | null;
-}
-
 export class MoveBookmarkDto {
   @ApiProperty({
     description: 'UUID of the quiz to move',
@@ -158,16 +143,16 @@ export class MoveBookmarkDto {
   targetCollectionId!: string;
 }
 
-export class ListCollectionBookmarksQueryDto {
+export class UpdateBookmarkDto {
   @ApiPropertyOptional({
-    description: 'Filter by difficulty',
-    example: 'medium',
+    description: 'Updated personal notes about the quiz',
+    maxLength: 500,
     nullable: true,
   })
   @IsOptional()
   @IsString()
-  @Matches(DEFAULT_SLUG_PATTERN)
-  difficulty?: string;
+  @MaxLength(500)
+  notes?: string | null;
 }
 
 export { ListRecentBookmarksQueryDto, SearchBookmarksQueryDto };
