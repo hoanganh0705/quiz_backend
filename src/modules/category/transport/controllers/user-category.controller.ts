@@ -11,7 +11,7 @@ import type { JwtPayload } from '@/common/guards/jwt.guard';
 import { ApiAuth } from '@/common/swagger/swagger-decorators';
 import { ListFollowedCategoriesQueryDto } from '../../dto/request/list-followed-categories-query.dto';
 import { FollowedCategoriesResponseDto } from '../../dto/response/followed-categories-response.dto';
-import { CategoryApplicationService } from '../../application/category.application.service';
+import { CategoryQueryService } from '../../application/category-query.service';
 import { CategoryDomainExceptionFilter } from '../filters/category-domain-exception.filter';
 import { FollowedCategoryCursorMapper } from '../../mappers/followed-category-cursor.mapper';
 
@@ -26,7 +26,7 @@ import { FollowedCategoryCursorMapper } from '../../mappers/followed-category-cu
 @Controller()
 @UseFilters(CategoryDomainExceptionFilter)
 export class UserCategoryController {
-  constructor(private readonly categoryApplicationService: CategoryApplicationService) {}
+  constructor(private readonly categoryQueryService: CategoryQueryService) {}
 
   @Get('users/me/followed-categories')
   @ApiBearerAuth()
@@ -45,11 +45,9 @@ export class UserCategoryController {
     @CurrentUser() user: JwtPayload,
     @Query() query: ListFollowedCategoriesQueryDto,
   ): Promise<FollowedCategoriesResponseDto> {
-    const cursor = query.cursor ? FollowedCategoryCursorMapper.parse(query.cursor) : null;
-
-    return this.categoryApplicationService.listFollowedCategories(user.sub, {
+    return this.categoryQueryService.listFollowedCategories(user.sub, {
       limit: query.limit,
-      cursor,
+      cursor: query.cursor ? FollowedCategoryCursorMapper.parse(query.cursor) : null,
     });
   }
 }
