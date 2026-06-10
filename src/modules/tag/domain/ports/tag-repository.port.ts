@@ -6,15 +6,16 @@ export interface TagRow {
   updatedAt: string;
 }
 
-export interface TagRowWithDeleted extends TagRow {
+export interface TagDeleteStatus {
   deletedAt: string | null;
 }
 
-export interface TagFollowRow {
+export interface FollowResult {
   followId: string;
-  userId: string;
-  tagId: string;
-  createdAt: string;
+}
+
+export interface TagUnfollowResult {
+  unfollowed: boolean;
 }
 
 export interface FollowedTagRow extends TagRow {
@@ -30,7 +31,7 @@ export interface RankedTagRow extends TagRow {
 
 export interface TagRepositoryPort {
   findById(tagId: string): Promise<TagRow | null>;
-  findByIdIncludingDeleted(tagId: string): Promise<TagRowWithDeleted | null>;
+  findByIdIncludingDeleted(tagId: string): Promise<TagDeleteStatus | null>;
   findBySlug(slug: string): Promise<TagRow | null>;
   findMany(params: {
     limit: number;
@@ -45,8 +46,12 @@ export interface TagRepositoryPort {
   }): Promise<TagRow | null>;
   softDelete(tagId: string, nowIso: string): Promise<boolean>;
   restore(tagId: string, nowIso: string): Promise<TagRow | null>;
-  followTag(params: { userId: string; tagId: string; nowIso: string }): Promise<TagFollowRow>;
-  unfollowTag(params: { userId: string; tagId: string; nowIso: string }): Promise<void>;
+  followTag(params: { userId: string; tagId: string; nowIso: string }): Promise<FollowResult>;
+  unfollowTag(params: {
+    userId: string;
+    tagId: string;
+    nowIso: string;
+  }): Promise<TagUnfollowResult>;
   listFollowedTags(params: {
     userId: string;
     limit: number;

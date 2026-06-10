@@ -1,6 +1,10 @@
 import { decodeBase64JsonCursor, encodeBase64JsonCursor } from '@/common/utils/cursor.util';
 import type { TagRow } from '../domain/ports/tag-repository.port';
-import type { TagCursorPayload } from '../types/tag.types';
+
+export type TagCursorPayload = {
+  createdAt: string;
+  tagId: string;
+};
 
 export class TagCursorMapper {
   private static readonly tagIdPattern =

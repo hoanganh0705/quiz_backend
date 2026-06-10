@@ -1,4 +1,7 @@
-import type { TagCursorPayload } from '../../types/tag.types';
+export type ListTagsCursor = {
+  createdAt: string;
+  tagId: string;
+};
 
 export type CreateTagCommand = {
   name: string;
@@ -11,7 +14,7 @@ export type UpdateTagCommand = {
 };
 
 export type ListTagsQuery = {
-  cursor?: TagCursorPayload | null;
+  cursor?: ListTagsCursor | null;
   limit?: number;
 };
 
