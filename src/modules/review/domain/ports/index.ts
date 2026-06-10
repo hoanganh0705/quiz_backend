@@ -7,7 +7,10 @@ export {
   type ReviewDashboardRow,
   type ReviewHelpfulVoteRow,
   type ReviewReportRow,
+  type ReportedReviewRow,
   type ReviewCursor,
+  type ReportCursor,
+  type ReviewSort,
   type ReviewRepositoryPort,
   REVIEW_REPOSITORY_PORT,
 } from './review-repository.port';

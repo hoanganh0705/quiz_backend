@@ -5,8 +5,10 @@ import {
   UpdateReviewResponseDto,
   MyReviewItemDto,
   ReviewDetailResponseDto,
+  MyQuizReviewResponseDto,
+  ReportedReviewItemDto,
 } from '../dto/response';
-import type { ReviewDetailRow, ReviewRow, MyReviewRow, ReviewDetailByIdRow } from '../domain/ports';
+import type { ReviewDetailRow, ReviewRow, MyReviewRow, ReviewDetailByIdRow, ReportedReviewRow } from '../domain/ports';
 
 @Injectable()
 export class ReviewResponseMapper {
@@ -57,6 +59,20 @@ export class ReviewResponseMapper {
     };
   }
 
+  toMyQuizReviewResponse(row: ReviewDetailByIdRow): MyQuizReviewResponseDto {
+    return {
+      reviewId: row.reviewId,
+      quizId: row.quizId,
+      quizTitle: row.quizTitle,
+      userId: row.userId,
+      username: row.username,
+      rating: row.rating,
+      content: row.content,
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+    };
+  }
+
   toCreateReviewResponse(row: ReviewRow): CreateReviewResponseDto {
     return {
       reviewId: row.reviewId,
@@ -75,5 +91,25 @@ export class ReviewResponseMapper {
       comment: row.comment,
       updatedAt: row.updatedAt,
     };
+  }
+
+  toReportedReviewItem(row: ReportedReviewRow): ReportedReviewItemDto {
+    return {
+      reportId: row.reportId,
+      reviewId: row.reviewId,
+      quizId: row.quizId,
+      quizTitle: row.quizTitle,
+      reviewerUsername: row.reviewerUsername,
+      rating: row.rating,
+      content: row.content,
+      reason: row.reason,
+      details: row.details,
+      status: row.status,
+      createdAt: row.createdAt,
+    };
+  }
+
+  toReportedReviewItems(rows: ReportedReviewRow[]): ReportedReviewItemDto[] {
+    return rows.map((row) => this.toReportedReviewItem(row));
   }
 }

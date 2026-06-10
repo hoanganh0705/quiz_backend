@@ -1,9 +1,15 @@
 import { Injectable } from '@nestjs/common';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
+import type { QuizAnalyticsResponseDto } from '@/modules/quiz/dto/response/quiz-analytics.dto';
 import { ReviewService } from '../domain/review.service';
 import { ReviewResponseMapper } from '../mappers/review-response.mapper';
-import { ReviewCursorMapper } from '../mappers/review-cursor.mapper';
-import { HelpfulReviewDto, ReportReviewDto, CreateReviewDto, UpdateReviewDto } from '../dto/request';
+import { ReviewCursorMapper, ReportCursorMapper } from '../mappers/review-cursor.mapper';
+import {
+  HelpfulReviewDto,
+  ReportReviewDto,
+  CreateReviewDto,
+  UpdateReviewDto,
+} from '../dto/request';
 import {
   ReviewListResponseDto,
   CreateReviewResponseDto,
@@ -15,6 +21,8 @@ import {
   ReviewDashboardResponseDto,
   HelpfulReviewResponseDto,
   ReportReviewResponseDto,
+  MyQuizReviewResponseDto,
+  ReportedReviewsResponseDto,
 } from '../dto/response';
 
 @Injectable()
@@ -44,8 +52,9 @@ export class ReviewApplicationService {
     limit: number,
     cursor?: { createdAt: string; reviewId: string } | null,
     rating?: number,
+    sort?: import('../domain/ports').ReviewSort,
   ): Promise<ReviewListResponseDto> {
-    const rows = await this.reviewService.listReviews(quizId, limit, cursor, rating);
+    const rows = await this.reviewService.listReviews(quizId, limit, cursor, rating, sort);
 
     const hasNextPage = rows.length > limit;
     const items = hasNextPage ? rows.slice(0, limit) : rows;
@@ -104,12 +113,27 @@ export class ReviewApplicationService {
     return this.reviewResponseMapper.toReviewDetailResponse(review);
   }
 
+  async getMyQuizReview(quizId: string, userId: string): Promise<MyQuizReviewResponseDto | null> {
+    const review = await this.reviewService.getMyQuizReview(quizId, userId);
+    if (!review) {
+      return null;
+    }
+    return this.reviewResponseMapper.toMyQuizReviewResponse(review);
+  }
+
   async getQuizReviewStats(quizId: string): Promise<ReviewStatsResponseDto> {
     return this.reviewService.getQuizReviewStats(quizId);
   }
 
   async getMyReviewDashboard(user: JwtPayload): Promise<ReviewDashboardResponseDto> {
     return this.reviewService.getMyReviewDashboard(user.sub);
+  }
+
+  async getCreatorQuizReviewAnalytics(
+    quizId: string,
+    user: JwtPayload,
+  ): Promise<QuizAnalyticsResponseDto> {
+    return this.reviewService.getCreatorQuizReviewAnalytics(quizId, user);
   }
 
   async markReviewHelpful(
@@ -138,6 +162,25 @@ export class ReviewApplicationService {
       payload.details ?? null,
     );
     return { message: 'Review reported successfully' };
+  }
+
+  async listReportedReviews(
+    userId: string,
+    query: { limit?: number; cursor?: { createdAt: string; reportId: string } | null },
+  ): Promise<ReportedReviewsResponseDto> {
+    const { items, limit, hasNextPage, nextCursor } = await this.reviewService.listReportedReviews(
+      userId,
+      query,
+    );
+
+    return {
+      items: this.reviewResponseMapper.toReportedReviewItems(items),
+      pagination: {
+        limit,
+        hasNextPage,
+        nextCursor: nextCursor ? ReportCursorMapper.serialize(nextCursor) : null,
+      },
+    };
   }
 
   async updateReview(

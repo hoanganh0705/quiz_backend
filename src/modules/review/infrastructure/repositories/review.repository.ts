@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, desc, eq, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, or, sql } from 'drizzle-orm';
 import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 import { DRIZZLE } from '@/core/database/drizzle.constants';
 import type { DrizzleDB } from '@/core/database/database.module';
@@ -26,6 +26,7 @@ import type {
   ReviewDashboardRow,
   ReviewHelpfulVoteRow,
   ReviewReportRow,
+  ReportedReviewRow,
 } from '@/modules/review/domain/ports';
 
 const QUIZ_COLUMNS = quizzes as unknown as {
@@ -67,6 +68,31 @@ export class ReviewRepository implements ReviewRepositoryPort {
     return (row as ReviewRow | undefined) ?? null;
   }
 
+  async getMyQuizReview(
+    quizId: string,
+    userId: string,
+  ): Promise<import('@/modules/review/domain/ports').ReviewDetailByIdRow | null> {
+    const [row] = await this.db
+      .select({
+        reviewId: quizReviews.reviewId,
+        quizId: quizReviews.quizId,
+        quizTitle: quizzes.title,
+        userId: quizReviews.userId,
+        username: users.username,
+        rating: quizReviews.rating,
+        content: quizReviews.comment,
+        createdAt: quizReviews.createdAt,
+        updatedAt: quizReviews.updatedAt,
+      })
+      .from(quizReviews)
+      .innerJoin(quizzes, eq(quizReviews.quizId, quizzes.quizId))
+      .innerJoin(users, eq(quizReviews.userId, users.userId))
+      .where(and(eq(quizReviews.quizId, quizId), eq(quizReviews.userId, userId)))
+      .limit(1);
+
+    return (row as import('@/modules/review/domain/ports').ReviewDetailByIdRow | undefined) ?? null;
+  }
+
   async getReviewById(reviewId: string): Promise<ReviewRow | null> {
     const [row] = await this.db
       .select({
@@ -85,7 +111,9 @@ export class ReviewRepository implements ReviewRepositoryPort {
     return (row as ReviewRow | undefined) ?? null;
   }
 
-  async findReviewById(reviewId: string): Promise<import('@/modules/review/domain/ports').ReviewDetailByIdRow | null> {
+  async findReviewById(
+    reviewId: string,
+  ): Promise<import('@/modules/review/domain/ports').ReviewDetailByIdRow | null> {
     const [row] = await this.db
       .select({
         reviewId: quizReviews.reviewId,
@@ -112,6 +140,7 @@ export class ReviewRepository implements ReviewRepositoryPort {
     limit: number;
     cursor?: { createdAt: string; reviewId: string } | null;
     rating?: number;
+    sort?: import('@/modules/review/domain/ports').ReviewSort;
   }): Promise<ReviewDetailRow[]> {
     const cursorCondition = params.cursor
       ? or(
@@ -122,6 +151,89 @@ export class ReviewRepository implements ReviewRepositoryPort {
           ),
         )
       : undefined;
+
+    const baseWhere =
+      params.rating !== undefined
+        ? and(eq(quizReviews.quizId, params.quizId), eq(quizReviews.rating, params.rating))
+        : eq(quizReviews.quizId, params.quizId);
+
+    if (params.sort === 'helpful') {
+      const voteCountSubquery = sql<number>`
+        COALESCE((
+          SELECT COUNT(*)
+          FROM ${reviewHelpfulVotes}
+          WHERE ${reviewHelpfulVotes.reviewId} = ${quizReviews.reviewId}
+        ), 0)
+      `.as('vote_count');
+
+      const rows = await this.db
+        .select({
+          reviewId: quizReviews.reviewId,
+          quizId: quizReviews.quizId,
+          userId: quizReviews.userId,
+          rating: quizReviews.rating,
+          comment: quizReviews.comment,
+          createdAt: quizReviews.createdAt,
+          updatedAt: quizReviews.updatedAt,
+          username: users.username,
+          userAvatarUrl: userProfiles.avatarUrl,
+          voteCount: voteCountSubquery,
+        })
+        .from(quizReviews)
+        .innerJoin(users, eq(quizReviews.userId, users.userId))
+        .leftJoin(userProfiles, eq(users.userId, userProfiles.userId))
+        .where(params.cursor ? and(baseWhere, cursorCondition) : baseWhere)
+        .orderBy(desc(sql`'vote_count'::int`), desc(quizReviews.reviewId))
+        .limit(params.limit + 1);
+
+      return rows as unknown as ReviewDetailRow[];
+    }
+
+    if (params.sort === 'highest_rating') {
+      const rows = await this.db
+        .select({
+          reviewId: quizReviews.reviewId,
+          quizId: quizReviews.quizId,
+          userId: quizReviews.userId,
+          rating: quizReviews.rating,
+          comment: quizReviews.comment,
+          createdAt: quizReviews.createdAt,
+          updatedAt: quizReviews.updatedAt,
+          username: users.username,
+          userAvatarUrl: userProfiles.avatarUrl,
+        })
+        .from(quizReviews)
+        .innerJoin(users, eq(quizReviews.userId, users.userId))
+        .leftJoin(userProfiles, eq(users.userId, userProfiles.userId))
+        .where(params.cursor ? and(baseWhere, cursorCondition) : baseWhere)
+        .orderBy(desc(quizReviews.rating), desc(quizReviews.reviewId))
+        .limit(params.limit + 1);
+
+      return rows as ReviewDetailRow[];
+    }
+
+    if (params.sort === 'lowest_rating') {
+      const rows = await this.db
+        .select({
+          reviewId: quizReviews.reviewId,
+          quizId: quizReviews.quizId,
+          userId: quizReviews.userId,
+          rating: quizReviews.rating,
+          comment: quizReviews.comment,
+          createdAt: quizReviews.createdAt,
+          updatedAt: quizReviews.updatedAt,
+          username: users.username,
+          userAvatarUrl: userProfiles.avatarUrl,
+        })
+        .from(quizReviews)
+        .innerJoin(users, eq(quizReviews.userId, users.userId))
+        .leftJoin(userProfiles, eq(users.userId, userProfiles.userId))
+        .where(params.cursor ? and(baseWhere, cursorCondition) : baseWhere)
+        .orderBy(asc(quizReviews.rating), desc(quizReviews.reviewId))
+        .limit(params.limit + 1);
+
+      return rows as ReviewDetailRow[];
+    }
 
     const rows = await this.db
       .select({
@@ -138,18 +250,7 @@ export class ReviewRepository implements ReviewRepositoryPort {
       .from(quizReviews)
       .innerJoin(users, eq(quizReviews.userId, users.userId))
       .leftJoin(userProfiles, eq(users.userId, userProfiles.userId))
-      .where(
-        params.cursor
-          ? and(
-              eq(quizReviews.quizId, params.quizId),
-              params.rating !== undefined ? eq(quizReviews.rating, params.rating) : undefined,
-              cursorCondition,
-            )
-          : and(
-              eq(quizReviews.quizId, params.quizId),
-              params.rating !== undefined ? eq(quizReviews.rating, params.rating) : undefined,
-            ),
-      )
+      .where(params.cursor ? and(baseWhere, cursorCondition) : baseWhere)
       .orderBy(desc(quizReviews.createdAt), desc(quizReviews.reviewId))
       .limit(params.limit + 1);
 
@@ -204,7 +305,9 @@ export class ReviewRepository implements ReviewRepositoryPort {
   async getQuizReviewStats(quizId: string): Promise<ReviewStatsRow | null> {
     const [row] = await this.db
       .select({
-        averageRating: sql<number>`COALESCE(ROUND(AVG(${quizReviews.rating})::numeric, 1), 0)`.as('average_rating'),
+        averageRating: sql<number>`COALESCE(ROUND(AVG(${quizReviews.rating})::numeric, 1), 0)`.as(
+          'average_rating',
+        ),
         totalReviews: sql<number>`COUNT(${quizReviews.reviewId})`.as('total_reviews'),
         rating1: sql<number>`COUNT(CASE WHEN ${quizReviews.rating} = 1 THEN 1 END)`.as('rating_1'),
         rating2: sql<number>`COUNT(CASE WHEN ${quizReviews.rating} = 2 THEN 1 END)`.as('rating_2'),
@@ -226,8 +329,9 @@ export class ReviewRepository implements ReviewRepositoryPort {
           sql<number>`COALESCE(ROUND(AVG(${quizReviews.rating})::numeric, 1), 0)`.as(
             'average_rating_given',
           ),
-        lastUpdated:
-          sql<string>`COALESCE(MAX(${quizReviews.updatedAt}), NOW()::text)`.as('last_updated'),
+        lastUpdated: sql<string>`COALESCE(MAX(${quizReviews.updatedAt}), NOW()::text)`.as(
+          'last_updated',
+        ),
       })
       .from(quizReviews)
       .where(eq(quizReviews.userId, userId));
@@ -282,9 +386,7 @@ export class ReviewRepository implements ReviewRepositoryPort {
         createdAt: reviewHelpfulVotes.createdAt,
       })
       .from(reviewHelpfulVotes)
-      .where(
-        and(eq(reviewHelpfulVotes.reviewId, reviewId), eq(reviewHelpfulVotes.userId, userId)),
-      )
+      .where(and(eq(reviewHelpfulVotes.reviewId, reviewId), eq(reviewHelpfulVotes.userId, userId)))
       .limit(1);
 
     if (existingVote) {
@@ -312,6 +414,50 @@ export class ReviewRepository implements ReviewRepositoryPort {
       .limit(1);
 
     return row !== undefined;
+  }
+
+  async listReportedReviews(params: {
+    reporterId: string;
+    limit: number;
+    cursor?: { createdAt: string; reportId: string } | null;
+  }): Promise<ReportedReviewRow[]> {
+    const cursorCondition = params.cursor
+      ? or(
+          sql`${reviewReports.createdAt} < ${params.cursor.createdAt}`,
+          and(
+            eq(reviewReports.createdAt, params.cursor.createdAt),
+            sql`${reviewReports.reportId} < ${params.cursor.reportId}`,
+          ),
+        )
+      : undefined;
+
+    const rows = await this.db
+      .select({
+        reportId: reviewReports.reportId,
+        reviewId: reviewReports.reviewId,
+        quizId: quizReviews.quizId,
+        quizTitle: quizzes.title,
+        reviewerUsername: users.username,
+        rating: quizReviews.rating,
+        content: quizReviews.comment,
+        reason: reviewReports.reason,
+        details: reviewReports.details,
+        status: reviewReports.status,
+        createdAt: reviewReports.createdAt,
+      })
+      .from(reviewReports)
+      .innerJoin(quizReviews, eq(reviewReports.reviewId, quizReviews.reviewId))
+      .innerJoin(quizzes, eq(quizReviews.quizId, quizzes.quizId))
+      .innerJoin(users, eq(quizReviews.userId, users.userId))
+      .where(
+        params.cursor
+          ? and(eq(reviewReports.reporterId, params.reporterId), cursorCondition)
+          : eq(reviewReports.reporterId, params.reporterId),
+      )
+      .orderBy(desc(reviewReports.createdAt), desc(reviewReports.reportId))
+      .limit(params.limit + 1);
+
+    return rows as ReportedReviewRow[];
   }
 
   async createReport(params: {

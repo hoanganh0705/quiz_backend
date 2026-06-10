@@ -1,4 +1,4 @@
-import { IsInt, IsOptional, IsString, Max, Min, IsBoolean, MaxLength } from 'class-validator';
+import { IsInt, IsOptional, IsString, Max, Min, IsBoolean, MaxLength, IsEnum } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 
@@ -49,6 +49,13 @@ export class UpdateReviewDto {
   comment?: string | null;
 }
 
+export enum ReviewSort {
+  HELPFUL = 'helpful',
+  NEWEST = 'newest',
+  HIGHEST_RATING = 'highest_rating',
+  LOWEST_RATING = 'lowest_rating',
+}
+
 export class ListReviewsQueryDto {
   @ApiPropertyOptional({
     description: 'Cursor for cursor-based pagination',
@@ -85,9 +92,30 @@ export class ListReviewsQueryDto {
   @Min(1)
   @Max(5)
   rating?: number;
+
+  @ApiPropertyOptional({
+    description: 'Sort order for the review list',
+    enum: ReviewSort,
+    default: ReviewSort.NEWEST,
+    example: 'newest',
+    nullable: true,
+  })
+  @IsOptional()
+  @IsEnum(ReviewSort)
+  sort?: ReviewSort = ReviewSort.NEWEST;
 }
 
 export class ListMyReviewsQueryDto {
+  @ApiPropertyOptional({
+    description: 'UUID of the quiz to retrieve the current user review for',
+    example: '660e8400-e29b-41d4-a716-446655440000',
+    nullable: true,
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(36)
+  quizId?: string;
+
   @ApiPropertyOptional({
     description: 'Opaque cursor for pagination',
     example:
@@ -118,6 +146,31 @@ export class HelpfulReviewDto {
   })
   @IsBoolean()
   helpful!: boolean;
+}
+
+export class ListReportedReviewsQueryDto {
+  @ApiPropertyOptional({
+    description: 'Opaque cursor for pagination',
+    example:
+      'eyJjcmVhdGVkQXQiOiIyMDI2LTAxLTAxVDAwOjAwOjAwLjAwMFoiLCJyZXBvcnRJZCI6Ijk5MGU4NDAwLWUyOWItNDFkNC1hNzE2LTQ0NjY1NTQ0MDAwMSJ9',
+    nullable: true,
+  })
+  @IsOptional()
+  @IsString()
+  cursor?: string;
+
+  @ApiPropertyOptional({
+    description: 'Maximum number of items to return (1–100)',
+    minimum: 1,
+    maximum: 100,
+    default: 10,
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  limit?: number = 10;
 }
 
 export class ReportReviewDto {
