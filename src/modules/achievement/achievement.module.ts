@@ -40,9 +40,10 @@ import { AchievementDomainExceptionFilter } from './transport/filters/achievemen
 // User module for activity event wiring
 import { UserModule } from '@/modules/user/user.module';
 import { RankingModule } from '@/modules/ranking/ranking.module';
+import { AttemptModule } from '@/modules/attempt/attempt.module';
 
 @Module({
-  imports: [DatabaseModule, UserModule, RankingModule],
+  imports: [DatabaseModule, UserModule, RankingModule, AttemptModule],
   controllers: [AchievementController],
   providers: [
     {

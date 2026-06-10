@@ -237,18 +237,4 @@ export class AchievementDomainEventBus {
       event: 'event_bus_cleared',
     });
   }
-
-  /**
-   * Get the number of handlers for a specific event type.
-   */
-  getHandlerCount(eventType: string): number {
-    return this.handlers.get(eventType)?.size ?? 0;
-  }
-
-  /**
-   * Get the total number of global handlers.
-   */
-  getGlobalHandlerCount(): number {
-    return this.globalHandlers.size;
-  }
 }

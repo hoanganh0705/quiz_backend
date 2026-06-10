@@ -2,7 +2,6 @@ export {
   AttemptDomainError,
   AttemptNotFoundError,
   AttemptForbiddenError,
-  AttemptConflictError,
   AttemptValidationError,
   AttemptAlreadyStartedError,
   AttemptNotActiveError,
@@ -10,4 +9,5 @@ export {
   QuizNotPublishedError,
   AttemptQuestionInvalidError,
   AttemptNotCompletedError,
+  AttemptAnswerNotFoundError,
 } from './attempt-domain.errors';

@@ -16,7 +16,7 @@ import {
   categories,
   quizTags,
   tags,
-  users,
+  quizAttemptEvents,
 } from '@/core/database/schema';
 import type { AttemptContextType } from '@/modules/attempt/types/attempt.types';
 import type {
@@ -330,38 +330,53 @@ export class AttemptRepository implements AttemptRepositoryPort {
     userId: string;
     nowIso: string;
   }): Promise<AttemptRow> {
-    const [updated] = await this.db
-      .update(quizAttempts)
-      .set({
-        status: 'abandoned',
-        finishedAt: params.nowIso,
-        updatedAt: params.nowIso,
-      })
-      .where(
-        and(
-          eq(quizAttempts.attemptId, params.attemptId),
-          eq(quizAttempts.userId, params.userId),
-          eq(quizAttempts.status, 'started'),
-        ),
-      )
-      .returning({
-        attemptId: quizAttempts.attemptId,
-        userId: quizAttempts.userId,
-        quizVersionId: quizAttempts.quizVersionId,
-        contextType: quizAttempts.contextType,
-        contextRefId: quizAttempts.contextRefId,
-        status: quizAttempts.status,
-        scorePercent: quizAttempts.scorePercent,
-        correctCount: quizAttempts.correctCount,
-        startedAt: quizAttempts.startedAt,
-        finishedAt: quizAttempts.finishedAt,
-        timeTakenMs: quizAttempts.timeTakenMs,
-        xpEarned: quizAttempts.xpEarned,
-        createdAt: quizAttempts.createdAt,
-        updatedAt: quizAttempts.updatedAt,
+    return this.db.transaction(async (tx) => {
+      const [updated] = await tx
+        .update(quizAttempts)
+        .set({
+          status: 'abandoned',
+          finishedAt: params.nowIso,
+          updatedAt: params.nowIso,
+        })
+        .where(
+          and(
+            eq(quizAttempts.attemptId, params.attemptId),
+            eq(quizAttempts.userId, params.userId),
+            eq(quizAttempts.status, 'started'),
+          ),
+        )
+        .returning({
+          attemptId: quizAttempts.attemptId,
+          userId: quizAttempts.userId,
+          quizVersionId: quizAttempts.quizVersionId,
+          contextType: quizAttempts.contextType,
+          contextRefId: quizAttempts.contextRefId,
+          status: quizAttempts.status,
+          scorePercent: quizAttempts.scorePercent,
+          correctCount: quizAttempts.correctCount,
+          startedAt: quizAttempts.startedAt,
+          finishedAt: quizAttempts.finishedAt,
+          timeTakenMs: quizAttempts.timeTakenMs,
+          xpEarned: quizAttempts.xpEarned,
+          createdAt: quizAttempts.createdAt,
+          updatedAt: quizAttempts.updatedAt,
+        });
+
+      if (!updated) {
+        throw new Error('Failed to abandon attempt — record not found or not active');
+      }
+
+      // Log the abandonment event to quiz_attempt_events for audit trail
+      await tx.insert(quizAttemptEvents).values({
+        attemptId: params.attemptId,
+        eventType: 'attempt.abandoned',
+        payload: {
+          abandonedAt: params.nowIso,
+        },
       });
 
-    return updated as AttemptRow;
+      return updated as AttemptRow;
+    });
   }
 
   async getAttemptAnswersByAttemptId(attemptId: string): Promise<AttemptAnswerRow[]> {
@@ -373,19 +388,36 @@ export class AttemptRepository implements AttemptRepositoryPort {
         selectedOptionId: quizAttemptAnswers.selectedOptionId,
         answeredAt: quizAttemptAnswers.answeredAt,
         timeTakenMs: quizAttemptAnswers.timeTakenMs,
-        optionPosition: quizAnswerOptions.position,
-        optionValue: quizAnswerOptions.value,
-        isCorrect: quizAnswerOptions.isCorrect,
       })
       .from(quizAttemptAnswers)
-      .leftJoin(
-        quizAnswerOptions,
-        eq(quizAttemptAnswers.selectedOptionId, quizAnswerOptions.optionId),
-      )
       .where(eq(quizAttemptAnswers.attemptId, attemptId))
       .orderBy(quizAttemptAnswers.answeredAt);
 
     return rows as AttemptAnswerRow[];
+  }
+
+  /**
+   * Returns only the scoring-relevant subset of answer data for an attempt.
+   * Uses an INNER JOIN so only answered questions (with a selected option) are counted.
+   * Used by AttemptCommandService to compute scoring without a deduplication workaround.
+   */
+  async getAttemptAnswerScoringData(
+    attemptId: string,
+  ): Promise<{ totalAnswers: number; correctCount: number }> {
+    const answers = await this.db
+      .select({
+        attemptAnswerId: quizAttemptAnswers.attemptAnswerId,
+        isCorrect: quizAnswerOptions.isCorrect,
+      })
+      .from(quizAttemptAnswers)
+      .innerJoin(
+        quizAnswerOptions,
+        eq(quizAttemptAnswers.selectedOptionId, quizAnswerOptions.optionId),
+      )
+      .where(eq(quizAttemptAnswers.attemptId, attemptId));
+
+    const correctCount = answers.filter((a) => a.isCorrect === true).length;
+    return { totalAnswers: answers.length, correctCount };
   }
 
   async submitAnswer(params: {
@@ -396,28 +428,51 @@ export class AttemptRepository implements AttemptRepositoryPort {
     nowIso: string;
     timeTakenMs?: number | null;
   }): Promise<AttemptAnswerRow> {
-    const [created] = await this.db
-      .insert(quizAttemptAnswers)
-      .values({
+    return this.db.transaction(async (tx) => {
+      // Lock the attempt row for update to prevent concurrent answer submissions
+      // and ensure the attempt status check is consistent within this transaction.
+      const [locked] = await tx
+        .select({ attemptId: quizAttempts.attemptId, status: quizAttempts.status })
+        .from(quizAttempts)
+        .where(eq(quizAttempts.attemptId, params.attemptId))
+        .limit(1);
+
+      if (!locked || locked.status !== 'started') {
+        throw new Error('Attempt not active or not found');
+      }
+
+      const [created] = await tx
+        .insert(quizAttemptAnswers)
+        .values({
+          attemptId: params.attemptId,
+          questionId: params.questionId,
+          selectedOptionId: params.selectedOptionId,
+          answeredAt: params.nowIso,
+          timeTakenMs: params.timeTakenMs ?? null,
+        })
+        .returning({
+          attemptAnswerId: quizAttemptAnswers.attemptAnswerId,
+          attemptId: quizAttemptAnswers.attemptId,
+          questionId: quizAttemptAnswers.questionId,
+          selectedOptionId: quizAttemptAnswers.selectedOptionId,
+          answeredAt: quizAttemptAnswers.answeredAt,
+          timeTakenMs: quizAttemptAnswers.timeTakenMs,
+        });
+
+      // Log the answer submission event to quiz_attempt_events for audit trail
+      await tx.insert(quizAttemptEvents).values({
         attemptId: params.attemptId,
+        eventType: 'answer.submitted',
         questionId: params.questionId,
         selectedOptionId: params.selectedOptionId,
-        answeredAt: params.nowIso,
-        timeTakenMs: params.timeTakenMs ?? null,
-      })
-      .returning({
-        attemptAnswerId: quizAttemptAnswers.attemptAnswerId,
-        attemptId: quizAttemptAnswers.attemptId,
-        questionId: quizAttemptAnswers.questionId,
-        selectedOptionId: quizAttemptAnswers.selectedOptionId,
-        answeredAt: quizAttemptAnswers.answeredAt,
-        timeTakenMs: quizAttemptAnswers.timeTakenMs,
-        optionPosition: quizAnswerOptions.position,
-        optionValue: quizAnswerOptions.value,
-        isCorrect: quizAnswerOptions.isCorrect,
+        payload: {
+          answeredAt: params.nowIso,
+          timeTakenMs: params.timeTakenMs,
+        },
       });
 
-    return created as AttemptAnswerRow;
+      return created as AttemptAnswerRow;
+    });
   }
 
   async checkAnswerOptionBelongsToQuestion(questionId: string, optionId: string): Promise<boolean> {
@@ -538,14 +593,18 @@ export class AttemptRepository implements AttemptRepositoryPort {
           .where(eq(quizStats.quizId, params.quizId));
       }
 
-      if (params.xpEarned > 0) {
-        await tx
-          .update(users)
-          .set({
-            xpTotal: sql`${users.xpTotal} + ${params.xpEarned}`,
-          })
-          .where(eq(users.userId, params.userId));
-      }
+      // Log the attempt completion event to quiz_attempt_events for audit trail
+      await tx.insert(quizAttemptEvents).values({
+        attemptId: params.attemptId,
+        eventType: 'attempt.completed',
+        payload: {
+          scorePercent: params.scorePercent,
+          correctCount: params.correctCount,
+          timeTakenMs: params.timeTakenMs,
+          xpEarned: params.xpEarned,
+          completedAt: params.nowIso,
+        },
+      });
 
       return updated as AttemptRow;
     });
@@ -721,5 +780,25 @@ export class AttemptRepository implements AttemptRepositoryPort {
         : null,
       favoriteTag: favoriteTag ? { tagId: favoriteTag.tagId, name: favoriteTag.name } : null,
     };
+  }
+
+  async countCompletedAttempts(userId: string): Promise<number> {
+    const [row] = await this.db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(quizAttempts)
+      .where(and(eq(quizAttempts.userId, userId), eq(quizAttempts.status, 'completed')));
+
+    return row?.count ?? 0;
+  }
+
+  async deleteAnswer(params: { attemptId: string; userId: string; questionId: string }): Promise<void> {
+    await this.db
+      .delete(quizAttemptAnswers)
+      .where(
+        and(
+          eq(quizAttemptAnswers.attemptId, params.attemptId),
+          eq(quizAttemptAnswers.questionId, params.questionId),
+        ),
+      );
   }
 }

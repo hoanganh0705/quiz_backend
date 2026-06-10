@@ -1,16 +1,8 @@
 import type { AttemptDetailRow, AttemptAnswerRow } from './ports/attempt-repository.port';
 
-function calculateScore(answers: AttemptAnswerRow[]): {
-  correctCount: number;
-  scorePercent: string;
-} {
-  const correctCount = answers.filter((a) => a.isCorrect === true).length;
-  const totalQuestions = answers.length;
-
-  const scorePercent =
-    totalQuestions > 0 ? ((correctCount / totalQuestions) * 100).toFixed(2) : '0.00';
-
-  return { correctCount, scorePercent };
+function calculateScorePercent(correctCount: number, totalAnswers: number): string {
+  if (totalAnswers === 0) return '0.00';
+  return ((correctCount / totalAnswers) * 100).toFixed(2);
 }
 
 function calculateTimeTakenMs(startedAt: string, nowIso: string): number {
@@ -37,9 +29,9 @@ function calculateXpEarned(
  */
 export const AttemptScoringService = {
   /**
-   * Calculates the score from submitted answers.
+   * Calculates the score percentage from correct count and total answers.
    */
-  calculateScore,
+  calculateScorePercent,
 
   /**
    * Calculates elapsed time from start timestamp to completion timestamp.
@@ -52,24 +44,4 @@ export const AttemptScoringService = {
    * Calculates XP earned based on passing score.
    */
   calculateXpEarned,
-
-  /**
-   * Calculates all scoring metrics from attempt data.
-   */
-  computeScoringResult(
-    attempt: AttemptDetailRow,
-    answers: AttemptAnswerRow[],
-    nowIso: string,
-  ): {
-    correctCount: number;
-    scorePercent: string;
-    timeTakenMs: number;
-    xpEarned: number;
-  } {
-    const { correctCount, scorePercent } = calculateScore(answers);
-    const timeTakenMs = calculateTimeTakenMs(attempt.startedAt, nowIso);
-    const xpEarned = calculateXpEarned(scorePercent, attempt.passingScorePercent, attempt.rewardXp);
-
-    return { correctCount, scorePercent, timeTakenMs, xpEarned };
-  },
 };

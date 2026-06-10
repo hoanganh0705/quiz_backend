@@ -24,10 +24,7 @@ import { RankingEventHandler } from './domain/events/ranking.event-handler';
 
 // Domain Ports
 import { RANKING_REPOSITORY_PORT } from './domain/ports/ranking-repository.port';
-import {
-  RANKING_DOMAIN_EVENT_BUS,
-  EXTERNAL_EVENT_BUS,
-} from './domain/ports/ranking-event-bus.port';
+import { RANKING_DOMAIN_EVENT_BUS } from './domain/ports/ranking-event-bus.port';
 
 // Domain Services
 import {
@@ -74,10 +71,6 @@ import { RankingDomainExceptionFilter } from './transport/filters/ranking-domain
       provide: RANKING_DOMAIN_EVENT_BUS,
       useExisting: RankingDomainEventBus,
     },
-    {
-      provide: EXTERNAL_EVENT_BUS,
-      useExisting: RankingDomainEventBus,
-    },
 
     // Domain Services
     XpIngestionService,
@@ -109,7 +102,6 @@ import { RankingDomainExceptionFilter } from './transport/filters/ranking-domain
     // Ports
     RANKING_REPOSITORY_PORT,
     RANKING_DOMAIN_EVENT_BUS,
-    EXTERNAL_EVENT_BUS,
 
     // Domain Services
     XpIngestionService,

@@ -34,17 +34,6 @@ export type AttemptDetailRow = AttemptRow & {
   rewardXp: number;
 };
 
-export type AttemptWithAnswersRow = AttemptRow & {
-  quizId: string;
-  quizTitle: string;
-  quizSlug: string;
-  versionNumber: number;
-  difficulty: QuizDifficulty;
-  durationMs: number;
-  passingScorePercent: number;
-  rewardXp: number;
-};
-
 export type AttemptAnswerRow = {
   attemptAnswerId: string;
   attemptId: string;
@@ -52,9 +41,6 @@ export type AttemptAnswerRow = {
   selectedOptionId: string | null;
   answeredAt: string;
   timeTakenMs: number | null;
-  optionPosition: number | null;
-  optionValue: string | null;
-  isCorrect: boolean | null;
 };
 
 export type AttemptAnalyticsRow = {
@@ -143,6 +129,14 @@ export interface AttemptRepositoryPort {
 
   getAttemptAnswersByAttemptId(attemptId: string): Promise<AttemptAnswerRow[]>;
 
+  /**
+   * Returns scoring-relevant answer data (total count and correct count) for an attempt.
+   * Uses a targeted INNER JOIN — no deduplication needed since we count directly.
+   */
+  getAttemptAnswerScoringData(
+    attemptId: string,
+  ): Promise<{ totalAnswers: number; correctCount: number }>;
+
   submitAnswer(params: {
     attemptId: string;
     userId: string;
@@ -202,6 +196,23 @@ export interface AttemptRepositoryPort {
    * All aggregation logic lives in the repository query.
    */
   getUserAttemptStats(userId: string): Promise<UserAttemptStatsRow>;
+
+  /**
+   * Returns the number of completed attempts for a user.
+   * Used to determine quiz milestone achievements.
+   */
+  countCompletedAttempts(userId: string): Promise<number>;
+
+  /**
+   * Deletes a submitted answer for an active attempt.
+   * Only allowed on attempts with status 'started'.
+   * Fails silently if no answer exists for the given question.
+   */
+  deleteAnswer(params: {
+    attemptId: string;
+    userId: string;
+    questionId: string;
+  }): Promise<void>;
 }
 
 export const ATTEMPT_REPOSITORY_PORT = Symbol('ATTEMPT_REPOSITORY_PORT');
