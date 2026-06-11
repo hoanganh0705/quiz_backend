@@ -350,7 +350,9 @@ export class QuizRepository implements QuizRepositoryPort {
     return rows as QuizWithPublishedVersionRow[];
   }
 
-  async findRelatedQuizzes(params: FindRelatedQuizzesParams): Promise<QuizWithPublishedVersionRow[]> {
+  async findRelatedQuizzes(
+    params: FindRelatedQuizzesParams,
+  ): Promise<QuizWithPublishedVersionRow[]> {
     const rows = await this.db
       .select({
         ...QUIZ_WITH_VERSION_PROJECTION,

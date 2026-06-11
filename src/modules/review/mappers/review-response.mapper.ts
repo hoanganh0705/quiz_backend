@@ -8,7 +8,13 @@ import {
   MyQuizReviewResponseDto,
   ReportedReviewItemDto,
 } from '../dto/response';
-import type { ReviewDetailRow, ReviewRow, MyReviewRow, ReviewDetailByIdRow, ReportedReviewRow } from '../domain/ports';
+import type {
+  ReviewDetailRow,
+  ReviewRow,
+  MyReviewRow,
+  ReviewDetailByIdRow,
+  ReportedReviewRow,
+} from '../domain/ports';
 
 @Injectable()
 export class ReviewResponseMapper {

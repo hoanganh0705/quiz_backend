@@ -14,7 +14,12 @@ export class GetSearchSuggestionsQueryDto {
   @MaxLength(50)
   q!: string;
 
-  @ApiPropertyOptional({ description: 'Maximum number of suggestions', example: 10, minimum: 1, maximum: 20 })
+  @ApiPropertyOptional({
+    description: 'Maximum number of suggestions',
+    example: 10,
+    minimum: 1,
+    maximum: 20,
+  })
   @Type(() => Number)
   @IsInt()
   @Min(1)

@@ -125,7 +125,10 @@ export class RankingListenerAdapter implements OnModuleInit, OnModuleDestroy {
   }
 
   private mapMilestone(
-    milestone: Extract<PublishedRankingDomainEvent, { eventType: 'ranking.milestone' }>['milestoneType'],
+    milestone: Extract<
+      PublishedRankingDomainEvent,
+      { eventType: 'ranking.milestone' }
+    >['milestoneType'],
   ): 'top10' | 'top100' | 'top1000' | 'rank1' {
     switch (milestone) {
       case 'TOP_1':

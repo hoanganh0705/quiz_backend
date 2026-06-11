@@ -37,7 +37,13 @@ export function hydrateQuestions(rows: QuizQuestionJoinRow[]): HydratedQuizQuest
       questions.set(row.questionId, question);
     }
 
-    if (row.optionId && row.optionPosition !== null && row.optionValue !== null && row.optionIsCorrect !== null && row.optionCreatedAt) {
+    if (
+      row.optionId &&
+      row.optionPosition !== null &&
+      row.optionValue !== null &&
+      row.optionIsCorrect !== null &&
+      row.optionCreatedAt
+    ) {
       question.answerOptions.push({
         optionId: row.optionId,
         position: row.optionPosition,

@@ -13,11 +13,14 @@ describe('GetMyRankingHistoryQueryHandler', () => {
       debug: jest.fn(),
     } as unknown as ConstructorParameters<typeof GetMyRankingHistoryQueryHandler>[1];
 
-    const handler = new GetMyRankingHistoryQueryHandler(rankingRepository as never, logger as never);
+    const handler = new GetMyRankingHistoryQueryHandler(
+      rankingRepository as never,
+      logger as never,
+    );
 
     return {
       handler,
-      rankingRepository: rankingRepository as {
+      rankingRepository: rankingRepository as unknown as {
         getUserRankingHistory: jest.Mock;
       },
     };

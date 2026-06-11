@@ -88,6 +88,9 @@ export class TrendingDiscussionsResponseDto {
   })
   items!: TrendingDiscussionItemResponseDto[];
 
-  @ApiProperty({ description: 'Pagination metadata', type: () => TrendingDiscussionsPaginationResponseDto })
+  @ApiProperty({
+    description: 'Pagination metadata',
+    type: () => TrendingDiscussionsPaginationResponseDto,
+  })
   pagination!: TrendingDiscussionsPaginationResponseDto;
 }

@@ -1,7 +1,10 @@
 import { Inject, Injectable, OnModuleInit } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { QuizAnalyticsService } from '@/modules/quiz/domain/analytics';
-import { CATEGORY_DOMAIN_EVENT_BUS, type CategoryDomainEventBusPort } from '@/modules/category/domain/ports';
+import {
+  CATEGORY_DOMAIN_EVENT_BUS,
+  type CategoryDomainEventBusPort,
+} from '@/modules/category/domain/ports';
 
 /**
  * Wires CategoryDomainEventBus events to QuizAnalyticsService.
@@ -28,7 +31,7 @@ export class CategoryEventBootstrapService implements OnModuleInit {
     });
   }
 
-  private async handleEvent(event: CategoryDomainEventPayload): Promise<void> {
+  private handleEvent(event: CategoryDomainEventPayload): void {
     const { type, categoryId } = event;
 
     try {
@@ -58,7 +61,7 @@ export class CategoryEventBootstrapService implements OnModuleInit {
 }
 
 type CategoryDomainEventPayload =
-  | ({ type: 'CategoryCreatedEvent'; categoryId: string; slug: string; nowIso: string })
-  | ({ type: 'CategoryUpdatedEvent'; categoryId: string; slug: string; nowIso: string })
-  | ({ type: 'CategoryDeletedEvent'; categoryId: string; slug: string; nowIso: string })
-  | ({ type: 'CategoryRestoredEvent'; categoryId: string; slug: string; nowIso: string });
+  | { type: 'CategoryCreatedEvent'; categoryId: string; slug: string; nowIso: string }
+  | { type: 'CategoryUpdatedEvent'; categoryId: string; slug: string; nowIso: string }
+  | { type: 'CategoryDeletedEvent'; categoryId: string; slug: string; nowIso: string }
+  | { type: 'CategoryRestoredEvent'; categoryId: string; slug: string; nowIso: string };

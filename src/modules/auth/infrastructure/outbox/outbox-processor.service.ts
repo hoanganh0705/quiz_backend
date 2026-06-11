@@ -40,9 +40,7 @@ export class OutboxProcessorService {
         attemptCount: outboxEvents.attemptCount,
       })
       .from(outboxEvents)
-      .where(
-        and(isNull(outboxEvents.processedAt), lte(outboxEvents.nextAttemptAt, nowIso)),
-      )
+      .where(and(isNull(outboxEvents.processedAt), lte(outboxEvents.nextAttemptAt, nowIso)))
       .orderBy(asc(outboxEvents.createdAt))
       .limit(OutboxProcessorService.BATCH_SIZE);
 
@@ -72,7 +70,10 @@ export class OutboxProcessorService {
         failedCount += 1;
 
         const nextAttemptCount = event.attemptCount + 1;
-        const nextAttemptAt = this.authAuditLogService.buildNextAttemptIso(nextAttemptCount, nowIso);
+        const nextAttemptAt = this.authAuditLogService.buildNextAttemptIso(
+          nextAttemptCount,
+          nowIso,
+        );
         const lastError = error instanceof Error ? error.message : 'Unknown error';
 
         await this.db
@@ -130,7 +131,9 @@ export class OutboxProcessorService {
 
   private async dispatch(event: OutboxEventRow, nowIso: string): Promise<void> {
     const userId = this.readString(event.payload.userId);
-    const ipAddress = this.readOptionalString(event.payload.ipAddress) ?? this.readOptionalString(event.payload.revokedByIp);
+    const ipAddress =
+      this.readOptionalString(event.payload.ipAddress) ??
+      this.readOptionalString(event.payload.revokedByIp);
 
     switch (`${event.aggregateType}:${event.eventType}`) {
       case 'password_reset:password_reset_completed':

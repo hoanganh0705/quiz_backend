@@ -1,8 +1,7 @@
 import { decodeBase64JsonCursor, encodeBase64JsonCursor } from '@/common/utils/cursor.util';
 import type { ReviewCursor, ReportCursor } from '../domain/ports';
 
-const UUID_PATTERN =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/;
 
@@ -23,7 +22,7 @@ export class CursorMapper {
     }
 
     return {
-      createdAt: parsed.createdAt!,
+      createdAt: parsed.createdAt,
       reviewId: parsed.reviewId!,
     };
   }
@@ -43,7 +42,7 @@ export class CursorMapper {
     }
 
     return {
-      createdAt: parsed.createdAt!,
+      createdAt: parsed.createdAt,
       reportId: parsed.reportId!,
     };
   }

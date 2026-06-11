@@ -22,7 +22,10 @@ export class MyCommentItemResponseDto {
   })
   quizId!: string;
 
-  @ApiProperty({ description: 'Comment content', example: 'I think it is based on response speed.' })
+  @ApiProperty({
+    description: 'Comment content',
+    example: 'I think it is based on response speed.',
+  })
   content!: string;
 
   @ApiProperty({ description: 'Number of direct replies', example: 3 })
@@ -61,7 +64,10 @@ export class MyCommentsPaginationResponseDto {
 }
 
 export class MyCommentsResponseDto {
-  @ApiProperty({ description: 'Authenticated user comment items', type: () => [MyCommentItemResponseDto] })
+  @ApiProperty({
+    description: 'Authenticated user comment items',
+    type: () => [MyCommentItemResponseDto],
+  })
   items!: MyCommentItemResponseDto[];
 
   @ApiProperty({ description: 'Pagination metadata', type: () => MyCommentsPaginationResponseDto })

@@ -45,7 +45,10 @@ import type {
   MarkThreadAsSolvedParams,
   UnsolveThreadParams,
 } from '../types';
-import { USER_REPOSITORY_PORT, type UserRepositoryPort } from '@/modules/user/domain/ports/user-repository.port';
+import {
+  USER_REPOSITORY_PORT,
+  type UserRepositoryPort,
+} from '@/modules/user/domain/ports/user-repository.port';
 import { UserNotFoundError } from '@/modules/user/domain/errors';
 import { isPostgresUniqueViolation } from '@/common/utils/db-error.util';
 import {
@@ -316,7 +319,12 @@ export class DiscussionService {
   async listMyDiscussionSubscriptions(
     userId: string,
     query: { page?: number; limit?: number },
-  ): Promise<{ items: MyDiscussionSubscriptionListItem[]; total: number; page: number; limit: number }> {
+  ): Promise<{
+    items: MyDiscussionSubscriptionListItem[];
+    total: number;
+    page: number;
+    limit: number;
+  }> {
     const page = query.page ?? 1;
     const limit = query.limit ?? 20;
 
@@ -382,7 +390,12 @@ export class DiscussionService {
     }
 
     if (thread.status !== 'open') {
-      this.logger.warn({ event: 'discussion_thread_not_active', threadId, userId, status: thread.status });
+      this.logger.warn({
+        event: 'discussion_thread_not_active',
+        threadId,
+        userId,
+        status: thread.status,
+      });
       throw new ThreadNotActiveError();
     }
 
@@ -417,7 +430,12 @@ export class DiscussionService {
     }
 
     if (thread.status !== 'open') {
-      this.logger.warn({ event: 'discussion_thread_not_active', threadId, userId, status: thread.status });
+      this.logger.warn({
+        event: 'discussion_thread_not_active',
+        threadId,
+        userId,
+        status: thread.status,
+      });
       throw new ThreadNotActiveError();
     }
 
@@ -447,24 +465,40 @@ export class DiscussionService {
     const thread = await this.repo.getThreadById(params.threadId);
 
     if (!thread) {
-      this.logger.warn({ event: 'discussion_thread_not_found', threadId: params.threadId, actorId: params.actorId });
+      this.logger.warn({
+        event: 'discussion_thread_not_found',
+        threadId: params.threadId,
+        actorId: params.actorId,
+      });
       throw new ThreadNotFoundError(params.threadId);
     }
 
     if (thread.status === 'deleted') {
-      this.logger.warn({ event: 'discussion_thread_not_active', threadId: params.threadId, actorId: params.actorId });
+      this.logger.warn({
+        event: 'discussion_thread_not_active',
+        threadId: params.threadId,
+        actorId: params.actorId,
+      });
       throw new ThreadNotActiveError();
     }
 
     if (thread.authorId !== params.actorId) {
-      this.logger.warn({ event: 'discussion_thread_forbidden', threadId: params.threadId, actorId: params.actorId });
+      this.logger.warn({
+        event: 'discussion_thread_forbidden',
+        threadId: params.threadId,
+        actorId: params.actorId,
+      });
       throw new ThreadForbiddenError();
     }
 
     const comment = await this.repo.getCommentById(params.commentId);
 
     if (!comment) {
-      this.logger.warn({ event: 'discussion_comment_not_found', commentId: params.commentId, threadId: params.threadId });
+      this.logger.warn({
+        event: 'discussion_comment_not_found',
+        commentId: params.commentId,
+        threadId: params.threadId,
+      });
       throw new CommentNotFoundError(params.commentId);
     }
 
@@ -504,17 +538,29 @@ export class DiscussionService {
     const thread = await this.repo.getThreadById(params.threadId);
 
     if (!thread) {
-      this.logger.warn({ event: 'discussion_thread_not_found', threadId: params.threadId, actorId: params.actorId });
+      this.logger.warn({
+        event: 'discussion_thread_not_found',
+        threadId: params.threadId,
+        actorId: params.actorId,
+      });
       throw new ThreadNotFoundError(params.threadId);
     }
 
     if (thread.status === 'deleted') {
-      this.logger.warn({ event: 'discussion_thread_not_active', threadId: params.threadId, actorId: params.actorId });
+      this.logger.warn({
+        event: 'discussion_thread_not_active',
+        threadId: params.threadId,
+        actorId: params.actorId,
+      });
       throw new ThreadNotActiveError();
     }
 
     if (thread.authorId !== params.actorId) {
-      this.logger.warn({ event: 'discussion_thread_forbidden', threadId: params.threadId, actorId: params.actorId });
+      this.logger.warn({
+        event: 'discussion_thread_forbidden',
+        threadId: params.threadId,
+        actorId: params.actorId,
+      });
       throw new ThreadForbiddenError();
     }
 
@@ -529,9 +575,10 @@ export class DiscussionService {
     return updated;
   }
 
-  async listTrendingDiscussions(
-    query: { limit?: number; cursor?: TrendingDiscussionCursor | null },
-  ): Promise<{
+  async listTrendingDiscussions(query: {
+    limit?: number;
+    cursor?: TrendingDiscussionCursor | null;
+  }): Promise<{
     items: TrendingDiscussionListItem[];
     limit: number;
     hasNextPage: boolean;
@@ -558,9 +605,10 @@ export class DiscussionService {
     };
   }
 
-  async listUnansweredDiscussions(
-    query: { limit?: number; cursor?: UnansweredDiscussionCursor | null },
-  ): Promise<{
+  async listUnansweredDiscussions(query: {
+    limit?: number;
+    cursor?: UnansweredDiscussionCursor | null;
+  }): Promise<{
     items: UnansweredDiscussionListItem[];
     limit: number;
     hasNextPage: boolean;
@@ -587,9 +635,11 @@ export class DiscussionService {
     };
   }
 
-  async searchDiscussions(
-    query: { q?: string; limit?: number; cursor?: SearchDiscussionsCursor | null },
-  ): Promise<{
+  async searchDiscussions(query: {
+    q?: string;
+    limit?: number;
+    cursor?: SearchDiscussionsCursor | null;
+  }): Promise<{
     items: SearchDiscussionListItem[];
     limit: number;
     hasNextPage: boolean;

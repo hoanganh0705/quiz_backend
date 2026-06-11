@@ -16,7 +16,6 @@ import {
   AttemptValidationError,
   QuizNotPublishedError,
   AttemptQuestionInvalidError,
-  AttemptAnswerNotFoundError,
 } from './errors';
 import {
   QUIZ_NOT_PUBLISHED_MESSAGE,
@@ -231,13 +230,7 @@ export class AttemptCommandService {
       });
 
       this.eventBus.emitAttemptAnswerSubmitted(
-        new AttemptAnswerSubmittedEvent(
-          attemptId,
-          user.sub,
-          questionId,
-          selectedOptionId,
-          nowIso,
-        ),
+        new AttemptAnswerSubmittedEvent(attemptId, user.sub, questionId, selectedOptionId, nowIso),
       );
 
       return answer;
@@ -310,10 +303,7 @@ export class AttemptCommandService {
 
     const scoringData = await this.attemptRepository.getAttemptAnswerScoringData(attemptId);
 
-    const timeTakenMs = AttemptScoringService.calculateTimeTakenMs(
-      attemptDetail.startedAt,
-      nowIso,
-    );
+    const timeTakenMs = AttemptScoringService.calculateTimeTakenMs(attemptDetail.startedAt, nowIso);
     const scorePercent = AttemptScoringService.calculateScorePercent(
       scoringData.correctCount,
       scoringData.totalAnswers,
@@ -381,7 +371,9 @@ export class AttemptCommandService {
     }
 
     // Emit quiz.milestone event if the user crossed a milestone threshold
-    const completedCount = await this.attemptRepository.countCompletedAttempts(attemptDetail.userId);
+    const completedCount = await this.attemptRepository.countCompletedAttempts(
+      attemptDetail.userId,
+    );
     const MILESTONE_THRESHOLDS = [10, 50, 100, 250, 500, 1000];
     const crossedMilestone = MILESTONE_THRESHOLDS.find((m) => completedCount === m);
     if (crossedMilestone !== undefined) {

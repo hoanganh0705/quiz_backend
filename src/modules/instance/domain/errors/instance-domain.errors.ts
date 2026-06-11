@@ -11,24 +11,6 @@ export class InstanceNotFoundError extends InstanceDomainError {
   }
 }
 
-export class InstanceForbiddenError extends InstanceDomainError {
-  constructor(message = 'You do not have permission for this action') {
-    super(message);
-  }
-}
-
-export class InstanceConflictError extends InstanceDomainError {
-  constructor(message = 'Resource conflict') {
-    super(message);
-  }
-}
-
-export class InstanceValidationError extends InstanceDomainError {
-  constructor(message = 'Validation failed') {
-    super(message);
-  }
-}
-
 export class InstanceFullError extends InstanceDomainError {
   constructor(message = 'Instance is full') {
     super(message);
@@ -61,12 +43,6 @@ export class InstanceAlreadyClosedError extends InstanceDomainError {
 
 export class PlayerAlreadyJoinedError extends InstanceDomainError {
   constructor(message = 'You have already joined this instance') {
-    super(message);
-  }
-}
-
-export class PlayerNotInInstanceError extends InstanceDomainError {
-  constructor(message = 'You are not in this instance') {
     super(message);
   }
 }

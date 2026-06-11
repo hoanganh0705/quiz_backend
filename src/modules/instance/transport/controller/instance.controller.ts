@@ -1,4 +1,5 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Post, UseFilters } from '@nestjs/common';
+import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Query, UseFilters } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import {
   ApiTags,
   ApiOperation,
@@ -12,11 +13,14 @@ import {
   ApiInternalServerErrorResponse,
 } from '@nestjs/swagger';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
+import { Transactional } from '@/common/interceptors/transactional.interceptor';
 import { ApiAuth, ApiValidationRequest } from '@/common/swagger/swagger-decorators';
+import { decodeBase64JsonCursor } from '@/common/utils/cursor.util';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
 import { InstanceService } from '../../domain/instance.service';
 import { InstanceResponseMapper } from '../../mappers/instance-response.mapper';
-import { CreateInstanceDto } from '../../dto/request';
+import { CreateInstanceDto, GetLeaderboardQueryDto, ListInstancesQueryDto } from '../../dto/request';
+import type { LeaderboardCursorPayload } from '../../domain/ports';
 import {
   InstanceDetailResponseDto,
   CreateInstanceResponseDto,
@@ -24,6 +28,8 @@ import {
   StartInstanceResponseDto,
   CloseInstanceResponseDto,
   InstanceLeaderboardResponseDto,
+  InstanceListResponseDto,
+  InstancePlayersResponseDto,
 } from '../../dto/response';
 import { InstanceDomainExceptionFilter } from '../filters/instance-domain-exception.filter';
 
@@ -38,6 +44,8 @@ export class InstanceController {
   ) {}
 
   @Post()
+  @Transactional()
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @ApiAuth()
   @ApiOperation({
     summary: 'Create instance',
@@ -67,6 +75,57 @@ export class InstanceController {
     };
   }
 
+  @Get()
+  @ApiOperation({
+    summary: 'List open instances',
+    description:
+      'Returns a paginated, cursor-based list of open quiz instances for discovery. ' +
+      'Only instances with status `open` are returned by default.',
+  })
+  @ApiOkResponse({ description: 'Instance list returned', type: InstanceListResponseDto })
+  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  async listInstances(
+    @Query() query: ListInstancesQueryDto,
+  ): Promise<InstanceListResponseDto> {
+    const result = await this.instanceService.listInstances({
+      limit: query.limit ?? 20,
+      cursor: query.cursor,
+      filters: {
+        status: query.status,
+        difficulty: query.difficulty,
+      },
+    });
+
+    return {
+      items: result.rows.map((row) => this.mapper.toInstanceListItemResponse(row)),
+      pagination: {
+        limit: result.limit,
+        hasNextPage: result.hasNextPage,
+        nextCursor: result.nextCursor,
+      },
+    };
+  }
+
+  @Get(':id/players')
+  @ApiOperation({
+    summary: 'List instance players',
+    description: 'Returns all players in a specific instance, with profile data.',
+  })
+  @ApiOkResponse({ description: 'Players returned', type: InstancePlayersResponseDto })
+  @ApiNotFoundResponse({ description: 'Instance not found' })
+  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  async listInstancePlayers(
+    @Param('id', new ParseUUIDPipe()) instanceId: string,
+  ): Promise<InstancePlayersResponseDto> {
+    const { items, total } = await this.instanceService.listInstancePlayers(instanceId);
+
+    return {
+      instanceId,
+      items: items.map((p) => this.mapper.toInstancePlayerResponse(p)),
+      total,
+    };
+  }
+
   @Get(':id')
   @ApiOperation({
     summary: 'Get instance by ID',
@@ -78,12 +137,18 @@ export class InstanceController {
   getInstanceById(
     @Param('id', new ParseUUIDPipe()) instanceId: string,
   ): Promise<InstanceDetailResponseDto> {
-    return this.instanceService.getInstanceById(instanceId).then((row) => {
-      return this.mapper.toInstanceDetailResponse(row);
+    return this.instanceService.getInstanceById(instanceId).then(async (row) => {
+      const { items: players } = await this.instanceService.listInstancePlayers(instanceId);
+      return this.mapper.toInstanceDetailResponse(
+        row,
+        players.map((p) => this.mapper.toInstancePlayerResponse(p)),
+      );
     });
   }
 
   @Post(':id/join')
+  @Transactional()
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @ApiAuth()
   @ApiOperation({
     summary: 'Join instance',
@@ -151,10 +216,27 @@ export class InstanceController {
   @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
   getLeaderboard(
     @Param('id', new ParseUUIDPipe()) instanceId: string,
+    @Query() query: GetLeaderboardQueryDto,
   ): Promise<InstanceLeaderboardResponseDto> {
-    return this.instanceService.getLeaderboard(instanceId).then((entries) => ({
-      instanceId,
-      items: entries.map((e) => this.mapper.toLeaderboardEntryResponse(e)),
-    }));
+    const limit = query.limit ?? 20;
+    const cursor: LeaderboardCursorPayload | undefined = query.cursor
+      ? decodeBase64JsonCursor<LeaderboardCursorPayload>(query.cursor) as LeaderboardCursorPayload
+      : undefined;
+
+    return this.instanceService
+      .getLeaderboard({ instanceId, limit, cursor: cursor ?? null })
+      .then(({ items, hasNextPage }) => {
+        const lastItem = items[items.length - 1];
+        const nextCursor = hasNextPage && lastItem
+          ? Buffer.from(JSON.stringify({ rank: lastItem.rank, instancePlayerId: lastItem.instancePlayerId }), 'utf8').toString('base64url')
+          : null;
+
+        return {
+          instanceId,
+          items: items.map((e) => this.mapper.toLeaderboardEntryResponse(e)),
+          hasNextPage,
+          nextCursor,
+        };
+      });
   }
 }

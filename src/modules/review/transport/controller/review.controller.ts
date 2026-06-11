@@ -5,16 +5,13 @@ import {
   Get,
   Param,
   ParseUUIDPipe,
-  Patch,
   Post,
-  Query,
   UseFilters,
 } from '@nestjs/common';
 import {
   ApiTags,
   ApiOperation,
   ApiOkResponse,
-  ApiCreatedResponse,
   ApiBearerAuth,
   ApiNotFoundResponse,
   ApiConflictResponse,
@@ -26,10 +23,7 @@ import { CurrentUser } from '@/common/decorators/current-user.decorator';
 import { ApiAuth, ApiValidationRequest } from '@/common/swagger/swagger-decorators';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
 import { ReviewApplicationService } from '../../application/review.application.service';
-import {
-  HelpfulReviewDto,
-  ReportReviewDto,
-} from '../../dto/request';
+import { HelpfulReviewDto, ReportReviewDto } from '../../dto/request';
 import {
   ReviewDetailResponseDto,
   ReviewDashboardResponseDto,
@@ -49,13 +43,11 @@ export class ReviewController {
   @ApiAuth()
   @ApiOperation({
     summary: 'Get my review dashboard',
-    description: 'Returns the authenticated user\'s review dashboard summary.',
+    description: "Returns the authenticated user's review dashboard summary.",
   })
   @ApiOkResponse({ description: 'Review dashboard returned', type: ReviewDashboardResponseDto })
   @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
-  async getMyReviewDashboard(
-    @CurrentUser() user: JwtPayload,
-  ): Promise<ReviewDashboardResponseDto> {
+  async getMyReviewDashboard(@CurrentUser() user: JwtPayload): Promise<ReviewDashboardResponseDto> {
     return this.reviewApplicationService.getMyReviewDashboard(user);
   }
 
@@ -82,7 +74,7 @@ export class ReviewController {
   @ApiAuth()
   @ApiOperation({
     summary: 'Remove helpful vote',
-    description: 'Removes the authenticated user\'s helpful vote from a review. Idempotent.',
+    description: "Removes the authenticated user's helpful vote from a review. Idempotent.",
   })
   @ApiOkResponse({ description: 'Helpful vote removed', type: HelpfulReviewResponseDto })
   @ApiNotFoundResponse({ description: 'Review not found' })

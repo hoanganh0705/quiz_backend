@@ -1,13 +1,8 @@
 import { Inject, Injectable, OnModuleDestroy } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { Queue } from 'bullmq';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import type { TournamentDomainEventBusPort } from '../../domain/ports';
-import {
-  TOURNAMENT_QUEUE_NAME,
-  TOURNAMENT_QUEUE_TOKENS,
-  TOURNAMENT_DOMAIN_EVENT_BUS,
-} from '../../domain/ports';
+import { TOURNAMENT_QUEUE_TOKENS } from '../../domain/ports';
 import type { TournamentDomainEvent } from '../../domain/events';
 import { TournamentJoinedEvent, TournamentParticipantWithdrawnEvent } from '../../domain/events';
 import {
@@ -17,7 +12,9 @@ import {
 } from '../../domain/events';
 
 @Injectable()
-export class BullmqTournamentEventBusService implements TournamentDomainEventBusPort, OnModuleDestroy {
+export class BullmqTournamentEventBusService
+  implements TournamentDomainEventBusPort, OnModuleDestroy
+{
   private handlers: Array<(event: TournamentDomainEvent) => void> = [];
 
   constructor(
@@ -127,7 +124,11 @@ export function deserializeEvent(data: TournamentEventJobData): TournamentDomain
     case 'tournament.joined':
       return new TournamentJoinedEvent(data.tournamentId, data.userId, new Date(data.occurredAt));
     case 'tournament.participant.withdrawn':
-      return new TournamentParticipantWithdrawnEvent(data.tournamentId, data.userId, new Date(data.withdrawnAt));
+      return new TournamentParticipantWithdrawnEvent(
+        data.tournamentId,
+        data.userId,
+        new Date(data.withdrawnAt),
+      );
     case 'tournament.starting_soon':
       return new TournamentStartingSoonEvent(
         data.userId,
@@ -160,7 +161,35 @@ export function deserializeEvent(data: TournamentEventJobData): TournamentDomain
 // Union type covering all event shapes as plain JSON (what BullMQ serializes)
 export type TournamentEventJobData =
   | { eventType: 'tournament.joined'; tournamentId: string; userId: string; occurredAt: string }
-  | { eventType: 'tournament.participant.withdrawn'; tournamentId: string; userId: string; withdrawnAt: string }
-  | { eventType: 'tournament.starting_soon'; userId: string; tournamentId: string; tournamentTitle: string; startsAt: string; timestamp: string }
-  | { eventType: 'tournament.completed'; userId: string; tournamentId: string; tournamentTitle: string; rank: number; totalParticipants: number; timestamp: string }
-  | { eventType: 'tournament.won'; userId: string; tournamentId: string; tournamentTitle: string; rank: number; prize?: string; timestamp: string };
+  | {
+      eventType: 'tournament.participant.withdrawn';
+      tournamentId: string;
+      userId: string;
+      withdrawnAt: string;
+    }
+  | {
+      eventType: 'tournament.starting_soon';
+      userId: string;
+      tournamentId: string;
+      tournamentTitle: string;
+      startsAt: string;
+      timestamp: string;
+    }
+  | {
+      eventType: 'tournament.completed';
+      userId: string;
+      tournamentId: string;
+      tournamentTitle: string;
+      rank: number;
+      totalParticipants: number;
+      timestamp: string;
+    }
+  | {
+      eventType: 'tournament.won';
+      userId: string;
+      tournamentId: string;
+      tournamentTitle: string;
+      rank: number;
+      prize?: string;
+      timestamp: string;
+    };

@@ -106,7 +106,10 @@ export class TournamentController {
     description:
       'Returns tournaments that have not started yet, paginated by page and limit and ordered by the selected upcoming sort option.',
   })
-  @ApiOkResponse({ description: 'Upcoming tournaments returned', type: UpcomingTournamentsResponseDto })
+  @ApiOkResponse({
+    description: 'Upcoming tournaments returned',
+    type: UpcomingTournamentsResponseDto,
+  })
   @ApiBadRequestResponse({ description: 'Validation failed' })
   @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
   @ApiValidationRequest()
@@ -140,7 +143,10 @@ export class TournamentController {
     description:
       'Returns tournaments that have already ended, paginated by page and limit and ordered by newest completed first.',
   })
-  @ApiOkResponse({ description: 'Completed tournaments returned', type: CompletedTournamentsResponseDto })
+  @ApiOkResponse({
+    description: 'Completed tournaments returned',
+    type: CompletedTournamentsResponseDto,
+  })
   @ApiBadRequestResponse({ description: 'Validation failed' })
   @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
   @ApiValidationRequest()
@@ -157,7 +163,10 @@ export class TournamentController {
     description:
       'Returns tournaments related to the specified tournament for discovery. Relatedness is determined by shared category, description keywords, and title similarity.',
   })
-  @ApiOkResponse({ description: 'Related tournaments returned', type: RelatedTournamentsResponseDto })
+  @ApiOkResponse({
+    description: 'Related tournaments returned',
+    type: RelatedTournamentsResponseDto,
+  })
   @ApiNotFoundResponse({ description: 'Tournament not found' })
   @ApiBadRequestResponse({ description: 'Validation failed' })
   @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
@@ -284,11 +293,13 @@ export class TournamentController {
   @ApiOperation({
     summary: 'Get my tournament standing',
     description:
-      'Returns the authenticated user\'s current standing within the specified tournament including rank, score, percentile, and participant count.',
+      "Returns the authenticated user's current standing within the specified tournament including rank, score, percentile, and participant count.",
   })
   @ApiOkResponse({ description: 'Standing returned', type: MyTournamentStandingResponseDto })
   @ApiNotFoundResponse({ description: 'Tournament not found or you are not registered' })
-  @ApiForbiddenResponse({ description: 'You do not have permission to view your standing in this tournament' })
+  @ApiForbiddenResponse({
+    description: 'You do not have permission to view your standing in this tournament',
+  })
   @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
   getMyTournamentStanding(
     @Param('id', new ParseUUIDPipe()) tournamentId: string,

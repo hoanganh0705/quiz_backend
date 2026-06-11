@@ -176,7 +176,11 @@ export class RankingRepository implements RankingRepositoryPort {
       .where(inArray(userRanking.userId, userIds));
   }
 
-  async updateRank(params: { userId: string; period: RankingPeriod; rank: number }): Promise<number | null> {
+  async updateRank(params: {
+    userId: string;
+    period: RankingPeriod;
+    rank: number;
+  }): Promise<number | null> {
     const { userId, period, rank } = params;
 
     const rankFieldName = this.getRankFieldName(period);
@@ -391,7 +395,10 @@ export class RankingRepository implements RankingRepositoryPort {
     from?: Date;
     to?: Date;
   }): Promise<RankHistoryRow[]> {
-    const conditions = [eq(rankHistory.userId, params.userId), eq(rankHistory.period, params.period)];
+    const conditions = [
+      eq(rankHistory.userId, params.userId),
+      eq(rankHistory.period, params.period),
+    ];
 
     if (params.from) {
       conditions.push(gte(rankHistory.snapshotDate, params.from.toISOString()));
@@ -471,18 +478,16 @@ export class RankingRepository implements RankingRepositoryPort {
     return results.rows;
   }
 
-  async getNearbyRanks(params: {
-    userId: string;
-    period: RankingPeriod;
-    radius: number;
-  }): Promise<{
+  async getNearbyRanks(params: { userId: string; period: RankingPeriod; radius: number }): Promise<{
     above: NearbyRankEntryRow[];
     me: NearbyRankEntryRow | null;
     below: NearbyRankEntryRow[];
   }> {
     const xpColumn = this.getXpColumn(params.period);
 
-    const results = await this.executeRaw<NearbyRankEntryRow & { position: 'above' | 'me' | 'below' }>(sql`
+    const results = await this.executeRaw<
+      NearbyRankEntryRow & { position: 'above' | 'me' | 'below' }
+    >(sql`
       WITH ranked_users AS (
         SELECT
           u.user_id AS "userId",
@@ -653,7 +658,8 @@ export class RankingRepository implements RankingRepositoryPort {
         AND u.deleted_at IS NULL
     `);
 
-    const snapshotDate = period === RankingPeriod.WEEKLY ? this.getWeekStart(resetAt) : this.getMonthStart(resetAt);
+    const snapshotDate =
+      period === RankingPeriod.WEEKLY ? this.getWeekStart(resetAt) : this.getMonthStart(resetAt);
 
     for (const user of usersToArchive.rows) {
       const xpValue = Number(user.xp);

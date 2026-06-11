@@ -27,11 +27,7 @@ import { CurrentUser } from '@/common/decorators/current-user.decorator';
 import { ApiAuth, ApiValidationRequest } from '@/common/swagger/swagger-decorators';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
 import { ReviewApplicationService } from '../../application/review.application.service';
-import {
-  CreateReviewDto,
-  UpdateReviewDto,
-  ListReviewsQueryDto,
-} from '../../dto/request';
+import { CreateReviewDto, UpdateReviewDto, ListReviewsQueryDto } from '../../dto/request';
 import {
   ReviewListResponseDto,
   CreateReviewResponseDto,

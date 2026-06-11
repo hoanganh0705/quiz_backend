@@ -5,10 +5,7 @@ import {
   RANKING_REPOSITORY_PORT,
   type RankingRepositoryPort,
 } from '../domain/ports/ranking-repository.port';
-import type {
-  PeakRankDto,
-  PeakRanksResponseDto,
-} from '../dto/response/leaderboard-response.dto';
+import type { PeakRankDto, PeakRanksResponseDto } from '../dto/response/leaderboard-response.dto';
 
 @Injectable()
 export class GetMyPeakRanksQueryHandler {

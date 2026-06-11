@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { lt, sql } from 'drizzle-orm';
+import { lt } from 'drizzle-orm';
 import { DRIZZLE } from '@/core/database/drizzle.constants';
 import type { DrizzleDB } from '@/core/database/database.module';
 import { authAuditLogs } from '@/core/database/schema';
