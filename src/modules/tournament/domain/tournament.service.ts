@@ -24,10 +24,7 @@ import {
   TOURNAMENT_DOMAIN_EVENT_BUS,
   type TournamentDomainEventBusPort,
 } from './ports/tournament-domain-event-bus.port';
-import { TournamentParticipantWithdrawnEvent } from './events/tournament-participant-withdrawn.event';
-import { TournamentJoinedEvent } from './events/tournament-joined.event';
-import { ATTEMPT_REPOSITORY_PORT } from '@/modules/attempt/domain/ports';
-import type { AttemptRepositoryPort } from '@/modules/attempt/domain/ports';
+import { TournamentParticipantWithdrawnEvent, TournamentJoinedEvent } from './events';
 import { CreateTournamentDto } from '../dto/request';
 import type { GetTournamentParticipantsQuery } from './types/get-tournament-participants.query';
 import type { GetMyTournamentStandingQuery } from './types/get-my-tournament-standing.query';
@@ -40,6 +37,7 @@ import type { GetTournamentWinnersQuery } from './types/get-tournament-winners.q
 import type { WithdrawTournamentCommand } from './types/withdraw-tournament.command';
 import {
   TournamentNotFoundError,
+  TournamentValidationError,
   TournamentRegistrationClosedError,
   TournamentFullError,
   TournamentAlreadyRegisteredError,
@@ -49,7 +47,7 @@ import {
   TournamentAttemptAlreadyExistsError,
   TournamentNotRegisteredError,
   TournamentUnregisterClosedError,
-  TournamentAlreadyWithdrawnError,
+  TournamentParticipantStateError,
   TournamentWithdrawClosedError,
 } from './errors';
 import {
@@ -63,7 +61,7 @@ import {
   TOURNAMENT_ATTEMPT_ALREADY_EXISTS_MESSAGE,
   TOURNAMENT_NOT_REGISTERED_MESSAGE,
   TOURNAMENT_UNREGISTER_CLOSED_MESSAGE,
-  TOURNAMENT_ALREADY_WITHDRAWN_MESSAGE,
+  TOURNAMENT_PARTICIPANT_STATE_ERROR_MESSAGE,
   TOURNAMENT_WITHDRAW_CLOSED_MESSAGE,
 } from '../tournament.constants';
 
@@ -72,8 +70,6 @@ export class TournamentService {
   constructor(
     @Inject(TOURNAMENT_REPOSITORY_PORT)
     private readonly tournamentRepository: TournamentRepositoryPort,
-    @Inject(ATTEMPT_REPOSITORY_PORT)
-    private readonly attemptRepository: AttemptRepositoryPort,
     @Inject(TOURNAMENT_DOMAIN_EVENT_BUS)
     private readonly eventBus: TournamentDomainEventBusPort,
     @InjectPinoLogger(TournamentService.name)
@@ -89,6 +85,9 @@ export class TournamentService {
   }
 
   async createTournament(user: JwtPayload, payload: CreateTournamentDto): Promise<TournamentRow> {
+    if (new Date(payload.endAt) <= new Date(payload.startAt)) {
+      throw new TournamentValidationError('endAt must be after startAt');
+    }
     const nowIso = new Date().toISOString();
 
     const result = await this.tournamentRepository.createTournament({
@@ -415,8 +414,8 @@ export class TournamentService {
     }
 
     if (tournament.maxParticipants !== null) {
-      const leaderboard = await this.tournamentRepository.getLeaderboard(tournamentId);
-      if (leaderboard.length >= tournament.maxParticipants) {
+      const count = await this.tournamentRepository.countParticipants(tournamentId);
+      if (count >= tournament.maxParticipants) {
         throw new TournamentFullError(TOURNAMENT_FULL_MESSAGE);
       }
     }
@@ -461,10 +460,10 @@ export class TournamentService {
     }
 
     if (participant.status === 'withdrawn') {
-      throw new TournamentAlreadyWithdrawnError(TOURNAMENT_ALREADY_WITHDRAWN_MESSAGE);
+      throw new TournamentParticipantStateError(TOURNAMENT_PARTICIPANT_STATE_ERROR_MESSAGE);
     }
 
-    if (participant.status !== 'active' && participant.status !== 'registered') {
+    if (participant.status !== 'active') {
       throw new TournamentForbiddenError(TOURNAMENT_FORBIDDEN_MESSAGE);
     }
 
@@ -499,12 +498,12 @@ export class TournamentService {
       command.tournamentId,
     );
 
-    if (!participant || participant.status === 'registered') {
+    if (!participant) {
       throw new TournamentForbiddenError(TOURNAMENT_FORBIDDEN_MESSAGE);
     }
 
     if (participant.status === 'withdrawn') {
-      throw new TournamentAlreadyWithdrawnError(TOURNAMENT_ALREADY_WITHDRAWN_MESSAGE);
+      throw new TournamentParticipantStateError(TOURNAMENT_PARTICIPANT_STATE_ERROR_MESSAGE);
     }
 
     if (participant.status === 'completed') {
@@ -558,6 +557,11 @@ export class TournamentService {
       throw new TournamentRoundNotOpenError(TOURNAMENT_ROUND_NOT_OPEN_MESSAGE);
     }
 
+    const roundDetail = await this.tournamentRepository.getRoundDetailById(roundId);
+    if (!roundDetail) {
+      throw new TournamentRoundNotFoundError(TOURNAMENT_ROUND_NOT_FOUND_MESSAGE);
+    }
+
     const participant = await this.tournamentRepository.getParticipantByUserAndTournament(
       user.sub,
       tournamentId,
@@ -575,31 +579,40 @@ export class TournamentService {
       throw new TournamentAttemptAlreadyExistsError(TOURNAMENT_ATTEMPT_ALREADY_EXISTS_MESSAGE);
     }
 
-    const roundParticipant = existingRoundParticipant
-      ? existingRoundParticipant
-      : await this.tournamentRepository.createRoundParticipant({
-          roundId,
-          participantId: participant.participantId,
-          nowIso,
-        });
+    let attemptId: string;
 
-    const roundDetail = await this.tournamentRepository.getRoundDetailById(roundId);
-    if (!roundDetail) {
-      throw new TournamentRoundNotFoundError(TOURNAMENT_ROUND_NOT_FOUND_MESSAGE);
+    if (!existingRoundParticipant) {
+      // No round participant yet — atomically insert both round participant and attempt
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+      const result = await this.tournamentRepository.startRoundAttemptTx({
+        roundId,
+        participantId: participant.participantId,
+        userId: user.sub,
+        quizVersionId: roundDetail.quizVersionId,
+        tournamentId,
+        nowIso,
+      });
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access,@typescript-eslint/no-unsafe-assignment
+      attemptId = result.attemptId;
+    } else {
+      // Round participant exists but has no attempt — create attempt only
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+      const createdAttempt = await this.tournamentRepository.createAttemptForRound({
+        userId: user.sub,
+        quizVersionId: roundDetail.quizVersionId,
+        tournamentId,
+        roundId,
+        roundParticipantId: existingRoundParticipant.roundParticipantId,
+        nowIso,
+      });
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access,@typescript-eslint/no-unsafe-assignment
+      attemptId = createdAttempt.attemptId;
     }
 
-    const createdAttempt = await this.attemptRepository.createTournamentAttempt({
-      userId: user.sub,
-      quizVersionId: roundDetail.quizVersionId,
-      tournamentId,
-      roundId,
-      nowIso,
-    });
-
     return {
-      attemptId: createdAttempt.attemptId,
+      attemptId,
       quizVersionId: roundDetail.quizVersionId,
-      participantId: roundParticipant.participantId,
+      participantId: participant.participantId,
     };
   }
 }

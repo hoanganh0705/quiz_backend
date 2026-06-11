@@ -85,6 +85,12 @@ export class TournamentAlreadyWithdrawnError extends TournamentDomainError {
   }
 }
 
+export class TournamentParticipantStateError extends TournamentDomainError {
+  constructor(message: string) {
+    super(message);
+  }
+}
+
 export class TournamentWithdrawClosedError extends TournamentDomainError {
   constructor(message = 'Tournament withdrawal is only allowed while the tournament is active') {
     super(message);

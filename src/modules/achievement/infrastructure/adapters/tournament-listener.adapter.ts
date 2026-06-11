@@ -5,41 +5,20 @@
  * This adapter bridges the Tournament domain to the Achievement domain.
  */
 
-import { Inject, Injectable, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
+import { Inject, Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
+import {
+  TOURNAMENT_DOMAIN_EVENT_BUS,
+  type TournamentDomainEventBusPort,
+} from '@/modules/tournament/domain/ports/tournament-domain-event-bus.port';
+import type {
+  TournamentDomainEvent,
+  TournamentWonEvent,
+  TournamentJoinedEvent,
+} from '@/modules/tournament/domain/events';
 import { RuleEngineService } from '../../domain/services/rule-engine.service';
 import { ACHIEVEMENT_REPOSITORY_PORT } from '../../infrastructure/repositories/achievement.repository';
 import type { AchievementRepositoryPort } from '../../infrastructure/repositories/achievement.repository';
-
-export interface TournamentWonEvent {
-  readonly eventType: 'tournament.won';
-  readonly userId: string;
-  readonly tournamentId: string;
-  readonly tournamentTitle: string;
-  readonly rank: number;
-  readonly timestamp: Date;
-}
-
-export interface TournamentParticipationEvent {
-  readonly eventType: 'tournament.participated';
-  readonly userId: string;
-  readonly tournamentId: string;
-  readonly tournamentTitle: string;
-  readonly participatedAt: Date;
-}
-
-export interface TournamentMilestoneEvent {
-  readonly eventType: 'tournament.milestone';
-  readonly userId: string;
-  readonly tournamentsWon: number;
-  readonly milestone: number;
-  readonly timestamp: Date;
-}
-
-export type TournamentDomainEvent =
-  | TournamentWonEvent
-  | TournamentParticipationEvent
-  | TournamentMilestoneEvent;
 
 @Injectable()
 export class TournamentEventListenerAdapter implements OnModuleInit, OnModuleDestroy {
@@ -49,6 +28,8 @@ export class TournamentEventListenerAdapter implements OnModuleInit, OnModuleDes
     private readonly ruleEngineService: RuleEngineService,
     @Inject(ACHIEVEMENT_REPOSITORY_PORT)
     private readonly achievementRepository: AchievementRepositoryPort,
+    @Inject(TOURNAMENT_DOMAIN_EVENT_BUS)
+    private readonly tournamentEventBus: TournamentDomainEventBusPort,
     @InjectPinoLogger(TournamentEventListenerAdapter.name)
     private readonly logger: PinoLogger,
   ) {}
@@ -59,17 +40,30 @@ export class TournamentEventListenerAdapter implements OnModuleInit, OnModuleDes
 
   onModuleDestroy(): void {
     this.unsubscribe?.();
+    this.unsubscribe = null;
   }
 
   private subscribe(): void {
+    this.unsubscribe = this.tournamentEventBus.subscribe((event: TournamentDomainEvent) => {
+      void this.handleEvent(event);
+    });
+
     this.logger.info({
       event: 'achievement_tournament_listener_subscribed',
     });
   }
 
-  /**
-   * Handle tournament won event.
-   */
+  private async handleEvent(event: TournamentDomainEvent): Promise<void> {
+    switch (event.eventType) {
+      case 'tournament.won':
+        await this.handleTournamentWon(event);
+        break;
+      case 'tournament.joined':
+        await this.handleTournamentParticipation(event);
+        break;
+    }
+  }
+
   async handleTournamentWon(event: TournamentWonEvent): Promise<void> {
     try {
       const results = await this.ruleEngineService.evaluateEvent({
@@ -101,10 +95,7 @@ export class TournamentEventListenerAdapter implements OnModuleInit, OnModuleDes
     }
   }
 
-  /**
-   * Handle tournament participation event.
-   */
-  async handleTournamentParticipation(event: TournamentParticipationEvent): Promise<void> {
+  async handleTournamentParticipation(event: TournamentJoinedEvent): Promise<void> {
     try {
       const results = await this.ruleEngineService.evaluateEvent({
         userId: event.userId,
@@ -127,37 +118,6 @@ export class TournamentEventListenerAdapter implements OnModuleInit, OnModuleDes
         event: 'tournament_participation_evaluation_failed',
         userId: event.userId,
         tournamentId: event.tournamentId,
-        error: error instanceof Error ? error.message : 'Unknown error',
-      });
-    }
-  }
-
-  /**
-   * Handle tournament milestone event.
-   */
-  async handleTournamentMilestone(event: TournamentMilestoneEvent): Promise<void> {
-    try {
-      const results = await this.ruleEngineService.evaluateEvent({
-        userId: event.userId,
-        eventType: 'tournament.milestone',
-        eventData: {
-          tournamentsWon: event.tournamentsWon,
-          milestone: event.milestone,
-        },
-      });
-
-      this.logger.info({
-        event: 'tournament_milestone_evaluated',
-        userId: event.userId,
-        tournamentsWon: event.tournamentsWon,
-        milestone: event.milestone,
-        badgesAwarded: results.filter((r) => r.awarded).length,
-        results,
-      });
-    } catch (error) {
-      this.logger.error({
-        event: 'tournament_milestone_evaluation_failed',
-        userId: event.userId,
         error: error instanceof Error ? error.message : 'Unknown error',
       });
     }

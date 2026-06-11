@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
 import { TournamentService } from '../domain/tournament.service';
 import { TournamentResponseMapper } from '../mappers/tournament-response.mapper';
@@ -36,12 +37,20 @@ export class TournamentApplicationService {
   constructor(
     private readonly tournamentService: TournamentService,
     private readonly mapper: TournamentResponseMapper,
+    @InjectPinoLogger(TournamentApplicationService.name)
+    private readonly logger: PinoLogger,
   ) {}
 
   async createTournament(
     user: JwtPayload,
     payload: CreateTournamentDto,
   ): Promise<TournamentResponseDto> {
+    this.logger.info({
+      event: 'app_create_tournament',
+      userId: user.sub,
+      title: payload.title,
+      difficulty: payload.difficulty,
+    });
     const result = await this.tournamentService.createTournament(user, payload);
     return this.mapper.toTournamentResponse(result);
   }
@@ -55,6 +64,13 @@ export class TournamentApplicationService {
         difficulty: query.difficulty,
         categoryId: query.categoryId,
       },
+    });
+
+    this.logger.info({
+      event: 'app_list_tournaments',
+      filters: { status: query.status, difficulty: query.difficulty, categoryId: query.categoryId },
+      resultCount: rows.length,
+      hasNextPage,
     });
 
     return {
@@ -74,6 +90,13 @@ export class TournamentApplicationService {
       page: query.page ?? 1,
       limit: query.limit ?? 20,
       sortBy: query.sortBy ?? 'startAt',
+    });
+
+    this.logger.info({
+      event: 'app_get_upcoming_tournaments',
+      page: result.page,
+      limit: result.limit,
+      total: result.total,
     });
 
     return {
@@ -101,6 +124,13 @@ export class TournamentApplicationService {
       limit: query.limit ?? 20,
     });
 
+    this.logger.info({
+      event: 'app_get_active_tournaments',
+      page: result.page,
+      limit: result.limit,
+      total: result.total,
+    });
+
     return {
       items: result.items.map((item) => ({
         tournamentId: item.tournamentId,
@@ -123,6 +153,13 @@ export class TournamentApplicationService {
     const result = await this.tournamentService.getCompletedTournaments({
       page: query.page ?? 1,
       limit: query.limit ?? 20,
+    });
+
+    this.logger.info({
+      event: 'app_get_completed_tournaments',
+      page: result.page,
+      limit: result.limit,
+      total: result.total,
     });
 
     return {
@@ -150,6 +187,12 @@ export class TournamentApplicationService {
       limit: query.limit ?? 5,
     });
 
+    this.logger.info({
+      event: 'app_get_related_tournaments',
+      tournamentId,
+      resultCount: result.length,
+    });
+
     return {
       items: result.map((item) => ({
         tournamentId: item.tournamentId,
@@ -162,6 +205,13 @@ export class TournamentApplicationService {
 
   async getTournamentStats(tournamentId: string): Promise<TournamentStatsResponseDto> {
     const stats = await this.tournamentService.getTournamentStats({ tournamentId });
+
+    this.logger.info({
+      event: 'app_get_tournament_stats',
+      tournamentId,
+      participants: stats.participants,
+      completedParticipants: stats.completedParticipants,
+    });
 
     return {
       tournamentId: stats.tournamentId,
@@ -186,6 +236,13 @@ export class TournamentApplicationService {
       limit: query.limit ?? 10,
     });
 
+    this.logger.info({
+      event: 'app_get_tournament_winners',
+      tournamentId,
+      limit: query.limit ?? 10,
+      resultCount: items.length,
+    });
+
     return {
       items: items.map((item) => ({
         rank: item.rank,
@@ -200,6 +257,13 @@ export class TournamentApplicationService {
   async getTournamentById(tournamentId: string): Promise<TournamentDetailResponseDto> {
     const detail = await this.tournamentService.getTournamentById(tournamentId);
     const rounds = await this.tournamentService.getTournamentRounds(tournamentId);
+
+    this.logger.info({
+      event: 'app_get_tournament_by_id',
+      tournamentId,
+      roundCount: rounds.length,
+    });
+
     return this.mapper.toTournamentDetailResponse(detail, rounds);
   }
 
@@ -211,6 +275,14 @@ export class TournamentApplicationService {
       tournamentId,
       page: query.page ?? 1,
       limit: query.limit ?? 20,
+    });
+
+    this.logger.info({
+      event: 'app_get_tournament_participants',
+      tournamentId,
+      page: result.page,
+      limit: result.limit,
+      total: result.total,
     });
 
     return {
@@ -234,6 +306,13 @@ export class TournamentApplicationService {
   ): Promise<MyTournamentStandingResponseDto> {
     const standing = await this.tournamentService.getMyTournamentStanding({ tournamentId, userId });
 
+    this.logger.info({
+      event: 'app_get_my_standing',
+      tournamentId,
+      userId,
+      rank: standing.rank,
+    });
+
     return {
       rank: standing.rank,
       score: standing.score,
@@ -246,6 +325,12 @@ export class TournamentApplicationService {
     tournamentId: string,
     user: JwtPayload,
   ): Promise<RegisterTournamentResponseDto> {
+    this.logger.info({
+      event: 'app_register_for_tournament',
+      tournamentId,
+      userId: user.sub,
+    });
+
     const participant = await this.tournamentService.registerForTournament(tournamentId, user);
 
     return {
@@ -258,6 +343,11 @@ export class TournamentApplicationService {
   }
 
   async getLeaderboard(tournamentId: string): Promise<TournamentLeaderboardResponseDto> {
+    this.logger.info({
+      event: 'app_get_leaderboard',
+      tournamentId,
+    });
+
     const entries = await this.tournamentService.getLeaderboard(tournamentId);
 
     return {
@@ -270,6 +360,13 @@ export class TournamentApplicationService {
     roundId: string,
     user: JwtPayload,
   ): Promise<StartTournamentAttemptResponseDto> {
+    this.logger.info({
+      event: 'app_start_round_attempt',
+      tournamentId,
+      roundId,
+      userId: user.sub,
+    });
+
     const result = await this.tournamentService.startRoundAttempt(tournamentId, roundId, user);
 
     return {
@@ -284,15 +381,27 @@ export class TournamentApplicationService {
     tournamentId: string,
     user: JwtPayload,
   ): Promise<UnregisterTournamentResponseDto> {
+    this.logger.info({
+      event: 'app_unregister_from_tournament',
+      tournamentId,
+      userId: user.sub,
+    });
+
     await this.tournamentService.unregisterFromTournament(tournamentId, user);
 
-    return { message: 'Successfully withdrawn from the tournament' };
+    return { message: 'Successfully unregistered from the tournament' };
   }
 
   async withdrawFromTournament(
     tournamentId: string,
     user: JwtPayload,
   ): Promise<WithdrawTournamentResponseDto> {
+    this.logger.info({
+      event: 'app_withdraw_from_tournament',
+      tournamentId,
+      userId: user.sub,
+    });
+
     const participant = await this.tournamentService.withdrawFromTournament({
       tournamentId,
       userId: user.sub,
