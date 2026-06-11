@@ -1,30 +1,35 @@
+/**
+ * Ranking Outbox Adapter
+ *
+ * Implements RankingOutboxPort by inserting into the shared outbox_events table.
+ * The event is inserted inside the caller's transaction to guarantee atomicity.
+ */
+
 import { Inject, Injectable } from '@nestjs/common';
 import { DRIZZLE } from '@/core/database/drizzle.constants';
 import type { DrizzleDB } from '@/core/database/database.module';
 import { outboxEvents } from '@/core/database/schema';
-import type { OutboxPort } from '../../domain/ports/outbox.port';
+import type {
+  RankingOutboxPort,
+} from '../../domain/ports/ranking-outbox.port';
 
 @Injectable()
-export class OutboxAdapter implements OutboxPort {
+export class RankingOutboxAdapter implements RankingOutboxPort {
   constructor(@Inject(DRIZZLE) private readonly db: DrizzleDB) {}
 
-  async scheduleEvent(
+  async scheduleRankingEvent(
     params: {
-      aggregateType: string;
       eventType: string;
       payload: Record<string, unknown>;
       nowIso: string;
       idempotencyKey?: string;
     },
-    tx?: unknown,
+    tx: unknown,
   ): Promise<void> {
-    // When called from within a repository's db.transaction() callback, callers
-    // pass the transaction client (type: any/DrizzleTransaction). Using the tx's
-    // insert() ensures the outbox row is committed atomically with the domain write.
     const dbOrTx = tx != null ? (tx as DrizzleDB) : this.db;
 
     await dbOrTx.insert(outboxEvents).values({
-      aggregateType: params.aggregateType,
+      aggregateType: 'ranking',
       eventType: params.eventType,
       payload: params.payload,
       createdAt: params.nowIso,

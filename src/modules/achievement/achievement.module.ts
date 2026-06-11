@@ -1,5 +1,4 @@
 import { Module, forwardRef } from '@nestjs/common';
-import { DRIZZLE } from '@/core/database/drizzle.constants';
 
 // Database
 import { DatabaseModule } from '@/core/database/database.module';
@@ -27,7 +26,7 @@ import { AchievementRepository } from './infrastructure/repositories/achievement
 import { ACHIEVEMENT_REPOSITORY_PORT } from './infrastructure/repositories/achievement.repository';
 
 // Infrastructure - Event Listeners
-import { RankingListenerAdapter } from './infrastructure/adapters/ranking-listener.adapter';
+import { AchievementRankingListenerAdapter } from './infrastructure/adapters/achievement-ranking-listener.adapter';
 import { AttemptEventListenerAdapter } from './infrastructure/adapters/attempt-listener.adapter';
 import { TournamentEventListenerAdapter } from './infrastructure/adapters/tournament-listener.adapter';
 import { InstanceEventListenerAdapter } from './infrastructure/adapters/instance-listener.adapter';
@@ -61,10 +60,6 @@ import { NotificationModule } from '@/modules/notification/notification.module';
   ],
   controllers: [AchievementController],
   providers: [
-    {
-      provide: 'DATABASE',
-      useExisting: DRIZZLE,
-    },
     // Domain Event Bus
     AchievementDomainEventBus,
     {
@@ -94,7 +89,7 @@ import { NotificationModule } from '@/modules/notification/notification.module';
     },
 
     // Infrastructure - Event Listeners
-    RankingListenerAdapter,
+    AchievementRankingListenerAdapter,
     AttemptEventListenerAdapter,
     TournamentEventListenerAdapter,
     InstanceEventListenerAdapter,

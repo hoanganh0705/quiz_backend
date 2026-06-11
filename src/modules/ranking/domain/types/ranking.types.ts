@@ -350,41 +350,99 @@ export function getPercentileLabel(percentile: number): string {
   return RANKING_CONSTANTS.PERCENTILE_LABELS[0];
 }
 
+import { RankingPeriodEnum } from '../../dto/request/leaderboard-query.dto';
+
 export function calculatePercentile(rank: number, totalUsers: number): number {
   if (rank <= 0 || totalUsers <= 0) return 0;
   return Math.round(((totalUsers - rank) / totalUsers) * 10000) / 100;
 }
 
-export function getXpField(period: RankingPeriod): 'allTimeXp' | 'weeklyXp' | 'monthlyXp' {
-  const mapping: Partial<Record<RankingPeriod, 'allTimeXp' | 'weeklyXp' | 'monthlyXp'>> = {
-    [RankingPeriod.ALL_TIME]: 'allTimeXp',
-    [RankingPeriod.WEEKLY]: 'weeklyXp',
-    [RankingPeriod.MONTHLY]: 'monthlyXp',
-  };
-
-  return mapping[period] ?? 'allTimeXp';
+/** Convert a RankingPeriodEnum (controller layer) to a RankingPeriod (domain). */
+export function enumToPeriod(periodEnum: RankingPeriodEnum): RankingPeriod {
+  return periodEnum as unknown as RankingPeriod;
 }
 
-export function getRankField(period: RankingPeriod): 'allTimeRank' | 'weeklyRank' | 'monthlyRank' {
-  const mapping: Partial<Record<RankingPeriod, 'allTimeRank' | 'weeklyRank' | 'monthlyRank'>> = {
-    [RankingPeriod.ALL_TIME]: 'allTimeRank',
-    [RankingPeriod.WEEKLY]: 'weeklyRank',
-    [RankingPeriod.MONTHLY]: 'monthlyRank',
-  };
-
-  return mapping[period] ?? 'allTimeRank';
+export function getXpColumn(period: RankingPeriod): string {
+  switch (period) {
+    case RankingPeriod.DAILY:
+      return 'daily_xp';
+    case RankingPeriod.WEEKLY:
+      return 'weekly_xp';
+    case RankingPeriod.MONTHLY:
+      return 'monthly_xp';
+    case RankingPeriod.ALL_TIME:
+      return 'all_time_xp';
+  }
 }
 
-export function getPeakRankField(
-  period: RankingPeriod,
-): 'peakAllTimeRank' | 'peakWeeklyRank' | 'peakMonthlyRank' {
-  const mapping: Partial<
-    Record<RankingPeriod, 'peakAllTimeRank' | 'peakWeeklyRank' | 'peakMonthlyRank'>
-  > = {
-    [RankingPeriod.ALL_TIME]: 'peakAllTimeRank',
-    [RankingPeriod.WEEKLY]: 'peakWeeklyRank',
-    [RankingPeriod.MONTHLY]: 'peakMonthlyRank',
-  };
-
-  return mapping[period] ?? 'peakAllTimeRank';
+export function getRankColumn(period: RankingPeriod): string {
+  switch (period) {
+    case RankingPeriod.DAILY:
+      return 'daily_rank';
+    case RankingPeriod.WEEKLY:
+      return 'weekly_rank';
+    case RankingPeriod.MONTHLY:
+      return 'monthly_rank';
+    case RankingPeriod.ALL_TIME:
+      return 'all_time_rank';
+  }
 }
+
+export function getRankFieldName(period: RankingPeriod): 'allTimeRank' | 'weeklyRank' | 'monthlyRank' | 'dailyRank' {
+  switch (period) {
+    case RankingPeriod.DAILY:
+      return 'dailyRank';
+    case RankingPeriod.WEEKLY:
+      return 'weeklyRank';
+    case RankingPeriod.MONTHLY:
+      return 'monthlyRank';
+    case RankingPeriod.ALL_TIME:
+      return 'allTimeRank';
+  }
+}
+
+export function getResetColumn(period: RankingPeriod): string {
+  switch (period) {
+    case RankingPeriod.DAILY:
+      return 'lastDailyResetAt';
+    case RankingPeriod.WEEKLY:
+      return 'lastWeeklyResetAt';
+    case RankingPeriod.MONTHLY:
+      return 'lastMonthlyResetAt';
+    case RankingPeriod.ALL_TIME:
+      return 'updatedAt';
+  }
+}
+
+export function getXpField(period: RankingPeriod): 'allTimeXp' | 'weeklyXp' | 'monthlyXp' | 'dailyXp' {
+  switch (period) {
+    case RankingPeriod.DAILY:
+      return 'dailyXp';
+    case RankingPeriod.WEEKLY:
+      return 'weeklyXp';
+    case RankingPeriod.MONTHLY:
+      return 'monthlyXp';
+    case RankingPeriod.ALL_TIME:
+      return 'allTimeXp';
+  }
+}
+
+export function getWeekStart(date: Date): Date {
+  const d = new Date(date);
+  const day = d.getDay();
+  const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+  d.setDate(diff);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+export function getMonthStart(date: Date): Date {
+  return new Date(date.getFullYear(), date.getMonth(), 1, 0, 0, 0, 0);
+}
+
+export function getDayStart(date: Date): Date {
+  const d = new Date(date);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
