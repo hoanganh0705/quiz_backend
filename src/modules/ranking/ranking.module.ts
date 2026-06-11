@@ -12,13 +12,14 @@
  */
 
 import { Module } from '@nestjs/common';
-import { JwtModule } from '@nestjs/jwt';
-import { DRIZZLE } from '@/core/database/drizzle.constants';
 import { NotificationModule } from '@/modules/notification/notification.module';
 
 // Infrastructure
 import { RankingRepository } from './infrastructure/repositories/ranking.repository';
-import { RankingListenerAdapter } from './infrastructure/adapters/ranking-listener.adapter';
+import { RankingNotificationListenerAdapter } from './infrastructure/adapters/ranking-notification-listener.adapter';
+import { RankingConsistencySubscriber } from './infrastructure/adapters/ranking-consistency-subscriber.adapter';
+import { RankingOutboxProcessorService } from './infrastructure/outbox/ranking-outbox-processor.service';
+import { RankingOutboxAdapter } from './infrastructure/outbox/ranking-outbox.adapter';
 
 // Domain Events
 import { RankingDomainEventBus } from './domain/events/ranking-domain.event-bus';
@@ -27,6 +28,7 @@ import { RankingEventHandler } from './domain/events/ranking.event-handler';
 // Domain Ports
 import { RANKING_REPOSITORY_PORT } from './domain/ports/ranking-repository.port';
 import { RANKING_DOMAIN_EVENT_BUS } from './domain/ports/ranking-event-bus.port';
+import { RANKING_OUTBOX_PORT } from './domain/ports/ranking-outbox.port';
 
 // Domain Services
 import {
@@ -51,15 +53,12 @@ import { RankingApplicationService } from './application/ranking.application.ser
 
 // Transport
 import { RankingController } from './transport/controller/ranking.controller';
+import { RankingAdminController } from './transport/controller/ranking-admin.controller';
 import { RankingDomainExceptionFilter } from './transport/filters/ranking-domain-exception.filter';
 
 @Module({
-  imports: [JwtModule, NotificationModule],
+  imports: [NotificationModule],
   providers: [
-    {
-      provide: 'DATABASE',
-      useExisting: DRIZZLE,
-    },
     // Infrastructure
     RankingRepository,
     RankingDomainEventBus,
@@ -72,6 +71,10 @@ import { RankingDomainExceptionFilter } from './transport/filters/ranking-domain
     {
       provide: RANKING_DOMAIN_EVENT_BUS,
       useExisting: RankingDomainEventBus,
+    },
+    {
+      provide: RANKING_OUTBOX_PORT,
+      useClass: RankingOutboxAdapter,
     },
 
     // Domain Services
@@ -97,16 +100,23 @@ import { RankingDomainExceptionFilter } from './transport/filters/ranking-domain
     RankingEventHandler,
 
     // Notification Listeners
-    RankingListenerAdapter,
+    RankingNotificationListenerAdapter,
+
+    // Monitoring
+    RankingConsistencySubscriber,
+
+    // Outbox Processor
+    RankingOutboxProcessorService,
 
     // Transport
     RankingDomainExceptionFilter,
   ],
-  controllers: [RankingController],
+  controllers: [RankingController, RankingAdminController],
   exports: [
     // Ports
     RANKING_REPOSITORY_PORT,
     RANKING_DOMAIN_EVENT_BUS,
+    RANKING_OUTBOX_PORT,
 
     // Domain Services
     XpIngestionService,

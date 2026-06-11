@@ -2,7 +2,7 @@
  * Achievement Infrastructure Adapters
  */
 
-export * from './ranking-listener.adapter';
+export * from './achievement-ranking-listener.adapter';
 export * from './attempt-listener.adapter';
 export * from './tournament-listener.adapter';
 export * from './instance-listener.adapter';

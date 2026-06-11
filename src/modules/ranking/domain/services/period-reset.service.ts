@@ -41,6 +41,30 @@ export class PeriodResetService {
   ) {}
 
   /**
+   * Perform a daily reset.
+   * Archives current daily rankings and resets counters.
+   */
+  async performDailyReset(): Promise<PeriodResetResult> {
+    const now = new Date();
+
+    if (now.getUTCHours() !== 0) {
+      this.logger.warn({
+        event: 'daily_reset_skipped',
+        reason: 'Not at midnight UTC',
+        hour: now.getUTCHours(),
+      });
+      return {
+        period: RankingPeriod.DAILY,
+        usersAffected: 0,
+        archivedRecords: 0,
+        resetAt: now,
+      };
+    }
+
+    return this.executeReset(RankingPeriod.DAILY, now);
+  }
+
+  /**
    * Perform a weekly reset.
    * Archives current weekly rankings and resets counters.
    */
@@ -192,6 +216,9 @@ export class PeriodResetService {
    */
   isResetDue(period: RankingPeriod, now: Date = new Date()): boolean {
     switch (period) {
+      case RankingPeriod.DAILY:
+        return now.getUTCHours() === 0 && now.getUTCMinutes() < 5;
+
       case RankingPeriod.WEEKLY:
         return now.getUTCDay() === 1 && now.getUTCHours() === 0 && now.getUTCMinutes() < 5;
 
@@ -199,7 +226,7 @@ export class PeriodResetService {
         return now.getUTCDate() === 1 && now.getUTCHours() === 0 && now.getUTCMinutes() < 5;
 
       case RankingPeriod.ALL_TIME:
-        return false; // Never resets
+        return false;
 
       default:
         return false;
@@ -211,8 +238,14 @@ export class PeriodResetService {
    */
   getNextResetTime(period: RankingPeriod, now: Date = new Date()): Date {
     switch (period) {
+      case RankingPeriod.DAILY: {
+        const next = new Date(now);
+        next.setUTCDate(next.getUTCDate() + 1);
+        next.setUTCHours(0, 0, 0, 0);
+        return next;
+      }
+
       case RankingPeriod.WEEKLY: {
-        // Next Monday
         const next = new Date(now);
         const daysUntilMonday = (8 - now.getUTCDay()) % 7 || 7;
         next.setUTCDate(now.getUTCDate() + daysUntilMonday);
@@ -221,13 +254,11 @@ export class PeriodResetService {
       }
 
       case RankingPeriod.MONTHLY: {
-        // First day of next month
-        const next = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
-        return next;
+        return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
       }
 
       case RankingPeriod.ALL_TIME:
-        return new Date('2099-12-31T23:59:59Z'); // Far future
+        return new Date('2099-12-31T23:59:59Z');
 
       default:
         return now;

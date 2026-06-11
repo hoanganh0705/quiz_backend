@@ -53,27 +53,6 @@ export class LeaderboardQueryDto {
   offset?: number = 0;
 }
 
-export class CategoryLeaderboardQueryDto extends LeaderboardQueryDto {
-  @ApiPropertyOptional({
-    description: 'Category ID to filter leaderboard',
-    example: '550e8400-e29b-41d4-a716-446655440000',
-  })
-  @IsString()
-  @IsOptional()
-  categoryId?: string;
-}
-
-export class UserRankQueryDto {
-  @ApiPropertyOptional({
-    description: 'Ranking period',
-    enum: RankingPeriodEnum,
-    default: RankingPeriodEnum.ALL_TIME,
-  })
-  @IsEnum(RankingPeriodEnum)
-  @IsOptional()
-  period?: RankingPeriodEnum = RankingPeriodEnum.ALL_TIME;
-}
-
 export class MyRankingHistoryQueryDto {
   @ApiPropertyOptional({
     description: 'Ranking history period',

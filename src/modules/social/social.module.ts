@@ -16,8 +16,13 @@ import { SOCIAL_REPOSITORY_PORT } from './domain/ports/social-ports';
 import { SocialDomainEventBus } from './domain/events';
 import { RANKING_PORT } from './domain/ports/ranking.port';
 import { SOCIAL_DOMAIN_EVENT_BUS } from './domain/events/social-event-bus.port';
+// Ranking infrastructure (local instances, no RankingModule import needed)
+import { RankingDomainEventBus } from '@/modules/ranking/domain/events/ranking-domain.event-bus';
+import { RankingRepository } from '@/modules/ranking/infrastructure/repositories/ranking.repository';
+import { RANKING_DOMAIN_EVENT_BUS } from '@/modules/ranking/domain/ports/ranking-event-bus.port';
+import { RANKING_REPOSITORY_PORT } from '@/modules/ranking/domain/ports/ranking-repository.port';
+// Other domain modules (needed for event bus tokens)
 import { UserModule } from '@/modules/user/user.module';
-import { RankingModule } from '@/modules/ranking/ranking.module';
 import { AchievementModule } from '@/modules/achievement/achievement.module';
 import { DiscussionModule } from '@/modules/discussion/discussion.module';
 import { TournamentModule } from '@/modules/tournament/tournament.module';
@@ -27,7 +32,6 @@ import { NotificationModule } from '@/modules/notification/notification.module';
   imports: [
     DatabaseModule,
     UserModule,
-    RankingModule,
     AchievementModule,
     DiscussionModule,
     TournamentModule,
@@ -38,7 +42,11 @@ import { NotificationModule } from '@/modules/notification/notification.module';
     SocialApplicationService,
     SocialService,
     SocialRepository,
+    // Ranking infrastructure (local instances for SocialModule)
+    RankingRepository,
+    RankingDomainEventBus,
     RankingAdapter,
+    // Event listener adapters
     AchievementFeedListenerAdapter,
     RankingFeedListenerAdapter,
     DiscussionFeedListenerAdapter,
@@ -46,9 +54,12 @@ import { NotificationModule } from '@/modules/notification/notification.module';
     SocialNotificationListener,
     SocialDomainExceptionFilter,
     SocialDomainEventBus,
+    // Token bindings
     { provide: SOCIAL_DOMAIN_EVENT_BUS, useExisting: SocialDomainEventBus },
     { provide: SOCIAL_REPOSITORY_PORT, useExisting: SocialRepository },
     { provide: RANKING_PORT, useExisting: RankingAdapter },
+    { provide: RANKING_DOMAIN_EVENT_BUS, useExisting: RankingDomainEventBus },
+    { provide: RANKING_REPOSITORY_PORT, useExisting: RankingRepository },
   ],
   controllers: [SocialController],
   exports: [SocialService, SocialApplicationService, SocialDomainEventBus, SOCIAL_DOMAIN_EVENT_BUS],

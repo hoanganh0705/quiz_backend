@@ -38,10 +38,10 @@ export class LeaderboardEntryDto {
 export class PeriodInfoDto {
   @ApiProperty({
     description: 'Period type',
-    enum: ['weekly', 'monthly', 'all_time'],
+    enum: ['daily', 'weekly', 'monthly', 'all_time'],
     example: 'weekly',
   })
-  type!: 'weekly' | 'monthly' | 'all_time';
+  type!: 'daily' | 'weekly' | 'monthly' | 'all_time';
 
   @ApiProperty({ description: 'Period start date', example: '2026-05-25T00:00:00.000Z' })
   start!: string;
@@ -97,17 +97,6 @@ export class UserRankPositionDto {
 
   @ApiPropertyOptional({ description: 'Amount of rank change', example: 5 })
   trendAmount!: number | null;
-}
-
-export class RankTrendDto {
-  @ApiPropertyOptional({ description: 'Previous rank', example: 47 })
-  previousRank!: number | null;
-
-  @ApiPropertyOptional({ description: 'Current rank', example: 42 })
-  currentRank!: number | null;
-
-  @ApiPropertyOptional({ description: 'Amount of change (negative means dropped)', example: 5 })
-  change!: number | null;
 }
 
 export class GlobalRankingDto {
@@ -422,7 +411,7 @@ export class UserRankSummaryDto {
   trendAmount!: number | null;
 
   @ApiProperty({ description: 'Period type' })
-  period!: 'weekly' | 'monthly' | 'all_time';
+  period!: 'daily' | 'weekly' | 'monthly' | 'all_time';
 
   @ApiProperty({ description: 'Reset time', example: 86400 })
   resetInSeconds!: number;

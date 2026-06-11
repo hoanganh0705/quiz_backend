@@ -17,8 +17,6 @@
 
 import { Inject, Injectable } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
-import { NodePgDatabase } from 'drizzle-orm/node-postgres';
-import { sql } from 'drizzle-orm';
 import {
   RANKING_REPOSITORY_PORT,
   type RankingRepositoryPort,
@@ -32,6 +30,7 @@ import {
   RankingMilestone,
   RankingPeriod,
   calculatePercentile,
+  getXpField,
 } from '../types/ranking.types';
 import type {
   RankCalculationResult,
@@ -40,26 +39,9 @@ import type {
 } from '../types/ranking.types';
 import { RankCalculationError } from '../errors/ranking-domain.errors';
 
-interface RankedRow extends Record<string, unknown> {
-  user_id: string;
-  xp: number;
-  rank: number;
-  dense_rank: number;
-}
-
-interface CountRow extends Record<string, unknown> {
-  rank: number;
-}
-
-interface DenseRankRow extends Record<string, unknown> {
-  dense_rank: number;
-}
-
 @Injectable()
 export class RankCalculationService {
   constructor(
-    @Inject('DATABASE')
-    private readonly db: NodePgDatabase,
     @Inject(RANKING_REPOSITORY_PORT)
     private readonly rankingRepository: RankingRepositoryPort,
     @Inject(RANKING_DOMAIN_EVENT_BUS)
@@ -71,61 +53,33 @@ export class RankCalculationService {
   /**
    * Calculate ranks for all users in a specific period.
    * Uses both RANK() and DENSE_RANK() for complete ranking information.
-   *
-   * @param period - The ranking period to calculate
-   * @returns Array of rank calculation results
    */
   async calculateAllRanks(period: RankingPeriod): Promise<RankCalculationResult[]> {
-    const xpColumn = this.getXpColumn(period);
-
     this.logger.info({
       event: 'rank_calculation_started',
       period,
     });
 
     try {
-      // Use raw SQL with both RANK() and DENSE_RANK()
-      // RANK() assigns the same rank to ties but leaves gaps
-      // DENSE_RANK() assigns the same rank to ties without gaps
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-      const results = await this.db.execute<RankedRow>(sql`
-        WITH ranked AS (
-          SELECT
-            ur.user_id,
-            ur.${sql.raw(xpColumn)} as xp,
-            RANK() OVER (
-              ORDER BY ur.${sql.raw(xpColumn)} DESC, u.created_at ASC
-            ) as rank,
-            DENSE_RANK() OVER (
-              ORDER BY ur.${sql.raw(xpColumn)} DESC, u.created_at ASC
-            ) as dense_rank
-          FROM user_ranking ur
-          INNER JOIN users u ON u.user_id = ur.user_id
-          WHERE ur.${sql.raw(xpColumn)} > 0
-            AND u.deleted_at IS NULL
-        )
-        SELECT * FROM ranked
-      `);
+      const rankResults = await this.rankingRepository.calculateAllRanks(period);
 
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-      const rankResults: RankCalculationResult[] = (results.rows as RankedRow[]).map((row) => ({
-        userId: row.user_id,
+      const results: RankCalculationResult[] = rankResults.map((row) => ({
+        userId: row.userId,
         period,
-        rank: Number(row.rank),
-        denseRank: Number(row.dense_rank),
-        xp: Number(row.xp),
+        rank: row.rank,
+        denseRank: row.denseRank,
+        xp: row.xp,
       }));
 
-      // Batch update all ranks in a single transaction
-      await this.batchUpdateRanks(rankResults, period);
+      await this.batchUpdateRanks(results, period);
 
       this.logger.info({
         event: 'rank_calculation_completed',
         period,
-        usersRanked: rankResults.length,
+        usersRanked: results.length,
       });
 
-      return rankResults;
+      return results;
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown error';
       throw new RankCalculationError(period, message);
@@ -134,36 +88,19 @@ export class RankCalculationService {
 
   /**
    * Recalculate ranks for a specific set of users.
-   * This is more efficient than recalculating all ranks.
-   *
-   * @param userIds - Array of user IDs to recalculate
-   * @param period - The ranking period
+   * Uses a single window-function query instead of per-user loops.
    */
   async recalculateRanksForUsers(userIds: string[], period: RankingPeriod): Promise<void> {
     if (userIds.length === 0) return;
 
-    // First, mark all affected users as dirty
     await this.rankingRepository.markDirty(userIds);
 
-    // For each user, calculate their rank by counting users with higher XP
-    for (const userId of userIds) {
-      const userRankingRow = await this.rankingRepository.getUserRanking(userId);
-      if (!userRankingRow) continue;
+    const ranked = await this.rankingRepository.calculateAllRanksForUsers({
+      userIds,
+      period,
+    });
 
-      const userXp = userRankingRow[this.getXpFieldName(period)];
-      if (userXp <= 0) continue;
-
-      // Calculate rank by counting users with higher XP
-      const rank = await this.calculateUserRank(userId, period);
-      if (rank === null) continue;
-
-      // Update the rank
-      await this.rankingRepository.updateRank({
-        userId,
-        period,
-        rank,
-      });
-    }
+    await this.batchUpdateRanksForUsers(ranked, period);
 
     this.logger.info({
       event: 'incremental_rank_recalculation_completed',
@@ -174,79 +111,44 @@ export class RankCalculationService {
 
   /**
    * Calculate the rank for a single user.
-   * Uses COUNT query which is efficient for single user lookups.
-   *
-   * @param userId - The user ID
-   * @param period - The ranking period
-   * @returns The user's rank, or null if no XP
    */
-  async calculateUserRank(userId: string, period: RankingPeriod): Promise<number | null> {
-    const xpColumn = this.getXpColumn(period);
+  async calculateUserRank(
+    userId: string,
+    period: RankingPeriod,
+    userXp?: number | null,
+  ): Promise<number | null> {
+    if (userXp === undefined || userXp === null) {
+      const user = await this.rankingRepository.getUserRanking(userId);
+      if (!user) return null;
+      userXp = user[getXpField(period)];
+    }
 
-    const user = await this.rankingRepository.getUserRanking(userId);
-    if (!user) return null;
-
-    const userXp = user[this.getXpFieldName(period)];
     if (userXp <= 0) return null;
 
-    // Count users with strictly higher XP
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-    const result = await this.db.execute<CountRow>(sql`
-      SELECT COUNT(*) + 1 as rank
-      FROM user_ranking ur
-      INNER JOIN users u ON u.user_id = ur.user_id
-      WHERE ur.${sql.raw(xpColumn)} > ${userXp}
-        AND u.deleted_at IS NULL
-    `);
-
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-    return Number((result.rows[0] as CountRow | undefined)?.rank ?? 0) || null;
-  }
-
-  /**
-   * Calculate the DENSE_RANK for a single user.
-   * Useful for percentile calculations.
-   *
-   * @param userId - The user ID
-   * @param period - The ranking period
-   * @returns The user's dense rank
-   */
-  async calculateUserDenseRank(userId: string, period: RankingPeriod): Promise<number | null> {
-    const xpColumn = this.getXpColumn(period);
-
-    const user = await this.rankingRepository.getUserRanking(userId);
-    if (!user) return null;
-
-    const userXp = user[this.getXpFieldName(period)];
-    if (userXp <= 0) return null;
-
-    // Count users with strictly higher XP (dense rank calculation)
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-    const result = await this.db.execute<DenseRankRow>(sql`
-      SELECT COUNT(DISTINCT ur.${sql.raw(xpColumn)}) + 1 as dense_rank
-      FROM user_ranking ur
-      INNER JOIN users u ON u.user_id = ur.user_id
-      WHERE ur.${sql.raw(xpColumn)} > ${userXp}
-        AND u.deleted_at IS NULL
-    `);
-
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-    return Number((result.rows[0] as DenseRankRow | undefined)?.dense_rank ?? 0) || null;
+    const count = await this.rankingRepository.countRankAbove(userXp, period);
+    return count || null;
   }
 
   /**
    * Queue a user for rank recalculation.
-   * The actual recalculation happens asynchronously.
-   *
-   * @param userId - The user ID
-   * @param periods - Array of periods to recalculate
    */
   async queueRankRecalculation(userId: string, periods: RankingPeriod[]): Promise<void> {
-    // Mark user as dirty
     await this.rankingRepository.markDirty([userId]);
 
-    // In a production system, this would queue to a job processor
-    // For now, we process immediately but could be batched
+    this.logger.debug({
+      event: 'rank_recalculation_queued',
+      userId,
+      periods,
+    });
+  }
+
+  /**
+   * Like `queueRankRecalculation` but accepts an explicit transaction client.
+   * Used by XpIngestionService to participate in the atomic XP + outbox transaction.
+   */
+  async queueRankRecalculationInTx(tx: unknown, userId: string, periods: RankingPeriod[]): Promise<void> {
+    await this.rankingRepository.markDirtyInTx(tx, [userId]);
+
     this.logger.debug({
       event: 'rank_recalculation_queued',
       userId,
@@ -256,9 +158,6 @@ export class RankCalculationService {
 
   /**
    * Process all dirty users for rank recalculation.
-   * This is called by the batch processor.
-   *
-   * @param limit - Maximum number of users to process
    */
   async processDirtyRankings(limit = RANKING_CONSTANTS.INCREMENTAL_BATCH_SIZE): Promise<number> {
     const dirtyUsers = await this.rankingRepository.getDirtyUsers(limit);
@@ -267,12 +166,15 @@ export class RankCalculationService {
 
     const userIds = dirtyUsers.map((u) => u.userId);
 
-    // Process all periods
-    for (const period of [RankingPeriod.WEEKLY, RankingPeriod.MONTHLY, RankingPeriod.ALL_TIME]) {
+    for (const period of [
+      RankingPeriod.DAILY,
+      RankingPeriod.WEEKLY,
+      RankingPeriod.MONTHLY,
+      RankingPeriod.ALL_TIME,
+    ]) {
       await this.recalculateRanksForUsers(userIds, period);
     }
 
-    // Clear dirty flags
     await this.rankingRepository.clearDirtyFlags(userIds);
 
     this.logger.info({
@@ -285,12 +187,10 @@ export class RankCalculationService {
 
   /**
    * Perform consistency check on rankings.
-   * Identifies and fixes rank inconsistencies.
    */
   async performConsistencyCheck(): Promise<ConsistencyReport> {
     const issues: RankingIssue[] = [];
 
-    // Check for users with XP > 0 but no rank
     const missingRanks = await this.rankingRepository.findMissingRanks();
     if (missingRanks.length > 0) {
       issues.push({
@@ -299,9 +199,9 @@ export class RankCalculationService {
         severity: 'medium',
       });
 
-      // Fix missing ranks
       for (const userId of missingRanks) {
         for (const period of [
+          RankingPeriod.DAILY,
           RankingPeriod.WEEKLY,
           RankingPeriod.MONTHLY,
           RankingPeriod.ALL_TIME,
@@ -314,7 +214,6 @@ export class RankCalculationService {
       }
     }
 
-    // Check for XP mismatches (stored vs. calculated from events)
     const xpMismatches = await this.rankingRepository.findXpMismatches();
     if (xpMismatches.length > 0) {
       issues.push({
@@ -339,36 +238,42 @@ export class RankCalculationService {
     return report;
   }
 
-  /**
-   * Batch update ranks for multiple users.
-   */
   private async batchUpdateRanks(
     results: RankCalculationResult[],
     period: RankingPeriod,
   ): Promise<void> {
-    if (results.length === 0) return;
-
-    const rankColumn = this.getRankColumn(period);
-
     for (const result of results) {
-      await this.rankingRepository.updateRank({
+      const previousRank = await this.rankingRepository.updateRank({
         userId: result.userId,
         period,
         rank: result.rank,
       });
 
-      const peakUpdated = await this.rankingRepository.updatePeakRank({
+      if (previousRank !== null && previousRank !== result.rank) {
+        this.eventBus.emitRankChanged({
+          eventType: 'rank.changed',
+          userId: result.userId,
+          period,
+          previousRank,
+          newRank: result.rank,
+          previousXp: 0,
+          newXp: result.xp,
+          timestamp: new Date(),
+        });
+      }
+
+      const peakResult = await this.rankingRepository.updatePeakRank({
         userId: result.userId,
         period,
         rank: result.rank,
       });
 
-      if (peakUpdated) {
+      if (peakResult.updated) {
         this.eventBus.emitPeakRankAchieved({
           eventType: 'peak.rank.achieved',
           userId: result.userId,
           period,
-          previousPeakRank: null,
+          previousPeakRank: peakResult.previousPeakRank,
           newPeakRank: result.rank,
           timestamp: new Date(),
         });
@@ -380,9 +285,53 @@ export class RankCalculationService {
     this.logger.debug({
       event: 'batch_ranks_updated',
       period,
-      usersAffected: results.length,
-      rankColumn,
+      count: results.length,
     });
+  }
+
+  private async batchUpdateRanksForUsers(
+    ranked: { userId: string; xp: number; rank: number; denseRank: number }[],
+    period: RankingPeriod,
+  ): Promise<void> {
+    for (const row of ranked) {
+      const previousRank = await this.rankingRepository.updateRank({
+        userId: row.userId,
+        period,
+        rank: row.rank,
+      });
+
+      if (previousRank !== null && previousRank !== row.rank) {
+        this.eventBus.emitRankChanged({
+          eventType: 'rank.changed',
+          userId: row.userId,
+          period,
+          previousRank,
+          newRank: row.rank,
+          previousXp: 0,
+          newXp: row.xp,
+          timestamp: new Date(),
+        });
+      }
+
+      const peakResult = await this.rankingRepository.updatePeakRank({
+        userId: row.userId,
+        period,
+        rank: row.rank,
+      });
+
+      if (peakResult.updated) {
+        this.eventBus.emitPeakRankAchieved({
+          eventType: 'peak.rank.achieved',
+          userId: row.userId,
+          period,
+          previousPeakRank: peakResult.previousPeakRank,
+          newPeakRank: row.rank,
+          timestamp: new Date(),
+        });
+      }
+
+      await this.checkAndPersistMilestones(row.userId, period, row.rank, row.denseRank);
+    }
   }
 
   private async checkAndPersistMilestones(
@@ -393,18 +342,14 @@ export class RankCalculationService {
   ): Promise<void> {
     const milestones = this.getMilestonesForRank(rank);
 
-    if (milestones.length === 0) {
-      return;
-    }
+    if (milestones.length === 0) return;
 
     const totalParticipants = await this.rankingRepository.getTotalParticipants(period);
     const percentile = calculatePercentile(denseRank, totalParticipants);
 
     for (const milestone of milestones) {
       const milestoneExists = await this.rankingRepository.hasMilestone({ userId, milestone });
-      if (milestoneExists) {
-        continue;
-      }
+      if (milestoneExists) continue;
 
       await this.rankingRepository.createMilestone({
         userId,
@@ -439,36 +384,5 @@ export class RankCalculationService {
     return thresholds
       .filter((threshold) => rank <= threshold.rank)
       .map((threshold) => threshold.milestone);
-  }
-
-  // ============================================
-  // Helper Methods
-  // ============================================
-
-  private getXpColumn(period: RankingPeriod): string {
-    const mapping: Partial<Record<RankingPeriod, string>> = {
-      [RankingPeriod.ALL_TIME]: 'all_time_xp',
-      [RankingPeriod.WEEKLY]: 'weekly_xp',
-      [RankingPeriod.MONTHLY]: 'monthly_xp',
-    };
-    return mapping[period] ?? 'all_time_xp';
-  }
-
-  private getRankColumn(period: RankingPeriod): string {
-    const mapping: Partial<Record<RankingPeriod, string>> = {
-      [RankingPeriod.ALL_TIME]: 'all_time_rank',
-      [RankingPeriod.WEEKLY]: 'weekly_rank',
-      [RankingPeriod.MONTHLY]: 'monthly_rank',
-    };
-    return mapping[period] ?? 'all_time_rank';
-  }
-
-  private getXpFieldName(period: RankingPeriod): 'allTimeXp' | 'weeklyXp' | 'monthlyXp' {
-    const mapping: Partial<Record<RankingPeriod, 'allTimeXp' | 'weeklyXp' | 'monthlyXp'>> = {
-      [RankingPeriod.ALL_TIME]: 'allTimeXp',
-      [RankingPeriod.WEEKLY]: 'weeklyXp',
-      [RankingPeriod.MONTHLY]: 'monthlyXp',
-    };
-    return mapping[period] ?? 'allTimeXp';
   }
 }

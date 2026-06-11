@@ -6,27 +6,18 @@ import { Injectable } from '@nestjs/common';
  *
  * ## How it works
  *
- * When a controller handler is decorated with `@Transactional()`, the
- * `TransactionalInterceptor` wraps the entire handler in `context.run()`.
+ * When a controller handler is decorated with `@Transactional()` or enters the
+ * `CorrelationInterceptor`, the `TransactionalContext` stores values in AsyncLocalStorage.
+ * All downstream code (services, repositories) can retrieve them via `get()`.
  *
- * Inside the handler chain (service → repository → Drizzle), any code that calls
- * `db.transaction()` can check `context.getDbClient()` first:
- *   - If a client is stored (another layer already opened the transaction), reuse it.
- *   - Otherwise, open a new transaction normally.
- *
- * This means nested `db.transaction()` calls are collapsed into a single DB
- * transaction without any caller having to explicitly pass a `tx` parameter.
- *
- * ## Usage in repositories
+ * ## Usage
  *
  * ```typescript
- * async myAtomicOperation(params) {
- *   const existingTx = this.transactionalContext.getDbClient() as typeof this.db;
- *   if (existingTx) {
- *     return existingTx.execute(myQuery);
- *   }
- *   return this.db.transaction(async (tx) => { ... });
- * }
+ * // Store a value (interceptor)
+ * context.set('my_key', myValue);
+ *
+ * // Retrieve it (service/repository)
+ * const value = context.get<MyType>('my_key');
  * ```
  */
 @Injectable()
@@ -36,9 +27,8 @@ export class TransactionalContext {
   private static readonly DB_CLIENT_KEY = 'db_transaction_client';
 
   /**
-   * Run `callback` inside a transactional scope.
-   * The store is available to all downstream calls (repositories, services, etc.)
-   * in the same async chain.
+   * Run `callback` inside a scoped execution.
+   * The store is available to all downstream calls in the same async chain.
    */
   run<T>(callback: () => T): T {
     return this.storage.run(new Map<string, unknown>(), callback);
@@ -62,6 +52,34 @@ export class TransactionalContext {
    */
   setDbClient(tx: unknown): void {
     this.storage.getStore()?.set(TransactionalContext.DB_CLIENT_KEY, tx);
+  }
+
+  /**
+   * Store a value under a key in the current async scope.
+   */
+  set<T>(key: string, value: T): void {
+    this.storage.getStore()?.set(key, value);
+  }
+
+  /**
+   * Retrieve a value by key from the current async scope.
+   */
+  get<T>(key: string): T | undefined {
+    return this.storage.getStore()?.get(key) as T | undefined;
+  }
+
+  /**
+   * Check whether a key exists in the current async scope.
+   */
+  has(key: string): boolean {
+    return this.storage.getStore()?.has(key) ?? false;
+  }
+
+  /**
+   * Delete a key from the current async scope.
+   */
+  delete(key: string): void {
+    this.storage.getStore()?.delete(key);
   }
 }
 

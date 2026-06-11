@@ -199,6 +199,17 @@ export interface MySocialAnalytics {
 
 export type TrendingReason = 'most_followed' | 'fastest_growing' | 'most_active' | 'rising_star';
 
+/** Rank trend summary for a single period (mirrors RankTrend from ranking.port). */
+export interface RankTrendInfo {
+  period: 'weekly' | 'monthly' | 'all_time';
+  currentRank: number | null;
+  previousRank: number | null;
+  change: number;
+  direction: 'up' | 'down' | 'stable' | 'new';
+  currentXp: number;
+  previousXp: number | null;
+}
+
 export interface TrendingUser {
   userId: string;
   username: string;
@@ -206,6 +217,10 @@ export interface TrendingUser {
   followers: number;
   trendScore: number;
   trendReason: TrendingReason;
+  /** Current weekly rank trend from rank history snapshots */
+  weeklyRankTrend: RankTrendInfo | null;
+  /** Current monthly rank trend from rank history snapshots */
+  monthlyRankTrend: RankTrendInfo | null;
 }
 
 export interface TrendingUsersResult {
@@ -251,6 +266,10 @@ export interface FriendRankingEntry {
   avatarUrl: string | null;
   xp: number;
   friendSince: string;
+  /** Weekly rank trend from rank history snapshots */
+  weeklyRankTrend: RankTrendInfo | null;
+  /** Monthly rank trend from rank history snapshots */
+  monthlyRankTrend: RankTrendInfo | null;
 }
 
 export interface FriendLeaderboard {
