@@ -1,20 +1,56 @@
-import { Inject, Injectable } from '@nestjs/common';
+/**
+ * Notification Channel Service
+ *
+ * Infrastructure adapter that handles notification delivery across channels
+ * (in-app, email, push). Applies user preferences and quiet-hours rules
+ * before creating and dispatching notifications. User preferences are cached
+ * in Redis for 5 minutes to avoid repeated DB fetches.
+ */
+
+import { Inject, Injectable, Optional } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import type {
   NotificationType,
   NotificationChannel,
   NotificationPreferencesRow,
-} from '../types/notification.types';
-import { NOTIFICATION_REPOSITORY_PORT, type NotificationRepositoryPort } from '../ports';
+} from '../../domain/types/notification.types';
+import {
+  NOTIFICATION_REPOSITORY_PORT,
+  NOTIFICATION_DOMAIN_EVENT_BUS,
+  type NotificationRepositoryPort,
+  type NotificationDomainEventBus,
+  type NotificationChannelServiceInstance,
+} from '../../domain/ports/notification-ports';
+import type { NotificationSentEvent } from '../../domain/events/notification.events';
+import { CACHE_PROVIDER, type CacheProvider } from '@/common/ports/cache.provider';
+
+const NOTIF_PREFS_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
 @Injectable()
-export class NotificationChannelService {
+export class NotificationChannelService implements NotificationChannelServiceInstance {
+  private readonly cacheKeyPrefix = 'notif:prefs:';
+
   constructor(
     @Inject(NOTIFICATION_REPOSITORY_PORT)
     private readonly notificationRepository: NotificationRepositoryPort,
+    @Optional()
+    @Inject(NOTIFICATION_DOMAIN_EVENT_BUS)
+    private readonly eventBus?: NotificationDomainEventBus,
+    @Optional()
+    @Inject(CACHE_PROVIDER)
+    private readonly cache?: CacheProvider,
+    @Optional()
     @InjectPinoLogger(NotificationChannelService.name)
-    private readonly logger: PinoLogger,
+    private readonly logger?: PinoLogger,
   ) {}
+
+  /**
+   * Invalidate the cached preferences for a user. Call this after updating preferences.
+   */
+  async invalidatePreferencesCache(userId: string): Promise<void> {
+    if (!this.cache) return;
+    await this.cache.set(this.cacheKeyPrefix + userId, '', 0);
+  }
 
   async send(params: {
     userId: string;
@@ -23,12 +59,41 @@ export class NotificationChannelService {
     body: string;
     metadata?: Record<string, unknown>;
     channels?: NotificationChannel[];
+    recipientEmail?: string;
+    pushToken?: string;
   }): Promise<void> {
     const channels = params.channels ?? (['in_app'] as NotificationChannel[]);
 
+    const prefs = await this.getPreferences(params.userId);
+
     for (const channel of channels) {
-      await this.sendToChannel(params, channel);
+      await this.sendToChannel(params, channel, prefs);
     }
+  }
+
+  private async getPreferences(userId: string): Promise<NotificationPreferencesRow | null> {
+    if (this.cache) {
+      const cached = await this.cache.get(this.cacheKeyPrefix + userId);
+      if (cached !== null) {
+        if (cached === '') {
+          return null;
+        }
+        try {
+          return JSON.parse(cached) as NotificationPreferencesRow;
+        } catch {
+          this.logger?.warn({ event: 'prefs_cache_parse_failed', userId });
+        }
+      }
+    }
+
+    const prefs = await this.notificationRepository.getPreferences(userId);
+
+    if (this.cache) {
+      const cacheValue = prefs ? JSON.stringify(prefs) : '';
+      await this.cache.set(this.cacheKeyPrefix + userId, cacheValue, NOTIF_PREFS_TTL_MS);
+    }
+
+    return prefs;
   }
 
   private async sendToChannel(
@@ -38,12 +103,15 @@ export class NotificationChannelService {
       title: string;
       body: string;
       metadata?: Record<string, unknown>;
+      recipientEmail?: string;
+      pushToken?: string;
     },
     channel: NotificationChannel,
+    prefs: NotificationPreferencesRow | null,
   ): Promise<void> {
-    const shouldSend = await this.shouldSendNotification(params.userId, params.type, channel);
+    const shouldSend = this.shouldSendNotification(params.userId, params.type, channel, prefs);
     if (!shouldSend) {
-      this.logger.info({
+      this.logger?.info({
         event: 'notification_skipped_by_preferences',
         userId: params.userId,
         type: params.type,
@@ -61,25 +129,35 @@ export class NotificationChannelService {
       channel,
     });
 
+    const sentEvent: NotificationSentEvent = {
+      eventType: 'notification.sent',
+      notificationId: notification.notificationId,
+      userId: notification.userId,
+      type: notification.type,
+      channel: notification.channel,
+      timestamp: new Date(),
+    };
+    this.eventBus?.emit(sentEvent);
+
     switch (channel) {
       case 'in_app':
         await this.sendInApp(notification);
         break;
       case 'email':
-        await this.sendEmail(notification);
+        await this.sendEmail(notification, params.recipientEmail);
         break;
       case 'push':
-        await this.sendPush(notification);
+        await this.sendPush(notification, params.pushToken);
         break;
     }
   }
 
-  private async shouldSendNotification(
+  private shouldSendNotification(
     userId: string,
     type: NotificationType,
     channel: NotificationChannel,
-  ): Promise<boolean> {
-    const prefs = await this.notificationRepository.getPreferences(userId);
+    prefs: NotificationPreferencesRow | null,
+  ): boolean {
     if (!prefs) {
       return true;
     }
@@ -138,7 +216,7 @@ export class NotificationChannelService {
     }
 
     if (this.isInQuietHours(prefs)) {
-      this.logger.info({
+      this.logger?.info({
         event: 'notification_skipped_quiet_hours',
         userId,
         quietHoursStart: prefs.quietHoursStart,
@@ -170,36 +248,59 @@ export class NotificationChannelService {
     return currentTime >= startTime && currentTime <= endTime;
   }
 
-  private sendInApp(notification: { notificationId: string; userId: string }): Promise<void> {
-    this.logger.info({
+  private async sendInApp(notification: {
+    notificationId: string;
+    userId: string;
+  }): Promise<void> {
+    this.logger?.info({
       event: 'in_app_notification_sent',
       notificationId: notification.notificationId,
       userId: notification.userId,
       channel: 'in_app',
     });
-
-    return Promise.resolve();
   }
 
-  private sendEmail(notification: { notificationId: string; userId: string }): Promise<void> {
-    this.logger.info({
+  private async sendEmail(
+    notification: { notificationId: string; userId: string },
+    recipientEmail?: string,
+  ): Promise<void> {
+    if (!recipientEmail) {
+      this.logger?.warn({
+        event: 'email_notification_skipped_no_recipient',
+        notificationId: notification.notificationId,
+        userId: notification.userId,
+        reason: 'recipientEmail not provided',
+      });
+      return;
+    }
+
+    this.logger?.info({
       event: 'email_notification_queued',
       notificationId: notification.notificationId,
       userId: notification.userId,
       channel: 'email',
     });
-
-    return Promise.resolve();
   }
 
-  private sendPush(notification: { notificationId: string; userId: string }): Promise<void> {
-    this.logger.info({
+  private async sendPush(
+    notification: { notificationId: string; userId: string },
+    pushToken?: string,
+  ): Promise<void> {
+    if (!pushToken) {
+      this.logger?.warn({
+        event: 'push_notification_skipped_no_token',
+        notificationId: notification.notificationId,
+        userId: notification.userId,
+        reason: 'pushToken not provided',
+      });
+      return;
+    }
+
+    this.logger?.info({
       event: 'push_notification_queued',
       notificationId: notification.notificationId,
       userId: notification.userId,
       channel: 'push',
     });
-
-    return Promise.resolve();
   }
 }

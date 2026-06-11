@@ -9,18 +9,29 @@ import {
   ParseIntPipe,
   DefaultValuePipe,
   Body,
+  HttpCode,
+  HttpStatus,
+  BadRequestException,
 } from '@nestjs/common';
+import { ApiTags } from '@nestjs/swagger';
+import { ApiNoContent } from '@/common/swagger/swagger-decorators';
+import { Transactional } from '@/common/interceptors/transactional.interceptor';
 import { NotificationApplicationService } from '@/modules/notification/application/notification-application.service';
 import {
   NotificationListResponseDto,
   NotificationPreferencesResponseDto,
   NotificationResponseDto,
+  UnreadCountResponseDto,
+  DeletedReadNotificationsResponseDto,
+  NotificationAnalyticsDto,
 } from '@/modules/notification/dto/response';
 import { RequireAuth } from '@/common/guards/jwt.guard';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
 import { User } from '@/common/decorators/user.decorator';
 import { UpdatePreferencesDto, GetNotificationsQueryDto } from '@/modules/notification/dto/request';
+import { Roles } from '@/common/authorization/decorators/roles.decorator';
 
+@ApiTags('notification')
 @Controller('notifications')
 @RequireAuth()
 export class NotificationController {
@@ -34,12 +45,18 @@ export class NotificationController {
     @Query('unreadOnly', new DefaultValuePipe(false)) unreadOnly?: boolean,
     @Query() query?: GetNotificationsQueryDto,
   ): Promise<NotificationListResponseDto> {
-    const parsedCursor: { createdAt: string; notificationId: string } | null = cursor
-      ? (JSON.parse(Buffer.from(cursor, 'base64').toString()) as {
+    let parsedCursor: { createdAt: string; notificationId: string } | null = null;
+
+    if (cursor) {
+      try {
+        parsedCursor = JSON.parse(Buffer.from(cursor, 'base64').toString()) as {
           createdAt: string;
           notificationId: string;
-        })
-      : null;
+        };
+      } catch {
+        throw new BadRequestException('Invalid cursor parameter');
+      }
+    }
 
     const result = await this.notificationService.getNotifications(
       user,
@@ -61,6 +78,7 @@ export class NotificationController {
         isRead: n.isRead,
         readAt: n.readAt,
         createdAt: n.createdAt,
+        expiresAt: n.expiresAt,
       })),
       unreadCount: result.unreadCount,
       hasNextPage: result.hasNextPage,
@@ -68,9 +86,15 @@ export class NotificationController {
   }
 
   @Get('unread-count')
-  async getUnreadCount(@User() user: JwtPayload): Promise<{ count: number }> {
+  async getUnreadCount(@User() user: JwtPayload): Promise<UnreadCountResponseDto> {
     const count = await this.notificationService.getUnreadCount(user);
     return { count };
+  }
+
+  @Get('analytics')
+  @Roles('admin')
+  async getAnalytics(): Promise<NotificationAnalyticsDto> {
+    return this.notificationService.getAnalytics();
   }
 
   @Get(':notificationId')
@@ -91,55 +115,58 @@ export class NotificationController {
       isRead: notification.isRead,
       readAt: notification.readAt,
       createdAt: notification.createdAt,
+      expiresAt: notification.expiresAt,
     };
   }
 
   @Post(':notificationId/read')
+  @Transactional()
+  @ApiNoContent()
+  @HttpCode(HttpStatus.NO_CONTENT)
   async markAsRead(
     @Param('notificationId') notificationId: string,
     @User() user: JwtPayload,
-  ): Promise<{ message: string }> {
+  ): Promise<void> {
     await this.notificationService.markAsRead(notificationId, user);
-    return { message: 'Notification marked as read' };
   }
 
   @Post(':notificationId/unread')
+  @Transactional()
+  @ApiNoContent()
+  @HttpCode(HttpStatus.NO_CONTENT)
   async markAsUnread(
     @Param('notificationId') notificationId: string,
     @User() user: JwtPayload,
-  ): Promise<{ success: true; notificationId: string; read: false }> {
+  ): Promise<void> {
     await this.notificationService.markAsUnread(notificationId, user);
-    return {
-      success: true,
-      notificationId,
-      read: false,
-    };
   }
 
   @Post('read-all')
-  async markAllAsRead(@User() user: JwtPayload): Promise<{ message: string }> {
+  @Transactional()
+  @ApiNoContent()
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async markAllAsRead(@User() user: JwtPayload): Promise<void> {
     await this.notificationService.markAllAsRead(user);
-    return { message: 'All notifications marked as read' };
   }
 
   @Delete('read')
+  @Transactional()
   async deleteReadNotifications(
     @User() user: JwtPayload,
-  ): Promise<{ success: true; deletedCount: number }> {
+  ): Promise<DeletedReadNotificationsResponseDto> {
     const deletedCount = await this.notificationService.deleteReadNotifications(user);
-    return {
-      success: true,
-      deletedCount,
-    };
+    return { deletedCount };
   }
 
   @Delete(':notificationId')
+  @Transactional()
+  @ApiNoContent()
+  @HttpCode(HttpStatus.NO_CONTENT)
   async deleteNotification(
     @Param('notificationId') notificationId: string,
     @User() user: JwtPayload,
-  ): Promise<{ message: string }> {
+  ): Promise<void> {
     await this.notificationService.deleteNotification(notificationId, user);
-    return { message: 'Notification deleted' };
   }
 
   // Preferences endpoints
@@ -154,6 +181,7 @@ export class NotificationController {
       tournamentEnabled: prefs.tournamentEnabled,
       rankEnabled: prefs.rankEnabled,
       friendEnabled: prefs.friendEnabled,
+      discussionEnabled: prefs.discussionEnabled,
       summaryEnabled: prefs.summaryEnabled,
       marketingEnabled: prefs.marketingEnabled,
       rankImprovementThreshold: prefs.rankImprovementThreshold,
@@ -163,6 +191,7 @@ export class NotificationController {
   }
 
   @Patch('preferences')
+  @Transactional()
   async updatePreferences(
     @User() user: JwtPayload,
     @Body() updateDto: UpdatePreferencesDto,
@@ -176,6 +205,7 @@ export class NotificationController {
       tournamentEnabled: prefs.tournamentEnabled,
       rankEnabled: prefs.rankEnabled,
       friendEnabled: prefs.friendEnabled,
+      discussionEnabled: prefs.discussionEnabled,
       summaryEnabled: prefs.summaryEnabled,
       marketingEnabled: prefs.marketingEnabled,
       rankImprovementThreshold: prefs.rankImprovementThreshold,

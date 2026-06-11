@@ -1,24 +1,19 @@
 /**
  * Notification Domain Events
  *
- * Defines all events emitted by the Notification Domain.
+ * Published when significant notification state changes occur,
+ * allowing other domains to react (e.g. WebSocket push, audit logs, analytics).
  */
 
-/**
- * Event emitted when a notification is sent to a user.
- */
 export interface NotificationSentEvent {
   readonly eventType: 'notification.sent';
   readonly notificationId: string;
   readonly userId: string;
-  readonly notificationType: string;
+  readonly type: string;
   readonly channel: string;
   readonly timestamp: Date;
 }
 
-/**
- * Event emitted when a notification is read by a user.
- */
 export interface NotificationReadEvent {
   readonly eventType: 'notification.read';
   readonly notificationId: string;
@@ -26,19 +21,13 @@ export interface NotificationReadEvent {
   readonly timestamp: Date;
 }
 
-/**
- * Event emitted when all notifications are marked as read.
- */
-export interface AllNotificationsReadEvent {
-  readonly eventType: 'notification.all_read';
+export interface NotificationUnreadEvent {
+  readonly eventType: 'notification.unread';
+  readonly notificationId: string;
   readonly userId: string;
-  readonly count: number;
   readonly timestamp: Date;
 }
 
-/**
- * Event emitted when a notification is deleted.
- */
 export interface NotificationDeletedEvent {
   readonly eventType: 'notification.deleted';
   readonly notificationId: string;
@@ -46,11 +35,8 @@ export interface NotificationDeletedEvent {
   readonly timestamp: Date;
 }
 
-/**
- * Union type of all notification domain events.
- */
 export type NotificationDomainEvent =
   | NotificationSentEvent
   | NotificationReadEvent
-  | AllNotificationsReadEvent
+  | NotificationUnreadEvent
   | NotificationDeletedEvent;

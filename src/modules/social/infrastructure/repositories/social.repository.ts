@@ -330,7 +330,19 @@ export class SocialRepository implements SocialRepositoryPort {
       })
       .returning();
 
-    return follow as UserFollow;
+    const [followerRow, followingRow] = await Promise.all([
+      this.db.select({ username: users.username }).from(users).where(eq(users.userId, followerId)),
+      this.db.select({ username: users.username }).from(users).where(eq(users.userId, followingId)),
+    ]);
+
+    return {
+      followId: follow.followId,
+      followerId: follow.followerId,
+      followingId: follow.followingId,
+      followerUsername: followerRow[0]?.username ?? '',
+      followingUsername: followingRow[0]?.username ?? '',
+      createdAt: follow.createdAt,
+    };
   }
 
   async unfollowUser(followerId: string, followingId: string): Promise<void> {
@@ -1214,6 +1226,21 @@ export class SocialRepository implements SocialRepositoryPort {
 
     return {
       items: rows.rows as TrendingUsersResult['items'],
+    };
+  }
+
+  async getUsernamesForUsers(
+    followerId: string,
+    followingId: string,
+  ): Promise<{ followerUsername: string; followingUsername: string }> {
+    const [followerRow, followingRow] = await Promise.all([
+      this.db.select({ username: users.username }).from(users).where(eq(users.userId, followerId)),
+      this.db.select({ username: users.username }).from(users).where(eq(users.userId, followingId)),
+    ]);
+
+    return {
+      followerUsername: followerRow[0]?.username ?? '',
+      followingUsername: followingRow[0]?.username ?? '',
     };
   }
 }

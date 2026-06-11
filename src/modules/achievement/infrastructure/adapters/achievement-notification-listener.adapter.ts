@@ -1,30 +1,36 @@
 /**
- * Achievement Event Listener Adapter
+ * Achievement Notification Listener
  *
- * Listens to Achievement domain events and triggers notifications.
- * This adapter bridges the Achievement domain to the Notification domain.
+ * Subscribes to Achievement domain events and dispatches notifications.
+ * Hosted in AchievementModule to avoid cross-module import cycles.
  */
 
-import { Injectable, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
+import { Inject, Injectable, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
-import { AchievementDomainEventBus } from '@/modules/achievement/domain/events/achievement-domain.event-bus';
+import {
+  ACHIEVEMENT_DOMAIN_EVENT_BUS,
+  AchievementDomainEventBus,
+} from '../../domain/events/achievement-domain.event-bus';
 import type {
   AchievementDomainEvent as PublishedAchievementDomainEvent,
   AchievementAwardedEvent as PublishedAchievementAwardedEvent,
   BadgeEarnedEvent as PublishedBadgeEarnedEvent,
   BadgeRevokedEvent as PublishedBadgeRevokedEvent,
   StreakMilestoneEvent as PublishedStreakMilestoneEvent,
-} from '@/modules/achievement/domain/events/achievement.events';
-import { AchievementNotificationService } from '../../domain/services/achievement-notification.service';
+} from '../../domain/events/achievement.events';
+import { NOTIFICATION_CHANNEL_SERVICE } from '@/modules/notification/domain/ports';
+import type { NotificationChannelServicePort } from '@/modules/notification/domain/ports';
 
 @Injectable()
-export class AchievementListenerAdapter implements OnModuleInit, OnModuleDestroy {
+export class AchievementNotificationListener implements OnModuleInit, OnModuleDestroy {
   private unsubscribe: (() => void) | null = null;
 
   constructor(
-    private readonly achievementNotificationService: AchievementNotificationService,
+    @Inject(ACHIEVEMENT_DOMAIN_EVENT_BUS)
     private readonly achievementEventBus: AchievementDomainEventBus,
-    @InjectPinoLogger(AchievementListenerAdapter.name)
+    @Inject(NOTIFICATION_CHANNEL_SERVICE)
+    private readonly channelService: NotificationChannelServicePort,
+    @InjectPinoLogger(AchievementNotificationListener.name)
     private readonly logger: PinoLogger,
   ) {}
 
@@ -32,7 +38,7 @@ export class AchievementListenerAdapter implements OnModuleInit, OnModuleDestroy
     this.subscribe();
 
     this.logger.info({
-      event: 'notification_achievement_listener_initialized',
+      event: 'achievement_notification_listener_initialized',
     });
   }
 
@@ -65,20 +71,24 @@ export class AchievementListenerAdapter implements OnModuleInit, OnModuleDestroy
     }
   }
 
-  async handleAchievementAwarded(event: PublishedAchievementAwardedEvent): Promise<void> {
+  private async handleAchievementAwarded(event: PublishedAchievementAwardedEvent): Promise<void> {
     try {
-      await this.achievementNotificationService.notifyAchievementEarned({
+      const title = 'Achievement Unlocked';
+      const body = `You earned the ${event.badgeType.replace(/_/g, ' ')} badge`;
+
+      await this.channelService.send({
         userId: event.userId,
-        achievementType: event.achievementType,
-        badgeType: event.badgeType,
-        badgeName: event.badgeType
-          .replace(/_/g, ' ')
-          .replace(/\b\w/g, (letter) => letter.toUpperCase()),
-        category: event.achievementType,
+        type: 'achievement_earned',
+        title,
+        body,
+        metadata: {
+          achievementType: event.achievementType,
+          badgeType: event.badgeType,
+        },
       });
 
       this.logger.info({
-        event: 'achievement_notification_triggered',
+        event: 'achievement_notification_sent',
         userId: event.userId,
         badgeType: event.badgeType,
         achievementType: event.achievementType,
@@ -93,19 +103,21 @@ export class AchievementListenerAdapter implements OnModuleInit, OnModuleDestroy
     }
   }
 
-  async handleBadgeEarned(event: PublishedBadgeEarnedEvent): Promise<void> {
+  private async handleBadgeEarned(event: PublishedBadgeEarnedEvent): Promise<void> {
     try {
-      await this.achievementNotificationService.notifyBadgeUnlocked({
+      const title = 'Badge Earned';
+      const body = `You earned the ${event.badgeType.replace(/_/g, ' ')} badge`;
+
+      await this.channelService.send({
         userId: event.userId,
-        badgeType: event.badgeType,
-        badgeName: event.badgeType
-          .replace(/_/g, ' ')
-          .replace(/\b\w/g, (letter) => letter.toUpperCase()),
-        category: 'general',
+        type: 'badge_unlocked',
+        title,
+        body,
+        metadata: { badgeType: event.badgeType },
       });
 
       this.logger.info({
-        event: 'badge_unlock_notification_triggered',
+        event: 'badge_unlock_notification_sent',
         userId: event.userId,
         badgeType: event.badgeType,
       });
@@ -119,18 +131,24 @@ export class AchievementListenerAdapter implements OnModuleInit, OnModuleDestroy
     }
   }
 
-  async handleBadgeRevoked(event: PublishedBadgeRevokedEvent): Promise<void> {
+  private async handleBadgeRevoked(event: PublishedBadgeRevokedEvent): Promise<void> {
     try {
-      await this.achievementNotificationService.notifyBadgeRevoked({
+      const title = 'Badge Revoked';
+      const body = `The ${event.badgeType.replace(/_/g, ' ')} badge was revoked`;
+
+      await this.channelService.send({
         userId: event.userId,
-        badgeId: event.badgeId,
-        badgeType: event.badgeType,
-        reason: event.reason,
-        revokedBy: event.revokedBy,
+        type: 'badge_revoked',
+        title,
+        body,
+        metadata: {
+          badgeType: event.badgeType,
+          reason: event.reason,
+        },
       });
 
       this.logger.info({
-        event: 'badge_revoked_notification_triggered',
+        event: 'badge_revoked_notification_sent',
         userId: event.userId,
         badgeType: event.badgeType,
       });
@@ -144,19 +162,23 @@ export class AchievementListenerAdapter implements OnModuleInit, OnModuleDestroy
     }
   }
 
-  async handleStreakMilestone(event: PublishedStreakMilestoneEvent): Promise<void> {
+  private async handleStreakMilestone(event: PublishedStreakMilestoneEvent): Promise<void> {
     try {
-      await this.achievementNotificationService.notifyStreakMilestone({
+      const title = 'Streak Milestone';
+      const body = `You have maintained a ${event.streakDays}-day streak`;
+
+      await this.channelService.send({
         userId: event.userId,
-        streakDays: event.streakDays,
-        milestone: event.streakDays,
+        type: 'streak_milestone',
+        title,
+        body,
+        metadata: { streakDays: event.streakDays },
       });
 
       this.logger.info({
-        event: 'streak_milestone_notification_triggered',
+        event: 'streak_milestone_notification_sent',
         userId: event.userId,
         streakDays: event.streakDays,
-        milestone: event.streakDays,
       });
     } catch (error) {
       this.logger.error({

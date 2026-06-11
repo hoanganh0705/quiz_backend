@@ -59,6 +59,14 @@ export class UpdatePreferencesDto {
   friendEnabled?: boolean;
 
   @ApiPropertyOptional({
+    description: 'Enable or disable discussion reply and mention notifications',
+    example: true,
+  })
+  @IsOptional()
+  @IsBoolean()
+  discussionEnabled?: boolean;
+
+  @ApiPropertyOptional({
     description: 'Enable or disable weekly summary digest notifications',
     example: true,
   })

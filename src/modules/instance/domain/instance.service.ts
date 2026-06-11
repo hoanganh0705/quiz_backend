@@ -28,7 +28,8 @@ import {
   InstanceClosedEvent,
 } from './events';
 import type { NotificationType } from '@/modules/notification/domain/types/notification.types';
-import type { NotificationChannelService } from '@/modules/notification/domain/services';
+import type { NotificationChannelService } from '@/modules/notification/infrastructure/adapters/notification-channel.service';
+import { NOTIFICATION_CHANNEL_SERVICE } from '@/modules/notification/domain/ports/notification-ports';
 
 @Injectable()
 export class InstanceService {
@@ -40,7 +41,7 @@ export class InstanceService {
     @InjectPinoLogger(InstanceService.name)
     private readonly logger: PinoLogger,
     @Optional()
-    @Inject('NOTIFICATION_CHANNEL_SERVICE')
+    @Inject(NOTIFICATION_CHANNEL_SERVICE)
     private readonly notificationChannelService?: NotificationChannelService,
   ) {}
 

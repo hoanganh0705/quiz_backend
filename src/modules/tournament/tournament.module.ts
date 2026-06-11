@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ConnectionOptions, Queue } from 'bullmq';
 import { DatabaseModule } from '@/core/database/database.module';
+import { NotificationModule } from '@/modules/notification/notification.module';
 import { TournamentApplicationService } from './application/tournament.application.service';
 import { TournamentService } from './domain/tournament.service';
 import { TournamentLifecycleService } from './domain/tournament-lifecycle.service';
@@ -18,9 +19,10 @@ import {
 import { BullmqTournamentEventBusService } from './infrastructure/events/bullmq-tournament-event-bus.service';
 import { TournamentEventProcessor } from './infrastructure/events/tournament-event.processor';
 import { TournamentSchedulerService } from './infrastructure/scheduler/tournament-scheduler.service';
+import { TournamentListenerAdapter } from './infrastructure/adapters/tournament-listener.adapter';
 
 @Module({
-  imports: [DatabaseModule],
+  imports: [DatabaseModule, NotificationModule],
   providers: [
     TournamentApplicationService,
     TournamentService,
@@ -51,6 +53,7 @@ import { TournamentSchedulerService } from './infrastructure/scheduler/tournamen
         return new Queue(TOURNAMENT_QUEUE_NAME, { connection });
       },
     },
+    TournamentListenerAdapter,
   ],
   controllers: [TournamentController],
   exports: [

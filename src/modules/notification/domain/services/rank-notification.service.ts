@@ -4,7 +4,7 @@
  * Composes and sends rank-related notifications.
  */
 
-import { Inject, Injectable } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import {
   RANK_NOTIFICATION_TITLES,
@@ -14,14 +14,11 @@ import {
   PeriodWinnerParams,
   NotificationType,
 } from '../types/notification.types';
-import { NotificationChannelService } from './channel.service';
-import { NOTIFICATION_REPOSITORY_PORT, type NotificationRepositoryPort } from '../ports';
+import { NotificationChannelService } from '../../infrastructure/adapters/notification-channel.service';
 
 @Injectable()
 export class RankNotificationService {
   constructor(
-    @Inject(NOTIFICATION_REPOSITORY_PORT)
-    private readonly notificationRepository: NotificationRepositoryPort,
     private readonly channelService: NotificationChannelService,
     @InjectPinoLogger(RankNotificationService.name)
     private readonly logger: PinoLogger,

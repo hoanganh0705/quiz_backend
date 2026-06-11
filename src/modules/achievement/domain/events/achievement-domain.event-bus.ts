@@ -238,3 +238,5 @@ export class AchievementDomainEventBus {
     });
   }
 }
+
+export const ACHIEVEMENT_DOMAIN_EVENT_BUS = Symbol('ACHIEVEMENT_DOMAIN_EVENT_BUS');

@@ -14,9 +14,11 @@
 import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { DRIZZLE } from '@/core/database/drizzle.constants';
+import { NotificationModule } from '@/modules/notification/notification.module';
 
 // Infrastructure
 import { RankingRepository } from './infrastructure/repositories/ranking.repository';
+import { RankingListenerAdapter } from './infrastructure/adapters/ranking-listener.adapter';
 
 // Domain Events
 import { RankingDomainEventBus } from './domain/events/ranking-domain.event-bus';
@@ -52,7 +54,7 @@ import { RankingController } from './transport/controller/ranking.controller';
 import { RankingDomainExceptionFilter } from './transport/filters/ranking-domain-exception.filter';
 
 @Module({
-  imports: [JwtModule],
+  imports: [JwtModule, NotificationModule],
   providers: [
     {
       provide: 'DATABASE',
@@ -93,6 +95,9 @@ import { RankingDomainExceptionFilter } from './transport/filters/ranking-domain
 
     // Domain Events
     RankingEventHandler,
+
+    // Notification Listeners
+    RankingListenerAdapter,
 
     // Transport
     RankingDomainExceptionFilter,

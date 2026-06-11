@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { DatabaseModule } from '@/core/database/database.module';
 import { SocialApplicationService } from './application/social-application.service';
@@ -9,6 +9,7 @@ import { AchievementFeedListenerAdapter } from './infrastructure/adapters/achiev
 import { RankingFeedListenerAdapter } from './infrastructure/adapters/ranking-feed-listener.adapter';
 import { DiscussionFeedListenerAdapter } from './infrastructure/adapters/discussion-feed-listener.adapter';
 import { TournamentFeedListenerAdapter } from './infrastructure/adapters/tournament-feed-listener.adapter';
+import { SocialNotificationListener } from './infrastructure/adapters/social-notification-listener.adapter';
 import { SocialController } from './transport/controller/social.controller';
 import { SocialDomainExceptionFilter } from './transport/filters/social-domain-exception.filter';
 import { SOCIAL_REPOSITORY_PORT } from './domain/ports/social-ports';
@@ -20,6 +21,7 @@ import { RankingModule } from '@/modules/ranking/ranking.module';
 import { AchievementModule } from '@/modules/achievement/achievement.module';
 import { DiscussionModule } from '@/modules/discussion/discussion.module';
 import { TournamentModule } from '@/modules/tournament/tournament.module';
+import { NotificationModule } from '@/modules/notification/notification.module';
 
 @Module({
   imports: [
@@ -29,6 +31,7 @@ import { TournamentModule } from '@/modules/tournament/tournament.module';
     AchievementModule,
     DiscussionModule,
     TournamentModule,
+    forwardRef(() => NotificationModule),
     JwtModule,
   ],
   providers: [
@@ -40,6 +43,7 @@ import { TournamentModule } from '@/modules/tournament/tournament.module';
     RankingFeedListenerAdapter,
     DiscussionFeedListenerAdapter,
     TournamentFeedListenerAdapter,
+    SocialNotificationListener,
     SocialDomainExceptionFilter,
     SocialDomainEventBus,
     { provide: SOCIAL_DOMAIN_EVENT_BUS, useExisting: SocialDomainEventBus },
