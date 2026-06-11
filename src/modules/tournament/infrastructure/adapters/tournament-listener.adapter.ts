@@ -17,7 +17,7 @@ import {
   type TournamentCompletedEvent,
   type TournamentStartingSoonEvent,
 } from '@/modules/tournament/domain/events';
-import { TournamentNotificationService } from '../../domain/services/tournament-notification.service';
+import { TournamentNotificationService } from '@/modules/notification/domain/services';
 
 @Injectable()
 export class TournamentListenerAdapter implements OnModuleInit, OnModuleDestroy {

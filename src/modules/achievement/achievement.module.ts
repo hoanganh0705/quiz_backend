@@ -11,14 +11,16 @@ import { BadgeEvaluationService } from './domain/services/badge-evaluation.servi
 import { RuleEngineService } from './domain/services/rule-engine.service';
 import { ProgressTrackingService } from './domain/services/progress-tracking.service';
 import { ScheduledEvaluationService } from './domain/services/scheduled-evaluation.service';
-import { BadgeNotificationService } from './domain/services/badge-notification.service';
 import { AchievementHistoryService } from './domain/services/achievement-history.service';
 import { SeasonalBadgeService } from './domain/services/seasonal-badge.service';
 import { BadgeRevocationService } from './domain/services/badge-revocation.service';
 import { BadgeVersioningService } from './domain/services/badge-versioning.service';
 import { RareBadgeService } from './domain/services/rare-badge.service';
 import { BadgeAnalyticsService } from './domain/services/badge-analytics.service';
-import { AchievementDomainEventBus } from './domain/events/achievement-domain.event-bus';
+import {
+  AchievementDomainEventBus,
+  ACHIEVEMENT_DOMAIN_EVENT_BUS,
+} from './domain/events/achievement-domain.event-bus';
 
 // Infrastructure - Repository
 import { AchievementRepository } from './infrastructure/repositories/achievement.repository.impl';
@@ -30,6 +32,7 @@ import { AttemptEventListenerAdapter } from './infrastructure/adapters/attempt-l
 import { TournamentEventListenerAdapter } from './infrastructure/adapters/tournament-listener.adapter';
 import { InstanceEventListenerAdapter } from './infrastructure/adapters/instance-listener.adapter';
 import { UserActivityListenerAdapter } from './infrastructure/adapters/user-activity-listener.adapter';
+import { AchievementNotificationListener } from './infrastructure/adapters/achievement-notification-listener.adapter';
 
 // Application
 import { AchievementApplicationService } from './application/achievement.application.service';
@@ -44,6 +47,7 @@ import { RankingModule } from '@/modules/ranking/ranking.module';
 import { AttemptModule } from '@/modules/attempt/attempt.module';
 import { TournamentModule } from '@/modules/tournament/tournament.module';
 import { InstanceModule } from '@/modules/instance/instance.module';
+import { NotificationModule } from '@/modules/notification/notification.module';
 
 @Module({
   imports: [
@@ -53,6 +57,7 @@ import { InstanceModule } from '@/modules/instance/instance.module';
     AttemptModule,
     TournamentModule,
     forwardRef(() => InstanceModule),
+    forwardRef(() => NotificationModule),
   ],
   controllers: [AchievementController],
   providers: [
@@ -62,6 +67,10 @@ import { InstanceModule } from '@/modules/instance/instance.module';
     },
     // Domain Event Bus
     AchievementDomainEventBus,
+    {
+      provide: ACHIEVEMENT_DOMAIN_EVENT_BUS,
+      useExisting: AchievementDomainEventBus,
+    },
 
     // Domain Services
     RankAchievementService,
@@ -70,7 +79,6 @@ import { InstanceModule } from '@/modules/instance/instance.module';
     RuleEngineService,
     ProgressTrackingService,
     ScheduledEvaluationService,
-    BadgeNotificationService,
     AchievementHistoryService,
     SeasonalBadgeService,
     BadgeRevocationService,
@@ -92,6 +100,9 @@ import { InstanceModule } from '@/modules/instance/instance.module';
     InstanceEventListenerAdapter,
     UserActivityListenerAdapter,
 
+    // Notification bridge (listens to Achievement events, dispatches via NotificationModule)
+    AchievementNotificationListener,
+
     // Application
     AchievementApplicationService,
 
@@ -101,6 +112,7 @@ import { InstanceModule } from '@/modules/instance/instance.module';
   exports: [
     // Domain Event Bus
     AchievementDomainEventBus,
+    ACHIEVEMENT_DOMAIN_EVENT_BUS,
 
     // Domain Services
     RankAchievementService,
@@ -109,7 +121,6 @@ import { InstanceModule } from '@/modules/instance/instance.module';
     RuleEngineService,
     ProgressTrackingService,
     ScheduledEvaluationService,
-    BadgeNotificationService,
     AchievementHistoryService,
     SeasonalBadgeService,
     BadgeRevocationService,

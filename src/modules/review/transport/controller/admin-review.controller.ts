@@ -28,7 +28,7 @@ import {
   UpdateReportStatusResponseDto,
 } from '@/modules/review/dto/response';
 
-@ApiTags('Admin Reviews')
+@ApiTags('reviews')
 @ApiBearerAuth()
 @Controller('admin/reviews')
 export class AdminReviewController {

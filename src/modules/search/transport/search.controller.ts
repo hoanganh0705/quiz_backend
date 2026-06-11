@@ -12,7 +12,7 @@ import { SearchApplicationService } from '../application/search.application.serv
 import { SearchQueryDto } from '../dto/search-query.dto';
 import { SearchResponseDto } from '../dto/search-response.dto';
 
-@ApiTags('Search')
+@ApiTags('search')
 @Controller('search')
 export class SearchController {
   constructor(private readonly searchApplicationService: SearchApplicationService) {}

@@ -123,6 +123,17 @@ export class NotificationResponseDto {
   @Expose()
   @IsISO8601()
   createdAt!: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Notification expiration timestamp (ISO 8601). Null means the notification never expires.',
+    example: '2025-07-01T10:00:00.000Z',
+    nullable: true,
+  })
+  @Expose()
+  @IsOptional()
+  @IsISO8601()
+  expiresAt!: string | null;
 }
 
 export class NotificationListResponseDto {
@@ -208,6 +219,14 @@ export class NotificationPreferencesResponseDto {
   @Expose()
   @IsBoolean()
   friendEnabled!: boolean;
+
+  @ApiProperty({
+    description: 'Whether discussion reply and mention notifications are enabled',
+    example: true,
+  })
+  @Expose()
+  @IsBoolean()
+  discussionEnabled!: boolean;
 
   @ApiProperty({
     description: 'Whether weekly summary notifications are enabled',

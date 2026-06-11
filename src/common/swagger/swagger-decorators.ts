@@ -6,6 +6,7 @@ import {
   ApiNotFoundResponse,
   ApiBadRequestResponse,
   ApiInternalServerErrorResponse,
+  ApiNoContentResponse,
   type ApiResponseOptions,
 } from '@nestjs/swagger';
 import { AUTH_SECURITY_NAME } from '@/core/swagger/swagger.config';
@@ -41,6 +42,12 @@ const defaultInternalError: ApiResponseOptions = {
   description: 'Unexpected server error',
   type: ErrorResponseDto,
 };
+
+/**
+ * Documents a successful 204 No Content response (used for delete, mark-as-read, etc.).
+ */
+export const ApiNoContent = (description = 'Operation completed successfully'): MethodDecorator =>
+  ApiNoContentResponse({ description });
 
 /**
  * Marks an endpoint as protected with JWT Bearer authentication.

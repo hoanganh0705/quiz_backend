@@ -19,6 +19,7 @@ export interface FriendRequestAcceptedEvent {
   readonly friendshipId: string;
   readonly requesterId: string;
   readonly addresseeId: string;
+  readonly addresseeUsername: string;
   readonly timestamp: Date;
 }
 
@@ -64,14 +65,18 @@ export interface UserFollowedEvent {
   readonly eventType: 'user_followed';
   readonly followId: string;
   readonly followerId: string;
+  readonly followerUsername: string;
   readonly followingId: string;
+  readonly followingUsername: string;
   readonly timestamp: Date;
 }
 
 export interface UserUnfollowedEvent {
   readonly eventType: 'user_unfollowed';
   readonly followerId: string;
+  readonly followerUsername: string;
   readonly followingId: string;
+  readonly followingUsername: string;
   readonly timestamp: Date;
 }
 

@@ -9,7 +9,7 @@ import {
   type DiscussionRepositoryPort,
 } from '@/modules/discussion/domain/ports';
 import type { DiscussionComment } from '@/modules/discussion/domain/types';
-import { NotificationChannelService } from './channel.service';
+import { NotificationChannelService } from '../../infrastructure/adapters/notification-channel.service';
 
 @Injectable()
 export class DiscussionNotificationService {

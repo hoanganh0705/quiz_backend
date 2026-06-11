@@ -151,11 +151,17 @@ export class SocialService {
 
     // Emit domain event
     if (accept) {
+      const { followerUsername } = await this.socialRepository.getUsernamesForUsers(
+        friendship.requesterId,
+        friendship.addresseeId,
+      );
+
       this.eventBus.emitFriendRequestAccepted({
         eventType: 'friend_request_accepted',
         friendshipId,
         requesterId: friendship.requesterId,
         addresseeId: friendship.addresseeId,
+        addresseeUsername: followerUsername,
         timestamp: new Date(),
       });
     } else {
@@ -309,7 +315,9 @@ export class SocialService {
         eventType: 'user_followed',
         followId: follow.followId,
         followerId,
+        followerUsername: follow.followerUsername,
         followingId,
+        followingUsername: follow.followingUsername,
         timestamp: new Date(),
       });
     } catch (error) {
@@ -323,6 +331,11 @@ export class SocialService {
   async unfollowUser(followerId: string, followingId: string): Promise<void> {
     await this.socialRepository.unfollowUser(followerId, followingId);
 
+    const { followerUsername, followingUsername } = await this.socialRepository.getUsernamesForUsers(
+      followerId,
+      followingId,
+    );
+
     this.logger.info({
       event: 'user_unfollowed',
       followerId,
@@ -333,7 +346,9 @@ export class SocialService {
     this.eventBus.emitUserUnfollowed({
       eventType: 'user_unfollowed',
       followerId,
+      followerUsername,
       followingId,
+      followingUsername,
       timestamp: new Date(),
     });
   }

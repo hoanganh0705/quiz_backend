@@ -515,12 +515,18 @@ export class DiscussionService {
 
     const updated = await this.repo.markThreadAsSolved(params);
 
+    const usernames = await this.repo.getUsernamesForUsers([params.actorId]);
+    const solverUsername = usernames.get(params.actorId) ?? '';
+
     this.eventBus.emitThreadSolved({
       eventType: 'discussion_thread_solved',
       threadId: params.threadId,
+      threadTitle: updated.title,
       commentId: params.commentId,
       authorId: thread.authorId,
+      authorUsername: thread.author.username,
       solverId: params.actorId,
+      solverUsername,
       timestamp: new Date(),
     });
 
@@ -877,7 +883,10 @@ export class DiscussionService {
       eventType: 'comment_created',
       commentId: comment.commentId,
       threadId: params.threadId,
+      threadTitle: thread.title,
       authorId: params.authorId,
+      authorUsername: comment.author.username,
+      threadAuthorId: thread.author.userId,
       parentCommentId: params.parentCommentId ?? null,
       isReply: params.parentCommentId !== null,
       timestamp: new Date(),

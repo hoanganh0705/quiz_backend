@@ -2,45 +2,23 @@ import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { DatabaseModule } from '@/core/database/database.module';
 import { NotificationApplicationService } from './application/notification-application.service';
+import { NotificationSchedulerService } from './application/notification-scheduler.service';
 import { NotificationService } from './domain/notification.service';
 import { NotificationRepository } from './infrastructure/repositories/notification.repository';
 import { NotificationController } from './transport/controller/notification.controller';
 import {
-  NotificationChannelService,
-  RankNotificationService,
-  AchievementNotificationService,
-  TournamentNotificationService,
-  SocialNotificationService,
-  DiscussionNotificationService,
-} from './domain/services';
-import {
   NOTIFICATION_CHANNEL_SERVICE,
+  NOTIFICATION_CHANNEL_SERVICE_INSTANCE,
   NOTIFICATION_REPOSITORY_PORT,
+  NOTIFICATION_DOMAIN_EVENT_BUS,
 } from './domain/ports';
-import {
-  RankingListenerAdapter,
-  AchievementListenerAdapter,
-  TournamentListenerAdapter,
-  SocialListenerAdapter,
-  SocialEventHandler,
-  DiscussionListenerAdapter,
-} from './infrastructure/adapters';
-import { RankingModule } from '@/modules/ranking';
-import { SocialModule } from '@/modules/social';
-import { AchievementModule } from '@/modules/achievement/achievement.module';
-import { TournamentModule } from '@/modules/tournament/tournament.module';
-import { DiscussionModule } from '@/modules/discussion/discussion.module';
+import { NotificationChannelService } from './infrastructure/adapters';
+import { RankNotificationService } from './domain/services/rank-notification.service';
+import { TournamentNotificationService } from './domain/services';
+import { NotificationDomainEventBus } from './domain/events/notification-domain.event-bus';
 
 @Module({
-  imports: [
-    DatabaseModule,
-    RankingModule,
-    SocialModule,
-    AchievementModule,
-    TournamentModule,
-    DiscussionModule,
-    JwtModule,
-  ],
+  imports: [DatabaseModule, JwtModule],
   providers: [
     NotificationRepository,
     {
@@ -52,32 +30,34 @@ import { DiscussionModule } from '@/modules/discussion/discussion.module';
       provide: NOTIFICATION_CHANNEL_SERVICE,
       useExisting: NotificationChannelService,
     },
+    {
+      provide: NOTIFICATION_CHANNEL_SERVICE_INSTANCE,
+      useExisting: NotificationChannelService,
+    },
+    {
+      provide: NOTIFICATION_DOMAIN_EVENT_BUS,
+      useExisting: NotificationDomainEventBus,
+    },
     NotificationChannelService,
-    RankNotificationService,
-    AchievementNotificationService,
-    TournamentNotificationService,
-    SocialNotificationService,
-    DiscussionNotificationService,
-    RankingListenerAdapter,
-    AchievementListenerAdapter,
-    TournamentListenerAdapter,
-    SocialListenerAdapter,
-    SocialEventHandler,
-    DiscussionListenerAdapter,
+    NotificationDomainEventBus,
     NotificationApplicationService,
+    NotificationSchedulerService,
+    RankNotificationService,
+    TournamentNotificationService,
   ],
   controllers: [NotificationController],
   exports: [
     NOTIFICATION_REPOSITORY_PORT,
     NOTIFICATION_CHANNEL_SERVICE,
+    NOTIFICATION_CHANNEL_SERVICE_INSTANCE,
+    NOTIFICATION_DOMAIN_EVENT_BUS,
     NotificationService,
     NotificationChannelService,
-    RankNotificationService,
-    AchievementNotificationService,
-    TournamentNotificationService,
-    SocialNotificationService,
-    DiscussionNotificationService,
+    NotificationDomainEventBus,
     NotificationApplicationService,
+    NotificationSchedulerService,
+    RankNotificationService,
+    TournamentNotificationService,
   ],
 })
 export class NotificationModule {}
