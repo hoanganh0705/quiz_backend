@@ -87,7 +87,7 @@ export class TournamentResponseDto {
 
   @ApiProperty({
     description: 'Lifecycle status',
-    enum: ['upcoming', 'registration', 'ongoing', 'finished', 'cancelled'],
+    enum: ['upcoming', 'registration', 'ongoing', 'finished'],
     example: 'registration',
   })
   status!: TournamentStatus;
@@ -151,50 +151,6 @@ export class TournamentListResponseDto {
 
   @ApiProperty({ description: 'Pagination metadata', type: () => TournamentPaginationResponseDto })
   pagination!: TournamentPaginationResponseDto;
-}
-
-export class TournamentParticipantResponseDto {
-  @ApiProperty({
-    description: 'Participant record identifier',
-    example: '550e8400-e29b-41d4-a716-446655440099',
-  })
-  participantId!: string;
-
-  @ApiProperty({
-    description: 'Tournament identifier',
-    example: '660e8400-e29b-41d4-a716-446655440000',
-  })
-  tournamentId!: string;
-
-  @ApiProperty({ description: 'User identifier', example: '550e8400-e29b-41d4-a716-446655440000' })
-  userId!: string;
-
-  @ApiProperty({
-    description: 'Registration timestamp (ISO 8601)',
-    example: '2025-06-15T08:00:00.000Z',
-  })
-  registeredAt!: string;
-
-  @ApiProperty({ description: 'Total score accumulated', example: 8500 })
-  totalScore!: number;
-
-  @ApiProperty({ description: 'Total time spent in milliseconds', example: 3600000 })
-  totalTimeMs!: number;
-
-  @ApiPropertyOptional({
-    description: 'Final rank (null if tournament not yet finished)',
-    nullable: true,
-  })
-  rankFinal!: number | null;
-
-  @ApiProperty({ description: 'Participant status', example: 'active' })
-  status!: string;
-
-  @ApiProperty({
-    description: 'Last update timestamp (ISO 8601)',
-    example: '2025-07-01T12:00:00.000Z',
-  })
-  updatedAt!: string;
 }
 
 export class TournamentLeaderboardEntryDto {
@@ -276,8 +232,8 @@ export class TournamentParticipantListItemDto {
   registeredAt!: string;
 }
 
-export class TournamentParticipantsPaginationDto {
-  @ApiProperty({ description: 'Total number of matching participants', example: 523 })
+export class PaginatedResultDto {
+  @ApiProperty({ description: 'Total number of matching records', example: 12 })
   total!: number;
 
   @ApiProperty({ description: 'Current page number', example: 1 })
@@ -288,18 +244,30 @@ export class TournamentParticipantsPaginationDto {
 }
 
 export class TournamentParticipantsResponseDto {
-  @ApiProperty({ description: 'Tournament participant items', type: () => [TournamentParticipantListItemDto] })
+  @ApiProperty({
+    description: 'Tournament participant items',
+    type: () => [TournamentParticipantListItemDto],
+  })
   items!: TournamentParticipantListItemDto[];
 
-  @ApiProperty({ description: 'Pagination metadata', type: () => TournamentParticipantsPaginationDto })
-  pagination!: TournamentParticipantsPaginationDto;
+  @ApiProperty({
+    description: 'Pagination metadata',
+    type: () => PaginatedResultDto,
+  })
+  pagination!: PaginatedResultDto;
 
-  @ApiProperty({ description: 'Total number of participants registered in the tournament', example: 523 })
+  @ApiProperty({
+    description: 'Total number of participants registered in the tournament',
+    example: 523,
+  })
   totalParticipants!: number;
 }
 
 export class UpcomingTournamentItemDto {
-  @ApiProperty({ description: 'Tournament identifier', example: '660e8400-e29b-41d4-a716-446655440000' })
+  @ApiProperty({
+    description: 'Tournament identifier',
+    example: '660e8400-e29b-41d4-a716-446655440000',
+  })
   tournamentId!: string;
 
   @ApiProperty({ description: 'Tournament name', example: 'Spring Challenge' })
@@ -318,27 +286,19 @@ export class UpcomingTournamentItemDto {
   participantCount!: number;
 }
 
-export class UpcomingTournamentsPaginationDto {
-  @ApiProperty({ description: 'Total number of matching upcoming tournaments', example: 12 })
-  total!: number;
-
-  @ApiProperty({ description: 'Current page number', example: 1 })
-  page!: number;
-
-  @ApiProperty({ description: 'Items per page', example: 20 })
-  limit!: number;
-}
-
 export class UpcomingTournamentsResponseDto {
   @ApiProperty({ type: () => [UpcomingTournamentItemDto] })
   items!: UpcomingTournamentItemDto[];
 
-  @ApiProperty({ type: () => UpcomingTournamentsPaginationDto })
-  pagination!: UpcomingTournamentsPaginationDto;
+  @ApiProperty({ type: () => PaginatedResultDto })
+  pagination!: PaginatedResultDto;
 }
 
 export class ActiveTournamentItemDto {
-  @ApiProperty({ description: 'Tournament identifier', example: '660e8400-e29b-41d4-a716-446655440000' })
+  @ApiProperty({
+    description: 'Tournament identifier',
+    example: '660e8400-e29b-41d4-a716-446655440000',
+  })
   tournamentId!: string;
 
   @ApiProperty({ description: 'Tournament name', example: 'Spring Challenge' })
@@ -354,27 +314,19 @@ export class ActiveTournamentItemDto {
   participantCount!: number;
 }
 
-export class ActiveTournamentsPaginationDto {
-  @ApiProperty({ description: 'Total number of matching active tournaments', example: 7 })
-  total!: number;
-
-  @ApiProperty({ description: 'Current page number', example: 1 })
-  page!: number;
-
-  @ApiProperty({ description: 'Items per page', example: 20 })
-  limit!: number;
-}
-
 export class ActiveTournamentsResponseDto {
   @ApiProperty({ type: () => [ActiveTournamentItemDto] })
   items!: ActiveTournamentItemDto[];
 
-  @ApiProperty({ type: () => ActiveTournamentsPaginationDto })
-  pagination!: ActiveTournamentsPaginationDto;
+  @ApiProperty({ type: () => PaginatedResultDto })
+  pagination!: PaginatedResultDto;
 }
 
 export class CompletedTournamentItemDto {
-  @ApiProperty({ description: 'Tournament identifier', example: '660e8400-e29b-41d4-a716-446655440000' })
+  @ApiProperty({
+    description: 'Tournament identifier',
+    example: '660e8400-e29b-41d4-a716-446655440000',
+  })
   tournamentId!: string;
 
   @ApiProperty({ description: 'Tournament name', example: 'Spring Challenge' })
@@ -390,27 +342,19 @@ export class CompletedTournamentItemDto {
   participantCount!: number;
 }
 
-export class CompletedTournamentsPaginationDto {
-  @ApiProperty({ description: 'Total number of matching completed tournaments', example: 14 })
-  total!: number;
-
-  @ApiProperty({ description: 'Current page number', example: 1 })
-  page!: number;
-
-  @ApiProperty({ description: 'Items per page', example: 20 })
-  limit!: number;
-}
-
 export class CompletedTournamentsResponseDto {
   @ApiProperty({ type: () => [CompletedTournamentItemDto] })
   items!: CompletedTournamentItemDto[];
 
-  @ApiProperty({ type: () => CompletedTournamentsPaginationDto })
-  pagination!: CompletedTournamentsPaginationDto;
+  @ApiProperty({ type: () => PaginatedResultDto })
+  pagination!: PaginatedResultDto;
 }
 
 export class RelatedTournamentItemDto {
-  @ApiProperty({ description: 'Tournament identifier', example: '660e8400-e29b-41d4-a716-446655440000' })
+  @ApiProperty({
+    description: 'Tournament identifier',
+    example: '660e8400-e29b-41d4-a716-446655440000',
+  })
   tournamentId!: string;
 
   @ApiProperty({ description: 'Tournament name', example: 'Backend Challenge' })
@@ -429,7 +373,10 @@ export class RelatedTournamentsResponseDto {
 }
 
 export class TournamentStatsResponseDto {
-  @ApiProperty({ description: 'Tournament identifier', example: '660e8400-e29b-41d4-a716-446655440000' })
+  @ApiProperty({
+    description: 'Tournament identifier',
+    example: '660e8400-e29b-41d4-a716-446655440000',
+  })
   tournamentId!: string;
 
   @ApiProperty({ description: 'Total registered participants', example: 523 })
@@ -453,10 +400,16 @@ export class TournamentStatsResponseDto {
   @ApiProperty({ description: 'Average final rank', example: 262, nullable: true })
   averageRank!: number | null;
 
-  @ApiProperty({ description: 'Tournament start timestamp (ISO 8601)', example: '2026-06-01T00:00:00Z' })
+  @ApiProperty({
+    description: 'Tournament start timestamp (ISO 8601)',
+    example: '2026-06-01T00:00:00Z',
+  })
   startedAt!: string;
 
-  @ApiProperty({ description: 'Tournament end timestamp (ISO 8601)', example: '2026-06-10T00:00:00Z' })
+  @ApiProperty({
+    description: 'Tournament end timestamp (ISO 8601)',
+    example: '2026-06-10T00:00:00Z',
+  })
   endedAt!: string;
 }
 
@@ -467,10 +420,16 @@ export class MyTournamentStandingResponseDto {
   @ApiProperty({ description: 'Current score of the authenticated user', example: 542 })
   score!: number;
 
-  @ApiProperty({ description: 'Percentile based on participants ranked below the user', example: 95 })
+  @ApiProperty({
+    description: 'Percentile based on participants ranked below the user',
+    example: 95,
+  })
   percentile!: number;
 
-  @ApiProperty({ description: 'Total number of active participants in the tournament', example: 523 })
+  @ApiProperty({
+    description: 'Total number of active participants in the tournament',
+    example: 523,
+  })
   participantCount!: number;
 }
 

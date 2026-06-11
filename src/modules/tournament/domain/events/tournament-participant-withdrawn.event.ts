@@ -1,5 +1,5 @@
 export class TournamentParticipantWithdrawnEvent {
-  readonly type = 'tournament.participant.withdrawn';
+  readonly eventType = 'tournament.participant.withdrawn' as const;
 
   constructor(
     public readonly tournamentId: string,
