@@ -47,6 +47,7 @@ import {
   categoryFollows,
   notifications,
   notificationPreferences,
+  tournamentStats,
 } from '.';
 
 export const userRankingRelations = relations(userRanking, ({ one, many }) => ({
@@ -365,6 +366,14 @@ export const tournamentsRelations = relations(tournaments, ({ one, many }) => ({
     references: [categories.categoryId],
   }),
   tournamentParticipants: many(tournamentParticipants),
+  stats: one(tournamentStats),
+}));
+
+export const tournamentStatsRelations = relations(tournamentStats, ({ one }) => ({
+  tournament: one(tournaments, {
+    fields: [tournamentStats.tournamentId],
+    references: [tournaments.tournamentId],
+  }),
 }));
 
 export const tournamentParticipantsRelations = relations(

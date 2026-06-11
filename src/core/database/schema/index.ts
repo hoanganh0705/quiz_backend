@@ -1838,22 +1838,26 @@ export const tournamentParticipants = pgTable(
       'btree',
       table.userId.asc().nullsLast().op('uuid_ops'),
     ),
-    index('idx_tournament_participants_user_rank_final').using(
-      'btree',
-      table.userId.asc().nullsLast().op('uuid_ops'),
-      table.rankFinal.asc().nullsLast().op('int2_ops'),
-    ).where(sql`rank_final IS NOT NULL`),
+    index('idx_tournament_participants_user_rank_final')
+      .using(
+        'btree',
+        table.userId.asc().nullsLast().op('uuid_ops'),
+        table.rankFinal.asc().nullsLast().op('int2_ops'),
+      )
+      .where(sql`rank_final IS NOT NULL`),
     index('idx_tournament_participants_user_registered').using(
       'btree',
       table.userId.asc().nullsLast().op('uuid_ops'),
       table.registeredAt.desc().nullsLast().op('timestamptz_ops'),
       table.participantId.desc().nullsLast().op('uuid_ops'),
     ),
-    index('idx_tournament_participants_user_completed').using(
-      'btree',
-      table.userId.asc().nullsLast().op('uuid_ops'),
-      table.participantId.desc().nullsLast().op('uuid_ops'),
-    ).where(sql`rank_final IS NOT NULL`),
+    index('idx_tournament_participants_user_completed')
+      .using(
+        'btree',
+        table.userId.asc().nullsLast().op('uuid_ops'),
+        table.participantId.desc().nullsLast().op('uuid_ops'),
+      )
+      .where(sql`rank_final IS NOT NULL`),
     foreignKey({
       columns: [table.tournamentId],
       foreignColumns: [tournaments.tournamentId],
@@ -1933,6 +1937,20 @@ export const tournamentRoundParticipants = pgTable(
     check('tournament_round_participants_round_time_ms_nonneg', sql`round_time_ms >= 0`),
   ],
 );
+
+export const tournamentStats = pgTable('tournament_stats', {
+  tournamentId: uuid('tournament_id')
+    .primaryKey()
+    .references(() => tournaments.tournamentId, { onDelete: 'cascade' }),
+  participants: integer('participants').notNull().default(0),
+  completedParticipants: integer('completed_participants').notNull().default(0),
+  averageScore: numeric('average_score', { precision: 10, scale: 2 }).default('0'),
+  highestScore: integer('highest_score'),
+  lowestScore: integer('lowest_score'),
+  completionRate: numeric('completion_rate', { precision: 5, scale: 2 }).default('0'),
+  averageRank: numeric('average_rank', { precision: 10, scale: 2 }),
+  updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+});
 
 export const userProfiles = pgTable(
   'user_profiles',
