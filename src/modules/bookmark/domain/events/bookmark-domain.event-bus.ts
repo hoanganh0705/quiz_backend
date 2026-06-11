@@ -5,10 +5,7 @@ import {
   type BookmarkEventHandler,
   BOOKMARK_DOMAIN_EVENT_BUS,
 } from './bookmark-domain-event-bus.port';
-import {
-  BookmarkAddedEvent,
-  BookmarkRemovedEvent,
-} from './bookmark-domain.events';
+import { BookmarkAddedEvent, BookmarkRemovedEvent } from './bookmark-domain.events';
 
 /**
  * Simple domain event bus for Bookmark aggregate events.

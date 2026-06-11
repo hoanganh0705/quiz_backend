@@ -13,7 +13,7 @@ describe('TournamentService getActiveTournaments', () => {
       info: jest.fn(),
       warn: jest.fn(),
       error: jest.fn(),
-    } as ConstructorParameters<typeof TournamentService>[2];
+    } as unknown as ConstructorParameters<typeof TournamentService>[2];
 
     const service = new TournamentService(
       tournamentRepository as never,
@@ -23,7 +23,7 @@ describe('TournamentService getActiveTournaments', () => {
 
     return {
       service,
-      tournamentRepository: tournamentRepository as {
+      tournamentRepository: tournamentRepository as unknown as {
         listActiveTournaments: jest.Mock;
       },
     };
@@ -69,7 +69,7 @@ describe('TournamentService getActiveTournaments', () => {
       expect.objectContaining({
         page: 1,
         limit: 20,
-        nowIso: expect.any(String),
+        nowIso: expect.any(String) as string,
       }),
     );
   });

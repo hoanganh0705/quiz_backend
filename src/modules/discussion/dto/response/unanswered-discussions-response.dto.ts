@@ -66,8 +66,7 @@ export class UnansweredDiscussionsPaginationResponseDto {
   @ApiPropertyOptional({
     description: 'Opaque cursor for the next page',
     nullable: true,
-    example:
-      'eyJ0aHJlYWRJZCI6IjY2MGU4NDAwLWUyOWItNDFkNC1hNzE2LTQ0NjY1NTQ0MDAwMCJ9',
+    example: 'eyJ0aHJlYWRJZCI6IjY2MGU4NDAwLWUyOWItNDFkNC1hNzE2LTQ0NjY1NTQ0MDAwMCJ9',
   })
   nextCursor!: string | null;
 }
@@ -79,6 +78,9 @@ export class UnansweredDiscussionsResponseDto {
   })
   items!: UnansweredDiscussionItemResponseDto[];
 
-  @ApiProperty({ description: 'Pagination metadata', type: () => UnansweredDiscussionsPaginationResponseDto })
+  @ApiProperty({
+    description: 'Pagination metadata',
+    type: () => UnansweredDiscussionsPaginationResponseDto,
+  })
   pagination!: UnansweredDiscussionsPaginationResponseDto;
 }

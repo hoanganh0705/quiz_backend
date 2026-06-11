@@ -10,17 +10,11 @@ export class MyTournamentCursorMapper {
   static parse(cursor: string): { registeredAt: string; participantId: string } {
     const parsed = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf-8'));
 
-    if (
-      typeof parsed.registeredAt !== 'string' ||
-      !ISO_DATE_PATTERN.test(parsed.registeredAt)
-    ) {
+    if (typeof parsed.registeredAt !== 'string' || !ISO_DATE_PATTERN.test(parsed.registeredAt)) {
       throw new Error('Invalid cursor: registeredAt must be an ISO date string');
     }
 
-    if (
-      typeof parsed.participantId !== 'string' ||
-      !UUID_PATTERN.test(parsed.participantId)
-    ) {
+    if (typeof parsed.participantId !== 'string' || !UUID_PATTERN.test(parsed.participantId)) {
       throw new Error('Invalid cursor: participantId must be a UUID');
     }
 

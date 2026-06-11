@@ -49,7 +49,8 @@ export class MyTournamentHistoryPaginationDto {
   @ApiProperty({
     description: 'Cursor for the next page (base64-encoded { completedAt, participantId })',
     nullable: true,
-    example: 'eyJjb21wbGV0ZWRBdCI6ICIyMDI2LTA2LTAxVDAwOjAwOjAwWiIsICJwYXJ0aWNpcGFudElkIjogIjY2MGU4NDgwLWUyOWItMzFkNC1hNzE2LTQ0NjY1NjU0NDAwMCJ9',
+    example:
+      'eyJjb21wbGV0ZWRBdCI6ICIyMDI2LTA2LTAxVDAwOjAwOjAwWiIsICJwYXJ0aWNpcGFudElkIjogIjY2MGU4NDgwLWUyOWItMzFkNC1hNzE2LTQ0NjY1NjU0NDAwMCJ9',
   })
   nextCursor!: string | null;
 }

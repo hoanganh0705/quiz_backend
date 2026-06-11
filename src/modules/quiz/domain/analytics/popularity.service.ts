@@ -4,9 +4,7 @@ import {
   METRICS_REPOSITORY_PORT,
   type MetricsRepositoryPort,
 } from './ports/metrics-repository.port';
-import {
-  DRIZZLE,
-} from '@/core/database/drizzle.constants';
+import { DRIZZLE } from '@/core/database/drizzle.constants';
 import type { DrizzleDB } from '@/core/database/database.module';
 import { quizStats } from '@/core/database/schema';
 import { sql } from 'drizzle-orm';

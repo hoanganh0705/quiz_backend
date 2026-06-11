@@ -111,7 +111,10 @@ export interface DiscussionRepositoryPort {
     limit: number;
     cursor?: SearchDiscussionsCursor | null;
   }): Promise<SearchDiscussionListItem[]>;
-  findRelatedThreads(params: { threadId: string; limit: number }): Promise<RelatedDiscussionListItem[]>;
+  findRelatedThreads(params: {
+    threadId: string;
+    limit: number;
+  }): Promise<RelatedDiscussionListItem[]>;
   listThreadParticipants(threadId: string): Promise<ThreadParticipantListItem[]>;
   getPublicDiscussionProfile(userId: string): Promise<PublicDiscussionProfile>;
   getThreadStats(threadId: string): Promise<ThreadStats | null>;

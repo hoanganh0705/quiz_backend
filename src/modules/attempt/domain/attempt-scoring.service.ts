@@ -1,5 +1,3 @@
-import type { AttemptDetailRow, AttemptAnswerRow } from './ports/attempt-repository.port';
-
 function calculateScorePercent(correctCount: number, totalAnswers: number): string {
   if (totalAnswers === 0) return '0.00';
   return ((correctCount / totalAnswers) * 100).toFixed(2);

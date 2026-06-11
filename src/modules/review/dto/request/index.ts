@@ -1,4 +1,13 @@
-import { IsInt, IsOptional, IsString, Max, Min, IsBoolean, MaxLength, IsEnum } from 'class-validator';
+import {
+  IsInt,
+  IsOptional,
+  IsString,
+  Max,
+  Min,
+  IsBoolean,
+  MaxLength,
+  IsEnum,
+} from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import { ReviewSort } from '@/modules/review/domain/ports';
@@ -146,8 +155,7 @@ export class HelpfulReviewDto {
   helpful!: boolean;
 
   @ApiPropertyOptional({
-    description:
-      'Idempotency key to prevent duplicate helpful votes on retry.',
+    description: 'Idempotency key to prevent duplicate helpful votes on retry.',
     example: 'helpful-review-550e8400-e29b-41d4-a716-446655440099-bob',
     nullable: true,
   })
@@ -202,8 +210,7 @@ export class ReportReviewDto {
   details?: string | null;
 
   @ApiPropertyOptional({
-    description:
-      'Idempotency key to prevent duplicate reports on retry.',
+    description: 'Idempotency key to prevent duplicate reports on retry.',
     example: 'report-review-550e8400-e29b-41d4-a716-446655440099-charlie',
     nullable: true,
   })

@@ -79,6 +79,9 @@ export class SearchDiscussionsResponseDto {
   })
   items!: SearchDiscussionItemResponseDto[];
 
-  @ApiProperty({ description: 'Pagination metadata', type: () => SearchDiscussionsPaginationResponseDto })
+  @ApiProperty({
+    description: 'Pagination metadata',
+    type: () => SearchDiscussionsPaginationResponseDto,
+  })
   pagination!: SearchDiscussionsPaginationResponseDto;
 }

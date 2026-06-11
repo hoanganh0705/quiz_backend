@@ -5,14 +5,7 @@
  * Part of Phase 3 - Leaderboards & APIs.
  */
 
-import {
-  Controller,
-  Get,
-  Param,
-  Query,
-  UseFilters,
-  UseGuards,
-} from '@nestjs/common';
+import { Controller, Get, Param, Query, UseFilters, UseGuards } from '@nestjs/common';
 import {
   ApiTags,
   ApiOperation,
@@ -105,9 +98,13 @@ export class RankingController {
   @Public()
   @ApiOperation({
     summary: 'Get leaderboard distribution',
-    description: 'Returns distribution statistics for the active leaderboard in the selected period.',
+    description:
+      'Returns distribution statistics for the active leaderboard in the selected period.',
   })
-  @ApiOkResponse({ description: 'Leaderboard distribution returned', type: LeaderboardDistributionResponseDto })
+  @ApiOkResponse({
+    description: 'Leaderboard distribution returned',
+    type: LeaderboardDistributionResponseDto,
+  })
   @ApiBadRequestResponse({ description: 'Validation failed' })
   @ApiQuery({ name: 'period', enum: RankingPeriodEnum, required: false })
   async getLeaderboardDistribution(
@@ -122,7 +119,8 @@ export class RankingController {
   @Public()
   @ApiOperation({
     summary: 'Get top ranking movers',
-    description: 'Returns users with the largest positive ranking movement during the selected period.',
+    description:
+      'Returns users with the largest positive ranking movement during the selected period.',
   })
   @ApiOkResponse({ description: 'Top movers returned', type: TopMoversResponseDto })
   @ApiBadRequestResponse({ description: 'Validation failed' })
@@ -199,7 +197,8 @@ export class RankingController {
   @ApiBearerAuth()
   @ApiOperation({
     summary: 'Get authenticated user ranking milestones',
-    description: 'Returns ranking milestones achieved by the authenticated user in chronological order.',
+    description:
+      'Returns ranking milestones achieved by the authenticated user in chronological order.',
   })
   @ApiOkResponse({ description: 'Ranking milestones returned', type: RankingMilestonesResponseDto })
   @ApiUnauthorizedResponse({ description: 'Missing or invalid token' })
@@ -239,7 +238,8 @@ export class RankingController {
   @ApiBearerAuth()
   @ApiOperation({
     summary: 'Get authenticated user rank movement',
-    description: "Returns the authenticated user's ranking movement compared to the previous ranking snapshot.",
+    description:
+      "Returns the authenticated user's ranking movement compared to the previous ranking snapshot.",
   })
   @ApiOkResponse({ description: 'Rank movement returned', type: RankMovementResponseDto })
   @ApiUnauthorizedResponse({ description: 'Missing or invalid token' })
@@ -312,7 +312,10 @@ export class RankingController {
     summary: 'Get public user ranking history',
     description: "Returns the specified user's public historical ranking progression over time.",
   })
-  @ApiOkResponse({ description: 'Public ranking history returned', type: PublicRankingHistoryResponseDto })
+  @ApiOkResponse({
+    description: 'Public ranking history returned',
+    type: PublicRankingHistoryResponseDto,
+  })
   @ApiNotFoundResponse({ description: 'User not found' })
   @ApiBadRequestResponse({ description: 'Validation failed' })
   @ApiQuery({ name: 'period', enum: RankingPeriodEnum, required: false })

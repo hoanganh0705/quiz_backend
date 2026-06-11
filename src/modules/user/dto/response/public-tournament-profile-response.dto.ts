@@ -16,13 +16,20 @@ export class PublicTournamentProfileResponseDto {
   @ApiProperty({ description: 'Best final rank achieved', example: 1, nullable: true })
   bestRank!: number | null;
 
-  @ApiProperty({ description: 'Average final rank across completed tournaments', example: 18, nullable: true })
+  @ApiProperty({
+    description: 'Average final rank across completed tournaments',
+    example: 18,
+    nullable: true,
+  })
   averageRank!: number | null;
 
   @ApiProperty({ description: 'Number of top 10 finishes', example: 12 })
   top10Finishes!: number;
 
-  @ApiProperty({ description: 'Total final tournament score across completed tournaments', example: 15420 })
+  @ApiProperty({
+    description: 'Total final tournament score across completed tournaments',
+    example: 15420,
+  })
   totalTournamentScore!: number;
 
   @ApiProperty({

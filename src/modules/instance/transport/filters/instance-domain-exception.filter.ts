@@ -3,16 +3,12 @@ import type { Response } from 'express';
 import {
   InstanceDomainError,
   InstanceNotFoundError,
-  InstanceForbiddenError,
-  InstanceConflictError,
-  InstanceValidationError,
-  InstanceNotOpenError,
   InstanceNotHostError,
+  InstanceNotOpenError,
+  InstanceFullError,
   InstanceAlreadyStartedError,
   InstanceAlreadyClosedError,
-  InstanceFullError,
   PlayerAlreadyJoinedError,
-  PlayerNotInInstanceError,
 } from '../../domain/errors';
 
 const HTTP_ERROR_NAMES: Record<number, string> = {
@@ -39,25 +35,24 @@ export class InstanceDomainExceptionFilter implements ExceptionFilter {
   }
 
   private mapToHttp(error: InstanceDomainError): { status: number; message: string } {
-    if (error instanceof InstanceNotFoundError || error instanceof PlayerNotInInstanceError) {
+    if (error instanceof InstanceNotFoundError) {
       return { status: HttpStatus.NOT_FOUND, message: 'Resource not found' };
     }
 
-    if (error instanceof InstanceForbiddenError || error instanceof InstanceNotHostError) {
+    if (error instanceof InstanceNotHostError) {
       return {
         status: HttpStatus.FORBIDDEN,
         message: 'You do not have permission to perform this action',
       };
     }
 
-    if (error instanceof InstanceConflictError || error instanceof PlayerAlreadyJoinedError) {
+    if (error instanceof PlayerAlreadyJoinedError) {
       return { status: HttpStatus.CONFLICT, message: 'Resource already exists' };
     }
 
     if (
       error instanceof InstanceNotOpenError ||
       error instanceof InstanceFullError ||
-      error instanceof InstanceValidationError ||
       error instanceof InstanceAlreadyStartedError ||
       error instanceof InstanceAlreadyClosedError
     ) {

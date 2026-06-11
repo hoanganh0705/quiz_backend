@@ -76,7 +76,10 @@ export class BookmarkController {
     description:
       'Searches bookmarked quizzes across all collections owned by the authenticated user using cursor pagination.',
   })
-  @ApiOkResponse({ description: 'Bookmark search results returned', type: SearchBookmarksResponseDto })
+  @ApiOkResponse({
+    description: 'Bookmark search results returned',
+    type: SearchBookmarksResponseDto,
+  })
   @ApiBadRequestResponse({ description: 'Validation failed' })
   @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
   @ApiValidationRequest()
@@ -96,7 +99,7 @@ export class BookmarkController {
   @ApiOperation({
     summary: 'Get recent bookmarks',
     description:
-      'Returns the authenticated user\'s bookmarked quizzes across all collections, cursor-paginated and ordered by most recently bookmarked.',
+      "Returns the authenticated user's bookmarked quizzes across all collections, cursor-paginated and ordered by most recently bookmarked.",
   })
   @ApiOkResponse({ description: 'Recent bookmarks returned', type: RecentBookmarksResponseDto })
   @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
@@ -247,7 +250,11 @@ export class BookmarkController {
     @CurrentUser() user: JwtPayload,
     @Body() payload: BulkAddBookmarksDto,
   ): Promise<BulkAddBookmarksResponseDto> {
-    return this.bookmarkApplicationService.addBookmarksBulk(user.sub, collectionId, payload.quizIds);
+    return this.bookmarkApplicationService.addBookmarksBulk(
+      user.sub,
+      collectionId,
+      payload.quizIds,
+    );
   }
 
   @Delete('collections/:collectionId/quizzes/bulk')
@@ -268,7 +275,11 @@ export class BookmarkController {
     @CurrentUser() user: JwtPayload,
     @Body() payload: BulkRemoveBookmarksDto,
   ): Promise<BulkRemoveBookmarksResponseDto> {
-    return this.bookmarkApplicationService.removeBookmarksBulk(user.sub, collectionId, payload.quizIds);
+    return this.bookmarkApplicationService.removeBookmarksBulk(
+      user.sub,
+      collectionId,
+      payload.quizIds,
+    );
   }
 
   @Delete('collections/:collectionId/quizzes/:quizId')
@@ -358,13 +369,11 @@ export class BookmarkController {
   @ApiOperation({
     summary: 'Get my bookmark stats',
     description:
-      'Returns aggregated statistics for the authenticated user\'s bookmarks, including total collections, total bookmarks, and the most-bookmarked category and tag.',
+      "Returns aggregated statistics for the authenticated user's bookmarks, including total collections, total bookmarks, and the most-bookmarked category and tag.",
   })
   @ApiOkResponse({ description: 'Bookmark statistics returned', type: BookmarkStatsResponseDto })
   @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
-  async getMyBookmarkStats(
-    @CurrentUser() user: JwtPayload,
-  ): Promise<BookmarkStatsResponseDto> {
+  async getMyBookmarkStats(@CurrentUser() user: JwtPayload): Promise<BookmarkStatsResponseDto> {
     return this.bookmarkApplicationService.getMyBookmarkStats(user);
   }
 

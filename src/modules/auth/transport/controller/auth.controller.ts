@@ -290,7 +290,8 @@ export class AuthController {
   @Delete('sessions/others')
   @ApiOperation({
     summary: 'Log out all other devices',
-    description: 'Normalized REST route. Keeps the current session and revokes every other active session for the user.',
+    description:
+      'Normalized REST route. Keeps the current session and revokes every other active session for the user.',
   })
   @ApiOkResponse({ description: 'Other sessions revoked', type: SessionManagementResultDto })
   @ApiUnauthorizedResponse({ description: 'Not authenticated' })
@@ -306,7 +307,8 @@ export class AuthController {
   @Post('sessions/logout-others')
   @ApiOperation({
     summary: 'Log out all other devices (legacy)',
-    description: 'Legacy route retained for compatibility. Keeps the current session and revokes every other active session for the user.',
+    description:
+      'Legacy route retained for compatibility. Keeps the current session and revokes every other active session for the user.',
   })
   @ApiOkResponse({ description: 'Other sessions revoked', type: SessionManagementResultDto })
   @ApiUnauthorizedResponse({ description: 'Not authenticated' })

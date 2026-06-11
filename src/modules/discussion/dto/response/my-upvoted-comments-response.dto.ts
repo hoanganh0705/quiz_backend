@@ -13,7 +13,10 @@ export class MyUpvotedCommentItemResponseDto {
   })
   threadId!: string;
 
-  @ApiProperty({ description: 'Comment content', example: 'I think the XP depends on response speed.' })
+  @ApiProperty({
+    description: 'Comment content',
+    example: 'I think the XP depends on response speed.',
+  })
   content!: string;
 
   @ApiProperty({ description: 'Net vote count on the comment', example: 12 })
@@ -33,7 +36,10 @@ export class MyUpvotedCommentItemResponseDto {
 }
 
 export class MyUpvotedCommentsResponseDto {
-  @ApiProperty({ description: 'Upvoted comment items', type: () => [MyUpvotedCommentItemResponseDto] })
+  @ApiProperty({
+    description: 'Upvoted comment items',
+    type: () => [MyUpvotedCommentItemResponseDto],
+  })
   items!: MyUpvotedCommentItemResponseDto[];
 
   @ApiProperty({ description: 'Total number of matching comments', example: 50 })

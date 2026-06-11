@@ -4,10 +4,7 @@ import { QUIZ_ANALYTICS_PORT } from '@/modules/quiz/domain/analytics';
 import type { QuizAnalyticsService } from '@/modules/quiz/domain/analytics';
 import { BOOKMARK_DOMAIN_EVENT_BUS } from './bookmark-domain-event-bus.port';
 import type { BookmarkDomainEventBusPort } from './bookmark-domain-event-bus.port';
-import {
-  BookmarkAddedEvent,
-  BookmarkRemovedEvent,
-} from './bookmark-domain.events';
+import { BookmarkAddedEvent, BookmarkRemovedEvent } from './bookmark-domain.events';
 
 /**
  * Subscribes to Bookmark domain events and refreshes quiz analytics accordingly.
@@ -31,9 +28,7 @@ export class BookmarkAnalyticsEventHandler implements OnModuleInit {
   ) {}
 
   onModuleInit(): void {
-    this.unsubscribe = this.eventBus.subscribe(
-      this.handleBookmarkEvent.bind(this),
-    );
+    this.unsubscribe = this.eventBus.subscribe(this.handleBookmarkEvent.bind(this));
 
     this.logger.info({
       event: 'bookmark_analytics_event_handler_subscribed',

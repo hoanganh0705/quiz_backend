@@ -21,7 +21,11 @@ export class PublicAchievementProfileResponseDto {
   @ApiProperty({ description: 'Number of rare badges earned', example: 3 })
   rareBadges!: number;
 
-  @ApiProperty({ description: 'Best public rank achieved by the user', example: 12, nullable: true })
+  @ApiProperty({
+    description: 'Best public rank achieved by the user',
+    example: 12,
+    nullable: true,
+  })
   highestRank!: number | null;
 
   @ApiProperty({

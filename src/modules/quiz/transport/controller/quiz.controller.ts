@@ -417,7 +417,12 @@ export class QuizController {
     @CurrentUser() user: JwtPayload,
     @Body() payload: UpdateQuizVersionDto,
   ): Promise<QuizVersionResponseDto> {
-    return this.quizVersionApplicationService.updateQuizVersion(quizId, quizVersionId, user, payload);
+    return this.quizVersionApplicationService.updateQuizVersion(
+      quizId,
+      quizVersionId,
+      user,
+      payload,
+    );
   }
 
   @Post(':id/versions/:versionId/publish')

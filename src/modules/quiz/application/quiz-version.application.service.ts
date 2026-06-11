@@ -86,7 +86,12 @@ export class QuizVersionApplicationService {
       passingScorePercent: dto.passingScorePercent,
       rewardXp: dto.rewardXp,
     };
-    const result = await this.quizVersionService.updateQuizVersion(quizId, quizVersionId, user, command);
+    const result = await this.quizVersionService.updateQuizVersion(
+      quizId,
+      quizVersionId,
+      user,
+      command,
+    );
     return QuizVersionResponseMapper.toQuizVersionResponse(result);
   }
 

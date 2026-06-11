@@ -13,7 +13,11 @@ export class MyTournamentAnalyticsResponseDto {
   @ApiProperty({ description: 'Number of top 10 finishes', example: 18 })
   top10Finishes!: number;
 
-  @ApiProperty({ description: 'Average final rank across completed tournaments', example: 21, nullable: true })
+  @ApiProperty({
+    description: 'Average final rank across completed tournaments',
+    example: 21,
+    nullable: true,
+  })
   averageRank!: number | null;
 
   @ApiProperty({ description: 'Best final rank achieved', example: 1, nullable: true })

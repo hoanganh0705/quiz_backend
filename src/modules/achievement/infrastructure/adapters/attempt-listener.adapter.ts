@@ -96,9 +96,13 @@ export class AttemptEventListenerAdapter implements OnModuleInit, OnModuleDestro
     );
   }
 
-  private isQuizMilestoneEvent(
-    event: unknown,
-  ): event is { eventType: 'quiz.milestone'; userId: string; completedCount: number; milestone: number; timestamp: Date } {
+  private isQuizMilestoneEvent(event: unknown): event is {
+    eventType: 'quiz.milestone';
+    userId: string;
+    completedCount: number;
+    milestone: number;
+    timestamp: Date;
+  } {
     return (
       typeof event === 'object' &&
       event !== null &&
@@ -107,7 +111,13 @@ export class AttemptEventListenerAdapter implements OnModuleInit, OnModuleDestro
     );
   }
 
-  private async handleQuizMilestoneFromBus(event: { eventType: 'quiz.milestone'; userId: string; completedCount: number; milestone: number; timestamp: Date }): Promise<void> {
+  private async handleQuizMilestoneFromBus(event: {
+    eventType: 'quiz.milestone';
+    userId: string;
+    completedCount: number;
+    milestone: number;
+    timestamp: Date;
+  }): Promise<void> {
     try {
       await this.handleQuizMilestone({
         eventType: 'quiz.milestone',
@@ -125,9 +135,7 @@ export class AttemptEventListenerAdapter implements OnModuleInit, OnModuleDestro
     }
   }
 
-  private async handleAttemptCompletedFromBus(
-    event: AttemptDomainCompletedEvent,
-  ): Promise<void> {
+  private async handleAttemptCompletedFromBus(event: AttemptDomainCompletedEvent): Promise<void> {
     try {
       await this.handleAttemptCompleted({
         eventType: 'attempt.completed',

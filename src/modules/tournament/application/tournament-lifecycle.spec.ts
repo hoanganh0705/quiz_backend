@@ -12,12 +12,14 @@ describe('TournamentLifecycleService', () => {
       finalizeTournament: jest.fn(),
     } as unknown as ConstructorParameters<typeof TournamentLifecycleService>[0];
 
-    const eventBus = { publish: jest.fn() } as ConstructorParameters<typeof TournamentLifecycleService>[1];
+    const eventBus = { publish: jest.fn() } as unknown as ConstructorParameters<
+      typeof TournamentLifecycleService
+    >[1];
     const logger = {
       info: jest.fn(),
       warn: jest.fn(),
       error: jest.fn(),
-    } as ConstructorParameters<typeof TournamentLifecycleService>[2];
+    } as unknown as ConstructorParameters<typeof TournamentLifecycleService>[2];
 
     const service = new TournamentLifecycleService(
       tournamentRepository as never,
@@ -27,7 +29,7 @@ describe('TournamentLifecycleService', () => {
 
     return {
       service,
-      tournamentRepository: tournamentRepository as {
+      tournamentRepository: tournamentRepository as unknown as {
         listTournamentsStartingSoon: jest.Mock;
         countParticipants: jest.Mock;
         markTournamentStatus: jest.Mock;
@@ -35,7 +37,7 @@ describe('TournamentLifecycleService', () => {
         listCompletedTournaments: jest.Mock;
         finalizeTournament: jest.Mock;
       },
-      eventBus: eventBus as { publish: jest.Mock },
+      eventBus: eventBus as unknown as { publish: jest.Mock },
     };
   };
 
@@ -49,7 +51,10 @@ describe('TournamentLifecycleService', () => {
       },
     ]);
     tournamentRepository.countParticipants.mockResolvedValue(2);
-    tournamentRepository.markTournamentStatus.mockResolvedValue({ tournamentId: 't-1', status: 'registration' });
+    tournamentRepository.markTournamentStatus.mockResolvedValue({
+      tournamentId: 't-1',
+      status: 'registration',
+    });
     tournamentRepository.listParticipants.mockResolvedValue({
       items: [
         { userId: 'u-1', username: 'a', registeredAt: 'x' },
