@@ -41,9 +41,10 @@ import { AchievementDomainExceptionFilter } from './transport/filters/achievemen
 import { UserModule } from '@/modules/user/user.module';
 import { RankingModule } from '@/modules/ranking/ranking.module';
 import { AttemptModule } from '@/modules/attempt/attempt.module';
+import { TournamentModule } from '@/modules/tournament/tournament.module';
 
 @Module({
-  imports: [DatabaseModule, UserModule, RankingModule, AttemptModule],
+  imports: [DatabaseModule, UserModule, RankingModule, AttemptModule, TournamentModule],
   controllers: [AchievementController],
   providers: [
     {

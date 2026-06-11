@@ -13,7 +13,7 @@ import {
   TournamentCompletedEvent,
   TournamentStartingSoonEvent,
   TournamentWonEvent,
-} from './events/tournament-joined.event';
+} from './events';
 
 @Injectable()
 export class TournamentLifecycleService {

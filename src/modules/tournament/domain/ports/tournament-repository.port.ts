@@ -6,6 +6,8 @@ import type {
   TournamentCursorPayload,
 } from '../../types/tournament.types';
 
+export type { TournamentCursorPayload };
+
 export type TournamentRow = {
   tournamentId: string;
   title: string;
@@ -282,6 +284,32 @@ export interface TournamentRepositoryPort {
     tournamentId: string;
     nowIso: string;
   }): Promise<FinalizedTournamentParticipantRow[]>;
+
+  /**
+   * Atomically creates a round participant and its associated quiz attempt
+   * within a single database transaction.
+   */
+  startRoundAttemptTx(params: {
+    roundId: string;
+    participantId: string;
+    userId: string;
+    quizVersionId: string;
+    tournamentId: string;
+    nowIso: string;
+  }): Promise<{ attemptId: string; roundParticipant: TournamentRoundParticipantRow }>;
+
+  /**
+   * Creates a quiz attempt for an existing round participant and links it back
+   * to the round participant — all within a single transaction.
+   */
+  createAttemptForRound(params: {
+    userId: string;
+    quizVersionId: string;
+    tournamentId: string;
+    roundId: string;
+    roundParticipantId: string;
+    nowIso: string;
+  }): Promise<{ attemptId: string }>;
 }
 
 export const TOURNAMENT_REPOSITORY_PORT = Symbol('TOURNAMENT_REPOSITORY_PORT');

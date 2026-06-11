@@ -7,6 +7,9 @@ import {
   tournamentRounds,
   tournamentParticipants,
   tournamentRoundParticipants,
+  tournamentStats,
+  quizVersions,
+  quizAttempts,
   categories,
   users,
   userProfiles,
@@ -22,6 +25,7 @@ import type {
   TournamentRow,
   TournamentDetailRow,
   TournamentRoundRow,
+  TournamentRoundDetailRow,
   TournamentParticipantRow,
   TournamentRoundParticipantRow,
   TournamentLeaderboardEntry,
@@ -37,9 +41,18 @@ import type {
   TournamentWinnerRow,
 } from '@/modules/tournament/domain/ports';
 
+type RawQueryResult<T> = {
+  rows: T[];
+  rowCount?: number | null;
+};
+
 @Injectable()
 export class TournamentRepository implements TournamentRepositoryPort {
   constructor(@Inject(DRIZZLE) private readonly db: DrizzleDB) {}
+
+  private async executeRaw<T>(query: ReturnType<typeof sql>): Promise<RawQueryResult<T>> {
+    return (await this.db.execute(query)) as unknown as RawQueryResult<T>;
+  }
 
   async getTournamentById(tournamentId: string): Promise<TournamentRow | null> {
     const [row] = await this.db
@@ -385,19 +398,52 @@ export class TournamentRepository implements TournamentRepositoryPort {
   async getTournamentStats(tournamentId: string): Promise<TournamentStatsRow> {
     const [stats] = await this.db
       .select({
-        tournamentId: tournaments.tournamentId,
+        tournamentId: tournamentStats.tournamentId,
+        participants: tournamentStats.participants,
+        completedParticipants: tournamentStats.completedParticipants,
+        averageScore: sql<string>`COALESCE(${tournamentStats.averageScore}::numeric, 0)`,
+        highestScore: tournamentStats.highestScore,
+        lowestScore: tournamentStats.lowestScore,
+        completionRate: sql<string>`COALESCE(${tournamentStats.completionRate}::numeric, 0)`,
+        averageRank: tournamentStats.averageRank,
+        startedAt: tournaments.startAt,
+        endedAt: tournaments.endAt,
+      })
+      .from(tournamentStats)
+      .innerJoin(tournaments, eq(tournamentStats.tournamentId, tournaments.tournamentId))
+      .where(and(eq(tournamentStats.tournamentId, tournamentId), isNull(tournaments.deletedAt)))
+      .limit(1);
+
+    if (stats) {
+      return {
+        tournamentId,
+        participants: Number(stats.participants ?? 0),
+        completedParticipants: Number(stats.completedParticipants ?? 0),
+        averageScore: Number(stats.averageScore ?? 0),
+        highestScore: stats.highestScore ?? null,
+        lowestScore: stats.lowestScore ?? null,
+        completionRate: Number(stats.completionRate ?? 0),
+        averageRank: stats.averageRank ? Number(stats.averageRank) : null,
+        startedAt: stats.startedAt ?? '',
+        endedAt: stats.endedAt ?? '',
+      };
+    }
+
+    const [fallback] = await this.db
+      .select({
         participants: sql<number>`COUNT(${tournamentParticipants.participantId})`,
         completedParticipants: sql<number>`COUNT(CASE WHEN ${tournamentParticipants.rankFinal} IS NOT NULL THEN 1 END)`,
-        averageScore:
-          sql<number>`COALESCE(ROUND(AVG(CASE WHEN ${tournamentParticipants.rankFinal} IS NOT NULL THEN ${tournamentParticipants.totalScore}::numeric END)), 0)`,
-        highestScore:
-          sql<number | null>`MAX(CASE WHEN ${tournamentParticipants.rankFinal} IS NOT NULL THEN ${tournamentParticipants.totalScore} END)`,
-        lowestScore:
-          sql<number | null>`MIN(CASE WHEN ${tournamentParticipants.rankFinal} IS NOT NULL THEN ${tournamentParticipants.totalScore} END)`,
-        completionRate:
-          sql<number>`COALESCE(ROUND((COUNT(CASE WHEN ${tournamentParticipants.rankFinal} IS NOT NULL THEN 1 END)::numeric * 100.0) / NULLIF(COUNT(${tournamentParticipants.participantId}), 0), 2), 0)`,
-        averageRank:
-          sql<number | null>`ROUND(AVG(CASE WHEN ${tournamentParticipants.rankFinal} IS NOT NULL THEN ${tournamentParticipants.rankFinal}::numeric END))`,
+        averageScore: sql<number>`COALESCE(ROUND(AVG(CASE WHEN ${tournamentParticipants.rankFinal} IS NOT NULL THEN ${tournamentParticipants.totalScore}::numeric END)), 0)`,
+        highestScore: sql<
+          number | null
+        >`MAX(CASE WHEN ${tournamentParticipants.rankFinal} IS NOT NULL THEN ${tournamentParticipants.totalScore} END)`,
+        lowestScore: sql<
+          number | null
+        >`MIN(CASE WHEN ${tournamentParticipants.rankFinal} IS NOT NULL THEN ${tournamentParticipants.totalScore} END)`,
+        completionRate: sql<number>`COALESCE(ROUND((COUNT(CASE WHEN ${tournamentParticipants.rankFinal} IS NOT NULL THEN 1 END)::numeric * 100.0) / NULLIF(COUNT(${tournamentParticipants.participantId}), 0), 2), 0)`,
+        averageRank: sql<
+          number | null
+        >`ROUND(AVG(CASE WHEN ${tournamentParticipants.rankFinal} IS NOT NULL THEN ${tournamentParticipants.rankFinal}::numeric END))`,
         startedAt: tournaments.startAt,
         endedAt: tournaments.endAt,
       })
@@ -412,16 +458,60 @@ export class TournamentRepository implements TournamentRepositoryPort {
 
     return {
       tournamentId,
-      participants: Number(stats?.participants ?? 0),
-      completedParticipants: Number(stats?.completedParticipants ?? 0),
-      averageScore: Number(stats?.averageScore ?? 0),
-      highestScore: stats?.highestScore ?? null,
-      lowestScore: stats?.lowestScore ?? null,
-      completionRate: Number(stats?.completionRate ?? 0),
-      averageRank: stats?.averageRank ?? null,
-      startedAt: stats?.startedAt ?? '',
-      endedAt: stats?.endedAt ?? '',
+      participants: Number(fallback?.participants ?? 0),
+      completedParticipants: Number(fallback?.completedParticipants ?? 0),
+      averageScore: Number(fallback?.averageScore ?? 0),
+      highestScore: fallback?.highestScore ?? null,
+      lowestScore: fallback?.lowestScore ?? null,
+      completionRate: Number(fallback?.completionRate ?? 0),
+      averageRank: fallback?.averageRank ?? null,
+      startedAt: fallback?.startedAt ?? '',
+      endedAt: fallback?.endedAt ?? '',
     };
+  }
+
+  private async refreshTournamentStats(tournamentId: string): Promise<void> {
+    await this.executeRaw(sql`
+      INSERT INTO tournament_stats AS ts (
+        tournament_id, participants, completed_participants,
+        average_score, highest_score, lowest_score,
+        completion_rate, average_rank, updated_at
+      )
+      SELECT
+        ${tournamentId},
+        COUNT(tp.participant_id)::int,
+        COUNT(CASE WHEN tp.rank_final IS NOT NULL THEN 1 END)::int,
+        COALESCE(ROUND(AVG(CASE WHEN tp.rank_final IS NOT NULL THEN tp.total_score::numeric END), 2), 0)::numeric,
+        CASE WHEN COUNT(CASE WHEN tp.rank_final IS NOT NULL THEN 1 END) = 0 THEN NULL
+             ELSE MAX(CASE WHEN tp.rank_final IS NOT NULL THEN tp.total_score END)::int
+        END,
+        CASE WHEN COUNT(CASE WHEN tp.rank_final IS NOT NULL THEN 1 END) = 0 THEN NULL
+             ELSE MIN(CASE WHEN tp.rank_final IS NOT NULL THEN tp.total_score END)::int
+        END,
+        COALESCE(
+          ROUND(
+            (COUNT(CASE WHEN tp.rank_final IS NOT NULL THEN 1 END)::numeric * 100.0) /
+            NULLIF(COUNT(tp.participant_id), 0),
+            2
+          ),
+          0
+        )::numeric,
+        CASE WHEN COUNT(CASE WHEN tp.rank_final IS NOT NULL THEN 1 END) = 0 THEN NULL
+             ELSE ROUND(AVG(CASE WHEN tp.rank_final IS NOT NULL THEN tp.rank_final::numeric END))::numeric
+        END,
+        now()
+      FROM tournament_participants tp
+      WHERE tp.tournament_id = ${tournamentId}
+      ON CONFLICT (tournament_id) DO UPDATE SET
+        participants = EXCLUDED.participants,
+        completed_participants = EXCLUDED.completed_participants,
+        average_score = EXCLUDED.average_score,
+        highest_score = EXCLUDED.highest_score,
+        lowest_score = EXCLUDED.lowest_score,
+        completion_rate = EXCLUDED.completion_rate,
+        average_rank = EXCLUDED.average_rank,
+        updated_at = EXCLUDED.updated_at
+    `);
   }
 
   async createTournament(params: {
@@ -618,11 +708,35 @@ export class TournamentRepository implements TournamentRepositoryPort {
     return (row as TournamentRoundRow | undefined) ?? null;
   }
 
-  getRoundDetailById(
-    roundId: string,
-  ): Promise<import('@/modules/tournament/domain/ports').TournamentRoundDetailRow | null> {
-    void roundId;
-    return Promise.resolve(null);
+  async getRoundDetailById(roundId: string): Promise<TournamentRoundDetailRow | null> {
+    const result = await this.db
+      .select({
+        roundId: tournamentRounds.roundId,
+        tournamentId: tournamentRounds.tournamentId,
+        roundNumber: tournamentRounds.roundNumber,
+        name: tournamentRounds.name,
+        description: tournamentRounds.description,
+        quizVersionId: tournamentRounds.quizVersionId,
+        startAt: tournamentRounds.startAt,
+        endAt: tournamentRounds.endAt,
+        durationMs: quizVersions.durationMs,
+        status: tournamentRounds.status,
+        isElimination: tournamentRounds.isElimination,
+        participantLimit: tournamentRounds.participantLimit,
+        createdAt: tournamentRounds.createdAt,
+        updatedAt: tournamentRounds.updatedAt,
+        versionNumber: quizVersions.versionNumber,
+        difficulty: quizVersions.difficulty,
+        passingScorePercent: quizVersions.passingScorePercent,
+        rewardXp: quizVersions.rewardXp,
+      })
+      .from(tournamentRounds)
+      .leftJoin(quizVersions, eq(tournamentRounds.quizVersionId, quizVersions.quizVersionId))
+      .where(eq(tournamentRounds.roundId, roundId))
+      .limit(1);
+
+    const [row] = result as any;
+    return (row as unknown as TournamentRoundDetailRow | undefined) ?? null;
   }
 
   async getRoundsByTournament(tournamentId: string): Promise<TournamentRoundRow[]> {
@@ -711,6 +825,128 @@ export class TournamentRepository implements TournamentRepositoryPort {
     return row as TournamentRoundParticipantRow;
   }
 
+  /**
+   * Atomically creates a round participant and its associated quiz attempt
+   * within a single database transaction.
+   */
+  async startRoundAttemptTx(params: {
+    roundId: string;
+    participantId: string;
+    userId: string;
+    quizVersionId: string;
+    tournamentId: string;
+    nowIso: string;
+  }): Promise<{ attemptId: string; roundParticipant: TournamentRoundParticipantRow }> {
+    return this.db.transaction(async (tx) => {
+      const [roundParticipant] = await tx
+        .insert(tournamentRoundParticipants)
+        .values({
+          roundId: params.roundId,
+          participantId: params.participantId,
+          joinedAt: params.nowIso,
+          roundScore: 0,
+          roundTimeMs: 0,
+          isQualified: true,
+          updatedAt: params.nowIso,
+        })
+        .returning({
+          roundParticipantId: tournamentRoundParticipants.roundParticipantId,
+          roundId: tournamentRoundParticipants.roundId,
+          participantId: tournamentRoundParticipants.participantId,
+          attemptId: tournamentRoundParticipants.attemptId,
+          joinedAt: tournamentRoundParticipants.joinedAt,
+          roundScore: tournamentRoundParticipants.roundScore,
+          roundTimeMs: tournamentRoundParticipants.roundTimeMs,
+          rankInRound: tournamentRoundParticipants.rankInRound,
+          isQualified: tournamentRoundParticipants.isQualified,
+          updatedAt: tournamentRoundParticipants.updatedAt,
+        });
+
+      const [createdAttempt] = await tx
+        .insert(quizAttempts)
+        .values({
+          userId: params.userId,
+          quizVersionId: params.quizVersionId,
+          contextType: 'tournament',
+          contextRefId: params.tournamentId,
+          status: 'started',
+          startedAt: params.nowIso,
+          createdAt: params.nowIso,
+          updatedAt: params.nowIso,
+        })
+        .returning({ attemptId: quizAttempts.attemptId });
+
+      await tx
+        .update(tournamentRoundParticipants)
+        .set({ attemptId: createdAttempt.attemptId, updatedAt: params.nowIso })
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+        .where(
+          eq(tournamentRoundParticipants.roundParticipantId, roundParticipant.roundParticipantId),
+        );
+
+      const [updatedRoundParticipant] = await tx
+        .select({
+          roundParticipantId: tournamentRoundParticipants.roundParticipantId,
+          roundId: tournamentRoundParticipants.roundId,
+          participantId: tournamentRoundParticipants.participantId,
+          attemptId: tournamentRoundParticipants.attemptId,
+          joinedAt: tournamentRoundParticipants.joinedAt,
+          roundScore: tournamentRoundParticipants.roundScore,
+          roundTimeMs: tournamentRoundParticipants.roundTimeMs,
+          rankInRound: tournamentRoundParticipants.rankInRound,
+          isQualified: tournamentRoundParticipants.isQualified,
+          updatedAt: tournamentRoundParticipants.updatedAt,
+        })
+        .from(tournamentRoundParticipants)
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+        .where(
+          eq(tournamentRoundParticipants.roundParticipantId, roundParticipant.roundParticipantId),
+        )
+        .limit(1);
+
+      return {
+        attemptId: createdAttempt.attemptId,
+        roundParticipant: updatedRoundParticipant as TournamentRoundParticipantRow,
+      };
+    });
+  }
+
+  /**
+   * Creates a quiz attempt for an existing round participant and links it back
+   * to the round participant — all within a single transaction.
+   */
+  async createAttemptForRound(params: {
+    userId: string;
+    quizVersionId: string;
+    tournamentId: string;
+    roundId: string;
+    roundParticipantId: string;
+    nowIso: string;
+  }): Promise<{ attemptId: string }> {
+    return this.db.transaction(async (tx) => {
+      const [createdAttempt] = await tx
+        .insert(quizAttempts)
+        .values({
+          userId: params.userId,
+          quizVersionId: params.quizVersionId,
+          contextType: 'tournament',
+          contextRefId: params.tournamentId,
+          status: 'started',
+          startedAt: params.nowIso,
+          createdAt: params.nowIso,
+          updatedAt: params.nowIso,
+        })
+        .returning({ attemptId: quizAttempts.attemptId });
+
+      await tx
+        .update(tournamentRoundParticipants)
+        .set({ attemptId: createdAttempt.attemptId, updatedAt: params.nowIso })
+        .where(eq(tournamentRoundParticipants.roundParticipantId, params.roundParticipantId));
+
+      return { attemptId: createdAttempt.attemptId };
+    });
+  }
+
   async getLeaderboard(tournamentId: string): Promise<TournamentLeaderboardEntry[]> {
     const rows = await this.db
       .select({
@@ -734,7 +970,10 @@ export class TournamentRepository implements TournamentRepositoryPort {
       .where(
         and(
           eq(tournamentParticipants.tournamentId, tournamentId),
-          eq(tournamentParticipants.status, 'active'),
+          or(
+            eq(tournamentParticipants.status, 'active'),
+            eq(tournamentParticipants.status, 'completed'),
+          ),
         ),
       )
       .orderBy(desc(tournamentParticipants.totalScore), tournamentParticipants.totalTimeMs);
@@ -833,40 +1072,45 @@ export class TournamentRepository implements TournamentRepositoryPort {
       return null;
     }
 
-    const activeParticipants = await this.db
-      .select({
-        participantId: tournamentParticipants.participantId,
-        totalScore: tournamentParticipants.totalScore,
-        totalTimeMs: tournamentParticipants.totalTimeMs,
-      })
-      .from(tournamentParticipants)
-      .innerJoin(users, eq(tournamentParticipants.userId, users.userId))
-      .where(
-        and(
-          eq(tournamentParticipants.tournamentId, params.tournamentId),
-          eq(tournamentParticipants.status, 'active'),
-          isNull(users.deletedAt),
-        ),
-      )
-      .orderBy(desc(tournamentParticipants.totalScore), tournamentParticipants.totalTimeMs);
+    const result = await this.executeRaw<{
+      participant_id: string;
+      total_score: number;
+      total_time_ms: number;
+      participant_count: number;
+      rank: number;
+    }>(sql`
+      SELECT
+        tp.participant_id,
+        tp.total_score,
+        tp.total_time_ms,
+        COUNT(*) OVER ()::int AS participant_count,
+        ROW_NUMBER() OVER (
+          ORDER BY tp.total_score DESC, tp.total_time_ms ASC
+        ) AS rank
+      FROM tournament_participants tp
+      INNER JOIN users u ON u.user_id = tp.user_id
+      WHERE tp.tournament_id = ${params.tournamentId}
+        AND tp.status = 'active'
+        AND u.deleted_at IS NULL
+      HAVING tp.participant_id = ${participant.participantId}
+    `);
 
-    const participantCount = activeParticipants.length;
-    const participantIndex = activeParticipants.findIndex(
-      (row) => row.participantId === participant.participantId,
-    );
+    const rows = result.rows;
 
-    if (participantIndex === -1) {
+    if (!rows.length) {
       return null;
     }
 
-    const rank = participantIndex + 1;
+    const row = rows[0];
+    const rank = Number(row.rank);
+    const participantCount = Number(row.participant_count);
     const rankedBelow = participantCount - rank;
     const percentile =
       participantCount <= 1 ? 0 : Math.round((rankedBelow / participantCount) * 100);
 
     return {
       rank,
-      score: participant.totalScore,
+      score: Number(row.total_score),
       percentile,
       participantCount,
     };
@@ -960,39 +1204,54 @@ export class TournamentRepository implements TournamentRepositoryPort {
     tournamentId: string;
     nowIso: string;
   }): Promise<FinalizedTournamentParticipantRow[]> {
-    const participants = await this.db
-      .select({
-        participantId: tournamentParticipants.participantId,
-        userId: tournamentParticipants.userId,
-      })
-      .from(tournamentParticipants)
-      .innerJoin(users, eq(tournamentParticipants.userId, users.userId))
-      .where(
-        and(
-          eq(tournamentParticipants.tournamentId, params.tournamentId),
-          isNull(tournamentParticipants.withdrawnAt),
-          isNull(users.deletedAt),
-        ),
-      )
-      .orderBy(desc(tournamentParticipants.totalScore), tournamentParticipants.totalTimeMs);
-
-    const totalParticipants = participants.length;
-
-    for (const [index, participant] of participants.entries()) {
-      await this.db
-        .update(tournamentParticipants)
-        .set({
-          rankFinal: index + 1,
-          status: 'completed' as TournamentParticipantStatus,
-          updatedAt: params.nowIso,
+    return this.db.transaction(async (tx) => {
+      const participants = await tx
+        .select({
+          participantId: tournamentParticipants.participantId,
+          userId: tournamentParticipants.userId,
         })
-        .where(eq(tournamentParticipants.participantId, participant.participantId));
-    }
+        .from(tournamentParticipants)
+        .innerJoin(users, eq(tournamentParticipants.userId, users.userId))
+        .where(
+          and(
+            eq(tournamentParticipants.tournamentId, params.tournamentId),
+            isNull(tournamentParticipants.withdrawnAt),
+            isNull(users.deletedAt),
+          ),
+        )
+        .orderBy(desc(tournamentParticipants.totalScore), tournamentParticipants.totalTimeMs);
 
-    return participants.map((participant, index) => ({
-      userId: participant.userId,
-      rank: index + 1,
-      totalParticipants,
-    }));
+      const totalParticipants = participants.length;
+
+      if (totalParticipants > 0) {
+        const rankedParticipants = participants.map((p, i) => ({
+          participantId: p.participantId,
+          rank: i + 1,
+        }));
+
+        await tx
+          .update(tournamentParticipants)
+          .set({
+            rankFinal: sql`CASE ${sql.join(
+              rankedParticipants.map(
+                ({ participantId, rank }) =>
+                  sql`WHEN ${eq(tournamentParticipants.participantId, participantId)} THEN ${rank}`,
+              ),
+              sql` `,
+            )} ELSE rank_final END`,
+            status: 'completed' as TournamentParticipantStatus,
+            updatedAt: params.nowIso,
+          })
+          .where(eq(tournamentParticipants.tournamentId, params.tournamentId));
+      }
+
+      await this.refreshTournamentStats(params.tournamentId);
+
+      return participants.map((participant, index) => ({
+        userId: participant.userId,
+        rank: index + 1,
+        totalParticipants,
+      }));
+    });
   }
 }

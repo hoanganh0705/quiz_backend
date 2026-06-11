@@ -3,14 +3,12 @@ import type {
   TournamentRow,
   TournamentDetailRow,
   TournamentRoundRow,
-  TournamentParticipantRow,
   TournamentLeaderboardEntry,
 } from '../domain/ports';
 import {
   TournamentResponseDto,
   TournamentDetailResponseDto,
   TournamentRoundResponseDto,
-  TournamentParticipantResponseDto,
   TournamentLeaderboardEntryDto,
 } from '../dto/response';
 
@@ -72,20 +70,6 @@ export class TournamentResponseMapper {
       isElimination: row.isElimination,
       participantLimit: row.participantLimit,
       createdAt: row.createdAt,
-      updatedAt: row.updatedAt,
-    };
-  }
-
-  toParticipantResponse(row: TournamentParticipantRow): TournamentParticipantResponseDto {
-    return {
-      participantId: row.participantId,
-      tournamentId: row.tournamentId,
-      userId: row.userId,
-      registeredAt: row.registeredAt,
-      totalScore: row.totalScore,
-      totalTimeMs: row.totalTimeMs,
-      rankFinal: row.rankFinal,
-      status: row.status,
       updatedAt: row.updatedAt,
     };
   }
