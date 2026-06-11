@@ -110,7 +110,12 @@ export class PasswordResetService {
         tokenHash,
         passwordHash,
         nowIso,
-        eventPayload: { eventType: 'password_reset_completed', userId: existing.userId, timestamp: nowIso, ipAddress },
+        eventPayload: {
+          eventType: 'password_reset_completed',
+          userId: existing.userId,
+          timestamp: nowIso,
+          ipAddress,
+        },
       });
       userId = result.userId;
     } catch (error) {

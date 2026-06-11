@@ -1,4 +1,7 @@
-import type { QuizVersionRow, QuizVersionDetailRow } from '../domain/ports/quiz-version-repository.port';
+import type {
+  QuizVersionRow,
+  QuizVersionDetailRow,
+} from '../domain/ports/quiz-version-repository.port';
 import type { QuizQuestionResponseDto } from '../dto/response/quiz-question-response.dto';
 import type {
   QuizVersionResponseDto,
@@ -29,7 +32,17 @@ export class QuizVersionResponseMapper {
   }
 
   static toQuizVersionDetailResponse(
-    row: Pick<QuizVersionDetailRow, 'quizVersionId' | 'quizId' | 'versionNumber' | 'status' | 'passingScorePercent' | 'durationMs' | 'createdAt' | 'updatedAt'> & {
+    row: Pick<
+      QuizVersionDetailRow,
+      | 'quizVersionId'
+      | 'quizId'
+      | 'versionNumber'
+      | 'status'
+      | 'passingScorePercent'
+      | 'durationMs'
+      | 'createdAt'
+      | 'updatedAt'
+    > & {
       title: string;
       description: string | null;
     },

@@ -14,7 +14,7 @@ describe('TournamentService getRelatedTournaments', () => {
       info: jest.fn(),
       warn: jest.fn(),
       error: jest.fn(),
-    } as ConstructorParameters<typeof TournamentService>[2];
+    } as unknown as ConstructorParameters<typeof TournamentService>[2];
 
     const service = new TournamentService(
       tournamentRepository as never,
@@ -24,7 +24,7 @@ describe('TournamentService getRelatedTournaments', () => {
 
     return {
       service,
-      tournamentRepository: tournamentRepository as {
+      tournamentRepository: tournamentRepository as unknown as {
         getTournamentById: jest.Mock;
         listRelatedTournaments: jest.Mock;
       },
@@ -55,7 +55,14 @@ describe('TournamentService getRelatedTournaments', () => {
       limit: 5,
     });
 
-    expect(result.items).toEqual(items);
+    expect(result).toEqual([
+      {
+        tournamentId: 't-2',
+        name: 'Backend Challenge',
+        startAt: '2026-07-01T00:00:00Z',
+        participantCount: 312,
+      },
+    ]);
   });
 
   it('excludes current tournament via repository filter', async () => {

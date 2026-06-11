@@ -19,7 +19,9 @@ export class GetLeaderboardDistributionQueryHandler {
     private readonly logger: PinoLogger,
   ) {}
 
-  async execute(query: GetLeaderboardDistributionQuery): Promise<LeaderboardDistributionResponseDto> {
+  async execute(
+    query: GetLeaderboardDistributionQuery,
+  ): Promise<LeaderboardDistributionResponseDto> {
     this.logger.debug({
       event: 'get_leaderboard_distribution',
       period: query.period,
@@ -34,10 +36,7 @@ export class GetLeaderboardDistributionQueryHandler {
     };
   }
 
-  private toBucketDto(bucket: {
-    label: string;
-    count: number;
-  }): LeaderboardDistributionBucketDto {
+  private toBucketDto(bucket: { label: string; count: number }): LeaderboardDistributionBucketDto {
     return {
       label: bucket.label,
       count: bucket.count,

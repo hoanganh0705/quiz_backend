@@ -8,7 +8,12 @@ import {
   AttemptAnalyticsResponseDto,
   UserAttemptStatsResponseDto,
 } from '../dto/response';
-import type { AttemptDetailRow, AttemptAnswerRow, AttemptAnalyticsRow, UserAttemptStatsRow } from '../domain/ports';
+import type {
+  AttemptDetailRow,
+  AttemptAnswerRow,
+  AttemptAnalyticsRow,
+  UserAttemptStatsRow,
+} from '../domain/ports';
 import type { AttemptListRow } from '../domain/ports';
 
 @Injectable()

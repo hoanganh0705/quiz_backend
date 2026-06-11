@@ -15,7 +15,6 @@ import { ACHIEVEMENT_REPOSITORY_PORT } from '../../infrastructure/repositories/a
 import type {
   AchievementRepositoryPort,
   BadgeDefinitionRow,
-  BadgeRuleRow,
 } from '../../infrastructure/repositories/achievement.repository';
 
 export enum ProgressVisibility {
@@ -56,7 +55,10 @@ export class ProgressTrackingService {
     private readonly logger: PinoLogger,
   ) {}
 
-  async getBadgeProgressSnapshot(userId: string, badgeId: string): Promise<BadgeProgressSnapshot | null> {
+  async getBadgeProgressSnapshot(
+    userId: string,
+    badgeId: string,
+  ): Promise<BadgeProgressSnapshot | null> {
     const badge = await this.achievementRepository.getBadgeById(badgeId);
     if (!badge) {
       this.logger.warn({ event: 'badge_progress_badge_not_found', userId, badgeId });
@@ -67,7 +69,12 @@ export class ProgressTrackingService {
     const primaryRule = rules[0] ?? null;
 
     const target = this.resolveTarget(primaryRule?.config ?? null, badgeId);
-    const current = await this.resolveCurrentProgress(userId, badgeId, primaryRule?.config ?? null, target);
+    const current = await this.resolveCurrentProgress(
+      userId,
+      badgeId,
+      primaryRule?.config ?? null,
+      target,
+    );
     const percent = this.calculatePercent(current, target);
 
     this.logger.debug({

@@ -1671,29 +1671,54 @@ export const quizInstancePlayers = pgTable(
       'btree',
       table.attemptId.asc().nullsLast().op('uuid_ops'),
     ),
+
     index('idx_quiz_instance_players_user_id').using(
       'btree',
       table.userId.asc().nullsLast().op('uuid_ops'),
     ),
+
+    // Supports:
+    // SELECT count(*) FROM quiz_instance_players
+    // WHERE instance_id = ? AND status = ?
+    //
+    // Also useful for leaderboard and player-state filtering.
+    index('idx_quiz_instance_players_instance_status').using(
+      'btree',
+      table.instanceId.asc().nullsLast().op('uuid_ops'),
+      table.status.asc().nullsLast().op('text_ops'),
+    ),
+
     foreignKey({
       columns: [table.attemptId],
       foreignColumns: [quizAttempts.attemptId],
       name: 'quiz_instance_players_attempt_id_fkey',
     }).onDelete('set null'),
+
     foreignKey({
       columns: [table.instanceId],
       foreignColumns: [quizInstances.instanceId],
       name: 'quiz_instance_players_instance_id_fkey',
     }).onDelete('cascade'),
+
     foreignKey({
       columns: [table.userId],
       foreignColumns: [users.userId],
       name: 'quiz_instance_players_user_id_fkey',
     }).onDelete('restrict'),
+
     unique('uq_quiz_instance_players_instance_user').on(table.instanceId, table.userId),
+
     check(
       'quiz_instance_players_status_check',
-      sql`status = ANY (ARRAY['joined'::text, 'ready'::text, 'playing'::text, 'disconnected'::text, 'finished'::text])`,
+      sql`status = ANY (
+        ARRAY[
+          'joined'::text,
+          'ready'::text,
+          'playing'::text,
+          'disconnected'::text,
+          'finished'::text
+        ]
+      )`,
     ),
   ],
 );

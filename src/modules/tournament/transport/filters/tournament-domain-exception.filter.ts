@@ -29,7 +29,9 @@ const HTTP_ERROR_NAMES: Record<number, string> = {
 
 @Catch(TournamentDomainError)
 export class TournamentDomainExceptionFilter implements ExceptionFilter {
-  constructor(@InjectPinoLogger(TournamentDomainExceptionFilter.name) private readonly logger: PinoLogger) {}
+  constructor(
+    @InjectPinoLogger(TournamentDomainExceptionFilter.name) private readonly logger: PinoLogger,
+  ) {}
 
   catch(exception: TournamentDomainError, host: ArgumentsHost): void {
     const ctx = host.switchToHttp();

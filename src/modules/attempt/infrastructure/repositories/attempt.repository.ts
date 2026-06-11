@@ -791,7 +791,11 @@ export class AttemptRepository implements AttemptRepositoryPort {
     return row?.count ?? 0;
   }
 
-  async deleteAnswer(params: { attemptId: string; userId: string; questionId: string }): Promise<void> {
+  async deleteAnswer(params: {
+    attemptId: string;
+    userId: string;
+    questionId: string;
+  }): Promise<void> {
     await this.db
       .delete(quizAttemptAnswers)
       .where(

@@ -51,7 +51,10 @@ export class NotificationApplicationService {
     await this.notificationService.markAsUnread(notificationId, user.sub);
   }
 
-  async getNotificationDetail(notificationId: string, user: JwtPayload): Promise<DomainNotification> {
+  async getNotificationDetail(
+    notificationId: string,
+    user: JwtPayload,
+  ): Promise<DomainNotification> {
     return this.notificationService.getNotificationDetail(notificationId, user.sub);
   }
 

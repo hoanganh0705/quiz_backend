@@ -16,7 +16,7 @@ describe('GetMyRankMovementQueryHandler', () => {
 
     return {
       handler,
-      rankingRepository: rankingRepository as {
+      rankingRepository: rankingRepository as unknown as {
         getLatestRankSnapshots: jest.Mock;
       },
     };
@@ -107,12 +107,14 @@ describe('GetMyRankMovementQueryHandler', () => {
       },
     });
 
-    await expect(handler.execute({ userId: 'u1', period: RankingPeriod.MONTHLY })).resolves.toEqual({
-      previousRank: 80,
-      currentRank: 80,
-      change: 0,
-      direction: 'stable',
-    });
+    await expect(handler.execute({ userId: 'u1', period: RankingPeriod.MONTHLY })).resolves.toEqual(
+      {
+        previousRank: 80,
+        currentRank: 80,
+        change: 0,
+        direction: 'stable',
+      },
+    );
   });
 
   it('returns unknown when only first snapshot exists', async () => {
@@ -130,7 +132,9 @@ describe('GetMyRankMovementQueryHandler', () => {
       previous: null,
     });
 
-    await expect(handler.execute({ userId: 'u1', period: RankingPeriod.ALL_TIME })).resolves.toEqual({
+    await expect(
+      handler.execute({ userId: 'u1', period: RankingPeriod.ALL_TIME }),
+    ).resolves.toEqual({
       previousRank: null,
       currentRank: 120,
       change: null,

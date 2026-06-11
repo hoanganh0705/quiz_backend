@@ -33,8 +33,7 @@ export class TournamentEventProcessor implements OnModuleInit, OnModuleDestroy {
     const fallbackConcurrency = 5;
     const configured = this.configService.get<string | number>('TOURNAMENT_QUEUE_CONCURRENCY');
     const parsed = Number(configured);
-    const concurrency =
-      Number.isInteger(parsed) && parsed > 0 ? parsed : fallbackConcurrency;
+    const concurrency = Number.isInteger(parsed) && parsed > 0 ? parsed : fallbackConcurrency;
 
     this.worker = new Worker<TournamentEventJobData, void, string>(
       'tournament-events',

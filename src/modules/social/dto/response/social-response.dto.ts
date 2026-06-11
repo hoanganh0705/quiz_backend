@@ -264,7 +264,10 @@ export class SocialSuggestionItemDto {
   @ApiProperty({ description: 'Number of mutual followers', example: 8 })
   mutualFollowers!: number;
 
-  @ApiProperty({ description: 'Human-readable primary suggestion reason', example: '12 mutual friends' })
+  @ApiProperty({
+    description: 'Human-readable primary suggestion reason',
+    example: '12 mutual friends',
+  })
   reason!: string;
 }
 

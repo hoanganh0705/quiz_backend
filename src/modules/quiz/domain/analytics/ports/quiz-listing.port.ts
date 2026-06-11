@@ -12,7 +12,10 @@ export interface QuizListingPort {
     dto: ListQuizzesQueryDto;
   }): Promise<QuizListResponseDto>;
 
-  getRecommendedQuizzes(userId: string, dto: RecommendedQuizzesQueryDto): Promise<RelatedQuizzesResponseDto>;
+  getRecommendedQuizzes(
+    userId: string,
+    dto: RecommendedQuizzesQueryDto,
+  ): Promise<RelatedQuizzesResponseDto>;
 
   getMyQuizAnalytics(userId: string): Promise<CreatorQuizAnalyticsDto>;
 

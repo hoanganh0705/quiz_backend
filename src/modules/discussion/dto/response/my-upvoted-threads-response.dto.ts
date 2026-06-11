@@ -30,7 +30,10 @@ export class MyUpvotedThreadItemResponseDto {
 }
 
 export class MyUpvotedThreadsResponseDto {
-  @ApiProperty({ description: 'Upvoted thread items', type: () => [MyUpvotedThreadItemResponseDto] })
+  @ApiProperty({
+    description: 'Upvoted thread items',
+    type: () => [MyUpvotedThreadItemResponseDto],
+  })
   items!: MyUpvotedThreadItemResponseDto[];
 
   @ApiProperty({ description: 'Total number of matching threads', example: 25 })

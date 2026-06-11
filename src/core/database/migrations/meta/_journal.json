@@ -204,6 +204,13 @@
       "when": 1781109095931,
       "tag": "0028_white_infant_terrible",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1781156000000,
+      "tag": "0029_tender_doomsday",
+      "breakpoints": true
     }
   ]
 }

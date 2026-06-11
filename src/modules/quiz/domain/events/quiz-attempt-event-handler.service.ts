@@ -28,9 +28,7 @@ export class QuizAttemptEventHandler implements OnModuleInit {
   ) {}
 
   onModuleInit(): void {
-    this.unsubscribe = this.attemptEventBus.subscribe(
-      this.handleAttemptCompleted.bind(this),
-    );
+    this.unsubscribe = this.attemptEventBus.subscribe(this.handleAttemptCompleted.bind(this));
 
     this.logger.info({
       event: 'quiz_attempt_event_handler_subscribed',

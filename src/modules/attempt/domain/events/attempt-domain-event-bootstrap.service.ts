@@ -1,12 +1,14 @@
 import { Inject, Injectable, OnModuleInit } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
-import { ATTEMPT_DOMAIN_EVENT_BUS, type AttemptEventHandler } from './attempt-domain-event-bus.port';
+import {
+  ATTEMPT_DOMAIN_EVENT_BUS,
+  type AttemptEventHandler,
+} from './attempt-domain-event-bus.port';
 import type { AttemptDomainEventBusPort } from './attempt-domain-event-bus.port';
 import {
   AttemptStartedEvent,
   AttemptAnswerSubmittedEvent,
   AttemptAbandonedEvent,
-  AttemptCompletedEvent,
 } from './attempt-domain.events';
 
 /**

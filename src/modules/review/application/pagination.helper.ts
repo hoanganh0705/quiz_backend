@@ -1,5 +1,3 @@
-import type { ReviewCursor, ReportCursor } from '../domain/ports';
-
 export interface CursorItem {
   createdAt: string;
   [key: string]: unknown;
@@ -19,7 +17,7 @@ export function buildPagination<T extends CursorItem>(
 ): PaginationResult<T> {
   const hasNextPage = rows.length > limit;
   const items = hasNextPage ? rows.slice(0, limit) : rows;
-  const lastItem = items.at(-1) as T | undefined;
+  const lastItem = items.at(-1);
 
   return {
     items,

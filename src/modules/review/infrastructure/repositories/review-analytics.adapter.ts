@@ -1,6 +1,6 @@
 import { Inject, Injectable, forwardRef } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
-import { REVIEW_ANALYTICS_PORT, type ReviewAnalyticsPort } from '@/modules/review/domain/events';
+import { type ReviewAnalyticsPort } from '@/modules/review/domain/events';
 import { ReviewSubmittedEvent, ReviewDeletedEvent } from '@/modules/review/domain/events';
 import { AnalyticsEventHandler } from '@/modules/quiz/domain/analytics/analytics-event-handler';
 

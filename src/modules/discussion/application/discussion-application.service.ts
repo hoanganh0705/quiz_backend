@@ -32,8 +32,6 @@ import type {
   SearchDiscussionsCursor,
   ThreadStats,
   MyDiscussionStats,
-  MarkThreadAsSolvedParams,
-  UnsolveThreadParams,
 } from '../domain/types';
 
 @Injectable()
