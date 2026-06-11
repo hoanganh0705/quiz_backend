@@ -1831,4 +1831,15 @@ export class DiscussionRepository implements DiscussionRepositoryPort {
       deletedAt: comment.deletedAt,
     };
   }
+
+  async getUsernamesForUsers(userIds: string[]): Promise<Map<string, string>> {
+    if (userIds.length === 0) return new Map();
+
+    const rows = await this.db
+      .select({ userId: users.userId, username: users.username })
+      .from(users)
+      .where(inArray(users.userId, userIds));
+
+    return new Map(rows.map((r) => [r.userId, r.username]));
+  }
 }

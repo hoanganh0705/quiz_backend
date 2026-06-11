@@ -18,7 +18,6 @@ export {
   type EvaluationResult as ScheduledEvaluationResult,
   type BatchEvaluationResult,
 } from './scheduled-evaluation.service';
-export * from './badge-notification.service';
 export * from './achievement-history.service';
 export * from './seasonal-badge.service';
 export * from './badge-revocation.service';

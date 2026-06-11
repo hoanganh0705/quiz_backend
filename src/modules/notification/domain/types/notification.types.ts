@@ -77,15 +77,6 @@ export interface UpdatePreferencesParams {
   quietHoursEnd?: string | null;
 }
 
-export interface NotificationAnalytics {
-  total: number;
-  unread: number;
-  badge: number;
-  discussion: number;
-  social: number;
-  ranking: number;
-  tournament: number;
-}
 
 // Rank notification params
 export interface RankNotificationParams {

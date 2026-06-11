@@ -96,4 +96,8 @@ export interface SocialRepositoryPort {
   // Relationship
   getRelationshipStatus(userId: string, targetId: string): Promise<RelationshipStatus>;
   getSocialCounts(userId: string): Promise<SocialCounts>;
+  getUsernamesForUsers(
+    followerId: string,
+    followingId: string,
+  ): Promise<{ followerUsername: string; followingUsername: string }>;
 }

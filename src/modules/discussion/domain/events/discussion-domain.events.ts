@@ -8,7 +8,10 @@ export interface CommentCreatedEvent {
   readonly eventType: 'comment_created';
   readonly commentId: string;
   readonly threadId: string;
+  readonly threadTitle: string;
   readonly authorId: string;
+  readonly authorUsername: string;
+  readonly threadAuthorId: string;
   readonly parentCommentId: string | null;
   readonly isReply: boolean;
   readonly timestamp: Date;
@@ -73,9 +76,12 @@ export interface DiscussionThreadCreatedEvent {
 export interface DiscussionThreadSolvedEvent {
   readonly eventType: 'discussion_thread_solved';
   readonly threadId: string;
+  readonly threadTitle: string;
   readonly commentId: string;
   readonly authorId: string;
+  readonly authorUsername: string;
   readonly solverId: string;
+  readonly solverUsername: string;
   readonly timestamp: Date;
 }
 
