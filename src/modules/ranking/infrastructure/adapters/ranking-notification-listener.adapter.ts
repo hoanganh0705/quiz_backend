@@ -19,7 +19,7 @@ import {
 } from '@/modules/notification/domain/ports/notification-ports';
 
 @Injectable()
-export class RankingListenerAdapter implements OnModuleInit, OnModuleDestroy {
+export class RankingNotificationListenerAdapter implements OnModuleInit, OnModuleDestroy {
   private unsubscribe: (() => void) | null = null;
 
   constructor(
@@ -28,7 +28,7 @@ export class RankingListenerAdapter implements OnModuleInit, OnModuleDestroy {
     private readonly eventBus: RankingDomainEventBusPort,
     @Inject(NOTIFICATION_REPOSITORY_PORT)
     private readonly notificationRepository: NotificationRepositoryPort,
-    @InjectPinoLogger(RankingListenerAdapter.name)
+    @InjectPinoLogger(RankingNotificationListenerAdapter.name)
     private readonly logger: PinoLogger,
   ) {}
 
@@ -58,10 +58,6 @@ export class RankingListenerAdapter implements OnModuleInit, OnModuleDestroy {
 
       case 'ranking.milestone':
         await this.handleRankingMilestone(event);
-        break;
-
-      case 'period.reset.completed':
-        this.handlePeriodResetCompleted(event);
         break;
     }
   }
@@ -113,16 +109,6 @@ export class RankingListenerAdapter implements OnModuleInit, OnModuleDestroy {
         error: error instanceof Error ? error.message : 'Unknown error',
       });
     }
-  }
-
-  private handlePeriodResetCompleted(
-    event: Extract<PublishedRankingDomainEvent, { eventType: 'period.reset.completed' }>,
-  ): void {
-    this.logger.debug({
-      event: 'period_reset_notification_received',
-      period: event.period,
-      archivedRecords: event.archivedRecords,
-    });
   }
 
   private mapMilestone(

@@ -571,7 +571,46 @@ export class SocialService {
       limit,
     });
 
-    return await this.socialRepository.getTrendingUsers(limit);
+    const result = await this.socialRepository.getTrendingUsers(limit);
+
+    if (result.items.length === 0) {
+      return result;
+    }
+
+    const userIds = result.items.map((u) => u.userId);
+
+    // Fetch rank trends for all trending users
+    const trends = await this.ranking.getRankTrendsForUsers(userIds, ['weekly', 'monthly']);
+
+    // Enrich each trending user with rank trend data
+    const enrichedItems = result.items.map((user) => {
+      const userTrends = trends.get(user.userId) ?? [];
+      const weeklyTrend = userTrends.find((t) => t.period === 'weekly') ?? null;
+      const monthlyTrend = userTrends.find((t) => t.period === 'monthly') ?? null;
+      return {
+        ...user,
+        weeklyRankTrend: weeklyTrend ? {
+          period: weeklyTrend.period,
+          currentRank: weeklyTrend.currentRank,
+          previousRank: weeklyTrend.previousRank,
+          change: weeklyTrend.change,
+          direction: weeklyTrend.direction,
+          currentXp: weeklyTrend.currentXp,
+          previousXp: weeklyTrend.previousXp,
+        } : null,
+        monthlyRankTrend: monthlyTrend ? {
+          period: monthlyTrend.period,
+          currentRank: monthlyTrend.currentRank,
+          previousRank: monthlyTrend.previousRank,
+          change: monthlyTrend.change,
+          direction: monthlyTrend.direction,
+          currentXp: monthlyTrend.currentXp,
+          previousXp: monthlyTrend.previousXp,
+        } : null,
+      };
+    });
+
+    return { items: enrichedItems };
   }
 
   async searchUsernameSuggestions(query: string, limit: number): Promise<UsernameSuggestion[]> {
@@ -672,13 +711,19 @@ export class SocialService {
     // Get friend IDs
     const friendIds = friends.map((f) => f.userId);
 
-    // Get rankings for friends
-    const rankings = await this.ranking.getRankingsForUsers(friendIds, period);
+    // Get rankings and trends for friends in parallel
+    const [rankings, trends] = await Promise.all([
+      this.ranking.getRankingsForUsers(friendIds, period),
+      this.ranking.getRankTrendsForUsers(friendIds, ['weekly', 'monthly']),
+    ]);
 
-    // Build entries with rankings
+    // Build entries with rankings and trends
     const entries: FriendRankingEntry[] = friends
       .map((friend) => {
         const ranking = rankings.get(friend.userId);
+        const userTrends = trends.get(friend.userId) ?? [];
+        const weeklyTrend = userTrends.find((t) => t.period === 'weekly') ?? null;
+        const monthlyTrend = userTrends.find((t) => t.period === 'monthly') ?? null;
         return {
           rank: 0, // Will be calculated
           userId: friend.userId,
@@ -687,6 +732,24 @@ export class SocialService {
           avatarUrl: friend.avatarUrl,
           xp: ranking?.xp ?? 0,
           friendSince: friend.friendSince,
+          weeklyRankTrend: weeklyTrend ? {
+            period: weeklyTrend.period,
+            currentRank: weeklyTrend.currentRank,
+            previousRank: weeklyTrend.previousRank,
+            change: weeklyTrend.change,
+            direction: weeklyTrend.direction,
+            currentXp: weeklyTrend.currentXp,
+            previousXp: weeklyTrend.previousXp,
+          } : null,
+          monthlyRankTrend: monthlyTrend ? {
+            period: monthlyTrend.period,
+            currentRank: monthlyTrend.currentRank,
+            previousRank: monthlyTrend.previousRank,
+            change: monthlyTrend.change,
+            direction: monthlyTrend.direction,
+            currentXp: monthlyTrend.currentXp,
+            previousXp: monthlyTrend.previousXp,
+          } : null,
         };
       })
       .filter((e) => e.xp > 0) // Only include friends with XP

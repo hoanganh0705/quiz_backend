@@ -645,6 +645,12 @@ export const outboxEvents = pgTable(
       .defaultNow()
       .notNull(),
     lastError: text('last_error'),
+    /** Client-provided key for XP event deduplication. */
+    idempotencyKey: text('idempotency_key'),
+    /** Timestamp when the event exhausted all retry attempts and moved to DLQ. */
+    failedAt: timestamp('failed_at', { withTimezone: true, mode: 'string' }),
+    /** Human-readable reason for DLQ placement. */
+    dlqReason: text('dlq_reason'),
   },
   (table) => [
     index('idx_outbox_events_unprocessed').using(
@@ -660,6 +666,10 @@ export const outboxEvents = pgTable(
       table.processedAt.asc().nullsLast().op('timestamptz_ops'),
       table.nextAttemptAt.asc().nullsLast().op('timestamptz_ops'),
       table.createdAt.asc().nullsLast().op('timestamptz_ops'),
+    ),
+    index('idx_outbox_events_idempotency_unprocessed').using(
+      'btree',
+      table.idempotencyKey.asc().nullsLast().op('text_ops'),
     ),
   ],
 );
@@ -767,12 +777,14 @@ export const userRanking = pgTable(
     allTimeRank: integer('all_time_rank'),
     weeklyRank: integer('weekly_rank'),
     monthlyRank: integer('monthly_rank'),
+    dailyRank: integer('daily_rank'),
     updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'string' })
       .defaultNow()
       .notNull(),
     // Phase 1 enhancements
     lastWeeklyResetAt: timestamp('last_weekly_reset_at', { withTimezone: true, mode: 'string' }),
     lastMonthlyResetAt: timestamp('last_monthly_reset_at', { withTimezone: true, mode: 'string' }),
+    lastDailyResetAt: timestamp('last_daily_reset_at', { withTimezone: true, mode: 'string' }),
     peakAllTimeRank: integer('peak_all_time_rank'),
     peakAllTimeRankAchievedAt: timestamp('peak_all_time_rank_achieved_at', {
       withTimezone: true,
@@ -788,6 +800,12 @@ export const userRanking = pgTable(
       withTimezone: true,
       mode: 'string',
     }),
+    peakDailyRank: integer('peak_daily_rank'),
+    peakDailyRankAchievedAt: timestamp('peak_daily_rank_achieved_at', {
+      withTimezone: true,
+      mode: 'string',
+    }),
+    dailyXp: integer('daily_xp').default(0).notNull(),
     lastActivityAt: timestamp('last_activity_at', { withTimezone: true, mode: 'string' }),
     isDirty: boolean('is_dirty').default(false).notNull(),
   },
@@ -804,6 +822,10 @@ export const userRanking = pgTable(
       'btree',
       table.monthlyRank.asc().nullsLast().op('int4_ops'),
     ),
+    index('idx_user_ranking_daily_rank').using(
+      'btree',
+      table.dailyRank.asc().nullsLast().op('int4_ops'),
+    ),
     index('idx_user_ranking_dirty').using('btree', table.isDirty.asc().nullsLast().op('bool_ops')),
     index('idx_user_ranking_user_dirty_updated').using(
       'btree',
@@ -819,12 +841,14 @@ export const userRanking = pgTable(
     check('user_ranking_all_time_xp_nonneg', sql`all_time_xp >= 0`),
     check('user_ranking_weekly_xp_nonneg', sql`weekly_xp >= 0`),
     check('user_ranking_monthly_xp_nonneg', sql`monthly_xp >= 0`),
+    check('user_ranking_daily_xp_nonneg', sql`daily_xp >= 0`),
     check(
       'user_ranking_all_time_rank_positive',
       sql`(all_time_rank IS NULL) OR (all_time_rank > 0)`,
     ),
     check('user_ranking_weekly_rank_positive', sql`(weekly_rank IS NULL) OR (weekly_rank > 0)`),
     check('user_ranking_monthly_rank_positive', sql`(monthly_rank IS NULL) OR (monthly_rank > 0)`),
+    check('user_ranking_daily_rank_positive', sql`(daily_rank IS NULL) OR (daily_rank > 0)`),
   ],
 );
 

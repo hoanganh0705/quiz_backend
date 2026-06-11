@@ -6,15 +6,16 @@
  */
 
 import { Controller, Get, Param, Query, UseFilters, UseGuards } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import {
   ApiTags,
   ApiOperation,
   ApiOkResponse,
-  ApiBearerAuth,
-  ApiUnauthorizedResponse,
-  ApiNotFoundResponse,
   ApiQuery,
   ApiBadRequestResponse,
+  ApiHeader,
+  ApiParam,
+  ApiNotFoundResponse,
 } from '@nestjs/swagger';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
 import { Public } from '@/common/decorators/public.decorator';
@@ -78,11 +79,14 @@ export class RankingController {
 
   @Get()
   @Public()
+  @Throttle({ default: { limit: 30, ttl: 60_000 } })
   @ApiOperation({
     summary: 'Get global leaderboard',
     description: 'Returns the global leaderboard with optional period filter.',
   })
   @ApiOkResponse({ description: 'Leaderboard returned', type: LeaderboardResponseDto })
+  @ApiBadRequestResponse({ description: 'Validation failed' })
+  @ApiHeader({ name: 'x-correlation-id', required: false, description: 'Request trace ID' })
   @ApiQuery({ name: 'period', enum: RankingPeriodEnum, required: false })
   @ApiQuery({ name: 'limit', required: false, type: Number })
   @ApiQuery({ name: 'offset', required: false, type: Number })
@@ -96,6 +100,7 @@ export class RankingController {
 
   @Get('distribution')
   @Public()
+  @Throttle({ default: { limit: 30, ttl: 60_000 } })
   @ApiOperation({
     summary: 'Get leaderboard distribution',
     description:
@@ -106,6 +111,7 @@ export class RankingController {
     type: LeaderboardDistributionResponseDto,
   })
   @ApiBadRequestResponse({ description: 'Validation failed' })
+  @ApiHeader({ name: 'x-correlation-id', required: false, description: 'Request trace ID' })
   @ApiQuery({ name: 'period', enum: RankingPeriodEnum, required: false })
   async getLeaderboardDistribution(
     @Query() query: LeaderboardDistributionQueryDto,
@@ -117,6 +123,7 @@ export class RankingController {
 
   @Get('top-movers')
   @Public()
+  @Throttle({ default: { limit: 30, ttl: 60_000 } })
   @ApiOperation({
     summary: 'Get top ranking movers',
     description:
@@ -124,6 +131,7 @@ export class RankingController {
   })
   @ApiOkResponse({ description: 'Top movers returned', type: TopMoversResponseDto })
   @ApiBadRequestResponse({ description: 'Validation failed' })
+  @ApiHeader({ name: 'x-correlation-id', required: false, description: 'Request trace ID' })
   @ApiQuery({
     name: 'period',
     enum: [RankingPeriodEnum.DAILY, RankingPeriodEnum.WEEKLY, RankingPeriodEnum.MONTHLY],
@@ -139,27 +147,24 @@ export class RankingController {
 
   @Get('me')
   @UseGuards(JwtGuard)
-  @ApiBearerAuth()
   @ApiOperation({
     summary: 'Get current user rank',
     description: "Returns the authenticated user's rank information across all periods.",
   })
   @ApiOkResponse({ description: 'User rank returned', type: UserRankResponseDto })
-  @ApiUnauthorizedResponse({ description: 'Missing or invalid token' })
+  @ApiHeader({ name: 'x-correlation-id', required: false, description: 'Request trace ID' })
   async getMyRank(@CurrentUser() user: JwtPayload): Promise<UserRankResponseDto> {
     return this.userRankService.getUserRank(user.sub);
   }
 
   @Get('me/rank')
   @UseGuards(JwtGuard)
-  @ApiBearerAuth()
   @ApiOperation({
     summary: 'Get current user rank for specific period',
     description: "Returns the authenticated user's rank for a specific period.",
   })
   @ApiOkResponse({ description: 'User rank returned', type: UserRankSummaryDto })
-  @ApiUnauthorizedResponse({ description: 'Missing or invalid token' })
-  @ApiNotFoundResponse({ description: 'User not found or has no rank' })
+  @ApiHeader({ name: 'x-correlation-id', required: false, description: 'Request trace ID' })
   @ApiQuery({ name: 'period', enum: RankingPeriodEnum, required: false })
   async getMyRankForPeriod(
     @Query() query: LeaderboardQueryDto,
@@ -173,14 +178,12 @@ export class RankingController {
 
   @Get('me/percentile')
   @UseGuards(JwtGuard)
-  @ApiBearerAuth()
   @ApiOperation({
     summary: 'Get authenticated user percentile',
     description: 'Returns the authenticated user percentile in the selected leaderboard period.',
   })
   @ApiOkResponse({ description: 'User percentile returned', type: UserPercentileResponseDto })
-  @ApiUnauthorizedResponse({ description: 'Missing or invalid token' })
-  @ApiBadRequestResponse({ description: 'Validation failed' })
+  @ApiHeader({ name: 'x-correlation-id', required: false, description: 'Request trace ID' })
   @ApiQuery({ name: 'period', enum: RankingPeriodEnum, required: false })
   async getMyPercentile(
     @CurrentUser() user: JwtPayload,
@@ -194,14 +197,13 @@ export class RankingController {
 
   @Get('me/milestones')
   @UseGuards(JwtGuard)
-  @ApiBearerAuth()
   @ApiOperation({
     summary: 'Get authenticated user ranking milestones',
     description:
       'Returns ranking milestones achieved by the authenticated user in chronological order.',
   })
   @ApiOkResponse({ description: 'Ranking milestones returned', type: RankingMilestonesResponseDto })
-  @ApiUnauthorizedResponse({ description: 'Missing or invalid token' })
+  @ApiHeader({ name: 'x-correlation-id', required: false, description: 'Request trace ID' })
   async getMyRankingMilestones(
     @CurrentUser() user: JwtPayload,
   ): Promise<RankingMilestonesResponseDto> {
@@ -212,14 +214,12 @@ export class RankingController {
 
   @Get('me/nearby')
   @UseGuards(JwtGuard)
-  @ApiBearerAuth()
   @ApiOperation({
     summary: 'Get nearby leaderboard ranks for authenticated user',
     description: 'Returns leaderboard entries immediately above and below the authenticated user.',
   })
   @ApiOkResponse({ description: 'Nearby ranks returned', type: NearbyRanksResponseDto })
-  @ApiUnauthorizedResponse({ description: 'Missing or invalid token' })
-  @ApiBadRequestResponse({ description: 'Validation failed' })
+  @ApiHeader({ name: 'x-correlation-id', required: false, description: 'Request trace ID' })
   @ApiQuery({ name: 'period', enum: RankingPeriodEnum, required: false })
   @ApiQuery({ name: 'radius', required: false, type: Number, example: 2 })
   async getNearbyRanks(
@@ -235,14 +235,13 @@ export class RankingController {
 
   @Get('me/movement')
   @UseGuards(JwtGuard)
-  @ApiBearerAuth()
   @ApiOperation({
     summary: 'Get authenticated user rank movement',
     description:
       "Returns the authenticated user's ranking movement compared to the previous ranking snapshot.",
   })
   @ApiOkResponse({ description: 'Rank movement returned', type: RankMovementResponseDto })
-  @ApiUnauthorizedResponse({ description: 'Missing or invalid token' })
+  @ApiHeader({ name: 'x-correlation-id', required: false, description: 'Request trace ID' })
   @ApiQuery({ name: 'period', enum: RankingPeriodEnum, required: false })
   async getMyRankMovement(
     @CurrentUser() user: JwtPayload,
@@ -256,13 +255,12 @@ export class RankingController {
 
   @Get('me/peak-ranks')
   @UseGuards(JwtGuard)
-  @ApiBearerAuth()
   @ApiOperation({
     summary: 'Get authenticated user peak ranks',
     description: "Returns the authenticated user's best ranking positions ever achieved.",
   })
   @ApiOkResponse({ description: 'Peak ranks returned', type: PeakRanksResponseDto })
-  @ApiUnauthorizedResponse({ description: 'Missing or invalid token' })
+  @ApiHeader({ name: 'x-correlation-id', required: false, description: 'Request trace ID' })
   async getMyPeakRanks(@CurrentUser() user: JwtPayload): Promise<PeakRanksResponseDto> {
     return this.getMyPeakRanksQueryHandler.execute({
       userId: user.sub,
@@ -271,14 +269,12 @@ export class RankingController {
 
   @Get('me/history')
   @UseGuards(JwtGuard)
-  @ApiBearerAuth()
   @ApiOperation({
     summary: 'Get authenticated user ranking history',
     description: "Returns the authenticated user's historical ranking progression over time.",
   })
   @ApiOkResponse({ description: 'Ranking history returned', type: RankingHistoryResponseDto })
-  @ApiUnauthorizedResponse({ description: 'Missing or invalid token' })
-  @ApiBadRequestResponse({ description: 'Validation failed' })
+  @ApiHeader({ name: 'x-correlation-id', required: false, description: 'Request trace ID' })
   @ApiQuery({ name: 'period', enum: RankingPeriodEnum, required: false })
   @ApiQuery({ name: 'from', required: false, type: String, example: '2026-01-01' })
   @ApiQuery({ name: 'to', required: false, type: String, example: '2026-06-01' })
@@ -296,18 +292,22 @@ export class RankingController {
 
   @Get(':userId')
   @Public()
+  @Throttle({ default: { limit: 30, ttl: 60_000 } })
   @ApiOperation({
     summary: 'Get user rank information',
     description: 'Returns public rank information for a specific user.',
   })
   @ApiOkResponse({ description: 'User rank returned', type: UserRankResponseDto })
   @ApiNotFoundResponse({ description: 'User not found' })
+  @ApiHeader({ name: 'x-correlation-id', required: false, description: 'Request trace ID' })
+  @ApiParam({ name: 'userId', type: String, description: 'User UUID' })
   async getUserRank(@Param('userId') userId: string): Promise<UserRankResponseDto> {
     return this.userRankService.getUserRank(userId);
   }
 
   @Get(':userId/history')
   @Public()
+  @Throttle({ default: { limit: 30, ttl: 60_000 } })
   @ApiOperation({
     summary: 'Get public user ranking history',
     description: "Returns the specified user's public historical ranking progression over time.",
@@ -317,7 +317,8 @@ export class RankingController {
     type: PublicRankingHistoryResponseDto,
   })
   @ApiNotFoundResponse({ description: 'User not found' })
-  @ApiBadRequestResponse({ description: 'Validation failed' })
+  @ApiHeader({ name: 'x-correlation-id', required: false, description: 'Request trace ID' })
+  @ApiParam({ name: 'userId', type: String, description: 'User UUID' })
   @ApiQuery({ name: 'period', enum: RankingPeriodEnum, required: false })
   @ApiQuery({ name: 'from', required: false, type: String, example: '2026-01-01' })
   @ApiQuery({ name: 'to', required: false, type: String, example: '2026-06-01' })
@@ -335,6 +336,7 @@ export class RankingController {
 
   @Get(':userId/rank')
   @Public()
+  @Throttle({ default: { limit: 30, ttl: 60_000 } })
   @ApiOperation({
     summary: 'Get user rank for specific period',
     description: "Returns the user's rank for a specific period.",

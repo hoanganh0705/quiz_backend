@@ -11,6 +11,7 @@ import { CommonModule } from './common/common.module';
 import { JwtGuard } from './common/guards/jwt.guard';
 import { GlobalExceptionFilter } from './common/filters/global-exception.filter';
 import { ResponseFormatInterceptor } from './common/interceptors/response-format.interceptor';
+import { CorrelationInterceptor } from './common/interceptors/correlation.interceptor';
 import { CategoryModule } from './modules/category/category.module';
 import { TagModule } from './modules/tag/tag.module';
 import { QuizModule } from './modules/quiz/quiz.module';
@@ -99,6 +100,10 @@ import { HealthModule } from './modules/health/health.module';
     {
       provide: APP_INTERCEPTOR,
       useClass: ResponseFormatInterceptor,
+    },
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: CorrelationInterceptor,
     },
     {
       provide: APP_FILTER,
