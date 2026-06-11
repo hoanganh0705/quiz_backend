@@ -4,7 +4,10 @@ import type {
   CommentCreatedEvent,
   DiscussionThreadSolvedEvent,
 } from '@/modules/discussion/domain/events/discussion-domain.events';
-import { DISCUSSION_REPOSITORY_PORT, type DiscussionRepositoryPort } from '@/modules/discussion/domain/ports';
+import {
+  DISCUSSION_REPOSITORY_PORT,
+  type DiscussionRepositoryPort,
+} from '@/modules/discussion/domain/ports';
 import type { DiscussionComment } from '@/modules/discussion/domain/types';
 import { NotificationChannelService } from './channel.service';
 

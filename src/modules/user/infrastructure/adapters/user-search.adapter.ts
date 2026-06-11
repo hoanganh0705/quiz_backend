@@ -3,7 +3,11 @@ import { DRIZZLE } from '@/core/database/drizzle.constants';
 import type { DrizzleDB } from '@/core/database/database.module';
 import { and, eq, ilike, isNull, or } from 'drizzle-orm';
 import { userProfiles, users } from '@/core/database/schema';
-import type { UserSearchPort, UserSearchResult, UsernameSuggestion } from '../../domain/ports/user-search.port';
+import type {
+  UserSearchPort,
+  UserSearchResult,
+  UsernameSuggestion,
+} from '../../domain/ports/user-search.port';
 
 @Injectable()
 export class UserSearchAdapter implements UserSearchPort {

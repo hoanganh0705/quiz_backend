@@ -8,6 +8,7 @@ import type {
 
 export const NOTIFICATION_REPOSITORY_PORT = Symbol('NOTIFICATION_REPOSITORY_PORT');
 export const NOTIFICATION_SERVICE_PORT = Symbol('NOTIFICATION_SERVICE_PORT');
+export const NOTIFICATION_CHANNEL_SERVICE = Symbol('NOTIFICATION_CHANNEL_SERVICE');
 
 export interface NotificationRepositoryPort {
   create(params: CreateNotificationParams): Promise<Notification>;

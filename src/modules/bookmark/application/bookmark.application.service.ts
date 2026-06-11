@@ -67,14 +67,12 @@ export class BookmarkApplicationService {
     },
   ): Promise<SearchBookmarksResponseDto> {
     this.logger.debug({ event: 'app_search_bookmarks', userId, query: query.q });
-    const { items, limit, hasNextPage, nextCursor } = await this.bookmarkQueryService.searchBookmarks(
-      userId,
-      {
+    const { items, limit, hasNextPage, nextCursor } =
+      await this.bookmarkQueryService.searchBookmarks(userId, {
         query: query.q,
         limit: query.limit,
         cursor: query.cursor ?? null,
-      },
-    );
+      });
 
     return {
       items: items.map((item) => ({
@@ -99,10 +97,8 @@ export class BookmarkApplicationService {
     query: { limit?: number; cursor?: { bookmarkedAt: string; bookmarkId: string } | null },
   ): Promise<RecentBookmarksResponseDto> {
     this.logger.debug({ event: 'app_get_recent_bookmarks', userId });
-    const { items, limit, hasNextPage, nextCursor } = await this.bookmarkQueryService.getRecentBookmarks(
-      userId,
-      query,
-    );
+    const { items, limit, hasNextPage, nextCursor } =
+      await this.bookmarkQueryService.getRecentBookmarks(userId, query);
 
     return {
       items: items.map((item) => ({
@@ -141,7 +137,12 @@ export class BookmarkApplicationService {
     payload: AddBookmarkDto,
     user: JwtPayload,
   ): Promise<AddBookmarkResponseDto> {
-    this.logger.debug({ event: 'app_add_bookmark', userId: user.sub, collectionId, quizId: payload.quizId });
+    this.logger.debug({
+      event: 'app_add_bookmark',
+      userId: user.sub,
+      collectionId,
+      quizId: payload.quizId,
+    });
     const bookmark = await this.bookmarkCommandService.addBookmark(
       collectionId,
       payload.quizId,
@@ -157,7 +158,12 @@ export class BookmarkApplicationService {
     collectionId: string,
     quizIds: string[],
   ): Promise<BulkAddBookmarksResponseDto> {
-    this.logger.debug({ event: 'app_add_bookmarks_bulk', userId, collectionId, count: quizIds.length });
+    this.logger.debug({
+      event: 'app_add_bookmarks_bulk',
+      userId,
+      collectionId,
+      count: quizIds.length,
+    });
     return {
       addedCount: Number(
         await this.bookmarkCommandService.addBookmarksBulk(userId, collectionId, quizIds),
@@ -170,7 +176,12 @@ export class BookmarkApplicationService {
     collectionId: string,
     quizIds: string[],
   ): Promise<BulkRemoveBookmarksResponseDto> {
-    this.logger.debug({ event: 'app_remove_bookmarks_bulk', userId, collectionId, count: quizIds.length });
+    this.logger.debug({
+      event: 'app_remove_bookmarks_bulk',
+      userId,
+      collectionId,
+      count: quizIds.length,
+    });
     return {
       removedCount: Number(
         await this.bookmarkCommandService.removeBookmarksBulk(userId, collectionId, quizIds),
@@ -216,7 +227,11 @@ export class BookmarkApplicationService {
     collectionId: string,
     user: JwtPayload,
   ): Promise<BookmarkListResponseDto> {
-    this.logger.debug({ event: 'app_list_bookmarks_in_collection', userId: user.sub, collectionId });
+    this.logger.debug({
+      event: 'app_list_bookmarks_in_collection',
+      userId: user.sub,
+      collectionId,
+    });
     const rows = await this.bookmarkQueryService.listBookmarksInCollection(collectionId, user);
 
     return {
@@ -239,9 +254,20 @@ export class BookmarkApplicationService {
     payload: { quizId: string; targetCollectionId: string },
   ): Promise<MoveBookmarkResponseDto> {
     const { targetCollectionId, quizId } = payload;
-    this.logger.debug({ event: 'app_move_bookmark', userId, sourceCollectionId, targetCollectionId, quizId });
+    this.logger.debug({
+      event: 'app_move_bookmark',
+      userId,
+      sourceCollectionId,
+      targetCollectionId,
+      quizId,
+    });
 
-    await this.bookmarkCommandService.moveBookmark(userId, sourceCollectionId, targetCollectionId, quizId);
+    await this.bookmarkCommandService.moveBookmark(
+      userId,
+      sourceCollectionId,
+      targetCollectionId,
+      quizId,
+    );
 
     return { message: 'Bookmark moved successfully' };
   }

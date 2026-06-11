@@ -55,9 +55,15 @@ export class MyDiscussionsPaginationResponseDto {
 }
 
 export class MyDiscussionsResponseDto {
-  @ApiProperty({ description: 'Authenticated user discussion items', type: () => [MyDiscussionItemResponseDto] })
+  @ApiProperty({
+    description: 'Authenticated user discussion items',
+    type: () => [MyDiscussionItemResponseDto],
+  })
   items!: MyDiscussionItemResponseDto[];
 
-  @ApiProperty({ description: 'Pagination metadata', type: () => MyDiscussionsPaginationResponseDto })
+  @ApiProperty({
+    description: 'Pagination metadata',
+    type: () => MyDiscussionsPaginationResponseDto,
+  })
   pagination!: MyDiscussionsPaginationResponseDto;
 }

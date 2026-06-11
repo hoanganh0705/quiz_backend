@@ -7,7 +7,6 @@ import { and, desc, eq, isNull, or, sql, asc, ne } from 'drizzle-orm';
 import type {
   TagRepositoryPort,
   TagRow,
-  TagDeleteStatus,
   FollowResult,
   TagUnfollowResult,
   FollowedTagRow,
@@ -243,7 +242,7 @@ export class TagRepository implements TagRepositoryPort {
         .where(eq(tagFollows.followId, existingDeletedFollow.followId))
         .returning({ followId: tagFollows.followId });
 
-      return restored!;
+      return restored;
     }
 
     const [newFollow] = await this.db
@@ -255,7 +254,7 @@ export class TagRepository implements TagRepositoryPort {
       })
       .returning({ followId: tagFollows.followId });
 
-    return newFollow!;
+    return newFollow;
   }
 
   async unfollowTag(params: {

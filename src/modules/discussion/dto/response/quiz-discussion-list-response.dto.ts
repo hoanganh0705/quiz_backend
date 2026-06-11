@@ -76,9 +76,15 @@ export class QuizDiscussionPaginationResponseDto {
 }
 
 export class QuizDiscussionListResponseDto {
-  @ApiProperty({ description: 'Discussion thread items', type: () => [QuizDiscussionItemResponseDto] })
+  @ApiProperty({
+    description: 'Discussion thread items',
+    type: () => [QuizDiscussionItemResponseDto],
+  })
   items!: QuizDiscussionItemResponseDto[];
 
-  @ApiProperty({ description: 'Pagination metadata', type: () => QuizDiscussionPaginationResponseDto })
+  @ApiProperty({
+    description: 'Pagination metadata',
+    type: () => QuizDiscussionPaginationResponseDto,
+  })
   pagination!: QuizDiscussionPaginationResponseDto;
 }

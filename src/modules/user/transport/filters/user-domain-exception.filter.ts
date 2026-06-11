@@ -21,10 +21,7 @@ const HTTP_ERROR_NAMES: Record<number, string> = {
  */
 @Catch(UserDomainError, UserProfilePrivateError)
 export class UserDomainExceptionFilter implements ExceptionFilter {
-  catch(
-    exception: UserDomainError | UserProfilePrivateError,
-    host: ArgumentsHost,
-  ): void {
+  catch(exception: UserDomainError | UserProfilePrivateError, host: ArgumentsHost): void {
     const ctx = host.switchToHttp();
     const response = ctx.getResponse<Response>();
 

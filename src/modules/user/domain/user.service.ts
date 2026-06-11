@@ -29,7 +29,10 @@ import type { GetMyTournamentHistoryQuery } from './types/get-my-tournament-hist
 import type { GetPublicTournamentProfileQuery } from './types/get-public-tournament-profile.query';
 import type { GetMyTournamentAnalyticsQuery } from './types/get-my-tournament-analytics.query';
 import { XP_PER_LEVEL } from './constants/user.domain-constants';
-import { USER_DOMAIN_EVENT_BUS, type UserDomainEventBusPort } from './events/user-domain-event-bus.port';
+import {
+  USER_DOMAIN_EVENT_BUS,
+  type UserDomainEventBusPort,
+} from './events/user-domain-event-bus.port';
 import { UserProfileUpdatedEvent, UserSettingsUpdatedEvent } from './events/user-domain.events';
 
 function calculateLevel(totalXp: number): number {
@@ -172,7 +175,11 @@ export class UserDomainService {
     this.logger.info({ event: 'user_profile_updated', userId });
 
     this.eventBus.emitProfileUpdated(
-      new UserProfileUpdatedEvent(userId, Object.keys(patch) as ('displayName' | 'bio' | 'avatarUrl')[], nowIso),
+      new UserProfileUpdatedEvent(
+        userId,
+        Object.keys(patch) as ('displayName' | 'bio' | 'avatarUrl')[],
+        nowIso,
+      ),
     );
 
     return updated;
@@ -229,9 +236,7 @@ export class UserDomainService {
     };
   }
 
-  async getMyTournaments(
-    query: GetMyTournamentsQuery & { requesterId: string },
-  ): Promise<{
+  async getMyTournaments(query: GetMyTournamentsQuery & { requesterId: string }): Promise<{
     items: MyTournamentRow[];
     limit: number;
     hasNextPage: boolean;

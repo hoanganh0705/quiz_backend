@@ -1,11 +1,4 @@
-import {
-  Controller,
-  Get,
-  Param,
-  ParseUUIDPipe,
-  Query,
-  UseFilters,
-} from '@nestjs/common';
+import { Controller, Get, Param, ParseUUIDPipe, Query, UseFilters } from '@nestjs/common';
 import {
   ApiTags,
   ApiOperation,
@@ -36,7 +29,10 @@ export class QuizDiscussionController {
     summary: 'List quiz discussions',
     description: 'Returns a paginated list of discussion threads for a specific quiz.',
   })
-  @ApiOkResponse({ description: 'Discussion threads returned', type: QuizDiscussionListResponseDto })
+  @ApiOkResponse({
+    description: 'Discussion threads returned',
+    type: QuizDiscussionListResponseDto,
+  })
   @ApiNotFoundResponse({ description: 'Quiz not found' })
   @ApiBadRequestResponse({ description: 'Validation failed' })
   @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })

@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { DRIZZLE } from '@/core/database/drizzle.constants';
 
 // Database
@@ -28,6 +28,7 @@ import { ACHIEVEMENT_REPOSITORY_PORT } from './infrastructure/repositories/achie
 import { RankingListenerAdapter } from './infrastructure/adapters/ranking-listener.adapter';
 import { AttemptEventListenerAdapter } from './infrastructure/adapters/attempt-listener.adapter';
 import { TournamentEventListenerAdapter } from './infrastructure/adapters/tournament-listener.adapter';
+import { InstanceEventListenerAdapter } from './infrastructure/adapters/instance-listener.adapter';
 import { UserActivityListenerAdapter } from './infrastructure/adapters/user-activity-listener.adapter';
 
 // Application
@@ -42,9 +43,17 @@ import { UserModule } from '@/modules/user/user.module';
 import { RankingModule } from '@/modules/ranking/ranking.module';
 import { AttemptModule } from '@/modules/attempt/attempt.module';
 import { TournamentModule } from '@/modules/tournament/tournament.module';
+import { InstanceModule } from '@/modules/instance/instance.module';
 
 @Module({
-  imports: [DatabaseModule, UserModule, RankingModule, AttemptModule, TournamentModule],
+  imports: [
+    DatabaseModule,
+    UserModule,
+    RankingModule,
+    AttemptModule,
+    TournamentModule,
+    forwardRef(() => InstanceModule),
+  ],
   controllers: [AchievementController],
   providers: [
     {
@@ -80,6 +89,7 @@ import { TournamentModule } from '@/modules/tournament/tournament.module';
     RankingListenerAdapter,
     AttemptEventListenerAdapter,
     TournamentEventListenerAdapter,
+    InstanceEventListenerAdapter,
     UserActivityListenerAdapter,
 
     // Application
@@ -113,6 +123,7 @@ import { TournamentModule } from '@/modules/tournament/tournament.module';
     // Event Listeners
     AttemptEventListenerAdapter,
     TournamentEventListenerAdapter,
+    InstanceEventListenerAdapter,
     UserActivityListenerAdapter,
 
     // Application Service

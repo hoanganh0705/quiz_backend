@@ -1,15 +1,4 @@
-import {
-  Body,
-  Controller,
-  Delete,
-  Get,
-  Param,
-  ParseUUIDPipe,
-  Patch,
-  Post,
-  Query,
-  UseFilters,
-} from '@nestjs/common';
+import { Body, Controller, Get, Param, ParseUUIDPipe, Query, UseFilters } from '@nestjs/common';
 import {
   ApiTags,
   ApiOperation,
@@ -137,7 +126,7 @@ export class UserReviewController {
   @ApiOperation({
     summary: 'List my reviews',
     description:
-      "Returns a cursor-paginated list of all reviews created by the authenticated user, ordered by newest first.",
+      'Returns a cursor-paginated list of all reviews created by the authenticated user, ordered by newest first.',
   })
   @ApiOkResponse({
     description: 'My reviews returned',

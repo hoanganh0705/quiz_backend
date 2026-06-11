@@ -121,7 +121,11 @@ export interface RankingRepositoryPort {
   clearDirtyFlags(userIds: string[]): Promise<void>;
 
   // Rank Operations
-  updateRank(params: { userId: string; period: RankingPeriod; rank: number }): Promise<number | null>;
+  updateRank(params: {
+    userId: string;
+    period: RankingPeriod;
+    rank: number;
+  }): Promise<number | null>;
 
   updatePeakRank(params: { userId: string; period: RankingPeriod; rank: number }): Promise<boolean>;
 
@@ -164,16 +168,9 @@ export interface RankingRepositoryPort {
     period: RankingPeriod;
   }): Promise<RankSnapshotPairRow>;
 
-  getTopMovers(params: {
-    period: RankingPeriod;
-    limit: number;
-  }): Promise<TopMoverRow[]>;
+  getTopMovers(params: { period: RankingPeriod; limit: number }): Promise<TopMoverRow[]>;
 
-  getNearbyRanks(params: {
-    userId: string;
-    period: RankingPeriod;
-    radius: number;
-  }): Promise<{
+  getNearbyRanks(params: { userId: string; period: RankingPeriod; radius: number }): Promise<{
     above: NearbyRankEntryRow[];
     me: NearbyRankEntryRow | null;
     below: NearbyRankEntryRow[];
@@ -188,10 +185,7 @@ export interface RankingRepositoryPort {
 
   getUserMilestones(userId: string): Promise<RankingMilestoneRow[]>;
 
-  hasMilestone(params: {
-    userId: string;
-    milestone: RankingMilestone;
-  }): Promise<boolean>;
+  hasMilestone(params: { userId: string; milestone: RankingMilestone }): Promise<boolean>;
 
   getLeaderboardDistribution(period: RankingPeriod): Promise<LeaderboardDistributionRow>;
 

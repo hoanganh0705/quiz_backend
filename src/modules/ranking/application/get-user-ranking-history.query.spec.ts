@@ -35,19 +35,22 @@ describe('GetUserRankingHistoryQueryHandler', () => {
 
     return {
       handler,
-      rankingRepository: rankingRepository as {
+      rankingRepository: rankingRepository as unknown as {
         getUserRankingHistory: jest.Mock;
       },
-      db: db as {
+      db: db as unknown as {
         select: jest.Mock;
       },
-      logger: logger as {
+      logger: logger as unknown as {
         warn: jest.Mock;
       },
     };
   };
 
-  const mockUserQueryResult = (db: { select: jest.Mock }, rows: Array<{ userId: string; username: string }>) => {
+  const mockUserQueryResult = (
+    db: { select: jest.Mock },
+    rows: Array<{ userId: string; username: string }>,
+  ) => {
     const limit = jest.fn().mockResolvedValue(rows);
     const where = jest.fn().mockReturnValue({ limit });
     const leftJoin = jest.fn().mockReturnValue({ where });

@@ -124,7 +124,10 @@ export type PlatformReportRow = {
 export interface ReviewRepositoryPort {
   getReviewByQuizAndUser(quizId: string, userId: string): Promise<ReviewRow | null>;
 
-  getMyQuizReview(quizId: string, userId: string): Promise<import('@/modules/review/domain/ports').ReviewDetailByIdRow | null>;
+  getMyQuizReview(
+    quizId: string,
+    userId: string,
+  ): Promise<import('@/modules/review/domain/ports').ReviewDetailByIdRow | null>;
 
   getReviewById(reviewId: string): Promise<ReviewRow | null>;
 

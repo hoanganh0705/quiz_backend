@@ -1,9 +1,4 @@
-import {
-  CallHandler,
-  ExecutionContext,
-  Injectable,
-  NestInterceptor,
-} from '@nestjs/common';
+import { CallHandler, ExecutionContext, Injectable, NestInterceptor } from '@nestjs/common';
 import { Observable, from } from 'rxjs';
 import { AUTH_TRANSACTIONAL_KEY } from './transactional.decorator';
 import { AuthTransactionContext } from './auth-transaction.context';

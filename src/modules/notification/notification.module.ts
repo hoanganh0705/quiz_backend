@@ -14,6 +14,10 @@ import {
   DiscussionNotificationService,
 } from './domain/services';
 import {
+  NOTIFICATION_CHANNEL_SERVICE,
+  NOTIFICATION_REPOSITORY_PORT,
+} from './domain/ports';
+import {
   RankingListenerAdapter,
   AchievementListenerAdapter,
   TournamentListenerAdapter,
@@ -26,7 +30,6 @@ import { SocialModule } from '@/modules/social';
 import { AchievementModule } from '@/modules/achievement/achievement.module';
 import { TournamentModule } from '@/modules/tournament/tournament.module';
 import { DiscussionModule } from '@/modules/discussion/discussion.module';
-import { NOTIFICATION_REPOSITORY_PORT } from './domain/ports';
 
 @Module({
   imports: [
@@ -45,6 +48,10 @@ import { NOTIFICATION_REPOSITORY_PORT } from './domain/ports';
       useExisting: NotificationRepository,
     },
     NotificationService,
+    {
+      provide: NOTIFICATION_CHANNEL_SERVICE,
+      useExisting: NotificationChannelService,
+    },
     NotificationChannelService,
     RankNotificationService,
     AchievementNotificationService,
@@ -62,6 +69,7 @@ import { NOTIFICATION_REPOSITORY_PORT } from './domain/ports';
   controllers: [NotificationController],
   exports: [
     NOTIFICATION_REPOSITORY_PORT,
+    NOTIFICATION_CHANNEL_SERVICE,
     NotificationService,
     NotificationChannelService,
     RankNotificationService,

@@ -50,7 +50,6 @@ import {
   DiscussionThreadUnsolveResponseDto,
 } from '@/modules/discussion/dto/response';
 import {
-  CreateThreadDto,
   UpdateThreadDto,
   CreateCommentDto,
   UpdateCommentDto,
@@ -392,7 +391,8 @@ export class DiscussionController {
   @ApiAuth()
   @ApiOperation({
     summary: 'Mark thread as solved',
-    description: 'Marks a discussion thread as solved by selecting one of its comments as the accepted solution.',
+    description:
+      'Marks a discussion thread as solved by selecting one of its comments as the accepted solution.',
   })
   @ApiOkResponse({
     description: 'Thread marked as solved successfully',
@@ -422,7 +422,8 @@ export class DiscussionController {
   @ApiAuth()
   @ApiOperation({
     summary: 'Unsolve thread',
-    description: 'Removes the solved state from a discussion thread owned by the authenticated user.',
+    description:
+      'Removes the solved state from a discussion thread owned by the authenticated user.',
   })
   @ApiOkResponse({
     description: 'Thread unsolved successfully',

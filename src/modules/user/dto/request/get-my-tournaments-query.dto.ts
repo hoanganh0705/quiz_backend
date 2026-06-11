@@ -5,7 +5,8 @@ import { IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
 export class GetMyTournamentsQueryDto {
   @ApiPropertyOptional({
     description: 'Cursor for pagination (base64-encoded { registeredAt, participantId })',
-    example: 'eyJyZWdpc3RlcmVkQXQiOiAiMjAyNi0wNi0wMVQwMDowMDowMFoiLCAicGFydGljaXBhbnRJZCI6ICI2NjBlODQwMC1lMjliLTMxZDQtYTcxNi00NDY2NTY1NDQwMDAifQ==',
+    example:
+      'eyJyZWdpc3RlcmVkQXQiOiAiMjAyNi0wNi0wMVQwMDowMDowMFoiLCAicGFydGljaXBhbnRJZCI6ICI2NjBlODQwMC1lMjliLTMxZDQtYTcxNi00NDY2NTY1NDQwMDAifQ==',
   })
   @IsOptional()
   @IsString()

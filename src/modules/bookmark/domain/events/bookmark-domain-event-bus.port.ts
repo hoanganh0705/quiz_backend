@@ -1,7 +1,4 @@
-import type {
-  BookmarkAddedEvent,
-  BookmarkRemovedEvent,
-} from './bookmark-domain.events';
+import type { BookmarkAddedEvent, BookmarkRemovedEvent } from './bookmark-domain.events';
 
 export const BOOKMARK_DOMAIN_EVENT_BUS = Symbol('BOOKMARK_DOMAIN_EVENT_BUS');
 

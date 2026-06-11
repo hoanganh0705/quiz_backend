@@ -22,10 +22,7 @@ import { Roles } from '@/common/authorization/decorators/roles.decorator';
 import { ApiAuth, ApiValidationRequest } from '@/common/swagger/swagger-decorators';
 import { ReviewAdminService } from '@/modules/review/domain/review-admin.service';
 import { CursorMapper } from '@/modules/review/mappers/review-cursor.mapper';
-import {
-  ListPlatformReportsQueryDto,
-  UpdateReportStatusDto,
-} from '@/modules/review/dto/request';
+import { ListPlatformReportsQueryDto, UpdateReportStatusDto } from '@/modules/review/dto/request';
 import {
   PlatformReportsResponseDto,
   UpdateReportStatusResponseDto,
@@ -35,9 +32,7 @@ import {
 @ApiBearerAuth()
 @Controller('admin/reviews')
 export class AdminReviewController {
-  constructor(
-    private readonly reviewAdminService: ReviewAdminService,
-  ) {}
+  constructor(private readonly reviewAdminService: ReviewAdminService) {}
 
   @Get('reports')
   @Roles('admin')
@@ -49,7 +44,10 @@ export class AdminReviewController {
       'Returns a paginated list of all review reports across the platform. ' +
       'Only accessible by admin users.',
   })
-  @ApiOkResponse({ description: 'Paginated list of platform-wide reports', type: PlatformReportsResponseDto })
+  @ApiOkResponse({
+    description: 'Paginated list of platform-wide reports',
+    type: PlatformReportsResponseDto,
+  })
   @ApiUnauthorizedResponse({ description: 'Unauthorized — missing or invalid token' })
   @ApiForbiddenResponse({ description: 'Forbidden — requires admin role' })
   async listPlatformReports(

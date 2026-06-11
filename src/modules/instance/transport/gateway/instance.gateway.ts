@@ -13,12 +13,11 @@ import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { WsJwtGuard } from '@/common/guards/ws-jwt.guard';
 import { WsCurrentUser } from '@/common/decorators/ws-current-user.decorator';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
-import { InstanceService } from '../../domain/instance.service';
 import { WsExceptionFilter } from '../filters/ws-exception.filter';
+import { InstanceApplicationService } from '../../application/instance.application.service';
 
-interface RoomState {
-  socketToUser: Map<string, string>;
-}
+const ERR_NOT_HOST = { code: 'NOT_HOST', message: 'Only the host can perform this action' };
+const ERR_FORBIDDEN = { code: 'FORBIDDEN', message: 'You do not have permission for this action' };
 
 @WebSocketGateway({
   namespace: '/instances',
@@ -30,15 +29,17 @@ interface RoomState {
 @UseFilters(WsExceptionFilter)
 export class InstanceGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
-  server: Server = new Server();
-
-  private roomStates: Map<string, RoomState> = new Map();
+  server!: Server;
 
   constructor(
-    private readonly instanceService: InstanceService,
+    private readonly instanceAppService: InstanceApplicationService,
     @InjectPinoLogger(InstanceGateway.name)
     private readonly logger: PinoLogger,
   ) {}
+
+  afterInit(): void {
+    this.instanceAppService.setServer(this.server);
+  }
 
   handleConnection(client: Socket): void {
     this.logger.info({ event: 'client_connected', socketId: client.id });
@@ -47,20 +48,10 @@ export class InstanceGateway implements OnGatewayConnection, OnGatewayDisconnect
   handleDisconnect(client: Socket): void {
     this.logger.info({ event: 'client_disconnected', socketId: client.id });
 
-    for (const [roomId, room] of this.roomStates.entries()) {
-      if (room.socketToUser.has(client.id)) {
-        room.socketToUser.delete(client.id);
-        void client.leave(roomId);
-        this.server.to(roomId).emit('player_left', {
-          socketId: client.id,
-          remainingPlayers: room.socketToUser.size,
-        });
-
-        if (room.socketToUser.size === 0) {
-          this.roomStates.delete(roomId);
-        }
-        break;
-      }
+    const rooms = Array.from(client.rooms).filter((r) => r !== client.id);
+    for (const roomId of rooms) {
+      void client.leave(roomId);
+      this.instanceAppService.handlePlayerLeftSocket({ socketId: client.id, instanceId: roomId });
     }
   }
 
@@ -73,22 +64,12 @@ export class InstanceGateway implements OnGatewayConnection, OnGatewayDisconnect
   ): Promise<{ event: string; data: Record<string, unknown> }> {
     const { instanceId } = data;
 
-    const instance = await this.instanceService.getInstanceById(instanceId);
-
     await client.join(instanceId);
+    this.instanceAppService.handlePlayerJoinedSocket({ socketId: client.id, instanceId, user });
 
-    if (!this.roomStates.has(instanceId)) {
-      this.roomStates.set(instanceId, { socketToUser: new Map() });
-    }
+    await this.instanceAppService.joinInstance(instanceId, user);
 
-    this.roomStates.get(instanceId)!.socketToUser.set(client.id, user.sub);
-
-    this.server.to(instanceId).emit('player_joined', {
-      userId: user.sub,
-      username: user.sub,
-      totalPlayers: this.roomStates.get(instanceId)!.socketToUser.size,
-      instanceStatus: instance.status,
-    });
+    const result = await this.instanceAppService.handleJoinInstanceSocket(instanceId, user);
 
     this.logger.info({
       event: 'ws_player_joined',
@@ -101,8 +82,8 @@ export class InstanceGateway implements OnGatewayConnection, OnGatewayDisconnect
       event: 'joined',
       data: {
         instanceId,
-        status: instance.status,
-        quizTitle: instance.quizTitle,
+        status: result.status,
+        quizTitle: result.quizTitle,
       },
     };
   }
@@ -113,19 +94,15 @@ export class InstanceGateway implements OnGatewayConnection, OnGatewayDisconnect
     @ConnectedSocket() client: Socket,
     @MessageBody() data: { instanceId: string },
     @WsCurrentUser() user: JwtPayload,
-  ): Promise<{ event: string; data: Record<string, unknown> } | void> {
+  ): Promise<{ event: string; data: Record<string, unknown> }> {
     const { instanceId } = data;
 
-    const isHost = await this.instanceService.isHost(instanceId, user.sub);
-    if (!isHost) return;
+    const isHost = await this.instanceAppService.handleStartGameSocket(instanceId, user);
+    if (!isHost) {
+      return { event: 'error', data: ERR_FORBIDDEN };
+    }
 
-    const result = await this.instanceService.startInstance(instanceId, user);
-
-    this.server.to(instanceId).emit('game_started', {
-      instanceId,
-      startedBy: user.sub,
-      timestamp: new Date().toISOString(),
-    });
+    const result = await this.instanceAppService.startInstance(instanceId, user);
 
     this.logger.info({
       event: 'ws_game_started',
@@ -166,15 +143,19 @@ export class InstanceGateway implements OnGatewayConnection, OnGatewayDisconnect
     @ConnectedSocket() client: Socket,
     @MessageBody() data: { instanceId: string; questionNumber: number; totalQuestions: number },
     @WsCurrentUser() user: JwtPayload,
-  ): Promise<void> {
-    const isHost = await this.instanceService.isHost(data.instanceId, user.sub);
-    if (!isHost) return;
+  ): Promise<{ event: string; data: Record<string, unknown> }> {
+    const isHost = await this.instanceAppService.handleQuestionRevealedSocket(data, user);
+    if (!isHost) {
+      return { event: 'error', data: ERR_NOT_HOST };
+    }
 
     this.server.to(data.instanceId).emit('question_revealed', {
       questionNumber: data.questionNumber,
       totalQuestions: data.totalQuestions,
       timestamp: new Date().toISOString(),
     });
+
+    return { event: 'ack', data: { received: true } };
   }
 
   @UseGuards(WsJwtGuard)
@@ -183,26 +164,13 @@ export class InstanceGateway implements OnGatewayConnection, OnGatewayDisconnect
     @ConnectedSocket() client: Socket,
     @MessageBody() data: { instanceId: string },
     @WsCurrentUser() user: JwtPayload,
-  ): Promise<void> {
-    const isHost = await this.instanceService.isHost(data.instanceId, user.sub);
-    if (!isHost) return;
+  ): Promise<{ event: string; data: Record<string, unknown> }> {
+    const isHost = await this.instanceAppService.handleUpdateLeaderboardSocket(data.instanceId, user);
+    if (!isHost) {
+      return { event: 'error', data: ERR_NOT_HOST };
+    }
 
-    const leaderboard = await this.instanceService.getLeaderboard(data.instanceId);
-
-    this.server.to(data.instanceId).emit('leaderboard_updated', {
-      entries: leaderboard.map((e) => ({
-        userId: e.userId,
-        username: e.username,
-        displayName: e.displayName,
-        avatarUrl: e.avatarUrl,
-        scorePercent: e.scorePercent,
-        correctCount: e.correctCount,
-        timeTakenMs: e.timeTakenMs,
-        rank: e.rank,
-        status: e.status,
-      })),
-      timestamp: new Date().toISOString(),
-    });
+    return { event: 'ack', data: { received: true } };
   }
 
   @UseGuards(WsJwtGuard)
@@ -211,32 +179,12 @@ export class InstanceGateway implements OnGatewayConnection, OnGatewayDisconnect
     @ConnectedSocket() client: Socket,
     @MessageBody() data: { instanceId: string },
     @WsCurrentUser() user: JwtPayload,
-  ): Promise<void> {
-    const isHost = await this.instanceService.isHost(data.instanceId, user.sub);
-    if (!isHost) return;
+  ): Promise<{ event: string; data: Record<string, unknown> }> {
+    const isHost = await this.instanceAppService.handleEndGameSocket(data.instanceId, user);
+    if (!isHost) {
+      return { event: 'error', data: ERR_NOT_HOST };
+    }
 
-    const leaderboard = await this.instanceService.getLeaderboard(data.instanceId);
-
-    this.server.to(data.instanceId).emit('game_finished', {
-      instanceId: data.instanceId,
-      leaderboard: leaderboard.map((e) => ({
-        userId: e.userId,
-        username: e.username,
-        displayName: e.displayName,
-        avatarUrl: e.avatarUrl,
-        scorePercent: e.scorePercent,
-        correctCount: e.correctCount,
-        timeTakenMs: e.timeTakenMs,
-        rank: e.rank,
-        status: e.status,
-      })),
-      timestamp: new Date().toISOString(),
-    });
-
-    this.logger.info({
-      event: 'ws_game_finished',
-      instanceId: data.instanceId,
-      userId: user.sub,
-    });
+    return { event: 'ack', data: { received: true } };
   }
 }

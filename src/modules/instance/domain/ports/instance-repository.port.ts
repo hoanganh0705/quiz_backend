@@ -26,6 +26,10 @@ export type QuizInstanceDetailRow = QuizInstanceRow & {
   hostDisplayName: string | null;
 };
 
+export type QuizInstanceListRow = QuizInstanceDetailRow & {
+  playerCount: number;
+};
+
 export type QuizInstancePlayerRow = {
   instancePlayerId: string;
   instanceId: string;
@@ -36,17 +40,49 @@ export type QuizInstancePlayerRow = {
   leftAt: string | null;
 };
 
-export type QuizInstancePlayerDetailRow = QuizInstancePlayerRow & {
+export type InstanceLeaderboardEntry = {
+  instancePlayerId: string;
+  instanceId: string;
+  userId: string;
+  attemptId: string | null;
+  status: string;
+  joinedAt: string;
+  leftAt: string | null;
   username: string;
   displayName: string | null;
   avatarUrl: string | null;
-};
-
-export type InstanceLeaderboardEntry = QuizInstancePlayerDetailRow & {
   scorePercent: string | null;
   correctCount: number | null;
   timeTakenMs: number | null;
   rank: number;
+};
+
+export type InstancePlayerWithProfile = {
+  instancePlayerId: string;
+  instanceId: string;
+  userId: string;
+  username: string;
+  displayName: string | null;
+  avatarUrl: string | null;
+  status: string;
+  attemptId: string | null;
+  joinedAt: string;
+};
+
+export type InstanceCursorPayload = {
+  createdAt: string;
+  instanceId: string;
+};
+
+export type LeaderboardCursorPayload = {
+  rank: number;
+  instancePlayerId: string;
+};
+
+/** Minimal context fields needed from a quiz attempt to route instance events. */
+export type AttemptContextInfo = {
+  contextType: string;
+  contextRefId: string | null;
 };
 
 export interface QuizInstanceRepositoryPort {
@@ -56,6 +92,13 @@ export interface QuizInstanceRepositoryPort {
     maxPlayers: number | null;
     nowIso: string;
   }): Promise<{ instanceId: string }>;
+
+  createInstanceWithHost(params: {
+    quizVersionId: string;
+    hostUserId: string;
+    maxPlayers: number | null;
+    nowIso: string;
+  }): Promise<{ instanceId: string; hostPlayerId: string }>;
 
   getInstanceById(instanceId: string): Promise<QuizInstanceRow | null>;
 
@@ -71,10 +114,6 @@ export interface QuizInstanceRepositoryPort {
 
   getPlayer(instanceId: string, userId: string): Promise<QuizInstancePlayerRow | null>;
 
-  getPlayerById(instancePlayerId: string): Promise<QuizInstancePlayerRow | null>;
-
-  getPlayerDetail(instanceId: string, userId: string): Promise<QuizInstancePlayerDetailRow | null>;
-
   listPlayers(instanceId: string): Promise<QuizInstancePlayerRow[]>;
 
   addPlayer(params: {
@@ -83,23 +122,54 @@ export interface QuizInstanceRepositoryPort {
     nowIso: string;
   }): Promise<QuizInstancePlayerRow>;
 
-  updatePlayerStatus(params: {
-    instancePlayerId: string;
-    status: string;
-    attemptId?: string | null;
-    nowIso: string;
-  }): Promise<void>;
-
-  updatePlayerByInstanceAndUser(params: {
+  joinInstanceAtomic(params: {
     instanceId: string;
     userId: string;
-    status: string;
-    attemptId?: string | null;
-  }): Promise<void>;
+    maxPlayers: number | null;
+    nowIso: string;
+  }): Promise<{ joined: boolean; player?: QuizInstancePlayerRow }>;
 
-  getLeaderboard(instanceId: string): Promise<InstanceLeaderboardEntry[]>;
+  getLeaderboard(params: {
+    instanceId: string;
+    limit: number;
+    cursor?: LeaderboardCursorPayload | null;
+  }): Promise<{ items: InstanceLeaderboardEntry[]; hasNextPage: boolean }>;
 
   countPlayers(instanceId: string): Promise<number>;
+
+  linkAttemptToPlayer(params: {
+    instanceId: string;
+    userId: string;
+    attemptId: string;
+    status: string;
+  }): Promise<void>;
+
+  updatePlayerStatus(params: { instanceId: string; userId: string; status: string }): Promise<void>;
+
+  getPlayerByUserAndInstance(params: {
+    instanceId: string;
+    userId: string;
+  }): Promise<QuizInstancePlayerRow | null>;
+
+  listInstances(params: {
+    limit: number;
+    cursor?: InstanceCursorPayload | null;
+    filters?: {
+      status?: 'open' | 'running' | 'closed' | 'finished';
+      difficulty?: string;
+    };
+  }): Promise<QuizInstanceListRow[]>;
+
+  listPlayersWithProfile(params: { instanceId: string }): Promise<InstancePlayerWithProfile[]>;
+
+  /** Count the total number of instances hosted by a user. */
+  countInstancesHostedByUser(userId: string): Promise<number>;
+
+  /** Count the number of instances the user has finished playing (status = 'finished'). */
+  countFinishedInstancesByUser(userId: string): Promise<number>;
+
+  /** Fetch context fields (contextType, contextRefId) for a quiz attempt by its ID. */
+  getAttemptContextInfo(attemptId: string): Promise<AttemptContextInfo | null>;
 }
 
 export const QUIZ_INSTANCE_REPOSITORY_PORT = Symbol('QUIZ_INSTANCE_REPOSITORY_PORT');

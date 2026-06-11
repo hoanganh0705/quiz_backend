@@ -5,7 +5,12 @@ export class NotificationFactory {
     followerId: string;
     followerUsername?: string;
     followId: string;
-  }): { type: NotificationType; title: string; message: string; metadata: Record<string, unknown> } {
+  }): {
+    type: NotificationType;
+    title: string;
+    message: string;
+    metadata: Record<string, unknown>;
+  } {
     return {
       type: 'followed',
       title: 'New Follower',
@@ -22,7 +27,12 @@ export class NotificationFactory {
     requesterId: string;
     requesterUsername?: string;
     friendshipId: string;
-  }): { type: NotificationType; title: string; message: string; metadata: Record<string, unknown> } {
+  }): {
+    type: NotificationType;
+    title: string;
+    message: string;
+    metadata: Record<string, unknown>;
+  } {
     return {
       type: 'friend_request',
       title: 'New Friend Request',
@@ -39,7 +49,12 @@ export class NotificationFactory {
     addresseeId: string;
     addresseeUsername?: string;
     friendshipId: string;
-  }): { type: NotificationType; title: string; message: string; metadata: Record<string, unknown> } {
+  }): {
+    type: NotificationType;
+    title: string;
+    message: string;
+    metadata: Record<string, unknown>;
+  } {
     return {
       type: 'friend_accepted',
       title: 'Friend Request Accepted',
@@ -58,7 +73,12 @@ export class NotificationFactory {
     threadId: string;
     commentId: string;
     parentCommentId?: string | null;
-  }): { type: NotificationType; title: string; message: string; metadata: Record<string, unknown> } {
+  }): {
+    type: NotificationType;
+    title: string;
+    message: string;
+    metadata: Record<string, unknown>;
+  } {
     return {
       type: 'discussion_reply',
       title: 'New Reply',
@@ -78,7 +98,12 @@ export class NotificationFactory {
     actorUsername?: string;
     threadId: string;
     commentId: string;
-  }): { type: NotificationType; title: string; message: string; metadata: Record<string, unknown> } {
+  }): {
+    type: NotificationType;
+    title: string;
+    message: string;
+    metadata: Record<string, unknown>;
+  } {
     return {
       type: 'discussion_mention',
       title: 'You Were Mentioned',
@@ -96,7 +121,12 @@ export class NotificationFactory {
     threadId: string;
     commentId: string;
     solverId: string;
-  }): { type: NotificationType; title: string; message: string; metadata: Record<string, unknown> } {
+  }): {
+    type: NotificationType;
+    title: string;
+    message: string;
+    metadata: Record<string, unknown>;
+  } {
     return {
       type: 'discussion_solved',
       title: 'Discussion Solved',
@@ -109,14 +139,16 @@ export class NotificationFactory {
     };
   }
 
-  static createBadgeEarned(params: {
-    badgeType: string;
-    badgeName?: string;
-  }): { type: NotificationType; title: string; message: string; metadata: Record<string, unknown> } {
+  static createBadgeEarned(params: { badgeType: string; badgeName?: string }): {
+    type: NotificationType;
+    title: string;
+    message: string;
+    metadata: Record<string, unknown>;
+  } {
     return {
       type: 'badge_earned',
       title: 'Badge Earned',
-      message: `You earned the \"${params.badgeName ?? params.badgeType}\" badge`,
+      message: `You earned the "${params.badgeName ?? params.badgeType}" badge`,
       metadata: {
         badgeId: params.badgeType,
         badgeName: params.badgeName,
@@ -124,10 +156,12 @@ export class NotificationFactory {
     };
   }
 
-  static createTournamentStarted(params: {
-    tournamentId: string;
-    tournamentTitle?: string;
-  }): { type: NotificationType; title: string; message: string; metadata: Record<string, unknown> } {
+  static createTournamentStarted(params: { tournamentId: string; tournamentTitle?: string }): {
+    type: NotificationType;
+    title: string;
+    message: string;
+    metadata: Record<string, unknown>;
+  } {
     return {
       type: 'tournament_started',
       title: 'Tournament Started',
@@ -143,7 +177,12 @@ export class NotificationFactory {
     tournamentId: string;
     tournamentTitle?: string;
     startsAt?: string;
-  }): { type: NotificationType; title: string; message: string; metadata: Record<string, unknown> } {
+  }): {
+    type: NotificationType;
+    title: string;
+    message: string;
+    metadata: Record<string, unknown>;
+  } {
     return {
       type: 'tournament_reminder',
       title: 'Tournament Reminder',
@@ -160,7 +199,12 @@ export class NotificationFactory {
     tournamentId: string;
     tournamentTitle?: string;
     prize?: string;
-  }): { type: NotificationType; title: string; message: string; metadata: Record<string, unknown> } {
+  }): {
+    type: NotificationType;
+    title: string;
+    message: string;
+    metadata: Record<string, unknown>;
+  } {
     return {
       type: 'tournament_won',
       title: 'Tournament Champion!',
@@ -180,7 +224,12 @@ export class NotificationFactory {
     newRank: number;
     improvement: number;
     period: string;
-  }): { type: NotificationType; title: string; message: string; metadata: Record<string, unknown> } {
+  }): {
+    type: NotificationType;
+    title: string;
+    message: string;
+    metadata: Record<string, unknown>;
+  } {
     return {
       type: 'rank_improved',
       title: `+${params.improvement} positions!`,
@@ -199,7 +248,12 @@ export class NotificationFactory {
     period: string;
     milestone: string;
     percentile?: number;
-  }): { type: NotificationType; title: string; message: string; metadata: Record<string, unknown> } {
+  }): {
+    type: NotificationType;
+    title: string;
+    message: string;
+    metadata: Record<string, unknown>;
+  } {
     return {
       type: 'rank_milestone',
       title: 'Rank Milestone!',

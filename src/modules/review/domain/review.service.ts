@@ -24,7 +24,7 @@ import {
 } from '../review.constants';
 import { REVIEW_ANALYTICS_PORT, type ReviewAnalyticsPort } from './events';
 import { ReviewSubmittedEvent, ReviewDeletedEvent } from './events';
-import type { ReviewStatsRow, ReviewDashboardRow } from './ports';
+import type { ReviewStatsRow } from './ports';
 import type { ReviewDashboardResponseDto } from '../dto/response';
 import {
   type ReviewActor,
@@ -381,9 +381,7 @@ export class ReviewService {
     }
 
     await this.db.transaction(async (tx) => {
-      await tx.delete(quizReviews).where(
-        sql`${quizReviews.reviewId} = ${existing.reviewId}`,
-      );
+      await tx.delete(quizReviews).where(sql`${quizReviews.reviewId} = ${existing.reviewId}`);
     });
 
     this.logger.info({
