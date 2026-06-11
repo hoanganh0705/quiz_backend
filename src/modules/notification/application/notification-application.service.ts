@@ -1,14 +1,22 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
+import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
 import { NotificationService } from '../domain/notification.service';
-import { NOTIFICATION_REPOSITORY_PORT } from '../domain/ports/notification-ports';
-import type { NotificationRepositoryPort } from '../domain/ports/notification-ports';
+import {
+  NOTIFICATION_REPOSITORY_PORT,
+  NOTIFICATION_DOMAIN_EVENT_BUS,
+  NOTIFICATION_CHANNEL_SERVICE_INSTANCE,
+  type NotificationRepositoryPort,
+  type NotificationDomainEventBus,
+  type NotificationChannelServiceInstance,
+} from '../domain/ports/notification-ports';
+import { NotificationForbiddenError, NotificationNotFoundError } from '../domain/errors';
+import type { NotificationReadEvent, NotificationUnreadEvent, NotificationDeletedEvent } from '../domain/events/notification.events';
 import type {
   Notification as DomainNotification,
   NotificationListParams,
-  CreateNotificationParams,
-  NotificationPreferencesRow,
   UpdatePreferencesParams,
+  NotificationPreferencesRow,
 } from '../domain/types/notification.types';
 
 @Injectable()
@@ -17,6 +25,14 @@ export class NotificationApplicationService {
     private readonly notificationService: NotificationService,
     @Inject(NOTIFICATION_REPOSITORY_PORT)
     private readonly notificationRepository: NotificationRepositoryPort,
+    @Inject(NOTIFICATION_DOMAIN_EVENT_BUS)
+    private readonly eventBus: NotificationDomainEventBus,
+    @Optional()
+    @Inject(NOTIFICATION_CHANNEL_SERVICE_INSTANCE)
+    private readonly channelServiceInstance?: NotificationChannelServiceInstance,
+    @Optional()
+    @InjectPinoLogger(NotificationApplicationService.name)
+    private readonly logger?: PinoLogger,
   ) {}
 
   async getNotifications(
@@ -43,61 +59,148 @@ export class NotificationApplicationService {
     };
   }
 
-  async markAsRead(notificationId: string, user: JwtPayload): Promise<void> {
-    await this.notificationService.markAsRead(notificationId, user.sub);
-  }
-
-  async markAsUnread(notificationId: string, user: JwtPayload): Promise<void> {
-    await this.notificationService.markAsUnread(notificationId, user.sub);
-  }
-
   async getNotificationDetail(
     notificationId: string,
     user: JwtPayload,
   ): Promise<DomainNotification> {
-    return this.notificationService.getNotificationDetail(notificationId, user.sub);
+    const notification = await this.notificationService.getNotification(notificationId, user.sub);
+
+    if (!notification) {
+      throw new NotificationNotFoundError(notificationId);
+    }
+
+    return notification;
+  }
+
+  async markAsRead(notificationId: string, user: JwtPayload): Promise<void> {
+    const notification = await this.notificationService.getNotification(notificationId, user.sub);
+
+    if (!notification) {
+      throw new NotificationNotFoundError(notificationId);
+    }
+
+    if (notification.userId !== user.sub) {
+      throw new NotificationForbiddenError();
+    }
+
+    await this.notificationRepository.markAsRead(notificationId, user.sub);
+
+    const readEvent: NotificationReadEvent = {
+      eventType: 'notification.read',
+      notificationId,
+      userId: user.sub,
+      timestamp: new Date(),
+    };
+    this.eventBus.emit(readEvent);
+
+    this.logger?.info({
+      event: 'notification_marked_read',
+      notificationId,
+      userId: user.sub,
+    });
+  }
+
+  async markAsUnread(notificationId: string, user: JwtPayload): Promise<void> {
+    const notification = await this.notificationService.getNotification(notificationId, user.sub);
+
+    if (!notification) {
+      throw new NotificationNotFoundError(notificationId);
+    }
+
+    if (notification.userId !== user.sub) {
+      throw new NotificationForbiddenError();
+    }
+
+    await this.notificationRepository.markAsUnread(notificationId, user.sub);
+
+    const unreadEvent: NotificationUnreadEvent = {
+      eventType: 'notification.unread',
+      notificationId,
+      userId: user.sub,
+      timestamp: new Date(),
+    };
+    this.eventBus.emit(unreadEvent);
+
+    this.logger?.info({
+      event: 'notification_marked_unread',
+      notificationId,
+      userId: user.sub,
+    });
   }
 
   async markAllAsRead(user: JwtPayload): Promise<void> {
-    await this.notificationService.markAllAsRead(user.sub);
+    await this.notificationRepository.markAllAsRead(user.sub);
+
+    this.logger?.info({
+      event: 'all_notifications_marked_read',
+      userId: user.sub,
+    });
   }
 
   async deleteReadNotifications(user: JwtPayload): Promise<number> {
-    return this.notificationService.deleteReadNotifications(user.sub);
+    const deletedCount = await this.notificationRepository.deleteReadNotifications(user.sub);
+
+    this.logger?.info({
+      event: 'read_notifications_deleted',
+      userId: user.sub,
+      deletedCount,
+    });
+
+    return deletedCount;
   }
 
   async deleteNotification(notificationId: string, user: JwtPayload): Promise<void> {
-    await this.notificationService.deleteNotification(notificationId, user.sub);
-  }
+    const notification = await this.notificationService.getNotification(notificationId, user.sub);
 
-  async createNotification(params: CreateNotificationParams): Promise<DomainNotification> {
-    return this.notificationService.create(params);
+    if (!notification) {
+      throw new NotificationNotFoundError(notificationId);
+    }
+
+    if (notification.userId !== user.sub) {
+      throw new NotificationForbiddenError();
+    }
+
+    await this.notificationRepository.delete(notificationId, user.sub);
+
+    const deletedEvent: NotificationDeletedEvent = {
+      eventType: 'notification.deleted',
+      notificationId,
+      userId: user.sub,
+      timestamp: new Date(),
+    };
+    this.eventBus.emit(deletedEvent);
+
+    this.logger?.info({
+      event: 'notification_deleted',
+      notificationId,
+      userId: user.sub,
+    });
   }
 
   async getUnreadCount(user: JwtPayload): Promise<number> {
     return this.notificationService.getUnreadCount(user.sub);
   }
 
-  /**
-   * Get user notification preferences.
-   */
-  async getPreferences(user: JwtPayload): Promise<NotificationPreferencesRow | null> {
-    return this.notificationRepository.getPreferences(user.sub);
+  async getAnalytics(): Promise<{
+    total: number;
+    unread: number;
+    byType: Record<string, number>;
+    byChannel: Record<string, number>;
+    last24h: number;
+    last7d: number;
+  }> {
+    return this.notificationRepository.getAnalytics();
   }
 
-  /**
-   * Update user notification preferences.
-   */
   async updatePreferences(
     user: JwtPayload,
     params: UpdatePreferencesParams,
   ): Promise<NotificationPreferencesRow> {
-    return this.notificationRepository.upsertPreferences(user.sub, params);
+    const result = await this.notificationRepository.upsertPreferences(user.sub, params);
+    await this.channelServiceInstance?.invalidatePreferencesCache(user.sub);
+    return result;
   }
 
-  /**
-   * Get or create default preferences for a user.
-   */
   async getOrCreatePreferences(user: JwtPayload): Promise<NotificationPreferencesRow> {
     const existing = await this.notificationRepository.getPreferences(user.sub);
     if (existing) {

@@ -21,6 +21,8 @@ export interface UserFollow {
   followId: string;
   followerId: string;
   followingId: string;
+  followerUsername: string;
+  followingUsername: string;
   createdAt: string;
 }
 

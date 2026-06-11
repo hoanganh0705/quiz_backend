@@ -6,7 +6,7 @@
 
 import { Injectable } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
-import { NotificationChannelService } from './channel.service';
+import { NotificationChannelService } from '../../infrastructure/adapters/notification-channel.service';
 
 export interface FriendRequestReceivedParams {
   userId: string;
@@ -19,6 +19,16 @@ export interface FriendRequestAcceptedParams {
   userId: string;
   addresseeUsername: string;
   friendshipId: string;
+}
+
+export interface UserFollowedParams {
+  userId: string;
+  followerUsername: string;
+}
+
+export interface UserUnfollowedParams {
+  userId: string;
+  unfollowerUsername: string;
 }
 
 @Injectable()
@@ -74,6 +84,52 @@ export class SocialNotificationService {
 
     this.logger.info({
       event: 'friend_accepted_notification_sent',
+      userId: params.userId,
+    });
+  }
+
+  /**
+   * Send a notification when someone follows the user.
+   */
+  async notifyUserFollowed(params: UserFollowedParams): Promise<void> {
+    const title = 'New Follower';
+    const body = `${params.followerUsername} started following you`;
+
+    await this.channelService.send({
+      userId: params.userId,
+      type: 'followed',
+      title,
+      body,
+      metadata: {
+        followerUsername: params.followerUsername,
+      },
+    });
+
+    this.logger.info({
+      event: 'user_followed_notification_sent',
+      userId: params.userId,
+    });
+  }
+
+  /**
+   * Send a notification when someone unfollows the user.
+   */
+  async notifyUserUnfollowed(params: UserUnfollowedParams): Promise<void> {
+    const title = 'Follower Removed';
+    const body = `${params.unfollowerUsername} unfollowed you`;
+
+    await this.channelService.send({
+      userId: params.userId,
+      type: 'followed',
+      title,
+      body,
+      metadata: {
+        unfollowerUsername: params.unfollowerUsername,
+      },
+    });
+
+    this.logger.info({
+      event: 'user_unfollowed_notification_sent',
       userId: params.userId,
     });
   }

@@ -8,6 +8,8 @@ import {
   Query,
   Body,
   ParseUUIDPipe,
+  HttpCode,
+  HttpStatus,
   UseFilters,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
@@ -24,7 +26,7 @@ import {
   ApiInternalServerErrorResponse,
 } from '@nestjs/swagger';
 import { Public } from '@/common/decorators/public.decorator';
-import { ApiAuth, ApiValidationRequest } from '@/common/swagger/swagger-decorators';
+import { ApiAuth, ApiValidationRequest, ApiNoContent } from '@/common/swagger/swagger-decorators';
 import { RequireAuth } from '@/common/guards/jwt.guard';
 import { Roles } from '@/common/authorization/decorators/roles.decorator';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
@@ -448,15 +450,15 @@ export class DiscussionController {
   @Delete('threads/:threadId')
   @ApiAuth()
   @ApiOperation({ summary: 'Soft-delete a thread (author only)' })
-  @ApiOkResponse({ description: 'Thread deleted' })
+  @ApiNoContent('Thread deleted')
   @ApiNotFoundResponse({ description: 'Thread not found' })
   @ApiForbiddenResponse({ description: 'Not the thread author' })
+  @HttpCode(HttpStatus.NO_CONTENT)
   async deleteThread(
     @CurrentUser() user: JwtPayload,
     @Param('threadId', new ParseUUIDPipe()) threadId: string,
-  ): Promise<{ message: string }> {
+  ): Promise<void> {
     await this.discussionService.deleteThread(user, threadId);
-    return { message: 'Thread deleted' };
   }
 
   @Post('threads/:threadId/hide')

@@ -1,43 +1,37 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
 import { DRIZZLE } from '@/core/database/drizzle.constants';
 import type { DrizzleDB } from '@/core/database/database.module';
 import { notifications, notificationPreferences } from '@/core/database/schema';
 
-import { eq, and, desc, sql, isNull, or, inArray } from 'drizzle-orm';
+import { eq, and, desc, sql, isNull, or, count, gt } from 'drizzle-orm';
 import { NotificationRepositoryPort } from '../../domain/ports';
 import type { Notification as DomainNotification } from '../../domain/types';
-import type { NotificationAnalytics } from '../../domain/types';
 import {
   CreateNotificationParams,
   NotificationListParams,
   NotificationPreferencesRow,
 } from '../../domain/types';
-
-const BADGE_TYPES = ['achievement_earned', 'badge_unlocked', 'badge_earned', 'streak_milestone'];
-const DISCUSSION_TYPES = ['discussion_reply', 'discussion_mention', 'discussion_solved'];
-const SOCIAL_TYPES = ['friend_request', 'friend_accepted', 'followed'];
-const RANKING_TYPES = [
-  'rank_achievement',
-  'rank_improvement',
-  'period_winner',
-  'rank_improved',
-  'rank_milestone',
-];
-const TOURNAMENT_TYPES = [
-  'tournament_invite',
-  'tournament_starting',
-  'tournament_completed',
-  'tournament_won',
-  'tournament_started',
-  'tournament_reminder',
-];
+import {
+  TransactionalContext,
+  TRANSACTIONAL_CONTEXT,
+} from '@/common/interceptors/transactional-context';
 
 @Injectable()
 export class NotificationRepository implements NotificationRepositoryPort {
-  constructor(@Inject(DRIZZLE) private readonly db: DrizzleDB) {}
+  constructor(
+    @Inject(DRIZZLE) private readonly db: DrizzleDB,
+    @Optional()
+    @Inject(TRANSACTIONAL_CONTEXT)
+    private readonly transactionalContext?: TransactionalContext,
+  ) {}
+
+  private getDb(): DrizzleDB {
+    const tx = this.transactionalContext?.getDbClient() as DrizzleDB | null;
+    return tx ?? this.db;
+  }
 
   async create(params: CreateNotificationParams): Promise<DomainNotification> {
-    const [notification] = await this.db
+    const [notification] = await this.getDb()
       .insert(notifications)
       .values({
         userId: params.userId,
@@ -118,7 +112,7 @@ export class NotificationRepository implements NotificationRepositoryPort {
   }
 
   async markAsRead(notificationId: string, userId: string): Promise<void> {
-    await this.db
+    await this.getDb()
       .update(notifications)
       .set({ isRead: true, readAt: new Date().toISOString() })
       .where(
@@ -131,7 +125,7 @@ export class NotificationRepository implements NotificationRepositoryPort {
   }
 
   async markAsUnread(notificationId: string, userId: string): Promise<void> {
-    await this.db
+    await this.getDb()
       .update(notifications)
       .set({ isRead: false, readAt: null })
       .where(
@@ -144,7 +138,7 @@ export class NotificationRepository implements NotificationRepositoryPort {
   }
 
   async markAllAsRead(userId: string): Promise<void> {
-    await this.db
+    await this.getDb()
       .update(notifications)
       .set({ isRead: true, readAt: new Date().toISOString() })
       .where(
@@ -158,7 +152,7 @@ export class NotificationRepository implements NotificationRepositoryPort {
 
   async deleteReadNotifications(userId: string): Promise<number> {
     const deletedAt = new Date().toISOString();
-    const result = await this.db
+    const result = await this.getDb()
       .update(notifications)
       .set({ deletedAt })
       .where(
@@ -173,7 +167,7 @@ export class NotificationRepository implements NotificationRepositoryPort {
   }
 
   async delete(notificationId: string, userId: string): Promise<void> {
-    await this.db
+    await this.getDb()
       .delete(notifications)
       .where(
         and(eq(notifications.notificationId, notificationId), eq(notifications.userId, userId)),
@@ -181,7 +175,7 @@ export class NotificationRepository implements NotificationRepositoryPort {
   }
 
   async softDelete(notificationId: string, userId: string): Promise<void> {
-    await this.db
+    await this.getDb()
       .update(notifications)
       .set({ deletedAt: new Date().toISOString() })
       .where(
@@ -193,45 +187,8 @@ export class NotificationRepository implements NotificationRepositoryPort {
       );
   }
 
-  async deleteExpired(): Promise<void> {
-    const now = new Date().toISOString();
-    await this.db
-      .delete(notifications)
-      .where(
-        and(
-          isNull(notifications.deletedAt),
-          sql`${notifications.expiresAt} IS NOT NULL AND ${notifications.expiresAt} < ${now}`,
-        ),
-      );
-  }
-
-  async getAnalytics(userId: string): Promise<NotificationAnalytics> {
-    const [result] = await this.db
-      .select({
-        total: sql<number>`count(*)::int`,
-        unread: sql<number>`count(*) filter (where ${notifications.isRead} = false)::int`,
-        badge: sql<number>`count(*) filter (where ${inArray(notifications.type, BADGE_TYPES as never)})::int`,
-        discussion: sql<number>`count(*) filter (where ${inArray(notifications.type, DISCUSSION_TYPES as never)})::int`,
-        social: sql<number>`count(*) filter (where ${inArray(notifications.type, SOCIAL_TYPES as never)})::int`,
-        ranking: sql<number>`count(*) filter (where ${inArray(notifications.type, RANKING_TYPES as never)})::int`,
-        tournament: sql<number>`count(*) filter (where ${inArray(notifications.type, TOURNAMENT_TYPES as never)})::int`,
-      })
-      .from(notifications)
-      .where(and(eq(notifications.userId, userId), isNull(notifications.deletedAt)));
-
-    return {
-      total: Number(result?.total ?? 0),
-      unread: Number(result?.unread ?? 0),
-      badge: Number(result?.badge ?? 0),
-      discussion: Number(result?.discussion ?? 0),
-      social: Number(result?.social ?? 0),
-      ranking: Number(result?.ranking ?? 0),
-      tournament: Number(result?.tournament ?? 0),
-    };
-  }
-
   async getPreferences(userId: string): Promise<NotificationPreferencesRow | null> {
-    const [prefs] = await this.db
+    const [prefs] = await this.getDb()
       .select()
       .from(notificationPreferences)
       .where(eq(notificationPreferences.userId, userId));
@@ -246,7 +203,7 @@ export class NotificationRepository implements NotificationRepositoryPort {
     const existing = await this.getPreferences(userId);
 
     if (existing) {
-      const [updated] = await this.db
+      const [updated] = await this.getDb()
         .update(notificationPreferences)
         .set({
           ...this.stripPreferenceFields(prefs),
@@ -273,7 +230,7 @@ export class NotificationRepository implements NotificationRepositoryPort {
         quietHoursEnd: prefs.quietHoursEnd ?? null,
       };
 
-      const [created] = await this.db
+      const [created] = await this.getDb()
         .insert(notificationPreferences)
         .values({
           userId,
@@ -338,5 +295,76 @@ export class NotificationRepository implements NotificationRepositoryPort {
     void createdAt;
     void updatedAt;
     return rest;
+  }
+
+  async deleteExpired(): Promise<number> {
+    const now = new Date().toISOString();
+    const result = await this.db
+      .delete(notifications)
+      .where(sql`${notifications.expiresAt} IS NOT NULL AND ${notifications.expiresAt} < ${now}`);
+
+    return Number(result.rowCount ?? 0);
+  }
+
+  async getAnalytics(): Promise<{
+    total: number;
+    unread: number;
+    byType: Record<string, number>;
+    byChannel: Record<string, number>;
+    last24h: number;
+    last7d: number;
+  }> {
+    const now = new Date();
+    const dayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
+    const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
+
+    const [[totalResult], [unreadResult], typeResults, channelResults, [last24hResult], [last7dResult]] =
+      await Promise.all([
+        this.db
+          .select({ value: count() })
+          .from(notifications)
+          .where(isNull(notifications.deletedAt)),
+        this.db
+          .select({ value: count() })
+          .from(notifications)
+          .where(and(eq(notifications.isRead, false), isNull(notifications.deletedAt))),
+        this.db
+          .select({ type: notifications.type, value: count() })
+          .from(notifications)
+          .where(isNull(notifications.deletedAt))
+          .groupBy(notifications.type),
+        this.db
+          .select({ channel: notifications.channel, value: count() })
+          .from(notifications)
+          .where(isNull(notifications.deletedAt))
+          .groupBy(notifications.channel),
+        this.db
+          .select({ value: count() })
+          .from(notifications)
+          .where(and(gt(notifications.createdAt, dayAgo), isNull(notifications.deletedAt))),
+        this.db
+          .select({ value: count() })
+          .from(notifications)
+          .where(and(gt(notifications.createdAt, weekAgo), isNull(notifications.deletedAt))),
+      ]);
+
+    const byType: Record<string, number> = {};
+    for (const row of typeResults) {
+      byType[row.type] = Number(row.value);
+    }
+
+    const byChannel: Record<string, number> = {};
+    for (const row of channelResults) {
+      byChannel[row.channel] = Number(row.value);
+    }
+
+    return {
+      total: Number(totalResult?.value ?? 0),
+      unread: Number(unreadResult?.value ?? 0),
+      byType,
+      byChannel,
+      last24h: Number(last24hResult?.value ?? 0),
+      last7d: Number(last7dResult?.value ?? 0),
+    };
   }
 }

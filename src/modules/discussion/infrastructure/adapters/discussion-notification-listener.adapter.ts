@@ -1,25 +1,34 @@
+/**
+ * Discussion Notification Listener
+ *
+ * Subscribes to Discussion domain events and dispatches notifications.
+ * Hosted in DiscussionModule to avoid cross-module import cycles.
+ */
+
 import { Inject, Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import {
   DISCUSSION_DOMAIN_EVENT_BUS,
   type DiscussionDomainEventBusPort,
-} from '@/modules/discussion/domain/events';
+} from '../../domain/events';
 import type {
   DiscussionDomainEvent,
   CommentCreatedEvent,
   DiscussionThreadSolvedEvent,
-} from '@/modules/discussion/domain/events/discussion-domain.events';
-import { DiscussionNotificationService } from '../../domain/services/discussion-notification.service';
+} from '../../domain/events/discussion-domain.events';
+import { NOTIFICATION_CHANNEL_SERVICE } from '@/modules/notification/domain/ports';
+import type { NotificationChannelServicePort } from '@/modules/notification/domain/ports';
 
 @Injectable()
-export class DiscussionListenerAdapter implements OnModuleInit, OnModuleDestroy {
+export class DiscussionNotificationListener implements OnModuleInit, OnModuleDestroy {
   private unsubscribe: (() => void) | null = null;
 
   constructor(
     @Inject(DISCUSSION_DOMAIN_EVENT_BUS)
     private readonly discussionEventBus: DiscussionDomainEventBusPort,
-    private readonly discussionNotificationService: DiscussionNotificationService,
-    @InjectPinoLogger(DiscussionListenerAdapter.name)
+    @Inject(NOTIFICATION_CHANNEL_SERVICE)
+    private readonly channelService: NotificationChannelServicePort,
+    @InjectPinoLogger(DiscussionNotificationListener.name)
     private readonly logger: PinoLogger,
   ) {}
 
@@ -52,7 +61,25 @@ export class DiscussionListenerAdapter implements OnModuleInit, OnModuleDestroy 
 
   async handleCommentCreated(event: CommentCreatedEvent): Promise<void> {
     try {
-      await this.discussionNotificationService.notifyCommentCreated(event);
+      const title = 'New Reply';
+      const body = `${event.authorUsername} replied to your question`;
+
+      await this.channelService.send({
+        userId: event.threadAuthorId,
+        type: 'discussion_reply',
+        title,
+        body,
+        metadata: {
+          threadId: event.threadId,
+          commentId: event.commentId,
+        },
+      });
+
+      this.logger.info({
+        event: 'discussion_reply_notification_sent',
+        threadId: event.threadId,
+        commentId: event.commentId,
+      });
     } catch (error) {
       this.logger.error({
         event: 'discussion_reply_notification_failed',
@@ -65,7 +92,25 @@ export class DiscussionListenerAdapter implements OnModuleInit, OnModuleDestroy 
 
   async handleThreadSolved(event: DiscussionThreadSolvedEvent): Promise<void> {
     try {
-      await this.discussionNotificationService.notifyThreadSolved(event);
+      const title = 'Your Question Was Solved';
+      const body = `${event.solverUsername} marked your question as solved`;
+
+      await this.channelService.send({
+        userId: event.authorId,
+        type: 'discussion_thread_solved',
+        title,
+        body,
+        metadata: {
+          threadId: event.threadId,
+          commentId: event.commentId,
+        },
+      });
+
+      this.logger.info({
+        event: 'discussion_solved_notification_sent',
+        threadId: event.threadId,
+        commentId: event.commentId,
+      });
     } catch (error) {
       this.logger.error({
         event: 'discussion_solved_notification_failed',

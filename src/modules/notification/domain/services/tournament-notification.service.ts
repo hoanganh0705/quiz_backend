@@ -6,7 +6,7 @@
 
 import { Injectable } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
-import { NotificationChannelService } from './channel.service';
+import { NotificationChannelService } from '../../infrastructure/adapters/notification-channel.service';
 
 export interface TournamentInviteParams {
   userId: string;

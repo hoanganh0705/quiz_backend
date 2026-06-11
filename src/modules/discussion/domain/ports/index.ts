@@ -171,4 +171,7 @@ export interface DiscussionRepositoryPort {
     cursor?: string | null;
   }): Promise<DiscussionReport[]>;
   reviewReport(params: ReviewReportParams): Promise<DiscussionReport>;
+
+  // Helpers
+  getUsernamesForUsers(userIds: string[]): Promise<Map<string, string>>;
 }
