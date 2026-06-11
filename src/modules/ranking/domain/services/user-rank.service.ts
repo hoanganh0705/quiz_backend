@@ -19,6 +19,7 @@ import {
   calculatePercentile,
   getPercentileLabel,
   getXpField,
+  enumToPeriod,
 } from '../types/ranking.types';
 import { RankingPeriodEnum } from '../../dto/request/leaderboard-query.dto';
 import type {
@@ -90,7 +91,7 @@ export class UserRankService {
     userId: string,
     periodEnum: RankingPeriodEnum,
   ): Promise<UserRankSummaryDto | undefined> {
-    const period = this.enumToPeriod(periodEnum);
+    const period = enumToPeriod(periodEnum);
 
     const ranking = await this.rankingRepository.getUserRanking(userId);
     if (!ranking) return undefined;
@@ -269,16 +270,4 @@ export class UserRankService {
     };
   }
 
-  /**
-   * Convert enum to domain period.
-   */
-  private enumToPeriod(periodEnum: RankingPeriodEnum): RankingPeriod {
-    const mapping: Record<RankingPeriodEnum, RankingPeriod> = {
-      [RankingPeriodEnum.DAILY]: RankingPeriod.DAILY,
-      [RankingPeriodEnum.WEEKLY]: RankingPeriod.WEEKLY,
-      [RankingPeriodEnum.MONTHLY]: RankingPeriod.MONTHLY,
-      [RankingPeriodEnum.ALL_TIME]: RankingPeriod.ALL_TIME,
-    };
-    return mapping[periodEnum];
-  }
 }

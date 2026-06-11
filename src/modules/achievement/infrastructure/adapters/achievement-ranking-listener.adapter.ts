@@ -5,25 +5,23 @@
  * This adapter bridges the Ranking domain event bus to Achievement domain services.
  */
 
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import {
   RANKING_DOMAIN_EVENT_BUS,
   type RankingDomainEventBusPort,
 } from '../../../ranking/domain/ports/ranking-event-bus.port';
 import { RankAchievementService } from '../../domain/services/rank-achievement.service';
-import { ConsistencyService } from '../../domain/services/consistency.service';
 
 @Injectable()
-export class RankingListenerAdapter {
+export class AchievementRankingListenerAdapter implements OnModuleInit, OnModuleDestroy {
   private unsubscribe: (() => void) | null = null;
 
   constructor(
     private readonly rankAchievementService: RankAchievementService,
-    private readonly consistencyService: ConsistencyService,
     @Inject(RANKING_DOMAIN_EVENT_BUS)
     private readonly eventBus: RankingDomainEventBusPort,
-    @InjectPinoLogger(RankingListenerAdapter.name)
+    @InjectPinoLogger(AchievementRankingListenerAdapter.name)
     private readonly logger: PinoLogger,
   ) {}
 
@@ -52,15 +50,6 @@ export class RankingListenerAdapter {
             period: string;
             newRank: number;
             previousRank: number | null;
-          },
-        );
-        break;
-
-      case 'xp.added':
-        await this.handleXpAdded(
-          event as {
-            eventType: 'xp.added';
-            userId: string;
           },
         );
         break;
@@ -96,21 +85,6 @@ export class RankingListenerAdapter {
     } catch (error) {
       this.logger.error({
         event: 'rank_achievement_evaluation_failed',
-        userId: event.userId,
-        error: error instanceof Error ? error.message : 'Unknown error',
-      });
-    }
-  }
-
-  private async handleXpAdded(event: { eventType: 'xp.added'; userId: string }): Promise<void> {
-    try {
-      await this.consistencyService.awardConsistencyBadge({
-        userId: event.userId,
-        streakDays: 1,
-      });
-    } catch (error) {
-      this.logger.error({
-        event: 'consistency_evaluation_failed',
         userId: event.userId,
         error: error instanceof Error ? error.message : 'Unknown error',
       });

@@ -5,6 +5,7 @@
  */
 
 import { Inject, Injectable } from '@nestjs/common';
+import { DRIZZLE } from '@/core/database/drizzle.constants';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { and, eq, desc, isNull, count, sql, asc } from 'drizzle-orm';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
@@ -34,7 +35,7 @@ import type {
 @Injectable()
 export class AchievementRepository implements AchievementRepositoryPort {
   constructor(
-    @Inject('DATABASE')
+    @Inject(DRIZZLE)
     private readonly db: PostgresJsDatabase<typeof schema>,
     @InjectPinoLogger(AchievementRepository.name)
     private readonly logger: PinoLogger,

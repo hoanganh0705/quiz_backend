@@ -11,17 +11,22 @@ export type UserRankingRow = {
   allTimeXp: number;
   weeklyXp: number;
   monthlyXp: number;
+  dailyXp: number;
   allTimeRank: number | null;
   weeklyRank: number | null;
   monthlyRank: number | null;
+  dailyRank: number | null;
   lastWeeklyResetAt: string | null;
   lastMonthlyResetAt: string | null;
+  lastDailyResetAt: string | null;
   peakAllTimeRank: number | null;
   peakAllTimeRankAchievedAt: string | null;
   peakWeeklyRank: number | null;
   peakWeeklyRankAchievedAt: string | null;
   peakMonthlyRank: number | null;
   peakMonthlyRankAchievedAt: string | null;
+  peakDailyRank: number | null;
+  peakDailyRankAchievedAt: string | null;
   lastActivityAt: string | null;
   isDirty: boolean;
   updatedAt: string;
@@ -110,11 +115,24 @@ export interface RankingRepositoryPort {
 
   getUserRankingWithUser(userId: string): Promise<UserRankingWithUserRow | null>;
 
+  getRankingsForUsers(userIds: string[]): Promise<UserRankingRow[]>;
+
   createUserRanking(userId: string): Promise<UserRankingRow>;
 
   updateXp(params: { userId: string; amount: number; now: Date }): Promise<UserRankingRow>;
 
+  /**
+   * Like `updateXp` but accepts an explicit transaction client for use in
+   * callers that manage their own transactions (e.g. XpIngestionService).
+   */
+  updateXpInTx(tx: unknown, params: { userId: string; amount: number; now: Date }): Promise<UserRankingRow>;
+
   markDirty(userIds: string[]): Promise<void>;
+
+  /**
+   * Like `markDirty` but accepts an explicit transaction client.
+   */
+  markDirtyInTx(tx: unknown, userIds: string[]): Promise<void>;
 
   getDirtyUsers(limit: number): Promise<UserRankingRow[]>;
 
@@ -127,7 +145,7 @@ export interface RankingRepositoryPort {
     rank: number;
   }): Promise<number | null>;
 
-  updatePeakRank(params: { userId: string; period: RankingPeriod; rank: number }): Promise<boolean>;
+  updatePeakRank(params: { userId: string; period: RankingPeriod; rank: number }): Promise<{ updated: boolean; previousPeakRank: number | null }>;
 
   getPeakRanks(userId: string): Promise<PeakRanksRow>;
 
@@ -188,6 +206,23 @@ export interface RankingRepositoryPort {
   hasMilestone(params: { userId: string; milestone: RankingMilestone }): Promise<boolean>;
 
   getLeaderboardDistribution(period: RankingPeriod): Promise<LeaderboardDistributionRow>;
+
+  // Batch rank calculation using window functions
+  calculateAllRanksForUsers(params: {
+    userIds: string[];
+    period: RankingPeriod;
+  }): Promise<{ userId: string; xp: number; rank: number; denseRank: number }[]>;
+
+  // Full rank recalculation using window functions
+  calculateAllRanks(period: RankingPeriod): Promise<{
+    userId: string;
+    xp: number;
+    rank: number;
+    denseRank: number;
+  }[]>;
+
+  // Count how many users have strictly more XP (used for single-user rank lookup)
+  countRankAbove(xp: number, period: RankingPeriod): Promise<number>;
 
   // Period Reset Operations
   resetPeriod(period: RankingPeriod, resetAt: Date): Promise<number>;

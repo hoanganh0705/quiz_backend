@@ -12,7 +12,11 @@ import {
   RANKING_DOMAIN_EVENT_BUS,
   type RankingDomainEventBusPort,
 } from '../domain/ports/ranking-event-bus.port';
-import { RankingPeriod } from '../domain/types/ranking.types';
+import {
+  RANKING_CONSTANTS,
+  RankingPeriod,
+  type ConsistencyReport,
+} from '../domain/types/ranking.types';
 import { PeriodResetService, RankCalculationService } from '../domain/services';
 import {
   RANKING_REPOSITORY_PORT,
@@ -277,21 +281,57 @@ export class RankingApplicationService implements OnModuleInit, OnModuleDestroy 
       await this.rankCalculationService.calculateAllRanks(RankingPeriod.ALL_TIME);
       await this.rankCalculationService.calculateAllRanks(RankingPeriod.WEEKLY);
       await this.rankCalculationService.calculateAllRanks(RankingPeriod.MONTHLY);
+      await this.rankCalculationService.calculateAllRanks(RankingPeriod.DAILY);
     }
   }
 
   /**
-   * Get service status.
+   * Returns the current operational status of the ranking system.
    */
-  getStatus(): {
-    isRunning: boolean;
-    schedulerActive: boolean;
-    consistencyCheckerActive: boolean;
-  } {
-    return {
-      isRunning: this.isRunning,
-      schedulerActive: this.schedulerInterval !== null,
-      consistencyCheckerActive: this.consistencyInterval !== null,
+  async getStatus(): Promise<{
+    schedulerRunning: boolean;
+    dirtyQueueSize: number;
+    nextConsistencyCheck: Date | null;
+    nextPeriodReset: {
+      weekly: Date | null;
+      monthly: Date | null;
+      daily: Date | null;
     };
+  }> {
+    const dirtyUsers = await this.rankingRepository.getDirtyUsers(0);
+    const nextWeekly = this.periodResetService.getNextResetTime(RankingPeriod.WEEKLY);
+    const nextMonthly = this.periodResetService.getNextResetTime(RankingPeriod.MONTHLY);
+    const nextDaily = this.periodResetService.getNextResetTime(RankingPeriod.DAILY);
+
+    return {
+      schedulerRunning: this.schedulerInterval !== null,
+      dirtyQueueSize: dirtyUsers.length,
+      nextConsistencyCheck: this.consistencyInterval
+        ? new Date(Date.now() + this.CONSISTENCY_INTERVAL_MS)
+        : null,
+      nextPeriodReset: {
+        weekly: nextWeekly,
+        monthly: nextMonthly,
+        daily: nextDaily,
+      },
+    };
+  }
+
+  /**
+   * Triggers an immediate consistency check and returns the report.
+   * Exposed for admin monitoring.
+   */
+  async triggerConsistencyCheck(): Promise<ConsistencyReport> {
+    this.logger.info({ event: 'consistency_check_admin_triggered' });
+    const report = await this.rankCalculationService.performConsistencyCheck();
+
+    this.eventBus.emitConsistencyCheck({
+      eventType: 'consistency.check',
+      issuesFound: report.totalIssues,
+      issuesFixed: report.fixed,
+      timestamp: new Date(),
+    });
+
+    return report;
   }
 }

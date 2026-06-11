@@ -40,6 +40,8 @@ export interface OutboxPort {
       eventType: string;
       payload: Record<string, unknown>;
       nowIso: string;
+      /** Prevents double-processing on retry. Only enforce for XP events. */
+      idempotencyKey?: string;
     },
     tx?: unknown,
   ): Promise<void>;

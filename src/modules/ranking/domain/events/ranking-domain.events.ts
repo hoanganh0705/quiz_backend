@@ -19,6 +19,7 @@ export interface XpAddedEvent {
   readonly newAllTimeXp: number;
   readonly newWeeklyXp: number;
   readonly newMonthlyXp: number;
+  readonly newDailyXp: number;
   readonly timestamp: Date;
 }
 
