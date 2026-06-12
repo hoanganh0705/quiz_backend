@@ -1,4 +1,4 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class MyUpvotedThreadItemResponseDto {
   @ApiProperty({
@@ -24,9 +24,24 @@ export class MyUpvotedThreadItemResponseDto {
 
   @ApiProperty({
     description: 'Timestamp when the authenticated user upvoted the thread',
-    example: '2026-06-08T09:00:00Z',
+    example: '2026-08T09:00:00Z',
   })
   upvotedAt!: string;
+}
+
+export class MyUpvotedThreadsPaginationDto {
+  @ApiProperty({ description: 'Items per page', example: 20 })
+  limit!: number;
+
+  @ApiProperty({ description: 'Whether another page is available', example: true })
+  hasNextPage!: boolean;
+
+  @ApiPropertyOptional({
+    description: 'Opaque cursor for the next page',
+    nullable: true,
+    example: 'eyJ1cHVvdGVkQXQiOiIyMDI2LTA2LTA4VDA5OjAwOjAwWiIsInRocmVhZElkIjoiNjYwZTg0MDAtZTI5Yi00MWQ0LWE3MTYtNDQ2NjU1NDQwMDAwIn0=',
+  })
+  nextCursor!: string | null;
 }
 
 export class MyUpvotedThreadsResponseDto {
@@ -36,12 +51,6 @@ export class MyUpvotedThreadsResponseDto {
   })
   items!: MyUpvotedThreadItemResponseDto[];
 
-  @ApiProperty({ description: 'Total number of matching threads', example: 25 })
-  total!: number;
-
-  @ApiProperty({ description: 'Current page number', example: 1 })
-  page!: number;
-
-  @ApiProperty({ description: 'Items per page', example: 20 })
-  limit!: number;
+  @ApiProperty({ description: 'Pagination metadata', type: () => MyUpvotedThreadsPaginationDto })
+  pagination!: MyUpvotedThreadsPaginationDto;
 }

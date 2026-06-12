@@ -1,3 +1,12 @@
+import type { DrizzleDB } from '@/core/database/database.module';
+import type { NodePgQueryResultHKT } from 'drizzle-orm/node-postgres';
+import type { PgTransaction } from 'drizzle-orm/pg-core';
+
+export type TransactionClient = PgTransaction<
+  NodePgQueryResultHKT,
+  Record<string, never>,
+  Record<string, never>
+>;
 import {
   DiscussionThread,
   DiscussionThreadDetail,
@@ -24,6 +33,10 @@ import {
   MyUpvotedCommentListItem,
   MyDiscussionSubscriptionListItem,
   MySavedThreadListItem,
+  MyUpvotedThreadCursor,
+  MyUpvotedCommentCursor,
+  MyDiscussionSubscriptionCursor,
+  MySavedThreadCursor,
   TrendingDiscussionListItem,
   TrendingDiscussionCursor,
   UnansweredDiscussionListItem,
@@ -59,11 +72,6 @@ export interface DiscussionRepositoryPort {
     limit: number;
     cursor?: QuizDiscussionCursor | null;
   }): Promise<MyDiscussionListItem[]>;
-  listDiscussionsByUser(params: {
-    userId: string;
-    limit: number;
-    cursor?: QuizDiscussionCursor | null;
-  }): Promise<MyDiscussionListItem[]>;
   listMyComments(params: {
     userId: string;
     limit: number;
@@ -71,33 +79,28 @@ export interface DiscussionRepositoryPort {
   }): Promise<MyCommentListItem[]>;
   listMyUpvotedThreads(params: {
     userId: string;
-    page: number;
     limit: number;
-  }): Promise<{ items: MyUpvotedThreadListItem[]; total: number }>;
+    cursor: MyUpvotedThreadCursor | null;
+  }): Promise<MyUpvotedThreadListItem[]>;
   listMyUpvotedComments(params: {
     userId: string;
-    page: number;
     limit: number;
-  }): Promise<{ items: MyUpvotedCommentListItem[]; total: number }>;
+    cursor: MyUpvotedCommentCursor | null;
+  }): Promise<MyUpvotedCommentListItem[]>;
   listMyDiscussionSubscriptions(params: {
     userId: string;
-    page: number;
     limit: number;
-  }): Promise<{ items: MyDiscussionSubscriptionListItem[]; total: number }>;
+    cursor: MyDiscussionSubscriptionCursor | null;
+  }): Promise<MyDiscussionSubscriptionListItem[]>;
   listMySavedThreads(params: {
     userId: string;
-    page: number;
     limit: number;
-  }): Promise<{ items: MySavedThreadListItem[]; total: number }>;
+    cursor: MySavedThreadCursor | null;
+  }): Promise<MySavedThreadListItem[]>;
   subscribeToThread(params: { userId: string; threadId: string }): Promise<void>;
   unsubscribeFromThread(params: { userId: string; threadId: string }): Promise<void>;
   saveThread(params: { userId: string; threadId: string }): Promise<void>;
   unsaveThread(params: { userId: string; threadId: string }): Promise<void>;
-  listCommentsByUser(params: {
-    userId: string;
-    limit: number;
-    cursor?: MyCommentCursor | null;
-  }): Promise<MyCommentListItem[]>;
   listTrendingDiscussions(params: {
     limit: number;
     cursor?: TrendingDiscussionCursor | null;
@@ -128,13 +131,17 @@ export interface DiscussionRepositoryPort {
     status: 'open' | 'closed' | 'hidden' | 'deleted';
   }): Promise<void>;
   incrementThreadCommentCount(threadId: string, delta: number): Promise<void>;
-  updateThreadVotes(threadId: string, deltaUpvotes: number, deltaDownvotes: number): Promise<void>;
+  updateThreadVotes(
+    threadId: string,
+    deltaUpvotes: number,
+    deltaDownvotes: number,
+    db?: DrizzleDB,
+  ): Promise<void>;
 
   // Comments
   createComment(params: CreateCommentParams): Promise<DiscussionComment>;
   getCommentById(commentId: string): Promise<DiscussionComment | null>;
   listComments(params: ListCommentsParams): Promise<DiscussionCommentWithReplies[]>;
-  getCommentReplies(parentCommentId: string, limit: number): Promise<DiscussionComment[]>;
   updateComment(params: UpdateCommentParams): Promise<DiscussionComment>;
   softDeleteComment(params: { commentId: string; authorId: string }): Promise<void>;
   updateCommentStatus(params: {
@@ -147,15 +154,19 @@ export interface DiscussionRepositoryPort {
     commentId: string,
     deltaUpvotes: number,
     deltaDownvotes: number,
+    db?: DrizzleDB | TransactionClient,
   ): Promise<void>;
 
   // Votes
-  upsertVote(params: VoteParams): Promise<DiscussionVote>;
-  removeVote(params: {
-    userId: string;
-    targetType: 'thread' | 'comment' | 'reply';
-    targetId: string;
-  }): Promise<void>;
+  upsertVote(params: VoteParams, db?: DrizzleDB): Promise<DiscussionVote>;
+  removeVote(
+    params: {
+      userId: string;
+      targetType: 'thread' | 'comment' | 'reply';
+      targetId: string;
+    },
+    db?: DrizzleDB,
+  ): Promise<void>;
   getUserVote(
     userId: string,
     targetType: 'thread' | 'comment' | 'reply',
@@ -164,7 +175,6 @@ export interface DiscussionRepositoryPort {
 
   // Reports
   createReport(params: ReportParams): Promise<DiscussionReport>;
-  getReportById(reportId: string): Promise<DiscussionReport | null>;
   listReports(params: {
     status?: string;
     limit?: number;

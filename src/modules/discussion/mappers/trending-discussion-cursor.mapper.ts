@@ -2,6 +2,7 @@ import { decodeBase64JsonCursor, encodeBase64JsonCursor } from '@/common/utils/c
 
 export type TrendingDiscussionCursor = {
   score: number;
+  createdAt: string;
   threadId: string;
 };
 
@@ -12,12 +13,13 @@ export class TrendingDiscussionCursorMapper {
   static parse(cursor: string): TrendingDiscussionCursor {
     const parsed = decodeBase64JsonCursor<TrendingDiscussionCursor>(cursor);
 
-    if (typeof parsed.score !== 'number' || !this.isUuid(parsed.threadId)) {
+    if (typeof parsed.score !== 'number' || !this.isIsoDateString(parsed.createdAt) || !this.isUuid(parsed.threadId)) {
       throw new Error('Invalid cursor');
     }
 
     return {
       score: parsed.score ?? 0,
+      createdAt: parsed.createdAt ?? '',
       threadId: parsed.threadId ?? '',
     };
   }
@@ -25,11 +27,17 @@ export class TrendingDiscussionCursorMapper {
   static serialize(payload: TrendingDiscussionCursor): string {
     return encodeBase64JsonCursor({
       score: payload.score,
+      createdAt: payload.createdAt,
       threadId: payload.threadId,
     });
   }
 
-  private static isUuid(value: unknown): boolean {
+  private static isUuid(value: unknown): value is string {
     return typeof value === 'string' && this.uuidPattern.test(value);
+  }
+
+  private static isIsoDateString(value: unknown): value is string {
+    if (typeof value !== 'string') return false;
+    return /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(value);
   }
 }

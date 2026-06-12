@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { DatabaseModule } from '@/core/database/database.module';
 import { NotificationApplicationService } from './application/notification-application.service';
@@ -16,9 +16,11 @@ import { NotificationChannelService } from './infrastructure/adapters';
 import { RankNotificationService } from './domain/services/rank-notification.service';
 import { TournamentNotificationService } from './domain/services';
 import { NotificationDomainEventBus } from './domain/events/notification-domain.event-bus';
+import { DiscussionModule } from '@/modules/discussion/discussion.module';
+import { DiscussionNotificationListener } from './infrastructure/adapters/discussion-notification-listener.adapter';
 
 @Module({
-  imports: [DatabaseModule, JwtModule],
+  imports: [DatabaseModule, JwtModule, forwardRef(() => DiscussionModule)],
   providers: [
     NotificationRepository,
     {
@@ -44,6 +46,7 @@ import { NotificationDomainEventBus } from './domain/events/notification-domain.
     NotificationSchedulerService,
     RankNotificationService,
     TournamentNotificationService,
+    DiscussionNotificationListener,
   ],
   controllers: [NotificationController],
   exports: [

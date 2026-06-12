@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Controller,
   Get,
   Post,
@@ -50,14 +51,16 @@ import {
   DiscussionSavedThreadActionResponseDto,
   DiscussionThreadSolveResponseDto,
   DiscussionThreadUnsolveResponseDto,
+  ActionResponseDto,
 } from '@/modules/discussion/dto/response';
 import {
   UpdateThreadDto,
   CreateCommentDto,
+  CreateThreadDto,
   UpdateCommentDto,
   VoteDto,
   RemoveVoteDto,
-  ReportDto,
+  CreateReportDto,
   ReviewReportDto,
   ListThreadsQueryDto,
   ListCommentsQueryDto,
@@ -229,6 +232,7 @@ export class DiscussionController {
     return this.discussionService.getMyDiscussionStats(user);
   }
 
+  @Throttle({ default: { limit: 30, ttl: 60_000 } })
   @Post('threads/:threadId/subscribe')
   @ApiAuth()
   @ApiOperation({
@@ -250,6 +254,7 @@ export class DiscussionController {
     return this.discussionService.subscribeToThread(user, threadId);
   }
 
+  @Throttle({ default: { limit: 30, ttl: 60_000 } })
   @Delete('threads/:threadId/subscribe')
   @ApiAuth()
   @ApiOperation({
@@ -271,6 +276,7 @@ export class DiscussionController {
     return this.discussionService.unsubscribeFromThread(user, threadId);
   }
 
+  @Throttle({ default: { limit: 30, ttl: 60_000 } })
   @Post('threads/:threadId/save')
   @ApiAuth()
   @ApiOperation({
@@ -292,6 +298,7 @@ export class DiscussionController {
     return this.discussionService.saveThread(user, threadId);
   }
 
+  @Throttle({ default: { limit: 30, ttl: 60_000 } })
   @Delete('threads/:threadId/save')
   @ApiAuth()
   @ApiOperation({
@@ -333,6 +340,28 @@ export class DiscussionController {
     });
   }
 
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @Post('threads')
+  @ApiAuth()
+  @ApiOperation({
+    summary: 'Create a new discussion thread',
+    description:
+      'Creates a discussion thread for the specified quiz. The authenticated user becomes the thread author.',
+  })
+  @ApiCreatedResponse({
+    description: 'Thread created successfully',
+    type: ThreadDto,
+  })
+  @ApiNotFoundResponse({ description: 'Quiz not found' })
+  @ApiBadRequestResponse({ description: 'Validation failed' })
+  @ApiValidationRequest()
+  async createThread(
+    @CurrentUser() user: JwtPayload,
+    @Body() dto: CreateThreadDto,
+  ): Promise<ThreadDto> {
+    return this.discussionService.createThread(user, dto.quizId, dto.title, dto.body);
+  }
+
   @Get('threads/:threadId')
   @ApiAuth()
   @ApiOperation({ summary: 'Get a thread with its comments' })
@@ -345,6 +374,7 @@ export class DiscussionController {
     return this.discussionService.getThread(user, threadId);
   }
 
+  @Throttle({ default: { limit: 20, ttl: 60_000 } })
   @Put('threads/:threadId')
   @ApiAuth()
   @ApiOperation({ summary: 'Update a thread (author only)' })
@@ -361,6 +391,7 @@ export class DiscussionController {
     return this.discussionService.updateThread(user, threadId, dto);
   }
 
+  @Throttle({ default: { limit: 30, ttl: 60_000 } })
   @Post('threads/:threadId/close')
   @ApiAuth()
   @ApiOperation({ summary: 'Close a thread (author only)' })
@@ -370,11 +401,12 @@ export class DiscussionController {
   async closeThread(
     @CurrentUser() user: JwtPayload,
     @Param('threadId', new ParseUUIDPipe()) threadId: string,
-  ): Promise<{ message: string }> {
+  ): Promise<ActionResponseDto> {
     await this.discussionService.closeThread(user, threadId);
     return { message: 'Thread closed' };
   }
 
+  @Throttle({ default: { limit: 30, ttl: 60_000 } })
   @Post('threads/:threadId/reopen')
   @ApiAuth()
   @ApiOperation({ summary: 'Reopen a closed thread (author only)' })
@@ -384,11 +416,12 @@ export class DiscussionController {
   async reopenThread(
     @CurrentUser() user: JwtPayload,
     @Param('threadId', new ParseUUIDPipe()) threadId: string,
-  ): Promise<{ message: string }> {
+  ): Promise<ActionResponseDto> {
     await this.discussionService.reopenThread(user, threadId);
     return { message: 'Thread reopened' };
   }
 
+  @Throttle({ default: { limit: 20, ttl: 60_000 } })
   @Post('threads/:threadId/solve')
   @ApiAuth()
   @ApiOperation({
@@ -420,6 +453,7 @@ export class DiscussionController {
     };
   }
 
+  @Throttle({ default: { limit: 20, ttl: 60_000 } })
   @Delete('threads/:threadId/solve')
   @ApiAuth()
   @ApiOperation({
@@ -447,6 +481,7 @@ export class DiscussionController {
     };
   }
 
+  @Throttle({ default: { limit: 30, ttl: 60_000 } })
   @Delete('threads/:threadId')
   @ApiAuth()
   @ApiOperation({ summary: 'Soft-delete a thread (author only)' })
@@ -461,6 +496,7 @@ export class DiscussionController {
     await this.discussionService.deleteThread(user, threadId);
   }
 
+  @Throttle({ default: { limit: 30, ttl: 60_000 } })
   @Post('threads/:threadId/hide')
   @ApiAuth()
   @Roles('admin', 'moderator')
@@ -471,13 +507,14 @@ export class DiscussionController {
   async hideThread(
     @CurrentUser() user: JwtPayload,
     @Param('threadId', new ParseUUIDPipe()) threadId: string,
-  ): Promise<{ message: string }> {
+  ): Promise<ActionResponseDto> {
     await this.discussionService.hideThread(user, threadId);
     return { message: 'Thread hidden' };
   }
 
   // ─── COMMENTS ─────────────────────────────────────────────────────────────
 
+  @Throttle({ default: { limit: 20, ttl: 60_000 } })
   @Post('threads/:threadId/comments')
   @ApiAuth()
   @ApiOperation({ summary: 'Add a comment or reply to a thread' })
@@ -528,6 +565,7 @@ export class DiscussionController {
     return this.discussionService.getComment(user, commentId);
   }
 
+  @Throttle({ default: { limit: 20, ttl: 60_000 } })
   @Put('comments/:commentId')
   @ApiAuth()
   @ApiOperation({ summary: 'Update a comment (author only)' })
@@ -541,23 +579,28 @@ export class DiscussionController {
     @Param('commentId', new ParseUUIDPipe()) commentId: string,
     @Body() dto: UpdateCommentDto,
   ): Promise<CommentDto> {
+    if (dto.body === undefined) {
+      throw new BadRequestException('At least one field must be provided to update a comment');
+    }
     return this.discussionService.updateComment(user, commentId, dto.body);
   }
 
+  @Throttle({ default: { limit: 30, ttl: 60_000 } })
   @Delete('comments/:commentId')
   @ApiAuth()
   @ApiOperation({ summary: 'Soft-delete a comment (author only)' })
-  @ApiOkResponse({ description: 'Comment deleted' })
+  @ApiNoContent('Comment deleted')
   @ApiNotFoundResponse({ description: 'Comment not found' })
   @ApiForbiddenResponse({ description: 'Not the comment author' })
+  @HttpCode(HttpStatus.NO_CONTENT)
   async deleteComment(
     @CurrentUser() user: JwtPayload,
     @Param('commentId', new ParseUUIDPipe()) commentId: string,
-  ): Promise<{ message: string }> {
+  ): Promise<void> {
     await this.discussionService.deleteComment(user, commentId);
-    return { message: 'Comment deleted' };
   }
 
+  @Throttle({ default: { limit: 30, ttl: 60_000 } })
   @Post('comments/:commentId/hide')
   @ApiAuth()
   @Roles('admin', 'moderator')
@@ -568,7 +611,7 @@ export class DiscussionController {
   async hideComment(
     @CurrentUser() user: JwtPayload,
     @Param('commentId', new ParseUUIDPipe()) commentId: string,
-  ): Promise<{ message: string }> {
+  ): Promise<ActionResponseDto> {
     await this.discussionService.hideComment(user, commentId);
     return { message: 'Comment hidden' };
   }
@@ -584,7 +627,7 @@ export class DiscussionController {
   @ApiForbiddenResponse({ description: 'Cannot vote on own content' })
   @ApiBadRequestResponse({ description: 'Validation failed' })
   @ApiValidationRequest()
-  async vote(@CurrentUser() user: JwtPayload, @Body() dto: VoteDto): Promise<{ message: string }> {
+  async vote(@CurrentUser() user: JwtPayload, @Body() dto: VoteDto): Promise<ActionResponseDto> {
     await this.discussionService.vote(user, dto.targetType, dto.targetId, dto.value);
     return { message: 'Vote recorded' };
   }
@@ -597,7 +640,7 @@ export class DiscussionController {
   async removeVote(
     @CurrentUser() user: JwtPayload,
     @Body() dto: RemoveVoteDto,
-  ): Promise<{ message: string }> {
+  ): Promise<ActionResponseDto> {
     await this.discussionService.removeVote(user, dto.targetType, dto.targetId);
     return { message: 'Vote removed' };
   }
@@ -616,8 +659,8 @@ export class DiscussionController {
   @ApiValidationRequest()
   async report(
     @CurrentUser() user: JwtPayload,
-    @Body() dto: ReportDto,
-  ): Promise<{ message: string }> {
+    @Body() dto: CreateReportDto,
+  ): Promise<ActionResponseDto> {
     await this.discussionService.report(
       user,
       dto.targetType,
@@ -628,6 +671,7 @@ export class DiscussionController {
     return { message: 'Report submitted' };
   }
 
+  @Throttle({ default: { limit: 20, ttl: 60_000 } })
   @Post('reports/:reportId/review')
   @ApiAuth()
   @Roles('admin', 'moderator')
@@ -641,7 +685,7 @@ export class DiscussionController {
     @CurrentUser() user: JwtPayload,
     @Param('reportId', new ParseUUIDPipe()) reportId: string,
     @Body() dto: ReviewReportDto,
-  ): Promise<{ message: string }> {
+  ): Promise<ActionResponseDto> {
     await this.discussionService.reviewReport(user, reportId, dto.status, dto.actionTaken ?? false);
     return { message: 'Report reviewed' };
   }

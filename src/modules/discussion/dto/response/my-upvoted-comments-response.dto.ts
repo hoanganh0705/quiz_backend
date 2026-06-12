@@ -1,4 +1,4 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class MyUpvotedCommentItemResponseDto {
   @ApiProperty({
@@ -35,6 +35,21 @@ export class MyUpvotedCommentItemResponseDto {
   upvotedAt!: string;
 }
 
+export class MyUpvotedCommentsPaginationDto {
+  @ApiProperty({ description: 'Items per page', example: 20 })
+  limit!: number;
+
+  @ApiProperty({ description: 'Whether another page is available', example: true })
+  hasNextPage!: boolean;
+
+  @ApiPropertyOptional({
+    description: 'Opaque cursor for the next page',
+    nullable: true,
+    example: 'eyJ1cHVvdGVkQXQiOiIyMDI2LTA2LTA4VDA5OjAwOjAwWiIsImNvbW1lbnRJZCI6Ijg4MGU4NDgwLWUyOWItNDFkNC1hNzE2LTQ0NjY1NTQ0MDAwMCJ9',
+  })
+  nextCursor!: string | null;
+}
+
 export class MyUpvotedCommentsResponseDto {
   @ApiProperty({
     description: 'Upvoted comment items',
@@ -42,12 +57,6 @@ export class MyUpvotedCommentsResponseDto {
   })
   items!: MyUpvotedCommentItemResponseDto[];
 
-  @ApiProperty({ description: 'Total number of matching comments', example: 50 })
-  total!: number;
-
-  @ApiProperty({ description: 'Current page number', example: 1 })
-  page!: number;
-
-  @ApiProperty({ description: 'Items per page', example: 20 })
-  limit!: number;
+  @ApiProperty({ description: 'Pagination metadata', type: () => MyUpvotedCommentsPaginationDto })
+  pagination!: MyUpvotedCommentsPaginationDto;
 }

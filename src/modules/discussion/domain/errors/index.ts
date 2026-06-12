@@ -19,13 +19,6 @@ export class CommentNotFoundError extends DiscussionError {
   }
 }
 
-export class ReportNotFoundError extends DiscussionError {
-  constructor(reportId: string) {
-    super(`Report not found: ${reportId}`);
-    this.name = 'ReportNotFoundError';
-  }
-}
-
 export class ThreadForbiddenError extends DiscussionError {
   constructor() {
     super('You do not have permission to perform this action on this thread');
@@ -82,9 +75,16 @@ export class DuplicateReportError extends DiscussionError {
   }
 }
 
-export class ReportReviewForbiddenError extends DiscussionError {
+export class QuizNotFoundError extends DiscussionError {
+  constructor(quizId: string) {
+    super(`Quiz not found: ${quizId}`);
+    this.name = 'QuizNotFoundError';
+  }
+}
+
+export class ModeratorRequiredError extends DiscussionError {
   constructor() {
-    super('You do not have permission to review this report');
-    this.name = 'ReportReviewForbiddenError';
+    super('Moderator or admin role is required to perform this action');
+    this.name = 'ModeratorRequiredError';
   }
 }

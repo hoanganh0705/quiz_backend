@@ -5,15 +5,7 @@
  * All endpoints require the 'admin' role.
  */
 
-import {
-  Controller,
-  Get,
-  Post,
-  Param,
-  HttpCode,
-  HttpStatus,
-  ParseUUIDPipe,
-} from '@nestjs/common';
+import { Controller, Get, Post, Param, HttpCode, HttpStatus, ParseUUIDPipe } from '@nestjs/common';
 import {
   ApiTags,
   ApiOperation,
@@ -23,14 +15,13 @@ import {
   ApiBadRequestResponse,
   ApiInternalServerErrorResponse,
 } from '@nestjs/swagger';
-import { CurrentUser } from '@/common/decorators/current-user.decorator';
 import { Roles } from '@/common/authorization/decorators/roles.decorator';
 import { ApiAuth } from '@/common/swagger/swagger-decorators';
 import { ScheduledEvaluationService } from '../../infrastructure/scheduled/scheduled-evaluation.service';
 import { AchievementHistoryService } from '../../application/achievement-history.service';
 import { ReevaluateUserResponseDto } from '../../dto/response/achievement-admin-response.dto';
 
-@ApiTags('achievements-admin')
+@ApiTags('achievements')
 @Controller('admin/achievements')
 @ApiAuth()
 @ApiUnauthorizedResponse({ description: 'Unauthorized — missing or invalid token' })
@@ -48,7 +39,7 @@ export class AchievementAdminController {
   @ApiOperation({
     summary: 'Re-evaluate all badges for a user',
     description:
-      "Forces re-evaluation of every active badge for the specified user. Badges the user " +
+      'Forces re-evaluation of every active badge for the specified user. Badges the user ' +
       'does not yet have will be checked against the rule engine. Use this to correct missed ' +
       'awards or retroactively grant badges after data fixes.',
   })
@@ -75,7 +66,7 @@ export class AchievementAdminController {
   @ApiOperation({
     summary: "Get a user's achievement history",
     description:
-      "Returns the full achievement history (including revoked) for a user. " +
+      'Returns the full achievement history (including revoked) for a user. ' +
       'Intended for admin review when investigating missing or incorrectly revoked badges.',
   })
   @ApiOkResponse({ description: 'Achievement history returned' })
