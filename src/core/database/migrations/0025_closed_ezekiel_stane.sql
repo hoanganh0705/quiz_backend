@@ -1,1 +1,0 @@
-ALTER TABLE "users" ALTER COLUMN "user_search_vector" DROP EXPRESSION;
