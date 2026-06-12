@@ -8,6 +8,10 @@ export interface CacheProvider {
   get(key: string): Promise<string | null>;
 
   set(key: string, value: string, ttlMs: number): Promise<void>;
+
+  rpushJson<T>(key: string, item: T): Promise<number>;
+
+  lpopJson<T>(key: string): Promise<T | null>;
 }
 
 export const CACHE_PROVIDER = Symbol('CACHE_PROVIDER');

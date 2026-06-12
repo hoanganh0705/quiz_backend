@@ -109,6 +109,20 @@ export const discussionThreads = pgTable(
     index('idx_discussion_threads_search_vector')
       .using('gin', table.discussionSearchVector)
       .where(sql`deleted_at IS NULL`),
+    index('idx_discussion_threads_trending')
+      .using(
+        'btree',
+        table.votesCount.desc().nullsLast().op('int4_ops'),
+        table.createdAt.desc().nullsLast().op('timestamptz_ops'),
+      )
+      .where(sql`deleted_at IS NULL`),
+    index('idx_discussion_threads_unanswered')
+      .using(
+        'btree',
+        table.commentsCount.asc().nullsLast().op('int4_ops'),
+        table.createdAt.desc().nullsLast().op('timestamptz_ops'),
+      )
+      .where(sql`comments_count = 0 AND deleted_at IS NULL`),
     uniqueIndex('uq_discussion_threads_quiz_author_title_active')
       .using('btree', table.quizId.asc().nullsLast().op('uuid_ops'), sql`lower(title)`)
       .where(sql`deleted_at IS NULL`),

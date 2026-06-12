@@ -1,12 +1,12 @@
 import { Inject, Injectable, forwardRef } from '@nestjs/common';
+import { DRIZZLE } from '@/core/database/drizzle.constants';
+import type { DrizzleDB } from '@/core/database/database.module';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
-import {
-  DISCUSSION_REPOSITORY_PORT,
-  QUIZ_EXISTENCE_PORT,
-  type DiscussionRepositoryPort,
-} from '../ports';
-import type { QuizExistencePort } from '../ports/quiz-existence.port';
-import { DISCUSSION_DOMAIN_EVENT_BUS, type DiscussionDomainEventBusPort } from '../events';
+import { UserRole } from '@/common/types/user-role.type';
+import { DISCUSSION_REPOSITORY_PORT, QUIZ_EXISTENCE_PORT } from '../ports';
+import type { DiscussionRepositoryPort, QuizExistencePort } from '../ports';
+import { DISCUSSION_DOMAIN_EVENT_BUS } from '../events';
+import type { DiscussionDomainEventBusPort } from '../events';
 import type {
   DiscussionThread,
   DiscussionThreadDetail,
@@ -27,6 +27,10 @@ import type {
   MyDiscussionListItem,
   MyCommentCursor,
   MyCommentListItem,
+  MyUpvotedThreadCursor,
+  MyUpvotedCommentCursor,
+  MyDiscussionSubscriptionCursor,
+  MySavedThreadCursor,
   MyUpvotedThreadListItem,
   MyUpvotedCommentListItem,
   MyDiscussionSubscriptionListItem,
@@ -45,10 +49,8 @@ import type {
   MarkThreadAsSolvedParams,
   UnsolveThreadParams,
 } from '../types';
-import {
-  USER_REPOSITORY_PORT,
-  type UserRepositoryPort,
-} from '@/modules/user/domain/ports/user-repository.port';
+import { USER_REPOSITORY_PORT } from '@/modules/user/domain/ports/user-repository.port';
+import type { UserRepositoryPort } from '@/modules/user/domain/ports/user-repository.port';
 import { UserNotFoundError } from '@/modules/user/domain/errors';
 import { isPostgresUniqueViolation } from '@/common/utils/db-error.util';
 import {
@@ -62,6 +64,8 @@ import {
   SelfVoteError,
   SelfReportError,
   DuplicateReportError,
+  QuizNotFoundError,
+  ModeratorRequiredError,
 } from '../errors';
 
 @Injectable()
@@ -75,6 +79,8 @@ export class DiscussionService {
     private readonly userRepository: UserRepositoryPort,
     @Inject(DISCUSSION_DOMAIN_EVENT_BUS)
     private readonly eventBus: DiscussionDomainEventBusPort,
+    @Inject(DRIZZLE)
+    private readonly db: DrizzleDB,
     @InjectPinoLogger(DiscussionService.name)
     private readonly logger: PinoLogger,
   ) {}
@@ -84,7 +90,7 @@ export class DiscussionService {
   async createThread(params: CreateThreadParams): Promise<DiscussionThread> {
     const quizExists = await this.quizExistence.exists(params.quizId);
     if (!quizExists) {
-      throw new Error('Quiz not found');
+      throw new QuizNotFoundError(params.quizId);
     }
 
     this.logger.debug({
@@ -131,7 +137,7 @@ export class DiscussionService {
   }> {
     const quizExists = await this.quizExistence.exists(quizId);
     if (!quizExists) {
-      throw new Error('Quiz not found');
+      throw new QuizNotFoundError(quizId);
     }
 
     const limit = query.limit ?? 20;
@@ -165,46 +171,13 @@ export class DiscussionService {
     hasNextPage: boolean;
     nextCursor: QuizDiscussionCursor | null;
   }> {
-    const limit = query.limit ?? 20;
-    const rows = await this.repo.listMyDiscussions({
-      userId,
-      limit,
-      cursor: query.cursor ?? null,
-    });
-
-    const hasNextPage = rows.length > limit;
-    const items = hasNextPage ? rows.slice(0, limit) : rows;
-    const lastItem = items.at(-1);
-
-    return {
-      items,
-      limit,
-      hasNextPage,
-      nextCursor:
-        hasNextPage && lastItem
-          ? { createdAt: lastItem.createdAt, threadId: lastItem.threadId }
-          : null,
-    };
-  }
-
-  async listDiscussionsByUser(
-    userId: string,
-    query: { limit?: number; cursor?: QuizDiscussionCursor | null },
-  ): Promise<{
-    items: MyDiscussionListItem[];
-    limit: number;
-    hasNextPage: boolean;
-    nextCursor: QuizDiscussionCursor | null;
-  }> {
     const user = await this.userRepository.findMeById(userId);
-
     if (!user) {
       this.logger.warn({ event: 'discussion_user_not_found', userId });
       throw new UserNotFoundError();
     }
-
     const limit = query.limit ?? 20;
-    const rows = await this.repo.listDiscussionsByUser({
+    const rows = await this.repo.listMyDiscussions({
       userId,
       limit,
       cursor: query.cursor ?? null,
@@ -258,126 +231,123 @@ export class DiscussionService {
 
   async listMyUpvotedThreads(
     userId: string,
-    query: { page?: number; limit?: number },
-  ): Promise<{ items: MyUpvotedThreadListItem[]; total: number; page: number; limit: number }> {
-    const page = query.page ?? 1;
+    query: { limit?: number; cursor?: MyUpvotedThreadCursor | null },
+  ): Promise<{
+    items: MyUpvotedThreadListItem[];
+    limit: number;
+    hasNextPage: boolean;
+    nextCursor: MyUpvotedThreadCursor | null;
+  }> {
     const limit = query.limit ?? 20;
-
-    const result = await this.repo.listMyUpvotedThreads({
+    const rows = await this.repo.listMyUpvotedThreads({
       userId,
-      page,
       limit,
+      cursor: query.cursor ?? null,
     });
 
-    this.logger.debug({
-      event: 'my_upvoted_threads_listed',
-      userId,
-      page,
-      limit,
-      total: result.total,
-      resultCount: result.items.length,
-    });
+    const hasNextPage = rows.length > limit;
+    const items = hasNextPage ? rows.slice(0, limit) : rows;
+    const lastItem = items.at(-1);
 
     return {
-      items: result.items,
-      total: result.total,
-      page,
+      items,
       limit,
+      hasNextPage,
+      nextCursor:
+        hasNextPage && lastItem
+          ? { upvotedAt: lastItem.upvotedAt, threadId: lastItem.threadId }
+          : null,
     };
   }
 
   async listMyUpvotedComments(
     userId: string,
-    query: { page?: number; limit?: number },
-  ): Promise<{ items: MyUpvotedCommentListItem[]; total: number; page: number; limit: number }> {
-    const page = query.page ?? 1;
+    query: { limit?: number; cursor?: MyUpvotedCommentCursor | null },
+  ): Promise<{
+    items: MyUpvotedCommentListItem[];
+    limit: number;
+    hasNextPage: boolean;
+    nextCursor: MyUpvotedCommentCursor | null;
+  }> {
     const limit = query.limit ?? 20;
-
-    const result = await this.repo.listMyUpvotedComments({
+    const rows = await this.repo.listMyUpvotedComments({
       userId,
-      page,
       limit,
+      cursor: query.cursor ?? null,
     });
 
-    this.logger.debug({
-      event: 'my_upvoted_comments_listed',
-      userId,
-      page,
-      limit,
-      total: result.total,
-      resultCount: result.items.length,
-    });
+    const hasNextPage = rows.length > limit;
+    const items = hasNextPage ? rows.slice(0, limit) : rows;
+    const lastItem = items.at(-1);
 
     return {
-      items: result.items,
-      total: result.total,
-      page,
+      items,
       limit,
+      hasNextPage,
+      nextCursor:
+        hasNextPage && lastItem
+          ? { upvotedAt: lastItem.upvotedAt, commentId: lastItem.commentId }
+          : null,
     };
   }
 
   async listMyDiscussionSubscriptions(
     userId: string,
-    query: { page?: number; limit?: number },
+    query: { limit?: number; cursor?: MyDiscussionSubscriptionCursor | null },
   ): Promise<{
     items: MyDiscussionSubscriptionListItem[];
-    total: number;
-    page: number;
     limit: number;
+    hasNextPage: boolean;
+    nextCursor: MyDiscussionSubscriptionCursor | null;
   }> {
-    const page = query.page ?? 1;
     const limit = query.limit ?? 20;
-
-    const result = await this.repo.listMyDiscussionSubscriptions({
+    const rows = await this.repo.listMyDiscussionSubscriptions({
       userId,
-      page,
       limit,
+      cursor: query.cursor ?? null,
     });
 
-    this.logger.debug({
-      event: 'my_discussion_subscriptions_listed',
-      userId,
-      page,
-      limit,
-      total: result.total,
-      resultCount: result.items.length,
-    });
+    const hasNextPage = rows.length > limit;
+    const items = hasNextPage ? rows.slice(0, limit) : rows;
+    const lastItem = items.at(-1);
 
     return {
-      items: result.items,
-      total: result.total,
-      page,
+      items,
       limit,
+      hasNextPage,
+      nextCursor:
+        hasNextPage && lastItem
+          ? { subscribedAt: lastItem.subscribedAt, threadId: lastItem.threadId }
+          : null,
     };
   }
 
   async listMySavedThreads(
     userId: string,
-    query: { page?: number; limit?: number },
-  ): Promise<{ items: MySavedThreadListItem[]; total: number; page: number; limit: number }> {
-    const page = query.page ?? 1;
+    query: { limit?: number; cursor?: MySavedThreadCursor | null },
+  ): Promise<{
+    items: MySavedThreadListItem[];
+    limit: number;
+    hasNextPage: boolean;
+    nextCursor: MySavedThreadCursor | null;
+  }> {
     const limit = query.limit ?? 20;
-
-    const result = await this.repo.listMySavedThreads({
+    const rows = await this.repo.listMySavedThreads({
       userId,
-      page,
       limit,
+      cursor: query.cursor ?? null,
     });
 
-    this.logger.debug({
-      event: 'my_saved_threads_listed',
-      userId,
-      page,
-      limit,
-      total: result.total,
-      resultCount: result.items.length,
-    });
+    const hasNextPage = rows.length > limit;
+    const items = hasNextPage ? rows.slice(0, limit) : rows;
+    const lastItem = items.at(-1);
 
     return {
-      items: result.items,
-      total: result.total,
-      page,
+      items,
       limit,
+      hasNextPage,
+      nextCursor:
+        hasNextPage && lastItem ? { savedAt: lastItem.savedAt, threadId: lastItem.threadId } : null,
     };
   }
 
@@ -606,7 +576,11 @@ export class DiscussionService {
       hasNextPage,
       nextCursor:
         hasNextPage && lastItem
-          ? { score: lastItem.trendingScore, threadId: lastItem.threadId }
+          ? {
+              score: lastItem.trendingScore,
+              createdAt: lastItem.createdAt,
+              threadId: lastItem.threadId,
+            }
           : null,
     };
   }
@@ -762,7 +736,7 @@ export class DiscussionService {
     }
 
     const limit = query.limit ?? 20;
-    const rows = await this.repo.listCommentsByUser({
+    const rows = await this.repo.listMyComments({
       userId,
       limit,
       cursor: query.cursor ?? null,
@@ -817,6 +791,12 @@ export class DiscussionService {
     if (thread.authorId !== userId) throw new ThreadForbiddenError();
 
     await this.repo.updateThreadStatus({ threadId, status: 'open' });
+    this.eventBus.emitThreadReopened({
+      eventType: 'thread_reopened',
+      threadId,
+      authorId: userId,
+      timestamp: new Date(),
+    });
     this.logger.info({ event: 'thread_reopened', threadId });
   }
 
@@ -836,7 +816,11 @@ export class DiscussionService {
     this.logger.info({ event: 'thread_deleted', threadId });
   }
 
-  async hideThread(threadId: string, moderatorId: string): Promise<void> {
+  async hideThread(threadId: string, moderatorId: string, role: UserRole): Promise<void> {
+    if (role !== 'admin' && role !== 'moderator') {
+      throw new ModeratorRequiredError();
+    }
+
     const thread = await this.repo.getThreadById(threadId);
     if (!thread) throw new ThreadNotFoundError(threadId);
     if (thread.status === 'deleted') throw new ThreadNotActiveError();
@@ -859,12 +843,14 @@ export class DiscussionService {
     if (thread.status === 'deleted') throw new ThreadNotActiveError();
     if (thread.status === 'closed') throw new ThreadClosedError();
 
-    if (params.parentCommentId) {
-      const parent = await this.repo.getCommentById(params.parentCommentId);
-      if (!parent) throw new CommentNotFoundError(params.parentCommentId);
-      if (parent.threadId !== params.threadId) {
-        throw new Error('Parent comment does not belong to this thread');
-      }
+    const parent = params.parentCommentId
+      ? await this.repo.getCommentById(params.parentCommentId)
+      : null;
+    if (params.parentCommentId && !parent) {
+      throw new CommentNotFoundError(params.parentCommentId);
+    }
+    if (parent && parent.threadId !== params.threadId) {
+      throw new CommentThreadMismatchError();
     }
 
     const comment = await this.repo.createComment(params);
@@ -888,6 +874,7 @@ export class DiscussionService {
       authorUsername: comment.author.username,
       threadAuthorId: thread.author.userId,
       parentCommentId: params.parentCommentId ?? null,
+      parentCommentAuthorId: parent?.author.userId ?? null,
       isReply: params.parentCommentId !== null,
       timestamp: new Date(),
     });
@@ -943,7 +930,11 @@ export class DiscussionService {
     this.logger.info({ event: 'comment_deleted', commentId });
   }
 
-  async hideComment(commentId: string, moderatorId: string): Promise<void> {
+  async hideComment(commentId: string, moderatorId: string, role: UserRole): Promise<void> {
+    if (role !== 'admin' && role !== 'moderator') {
+      throw new ModeratorRequiredError();
+    }
+
     const comment = await this.repo.getCommentById(commentId);
     if (!comment) throw new CommentNotFoundError(commentId);
 
@@ -974,26 +965,41 @@ export class DiscussionService {
       if (comment.authorId === userId) throw new SelfVoteError();
     }
 
-    const existingVote = await this.repo.getUserVote(userId, targetType, targetId);
+    await this.db.transaction(async (tx: any) => {
+      const [existingVote] = await Promise.all([
+        this.repo.getUserVote(userId, targetType, targetId),
+      ]);
 
-    if (existingVote === value) {
-      await this.repo.removeVote({ userId, targetType, targetId });
-      const delta = value === 'upvote' ? -1 : -1;
-      const deltaDown = value === 'downvote' ? -1 : -1;
-      await this.updateTargetVotes(targetType, targetId, -delta, -deltaDown);
-    } else {
-      await this.repo.upsertVote({ userId, targetType, targetId, value });
-
-      if (existingVote) {
-        const flipUp = value === 'upvote' ? 1 : -1;
-        const flipDown = value === 'upvote' ? -1 : 1;
-        await this.updateTargetVotes(targetType, targetId, flipUp, flipDown);
+      if (existingVote === value) {
+        await this.repo.removeVote({ userId, targetType, targetId }, tx);
+        const deltaUp = value === 'upvote' ? -1 : 0;
+        const deltaDown = value === 'downvote' ? -1 : 0;
+        if (targetType === 'thread') {
+          await this.repo.updateThreadVotes(targetId, deltaUp, deltaDown, tx);
+        } else {
+          await this.repo.updateCommentVotes(targetId, deltaUp, deltaDown, tx);
+        }
       } else {
-        const upDelta = value === 'upvote' ? 1 : 0;
-        const downDelta = value === 'downvote' ? 1 : 0;
-        await this.updateTargetVotes(targetType, targetId, upDelta, downDelta);
+        await this.repo.upsertVote({ userId, targetType, targetId, value }, tx);
+        if (existingVote) {
+          const flipUp = value === 'upvote' ? 1 : -1;
+          const flipDown = value === 'upvote' ? -1 : 1;
+          if (targetType === 'thread') {
+            await this.repo.updateThreadVotes(targetId, flipUp, flipDown, tx);
+          } else {
+            await this.repo.updateCommentVotes(targetId, flipUp, flipDown, tx);
+          }
+        } else {
+          const upDelta = value === 'upvote' ? 1 : 0;
+          const downDelta = value === 'downvote' ? 1 : 0;
+          if (targetType === 'thread') {
+            await this.repo.updateThreadVotes(targetId, upDelta, downDelta, tx);
+          } else {
+            await this.repo.updateCommentVotes(targetId, upDelta, downDelta, tx);
+          }
+        }
       }
-    }
+    });
 
     this.logger.debug({ event: 'vote_cast', userId, targetType, targetId, value });
   }

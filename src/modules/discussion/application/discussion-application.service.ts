@@ -3,9 +3,33 @@ import type { JwtPayload } from '@/common/guards/jwt.guard';
 import { DiscussionService } from '../domain/services/discussion.service';
 import { QuizDiscussionCursorMapper } from '../mappers/quiz-discussion-cursor.mapper';
 import { MyCommentCursorMapper } from '../mappers/my-comment-cursor.mapper';
+import {
+  MyUpvotedThreadCursorMapper,
+  type MyUpvotedThreadCursor,
+} from '../mappers/my-upvoted-thread-cursor.mapper';
+import {
+  MyUpvotedCommentCursorMapper,
+  type MyUpvotedCommentCursor,
+} from '../mappers/my-upvoted-comment-cursor.mapper';
+import {
+  MyDiscussionSubscriptionCursorMapper,
+  type MyDiscussionSubscriptionCursor,
+} from '../mappers/my-discussion-subscription-cursor.mapper';
+import {
+  MySavedThreadCursorMapper,
+  type MySavedThreadCursor,
+} from '../mappers/my-saved-thread-cursor.mapper';
 import { TrendingDiscussionCursorMapper } from '../mappers/trending-discussion-cursor.mapper';
 import { UnansweredDiscussionCursorMapper } from '../mappers/unanswered-discussion-cursor.mapper';
 import { SearchDiscussionsCursorMapper } from '../mappers/search-discussions-cursor.mapper';
+import {
+  DiscussionThreadStatus,
+  ThreadSortField,
+  SortOrder,
+  DiscussionReportStatus,
+  DiscussionReportTargetType,
+  DiscussionVoteValue,
+} from '../domain/types';
 import type {
   DiscussionThread,
   DiscussionThreadDetail,
@@ -63,9 +87,9 @@ export class DiscussionApplicationService {
     filters: {
       quizId?: string;
       authorId?: string;
-      status?: 'open' | 'closed' | 'hidden' | 'deleted';
-      sortBy?: 'created_at' | 'votes_count' | 'comments_count';
-      sortOrder?: 'asc' | 'desc';
+      status?: DiscussionThreadStatus;
+      sortBy?: ThreadSortField;
+      sortOrder?: SortOrder;
       limit?: number;
       cursor?: string | null;
     },
@@ -121,30 +145,6 @@ export class DiscussionApplicationService {
     };
   }
 
-  async listDiscussionsByUser(
-    userId: string,
-    query: { limit?: number; cursor?: QuizDiscussionCursor | null },
-  ): Promise<{
-    items: MyDiscussionListItem[];
-    pagination: {
-      limit: number;
-      hasNextPage: boolean;
-      nextCursor: string | null;
-    };
-  }> {
-    const { items, limit, hasNextPage, nextCursor } =
-      await this.discussionService.listDiscussionsByUser(userId, query);
-
-    return {
-      items,
-      pagination: {
-        limit,
-        hasNextPage,
-        nextCursor: nextCursor ? QuizDiscussionCursorMapper.serialize(nextCursor) : null,
-      },
-    };
-  }
-
   async listMyComments(
     userId: string,
     query: { limit?: number; cursor?: MyCommentCursor | null },
@@ -173,35 +173,74 @@ export class DiscussionApplicationService {
 
   async listMyUpvotedThreads(
     user: JwtPayload,
-    query: { page?: number; limit?: number },
-  ): Promise<{ items: MyUpvotedThreadListItem[]; total: number; page: number; limit: number }> {
-    return this.discussionService.listMyUpvotedThreads(user.sub, query);
+    query: { limit?: number; cursor?: MyUpvotedThreadCursor | null },
+  ): Promise<{
+    items: MyUpvotedThreadListItem[];
+    pagination: { limit: number; hasNextPage: boolean; nextCursor: string | null };
+  }> {
+    const { items, limit, hasNextPage, nextCursor } = await this.discussionService.listMyUpvotedThreads(user.sub, query);
+    return {
+      items,
+      pagination: {
+        limit,
+        hasNextPage,
+        nextCursor: nextCursor ? MyUpvotedThreadCursorMapper.serialize(nextCursor) : null,
+      },
+    };
   }
 
   async listMyUpvotedComments(
     user: JwtPayload,
-    query: { page?: number; limit?: number },
-  ): Promise<{ items: MyUpvotedCommentListItem[]; total: number; page: number; limit: number }> {
-    return this.discussionService.listMyUpvotedComments(user.sub, query);
+    query: { limit?: number; cursor?: MyUpvotedCommentCursor | null },
+  ): Promise<{
+    items: MyUpvotedCommentListItem[];
+    pagination: { limit: number; hasNextPage: boolean; nextCursor: string | null };
+  }> {
+    const { items, limit, hasNextPage, nextCursor } = await this.discussionService.listMyUpvotedComments(user.sub, query);
+    return {
+      items,
+      pagination: {
+        limit,
+        hasNextPage,
+        nextCursor: nextCursor ? MyUpvotedCommentCursorMapper.serialize(nextCursor) : null,
+      },
+    };
   }
 
   async listMyDiscussionSubscriptions(
     user: JwtPayload,
-    query: { page?: number; limit?: number },
+    query: { limit?: number; cursor?: MyDiscussionSubscriptionCursor | null },
   ): Promise<{
     items: MyDiscussionSubscriptionListItem[];
-    total: number;
-    page: number;
-    limit: number;
+    pagination: { limit: number; hasNextPage: boolean; nextCursor: string | null };
   }> {
-    return this.discussionService.listMyDiscussionSubscriptions(user.sub, query);
+    const { items, limit, hasNextPage, nextCursor } = await this.discussionService.listMyDiscussionSubscriptions(user.sub, query);
+    return {
+      items,
+      pagination: {
+        limit,
+        hasNextPage,
+        nextCursor: nextCursor ? MyDiscussionSubscriptionCursorMapper.serialize(nextCursor) : null,
+      },
+    };
   }
 
   async listMySavedThreads(
     user: JwtPayload,
-    query: { page?: number; limit?: number },
-  ): Promise<{ items: MySavedThreadListItem[]; total: number; page: number; limit: number }> {
-    return this.discussionService.listMySavedThreads(user.sub, query);
+    query: { limit?: number; cursor?: MySavedThreadCursor | null },
+  ): Promise<{
+    items: MySavedThreadListItem[];
+    pagination: { limit: number; hasNextPage: boolean; nextCursor: string | null };
+  }> {
+    const { items, limit, hasNextPage, nextCursor } = await this.discussionService.listMySavedThreads(user.sub, query);
+    return {
+      items,
+      pagination: {
+        limit,
+        hasNextPage,
+        nextCursor: nextCursor ? MySavedThreadCursorMapper.serialize(nextCursor) : null,
+      },
+    };
   }
 
   async subscribeToThread(user: JwtPayload, threadId: string): Promise<{ success: true }> {
@@ -389,7 +428,7 @@ export class DiscussionApplicationService {
   }
 
   async hideThread(user: JwtPayload, threadId: string): Promise<void> {
-    return this.discussionService.hideThread(threadId, user.sub);
+    return this.discussionService.hideThread(threadId, user.sub, user.role);
   }
 
   // ─── COMMENTS ───────────────────────────────────────────────────────────────
@@ -442,16 +481,16 @@ export class DiscussionApplicationService {
   }
 
   async hideComment(user: JwtPayload, commentId: string): Promise<void> {
-    return this.discussionService.hideComment(commentId, user.sub);
+    return this.discussionService.hideComment(commentId, user.sub, user.role);
   }
 
   // ─── VOTES ─────────────────────────────────────────────────────────────────
 
   async vote(
     user: JwtPayload,
-    targetType: 'thread' | 'comment' | 'reply',
+    targetType: DiscussionReportTargetType,
     targetId: string,
-    value: 'upvote' | 'downvote',
+    value: DiscussionVoteValue,
   ): Promise<void> {
     return this.discussionService.vote({
       userId: user.sub,
@@ -463,7 +502,7 @@ export class DiscussionApplicationService {
 
   async removeVote(
     user: JwtPayload,
-    targetType: 'thread' | 'comment' | 'reply',
+    targetType: DiscussionReportTargetType,
     targetId: string,
   ): Promise<void> {
     return this.discussionService.removeVote({
@@ -477,7 +516,7 @@ export class DiscussionApplicationService {
 
   async report(
     user: JwtPayload,
-    targetType: 'thread' | 'comment' | 'reply',
+    targetType: DiscussionReportTargetType,
     targetId: string,
     reason: string,
     details?: string | null,
@@ -503,7 +542,7 @@ export class DiscussionApplicationService {
   async listReports(
     user: JwtPayload,
     filters: {
-      status?: 'open' | 'reviewed' | 'dismissed' | 'actioned';
+      status?: DiscussionReportStatus;
       limit?: number;
       cursor?: string | null;
     },

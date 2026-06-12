@@ -1,6 +1,7 @@
 import { Type } from 'class-transformer';
-import { IsIn, IsInt, IsOptional, IsString, IsUUID, Max, MaxLength, Min } from 'class-validator';
+import { IsEnum, IsInt, IsOptional, IsString, IsUUID, Max, MaxLength, Min } from 'class-validator';
 import { ApiPropertyOptional } from '@nestjs/swagger';
+import { ThreadSortField, SortOrder, ThreadStatus } from './enums';
 
 export class ListThreadsQueryDto {
   @ApiPropertyOptional({
@@ -53,8 +54,8 @@ export class ListThreadsQueryDto {
     nullable: true,
   })
   @IsOptional()
-  @IsIn(['open', 'closed', 'hidden', 'deleted'])
-  status?: 'open' | 'closed' | 'hidden' | 'deleted';
+  @IsEnum(ThreadStatus)
+  status?: ThreadStatus;
 
   @ApiPropertyOptional({
     description: 'Sort field',
@@ -64,8 +65,8 @@ export class ListThreadsQueryDto {
     nullable: true,
   })
   @IsOptional()
-  @IsIn(['created_at', 'votes_count', 'comments_count'])
-  sortBy?: 'created_at' | 'votes_count' | 'comments_count';
+  @IsEnum(ThreadSortField)
+  sortBy?: ThreadSortField;
 
   @ApiPropertyOptional({
     description: 'Sort direction',
@@ -75,8 +76,8 @@ export class ListThreadsQueryDto {
     nullable: true,
   })
   @IsOptional()
-  @IsIn(['asc', 'desc'])
-  sortOrder?: 'asc' | 'desc';
+  @IsEnum(SortOrder)
+  sortOrder?: SortOrder;
 }
 
 export class ListCommentsQueryDto {

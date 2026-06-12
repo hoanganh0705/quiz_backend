@@ -5,11 +5,13 @@
  */
 
 import type {
+  DiscussionDomainEvent,
   CommentCreatedEvent,
   CommentDeletedEvent,
   CommentHiddenEvent,
   ThreadClosedEvent,
   ThreadDeletedEvent,
+  ThreadReopenedEvent,
   ThreadHiddenEvent,
   ContentReportedEvent,
   DiscussionThreadCreatedEvent,
@@ -27,21 +29,10 @@ export interface DiscussionDomainEventBusPort {
   emitThreadSolved(event: DiscussionThreadSolvedEvent): void;
   emitThreadClosed(event: ThreadClosedEvent): void;
   emitThreadDeleted(event: ThreadDeletedEvent): void;
+  emitThreadReopened(event: ThreadReopenedEvent): void;
   emitThreadHidden(event: ThreadHiddenEvent): void;
   emitContentReported(event: ContentReportedEvent): void;
   emitReportReviewed(event: ReportReviewedEvent): void;
 }
-
-export type DiscussionDomainEvent =
-  | CommentCreatedEvent
-  | CommentDeletedEvent
-  | CommentHiddenEvent
-  | DiscussionThreadCreatedEvent
-  | DiscussionThreadSolvedEvent
-  | ThreadClosedEvent
-  | ThreadDeletedEvent
-  | ThreadHiddenEvent
-  | ContentReportedEvent
-  | ReportReviewedEvent;
 
 export const DISCUSSION_DOMAIN_EVENT_BUS = Symbol('DISCUSSION_DOMAIN_EVENT_BUS');

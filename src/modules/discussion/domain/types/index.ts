@@ -3,6 +3,8 @@ export type DiscussionContentStatus = 'visible' | 'hidden' | 'deleted' | 'accept
 export type DiscussionVoteValue = 'upvote' | 'downvote';
 export type DiscussionReportStatus = 'open' | 'reviewed' | 'dismissed' | 'actioned';
 export type DiscussionReportTargetType = 'thread' | 'comment' | 'reply';
+export type ThreadSortField = 'created_at' | 'votes_count' | 'comments_count';
+export type SortOrder = 'asc' | 'desc';
 
 export interface DiscussionThreadAuthor {
   userId: string;
@@ -64,6 +66,26 @@ export interface MyCommentCursor {
   commentId: string;
 }
 
+export interface MyUpvotedThreadCursor {
+  upvotedAt: string;
+  threadId: string;
+}
+
+export interface MyUpvotedCommentCursor {
+  upvotedAt: string;
+  commentId: string;
+}
+
+export interface MyDiscussionSubscriptionCursor {
+  subscribedAt: string;
+  threadId: string;
+}
+
+export interface MySavedThreadCursor {
+  savedAt: string;
+  threadId: string;
+}
+
 export interface MyCommentListItem {
   commentId: string;
   threadId: string;
@@ -112,6 +134,7 @@ export interface MySavedThreadListItem {
 
 export interface TrendingDiscussionCursor {
   score: number;
+  createdAt: string;
   threadId: string;
 }
 
@@ -243,7 +266,7 @@ export interface DiscussionReport {
   targetId: string;
   reason: string;
   details: string | null;
-  status: DiscussionReportStatus;
+  status: 'reviewed' | 'dismissed' | 'actioned';
   reviewedByUserId: string | null;
   reviewedAt: string | null;
   actionTaken: boolean;
@@ -284,11 +307,6 @@ export interface UpdateThreadParams {
   body?: string;
 }
 
-export interface DeleteThreadParams {
-  threadId: string;
-  authorId: string;
-}
-
 export interface CreateCommentParams {
   threadId: string;
   authorId: string;
@@ -311,11 +329,6 @@ export interface MarkThreadAsSolvedParams {
 export interface UnsolveThreadParams {
   threadId: string;
   actorId: string;
-}
-
-export interface DeleteCommentParams {
-  commentId: string;
-  authorId: string;
 }
 
 export interface VoteParams {

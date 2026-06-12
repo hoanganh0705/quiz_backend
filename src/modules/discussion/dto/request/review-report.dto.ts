@@ -1,13 +1,14 @@
-import { IsBoolean, IsIn, IsOptional } from 'class-validator';
+import { IsBoolean, IsEnum, IsIn, IsOptional } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { ReportStatus } from './enums';
 
 export class ReviewReportDto {
   @ApiProperty({
     description: 'Resolution status of the report',
-    enum: ['reviewed', 'dismissed', 'actioned'],
+    enum: ReportStatus,
     example: 'actioned',
   })
-  @IsIn(['reviewed', 'dismissed', 'actioned'])
+  @IsEnum(ReportStatus)
   status!: 'reviewed' | 'dismissed' | 'actioned';
 
   @ApiPropertyOptional({

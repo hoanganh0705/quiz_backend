@@ -1,21 +1,19 @@
 import { Type } from 'class-transformer';
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsInt, IsOptional, Max, Min } from 'class-validator';
+import { IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
 
 export class ListMyUpvotedThreadsQueryDto {
   @ApiPropertyOptional({
-    description: 'Page number (1-based)',
-    minimum: 1,
-    default: 1,
+    description: 'Opaque cursor for pagination',
+    example:
+      'eyJ1cHVvdGVkQXQiOiIyMDI2LTA2LTA4VDA5OjAwOjAwWiIsInRocmVhZElkIjoiNjYwZTg0MDAtZTI5Yi00MWQ0LWE3MTYtNDQ2NjU1NDQwMDAwIn0=',
   })
   @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  @Min(1)
-  page?: number = 1;
+  @IsString()
+  cursor?: string;
 
   @ApiPropertyOptional({
-    description: 'Maximum number of items to return per page (1–100)',
+    description: 'Maximum number of items to return (1–100)',
     minimum: 1,
     maximum: 100,
     default: 20,
