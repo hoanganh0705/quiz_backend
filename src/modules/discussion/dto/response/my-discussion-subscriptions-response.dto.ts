@@ -1,4 +1,4 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class MyDiscussionSubscriptionItemResponseDto {
   @ApiProperty({
@@ -23,6 +23,21 @@ export class MyDiscussionSubscriptionItemResponseDto {
   subscribedAt!: string;
 }
 
+export class MyDiscussionSubscriptionsPaginationDto {
+  @ApiProperty({ description: 'Items per page', example: 20 })
+  limit!: number;
+
+  @ApiProperty({ description: 'Whether another page is available', example: true })
+  hasNextPage!: boolean;
+
+  @ApiPropertyOptional({
+    description: 'Opaque cursor for the next page',
+    nullable: true,
+    example: 'eyJzdWJzY3JpYmVkQXQiOiIyMDI2LTA2LTA4VDA5OjAwOjAwWiIsInRocmVhZElkIjoiNjYwZTg0MDAtZTI5Yi00MWQ0LWE3MTYtNDQ2NjU1NDQwMDAwIn0=',
+  })
+  nextCursor!: string | null;
+}
+
 export class MyDiscussionSubscriptionsResponseDto {
   @ApiProperty({
     description: 'Subscribed discussion thread items',
@@ -30,12 +45,6 @@ export class MyDiscussionSubscriptionsResponseDto {
   })
   items!: MyDiscussionSubscriptionItemResponseDto[];
 
-  @ApiProperty({ description: 'Total number of matching subscriptions', example: 8 })
-  total!: number;
-
-  @ApiProperty({ description: 'Current page number', example: 1 })
-  page!: number;
-
-  @ApiProperty({ description: 'Items per page', example: 20 })
-  limit!: number;
+  @ApiProperty({ description: 'Pagination metadata', type: () => MyDiscussionSubscriptionsPaginationDto })
+  pagination!: MyDiscussionSubscriptionsPaginationDto;
 }

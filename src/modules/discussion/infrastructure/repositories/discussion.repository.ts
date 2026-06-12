@@ -11,6 +11,7 @@ import {
   quizzes,
   discussionThreadSubscriptions,
   discussionSavedThreads,
+  quizCategories,
 } from '@/core/database/schema';
 import type {
   DiscussionThread,
@@ -368,15 +369,11 @@ export class DiscussionRepository implements DiscussionRepositoryPort {
         )`
       : undefined;
 
-    const quizRows = await this.db.select().from(quizzes);
-    const quizTitleById = new Map<string, string>(
-      quizRows.map((quiz) => [quiz.quizId, quiz.title] as const),
-    );
-
     const rows = await this.db
       .select({
         threadId: discussionThreads.threadId,
         quizId: discussionThreads.quizId,
+        quizTitle: quizzes.title,
         title: discussionThreads.title,
         commentCount: discussionThreads.commentsCount,
         voteCount: discussionThreads.votesCount,
@@ -384,6 +381,7 @@ export class DiscussionRepository implements DiscussionRepositoryPort {
         updatedAt: discussionThreads.updatedAt,
       })
       .from(discussionThreads)
+      .innerJoin(quizzes, eq(discussionThreads.quizId, quizzes.quizId))
       .where(
         and(
           eq(discussionThreads.authorId, params.userId),
@@ -397,21 +395,13 @@ export class DiscussionRepository implements DiscussionRepositoryPort {
     return rows.map((row) => ({
       threadId: row.threadId,
       quizId: row.quizId,
-      quizTitle: quizTitleById.get(row.quizId) ?? '',
+      quizTitle: row.quizTitle,
       title: row.title,
       commentCount: row.commentCount,
       voteCount: row.voteCount,
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
     }));
-  }
-
-  async listDiscussionsByUser(params: {
-    userId: string;
-    limit: number;
-    cursor?: { createdAt: string; threadId: string } | null;
-  }): Promise<MyDiscussionListItem[]> {
-    return this.listMyDiscussions(params);
   }
 
   async listMyComments(params: {
@@ -469,24 +459,18 @@ export class DiscussionRepository implements DiscussionRepositoryPort {
 
   async listMyUpvotedThreads(params: {
     userId: string;
-    page: number;
     limit: number;
-  }): Promise<{ items: MyUpvotedThreadListItem[]; total: number }> {
-    const offset = (params.page - 1) * params.limit;
-
-    const [totalRow] = await this.db
-      .select({ count: count() })
-      .from(discussionVotes)
-      .innerJoin(discussionThreads, eq(discussionVotes.targetId, discussionThreads.threadId))
-      .where(
-        and(
-          eq(discussionVotes.userId, params.userId),
-          eq(discussionVotes.targetType, 'thread'),
-          eq(discussionVotes.value, 'upvote'),
-          isNull(discussionThreads.deletedAt),
-          eq(discussionThreads.status, 'open'),
-        ),
-      );
+    cursor: { upvotedAt: string; threadId: string } | null;
+  }): Promise<MyUpvotedThreadListItem[]> {
+    const cursorCondition = params.cursor
+      ? sql`(
+          ${discussionVotes.createdAt} < ${params.cursor.upvotedAt}
+          OR (
+            ${discussionVotes.createdAt} = ${params.cursor.upvotedAt}
+            AND ${discussionThreads.threadId} < ${params.cursor.threadId}
+          )
+        )`
+      : undefined;
 
     const rows = await this.db
       .select({
@@ -506,45 +490,36 @@ export class DiscussionRepository implements DiscussionRepositoryPort {
           eq(discussionVotes.value, 'upvote'),
           isNull(discussionThreads.deletedAt),
           eq(discussionThreads.status, 'open'),
+          cursorCondition,
         ),
       )
       .orderBy(desc(discussionVotes.createdAt), desc(discussionThreads.threadId))
-      .limit(params.limit)
-      .offset(offset);
+      .limit(params.limit + 1);
 
-    return {
-      items: (rows as MyUpvotedThreadRow[]).map((row) => ({
-        threadId: row.threadId,
-        title: row.title,
-        voteCount: row.voteCount,
-        commentCount: row.commentCount,
-        createdAt: row.createdAt,
-        upvotedAt: row.upvotedAt,
-      })),
-      total: Number(totalRow?.count ?? 0),
-    };
+    return (rows as MyUpvotedThreadRow[]).map((row) => ({
+      threadId: row.threadId,
+      title: row.title,
+      voteCount: row.voteCount,
+      commentCount: row.commentCount,
+      createdAt: row.createdAt,
+      upvotedAt: row.upvotedAt,
+    }));
   }
 
   async listMyUpvotedComments(params: {
     userId: string;
-    page: number;
     limit: number;
-  }): Promise<{ items: MyUpvotedCommentListItem[]; total: number }> {
-    const offset = (params.page - 1) * params.limit;
-
-    const [totalRow] = await this.db
-      .select({ count: count() })
-      .from(discussionVotes)
-      .innerJoin(discussionComments, eq(discussionVotes.targetId, discussionComments.commentId))
-      .where(
-        and(
-          eq(discussionVotes.userId, params.userId),
-          eq(discussionVotes.targetType, 'comment'),
-          eq(discussionVotes.value, 'upvote'),
-          isNull(discussionComments.deletedAt),
-          eq(discussionComments.status, 'visible'),
-        ),
-      );
+    cursor: { upvotedAt: string; commentId: string } | null;
+  }): Promise<MyUpvotedCommentListItem[]> {
+    const cursorCondition = params.cursor
+      ? sql`(
+          ${discussionVotes.createdAt} < ${params.cursor.upvotedAt}
+          OR (
+            ${discussionVotes.createdAt} = ${params.cursor.upvotedAt}
+            AND ${discussionComments.commentId} < ${params.cursor.commentId}
+          )
+        )`
+      : undefined;
 
     const rows = await this.db
       .select({
@@ -564,46 +539,36 @@ export class DiscussionRepository implements DiscussionRepositoryPort {
           eq(discussionVotes.value, 'upvote'),
           isNull(discussionComments.deletedAt),
           eq(discussionComments.status, 'visible'),
+          cursorCondition,
         ),
       )
       .orderBy(desc(discussionVotes.createdAt), desc(discussionComments.commentId))
-      .limit(params.limit)
-      .offset(offset);
+      .limit(params.limit + 1);
 
-    return {
-      items: (rows as MyUpvotedCommentRow[]).map((row) => ({
-        commentId: row.commentId,
-        threadId: row.threadId,
-        content: row.content,
-        voteCount: row.voteCount,
-        createdAt: row.createdAt,
-        upvotedAt: row.upvotedAt,
-      })),
-      total: Number(totalRow?.count ?? 0),
-    };
+    return (rows as MyUpvotedCommentRow[]).map((row) => ({
+      commentId: row.commentId,
+      threadId: row.threadId,
+      content: row.content,
+      voteCount: row.voteCount,
+      createdAt: row.createdAt,
+      upvotedAt: row.upvotedAt,
+    }));
   }
 
   async listMyDiscussionSubscriptions(params: {
     userId: string;
-    page: number;
     limit: number;
-  }): Promise<{ items: MyDiscussionSubscriptionListItem[]; total: number }> {
-    const offset = (params.page - 1) * params.limit;
-
-    const [totalRow] = await this.db
-      .select({ count: count() })
-      .from(discussionThreadSubscriptions)
-      .innerJoin(
-        discussionThreads,
-        eq(discussionThreadSubscriptions.threadId, discussionThreads.threadId),
-      )
-      .where(
-        and(
-          eq(discussionThreadSubscriptions.userId, params.userId),
-          isNull(discussionThreads.deletedAt),
-          eq(discussionThreads.status, 'open'),
-        ),
-      );
+    cursor: { subscribedAt: string; threadId: string } | null;
+  }): Promise<MyDiscussionSubscriptionListItem[]> {
+    const cursorCondition = params.cursor
+      ? sql`(
+          ${discussionThreadSubscriptions.createdAt} < ${params.cursor.subscribedAt}
+          OR (
+            ${discussionThreadSubscriptions.createdAt} = ${params.cursor.subscribedAt}
+            AND ${discussionThreads.threadId} < ${params.cursor.threadId}
+          )
+        )`
+      : undefined;
 
     const rows = await this.db
       .select({
@@ -623,42 +588,35 @@ export class DiscussionRepository implements DiscussionRepositoryPort {
           eq(discussionThreadSubscriptions.userId, params.userId),
           isNull(discussionThreads.deletedAt),
           eq(discussionThreads.status, 'open'),
+          cursorCondition,
         ),
       )
       .orderBy(desc(discussionThreadSubscriptions.createdAt), desc(discussionThreads.threadId))
-      .limit(params.limit)
-      .offset(offset);
+      .limit(params.limit + 1);
 
-    return {
-      items: (rows as MyDiscussionSubscriptionRow[]).map((row) => ({
-        threadId: row.threadId,
-        title: row.title,
-        commentCount: row.commentCount,
-        voteCount: row.voteCount,
-        subscribedAt: row.subscribedAt,
-      })),
-      total: Number(totalRow?.count ?? 0),
-    };
+    return (rows as MyDiscussionSubscriptionRow[]).map((row) => ({
+      threadId: row.threadId,
+      title: row.title,
+      commentCount: row.commentCount,
+      voteCount: row.voteCount,
+      subscribedAt: row.subscribedAt,
+    }));
   }
 
   async listMySavedThreads(params: {
     userId: string;
-    page: number;
     limit: number;
-  }): Promise<{ items: MySavedThreadListItem[]; total: number }> {
-    const offset = (params.page - 1) * params.limit;
-
-    const [totalRow] = await this.db
-      .select({ count: count() })
-      .from(discussionSavedThreads)
-      .innerJoin(discussionThreads, eq(discussionSavedThreads.threadId, discussionThreads.threadId))
-      .where(
-        and(
-          eq(discussionSavedThreads.userId, params.userId),
-          isNull(discussionThreads.deletedAt),
-          eq(discussionThreads.status, 'open'),
-        ),
-      );
+    cursor: { savedAt: string; threadId: string } | null;
+  }): Promise<MySavedThreadListItem[]> {
+    const cursorCondition = params.cursor
+      ? sql`(
+          ${discussionSavedThreads.createdAt} < ${params.cursor.savedAt}
+          OR (
+            ${discussionSavedThreads.createdAt} = ${params.cursor.savedAt}
+            AND ${discussionThreads.threadId} < ${params.cursor.threadId}
+          )
+        )`
+      : undefined;
 
     const rows = await this.db
       .select({
@@ -675,22 +633,19 @@ export class DiscussionRepository implements DiscussionRepositoryPort {
           eq(discussionSavedThreads.userId, params.userId),
           isNull(discussionThreads.deletedAt),
           eq(discussionThreads.status, 'open'),
+          cursorCondition,
         ),
       )
       .orderBy(desc(discussionSavedThreads.createdAt), desc(discussionThreads.threadId))
-      .limit(params.limit)
-      .offset(offset);
+      .limit(params.limit + 1);
 
-    return {
-      items: (rows as MySavedThreadRow[]).map((row) => ({
-        threadId: row.threadId,
-        title: row.title,
-        commentCount: row.commentCount,
-        voteCount: row.voteCount,
-        savedAt: row.savedAt,
-      })),
-      total: Number(totalRow?.count ?? 0),
-    };
+    return (rows as MySavedThreadRow[]).map((row) => ({
+      threadId: row.threadId,
+      title: row.title,
+      commentCount: row.commentCount,
+      voteCount: row.voteCount,
+      savedAt: row.savedAt,
+    }));
   }
 
   async subscribeToThread(params: { userId: string; threadId: string }): Promise<void> {
@@ -779,17 +734,9 @@ export class DiscussionRepository implements DiscussionRepositoryPort {
     return this.enrichThread(updated as unknown as DiscussionThreadRow);
   }
 
-  async listCommentsByUser(params: {
-    userId: string;
-    limit: number;
-    cursor?: { createdAt: string; commentId: string } | null;
-  }): Promise<MyCommentListItem[]> {
-    return this.listMyComments(params);
-  }
-
   async listTrendingDiscussions(params: {
     limit: number;
-    cursor?: { score: number; threadId: string } | null;
+    cursor?: { score: number; createdAt: string; threadId: string } | null;
   }): Promise<TrendingDiscussionListItem[]> {
     const cursorCondition = params.cursor
       ? sql`(
@@ -816,6 +763,21 @@ export class DiscussionRepository implements DiscussionRepositoryPort {
                 0
               )
             ) = ${params.cursor.score}
+            AND ${discussionThreads.createdAt} > ${params.cursor.createdAt}
+          )
+          OR (
+            (
+              ${discussionThreads.votesCount} * 3 +
+              ${discussionThreads.commentsCount} * 2 +
+              COALESCE(
+                (SELECT COUNT(*) FROM discussion_comments dc
+                 WHERE dc.thread_id = ${discussionThreads.threadId}
+                 AND dc.deleted_at IS NULL
+                 AND dc.created_at > NOW() - INTERVAL '7 days')::int,
+                0
+              )
+            ) = ${params.cursor.score}
+            AND ${discussionThreads.createdAt} = ${params.cursor.createdAt}
             AND ${discussionThreads.threadId} > ${params.cursor.threadId}
           )
         )`
@@ -1053,83 +1015,73 @@ export class DiscussionRepository implements DiscussionRepositoryPort {
     threadId: string;
     limit: number;
   }): Promise<RelatedDiscussionListItem[]> {
-    const titleTokens = sql`ARRAY(
-      SELECT DISTINCT token
-      FROM unnest(regexp_split_to_array(lower(${discussionThreads.title}), E'\\W+')) AS token
-      WHERE length(token) >= 3
-    )`;
-
-    const baseThread = this.db
-      .select({
-        threadId: discussionThreads.threadId,
-        quizId: discussionThreads.quizId,
-        titleTokens,
-      })
-      .from(discussionThreads)
-      .where(
-        and(
-          eq(discussionThreads.threadId, params.threadId),
-          eq(discussionThreads.status, 'open'),
-          isNull(discussionThreads.deletedAt),
+    const baseThread = this.db.$with('base_thread').as(
+      this.db
+        .select({
+          threadId: discussionThreads.threadId,
+          quizId: discussionThreads.quizId,
+          titleTokens: sql<string[]>`ARRAY(
+            SELECT DISTINCT token
+            FROM unnest(regexp_split_to_array(lower(${discussionThreads.title}), E'\\W+')) AS token
+            WHERE length(token) >= 3
+          )`.as('title_tokens'),
+        })
+        .from(discussionThreads)
+        .where(
+          and(
+            eq(discussionThreads.threadId, params.threadId),
+            eq(discussionThreads.status, 'open'),
+            isNull(discussionThreads.deletedAt),
+          ),
         ),
-      )
-      .as('base_thread');
+    );
 
-    const candidateTitleTokens = sql<string[]>`ARRAY(
-      SELECT DISTINCT token
-      FROM unnest(regexp_split_to_array(lower(${discussionThreads.title}), E'\\W+')) AS token
-      WHERE length(token) >= 3
-    )`;
+    const baseCategories = this.db
+      .$with('base_categories')
+      .as(
+        this.db
+          .select({ categoryId: quizCategories.categoryId })
+          .from(quizCategories)
+          .innerJoin(baseThread, eq(quizCategories.quizId, baseThread.quizId)),
+      );
 
-    const sameQuizScore = sql<number>`CASE WHEN ${discussionThreads.quizId} = ${baseThread.quizId} THEN 100 ELSE 0 END`;
-    const categoryOverlapScore = sql<number>`COALESCE((
-      SELECT count(DISTINCT qc_candidate.category_id)::int
-      FROM quiz_categories qc_candidate
-      INNER JOIN quiz_categories qc_base
-        ON qc_base.category_id = qc_candidate.category_id
-      WHERE qc_candidate.quiz_id = ${discussionThreads.quizId}
-        AND qc_base.quiz_id = ${baseThread.quizId}
-    ), 0)`;
-    const tagOverlapScore = sql<number>`COALESCE((
-      SELECT count(DISTINCT qt_candidate.tag_id)::int
-      FROM quiz_tags qt_candidate
-      INNER JOIN quiz_tags qt_base
-        ON qt_base.tag_id = qt_candidate.tag_id
-      WHERE qt_candidate.quiz_id = ${discussionThreads.quizId}
-        AND qt_base.quiz_id = ${baseThread.quizId}
-    ), 0)`;
-    const titleOverlapScore = sql<number>`COALESCE((
-      SELECT count(DISTINCT token)::int
-      FROM unnest(${baseThread.titleTokens}) AS token
-      WHERE token = ANY(${candidateTitleTokens})
-    ), 0)`;
-    const relevanceScore = sql<number>`(
-      ${sameQuizScore}
-      + (${categoryOverlapScore} * 20)
-      + (${tagOverlapScore} * 15)
-      + (${titleOverlapScore} * 10)
-    )`;
+    const candidateCategories = this.db.$with('candidate_categories').as(
+      this.db
+        .select({
+          quizId: quizCategories.quizId,
+          categoryOverlap: count(quizCategories.categoryId).as('category_overlap'),
+        })
+        .from(quizCategories)
+        .innerJoin(baseCategories, eq(quizCategories.categoryId, baseCategories.categoryId))
+        .where(sql`${quizCategories.quizId} <> ${baseThread.quizId}`)
+        .groupBy(quizCategories.quizId),
+    );
 
     const rows = await this.db
+      .with(baseThread, baseCategories, candidateCategories)
       .select({
         threadId: discussionThreads.threadId,
         title: discussionThreads.title,
         commentCount: discussionThreads.commentsCount,
         voteCount: discussionThreads.votesCount,
-        relevanceScore,
+        relevanceScore: sql<number>`(
+          CASE WHEN ${discussionThreads.quizId} = ${baseThread.quizId} THEN 100 ELSE 0 END
+          + COALESCE(${candidateCategories.categoryOverlap}, 0)::int * 20
+        )`.as('relevance_score'),
       })
       .from(discussionThreads)
       .innerJoin(baseThread, sql`true`)
+      .leftJoin(candidateCategories, eq(discussionThreads.quizId, candidateCategories.quizId))
       .where(
         and(
           eq(discussionThreads.status, 'open'),
           isNull(discussionThreads.deletedAt),
           sql`${discussionThreads.threadId} <> ${params.threadId}`,
-          sql`${relevanceScore} > 0`,
+          sql`(CASE WHEN ${discussionThreads.quizId} = ${baseThread.quizId} THEN 100 ELSE 0 END + COALESCE(${candidateCategories.categoryOverlap}, 0)::int * 20) > 0`,
         ),
       )
       .orderBy(
-        desc(relevanceScore),
+        desc(sql`relevance_score`),
         desc(discussionThreads.commentsCount),
         desc(discussionThreads.votesCount),
       )
@@ -1188,18 +1140,28 @@ export class DiscussionRepository implements DiscussionRepositoryPort {
   }
 
   async getThreadStats(threadId: string): Promise<ThreadStats | null> {
-    const [thread] = await this.db
-      .select()
-      .from(discussionThreads)
-      .where(and(eq(discussionThreads.threadId, threadId), isNull(discussionThreads.deletedAt)));
+    const participantCountCTE = this.db.$with('participant_count').as(
+      this.db
+        .select({ count: count() })
+        .from(discussionComments)
+        .where(
+          and(
+            eq(discussionComments.threadId, threadId),
+            isNull(discussionComments.deletedAt),
+            isNotNull(discussionComments.authorId),
+          ),
+        ),
+    );
 
-    if (!thread) return null;
-
-    const [stats] = await this.db
+    const rows = await this.db
+      .with(participantCountCTE)
       .select({
+        threadId: discussionThreads.threadId,
+        commentsCount: discussionThreads.commentsCount,
+        upvotesCount: discussionThreads.upvotesCount,
+        downvotesCount: discussionThreads.downvotesCount,
+        updatedAt: discussionThreads.updatedAt,
         totalReplies: sql<number>`COALESCE(SUM(${discussionComments.repliesCount}), 0)::int`,
-        upvotes: discussionThreads.upvotesCount,
-        downvotes: discussionThreads.downvotesCount,
         latestActivityAt: sql<string>`GREATEST(
           ${discussionThreads.updatedAt},
           COALESCE(
@@ -1209,36 +1171,31 @@ export class DiscussionRepository implements DiscussionRepositoryPort {
             ${discussionThreads.updatedAt}
           )
         )`,
+        participantCount: sql<number>`COALESCE((SELECT count FROM participant_count), 0)::int`,
       })
       .from(discussionThreads)
       .leftJoin(discussionComments, eq(discussionComments.threadId, discussionThreads.threadId))
-      .where(eq(discussionThreads.threadId, threadId))
+      .where(and(eq(discussionThreads.threadId, threadId), isNull(discussionThreads.deletedAt)))
       .groupBy(
         discussionThreads.threadId,
+        discussionThreads.commentsCount,
         discussionThreads.upvotesCount,
         discussionThreads.downvotesCount,
         discussionThreads.updatedAt,
-      );
+      )
+      .limit(1);
 
-    const [participantCount] = await this.db
-      .select({ count: count() })
-      .from(discussionComments)
-      .where(
-        and(
-          eq(discussionComments.threadId, threadId),
-          isNull(discussionComments.deletedAt),
-          isNotNull(discussionComments.authorId),
-        ),
-      );
+    if (rows.length === 0) return null;
 
+    const row = rows[0];
     return {
       threadId,
-      totalComments: thread.commentsCount,
-      totalReplies: stats ? Number(stats.totalReplies) : 0,
-      totalParticipants: participantCount ? Number(participantCount.count) : 0,
-      upvotes: thread.upvotesCount,
-      downvotes: thread.downvotesCount,
-      latestActivityAt: stats?.latestActivityAt ?? thread.updatedAt,
+      totalComments: row.commentsCount,
+      totalReplies: Number(row.totalReplies),
+      totalParticipants: Number(row.participantCount),
+      upvotes: row.upvotesCount,
+      downvotes: row.downvotesCount,
+      latestActivityAt: row.latestActivityAt,
     };
   }
 
@@ -1376,10 +1333,11 @@ export class DiscussionRepository implements DiscussionRepositoryPort {
     threadId: string,
     deltaUpvotes: number,
     deltaDownvotes: number,
+    db?: DrizzleDB,
   ): Promise<void> {
-    // Tính tổng delta trước trong JS để tránh lỗi SQL với nhiều tham số liên tiếp
+    const client = db ?? this.db;
     const totalDelta = deltaUpvotes + deltaDownvotes;
-    await this.db
+    await client
       .update(discussionThreads)
       .set({
         upvotesCount: sql`${discussionThreads.upvotesCount} + ${deltaUpvotes}`,
@@ -1530,35 +1488,6 @@ export class DiscussionRepository implements DiscussionRepositoryPort {
     return result;
   }
 
-  async getCommentReplies(parentCommentId: string, limit: number): Promise<DiscussionComment[]> {
-    const rows = await this.db
-      .select({
-        comment: discussionComments,
-        authorUsername: users.username,
-        authorDisplayName: userProfiles.displayName,
-        authorAvatarUrl: userProfiles.avatarUrl,
-      })
-      .from(discussionComments)
-      .innerJoin(users, eq(discussionComments.authorId, users.userId))
-      .leftJoin(userProfiles, eq(users.userId, userProfiles.userId))
-      .where(
-        and(
-          eq(discussionComments.parentCommentId, parentCommentId),
-          isNull(discussionComments.deletedAt),
-        ),
-      )
-      .orderBy(asc(discussionComments.createdAt))
-      .limit(limit);
-
-    return rows.map((row) =>
-      this.enrichComment(row.comment as unknown as DiscussionCommentRow, {
-        username: row.authorUsername,
-        displayName: row.authorDisplayName,
-        avatarUrl: row.authorAvatarUrl,
-      }),
-    );
-  }
-
   async updateComment(params: UpdateCommentParams): Promise<DiscussionComment> {
     const [updated] = await this.db
       .update(discussionComments)
@@ -1621,9 +1550,11 @@ export class DiscussionRepository implements DiscussionRepositoryPort {
     commentId: string,
     deltaUpvotes: number,
     deltaDownvotes: number,
+    db?: DrizzleDB,
   ): Promise<void> {
+    const client = db ?? this.db;
     const totalDelta = deltaUpvotes + deltaDownvotes;
-    await this.db
+    await client
       .update(discussionComments)
       .set({
         upvotesCount: sql`${discussionComments.upvotesCount} + ${deltaUpvotes}`,
@@ -1636,8 +1567,8 @@ export class DiscussionRepository implements DiscussionRepositoryPort {
 
   // ─── VOTES ──────────────────────────────────────────────────────────────────
 
-  async upsertVote(params: VoteParams): Promise<DiscussionVote> {
-    const [vote] = await this.db
+  async upsertVote(params: VoteParams, db?: DrizzleDB): Promise<DiscussionVote> {
+    const [vote] = await (db ?? this.db)
       .insert(discussionVotes)
       .values({
         userId: params.userId,
@@ -1657,12 +1588,16 @@ export class DiscussionRepository implements DiscussionRepositoryPort {
     return vote as DiscussionVote;
   }
 
-  async removeVote(params: {
-    userId: string;
-    targetType: 'thread' | 'comment' | 'reply';
-    targetId: string;
-  }): Promise<void> {
-    await this.db
+  async removeVote(
+    params: {
+      userId: string;
+      targetType: 'thread' | 'comment' | 'reply';
+      targetId: string;
+    },
+    db?: DrizzleDB,
+  ): Promise<void> {
+    const client = db ?? this.db;
+    await client
       .delete(discussionVotes)
       .where(
         and(
@@ -1709,15 +1644,6 @@ export class DiscussionRepository implements DiscussionRepositoryPort {
       .returning();
 
     return report as DiscussionReport;
-  }
-
-  async getReportById(reportId: string): Promise<DiscussionReport | null> {
-    const [report] = await this.db
-      .select()
-      .from(discussionReports)
-      .where(eq(discussionReports.reportId, reportId));
-
-    return (report as DiscussionReport) ?? null;
   }
 
   async listReports(params: {
