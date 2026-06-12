@@ -12,13 +12,14 @@ import {
   SelfVoteError,
   SelfReportError,
   DuplicateReportError,
-  ReportNotFoundError,
-  ReportReviewForbiddenError,
+  QuizNotFoundError,
+  ModeratorRequiredError,
 } from '../../../domain/errors';
+import { UserNotFoundError } from '@/modules/user/domain/errors';
 
-@Catch(DiscussionError)
+@Catch(DiscussionError, UserNotFoundError)
 export class DiscussionDomainExceptionFilter {
-  catch(exception: DiscussionError, host: ArgumentsHost) {
+  catch(exception: DiscussionError | UserNotFoundError, host: ArgumentsHost) {
     const ctx = host.switchToHttp();
     const response = ctx.getResponse<Response>();
 
@@ -28,9 +29,15 @@ export class DiscussionDomainExceptionFilter {
       status = HttpStatus.NOT_FOUND;
     } else if (exception instanceof CommentNotFoundError) {
       status = HttpStatus.NOT_FOUND;
+    } else if (exception instanceof QuizNotFoundError) {
+      status = HttpStatus.NOT_FOUND;
+    } else if (exception instanceof UserNotFoundError) {
+      status = HttpStatus.NOT_FOUND;
     } else if (exception instanceof ThreadForbiddenError) {
       status = HttpStatus.FORBIDDEN;
     } else if (exception instanceof CommentForbiddenError) {
+      status = HttpStatus.FORBIDDEN;
+    } else if (exception instanceof ModeratorRequiredError) {
       status = HttpStatus.FORBIDDEN;
     } else if (exception instanceof ThreadClosedError) {
       status = HttpStatus.CONFLICT;
@@ -44,10 +51,6 @@ export class DiscussionDomainExceptionFilter {
       status = HttpStatus.FORBIDDEN;
     } else if (exception instanceof DuplicateReportError) {
       status = HttpStatus.CONFLICT;
-    } else if (exception instanceof ReportNotFoundError) {
-      status = HttpStatus.NOT_FOUND;
-    } else if (exception instanceof ReportReviewForbiddenError) {
-      status = HttpStatus.FORBIDDEN;
     }
 
     response.status(status).json({

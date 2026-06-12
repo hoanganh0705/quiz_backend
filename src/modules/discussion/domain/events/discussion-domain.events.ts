@@ -13,6 +13,7 @@ export interface CommentCreatedEvent {
   readonly authorUsername: string;
   readonly threadAuthorId: string;
   readonly parentCommentId: string | null;
+  readonly parentCommentAuthorId: string | null;
   readonly isReply: boolean;
   readonly timestamp: Date;
 }
@@ -42,6 +43,13 @@ export interface ThreadClosedEvent {
 
 export interface ThreadDeletedEvent {
   readonly eventType: 'thread_deleted';
+  readonly threadId: string;
+  readonly authorId: string;
+  readonly timestamp: Date;
+}
+
+export interface ThreadReopenedEvent {
+  readonly eventType: 'thread_reopened';
   readonly threadId: string;
   readonly authorId: string;
   readonly timestamp: Date;
@@ -102,6 +110,7 @@ export type DiscussionDomainEvent =
   | DiscussionThreadSolvedEvent
   | ThreadClosedEvent
   | ThreadDeletedEvent
+  | ThreadReopenedEvent
   | ThreadHiddenEvent
   | ContentReportedEvent
   | ReportReviewedEvent;

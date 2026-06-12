@@ -1,4 +1,4 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class MySavedThreadItemResponseDto {
   @ApiProperty({
@@ -23,6 +23,21 @@ export class MySavedThreadItemResponseDto {
   savedAt!: string;
 }
 
+export class MySavedThreadsPaginationDto {
+  @ApiProperty({ description: 'Items per page', example: 20 })
+  limit!: number;
+
+  @ApiProperty({ description: 'Whether another page is available', example: true })
+  hasNextPage!: boolean;
+
+  @ApiPropertyOptional({
+    description: 'Opaque cursor for the next page',
+    nullable: true,
+    example: 'eyJzYXZlZEF0IjoiMjAyNi0wNi0wOFQwOTowMDowMFoiLCJ0aHJlYWRJZCI6IjY2MGU4NDAwLWUyOWItNDFkNC1hNzE2LTQ0NjY1NTQ0MDAwMCJ9',
+  })
+  nextCursor!: string | null;
+}
+
 export class MySavedThreadsResponseDto {
   @ApiProperty({
     description: 'Saved discussion thread items',
@@ -30,12 +45,6 @@ export class MySavedThreadsResponseDto {
   })
   items!: MySavedThreadItemResponseDto[];
 
-  @ApiProperty({ description: 'Total number of matching saved threads', example: 15 })
-  total!: number;
-
-  @ApiProperty({ description: 'Current page number', example: 1 })
-  page!: number;
-
-  @ApiProperty({ description: 'Items per page', example: 20 })
-  limit!: number;
+  @ApiProperty({ description: 'Pagination metadata', type: () => MySavedThreadsPaginationDto })
+  pagination!: MySavedThreadsPaginationDto;
 }

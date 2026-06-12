@@ -31,6 +31,10 @@ import {
   PublicDiscussionProfileResponseDto,
 } from '@/modules/discussion/dto/response';
 import { MyCommentCursorMapper } from '@/modules/discussion/mappers/my-comment-cursor.mapper';
+import { MyUpvotedThreadCursorMapper } from '@/modules/discussion/mappers/my-upvoted-thread-cursor.mapper';
+import { MyUpvotedCommentCursorMapper } from '@/modules/discussion/mappers/my-upvoted-comment-cursor.mapper';
+import { MyDiscussionSubscriptionCursorMapper } from '@/modules/discussion/mappers/my-discussion-subscription-cursor.mapper';
+import { MySavedThreadCursorMapper } from '@/modules/discussion/mappers/my-saved-thread-cursor.mapper';
 import { QuizDiscussionCursorMapper } from '@/modules/discussion/mappers/quiz-discussion-cursor.mapper';
 import { DiscussionDomainExceptionFilter } from './filters/discussion-domain-exception.filter';
 
@@ -59,7 +63,7 @@ export class UserDiscussionController {
     @Param('userId', new ParseUUIDPipe()) userId: string,
     @Query() query: ListMyDiscussionsQueryDto,
   ): Promise<MyDiscussionsResponseDto> {
-    return this.discussionApplicationService.listDiscussionsByUser(userId, {
+    return this.discussionApplicationService.listMyDiscussions(userId, {
       limit: query.limit,
       cursor: query.cursor ? QuizDiscussionCursorMapper.parse(query.cursor) : null,
     });
@@ -156,8 +160,8 @@ export class UserDiscussionController {
     @Query() query: ListMyUpvotedThreadsQueryDto,
   ): Promise<MyUpvotedThreadsResponseDto> {
     return this.discussionApplicationService.listMyUpvotedThreads(user, {
-      page: query.page,
       limit: query.limit,
+      cursor: query.cursor ? MyUpvotedThreadCursorMapper.parse(query.cursor) : null,
     });
   }
 
@@ -181,8 +185,8 @@ export class UserDiscussionController {
     @Query() query: ListMyUpvotedCommentsQueryDto,
   ): Promise<MyUpvotedCommentsResponseDto> {
     return this.discussionApplicationService.listMyUpvotedComments(user, {
-      page: query.page,
       limit: query.limit,
+      cursor: query.cursor ? MyUpvotedCommentCursorMapper.parse(query.cursor) : null,
     });
   }
 
@@ -206,8 +210,8 @@ export class UserDiscussionController {
     @Query() query: ListMyDiscussionSubscriptionsQueryDto,
   ): Promise<MyDiscussionSubscriptionsResponseDto> {
     return this.discussionApplicationService.listMyDiscussionSubscriptions(user, {
-      page: query.page,
       limit: query.limit,
+      cursor: query.cursor ? MyDiscussionSubscriptionCursorMapper.parse(query.cursor) : null,
     });
   }
 
@@ -231,8 +235,8 @@ export class UserDiscussionController {
     @Query() query: ListMySavedThreadsQueryDto,
   ): Promise<MySavedThreadsResponseDto> {
     return this.discussionApplicationService.listMySavedThreads(user, {
-      page: query.page,
       limit: query.limit,
+      cursor: query.cursor ? MySavedThreadCursorMapper.parse(query.cursor) : null,
     });
   }
 

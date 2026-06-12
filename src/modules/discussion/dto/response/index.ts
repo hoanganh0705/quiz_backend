@@ -17,6 +17,7 @@ export * from './thread-participants-response.dto';
 export * from './public-discussion-profile-response.dto';
 export * from './thread-stats-response.dto';
 export * from './my-discussion-stats-response.dto';
+export * from './action-response.dto';
 
 const THREAD_STATUS_VALUES = ['open', 'closed', 'hidden', 'deleted'] as const;
 const CONTENT_STATUS_VALUES = ['visible', 'hidden', 'deleted', 'accepted'] as const;
@@ -258,7 +259,7 @@ export class PaginatedCommentsDto {
   hasNextPage!: boolean;
 }
 
-export class ReportDto {
+export class ReportResponseDto {
   @ApiProperty({
     description: 'Report identifier',
     example: '990e8400-e29b-41d4-a716-446655440000',
@@ -335,8 +336,8 @@ export class ReportDto {
 }
 
 export class PaginatedReportsDto {
-  @ApiProperty({ description: 'Report page items', type: () => [ReportDto] })
-  items!: ReportDto[];
+  @ApiProperty({ description: 'Report page items', type: () => [ReportResponseDto] })
+  items!: ReportResponseDto[];
 
   @ApiProperty({ description: 'Whether another page is available', example: false })
   hasNextPage!: boolean;

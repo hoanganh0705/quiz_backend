@@ -4,6 +4,7 @@ export type {
   CommentHiddenEvent,
   ThreadClosedEvent,
   ThreadDeletedEvent,
+  ThreadReopenedEvent,
   ThreadHiddenEvent,
   ContentReportedEvent,
   DiscussionThreadCreatedEvent,
