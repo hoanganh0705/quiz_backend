@@ -1,12 +1,24 @@
-import { Inject, Injectable, forwardRef } from '@nestjs/common';
-import { DRIZZLE } from '@/core/database/drizzle.constants';
-import type { DrizzleDB } from '@/core/database/database.module';
+import { Inject, Injectable } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { UserRole } from '@/common/types/user-role.type';
-import { DISCUSSION_REPOSITORY_PORT, QUIZ_EXISTENCE_PORT } from '../ports';
-import type { DiscussionRepositoryPort, QuizExistencePort } from '../ports';
+import {
+  DISCUSSION_REPOSITORY_PORT,
+  QUIZ_EXISTENCE_PORT,
+  USER_EXISTENCE_PORT,
+} from '../ports';
+import type {
+  DiscussionRepositoryPort,
+  QuizExistencePort,
+  UserExistencePort,
+  UserPublicInfo,
+} from '../ports';
 import { DISCUSSION_DOMAIN_EVENT_BUS } from '../events';
 import type { DiscussionDomainEventBusPort } from '../events';
+import type {
+  CommentMentionedEvent,
+  CommentRestoredEvent,
+  ThreadRestoredEvent,
+} from '../events/discussion-domain.events';
 import type {
   DiscussionThread,
   DiscussionThreadDetail,
@@ -25,8 +37,8 @@ import type {
   QuizDiscussionCursor,
   QuizDiscussionListItem,
   MyDiscussionListItem,
-  MyCommentCursor,
   MyCommentListItem,
+  MyCommentCursor,
   MyUpvotedThreadCursor,
   MyUpvotedCommentCursor,
   MyDiscussionSubscriptionCursor,
@@ -49,8 +61,6 @@ import type {
   MarkThreadAsSolvedParams,
   UnsolveThreadParams,
 } from '../types';
-import { USER_REPOSITORY_PORT } from '@/modules/user/domain/ports/user-repository.port';
-import type { UserRepositoryPort } from '@/modules/user/domain/ports/user-repository.port';
 import { UserNotFoundError } from '@/modules/user/domain/errors';
 import { isPostgresUniqueViolation } from '@/common/utils/db-error.util';
 import {
@@ -75,12 +85,10 @@ export class DiscussionService {
     private readonly repo: DiscussionRepositoryPort,
     @Inject(QUIZ_EXISTENCE_PORT)
     private readonly quizExistence: QuizExistencePort,
-    @Inject(forwardRef(() => USER_REPOSITORY_PORT))
-    private readonly userRepository: UserRepositoryPort,
+    @Inject(USER_EXISTENCE_PORT)
+    private readonly userExistence: UserExistencePort,
     @Inject(DISCUSSION_DOMAIN_EVENT_BUS)
     private readonly eventBus: DiscussionDomainEventBusPort,
-    @Inject(DRIZZLE)
-    private readonly db: DrizzleDB,
     @InjectPinoLogger(DiscussionService.name)
     private readonly logger: PinoLogger,
   ) {}
@@ -171,8 +179,8 @@ export class DiscussionService {
     hasNextPage: boolean;
     nextCursor: QuizDiscussionCursor | null;
   }> {
-    const user = await this.userRepository.findMeById(userId);
-    if (!user) {
+    const userExists = await this.userExistence.exists(userId);
+    if (!userExists) {
       this.logger.warn({ event: 'discussion_user_not_found', userId });
       throw new UserNotFoundError();
     }
@@ -485,9 +493,6 @@ export class DiscussionService {
 
     const updated = await this.repo.markThreadAsSolved(params);
 
-    const usernames = await this.repo.getUsernamesForUsers([params.actorId]);
-    const solverUsername = usernames.get(params.actorId) ?? '';
-
     this.eventBus.emitThreadSolved({
       eventType: 'discussion_thread_solved',
       threadId: params.threadId,
@@ -496,7 +501,7 @@ export class DiscussionService {
       authorId: thread.authorId,
       authorUsername: thread.author.username,
       solverId: params.actorId,
-      solverUsername,
+      solverUsername: params.solverUsername,
       timestamp: new Date(),
     });
 
@@ -690,9 +695,9 @@ export class DiscussionService {
   }
 
   async getPublicDiscussionProfile(userId: string): Promise<PublicDiscussionProfile> {
-    const user = await this.userRepository.findMeById(userId);
+    const userExists = await this.userExistence.exists(userId);
 
-    if (!user) {
+    if (!userExists) {
       this.logger.warn({ event: 'discussion_profile_user_not_found', userId });
       throw new UserNotFoundError();
     }
@@ -717,44 +722,6 @@ export class DiscussionService {
 
   async getMyDiscussionStats(userId: string): Promise<MyDiscussionStats> {
     return this.repo.getMyDiscussionStats(userId);
-  }
-
-  async listCommentsByUser(
-    userId: string,
-    query: { limit?: number; cursor?: MyCommentCursor | null },
-  ): Promise<{
-    items: MyCommentListItem[];
-    limit: number;
-    hasNextPage: boolean;
-    nextCursor: MyCommentCursor | null;
-  }> {
-    const user = await this.userRepository.findMeById(userId);
-
-    if (!user) {
-      this.logger.warn({ event: 'discussion_comment_user_not_found', userId });
-      throw new UserNotFoundError();
-    }
-
-    const limit = query.limit ?? 20;
-    const rows = await this.repo.listMyComments({
-      userId,
-      limit,
-      cursor: query.cursor ?? null,
-    });
-
-    const hasNextPage = rows.length > limit;
-    const items = hasNextPage ? rows.slice(0, limit) : rows;
-    const lastItem = items.at(-1);
-
-    return {
-      items,
-      limit,
-      hasNextPage,
-      nextCursor:
-        hasNextPage && lastItem
-          ? { createdAt: lastItem.createdAt, commentId: lastItem.commentId }
-          : null,
-    };
   }
 
   async updateThread(params: UpdateThreadParams): Promise<DiscussionThread> {
@@ -805,8 +772,11 @@ export class DiscussionService {
     if (!thread) throw new ThreadNotFoundError(threadId);
     if (thread.authorId !== authorId) throw new ThreadForbiddenError();
 
-    await this.repo.softDeleteCommentsByThread(threadId);
-    await this.repo.softDeleteThread({ threadId, authorId });
+    await this.repo.transactionally(async (tx) => {
+      await this.repo.softDeleteCommentsByThread(threadId, tx);
+      await this.repo.softDeleteThread({ threadId, authorId }, tx);
+    });
+
     this.eventBus.emitThreadDeleted({
       eventType: 'thread_deleted',
       threadId,
@@ -833,6 +803,25 @@ export class DiscussionService {
       timestamp: new Date(),
     });
     this.logger.info({ event: 'thread_hidden', threadId, moderatorId });
+  }
+
+  async restoreThread(threadId: string, moderatorId: string, role: UserRole): Promise<void> {
+    if (role !== 'admin' && role !== 'moderator') {
+      throw new ModeratorRequiredError();
+    }
+
+    const thread = await this.repo.getThreadById(threadId);
+    if (!thread) throw new ThreadNotFoundError(threadId);
+    if (thread.status === 'deleted') throw new ThreadNotActiveError();
+
+    await this.repo.updateThreadStatus({ threadId, status: 'open' });
+    this.eventBus.emitThreadRestored({
+      eventType: 'thread_restored',
+      threadId,
+      authorId: thread.authorId,
+      timestamp: new Date(),
+    });
+    this.logger.info({ event: 'thread_restored', threadId, moderatorId });
   }
 
   // ─── COMMENTS ───────────────────────────────────────────────────────────────
@@ -879,7 +868,54 @@ export class DiscussionService {
       timestamp: new Date(),
     });
 
+    await this.emitMentionEvents(params.body, thread, comment);
+
     return comment;
+  }
+
+  private async emitMentionEvents(
+    content: string,
+    thread: { threadId: string; title: string },
+    comment: DiscussionComment,
+  ): Promise<void> {
+    const usernames = this.parseMentionUsernames(content);
+    if (usernames.length === 0) return;
+
+    const mentionedUsers = await this.userExistence.findByUsernames(usernames);
+
+    for (const user of mentionedUsers) {
+      if (user.userId === comment.authorId) continue;
+
+      const event: CommentMentionedEvent = {
+        eventType: 'comment_mentioned',
+        commentId: comment.commentId,
+        threadId: thread.threadId,
+        threadTitle: thread.title,
+        mentionedUserId: user.userId,
+        mentionedUsername: user.username,
+        authorId: comment.authorId,
+        authorUsername: comment.author.username,
+        timestamp: new Date(),
+      };
+      this.eventBus.emitCommentMentioned(event);
+    }
+
+    if (mentionedUsers.length > 0) {
+      this.logger.info({
+        event: 'comment_mentions_parsed',
+        commentId: comment.commentId,
+        threadId: thread.threadId,
+        mentionedUsernames: mentionedUsers.map((u) => u.username),
+      });
+    }
+  }
+
+  private parseMentionUsernames(content: string): string[] {
+    const matches = content.match(/@(\w{1,30})/g);
+    if (!matches) return [];
+
+    const usernames = matches.map((m) => m.slice(1).toLowerCase());
+    return [...new Set(usernames)];
   }
 
   async getComment(commentId: string): Promise<DiscussionComment | null> {
@@ -949,6 +985,25 @@ export class DiscussionService {
     this.logger.info({ event: 'comment_hidden', commentId, moderatorId });
   }
 
+  async restoreComment(commentId: string, moderatorId: string, role: UserRole): Promise<void> {
+    if (role !== 'admin' && role !== 'moderator') {
+      throw new ModeratorRequiredError();
+    }
+
+    const comment = await this.repo.getCommentById(commentId);
+    if (!comment) throw new CommentNotFoundError(commentId);
+
+    await this.repo.updateCommentStatus({ commentId, status: 'visible' });
+    this.eventBus.emitCommentRestored({
+      eventType: 'comment_restored',
+      commentId,
+      threadId: comment.threadId,
+      authorId: comment.authorId,
+      timestamp: new Date(),
+    });
+    this.logger.info({ event: 'comment_restored', commentId, moderatorId });
+  }
+
   // ─── VOTES ─────────────────────────────────────────────────────────────────
 
   async vote(params: VoteParams): Promise<void> {
@@ -965,9 +1020,9 @@ export class DiscussionService {
       if (comment.authorId === userId) throw new SelfVoteError();
     }
 
-    await this.db.transaction(async (tx: any) => {
+    await this.repo.transactionally(async (tx) => {
       const [existingVote] = await Promise.all([
-        this.repo.getUserVote(userId, targetType, targetId),
+        this.repo.getUserVoteForUpdate(userId, targetType, targetId, tx),
       ]);
 
       if (existingVote === value) {
@@ -1010,26 +1065,32 @@ export class DiscussionService {
     targetId: string;
   }): Promise<void> {
     const { userId, targetType, targetId } = params;
-    const existingVote = await this.repo.getUserVote(userId, targetType, targetId);
-    if (!existingVote) return;
 
-    const deltaUp = existingVote === 'upvote' ? -1 : 0;
-    const deltaDown = existingVote === 'downvote' ? -1 : 0;
-    await this.updateTargetVotes(targetType, targetId, deltaUp, deltaDown);
-    await this.repo.removeVote({ userId, targetType, targetId });
+    await this.repo.transactionally(async (tx) => {
+      const existingVote = await this.repo.getUserVoteForUpdate(userId, targetType, targetId, tx);
+      if (!existingVote) return;
+
+      const deltaUp = existingVote === 'upvote' ? -1 : 0;
+      const deltaDown = existingVote === 'downvote' ? -1 : 0;
+
+      await this.updateTargetVotesWithTx(targetType, targetId, deltaUp, deltaDown, tx);
+      await this.repo.removeVote({ userId, targetType, targetId }, tx);
+    });
+
     this.logger.debug({ event: 'vote_removed', userId, targetType, targetId });
   }
 
-  private async updateTargetVotes(
+  private async updateTargetVotesWithTx(
     targetType: string,
     targetId: string,
     deltaUpvotes: number,
     deltaDownvotes: number,
+    tx: any,
   ): Promise<void> {
     if (targetType === 'thread') {
-      await this.repo.updateThreadVotes(targetId, deltaUpvotes, deltaDownvotes);
+      await this.repo.updateThreadVotes(targetId, deltaUpvotes, deltaDownvotes, tx);
     } else {
-      await this.repo.updateCommentVotes(targetId, deltaUpvotes, deltaDownvotes);
+      await this.repo.updateCommentVotes(targetId, deltaUpvotes, deltaDownvotes, tx);
     }
   }
 

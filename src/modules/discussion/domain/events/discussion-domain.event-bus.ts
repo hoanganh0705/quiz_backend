@@ -17,11 +17,14 @@ import type {
   CommentCreatedEvent,
   CommentDeletedEvent,
   CommentHiddenEvent,
+  CommentMentionedEvent,
+  CommentRestoredEvent,
   DiscussionThreadCreatedEvent,
   DiscussionThreadSolvedEvent,
   ThreadClosedEvent,
   ThreadDeletedEvent,
   ThreadReopenedEvent,
+  ThreadRestoredEvent,
   ThreadHiddenEvent,
   ContentReportedEvent,
   ReportReviewedEvent,
@@ -189,6 +192,18 @@ export class DiscussionDomainEventBus implements DiscussionDomainEventBusPort, O
   }
 
   emitReportReviewed(event: ReportReviewedEvent): void {
+    this.emit(event);
+  }
+
+  emitCommentMentioned(event: CommentMentionedEvent): void {
+    this.emit(event);
+  }
+
+  emitCommentRestored(event: CommentRestoredEvent): void {
+    this.emit(event);
+  }
+
+  emitThreadRestored(event: ThreadRestoredEvent): void {
     this.emit(event);
   }
 }

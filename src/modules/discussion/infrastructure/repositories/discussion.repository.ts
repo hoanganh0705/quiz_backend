@@ -1,6 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { DRIZZLE } from '@/core/database/drizzle.constants';
 import type { DrizzleDB } from '@/core/database/database.module';
+import { CACHE_PROVIDER, type CacheProvider } from '@/common/ports/cache.provider';
 import {
   discussionThreads,
   discussionComments,
@@ -138,7 +139,10 @@ type MySavedThreadRow = {
 
 @Injectable()
 export class DiscussionRepository implements DiscussionRepositoryPort {
-  constructor(@Inject(DRIZZLE) private readonly db: DrizzleDB) {}
+  constructor(
+    @Inject(DRIZZLE) private readonly db: DrizzleDB,
+    @Inject(CACHE_PROVIDER) private readonly cache: CacheProvider,
+  ) {}
 
   // ─── THREADS ────────────────────────────────────────────────────────────────
 
@@ -171,21 +175,31 @@ export class DiscussionRepository implements DiscussionRepositoryPort {
     threadId: string,
     userId?: string | null,
   ): Promise<DiscussionThreadDetail | null> {
-    const [thread] = await this.db
-      .select()
+    const [row] = await this.db
+      .select({
+        thread: discussionThreads,
+        authorUsername: users.username,
+        authorDisplayName: userProfiles.displayName,
+        authorAvatarUrl: userProfiles.avatarUrl,
+      })
       .from(discussionThreads)
+      .innerJoin(users, eq(discussionThreads.authorId, users.userId))
+      .leftJoin(userProfiles, eq(users.userId, userProfiles.userId))
       .where(and(eq(discussionThreads.threadId, threadId), isNull(discussionThreads.deletedAt)));
 
-    if (!thread) return null;
-
-    const enriched = await this.enrichThread(thread as unknown as DiscussionThreadRow);
+    if (!row) return null;
 
     let userVote: DiscussionVoteValue | null = null;
     if (userId) {
       userVote = await this.getUserVote(userId, 'thread', threadId);
     }
 
-    // Lấy top-level comments kèm author info trong một query
+    const enriched = this.buildThreadFromRow(row.thread, {
+      username: row.authorUsername,
+      displayName: row.authorDisplayName,
+      avatarUrl: row.authorAvatarUrl,
+    });
+
     const topLevelComments = await this.db
       .select({
         comment: discussionComments,
@@ -205,9 +219,8 @@ export class DiscussionRepository implements DiscussionRepositoryPort {
       )
       .orderBy(asc(discussionComments.createdAt));
 
-    const topLevelCommentIds = topLevelComments.map((row) => row.comment.commentId);
+    const topLevelCommentIds = topLevelComments.map((r) => r.comment.commentId);
 
-    // Batch-fetch tất cả replies trong một query — tránh N round-trips
     const allReplies: DiscussionComment[] = topLevelCommentIds.length
       ? await this.getRepliesByParentIds(topLevelCommentIds, MAX_REPLIES_PER_COMMENT)
       : [];
@@ -219,16 +232,16 @@ export class DiscussionRepository implements DiscussionRepositoryPort {
       repliesByParent.get(parentId)!.push(reply);
     }
 
-    const commentsWithReplies: DiscussionCommentWithReplies[] = topLevelComments.map((row) => {
-      const comment = row.comment as unknown as DiscussionCommentRow;
+    const commentsWithReplies: DiscussionCommentWithReplies[] = topLevelComments.map((r) => {
+      const comment = r.comment as unknown as DiscussionCommentRow;
       const enrichedComment = this.enrichComment(comment, {
-        username: row.authorUsername,
-        displayName: row.authorDisplayName,
-        avatarUrl: row.authorAvatarUrl,
+        username: r.authorUsername,
+        displayName: r.authorDisplayName,
+        avatarUrl: r.authorAvatarUrl,
       });
       return {
         ...enrichedComment,
-        replies: repliesByParent.get(row.comment.commentId) ?? [],
+        replies: repliesByParent.get(r.comment.commentId) ?? [],
         userVote: null,
       };
     });
@@ -436,6 +449,7 @@ export class DiscussionRepository implements DiscussionRepositoryPort {
       .where(
         and(
           eq(discussionComments.authorId, params.userId),
+          eq(discussionComments.status, 'visible'),
           isNull(discussionComments.deletedAt),
           isNull(discussionThreads.deletedAt),
           cursorCondition,
@@ -734,11 +748,30 @@ export class DiscussionRepository implements DiscussionRepositoryPort {
     return this.enrichThread(updated as unknown as DiscussionThreadRow);
   }
 
+  private static readonly TRENDING_CACHE_TTL_MS = 60_000; // 60 seconds
+  private static readonly TRENDING_CACHE_KEY = 'discussion:trending:page1';
+
   async listTrendingDiscussions(params: {
     limit: number;
     cursor?: { score: number; createdAt: string; threadId: string } | null;
   }): Promise<TrendingDiscussionListItem[]> {
-    const cursorCondition = params.cursor
+    // Cache only the first page (no cursor) for 60s to avoid repeated expensive queries
+    if (!params.cursor) {
+      return this.cache.getOrSet<TrendingDiscussionListItem[]>(
+        DiscussionRepository.TRENDING_CACHE_KEY,
+        DiscussionRepository.TRENDING_CACHE_TTL_MS,
+        () => this.fetchTrendingFromDb(params.limit),
+      );
+    }
+
+    return this.fetchTrendingFromDb(params.limit, params.cursor);
+  }
+
+  private async fetchTrendingFromDb(
+    limit: number,
+    cursor?: { score: number; createdAt: string; threadId: string } | null,
+  ): Promise<TrendingDiscussionListItem[]> {
+    const cursorCondition = cursor
       ? sql`(
           (
             ${discussionThreads.votesCount} * 3 +
@@ -750,7 +783,7 @@ export class DiscussionRepository implements DiscussionRepositoryPort {
                AND dc.created_at > NOW() - INTERVAL '7 days')::int,
               0
             )
-          ) < ${params.cursor.score}
+          ) < ${cursor.score}
           OR (
             (
               ${discussionThreads.votesCount} * 3 +
@@ -762,8 +795,8 @@ export class DiscussionRepository implements DiscussionRepositoryPort {
                  AND dc.created_at > NOW() - INTERVAL '7 days')::int,
                 0
               )
-            ) = ${params.cursor.score}
-            AND ${discussionThreads.createdAt} > ${params.cursor.createdAt}
+            ) = ${cursor.score}
+            AND ${discussionThreads.createdAt} > ${cursor.createdAt}
           )
           OR (
             (
@@ -776,9 +809,9 @@ export class DiscussionRepository implements DiscussionRepositoryPort {
                  AND dc.created_at > NOW() - INTERVAL '7 days')::int,
                 0
               )
-            ) = ${params.cursor.score}
-            AND ${discussionThreads.createdAt} = ${params.cursor.createdAt}
-            AND ${discussionThreads.threadId} > ${params.cursor.threadId}
+            ) = ${cursor.score}
+            AND ${discussionThreads.createdAt} = ${cursor.createdAt}
+            AND ${discussionThreads.threadId} > ${cursor.threadId}
           )
         )`
       : undefined;
@@ -866,7 +899,7 @@ export class DiscussionRepository implements DiscussionRepositoryPort {
         `),
         desc(discussionThreads.threadId),
       )
-      .limit(params.limit + 1);
+      .limit(limit + 1);
 
     return rows.map((row) => ({
       threadId: row.threadId,
@@ -952,11 +985,12 @@ export class DiscussionRepository implements DiscussionRepositoryPort {
     limit: number;
     cursor?: { createdAt: string; threadId: string } | null;
   }): Promise<SearchDiscussionListItem[]> {
-    const searchPattern = `%${params.query}%`;
-    const searchCondition = sql`(
-      ${discussionThreads.title} ILIKE ${searchPattern}
-      OR ${discussionThreads.body} ILIKE ${searchPattern}
-    )`;
+    const sanitized = params.query.replace(/[():&|!<>]/g, ' ').trim();
+    if (!sanitized) {
+      return [];
+    }
+
+    const searchCondition = sql`${discussionThreads.discussionSearchVector} @@ websearch_to_tsquery('english', ${sanitized})`;
 
     const cursorCondition = params.cursor
       ? sql`(
@@ -1139,6 +1173,14 @@ export class DiscussionRepository implements DiscussionRepositoryPort {
     }));
   }
 
+  async listThreadSubscribers(threadId: string): Promise<{ userId: string }[]> {
+    const rows = await this.db
+      .select({ userId: discussionThreadSubscriptions.userId })
+      .from(discussionThreadSubscriptions)
+      .where(eq(discussionThreadSubscriptions.threadId, threadId));
+    return rows;
+  }
+
   async getThreadStats(threadId: string): Promise<ThreadStats | null> {
     const participantCountCTE = this.db.$with('participant_count').as(
       this.db
@@ -1296,9 +1338,13 @@ export class DiscussionRepository implements DiscussionRepositoryPort {
     return this.enrichThread(updated as unknown as DiscussionThreadRow);
   }
 
-  async softDeleteThread(params: { threadId: string; authorId: string }): Promise<void> {
+  async softDeleteThread(
+    params: { threadId: string; authorId: string },
+    db?: DrizzleDB,
+  ): Promise<void> {
+    const client = db ?? this.db;
     const now = new Date().toISOString();
-    await this.db
+    await client
       .update(discussionThreads)
       .set({ deletedAt: now, updatedAt: now, status: 'deleted' })
       .where(
@@ -1528,9 +1574,10 @@ export class DiscussionRepository implements DiscussionRepositoryPort {
       .where(eq(discussionComments.commentId, params.commentId));
   }
 
-  async softDeleteCommentsByThread(threadId: string): Promise<void> {
+  async softDeleteCommentsByThread(threadId: string, db?: DrizzleDB): Promise<void> {
+    const client = db ?? this.db;
     const now = new Date().toISOString();
-    await this.db
+    await client
       .update(discussionComments)
       .set({ deletedAt: now, updatedAt: now, status: 'deleted' })
       .where(and(eq(discussionComments.threadId, threadId), isNull(discussionComments.deletedAt)));
@@ -1612,8 +1659,10 @@ export class DiscussionRepository implements DiscussionRepositoryPort {
     userId: string,
     targetType: 'thread' | 'comment' | 'reply',
     targetId: string,
+    db?: DrizzleDB,
   ): Promise<DiscussionVoteValue | null> {
-    const [vote] = await this.db
+    const client = db ?? this.db;
+    const [vote] = await client
       .select({ value: discussionVotes.value })
       .from(discussionVotes)
       .where(
@@ -1625,6 +1674,26 @@ export class DiscussionRepository implements DiscussionRepositoryPort {
       );
 
     return (vote?.value as DiscussionVoteValue) ?? null;
+  }
+
+  /**
+   * Acquires a row-level lock on the vote row before updating.
+   * Uses raw FOR UPDATE SQL — Drizzle 0.45 doesn't expose this through the query builder.
+   * Must be called inside a transaction.
+   */
+  async getUserVoteForUpdate(
+    userId: string,
+    targetType: 'thread' | 'comment' | 'reply',
+    targetId: string,
+    db: DrizzleDB,
+  ): Promise<DiscussionVoteValue | null> {
+    const [vote] = await db
+      .execute(
+        sql`SELECT "value" FROM "discussion_votes" WHERE "user_id" = ${userId} AND "target_type" = ${targetType} AND "target_id" = ${targetId} FOR UPDATE`,
+      )
+      .catch(() => []);
+
+    return ((vote as { value: DiscussionVoteValue } | undefined)?.value) ?? null;
   }
 
   // ─── REPORTS ────────────────────────────────────────────────────────────────
@@ -1686,6 +1755,32 @@ export class DiscussionRepository implements DiscussionRepositoryPort {
 
   // ─── PRIVATE HELPERS ────────────────────────────────────────────────────────
 
+  private buildThreadFromRow(
+    thread: DiscussionThreadRow,
+    author: AuthorInfo,
+  ): DiscussionThread {
+    return {
+      threadId: thread.threadId,
+      quizId: thread.quizId,
+      authorId: thread.authorId,
+      author: { userId: thread.authorId, ...author },
+      title: thread.title,
+      body: thread.body,
+      status: thread.status,
+      isSolved: thread.isSolved,
+      solvedAt: thread.solvedAt,
+      solvedCommentId: thread.solvedCommentId,
+      solvedBy: thread.solvedBy,
+      commentsCount: thread.commentsCount,
+      votesCount: thread.votesCount,
+      upvotesCount: thread.upvotesCount,
+      downvotesCount: thread.downvotesCount,
+      createdAt: thread.createdAt,
+      updatedAt: thread.updatedAt,
+      deletedAt: thread.deletedAt,
+    };
+  }
+
   private async enrichThread(
     thread: DiscussionThreadRow,
     overrideAuthor?: AuthorInfo,
@@ -1712,26 +1807,7 @@ export class DiscussionRepository implements DiscussionRepositoryPort {
       };
     }
 
-    return {
-      threadId: thread.threadId,
-      quizId: thread.quizId,
-      authorId: thread.authorId,
-      author: { userId: thread.authorId, ...author },
-      title: thread.title,
-      body: thread.body,
-      status: thread.status,
-      isSolved: thread.isSolved,
-      solvedAt: thread.solvedAt,
-      solvedCommentId: thread.solvedCommentId,
-      solvedBy: thread.solvedBy,
-      commentsCount: thread.commentsCount,
-      votesCount: thread.votesCount,
-      upvotesCount: thread.upvotesCount,
-      downvotesCount: thread.downvotesCount,
-      createdAt: thread.createdAt,
-      updatedAt: thread.updatedAt,
-      deletedAt: thread.deletedAt,
-    };
+    return this.buildThreadFromRow(thread, author);
   }
 
   private enrichComment(comment: DiscussionCommentRow, author?: AuthorInfo): DiscussionComment {
@@ -1767,5 +1843,9 @@ export class DiscussionRepository implements DiscussionRepositoryPort {
       .where(inArray(users.userId, userIds));
 
     return new Map(rows.map((r) => [r.userId, r.username]));
+  }
+
+  async transactionally<T>(fn: (tx: DrizzleDB) => Promise<T>): Promise<T> {
+    return this.db.transaction(fn as (tx: unknown) => Promise<T>) as Promise<T>;
   }
 }

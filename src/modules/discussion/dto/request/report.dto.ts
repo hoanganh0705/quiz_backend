@@ -1,15 +1,16 @@
-import { IsEnum, IsOptional, IsString, IsUUID, MaxLength, MinLength } from 'class-validator';
+import { IsIn, IsOptional, IsString, IsUUID, MaxLength, MinLength } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { VoteTargetType } from './enums';
+import { DISCUSSION_REPORT_TARGET_TYPE } from '../../domain/types';
+import type { DiscussionReportTargetType } from '../../domain/types';
 
 export class CreateReportDto {
   @ApiProperty({
     description: 'Type of content being reported',
-    enum: VoteTargetType,
+    enum: DISCUSSION_REPORT_TARGET_TYPE,
     example: 'comment',
   })
-  @IsEnum(VoteTargetType)
-  targetType!: VoteTargetType;
+  @IsIn(DISCUSSION_REPORT_TARGET_TYPE)
+  targetType!: DiscussionReportTargetType;
 
   @ApiProperty({
     description: 'UUID of the thread, comment, or reply being reported',

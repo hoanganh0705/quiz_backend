@@ -16,6 +16,13 @@ export interface UserMeRow {
   updatedAt: string;
 }
 
+export interface UserPublicRow {
+  userId: string;
+  username: string;
+  displayName: string | null;
+  avatarUrl: string | null;
+}
+
 export interface UserBadgeRow {
   userBadgeId: string;
   badgeId: string;
@@ -123,6 +130,8 @@ export interface UserRepositoryPort {
     settings: Record<string, unknown>,
     nowIso: string,
   ): Promise<UserMeRow | null>;
+
+  findByUsernames(usernames: string[]): Promise<UserPublicRow[]>;
 }
 
 export const USER_REPOSITORY_PORT = Symbol('USER_REPOSITORY_PORT');
