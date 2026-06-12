@@ -86,7 +86,7 @@ export class BadgeRevocationService {
   async revokeBadge(request: RevocationRequest): Promise<RevocationResult> {
     const validationError = this.validateRequest(request);
     if (validationError) {
-      this.logger.warn({
+      this.logger.info({
         event: 'revocation_validation_failed',
         userId: request.userId,
         badgeId: request.badgeId,
@@ -113,7 +113,7 @@ export class BadgeRevocationService {
 
       const revocation = this.toRevocationRecord(revokedBadge, request);
 
-      this.logger.warn({
+      this.logger.info({
         event: 'badge_revoked',
         userId: request.userId,
         badgeId: request.badgeId,

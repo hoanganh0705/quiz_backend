@@ -2,4 +2,4 @@
  * Achievement Domain Ports
  */
 
-export * from './achievement.port';
+export * from './achievement-outbox.port';

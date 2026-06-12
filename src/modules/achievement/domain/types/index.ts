@@ -3,4 +3,3 @@
  */
 
 export * from './achievement.types';
-export * from './rule-config.types';
