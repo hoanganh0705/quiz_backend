@@ -7,6 +7,7 @@
 
 import { Inject, Injectable, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
+import { createCorrelationId } from '@/common/interceptors/correlation-id';
 import { AchievementDomainEventBus } from '../../domain/events/achievement-domain.event-bus';
 import type { AchievementDomainEvent } from '../../domain/events/achievement.events';
 import type { UserActivityService } from '../../../user/application/user-activity.service';
@@ -85,8 +86,11 @@ export class UserActivityListenerAdapter implements OnModuleInit, OnModuleDestro
   }
 
   private async handleEvent(event: AchievementDomainEvent): Promise<void> {
+    const correlationId = createCorrelationId();
+
     this.logger.debug({
       event: 'achievement_event_received',
+      correlationId,
       eventType: event.eventType,
       userId: event.userId,
     });
@@ -108,12 +112,14 @@ export class UserActivityListenerAdapter implements OnModuleInit, OnModuleDestro
 
       this.logger.debug({
         event: 'user_activity_recorded_from_achievement',
+        correlationId,
         eventType: event.eventType,
         userId: event.userId,
       });
     } catch (error) {
       this.logger.error({
         event: 'user_activity_recording_from_achievement_failed',
+        correlationId,
         eventType: event.eventType,
         userId: event.userId,
         error: error instanceof Error ? error.message : 'Unknown error',

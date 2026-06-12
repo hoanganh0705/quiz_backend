@@ -1,138 +1,119 @@
 import { Module, forwardRef } from '@nestjs/common';
 
-// Database
 import { DatabaseModule } from '@/core/database/database.module';
 
-// Domain Services
 import { RankAchievementService } from './domain/services/rank-achievement.service';
-import { ConsistencyService } from './domain/services/consistency.service';
-import { BadgeEvaluationService } from './domain/services/badge-evaluation.service';
 import { RuleEngineService } from './domain/services/rule-engine.service';
-import { ProgressTrackingService } from './domain/services/progress-tracking.service';
-import { ScheduledEvaluationService } from './domain/services/scheduled-evaluation.service';
-import { AchievementHistoryService } from './domain/services/achievement-history.service';
-import { SeasonalBadgeService } from './domain/services/seasonal-badge.service';
 import { BadgeRevocationService } from './domain/services/badge-revocation.service';
-import { BadgeVersioningService } from './domain/services/badge-versioning.service';
-import { RareBadgeService } from './domain/services/rare-badge.service';
-import { BadgeAnalyticsService } from './domain/services/badge-analytics.service';
 import {
   AchievementDomainEventBus,
   ACHIEVEMENT_DOMAIN_EVENT_BUS,
 } from './domain/events/achievement-domain.event-bus';
 
-// Infrastructure - Repository
 import { AchievementRepository } from './infrastructure/repositories/achievement.repository.impl';
 import { ACHIEVEMENT_REPOSITORY_PORT } from './infrastructure/repositories/achievement.repository';
+import { ScheduledEvaluationService } from './infrastructure/scheduled/scheduled-evaluation.service';
+import {
+  AchievementOutboxAdapter,
+  ACHIEVEMENT_OUTBOX_PORT,
+} from './infrastructure/outbox/achievement-outbox.adapter';
 
-// Infrastructure - Event Listeners
-import { AchievementRankingListenerAdapter } from './infrastructure/adapters/achievement-ranking-listener.adapter';
-import { AttemptEventListenerAdapter } from './infrastructure/adapters/attempt-listener.adapter';
-import { TournamentEventListenerAdapter } from './infrastructure/adapters/tournament-listener.adapter';
-import { InstanceEventListenerAdapter } from './infrastructure/adapters/instance-listener.adapter';
+import { AchievementAttemptEventListenerAdapter } from './infrastructure/adapters/attempt-listener.adapter';
+import { AchievementTournamentEventListenerAdapter } from './infrastructure/adapters/tournament-listener.adapter';
+import { AchievementInstanceEventListenerAdapter } from './infrastructure/adapters/instance-listener.adapter';
 import { UserActivityListenerAdapter } from './infrastructure/adapters/user-activity-listener.adapter';
 import { AchievementNotificationListener } from './infrastructure/adapters/achievement-notification-listener.adapter';
+import { RankingEventAchievementListenerAdapter } from './infrastructure/adapters/ranking-event-listener.adapter';
 
-// Application
 import { AchievementApplicationService } from './application/achievement.application.service';
+import { ProgressTrackingService } from './application/progress-tracking.service';
 
-// Transport
 import { AchievementController } from './transport/controller/achievement.controller';
+import { AchievementAdminController } from './transport/controller/achievement-admin.controller';
 import { AchievementDomainExceptionFilter } from './transport/filters/achievement-domain-exception.filter';
 
-// User module for activity event wiring
 import { UserModule } from '@/modules/user/user.module';
 import { RankingModule } from '@/modules/ranking/ranking.module';
-import { AttemptModule } from '@/modules/attempt/attempt.module';
-import { TournamentModule } from '@/modules/tournament/tournament.module';
-import { InstanceModule } from '@/modules/instance/instance.module';
 import { NotificationModule } from '@/modules/notification/notification.module';
+import { AttemptModule } from '@/modules/attempt/attempt.module';
+import { InstanceModule } from '@/modules/instance/instance.module';
+import { TournamentModule } from '@/modules/tournament/tournament.module';
+import { AchievementHistoryService } from './application/achievement-history.service';
+import { BadgeAnalyticsService } from './application';
 
 @Module({
   imports: [
     DatabaseModule,
     UserModule,
     RankingModule,
-    AttemptModule,
-    TournamentModule,
-    forwardRef(() => InstanceModule),
     forwardRef(() => NotificationModule),
+    AttemptModule,
+    InstanceModule,
+    TournamentModule,
   ],
-  controllers: [AchievementController],
+  controllers: [AchievementController, AchievementAdminController],
   providers: [
-    // Domain Event Bus
     AchievementDomainEventBus,
     {
       provide: ACHIEVEMENT_DOMAIN_EVENT_BUS,
       useExisting: AchievementDomainEventBus,
     },
 
-    // Domain Services
     RankAchievementService,
-    ConsistencyService,
-    BadgeEvaluationService,
     RuleEngineService,
-    ProgressTrackingService,
-    ScheduledEvaluationService,
-    AchievementHistoryService,
-    SeasonalBadgeService,
     BadgeRevocationService,
-    BadgeVersioningService,
-    RareBadgeService,
-    BadgeAnalyticsService,
 
-    // Infrastructure - Repository
     AchievementRepository,
     {
       provide: ACHIEVEMENT_REPOSITORY_PORT,
       useExisting: AchievementRepository,
     },
 
-    // Infrastructure - Event Listeners
-    AchievementRankingListenerAdapter,
-    AttemptEventListenerAdapter,
-    TournamentEventListenerAdapter,
-    InstanceEventListenerAdapter,
+    ScheduledEvaluationService,
+
+    AchievementOutboxAdapter,
+    {
+      provide: ACHIEVEMENT_OUTBOX_PORT,
+      useExisting: AchievementOutboxAdapter,
+    },
+
+    AchievementAttemptEventListenerAdapter,
+    AchievementTournamentEventListenerAdapter,
+    AchievementInstanceEventListenerAdapter,
     UserActivityListenerAdapter,
-
-    // Notification bridge (listens to Achievement events, dispatches via NotificationModule)
     AchievementNotificationListener,
+    RankingEventAchievementListenerAdapter,
 
-    // Application
     AchievementApplicationService,
+    ProgressTrackingService,
+    AchievementHistoryService,
+    BadgeAnalyticsService,
 
-    // Exception Filter
     AchievementDomainExceptionFilter,
   ],
   exports: [
-    // Domain Event Bus
     AchievementDomainEventBus,
     ACHIEVEMENT_DOMAIN_EVENT_BUS,
 
-    // Domain Services
     RankAchievementService,
-    ConsistencyService,
-    BadgeEvaluationService,
     RuleEngineService,
-    ProgressTrackingService,
-    ScheduledEvaluationService,
-    AchievementHistoryService,
-    SeasonalBadgeService,
     BadgeRevocationService,
-    BadgeVersioningService,
-    RareBadgeService,
+
+    ACHIEVEMENT_REPOSITORY_PORT,
+    ACHIEVEMENT_OUTBOX_PORT,
+
+    ScheduledEvaluationService,
+    ProgressTrackingService,
+    AchievementHistoryService,
     BadgeAnalyticsService,
 
-    // Ports
-    ACHIEVEMENT_REPOSITORY_PORT,
-
-    // Event Listeners
-    AttemptEventListenerAdapter,
-    TournamentEventListenerAdapter,
-    InstanceEventListenerAdapter,
+    AchievementAttemptEventListenerAdapter,
+    AchievementTournamentEventListenerAdapter,
+    AchievementInstanceEventListenerAdapter,
     UserActivityListenerAdapter,
 
-    // Application Service
+    RankingEventAchievementListenerAdapter,
+
     AchievementApplicationService,
   ],
 })

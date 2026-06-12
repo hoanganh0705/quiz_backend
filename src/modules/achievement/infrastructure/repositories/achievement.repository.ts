@@ -94,7 +94,16 @@ export interface AchievementRepositoryPort {
   hasBadge(userId: string, badgeId: string): Promise<boolean>;
 
   /**
+   * Check badge ownership for multiple badges in a single query (avoids N+1).
+   * Returns a map of badgeId -> true/false.
+   */
+  hasBadges(userId: string, badgeIds: string[]): Promise<Record<string, boolean>>;
+
+  /**
    * Award a badge to a user.
+   * Idempotent: returns null if the user already has this badge (unique constraint violation).
+   * The caller should guard with hasBadge() for the normal fast path; this handles the race case
+   * where two concurrent requests both pass the guard and hit the DB simultaneously.
    */
   awardBadge(params: {
     userId: string;
@@ -104,7 +113,7 @@ export interface AchievementRepositoryPort {
     progress?: Record<string, unknown>;
     metadata?: Record<string, unknown>;
     expiresAt?: Date;
-  }): Promise<UserBadgeRow>;
+  }): Promise<UserBadgeRow | null>;
 
   /**
    * Get all active badges for a user.
@@ -112,16 +121,23 @@ export interface AchievementRepositoryPort {
   getUserBadges(userId: string): Promise<UserBadgeRow[]>;
 
   /**
-   * Get all active badges for a user, with badge details.
+   * Get all active badges for a user, with badge details (paginated).
    */
   getUserBadgesWithDetails(
     userId: string,
-  ): Promise<(UserBadgeRow & { badge: BadgeDefinitionRow })[]>;
+    params?: { limit?: number; offset?: number },
+  ): Promise<{
+    data: (UserBadgeRow & { badge: BadgeDefinitionRow })[];
+    total: number;
+  }>;
 
   /**
-   * Get the public badge catalog.
+   * Get the public badge catalog (paginated).
    */
-  getBadgeCatalog(): Promise<BadgeCatalogRow[]>;
+  getBadgeCatalog(params?: { limit?: number; offset?: number; category?: string }): Promise<{
+    data: BadgeCatalogRow[];
+    total: number;
+  }>;
 
   /**
    * Get public achievement profile for a user.
@@ -142,6 +158,11 @@ export interface AchievementRepositoryPort {
    * Get badge definition by slug.
    */
   getBadgeBySlug(slug: string): Promise<BadgeDefinitionRow | null>;
+
+  /**
+   * Get badge definitions by IDs in a single query (avoids N+1).
+   */
+  getBadgesByIds(badgeIds: string[]): Promise<BadgeDefinitionRow[]>;
 
   /**
    * Get all active badge definitions.
@@ -185,6 +206,15 @@ export interface AchievementRepositoryPort {
   getBadgeProgress(userId: string, badgeId: string): Promise<Record<string, unknown> | null>;
 
   /**
+   * Get badge progress for multiple badges in a single query (avoids N+1).
+   * Returns a map of badgeId -> progress record (or null if none).
+   */
+  getBadgeProgressBatch(
+    userId: string,
+    badgeIds: string[],
+  ): Promise<Record<string, Record<string, unknown> | null>>;
+
+  /**
    * Revoke a badge and return the audit record.
    */
   revokeBadge(userId: string, badgeId: string, reason: string): Promise<RevokedBadgeRecord | null>;
@@ -216,6 +246,20 @@ export interface AchievementRepositoryPort {
    * Get badge earners count.
    */
   getBadgeEarnersCount(badgeId: string): Promise<number>;
+
+  /**
+   * Get earner counts for multiple badges in a single query (avoids N+1).
+   */
+  getBadgeEarnersCounts(badgeIds: string[]): Promise<Record<string, number>>;
+
+  /**
+   * Get time-windowed earner counts for a badge (last 24h, 7d, 30d) in a single query.
+   */
+  getBadgeEarnersCountTimeline(badgeId: string): Promise<{
+    last24Hours: number;
+    last7Days: number;
+    last30Days: number;
+  }>;
 }
 
 export const ACHIEVEMENT_REPOSITORY_PORT: unique symbol = Symbol('ACHIEVEMENT_REPOSITORY_PORT');

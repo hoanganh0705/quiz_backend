@@ -31,7 +31,7 @@ import {
   ConsistencyReportResponseDto,
 } from '../../dto/response/ranking-admin-response.dto';
 
-@ApiTags('admin — ranking')
+@ApiTags('leaderboard')
 @Controller('admin/ranking')
 @ApiAuth()
 export class RankingAdminController {
