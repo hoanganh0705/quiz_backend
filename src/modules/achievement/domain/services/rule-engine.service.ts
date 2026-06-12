@@ -12,6 +12,7 @@ import type { AchievementRepositoryPort } from '../../infrastructure/repositorie
 import type {
   BadgeDefinitionRow,
   BadgeRuleRow,
+  UserBadgeRow,
 } from '../../infrastructure/repositories/achievement.repository';
 
 export interface EvaluationContext {
@@ -105,9 +106,18 @@ export class RuleEngineService {
   }
 
   /**
+   * Check if a user already has a specific badge.
+   */
+  hasBadge(userId: string, badgeId: string): Promise<boolean> {
+    return this.achievementRepository.hasBadge(userId, badgeId);
+  }
+
+  /**
    * Get all badges a user has earned.
    */
-  async getUserBadges(userId: string) {
+  async getUserBadges(
+    userId: string,
+  ): Promise<{ data: (UserBadgeRow & { badge: BadgeDefinitionRow })[]; total: number }> {
     return this.achievementRepository.getUserBadgesWithDetails(userId);
   }
 
@@ -305,7 +315,7 @@ export class RuleEngineService {
         return typeof eventData.scorePercentage === 'number' ? eventData.scorePercentage : null;
 
       default:
-        this.logger.warn({
+        this.logger.error({
           event: 'unknown_metric',
           metric,
         });

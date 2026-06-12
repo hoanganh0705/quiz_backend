@@ -744,6 +744,28 @@ export const userBadges = pgTable(
       table.revokedAt.asc().nullsLast().op('timestamptz_ops'),
       table.earnedAt.desc().nullsLast().op('timestamptz_ops'),
     ),
+    index('idx_user_badges_user_badge_active').using(
+      'btree',
+      table.userId.asc().nullsLast().op('uuid_ops'),
+      table.badgeId.asc().nullsLast().op('uuid_ops'),
+      table.revokedAt.asc().nullsLast().op('timestamptz_ops'),
+    ),
+    // Partial unique constraint on (userId, badgeId) for active records.
+    // Prevents race-condition duplicate awards — the DB rejects the second concurrent INSERT.
+    // Uses .on() because uniqueIndex().where() only supports a single column via sql`` syntax.
+    uniqueIndex('uq_user_badges_user_badge_active')
+      .on(
+        table.userId.asc().nullsLast().op('uuid_ops'),
+        table.badgeId.asc().nullsLast().op('uuid_ops'),
+      )
+      .where(sql`${table.revokedAt} IS NULL`),
+    // Composite B-tree with (userId, badgeId) leading key — covers the hasBadge()
+    // query: WHERE user_id = $1 AND badge_id = $2 AND revoked_at IS NULL.
+    index('idx_user_badges_user_badge').using(
+      'btree',
+      table.userId.asc().nullsLast().op('uuid_ops'),
+      table.badgeId.asc().nullsLast().op('uuid_ops'),
+    ),
     index('idx_user_badges_cursor_pagination').using(
       'btree',
       table.userId.asc().nullsLast().op('uuid_ops'),
@@ -761,7 +783,6 @@ export const userBadges = pgTable(
       foreignColumns: [users.userId],
       name: 'user_badges_user_id_fkey',
     }).onDelete('cascade'),
-    unique('uq_user_badges_user_badge').on(table.badgeId, table.userId),
     check('user_badges_progress_object', sql`jsonb_typeof(progress) = 'object'::text`),
     check('user_badges_metadata_object', sql`jsonb_typeof(metadata) = 'object'::text`),
   ],
@@ -1156,7 +1177,7 @@ export const quizVersions = pgTable(
     index('idx_quiz_versions_quiz_status').using(
       'btree',
       table.quizId.asc().nullsLast().op('uuid_ops'),
-      table.status.asc().nullsLast().op('text_ops'),
+      table.status.asc().nullsLast().op('enum_ops'),
     ),
     foreignKey({
       columns: [table.createdByUserId],

@@ -7,6 +7,7 @@
 
 import { Inject, Injectable, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
+import { createCorrelationId } from '@/common/interceptors/correlation-id';
 import {
   ACHIEVEMENT_DOMAIN_EVENT_BUS,
   AchievementDomainEventBus,
@@ -72,6 +73,8 @@ export class AchievementNotificationListener implements OnModuleInit, OnModuleDe
   }
 
   private async handleAchievementAwarded(event: PublishedAchievementAwardedEvent): Promise<void> {
+    const correlationId = createCorrelationId();
+
     try {
       const title = 'Achievement Unlocked';
       const body = `You earned the ${event.badgeType.replace(/_/g, ' ')} badge`;
@@ -89,6 +92,7 @@ export class AchievementNotificationListener implements OnModuleInit, OnModuleDe
 
       this.logger.info({
         event: 'achievement_notification_sent',
+        correlationId,
         userId: event.userId,
         badgeType: event.badgeType,
         achievementType: event.achievementType,
@@ -96,6 +100,7 @@ export class AchievementNotificationListener implements OnModuleInit, OnModuleDe
     } catch (error) {
       this.logger.error({
         event: 'achievement_notification_failed',
+        correlationId,
         userId: event.userId,
         badgeType: event.badgeType,
         error: error instanceof Error ? error.message : 'Unknown error',
@@ -104,6 +109,8 @@ export class AchievementNotificationListener implements OnModuleInit, OnModuleDe
   }
 
   private async handleBadgeEarned(event: PublishedBadgeEarnedEvent): Promise<void> {
+    const correlationId = createCorrelationId();
+
     try {
       const title = 'Badge Earned';
       const body = `You earned the ${event.badgeType.replace(/_/g, ' ')} badge`;
@@ -118,12 +125,14 @@ export class AchievementNotificationListener implements OnModuleInit, OnModuleDe
 
       this.logger.info({
         event: 'badge_unlock_notification_sent',
+        correlationId,
         userId: event.userId,
         badgeType: event.badgeType,
       });
     } catch (error) {
       this.logger.error({
         event: 'badge_unlock_notification_failed',
+        correlationId,
         userId: event.userId,
         badgeType: event.badgeType,
         error: error instanceof Error ? error.message : 'Unknown error',
@@ -132,6 +141,8 @@ export class AchievementNotificationListener implements OnModuleInit, OnModuleDe
   }
 
   private async handleBadgeRevoked(event: PublishedBadgeRevokedEvent): Promise<void> {
+    const correlationId = createCorrelationId();
+
     try {
       const title = 'Badge Revoked';
       const body = `The ${event.badgeType.replace(/_/g, ' ')} badge was revoked`;
@@ -149,12 +160,14 @@ export class AchievementNotificationListener implements OnModuleInit, OnModuleDe
 
       this.logger.info({
         event: 'badge_revoked_notification_sent',
+        correlationId,
         userId: event.userId,
         badgeType: event.badgeType,
       });
     } catch (error) {
       this.logger.error({
         event: 'badge_revoked_notification_failed',
+        correlationId,
         userId: event.userId,
         badgeType: event.badgeType,
         error: error instanceof Error ? error.message : 'Unknown error',
@@ -163,6 +176,8 @@ export class AchievementNotificationListener implements OnModuleInit, OnModuleDe
   }
 
   private async handleStreakMilestone(event: PublishedStreakMilestoneEvent): Promise<void> {
+    const correlationId = createCorrelationId();
+
     try {
       const title = 'Streak Milestone';
       const body = `You have maintained a ${event.streakDays}-day streak`;
@@ -177,12 +192,14 @@ export class AchievementNotificationListener implements OnModuleInit, OnModuleDe
 
       this.logger.info({
         event: 'streak_milestone_notification_sent',
+        correlationId,
         userId: event.userId,
         streakDays: event.streakDays,
       });
     } catch (error) {
       this.logger.error({
         event: 'streak_milestone_notification_failed',
+        correlationId,
         userId: event.userId,
         streakDays: event.streakDays,
         error: error instanceof Error ? error.message : 'Unknown error',

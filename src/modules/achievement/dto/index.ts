@@ -4,3 +4,6 @@ export * from './response/achievement-history-item-response.dto';
 export * from './response/user-badge-analytics-response.dto';
 export * from './response/public-achievement-profile-response.dto';
 export * from './response/badge-catalog-item-response.dto';
+export * from './response/achievement-admin-response.dto';
+export * from './response/my-badges-response.dto';
+export * from './request/achievement-admin-query.dto';
