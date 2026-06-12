@@ -9,6 +9,14 @@ export interface CacheProvider {
 
   set(key: string, value: string, ttlMs: number): Promise<void>;
 
+  /**
+   * Gets a cached value or computes and caches it if missing.
+   * @param key Redis key
+   * @param ttlMs TTL in milliseconds
+   * @param fetcher async function to compute the value if not cached
+   */
+  getOrSet<T>(key: string, ttlMs: number, fetcher: () => Promise<T>): Promise<T>;
+
   rpushJson<T>(key: string, item: T): Promise<number>;
 
   lpopJson<T>(key: string): Promise<T | null>;

@@ -1,15 +1,16 @@
-import { IsEnum, IsUUID } from 'class-validator';
+import { IsIn, IsUUID } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
-import { VoteTargetType, VoteValue } from './enums';
+import { DISCUSSION_REPORT_TARGET_TYPE, DISCUSSION_VOTE_VALUE } from '../../domain/types';
+import type { DiscussionReportTargetType, DiscussionVoteValue } from '../../domain/types';
 
 export class VoteDto {
   @ApiProperty({
     description: 'Type of content being voted on',
-    enum: VoteTargetType,
+    enum: DISCUSSION_REPORT_TARGET_TYPE,
     example: 'comment',
   })
-  @IsEnum(VoteTargetType)
-  targetType!: VoteTargetType;
+  @IsIn(DISCUSSION_REPORT_TARGET_TYPE)
+  targetType!: DiscussionReportTargetType;
 
   @ApiProperty({
     description: 'UUID of the thread, comment, or reply being voted on',
@@ -21,21 +22,21 @@ export class VoteDto {
 
   @ApiProperty({
     description: 'Vote value',
-    enum: VoteValue,
+    enum: DISCUSSION_VOTE_VALUE,
     example: 'upvote',
   })
-  @IsEnum(VoteValue)
-  value!: VoteValue;
+  @IsIn(DISCUSSION_VOTE_VALUE)
+  value!: DiscussionVoteValue;
 }
 
 export class RemoveVoteDto {
   @ApiProperty({
     description: 'Type of content the vote belongs to',
-    enum: VoteTargetType,
+    enum: DISCUSSION_REPORT_TARGET_TYPE,
     example: 'comment',
   })
-  @IsEnum(VoteTargetType)
-  targetType!: VoteTargetType;
+  @IsIn(DISCUSSION_REPORT_TARGET_TYPE)
+  targetType!: DiscussionReportTargetType;
 
   @ApiProperty({
     description: 'UUID of the thread, comment, or reply the vote belongs to',

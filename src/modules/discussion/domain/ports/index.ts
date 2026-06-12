@@ -53,6 +53,7 @@ import {
 } from '../types';
 
 export * from './quiz-existence.port';
+export * from './user-existence.port';
 
 export const DISCUSSION_REPOSITORY_PORT = Symbol('DISCUSSION_REPOSITORY_PORT');
 
@@ -119,13 +120,14 @@ export interface DiscussionRepositoryPort {
     limit: number;
   }): Promise<RelatedDiscussionListItem[]>;
   listThreadParticipants(threadId: string): Promise<ThreadParticipantListItem[]>;
+  listThreadSubscribers(threadId: string): Promise<{ userId: string }[]>;
   getPublicDiscussionProfile(userId: string): Promise<PublicDiscussionProfile>;
   getThreadStats(threadId: string): Promise<ThreadStats | null>;
   getMyDiscussionStats(userId: string): Promise<MyDiscussionStats>;
   updateThread(params: UpdateThreadParams): Promise<DiscussionThread>;
   markThreadAsSolved(params: MarkThreadAsSolvedParams): Promise<DiscussionThread>;
   unsolveThread(params: UnsolveThreadParams): Promise<DiscussionThread>;
-  softDeleteThread(params: { threadId: string; authorId: string }): Promise<void>;
+  softDeleteThread(params: { threadId: string; authorId: string }, db?: DrizzleDB): Promise<void>;
   updateThreadStatus(params: {
     threadId: string;
     status: 'open' | 'closed' | 'hidden' | 'deleted';
@@ -148,7 +150,7 @@ export interface DiscussionRepositoryPort {
     commentId: string;
     status: 'visible' | 'hidden' | 'deleted';
   }): Promise<void>;
-  softDeleteCommentsByThread(threadId: string): Promise<void>;
+  softDeleteCommentsByThread(threadId: string, db?: DrizzleDB): Promise<void>;
   incrementCommentRepliesCount(commentId: string, delta: number): Promise<void>;
   updateCommentVotes(
     commentId: string,
@@ -172,6 +174,12 @@ export interface DiscussionRepositoryPort {
     targetType: 'thread' | 'comment' | 'reply',
     targetId: string,
   ): Promise<DiscussionVoteValue | null>;
+  getUserVoteForUpdate(
+    userId: string,
+    targetType: 'thread' | 'comment' | 'reply',
+    targetId: string,
+    db: DrizzleDB,
+  ): Promise<DiscussionVoteValue | null>;
 
   // Reports
   createReport(params: ReportParams): Promise<DiscussionReport>;
@@ -184,4 +192,5 @@ export interface DiscussionRepositoryPort {
 
   // Helpers
   getUsernamesForUsers(userIds: string[]): Promise<Map<string, string>>;
+  transactionally<T>(fn: (tx: DrizzleDB) => Promise<T>): Promise<T>;
 }

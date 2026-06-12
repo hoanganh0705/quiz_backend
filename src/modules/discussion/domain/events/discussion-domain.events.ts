@@ -102,15 +102,45 @@ export interface ReportReviewedEvent {
   readonly timestamp: Date;
 }
 
+export interface CommentMentionedEvent {
+  readonly eventType: 'comment_mentioned';
+  readonly commentId: string;
+  readonly threadId: string;
+  readonly threadTitle: string;
+  readonly mentionedUserId: string;
+  readonly mentionedUsername: string;
+  readonly authorId: string;
+  readonly authorUsername: string;
+  readonly timestamp: Date;
+}
+
+export interface CommentRestoredEvent {
+  readonly eventType: 'comment_restored';
+  readonly commentId: string;
+  readonly threadId: string;
+  readonly authorId: string;
+  readonly timestamp: Date;
+}
+
+export interface ThreadRestoredEvent {
+  readonly eventType: 'thread_restored';
+  readonly threadId: string;
+  readonly authorId: string;
+  readonly timestamp: Date;
+}
+
 export type DiscussionDomainEvent =
   | CommentCreatedEvent
   | CommentDeletedEvent
   | CommentHiddenEvent
+  | CommentMentionedEvent
+  | CommentRestoredEvent
   | DiscussionThreadCreatedEvent
   | DiscussionThreadSolvedEvent
   | ThreadClosedEvent
   | ThreadDeletedEvent
   | ThreadReopenedEvent
+  | ThreadRestoredEvent
   | ThreadHiddenEvent
   | ContentReportedEvent
   | ReportReviewedEvent;
