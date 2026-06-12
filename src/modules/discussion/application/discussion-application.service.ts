@@ -1,6 +1,9 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
+import { DISCUSSION_REPOSITORY_PORT } from '../domain/ports';
+import type { DiscussionRepositoryPort } from '../domain/ports';
 import { DiscussionService } from '../domain/services/discussion.service';
+import { DiscussionModeratorAuditService } from '../infrastructure/audit/discussion-moderator-audit.service';
 import { QuizDiscussionCursorMapper } from '../mappers/quiz-discussion-cursor.mapper';
 import { MyCommentCursorMapper } from '../mappers/my-comment-cursor.mapper';
 import {
@@ -60,7 +63,12 @@ import type {
 
 @Injectable()
 export class DiscussionApplicationService {
-  constructor(private readonly discussionService: DiscussionService) {}
+  constructor(
+    private readonly discussionService: DiscussionService,
+    @Inject(DISCUSSION_REPOSITORY_PORT)
+    private readonly discussionRepository: DiscussionRepositoryPort,
+    private readonly moderatorAudit: DiscussionModeratorAuditService,
+  ) {}
 
   // ─── THREADS ────────────────────────────────────────────────────────────────
 
@@ -270,15 +278,26 @@ export class DiscussionApplicationService {
       nextCursor: string | null;
     };
   }> {
-    const { items, limit, hasNextPage, nextCursor } =
-      await this.discussionService.listCommentsByUser(userId, query);
+    const limit = query.limit ?? 20;
+    const rows = await this.discussionRepository.listMyComments({
+      userId,
+      limit,
+      cursor: query.cursor ?? null,
+    });
+
+    const hasNextPage = rows.length > limit;
+    const items = hasNextPage ? rows.slice(0, limit) : rows;
+    const lastItem = items.at(-1);
 
     return {
       items,
       pagination: {
         limit,
         hasNextPage,
-        nextCursor: nextCursor ? MyCommentCursorMapper.serialize(nextCursor) : null,
+        nextCursor:
+          hasNextPage && lastItem
+            ? MyCommentCursorMapper.serialize({ createdAt: lastItem.createdAt, commentId: lastItem.commentId })
+            : null,
       },
     };
   }
@@ -409,10 +428,14 @@ export class DiscussionApplicationService {
     threadId: string,
     commentId: string,
   ): Promise<DiscussionThread> {
+    const usernames = await this.discussionRepository.getUsernamesForUsers([user.sub]);
+    const solverUsername = usernames.get(user.sub) ?? '';
+
     return this.discussionService.markThreadAsSolved({
       threadId,
       commentId,
       actorId: user.sub,
+      solverUsername,
     });
   }
 
@@ -428,7 +451,25 @@ export class DiscussionApplicationService {
   }
 
   async hideThread(user: JwtPayload, threadId: string): Promise<void> {
-    return this.discussionService.hideThread(threadId, user.sub, user.role);
+    await this.discussionService.hideThread(threadId, user.sub, user.role);
+    await this.moderatorAudit.log({
+      actorId: user.sub,
+      actorRole: user.role,
+      action: 'hide_thread',
+      targetType: 'thread',
+      targetId: threadId,
+    });
+  }
+
+  async restoreThread(user: JwtPayload, threadId: string): Promise<void> {
+    await this.discussionService.restoreThread(threadId, user.sub, user.role);
+    await this.moderatorAudit.log({
+      actorId: user.sub,
+      actorRole: user.role,
+      action: 'restore_thread',
+      targetType: 'thread',
+      targetId: threadId,
+    });
   }
 
   // ─── COMMENTS ───────────────────────────────────────────────────────────────
@@ -481,7 +522,25 @@ export class DiscussionApplicationService {
   }
 
   async hideComment(user: JwtPayload, commentId: string): Promise<void> {
-    return this.discussionService.hideComment(commentId, user.sub, user.role);
+    await this.discussionService.hideComment(commentId, user.sub, user.role);
+    await this.moderatorAudit.log({
+      actorId: user.sub,
+      actorRole: user.role,
+      action: 'hide_comment',
+      targetType: 'comment',
+      targetId: commentId,
+    });
+  }
+
+  async restoreComment(user: JwtPayload, commentId: string): Promise<void> {
+    await this.discussionService.restoreComment(commentId, user.sub, user.role);
+    await this.moderatorAudit.log({
+      actorId: user.sub,
+      actorRole: user.role,
+      action: 'restore_comment',
+      targetType: 'comment',
+      targetId: commentId,
+    });
   }
 
   // ─── VOTES ─────────────────────────────────────────────────────────────────
@@ -536,7 +595,15 @@ export class DiscussionApplicationService {
     status: 'reviewed' | 'dismissed' | 'actioned',
     actionTaken = false,
   ): Promise<void> {
-    return this.discussionService.reviewReport(reportId, user.sub, status, actionTaken);
+    await this.discussionService.reviewReport(reportId, user.sub, status, actionTaken);
+    await this.moderatorAudit.log({
+      actorId: user.sub,
+      actorRole: user.role,
+      action: 'review_report',
+      targetType: 'report',
+      targetId: reportId,
+      result: status,
+    });
   }
 
   async listReports(

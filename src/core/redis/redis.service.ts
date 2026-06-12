@@ -84,6 +84,21 @@ export class RedisService implements CacheProvider, OnModuleDestroy {
     await this.client.set(key, value, 'PX', ttlMs);
   }
 
+  async getOrSet<T>(key: string, ttlMs: number, fetcher: () => Promise<T>): Promise<T> {
+    const cached = await this.get(key);
+    if (cached !== null) {
+      try {
+        return JSON.parse(cached) as T;
+      } catch {
+        // malformed cache entry, fall through to re-fetch
+      }
+    }
+
+    const value = await fetcher();
+    await this.set(key, JSON.stringify(value), ttlMs);
+    return value;
+  }
+
   async rpushJson<T>(key: string, item: T): Promise<number> {
     return this.client.rpush(key, JSON.stringify(item));
   }

@@ -2,6 +2,8 @@ import { ArgumentsHost, Catch, ExceptionFilter, HttpException, HttpStatus } from
 import { ConfigService } from '@nestjs/config';
 import type { Request, Response } from 'express';
 import { PinoLogger } from 'nestjs-pino';
+import type { ProblemDetail } from '@/common/types/problem-detail.type';
+import { RFC7807_TYPE_URIS } from '@/common/types/problem-detail.type';
 
 type RequestWithLogger = Request & {
   id?: string;
@@ -29,7 +31,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
 
     let statusCode = HttpStatus.INTERNAL_SERVER_ERROR;
     let message: string | string[] = 'Internal server error';
-    let error = 'InternalServerError';
+    let errorName = 'InternalServerError';
 
     if (exception instanceof HttpException) {
       statusCode = exception.getStatus();
@@ -37,13 +39,13 @@ export class GlobalExceptionFilter implements ExceptionFilter {
 
       if (typeof exceptionResponse === 'string') {
         message = exceptionResponse;
-        error = exception.name;
+        errorName = exception.name;
       } else if (this.isHttpExceptionResponseShape(exceptionResponse)) {
         message = exceptionResponse.message ?? exception.message;
-        error = exceptionResponse.error ?? exception.name;
+        errorName = exceptionResponse.error ?? exception.name;
       } else {
         message = exception.message;
-        error = exception.name;
+        errorName = exception.name;
       }
 
       if (statusCode >= HttpStatus.INTERNAL_SERVER_ERROR) {
@@ -52,7 +54,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
           method: request.method,
           url: request.url,
           statusCode,
-          error,
+          error: errorName,
           details: message,
         });
       } else {
@@ -61,13 +63,13 @@ export class GlobalExceptionFilter implements ExceptionFilter {
           method: request.method,
           url: request.url,
           statusCode,
-          error,
+          error: errorName,
           details: message,
         });
       }
     } else if (exception instanceof Error) {
       message = isProduction ? 'Internal server error' : exception.message;
-      error = 'InternalServerError';
+      errorName = 'InternalServerError';
 
       if (isProduction) {
         requestLogger.error({
@@ -98,22 +100,21 @@ export class GlobalExceptionFilter implements ExceptionFilter {
 
     if (isProduction && statusCode >= HttpStatus.INTERNAL_SERVER_ERROR) {
       message = 'Internal server error';
-      error = 'InternalServerError';
+      errorName = 'InternalServerError';
     }
 
-    response.status(statusCode).json({
-      data: {
-        statusCode,
-        message,
-        error,
+    const problem: ProblemDetail = {
+      type: RFC7807_TYPE_URIS[statusCode] ?? RFC7807_TYPE_URIS[500],
+      title: errorName,
+      status: statusCode,
+      detail: Array.isArray(message) ? message.join('; ') : message,
+      instance: request.originalUrl ?? request.url,
+      extensions: {
         requestId: request.id,
-        path: request.url,
-        method: request.method,
       },
-      meta: {
-        timestamp: new Date().toISOString(),
-      },
-    });
+    };
+
+    response.status(statusCode).json(problem);
   }
 
   private getRequestLogger(request: RequestWithLogger): Pick<PinoLogger, 'warn' | 'error'> {
