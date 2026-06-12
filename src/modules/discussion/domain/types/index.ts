@@ -6,6 +6,20 @@ export type DiscussionReportTargetType = 'thread' | 'comment' | 'reply';
 export type ThreadSortField = 'created_at' | 'votes_count' | 'comments_count';
 export type SortOrder = 'asc' | 'desc';
 
+// Const objects mirror the type aliases above — single source of truth for both
+// compile-time types (domain/service/repository) and runtime values (DTO validation + Swagger).
+export const DISCUSSION_THREAD_STATUS = ['open', 'closed', 'hidden', 'deleted'] as const;
+export const DISCUSSION_CONTENT_STATUS = ['visible', 'hidden', 'deleted', 'accepted'] as const;
+export const DISCUSSION_VOTE_VALUE = ['upvote', 'downvote'] as const;
+export const DISCUSSION_REPORT_STATUS = ['open', 'reviewed', 'dismissed', 'actioned'] as const;
+export const DISCUSSION_REPORT_TARGET_TYPE = ['thread', 'comment', 'reply'] as const;
+export const THREAD_SORT_FIELD = ['created_at', 'votes_count', 'comments_count'] as const;
+export const SORT_ORDER = ['asc', 'desc'] as const;
+
+// Subset of DISCUSSION_REPORT_STATUS — only valid statuses when reviewing a report
+export const REVIEW_REPORT_STATUS = ['reviewed', 'dismissed', 'actioned'] as const;
+export type ReviewReportStatus = 'reviewed' | 'dismissed' | 'actioned';
+
 export interface DiscussionThreadAuthor {
   userId: string;
   username: string;
@@ -324,6 +338,7 @@ export interface MarkThreadAsSolvedParams {
   threadId: string;
   commentId: string;
   actorId: string;
+  solverUsername: string;
 }
 
 export interface UnsolveThreadParams {

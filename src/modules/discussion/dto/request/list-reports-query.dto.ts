@@ -1,7 +1,8 @@
 import { Type } from 'class-transformer';
-import { IsEnum, IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
+import { IsIn, IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { ReportStatus } from './enums';
+import { DISCUSSION_REPORT_STATUS } from '../../domain/types';
+import type { DiscussionReportStatus } from '../../domain/types';
 
 export class ListReportsQueryDto {
   @ApiPropertyOptional({
@@ -28,11 +29,11 @@ export class ListReportsQueryDto {
 
   @ApiPropertyOptional({
     description: 'Filter by report status',
-    enum: ReportStatus,
+    enum: DISCUSSION_REPORT_STATUS,
     example: 'open',
     nullable: true,
   })
   @IsOptional()
-  @IsEnum(ReportStatus)
-  status?: ReportStatus;
+  @IsIn(DISCUSSION_REPORT_STATUS)
+  status?: DiscussionReportStatus;
 }

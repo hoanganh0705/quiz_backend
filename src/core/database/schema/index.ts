@@ -109,6 +109,13 @@ export const discussionThreads = pgTable(
     index('idx_discussion_threads_search_vector')
       .using('gin', table.discussionSearchVector)
       .where(sql`deleted_at IS NULL`),
+    index('idx_discussion_threads_status_created')
+      .using(
+        'btree',
+        table.status.asc().nullsLast().op('enum_ops'),
+        table.createdAt.desc().nullsLast().op('timestamptz_ops'),
+      )
+      .where(sql`deleted_at IS NULL`),
     index('idx_discussion_threads_trending')
       .using(
         'btree',

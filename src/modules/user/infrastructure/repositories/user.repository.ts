@@ -18,7 +18,7 @@ import {
   userRanking,
   users,
 } from '@/core/database/schema';
-import { and, count, desc, eq, isNull, or, sql } from 'drizzle-orm';
+import { and, count, desc, eq, inArray, isNull, or, sql } from 'drizzle-orm';
 import type { UserAnalytics } from '../../domain/types/user-analytics';
 import type {
   MyTournamentAnalyticsRow,
@@ -28,6 +28,7 @@ import type {
   UserActivityRow,
   UserBadgeRow,
   UserMeRow,
+  UserPublicRow,
   UserRankingRow,
   UserRepositoryPort,
 } from '../../domain/ports/user-repository.port';
@@ -546,5 +547,27 @@ export class UserRepository implements UserRepositoryPort {
         bio: profile?.bio ?? null,
       };
     });
+  }
+
+  async findByUsernames(usernames: string[]): Promise<UserPublicRow[]> {
+    if (usernames.length === 0) return [];
+
+    const rows = await this.db
+      .select({
+        userId: users.userId,
+        username: users.username,
+        displayName: userProfiles.displayName,
+        avatarUrl: userProfiles.avatarUrl,
+      })
+      .from(users)
+      .leftJoin(userProfiles, eq(users.userId, userProfiles.userId))
+      .where(and(inArray(users.username, usernames), isNull(users.deletedAt)));
+
+    return rows.map((r) => ({
+      userId: r.userId,
+      username: r.username,
+      displayName: r.displayName ?? null,
+      avatarUrl: r.avatarUrl ?? null,
+    }));
   }
 }

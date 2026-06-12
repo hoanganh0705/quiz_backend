@@ -51,7 +51,6 @@ import {
   DiscussionSavedThreadActionResponseDto,
   DiscussionThreadSolveResponseDto,
   DiscussionThreadUnsolveResponseDto,
-  ActionResponseDto,
 } from '@/modules/discussion/dto/response';
 import {
   UpdateThreadDto,
@@ -71,6 +70,7 @@ import {
   ListRelatedDiscussionsQueryDto,
   SolveThreadDto,
 } from '@/modules/discussion/dto/request';
+import type { DiscussionReportStatus } from '@/modules/discussion/domain/types';
 import { DiscussionDomainExceptionFilter } from './filters/discussion-domain-exception.filter';
 import { TrendingDiscussionCursorMapper } from '@/modules/discussion/mappers/trending-discussion-cursor.mapper';
 import { UnansweredDiscussionCursorMapper } from '@/modules/discussion/mappers/unanswered-discussion-cursor.mapper';
@@ -395,30 +395,30 @@ export class DiscussionController {
   @Post('threads/:threadId/close')
   @ApiAuth()
   @ApiOperation({ summary: 'Close a thread (author only)' })
-  @ApiOkResponse({ description: 'Thread closed' })
+  @ApiNoContent()
   @ApiNotFoundResponse({ description: 'Thread not found' })
   @ApiForbiddenResponse({ description: 'Not the thread author' })
+  @HttpCode(HttpStatus.NO_CONTENT)
   async closeThread(
     @CurrentUser() user: JwtPayload,
     @Param('threadId', new ParseUUIDPipe()) threadId: string,
-  ): Promise<ActionResponseDto> {
+  ): Promise<void> {
     await this.discussionService.closeThread(user, threadId);
-    return { message: 'Thread closed' };
   }
 
   @Throttle({ default: { limit: 30, ttl: 60_000 } })
   @Post('threads/:threadId/reopen')
   @ApiAuth()
   @ApiOperation({ summary: 'Reopen a closed thread (author only)' })
-  @ApiOkResponse({ description: 'Thread reopened' })
+  @ApiNoContent()
   @ApiNotFoundResponse({ description: 'Thread not found' })
   @ApiForbiddenResponse({ description: 'Not the thread author' })
+  @HttpCode(HttpStatus.NO_CONTENT)
   async reopenThread(
     @CurrentUser() user: JwtPayload,
     @Param('threadId', new ParseUUIDPipe()) threadId: string,
-  ): Promise<ActionResponseDto> {
+  ): Promise<void> {
     await this.discussionService.reopenThread(user, threadId);
-    return { message: 'Thread reopened' };
   }
 
   @Throttle({ default: { limit: 20, ttl: 60_000 } })
@@ -501,15 +501,31 @@ export class DiscussionController {
   @ApiAuth()
   @Roles('admin', 'moderator')
   @ApiOperation({ summary: 'Hide a thread (moderator only)' })
-  @ApiOkResponse({ description: 'Thread hidden' })
+  @ApiNoContent()
   @ApiNotFoundResponse({ description: 'Thread not found' })
   @ApiForbiddenResponse({ description: 'Not a moderator' })
+  @HttpCode(HttpStatus.NO_CONTENT)
   async hideThread(
     @CurrentUser() user: JwtPayload,
     @Param('threadId', new ParseUUIDPipe()) threadId: string,
-  ): Promise<ActionResponseDto> {
+  ): Promise<void> {
     await this.discussionService.hideThread(user, threadId);
-    return { message: 'Thread hidden' };
+  }
+
+  @Throttle({ default: { limit: 30, ttl: 60_000 } })
+  @Post('threads/:threadId/restore')
+  @ApiAuth()
+  @Roles('admin', 'moderator')
+  @ApiOperation({ summary: 'Restore a hidden thread (moderator only)' })
+  @ApiNoContent()
+  @ApiNotFoundResponse({ description: 'Thread not found' })
+  @ApiForbiddenResponse({ description: 'Not a moderator' })
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async restoreThread(
+    @CurrentUser() user: JwtPayload,
+    @Param('threadId', new ParseUUIDPipe()) threadId: string,
+  ): Promise<void> {
+    await this.discussionService.restoreThread(user, threadId);
   }
 
   // ─── COMMENTS ─────────────────────────────────────────────────────────────
@@ -605,15 +621,31 @@ export class DiscussionController {
   @ApiAuth()
   @Roles('admin', 'moderator')
   @ApiOperation({ summary: 'Hide a comment (moderator only)' })
-  @ApiOkResponse({ description: 'Comment hidden' })
+  @ApiNoContent()
   @ApiNotFoundResponse({ description: 'Comment not found' })
   @ApiForbiddenResponse({ description: 'Not a moderator' })
+  @HttpCode(HttpStatus.NO_CONTENT)
   async hideComment(
     @CurrentUser() user: JwtPayload,
     @Param('commentId', new ParseUUIDPipe()) commentId: string,
-  ): Promise<ActionResponseDto> {
+  ): Promise<void> {
     await this.discussionService.hideComment(user, commentId);
-    return { message: 'Comment hidden' };
+  }
+
+  @Throttle({ default: { limit: 30, ttl: 60_000 } })
+  @Post('comments/:commentId/restore')
+  @ApiAuth()
+  @Roles('admin', 'moderator')
+  @ApiOperation({ summary: 'Restore a hidden comment (moderator only)' })
+  @ApiNoContent()
+  @ApiNotFoundResponse({ description: 'Comment not found' })
+  @ApiForbiddenResponse({ description: 'Not a moderator' })
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async restoreComment(
+    @CurrentUser() user: JwtPayload,
+    @Param('commentId', new ParseUUIDPipe()) commentId: string,
+  ): Promise<void> {
+    await this.discussionService.restoreComment(user, commentId);
   }
 
   // ─── VOTES ───────────────────────────────────────────────────────────────
@@ -622,27 +654,26 @@ export class DiscussionController {
   @Post('vote')
   @ApiAuth()
   @ApiOperation({ summary: 'Cast or toggle a vote on a thread, comment, or reply' })
-  @ApiOkResponse({ description: 'Vote recorded' })
+  @ApiNoContent()
   @ApiNotFoundResponse({ description: 'Target not found' })
   @ApiForbiddenResponse({ description: 'Cannot vote on own content' })
   @ApiBadRequestResponse({ description: 'Validation failed' })
   @ApiValidationRequest()
-  async vote(@CurrentUser() user: JwtPayload, @Body() dto: VoteDto): Promise<ActionResponseDto> {
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async vote(@CurrentUser() user: JwtPayload, @Body() dto: VoteDto): Promise<void> {
     await this.discussionService.vote(user, dto.targetType, dto.targetId, dto.value);
-    return { message: 'Vote recorded' };
   }
 
   @Throttle({ default: { limit: 20, ttl: 60_000 } })
   @Delete('vote')
   @ApiAuth()
   @ApiOperation({ summary: 'Remove a vote from a thread, comment, or reply' })
-  @ApiOkResponse({ description: 'Vote removed' })
+  @ApiNoContent()
   async removeVote(
     @CurrentUser() user: JwtPayload,
     @Body() dto: RemoveVoteDto,
-  ): Promise<ActionResponseDto> {
+  ): Promise<void> {
     await this.discussionService.removeVote(user, dto.targetType, dto.targetId);
-    return { message: 'Vote removed' };
   }
 
   // ─── REPORTS ─────────────────────────────────────────────────────────────
@@ -651,16 +682,17 @@ export class DiscussionController {
   @Post('report')
   @ApiAuth()
   @ApiOperation({ summary: 'Report a thread, comment, or reply for moderation review' })
-  @ApiOkResponse({ description: 'Report submitted' })
+  @ApiNoContent()
   @ApiNotFoundResponse({ description: 'Target not found' })
   @ApiForbiddenResponse({ description: 'Cannot report own content' })
   @ApiConflictResponse({ description: 'You have already reported this content' })
   @ApiBadRequestResponse({ description: 'Validation failed' })
   @ApiValidationRequest()
+  @HttpCode(HttpStatus.NO_CONTENT)
   async report(
     @CurrentUser() user: JwtPayload,
     @Body() dto: CreateReportDto,
-  ): Promise<ActionResponseDto> {
+  ): Promise<void> {
     await this.discussionService.report(
       user,
       dto.targetType,
@@ -668,7 +700,6 @@ export class DiscussionController {
       dto.reason,
       dto.details ?? null,
     );
-    return { message: 'Report submitted' };
   }
 
   @Throttle({ default: { limit: 20, ttl: 60_000 } })
@@ -676,18 +707,18 @@ export class DiscussionController {
   @ApiAuth()
   @Roles('admin', 'moderator')
   @ApiOperation({ summary: 'Review and resolve a report (moderator only)' })
-  @ApiOkResponse({ description: 'Report reviewed' })
+  @ApiNoContent()
   @ApiNotFoundResponse({ description: 'Report not found' })
   @ApiForbiddenResponse({ description: 'Not a moderator' })
   @ApiBadRequestResponse({ description: 'Validation failed' })
   @ApiValidationRequest()
+  @HttpCode(HttpStatus.NO_CONTENT)
   async reviewReport(
     @CurrentUser() user: JwtPayload,
     @Param('reportId', new ParseUUIDPipe()) reportId: string,
     @Body() dto: ReviewReportDto,
-  ): Promise<ActionResponseDto> {
+  ): Promise<void> {
     await this.discussionService.reviewReport(user, reportId, dto.status, dto.actionTaken ?? false);
-    return { message: 'Report reviewed' };
   }
 
   @Get('reports')

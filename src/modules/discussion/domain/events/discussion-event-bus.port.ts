@@ -9,9 +9,12 @@ import type {
   CommentCreatedEvent,
   CommentDeletedEvent,
   CommentHiddenEvent,
+  CommentMentionedEvent,
+  CommentRestoredEvent,
   ThreadClosedEvent,
   ThreadDeletedEvent,
   ThreadReopenedEvent,
+  ThreadRestoredEvent,
   ThreadHiddenEvent,
   ContentReportedEvent,
   DiscussionThreadCreatedEvent,
@@ -25,11 +28,14 @@ export interface DiscussionDomainEventBusPort {
   emitCommentCreated(event: CommentCreatedEvent): void;
   emitCommentDeleted(event: CommentDeletedEvent): void;
   emitCommentHidden(event: CommentHiddenEvent): void;
+  emitCommentMentioned(event: CommentMentionedEvent): void;
+  emitCommentRestored(event: CommentRestoredEvent): void;
   emitThreadCreated(event: DiscussionThreadCreatedEvent): void;
   emitThreadSolved(event: DiscussionThreadSolvedEvent): void;
   emitThreadClosed(event: ThreadClosedEvent): void;
   emitThreadDeleted(event: ThreadDeletedEvent): void;
   emitThreadReopened(event: ThreadReopenedEvent): void;
+  emitThreadRestored(event: ThreadRestoredEvent): void;
   emitThreadHidden(event: ThreadHiddenEvent): void;
   emitContentReported(event: ContentReportedEvent): void;
   emitReportReviewed(event: ReportReviewedEvent): void;

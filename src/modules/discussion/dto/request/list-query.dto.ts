@@ -1,7 +1,8 @@
 import { Type } from 'class-transformer';
-import { IsEnum, IsInt, IsOptional, IsString, IsUUID, Max, MaxLength, Min } from 'class-validator';
+import { IsInt, IsIn, IsOptional, IsString, IsUUID, Max, MaxLength, Min } from 'class-validator';
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { ThreadSortField, SortOrder, ThreadStatus } from './enums';
+import type { ThreadSortField, SortOrder, DiscussionThreadStatus } from '../../domain/types';
+import { THREAD_SORT_FIELD, SORT_ORDER, DISCUSSION_THREAD_STATUS } from '../../domain/types';
 
 export class ListThreadsQueryDto {
   @ApiPropertyOptional({
@@ -49,34 +50,34 @@ export class ListThreadsQueryDto {
 
   @ApiPropertyOptional({
     description: 'Filter by thread status',
-    enum: ['open', 'closed', 'hidden', 'deleted'],
+    enum: DISCUSSION_THREAD_STATUS,
     example: 'open',
     nullable: true,
   })
   @IsOptional()
-  @IsEnum(ThreadStatus)
-  status?: ThreadStatus;
+  @IsIn(DISCUSSION_THREAD_STATUS)
+  status?: DiscussionThreadStatus;
 
   @ApiPropertyOptional({
     description: 'Sort field',
-    enum: ['created_at', 'votes_count', 'comments_count'],
+    enum: THREAD_SORT_FIELD,
     default: 'created_at',
     example: 'created_at',
     nullable: true,
   })
   @IsOptional()
-  @IsEnum(ThreadSortField)
+  @IsIn(THREAD_SORT_FIELD)
   sortBy?: ThreadSortField;
 
   @ApiPropertyOptional({
     description: 'Sort direction',
-    enum: ['asc', 'desc'],
+    enum: SORT_ORDER,
     default: 'desc',
     example: 'desc',
     nullable: true,
   })
   @IsOptional()
-  @IsEnum(SortOrder)
+  @IsIn(SORT_ORDER)
   sortOrder?: SortOrder;
 }
 
