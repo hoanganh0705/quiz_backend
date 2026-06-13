@@ -15,6 +15,11 @@ import type {
   SocialDomainEvent,
   FriendRequestSentEvent,
   FriendRequestAcceptedEvent,
+  FriendRequestRejectedEvent,
+  FriendRequestCancelledEvent,
+  FriendRemovedEvent,
+  UserBlockedEvent,
+  UserUnblockedEvent,
   UserFollowedEvent,
   UserUnfollowedEvent,
 } from '../../domain/events/social-domain.events';
@@ -64,11 +69,25 @@ export class SocialNotificationListener implements OnModuleInit, OnModuleDestroy
         await this.handleUserUnfollowed(event);
         break;
 
-      default:
-        this.logger.debug({
-          event: 'unhandled_social_notification_event',
-          eventType: event.eventType,
-        });
+      case 'friend_request_rejected':
+        await this.handleFriendRequestRejected(event);
+        break;
+
+      case 'friend_request_cancelled':
+        await this.handleFriendRequestCancelled(event);
+        break;
+
+      case 'friend_removed':
+        await this.handleFriendRemoved(event);
+        break;
+
+      case 'user_blocked':
+        await this.handleUserBlocked(event);
+        break;
+
+      case 'user_unblocked':
+        await this.handleUserUnblocked(event);
+        break;
     }
   }
 
@@ -192,6 +211,159 @@ export class SocialNotificationListener implements OnModuleInit, OnModuleDestroy
         event: 'user_unfollowed_notification_failed',
         followerId: event.followerId,
         followingId: event.followingId,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
+  }
+
+  private async handleFriendRequestRejected(event: FriendRequestRejectedEvent): Promise<void> {
+    try {
+      const title = 'Friend Request Declined';
+      const body = `Your friend request was declined`;
+
+      await this.channelService.send({
+        userId: event.requesterId,
+        type: 'friend_request',
+        title,
+        body,
+        metadata: {
+          friendshipId: event.friendshipId,
+        },
+      });
+
+      this.logger.info({
+        event: 'friend_request_rejected_notification_sent',
+        requesterId: event.requesterId,
+        addresseeId: event.addresseeId,
+        friendshipId: event.friendshipId,
+      });
+    } catch (error) {
+      this.logger.error({
+        event: 'friend_request_rejected_notification_failed',
+        requesterId: event.requesterId,
+        addresseeId: event.addresseeId,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
+  }
+
+  private async handleFriendRequestCancelled(event: FriendRequestCancelledEvent): Promise<void> {
+    try {
+      const title = 'Friend Request Cancelled';
+      const body = `A friend request sent to you was cancelled`;
+
+      await this.channelService.send({
+        userId: event.addresseeId,
+        type: 'friend_request',
+        title,
+        body,
+        metadata: {
+          friendshipId: event.friendshipId,
+        },
+      });
+
+      this.logger.info({
+        event: 'friend_request_cancelled_notification_sent',
+        requesterId: event.requesterId,
+        addresseeId: event.addresseeId,
+        friendshipId: event.friendshipId,
+      });
+    } catch (error) {
+      this.logger.error({
+        event: 'friend_request_cancelled_notification_failed',
+        requesterId: event.requesterId,
+        addresseeId: event.addresseeId,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
+  }
+
+  private async handleFriendRemoved(event: FriendRemovedEvent): Promise<void> {
+    try {
+      const title = 'Friend Removed';
+      const body = `A friend removed you from their friends list`;
+
+      await this.channelService.send({
+        userId: event.friendId,
+        type: 'friend_accepted',
+        title,
+        body,
+        metadata: {
+          userId: event.userId,
+        },
+      });
+
+      this.logger.info({
+        event: 'friend_removed_notification_sent',
+        userId: event.userId,
+        friendId: event.friendId,
+      });
+    } catch (error) {
+      this.logger.error({
+        event: 'friend_removed_notification_failed',
+        userId: event.userId,
+        friendId: event.friendId,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
+  }
+
+  private async handleUserBlocked(event: UserBlockedEvent): Promise<void> {
+    try {
+      const title = 'You Have Been Blocked';
+      const body = `You have been blocked by a user`;
+
+      await this.channelService.send({
+        userId: event.blockedId,
+        type: 'friend_request',
+        title,
+        body,
+        metadata: {
+          blockerId: event.blockerId,
+          reason: event.reason,
+        },
+      });
+
+      this.logger.info({
+        event: 'user_blocked_notification_sent',
+        blockerId: event.blockerId,
+        blockedId: event.blockedId,
+      });
+    } catch (error) {
+      this.logger.error({
+        event: 'user_blocked_notification_failed',
+        blockerId: event.blockerId,
+        blockedId: event.blockedId,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
+  }
+
+  private async handleUserUnblocked(event: UserUnblockedEvent): Promise<void> {
+    try {
+      const title = 'You Have Been Unblocked';
+      const body = `You have been unblocked by a user`;
+
+      await this.channelService.send({
+        userId: event.blockedId,
+        type: 'friend_request',
+        title,
+        body,
+        metadata: {
+          blockerId: event.blockerId,
+        },
+      });
+
+      this.logger.info({
+        event: 'user_unblocked_notification_sent',
+        blockerId: event.blockerId,
+        blockedId: event.blockedId,
+      });
+    } catch (error) {
+      this.logger.error({
+        event: 'user_unblocked_notification_failed',
+        blockerId: event.blockerId,
+        blockedId: event.blockedId,
         error: error instanceof Error ? error.message : 'Unknown error',
       });
     }

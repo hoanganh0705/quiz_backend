@@ -7,7 +7,7 @@
 
 import { Inject, Injectable, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
-import { createCorrelationId } from '@/common/interceptors/correlation-id';
+import { getCorrelationId, createCorrelationId } from '@/common/interceptors/correlation-id';
 import {
   ACHIEVEMENT_DOMAIN_EVENT_BUS,
   AchievementDomainEventBus,
@@ -73,7 +73,7 @@ export class AchievementNotificationListener implements OnModuleInit, OnModuleDe
   }
 
   private async handleAchievementAwarded(event: PublishedAchievementAwardedEvent): Promise<void> {
-    const correlationId = createCorrelationId();
+    const correlationId = getCorrelationId() ?? createCorrelationId();
 
     try {
       const title = 'Achievement Unlocked';
@@ -109,7 +109,7 @@ export class AchievementNotificationListener implements OnModuleInit, OnModuleDe
   }
 
   private async handleBadgeEarned(event: PublishedBadgeEarnedEvent): Promise<void> {
-    const correlationId = createCorrelationId();
+    const correlationId = getCorrelationId() ?? createCorrelationId();
 
     try {
       const title = 'Badge Earned';
@@ -141,7 +141,7 @@ export class AchievementNotificationListener implements OnModuleInit, OnModuleDe
   }
 
   private async handleBadgeRevoked(event: PublishedBadgeRevokedEvent): Promise<void> {
-    const correlationId = createCorrelationId();
+    const correlationId = getCorrelationId() ?? createCorrelationId();
 
     try {
       const title = 'Badge Revoked';
@@ -176,7 +176,7 @@ export class AchievementNotificationListener implements OnModuleInit, OnModuleDe
   }
 
   private async handleStreakMilestone(event: PublishedStreakMilestoneEvent): Promise<void> {
-    const correlationId = createCorrelationId();
+    const correlationId = getCorrelationId() ?? createCorrelationId();
 
     try {
       const title = 'Streak Milestone';

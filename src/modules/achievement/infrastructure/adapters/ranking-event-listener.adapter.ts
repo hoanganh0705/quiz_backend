@@ -2,21 +2,14 @@
  * Ranking Event Achievement Listener Adapter
  *
  * Listens to Ranking domain events and triggers achievement evaluation.
- * This adapter bridges the Ranking domain event bus to Achievement domain services.
- *
- * Subscribes directly to the internal RankingDomainEventBus since both run in
- * the same process — no need for an intermediate adapter. Cross-module consumers
- * in separate processes should use SharedRankingEventBusAdapter + SHARED_RANKING_EVENT_BUS.
+ * Subscribes to SHARED_RANKING_EVENT_BUS for cross-module events.
  */
 
 import { Inject, Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
-import { createCorrelationId } from '@/common/interceptors/correlation-id';
-import {
-  RANKING_DOMAIN_EVENT_BUS,
-  type RankingDomainEventBusPort,
-} from '@/modules/ranking';
-import type { PublishedRankingDomainEvent } from '@/modules/ranking';
+import { getCorrelationId, createCorrelationId } from '@/common/interceptors/correlation-id';
+import { SHARED_RANKING_EVENT_BUS } from '@/common/events/ranking-shared-events';
+import type { SharedRankingEventBusPort, SharedRankingDomainEvent } from '@/common/events/ranking-shared-events';
 import { RankAchievementService } from '../../domain/services/rank-achievement.service';
 
 @Injectable()
@@ -25,8 +18,8 @@ export class RankingEventAchievementListenerAdapter implements OnModuleInit, OnM
 
   constructor(
     private readonly rankAchievementService: RankAchievementService,
-    @Inject(RANKING_DOMAIN_EVENT_BUS)
-    private readonly eventBus: RankingDomainEventBusPort,
+    @Inject(SHARED_RANKING_EVENT_BUS)
+    private readonly eventBus: SharedRankingEventBusPort,
     @InjectPinoLogger(RankingEventAchievementListenerAdapter.name)
     private readonly logger: PinoLogger,
   ) {}
@@ -40,7 +33,7 @@ export class RankingEventAchievementListenerAdapter implements OnModuleInit, OnM
   }
 
   private subscribe(): void {
-    this.unsubscribe = this.eventBus.subscribe((event: PublishedRankingDomainEvent) => {
+    this.unsubscribe = this.eventBus.subscribe((event: SharedRankingDomainEvent) => {
       void this.handleEvent(event);
     });
 
@@ -49,8 +42,8 @@ export class RankingEventAchievementListenerAdapter implements OnModuleInit, OnM
     });
   }
 
-  private async handleEvent(event: PublishedRankingDomainEvent): Promise<void> {
-    const correlationId = createCorrelationId();
+  private async handleEvent(event: SharedRankingDomainEvent): Promise<void> {
+    const correlationId = getCorrelationId() ?? createCorrelationId();
 
     switch (event.eventType) {
       case 'rank.changed':
@@ -68,7 +61,7 @@ export class RankingEventAchievementListenerAdapter implements OnModuleInit, OnM
   }
 
   private async handleRankChanged(
-    event: Extract<PublishedRankingDomainEvent, { eventType: 'rank.changed' }>,
+    event: Extract<SharedRankingDomainEvent, { eventType: 'rank.changed' }>,
     correlationId: string,
   ): Promise<void> {
     try {
@@ -101,7 +94,7 @@ export class RankingEventAchievementListenerAdapter implements OnModuleInit, OnM
   }
 
   private async handlePeakRankAchieved(
-    event: Extract<PublishedRankingDomainEvent, { eventType: 'peak.rank.achieved' }>,
+    event: Extract<SharedRankingDomainEvent, { eventType: 'peak.rank.achieved' }>,
     correlationId: string,
   ): Promise<void> {
     try {
@@ -133,7 +126,7 @@ export class RankingEventAchievementListenerAdapter implements OnModuleInit, OnM
   }
 
   private handleRankingMilestone(
-    event: Extract<PublishedRankingDomainEvent, { eventType: 'ranking.milestone' }>,
+    event: Extract<SharedRankingDomainEvent, { eventType: 'ranking.milestone' }>,
     correlationId: string,
   ): void {
     this.logger.debug({

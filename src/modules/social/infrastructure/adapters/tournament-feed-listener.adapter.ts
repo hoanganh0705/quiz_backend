@@ -6,6 +6,7 @@ import {
 } from '@/modules/tournament/domain/ports/tournament-domain-event-bus.port';
 import type { TournamentDomainEvent } from '@/modules/tournament/domain/events';
 import { SocialService } from '../../domain/services/social.service';
+import { getCorrelationId, createCorrelationId } from '@/common/interceptors/correlation-id';
 
 @Injectable()
 export class TournamentFeedListenerAdapter implements OnModuleInit, OnModuleDestroy {
@@ -31,6 +32,8 @@ export class TournamentFeedListenerAdapter implements OnModuleInit, OnModuleDest
   }
 
   private async handleEvent(event: TournamentDomainEvent): Promise<void> {
+    const correlationId = getCorrelationId() ?? createCorrelationId();
+
     switch (event.eventType) {
       case 'tournament.joined':
         await this.socialService.recordFeedActivity({
@@ -45,6 +48,7 @@ export class TournamentFeedListenerAdapter implements OnModuleInit, OnModuleDest
       case 'tournament.participant.withdrawn':
         this.logger.debug({
           event: 'social_feed_ignoring_tournament_withdrawn',
+          correlationId,
           tournamentId: event.tournamentId,
           userId: event.userId,
         });

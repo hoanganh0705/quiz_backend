@@ -52,9 +52,11 @@ import { QuizQuestionRepository } from './infrastructure/repositories/quiz-quest
 
 // Cross-module imports (for shared event buses)
 import { AttemptModule } from '@/modules/attempt/attempt.module';
+import { ReviewModule } from '@/modules/review/review.module';
+import { ReviewEventListenerAdapter } from './domain/events/review-event-listener.adapter';
 
 @Module({
-  imports: [DatabaseModule, forwardRef(() => AttemptModule)],
+  imports: [DatabaseModule, forwardRef(() => AttemptModule), forwardRef(() => ReviewModule)],
   providers: [
     // Application Services
     QuizApplicationService,
@@ -82,6 +84,7 @@ import { AttemptModule } from '@/modules/attempt/attempt.module';
     QuizDomainEventBootstrapService,
     QuizAttemptEventHandler,
     QuizAttemptEventBootstrapService,
+    ReviewEventListenerAdapter,
 
     // Exception Filter
     QuizDomainExceptionFilter,
