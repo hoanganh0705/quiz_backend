@@ -7,7 +7,7 @@
 
 import { Inject, Injectable, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
-import { createCorrelationId } from '@/common/interceptors/correlation-id';
+import { getCorrelationId, createCorrelationId } from '@/common/interceptors/correlation-id';
 import { RuleEngineService } from '../../domain/services/rule-engine.service';
 import { INSTANCE_DOMAIN_EVENT_BUS } from '@/modules/instance/domain/events/instance-domain-event-bus.port';
 import type { InstanceDomainEventBusPort } from '@/modules/instance/domain/events/instance-domain-event-bus.port';
@@ -69,7 +69,7 @@ export class AchievementInstanceEventListenerAdapter implements OnModuleInit, On
   }
 
   private async handleInstanceCreated(event: InstanceCreatedEvent): Promise<void> {
-    const correlationId = createCorrelationId();
+    const correlationId = getCorrelationId() ?? createCorrelationId();
 
     try {
       const results = await this.ruleEngineService.evaluateEvent({
@@ -101,7 +101,7 @@ export class AchievementInstanceEventListenerAdapter implements OnModuleInit, On
   }
 
   private async handlePlayerFinished(event: PlayerFinishedEvent): Promise<void> {
-    const correlationId = createCorrelationId();
+    const correlationId = getCorrelationId() ?? createCorrelationId();
 
     try {
       const results = await this.ruleEngineService.evaluateEvent({

@@ -1,10 +1,10 @@
 import { Inject, Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import {
-  RANKING_DOMAIN_EVENT_BUS,
-  type PublishedRankingDomainEvent,
-  type RankingDomainEventBusPort,
-} from '@/modules/ranking/domain/ports/ranking-event-bus.port';
+  SHARED_RANKING_EVENT_BUS,
+  type SharedRankingEventBusPort,
+  type SharedRankingDomainEvent,
+} from '@/common/events/ranking-shared-events';
 import { SocialService } from '../../domain/services/social.service';
 
 @Injectable()
@@ -12,8 +12,8 @@ export class RankingFeedListenerAdapter implements OnModuleInit, OnModuleDestroy
   private unsubscribe: (() => void) | null = null;
 
   constructor(
-    @Inject(RANKING_DOMAIN_EVENT_BUS)
-    private readonly rankingEventBus: RankingDomainEventBusPort,
+    @Inject(SHARED_RANKING_EVENT_BUS)
+    private readonly rankingEventBus: SharedRankingEventBusPort,
     private readonly socialService: SocialService,
     @InjectPinoLogger(RankingFeedListenerAdapter.name)
     private readonly logger: PinoLogger,
@@ -30,7 +30,7 @@ export class RankingFeedListenerAdapter implements OnModuleInit, OnModuleDestroy
     this.unsubscribe = null;
   }
 
-  private async handleEvent(event: PublishedRankingDomainEvent): Promise<void> {
+  private async handleEvent(event: SharedRankingDomainEvent): Promise<void> {
     if (event.eventType === 'ranking.milestone') {
       await this.socialService.recordFeedActivity({
         userId: event.userId,

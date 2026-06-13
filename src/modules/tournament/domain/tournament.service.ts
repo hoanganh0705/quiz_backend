@@ -433,7 +433,9 @@ export class TournamentService {
       participantId: participant.participantId,
     });
 
-    this.eventBus.publish(new TournamentJoinedEvent(tournamentId, user.sub, new Date(nowIso)));
+    this.eventBus.publish(
+      new TournamentJoinedEvent(tournamentId, user.sub, tournament.title, new Date(nowIso)),
+    );
 
     return participant;
   }

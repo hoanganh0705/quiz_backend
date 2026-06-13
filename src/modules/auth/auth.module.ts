@@ -68,8 +68,10 @@ import { OAuthIdentityResolver } from './domain/oauth/oauth-identity-resolver';
 import { OAuthAccountLinker } from './domain/oauth/oauth-account-linker';
 import { OAuthSessionIssuer } from './domain/oauth/oauth-session-issuer';
 import { OAuthEventService } from './domain/oauth/oauth-event.service';
+import { NotificationModule } from '@/modules/notification/notification.module';
+import { AuthSecurityNotificationService } from '@/modules/notification/domain/services/auth-security-notification.service';
 @Module({
-  imports: [CommonModule, DatabaseModule, RedisModule, EmailModule],
+  imports: [CommonModule, DatabaseModule, RedisModule, EmailModule, NotificationModule],
   controllers: [AuthController],
   providers: [
     // Application
@@ -134,6 +136,7 @@ import { OAuthEventService } from './domain/oauth/oauth-event.service';
     // OAuth infrastructure and services
     OutboxAdapter,
     OutboxProcessorService,
+    AuthSecurityNotificationService,
     GoogleOAuthConfig,
     GoogleOAuthAdapter,
     OAuthAccountRepository,

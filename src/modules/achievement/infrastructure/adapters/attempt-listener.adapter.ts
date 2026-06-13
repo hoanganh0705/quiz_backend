@@ -7,7 +7,7 @@
 
 import { Inject, Injectable, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
-import { createCorrelationId } from '@/common/interceptors/correlation-id';
+import { getCorrelationId, createCorrelationId } from '@/common/interceptors/correlation-id';
 import { RuleEngineService } from '../../domain/services/rule-engine.service';
 import { ATTEMPT_DOMAIN_EVENT_BUS } from '@/modules/attempt/domain/events/attempt-domain-event-bus.port';
 import type { AttemptDomainEventBusPort } from '@/modules/attempt/domain/events/attempt-domain-event-bus.port';
@@ -128,7 +128,7 @@ export class AchievementAttemptEventListenerAdapter implements OnModuleInit, OnM
   }
 
   private async handleQuizMilestone(event: QuizMilestoneEvent): Promise<void> {
-    const correlationId = createCorrelationId();
+    const correlationId = getCorrelationId() ?? createCorrelationId();
 
     try {
       const results = await this.ruleEngineService.evaluateEvent({
