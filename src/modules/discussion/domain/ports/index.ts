@@ -193,4 +193,9 @@ export interface DiscussionRepositoryPort {
   // Helpers
   getUsernamesForUsers(userIds: string[]): Promise<Map<string, string>>;
   transactionally<T>(fn: (tx: DrizzleDB) => Promise<T>): Promise<T>;
+
+  // Author/reporter lookups for notification listeners
+  getCommentAuthor(commentId: string): Promise<{ authorId: string } | null>;
+  getThreadAuthor(threadId: string): Promise<{ authorId: string } | null>;
+  getReportReporter(reportId: string): Promise<{ reporterId: string } | null>;
 }

@@ -6,7 +6,7 @@
 
 import { Injectable } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
-import { createCorrelationId } from '@/common/interceptors/correlation-id';
+import { correlationIdStorage, createCorrelationId, getCorrelationId } from '@/common/interceptors/correlation-id';
 import type { SocialDomainEventBusPort, SocialDomainEvent } from './social-event-bus.port';
 import type {
   FriendRequestSentEvent,
@@ -40,13 +40,17 @@ export class SocialDomainEventBus implements SocialDomainEventBusPort {
   }
 
   private emit(event: SocialDomainEvent): void {
+    const correlationId = getCorrelationId() ?? createCorrelationId();
+
     for (const handler of this.handlers) {
       try {
-        handler(event);
+        correlationIdStorage.run({ correlationId }, () => {
+          handler(event);
+        });
       } catch (error) {
         this.logger.error({
           event: 'social_event_handler_error',
-          correlationId: createCorrelationId(),
+          correlationId,
           eventType: event.eventType,
           error: error instanceof Error ? error.message : String(error),
         });

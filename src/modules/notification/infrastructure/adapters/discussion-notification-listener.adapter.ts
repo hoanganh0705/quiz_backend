@@ -15,10 +15,13 @@ import {
 import type {
   DiscussionDomainEvent,
   CommentCreatedEvent,
+  CommentDeletedEvent,
   CommentHiddenEvent,
   CommentMentionedEvent,
   CommentRestoredEvent,
   DiscussionThreadSolvedEvent,
+  ThreadClosedEvent,
+  ThreadDeletedEvent,
   ThreadHiddenEvent,
   ThreadRestoredEvent,
   ThreadReopenedEvent,
@@ -86,6 +89,15 @@ export class DiscussionNotificationListener implements OnModuleInit, OnModuleDes
         break;
       case 'report_reviewed':
         await this.handleReportReviewed(event);
+        break;
+      case 'comment_deleted':
+        await this.handleCommentDeleted(event);
+        break;
+      case 'thread_closed':
+        await this.handleThreadClosed(event);
+        break;
+      case 'thread_deleted':
+        await this.handleThreadDeleted(event);
         break;
     }
   }
@@ -442,14 +454,105 @@ export class DiscussionNotificationListener implements OnModuleInit, OnModuleDes
   }
 
   private async getCommentInfo(commentId: string): Promise<{ authorId: string | null } | null> {
-    return { authorId: null };
+    const result = await this.discussionRepository.getCommentAuthor(commentId);
+    return result;
   }
 
   private async getThreadInfo(threadId: string): Promise<{ authorId: string | null } | null> {
-    return { authorId: null };
+    const result = await this.discussionRepository.getThreadAuthor(threadId);
+    return result;
   }
 
   private async getReportInfo(reportId: string): Promise<{ reporterId: string | null } | null> {
-    return { reporterId: null };
+    const result = await this.discussionRepository.getReportReporter(reportId);
+    return result;
+  }
+
+  async handleCommentDeleted(event: CommentDeletedEvent): Promise<void> {
+    try {
+      const comment = await this.getCommentInfo(event.commentId);
+      if (!comment || !comment.authorId) return;
+      if (comment.authorId === event.authorId) return;
+
+      await this.channelService.send({
+        userId: comment.authorId,
+        type: 'discussion_reply',
+        title: 'Your comment was deleted',
+        body: 'A moderator has deleted one of your comments',
+        metadata: {
+          threadId: event.threadId,
+          commentId: event.commentId,
+        },
+      });
+
+      this.logger.info({
+        event: 'comment_deleted_notification_sent',
+        threadId: event.threadId,
+        commentId: event.commentId,
+      });
+    } catch (error) {
+      this.logger.error({
+        event: 'comment_deleted_notification_failed',
+        threadId: event.threadId,
+        commentId: event.commentId,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
+  }
+
+  async handleThreadClosed(event: ThreadClosedEvent): Promise<void> {
+    try {
+      const thread = await this.getThreadInfo(event.threadId);
+      if (!thread || !thread.authorId) return;
+
+      await this.channelService.send({
+        userId: thread.authorId,
+        type: 'discussion_reply',
+        title: 'Your discussion was closed',
+        body: 'Your discussion has been closed for new replies',
+        metadata: {
+          threadId: event.threadId,
+        },
+      });
+
+      this.logger.info({
+        event: 'thread_closed_notification_sent',
+        threadId: event.threadId,
+      });
+    } catch (error) {
+      this.logger.error({
+        event: 'thread_closed_notification_failed',
+        threadId: event.threadId,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
+  }
+
+  async handleThreadDeleted(event: ThreadDeletedEvent): Promise<void> {
+    try {
+      const thread = await this.getThreadInfo(event.threadId);
+      if (!thread || !thread.authorId) return;
+
+      await this.channelService.send({
+        userId: thread.authorId,
+        type: 'discussion_reply',
+        title: 'Your discussion was deleted',
+        body: 'A moderator has deleted your discussion',
+        metadata: {
+          threadId: event.threadId,
+        },
+      });
+
+      this.logger.info({
+        event: 'thread_deleted_notification_sent',
+        threadId: event.threadId,
+      });
+    } catch (error) {
+      this.logger.error({
+        event: 'thread_deleted_notification_failed',
+        threadId: event.threadId,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
   }
 }

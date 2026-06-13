@@ -77,6 +77,7 @@ function serializeEvent(event: TournamentDomainEvent): TournamentEventJobData {
         eventType: event.eventType,
         tournamentId: event.tournamentId,
         userId: event.userId,
+        tournamentTitle: event.tournamentTitle,
         occurredAt: event.occurredAt.toISOString(),
       };
     case 'tournament.participant.withdrawn':
@@ -122,7 +123,12 @@ function serializeEvent(event: TournamentDomainEvent): TournamentEventJobData {
 export function deserializeEvent(data: TournamentEventJobData): TournamentDomainEvent {
   switch (data.eventType) {
     case 'tournament.joined':
-      return new TournamentJoinedEvent(data.tournamentId, data.userId, new Date(data.occurredAt));
+      return new TournamentJoinedEvent(
+        data.tournamentId,
+        data.userId,
+        (data as { tournamentTitle: string }).tournamentTitle,
+        new Date(data.occurredAt),
+      );
     case 'tournament.participant.withdrawn':
       return new TournamentParticipantWithdrawnEvent(
         data.tournamentId,
@@ -160,7 +166,13 @@ export function deserializeEvent(data: TournamentEventJobData): TournamentDomain
 
 // Union type covering all event shapes as plain JSON (what BullMQ serializes)
 export type TournamentEventJobData =
-  | { eventType: 'tournament.joined'; tournamentId: string; userId: string; occurredAt: string }
+  | {
+      eventType: 'tournament.joined';
+      tournamentId: string;
+      userId: string;
+      tournamentTitle: string;
+      occurredAt: string;
+    }
   | {
       eventType: 'tournament.participant.withdrawn';
       tournamentId: string;

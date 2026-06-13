@@ -1693,7 +1693,7 @@ export class DiscussionRepository implements DiscussionRepositoryPort {
       )
       .catch(() => []);
 
-    return ((vote as { value: DiscussionVoteValue } | undefined)?.value) ?? null;
+    return (vote as { value: DiscussionVoteValue } | undefined)?.value ?? null;
   }
 
   // ─── REPORTS ────────────────────────────────────────────────────────────────
@@ -1755,10 +1755,7 @@ export class DiscussionRepository implements DiscussionRepositoryPort {
 
   // ─── PRIVATE HELPERS ────────────────────────────────────────────────────────
 
-  private buildThreadFromRow(
-    thread: DiscussionThreadRow,
-    author: AuthorInfo,
-  ): DiscussionThread {
+  private buildThreadFromRow(thread: DiscussionThreadRow, author: AuthorInfo): DiscussionThread {
     return {
       threadId: thread.threadId,
       quizId: thread.quizId,
@@ -1843,6 +1840,33 @@ export class DiscussionRepository implements DiscussionRepositoryPort {
       .where(inArray(users.userId, userIds));
 
     return new Map(rows.map((r) => [r.userId, r.username]));
+  }
+
+  async getCommentAuthor(commentId: string): Promise<{ authorId: string } | null> {
+    const [row] = await this.db
+      .select({ authorId: discussionComments.authorId })
+      .from(discussionComments)
+      .where(eq(discussionComments.commentId, commentId))
+      .limit(1);
+    return row ?? null;
+  }
+
+  async getThreadAuthor(threadId: string): Promise<{ authorId: string } | null> {
+    const [row] = await this.db
+      .select({ authorId: discussionThreads.authorId })
+      .from(discussionThreads)
+      .where(eq(discussionThreads.threadId, threadId))
+      .limit(1);
+    return row ?? null;
+  }
+
+  async getReportReporter(reportId: string): Promise<{ reporterId: string } | null> {
+    const [row] = await this.db
+      .select({ reporterId: discussionReports.reporterId })
+      .from(discussionReports)
+      .where(eq(discussionReports.reportId, reportId))
+      .limit(1);
+    return row ?? null;
   }
 
   async transactionally<T>(fn: (tx: DrizzleDB) => Promise<T>): Promise<T> {

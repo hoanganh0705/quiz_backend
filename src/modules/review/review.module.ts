@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { DatabaseModule } from '@/core/database/database.module';
 import { ReviewApplicationService } from './application/review.application.service';
 import { ReviewService } from './domain/review.service';
@@ -12,13 +12,17 @@ import { UserReviewController } from './transport/controller/user-review.control
 import { AdminReviewController } from './transport/controller/admin-review.controller';
 import { ReviewDomainExceptionFilter } from './transport/filters/review-domain-exception.filter';
 import { REVIEW_REPOSITORY_PORT } from './domain/ports';
-import { REVIEW_ANALYTICS_PORT } from './domain/events';
+import {
+  REVIEW_ANALYTICS_PORT,
+  REVIEW_DOMAIN_EVENT_BUS,
+  ReviewDomainEventBus,
+} from './domain/events';
 import { ReviewRepository } from './infrastructure/repositories/review.repository';
 import { ReviewAnalyticsAdapter } from './infrastructure/repositories/review-analytics.adapter';
 import { QuizModule } from '@/modules/quiz/quiz.module';
 
 @Module({
-  imports: [DatabaseModule, QuizModule],
+  imports: [DatabaseModule, forwardRef(() => QuizModule)],
   providers: [
     // Application
     ReviewApplicationService,
@@ -37,13 +41,15 @@ import { QuizModule } from '@/modules/quiz/quiz.module';
 
     // Port bindings
     { provide: REVIEW_REPOSITORY_PORT, useExisting: ReviewRepository },
-    { provide: REVIEW_ANALYTICS_PORT, useExisting: ReviewAnalyticsAdapter },
     { provide: IDEMPOTENCY_SERVICE, useExisting: IdempotencyService },
 
     // Infrastructure
     ReviewRepository,
-    ReviewAnalyticsAdapter,
     IdempotencyService,
+
+    // Domain Event Bus
+    ReviewDomainEventBus,
+    { provide: REVIEW_DOMAIN_EVENT_BUS, useExisting: ReviewDomainEventBus },
   ],
   controllers: [
     ReviewController,
@@ -51,6 +57,6 @@ import { QuizModule } from '@/modules/quiz/quiz.module';
     UserReviewController,
     AdminReviewController,
   ],
-  exports: [ReviewApplicationService],
+  exports: [ReviewApplicationService, REVIEW_DOMAIN_EVENT_BUS, ReviewDomainEventBus],
 })
 export class ReviewModule {}

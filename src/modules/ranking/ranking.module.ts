@@ -23,7 +23,9 @@ import { RankingOutboxAdapter } from './infrastructure/outbox/ranking-outbox.ada
 
 // Domain Events
 import { RankingDomainEventBus } from './domain/events/ranking-domain.event-bus';
+import { SharedRankingEventBusAdapter } from './domain/events/shared-ranking-event-bus.adapter';
 import { RankingEventHandler } from './domain/events/ranking.event-handler';
+import { SHARED_RANKING_EVENT_BUS } from '@/common/events/ranking-shared-events';
 
 // Domain Ports
 import { RANKING_REPOSITORY_PORT } from './domain/ports/ranking-repository.port';
@@ -62,6 +64,7 @@ import { RankingDomainExceptionFilter } from './transport/filters/ranking-domain
     // Infrastructure
     RankingRepository,
     RankingDomainEventBus,
+    SharedRankingEventBusAdapter,
 
     // Ports
     {
@@ -71,6 +74,10 @@ import { RankingDomainExceptionFilter } from './transport/filters/ranking-domain
     {
       provide: RANKING_DOMAIN_EVENT_BUS,
       useExisting: RankingDomainEventBus,
+    },
+    {
+      provide: SHARED_RANKING_EVENT_BUS,
+      useExisting: SharedRankingEventBusAdapter,
     },
     {
       provide: RANKING_OUTBOX_PORT,
@@ -117,6 +124,7 @@ import { RankingDomainExceptionFilter } from './transport/filters/ranking-domain
     RANKING_REPOSITORY_PORT,
     RANKING_DOMAIN_EVENT_BUS,
     RANKING_OUTBOX_PORT,
+    SHARED_RANKING_EVENT_BUS,
 
     // Domain Services
     XpIngestionService,

@@ -11,6 +11,12 @@
  * After 8 attempts the event is moved to DLQ (failed_at + dlq_reason set).
  * Events with idempotency keys that hit a uniqueness conflict are assumed already
  * processed and are silently marked as done.
+ *
+ * Correlation ID propagation:
+ *   - Outbox rows may carry a correlationId in their metadata
+ *   - Before dispatching, set the ID in AsyncLocalStorage so downstream
+ *     handlers (achievement evaluation, notifications, social feed) can
+ *     read it via getCorrelationId() instead of generating a new one
  */
 
 import { Cron, CronExpression } from '@nestjs/schedule';
@@ -22,6 +28,7 @@ import type { DrizzleDB } from '@/core/database/database.module';
 import { outboxEvents } from '@/core/database/schema';
 import type { RankingDomainEvent } from '../../domain/events/ranking-domain.events';
 import { RankingDomainEventBus } from '../../domain/events/ranking-domain.event-bus';
+import { correlationIdStorage, createCorrelationId } from '@/common/interceptors/correlation-id';
 
 const RANKING_OUTBOX_MAX_RETRIES = 8;
 const RANKING_OUTBOX_BASE_DELAY_SECONDS = 30;
@@ -34,6 +41,7 @@ type OutboxEventRow = {
   createdAt: string;
   attemptCount: number;
   idempotencyKey: string | null;
+  correlationId: string | null;
 };
 
 @Injectable()
@@ -106,7 +114,11 @@ export class RankingOutboxProcessorService implements OnModuleInit {
 
   private async dispatch(event: OutboxEventRow): Promise<void> {
     const domainEvent = event.payload as unknown as RankingDomainEvent;
-    this.eventBus.dispatchToSubscribers(domainEvent);
+    const correlationId = event.correlationId ?? createCorrelationId();
+
+    correlationIdStorage.run({ correlationId }, () => {
+      this.eventBus.dispatchToSubscribers(domainEvent);
+    });
   }
 
   private async handleFailure(

@@ -365,6 +365,7 @@ export class SocialFeedItemDto {
       'tournament_joined',
       'tournament_completed',
       'tournament_won',
+      'comment_created',
       'discussion_created',
       'discussion_solved',
     ],
@@ -378,6 +379,7 @@ export class SocialFeedItemDto {
     | 'tournament_joined'
     | 'tournament_completed'
     | 'tournament_won'
+    | 'comment_created'
     | 'discussion_created'
     | 'discussion_solved';
 
@@ -417,6 +419,7 @@ export class UserActivityItemDto {
       'tournament_joined',
       'tournament_completed',
       'tournament_won',
+      'comment_created',
       'discussion_created',
       'discussion_solved',
     ],
@@ -430,6 +433,7 @@ export class UserActivityItemDto {
     | 'tournament_joined'
     | 'tournament_completed'
     | 'tournament_won'
+    | 'comment_created'
     | 'discussion_created'
     | 'discussion_solved';
 

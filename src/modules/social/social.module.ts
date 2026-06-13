@@ -21,6 +21,8 @@ import { RankingDomainEventBus } from '@/modules/ranking/domain/events/ranking-d
 import { RankingRepository } from '@/modules/ranking/infrastructure/repositories/ranking.repository';
 import { RANKING_DOMAIN_EVENT_BUS } from '@/modules/ranking/domain/ports/ranking-event-bus.port';
 import { RANKING_REPOSITORY_PORT } from '@/modules/ranking/domain/ports/ranking-repository.port';
+import { SharedRankingEventBusAdapter } from '@/modules/ranking/domain/events/shared-ranking-event-bus.adapter';
+import { SHARED_RANKING_EVENT_BUS } from '@/common/events/ranking-shared-events';
 // Other domain modules (needed for event bus tokens)
 import { UserModule } from '@/modules/user/user.module';
 import { AchievementModule } from '@/modules/achievement/achievement.module';
@@ -45,6 +47,7 @@ import { NotificationModule } from '@/modules/notification/notification.module';
     // Ranking infrastructure (local instances for SocialModule)
     RankingRepository,
     RankingDomainEventBus,
+    SharedRankingEventBusAdapter,
     RankingAdapter,
     // Event listener adapters
     AchievementFeedListenerAdapter,
@@ -60,6 +63,7 @@ import { NotificationModule } from '@/modules/notification/notification.module';
     { provide: RANKING_PORT, useExisting: RankingAdapter },
     { provide: RANKING_DOMAIN_EVENT_BUS, useExisting: RankingDomainEventBus },
     { provide: RANKING_REPOSITORY_PORT, useExisting: RankingRepository },
+    { provide: SHARED_RANKING_EVENT_BUS, useExisting: SharedRankingEventBusAdapter },
   ],
   controllers: [SocialController],
   exports: [SocialService, SocialApplicationService, SocialDomainEventBus, SOCIAL_DOMAIN_EVENT_BUS],
