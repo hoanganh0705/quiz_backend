@@ -13,9 +13,10 @@ import {
 } from '@/modules/tournament/domain/ports/tournament-domain-event-bus.port';
 import {
   type TournamentDomainEvent,
-  type TournamentWonEvent,
-  type TournamentCompletedEvent,
-  type TournamentStartingSoonEvent,
+  TournamentJoinedEvent,
+  TournamentWonEvent,
+  TournamentCompletedEvent,
+  TournamentStartingSoonEvent,
 } from '@/modules/tournament/domain/events';
 import { TournamentNotificationService } from '@/modules/notification/domain/services';
 
@@ -51,6 +52,9 @@ export class TournamentListenerAdapter implements OnModuleInit, OnModuleDestroy 
 
   private async handleEvent(event: TournamentDomainEvent): Promise<void> {
     switch (event.eventType) {
+      case 'tournament.joined':
+        await this.handleTournamentJoined(event);
+        break;
       case 'tournament.won':
         await this.handleTournamentWon(event);
         break;
@@ -60,6 +64,29 @@ export class TournamentListenerAdapter implements OnModuleInit, OnModuleDestroy 
       case 'tournament.starting_soon':
         await this.handleTournamentStartingSoon(event);
         break;
+    }
+  }
+
+  async handleTournamentJoined(event: TournamentJoinedEvent): Promise<void> {
+    try {
+      await this.tournamentNotificationService.notifyTournamentJoined({
+        userId: event.userId,
+        tournamentId: event.tournamentId,
+        tournamentTitle: event.tournamentTitle,
+      });
+
+      this.logger.info({
+        event: 'tournament_joined_notification_triggered',
+        userId: event.userId,
+        tournamentId: event.tournamentId,
+      });
+    } catch (error) {
+      this.logger.error({
+        event: 'tournament_joined_notification_failed',
+        userId: event.userId,
+        tournamentId: event.tournamentId,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
     }
   }
 

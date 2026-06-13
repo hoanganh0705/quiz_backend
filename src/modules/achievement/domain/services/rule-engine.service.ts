@@ -190,6 +190,7 @@ export class RuleEngineService {
     // Map event types to rule types
     const eventToRuleType: Record<string, string[]> = {
       'attempt.completed': ['count', 'perfect_score'],
+      perfect_score: ['perfect_score'],
       'ranking.rank_changed': ['rank', 'rank_period'],
       'ranking.milestone': ['rank', 'rank_period'],
       'tournament.won': ['tournament_win'],

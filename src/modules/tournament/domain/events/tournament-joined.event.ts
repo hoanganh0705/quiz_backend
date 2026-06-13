@@ -4,6 +4,7 @@ export class TournamentJoinedEvent {
   constructor(
     public readonly tournamentId: string,
     public readonly userId: string,
+    public readonly tournamentTitle: string,
     public readonly occurredAt: Date,
   ) {}
 }

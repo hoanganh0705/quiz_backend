@@ -142,6 +142,7 @@ export type SocialFeedActivityType =
   | 'tournament_joined'
   | 'tournament_completed'
   | 'tournament_won'
+  | 'comment_created'
   | 'discussion_created'
   | 'discussion_solved';
 

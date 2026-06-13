@@ -23,7 +23,12 @@ import {
   REVIEW_ATTEMPT_REQUIRED_MESSAGE,
 } from '../review.constants';
 import { REVIEW_ANALYTICS_PORT, type ReviewAnalyticsPort } from './events';
-import { ReviewSubmittedEvent, ReviewDeletedEvent } from './events';
+import {
+  ReviewSubmittedEvent,
+  ReviewDeletedEvent,
+  REVIEW_DOMAIN_EVENT_BUS,
+  type ReviewDomainEventBusPort,
+} from './events';
 import type { ReviewStatsRow } from './ports';
 import type { ReviewDashboardResponseDto } from '../dto/response';
 import {
@@ -49,6 +54,8 @@ export class ReviewService {
     private readonly quizAnalyticsService: QuizAnalyticsService,
     @Inject(REVIEW_ANALYTICS_PORT)
     private readonly reviewAnalytics: ReviewAnalyticsPort,
+    @Inject(REVIEW_DOMAIN_EVENT_BUS)
+    private readonly reviewEventBus: ReviewDomainEventBusPort,
     @InjectPinoLogger(ReviewService.name)
     private readonly logger: PinoLogger,
   ) {}
@@ -119,7 +126,7 @@ export class ReviewService {
         rating,
       });
 
-      await this.reviewAnalytics.handleReviewSubmitted(
+      this.reviewEventBus.dispatchToSubscribers(
         new ReviewSubmittedEvent({ quizId, reviewId: review.reviewId, userId: user.sub, rating }),
       );
 
@@ -360,7 +367,7 @@ export class ReviewService {
       rating,
     });
 
-    await this.reviewAnalytics.handleReviewSubmitted(
+    this.reviewEventBus.dispatchToSubscribers(
       new ReviewSubmittedEvent({ quizId, reviewId: existing.reviewId, userId: user.sub, rating }),
     );
 
@@ -390,7 +397,7 @@ export class ReviewService {
       userId: user.sub,
     });
 
-    await this.reviewAnalytics.handleReviewDeleted(
+    this.reviewEventBus.dispatchToSubscribers(
       new ReviewDeletedEvent({ quizId, reviewId: existing.reviewId }),
     );
   }

@@ -445,6 +445,7 @@ export const socialFeedActivityType = pgEnum('social_feed_activity_type', [
   'tournament_joined',
   'tournament_completed',
   'tournament_won',
+  'comment_created',
   'discussion_created',
   'discussion_solved',
 ]);
@@ -672,6 +673,8 @@ export const outboxEvents = pgTable(
     failedAt: timestamp('failed_at', { withTimezone: true, mode: 'string' }),
     /** Human-readable reason for DLQ placement. */
     dlqReason: text('dlq_reason'),
+    /** Tracks the HTTP correlation ID chain through async processing. */
+    correlationId: text('correlation_id'),
   },
   (table) => [
     index('idx_outbox_events_unprocessed').using(
@@ -2372,6 +2375,21 @@ export const notificationType = pgEnum('notification_type', [
   'tournament_reminder',
   'rank_improved',
   'rank_milestone',
+  'instance_player_joined',
+  'instance_started',
+  'instance_xp_earned',
+  'instance_closed',
+  'instance_player_disconnected',
+  'profile_updated',
+  'settings_updated',
+  'password_changed',
+  'password_reset_requested',
+  'password_reset_completed',
+  'account_deleted',
+  'session_revoked',
+  'all_other_sessions_revoked',
+  'oauth_linked',
+  'oauth_unlinked',
 ]);
 
 export const notificationChannel = pgEnum('notification_channel', ['in_app', 'email', 'push']);

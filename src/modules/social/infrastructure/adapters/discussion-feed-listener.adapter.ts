@@ -6,10 +6,12 @@ import {
 } from '@/modules/discussion/domain/events';
 import type {
   DiscussionDomainEvent,
+  CommentCreatedEvent,
   DiscussionThreadCreatedEvent,
   DiscussionThreadSolvedEvent,
 } from '@/modules/discussion/domain/events/discussion-domain.events';
 import { SocialService } from '../../domain/services/social.service';
+import { getCorrelationId, createCorrelationId } from '@/common/interceptors/correlation-id';
 
 @Injectable()
 export class DiscussionFeedListenerAdapter implements OnModuleInit, OnModuleDestroy {
@@ -35,17 +37,50 @@ export class DiscussionFeedListenerAdapter implements OnModuleInit, OnModuleDest
   }
 
   private async handleEvent(event: DiscussionDomainEvent): Promise<void> {
+    const correlationId = getCorrelationId() ?? createCorrelationId();
+
+    if (event.eventType === 'comment_created') {
+      await this.recordCommentCreated(event, correlationId);
+      return;
+    }
+
     if (event.eventType === 'discussion_thread_created') {
-      await this.recordThreadCreated(event);
+      await this.recordThreadCreated(event, correlationId);
       return;
     }
 
     if (event.eventType === 'discussion_thread_solved') {
-      await this.recordThreadSolved(event);
+      await this.recordThreadSolved(event, correlationId);
     }
   }
 
-  private async recordThreadCreated(event: DiscussionThreadCreatedEvent): Promise<void> {
+  private async recordCommentCreated(event: CommentCreatedEvent, correlationId: string): Promise<void> {
+    this.logger.debug({
+      event: 'social_feed_comment_created',
+      correlationId,
+      authorId: event.authorId,
+      threadId: event.threadId,
+    });
+
+    await this.socialService.recordFeedActivity({
+      userId: event.authorId,
+      activityType: 'comment_created',
+      occurredAt: event.timestamp.toISOString(),
+      payload: {
+        threadId: event.threadId,
+        commentId: event.commentId,
+      },
+    });
+  }
+
+  private async recordThreadCreated(event: DiscussionThreadCreatedEvent, correlationId: string): Promise<void> {
+    this.logger.debug({
+      event: 'social_feed_thread_created',
+      correlationId,
+      authorId: event.authorId,
+      threadId: event.threadId,
+    });
+
     await this.socialService.recordFeedActivity({
       userId: event.authorId,
       activityType: 'discussion_created',
@@ -58,7 +93,14 @@ export class DiscussionFeedListenerAdapter implements OnModuleInit, OnModuleDest
     });
   }
 
-  private async recordThreadSolved(event: DiscussionThreadSolvedEvent): Promise<void> {
+  private async recordThreadSolved(event: DiscussionThreadSolvedEvent, correlationId: string): Promise<void> {
+    this.logger.debug({
+      event: 'social_feed_thread_solved',
+      correlationId,
+      authorId: event.authorId,
+      threadId: event.threadId,
+    });
+
     await this.socialService.recordFeedActivity({
       userId: event.authorId,
       activityType: 'discussion_solved',

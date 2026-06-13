@@ -16,6 +16,12 @@ export interface TournamentInviteParams {
   expiresAt: string;
 }
 
+export interface TournamentJoinedParams {
+  userId: string;
+  tournamentId: string;
+  tournamentTitle: string;
+}
+
 export interface TournamentStartingParams {
   userId: string;
   tournamentId: string;
@@ -68,6 +74,31 @@ export class TournamentNotificationService {
 
     this.logger.info({
       event: 'tournament_invite_notification_sent',
+      userId: params.userId,
+      tournamentId: params.tournamentId,
+    });
+  }
+
+  /**
+   * Send a tournament joined confirmation notification.
+   */
+  async notifyTournamentJoined(params: TournamentJoinedParams): Promise<void> {
+    const title = 'Joined Tournament';
+    const body = `You've successfully joined "${params.tournamentTitle}". Good luck!`;
+
+    await this.channelService.send({
+      userId: params.userId,
+      type: 'tournament_started',
+      title,
+      body,
+      metadata: {
+        tournamentId: params.tournamentId,
+        tournamentTitle: params.tournamentTitle,
+      },
+    });
+
+    this.logger.info({
+      event: 'tournament_joined_notification_sent',
       userId: params.userId,
       tournamentId: params.tournamentId,
     });

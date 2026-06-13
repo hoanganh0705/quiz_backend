@@ -7,7 +7,7 @@
 
 import { Inject, Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
-import { createCorrelationId } from '@/common/interceptors/correlation-id';
+import { getCorrelationId, createCorrelationId } from '@/common/interceptors/correlation-id';
 import {
   TOURNAMENT_DOMAIN_EVENT_BUS,
   type TournamentDomainEventBusPort,
@@ -55,7 +55,7 @@ export class AchievementTournamentEventListenerAdapter implements OnModuleInit, 
   }
 
   private async handleTournamentWon(event: TournamentWonEvent): Promise<void> {
-    const correlationId = createCorrelationId();
+    const correlationId = getCorrelationId() ?? createCorrelationId();
 
     try {
       const results = await this.ruleEngineService.evaluateEvent({

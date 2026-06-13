@@ -6,6 +6,10 @@ import { DRIZZLE } from '@/core/database/drizzle.constants';
 import type { DrizzleDB } from '@/core/database/database.module';
 import { outboxEvents } from '@/core/database/schema';
 import { AuthAuditLogService } from '../audit/auth-audit-log.service';
+import { correlationIdStorage, createCorrelationId } from '@/common/interceptors/correlation-id';
+import {
+  AuthSecurityNotificationService,
+} from '@/modules/notification/domain/services/auth-security-notification.service';
 
 type OutboxEventRow = {
   eventId: string;
@@ -14,6 +18,7 @@ type OutboxEventRow = {
   payload: Record<string, unknown>;
   createdAt: string;
   attemptCount: number;
+  correlationId: string | null;
 };
 
 @Injectable()
@@ -23,6 +28,7 @@ export class OutboxProcessorService {
   constructor(
     @Inject(DRIZZLE) private readonly db: DrizzleDB,
     private readonly authAuditLogService: AuthAuditLogService,
+    private readonly authSecurityNotificationService: AuthSecurityNotificationService,
     @InjectPinoLogger(OutboxProcessorService.name) private readonly logger: PinoLogger,
   ) {}
 
@@ -38,6 +44,7 @@ export class OutboxProcessorService {
         payload: outboxEvents.payload,
         createdAt: outboxEvents.createdAt,
         attemptCount: outboxEvents.attemptCount,
+        correlationId: outboxEvents.correlationId,
       })
       .from(outboxEvents)
       .where(and(isNull(outboxEvents.processedAt), lte(outboxEvents.nextAttemptAt, nowIso)))
@@ -134,32 +141,39 @@ export class OutboxProcessorService {
     const ipAddress =
       this.readOptionalString(event.payload.ipAddress) ??
       this.readOptionalString(event.payload.revokedByIp);
+    const correlationId = event.correlationId ?? createCorrelationId();
 
-    switch (`${event.aggregateType}:${event.eventType}`) {
-      case 'password_reset:password_reset_completed':
-      case 'account:account_deleted':
-      case 'account:password_changed':
-      case 'oauth_account:oauth_account_created':
-      case 'oauth_account:oauth_account_linked':
-      case 'oauth_login:oauth_login':
-      case 'oauth_login:oauth_login_failed': {
-        await this.authAuditLogService.record({
-          eventType: event.eventType,
-          userId: userId ?? undefined,
-          ipAddress,
-          metadata: {
-            aggregateType: event.aggregateType,
-            ...event.payload,
-          },
-          createdAt: nowIso,
-        });
-        return;
+    await correlationIdStorage.run({ correlationId }, async () => {
+      switch (`${event.aggregateType}:${event.eventType}`) {
+        case 'password_reset:password_reset_completed':
+        case 'password_reset:password_reset_requested':
+        case 'account:account_deleted':
+        case 'account:password_changed':
+        case 'session:session_revoked':
+        case 'session:all_other_sessions_revoked':
+        case 'oauth_account:oauth_account_created':
+        case 'oauth_account:oauth_account_linked':
+        case 'oauth_login:oauth_login':
+        case 'oauth_login:oauth_login_failed': {
+          await this.authAuditLogService.record({
+            eventType: event.eventType,
+            userId: userId ?? undefined,
+            ipAddress,
+            metadata: {
+              aggregateType: event.aggregateType,
+              ...event.payload,
+            },
+            createdAt: nowIso,
+          });
+          await this.sendSecurityNotification(event, userId, ipAddress);
+          return;
+        }
+        default:
+          throw new Error(
+            `Unsupported outbox event dispatcher key: ${event.aggregateType}:${event.eventType}`,
+          );
       }
-      default:
-        throw new Error(
-          `Unsupported outbox event dispatcher key: ${event.aggregateType}:${event.eventType}`,
-        );
-    }
+    });
   }
 
   private readString(value: unknown): string | null {
@@ -168,5 +182,72 @@ export class OutboxProcessorService {
 
   private readOptionalString(value: unknown): string | null {
     return typeof value === 'string' && value.length > 0 ? value : null;
+  }
+
+  private async sendSecurityNotification(
+    event: OutboxEventRow,
+    userId: string | null,
+    ipAddress: string | null,
+  ): Promise<void> {
+    if (!userId) return;
+
+    try {
+      switch (`${event.aggregateType}:${event.eventType}`) {
+        case 'account:password_changed':
+          await this.authSecurityNotificationService.notifyPasswordChanged({ userId, ipAddress });
+          break;
+
+        case 'password_reset:password_reset_requested':
+          await this.authSecurityNotificationService.notifyPasswordResetRequested({ userId, ipAddress });
+          break;
+
+        case 'password_reset:password_reset_completed':
+          await this.authSecurityNotificationService.notifyPasswordResetCompleted({ userId, ipAddress });
+          break;
+
+        case 'account:account_deleted':
+          await this.authSecurityNotificationService.notifyAccountDeleted({ userId, ipAddress });
+          break;
+
+        case 'session:session_revoked': {
+          const sessionId = this.readString(event.payload.sessionId) ?? 'unknown';
+          await this.authSecurityNotificationService.notifySessionRevoked({ userId, sessionId, ipAddress });
+          break;
+        }
+
+        case 'session:all_other_sessions_revoked': {
+          const count =
+            typeof event.payload.revokedSessionCount === 'number'
+              ? event.payload.revokedSessionCount
+              : 0;
+          await this.authSecurityNotificationService.notifyAllSessionsRevoked({
+            userId,
+            revokedSessionCount: count,
+            ipAddress,
+          });
+          break;
+        }
+
+        case 'oauth_account:oauth_account_linked': {
+          const provider = this.readString(event.payload.provider) ?? 'unknown';
+          await this.authSecurityNotificationService.notifyOAuthLinked({ userId, provider });
+          break;
+        }
+
+        case 'oauth_account:oauth_account_created': {
+          const provider = this.readString(event.payload.provider) ?? 'unknown';
+          await this.authSecurityNotificationService.notifyOAuthLinked({ userId, provider });
+          break;
+        }
+      }
+    } catch (error) {
+      this.logger.error({
+        event: 'auth_security_notification_failed',
+        aggregateType: event.aggregateType,
+        eventType: event.eventType,
+        userId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
   }
 }
