@@ -10,6 +10,7 @@ import {
   TournamentCompletedEvent,
   TournamentWonEvent,
 } from '../../domain/events';
+import { getCorrelationId } from '@/common/interceptors/correlation-id';
 
 @Injectable()
 export class BullmqTournamentEventBusService
@@ -69,8 +70,11 @@ export class BullmqTournamentEventBusService
   }
 }
 
-// Discriminated-union serializer — converts class instances to plain JSON
+// Discriminated-union serializer — converts class instances to plain JSON.
+// Captures the current correlation ID (if any) from AsyncLocalStorage so the
+// downstream BullMQ worker can restore it before invoking any handler.
 function serializeEvent(event: TournamentDomainEvent): TournamentEventJobData {
+  const correlationId = getCorrelationId();
   switch (event.eventType) {
     case 'tournament.joined':
       return {
@@ -79,6 +83,7 @@ function serializeEvent(event: TournamentDomainEvent): TournamentEventJobData {
         userId: event.userId,
         tournamentTitle: event.tournamentTitle,
         occurredAt: event.occurredAt.toISOString(),
+        correlationId,
       };
     case 'tournament.participant.withdrawn':
       return {
@@ -86,6 +91,7 @@ function serializeEvent(event: TournamentDomainEvent): TournamentEventJobData {
         tournamentId: event.tournamentId,
         userId: event.userId,
         withdrawnAt: event.withdrawnAt.toISOString(),
+        correlationId,
       };
     case 'tournament.starting_soon':
       return {
@@ -95,6 +101,7 @@ function serializeEvent(event: TournamentDomainEvent): TournamentEventJobData {
         tournamentTitle: event.tournamentTitle,
         startsAt: event.startsAt,
         timestamp: event.timestamp.toISOString(),
+        correlationId,
       };
     case 'tournament.completed':
       return {
@@ -105,6 +112,7 @@ function serializeEvent(event: TournamentDomainEvent): TournamentEventJobData {
         rank: event.rank,
         totalParticipants: event.totalParticipants,
         timestamp: event.timestamp.toISOString(),
+        correlationId,
       };
     case 'tournament.won':
       return {
@@ -115,6 +123,7 @@ function serializeEvent(event: TournamentDomainEvent): TournamentEventJobData {
         rank: event.rank,
         prize: event.prize,
         timestamp: event.timestamp.toISOString(),
+        correlationId,
       };
   }
 }
@@ -172,12 +181,14 @@ export type TournamentEventJobData =
       userId: string;
       tournamentTitle: string;
       occurredAt: string;
+      correlationId?: string;
     }
   | {
       eventType: 'tournament.participant.withdrawn';
       tournamentId: string;
       userId: string;
       withdrawnAt: string;
+      correlationId?: string;
     }
   | {
       eventType: 'tournament.starting_soon';
@@ -186,6 +197,7 @@ export type TournamentEventJobData =
       tournamentTitle: string;
       startsAt: string;
       timestamp: string;
+      correlationId?: string;
     }
   | {
       eventType: 'tournament.completed';
@@ -195,6 +207,7 @@ export type TournamentEventJobData =
       rank: number;
       totalParticipants: number;
       timestamp: string;
+      correlationId?: string;
     }
   | {
       eventType: 'tournament.won';
@@ -204,4 +217,5 @@ export type TournamentEventJobData =
       rank: number;
       prize?: string;
       timestamp: string;
+      correlationId?: string;
     };

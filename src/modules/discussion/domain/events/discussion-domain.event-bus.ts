@@ -29,11 +29,22 @@ import type {
   ContentReportedEvent,
   ReportReviewedEvent,
 } from './discussion-domain.events';
+import {
+  correlationIdStorage,
+  createCorrelationId,
+  getCorrelationId,
+} from '@/common/interceptors/correlation-id';
 
 interface QueuedEvent {
   event: DiscussionDomainEvent;
   attempt: number;
   nextRetryAt: number; // Unix timestamp (ms)
+  // Captured at the time the retry was scheduled so the retry handler
+  // (which runs much later on the polling timer) can restore the same
+  // correlation ID into AsyncLocalStorage. Without this, all retried
+  // events would log under whatever correlation ID the polling tick
+  // happened to have, which is meaningless.
+  correlationId?: string;
 }
 
 @Injectable()
@@ -80,12 +91,21 @@ export class DiscussionDomainEventBus implements DiscussionDomainEventBusPort, O
       try {
         handler(event);
       } catch (error) {
-        this.scheduleRetry(event, /* attempt= */ 1, error);
+        // Capture the originating correlation ID (if any) so a future
+        // retry, which runs from a polling timer with no inherent context,
+        // can still join its log lines back to the original emit.
+        const correlationId = getCorrelationId();
+        this.scheduleRetry(event, /* attempt= */ 1, error, correlationId);
       }
     }
   }
 
-  private scheduleRetry(event: DiscussionDomainEvent, attempt: number, error: unknown): void {
+  private scheduleRetry(
+    event: DiscussionDomainEvent,
+    attempt: number,
+    error: unknown,
+    correlationId: string | undefined,
+  ): void {
     if (attempt > DiscussionDomainEventBus.MAX_RETRIES) {
       void this.moveToDeadLetter(event, attempt, error);
       return;
@@ -96,7 +116,7 @@ export class DiscussionDomainEventBus implements DiscussionDomainEventBusPort, O
       DiscussionDomainEventBus.RETRY_DELAYS_MS[DiscussionDomainEventBus.RETRY_DELAYS_MS.length - 1];
     const nextRetryAt = Date.now() + delayMs;
 
-    const queued: QueuedEvent = { event, attempt, nextRetryAt };
+    const queued: QueuedEvent = { event, attempt, nextRetryAt, correlationId };
 
     this.logger.warn({
       event: 'discussion_event_retry_scheduled',
@@ -104,6 +124,7 @@ export class DiscussionDomainEventBus implements DiscussionDomainEventBusPort, O
       attempt,
       nextRetryAt: new Date(nextRetryAt).toISOString(),
       delayMs,
+      correlationId,
       error: error instanceof Error ? error.message : String(error),
     });
 
@@ -139,15 +160,22 @@ export class DiscussionDomainEventBus implements DiscussionDomainEventBusPort, O
       }
 
       const nextAttempt = queued.attempt + 1;
+      // Re-establish a correlation context for this retry tick so the
+      // log lines and downstream effects can be traced back to the
+      // original emit. Falls back to a fresh UUID for legacy queued
+      // events that pre-date this fix.
+      const correlationId = queued.correlationId ?? createCorrelationId();
 
-      for (const handler of this.handlers) {
-        try {
-          handler(queued.event);
-        } catch (error) {
-          this.scheduleRetry(queued.event, nextAttempt, error);
-          break;
+      correlationIdStorage.run({ correlationId }, () => {
+        for (const handler of this.handlers) {
+          try {
+            handler(queued.event);
+          } catch (error) {
+            this.scheduleRetry(queued.event, nextAttempt, error, correlationId);
+            break;
+          }
         }
-      }
+      });
     }
   }
 

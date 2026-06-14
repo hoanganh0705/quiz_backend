@@ -2,7 +2,6 @@ import { Module, forwardRef } from '@nestjs/common';
 import { DatabaseModule } from '@/core/database/database.module';
 import { AttemptModule } from '@/modules/attempt/attempt.module';
 import { NotificationModule } from '@/modules/notification/notification.module';
-import { NOTIFICATION_CHANNEL_SERVICE } from '@/modules/notification/domain/ports';
 import { InstanceService } from './domain/instance.service';
 import { InstanceController } from './transport/controller/instance.controller';
 import { InstanceGateway } from './transport/gateway/instance.gateway';

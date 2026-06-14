@@ -17,9 +17,12 @@ import {
 } from './application/user-activity.service';
 import { QuizModule } from '@/modules/quiz/quiz.module';
 import { QuizApplicationService } from '@/modules/quiz/application/quiz.application.service';
+import { StreakService } from './domain/services/streak.service';
+import { RankingModule } from '@/modules/ranking/ranking.module';
+import { RankingXpStreakListenerAdapter } from './infrastructure/adapters/ranking-xp-streak-listener.adapter';
 
 @Module({
-  imports: [DatabaseModule, forwardRef(() => QuizModule)],
+  imports: [DatabaseModule, forwardRef(() => QuizModule), forwardRef(() => RankingModule)],
   controllers: [UserController],
   providers: [
     UserApplicationService,
@@ -34,6 +37,8 @@ import { QuizApplicationService } from '@/modules/quiz/application/quiz.applicat
     { provide: USER_ACTIVITY_SERVICE, useExisting: UserActivityServiceImpl },
     { provide: QUIZ_LISTING_PORT, useExisting: QuizApplicationService },
     UserDomainExceptionFilter,
+    StreakService,
+    RankingXpStreakListenerAdapter,
   ],
   exports: [
     UserApplicationService,
@@ -44,6 +49,7 @@ import { QuizApplicationService } from '@/modules/quiz/application/quiz.applicat
     USER_ACTIVITY_SERVICE,
     UserDomainEventBus,
     UserActivityServiceImpl,
+    StreakService,
   ],
 })
 export class UserModule {}

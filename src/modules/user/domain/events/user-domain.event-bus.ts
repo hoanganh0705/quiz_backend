@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import type { UserProfileUpdatedEvent, UserSettingsUpdatedEvent } from './user-domain.events';
+import type { UserProfileUpdatedEvent, UserSettingsUpdatedEvent, UserStreakUpdatedEvent } from './user-domain.events';
 import type { UserDomainEventBusPort } from './user-domain-event-bus.port';
 
 @Injectable()
@@ -27,6 +27,10 @@ export class UserDomainEventBus implements UserDomainEventBusPort {
   }
 
   emitSettingsUpdated(event: UserSettingsUpdatedEvent): void {
+    this.emit(event);
+  }
+
+  emitStreakUpdated(event: UserStreakUpdatedEvent): void {
     this.emit(event);
   }
 }

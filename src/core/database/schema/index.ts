@@ -448,6 +448,11 @@ export const socialFeedActivityType = pgEnum('social_feed_activity_type', [
   'comment_created',
   'discussion_created',
   'discussion_solved',
+  'quiz_completed',
+  'quiz_milestone',
+  'instance_created',
+  'instance_joined',
+  'instance_completed',
 ]);
 
 export const friendshipStatus = pgEnum('friendship_status', [

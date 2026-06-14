@@ -41,12 +41,15 @@ export class CategoryEventBootstrapService implements OnModuleInit {
           break;
         case 'CategoryUpdatedEvent':
           this.logger.info({ event: 'category_event_bootstrap_updated', categoryId });
+          void this.quizAnalyticsService.invalidateCategoryAnalytics(categoryId);
           break;
         case 'CategoryDeletedEvent':
           this.logger.info({ event: 'category_event_bootstrap_deleted', categoryId });
+          void this.quizAnalyticsService.invalidateCategoryAnalytics(categoryId);
           break;
         case 'CategoryRestoredEvent':
           this.logger.info({ event: 'category_event_bootstrap_restored', categoryId });
+          void this.quizAnalyticsService.invalidateCategoryAnalytics(categoryId);
           break;
       }
     } catch (error) {

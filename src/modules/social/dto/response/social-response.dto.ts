@@ -1,4 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import type { SocialFeedActivityType } from '../../domain/types/social.types';
 
 export class FriendRequestDto {
   @ApiProperty({
@@ -368,20 +369,15 @@ export class SocialFeedItemDto {
       'comment_created',
       'discussion_created',
       'discussion_solved',
+      'quiz_completed',
+      'quiz_milestone',
+      'instance_created',
+      'instance_joined',
+      'instance_completed',
     ],
     example: 'badge_earned',
   })
-  type!:
-    | 'badge_earned'
-    | 'badge_revoked'
-    | 'rank_milestone'
-    | 'peak_rank_achieved'
-    | 'tournament_joined'
-    | 'tournament_completed'
-    | 'tournament_won'
-    | 'comment_created'
-    | 'discussion_created'
-    | 'discussion_solved';
+  type!: SocialFeedActivityType;
 
   @ApiProperty({
     description: 'Timestamp when the activity occurred (ISO 8601)',
@@ -422,20 +418,15 @@ export class UserActivityItemDto {
       'comment_created',
       'discussion_created',
       'discussion_solved',
+      'quiz_completed',
+      'quiz_milestone',
+      'instance_created',
+      'instance_joined',
+      'instance_completed',
     ],
     example: 'badge_earned',
   })
-  type!:
-    | 'badge_earned'
-    | 'badge_revoked'
-    | 'rank_milestone'
-    | 'peak_rank_achieved'
-    | 'tournament_joined'
-    | 'tournament_completed'
-    | 'tournament_won'
-    | 'comment_created'
-    | 'discussion_created'
-    | 'discussion_solved';
+  type!: SocialFeedActivityType;
 
   @ApiProperty({
     description: 'Timestamp when the activity occurred (ISO 8601)',

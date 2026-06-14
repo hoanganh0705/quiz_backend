@@ -3,19 +3,21 @@
  *
  * Listens to Tournament domain events and triggers achievement evaluation.
  * This adapter bridges the Tournament domain to the Achievement domain.
+ *
+ * Subscribes to SHARED_TOURNAMENT_EVENT_BUS (the cross-module shared kernel
+ * for tournament events) rather than the internal Tournament bus, so
+ * Achievement doesn't depend on Tournament internals.
  */
 
 import { Inject, Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { getCorrelationId, createCorrelationId } from '@/common/interceptors/correlation-id';
 import {
-  TOURNAMENT_DOMAIN_EVENT_BUS,
-  type TournamentDomainEventBusPort,
-} from '@/modules/tournament/domain/ports/tournament-domain-event-bus.port';
-import type {
-  TournamentDomainEvent,
-  TournamentWonEvent,
-} from '@/modules/tournament/domain/events';
+  SHARED_TOURNAMENT_EVENT_BUS,
+  type SharedTournamentEventBusPort,
+  type SharedTournamentDomainEvent,
+  type SharedTournamentWonEvent,
+} from '@/common/events/tournament-shared-events';
 import { RuleEngineService } from '../../domain/services/rule-engine.service';
 
 @Injectable()
@@ -24,8 +26,8 @@ export class AchievementTournamentEventListenerAdapter implements OnModuleInit, 
 
   constructor(
     private readonly ruleEngineService: RuleEngineService,
-    @Inject(TOURNAMENT_DOMAIN_EVENT_BUS)
-    private readonly tournamentEventBus: TournamentDomainEventBusPort,
+    @Inject(SHARED_TOURNAMENT_EVENT_BUS)
+    private readonly tournamentEventBus: SharedTournamentEventBusPort,
     @InjectPinoLogger(AchievementTournamentEventListenerAdapter.name)
     private readonly logger: PinoLogger,
   ) {}
@@ -39,7 +41,7 @@ export class AchievementTournamentEventListenerAdapter implements OnModuleInit, 
   }
 
   private subscribe(): void {
-    this.unsubscribe = this.tournamentEventBus.subscribe((event: TournamentDomainEvent) => {
+    this.unsubscribe = this.tournamentEventBus.subscribe((event: SharedTournamentDomainEvent) => {
       void this.handleEvent(event);
     });
 
@@ -48,13 +50,13 @@ export class AchievementTournamentEventListenerAdapter implements OnModuleInit, 
     });
   }
 
-  private async handleEvent(event: TournamentDomainEvent): Promise<void> {
+  private async handleEvent(event: SharedTournamentDomainEvent): Promise<void> {
     if (event.eventType === 'tournament.won') {
       await this.handleTournamentWon(event);
     }
   }
 
-  private async handleTournamentWon(event: TournamentWonEvent): Promise<void> {
+  private async handleTournamentWon(event: SharedTournamentWonEvent): Promise<void> {
     const correlationId = getCorrelationId() ?? createCorrelationId();
 
     try {

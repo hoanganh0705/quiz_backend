@@ -5,7 +5,7 @@
  * This adapter bridges the Tournament domain to the Notification domain.
  */
 
-import { Inject, Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import { Inject, Injectable, OnModuleDestroy, OnModuleInit, forwardRef } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import {
   TOURNAMENT_DOMAIN_EVENT_BUS,
@@ -18,14 +18,18 @@ import {
   TournamentCompletedEvent,
   TournamentStartingSoonEvent,
 } from '@/modules/tournament/domain/events';
-import { TournamentNotificationService } from '@/modules/notification/domain/services';
+import {
+  TOURNAMENT_NOTIFICATION_PORT,
+  type TournamentNotificationPort,
+} from '@/modules/notification/domain/ports';
 
 @Injectable()
 export class TournamentListenerAdapter implements OnModuleInit, OnModuleDestroy {
   private unsubscribe: (() => void) | null = null;
 
   constructor(
-    private readonly tournamentNotificationService: TournamentNotificationService,
+    @Inject(forwardRef(() => TOURNAMENT_NOTIFICATION_PORT))
+    private readonly tournamentNotifications: TournamentNotificationPort,
     @Inject(TOURNAMENT_DOMAIN_EVENT_BUS)
     private readonly tournamentEventBus: TournamentDomainEventBusPort,
     @InjectPinoLogger(TournamentListenerAdapter.name)
@@ -69,7 +73,7 @@ export class TournamentListenerAdapter implements OnModuleInit, OnModuleDestroy 
 
   async handleTournamentJoined(event: TournamentJoinedEvent): Promise<void> {
     try {
-      await this.tournamentNotificationService.notifyTournamentJoined({
+      await this.tournamentNotifications.notifyTournamentJoined({
         userId: event.userId,
         tournamentId: event.tournamentId,
         tournamentTitle: event.tournamentTitle,
@@ -92,7 +96,7 @@ export class TournamentListenerAdapter implements OnModuleInit, OnModuleDestroy 
 
   async handleTournamentWon(event: TournamentWonEvent): Promise<void> {
     try {
-      await this.tournamentNotificationService.notifyTournamentWon({
+      await this.tournamentNotifications.notifyTournamentWon({
         userId: event.userId,
         tournamentId: event.tournamentId,
         tournamentTitle: event.tournamentTitle,
@@ -117,7 +121,7 @@ export class TournamentListenerAdapter implements OnModuleInit, OnModuleDestroy 
 
   async handleTournamentCompleted(event: TournamentCompletedEvent): Promise<void> {
     try {
-      await this.tournamentNotificationService.notifyTournamentCompleted({
+      await this.tournamentNotifications.notifyTournamentCompleted({
         userId: event.userId,
         tournamentId: event.tournamentId,
         tournamentTitle: event.tournamentTitle,
@@ -143,7 +147,7 @@ export class TournamentListenerAdapter implements OnModuleInit, OnModuleDestroy 
 
   async handleTournamentStartingSoon(event: TournamentStartingSoonEvent): Promise<void> {
     try {
-      await this.tournamentNotificationService.notifyTournamentStarting({
+      await this.tournamentNotifications.notifyTournamentStarting({
         userId: event.userId,
         tournamentId: event.tournamentId,
         tournamentTitle: event.tournamentTitle,

@@ -2,7 +2,12 @@ import { Global, Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { APP_INTERCEPTOR } from '@nestjs/core';
 import { JwtGuard } from './guards/jwt.guard';
-import { CommonExternalEventBus, EXTERNAL_EVENT_BUS } from './events/common-external-event-bus';
+import {
+  CommonExternalEventBus,
+  EXTERNAL_EVENT_BUS,
+  EXTERNAL_EVENT_BUS_PRODUCER_PORT,
+  EXTERNAL_EVENT_BUS_CONSUMER_PORT,
+} from './events/common-external-event-bus';
 import {
   TransactionalContext,
   TRANSACTIONAL_CONTEXT,
@@ -15,6 +20,8 @@ import { TransactionalInterceptor } from './interceptors/transactional.intercept
   providers: [
     JwtGuard,
     { provide: EXTERNAL_EVENT_BUS, useExisting: CommonExternalEventBus },
+    { provide: EXTERNAL_EVENT_BUS_PRODUCER_PORT, useExisting: CommonExternalEventBus },
+    { provide: EXTERNAL_EVENT_BUS_CONSUMER_PORT, useExisting: CommonExternalEventBus },
     CommonExternalEventBus,
     { provide: TRANSACTIONAL_CONTEXT, useExisting: TransactionalContext },
     TransactionalContext,
@@ -26,6 +33,8 @@ import { TransactionalInterceptor } from './interceptors/transactional.intercept
     JwtModule,
     JwtGuard,
     EXTERNAL_EVENT_BUS,
+    EXTERNAL_EVENT_BUS_PRODUCER_PORT,
+    EXTERNAL_EVENT_BUS_CONSUMER_PORT,
     CommonExternalEventBus,
     TRANSACTIONAL_CONTEXT,
     TransactionalContext,

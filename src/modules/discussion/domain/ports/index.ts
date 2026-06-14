@@ -198,4 +198,20 @@ export interface DiscussionRepositoryPort {
   getCommentAuthor(commentId: string): Promise<{ authorId: string } | null>;
   getThreadAuthor(threadId: string): Promise<{ authorId: string } | null>;
   getReportReporter(reportId: string): Promise<{ reporterId: string } | null>;
+
+  /**
+   * Fetches a short summary of the reported content for moderator notifications.
+   * Returns null if the target no longer exists.
+   */
+  getReportTargetSummary(params: {
+    reportId: string;
+    targetType: 'thread' | 'comment' | 'reply';
+    targetId: string;
+  }): Promise<{
+    targetType: 'thread' | 'comment' | 'reply';
+    targetId: string;
+    threadId: string;
+    threadTitle: string;
+    excerpt: string;
+  } | null>;
 }
