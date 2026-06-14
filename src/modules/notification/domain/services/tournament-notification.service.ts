@@ -44,8 +44,19 @@ export interface TournamentWonParams {
   prize?: string;
 }
 
+/**
+ * Port interface exposed to the Tournament module via TOURNAMENT_NOTIFICATION_PORT.
+ */
+export interface TournamentNotificationPort {
+  notifyTournamentInvite(params: TournamentInviteParams): Promise<void>;
+  notifyTournamentJoined(params: TournamentJoinedParams): Promise<void>;
+  notifyTournamentStarting(params: TournamentStartingParams): Promise<void>;
+  notifyTournamentCompleted(params: TournamentCompletedParams): Promise<void>;
+  notifyTournamentWon(params: TournamentWonParams): Promise<void>;
+}
+
 @Injectable()
-export class TournamentNotificationService {
+export class TournamentNotificationService implements TournamentNotificationPort {
   constructor(
     private readonly channelService: NotificationChannelService,
     @InjectPinoLogger(TournamentNotificationService.name)

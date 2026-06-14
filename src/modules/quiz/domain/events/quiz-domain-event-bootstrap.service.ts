@@ -74,7 +74,13 @@ export class QuizDomainEventBootstrapService implements OnModuleInit {
       return;
     }
 
-    this.logger.debug({ event: 'quiz_deleted_received', quizId: event.quizId });
+    void this.quizAnalyticsService.invalidateQuizMetrics(event.quizId);
+
+    this.logger.info({
+      event: 'quiz_deleted_analytics_invalidated',
+      quizId: event.quizId,
+      deletedBy: event.deletedByUserId,
+    });
   }
 
   private handleQuizVersionCreated(event: unknown): void {

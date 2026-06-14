@@ -41,8 +41,30 @@ export interface InstancePlayerDisconnectedParams {
   socketId: string;
 }
 
+/**
+ * Port interface exposed to the Instance module via INSTANCE_NOTIFICATION_PORT.
+ */
+export interface InstanceNotificationPort {
+  notifyPlayerJoined(params: InstancePlayerJoinedParams): Promise<void>;
+  notifyInstanceStarted(params: InstanceStartedParams): Promise<void>;
+  notifyPlayerXpEarned(params: InstancePlayerXpEarnedParams): Promise<void>;
+  notifyInstanceClosed(params: InstanceClosedParams): Promise<void>;
+  notifyPlayerDisconnected(params: InstancePlayerDisconnectedParams): Promise<void>;
+  /**
+   * Generic host-side system announcement. Used by the Instance service for
+   * low-level system messages (e.g. host re-engagement) that do not have a
+   * dedicated event type.
+   */
+  notifyHostSystemAnnouncement(params: {
+    userId: string;
+    title: string;
+    body: string;
+    metadata: Record<string, unknown>;
+  }): Promise<void>;
+}
+
 @Injectable()
-export class InstanceNotificationService {
+export class InstanceNotificationService implements InstanceNotificationPort {
   constructor(
     private readonly channelService: NotificationChannelService,
     @InjectPinoLogger(InstanceNotificationService.name)
@@ -182,6 +204,26 @@ export class InstanceNotificationService {
       event: 'instance_player_disconnected_notification_sent',
       userId: params.userId,
       instanceId: params.instanceId,
+    });
+  }
+
+  /**
+   * Generic host-side system announcement (in-app only). Keeps low-level
+   * system messages inside the Notification module's surface area.
+   */
+  async notifyHostSystemAnnouncement(params: {
+    userId: string;
+    title: string;
+    body: string;
+    metadata: Record<string, unknown>;
+  }): Promise<void> {
+    await this.channelService.send({
+      userId: params.userId,
+      type: 'system_announcement',
+      title: params.title,
+      body: params.body,
+      metadata: params.metadata,
+      channels: ['in_app'],
     });
   }
 }

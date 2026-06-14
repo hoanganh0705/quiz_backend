@@ -5,6 +5,7 @@ import { TagApplicationService } from './application/tag.application.service';
 import { TagDomainService } from './domain/tag.service';
 import { TagRepository } from './infrastructure/repositories/tag.repository';
 import { TagDomainEventBus } from './domain/events/tag-domain.event-bus';
+import { TagEventBootstrapService } from './tag-event-bootstrap.service';
 import { DatabaseModule } from '@/core/database/database.module';
 import { RedisModule } from '@/core/redis/redis.module';
 import { QuizModule } from '@/modules/quiz/quiz.module';
@@ -21,6 +22,7 @@ import { QuizApplicationService } from '@/modules/quiz/application/quiz.applicat
     TagDomainService,
     TagRepository,
     TagDomainEventBus,
+    TagEventBootstrapService,
     { provide: TAG_REPOSITORY_PORT, useClass: TagRepository },
     { provide: TAG_DOMAIN_EVENT_BUS, useExisting: TagDomainEventBus },
     { provide: QUIZ_LISTING_PORT, useExisting: QuizApplicationService },

@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { ConnectionOptions, Queue } from 'bullmq';
 import { DatabaseModule } from '@/core/database/database.module';
 import { NotificationModule } from '@/modules/notification/notification.module';
+import { SHARED_TOURNAMENT_EVENT_BUS } from '@/common/events/tournament-shared-events';
 import { TournamentApplicationService } from './application/tournament.application.service';
 import { TournamentService } from './domain/tournament.service';
 import { TournamentLifecycleService } from './domain/tournament-lifecycle.service';
@@ -20,6 +21,7 @@ import { BullmqTournamentEventBusService } from './infrastructure/events/bullmq-
 import { TournamentEventProcessor } from './infrastructure/events/tournament-event.processor';
 import { TournamentSchedulerService } from './infrastructure/scheduler/tournament-scheduler.service';
 import { TournamentListenerAdapter } from './infrastructure/adapters/tournament-listener.adapter';
+import { SharedTournamentEventBusAdapter } from './domain/events/shared-tournament-event-bus.adapter';
 
 @Module({
   imports: [DatabaseModule, NotificationModule],
@@ -54,6 +56,11 @@ import { TournamentListenerAdapter } from './infrastructure/adapters/tournament-
       },
     },
     TournamentListenerAdapter,
+    SharedTournamentEventBusAdapter,
+    {
+      provide: SHARED_TOURNAMENT_EVENT_BUS,
+      useExisting: SharedTournamentEventBusAdapter,
+    },
   ],
   controllers: [TournamentController],
   exports: [
@@ -62,6 +69,7 @@ import { TournamentListenerAdapter } from './infrastructure/adapters/tournament-
     TOURNAMENT_DOMAIN_EVENT_BUS,
     BullmqTournamentEventBusService,
     TOURNAMENT_QUEUE_TOKENS.QUEUE,
+    SHARED_TOURNAMENT_EVENT_BUS,
   ],
 })
 export class TournamentModule {}

@@ -23,4 +23,17 @@ export class UserSettingsUpdatedEvent {
   ) {}
 }
 
-export type UserDomainEvent = UserProfileUpdatedEvent | UserSettingsUpdatedEvent;
+export interface UserStreakUpdatedEvent {
+  readonly eventType: 'user.streak_updated';
+  readonly userId: string;
+  readonly currentStreak: number;
+  readonly longestStreak: number;
+  readonly previousStreak: number;
+  readonly isNewRecord: boolean;
+  readonly timestamp: Date;
+}
+
+export type UserDomainEvent =
+  | UserProfileUpdatedEvent
+  | UserSettingsUpdatedEvent
+  | UserStreakUpdatedEvent;

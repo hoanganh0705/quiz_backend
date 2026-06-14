@@ -16,6 +16,7 @@ import { CategoryModule } from './modules/category/category.module';
 import { TagModule } from './modules/tag/tag.module';
 import { QuizModule } from './modules/quiz/quiz.module';
 import { CategoryEventBootstrapService } from './modules/category/category-event-bootstrap.service';
+import { TagEventBootstrapService } from './modules/tag/tag-event-bootstrap.service';
 import { AttemptModule } from './modules/attempt/attempt.module';
 import { BookmarkModule } from './modules/bookmark/bookmark.module';
 import { ReviewModule } from './modules/review/review.module';
@@ -110,6 +111,7 @@ import { HealthModule } from './modules/health/health.module';
       useClass: GlobalExceptionFilter,
     },
     CategoryEventBootstrapService,
+    TagEventBootstrapService,
   ],
 })
 export class AppModule {}
