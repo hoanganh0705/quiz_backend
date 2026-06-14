@@ -92,6 +92,18 @@ export class QuizAnalyticsRepository implements QuizAnalyticsRepositoryPort {
     await Promise.all(entries.map(({ quizId, data }) => this.upsertQuizStats(quizId, data)));
   }
 
+  async deleteQuizStats(quizId: string): Promise<void> {
+    await this.db.delete(quizStats).where(eq(quizStats.quizId, quizId));
+  }
+
+  async getQuizIdsByCategory(categoryId: string): Promise<string[]> {
+    const rows = await this.db
+      .select({ quizId: quizCategories.quizId })
+      .from(quizCategories)
+      .where(eq(quizCategories.categoryId, categoryId));
+    return rows.map((r) => r.quizId);
+  }
+
   async getAllQuizStats(): Promise<QuizStatsRow[]> {
     return this.db.select().from(quizStats);
   }

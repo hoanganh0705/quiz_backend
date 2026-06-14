@@ -1869,6 +1869,64 @@ export class DiscussionRepository implements DiscussionRepositoryPort {
     return row ?? null;
   }
 
+  async getReportTargetSummary(params: {
+    reportId: string;
+    targetType: 'thread' | 'comment' | 'reply';
+    targetId: string;
+  }): Promise<{
+    targetType: 'thread' | 'comment' | 'reply';
+    targetId: string;
+    threadId: string;
+    threadTitle: string;
+    excerpt: string;
+  } | null> {
+    const excerptLimit = 240;
+
+    if (params.targetType === 'thread') {
+      const [row] = await this.db
+        .select({
+          threadId: discussionThreads.threadId,
+          title: discussionThreads.title,
+          body: discussionThreads.body,
+        })
+        .from(discussionThreads)
+        .where(eq(discussionThreads.threadId, params.targetId))
+        .limit(1);
+
+      if (!row) return null;
+
+      return {
+        targetType: 'thread',
+        targetId: row.threadId,
+        threadId: row.threadId,
+        threadTitle: row.title,
+        excerpt: row.body.length > excerptLimit ? `${row.body.slice(0, excerptLimit)}…` : row.body,
+      };
+    }
+
+    const [row] = await this.db
+      .select({
+        commentId: discussionComments.commentId,
+        threadId: discussionComments.threadId,
+        threadTitle: discussionThreads.title,
+        body: discussionComments.body,
+      })
+      .from(discussionComments)
+      .innerJoin(discussionThreads, eq(discussionComments.threadId, discussionThreads.threadId))
+      .where(eq(discussionComments.commentId, params.targetId))
+      .limit(1);
+
+    if (!row) return null;
+
+    return {
+      targetType: params.targetType,
+      targetId: row.commentId,
+      threadId: row.threadId,
+      threadTitle: row.threadTitle,
+      excerpt: row.body.length > excerptLimit ? `${row.body.slice(0, excerptLimit)}…` : row.body,
+    };
+  }
+
   async transactionally<T>(fn: (tx: DrizzleDB) => Promise<T>): Promise<T> {
     return this.db.transaction(fn as (tx: unknown) => Promise<T>) as Promise<T>;
   }

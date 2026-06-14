@@ -1,9 +1,9 @@
 /**
  * Ranking Adapter
  *
- * Implements RankingPort by delegating to the Ranking repository.
- * Local instances of RankingRepository and RankingDomainEventBus are provided
- * directly by SocialModule — RankingModule is NOT imported.
+ * Implements RankingPort by delegating to the Ranking repository through the
+ * `RANKING_REPOSITORY_PORT` token. The repository instance lives in RankingModule
+ * and is shared across all consumers — Social does not own or instantiate it.
  */
 
 import { Inject, Injectable } from '@nestjs/common';

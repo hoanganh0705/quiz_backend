@@ -10,8 +10,8 @@ import { Inject, Injectable, OnModuleInit } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import type { ExternalXpEarnedEvent } from './ranking-domain.events';
 import { XpIngestionService } from '../services/xp-ingestion.service';
-import { EXTERNAL_EVENT_BUS } from '@/common/events';
-import type { ExternalEventBusPort } from '@/common/events/common-external-event-bus';
+import { EXTERNAL_EVENT_BUS_CONSUMER_PORT } from '@/common/events';
+import type { ExternalEventBusConsumerPort } from '@/common/events/common-external-event-bus';
 
 @Injectable()
 export class RankingEventHandler implements OnModuleInit {
@@ -19,8 +19,8 @@ export class RankingEventHandler implements OnModuleInit {
 
   constructor(
     private readonly xpIngestionService: XpIngestionService,
-    @Inject(EXTERNAL_EVENT_BUS)
-    private readonly externalEventBus: ExternalEventBusPort,
+    @Inject(EXTERNAL_EVENT_BUS_CONSUMER_PORT)
+    private readonly externalEventBus: ExternalEventBusConsumerPort,
     @InjectPinoLogger(RankingEventHandler.name)
     private readonly logger: PinoLogger,
   ) {}
@@ -50,6 +50,7 @@ export class RankingEventHandler implements OnModuleInit {
       userId: event.userId,
       amount: event.amount,
       source: event.source,
+      correlationId: event.correlationId,
     });
 
     try {
@@ -63,6 +64,7 @@ export class RankingEventHandler implements OnModuleInit {
         userId: event.userId,
         amount: event.amount,
         source: event.source,
+        correlationId: event.correlationId,
       });
     } catch (error) {
       this.logger.error({
@@ -70,6 +72,7 @@ export class RankingEventHandler implements OnModuleInit {
         userId: event.userId,
         amount: event.amount,
         source: event.source,
+        correlationId: event.correlationId,
         error: error instanceof Error ? error.message : 'Unknown error',
       });
     }

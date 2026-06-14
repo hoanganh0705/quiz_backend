@@ -9,15 +9,19 @@ import {
   AchievementDomainEventBus,
   ACHIEVEMENT_DOMAIN_EVENT_BUS,
 } from './domain/events/achievement-domain.event-bus';
+import { SharedAchievementEventBusAdapter } from './domain/events/shared-achievement-event-bus.adapter';
+import { SHARED_ACHIEVEMENT_EVENT_BUS } from '@/common/events/achievement-shared-events';
 
 import { AchievementRepository } from './infrastructure/repositories/achievement.repository.impl';
 import { ACHIEVEMENT_REPOSITORY_PORT } from './infrastructure/repositories/achievement.repository';
 import { ScheduledEvaluationService } from './infrastructure/scheduled/scheduled-evaluation.service';
+import { AchievementOutboxProcessorService } from './infrastructure/outbox/achievement-outbox-processor.service';
 
 import { AchievementAttemptEventListenerAdapter } from './infrastructure/adapters/attempt-listener.adapter';
 import { AchievementTournamentEventListenerAdapter } from './infrastructure/adapters/tournament-listener.adapter';
 import { AchievementInstanceEventListenerAdapter } from './infrastructure/adapters/instance-listener.adapter';
 import { UserActivityListenerAdapter } from './infrastructure/adapters/user-activity-listener.adapter';
+import { UserAchievementListenerAdapter } from './infrastructure/adapters/user-achievement-listener.adapter';
 import { AchievementNotificationListener } from './infrastructure/adapters/achievement-notification-listener.adapter';
 import { RankingEventAchievementListenerAdapter } from './infrastructure/adapters/ranking-event-listener.adapter';
 
@@ -54,6 +58,11 @@ import { BadgeAnalyticsService } from './application';
       provide: ACHIEVEMENT_DOMAIN_EVENT_BUS,
       useExisting: AchievementDomainEventBus,
     },
+    SharedAchievementEventBusAdapter,
+    {
+      provide: SHARED_ACHIEVEMENT_EVENT_BUS,
+      useExisting: SharedAchievementEventBusAdapter,
+    },
 
     RankAchievementService,
     RuleEngineService,
@@ -71,6 +80,7 @@ import { BadgeAnalyticsService } from './application';
     AchievementTournamentEventListenerAdapter,
     AchievementInstanceEventListenerAdapter,
     UserActivityListenerAdapter,
+    UserAchievementListenerAdapter,
     AchievementNotificationListener,
     RankingEventAchievementListenerAdapter,
 
@@ -78,12 +88,14 @@ import { BadgeAnalyticsService } from './application';
     ProgressTrackingService,
     AchievementHistoryService,
     BadgeAnalyticsService,
+    AchievementOutboxProcessorService,
 
     AchievementDomainExceptionFilter,
   ],
   exports: [
     AchievementDomainEventBus,
     ACHIEVEMENT_DOMAIN_EVENT_BUS,
+    SHARED_ACHIEVEMENT_EVENT_BUS,
 
     RankAchievementService,
     RuleEngineService,

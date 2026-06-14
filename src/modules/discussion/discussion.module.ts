@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { DatabaseModule } from '@/core/database/database.module';
 import { DiscussionApplicationService } from './application/discussion-application.service';
 import { DiscussionService } from './domain/services/discussion.service';
@@ -16,15 +16,12 @@ import {
   QUIZ_EXISTENCE_PORT,
   USER_EXISTENCE_PORT,
 } from './domain/ports';
-import {
-  DISCUSSION_DOMAIN_EVENT_BUS,
-  DiscussionDomainEventBus,
-} from './domain/events';
+import { DISCUSSION_DOMAIN_EVENT_BUS, DiscussionDomainEventBus } from './domain/events';
 import { QuizModule } from '@/modules/quiz/quiz.module';
 import { UserModule } from '@/modules/user/user.module';
 
 @Module({
-  imports: [DatabaseModule, QuizModule, UserModule],
+  imports: [DatabaseModule, forwardRef(() => QuizModule), forwardRef(() => UserModule)],
   providers: [
     DiscussionApplicationService,
     DiscussionService,

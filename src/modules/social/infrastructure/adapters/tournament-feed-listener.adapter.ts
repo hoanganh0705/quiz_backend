@@ -1,10 +1,10 @@
 import { Inject, Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import {
-  TOURNAMENT_DOMAIN_EVENT_BUS,
-  type TournamentDomainEventBusPort,
-} from '@/modules/tournament/domain/ports/tournament-domain-event-bus.port';
-import type { TournamentDomainEvent } from '@/modules/tournament/domain/events';
+  SHARED_TOURNAMENT_EVENT_BUS,
+  type SharedTournamentEventBusPort,
+  type SharedTournamentDomainEvent,
+} from '@/common/events/tournament-shared-events';
 import { SocialService } from '../../domain/services/social.service';
 import { getCorrelationId, createCorrelationId } from '@/common/interceptors/correlation-id';
 
@@ -13,15 +13,15 @@ export class TournamentFeedListenerAdapter implements OnModuleInit, OnModuleDest
   private unsubscribe: (() => void) | null = null;
 
   constructor(
-    @Inject(TOURNAMENT_DOMAIN_EVENT_BUS)
-    private readonly tournamentEventBus: TournamentDomainEventBusPort,
+    @Inject(SHARED_TOURNAMENT_EVENT_BUS)
+    private readonly tournamentEventBus: SharedTournamentEventBusPort,
     private readonly socialService: SocialService,
     @InjectPinoLogger(TournamentFeedListenerAdapter.name)
     private readonly logger: PinoLogger,
   ) {}
 
   onModuleInit(): void {
-    this.unsubscribe = this.tournamentEventBus.subscribe((event: TournamentDomainEvent) => {
+    this.unsubscribe = this.tournamentEventBus.subscribe((event: SharedTournamentDomainEvent) => {
       void this.handleEvent(event);
     });
   }
@@ -31,7 +31,7 @@ export class TournamentFeedListenerAdapter implements OnModuleInit, OnModuleDest
     this.unsubscribe = null;
   }
 
-  private async handleEvent(event: TournamentDomainEvent): Promise<void> {
+  private async handleEvent(event: SharedTournamentDomainEvent): Promise<void> {
     const correlationId = getCorrelationId() ?? createCorrelationId();
 
     switch (event.eventType) {
@@ -39,18 +39,24 @@ export class TournamentFeedListenerAdapter implements OnModuleInit, OnModuleDest
         await this.socialService.recordFeedActivity({
           userId: event.userId,
           activityType: 'tournament_joined',
-          occurredAt: event.occurredAt.toISOString(),
+          occurredAt: event.timestamp.toISOString(),
           payload: {
             tournamentId: event.tournamentId,
           },
         });
         break;
       case 'tournament.participant.withdrawn':
-        this.logger.debug({
-          event: 'social_feed_ignoring_tournament_withdrawn',
+        // Withdrawals are intentionally not broadcast to the social feed —
+        // they reflect a user choice to step back from a public commitment and
+        // are not the kind of activity friends want surfaced in their feed.
+        // Log at info level for operational visibility (audit trail + dashboards)
+        // without making the event publicly visible.
+        this.logger.info({
+          event: 'tournament_participant_withdrawn_observed',
           correlationId,
           tournamentId: event.tournamentId,
           userId: event.userId,
+          withdrawnAt: event.timestamp.toISOString(),
         });
         break;
     }

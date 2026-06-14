@@ -11,8 +11,9 @@
  * - application/: Orchestration (schedulers, background jobs)
  */
 
-import { Module } from '@nestjs/common';
+import { forwardRef, Module } from '@nestjs/common';
 import { NotificationModule } from '@/modules/notification/notification.module';
+import { AttemptModule } from '@/modules/attempt/attempt.module';
 
 // Infrastructure
 import { RankingRepository } from './infrastructure/repositories/ranking.repository';
@@ -20,6 +21,8 @@ import { RankingNotificationListenerAdapter } from './infrastructure/adapters/ra
 import { RankingConsistencySubscriber } from './infrastructure/adapters/ranking-consistency-subscriber.adapter';
 import { RankingOutboxProcessorService } from './infrastructure/outbox/ranking-outbox-processor.service';
 import { RankingOutboxAdapter } from './infrastructure/outbox/ranking-outbox.adapter';
+import { AttemptRankingListenerAdapter } from './infrastructure/adapters/attempt-ranking-listener.adapter';
+import { RankingPeriodResetNotificationAdapter } from './infrastructure/adapters/ranking-period-reset-notification.adapter';
 
 // Domain Events
 import { RankingDomainEventBus } from './domain/events/ranking-domain.event-bus';
@@ -59,10 +62,12 @@ import { RankingAdminController } from './transport/controller/ranking-admin.con
 import { RankingDomainExceptionFilter } from './transport/filters/ranking-domain-exception.filter';
 
 @Module({
-  imports: [NotificationModule],
+  imports: [NotificationModule, forwardRef(() => AttemptModule)],
   providers: [
     // Infrastructure
     RankingRepository,
+    AttemptRankingListenerAdapter,
+    RankingPeriodResetNotificationAdapter,
     RankingDomainEventBus,
     SharedRankingEventBusAdapter,
 

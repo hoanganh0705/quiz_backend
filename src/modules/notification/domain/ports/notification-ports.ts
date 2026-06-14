@@ -10,6 +10,12 @@ export const NOTIFICATION_CHANNEL_SERVICE = Symbol('NOTIFICATION_CHANNEL_SERVICE
 export const NOTIFICATION_CHANNEL_SERVICE_INSTANCE = Symbol('NOTIFICATION_CHANNEL_SERVICE_INSTANCE');
 // NOTIFICATION_DOMAIN_EVENT_BUS is re-exported below from the event bus module
 
+export const SOCIAL_NOTIFICATION_PORT = Symbol('SOCIAL_NOTIFICATION_PORT');
+export const ACHIEVEMENT_NOTIFICATION_PORT = Symbol('ACHIEVEMENT_NOTIFICATION_PORT');
+export const TOURNAMENT_NOTIFICATION_PORT = Symbol('TOURNAMENT_NOTIFICATION_PORT');
+export const INSTANCE_NOTIFICATION_PORT = Symbol('INSTANCE_NOTIFICATION_PORT');
+export const RANK_NOTIFICATION_PORT = Symbol('RANK_NOTIFICATION_PORT');
+
 export interface NotificationRepositoryPort {
   create(params: CreateNotificationParams): Promise<Notification>;
   findById(id: string): Promise<Notification | null>;
@@ -63,6 +69,14 @@ export interface NotificationChannelServiceInstance {
 }
 
 export type NotificationChannelServicePort = NotificationSenderPort;
+
+// Re-export the per-module notification port types so consumers can import them
+// from the ports barrel without reaching into the services folder.
+export type { SocialNotificationPort } from '../services/social-notification.service';
+export type { AchievementNotificationPort } from '../services/achievement-notification.service';
+export type { TournamentNotificationPort } from '../services/tournament-notification.service';
+export type { InstanceNotificationPort } from '../services/instance-notification.service';
+export type { RankNotificationPort } from '../services/rank-notification.service';
 
 // Re-export event bus for consumers who only import from ports
 export {

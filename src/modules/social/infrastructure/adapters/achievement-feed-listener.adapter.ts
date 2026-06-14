@@ -1,35 +1,40 @@
-import { Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import { Inject, Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import {
-  AchievementDomainEventBus,
-  type EventSubscription,
-} from '@/modules/achievement/domain/events';
-import type { AchievementDomainEvent } from '@/modules/achievement/domain/events/achievement.events';
+  SHARED_ACHIEVEMENT_EVENT_BUS,
+  type SharedAchievementEventBusPort,
+  type SharedAchievementDomainEvent,
+} from '@/common/events/achievement-shared-events';
 import { SocialService } from '../../domain/services/social.service';
 
 @Injectable()
 export class AchievementFeedListenerAdapter implements OnModuleInit, OnModuleDestroy {
-  private subscription: EventSubscription | null = null;
+  private unsubscribe: (() => void) | null = null;
 
   constructor(
-    private readonly achievementEventBus: AchievementDomainEventBus,
+    @Inject(SHARED_ACHIEVEMENT_EVENT_BUS)
+    private readonly achievementEventBus: SharedAchievementEventBusPort,
     private readonly socialService: SocialService,
     @InjectPinoLogger(AchievementFeedListenerAdapter.name)
     private readonly logger: PinoLogger,
   ) {}
 
   onModuleInit(): void {
-    this.subscription = this.achievementEventBus.subscribeAll((event) => {
+    this.unsubscribe = this.achievementEventBus.subscribe((event) => {
       void this.handleEvent(event);
+    });
+
+    this.logger.info({
+      event: 'achievement_feed_listener_initialized',
     });
   }
 
   onModuleDestroy(): void {
-    this.subscription?.unsubscribe();
-    this.subscription = null;
+    this.unsubscribe?.();
+    this.unsubscribe = null;
   }
 
-  private async handleEvent(event: AchievementDomainEvent): Promise<void> {
+  private async handleEvent(event: SharedAchievementDomainEvent): Promise<void> {
     if (event.eventType === 'badge.earned') {
       await this.socialService.recordFeedActivity({
         userId: event.userId,

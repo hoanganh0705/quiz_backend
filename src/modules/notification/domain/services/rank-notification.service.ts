@@ -17,7 +17,7 @@ import {
 import { NotificationChannelService } from '../../infrastructure/adapters/notification-channel.service';
 
 @Injectable()
-export class RankNotificationService {
+export class RankNotificationService implements RankNotificationPort {
   constructor(
     private readonly channelService: NotificationChannelService,
     @InjectPinoLogger(RankNotificationService.name)
@@ -121,4 +121,13 @@ export class RankNotificationService {
       metadata: params.metadata,
     });
   }
+}
+
+/**
+ * Port interface exposed to the Ranking module via RANK_NOTIFICATION_PORT.
+ */
+export interface RankNotificationPort {
+  notifyRankAchievement(params: RankNotificationParams): Promise<void>;
+  notifyRankImprovement(params: RankImprovementParams): Promise<void>;
+  notifyPeriodWinner(params: PeriodWinnerParams): Promise<void>;
 }

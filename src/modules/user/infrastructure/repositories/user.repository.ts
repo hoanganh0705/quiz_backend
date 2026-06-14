@@ -31,6 +31,7 @@ import type {
   UserPublicRow,
   UserRankingRow,
   UserRepositoryPort,
+  ModeratorRole,
 } from '../../domain/ports/user-repository.port';
 
 export const USER_BADGE_COLUMNS = {
@@ -569,5 +570,16 @@ export class UserRepository implements UserRepositoryPort {
       displayName: r.displayName ?? null,
       avatarUrl: r.avatarUrl ?? null,
     }));
+  }
+
+  async findUsersByRole(roles: ModeratorRole[]): Promise<{ userId: string }[]> {
+    if (roles.length === 0) return [];
+
+    const rows = await this.db
+      .select({ userId: users.userId })
+      .from(users)
+      .where(and(inArray(users.role, roles), isNull(users.deletedAt)));
+
+    return rows.map((r) => ({ userId: r.userId }));
   }
 }

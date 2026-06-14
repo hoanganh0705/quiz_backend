@@ -1,29 +1,33 @@
 /**
  * Notification Ranking Listener Adapter
  *
- * Listens to Ranking domain events and triggers notifications.
- * This adapter bridges the Ranking domain event bus to Notification domain services.
+ * Listens to Ranking domain events and triggers notifications via the dedicated
+ * RANK_NOTIFICATION_PORT. The Notification module owns the implementation
+ * (RankNotificationService) and exports it through the port token, so Ranking
+ * does not reach into Notification internals.
  */
 
-import { Inject, Injectable, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
+import { Inject, Injectable, OnModuleInit, OnModuleDestroy, forwardRef } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import {
   RANKING_DOMAIN_EVENT_BUS,
   type RankingDomainEventBusPort,
   type PublishedRankingDomainEvent,
 } from '../../domain/ports/ranking-event-bus.port';
-import { RankNotificationService } from '@/modules/notification/domain/services';
 import {
+  RANK_NOTIFICATION_PORT,
+  type RankNotificationPort,
   NOTIFICATION_REPOSITORY_PORT,
   type NotificationRepositoryPort,
-} from '@/modules/notification/domain/ports/notification-ports';
+} from '@/modules/notification/domain/ports';
 
 @Injectable()
 export class RankingNotificationListenerAdapter implements OnModuleInit, OnModuleDestroy {
   private unsubscribe: (() => void) | null = null;
 
   constructor(
-    private readonly rankNotificationService: RankNotificationService,
+    @Inject(forwardRef(() => RANK_NOTIFICATION_PORT))
+    private readonly rankNotifications: RankNotificationPort,
     @Inject(RANKING_DOMAIN_EVENT_BUS)
     private readonly eventBus: RankingDomainEventBusPort,
     @Inject(NOTIFICATION_REPOSITORY_PORT)
@@ -74,7 +78,7 @@ export class RankingNotificationListenerAdapter implements OnModuleInit, OnModul
 
     if (improvement >= threshold) {
       try {
-        await this.rankNotificationService.notifyRankImprovement({
+        await this.rankNotifications.notifyRankImprovement({
           userId: event.userId,
           previousRank: event.previousRank,
           newRank: event.newRank,
@@ -95,7 +99,7 @@ export class RankingNotificationListenerAdapter implements OnModuleInit, OnModul
     event: Extract<PublishedRankingDomainEvent, { eventType: 'ranking.milestone' }>,
   ): Promise<void> {
     try {
-      await this.rankNotificationService.notifyRankAchievement({
+      await this.rankNotifications.notifyRankAchievement({
         userId: event.userId,
         rank: event.rank,
         period: event.period,

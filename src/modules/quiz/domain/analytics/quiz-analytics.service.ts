@@ -113,6 +113,47 @@ export class QuizAnalyticsService implements QuizAnalyticsPort {
     });
   }
 
+  /**
+   * Port-side entry point for `review.submitted` notifications from the Review module.
+   * Delegates to {@link refreshReviewMetrics} but isolates the failure to the port
+   * boundary so a bad payload can't tear down the listener.
+   */
+  async onReviewSubmitted(quizId: string): Promise<void> {
+    try {
+      await this.refreshReviewMetrics(quizId);
+      this.logger.debug({
+        event: 'analytics_review_submitted',
+        quizId,
+      });
+    } catch (error) {
+      this.logger.error({
+        event: 'analytics_review_submitted_failed',
+        quizId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  /**
+   * Port-side entry point for `review.deleted` notifications from the Review module.
+   * See {@link onReviewSubmitted} for the rationale behind the try/catch.
+   */
+  async onReviewDeleted(quizId: string): Promise<void> {
+    try {
+      await this.refreshReviewMetrics(quizId);
+      this.logger.debug({
+        event: 'analytics_review_deleted',
+        quizId,
+      });
+    } catch (error) {
+      this.logger.error({
+        event: 'analytics_review_deleted_failed',
+        quizId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
   async refreshBookmarkMetrics(quizId: string): Promise<void> {
     const nowIso = new Date().toISOString();
 
@@ -162,6 +203,73 @@ export class QuizAnalyticsService implements QuizAnalyticsPort {
       quizId,
       popularityScore,
     });
+  }
+
+  /**
+   * Remove all cached analytics for a deleted quiz.
+   * Called by QuizDomainEventBootstrapService when a `quiz.deleted` event is received.
+   *
+   * Trending/popularity leaderboards are computed on-demand and JOIN on the
+   * `quizzes` table with `deletedAt IS NULL`, so a deleted quiz is already
+   * excluded from those queries. Removing the `quizStats` row is the
+   * additional step needed to keep the analytics tables consistent and
+   * free up storage.
+   */
+  async invalidateQuizMetrics(quizId: string): Promise<void> {
+    try {
+      await this.analyticsRepository.deleteQuizStats(quizId);
+
+      this.logger.info({
+        event: 'quiz_metrics_invalidated',
+        quizId,
+      });
+    } catch (error) {
+      this.logger.error({
+        event: 'quiz_metrics_invalidation_failed',
+        quizId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  /**
+   * Refresh per-quiz analytics for every quiz in the given category.
+   * Called by CategoryEventBootstrapService when a category is created, updated,
+   * deleted, or restored — the category's trending rank can change and downstream
+   * leaderboards (trending/popular quizzes filtered by category) need to pick that up.
+   *
+   * Failures are logged but do not throw — the category event has already been
+   * persisted at this point and a failed analytics refresh is recoverable on the
+   * next periodic rebuild.
+   */
+  async invalidateCategoryAnalytics(categoryId: string): Promise<void> {
+    try {
+      const quizIds = await this.analyticsRepository.getQuizIdsByCategory(categoryId);
+
+      if (quizIds.length === 0) {
+        this.logger.info({
+          event: 'category_analytics_invalidated_no_quizzes',
+          categoryId,
+        });
+        return;
+      }
+
+      await Promise.allSettled(
+        quizIds.map((quizId) => this.refreshQuizMetrics(quizId)),
+      );
+
+      this.logger.info({
+        event: 'category_analytics_invalidated',
+        categoryId,
+        quizCount: quizIds.length,
+      });
+    } catch (error) {
+      this.logger.error({
+        event: 'category_analytics_invalidation_failed',
+        categoryId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
   }
 
   async refreshAllTrendingScores(): Promise<void> {
