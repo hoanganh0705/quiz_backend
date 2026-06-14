@@ -42,9 +42,11 @@ import { QuizModule } from '@/modules/quiz/quiz.module';
     // Port bindings
     { provide: REVIEW_REPOSITORY_PORT, useExisting: ReviewRepository },
     { provide: IDEMPOTENCY_SERVICE, useExisting: IdempotencyService },
+    { provide: REVIEW_ANALYTICS_PORT, useExisting: ReviewAnalyticsAdapter },
 
     // Infrastructure
     ReviewRepository,
+    ReviewAnalyticsAdapter,
     IdempotencyService,
 
     // Domain Event Bus

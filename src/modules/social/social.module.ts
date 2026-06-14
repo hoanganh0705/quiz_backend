@@ -9,6 +9,7 @@ import { AchievementFeedListenerAdapter } from './infrastructure/adapters/achiev
 import { RankingFeedListenerAdapter } from './infrastructure/adapters/ranking-feed-listener.adapter';
 import { DiscussionFeedListenerAdapter } from './infrastructure/adapters/discussion-feed-listener.adapter';
 import { TournamentFeedListenerAdapter } from './infrastructure/adapters/tournament-feed-listener.adapter';
+import { InstanceFeedListenerAdapter } from './infrastructure/adapters/instance-feed-listener.adapter';
 import { SocialNotificationListener } from './infrastructure/adapters/social-notification-listener.adapter';
 import { SocialController } from './transport/controller/social.controller';
 import { SocialDomainExceptionFilter } from './transport/filters/social-domain-exception.filter';
@@ -16,19 +17,16 @@ import { SOCIAL_REPOSITORY_PORT } from './domain/ports/social-ports';
 import { SocialDomainEventBus } from './domain/events';
 import { RANKING_PORT } from './domain/ports/ranking.port';
 import { SOCIAL_DOMAIN_EVENT_BUS } from './domain/events/social-event-bus.port';
-// Ranking infrastructure (local instances, no RankingModule import needed)
-import { RankingDomainEventBus } from '@/modules/ranking/domain/events/ranking-domain.event-bus';
-import { RankingRepository } from '@/modules/ranking/infrastructure/repositories/ranking.repository';
-import { RANKING_DOMAIN_EVENT_BUS } from '@/modules/ranking/domain/ports/ranking-event-bus.port';
-import { RANKING_REPOSITORY_PORT } from '@/modules/ranking/domain/ports/ranking-repository.port';
-import { SharedRankingEventBusAdapter } from '@/modules/ranking/domain/events/shared-ranking-event-bus.adapter';
-import { SHARED_RANKING_EVENT_BUS } from '@/common/events/ranking-shared-events';
 // Other domain modules (needed for event bus tokens)
 import { UserModule } from '@/modules/user/user.module';
 import { AchievementModule } from '@/modules/achievement/achievement.module';
 import { DiscussionModule } from '@/modules/discussion/discussion.module';
 import { TournamentModule } from '@/modules/tournament/tournament.module';
 import { NotificationModule } from '@/modules/notification/notification.module';
+import { RankingModule } from '@/modules/ranking/ranking.module';
+import { AttemptModule } from '@/modules/attempt/attempt.module';
+import { InstanceModule } from '@/modules/instance/instance.module';
+import { AttemptFeedListenerAdapter } from './infrastructure/adapters/attempt-feed-listener.adapter';
 
 @Module({
   imports: [
@@ -38,22 +36,24 @@ import { NotificationModule } from '@/modules/notification/notification.module';
     DiscussionModule,
     TournamentModule,
     forwardRef(() => NotificationModule),
+    forwardRef(() => RankingModule),
+    AttemptModule,
+    forwardRef(() => InstanceModule),
     JwtModule,
   ],
   providers: [
     SocialApplicationService,
     SocialService,
     SocialRepository,
-    // Ranking infrastructure (local instances for SocialModule)
-    RankingRepository,
-    RankingDomainEventBus,
-    SharedRankingEventBusAdapter,
+    // Ranking port (SocialModule owns this adapter)
     RankingAdapter,
     // Event listener adapters
     AchievementFeedListenerAdapter,
     RankingFeedListenerAdapter,
     DiscussionFeedListenerAdapter,
     TournamentFeedListenerAdapter,
+    AttemptFeedListenerAdapter,
+    InstanceFeedListenerAdapter,
     SocialNotificationListener,
     SocialDomainExceptionFilter,
     SocialDomainEventBus,
@@ -61,9 +61,6 @@ import { NotificationModule } from '@/modules/notification/notification.module';
     { provide: SOCIAL_DOMAIN_EVENT_BUS, useExisting: SocialDomainEventBus },
     { provide: SOCIAL_REPOSITORY_PORT, useExisting: SocialRepository },
     { provide: RANKING_PORT, useExisting: RankingAdapter },
-    { provide: RANKING_DOMAIN_EVENT_BUS, useExisting: RankingDomainEventBus },
-    { provide: RANKING_REPOSITORY_PORT, useExisting: RankingRepository },
-    { provide: SHARED_RANKING_EVENT_BUS, useExisting: SharedRankingEventBusAdapter },
   ],
   controllers: [SocialController],
   exports: [SocialService, SocialApplicationService, SocialDomainEventBus, SOCIAL_DOMAIN_EVENT_BUS],

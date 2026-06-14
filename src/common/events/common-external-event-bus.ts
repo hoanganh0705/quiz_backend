@@ -12,14 +12,49 @@
 
 import { Injectable } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
+import { correlationIdStorage } from '@/common/interceptors/correlation-id';
 
 export const EXTERNAL_EVENT_BUS = Symbol('EXTERNAL_EVENT_BUS');
 
-export interface ExternalEventBusPort {
-  subscribe(eventType: string, handler: (event: ExternalEvent) => void): () => void;
+/**
+ * Port interface for the external event bus.
+ *
+ * The producer side (modules that publish `external.xp.earned`) only needs the
+ * `publishXpEarned` method, so it should inject `EXTERNAL_EVENT_BUS_PRODUCER_PORT`.
+ * The consumer side only needs `subscribe`, so it should inject
+ * `EXTERNAL_EVENT_BUS_CONSUMER_PORT`. This split keeps producers from
+ * accidentally depending on the subscription surface (and vice versa), and
+ * matches the producer-side pattern used by Attempt / Tournament.
+ */
+export interface ExternalEventBusProducerPort {
   publishXpEarned(event: ExternalXpEarnedEvent): void;
 }
 
+export interface ExternalEventBusConsumerPort {
+  subscribe(eventType: string, handler: (event: ExternalEvent) => void): () => void;
+}
+
+export const EXTERNAL_EVENT_BUS_PRODUCER_PORT = Symbol('EXTERNAL_EVENT_BUS_PRODUCER_PORT');
+export const EXTERNAL_EVENT_BUS_CONSUMER_PORT = Symbol('EXTERNAL_EVENT_BUS_CONSUMER_PORT');
+
+/**
+ * Legacy aggregate port retained for backward compatibility. New code should
+ * use the narrower producer/consumer ports.
+ */
+export interface ExternalEventBusPort extends ExternalEventBusProducerPort, ExternalEventBusConsumerPort {}
+
+/**
+ * Shared external XP-earned event payload.
+ *
+ * Includes an optional `correlationId` so that handlers in downstream modules
+ * (Ranking, etc.) can join their own log lines to the originating request
+ * chain. Producers should set this from `getCorrelationId()` (falling back to
+ * a freshly-generated UUID via `createCorrelationId()`) at publish time; the
+ * `CommonExternalEventBus.publish()` method automatically restores it into
+ * the module-level `correlationIdStorage` AsyncLocalStorage before invoking
+ * any subscriber, so consumers can simply call `getCorrelationId()` and read
+ * the same ID without having to thread it through their own bookkeeping.
+ */
 export interface ExternalXpEarnedEvent {
   readonly eventType: 'external.xp.earned';
   readonly userId: string;
@@ -29,6 +64,7 @@ export interface ExternalXpEarnedEvent {
   readonly tournamentId?: string;
   readonly categoryId?: string;
   readonly timestamp: Date;
+  readonly correlationId?: string;
 }
 
 export type ExternalEvent = ExternalXpEarnedEvent;
@@ -36,7 +72,7 @@ export type ExternalEvent = ExternalXpEarnedEvent;
 type ExternalEventHandler = (event: ExternalEvent) => void | Promise<void>;
 
 @Injectable()
-export class CommonExternalEventBus {
+export class CommonExternalEventBus implements ExternalEventBusPort {
   private readonly handlers: Map<string, Set<ExternalEventHandler>> = new Map();
 
   constructor(
@@ -81,29 +117,43 @@ export class CommonExternalEventBus {
       event: 'external_event_published',
       eventType: event.eventType,
       userId: event.userId,
+      correlationId: event.correlationId,
     });
 
     const typeHandlers = this.handlers.get(event.eventType);
     if (!typeHandlers || typeHandlers.size === 0) return;
 
     for (const handler of typeHandlers) {
-      try {
-        const result = handler(event);
-        if (result instanceof Promise) {
-          result.catch((error) => {
-            this.logger.error({
-              event: 'external_event_handler_error',
-              eventType: event.eventType,
-              error: error instanceof Error ? error.message : String(error),
+      // Restore the originating correlation ID (if present) into the
+      // module-level AsyncLocalStorage so downstream consumers can read it via
+      // `getCorrelationId()` without any extra plumbing on their end.
+      const dispatch = () => {
+        try {
+          const result = handler(event);
+          if (result instanceof Promise) {
+            result.catch((error) => {
+              this.logger.error({
+                event: 'external_event_handler_error',
+                eventType: event.eventType,
+                correlationId: event.correlationId,
+                error: error instanceof Error ? error.message : String(error),
+              });
             });
+          }
+        } catch (error) {
+          this.logger.error({
+            event: 'external_event_handler_error',
+            eventType: event.eventType,
+            correlationId: event.correlationId,
+            error: error instanceof Error ? error.message : String(error),
           });
         }
-      } catch (error) {
-        this.logger.error({
-          event: 'external_event_handler_error',
-          eventType: event.eventType,
-          error: error instanceof Error ? error.message : String(error),
-        });
+      };
+
+      if (event.correlationId) {
+        correlationIdStorage.run({ correlationId: event.correlationId }, dispatch);
+      } else {
+        dispatch();
       }
     }
   }

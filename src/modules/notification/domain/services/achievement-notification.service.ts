@@ -26,8 +26,21 @@ export interface BadgeRevokedNotificationParams {
   revokedBy: string;
 }
 
+/**
+ * Port interface exposed to the Achievement module via ACHIEVEMENT_NOTIFICATION_PORT.
+ * Consumers call these methods instead of reaching into the Notification module.
+ */
+export interface AchievementNotificationPort {
+  notifyAchievementEarned(params: AchievementNotificationParams): Promise<void>;
+  notifyBadgeUnlocked(
+    params: Omit<AchievementNotificationParams, 'achievementType'>,
+  ): Promise<void>;
+  notifyBadgeRevoked(params: BadgeRevokedNotificationParams): Promise<void>;
+  notifyStreakMilestone(params: StreakNotificationParams): Promise<void>;
+}
+
 @Injectable()
-export class AchievementNotificationService {
+export class AchievementNotificationService implements AchievementNotificationPort {
   constructor(
     private readonly channelService: NotificationChannelService,
     @InjectPinoLogger(AchievementNotificationService.name)

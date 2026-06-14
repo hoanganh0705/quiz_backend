@@ -1,4 +1,4 @@
-import { Inject, Injectable, Optional } from '@nestjs/common';
+import { Inject, Injectable, Optional, forwardRef } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
 import { QUIZ_INSTANCE_REPOSITORY_PORT } from './ports';
@@ -27,9 +27,10 @@ import {
   InstanceStartedEvent,
   InstanceClosedEvent,
 } from './events';
-import type { NotificationType } from '@/modules/notification/domain/types/notification.types';
-import type { NotificationChannelService } from '@/modules/notification/infrastructure/adapters/notification-channel.service';
-import { NOTIFICATION_CHANNEL_SERVICE } from '@/modules/notification/domain/ports/notification-ports';
+import {
+  INSTANCE_NOTIFICATION_PORT,
+  type InstanceNotificationPort,
+} from '@/modules/notification/domain/ports';
 
 @Injectable()
 export class InstanceService {
@@ -41,8 +42,8 @@ export class InstanceService {
     @InjectPinoLogger(InstanceService.name)
     private readonly logger: PinoLogger,
     @Optional()
-    @Inject(NOTIFICATION_CHANNEL_SERVICE)
-    private readonly notificationChannelService?: NotificationChannelService,
+    @Inject(forwardRef(() => INSTANCE_NOTIFICATION_PORT))
+    private readonly instanceNotifications?: InstanceNotificationPort,
   ) {}
 
   async createInstance(params: {
@@ -356,22 +357,20 @@ export class InstanceService {
     body: string;
     metadata: Record<string, unknown>;
   }): Promise<void> {
-    if (!this.notificationChannelService) {
+    if (!this.instanceNotifications) {
       this.logger.warn({
-        event: 'notification_channel_service_unavailable',
-        message: 'NotificationChannelService not injected; skipping notification',
+        event: 'instance_notification_port_unavailable',
+        message: 'INSTANCE_NOTIFICATION_PORT not injected; skipping notification',
       });
       return;
     }
 
     try {
-      await this.notificationChannelService.send({
+      await this.instanceNotifications.notifyHostSystemAnnouncement({
         userId: params.userId,
-        type: 'system_announcement' as NotificationType,
         title: params.title,
         body: params.body,
         metadata: params.metadata,
-        channels: ['in_app'],
       });
 
       this.logger.debug({

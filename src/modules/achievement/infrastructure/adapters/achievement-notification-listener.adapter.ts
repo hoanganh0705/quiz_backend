@@ -1,11 +1,15 @@
 /**
  * Achievement Notification Listener
  *
- * Subscribes to Achievement domain events and dispatches notifications.
+ * Subscribes to Achievement domain events and dispatches notifications via
+ * ACHIEVEMENT_NOTIFICATION_PORT. The Notification module owns the implementation
+ * (AchievementNotificationService) and exports it through the port token, so
+ * Achievement does not reach into Notification internals.
+ *
  * Hosted in AchievementModule to avoid cross-module import cycles.
  */
 
-import { Inject, Injectable, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
+import { Inject, Injectable, OnModuleInit, OnModuleDestroy, forwardRef } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { getCorrelationId, createCorrelationId } from '@/common/interceptors/correlation-id';
 import {
@@ -19,8 +23,10 @@ import type {
   BadgeRevokedEvent as PublishedBadgeRevokedEvent,
   StreakMilestoneEvent as PublishedStreakMilestoneEvent,
 } from '../../domain/events/achievement.events';
-import { NOTIFICATION_CHANNEL_SERVICE } from '@/modules/notification/domain/ports';
-import type { NotificationChannelServicePort } from '@/modules/notification/domain/ports';
+import {
+  ACHIEVEMENT_NOTIFICATION_PORT,
+  type AchievementNotificationPort,
+} from '@/modules/notification/domain/ports';
 
 @Injectable()
 export class AchievementNotificationListener implements OnModuleInit, OnModuleDestroy {
@@ -29,8 +35,8 @@ export class AchievementNotificationListener implements OnModuleInit, OnModuleDe
   constructor(
     @Inject(ACHIEVEMENT_DOMAIN_EVENT_BUS)
     private readonly achievementEventBus: AchievementDomainEventBus,
-    @Inject(NOTIFICATION_CHANNEL_SERVICE)
-    private readonly channelService: NotificationChannelServicePort,
+    @Inject(forwardRef(() => ACHIEVEMENT_NOTIFICATION_PORT))
+    private readonly achievementNotifications: AchievementNotificationPort,
     @InjectPinoLogger(AchievementNotificationListener.name)
     private readonly logger: PinoLogger,
   ) {}
@@ -56,40 +62,40 @@ export class AchievementNotificationListener implements OnModuleInit, OnModuleDe
   }
 
   private async handleEvent(event: PublishedAchievementDomainEvent): Promise<void> {
-    switch (event.eventType) {
-      case 'achievement.awarded':
-        await this.handleAchievementAwarded(event);
-        break;
-      case 'badge.earned':
-        await this.handleBadgeEarned(event);
-        break;
-      case 'badge.revoked':
-        await this.handleBadgeRevoked(event);
-        break;
-      case 'streak.milestone':
-        await this.handleStreakMilestone(event);
-        break;
+    try {
+      switch (event.eventType) {
+        case 'achievement.awarded':
+          await this.handleAchievementAwarded(event);
+          break;
+        case 'badge.earned':
+          await this.handleBadgeEarned(event);
+          break;
+        case 'badge.revoked':
+          await this.handleBadgeRevoked(event);
+          break;
+        case 'streak.milestone':
+          await this.handleStreakMilestone(event);
+          break;
+      }
+    } catch (error) {
+      this.logger.error({
+        event: 'achievement_notification_dispatch_failed',
+        eventType: event.eventType,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
     }
   }
 
   private async handleAchievementAwarded(event: PublishedAchievementAwardedEvent): Promise<void> {
     const correlationId = getCorrelationId() ?? createCorrelationId();
-
     try {
-      const title = 'Achievement Unlocked';
-      const body = `You earned the ${event.badgeType.replace(/_/g, ' ')} badge`;
-
-      await this.channelService.send({
+      await this.achievementNotifications.notifyAchievementEarned({
         userId: event.userId,
-        type: 'achievement_earned',
-        title,
-        body,
-        metadata: {
-          achievementType: event.achievementType,
-          badgeType: event.badgeType,
-        },
+        achievementType: event.achievementType,
+        badgeType: event.badgeType,
+        badgeName: event.badgeType,
+        category: event.achievementType,
       });
-
       this.logger.info({
         event: 'achievement_notification_sent',
         correlationId,
@@ -110,19 +116,13 @@ export class AchievementNotificationListener implements OnModuleInit, OnModuleDe
 
   private async handleBadgeEarned(event: PublishedBadgeEarnedEvent): Promise<void> {
     const correlationId = getCorrelationId() ?? createCorrelationId();
-
     try {
-      const title = 'Badge Earned';
-      const body = `You earned the ${event.badgeType.replace(/_/g, ' ')} badge`;
-
-      await this.channelService.send({
+      await this.achievementNotifications.notifyBadgeUnlocked({
         userId: event.userId,
-        type: 'badge_unlocked',
-        title,
-        body,
-        metadata: { badgeType: event.badgeType },
+        badgeType: event.badgeType,
+        badgeName: event.badgeType,
+        category: event.badgeType,
       });
-
       this.logger.info({
         event: 'badge_unlock_notification_sent',
         correlationId,
@@ -142,22 +142,14 @@ export class AchievementNotificationListener implements OnModuleInit, OnModuleDe
 
   private async handleBadgeRevoked(event: PublishedBadgeRevokedEvent): Promise<void> {
     const correlationId = getCorrelationId() ?? createCorrelationId();
-
     try {
-      const title = 'Badge Revoked';
-      const body = `The ${event.badgeType.replace(/_/g, ' ')} badge was revoked`;
-
-      await this.channelService.send({
+      await this.achievementNotifications.notifyBadgeRevoked({
         userId: event.userId,
-        type: 'badge_revoked',
-        title,
-        body,
-        metadata: {
-          badgeType: event.badgeType,
-          reason: event.reason,
-        },
+        badgeId: event.badgeId,
+        badgeType: event.badgeType,
+        reason: event.reason,
+        revokedBy: event.revokedBy,
       });
-
       this.logger.info({
         event: 'badge_revoked_notification_sent',
         correlationId,
@@ -177,19 +169,12 @@ export class AchievementNotificationListener implements OnModuleInit, OnModuleDe
 
   private async handleStreakMilestone(event: PublishedStreakMilestoneEvent): Promise<void> {
     const correlationId = getCorrelationId() ?? createCorrelationId();
-
     try {
-      const title = 'Streak Milestone';
-      const body = `You have maintained a ${event.streakDays}-day streak`;
-
-      await this.channelService.send({
+      await this.achievementNotifications.notifyStreakMilestone({
         userId: event.userId,
-        type: 'streak_milestone',
-        title,
-        body,
-        metadata: { streakDays: event.streakDays },
+        streakDays: event.streakDays,
+        milestone: event.streakDays,
       });
-
       this.logger.info({
         event: 'streak_milestone_notification_sent',
         correlationId,

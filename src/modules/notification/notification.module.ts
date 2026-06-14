@@ -11,6 +11,11 @@ import {
   NOTIFICATION_CHANNEL_SERVICE_INSTANCE,
   NOTIFICATION_REPOSITORY_PORT,
   NOTIFICATION_DOMAIN_EVENT_BUS,
+  SOCIAL_NOTIFICATION_PORT,
+  ACHIEVEMENT_NOTIFICATION_PORT,
+  TOURNAMENT_NOTIFICATION_PORT,
+  INSTANCE_NOTIFICATION_PORT,
+  RANK_NOTIFICATION_PORT,
 } from './domain/ports';
 import { NotificationChannelService } from './infrastructure/adapters';
 import { RankNotificationService } from './domain/services/rank-notification.service';
@@ -19,6 +24,8 @@ import {
   InstanceNotificationService,
   ReviewNotificationService,
   UserNotificationService,
+  SocialNotificationService,
+  AchievementNotificationService,
 } from './domain/services';
 import { NotificationDomainEventBus } from './domain/events/notification-domain.event-bus';
 import { DiscussionModule } from '@/modules/discussion/discussion.module';
@@ -59,13 +66,36 @@ import { NotificationWebSocketListener } from './infrastructure/adapters/notific
     NotificationApplicationService,
     NotificationSchedulerService,
     RankNotificationService,
+    {
+      provide: RANK_NOTIFICATION_PORT,
+      useExisting: RankNotificationService,
+    },
     TournamentNotificationService,
+    {
+      provide: TOURNAMENT_NOTIFICATION_PORT,
+      useExisting: TournamentNotificationService,
+    },
     InstanceNotificationService,
+    {
+      provide: INSTANCE_NOTIFICATION_PORT,
+      useExisting: InstanceNotificationService,
+    },
     DiscussionNotificationListener,
     InstanceNotificationListener,
     ReviewNotificationListener,
+    ReviewNotificationService,
     UserNotificationService,
     UserNotificationListener,
+    SocialNotificationService,
+    {
+      provide: SOCIAL_NOTIFICATION_PORT,
+      useExisting: SocialNotificationService,
+    },
+    AchievementNotificationService,
+    {
+      provide: ACHIEVEMENT_NOTIFICATION_PORT,
+      useExisting: AchievementNotificationService,
+    },
     NotificationGateway,
     NotificationWebSocketListener,
   ],
@@ -81,8 +111,15 @@ import { NotificationWebSocketListener } from './infrastructure/adapters/notific
     NotificationApplicationService,
     NotificationSchedulerService,
     RankNotificationService,
+    RANK_NOTIFICATION_PORT,
     TournamentNotificationService,
+    TOURNAMENT_NOTIFICATION_PORT,
     InstanceNotificationService,
+    INSTANCE_NOTIFICATION_PORT,
+    SocialNotificationService,
+    SOCIAL_NOTIFICATION_PORT,
+    AchievementNotificationService,
+    ACHIEVEMENT_NOTIFICATION_PORT,
   ],
 })
 export class NotificationModule {}

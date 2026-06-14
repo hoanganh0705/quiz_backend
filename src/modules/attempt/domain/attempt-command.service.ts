@@ -39,9 +39,10 @@ import {
   AttemptCompletedEvent,
   QuizMilestoneEvent,
 } from './events/attempt-domain.events';
-import { EXTERNAL_EVENT_BUS } from '@/common/events';
-import type { CommonExternalEventBus } from '@/common/events/common-external-event-bus';
+import { EXTERNAL_EVENT_BUS_PRODUCER_PORT } from '@/common/events';
+import type { ExternalEventBusProducerPort } from '@/common/events/common-external-event-bus';
 import { QUIZ_REPOSITORY_PORT } from '@/modules/quiz/domain/ports';
+import { createCorrelationId } from '@/common/interceptors/correlation-id';
 
 /**
  * AttemptCommandService — Mutation operations for the Attempt aggregate.
@@ -60,8 +61,8 @@ export class AttemptCommandService {
     private readonly attemptQueryService: AttemptQueryService,
     @Inject(ATTEMPT_DOMAIN_EVENT_BUS)
     private readonly eventBus: AttemptDomainEventBusPort,
-    @Inject(EXTERNAL_EVENT_BUS)
-    private readonly externalEventBus: CommonExternalEventBus,
+    @Inject(EXTERNAL_EVENT_BUS_PRODUCER_PORT)
+    private readonly externalEventBus: ExternalEventBusProducerPort,
     @Inject(QUIZ_REPOSITORY_PORT)
     private readonly quizRepository: {
       getQuizWithPublishedVersionById: (quizId: string) => Promise<{
@@ -360,6 +361,7 @@ export class AttemptCommandService {
         source: 'quiz_attempt',
         attemptId,
         timestamp: new Date(nowIso),
+        correlationId: createCorrelationId(),
       });
 
       this.logger.debug({

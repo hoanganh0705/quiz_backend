@@ -11,6 +11,7 @@ import { getCorrelationId, createCorrelationId } from '@/common/interceptors/cor
 import { SHARED_RANKING_EVENT_BUS } from '@/common/events/ranking-shared-events';
 import type { SharedRankingEventBusPort, SharedRankingDomainEvent } from '@/common/events/ranking-shared-events';
 import { RankAchievementService } from '../../domain/services/rank-achievement.service';
+import { RuleEngineService } from '../../domain/services/rule-engine.service';
 
 @Injectable()
 export class RankingEventAchievementListenerAdapter implements OnModuleInit, OnModuleDestroy {
@@ -18,6 +19,7 @@ export class RankingEventAchievementListenerAdapter implements OnModuleInit, OnM
 
   constructor(
     private readonly rankAchievementService: RankAchievementService,
+    private readonly ruleEngineService: RuleEngineService,
     @Inject(SHARED_RANKING_EVENT_BUS)
     private readonly eventBus: SharedRankingEventBusPort,
     @InjectPinoLogger(RankingEventAchievementListenerAdapter.name)
@@ -125,17 +127,53 @@ export class RankingEventAchievementListenerAdapter implements OnModuleInit, OnM
     }
   }
 
-  private handleRankingMilestone(
+  private async handleRankingMilestone(
     event: Extract<SharedRankingDomainEvent, { eventType: 'ranking.milestone' }>,
     correlationId: string,
-  ): void {
-    this.logger.debug({
-      event: 'ranking_milestone_received',
-      correlationId,
-      userId: event.userId,
-      period: event.period,
-      milestoneType: event.milestoneType,
-      rank: event.rank,
-    });
+  ): Promise<void> {
+    try {
+      // Evaluate rank badges through the rank service first (top-10/top-100/top-1000 style).
+      await this.rankAchievementService.checkRankAchievements({
+        userId: event.userId,
+        period: event.period,
+        currentRank: event.rank,
+        previousRank: null,
+        xp: 0,
+      });
+
+      // Then evaluate rule-engine badges keyed off `ranking.milestone` so any custom
+      // rules tied to this trigger can fire (e.g. "reached top-100 in your first
+      // active week").
+      const results = await this.ruleEngineService.evaluateEvent({
+        userId: event.userId,
+        eventType: 'ranking.milestone',
+        eventData: {
+          period: event.period,
+          milestoneType: event.milestoneType,
+          rank: event.rank,
+          percentile: event.percentile,
+        },
+      });
+
+      this.logger.info({
+        event: 'ranking_milestone_evaluated',
+        correlationId,
+        userId: event.userId,
+        period: event.period,
+        milestoneType: event.milestoneType,
+        rank: event.rank,
+        badgesAwarded: results.filter((r) => r.awarded).length,
+      });
+    } catch (error) {
+      this.logger.error({
+        event: 'ranking_milestone_evaluation_failed',
+        correlationId,
+        userId: event.userId,
+        period: event.period,
+        milestoneType: event.milestoneType,
+        rank: event.rank,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
   }
 }

@@ -7,7 +7,10 @@
 
 import { Inject, Injectable, OnModuleDestroy, OnModuleInit, forwardRef } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
-import { DISCUSSION_REPOSITORY_PORT, type DiscussionRepositoryPort } from '@/modules/discussion/domain/ports';
+import {
+  DISCUSSION_REPOSITORY_PORT,
+  type DiscussionRepositoryPort,
+} from '@/modules/discussion/domain/ports';
 import {
   DISCUSSION_DOMAIN_EVENT_BUS,
   type DiscussionDomainEventBusPort,
@@ -30,6 +33,10 @@ import type {
 } from '@/modules/discussion/domain/events/discussion-domain.events';
 import { NOTIFICATION_CHANNEL_SERVICE } from '../../domain/ports';
 import type { NotificationChannelServicePort } from '../../domain/ports';
+import {
+  USER_REPOSITORY_PORT,
+  type UserRepositoryPort,
+} from '@/modules/user/domain/ports/user-repository.port';
 
 @Injectable()
 export class DiscussionNotificationListener implements OnModuleInit, OnModuleDestroy {
@@ -42,6 +49,8 @@ export class DiscussionNotificationListener implements OnModuleInit, OnModuleDes
     private readonly channelService: NotificationChannelServicePort,
     @Inject(DISCUSSION_REPOSITORY_PORT)
     private readonly discussionRepository: DiscussionRepositoryPort,
+    @Inject(forwardRef(() => USER_REPOSITORY_PORT))
+    private readonly userRepository: UserRepositoryPort,
     @InjectPinoLogger(DiscussionNotificationListener.name)
     private readonly logger: PinoLogger,
   ) {}
@@ -402,12 +411,82 @@ export class DiscussionNotificationListener implements OnModuleInit, OnModuleDes
   }
 
   async handleContentReported(event: ContentReportedEvent): Promise<void> {
-    this.logger.debug({
-      event: 'content_reported_notification_received',
-      reportId: event.reportId,
-      targetType: event.targetType,
-      targetId: event.targetId,
-    });
+    try {
+      const summary = await this.discussionRepository.getReportTargetSummary({
+        reportId: event.reportId,
+        targetType: event.targetType,
+        targetId: event.targetId,
+      });
+
+      if (!summary) {
+        this.logger.warn({
+          event: 'content_reported_target_missing',
+          reportId: event.reportId,
+          targetType: event.targetType,
+          targetId: event.targetId,
+        });
+        return;
+      }
+
+      const moderators = await this.userRepository.findUsersByRole(['admin', 'moderator']);
+
+      if (moderators.length === 0) {
+        this.logger.warn({
+          event: 'content_reported_no_moderators',
+          reportId: event.reportId,
+        });
+        return;
+      }
+
+      const targetLabel = this.formatTargetLabel(event.targetType);
+      const body = `${targetLabel} reported in "${summary.threadTitle}": ${event.reason}`;
+
+      await Promise.allSettled(
+        moderators.map((m) =>
+          this.channelService.send({
+            userId: m.userId,
+            type: 'system_announcement',
+            title: 'New content report',
+            body,
+            metadata: {
+              reportId: event.reportId,
+              targetType: event.targetType,
+              targetId: event.targetId,
+              threadId: summary.threadId,
+              threadTitle: summary.threadTitle,
+              reporterId: event.reporterId,
+              reason: event.reason,
+              excerpt: summary.excerpt,
+            },
+          }),
+        ),
+      );
+
+      this.logger.info({
+        event: 'content_reported_moderator_notifications_sent',
+        reportId: event.reportId,
+        targetType: event.targetType,
+        threadId: summary.threadId,
+        moderatorCount: moderators.length,
+      });
+    } catch (error) {
+      this.logger.error({
+        event: 'content_reported_moderator_notification_failed',
+        reportId: event.reportId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  private formatTargetLabel(targetType: 'thread' | 'comment' | 'reply'): string {
+    switch (targetType) {
+      case 'thread':
+        return 'A discussion thread';
+      case 'comment':
+        return 'A comment';
+      case 'reply':
+        return 'A reply';
+    }
   }
 
   async handleReportReviewed(event: ReportReviewedEvent): Promise<void> {

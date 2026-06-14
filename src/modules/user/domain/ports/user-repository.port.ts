@@ -23,6 +23,8 @@ export interface UserPublicRow {
   avatarUrl: string | null;
 }
 
+export type ModeratorRole = 'admin' | 'moderator';
+
 export interface UserBadgeRow {
   userBadgeId: string;
   badgeId: string;
@@ -132,6 +134,8 @@ export interface UserRepositoryPort {
   ): Promise<UserMeRow | null>;
 
   findByUsernames(usernames: string[]): Promise<UserPublicRow[]>;
+
+  findUsersByRole(roles: ModeratorRole[]): Promise<{ userId: string }[]>;
 }
 
 export const USER_REPOSITORY_PORT = Symbol('USER_REPOSITORY_PORT');

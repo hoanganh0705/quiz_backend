@@ -144,7 +144,12 @@ export type SocialFeedActivityType =
   | 'tournament_won'
   | 'comment_created'
   | 'discussion_created'
-  | 'discussion_solved';
+  | 'discussion_solved'
+  | 'quiz_completed'
+  | 'quiz_milestone'
+  | 'instance_created'
+  | 'instance_joined'
+  | 'instance_completed';
 
 export interface SocialFeedActivity {
   id: string;
