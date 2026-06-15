@@ -1,21 +1,7 @@
 import { Catch, ArgumentsHost, HttpStatus } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import type { ProblemDetail } from '@/common/types/problem-detail.type';
-import {
-  DiscussionError,
-  ThreadNotFoundError,
-  CommentNotFoundError,
-  ThreadForbiddenError,
-  CommentForbiddenError,
-  ThreadClosedError,
-  ThreadNotActiveError,
-  CommentThreadMismatchError,
-  SelfVoteError,
-  SelfReportError,
-  DuplicateReportError,
-  QuizNotFoundError,
-  ModeratorRequiredError,
-} from '../../../domain/errors';
+import { DiscussionError } from '../../domain/errors';
 import { UserNotFoundError } from '@/modules/user/domain/errors';
 
 const DISCUSSION_PROBLEM_URIS: Record<string, string> = {

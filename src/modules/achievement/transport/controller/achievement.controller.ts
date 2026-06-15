@@ -1,18 +1,14 @@
 import { Controller, Delete, Get, Param, ParseUUIDPipe, Query, UseFilters } from '@nestjs/common';
-import {
-  ApiBearerAuth,
-  ApiForbiddenResponse,
-  ApiInternalServerErrorResponse,
-  ApiNoContentResponse,
-  ApiNotFoundResponse,
-  ApiOkResponse,
-  ApiOperation,
-  ApiTags,
-  ApiUnauthorizedResponse,
-} from '@nestjs/swagger';
+import { ApiTags } from '@nestjs/swagger';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
 import { Roles } from '@/common/authorization/decorators/roles.decorator';
-import { ApiAuth } from '@/common/swagger/swagger-decorators';
+import {
+  ApiAuth,
+  ApiAuthList,
+  ApiAuthDelete,
+  ApiPublicList,
+  ApiInternalError,
+} from '@/common/swagger/swagger-decorators';
 import { AchievementApplicationService } from '../../application/achievement.application.service';
 import { AchievementHistoryItemResponseDto } from '../../dto/response/achievement-history-item-response.dto';
 import { BadgeCatalogItemResponseDto } from '../../dto/response/badge-catalog-item-response.dto';
@@ -29,24 +25,14 @@ export interface PaginationQuery {
 }
 
 @ApiTags('achievements')
-@ApiBearerAuth()
-@ApiUnauthorizedResponse({ description: 'Missing or invalid authentication token' })
 @Controller('achievements')
 @UseFilters(AchievementDomainExceptionFilter)
 export class AchievementController {
   constructor(private readonly achievementApplicationService: AchievementApplicationService) {}
 
   @Get('badges')
-  @ApiOperation({
-    summary: 'Get badge catalog',
-    description: 'Returns the catalog of all available badges in the system.',
-  })
-  @ApiOkResponse({
-    description: 'Badge catalog returned',
-    type: BadgeCatalogItemResponseDto,
-    isArray: true,
-  })
-  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  @ApiPublicList({ description: 'Badge catalog returned', type: BadgeCatalogItemResponseDto, isArray: true })
+  @ApiInternalError()
   getBadgeCatalog(@Query() query: PaginationQuery): Promise<{
     data: BadgeCatalogItemResponseDto[];
     total: number;
@@ -55,17 +41,8 @@ export class AchievementController {
   }
 
   @Get('me/badges')
-  @ApiOperation({
-    summary: 'Get my earned badges',
-    description:
-      'Returns all badges earned by the authenticated user, including rarity tier and earned-at timestamp. ' +
-      'Supports pagination via limit and offset query parameters.',
-  })
-  @ApiOkResponse({
-    description: 'User badges returned',
-    type: MyBadgesResponseDto,
-  })
-  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  @ApiAuthList({ description: 'User badges returned', type: MyBadgesResponseDto })
+  @ApiInternalError()
   getMyBadges(
     @CurrentUser('sub') userId: string,
     @Query() query: PaginationQuery,
@@ -74,13 +51,8 @@ export class AchievementController {
   }
 
   @Get('badges/:badgeId')
-  @ApiOperation({
-    summary: 'Get badge details',
-    description: 'Returns badge metadata and total earned count for the specified badge.',
-  })
-  @ApiOkResponse({ description: 'Badge details returned', type: BadgeDetailsResponseDto })
-  @ApiNotFoundResponse({ description: 'Badge not found' })
-  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  @ApiPublicList({ description: 'Badge details returned', type: BadgeDetailsResponseDto })
+  @ApiInternalError()
   getBadgeDetails(
     @Param('badgeId', new ParseUUIDPipe()) badgeId: string,
   ): Promise<BadgeDetailsResponseDto> {
@@ -89,16 +61,9 @@ export class AchievementController {
 
   @Delete('/users/:userId/badges/:badgeId')
   @Roles('admin')
-  @ApiBearerAuth()
   @ApiAuth()
-  @ApiOperation({
-    summary: 'Revoke a user badge',
-    description: 'Revokes a badge from a user. Requires admin role.',
-  })
-  @ApiNoContentResponse({ description: 'Badge revoked successfully' })
-  @ApiForbiddenResponse({ description: 'Authenticated user lacks required role or permission' })
-  @ApiNotFoundResponse({ description: 'User, badge, or owned badge not found' })
-  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  @ApiAuthDelete('Badge revoked successfully')
+  @ApiInternalError()
   async revokeUserBadge(
     @Param('userId', new ParseUUIDPipe()) userId: string,
     @Param('badgeId', new ParseUUIDPipe()) badgeId: string,
@@ -108,32 +73,18 @@ export class AchievementController {
   }
 
   @Get('/users/:userId/achievements')
-  @ApiOperation({
-    summary: 'Get public achievement profile',
-    description: 'Returns a public achievement summary for the specified user.',
-  })
-  @ApiOkResponse({
-    description: 'Public achievement profile returned',
-    type: PublicAchievementProfileResponseDto,
-  })
-  @ApiNotFoundResponse({ description: 'User not found' })
-  @ApiForbiddenResponse({ description: 'User profile is private' })
-  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  @ApiAuthList({ description: 'Public achievement profile returned', type: PublicAchievementProfileResponseDto })
+  @ApiInternalError()
   getPublicAchievementProfile(
     @Param('userId', new ParseUUIDPipe()) userId: string,
     @CurrentUser('sub') requesterId: string,
   ): Promise<PublicAchievementProfileResponseDto> {
     return this.achievementApplicationService.getPublicAchievementProfile(userId, requesterId);
   }
+
   @Get('/users/me/badges/:badgeId/progress')
-  @ApiOperation({
-    summary: 'Get my badge progress',
-    description:
-      "Returns the authenticated user's current progress toward earning the specified badge.",
-  })
-  @ApiOkResponse({ description: 'Badge progress returned', type: BadgeProgressResponseDto })
-  @ApiNotFoundResponse({ description: 'Badge not found' })
-  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  @ApiAuthList({ description: 'Badge progress returned', type: BadgeProgressResponseDto })
+  @ApiInternalError()
   getMyBadgeProgress(
     @CurrentUser('sub') userId: string,
     @Param('badgeId', new ParseUUIDPipe()) badgeId: string,
@@ -142,17 +93,12 @@ export class AchievementController {
   }
 
   @Get('/users/me/achievements/history')
-  @ApiOperation({
-    summary: 'Get my achievement history',
-    description:
-      "Returns the authenticated user's achievement history ordered by most recent first.",
-  })
-  @ApiOkResponse({
+  @ApiAuthList({
     description: 'Achievement history returned',
     type: AchievementHistoryItemResponseDto,
     isArray: true,
   })
-  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  @ApiInternalError()
   getMyAchievementHistory(
     @CurrentUser('sub') userId: string,
     @Query() query: PaginationQuery,
@@ -161,15 +107,8 @@ export class AchievementController {
   }
 
   @Get('/users/me/badges/analytics')
-  @ApiOperation({
-    summary: 'Get my badge analytics',
-    description: 'Returns badge analytics for the authenticated user.',
-  })
-  @ApiOkResponse({
-    description: 'Badge analytics returned',
-    type: UserBadgeAnalyticsResponseDto,
-  })
-  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  @ApiAuthList({ description: 'Badge analytics returned', type: UserBadgeAnalyticsResponseDto })
+  @ApiInternalError()
   getMyBadgeAnalytics(@CurrentUser('sub') userId: string): Promise<UserBadgeAnalyticsResponseDto> {
     return this.achievementApplicationService.getMyBadgeAnalytics(userId);
   }

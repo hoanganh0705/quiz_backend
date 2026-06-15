@@ -1,4 +1,4 @@
-import { INestApplication } from '@nestjs/common';
+import { INestApplication } from '@nestjs/common'; // INestApplication is an interface that represents the NestJS application instance. It provides methods for configuring the app, such as setting up middleware, routes, global prefixes, and more. By using INestApplication as a type, we can ensure that the app parameter passed to setupSwagger has the necessary methods and properties to properly configure Swagger for our API documentation.
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 
 const SWAGGER_PATH = 'docs';

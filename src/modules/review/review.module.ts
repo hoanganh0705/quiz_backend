@@ -7,7 +7,6 @@ import { IdempotencyService, IDEMPOTENCY_SERVICE } from './domain/idempotency.se
 import { ReviewResponseMapper } from './mappers/review-response.mapper';
 import { CursorMapper } from './mappers/review-cursor.mapper';
 import { ReviewController } from './transport/controller/review.controller';
-import { QuizReviewController } from './transport/controller/quiz-review.controller';
 import { UserReviewController } from './transport/controller/user-review.controller';
 import { AdminReviewController } from './transport/controller/admin-review.controller';
 import { ReviewDomainExceptionFilter } from './transport/filters/review-domain-exception.filter';
@@ -20,6 +19,7 @@ import {
 import { ReviewRepository } from './infrastructure/repositories/review.repository';
 import { ReviewAnalyticsAdapter } from './infrastructure/repositories/review-analytics.adapter';
 import { QuizModule } from '@/modules/quiz/quiz.module';
+import { quizReviewController } from './transport/controller/quiz-review.controller';
 
 @Module({
   imports: [DatabaseModule, forwardRef(() => QuizModule)],
@@ -55,7 +55,7 @@ import { QuizModule } from '@/modules/quiz/quiz.module';
   ],
   controllers: [
     ReviewController,
-    QuizReviewController,
+    quizReviewController,
     UserReviewController,
     AdminReviewController,
   ],

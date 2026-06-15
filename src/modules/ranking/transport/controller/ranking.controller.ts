@@ -7,19 +7,11 @@
 
 import { Controller, Get, Param, Query, UseFilters, UseGuards } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
-import {
-  ApiTags,
-  ApiOperation,
-  ApiOkResponse,
-  ApiQuery,
-  ApiBadRequestResponse,
-  ApiHeader,
-  ApiParam,
-  ApiNotFoundResponse,
-} from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiOkResponse } from '@nestjs/swagger';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
 import { Public } from '@/common/decorators/public.decorator';
 import { JwtGuard, type JwtPayload } from '@/common/guards/jwt.guard';
+import { ApiPublicList } from '@/common/swagger/swagger-decorators';
 import { RankingDomainExceptionFilter } from '../filters/ranking-domain-exception.filter';
 import { LeaderboardService } from '../../domain/services/leaderboard.service';
 import { UserRankService } from '../../domain/services/user-rank.service';
@@ -84,12 +76,7 @@ export class RankingController {
     summary: 'Get global leaderboard',
     description: 'Returns the global leaderboard with optional period filter.',
   })
-  @ApiOkResponse({ description: 'Leaderboard returned', type: LeaderboardResponseDto })
-  @ApiBadRequestResponse({ description: 'Validation failed' })
-  @ApiHeader({ name: 'x-correlation-id', required: false, description: 'Request trace ID' })
-  @ApiQuery({ name: 'period', enum: RankingPeriodEnum, required: false })
-  @ApiQuery({ name: 'limit', required: false, type: Number })
-  @ApiQuery({ name: 'offset', required: false, type: Number })
+  @ApiPublicList({ description: 'Leaderboard returned', type: LeaderboardResponseDto })
   async getGlobalLeaderboard(@Query() query: LeaderboardQueryDto): Promise<LeaderboardResponseDto> {
     return this.leaderboardService.getGlobalLeaderboard({
       period: query.period ?? RankingPeriodEnum.ALL_TIME,
@@ -106,13 +93,10 @@ export class RankingController {
     description:
       'Returns distribution statistics for the active leaderboard in the selected period.',
   })
-  @ApiOkResponse({
+  @ApiPublicList({
     description: 'Leaderboard distribution returned',
     type: LeaderboardDistributionResponseDto,
   })
-  @ApiBadRequestResponse({ description: 'Validation failed' })
-  @ApiHeader({ name: 'x-correlation-id', required: false, description: 'Request trace ID' })
-  @ApiQuery({ name: 'period', enum: RankingPeriodEnum, required: false })
   async getLeaderboardDistribution(
     @Query() query: LeaderboardDistributionQueryDto,
   ): Promise<LeaderboardDistributionResponseDto> {
@@ -129,15 +113,7 @@ export class RankingController {
     description:
       'Returns users with the largest positive ranking movement during the selected period.',
   })
-  @ApiOkResponse({ description: 'Top movers returned', type: TopMoversResponseDto })
-  @ApiBadRequestResponse({ description: 'Validation failed' })
-  @ApiHeader({ name: 'x-correlation-id', required: false, description: 'Request trace ID' })
-  @ApiQuery({
-    name: 'period',
-    enum: [RankingPeriodEnum.DAILY, RankingPeriodEnum.WEEKLY, RankingPeriodEnum.MONTHLY],
-    required: false,
-  })
-  @ApiQuery({ name: 'limit', required: false, type: Number, example: 10 })
+  @ApiPublicList({ description: 'Top movers returned', type: TopMoversResponseDto })
   async getTopMovers(@Query() query: TopMoversQueryDto): Promise<TopMoversResponseDto> {
     return this.getTopMoversQueryHandler.execute({
       period: mapRankingPeriodEnumToDomain(query.period ?? RankingPeriodEnum.DAILY),
@@ -152,7 +128,6 @@ export class RankingController {
     description: "Returns the authenticated user's rank information across all periods.",
   })
   @ApiOkResponse({ description: 'User rank returned', type: UserRankResponseDto })
-  @ApiHeader({ name: 'x-correlation-id', required: false, description: 'Request trace ID' })
   async getMyRank(@CurrentUser() user: JwtPayload): Promise<UserRankResponseDto> {
     return this.userRankService.getUserRank(user.sub);
   }
@@ -164,8 +139,6 @@ export class RankingController {
     description: "Returns the authenticated user's rank for a specific period.",
   })
   @ApiOkResponse({ description: 'User rank returned', type: UserRankSummaryDto })
-  @ApiHeader({ name: 'x-correlation-id', required: false, description: 'Request trace ID' })
-  @ApiQuery({ name: 'period', enum: RankingPeriodEnum, required: false })
   async getMyRankForPeriod(
     @Query() query: LeaderboardQueryDto,
     @CurrentUser() user: JwtPayload,
@@ -183,8 +156,6 @@ export class RankingController {
     description: 'Returns the authenticated user percentile in the selected leaderboard period.',
   })
   @ApiOkResponse({ description: 'User percentile returned', type: UserPercentileResponseDto })
-  @ApiHeader({ name: 'x-correlation-id', required: false, description: 'Request trace ID' })
-  @ApiQuery({ name: 'period', enum: RankingPeriodEnum, required: false })
   async getMyPercentile(
     @CurrentUser() user: JwtPayload,
     @Query() query: LeaderboardDistributionQueryDto,
@@ -203,7 +174,6 @@ export class RankingController {
       'Returns ranking milestones achieved by the authenticated user in chronological order.',
   })
   @ApiOkResponse({ description: 'Ranking milestones returned', type: RankingMilestonesResponseDto })
-  @ApiHeader({ name: 'x-correlation-id', required: false, description: 'Request trace ID' })
   async getMyRankingMilestones(
     @CurrentUser() user: JwtPayload,
   ): Promise<RankingMilestonesResponseDto> {
@@ -219,9 +189,6 @@ export class RankingController {
     description: 'Returns leaderboard entries immediately above and below the authenticated user.',
   })
   @ApiOkResponse({ description: 'Nearby ranks returned', type: NearbyRanksResponseDto })
-  @ApiHeader({ name: 'x-correlation-id', required: false, description: 'Request trace ID' })
-  @ApiQuery({ name: 'period', enum: RankingPeriodEnum, required: false })
-  @ApiQuery({ name: 'radius', required: false, type: Number, example: 2 })
   async getNearbyRanks(
     @CurrentUser() user: JwtPayload,
     @Query() query: NearbyRanksQueryDto,
@@ -241,8 +208,6 @@ export class RankingController {
       "Returns the authenticated user's ranking movement compared to the previous ranking snapshot.",
   })
   @ApiOkResponse({ description: 'Rank movement returned', type: RankMovementResponseDto })
-  @ApiHeader({ name: 'x-correlation-id', required: false, description: 'Request trace ID' })
-  @ApiQuery({ name: 'period', enum: RankingPeriodEnum, required: false })
   async getMyRankMovement(
     @CurrentUser() user: JwtPayload,
     @Query() query: RankMovementQueryDto,
@@ -260,7 +225,6 @@ export class RankingController {
     description: "Returns the authenticated user's best ranking positions ever achieved.",
   })
   @ApiOkResponse({ description: 'Peak ranks returned', type: PeakRanksResponseDto })
-  @ApiHeader({ name: 'x-correlation-id', required: false, description: 'Request trace ID' })
   async getMyPeakRanks(@CurrentUser() user: JwtPayload): Promise<PeakRanksResponseDto> {
     return this.getMyPeakRanksQueryHandler.execute({
       userId: user.sub,
@@ -274,10 +238,6 @@ export class RankingController {
     description: "Returns the authenticated user's historical ranking progression over time.",
   })
   @ApiOkResponse({ description: 'Ranking history returned', type: RankingHistoryResponseDto })
-  @ApiHeader({ name: 'x-correlation-id', required: false, description: 'Request trace ID' })
-  @ApiQuery({ name: 'period', enum: RankingPeriodEnum, required: false })
-  @ApiQuery({ name: 'from', required: false, type: String, example: '2026-01-01' })
-  @ApiQuery({ name: 'to', required: false, type: String, example: '2026-06-01' })
   async getMyRankingHistory(
     @CurrentUser() user: JwtPayload,
     @Query() query: MyRankingHistoryQueryDto,
@@ -297,10 +257,7 @@ export class RankingController {
     summary: 'Get user rank information',
     description: 'Returns public rank information for a specific user.',
   })
-  @ApiOkResponse({ description: 'User rank returned', type: UserRankResponseDto })
-  @ApiNotFoundResponse({ description: 'User not found' })
-  @ApiHeader({ name: 'x-correlation-id', required: false, description: 'Request trace ID' })
-  @ApiParam({ name: 'userId', type: String, description: 'User UUID' })
+  @ApiPublicList({ description: 'User rank returned', type: UserRankResponseDto })
   async getUserRank(@Param('userId') userId: string): Promise<UserRankResponseDto> {
     return this.userRankService.getUserRank(userId);
   }
@@ -312,16 +269,10 @@ export class RankingController {
     summary: 'Get public user ranking history',
     description: "Returns the specified user's public historical ranking progression over time.",
   })
-  @ApiOkResponse({
+  @ApiPublicList({
     description: 'Public ranking history returned',
     type: PublicRankingHistoryResponseDto,
   })
-  @ApiNotFoundResponse({ description: 'User not found' })
-  @ApiHeader({ name: 'x-correlation-id', required: false, description: 'Request trace ID' })
-  @ApiParam({ name: 'userId', type: String, description: 'User UUID' })
-  @ApiQuery({ name: 'period', enum: RankingPeriodEnum, required: false })
-  @ApiQuery({ name: 'from', required: false, type: String, example: '2026-01-01' })
-  @ApiQuery({ name: 'to', required: false, type: String, example: '2026-06-01' })
   async getUserRankingHistory(
     @Param('userId') userId: string,
     @Query() query: MyRankingHistoryQueryDto,
@@ -341,9 +292,7 @@ export class RankingController {
     summary: 'Get user rank for specific period',
     description: "Returns the user's rank for a specific period.",
   })
-  @ApiOkResponse({ description: 'User rank returned', type: UserRankSummaryDto })
-  @ApiNotFoundResponse({ description: 'User not found or has no rank' })
-  @ApiQuery({ name: 'period', enum: RankingPeriodEnum, required: false })
+  @ApiPublicList({ description: 'User rank returned', type: UserRankSummaryDto })
   async getUserRankForPeriod(
     @Param('userId') userId: string,
     @Query() query: LeaderboardQueryDto,

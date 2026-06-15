@@ -14,22 +14,16 @@ import {
   UseFilters,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
-import {
-  ApiTags,
-  ApiOperation,
-  ApiOkResponse,
-  ApiCreatedResponse,
-  ApiBearerAuth,
-  ApiNotFoundResponse,
-  ApiConflictResponse,
-  ApiForbiddenResponse,
-  ApiBadRequestResponse,
-  ApiInternalServerErrorResponse,
-} from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiOkResponse, ApiCreatedResponse } from '@nestjs/swagger';
 import { Public } from '@/common/decorators/public.decorator';
-import { ApiAuth, ApiValidationRequest, ApiNoContent } from '@/common/swagger/swagger-decorators';
-import { RequireAuth } from '@/common/guards/jwt.guard';
-import { Roles } from '@/common/authorization/decorators/roles.decorator';
+import {
+  ApiAuth,
+  ApiAuthAction,
+  ApiAuthActionNoContent,
+  ApiPublicList,
+  ApiModeratorEndpoint,
+  ApiModeratorAction,
+} from '@/common/swagger/swagger-decorators';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
 import { DiscussionApplicationService } from '@/modules/discussion/application/discussion-application.service';
@@ -70,15 +64,12 @@ import {
   ListRelatedDiscussionsQueryDto,
   SolveThreadDto,
 } from '@/modules/discussion/dto/request';
-import type { DiscussionReportStatus } from '@/modules/discussion/domain/types';
-import { DiscussionDomainExceptionFilter } from './filters/discussion-domain-exception.filter';
 import { TrendingDiscussionCursorMapper } from '@/modules/discussion/mappers/trending-discussion-cursor.mapper';
 import { UnansweredDiscussionCursorMapper } from '@/modules/discussion/mappers/unanswered-discussion-cursor.mapper';
 import { SearchDiscussionsCursorMapper } from '@/modules/discussion/mappers/search-discussions-cursor.mapper';
+import { DiscussionDomainExceptionFilter } from '../filters/discussion-domain-exception.filter';
 
 @ApiTags('discussions')
-@ApiBearerAuth()
-@RequireAuth()
 @Controller('discussions')
 @UseFilters(DiscussionDomainExceptionFilter)
 export class DiscussionController {
@@ -88,17 +79,10 @@ export class DiscussionController {
 
   @Get('trending')
   @Public()
-  @ApiOperation({
-    summary: 'List trending discussions',
-    description:
-      'Returns discussion threads ordered by a trending score that factors in votes, comments, and recent reply activity within the last 7 days.',
-  })
-  @ApiOkResponse({
+  @ApiPublicList({
     description: 'Trending discussions returned',
     type: TrendingDiscussionsResponseDto,
   })
-  @ApiBadRequestResponse({ description: 'Validation failed' })
-  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
   async listTrendingDiscussions(
     @Query() query: ListTrendingDiscussionsQueryDto,
   ): Promise<TrendingDiscussionsResponseDto> {
@@ -110,17 +94,10 @@ export class DiscussionController {
 
   @Get('unanswered')
   @Public()
-  @ApiOperation({
-    summary: 'List unanswered discussions',
-    description:
-      'Returns open discussion threads that have not yet received any comments, ordered by newest first.',
-  })
-  @ApiOkResponse({
+  @ApiPublicList({
     description: 'Unanswered discussions returned',
     type: UnansweredDiscussionsResponseDto,
   })
-  @ApiBadRequestResponse({ description: 'Validation failed' })
-  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
   async listUnansweredDiscussions(
     @Query() query: ListUnansweredDiscussionsQueryDto,
   ): Promise<UnansweredDiscussionsResponseDto> {
@@ -132,17 +109,7 @@ export class DiscussionController {
 
   @Get('search')
   @Public()
-  @ApiOperation({
-    summary: 'Search discussions',
-    description:
-      'Searches discussion threads by keyword in title and body, ordered by newest first.',
-  })
-  @ApiOkResponse({
-    description: 'Search results returned',
-    type: SearchDiscussionsResponseDto,
-  })
-  @ApiBadRequestResponse({ description: 'Validation failed' })
-  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  @ApiPublicList({ description: 'Search results returned', type: SearchDiscussionsResponseDto })
   async searchDiscussions(
     @Query() query: SearchDiscussionsQueryDto,
   ): Promise<SearchDiscussionsResponseDto> {
@@ -155,18 +122,10 @@ export class DiscussionController {
 
   @Get('threads/:threadId/related')
   @Public()
-  @ApiOperation({
-    summary: 'List related discussions',
-    description:
-      'Returns up to 10 discussion threads related to the specified thread based on quiz overlap, shared categories or tags, and similar title keywords.',
-  })
-  @ApiOkResponse({
+  @ApiPublicList({
     description: 'Related discussions returned',
     type: RelatedDiscussionsResponseDto,
   })
-  @ApiNotFoundResponse({ description: 'Thread not found' })
-  @ApiBadRequestResponse({ description: 'Validation failed' })
-  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
   async listRelatedDiscussions(
     @Param('threadId', new ParseUUIDPipe()) threadId: string,
     @Query() query: ListRelatedDiscussionsQueryDto,
@@ -178,17 +137,10 @@ export class DiscussionController {
 
   @Get('threads/:threadId/participants')
   @Public()
-  @ApiOperation({
-    summary: 'List thread participants',
-    description:
-      'Returns all unique users who participated in the specified thread, including the thread author and commenters, ordered by comment count descending.',
-  })
-  @ApiOkResponse({
+  @ApiPublicList({
     description: 'Thread participants returned',
     type: ThreadParticipantsResponseDto,
   })
-  @ApiNotFoundResponse({ description: 'Thread not found' })
-  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
   async listThreadParticipants(
     @Param('threadId', new ParseUUIDPipe()) threadId: string,
   ): Promise<ThreadParticipantsResponseDto> {
@@ -197,17 +149,7 @@ export class DiscussionController {
 
   @Get('threads/:threadId/stats')
   @Public()
-  @ApiOperation({
-    summary: 'Get thread statistics',
-    description:
-      'Returns aggregated statistics for a discussion thread including comments, replies, participants, votes, and latest activity.',
-  })
-  @ApiOkResponse({
-    description: 'Thread statistics returned',
-    type: ThreadStatsResponseDto,
-  })
-  @ApiNotFoundResponse({ description: 'Thread not found' })
-  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  @ApiPublicList({ description: 'Thread statistics returned', type: ThreadStatsResponseDto })
   async getThreadStats(
     @Param('threadId', new ParseUUIDPipe()) threadId: string,
   ): Promise<ThreadStatsResponseDto | null> {
@@ -225,7 +167,6 @@ export class DiscussionController {
     description: 'Discussion statistics returned',
     type: MyDiscussionStatsResponseDto,
   })
-  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
   async getMyDiscussionStats(
     @CurrentUser() user: JwtPayload,
   ): Promise<MyDiscussionStatsResponseDto> {
@@ -234,19 +175,10 @@ export class DiscussionController {
 
   @Throttle({ default: { limit: 30, ttl: 60_000 } })
   @Post('threads/:threadId/subscribe')
-  @ApiAuth()
-  @ApiOperation({
-    summary: 'Subscribe to discussion thread',
-    description:
-      'Subscribes the authenticated user to the specified discussion thread. The operation is idempotent and succeeds even if the user is already subscribed.',
-  })
-  @ApiOkResponse({
+  @ApiAuthAction({
     description: 'Subscription recorded successfully',
     type: DiscussionSubscriptionActionResponseDto,
   })
-  @ApiNotFoundResponse({ description: 'Thread not found' })
-  @ApiBadRequestResponse({ description: 'Validation failed' })
-  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
   async subscribeToThread(
     @CurrentUser() user: JwtPayload,
     @Param('threadId', new ParseUUIDPipe()) threadId: string,
@@ -256,19 +188,10 @@ export class DiscussionController {
 
   @Throttle({ default: { limit: 30, ttl: 60_000 } })
   @Delete('threads/:threadId/subscribe')
-  @ApiAuth()
-  @ApiOperation({
-    summary: 'Unsubscribe from discussion thread',
-    description:
-      'Unsubscribes the authenticated user from the specified discussion thread. The operation is idempotent and succeeds even if no subscription exists.',
-  })
-  @ApiOkResponse({
+  @ApiAuthAction({
     description: 'Subscription removed successfully',
     type: DiscussionSubscriptionActionResponseDto,
   })
-  @ApiNotFoundResponse({ description: 'Thread not found' })
-  @ApiBadRequestResponse({ description: 'Validation failed' })
-  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
   async unsubscribeFromThread(
     @CurrentUser() user: JwtPayload,
     @Param('threadId', new ParseUUIDPipe()) threadId: string,
@@ -278,19 +201,10 @@ export class DiscussionController {
 
   @Throttle({ default: { limit: 30, ttl: 60_000 } })
   @Post('threads/:threadId/save')
-  @ApiAuth()
-  @ApiOperation({
-    summary: 'Save discussion thread',
-    description:
-      'Saves the specified discussion thread for the authenticated user. The operation is idempotent and succeeds even if the thread is already saved.',
-  })
-  @ApiOkResponse({
+  @ApiAuthAction({
     description: 'Thread saved successfully',
     type: DiscussionSavedThreadActionResponseDto,
   })
-  @ApiNotFoundResponse({ description: 'Thread not found' })
-  @ApiBadRequestResponse({ description: 'Validation failed' })
-  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
   async saveThread(
     @CurrentUser() user: JwtPayload,
     @Param('threadId', new ParseUUIDPipe()) threadId: string,
@@ -300,19 +214,10 @@ export class DiscussionController {
 
   @Throttle({ default: { limit: 30, ttl: 60_000 } })
   @Delete('threads/:threadId/save')
-  @ApiAuth()
-  @ApiOperation({
-    summary: 'Remove saved discussion thread',
-    description:
-      'Removes the specified saved discussion thread for the authenticated user. The operation is idempotent and succeeds even if the thread is not currently saved.',
-  })
-  @ApiOkResponse({
+  @ApiAuthAction({
     description: 'Saved thread removed successfully',
     type: DiscussionSavedThreadActionResponseDto,
   })
-  @ApiNotFoundResponse({ description: 'Thread not found' })
-  @ApiBadRequestResponse({ description: 'Validation failed' })
-  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
   async unsaveThread(
     @CurrentUser() user: JwtPayload,
     @Param('threadId', new ParseUUIDPipe()) threadId: string,
@@ -324,7 +229,6 @@ export class DiscussionController {
   @ApiAuth()
   @ApiOperation({ summary: 'List discussion threads' })
   @ApiOkResponse({ description: 'Threads returned', type: PaginatedThreadsDto })
-  @ApiBadRequestResponse({ description: 'Validation failed' })
   async listThreads(
     @CurrentUser() user: JwtPayload,
     @Query() query: ListThreadsQueryDto,
@@ -348,13 +252,7 @@ export class DiscussionController {
     description:
       'Creates a discussion thread for the specified quiz. The authenticated user becomes the thread author.',
   })
-  @ApiCreatedResponse({
-    description: 'Thread created successfully',
-    type: ThreadDto,
-  })
-  @ApiNotFoundResponse({ description: 'Quiz not found' })
-  @ApiBadRequestResponse({ description: 'Validation failed' })
-  @ApiValidationRequest()
+  @ApiCreatedResponse({ description: 'Thread created successfully', type: ThreadDto })
   async createThread(
     @CurrentUser() user: JwtPayload,
     @Body() dto: CreateThreadDto,
@@ -366,7 +264,6 @@ export class DiscussionController {
   @ApiAuth()
   @ApiOperation({ summary: 'Get a thread with its comments' })
   @ApiOkResponse({ description: 'Thread returned', type: ThreadDetailDto })
-  @ApiNotFoundResponse({ description: 'Thread not found' })
   async getThread(
     @CurrentUser() user: JwtPayload,
     @Param('threadId', new ParseUUIDPipe()) threadId: string,
@@ -376,13 +273,7 @@ export class DiscussionController {
 
   @Throttle({ default: { limit: 20, ttl: 60_000 } })
   @Put('threads/:threadId')
-  @ApiAuth()
-  @ApiOperation({ summary: 'Update a thread (author only)' })
-  @ApiOkResponse({ description: 'Thread updated', type: ThreadDto })
-  @ApiNotFoundResponse({ description: 'Thread not found' })
-  @ApiForbiddenResponse({ description: 'Not the thread author' })
-  @ApiBadRequestResponse({ description: 'Validation failed' })
-  @ApiValidationRequest()
+  @ApiAuthAction({ description: 'Thread updated', type: ThreadDto })
   async updateThread(
     @CurrentUser() user: JwtPayload,
     @Param('threadId', new ParseUUIDPipe()) threadId: string,
@@ -393,11 +284,7 @@ export class DiscussionController {
 
   @Throttle({ default: { limit: 30, ttl: 60_000 } })
   @Post('threads/:threadId/close')
-  @ApiAuth()
-  @ApiOperation({ summary: 'Close a thread (author only)' })
-  @ApiNoContent()
-  @ApiNotFoundResponse({ description: 'Thread not found' })
-  @ApiForbiddenResponse({ description: 'Not the thread author' })
+  @ApiAuthActionNoContent('Thread closed')
   @HttpCode(HttpStatus.NO_CONTENT)
   async closeThread(
     @CurrentUser() user: JwtPayload,
@@ -408,11 +295,7 @@ export class DiscussionController {
 
   @Throttle({ default: { limit: 30, ttl: 60_000 } })
   @Post('threads/:threadId/reopen')
-  @ApiAuth()
-  @ApiOperation({ summary: 'Reopen a closed thread (author only)' })
-  @ApiNoContent()
-  @ApiNotFoundResponse({ description: 'Thread not found' })
-  @ApiForbiddenResponse({ description: 'Not the thread author' })
+  @ApiAuthActionNoContent('Thread reopened')
   @HttpCode(HttpStatus.NO_CONTENT)
   async reopenThread(
     @CurrentUser() user: JwtPayload,
@@ -423,21 +306,10 @@ export class DiscussionController {
 
   @Throttle({ default: { limit: 20, ttl: 60_000 } })
   @Post('threads/:threadId/solve')
-  @ApiAuth()
-  @ApiOperation({
-    summary: 'Mark thread as solved',
-    description:
-      'Marks a discussion thread as solved by selecting one of its comments as the accepted solution.',
-  })
-  @ApiOkResponse({
+  @ApiAuthAction({
     description: 'Thread marked as solved successfully',
     type: DiscussionThreadSolveResponseDto,
   })
-  @ApiNotFoundResponse({ description: 'Thread or comment not found' })
-  @ApiForbiddenResponse({ description: 'Only the thread owner can solve the thread' })
-  @ApiBadRequestResponse({ description: 'Validation failed' })
-  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
-  @ApiValidationRequest()
   async markThreadAsSolved(
     @CurrentUser() user: JwtPayload,
     @Param('threadId', new ParseUUIDPipe()) threadId: string,
@@ -455,20 +327,10 @@ export class DiscussionController {
 
   @Throttle({ default: { limit: 20, ttl: 60_000 } })
   @Delete('threads/:threadId/solve')
-  @ApiAuth()
-  @ApiOperation({
-    summary: 'Unsolve thread',
-    description:
-      'Removes the solved state from a discussion thread owned by the authenticated user.',
-  })
-  @ApiOkResponse({
+  @ApiAuthAction({
     description: 'Thread unsolved successfully',
     type: DiscussionThreadUnsolveResponseDto,
   })
-  @ApiNotFoundResponse({ description: 'Thread not found' })
-  @ApiForbiddenResponse({ description: 'Only the thread owner can unsolve the thread' })
-  @ApiBadRequestResponse({ description: 'Validation failed' })
-  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
   async unsolveThread(
     @CurrentUser() user: JwtPayload,
     @Param('threadId', new ParseUUIDPipe()) threadId: string,
@@ -483,11 +345,7 @@ export class DiscussionController {
 
   @Throttle({ default: { limit: 30, ttl: 60_000 } })
   @Delete('threads/:threadId')
-  @ApiAuth()
-  @ApiOperation({ summary: 'Soft-delete a thread (author only)' })
-  @ApiNoContent('Thread deleted')
-  @ApiNotFoundResponse({ description: 'Thread not found' })
-  @ApiForbiddenResponse({ description: 'Not the thread author' })
+  @ApiAuthActionNoContent('Thread deleted')
   @HttpCode(HttpStatus.NO_CONTENT)
   async deleteThread(
     @CurrentUser() user: JwtPayload,
@@ -498,12 +356,7 @@ export class DiscussionController {
 
   @Throttle({ default: { limit: 30, ttl: 60_000 } })
   @Post('threads/:threadId/hide')
-  @ApiAuth()
-  @Roles('admin', 'moderator')
-  @ApiOperation({ summary: 'Hide a thread (moderator only)' })
-  @ApiNoContent()
-  @ApiNotFoundResponse({ description: 'Thread not found' })
-  @ApiForbiddenResponse({ description: 'Not a moderator' })
+  @ApiModeratorAction('Thread hidden')
   @HttpCode(HttpStatus.NO_CONTENT)
   async hideThread(
     @CurrentUser() user: JwtPayload,
@@ -514,12 +367,7 @@ export class DiscussionController {
 
   @Throttle({ default: { limit: 30, ttl: 60_000 } })
   @Post('threads/:threadId/restore')
-  @ApiAuth()
-  @Roles('admin', 'moderator')
-  @ApiOperation({ summary: 'Restore a hidden thread (moderator only)' })
-  @ApiNoContent()
-  @ApiNotFoundResponse({ description: 'Thread not found' })
-  @ApiForbiddenResponse({ description: 'Not a moderator' })
+  @ApiModeratorAction('Thread restored')
   @HttpCode(HttpStatus.NO_CONTENT)
   async restoreThread(
     @CurrentUser() user: JwtPayload,
@@ -532,13 +380,7 @@ export class DiscussionController {
 
   @Throttle({ default: { limit: 20, ttl: 60_000 } })
   @Post('threads/:threadId/comments')
-  @ApiAuth()
-  @ApiOperation({ summary: 'Add a comment or reply to a thread' })
-  @ApiCreatedResponse({ description: 'Comment created', type: CommentDto })
-  @ApiNotFoundResponse({ description: 'Thread or parent comment not found' })
-  @ApiConflictResponse({ description: 'Thread is closed' })
-  @ApiBadRequestResponse({ description: 'Validation failed' })
-  @ApiValidationRequest()
+  @ApiAuthAction({ description: 'Comment created', type: CommentDto })
   async createComment(
     @CurrentUser() user: JwtPayload,
     @Param('threadId', new ParseUUIDPipe()) threadId: string,
@@ -556,7 +398,6 @@ export class DiscussionController {
   @ApiAuth()
   @ApiOperation({ summary: 'List comments on a thread' })
   @ApiOkResponse({ description: 'Comments returned', type: PaginatedCommentsDto })
-  @ApiBadRequestResponse({ description: 'Validation failed' })
   async listComments(
     @CurrentUser() user: JwtPayload,
     @Param('threadId', new ParseUUIDPipe()) threadId: string,
@@ -573,7 +414,6 @@ export class DiscussionController {
   @ApiAuth()
   @ApiOperation({ summary: 'Get a single comment' })
   @ApiOkResponse({ description: 'Comment returned', type: CommentDto })
-  @ApiNotFoundResponse({ description: 'Comment not found' })
   async getComment(
     @CurrentUser() user: JwtPayload,
     @Param('commentId', new ParseUUIDPipe()) commentId: string,
@@ -583,13 +423,7 @@ export class DiscussionController {
 
   @Throttle({ default: { limit: 20, ttl: 60_000 } })
   @Put('comments/:commentId')
-  @ApiAuth()
-  @ApiOperation({ summary: 'Update a comment (author only)' })
-  @ApiOkResponse({ description: 'Comment updated', type: CommentDto })
-  @ApiNotFoundResponse({ description: 'Comment not found' })
-  @ApiForbiddenResponse({ description: 'Not the comment author' })
-  @ApiBadRequestResponse({ description: 'Validation failed' })
-  @ApiValidationRequest()
+  @ApiAuthAction({ description: 'Comment updated', type: CommentDto })
   async updateComment(
     @CurrentUser() user: JwtPayload,
     @Param('commentId', new ParseUUIDPipe()) commentId: string,
@@ -603,11 +437,7 @@ export class DiscussionController {
 
   @Throttle({ default: { limit: 30, ttl: 60_000 } })
   @Delete('comments/:commentId')
-  @ApiAuth()
-  @ApiOperation({ summary: 'Soft-delete a comment (author only)' })
-  @ApiNoContent('Comment deleted')
-  @ApiNotFoundResponse({ description: 'Comment not found' })
-  @ApiForbiddenResponse({ description: 'Not the comment author' })
+  @ApiAuthActionNoContent('Comment deleted')
   @HttpCode(HttpStatus.NO_CONTENT)
   async deleteComment(
     @CurrentUser() user: JwtPayload,
@@ -618,12 +448,7 @@ export class DiscussionController {
 
   @Throttle({ default: { limit: 30, ttl: 60_000 } })
   @Post('comments/:commentId/hide')
-  @ApiAuth()
-  @Roles('admin', 'moderator')
-  @ApiOperation({ summary: 'Hide a comment (moderator only)' })
-  @ApiNoContent()
-  @ApiNotFoundResponse({ description: 'Comment not found' })
-  @ApiForbiddenResponse({ description: 'Not a moderator' })
+  @ApiModeratorAction('Comment hidden')
   @HttpCode(HttpStatus.NO_CONTENT)
   async hideComment(
     @CurrentUser() user: JwtPayload,
@@ -634,12 +459,7 @@ export class DiscussionController {
 
   @Throttle({ default: { limit: 30, ttl: 60_000 } })
   @Post('comments/:commentId/restore')
-  @ApiAuth()
-  @Roles('admin', 'moderator')
-  @ApiOperation({ summary: 'Restore a hidden comment (moderator only)' })
-  @ApiNoContent()
-  @ApiNotFoundResponse({ description: 'Comment not found' })
-  @ApiForbiddenResponse({ description: 'Not a moderator' })
+  @ApiModeratorAction('Comment restored')
   @HttpCode(HttpStatus.NO_CONTENT)
   async restoreComment(
     @CurrentUser() user: JwtPayload,
@@ -652,13 +472,7 @@ export class DiscussionController {
 
   @Throttle({ default: { limit: 20, ttl: 60_000 } })
   @Post('vote')
-  @ApiAuth()
-  @ApiOperation({ summary: 'Cast or toggle a vote on a thread, comment, or reply' })
-  @ApiNoContent()
-  @ApiNotFoundResponse({ description: 'Target not found' })
-  @ApiForbiddenResponse({ description: 'Cannot vote on own content' })
-  @ApiBadRequestResponse({ description: 'Validation failed' })
-  @ApiValidationRequest()
+  @ApiAuthActionNoContent('Vote recorded')
   @HttpCode(HttpStatus.NO_CONTENT)
   async vote(@CurrentUser() user: JwtPayload, @Body() dto: VoteDto): Promise<void> {
     await this.discussionService.vote(user, dto.targetType, dto.targetId, dto.value);
@@ -668,7 +482,6 @@ export class DiscussionController {
   @Delete('vote')
   @ApiAuth()
   @ApiOperation({ summary: 'Remove a vote from a thread, comment, or reply' })
-  @ApiNoContent()
   async removeVote(@CurrentUser() user: JwtPayload, @Body() dto: RemoveVoteDto): Promise<void> {
     await this.discussionService.removeVote(user, dto.targetType, dto.targetId);
   }
@@ -677,14 +490,7 @@ export class DiscussionController {
 
   @Throttle({ default: { limit: 5, ttl: 60_000 } })
   @Post('report')
-  @ApiAuth()
-  @ApiOperation({ summary: 'Report a thread, comment, or reply for moderation review' })
-  @ApiNoContent()
-  @ApiNotFoundResponse({ description: 'Target not found' })
-  @ApiForbiddenResponse({ description: 'Cannot report own content' })
-  @ApiConflictResponse({ description: 'You have already reported this content' })
-  @ApiBadRequestResponse({ description: 'Validation failed' })
-  @ApiValidationRequest()
+  @ApiAuthActionNoContent('Report submitted')
   @HttpCode(HttpStatus.NO_CONTENT)
   async report(@CurrentUser() user: JwtPayload, @Body() dto: CreateReportDto): Promise<void> {
     await this.discussionService.report(
@@ -698,14 +504,7 @@ export class DiscussionController {
 
   @Throttle({ default: { limit: 20, ttl: 60_000 } })
   @Post('reports/:reportId/review')
-  @ApiAuth()
-  @Roles('admin', 'moderator')
-  @ApiOperation({ summary: 'Review and resolve a report (moderator only)' })
-  @ApiNoContent()
-  @ApiNotFoundResponse({ description: 'Report not found' })
-  @ApiForbiddenResponse({ description: 'Not a moderator' })
-  @ApiBadRequestResponse({ description: 'Validation failed' })
-  @ApiValidationRequest()
+  @ApiModeratorAction('Report reviewed')
   @HttpCode(HttpStatus.NO_CONTENT)
   async reviewReport(
     @CurrentUser() user: JwtPayload,
@@ -716,12 +515,7 @@ export class DiscussionController {
   }
 
   @Get('reports')
-  @ApiAuth()
-  @Roles('admin', 'moderator')
-  @ApiOperation({ summary: 'List reports for moderation review (moderator only)' })
-  @ApiOkResponse({ description: 'Reports returned', type: PaginatedReportsDto })
-  @ApiForbiddenResponse({ description: 'Not a moderator' })
-  @ApiBadRequestResponse({ description: 'Validation failed' })
+  @ApiModeratorEndpoint({ description: 'Reports returned', type: PaginatedReportsDto })
   async listReports(
     @CurrentUser() user: JwtPayload,
     @Query() query: ListReportsQueryDto,

@@ -6,27 +6,16 @@
  */
 
 import { Controller, Get, Post, Param, HttpCode, HttpStatus, ParseUUIDPipe } from '@nestjs/common';
-import {
-  ApiTags,
-  ApiOperation,
-  ApiOkResponse,
-  ApiUnauthorizedResponse,
-  ApiForbiddenResponse,
-  ApiBadRequestResponse,
-  ApiInternalServerErrorResponse,
-} from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiOkResponse } from '@nestjs/swagger';
 import { Roles } from '@/common/authorization/decorators/roles.decorator';
-import { ApiAuth } from '@/common/swagger/swagger-decorators';
+import { ApiAdminEndpoint, ApiAdminResource, ApiAdminRead } from '@/common/swagger/swagger-decorators';
 import { ScheduledEvaluationService } from '../../infrastructure/scheduled/scheduled-evaluation.service';
 import { AchievementHistoryService } from '../../application/achievement-history.service';
 import { ReevaluateUserResponseDto } from '../../dto/response/achievement-admin-response.dto';
 
 @ApiTags('achievements')
 @Controller('admin/achievements')
-@ApiAuth()
-@ApiUnauthorizedResponse({ description: 'Unauthorized — missing or invalid token' })
-@ApiForbiddenResponse({ description: 'Forbidden — requires admin role' })
-@ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+@ApiAdminEndpoint()
 export class AchievementAdminController {
   constructor(
     private readonly scheduledEvaluationService: ScheduledEvaluationService,
@@ -44,7 +33,6 @@ export class AchievementAdminController {
       'awards or retroactively grant badges after data fixes.',
   })
   @ApiOkResponse({ description: 'Re-evaluation completed', type: ReevaluateUserResponseDto })
-  @ApiBadRequestResponse({ description: 'Invalid user ID' })
   async reevaluateUser(
     @Param('userId', new ParseUUIDPipe()) userId: string,
   ): Promise<ReevaluateUserResponseDto> {
@@ -63,13 +51,7 @@ export class AchievementAdminController {
 
   @Get('reevaluate/:userId/history')
   @Roles('admin')
-  @ApiOperation({
-    summary: "Get a user's achievement history",
-    description:
-      'Returns the full achievement history (including revoked) for a user. ' +
-      'Intended for admin review when investigating missing or incorrectly revoked badges.',
-  })
-  @ApiOkResponse({ description: 'Achievement history returned' })
+  @ApiAdminRead({ description: 'Achievement history returned' })
   async getUserHistory(@Param('userId', new ParseUUIDPipe()) userId: string) {
     return this.achievementHistoryService.getUserHistory(userId, { includeRevoked: true });
   }

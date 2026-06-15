@@ -10,7 +10,7 @@ import { UserExistenceAdapter } from './infrastructure/adapters/user-existence.a
 import { DiscussionController } from './transport/controller/discussion.controller';
 import { QuizDiscussionController } from './transport/controller/quiz-discussion.controller';
 import { UserDiscussionController } from './transport/controller/user-discussion.controller';
-import { DiscussionDomainExceptionFilter } from './transport/controller/filters/discussion-domain-exception.filter';
+import { DiscussionDomainExceptionFilter } from './transport/filters/discussion-domain-exception.filter';
 import {
   DISCUSSION_REPOSITORY_PORT,
   QUIZ_EXISTENCE_PORT,

@@ -11,20 +11,18 @@ import {
   UseFilters,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
-import {
-  ApiTags,
-  ApiOperation,
-  ApiOkResponse,
-  ApiCreatedResponse,
-  ApiNotFoundResponse,
-  ApiBearerAuth,
-  ApiBadRequestResponse,
-  ApiConflictResponse,
-  ApiInternalServerErrorResponse,
-} from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiOkResponse, ApiNotFoundResponse } from '@nestjs/swagger';
 import { Public } from '@/common/decorators/public.decorator';
 import { Roles } from '@/common/authorization/decorators/roles.decorator';
-import { ApiAuth, ApiValidationRequest } from '@/common/swagger/swagger-decorators';
+import {
+  ApiAuth,
+  ApiAuthCreate,
+  ApiAuthUpdate,
+  ApiPublicList,
+  ApiConflict,
+  ApiInternalError,
+  ApiAuthDelete,
+} from '@/common/swagger/swagger-decorators';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
 import { CreateTagDto } from '../../dto/request/create-tag.dto';
@@ -65,7 +63,7 @@ export class TagController {
     description: 'Returns tags ranked by aggregated quiz popularity score.',
   })
   @ApiOkResponse({ description: 'Ranked tags returned', type: RankedTagsResponseDto })
-  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  @ApiInternalError()
   getPopularTags(@Query() query: TagRankingQueryDto): Promise<RankedTagsResponseDto> {
     return this.tagApplicationService.getPopularTags({ limit: query.limit });
   }
@@ -77,7 +75,7 @@ export class TagController {
     description: 'Returns tags ranked by aggregated quiz trending score.',
   })
   @ApiOkResponse({ description: 'Ranked tags returned', type: RankedTagsResponseDto })
-  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  @ApiInternalError()
   getTrendingTags(@Query() query: TagRankingQueryDto): Promise<RankedTagsResponseDto> {
     return this.tagApplicationService.getTrendingTags({ limit: query.limit });
   }
@@ -86,14 +84,7 @@ export class TagController {
 
   @Get(':slug/quizzes')
   @Public()
-  @ApiOperation({
-    summary: 'List quizzes with a tag',
-    description:
-      'Returns the same quiz list response as GET /quizzes, filtered to the given tag slug.',
-  })
-  @ApiOkResponse({ description: 'Quizzes returned', type: TagQuizzesResponseDto })
-  @ApiNotFoundResponse({ description: 'Tag not found' })
-  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  @ApiPublicList({ description: 'Quizzes returned', type: TagQuizzesResponseDto })
   async getTagQuizzes(
     @Param('slug') slug: string,
     @Query() query: ListQuizzesQueryDto,
@@ -103,13 +94,7 @@ export class TagController {
 
   @Get(':slug/related')
   @Public()
-  @ApiOperation({
-    summary: 'Related tags',
-    description: 'Returns active tags related to the given tag slug.',
-  })
-  @ApiOkResponse({ description: 'Related tags returned', type: RelatedTagsResponseDto })
-  @ApiNotFoundResponse({ description: 'Tag not found' })
-  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  @ApiPublicList({ description: 'Related tags returned', type: RelatedTagsResponseDto })
   getRelatedTags(
     @Param('slug') slug: string,
     @Query() query: RelatedTagsQueryDto,
@@ -120,13 +105,7 @@ export class TagController {
 
   @Get(':id/analytics')
   @Public()
-  @ApiOperation({
-    summary: 'Tag analytics',
-    description: 'Returns aggregated analytics for all quizzes with this tag.',
-  })
-  @ApiOkResponse({ description: 'Analytics returned', type: TagAnalyticsResponseDto })
-  @ApiNotFoundResponse({ description: 'Tag or analytics not found' })
-  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  @ApiPublicList({ description: 'Analytics returned', type: TagAnalyticsResponseDto })
   getTagAnalytics(
     @Param('id', new ParseUUIDPipe()) tagId: string,
   ): Promise<TagAnalyticsResponseDto> {
@@ -137,15 +116,14 @@ export class TagController {
 
   @Post(':id/follow')
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
-  @ApiBearerAuth()
   @ApiAuth()
   @ApiOperation({
     summary: 'Follow a tag',
     description: 'Adds the authenticated user to the tag followers. Idempotent.',
   })
   @ApiOkResponse({ description: 'Tag followed', type: TagFollowMessageResponseDto })
-  @ApiNotFoundResponse({ description: 'Tag not found' })
-  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  @ApiNotFoundResponse()
+  @ApiInternalError()
   followTag(
     @Param('id', new ParseUUIDPipe()) tagId: string,
     @CurrentUser() user: JwtPayload,
@@ -155,14 +133,13 @@ export class TagController {
 
   @Delete(':id/follow')
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
-  @ApiBearerAuth()
   @ApiAuth()
   @ApiOperation({
     summary: 'Unfollow a tag',
     description: 'Removes the authenticated user from the tag followers. Idempotent.',
   })
   @ApiOkResponse({ description: 'Tag unfollowed', type: TagFollowMessageResponseDto })
-  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  @ApiInternalError()
   unfollowTag(
     @Param('id', new ParseUUIDPipe()) tagId: string,
     @CurrentUser() user: JwtPayload,
@@ -174,16 +151,15 @@ export class TagController {
 
   @Post(':id/restore')
   @Roles('admin')
-  @ApiBearerAuth()
   @ApiAuth()
   @ApiOperation({
     summary: 'Restore tag',
     description: 'Restores a soft-deleted tag. Requires admin role.',
   })
   @ApiOkResponse({ description: 'Tag restored', type: TagResponseDto })
-  @ApiNotFoundResponse({ description: 'Tag not found' })
-  @ApiConflictResponse({ description: 'Tag already active or slug conflict' })
-  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  @ApiNotFoundResponse()
+  @ApiConflict()
+  @ApiInternalError()
   restoreTag(@Param('id', new ParseUUIDPipe()) tagId: string): Promise<TagResponseDto> {
     return this.tagApplicationService.restoreTag(tagId);
   }
@@ -192,12 +168,7 @@ export class TagController {
 
   @Get()
   @Public()
-  @ApiOperation({
-    summary: 'List tags',
-    description: 'Returns a paginated, cursor-based list of active tags.',
-  })
-  @ApiOkResponse({ description: 'Tags returned', type: TagListResponseDto })
-  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  @ApiPublicList({ description: 'Tags returned', type: TagListResponseDto })
   listTags(@Query() query: ListTagsQueryDto): Promise<TagListResponseDto> {
     const command: ListTagsQuery = {
       limit: query.limit,
@@ -208,31 +179,14 @@ export class TagController {
 
   @Get(':slug')
   @Public()
-  @ApiOperation({
-    summary: 'Get tag by slug',
-    description: 'Returns a single active tag by its URL slug.',
-  })
-  @ApiOkResponse({ description: 'Tag found', type: TagResponseDto })
-  @ApiNotFoundResponse({ description: 'Tag not found' })
-  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  @ApiPublicList({ description: 'Tag found', type: TagResponseDto })
   getTagBySlug(@Param('slug') slug: string): Promise<TagResponseDto> {
     return this.tagApplicationService.getTagBySlug(slug);
   }
 
   @Post()
   @Roles('admin')
-  @ApiBearerAuth()
-  @ApiAuth()
-  @ApiOperation({
-    summary: 'Create tag',
-    description: 'Creates a new quiz tag. Requires admin role.',
-  })
-  @ApiCreatedResponse({ description: 'Tag created', type: TagResponseDto })
-  @ApiBadRequestResponse({ description: 'Validation failed' })
-  @ApiConflictResponse({ description: 'A tag with this slug already exists' })
-  @ApiNotFoundResponse({ description: 'Tag not found' })
-  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
-  @ApiValidationRequest()
+  @ApiAuthCreate({ description: 'Tag created', type: TagResponseDto })
   createTag(@Body() payload: CreateTagDto): Promise<TagResponseDto> {
     const command: CreateTagCommand = { name: payload.name, slug: payload.slug };
     return this.tagApplicationService.createTag(command);
@@ -240,18 +194,7 @@ export class TagController {
 
   @Patch(':id')
   @Roles('admin')
-  @ApiBearerAuth()
-  @ApiAuth()
-  @ApiOperation({
-    summary: 'Update tag',
-    description: 'Updates an existing tag by ID. Requires admin role.',
-  })
-  @ApiOkResponse({ description: 'Tag updated', type: TagResponseDto })
-  @ApiNotFoundResponse({ description: 'Tag not found' })
-  @ApiBadRequestResponse({ description: 'Validation failed' })
-  @ApiConflictResponse({ description: 'A tag with this slug already exists' })
-  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
-  @ApiValidationRequest()
+  @ApiAuthUpdate({ description: 'Tag updated', type: TagResponseDto })
   updateTag(
     @Param('id', new ParseUUIDPipe()) tagId: string,
     @Body() payload: UpdateTagDto,
@@ -262,12 +205,7 @@ export class TagController {
 
   @Delete(':id')
   @Roles('admin')
-  @ApiBearerAuth()
-  @ApiAuth()
-  @ApiOperation({ summary: 'Delete tag', description: 'Soft-deletes a tag. Requires admin role.' })
-  @ApiOkResponse({ description: 'Tag deleted', type: DeleteTagResponseDto })
-  @ApiNotFoundResponse({ description: 'Tag not found' })
-  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  @ApiAuthDelete('Tag deleted')
   deleteTag(@Param('id', new ParseUUIDPipe()) tagId: string): Promise<DeleteTagResponseDto> {
     return this.tagApplicationService.deleteTag(tagId);
   }

@@ -1,17 +1,9 @@
 import { Controller, Get, Param, ParseUUIDPipe, Query, UseFilters } from '@nestjs/common';
-import {
-  ApiTags,
-  ApiOperation,
-  ApiOkResponse,
-  ApiBearerAuth,
-  ApiBadRequestResponse,
-  ApiInternalServerErrorResponse,
-  ApiNotFoundResponse,
-} from '@nestjs/swagger';
+import { ApiTags } from '@nestjs/swagger';
 import { Public } from '@/common/decorators/public.decorator';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
-import { ApiAuth, ApiValidationRequest } from '@/common/swagger/swagger-decorators';
+import { ApiAuthList, ApiPublicList } from '@/common/swagger/swagger-decorators';
 import { DiscussionApplicationService } from '@/modules/discussion/application/discussion-application.service';
 import {
   ListMyCommentsQueryDto,
@@ -36,7 +28,7 @@ import { MyUpvotedCommentCursorMapper } from '@/modules/discussion/mappers/my-up
 import { MyDiscussionSubscriptionCursorMapper } from '@/modules/discussion/mappers/my-discussion-subscription-cursor.mapper';
 import { MySavedThreadCursorMapper } from '@/modules/discussion/mappers/my-saved-thread-cursor.mapper';
 import { QuizDiscussionCursorMapper } from '@/modules/discussion/mappers/quiz-discussion-cursor.mapper';
-import { DiscussionDomainExceptionFilter } from './filters/discussion-domain-exception.filter';
+import { DiscussionDomainExceptionFilter } from '../filters/discussion-domain-exception.filter';
 
 @ApiTags('users')
 @Controller()
@@ -46,19 +38,7 @@ export class UserDiscussionController {
 
   @Get('users/:userId/discussions')
   @Public()
-  @ApiOperation({
-    summary: 'List user discussions',
-    description:
-      'Returns public discussion threads created by the specified user, cursor-paginated and ordered by newest first.',
-  })
-  @ApiOkResponse({
-    description: 'User discussions returned',
-    type: MyDiscussionsResponseDto,
-  })
-  @ApiNotFoundResponse({ description: 'User not found' })
-  @ApiBadRequestResponse({ description: 'Validation failed' })
-  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
-  @ApiValidationRequest()
+  @ApiPublicList({ description: 'User discussions returned', type: MyDiscussionsResponseDto })
   listDiscussionsByUser(
     @Param('userId', new ParseUUIDPipe()) userId: string,
     @Query() query: ListMyDiscussionsQueryDto,
@@ -71,19 +51,7 @@ export class UserDiscussionController {
 
   @Get('users/:userId/comments')
   @Public()
-  @ApiOperation({
-    summary: 'List user comments',
-    description:
-      'Returns public comments created by the specified user, cursor-paginated and ordered by newest first.',
-  })
-  @ApiOkResponse({
-    description: 'User comments returned',
-    type: MyCommentsResponseDto,
-  })
-  @ApiNotFoundResponse({ description: 'User not found' })
-  @ApiBadRequestResponse({ description: 'Validation failed' })
-  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
-  @ApiValidationRequest()
+  @ApiPublicList({ description: 'User comments returned', type: MyCommentsResponseDto })
   listCommentsByUser(
     @Param('userId', new ParseUUIDPipe()) userId: string,
     @Query() query: ListMyCommentsQueryDto,
@@ -96,19 +64,10 @@ export class UserDiscussionController {
 
   @Get('users/:userId/discussion-profile')
   @Public()
-  @ApiOperation({
-    summary: 'Get public discussion profile',
-    description:
-      'Returns the public discussion profile for the specified user including thread count, comment count, accepted answers, and reputation.',
-  })
-  @ApiOkResponse({
+  @ApiPublicList({
     description: 'Public discussion profile returned',
     type: PublicDiscussionProfileResponseDto,
   })
-  @ApiNotFoundResponse({ description: 'User not found' })
-  @ApiBadRequestResponse({ description: 'Validation failed' })
-  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
-  @ApiValidationRequest()
   getPublicDiscussionProfile(
     @Param('userId', new ParseUUIDPipe()) userId: string,
   ): Promise<PublicDiscussionProfileResponseDto> {
@@ -116,20 +75,8 @@ export class UserDiscussionController {
   }
 
   @Get('users/me/comments')
-  @ApiBearerAuth()
-  @ApiAuth()
-  @ApiOperation({
-    summary: 'My comments',
-    description:
-      'Returns comments created by the authenticated user, cursor-paginated and ordered by newest first.',
-  })
-  @ApiOkResponse({
-    description: 'My comments returned',
-    type: MyCommentsResponseDto,
-  })
-  @ApiBadRequestResponse({ description: 'Validation failed' })
-  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
-  @ApiValidationRequest()
+  @ApiAuthList({ description: 'My comments returned', type: MyCommentsResponseDto })
+  @ApiPublicList()
   listMyComments(
     @CurrentUser() user: JwtPayload,
     @Query() query: ListMyCommentsQueryDto,
@@ -141,20 +88,7 @@ export class UserDiscussionController {
   }
 
   @Get('users/me/upvoted-threads')
-  @ApiBearerAuth()
-  @ApiAuth()
-  @ApiOperation({
-    summary: 'My upvoted threads',
-    description:
-      'Returns active discussion threads upvoted by the authenticated user, paginated and ordered by the most recent upvote first.',
-  })
-  @ApiOkResponse({
-    description: 'Upvoted threads returned',
-    type: MyUpvotedThreadsResponseDto,
-  })
-  @ApiBadRequestResponse({ description: 'Validation failed' })
-  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
-  @ApiValidationRequest()
+  @ApiAuthList({ description: 'Upvoted threads returned', type: MyUpvotedThreadsResponseDto })
   listMyUpvotedThreads(
     @CurrentUser() user: JwtPayload,
     @Query() query: ListMyUpvotedThreadsQueryDto,
@@ -166,20 +100,7 @@ export class UserDiscussionController {
   }
 
   @Get('users/me/upvoted-comments')
-  @ApiBearerAuth()
-  @ApiAuth()
-  @ApiOperation({
-    summary: 'My upvoted comments',
-    description:
-      'Returns active discussion comments upvoted by the authenticated user, paginated and ordered by the most recent upvote first.',
-  })
-  @ApiOkResponse({
-    description: 'Upvoted comments returned',
-    type: MyUpvotedCommentsResponseDto,
-  })
-  @ApiBadRequestResponse({ description: 'Validation failed' })
-  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
-  @ApiValidationRequest()
+  @ApiAuthList({ description: 'Upvoted comments returned', type: MyUpvotedCommentsResponseDto })
   listMyUpvotedComments(
     @CurrentUser() user: JwtPayload,
     @Query() query: ListMyUpvotedCommentsQueryDto,
@@ -191,20 +112,10 @@ export class UserDiscussionController {
   }
 
   @Get('users/me/discussion-subscriptions')
-  @ApiBearerAuth()
-  @ApiAuth()
-  @ApiOperation({
-    summary: 'My discussion subscriptions',
-    description:
-      'Returns active discussion threads subscribed to by the authenticated user, paginated and ordered by the most recent subscription first.',
-  })
-  @ApiOkResponse({
+  @ApiAuthList({
     description: 'Discussion subscriptions returned',
     type: MyDiscussionSubscriptionsResponseDto,
   })
-  @ApiBadRequestResponse({ description: 'Validation failed' })
-  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
-  @ApiValidationRequest()
   listMyDiscussionSubscriptions(
     @CurrentUser() user: JwtPayload,
     @Query() query: ListMyDiscussionSubscriptionsQueryDto,
@@ -216,20 +127,7 @@ export class UserDiscussionController {
   }
 
   @Get('users/me/saved-threads')
-  @ApiBearerAuth()
-  @ApiAuth()
-  @ApiOperation({
-    summary: 'My saved threads',
-    description:
-      'Returns active discussion threads saved by the authenticated user, paginated and ordered by the most recent save first.',
-  })
-  @ApiOkResponse({
-    description: 'Saved threads returned',
-    type: MySavedThreadsResponseDto,
-  })
-  @ApiBadRequestResponse({ description: 'Validation failed' })
-  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
-  @ApiValidationRequest()
+  @ApiAuthList({ description: 'Saved threads returned', type: MySavedThreadsResponseDto })
   listMySavedThreads(
     @CurrentUser() user: JwtPayload,
     @Query() query: ListMySavedThreadsQueryDto,
@@ -241,20 +139,7 @@ export class UserDiscussionController {
   }
 
   @Get('users/me/discussions')
-  @ApiBearerAuth()
-  @ApiAuth()
-  @ApiOperation({
-    summary: 'My discussions',
-    description:
-      'Returns discussion threads created by the authenticated user, cursor-paginated and ordered by newest first.',
-  })
-  @ApiOkResponse({
-    description: 'My discussions returned',
-    type: MyDiscussionsResponseDto,
-  })
-  @ApiBadRequestResponse({ description: 'Validation failed' })
-  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
-  @ApiValidationRequest()
+  @ApiAuthList({ description: 'My discussions returned', type: MyDiscussionsResponseDto })
   listMyDiscussions(
     @CurrentUser() user: JwtPayload,
     @Query() query: ListMyDiscussionsQueryDto,
