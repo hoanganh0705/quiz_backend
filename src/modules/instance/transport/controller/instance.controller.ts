@@ -1,4 +1,13 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Query, UseFilters } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  ParseUUIDPipe,
+  Post,
+  Query,
+  UseFilters,
+} from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import {
   ApiTags,
@@ -16,10 +25,14 @@ import { CurrentUser } from '@/common/decorators/current-user.decorator';
 import { Transactional } from '@/common/interceptors/transactional.interceptor';
 import { ApiAuth, ApiValidationRequest } from '@/common/swagger/swagger-decorators';
 import { decodeBase64JsonCursor } from '@/common/utils/cursor.util';
-import type { JwtPayload } from '@/common/guards/jwt.guard';
+import { RequireAuth, type JwtPayload } from '@/common/guards/jwt.guard';
 import { InstanceService } from '../../domain/instance.service';
 import { InstanceResponseMapper } from '../../mappers/instance-response.mapper';
-import { CreateInstanceDto, GetLeaderboardQueryDto, ListInstancesQueryDto } from '../../dto/request';
+import {
+  CreateInstanceDto,
+  GetLeaderboardQueryDto,
+  ListInstancesQueryDto,
+} from '../../dto/request';
 import type { LeaderboardCursorPayload } from '../../domain/ports';
 import {
   InstanceDetailResponseDto,
@@ -35,6 +48,7 @@ import { InstanceDomainExceptionFilter } from '../filters/instance-domain-except
 
 @ApiTags('instances')
 @ApiBearerAuth()
+@RequireAuth()
 @Controller('instances')
 @UseFilters(InstanceDomainExceptionFilter)
 export class InstanceController {
@@ -84,9 +98,7 @@ export class InstanceController {
   })
   @ApiOkResponse({ description: 'Instance list returned', type: InstanceListResponseDto })
   @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
-  async listInstances(
-    @Query() query: ListInstancesQueryDto,
-  ): Promise<InstanceListResponseDto> {
+  async listInstances(@Query() query: ListInstancesQueryDto): Promise<InstanceListResponseDto> {
     const result = await this.instanceService.listInstances({
       limit: query.limit ?? 20,
       cursor: query.cursor,
@@ -220,16 +232,23 @@ export class InstanceController {
   ): Promise<InstanceLeaderboardResponseDto> {
     const limit = query.limit ?? 20;
     const cursor: LeaderboardCursorPayload | undefined = query.cursor
-      ? decodeBase64JsonCursor<LeaderboardCursorPayload>(query.cursor) as LeaderboardCursorPayload
+      ? (decodeBase64JsonCursor<LeaderboardCursorPayload>(query.cursor) as LeaderboardCursorPayload)
       : undefined;
 
     return this.instanceService
       .getLeaderboard({ instanceId, limit, cursor: cursor ?? null })
       .then(({ items, hasNextPage }) => {
         const lastItem = items[items.length - 1];
-        const nextCursor = hasNextPage && lastItem
-          ? Buffer.from(JSON.stringify({ rank: lastItem.rank, instancePlayerId: lastItem.instancePlayerId }), 'utf8').toString('base64url')
-          : null;
+        const nextCursor =
+          hasNextPage && lastItem
+            ? Buffer.from(
+                JSON.stringify({
+                  rank: lastItem.rank,
+                  instancePlayerId: lastItem.instancePlayerId,
+                }),
+                'utf8',
+              ).toString('base64url')
+            : null;
 
         return {
           instanceId,

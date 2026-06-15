@@ -121,10 +121,7 @@ export class RankingOutboxProcessorService implements OnModuleInit {
     });
   }
 
-  private async handleFailure(
-    event: OutboxEventRow,
-    error: unknown,
-  ): Promise<void> {
+  private async handleFailure(event: OutboxEventRow, error: unknown): Promise<void> {
     const nextAttemptCount = event.attemptCount + 1;
     const nowIso = new Date().toISOString();
     const nextAttemptAt = computeNextAttemptIso(nextAttemptCount, nowIso);
@@ -165,12 +162,7 @@ export class RankingOutboxProcessorService implements OnModuleInit {
     await this.db
       .update(outboxEvents)
       .set(updateValues)
-      .where(
-        and(
-          eq(outboxEvents.eventId, event.eventId),
-          isNull(outboxEvents.processedAt),
-        ),
-      );
+      .where(and(eq(outboxEvents.eventId, event.eventId), isNull(outboxEvents.processedAt)));
   }
 
   private async markProcessed(eventId: string): Promise<void> {

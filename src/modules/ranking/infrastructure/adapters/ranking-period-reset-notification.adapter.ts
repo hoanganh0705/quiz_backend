@@ -73,8 +73,7 @@ export class RankingPeriodResetNotificationAdapter implements OnModuleInit, OnMo
       typeof event === 'object' &&
       event !== null &&
       'eventType' in event &&
-      (event.eventType === 'period.reset.initiated' ||
-        event.eventType === 'period.reset.completed')
+      (event.eventType === 'period.reset.initiated' || event.eventType === 'period.reset.completed')
     );
   }
 

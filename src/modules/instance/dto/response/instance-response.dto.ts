@@ -237,7 +237,10 @@ export class InstanceListItemDto {
   })
   quizVersionId!: string;
 
-  @ApiProperty({ description: 'Host user identifier', example: '770e8400-e29b-41d4-a716-446655440000' })
+  @ApiProperty({
+    description: 'Host user identifier',
+    example: '770e8400-e29b-41d4-a716-446655440000',
+  })
   hostUserId!: string;
 
   @ApiProperty({ description: 'Host username', example: 'alice_wonder' })
@@ -246,7 +249,10 @@ export class InstanceListItemDto {
   @ApiPropertyOptional({ description: 'Host display name', nullable: true })
   hostDisplayName!: string | null;
 
-  @ApiPropertyOptional({ description: 'Maximum player capacity (null = unlimited)', nullable: true })
+  @ApiPropertyOptional({
+    description: 'Maximum player capacity (null = unlimited)',
+    nullable: true,
+  })
   maxPlayers!: number | null;
 
   @ApiProperty({ description: 'Instance lifecycle status', example: 'open' })
@@ -262,7 +268,10 @@ export class InstanceListItemDto {
   @ApiProperty({ description: 'Time limit in milliseconds', example: 600000 })
   durationMs!: number;
 
-  @ApiProperty({ description: 'Parent quiz identifier', example: '660e8400-e29b-41d4-a716-446655440099' })
+  @ApiProperty({
+    description: 'Parent quiz identifier',
+    example: '660e8400-e29b-41d4-a716-446655440099',
+  })
   quizId!: string;
 
   @ApiProperty({ description: 'Quiz title', example: 'JavaScript Fundamentals' })

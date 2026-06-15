@@ -63,10 +63,6 @@ import { ConfigService } from '@nestjs/config';
     { provide: INSTANCE_DOMAIN_EVENT_BUS, useExisting: InstanceDomainEventBus },
   ],
   controllers: [InstanceController],
-  exports: [
-    InstanceService,
-    QUIZ_INSTANCE_REPOSITORY_PORT,
-    INSTANCE_DOMAIN_EVENT_BUS,
-  ],
+  exports: [InstanceService, QUIZ_INSTANCE_REPOSITORY_PORT, INSTANCE_DOMAIN_EVENT_BUS],
 })
 export class InstanceModule {}

@@ -1,15 +1,13 @@
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { Inject, Injectable } from '@nestjs/common';
-import { and, asc, eq, isNull, lte } from 'drizzle-orm';
+import { and, asc, eq, isNotNull, isNull, lte } from 'drizzle-orm';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { DRIZZLE } from '@/core/database/drizzle.constants';
 import type { DrizzleDB } from '@/core/database/database.module';
 import { outboxEvents } from '@/core/database/schema';
 import { AuthAuditLogService } from '../audit/auth-audit-log.service';
 import { correlationIdStorage, createCorrelationId } from '@/common/interceptors/correlation-id';
-import {
-  AuthSecurityNotificationService,
-} from '@/modules/notification/domain/services/auth-security-notification.service';
+import { AuthSecurityNotificationService } from '@/modules/notification/domain/services/auth-security-notification.service';
 
 type OutboxEventRow = {
   eventId: string;
@@ -47,7 +45,17 @@ export class OutboxProcessorService {
         correlationId: outboxEvents.correlationId,
       })
       .from(outboxEvents)
-      .where(and(isNull(outboxEvents.processedAt), lte(outboxEvents.nextAttemptAt, nowIso)))
+      .where(
+        and(
+          isNull(outboxEvents.processedAt),
+          // Exclude events that have already been moved to the DLQ.
+          // Without this filter, a poisoned event that exhausted its
+          // retries would be re-selected on every cron tick and
+          // re-thrown, creating an infinite retry loop.
+          isNull(outboxEvents.failedAt),
+          lte(outboxEvents.nextAttemptAt, nowIso),
+        ),
+      )
       .orderBy(asc(outboxEvents.createdAt))
       .limit(OutboxProcessorService.BATCH_SIZE);
 
@@ -77,29 +85,54 @@ export class OutboxProcessorService {
         failedCount += 1;
 
         const nextAttemptCount = event.attemptCount + 1;
-        const nextAttemptAt = this.authAuditLogService.buildNextAttemptIso(
-          nextAttemptCount,
-          nowIso,
-        );
         const lastError = error instanceof Error ? error.message : 'Unknown error';
+        const retriesExhausted = nextAttemptCount >= this.authAuditLogService.maxOutboxRetries;
+
+        // If retries are exhausted, mark the event as DLQ'd in the
+        // SAME update so the next cron tick (which now filters on
+        // `failedAt IS NULL`) skips it. Without `failedAt` being
+        // set, the row would be re-selected forever and re-thrown
+        // on every tick.
+        const updateValues: {
+          attemptCount: number;
+          lastAttemptAt: string;
+          nextAttemptAt: string;
+          lastError: string;
+          failedAt?: string;
+          dlqReason?: string;
+        } = retriesExhausted
+          ? {
+              attemptCount: nextAttemptCount,
+              lastAttemptAt: nowIso,
+              // The exact nextAttemptAt value no longer matters once
+              // the event is in the DLQ, but we still need a valid
+              // timestamp so the row satisfies the column's NOT NULL
+              // constraint. Use `nowIso` to mark "no further attempts".
+              nextAttemptAt: nowIso,
+              lastError,
+              failedAt: nowIso,
+              dlqReason: `exhausted_retries:${lastError}`,
+            }
+          : {
+              attemptCount: nextAttemptCount,
+              lastAttemptAt: nowIso,
+              nextAttemptAt: this.authAuditLogService.buildNextAttemptIso(nextAttemptCount, nowIso),
+              lastError,
+            };
 
         await this.db
           .update(outboxEvents)
-          .set({
-            attemptCount: nextAttemptCount,
-            lastAttemptAt: nowIso,
-            nextAttemptAt,
-            lastError,
-          })
+          .set(updateValues)
           .where(and(eq(outboxEvents.eventId, event.eventId), isNull(outboxEvents.processedAt)));
 
-        if (nextAttemptCount >= this.authAuditLogService.maxOutboxRetries) {
+        if (retriesExhausted) {
           this.logger.error({
             event: 'auth_outbox_event_exhausted_retries',
             outboxEventId: event.eventId,
             aggregateType: event.aggregateType,
             eventType: event.eventType,
             attemptCount: nextAttemptCount,
+            dlqReason: updateValues.dlqReason,
             message: lastError,
           });
         } else {
@@ -109,7 +142,7 @@ export class OutboxProcessorService {
             aggregateType: event.aggregateType,
             eventType: event.eventType,
             attemptCount: nextAttemptCount,
-            nextAttemptAt,
+            nextAttemptAt: updateValues.nextAttemptAt,
             message: lastError,
           });
         }
@@ -134,6 +167,52 @@ export class OutboxProcessorService {
         purgedCount,
       });
     }
+  }
+
+  /**
+   * DLQ monitor: scan the outbox for events that have been moved to
+   * the dead-letter queue (`failedAt IS NOT NULL AND dlqReason IS NOT
+   * NULL`) and emit a high-severity alert. Runs every five minutes so
+   * a poisoned event that slips past the cron filter is surfaced
+   * within a few minutes of being marked, well before it can
+   * accumulate and start filling the outbox.
+   *
+   * The query is bounded (`limit 1000`) so a backlog of DLQ rows
+   * cannot make this monitor itself a hot path. The alert includes
+   * per-aggregate counts so an operator can quickly identify the
+   * source of the failure without having to query the DB.
+   */
+  @Cron('*/5 * * * *')
+  async monitorDeadLetterQueue(): Promise<void> {
+    const rows = await this.db
+      .select({
+        eventId: outboxEvents.eventId,
+        aggregateType: outboxEvents.aggregateType,
+        eventType: outboxEvents.eventType,
+        attemptCount: outboxEvents.attemptCount,
+        failedAt: outboxEvents.failedAt,
+        dlqReason: outboxEvents.dlqReason,
+        lastError: outboxEvents.lastError,
+      })
+      .from(outboxEvents)
+      .where(
+        and(
+          isNull(outboxEvents.processedAt),
+          isNotNull(outboxEvents.failedAt),
+          isNotNull(outboxEvents.dlqReason),
+        ),
+      )
+      .limit(1000);
+
+    if (rows.length === 0) {
+      return;
+    }
+
+    this.logger.error({
+      event: 'auth_outbox_dlq_alert',
+      totalDlqEvents: rows.length,
+      sampleEventIds: rows.slice(0, 5).map((e) => e.eventId),
+    });
   }
 
   private async dispatch(event: OutboxEventRow, nowIso: string): Promise<void> {
@@ -198,11 +277,17 @@ export class OutboxProcessorService {
           break;
 
         case 'password_reset:password_reset_requested':
-          await this.authSecurityNotificationService.notifyPasswordResetRequested({ userId, ipAddress });
+          await this.authSecurityNotificationService.notifyPasswordResetRequested({
+            userId,
+            ipAddress,
+          });
           break;
 
         case 'password_reset:password_reset_completed':
-          await this.authSecurityNotificationService.notifyPasswordResetCompleted({ userId, ipAddress });
+          await this.authSecurityNotificationService.notifyPasswordResetCompleted({
+            userId,
+            ipAddress,
+          });
           break;
 
         case 'account:account_deleted':
@@ -211,7 +296,11 @@ export class OutboxProcessorService {
 
         case 'session:session_revoked': {
           const sessionId = this.readString(event.payload.sessionId) ?? 'unknown';
-          await this.authSecurityNotificationService.notifySessionRevoked({ userId, sessionId, ipAddress });
+          await this.authSecurityNotificationService.notifySessionRevoked({
+            userId,
+            sessionId,
+            ipAddress,
+          });
           break;
         }
 

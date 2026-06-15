@@ -269,5 +269,4 @@ export class UserRankService {
       },
     };
   }
-
 }

@@ -1,11 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { UserRole } from '@/common/types/user-role.type';
-import {
-  DISCUSSION_REPOSITORY_PORT,
-  QUIZ_EXISTENCE_PORT,
-  USER_EXISTENCE_PORT,
-} from '../ports';
+import { DISCUSSION_REPOSITORY_PORT, QUIZ_EXISTENCE_PORT, USER_EXISTENCE_PORT } from '../ports';
 import type {
   DiscussionRepositoryPort,
   QuizExistencePort,

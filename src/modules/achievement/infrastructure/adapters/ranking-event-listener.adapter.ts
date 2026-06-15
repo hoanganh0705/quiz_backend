@@ -9,7 +9,10 @@ import { Inject, Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/commo
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { getCorrelationId, createCorrelationId } from '@/common/interceptors/correlation-id';
 import { SHARED_RANKING_EVENT_BUS } from '@/common/events/ranking-shared-events';
-import type { SharedRankingEventBusPort, SharedRankingDomainEvent } from '@/common/events/ranking-shared-events';
+import type {
+  SharedRankingEventBusPort,
+  SharedRankingDomainEvent,
+} from '@/common/events/ranking-shared-events';
 import { RankAchievementService } from '../../domain/services/rank-achievement.service';
 import { RuleEngineService } from '../../domain/services/rule-engine.service';
 

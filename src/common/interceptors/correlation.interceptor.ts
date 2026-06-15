@@ -9,12 +9,7 @@
  * when the interceptor assigns it via `pino.assign()`.
  */
 
-import {
-  Injectable,
-  NestInterceptor,
-  ExecutionContext,
-  CallHandler,
-} from '@nestjs/common';
+import { Injectable, NestInterceptor, ExecutionContext, CallHandler } from '@nestjs/common';
 import { Observable } from 'rxjs';
 import { tap } from 'rxjs/operators';
 import { randomUUID } from 'node:crypto';
@@ -30,11 +25,12 @@ export class CorrelationInterceptor implements NestInterceptor {
   intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
     const request = context.switchToHttp().getRequest<Request>();
     const incoming = request.headers[CORRELATION_ID_HEADER] as string | undefined;
-    const correlationId: string = (incoming && incoming.length > 0 && incoming.length <= 64)
-      ? incoming
-      : randomUUID();
+    const correlationId: string =
+      incoming && incoming.length > 0 && incoming.length <= 64 ? incoming : randomUUID();
 
-    const response = context.switchToHttp().getResponse<Response & { setHeader(name: string, value: string): void }>();
+    const response = context
+      .switchToHttp()
+      .getResponse<Response & { setHeader(name: string, value: string): void }>();
     response.setHeader(CORRELATION_ID_HEADER, correlationId);
 
     this.logger.assign({ correlationId });

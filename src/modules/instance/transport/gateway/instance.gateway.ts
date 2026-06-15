@@ -165,7 +165,10 @@ export class InstanceGateway implements OnGatewayConnection, OnGatewayDisconnect
     @MessageBody() data: { instanceId: string },
     @WsCurrentUser() user: JwtPayload,
   ): Promise<{ event: string; data: Record<string, unknown> }> {
-    const isHost = await this.instanceAppService.handleUpdateLeaderboardSocket(data.instanceId, user);
+    const isHost = await this.instanceAppService.handleUpdateLeaderboardSocket(
+      data.instanceId,
+      user,
+    );
     if (!isHost) {
       return { event: 'error', data: ERR_NOT_HOST };
     }

@@ -13,7 +13,11 @@ export class TrendingDiscussionCursorMapper {
   static parse(cursor: string): TrendingDiscussionCursor {
     const parsed = decodeBase64JsonCursor<TrendingDiscussionCursor>(cursor);
 
-    if (typeof parsed.score !== 'number' || !this.isIsoDateString(parsed.createdAt) || !this.isUuid(parsed.threadId)) {
+    if (
+      typeof parsed.score !== 'number' ||
+      !this.isIsoDateString(parsed.createdAt) ||
+      !this.isUuid(parsed.threadId)
+    ) {
       throw new Error('Invalid cursor');
     }
 

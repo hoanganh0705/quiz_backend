@@ -130,10 +130,16 @@ export class RankCalculationService {
   }
 
   /**
-   * Queue a user for rank recalculation.
+   * Queue a user for rank recalculation across one or more periods.
+   *
+   * Idempotency: enqueueRecalculation inserts into
+   * `rank_recalculation_work_items` with `ON CONFLICT (user_id, period)
+   * DO NOTHING`, so two concurrent calls for the same (user, period)
+   * pair produce exactly one work item. The batch processor picks each
+   * pair up at most once per enqueue.
    */
   async queueRankRecalculation(userId: string, periods: RankingPeriod[]): Promise<void> {
-    await this.rankingRepository.markDirty([userId]);
+    await this.rankingRepository.enqueueRecalculation({ userIds: [userId], periods });
 
     this.logger.debug({
       event: 'rank_recalculation_queued',
@@ -146,8 +152,12 @@ export class RankCalculationService {
    * Like `queueRankRecalculation` but accepts an explicit transaction client.
    * Used by XpIngestionService to participate in the atomic XP + outbox transaction.
    */
-  async queueRankRecalculationInTx(tx: unknown, userId: string, periods: RankingPeriod[]): Promise<void> {
-    await this.rankingRepository.markDirtyInTx(tx, [userId]);
+  async queueRankRecalculationInTx(
+    tx: unknown,
+    userId: string,
+    periods: RankingPeriod[],
+  ): Promise<void> {
+    await this.rankingRepository.enqueueRecalculationInTx(tx, { userIds: [userId], periods });
 
     this.logger.debug({
       event: 'rank_recalculation_queued',
@@ -157,32 +167,60 @@ export class RankCalculationService {
   }
 
   /**
-   * Process all dirty users for rank recalculation.
+   * Process all pending rank recalculation work items.
+   *
+   * Idempotency model: each work item is one (user, period) pair. The
+   * unique index on (user_id, period) makes enqueue idempotent, and
+   * `completeRecalculationWorkItems` deletes the work item by ID after
+   * the recompute succeeds, so the same item is never processed twice.
+   * A work item that gets re-enqueued mid-batch (because a new XP event
+   * fired while we were computing) is a brand-new row with a new
+   * `workItemId`; the previous one is gone. The `is_dirty` latch on
+   * `user_ranking` is cleared only when the user has no more pending
+   * work items.
    */
   async processDirtyRankings(limit = RANKING_CONSTANTS.INCREMENTAL_BATCH_SIZE): Promise<number> {
-    const dirtyUsers = await this.rankingRepository.getDirtyUsers(limit);
+    const workItems = await this.rankingRepository.getPendingRecalculationWorkItems(limit);
 
-    if (dirtyUsers.length === 0) return 0;
+    if (workItems.length === 0) return 0;
 
-    const userIds = dirtyUsers.map((u) => u.userId);
-
-    for (const period of [
-      RankingPeriod.DAILY,
-      RankingPeriod.WEEKLY,
-      RankingPeriod.MONTHLY,
-      RankingPeriod.ALL_TIME,
-    ]) {
-      await this.recalculateRanksForUsers(userIds, period);
+    // Group work items by period so we can recalculate each period
+    // in one pass over the (much smaller) set of users for that period.
+    const byPeriod = new Map<string, string[]>();
+    for (const wi of workItems) {
+      const list = byPeriod.get(wi.period) ?? [];
+      list.push(wi.userId);
+      byPeriod.set(wi.period, list);
     }
 
-    await this.rankingRepository.clearDirtyFlags(userIds);
+    for (const [period, userIds] of byPeriod) {
+      // Deduplicate within the batch (defense in depth; the unique
+      // index already prevents duplicate enqueues).
+      const deduped = Array.from(new Set(userIds));
+      await this.recalculateRanksForUsers(deduped, period as RankingPeriod);
+    }
+
+    // Mark all consumed work items as complete. This is the only
+    // deletion path; the next batch sees only new work items.
+    await this.rankingRepository.completeRecalculationWorkItems(
+      workItems.map((wi) => wi.workItemId),
+    );
+
+    // For every user that had at least one work item, check whether
+    // they still have pending work. If not, clear the per-user latch.
+    // We do this with a single grouped query: for each user that had a
+    // work item in this batch, count their remaining work items; users
+    // with zero remaining get their latch cleared in one statement.
+    const usersWithWork = Array.from(new Set(workItems.map((wi) => wi.userId)));
+    await this.rankingRepository.clearDirtyFlagsForUsersWithNoPendingWork(usersWithWork);
 
     this.logger.info({
       event: 'dirty_rankings_processed',
-      usersProcessed: dirtyUsers.length,
+      workItemsProcessed: workItems.length,
+      usersAffected: usersWithWork.length,
     });
 
-    return dirtyUsers.length;
+    return workItems.length;
   }
 
   /**

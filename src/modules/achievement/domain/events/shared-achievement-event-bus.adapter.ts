@@ -77,9 +77,7 @@ export class SharedAchievementEventBusAdapter
     }
   }
 
-  private toSharedEvent(
-    event: AchievementDomainEvent,
-  ): SharedAchievementDomainEvent | null {
+  private toSharedEvent(event: AchievementDomainEvent): SharedAchievementDomainEvent | null {
     switch (event.eventType) {
       case 'achievement.awarded':
         return {

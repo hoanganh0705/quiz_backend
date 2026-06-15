@@ -11,7 +11,12 @@ import { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { eq, sql, desc, and, inArray, gte, lte, asc } from 'drizzle-orm';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import * as schema from '@/core/database/schema';
-import { userRanking, rankHistory, rankingMilestones } from '@/core/database/schema';
+import {
+  userRanking,
+  rankHistory,
+  rankingMilestones,
+  rankRecalculationWorkItems,
+} from '@/core/database/schema';
 import {
   TransactionalContext,
   TRANSACTIONAL_CONTEXT,
@@ -145,11 +150,17 @@ export class RankingRepository implements RankingRepositoryPort {
     return this._updateXpCore(tx, params);
   }
 
-  async updateXpInTx(tx: unknown, params: { userId: string; amount: number; now: Date }): Promise<UserRankingRow> {
+  async updateXpInTx(
+    tx: unknown,
+    params: { userId: string; amount: number; now: Date },
+  ): Promise<UserRankingRow> {
     return this._updateXpCore(tx as typeof this.db, params);
   }
 
-  private async _updateXpCore(tx: typeof this.db, params: { userId: string; amount: number; now: Date }): Promise<UserRankingRow> {
+  private async _updateXpCore(
+    tx: typeof this.db,
+    params: { userId: string; amount: number; now: Date },
+  ): Promise<UserRankingRow> {
     const { userId, amount, now } = params;
     const nowIso = now.toISOString();
 
@@ -295,10 +306,75 @@ export class RankingRepository implements RankingRepositoryPort {
   }
 
   private async _markDirtyCore(tx: typeof this.db, userIds: string[]): Promise<void> {
+    await tx.update(userRanking).set({ isDirty: true }).where(inArray(userRanking.userId, userIds));
+  }
+
+  async enqueueRecalculation(params: {
+    userIds: string[];
+    periods: RankingPeriod[];
+  }): Promise<void> {
+    if (params.userIds.length === 0 || params.periods.length === 0) return;
+    const tx = (this.transactionalContext?.getDbClient() ?? this.db) as typeof this.db;
+    await this._enqueueRecalculationCore(tx, params);
+  }
+
+  async enqueueRecalculationInTx(
+    tx: unknown,
+    params: { userIds: string[]; periods: RankingPeriod[] },
+  ): Promise<void> {
+    if (params.userIds.length === 0 || params.periods.length === 0) return;
+    await this._enqueueRecalculationCore(tx as typeof this.db, params);
+  }
+
+  private async _enqueueRecalculationCore(
+    tx: typeof this.db,
+    params: { userIds: string[]; periods: RankingPeriod[] },
+  ): Promise<void> {
+    // ON CONFLICT (user_id, period) DO NOTHING — the unique index on
+    // (user_id, period) makes the insert idempotent. Concurrent
+    // enqueues for the same (user, period) pair produce exactly one
+    // work-item row, so we cannot enqueue "twice" by accident.
+    const rows = params.userIds.flatMap((userId) =>
+      params.periods.map((period) => ({ userId, period })),
+    );
+
+    await tx
+      .insert(rankRecalculationWorkItems)
+      .values(rows)
+      .onConflictDoNothing({
+        target: [rankRecalculationWorkItems.userId, rankRecalculationWorkItems.period],
+      });
+
+    // Flip the per-user latch so fast existence checks see the dirty
+    // flag. The latch is cheap to set even if already true.
     await tx
       .update(userRanking)
       .set({ isDirty: true })
-      .where(inArray(userRanking.userId, userIds));
+      .where(inArray(userRanking.userId, params.userIds));
+  }
+
+  async getPendingRecalculationWorkItems(
+    limit: number,
+  ): Promise<Array<{ workItemId: string; userId: string; period: string }>> {
+    const rows = await this.db
+      .select({
+        workItemId: rankRecalculationWorkItems.workItemId,
+        userId: rankRecalculationWorkItems.userId,
+        period: rankRecalculationWorkItems.period,
+      })
+      .from(rankRecalculationWorkItems)
+      .orderBy(asc(rankRecalculationWorkItems.enqueuedAt))
+      .limit(limit);
+
+    return rows as Array<{ workItemId: string; userId: string; period: string }>;
+  }
+
+  async completeRecalculationWorkItems(workItemIds: string[]): Promise<void> {
+    if (workItemIds.length === 0) return;
+
+    await this.db
+      .delete(rankRecalculationWorkItems)
+      .where(inArray(rankRecalculationWorkItems.workItemId, workItemIds));
   }
 
   async getDirtyUsers(limit: number): Promise<UserRankingRow[]> {
@@ -317,6 +393,38 @@ export class RankingRepository implements RankingRepositoryPort {
       .update(userRanking)
       .set({ isDirty: false })
       .where(inArray(userRanking.userId, userIds));
+  }
+
+  async clearDirtyFlagsForUsersWithNoPendingWork(userIds: string[]): Promise<void> {
+    if (userIds.length === 0) return;
+
+    // Subquery: users in the input set that have no rows in the
+    // work-items table. Single round-trip via a CTE.
+    const result = await this.db.execute(sql<{ userId: string }>`
+      WITH users_with_pending AS (
+        SELECT DISTINCT user_id
+        FROM rank_recalculation_work_items
+        WHERE user_id = ANY(${userIds}::uuid[])
+      ),
+      users_to_clear AS (
+        SELECT u.user_id
+        FROM unnest(${userIds}::uuid[]) AS u(user_id)
+        LEFT JOIN users_with_pending p ON p.user_id = u.user_id
+        WHERE p.user_id IS NULL
+      )
+      UPDATE user_ranking
+      SET is_dirty = false
+      WHERE user_id IN (SELECT user_id FROM users_to_clear)
+      RETURNING user_id AS "userId"
+    `);
+
+    const cleared = (result.rows as Array<{ userId: string }>).map((r) => r.userId);
+    if (cleared.length > 0) {
+      this.logger.debug({
+        event: 'ranking_latch_cleared',
+        usersCleared: cleared.length,
+      });
+    }
   }
 
   async updateRank(params: {
@@ -835,12 +943,14 @@ export class RankingRepository implements RankingRepositoryPort {
     }));
   }
 
-  async calculateAllRanks(period: RankingPeriod): Promise<{
-    userId: string;
-    xp: number;
-    rank: number;
-    denseRank: number;
-  }[]> {
+  async calculateAllRanks(period: RankingPeriod): Promise<
+    {
+      userId: string;
+      xp: number;
+      rank: number;
+      denseRank: number;
+    }[]
+  > {
     const xpColumn = getXpColumn(period);
 
     const result = await this.executeRaw<{
@@ -911,41 +1021,28 @@ export class RankingRepository implements RankingRepositoryPort {
 
     const snapshotDate = getDayStart(resetAt);
 
-    // Collect all users to archive before mutating.
-    const usersToArchive = await this.executeRaw<{
-      userId: string;
-      xp: number | string;
-      rank: number | null;
-    }>(sql`
+    // Archive every user's current rank to rank_history in a single bulk
+    // INSERT ... SELECT. The unique constraint
+    //   uq_rank_history_user_period_snapshot (user_id, period, snapshot_date)
+    // plus ON CONFLICT DO NOTHING makes this idempotent: if the process is
+    // killed mid-reset and a new reset attempt is made for the same
+    // snapshot_date, the archive rows are not duplicated.
+    await tx.execute(sql`
+      INSERT INTO rank_history (user_id, period, snapshot_date, rank, xp, recorded_at)
       SELECT
-        ur.user_id as "userId",
-        ur.${sql.raw(xpColumn)} as xp,
-        ur.${sql.raw(xpColumn.replace('_xp', '_rank'))} as rank
+        ur.user_id,
+        ${period}::text,
+        ${snapshotDate.toISOString()}::timestamptz,
+        ur.${sql.raw(xpColumn.replace('_xp', '_rank'))},
+        ur.${sql.raw(xpColumn)},
+        ${resetAtIso}::timestamptz
       FROM user_ranking ur
       INNER JOIN users u ON u.user_id = ur.user_id
       WHERE ur.${sql.raw(xpColumn)} > 0
+        AND ur.${sql.raw(xpColumn.replace('_xp', '_rank'))} IS NOT NULL
         AND u.deleted_at IS NULL
+      ON CONFLICT (user_id, period, snapshot_date) DO NOTHING
     `);
-
-    // Archive each user's current rank to rank_history within the transaction.
-    for (const user of usersToArchive.rows) {
-      const xpValue = Number(user.xp);
-      const rankValue = user.rank;
-
-      if (xpValue > 0 && rankValue !== null) {
-        await tx
-          .insert(rankHistory)
-          .values({
-            userId: user.userId,
-            period,
-            snapshotDate: snapshotDate.toISOString(),
-            rank: rankValue,
-            xp: xpValue,
-            recordedAt: resetAtIso,
-          })
-          .onConflictDoNothing();
-      }
-    }
 
     // Reset XP and rank for all active users in one atomic UPDATE.
     const resetResult = (await tx

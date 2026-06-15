@@ -182,12 +182,7 @@ export class AchievementOutboxProcessorService implements OnModuleInit {
     await this.db
       .update(outboxEvents)
       .set(updateValues)
-      .where(
-        and(
-          eq(outboxEvents.eventId, event.eventId),
-          isNull(outboxEvents.processedAt),
-        ),
-      );
+      .where(and(eq(outboxEvents.eventId, event.eventId), isNull(outboxEvents.processedAt)));
   }
 
   private async markProcessed(eventId: string): Promise<void> {

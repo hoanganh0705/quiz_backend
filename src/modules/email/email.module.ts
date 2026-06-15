@@ -1,11 +1,13 @@
 import { Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Queue, type ConnectionOptions } from 'bullmq';
+import { DatabaseModule } from '@/core/database/database.module';
 import { EmailProcessor } from './email.processor';
 import { EmailService } from './email.service';
 import { EMAIL_QUEUE_NAME, EMAIL_QUEUE_TOKENS } from './email.constants';
 
 @Module({
+  imports: [DatabaseModule],
   providers: [
     {
       provide: EMAIL_QUEUE_TOKENS.CONNECTION,

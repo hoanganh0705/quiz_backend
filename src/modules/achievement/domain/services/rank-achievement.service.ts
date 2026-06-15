@@ -54,25 +54,25 @@ export class RankAchievementService {
     const eligible: BadgeType[] = [];
 
     if (params.currentRank === BADGE_THRESHOLDS.RANK.RANK_1) {
-      if (!await this.ruleEngineService.hasBadge(params.userId, BadgeType.RANK_1)) {
+      if (!(await this.ruleEngineService.hasBadge(params.userId, BadgeType.RANK_1))) {
         eligible.push(BadgeType.RANK_1);
       }
     }
 
     if (params.currentRank <= BADGE_THRESHOLDS.RANK.TOP_10) {
-      if (!await this.ruleEngineService.hasBadge(params.userId, BadgeType.TOP_10)) {
+      if (!(await this.ruleEngineService.hasBadge(params.userId, BadgeType.TOP_10))) {
         eligible.push(BadgeType.TOP_10);
       }
     }
 
     if (params.currentRank <= BADGE_THRESHOLDS.RANK.TOP_100) {
-      if (!await this.ruleEngineService.hasBadge(params.userId, BadgeType.TOP_100)) {
+      if (!(await this.ruleEngineService.hasBadge(params.userId, BadgeType.TOP_100))) {
         eligible.push(BadgeType.TOP_100);
       }
     }
 
     if (params.currentRank <= BADGE_THRESHOLDS.RANK.TOP_1000) {
-      if (!await this.ruleEngineService.hasBadge(params.userId, BadgeType.TOP_1000)) {
+      if (!(await this.ruleEngineService.hasBadge(params.userId, BadgeType.TOP_1000))) {
         eligible.push(BadgeType.TOP_1000);
       }
     }

@@ -54,7 +54,10 @@ export class DiscussionFeedListenerAdapter implements OnModuleInit, OnModuleDest
     }
   }
 
-  private async recordCommentCreated(event: CommentCreatedEvent, correlationId: string): Promise<void> {
+  private async recordCommentCreated(
+    event: CommentCreatedEvent,
+    correlationId: string,
+  ): Promise<void> {
     this.logger.debug({
       event: 'social_feed_comment_created',
       correlationId,
@@ -73,7 +76,10 @@ export class DiscussionFeedListenerAdapter implements OnModuleInit, OnModuleDest
     });
   }
 
-  private async recordThreadCreated(event: DiscussionThreadCreatedEvent, correlationId: string): Promise<void> {
+  private async recordThreadCreated(
+    event: DiscussionThreadCreatedEvent,
+    correlationId: string,
+  ): Promise<void> {
     this.logger.debug({
       event: 'social_feed_thread_created',
       correlationId,
@@ -93,7 +99,10 @@ export class DiscussionFeedListenerAdapter implements OnModuleInit, OnModuleDest
     });
   }
 
-  private async recordThreadSolved(event: DiscussionThreadSolvedEvent, correlationId: string): Promise<void> {
+  private async recordThreadSolved(
+    event: DiscussionThreadSolvedEvent,
+    correlationId: string,
+  ): Promise<void> {
     this.logger.debug({
       event: 'social_feed_thread_solved',
       correlationId,

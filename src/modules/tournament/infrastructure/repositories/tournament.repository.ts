@@ -879,7 +879,7 @@ export class TournamentRepository implements TournamentRepositoryPort {
       await tx
         .update(tournamentRoundParticipants)
         .set({ attemptId: createdAttempt.attemptId, updatedAt: params.nowIso })
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+
         .where(
           eq(tournamentRoundParticipants.roundParticipantId, roundParticipant.roundParticipantId),
         );
@@ -898,7 +898,7 @@ export class TournamentRepository implements TournamentRepositoryPort {
           updatedAt: tournamentRoundParticipants.updatedAt,
         })
         .from(tournamentRoundParticipants)
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+
         .where(
           eq(tournamentRoundParticipants.roundParticipantId, roundParticipant.roundParticipantId),
         )
@@ -1205,53 +1205,111 @@ export class TournamentRepository implements TournamentRepositoryPort {
     nowIso: string;
   }): Promise<FinalizedTournamentParticipantRow[]> {
     return this.db.transaction(async (tx) => {
-      const participants = await tx
-        .select({
-          participantId: tournamentParticipants.participantId,
-          userId: tournamentParticipants.userId,
-        })
-        .from(tournamentParticipants)
-        .innerJoin(users, eq(tournamentParticipants.userId, users.userId))
-        .where(
-          and(
-            eq(tournamentParticipants.tournamentId, params.tournamentId),
-            isNull(tournamentParticipants.withdrawnAt),
-            isNull(users.deletedAt),
-          ),
-        )
-        .orderBy(desc(tournamentParticipants.totalScore), tournamentParticipants.totalTimeMs);
+      // Compute ranks entirely in SQL with ROW_NUMBER(). The CTE orders
+      // participants by score (descending) and tie-breaks by total time
+      // (ascending — faster finishes win ties), then materializes the
+      // final standings. This avoids loading the full participant set
+      // into application memory: only the (participantId, userId, rank)
+      // tuples are streamed out, in batches of 1000.
+      const totalResult = await tx.execute(sql<{ total: number | string }>`
+        SELECT COUNT(*)::bigint AS total
+        FROM tournament_participants tp
+        INNER JOIN users u ON u.user_id = tp.user_id
+        WHERE tp.tournament_id = ${params.tournamentId}::uuid
+          AND tp.withdrawn_at IS NULL
+          AND u.deleted_at IS NULL
+      `);
+      const totalParticipants = Number(
+        (totalResult.rows[0] as { total?: unknown } | undefined)?.total ?? 0,
+      );
 
-      const totalParticipants = participants.length;
+      // Streaming batched UPDATE: pull (participantId, userId, rank) chunks
+      // and update each batch with one statement that joins to a VALUES list.
+      // A single SQL round-trip per batch instead of one per participant.
+      const BATCH_SIZE = 1000;
+      let offset = 0;
 
-      if (totalParticipants > 0) {
-        const rankedParticipants = participants.map((p, i) => ({
-          participantId: p.participantId,
-          rank: i + 1,
-        }));
+      while (true) {
+        const batch = await tx.execute(
+          sql<{ participantId: string; userId: string; rank: number | string }>`
+            WITH ranked AS (
+              SELECT
+                tp.participant_id as "participantId",
+                tp.user_id as "userId",
+                ROW_NUMBER() OVER (
+                  ORDER BY tp.total_score DESC, tp.total_time_ms ASC, tp.participant_id ASC
+                )::int as rank
+              FROM tournament_participants tp
+              INNER JOIN users u ON u.user_id = tp.user_id
+              WHERE tp.tournament_id = ${params.tournamentId}::uuid
+                AND tp.withdrawn_at IS NULL
+                AND u.deleted_at IS NULL
+            )
+            SELECT "participantId", "userId", rank
+            FROM ranked
+            ORDER BY rank
+            LIMIT ${BATCH_SIZE} OFFSET ${offset}
+          `,
+        );
 
-        await tx
-          .update(tournamentParticipants)
-          .set({
-            rankFinal: sql`CASE ${sql.join(
-              rankedParticipants.map(
-                ({ participantId, rank }) =>
-                  sql`WHEN ${eq(tournamentParticipants.participantId, participantId)} THEN ${rank}`,
-              ),
-              sql` `,
-            )} ELSE rank_final END`,
-            status: 'completed' as TournamentParticipantStatus,
-            updatedAt: params.nowIso,
-          })
-          .where(eq(tournamentParticipants.tournamentId, params.tournamentId));
+        const rows = batch.rows as Array<{
+          participantId: string;
+          userId: string;
+          rank: number | string;
+        }>;
+        if (rows.length === 0) break;
+
+        // Build a single UPDATE … FROM (VALUES …) statement per batch.
+        // This issues exactly one round-trip for the whole batch and
+        // touches only the rows in this chunk.
+        const valuesSql = sql.join(
+          rows.map((r) => sql`(${r.participantId}::uuid, ${Number(r.rank)}::int)`),
+          sql`, `,
+        );
+
+        await tx.execute(sql`
+          UPDATE tournament_participants AS tp
+          SET
+            rank_final = v.rank,
+            status = 'completed',
+            updated_at = ${params.nowIso}::timestamptz
+          FROM (VALUES ${valuesSql}) AS v(participant_id, rank)
+          WHERE tp.participant_id = v.participant_id
+        `);
+
+        if (rows.length < BATCH_SIZE) break;
+        offset += BATCH_SIZE;
       }
 
       await this.refreshTournamentStats(params.tournamentId);
 
-      return participants.map((participant, index) => ({
-        userId: participant.userId,
-        rank: index + 1,
-        totalParticipants,
-      }));
+      // Return the final standings in rank order. This is the only place
+      // we materialize the full result set, and it's bounded by the
+      // number of participants in this tournament (necessary because
+      // the API contract returns the full standings list).
+      const finalStandings = await tx.execute(
+        sql<{ userId: string; rank: number | string }>`
+          SELECT
+            tp.user_id as "userId",
+            ROW_NUMBER() OVER (
+              ORDER BY tp.total_score DESC, tp.total_time_ms ASC, tp.participant_id ASC
+            )::int as rank
+          FROM tournament_participants tp
+          INNER JOIN users u ON u.user_id = tp.user_id
+          WHERE tp.tournament_id = ${params.tournamentId}::uuid
+            AND tp.withdrawn_at IS NULL
+            AND u.deleted_at IS NULL
+          ORDER BY rank
+        `,
+      );
+
+      return (finalStandings.rows as Array<{ userId: string; rank: number | string }>).map(
+        (row) => ({
+          userId: row.userId,
+          rank: Number(row.rank),
+          totalParticipants,
+        }),
+      );
     });
   }
 }

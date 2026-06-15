@@ -76,16 +76,8 @@ export class DiscussionCleanupService {
     const rows = await this.db
       .select({ voteId: discussionVotes.voteId })
       .from(discussionVotes)
-      .innerJoin(
-        discussionThreads,
-        eq(discussionVotes.targetId, discussionThreads.threadId),
-      )
-      .where(
-        and(
-          eq(discussionVotes.targetType, 'thread'),
-          isNotNull(discussionThreads.deletedAt),
-        ),
-      );
+      .innerJoin(discussionThreads, eq(discussionVotes.targetId, discussionThreads.threadId))
+      .where(and(eq(discussionVotes.targetType, 'thread'), isNotNull(discussionThreads.deletedAt)));
 
     return { voteIds: rows.map((r) => r.voteId) };
   }
@@ -94,15 +86,9 @@ export class DiscussionCleanupService {
     const rows = await this.db
       .select({ voteId: discussionVotes.voteId })
       .from(discussionVotes)
-      .innerJoin(
-        discussionComments,
-        eq(discussionVotes.targetId, discussionComments.commentId),
-      )
+      .innerJoin(discussionComments, eq(discussionVotes.targetId, discussionComments.commentId))
       .where(
-        and(
-          eq(discussionVotes.targetType, 'comment'),
-          isNotNull(discussionComments.deletedAt),
-        ),
+        and(eq(discussionVotes.targetType, 'comment'), isNotNull(discussionComments.deletedAt)),
       );
 
     return { voteIds: rows.map((r) => r.voteId) };

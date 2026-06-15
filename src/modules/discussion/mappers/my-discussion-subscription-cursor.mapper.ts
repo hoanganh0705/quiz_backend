@@ -18,7 +18,10 @@ export class MyDiscussionSubscriptionCursorMapper {
   }
 
   static serialize(payload: MyDiscussionSubscriptionCursor): string {
-    return encodeBase64JsonCursor({ subscribedAt: payload.subscribedAt, threadId: payload.threadId });
+    return encodeBase64JsonCursor({
+      subscribedAt: payload.subscribedAt,
+      threadId: payload.threadId,
+    });
   }
 
   private static isUuid(value: unknown): value is string {
