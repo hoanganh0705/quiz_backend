@@ -1,9 +1,19 @@
-import { Inject, Injectable } from '@nestjs/common';
-import { lt } from 'drizzle-orm';
-import { DRIZZLE } from '@/core/database/drizzle.constants';
-import type { DrizzleDB } from '@/core/database/database.module';
-import { authAuditLogs } from '@/core/database/schema';
+import { Injectable } from '@nestjs/common';
 import { SecurityConfig } from '../../config/security.config';
+import { AuditLogService, type AuditRecordInput } from '@/common/audit/audit-log.service';
+
+/**
+ * Backward-compatible shim around the cross-domain
+ * `AuditLogService`. Preserves the auth outbox call site
+ * (`authAuditLogService.record({ eventType, userId, ipAddress,
+ * metadata, createdAt })`) and the auth-domain retention
+ * default.
+ *
+ * New code should depend on `AuditLogService` directly and use
+ * the `domain` / `action` / `actorId` / `subjectUserId` fields
+ * for structured filtering. This shim will stay as long as the
+ * outbox processor uses it, and then can be deleted.
+ */
 
 type AuthAuditRecordInput = {
   eventType: string;
@@ -16,32 +26,25 @@ type AuthAuditRecordInput = {
 @Injectable()
 export class AuthAuditLogService {
   constructor(
-    @Inject(DRIZZLE) private readonly db: DrizzleDB,
     private readonly securityConfig: SecurityConfig,
+    private readonly auditLogService: AuditLogService,
   ) {}
 
   async record(input: AuthAuditRecordInput): Promise<void> {
-    const createdAt = input.createdAt ?? new Date().toISOString();
-    const expiresAt = new Date(createdAt);
-    expiresAt.setUTCDate(expiresAt.getUTCDate() + this.securityConfig.authAuditRetentionDays);
-
-    await this.db.insert(authAuditLogs).values({
+    const forwarded: AuditRecordInput = {
       eventType: input.eventType,
       userId: input.userId,
       ipAddress: input.ipAddress ?? null,
-      metadata: input.metadata ?? {},
-      createdAt,
-      expiresAt: expiresAt.toISOString(),
-    });
+      metadata: input.metadata,
+      createdAt: input.createdAt,
+      domain: 'auth',
+      retentionDays: this.securityConfig.authAuditRetentionDays,
+    };
+    await this.auditLogService.record(forwarded);
   }
 
   async purgeExpired(nowIso = new Date().toISOString()): Promise<number> {
-    const result = await this.db
-      .delete(authAuditLogs)
-      .where(lt(authAuditLogs.expiresAt, nowIso))
-      .returning({ auditLogId: authAuditLogs.auditLogId });
-
-    return result.length;
+    return this.auditLogService.purgeExpired(nowIso);
   }
 
   computeRetryDelaySeconds(attemptCount: number): number {

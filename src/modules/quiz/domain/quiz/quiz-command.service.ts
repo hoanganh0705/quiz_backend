@@ -17,6 +17,7 @@ import {
   type QuizWithPublishedVersionRow,
 } from '../ports/quiz-repository.port';
 import { QUIZ_DOMAIN_EVENT_BUS } from '../ports/quiz-domain-event-bus.port';
+import { AuditLogService } from '@/common/audit/audit-log.service';
 
 /**
  * QuizCommandService — Command orchestration for the Quiz aggregate.
@@ -35,6 +36,7 @@ export class QuizCommandService {
     @Inject(QUIZ_REPOSITORY_PORT) private readonly quizRepository: QuizRepositoryPort,
     private readonly quizQueryService: QuizQueryService,
     @Inject(QUIZ_DOMAIN_EVENT_BUS) private readonly eventBus: QuizDomainEventBus,
+    private readonly auditLogService: AuditLogService,
     @InjectPinoLogger(QuizCommandService.name) private readonly logger: PinoLogger,
   ) {}
 
@@ -162,6 +164,35 @@ export class QuizCommandService {
     await this.quizRepository.softDeleteQuiz(quizId, nowIso);
 
     this.logger.info({ event: 'quiz_deleted', quizId, userId: user.sub });
+
+    // Audit: quiz deletion is destructive. The previous
+    // implementation only logged the event; the cross-domain
+    // audit log captures who deleted which quiz so the
+    // platform can answer "did creator X delete their own
+    // quiz or did an admin do it?" and so the analytics
+    // module can attribute the loss of attempts to a known
+    // user action.
+    try {
+      await this.auditLogService.record({
+        eventType: 'quiz.deleted',
+        domain: 'quiz',
+        action: 'quiz.deleted',
+        actorId: user.sub,
+        metadata: {
+          quizId,
+          creatorId: quiz.creatorId,
+          wasAdminOverride: quiz.creatorId !== user.sub,
+        },
+        createdAt: nowIso,
+      });
+    } catch (error) {
+      this.logger.error({
+        event: 'quiz_deletion_audit_write_failed',
+        quizId,
+        userId: user.sub,
+        message: error instanceof Error ? error.message : 'unknown',
+      });
+    }
 
     this.eventBus.emitQuizDeleted(new QuizDeletedEvent(quizId, user.sub, nowIso));
 
