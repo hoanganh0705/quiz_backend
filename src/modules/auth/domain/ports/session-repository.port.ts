@@ -65,15 +65,31 @@ export interface SessionRepositoryPort {
     },
   ): Promise<void>;
 
-  revokeSessionsByUserId(userId: string, nowIso: string): Promise<void>;
+  revokeSessionsByUserId(
+    userId: string,
+    nowIso: string,
+  ): Promise<Array<{ sessionId: string; jti: string; refreshTokenHash: string }>>;
 
-  revokeOtherSessionsByUserId(userId: string, sessionId: string, nowIso: string): Promise<void>;
+  revokeOtherSessionsByUserId(
+    userId: string,
+    sessionId: string,
+    nowIso: string,
+  ): Promise<Array<{ sessionId: string; jti: string; refreshTokenHash: string }>>;
 
-  revokeSessionById(sessionId: string, nowIso: string): Promise<void>;
+  revokeSessionById(
+    sessionId: string,
+    nowIso: string,
+  ): Promise<{ sessionId: string; jti: string; refreshTokenHash: string; userId: string } | null>;
 
-  revokeSessionByJti(jti: string, nowIso: string): Promise<void>;
+  revokeSessionByJti(
+    jti: string,
+    nowIso: string,
+  ): Promise<{ sessionId: string; jti: string; refreshTokenHash: string; userId: string } | null>;
 
-  revokeSessionByRefreshTokenHash(refreshTokenHash: string, nowIso: string): Promise<void>;
+  revokeSessionByRefreshTokenHash(
+    refreshTokenHash: string,
+    nowIso: string,
+  ): Promise<{ sessionId: string; jti: string; refreshTokenHash: string; userId: string } | null>;
 
   countActiveSessionsByUserId(userId: string, nowIso: string): Promise<number>;
 }

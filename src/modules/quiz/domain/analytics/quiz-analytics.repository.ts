@@ -204,10 +204,10 @@ export class QuizAnalyticsRepository implements QuizAnalyticsRepositoryPort {
     const trendingQuizzes: TrendingQuiz[] = [];
     for (let i = 0; i < filtered.length; i++) {
       const row = filtered[i];
-      const recentAttempts = await this.getRecentAttemptsByQuiz(row.quizId as string, 168);
+      const recentAttempts = await this.getRecentAttemptsByQuiz(row.quizId, 168);
       trendingQuizzes.push({
         rank: i + 1,
-        quizId: row.quizId as string,
+        quizId: row.quizId,
         title: row.title,
         slug: row.slug,
         imageUrl: row.imageUrl,
@@ -260,7 +260,7 @@ export class QuizAnalyticsRepository implements QuizAnalyticsRepositoryPort {
 
     return filtered.map((row, i) => ({
       rank: i + 1,
-      quizId: row.quizId as string,
+      quizId: row.quizId,
       title: row.title,
       slug: row.slug,
       imageUrl: row.imageUrl,
@@ -488,7 +488,7 @@ export class QuizAnalyticsRepository implements QuizAnalyticsRepositoryPort {
 
     return results.map((row, i) => ({
       rank: i + 1,
-      quizId: row.quizId as string,
+      quizId: row.quizId,
       title: row.title,
       slug: row.slug,
       imageUrl: row.imageUrl,

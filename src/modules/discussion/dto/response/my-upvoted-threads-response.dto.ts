@@ -39,7 +39,8 @@ export class MyUpvotedThreadsPaginationDto {
   @ApiPropertyOptional({
     description: 'Opaque cursor for the next page',
     nullable: true,
-    example: 'eyJ1cHVvdGVkQXQiOiIyMDI2LTA2LTA4VDA5OjAwOjAwWiIsInRocmVhZElkIjoiNjYwZTg0MDAtZTI5Yi00MWQ0LWE3MTYtNDQ2NjU1NDQwMDAwIn0=',
+    example:
+      'eyJ1cHVvdGVkQXQiOiIyMDI2LTA2LTA4VDA5OjAwOjAwWiIsInRocmVhZElkIjoiNjYwZTg0MDAtZTI5Yi00MWQ0LWE3MTYtNDQ2NjU1NDQwMDAwIn0=',
   })
   nextCursor!: string | null;
 }

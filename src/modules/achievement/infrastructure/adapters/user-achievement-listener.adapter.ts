@@ -24,7 +24,9 @@ export class UserAchievementListenerAdapter implements OnModuleInit, OnModuleDes
 
   constructor(
     @Inject(forwardRef(() => USER_DOMAIN_EVENT_BUS))
-    private readonly userEventBus: { subscribe(handler: (event: UserDomainEvent) => void): () => void },
+    private readonly userEventBus: {
+      subscribe(handler: (event: UserDomainEvent) => void): () => void;
+    },
     private readonly ruleEngineService: RuleEngineService,
     @InjectPinoLogger(UserAchievementListenerAdapter.name)
     private readonly logger: PinoLogger,

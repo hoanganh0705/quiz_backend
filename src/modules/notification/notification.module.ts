@@ -41,7 +41,15 @@ import { NotificationGateway } from './transport/gateway/notification.gateway';
 import { NotificationWebSocketListener } from './infrastructure/adapters/notification-websocket-listener.adapter';
 
 @Module({
-  imports: [DatabaseModule, JwtModule, forwardRef(() => DiscussionModule), forwardRef(() => InstanceModule), forwardRef(() => ReviewModule), forwardRef(() => QuizModule), forwardRef(() => UserModule)],
+  imports: [
+    DatabaseModule,
+    JwtModule,
+    forwardRef(() => DiscussionModule),
+    forwardRef(() => InstanceModule),
+    forwardRef(() => ReviewModule),
+    forwardRef(() => QuizModule),
+    forwardRef(() => UserModule),
+  ],
   providers: [
     NotificationRepository,
     {

@@ -7,7 +7,14 @@
  * Registered in QuizModule.onModuleInit and unsubscribed on destroy.
  */
 
-import { Inject, Injectable, OnModuleDestroy, OnModuleInit, Optional, forwardRef } from '@nestjs/common';
+import {
+  Inject,
+  Injectable,
+  OnModuleDestroy,
+  OnModuleInit,
+  Optional,
+  forwardRef,
+} from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import {
   REVIEW_DOMAIN_EVENT_BUS,

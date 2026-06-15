@@ -29,9 +29,10 @@ export class AchievementDomainExceptionFilter implements ExceptionFilter {
     });
   }
 
-  private mapToHttp(
-    error: AchievementDomainError | UserProfilePrivateError,
-  ): { status: number; message: string } {
+  private mapToHttp(error: AchievementDomainError | UserProfilePrivateError): {
+    status: number;
+    message: string;
+  } {
     if (error instanceof BadgeNotFoundError) {
       return { status: HttpStatus.NOT_FOUND, message: 'Badge not found' };
     }

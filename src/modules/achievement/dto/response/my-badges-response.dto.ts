@@ -18,7 +18,10 @@ export class MyBadgeItemDto {
 }
 
 export class MyBadgesResponseDto {
-  @ApiProperty({ type: [MyBadgeItemDto], description: 'List of badges earned by the authenticated user' })
+  @ApiProperty({
+    type: [MyBadgeItemDto],
+    description: 'List of badges earned by the authenticated user',
+  })
   data!: MyBadgeItemDto[];
 
   @ApiProperty({ description: 'Total count of badges matching the query' })

@@ -82,6 +82,35 @@ export class SocialApplicationService {
     return { items: result, hasNextPage };
   }
 
+  /**
+   * Read another user's friend list. Access is restricted to:
+   *   - the target user themselves (read your own friends), or
+   *   - users who are mutual friends with the target.
+   *
+   * The service throws `BlockedUserError` if either side has
+   * blocked the other, and `FriendListForbiddenError` if the
+   * requester is neither self nor a mutual friend. This is the
+   * IDOR fix — the previous controller used to fabricate a
+   * `JwtPayload` with the URL parameter as `sub`, letting any
+   * authenticated user read any other user's friend list.
+   */
+  async getFriendsOfUser(
+    requesterId: string,
+    targetUserId: string,
+    limit: number,
+    cursor?: string | null,
+  ): Promise<{ items: Friend[]; hasNextPage: boolean }> {
+    const items = await this.socialService.getFriendsOfUser(
+      requesterId,
+      targetUserId,
+      limit + 1,
+      cursor,
+    );
+    const hasNextPage = items.length > limit;
+    const result = hasNextPage ? items.slice(0, limit) : items;
+    return { items: result, hasNextPage };
+  }
+
   async getFriendCount(user: JwtPayload): Promise<number> {
     return this.socialService.getFriendCount(user.sub);
   }

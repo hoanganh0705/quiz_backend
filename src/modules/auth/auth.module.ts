@@ -52,6 +52,7 @@ import { AuthAuditLogService } from './infrastructure/audit/auth-audit-log.servi
 import { AuthTransactionContext } from './infrastructure/transaction/auth-transaction.context';
 import { TransactionalInterceptor } from './infrastructure/transaction/transactional.interceptor';
 import { OUTBOX_PORT } from './domain/ports/outbox.port';
+import { SessionInvalidationBus } from './infrastructure/session/session-invalidation.bus';
 
 // OAuth domain
 import { OAuthLoginService } from './domain/oauth/oauth-login.service';
@@ -148,6 +149,8 @@ import { AuthSecurityNotificationService } from '@/modules/notification/domain/s
     OAuthSessionIssuer,
     OAuthEventService,
     OAuthLoginService,
+    // Cross-instance session invalidation
+    SessionInvalidationBus,
   ],
   exports: [AuthApplicationService],
 })

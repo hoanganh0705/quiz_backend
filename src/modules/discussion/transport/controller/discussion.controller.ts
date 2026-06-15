@@ -669,10 +669,7 @@ export class DiscussionController {
   @ApiAuth()
   @ApiOperation({ summary: 'Remove a vote from a thread, comment, or reply' })
   @ApiNoContent()
-  async removeVote(
-    @CurrentUser() user: JwtPayload,
-    @Body() dto: RemoveVoteDto,
-  ): Promise<void> {
+  async removeVote(@CurrentUser() user: JwtPayload, @Body() dto: RemoveVoteDto): Promise<void> {
     await this.discussionService.removeVote(user, dto.targetType, dto.targetId);
   }
 
@@ -689,10 +686,7 @@ export class DiscussionController {
   @ApiBadRequestResponse({ description: 'Validation failed' })
   @ApiValidationRequest()
   @HttpCode(HttpStatus.NO_CONTENT)
-  async report(
-    @CurrentUser() user: JwtPayload,
-    @Body() dto: CreateReportDto,
-  ): Promise<void> {
+  async report(@CurrentUser() user: JwtPayload, @Body() dto: CreateReportDto): Promise<void> {
     await this.discussionService.report(
       user,
       dto.targetType,

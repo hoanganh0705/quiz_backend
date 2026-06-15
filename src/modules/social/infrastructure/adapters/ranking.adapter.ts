@@ -91,7 +91,9 @@ export class RankingAdapter implements RankingPort {
           const rankingPeriod = this.mapToRankingPeriod(period);
           const currentRank = await this.rankingRepository.getUserRank(userId, rankingPeriod);
           const currentRanking = await this.rankingRepository.getRankingsForUsers([userId]);
-          const currentXp = currentRanking[0] ? this.getXpForPeriod(currentRanking[0], rankingPeriod) : 0;
+          const currentXp = currentRanking[0]
+            ? this.getXpForPeriod(currentRanking[0], rankingPeriod)
+            : 0;
 
           const snapshots = await this.rankingRepository.getLatestRankSnapshots({
             userId,

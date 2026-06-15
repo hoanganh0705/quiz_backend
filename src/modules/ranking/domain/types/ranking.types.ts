@@ -284,8 +284,13 @@ export interface UserRankingBadges {
 // ============================================
 
 export const RANKING_CONSTANTS = {
-  // Cache TTLs in seconds
-  LEADERBOARD_CACHE_TTL: 60,
+  // Cache TTLs in seconds. Leaderboard cache uses a 30-second TTL
+  // (per the production-readiness audit) so that a 3-instance
+  // deployment has at most 30 seconds of cross-instance staleness
+  // after an XP event. The user-rank TTL is shorter because the
+  // user is most likely looking at their own rank, and rank changes
+  // should reflect quickly.
+  LEADERBOARD_CACHE_TTL: 30,
   USER_RANK_CACHE_TTL: 10,
   TOTAL_USERS_CACHE_TTL: 300,
 
@@ -388,7 +393,9 @@ export function getRankColumn(period: RankingPeriod): string {
   }
 }
 
-export function getRankFieldName(period: RankingPeriod): 'allTimeRank' | 'weeklyRank' | 'monthlyRank' | 'dailyRank' {
+export function getRankFieldName(
+  period: RankingPeriod,
+): 'allTimeRank' | 'weeklyRank' | 'monthlyRank' | 'dailyRank' {
   switch (period) {
     case RankingPeriod.DAILY:
       return 'dailyRank';
@@ -414,7 +421,9 @@ export function getResetColumn(period: RankingPeriod): string {
   }
 }
 
-export function getXpField(period: RankingPeriod): 'allTimeXp' | 'weeklyXp' | 'monthlyXp' | 'dailyXp' {
+export function getXpField(
+  period: RankingPeriod,
+): 'allTimeXp' | 'weeklyXp' | 'monthlyXp' | 'dailyXp' {
   switch (period) {
     case RankingPeriod.DAILY:
       return 'dailyXp';
@@ -445,4 +454,3 @@ export function getDayStart(date: Date): Date {
   d.setHours(0, 0, 0, 0);
   return d;
 }
-

@@ -45,7 +45,8 @@ const QUIZ_COLUMNS = quizzes as unknown as {
 export class QuizInstanceRepository implements QuizInstanceRepositoryPort {
   constructor(
     @Inject(DRIZZLE) private readonly db: DrizzleDB,
-    @Optional() @Inject(TRANSACTIONAL_CONTEXT)
+    @Optional()
+    @Inject(TRANSACTIONAL_CONTEXT)
     private readonly transactionalContext?: TransactionalContext,
   ) {}
 
@@ -293,10 +294,18 @@ export class QuizInstanceRepository implements QuizInstanceRepositoryPort {
     userId: string;
     maxPlayers: number | null;
     nowIso: string;
-  }): Promise<{ joined: boolean; player?: import('@/modules/instance/domain/ports').QuizInstancePlayerRow }> {
+  }): Promise<{
+    joined: boolean;
+    player?: import('@/modules/instance/domain/ports').QuizInstancePlayerRow;
+  }> {
     const existingTx = this.transactionalContext?.getDbClient() as DrizzleDB | null;
 
-    const executeJoin = async (tx: unknown): Promise<{ joined: boolean; player?: import('@/modules/instance/domain/ports').QuizInstancePlayerRow }> => {
+    const executeJoin = async (
+      tx: unknown,
+    ): Promise<{
+      joined: boolean;
+      player?: import('@/modules/instance/domain/ports').QuizInstancePlayerRow;
+    }> => {
       const db = tx as DrizzleDB;
 
       const [existing] = await db
@@ -349,7 +358,10 @@ export class QuizInstanceRepository implements QuizInstanceRepositoryPort {
             leftAt: quizInstancePlayers.leftAt,
           });
 
-        return { joined: true, player: player as import('@/modules/instance/domain/ports').QuizInstancePlayerRow };
+        return {
+          joined: true,
+          player: player as import('@/modules/instance/domain/ports').QuizInstancePlayerRow,
+        };
       } catch (error) {
         if (isPostgresUniqueViolation(error)) {
           return { joined: false };
@@ -413,7 +425,11 @@ export class QuizInstanceRepository implements QuizInstanceRepositoryPort {
       .leftJoin(quizAttempts, eq(quizInstancePlayers.attemptId, quizAttempts.attemptId))
       .innerJoin(quizInstances, eq(quizInstancePlayers.instanceId, quizInstances.instanceId))
       .where(and(...conditions))
-      .orderBy(desc(quizAttempts.scorePercent), quizAttempts.timeTakenMs, quizInstancePlayers.instancePlayerId)
+      .orderBy(
+        desc(quizAttempts.scorePercent),
+        quizAttempts.timeTakenMs,
+        quizInstancePlayers.instancePlayerId,
+      )
       .limit(params.limit + 1);
 
     const hasNextPage = rows.length > params.limit;
@@ -507,7 +523,7 @@ export class QuizInstanceRepository implements QuizInstanceRepositoryPort {
       difficulty?: string;
     };
   }): Promise<import('@/modules/instance/domain/ports').QuizInstanceListRow[]> {
-    const conditions: (ReturnType<typeof eq> | ReturnType<typeof sql>)[] = [];
+    const conditions: ReturnType<typeof eq>[] = [];
 
     if (params.filters?.status) {
       conditions.push(
@@ -566,7 +582,9 @@ export class QuizInstanceRepository implements QuizInstanceRepositoryPort {
       .orderBy(desc(quizInstances.createdAt), desc(quizInstances.instanceId))
       .limit(params.limit + 1);
 
-    return rows as unknown as Promise<import('@/modules/instance/domain/ports').QuizInstanceListRow[]>;
+    return rows as unknown as Promise<
+      import('@/modules/instance/domain/ports').QuizInstanceListRow[]
+    >;
   }
 
   async listPlayersWithProfile(params: {
@@ -607,16 +625,15 @@ export class QuizInstanceRepository implements QuizInstanceRepositoryPort {
       .select({ count: count() })
       .from(quizInstancePlayers)
       .where(
-        and(
-          eq(quizInstancePlayers.userId, userId),
-          eq(quizInstancePlayers.status, 'finished'),
-        ),
+        and(eq(quizInstancePlayers.userId, userId), eq(quizInstancePlayers.status, 'finished')),
       );
 
     return row?.count ?? 0;
   }
 
-  async getAttemptContextInfo(attemptId: string): Promise<import('@/modules/instance/domain/ports').AttemptContextInfo | null> {
+  async getAttemptContextInfo(
+    attemptId: string,
+  ): Promise<import('@/modules/instance/domain/ports').AttemptContextInfo | null> {
     const [row] = await this.db
       .select({
         contextType: quizAttempts.contextType,

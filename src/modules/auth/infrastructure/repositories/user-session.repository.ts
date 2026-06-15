@@ -215,14 +215,22 @@ export class UserSessionRepository implements SessionRepositoryPort {
     });
   }
 
-  async revokeSessionsByUserId(userId: string, nowIso: string): Promise<void> {
-    await this.db
+  async revokeSessionsByUserId(
+    userId: string,
+    nowIso: string,
+  ): Promise<Array<{ sessionId: string; jti: string; refreshTokenHash: string }>> {
+    return this.db
       .update(userSessions)
       .set({
         revokedAt: nowIso,
         lastUsedAt: nowIso,
       })
       .where(and(eq(userSessions.userId, userId), isNull(userSessions.revokedAt)))
+      .returning({
+        sessionId: userSessions.sessionId,
+        jti: userSessions.jti,
+        refreshTokenHash: userSessions.refreshTokenHash,
+      })
       .catch(() => {
         throw new InternalServerErrorException('Failed to revoke user sessions');
       });
@@ -232,8 +240,8 @@ export class UserSessionRepository implements SessionRepositoryPort {
     userId: string,
     sessionId: string,
     nowIso: string,
-  ): Promise<void> {
-    await this.db
+  ): Promise<Array<{ sessionId: string; jti: string; refreshTokenHash: string }>> {
+    return this.db
       .update(userSessions)
       .set({
         revokedAt: nowIso,
@@ -246,39 +254,67 @@ export class UserSessionRepository implements SessionRepositoryPort {
           sql`${userSessions.sessionId} <> ${sessionId}`,
         ),
       )
+      .returning({
+        sessionId: userSessions.sessionId,
+        jti: userSessions.jti,
+        refreshTokenHash: userSessions.refreshTokenHash,
+      })
       .catch(() => {
         throw new InternalServerErrorException('Failed to revoke other user sessions');
       });
   }
 
-  async revokeSessionById(sessionId: string, nowIso: string): Promise<void> {
-    await this.db
+  async revokeSessionById(
+    sessionId: string,
+    nowIso: string,
+  ): Promise<{ sessionId: string; jti: string; refreshTokenHash: string; userId: string } | null> {
+    const [row] = await this.db
       .update(userSessions)
       .set({
         revokedAt: nowIso,
         lastUsedAt: nowIso,
       })
       .where(and(eq(userSessions.sessionId, sessionId), isNull(userSessions.revokedAt)))
+      .returning({
+        sessionId: userSessions.sessionId,
+        jti: userSessions.jti,
+        refreshTokenHash: userSessions.refreshTokenHash,
+        userId: userSessions.userId,
+      })
       .catch(() => {
         throw new InternalServerErrorException('Failed to revoke user session by id');
       });
+    return row ?? null;
   }
 
-  async revokeSessionByJti(jti: string, nowIso: string): Promise<void> {
-    await this.db
+  async revokeSessionByJti(
+    jti: string,
+    nowIso: string,
+  ): Promise<{ sessionId: string; jti: string; refreshTokenHash: string; userId: string } | null> {
+    const [row] = await this.db
       .update(userSessions)
       .set({
         revokedAt: nowIso,
         lastUsedAt: nowIso,
       })
       .where(and(eq(userSessions.jti, jti), isNull(userSessions.revokedAt)))
+      .returning({
+        sessionId: userSessions.sessionId,
+        jti: userSessions.jti,
+        refreshTokenHash: userSessions.refreshTokenHash,
+        userId: userSessions.userId,
+      })
       .catch(() => {
         throw new InternalServerErrorException('Failed to revoke user session by jti');
       });
+    return row ?? null;
   }
 
-  async revokeSessionByRefreshTokenHash(refreshTokenHash: string, nowIso: string): Promise<void> {
-    await this.db
+  async revokeSessionByRefreshTokenHash(
+    refreshTokenHash: string,
+    nowIso: string,
+  ): Promise<{ sessionId: string; jti: string; refreshTokenHash: string; userId: string } | null> {
+    const [row] = await this.db
       .update(userSessions)
       .set({
         revokedAt: nowIso,
@@ -287,9 +323,16 @@ export class UserSessionRepository implements SessionRepositoryPort {
       .where(
         and(eq(userSessions.refreshTokenHash, refreshTokenHash), isNull(userSessions.revokedAt)),
       )
+      .returning({
+        sessionId: userSessions.sessionId,
+        jti: userSessions.jti,
+        refreshTokenHash: userSessions.refreshTokenHash,
+        userId: userSessions.userId,
+      })
       .catch(() => {
         throw new InternalServerErrorException('Failed to revoke user session by token hash');
       });
+    return row ?? null;
   }
 
   async revokeExpiredSessions(nowIso: string): Promise<{ sessionId: string }[]> {

@@ -19,6 +19,19 @@ export class FriendRequestForbiddenError extends SocialError {
   }
 }
 
+/**
+ * Raised when a user attempts to read another user's friend
+ * list without being allowed to do so. Allow-list: self, or
+ * users who are mutual friends with the target (and neither
+ * side has blocked the other).
+ */
+export class FriendListForbiddenError extends SocialError {
+  constructor() {
+    super('You do not have permission to view this user’s friend list');
+    this.name = 'FriendListForbiddenError';
+  }
+}
+
 export class SelfFriendRequestError extends SocialError {
   constructor() {
     super('You cannot send a friend request to yourself');

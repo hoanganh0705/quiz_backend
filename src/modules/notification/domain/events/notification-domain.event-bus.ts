@@ -9,9 +9,8 @@ import { Injectable } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import type { NotificationDomainEvent } from './notification.events';
 
-export type NotificationEventHandler<T extends NotificationDomainEvent = NotificationDomainEvent> = (
-  event: T,
-) => void | Promise<void>;
+export type NotificationEventHandler<T extends NotificationDomainEvent = NotificationDomainEvent> =
+  (event: T) => void | Promise<void>;
 
 export interface NotificationEventSubscription {
   unsubscribe: () => void;

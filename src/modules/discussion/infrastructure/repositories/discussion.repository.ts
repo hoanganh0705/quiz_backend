@@ -158,17 +158,32 @@ export class DiscussionRepository implements DiscussionRepositoryPort {
       })
       .returning();
 
-    return this.enrichThread(thread as unknown as DiscussionThreadRow);
+    // Pre-load the author with a JOIN so `enrichThread` does not
+    // need to issue a second query. This keeps the per-thread
+    // cost at exactly one roundtrip — see the `enrichThread` note
+    // about why the fallback path was removed.
+    return this.loadThreadWithAuthor(thread.threadId);
   }
 
   async getThreadById(threadId: string): Promise<DiscussionThread | null> {
-    const [thread] = await this.db
-      .select()
+    const [row] = await this.db
+      .select({
+        thread: discussionThreads,
+        authorUsername: users.username,
+        authorDisplayName: userProfiles.displayName,
+        authorAvatarUrl: userProfiles.avatarUrl,
+      })
       .from(discussionThreads)
+      .innerJoin(users, eq(discussionThreads.authorId, users.userId))
+      .leftJoin(userProfiles, eq(users.userId, userProfiles.userId))
       .where(and(eq(discussionThreads.threadId, threadId), isNull(discussionThreads.deletedAt)));
 
-    if (!thread) return null;
-    return this.enrichThread(thread as unknown as DiscussionThreadRow);
+    if (!row) return null;
+    return this.enrichThread(row.thread as unknown as DiscussionThreadRow, {
+      username: row.authorUsername,
+      displayName: row.authorDisplayName,
+      avatarUrl: row.authorAvatarUrl,
+    });
   }
 
   async getThreadDetail(
@@ -717,13 +732,16 @@ export class DiscussionRepository implements DiscussionRepositoryPort {
         updatedAt: now,
       })
       .where(eq(discussionThreads.threadId, params.threadId))
-      .returning();
+      .returning({ threadId: discussionThreads.threadId });
 
     if (!updated) {
       throw new Error('Thread not found');
     }
 
-    return this.enrichThread(updated as unknown as DiscussionThreadRow);
+    // Re-read the thread with the author JOIN'd in a single query
+    // instead of falling back to the per-thread author fetch in
+    // `enrichThread`. Avoids the N+1 trap in any future caller.
+    return this.loadThreadWithAuthor(updated.threadId);
   }
 
   async unsolveThread(params: UnsolveThreadParams): Promise<DiscussionThread> {
@@ -739,13 +757,13 @@ export class DiscussionRepository implements DiscussionRepositoryPort {
         updatedAt: now,
       })
       .where(eq(discussionThreads.threadId, params.threadId))
-      .returning();
+      .returning({ threadId: discussionThreads.threadId });
 
     if (!updated) {
       throw new Error('Thread not found');
     }
 
-    return this.enrichThread(updated as unknown as DiscussionThreadRow);
+    return this.loadThreadWithAuthor(updated.threadId);
   }
 
   private static readonly TRENDING_CACHE_TTL_MS = 60_000; // 60 seconds
@@ -771,45 +789,50 @@ export class DiscussionRepository implements DiscussionRepositoryPort {
     limit: number,
     cursor?: { score: number; createdAt: string; threadId: string } | null,
   ): Promise<TrendingDiscussionListItem[]> {
+    // Per-thread comment aggregates. The previous implementation
+    // re-executed correlated subqueries against `discussion_comments`
+    // 3+ times per row (once in the cursor, once in `replyCount`,
+    // once in `latestActivityAt`, and once in `trendingScore`).
+    // With 20 rows per page that is 60–80 subquery executions per
+    // request.
+    //
+    // We instead compute the aggregates in a single CTE pass and
+    // LEFT JOIN the result to the threads query. The planner
+    // can satisfy the CTE either with a hash aggregate over the
+    // visible comment rows or with a nested-loop join driven by
+    // the page of thread ids, but either way the per-thread
+    // subqueries are gone.
+    const threadCommentStats = this.db.$with('thread_comment_stats').as(
+      this.db
+        .select({
+          threadId: discussionComments.threadId,
+          recentCommentCount: sql<number>`COUNT(*) FILTER (WHERE ${discussionComments.createdAt} > NOW() - INTERVAL '7 days')::int`,
+          replyCount: sql<number>`COUNT(*) FILTER (WHERE ${discussionComments.parentCommentId} IS NOT NULL)::int`,
+          latestCommentAt: sql<Date | null>`MAX(${discussionComments.createdAt})`,
+        })
+        .from(discussionComments)
+        .where(isNull(discussionComments.deletedAt))
+        .groupBy(discussionComments.threadId),
+    );
+
+    // Score expression reused in both the cursor condition and
+    // the ORDER BY. Defined once so the planner sees the same
+    // expression in both places and can share derived state.
+    const scoreExpression = sql<number>`(
+      ${discussionThreads.votesCount} * 3 +
+      ${discussionThreads.commentsCount} * 2 +
+      COALESCE(${threadCommentStats.recentCommentCount}, 0)
+    )::float`;
+
     const cursorCondition = cursor
       ? sql`(
-          (
-            ${discussionThreads.votesCount} * 3 +
-            ${discussionThreads.commentsCount} * 2 +
-            COALESCE(
-              (SELECT COUNT(*) FROM discussion_comments dc
-               WHERE dc.thread_id = ${discussionThreads.threadId}
-               AND dc.deleted_at IS NULL
-               AND dc.created_at > NOW() - INTERVAL '7 days')::int,
-              0
-            )
-          ) < ${cursor.score}
+          (${scoreExpression} < ${cursor.score})
           OR (
-            (
-              ${discussionThreads.votesCount} * 3 +
-              ${discussionThreads.commentsCount} * 2 +
-              COALESCE(
-                (SELECT COUNT(*) FROM discussion_comments dc
-                 WHERE dc.thread_id = ${discussionThreads.threadId}
-                 AND dc.deleted_at IS NULL
-                 AND dc.created_at > NOW() - INTERVAL '7 days')::int,
-                0
-              )
-            ) = ${cursor.score}
+            ${scoreExpression} = ${cursor.score}
             AND ${discussionThreads.createdAt} > ${cursor.createdAt}
           )
           OR (
-            (
-              ${discussionThreads.votesCount} * 3 +
-              ${discussionThreads.commentsCount} * 2 +
-              COALESCE(
-                (SELECT COUNT(*) FROM discussion_comments dc
-                 WHERE dc.thread_id = ${discussionThreads.threadId}
-                 AND dc.deleted_at IS NULL
-                 AND dc.created_at > NOW() - INTERVAL '7 days')::int,
-                0
-              )
-            ) = ${cursor.score}
+            ${scoreExpression} = ${cursor.score}
             AND ${discussionThreads.createdAt} = ${cursor.createdAt}
             AND ${discussionThreads.threadId} > ${cursor.threadId}
           )
@@ -817,6 +840,7 @@ export class DiscussionRepository implements DiscussionRepositoryPort {
       : undefined;
 
     const rows = await this.db
+      .with(threadCommentStats)
       .select({
         threadId: discussionThreads.threadId,
         quizId: discussionThreads.quizId,
@@ -831,48 +855,22 @@ export class DiscussionRepository implements DiscussionRepositoryPort {
         displayName: userProfiles.displayName,
         avatarUrl: userProfiles.avatarUrl,
 
-        replyCount: sql<number>`COALESCE(
-          (
-            SELECT COUNT(*)
-            FROM discussion_comments dc
-            WHERE dc.thread_id = ${discussionThreads.threadId}
-              AND dc.deleted_at IS NULL
-              AND dc.parent_comment_id IS NOT NULL
-          )::int,
-          0
-        )`,
+        replyCount: sql<number>`COALESCE(${threadCommentStats.replyCount}, 0)`,
 
         latestActivityAt: sql<Date>`GREATEST(
           ${discussionThreads.updatedAt},
           COALESCE(
-            (
-              SELECT MAX(dc.created_at)
-              FROM discussion_comments dc
-              WHERE dc.thread_id = ${discussionThreads.threadId}
-                AND dc.deleted_at IS NULL
-            ),
+            ${threadCommentStats.latestCommentAt},
             ${discussionThreads.updatedAt}
           )
         )`,
 
-        trendingScore: sql<number>`(
-          ${discussionThreads.votesCount} * 3 +
-          ${discussionThreads.commentsCount} * 2 +
-          COALESCE(
-            (
-              SELECT COUNT(*)
-              FROM discussion_comments dc
-              WHERE dc.thread_id = ${discussionThreads.threadId}
-                AND dc.deleted_at IS NULL
-                AND dc.created_at > NOW() - INTERVAL '7 days'
-            )::int,
-            0
-          )
-        )::float`,
+        trendingScore: scoreExpression,
       })
       .from(discussionThreads)
       .innerJoin(users, eq(discussionThreads.authorId, users.userId))
       .leftJoin(userProfiles, eq(users.userId, userProfiles.userId))
+      .leftJoin(threadCommentStats, eq(threadCommentStats.threadId, discussionThreads.threadId))
       .where(
         and(
           eq(discussionThreads.status, 'open'),
@@ -880,25 +878,7 @@ export class DiscussionRepository implements DiscussionRepositoryPort {
           cursorCondition,
         ),
       )
-      .orderBy(
-        desc(sql`
-          (
-            ${discussionThreads.votesCount} * 3 +
-            ${discussionThreads.commentsCount} * 2 +
-            COALESCE(
-              (
-                SELECT COUNT(*)
-                FROM discussion_comments dc
-                WHERE dc.thread_id = ${discussionThreads.threadId}
-                  AND dc.deleted_at IS NULL
-                  AND dc.created_at > NOW() - INTERVAL '7 days'
-              )::int,
-              0
-            )
-          )
-        `),
-        desc(discussionThreads.threadId),
-      )
+      .orderBy(desc(scoreExpression), desc(discussionThreads.threadId))
       .limit(limit + 1);
 
     return rows.map((row) => ({
@@ -1332,10 +1312,10 @@ export class DiscussionRepository implements DiscussionRepositoryPort {
           isNull(discussionThreads.deletedAt),
         ),
       )
-      .returning();
+      .returning({ threadId: discussionThreads.threadId });
 
     if (!updated) throw new Error('Thread not found or not authorized');
-    return this.enrichThread(updated as unknown as DiscussionThreadRow);
+    return this.loadThreadWithAuthor(updated.threadId);
   }
 
   async softDeleteThread(
@@ -1778,33 +1758,51 @@ export class DiscussionRepository implements DiscussionRepositoryPort {
     };
   }
 
-  private async enrichThread(
-    thread: DiscussionThreadRow,
-    overrideAuthor?: AuthorInfo,
-  ): Promise<DiscussionThread> {
-    let author: AuthorInfo;
+  /**
+   * Build a `DiscussionThread` domain object from a thread row and
+   * its pre-loaded author.
+   *
+   * IMPORTANT: the author MUST be pre-loaded by the caller (via a
+   * JOIN on `users`/`userProfiles`). We deliberately do NOT
+   * accept a fallback that re-queries the database for the
+   * author — that would let any caller silently introduce an N+1
+   * in a list endpoint. If a future caller forgets the JOIN,
+   * TypeScript will fail to compile because the second argument
+   * is required.
+   */
+  private enrichThread(thread: DiscussionThreadRow, author: AuthorInfo): DiscussionThread {
+    return this.buildThreadFromRow(thread, author);
+  }
 
-    if (overrideAuthor) {
-      author = overrideAuthor;
-    } else {
-      const [userRow] = await this.db
-        .select({
-          username: users.username,
-          displayName: userProfiles.displayName,
-          avatarUrl: userProfiles.avatarUrl,
-        })
-        .from(users)
-        .leftJoin(userProfiles, eq(users.userId, userProfiles.userId))
-        .where(eq(users.userId, thread.authorId));
+  /**
+   * Single-row thread fetcher used by mutation methods
+   * (create / update / solve / unsolve) that already issued a
+   * write and only know the resulting `threadId`. Loads the
+   * thread with its author JOIN'd in one roundtrip, so callers
+   * do not have to re-run an extra query per thread.
+   */
+  private async loadThreadWithAuthor(threadId: string): Promise<DiscussionThread> {
+    const [row] = await this.db
+      .select({
+        thread: discussionThreads,
+        authorUsername: users.username,
+        authorDisplayName: userProfiles.displayName,
+        authorAvatarUrl: userProfiles.avatarUrl,
+      })
+      .from(discussionThreads)
+      .innerJoin(users, eq(discussionThreads.authorId, users.userId))
+      .leftJoin(userProfiles, eq(users.userId, userProfiles.userId))
+      .where(eq(discussionThreads.threadId, threadId));
 
-      author = {
-        username: userRow?.username ?? '',
-        displayName: userRow?.displayName ?? null,
-        avatarUrl: userRow?.avatarUrl ?? null,
-      };
+    if (!row) {
+      throw new Error(`Thread ${threadId} disappeared after write`);
     }
 
-    return this.buildThreadFromRow(thread, author);
+    return this.enrichThread(row.thread as unknown as DiscussionThreadRow, {
+      username: row.authorUsername,
+      displayName: row.authorDisplayName,
+      avatarUrl: row.authorAvatarUrl,
+    });
   }
 
   private enrichComment(comment: DiscussionCommentRow, author?: AuthorInfo): DiscussionComment {
@@ -1928,6 +1926,6 @@ export class DiscussionRepository implements DiscussionRepositoryPort {
   }
 
   async transactionally<T>(fn: (tx: DrizzleDB) => Promise<T>): Promise<T> {
-    return this.db.transaction(fn as (tx: unknown) => Promise<T>) as Promise<T>;
+    return this.db.transaction(fn as (tx: unknown) => Promise<T>);
   }
 }

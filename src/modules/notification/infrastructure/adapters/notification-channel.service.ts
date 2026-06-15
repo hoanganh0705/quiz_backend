@@ -248,10 +248,7 @@ export class NotificationChannelService implements NotificationChannelServiceIns
     return currentTime >= startTime && currentTime <= endTime;
   }
 
-  private async sendInApp(notification: {
-    notificationId: string;
-    userId: string;
-  }): Promise<void> {
+  private async sendInApp(notification: { notificationId: string; userId: string }): Promise<void> {
     this.logger?.info({
       event: 'in_app_notification_sent',
       notificationId: notification.notificationId,

@@ -149,10 +149,7 @@ export class InstanceApplicationService {
     return { status: instance.status, quizTitle: instance.quizTitle };
   }
 
-  async handleStartGameSocket(
-    instanceId: string,
-    user: JwtPayload,
-  ): Promise<boolean> {
+  async handleStartGameSocket(instanceId: string, user: JwtPayload): Promise<boolean> {
     return this.instanceService.isHost(instanceId, user.sub);
   }
 
@@ -163,17 +160,11 @@ export class InstanceApplicationService {
     return this.instanceService.isHost(data.instanceId, user.sub);
   }
 
-  async handleUpdateLeaderboardSocket(
-    instanceId: string,
-    user: JwtPayload,
-  ): Promise<boolean> {
+  async handleUpdateLeaderboardSocket(instanceId: string, user: JwtPayload): Promise<boolean> {
     return this.instanceService.isHost(instanceId, user.sub);
   }
 
-  async handleEndGameSocket(
-    instanceId: string,
-    user: JwtPayload,
-  ): Promise<boolean> {
+  async handleEndGameSocket(instanceId: string, user: JwtPayload): Promise<boolean> {
     return this.instanceService.isHost(instanceId, user.sub);
   }
 

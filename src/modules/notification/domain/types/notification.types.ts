@@ -77,7 +77,6 @@ export interface UpdatePreferencesParams {
   quietHoursEnd?: string | null;
 }
 
-
 // Rank notification params
 export interface RankNotificationParams {
   userId: string;
