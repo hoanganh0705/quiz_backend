@@ -36,6 +36,7 @@ import type {
   FeaturedBadgeResponseDto,
 } from '../dto/response/public-achievement-profile-response.dto';
 import type { BadgeProgressSnapshot } from './progress-tracking.service';
+import { AuditLogService } from '@/common/audit/audit-log.service';
 
 @Injectable()
 export class AchievementApplicationService {
@@ -47,6 +48,7 @@ export class AchievementApplicationService {
     private readonly userDomainService: UserDomainService,
     @Inject(ACHIEVEMENT_REPOSITORY_PORT)
     private readonly achievementRepository: AchievementRepositoryPort,
+    private readonly auditLogService: AuditLogService,
     @InjectPinoLogger(AchievementApplicationService.name)
     private readonly logger: PinoLogger,
   ) {}
@@ -176,6 +178,34 @@ export class AchievementApplicationService {
       badgeId,
       revokedBy,
     });
+
+    // Audit: badge revocation by an admin is a sensitive
+    // action — the previous code only logged it, which is not
+    // a durable record. The cross-domain audit log captures
+    // who revoked whose badge so the user can challenge the
+    // action later and so the platform can answer "which
+    // badges did admin X revoke last month?".
+    try {
+      await this.auditLogService.record({
+        eventType: 'achievement.badge.revoked',
+        domain: 'achievement',
+        action: 'badge.revoked',
+        actorId: revokedBy,
+        subjectUserId: userId,
+        metadata: {
+          badgeId,
+          badgeName: badge.name,
+        },
+      });
+    } catch (error) {
+      this.logger.error({
+        event: 'achievement_badge_revocation_audit_write_failed',
+        userId,
+        badgeId,
+        revokedBy,
+        message: error instanceof Error ? error.message : 'unknown',
+      });
+    }
   }
 
   async getPublicAchievementProfile(

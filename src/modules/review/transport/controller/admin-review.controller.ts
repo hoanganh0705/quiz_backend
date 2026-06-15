@@ -27,6 +27,8 @@ import {
   PlatformReportsResponseDto,
   UpdateReportStatusResponseDto,
 } from '@/modules/review/dto/response';
+import { CurrentUser } from '@/common/decorators/current-user.decorator';
+import type { JwtPayload } from '@/common/guards/jwt.guard';
 
 @ApiTags('reviews')
 @ApiBearerAuth()
@@ -107,8 +109,9 @@ export class AdminReviewController {
   async updateReportStatus(
     @Param('reportId', new ParseUUIDPipe()) reportId: string,
     @Body() body: UpdateReportStatusDto,
+    @CurrentUser() actor: JwtPayload,
   ): Promise<UpdateReportStatusResponseDto> {
-    await this.reviewAdminService.updateReportStatus(reportId, body.status);
+    await this.reviewAdminService.updateReportStatus(reportId, body.status, actor.sub);
     return { message: 'Report status updated successfully' };
   }
 }
