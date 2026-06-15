@@ -11,21 +11,21 @@ import {
   UseFilters,
 } from '@nestjs/common';
 
-import {
-  ApiTags,
-  ApiOperation,
-  ApiOkResponse,
-  ApiCreatedResponse,
-  ApiBearerAuth,
-  ApiNotFoundResponse,
-  ApiConflictResponse,
-  ApiBadRequestResponse,
-  ApiForbiddenResponse,
-  ApiInternalServerErrorResponse,
-} from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiCreatedResponse, ApiNotFoundResponse } from '@nestjs/swagger';
 
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
-import { ApiAuth, ApiValidationRequest } from '@/common/swagger/swagger-decorators';
+import {
+  ApiAuth,
+  ApiAuthList,
+  ApiAuthCreate,
+  ApiAuthUpdate,
+  ApiAuthDelete,
+  ApiAuthAction,
+  ApiBadRequest,
+  ApiForbidden,
+  ApiInternalError,
+  ApiConflict,
+} from '@/common/swagger/swagger-decorators';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
 import { BookmarkApplicationService } from '../../application/bookmark.application.service';
 import {
@@ -63,26 +63,18 @@ import { BookmarkDomainExceptionFilter } from '../filters/bookmark-domain-except
 import { BookmarkCursorMapper } from '../../mappers/bookmark-cursor.mapper';
 
 @ApiTags('bookmarks')
-@ApiBearerAuth()
 @Controller('bookmarks')
 @UseFilters(BookmarkDomainExceptionFilter)
 export class BookmarkController {
   constructor(private readonly bookmarkApplicationService: BookmarkApplicationService) {}
 
   @Get('search')
-  @ApiAuth()
-  @ApiOperation({
-    summary: 'Search bookmarks',
-    description:
-      'Searches bookmarked quizzes across all collections owned by the authenticated user using cursor pagination.',
-  })
-  @ApiOkResponse({
+  @ApiAuthList({
     description: 'Bookmark search results returned',
     type: SearchBookmarksResponseDto,
   })
-  @ApiBadRequestResponse({ description: 'Validation failed' })
-  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
-  @ApiValidationRequest()
+  @ApiBadRequest()
+  @ApiInternalError()
   async searchBookmarks(
     @CurrentUser() user: JwtPayload,
     @Query() query: SearchBookmarksQueryDto,
@@ -95,14 +87,8 @@ export class BookmarkController {
   }
 
   @Get('recent')
-  @ApiAuth()
-  @ApiOperation({
-    summary: 'Get recent bookmarks',
-    description:
-      "Returns the authenticated user's bookmarked quizzes across all collections, cursor-paginated and ordered by most recently bookmarked.",
-  })
-  @ApiOkResponse({ description: 'Recent bookmarks returned', type: RecentBookmarksResponseDto })
-  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  @ApiAuthList({ description: 'Recent bookmarks returned', type: RecentBookmarksResponseDto })
+  @ApiInternalError()
   async getRecentBookmarks(
     @CurrentUser() user: JwtPayload,
     @Query() query: ListRecentBookmarksQueryDto,
@@ -114,32 +100,11 @@ export class BookmarkController {
   }
 
   @Get('quizzes/:quizId/status')
-  @ApiAuth()
-  @ApiOperation({
-    summary: 'Get bookmark status for quiz',
-    description:
-      'Returns whether the authenticated user has bookmarked the quiz and which of their collections contain it.',
-  })
-  @ApiOkResponse({
+  @ApiAuthList({
     description: 'Bookmark status returned for a bookmarked quiz',
     type: BookmarkStatusResponseDto,
-    schema: {
-      example: {
-        bookmarked: true,
-        collections: [
-          {
-            collectionId: '770e8400-e29b-41d4-a716-446655440000',
-            name: 'Favorites',
-          },
-          {
-            collectionId: '770e8400-e29b-41d4-a716-446655440001',
-            name: 'React Learning',
-          },
-        ],
-      },
-    },
   })
-  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  @ApiInternalError()
   async getBookmarkStatus(
     @Param('quizId', new ParseUUIDPipe()) quizId: string,
     @CurrentUser() user: JwtPayload,
@@ -148,13 +113,8 @@ export class BookmarkController {
   }
 
   @Get('collections')
-  @ApiAuth()
-  @ApiOperation({
-    summary: 'List my collections',
-    description: 'Returns all bookmark collections owned by the authenticated user.',
-  })
-  @ApiOkResponse({ description: 'Collections returned', type: BookmarkCollectionListResponseDto })
-  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  @ApiAuthList({ description: 'Collections returned', type: BookmarkCollectionListResponseDto })
+  @ApiInternalError()
   async listCollections(
     @CurrentUser() user: JwtPayload,
   ): Promise<BookmarkCollectionListResponseDto> {
@@ -162,15 +122,7 @@ export class BookmarkController {
   }
 
   @Post('collections')
-  @ApiAuth()
-  @ApiOperation({
-    summary: 'Create collection',
-    description: 'Creates a new bookmark collection for the authenticated user.',
-  })
-  @ApiCreatedResponse({ description: 'Collection created', type: CreateCollectionResponseDto })
-  @ApiBadRequestResponse({ description: 'Validation failed' })
-  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
-  @ApiValidationRequest()
+  @ApiAuthCreate({ description: 'Collection created', type: CreateCollectionResponseDto })
   async createCollection(
     @CurrentUser() user: JwtPayload,
     @Body() payload: CreateCollectionDto,
@@ -179,14 +131,9 @@ export class BookmarkController {
   }
 
   @Get('collections/:collectionId')
-  @ApiAuth()
-  @ApiOperation({
-    summary: 'List bookmarks in collection',
-    description: 'Returns all bookmarked quizzes within a specific collection.',
-  })
-  @ApiOkResponse({ description: 'Bookmarks returned', type: BookmarkListResponseDto })
-  @ApiNotFoundResponse({ description: 'Collection not found' })
-  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  @ApiAuthList({ description: 'Bookmarks returned', type: BookmarkListResponseDto })
+  @ApiNotFoundResponse()
+  @ApiInternalError()
   async listBookmarksInCollection(
     @Param('collectionId', new ParseUUIDPipe()) collectionId: string,
     @CurrentUser() user: JwtPayload,
@@ -195,19 +142,13 @@ export class BookmarkController {
   }
 
   @Get('collections/:collectionId/analytics')
-  @ApiAuth()
-  @ApiOperation({
-    summary: 'Get bookmark collection analytics',
-    description:
-      'Returns analytics for a bookmark collection, including summary metrics and top categories/tags across the bookmarked quizzes.',
-  })
-  @ApiOkResponse({
+  @ApiAuthList({
     description: 'Bookmark collection analytics returned',
     type: BookmarkCollectionAnalyticsResponseDto,
   })
-  @ApiNotFoundResponse({ description: 'Bookmark collection analytics not found' })
-  @ApiForbiddenResponse({ description: 'You do not have permission to view this collection' })
-  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  @ApiNotFoundResponse()
+  @ApiForbidden()
+  @ApiInternalError()
   async getCollectionAnalytics(
     @Param('collectionId', new ParseUUIDPipe()) collectionId: string,
     @CurrentUser() user: JwtPayload,
@@ -219,11 +160,10 @@ export class BookmarkController {
   @ApiAuth()
   @ApiOperation({ summary: 'Add bookmark', description: 'Adds a quiz to a bookmark collection.' })
   @ApiCreatedResponse({ description: 'Bookmark added', type: AddBookmarkResponseDto })
-  @ApiNotFoundResponse({ description: 'Collection or quiz not found' })
-  @ApiConflictResponse({ description: 'Quiz is already bookmarked in this collection' })
-  @ApiBadRequestResponse({ description: 'Validation failed' })
-  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
-  @ApiValidationRequest()
+  @ApiNotFoundResponse()
+  @ApiConflict()
+  @ApiBadRequest()
+  @ApiInternalError()
   async addBookmark(
     @Param('collectionId', new ParseUUIDPipe()) collectionId: string,
     @CurrentUser() user: JwtPayload,
@@ -233,18 +173,7 @@ export class BookmarkController {
   }
 
   @Post('collections/:collectionId/quizzes/bulk')
-  @ApiAuth()
-  @ApiOperation({
-    summary: 'Bulk add bookmarks',
-    description:
-      'Adds multiple quizzes to a bookmark collection in a single idempotent request. Duplicate bookmarks are ignored. Maximum 100 quiz IDs per request.',
-  })
-  @ApiOkResponse({ description: 'Bookmarks added in bulk', type: BulkAddBookmarksResponseDto })
-  @ApiNotFoundResponse({ description: 'Collection not found' })
-  @ApiForbiddenResponse({ description: 'Not the collection owner' })
-  @ApiBadRequestResponse({ description: 'Validation failed or more than 100 quizIds provided' })
-  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
-  @ApiValidationRequest()
+  @ApiAuthAction({ description: 'Bookmarks added in bulk', type: BulkAddBookmarksResponseDto })
   async addBookmarksBulk(
     @Param('collectionId', new ParseUUIDPipe()) collectionId: string,
     @CurrentUser() user: JwtPayload,
@@ -258,18 +187,7 @@ export class BookmarkController {
   }
 
   @Delete('collections/:collectionId/quizzes/bulk')
-  @ApiAuth()
-  @ApiOperation({
-    summary: 'Bulk remove bookmarks',
-    description:
-      'Removes multiple bookmarks from a collection in a single idempotent request. Missing bookmarks are ignored. Maximum 100 quiz IDs per request.',
-  })
-  @ApiOkResponse({ description: 'Bookmarks removed in bulk', type: BulkRemoveBookmarksResponseDto })
-  @ApiNotFoundResponse({ description: 'Collection not found' })
-  @ApiForbiddenResponse({ description: 'Not the collection owner' })
-  @ApiBadRequestResponse({ description: 'Validation failed or more than 100 quizIds provided' })
-  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
-  @ApiValidationRequest()
+  @ApiAuthAction({ description: 'Bookmarks removed in bulk', type: BulkRemoveBookmarksResponseDto })
   async removeBookmarksBulk(
     @Param('collectionId', new ParseUUIDPipe()) collectionId: string,
     @CurrentUser() user: JwtPayload,
@@ -283,15 +201,7 @@ export class BookmarkController {
   }
 
   @Delete('collections/:collectionId/quizzes/:quizId')
-  @ApiAuth()
-  @ApiOperation({
-    summary: 'Remove bookmark',
-    description: 'Removes a quiz from a bookmark collection.',
-  })
-  @ApiOkResponse({ description: 'Bookmark removed', type: RemoveBookmarkResponseDto })
-  @ApiNotFoundResponse({ description: 'Collection or bookmark not found' })
-  @ApiForbiddenResponse({ description: 'Not the collection owner' })
-  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  @ApiAuthAction({ description: 'Bookmark removed', type: RemoveBookmarkResponseDto })
   async removeBookmark(
     @Param('collectionId', new ParseUUIDPipe()) collectionId: string,
     @Param('quizId', new ParseUUIDPipe()) quizId: string,
@@ -301,17 +211,7 @@ export class BookmarkController {
   }
 
   @Patch('collections/:collectionId/quizzes/:quizId')
-  @ApiAuth()
-  @ApiOperation({
-    summary: 'Update bookmark',
-    description: 'Updates personal notes on an existing bookmarked quiz.',
-  })
-  @ApiOkResponse({ description: 'Bookmark updated', type: UpdateBookmarkResponseDto })
-  @ApiNotFoundResponse({ description: 'Collection or bookmark not found' })
-  @ApiForbiddenResponse({ description: 'Not the collection owner' })
-  @ApiBadRequestResponse({ description: 'Validation failed' })
-  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
-  @ApiValidationRequest()
+  @ApiAuthUpdate({ description: 'Bookmark updated', type: UpdateBookmarkResponseDto })
   async updateBookmark(
     @Param('collectionId', new ParseUUIDPipe()) collectionId: string,
     @Param('quizId', new ParseUUIDPipe()) quizId: string,
@@ -322,19 +222,7 @@ export class BookmarkController {
   }
 
   @Post('collections/:collectionId/move')
-  @ApiAuth()
-  @ApiOperation({
-    summary: 'Move bookmark',
-    description:
-      'Moves an existing bookmarked quiz from one collection to another in a single atomic operation.',
-  })
-  @ApiOkResponse({ description: 'Bookmark moved', type: MoveBookmarkResponseDto })
-  @ApiNotFoundResponse({ description: 'Collection or bookmark not found' })
-  @ApiConflictResponse({ description: 'Quiz is already bookmarked in the target collection' })
-  @ApiForbiddenResponse({ description: 'Not the collection owner' })
-  @ApiBadRequestResponse({ description: 'Validation failed' })
-  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
-  @ApiValidationRequest()
+  @ApiAuthAction({ description: 'Bookmark moved', type: MoveBookmarkResponseDto })
   async moveBookmark(
     @Param('collectionId', new ParseUUIDPipe()) collectionId: string,
     @CurrentUser() user: JwtPayload,
@@ -344,18 +232,7 @@ export class BookmarkController {
   }
 
   @Patch('collections/:collectionId')
-  @ApiAuth()
-  @ApiOperation({
-    summary: 'Update collection',
-    description: 'Updates the name and/or description of a bookmark collection.',
-  })
-  @ApiOkResponse({ description: 'Collection updated', type: UpdateCollectionResponseDto })
-  @ApiNotFoundResponse({ description: 'Collection not found' })
-  @ApiForbiddenResponse({ description: 'Not the collection owner' })
-  @ApiConflictResponse({ description: 'A collection with this name already exists' })
-  @ApiBadRequestResponse({ description: 'Validation failed' })
-  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
-  @ApiValidationRequest()
+  @ApiAuthUpdate({ description: 'Collection updated', type: UpdateCollectionResponseDto })
   async updateCollection(
     @Param('collectionId', new ParseUUIDPipe()) collectionId: string,
     @CurrentUser() user: JwtPayload,
@@ -365,28 +242,14 @@ export class BookmarkController {
   }
 
   @Get('me/stats')
-  @ApiAuth()
-  @ApiOperation({
-    summary: 'Get my bookmark stats',
-    description:
-      "Returns aggregated statistics for the authenticated user's bookmarks, including total collections, total bookmarks, and the most-bookmarked category and tag.",
-  })
-  @ApiOkResponse({ description: 'Bookmark statistics returned', type: BookmarkStatsResponseDto })
-  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  @ApiAuthList({ description: 'Bookmark statistics returned', type: BookmarkStatsResponseDto })
+  @ApiInternalError()
   async getMyBookmarkStats(@CurrentUser() user: JwtPayload): Promise<BookmarkStatsResponseDto> {
     return this.bookmarkApplicationService.getMyBookmarkStats(user);
   }
 
   @Delete('collections/:collectionId')
-  @ApiAuth()
-  @ApiOperation({
-    summary: 'Delete collection',
-    description: 'Deletes a bookmark collection and all its bookmarked quizzes.',
-  })
-  @ApiOkResponse({ description: 'Collection deleted', type: DeleteCollectionResponseDto })
-  @ApiNotFoundResponse({ description: 'Collection not found' })
-  @ApiForbiddenResponse({ description: 'Not the collection owner' })
-  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  @ApiAuthDelete('Collection deleted')
   async deleteCollection(
     @Param('collectionId', new ParseUUIDPipe()) collectionId: string,
     @CurrentUser() user: JwtPayload,

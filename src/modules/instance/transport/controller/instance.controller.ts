@@ -14,18 +14,19 @@ import {
   ApiOperation,
   ApiOkResponse,
   ApiCreatedResponse,
-  ApiBearerAuth,
   ApiNotFoundResponse,
-  ApiConflictResponse,
   ApiForbiddenResponse,
-  ApiBadRequestResponse,
-  ApiInternalServerErrorResponse,
 } from '@nestjs/swagger';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
 import { Transactional } from '@/common/interceptors/transactional.interceptor';
-import { ApiAuth, ApiValidationRequest } from '@/common/swagger/swagger-decorators';
+import {
+  ApiAuth,
+  ApiAuthAction,
+  ApiBadRequest,
+  ApiInternalError,
+} from '@/common/swagger/swagger-decorators';
 import { decodeBase64JsonCursor } from '@/common/utils/cursor.util';
-import { RequireAuth, type JwtPayload } from '@/common/guards/jwt.guard';
+import { type JwtPayload } from '@/common/guards/jwt.guard';
 import { InstanceService } from '../../domain/instance.service';
 import { InstanceResponseMapper } from '../../mappers/instance-response.mapper';
 import {
@@ -47,8 +48,6 @@ import {
 import { InstanceDomainExceptionFilter } from '../filters/instance-domain-exception.filter';
 
 @ApiTags('instances')
-@ApiBearerAuth()
-@RequireAuth()
 @Controller('instances')
 @UseFilters(InstanceDomainExceptionFilter)
 export class InstanceController {
@@ -70,9 +69,8 @@ export class InstanceController {
   @ApiForbiddenResponse({
     description: 'You do not have permission to create an instance for this quiz',
   })
-  @ApiBadRequestResponse({ description: 'Validation failed' })
-  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
-  @ApiValidationRequest()
+  @ApiBadRequest('Validation failed')
+  @ApiInternalError()
   async createInstance(
     @CurrentUser() user: JwtPayload,
     @Body() payload: CreateInstanceDto,
@@ -97,7 +95,7 @@ export class InstanceController {
       'Only instances with status `open` are returned by default.',
   })
   @ApiOkResponse({ description: 'Instance list returned', type: InstanceListResponseDto })
-  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  @ApiInternalError()
   async listInstances(@Query() query: ListInstancesQueryDto): Promise<InstanceListResponseDto> {
     const result = await this.instanceService.listInstances({
       limit: query.limit ?? 20,
@@ -125,7 +123,7 @@ export class InstanceController {
   })
   @ApiOkResponse({ description: 'Players returned', type: InstancePlayersResponseDto })
   @ApiNotFoundResponse({ description: 'Instance not found' })
-  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  @ApiInternalError()
   async listInstancePlayers(
     @Param('id', new ParseUUIDPipe()) instanceId: string,
   ): Promise<InstancePlayersResponseDto> {
@@ -145,7 +143,7 @@ export class InstanceController {
   })
   @ApiOkResponse({ description: 'Instance found', type: InstanceDetailResponseDto })
   @ApiNotFoundResponse({ description: 'Instance not found' })
-  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  @ApiInternalError()
   getInstanceById(
     @Param('id', new ParseUUIDPipe()) instanceId: string,
   ): Promise<InstanceDetailResponseDto> {
@@ -161,19 +159,8 @@ export class InstanceController {
   @Post(':id/join')
   @Transactional()
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
-  @ApiAuth()
-  @ApiOperation({
-    summary: 'Join instance',
-    description: 'Adds the authenticated user as a player in the instance.',
-  })
-  @ApiOkResponse({ description: 'Joined successfully', type: JoinInstanceResponseDto })
-  @ApiNotFoundResponse({ description: 'Instance not found' })
-  @ApiConflictResponse({
-    description: 'You are already a player in this instance or instance is full',
-  })
-  @ApiBadRequestResponse({ description: 'Instance is not open for joining' })
-  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
-  joinInstance(
+  @ApiAuthAction({ description: 'Joined successfully', type: JoinInstanceResponseDto })
+  async joinInstance(
     @Param('id', new ParseUUIDPipe()) instanceId: string,
     @CurrentUser() user: JwtPayload,
   ): Promise<JoinInstanceResponseDto> {
@@ -181,18 +168,8 @@ export class InstanceController {
   }
 
   @Post(':id/start')
-  @ApiAuth()
-  @ApiOperation({
-    summary: 'Start instance',
-    description: 'Starts the instance, allowing all joined players to begin answering questions.',
-  })
-  @ApiOkResponse({ description: 'Instance started', type: StartInstanceResponseDto })
-  @ApiNotFoundResponse({ description: 'Instance not found' })
-  @ApiForbiddenResponse({ description: 'Only the host can start the instance' })
-  @ApiConflictResponse({ description: 'Instance has already started or has no players' })
-  @ApiBadRequestResponse({ description: 'Instance is not in a state that can be started' })
-  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
-  startInstance(
+  @ApiAuthAction({ description: 'Instance started', type: StartInstanceResponseDto })
+  async startInstance(
     @Param('id', new ParseUUIDPipe()) instanceId: string,
     @CurrentUser() user: JwtPayload,
   ): Promise<StartInstanceResponseDto> {
@@ -200,18 +177,8 @@ export class InstanceController {
   }
 
   @Post(':id/close')
-  @ApiAuth()
-  @ApiOperation({
-    summary: 'Close instance',
-    description: 'Closes the instance and finalizes all player scores.',
-  })
-  @ApiOkResponse({ description: 'Instance closed', type: CloseInstanceResponseDto })
-  @ApiNotFoundResponse({ description: 'Instance not found' })
-  @ApiForbiddenResponse({ description: 'Only the host can close the instance' })
-  @ApiConflictResponse({ description: 'Instance has already been closed' })
-  @ApiBadRequestResponse({ description: 'Instance is not in a state that can be closed' })
-  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
-  closeInstance(
+  @ApiAuthAction({ description: 'Instance closed', type: CloseInstanceResponseDto })
+  async closeInstance(
     @Param('id', new ParseUUIDPipe()) instanceId: string,
     @CurrentUser() user: JwtPayload,
   ): Promise<CloseInstanceResponseDto> {
@@ -225,7 +192,7 @@ export class InstanceController {
   })
   @ApiOkResponse({ description: 'Leaderboard returned', type: InstanceLeaderboardResponseDto })
   @ApiNotFoundResponse({ description: 'Instance not found' })
-  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  @ApiInternalError()
   getLeaderboard(
     @Param('id', new ParseUUIDPipe()) instanceId: string,
     @Query() query: GetLeaderboardQueryDto,
