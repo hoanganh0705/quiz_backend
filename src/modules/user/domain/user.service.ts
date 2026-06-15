@@ -34,6 +34,7 @@ import {
   type UserDomainEventBusPort,
 } from './events/user-domain-event-bus.port';
 import { UserProfileUpdatedEvent, UserSettingsUpdatedEvent } from './events/user-domain.events';
+import { AuditLogService } from '@/common/audit/audit-log.service';
 
 function calculateLevel(totalXp: number): number {
   return Math.floor(totalXp / XP_PER_LEVEL) + 1;
@@ -46,6 +47,7 @@ export class UserDomainService {
     private readonly userRepository: UserRepositoryPort,
     @Inject(USER_DOMAIN_EVENT_BUS)
     private readonly eventBus: UserDomainEventBusPort,
+    private readonly auditLogService: AuditLogService,
     @InjectPinoLogger(UserDomainService.name) private readonly logger: PinoLogger,
   ) {}
 
@@ -181,6 +183,34 @@ export class UserDomainService {
         nowIso,
       ),
     );
+
+    // Audit: profile changes. The auth audit log used to be the
+    // only place to record such changes, but it was scoped to
+    // auth events and the user module never wrote to it. The
+    // new cross-domain `AuditLogService` covers this and gives
+    // us a structured `domain='user'`, `action='profile.updated'`
+    // pair for cross-domain reporting. Failures are swallowed —
+    // an audit-log write must never break the user-facing
+    // operation.
+    try {
+      await this.auditLogService.record({
+        eventType: 'user.profile.updated',
+        domain: 'user',
+        action: 'profile.updated',
+        actorId: userId,
+        subjectUserId: userId,
+        metadata: {
+          changedFields: Object.keys(patch),
+        },
+        createdAt: nowIso,
+      });
+    } catch (error) {
+      this.logger.error({
+        event: 'user_profile_audit_write_failed',
+        userId,
+        message: error instanceof Error ? error.message : 'unknown',
+      });
+    }
 
     return updated;
   }

@@ -47,6 +47,7 @@ import {
 } from '../errors/social.errors';
 import { UserNotFoundError } from '@/modules/user/domain/errors';
 import { isPostgresUniqueViolation } from '@/common/utils/db-error.util';
+import { AuditLogService } from '@/common/audit/audit-log.service';
 
 @Injectable()
 export class SocialService {
@@ -61,6 +62,7 @@ export class SocialService {
     private readonly ranking: RankingPort,
     @Inject(USER_REPOSITORY_PORT)
     private readonly userRepository: UserRepositoryPort,
+    private readonly auditLogService: AuditLogService,
     @InjectPinoLogger(SocialService.name)
     private readonly logger: PinoLogger,
   ) {}
@@ -292,6 +294,32 @@ export class SocialService {
       reason,
     });
 
+    // Audit: blocking is a sensitive action. The previous
+    // implementation only logged the event, which is not a
+    // durable record and cannot be queried later. The
+    // cross-domain audit log captures who blocked whom so
+    // the platform can answer "who has user X blocked?" and
+    // the user can challenge an unjustified block.
+    try {
+      await this.auditLogService.record({
+        eventType: 'social.user.blocked',
+        domain: 'social',
+        action: 'user.blocked',
+        actorId: blockerId,
+        subjectUserId: blockedId,
+        metadata: {
+          reason: reason ?? null,
+        },
+      });
+    } catch (error) {
+      this.logger.error({
+        event: 'social_block_audit_write_failed',
+        blockerId,
+        blockedId,
+        message: error instanceof Error ? error.message : 'unknown',
+      });
+    }
+
     // Emit domain event
     this.eventBus.emitUserBlocked({
       eventType: 'user_blocked',
@@ -312,6 +340,27 @@ export class SocialService {
       blockerId,
       blockedId,
     });
+
+    // Audit: unblocking mirrors blocking. Captures who unblocked
+    // whom so the social module can answer "is there a history
+    // of X repeatedly blocking and unblocking Y as harassment?"
+    // without a log grep.
+    try {
+      await this.auditLogService.record({
+        eventType: 'social.user.unblocked',
+        domain: 'social',
+        action: 'user.unblocked',
+        actorId: blockerId,
+        subjectUserId: blockedId,
+      });
+    } catch (error) {
+      this.logger.error({
+        event: 'social_unblock_audit_write_failed',
+        blockerId,
+        blockedId,
+        message: error instanceof Error ? error.message : 'unknown',
+      });
+    }
 
     // Emit domain event
     this.eventBus.emitUserUnblocked({
