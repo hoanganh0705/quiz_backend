@@ -1,5 +1,5 @@
 import { Module, forwardRef } from '@nestjs/common';
-import { UserController } from './user.controller';
+import { UserController } from './transport/controller/user.controller';
 import { UserApplicationService } from './application/user.application.service';
 import { UserDomainService } from './domain/user.service';
 import { UserRepository } from './infrastructure/repositories/user.repository';

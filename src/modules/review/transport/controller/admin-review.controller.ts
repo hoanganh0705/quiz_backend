@@ -9,17 +9,9 @@ import {
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
-import {
-  ApiTags,
-  ApiOperation,
-  ApiBearerAuth,
-  ApiOkResponse,
-  ApiUnauthorizedResponse,
-  ApiForbiddenResponse,
-  ApiNotFoundResponse,
-} from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiOkResponse } from '@nestjs/swagger';
 import { Roles } from '@/common/authorization/decorators/roles.decorator';
-import { ApiAuth, ApiValidationRequest } from '@/common/swagger/swagger-decorators';
+import { ApiAdminResource, ApiAdminUpdate } from '@/common/swagger/swagger-decorators';
 import { ReviewAdminService } from '@/modules/review/domain/review-admin.service';
 import { CursorMapper } from '@/modules/review/mappers/review-cursor.mapper';
 import { ListPlatformReportsQueryDto, UpdateReportStatusDto } from '@/modules/review/dto/request';
@@ -31,15 +23,14 @@ import { CurrentUser } from '@/common/decorators/current-user.decorator';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
 
 @ApiTags('reviews')
-@ApiBearerAuth()
 @Controller('admin/reviews')
+@ApiAdminResource()
 export class AdminReviewController {
   constructor(private readonly reviewAdminService: ReviewAdminService) {}
 
   @Get('reports')
   @Roles('admin')
   @HttpCode(HttpStatus.OK)
-  @ApiAuth()
   @ApiOperation({
     summary: 'List all platform-wide review reports for moderation',
     description:
@@ -50,8 +41,6 @@ export class AdminReviewController {
     description: 'Paginated list of platform-wide reports',
     type: PlatformReportsResponseDto,
   })
-  @ApiUnauthorizedResponse({ description: 'Unauthorized — missing or invalid token' })
-  @ApiForbiddenResponse({ description: 'Forbidden — requires admin role' })
   async listPlatformReports(
     @Query() query: ListPlatformReportsQueryDto,
   ): Promise<PlatformReportsResponseDto> {
@@ -91,21 +80,10 @@ export class AdminReviewController {
   @Patch('reports/:reportId')
   @Roles('admin')
   @HttpCode(HttpStatus.OK)
-  @ApiAuth()
-  @ApiOperation({
-    summary: 'Update the status of a review report',
-    description:
-      'Allows an admin to change the status of a review report to ' +
-      '`reviewed`, `dismissed`, or `actioned`.',
-  })
-  @ApiOkResponse({
+  @ApiAdminUpdate({
     description: 'Report status updated successfully',
     type: UpdateReportStatusResponseDto,
   })
-  @ApiUnauthorizedResponse({ description: 'Unauthorized — missing or invalid token' })
-  @ApiForbiddenResponse({ description: 'Forbidden — requires admin role' })
-  @ApiNotFoundResponse({ description: 'Report not found' })
-  @ApiValidationRequest()
   async updateReportStatus(
     @Param('reportId', new ParseUUIDPipe()) reportId: string,
     @Body() body: UpdateReportStatusDto,

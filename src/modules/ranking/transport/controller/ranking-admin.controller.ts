@@ -6,17 +6,9 @@
  */
 
 import { Controller, Get, Post, Query, HttpCode, HttpStatus } from '@nestjs/common';
-import {
-  ApiTags,
-  ApiOperation,
-  ApiOkResponse,
-  ApiUnauthorizedResponse,
-  ApiForbiddenResponse,
-  ApiHeader,
-  ApiBadRequestResponse,
-} from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiOkResponse } from '@nestjs/swagger';
 import { Roles } from '@/common/authorization/decorators/roles.decorator';
-import { ApiAuth } from '@/common/swagger/swagger-decorators';
+import { ApiAdminEndpoint } from '@/common/swagger/swagger-decorators';
 import { RankingApplicationService } from '../../application/ranking.application.service';
 import { PeriodResetService } from '../../domain/services';
 import { mapRankingPeriodEnumToDomain } from '../../application/get-my-ranking-history.query';
@@ -33,7 +25,7 @@ import {
 
 @ApiTags('leaderboard')
 @Controller('admin/ranking')
-@ApiAuth()
+@ApiAdminEndpoint()
 export class RankingAdminController {
   constructor(
     private readonly rankingAppService: RankingApplicationService,
@@ -48,9 +40,6 @@ export class RankingAdminController {
       'Returns operational status of the ranking system including scheduler state and dirty queue depth.',
   })
   @ApiOkResponse({ description: 'Ranking system status', type: RankingStatusResponseDto })
-  @ApiUnauthorizedResponse({ description: 'Unauthorized — missing or invalid token' })
-  @ApiForbiddenResponse({ description: 'Forbidden — requires admin role' })
-  @ApiHeader({ name: 'x-correlation-id', required: false, description: 'Request trace ID' })
   async getStatus(): Promise<RankingStatusResponseDto> {
     const status = await this.rankingAppService.getStatus();
     return {
@@ -75,10 +64,6 @@ export class RankingAdminController {
       'Without a period parameter, all periods (all-time, weekly, monthly, daily) are recalculated.',
   })
   @ApiOkResponse({ description: 'Recalculation triggered', type: RecalculateResponseDto })
-  @ApiUnauthorizedResponse({ description: 'Unauthorized — missing or invalid token' })
-  @ApiForbiddenResponse({ description: 'Forbidden — requires admin role' })
-  @ApiBadRequestResponse({ description: 'Invalid period value' })
-  @ApiHeader({ name: 'x-correlation-id', required: false, description: 'Request trace ID' })
   async triggerRecalculation(@Query() query: RecalculateQueryDto): Promise<RecalculateResponseDto> {
     const period = query.period ? mapRankingPeriodEnumToDomain(query.period) : undefined;
     await this.rankingAppService.triggerImmediateRecalculation(period);
@@ -101,10 +86,6 @@ export class RankingAdminController {
       'Without a period parameter, all due periods (weekly, monthly, daily) are reset.',
   })
   @ApiOkResponse({ description: 'Period reset initiated', type: PeriodResetResponseDto })
-  @ApiUnauthorizedResponse({ description: 'Unauthorized — missing or invalid token' })
-  @ApiForbiddenResponse({ description: 'Forbidden — requires admin role' })
-  @ApiBadRequestResponse({ description: 'Invalid period value' })
-  @ApiHeader({ name: 'x-correlation-id', required: false, description: 'Request trace ID' })
   async triggerPeriodReset(@Query() query: PeriodResetQueryDto): Promise<PeriodResetResponseDto> {
     if (query.period) {
       const period = mapRankingPeriodEnumToDomain(query.period);
@@ -127,9 +108,6 @@ export class RankingAdminController {
     description: 'Forces an immediate consistency check and returns the full report.',
   })
   @ApiOkResponse({ description: 'Consistency check report', type: ConsistencyReportResponseDto })
-  @ApiUnauthorizedResponse({ description: 'Unauthorized — missing or invalid token' })
-  @ApiForbiddenResponse({ description: 'Forbidden — requires admin role' })
-  @ApiHeader({ name: 'x-correlation-id', required: false, description: 'Request trace ID' })
   async triggerConsistencyCheck(): Promise<ConsistencyReportResponseDto> {
     const report = await this.rankingAppService.triggerConsistencyCheck();
     return {

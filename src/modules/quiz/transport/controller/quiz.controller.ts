@@ -16,19 +16,22 @@ import {
   ApiTags,
   ApiOperation,
   ApiOkResponse,
-  ApiCreatedResponse,
-  ApiBearerAuth,
   ApiForbiddenResponse,
   ApiNotFoundResponse,
-  ApiBadRequestResponse,
-  ApiConflictResponse,
-  ApiInternalServerErrorResponse,
 } from '@nestjs/swagger';
 import { Permission } from '@/common/authorization/permissions';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
 import { Permissions } from '@/common/authorization/decorators/permissions.decorator';
 import { Public } from '@/common/decorators/public.decorator';
-import { ApiAuth, ApiValidationRequest } from '@/common/swagger/swagger-decorators';
+import {
+  ApiAuth,
+  ApiAuthList,
+  ApiAuthCreate,
+  ApiPublicList,
+  ApiConflict,
+  ApiInternalError,
+  ApiAuthUpdateWithState,
+} from '@/common/swagger/swagger-decorators';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
 import { QuizApplicationService } from '../../application/quiz.application.service';
 import { QuizVersionApplicationService } from '../../application/quiz-version.application.service';
@@ -73,17 +76,7 @@ export class QuizController {
 
   @Post()
   @Permissions(Permission.QUIZ_CREATE)
-  @ApiBearerAuth()
-  @ApiAuth()
-  @ApiOperation({
-    summary: 'Create quiz',
-    description: 'Creates a new quiz with an initial version. Requires `quiz:create` permission.',
-  })
-  @ApiCreatedResponse({ description: 'Quiz created', type: QuizResponseDto })
-  @ApiBadRequestResponse({ description: 'Validation failed' })
-  @ApiConflictResponse({ description: 'Quiz with this slug already exists' })
-  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
-  @ApiValidationRequest()
+  @ApiAuthCreate({ description: 'Quiz created', type: QuizResponseDto })
   createQuiz(
     @CurrentUser() user: JwtPayload,
     @Body() payload: CreateQuizDto,
@@ -93,29 +86,13 @@ export class QuizController {
 
   @Get()
   @Public()
-  @ApiOperation({
-    summary: 'List quizzes',
-    description:
-      'Returns a paginated, cursor-based list of quizzes. Supports filtering by difficulty, category, and tag.',
-  })
-  @ApiOkResponse({ description: 'Quizzes returned', type: QuizListResponseDto })
-  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  @ApiPublicList({ description: 'Quizzes returned', type: QuizListResponseDto })
   listQuizzes(@Query() query: ListQuizzesQueryDto): Promise<QuizListResponseDto> {
     return this.quizApplicationService.listQuizzes(query);
   }
 
   @Get('me')
-  @ApiBearerAuth()
-  @ApiAuth()
-  @ApiOperation({
-    summary: 'List my quizzes',
-    description:
-      'Returns a paginated, cursor-based list of quizzes created by the authenticated user, ordered by newest first.',
-  })
-  @ApiOkResponse({ description: 'Quizzes returned', type: QuizListResponseDto })
-  @ApiBadRequestResponse({ description: 'Validation failed' })
-  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
-  @ApiValidationRequest()
+  @ApiAuthList({ description: 'Quizzes returned', type: QuizListResponseDto })
   listMyQuizzes(
     @CurrentUser('sub') userId: string,
     @Query() query: ListQuizzesQueryDto,
@@ -124,17 +101,7 @@ export class QuizController {
   }
 
   @Get('me/drafts')
-  @ApiBearerAuth()
-  @ApiAuth()
-  @ApiOperation({
-    summary: 'List my draft quizzes',
-    description:
-      'Returns a paginated, cursor-based list of draft quizzes owned by the authenticated user, ordered by newest first.',
-  })
-  @ApiOkResponse({ description: 'Draft quizzes returned', type: QuizListResponseDto })
-  @ApiBadRequestResponse({ description: 'Validation failed' })
-  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
-  @ApiValidationRequest()
+  @ApiAuthList({ description: 'Draft quizzes returned', type: QuizListResponseDto })
   listMyDraftQuizzes(
     @CurrentUser('sub') userId: string,
     @Query() query: ListQuizzesQueryDto,
@@ -143,17 +110,7 @@ export class QuizController {
   }
 
   @Get('me/published')
-  @ApiBearerAuth()
-  @ApiAuth()
-  @ApiOperation({
-    summary: 'List my published quizzes',
-    description:
-      'Returns a paginated, cursor-based list of published quizzes owned by the authenticated user, ordered by newest first.',
-  })
-  @ApiOkResponse({ description: 'Published quizzes returned', type: QuizListResponseDto })
-  @ApiBadRequestResponse({ description: 'Validation failed' })
-  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
-  @ApiValidationRequest()
+  @ApiAuthList({ description: 'Published quizzes returned', type: QuizListResponseDto })
   listMyPublishedQuizzes(
     @CurrentUser('sub') userId: string,
     @Query() query: ListQuizzesQueryDto,
@@ -163,14 +120,7 @@ export class QuizController {
 
   @Get('trending')
   @Public()
-  @ApiOperation({
-    summary: 'Trending quizzes',
-    description:
-      'Returns published quizzes ranked by recent engagement using the existing weekly trending calculation.',
-  })
-  @ApiOkResponse({ description: 'Trending quizzes returned', type: TrendingQuizzesResponseDto })
-  @ApiBadRequestResponse({ description: 'Validation failed' })
-  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  @ApiPublicList({ description: 'Trending quizzes returned', type: TrendingQuizzesResponseDto })
   getTrendingQuizzes(
     @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit: number,
     @Query('categoryId') categoryId?: string,
@@ -180,14 +130,7 @@ export class QuizController {
 
   @Get('popular')
   @Public()
-  @ApiOperation({
-    summary: 'Popular quizzes',
-    description:
-      'Returns published quizzes ranked by the existing popularity score combining attempts, ratings, and bookmarks.',
-  })
-  @ApiOkResponse({ description: 'Popular quizzes returned', type: PopularQuizzesResponseDto })
-  @ApiBadRequestResponse({ description: 'Validation failed' })
-  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  @ApiPublicList({ description: 'Popular quizzes returned', type: PopularQuizzesResponseDto })
   getPopularQuizzes(
     @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit: number,
     @Query('categoryId') categoryId?: string,
@@ -196,70 +139,35 @@ export class QuizController {
   }
 
   @Get('me/analytics')
-  @ApiBearerAuth()
-  @ApiAuth()
-  @ApiOperation({
-    summary: 'Get my quiz analytics',
-    description:
-      'Returns creator-level analytics aggregated across all quizzes owned by the authenticated user.',
-  })
-  @ApiOkResponse({ description: 'Quiz analytics returned', type: CreatorQuizAnalyticsDto })
-  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  @ApiAuthList({ description: 'Quiz analytics returned', type: CreatorQuizAnalyticsDto })
   getMyQuizAnalytics(@CurrentUser('sub') userId: string): Promise<CreatorQuizAnalyticsDto> {
     return this.quizApplicationService.getMyQuizAnalytics(userId);
   }
 
   @Get('featured')
   @Public()
-  @ApiOperation({
-    summary: 'Featured quizzes',
-    description:
-      'Returns active, published featured quizzes ordered by most recently featured first.',
-  })
-  @ApiOkResponse({ description: 'Featured quizzes returned', type: RelatedQuizzesResponseDto })
-  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  @ApiPublicList({ description: 'Featured quizzes returned', type: RelatedQuizzesResponseDto })
   getFeaturedQuizzes(@Query() query: FeaturedQuizzesQueryDto): Promise<RelatedQuizzesResponseDto> {
     return this.quizApplicationService.getFeaturedQuizzes(query);
   }
 
   @Get(':id')
   @Public()
-  @ApiOperation({
-    summary: 'Get quiz by ID',
-    description: 'Returns a single quiz by its unique ID including the published version summary.',
-  })
-  @ApiOkResponse({ description: 'Quiz found', type: QuizResponseDto })
-  @ApiNotFoundResponse({ description: 'Quiz not found' })
-  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  @ApiPublicList({ description: 'Quiz found', type: QuizResponseDto })
   getQuizById(@Param('id', new ParseUUIDPipe()) quizId: string): Promise<QuizResponseDto> {
     return this.quizApplicationService.getQuizById(quizId);
   }
 
   @Get(':id/stats')
   @Public()
-  @ApiOperation({
-    summary: 'Quiz stats',
-    description: 'Returns aggregated statistics for a quiz.',
-  })
-  @ApiOkResponse({ description: 'Quiz stats returned', type: QuizStatsResponseDto })
-  @ApiNotFoundResponse({ description: 'Quiz not found' })
-  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  @ApiPublicList({ description: 'Quiz stats returned', type: QuizStatsResponseDto })
   getQuizStats(@Param('id', new ParseUUIDPipe()) quizId: string): Promise<QuizStatsResponseDto> {
     return this.quizApplicationService.getQuizStats(quizId);
   }
 
   @Get(':slug/similar')
   @Public()
-  @ApiOperation({
-    summary: 'Similar quizzes',
-    description:
-      'Returns related quizzes ranked by shared categories, shared tags, and popularity.',
-  })
-  @ApiOkResponse({ description: 'Related quizzes returned', type: RelatedQuizzesResponseDto })
-  @ApiNotFoundResponse({ description: 'Quiz not found' })
-  @ApiBadRequestResponse({ description: 'Validation failed' })
-  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
-  @ApiValidationRequest()
+  @ApiPublicList({ description: 'Related quizzes returned', type: RelatedQuizzesResponseDto })
   async getRelatedQuizzes(
     @Param('slug') slug: string,
     @Query() query: RelatedQuizzesQueryDto,
@@ -275,32 +183,14 @@ export class QuizController {
 
   @Get(':slug')
   @Public()
-  @ApiOperation({
-    summary: 'Get quiz by slug',
-    description: 'Returns a single quiz by its URL slug including the published version summary.',
-  })
-  @ApiOkResponse({ description: 'Quiz found', type: QuizResponseDto })
-  @ApiNotFoundResponse({ description: 'Quiz not found' })
-  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  @ApiPublicList({ description: 'Quiz found', type: QuizResponseDto })
   getQuizBySlug(@Param('slug') slug: string): Promise<QuizResponseDto> {
     return this.quizApplicationService.getQuizBySlug(slug);
   }
 
   @Patch(':id')
   @Permissions(Permission.QUIZ_EDIT_OWN, Permission.QUIZ_EDIT_ANY)
-  @ApiBearerAuth()
-  @ApiAuth()
-  @ApiOperation({
-    summary: 'Update quiz',
-    description: 'Updates a quiz by ID. Requires `quiz:edit:own` or `quiz:edit:any` permission.',
-  })
-  @ApiOkResponse({ description: 'Quiz updated', type: QuizResponseDto })
-  @ApiNotFoundResponse({ description: 'Quiz not found' })
-  @ApiForbiddenResponse({ description: 'You do not have permission to edit this quiz' })
-  @ApiBadRequestResponse({ description: 'Validation failed' })
-  @ApiConflictResponse({ description: 'Quiz with this slug already exists' })
-  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
-  @ApiValidationRequest()
+  @ApiAuthUpdateWithState({ description: 'Quiz updated', type: QuizResponseDto })
   updateQuiz(
     @Param('id', new ParseUUIDPipe()) quizId: string,
     @CurrentUser() user: JwtPayload,
@@ -311,7 +201,6 @@ export class QuizController {
 
   @Delete(':id')
   @Permissions(Permission.QUIZ_DELETE_OWN, Permission.QUIZ_DELETE_ANY)
-  @ApiBearerAuth()
   @ApiAuth()
   @ApiOperation({
     summary: 'Delete quiz',
@@ -321,7 +210,7 @@ export class QuizController {
   @ApiOkResponse({ description: 'Quiz deleted', type: DeleteQuizResponseDto })
   @ApiNotFoundResponse({ description: 'Quiz not found' })
   @ApiForbiddenResponse({ description: 'You do not have permission to delete this quiz' })
-  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  @ApiInternalError()
   deleteQuiz(
     @Param('id', new ParseUUIDPipe()) quizId: string,
     @CurrentUser() user: JwtPayload,
@@ -331,21 +220,7 @@ export class QuizController {
 
   @Post(':id/versions')
   @Permissions(Permission.QUIZ_VERSION_CREATE_OWN, Permission.QUIZ_VERSION_CREATE_ANY)
-  @ApiBearerAuth()
-  @ApiAuth()
-  @ApiOperation({
-    summary: 'Create quiz version',
-    description:
-      'Creates a new draft version for a quiz. Optionally copies questions from an existing version. Requires `quiz-version:create:own` or `quiz-version:create:any`.',
-  })
-  @ApiCreatedResponse({ description: 'Quiz version created', type: QuizVersionResponseDto })
-  @ApiNotFoundResponse({ description: 'Quiz not found' })
-  @ApiForbiddenResponse({
-    description: 'You do not have permission to create versions for this quiz',
-  })
-  @ApiBadRequestResponse({ description: 'Validation failed' })
-  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
-  @ApiValidationRequest()
+  @ApiAuthCreate({ description: 'Quiz version created', type: QuizVersionResponseDto })
   createQuizVersion(
     @Param('id', new ParseUUIDPipe()) quizId: string,
     @CurrentUser() user: JwtPayload,
@@ -356,17 +231,7 @@ export class QuizController {
 
   @Get(':id/versions')
   @Permissions(Permission.QUIZ_VERSION_VIEW_OWN, Permission.QUIZ_VERSION_VIEW_ANY)
-  @ApiBearerAuth()
-  @ApiAuth()
-  @ApiOperation({
-    summary: 'List quiz versions',
-    description:
-      'Returns all versions of a quiz. Requires `quiz-version:view:own` or `quiz-version:view:any`.',
-  })
-  @ApiOkResponse({ description: 'Versions returned', type: QuizVersionListResponseDto })
-  @ApiNotFoundResponse({ description: 'Quiz not found' })
-  @ApiForbiddenResponse({ description: 'You do not have permission to view versions of this quiz' })
-  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  @ApiAuthList({ description: 'Versions returned', type: QuizVersionListResponseDto })
   listQuizVersions(
     @Param('id', new ParseUUIDPipe()) quizId: string,
     @CurrentUser() user: JwtPayload,
@@ -377,17 +242,7 @@ export class QuizController {
 
   @Get(':id/versions/:versionId')
   @Permissions(Permission.QUIZ_VERSION_VIEW_OWN, Permission.QUIZ_VERSION_VIEW_ANY)
-  @ApiBearerAuth()
-  @ApiAuth()
-  @ApiOperation({
-    summary: 'Get quiz version detail',
-    description:
-      'Returns complete details of a single quiz version. Requires `quiz-version:view:own` or `quiz-version:view:any`.',
-  })
-  @ApiOkResponse({ description: 'Quiz version returned', type: QuizVersionDetailResponseDto })
-  @ApiNotFoundResponse({ description: 'Quiz or version not found' })
-  @ApiForbiddenResponse({ description: 'You do not have permission to view this quiz version' })
-  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  @ApiAuthList({ description: 'Quiz version returned', type: QuizVersionDetailResponseDto })
   getQuizVersionDetail(
     @Param('id', new ParseUUIDPipe()) quizId: string,
     @Param('versionId', new ParseUUIDPipe()) quizVersionId: string,
@@ -398,19 +253,7 @@ export class QuizController {
 
   @Patch(':id/versions/:versionId')
   @Permissions(Permission.QUIZ_VERSION_EDIT_OWN, Permission.QUIZ_VERSION_EDIT_ANY)
-  @ApiBearerAuth()
-  @ApiAuth()
-  @ApiOperation({
-    summary: 'Update quiz version',
-    description:
-      "Updates a quiz version's metadata (difficulty, duration, passing score, XP reward). Requires `quiz-version:edit:own` or `quiz-version:edit:any`.",
-  })
-  @ApiOkResponse({ description: 'Version updated', type: QuizVersionResponseDto })
-  @ApiNotFoundResponse({ description: 'Quiz or version not found' })
-  @ApiForbiddenResponse({ description: 'You do not have permission to edit this quiz version' })
-  @ApiBadRequestResponse({ description: 'Validation failed or quiz version is not editable' })
-  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
-  @ApiValidationRequest()
+  @ApiAuthUpdateWithState({ description: 'Version updated', type: QuizVersionResponseDto })
   updateQuizVersion(
     @Param('id', new ParseUUIDPipe()) quizId: string,
     @Param('versionId', new ParseUUIDPipe()) quizVersionId: string,
@@ -427,7 +270,6 @@ export class QuizController {
 
   @Post(':id/versions/:versionId/publish')
   @Permissions(Permission.QUIZ_VERSION_PUBLISH_OWN, Permission.QUIZ_VERSION_PUBLISH_ANY)
-  @ApiBearerAuth()
   @ApiAuth()
   @ApiOperation({
     summary: 'Publish quiz version',
@@ -436,8 +278,8 @@ export class QuizController {
   @ApiOkResponse({ description: 'Version published', type: QuizVersionResponseDto })
   @ApiNotFoundResponse({ description: 'Quiz or version not found' })
   @ApiForbiddenResponse({ description: 'You do not have permission to publish this quiz version' })
-  @ApiBadRequestResponse({ description: 'Validation failed or quiz version is not publishable' })
-  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  @ApiConflict()
+  @ApiInternalError()
   publishQuizVersion(
     @Param('id', new ParseUUIDPipe()) quizId: string,
     @Param('versionId', new ParseUUIDPipe()) quizVersionId: string,
@@ -448,19 +290,7 @@ export class QuizController {
 
   @Post(':id/versions/:versionId/questions')
   @Permissions(Permission.QUIZ_VERSION_EDIT_OWN, Permission.QUIZ_VERSION_EDIT_ANY)
-  @ApiBearerAuth()
-  @ApiAuth()
-  @ApiOperation({
-    summary: 'Create question',
-    description:
-      'Adds a single question to a quiz version. Requires `quiz-version:edit:own` or `quiz-version:edit:any`.',
-  })
-  @ApiCreatedResponse({ description: 'Question created', type: QuizQuestionResponseDto })
-  @ApiNotFoundResponse({ description: 'Quiz or version not found' })
-  @ApiForbiddenResponse({ description: 'You do not have permission to edit this quiz version' })
-  @ApiBadRequestResponse({ description: 'Validation failed or quiz version is not editable' })
-  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
-  @ApiValidationRequest()
+  @ApiAuthCreate({ description: 'Question created', type: QuizQuestionResponseDto })
   createQuizQuestion(
     @Param('id', new ParseUUIDPipe()) quizId: string,
     @Param('versionId', new ParseUUIDPipe()) quizVersionId: string,
@@ -477,19 +307,7 @@ export class QuizController {
 
   @Post(':id/versions/:versionId/questions/bulk')
   @Permissions(Permission.QUIZ_VERSION_EDIT_OWN, Permission.QUIZ_VERSION_EDIT_ANY)
-  @ApiBearerAuth()
-  @ApiAuth()
-  @ApiOperation({
-    summary: 'Create questions in bulk',
-    description:
-      'Adds multiple questions to a quiz version in a single request. Requires `quiz-version:edit:own` or `quiz-version:edit:any`.',
-  })
-  @ApiCreatedResponse({ description: 'Questions created', type: [QuizQuestionResponseDto] })
-  @ApiNotFoundResponse({ description: 'Quiz or version not found' })
-  @ApiForbiddenResponse({ description: 'You do not have permission to edit this quiz version' })
-  @ApiBadRequestResponse({ description: 'Validation failed or quiz version is not editable' })
-  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
-  @ApiValidationRequest()
+  @ApiAuthCreate({ description: 'Questions created', type: [QuizQuestionResponseDto] })
   createQuizQuestions(
     @Param('id', new ParseUUIDPipe()) quizId: string,
     @Param('versionId', new ParseUUIDPipe()) quizVersionId: string,
