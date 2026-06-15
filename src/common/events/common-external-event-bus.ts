@@ -41,7 +41,8 @@ export const EXTERNAL_EVENT_BUS_CONSUMER_PORT = Symbol('EXTERNAL_EVENT_BUS_CONSU
  * Legacy aggregate port retained for backward compatibility. New code should
  * use the narrower producer/consumer ports.
  */
-export interface ExternalEventBusPort extends ExternalEventBusProducerPort, ExternalEventBusConsumerPort {}
+export interface ExternalEventBusPort
+  extends ExternalEventBusProducerPort, ExternalEventBusConsumerPort {}
 
 /**
  * Shared external XP-earned event payload.

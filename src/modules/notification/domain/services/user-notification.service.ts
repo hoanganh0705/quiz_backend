@@ -32,9 +32,7 @@ export class UserNotificationService {
       avatarUrl: 'avatar',
     };
 
-    const changed = params.changedFields
-      .map((f) => fieldLabels[f] ?? f)
-      .join(', ');
+    const changed = params.changedFields.map((f) => fieldLabels[f] ?? f).join(', ');
 
     const body = `Your profile was updated: ${changed}`;
 

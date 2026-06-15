@@ -48,7 +48,9 @@ interface QueuedEvent {
 }
 
 @Injectable()
-export class DiscussionDomainEventBus implements DiscussionDomainEventBusPort, OnModuleInit, OnModuleDestroy {
+export class DiscussionDomainEventBus
+  implements DiscussionDomainEventBusPort, OnModuleInit, OnModuleDestroy
+{
   private static readonly RETRY_QUEUE_KEY = 'discussion:event_retry_queue';
   private static readonly DEAD_LETTER_KEY = 'discussion:event_dead_letter';
   private static readonly RETRY_DELAYS_MS = [5_000, 10_000, 20_000, 40_000, 80_000] as const;
@@ -131,7 +133,11 @@ export class DiscussionDomainEventBus implements DiscussionDomainEventBusPort, O
     void this.cache.rpushJson(DiscussionDomainEventBus.RETRY_QUEUE_KEY, queued);
   }
 
-  private async moveToDeadLetter(event: DiscussionDomainEvent, attempt: number, error: unknown): Promise<void> {
+  private async moveToDeadLetter(
+    event: DiscussionDomainEvent,
+    attempt: number,
+    error: unknown,
+  ): Promise<void> {
     this.logger.error({
       event: 'discussion_event_dead_lettered',
       eventType: event.eventType,
@@ -151,7 +157,9 @@ export class DiscussionDomainEventBus implements DiscussionDomainEventBusPort, O
     const now = Date.now();
 
     while (true) {
-      const queued = await this.cache.lpopJson<QueuedEvent>(DiscussionDomainEventBus.RETRY_QUEUE_KEY);
+      const queued = await this.cache.lpopJson<QueuedEvent>(
+        DiscussionDomainEventBus.RETRY_QUEUE_KEY,
+      );
       if (queued === null) break;
 
       if (queued.nextRetryAt > now) {

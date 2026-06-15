@@ -125,7 +125,10 @@ export interface RankingRepositoryPort {
    * Like `updateXp` but accepts an explicit transaction client for use in
    * callers that manage their own transactions (e.g. XpIngestionService).
    */
-  updateXpInTx(tx: unknown, params: { userId: string; amount: number; now: Date }): Promise<UserRankingRow>;
+  updateXpInTx(
+    tx: unknown,
+    params: { userId: string; amount: number; now: Date },
+  ): Promise<UserRankingRow>;
 
   markDirty(userIds: string[]): Promise<void>;
 
@@ -134,9 +137,55 @@ export interface RankingRepositoryPort {
    */
   markDirtyInTx(tx: unknown, userIds: string[]): Promise<void>;
 
+  /**
+   * Enqueue rank recalculation work items for the given users and
+   * periods. Inserts one row per (user, period) pair into
+   * `rank_recalculation_work_items` with `ON CONFLICT (user_id,
+   * period) DO NOTHING`, so concurrent enqueues for the same pair are
+   * idempotent. Also flips the per-user `is_dirty` latch on
+   * `user_ranking` for fast existence checks.
+   */
+  enqueueRecalculation(params: { userIds: string[]; periods: RankingPeriod[] }): Promise<void>;
+
+  /**
+   * Like {@link enqueueRecalculation} but participates in the caller's
+   * transaction. Used by XP ingestion so the work-item insert and the
+   * XP update commit atomically.
+   */
+  enqueueRecalculationInTx(
+    tx: unknown,
+    params: { userIds: string[]; periods: RankingPeriod[] },
+  ): Promise<void>;
+
+  /**
+   * Fetch up to `limit` pending work items, joined with the
+   * `user_ranking` row. Items are returned oldest-first so the queue
+   * is FIFO. The returned rows include `workItemId` so the caller can
+   * delete the work item once the recalculation completes.
+   */
+  getPendingRecalculationWorkItems(
+    limit: number,
+  ): Promise<Array<{ workItemId: string; userId: string; period: string }>>;
+
+  /**
+   * Delete work items by ID. Called by the recalculation processor
+   * after a successful recompute.
+   */
+  completeRecalculationWorkItems(workItemIds: string[]): Promise<void>;
+
   getDirtyUsers(limit: number): Promise<UserRankingRow[]>;
 
   clearDirtyFlags(userIds: string[]): Promise<void>;
+
+  /**
+   * Clear the per-user `is_dirty` latch for the subset of `userIds`
+   * that have zero remaining rows in `rank_recalculation_work_items`.
+   * Implemented as a single grouped query that returns the IDs to
+   * clear, then a single `UPDATE … WHERE user_id IN (…)`. Used by the
+   * batch processor to drop the latch exactly when the work queue is
+   * drained for each user.
+   */
+  clearDirtyFlagsForUsersWithNoPendingWork(userIds: string[]): Promise<void>;
 
   // Rank Operations
   updateRank(params: {
@@ -145,7 +194,11 @@ export interface RankingRepositoryPort {
     rank: number;
   }): Promise<number | null>;
 
-  updatePeakRank(params: { userId: string; period: RankingPeriod; rank: number }): Promise<{ updated: boolean; previousPeakRank: number | null }>;
+  updatePeakRank(params: {
+    userId: string;
+    period: RankingPeriod;
+    rank: number;
+  }): Promise<{ updated: boolean; previousPeakRank: number | null }>;
 
   getPeakRanks(userId: string): Promise<PeakRanksRow>;
 
@@ -214,12 +267,14 @@ export interface RankingRepositoryPort {
   }): Promise<{ userId: string; xp: number; rank: number; denseRank: number }[]>;
 
   // Full rank recalculation using window functions
-  calculateAllRanks(period: RankingPeriod): Promise<{
-    userId: string;
-    xp: number;
-    rank: number;
-    denseRank: number;
-  }[]>;
+  calculateAllRanks(period: RankingPeriod): Promise<
+    {
+      userId: string;
+      xp: number;
+      rank: number;
+      denseRank: number;
+    }[]
+  >;
 
   // Count how many users have strictly more XP (used for single-user rank lookup)
   countRankAbove(xp: number, period: RankingPeriod): Promise<number>;

@@ -629,6 +629,39 @@ export const passwordResetTokens = pgTable(
   ],
 );
 
+/**
+ * Idempotency ledger for outbound verification emails.
+ *
+ * One row per token that has been handed to the email provider. Before
+ * sending, the email processor attempts `INSERT … ON CONFLICT (token_hash)
+ * DO NOTHING`; if a row already exists for the same token hash, the email
+ * was already sent and the current job is a duplicate (BullMQ retry, replay
+ * after crash) — the send is skipped.
+ *
+ * The TTL on each row is `EMAIL_VERIFICATION_TOKEN_TTL_SECONDS`; a
+ * background purge job can delete expired rows so the table does not grow
+ * without bound. The unique constraint on `token_hash` enforces that at
+ * most one send per token ever happens, regardless of how many times the
+ * BullMQ job is retried.
+ */
+export const sentVerificationTokens = pgTable(
+  'sent_verification_tokens',
+  {
+    sentTokenId: uuid('sent_token_id').defaultRandom().primaryKey().notNull(),
+    userId: uuid('user_id').references(() => users.userId, { onDelete: 'set null' }),
+    tokenHash: text('token_hash').notNull(),
+    sentAt: timestamp('sent_at', { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+    expiresAt: timestamp('expires_at', { withTimezone: true, mode: 'string' }).notNull(),
+  },
+  (table) => [
+    uniqueIndex('uq_sent_verification_tokens_hash').on(table.tokenHash),
+    index('idx_sent_verification_tokens_expires').using(
+      'btree',
+      table.expiresAt.asc().nullsLast().op('timestamptz_ops'),
+    ),
+  ],
+);
+
 export const passwordHistory = pgTable(
   'password_history',
   {
@@ -700,6 +733,13 @@ export const outboxEvents = pgTable(
       'btree',
       table.idempotencyKey.asc().nullsLast().op('text_ops'),
     ),
+    // Partial unique index on the idempotency key for unprocessed events.
+    // Once an event is processed, its row is preserved for audit (and a
+    // future event with the same key — e.g. a manual resend — should still
+    // be insertable), so the uniqueness only constrains the live queue.
+    uniqueIndex('uq_outbox_events_idempotency_unprocessed')
+      .on(table.idempotencyKey.asc().nullsLast().op('text_ops'))
+      .where(sql`processed_at IS NULL AND idempotency_key IS NOT NULL`),
   ],
 );
 
@@ -899,6 +939,48 @@ export const userRanking = pgTable(
     check('user_ranking_weekly_rank_positive', sql`(weekly_rank IS NULL) OR (weekly_rank > 0)`),
     check('user_ranking_monthly_rank_positive', sql`(monthly_rank IS NULL) OR (monthly_rank > 0)`),
     check('user_ranking_daily_rank_positive', sql`(daily_rank IS NULL) OR (daily_rank > 0)`),
+  ],
+);
+
+/**
+ * Rank recalculation work-item queue.
+ *
+ * One row per (user, period) that needs its rank recomputed. The unique
+ * constraint on (user_id, period) makes `markDirty` a no-op when the
+ * same (user, period) pair is enqueued twice — concurrent XP events for
+ * the same user in the same period collapse to a single work item.
+ *
+ * The batch processor selects rows from this table, computes the new
+ * rank, and deletes the consumed rows. The `is_dirty` boolean on
+ * `user_ranking` is a separate "this user has any pending work" latch
+ * for fast existence checks; this table is the authoritative per-period
+ * work queue.
+ */
+export const rankRecalculationWorkItems = pgTable(
+  'rank_recalculation_work_items',
+  {
+    workItemId: uuid('work_item_id').defaultRandom().primaryKey().notNull(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.userId, { onDelete: 'cascade' }),
+    period: text('period').notNull(),
+    enqueuedAt: timestamp('enqueued_at', { withTimezone: true, mode: 'string' })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex('uq_rank_recalculation_work_items_user_period').on(
+      table.userId.asc().nullsLast().op('uuid_ops'),
+      table.period.asc().nullsLast().op('text_ops'),
+    ),
+    index('idx_rank_recalculation_work_items_enqueued').using(
+      'btree',
+      table.enqueuedAt.asc().nullsLast().op('timestamptz_ops'),
+    ),
+    check(
+      'rank_recalculation_work_items_period_valid',
+      sql`period = ANY (ARRAY['daily'::text, 'weekly'::text, 'monthly'::text, 'all_time'::text])`,
+    ),
   ],
 );
 

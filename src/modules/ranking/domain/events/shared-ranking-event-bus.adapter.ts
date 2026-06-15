@@ -77,9 +77,7 @@ export class SharedRankingEventBusAdapter
     }
   }
 
-  private toSharedEvent(
-    event: PublishedRankingDomainEvent,
-  ): SharedRankingDomainEvent | null {
+  private toSharedEvent(event: PublishedRankingDomainEvent): SharedRankingDomainEvent | null {
     switch (event.eventType) {
       case 'rank.changed':
         return {

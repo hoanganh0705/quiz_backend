@@ -121,16 +121,27 @@ export class AchievementRepository implements AchievementRepositoryPort {
 
         inserted = row;
 
-        await tx.insert(outboxEvents).values({
-          aggregateType: 'Achievement',
-          eventType: 'achievement.awarded',
-          payload: {
-            userId: params.userId,
-            badgeId: params.badgeId,
-            metadata: params.metadata,
-          },
-          createdAt: nowIso,
-        });
+        await tx
+          .insert(outboxEvents)
+          .values({
+            aggregateType: 'Achievement',
+            eventType: 'achievement.awarded',
+            payload: {
+              userId: params.userId,
+              badgeId: params.badgeId,
+              metadata: params.metadata,
+            },
+            createdAt: nowIso,
+            // Producer-side idempotency: a (user, badge) pair can only
+            // be awarded once (the user_badges table enforces this
+            // elsewhere too). Using the same key for the outbox event
+            // means a retried award of the same (user, badge) silently
+            // drops the duplicate outbox row at this INSERT.
+            idempotencyKey: `achievement:awarded:${params.userId}:${params.badgeId}`,
+          })
+          .onConflictDoNothing({
+            target: outboxEvents.idempotencyKey,
+          });
       } catch (error) {
         if (isPostgresUniqueViolation(error)) {
           this.logger.debug({
@@ -539,18 +550,30 @@ export class AchievementRepository implements AchievementRepositoryPort {
 
       const badgeRow = badgeResults[0];
 
-      await tx.insert(outboxEvents).values({
-        aggregateType: 'Achievement',
-        eventType: 'achievement.revoked',
-        payload: {
-          userId,
-          badgeId,
-          badgeSlug: badgeRow?.badgeSlug ?? '',
-          revokedAt: nowIso,
-          reason,
-        },
-        createdAt: nowIso,
-      });
+      await tx
+        .insert(outboxEvents)
+        .values({
+          aggregateType: 'Achievement',
+          eventType: 'achievement.revoked',
+          payload: {
+            userId,
+            badgeId,
+            badgeSlug: badgeRow?.badgeSlug ?? '',
+            revokedAt: nowIso,
+            reason,
+          },
+          createdAt: nowIso,
+          // Producer-side idempotency: include the timestamp in the
+          // key so a re-revocation of the same badge (after a prior
+          // award-revoke-award-revoke cycle) gets a distinct key and
+          // is not silently dropped. Without the timestamp, the
+          // second revocation would collide on (user, badge) and
+          // never get scheduled.
+          idempotencyKey: `achievement:revoked:${userId}:${badgeId}:${nowIso}`,
+        })
+        .onConflictDoNothing({
+          target: outboxEvents.idempotencyKey,
+        });
 
       this.logger.info({
         event: 'badge_revoked',

@@ -186,7 +186,8 @@ export class DiscussionApplicationService {
     items: MyUpvotedThreadListItem[];
     pagination: { limit: number; hasNextPage: boolean; nextCursor: string | null };
   }> {
-    const { items, limit, hasNextPage, nextCursor } = await this.discussionService.listMyUpvotedThreads(user.sub, query);
+    const { items, limit, hasNextPage, nextCursor } =
+      await this.discussionService.listMyUpvotedThreads(user.sub, query);
     return {
       items,
       pagination: {
@@ -204,7 +205,8 @@ export class DiscussionApplicationService {
     items: MyUpvotedCommentListItem[];
     pagination: { limit: number; hasNextPage: boolean; nextCursor: string | null };
   }> {
-    const { items, limit, hasNextPage, nextCursor } = await this.discussionService.listMyUpvotedComments(user.sub, query);
+    const { items, limit, hasNextPage, nextCursor } =
+      await this.discussionService.listMyUpvotedComments(user.sub, query);
     return {
       items,
       pagination: {
@@ -222,7 +224,8 @@ export class DiscussionApplicationService {
     items: MyDiscussionSubscriptionListItem[];
     pagination: { limit: number; hasNextPage: boolean; nextCursor: string | null };
   }> {
-    const { items, limit, hasNextPage, nextCursor } = await this.discussionService.listMyDiscussionSubscriptions(user.sub, query);
+    const { items, limit, hasNextPage, nextCursor } =
+      await this.discussionService.listMyDiscussionSubscriptions(user.sub, query);
     return {
       items,
       pagination: {
@@ -240,7 +243,8 @@ export class DiscussionApplicationService {
     items: MySavedThreadListItem[];
     pagination: { limit: number; hasNextPage: boolean; nextCursor: string | null };
   }> {
-    const { items, limit, hasNextPage, nextCursor } = await this.discussionService.listMySavedThreads(user.sub, query);
+    const { items, limit, hasNextPage, nextCursor } =
+      await this.discussionService.listMySavedThreads(user.sub, query);
     return {
       items,
       pagination: {
@@ -296,7 +300,10 @@ export class DiscussionApplicationService {
         hasNextPage,
         nextCursor:
           hasNextPage && lastItem
-            ? MyCommentCursorMapper.serialize({ createdAt: lastItem.createdAt, commentId: lastItem.commentId })
+            ? MyCommentCursorMapper.serialize({
+                createdAt: lastItem.createdAt,
+                commentId: lastItem.commentId,
+              })
             : null,
       },
     };

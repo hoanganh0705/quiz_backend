@@ -208,11 +208,7 @@ export interface AttemptRepositoryPort {
    * Only allowed on attempts with status 'started'.
    * Fails silently if no answer exists for the given question.
    */
-  deleteAnswer(params: {
-    attemptId: string;
-    userId: string;
-    questionId: string;
-  }): Promise<void>;
+  deleteAnswer(params: { attemptId: string; userId: string; questionId: string }): Promise<void>;
 }
 
 export const ATTEMPT_REPOSITORY_PORT = Symbol('ATTEMPT_REPOSITORY_PORT');

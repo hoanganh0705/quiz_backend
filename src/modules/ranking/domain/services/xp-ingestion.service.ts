@@ -23,10 +23,7 @@ import {
   RANKING_DOMAIN_EVENT_BUS,
   type RankingDomainEventBusPort,
 } from '../ports/ranking-event-bus.port';
-import {
-  RANKING_OUTBOX_PORT,
-  type RankingOutboxPort,
-} from '../ports/ranking-outbox.port';
+import { RANKING_OUTBOX_PORT, type RankingOutboxPort } from '../ports/ranking-outbox.port';
 import { RankingPeriod } from '../types/ranking.types';
 import type { ExternalXpEarnedEvent } from '../events/ranking-domain.events';
 import { InvalidXpEventError } from '../errors/ranking-domain.errors';
@@ -80,10 +77,11 @@ export class XpIngestionService {
 
     // Atomic: XP update + outbox row in the same transaction
     await this.db.transaction(async (tx) => {
-      const updatedRanking = await this.rankingRepository.updateXpInTx(
-        tx,
-        { userId: event.userId, amount: event.amount, now },
-      );
+      const updatedRanking = await this.rankingRepository.updateXpInTx(tx, {
+        userId: event.userId,
+        amount: event.amount,
+        now,
+      });
 
       // Schedule XpAdded event for durable dispatch via the outbox processor
       await this.outbox.scheduleRankingEvent(
@@ -106,16 +104,12 @@ export class XpIngestionService {
       );
 
       // Queue rank recalculation for all periods (same transaction)
-      await this.rankCalculationService.queueRankRecalculationInTx(
-        tx,
-        event.userId,
-        [
-          RankingPeriod.ALL_TIME,
-          RankingPeriod.WEEKLY,
-          RankingPeriod.MONTHLY,
-          RankingPeriod.DAILY,
-        ],
-      );
+      await this.rankCalculationService.queueRankRecalculationInTx(tx, event.userId, [
+        RankingPeriod.ALL_TIME,
+        RankingPeriod.WEEKLY,
+        RankingPeriod.MONTHLY,
+        RankingPeriod.DAILY,
+      ]);
     });
 
     this.logger.info({

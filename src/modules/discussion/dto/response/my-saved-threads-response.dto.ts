@@ -33,7 +33,8 @@ export class MySavedThreadsPaginationDto {
   @ApiPropertyOptional({
     description: 'Opaque cursor for the next page',
     nullable: true,
-    example: 'eyJzYXZlZEF0IjoiMjAyNi0wNi0wOFQwOTowMDowMFoiLCJ0aHJlYWRJZCI6IjY2MGU4NDAwLWUyOWItNDFkNC1hNzE2LTQ0NjY1NTQ0MDAwMCJ9',
+    example:
+      'eyJzYXZlZEF0IjoiMjAyNi0wNi0wOFQwOTowMDowMFoiLCJ0aHJlYWRJZCI6IjY2MGU4NDAwLWUyOWItNDFkNC1hNzE2LTQ0NjY1NTQ0MDAwMCJ9',
   })
   nextCursor!: string | null;
 }

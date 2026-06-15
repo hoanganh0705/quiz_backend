@@ -273,6 +273,36 @@ export class QuizVersionRepository implements QuizVersionRepositoryPort {
   }): Promise<QuizVersionRow | null> {
     try {
       return await this.db.transaction(async (tx) => {
+        // Acquire row-level locks on BOTH the target version and the
+        // parent quiz row. The version lock serializes concurrent
+        // attempts to publish the same version (the second publisher
+        // will see status != 'draft' after the first commits). The
+        // quiz row lock serializes publishers of DIFFERENT versions of
+        // the same quiz, so the final state has exactly one published
+        // version per quiz. Without the quiz-row lock, two concurrent
+        // publishes of different versions can both succeed and leave
+        // the quizzes.published_version_id pointing at whichever
+        // committed last, with the previous published version stuck
+        // in 'archived' before its superseding publish completed.
+        const locked = await tx.execute(sql`
+          SELECT quiz_version_id
+          FROM quiz_versions
+          WHERE quiz_version_id = ${params.quizVersionId}::uuid
+            AND quiz_id = ${params.quizId}::uuid
+          FOR UPDATE
+        `);
+
+        if (locked.rows.length === 0) {
+          return null;
+        }
+
+        await tx.execute(sql`
+          SELECT quiz_id
+          FROM quizzes
+          WHERE quiz_id = ${params.quizId}::uuid
+          FOR UPDATE
+        `);
+
         await tx
           .update(quizVersions)
           .set({

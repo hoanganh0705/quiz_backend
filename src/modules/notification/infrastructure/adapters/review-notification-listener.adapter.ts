@@ -23,7 +23,9 @@ export class ReviewNotificationListener implements OnModuleInit, OnModuleDestroy
 
   constructor(
     @Inject(forwardRef(() => REVIEW_DOMAIN_EVENT_BUS))
-    private readonly reviewEventBus: { subscribe(handler: (event: PublishedReviewDomainEvent) => void): () => void },
+    private readonly reviewEventBus: {
+      subscribe(handler: (event: PublishedReviewDomainEvent) => void): () => void;
+    },
     @Inject(forwardRef(() => QUIZ_REPOSITORY_PORT))
     private readonly quizRepository: QuizRepositoryPort,
     private readonly reviewNotificationService: ReviewNotificationService,
@@ -62,7 +64,9 @@ export class ReviewNotificationListener implements OnModuleInit, OnModuleDestroy
     }
   }
 
-  private async handleReviewSubmitted(event: Extract<PublishedReviewDomainEvent, { eventType: 'review.submitted' }>): Promise<void> {
+  private async handleReviewSubmitted(
+    event: Extract<PublishedReviewDomainEvent, { eventType: 'review.submitted' }>,
+  ): Promise<void> {
     try {
       const quiz = await this.quizRepository.getQuizWithPublishedVersionById(event.payload.quizId);
       if (!quiz || !quiz.creatorId) {
@@ -92,7 +96,9 @@ export class ReviewNotificationListener implements OnModuleInit, OnModuleDestroy
     }
   }
 
-  private async handleReviewDeleted(event: Extract<PublishedReviewDomainEvent, { eventType: 'review.deleted' }>): Promise<void> {
+  private async handleReviewDeleted(
+    event: Extract<PublishedReviewDomainEvent, { eventType: 'review.deleted' }>,
+  ): Promise<void> {
     try {
       const quiz = await this.quizRepository.getQuizWithPublishedVersionById(event.payload.quizId);
       if (!quiz || !quiz.creatorId) {

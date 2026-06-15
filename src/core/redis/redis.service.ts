@@ -109,6 +109,33 @@ export class RedisService implements CacheProvider, OnModuleDestroy {
     return JSON.parse(raw) as T;
   }
 
+  /**
+   * Publish a JSON-serialized message on a Redis pub/sub channel.
+   * Returns the number of subscribers that received the message
+   * (0 is normal during a rolling deploy, since old instances may
+   * be subscribed but new instances may not be listening yet).
+   *
+   * Used by the session-invalidation bus to broadcast revocation
+   * events across all API instances.
+   */
+  async publish(channel: string, payload: unknown): Promise<number> {
+    return this.client.publish(channel, JSON.stringify(payload));
+  }
+
+  /**
+   * Create a dedicated subscriber connection. Pub/sub in Redis blocks
+   * the connection from running normal commands, so subscribers must
+   * use a separate client. Callers are responsible for calling
+   * `subscriber.quit()` on shutdown.
+   */
+  createSubscriber(): Redis {
+    const redisUrl = this.configService.get<string>('REDIS_URL');
+    if (!redisUrl || redisUrl.trim().length === 0) {
+      throw new Error('REDIS_URL is not defined in environment variables');
+    }
+    return new Redis(redisUrl);
+  }
+
   async onModuleDestroy(): Promise<void> {
     await this.client.quit();
   }

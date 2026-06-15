@@ -14,7 +14,10 @@ import {
   NOTIFICATION_DOMAIN_EVENT_BUS,
   type NotificationDomainEvent,
 } from '@/modules/notification/domain/events';
-import type { NotificationDomainEventBus, NotificationEventSubscription } from '@/modules/notification/domain/events/notification-domain.event-bus';
+import type {
+  NotificationDomainEventBus,
+  NotificationEventSubscription,
+} from '@/modules/notification/domain/events/notification-domain.event-bus';
 import { NotificationGateway } from '../../transport/gateway/notification.gateway';
 
 @Injectable()
@@ -46,9 +49,12 @@ export class NotificationWebSocketListener implements OnModuleInit, OnModuleDest
     ] as const;
 
     for (const eventType of eventTypes) {
-      const subscription = this.notificationEventBus.subscribe(eventType, (event: NotificationDomainEvent) => {
-        void this.handleEvent(event);
-      });
+      const subscription = this.notificationEventBus.subscribe(
+        eventType,
+        (event: NotificationDomainEvent) => {
+          void this.handleEvent(event);
+        },
+      );
 
       this.subscriptions.push(subscription);
     }

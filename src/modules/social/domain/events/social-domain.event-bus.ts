@@ -6,7 +6,11 @@
 
 import { Injectable } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
-import { correlationIdStorage, createCorrelationId, getCorrelationId } from '@/common/interceptors/correlation-id';
+import {
+  correlationIdStorage,
+  createCorrelationId,
+  getCorrelationId,
+} from '@/common/interceptors/correlation-id';
 import type { SocialDomainEventBusPort, SocialDomainEvent } from './social-event-bus.port';
 import type {
   FriendRequestSentEvent,

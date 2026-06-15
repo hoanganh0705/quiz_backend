@@ -9,6 +9,7 @@ import {
   BlockedUserError,
   UserBlockedError,
   PendingRequestExistsError,
+  FriendListForbiddenError,
 } from '../../domain/errors';
 
 const HTTP_ERROR_NAMES: Record<number, string> = {
@@ -43,6 +44,13 @@ export class SocialDomainExceptionFilter implements ExceptionFilter {
       return {
         status: HttpStatus.FORBIDDEN,
         message: 'You do not have permission to perform this action',
+      };
+    }
+
+    if (error instanceof FriendListForbiddenError) {
+      return {
+        status: HttpStatus.FORBIDDEN,
+        message: 'You do not have permission to view this user’s friend list',
       };
     }
 
