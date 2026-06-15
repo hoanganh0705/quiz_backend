@@ -13,7 +13,6 @@ import {
 } from '@nestjs/common';
 import {
   ApiBadRequestResponse,
-  ApiBearerAuth,
   ApiInternalServerErrorResponse,
   ApiOkResponse,
   ApiOperation,
@@ -55,7 +54,6 @@ import { User } from '@/common/decorators/user.decorator';
 import { SocialDomainExceptionFilter } from '../filters/social-domain-exception.filter';
 
 @ApiTags('social')
-@ApiBearerAuth()
 @Controller('social')
 @RequireAuth()
 @UseFilters(SocialDomainExceptionFilter)
@@ -289,13 +287,6 @@ export class SocialController {
     @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit: number,
     @Query('cursor') cursor?: string,
   ): Promise<{ items: FriendDto[]; hasNextPage: boolean }> {
-    // IDOR fix: do NOT substitute `user.sub` with the URL
-    // parameter. The previous implementation fabricated a
-    // JwtPayload with `sub: targetUserId`, which let any
-    // authenticated user read any other user's friend list.
-    //
-    // Access control (self OR mutual friends, no block in
-    // either direction) is enforced inside the service.
     return this.socialService.getFriendsOfUser(user.sub, targetUserId, limit, cursor ?? null);
   }
 

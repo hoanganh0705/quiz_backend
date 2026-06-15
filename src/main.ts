@@ -3,16 +3,16 @@ import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestExpressApplication } from '@nestjs/platform-express';
-import cookieParser from 'cookie-parser';
-import helmet from 'helmet';
+import cookieParser from 'cookie-parser'; // cookie-parser is a middleware that parses cookies attached to the client request object. It populates req.cookies with an object keyed by the cookie names. This is useful for handling authentication tokens, session IDs, and other data stored in cookies. By using cookie-parser, we can easily access and manage cookies in our NestJS application, especially when dealing with cross-origin requests where cookies are often used for maintaining user sessions.
+import helmet from 'helmet'; // Helmet is a collection of middleware functions that help secure Express apps by setting various HTTP headers. It can help protect against common web vulnerabilities such as cross-site scripting (XSS), clickjacking, and MIME-sniffing attacks. By using Helmet in our NestJS application, we can enhance the security of our API by adding these protective headers to all responses, making it harder for attackers to exploit vulnerabilities in our app.
 import { isSwaggerEnabled, setupSwagger, buildSwaggerConfig } from './core/swagger/swagger.config';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, { bufferLogs: true }); // bufferLogs: true để đảm bảo log được ghi lại ngay cả khi app chưa sẵn sàng để xử lý request, tránh mất log quan trọng trong quá trình khởi động
   const configService = app.get(ConfigService);
   const isProduction = configService.get<string>('NODE_ENV') === 'production';
-  const trustProxy = configService.get<boolean>('TRUST_PROXY') ?? false;
-  const rawCorsOrigins = configService.get<string>('CORS_ORIGINS') ?? '';
+  const trustProxy = configService.get<boolean>('TRUST_PROXY') ?? false; // default to false if not set, meaning the app will not trust proxy headers unless explicitly configured to do so, which is a safer default for security reasons. If your app is behind a proxy (like Nginx or a cloud load balancer), you should set TRUST_PROXY to true to ensure correct handling of client IP and protocol information.
+  const rawCorsOrigins = configService.get<string>('CORS_ORIGINS') ?? ''; // CORS_ORIGINS env var should be a comma-separated list of allowed origins for CORS, e.g. "https://example.com,https://another.com". If it's not set, it will default to an empty string, which means no specific origins are allowed and the app will fall back to allowing all origins in development or disallowing all origins in production.
   const corsOrigins = rawCorsOrigins
     .split(',')
     .map((origin) => origin.trim())

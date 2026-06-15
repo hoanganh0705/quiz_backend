@@ -9,6 +9,7 @@ import { CategoryDomainEventBus } from './domain/events/category-domain.event-bu
 import { DatabaseModule } from '@/core/database/database.module';
 import { QuizModule } from '@/modules/quiz/quiz.module';
 import { CATEGORY_REPOSITORY_PORT, CATEGORY_DOMAIN_EVENT_BUS } from './domain/ports';
+import { CategoryEventBootstrapService } from './category-event-bootstrap.service';
 
 @Module({
   imports: [DatabaseModule, QuizModule],
@@ -19,6 +20,7 @@ import { CATEGORY_REPOSITORY_PORT, CATEGORY_DOMAIN_EVENT_BUS } from './domain/po
     CategoryDomainService,
     CategoryRepository,
     CategoryDomainEventBus,
+    CategoryEventBootstrapService,
     { provide: CATEGORY_REPOSITORY_PORT, useClass: CategoryRepository },
     { provide: CATEGORY_DOMAIN_EVENT_BUS, useExisting: CategoryDomainEventBus },
   ],
