@@ -155,26 +155,6 @@
 
 ## 15. Security Vulnerabilities
 
-### CRITICAL
-
-**`InstanceController` — no authentication on any endpoint**
-
-- **Modules:** `instance`
-- **File:** `src/modules/instance/transport/controller/instance.controller.ts`, lines 37–242
-- **Impact:** Every HTTP route in the controller lacks `@ApiAuth()`, `@ApiBearerAuth()`, `@RequireAuth()`, or `@UseGuards(JwtGuard)`. While the `JwtGuard` is globally registered, the controller does not declare any auth decorators. The `InstanceGateway` WebSocket has `@UseGuards(WsJwtGuard)`, but the HTTP API does not. Unauthenticated users can join, start, and close live quiz instances.
-- **Fix:** Add `@ApiBearerAuth()` and `@RequireAuth()` at class level. Add `@Permissions(Permission.INSTANCE_HOST_ONLY)` to `startInstance` and `closeInstance`.
-
----
-
-### HIGH
-
-**Social `getFriendsOfUser` — IDOR**
-
-- **Modules:** `social`
-- **File:** `src/modules/social/transport/controller/social.controller.ts`, lines 285–292
-- **Impact:** `{ ...user, sub: targetUserId }` substitutes the authenticated user's identity with the URL parameter. Any authenticated user can read any other user's friend list.
-- **Fix:** Do not substitute `user.sub`. The service should check relationship status and privacy settings before returning the target's friends.
-
 ---
 
 ### MEDIUM
@@ -185,15 +165,6 @@
 - **File:** `src/main.ts`
 - **Impact:** `helmet()` is called but `contentSecurityPolicy: false` when Swagger is enabled. This means no security headers are set in development/staging environments where Swagger is enabled. Missing headers: `X-Content-Type-Options`, `X-Frame-Options`, `Strict-Transport-Security`, `Referrer-Policy`.
 - **Fix:** Set explicit security headers regardless of Swagger state. Use `contentSecurityPolicy: false` only for the Swagger-specific CSP directive, not all headers.
-
----
-
-**Notification analytics — platform-wide data exposure**
-
-- **Modules:** `notification`
-- **File:** `src/modules/notification/transport/controller/notification.controller.ts`, line 94
-- **Impact:** `GET /notifications/analytics` returns aggregate statistics for **all users** on the platform (total notifications, by type, by channel, last 24h, last 7d). Only admins with `@Roles('admin')` can access it, but the data covers the entire user base — a privacy concern.
-- **Fix:** Scope analytics to the requesting admin's own notification data, or add explicit `@Permissions(Permission.NOTIFICATION_ANALYTICS_VIEW)` with a data minimization check.
 
 ---
 
@@ -208,37 +179,13 @@
 
 ---
 
-## 16. Authorization Gaps
-
-### MEDIUM
-
-**Review moderation — admin-only status change**
-
-- **Modules:** `review`
-- **File:** `src/modules/review/infrastructure/controllers/admin-review.controller.ts`, line 107
-- **Impact:** `updateReportStatus` uses `@Roles('admin')`. Moderators cannot act on review reports — they must escalate to admins.
-- **Fix:** Add `@Permissions(Permission.REVIEW_MODERATE)` with role `'moderator'` or `'admin'` in `ROLE_PERMISSIONS`.
-
----
-
-**Badge revocation — admin-only**
-
-- **Modules:** `achievement`
-- **File:** `src/modules/achievement/transport/controller/achievement.controller.ts`, line 90
-- **Impact:** Same as review moderation — no moderator role. Minor, as badge revocation is a sensitive operation.
-- **Fix:** Add `@Permissions(Permission.BADGE_REVOKE)` with `moderator` and `admin` roles.
-
----
-
 ## 17. Privilege Escalation Paths
 
 ### LOW
 
 **No privilege escalation paths found.**
 
-The codebase has no path for a regular user to elevate to moderator or admin. The `QuizPolicy`, `AttemptCommandService`, and `AttemptQueryService` all enforce ownership and role checks. JWT payload validation (`isUserRole`) prevents tampering. The only concern is the IDOR in social `getFriendsOfUser` (Section 15, HIGH) which is a data access issue, not an elevation issue.
-
----
+## The codebase has no path for a regular user to elevate to moderator or admin. The `QuizPolicy`, `AttemptCommandService`, and `AttemptQueryService` all enforce ownership and role checks. JWT payload validation (`isUserRole`) prevents tampering. The only concern is the IDOR in social `getFriendsOfUser` (Section 15, HIGH) which is a data access issue, not an elevation issue.
 
 ## 18. Audit Logging Coverage
 
@@ -302,8 +249,6 @@ The codebase has no path for a regular user to elevate to moderator or admin. Th
 
 ---
 
-### MEDIUM
-
 **No health check for Redis**
 
 - **Modules:** `core`
@@ -312,6 +257,8 @@ The codebase has no path for a regular user to elevate to moderator or admin. Th
 - **Fix:** Add Redis ping to the health check. Return degraded status if Redis is down but DB is up.
 
 ---
+
+### INFO
 
 **No SLO/SLA definitions**
 
@@ -378,28 +325,11 @@ The codebase has no path for a regular user to elevate to moderator or admin. Th
 
 ## 22. Recovery Paths
 
-### MEDIUM
-
-**No circuit breaker for email provider**
-
-- **Modules:** `email`
-- **File:** `src/modules/email/email.processor.ts`
-- **Impact:** If Resend API experiences sustained downtime, BullMQ will retry all failed jobs with exponential backoff. After 5 attempts (default), jobs are moved to the failed queue. No circuit breaker opens to stop flooding the failing service.
-- **Fix:** Implement a circuit breaker (e.g., `opossum` library) with half-open state after 30 seconds. Open after 5 consecutive failures. Log circuit state transitions.
-
----
-
-**No recovery path for stuck outbox events**
-
-- **Modules:** `auth`, `ranking`, `achievement`
-- **Impact:** An event in the outbox that is permanently failing (e.g., notification email address is permanently invalid) will eventually reach DLQ (ranking/achievement) or spin forever (auth). There is no manual intervention tooling to inspect, retry, or discard DLQ events.
-- **Fix:** Add a CLI command `npm run outbox:inspect -- --event-id=X` and `npm run outbox:retry -- --event-id=X` for operational recovery. Add a degraded-mode flag to bypass failing handlers.
-
 ---
 
 ## 23. Reconciliation Jobs
 
-### MEDIUM
+### INFO
 
 **Quiz stats reconciliation — no scheduled job**
 
@@ -414,7 +344,10 @@ The codebase has no path for a regular user to elevate to moderator or admin. Th
 - **Modules:** `ranking`
 - **File:** `src/modules/ranking/infrastructure/repositories/ranking.repository.ts`, lines 987–1057 (`findXpMismatches`)
 - **Impact:** `findXpMismatches` is a diagnostic query that exists but is not scheduled. XP drift (from failed transactions, rounding errors, or bugs) accumulates silently.
-- **Fix:** Schedule `findXpMismatches` to run daily. Auto-correct mismatches where `ABS(delta) < 1 XP`. Flag mismatches > 1 XP for manual review.
+  Fix:
+  Run `findXpMismatches` daily and alert on any detected mismatch.
+  Provide an administrative reconciliation workflow to investigate and repair affected users.
+  Avoid automatic correction to prevent masking underlying data consistency bugs.
 
 ---
 
@@ -428,7 +361,7 @@ The codebase has no path for a regular user to elevate to moderator or admin. Th
 
 ## 24. Operational Tooling
 
-### HIGH
+### INFO
 
 **No CLI tool for operational tasks**
 
@@ -461,7 +394,7 @@ The codebase has no path for a regular user to elevate to moderator or admin. Th
 
 ---
 
-### MEDIUM
+### INFO
 
 **Seed command has no `--dry-run` mode**
 
@@ -469,214 +402,3 @@ The codebase has no path for a regular user to elevate to moderator or admin. Th
 - **File:** `src/commands/seed/`
 - **Impact:** Running seeds in staging or production (even accidentally) modifies data with no preview. The command checks `NODE_ENV !== 'production'` but staging uses `NODE_ENV = 'staging'` which passes the check.
 - **Fix:** Add `--dry-run` flag that prints what would be inserted. Rename the `ALLOW_PROD_SEED` env check to `ALLOW_SEED` and require explicit opt-in for non-dev environments.
-
----
-
-## 25. Failure Scenarios
-
-### CRITICAL
-
-**Scenario: Quiz attempt completes → stats average drifts → dashboard shows wrong scores**
-
-- **Root cause:** Race condition in `completeAttemptAndSideEffects` (Section 1, CRITICAL)
-- **Detection:** Daily reconciliation job (missing — Section 23)
-- **Mitigation:** Fix race condition with atomic SQL (Section 1 fix)
-- **Recovery:** Run `quiz:stats:reconcile` CLI command
-
----
-
-**Scenario: User earns badge → event emitted in-process → handler on wrong instance never fires → user never notified**
-
-- **Root cause:** In-process event bus (Section 5, HIGH) + multi-instance deployment
-- **Detection:** User complaint, no metric
-- **Mitigation:** Achievement events need outbox coverage (Section 6 fix)
-- **Recovery:** Manual badge award confirmation via `achievement:grant` CLI
-
----
-
-**Scenario: Email verification token consumed → partial send → BullMQ retries → user receives duplicate verification email**
-
-- **Root cause:** No idempotency in email processor (Section 3, CRITICAL)
-- **Detection:** User complaint
-- **Mitigation:** Add idempotency table (Section 3 fix)
-- **Recovery:** Manually verify email in DB
-
----
-
-**Scenario: Outbox processor crashes at row 500/1000 → badge evaluation continues on restart → badge awarded twice**
-
-- **Root cause:** No cursor/watermark in deferred evaluation (Section 5, MEDIUM)
-- **Detection:** Spike in duplicate badge awards (no alerting — Section 20)
-- **Mitigation:** Add cursor table (Section 5 fix)
-- **Recovery:** `achievement:revoke` CLI for affected users
-
----
-
-**Scenario: Redis goes down → rate limiting stops → credential stuffing attack → accounts compromised**
-
-- **Root cause:** No Redis health check + no Redis circuit breaker
-- **Detection:** Spike in failed login attempts (no alerting — Section 20)
-- **Mitigation:** Add Redis health check to `/health` endpoint. Add Redis circuit breaker in `RedisService`.
-- **Recovery:** Restore Redis. Revoke compromised sessions via `session:revoke-all` CLI.
-
----
-
-**Scenario: Admin changes user's email → no audit log → GDPR data subject request cannot be fulfilled**
-
-- **Root cause:** Missing audit log for profile changes (Section 18, MEDIUM)
-- **Detection:** Manual audit
-- **Mitigation:** Add profile change audit log (Section 18 fix)
-
----
-
-**Scenario: DLQ rows accumulate → auth outbox spins forever → disk fills → database goes down**
-
-- **Root cause:** Auth outbox infinite retry (Section 6, HIGH) + no disk monitoring alerting (Section 20, CRITICAL)
-- **Detection:** PagerDuty alert (missing — Section 20)
-- **Mitigation:** Fix auth outbox DLQ handling (Section 6 fix)
-- **Recovery:** `ranking:outbox:inspect` CLI → manually discard or fix events
-
----
-
-**Scenario: Tournament with 50,000 participants → `finalizeTournament` OOM crash → tournament left in `ongoing` state forever**
-
-- **Root cause:** Full table load in `finalizeTournament` (Section 1, HIGH)
-- **Detection:** Tournament never transitions to `finished`
-- **Mitigation:** Fix `finalizeTournament` to use batched SQL updates (Section 1 fix)
-- **Recovery:** Manual tournament finalization via DB update + `tournament:finalize` CLI
-
----
-
-# Classification Summary
-
-## CRITICAL Risks
-
-| #   | Finding                                                             | Modules                                  | Production Impact                               |
-| --- | ------------------------------------------------------------------- | ---------------------------------------- | ----------------------------------------------- |
-| C1  | Quiz stats average race condition                                   | attempt, quiz                            | Corrupted average score data on popular quizzes |
-| C2  | Missing transactions in 5 domains — events lost on crash            | notification, social, discussion, review | Silent data loss in multi-instance deployments  |
-| C3  | Auth outbox infinite retry loop                                     | auth                                     | Poisoned events spin forever, disk pressure     |
-| C4  | InstanceController has zero authentication                          | instance                                 | Unauthenticated users can disrupt live games    |
-| C5  | Email processor has no idempotency                                  | email                                    | Duplicate verification emails, token double-use |
-| C6  | Leaderboard cache is in-process Map — inconsistent across instances | ranking                                  | Different leaderboard rankings per instance     |
-
-## HIGH Risks
-
-| #   | Finding                                               | Modules                                                              | Production Impact                                              |
-| --- | ----------------------------------------------------- | -------------------------------------------------------------------- | -------------------------------------------------------------- |
-| H1  | Social getFriendsOfUser IDOR                          | social                                                               | Any user can read any user's friend list                       |
-| H2  | Rank history duplicate risk on interrupted reset      | ranking                                                              | Duplicate or missing rank history entries                      |
-| H3  | In-process event buses don't work cross-instance      | attempt, quiz, discussion, notification, social, review, achievement | Events emitted on one instance never reach handlers on another |
-| H4  | Tournament finalize OOM on large tournaments          | tournament                                                           | Service crash on large tournaments, stuck in `ongoing` state   |
-| H5  | No Prometheus metrics endpoint                        | all                                                                  | No observability of latency, error rates, queue depth          |
-| H6  | DLQ rows accumulate with no alerting                  | ranking, achievement                                                 | Poisoned events silently accumulate                            |
-| H7  | No alerting configuration whatsoever                  | all                                                                  | No automated detection of production incidents                 |
-| H8  | Missing dirty-user index on user_ranking              | ranking                                                              | Full table scan on every rank recalculation                    |
-| H9  | No operational CLI tooling                            | all                                                                  | Database modifications require raw SQL                         |
-| H10 | Missing session revocation cross-instance propagation | auth                                                                 | Revoked sessions may remain valid on other instances           |
-| H11 | No circuit breaker for email provider                 | email                                                                | Sustained API failures flood queue with retries                |
-| H12 | Auth outbox has no DLQ state — events never die       | auth                                                                 | Permanent retry loop for exhausted events                      |
-
-## MEDIUM Risks
-
-| #   | Finding                                                                  | Modules                    | Production Impact                                               |
-| --- | ------------------------------------------------------------------------ | -------------------------- | --------------------------------------------------------------- |
-| M1  | Auth outbox, ranking outbox run on every instance — duplicate processing | auth, ranking, achievement | Wasted CPU, lock contention on outbox rows                      |
-| M2  | Social blockUser/followUser lack unique constraints                      | social                     | Duplicate rows, race conditions                                 |
-| M3  | Notification payload has no size constraint                              | notification               | Unbounded JSONB could bloat table                               |
-| M4  | Missing Redis health check                                               | core                       | Redis failure not detected by health endpoint                   |
-| M5  | Missing SLO definitions                                                  | all                        | No objective measure of production health                       |
-| M6  | Notification analytics exposes platform-wide data                        | notification               | Admin can view aggregate notification data for all users        |
-| M7  | Discussion trending cache invalidation missing                           | discussion                 | Stale trending data up to 2x TTL                                |
-| M8  | Review moderation and badge revocation moderator-only gap                | review, achievement        | No moderator role for review/report actions                     |
-| M9  | No quiz stats reconciliation scheduled job                               | quiz                       | Stats average drifts over time, no correction                   |
-| M10 | XP mismatch reconciliation manual only                                   | ranking                    | XP drift accumulates silently                                   |
-| M11 | HTTP email calls retry on 4xx errors                                     | email                      | Wasted queue capacity on permanent failures                     |
-| M12 | Social feed recording has no retry                                       | social                     | Feed activity permanently lost on handler failure               |
-| M13 | Audit log only covers auth events                                        | auth                       | Profile changes, badge revocations, review moderation untracked |
-| M14 | Missing indexes: friendships, user_follows, tournament_participants      | social, tournament         | Slow social queries and participant counting                    |
-| M15 | N+1 in discussion thread enrichment                                      | discussion                 | Extra query per thread when author not pre-loaded               |
-| M16 | N+1 in social getFriendLeaderboard                                       | social                     | Multiple queries for friend rankings instead of batched         |
-| M17 | Correlation ID missing from BullMQ job data                              | email                      | Email failures cannot be traced to originating request          |
-| M18 | Seed command `--dry-run` missing                                         | core                       | Seeds can run in staging without preview                        |
-
-## LOW Risks
-
-| #   | Finding                                                      | Modules | Production Impact                                      |
-| --- | ------------------------------------------------------------ | ------- | ------------------------------------------------------ |
-| L1  | WsJwtGuard skips audience validation if env var undefined    | auth    | Tokens from other audiences may be accepted            |
-| L2  | Audit log purge has no retention verification                | auth    | Silent accumulation if purge is broken                 |
-| L3  | No Sentry/error tracker integration                          | all     | No automatic error aggregation and grouping            |
-| L4  | No distributed tracing (Jaeger/Zipkin)                       | all     | No end-to-end request traces across services           |
-| L5  | Prometheus endpoint only exists via log-based metrics design | all     | Metrics must be scraped from logs, not native counters |
-
----
-
-# Pre-Production Checklist
-
-## Must-Fix Before Launch
-
-- [ ] **C4:** Add `@RequireAuth()` + `@ApiBearerAuth()` to `InstanceController`
-- [ ] **C1:** Fix quiz stats average with atomic SQL UPDATE
-- [ ] **C3:** Implement DLQ state for auth outbox (set `failed_at` on exhaustion)
-- [ ] **C5:** Add idempotency table for email verification tokens
-- [ ] **C6:** Replace in-process leaderboard cache with Redis
-- [ ] **H5:** Add `/metrics` Prometheus endpoint
-- [ ] **H7:** Configure alerting rules (PagerDuty/Alertmanager)
-- [ ] **H9:** Implement operational CLI commands
-- [ ] **H1:** Fix social `getFriendsOfUser` IDOR
-- [ ] **H8:** Add `(is_dirty, updated_at)` index on `user_ranking`
-
-## Must-Do Before Launch
-
-- [ ] Configure Prometheus scraping and Grafana dashboards
-- [ ] Configure PagerDuty alerting for P1/P2 alerts
-- [ ] Run load test with 10,000+ concurrent users
-- [ ] Test migration on production-sized dataset clone
-- [ ] Define and publish SLOs (availability, latency p99, error rate)
-- [ ] Create on-call runbooks for each P1/P2 alert
-- [ ] Verify all env vars are in secrets manager (not `.env`)
-- [ ] Verify `NODE_ENV=production` in all non-dev deployments
-- [ ] Test multi-instance deployment (3 instances minimum)
-- [ ] Verify Redis Sentinel or Cluster for HA
-
-## Should-Fix Before Launch
-
-- [ ] **M11:** Add retry filter to only retry 5xx, not 4xx
-- [ ] **M7:** Add cache invalidation on discussion votes/comments
-- [ ] **M9:** Add nightly quiz stats reconciliation job
-- [ ] **M10:** Schedule XP mismatch reconciliation daily
-- [ ] **M1:** Use `FOR UPDATE SKIP LOCKED` in outbox queries
-- [ ] **M4:** Add Redis ping to health check
-- [ ] **M2:** Add unique constraints for social relationships
-- [ ] **M16:** Batch-load ranking data for friend leaderboard
-- [ ] **L2:** Add row count check in audit log purge job
-
----
-
-# Cleanup Plan
-
-## Immediate (This Sprint)
-
-1. Fix C4 (InstanceController auth), C1 (quiz stats race), C3 (auth DLQ), C5 (email idempotency), C6 (leaderboard cache)
-2. Add Prometheus metrics endpoint (H5)
-3. Configure PagerDuty alerts (H7)
-4. Implement operational CLI (H9)
-
-## Short-Term (Next Sprint)
-
-1. Implement outbox for notification, social, discussion, review domains (H2, C2)
-2. Add missing indexes (H8, M14)
-3. Fix N+1 patterns (M15, M16)
-4. Add Redis health check to `/health` (M4)
-5. Add quiz stats and XP reconciliation jobs (M9, M10)
-
-## Medium-Term (Next Quarter)
-
-1. Replace in-process event buses with Kafka/RabbitMQ
-2. Add circuit breakers for all external integrations
-3. Define and publish SLOs with Grafana dashboards
-4. Implement distributed tracing (Jaeger)
-5. Add Sentry for error aggregation
-6. Load test at 10x expected traffic
-7. Add on-call runbooks for all P1/P2 alerts

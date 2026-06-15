@@ -123,10 +123,22 @@ export class RedisService implements CacheProvider, OnModuleDestroy {
   }
 
   /**
-   * Create a dedicated subscriber connection. Pub/sub in Redis blocks
-   * the connection from running normal commands, so subscribers must
-   * use a separate client. Callers are responsible for calling
-   * `subscriber.quit()` on shutdown.
+   * Round-trip a `PING` against the Redis server. Returns the
+   * server reply on success, throws on connection / protocol
+   * errors. Used by the health check — kept on this service
+   * (rather than the controller reaching into the ioredis
+   * client directly) so the health check stays decoupled from
+   * the underlying driver.
+   */
+  async ping(): Promise<string> {
+    return this.client.ping();
+  }
+
+  /**
+   * Create a dedicated subscriber connection. Pub/sub blocks
+   * the connection from running normal commands, so subscribers
+   * must use a separate client. Callers are responsible for
+   * calling `subscriber.quit()` on shutdown.
    */
   createSubscriber(): Redis {
     const redisUrl = this.configService.get<string>('REDIS_URL');

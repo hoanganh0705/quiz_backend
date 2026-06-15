@@ -10,6 +10,7 @@ import {
 } from './events/common-external-event-bus';
 import { TransactionalContext, TRANSACTIONAL_CONTEXT } from './interceptors/transactional-context';
 import { TransactionalInterceptor } from './interceptors/transactional.interceptor';
+import { AuditLogService } from './audit/audit-log.service';
 
 @Global()
 @Module({
@@ -22,6 +23,7 @@ import { TransactionalInterceptor } from './interceptors/transactional.intercept
     CommonExternalEventBus,
     { provide: TRANSACTIONAL_CONTEXT, useExisting: TransactionalContext },
     TransactionalContext,
+    AuditLogService,
     // Global interceptor: registered via APP_INTERCEPTOR so it applies to all
     // modules automatically (no need to add it to every module's providers).
     { provide: APP_INTERCEPTOR, useClass: TransactionalInterceptor },
@@ -35,6 +37,7 @@ import { TransactionalInterceptor } from './interceptors/transactional.intercept
     CommonExternalEventBus,
     TRANSACTIONAL_CONTEXT,
     TransactionalContext,
+    AuditLogService,
   ],
 })
 export class CommonModule {}

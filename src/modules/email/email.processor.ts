@@ -10,8 +10,17 @@ import { sentVerificationTokens } from '@/core/database/schema';
 import { sql } from 'drizzle-orm';
 import { EMAIL_JOB_NAMES, EMAIL_QUEUE_NAME, EMAIL_QUEUE_TOKENS } from './email.constants';
 import type { SendVerificationEmailJobData } from './email.types';
+import { correlationIdStorage, createCorrelationId } from '@/common/interceptors/correlation-id';
+import { CircuitBreaker, type CircuitState } from '@/common/resilience/circuit-breaker';
 
 const DEFAULT_EMAIL_VERIFICATION_TOKEN_TTL_SECONDS = 1_800;
+
+// Circuit-breaker thresholds. The audit specifies 5
+// consecutive failures to open and a 30-second cool-down
+// before a half-open probe; both are env-overridable so a
+// production incident can dial them without a code change.
+const DEFAULT_EMAIL_CB_FAILURE_THRESHOLD = 5;
+const DEFAULT_EMAIL_CB_RESET_TIMEOUT_MS = 30_000;
 
 @Injectable()
 export class EmailProcessor implements OnModuleInit, OnModuleDestroy {
@@ -23,6 +32,19 @@ export class EmailProcessor implements OnModuleInit, OnModuleDestroy {
   private readonly sendTimeoutMs: number;
   private readonly tokenTtlSeconds: number;
   private readonly resend: Resend;
+  /**
+   * Circuit breaker in front of the Resend API. The
+   * breaker is per-process and per-job-name: each
+   * `EmailProcessor` instance has its own state. On a
+   * sustained Resend outage, the breaker opens after
+   * `failureThreshold` consecutive failures; jobs in
+   * flight then fail fast with `CircuitOpenError` and
+   * BullMQ retries them with exponential backoff. Once
+   * the cool-down elapses, one probe job is allowed
+   * through; if it succeeds the circuit closes and the
+   * queue drains.
+   */
+  private readonly resendBreaker: CircuitBreaker;
 
   constructor(
     private readonly configService: ConfigService,
@@ -53,6 +75,36 @@ export class EmailProcessor implements OnModuleInit, OnModuleDestroy {
       typeof configuredTtl === 'number' && configuredTtl > 0
         ? configuredTtl
         : DEFAULT_EMAIL_VERIFICATION_TOKEN_TTL_SECONDS;
+
+    const cbFailureThreshold = this.configService.get<number>('EMAIL_CB_FAILURE_THRESHOLD');
+    const cbResetTimeoutMs = this.configService.get<number>('EMAIL_CB_RESET_TIMEOUT_MS');
+
+    this.resendBreaker = new CircuitBreaker({
+      failureThreshold:
+        typeof cbFailureThreshold === 'number' && cbFailureThreshold > 0
+          ? Math.floor(cbFailureThreshold)
+          : DEFAULT_EMAIL_CB_FAILURE_THRESHOLD,
+      resetTimeoutMs:
+        typeof cbResetTimeoutMs === 'number' && cbResetTimeoutMs > 0
+          ? Math.floor(cbResetTimeoutMs)
+          : DEFAULT_EMAIL_CB_RESET_TIMEOUT_MS,
+    });
+
+    // Emit a single structured log line on every circuit
+    // state transition. Operators can `grep
+    // "email_resend_circuit_state"` to see when the
+    // upstream started flapping and when it recovered.
+    // Using `from`/`to` (rather than just `state`) makes
+    // it possible to distinguish "first failure" (closed
+    // → open) from "probe failure" (half-open → open).
+    this.resendBreaker.setStateChangeListener(({ from, to }) => {
+      this.logger.warn({
+        event: 'email_resend_circuit_state',
+        from,
+        to,
+        consecutiveFailures: this.resendBreaker.getConsecutiveFailures(),
+      });
+    });
   }
 
   // this method initializes the BullMQ worker to process email jobs from the queue, it sets up the concurrency level based on configuration and defines handlers for job completion and failure events to log the outcomes of email processing. When we start a project, this module will be initialized and the worker will start listening for jobs in the email queue, when a job is added to the queue, the worker will pick it up and execute the corresponding processing logic defined in the processSendVerificationEmail method.
@@ -82,12 +134,28 @@ export class EmailProcessor implements OnModuleInit, OnModuleDestroy {
     this.worker = new Worker<SendVerificationEmailJobData, void, string>(
       EMAIL_QUEUE_NAME,
       async (job: Job<SendVerificationEmailJobData>) => {
-        if (job.name !== EMAIL_JOB_NAMES.SEND_VERIFICATION_EMAIL) {
-          this.logger.warn({ event: 'email_job_unknown_type', jobId: job.id, jobName: job.name });
-          return;
-        }
+        // BullMQ workers run outside any HTTP request context, so we
+        // must restore the correlation ID that the enqueue site
+        // captured from `correlationIdStorage`. If the job data is
+        // missing one (only possible if someone hand-published to
+        // Redis without going through `EmailService`), mint a fresh
+        // UUID so log lines stay joinable on a single ID per
+        // processing attempt.
+        const correlationId = job.data.correlationId ?? createCorrelationId();
 
-        await this.processSendVerificationEmail(job);
+        await correlationIdStorage.run({ correlationId }, async () => {
+          if (job.name !== EMAIL_JOB_NAMES.SEND_VERIFICATION_EMAIL) {
+            this.logger.warn({
+              event: 'email_job_unknown_type',
+              jobId: job.id,
+              jobName: job.name,
+              correlationId,
+            });
+            return;
+          }
+
+          await this.processSendVerificationEmail(job, correlationId);
+        });
       },
       {
         connection: this.connection,
@@ -100,6 +168,7 @@ export class EmailProcessor implements OnModuleInit, OnModuleDestroy {
         event: 'email_job_completed',
         jobId: job.id,
         jobName: job.name,
+        correlationId: job.data.correlationId,
       });
     });
 
@@ -109,6 +178,7 @@ export class EmailProcessor implements OnModuleInit, OnModuleDestroy {
         typeof job?.opts?.attempts === 'number' && job.opts.attempts > 0 ? job.opts.attempts : 1;
       const jobUserId = job?.data.userId;
       const isFinalAttempt = attemptsMade >= configuredAttempts;
+      const correlationId = job?.data.correlationId ?? createCorrelationId();
 
       this.logger.error({
         event: 'email_job_failed',
@@ -118,6 +188,7 @@ export class EmailProcessor implements OnModuleInit, OnModuleDestroy {
         attemptsMade,
         configuredAttempts,
         isFinalAttempt,
+        correlationId,
         message: error.message,
         stack: error.stack,
       });
@@ -134,6 +205,7 @@ export class EmailProcessor implements OnModuleInit, OnModuleDestroy {
 
   private async processSendVerificationEmail(
     job: Job<SendVerificationEmailJobData>,
+    correlationId: string,
   ): Promise<void> {
     const userId = job.data.userId;
 
@@ -161,6 +233,7 @@ export class EmailProcessor implements OnModuleInit, OnModuleDestroy {
         provider: this.provider,
         userId,
         jobId: job.id,
+        correlationId,
         reason: 'token_already_sent',
       });
       return;
@@ -170,8 +243,21 @@ export class EmailProcessor implements OnModuleInit, OnModuleDestroy {
       const verificationUrl = `${this.verificationBaseUrl}?token=${encodeURIComponent(job.data.token)}`; // encodeURIComponent to ensure the token is safely included in the URL, in details, the verification URL is constructed by appending the token as a query parameter to the base URL. This allows the recipient to click the link and be directed to the appropriate endpoint in your application to verify their email address.
       const controller = new AbortController(); // we use AbortController to implement the timeout mechanism for sending emails. If the email sending operation takes longer than the specified timeout, the controller will abort the request, allowing us to handle it as a failure and trigger any retry logic defined in BullMQ.
 
+      // Wrap the actual upstream call in the circuit
+      // breaker. The breaker counts consecutive failures
+      // of `resend.emails.send` and short-circuits
+      // additional calls while it is `open` so a
+      // sustained Resend outage does not turn into a
+      // thundering-herd retry storm. A `CircuitOpenError`
+      // bubbles up through the catch below, deletes the
+      // token claim, and is re-thrown to BullMQ — which
+      // then applies exponential backoff exactly like
+      // any other failure. The job is not lost; it is
+      // deferred.
       await this.withTimeout(
-        this.sendVerificationEmailViaProvider(job.data.email, verificationUrl, controller.signal),
+        this.resendBreaker.exec(() =>
+          this.sendVerificationEmailViaProvider(job.data.email, verificationUrl, controller.signal),
+        ),
         this.sendTimeoutMs,
         controller,
       );
@@ -184,6 +270,7 @@ export class EmailProcessor implements OnModuleInit, OnModuleDestroy {
         userId,
         verificationUrl: '[REDACTED]',
         jobId: job.id,
+        correlationId,
       });
     } catch (error) {
       // The token was claimed above but the actual send failed. To
@@ -201,6 +288,8 @@ export class EmailProcessor implements OnModuleInit, OnModuleDestroy {
         jobId: job.id,
         userId,
         timeoutMs: this.sendTimeoutMs,
+        circuitState: this.resendBreaker.getState() satisfies CircuitState,
+        correlationId,
         message: error instanceof Error ? error.message : 'Unknown email processing error',
       });
 
