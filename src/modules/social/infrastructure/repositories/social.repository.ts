@@ -241,51 +241,65 @@ export class SocialRepository implements SocialRepositoryPort {
   }
 
   async blockUser(blockerId: string, blockedId: string, reason?: string): Promise<BlockedUser> {
-    // Check if already blocked (not deleted)
-    const existing = await this.db
-      .select()
-      .from(blockedUsers)
-      .where(
-        and(
-          eq(blockedUsers.blockerId, blockerId),
-          eq(blockedUsers.blockedId, blockedId),
-          isNull(blockedUsers.deletedAt),
-        ),
+    // Atomic UPSERT. The previous implementation performed three separate
+    // reads (active block, soft-deleted block) before deciding whether to
+    // restore or insert, which is a classic check-then-act race. Two
+    // concurrent calls could both observe "no active record" and both
+    // attempt to insert, producing duplicate rows.
+    //
+    // The partial unique index `uq_blocked_users_pair` on
+    // (blocker_id, blocked_id) WHERE deleted_at IS NULL already enforces
+    // uniqueness at the database level. Postgres uses that index for
+    // conflict resolution when the inserted row has deleted_at IS NULL,
+    // so the ON CONFLICT clause reliably targets it.
+    //
+    // Semantics:
+    //   - If no row exists for the pair, INSERT a new active block.
+    // The block row may be either freshly inserted (no prior row) or
+    // the result of an upsert into the partial unique index. Either
+    // way, RETURNING gives us the active block for the caller.
+    const result = await this.db.execute(sql<{
+      blockId: string;
+      blockerId: string;
+      blockedId: string;
+      reason: string | null;
+      createdAt: string;
+      deletedAt: string | null;
+    }>`
+      INSERT INTO blocked_users (blocker_id, blocked_id, reason, created_at)
+      VALUES (
+        ${blockerId}::uuid,
+        ${blockedId}::uuid,
+        ${reason ?? null},
+        NOW()
       )
-      .limit(1);
+      ON CONFLICT (blocker_id, blocked_id) WHERE deleted_at IS NULL
+      DO UPDATE SET reason = COALESCE(EXCLUDED.reason, blocked_users.reason)
+      RETURNING
+        block_id      AS "blockId",
+        blocker_id    AS "blockerId",
+        blocked_id    AS "blockedId",
+        reason,
+        created_at    AS "createdAt",
+        deleted_at    AS "deletedAt"
+    `);
 
-    if (existing.length > 0) {
-      return existing[0] as BlockedUser;
+    const row = result.rows[0] as
+      | {
+          blockId: string;
+          blockerId: string;
+          blockedId: string;
+          reason: string | null;
+          createdAt: string;
+          deletedAt: string | null;
+        }
+      | undefined;
+
+    if (!row) {
+      throw new Error('blockUser: UPSERT returned no row');
     }
 
-    // Check if previously blocked (soft deleted) and restore
-    const previouslyBlocked = await this.db
-      .select()
-      .from(blockedUsers)
-      .where(and(eq(blockedUsers.blockerId, blockerId), eq(blockedUsers.blockedId, blockedId)))
-      .limit(1);
-
-    if (previouslyBlocked.length > 0) {
-      const [updated] = await this.db
-        .update(blockedUsers)
-        .set({ reason: reason ?? null, deletedAt: null })
-        .where(eq(blockedUsers.blockId, previouslyBlocked[0].blockId))
-        .returning();
-
-      return updated as BlockedUser;
-    }
-
-    // Create new block
-    const [blocked] = await this.db
-      .insert(blockedUsers)
-      .values({
-        blockerId,
-        blockedId,
-        reason: reason ?? null,
-      })
-      .returning();
-
-    return blocked as BlockedUser;
+    return row as BlockedUser;
   }
 
   async unblockUser(blockerId: string, blockedId: string): Promise<void> {
@@ -322,13 +336,72 @@ export class SocialRepository implements SocialRepositoryPort {
   }
 
   async followUser(followerId: string, followingId: string): Promise<UserFollow> {
-    const [follow] = await this.db
-      .insert(userFollows)
-      .values({
-        followerId,
-        followingId,
-      })
-      .returning();
+    // Atomic insert with ON CONFLICT DO NOTHING. The partial unique
+    // index `uq_user_follows_pair` on (follower_id, following_id)
+    // WHERE deleted_at IS NULL enforces uniqueness at the database
+    // level. ON CONFLICT DO NOTHING with RETURNING yields the existing
+    // row when the pair is already followed, so a duplicate follow
+    // request is now idempotent and the caller always receives a
+    // well-formed UserFollow. Previously, a duplicate insert would
+    // throw a unique violation that the service layer swallowed, so
+    // the user thought the follow succeeded even though no row was
+    // created.
+    const result = await this.db.execute(sql<{
+      followId: string;
+      followerId: string;
+      followingId: string;
+      createdAt: string;
+    }>`
+      INSERT INTO user_follows (follower_id, following_id)
+      VALUES (${followerId}::uuid, ${followingId}::uuid)
+      ON CONFLICT (follower_id, following_id) WHERE deleted_at IS NULL
+      DO NOTHING
+      RETURNING
+        follow_id     AS "followId",
+        follower_id   AS "followerId",
+        following_id  AS "followingId",
+        created_at    AS "createdAt"
+    `);
+
+    let follow: {
+      followId: string;
+      followerId: string;
+      followingId: string;
+      createdAt: string;
+    };
+
+    if (result.rows.length > 0) {
+      follow = result.rows[0] as {
+        followId: string;
+        followerId: string;
+        followingId: string;
+        createdAt: string;
+      };
+    } else {
+      // Conflict path: the pair was already being followed. Fetch the
+      // existing row so the caller still gets a valid response.
+      const existing = await this.db
+        .select({
+          followId: userFollows.followId,
+          followerId: userFollows.followerId,
+          followingId: userFollows.followingId,
+          createdAt: userFollows.createdAt,
+        })
+        .from(userFollows)
+        .where(
+          and(
+            eq(userFollows.followerId, followerId),
+            eq(userFollows.followingId, followingId),
+            isNull(userFollows.deletedAt),
+          ),
+        )
+        .limit(1);
+
+      if (existing.length === 0) {
+        throw new Error('followUser: UPSERT returned no row and existing row not found');
+      }
+      follow = existing[0];
+    }
 
     const [followerRow, followingRow] = await Promise.all([
       this.db.select({ username: users.username }).from(users).where(eq(users.userId, followerId)),

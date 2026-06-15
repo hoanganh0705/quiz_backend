@@ -22,7 +22,9 @@ export class UserNotificationListener implements OnModuleInit, OnModuleDestroy {
 
   constructor(
     @Inject(forwardRef(() => USER_DOMAIN_EVENT_BUS))
-    private readonly userEventBus: { subscribe(handler: (event: UserDomainEvent) => void): () => void },
+    private readonly userEventBus: {
+      subscribe(handler: (event: UserDomainEvent) => void): () => void;
+    },
     private readonly userNotificationService: UserNotificationService,
     @InjectPinoLogger(UserNotificationListener.name)
     private readonly logger: PinoLogger,

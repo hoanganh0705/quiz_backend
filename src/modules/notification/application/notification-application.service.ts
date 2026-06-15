@@ -11,7 +11,11 @@ import {
   type NotificationChannelServiceInstance,
 } from '../domain/ports/notification-ports';
 import { NotificationForbiddenError, NotificationNotFoundError } from '../domain/errors';
-import type { NotificationReadEvent, NotificationUnreadEvent, NotificationDeletedEvent } from '../domain/events/notification.events';
+import type {
+  NotificationReadEvent,
+  NotificationUnreadEvent,
+  NotificationDeletedEvent,
+} from '../domain/events/notification.events';
 import type {
   Notification as DomainNotification,
   NotificationListParams,

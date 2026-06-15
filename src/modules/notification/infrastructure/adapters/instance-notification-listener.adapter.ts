@@ -13,9 +13,7 @@ import {
   INSTANCE_DOMAIN_EVENT_BUS,
   type InstanceDomainEventBusPort,
 } from '@/modules/instance/domain/events';
-import type {
-  InstanceDomainEvent,
-} from '@/modules/instance/domain/events';
+import type { InstanceDomainEvent } from '@/modules/instance/domain/events';
 import { InstanceNotificationService } from '../../domain/services/instance-notification.service';
 
 @Injectable()
@@ -73,7 +71,9 @@ export class InstanceNotificationListener implements OnModuleInit, OnModuleDestr
     }
   }
 
-  private async handlePlayerJoined(event: Extract<InstanceDomainEvent, { eventType: 'instance.player_joined' }>): Promise<void> {
+  private async handlePlayerJoined(
+    event: Extract<InstanceDomainEvent, { eventType: 'instance.player_joined' }>,
+  ): Promise<void> {
     try {
       const instance = await this.getInstanceHostInfo(event.instanceId);
       if (!instance) {
@@ -99,7 +99,9 @@ export class InstanceNotificationListener implements OnModuleInit, OnModuleDestr
     }
   }
 
-  private async handleInstanceStarted(event: Extract<InstanceDomainEvent, { eventType: 'instance.started' }>): Promise<void> {
+  private async handleInstanceStarted(
+    event: Extract<InstanceDomainEvent, { eventType: 'instance.started' }>,
+  ): Promise<void> {
     try {
       const instance = await this.getInstancePlayerIds(event.instanceId);
       if (!instance) {
@@ -123,7 +125,9 @@ export class InstanceNotificationListener implements OnModuleInit, OnModuleDestr
     }
   }
 
-  private async handlePlayerXpEarned(event: Extract<InstanceDomainEvent, { eventType: 'instance.player_xp_earned' }>): Promise<void> {
+  private async handlePlayerXpEarned(
+    event: Extract<InstanceDomainEvent, { eventType: 'instance.player_xp_earned' }>,
+  ): Promise<void> {
     try {
       await this.instanceNotificationService.notifyPlayerXpEarned({
         userId: event.userId,
@@ -139,7 +143,9 @@ export class InstanceNotificationListener implements OnModuleInit, OnModuleDestr
     }
   }
 
-  private async handleInstanceClosed(event: Extract<InstanceDomainEvent, { eventType: 'instance.closed' }>): Promise<void> {
+  private async handleInstanceClosed(
+    event: Extract<InstanceDomainEvent, { eventType: 'instance.closed' }>,
+  ): Promise<void> {
     try {
       const instance = await this.getInstancePlayerIds(event.instanceId);
       if (!instance) {
@@ -163,7 +169,9 @@ export class InstanceNotificationListener implements OnModuleInit, OnModuleDestr
     }
   }
 
-  private async handlePlayerDisconnected(event: Extract<InstanceDomainEvent, { eventType: 'instance.player_disconnected' }>): Promise<void> {
+  private async handlePlayerDisconnected(
+    event: Extract<InstanceDomainEvent, { eventType: 'instance.player_disconnected' }>,
+  ): Promise<void> {
     try {
       await this.instanceNotificationService.notifyPlayerDisconnected({
         userId: event.userId,
@@ -178,7 +186,9 @@ export class InstanceNotificationListener implements OnModuleInit, OnModuleDestr
     }
   }
 
-  private async getInstanceHostInfo(instanceId: string): Promise<{ hostUserId: string; playerName?: string } | null> {
+  private async getInstanceHostInfo(
+    instanceId: string,
+  ): Promise<{ hostUserId: string; playerName?: string } | null> {
     // Placeholder - in a real implementation, this would look up the instance
     // to get the host user ID. For now we return null to avoid breaking
     // the event chain if the lookup isn't available.

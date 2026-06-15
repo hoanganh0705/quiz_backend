@@ -3,6 +3,29 @@
  *
  * Handles leaderboard queries with caching.
  * Part of Phase 3 - Leaderboards & APIs.
+ *
+ * Caching model
+ * -------------
+ * The leaderboard cache is stored in Redis (via `CACHE_PROVIDER`)
+ * rather than in-process, so all instances of the API see a
+ * consistent view. A previous implementation kept a per-instance
+ * `Map`, which meant a 3-instance deployment could return three
+ * different leaderboards to the same user.
+ *
+ * The cache is read-through (`getOrSet`) with a short TTL. When a
+ * user's XP changes, the cached leaderboard keys naturally expire
+ * within `LEADERBOARD_CACHE_TTL` seconds; we deliberately do not
+ * delete the key from inside the local process because that would
+ * only affect the instance that received the XP event, not its
+ * peers. With a 30-second TTL, the worst-case staleness across the
+ * cluster is bounded by that window.
+ *
+ * If an immediate cross-instance invalidation is needed in the
+ * future, wire up a Redis pub/sub channel: publish a `leaderboard:
+ * invalidate` message on every `xp.added` and have each instance
+ * subscribe to evict its local mirror. The current implementation
+ * skips that complication because the audit accepts a 30-second
+ * TTL as sufficient.
  */
 
 import { Inject, Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
@@ -29,15 +52,10 @@ import type {
   PeriodInfoDto,
   UserRankPositionDto,
 } from '../../dto/response/leaderboard-response.dto';
-
-interface CacheEntry<T> {
-  data: T;
-  expiresAt: number;
-}
+import { CACHE_PROVIDER, type CacheProvider } from '@/common/ports/cache.provider';
 
 @Injectable()
 export class LeaderboardService implements OnModuleInit, OnModuleDestroy {
-  private readonly cache = new Map<string, CacheEntry<unknown>>();
   private unsubscribe: (() => void) | null = null;
 
   constructor(
@@ -45,6 +63,8 @@ export class LeaderboardService implements OnModuleInit, OnModuleDestroy {
     private readonly rankingRepository: RankingRepositoryPort,
     @Inject(RANKING_DOMAIN_EVENT_BUS)
     private readonly eventBus: RankingDomainEventBusPort,
+    @Inject(CACHE_PROVIDER)
+    private readonly cache: CacheProvider,
     private readonly periodResetService: PeriodResetService,
     @InjectPinoLogger(LeaderboardService.name)
     private readonly logger: PinoLogger,
@@ -53,14 +73,21 @@ export class LeaderboardService implements OnModuleInit, OnModuleDestroy {
   onModuleInit(): void {
     this.unsubscribe = this.eventBus.subscribe((event) => {
       if (event.eventType === 'xp.added') {
-        this.invalidateUserCache(event.userId);
+        // No-op: the leaderboard cache uses Redis with a short TTL
+        // (see class docstring), so we do not need to invalidate
+        // keys locally. Logging the event keeps the audit trail
+        // visible in case operators want to correlate leaderboard
+        // staleness with a specific user.
+        this.logger.debug({
+          event: 'leaderboard_xp_added',
+          userId: event.userId,
+        });
       }
     });
   }
 
   onModuleDestroy(): void {
     this.unsubscribe?.();
-    this.cache.clear();
   }
 
   /**
@@ -76,46 +103,29 @@ export class LeaderboardService implements OnModuleInit, OnModuleDestroy {
     const period = enumToPeriod(periodEnum);
 
     const cacheKey = `lb:${period}:${limit}:${offset}`;
-    const cached = this.getCached<{
+    const ttlMs = RANKING_CONSTANTS.LEADERBOARD_CACHE_TTL * 1000;
+
+    const cachedPayload = await this.cache.getOrSet<{
       entries: LeaderboardEntryDto[];
       totalParticipants: number;
-    }>(cacheKey);
-    if (cached) {
-      this.logger.debug({ event: 'leaderboard_cache_hit', period, limit, offset });
-      const { entries: cachedEntries, totalParticipants } = cached;
-      let userPosition: UserRankPositionDto | undefined;
-      if (currentUserId) {
-        userPosition = await this.getUserPosition(currentUserId, periodEnum);
-      }
+    }>(cacheKey, ttlMs, async () => {
+      this.logger.debug({
+        event: 'get_global_leaderboard',
+        period,
+        limit,
+        offset,
+      });
+      const entries = await this.rankingRepository.getLeaderboard({
+        period,
+        limit,
+        offset,
+      });
+      const totalParticipants = await this.getCachedTotalParticipants(period);
       return {
-        entries: cachedEntries,
+        entries: this.transformLeaderboardEntries(entries, offset),
         totalParticipants,
-        userPosition,
-        period: this.buildPeriodInfo(period),
-        pagination: {
-          limit,
-          offset,
-          hasMore: offset + cachedEntries.length < totalParticipants,
-        },
       };
-    }
-
-    this.logger.debug({
-      event: 'get_global_leaderboard',
-      period,
-      limit,
-      offset,
     });
-
-    const entries = await this.rankingRepository.getLeaderboard({
-      period,
-      limit,
-      offset,
-    });
-    const totalParticipants = await this.getCachedTotalParticipants(period);
-    const leaderboardEntries = this.transformLeaderboardEntries(entries, offset, currentUserId);
-
-    this.setCached(cacheKey, { entries: leaderboardEntries, totalParticipants }, RANKING_CONSTANTS.LEADERBOARD_CACHE_TTL);
 
     let userPosition: UserRankPositionDto | undefined;
     if (currentUserId) {
@@ -123,14 +133,14 @@ export class LeaderboardService implements OnModuleInit, OnModuleDestroy {
     }
 
     return {
-      entries: leaderboardEntries,
-      totalParticipants,
+      entries: cachedPayload.entries,
+      totalParticipants: cachedPayload.totalParticipants,
       userPosition,
       period: this.buildPeriodInfo(period),
       pagination: {
         limit,
         offset,
-        hasMore: offset + entries.length < totalParticipants,
+        hasMore: offset + cachedPayload.entries.length < cachedPayload.totalParticipants,
       },
     };
   }
@@ -145,42 +155,40 @@ export class LeaderboardService implements OnModuleInit, OnModuleDestroy {
     const period = enumToPeriod(periodEnum);
 
     const cacheKey = `pos:${userId}:${period}`;
-    const cached = this.getCached<UserRankPositionDto>(cacheKey);
-    if (cached) {
-      this.logger.debug({ event: 'user_position_cache_hit', userId, period });
-      return cached;
-    }
+    const ttlMs = RANKING_CONSTANTS.USER_RANK_CACHE_TTL * 1000;
 
-    const ranking = await this.rankingRepository.getUserRanking(userId);
-    if (!ranking) return undefined;
+    return this.cache
+      .getOrSet<UserRankPositionDto | null>(cacheKey, ttlMs, async () => {
+        this.logger.debug({ event: 'get_user_position', userId, period });
+        const ranking = await this.rankingRepository.getUserRanking(userId);
+        if (!ranking) return null;
 
-    const xpField = getXpField(period);
-    const xp = ranking[xpField];
+        const xpField = getXpField(period);
+        const xp = ranking[xpField];
 
-    if (xp === 0) return undefined;
+        if (xp === 0) return null;
 
-    const rank = await this.rankingRepository.getUserRank(userId, period);
-    if (rank === null) return undefined;
+        const rank = await this.rankingRepository.getUserRank(userId, period);
+        if (rank === null) return null;
 
-    const totalParticipants = await this.getCachedTotalParticipants(period);
-    const percentile = calculatePercentile(rank, totalParticipants);
-    const nextRankXp = await this.rankingRepository.getNextRankXp(period, rank);
-    const xpToNextRank = nextRankXp !== null ? nextRankXp - xp : null;
+        const totalParticipants = await this.getCachedTotalParticipants(period);
+        const percentile = calculatePercentile(rank, totalParticipants);
+        const nextRankXp = await this.rankingRepository.getNextRankXp(period, rank);
+        const xpToNextRank = nextRankXp !== null ? nextRankXp - xp : null;
 
-    const result: UserRankPositionDto = {
-      rank,
-      denseRank: rank,
-      percentile,
-      percentileLabel: getPercentileLabel(percentile),
-      xp,
-      xpToNextRank,
-      nextRankXp,
-      trend: this.determineTrend(ranking),
-      trendAmount: null,
-    };
-
-    this.setCached(cacheKey, result, RANKING_CONSTANTS.USER_RANK_CACHE_TTL);
-    return result;
+        return {
+          rank,
+          denseRank: rank,
+          percentile,
+          percentileLabel: getPercentileLabel(percentile),
+          xp,
+          xpToNextRank,
+          nextRankXp,
+          trend: this.determineTrend(ranking),
+          trendAmount: null,
+        };
+      })
+      .then((value) => value ?? undefined);
   }
 
   /**
@@ -273,33 +281,11 @@ export class LeaderboardService implements OnModuleInit, OnModuleDestroy {
 
   private async getCachedTotalParticipants(period: RankingPeriod): Promise<number> {
     const cacheKey = `total:${period}`;
-    const cached = this.getCached<number>(cacheKey);
-    if (cached !== undefined) return cached;
+    const ttlMs = RANKING_CONSTANTS.TOTAL_USERS_CACHE_TTL * 1000;
 
-    const total = await this.rankingRepository.getTotalParticipants(period);
-    this.setCached(cacheKey, total, RANKING_CONSTANTS.TOTAL_USERS_CACHE_TTL);
-    return total;
-  }
-
-  private getCached<T>(key: string): T | undefined {
-    const entry = this.cache.get(key) as CacheEntry<T> | undefined;
-    if (!entry) return undefined;
-    if (Date.now() > entry.expiresAt) {
-      this.cache.delete(key);
-      return undefined;
-    }
-    return entry.data;
-  }
-
-  private setCached<T>(key: string, data: T, ttlSeconds: number): void {
-    this.cache.set(key, { data, expiresAt: Date.now() + ttlSeconds * 1000 });
-  }
-
-  private invalidateUserCache(userId: string): void {
-    for (const key of this.cache.keys()) {
-      if (key.startsWith(`pos:${userId}:`) || key.startsWith('lb:')) {
-        this.cache.delete(key);
-      }
-    }
+    return this.cache.getOrSet<number>(cacheKey, ttlMs, async () => {
+      this.logger.debug({ event: 'get_total_participants', period });
+      return this.rankingRepository.getTotalParticipants(period);
+    });
   }
 }

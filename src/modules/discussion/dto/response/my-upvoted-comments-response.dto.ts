@@ -45,7 +45,8 @@ export class MyUpvotedCommentsPaginationDto {
   @ApiPropertyOptional({
     description: 'Opaque cursor for the next page',
     nullable: true,
-    example: 'eyJ1cHVvdGVkQXQiOiIyMDI2LTA2LTA4VDA5OjAwOjAwWiIsImNvbW1lbnRJZCI6Ijg4MGU4NDgwLWUyOWItNDFkNC1hNzE2LTQ0NjY1NTQ0MDAwMCJ9',
+    example:
+      'eyJ1cHVvdGVkQXQiOiIyMDI2LTA2LTA4VDA5OjAwOjAwWiIsImNvbW1lbnRJZCI6Ijg4MGU4NDgwLWUyOWItNDFkNC1hNzE2LTQ0NjY1NTQ0MDAwMCJ9',
   })
   nextCursor!: string | null;
 }

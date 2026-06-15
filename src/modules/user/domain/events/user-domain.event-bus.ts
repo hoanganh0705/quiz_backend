@@ -1,5 +1,9 @@
 import { Injectable } from '@nestjs/common';
-import type { UserProfileUpdatedEvent, UserSettingsUpdatedEvent, UserStreakUpdatedEvent } from './user-domain.events';
+import type {
+  UserProfileUpdatedEvent,
+  UserSettingsUpdatedEvent,
+  UserStreakUpdatedEvent,
+} from './user-domain.events';
 import type { UserDomainEventBusPort } from './user-domain-event-bus.port';
 
 @Injectable()

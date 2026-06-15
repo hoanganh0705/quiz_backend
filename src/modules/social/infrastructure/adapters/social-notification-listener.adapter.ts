@@ -9,13 +9,7 @@
  * Hosted in SocialModule to avoid cross-module import cycles.
  */
 
-import {
-  Inject,
-  Injectable,
-  OnModuleInit,
-  OnModuleDestroy,
-  forwardRef,
-} from '@nestjs/common';
+import { Inject, Injectable, OnModuleInit, OnModuleDestroy, forwardRef } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import {
   SOCIAL_DOMAIN_EVENT_BUS,
@@ -33,7 +27,10 @@ import type {
   UserFollowedEvent,
   UserUnfollowedEvent,
 } from '../../domain/events/social-domain.events';
-import { SOCIAL_NOTIFICATION_PORT, type SocialNotificationPort } from '@/modules/notification/domain/ports';
+import {
+  SOCIAL_NOTIFICATION_PORT,
+  type SocialNotificationPort,
+} from '@/modules/notification/domain/ports';
 
 @Injectable()
 export class SocialNotificationListener implements OnModuleInit, OnModuleDestroy {

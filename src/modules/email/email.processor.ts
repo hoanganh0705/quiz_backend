@@ -1,10 +1,17 @@
 import { Inject, Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Job, Worker, type ConnectionOptions } from 'bullmq';
+import { createHash } from 'crypto';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { Resend } from 'resend';
+import { DRIZZLE } from '@/core/database/drizzle.constants';
+import type { DrizzleDB } from '@/core/database/database.module';
+import { sentVerificationTokens } from '@/core/database/schema';
+import { sql } from 'drizzle-orm';
 import { EMAIL_JOB_NAMES, EMAIL_QUEUE_NAME, EMAIL_QUEUE_TOKENS } from './email.constants';
 import type { SendVerificationEmailJobData } from './email.types';
+
+const DEFAULT_EMAIL_VERIFICATION_TOKEN_TTL_SECONDS = 1_800;
 
 @Injectable()
 export class EmailProcessor implements OnModuleInit, OnModuleDestroy {
@@ -14,12 +21,14 @@ export class EmailProcessor implements OnModuleInit, OnModuleDestroy {
   private readonly fromName: string;
   private readonly verificationBaseUrl: string;
   private readonly sendTimeoutMs: number;
+  private readonly tokenTtlSeconds: number;
   private readonly resend: Resend;
 
   constructor(
     private readonly configService: ConfigService,
     @Inject(EMAIL_QUEUE_TOKENS.CONNECTION) // inject the Redis connection in email.module.ts
     private readonly connection: ConnectionOptions,
+    @Inject(DRIZZLE) private readonly db: DrizzleDB,
     @InjectPinoLogger(EmailProcessor.name) private readonly logger: PinoLogger,
   ) {
     const configuredBaseUrl = this.configService.get<string>('EMAIL_VERIFICATION_BASE_URL')?.trim();
@@ -38,6 +47,12 @@ export class EmailProcessor implements OnModuleInit, OnModuleDestroy {
     const configuredTimeout = this.configService.get<number>('EMAIL_SEND_TIMEOUT_MS');
     this.sendTimeoutMs =
       typeof configuredTimeout === 'number' && configuredTimeout > 0 ? configuredTimeout : 5_000;
+
+    const configuredTtl = this.configService.get<number>('EMAIL_VERIFICATION_TOKEN_TTL_SECONDS');
+    this.tokenTtlSeconds =
+      typeof configuredTtl === 'number' && configuredTtl > 0
+        ? configuredTtl
+        : DEFAULT_EMAIL_VERIFICATION_TOKEN_TTL_SECONDS;
   }
 
   // this method initializes the BullMQ worker to process email jobs from the queue, it sets up the concurrency level based on configuration and defines handlers for job completion and failure events to log the outcomes of email processing. When we start a project, this module will be initialized and the worker will start listening for jobs in the email queue, when a job is added to the queue, the worker will pick it up and execute the corresponding processing logic defined in the processSendVerificationEmail method.
@@ -120,9 +135,39 @@ export class EmailProcessor implements OnModuleInit, OnModuleDestroy {
   private async processSendVerificationEmail(
     job: Job<SendVerificationEmailJobData>,
   ): Promise<void> {
+    const userId = job.data.userId;
+
+    // Idempotency check: try to claim this token in the
+    // sent_verification_tokens table. The unique index on token_hash
+    // makes this atomic — two concurrent attempts to claim the same
+    // token will produce exactly one row. If we did not claim the
+    // token, it has already been sent in a prior job, so we skip
+    // (the prior send is enough; we must not send twice).
+    const tokenHash = hashToken(job.data.token);
+    const expiresAt = new Date(Date.now() + this.tokenTtlSeconds * 1000).toISOString();
+    const claimed = await this.db
+      .insert(sentVerificationTokens)
+      .values({
+        userId: userId ?? null,
+        tokenHash,
+        expiresAt,
+      })
+      .onConflictDoNothing({ target: sentVerificationTokens.tokenHash })
+      .returning({ sentTokenId: sentVerificationTokens.sentTokenId });
+
+    if (claimed.length === 0) {
+      this.logger.info({
+        event: 'email_send_verification_skipped_duplicate',
+        provider: this.provider,
+        userId,
+        jobId: job.id,
+        reason: 'token_already_sent',
+      });
+      return;
+    }
+
     try {
       const verificationUrl = `${this.verificationBaseUrl}?token=${encodeURIComponent(job.data.token)}`; // encodeURIComponent to ensure the token is safely included in the URL, in details, the verification URL is constructed by appending the token as a query parameter to the base URL. This allows the recipient to click the link and be directed to the appropriate endpoint in your application to verify their email address.
-      const userId = job.data.userId;
       const controller = new AbortController(); // we use AbortController to implement the timeout mechanism for sending emails. If the email sending operation takes longer than the specified timeout, the controller will abort the request, allowing us to handle it as a failure and trigger any retry logic defined in BullMQ.
 
       await this.withTimeout(
@@ -141,7 +186,15 @@ export class EmailProcessor implements OnModuleInit, OnModuleDestroy {
         jobId: job.id,
       });
     } catch (error) {
-      const userId = job.data.userId;
+      // The token was claimed above but the actual send failed. To
+      // avoid a permanently blocked token (a future retry would see the
+      // row in sent_verification_tokens and skip), we delete the claim.
+      // This trades a tiny extra work on the failure path for correctness
+      // on the retry path: a failed send can be retried, a successful
+      // send cannot be duplicated.
+      await this.db
+        .delete(sentVerificationTokens)
+        .where(sql`${sentVerificationTokens.sentTokenId} = ${claimed[0].sentTokenId}::uuid`);
 
       this.logger.error({
         event: 'email_send_verification_error',
@@ -296,4 +349,8 @@ export class EmailProcessor implements OnModuleInit, OnModuleDestroy {
 
     return value;
   }
+}
+
+function hashToken(token: string): string {
+  return createHash('sha256').update(token).digest('hex');
 }

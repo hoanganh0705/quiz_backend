@@ -44,7 +44,7 @@ export class WsJwtGuard implements CanActivate {
     const auth = client.handshake.auth as { token?: string } | undefined;
     if (auth?.token) return auth.token;
 
-    const authHeader = client.handshake.headers.authorization as string | undefined;
+    const authHeader = client.handshake.headers.authorization;
     if (authHeader) {
       const [scheme, token] = authHeader.split(' ');
       if (scheme === 'Bearer' && token) return token;

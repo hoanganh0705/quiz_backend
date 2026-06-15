@@ -16,10 +16,7 @@ import type {
   AchievementRepositoryPort,
   BadgeDefinitionRow,
 } from '../infrastructure/repositories/achievement.repository';
-import {
-  BADGE_THRESHOLDS,
-  PROGRESS_MILESTONES,
-} from '../domain/constants/achievement.constants';
+import { BADGE_THRESHOLDS, PROGRESS_MILESTONES } from '../domain/constants/achievement.constants';
 
 export enum ProgressVisibility {
   VISIBLE = 'visible',

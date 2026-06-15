@@ -12,10 +12,7 @@ import { TOURNAMENT_RANKING_XP_TABLE } from '../../tournament.constants';
 import { EXTERNAL_EVENT_BUS_PRODUCER_PORT } from '@/common/events';
 import type { ExternalEventBusProducerPort } from '@/common/events/common-external-event-bus';
 import type { ExternalXpEarnedEvent } from '@/common/events/common-external-event-bus';
-import {
-  correlationIdStorage,
-  createCorrelationId,
-} from '@/common/interceptors/correlation-id';
+import { correlationIdStorage, createCorrelationId } from '@/common/interceptors/correlation-id';
 
 /**
  * BullMQ Worker that processes tournament domain events from the shared Redis queue.

@@ -318,35 +318,38 @@ export class NotificationRepository implements NotificationRepositoryPort {
     const dayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
     const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
 
-    const [[totalResult], [unreadResult], typeResults, channelResults, [last24hResult], [last7dResult]] =
-      await Promise.all([
-        this.db
-          .select({ value: count() })
-          .from(notifications)
-          .where(isNull(notifications.deletedAt)),
-        this.db
-          .select({ value: count() })
-          .from(notifications)
-          .where(and(eq(notifications.isRead, false), isNull(notifications.deletedAt))),
-        this.db
-          .select({ type: notifications.type, value: count() })
-          .from(notifications)
-          .where(isNull(notifications.deletedAt))
-          .groupBy(notifications.type),
-        this.db
-          .select({ channel: notifications.channel, value: count() })
-          .from(notifications)
-          .where(isNull(notifications.deletedAt))
-          .groupBy(notifications.channel),
-        this.db
-          .select({ value: count() })
-          .from(notifications)
-          .where(and(gt(notifications.createdAt, dayAgo), isNull(notifications.deletedAt))),
-        this.db
-          .select({ value: count() })
-          .from(notifications)
-          .where(and(gt(notifications.createdAt, weekAgo), isNull(notifications.deletedAt))),
-      ]);
+    const [
+      [totalResult],
+      [unreadResult],
+      typeResults,
+      channelResults,
+      [last24hResult],
+      [last7dResult],
+    ] = await Promise.all([
+      this.db.select({ value: count() }).from(notifications).where(isNull(notifications.deletedAt)),
+      this.db
+        .select({ value: count() })
+        .from(notifications)
+        .where(and(eq(notifications.isRead, false), isNull(notifications.deletedAt))),
+      this.db
+        .select({ type: notifications.type, value: count() })
+        .from(notifications)
+        .where(isNull(notifications.deletedAt))
+        .groupBy(notifications.type),
+      this.db
+        .select({ channel: notifications.channel, value: count() })
+        .from(notifications)
+        .where(isNull(notifications.deletedAt))
+        .groupBy(notifications.channel),
+      this.db
+        .select({ value: count() })
+        .from(notifications)
+        .where(and(gt(notifications.createdAt, dayAgo), isNull(notifications.deletedAt))),
+      this.db
+        .select({ value: count() })
+        .from(notifications)
+        .where(and(gt(notifications.createdAt, weekAgo), isNull(notifications.deletedAt))),
+    ]);
 
     const byType: Record<string, number> = {};
     for (const row of typeResults) {

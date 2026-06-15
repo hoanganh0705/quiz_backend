@@ -585,7 +585,7 @@ export class TournamentService {
 
     if (!existingRoundParticipant) {
       // No round participant yet — atomically insert both round participant and attempt
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+
       const result = await this.tournamentRepository.startRoundAttemptTx({
         roundId,
         participantId: participant.participantId,
@@ -594,11 +594,11 @@ export class TournamentService {
         tournamentId,
         nowIso,
       });
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access,@typescript-eslint/no-unsafe-assignment
+
       attemptId = result.attemptId;
     } else {
       // Round participant exists but has no attempt — create attempt only
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+
       const createdAttempt = await this.tournamentRepository.createAttemptForRound({
         userId: user.sub,
         quizVersionId: roundDetail.quizVersionId,
@@ -607,7 +607,7 @@ export class TournamentService {
         roundParticipantId: existingRoundParticipant.roundParticipantId,
         nowIso,
       });
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access,@typescript-eslint/no-unsafe-assignment
+
       attemptId = createdAttempt.attemptId;
     }
 

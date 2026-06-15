@@ -6,10 +6,7 @@
  * (e.g. Quiz module) to subscribe.
  */
 
-import type {
-  ReviewSubmittedEvent,
-  ReviewDeletedEvent,
-} from './review-domain.events';
+import type { ReviewSubmittedEvent, ReviewDeletedEvent } from './review-domain.events';
 
 export const REVIEW_DOMAIN_EVENT_BUS = Symbol('REVIEW_DOMAIN_EVENT_BUS');
 

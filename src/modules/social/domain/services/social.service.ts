@@ -43,6 +43,7 @@ import {
   PendingRequestExistsError,
   FriendRequestNotFoundError,
   FriendRequestForbiddenError,
+  FriendListForbiddenError,
 } from '../errors/social.errors';
 import { UserNotFoundError } from '@/modules/user/domain/errors';
 import { isPostgresUniqueViolation } from '@/common/utils/db-error.util';
@@ -217,6 +218,44 @@ export class SocialService {
     return this.socialRepository.getFriends(userId, limit, cursor);
   }
 
+  /**
+   * Read another user's friend list with explicit access control.
+   *
+   * Allowed when:
+   *   - the requester is the target themselves (own data), or
+   *   - the requester and the target are mutual friends and
+   *     neither side has blocked the other.
+   *
+   * Otherwise throws `FriendListForbiddenError` (a 403). If
+   * either side has blocked the other, throws `BlockedUserError`
+   * regardless of the friendship status — blocks always win.
+   */
+  async getFriendsOfUser(
+    requesterId: string,
+    targetUserId: string,
+    limit: number,
+    cursor?: string | null,
+  ): Promise<Friend[]> {
+    if (requesterId === targetUserId) {
+      return this.socialRepository.getFriends(targetUserId, limit, cursor);
+    }
+
+    const relationship = await this.socialRepository.getRelationshipStatus(
+      requesterId,
+      targetUserId,
+    );
+
+    if (relationship.isBlocked || relationship.isBlockedBy) {
+      throw new BlockedUserError();
+    }
+
+    if (!relationship.isFriend) {
+      throw new FriendListForbiddenError();
+    }
+
+    return this.socialRepository.getFriends(targetUserId, limit, cursor);
+  }
+
   async getFriendCount(userId: string): Promise<number> {
     return this.socialRepository.getFriendCount(userId);
   }
@@ -331,10 +370,8 @@ export class SocialService {
   async unfollowUser(followerId: string, followingId: string): Promise<void> {
     await this.socialRepository.unfollowUser(followerId, followingId);
 
-    const { followerUsername, followingUsername } = await this.socialRepository.getUsernamesForUsers(
-      followerId,
-      followingId,
-    );
+    const { followerUsername, followingUsername } =
+      await this.socialRepository.getUsernamesForUsers(followerId, followingId);
 
     this.logger.info({
       event: 'user_unfollowed',
@@ -589,24 +626,28 @@ export class SocialService {
       const monthlyTrend = userTrends.find((t) => t.period === 'monthly') ?? null;
       return {
         ...user,
-        weeklyRankTrend: weeklyTrend ? {
-          period: weeklyTrend.period,
-          currentRank: weeklyTrend.currentRank,
-          previousRank: weeklyTrend.previousRank,
-          change: weeklyTrend.change,
-          direction: weeklyTrend.direction,
-          currentXp: weeklyTrend.currentXp,
-          previousXp: weeklyTrend.previousXp,
-        } : null,
-        monthlyRankTrend: monthlyTrend ? {
-          period: monthlyTrend.period,
-          currentRank: monthlyTrend.currentRank,
-          previousRank: monthlyTrend.previousRank,
-          change: monthlyTrend.change,
-          direction: monthlyTrend.direction,
-          currentXp: monthlyTrend.currentXp,
-          previousXp: monthlyTrend.previousXp,
-        } : null,
+        weeklyRankTrend: weeklyTrend
+          ? {
+              period: weeklyTrend.period,
+              currentRank: weeklyTrend.currentRank,
+              previousRank: weeklyTrend.previousRank,
+              change: weeklyTrend.change,
+              direction: weeklyTrend.direction,
+              currentXp: weeklyTrend.currentXp,
+              previousXp: weeklyTrend.previousXp,
+            }
+          : null,
+        monthlyRankTrend: monthlyTrend
+          ? {
+              period: monthlyTrend.period,
+              currentRank: monthlyTrend.currentRank,
+              previousRank: monthlyTrend.previousRank,
+              change: monthlyTrend.change,
+              direction: monthlyTrend.direction,
+              currentXp: monthlyTrend.currentXp,
+              previousXp: monthlyTrend.previousXp,
+            }
+          : null,
       };
     });
 
@@ -732,24 +773,28 @@ export class SocialService {
           avatarUrl: friend.avatarUrl,
           xp: ranking?.xp ?? 0,
           friendSince: friend.friendSince,
-          weeklyRankTrend: weeklyTrend ? {
-            period: weeklyTrend.period,
-            currentRank: weeklyTrend.currentRank,
-            previousRank: weeklyTrend.previousRank,
-            change: weeklyTrend.change,
-            direction: weeklyTrend.direction,
-            currentXp: weeklyTrend.currentXp,
-            previousXp: weeklyTrend.previousXp,
-          } : null,
-          monthlyRankTrend: monthlyTrend ? {
-            period: monthlyTrend.period,
-            currentRank: monthlyTrend.currentRank,
-            previousRank: monthlyTrend.previousRank,
-            change: monthlyTrend.change,
-            direction: monthlyTrend.direction,
-            currentXp: monthlyTrend.currentXp,
-            previousXp: monthlyTrend.previousXp,
-          } : null,
+          weeklyRankTrend: weeklyTrend
+            ? {
+                period: weeklyTrend.period,
+                currentRank: weeklyTrend.currentRank,
+                previousRank: weeklyTrend.previousRank,
+                change: weeklyTrend.change,
+                direction: weeklyTrend.direction,
+                currentXp: weeklyTrend.currentXp,
+                previousXp: weeklyTrend.previousXp,
+              }
+            : null,
+          monthlyRankTrend: monthlyTrend
+            ? {
+                period: monthlyTrend.period,
+                currentRank: monthlyTrend.currentRank,
+                previousRank: monthlyTrend.previousRank,
+                change: monthlyTrend.change,
+                direction: monthlyTrend.direction,
+                currentXp: monthlyTrend.currentXp,
+                previousXp: monthlyTrend.previousXp,
+              }
+            : null,
         };
       })
       .filter((e) => e.xp > 0) // Only include friends with XP

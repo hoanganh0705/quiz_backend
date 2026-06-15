@@ -33,7 +33,8 @@ export class MyDiscussionSubscriptionsPaginationDto {
   @ApiPropertyOptional({
     description: 'Opaque cursor for the next page',
     nullable: true,
-    example: 'eyJzdWJzY3JpYmVkQXQiOiIyMDI2LTA2LTA4VDA5OjAwOjAwWiIsInRocmVhZElkIjoiNjYwZTg0MDAtZTI5Yi00MWQ0LWE3MTYtNDQ2NjU1NDQwMDAwIn0=',
+    example:
+      'eyJzdWJzY3JpYmVkQXQiOiIyMDI2LTA2LTA4VDA5OjAwOjAwWiIsInRocmVhZElkIjoiNjYwZTg0MDAtZTI5Yi00MWQ0LWE3MTYtNDQ2NjU1NDQwMDAwIn0=',
   })
   nextCursor!: string | null;
 }
@@ -45,6 +46,9 @@ export class MyDiscussionSubscriptionsResponseDto {
   })
   items!: MyDiscussionSubscriptionItemResponseDto[];
 
-  @ApiProperty({ description: 'Pagination metadata', type: () => MyDiscussionSubscriptionsPaginationDto })
+  @ApiProperty({
+    description: 'Pagination metadata',
+    type: () => MyDiscussionSubscriptionsPaginationDto,
+  })
   pagination!: MyDiscussionSubscriptionsPaginationDto;
 }

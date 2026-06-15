@@ -37,9 +37,7 @@ export function Transactional(): MethodDecorator {
  */
 @Injectable()
 export class TransactionalInterceptor implements NestInterceptor {
-  constructor(
-    private readonly transactionalContext: TransactionalContext,
-  ) {}
+  constructor(private readonly transactionalContext: TransactionalContext) {}
 
   intercept(executionContext: ExecutionContext, next: CallHandler): Observable<unknown> {
     const handler = executionContext.getHandler();

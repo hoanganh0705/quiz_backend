@@ -7,9 +7,7 @@
 
 import { Inject, Injectable } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
-import {
-  BadgeRevocationService,
-} from '../domain/services';
+import { BadgeRevocationService } from '../domain/services';
 import { ProgressTrackingService } from './progress-tracking.service';
 import { AchievementHistoryService } from './achievement-history.service';
 import { BadgeAnalyticsService } from './analytics/badge-analytics.service';
@@ -132,9 +130,7 @@ export class AchievementApplicationService {
 
     const badgeIds = userBadges.map((ub) => ub.badgeId);
     const earnerCounts =
-      badgeIds.length > 0
-        ? await this.achievementRepository.getBadgeEarnersCounts(badgeIds)
-        : {};
+      badgeIds.length > 0 ? await this.achievementRepository.getBadgeEarnersCounts(badgeIds) : {};
 
     return {
       data: userBadges.map((ub) => ({

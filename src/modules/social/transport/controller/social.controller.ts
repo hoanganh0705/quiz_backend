@@ -285,10 +285,18 @@ export class SocialController {
   @Get('friends/:userId')
   async getFriendsOfUser(
     @User() user: JwtPayload,
-    @Param('userId') targetUserId: string,
+    @Param('userId', new ParseUUIDPipe()) targetUserId: string,
+    @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit: number,
+    @Query('cursor') cursor?: string,
   ): Promise<{ items: FriendDto[]; hasNextPage: boolean }> {
-    const result = await this.socialService.getFriends({ ...user, sub: targetUserId }, 20, null);
-    return result;
+    // IDOR fix: do NOT substitute `user.sub` with the URL
+    // parameter. The previous implementation fabricated a
+    // JwtPayload with `sub: targetUserId`, which let any
+    // authenticated user read any other user's friend list.
+    //
+    // Access control (self OR mutual friends, no block in
+    // either direction) is enforced inside the service.
+    return this.socialService.getFriendsOfUser(user.sub, targetUserId, limit, cursor ?? null);
   }
 
   @Delete('friends/:userId')

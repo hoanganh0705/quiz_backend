@@ -8,10 +8,7 @@ import {
   EXTERNAL_EVENT_BUS_PRODUCER_PORT,
   EXTERNAL_EVENT_BUS_CONSUMER_PORT,
 } from './events/common-external-event-bus';
-import {
-  TransactionalContext,
-  TRANSACTIONAL_CONTEXT,
-} from './interceptors/transactional-context';
+import { TransactionalContext, TRANSACTIONAL_CONTEXT } from './interceptors/transactional-context';
 import { TransactionalInterceptor } from './interceptors/transactional.interceptor';
 
 @Global()

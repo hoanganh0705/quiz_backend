@@ -9,7 +9,10 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { USER_REPOSITORY_PORT } from '@/modules/user/domain/ports/user-repository.port';
 import type { UserRepositoryPort } from '@/modules/user/domain/ports/user-repository.port';
-import { type UserExistencePort, type UserPublicInfo } from '../../domain/ports/user-existence.port';
+import {
+  type UserExistencePort,
+  type UserPublicInfo,
+} from '../../domain/ports/user-existence.port';
 
 @Injectable()
 export class UserExistenceAdapter implements UserExistencePort {

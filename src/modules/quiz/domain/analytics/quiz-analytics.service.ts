@@ -254,9 +254,7 @@ export class QuizAnalyticsService implements QuizAnalyticsPort {
         return;
       }
 
-      await Promise.allSettled(
-        quizIds.map((quizId) => this.refreshQuizMetrics(quizId)),
-      );
+      await Promise.allSettled(quizIds.map((quizId) => this.refreshQuizMetrics(quizId)));
 
       this.logger.info({
         event: 'category_analytics_invalidated',
