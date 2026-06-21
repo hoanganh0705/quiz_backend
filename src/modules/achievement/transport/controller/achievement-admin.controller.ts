@@ -8,7 +8,11 @@
 import { Controller, Get, Post, Param, HttpCode, HttpStatus, ParseUUIDPipe } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiOkResponse } from '@nestjs/swagger';
 import { Roles } from '@/common/authorization/decorators/roles.decorator';
-import { ApiAdminEndpoint, ApiAdminResource, ApiAdminRead } from '@/common/swagger/swagger-decorators';
+import {
+  ApiAdminEndpoint,
+  ApiAdminResource,
+  ApiAdminRead,
+} from '@/common/swagger/swagger-decorators';
 import { ScheduledEvaluationService } from '../../infrastructure/scheduled/scheduled-evaluation.service';
 import { AchievementHistoryService } from '../../application/achievement-history.service';
 import { ReevaluateUserResponseDto } from '../../dto/response/achievement-admin-response.dto';

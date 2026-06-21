@@ -31,7 +31,11 @@ export class AchievementController {
   constructor(private readonly achievementApplicationService: AchievementApplicationService) {}
 
   @Get('badges')
-  @ApiPublicList({ description: 'Badge catalog returned', type: BadgeCatalogItemResponseDto, isArray: true })
+  @ApiPublicList({
+    description: 'Badge catalog returned',
+    type: BadgeCatalogItemResponseDto,
+    isArray: true,
+  })
   @ApiInternalError()
   getBadgeCatalog(@Query() query: PaginationQuery): Promise<{
     data: BadgeCatalogItemResponseDto[];
@@ -73,7 +77,10 @@ export class AchievementController {
   }
 
   @Get('/users/:userId/achievements')
-  @ApiAuthList({ description: 'Public achievement profile returned', type: PublicAchievementProfileResponseDto })
+  @ApiAuthList({
+    description: 'Public achievement profile returned',
+    type: PublicAchievementProfileResponseDto,
+  })
   @ApiInternalError()
   getPublicAchievementProfile(
     @Param('userId', new ParseUUIDPipe()) userId: string,
