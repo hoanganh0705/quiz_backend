@@ -24,7 +24,18 @@ import { RankingModule } from './modules/ranking/ranking.module';
 import { AchievementModule } from './modules/achievement/achievement.module';
 import { NotificationModule } from './modules/notification/notification.module';
 import { DiscussionModule } from './modules/discussion/discussion.module';
-import { validateEnv } from './core/config/env.validation';
+import {
+  validateEnv,
+  appConfig,
+  databaseConfig,
+  redisConfig,
+  jwtConfig,
+  emailConfig,
+  emailVerificationConfig,
+  securityConfig,
+  serverConfig,
+  sessionsConfig,
+} from './core/config';
 import { RedisModule } from './core/redis/redis.module';
 import { RolesGuard } from './common/authorization/guards/roles.guard';
 import { PermissionsGuard } from './common/authorization/guards/permissions.guard';
@@ -38,8 +49,19 @@ import { HealthModule } from './modules/health/health.module';
     // forRoot is a way to create a singleton instance of the module that can be shared across the entire application. This is useful for modules that provide services or configurations that should be consistent throughout the app, such as ConfigModule for environment variables, ThrottlerModule for rate limiting, ScheduleModule for cron jobs, and CoreLoggerModule for logging. By using forRoot, we ensure that there is only one instance of these modules and their services, which can be injected into any other module or controller that needs them. For feature modules like UserModule, AuthModule, etc., we typically just import them directly without forRoot, as they are designed to be imported multiple times if needed and do not maintain global state.
     ConfigModule.forRoot({
       isGlobal: true,
-      expandVariables: true, //  allow env like FOO='${BAR}_suffix' to be expanded to the value of BAR + '_suffix'
+      expandVariables: true, // allow env like FOO='${BAR}_suffix' to be expanded to the value of BAR + '_suffix'
       validate: validateEnv,
+      load: [
+        appConfig,
+        databaseConfig,
+        redisConfig,
+        jwtConfig,
+        emailConfig,
+        emailVerificationConfig,
+        securityConfig,
+        serverConfig,
+        sessionsConfig,
+      ],
     }),
     ThrottlerModule.forRoot({
       throttlers: [

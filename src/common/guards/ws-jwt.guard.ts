@@ -2,17 +2,25 @@ import { CanActivate, ExecutionContext, Injectable, UnauthorizedException } from
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import type { Socket } from 'socket.io';
-import { isUserRole, type UserRole } from '@/common/types/user-role.type';
+import { isUserRole } from '@/common/types/user-role.type';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
 
 export type AuthenticatedSocket = Socket & { user?: JwtPayload };
 
 @Injectable()
 export class WsJwtGuard implements CanActivate {
+  private readonly accessTokenSecret: string;
+  private readonly accessTokenIssuer: string;
+  private readonly accessTokenAudience: string;
+
   constructor(
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
-  ) {}
+  ) {
+    this.accessTokenSecret = this.configService.getOrThrow<string>('JWT_ACCESS_TOKEN_SECRET');
+    this.accessTokenIssuer = this.configService.getOrThrow<string>('JWT_ACCESS_TOKEN_ISSUER');
+    this.accessTokenAudience = this.configService.getOrThrow<string>('JWT_ACCESS_TOKEN_AUDIENCE');
+  }
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const client: AuthenticatedSocket = context.switchToWs().getClient();
@@ -24,9 +32,9 @@ export class WsJwtGuard implements CanActivate {
 
     try {
       const payload = await this.jwtService.verifyAsync<JwtPayload>(token, {
-        secret: this.configService.get<string>('JWT_ACCESS_TOKEN_SECRET'),
-        issuer: this.configService.get<string>('JWT_ACCESS_TOKEN_ISSUER'),
-        audience: this.configService.get<string>('JWT_ACCESS_TOKEN_AUDIENCE'),
+        secret: this.accessTokenSecret,
+        issuer: this.accessTokenIssuer,
+        audience: this.accessTokenAudience,
       });
 
       if (!payload?.sub || !isUserRole(payload.role)) {
@@ -46,7 +54,7 @@ export class WsJwtGuard implements CanActivate {
 
     const authHeader = client.handshake.headers.authorization;
     if (authHeader) {
-      const [scheme, token] = authHeader.split(' ');
+      const [scheme, token] = authHeader.trim().split(/\s+/);
       if (scheme === 'Bearer' && token) return token;
     }
 
