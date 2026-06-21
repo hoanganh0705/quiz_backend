@@ -10,6 +10,7 @@ import { ConfigService } from '@nestjs/config';
 import { Reflector } from '@nestjs/core';
 import { JwtService } from '@nestjs/jwt';
 import type { Request } from 'express';
+import type { Socket } from 'socket.io';
 import { IS_PUBLIC_KEY } from '../decorators/public.decorator';
 import { isUserRole, type UserRole } from '../types/user-role.type';
 
@@ -19,43 +20,26 @@ export type JwtPayload = {
   sessionId?: string;
 };
 
+export type AuthenticatedSocket = Socket & { user?: JwtPayload };
+
 type AuthenticatedRequest = Request & {
   user?: JwtPayload;
 };
 
 @Injectable()
 export class JwtGuard implements CanActivate {
+  private readonly accessTokenSecret: string;
+  private readonly accessTokenIssuer: string;
+  private readonly accessTokenAudience: string;
+
   constructor(
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
     private readonly reflector: Reflector,
-  ) {}
-
-  private getAccessTokenSecret(): string {
-    return (
-      this.configService.get<string>('JWT_ACCESS_TOKEN_SECRET') ??
-      (() => {
-        throw new Error('JWT_ACCESS_TOKEN_SECRET is not defined in environment variables');
-      })()
-    );
-  }
-
-  private getAccessTokenIssuer(): string {
-    return (
-      this.configService.get<string>('JWT_ACCESS_TOKEN_ISSUER') ??
-      (() => {
-        throw new Error('JWT_ACCESS_TOKEN_ISSUER is not defined in environment variables');
-      })()
-    );
-  }
-
-  private getAccessTokenAudience(): string {
-    return (
-      this.configService.get<string>('JWT_ACCESS_TOKEN_AUDIENCE') ??
-      (() => {
-        throw new Error('JWT_ACCESS_TOKEN_AUDIENCE is not defined in environment variables');
-      })()
-    );
+  ) {
+    this.accessTokenSecret = this.configService.getOrThrow<string>('JWT_ACCESS_TOKEN_SECRET');
+    this.accessTokenIssuer = this.configService.getOrThrow<string>('JWT_ACCESS_TOKEN_ISSUER');
+    this.accessTokenAudience = this.configService.getOrThrow<string>('JWT_ACCESS_TOKEN_AUDIENCE');
   }
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -75,16 +59,16 @@ export class JwtGuard implements CanActivate {
       throw new UnauthorizedException('Authorization header is missing');
     }
 
-    const [scheme, token] = authHeader.split(' ');
+    const [scheme, token] = authHeader.trim().split(/\s+/);
     if (scheme !== 'Bearer' || !token) {
       throw new UnauthorizedException('Invalid authorization header format');
     }
 
     try {
       const payload = await this.jwtService.verifyAsync<JwtPayload>(token, {
-        secret: this.getAccessTokenSecret(),
-        issuer: this.getAccessTokenIssuer(),
-        audience: this.getAccessTokenAudience(),
+        secret: this.accessTokenSecret,
+        issuer: this.accessTokenIssuer,
+        audience: this.accessTokenAudience,
       });
 
       if (!payload?.sub || !isUserRole(payload.role)) {
