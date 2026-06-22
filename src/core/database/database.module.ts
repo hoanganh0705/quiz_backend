@@ -1,10 +1,9 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-argument */
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import { Global, Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { Pool } from 'pg';
 import * as schema from './schema';
-import * as relations from './schema/relations';
 import { DRIZZLE } from './drizzle.constants';
 import { UserSessionRepository } from '@/modules/auth/infrastructure/repositories/user-session.repository';
 import { UserRepository } from '@/modules/user/infrastructure/repositories/user.repository';
@@ -16,10 +15,7 @@ import { QuizQuestionRepository } from '@/modules/quiz/infrastructure/repositori
 
 const createDrizzleDb = (connectionString: string) => {
   const pool = new Pool({ connectionString });
-
-  return drizzle(pool, {
-    schema: { ...schema, ...relations },
-  });
+  return drizzle(pool, { schema });
 };
 
 export type DrizzleDB = ReturnType<typeof createDrizzleDb>;
