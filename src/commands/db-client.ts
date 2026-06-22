@@ -2,7 +2,6 @@ import 'dotenv/config';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { Pool } from 'pg';
 import * as schema from '@/core/database/schema';
-import * as relations from '@/core/database/schema/relations';
 
 const databaseUrl = process.env.DATABASE_URL;
 
@@ -20,8 +19,7 @@ if (!databaseUrl) {
 // safety checks.
 
 const pool = new Pool({ connectionString: databaseUrl });
-// eslint-disable-next-line @typescript-eslint/no-unsafe-argument
-const db = drizzle(pool, { schema: { ...schema, ...relations } });
+const db = drizzle(pool, { schema });
 
 export { db };
 
