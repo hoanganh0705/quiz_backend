@@ -29,6 +29,13 @@
       "when": 1781450901003,
       "tag": "0003_wide_venus",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1782095444257,
+      "tag": "0004_flashy_karma",
+      "breakpoints": true
     }
   ]
 }
