@@ -14,6 +14,10 @@ export const emailConfig = registerAs('email', () => ({
   resendApiKey: process.env.RESEND_API_KEY ?? '',
   sendTimeoutMs: Number(process.env.EMAIL_SEND_TIMEOUT_MS ?? 5000),
   queueConcurrency: Number(process.env.EMAIL_QUEUE_CONCURRENCY ?? 5),
+  circuitBreaker: {
+    failureThreshold: Number(process.env.EMAIL_CB_FAILURE_THRESHOLD ?? 5),
+    resetTimeoutMs: Number(process.env.EMAIL_CB_RESET_TIMEOUT_MS ?? 30000),
+  },
 }));
 
 export type EmailConfig = ConfigType<typeof emailConfig>;

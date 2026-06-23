@@ -1,5 +1,4 @@
 import { Inject, Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { Job, Worker, type ConnectionOptions } from 'bullmq';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import {
@@ -13,6 +12,7 @@ import { EXTERNAL_EVENT_BUS_PRODUCER_PORT } from '@/common/events';
 import type { ExternalEventBusProducerPort } from '@/common/events/common-external-event-bus';
 import type { ExternalXpEarnedEvent } from '@/common/events/common-external-event-bus';
 import { correlationIdStorage, createCorrelationId } from '@/common/interceptors/correlation-id';
+import { sessionsConfig } from '@/core/config';
 
 /**
  * BullMQ Worker that processes tournament domain events from the shared Redis queue.
@@ -28,23 +28,21 @@ import { correlationIdStorage, createCorrelationId } from '@/common/interceptors
 @Injectable()
 export class TournamentEventProcessor implements OnModuleInit, OnModuleDestroy {
   private worker: Worker<TournamentEventJobData, void, string> | null = null;
+  private readonly concurrency: number;
 
   constructor(
-    private readonly configService: ConfigService,
     @Inject(TOURNAMENT_QUEUE_TOKENS.CONNECTION)
     private readonly connection: ConnectionOptions,
     @Inject(EXTERNAL_EVENT_BUS_PRODUCER_PORT)
     private readonly externalEventBus: ExternalEventBusProducerPort,
     @InjectPinoLogger(TournamentEventProcessor.name)
     private readonly logger: PinoLogger,
-  ) {}
+    @Inject(sessionsConfig.KEY) private readonly sessions,
+  ) {
+    this.concurrency = this.sessions.tournamentQueueConcurrency;
+  }
 
   onModuleInit(): void {
-    const fallbackConcurrency = 5;
-    const configured = this.configService.get<string | number>('TOURNAMENT_QUEUE_CONCURRENCY');
-    const parsed = Number(configured);
-    const concurrency = Number.isInteger(parsed) && parsed > 0 ? parsed : fallbackConcurrency;
-
     this.worker = new Worker<TournamentEventJobData, void, string>(
       'tournament-events',
       async (job: Job<TournamentEventJobData>) => {
@@ -68,7 +66,7 @@ export class TournamentEventProcessor implements OnModuleInit, OnModuleDestroy {
           await this.handleEvent(event);
         });
       },
-      { connection: this.connection, concurrency },
+      { connection: this.connection, concurrency: this.concurrency },
     );
 
     this.worker.on('completed', (job: Job<TournamentEventJobData>) => {
@@ -86,7 +84,7 @@ export class TournamentEventProcessor implements OnModuleInit, OnModuleDestroy {
 
     this.logger.info({
       event: 'tournament_event_processor_started',
-      concurrency,
+      concurrency: this.concurrency,
     });
   }
 
