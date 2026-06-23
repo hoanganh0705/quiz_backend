@@ -1,7 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { randomBytes } from 'crypto';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
-import { PasswordResetConfig } from '../config/password-reset.config';
+import { PasswordResetConfig } from '../config/password-reset-token.config';
 import { CRYPTO_PROVIDER, type CryptoProvider } from './ports/crypto.provider';
 import { PASSWORD_PROVIDER, type PasswordProvider } from './ports/password.provider';
 import { EMAIL_PROVIDER, type EmailProvider } from './ports/email.provider';

@@ -30,10 +30,10 @@
  */
 
 import { Inject, Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import type Redis from 'ioredis';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { CACHE_PROVIDER, type CacheProvider } from '@/common/ports/cache.provider';
+import { sessionsConfig } from '@/core/config';
 
 /**
  * How long a single in-process deny-list entry lives. Must be long
@@ -95,15 +95,10 @@ export class SessionInvalidationBus implements OnModuleInit, OnModuleDestroy {
 
   constructor(
     @Inject(CACHE_PROVIDER) private readonly cache: CacheProvider,
-    private readonly configService: ConfigService,
+    @Inject(sessionsConfig.KEY) private readonly sessions,
     @InjectPinoLogger(SessionInvalidationBus.name) private readonly logger: PinoLogger,
   ) {
-    // Channel name is configurable so a multi-tenant deployment can
-    // run separate Redis channels per tenant. Default is
-    // `auth:session:invalidate`.
-    this.channel =
-      this.configService.get<string>('AUTH_SESSION_INVALIDATION_CHANNEL')?.trim() ||
-      'auth:session:invalidate';
+    this.channel = this.sessions.authSessionInvalidationChannel;
   }
 
   async onModuleInit(): Promise<void> {

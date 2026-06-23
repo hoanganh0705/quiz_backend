@@ -141,13 +141,13 @@ export class NotificationChannelService implements NotificationChannelServiceIns
 
     switch (channel) {
       case 'in_app':
-        await this.sendInApp(notification);
+        this.sendInApp(notification);
         break;
       case 'email':
-        await this.sendEmail(notification, params.recipientEmail);
+        this.sendEmail(notification, params.recipientEmail);
         break;
       case 'push':
-        await this.sendPush(notification, params.pushToken);
+        this.sendPush(notification, params.pushToken);
         break;
     }
   }
@@ -248,7 +248,7 @@ export class NotificationChannelService implements NotificationChannelServiceIns
     return currentTime >= startTime && currentTime <= endTime;
   }
 
-  private async sendInApp(notification: { notificationId: string; userId: string }): Promise<void> {
+  private sendInApp(notification: { notificationId: string; userId: string }): void {
     this.logger?.info({
       event: 'in_app_notification_sent',
       notificationId: notification.notificationId,
@@ -257,10 +257,10 @@ export class NotificationChannelService implements NotificationChannelServiceIns
     });
   }
 
-  private async sendEmail(
+  private sendEmail(
     notification: { notificationId: string; userId: string },
     recipientEmail?: string,
-  ): Promise<void> {
+  ): void {
     if (!recipientEmail) {
       this.logger?.warn({
         event: 'email_notification_skipped_no_recipient',
@@ -279,10 +279,10 @@ export class NotificationChannelService implements NotificationChannelServiceIns
     });
   }
 
-  private async sendPush(
+  private sendPush(
     notification: { notificationId: string; userId: string },
     pushToken?: string,
-  ): Promise<void> {
+  ): void {
     if (!pushToken) {
       this.logger?.warn({
         event: 'push_notification_skipped_no_token',

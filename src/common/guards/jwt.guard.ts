@@ -6,11 +6,13 @@ import {
   type CanActivate,
   type ExecutionContext,
 } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
+import { Inject } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { JwtService } from '@nestjs/jwt';
 import type { Request } from 'express';
 import type { Socket } from 'socket.io';
+import { jwtConfig } from '@/core/config';
+import type { JwtConfig } from '@/core/config';
 import { IS_PUBLIC_KEY } from '../decorators/public.decorator';
 import { isUserRole, type UserRole } from '../types/user-role.type';
 
@@ -28,19 +30,12 @@ type AuthenticatedRequest = Request & {
 
 @Injectable()
 export class JwtGuard implements CanActivate {
-  private readonly accessTokenSecret: string;
-  private readonly accessTokenIssuer: string;
-  private readonly accessTokenAudience: string;
-
   constructor(
     private readonly jwtService: JwtService,
-    private readonly configService: ConfigService,
+    @Inject(jwtConfig.KEY)
+    private readonly jwt: JwtConfig,
     private readonly reflector: Reflector,
-  ) {
-    this.accessTokenSecret = this.configService.getOrThrow<string>('JWT_ACCESS_TOKEN_SECRET');
-    this.accessTokenIssuer = this.configService.getOrThrow<string>('JWT_ACCESS_TOKEN_ISSUER');
-    this.accessTokenAudience = this.configService.getOrThrow<string>('JWT_ACCESS_TOKEN_AUDIENCE');
-  }
+  ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
@@ -66,9 +61,9 @@ export class JwtGuard implements CanActivate {
 
     try {
       const payload = await this.jwtService.verifyAsync<JwtPayload>(token, {
-        secret: this.accessTokenSecret,
-        issuer: this.accessTokenIssuer,
-        audience: this.accessTokenAudience,
+        secret: this.jwt.accessSecret,
+        issuer: this.jwt.issuer,
+        audience: this.jwt.audience,
       });
 
       if (!payload?.sub || !isUserRole(payload.role)) {

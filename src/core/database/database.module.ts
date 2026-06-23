@@ -1,10 +1,11 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import { Global, Module } from '@nestjs/common';
-import { ConfigModule, ConfigService } from '@nestjs/config';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { Pool } from 'pg';
 import * as schema from './schema';
 import { DRIZZLE } from './drizzle.constants';
+import { databaseConfig } from '@/core/config';
+import type { DatabaseConfig } from '@/core/config';
 import { UserSessionRepository } from '@/modules/auth/infrastructure/repositories/user-session.repository';
 import { UserRepository } from '@/modules/user/infrastructure/repositories/user.repository';
 import { AttemptRepository } from '@/modules/attempt/infrastructure/repositories/attempt.repository';
@@ -22,19 +23,12 @@ export type DrizzleDB = ReturnType<typeof createDrizzleDb>;
 
 @Global()
 @Module({
-  imports: [ConfigModule],
   providers: [
     {
       provide: DRIZZLE,
-      inject: [ConfigService],
-      useFactory: (configService: ConfigService) => {
-        const databaseUrl = configService.get<string>('DATABASE_URL');
-
-        if (!databaseUrl) {
-          throw new Error('Missing DATABASE_URL configuration');
-        }
-
-        return createDrizzleDb(databaseUrl);
+      inject: [databaseConfig.KEY],
+      useFactory: (databaseConfig: DatabaseConfig) => {
+        return createDrizzleDb(databaseConfig.url);
       },
     },
     UserSessionRepository,

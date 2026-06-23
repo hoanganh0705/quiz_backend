@@ -35,6 +35,10 @@ import {
   securityConfig,
   serverConfig,
   sessionsConfig,
+  passwordResetConfig,
+  authSecurityConfig,
+  googleOAuthConfig,
+  swaggerConfig,
 } from './core/config';
 import { RedisModule } from './core/redis/redis.module';
 import { RolesGuard } from './common/authorization/guards/roles.guard';
@@ -61,6 +65,10 @@ import { HealthModule } from './modules/health/health.module';
         securityConfig,
         serverConfig,
         sessionsConfig,
+        passwordResetConfig,
+        authSecurityConfig,
+        googleOAuthConfig,
+        swaggerConfig,
       ],
     }),
     ThrottlerModule.forRoot({

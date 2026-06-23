@@ -9,8 +9,7 @@ import { createPinoHttpConfig } from './pino.config';
     ConfigModule,
     LoggerModule.forRootAsync({
       inject: [ConfigService],
-      useFactory: (configService: ConfigService) =>
-        createPinoHttpConfig(configService),
+      useFactory: (configService: ConfigService) => createPinoHttpConfig(configService),
     }),
   ],
   exports: [LoggerModule],

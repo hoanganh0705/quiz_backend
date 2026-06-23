@@ -1,26 +1,23 @@
 import { Module } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { Queue, type ConnectionOptions } from 'bullmq';
 import { DatabaseModule } from '@/core/database/database.module';
 import { EmailProcessor } from './email.processor';
 import { EmailService } from './email.service';
 import { EMAIL_QUEUE_NAME, EMAIL_QUEUE_TOKENS } from './email.constants';
+import { redisConfig } from '@/core/config';
+import type { RedisConfig } from '@/core/config';
 
 @Module({
   imports: [DatabaseModule],
   providers: [
     {
       provide: EMAIL_QUEUE_TOKENS.CONNECTION,
-      inject: [ConfigService],
-      useFactory: (configService: ConfigService): ConnectionOptions => {
-        const redisUrl = configService.get<string>('REDIS_URL');
-        if (!redisUrl || redisUrl.trim().length === 0) {
+      inject: [redisConfig.KEY],
+      useFactory: (redis: RedisConfig): ConnectionOptions => {
+        if (!redis.url) {
           throw new Error('REDIS_URL is not defined in environment variables');
         }
-
-        return {
-          url: redisUrl,
-        };
+        return { url: redis.url };
       },
     },
     {

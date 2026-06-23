@@ -1,5 +1,4 @@
 import { Module } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { ConnectionOptions, Queue } from 'bullmq';
 import { DatabaseModule } from '@/core/database/database.module';
 import { NotificationModule } from '@/modules/notification/notification.module';
@@ -22,6 +21,8 @@ import { TournamentEventProcessor } from './infrastructure/events/tournament-eve
 import { TournamentSchedulerService } from './infrastructure/scheduler/tournament-scheduler.service';
 import { TournamentListenerAdapter } from './infrastructure/adapters/tournament-listener.adapter';
 import { SharedTournamentEventBusAdapter } from './domain/events/shared-tournament-event-bus.adapter';
+import { redisConfig } from '@/core/config';
+import type { RedisConfig } from '@/core/config';
 
 @Module({
   imports: [DatabaseModule, NotificationModule],
@@ -39,13 +40,12 @@ import { SharedTournamentEventBusAdapter } from './domain/events/shared-tourname
     { provide: TOURNAMENT_DOMAIN_EVENT_BUS, useExisting: BullmqTournamentEventBusService },
     {
       provide: TOURNAMENT_QUEUE_TOKENS.CONNECTION,
-      inject: [ConfigService],
-      useFactory: (configService: ConfigService): ConnectionOptions => {
-        const redisUrl = configService.get<string>('REDIS_URL');
-        if (!redisUrl?.trim()) {
+      inject: [redisConfig.KEY],
+      useFactory: (redis: RedisConfig): ConnectionOptions => {
+        if (!redis.url) {
           throw new Error('REDIS_URL is not defined in environment variables');
         }
-        return { url: redisUrl };
+        return { url: redis.url };
       },
     },
     {
