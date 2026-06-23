@@ -1,5 +1,4 @@
 import { Inject, Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { Job, Worker, type ConnectionOptions } from 'bullmq';
 import { createHash } from 'crypto';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
@@ -12,15 +11,8 @@ import { EMAIL_JOB_NAMES, EMAIL_QUEUE_NAME, EMAIL_QUEUE_TOKENS } from './email.c
 import type { SendVerificationEmailJobData } from './email.types';
 import { correlationIdStorage, createCorrelationId } from '@/common/interceptors/correlation-id';
 import { CircuitBreaker, type CircuitState } from '@/common/resilience/circuit-breaker';
-
-const DEFAULT_EMAIL_VERIFICATION_TOKEN_TTL_SECONDS = 1_800;
-
-// Circuit-breaker thresholds. The audit specifies 5
-// consecutive failures to open and a 30-second cool-down
-// before a half-open probe; both are env-overridable so a
-// production incident can dial them without a code change.
-const DEFAULT_EMAIL_CB_FAILURE_THRESHOLD = 5;
-const DEFAULT_EMAIL_CB_RESET_TIMEOUT_MS = 30_000;
+import { emailConfig } from '@/core/config';
+import { emailVerificationConfig } from '@/core/config';
 
 @Injectable()
 export class EmailProcessor implements OnModuleInit, OnModuleDestroy {
@@ -31,6 +23,7 @@ export class EmailProcessor implements OnModuleInit, OnModuleDestroy {
   private readonly verificationBaseUrl: string;
   private readonly sendTimeoutMs: number;
   private readonly tokenTtlSeconds: number;
+  private readonly concurrency: number;
   private readonly resend: Resend;
   /**
    * Circuit breaker in front of the Resend API. The
@@ -47,47 +40,40 @@ export class EmailProcessor implements OnModuleInit, OnModuleDestroy {
   private readonly resendBreaker: CircuitBreaker;
 
   constructor(
-    private readonly configService: ConfigService,
-    @Inject(EMAIL_QUEUE_TOKENS.CONNECTION) // inject the Redis connection in email.module.ts
+    @Inject(EMAIL_QUEUE_TOKENS.CONNECTION)
     private readonly connection: ConnectionOptions,
     @Inject(DRIZZLE) private readonly db: DrizzleDB,
     @InjectPinoLogger(EmailProcessor.name) private readonly logger: PinoLogger,
+    @Inject(emailConfig.KEY) private readonly email,
+    @Inject(emailVerificationConfig.KEY) private readonly emailVerification,
   ) {
-    const configuredBaseUrl = this.configService.get<string>('EMAIL_VERIFICATION_BASE_URL')?.trim();
-    const resendApiKey = this.getRequiredConfig('RESEND_API_KEY');
+    const cfg = this.email;
+    const evCfg = this.emailVerification;
 
-    this.resend = new Resend(resendApiKey);
+    if (!cfg?.resendApiKey) {
+      throw new Error(
+        'Email service is missing required configuration. Check server environment variables.',
+      );
+    }
 
-    this.provider = this.getRequiredConfig('EMAIL_PROVIDER');
-    this.fromAddress = this.getRequiredConfig('EMAIL_FROM_ADDRESS');
-    this.fromName = this.getRequiredConfig('EMAIL_FROM_NAME');
-    this.verificationBaseUrl =
-      configuredBaseUrl && configuredBaseUrl.length > 0
-        ? configuredBaseUrl
-        : 'http://localhost:3000/verify-email';
+    this.resend = new Resend(cfg.resendApiKey);
+    this.provider = cfg.provider;
+    this.fromAddress = cfg.fromAddress;
+    this.fromName = cfg.fromName;
 
-    const configuredTimeout = this.configService.get<number>('EMAIL_SEND_TIMEOUT_MS');
-    this.sendTimeoutMs =
-      typeof configuredTimeout === 'number' && configuredTimeout > 0 ? configuredTimeout : 5_000;
+    if (!evCfg.baseUrl || evCfg.baseUrl.trim().length === 0) {
+      this.verificationBaseUrl = 'http://localhost:3000/verify-email';
+    } else {
+      this.verificationBaseUrl = evCfg.baseUrl.trim();
+    }
 
-    const configuredTtl = this.configService.get<number>('EMAIL_VERIFICATION_TOKEN_TTL_SECONDS');
-    this.tokenTtlSeconds =
-      typeof configuredTtl === 'number' && configuredTtl > 0
-        ? configuredTtl
-        : DEFAULT_EMAIL_VERIFICATION_TOKEN_TTL_SECONDS;
-
-    const cbFailureThreshold = this.configService.get<number>('EMAIL_CB_FAILURE_THRESHOLD');
-    const cbResetTimeoutMs = this.configService.get<number>('EMAIL_CB_RESET_TIMEOUT_MS');
+    this.sendTimeoutMs = cfg.sendTimeoutMs;
+    this.tokenTtlSeconds = evCfg.tokenTtlSeconds;
+    this.concurrency = cfg.queueConcurrency;
 
     this.resendBreaker = new CircuitBreaker({
-      failureThreshold:
-        typeof cbFailureThreshold === 'number' && cbFailureThreshold > 0
-          ? Math.floor(cbFailureThreshold)
-          : DEFAULT_EMAIL_CB_FAILURE_THRESHOLD,
-      resetTimeoutMs:
-        typeof cbResetTimeoutMs === 'number' && cbResetTimeoutMs > 0
-          ? Math.floor(cbResetTimeoutMs)
-          : DEFAULT_EMAIL_CB_RESET_TIMEOUT_MS,
+      failureThreshold: cfg.circuitBreaker.failureThreshold,
+      resetTimeoutMs: cfg.circuitBreaker.resetTimeoutMs,
     });
 
     // Emit a single structured log line on every circuit
@@ -109,28 +95,6 @@ export class EmailProcessor implements OnModuleInit, OnModuleDestroy {
 
   // this method initializes the BullMQ worker to process email jobs from the queue, it sets up the concurrency level based on configuration and defines handlers for job completion and failure events to log the outcomes of email processing. When we start a project, this module will be initialized and the worker will start listening for jobs in the email queue, when a job is added to the queue, the worker will pick it up and execute the corresponding processing logic defined in the processSendVerificationEmail method.
   onModuleInit(): void {
-    const fallbackConcurrency = 5;
-    const configuredConcurrency = this.configService.get<string | number>(
-      'EMAIL_QUEUE_CONCURRENCY',
-    );
-    const parsedConcurrency = Number(configuredConcurrency);
-
-    const concurrency =
-      Number.isInteger(parsedConcurrency) && parsedConcurrency > 0
-        ? parsedConcurrency
-        : fallbackConcurrency;
-
-    if (
-      configuredConcurrency !== undefined &&
-      (!Number.isInteger(parsedConcurrency) || parsedConcurrency <= 0)
-    ) {
-      this.logger.warn({
-        event: 'email_queue_invalid_concurrency',
-        value: configuredConcurrency,
-        fallback: fallbackConcurrency,
-      });
-    }
-
     this.worker = new Worker<SendVerificationEmailJobData, void, string>(
       EMAIL_QUEUE_NAME,
       async (job: Job<SendVerificationEmailJobData>) => {
@@ -159,7 +123,7 @@ export class EmailProcessor implements OnModuleInit, OnModuleDestroy {
       },
       {
         connection: this.connection,
-        concurrency,
+        concurrency: this.concurrency,
       },
     );
 
@@ -424,19 +388,6 @@ export class EmailProcessor implements OnModuleInit, OnModuleDestroy {
     </table>
   </body>
 </html>`;
-  }
-
-  private getRequiredConfig(key: string): string {
-    const value = this.configService.get<string>(key)?.trim();
-
-    if (!value) {
-      // Do not expose the config key name in the error message — this is a startup misconfiguration.
-      throw new Error(
-        'Email service is missing required configuration. Check server environment variables.',
-      );
-    }
-
-    return value;
   }
 }
 

@@ -1,5 +1,7 @@
-import { Injectable, OnModuleDestroy } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
+import { Inject, Injectable, OnModuleDestroy } from '@nestjs/common';
+import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
+import { redisConfig } from '@/core/config';
+import type { RedisConfig } from '@/core/config';
 import Redis from 'ioredis';
 import type { CacheProvider } from '@/common/ports/cache.provider';
 
@@ -7,18 +9,43 @@ import type { CacheProvider } from '@/common/ports/cache.provider';
 export class RedisService implements CacheProvider, OnModuleDestroy {
   private readonly client: Redis;
 
-  constructor(private readonly configService: ConfigService) {
-    const redisUrl = this.configService.get<string>('REDIS_URL');
-
-    if (!redisUrl || redisUrl.trim().length === 0) {
+  constructor(
+    @Inject(redisConfig.KEY)
+    private readonly redisConfig: RedisConfig,
+    @InjectPinoLogger(RedisService.name)
+    private readonly logger: PinoLogger,
+  ) {
+    const url = this.redisConfig.url;
+    if (!url || url.trim().length === 0) {
       throw new Error('REDIS_URL is not defined in environment variables');
     }
 
-    this.client = new Redis(redisUrl);
+    this.client = new Redis(url, this.redisOptions);
+  }
+
+  private get redisOptions() {
+    return {
+      maxRetriesPerRequest: 3,
+      enableReadyCheck: true,
+      lazyConnect: false,
+      retryStrategy: (times: number) => {
+        if (times > 3) {
+          return null;
+        }
+        return Math.min(times * 200, 1000);
+      },
+    };
+  }
+
+  private createClient(): Redis {
+    const url = this.redisConfig.url;
+    if (!url || url.trim().length === 0) {
+      throw new Error('REDIS_URL is not defined in environment variables');
+    }
+    return new Redis(url, this.redisOptions);
   }
 
   async incrementWindowCounter(key: string, windowMs: number): Promise<number> {
-    // The Lua script atomically increments the counter and sets the expiration if it's the first increment
     const luaScript = `
     local current = redis.call("INCR", KEYS[1])
     if current == 1 then
@@ -27,8 +54,6 @@ export class RedisService implements CacheProvider, OnModuleDestroy {
     return current
   `;
 
-    // execute the Lua script with the key and window duration in milliseconds as arguments
-    // 1 indicates that there is one key being passed to the script, which is the rate limit key we want to increment and set expiration for
     const count = await this.client.eval(luaScript, 1, key, windowMs);
 
     if (typeof count !== 'number') {
@@ -106,7 +131,18 @@ export class RedisService implements CacheProvider, OnModuleDestroy {
   async lpopJson<T>(key: string): Promise<T | null> {
     const raw = await this.client.lpop(key);
     if (raw === null) return null;
-    return JSON.parse(raw) as T;
+
+    try {
+      return JSON.parse(raw) as T;
+    } catch {
+      this.logger.warn({
+        event: 'redis_json_parse_failed',
+        key,
+        payloadLength: raw.length,
+        message: 'Failed to parse JSON from Redis list',
+      });
+      return null;
+    }
   }
 
   /**
@@ -141,11 +177,7 @@ export class RedisService implements CacheProvider, OnModuleDestroy {
    * calling `subscriber.quit()` on shutdown.
    */
   createSubscriber(): Redis {
-    const redisUrl = this.configService.get<string>('REDIS_URL');
-    if (!redisUrl || redisUrl.trim().length === 0) {
-      throw new Error('REDIS_URL is not defined in environment variables');
-    }
-    return new Redis(redisUrl);
+    return this.createClient();
   }
 
   async onModuleDestroy(): Promise<void> {

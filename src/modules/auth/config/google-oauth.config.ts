@@ -1,34 +1,29 @@
-import { Injectable } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-
-const MISSING_ENVIRONMENT_VARIABLE_SUFFIX = 'environment variable is not set';
+import { Inject, Injectable } from '@nestjs/common';
+import { googleOAuthConfig } from '@/core/config';
+import type { GoogleOAuthConfig as CoreGoogleOAuthConfig } from '@/core/config';
 
 /**
- * Google OAuth configuration.
- * Loaded from environment variables so credentials are never hardcoded.
+ * Google OAuth configuration wrapper.
+ * Preserves the @Injectable() surface consumed by GoogleOAuthAdapter.
  */
 @Injectable()
 export class GoogleOAuthConfig {
-  constructor(private readonly configService: ConfigService) {}
+  constructor(
+    @Inject(googleOAuthConfig.KEY)
+    private readonly config: CoreGoogleOAuthConfig,
+  ) {}
 
-  private getRequiredString(key: string): string {
-    const value = this.configService.get<string>(key);
+  get clientId(): string {
+    const value = this.config.clientId;
     if (!value) {
-      throw new Error(`${key} ${MISSING_ENVIRONMENT_VARIABLE_SUFFIX}`);
+      throw new Error('GOOGLE_CLIENT_ID environment variable is not set');
     }
-
     return value;
   }
 
-  get clientId(): string {
-    return this.getRequiredString('GOOGLE_CLIENT_ID');
-  }
-
-  /**
-   * Optional: restrict sign-in to a specific hosted domain (e.g. "example.com").
-   * Leave unset to allow any Google account.
-   */
+  /** Optional: restrict sign-in to a specific hosted domain (e.g. "example.com"). */
   get hostedDomain(): string | undefined {
-    return this.configService.get<string>('GOOGLE_HOSTED_DOMAIN');
+    const value = this.config.hostedDomain;
+    return value && value.trim().length > 0 ? value.trim() : undefined;
   }
 }

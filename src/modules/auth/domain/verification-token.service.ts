@@ -1,6 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { randomBytes } from 'crypto';
-import { EmailVerificationConfig } from '../config/email-verification.config';
+import { EmailVerificationConfig } from '../config/email-verification-token.config';
 import { CRYPTO_PROVIDER, type CryptoProvider } from './ports/crypto.provider';
 import { EMAIL_PROVIDER, type EmailProvider } from './ports/email.provider';
 import { AUTH_USER_REPOSITORY_PORT, type UserRepositoryPort } from './ports/user-repository.port';

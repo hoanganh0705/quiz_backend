@@ -24,12 +24,15 @@ import { ConfigService } from '@nestjs/config';
     forwardRef(() => NotificationModule),
     JwtModule.registerAsync({
       inject: [ConfigService],
-      useFactory: (configService: ConfigService) => ({
-        secret: configService.get<string>('JWT_ACCESS_TOKEN_SECRET') ?? '',
-        signOptions: {
-          expiresIn: '1d',
-        },
-      }),
+      useFactory: (configService: ConfigService) => {
+        const secret = configService.get<string>('jwt.accessSecret');
+        return {
+          secret: secret ?? '',
+          signOptions: {
+            expiresIn: '1d',
+          },
+        };
+      },
     }),
   ],
   providers: [
