@@ -1,7 +1,14 @@
-import { CanActivate, ExecutionContext, Injectable, UnauthorizedException } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
+import {
+  CanActivate,
+  ExecutionContext,
+  Inject,
+  Injectable,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import type { Socket } from 'socket.io';
+import { jwtConfig } from '@/core/config';
+import type { JwtConfig } from '@/core/config';
 import { isUserRole } from '@/common/types/user-role.type';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
 
@@ -9,18 +16,11 @@ export type AuthenticatedSocket = Socket & { user?: JwtPayload };
 
 @Injectable()
 export class WsJwtGuard implements CanActivate {
-  private readonly accessTokenSecret: string;
-  private readonly accessTokenIssuer: string;
-  private readonly accessTokenAudience: string;
-
   constructor(
     private readonly jwtService: JwtService,
-    private readonly configService: ConfigService,
-  ) {
-    this.accessTokenSecret = this.configService.getOrThrow<string>('JWT_ACCESS_TOKEN_SECRET');
-    this.accessTokenIssuer = this.configService.getOrThrow<string>('JWT_ACCESS_TOKEN_ISSUER');
-    this.accessTokenAudience = this.configService.getOrThrow<string>('JWT_ACCESS_TOKEN_AUDIENCE');
-  }
+    @Inject(jwtConfig.KEY)
+    private readonly jwt: JwtConfig,
+  ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const client: AuthenticatedSocket = context.switchToWs().getClient();
@@ -32,9 +32,9 @@ export class WsJwtGuard implements CanActivate {
 
     try {
       const payload = await this.jwtService.verifyAsync<JwtPayload>(token, {
-        secret: this.accessTokenSecret,
-        issuer: this.accessTokenIssuer,
-        audience: this.accessTokenAudience,
+        secret: this.jwt.accessSecret,
+        issuer: this.jwt.issuer,
+        audience: this.jwt.audience,
       });
 
       if (!payload?.sub || !isUserRole(payload.role)) {

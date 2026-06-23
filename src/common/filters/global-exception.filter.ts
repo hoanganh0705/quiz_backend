@@ -1,7 +1,15 @@
-import { ArgumentsHost, Catch, ExceptionFilter, HttpException, HttpStatus } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
+import {
+  ArgumentsHost,
+  Catch,
+  ExceptionFilter,
+  HttpException,
+  HttpStatus,
+  Inject,
+} from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { PinoLogger } from 'nestjs-pino';
+import { serverConfig } from '@/core/config';
+import type { ServerConfig } from '@/core/config';
 import type { ProblemDetail } from '@/common/types/problem-detail.type';
 import { RFC7807_TYPE_URIS } from '@/common/types/problem-detail.type';
 
@@ -19,11 +27,12 @@ type HttpExceptionResponseShape = {
 export class GlobalExceptionFilter implements ExceptionFilter {
   constructor(
     private readonly logger: PinoLogger,
-    private readonly configService: ConfigService,
+    @Inject(serverConfig.KEY)
+    private readonly server: ServerConfig,
   ) {}
 
   catch(exception: unknown, host: ArgumentsHost): void {
-    const isProduction = this.configService.get<string>('NODE_ENV') === 'production';
+    const isProduction = this.server.nodeEnv === 'production';
     const ctx = host.switchToHttp();
     const response = ctx.getResponse<Response>();
     const request = ctx.getRequest<RequestWithLogger>();
