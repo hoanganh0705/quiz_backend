@@ -41,7 +41,6 @@ import {
   swaggerConfig,
 } from './core/config';
 import { RedisModule } from './core/redis/redis.module';
-import { RolesGuard } from './common/authorization/guards/roles.guard';
 import { PermissionsGuard } from './common/authorization/guards/permissions.guard';
 import { LoggerModule } from 'nestjs-pino';
 import { SocialModule } from './modules/social/social.module';
@@ -121,10 +120,6 @@ import { HealthModule } from './modules/health/health.module';
     {
       provide: APP_GUARD,
       useClass: JwtGuard,
-    },
-    {
-      provide: APP_GUARD,
-      useClass: RolesGuard,
     },
     {
       provide: APP_GUARD,
