@@ -2,19 +2,10 @@ import { Inject, Injectable } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { UserRole } from '@/common/types/user-role.type';
 import { DISCUSSION_REPOSITORY_PORT, QUIZ_EXISTENCE_PORT, USER_EXISTENCE_PORT } from '../ports';
-import type {
-  DiscussionRepositoryPort,
-  QuizExistencePort,
-  UserExistencePort,
-  UserPublicInfo,
-} from '../ports';
+import type { DiscussionRepositoryPort, QuizExistencePort, UserExistencePort } from '../ports';
 import { DISCUSSION_DOMAIN_EVENT_BUS } from '../events';
 import type { DiscussionDomainEventBusPort } from '../events';
-import type {
-  CommentMentionedEvent,
-  CommentRestoredEvent,
-  ThreadRestoredEvent,
-} from '../events/discussion-domain.events';
+import type { CommentMentionedEvent } from '../events/discussion-domain.events';
 import type {
   DiscussionThread,
   DiscussionThreadDetail,
@@ -71,8 +62,8 @@ import {
   SelfReportError,
   DuplicateReportError,
   QuizNotFoundError,
-  ModeratorRequiredError,
 } from '../errors';
+import { DiscussionAuthorizationPolicy } from '../policies/discussion-authorization.policy';
 
 @Injectable()
 export class DiscussionService {
@@ -783,9 +774,7 @@ export class DiscussionService {
   }
 
   async hideThread(threadId: string, moderatorId: string, role: UserRole): Promise<void> {
-    if (role !== 'admin' && role !== 'moderator') {
-      throw new ModeratorRequiredError();
-    }
+    DiscussionAuthorizationPolicy.assertCanModerate({ sub: moderatorId, role });
 
     const thread = await this.repo.getThreadById(threadId);
     if (!thread) throw new ThreadNotFoundError(threadId);
@@ -802,9 +791,7 @@ export class DiscussionService {
   }
 
   async restoreThread(threadId: string, moderatorId: string, role: UserRole): Promise<void> {
-    if (role !== 'admin' && role !== 'moderator') {
-      throw new ModeratorRequiredError();
-    }
+    DiscussionAuthorizationPolicy.assertCanModerate({ sub: moderatorId, role });
 
     const thread = await this.repo.getThreadById(threadId);
     if (!thread) throw new ThreadNotFoundError(threadId);
@@ -963,9 +950,7 @@ export class DiscussionService {
   }
 
   async hideComment(commentId: string, moderatorId: string, role: UserRole): Promise<void> {
-    if (role !== 'admin' && role !== 'moderator') {
-      throw new ModeratorRequiredError();
-    }
+    DiscussionAuthorizationPolicy.assertCanModerate({ sub: moderatorId, role });
 
     const comment = await this.repo.getCommentById(commentId);
     if (!comment) throw new CommentNotFoundError(commentId);
@@ -982,9 +967,7 @@ export class DiscussionService {
   }
 
   async restoreComment(commentId: string, moderatorId: string, role: UserRole): Promise<void> {
-    if (role !== 'admin' && role !== 'moderator') {
-      throw new ModeratorRequiredError();
-    }
+    DiscussionAuthorizationPolicy.assertCanModerate({ sub: moderatorId, role });
 
     const comment = await this.repo.getCommentById(commentId);
     if (!comment) throw new CommentNotFoundError(commentId);

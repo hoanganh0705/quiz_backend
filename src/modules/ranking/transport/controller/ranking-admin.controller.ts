@@ -7,7 +7,8 @@
 
 import { Controller, Get, Post, Query, HttpCode, HttpStatus } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiOkResponse } from '@nestjs/swagger';
-import { Roles } from '@/common/authorization/decorators/roles.decorator';
+import { Permissions } from '@/common/authorization/decorators/permissions.decorator';
+import { Permission } from '@/common/authorization/permissions';
 import { ApiAdminEndpoint } from '@/common/swagger/swagger-decorators';
 import { RankingApplicationService } from '../../application/ranking.application.service';
 import { PeriodResetService } from '../../domain/services';
@@ -33,7 +34,7 @@ export class RankingAdminController {
   ) {}
 
   @Get('status')
-  @Roles('admin')
+  @Permissions(Permission.RANKING_ADMIN)
   @ApiOperation({
     summary: 'Get ranking system status',
     description:
@@ -55,7 +56,7 @@ export class RankingAdminController {
   }
 
   @Post('recalculate')
-  @Roles('admin')
+  @Permissions(Permission.RANKING_ADMIN)
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Trigger immediate rank recalculation',
@@ -77,7 +78,7 @@ export class RankingAdminController {
   }
 
   @Post('reset')
-  @Roles('admin')
+  @Permissions(Permission.RANKING_ADMIN)
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Trigger period reset',
@@ -101,7 +102,7 @@ export class RankingAdminController {
   }
 
   @Post('consistency-check')
-  @Roles('admin')
+  @Permissions(Permission.RANKING_ADMIN)
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Trigger consistency check',

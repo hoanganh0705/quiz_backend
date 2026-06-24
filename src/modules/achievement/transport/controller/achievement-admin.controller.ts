@@ -7,12 +7,9 @@
 
 import { Controller, Get, Post, Param, HttpCode, HttpStatus, ParseUUIDPipe } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiOkResponse } from '@nestjs/swagger';
-import { Roles } from '@/common/authorization/decorators/roles.decorator';
-import {
-  ApiAdminEndpoint,
-  ApiAdminResource,
-  ApiAdminRead,
-} from '@/common/swagger/swagger-decorators';
+import { Permissions } from '@/common/authorization/decorators/permissions.decorator';
+import { Permission } from '@/common/authorization/permissions';
+import { ApiAdminEndpoint, ApiAdminRead } from '@/common/swagger/swagger-decorators';
 import { ScheduledEvaluationService } from '../../infrastructure/scheduled/scheduled-evaluation.service';
 import { AchievementHistoryService } from '../../application/achievement-history.service';
 import { ReevaluateUserResponseDto } from '../../dto/response/achievement-admin-response.dto';
@@ -27,7 +24,7 @@ export class AchievementAdminController {
   ) {}
 
   @Post('reevaluate/:userId')
-  @Roles('admin')
+  @Permissions(Permission.ACHIEVEMENT_ADMIN)
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Re-evaluate all badges for a user',
@@ -54,7 +51,7 @@ export class AchievementAdminController {
   }
 
   @Get('reevaluate/:userId/history')
-  @Roles('admin')
+  @Permissions(Permission.ACHIEVEMENT_ADMIN)
   @ApiAdminRead({ description: 'Achievement history returned' })
   async getUserHistory(@Param('userId', new ParseUUIDPipe()) userId: string) {
     return this.achievementHistoryService.getUserHistory(userId, { includeRevoked: true });

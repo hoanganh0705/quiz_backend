@@ -1,7 +1,8 @@
 import { Controller, Delete, Get, Param, ParseUUIDPipe, Query, UseFilters } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
-import { Roles } from '@/common/authorization/decorators/roles.decorator';
+import { Permissions } from '@/common/authorization/decorators/permissions.decorator';
+import { Permission } from '@/common/authorization/permissions';
 import {
   ApiAuth,
   ApiAuthList,
@@ -64,7 +65,7 @@ export class AchievementController {
   }
 
   @Delete('/users/:userId/badges/:badgeId')
-  @Roles('admin')
+  @Permissions(Permission.ACHIEVEMENT_REVOKE)
   @ApiAuth()
   @ApiAuthDelete('Badge revoked successfully')
   @ApiInternalError()

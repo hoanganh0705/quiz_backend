@@ -29,7 +29,8 @@ import { RequireAuth } from '@/common/guards/jwt.guard';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
 import { User } from '@/common/decorators/user.decorator';
 import { UpdatePreferencesDto, GetNotificationsQueryDto } from '@/modules/notification/dto/request';
-import { Roles } from '@/common/authorization/decorators/roles.decorator';
+import { Permissions } from '@/common/authorization/decorators/permissions.decorator';
+import { Permission } from '@/common/authorization/permissions';
 
 @ApiTags('notification')
 @Controller('notifications')
@@ -92,7 +93,7 @@ export class NotificationController {
   }
 
   @Get('analytics')
-  @Roles('admin')
+  @Permissions(Permission.NOTIFICATION_ANALYTICS)
   async getAnalytics(): Promise<NotificationAnalyticsDto> {
     return this.notificationService.getAnalytics();
   }

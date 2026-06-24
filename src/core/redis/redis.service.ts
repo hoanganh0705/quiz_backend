@@ -15,34 +15,33 @@ export class RedisService implements CacheProvider, OnModuleDestroy {
     @InjectPinoLogger(RedisService.name)
     private readonly logger: PinoLogger,
   ) {
+    this.client = new Redis(this.redisUrl, this.redisOptions);
+  }
+
+  private get redisUrl(): string {
     const url = this.redisConfig.url;
+
     if (!url || url.trim().length === 0) {
       throw new Error('REDIS_URL is not defined in environment variables');
     }
 
-    this.client = new Redis(url, this.redisOptions);
+    return url;
   }
 
-  private get redisOptions() {
-    return {
-      maxRetriesPerRequest: 3,
-      enableReadyCheck: true,
-      lazyConnect: false,
-      retryStrategy: (times: number) => {
-        if (times > 3) {
-          return null;
-        }
-        return Math.min(times * 200, 1000);
-      },
-    };
-  }
+  private readonly redisOptions = {
+    maxRetriesPerRequest: 3,
+    enableReadyCheck: true,
+    lazyConnect: false,
+    retryStrategy: (times: number) => {
+      if (times > 3) {
+        return null;
+      }
+      return Math.min(times * 200, 1000);
+    },
+  };
 
   private createClient(): Redis {
-    const url = this.redisConfig.url;
-    if (!url || url.trim().length === 0) {
-      throw new Error('REDIS_URL is not defined in environment variables');
-    }
-    return new Redis(url, this.redisOptions);
+    return new Redis(this.redisUrl, this.redisOptions);
   }
 
   async incrementWindowCounter(key: string, windowMs: number): Promise<number> {
@@ -115,7 +114,10 @@ export class RedisService implements CacheProvider, OnModuleDestroy {
       try {
         return JSON.parse(cached) as T;
       } catch {
-        // malformed cache entry, fall through to re-fetch
+        this.logger.warn({
+          event: 'redis_cache_parse_failed',
+          key,
+        });
       }
     }
 
@@ -181,6 +183,10 @@ export class RedisService implements CacheProvider, OnModuleDestroy {
   }
 
   async onModuleDestroy(): Promise<void> {
-    await this.client.quit();
+    try {
+      await this.client.quit();
+    } catch {
+      this.client.disconnect();
+    }
   }
 }
