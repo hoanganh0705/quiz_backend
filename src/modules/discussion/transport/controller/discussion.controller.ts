@@ -16,6 +16,8 @@ import {
 import { Throttle } from '@nestjs/throttler';
 import { ApiTags, ApiOperation, ApiOkResponse, ApiCreatedResponse } from '@nestjs/swagger';
 import { Public } from '@/common/decorators/public.decorator';
+import { Permissions } from '@/common/authorization/decorators/permissions.decorator';
+import { Permission } from '@/common/authorization/permissions';
 import {
   ApiAuth,
   ApiAuthAction,
@@ -356,6 +358,7 @@ export class DiscussionController {
 
   @Throttle({ default: { limit: 30, ttl: 60_000 } })
   @Post('threads/:threadId/hide')
+  @Permissions(Permission.DISCUSSION_MODERATE)
   @ApiModeratorAction('Thread hidden')
   @HttpCode(HttpStatus.NO_CONTENT)
   async hideThread(
@@ -367,6 +370,7 @@ export class DiscussionController {
 
   @Throttle({ default: { limit: 30, ttl: 60_000 } })
   @Post('threads/:threadId/restore')
+  @Permissions(Permission.DISCUSSION_MODERATE)
   @ApiModeratorAction('Thread restored')
   @HttpCode(HttpStatus.NO_CONTENT)
   async restoreThread(
@@ -448,6 +452,7 @@ export class DiscussionController {
 
   @Throttle({ default: { limit: 30, ttl: 60_000 } })
   @Post('comments/:commentId/hide')
+  @Permissions(Permission.DISCUSSION_MODERATE)
   @ApiModeratorAction('Comment hidden')
   @HttpCode(HttpStatus.NO_CONTENT)
   async hideComment(
@@ -459,6 +464,7 @@ export class DiscussionController {
 
   @Throttle({ default: { limit: 30, ttl: 60_000 } })
   @Post('comments/:commentId/restore')
+  @Permissions(Permission.DISCUSSION_MODERATE)
   @ApiModeratorAction('Comment restored')
   @HttpCode(HttpStatus.NO_CONTENT)
   async restoreComment(
@@ -504,6 +510,7 @@ export class DiscussionController {
 
   @Throttle({ default: { limit: 20, ttl: 60_000 } })
   @Post('reports/:reportId/review')
+  @Permissions(Permission.DISCUSSION_MODERATE)
   @ApiModeratorAction('Report reviewed')
   @HttpCode(HttpStatus.NO_CONTENT)
   async reviewReport(
@@ -515,6 +522,7 @@ export class DiscussionController {
   }
 
   @Get('reports')
+  @Permissions(Permission.DISCUSSION_MODERATE)
   @ApiModeratorEndpoint({ description: 'Reports returned', type: PaginatedReportsDto })
   async listReports(
     @CurrentUser() user: JwtPayload,
