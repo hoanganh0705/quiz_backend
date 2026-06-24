@@ -10,7 +10,8 @@ import {
   HttpStatus,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiOkResponse } from '@nestjs/swagger';
-import { Roles } from '@/common/authorization/decorators/roles.decorator';
+import { Permissions } from '@/common/authorization/decorators/permissions.decorator';
+import { Permission } from '@/common/authorization/permissions';
 import { ApiAdminResource, ApiAdminUpdate } from '@/common/swagger/swagger-decorators';
 import { ReviewAdminService } from '@/modules/review/domain/review-admin.service';
 import { CursorMapper } from '@/modules/review/mappers/review-cursor.mapper';
@@ -29,7 +30,7 @@ export class AdminReviewController {
   constructor(private readonly reviewAdminService: ReviewAdminService) {}
 
   @Get('reports')
-  @Roles('admin')
+  @Permissions(Permission.REVIEW_MODERATE)
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'List all platform-wide review reports for moderation',
@@ -78,7 +79,7 @@ export class AdminReviewController {
   }
 
   @Patch('reports/:reportId')
-  @Roles('admin')
+  @Permissions(Permission.REVIEW_MODERATE)
   @HttpCode(HttpStatus.OK)
   @ApiAdminUpdate({
     description: 'Report status updated successfully',

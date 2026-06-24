@@ -12,7 +12,8 @@ import {
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiOkResponse, ApiNotFoundResponse } from '@nestjs/swagger';
 import { Public } from '@/common/decorators/public.decorator';
-import { Roles } from '@/common/authorization/decorators/roles.decorator';
+import { Permissions } from '@/common/authorization/decorators/permissions.decorator';
+import { Permission } from '@/common/authorization/permissions';
 import {
   ApiAuth,
   ApiAuthCreate,
@@ -141,7 +142,7 @@ export class CategoryController {
   }
 
   @Post(':id/restore')
-  @Roles('admin')
+  @Permissions(Permission.CATEGORY_MANAGE)
   @ApiAuth()
   @ApiOperation({
     summary: 'Restore category',
@@ -186,7 +187,7 @@ export class CategoryController {
   }
 
   @Post()
-  @Roles('admin')
+  @Permissions(Permission.CATEGORY_MANAGE)
   @ApiAuthCreate({ description: 'Category created', type: CategoryResponseDto })
   createCategory(@Body() payload: CreateCategoryDto): Promise<CategoryResponseDto> {
     const command: CreateCategoryCommand = {
@@ -200,7 +201,7 @@ export class CategoryController {
   }
 
   @Patch(':id')
-  @Roles('admin')
+  @Permissions(Permission.CATEGORY_MANAGE)
   @ApiAuthUpdate({ description: 'Category updated', type: CategoryResponseDto })
   updateCategory(
     @Param('id', new ParseUUIDPipe()) categoryId: string,
@@ -217,7 +218,7 @@ export class CategoryController {
   }
 
   @Delete(':id')
-  @Roles('admin')
+  @Permissions(Permission.CATEGORY_MANAGE)
   @ApiAuthDelete('Category deleted')
   deleteCategory(
     @Param('id', new ParseUUIDPipe()) categoryId: string,

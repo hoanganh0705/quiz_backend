@@ -13,7 +13,8 @@ import {
 import { Throttle } from '@nestjs/throttler';
 import { ApiTags, ApiOperation, ApiOkResponse, ApiNotFoundResponse } from '@nestjs/swagger';
 import { Public } from '@/common/decorators/public.decorator';
-import { Roles } from '@/common/authorization/decorators/roles.decorator';
+import { Permissions } from '@/common/authorization/decorators/permissions.decorator';
+import { Permission } from '@/common/authorization/permissions';
 import {
   ApiAuth,
   ApiAuthCreate,
@@ -150,7 +151,7 @@ export class TagController {
   // ─── Admin restore endpoint ───────────────────────────────────────────────────
 
   @Post(':id/restore')
-  @Roles('admin')
+  @Permissions(Permission.TAG_MANAGE)
   @ApiAuth()
   @ApiOperation({
     summary: 'Restore tag',
@@ -185,7 +186,7 @@ export class TagController {
   }
 
   @Post()
-  @Roles('admin')
+  @Permissions(Permission.TAG_MANAGE)
   @ApiAuthCreate({ description: 'Tag created', type: TagResponseDto })
   createTag(@Body() payload: CreateTagDto): Promise<TagResponseDto> {
     const command: CreateTagCommand = { name: payload.name, slug: payload.slug };
@@ -193,7 +194,7 @@ export class TagController {
   }
 
   @Patch(':id')
-  @Roles('admin')
+  @Permissions(Permission.TAG_MANAGE)
   @ApiAuthUpdate({ description: 'Tag updated', type: TagResponseDto })
   updateTag(
     @Param('id', new ParseUUIDPipe()) tagId: string,
@@ -204,7 +205,7 @@ export class TagController {
   }
 
   @Delete(':id')
-  @Roles('admin')
+  @Permissions(Permission.TAG_MANAGE)
   @ApiAuthDelete('Tag deleted')
   deleteTag(@Param('id', new ParseUUIDPipe()) tagId: string): Promise<DeleteTagResponseDto> {
     return this.tagApplicationService.deleteTag(tagId);
