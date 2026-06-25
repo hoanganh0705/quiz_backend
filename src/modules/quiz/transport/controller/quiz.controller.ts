@@ -18,6 +18,7 @@ import {
   ApiOkResponse,
   ApiForbiddenResponse,
   ApiNotFoundResponse,
+  ApiInternalServerErrorResponse,
 } from '@nestjs/swagger';
 import { Permission } from '@/common/authorization/permissions';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
@@ -210,7 +211,7 @@ export class QuizController {
   @ApiOkResponse({ description: 'Quiz deleted', type: DeleteQuizResponseDto })
   @ApiNotFoundResponse({ description: 'Quiz not found' })
   @ApiForbiddenResponse({ description: 'You do not have permission to delete this quiz' })
-  @ApiInternalError()
+  @ApiInternalServerErrorResponse()
   deleteQuiz(
     @Param('id', new ParseUUIDPipe()) quizId: string,
     @CurrentUser() user: JwtPayload,
@@ -279,7 +280,7 @@ export class QuizController {
   @ApiNotFoundResponse({ description: 'Quiz or version not found' })
   @ApiForbiddenResponse({ description: 'You do not have permission to publish this quiz version' })
   @ApiConflict()
-  @ApiInternalError()
+  @ApiInternalServerErrorResponse()
   publishQuizVersion(
     @Param('id', new ParseUUIDPipe()) quizId: string,
     @Param('versionId', new ParseUUIDPipe()) quizVersionId: string,

@@ -14,6 +14,8 @@ import {
   ApiCreatedResponse,
   ApiOkResponse,
   ApiTooManyRequestsResponse,
+  ApiBadRequestResponse,
+  ApiInternalServerErrorResponse,
 } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import { Public } from '@/common/decorators/public.decorator';
@@ -91,8 +93,8 @@ export class AuthController {
       'Creates a new user account and sends a verification email to the provided address.',
   })
   @ApiCreatedResponse({ description: 'Account created successfully', type: RegisterResponseDto })
-  @ApiBadRequest('Validation failed or email/username already in use')
-  @ApiInternalError()
+  @ApiBadRequestResponse()
+  @ApiInternalServerErrorResponse()
   async register(@Body() registerDto: RegisterDto): Promise<RegisterResponseDto> {
     const command: RegisterCommand = {
       username: registerDto.username,
@@ -111,8 +113,8 @@ export class AuthController {
     description: 'Confirms an email address using the token from the verification email.',
   })
   @ApiOkResponse({ description: 'Email verified successfully', type: VerifyEmailResponseDto })
-  @ApiBadRequest('Invalid or expired token')
-  @ApiInternalError()
+  @ApiBadRequestResponse()
+  @ApiInternalServerErrorResponse()
   async verifyEmail(@Body() verifyEmailDto: VerifyEmailDto): Promise<VerifyEmailResponseDto> {
     const command: VerifyEmailCommand = {
       token: verifyEmailDto.token,
@@ -130,8 +132,8 @@ export class AuthController {
       'Sends a new verification email to the provided address if the account exists and is unverified.',
   })
   @ApiOkResponse({ description: 'Verification email sent', type: VerifyEmailResponseDto })
-  @ApiBadRequest('Invalid email address')
-  @ApiInternalError()
+  @ApiBadRequestResponse()
+  @ApiInternalServerErrorResponse()
   async resendVerificationEmail(
     @Body() resendVerificationDto: ResendVerificationDto,
   ): Promise<VerifyEmailResponseDto> {
@@ -151,8 +153,8 @@ export class AuthController {
   })
   @ApiOkResponse({ description: 'Login successful', type: LoginResponseDto })
   @ApiUnauthorized()
-  @ApiBadRequest('Validation failed')
-  @ApiInternalError()
+  @ApiBadRequestResponse()
+  @ApiInternalServerErrorResponse()
   async login(
     @Body() loginDto: LoginDto,
     @RequestContext() context: AuthRequestContext,
@@ -179,8 +181,8 @@ export class AuthController {
   })
   @ApiOkResponse({ description: 'Login successful', type: LoginResponseDto })
   @ApiUnauthorized()
-  @ApiBadRequest('Validation failed')
-  @ApiInternalError()
+  @ApiBadRequestResponse()
+  @ApiInternalServerErrorResponse()
   async googleLogin(
     @Body() googleLoginDto: GoogleLoginDto,
     @RequestContext() context: AuthRequestContext,
@@ -199,8 +201,8 @@ export class AuthController {
   })
   @ApiOkResponse({ description: 'Token refreshed', type: RefreshTokenResponseDto })
   @ApiUnauthorized()
-  @ApiBadRequest('Validation failed')
-  @ApiInternalError()
+  @ApiBadRequestResponse()
+  @ApiInternalServerErrorResponse()
   async refreshToken(
     @RefreshToken({ required: true }) refreshToken: string,
     @RequestContext() context: AuthRequestContext,
@@ -219,7 +221,7 @@ export class AuthController {
       'Clears the refresh token cookie. The access token remains valid until it expires. Requires the refresh token cookie to be present.',
   })
   @ApiOkResponse({ description: 'Logged out successfully', type: LogoutResponseDto })
-  @ApiInternalError()
+  @ApiInternalServerErrorResponse()
   async logout(
     @RefreshToken() refreshToken: string | null,
     @RequestContext() context: AuthRequestContext,
@@ -237,7 +239,7 @@ export class AuthController {
       'Invalidates ALL active sessions for the authenticated user and clears the refresh token cookie.',
   })
   @ApiOkResponse({ description: 'All sessions terminated', type: LogoutResponseDto })
-  @ApiInternalError()
+  @ApiInternalServerErrorResponse()
   async logoutAll(
     @CurrentUser('sub') userId: string,
     @RequestContext() context: AuthRequestContext,
@@ -259,7 +261,7 @@ export class AuthController {
   })
   @ApiOkResponse({ description: 'Active sessions retrieved', type: SessionListResponseDto })
   @ApiUnauthorized()
-  @ApiInternalError()
+  @ApiInternalServerErrorResponse()
   async getActiveSessions(
     @CurrentUser('sub') userId: string,
     @CurrentUser('sessionId') currentSessionId: string,
@@ -276,7 +278,7 @@ export class AuthController {
       'Otherwise only the target session is invalidated.',
   })
   @ApiOkResponse({ description: 'Session revoked', type: SessionManagementResultDto })
-  @ApiInternalError()
+  @ApiInternalServerErrorResponse()
   async revokeSession(
     @CurrentUser('sub') userId: string,
     @CurrentUser('sessionId') currentSessionId: string,
@@ -294,7 +296,7 @@ export class AuthController {
   })
   @ApiOkResponse({ description: 'Other sessions revoked', type: SessionManagementResultDto })
   @ApiUnauthorized()
-  @ApiInternalError()
+  @ApiInternalServerErrorResponse()
   async revokeOtherSessions(
     @CurrentUser('sub') userId: string,
     @CurrentUser('sessionId') currentSessionId: string,
@@ -311,7 +313,7 @@ export class AuthController {
   })
   @ApiOkResponse({ description: 'Other sessions revoked', type: SessionManagementResultDto })
   @ApiUnauthorized()
-  @ApiInternalError()
+  @ApiInternalServerErrorResponse()
   async logoutOtherDevices(
     @CurrentUser('sub') userId: string,
     @CurrentUser('sessionId') currentSessionId: string,
@@ -327,7 +329,7 @@ export class AuthController {
   })
   @ApiOkResponse({ description: 'Security dashboard retrieved', type: AccountSecurityDto })
   @ApiUnauthorized()
-  @ApiInternalError()
+  @ApiInternalServerErrorResponse()
   async getSecurityDashboard(@CurrentUser('sub') userId: string): Promise<AccountSecurityDto> {
     return await this.authApplicationService.getSecurityDashboard(userId);
   }
@@ -347,9 +349,9 @@ export class AuthController {
     description: 'Password reset email sent (if account exists)',
     type: ForgotPasswordResponseDto,
   })
-  @ApiBadRequest('Validation failed')
+  @ApiBadRequestResponse()
   @ApiTooManyRequestsResponse({ description: 'Too many requests' })
-  @ApiInternalError()
+  @ApiInternalServerErrorResponse()
   async forgotPassword(
     @Body() forgotPasswordDto: ForgotPasswordDto,
   ): Promise<ForgotPasswordResponseDto> {
@@ -366,8 +368,8 @@ export class AuthController {
       'All active sessions are immediately invalidated after a successful reset.',
   })
   @ApiOkResponse({ description: 'Password reset successfully', type: ResetPasswordResponseDto })
-  @ApiBadRequest('Invalid or expired token, or password policy violation')
-  @ApiInternalError()
+  @ApiBadRequestResponse()
+  @ApiInternalServerErrorResponse()
   async resetPassword(
     @Body() resetPasswordDto: ResetPasswordDto,
   ): Promise<ResetPasswordResponseDto> {
@@ -388,8 +390,8 @@ export class AuthController {
   })
   @ApiOkResponse({ description: 'Password changed successfully', type: ChangePasswordResponseDto })
   @ApiUnauthorized()
-  @ApiBadRequest('Password policy violation')
-  @ApiInternalError()
+  @ApiBadRequestResponse()
+  @ApiInternalServerErrorResponse()
   async changePassword(
     @CurrentUser('sub') userId: string,
     @CurrentUser('sessionId') currentSessionId: string,
@@ -414,7 +416,7 @@ export class AuthController {
   })
   @ApiOkResponse({ description: 'Current user profile retrieved', type: CurrentUserResponseDto })
   @ApiUnauthorized()
-  @ApiInternalError()
+  @ApiInternalServerErrorResponse()
   async getCurrentUser(@CurrentUser('sub') userId: string): Promise<CurrentUserResponseDto> {
     return await this.authApplicationService.getCurrentUser(userId);
   }
@@ -431,8 +433,8 @@ export class AuthController {
       'Does not reveal whether an account exists.',
   })
   @ApiOkResponse({ description: 'Email availability checked', type: CheckEmailResponseDto })
-  @ApiBadRequest('Validation failed')
-  @ApiInternalError()
+  @ApiBadRequestResponse()
+  @ApiInternalServerErrorResponse()
   async checkEmail(@Body() dto: CheckEmailDto): Promise<CheckEmailResponseDto> {
     return await this.authApplicationService.checkEmailAvailability(dto.email);
   }
@@ -447,8 +449,8 @@ export class AuthController {
       'Does not reveal whether an account exists.',
   })
   @ApiOkResponse({ description: 'Username availability checked', type: CheckUsernameResponseDto })
-  @ApiBadRequest('Validation failed')
-  @ApiInternalError()
+  @ApiBadRequestResponse()
+  @ApiInternalServerErrorResponse()
   async checkUsername(@Body() dto: CheckUsernameDto): Promise<CheckUsernameResponseDto> {
     return await this.authApplicationService.checkUsernameAvailability(dto.username);
   }
@@ -465,7 +467,7 @@ export class AuthController {
   })
   @ApiOkResponse({ description: 'Password verification result', type: VerifyPasswordResponseDto })
   @ApiUnauthorized()
-  @ApiInternalError()
+  @ApiInternalServerErrorResponse()
   async verifyPassword(
     @CurrentUser('sub') userId: string,
     @Body() dto: VerifyPasswordDto,
@@ -485,7 +487,7 @@ export class AuthController {
   })
   @ApiOkResponse({ description: 'Account deleted', type: DeleteAccountResponseDto })
   @ApiUnauthorized()
-  @ApiInternalError()
+  @ApiInternalServerErrorResponse()
   async deleteAccount(
     @CurrentUser('sub') userId: string,
     @Body() dto: DeleteAccountDto,

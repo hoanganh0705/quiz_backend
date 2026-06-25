@@ -1,5 +1,5 @@
 import { Body, Controller, Get, Inject, Param, Patch, Query, UseFilters } from '@nestjs/common';
-import { ApiTags } from '@nestjs/swagger';
+import { ApiTags, ApiBadRequestResponse, ApiInternalServerErrorResponse } from '@nestjs/swagger';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
 import {
   ApiAuthList,
@@ -43,7 +43,7 @@ export class UserController {
 
   @Get('me/recommended-quizzes')
   @ApiAuthList({ description: 'Recommended quizzes returned', type: RelatedQuizzesResponseDto })
-  @ApiInternalError()
+  @ApiInternalServerErrorResponse()
   getRecommendedQuizzes(
     @CurrentUser('sub') userId: string,
     @Query() query: RecommendedQuizzesQueryDto,
@@ -99,7 +99,7 @@ export class UserController {
 
   @Get('me/activity')
   @ApiAuthList({ description: 'Activity returned', type: UserActivityResponseDto })
-  @ApiInternalError()
+  @ApiInternalServerErrorResponse()
   listUserActivity(
     @CurrentUser('sub') userId: string,
     @Query() query: ListUserActivityQueryDto,
@@ -161,7 +161,7 @@ export class UserController {
     description: 'Tournament analytics returned',
     type: MyTournamentAnalyticsResponseDto,
   })
-  @ApiInternalError()
+  @ApiInternalServerErrorResponse()
   getMyTournamentAnalytics(
     @CurrentUser('sub') userId: string,
   ): Promise<MyTournamentAnalyticsResponseDto> {
@@ -170,14 +170,14 @@ export class UserController {
 
   @Get('me/ranking')
   @ApiAuthList({ description: 'Ranking returned', type: UserRankingResponseDto })
-  @ApiInternalError()
+  @ApiInternalServerErrorResponse()
   getMyRanking(@CurrentUser('sub') userId: string): Promise<UserRankingResponseDto> {
     return this.userApplicationService.getUserRanking(userId, userId);
   }
 
   @Get('me/analytics')
   @ApiAuthList({ description: 'Analytics returned', type: UserAnalyticsResponseDto })
-  @ApiInternalError()
+  @ApiInternalServerErrorResponse()
   getMyAnalytics(@CurrentUser('sub') userId: string): Promise<UserAnalyticsResponseDto> {
     return this.userApplicationService.getUserAnalytics(userId, userId);
   }

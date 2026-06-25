@@ -10,7 +10,7 @@ import {
   Query,
   UseFilters,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiOkResponse, ApiNotFoundResponse } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiOkResponse, ApiNotFoundResponse, ApiInternalServerErrorResponse } from '@nestjs/swagger';
 import { Public } from '@/common/decorators/public.decorator';
 import { Permissions } from '@/common/authorization/decorators/permissions.decorator';
 import { Permission } from '@/common/authorization/permissions';
@@ -63,7 +63,7 @@ export class CategoryController {
     description: 'Returns categories ranked by aggregated quiz popularity score.',
   })
   @ApiOkResponse({ description: 'Ranked categories returned', type: RankedCategoriesResponseDto })
-  @ApiInternalError()
+  @ApiInternalServerErrorResponse()
   getPopularCategories(
     @Query() query: CategoryRankingQueryDto,
   ): Promise<RankedCategoriesResponseDto> {
@@ -77,7 +77,7 @@ export class CategoryController {
     description: 'Returns categories ranked by aggregated quiz trending score.',
   })
   @ApiOkResponse({ description: 'Ranked categories returned', type: RankedCategoriesResponseDto })
-  @ApiInternalError()
+  @ApiInternalServerErrorResponse()
   getTrendingCategories(
     @Query() query: CategoryRankingQueryDto,
   ): Promise<RankedCategoriesResponseDto> {
@@ -118,7 +118,7 @@ export class CategoryController {
   })
   @ApiOkResponse({ description: 'Category followed', type: MessageResponseDto })
   @ApiNotFoundResponse()
-  @ApiInternalError()
+  @ApiInternalServerErrorResponse()
   followCategory(
     @Param('id', new ParseUUIDPipe()) categoryId: string,
     @CurrentUser() user: JwtPayload,
@@ -133,7 +133,7 @@ export class CategoryController {
     description: 'Removes the authenticated user from the category followers. Idempotent.',
   })
   @ApiOkResponse({ description: 'Category unfollowed', type: MessageResponseDto })
-  @ApiInternalError()
+  @ApiInternalServerErrorResponse()
   unfollowCategory(
     @Param('id', new ParseUUIDPipe()) categoryId: string,
     @CurrentUser() user: JwtPayload,
@@ -151,7 +151,7 @@ export class CategoryController {
   @ApiOkResponse({ description: 'Category restored', type: CategoryResponseDto })
   @ApiNotFoundResponse()
   @ApiConflict()
-  @ApiInternalError()
+  @ApiInternalServerErrorResponse()
   restoreCategory(
     @Param('id', new ParseUUIDPipe()) categoryId: string,
   ): Promise<CategoryResponseDto> {

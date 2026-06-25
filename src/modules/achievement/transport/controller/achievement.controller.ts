@@ -1,5 +1,5 @@
 import { Controller, Delete, Get, Param, ParseUUIDPipe, Query, UseFilters } from '@nestjs/common';
-import { ApiTags } from '@nestjs/swagger';
+import { ApiTags, ApiBadRequestResponse, ApiInternalServerErrorResponse } from '@nestjs/swagger';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
 import { Permissions } from '@/common/authorization/decorators/permissions.decorator';
 import { Permission } from '@/common/authorization/permissions';
@@ -37,7 +37,7 @@ export class AchievementController {
     type: BadgeCatalogItemResponseDto,
     isArray: true,
   })
-  @ApiInternalError()
+  @ApiInternalServerErrorResponse()
   getBadgeCatalog(@Query() query: PaginationQuery): Promise<{
     data: BadgeCatalogItemResponseDto[];
     total: number;
@@ -47,7 +47,7 @@ export class AchievementController {
 
   @Get('me/badges')
   @ApiAuthList({ description: 'User badges returned', type: MyBadgesResponseDto })
-  @ApiInternalError()
+  @ApiInternalServerErrorResponse()
   getMyBadges(
     @CurrentUser('sub') userId: string,
     @Query() query: PaginationQuery,
@@ -57,7 +57,7 @@ export class AchievementController {
 
   @Get('badges/:badgeId')
   @ApiPublicList({ description: 'Badge details returned', type: BadgeDetailsResponseDto })
-  @ApiInternalError()
+  @ApiInternalServerErrorResponse()
   getBadgeDetails(
     @Param('badgeId', new ParseUUIDPipe()) badgeId: string,
   ): Promise<BadgeDetailsResponseDto> {
@@ -68,7 +68,7 @@ export class AchievementController {
   @Permissions(Permission.ACHIEVEMENT_REVOKE)
   @ApiAuth()
   @ApiAuthDelete('Badge revoked successfully')
-  @ApiInternalError()
+  @ApiInternalServerErrorResponse()
   async revokeUserBadge(
     @Param('userId', new ParseUUIDPipe()) userId: string,
     @Param('badgeId', new ParseUUIDPipe()) badgeId: string,
@@ -82,7 +82,7 @@ export class AchievementController {
     description: 'Public achievement profile returned',
     type: PublicAchievementProfileResponseDto,
   })
-  @ApiInternalError()
+  @ApiInternalServerErrorResponse()
   getPublicAchievementProfile(
     @Param('userId', new ParseUUIDPipe()) userId: string,
     @CurrentUser('sub') requesterId: string,
@@ -92,7 +92,7 @@ export class AchievementController {
 
   @Get('/users/me/badges/:badgeId/progress')
   @ApiAuthList({ description: 'Badge progress returned', type: BadgeProgressResponseDto })
-  @ApiInternalError()
+  @ApiInternalServerErrorResponse()
   getMyBadgeProgress(
     @CurrentUser('sub') userId: string,
     @Param('badgeId', new ParseUUIDPipe()) badgeId: string,
@@ -106,7 +106,7 @@ export class AchievementController {
     type: AchievementHistoryItemResponseDto,
     isArray: true,
   })
-  @ApiInternalError()
+  @ApiInternalServerErrorResponse()
   getMyAchievementHistory(
     @CurrentUser('sub') userId: string,
     @Query() query: PaginationQuery,
@@ -116,7 +116,7 @@ export class AchievementController {
 
   @Get('/users/me/badges/analytics')
   @ApiAuthList({ description: 'Badge analytics returned', type: UserBadgeAnalyticsResponseDto })
-  @ApiInternalError()
+  @ApiInternalServerErrorResponse()
   getMyBadgeAnalytics(@CurrentUser('sub') userId: string): Promise<UserBadgeAnalyticsResponseDto> {
     return this.achievementApplicationService.getMyBadgeAnalytics(userId);
   }

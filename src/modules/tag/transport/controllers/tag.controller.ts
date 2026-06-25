@@ -11,7 +11,7 @@ import {
   UseFilters,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
-import { ApiTags, ApiOperation, ApiOkResponse, ApiNotFoundResponse } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiOkResponse, ApiNotFoundResponse, ApiInternalServerErrorResponse } from '@nestjs/swagger';
 import { Public } from '@/common/decorators/public.decorator';
 import { Permissions } from '@/common/authorization/decorators/permissions.decorator';
 import { Permission } from '@/common/authorization/permissions';
@@ -64,7 +64,7 @@ export class TagController {
     description: 'Returns tags ranked by aggregated quiz popularity score.',
   })
   @ApiOkResponse({ description: 'Ranked tags returned', type: RankedTagsResponseDto })
-  @ApiInternalError()
+  @ApiInternalServerErrorResponse()
   getPopularTags(@Query() query: TagRankingQueryDto): Promise<RankedTagsResponseDto> {
     return this.tagApplicationService.getPopularTags({ limit: query.limit });
   }
@@ -76,7 +76,7 @@ export class TagController {
     description: 'Returns tags ranked by aggregated quiz trending score.',
   })
   @ApiOkResponse({ description: 'Ranked tags returned', type: RankedTagsResponseDto })
-  @ApiInternalError()
+  @ApiInternalServerErrorResponse()
   getTrendingTags(@Query() query: TagRankingQueryDto): Promise<RankedTagsResponseDto> {
     return this.tagApplicationService.getTrendingTags({ limit: query.limit });
   }
@@ -124,7 +124,7 @@ export class TagController {
   })
   @ApiOkResponse({ description: 'Tag followed', type: TagFollowMessageResponseDto })
   @ApiNotFoundResponse()
-  @ApiInternalError()
+  @ApiInternalServerErrorResponse()
   followTag(
     @Param('id', new ParseUUIDPipe()) tagId: string,
     @CurrentUser() user: JwtPayload,
@@ -140,7 +140,7 @@ export class TagController {
     description: 'Removes the authenticated user from the tag followers. Idempotent.',
   })
   @ApiOkResponse({ description: 'Tag unfollowed', type: TagFollowMessageResponseDto })
-  @ApiInternalError()
+  @ApiInternalServerErrorResponse()
   unfollowTag(
     @Param('id', new ParseUUIDPipe()) tagId: string,
     @CurrentUser() user: JwtPayload,
@@ -160,7 +160,7 @@ export class TagController {
   @ApiOkResponse({ description: 'Tag restored', type: TagResponseDto })
   @ApiNotFoundResponse()
   @ApiConflict()
-  @ApiInternalError()
+  @ApiInternalServerErrorResponse()
   restoreTag(@Param('id', new ParseUUIDPipe()) tagId: string): Promise<TagResponseDto> {
     return this.tagApplicationService.restoreTag(tagId);
   }

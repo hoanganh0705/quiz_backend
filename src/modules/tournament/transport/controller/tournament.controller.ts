@@ -10,7 +10,7 @@ import {
   UseFilters,
 } from '@nestjs/common';
 
-import { ApiTags, ApiOperation, ApiOkResponse, ApiNotFoundResponse } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiOkResponse, ApiNotFoundResponse, ApiInternalServerErrorResponse } from '@nestjs/swagger';
 import { Permission } from '@/common/authorization/permissions';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
 import { Permissions } from '@/common/authorization/decorators/permissions.decorator';
@@ -185,7 +185,7 @@ export class TournamentController {
 
   @Get(':id/my-standing')
   @ApiAuthList({ description: 'Standing returned', type: MyTournamentStandingResponseDto })
-  @ApiInternalError()
+  @ApiInternalServerErrorResponse()
   getMyTournamentStanding(
     @Param('id', new ParseUUIDPipe()) tournamentId: string,
     @CurrentUser('sub') userId: string,
@@ -218,7 +218,7 @@ export class TournamentController {
   })
   @ApiNotFoundResponse()
   @ApiConflict()
-  @ApiInternalError()
+  @ApiInternalServerErrorResponse()
   unregisterFromTournament(
     @Param('id', new ParseUUIDPipe()) tournamentId: string,
     @CurrentUser() user: JwtPayload,
