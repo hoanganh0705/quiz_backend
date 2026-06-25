@@ -19,6 +19,8 @@ import {
   ApiForbiddenResponse,
   ApiNotFoundResponse,
   ApiInternalServerErrorResponse,
+  ApiQuery,
+  ApiUnprocessableEntityResponse,
 } from '@nestjs/swagger';
 import { Permission } from '@/common/authorization/permissions';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
@@ -30,7 +32,6 @@ import {
   ApiAuthCreate,
   ApiPublicList,
   ApiConflict,
-  ApiInternalError,
   ApiAuthUpdateWithState,
 } from '@/common/swagger/swagger-decorators';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
@@ -64,6 +65,20 @@ import {
   QuizVersionDetailResponseDto,
   QuizVersionResponseDto,
 } from '../../dto/response/quiz-version-response.dto';
+import {
+  WrappedQuizResponseDto,
+  WrappedQuizListDto,
+  WrappedQuizVersionListDto,
+  WrappedQuizVersionResponseDto,
+  WrappedTrendingQuizzesDto,
+  WrappedPopularQuizzesDto,
+  WrappedCreatorAnalyticsDto,
+  WrappedQuizStatsDto,
+  WrappedRelatedQuizzesDto,
+  WrappedMessageDto,
+  WrappedQuizQuestionDto,
+  WrappedQuizQuestionArrayDto,
+} from '../../dto/response/quiz-response-docs.dto';
 
 @ApiTags('quizzes')
 @Controller('quizzes')
@@ -77,7 +92,8 @@ export class QuizController {
 
   @Post()
   @Permissions(Permission.QUIZ_CREATE)
-  @ApiAuthCreate({ description: 'Quiz created', type: QuizResponseDto })
+  @ApiAuthCreate({ description: 'Quiz created', type: WrappedQuizResponseDto })
+  @ApiForbiddenResponse({ description: 'You do not have permission to create quizzes' })
   createQuiz(
     @CurrentUser() user: JwtPayload,
     @Body() payload: CreateQuizDto,
@@ -87,13 +103,13 @@ export class QuizController {
 
   @Get()
   @Public()
-  @ApiPublicList({ description: 'Quizzes returned', type: QuizListResponseDto })
+  @ApiPublicList({ description: 'Quizzes returned', type: WrappedQuizListDto })
   listQuizzes(@Query() query: ListQuizzesQueryDto): Promise<QuizListResponseDto> {
     return this.quizApplicationService.listQuizzes(query);
   }
 
   @Get('me')
-  @ApiAuthList({ description: 'Quizzes returned', type: QuizListResponseDto })
+  @ApiAuthList({ description: 'Quizzes returned', type: WrappedQuizListDto })
   listMyQuizzes(
     @CurrentUser('sub') userId: string,
     @Query() query: ListQuizzesQueryDto,
@@ -102,7 +118,7 @@ export class QuizController {
   }
 
   @Get('me/drafts')
-  @ApiAuthList({ description: 'Draft quizzes returned', type: QuizListResponseDto })
+  @ApiAuthList({ description: 'Draft quizzes returned', type: WrappedQuizListDto })
   listMyDraftQuizzes(
     @CurrentUser('sub') userId: string,
     @Query() query: ListQuizzesQueryDto,
@@ -111,7 +127,7 @@ export class QuizController {
   }
 
   @Get('me/published')
-  @ApiAuthList({ description: 'Published quizzes returned', type: QuizListResponseDto })
+  @ApiAuthList({ description: 'Published quizzes returned', type: WrappedQuizListDto })
   listMyPublishedQuizzes(
     @CurrentUser('sub') userId: string,
     @Query() query: ListQuizzesQueryDto,
@@ -121,7 +137,19 @@ export class QuizController {
 
   @Get('trending')
   @Public()
-  @ApiPublicList({ description: 'Trending quizzes returned', type: TrendingQuizzesResponseDto })
+  @ApiPublicList({ description: 'Trending quizzes returned', type: WrappedTrendingQuizzesDto })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    description: 'Maximum number of trending quizzes to return (1–100)',
+    schema: { type: 'integer', minimum: 1, maximum: 100, default: 10 },
+  })
+  @ApiQuery({
+    name: 'categoryId',
+    required: false,
+    description: 'Filter by category UUID',
+    schema: { type: 'string', format: 'uuid' },
+  })
   getTrendingQuizzes(
     @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit: number,
     @Query('categoryId') categoryId?: string,
@@ -131,7 +159,19 @@ export class QuizController {
 
   @Get('popular')
   @Public()
-  @ApiPublicList({ description: 'Popular quizzes returned', type: PopularQuizzesResponseDto })
+  @ApiPublicList({ description: 'Popular quizzes returned', type: WrappedPopularQuizzesDto })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    description: 'Maximum number of popular quizzes to return (1–100)',
+    schema: { type: 'integer', minimum: 1, maximum: 100, default: 10 },
+  })
+  @ApiQuery({
+    name: 'categoryId',
+    required: false,
+    description: 'Filter by category UUID',
+    schema: { type: 'string', format: 'uuid' },
+  })
   getPopularQuizzes(
     @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit: number,
     @Query('categoryId') categoryId?: string,
@@ -140,35 +180,50 @@ export class QuizController {
   }
 
   @Get('me/analytics')
-  @ApiAuthList({ description: 'Quiz analytics returned', type: CreatorQuizAnalyticsDto })
+  @ApiAuthList({ description: 'Quiz analytics returned', type: WrappedCreatorAnalyticsDto })
   getMyQuizAnalytics(@CurrentUser('sub') userId: string): Promise<CreatorQuizAnalyticsDto> {
     return this.quizApplicationService.getMyQuizAnalytics(userId);
   }
 
   @Get('featured')
   @Public()
-  @ApiPublicList({ description: 'Featured quizzes returned', type: RelatedQuizzesResponseDto })
+  @ApiPublicList({ description: 'Featured quizzes returned', type: WrappedRelatedQuizzesDto })
   getFeaturedQuizzes(@Query() query: FeaturedQuizzesQueryDto): Promise<RelatedQuizzesResponseDto> {
     return this.quizApplicationService.getFeaturedQuizzes(query);
   }
 
   @Get(':id')
   @Public()
-  @ApiPublicList({ description: 'Quiz found', type: QuizResponseDto })
+  @ApiPublicList({ description: 'Quiz found', type: WrappedQuizResponseDto })
+  @ApiNotFoundResponse({ description: 'Quiz not found' })
   getQuizById(@Param('id', new ParseUUIDPipe()) quizId: string): Promise<QuizResponseDto> {
     return this.quizApplicationService.getQuizById(quizId);
   }
 
   @Get(':id/stats')
   @Public()
-  @ApiPublicList({ description: 'Quiz stats returned', type: QuizStatsResponseDto })
+  @ApiPublicList({ description: 'Quiz stats returned', type: WrappedQuizStatsDto })
+  @ApiNotFoundResponse({ description: 'Quiz not found' })
   getQuizStats(@Param('id', new ParseUUIDPipe()) quizId: string): Promise<QuizStatsResponseDto> {
     return this.quizApplicationService.getQuizStats(quizId);
   }
 
   @Get(':slug/similar')
   @Public()
-  @ApiPublicList({ description: 'Related quizzes returned', type: RelatedQuizzesResponseDto })
+  @ApiPublicList({ description: 'Related quizzes returned', type: WrappedRelatedQuizzesDto })
+  @ApiNotFoundResponse({ description: 'Quiz not found' })
+  @ApiQuery({
+    name: 'cursor',
+    required: false,
+    description: 'Cursor for cursor-based pagination',
+    schema: { type: 'string', maxLength: 512 },
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    description: 'Maximum number of related quizzes to return (1–100)',
+    schema: { type: 'integer', minimum: 1, maximum: 100, default: 10 },
+  })
   async getRelatedQuizzes(
     @Param('slug') slug: string,
     @Query() query: RelatedQuizzesQueryDto,
@@ -184,14 +239,15 @@ export class QuizController {
 
   @Get(':slug')
   @Public()
-  @ApiPublicList({ description: 'Quiz found', type: QuizResponseDto })
+  @ApiPublicList({ description: 'Quiz found', type: WrappedQuizResponseDto })
+  @ApiNotFoundResponse({ description: 'Quiz not found' })
   getQuizBySlug(@Param('slug') slug: string): Promise<QuizResponseDto> {
     return this.quizApplicationService.getQuizBySlug(slug);
   }
 
   @Patch(':id')
   @Permissions(Permission.QUIZ_EDIT_OWN, Permission.QUIZ_EDIT_ANY)
-  @ApiAuthUpdateWithState({ description: 'Quiz updated', type: QuizResponseDto })
+  @ApiAuthUpdateWithState({ description: 'Quiz updated', type: WrappedQuizResponseDto })
   updateQuiz(
     @Param('id', new ParseUUIDPipe()) quizId: string,
     @CurrentUser() user: JwtPayload,
@@ -208,7 +264,7 @@ export class QuizController {
     description:
       'Soft-deletes a quiz by ID. Requires `quiz:delete:own` or `quiz:delete:any` permission.',
   })
-  @ApiOkResponse({ description: 'Quiz deleted', type: DeleteQuizResponseDto })
+  @ApiOkResponse({ description: 'Quiz deleted', type: WrappedMessageDto })
   @ApiNotFoundResponse({ description: 'Quiz not found' })
   @ApiForbiddenResponse({ description: 'You do not have permission to delete this quiz' })
   @ApiInternalServerErrorResponse()
@@ -221,7 +277,11 @@ export class QuizController {
 
   @Post(':id/versions')
   @Permissions(Permission.QUIZ_VERSION_CREATE_OWN, Permission.QUIZ_VERSION_CREATE_ANY)
-  @ApiAuthCreate({ description: 'Quiz version created', type: QuizVersionResponseDto })
+  @ApiAuthCreate({ description: 'Quiz version created', type: WrappedQuizVersionResponseDto })
+  @ApiNotFoundResponse({ description: 'Quiz not found' })
+  @ApiForbiddenResponse({
+    description: 'You do not have permission to create versions for this quiz',
+  })
   createQuizVersion(
     @Param('id', new ParseUUIDPipe()) quizId: string,
     @CurrentUser() user: JwtPayload,
@@ -232,7 +292,9 @@ export class QuizController {
 
   @Get(':id/versions')
   @Permissions(Permission.QUIZ_VERSION_VIEW_OWN, Permission.QUIZ_VERSION_VIEW_ANY)
-  @ApiAuthList({ description: 'Versions returned', type: QuizVersionListResponseDto })
+  @ApiAuthList({ description: 'Versions returned', type: WrappedQuizVersionListDto })
+  @ApiNotFoundResponse({ description: 'Quiz not found' })
+  @ApiForbiddenResponse({ description: 'You do not have permission to view versions of this quiz' })
   listQuizVersions(
     @Param('id', new ParseUUIDPipe()) quizId: string,
     @CurrentUser() user: JwtPayload,
@@ -243,7 +305,9 @@ export class QuizController {
 
   @Get(':id/versions/:versionId')
   @Permissions(Permission.QUIZ_VERSION_VIEW_OWN, Permission.QUIZ_VERSION_VIEW_ANY)
-  @ApiAuthList({ description: 'Quiz version returned', type: QuizVersionDetailResponseDto })
+  @ApiAuthList({ description: 'Quiz version returned', type: WrappedQuizVersionResponseDto })
+  @ApiNotFoundResponse({ description: 'Quiz or version not found' })
+  @ApiForbiddenResponse({ description: 'You do not have permission to view this version' })
   getQuizVersionDetail(
     @Param('id', new ParseUUIDPipe()) quizId: string,
     @Param('versionId', new ParseUUIDPipe()) quizVersionId: string,
@@ -254,7 +318,9 @@ export class QuizController {
 
   @Patch(':id/versions/:versionId')
   @Permissions(Permission.QUIZ_VERSION_EDIT_OWN, Permission.QUIZ_VERSION_EDIT_ANY)
-  @ApiAuthUpdateWithState({ description: 'Version updated', type: QuizVersionResponseDto })
+  @ApiAuthUpdateWithState({ description: 'Version updated', type: WrappedQuizVersionResponseDto })
+  @ApiNotFoundResponse({ description: 'Quiz or version not found' })
+  @ApiForbiddenResponse({ description: 'You do not have permission to edit this version' })
   updateQuizVersion(
     @Param('id', new ParseUUIDPipe()) quizId: string,
     @Param('versionId', new ParseUUIDPipe()) quizVersionId: string,
@@ -276,10 +342,13 @@ export class QuizController {
     summary: 'Publish quiz version',
     description: `Publishes a draft quiz version, making it available for attempts. Only one version per quiz can be published at a time. The version must contain at least ${5} questions. Requires \`quiz-version:publish:own\` or \`quiz-version:publish:any\`.`,
   })
-  @ApiOkResponse({ description: 'Version published', type: QuizVersionResponseDto })
+  @ApiOkResponse({ description: 'Version published', type: WrappedQuizVersionResponseDto })
   @ApiNotFoundResponse({ description: 'Quiz or version not found' })
   @ApiForbiddenResponse({ description: 'You do not have permission to publish this quiz version' })
   @ApiConflict()
+  @ApiUnprocessableEntityResponse({
+    description: 'Quiz version does not meet requirements (e.g., insufficient questions)',
+  })
   @ApiInternalServerErrorResponse()
   publishQuizVersion(
     @Param('id', new ParseUUIDPipe()) quizId: string,
@@ -291,7 +360,11 @@ export class QuizController {
 
   @Post(':id/versions/:versionId/questions')
   @Permissions(Permission.QUIZ_VERSION_EDIT_OWN, Permission.QUIZ_VERSION_EDIT_ANY)
-  @ApiAuthCreate({ description: 'Question created', type: QuizQuestionResponseDto })
+  @ApiAuthCreate({ description: 'Question created', type: WrappedQuizQuestionDto })
+  @ApiNotFoundResponse({ description: 'Quiz or version not found' })
+  @ApiForbiddenResponse({
+    description: 'You do not have permission to add questions to this version',
+  })
   createQuizQuestion(
     @Param('id', new ParseUUIDPipe()) quizId: string,
     @Param('versionId', new ParseUUIDPipe()) quizVersionId: string,
@@ -308,7 +381,11 @@ export class QuizController {
 
   @Post(':id/versions/:versionId/questions/bulk')
   @Permissions(Permission.QUIZ_VERSION_EDIT_OWN, Permission.QUIZ_VERSION_EDIT_ANY)
-  @ApiAuthCreate({ description: 'Questions created', type: [QuizQuestionResponseDto] })
+  @ApiAuthCreate({ description: 'Questions created', type: WrappedQuizQuestionArrayDto })
+  @ApiNotFoundResponse({ description: 'Quiz or version not found' })
+  @ApiForbiddenResponse({
+    description: 'You do not have permission to add questions to this version',
+  })
   createQuizQuestions(
     @Param('id', new ParseUUIDPipe()) quizId: string,
     @Param('versionId', new ParseUUIDPipe()) quizVersionId: string,
