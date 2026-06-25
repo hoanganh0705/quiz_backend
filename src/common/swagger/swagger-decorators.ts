@@ -1,4 +1,4 @@
-import { applyDecorators, type Type } from '@nestjs/common';
+import { applyDecorators } from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiUnauthorizedResponse,
@@ -6,6 +6,7 @@ import {
   ApiNotFoundResponse,
   ApiBadRequestResponse,
   ApiConflictResponse,
+  ApiTooManyRequestsResponse,
   ApiInternalServerErrorResponse,
   ApiNoContentResponse,
   ApiCreatedResponse,
@@ -13,169 +14,240 @@ import {
   type ApiResponseOptions,
 } from '@nestjs/swagger';
 import { AUTH_SECURITY_NAME } from '@/core/swagger/swagger.config';
-import {
-  UnauthorizedErrorResponseDto,
-  ForbiddenErrorResponseDto,
-  NotFoundErrorResponseDto,
-  ValidationErrorResponseDto,
-  ErrorResponseDto,
-} from './swagger-schemas';
+import { ProblemDetailDto, ErrorResponseExamples } from './swagger-schemas';
 
-// ─── Pre-configured response option constants ─────────────────────────────────────
+// ─── Pre-configured response options ─────────────────────────────────────────────
 
-const defaultUnauthorized: ApiResponseOptions = {
+const baseProblemDetail = (): ApiResponseOptions => ({
+  type: ProblemDetailDto,
+});
+
+const unauthorizedOptions: ApiResponseOptions = {
   description: 'Missing or invalid authentication token',
-  type: UnauthorizedErrorResponseDto,
+  ...baseProblemDetail(),
+  content: {
+    'application/json': {
+      example: ErrorResponseExamples.unauthorized,
+    },
+  },
 };
 
-const defaultForbidden: ApiResponseOptions = {
+const forbiddenOptions: ApiResponseOptions = {
   description: 'Authenticated user lacks required role or permission',
-  type: ForbiddenErrorResponseDto,
+  ...baseProblemDetail(),
+  content: {
+    'application/json': {
+      example: ErrorResponseExamples.forbidden,
+    },
+  },
 };
 
-const defaultNotFound: ApiResponseOptions = {
+const notFoundOptions: ApiResponseOptions = {
   description: 'The requested resource does not exist or has been deleted',
-  type: NotFoundErrorResponseDto,
+  ...baseProblemDetail(),
+  content: {
+    'application/json': {
+      example: ErrorResponseExamples.notFound,
+    },
+  },
 };
 
-const defaultBadRequest: ApiResponseOptions = {
+const badRequestOptions: ApiResponseOptions = {
   description: 'Request body, query, or params failed validation',
-  type: ValidationErrorResponseDto,
+  ...baseProblemDetail(),
+  content: {
+    'application/json': {
+      example: ErrorResponseExamples.badRequest,
+    },
+  },
 };
 
-const defaultInternalError: ApiResponseOptions = {
-  description: 'Unexpected server error',
-  type: ErrorResponseDto,
-};
-
-const defaultConflict: ApiResponseOptions = {
+const conflictOptions: ApiResponseOptions = {
   description: 'The request conflicts with the current state of the resource',
-  type: ErrorResponseDto,
+  ...baseProblemDetail(),
+  content: {
+    'application/json': {
+      example: ErrorResponseExamples.conflict,
+    },
+  },
 };
 
-// ─── Core reusable decorators ───────────────────────────────────────────────────
+const tooManyRequestsOptions: ApiResponseOptions = {
+  description: 'Rate limit exceeded',
+  ...baseProblemDetail(),
+  content: {
+    'application/json': {
+      example: ErrorResponseExamples.tooManyRequests,
+    },
+  },
+};
 
-/**
- * Documents a successful 204 No Content response (used for delete, mark-as-read, etc.).
- */
-export const ApiNoContent = (description = 'Operation completed successfully'): MethodDecorator =>
-  ApiNoContentResponse({ description });
+const internalErrorOptions: ApiResponseOptions = {
+  description: 'Unexpected server error',
+  ...baseProblemDetail(),
+  content: {
+    'application/json': {
+      example: ErrorResponseExamples.internalServerError,
+    },
+  },
+};
+
+// ─── Authentication decorators ───────────────────────────────────────────────────
 
 /**
  * Marks an endpoint as protected with JWT Bearer authentication.
- * Adds 401 Unauthorized and 403 Forbidden response documentation.
+ * Documents 401 Unauthorized and 403 Forbidden responses.
  */
 export const ApiAuth = (): MethodDecorator & ClassDecorator =>
   applyDecorators(
     ApiBearerAuth(AUTH_SECURITY_NAME),
-    ApiUnauthorizedResponse(defaultUnauthorized),
-    ApiForbiddenResponse(defaultForbidden),
+    ApiUnauthorizedResponse(unauthorizedOptions),
+    ApiForbiddenResponse(forbiddenOptions),
   );
 
 /**
- * Documents the standard error responses for a protected endpoint.
- * Use alongside `@ApiAuth()` or on its own for endpoints that may throw auth errors.
+ * Documents 401 Unauthorized and 403 Forbidden responses only.
+ * Use alongside @ApiAuth() or on its own for endpoints that may throw auth errors.
  */
 export const ApiAuthResponses = (): MethodDecorator =>
   applyDecorators(
-    ApiUnauthorizedResponse(defaultUnauthorized),
-    ApiForbiddenResponse(defaultForbidden),
+    ApiUnauthorizedResponse(unauthorizedOptions),
+    ApiForbiddenResponse(forbiddenOptions),
   );
 
-/**
- * Documents validation errors for a POST/PATCH/PUT endpoint.
- */
-export const ApiValidationRequest = (): MethodDecorator => ApiBadRequestResponse(defaultBadRequest);
+// ─── Error response decorators ─────────────────────────────────────────────────
 
 /**
- * Documents the full suite of common error responses.
+ * Documents the 401 Unauthorized response.
  */
-export const ApiStandardErrors = (): MethodDecorator =>
-  applyDecorators(
-    ApiUnauthorizedResponse(defaultUnauthorized),
-    ApiForbiddenResponse(defaultForbidden),
-    ApiNotFoundResponse(defaultNotFound),
-    ApiBadRequestResponse(defaultBadRequest),
-    ApiInternalServerErrorResponse(defaultInternalError),
-  );
-
-// ─── Pre-built error response decorators ───────────────────────────────────────
+export const ApiUnauthorized = (): MethodDecorator => ApiUnauthorizedResponse(unauthorizedOptions);
 
 /**
- * Documents the 401 Unauthorized response for public endpoints that may still receive
- * invalid tokens (e.g., optional auth).
+ * Documents the 403 Forbidden response.
  */
-export const ApiUnauthorized = (): MethodDecorator => ApiUnauthorizedResponse(defaultUnauthorized);
-
-/**
- * Documents the 403 Forbidden response for permission-restricted endpoints.
- */
-export const ApiForbidden = (): MethodDecorator => ApiForbiddenResponse(defaultForbidden);
+export const ApiForbidden = (): MethodDecorator => ApiForbiddenResponse(forbiddenOptions);
 
 /**
  * Documents the 404 Not Found response.
  */
 export const ApiNotFound = (description?: string): MethodDecorator =>
   ApiNotFoundResponse({
-    description: description ?? defaultNotFound.description,
-    type: NotFoundErrorResponseDto,
+    description: description ?? notFoundOptions.description,
+    ...notFoundOptions,
   });
 
 /**
  * Documents the 400 Bad Request response for validation errors.
+ * @param _description - Deprecated, kept for backward compatibility. Use examples in OpenAPI instead.
  */
-export const ApiBadRequest = (description?: string): MethodDecorator =>
-  ApiBadRequestResponse({
-    description: description ?? defaultBadRequest.description,
-    type: ValidationErrorResponseDto,
-  });
+export const ApiBadRequest = (): MethodDecorator => ApiBadRequestResponse(badRequestOptions);
 
 /**
  * Documents the 409 Conflict response.
+ * @param description - Optional description override
  */
 export const ApiConflict = (description?: string): MethodDecorator =>
   ApiConflictResponse({
-    description: description ?? defaultConflict.description,
-    type: ErrorResponseDto,
+    description: description ?? conflictOptions.description,
+    ...conflictOptions,
   });
 
 /**
+ * Documents the 429 Too Many Requests response.
+ */
+export const ApiTooManyRequests = (): MethodDecorator =>
+  ApiTooManyRequestsResponse(tooManyRequestsOptions);
+
+/**
  * Documents the 500 Internal Server Error response.
+ * @param _description - Deprecated, kept for backward compatibility. Use examples in OpenAPI instead.
  */
-export const ApiInternalError = (description = 'Unexpected server error'): MethodDecorator =>
-  ApiInternalServerErrorResponse({ description });
-
-// ─── Common endpoint pattern decorators ─────────────────────────────────────────
-
-/**
- * Combines auth + ok response + internal error.
- * Used by most authenticated GET endpoints (e.g., /me, /me/stats).
- */
-export const ApiAuthList = (responseOptions: ApiResponseOptions = {}): MethodDecorator =>
-  applyDecorators(ApiAuth(), ApiOkResponse(responseOptions), ApiInternalError());
+export const ApiInternalError = (): MethodDecorator =>
+  ApiInternalServerErrorResponse(internalErrorOptions);
 
 /**
- * Combines ok response + bad request + internal error.
- * Used by public GET endpoints with validation (search, list with filters).
+ * Documents validation errors for a POST/PATCH/PUT endpoint.
  */
-export const ApiPublicList = (responseOptions: ApiResponseOptions = {}): MethodDecorator =>
-  applyDecorators(ApiOkResponse(responseOptions), ApiBadRequest(), ApiInternalError());
+export const ApiValidationRequest = (): MethodDecorator => ApiBadRequestResponse(badRequestOptions);
+
+// ─── Standard error response sets ──────────────────────────────────────────────
 
 /**
- * Combines ok response + not found + bad request + internal error.
- * Used by public GET endpoints that fetch by ID and need validation.
+ * Common errors for authenticated endpoints: 401, 403, 500.
  */
-export const ApiNotFoundList = (responseOptions: ApiResponseOptions = {}): MethodDecorator =>
+export const ApiAuthErrors = (): MethodDecorator =>
+  applyDecorators(ApiUnauthorized(), ApiForbidden(), ApiInternalError());
+
+/**
+ * Common errors for public endpoints: 400, 500.
+ */
+export const ApiPublicErrors = (): MethodDecorator =>
+  applyDecorators(ApiBadRequest(), ApiInternalError());
+
+/**
+ * Common errors for endpoints with resource lookups: 400, 404, 500.
+ */
+export const ApiLookupErrors = (): MethodDecorator =>
+  applyDecorators(ApiBadRequest(), ApiNotFound(), ApiInternalError());
+
+/**
+ * Full error suite: 401, 403, 404, 400, 500.
+ */
+export const ApiStandardErrors = (): MethodDecorator =>
   applyDecorators(
-    ApiOkResponse(responseOptions),
+    ApiUnauthorized(),
+    ApiForbidden(),
     ApiNotFound(),
     ApiBadRequest(),
     ApiInternalError(),
   );
 
+// ─── Success response decorators ─────────────────────────────────────────────────
+
 /**
- * Combines auth + created response + bad request + internal error.
- * Used by POST endpoints that create resources without resource-not-found check.
+ * Documents a successful 204 No Content response.
+ */
+export const ApiNoContent = (description = 'Operation completed successfully'): MethodDecorator =>
+  ApiNoContentResponse({ description });
+
+/**
+ * Documents a successful 200 OK response.
+ */
+export const ApiOk = (responseOptions: ApiResponseOptions = {}): MethodDecorator =>
+  ApiOkResponse(responseOptions);
+
+/**
+ * Documents a successful 201 Created response.
+ */
+export const ApiCreated = (responseOptions: ApiResponseOptions = {}): MethodDecorator =>
+  ApiCreatedResponse(responseOptions);
+
+// ─── Endpoint pattern decorators ─────────────────────────────────────────────────
+
+/**
+ * GET endpoint with authentication and internal error handling.
+ * Use for: /me, /profile, /stats
+ */
+export const ApiAuthRead = (responseOptions: ApiResponseOptions = {}): MethodDecorator =>
+  applyDecorators(ApiAuth(), ApiOkResponse(responseOptions), ApiInternalError());
+
+/**
+ * GET endpoint without authentication.
+ * Use for: public listings, search results
+ */
+export const ApiPublicRead = (responseOptions: ApiResponseOptions = {}): MethodDecorator =>
+  applyDecorators(ApiOkResponse(responseOptions), ApiPublicErrors());
+
+/**
+ * GET endpoint that fetches by ID.
+ * Use for: /quizzes/:id, /users/:id
+ */
+export const ApiPublicFetch = (responseOptions: ApiResponseOptions = {}): MethodDecorator =>
+  applyDecorators(ApiOkResponse(responseOptions), ApiLookupErrors());
+
+/**
+ * POST endpoint that creates a resource.
+ * Use for: /quizzes, /comments
  */
 export const ApiAuthCreate = (responseOptions: ApiResponseOptions = {}): MethodDecorator =>
   applyDecorators(
@@ -187,8 +259,8 @@ export const ApiAuthCreate = (responseOptions: ApiResponseOptions = {}): MethodD
   );
 
 /**
- * Combines auth + created response + not found + bad request + conflict + internal error.
- * Used by POST endpoints that create resources with state checks.
+ * POST endpoint with state conflict checks.
+ * Use for: /friend-requests, /follow
  */
 export const ApiAuthCreateWithState = (responseOptions: ApiResponseOptions = {}): MethodDecorator =>
   applyDecorators(
@@ -202,8 +274,8 @@ export const ApiAuthCreateWithState = (responseOptions: ApiResponseOptions = {})
   );
 
 /**
- * Combines auth + ok response + bad request + conflict + internal error.
- * Used by PATCH endpoints that update resources without not-found check.
+ * PATCH endpoint for updating resources.
+ * Use for: /quizzes/:id, /profile
  */
 export const ApiAuthUpdate = (responseOptions: ApiResponseOptions = {}): MethodDecorator =>
   applyDecorators(
@@ -216,8 +288,8 @@ export const ApiAuthUpdate = (responseOptions: ApiResponseOptions = {}): MethodD
   );
 
 /**
- * Combines auth + ok response + not found + forbidden + bad request + conflict + internal error.
- * Used by PATCH endpoints that update resources with ownership checks.
+ * PATCH endpoint with ownership/resource checks.
+ * Use for: /quizzes/:id (with owner check)
  */
 export const ApiAuthUpdateWithState = (responseOptions: ApiResponseOptions = {}): MethodDecorator =>
   applyDecorators(
@@ -232,15 +304,13 @@ export const ApiAuthUpdateWithState = (responseOptions: ApiResponseOptions = {})
   );
 
 /**
- * Combines auth + no content + internal error.
- * Used by DELETE endpoints without not-found check.
+ * DELETE endpoint without existence check.
  */
 export const ApiAuthDelete = (description = 'Resource deleted successfully'): MethodDecorator =>
   applyDecorators(ApiAuth(), ApiNoContent(description), ApiInternalError());
 
 /**
- * Combines auth + no content + not found + internal error.
- * Used by DELETE endpoints that verify resource existence.
+ * DELETE endpoint with existence check.
  */
 export const ApiAuthDeleteWithState = (
   description = 'Resource deleted successfully',
@@ -248,8 +318,8 @@ export const ApiAuthDeleteWithState = (
   applyDecorators(ApiAuth(), ApiNoContent(description), ApiNotFound(), ApiInternalError());
 
 /**
- * Combines auth + ok response + not found + conflict + forbidden + bad request + internal error.
- * Used by POST endpoints that perform idempotent actions (e.g., follow, join).
+ * Action endpoint (POST) returning 200 OK.
+ * Use for: follow, unfollow, like
  */
 export const ApiAuthAction = (responseOptions: ApiResponseOptions = {}): MethodDecorator =>
   applyDecorators(
@@ -264,8 +334,8 @@ export const ApiAuthAction = (responseOptions: ApiResponseOptions = {}): MethodD
   );
 
 /**
- * Combines auth + no content + not found + conflict + forbidden + bad request + internal error.
- * Used by POST endpoints that perform idempotent actions returning 204.
+ * Action endpoint (POST) returning 204 No Content.
+ * Use for: mark-as-read, bulk operations
  */
 export const ApiAuthActionNoContent = (
   description = 'Operation completed successfully',
@@ -284,8 +354,7 @@ export const ApiAuthActionNoContent = (
 // ─── Admin endpoint decorators ───────────────────────────────────────────────────
 
 /**
- * Combines auth + ok response + bad request + internal error.
- * Used by admin endpoints that manage system-level operations.
+ * Admin endpoint for system-level operations.
  */
 export const ApiAdminEndpoint = (
   responseOptions: ApiResponseOptions = {},
@@ -293,8 +362,7 @@ export const ApiAdminEndpoint = (
   applyDecorators(ApiAuth(), ApiOkResponse(responseOptions), ApiBadRequest(), ApiInternalError());
 
 /**
- * Combines auth + ok response + not found + bad request + conflict + internal error.
- * Used by admin endpoints that manage specific resources.
+ * Admin endpoint for resource management.
  */
 export const ApiAdminResource = (
   responseOptions: ApiResponseOptions = {},
@@ -309,15 +377,13 @@ export const ApiAdminResource = (
   );
 
 /**
- * Combines auth + ok response + not found + internal error.
- * Used by read-only admin endpoints (GET).
+ * Admin read-only endpoint.
  */
 export const ApiAdminRead = (responseOptions: ApiResponseOptions = {}): MethodDecorator =>
   applyDecorators(ApiAuth(), ApiOkResponse(responseOptions), ApiNotFound(), ApiInternalError());
 
 /**
- * Combines auth + created response + not found + bad request + conflict + internal error.
- * Used by admin endpoints that create resources.
+ * Admin create endpoint.
  */
 export const ApiAdminCreate = (responseOptions: ApiResponseOptions = {}): MethodDecorator =>
   applyDecorators(
@@ -331,8 +397,7 @@ export const ApiAdminCreate = (responseOptions: ApiResponseOptions = {}): Method
   );
 
 /**
- * Combines auth + ok response + not found + bad request + conflict + forbidden + internal error.
- * Used by admin endpoints that update resources.
+ * Admin update endpoint.
  */
 export const ApiAdminUpdate = (responseOptions: ApiResponseOptions = {}): MethodDecorator =>
   applyDecorators(
@@ -347,8 +412,7 @@ export const ApiAdminUpdate = (responseOptions: ApiResponseOptions = {}): Method
   );
 
 /**
- * Combines auth + ok response + not found + internal error.
- * Used by admin endpoints that delete resources.
+ * Admin delete endpoint.
  */
 export const ApiAdminDelete = (responseOptions: ApiResponseOptions = {}): MethodDecorator =>
   applyDecorators(ApiAuth(), ApiOkResponse(responseOptions), ApiNotFound(), ApiInternalError());
@@ -356,13 +420,12 @@ export const ApiAdminDelete = (responseOptions: ApiResponseOptions = {}): Method
 // ─── Moderator endpoint decorators ─────────────────────────────────────────────
 
 /**
- * Combines bearer auth + forbidden + ok response + not found + bad request + internal error.
- * Used by moderator endpoints that need authorization without auth error docs.
+ * Moderator endpoint with permission checks.
  */
 export const ApiModeratorEndpoint = (responseOptions: ApiResponseOptions = {}): MethodDecorator =>
   applyDecorators(
     ApiBearerAuth(AUTH_SECURITY_NAME),
-    ApiForbiddenResponse(defaultForbidden),
+    ApiForbiddenResponse(forbiddenOptions),
     ApiOkResponse(responseOptions),
     ApiNotFound(),
     ApiBadRequest(),
@@ -370,15 +433,14 @@ export const ApiModeratorEndpoint = (responseOptions: ApiResponseOptions = {}): 
   );
 
 /**
- * Combines bearer auth + forbidden + no content + not found + bad request + internal error.
- * Used by moderator endpoints that perform actions returning 204.
+ * Moderator action endpoint returning 204 No Content.
  */
 export const ApiModeratorAction = (
   description = 'Operation completed successfully',
 ): MethodDecorator =>
   applyDecorators(
     ApiBearerAuth(AUTH_SECURITY_NAME),
-    ApiForbiddenResponse(defaultForbidden),
+    ApiForbiddenResponse(forbiddenOptions),
     ApiNoContent(description),
     ApiNotFound(),
     ApiBadRequest(),
@@ -386,18 +448,16 @@ export const ApiModeratorAction = (
     ApiInternalError(),
   );
 
-// ─── Utility helpers ───────────────────────────────────────────────────────────
+// ─── Backward compatibility aliases ─────────────────────────────────────────────
 
 /**
- * Builds a typed paginated list response schema.
- * OpenAPI generators will produce `PaginatedResponse<T>` with `items: T[]` and `pagination: PaginationMeta`.
+ * @deprecated Use ApiAuthRead instead. Alias preserved for backward compatibility.
  */
-export const buildPaginatedSchema = <TItem extends object>(itemType: Type<TItem>) => {
-  return {
-    type: 'object',
-    properties: {
-      items: { type: 'array', items: { $ref: `#/components/schemas/${itemType.name}` } },
-      pagination: { $ref: `#/components/schemas/PaginationMetaDto` },
-    },
-  };
-};
+export const ApiAuthList = (responseOptions: ApiResponseOptions = {}): MethodDecorator =>
+  ApiAuthRead(responseOptions);
+
+/**
+ * @deprecated Use ApiPublicRead instead. Alias preserved for backward compatibility.
+ */
+export const ApiPublicList = (responseOptions: ApiResponseOptions = {}): MethodDecorator =>
+  ApiPublicRead(responseOptions);
