@@ -7,16 +7,16 @@ import { RankingPeriodEnum } from '../../dto/request/leaderboard-query.dto';
 
 export class RankingStatusResponseDto {
   @ApiProperty()
-  schedulerRunning: boolean;
+  schedulerRunning!: boolean;
 
   @ApiProperty()
-  dirtyQueueSize: number;
+  dirtyQueueSize!: number;
 
   @ApiPropertyOptional()
-  nextConsistencyCheck: string | null;
+  nextConsistencyCheck!: string | null;
 
   @ApiProperty()
-  nextPeriodReset: {
+  nextPeriodReset!: {
     weekly: string | null;
     monthly: string | null;
     daily: string | null;
@@ -25,41 +25,41 @@ export class RankingStatusResponseDto {
 
 export class RecalculateResponseDto {
   @ApiProperty({ example: 'Recalculation triggered for all periods' })
-  message: string;
+  message!: string;
 
   @ApiPropertyOptional({ enum: RankingPeriodEnum })
-  period?: string;
+  period!: string;
 }
 
 export class PeriodResetResponseDto {
   @ApiProperty({ example: 'Period reset initiated for weekly' })
-  message: string;
+  message!: string;
 
   @ApiProperty({ enum: RankingPeriodEnum })
-  period: string;
+  period!: string;
 }
 
 export class ConsistencyReportIssueDto {
   @ApiProperty()
-  type: 'xp_mismatch' | 'rank_gap' | 'missing_rank';
+  type!: 'xp_mismatch' | 'rank_gap' | 'missing_rank';
 
   @ApiPropertyOptional()
-  userId?: string;
+  userId!: string;
 
   @ApiProperty()
-  description: string;
+  description!: string;
 
   @ApiProperty({ enum: ['low', 'medium', 'high'] })
-  severity: 'low' | 'medium' | 'high';
+  severity!: 'low' | 'medium' | 'high';
 }
 
 export class ConsistencyReportResponseDto {
   @ApiProperty()
-  totalIssues: number;
+  totalIssues!: number;
 
   @ApiProperty()
-  fixed: number;
+  fixed!: number;
 
   @ApiProperty({ type: [ConsistencyReportIssueDto] })
-  issues: ConsistencyReportIssueDto[];
+  issues!: ConsistencyReportIssueDto[];
 }
