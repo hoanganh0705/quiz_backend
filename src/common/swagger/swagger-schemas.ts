@@ -186,3 +186,92 @@ export class SuccessResponseDto {
   @ApiProperty({ description: 'Confirmation message', example: 'Operation completed successfully' })
   message!: string;
 }
+
+// ─── Response envelope wrappers ─────────────────────────────────────────────────
+//
+// All HTTP responses are wrapped by ResponseFormatInterceptor as:
+//   { data: <actual_response>, meta: { timestamp, ...pagination } }
+//
+// These DTOs document the envelope so that every @ApiOkResponse / @ApiCreatedResponse
+// reference can use the `type: () => WrappedDto<T>()` pattern.
+//
+// Usage in controllers:
+//   @ApiOkResponse({ type: () => WrappedSuccessDto() })
+//   @ApiCreatedResponse({ type: () => WrappedLoginDto() })
+//
+// Non-paginated plain-object responses use WrappedDto<T>.
+// Paginated responses (items + pagination at root) use WrappedPaginatedDto<T>.
+
+/**
+ * Meta field added by ResponseFormatInterceptor to every non-paginated response.
+ */
+export class ResponseMetaDto {
+  @ApiProperty({
+    description: 'ISO 8601 timestamp of when the response was generated',
+    example: '2026-06-25T10:30:00.000Z',
+  })
+  timestamp!: string;
+}
+
+/**
+ * Paginated response meta — includes timestamp plus pagination fields.
+ */
+export class PaginatedResponseMetaDto extends ResponseMetaDto {
+  @ApiPropertyOptional({ description: 'Pagination metadata returned by cursor-based pagination' })
+  pagination?: Record<string, unknown>;
+}
+
+/**
+ * Generic non-paginated response envelope.
+ *
+ * @example
+ * // For a simple message response:
+ * WrappedDto<{ message: string }>
+ * // Runtime shape: { data: { message: string }, meta: { timestamp: string } }
+ */
+export class WrappedDto<T extends object> {
+  @ApiProperty({ description: 'The actual response payload for this endpoint' })
+  data!: T;
+
+  @ApiProperty({ type: () => ResponseMetaDto, description: 'Response metadata' })
+  meta!: ResponseMetaDto;
+}
+
+/**
+ * Generic paginated response envelope.
+ *
+ * @example
+ * WrappedPaginatedDto<QuizResponseDto>
+ * // Runtime shape: { data: QuizResponseDto[], meta: { timestamp: string, pagination: {...} } }
+ */
+export class WrappedPaginatedDto<T extends object> {
+  @ApiProperty({
+    description: 'Items for the current page',
+    isArray: true,
+    type: () => Object,
+  })
+  data!: T[];
+
+  @ApiProperty({ type: () => PaginatedResponseMetaDto })
+  meta!: PaginatedResponseMetaDto;
+}
+
+/**
+ * Convenience wrapper for simple `{ message: string }` responses.
+ */
+export class WrappedSuccessDto extends WrappedDto<{ message: string }> {}
+
+/**
+ * Convenience wrapper for `{ available: boolean }` responses.
+ */
+export class WrappedBooleanDto extends WrappedDto<{ available: boolean }> {}
+
+/**
+ * Convenience wrapper for `{ valid: boolean }` responses.
+ */
+export class WrappedValidDto extends WrappedDto<{ valid: boolean }> {}
+
+/**
+ * Convenience wrapper for `{ accessToken: string }` responses.
+ */
+export class WrappedAccessTokenDto extends WrappedDto<{ accessToken: string }> {}
