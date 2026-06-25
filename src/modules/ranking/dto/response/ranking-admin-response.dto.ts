@@ -28,7 +28,7 @@ export class RecalculateResponseDto {
   message!: string;
 
   @ApiPropertyOptional({ enum: RankingPeriodEnum })
-  period!: string;
+  period!: string | undefined;
 }
 
 export class PeriodResetResponseDto {
@@ -44,7 +44,7 @@ export class ConsistencyReportIssueDto {
   type!: 'xp_mismatch' | 'rank_gap' | 'missing_rank';
 
   @ApiPropertyOptional()
-  userId!: string;
+  userId!: string | undefined;
 
   @ApiProperty()
   description!: string;

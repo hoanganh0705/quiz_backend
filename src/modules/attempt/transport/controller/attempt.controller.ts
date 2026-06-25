@@ -17,6 +17,8 @@ import {
   ApiCreatedResponse,
   ApiNotFoundResponse,
   ApiConflictResponse,
+  ApiBadRequestResponse,
+  ApiInternalServerErrorResponse,
 } from '@nestjs/swagger';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
 import {
@@ -58,8 +60,8 @@ export class AttemptController {
   @ApiCreatedResponse({ description: 'Attempt started', type: AttemptResponseDto })
   @ApiNotFoundResponse({ description: 'Quiz not found or has no published version' })
   @ApiConflictResponse({ description: 'You already have an active attempt for this quiz' })
-  @ApiBadRequest('Validation failed or quiz is not available for attempts')
-  @ApiInternalError('Unexpected server error')
+  @ApiBadRequestResponse()
+  @ApiInternalServerErrorResponse()
   async startAttempt(
     @Param('quizId', new ParseUUIDPipe()) quizId: string,
     @CurrentUser() user: JwtPayload,
@@ -70,7 +72,7 @@ export class AttemptController {
 
   @Get('attempts/:attemptId')
   @ApiAuthList({ description: 'Attempt found', type: AttemptResponseDto })
-  @ApiInternalError('Unexpected server error')
+  @ApiInternalServerErrorResponse()
   async getAttemptById(
     @Param('attemptId', new ParseUUIDPipe()) attemptId: string,
     @CurrentUser() user: JwtPayload,
@@ -88,8 +90,8 @@ export class AttemptController {
   @ApiCreatedResponse({ description: 'Answer recorded', type: SubmitAnswerResponseDto })
   @ApiNotFoundResponse({ description: 'Attempt or question not found' })
   @ApiConflictResponse({ description: 'Attempt is not in an active state' })
-  @ApiBadRequest('Validation failed')
-  @ApiInternalError('Unexpected server error')
+  @ApiBadRequestResponse()
+  @ApiInternalServerErrorResponse()
   async submitAnswer(
     @Param('attemptId', new ParseUUIDPipe()) attemptId: string,
     @CurrentUser() user: JwtPayload,
@@ -136,7 +138,7 @@ export class AttemptController {
 
   @Get('users/me/attempts')
   @ApiAuthList({ description: 'Attempts returned', type: AttemptListResponseDto })
-  @ApiInternalError('Unexpected server error')
+  @ApiInternalServerErrorResponse()
   async listMyAttempts(
     @CurrentUser() user: JwtPayload,
     @Query() query: ListMyAttemptsQueryDto,
@@ -156,14 +158,14 @@ export class AttemptController {
 
   @Get('users/me/attempts/stats')
   @ApiAuthList({ description: 'Attempt statistics returned', type: UserAttemptStatsResponseDto })
-  @ApiInternalError('Unexpected server error')
+  @ApiInternalServerErrorResponse()
   async getMyAttemptStats(@CurrentUser() user: JwtPayload): Promise<UserAttemptStatsResponseDto> {
     return this.attemptApplicationService.getMyAttemptStats(user);
   }
 
   @Get('attempts/:attemptId/answers')
   @ApiAuthList({ description: 'Answers returned', type: AttemptAnswersResponseDto })
-  @ApiInternalError('Unexpected server error')
+  @ApiInternalServerErrorResponse()
   async getAttemptAnswers(
     @Param('attemptId', new ParseUUIDPipe()) attemptId: string,
     @CurrentUser() user: JwtPayload,
@@ -173,7 +175,7 @@ export class AttemptController {
 
   @Get('attempts/:attemptId/analytics')
   @ApiAuthList({ description: 'Analytics returned', type: AttemptAnalyticsResponseDto })
-  @ApiInternalError('Unexpected server error')
+  @ApiInternalServerErrorResponse()
   async getAttemptAnalytics(
     @Param('attemptId', new ParseUUIDPipe()) attemptId: string,
     @CurrentUser() user: JwtPayload,

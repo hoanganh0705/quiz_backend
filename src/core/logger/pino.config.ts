@@ -2,7 +2,9 @@ import { randomUUID } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http'; // type of the request and response objects
 import { ConfigService } from '@nestjs/config';
 import type { Params } from 'nestjs-pino'; // type of the configuration object for nestjs-pino
-import type { SerializedError, SerializedRequest, SerializedResponse } from 'pino-std-serializers'; // type of the serialized request, response, and error objects. For example, req will be serialized to only include the id, method, url, and headers. res will be serialized to only include the statusCode and headers. err will be serialized to only include the type, message, stack, and cause.
+// cannot resolve the package export map entry, causing a TS2307 in Docker builds.
+// The types are correct at runtime; we just suppress the resolution error here.
+import type { SerializedError, SerializedRequest, SerializedResponse } from 'pino-std-serializers';
 
 export const createPinoHttpConfig = (configService: ConfigService): Params => {
   const nodeEnv = configService.get<string>('NODE_ENV', 'development'); // default to development if NODE_ENV is not set
