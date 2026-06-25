@@ -4,9 +4,10 @@ import { redisConfig } from '@/core/config';
 import type { RedisConfig } from '@/core/config';
 import Redis from 'ioredis';
 import type { CacheProvider } from '@/common/ports/cache.provider';
+import type { PubSubProvider } from '@/common/ports/pubsub.provider';
 
 @Injectable()
-export class RedisService implements CacheProvider, OnModuleDestroy {
+export class RedisService implements CacheProvider, PubSubProvider, OnModuleDestroy {
   private readonly client: Redis;
 
   constructor(
@@ -152,9 +153,6 @@ export class RedisService implements CacheProvider, OnModuleDestroy {
    * Returns the number of subscribers that received the message
    * (0 is normal during a rolling deploy, since old instances may
    * be subscribed but new instances may not be listening yet).
-   *
-   * Used by the session-invalidation bus to broadcast revocation
-   * events across all API instances.
    */
   async publish(channel: string, payload: unknown): Promise<number> {
     return this.client.publish(channel, JSON.stringify(payload));

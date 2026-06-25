@@ -23,6 +23,7 @@ type HttpExceptionResponseShape = {
   error?: string;
 };
 
+// this filter split into 3 cases: 1. HTTP exceptions, 2. Errors, 3. Non-error exceptions
 @Catch()
 export class GlobalExceptionFilter implements ExceptionFilter {
   constructor(
@@ -42,6 +43,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     let message: string | string[] = 'Internal server error';
     let errorName = 'InternalServerError';
 
+    // Handle HTTP exceptions
     if (exception instanceof HttpException) {
       statusCode = exception.getStatus();
       const exceptionResponse = exception.getResponse();

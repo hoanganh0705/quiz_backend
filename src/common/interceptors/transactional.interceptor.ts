@@ -1,5 +1,5 @@
 import { CallHandler, ExecutionContext, Injectable, NestInterceptor } from '@nestjs/common';
-import { Observable, from } from 'rxjs';
+import { Observable, defer } from 'rxjs';
 import { TransactionalContext } from './transactional-context';
 
 export const TRANSACTIONAL_KEY = Symbol('TRANSACTIONAL_KEY');
@@ -39,16 +39,12 @@ export function Transactional(): MethodDecorator {
 export class TransactionalInterceptor implements NestInterceptor {
   constructor(private readonly transactionalContext: TransactionalContext) {}
 
-  intercept(executionContext: ExecutionContext, next: CallHandler): Observable<unknown> {
-    const handler = executionContext.getHandler();
-    const isTransactional = Reflect.getMetadata(TRANSACTIONAL_KEY, handler) === true;
-
-    if (!isTransactional) {
+  intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
+    const handler = context.getHandler();
+    if (Reflect.getMetadata(TRANSACTIONAL_KEY, handler) !== true) {
       return next.handle();
     }
 
-    // The async-local scope ensures all downstream calls (service → repository)
-    // share the same context store, regardless of how the call chain is structured.
-    return from(this.transactionalContext.run(() => next.handle()));
+    return defer(() => this.transactionalContext.run(() => next.handle()));
   }
 }

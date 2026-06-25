@@ -6,14 +6,14 @@ import { ApiProperty } from '@nestjs/swagger';
 
 export class ReevaluateUserResponseDto {
   @ApiProperty({ description: 'Human-readable outcome message' })
-  message: string;
+  message!: string;
 
   @ApiProperty({ description: 'Number of badges checked during reevaluation' })
-  checked: number;
+  checked!: number;
 
   @ApiProperty({ description: 'Number of badges awarded during reevaluation' })
-  awarded: number;
+  awarded!: number;
 
   @ApiProperty({ description: 'Number of errors encountered during reevaluation' })
-  errors: number;
+  errors!: number;
 }
