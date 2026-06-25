@@ -50,8 +50,8 @@ import {
 } from '@/modules/social/dto/request';
 import { RequireAuth } from '@/common/guards/jwt.guard';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
-import { User } from '@/common/decorators/user.decorator';
 import { SocialDomainExceptionFilter } from '../filters/social-domain-exception.filter';
+import { CurrentUser } from '@/common/decorators/current-user.decorator';
 
 @ApiTags('social')
 @Controller('social')
@@ -88,7 +88,7 @@ export class SocialController {
   @Throttle({ default: { limit: 20, ttl: 60_000 } })
   @Get('users/search')
   async searchUsers(
-    @User() user: JwtPayload,
+    @CurrentUser() user: JwtPayload,
     @Query('q') query: string,
     @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit: number,
   ): Promise<SearchableUserDto[]> {
@@ -108,7 +108,7 @@ export class SocialController {
   @ApiBadRequestResponse({ description: 'Validation failed' })
   @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
   async getSuggestions(
-    @User() user: JwtPayload,
+    @CurrentUser() user: JwtPayload,
     @Query() query: GetSocialSuggestionsQueryDto,
   ): Promise<SocialSuggestionsResponseDto> {
     return this.socialService.getSuggestions(user, query.page ?? 1, query.limit ?? 20);
@@ -127,7 +127,7 @@ export class SocialController {
   @ApiBadRequestResponse({ description: 'Validation failed' })
   @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
   async getFeed(
-    @User() user: JwtPayload,
+    @CurrentUser() user: JwtPayload,
     @Query() query: GetUserFollowersQueryDto,
   ): Promise<SocialFeedResponseDto> {
     return this.socialService.getFeed(user, query.page ?? 1, query.limit ?? 20);
@@ -145,7 +145,9 @@ export class SocialController {
   })
   @ApiBadRequestResponse({ description: 'Validation failed' })
   @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
-  async getMySocialAnalytics(@User() user: JwtPayload): Promise<MySocialAnalyticsResponseDto> {
+  async getMySocialAnalytics(
+    @CurrentUser() user: JwtPayload,
+  ): Promise<MySocialAnalyticsResponseDto> {
     return this.socialService.getMySocialAnalytics(user);
   }
 
@@ -186,7 +188,7 @@ export class SocialController {
   @ApiBadRequestResponse({ description: 'Validation failed' })
   @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
   async getUserActivity(
-    @User() user: JwtPayload,
+    @CurrentUser() user: JwtPayload,
     @Param('userId', new ParseUUIDPipe()) targetUserId: string,
     @Query() query: GetUserFollowersQueryDto,
   ): Promise<UserActivityResponseDto> {
@@ -225,7 +227,7 @@ export class SocialController {
   // Friend Leaderboard
   @Get('friends/leaderboard')
   async getFriendLeaderboard(
-    @User() user: JwtPayload,
+    @CurrentUser() user: JwtPayload,
     @Query('period', new DefaultValuePipe('weekly')) period: 'weekly' | 'monthly' | 'all_time',
     @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit: number,
   ): Promise<FriendLeaderboardDto> {
@@ -235,25 +237,25 @@ export class SocialController {
   // Friend Requests
   @Post('friend-request/:userId')
   async sendFriendRequest(
-    @User() user: JwtPayload,
+    @CurrentUser() user: JwtPayload,
     @Param('userId') addresseeId: string,
   ): Promise<FriendRequestDto> {
     return this.socialService.sendFriendRequest(user, addresseeId);
   }
 
   @Get('friend-requests/incoming')
-  async getPendingRequests(@User() user: JwtPayload): Promise<FriendRequestDto[]> {
+  async getPendingRequests(@CurrentUser() user: JwtPayload): Promise<FriendRequestDto[]> {
     return this.socialService.getPendingRequests(user);
   }
 
   @Get('friend-requests/outgoing')
-  async getSentRequests(@User() user: JwtPayload): Promise<FriendRequestDto[]> {
+  async getSentRequests(@CurrentUser() user: JwtPayload): Promise<FriendRequestDto[]> {
     return this.socialService.getSentRequests(user);
   }
 
   @Post('friend-requests/:friendshipId/respond')
   async respondToFriendRequest(
-    @User() user: JwtPayload,
+    @CurrentUser() user: JwtPayload,
     @Param('friendshipId') friendshipId: string,
     @Body() body: { accept: boolean },
   ): Promise<{ message: string }> {
@@ -263,7 +265,7 @@ export class SocialController {
 
   @Delete('friend-requests/:friendshipId')
   async cancelFriendRequest(
-    @User() user: JwtPayload,
+    @CurrentUser() user: JwtPayload,
     @Param('friendshipId') friendshipId: string,
   ): Promise<{ message: string }> {
     await this.socialService.cancelFriendRequest(user, friendshipId);
@@ -273,7 +275,7 @@ export class SocialController {
   // Friends
   @Get('friends')
   async getFriends(
-    @User() user: JwtPayload,
+    @CurrentUser() user: JwtPayload,
     @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit: number,
     @Query('cursor') cursor?: string,
   ): Promise<{ items: FriendDto[]; hasNextPage: boolean }> {
@@ -282,7 +284,7 @@ export class SocialController {
 
   @Get('friends/:userId')
   async getFriendsOfUser(
-    @User() user: JwtPayload,
+    @CurrentUser() user: JwtPayload,
     @Param('userId', new ParseUUIDPipe()) targetUserId: string,
     @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit: number,
     @Query('cursor') cursor?: string,
@@ -292,7 +294,7 @@ export class SocialController {
 
   @Delete('friends/:userId')
   async removeFriend(
-    @User() user: JwtPayload,
+    @CurrentUser() user: JwtPayload,
     @Param('userId') friendId: string,
   ): Promise<{ message: string }> {
     await this.socialService.removeFriend(user, friendId);
@@ -302,7 +304,7 @@ export class SocialController {
   // Blocking
   @Post('block/:userId')
   async blockUser(
-    @User() user: JwtPayload,
+    @CurrentUser() user: JwtPayload,
     @Param('userId') blockedId: string,
     @Body() body: { reason?: string },
   ): Promise<{ message: string }> {
@@ -312,7 +314,7 @@ export class SocialController {
 
   @Delete('block/:userId')
   async unblockUser(
-    @User() user: JwtPayload,
+    @CurrentUser() user: JwtPayload,
     @Param('userId') blockedId: string,
   ): Promise<{ message: string }> {
     await this.socialService.unblockUser(user, blockedId);
@@ -320,14 +322,14 @@ export class SocialController {
   }
 
   @Get('blocked')
-  async getBlockedUsers(@User() user: JwtPayload): Promise<BlockedUserDto[]> {
+  async getBlockedUsers(@CurrentUser() user: JwtPayload): Promise<BlockedUserDto[]> {
     return this.socialService.getBlockedUsers(user);
   }
 
   // Following
   @Post('follow/:userId')
   async followUser(
-    @User() user: JwtPayload,
+    @CurrentUser() user: JwtPayload,
     @Param('userId') followingId: string,
   ): Promise<{ message: string }> {
     await this.socialService.followUser(user, followingId);
@@ -336,7 +338,7 @@ export class SocialController {
 
   @Delete('follow/:userId')
   async unfollowUser(
-    @User() user: JwtPayload,
+    @CurrentUser() user: JwtPayload,
     @Param('userId') followingId: string,
   ): Promise<{ message: string }> {
     await this.socialService.unfollowUser(user, followingId);
@@ -345,7 +347,7 @@ export class SocialController {
 
   @Get('followers')
   async getFollowers(
-    @User() user: JwtPayload,
+    @CurrentUser() user: JwtPayload,
     @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit: number,
     @Query('cursor') cursor?: string,
   ): Promise<{ items: FollowerDto[]; hasNextPage: boolean }> {
@@ -371,7 +373,7 @@ export class SocialController {
   @ApiBadRequestResponse({ description: 'Validation failed' })
   @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
   async getUserFollowers(
-    @User() user: JwtPayload,
+    @CurrentUser() user: JwtPayload,
     @Param('userId', new ParseUUIDPipe()) targetUserId: string,
     @Query() query: GetUserFollowersQueryDto,
   ): Promise<UserFollowersResponseDto> {
@@ -402,7 +404,7 @@ export class SocialController {
   @ApiBadRequestResponse({ description: 'Validation failed' })
   @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
   async getMutualFriends(
-    @User() user: JwtPayload,
+    @CurrentUser() user: JwtPayload,
     @Param('userId', new ParseUUIDPipe()) targetUserId: string,
     @Query() query: GetUserFollowersQueryDto,
   ): Promise<MutualFriendsResponseDto> {
@@ -433,7 +435,7 @@ export class SocialController {
   @ApiBadRequestResponse({ description: 'Validation failed' })
   @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
   async getMutualFollowers(
-    @User() user: JwtPayload,
+    @CurrentUser() user: JwtPayload,
     @Param('userId', new ParseUUIDPipe()) targetUserId: string,
     @Query() query: GetUserFollowersQueryDto,
   ): Promise<MutualFollowersResponseDto> {
@@ -464,7 +466,7 @@ export class SocialController {
   @ApiBadRequestResponse({ description: 'Validation failed' })
   @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
   async getUserFollowing(
-    @User() user: JwtPayload,
+    @CurrentUser() user: JwtPayload,
     @Param('userId', new ParseUUIDPipe()) targetUserId: string,
     @Query() query: GetUserFollowersQueryDto,
   ): Promise<UserFollowingResponseDto> {
@@ -478,7 +480,7 @@ export class SocialController {
 
   @Get('following')
   async getFollowing(
-    @User() user: JwtPayload,
+    @CurrentUser() user: JwtPayload,
     @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit: number,
     @Query('cursor') cursor?: string,
   ): Promise<{ items: FollowingDto[]; hasNextPage: boolean }> {
@@ -488,14 +490,14 @@ export class SocialController {
   // Relationship
   @Get('relationship/:userId')
   async getRelationshipStatus(
-    @User() user: JwtPayload,
+    @CurrentUser() user: JwtPayload,
     @Param('userId') targetId: string,
   ): Promise<RelationshipStatusDto> {
     return this.socialService.getRelationshipStatus(user, targetId);
   }
 
   @Get('counts')
-  async getSocialCounts(@User() user: JwtPayload): Promise<SocialCountsDto> {
+  async getSocialCounts(@CurrentUser() user: JwtPayload): Promise<SocialCountsDto> {
     return this.socialService.getSocialCounts(user);
   }
 }

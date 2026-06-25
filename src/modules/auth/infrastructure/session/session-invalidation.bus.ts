@@ -32,7 +32,8 @@
 import { Inject, Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import type Redis from 'ioredis';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
-import { CACHE_PROVIDER, type CacheProvider } from '@/common/ports/cache.provider';
+import type { PubSubProvider } from '@/common/ports/pubsub.provider';
+import { PUBSUB_PROVIDER } from '@/common/ports/pubsub.provider';
 import { sessionsConfig } from '@/core/config';
 
 /**
@@ -94,9 +95,12 @@ export class SessionInvalidationBus implements OnModuleInit, OnModuleDestroy {
   private readonly handlers = new Set<SessionInvalidationHandler>();
 
   constructor(
-    @Inject(CACHE_PROVIDER) private readonly cache: CacheProvider,
-    @Inject(sessionsConfig.KEY) private readonly sessions,
-    @InjectPinoLogger(SessionInvalidationBus.name) private readonly logger: PinoLogger,
+    @Inject(PUBSUB_PROVIDER)
+    private readonly pubSub: PubSubProvider,
+    @Inject(sessionsConfig.KEY)
+    private readonly sessions,
+    @InjectPinoLogger(SessionInvalidationBus.name)
+    private readonly logger: PinoLogger,
   ) {
     this.channel = this.sessions.authSessionInvalidationChannel;
   }
@@ -106,7 +110,7 @@ export class SessionInvalidationBus implements OnModuleInit, OnModuleDestroy {
     // pub/sub subscribers cannot share a connection with normal
     // commands — once a connection is in subscribe mode it can
     // only run subscribe/unsubscribe/ping.
-    const subscriber = this.cache.createSubscriber();
+    const subscriber = this.pubSub.createSubscriber();
     this.subscriber = subscriber;
 
     subscriber.on('error', (error) => {
@@ -187,7 +191,7 @@ export class SessionInvalidationBus implements OnModuleInit, OnModuleDestroy {
       emittedAtMs: Date.now(),
     };
     try {
-      return await this.cache.publish(this.channel, fullEvent);
+      return await this.pubSub.publish(this.channel, fullEvent);
     } catch (error) {
       this.logger.error({
         event: 'session_invalidation_publish_failed',

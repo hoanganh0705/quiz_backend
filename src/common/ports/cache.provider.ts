@@ -20,21 +20,6 @@ export interface CacheProvider {
   rpushJson<T>(key: string, item: T): Promise<number>;
 
   lpopJson<T>(key: string): Promise<T | null>;
-
-  /**
-   * Publish a JSON-serialized payload on a Redis pub/sub channel.
-   * Returns the number of subscribers that received the message.
-   * Used by cross-instance buses (e.g. session invalidation).
-   */
-  publish(channel: string, payload: unknown): Promise<number>;
-
-  /**
-   * Create a dedicated subscriber connection. Pub/sub in Redis
-   * blocks the connection from running normal commands, so
-   * subscribers must use a separate client. The caller is
-   * responsible for calling `subscriber.quit()` on shutdown.
-   */
-  createSubscriber(): import('ioredis').default;
 }
 
 export const CACHE_PROVIDER = Symbol('CACHE_PROVIDER');

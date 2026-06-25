@@ -27,10 +27,10 @@ import {
 } from '@/modules/notification/dto/response';
 import { RequireAuth } from '@/common/guards/jwt.guard';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
-import { User } from '@/common/decorators/user.decorator';
 import { UpdatePreferencesDto, GetNotificationsQueryDto } from '@/modules/notification/dto/request';
 import { Permissions } from '@/common/authorization/decorators/permissions.decorator';
 import { Permission } from '@/common/authorization/permissions';
+import { CurrentUser } from '@/common/decorators/current-user.decorator';
 
 @ApiTags('notification')
 @Controller('notifications')
@@ -40,7 +40,7 @@ export class NotificationController {
 
   @Get()
   async getNotifications(
-    @User() user: JwtPayload,
+    @CurrentUser() user: JwtPayload,
     @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit: number,
     @Query('cursor') cursor?: string,
     @Query('unreadOnly', new DefaultValuePipe(false)) unreadOnly?: boolean,
@@ -87,7 +87,7 @@ export class NotificationController {
   }
 
   @Get('unread-count')
-  async getUnreadCount(@User() user: JwtPayload): Promise<UnreadCountResponseDto> {
+  async getUnreadCount(@CurrentUser() user: JwtPayload): Promise<UnreadCountResponseDto> {
     const count = await this.notificationService.getUnreadCount(user);
     return { count };
   }
@@ -101,7 +101,7 @@ export class NotificationController {
   @Get(':notificationId')
   async getNotificationDetail(
     @Param('notificationId') notificationId: string,
-    @User() user: JwtPayload,
+    @CurrentUser() user: JwtPayload,
   ): Promise<NotificationResponseDto> {
     const notification = await this.notificationService.getNotificationDetail(notificationId, user);
 
@@ -126,7 +126,7 @@ export class NotificationController {
   @HttpCode(HttpStatus.NO_CONTENT)
   async markAsRead(
     @Param('notificationId') notificationId: string,
-    @User() user: JwtPayload,
+    @CurrentUser() user: JwtPayload,
   ): Promise<void> {
     await this.notificationService.markAsRead(notificationId, user);
   }
@@ -137,7 +137,7 @@ export class NotificationController {
   @HttpCode(HttpStatus.NO_CONTENT)
   async markAsUnread(
     @Param('notificationId') notificationId: string,
-    @User() user: JwtPayload,
+    @CurrentUser() user: JwtPayload,
   ): Promise<void> {
     await this.notificationService.markAsUnread(notificationId, user);
   }
@@ -146,14 +146,14 @@ export class NotificationController {
   @Transactional()
   @ApiNoContent()
   @HttpCode(HttpStatus.NO_CONTENT)
-  async markAllAsRead(@User() user: JwtPayload): Promise<void> {
+  async markAllAsRead(@CurrentUser() user: JwtPayload): Promise<void> {
     await this.notificationService.markAllAsRead(user);
   }
 
   @Delete('read')
   @Transactional()
   async deleteReadNotifications(
-    @User() user: JwtPayload,
+    @CurrentUser() user: JwtPayload,
   ): Promise<DeletedReadNotificationsResponseDto> {
     const deletedCount = await this.notificationService.deleteReadNotifications(user);
     return { deletedCount };
@@ -165,14 +165,16 @@ export class NotificationController {
   @HttpCode(HttpStatus.NO_CONTENT)
   async deleteNotification(
     @Param('notificationId') notificationId: string,
-    @User() user: JwtPayload,
+    @CurrentUser() user: JwtPayload,
   ): Promise<void> {
     await this.notificationService.deleteNotification(notificationId, user);
   }
 
   // Preferences endpoints
   @Get('preferences')
-  async getPreferences(@User() user: JwtPayload): Promise<NotificationPreferencesResponseDto> {
+  async getPreferences(
+    @CurrentUser() user: JwtPayload,
+  ): Promise<NotificationPreferencesResponseDto> {
     const prefs = await this.notificationService.getOrCreatePreferences(user);
     return {
       inAppEnabled: prefs.inAppEnabled,
@@ -194,7 +196,7 @@ export class NotificationController {
   @Patch('preferences')
   @Transactional()
   async updatePreferences(
-    @User() user: JwtPayload,
+    @CurrentUser() user: JwtPayload,
     @Body() updateDto: UpdatePreferencesDto,
   ): Promise<NotificationPreferencesResponseDto> {
     const prefs = await this.notificationService.updatePreferences(user, updateDto);
