@@ -1,0 +1,152 @@
+# =============================================
+# Quiz Backend - Production .dockerignore
+# =============================================
+#
+# Principles:
+# 1. Minimize build context to speed up docker daemon transfers.
+# 2. Never include secrets (.env files).
+# 3. Exclude build artifacts that are regenerated inside the container.
+# 4. Exclude development-only files.
+#
+# Every pattern below MUST be justified by an actual file
+# or directory that exists (or historically existed) in this repo.
+# =============================================
+
+# ---------------------------------------------
+# Docker & Build Artifacts
+# ---------------------------------------------
+Dockerfile
+.dockerignore
+docker-compose*.yml
+docker-compose*.yaml
+
+# ---------------------------------------------
+# Git & Version Control
+# ---------------------------------------------
+.git
+.gitignore
+.gitattributes
+.github
+.gitlab-ci.yml
+
+# ---------------------------------------------
+# IDE & Editor
+# ---------------------------------------------
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# ---------------------------------------------
+# Dependencies
+# ---------------------------------------------
+# node_modules is reinstalled in Docker layers.
+# Including it would bloat the build context.
+node_modules/
+
+# ---------------------------------------------
+# Build Output
+# ---------------------------------------------
+# Generated during the Docker build; copying them
+# would waste context transfer and risk stale artifacts.
+dist/
+build/
+out/
+
+# TypeScript incremental build cache
+*.tsbuildinfo
+
+# ---------------------------------------------
+# Logs
+# ---------------------------------------------
+logs/
+*.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ---------------------------------------------
+# Environment & Secrets
+# ---------------------------------------------
+# .env always contains secrets — never include.
+# .env.example is the only safe env file for docs.
+.env
+.env.*
+!.env.example
+
+# Local dev overrides
+.env.local
+.env.development
+.env.development.local
+.env.test
+.env.test.local
+.env.production
+.env.production.local
+
+# ---------------------------------------------
+# Tests & Coverage
+# ---------------------------------------------
+# Not needed at runtime.  Excluding them keeps the
+# context lean and avoids accidentally exposing test
+# helper functions or mocks.
+coverage/
+.nyc_output/
+*.spec.ts
+*.test.ts
+**/__tests__/
+**/__mocks__/
+jest.config.*
+vitest.config.*
+
+# E2E test suite
+test/
+e2e/
+
+# ---------------------------------------------
+# Documentation & Developer Files
+# ---------------------------------------------
+# Docs and scripts are for development only.
+# Runtime only needs the compiled application.
+README.md
+CONTRIBUTING.md
+CHANGELOG.md
+LICENSE*
+docs/
+scripts/
+
+# ---------------------------------------------
+# Cache & Temporary Files
+# ---------------------------------------------
+.temp/
+.tmp/
+.cache/
+.parcel-cache/
+.swc-cache/
+.eslintcache
+.stylelintcache
+
+# ---------------------------------------------
+# Alternate Package Manager Lockfiles
+# ---------------------------------------------
+# This project uses pnpm (pnpm-lock.yaml), but
+# package-lock.json and yarn.lock may be added by
+# contributors and must not enter the context.
+package-lock.json
+yarn.lock
+
+# Workspace config for monorepos (pnpm-workspace.yaml).
+# This project is a single package, not a monorepo.  The
+# existing pnpm-workspace.yaml uses pnpm 10+ syntax
+# (allowBuilds) that pnpm 9.15.0 cannot parse, so the
+# file must be excluded from the Docker build context.
+pnpm-workspace.yaml
+
+# ---------------------------------------------
+# Miscellaneous Build Artifacts
+# ---------------------------------------------
+*.bak
+*.md
+*.txt

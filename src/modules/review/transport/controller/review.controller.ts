@@ -8,7 +8,7 @@ import {
   Post,
   UseFilters,
 } from '@nestjs/common';
-import { ApiTags } from '@nestjs/swagger';
+import { ApiTags, ApiInternalServerErrorResponse } from '@nestjs/swagger';
 import { Public } from '@/common/decorators/public.decorator';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
 import {
@@ -36,7 +36,7 @@ export class ReviewController {
 
   @Get('me')
   @ApiAuthList({ description: 'Review dashboard returned', type: ReviewDashboardResponseDto })
-  @ApiInternalError()
+  @ApiInternalServerErrorResponse()
   async getMyReviewDashboard(@CurrentUser() user: JwtPayload): Promise<ReviewDashboardResponseDto> {
     return this.reviewApplicationService.getMyReviewDashboard(user);
   }

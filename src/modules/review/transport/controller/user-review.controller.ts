@@ -1,8 +1,8 @@
 import { Body, Controller, Get, Param, ParseUUIDPipe, Query, UseFilters } from '@nestjs/common';
-import { ApiTags } from '@nestjs/swagger';
+import { ApiTags, ApiInternalServerErrorResponse } from '@nestjs/swagger';
 import { Public } from '@/common/decorators/public.decorator';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
-import { ApiAuthList, ApiPublicList, ApiInternalError } from '@/common/swagger/swagger-decorators';
+import { ApiAuthList, ApiPublicList } from '@/common/swagger/swagger-decorators';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
 import { ReviewApplicationService } from '../../application/review.application.service';
 import { ListMyReviewsQueryDto, ListReportedReviewsQueryDto } from '../../dto/request';
@@ -22,7 +22,7 @@ export class UserReviewController {
 
   @Get('me/reported-reviews')
   @ApiAuthList({ description: 'Reported reviews returned', type: ReportedReviewsResponseDto })
-  @ApiInternalError()
+  @ApiInternalServerErrorResponse()
   async listMyReportedReviews(
     @CurrentUser() user: JwtPayload,
     @Query() query: ListReportedReviewsQueryDto,
@@ -48,7 +48,7 @@ export class UserReviewController {
 
   @Get('me/reviews')
   @ApiAuthList({ description: 'My reviews returned', type: MyReviewsResponseDto })
-  @ApiInternalError()
+  @ApiInternalServerErrorResponse()
   async listMyReviews(
     @CurrentUser() user: JwtPayload,
     @Query() query: ListMyReviewsQueryDto,
@@ -61,7 +61,7 @@ export class UserReviewController {
 
   @Get('me/reviews/:quizId')
   @ApiAuthList({ description: 'My review for the quiz (or null)', type: ReviewDetailResponseDto })
-  @ApiInternalError()
+  @ApiInternalServerErrorResponse()
   async getMyReviewForQuiz(
     @Param('quizId', new ParseUUIDPipe()) quizId: string,
     @CurrentUser() user: JwtPayload,

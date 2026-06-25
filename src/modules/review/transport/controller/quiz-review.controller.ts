@@ -10,7 +10,7 @@ import {
   Query,
   UseFilters,
 } from '@nestjs/common';
-import { ApiTags, ApiNotFoundResponse } from '@nestjs/swagger';
+import { ApiTags, ApiNotFoundResponse, ApiInternalServerErrorResponse } from '@nestjs/swagger';
 import { Public } from '@/common/decorators/public.decorator';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
 import {
@@ -82,7 +82,7 @@ export class quizReviewController {
   @Get(':quizId/reviews/analytics')
   @ApiAuthList({ description: 'Quiz review analytics returned', type: QuizAnalyticsResponseDto })
   @ApiNotFoundResponse()
-  @ApiInternalError()
+  @ApiInternalServerErrorResponse()
   async getCreatorQuizReviewAnalytics(
     @Param('quizId', new ParseUUIDPipe()) quizId: string,
     @CurrentUser() user: JwtPayload,
@@ -96,7 +96,7 @@ export class quizReviewController {
     type: ReviewDetailResponseDto,
   })
   @ApiNotFoundResponse()
-  @ApiInternalError()
+  @ApiInternalServerErrorResponse()
   async getMyQuizReview(
     @Param('quizId', new ParseUUIDPipe()) quizId: string,
     @CurrentUser() user: JwtPayload,
