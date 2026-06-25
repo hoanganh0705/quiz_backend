@@ -93,6 +93,7 @@ export class TrendingQuizItemDto {
 
   @ApiPropertyOptional({
     description: 'Quiz cover image URL',
+    type: String,
     format: 'uri',
     example: 'https://example.com/covers/js.png',
     nullable: true,
@@ -149,6 +150,7 @@ export class PopularQuizItemDto {
 
   @ApiPropertyOptional({
     description: 'Quiz cover image URL',
+    type: String,
     format: 'uri',
     example: 'https://example.com/covers/js.png',
     nullable: true,

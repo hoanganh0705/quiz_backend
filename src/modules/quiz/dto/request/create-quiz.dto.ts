@@ -72,6 +72,7 @@ export class CreateQuizDto {
 
   @ApiPropertyOptional({
     description: 'Quiz description',
+    type: String,
     maxLength: 2000,
     example:
       'Test your knowledge of JavaScript fundamentals including variables, functions, and DOM manipulation.',
@@ -101,6 +102,7 @@ export class CreateQuizDto {
 
   @ApiPropertyOptional({
     description: 'Prerequisites or requirements to attempt this quiz',
+    type: String,
     maxLength: 5000,
     nullable: true,
   })
@@ -112,6 +114,7 @@ export class CreateQuizDto {
 
   @ApiPropertyOptional({
     description: 'Quiz cover image URL',
+    type: String,
     maxLength: 2048,
     format: 'uri',
     nullable: true,
@@ -144,6 +147,7 @@ export class CreateQuizDto {
 
   @ApiPropertyOptional({
     description: 'UUIDs of associated categories (max 50)',
+    type: Array,
     maxItems: 50,
     format: 'uuid',
     example: ['660e8400-e29b-41d4-a716-446655440000'],
@@ -158,6 +162,7 @@ export class CreateQuizDto {
 
   @ApiPropertyOptional({
     description: 'UUIDs of associated tags (max 50)',
+    type: Array,
     maxItems: 50,
     format: 'uuid',
     example: ['770e8400-e29b-41d4-a716-446655440000'],

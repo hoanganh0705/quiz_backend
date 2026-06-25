@@ -7,6 +7,7 @@ export class QuizPaginationResponseDto {
 
   @ApiPropertyOptional({
     description: 'Cursor for fetching the next page. `null` when there is no next page.',
+    type: String,
     nullable: true,
   })
   nextCursor!: string | null;

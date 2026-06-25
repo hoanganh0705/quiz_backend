@@ -30,6 +30,7 @@ export class QuizVersionDetailResponseDto {
 
   @ApiPropertyOptional({
     description: 'Version description',
+    type: String,
     example: 'Updated draft with additional DOM questions',
     nullable: true,
   })
@@ -99,7 +100,7 @@ export class QuizVersionResponseDto {
   @ApiProperty({ description: 'XP reward for passing', example: 100 })
   rewardXp!: number;
 
-  @ApiPropertyOptional({ description: 'Creator user identifier', nullable: true })
+  @ApiPropertyOptional({ description: 'Creator user identifier', type: String, nullable: true })
   createdByUserId!: string | null;
 
   @ApiProperty({
@@ -110,12 +111,14 @@ export class QuizVersionResponseDto {
 
   @ApiPropertyOptional({
     description: 'Timestamp when version was published (ISO 8601)',
+    type: String,
     nullable: true,
   })
   publishedAt!: string | null;
 
   @ApiPropertyOptional({
     description: 'Timestamp when version was archived (ISO 8601)',
+    type: String,
     nullable: true,
   })
   archivedAt!: string | null;

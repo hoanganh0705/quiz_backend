@@ -61,6 +61,7 @@ export class CreateQuizQuestionDto {
 
   @ApiPropertyOptional({
     description: 'Optional image URL associated with the question',
+    type: String,
     maxLength: 2048,
     format: 'uri',
     nullable: true,
