@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import { defineConfig } from 'drizzle-kit';
+import { resolve } from 'node:path';
 
 if (!process.env.DATABASE_URL) {
   throw new Error(
@@ -9,7 +10,7 @@ if (!process.env.DATABASE_URL) {
 
 export default defineConfig({
   dialect: 'postgresql',
-  out: './src/core/database/migrations',
+  out: resolve(__dirname, 'src/core/database/migrations'),
   schema: './src/core/database/schema',
   dbCredentials: {
     url: process.env.DATABASE_URL,

@@ -11,7 +11,7 @@ import {
   UseFilters,
 } from '@nestjs/common';
 
-import { ApiTags, ApiOperation, ApiCreatedResponse, ApiNotFoundResponse } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiCreatedResponse, ApiNotFoundResponse, ApiBadRequestResponse, ApiInternalServerErrorResponse } from '@nestjs/swagger';
 
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
 import {
@@ -73,8 +73,8 @@ export class BookmarkController {
     description: 'Bookmark search results returned',
     type: SearchBookmarksResponseDto,
   })
-  @ApiBadRequest()
-  @ApiInternalError()
+  @ApiBadRequestResponse()
+  @ApiInternalServerErrorResponse()
   async searchBookmarks(
     @CurrentUser() user: JwtPayload,
     @Query() query: SearchBookmarksQueryDto,
@@ -88,7 +88,7 @@ export class BookmarkController {
 
   @Get('recent')
   @ApiAuthList({ description: 'Recent bookmarks returned', type: RecentBookmarksResponseDto })
-  @ApiInternalError()
+  @ApiInternalServerErrorResponse()
   async getRecentBookmarks(
     @CurrentUser() user: JwtPayload,
     @Query() query: ListRecentBookmarksQueryDto,
@@ -104,7 +104,7 @@ export class BookmarkController {
     description: 'Bookmark status returned for a bookmarked quiz',
     type: BookmarkStatusResponseDto,
   })
-  @ApiInternalError()
+  @ApiInternalServerErrorResponse()
   async getBookmarkStatus(
     @Param('quizId', new ParseUUIDPipe()) quizId: string,
     @CurrentUser() user: JwtPayload,
@@ -114,7 +114,7 @@ export class BookmarkController {
 
   @Get('collections')
   @ApiAuthList({ description: 'Collections returned', type: BookmarkCollectionListResponseDto })
-  @ApiInternalError()
+  @ApiInternalServerErrorResponse()
   async listCollections(
     @CurrentUser() user: JwtPayload,
   ): Promise<BookmarkCollectionListResponseDto> {
@@ -133,7 +133,7 @@ export class BookmarkController {
   @Get('collections/:collectionId')
   @ApiAuthList({ description: 'Bookmarks returned', type: BookmarkListResponseDto })
   @ApiNotFoundResponse()
-  @ApiInternalError()
+  @ApiInternalServerErrorResponse()
   async listBookmarksInCollection(
     @Param('collectionId', new ParseUUIDPipe()) collectionId: string,
     @CurrentUser() user: JwtPayload,
@@ -148,7 +148,7 @@ export class BookmarkController {
   })
   @ApiNotFoundResponse()
   @ApiForbidden()
-  @ApiInternalError()
+  @ApiInternalServerErrorResponse()
   async getCollectionAnalytics(
     @Param('collectionId', new ParseUUIDPipe()) collectionId: string,
     @CurrentUser() user: JwtPayload,
@@ -162,8 +162,8 @@ export class BookmarkController {
   @ApiCreatedResponse({ description: 'Bookmark added', type: AddBookmarkResponseDto })
   @ApiNotFoundResponse()
   @ApiConflict()
-  @ApiBadRequest()
-  @ApiInternalError()
+  @ApiBadRequestResponse()
+  @ApiInternalServerErrorResponse()
   async addBookmark(
     @Param('collectionId', new ParseUUIDPipe()) collectionId: string,
     @CurrentUser() user: JwtPayload,
@@ -243,7 +243,7 @@ export class BookmarkController {
 
   @Get('me/stats')
   @ApiAuthList({ description: 'Bookmark statistics returned', type: BookmarkStatsResponseDto })
-  @ApiInternalError()
+  @ApiInternalServerErrorResponse()
   async getMyBookmarkStats(@CurrentUser() user: JwtPayload): Promise<BookmarkStatsResponseDto> {
     return this.bookmarkApplicationService.getMyBookmarkStats(user);
   }

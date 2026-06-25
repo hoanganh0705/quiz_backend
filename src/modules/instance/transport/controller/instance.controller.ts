@@ -16,6 +16,8 @@ import {
   ApiCreatedResponse,
   ApiNotFoundResponse,
   ApiForbiddenResponse,
+  ApiBadRequestResponse,
+  ApiInternalServerErrorResponse,
 } from '@nestjs/swagger';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
 import { Transactional } from '@/common/interceptors/transactional.interceptor';
@@ -69,8 +71,8 @@ export class InstanceController {
   @ApiForbiddenResponse({
     description: 'You do not have permission to create an instance for this quiz',
   })
-  @ApiBadRequest('Validation failed')
-  @ApiInternalError()
+  @ApiBadRequestResponse()
+  @ApiInternalServerErrorResponse()
   async createInstance(
     @CurrentUser() user: JwtPayload,
     @Body() payload: CreateInstanceDto,
@@ -95,7 +97,7 @@ export class InstanceController {
       'Only instances with status `open` are returned by default.',
   })
   @ApiOkResponse({ description: 'Instance list returned', type: InstanceListResponseDto })
-  @ApiInternalError()
+  @ApiInternalServerErrorResponse()
   async listInstances(@Query() query: ListInstancesQueryDto): Promise<InstanceListResponseDto> {
     const result = await this.instanceService.listInstances({
       limit: query.limit ?? 20,
@@ -123,7 +125,7 @@ export class InstanceController {
   })
   @ApiOkResponse({ description: 'Players returned', type: InstancePlayersResponseDto })
   @ApiNotFoundResponse({ description: 'Instance not found' })
-  @ApiInternalError()
+  @ApiInternalServerErrorResponse()
   async listInstancePlayers(
     @Param('id', new ParseUUIDPipe()) instanceId: string,
   ): Promise<InstancePlayersResponseDto> {
@@ -143,7 +145,7 @@ export class InstanceController {
   })
   @ApiOkResponse({ description: 'Instance found', type: InstanceDetailResponseDto })
   @ApiNotFoundResponse({ description: 'Instance not found' })
-  @ApiInternalError()
+  @ApiInternalServerErrorResponse()
   getInstanceById(
     @Param('id', new ParseUUIDPipe()) instanceId: string,
   ): Promise<InstanceDetailResponseDto> {
@@ -192,7 +194,7 @@ export class InstanceController {
   })
   @ApiOkResponse({ description: 'Leaderboard returned', type: InstanceLeaderboardResponseDto })
   @ApiNotFoundResponse({ description: 'Instance not found' })
-  @ApiInternalError()
+  @ApiInternalServerErrorResponse()
   getLeaderboard(
     @Param('id', new ParseUUIDPipe()) instanceId: string,
     @Query() query: GetLeaderboardQueryDto,
