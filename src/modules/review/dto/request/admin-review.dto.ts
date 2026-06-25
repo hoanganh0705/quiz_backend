@@ -5,6 +5,7 @@ import { Type } from 'class-transformer';
 export class ListPlatformReportsQueryDto {
   @ApiPropertyOptional({
     description: 'Opaque cursor for pagination',
+    type: String,
     nullable: true,
   })
   @IsOptional()

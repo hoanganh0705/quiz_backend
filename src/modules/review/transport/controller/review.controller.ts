@@ -8,15 +8,10 @@ import {
   Post,
   UseFilters,
 } from '@nestjs/common';
-import { ApiTags, ApiInternalServerErrorResponse } from '@nestjs/swagger';
+import { ApiTags, ApiInternalServerErrorResponse, ApiNotFoundResponse } from '@nestjs/swagger';
 import { Public } from '@/common/decorators/public.decorator';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
-import {
-  ApiAuthList,
-  ApiAuthAction,
-  ApiPublicList,
-  ApiInternalError,
-} from '@/common/swagger/swagger-decorators';
+import { ApiAuthList, ApiAuthAction, ApiPublicList } from '@/common/swagger/swagger-decorators';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
 import { ReviewApplicationService } from '../../application/review.application.service';
 import { HelpfulReviewDto, ReportReviewDto } from '../../dto/request';
@@ -27,6 +22,12 @@ import {
   ReportReviewResponseDto,
 } from '../../dto/response';
 import { ReviewDomainExceptionFilter } from '../filters/review-domain-exception.filter';
+import {
+  WrappedReviewDetailDto,
+  WrappedMyDashboardDto,
+  WrappedHelpfulMessageDto,
+  WrappedReportMessageDto,
+} from '../../dto/response/review-response-docs.dto';
 
 @ApiTags('reviews')
 @Controller('reviews')
@@ -35,14 +36,14 @@ export class ReviewController {
   constructor(private readonly reviewApplicationService: ReviewApplicationService) {}
 
   @Get('me')
-  @ApiAuthList({ description: 'Review dashboard returned', type: ReviewDashboardResponseDto })
+  @ApiAuthList({ description: 'Review dashboard returned', type: WrappedMyDashboardDto })
   @ApiInternalServerErrorResponse()
   async getMyReviewDashboard(@CurrentUser() user: JwtPayload): Promise<ReviewDashboardResponseDto> {
     return this.reviewApplicationService.getMyReviewDashboard(user);
   }
 
   @Post(':reviewId/helpful')
-  @ApiAuthAction({ description: 'Helpful vote recorded', type: HelpfulReviewResponseDto })
+  @ApiAuthAction({ description: 'Helpful vote recorded', type: WrappedHelpfulMessageDto })
   async markReviewHelpful(
     @Param('reviewId', new ParseUUIDPipe()) reviewId: string,
     @CurrentUser() user: JwtPayload,
@@ -52,7 +53,8 @@ export class ReviewController {
   }
 
   @Delete(':reviewId/helpful')
-  @ApiAuthList({ description: 'Helpful vote removed', type: HelpfulReviewResponseDto })
+  @ApiAuthList({ description: 'Helpful vote removed', type: WrappedHelpfulMessageDto })
+  @ApiNotFoundResponse({ description: 'Review not found' })
   async removeHelpfulVote(
     @Param('reviewId', new ParseUUIDPipe()) reviewId: string,
     @CurrentUser() user: JwtPayload,
@@ -61,7 +63,7 @@ export class ReviewController {
   }
 
   @Post(':reviewId/report')
-  @ApiAuthAction({ description: 'Review reported successfully', type: ReportReviewResponseDto })
+  @ApiAuthAction({ description: 'Review reported successfully', type: WrappedReportMessageDto })
   async reportReview(
     @Param('reviewId', new ParseUUIDPipe()) reviewId: string,
     @CurrentUser() user: JwtPayload,
@@ -72,7 +74,8 @@ export class ReviewController {
 
   @Get(':reviewId')
   @Public()
-  @ApiPublicList({ description: 'Review detail returned', type: ReviewDetailResponseDto })
+  @ApiPublicList({ description: 'Review detail returned', type: WrappedReviewDetailDto })
+  @ApiNotFoundResponse({ description: 'Review not found' })
   async getReviewById(
     @Param('reviewId', new ParseUUIDPipe()) reviewId: string,
   ): Promise<ReviewDetailResponseDto> {

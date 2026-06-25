@@ -42,18 +42,17 @@ export class PlatformReportItemDto {
 
   @ApiPropertyOptional({
     description: 'Content of the reported review',
+    type: String,
     nullable: true,
   })
   content!: string | null;
 
-  @ApiProperty({
-    description: 'Reason for reporting the review',
-    example: 'spam',
-  })
+  @ApiProperty({ description: 'Reason for reporting the review', example: 'spam' })
   reason!: string;
 
   @ApiPropertyOptional({
     description: 'Additional moderation details',
+    type: String,
     nullable: true,
   })
   details!: string | null;
@@ -73,6 +72,7 @@ export class PlatformReportItemDto {
 
   @ApiPropertyOptional({
     description: 'Last update timestamp (ISO 8601)',
+    type: String,
     nullable: true,
   })
   updatedAt!: string | null;
@@ -87,6 +87,7 @@ export class PlatformReportsPaginationDto {
 
   @ApiPropertyOptional({
     description: 'Opaque cursor for the next page',
+    type: String,
     nullable: true,
   })
   nextCursor!: string | null;

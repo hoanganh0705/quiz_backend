@@ -10,16 +10,20 @@ import {
   Query,
   UseFilters,
 } from '@nestjs/common';
-import { ApiTags, ApiNotFoundResponse, ApiInternalServerErrorResponse } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiNotFoundResponse,
+  ApiInternalServerErrorResponse,
+  ApiOkResponse,
+} from '@nestjs/swagger';
 import { Public } from '@/common/decorators/public.decorator';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
 import {
+  ApiAuth,
   ApiAuthList,
   ApiAuthCreate,
   ApiAuthUpdate,
-  ApiAuthDelete,
   ApiPublicList,
-  ApiInternalError,
 } from '@/common/swagger/swagger-decorators';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
 import { ReviewApplicationService } from '../../application/review.application.service';
@@ -35,6 +39,15 @@ import {
 import { QuizAnalyticsResponseDto } from '@/modules/quiz/dto/response/quiz-analytics.dto';
 import { ReviewDomainExceptionFilter } from '../filters/review-domain-exception.filter';
 import { CursorMapper } from '../../mappers/review-cursor.mapper';
+import {
+  WrappedReviewListDto,
+  WrappedReviewStatsDto,
+  WrappedCreateReviewDto,
+  WrappedUpdateReviewDto,
+  WrappedDeleteMessageDto,
+  WrappedReviewDetailDto,
+} from '../../dto/response/review-response-docs.dto';
+import { WrappedCreatorAnalyticsDto } from '@/modules/quiz/dto/response/quiz-response-docs.dto';
 
 @ApiTags('quizzes')
 @Controller('quizzes')
@@ -43,7 +56,7 @@ export class quizReviewController {
   constructor(private readonly reviewApplicationService: ReviewApplicationService) {}
 
   @Post(':quizId/reviews')
-  @ApiAuthCreate({ description: 'Review created', type: CreateReviewResponseDto })
+  @ApiAuthCreate({ description: 'Review created', type: WrappedCreateReviewDto })
   async createReview(
     @Param('quizId', new ParseUUIDPipe()) quizId: string,
     @CurrentUser() user: JwtPayload,
@@ -54,7 +67,9 @@ export class quizReviewController {
 
   @Get(':quizId/reviews')
   @Public()
-  @ApiPublicList({ description: 'Reviews returned', type: ReviewListResponseDto })
+  @ApiPublicList({ description: 'Reviews returned', type: WrappedReviewListDto })
+  @ApiNotFoundResponse({ description: 'Quiz not found' })
+  @ApiInternalServerErrorResponse()
   async listReviews(
     @Param('quizId', new ParseUUIDPipe()) quizId: string,
     @Query() query: ListReviewsQueryDto,
@@ -72,7 +87,7 @@ export class quizReviewController {
 
   @Get(':quizId/reviews/stats')
   @Public()
-  @ApiPublicList({ description: 'Quiz review statistics returned', type: ReviewStatsResponseDto })
+  @ApiPublicList({ description: 'Quiz review statistics returned', type: WrappedReviewStatsDto })
   async getQuizReviewStats(
     @Param('quizId', new ParseUUIDPipe()) quizId: string,
   ): Promise<ReviewStatsResponseDto> {
@@ -80,8 +95,8 @@ export class quizReviewController {
   }
 
   @Get(':quizId/reviews/analytics')
-  @ApiAuthList({ description: 'Quiz review analytics returned', type: QuizAnalyticsResponseDto })
-  @ApiNotFoundResponse()
+  @ApiAuthList({ description: 'Quiz review analytics returned', type: WrappedCreatorAnalyticsDto })
+  @ApiNotFoundResponse({ description: 'Quiz not found' })
   @ApiInternalServerErrorResponse()
   async getCreatorQuizReviewAnalytics(
     @Param('quizId', new ParseUUIDPipe()) quizId: string,
@@ -91,11 +106,8 @@ export class quizReviewController {
   }
 
   @Get(':quizId/reviews/me')
-  @ApiAuthList({
-    description: 'My review returned (or null if no review)',
-    type: ReviewDetailResponseDto,
-  })
-  @ApiNotFoundResponse()
+  @ApiAuthList({ description: 'My review returned', type: WrappedReviewDetailDto })
+  @ApiNotFoundResponse({ description: 'No review found for this quiz' })
   @ApiInternalServerErrorResponse()
   async getMyQuizReview(
     @Param('quizId', new ParseUUIDPipe()) quizId: string,
@@ -105,7 +117,8 @@ export class quizReviewController {
   }
 
   @Patch(':quizId/reviews')
-  @ApiAuthUpdate({ description: 'Review updated', type: UpdateReviewResponseDto })
+  @ApiAuthUpdate({ description: 'Review updated', type: WrappedUpdateReviewDto })
+  @ApiNotFoundResponse({ description: 'Review not found' })
   async updateReview(
     @Param('quizId', new ParseUUIDPipe()) quizId: string,
     @CurrentUser() user: JwtPayload,
@@ -115,7 +128,9 @@ export class quizReviewController {
   }
 
   @Delete(':quizId/reviews')
-  @ApiAuthDelete('Review deleted')
+  @ApiAuth()
+  @ApiOkResponse({ description: 'Review deleted', type: WrappedDeleteMessageDto })
+  @ApiNotFoundResponse({ description: 'Review not found' })
   async deleteReview(
     @Param('quizId', new ParseUUIDPipe()) quizId: string,
     @CurrentUser() user: JwtPayload,
