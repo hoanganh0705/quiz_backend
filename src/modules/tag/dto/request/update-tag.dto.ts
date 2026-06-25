@@ -21,10 +21,11 @@ export class UpdateTagDto {
 
   @ApiPropertyOptional({
     description: 'URL-friendly slug',
+    type: String,
+    nullable: true,
     maxLength: 120,
     pattern: DEFAULT_SLUG_PATTERN.source,
     example: 'typescript',
-    nullable: true,
   })
   @IsOptional()
   @Transform(({ value }: { value: unknown }) => trimStringToLowerCase(value))

@@ -13,10 +13,10 @@ export class RankedCategoryResponseDto {
   @ApiProperty()
   slug!: string;
 
-  @ApiPropertyOptional({ nullable: true })
+  @ApiPropertyOptional({ type: String, nullable: true })
   imageUrl!: string | null;
 
-  @ApiPropertyOptional({ nullable: true })
+  @ApiPropertyOptional({ type: String, nullable: true })
   description!: string | null;
 
   @ApiProperty({ description: 'Aggregated popularity or trending score (numeric string)' })

@@ -7,9 +7,10 @@ export class CategoryPaginationResponseDto {
 
   @ApiPropertyOptional({
     description: 'Cursor for fetching the next page. `null` when there is no next page.',
+    type: String,
+    nullable: true,
     example:
       'eyJjcmVhdGVkQXQiOiIyMDI1LTAxLTAxVDAwOjAwOjAwKzAwOjAwIiwiY3JlYXRpbmdVc2VySWQiOiI4MTIzMTIzLTEyMzQtMTIzNC0xMjM0LTEyMzQxMjM0MTIzNDQifQ',
-    nullable: true,
   })
   nextCursor!: string | null;
 
