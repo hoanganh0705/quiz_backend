@@ -35,7 +35,7 @@ export class UpdateQuizDto {
   @MaxLength(255)
   title?: string;
 
-  @ApiPropertyOptional({ description: 'Quiz description', maxLength: 2000, nullable: true })
+  @ApiPropertyOptional({ description: 'Quiz description', type: String, maxLength: 2000, nullable: true })
   @IsOptional()
   @Transform(({ value }: { value: unknown }) => trimStringToNullIfBlank(value))
   @IsString()
@@ -57,7 +57,7 @@ export class UpdateQuizDto {
   })
   slug?: string;
 
-  @ApiPropertyOptional({ description: 'Prerequisites', maxLength: 5000, nullable: true })
+  @ApiPropertyOptional({ description: 'Prerequisites', type: String, maxLength: 5000, nullable: true })
   @IsOptional()
   @Transform(({ value }: { value: unknown }) => trimStringToNullIfBlank(value))
   @IsString()
@@ -66,6 +66,7 @@ export class UpdateQuizDto {
 
   @ApiPropertyOptional({
     description: 'Quiz cover image URL',
+    type: String,
     maxLength: 2048,
     format: 'uri',
     nullable: true,
@@ -88,6 +89,7 @@ export class UpdateQuizDto {
 
   @ApiPropertyOptional({
     description: 'Associated category UUIDs (max 50)',
+    type: Array,
     maxItems: 50,
     format: 'uuid',
     nullable: true,
@@ -101,6 +103,7 @@ export class UpdateQuizDto {
 
   @ApiPropertyOptional({
     description: 'Associated tag UUIDs (max 50)',
+    type: Array,
     maxItems: 50,
     format: 'uuid',
     nullable: true,

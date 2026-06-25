@@ -8,22 +8,22 @@ export class QuizResponseDto {
   })
   quizId!: string;
 
-  @ApiPropertyOptional({ description: 'Creator user identifier', nullable: true })
+  @ApiPropertyOptional({ description: 'Creator user identifier', type: String, nullable: true })
   creatorId!: string | null;
 
   @ApiProperty({ description: 'Quiz title', example: 'JavaScript Fundamentals' })
   title!: string;
 
-  @ApiPropertyOptional({ description: 'Quiz description', nullable: true })
+  @ApiPropertyOptional({ description: 'Quiz description', type: String, nullable: true })
   description!: string | null;
 
   @ApiProperty({ description: 'URL-friendly slug', example: 'javascript-fundamentals' })
   slug!: string;
 
-  @ApiPropertyOptional({ description: 'Prerequisites', nullable: true })
+  @ApiPropertyOptional({ description: 'Prerequisites', type: String, nullable: true })
   requirements!: string | null;
 
-  @ApiPropertyOptional({ description: 'Quiz cover image URL', format: 'uri', nullable: true })
+  @ApiPropertyOptional({ description: 'Quiz cover image URL', type: String, format: 'uri', nullable: true })
   imageUrl!: string | null;
 
   @ApiProperty({ description: 'Whether the quiz is featured', example: true })
@@ -35,7 +35,7 @@ export class QuizResponseDto {
   @ApiProperty({ description: 'Whether the quiz has been verified by moderators', example: false })
   isVerified!: boolean;
 
-  @ApiPropertyOptional({ description: 'Currently published version identifier', nullable: true })
+  @ApiPropertyOptional({ description: 'Currently published version identifier', type: String, nullable: true })
   publishedVersionId!: string | null;
 
   @ApiProperty({
@@ -52,8 +52,8 @@ export class QuizResponseDto {
 
   @ApiPropertyOptional({
     description: 'Published version summary (excluded when listing multiple quizzes)',
-    nullable: true,
     type: () => QuizVersionResponseDto,
+    nullable: true,
   })
   publishedVersion!: QuizVersionResponseDto | null;
 }
