@@ -12,15 +12,21 @@ export class CategoryResponseDto {
 
   @ApiPropertyOptional({
     description: 'Category description',
-    example: 'Test your knowledge across topics',
+    type: String,
     nullable: true,
+    example: 'Test your knowledge across topics',
   })
   description!: string | null;
 
   @ApiProperty({ description: 'URL-friendly slug', example: 'general-knowledge' })
   slug!: string;
 
-  @ApiPropertyOptional({ description: 'Category cover image URL', format: 'uri', nullable: true })
+  @ApiPropertyOptional({
+    description: 'Category cover image URL',
+    type: String,
+    format: 'uri',
+    nullable: true,
+  })
   imageUrl!: string | null;
 
   @ApiProperty({

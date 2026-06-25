@@ -53,19 +53,26 @@ export class FollowedTagItemDto {
   @ApiProperty()
   slug!: string;
 
-  @ApiProperty({ description: 'ISO 8601 timestamp when the user followed this tag' })
+  @ApiPropertyOptional({
+    description: 'ISO 8601 timestamp when the user followed this tag',
+    type: String,
+  })
   followedAt!: string;
 }
 
 class FollowedTagsPaginationDto {
-  @ApiProperty()
+  @ApiProperty({ description: 'Number of items returned in this page', example: 20 })
   limit!: number;
 
-  @ApiProperty()
-  hasNextPage!: boolean;
-
-  @ApiPropertyOptional({ nullable: true })
+  @ApiProperty({
+    description: 'Cursor for fetching the next page. `null` when there is no next page.',
+    type: String,
+    nullable: true,
+  })
   nextCursor!: string | null;
+
+  @ApiProperty({ description: 'Whether more items exist after this page', example: true })
+  hasNextPage!: boolean;
 }
 
 export class FollowedTagsResponseDto {
@@ -109,7 +116,12 @@ export class TagAnalyticsTopQuizDto {
   @ApiProperty({ example: 'javascript-fundamentals' })
   slug!: string;
 
-  @ApiProperty({ example: 'https://example.com/covers/js.png', nullable: true })
+  @ApiProperty({
+    description: 'Quiz cover image URL',
+    type: String,
+    nullable: true,
+    example: 'https://example.com/covers/js.png',
+  })
   imageUrl!: string | null;
 
   @ApiProperty({ example: 87.6 })
