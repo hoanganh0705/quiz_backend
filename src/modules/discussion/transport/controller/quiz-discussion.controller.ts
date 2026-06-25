@@ -1,10 +1,10 @@
 import { Controller, Get, Param, ParseUUIDPipe, Query, UseFilters } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiOkResponse } from '@nestjs/swagger';
 import { Public } from '@/common/decorators/public.decorator';
-import { ApiPublicList } from '@/common/swagger/swagger-decorators';
 import { DiscussionApplicationService } from '@/modules/discussion/application/discussion-application.service';
 import { ListQuizDiscussionsQueryDto } from '@/modules/discussion/dto/request';
 import { QuizDiscussionListResponseDto } from '@/modules/discussion/dto/response';
+import { WrappedQuizDiscussionsDto } from '@/modules/discussion/dto/response/discussion-response-docs.dto';
 import { QuizDiscussionCursorMapper } from '@/modules/discussion/mappers/quiz-discussion-cursor.mapper';
 import { DiscussionDomainExceptionFilter } from '../filters/discussion-domain-exception.filter';
 
@@ -22,9 +22,8 @@ export class QuizDiscussionController {
   })
   @ApiOkResponse({
     description: 'Discussion threads returned',
-    type: QuizDiscussionListResponseDto,
+    type: WrappedQuizDiscussionsDto,
   })
-  @ApiPublicList()
   async listQuizDiscussions(
     @Param('quizId', new ParseUUIDPipe()) quizId: string,
     @Query() query: ListQuizDiscussionsQueryDto,
