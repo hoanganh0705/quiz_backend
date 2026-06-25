@@ -14,6 +14,7 @@ import { FollowedCategoriesResponseDto } from '../../dto/response/followed-categ
 import { CategoryQueryService } from '../../application/category-query.service';
 import { CategoryDomainExceptionFilter } from '../filters/category-domain-exception.filter';
 import { FollowedCategoryCursorMapper } from '../../mappers/followed-category-cursor.mapper';
+import { CategoryWrappedFollowedListDto } from '../../dto/response/category-response-docs.dto';
 
 /**
  * Hosts the /users/me/followed-categories route.
@@ -38,7 +39,7 @@ export class UserCategoryController {
   })
   @ApiOkResponse({
     description: 'Followed categories returned',
-    type: FollowedCategoriesResponseDto,
+    type: CategoryWrappedFollowedListDto,
   })
   @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
   listFollowedCategories(

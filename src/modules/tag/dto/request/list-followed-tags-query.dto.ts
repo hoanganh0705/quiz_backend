@@ -5,6 +5,8 @@ import { Type } from 'class-transformer';
 export class ListFollowedTagsQueryDto {
   @ApiPropertyOptional({
     description: 'Opaque cursor for pagination',
+    type: String,
+    nullable: true,
     example: 'eyJmb2xsb3dlZEF0IjoiMjAyNi0wMS0wMVQwMDowMDowMFoiLCJmb2xsb3dJZCI6InV1aWQifQ==',
   })
   @IsOptional()

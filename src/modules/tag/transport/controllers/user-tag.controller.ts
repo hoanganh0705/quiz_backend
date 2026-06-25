@@ -10,10 +10,10 @@ import { CurrentUser } from '@/common/decorators/current-user.decorator';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
 import { ApiAuth } from '@/common/swagger/swagger-decorators';
 import { ListFollowedTagsQueryDto } from '../../dto/request/list-followed-tags-query.dto';
-import { FollowedTagsResponseDto } from '../../dto/response/parity-response.dto';
 import { TagApplicationService } from '../../application/tag.application.service';
 import { TagDomainExceptionFilter } from '../filters/tag-domain-exception.filter';
 import { FollowedTagCursorMapper } from '../../mappers/followed-tag-cursor.mapper';
+import { TagWrappedFollowedListDto } from '../../dto/response/tag-response-docs.dto';
 
 /**
  * Hosts the /users/me/followed-tags route.
@@ -37,13 +37,10 @@ export class UserTagController {
   })
   @ApiOkResponse({
     description: 'Followed tags returned',
-    type: FollowedTagsResponseDto,
+    type: TagWrappedFollowedListDto,
   })
   @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
-  listFollowedTags(
-    @CurrentUser() user: JwtPayload,
-    @Query() query: ListFollowedTagsQueryDto,
-  ): Promise<FollowedTagsResponseDto> {
+  listFollowedTags(@CurrentUser() user: JwtPayload, @Query() query: ListFollowedTagsQueryDto) {
     const cursor = query.cursor ? FollowedTagCursorMapper.parse(query.cursor) : null;
 
     return this.tagApplicationService.listFollowedTags(user.sub, {

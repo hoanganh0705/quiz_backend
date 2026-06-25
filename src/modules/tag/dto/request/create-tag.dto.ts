@@ -15,10 +15,11 @@ export class CreateTagDto {
 
   @ApiPropertyOptional({
     description: 'URL-friendly slug (auto-generated from name if omitted)',
+    type: String,
+    nullable: true,
     maxLength: 120,
     pattern: DEFAULT_SLUG_PATTERN.source,
     example: 'javascript',
-    nullable: true,
   })
   @IsOptional()
   @Transform(({ value }: { value: unknown }) => trimStringToLowerCase(value))

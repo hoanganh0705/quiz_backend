@@ -19,15 +19,11 @@ import {
   ApiConflictResponse,
   ApiBadRequestResponse,
   ApiInternalServerErrorResponse,
+  ApiForbiddenResponse,
+  ApiUnprocessableEntityResponse,
 } from '@nestjs/swagger';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
-import {
-  ApiAuth,
-  ApiAuthList,
-  ApiAuthAction,
-  ApiBadRequest,
-  ApiInternalError,
-} from '@/common/swagger/swagger-decorators';
+import { ApiAuth, ApiAuthList, ApiAuthAction } from '@/common/swagger/swagger-decorators';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
 import { AttemptApplicationService } from '../../application/attempt.application.service';
 import { StartAttemptDto, ListMyAttemptsQueryDto, SubmitAnswerDto } from '../../dto/request';
@@ -42,6 +38,17 @@ import {
   AttemptAnalyticsResponseDto,
   UserAttemptStatsResponseDto,
 } from '../../dto/response';
+import {
+  AttemptWrappedAttemptDto,
+  AttemptWrappedSubmitAnswerDto,
+  AttemptWrappedWithdrawAnswerDto,
+  AttemptWrappedAbandonAttemptDto,
+  AttemptWrappedCompleteAttemptDto,
+  AttemptWrappedAnswersDto,
+  AttemptWrappedAnalyticsDto,
+  AttemptWrappedUserStatsDto,
+  AttemptWrappedListDto,
+} from '../../dto/response/attempt-response-docs.dto';
 import { AttemptDomainExceptionFilter } from '../filters/attempt-domain-exception.filter';
 
 @ApiTags('attempts')
@@ -57,7 +64,8 @@ export class AttemptController {
     description:
       'Resolves the published quiz version from the quizId and starts a new attempt for the authenticated user.',
   })
-  @ApiCreatedResponse({ description: 'Attempt started', type: AttemptResponseDto })
+  @ApiCreatedResponse({ description: 'Attempt started', type: AttemptWrappedAttemptDto })
+  @ApiForbiddenResponse({ description: 'You do not have permission to access this attempt' })
   @ApiNotFoundResponse({ description: 'Quiz not found or has no published version' })
   @ApiConflictResponse({ description: 'You already have an active attempt for this quiz' })
   @ApiBadRequestResponse()
@@ -71,7 +79,9 @@ export class AttemptController {
   }
 
   @Get('attempts/:attemptId')
-  @ApiAuthList({ description: 'Attempt found', type: AttemptResponseDto })
+  @ApiAuthList({ description: 'Attempt found', type: AttemptWrappedAttemptDto })
+  @ApiForbiddenResponse({ description: 'You do not have permission to access this attempt' })
+  @ApiNotFoundResponse({ description: 'Quiz attempt not found' })
   @ApiInternalServerErrorResponse()
   async getAttemptById(
     @Param('attemptId', new ParseUUIDPipe()) attemptId: string,
@@ -87,7 +97,11 @@ export class AttemptController {
     summary: 'Submit answer',
     description: 'Creates an answer record for a specific question within an active attempt.',
   })
-  @ApiCreatedResponse({ description: 'Answer recorded', type: SubmitAnswerResponseDto })
+  @ApiCreatedResponse({
+    description: 'Answer recorded',
+    type: AttemptWrappedSubmitAnswerDto,
+  })
+  @ApiForbiddenResponse({ description: 'You do not have permission to access this attempt' })
   @ApiNotFoundResponse({ description: 'Attempt or question not found' })
   @ApiConflictResponse({ description: 'Attempt is not in an active state' })
   @ApiBadRequestResponse()
@@ -108,7 +122,11 @@ export class AttemptController {
 
   @Delete('attempts/:attemptId/answers/:questionId')
   @HttpCode(HttpStatus.OK)
-  @ApiAuthAction({ description: 'Answer withdrawn', type: WithdrawAnswerResponseDto })
+  @ApiAuthAction({ description: 'Answer withdrawn', type: AttemptWrappedWithdrawAnswerDto })
+  @ApiForbiddenResponse({ description: 'You do not have permission to access this attempt' })
+  @ApiNotFoundResponse({ description: 'Answer to withdraw not found' })
+  @ApiConflictResponse({ description: 'Attempt is not in an active state' })
+  @ApiInternalServerErrorResponse()
   async withdrawAnswer(
     @Param('attemptId', new ParseUUIDPipe()) attemptId: string,
     @Param('questionId', new ParseUUIDPipe()) questionId: string,
@@ -119,7 +137,12 @@ export class AttemptController {
 
   @Post('attempts/:attemptId/abandon')
   @HttpCode(HttpStatus.OK)
-  @ApiAuthAction({ description: 'Attempt abandoned', type: AbandonAttemptResponseDto })
+  @ApiAuthAction({ description: 'Attempt abandoned', type: AttemptWrappedAbandonAttemptDto })
+  @ApiForbiddenResponse({ description: 'You do not have permission to access this attempt' })
+  @ApiNotFoundResponse({ description: 'Quiz attempt not found' })
+  @ApiConflictResponse({ description: 'Attempt is not in an active state' })
+  @ApiUnprocessableEntityResponse({ description: 'Quiz is not published and cannot be attempted' })
+  @ApiInternalServerErrorResponse()
   async abandonAttempt(
     @Param('attemptId', new ParseUUIDPipe()) attemptId: string,
     @CurrentUser() user: JwtPayload,
@@ -128,7 +151,11 @@ export class AttemptController {
   }
 
   @Post('attempts/:attemptId/complete')
-  @ApiAuthAction({ description: 'Attempt completed', type: CompleteAttemptResponseDto })
+  @ApiAuthAction({ description: 'Attempt completed', type: AttemptWrappedCompleteAttemptDto })
+  @ApiForbiddenResponse({ description: 'You do not have permission to access this attempt' })
+  @ApiNotFoundResponse({ description: 'Quiz attempt not found' })
+  @ApiConflictResponse({ description: 'Attempt is not in an active state' })
+  @ApiInternalServerErrorResponse()
   async completeAttempt(
     @Param('attemptId', new ParseUUIDPipe()) attemptId: string,
     @CurrentUser() user: JwtPayload,
@@ -137,7 +164,8 @@ export class AttemptController {
   }
 
   @Get('users/me/attempts')
-  @ApiAuthList({ description: 'Attempts returned', type: AttemptListResponseDto })
+  @ApiAuthList({ description: 'Attempts returned', type: AttemptWrappedListDto })
+  @ApiForbiddenResponse({ description: 'You do not have permission to access this resource' })
   @ApiInternalServerErrorResponse()
   async listMyAttempts(
     @CurrentUser() user: JwtPayload,
@@ -157,14 +185,20 @@ export class AttemptController {
   }
 
   @Get('users/me/attempts/stats')
-  @ApiAuthList({ description: 'Attempt statistics returned', type: UserAttemptStatsResponseDto })
+  @ApiAuthList({
+    description: 'Attempt statistics returned',
+    type: AttemptWrappedUserStatsDto,
+  })
+  @ApiForbiddenResponse({ description: 'You do not have permission to access this resource' })
   @ApiInternalServerErrorResponse()
   async getMyAttemptStats(@CurrentUser() user: JwtPayload): Promise<UserAttemptStatsResponseDto> {
     return this.attemptApplicationService.getMyAttemptStats(user);
   }
 
   @Get('attempts/:attemptId/answers')
-  @ApiAuthList({ description: 'Answers returned', type: AttemptAnswersResponseDto })
+  @ApiAuthList({ description: 'Answers returned', type: AttemptWrappedAnswersDto })
+  @ApiForbiddenResponse({ description: 'You do not have permission to access this attempt' })
+  @ApiNotFoundResponse({ description: 'Quiz attempt not found' })
   @ApiInternalServerErrorResponse()
   async getAttemptAnswers(
     @Param('attemptId', new ParseUUIDPipe()) attemptId: string,
@@ -174,7 +208,12 @@ export class AttemptController {
   }
 
   @Get('attempts/:attemptId/analytics')
-  @ApiAuthList({ description: 'Analytics returned', type: AttemptAnalyticsResponseDto })
+  @ApiAuthList({ description: 'Analytics returned', type: AttemptWrappedAnalyticsDto })
+  @ApiForbiddenResponse({ description: 'You do not have permission to access this attempt' })
+  @ApiNotFoundResponse({ description: 'Quiz attempt not found' })
+  @ApiUnprocessableEntityResponse({
+    description: 'Analytics are only available for completed attempts',
+  })
   @ApiInternalServerErrorResponse()
   async getAttemptAnalytics(
     @Param('attemptId', new ParseUUIDPipe()) attemptId: string,
