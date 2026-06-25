@@ -28,10 +28,10 @@ import {
 } from '@/common/swagger/swagger-decorators';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
+import type { DiscussionThreadDetail } from '@/modules/discussion/domain/types';
 import { DiscussionApplicationService } from '@/modules/discussion/application/discussion-application.service';
 import {
   ThreadDto,
-  ThreadDetailDto,
   CommentDto,
   PaginatedThreadsDto,
   PaginatedCommentsDto,
@@ -43,11 +43,28 @@ import {
   ThreadParticipantsResponseDto,
   ThreadStatsResponseDto,
   MyDiscussionStatsResponseDto,
-  DiscussionSubscriptionActionResponseDto,
-  DiscussionSavedThreadActionResponseDto,
   DiscussionThreadSolveResponseDto,
   DiscussionThreadUnsolveResponseDto,
 } from '@/modules/discussion/dto/response';
+import {
+  WrappedTrendingDiscussionsDto,
+  WrappedUnansweredDiscussionsDto,
+  WrappedSearchDiscussionsDto,
+  WrappedRelatedDiscussionsDto,
+  WrappedThreadParticipantsDto,
+  WrappedThreadStatsDto,
+  WrappedMyDiscussionStatsDto,
+  WrappedThreadDto,
+  WrappedThreadDetailDto,
+  WrappedCommentDto,
+  WrappedPaginatedThreadsDto,
+  WrappedPaginatedCommentsDto,
+  WrappedSubscriptionActionDto,
+  WrappedSavedThreadActionDto,
+  WrappedThreadSolveDto,
+  WrappedThreadUnsolveDto,
+  WrappedPaginatedReportsDto,
+} from '@/modules/discussion/dto/response/discussion-response-docs.dto';
 import {
   UpdateThreadDto,
   CreateCommentDto,
@@ -57,14 +74,14 @@ import {
   RemoveVoteDto,
   CreateReportDto,
   ReviewReportDto,
-  ListThreadsQueryDto,
-  ListCommentsQueryDto,
-  ListReportsQueryDto,
   ListTrendingDiscussionsQueryDto,
   ListUnansweredDiscussionsQueryDto,
   SearchDiscussionsQueryDto,
   ListRelatedDiscussionsQueryDto,
   SolveThreadDto,
+  ListThreadsQueryDto,
+  ListCommentsQueryDto,
+  ListReportsQueryDto,
 } from '@/modules/discussion/dto/request';
 import { TrendingDiscussionCursorMapper } from '@/modules/discussion/mappers/trending-discussion-cursor.mapper';
 import { UnansweredDiscussionCursorMapper } from '@/modules/discussion/mappers/unanswered-discussion-cursor.mapper';
@@ -83,7 +100,7 @@ export class DiscussionController {
   @Public()
   @ApiPublicList({
     description: 'Trending discussions returned',
-    type: TrendingDiscussionsResponseDto,
+    type: WrappedTrendingDiscussionsDto,
   })
   async listTrendingDiscussions(
     @Query() query: ListTrendingDiscussionsQueryDto,
@@ -98,7 +115,7 @@ export class DiscussionController {
   @Public()
   @ApiPublicList({
     description: 'Unanswered discussions returned',
-    type: UnansweredDiscussionsResponseDto,
+    type: WrappedUnansweredDiscussionsDto,
   })
   async listUnansweredDiscussions(
     @Query() query: ListUnansweredDiscussionsQueryDto,
@@ -111,7 +128,7 @@ export class DiscussionController {
 
   @Get('search')
   @Public()
-  @ApiPublicList({ description: 'Search results returned', type: SearchDiscussionsResponseDto })
+  @ApiPublicList({ description: 'Search results returned', type: WrappedSearchDiscussionsDto })
   async searchDiscussions(
     @Query() query: SearchDiscussionsQueryDto,
   ): Promise<SearchDiscussionsResponseDto> {
@@ -126,7 +143,7 @@ export class DiscussionController {
   @Public()
   @ApiPublicList({
     description: 'Related discussions returned',
-    type: RelatedDiscussionsResponseDto,
+    type: WrappedRelatedDiscussionsDto,
   })
   async listRelatedDiscussions(
     @Param('threadId', new ParseUUIDPipe()) threadId: string,
@@ -141,7 +158,7 @@ export class DiscussionController {
   @Public()
   @ApiPublicList({
     description: 'Thread participants returned',
-    type: ThreadParticipantsResponseDto,
+    type: WrappedThreadParticipantsDto,
   })
   async listThreadParticipants(
     @Param('threadId', new ParseUUIDPipe()) threadId: string,
@@ -151,7 +168,7 @@ export class DiscussionController {
 
   @Get('threads/:threadId/stats')
   @Public()
-  @ApiPublicList({ description: 'Thread statistics returned', type: ThreadStatsResponseDto })
+  @ApiPublicList({ description: 'Thread statistics returned', type: WrappedThreadStatsDto })
   async getThreadStats(
     @Param('threadId', new ParseUUIDPipe()) threadId: string,
   ): Promise<ThreadStatsResponseDto | null> {
@@ -167,7 +184,7 @@ export class DiscussionController {
   })
   @ApiOkResponse({
     description: 'Discussion statistics returned',
-    type: MyDiscussionStatsResponseDto,
+    type: WrappedMyDiscussionStatsDto,
   })
   async getMyDiscussionStats(
     @CurrentUser() user: JwtPayload,
@@ -179,12 +196,12 @@ export class DiscussionController {
   @Post('threads/:threadId/subscribe')
   @ApiAuthAction({
     description: 'Subscription recorded successfully',
-    type: DiscussionSubscriptionActionResponseDto,
+    type: WrappedSubscriptionActionDto,
   })
   async subscribeToThread(
     @CurrentUser() user: JwtPayload,
     @Param('threadId', new ParseUUIDPipe()) threadId: string,
-  ): Promise<DiscussionSubscriptionActionResponseDto> {
+  ): Promise<{ success: true }> {
     return this.discussionService.subscribeToThread(user, threadId);
   }
 
@@ -192,25 +209,22 @@ export class DiscussionController {
   @Delete('threads/:threadId/subscribe')
   @ApiAuthAction({
     description: 'Subscription removed successfully',
-    type: DiscussionSubscriptionActionResponseDto,
+    type: WrappedSubscriptionActionDto,
   })
   async unsubscribeFromThread(
     @CurrentUser() user: JwtPayload,
     @Param('threadId', new ParseUUIDPipe()) threadId: string,
-  ): Promise<DiscussionSubscriptionActionResponseDto> {
+  ): Promise<{ success: true }> {
     return this.discussionService.unsubscribeFromThread(user, threadId);
   }
 
   @Throttle({ default: { limit: 30, ttl: 60_000 } })
   @Post('threads/:threadId/save')
-  @ApiAuthAction({
-    description: 'Thread saved successfully',
-    type: DiscussionSavedThreadActionResponseDto,
-  })
+  @ApiAuthAction({ description: 'Thread saved successfully', type: WrappedSavedThreadActionDto })
   async saveThread(
     @CurrentUser() user: JwtPayload,
     @Param('threadId', new ParseUUIDPipe()) threadId: string,
-  ): Promise<DiscussionSavedThreadActionResponseDto> {
+  ): Promise<{ success: true }> {
     return this.discussionService.saveThread(user, threadId);
   }
 
@@ -218,19 +232,19 @@ export class DiscussionController {
   @Delete('threads/:threadId/save')
   @ApiAuthAction({
     description: 'Saved thread removed successfully',
-    type: DiscussionSavedThreadActionResponseDto,
+    type: WrappedSavedThreadActionDto,
   })
   async unsaveThread(
     @CurrentUser() user: JwtPayload,
     @Param('threadId', new ParseUUIDPipe()) threadId: string,
-  ): Promise<DiscussionSavedThreadActionResponseDto> {
+  ): Promise<{ success: true }> {
     return this.discussionService.unsaveThread(user, threadId);
   }
 
   @Get('threads')
   @ApiAuth()
   @ApiOperation({ summary: 'List discussion threads' })
-  @ApiOkResponse({ description: 'Threads returned', type: PaginatedThreadsDto })
+  @ApiOkResponse({ description: 'Threads returned', type: WrappedPaginatedThreadsDto })
   async listThreads(
     @CurrentUser() user: JwtPayload,
     @Query() query: ListThreadsQueryDto,
@@ -254,7 +268,7 @@ export class DiscussionController {
     description:
       'Creates a discussion thread for the specified quiz. The authenticated user becomes the thread author.',
   })
-  @ApiCreatedResponse({ description: 'Thread created successfully', type: ThreadDto })
+  @ApiCreatedResponse({ description: 'Thread created successfully', type: WrappedThreadDto })
   async createThread(
     @CurrentUser() user: JwtPayload,
     @Body() dto: CreateThreadDto,
@@ -265,17 +279,17 @@ export class DiscussionController {
   @Get('threads/:threadId')
   @ApiAuth()
   @ApiOperation({ summary: 'Get a thread with its comments' })
-  @ApiOkResponse({ description: 'Thread returned', type: ThreadDetailDto })
+  @ApiOkResponse({ description: 'Thread returned', type: WrappedThreadDetailDto })
   async getThread(
     @CurrentUser() user: JwtPayload,
     @Param('threadId', new ParseUUIDPipe()) threadId: string,
-  ): Promise<ThreadDetailDto | null> {
+  ): Promise<DiscussionThreadDetail | null> {
     return this.discussionService.getThread(user, threadId);
   }
 
   @Throttle({ default: { limit: 20, ttl: 60_000 } })
   @Put('threads/:threadId')
-  @ApiAuthAction({ description: 'Thread updated', type: ThreadDto })
+  @ApiAuthAction({ description: 'Thread updated', type: WrappedThreadDto })
   async updateThread(
     @CurrentUser() user: JwtPayload,
     @Param('threadId', new ParseUUIDPipe()) threadId: string,
@@ -310,7 +324,7 @@ export class DiscussionController {
   @Post('threads/:threadId/solve')
   @ApiAuthAction({
     description: 'Thread marked as solved successfully',
-    type: DiscussionThreadSolveResponseDto,
+    type: WrappedThreadSolveDto,
   })
   async markThreadAsSolved(
     @CurrentUser() user: JwtPayload,
@@ -318,7 +332,6 @@ export class DiscussionController {
     @Body() dto: SolveThreadDto,
   ): Promise<DiscussionThreadSolveResponseDto> {
     const thread = await this.discussionService.markThreadAsSolved(user, threadId, dto.commentId);
-
     return {
       threadId: thread.threadId,
       isSolved: thread.isSolved,
@@ -329,16 +342,12 @@ export class DiscussionController {
 
   @Throttle({ default: { limit: 20, ttl: 60_000 } })
   @Delete('threads/:threadId/solve')
-  @ApiAuthAction({
-    description: 'Thread unsolved successfully',
-    type: DiscussionThreadUnsolveResponseDto,
-  })
+  @ApiAuthAction({ description: 'Thread unsolved successfully', type: WrappedThreadUnsolveDto })
   async unsolveThread(
     @CurrentUser() user: JwtPayload,
     @Param('threadId', new ParseUUIDPipe()) threadId: string,
   ): Promise<DiscussionThreadUnsolveResponseDto> {
     const thread = await this.discussionService.unsolveThread(user, threadId);
-
     return {
       threadId: thread.threadId,
       isSolved: thread.isSolved,
@@ -384,7 +393,7 @@ export class DiscussionController {
 
   @Throttle({ default: { limit: 20, ttl: 60_000 } })
   @Post('threads/:threadId/comments')
-  @ApiAuthAction({ description: 'Comment created', type: CommentDto })
+  @ApiAuthAction({ description: 'Comment created', type: WrappedCommentDto })
   async createComment(
     @CurrentUser() user: JwtPayload,
     @Param('threadId', new ParseUUIDPipe()) threadId: string,
@@ -401,7 +410,7 @@ export class DiscussionController {
   @Get('threads/:threadId/comments')
   @ApiAuth()
   @ApiOperation({ summary: 'List comments on a thread' })
-  @ApiOkResponse({ description: 'Comments returned', type: PaginatedCommentsDto })
+  @ApiOkResponse({ description: 'Comments returned', type: WrappedPaginatedCommentsDto })
   async listComments(
     @CurrentUser() user: JwtPayload,
     @Param('threadId', new ParseUUIDPipe()) threadId: string,
@@ -417,7 +426,7 @@ export class DiscussionController {
   @Get('comments/:commentId')
   @ApiAuth()
   @ApiOperation({ summary: 'Get a single comment' })
-  @ApiOkResponse({ description: 'Comment returned', type: CommentDto })
+  @ApiOkResponse({ description: 'Comment returned', type: WrappedCommentDto })
   async getComment(
     @CurrentUser() user: JwtPayload,
     @Param('commentId', new ParseUUIDPipe()) commentId: string,
@@ -427,7 +436,7 @@ export class DiscussionController {
 
   @Throttle({ default: { limit: 20, ttl: 60_000 } })
   @Put('comments/:commentId')
-  @ApiAuthAction({ description: 'Comment updated', type: CommentDto })
+  @ApiAuthAction({ description: 'Comment updated', type: WrappedCommentDto })
   async updateComment(
     @CurrentUser() user: JwtPayload,
     @Param('commentId', new ParseUUIDPipe()) commentId: string,
@@ -486,8 +495,8 @@ export class DiscussionController {
 
   @Throttle({ default: { limit: 20, ttl: 60_000 } })
   @Delete('vote')
-  @ApiAuth()
-  @ApiOperation({ summary: 'Remove a vote from a thread, comment, or reply' })
+  @ApiAuthActionNoContent('Vote removed')
+  @HttpCode(HttpStatus.NO_CONTENT)
   async removeVote(@CurrentUser() user: JwtPayload, @Body() dto: RemoveVoteDto): Promise<void> {
     await this.discussionService.removeVote(user, dto.targetType, dto.targetId);
   }
@@ -523,7 +532,7 @@ export class DiscussionController {
 
   @Get('reports')
   @Permissions(Permission.DISCUSSION_MODERATE)
-  @ApiModeratorEndpoint({ description: 'Reports returned', type: PaginatedReportsDto })
+  @ApiModeratorEndpoint({ description: 'Reports returned', type: WrappedPaginatedReportsDto })
   async listReports(
     @CurrentUser() user: JwtPayload,
     @Query() query: ListReportsQueryDto,

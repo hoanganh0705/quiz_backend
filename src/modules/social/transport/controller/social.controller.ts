@@ -11,15 +11,16 @@ import {
   UseFilters,
   ParseUUIDPipe,
 } from '@nestjs/common';
-import {
-  ApiBadRequestResponse,
-  ApiInternalServerErrorResponse,
-  ApiOkResponse,
-  ApiOperation,
-  ApiParam,
-  ApiTags,
-} from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
+import { ApiTags, ApiOperation, ApiParam } from '@nestjs/swagger';
+import { Public } from '@/common/decorators/public.decorator';
+import {
+  ApiAuth,
+  ApiAuthAction,
+  ApiAuthActionNoContent,
+  ApiPublicRead,
+  ApiOk,
+} from '@/common/swagger/swagger-decorators';
 import { SocialApplicationService } from '@/modules/social/application/social-application.service';
 import {
   FriendRequestDto,
@@ -43,40 +44,52 @@ import {
   TrendingUsersListResponseDto,
 } from '@/modules/social/dto/response';
 import {
+  WrappedUsernameSuggestionsDto,
+  WrappedSearchUsersDto,
+  WrappedTrendingUsersDto,
+  WrappedFriendLeaderboardDto,
+  WrappedFriendRequestsDto,
+  WrappedMessageDto,
+  WrappedFriendsDto,
+  WrappedFollowersDto,
+  WrappedFollowingDto,
+  WrappedUserFollowersDto,
+  WrappedUserFollowingDto,
+  WrappedMutualFriendsDto,
+  WrappedMutualFollowersDto,
+  WrappedSocialSuggestionsDto,
+  WrappedSocialFeedDto,
+  WrappedUserActivityDto,
+  WrappedRelationshipStatusDto,
+  WrappedSocialCountsDto,
+  WrappedUserSocialStatsDto,
+  WrappedMySocialAnalyticsDto,
+  WrappedBlockedUsersDto,
+} from '@/modules/social/dto/response/social-response-docs.dto';
+import {
   GetSearchSuggestionsQueryDto,
   GetSocialSuggestionsQueryDto,
   GetTrendingUsersQueryDto,
   GetUserFollowersQueryDto,
 } from '@/modules/social/dto/request';
-import { RequireAuth } from '@/common/guards/jwt.guard';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
 import { SocialDomainExceptionFilter } from '../filters/social-domain-exception.filter';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
 
 @ApiTags('social')
 @Controller('social')
-@RequireAuth()
 @UseFilters(SocialDomainExceptionFilter)
 export class SocialController {
   constructor(private readonly socialService: SocialApplicationService) {}
 
-  // User Search
+  // ─── Search ────────────────────────────────────────────────────────────────
+
   @Get('search/suggestions')
-  @ApiOperation({
-    summary: 'Get username search suggestions',
-    description:
-      'Returns lightweight username suggestions for autocomplete using case-insensitive prefix matching.',
-  })
-  @ApiOkResponse({
+  @Public()
+  @ApiPublicRead({
     description: 'Username suggestions returned',
-    schema: {
-      type: 'array',
-      items: { type: 'string', example: 'anh' },
-      example: ['anh', 'annguyen', 'andrew'],
-    },
+    type: WrappedUsernameSuggestionsDto,
   })
-  @ApiBadRequestResponse({ description: 'Validation failed' })
-  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
   async getSearchSuggestions(@Query() query: GetSearchSuggestionsQueryDto): Promise<string[]> {
     const suggestions = await this.socialService.searchUsernameSuggestions(
       query.q,
@@ -85,28 +98,28 @@ export class SocialController {
     return suggestions.map((s) => s.username);
   }
 
-  @Throttle({ default: { limit: 20, ttl: 60_000 } })
   @Get('users/search')
-  async searchUsers(
+  @ApiAuth()
+  @ApiOperation({ summary: 'Search users by username' })
+  @ApiOk({ description: 'Search results returned', type: WrappedSearchUsersDto })
+  searchUsers(
     @CurrentUser() user: JwtPayload,
     @Query('q') query: string,
     @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit: number,
-  ): Promise<SearchableUserDto[]> {
-    return this.socialService.searchUsers(user, query, limit);
+  ): SearchableUserDto[] {
+    return this.socialService.searchUsers(user, query, limit) as unknown as SearchableUserDto[];
   }
 
+  // ─── Suggestions & Feed ──────────────────────────────────────────────────
+
   @Get('suggestions')
+  @ApiAuth()
   @ApiOperation({
     summary: 'Get social suggestions',
     description:
       'Returns paginated suggested users to connect with, ranked by mutual friends and mutual followers.',
   })
-  @ApiOkResponse({
-    description: 'Suggested users returned',
-    type: SocialSuggestionsResponseDto,
-  })
-  @ApiBadRequestResponse({ description: 'Validation failed' })
-  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  @ApiOk({ description: 'Suggested users returned', type: WrappedSocialSuggestionsDto })
   async getSuggestions(
     @CurrentUser() user: JwtPayload,
     @Query() query: GetSocialSuggestionsQueryDto,
@@ -115,17 +128,13 @@ export class SocialController {
   }
 
   @Get('feed')
+  @ApiAuth()
   @ApiOperation({
     summary: 'Get social feed',
     description:
       'Returns a paginated unified social activity feed across supported modules, ordered by newest activity first.',
   })
-  @ApiOkResponse({
-    description: 'Paginated social feed returned',
-    type: SocialFeedResponseDto,
-  })
-  @ApiBadRequestResponse({ description: 'Validation failed' })
-  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  @ApiOk({ description: 'Paginated social feed returned', type: WrappedSocialFeedDto })
   async getFeed(
     @CurrentUser() user: JwtPayload,
     @Query() query: GetUserFollowersQueryDto,
@@ -134,17 +143,16 @@ export class SocialController {
   }
 
   @Get('me/analytics')
+  @ApiAuth()
   @ApiOperation({
     summary: 'Get my social analytics',
     description:
       'Returns aggregate analytics for the authenticated user, including current social counts and net follower growth over the last 30 days.',
   })
-  @ApiOkResponse({
+  @ApiOk({
     description: 'Authenticated user social analytics returned',
-    type: MySocialAnalyticsResponseDto,
+    type: WrappedMySocialAnalyticsDto,
   })
-  @ApiBadRequestResponse({ description: 'Validation failed' })
-  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
   async getMySocialAnalytics(
     @CurrentUser() user: JwtPayload,
   ): Promise<MySocialAnalyticsResponseDto> {
@@ -152,17 +160,8 @@ export class SocialController {
   }
 
   @Get('users/trending')
-  @ApiOperation({
-    summary: 'Get trending users',
-    description:
-      'Returns trending public users ranked by follower base, recent follower growth, recent friendship growth, and recent social activity.',
-  })
-  @ApiOkResponse({
-    description: 'Trending users returned',
-    type: TrendingUsersListResponseDto,
-  })
-  @ApiBadRequestResponse({ description: 'Validation failed' })
-  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  @Public()
+  @ApiPublicRead({ description: 'Trending users returned', type: WrappedTrendingUsersDto })
   async getTrendingUsers(
     @Query() query: GetTrendingUsersQueryDto,
   ): Promise<TrendingUsersListResponseDto> {
@@ -170,6 +169,7 @@ export class SocialController {
   }
 
   @Get('users/:userId/activity')
+  @ApiAuth()
   @ApiOperation({
     summary: 'Get user public activity timeline',
     description:
@@ -181,12 +181,7 @@ export class SocialController {
     format: 'uuid',
     example: '660e8400-e29b-41d4-a716-446655440000',
   })
-  @ApiOkResponse({
-    description: 'Paginated public user activity returned',
-    type: UserActivityResponseDto,
-  })
-  @ApiBadRequestResponse({ description: 'Validation failed' })
-  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  @ApiOk({ description: 'Paginated public user activity returned', type: WrappedUserActivityDto })
   async getUserActivity(
     @CurrentUser() user: JwtPayload,
     @Param('userId', new ParseUUIDPipe()) targetUserId: string,
@@ -201,10 +196,10 @@ export class SocialController {
   }
 
   @Get('users/:userId/stats')
-  @ApiOperation({
-    summary: 'Get public social stats for a user',
-    description:
-      'Returns aggregate public social statistics for the specified user, including friends, followers, and following counts.',
+  @Public()
+  @ApiPublicRead({
+    description: 'Public user social stats returned',
+    type: WrappedUserSocialStatsDto,
   })
   @ApiParam({
     name: 'userId',
@@ -212,20 +207,18 @@ export class SocialController {
     format: 'uuid',
     example: '660e8400-e29b-41d4-a716-446655440000',
   })
-  @ApiOkResponse({
-    description: 'Public user social stats returned',
-    type: UserSocialStatsResponseDto,
-  })
-  @ApiBadRequestResponse({ description: 'Validation failed' })
-  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
   async getUserSocialStats(
     @Param('userId', new ParseUUIDPipe()) targetUserId: string,
   ): Promise<UserSocialStatsResponseDto> {
     return this.socialService.getUserSocialStats(targetUserId);
   }
 
-  // Friend Leaderboard
+  // ─── Friend Leaderboard ─────────────────────────────────────────────────
+
   @Get('friends/leaderboard')
+  @ApiAuth()
+  @ApiOperation({ summary: 'Get friend leaderboard' })
+  @ApiOk({ description: 'Friend leaderboard returned', type: WrappedFriendLeaderboardDto })
   async getFriendLeaderboard(
     @CurrentUser() user: JwtPayload,
     @Query('period', new DefaultValuePipe('weekly')) period: 'weekly' | 'monthly' | 'all_time',
@@ -234,78 +227,124 @@ export class SocialController {
     return this.socialService.getFriendLeaderboard(user, period, limit);
   }
 
-  // Friend Requests
+  // ─── Friend Requests ──────────────────────────────────────────────────────
+
+  @Throttle({ default: { limit: 20, ttl: 60_000 } })
   @Post('friend-request/:userId')
+  @ApiAuthAction({ description: 'Friend request sent', type: WrappedFriendRequestsDto })
   async sendFriendRequest(
     @CurrentUser() user: JwtPayload,
-    @Param('userId') addresseeId: string,
+    @Param('userId', new ParseUUIDPipe()) addresseeId: string,
   ): Promise<FriendRequestDto> {
     return this.socialService.sendFriendRequest(user, addresseeId);
   }
 
   @Get('friend-requests/incoming')
-  async getPendingRequests(@CurrentUser() user: JwtPayload): Promise<FriendRequestDto[]> {
-    return this.socialService.getPendingRequests(user);
+  @ApiAuth()
+  @ApiOperation({ summary: 'Get incoming friend requests' })
+  @ApiOk({ description: 'Incoming friend requests returned', type: WrappedFriendRequestsDto })
+  getPendingRequests(@CurrentUser() user: JwtPayload): FriendRequestDto[] {
+    return this.socialService.getPendingRequests(user) as unknown as FriendRequestDto[];
   }
 
   @Get('friend-requests/outgoing')
-  async getSentRequests(@CurrentUser() user: JwtPayload): Promise<FriendRequestDto[]> {
-    return this.socialService.getSentRequests(user);
+  @ApiAuth()
+  @ApiOperation({ summary: 'Get outgoing friend requests' })
+  @ApiOk({ description: 'Outgoing friend requests returned', type: WrappedFriendRequestsDto })
+  getSentRequests(@CurrentUser() user: JwtPayload): FriendRequestDto[] {
+    return this.socialService.getSentRequests(user) as unknown as FriendRequestDto[];
   }
 
+  @Throttle({ default: { limit: 20, ttl: 60_000 } })
   @Post('friend-requests/:friendshipId/respond')
+  @ApiAuthActionNoContent('Friend request responded to')
   async respondToFriendRequest(
     @CurrentUser() user: JwtPayload,
-    @Param('friendshipId') friendshipId: string,
+    @Param('friendshipId', new ParseUUIDPipe()) friendshipId: string,
     @Body() body: { accept: boolean },
-  ): Promise<{ message: string }> {
+  ): Promise<void> {
     await this.socialService.respondToFriendRequest(user, friendshipId, body.accept);
-    return { message: body.accept ? 'Friend request accepted' : 'Friend request rejected' };
   }
 
   @Delete('friend-requests/:friendshipId')
+  @ApiAuthActionNoContent('Friend request cancelled')
   async cancelFriendRequest(
     @CurrentUser() user: JwtPayload,
-    @Param('friendshipId') friendshipId: string,
-  ): Promise<{ message: string }> {
+    @Param('friendshipId', new ParseUUIDPipe()) friendshipId: string,
+  ): Promise<void> {
     await this.socialService.cancelFriendRequest(user, friendshipId);
-    return { message: 'Friend request cancelled' };
   }
 
-  // Friends
+  // ─── Friends ─────────────────────────────────────────────────────────────
+
   @Get('friends')
-  async getFriends(
+  @ApiAuth()
+  @ApiOperation({ summary: 'Get my friends' })
+  @ApiOk({ description: 'Friends returned', type: WrappedFriendsDto })
+  getFriends(
     @CurrentUser() user: JwtPayload,
     @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit: number,
     @Query('cursor') cursor?: string,
-  ): Promise<{ items: FriendDto[]; hasNextPage: boolean }> {
-    return this.socialService.getFriends(user, limit, cursor ?? null);
+  ): { items: FriendDto[]; hasNextPage: boolean } {
+    return this.socialService.getFriends(user, limit, cursor ?? null) as unknown as {
+      items: FriendDto[];
+      hasNextPage: boolean;
+    };
   }
 
   @Get('friends/:userId')
-  async getFriendsOfUser(
+  @ApiAuth()
+  @ApiOperation({ summary: "Get another user's friends" })
+  @ApiOk({ description: 'Friends returned', type: WrappedFriendsDto })
+  @ApiParam({
+    name: 'userId',
+    description: 'Target user identifier',
+    format: 'uuid',
+    example: '660e8400-e29b-41d4-a716-446655440000',
+  })
+  getFriendsOfUser(
     @CurrentUser() user: JwtPayload,
     @Param('userId', new ParseUUIDPipe()) targetUserId: string,
     @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit: number,
     @Query('cursor') cursor?: string,
-  ): Promise<{ items: FriendDto[]; hasNextPage: boolean }> {
-    return this.socialService.getFriendsOfUser(user.sub, targetUserId, limit, cursor ?? null);
+  ): { items: FriendDto[]; hasNextPage: boolean } {
+    return this.socialService.getFriendsOfUser(
+      user.sub,
+      targetUserId,
+      limit,
+      cursor ?? null,
+    ) as unknown as { items: FriendDto[]; hasNextPage: boolean };
   }
 
   @Delete('friends/:userId')
+  @ApiAuthActionNoContent('Friend removed')
+  @ApiParam({
+    name: 'userId',
+    description: 'Friend user identifier',
+    format: 'uuid',
+    example: '660e8400-e29b-41d4-a716-446655440000',
+  })
   async removeFriend(
     @CurrentUser() user: JwtPayload,
-    @Param('userId') friendId: string,
-  ): Promise<{ message: string }> {
+    @Param('userId', new ParseUUIDPipe()) friendId: string,
+  ): Promise<void> {
     await this.socialService.removeFriend(user, friendId);
-    return { message: 'Friend removed' };
   }
 
-  // Blocking
+  // ─── Blocking ────────────────────────────────────────────────────────────
+
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @Post('block/:userId')
+  @ApiAuthAction({ description: 'User blocked', type: WrappedMessageDto })
+  @ApiParam({
+    name: 'userId',
+    description: 'User to block',
+    format: 'uuid',
+    example: '660e8400-e29b-41d4-a716-446655440000',
+  })
   async blockUser(
     @CurrentUser() user: JwtPayload,
-    @Param('userId') blockedId: string,
+    @Param('userId', new ParseUUIDPipe()) blockedId: string,
     @Body() body: { reason?: string },
   ): Promise<{ message: string }> {
     await this.socialService.blockUser(user, blockedId, body.reason);
@@ -313,48 +352,79 @@ export class SocialController {
   }
 
   @Delete('block/:userId')
+  @ApiAuthActionNoContent('User unblocked')
+  @ApiParam({
+    name: 'userId',
+    description: 'User to unblock',
+    format: 'uuid',
+    example: '660e8400-e29b-41d4-a716-446655440000',
+  })
   async unblockUser(
     @CurrentUser() user: JwtPayload,
-    @Param('userId') blockedId: string,
-  ): Promise<{ message: string }> {
+    @Param('userId', new ParseUUIDPipe()) blockedId: string,
+  ): Promise<void> {
     await this.socialService.unblockUser(user, blockedId);
-    return { message: 'User unblocked' };
   }
 
   @Get('blocked')
-  async getBlockedUsers(@CurrentUser() user: JwtPayload): Promise<BlockedUserDto[]> {
-    return this.socialService.getBlockedUsers(user);
+  @ApiAuth()
+  @ApiOperation({ summary: 'Get blocked users' })
+  @ApiOk({ description: 'Blocked users returned', type: WrappedBlockedUsersDto })
+  getBlockedUsers(@CurrentUser() user: JwtPayload): BlockedUserDto[] {
+    return this.socialService.getBlockedUsers(user) as unknown as BlockedUserDto[];
   }
 
-  // Following
+  // ─── Following ────────────────────────────────────────────────────────────
+
+  @Throttle({ default: { limit: 30, ttl: 60_000 } })
   @Post('follow/:userId')
+  @ApiAuthActionNoContent('Now following user')
+  @ApiParam({
+    name: 'userId',
+    description: 'User to follow',
+    format: 'uuid',
+    example: '660e8400-e29b-41d4-a716-446655440000',
+  })
   async followUser(
     @CurrentUser() user: JwtPayload,
-    @Param('userId') followingId: string,
-  ): Promise<{ message: string }> {
+    @Param('userId', new ParseUUIDPipe()) followingId: string,
+  ): Promise<void> {
     await this.socialService.followUser(user, followingId);
-    return { message: 'Now following user' };
   }
 
+  @Throttle({ default: { limit: 30, ttl: 60_000 } })
   @Delete('follow/:userId')
+  @ApiAuthActionNoContent('Unfollowed user')
+  @ApiParam({
+    name: 'userId',
+    description: 'User to unfollow',
+    format: 'uuid',
+    example: '660e8400-e29b-41d4-a716-446655440000',
+  })
   async unfollowUser(
     @CurrentUser() user: JwtPayload,
-    @Param('userId') followingId: string,
-  ): Promise<{ message: string }> {
+    @Param('userId', new ParseUUIDPipe()) followingId: string,
+  ): Promise<void> {
     await this.socialService.unfollowUser(user, followingId);
-    return { message: 'Unfollowed user' };
   }
 
   @Get('followers')
-  async getFollowers(
+  @ApiAuth()
+  @ApiOperation({ summary: 'Get my followers' })
+  @ApiOk({ description: 'Followers returned', type: WrappedFollowersDto })
+  getFollowers(
     @CurrentUser() user: JwtPayload,
     @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit: number,
     @Query('cursor') cursor?: string,
-  ): Promise<{ items: FollowerDto[]; hasNextPage: boolean }> {
-    return this.socialService.getFollowers(user, limit, cursor ?? null);
+  ): { items: FollowerDto[]; hasNextPage: boolean } {
+    return this.socialService.getFollowers(user, limit, cursor ?? null) as unknown as {
+      items: FollowerDto[];
+      hasNextPage: boolean;
+    };
   }
 
   @Get('users/:userId/followers')
+  @ApiAuth()
   @ApiOperation({
     summary: 'Get user followers',
     description:
@@ -366,12 +436,7 @@ export class SocialController {
     format: 'uuid',
     example: '660e8400-e29b-41d4-a716-446655440000',
   })
-  @ApiOkResponse({
-    description: 'Paginated followers returned',
-    type: UserFollowersResponseDto,
-  })
-  @ApiBadRequestResponse({ description: 'Validation failed' })
-  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  @ApiOk({ description: 'Paginated followers returned', type: WrappedUserFollowersDto })
   async getUserFollowers(
     @CurrentUser() user: JwtPayload,
     @Param('userId', new ParseUUIDPipe()) targetUserId: string,
@@ -386,6 +451,7 @@ export class SocialController {
   }
 
   @Get('users/:userId/mutual-friends')
+  @ApiAuth()
   @ApiOperation({
     summary: 'Get mutual friends',
     description:
@@ -397,12 +463,7 @@ export class SocialController {
     format: 'uuid',
     example: '660e8400-e29b-41d4-a716-446655440000',
   })
-  @ApiOkResponse({
-    description: 'Paginated mutual friends returned',
-    type: MutualFriendsResponseDto,
-  })
-  @ApiBadRequestResponse({ description: 'Validation failed' })
-  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  @ApiOk({ description: 'Paginated mutual friends returned', type: WrappedMutualFriendsDto })
   async getMutualFriends(
     @CurrentUser() user: JwtPayload,
     @Param('userId', new ParseUUIDPipe()) targetUserId: string,
@@ -417,6 +478,7 @@ export class SocialController {
   }
 
   @Get('users/:userId/mutual-followers')
+  @ApiAuth()
   @ApiOperation({
     summary: 'Get mutual followers',
     description:
@@ -428,12 +490,7 @@ export class SocialController {
     format: 'uuid',
     example: '660e8400-e29b-41d4-a716-446655440000',
   })
-  @ApiOkResponse({
-    description: 'Paginated mutual followers returned',
-    type: MutualFollowersResponseDto,
-  })
-  @ApiBadRequestResponse({ description: 'Validation failed' })
-  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  @ApiOk({ description: 'Paginated mutual followers returned', type: WrappedMutualFollowersDto })
   async getMutualFollowers(
     @CurrentUser() user: JwtPayload,
     @Param('userId', new ParseUUIDPipe()) targetUserId: string,
@@ -448,6 +505,7 @@ export class SocialController {
   }
 
   @Get('users/:userId/following')
+  @ApiAuth()
   @ApiOperation({
     summary: 'Get user following',
     description:
@@ -459,12 +517,7 @@ export class SocialController {
     format: 'uuid',
     example: '660e8400-e29b-41d4-a716-446655440000',
   })
-  @ApiOkResponse({
-    description: 'Paginated following returned',
-    type: UserFollowingResponseDto,
-  })
-  @ApiBadRequestResponse({ description: 'Validation failed' })
-  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  @ApiOk({ description: 'Paginated following returned', type: WrappedUserFollowingDto })
   async getUserFollowing(
     @CurrentUser() user: JwtPayload,
     @Param('userId', new ParseUUIDPipe()) targetUserId: string,
@@ -479,24 +532,43 @@ export class SocialController {
   }
 
   @Get('following')
-  async getFollowing(
+  @ApiAuth()
+  @ApiOperation({ summary: 'Get accounts I follow' })
+  @ApiOk({ description: 'Following returned', type: WrappedFollowingDto })
+  getFollowing(
     @CurrentUser() user: JwtPayload,
     @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit: number,
     @Query('cursor') cursor?: string,
-  ): Promise<{ items: FollowingDto[]; hasNextPage: boolean }> {
-    return this.socialService.getFollowing(user, limit, cursor ?? null);
+  ): { items: FollowingDto[]; hasNextPage: boolean } {
+    return this.socialService.getFollowing(user, limit, cursor ?? null) as unknown as {
+      items: FollowingDto[];
+      hasNextPage: boolean;
+    };
   }
 
-  // Relationship
+  // ─── Relationship ───────────────────────────────────────────────────────
+
   @Get('relationship/:userId')
+  @ApiAuth()
+  @ApiOperation({ summary: 'Get relationship status with a user' })
+  @ApiOk({ description: 'Relationship status returned', type: WrappedRelationshipStatusDto })
+  @ApiParam({
+    name: 'userId',
+    description: 'Target user identifier',
+    format: 'uuid',
+    example: '660e8400-e29b-41d4-a716-446655440000',
+  })
   async getRelationshipStatus(
     @CurrentUser() user: JwtPayload,
-    @Param('userId') targetId: string,
+    @Param('userId', new ParseUUIDPipe()) targetId: string,
   ): Promise<RelationshipStatusDto> {
     return this.socialService.getRelationshipStatus(user, targetId);
   }
 
   @Get('counts')
+  @ApiAuth()
+  @ApiOperation({ summary: 'Get social counts for the authenticated user' })
+  @ApiOk({ description: 'Social counts returned', type: WrappedSocialCountsDto })
   async getSocialCounts(@CurrentUser() user: JwtPayload): Promise<SocialCountsDto> {
     return this.socialService.getSocialCounts(user);
   }

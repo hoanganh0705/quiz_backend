@@ -22,6 +22,17 @@ import {
   MySavedThreadsResponseDto,
   PublicDiscussionProfileResponseDto,
 } from '@/modules/discussion/dto/response';
+import {
+  WrappedUserDiscussionsDto,
+  WrappedUserCommentsDto,
+  WrappedPublicDiscussionProfileDto,
+  WrappedMyCommentsDto,
+  WrappedMyUpvotedThreadsDto,
+  WrappedMyUpvotedCommentsDto,
+  WrappedMyDiscussionSubscriptionsDto,
+  WrappedMySavedThreadsDto,
+  WrappedMyDiscussionsDto,
+} from '@/modules/discussion/dto/response/discussion-response-docs.dto';
 import { MyCommentCursorMapper } from '@/modules/discussion/mappers/my-comment-cursor.mapper';
 import { MyUpvotedThreadCursorMapper } from '@/modules/discussion/mappers/my-upvoted-thread-cursor.mapper';
 import { MyUpvotedCommentCursorMapper } from '@/modules/discussion/mappers/my-upvoted-comment-cursor.mapper';
@@ -38,7 +49,7 @@ export class UserDiscussionController {
 
   @Get('users/:userId/discussions')
   @Public()
-  @ApiPublicList({ description: 'User discussions returned', type: MyDiscussionsResponseDto })
+  @ApiPublicList({ description: 'User discussions returned', type: WrappedUserDiscussionsDto })
   listDiscussionsByUser(
     @Param('userId', new ParseUUIDPipe()) userId: string,
     @Query() query: ListMyDiscussionsQueryDto,
@@ -51,7 +62,7 @@ export class UserDiscussionController {
 
   @Get('users/:userId/comments')
   @Public()
-  @ApiPublicList({ description: 'User comments returned', type: MyCommentsResponseDto })
+  @ApiPublicList({ description: 'User comments returned', type: WrappedUserCommentsDto })
   listCommentsByUser(
     @Param('userId', new ParseUUIDPipe()) userId: string,
     @Query() query: ListMyCommentsQueryDto,
@@ -66,7 +77,7 @@ export class UserDiscussionController {
   @Public()
   @ApiPublicList({
     description: 'Public discussion profile returned',
-    type: PublicDiscussionProfileResponseDto,
+    type: WrappedPublicDiscussionProfileDto,
   })
   getPublicDiscussionProfile(
     @Param('userId', new ParseUUIDPipe()) userId: string,
@@ -75,8 +86,7 @@ export class UserDiscussionController {
   }
 
   @Get('users/me/comments')
-  @ApiAuthList({ description: 'My comments returned', type: MyCommentsResponseDto })
-  @ApiPublicList()
+  @ApiAuthList({ description: 'My comments returned', type: WrappedMyCommentsDto })
   listMyComments(
     @CurrentUser() user: JwtPayload,
     @Query() query: ListMyCommentsQueryDto,
@@ -88,7 +98,7 @@ export class UserDiscussionController {
   }
 
   @Get('users/me/upvoted-threads')
-  @ApiAuthList({ description: 'Upvoted threads returned', type: MyUpvotedThreadsResponseDto })
+  @ApiAuthList({ description: 'Upvoted threads returned', type: WrappedMyUpvotedThreadsDto })
   listMyUpvotedThreads(
     @CurrentUser() user: JwtPayload,
     @Query() query: ListMyUpvotedThreadsQueryDto,
@@ -100,7 +110,7 @@ export class UserDiscussionController {
   }
 
   @Get('users/me/upvoted-comments')
-  @ApiAuthList({ description: 'Upvoted comments returned', type: MyUpvotedCommentsResponseDto })
+  @ApiAuthList({ description: 'Upvoted comments returned', type: WrappedMyUpvotedCommentsDto })
   listMyUpvotedComments(
     @CurrentUser() user: JwtPayload,
     @Query() query: ListMyUpvotedCommentsQueryDto,
@@ -114,7 +124,7 @@ export class UserDiscussionController {
   @Get('users/me/discussion-subscriptions')
   @ApiAuthList({
     description: 'Discussion subscriptions returned',
-    type: MyDiscussionSubscriptionsResponseDto,
+    type: WrappedMyDiscussionSubscriptionsDto,
   })
   listMyDiscussionSubscriptions(
     @CurrentUser() user: JwtPayload,
@@ -127,7 +137,7 @@ export class UserDiscussionController {
   }
 
   @Get('users/me/saved-threads')
-  @ApiAuthList({ description: 'Saved threads returned', type: MySavedThreadsResponseDto })
+  @ApiAuthList({ description: 'Saved threads returned', type: WrappedMySavedThreadsDto })
   listMySavedThreads(
     @CurrentUser() user: JwtPayload,
     @Query() query: ListMySavedThreadsQueryDto,
@@ -139,7 +149,7 @@ export class UserDiscussionController {
   }
 
   @Get('users/me/discussions')
-  @ApiAuthList({ description: 'My discussions returned', type: MyDiscussionsResponseDto })
+  @ApiAuthList({ description: 'My discussions returned', type: WrappedMyDiscussionsDto })
   listMyDiscussions(
     @CurrentUser() user: JwtPayload,
     @Query() query: ListMyDiscussionsQueryDto,
