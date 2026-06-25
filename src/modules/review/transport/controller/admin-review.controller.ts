@@ -22,6 +22,10 @@ import {
 } from '@/modules/review/dto/response';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
+import {
+  WrappedPlatformReportsListDto,
+  WrappedUpdateReportMessageDto,
+} from '@/modules/review/dto/response/review-response-docs.dto';
 
 @ApiTags('reviews')
 @Controller('admin/reviews')
@@ -40,7 +44,7 @@ export class AdminReviewController {
   })
   @ApiOkResponse({
     description: 'Paginated list of platform-wide reports',
-    type: PlatformReportsResponseDto,
+    type: WrappedPlatformReportsListDto,
   })
   async listPlatformReports(
     @Query() query: ListPlatformReportsQueryDto,
@@ -83,7 +87,7 @@ export class AdminReviewController {
   @HttpCode(HttpStatus.OK)
   @ApiAdminUpdate({
     description: 'Report status updated successfully',
-    type: UpdateReportStatusResponseDto,
+    type: WrappedUpdateReportMessageDto,
   })
   async updateReportStatus(
     @Param('reportId', new ParseUUIDPipe()) reportId: string,

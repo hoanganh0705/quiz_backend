@@ -5,7 +5,6 @@ import {
   UpdateReviewResponseDto,
   MyReviewItemDto,
   ReviewDetailResponseDto,
-  MyQuizReviewResponseDto,
   ReportedReviewItemDto,
 } from '../dto/response';
 import type {
@@ -68,7 +67,7 @@ export class ReviewResponseMapper {
     };
   }
 
-  toMyQuizReviewResponse(row: ReviewDetailByIdRow): MyQuizReviewResponseDto {
+  toMyQuizReviewResponse(row: ReviewDetailByIdRow): ReviewDetailResponseDto {
     return {
       reviewId: row.reviewId,
       quizId: row.quizId,
@@ -79,6 +78,7 @@ export class ReviewResponseMapper {
       content: row.content,
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
+      helpfulCount: row.helpfulCount ?? 0,
     };
   }
 
