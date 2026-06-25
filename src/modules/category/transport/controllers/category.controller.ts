@@ -10,7 +10,14 @@ import {
   Query,
   UseFilters,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiOkResponse, ApiNotFoundResponse, ApiInternalServerErrorResponse } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiOkResponse,
+  ApiNotFoundResponse,
+  ApiConflictResponse,
+  ApiInternalServerErrorResponse,
+} from '@nestjs/swagger';
 import { Public } from '@/common/decorators/public.decorator';
 import { Permissions } from '@/common/authorization/decorators/permissions.decorator';
 import { Permission } from '@/common/authorization/permissions';
@@ -20,8 +27,6 @@ import {
   ApiAuthUpdate,
   ApiAuthDelete,
   ApiPublicList,
-  ApiConflict,
-  ApiInternalError,
 } from '@/common/swagger/swagger-decorators';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
@@ -37,10 +42,20 @@ import { MessageResponseDto } from '../../dto/response/message-response.dto';
 import { RankedCategoriesResponseDto } from '../../dto/response/ranked-categories-response.dto';
 import { CategoryAnalyticsResponseDto } from '../../dto/response/category-analytics-response.dto';
 import { RelatedCategoriesResponseDto } from '../../dto/response/related-categories-response.dto';
+import { QuizListResponseDto } from '../../../quiz/dto/response/quiz-list-response.dto';
 import { CategoryApplicationService } from '../../application/category.application.service';
 import { CategoryQueryService } from '../../application/category-query.service';
 import { CategoryDomainExceptionFilter } from '../filters/category-domain-exception.filter';
 import { CategoryCursorMapper } from '../../mappers/category-cursor.mapper';
+import {
+  CategoryWrappedRankedListDto,
+  CategoryWrappedRelatedListDto,
+  CategoryWrappedAnalyticsDto,
+  CategoryWrappedMessageDto,
+  CategoryWrappedCategoryDto,
+  CategoryWrappedListDto,
+} from '../../dto/response/category-response-docs.dto';
+import { WrappedQuizListDto } from '../../../quiz/dto/response/quiz-response-docs.dto';
 import type {
   CreateCategoryCommand,
   ListCategoriesQuery,
@@ -62,7 +77,10 @@ export class CategoryController {
     summary: 'Popular categories',
     description: 'Returns categories ranked by aggregated quiz popularity score.',
   })
-  @ApiOkResponse({ description: 'Ranked categories returned', type: RankedCategoriesResponseDto })
+  @ApiOkResponse({
+    description: 'Ranked categories returned',
+    type: CategoryWrappedRankedListDto,
+  })
   @ApiInternalServerErrorResponse()
   getPopularCategories(
     @Query() query: CategoryRankingQueryDto,
@@ -76,7 +94,10 @@ export class CategoryController {
     summary: 'Trending categories',
     description: 'Returns categories ranked by aggregated quiz trending score.',
   })
-  @ApiOkResponse({ description: 'Ranked categories returned', type: RankedCategoriesResponseDto })
+  @ApiOkResponse({
+    description: 'Ranked categories returned',
+    type: CategoryWrappedRankedListDto,
+  })
   @ApiInternalServerErrorResponse()
   getTrendingCategories(
     @Query() query: CategoryRankingQueryDto,
@@ -86,14 +107,24 @@ export class CategoryController {
 
   @Get(':slug/quizzes')
   @Public()
-  @ApiPublicList()
-  getCategoryQuizzes(@Param('slug') slug: string, @Query() query: ListQuizzesQueryDto) {
+  @ApiPublicList({ description: 'Quizzes in category returned', type: WrappedQuizListDto })
+  @ApiNotFoundResponse({ description: 'Category not found' })
+  @ApiInternalServerErrorResponse()
+  getCategoryQuizzes(
+    @Param('slug') slug: string,
+    @Query() query: ListQuizzesQueryDto,
+  ): Promise<QuizListResponseDto> {
     return this.categoryQueryService.getCategoryQuizzesBySlug(slug, query);
   }
 
   @Get(':slug/related')
   @Public()
-  @ApiPublicList({ description: 'Related categories returned', type: RelatedCategoriesResponseDto })
+  @ApiPublicList({
+    description: 'Related categories returned',
+    type: CategoryWrappedRelatedListDto,
+  })
+  @ApiNotFoundResponse({ description: 'Category not found' })
+  @ApiInternalServerErrorResponse()
   getRelatedCategories(
     @Param('slug') slug: string,
     @Query() query: RelatedCategoriesQueryDto,
@@ -103,7 +134,9 @@ export class CategoryController {
 
   @Get(':id/analytics')
   @Public()
-  @ApiPublicList({ description: 'Analytics returned', type: CategoryAnalyticsResponseDto })
+  @ApiPublicList({ description: 'Analytics returned', type: CategoryWrappedAnalyticsDto })
+  @ApiNotFoundResponse({ description: 'Category analytics not found' })
+  @ApiInternalServerErrorResponse()
   getCategoryAnalytics(
     @Param('id', new ParseUUIDPipe()) categoryId: string,
   ): Promise<CategoryAnalyticsResponseDto> {
@@ -116,8 +149,8 @@ export class CategoryController {
     summary: 'Follow a category',
     description: 'Adds the authenticated user to the category followers. Idempotent.',
   })
-  @ApiOkResponse({ description: 'Category followed', type: MessageResponseDto })
-  @ApiNotFoundResponse()
+  @ApiOkResponse({ description: 'Category followed', type: CategoryWrappedMessageDto })
+  @ApiNotFoundResponse({ description: 'Category not found' })
   @ApiInternalServerErrorResponse()
   followCategory(
     @Param('id', new ParseUUIDPipe()) categoryId: string,
@@ -132,7 +165,8 @@ export class CategoryController {
     summary: 'Unfollow a category',
     description: 'Removes the authenticated user from the category followers. Idempotent.',
   })
-  @ApiOkResponse({ description: 'Category unfollowed', type: MessageResponseDto })
+  @ApiOkResponse({ description: 'Category unfollowed', type: CategoryWrappedMessageDto })
+  @ApiNotFoundResponse({ description: 'Category not found' })
   @ApiInternalServerErrorResponse()
   unfollowCategory(
     @Param('id', new ParseUUIDPipe()) categoryId: string,
@@ -148,9 +182,11 @@ export class CategoryController {
     summary: 'Restore category',
     description: 'Restores a soft-deleted category. Requires admin role.',
   })
-  @ApiOkResponse({ description: 'Category restored', type: CategoryResponseDto })
-  @ApiNotFoundResponse()
-  @ApiConflict()
+  @ApiOkResponse({ description: 'Category restored', type: CategoryWrappedCategoryDto })
+  @ApiNotFoundResponse({ description: 'Category not found' })
+  @ApiConflictResponse({
+    description: 'A category with this slug already exists or category is already active',
+  })
   @ApiInternalServerErrorResponse()
   restoreCategory(
     @Param('id', new ParseUUIDPipe()) categoryId: string,
@@ -160,7 +196,8 @@ export class CategoryController {
 
   @Get()
   @Public()
-  @ApiPublicList({ description: 'Categories returned', type: CategoryListResponseDto })
+  @ApiPublicList({ description: 'Categories returned', type: CategoryWrappedListDto })
+  @ApiInternalServerErrorResponse()
   listCategories(@Query() query: ListCategoriesQueryDto): Promise<CategoryListResponseDto> {
     const command: ListCategoriesQuery = {
       limit: query.limit,
@@ -172,7 +209,9 @@ export class CategoryController {
 
   @Get(':id')
   @Public()
-  @ApiPublicList({ description: 'Category found', type: CategoryResponseDto })
+  @ApiPublicList({ description: 'Category found', type: CategoryWrappedCategoryDto })
+  @ApiNotFoundResponse({ description: 'Category not found' })
+  @ApiInternalServerErrorResponse()
   getCategoryById(
     @Param('id', new ParseUUIDPipe()) categoryId: string,
   ): Promise<CategoryResponseDto> {
@@ -181,14 +220,16 @@ export class CategoryController {
 
   @Get(':slug')
   @Public()
-  @ApiPublicList({ description: 'Category found', type: CategoryResponseDto })
+  @ApiPublicList({ description: 'Category found', type: CategoryWrappedCategoryDto })
+  @ApiNotFoundResponse({ description: 'Category not found' })
+  @ApiInternalServerErrorResponse()
   getCategoryBySlug(@Param('slug') slug: string): Promise<CategoryResponseDto> {
     return this.categoryQueryService.getCategoryBySlug(slug);
   }
 
   @Post()
   @Permissions(Permission.CATEGORY_MANAGE)
-  @ApiAuthCreate({ description: 'Category created', type: CategoryResponseDto })
+  @ApiAuthCreate({ description: 'Category created', type: CategoryWrappedCategoryDto })
   createCategory(@Body() payload: CreateCategoryDto): Promise<CategoryResponseDto> {
     const command: CreateCategoryCommand = {
       name: payload.name,
@@ -202,7 +243,7 @@ export class CategoryController {
 
   @Patch(':id')
   @Permissions(Permission.CATEGORY_MANAGE)
-  @ApiAuthUpdate({ description: 'Category updated', type: CategoryResponseDto })
+  @ApiAuthUpdate({ description: 'Category updated', type: CategoryWrappedCategoryDto })
   updateCategory(
     @Param('id', new ParseUUIDPipe()) categoryId: string,
     @Body() payload: UpdateCategoryDto,
@@ -220,6 +261,7 @@ export class CategoryController {
   @Delete(':id')
   @Permissions(Permission.CATEGORY_MANAGE)
   @ApiAuthDelete('Category deleted')
+  @ApiNotFoundResponse({ description: 'Category not found' })
   deleteCategory(
     @Param('id', new ParseUUIDPipe()) categoryId: string,
   ): Promise<MessageResponseDto> {

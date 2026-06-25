@@ -5,9 +5,10 @@ import { ApiPropertyOptional } from '@nestjs/swagger';
 export class ListTagsQueryDto {
   @ApiPropertyOptional({
     description: 'Cursor for cursor-based pagination',
+    type: String,
+    nullable: true,
     example:
       'eyJjcmVhdGVkQXQiOiIyMDI1LTAxLTAxVDAwOjAwOjAwKzAwOjAwIiwiY3JlYXRpbmdVc2VySWQiOiI4MTIzMTIzLTEyMzQtMTIzNC0xMjM0LTEyMzQxMjM0MTIzNDQifQ',
-    nullable: true,
   })
   @IsOptional()
   @IsString()

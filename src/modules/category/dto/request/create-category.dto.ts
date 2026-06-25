@@ -24,9 +24,10 @@ export class CreateCategoryDto {
 
   @ApiPropertyOptional({
     description: 'Category description',
+    type: String,
+    nullable: true,
     maxLength: 500,
     example: 'Test your knowledge across a wide range of topics',
-    nullable: true,
   })
   @IsOptional()
   @Transform(({ value }: { value: unknown }) => trimStringToNullIfBlank(value))
@@ -36,10 +37,11 @@ export class CreateCategoryDto {
 
   @ApiPropertyOptional({
     description: 'URL-friendly slug (auto-generated from name if omitted)',
+    type: String,
+    nullable: true,
     maxLength: 120,
     pattern: DEFAULT_SLUG_PATTERN.source,
     example: 'general-knowledge',
-    nullable: true,
   })
   @IsOptional()
   @Transform(({ value }: { value: unknown }) => trimStringToLowerCase(value))
@@ -52,10 +54,11 @@ export class CreateCategoryDto {
 
   @ApiPropertyOptional({
     description: 'Category cover image URL',
+    type: String,
+    nullable: true,
     maxLength: 2048,
     format: 'uri',
     example: 'https://example.com/images/general-knowledge.jpg',
-    nullable: true,
   })
   @IsOptional()
   @Transform(({ value }: { value: unknown }) => trimStringToNullIfBlank(value))

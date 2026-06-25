@@ -23,7 +23,12 @@ export class UpdateCategoryDto {
   @MaxLength(120)
   name?: string;
 
-  @ApiPropertyOptional({ description: 'Category description', maxLength: 500, nullable: true })
+  @ApiPropertyOptional({
+    description: 'Category description',
+    type: String,
+    nullable: true,
+    maxLength: 500,
+  })
   @IsOptional()
   @Transform(({ value }: { value: unknown }) => trimStringToNullIfBlank(value))
   @IsString()
@@ -32,10 +37,11 @@ export class UpdateCategoryDto {
 
   @ApiPropertyOptional({
     description: 'URL-friendly slug',
+    type: String,
+    nullable: true,
     maxLength: 120,
     pattern: DEFAULT_SLUG_PATTERN.source,
     example: 'general-knowledge',
-    nullable: true,
   })
   @IsOptional()
   @Transform(({ value }: { value: unknown }) => trimStringToLowerCase(value))
@@ -48,9 +54,10 @@ export class UpdateCategoryDto {
 
   @ApiPropertyOptional({
     description: 'Category cover image URL',
+    type: String,
+    nullable: true,
     maxLength: 2048,
     format: 'uri',
-    nullable: true,
   })
   @IsOptional()
   @Transform(({ value }: { value: unknown }) => trimStringToNullIfBlank(value))
