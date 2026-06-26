@@ -2,7 +2,8 @@ import { ApiProperty } from '@nestjs/swagger';
 
 /**
  * Runtime shape: { data: { message: string }, meta: { timestamp: string } }
- * Produced by ResponseFormatInterceptor for all non-paginated responses.
+ * Produced by ResponseFormatInterceptor for all non-paginated responses
+ * that return only a message.
  */
 export class WrappedMessageResponseDto {
   @ApiProperty({
