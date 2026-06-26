@@ -2,21 +2,25 @@
  * Achievement Admin Controller
  *
  * Admin-only endpoints for achievement system management.
- * All endpoints require the 'admin' role.
+ * All endpoints require the ACHIEVEMENT_ADMIN permission.
  */
 
 import { Controller, Get, Post, Param, HttpCode, HttpStatus, ParseUUIDPipe } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiOkResponse } from '@nestjs/swagger';
 import { Permissions } from '@/common/authorization/decorators/permissions.decorator';
 import { Permission } from '@/common/authorization/permissions';
-import { ApiAdminEndpoint, ApiAdminRead } from '@/common/swagger/swagger-decorators';
+import { ApiAuth } from '@/common/swagger/swagger-decorators';
 import { ScheduledEvaluationService } from '../../infrastructure/scheduled/scheduled-evaluation.service';
 import { AchievementHistoryService } from '../../application/achievement-history.service';
-import { ReevaluateUserResponseDto } from '../../dto/response/achievement-admin-response.dto';
+import {
+  WrappedReevaluateUserResponseDto,
+  WrappedAdminHistoryListDto,
+} from '../../dto/response/achievement-response-docs.dto';
+import type { AchievementHistoryEntry } from '../../application/achievement-history.service';
 
 @ApiTags('achievements')
 @Controller('admin/achievements')
-@ApiAdminEndpoint()
+@ApiAuth()
 export class AchievementAdminController {
   constructor(
     private readonly scheduledEvaluationService: ScheduledEvaluationService,
@@ -33,10 +37,16 @@ export class AchievementAdminController {
       'does not yet have will be checked against the rule engine. Use this to correct missed ' +
       'awards or retroactively grant badges after data fixes.',
   })
-  @ApiOkResponse({ description: 'Re-evaluation completed', type: ReevaluateUserResponseDto })
-  async reevaluateUser(
-    @Param('userId', new ParseUUIDPipe()) userId: string,
-  ): Promise<ReevaluateUserResponseDto> {
+  @ApiOkResponse({
+    description: 'Re-evaluation completed',
+    type: WrappedReevaluateUserResponseDto,
+  })
+  async reevaluateUser(@Param('userId', new ParseUUIDPipe()) userId: string): Promise<{
+    message: string;
+    checked: number;
+    awarded: number;
+    errors: number;
+  }> {
     const results = await this.scheduledEvaluationService.reevaluateUserBadges(userId);
 
     const awarded = results.filter((r) => r.awarded).length;
@@ -52,8 +62,14 @@ export class AchievementAdminController {
 
   @Get('reevaluate/:userId/history')
   @Permissions(Permission.ACHIEVEMENT_ADMIN)
-  @ApiAdminRead({ description: 'Achievement history returned' })
-  async getUserHistory(@Param('userId', new ParseUUIDPipe()) userId: string) {
+  @ApiOperation({ summary: 'Get achievement history for a user (admin)' })
+  @ApiOkResponse({
+    description: 'Achievement history returned',
+    type: WrappedAdminHistoryListDto,
+  })
+  async getUserHistory(
+    @Param('userId', new ParseUUIDPipe()) userId: string,
+  ): Promise<AchievementHistoryEntry[]> {
     return this.achievementHistoryService.getUserHistory(userId, { includeRevoked: true });
   }
 }
