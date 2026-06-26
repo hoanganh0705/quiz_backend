@@ -1,7 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
 import type { UserRole } from '@/common/types/user-role.type';
 
-// ─── Auth documentation-only wrapper DTOs ──────────────────────────────────────────
+// ─── Auth documentation-only wrapper DTOs ──────────────────────────────────────
 //
 // These DTOs document the actual runtime response shape produced by
 // ResponseFormatInterceptor, which wraps all non-paginated responses as:
@@ -11,6 +11,16 @@ import type { UserRole } from '@/common/types/user-role.type';
 // as method return types. These wrapper DTOs are used ONLY in @ApiOkResponse /
 // @ApiCreatedResponse decorators to document the actual wrapped shape in the OpenAPI spec.
 //
+
+// ─── Meta ─────────────────────────────────────────────────────────────────────
+
+class MetaDto {
+  @ApiProperty({
+    description: 'ISO 8601 timestamp of when the response was generated',
+    example: '2026-06-25T10:30:00.000Z',
+  })
+  timestamp!: string;
+}
 
 // ─── Nested data types (explicit schemas for data fields) ───────────────────────
 
@@ -62,7 +72,7 @@ class LoginDataDto {
   accessToken!: string;
 
   @ApiProperty({
-    description: 'Current session identifier',
+    description: 'Current session identifier for session management operations',
     example: '7c9e6679-7425-40de-944b-e07fc1f90ae7',
   })
   sessionId!: string;
@@ -138,113 +148,220 @@ class SessionItemDto {
   isCurrentSession!: boolean;
 }
 
-class MetaDto {
+class SessionListPayloadDto {
   @ApiProperty({
-    description: 'ISO 8601 timestamp of when the response was generated',
-    example: '2026-06-25T10:30:00.000Z',
+    description: 'List of active sessions for the authenticated user',
+    type: [SessionItemDto],
   })
-  timestamp!: string;
+  sessions!: SessionItemDto[];
 }
 
 // ─── Wrapper DTOs (top-level envelope) ────────────────────────────────────────
 
 /**
  * Runtime shape: { data: { message: string }, meta: { timestamp: string } }
- * Used for: register, logout, verify-email, verify-password, forgot-password, reset-password,
- * change-password, delete-account, session-management result
+ * Used for: register, logout, logout-all, verify-email, resend-verification-email,
+ * forgot-password, reset-password, change-password, delete-account,
+ * revoke-session, sessions/others, sessions/logout-others.
  */
 export class AuthWrappedMessageDto {
-  @ApiProperty({ description: 'Wrapped response payload', type: () => MessageDataDto })
+  @ApiProperty({
+    description: 'Wrapped response payload',
+    type: () => MessageDataDto,
+    example: {
+      message: 'Registration successful. Please check your email to verify your account.',
+    },
+  })
   data!: MessageDataDto;
 
-  @ApiProperty({ description: 'Response metadata', type: () => MetaDto })
+  @ApiProperty({
+    description: 'Response metadata',
+    type: () => MetaDto,
+    example: { timestamp: '2026-06-25T10:30:00.000Z' },
+  })
   meta!: MetaDto;
 }
 
 /**
  * Runtime shape: { data: { available: boolean }, meta: { timestamp: string } }
- * Used for: check-email, check-username
+ * Used for: check-email, check-username.
  */
 export class AuthWrappedAvailableDto {
-  @ApiProperty({ description: 'Wrapped response payload', type: () => AvailableDataDto })
+  @ApiProperty({
+    description: 'Wrapped response payload',
+    type: () => AvailableDataDto,
+    example: { available: true },
+  })
   data!: AvailableDataDto;
 
-  @ApiProperty({ description: 'Response metadata', type: () => MetaDto })
+  @ApiProperty({
+    description: 'Response metadata',
+    type: () => MetaDto,
+    example: { timestamp: '2026-06-25T10:30:00.000Z' },
+  })
   meta!: MetaDto;
 }
 
 /**
  * Runtime shape: { data: { valid: boolean }, meta: { timestamp: string } }
- * Used for: verify-password
+ * Used for: verify-password.
  */
 export class AuthWrappedValidDto {
-  @ApiProperty({ description: 'Wrapped response payload', type: () => ValidDataDto })
+  @ApiProperty({
+    description: 'Wrapped response payload',
+    type: () => ValidDataDto,
+    example: { valid: true },
+  })
   data!: ValidDataDto;
 
-  @ApiProperty({ description: 'Response metadata', type: () => MetaDto })
+  @ApiProperty({
+    description: 'Response metadata',
+    type: () => MetaDto,
+    example: { timestamp: '2026-06-25T10:30:00.000Z' },
+  })
   meta!: MetaDto;
 }
 
 /**
  * Runtime shape: { data: { accessToken: string }, meta: { timestamp: string } }
- * Used for: refresh-token
+ * Used for: refresh-token.
  */
 export class AuthWrappedAccessTokenDto {
-  @ApiProperty({ description: 'Wrapped response payload', type: () => AccessTokenDataDto })
+  @ApiProperty({
+    description: 'Wrapped response payload',
+    type: () => AccessTokenDataDto,
+    example: {
+      accessToken:
+        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI1NTBlODQwMC1lMjliLTIxZDQtYTcxNi00NDY2NTU0NDAwMDAiLCJyb2xlIjoidXNlciIsImlhdCI6MTcwOTAwMDAwMCwiZXhwIjoxNzA5MDAwNjAwfQ.sig',
+    },
+  })
   data!: AccessTokenDataDto;
 
-  @ApiProperty({ description: 'Response metadata', type: () => MetaDto })
+  @ApiProperty({
+    description: 'Response metadata',
+    type: () => MetaDto,
+    example: { timestamp: '2026-06-25T10:30:00.000Z' },
+  })
   meta!: MetaDto;
 }
 
 /**
  * Runtime shape: { data: { userId, username, email, accessToken, sessionId }, meta: { timestamp: string } }
- * Used for: login, googleLogin
+ * Used for: login, oauth/google.
  */
 export class AuthWrappedLoginDto {
-  @ApiProperty({ description: 'Wrapped response payload', type: () => LoginDataDto })
+  @ApiProperty({
+    description: 'Wrapped response payload',
+    type: () => LoginDataDto,
+    example: {
+      userId: '550e8400-e29b-41d4-a716-446655440000',
+      username: 'alice_wonder',
+      email: 'alice@example.com',
+      accessToken:
+        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI1NTBlODQwMC1lMjliLTIxZDQtYTcxNi00NDY2NTU0NDAwMDAiLCJyb2xlIjoidXNlciIsImlhdCI6MTcwOTAwMDAwMCwiZXhwIjoxNzA5MDAwNjAwfQ.sig',
+      sessionId: '7c9e6679-7425-40de-944b-e07fc1f90ae7',
+    },
+  })
   data!: LoginDataDto;
 
-  @ApiProperty({ description: 'Response metadata', type: () => MetaDto })
+  @ApiProperty({
+    description: 'Response metadata',
+    type: () => MetaDto,
+    example: { timestamp: '2026-06-25T10:30:00.000Z' },
+  })
   meta!: MetaDto;
 }
 
 /**
  * Runtime shape: { data: { userId, username, email, role, isVerified }, meta: { timestamp: string } }
- * Used for: getCurrentUser (/auth/me)
+ * Used for: getCurrentUser (/auth/me).
  */
 export class AuthWrappedCurrentUserDto {
-  @ApiProperty({ description: 'Wrapped response payload', type: () => CurrentUserDataDto })
+  @ApiProperty({
+    description: 'Wrapped response payload',
+    type: () => CurrentUserDataDto,
+    example: {
+      userId: '550e8400-e29b-41d4-a716-446655440000',
+      username: 'alice_wonder',
+      email: 'alice@example.com',
+      role: 'user',
+      isVerified: true,
+    },
+  })
   data!: CurrentUserDataDto;
 
-  @ApiProperty({ description: 'Response metadata', type: () => MetaDto })
+  @ApiProperty({
+    description: 'Response metadata',
+    type: () => MetaDto,
+    example: { timestamp: '2026-06-25T10:30:00.000Z' },
+  })
   meta!: MetaDto;
 }
 
 /**
  * Runtime shape: { data: { emailVerified, activeSessionCount, lastSuccessfulLoginAt, lastPasswordChangeAt }, meta: { timestamp: string } }
- * Used for: getSecurityDashboard (/auth/security/dashboard)
+ * Used for: getSecurityDashboard (/auth/security/dashboard).
  */
 export class AuthWrappedSecurityDto {
-  @ApiProperty({ description: 'Wrapped response payload', type: () => SecurityDataDto })
+  @ApiProperty({
+    description: 'Wrapped response payload',
+    type: () => SecurityDataDto,
+    example: {
+      emailVerified: true,
+      activeSessionCount: 3,
+      lastSuccessfulLoginAt: '2026-06-03T10:00:00.000Z',
+      lastPasswordChangeAt: null,
+    },
+  })
   data!: SecurityDataDto;
 
-  @ApiProperty({ description: 'Response metadata', type: () => MetaDto })
+  @ApiProperty({
+    description: 'Response metadata',
+    type: () => MetaDto,
+    example: { timestamp: '2026-06-25T10:30:00.000Z' },
+  })
   meta!: MetaDto;
 }
 
 /**
- * Runtime shape: { data: SessionItemDto[], meta: { timestamp: string } }
- * Used for: getActiveSessions (/auth/sessions)
+ * Runtime shape: { data: { sessions: SessionItemDto[] }, meta: { timestamp: string } }
+ * The controller returns SessionListResponseDto which wraps the array under the
+ * `sessions` key, so the interceptor's wrapped shape preserves that nesting.
+ * Used for: getActiveSessions (/auth/sessions).
  */
 export class AuthWrappedSessionListDto {
   @ApiProperty({
     description: 'Wrapped response payload',
-    isArray: true,
-    type: () => SessionItemDto,
+    type: () => SessionListPayloadDto,
+    example: {
+      sessions: [
+        {
+          sessionId: '7c9e6679-7425-40de-944b-e07fc1f90ae7',
+          deviceBrowser: 'Chrome',
+          deviceOs: 'macOS',
+          deviceType: 'desktop',
+          ipAddress: '203.0.113.42',
+          lastActiveAt: '2026-06-25T10:30:00.000Z',
+          isCurrentSession: true,
+        },
+        {
+          sessionId: '8d0e7788-8536-51ef-955c-f18df2a01bf8',
+          deviceBrowser: 'Safari',
+          deviceOs: 'iOS',
+          deviceType: 'mobile',
+          ipAddress: '198.51.100.7',
+          lastActiveAt: '2026-06-24T18:45:00.000Z',
+          isCurrentSession: false,
+        },
+      ],
+    },
   })
-  data!: SessionItemDto[];
+  data!: SessionListPayloadDto;
 
-  @ApiProperty({ description: 'Response metadata', type: () => MetaDto })
+  @ApiProperty({
+    description: 'Response metadata',
+    type: () => MetaDto,
+    example: { timestamp: '2026-06-25T10:30:00.000Z' },
+  })
   meta!: MetaDto;
 }

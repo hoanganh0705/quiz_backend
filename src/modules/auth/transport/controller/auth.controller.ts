@@ -15,12 +15,18 @@ import {
   ApiOkResponse,
   ApiTooManyRequestsResponse,
   ApiBadRequestResponse,
+  ApiUnauthorizedResponse,
+  ApiNotFoundResponse,
+  ApiConflictResponse,
   ApiInternalServerErrorResponse,
+  ApiForbiddenResponse,
 } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import { Public } from '@/common/decorators/public.decorator';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
-import { ApiAuth, ApiUnauthorized } from '@/common/swagger/swagger-decorators';
+import { ApiAuth } from '@/common/swagger/swagger-decorators';
+import { ApiCookieParam, registerCookieParam } from '@/common/swagger/cookie-params.plugin';
+import { ProblemDetailDto, ErrorResponseExamples } from '@/common/swagger/swagger-schemas';
 import { RefreshToken } from '../decorators/refresh-token.decorator';
 import { RequestContext } from '../decorators/request-context.decorator';
 import { RequestContextInterceptor } from '../interceptors/request-context.interceptor';
@@ -82,6 +88,81 @@ import type {
 } from '../../domain/types/auth-commands';
 import { VerifyPasswordDto } from '../../dto/request/verify-password.dto';
 
+const setCookieHeaderSchema = {
+  description: 'Refresh token cookie. HttpOnly, SameSite=Lax, Secure in production.',
+  schema: {
+    type: 'string',
+    example: 'refreshToken=a1b2c3d4...; Path=/; HttpOnly; SameSite=Lax; Max-Age=2592000',
+  },
+};
+
+const clearCookieHeaderSchema = {
+  description: 'Cleared refresh token cookie.',
+  schema: {
+    type: 'string',
+    example: 'refreshToken=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0',
+  },
+};
+
+const forbiddenOptions = {
+  description: 'Authenticated user lacks required role or permission',
+  type: ProblemDetailDto,
+  example: ErrorResponseExamples.forbidden,
+};
+
+const notFoundOptions = {
+  description: 'The requested resource does not exist or has been deleted',
+  type: ProblemDetailDto,
+  example: ErrorResponseExamples.notFound,
+};
+
+const conflictOptions = {
+  description: 'The request conflicts with the current state of the resource',
+  type: ProblemDetailDto,
+  example: ErrorResponseExamples.conflict,
+};
+
+const badRequestOptions = {
+  description: 'Request body, query, or params failed validation',
+  type: ProblemDetailDto,
+  example: ErrorResponseExamples.badRequest,
+};
+
+const unauthorizedOptions = {
+  description: 'Missing or invalid authentication credentials',
+  type: ProblemDetailDto,
+  example: ErrorResponseExamples.unauthorized,
+};
+
+const tooManyRequestsOptions = {
+  description: 'Rate limit exceeded',
+  type: ProblemDetailDto,
+  example: ErrorResponseExamples.tooManyRequests,
+};
+
+const internalErrorOptions = {
+  description: 'Unexpected server error',
+  type: ProblemDetailDto,
+  example: ErrorResponseExamples.internalServerError,
+};
+
+/**
+ * Side-effect: register the cookie parameters consumed by this controller's
+ * routes so the Swagger plugin can inject `in: 'cookie'` parameters into the
+ * generated OpenAPI document. Renaming a route requires updating the path
+ * here — but no longer requires editing a shared plugin.
+ */
+registerCookieParam('/api/v1/auth/refresh-token', 'post', {
+  name: 'refreshToken',
+  required: true,
+  description: 'HttpOnly refresh token cookie. Must be present for token rotation.',
+});
+registerCookieParam('/api/v1/auth/logout', 'post', {
+  name: 'refreshToken',
+  required: false,
+  description: 'HttpOnly refresh token cookie. Cleared on successful logout when present.',
+});
+
 @ApiTags('auth')
 @Controller('auth')
 @UseInterceptors(RequestContextInterceptor, RefreshTokenInterceptor)
@@ -97,9 +178,18 @@ export class AuthController {
     description:
       'Creates a new user account and sends a verification email to the provided address.',
   })
-  @ApiCreatedResponse({ description: 'Account created successfully', type: AuthWrappedMessageDto })
-  @ApiBadRequestResponse()
-  @ApiInternalServerErrorResponse()
+  @ApiCreatedResponse({
+    description: 'Account created successfully',
+    type: AuthWrappedMessageDto,
+    example: {
+      data: { message: 'Registration successful. Please check your email to verify your account.' },
+      meta: { timestamp: '2026-06-25T10:30:00.000Z' },
+    },
+  })
+  @ApiBadRequestResponse(badRequestOptions)
+  @ApiConflictResponse(conflictOptions)
+  @ApiTooManyRequestsResponse(tooManyRequestsOptions)
+  @ApiInternalServerErrorResponse(internalErrorOptions)
   async register(@Body() registerDto: RegisterDto): Promise<RegisterResponseDto> {
     const command: RegisterCommand = {
       username: registerDto.username,
@@ -117,9 +207,17 @@ export class AuthController {
     summary: 'Verify email address',
     description: 'Confirms an email address using the token from the verification email.',
   })
-  @ApiOkResponse({ description: 'Email verified successfully', type: AuthWrappedMessageDto })
-  @ApiBadRequestResponse()
-  @ApiInternalServerErrorResponse()
+  @ApiOkResponse({
+    description: 'Email verified successfully',
+    type: AuthWrappedMessageDto,
+    example: {
+      data: { message: 'Email verified successfully. You can now log in.' },
+      meta: { timestamp: '2026-06-25T10:30:00.000Z' },
+    },
+  })
+  @ApiBadRequestResponse(badRequestOptions)
+  @ApiTooManyRequestsResponse(tooManyRequestsOptions)
+  @ApiInternalServerErrorResponse(internalErrorOptions)
   async verifyEmail(@Body() verifyEmailDto: VerifyEmailDto): Promise<VerifyEmailResponseDto> {
     const command: VerifyEmailCommand = {
       token: verifyEmailDto.token,
@@ -136,9 +234,17 @@ export class AuthController {
     description:
       'Sends a new verification email to the provided address if the account exists and is unverified.',
   })
-  @ApiOkResponse({ description: 'Verification email sent', type: AuthWrappedMessageDto })
-  @ApiBadRequestResponse()
-  @ApiInternalServerErrorResponse()
+  @ApiOkResponse({
+    description: 'Verification email sent',
+    type: AuthWrappedMessageDto,
+    example: {
+      data: { message: 'Verification email has been sent. Please check your inbox.' },
+      meta: { timestamp: '2026-06-25T10:30:00.000Z' },
+    },
+  })
+  @ApiBadRequestResponse(badRequestOptions)
+  @ApiTooManyRequestsResponse(tooManyRequestsOptions)
+  @ApiInternalServerErrorResponse(internalErrorOptions)
   async resendVerificationEmail(
     @Body() resendVerificationDto: ResendVerificationDto,
   ): Promise<VerifyEmailResponseDto> {
@@ -154,12 +260,29 @@ export class AuthController {
   @ApiOperation({
     summary: 'Log in',
     description:
-      'Authenticates with email and password and returns a JWT access token. Device information is collected for security purposes.',
+      'Authenticates with email and password and returns a JWT access token. ' +
+      'A refresh token cookie is set on success. Device information is collected for security purposes.',
   })
-  @ApiOkResponse({ description: 'Login successful', type: AuthWrappedLoginDto })
-  @ApiUnauthorized()
-  @ApiBadRequestResponse()
-  @ApiInternalServerErrorResponse()
+  @ApiOkResponse({
+    description: 'Login successful',
+    type: AuthWrappedLoginDto,
+    headers: { 'Set-Cookie': setCookieHeaderSchema },
+    example: {
+      data: {
+        userId: '550e8400-e29b-41d4-a716-446655440000',
+        username: 'alice_wonder',
+        email: 'alice@example.com',
+        accessToken:
+          'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI1NTBlODQwMC1lMjliLTIxZDQtYTcxNi00NDY2NTU0NDAwMDAiLCJyb2xlIjoidXNlciIsImlhdCI6MTcwOTAwMDAwMCwiZXhwIjoxNzA5MDAwNjAwfQ.sig',
+        sessionId: '7c9e6679-7425-40de-944b-e07fc1f90ae7',
+      },
+      meta: { timestamp: '2026-06-25T10:30:00.000Z' },
+    },
+  })
+  @ApiUnauthorizedResponse(unauthorizedOptions)
+  @ApiBadRequestResponse(badRequestOptions)
+  @ApiTooManyRequestsResponse(tooManyRequestsOptions)
+  @ApiInternalServerErrorResponse(internalErrorOptions)
   async login(
     @Body() loginDto: LoginDto,
     @RequestContext() context: AuthRequestContext,
@@ -182,12 +305,30 @@ export class AuthController {
     summary: 'Log in with Google',
     description:
       'Authenticates using a Google ID token and returns a JWT access token. ' +
-      'If no account exists for the Google user, one is created automatically.',
+      'If no account exists for the Google user, one is created automatically. ' +
+      'A refresh token cookie is set on success.',
   })
-  @ApiOkResponse({ description: 'Login successful', type: AuthWrappedLoginDto })
-  @ApiUnauthorized()
-  @ApiBadRequestResponse()
-  @ApiInternalServerErrorResponse()
+  @ApiOkResponse({
+    description: 'Login successful',
+    type: AuthWrappedLoginDto,
+    headers: { 'Set-Cookie': setCookieHeaderSchema },
+    example: {
+      data: {
+        userId: '550e8400-e29b-41d4-a716-446655440000',
+        username: 'alice_wonder',
+        email: 'alice@example.com',
+        accessToken:
+          'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI1NTBlODQwMC1lMjbiLTIxZDQtYTcxNi00NDY2NTU0NDAwMDAiLCJyb2xlIjoidXNlciIsImlhdCI6MTcwOTAwMDAwMCwiZXhwIjoxNzA5MDAwNjAwfQ.sig',
+        sessionId: '8e0f8899-9647-62f0-a66d-g29eg3b12cg9',
+      },
+      meta: { timestamp: '2026-06-25T10:30:00.000Z' },
+    },
+  })
+  @ApiUnauthorizedResponse(unauthorizedOptions)
+  @ApiBadRequestResponse(badRequestOptions)
+  @ApiConflictResponse(conflictOptions)
+  @ApiTooManyRequestsResponse(tooManyRequestsOptions)
+  @ApiInternalServerErrorResponse(internalErrorOptions)
   async googleLogin(
     @Body() googleLoginDto: GoogleLoginDto,
     @RequestContext() context: AuthRequestContext,
@@ -199,15 +340,33 @@ export class AuthController {
   }
 
   @Public()
+  @ApiCookieParam('refreshToken', {
+    required: true,
+    description: 'HttpOnly refresh token cookie. Must be present for token rotation.',
+  })
   @Post('refresh-token')
   @ApiOperation({
     summary: 'Refresh access token',
-    description: 'Exchanges a valid refresh token cookie for a new JWT access token.',
+    description:
+      'Exchanges a valid refresh token cookie for a new JWT access token. ' +
+      'The refresh token cookie is rotated on success.',
   })
-  @ApiOkResponse({ description: 'Token refreshed', type: AuthWrappedAccessTokenDto })
-  @ApiUnauthorized()
-  @ApiBadRequestResponse()
-  @ApiInternalServerErrorResponse()
+  @ApiOkResponse({
+    description: 'Token refreshed',
+    type: AuthWrappedAccessTokenDto,
+    headers: { 'Set-Cookie': setCookieHeaderSchema },
+    example: {
+      data: {
+        accessToken:
+          'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI1NTBlODQwMC1lMjliLTIxZDQtYTcxNi00NDY2NTU0NDAwMDAiLCJyb2xlIjoidXNlciIsImlhdCI6MTcwOTAwMDAwMCwiZXhwIjoxNzA5MDAwNjAwfQ.sig',
+      },
+      meta: { timestamp: '2026-06-25T10:30:00.000Z' },
+    },
+  })
+  @ApiUnauthorizedResponse(unauthorizedOptions)
+  @ApiBadRequestResponse(badRequestOptions)
+  @ApiTooManyRequestsResponse(tooManyRequestsOptions)
+  @ApiInternalServerErrorResponse(internalErrorOptions)
   async refreshToken(
     @RefreshToken({ required: true }) refreshToken: string,
     @RequestContext() context: AuthRequestContext,
@@ -219,15 +378,28 @@ export class AuthController {
   }
 
   @Public()
+  @ApiCookieParam('refreshToken', {
+    required: false,
+    description: 'HttpOnly refresh token cookie. Cleared on successful logout when present.',
+  })
   @Post('logout')
   @ApiOperation({
     summary: 'Log out',
     description:
-      'Clears the refresh token cookie. The access token remains valid until it expires. Requires the refresh token cookie to be present.',
+      'Clears the refresh token cookie. The access token remains valid until it expires. ' +
+      'Requires the refresh token cookie to be present.',
   })
-  @ApiOkResponse({ description: 'Logged out successfully', type: AuthWrappedMessageDto })
-  @ApiUnauthorized()
-  @ApiInternalServerErrorResponse()
+  @ApiOkResponse({
+    description: 'Logged out successfully',
+    type: AuthWrappedMessageDto,
+    headers: { 'Set-Cookie': clearCookieHeaderSchema },
+    example: {
+      data: { message: 'Successfully logged out. Refresh cookie cleared.' },
+      meta: { timestamp: '2026-06-25T10:30:00.000Z' },
+    },
+  })
+  @ApiUnauthorizedResponse(unauthorizedOptions)
+  @ApiInternalServerErrorResponse(internalErrorOptions)
   async logout(
     @RefreshToken() refreshToken: string | null,
     @RequestContext() context: AuthRequestContext,
@@ -244,8 +416,18 @@ export class AuthController {
     description:
       'Invalidates ALL active sessions for the authenticated user and clears the refresh token cookie.',
   })
-  @ApiOkResponse({ description: 'All sessions terminated', type: AuthWrappedMessageDto })
-  @ApiInternalServerErrorResponse()
+  @ApiOkResponse({
+    description: 'All sessions terminated',
+    type: AuthWrappedMessageDto,
+    headers: { 'Set-Cookie': clearCookieHeaderSchema },
+    example: {
+      data: { message: 'Logged out from all sessions successfully' },
+      meta: { timestamp: '2026-06-25T10:30:00.000Z' },
+    },
+  })
+  @ApiUnauthorizedResponse(unauthorizedOptions)
+  @ApiForbiddenResponse(forbiddenOptions)
+  @ApiInternalServerErrorResponse(internalErrorOptions)
   async logoutAll(
     @CurrentUser('sub') userId: string,
     @RequestContext() context: AuthRequestContext,
@@ -265,9 +447,38 @@ export class AuthController {
       'Returns all active sessions for the authenticated user, ordered by most recent activity. ' +
       'The current session is marked with isCurrentSession: true.',
   })
-  @ApiOkResponse({ description: 'Active sessions retrieved', type: AuthWrappedSessionListDto })
-  @ApiUnauthorized()
-  @ApiInternalServerErrorResponse()
+  @ApiOkResponse({
+    description: 'Active sessions retrieved',
+    type: AuthWrappedSessionListDto,
+    example: {
+      data: {
+        sessions: [
+          {
+            sessionId: '7c9e6679-7425-40de-944b-e07fc1f90ae7',
+            deviceBrowser: 'Chrome',
+            deviceOs: 'macOS',
+            deviceType: 'desktop',
+            ipAddress: '203.0.113.42',
+            lastActiveAt: '2026-06-25T10:30:00.000Z',
+            isCurrentSession: true,
+          },
+          {
+            sessionId: '8d0e7788-8536-51ef-955c-f18df2a01bf8',
+            deviceBrowser: 'Safari',
+            deviceOs: 'iOS',
+            deviceType: 'mobile',
+            ipAddress: '198.51.100.7',
+            lastActiveAt: '2026-06-24T18:45:00.000Z',
+            isCurrentSession: false,
+          },
+        ],
+      },
+      meta: { timestamp: '2026-06-25T10:30:00.000Z' },
+    },
+  })
+  @ApiUnauthorizedResponse(unauthorizedOptions)
+  @ApiForbiddenResponse(forbiddenOptions)
+  @ApiInternalServerErrorResponse(internalErrorOptions)
   async getActiveSessions(
     @CurrentUser('sub') userId: string,
     @CurrentUser('sessionId') currentSessionId: string,
@@ -280,11 +491,23 @@ export class AuthController {
   @ApiOperation({
     summary: 'Revoke a session (legacy)',
     description:
-      'Legacy route retained for compatibility. Revokes a specific session. If the target is the current session, the user is logged out. ' +
+      'Legacy route retained for compatibility. Revokes a specific session. ' +
+      'If the target is the current session, the user is logged out (cookie cleared). ' +
       'Otherwise only the target session is invalidated.',
   })
-  @ApiOkResponse({ description: 'Session revoked', type: AuthWrappedMessageDto })
-  @ApiInternalServerErrorResponse()
+  @ApiOkResponse({
+    description: 'Session revoked',
+    type: AuthWrappedMessageDto,
+    headers: { 'Set-Cookie': clearCookieHeaderSchema },
+    example: {
+      data: { message: 'Session revoked successfully' },
+      meta: { timestamp: '2026-06-25T10:30:00.000Z' },
+    },
+  })
+  @ApiUnauthorizedResponse(unauthorizedOptions)
+  @ApiForbiddenResponse(forbiddenOptions)
+  @ApiNotFoundResponse(notFoundOptions)
+  @ApiInternalServerErrorResponse(internalErrorOptions)
   async revokeSession(
     @CurrentUser('sub') userId: string,
     @CurrentUser('sessionId') currentSessionId: string,
@@ -300,9 +523,17 @@ export class AuthController {
     description:
       'Normalized REST route. Keeps the current session and revokes every other active session for the user.',
   })
-  @ApiOkResponse({ description: 'Other sessions revoked', type: AuthWrappedMessageDto })
-  @ApiUnauthorized()
-  @ApiInternalServerErrorResponse()
+  @ApiOkResponse({
+    description: 'Other sessions revoked',
+    type: AuthWrappedMessageDto,
+    example: {
+      data: { message: '3 sessions revoked. Current device remains logged in.' },
+      meta: { timestamp: '2026-06-25T10:30:00.000Z' },
+    },
+  })
+  @ApiUnauthorizedResponse(unauthorizedOptions)
+  @ApiForbiddenResponse(forbiddenOptions)
+  @ApiInternalServerErrorResponse(internalErrorOptions)
   async revokeOtherSessions(
     @CurrentUser('sub') userId: string,
     @CurrentUser('sessionId') currentSessionId: string,
@@ -317,9 +548,17 @@ export class AuthController {
     description:
       'Legacy route retained for compatibility. Keeps the current session and revokes every other active session for the user.',
   })
-  @ApiOkResponse({ description: 'Other sessions revoked', type: AuthWrappedMessageDto })
-  @ApiUnauthorized()
-  @ApiInternalServerErrorResponse()
+  @ApiOkResponse({
+    description: 'Other sessions revoked',
+    type: AuthWrappedMessageDto,
+    example: {
+      data: { message: '3 sessions revoked. Current device remains logged in.' },
+      meta: { timestamp: '2026-06-25T10:30:00.000Z' },
+    },
+  })
+  @ApiUnauthorizedResponse(unauthorizedOptions)
+  @ApiForbiddenResponse(forbiddenOptions)
+  @ApiInternalServerErrorResponse(internalErrorOptions)
   async logoutOtherDevices(
     @CurrentUser('sub') userId: string,
     @CurrentUser('sessionId') currentSessionId: string,
@@ -333,9 +572,22 @@ export class AuthController {
     summary: 'Account security dashboard',
     description: 'Returns security-related information about the authenticated user account.',
   })
-  @ApiOkResponse({ description: 'Security dashboard retrieved', type: AuthWrappedSecurityDto })
-  @ApiUnauthorized()
-  @ApiInternalServerErrorResponse()
+  @ApiOkResponse({
+    description: 'Security dashboard retrieved',
+    type: AuthWrappedSecurityDto,
+    example: {
+      data: {
+        emailVerified: true,
+        activeSessionCount: 3,
+        lastSuccessfulLoginAt: '2026-06-03T10:00:00.000Z',
+        lastPasswordChangeAt: null,
+      },
+      meta: { timestamp: '2026-06-25T10:30:00.000Z' },
+    },
+  })
+  @ApiUnauthorizedResponse(unauthorizedOptions)
+  @ApiForbiddenResponse(forbiddenOptions)
+  @ApiInternalServerErrorResponse(internalErrorOptions)
   async getSecurityDashboard(@CurrentUser('sub') userId: string): Promise<AccountSecurityDto> {
     return await this.authApplicationService.getSecurityDashboard(userId);
   }
@@ -354,10 +606,14 @@ export class AuthController {
   @ApiOkResponse({
     description: 'Password reset email sent (if account exists)',
     type: AuthWrappedMessageDto,
+    example: {
+      data: { message: 'If the account exists, a password reset email has been sent.' },
+      meta: { timestamp: '2026-06-25T10:30:00.000Z' },
+    },
   })
-  @ApiBadRequestResponse()
-  @ApiTooManyRequestsResponse({ description: 'Too many requests' })
-  @ApiInternalServerErrorResponse()
+  @ApiBadRequestResponse(badRequestOptions)
+  @ApiTooManyRequestsResponse(tooManyRequestsOptions)
+  @ApiInternalServerErrorResponse(internalErrorOptions)
   async forgotPassword(
     @Body() forgotPasswordDto: ForgotPasswordDto,
   ): Promise<ForgotPasswordResponseDto> {
@@ -373,9 +629,19 @@ export class AuthController {
       'Resets the account password using a valid token. ' +
       'All active sessions are immediately invalidated after a successful reset.',
   })
-  @ApiOkResponse({ description: 'Password reset successfully', type: AuthWrappedMessageDto })
-  @ApiBadRequestResponse()
-  @ApiInternalServerErrorResponse()
+  @ApiOkResponse({
+    description: 'Password reset successfully',
+    type: AuthWrappedMessageDto,
+    example: {
+      data: {
+        message: 'Password has been reset successfully. Please log in with your new password.',
+      },
+      meta: { timestamp: '2026-06-25T10:30:00.000Z' },
+    },
+  })
+  @ApiBadRequestResponse(badRequestOptions)
+  @ApiTooManyRequestsResponse(tooManyRequestsOptions)
+  @ApiInternalServerErrorResponse(internalErrorOptions)
   async resetPassword(
     @Body() resetPasswordDto: ResetPasswordDto,
   ): Promise<ResetPasswordResponseDto> {
@@ -394,10 +660,22 @@ export class AuthController {
       'Changes the account password for an authenticated user. ' +
       'Requires the current password and terminates all other active sessions.',
   })
-  @ApiOkResponse({ description: 'Password changed successfully', type: AuthWrappedMessageDto })
-  @ApiUnauthorized()
-  @ApiBadRequestResponse()
-  @ApiInternalServerErrorResponse()
+  @ApiOkResponse({
+    description: 'Password changed successfully',
+    type: AuthWrappedMessageDto,
+    example: {
+      data: {
+        message: 'Password changed successfully. All other sessions have been logged out.',
+      },
+      meta: { timestamp: '2026-06-25T10:30:00.000Z' },
+    },
+  })
+  @ApiUnauthorizedResponse(unauthorizedOptions)
+  @ApiForbiddenResponse(forbiddenOptions)
+  @ApiBadRequestResponse(badRequestOptions)
+  @ApiConflictResponse(conflictOptions)
+  @ApiTooManyRequestsResponse(tooManyRequestsOptions)
+  @ApiInternalServerErrorResponse(internalErrorOptions)
   async changePassword(
     @CurrentUser('sub') userId: string,
     @CurrentUser('sessionId') currentSessionId: string,
@@ -420,9 +698,23 @@ export class AuthController {
     description:
       'Returns the authenticated user profile (userId, username, email, role, isVerified).',
   })
-  @ApiOkResponse({ description: 'Current user profile retrieved', type: AuthWrappedCurrentUserDto })
-  @ApiUnauthorized()
-  @ApiInternalServerErrorResponse()
+  @ApiOkResponse({
+    description: 'Current user profile retrieved',
+    type: AuthWrappedCurrentUserDto,
+    example: {
+      data: {
+        userId: '550e8400-e29b-41d4-a716-446655440000',
+        username: 'alice_wonder',
+        email: 'alice@example.com',
+        role: 'user',
+        isVerified: true,
+      },
+      meta: { timestamp: '2026-06-25T10:30:00.000Z' },
+    },
+  })
+  @ApiUnauthorizedResponse(unauthorizedOptions)
+  @ApiForbiddenResponse(forbiddenOptions)
+  @ApiInternalServerErrorResponse(internalErrorOptions)
   async getCurrentUser(@CurrentUser('sub') userId: string): Promise<CurrentUserResponseDto> {
     return await this.authApplicationService.getCurrentUser(userId);
   }
@@ -438,9 +730,17 @@ export class AuthController {
       'Checks whether an email address is available for registration. ' +
       'Does not reveal whether an account exists.',
   })
-  @ApiOkResponse({ description: 'Email availability checked', type: AuthWrappedAvailableDto })
-  @ApiBadRequestResponse()
-  @ApiInternalServerErrorResponse()
+  @ApiOkResponse({
+    description: 'Email availability checked',
+    type: AuthWrappedAvailableDto,
+    example: {
+      data: { available: true },
+      meta: { timestamp: '2026-06-25T10:30:00.000Z' },
+    },
+  })
+  @ApiBadRequestResponse(badRequestOptions)
+  @ApiTooManyRequestsResponse(tooManyRequestsOptions)
+  @ApiInternalServerErrorResponse(internalErrorOptions)
   async checkEmail(@Body() dto: CheckEmailDto): Promise<CheckEmailResponseDto> {
     return await this.authApplicationService.checkEmailAvailability(dto.email);
   }
@@ -454,9 +754,17 @@ export class AuthController {
       'Checks whether a username is available for registration. ' +
       'Does not reveal whether an account exists.',
   })
-  @ApiOkResponse({ description: 'Username availability checked', type: AuthWrappedAvailableDto })
-  @ApiBadRequestResponse()
-  @ApiInternalServerErrorResponse()
+  @ApiOkResponse({
+    description: 'Username availability checked',
+    type: AuthWrappedAvailableDto,
+    example: {
+      data: { available: false },
+      meta: { timestamp: '2026-06-25T10:30:00.000Z' },
+    },
+  })
+  @ApiBadRequestResponse(badRequestOptions)
+  @ApiTooManyRequestsResponse(tooManyRequestsOptions)
+  @ApiInternalServerErrorResponse(internalErrorOptions)
   async checkUsername(@Body() dto: CheckUsernameDto): Promise<CheckUsernameResponseDto> {
     return await this.authApplicationService.checkUsernameAvailability(dto.username);
   }
@@ -471,9 +779,17 @@ export class AuthController {
       "Verifies the authenticated user's current password without issuing tokens or sessions. " +
       'Intended as a confirmation step before sensitive operations.',
   })
-  @ApiOkResponse({ description: 'Password verification result', type: AuthWrappedValidDto })
-  @ApiUnauthorized()
-  @ApiInternalServerErrorResponse()
+  @ApiOkResponse({
+    description: 'Password verification result',
+    type: AuthWrappedValidDto,
+    example: {
+      data: { valid: true },
+      meta: { timestamp: '2026-06-25T10:30:00.000Z' },
+    },
+  })
+  @ApiUnauthorizedResponse(unauthorizedOptions)
+  @ApiForbiddenResponse(forbiddenOptions)
+  @ApiInternalServerErrorResponse(internalErrorOptions)
   async verifyPassword(
     @CurrentUser('sub') userId: string,
     @Body() dto: VerifyPasswordDto,
@@ -489,11 +805,22 @@ export class AuthController {
     summary: 'Delete account',
     description:
       "Permanently deletes the authenticated user's account after password confirmation. " +
-      'All active sessions are terminated immediately.',
+      'All active sessions are terminated immediately and the refresh token cookie is cleared.',
   })
-  @ApiOkResponse({ description: 'Account deleted', type: AuthWrappedMessageDto })
-  @ApiUnauthorized()
-  @ApiInternalServerErrorResponse()
+  @ApiOkResponse({
+    description: 'Account deleted',
+    type: AuthWrappedMessageDto,
+    headers: { 'Set-Cookie': clearCookieHeaderSchema },
+    example: {
+      data: { message: 'Account deleted successfully' },
+      meta: { timestamp: '2026-06-25T10:30:00.000Z' },
+    },
+  })
+  @ApiUnauthorizedResponse(unauthorizedOptions)
+  @ApiForbiddenResponse(forbiddenOptions)
+  @ApiBadRequestResponse(badRequestOptions)
+  @ApiConflictResponse(conflictOptions)
+  @ApiInternalServerErrorResponse(internalErrorOptions)
   async deleteAccount(
     @CurrentUser('sub') userId: string,
     @Body() dto: DeleteAccountDto,

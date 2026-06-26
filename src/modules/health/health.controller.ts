@@ -11,9 +11,14 @@ import type { DrizzleDB } from '@/core/database/database.module';
 import { RedisService } from '@/core/redis/redis.service';
 import { Public } from '@/common/decorators/public.decorator';
 import { sql } from 'drizzle-orm';
+import {
+  HealthStatusDto,
+  WrappedHealthResponseDto,
+  type HealthStatusValue,
+} from './dto/health-response-docs.dto';
 
 /**
- * Health status payload.
+ * Health check endpoint.
  *
  * - `status` is the *overall* status: `up` only when every
  *   probed dependency is reachable, `degraded` when the
@@ -34,12 +39,6 @@ import { sql } from 'drizzle-orm';
  * socket, so a hung dependency surfaces as a connect-timeout
  * error from the driver, not an unbounded wait.
  */
-type HealthStatus = {
-  status: 'up' | 'down' | 'degraded';
-  database: 'up' | 'down';
-  redis: 'up' | 'down';
-};
-
 @Public()
 @ApiTags('health')
 @Controller('health')
@@ -60,27 +59,13 @@ export class HealthController {
   })
   @ApiOkResponse({
     description: 'Health status (database and/or Redis reachable)',
-    schema: {
-      type: 'object',
-      properties: {
-        status: { type: 'string', enum: ['up', 'degraded'], example: 'up' },
-        database: { type: 'string', enum: ['up', 'down'], example: 'up' },
-        redis: { type: 'string', enum: ['up', 'down'], example: 'up' },
-      },
-    },
+    type: WrappedHealthResponseDto,
   })
   @ApiServiceUnavailableResponse({
     description: 'Database is down — the pod cannot serve any request safely',
-    schema: {
-      type: 'object',
-      properties: {
-        status: { type: 'string', enum: ['down'], example: 'down' },
-        database: { type: 'string', enum: ['down'], example: 'down' },
-        redis: { type: 'string', enum: ['up', 'down'], example: 'up' },
-      },
-    },
+    type: WrappedHealthResponseDto,
   })
-  async check(@Res({ passthrough: true }) res: Response): Promise<HealthStatus> {
+  async check(@Res({ passthrough: true }) res: Response): Promise<HealthStatusDto> {
     // Probe DB and Redis concurrently. The two probes are
     // independent — neither has to wait for the other, and
     // neither depends on the response from the other — so
@@ -88,7 +73,7 @@ export class HealthController {
     // `max(db, redis)` rather than `db + redis`.
     const [database, redis] = await Promise.all([this.probeDb(), this.probeRedis()]);
 
-    let status: HealthStatus['status'];
+    let status: HealthStatusValue;
     let httpStatus: number;
     if (database === 'down') {
       // DB is the source of truth. If it's down, every write
