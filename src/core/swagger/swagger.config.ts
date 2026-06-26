@@ -1,4 +1,4 @@
-import { INestApplication } from '@nestjs/common'; // INestApplication is an interface that represents the NestJS application instance. It provides methods for configuring the app, such as setting up middleware, routes, global prefixes, and more. By using INestApplication as a type, we can ensure that the app parameter passed to setupSwagger has the necessary methods and properties to properly configure Swagger for our API documentation.
+import { INestApplication } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { injectCookieParams } from '@/common/swagger/cookie-params.plugin';
 
@@ -55,6 +55,7 @@ export const buildSwaggerConfig = (overrides: Partial<SwaggerConfig> = {}): Swag
   description: overrides.description ?? 'REST API for the quiz application',
   version: overrides.version ?? '1.0',
   servers: overrides.servers ?? [],
+  globalPrefix: overrides.globalPrefix ?? 'api/v1',
 });
 
 export type SwaggerConfig = {
@@ -62,6 +63,7 @@ export type SwaggerConfig = {
   description: string;
   version: string;
   servers: string[];
+  globalPrefix: string;
 };
 
 export { AUTH_SECURITY_NAME };

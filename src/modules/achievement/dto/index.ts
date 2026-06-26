@@ -6,4 +6,5 @@ export * from './response/public-achievement-profile-response.dto';
 export * from './response/badge-catalog-item-response.dto';
 export * from './response/achievement-admin-response.dto';
 export * from './response/my-badges-response.dto';
+export * from './response/achievement-response-docs.dto';
 export * from './request/achievement-admin-query.dto';
