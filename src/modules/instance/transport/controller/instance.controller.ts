@@ -9,23 +9,13 @@ import {
   UseFilters,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
-import {
-  ApiTags,
-  ApiOperation,
-  ApiOkResponse,
-  ApiCreatedResponse,
-  ApiNotFoundResponse,
-  ApiForbiddenResponse,
-  ApiBadRequestResponse,
-  ApiInternalServerErrorResponse,
-} from '@nestjs/swagger';
+import { ApiTags } from '@nestjs/swagger';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
 import { Transactional } from '@/common/interceptors/transactional.interceptor';
 import {
-  ApiAuth,
   ApiAuthAction,
-  ApiBadRequest,
-  ApiInternalError,
+  ApiAuthCreateWithState,
+  ApiPublicRead,
 } from '@/common/swagger/swagger-decorators';
 import { decodeBase64JsonCursor } from '@/common/utils/cursor.util';
 import { type JwtPayload } from '@/common/guards/jwt.guard';
@@ -38,14 +28,24 @@ import {
 } from '../../dto/request';
 import type { LeaderboardCursorPayload } from '../../domain/ports';
 import {
-  InstanceDetailResponseDto,
   CreateInstanceResponseDto,
+  InstanceDetailResponseDto,
   JoinInstanceResponseDto,
   StartInstanceResponseDto,
   CloseInstanceResponseDto,
   InstanceLeaderboardResponseDto,
   InstanceListResponseDto,
   InstancePlayersResponseDto,
+} from '../../dto/response';
+import {
+  WrappedCreateInstanceResponseDto,
+  WrappedInstanceDetailResponseDto,
+  WrappedJoinInstanceResponseDto,
+  WrappedStartInstanceResponseDto,
+  WrappedCloseInstanceResponseDto,
+  WrappedInstanceListResponseDto,
+  WrappedInstanceLeaderboardResponseDto,
+  WrappedInstancePlayersResponseDto,
 } from '../../dto/response';
 import { InstanceDomainExceptionFilter } from '../filters/instance-domain-exception.filter';
 
@@ -61,18 +61,10 @@ export class InstanceController {
   @Post()
   @Transactional()
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
-  @ApiAuth()
-  @ApiOperation({
-    summary: 'Create instance',
-    description: 'Creates a new live quiz instance and sets the authenticated user as the host.',
+  @ApiAuthCreateWithState({
+    description: 'Instance created',
+    type: WrappedCreateInstanceResponseDto,
   })
-  @ApiCreatedResponse({ description: 'Instance created', type: CreateInstanceResponseDto })
-  @ApiNotFoundResponse({ description: 'Quiz version not found' })
-  @ApiForbiddenResponse({
-    description: 'You do not have permission to create an instance for this quiz',
-  })
-  @ApiBadRequestResponse()
-  @ApiInternalServerErrorResponse()
   async createInstance(
     @CurrentUser() user: JwtPayload,
     @Body() payload: CreateInstanceDto,
@@ -90,14 +82,7 @@ export class InstanceController {
   }
 
   @Get()
-  @ApiOperation({
-    summary: 'List open instances',
-    description:
-      'Returns a paginated, cursor-based list of open quiz instances for discovery. ' +
-      'Only instances with status `open` are returned by default.',
-  })
-  @ApiOkResponse({ description: 'Instance list returned', type: InstanceListResponseDto })
-  @ApiInternalServerErrorResponse()
+  @ApiPublicRead({ description: 'Instance list returned', type: WrappedInstanceListResponseDto })
   async listInstances(@Query() query: ListInstancesQueryDto): Promise<InstanceListResponseDto> {
     const result = await this.instanceService.listInstances({
       limit: query.limit ?? 20,
@@ -119,13 +104,7 @@ export class InstanceController {
   }
 
   @Get(':id/players')
-  @ApiOperation({
-    summary: 'List instance players',
-    description: 'Returns all players in a specific instance, with profile data.',
-  })
-  @ApiOkResponse({ description: 'Players returned', type: InstancePlayersResponseDto })
-  @ApiNotFoundResponse({ description: 'Instance not found' })
-  @ApiInternalServerErrorResponse()
+  @ApiPublicRead({ description: 'Players returned', type: WrappedInstancePlayersResponseDto })
   async listInstancePlayers(
     @Param('id', new ParseUUIDPipe()) instanceId: string,
   ): Promise<InstancePlayersResponseDto> {
@@ -139,13 +118,7 @@ export class InstanceController {
   }
 
   @Get(':id')
-  @ApiOperation({
-    summary: 'Get instance by ID',
-    description: 'Returns the full instance record including current players.',
-  })
-  @ApiOkResponse({ description: 'Instance found', type: InstanceDetailResponseDto })
-  @ApiNotFoundResponse({ description: 'Instance not found' })
-  @ApiInternalServerErrorResponse()
+  @ApiPublicRead({ description: 'Instance found', type: WrappedInstanceDetailResponseDto })
   getInstanceById(
     @Param('id', new ParseUUIDPipe()) instanceId: string,
   ): Promise<InstanceDetailResponseDto> {
@@ -161,7 +134,10 @@ export class InstanceController {
   @Post(':id/join')
   @Transactional()
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
-  @ApiAuthAction({ description: 'Joined successfully', type: JoinInstanceResponseDto })
+  @ApiAuthAction({
+    description: 'Joined successfully',
+    type: WrappedJoinInstanceResponseDto,
+  })
   async joinInstance(
     @Param('id', new ParseUUIDPipe()) instanceId: string,
     @CurrentUser() user: JwtPayload,
@@ -170,7 +146,10 @@ export class InstanceController {
   }
 
   @Post(':id/start')
-  @ApiAuthAction({ description: 'Instance started', type: StartInstanceResponseDto })
+  @ApiAuthAction({
+    description: 'Instance started',
+    type: WrappedStartInstanceResponseDto,
+  })
   async startInstance(
     @Param('id', new ParseUUIDPipe()) instanceId: string,
     @CurrentUser() user: JwtPayload,
@@ -179,7 +158,10 @@ export class InstanceController {
   }
 
   @Post(':id/close')
-  @ApiAuthAction({ description: 'Instance closed', type: CloseInstanceResponseDto })
+  @ApiAuthAction({
+    description: 'Instance closed',
+    type: WrappedCloseInstanceResponseDto,
+  })
   async closeInstance(
     @Param('id', new ParseUUIDPipe()) instanceId: string,
     @CurrentUser() user: JwtPayload,
@@ -188,13 +170,10 @@ export class InstanceController {
   }
 
   @Get(':id/leaderboard')
-  @ApiOperation({
-    summary: 'Get instance leaderboard',
-    description: 'Returns the live leaderboard for a specific instance.',
+  @ApiPublicRead({
+    description: 'Leaderboard returned',
+    type: WrappedInstanceLeaderboardResponseDto,
   })
-  @ApiOkResponse({ description: 'Leaderboard returned', type: InstanceLeaderboardResponseDto })
-  @ApiNotFoundResponse({ description: 'Instance not found' })
-  @ApiInternalServerErrorResponse()
   getLeaderboard(
     @Param('id', new ParseUUIDPipe()) instanceId: string,
     @Query() query: GetLeaderboardQueryDto,
@@ -220,7 +199,6 @@ export class InstanceController {
             : null;
 
         return {
-          instanceId,
           items: items.map((e) => this.mapper.toLeaderboardEntryResponse(e)),
           hasNextPage,
           nextCursor,
