@@ -1,3 +1,11 @@
-export type QuizInstanceStatus = 'open' | 'running' | 'closed' | 'finished';
+export const INSTANCE_STATUSES = ['open', 'running', 'closed', 'finished'] as const;
+export const INSTANCE_PLAYER_STATUSES = [
+  'joined',
+  'ready',
+  'playing',
+  'disconnected',
+  'finished',
+] as const;
 
-export type QuizInstancePlayerStatus = 'joined' | 'ready' | 'playing' | 'disconnected' | 'finished';
+export type QuizInstanceStatus = (typeof INSTANCE_STATUSES)[number];
+export type QuizInstancePlayerStatus = (typeof INSTANCE_PLAYER_STATUSES)[number];
