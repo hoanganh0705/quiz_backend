@@ -1,5 +1,5 @@
 import type { UserMeRow } from '../domain/ports/user-repository.port';
-import type { UserMeResponseDto } from '../dto/response/user-me-response.dto';
+import type { UserMeResponseDto } from '../dto/response/user-me.dto';
 import { isObjectRecord } from '@/common/utils/object.util';
 
 export class UserResponseMapper {

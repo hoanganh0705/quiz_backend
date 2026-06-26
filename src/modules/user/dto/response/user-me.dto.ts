@@ -13,18 +13,29 @@ export class UserMeResponseDto {
   @ApiProperty({ description: 'Email address', example: 'alice@example.com' })
   email!: string;
 
-  @ApiPropertyOptional({ description: 'Display name', example: 'Alice', nullable: true })
+  @ApiPropertyOptional({
+    description: 'Display name',
+    type: String,
+    example: 'Alice',
+    nullable: true,
+  })
   displayName!: string | null;
 
   @ApiPropertyOptional({
     description: 'Avatar image URL',
+    type: String,
     format: 'uri',
     example: 'https://example.com/avatars/alice.jpg',
     nullable: true,
   })
   avatarUrl!: string | null;
 
-  @ApiPropertyOptional({ description: 'User bio', example: 'Quiz enthusiast', nullable: true })
+  @ApiPropertyOptional({
+    description: 'User bio',
+    type: String,
+    example: 'Quiz enthusiast',
+    nullable: true,
+  })
   bio!: string | null;
 
   @ApiProperty({ description: 'Total experience points earned', example: 15420 })
@@ -36,7 +47,10 @@ export class UserMeResponseDto {
   @ApiProperty({ description: 'Longest daily quiz streak ever', example: 14 })
   longestStreak!: number;
 
-  @ApiProperty({ description: 'User preferences', example: { theme: 'dark', notifications: true } })
+  @ApiProperty({
+    description: 'User preferences',
+    example: { theme: 'dark', notifications: true },
+  })
   settings!: Record<string, unknown>;
 
   @ApiProperty({
