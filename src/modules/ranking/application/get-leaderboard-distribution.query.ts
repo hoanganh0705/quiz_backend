@@ -8,7 +8,7 @@ import {
 import type {
   LeaderboardDistributionBucketDto,
   LeaderboardDistributionResponseDto,
-} from '../dto/response/leaderboard-response.dto';
+} from '../dto/response/leaderboard-stats.dto';
 
 @Injectable()
 export class GetLeaderboardDistributionQueryHandler {

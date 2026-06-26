@@ -7,11 +7,11 @@
 
 import { Controller, Get, Param, Query, UseFilters, UseGuards } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
-import { ApiTags, ApiOperation, ApiOkResponse } from '@nestjs/swagger';
+import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
 import { Public } from '@/common/decorators/public.decorator';
 import { JwtGuard, type JwtPayload } from '@/common/guards/jwt.guard';
-import { ApiPublicList } from '@/common/swagger/swagger-decorators';
+import { ApiPublicRead } from '@/common/swagger/swagger-decorators';
 import { RankingDomainExceptionFilter } from '../filters/ranking-domain-exception.filter';
 import { LeaderboardService } from '../../domain/services/leaderboard.service';
 import { UserRankService } from '../../domain/services/user-rank.service';
@@ -25,19 +25,31 @@ import {
   TopMoversQueryDto,
 } from '../../dto/request/leaderboard-query.dto';
 import {
-  LeaderboardDistributionResponseDto,
   LeaderboardResponseDto,
-  NearbyRanksResponseDto,
-  PeakRanksResponseDto,
-  PublicRankingHistoryResponseDto,
-  RankMovementResponseDto,
-  RankingHistoryResponseDto,
-  RankingMilestonesResponseDto,
-  TopMoversResponseDto,
-  UserPercentileResponseDto,
   UserRankResponseDto,
   UserRankSummaryDto,
-} from '../../dto/response/leaderboard-response.dto';
+  NearbyRanksResponseDto,
+  PeakRanksResponseDto,
+  RankingHistoryResponseDto,
+  PublicRankingHistoryResponseDto,
+  RankMovementResponseDto,
+  RankingMilestonesResponseDto,
+  TopMoversResponseDto,
+  LeaderboardDistributionResponseDto,
+  UserPercentileResponseDto,
+  WrappedLeaderboardResponseDto,
+  WrappedUserRankResponseDto,
+  WrappedUserRankSummaryDto,
+  WrappedNearbyRanksResponseDto,
+  WrappedPeakRanksResponseDto,
+  WrappedRankingHistoryResponseDto,
+  WrappedPublicRankingHistoryResponseDto,
+  WrappedRankMovementResponseDto,
+  WrappedRankingMilestonesResponseDto,
+  WrappedTopMoversResponseDto,
+  WrappedLeaderboardDistributionResponseDto,
+  WrappedUserPercentileResponseDto,
+} from '../../dto';
 import { GetLeaderboardDistributionQueryHandler } from '../../application/get-leaderboard-distribution.query';
 import {
   GetMyRankingHistoryQueryHandler,
@@ -76,7 +88,7 @@ export class RankingController {
     summary: 'Get global leaderboard',
     description: 'Returns the global leaderboard with optional period filter.',
   })
-  @ApiPublicList({ description: 'Leaderboard returned', type: LeaderboardResponseDto })
+  @ApiPublicRead({ description: 'Leaderboard returned', type: WrappedLeaderboardResponseDto })
   async getGlobalLeaderboard(@Query() query: LeaderboardQueryDto): Promise<LeaderboardResponseDto> {
     return this.leaderboardService.getGlobalLeaderboard({
       period: query.period ?? RankingPeriodEnum.ALL_TIME,
@@ -90,12 +102,11 @@ export class RankingController {
   @Throttle({ default: { limit: 30, ttl: 60_000 } })
   @ApiOperation({
     summary: 'Get leaderboard distribution',
-    description:
-      'Returns distribution statistics for the active leaderboard in the selected period.',
+    description: 'Returns distribution statistics for the active leaderboard in the selected period.',
   })
-  @ApiPublicList({
+  @ApiPublicRead({
     description: 'Leaderboard distribution returned',
-    type: LeaderboardDistributionResponseDto,
+    type: WrappedLeaderboardDistributionResponseDto,
   })
   async getLeaderboardDistribution(
     @Query() query: LeaderboardDistributionQueryDto,
@@ -110,10 +121,9 @@ export class RankingController {
   @Throttle({ default: { limit: 30, ttl: 60_000 } })
   @ApiOperation({
     summary: 'Get top ranking movers',
-    description:
-      'Returns users with the largest positive ranking movement during the selected period.',
+    description: 'Returns users with the largest positive ranking movement during the selected period.',
   })
-  @ApiPublicList({ description: 'Top movers returned', type: TopMoversResponseDto })
+  @ApiPublicRead({ description: 'Top movers returned', type: WrappedTopMoversResponseDto })
   async getTopMovers(@Query() query: TopMoversQueryDto): Promise<TopMoversResponseDto> {
     return this.getTopMoversQueryHandler.execute({
       period: mapRankingPeriodEnumToDomain(query.period ?? RankingPeriodEnum.DAILY),
@@ -124,10 +134,10 @@ export class RankingController {
   @Get('me')
   @UseGuards(JwtGuard)
   @ApiOperation({
-    summary: 'Get current user rank',
+    summary: "Get current user's rank",
     description: "Returns the authenticated user's rank information across all periods.",
   })
-  @ApiOkResponse({ description: 'User rank returned', type: UserRankResponseDto })
+  @ApiPublicRead({ description: 'User rank returned', type: WrappedUserRankResponseDto })
   async getMyRank(@CurrentUser() user: JwtPayload): Promise<UserRankResponseDto> {
     return this.userRankService.getUserRank(user.sub);
   }
@@ -135,10 +145,10 @@ export class RankingController {
   @Get('me/rank')
   @UseGuards(JwtGuard)
   @ApiOperation({
-    summary: 'Get current user rank for specific period',
+    summary: "Get current user's rank for specific period",
     description: "Returns the authenticated user's rank for a specific period.",
   })
-  @ApiOkResponse({ description: 'User rank returned', type: UserRankSummaryDto })
+  @ApiPublicRead({ description: 'User rank returned', type: WrappedUserRankSummaryDto })
   async getMyRankForPeriod(
     @Query() query: LeaderboardQueryDto,
     @CurrentUser() user: JwtPayload,
@@ -155,7 +165,7 @@ export class RankingController {
     summary: 'Get authenticated user percentile',
     description: 'Returns the authenticated user percentile in the selected leaderboard period.',
   })
-  @ApiOkResponse({ description: 'User percentile returned', type: UserPercentileResponseDto })
+  @ApiPublicRead({ description: 'User percentile returned', type: WrappedUserPercentileResponseDto })
   async getMyPercentile(
     @CurrentUser() user: JwtPayload,
     @Query() query: LeaderboardDistributionQueryDto,
@@ -170,10 +180,9 @@ export class RankingController {
   @UseGuards(JwtGuard)
   @ApiOperation({
     summary: 'Get authenticated user ranking milestones',
-    description:
-      'Returns ranking milestones achieved by the authenticated user in chronological order.',
+    description: 'Returns ranking milestones achieved by the authenticated user in chronological order.',
   })
-  @ApiOkResponse({ description: 'Ranking milestones returned', type: RankingMilestonesResponseDto })
+  @ApiPublicRead({ description: 'Ranking milestones returned', type: WrappedRankingMilestonesResponseDto })
   async getMyRankingMilestones(
     @CurrentUser() user: JwtPayload,
   ): Promise<RankingMilestonesResponseDto> {
@@ -188,7 +197,7 @@ export class RankingController {
     summary: 'Get nearby leaderboard ranks for authenticated user',
     description: 'Returns leaderboard entries immediately above and below the authenticated user.',
   })
-  @ApiOkResponse({ description: 'Nearby ranks returned', type: NearbyRanksResponseDto })
+  @ApiPublicRead({ description: 'Nearby ranks returned', type: WrappedNearbyRanksResponseDto })
   async getNearbyRanks(
     @CurrentUser() user: JwtPayload,
     @Query() query: NearbyRanksQueryDto,
@@ -204,10 +213,9 @@ export class RankingController {
   @UseGuards(JwtGuard)
   @ApiOperation({
     summary: 'Get authenticated user rank movement',
-    description:
-      "Returns the authenticated user's ranking movement compared to the previous ranking snapshot.",
+    description: "Returns the authenticated user's ranking movement compared to the previous ranking snapshot.",
   })
-  @ApiOkResponse({ description: 'Rank movement returned', type: RankMovementResponseDto })
+  @ApiPublicRead({ description: 'Rank movement returned', type: WrappedRankMovementResponseDto })
   async getMyRankMovement(
     @CurrentUser() user: JwtPayload,
     @Query() query: RankMovementQueryDto,
@@ -221,10 +229,10 @@ export class RankingController {
   @Get('me/peak-ranks')
   @UseGuards(JwtGuard)
   @ApiOperation({
-    summary: 'Get authenticated user peak ranks',
+    summary: "Get authenticated user's peak ranks",
     description: "Returns the authenticated user's best ranking positions ever achieved.",
   })
-  @ApiOkResponse({ description: 'Peak ranks returned', type: PeakRanksResponseDto })
+  @ApiPublicRead({ description: 'Peak ranks returned', type: WrappedPeakRanksResponseDto })
   async getMyPeakRanks(@CurrentUser() user: JwtPayload): Promise<PeakRanksResponseDto> {
     return this.getMyPeakRanksQueryHandler.execute({
       userId: user.sub,
@@ -234,10 +242,10 @@ export class RankingController {
   @Get('me/history')
   @UseGuards(JwtGuard)
   @ApiOperation({
-    summary: 'Get authenticated user ranking history',
+    summary: "Get authenticated user's ranking history",
     description: "Returns the authenticated user's historical ranking progression over time.",
   })
-  @ApiOkResponse({ description: 'Ranking history returned', type: RankingHistoryResponseDto })
+  @ApiPublicRead({ description: 'Ranking history returned', type: WrappedRankingHistoryResponseDto })
   async getMyRankingHistory(
     @CurrentUser() user: JwtPayload,
     @Query() query: MyRankingHistoryQueryDto,
@@ -257,7 +265,7 @@ export class RankingController {
     summary: 'Get user rank information',
     description: 'Returns public rank information for a specific user.',
   })
-  @ApiPublicList({ description: 'User rank returned', type: UserRankResponseDto })
+  @ApiPublicRead({ description: 'User rank returned', type: WrappedUserRankResponseDto })
   async getUserRank(@Param('userId') userId: string): Promise<UserRankResponseDto> {
     return this.userRankService.getUserRank(userId);
   }
@@ -269,9 +277,9 @@ export class RankingController {
     summary: 'Get public user ranking history',
     description: "Returns the specified user's public historical ranking progression over time.",
   })
-  @ApiPublicList({
+  @ApiPublicRead({
     description: 'Public ranking history returned',
-    type: PublicRankingHistoryResponseDto,
+    type: WrappedPublicRankingHistoryResponseDto,
   })
   async getUserRankingHistory(
     @Param('userId') userId: string,
@@ -292,7 +300,7 @@ export class RankingController {
     summary: 'Get user rank for specific period',
     description: "Returns the user's rank for a specific period.",
   })
-  @ApiPublicList({ description: 'User rank returned', type: UserRankSummaryDto })
+  @ApiPublicRead({ description: 'User rank returned', type: WrappedUserRankSummaryDto })
   async getUserRankForPeriod(
     @Param('userId') userId: string,
     @Query() query: LeaderboardQueryDto,

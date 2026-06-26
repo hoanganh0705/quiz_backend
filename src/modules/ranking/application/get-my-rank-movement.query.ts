@@ -5,7 +5,7 @@ import {
   RANKING_REPOSITORY_PORT,
   type RankingRepositoryPort,
 } from '../domain/ports/ranking-repository.port';
-import type { RankMovementResponseDto } from '../dto/response/leaderboard-response.dto';
+import type { RankMovementResponseDto } from '../dto/response/leaderboard-history.dto';
 
 @Injectable()
 export class GetMyRankMovementQueryHandler {

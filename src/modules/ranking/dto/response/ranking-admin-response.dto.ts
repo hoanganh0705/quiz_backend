@@ -1,21 +1,29 @@
-/**
- * Admin Ranking Response DTOs
- */
-
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { RankingPeriodEnum } from '../../dto/request/leaderboard-query.dto';
 
 export class RankingStatusResponseDto {
-  @ApiProperty()
+  @ApiProperty({
+    description: 'Whether the background scheduler is currently running',
+    example: true,
+  })
   schedulerRunning!: boolean;
 
-  @ApiProperty()
+  @ApiProperty({
+    description: 'Number of users with dirty rankings awaiting recalculation',
+    example: 0,
+  })
   dirtyQueueSize!: number;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({
+    description: 'ISO 8601 timestamp of the next scheduled consistency check',
+    type: String,
+    nullable: true,
+  })
   nextConsistencyCheck!: string | null;
 
-  @ApiProperty()
+  @ApiProperty({
+    description: 'ISO 8601 timestamps for next resets of each period',
+  })
   nextPeriodReset!: {
     weekly: string | null;
     monthly: string | null;
@@ -24,42 +32,74 @@ export class RankingStatusResponseDto {
 }
 
 export class RecalculateResponseDto {
-  @ApiProperty({ example: 'Recalculation triggered for all periods' })
+  @ApiProperty({
+    description: 'Recalculation result message',
+    example: 'Recalculation triggered for all periods',
+  })
   message!: string;
 
-  @ApiPropertyOptional({ enum: RankingPeriodEnum })
+  @ApiPropertyOptional({
+    description: 'Period that was recalculated (undefined means all periods)',
+    enum: RankingPeriodEnum,
+    nullable: true,
+  })
   period!: string | undefined;
 }
 
 export class PeriodResetResponseDto {
-  @ApiProperty({ example: 'Period reset initiated for weekly' })
+  @ApiProperty({
+    description: 'Reset result message',
+    example: 'Period reset initiated for weekly',
+  })
   message!: string;
 
-  @ApiProperty({ enum: RankingPeriodEnum })
+  @ApiProperty({
+    description: 'Period that was reset',
+    enum: RankingPeriodEnum,
+    example: 'weekly',
+  })
   period!: string;
 }
 
 export class ConsistencyReportIssueDto {
-  @ApiProperty()
+  @ApiProperty({
+    description: 'Type of consistency issue detected',
+    enum: ['xp_mismatch', 'rank_gap', 'missing_rank'],
+    example: 'xp_mismatch',
+  })
   type!: 'xp_mismatch' | 'rank_gap' | 'missing_rank';
 
-  @ApiPropertyOptional()
-  userId!: string | undefined;
+  @ApiPropertyOptional({
+    description: 'Affected user identifier',
+    type: String,
+    nullable: true,
+  })
+  userId!: string | null | undefined;
 
-  @ApiProperty()
+  @ApiProperty({
+    description: 'Human-readable description of the issue',
+    example: 'XP mismatch between ranking and user table',
+  })
   description!: string;
 
-  @ApiProperty({ enum: ['low', 'medium', 'high'] })
+  @ApiProperty({
+    description: 'Severity level of the issue',
+    enum: ['low', 'medium', 'high'],
+    example: 'medium',
+  })
   severity!: 'low' | 'medium' | 'high';
 }
 
 export class ConsistencyReportResponseDto {
-  @ApiProperty()
+  @ApiProperty({ description: 'Total number of issues detected', example: 0 })
   totalIssues!: number;
 
-  @ApiProperty()
+  @ApiProperty({ description: 'Number of issues automatically fixed', example: 0 })
   fixed!: number;
 
-  @ApiProperty({ type: [ConsistencyReportIssueDto] })
+  @ApiProperty({
+    description: 'Individual issues detected during the consistency check',
+    type: () => [ConsistencyReportIssueDto],
+  })
   issues!: ConsistencyReportIssueDto[];
 }

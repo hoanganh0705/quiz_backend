@@ -115,6 +115,7 @@ export const RANK_NOTIFICATION_BODIES: Record<string, string> = {
 };
 
 export const NOTIFICATION_TYPE_VALUES = notificationType.enumValues;
+export const NOTIFICATION_CHANNEL_VALUES = notificationChannel.enumValues;
 export type NotificationCategory = 'badge' | 'discussion' | 'social' | 'ranking' | 'tournament';
 
 export type NotificationRow = typeof notifications.$inferSelect;
