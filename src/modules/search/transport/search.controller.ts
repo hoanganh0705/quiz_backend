@@ -1,10 +1,9 @@
 import { Controller, Get, Query } from '@nestjs/common';
-import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiTags } from '@nestjs/swagger';
 import { Public } from '@/common/decorators/public.decorator';
-import { ApiPublicList } from '@/common/swagger/swagger-decorators';
+import { ApiPublicRead } from '@/common/swagger/swagger-decorators';
 import { SearchApplicationService } from '../application/search.application.service';
-import { SearchQueryDto } from '../dto/search-query.dto';
-import { SearchResponseDto } from '../dto/search-response.dto';
+import { SearchQueryDto, WrappedSearchResponseDto } from '../dto';
 
 @ApiTags('search')
 @Controller('search')
@@ -13,17 +12,12 @@ export class SearchController {
 
   @Get()
   @Public()
-  @ApiOperation({
-    summary: 'Global full-text search',
+  @ApiPublicRead({
     description:
-      'Searches users, quizzes, and discussion threads with PostgreSQL full text search and returns ranked results for each section.',
+      'Aggregated full-text search results across users, quizzes, and discussion threads',
+    type: WrappedSearchResponseDto,
   })
-  @ApiOkResponse({
-    description: 'Aggregated search results returned',
-    type: SearchResponseDto,
-  })
-  @ApiPublicList()
-  getSearchResults(@Query() query: SearchQueryDto): Promise<SearchResponseDto> {
+  getSearchResults(@Query() query: SearchQueryDto) {
     return this.searchApplicationService.search(query.q, query.limit);
   }
 }
