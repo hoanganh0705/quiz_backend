@@ -8,7 +8,7 @@ import {
 import type {
   RankingMilestoneDto,
   RankingMilestonesResponseDto,
-} from '../dto/response/leaderboard-response.dto';
+} from '../dto/response/leaderboard-history.dto';
 
 @Injectable()
 export class GetMyRankingMilestonesQueryHandler {

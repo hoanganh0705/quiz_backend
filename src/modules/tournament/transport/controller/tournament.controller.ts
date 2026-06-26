@@ -9,20 +9,15 @@ import {
   Query,
   UseFilters,
 } from '@nestjs/common';
-
-import { ApiTags, ApiOperation, ApiOkResponse, ApiNotFoundResponse, ApiInternalServerErrorResponse } from '@nestjs/swagger';
+import { ApiTags } from '@nestjs/swagger';
 import { Permission } from '@/common/authorization/permissions';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
 import { Permissions } from '@/common/authorization/decorators/permissions.decorator';
 import { Public } from '@/common/decorators/public.decorator';
 import {
-  ApiAuth,
-  ApiAuthList,
-  ApiAuthCreate,
   ApiAuthAction,
-  ApiPublicList,
-  ApiInternalError,
-  ApiConflict,
+  ApiAuthCreateWithState,
+  ApiPublicRead,
 } from '@/common/swagger/swagger-decorators';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
 import { TournamentApplicationService } from '../../application/tournament.application.service';
@@ -41,8 +36,8 @@ import {
   TournamentDetailResponseDto,
   TournamentListResponseDto,
   TournamentLeaderboardResponseDto,
-  TournamentParticipantsResponseDto,
   TournamentWinnersResponseDto,
+  TournamentParticipantsResponseDto,
   UpcomingTournamentsResponseDto,
   ActiveTournamentsResponseDto,
   CompletedTournamentsResponseDto,
@@ -54,7 +49,24 @@ import {
   UnregisterTournamentResponseDto,
   WithdrawTournamentResponseDto,
 } from '../../dto/response';
-
+import {
+  WrappedTournamentResponseDto,
+  WrappedTournamentDetailResponseDto,
+  WrappedTournamentListResponseDto,
+  WrappedTournamentLeaderboardResponseDto,
+  WrappedTournamentWinnersResponseDto,
+  WrappedTournamentParticipantsResponseDto,
+  WrappedUpcomingTournamentsResponseDto,
+  WrappedActiveTournamentsResponseDto,
+  WrappedCompletedTournamentsResponseDto,
+  WrappedRelatedTournamentsResponseDto,
+  WrappedTournamentStatsResponseDto,
+  WrappedMyTournamentStandingResponseDto,
+  WrappedRegisterTournamentResponseDto,
+  WrappedStartTournamentAttemptResponseDto,
+  WrappedUnregisterTournamentResponseDto,
+  WrappedWithdrawTournamentResponseDto,
+} from '../../dto/response';
 import { TournamentDomainExceptionFilter } from '../filters/tournament-domain-exception.filter';
 
 @ApiTags('tournaments')
@@ -65,7 +77,10 @@ export class TournamentController {
 
   @Post()
   @Permissions(Permission.TOURNAMENT_CREATE)
-  @ApiAuthCreate({ description: 'Tournament created', type: TournamentResponseDto })
+  @ApiAuthCreateWithState({
+    description: 'Tournament created',
+    type: WrappedTournamentResponseDto,
+  })
   createTournament(
     @CurrentUser() user: JwtPayload,
     @Body() payload: CreateTournamentDto,
@@ -75,16 +90,19 @@ export class TournamentController {
 
   @Get()
   @Public()
-  @ApiPublicList({ description: 'Tournaments returned', type: TournamentListResponseDto })
+  @ApiPublicRead({
+    description: 'Tournaments returned',
+    type: WrappedTournamentListResponseDto,
+  })
   listTournaments(@Query() query: ListTournamentsQueryDto): Promise<TournamentListResponseDto> {
     return this.tournamentApplicationService.listTournaments(query);
   }
 
   @Get('upcoming')
   @Public()
-  @ApiPublicList({
+  @ApiPublicRead({
     description: 'Upcoming tournaments returned',
-    type: UpcomingTournamentsResponseDto,
+    type: WrappedUpcomingTournamentsResponseDto,
   })
   getUpcomingTournaments(
     @Query() query: GetUpcomingTournamentsQueryDto,
@@ -94,7 +112,10 @@ export class TournamentController {
 
   @Get('active')
   @Public()
-  @ApiPublicList({ description: 'Active tournaments returned', type: ActiveTournamentsResponseDto })
+  @ApiPublicRead({
+    description: 'Active tournaments returned',
+    type: WrappedActiveTournamentsResponseDto,
+  })
   getActiveTournaments(
     @Query() query: GetActiveTournamentsQueryDto,
   ): Promise<ActiveTournamentsResponseDto> {
@@ -103,9 +124,9 @@ export class TournamentController {
 
   @Get('completed')
   @Public()
-  @ApiPublicList({
+  @ApiPublicRead({
     description: 'Completed tournaments returned',
-    type: CompletedTournamentsResponseDto,
+    type: WrappedCompletedTournamentsResponseDto,
   })
   getCompletedTournaments(
     @Query() query: GetCompletedTournamentsQueryDto,
@@ -115,9 +136,9 @@ export class TournamentController {
 
   @Get(':id/related')
   @Public()
-  @ApiPublicList({
+  @ApiPublicRead({
     description: 'Related tournaments returned',
-    type: RelatedTournamentsResponseDto,
+    type: WrappedRelatedTournamentsResponseDto,
   })
   getRelatedTournaments(
     @Param('id', new ParseUUIDPipe()) tournamentId: string,
@@ -128,7 +149,10 @@ export class TournamentController {
 
   @Get(':id/stats')
   @Public()
-  @ApiPublicList({ description: 'Tournament stats returned', type: TournamentStatsResponseDto })
+  @ApiPublicRead({
+    description: 'Tournament stats returned',
+    type: WrappedTournamentStatsResponseDto,
+  })
   getTournamentStats(
     @Param('id', new ParseUUIDPipe()) tournamentId: string,
   ): Promise<TournamentStatsResponseDto> {
@@ -137,7 +161,10 @@ export class TournamentController {
 
   @Get(':id/winners')
   @Public()
-  @ApiPublicList({ description: 'Tournament winners returned', type: TournamentWinnersResponseDto })
+  @ApiPublicRead({
+    description: 'Tournament winners returned',
+    type: WrappedTournamentWinnersResponseDto,
+  })
   getTournamentWinners(
     @Param('id', new ParseUUIDPipe()) tournamentId: string,
     @Query() query: GetTournamentWinnersQueryDto,
@@ -147,7 +174,10 @@ export class TournamentController {
 
   @Get(':id')
   @Public()
-  @ApiPublicList({ description: 'Tournament found', type: TournamentDetailResponseDto })
+  @ApiPublicRead({
+    description: 'Tournament found',
+    type: WrappedTournamentDetailResponseDto,
+  })
   getTournamentById(
     @Param('id', new ParseUUIDPipe()) tournamentId: string,
   ): Promise<TournamentDetailResponseDto> {
@@ -156,7 +186,10 @@ export class TournamentController {
 
   @Get(':id/participants')
   @Public()
-  @ApiPublicList({ description: 'Participants returned', type: TournamentParticipantsResponseDto })
+  @ApiPublicRead({
+    description: 'Participants returned',
+    type: WrappedTournamentParticipantsResponseDto,
+  })
   getTournamentParticipants(
     @Param('id', new ParseUUIDPipe()) tournamentId: string,
     @Query() query: GetTournamentParticipantsQueryDto,
@@ -166,7 +199,10 @@ export class TournamentController {
 
   @Post(':id/register')
   @Permissions(Permission.TOURNAMENT_REGISTER)
-  @ApiAuthAction({ description: 'Registered successfully', type: RegisterTournamentResponseDto })
+  @ApiAuthAction({
+    description: 'Registered successfully',
+    type: WrappedRegisterTournamentResponseDto,
+  })
   registerForTournament(
     @Param('id', new ParseUUIDPipe()) tournamentId: string,
     @CurrentUser() user: JwtPayload,
@@ -176,7 +212,10 @@ export class TournamentController {
 
   @Get(':id/leaderboard')
   @Public()
-  @ApiPublicList({ description: 'Leaderboard returned', type: TournamentLeaderboardResponseDto })
+  @ApiPublicRead({
+    description: 'Leaderboard returned',
+    type: WrappedTournamentLeaderboardResponseDto,
+  })
   getLeaderboard(
     @Param('id', new ParseUUIDPipe()) tournamentId: string,
   ): Promise<TournamentLeaderboardResponseDto> {
@@ -184,8 +223,10 @@ export class TournamentController {
   }
 
   @Get(':id/my-standing')
-  @ApiAuthList({ description: 'Standing returned', type: MyTournamentStandingResponseDto })
-  @ApiInternalServerErrorResponse()
+  @ApiAuthAction({
+    description: 'Standing returned',
+    type: WrappedMyTournamentStandingResponseDto,
+  })
   getMyTournamentStanding(
     @Param('id', new ParseUUIDPipe()) tournamentId: string,
     @CurrentUser('sub') userId: string,
@@ -195,7 +236,10 @@ export class TournamentController {
 
   @Post(':id/rounds/:roundId/attempts')
   @Permissions(Permission.TOURNAMENT_ATTEMPT)
-  @ApiAuthAction({ description: 'Attempt started', type: StartTournamentAttemptResponseDto })
+  @ApiAuthAction({
+    description: 'Attempt started',
+    type: WrappedStartTournamentAttemptResponseDto,
+  })
   startRoundAttempt(
     @Param('id', new ParseUUIDPipe()) tournamentId: string,
     @Param('roundId', new ParseUUIDPipe()) roundId: string,
@@ -206,19 +250,10 @@ export class TournamentController {
 
   @Delete(':id/register')
   @Permissions(Permission.TOURNAMENT_REGISTER)
-  @ApiAuth()
-  @ApiOperation({
-    summary: 'Unregister from tournament',
-    description:
-      'Withdraws the authenticated user from a tournament. Only allowed when the tournament status is `registration`. Requires `tournament:register` permission.',
-  })
-  @ApiOkResponse({
+  @ApiAuthAction({
     description: 'Withdrawn successfully',
-    type: UnregisterTournamentResponseDto,
+    type: WrappedUnregisterTournamentResponseDto,
   })
-  @ApiNotFoundResponse()
-  @ApiConflict()
-  @ApiInternalServerErrorResponse()
   unregisterFromTournament(
     @Param('id', new ParseUUIDPipe()) tournamentId: string,
     @CurrentUser() user: JwtPayload,
@@ -228,7 +263,10 @@ export class TournamentController {
 
   @Post(':id/withdraw')
   @Permissions(Permission.TOURNAMENT_REGISTER)
-  @ApiAuthAction({ description: 'Withdrawal successful', type: WithdrawTournamentResponseDto })
+  @ApiAuthAction({
+    description: 'Withdrawal successful',
+    type: WrappedWithdrawTournamentResponseDto,
+  })
   withdrawFromTournament(
     @Param('id', new ParseUUIDPipe()) tournamentId: string,
     @CurrentUser() user: JwtPayload,
