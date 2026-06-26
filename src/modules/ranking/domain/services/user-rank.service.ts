@@ -30,7 +30,7 @@ import type {
   PeakRanksResponseDto,
   UserBadgesDto,
   UserRankSummaryDto,
-} from '../../dto/response/leaderboard-response.dto';
+} from '../../dto';
 
 @Injectable()
 export class UserRankService {

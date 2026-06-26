@@ -13,7 +13,7 @@ import {
 import type {
   PublicRankingHistoryResponseDto,
   RankingHistoryItemDto,
-} from '../dto/response/leaderboard-response.dto';
+} from '../dto/response/leaderboard-history.dto';
 
 @Injectable()
 export class GetUserRankingHistoryQueryHandler {

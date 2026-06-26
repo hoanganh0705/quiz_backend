@@ -10,7 +10,7 @@ import { RankingPeriodEnum } from '../dto/request/leaderboard-query.dto';
 import type {
   RankingHistoryItemDto,
   RankingHistoryResponseDto,
-} from '../dto/response/leaderboard-response.dto';
+} from '../dto/response/leaderboard-history.dto';
 
 @Injectable()
 export class GetMyRankingHistoryQueryHandler {

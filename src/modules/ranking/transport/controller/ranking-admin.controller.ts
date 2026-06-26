@@ -6,10 +6,14 @@
  */
 
 import { Controller, Get, Post, Query, HttpCode, HttpStatus } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiOkResponse } from '@nestjs/swagger';
+import { ApiTags, ApiOkResponse } from '@nestjs/swagger';
 import { Permissions } from '@/common/authorization/decorators/permissions.decorator';
 import { Permission } from '@/common/authorization/permissions';
-import { ApiAdminEndpoint } from '@/common/swagger/swagger-decorators';
+import {
+  ApiAuth,
+  ApiBadRequest,
+  ApiInternalError,
+} from '@/common/swagger/swagger-decorators';
 import { RankingApplicationService } from '../../application/ranking.application.service';
 import { PeriodResetService } from '../../domain/services';
 import { mapRankingPeriodEnumToDomain } from '../../application/get-my-ranking-history.query';
@@ -22,11 +26,14 @@ import {
   RecalculateResponseDto,
   PeriodResetResponseDto,
   ConsistencyReportResponseDto,
-} from '../../dto/response/ranking-admin-response.dto';
+  WrappedRankingStatusResponseDto,
+  WrappedRecalculateResponseDto,
+  WrappedPeriodResetResponseDto,
+  WrappedConsistencyReportResponseDto,
+} from '../../dto';
 
 @ApiTags('leaderboard')
 @Controller('admin/ranking')
-@ApiAdminEndpoint()
 export class RankingAdminController {
   constructor(
     private readonly rankingAppService: RankingApplicationService,
@@ -35,12 +42,10 @@ export class RankingAdminController {
 
   @Get('status')
   @Permissions(Permission.RANKING_ADMIN)
-  @ApiOperation({
-    summary: 'Get ranking system status',
-    description:
-      'Returns operational status of the ranking system including scheduler state and dirty queue depth.',
-  })
-  @ApiOkResponse({ description: 'Ranking system status', type: RankingStatusResponseDto })
+  @ApiAuth()
+  @ApiBadRequest()
+  @ApiInternalError()
+  @ApiOkResponse({ type: WrappedRankingStatusResponseDto })
   async getStatus(): Promise<RankingStatusResponseDto> {
     const status = await this.rankingAppService.getStatus();
     return {
@@ -58,13 +63,10 @@ export class RankingAdminController {
   @Post('recalculate')
   @Permissions(Permission.RANKING_ADMIN)
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({
-    summary: 'Trigger immediate rank recalculation',
-    description:
-      'Forces a full rank recalculation. Use sparingly — prefer the scheduled background process. ' +
-      'Without a period parameter, all periods (all-time, weekly, monthly, daily) are recalculated.',
-  })
-  @ApiOkResponse({ description: 'Recalculation triggered', type: RecalculateResponseDto })
+  @ApiAuth()
+  @ApiBadRequest()
+  @ApiInternalError()
+  @ApiOkResponse({ type: WrappedRecalculateResponseDto })
   async triggerRecalculation(@Query() query: RecalculateQueryDto): Promise<RecalculateResponseDto> {
     const period = query.period ? mapRankingPeriodEnumToDomain(query.period) : undefined;
     await this.rankingAppService.triggerImmediateRecalculation(period);
@@ -80,13 +82,10 @@ export class RankingAdminController {
   @Post('reset')
   @Permissions(Permission.RANKING_ADMIN)
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({
-    summary: 'Trigger period reset',
-    description:
-      'Forces an immediate reset for a specific period. ' +
-      'Without a period parameter, all due periods (weekly, monthly, daily) are reset.',
-  })
-  @ApiOkResponse({ description: 'Period reset initiated', type: PeriodResetResponseDto })
+  @ApiAuth()
+  @ApiBadRequest()
+  @ApiInternalError()
+  @ApiOkResponse({ type: WrappedPeriodResetResponseDto })
   async triggerPeriodReset(@Query() query: PeriodResetQueryDto): Promise<PeriodResetResponseDto> {
     if (query.period) {
       const period = mapRankingPeriodEnumToDomain(query.period);
@@ -104,11 +103,10 @@ export class RankingAdminController {
   @Post('consistency-check')
   @Permissions(Permission.RANKING_ADMIN)
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({
-    summary: 'Trigger consistency check',
-    description: 'Forces an immediate consistency check and returns the full report.',
-  })
-  @ApiOkResponse({ description: 'Consistency check report', type: ConsistencyReportResponseDto })
+  @ApiAuth()
+  @ApiBadRequest()
+  @ApiInternalError()
+  @ApiOkResponse({ type: WrappedConsistencyReportResponseDto })
   async triggerConsistencyCheck(): Promise<ConsistencyReportResponseDto> {
     const report = await this.rankingAppService.triggerConsistencyCheck();
     return {
