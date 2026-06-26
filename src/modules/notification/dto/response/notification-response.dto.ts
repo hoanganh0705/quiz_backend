@@ -13,30 +13,18 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import {
+  NOTIFICATION_TYPE_VALUES,
+  NOTIFICATION_CHANNEL_VALUES,
+} from '../../domain/types/notification.types';
 
-const NOTIFICATION_TYPES = [
-  'achievement_earned',
-  'badge_unlocked',
-  'rank_achievement',
-  'rank_improvement',
-  'period_winner',
-  'tournament_invite',
-  'tournament_starting',
-  'tournament_completed',
-  'tournament_won',
-  'streak_milestone',
-  'friend_request',
-  'friend_accepted',
-  'quiz_review_received',
-  'weekly_summary',
-  'system_announcement',
-] as const;
-
-const NOTIFICATION_CHANNELS = ['in_app', 'email', 'push'] as const;
+export type NotificationTypeValue = (typeof NOTIFICATION_TYPE_VALUES)[number];
+export type NotificationChannelValue = (typeof NOTIFICATION_CHANNEL_VALUES)[number];
 
 export class NotificationResponseDto {
   @ApiProperty({
     description: 'Unique notification identifier',
+    type: String,
     format: 'uuid',
     example: '550e8400-e29b-41d4-a716-446655440000',
   })
@@ -46,6 +34,7 @@ export class NotificationResponseDto {
 
   @ApiProperty({
     description: 'Recipient user identifier',
+    type: String,
     format: 'uuid',
     example: '660e8400-e29b-41d4-a716-446655440000',
   })
@@ -55,12 +44,12 @@ export class NotificationResponseDto {
 
   @ApiProperty({
     description: 'Notification type',
-    enum: NOTIFICATION_TYPES,
+    enum: NOTIFICATION_TYPE_VALUES,
     example: 'achievement_earned',
   })
   @Expose()
-  @IsIn(NOTIFICATION_TYPES)
-  type!: string;
+  @IsIn(NOTIFICATION_TYPE_VALUES)
+  type!: NotificationTypeValue;
 
   @ApiProperty({
     description: 'Notification title',
@@ -82,8 +71,8 @@ export class NotificationResponseDto {
 
   @ApiProperty({
     description: 'Arbitrary metadata associated with the notification',
+    type: Object,
     example: { badgeType: 'js_master', achievementType: 'mastery' },
-    additionalProperties: true,
   })
   @Expose()
   @IsObject()
@@ -91,12 +80,12 @@ export class NotificationResponseDto {
 
   @ApiProperty({
     description: 'Delivery channel',
-    enum: NOTIFICATION_CHANNELS,
+    enum: Object.values(NOTIFICATION_CHANNEL_VALUES),
     example: 'in_app',
   })
   @Expose()
-  @IsIn(NOTIFICATION_CHANNELS)
-  channel!: string;
+  @IsIn(NOTIFICATION_CHANNEL_VALUES)
+  channel!: NotificationChannelValue;
 
   @ApiProperty({
     description: 'Whether the user has read this notification',
@@ -108,6 +97,7 @@ export class NotificationResponseDto {
 
   @ApiPropertyOptional({
     description: 'Timestamp when the notification was read (ISO 8601, null if unread)',
+    type: String,
     example: '2025-06-01T12:00:00.000Z',
     nullable: true,
   })
@@ -127,6 +117,7 @@ export class NotificationResponseDto {
   @ApiPropertyOptional({
     description:
       'Notification expiration timestamp (ISO 8601). Null means the notification never expires.',
+    type: String,
     example: '2025-07-01T10:00:00.000Z',
     nullable: true,
   })
@@ -258,6 +249,7 @@ export class NotificationPreferencesResponseDto {
   @ApiPropertyOptional({
     description:
       'Quiet hours start time in HH:MM format — notifications are suppressed after this time',
+    type: String,
     example: '22:00',
     nullable: true,
   })
@@ -268,6 +260,7 @@ export class NotificationPreferencesResponseDto {
 
   @ApiPropertyOptional({
     description: 'Quiet hours end time in HH:MM format — notifications resume after this time',
+    type: String,
     example: '08:00',
     nullable: true,
   })

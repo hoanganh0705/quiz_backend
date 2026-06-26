@@ -5,7 +5,7 @@ import {
   RANKING_REPOSITORY_PORT,
   type RankingRepositoryPort,
 } from '../domain/ports/ranking-repository.port';
-import type { UserPercentileResponseDto } from '../dto/response/leaderboard-response.dto';
+import type { UserPercentileResponseDto } from '../dto/response/leaderboard-stats.dto';
 
 @Injectable()
 export class GetMyPercentileQueryHandler {

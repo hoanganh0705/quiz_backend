@@ -51,7 +51,7 @@ import type {
   LeaderboardEntryDto,
   PeriodInfoDto,
   UserRankPositionDto,
-} from '../../dto/response/leaderboard-response.dto';
+} from '../../dto';
 import { CACHE_PROVIDER, type CacheProvider } from '@/common/ports/cache.provider';
 
 @Injectable()
@@ -127,9 +127,9 @@ export class LeaderboardService implements OnModuleInit, OnModuleDestroy {
       };
     });
 
-    let userPosition: UserRankPositionDto | undefined;
+    let userPosition: UserRankPositionDto | null = null;
     if (currentUserId) {
-      userPosition = await this.getUserPosition(currentUserId, periodEnum);
+      userPosition = await this.getUserPosition(currentUserId, periodEnum) ?? null;
     }
 
     return {

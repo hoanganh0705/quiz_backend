@@ -8,7 +8,7 @@ import {
 import type {
   NearbyRankEntryDto,
   NearbyRanksResponseDto,
-} from '../dto/response/leaderboard-response.dto';
+} from '../dto/response/leaderboard-nearby.dto';
 
 @Injectable()
 export class GetNearbyRanksQueryHandler {

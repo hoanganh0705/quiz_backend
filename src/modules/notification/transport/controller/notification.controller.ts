@@ -13,17 +13,23 @@ import {
   HttpStatus,
   BadRequestException,
 } from '@nestjs/common';
-import { ApiTags } from '@nestjs/swagger';
-import { ApiNoContent } from '@/common/swagger/swagger-decorators';
+import { ApiTags, ApiOperation, ApiQuery, ApiOkResponse } from '@nestjs/swagger';
+import { ApiNoContent, ApiAuthAction, ApiBadRequest } from '@/common/swagger/swagger-decorators';
 import { Transactional } from '@/common/interceptors/transactional.interceptor';
 import { NotificationApplicationService } from '@/modules/notification/application/notification-application.service';
 import {
   NotificationListResponseDto,
-  NotificationPreferencesResponseDto,
   NotificationResponseDto,
+  NotificationPreferencesResponseDto,
   UnreadCountResponseDto,
   DeletedReadNotificationsResponseDto,
   NotificationAnalyticsDto,
+  WrappedNotificationListResponseDto,
+  WrappedNotificationResponseDto,
+  WrappedNotificationPreferencesResponseDto,
+  WrappedUnreadCountResponseDto,
+  WrappedDeletedReadNotificationsResponseDto,
+  WrappedNotificationAnalyticsDto,
 } from '@/modules/notification/dto/response';
 import { RequireAuth } from '@/common/guards/jwt.guard';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
@@ -32,13 +38,43 @@ import { Permissions } from '@/common/authorization/decorators/permissions.decor
 import { Permission } from '@/common/authorization/permissions';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
 
-@ApiTags('notification')
+@ApiTags('notifications')
 @Controller('notifications')
 @RequireAuth()
 export class NotificationController {
   constructor(private readonly notificationService: NotificationApplicationService) {}
 
   @Get()
+  @ApiOperation({
+    summary: 'List notifications',
+    description: 'Returns paginated notifications for the authenticated user.',
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    description: 'Number of items per page (default 20)',
+    example: 20,
+  })
+  @ApiQuery({
+    name: 'cursor',
+    required: false,
+    description: 'Base64-encoded cursor for pagination',
+    example:
+      'eyJjcmVhdGVkQXQiOiIyMDI1LTAxLTAxVDAwOjAwOjAwKzAwOjAwIiwiZGlzdGluY3Rpb25JZCI6IjU1MGU4NDAwLWUyOWItNDFkNC1hNzE2LTQ0NjY1NTQ0MDAwMDAifQ==',
+  })
+  @ApiQuery({
+    name: 'unreadOnly',
+    required: false,
+    description: 'Filter to unread notifications only',
+    example: false,
+  })
+  @ApiQuery({
+    name: 'includeArchived',
+    required: false,
+    description: 'Include archived notifications',
+    example: false,
+  })
+  @ApiOkResponse({ type: WrappedNotificationListResponseDto })
   async getNotifications(
     @CurrentUser() user: JwtPayload,
     @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit: number,
@@ -87,6 +123,8 @@ export class NotificationController {
   }
 
   @Get('unread-count')
+  @ApiOperation({ summary: 'Get unread notification count' })
+  @ApiOkResponse({ type: WrappedUnreadCountResponseDto })
   async getUnreadCount(@CurrentUser() user: JwtPayload): Promise<UnreadCountResponseDto> {
     const count = await this.notificationService.getUnreadCount(user);
     return { count };
@@ -94,84 +132,15 @@ export class NotificationController {
 
   @Get('analytics')
   @Permissions(Permission.NOTIFICATION_ANALYTICS)
+  @ApiOperation({ summary: 'Get notification analytics' })
+  @ApiOkResponse({ type: WrappedNotificationAnalyticsDto })
   async getAnalytics(): Promise<NotificationAnalyticsDto> {
     return this.notificationService.getAnalytics();
   }
 
-  @Get(':notificationId')
-  async getNotificationDetail(
-    @Param('notificationId') notificationId: string,
-    @CurrentUser() user: JwtPayload,
-  ): Promise<NotificationResponseDto> {
-    const notification = await this.notificationService.getNotificationDetail(notificationId, user);
-
-    return {
-      notificationId: notification.notificationId,
-      userId: notification.userId,
-      type: notification.type,
-      title: notification.title,
-      message: notification.message,
-      metadata: notification.metadata,
-      channel: notification.channel,
-      isRead: notification.isRead,
-      readAt: notification.readAt,
-      createdAt: notification.createdAt,
-      expiresAt: notification.expiresAt,
-    };
-  }
-
-  @Post(':notificationId/read')
-  @Transactional()
-  @ApiNoContent()
-  @HttpCode(HttpStatus.NO_CONTENT)
-  async markAsRead(
-    @Param('notificationId') notificationId: string,
-    @CurrentUser() user: JwtPayload,
-  ): Promise<void> {
-    await this.notificationService.markAsRead(notificationId, user);
-  }
-
-  @Post(':notificationId/unread')
-  @Transactional()
-  @ApiNoContent()
-  @HttpCode(HttpStatus.NO_CONTENT)
-  async markAsUnread(
-    @Param('notificationId') notificationId: string,
-    @CurrentUser() user: JwtPayload,
-  ): Promise<void> {
-    await this.notificationService.markAsUnread(notificationId, user);
-  }
-
-  @Post('read-all')
-  @Transactional()
-  @ApiNoContent()
-  @HttpCode(HttpStatus.NO_CONTENT)
-  async markAllAsRead(@CurrentUser() user: JwtPayload): Promise<void> {
-    await this.notificationService.markAllAsRead(user);
-  }
-
-  @Delete('read')
-  @Transactional()
-  async deleteReadNotifications(
-    @CurrentUser() user: JwtPayload,
-  ): Promise<DeletedReadNotificationsResponseDto> {
-    const deletedCount = await this.notificationService.deleteReadNotifications(user);
-    return { deletedCount };
-  }
-
-  @Delete(':notificationId')
-  @Transactional()
-  @ApiNoContent()
-  @HttpCode(HttpStatus.NO_CONTENT)
-  async deleteNotification(
-    @Param('notificationId') notificationId: string,
-    @CurrentUser() user: JwtPayload,
-  ): Promise<void> {
-    await this.notificationService.deleteNotification(notificationId, user);
-  }
-
-  // Preferences endpoints
   @Get('preferences')
+  @ApiOperation({ summary: 'Get notification preferences' })
+  @ApiOkResponse({ type: WrappedNotificationPreferencesResponseDto })
   async getPreferences(
     @CurrentUser() user: JwtPayload,
   ): Promise<NotificationPreferencesResponseDto> {
@@ -195,6 +164,9 @@ export class NotificationController {
 
   @Patch('preferences')
   @Transactional()
+  @ApiOperation({ summary: 'Update notification preferences' })
+  @ApiBadRequest()
+  @ApiOkResponse({ type: WrappedNotificationPreferencesResponseDto })
   async updatePreferences(
     @CurrentUser() user: JwtPayload,
     @Body() updateDto: UpdatePreferencesDto,
@@ -215,5 +187,83 @@ export class NotificationController {
       quietHoursStart: prefs.quietHoursStart,
       quietHoursEnd: prefs.quietHoursEnd,
     };
+  }
+
+  @Get(':notificationId')
+  @ApiOperation({ summary: 'Get notification detail' })
+  @ApiOkResponse({ type: WrappedNotificationResponseDto })
+  async getNotificationDetail(
+    @Param('notificationId') notificationId: string,
+    @CurrentUser() user: JwtPayload,
+  ): Promise<NotificationResponseDto> {
+    const notification = await this.notificationService.getNotificationDetail(notificationId, user);
+
+    return {
+      notificationId: notification.notificationId,
+      userId: notification.userId,
+      type: notification.type,
+      title: notification.title,
+      message: notification.message,
+      metadata: notification.metadata,
+      channel: notification.channel,
+      isRead: notification.isRead,
+      readAt: notification.readAt,
+      createdAt: notification.createdAt,
+      expiresAt: notification.expiresAt,
+    };
+  }
+
+  @Post(':notificationId/read')
+  @Transactional()
+  @ApiNoContent('Notification marked as read')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async markAsRead(
+    @Param('notificationId') notificationId: string,
+    @CurrentUser() user: JwtPayload,
+  ): Promise<void> {
+    await this.notificationService.markAsRead(notificationId, user);
+  }
+
+  @Post(':notificationId/unread')
+  @Transactional()
+  @ApiNoContent('Notification marked as unread')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async markAsUnread(
+    @Param('notificationId') notificationId: string,
+    @CurrentUser() user: JwtPayload,
+  ): Promise<void> {
+    await this.notificationService.markAsUnread(notificationId, user);
+  }
+
+  @Post('read-all')
+  @Transactional()
+  @ApiNoContent('All notifications marked as read')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async markAllAsRead(@CurrentUser() user: JwtPayload): Promise<void> {
+    await this.notificationService.markAllAsRead(user);
+  }
+
+  @Delete('read')
+  @Transactional()
+  @ApiAuthAction({
+    description: 'Read notifications deleted',
+    type: WrappedDeletedReadNotificationsResponseDto,
+  })
+  async deleteReadNotifications(
+    @CurrentUser() user: JwtPayload,
+  ): Promise<DeletedReadNotificationsResponseDto> {
+    const deletedCount = await this.notificationService.deleteReadNotifications(user);
+    return { deletedCount };
+  }
+
+  @Delete(':notificationId')
+  @Transactional()
+  @ApiNoContent('Notification deleted')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async deleteNotification(
+    @Param('notificationId') notificationId: string,
+    @CurrentUser() user: JwtPayload,
+  ): Promise<void> {
+    await this.notificationService.deleteNotification(notificationId, user);
   }
 }
