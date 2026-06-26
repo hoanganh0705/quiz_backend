@@ -1,6 +1,7 @@
-import { Transform, Type } from 'class-transformer';
+import { Type } from 'class-transformer';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { IsInt, IsString, Max, Min, MinLength } from 'class-validator';
+import { Transform } from 'class-transformer';
 
 export class SearchQueryDto {
   @ApiPropertyOptional({
@@ -12,7 +13,6 @@ export class SearchQueryDto {
     if (typeof value !== 'string') {
       return value;
     }
-
     return value.trim().replace(/\s+/g, ' ').toLowerCase();
   })
   @IsString()

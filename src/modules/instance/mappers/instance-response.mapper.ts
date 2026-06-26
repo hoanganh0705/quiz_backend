@@ -5,6 +5,7 @@ import type {
   InstanceLeaderboardEntry,
   InstancePlayerWithProfile,
 } from '../domain/ports';
+import type { QuizInstanceStatus, QuizInstancePlayerStatus } from '../types/instance.types';
 import {
   InstanceDetailResponseDto,
   InstanceListItemDto,
@@ -25,7 +26,7 @@ export class InstanceResponseMapper {
       hostUsername: row.hostUsername,
       hostDisplayName: row.hostDisplayName,
       maxPlayers: row.maxPlayers,
-      status: row.status,
+      status: row.status as QuizInstanceStatus,
       versionNumber: row.versionNumber,
       difficulty: row.difficulty,
       durationMs: row.durationMs,
@@ -50,7 +51,7 @@ export class InstanceResponseMapper {
       hostUsername: row.hostUsername,
       hostDisplayName: row.hostDisplayName,
       maxPlayers: row.maxPlayers,
-      status: row.status,
+      status: row.status as QuizInstanceStatus,
       difficulty: row.difficulty,
       durationMs: row.durationMs,
       quizId: row.quizId,
@@ -69,7 +70,7 @@ export class InstanceResponseMapper {
       username: entry.username,
       displayName: entry.displayName,
       avatarUrl: entry.avatarUrl,
-      status: entry.status,
+      status: entry.status as QuizInstancePlayerStatus,
       scorePercent: entry.scorePercent !== null ? parseFloat(entry.scorePercent) : null,
       correctCount: entry.correctCount,
       timeTakenMs: entry.timeTakenMs,
@@ -84,7 +85,7 @@ export class InstanceResponseMapper {
       username: player.username,
       displayName: player.displayName,
       avatarUrl: player.avatarUrl,
-      status: player.status,
+      status: player.status as QuizInstancePlayerStatus,
       attemptId: player.attemptId,
       joinedAt: player.joinedAt,
     };
