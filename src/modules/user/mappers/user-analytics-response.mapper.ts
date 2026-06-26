@@ -1,5 +1,5 @@
 import type { UserAnalytics } from '../domain/types/user-analytics';
-import type { UserAnalyticsResponseDto } from '../dto/response/user-analytics-response.dto';
+import type { UserAnalyticsResponseDto } from '../dto/response/user-analytics.dto';
 
 export class UserAnalyticsResponseMapper {
   static toResponse(analytics: UserAnalytics): UserAnalyticsResponseDto {

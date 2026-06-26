@@ -1,4 +1,4 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class MyTournamentAnalyticsResponseDto {
   @ApiProperty({ description: 'Completed tournaments participated in', example: 45 })
@@ -13,17 +13,26 @@ export class MyTournamentAnalyticsResponseDto {
   @ApiProperty({ description: 'Number of top 10 finishes', example: 18 })
   top10Finishes!: number;
 
-  @ApiProperty({
+  @ApiPropertyOptional({
     description: 'Average final rank across completed tournaments',
-    example: 21,
+    type: Number,
     nullable: true,
+    example: 21,
   })
   averageRank!: number | null;
 
-  @ApiProperty({ description: 'Best final rank achieved', example: 1, nullable: true })
+  @ApiPropertyOptional({
+    description: 'Best final rank achieved',
+    type: Number,
+    nullable: true,
+    example: 1,
+  })
   bestRank!: number | null;
 
-  @ApiProperty({ description: 'Average final score across completed tournaments', example: 84 })
+  @ApiProperty({
+    description: 'Average final score across completed tournaments',
+    example: 84,
+  })
   averageScore!: number;
 
   @ApiProperty({ description: 'Total final tournament score', example: 12540 })
@@ -32,10 +41,11 @@ export class MyTournamentAnalyticsResponseDto {
   @ApiProperty({ description: 'Completion rate percentage', example: 91 })
   completionRate!: number;
 
-  @ApiProperty({
+  @ApiPropertyOptional({
     description: 'Most recent completed tournament timestamp (ISO 8601)',
-    example: '2026-06-01T00:00:00Z',
+    type: String,
     nullable: true,
+    example: '2026-06-01T00:00:00.000Z',
   })
   lastTournamentAt!: string | null;
 }

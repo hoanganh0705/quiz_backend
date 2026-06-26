@@ -1,4 +1,4 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class PublicTournamentProfileResponseDto {
   @ApiProperty({
@@ -7,19 +7,28 @@ export class PublicTournamentProfileResponseDto {
   })
   userId!: string;
 
-  @ApiProperty({ description: 'Number of completed tournaments participated in', example: 32 })
+  @ApiProperty({
+    description: 'Number of completed tournaments participated in',
+    example: 32,
+  })
   tournamentsPlayed!: number;
 
   @ApiProperty({ description: 'Number of completed tournaments won', example: 4 })
   tournamentsWon!: number;
 
-  @ApiProperty({ description: 'Best final rank achieved', example: 1, nullable: true })
+  @ApiPropertyOptional({
+    description: 'Best final rank achieved',
+    type: Number,
+    nullable: true,
+    example: 1,
+  })
   bestRank!: number | null;
 
-  @ApiProperty({
+  @ApiPropertyOptional({
     description: 'Average final rank across completed tournaments',
-    example: 18,
+    type: Number,
     nullable: true,
+    example: 18,
   })
   averageRank!: number | null;
 
@@ -32,10 +41,11 @@ export class PublicTournamentProfileResponseDto {
   })
   totalTournamentScore!: number;
 
-  @ApiProperty({
+  @ApiPropertyOptional({
     description: 'Most recent completed tournament timestamp (ISO 8601)',
-    example: '2026-06-01T00:00:00Z',
+    type: String,
     nullable: true,
+    example: '2026-06-01T00:00:00.000Z',
   })
   lastTournamentAt!: string | null;
 }

@@ -1,4 +1,4 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class MyTournamentHistoryItemDto {
   @ApiProperty({
@@ -13,10 +13,11 @@ export class MyTournamentHistoryItemDto {
   })
   tournamentName!: string;
 
-  @ApiProperty({
+  @ApiPropertyOptional({
     description: 'Final rank achieved by the authenticated user',
-    example: 12,
+    type: Number,
     nullable: true,
+    example: 12,
   })
   rank!: number | null;
 
@@ -34,7 +35,7 @@ export class MyTournamentHistoryItemDto {
 
   @ApiProperty({
     description: 'Timestamp when the tournament was completed',
-    example: '2026-06-01T00:00:00Z',
+    example: '2026-06-01T00:00:00.000Z',
   })
   completedAt!: string;
 }
@@ -46,8 +47,10 @@ export class MyTournamentHistoryPaginationDto {
   @ApiProperty({ description: 'Whether more items exist after this page', example: true })
   hasNextPage!: boolean;
 
-  @ApiProperty({
-    description: 'Cursor for the next page (base64-encoded { completedAt, participantId })',
+  @ApiPropertyOptional({
+    description:
+      'Cursor for the next page (base64-encoded { completedAt, participantId })',
+    type: String,
     nullable: true,
     example:
       'eyJjb21wbGV0ZWRBdCI6ICIyMDI2LTA2LTAxVDAwOjAwOjAwWiIsICJwYXJ0aWNpcGFudElkIjogIjY2MGU4NDgwLWUyOWItMzFkNC1hNzE2LTQ0NjY1NjU0NDAwMCJ9',
