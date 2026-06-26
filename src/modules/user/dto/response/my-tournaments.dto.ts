@@ -1,4 +1,4 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import type { TournamentStatus } from '@/modules/tournament/types/tournament.types';
 
 export class MyTournamentItemDto {
@@ -23,19 +23,19 @@ export class MyTournamentItemDto {
 
   @ApiProperty({
     description: 'Timestamp when the user registered for or first participated in the tournament',
-    example: '2026-06-01T00:00:00Z',
+    example: '2026-06-01T00:00:00.000Z',
   })
   registeredAt!: string;
 
   @ApiProperty({
-    description: 'Tournament start timestamp in ISO 8601 format',
-    example: '2026-06-05T00:00:00Z',
+    description: 'Tournament start timestamp (ISO 8601)',
+    example: '2026-06-05T00:00:00.000Z',
   })
   startAt!: string;
 
   @ApiProperty({
-    description: 'Tournament end timestamp in ISO 8601 format',
-    example: '2026-06-10T00:00:00Z',
+    description: 'Tournament end timestamp (ISO 8601)',
+    example: '2026-06-10T00:00:00.000Z',
   })
   endAt!: string;
 }
@@ -47,8 +47,10 @@ export class MyTournamentsPaginationDto {
   @ApiProperty({ description: 'Whether more items exist after this page', example: true })
   hasNextPage!: boolean;
 
-  @ApiProperty({
-    description: 'Cursor for the next page (base64-encoded { registeredAt, participantId })',
+  @ApiPropertyOptional({
+    description:
+      'Cursor for the next page (base64-encoded { registeredAt, participantId })',
+    type: String,
     nullable: true,
     example:
       'eyJyZWdpc3RlcmVkQXQiOiAiMjAyNi0wNi0wMVQwMDowMDowMFoiLCAicGFydGljaXBhbnRJZCI6ICI2NjBlODQwMC1lMjliLTMxZDQtYTcxNi00NDY2NTY1NDQwMDAifQ==',

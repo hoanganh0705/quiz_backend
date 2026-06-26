@@ -6,6 +6,7 @@ import { trimStringToNullIfBlank } from '@/common/utils/text.util';
 export class UpdateMeDto {
   @ApiPropertyOptional({
     description: 'Display name shown in the app (null or blank removes it)',
+    type: String,
     maxLength: 100,
     example: 'Alice',
     nullable: true,
@@ -18,6 +19,7 @@ export class UpdateMeDto {
 
   @ApiPropertyOptional({
     description: 'Short bio (null or blank removes it)',
+    type: String,
     maxLength: 500,
     example: 'Quiz enthusiast and trivia lover',
     nullable: true,
@@ -30,6 +32,7 @@ export class UpdateMeDto {
 
   @ApiPropertyOptional({
     description: 'Avatar image URL (null or blank removes it)',
+    type: String,
     maxLength: 2048,
     example: 'https://example.com/avatars/alice.jpg',
     nullable: true,
