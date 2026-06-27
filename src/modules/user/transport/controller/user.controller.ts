@@ -3,8 +3,8 @@ import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
 import { ApiAuth } from '@/common/swagger/swagger-decorators';
 import { RecommendedQuizzesQueryDto } from '@/modules/quiz/dto/request/recommended-quizzes-query.dto';
+import { QuizResponseDto } from '@/modules/quiz/dto/response/quiz-response.dto';
 import { ListQuizzesQueryDto } from '@/modules/quiz/dto/request/list-quizzes-query.dto';
-import { RelatedQuizzesResponseDto } from '@/modules/quiz/dto/response/related-quizzes-response.dto';
 import { QuizListResponseDto } from '@/modules/quiz/dto/response/quiz-list-response.dto';
 import { CreatorQuizAnalyticsDto } from '@/modules/quiz/dto/response/quiz-analytics.dto';
 import { GetMyTournamentsQueryDto } from '../../dto/request/get-my-tournaments-query.dto';
@@ -68,11 +68,12 @@ export class UserController {
   })
   @ApiRecommendedQuizzesResponse()
   @ApiInternalError()
-  getRecommendedQuizzes(
+  async getRecommendedQuizzes(
     @CurrentUser('sub') userId: string,
     @Query() query: RecommendedQuizzesQueryDto,
-  ): Promise<RelatedQuizzesResponseDto> {
-    return this.quizListing.getRecommendedQuizzes(userId, query);
+  ): Promise<QuizResponseDto[]> {
+    const { items } = await this.quizListing.getRecommendedQuizzes(userId, query);
+    return items;
   }
 
   @Get(':userId/quizzes/analytics')

@@ -1,20 +1,12 @@
 import { Controller, Get, Query, UseFilters } from '@nestjs/common';
-import {
-  ApiTags,
-  ApiOperation,
-  ApiOkResponse,
-  ApiBearerAuth,
-  ApiInternalServerErrorResponse,
-} from '@nestjs/swagger';
+import { ApiTags } from '@nestjs/swagger';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
-import { ApiAuth } from '@/common/swagger/swagger-decorators';
 import { ListFollowedCategoriesQueryDto } from '../../dto/request/list-followed-categories-query.dto';
-import { FollowedCategoriesResponseDto } from '../../dto/response/followed-categories-response.dto';
 import { CategoryQueryService } from '../../application/category-query.service';
 import { CategoryDomainExceptionFilter } from '../filters/category-domain-exception.filter';
 import { FollowedCategoryCursorMapper } from '../../mappers/followed-category-cursor.mapper';
-import { CategoryWrappedFollowedListDto } from '../../dto/response/category-response-docs.dto';
+import { ApiFollowedCategoriesResponse } from '../swagger/category-swagger-decorators';
 
 /**
  * Hosts the /users/me/followed-categories route.
@@ -30,25 +22,16 @@ export class UserCategoryController {
   constructor(private readonly categoryQueryService: CategoryQueryService) {}
 
   @Get('users/me/followed-categories')
-  @ApiBearerAuth()
-  @ApiAuth()
-  @ApiOperation({
-    summary: 'My followed categories',
-    description:
-      'Returns the list of categories the authenticated user follows, cursor-paginated and ordered by most recently followed.',
-  })
-  @ApiOkResponse({
-    description: 'Followed categories returned',
-    type: CategoryWrappedFollowedListDto,
-  })
-  @ApiInternalServerErrorResponse({ description: 'Unexpected server error' })
+  @ApiFollowedCategoriesResponse()
   listFollowedCategories(
     @CurrentUser() user: JwtPayload,
     @Query() query: ListFollowedCategoriesQueryDto,
-  ): Promise<FollowedCategoriesResponseDto> {
+  ) {
+    const cursor = query.cursor ? FollowedCategoryCursorMapper.parse(query.cursor) : null;
+
     return this.categoryQueryService.listFollowedCategories(user.sub, {
       limit: query.limit,
-      cursor: query.cursor ? FollowedCategoryCursorMapper.parse(query.cursor) : null,
+      cursor,
     });
   }
 }
