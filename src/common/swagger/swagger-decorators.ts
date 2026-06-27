@@ -17,79 +17,50 @@ import { AUTH_SECURITY_NAME } from '@/core/swagger/swagger.config';
 import { ProblemDetailDto, ErrorResponseExamples } from './swagger-schemas';
 
 // ─── Pre-configured response options ─────────────────────────────────────────────
-
-const baseProblemDetail = (): ApiResponseOptions => ({
-  type: ProblemDetailDto,
-});
+//
+// Every ProblemDetail error response is wired with the same shape so the OpenAPI
+// spec consistently shows both a schema reference and a concrete example.
 
 const unauthorizedOptions: ApiResponseOptions = {
   description: 'Missing or invalid authentication token',
-  ...baseProblemDetail(),
-  content: {
-    'application/json': {
-      example: ErrorResponseExamples.unauthorized,
-    },
-  },
+  type: ProblemDetailDto,
+  example: ErrorResponseExamples.unauthorized,
 };
 
 const forbiddenOptions: ApiResponseOptions = {
   description: 'Authenticated user lacks required role or permission',
-  ...baseProblemDetail(),
-  content: {
-    'application/json': {
-      example: ErrorResponseExamples.forbidden,
-    },
-  },
+  type: ProblemDetailDto,
+  example: ErrorResponseExamples.forbidden,
 };
 
 const notFoundOptions: ApiResponseOptions = {
   description: 'The requested resource does not exist or has been deleted',
-  ...baseProblemDetail(),
-  content: {
-    'application/json': {
-      example: ErrorResponseExamples.notFound,
-    },
-  },
+  type: ProblemDetailDto,
+  example: ErrorResponseExamples.notFound,
 };
 
 const badRequestOptions: ApiResponseOptions = {
   description: 'Request body, query, or params failed validation',
-  ...baseProblemDetail(),
-  content: {
-    'application/json': {
-      example: ErrorResponseExamples.badRequest,
-    },
-  },
+  type: ProblemDetailDto,
+  example: ErrorResponseExamples.badRequest,
 };
 
 const conflictOptions: ApiResponseOptions = {
   description: 'The request conflicts with the current state of the resource',
-  ...baseProblemDetail(),
-  content: {
-    'application/json': {
-      example: ErrorResponseExamples.conflict,
-    },
-  },
+  type: ProblemDetailDto,
+  example: ErrorResponseExamples.conflict,
 };
 
 const tooManyRequestsOptions: ApiResponseOptions = {
   description: 'Rate limit exceeded',
-  ...baseProblemDetail(),
-  content: {
-    'application/json': {
-      example: ErrorResponseExamples.tooManyRequests,
-    },
-  },
+  type: ProblemDetailDto,
+  example: ErrorResponseExamples.tooManyRequests,
 };
 
 const internalErrorOptions: ApiResponseOptions = {
   description: 'Unexpected server error',
-  ...baseProblemDetail(),
-  content: {
-    'application/json': {
-      example: ErrorResponseExamples.internalServerError,
-    },
-  },
+  type: ProblemDetailDto,
+  example: ErrorResponseExamples.internalServerError,
 };
 
 // ─── Authentication decorators ───────────────────────────────────────────────────
