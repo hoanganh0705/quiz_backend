@@ -421,34 +421,6 @@ class PublicTournamentProfileDataDto {
   lastTournamentAt!: string | null;
 }
 
-class RelatedQuizItemDataDto {
-  @ApiProperty({ description: 'Quiz identifier', example: '660e8400-e29b-41d4-a716-446655440000' })
-  quizId!: string;
-
-  @ApiProperty({ description: 'Quiz title', example: 'JavaScript Fundamentals' })
-  title!: string;
-
-  @ApiProperty({ description: 'URL-friendly quiz slug', example: 'javascript-fundamentals' })
-  slug!: string;
-
-  @ApiPropertyOptional({
-    description: 'Quiz cover image URL',
-    type: String,
-    format: 'uri',
-    nullable: true,
-    example: 'https://example.com/covers/js.png',
-  })
-  imageUrl!: string | null;
-}
-
-class RelatedQuizzesDataDto {
-  @ApiProperty({
-    description: 'Related quiz items',
-    type: () => [RelatedQuizItemDataDto],
-  })
-  items!: RelatedQuizItemDataDto[];
-}
-
 class QuizListItemDataDto {
   @ApiProperty({ description: 'Quiz identifier', example: '660e8400-e29b-41d4-a716-446655440000' })
   quizId!: string;
@@ -617,10 +589,10 @@ export class UserWrappedPublicTournamentProfileDto {
 
 export class UserWrappedRelatedQuizzesDto {
   @ApiProperty({
-    description: 'Wrapped response payload',
-    type: () => RelatedQuizzesDataDto,
+    description: 'Wrapped response payload (recommended quiz items)',
+    type: () => [QuizListItemDataDto],
   })
-  data!: RelatedQuizzesDataDto;
+  data!: QuizListItemDataDto[];
 
   @ApiProperty({ description: 'Response metadata', type: () => MetaDto })
   meta!: MetaDto;

@@ -11,23 +11,10 @@ import {
   UseFilters,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
-import {
-  ApiTags,
-  ApiOperation,
-  ApiOkResponse,
-  ApiNotFoundResponse,
-  ApiConflictResponse,
-  ApiInternalServerErrorResponse,
-} from '@nestjs/swagger';
+import { ApiTags } from '@nestjs/swagger';
 import { Public } from '@/common/decorators/public.decorator';
 import { Permissions } from '@/common/authorization/decorators/permissions.decorator';
 import { Permission } from '@/common/authorization/permissions';
-import {
-  ApiAuth,
-  ApiAuthCreate,
-  ApiAuthUpdate,
-  ApiPublicList,
-} from '@/common/swagger/swagger-decorators';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
 import { CreateTagDto } from '../../dto/request/create-tag.dto';
@@ -38,22 +25,27 @@ import { RelatedTagsQueryDto } from '../../dto/request/related-tags-query.dto';
 import { TagApplicationService } from '../../application/tag.application.service';
 import { TagDomainExceptionFilter } from '../filters/tag-domain-exception.filter';
 import { TagCursorMapper } from '../../mappers/tag-cursor.mapper';
-import {
-  TagWrappedRankedListDto,
-  TagWrappedRelatedListDto,
-  TagWrappedAnalyticsDto,
-  TagWrappedFollowMessageDto,
-  TagWrappedDeleteMessageDto,
-  TagWrappedTagDto,
-  TagWrappedListDto,
-} from '../../dto/response/tag-response-docs.dto';
-import { WrappedQuizListDto } from '@/modules/quiz/dto/response/quiz-response-docs.dto';
+import type { ListQuizzesQueryDto } from '@/modules/quiz/dto/request/list-quizzes-query.dto';
 import type {
   CreateTagCommand,
   ListTagsQuery,
   UpdateTagCommand,
 } from '../../domain/types/tag-commands';
-import type { ListQuizzesQueryDto } from '@/modules/quiz/dto/request/list-quizzes-query.dto';
+import {
+  ApiCreateTagResponse,
+  ApiDeleteTagResponse,
+  ApiFollowTagResponse,
+  ApiListTagsResponse,
+  ApiPopularTagsResponse,
+  ApiRelatedTagsResponse,
+  ApiRestoreTagResponse,
+  ApiTagAnalyticsResponse,
+  ApiTagBySlugResponse,
+  ApiTagQuizzesResponse,
+  ApiTrendingTagsResponse,
+  ApiUnfollowTagResponse,
+  ApiUpdateTagResponse,
+} from '../swagger/tag-swagger-decorators';
 
 @ApiTags('tags')
 @Controller('tags')
@@ -63,110 +55,63 @@ export class TagController {
 
   @Get('popular')
   @Public()
-  @ApiOperation({
-    summary: 'Popular tags',
-    description: 'Returns tags ranked by aggregated quiz popularity score.',
-  })
-  @ApiOkResponse({
-    description: 'Ranked tags returned',
-    type: TagWrappedRankedListDto,
-  })
-  @ApiInternalServerErrorResponse()
+  @ApiPopularTagsResponse()
   getPopularTags(@Query() query: TagRankingQueryDto) {
     return this.tagApplicationService.getPopularTags({ limit: query.limit });
   }
 
   @Get('trending')
   @Public()
-  @ApiOperation({
-    summary: 'Trending tags',
-    description: 'Returns tags ranked by aggregated quiz trending score.',
-  })
-  @ApiOkResponse({
-    description: 'Ranked tags returned',
-    type: TagWrappedRankedListDto,
-  })
-  @ApiInternalServerErrorResponse()
+  @ApiTrendingTagsResponse()
   getTrendingTags(@Query() query: TagRankingQueryDto) {
     return this.tagApplicationService.getTrendingTags({ limit: query.limit });
   }
 
   @Get(':slug/quizzes')
   @Public()
-  @ApiPublicList({ description: 'Quizzes in tag returned', type: WrappedQuizListDto })
-  @ApiNotFoundResponse({ description: 'Tag not found' })
-  @ApiInternalServerErrorResponse()
+  @ApiTagQuizzesResponse()
   getTagQuizzes(@Param('slug') slug: string, @Query() query: ListQuizzesQueryDto) {
     return this.tagApplicationService.getTagQuizzesBySlug(slug, query);
   }
 
   @Get(':slug/related')
   @Public()
-  @ApiPublicList({ description: 'Related tags returned', type: TagWrappedRelatedListDto })
-  @ApiNotFoundResponse({ description: 'Tag not found' })
-  @ApiInternalServerErrorResponse()
+  @ApiRelatedTagsResponse()
   getRelatedTags(@Param('slug') slug: string, @Query() query: RelatedTagsQueryDto) {
     return this.tagApplicationService.getRelatedTags(slug, { limit: query.limit ?? 10 });
   }
 
   @Get(':id/analytics')
   @Public()
-  @ApiPublicList({ description: 'Analytics returned', type: TagWrappedAnalyticsDto })
-  @ApiNotFoundResponse({ description: 'Tag analytics not found' })
-  @ApiInternalServerErrorResponse()
+  @ApiTagAnalyticsResponse()
   getTagAnalytics(@Param('id', new ParseUUIDPipe()) tagId: string) {
     return this.tagApplicationService.getTagAnalytics(tagId);
   }
 
   @Post(':id/follow')
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
-  @ApiAuth()
-  @ApiOperation({
-    summary: 'Follow a tag',
-    description: 'Adds the authenticated user to the tag followers. Idempotent.',
-  })
-  @ApiOkResponse({ description: 'Tag followed', type: TagWrappedFollowMessageDto })
-  @ApiNotFoundResponse({ description: 'Tag not found' })
-  @ApiInternalServerErrorResponse()
+  @ApiFollowTagResponse()
   followTag(@Param('id', new ParseUUIDPipe()) tagId: string, @CurrentUser() user: JwtPayload) {
     return this.tagApplicationService.followTag(user.sub, tagId);
   }
 
   @Delete(':id/follow')
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
-  @ApiAuth()
-  @ApiOperation({
-    summary: 'Unfollow a tag',
-    description: 'Removes the authenticated user from the tag followers. Idempotent.',
-  })
-  @ApiOkResponse({ description: 'Tag unfollowed', type: TagWrappedFollowMessageDto })
-  @ApiNotFoundResponse({ description: 'Tag not found' })
-  @ApiInternalServerErrorResponse()
+  @ApiUnfollowTagResponse()
   unfollowTag(@Param('id', new ParseUUIDPipe()) tagId: string, @CurrentUser() user: JwtPayload) {
     return this.tagApplicationService.unfollowTag(user.sub, tagId);
   }
 
   @Post(':id/restore')
   @Permissions(Permission.TAG_MANAGE)
-  @ApiAuth()
-  @ApiOperation({
-    summary: 'Restore tag',
-    description: 'Restores a soft-deleted tag. Requires admin role.',
-  })
-  @ApiOkResponse({ description: 'Tag restored', type: TagWrappedTagDto })
-  @ApiNotFoundResponse({ description: 'Tag not found' })
-  @ApiConflictResponse({
-    description: 'A tag with this slug already exists or tag is already active',
-  })
-  @ApiInternalServerErrorResponse()
+  @ApiRestoreTagResponse()
   restoreTag(@Param('id', new ParseUUIDPipe()) tagId: string) {
     return this.tagApplicationService.restoreTag(tagId);
   }
 
   @Get()
   @Public()
-  @ApiPublicList({ description: 'Tags returned', type: TagWrappedListDto })
-  @ApiInternalServerErrorResponse()
+  @ApiListTagsResponse()
   listTags(@Query() query: ListTagsQueryDto) {
     const command: ListTagsQuery = {
       limit: query.limit,
@@ -177,16 +122,14 @@ export class TagController {
 
   @Get(':slug')
   @Public()
-  @ApiPublicList({ description: 'Tag found', type: TagWrappedTagDto })
-  @ApiNotFoundResponse({ description: 'Tag not found' })
-  @ApiInternalServerErrorResponse()
+  @ApiTagBySlugResponse()
   getTagBySlug(@Param('slug') slug: string) {
     return this.tagApplicationService.getTagBySlug(slug);
   }
 
   @Post()
   @Permissions(Permission.TAG_MANAGE)
-  @ApiAuthCreate({ description: 'Tag created', type: TagWrappedTagDto })
+  @ApiCreateTagResponse()
   createTag(@Body() payload: CreateTagDto) {
     const command: CreateTagCommand = { name: payload.name, slug: payload.slug };
     return this.tagApplicationService.createTag(command);
@@ -194,8 +137,7 @@ export class TagController {
 
   @Patch(':id')
   @Permissions(Permission.TAG_MANAGE)
-  @ApiAuthUpdate({ description: 'Tag updated', type: TagWrappedTagDto })
-  @ApiNotFoundResponse({ description: 'Tag not found' })
+  @ApiUpdateTagResponse()
   updateTag(@Param('id', new ParseUUIDPipe()) tagId: string, @Body() payload: UpdateTagDto) {
     const command: UpdateTagCommand = { name: payload.name, slug: payload.slug };
     return this.tagApplicationService.updateTag(tagId, command);
@@ -203,10 +145,7 @@ export class TagController {
 
   @Delete(':id')
   @Permissions(Permission.TAG_MANAGE)
-  @ApiAuth()
-  @ApiOperation({ summary: 'Delete tag' })
-  @ApiOkResponse({ description: 'Tag deleted', type: TagWrappedDeleteMessageDto })
-  @ApiNotFoundResponse({ description: 'Tag not found' })
+  @ApiDeleteTagResponse()
   deleteTag(@Param('id', new ParseUUIDPipe()) tagId: string) {
     return this.tagApplicationService.deleteTag(tagId);
   }
