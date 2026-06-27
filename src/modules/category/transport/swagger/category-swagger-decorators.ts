@@ -1,0 +1,386 @@
+import { applyDecorators, type Type } from '@nestjs/common';
+import {
+  ApiBadRequestResponse,
+  ApiBearerAuth,
+  ApiConflictResponse,
+  ApiCreatedResponse,
+  ApiForbiddenResponse,
+  ApiInternalServerErrorResponse,
+  ApiNotFoundResponse,
+  ApiOkResponse,
+  ApiUnauthorizedResponse,
+  type ApiResponseOptions,
+} from '@nestjs/swagger';
+import { AUTH_SECURITY_NAME } from '@/core/swagger/swagger.config';
+import { ProblemDetailDto } from '@/common/swagger/swagger-schemas';
+import { WrappedQuizListDto } from '@/modules/quiz/dto/response/quiz-response-docs.dto';
+import {
+  CategoryWrappedAnalyticsDto,
+  CategoryWrappedCategoryDto,
+  CategoryWrappedFollowedListDto,
+  CategoryWrappedListDto,
+  CategoryWrappedMessageDto,
+  CategoryWrappedRankedListDto,
+  CategoryWrappedRelatedListDto,
+} from '../../dto/response/category-response-docs.dto';
+import {
+  analyticsBadRequestExample,
+  analyticsInternalErrorExample,
+  analyticsNotFoundExample,
+  categoryByIdBadRequestExample,
+  categoryByIdInternalErrorExample,
+  categoryByIdNotFoundExample,
+  categoryBySlugInternalErrorExample,
+  categoryBySlugNotFoundExample,
+  categoryQuizzesInternalErrorExample,
+  categoryQuizzesNotFoundExample,
+  createCategoryBadRequestExample,
+  createCategoryConflictExample,
+  createCategoryForbiddenExample,
+  createCategoryInternalErrorExample,
+  createCategoryUnauthorizedExample,
+  deleteCategoryForbiddenExample,
+  deleteCategoryInternalErrorExample,
+  deleteCategoryNotFoundExample,
+  deleteCategoryUnauthorizedExample,
+  followedCategoriesBadRequestExample,
+  followedCategoriesForbiddenExample,
+  followedCategoriesInternalErrorExample,
+  followedCategoriesUnauthorizedExample,
+  followForbiddenExample,
+  followInternalErrorExample,
+  followNotFoundExample,
+  followUnauthorizedExample,
+  listCategoriesBadRequestExample,
+  listCategoriesInternalErrorExample,
+  popularBadRequestExample,
+  popularInternalErrorExample,
+  relatedBadRequestExample,
+  relatedInternalErrorExample,
+  relatedNotFoundExample,
+  restoreConflictExample,
+  restoreForbiddenExample,
+  restoreInternalErrorExample,
+  restoreNotFoundExample,
+  restoreUnauthorizedExample,
+  trendingBadRequestExample,
+  trendingInternalErrorExample,
+  unfollowForbiddenExample,
+  unfollowInternalErrorExample,
+  unfollowNotFoundExample,
+  unfollowUnauthorizedExample,
+  updateCategoryBadRequestExample,
+  updateCategoryConflictExample,
+  updateCategoryForbiddenExample,
+  updateCategoryInternalErrorExample,
+  updateCategoryNotFoundExample,
+  updateCategoryUnauthorizedExample,
+  CATEGORY_ANALYTICS_EXAMPLE,
+  CATEGORY_DELETE_MESSAGE_EXAMPLE,
+  CATEGORY_DETAIL_EXAMPLE,
+  CATEGORY_FOLLOWED_LIST_EXAMPLE,
+  CATEGORY_FOLLOW_MESSAGE_EXAMPLE,
+  CATEGORY_LIST_EXAMPLE,
+  CATEGORY_QUIZZES_EXAMPLE,
+  CATEGORY_RANKED_LIST_EXAMPLE,
+  CATEGORY_RELATED_LIST_EXAMPLE,
+  CATEGORY_UNFOLLOW_MESSAGE_EXAMPLE,
+} from './examples';
+
+// ─── Success response factory ────────────────────────────────────────────────────
+//
+// Single helper so every success decorator stays a one-liner.
+const createDataResponse = (
+  status: 200 | 201,
+  description: string,
+  type: Type<unknown>,
+  example: object,
+): MethodDecorator =>
+  status === 201
+    ? ApiCreatedResponse({ description, type, example })
+    : ApiOkResponse({ description, type, example });
+
+// ─── Shared description strings ────────────────────────────────────────────────
+//
+// One wording style across every endpoint: third-person imperative.
+const DESCRIPTIONS = {
+  // single resource
+  categoryById: 'Returns the requested category.',
+  categoryBySlug: 'Returns the requested category.',
+  categoryCreate: 'Returns the created category.',
+  categoryUpdate: 'Returns the updated category.',
+  categoryRestore: 'Returns the restored category.',
+  // lists
+  categoryList: 'Returns the requested categories.',
+  categoryRanked: 'Returns the ranked categories.',
+  categoryRelated: 'Returns the related categories.',
+  categoryFollowed: 'Returns the followed categories.',
+  categoryAnalytics: 'Returns the category analytics.',
+  categoryQuizzes: 'Returns the quizzes in the category.',
+  // action confirmations
+  categoryFollow: 'Confirms the category was followed.',
+  categoryUnfollow: 'Confirms the category was unfollowed.',
+  categoryDelete: 'Confirms the category was deleted.',
+} as const;
+
+// ─── Error response option factory ────────────────────────────────────────────
+//
+// Each helper builds a ProblemDetail option block whose `example.instance`
+// matches the URL of the endpoint that documents it.
+const problem = {
+  badRequest: (example: object): ApiResponseOptions => ({
+    description: 'Request body, query, or params failed validation',
+    type: ProblemDetailDto,
+    example,
+  }),
+  unauthorized: (example: object): ApiResponseOptions => ({
+    description: 'Authentication is required to access this resource',
+    type: ProblemDetailDto,
+    example,
+  }),
+  forbidden: (example: object): ApiResponseOptions => ({
+    description: 'Authenticated user lacks the required role or permission',
+    type: ProblemDetailDto,
+    example,
+  }),
+  notFound: (example: object): ApiResponseOptions => ({
+    description: 'The requested category does not exist or has been deleted',
+    type: ProblemDetailDto,
+    example,
+  }),
+  conflict: (example: object): ApiResponseOptions => ({
+    description: 'The request conflicts with the current state of the category',
+    type: ProblemDetailDto,
+    example,
+  }),
+  internalError: (example: object): ApiResponseOptions => ({
+    description: 'Unexpected server error',
+    type: ProblemDetailDto,
+    example,
+  }),
+};
+
+// ─── Per-endpoint composed decorators ─────────────────────────────────────────
+
+/** GET /categories/popular */
+export const ApiPopularCategoriesResponse = (): MethodDecorator =>
+  applyDecorators(
+    createDataResponse(
+      200,
+      DESCRIPTIONS.categoryRanked,
+      CategoryWrappedRankedListDto,
+      CATEGORY_RANKED_LIST_EXAMPLE,
+    ),
+    ApiBadRequestResponse(problem.badRequest(popularBadRequestExample)),
+    ApiInternalServerErrorResponse(problem.internalError(popularInternalErrorExample)),
+  );
+
+/** GET /categories/trending */
+export const ApiTrendingCategoriesResponse = (): MethodDecorator =>
+  applyDecorators(
+    createDataResponse(
+      200,
+      DESCRIPTIONS.categoryRanked,
+      CategoryWrappedRankedListDto,
+      CATEGORY_RANKED_LIST_EXAMPLE,
+    ),
+    ApiBadRequestResponse(problem.badRequest(trendingBadRequestExample)),
+    ApiInternalServerErrorResponse(problem.internalError(trendingInternalErrorExample)),
+  );
+
+/** GET /categories/:slug/quizzes */
+export const ApiCategoryQuizzesResponse = (): MethodDecorator =>
+  applyDecorators(
+    createDataResponse(
+      200,
+      DESCRIPTIONS.categoryQuizzes,
+      WrappedQuizListDto,
+      CATEGORY_QUIZZES_EXAMPLE,
+    ),
+    ApiNotFoundResponse(problem.notFound(categoryQuizzesNotFoundExample)),
+    ApiInternalServerErrorResponse(problem.internalError(categoryQuizzesInternalErrorExample)),
+  );
+
+/** GET /categories/:slug/related */
+export const ApiRelatedCategoriesResponse = (): MethodDecorator =>
+  applyDecorators(
+    createDataResponse(
+      200,
+      DESCRIPTIONS.categoryRelated,
+      CategoryWrappedRelatedListDto,
+      CATEGORY_RELATED_LIST_EXAMPLE,
+    ),
+    ApiBadRequestResponse(problem.badRequest(relatedBadRequestExample)),
+    ApiNotFoundResponse(problem.notFound(relatedNotFoundExample)),
+    ApiInternalServerErrorResponse(problem.internalError(relatedInternalErrorExample)),
+  );
+
+/** GET /categories/:id/analytics */
+export const ApiCategoryAnalyticsResponse = (): MethodDecorator =>
+  applyDecorators(
+    createDataResponse(
+      200,
+      DESCRIPTIONS.categoryAnalytics,
+      CategoryWrappedAnalyticsDto,
+      CATEGORY_ANALYTICS_EXAMPLE,
+    ),
+    ApiBadRequestResponse(problem.badRequest(analyticsBadRequestExample)),
+    ApiNotFoundResponse(problem.notFound(analyticsNotFoundExample)),
+    ApiInternalServerErrorResponse(problem.internalError(analyticsInternalErrorExample)),
+  );
+
+/** POST /categories/:id/follow */
+export const ApiFollowCategoryResponse = (): MethodDecorator =>
+  applyDecorators(
+    ApiBearerAuth(AUTH_SECURITY_NAME),
+    createDataResponse(
+      200,
+      DESCRIPTIONS.categoryFollow,
+      CategoryWrappedMessageDto,
+      CATEGORY_FOLLOW_MESSAGE_EXAMPLE,
+    ),
+    ApiUnauthorizedResponse(problem.unauthorized(followUnauthorizedExample)),
+    ApiForbiddenResponse(problem.forbidden(followForbiddenExample)),
+    ApiNotFoundResponse(problem.notFound(followNotFoundExample)),
+    ApiInternalServerErrorResponse(problem.internalError(followInternalErrorExample)),
+  );
+
+/** DELETE /categories/:id/follow */
+export const ApiUnfollowCategoryResponse = (): MethodDecorator =>
+  applyDecorators(
+    ApiBearerAuth(AUTH_SECURITY_NAME),
+    createDataResponse(
+      200,
+      DESCRIPTIONS.categoryUnfollow,
+      CategoryWrappedMessageDto,
+      CATEGORY_UNFOLLOW_MESSAGE_EXAMPLE,
+    ),
+    ApiUnauthorizedResponse(problem.unauthorized(unfollowUnauthorizedExample)),
+    ApiForbiddenResponse(problem.forbidden(unfollowForbiddenExample)),
+    ApiNotFoundResponse(problem.notFound(unfollowNotFoundExample)),
+    ApiInternalServerErrorResponse(problem.internalError(unfollowInternalErrorExample)),
+  );
+
+/** POST /categories/:id/restore */
+export const ApiRestoreCategoryResponse = (): MethodDecorator =>
+  applyDecorators(
+    ApiBearerAuth(AUTH_SECURITY_NAME),
+    createDataResponse(
+      200,
+      DESCRIPTIONS.categoryRestore,
+      CategoryWrappedCategoryDto,
+      CATEGORY_DETAIL_EXAMPLE,
+    ),
+    ApiUnauthorizedResponse(problem.unauthorized(restoreUnauthorizedExample)),
+    ApiForbiddenResponse(problem.forbidden(restoreForbiddenExample)),
+    ApiNotFoundResponse(problem.notFound(restoreNotFoundExample)),
+    ApiConflictResponse(problem.conflict(restoreConflictExample)),
+    ApiInternalServerErrorResponse(problem.internalError(restoreInternalErrorExample)),
+  );
+
+/** GET /categories */
+export const ApiListCategoriesResponse = (): MethodDecorator =>
+  applyDecorators(
+    createDataResponse(
+      200,
+      DESCRIPTIONS.categoryList,
+      CategoryWrappedListDto,
+      CATEGORY_LIST_EXAMPLE,
+    ),
+    ApiBadRequestResponse(problem.badRequest(listCategoriesBadRequestExample)),
+    ApiInternalServerErrorResponse(problem.internalError(listCategoriesInternalErrorExample)),
+  );
+
+/** GET /categories/:id */
+export const ApiCategoryByIdResponse = (): MethodDecorator =>
+  applyDecorators(
+    createDataResponse(
+      200,
+      DESCRIPTIONS.categoryById,
+      CategoryWrappedCategoryDto,
+      CATEGORY_DETAIL_EXAMPLE,
+    ),
+    ApiBadRequestResponse(problem.badRequest(categoryByIdBadRequestExample)),
+    ApiNotFoundResponse(problem.notFound(categoryByIdNotFoundExample)),
+    ApiInternalServerErrorResponse(problem.internalError(categoryByIdInternalErrorExample)),
+  );
+
+/** GET /categories/:slug */
+export const ApiCategoryBySlugResponse = (): MethodDecorator =>
+  applyDecorators(
+    createDataResponse(
+      200,
+      DESCRIPTIONS.categoryBySlug,
+      CategoryWrappedCategoryDto,
+      CATEGORY_DETAIL_EXAMPLE,
+    ),
+    ApiNotFoundResponse(problem.notFound(categoryBySlugNotFoundExample)),
+    ApiInternalServerErrorResponse(problem.internalError(categoryBySlugInternalErrorExample)),
+  );
+
+/** POST /categories */
+export const ApiCreateCategoryResponse = (): MethodDecorator =>
+  applyDecorators(
+    ApiBearerAuth(AUTH_SECURITY_NAME),
+    createDataResponse(
+      201,
+      DESCRIPTIONS.categoryCreate,
+      CategoryWrappedCategoryDto,
+      CATEGORY_DETAIL_EXAMPLE,
+    ),
+    ApiBadRequestResponse(problem.badRequest(createCategoryBadRequestExample)),
+    ApiUnauthorizedResponse(problem.unauthorized(createCategoryUnauthorizedExample)),
+    ApiForbiddenResponse(problem.forbidden(createCategoryForbiddenExample)),
+    ApiConflictResponse(problem.conflict(createCategoryConflictExample)),
+    ApiInternalServerErrorResponse(problem.internalError(createCategoryInternalErrorExample)),
+  );
+
+/** PATCH /categories/:id */
+export const ApiUpdateCategoryResponse = (): MethodDecorator =>
+  applyDecorators(
+    ApiBearerAuth(AUTH_SECURITY_NAME),
+    createDataResponse(
+      200,
+      DESCRIPTIONS.categoryUpdate,
+      CategoryWrappedCategoryDto,
+      CATEGORY_DETAIL_EXAMPLE,
+    ),
+    ApiBadRequestResponse(problem.badRequest(updateCategoryBadRequestExample)),
+    ApiUnauthorizedResponse(problem.unauthorized(updateCategoryUnauthorizedExample)),
+    ApiForbiddenResponse(problem.forbidden(updateCategoryForbiddenExample)),
+    ApiNotFoundResponse(problem.notFound(updateCategoryNotFoundExample)),
+    ApiConflictResponse(problem.conflict(updateCategoryConflictExample)),
+    ApiInternalServerErrorResponse(problem.internalError(updateCategoryInternalErrorExample)),
+  );
+
+/** DELETE /categories/:id */
+export const ApiDeleteCategoryResponse = (): MethodDecorator =>
+  applyDecorators(
+    ApiBearerAuth(AUTH_SECURITY_NAME),
+    createDataResponse(
+      200,
+      DESCRIPTIONS.categoryDelete,
+      CategoryWrappedMessageDto,
+      CATEGORY_DELETE_MESSAGE_EXAMPLE,
+    ),
+    ApiUnauthorizedResponse(problem.unauthorized(deleteCategoryUnauthorizedExample)),
+    ApiForbiddenResponse(problem.forbidden(deleteCategoryForbiddenExample)),
+    ApiNotFoundResponse(problem.notFound(deleteCategoryNotFoundExample)),
+    ApiInternalServerErrorResponse(problem.internalError(deleteCategoryInternalErrorExample)),
+  );
+
+/** GET /users/me/followed-categories */
+export const ApiFollowedCategoriesResponse = (): MethodDecorator =>
+  applyDecorators(
+    ApiBearerAuth(AUTH_SECURITY_NAME),
+    createDataResponse(
+      200,
+      DESCRIPTIONS.categoryFollowed,
+      CategoryWrappedFollowedListDto,
+      CATEGORY_FOLLOWED_LIST_EXAMPLE,
+    ),
+    ApiBadRequestResponse(problem.badRequest(followedCategoriesBadRequestExample)),
+    ApiUnauthorizedResponse(problem.unauthorized(followedCategoriesUnauthorizedExample)),
+    ApiForbiddenResponse(problem.forbidden(followedCategoriesForbiddenExample)),
+    ApiInternalServerErrorResponse(problem.internalError(followedCategoriesInternalErrorExample)),
+  );

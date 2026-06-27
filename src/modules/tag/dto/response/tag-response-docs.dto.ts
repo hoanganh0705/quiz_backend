@@ -218,13 +218,13 @@ class TagAnalyticsDataDto {
 
   @ApiProperty({
     description: 'Summary statistics across all quizzes in this tag',
-    type: TagAnalyticsSummaryDataDto,
+    type: () => TagAnalyticsSummaryDataDto,
   })
   summary!: TagAnalyticsSummaryDataDto;
 
   @ApiProperty({
     description: 'Top quizzes in this tag by popularity',
-    type: [TagAnalyticsTopQuizDataDto],
+    type: () => [TagAnalyticsTopQuizDataDto],
   })
   topQuizzes!: TagAnalyticsTopQuizDataDto[];
 
@@ -311,13 +311,13 @@ class PaginatedMetaDto {
 export class TagWrappedRankedListDto {
   @ApiProperty({
     description: 'Ranked tag items',
-    type: [RankedTagDataDto],
+    type: () => [RankedTagDataDto],
   })
   data!: RankedTagDataDto[];
 
   @ApiProperty({
     description: 'Response metadata',
-    type: MetaDto,
+    type: () => MetaDto,
   })
   meta!: MetaDto;
 }
@@ -325,69 +325,69 @@ export class TagWrappedRankedListDto {
 export class TagWrappedRelatedListDto {
   @ApiProperty({
     description: 'Related tag items',
-    type: [TagDataDto],
+    type: () => [TagDataDto],
   })
   data!: TagDataDto[];
 
   @ApiProperty({
     description: 'Response metadata',
-    type: MetaDto,
+    type: () => MetaDto,
   })
   meta!: MetaDto;
 }
 
 export class TagWrappedAnalyticsDto {
   @ApiProperty({
-    description: 'Wrapped tag analytics',
-    type: TagAnalyticsDataDto,
+    description: 'Tag analytics payload',
+    type: () => TagAnalyticsDataDto,
   })
   data!: TagAnalyticsDataDto;
 
   @ApiProperty({
     description: 'Response metadata',
-    type: MetaDto,
+    type: () => MetaDto,
   })
   meta!: MetaDto;
 }
 
 export class TagWrappedFollowMessageDto {
   @ApiProperty({
-    description: 'Wrapped follow/unfollow result',
-    type: TagFollowDataDto,
+    description: 'Follow/unfollow result payload',
+    type: () => TagFollowDataDto,
   })
   data!: TagFollowDataDto;
 
   @ApiProperty({
     description: 'Response metadata',
-    type: MetaDto,
+    type: () => MetaDto,
   })
   meta!: MetaDto;
 }
 
 export class TagWrappedDeleteMessageDto {
   @ApiProperty({
-    description: 'Wrapped delete result',
-    type: TagDeleteDataDto,
+    description: 'Deletion confirmation payload',
+    type: () => TagDeleteDataDto,
   })
   data!: TagDeleteDataDto;
 
   @ApiProperty({
     description: 'Response metadata',
-    type: MetaDto,
+    type: () => MetaDto,
   })
   meta!: MetaDto;
 }
 
 export class TagWrappedTagDto {
   @ApiProperty({
-    description: 'Wrapped tag details',
-    type: TagDataDto,
+    description: 'Tag payload',
+    type: () => TagDataDto,
   })
   data!: TagDataDto;
 
   @ApiProperty({
     description: 'Response metadata',
-    type: MetaDto,
+    type: () => MetaDto,
   })
   meta!: MetaDto;
 }
@@ -395,13 +395,13 @@ export class TagWrappedTagDto {
 export class TagWrappedListDto {
   @ApiProperty({
     description: 'Paginated tag items',
-    type: [TagDataDto],
+    type: () => [TagDataDto],
   })
   data!: TagDataDto[];
 
   @ApiProperty({
     description: 'Response metadata with pagination',
-    type: PaginatedMetaDto,
+    type: () => PaginatedMetaDto,
   })
   meta!: PaginatedMetaDto;
 }
@@ -409,13 +409,13 @@ export class TagWrappedListDto {
 export class TagWrappedFollowedListDto {
   @ApiProperty({
     description: 'Paginated followed tag items',
-    type: [FollowedTagDataDto],
+    type: () => [FollowedTagDataDto],
   })
   data!: FollowedTagDataDto[];
 
   @ApiProperty({
     description: 'Response metadata with pagination',
-    type: PaginatedMetaDto,
+    type: () => PaginatedMetaDto,
   })
   meta!: PaginatedMetaDto;
 }
