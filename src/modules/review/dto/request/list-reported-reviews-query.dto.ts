@@ -4,11 +4,11 @@ import { IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
 
 export class ListReportedReviewsQueryDto {
   @ApiPropertyOptional({
-    description: 'Opaque cursor for pagination',
+    description: 'Opaque cursor for pagination. Pass the `nextCursor` from a previous response.',
     type: String,
     nullable: true,
     example:
-      'eyJjcmVhdGVkQXQiOiIyMDI2LTAxLTAxVDAwOjAwOjAwLjAwMFoiLCJyZXBvcnRJZCI6Ijk5MGU4NDAwLWUyOWItNDFkNC1hNzE2LTQ0NjY1NTQ0MDAwMSJ9',
+      'eyJjcmVhdGVkQXQiOiAiMjAyNi0wMS0wMVQwMDowMDowMC4wMDBaIiwgInJlcG9ydElkIjogIjk5MGU4NDAwLWUyOWItNDFkNC1hNzE2LTQ0NjY1NTQ0MDAwMSJ9',
   })
   @IsOptional()
   @IsString()

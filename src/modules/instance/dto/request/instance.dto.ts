@@ -33,8 +33,11 @@ export type InstanceStatus = (typeof INSTANCE_STATUSES)[number];
 
 export class GetLeaderboardQueryDto {
   @ApiPropertyOptional({
-    description: 'Base64-encoded cursor for cursor-based pagination',
+    description:
+      'Opaque cursor for cursor-based pagination. Decode base64url to JSON `{ rank, instancePlayerId }`. ' +
+      'Pass the `nextCursor` from the previous page response to continue pagination.',
     nullable: true,
+    example: 'eyJyYW5rIjogMjQsICJpbnN0YW5jZVBsYXllcklkIjogIjU1MGU4NDAwLWUyOWItNDFkNC1hNzE2LTQ0NjY1NTQ0MDA5OSJ9',
   })
   @IsOptional()
   @IsString()
@@ -58,8 +61,12 @@ export class GetLeaderboardQueryDto {
 
 export class ListInstancesQueryDto {
   @ApiPropertyOptional({
-    description: 'Cursor for cursor-based pagination',
+    description:
+      'Opaque cursor for cursor-based pagination. Decode base64 to JSON `{ createdAt, instanceId }`. ' +
+      'Pass the `nextCursor` from the previous page response to continue pagination.',
     nullable: true,
+    example:
+      'eyJjcmVhdGVkQXQiOiIyMDI2LTA2LTI1VDEwOjMwOjAwLjAwMFoiLCJpbnN0YW5jZUlkIjoiNjYwZTg0MDAtZTI5Yi00MWQ0LWE3MTYtNDQ2NjU1NDQwMDAwIn0=',
   })
   @IsOptional()
   @IsString()
@@ -83,6 +90,7 @@ export class ListInstancesQueryDto {
   @ApiPropertyOptional({
     description: 'Filter by instance status',
     enum: INSTANCE_STATUSES,
+    type: String,
     nullable: true,
   })
   @IsOptional()
@@ -91,6 +99,7 @@ export class ListInstancesQueryDto {
   @ApiPropertyOptional({
     description: 'Filter by quiz difficulty',
     enum: QUIZ_DIFFICULTIES,
+    type: String,
     nullable: true,
   })
   @IsOptional()

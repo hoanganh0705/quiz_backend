@@ -12,6 +12,47 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 // These wrapper DTOs are used ONLY in @ApiOkResponse / @ApiCreatedResponse decorators
 // to document the actual wrapped shape in the OpenAPI spec.
 //
+// ─── Error responses ─────────────────────────────────────────────────────────────
+//
+// Two distinct runtime shapes must be documented:
+//
+//   1. Global / Nest HttpException errors
+//      (400 from class-validator, 401 from JwtGuard, 403 from PermissionsGuard,
+//       500 from unhandled errors)
+//      → handled by GlobalExceptionFilter → emits RFC 7807 ProblemDetail
+//        { type, title, status, detail, instance, extensions }
+//
+//   2. Bookmark domain errors
+//      (CollectionNotFoundError, BookmarkNotFoundError,
+//       BookmarkCollectionNotFoundError, CollectionForbiddenError,
+//       CollectionConflictError, BookmarkConflictError)
+//      → handled by BookmarkDomainExceptionFilter → emits
+//        { statusCode: number, message: string, error: string }
+//
+// Both shapes are documented below.
+//
+
+// ─── Error response schemas ─────────────────────────────────────────────────────
+
+export class BookmarkDomainErrorDto {
+  @ApiProperty({
+    description: 'HTTP status code produced by the bookmark domain exception filter',
+    example: 404,
+  })
+  statusCode!: number;
+
+  @ApiProperty({
+    description: 'Human-readable message produced by the bookmark domain exception filter',
+    example: 'Bookmark collection not found',
+  })
+  message!: string;
+
+  @ApiProperty({
+    description: 'HTTP status text produced by the bookmark domain exception filter',
+    example: 'Not Found',
+  })
+  error!: string;
+}
 
 // ─── Nested data types ─────────────────────────────────────────────────────────
 
@@ -28,7 +69,7 @@ class BookmarkStatusCollectionDataDto {
 
 class BookmarkStatusDataDto {
   @ApiProperty({
-    description: 'Whether the authenticated user has bookmarked the quiz',
+    description: 'Whether the authenticated user has bookmarked the quiz in any collection',
     example: true,
   })
   bookmarked!: boolean;
@@ -36,6 +77,10 @@ class BookmarkStatusDataDto {
   @ApiProperty({
     description: 'Collections owned by the authenticated user that contain the quiz',
     type: [BookmarkStatusCollectionDataDto],
+    example: [
+      { collectionId: '770e8400-e29b-41d4-a716-446655440000', name: 'Favorites' },
+      { collectionId: '770e8400-e29b-41d4-a716-446655440001', name: 'React Learning' },
+    ],
   })
   collections!: BookmarkStatusCollectionDataDto[];
 }
@@ -56,7 +101,11 @@ class BookmarkCollectionDataDto {
   @ApiProperty({ description: 'Collection name', example: 'My Favorite Quizzes' })
   name!: string;
 
-  @ApiPropertyOptional({ description: 'Collection description', type: String, nullable: true })
+  @ApiPropertyOptional({
+    description: 'Collection description. `null` when no description is set.',
+    type: String,
+    nullable: true,
+  })
   description!: string | null;
 
   @ApiProperty({ description: 'Number of bookmarked quizzes in this collection', example: 5 })
@@ -92,7 +141,7 @@ class BookmarkedQuizDataDto {
   quizSlug!: string;
 
   @ApiPropertyOptional({
-    description: 'Quiz cover image URL',
+    description: 'Quiz cover image URL. `null` when no image is set.',
     type: String,
     format: 'uri',
     nullable: true,
@@ -102,7 +151,11 @@ class BookmarkedQuizDataDto {
   @ApiProperty({ description: 'Whether the quiz is featured', example: true })
   quizIsFeatured!: boolean;
 
-  @ApiPropertyOptional({ description: 'Personal notes', type: String, nullable: true })
+  @ApiPropertyOptional({
+    description: 'Personal notes. `null` when no notes are set.',
+    type: String,
+    nullable: true,
+  })
   notes!: string | null;
 
   @ApiProperty({
@@ -128,7 +181,11 @@ class AddBookmarkDataDto {
   @ApiProperty({ description: 'Quiz identifier', example: '660e8400-e29b-41d4-a716-446655440000' })
   quizId!: string;
 
-  @ApiPropertyOptional({ description: 'Personal notes', type: String, nullable: true })
+  @ApiPropertyOptional({
+    description: 'Personal notes. `null` when no notes are set.',
+    type: String,
+    nullable: true,
+  })
   notes!: string | null;
 
   @ApiProperty({
@@ -154,7 +211,11 @@ class UpdateBookmarkDataDto {
   @ApiProperty({ description: 'Quiz identifier', example: '660e8400-e29b-41d4-a716-446655440000' })
   quizId!: string;
 
-  @ApiPropertyOptional({ description: 'Updated personal notes', type: String, nullable: true })
+  @ApiPropertyOptional({
+    description: 'Updated personal notes. `null` when no notes are set.',
+    type: String,
+    nullable: true,
+  })
   notes!: string | null;
 
   @ApiProperty({
@@ -165,12 +226,19 @@ class UpdateBookmarkDataDto {
 }
 
 class BulkAddDataDto {
-  @ApiProperty({ description: 'Number of bookmarks newly added to the collection', example: 2 })
+  @ApiProperty({
+    description:
+      'Number of bookmarks newly inserted. Duplicates and existing pairs are skipped (idempotent).',
+    example: 2,
+  })
   addedCount!: number;
 }
 
 class BulkRemoveDataDto {
-  @ApiProperty({ description: 'Number of bookmarks removed from the collection', example: 2 })
+  @ApiProperty({
+    description: 'Number of bookmarks removed. Removing a non-existent pair is a no-op.',
+    example: 2,
+  })
   removedCount!: number;
 }
 
@@ -184,7 +252,11 @@ class CreateCollectionDataDto {
   @ApiProperty({ description: 'Collection name', example: 'My Favorite Quizzes' })
   name!: string;
 
-  @ApiPropertyOptional({ description: 'Collection description', type: String, nullable: true })
+  @ApiPropertyOptional({
+    description: 'Collection description. `null` when no description is set.',
+    type: String,
+    nullable: true,
+  })
   description!: string | null;
 
   @ApiProperty({
@@ -204,7 +276,11 @@ class UpdateCollectionDataDto {
   @ApiProperty({ description: 'Collection name', example: 'My Favorite Quizzes' })
   name!: string;
 
-  @ApiPropertyOptional({ description: 'Collection description', type: String, nullable: true })
+  @ApiPropertyOptional({
+    description: 'Collection description. `null` when no description is set.',
+    type: String,
+    nullable: true,
+  })
   description!: string | null;
 
   @ApiProperty({
@@ -246,21 +322,28 @@ class BookmarkStatsFavoriteTagDataDto {
 }
 
 class BookmarkStatsDataDto {
-  @ApiProperty({ description: 'Total number of bookmark collections', example: 3 })
+  @ApiProperty({
+    description: 'Total number of bookmark collections owned by the user',
+    example: 3,
+  })
   totalCollections!: number;
 
-  @ApiProperty({ description: 'Total bookmarked quizzes across all collections', example: 27 })
+  @ApiProperty({
+    description: 'Total number of bookmarked quizzes across all collections',
+    example: 27,
+  })
   totalBookmarks!: number;
 
   @ApiPropertyOptional({
-    description: 'Category with the most bookmarked quizzes. Null if no bookmarks exist.',
+    description:
+      'Category with the most bookmarked quizzes. `null` when the user has no bookmarks.',
     type: BookmarkStatsFavoriteCategoryDataDto,
     nullable: true,
   })
   favoriteCategory!: BookmarkStatsFavoriteCategoryDataDto | null;
 
   @ApiPropertyOptional({
-    description: 'Tag with the most bookmarked quizzes. Null if no bookmarks exist.',
+    description: 'Tag with the most bookmarked quizzes. `null` when the user has no bookmarks.',
     type: BookmarkStatsFavoriteTagDataDto,
     nullable: true,
   })
@@ -278,7 +361,7 @@ class RecentBookmarkItemDataDto {
   slug!: string;
 
   @ApiPropertyOptional({
-    description: 'Quiz cover image URL',
+    description: 'Quiz cover image URL. `null` when no image is set.',
     type: String,
     format: 'uri',
     nullable: true,
@@ -286,7 +369,7 @@ class RecentBookmarkItemDataDto {
   imageUrl!: string | null;
 
   @ApiProperty({
-    description: 'Collection identifier',
+    description: 'Collection identifier containing the bookmark',
     example: '770e8400-e29b-41d4-a716-446655440000',
   })
   collectionId!: string;
@@ -312,7 +395,7 @@ class SearchBookmarkItemDataDto {
   slug!: string;
 
   @ApiPropertyOptional({
-    description: 'Quiz cover image URL',
+    description: 'Quiz cover image URL. `null` when no image is set.',
     type: String,
     format: 'uri',
     nullable: true,
@@ -320,7 +403,7 @@ class SearchBookmarkItemDataDto {
   imageUrl!: string | null;
 
   @ApiProperty({
-    description: 'Collection identifier',
+    description: 'Collection identifier containing the bookmark',
     example: '770e8400-e29b-41d4-a716-446655440000',
   })
   collectionId!: string;
@@ -339,7 +422,7 @@ class CollectionAnalyticsSummaryDataDto {
   @ApiProperty({ description: 'Total bookmarks in this collection', example: 24 })
   totalBookmarks!: number;
 
-  @ApiProperty({ description: 'Number of unique quizzes', example: 24 })
+  @ApiProperty({ description: 'Number of unique quizzes in this collection', example: 24 })
   totalQuizzes!: number;
 
   @ApiProperty({ description: 'Average rating across quizzes in this collection', example: 4.2 })
@@ -400,19 +483,20 @@ class CollectionAnalyticsDataDto {
   summary!: CollectionAnalyticsSummaryDataDto;
 
   @ApiProperty({
-    description: 'Top categories by bookmark count',
+    description: 'Top categories by bookmark count within this collection',
     type: [CollectionAnalyticsTopCategoryDataDto],
   })
   topCategories!: CollectionAnalyticsTopCategoryDataDto[];
 
   @ApiProperty({
-    description: 'Top tags by bookmark count',
+    description: 'Top tags by bookmark count within this collection',
     type: [CollectionAnalyticsTopTagDataDto],
   })
   topTags!: CollectionAnalyticsTopTagDataDto[];
 
   @ApiProperty({
-    description: 'Timestamp of the last analytics refresh (ISO 8601)',
+    description:
+      "Timestamp of the bookmark collection's `updatedAt` (ISO 8601). Used as the analytics refresh marker.",
     example: '2026-06-05T01:00:00.000Z',
   })
   lastUpdated!: string;
@@ -441,6 +525,8 @@ class PaginationMetaDataDto {
     description: 'Cursor for fetching the next page. `null` when there is no next page.',
     type: String,
     nullable: true,
+    example:
+      'eyJib29rbWFya2VkQXQiOiIyMDI2LTAxLTAxVDAwOjAwOjAwLjAwMFoiLCJib29rbWFya0lkIjoiNTUwZTg0MDAtZTI5Yi00MWQ0LWE3MTYtNDQ2NjU1NDQwMDk5In0=',
   })
   nextCursor!: string | null;
 
@@ -462,7 +548,10 @@ class PaginatedMetaDto {
 // ─── Wrapper DTOs (top-level envelope) ────────────────────────────────────────
 
 export class WrappedBookmarkStatusDto {
-  @ApiProperty({ description: 'Wrapped bookmark status', type: BookmarkStatusDataDto })
+  @ApiProperty({
+    description: 'Bookmark status for the requested quiz',
+    type: BookmarkStatusDataDto,
+  })
   data!: BookmarkStatusDataDto;
 
   @ApiProperty({ description: 'Response metadata', type: MetaDto })
@@ -511,7 +600,7 @@ export class WrappedRecentBookmarksDto {
 }
 
 export class WrappedCreateCollectionDto {
-  @ApiProperty({ description: 'Wrapped create collection result', type: CreateCollectionDataDto })
+  @ApiProperty({ description: 'Created collection', type: CreateCollectionDataDto })
   data!: CreateCollectionDataDto;
 
   @ApiProperty({ description: 'Response metadata', type: MetaDto })
@@ -519,7 +608,7 @@ export class WrappedCreateCollectionDto {
 }
 
 export class WrappedAddBookmarkDto {
-  @ApiProperty({ description: 'Wrapped add bookmark result', type: AddBookmarkDataDto })
+  @ApiProperty({ description: 'Added bookmark', type: AddBookmarkDataDto })
   data!: AddBookmarkDataDto;
 
   @ApiProperty({ description: 'Response metadata', type: MetaDto })
@@ -527,7 +616,7 @@ export class WrappedAddBookmarkDto {
 }
 
 export class WrappedBulkAddDto {
-  @ApiProperty({ description: 'Wrapped bulk add result', type: BulkAddDataDto })
+  @ApiProperty({ description: 'Bulk add result', type: BulkAddDataDto })
   data!: BulkAddDataDto;
 
   @ApiProperty({ description: 'Response metadata', type: MetaDto })
@@ -535,7 +624,7 @@ export class WrappedBulkAddDto {
 }
 
 export class WrappedBulkRemoveDto {
-  @ApiProperty({ description: 'Wrapped bulk remove result', type: BulkRemoveDataDto })
+  @ApiProperty({ description: 'Bulk remove result', type: BulkRemoveDataDto })
   data!: BulkRemoveDataDto;
 
   @ApiProperty({ description: 'Response metadata', type: MetaDto })
@@ -543,7 +632,7 @@ export class WrappedBulkRemoveDto {
 }
 
 export class WrappedRemoveBookmarkDto {
-  @ApiProperty({ description: 'Wrapped remove bookmark result', type: MessageDataDto })
+  @ApiProperty({ description: 'Removal confirmation', type: MessageDataDto })
   data!: MessageDataDto;
 
   @ApiProperty({ description: 'Response metadata', type: MetaDto })
@@ -551,7 +640,7 @@ export class WrappedRemoveBookmarkDto {
 }
 
 export class WrappedUpdateBookmarkDto {
-  @ApiProperty({ description: 'Wrapped update bookmark result', type: UpdateBookmarkDataDto })
+  @ApiProperty({ description: 'Updated bookmark', type: UpdateBookmarkDataDto })
   data!: UpdateBookmarkDataDto;
 
   @ApiProperty({ description: 'Response metadata', type: MetaDto })
@@ -559,7 +648,7 @@ export class WrappedUpdateBookmarkDto {
 }
 
 export class WrappedMoveBookmarkDto {
-  @ApiProperty({ description: 'Wrapped move bookmark result', type: MessageDataDto })
+  @ApiProperty({ description: 'Move confirmation', type: MessageDataDto })
   data!: MessageDataDto;
 
   @ApiProperty({ description: 'Response metadata', type: MetaDto })
@@ -567,7 +656,7 @@ export class WrappedMoveBookmarkDto {
 }
 
 export class WrappedUpdateCollectionDto {
-  @ApiProperty({ description: 'Wrapped update collection result', type: UpdateCollectionDataDto })
+  @ApiProperty({ description: 'Updated collection', type: UpdateCollectionDataDto })
   data!: UpdateCollectionDataDto;
 
   @ApiProperty({ description: 'Response metadata', type: MetaDto })
@@ -575,7 +664,10 @@ export class WrappedUpdateCollectionDto {
 }
 
 export class WrappedBookmarkStatsDto {
-  @ApiProperty({ description: 'Wrapped bookmark statistics', type: BookmarkStatsDataDto })
+  @ApiProperty({
+    description: 'Bookmark statistics for the authenticated user',
+    type: BookmarkStatsDataDto,
+  })
   data!: BookmarkStatsDataDto;
 
   @ApiProperty({ description: 'Response metadata', type: MetaDto })
@@ -583,7 +675,7 @@ export class WrappedBookmarkStatsDto {
 }
 
 export class WrappedDeleteCollectionDto {
-  @ApiProperty({ description: 'Wrapped delete collection result', type: MessageDataDto })
+  @ApiProperty({ description: 'Deletion confirmation', type: MessageDataDto })
   data!: MessageDataDto;
 
   @ApiProperty({ description: 'Response metadata', type: MetaDto })
@@ -591,7 +683,10 @@ export class WrappedDeleteCollectionDto {
 }
 
 export class WrappedCollectionAnalyticsDto {
-  @ApiProperty({ description: 'Wrapped collection analytics', type: CollectionAnalyticsDataDto })
+  @ApiProperty({
+    description: 'Analytics for the bookmark collection',
+    type: CollectionAnalyticsDataDto,
+  })
   data!: CollectionAnalyticsDataDto;
 
   @ApiProperty({ description: 'Response metadata', type: MetaDto })

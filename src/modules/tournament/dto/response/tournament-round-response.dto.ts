@@ -1,5 +1,8 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { TOURNAMENT_ROUND_STATUSES, type TournamentRoundStatus } from '../../types/tournament.types';
+import {
+  TOURNAMENT_ROUND_STATUSES,
+  type TournamentRoundStatus,
+} from '../../types/tournament.types';
 
 export class TournamentRoundResponseDto {
   @ApiProperty({ description: 'Round identifier', example: '550e8400-e29b-41d4-a716-446655440001' })

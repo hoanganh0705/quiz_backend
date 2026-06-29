@@ -8,6 +8,7 @@ import {
   ApiInternalServerErrorResponse,
   ApiNotFoundResponse,
   ApiOkResponse,
+  ApiTooManyRequestsResponse,
   ApiUnauthorizedResponse,
   type ApiResponseOptions,
 } from '@nestjs/swagger';
@@ -50,7 +51,9 @@ import {
   followForbiddenExample,
   followInternalErrorExample,
   followNotFoundExample,
+  followTooManyRequestsExample,
   followUnauthorizedExample,
+  followBadRequestExample,
   listCategoriesBadRequestExample,
   listCategoriesInternalErrorExample,
   popularBadRequestExample,
@@ -65,9 +68,11 @@ import {
   restoreUnauthorizedExample,
   trendingBadRequestExample,
   trendingInternalErrorExample,
+  unfollowBadRequestExample,
   unfollowForbiddenExample,
   unfollowInternalErrorExample,
   unfollowNotFoundExample,
+  unfollowTooManyRequestsExample,
   unfollowUnauthorizedExample,
   updateCategoryBadRequestExample,
   updateCategoryConflictExample,
@@ -150,6 +155,11 @@ const problem = {
   }),
   conflict: (example: object): ApiResponseOptions => ({
     description: 'The request conflicts with the current state of the category',
+    type: ProblemDetailDto,
+    example,
+  }),
+  tooManyRequests: (example: object): ApiResponseOptions => ({
+    description: 'Rate limit exceeded. Please retry after the time indicated in the response',
     type: ProblemDetailDto,
     example,
   }),
@@ -239,9 +249,11 @@ export const ApiFollowCategoryResponse = (): MethodDecorator =>
       CategoryWrappedMessageDto,
       CATEGORY_FOLLOW_MESSAGE_EXAMPLE,
     ),
+    ApiBadRequestResponse(problem.badRequest(followBadRequestExample)),
     ApiUnauthorizedResponse(problem.unauthorized(followUnauthorizedExample)),
     ApiForbiddenResponse(problem.forbidden(followForbiddenExample)),
     ApiNotFoundResponse(problem.notFound(followNotFoundExample)),
+    ApiTooManyRequestsResponse(problem.tooManyRequests(followTooManyRequestsExample)),
     ApiInternalServerErrorResponse(problem.internalError(followInternalErrorExample)),
   );
 
@@ -255,9 +267,11 @@ export const ApiUnfollowCategoryResponse = (): MethodDecorator =>
       CategoryWrappedMessageDto,
       CATEGORY_UNFOLLOW_MESSAGE_EXAMPLE,
     ),
+    ApiBadRequestResponse(problem.badRequest(unfollowBadRequestExample)),
     ApiUnauthorizedResponse(problem.unauthorized(unfollowUnauthorizedExample)),
     ApiForbiddenResponse(problem.forbidden(unfollowForbiddenExample)),
     ApiNotFoundResponse(problem.notFound(unfollowNotFoundExample)),
+    ApiTooManyRequestsResponse(problem.tooManyRequests(unfollowTooManyRequestsExample)),
     ApiInternalServerErrorResponse(problem.internalError(unfollowInternalErrorExample)),
   );
 

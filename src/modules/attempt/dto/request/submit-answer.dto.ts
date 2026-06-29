@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsInt, IsOptional, IsString, IsUUID, Min } from 'class-validator';
+import { IsInt, IsOptional, IsUUID, Min } from 'class-validator';
 
 export class SubmitAnswerDto {
   @ApiProperty({
@@ -32,16 +32,4 @@ export class SubmitAnswerDto {
   @IsInt()
   @Min(0)
   timeTakenMs?: number | null;
-
-  @ApiPropertyOptional({
-    description:
-      'Optional client-generated idempotency key. If provided, submitting the same answer ' +
-      'twice with the same key will return the existing answer record instead of raising a conflict.',
-    type: String,
-    example: 'client-uuid-attempt-answer-001',
-    nullable: true,
-  })
-  @IsOptional()
-  @IsString()
-  idempotencyKey?: string;
 }

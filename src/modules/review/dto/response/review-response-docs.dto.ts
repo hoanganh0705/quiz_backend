@@ -12,6 +12,43 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 // These wrapper DTOs are used ONLY in @ApiOkResponse / @ApiCreatedResponse decorators
 // to document the actual wrapped shape in the OpenAPI spec.
 //
+// Two distinct runtime error shapes must be documented:
+//
+//   1. Global / Nest HttpException errors
+//      (400 from class-validator, 401 from JwtGuard, 403 from PermissionsGuard,
+//       500 from unhandled errors)
+//      → handled by GlobalExceptionFilter → emits RFC 7807 ProblemDetail
+//        { type, title, status, detail, instance, extensions }
+//
+//   2. Review domain errors
+//      (ReviewNotFoundError, ReviewForbiddenError, ReviewConflictError,
+//       ReviewValidationError, ReviewAttemptRequiredError, ReviewAlreadyReportedError)
+//      → handled by ReviewDomainExceptionFilter → emits
+//        { statusCode: number, message: string, error: string }
+//
+// Both shapes are documented below.
+
+// ─── Error response schemas ─────────────────────────────────────────────────────
+
+export class ReviewDomainErrorDto {
+  @ApiProperty({
+    description: 'HTTP status code produced by the review domain exception filter',
+    example: 404,
+  })
+  statusCode!: number;
+
+  @ApiProperty({
+    description: 'Human-readable message produced by the review domain exception filter',
+    example: 'Review not found',
+  })
+  message!: string;
+
+  @ApiProperty({
+    description: 'HTTP status text produced by the review domain exception filter',
+    example: 'Not Found',
+  })
+  error!: string;
+}
 
 // ─── Nested data types ─────────────────────────────────────────────────────────
 
@@ -421,8 +458,97 @@ class PlatformReportItemDataDto {
 }
 
 class MessageDataDto {
-  @ApiProperty({ description: 'Result message', example: 'Operation completed successfully' })
+  @ApiProperty({
+    description: 'Result message returned by the endpoint',
+    example: 'Review marked as helpful',
+  })
   message!: string;
+}
+
+// Quiz analytics shape returned by GET /api/v1/quizzes/{quizId}/reviews/analytics.
+// Mirrors QuizAnalyticsResponseDto from the quiz module (per-quiz analytics), NOT
+// CreatorAnalyticsDataDto (which is per-creator analytics for /me/analytics).
+class QuizAnalyticsMetricsDataDto {
+  @ApiProperty({ description: 'Total number of quiz attempts', example: 1250 })
+  totalAttempts!: number;
+
+  @ApiProperty({ description: 'Number of unique players who attempted the quiz', example: 820 })
+  uniquePlayers!: number;
+
+  @ApiProperty({
+    description: 'Average score percent across all attempts (0–100)',
+    example: 72.4,
+  })
+  averageScore!: number;
+
+  @ApiProperty({
+    description: 'Proportion of attempts that reached the end (0–1)',
+    example: 0.85,
+  })
+  completionRate!: number;
+}
+
+class QuizAnalyticsReviewMetricsDataDto {
+  @ApiProperty({ description: 'Average user rating (1–5)', example: 4.3 })
+  averageRating!: number;
+
+  @ApiProperty({ description: 'Total number of ratings submitted', example: 312 })
+  ratingCount!: number;
+}
+
+class QuizAnalyticsEngagementMetricsDataDto {
+  @ApiProperty({ description: 'Number of times the quiz has been bookmarked', example: 95 })
+  bookmarkCount!: number;
+}
+
+class QuizAnalyticsPopularityDataDto {
+  @ApiProperty({ description: 'Composite popularity score', example: 87.6 })
+  popularityScore!: number;
+
+  @ApiProperty({
+    description: 'Short-term trending score based on recent activity',
+    example: 45.2,
+  })
+  trendingScore!: number;
+}
+
+class QuizAnalyticsDataDto {
+  @ApiProperty({
+    description: 'Quiz identifier',
+    format: 'uuid',
+    example: '660e8400-e29b-41d4-a716-446655440000',
+  })
+  quizId!: string;
+
+  @ApiProperty({
+    description: 'Quiz attempt and score metrics',
+    type: QuizAnalyticsMetricsDataDto,
+  })
+  metrics!: QuizAnalyticsMetricsDataDto;
+
+  @ApiProperty({
+    description: 'User review metrics',
+    type: QuizAnalyticsReviewMetricsDataDto,
+  })
+  reviewMetrics!: QuizAnalyticsReviewMetricsDataDto;
+
+  @ApiProperty({
+    description: 'Engagement metrics',
+    type: QuizAnalyticsEngagementMetricsDataDto,
+  })
+  engagementMetrics!: QuizAnalyticsEngagementMetricsDataDto;
+
+  @ApiProperty({
+    description: 'Popularity and trending scores',
+    type: QuizAnalyticsPopularityDataDto,
+  })
+  popularity!: QuizAnalyticsPopularityDataDto;
+
+  @ApiProperty({
+    description: 'Timestamp of the last analytics refresh (ISO 8601)',
+    example: '2025-06-01T00:00:00.000Z',
+  })
+  lastUpdated!: string;
 }
 
 // ─── Meta types ────────────────────────────────────────────────────────────────
@@ -440,9 +566,13 @@ class PaginationMetaDataDto {
   limit!: number;
 
   @ApiProperty({
-    description: 'Cursor for fetching the next page. `null` when there is no next page.',
+    description:
+      'Opaque cursor for fetching the next page. `null` when there is no next page. ' +
+      'Pass this value as the `cursor` query parameter on the next request to continue pagination.',
     type: String,
     nullable: true,
+    example:
+      'eyJjcmVhdGVkQXQiOiAiMjAyNi0wMS0wMVQwMDowMDowMC4wMDBaIiwgInJldmlld0lkIjogIjU1MGU4NDAwLWUyOWItNDFkNC1hNzE2LTQ0NjY1NTQ0MDA5OSJ9',
   })
   nextCursor!: string | null;
 
@@ -537,9 +667,12 @@ export class WrappedDeleteMessageDto {
 
 export class WrappedMyReviewDto {
   @ApiProperty({
-    description: 'Wrapped my review for a quiz (null if no review exists)',
+    description:
+      'The authenticated user review for the requested quiz. ' +
+      '`null` when the user has not reviewed the quiz yet.',
     type: ReviewDetailDataDto,
     nullable: true,
+    example: null,
   })
   data!: ReviewDetailDataDto | null;
 
@@ -580,6 +713,17 @@ export class WrappedPlatformReportsListDto {
 export class WrappedUpdateReportMessageDto {
   @ApiProperty({ description: 'Wrapped update report result', type: MessageDataDto })
   data!: MessageDataDto;
+
+  @ApiProperty({ description: 'Response metadata', type: MetaDto })
+  meta!: MetaDto;
+}
+
+export class WrappedQuizAnalyticsDto {
+  @ApiProperty({
+    description: 'Per-quiz analytics returned by the quiz analytics service',
+    type: QuizAnalyticsDataDto,
+  })
+  data!: QuizAnalyticsDataDto;
 
   @ApiProperty({ description: 'Response metadata', type: MetaDto })
   meta!: MetaDto;

@@ -23,7 +23,12 @@ export class QuizQuestionResponseDto {
   })
   questionText!: string;
 
-  @ApiPropertyOptional({ description: 'Optional image URL', type: String, format: 'uri', nullable: true })
+  @ApiPropertyOptional({
+    description: 'Optional image URL',
+    type: String,
+    format: 'uri',
+    nullable: true,
+  })
   imageUrl!: string | null;
 
   @ApiProperty({

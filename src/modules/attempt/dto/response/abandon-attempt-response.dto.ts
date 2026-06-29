@@ -17,6 +17,6 @@ export class AbandonAttemptResponseDto {
   })
   finishedAt!: string;
 
-  @ApiProperty({ description: 'Status message', example: 'Attempt abandoned. No XP was earned.' })
+  @ApiProperty({ description: 'Status message', example: 'Attempt abandoned successfully' })
   message!: string;
 }
