@@ -129,7 +129,7 @@ export class LeaderboardService implements OnModuleInit, OnModuleDestroy {
 
     let userPosition: UserRankPositionDto | null = null;
     if (currentUserId) {
-      userPosition = await this.getUserPosition(currentUserId, periodEnum) ?? null;
+      userPosition = (await this.getUserPosition(currentUserId, periodEnum)) ?? null;
     }
 
     return {

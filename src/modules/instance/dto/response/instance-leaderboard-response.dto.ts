@@ -83,11 +83,12 @@ export class InstanceLeaderboardResponseDto {
   hasNextPage!: boolean;
 
   @ApiPropertyOptional({
-    description: 'Base64-encoded cursor for fetching the next page. Null when no more pages.',
+    description:
+      'Base64URL-encoded cursor for fetching the next page. `null` when there is no next page. ' +
+      'Decoded payload: `{ rank: number, instancePlayerId: string }`.',
     type: String,
-    example:
-      'eyJyYW5rIjI0LCJpbnN0YW5jZVBsYXllcklkIjoiNTUwZTg0MDAtZTI5Yi00MWQ0LWE3MTYtNDQ2NjU1NDQwMDk5In0',
     nullable: true,
+    example: 'eyJyYW5rIjogMjQsICJpbnN0YW5jZVBsYXllcklkIjogIjU1MGU4NDAwLWUyOWItNDFkNC1hNzE2LTQ0NjY1NTQ0MDA5OSJ9',
   })
   nextCursor!: string | null;
 }

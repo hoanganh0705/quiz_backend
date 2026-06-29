@@ -63,10 +63,14 @@ export const relatedInternalErrorExample = withInstance(
 
 // ─── /categories/:id/analytics ─────────────────────────────────────────────────
 
-export const analyticsBadRequestExample = withInstance(
-  ErrorResponseExamples.badRequest,
-  '/categories/660e8400-e29b-41d4-a716-446655440000/analytics',
-);
+export const analyticsBadRequestExample = {
+  ...withInstance(
+    ErrorResponseExamples.badRequest,
+    '/categories/660e8400-e29b-41d4-a716-446655440000/analytics',
+  ),
+  detail: 'Validation failed (uuid is expected)',
+  extensions: { requestId: 'req_abc123' },
+};
 export const analyticsNotFoundExample = withInstance(
   ErrorResponseExamples.notFound,
   '/categories/660e8400-e29b-41d4-a716-446655440000/analytics',
@@ -94,6 +98,18 @@ export const followInternalErrorExample = withInstance(
   ErrorResponseExamples.internalServerError,
   '/categories/660e8400-e29b-41d4-a716-446655440000/follow',
 );
+export const followBadRequestExample = {
+  ...withInstance(
+    ErrorResponseExamples.badRequest,
+    '/categories/660e8400-e29b-41d4-a716-446655440000/follow',
+  ),
+  detail: 'Validation failed (uuid is expected)',
+  extensions: { requestId: 'req_abc123' },
+};
+export const followTooManyRequestsExample = withInstance(
+  ErrorResponseExamples.tooManyRequests,
+  '/categories/660e8400-e29b-41d4-a716-446655440000/follow',
+);
 
 // ─── /categories/:id/follow (DELETE) ───────────────────────────────────────────
 
@@ -111,6 +127,18 @@ export const unfollowNotFoundExample = withInstance(
 );
 export const unfollowInternalErrorExample = withInstance(
   ErrorResponseExamples.internalServerError,
+  '/categories/660e8400-e29b-41d4-a716-446655440000/follow',
+);
+export const unfollowBadRequestExample = {
+  ...withInstance(
+    ErrorResponseExamples.badRequest,
+    '/categories/660e8400-e29b-41d4-a716-446655440000/follow',
+  ),
+  detail: 'Validation failed (uuid is expected)',
+  extensions: { requestId: 'req_abc123' },
+};
+export const unfollowTooManyRequestsExample = withInstance(
+  ErrorResponseExamples.tooManyRequests,
   '/categories/660e8400-e29b-41d4-a716-446655440000/follow',
 );
 
@@ -154,10 +182,14 @@ export const categoryByIdNotFoundExample = withInstance(
   ErrorResponseExamples.notFound,
   '/categories/660e8400-e29b-41d4-a716-446655440000',
 );
-export const categoryByIdBadRequestExample = withInstance(
-  ErrorResponseExamples.badRequest,
-  '/categories/660e8400-e29b-41d4-a716-446655440000',
-);
+export const categoryByIdBadRequestExample = {
+  ...withInstance(
+    ErrorResponseExamples.badRequest,
+    '/categories/660e8400-e29b-41d4-a716-446655440000',
+  ),
+  detail: 'Validation failed (uuid is expected)',
+  extensions: { requestId: 'req_abc123' },
+};
 export const categoryByIdInternalErrorExample = withInstance(
   ErrorResponseExamples.internalServerError,
   '/categories/660e8400-e29b-41d4-a716-446655440000',

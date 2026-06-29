@@ -8,6 +8,7 @@ import {
 } from './instance-action-response.dto';
 import { InstanceDetailResponseDto } from './instance-detail-response.dto';
 import { InstanceLeaderboardEntryDto } from './instance-leaderboard-response.dto';
+import { InstanceLeaderboardResponseDto } from './instance-leaderboard-response.dto';
 import { InstanceListItemDto } from './instance-list-response.dto';
 import { InstancePlayersResponseDto } from './instance-players-response.dto';
 
@@ -27,32 +28,75 @@ import { InstancePlayersResponseDto } from './instance-players-response.dto';
 // decorators to document the actual wrapped shape in the OpenAPI spec.
 //
 
-class InstanceLeaderboardMetaDto {
-  @ApiProperty({
-    description: 'ISO 8601 timestamp of when the response was generated',
-    example: '2026-06-25T10:30:00.000Z',
-  })
-  timestamp!: string;
+// ─── Error response schemas ────────────────────────────────────────────────────
 
-  @ApiPropertyOptional({
-    description: 'Leaderboard cursor-pagination metadata',
+/**
+ * JSON shape emitted by `InstanceDomainExceptionFilter` for any
+ * `InstanceDomainError` (404 / 400 / 403 / 409). Distinct from the RFC 7807
+ * `ProblemDetailDto` emitted by `GlobalExceptionFilter` for validation,
+ * ParseUUIDPipe, throttler, and JWT failures.
+ */
+export class InstanceDomainErrorDto {
+  @ApiProperty({
+    description: 'HTTP status code produced by the instance domain exception filter',
+    example: 404,
   })
-  pagination?: {
-    limit: number;
-    nextCursor: string | null;
-    hasNextPage: boolean;
-  };
+  statusCode!: number;
+
+  @ApiProperty({
+    description:
+      'Human-readable message produced by the instance domain exception filter. ' +
+      'Note: the filter rewrites the original error message into a generic one ' +
+      '(e.g. "Resource not found", "Invalid request data") so client messages are ' +
+      'always one of these fixed strings.',
+    example: 'Resource not found',
+  })
+  message!: string;
+
+  @ApiProperty({
+    description: 'HTTP status text produced by the instance domain exception filter',
+    example: 'Not Found',
+  })
+  error!: string;
 }
 
-class InstanceListMetaDto {
+// ─── Meta schemas ───────────────────────────────────────────────────────────────
+
+class InstanceResponseMetaDto {
   @ApiProperty({
     description: 'ISO 8601 timestamp of when the response was generated',
     example: '2026-06-25T10:30:00.000Z',
   })
   timestamp!: string;
+}
 
-  @ApiProperty({ description: 'Instance list cursor-pagination metadata', type: PaginationMetaDto })
-  pagination!: PaginationMetaDto;
+// Paginated meta detail — defined first to resolve forward references.
+class InstanceListPaginationMetaDetailsDto {
+  @ApiProperty({ description: 'Items per page', example: 20 })
+  limit!: number;
+
+  @ApiPropertyOptional({
+    description:
+      'Opaque cursor string for fetching the next page. `null` when there is no next page. ' +
+      'Pass this value as the `cursor` query parameter on the next request to continue pagination. ' +
+      'The cursor is a standard base64-encoded JSON payload `{ createdAt, instanceId }`.',
+    type: String,
+    nullable: true,
+    example:
+      'eyJjcmVhdGVkQXQiOiIyMDI2LTA2LTI1VDEwOjMwOjAwLjAwMFoiLCJpbnN0YW5jZUlkIjoiNjYwZTg0MDAtZTI5Yi00MWQ0LWE3MTYtNDQ2NjU1NDQwMDAwIn0=',
+  })
+  nextCursor!: string | null;
+
+  @ApiProperty({ description: 'Whether more items exist after this page', example: true })
+  hasNextPage!: boolean;
+}
+
+class InstanceListMetaDto extends InstanceResponseMetaDto {
+  @ApiProperty({
+    description: 'Instance list cursor-pagination metadata',
+    type: InstanceListPaginationMetaDetailsDto,
+  })
+  pagination!: InstanceListPaginationMetaDetailsDto;
 }
 
 // ─── Non-paginated wrappers ────────────────────────────────────────────────────
@@ -64,8 +108,11 @@ export class WrappedCreateInstanceResponseDto {
   })
   data!: CreateInstanceResponseDto;
 
-  @ApiProperty({ description: 'Response metadata' })
-  meta!: { timestamp: string };
+  @ApiProperty({
+    description: 'Response metadata',
+    type: InstanceResponseMetaDto,
+  })
+  meta!: InstanceResponseMetaDto;
 }
 
 export class WrappedJoinInstanceResponseDto {
@@ -75,8 +122,11 @@ export class WrappedJoinInstanceResponseDto {
   })
   data!: JoinInstanceResponseDto;
 
-  @ApiProperty({ description: 'Response metadata' })
-  meta!: { timestamp: string };
+  @ApiProperty({
+    description: 'Response metadata',
+    type: InstanceResponseMetaDto,
+  })
+  meta!: InstanceResponseMetaDto;
 }
 
 export class WrappedStartInstanceResponseDto {
@@ -86,8 +136,11 @@ export class WrappedStartInstanceResponseDto {
   })
   data!: StartInstanceResponseDto;
 
-  @ApiProperty({ description: 'Response metadata' })
-  meta!: { timestamp: string };
+  @ApiProperty({
+    description: 'Response metadata',
+    type: InstanceResponseMetaDto,
+  })
+  meta!: InstanceResponseMetaDto;
 }
 
 export class WrappedCloseInstanceResponseDto {
@@ -97,8 +150,11 @@ export class WrappedCloseInstanceResponseDto {
   })
   data!: CloseInstanceResponseDto;
 
-  @ApiProperty({ description: 'Response metadata' })
-  meta!: { timestamp: string };
+  @ApiProperty({
+    description: 'Response metadata',
+    type: InstanceResponseMetaDto,
+  })
+  meta!: InstanceResponseMetaDto;
 }
 
 export class WrappedInstanceDetailResponseDto {
@@ -108,27 +164,56 @@ export class WrappedInstanceDetailResponseDto {
   })
   data!: InstanceDetailResponseDto;
 
-  @ApiProperty({ description: 'Response metadata' })
-  meta!: { timestamp: string };
+  @ApiProperty({
+    description: 'Response metadata',
+    type: InstanceResponseMetaDto,
+  })
+  meta!: InstanceResponseMetaDto;
 }
 
 export class WrappedInstancePlayersResponseDto {
   @ApiProperty({
-    description: 'Instance player list',
+    description: 'Instance player list (a `{ instanceId, items, total }` object)',
     type: () => InstancePlayersResponseDto,
   })
   data!: InstancePlayersResponseDto;
 
-  @ApiProperty({ description: 'Response metadata' })
-  meta!: { timestamp: string };
+  @ApiProperty({
+    description: 'Response metadata',
+    type: InstanceResponseMetaDto,
+  })
+  meta!: InstanceResponseMetaDto;
 }
 
-// ─── Paginated wrappers ────────────────────────────────────────────────────────
+// ─── Leaderboard wrapper (non-paginated envelope) ────────────────────────────
 //
-// For paginated responses, ResponseFormatInterceptor wraps the root-level
-// { items, pagination } as { data: items, meta: { timestamp, pagination } }.
+// Note: the leaderboard controller returns `{ items, hasNextPage, nextCursor }`.
+// Because the payload does NOT contain a `pagination` key, `ResponseFormatInterceptor`
+// treats it as a non-paginated plain object, so `data` holds the full object and
+// `meta` only contains `timestamp` (no nested `pagination`).
 //
+export class WrappedInstanceLeaderboardResponseDto {
+  @ApiProperty({
+    description:
+      'Leaderboard page. Because this endpoint returns a `{ items, hasNextPage, nextCursor }` ' +
+      'object (not the `{ items, pagination }` shape), the interceptor wraps it as a ' +
+      'non-paginated payload: the entire object lives under `data` and `meta` only carries `timestamp`.',
+    type: () => InstanceLeaderboardResponseDto,
+  })
+  data!: InstanceLeaderboardResponseDto;
 
+  @ApiProperty({
+    description: 'Response metadata (timestamp only — no pagination field on this endpoint)',
+    type: InstanceResponseMetaDto,
+  })
+  meta!: InstanceResponseMetaDto;
+}
+
+// ─── List wrapper (paginated envelope) ────────────────────────────────────────
+//
+// `listInstances` returns `{ items, pagination }` which the interceptor detects as
+// a paginated payload: it hoists `items` to `data` and nests `pagination` under `meta`.
+//
 export class WrappedInstanceListResponseDto {
   @ApiProperty({
     description: 'Instance list items',
@@ -138,15 +223,4 @@ export class WrappedInstanceListResponseDto {
 
   @ApiProperty({ description: 'Response metadata', type: InstanceListMetaDto })
   meta!: InstanceListMetaDto;
-}
-
-export class WrappedInstanceLeaderboardResponseDto {
-  @ApiProperty({
-    description: 'Leaderboard entries sorted by rank',
-    type: () => [InstanceLeaderboardEntryDto],
-  })
-  data!: InstanceLeaderboardEntryDto[];
-
-  @ApiProperty({ description: 'Response metadata', type: InstanceLeaderboardMetaDto })
-  meta!: InstanceLeaderboardMetaDto;
 }

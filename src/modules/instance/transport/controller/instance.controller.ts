@@ -7,18 +7,28 @@ import {
   Post,
   Query,
   UseFilters,
+  applyDecorators,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
-import { ApiTags } from '@nestjs/swagger';
+import {
+  ApiBadRequestResponse,
+  ApiBearerAuth,
+  ApiCreatedResponse,
+  ApiExtraModels,
+  ApiForbiddenResponse,
+  ApiNotFoundResponse,
+  ApiOkResponse,
+  ApiOperation,
+  ApiTags,
+  ApiUnauthorizedResponse,
+  getSchemaPath,
+} from '@nestjs/swagger';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
 import { Transactional } from '@/common/interceptors/transactional.interceptor';
-import {
-  ApiAuthAction,
-  ApiAuthCreateWithState,
-  ApiPublicRead,
-} from '@/common/swagger/swagger-decorators';
+import { ProblemDetailDto, ErrorResponseExamples } from '@/common/swagger/swagger-schemas';
 import { decodeBase64JsonCursor } from '@/common/utils/cursor.util';
 import { type JwtPayload } from '@/common/guards/jwt.guard';
+import { AUTH_SECURITY_NAME } from '@/core/swagger/swagger.config';
 import { InstanceService } from '../../domain/instance.service';
 import { InstanceResponseMapper } from '../../mappers/instance-response.mapper';
 import {
@@ -46,10 +56,97 @@ import {
   WrappedInstanceListResponseDto,
   WrappedInstanceLeaderboardResponseDto,
   WrappedInstancePlayersResponseDto,
+  InstanceDomainErrorDto,
 } from '../../dto/response';
 import { InstanceDomainExceptionFilter } from '../filters/instance-domain-exception.filter';
 
+// ─── Local helper decorators ───────────────────────────────────────────────────
+//
+// `InstanceDomainExceptionFilter` rewrites every `InstanceDomainError` into
+// `{ statusCode, message, error }` (NOT RFC 7807), so we need:
+//   404 / 403 / 400 / 409 — InstanceDomainErrorDto shape (from the domain filter).
+//   401 / 400 (validator) / 400 (ParseUUIDPipe) — ProblemDetailDto (from GlobalExceptionFilter).
+//
+// When the same HTTP status can originate from BOTH filters we use `schema.oneOf`.
+
+/** 404 thrown by `InstanceService` → handled by InstanceDomainExceptionFilter. */
+function instanceNotFoundResponse(): MethodDecorator {
+  return applyDecorators(
+    ApiNotFoundResponse({
+      description:
+        'Instance not found. Returned by the instance domain exception filter with a ' +
+        '`{ statusCode, message, error }` envelope (message is always "Resource not found").',
+      schema: { $ref: getSchemaPath(InstanceDomainErrorDto) },
+    }),
+  );
+}
+
+/** 403 from `InstanceNotHostError` (domain) → InstanceDomainExceptionFilter. */
+function instanceForbiddenResponse(): MethodDecorator {
+  return applyDecorators(
+    ApiForbiddenResponse({
+      description:
+        'Caller is not the host of the instance. Returned by the instance domain exception filter ' +
+        'with a `{ statusCode, message, error }` envelope ' +
+        '(message is always "You do not have permission to perform this action").',
+      schema: { $ref: getSchemaPath(InstanceDomainErrorDto) },
+    }),
+  );
+}
+
+/**
+ * 400 that can be either:
+ *   - `ProblemDetailDto` from `GlobalExceptionFilter` (class-validator on body, ParseUUIDPipe on path, etc.)
+ *   - `InstanceDomainErrorDto` from `InstanceDomainExceptionFilter` (InstanceNotOpenError, InstanceFullError,
+ *     InstanceAlreadyStartedError, InstanceAlreadyClosedError).
+ */
+function instanceBadRequestResponseDual(): MethodDecorator {
+  return applyDecorators(
+    ApiBadRequestResponse({
+      description:
+        'Request failed validation OR a domain-level precondition failed. The response is either ' +
+        'an RFC 7807 `ProblemDetailDto` (from class-validator on the body / ParseUUIDPipe on the path) ' +
+        'or an `InstanceDomainErrorDto` envelope from the instance domain exception filter ' +
+        '(`InstanceNotOpenError`, `InstanceFullError`, `InstanceAlreadyStartedError`, ' +
+        '`InstanceAlreadyClosedError` all map to 400 with the generic message "Invalid request data").',
+      schema: {
+        oneOf: [
+          { $ref: getSchemaPath(ProblemDetailDto) },
+          { $ref: getSchemaPath(InstanceDomainErrorDto) },
+        ],
+      },
+    }),
+  );
+}
+
+/** 400 from `ParseUUIDPipe` / query-param validation only — not domain. */
+function instanceBadRequestResponseValidation(): MethodDecorator {
+  return applyDecorators(
+    ApiBadRequestResponse({
+      description:
+        'Request failed validation (e.g. malformed UUID in the path or invalid query parameters). ' +
+        'RFC 7807 ProblemDetail envelope.',
+      type: ProblemDetailDto,
+      example: ErrorResponseExamples.badRequest,
+    }),
+  );
+}
+
+/** 401 — globally enforced by JwtGuard. */
+function instanceUnauthorizedResponse(): MethodDecorator {
+  return applyDecorators(
+    ApiBearerAuth(AUTH_SECURITY_NAME),
+    ApiUnauthorizedResponse({
+      description:
+        'Missing or invalid JWT bearer token. Returned by the global JwtGuard as an RFC 7807 ProblemDetail.',
+      type: ProblemDetailDto,
+      example: ErrorResponseExamples.unauthorized,
+    }),
+  );
+}
+
 @ApiTags('instances')
+@ApiExtraModels(ProblemDetailDto, InstanceDomainErrorDto)
 @Controller('instances')
 @UseFilters(InstanceDomainExceptionFilter)
 export class InstanceController {
@@ -58,12 +155,36 @@ export class InstanceController {
     private readonly mapper: InstanceResponseMapper,
   ) {}
 
+  // ─── POST /instances ────────────────────────────────────────────────────────
+  //
+  // `instanceService.createInstance` only inserts a row — it never throws any
+  // `InstanceDomainError`. The only 400 path is class-validator on the body
+  // (handled by GlobalExceptionFilter → ProblemDetailDto). 404 and 409 from
+  // `@ApiAuthCreateWithState` were incorrect for this endpoint and have been
+  // removed.
   @Post()
   @Transactional()
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
-  @ApiAuthCreateWithState({
+  @instanceUnauthorizedResponse()
+  @ApiCreatedResponse({
     description: 'Instance created',
     type: WrappedCreateInstanceResponseDto,
+  })
+  @ApiOperation({
+    summary: 'Create instance',
+    description:
+      'Creates a new quiz instance for the given published quiz version and automatically ' +
+      'adds the caller as a host player. Requires a valid JWT bearer token. ' +
+      'A 400 is returned only when the request body fails validation ' +
+      '(e.g. `quizVersionId` is not a valid UUID or `maxPlayers` is outside 2–100). ' +
+      '500 can be returned for unexpected server errors (e.g. database failures).',
+  })
+  @ApiBadRequestResponse({
+    description:
+      'Request body failed validation (e.g. invalid `quizVersionId`, invalid `maxPlayers`). ' +
+      'RFC 7807 ProblemDetail envelope.',
+    type: ProblemDetailDto,
+    example: ErrorResponseExamples.badRequest,
   })
   async createInstance(
     @CurrentUser() user: JwtPayload,
@@ -81,8 +202,25 @@ export class InstanceController {
     };
   }
 
+  // ─── GET /instances ─────────────────────────────────────────────────────────
+  //
+  // Global JwtGuard enforces authentication even though `@ApiPublicRead` is
+  // applied, so 401 must be documented. 404 cannot occur (list endpoint).
   @Get()
-  @ApiPublicRead({ description: 'Instance list returned', type: WrappedInstanceListResponseDto })
+  @instanceUnauthorizedResponse()
+  @ApiOkResponse({
+    description: 'Instance list returned',
+    type: WrappedInstanceListResponseDto,
+  })
+  @ApiOperation({
+    summary: 'List instances',
+    description:
+      'Returns a paginated cursor-based list of quiz instances. Requires a valid JWT bearer token. ' +
+      'Query parameters: `cursor` (opaque pagination cursor), `limit` (1–100, default 20), ' +
+      '`status` (one of `open`, `running`, `closed`, `finished`), `difficulty` (`easy`, `medium`, `hard`). ' +
+      '400 is returned only when the query parameters fail validation.',
+  })
+  @instanceBadRequestResponseValidation()
   async listInstances(@Query() query: ListInstancesQueryDto): Promise<InstanceListResponseDto> {
     const result = await this.instanceService.listInstances({
       limit: query.limit ?? 20,
@@ -103,8 +241,26 @@ export class InstanceController {
     };
   }
 
+  // ─── GET /instances/{id}/players ────────────────────────────────────────────
+  //
+  // `InstanceService.listInstancePlayers` throws `InstanceNotFoundError` when
+  // the instance does not exist → InstanceDomainExceptionFilter → 404.
+  // The response payload (`{ instanceId, items, total }`) does NOT contain a
+  // `pagination` key, so the interceptor wraps it as a non-paginated envelope.
   @Get(':id/players')
-  @ApiPublicRead({ description: 'Players returned', type: WrappedInstancePlayersResponseDto })
+  @instanceUnauthorizedResponse()
+  @ApiOkResponse({
+    description: 'Players returned',
+    type: WrappedInstancePlayersResponseDto,
+  })
+  @ApiOperation({
+    summary: 'List instance players',
+    description:
+      'Returns the list of players currently in the instance, with a `total` count. ' +
+      'Requires a valid JWT bearer token. 404 is returned when the instance does not exist.',
+  })
+  @instanceBadRequestResponseValidation()
+  @instanceNotFoundResponse()
   async listInstancePlayers(
     @Param('id', new ParseUUIDPipe()) instanceId: string,
   ): Promise<InstancePlayersResponseDto> {
@@ -117,8 +273,25 @@ export class InstanceController {
     };
   }
 
+  // ─── GET /instances/{id} ────────────────────────────────────────────────────
+  //
+  // `InstanceService.getInstanceById` throws `InstanceNotFoundError` on miss
+  // → 404 via `InstanceDomainExceptionFilter`.
   @Get(':id')
-  @ApiPublicRead({ description: 'Instance found', type: WrappedInstanceDetailResponseDto })
+  @instanceUnauthorizedResponse()
+  @ApiOkResponse({
+    description: 'Instance found',
+    type: WrappedInstanceDetailResponseDto,
+  })
+  @ApiOperation({
+    summary: 'Get instance by id',
+    description:
+      'Returns full instance details including the host, quiz info, lifecycle timestamps, ' +
+      'and a snapshot of the current players. Requires a valid JWT bearer token. ' +
+      '404 is returned when the instance does not exist.',
+  })
+  @instanceBadRequestResponseValidation()
+  @instanceNotFoundResponse()
   getInstanceById(
     @Param('id', new ParseUUIDPipe()) instanceId: string,
   ): Promise<InstanceDetailResponseDto> {
@@ -131,13 +304,32 @@ export class InstanceController {
     });
   }
 
+  // ─── POST /instances/{id}/join ─────────────────────────────────────────────
+  //
+  // `InstanceService.joinInstance` throws:
+  //   - `InstanceNotFoundError` → 404 InstanceDomainErrorDto
+  //   - `InstanceNotOpenError`  → 400 InstanceDomainErrorDto
+  //   - `InstanceFullError`     → 400 InstanceDomainErrorDto
+  // Note: 403 (host check) and 409 (conflict) are NEVER thrown here.
+  // 400 can also come from class-validator / ParseUUIDPipe → ProblemDetailDto.
   @Post(':id/join')
   @Transactional()
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
-  @ApiAuthAction({
+  @instanceUnauthorizedResponse()
+  @ApiOkResponse({
     description: 'Joined successfully',
     type: WrappedJoinInstanceResponseDto,
   })
+  @ApiOperation({
+    summary: 'Join instance',
+    description:
+      'Adds the caller as a player in the instance. Requires a valid JWT bearer token. ' +
+      'Possible errors: 400 (instance is not open, instance is full, malformed path UUID, ' +
+      'or body validation failure) and 404 (instance does not exist). ' +
+      'Returns 200 with `{ message: "Joined the instance successfully" }`.',
+  })
+  @instanceBadRequestResponseDual()
+  @instanceNotFoundResponse()
   async joinInstance(
     @Param('id', new ParseUUIDPipe()) instanceId: string,
     @CurrentUser() user: JwtPayload,
@@ -145,11 +337,30 @@ export class InstanceController {
     return this.instanceService.joinInstance(instanceId, user);
   }
 
+  // ─── POST /instances/{id}/start ─────────────────────────────────────────────
+  //
+  // `InstanceService.startInstance` throws:
+  //   - `InstanceNotFoundError`        → 404 InstanceDomainErrorDto
+  //   - `InstanceNotHostError`         → 403 InstanceDomainErrorDto
+  //   - `InstanceAlreadyStartedError`  → 400 InstanceDomainErrorDto
+  // 409 is NEVER thrown here.
   @Post(':id/start')
-  @ApiAuthAction({
+  @instanceUnauthorizedResponse()
+  @ApiOkResponse({
     description: 'Instance started',
     type: WrappedStartInstanceResponseDto,
   })
+  @ApiOperation({
+    summary: 'Start instance',
+    description:
+      'Transitions an open instance into the `running` state. Only the host can start an instance. ' +
+      'Requires a valid JWT bearer token. Possible errors: 400 (instance has already started, ' +
+      'or malformed path UUID), 403 (caller is not the host), 404 (instance does not exist). ' +
+      'Returns 200 with `{ message: "Instance started" }`.',
+  })
+  @instanceBadRequestResponseDual()
+  @instanceForbiddenResponse()
+  @instanceNotFoundResponse()
   async startInstance(
     @Param('id', new ParseUUIDPipe()) instanceId: string,
     @CurrentUser() user: JwtPayload,
@@ -157,11 +368,30 @@ export class InstanceController {
     return this.instanceService.startInstance(instanceId, user);
   }
 
+  // ─── POST /instances/{id}/close ────────────────────────────────────────────
+  //
+  // `InstanceService.closeInstance` throws:
+  //   - `InstanceNotFoundError`        → 404 InstanceDomainErrorDto
+  //   - `InstanceNotHostError`         → 403 InstanceDomainErrorDto
+  //   - `InstanceAlreadyClosedError`   → 400 InstanceDomainErrorDto
+  // 409 is NEVER thrown here.
   @Post(':id/close')
-  @ApiAuthAction({
+  @instanceUnauthorizedResponse()
+  @ApiOkResponse({
     description: 'Instance closed',
     type: WrappedCloseInstanceResponseDto,
   })
+  @ApiOperation({
+    summary: 'Close instance',
+    description:
+      'Transitions the instance into the `closed` state. Only the host can close an instance. ' +
+      'Requires a valid JWT bearer token. Possible errors: 400 (instance is already closed, ' +
+      'or malformed path UUID), 403 (caller is not the host), 404 (instance does not exist). ' +
+      'Returns 200 with `{ message: "Instance closed" }`.',
+  })
+  @instanceBadRequestResponseDual()
+  @instanceForbiddenResponse()
+  @instanceNotFoundResponse()
   async closeInstance(
     @Param('id', new ParseUUIDPipe()) instanceId: string,
     @CurrentUser() user: JwtPayload,
@@ -169,11 +399,31 @@ export class InstanceController {
     return this.instanceService.closeInstance(instanceId, user);
   }
 
+  // ─── GET /instances/{id}/leaderboard ───────────────────────────────────────
+  //
+  // `InstanceService.getLeaderboard` throws `InstanceNotFoundError` on miss → 404.
+  // The controller returns `{ items, hasNextPage, nextCursor }` (no `pagination` key),
+  // so `ResponseFormatInterceptor` wraps it as a non-paginated envelope: the entire
+  // object lives under `data` and `meta` only contains `timestamp`.
   @Get(':id/leaderboard')
-  @ApiPublicRead({
+  @instanceUnauthorizedResponse()
+  @ApiOkResponse({
     description: 'Leaderboard returned',
     type: WrappedInstanceLeaderboardResponseDto,
   })
+  @ApiOperation({
+    summary: 'Get instance leaderboard',
+    description:
+      'Returns the ranked player leaderboard for the instance, sorted by attempt score then ' +
+      'by completion time. Requires a valid JWT bearer token. ' +
+      'Supports cursor pagination via the `cursor` query parameter (decoded payload: ' +
+      '`{ rank, instancePlayerId }`) and `limit` (1–100, default 20). ' +
+      'The response envelope is non-paginated: `data` is `{ items, hasNextPage, nextCursor }` ' +
+      'and `meta` only carries the `timestamp` (no nested `pagination`). ' +
+      '404 is returned when the instance does not exist.',
+  })
+  @instanceBadRequestResponseValidation()
+  @instanceNotFoundResponse()
   getLeaderboard(
     @Param('id', new ParseUUIDPipe()) instanceId: string,
     @Query() query: GetLeaderboardQueryDto,

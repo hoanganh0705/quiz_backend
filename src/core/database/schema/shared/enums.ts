@@ -89,11 +89,7 @@ export const quizInstanceStatus = pgEnum('quiz_instance_status', [
   'finished',
 ]);
 
-export const quizVersionStatus = pgEnum('quiz_version_status', [
-  'draft',
-  'published',
-  'archived',
-]);
+export const quizVersionStatus = pgEnum('quiz_version_status', ['draft', 'published', 'archived']);
 
 // -- Tournament ---------------------------------------------------------------
 

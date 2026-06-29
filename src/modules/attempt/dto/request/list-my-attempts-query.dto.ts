@@ -13,7 +13,7 @@ export class ListMyAttemptsQueryDto {
     type: String,
     nullable: true,
     example:
-      'eyJzb3J0QnkiOiJjcmVhdGVkQXQiLCJzb3J0VmFsdWUiOiIyMDI1LTAxLTAxVDAwOjAwOjAwLjAwMFoiLCJhdHRlbXB0SWQiOiI4MTIzMTIzLTEyMzQtMTIzNC0xMjM0LTEyMzQxMjM0MTIzNCJ9',
+      'eyJzb3J0QnkiOiJjcmVhdGVkQXQiLCJzb3J0VmFsdWUiOiIyMDI1LTAxLTAxVDAwOjAwOjAwLjAwMFoiLCJhdHRlbXB0SWQiOiI1NTBlODQwMC1lMjliLTQxZDQtYTcxNi00NDY2NTU0NDAwOTkifQ==',
   })
   @IsOptional()
   @IsString()

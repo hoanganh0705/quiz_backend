@@ -23,7 +23,12 @@ export class QuizResponseDto {
   @ApiPropertyOptional({ description: 'Prerequisites', type: String, nullable: true })
   requirements!: string | null;
 
-  @ApiPropertyOptional({ description: 'Quiz cover image URL', type: String, format: 'uri', nullable: true })
+  @ApiPropertyOptional({
+    description: 'Quiz cover image URL',
+    type: String,
+    format: 'uri',
+    nullable: true,
+  })
   imageUrl!: string | null;
 
   @ApiProperty({ description: 'Whether the quiz is featured', example: true })
@@ -35,7 +40,11 @@ export class QuizResponseDto {
   @ApiProperty({ description: 'Whether the quiz has been verified by moderators', example: false })
   isVerified!: boolean;
 
-  @ApiPropertyOptional({ description: 'Currently published version identifier', type: String, nullable: true })
+  @ApiPropertyOptional({
+    description: 'Currently published version identifier',
+    type: String,
+    nullable: true,
+  })
   publishedVersionId!: string | null;
 
   @ApiProperty({

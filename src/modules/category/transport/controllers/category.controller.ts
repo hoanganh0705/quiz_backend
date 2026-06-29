@@ -10,6 +10,7 @@ import {
   Query,
   UseFilters,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { ApiTags } from '@nestjs/swagger';
 import { Public } from '@/common/decorators/public.decorator';
 import { Permissions } from '@/common/authorization/decorators/permissions.decorator';
@@ -93,6 +94,7 @@ export class CategoryController {
   }
 
   @Post(':id/follow')
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @ApiFollowCategoryResponse()
   followCategory(
     @Param('id', new ParseUUIDPipe()) categoryId: string,
@@ -102,6 +104,7 @@ export class CategoryController {
   }
 
   @Delete(':id/follow')
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @ApiUnfollowCategoryResponse()
   unfollowCategory(
     @Param('id', new ParseUUIDPipe()) categoryId: string,

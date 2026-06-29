@@ -8,23 +8,32 @@ export class CreateInstanceResponseDto {
   instanceId!: string;
 
   @ApiProperty({
-    description: 'Instance creation result',
+    description: 'Human-readable confirmation message',
     example: 'Instance created successfully',
   })
   message!: string;
 }
 
 export class JoinInstanceResponseDto {
-  @ApiProperty({ description: 'Join result', example: 'Successfully joined the instance' })
+  @ApiProperty({
+    description: 'Human-readable confirmation message returned by the join handler',
+    example: 'Joined the instance successfully',
+  })
   message!: string;
 }
 
 export class StartInstanceResponseDto {
-  @ApiProperty({ description: 'Start result', example: 'Instance started. Players can now begin.' })
+  @ApiProperty({
+    description: 'Human-readable confirmation message returned by the start handler',
+    example: 'Instance started',
+  })
   message!: string;
 }
 
 export class CloseInstanceResponseDto {
-  @ApiProperty({ description: 'Close result', example: 'Instance closed' })
+  @ApiProperty({
+    description: 'Human-readable confirmation message returned by the close handler',
+    example: 'Instance closed',
+  })
   message!: string;
 }

@@ -16,8 +16,12 @@ export type UpcomingTournamentSortOption = (typeof UPCOMING_TOURNAMENT_SORT_OPTI
 
 export class ListTournamentsQueryDto {
   @ApiPropertyOptional({
-    description: 'Cursor for cursor-based pagination',
+    description:
+      'Opaque cursor string for cursor-based pagination. Pass the `nextCursor` value ' +
+      'from a previous response to fetch the next page. Omit (or pass `null`) for the first page.',
     nullable: true,
+    example:
+      'eyJjcmVhdGVkQXQiOiIyMDI2LTA2LTI1VDEwOjMwOjAwLjAwMFoiLCJ0b3VybmFtZW50SWQiOiI2NjBlODQwMC1lMjliLTQxZDQtYTcxNi00NDY2NTU0NDAwMDAifQ',
   })
   @IsOptional()
   @IsString()
