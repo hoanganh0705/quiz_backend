@@ -35,7 +35,12 @@ export class UpdateQuizDto {
   @MaxLength(255)
   title?: string;
 
-  @ApiPropertyOptional({ description: 'Quiz description', type: String, maxLength: 2000, nullable: true })
+  @ApiPropertyOptional({
+    description: 'Quiz description',
+    type: String,
+    maxLength: 2000,
+    nullable: true,
+  })
   @IsOptional()
   @Transform(({ value }: { value: unknown }) => trimStringToNullIfBlank(value))
   @IsString()
@@ -57,7 +62,12 @@ export class UpdateQuizDto {
   })
   slug?: string;
 
-  @ApiPropertyOptional({ description: 'Prerequisites', type: String, maxLength: 5000, nullable: true })
+  @ApiPropertyOptional({
+    description: 'Prerequisites',
+    type: String,
+    maxLength: 5000,
+    nullable: true,
+  })
   @IsOptional()
   @Transform(({ value }: { value: unknown }) => trimStringToNullIfBlank(value))
   @IsString()

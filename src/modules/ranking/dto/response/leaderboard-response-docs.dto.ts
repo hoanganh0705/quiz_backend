@@ -30,27 +30,88 @@ import { UserRankSummaryDto } from './leaderboard-stats.dto';
 // the items as data and nests pagination inside meta:
 //   { data: items, meta: { timestamp, pagination } }
 //
-// For ranking-specific responses, some responses have root-level { entries, ... }
-// or { above, me, below } or { above, below } or { items } — these are NOT
-// detected as paginated payloads (no top-level `items` + `pagination` pair),
-// so they are wrapped as { data: <root>, meta: { timestamp } }.
+// Ranking-specific responses return objects like { entries, ... } or
+// { above, me, below } or { items } — these do NOT have a top-level
+// `pagination` key, so they are wrapped as non-paginated:
+//   { data: <root>, meta: { timestamp } }
 //
 // Runtime DTOs live in their own response DTO files and are imported here for
 // use in wrapper type refs.
 //
-// These wrapper DTOs are used ONLY in @ApiOkResponse / @ApiCreatedResponse
-// decorators to document the actual wrapped shape in the OpenAPI spec.
+// ─── Ranking Domain Error Shape ────────────────────────────────────────────────
+//
+// RankingDomainExceptionFilter uses @Catch() (catches ALL exceptions).
+// This means EVERY error from the ranking controller — including JwtGuard's
+// UnauthorizedException, PermissionsGuard's ForbiddenException, and class-validator
+// BadRequestException — is intercepted and re-written to the same shape:
+//   { statusCode, message, code, timestamp }
+//
+// The code field is NOT the HTTP status text; it is a domain-specific
+// machine-readable string like "UNAUTHORIZED", "BAD_REQUEST", etc. The filter
+// extracts it from HttpException response objects, falling back to a
+// status-based default (e.g., BAD_REQUEST for 400, NOT_FOUND for 404).
 //
 
-// ─── Paginated meta ─────────────────────────────────────────────────────────────
+export const RANKING_ERROR_CODES = [
+  'UNAUTHORIZED',
+  'FORBIDDEN',
+  'BAD_REQUEST',
+  'NOT_FOUND',
+  'INTERNAL_ERROR',
+] as const;
+export type RankingErrorCode = (typeof RANKING_ERROR_CODES)[number];
 
-class RankingLeaderboardMetaDto {
+/**
+ * Error envelope emitted by `RankingDomainExceptionFilter` for every HTTP error
+ * originating from the ranking controller (including JWT failures, permission
+ * denials, and validation errors). Distinct from RFC 7807 ProblemDetailDto.
+ */
+export class RankingDomainErrorDto {
+  @ApiProperty({
+    description: 'HTTP status code produced by the ranking domain exception filter',
+    example: 401,
+  })
+  statusCode!: number;
+
+  @ApiProperty({
+    description:
+      'Human-readable message. For JwtGuard failures this is the message from ' +
+      '`UnauthorizedException`. For `BadRequestException` (validation) it is the ' +
+      'validation message. For PermissionsGuard failures it is the message from ' +
+      '`ForbiddenException`. The message content varies by source.',
+    example: 'Authorization header is missing',
+  })
+  message!: string;
+
+  @ApiProperty({
+    description:
+      'Machine-readable error code. The filter extracts this from the exception ' +
+      'response shape (`code` field). For HttpExceptions without an explicit code, ' +
+      'defaults to status-based strings: `UNAUTHORIZED` (401), `FORBIDDEN` (403), ' +
+      '`BAD_REQUEST` (400), `NOT_FOUND` (404), `INTERNAL_ERROR` (500).',
+    enum: RANKING_ERROR_CODES,
+    example: 'UNAUTHORIZED',
+  })
+  code!: RankingErrorCode;
+
+  @ApiProperty({
+    description: 'ISO 8601 timestamp of when the error was generated',
+    example: '2026-06-25T10:30:00.000Z',
+  })
+  timestamp!: string;
+}
+
+// ─── Meta schemas ───────────────────────────────────────────────────────────────
+
+class RankingResponseMetaDto {
   @ApiProperty({
     description: 'ISO 8601 timestamp of when the response was generated',
     example: '2026-06-25T10:30:00.000Z',
   })
   timestamp!: string;
+}
 
+class RankingLeaderboardMetaDto extends RankingResponseMetaDto {
   @ApiProperty({ description: 'Leaderboard pagination metadata' })
   pagination!: {
     limit: number;
@@ -62,19 +123,31 @@ class RankingLeaderboardMetaDto {
 // ─── Non-paginated wrappers ────────────────────────────────────────────────────
 
 export class WrappedLeaderboardResponseDto {
-  @ApiProperty({ description: 'Leaderboard data', type: () => LeaderboardResponseDto })
+  @ApiProperty({
+    description: 'Leaderboard data',
+    type: () => LeaderboardResponseDto,
+  })
   data!: LeaderboardResponseDto;
 
-  @ApiProperty({ description: 'Response metadata', type: RankingLeaderboardMetaDto })
+  @ApiProperty({
+    description: 'Response metadata',
+    type: RankingLeaderboardMetaDto,
+  })
   meta!: RankingLeaderboardMetaDto;
 }
 
 export class WrappedUserRankResponseDto {
-  @ApiProperty({ description: 'User rank data', type: () => UserRankResponseDto })
+  @ApiProperty({
+    description: 'User rank data',
+    type: () => UserRankResponseDto,
+  })
   data!: UserRankResponseDto;
 
-  @ApiProperty({ description: 'Response metadata' })
-  meta!: { timestamp: string };
+  @ApiProperty({
+    description: 'Response metadata',
+    type: RankingResponseMetaDto,
+  })
+  meta!: RankingResponseMetaDto;
 }
 
 export class WrappedLeaderboardDistributionResponseDto {
@@ -84,32 +157,53 @@ export class WrappedLeaderboardDistributionResponseDto {
   })
   data!: LeaderboardDistributionResponseDto;
 
-  @ApiProperty({ description: 'Response metadata' })
-  meta!: { timestamp: string };
+  @ApiProperty({
+    description: 'Response metadata',
+    type: RankingResponseMetaDto,
+  })
+  meta!: RankingResponseMetaDto;
 }
 
 export class WrappedTopMoversResponseDto {
-  @ApiProperty({ description: 'Top movers data', type: () => TopMoversResponseDto })
+  @ApiProperty({
+    description: 'Top movers data',
+    type: () => TopMoversResponseDto,
+  })
   data!: TopMoversResponseDto;
 
-  @ApiProperty({ description: 'Response metadata' })
-  meta!: { timestamp: string };
+  @ApiProperty({
+    description: 'Response metadata',
+    type: RankingResponseMetaDto,
+  })
+  meta!: RankingResponseMetaDto;
 }
 
 export class WrappedNearbyRanksResponseDto {
-  @ApiProperty({ description: 'Nearby ranks data', type: () => NearbyRanksResponseDto })
+  @ApiProperty({
+    description: 'Nearby ranks data',
+    type: () => NearbyRanksResponseDto,
+  })
   data!: NearbyRanksResponseDto;
 
-  @ApiProperty({ description: 'Response metadata' })
-  meta!: { timestamp: string };
+  @ApiProperty({
+    description: 'Response metadata',
+    type: RankingResponseMetaDto,
+  })
+  meta!: RankingResponseMetaDto;
 }
 
 export class WrappedRankingHistoryResponseDto {
-  @ApiProperty({ description: 'Ranking history data', type: () => RankingHistoryResponseDto })
+  @ApiProperty({
+    description: 'Ranking history data',
+    type: () => RankingHistoryResponseDto,
+  })
   data!: RankingHistoryResponseDto;
 
-  @ApiProperty({ description: 'Response metadata' })
-  meta!: { timestamp: string };
+  @ApiProperty({
+    description: 'Response metadata',
+    type: RankingResponseMetaDto,
+  })
+  meta!: RankingResponseMetaDto;
 }
 
 export class WrappedPublicRankingHistoryResponseDto {
@@ -119,24 +213,39 @@ export class WrappedPublicRankingHistoryResponseDto {
   })
   data!: PublicRankingHistoryResponseDto;
 
-  @ApiProperty({ description: 'Response metadata' })
-  meta!: { timestamp: string };
+  @ApiProperty({
+    description: 'Response metadata',
+    type: RankingResponseMetaDto,
+  })
+  meta!: RankingResponseMetaDto;
 }
 
 export class WrappedPeakRanksResponseDto {
-  @ApiProperty({ description: 'Peak ranks data', type: () => PeakRanksResponseDto })
+  @ApiProperty({
+    description: 'Peak ranks data',
+    type: () => PeakRanksResponseDto,
+  })
   data!: PeakRanksResponseDto;
 
-  @ApiProperty({ description: 'Response metadata' })
-  meta!: { timestamp: string };
+  @ApiProperty({
+    description: 'Response metadata',
+    type: RankingResponseMetaDto,
+  })
+  meta!: RankingResponseMetaDto;
 }
 
 export class WrappedRankMovementResponseDto {
-  @ApiProperty({ description: 'Rank movement data', type: () => RankMovementResponseDto })
+  @ApiProperty({
+    description: 'Rank movement data',
+    type: () => RankMovementResponseDto,
+  })
   data!: RankMovementResponseDto;
 
-  @ApiProperty({ description: 'Response metadata' })
-  meta!: { timestamp: string };
+  @ApiProperty({
+    description: 'Response metadata',
+    type: RankingResponseMetaDto,
+  })
+  meta!: RankingResponseMetaDto;
 }
 
 export class WrappedRankingMilestonesResponseDto {
@@ -146,50 +255,83 @@ export class WrappedRankingMilestonesResponseDto {
   })
   data!: RankingMilestonesResponseDto;
 
-  @ApiProperty({ description: 'Response metadata' })
-  meta!: { timestamp: string };
+  @ApiProperty({
+    description: 'Response metadata',
+    type: RankingResponseMetaDto,
+  })
+  meta!: RankingResponseMetaDto;
 }
 
 export class WrappedUserPercentileResponseDto {
-  @ApiProperty({ description: 'User percentile data', type: () => UserPercentileResponseDto })
+  @ApiProperty({
+    description: 'User percentile data',
+    type: () => UserPercentileResponseDto,
+  })
   data!: UserPercentileResponseDto;
 
-  @ApiProperty({ description: 'Response metadata' })
-  meta!: { timestamp: string };
+  @ApiProperty({
+    description: 'Response metadata',
+    type: RankingResponseMetaDto,
+  })
+  meta!: RankingResponseMetaDto;
 }
 
 export class WrappedUserRankSummaryDto {
-  @ApiProperty({ description: 'User rank summary data', type: () => UserRankSummaryDto })
+  @ApiProperty({
+    description: 'User rank summary data',
+    type: () => UserRankSummaryDto,
+  })
   data!: UserRankSummaryDto;
 
-  @ApiProperty({ description: 'Response metadata' })
-  meta!: { timestamp: string };
+  @ApiProperty({
+    description: 'Response metadata',
+    type: RankingResponseMetaDto,
+  })
+  meta!: RankingResponseMetaDto;
 }
 
 // ─── Admin wrappers ────────────────────────────────────────────────────────────
 
 export class WrappedRankingStatusResponseDto {
-  @ApiProperty({ description: 'Ranking system status', type: () => RankingStatusResponseDto })
+  @ApiProperty({
+    description: 'Ranking system status',
+    type: () => RankingStatusResponseDto,
+  })
   data!: RankingStatusResponseDto;
 
-  @ApiProperty({ description: 'Response metadata' })
-  meta!: { timestamp: string };
+  @ApiProperty({
+    description: 'Response metadata',
+    type: RankingResponseMetaDto,
+  })
+  meta!: RankingResponseMetaDto;
 }
 
 export class WrappedRecalculateResponseDto {
-  @ApiProperty({ description: 'Recalculation result', type: () => RecalculateResponseDto })
+  @ApiProperty({
+    description: 'Recalculation result',
+    type: () => RecalculateResponseDto,
+  })
   data!: RecalculateResponseDto;
 
-  @ApiProperty({ description: 'Response metadata' })
-  meta!: { timestamp: string };
+  @ApiProperty({
+    description: 'Response metadata',
+    type: RankingResponseMetaDto,
+  })
+  meta!: RankingResponseMetaDto;
 }
 
 export class WrappedPeriodResetResponseDto {
-  @ApiProperty({ description: 'Period reset result', type: () => PeriodResetResponseDto })
+  @ApiProperty({
+    description: 'Period reset result',
+    type: () => PeriodResetResponseDto,
+  })
   data!: PeriodResetResponseDto;
 
-  @ApiProperty({ description: 'Response metadata' })
-  meta!: { timestamp: string };
+  @ApiProperty({
+    description: 'Response metadata',
+    type: RankingResponseMetaDto,
+  })
+  meta!: RankingResponseMetaDto;
 }
 
 export class WrappedConsistencyReportResponseDto {
@@ -199,6 +341,9 @@ export class WrappedConsistencyReportResponseDto {
   })
   data!: ConsistencyReportResponseDto;
 
-  @ApiProperty({ description: 'Response metadata' })
-  meta!: { timestamp: string };
+  @ApiProperty({
+    description: 'Response metadata',
+    type: RankingResponseMetaDto,
+  })
+  meta!: RankingResponseMetaDto;
 }

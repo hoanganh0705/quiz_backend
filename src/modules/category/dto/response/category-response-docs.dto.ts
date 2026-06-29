@@ -343,12 +343,37 @@ class PaginatedMetaDto {
 
 // ─── Wrapper DTOs (top-level envelope) ────────────────────────────────────────
 
-export class CategoryWrappedRankedListDto {
+// ─── Nested list payloads (for non-paginated endpoints) ──────────────────────
+//
+// Endpoints that return `{ items }` without a `pagination` field are wrapped by
+// the response interceptor as `{ data: { items: [...] }, meta: { timestamp } }`,
+// not flattened to `{ data: [...], meta: { ..., pagination } }`. These inner
+// classes document that nested `data` shape for Swagger.
+class CategoryRankedListDataDto {
   @ApiProperty({
     description: 'Ranked category items',
     type: [RankedCategoryDataDto],
   })
-  data!: RankedCategoryDataDto[];
+  items!: RankedCategoryDataDto[];
+}
+
+class CategoryRelatedListDataDto {
+  @ApiProperty({
+    description: 'Related category items',
+    type: [CategoryDataDto],
+  })
+  items!: CategoryDataDto[];
+}
+
+// ─── Wrapper DTOs (top-level envelope) ────────────────────────────────────────
+
+export class CategoryWrappedRankedListDto {
+  @ApiProperty({
+    description:
+      'Wrapped ranked category list. `data` is an object (not an array) because the endpoint returns `{ items }` without a `pagination` cursor, so the response interceptor does not flatten it.',
+    type: CategoryRankedListDataDto,
+  })
+  data!: CategoryRankedListDataDto;
 
   @ApiProperty({
     description: 'Response metadata',
@@ -359,10 +384,11 @@ export class CategoryWrappedRankedListDto {
 
 export class CategoryWrappedRelatedListDto {
   @ApiProperty({
-    description: 'Related category items',
-    type: [CategoryDataDto],
+    description:
+      'Wrapped related category list. `data` is an object (not an array) because the endpoint returns `{ items }` without a `pagination` cursor, so the response interceptor does not flatten it.',
+    type: CategoryRelatedListDataDto,
   })
-  data!: CategoryDataDto[];
+  data!: CategoryRelatedListDataDto;
 
   @ApiProperty({
     description: 'Response metadata',

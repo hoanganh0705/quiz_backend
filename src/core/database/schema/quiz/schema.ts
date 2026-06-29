@@ -53,7 +53,13 @@ import {
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 
-import { quizDifficulty, quizInstanceStatus, quizVersionStatus, reviewReportStatus, tsvector } from '../shared';
+import {
+  quizDifficulty,
+  quizInstanceStatus,
+  quizVersionStatus,
+  reviewReportStatus,
+  tsvector,
+} from '../shared';
 import { users } from '../auth/schema';
 import { categories, tags } from '..';
 

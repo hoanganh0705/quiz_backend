@@ -4,9 +4,11 @@ import { Type } from 'class-transformer';
 
 export class ListPlatformReportsQueryDto {
   @ApiPropertyOptional({
-    description: 'Opaque cursor for pagination',
+    description: 'Opaque cursor for pagination. Pass the `nextCursor` from a previous response.',
     type: String,
     nullable: true,
+    example:
+      'eyJjcmVhdGVkQXQiOiAiMjAyNi0wMS0wMVQwMDowMDowMC4wMDBaIiwgInJlcG9ydElkIjogIjk5MGU4NDAwLWUyOWItNDFkNC1hNzE2LTQ0NjY1NTQ0MDAwMSJ9',
   })
   @IsOptional()
   @IsString()
