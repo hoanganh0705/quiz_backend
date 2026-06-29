@@ -67,10 +67,14 @@ export const relatedInternalErrorExample = withInstance(
 
 // ─── /tags/:id/analytics ────────────────────────────────────────────────────────
 
-export const analyticsBadRequestExample = withInstance(
-  ErrorResponseExamples.badRequest,
-  '/tags/770e8400-e29b-41d4-a716-446655440000/analytics',
-);
+export const analyticsBadRequestExample = {
+  ...withInstance(
+    ErrorResponseExamples.badRequest,
+    '/tags/770e8400-e29b-41d4-a716-446655440000/analytics',
+  ),
+  detail: 'Validation failed (uuid is expected)',
+  extensions: { requestId: 'req_abc123' },
+};
 export const analyticsNotFoundExample = withInstance(
   ErrorResponseExamples.notFound,
   '/tags/770e8400-e29b-41d4-a716-446655440000/analytics',
@@ -98,6 +102,14 @@ export const followTooManyRequestsExample = withInstance(
   ErrorResponseExamples.tooManyRequests,
   '/tags/770e8400-e29b-41d4-a716-446655440000/follow',
 );
+export const followBadRequestExample = {
+  ...withInstance(
+    ErrorResponseExamples.badRequest,
+    '/tags/770e8400-e29b-41d4-a716-446655440000/follow',
+  ),
+  detail: 'Validation failed (uuid is expected)',
+  extensions: { requestId: 'req_abc123' },
+};
 export const followInternalErrorExample = withInstance(
   ErrorResponseExamples.internalServerError,
   '/tags/770e8400-e29b-41d4-a716-446655440000/follow',
@@ -121,6 +133,14 @@ export const unfollowTooManyRequestsExample = withInstance(
   ErrorResponseExamples.tooManyRequests,
   '/tags/770e8400-e29b-41d4-a716-446655440000/follow',
 );
+export const unfollowBadRequestExample = {
+  ...withInstance(
+    ErrorResponseExamples.badRequest,
+    '/tags/770e8400-e29b-41d4-a716-446655440000/follow',
+  ),
+  detail: 'Validation failed (uuid is expected)',
+  extensions: { requestId: 'req_abc123' },
+};
 export const unfollowInternalErrorExample = withInstance(
   ErrorResponseExamples.internalServerError,
   '/tags/770e8400-e29b-41d4-a716-446655440000/follow',

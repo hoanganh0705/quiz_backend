@@ -9,10 +9,20 @@ import {
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiOkResponse } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiBearerAuth,
+  ApiOperation,
+  ApiOkResponse,
+  ApiUnauthorizedResponse,
+  ApiForbiddenResponse,
+  ApiBadRequestResponse,
+  ApiInternalServerErrorResponse,
+} from '@nestjs/swagger';
 import { Permissions } from '@/common/authorization/decorators/permissions.decorator';
 import { Permission } from '@/common/authorization/permissions';
-import { ApiAdminResource, ApiAdminUpdate } from '@/common/swagger/swagger-decorators';
+import { AUTH_SECURITY_NAME } from '@/core/swagger/swagger.config';
+import { ProblemDetailDto, ErrorResponseExamples } from '@/common/swagger/swagger-schemas';
 import { ReviewAdminService } from '@/modules/review/domain/review-admin.service';
 import { CursorMapper } from '@/modules/review/mappers/review-cursor.mapper';
 import { ListPlatformReportsQueryDto, UpdateReportStatusDto } from '@/modules/review/dto/request';
@@ -27,9 +37,19 @@ import {
   WrappedUpdateReportMessageDto,
 } from '@/modules/review/dto/response/review-response-docs.dto';
 
+// Admin review endpoints never throw ReviewDomainError (the admin service
+// has no domain error classes; missing reports or invalid transitions result
+// in empty result sets, not exceptions), so the ReviewDomainExceptionFilter
+// has nothing to catch. Authentication and authorization failures fall
+// through to GlobalExceptionFilter and are emitted as RFC 7807 ProblemDetail
+// responses (401 from JwtGuard, 403 from PermissionsGuard).
+// 404 and 409 are intentionally NOT documented because the admin service
+// never throws them — listPlatformReports returns an empty result set, and
+// updateReportStatus is a no-op when the report does not exist.
+
 @ApiTags('reviews')
 @Controller('admin/reviews')
-@ApiAdminResource()
+@ApiBearerAuth(AUTH_SECURITY_NAME)
 export class AdminReviewController {
   constructor(private readonly reviewAdminService: ReviewAdminService) {}
 
@@ -45,6 +65,26 @@ export class AdminReviewController {
   @ApiOkResponse({
     description: 'Paginated list of platform-wide reports',
     type: WrappedPlatformReportsListDto,
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Missing or invalid authentication token',
+    type: ProblemDetailDto,
+    example: ErrorResponseExamples.unauthorized,
+  })
+  @ApiForbiddenResponse({
+    description: 'Authenticated user lacks the REVIEW_MODERATE permission',
+    type: ProblemDetailDto,
+    example: ErrorResponseExamples.forbidden,
+  })
+  @ApiBadRequestResponse({
+    description: 'Query parameters failed validation',
+    type: ProblemDetailDto,
+    example: ErrorResponseExamples.badRequest,
+  })
+  @ApiInternalServerErrorResponse({
+    description: 'Unexpected server error',
+    type: ProblemDetailDto,
+    example: ErrorResponseExamples.internalServerError,
   })
   async listPlatformReports(
     @Query() query: ListPlatformReportsQueryDto,
@@ -85,9 +125,36 @@ export class AdminReviewController {
   @Patch('reports/:reportId')
   @Permissions(Permission.REVIEW_MODERATE)
   @HttpCode(HttpStatus.OK)
-  @ApiAdminUpdate({
+  @ApiOperation({
+    summary: 'Update platform review report status',
+    description:
+      'Updates the moderation status of a platform-wide review report. ' +
+      'Only accessible by admin users. ' +
+      'If the report does not exist the update is a no-op.',
+  })
+  @ApiOkResponse({
     description: 'Report status updated successfully',
     type: WrappedUpdateReportMessageDto,
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Missing or invalid authentication token',
+    type: ProblemDetailDto,
+    example: ErrorResponseExamples.unauthorized,
+  })
+  @ApiForbiddenResponse({
+    description: 'Authenticated user lacks the REVIEW_MODERATE permission',
+    type: ProblemDetailDto,
+    example: ErrorResponseExamples.forbidden,
+  })
+  @ApiBadRequestResponse({
+    description: 'Request body failed validation',
+    type: ProblemDetailDto,
+    example: ErrorResponseExamples.badRequest,
+  })
+  @ApiInternalServerErrorResponse({
+    description: 'Unexpected server error',
+    type: ProblemDetailDto,
+    example: ErrorResponseExamples.internalServerError,
   })
   async updateReportStatus(
     @Param('reportId', new ParseUUIDPipe()) reportId: string,

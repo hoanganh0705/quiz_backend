@@ -1,5 +1,5 @@
 import { Body, Controller, Get, Param, ParseUUIDPipe, Query, UseFilters } from '@nestjs/common';
-import { ApiTags, ApiInternalServerErrorResponse, ApiNotFoundResponse } from '@nestjs/swagger';
+import { ApiTags } from '@nestjs/swagger';
 import { Public } from '@/common/decorators/public.decorator';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
 import { ApiAuthList, ApiPublicList } from '@/common/swagger/swagger-decorators';
@@ -16,7 +16,7 @@ import { CursorMapper } from '../../mappers/review-cursor.mapper';
 import {
   WrappedMyReviewsListDto,
   WrappedReportedReviewsListDto,
-  WrappedReviewDetailDto,
+  WrappedMyReviewDto,
 } from '../../dto/response/review-response-docs.dto';
 
 @ApiTags('users')
@@ -27,7 +27,6 @@ export class UserReviewController {
 
   @Get('me/reported-reviews')
   @ApiAuthList({ description: 'Reported reviews returned', type: WrappedReportedReviewsListDto })
-  @ApiInternalServerErrorResponse()
   async listMyReportedReviews(
     @CurrentUser() user: JwtPayload,
     @Query() query: ListReportedReviewsQueryDto,
@@ -41,7 +40,6 @@ export class UserReviewController {
   @Get(':userId/reviews')
   @Public()
   @ApiPublicList({ description: 'User reviews returned', type: WrappedMyReviewsListDto })
-  @ApiInternalServerErrorResponse()
   async listReviewsByUser(
     @Param('userId', new ParseUUIDPipe()) userId: string,
     @Query() query: ListMyReviewsQueryDto,
@@ -54,7 +52,6 @@ export class UserReviewController {
 
   @Get('me/reviews')
   @ApiAuthList({ description: 'My reviews returned', type: WrappedMyReviewsListDto })
-  @ApiInternalServerErrorResponse()
   async listMyReviews(
     @CurrentUser() user: JwtPayload,
     @Query() query: ListMyReviewsQueryDto,
@@ -65,10 +62,10 @@ export class UserReviewController {
     });
   }
 
+  // Implementation returns `null` when the user has not reviewed the quiz
+  // (NOT a 404). The wrapper documents `data: ReviewDetailDataDto | null`.
   @Get('me/reviews/:quizId')
-  @ApiAuthList({ description: 'My review for the quiz returned', type: WrappedReviewDetailDto })
-  @ApiNotFoundResponse({ description: 'No review found for this quiz' })
-  @ApiInternalServerErrorResponse()
+  @ApiAuthList({ description: 'My review for the quiz returned', type: WrappedMyReviewDto })
   async getMyReviewForQuiz(
     @Param('quizId', new ParseUUIDPipe()) quizId: string,
     @CurrentUser() user: JwtPayload,

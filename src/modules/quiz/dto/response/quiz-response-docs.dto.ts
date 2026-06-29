@@ -110,10 +110,42 @@ class QuizDataDto {
 
   @ApiProperty({
     description: 'Published version summary',
-    type: Object,
+    type: () => QuizVersionDataDto,
     nullable: true,
   })
-  publishedVersion!: object | null;
+  publishedVersion!: QuizVersionDataDto | null;
+}
+
+class QuizAnswerOptionDataDto {
+  @ApiProperty({
+    description: 'Unique answer option identifier',
+    example: '550e8400-e29b-41d4-a716-446655440000',
+  })
+  optionId!: string;
+
+  @ApiProperty({
+    description: 'Display order (1-based)',
+    example: 1,
+  })
+  position!: number;
+
+  @ApiProperty({
+    description: 'Answer text',
+    example: 'console.log',
+  })
+  value!: string;
+
+  @ApiProperty({
+    description: 'Whether this is the correct answer',
+    example: true,
+  })
+  isCorrect!: boolean;
+
+  @ApiProperty({
+    description: 'Creation timestamp (ISO 8601)',
+    example: '2025-01-15T08:30:00.000Z',
+  })
+  createdAt!: string;
 }
 
 class QuizQuestionDataDto {
@@ -162,10 +194,10 @@ class QuizQuestionDataDto {
   updatedAt!: string;
 
   @ApiProperty({
-    description: 'Answer options',
-    type: [Object],
+    description: 'Answer options for this question',
+    type: () => [QuizAnswerOptionDataDto],
   })
-  answerOptions!: object[];
+  answerOptions!: QuizAnswerOptionDataDto[];
 }
 
 class QuizVersionDataDto {
@@ -579,6 +611,181 @@ class PaginatedMetaDto {
   pagination!: PaginationMetaDataDto;
 }
 
+// ─── Quiz version detail ──────────────────────────────────────────────────────
+
+class QuizVersionDetailAnswerOptionDataDto {
+  @ApiProperty({
+    description: 'Unique answer option identifier',
+    example: '440e8400-e29b-41d4-a716-446655440001',
+  })
+  optionId!: string;
+
+  @ApiProperty({
+    description: 'Parent question identifier',
+    example: '550e8400-e29b-41d4-a716-446655440001',
+  })
+  questionId!: string;
+
+  @ApiProperty({
+    description: 'Display order (1-based)',
+    example: 1,
+  })
+  position!: number;
+
+  @ApiProperty({
+    description: 'Answer option text',
+    example: 'Prints a value to the console',
+  })
+  optionText!: string;
+
+  @ApiProperty({
+    description: 'Whether this option is a correct answer',
+    example: true,
+  })
+  isCorrect!: boolean;
+
+  @ApiProperty({
+    description: 'Optional feedback shown when this option is selected',
+    type: String,
+    nullable: true,
+  })
+  explanation!: string | null;
+
+  @ApiProperty({
+    description: 'Creation timestamp (ISO 8601)',
+    example: '2025-01-15T08:30:00.000Z',
+  })
+  createdAt!: string;
+
+  @ApiProperty({
+    description: 'Last update timestamp (ISO 8601)',
+    example: '2025-06-01T12:00:00.000Z',
+  })
+  updatedAt!: string;
+}
+
+class QuizVersionDetailQuestionDataDto {
+  @ApiProperty({
+    description: 'Unique question identifier',
+    example: '550e8400-e29b-41d4-a716-446655440001',
+  })
+  questionId!: string;
+
+  @ApiProperty({
+    description: 'Parent quiz version identifier',
+    example: '550e8400-e29b-41d4-a716-446655440000',
+  })
+  quizVersionId!: string;
+
+  @ApiProperty({
+    description: 'Display order (1-based)',
+    example: 1,
+  })
+  position!: number;
+
+  @ApiProperty({
+    description: 'Question text',
+    example: 'What does `console.log` do in JavaScript?',
+  })
+  questionText!: string;
+
+  @ApiProperty({
+    description: 'Optional image URL',
+    type: String,
+    format: 'uri',
+    nullable: true,
+  })
+  imageUrl!: string | null;
+
+  @ApiProperty({
+    description: 'Creation timestamp (ISO 8601)',
+    example: '2025-01-15T08:30:00.000Z',
+  })
+  createdAt!: string;
+
+  @ApiProperty({
+    description: 'Last update timestamp (ISO 8601)',
+    example: '2025-06-01T12:00:00.000Z',
+  })
+  updatedAt!: string;
+
+  @ApiProperty({
+    description: 'Answer options for this question',
+    type: () => [QuizVersionDetailAnswerOptionDataDto],
+  })
+  answerOptions!: QuizVersionDetailAnswerOptionDataDto[];
+}
+
+class QuizVersionDetailDataDto {
+  @ApiProperty({
+    description: 'Quiz version identifier',
+    example: '550e8400-e29b-41d4-a716-446655440000',
+  })
+  versionId!: string;
+
+  @ApiProperty({
+    description: 'Parent quiz identifier',
+    example: '660e8400-e29b-41d4-a716-446655440000',
+  })
+  quizId!: string;
+
+  @ApiProperty({
+    description: 'Sequential version number',
+    example: 1,
+  })
+  versionNumber!: number;
+
+  @ApiProperty({
+    description: 'Version lifecycle status',
+    enum: ['draft', 'published', 'archived'],
+    example: 'draft',
+  })
+  status!: QuizVersionStatus;
+
+  @ApiProperty({
+    description: 'Version title',
+    example: 'JavaScript Fundamentals v2',
+  })
+  title!: string;
+
+  @ApiProperty({
+    description: 'Version description',
+    type: String,
+    nullable: true,
+  })
+  description!: string | null;
+
+  @ApiProperty({
+    description: 'Passing score percent required to pass',
+    example: 70,
+  })
+  passingScore!: number;
+
+  @ApiProperty({
+    description: 'Time limit in milliseconds',
+    example: 600000,
+  })
+  timeLimit!: number;
+
+  @ApiProperty({
+    description: 'Questions included in this version',
+    type: () => [QuizVersionDetailQuestionDataDto],
+  })
+  questions!: QuizVersionDetailQuestionDataDto[];
+
+  @ApiProperty({
+    description: 'Creation timestamp (ISO 8601)',
+    example: '2025-01-15T08:30:00.000Z',
+  })
+  createdAt!: string;
+
+  @ApiProperty({
+    description: 'Last update timestamp (ISO 8601)',
+    example: '2025-06-01T12:00:00.000Z',
+  })
+  updatedAt!: string;
+}
+
 // ─── Wrapper DTOs (top-level envelope) ────────────────────────────────────────
 
 export class WrappedMessageDto {
@@ -658,6 +865,20 @@ export class WrappedQuizVersionResponseDto {
     type: () => QuizVersionDataDto,
   })
   data!: QuizVersionDataDto;
+
+  @ApiProperty({
+    description: 'Response metadata',
+    type: () => MetaDto,
+  })
+  meta!: MetaDto;
+}
+
+export class WrappedQuizVersionDetailResponseDto {
+  @ApiProperty({
+    description: 'Wrapped quiz version detail (with questions and answer options)',
+    type: () => QuizVersionDetailDataDto,
+  })
+  data!: QuizVersionDetailDataDto;
 
   @ApiProperty({
     description: 'Response metadata',

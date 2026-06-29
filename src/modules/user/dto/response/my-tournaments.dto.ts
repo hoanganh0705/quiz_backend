@@ -48,8 +48,7 @@ export class MyTournamentsPaginationDto {
   hasNextPage!: boolean;
 
   @ApiPropertyOptional({
-    description:
-      'Cursor for the next page (base64-encoded { registeredAt, participantId })',
+    description: 'Cursor for the next page (base64-encoded { registeredAt, participantId })',
     type: String,
     nullable: true,
     example:

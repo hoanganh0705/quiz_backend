@@ -1,11 +1,5 @@
-/* eslint-disable @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment */
 import { relations } from 'drizzle-orm/relations';
-import {
-  socialFeedActivities,
-  friendships,
-  blockedUsers,
-  userFollows,
-} from './schema';
+import { socialFeedActivities, friendships, blockedUsers, userFollows } from './schema';
 import { users } from '../auth/schema';
 
 // =============================================================================

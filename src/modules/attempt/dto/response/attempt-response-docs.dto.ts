@@ -1,4 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { QUIZ_DIFFICULTIES } from '@/modules/quiz/types/quiz.types';
+import { ATTEMPT_STATUSES, ATTEMPT_CONTEXT_TYPES } from '../../types/attempt.types';
 
 // ─── Attempt module documentation-only wrapper DTOs ───────────────────────────────
 //
@@ -18,12 +20,14 @@ import { ApiProperty } from '@nestjs/swagger';
 class AttemptAnswerDataDto {
   @ApiProperty({
     description: 'Answer record identifier',
+    format: 'uuid',
     example: '550e8400-e29b-41d4-a716-446655440002',
   })
   attemptAnswerId!: string;
 
   @ApiProperty({
     description: 'Question identifier',
+    format: 'uuid',
     example: '550e8400-e29b-41d4-a716-446655440001',
   })
   questionId!: string;
@@ -31,6 +35,7 @@ class AttemptAnswerDataDto {
   @ApiProperty({
     description: 'Selected option identifier',
     type: String,
+    format: 'uuid',
     nullable: true,
     example: '550e8400-e29b-41d4-a716-446655440010',
   })
@@ -50,9 +55,10 @@ class AttemptAnswerDataDto {
   timeTakenMs!: number | null;
 
   @ApiProperty({
-    description: 'Whether the answer was correct',
+    description: 'Whether the answer was correct. Always null until the attempt is completed.',
     type: Boolean,
     nullable: true,
+    example: null,
   })
   isCorrect!: boolean | null;
 }
@@ -60,18 +66,21 @@ class AttemptAnswerDataDto {
 class AttemptDataDto {
   @ApiProperty({
     description: 'Unique attempt identifier',
+    format: 'uuid',
     example: '550e8400-e29b-41d4-a716-446655440099',
   })
   attemptId!: string;
 
   @ApiProperty({
     description: 'User identifier',
+    format: 'uuid',
     example: '550e8400-e29b-41d4-a716-446655440000',
   })
   userId!: string;
 
   @ApiProperty({
     description: 'Quiz identifier',
+    format: 'uuid',
     example: '660e8400-e29b-41d4-a716-446655440000',
   })
   quizId!: string;
@@ -96,6 +105,7 @@ class AttemptDataDto {
 
   @ApiProperty({
     description: 'Difficulty level',
+    enum: QUIZ_DIFFICULTIES,
     example: 'medium',
   })
   difficulty!: string;
@@ -120,6 +130,7 @@ class AttemptDataDto {
 
   @ApiProperty({
     description: 'Context type',
+    enum: ATTEMPT_CONTEXT_TYPES,
     example: 'solo',
   })
   contextType!: string;
@@ -127,12 +138,14 @@ class AttemptDataDto {
   @ApiProperty({
     description: 'Context reference ID',
     type: String,
+    format: 'uuid',
     nullable: true,
   })
   contextRefId!: string | null;
 
   @ApiProperty({
     description: 'Attempt status',
+    enum: ATTEMPT_STATUSES,
     example: 'started',
   })
   status!: string;
@@ -160,6 +173,7 @@ class AttemptDataDto {
   @ApiProperty({
     description: 'Completion timestamp (ISO 8601, null if not yet complete)',
     type: String,
+    format: 'date-time',
     nullable: true,
   })
   finishedAt!: string | null;
@@ -187,19 +201,22 @@ class AttemptDataDto {
 class SubmitAnswerDataDto {
   @ApiProperty({
     description: 'Answer record identifier',
+    format: 'uuid',
     example: '550e8400-e29b-41d4-a716-446655440002',
   })
   attemptAnswerId!: string;
 
   @ApiProperty({
     description: 'Question identifier',
+    format: 'uuid',
     example: '550e8400-e29b-41d4-a716-446655440001',
   })
   questionId!: string;
 
   @ApiProperty({
-    description: 'Selected option identifier',
+    description: 'Selected option identifier. Null when the question was skipped.',
     type: String,
+    format: 'uuid',
     nullable: true,
     example: '550e8400-e29b-41d4-a716-446655440010',
   })
@@ -219,9 +236,10 @@ class SubmitAnswerDataDto {
   timeTakenMs!: number | null;
 
   @ApiProperty({
-    description: 'Whether the answer was correct',
+    description: 'Whether the answer was correct. Always null until the attempt is completed.',
     type: Boolean,
     nullable: true,
+    example: null,
   })
   isCorrect!: boolean | null;
 }
@@ -229,6 +247,7 @@ class SubmitAnswerDataDto {
 class WithdrawAnswerDataDto {
   @ApiProperty({
     description: 'Question identifier',
+    format: 'uuid',
     example: '550e8400-e29b-41d4-a716-446655440001',
   })
   questionId!: string;
@@ -243,12 +262,14 @@ class WithdrawAnswerDataDto {
 class AbandonAttemptDataDto {
   @ApiProperty({
     description: 'Attempt identifier',
+    format: 'uuid',
     example: '550e8400-e29b-41d4-a716-446655440099',
   })
   attemptId!: string;
 
   @ApiProperty({
     description: 'Final status',
+    enum: ATTEMPT_STATUSES,
     example: 'abandoned',
   })
   status!: string;
@@ -261,7 +282,7 @@ class AbandonAttemptDataDto {
 
   @ApiProperty({
     description: 'Status message',
-    example: 'Attempt abandoned. No XP was earned.',
+    example: 'Attempt abandoned successfully',
   })
   message!: string;
 }
@@ -269,18 +290,21 @@ class AbandonAttemptDataDto {
 class CompleteAttemptDataDto {
   @ApiProperty({
     description: 'Attempt identifier',
+    format: 'uuid',
     example: '550e8400-e29b-41d4-a716-446655440099',
   })
   attemptId!: string;
 
   @ApiProperty({
     description: 'Quiz identifier',
+    format: 'uuid',
     example: '660e8400-e29b-41d4-a716-446655440000',
   })
   quizId!: string;
 
   @ApiProperty({
     description: 'Final status',
+    enum: ATTEMPT_STATUSES,
     example: 'completed',
   })
   status!: string;
@@ -324,6 +348,7 @@ class CompleteAttemptDataDto {
 class AttemptAnswerItemDataDto {
   @ApiProperty({
     description: 'Question identifier',
+    format: 'uuid',
     example: '550e8400-e29b-41d4-a716-446655440001',
   })
   questionId!: string;
@@ -331,15 +356,17 @@ class AttemptAnswerItemDataDto {
   @ApiProperty({
     description: 'Selected option identifier (null if the question was skipped)',
     type: String,
+    format: 'uuid',
     nullable: true,
     example: '550e8400-e29b-41d4-a716-446655440010',
   })
   selectedOptionId!: string | null;
 
   @ApiProperty({
-    description: 'Whether the answer was correct (null until the attempt is completed)',
+    description: 'Whether the answer was correct. Always null until the attempt is completed.',
     type: Boolean,
     nullable: true,
+    example: null,
   })
   isCorrect!: boolean | null;
 
@@ -353,6 +380,7 @@ class AttemptAnswerItemDataDto {
 class AttemptAnswersDataDto {
   @ApiProperty({
     description: 'Attempt identifier',
+    format: 'uuid',
     example: '550e8400-e29b-41d4-a716-446655440099',
   })
   attemptId!: string;
@@ -367,6 +395,7 @@ class AttemptAnswersDataDto {
 class AttemptAnalyticsDataDto {
   @ApiProperty({
     description: 'Attempt identifier',
+    format: 'uuid',
     example: '550e8400-e29b-41d4-a716-446655440099',
   })
   attemptId!: string;
@@ -384,7 +413,7 @@ class AttemptAnalyticsDataDto {
       'Accuracy: ratio of correct answers to total questions (0–100). Null when totalQuestions is 0.',
     type: Number,
     nullable: true,
-    example: 80.0,
+    example: 80,
   })
   accuracy!: number | null;
 
@@ -414,19 +443,20 @@ class AttemptAnalyticsDataDto {
     description: 'Total time spent on the attempt in seconds. Null if not recorded.',
     type: Number,
     nullable: true,
-    example: 345,
+    example: 345.5,
   })
   timeSpentSeconds!: number | null;
 
   @ApiProperty({
     description: 'Percentile rank among all completed attempts for the same quiz version (0–100).',
-    example: 75.0,
+    example: 75,
   })
   percentileRank!: number;
 
   @ApiProperty({
     description: 'Attempt completion timestamp (ISO 8601). Null if not yet completed.',
     type: String,
+    format: 'date-time',
     nullable: true,
     example: '2025-06-01T12:45:00.000Z',
   })
@@ -436,6 +466,7 @@ class AttemptAnalyticsDataDto {
 class AttemptStatsFavoriteCategoryDataDto {
   @ApiProperty({
     description: 'Category identifier',
+    format: 'uuid',
     example: '550e8400-e29b-41d4-a716-446655440001',
   })
   categoryId!: string;
@@ -450,6 +481,7 @@ class AttemptStatsFavoriteCategoryDataDto {
 class AttemptStatsFavoriteTagDataDto {
   @ApiProperty({
     description: 'Tag identifier',
+    format: 'uuid',
     example: '550e8400-e29b-41d4-a716-446655440002',
   })
   tagId!: string;
@@ -494,12 +526,14 @@ class UserStatsDataDto {
 
   @ApiProperty({
     description: 'Category attempted most frequently. Null if no attempts have been made.',
+    type: AttemptStatsFavoriteCategoryDataDto,
     nullable: true,
   })
   favoriteCategory!: AttemptStatsFavoriteCategoryDataDto | null;
 
   @ApiProperty({
     description: 'Tag attempted most frequently. Null if no attempts have been made.',
+    type: AttemptStatsFavoriteTagDataDto,
     nullable: true,
   })
   favoriteTag!: AttemptStatsFavoriteTagDataDto | null;
@@ -507,6 +541,7 @@ class UserStatsDataDto {
   @ApiProperty({
     description: 'Timestamp of the most recent attempt (ISO 8601). Null if no attempts exist.',
     type: String,
+    format: 'date-time',
     nullable: true,
     example: '2025-06-05T14:30:00.000Z',
   })
@@ -516,12 +551,14 @@ class UserStatsDataDto {
 class AttemptSummaryDataDto {
   @ApiProperty({
     description: 'Unique attempt identifier',
+    format: 'uuid',
     example: '550e8400-e29b-41d4-a716-446655440099',
   })
   attemptId!: string;
 
   @ApiProperty({
     description: 'Quiz identifier',
+    format: 'uuid',
     example: '660e8400-e29b-41d4-a716-446655440000',
   })
   quizId!: string;
@@ -546,18 +583,21 @@ class AttemptSummaryDataDto {
 
   @ApiProperty({
     description: 'Difficulty level',
+    enum: QUIZ_DIFFICULTIES,
     example: 'medium',
   })
   difficulty!: string;
 
   @ApiProperty({
     description: 'Context type',
+    enum: ATTEMPT_CONTEXT_TYPES,
     example: 'solo',
   })
   contextType!: string;
 
   @ApiProperty({
     description: 'Attempt status',
+    enum: ATTEMPT_STATUSES,
     example: 'completed',
   })
   status!: string;
@@ -585,6 +625,7 @@ class AttemptSummaryDataDto {
   @ApiProperty({
     description: 'Completion timestamp (ISO 8601)',
     type: String,
+    format: 'date-time',
     nullable: true,
   })
   finishedAt!: string | null;
