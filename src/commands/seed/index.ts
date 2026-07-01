@@ -15,6 +15,8 @@ import {
   runAttemptSeed,
   runBookmarkSeed,
   runReviewSeed,
+  runDiscussionSeed,
+  runRankingSeed,
 } from './development';
 
 import {
@@ -53,11 +55,13 @@ const runDevelopment = async (): Promise<void> => {
   let summaries: SeedSummary[] = [];
   await logger.group('Development seeds', async () => {
     const results: SeedSummary[] = [];
-    // Order: quizzes (base) → attempts → bookmarks/reviews (depend on users + quizzes)
+    // Order: quizzes (base) → attempts → ranking/reviews/discussions/bookmarks
     results.push(...(await runQuizSeed()));
     results.push(...(await runAttemptSeed()));
-    results.push(...(await runBookmarkSeed()));
+    results.push(...(await runRankingSeed()));
     results.push(...(await runReviewSeed()));
+    results.push(...(await runDiscussionSeed()));
+    results.push(...(await runBookmarkSeed()));
     summaries = results;
   });
   console.log('\nDevelopment summary:');
