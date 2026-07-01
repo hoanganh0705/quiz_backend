@@ -1,6 +1,7 @@
 import { eq, isNull, sql } from 'drizzle-orm';
 import type { SeedTx } from '@/commands/seed/infrastructure';
 import {
+  badges,
   categories,
   quizzes,
   quizVersions, 
@@ -40,6 +41,16 @@ export class SeedLookup {
       .limit(1);
 
     return row?.tagId ?? null;
+  }
+
+  async badgeIdBySlug(slug: string): Promise<string | null> {
+    const [row] = await this.tx
+      .select({ badgeId: badges.badgeId })
+      .from(badges)
+      .where(eq(badges.slug, slug))
+      .limit(1);
+
+    return row?.badgeId ?? null;
   }
 
   async quizIdBySlug(slug: string): Promise<string | null> {
