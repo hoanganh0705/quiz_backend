@@ -7,8 +7,6 @@ import {
   quizAttemptAnswers,
   quizAnswerOptions,
   quizQuestions,
-  quizStats,
-  quizVersions,
   users,
 } from '@/core/database/schema';
 import { logger } from '../infrastructure/seed-logger';
@@ -173,51 +171,9 @@ export const runAttemptSeed = async (): Promise<SeedSummary[]> => {
           .where(eq(users.userId, userId));
       }
 
-      if (attempt.status === 'completed' && attempt.scorePercent) {
-        const [qv] = await tx
-          .select({ quizId: quizVersions.quizId })
-          .from(quizVersions)
-          .where(eq(quizVersions.quizVersionId, quizVersionId))
-          .limit(1);
-
-        if (qv) {
-          const scoreNum = parseFloat(attempt.scorePercent);
-
-          const [existingStats] = await tx
-            .select({
-              totalAttempts: quizStats.totalAttempts,
-              avgScorePercent: quizStats.avgScorePercent,
-            })
-            .from(quizStats)
-            .where(eq(quizStats.quizId, qv.quizId))
-            .limit(1);
-
-          if (existingStats) {
-            const oldAvg = parseFloat((existingStats.avgScorePercent as string) ?? '0');
-            const n = Number(existingStats.totalAttempts);
-            const newAvg = oldAvg + (scoreNum - oldAvg) / (n + 1);
-
-            await tx
-              .update(quizStats)
-              .set({
-                totalAttempts: n + 1,
-                avgScorePercent: newAvg.toFixed(2),
-                lastAttemptAt: finishedAt ?? ctx.nowIso,
-                updatedAt: ctx.nowIso,
-              })
-              .where(eq(quizStats.quizId, qv.quizId));
-          } else {
-            await tx.insert(quizStats).values({
-              quizId: qv.quizId,
-              totalAttempts: 1,
-              totalPlayers: 1,
-              avgScorePercent: attempt.scorePercent,
-              lastAttemptAt: finishedAt ?? ctx.nowIso,
-              updatedAt: ctx.nowIso,
-            });
-          }
-        }
-      }
+      // NOTE: quiz_stats is ❌ DO NOT SEED — it is recomputed by the background
+      // job after each completed attempt. Writing it here would diverge from
+      // real attempt counts the moment a real API attempt is recorded.
 
       inserted++;
       logger.info(`Created attempt ${attempt.attemptId} (${attempt.status}) for ${attempt.userUsername} on ${attempt.quizSlug}`);

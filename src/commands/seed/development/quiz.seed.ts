@@ -12,6 +12,8 @@ import {
   quizVersions,
   quizQuestions,
   quizAnswerOptions,
+  quizCategories,
+  quizTags,
 } from '@/core/database/schema';
 import { logger } from '../infrastructure/seed-logger';
 
@@ -28,6 +30,8 @@ const QUIZ_SEEDS: QuizSeed[] = [
     creatorUsername: 'content_author',
     isFeatured: true,
     isHidden: false,
+    categorySlug: 'technology',
+    tagSlugs: ['programming'],
     versions: [
       {
         versionNumber: 1,
@@ -100,6 +104,8 @@ const QUIZ_SEEDS: QuizSeed[] = [
     creatorUsername: 'content_author',
     isFeatured: false,
     isHidden: false,
+    categorySlug: 'technology',
+    tagSlugs: ['programming', 'algorithms'],
     versions: [
       // Version 1: archived (immutable, no longer available)
       {
@@ -287,6 +293,9 @@ const QUIZ_SEEDS: QuizSeed[] = [
     creatorUsername: 'content_author',
     isFeatured: false,
     isHidden: false,
+    // Intentionally draft-only: demonstrates the insufficient-questions edge case
+    // and the draft quiz state. No categorySlug/tagSlugs because it is not
+    // discoverable via published listings.
     versions: [
       {
         versionNumber: 1,
@@ -349,6 +358,8 @@ const QUIZ_SEEDS: QuizSeed[] = [
     creatorUsername: 'admin_master',
     isFeatured: false,
     isHidden: false,
+    categorySlug: 'mathematics',
+    tagSlugs: ['algorithms', 'programming'],
     versions: [
       {
         versionNumber: 1,
@@ -464,6 +475,45 @@ async function ensureQuiz(
   return { quizId: created.quizId };
 }
 
+/**
+ * Assigns a quiz to its category and tags via the join tables.
+ * Uses onConflictDoNothing so repeated seed runs are safe.
+ * Only runs when categorySlug / tagSlugs are provided on the QuizSeed.
+ */
+async function ensureTaxonomy(
+  tx: SeedTx,
+  lookup: SeedLookup,
+  ctx: SeedContext,
+  quizId: string,
+  quiz: QuizSeed,
+): Promise<void> {
+  if (quiz.categorySlug) {
+    const categoryId = await lookup.categoryIdBySlug(quiz.categorySlug);
+    if (!categoryId) {
+      logger.warn(`Quiz taxonomy: category "${quiz.categorySlug}" not found for quiz "${quiz.slug}", skipping`);
+    } else {
+      await tx
+        .insert(quizCategories)
+        .values({ quizId, categoryId, createdAt: ctx.nowIso })
+        .onConflictDoNothing();
+      logger.info(`Category "${quiz.categorySlug}" assigned to "${quiz.slug}"`);
+    }
+  }
+
+  for (const tagSlug of quiz.tagSlugs ?? []) {
+    const tagId = await lookup.tagIdBySlug(tagSlug);
+    if (!tagId) {
+      logger.warn(`Quiz taxonomy: tag "${tagSlug}" not found for quiz "${quiz.slug}", skipping`);
+      continue;
+    }
+    await tx
+      .insert(quizTags)
+      .values({ quizId, tagId, createdAt: ctx.nowIso })
+      .onConflictDoNothing();
+    logger.info(`Tag "${tagSlug}" assigned to "${quiz.slug}"`);
+  }
+}
+
 async function ensureQuizVersion(
   tx: SeedTx,
   ctx: SeedContext,
@@ -554,6 +604,9 @@ export const runQuizSeed = async (): Promise<SeedSummary[]> => {
       await logger.group(`Quiz: ${quiz.slug}`, async () => {
         const creatorId = await lookup.userIdByUsername(quiz.creatorUsername);
         const { quizId } = await ensureQuiz(tx, lookup, ctx, quiz);
+
+        // Assign category and tags via join tables so filter endpoints work.
+        await ensureTaxonomy(tx, lookup, ctx, quizId, quiz);
 
         let questionsInserted = 0;
         let versionsInserted = 0;

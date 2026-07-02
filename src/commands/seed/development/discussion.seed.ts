@@ -4,8 +4,6 @@ import type { SeedSummary } from '../infrastructure/types';
 import { SeedLookup } from '../shared/seed-lookup';
 import {
   discussionComments,
-  discussionSavedThreads,
-  discussionThreadSubscriptions,
   discussionThreads,
   discussionVotes,
 } from '@/core/database/schema';
@@ -45,8 +43,9 @@ type DiscussionThreadSeed = {
   solvedCommentId?: string;
   solvedByUsername?: string;
   comments: DiscussionCommentSeed[];
-  subscriptions: string[];
-  savedBy: string[];
+  // NOTE: subscriptions and savedBy are ❌ DO NOT SEED.
+  // These rows must be created via POST /discussions/threads/:id/subscribe
+  // and POST /discussions/threads/:id/save so those endpoints remain testable.
   votes: DiscussionVoteSeed[];
 };
 
@@ -88,8 +87,6 @@ const DISCUSSION_THREAD_SEEDS: DiscussionThreadSeed[] = [
         downvotesCount: 0,
       },
     ],
-    subscriptions: ['content_author'],
-    savedBy: ['power_user'],
     votes: [
       {
         userUsername: 'content_author',
@@ -140,8 +137,6 @@ const DISCUSSION_THREAD_SEEDS: DiscussionThreadSeed[] = [
         downvotesCount: 0,
       },
     ],
-    subscriptions: ['learner_user'],
-    savedBy: ['content_author'],
     votes: [
       {
         userUsername: 'learner_user',
@@ -162,8 +157,6 @@ export const runDiscussionSeed = async (): Promise<SeedSummary[]> => {
     let threadsInserted = 0;
     let commentsInserted = 0;
     let votesInserted = 0;
-    let subscriptionsInserted = 0;
-    let savesInserted = 0;
     let skipped = 0;
 
     for (const seed of DISCUSSION_THREAD_SEEDS) {
@@ -235,36 +228,6 @@ export const runDiscussionSeed = async (): Promise<SeedSummary[]> => {
         commentsInserted++;
       }
 
-      for (const username of seed.subscriptions) {
-        const userId = await lookup.userIdByUsername(username);
-        const inserted = await tx
-          .insert(discussionThreadSubscriptions)
-          .values({
-            userId,
-            threadId: seed.threadId,
-            createdAt: ctx.nowIso,
-          })
-          .onConflictDoNothing()
-          .returning({ threadId: discussionThreadSubscriptions.threadId });
-
-        subscriptionsInserted += inserted.length;
-      }
-
-      for (const username of seed.savedBy) {
-        const userId = await lookup.userIdByUsername(username);
-        const inserted = await tx
-          .insert(discussionSavedThreads)
-          .values({
-            userId,
-            threadId: seed.threadId,
-            createdAt: ctx.nowIso,
-          })
-          .onConflictDoNothing()
-          .returning({ threadId: discussionSavedThreads.threadId });
-
-        savesInserted += inserted.length;
-      }
-
       for (const vote of seed.votes) {
         const userId = await lookup.userIdByUsername(vote.userUsername);
         const inserted = await tx
@@ -288,7 +251,7 @@ export const runDiscussionSeed = async (): Promise<SeedSummary[]> => {
 
     summaries.push({
       domain: 'discussions',
-      inserted: threadsInserted + commentsInserted + votesInserted + subscriptionsInserted + savesInserted,
+      inserted: threadsInserted + commentsInserted + votesInserted,
       updated: 0,
       skipped,
     });
