@@ -110,6 +110,10 @@ export type QuizSeed = {
   creatorUsername: string;
   isFeatured: boolean;
   isHidden: boolean;
+  /** Optional: slug of the category to assign to this quiz via the join table. */
+  categorySlug?: string;
+  /** Optional: tag slugs to assign to this quiz via the join table. */
+  tagSlugs?: string[];
   versions: QuizVersionSeed[];
 };
 
