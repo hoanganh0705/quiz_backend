@@ -192,7 +192,9 @@ export const runDiscussionSeed = async (): Promise<SeedSummary[]> => {
           downvotesCount: seed.downvotesCount,
           isSolved: seed.isSolved,
           solvedAt: seed.solvedAt ?? null,
-          solvedCommentId: seed.solvedCommentId ?? null,
+          // Insert null first — the FK to discussion_comments requires the comment to
+          // exist before we can set solvedCommentId. We patch it after inserting comments.
+          solvedCommentId: null,
           solvedBy,
           createdAt: ctx.nowIso,
           updatedAt: ctx.nowIso,
@@ -226,6 +228,14 @@ export const runDiscussionSeed = async (): Promise<SeedSummary[]> => {
           updatedAt: ctx.nowIso,
         });
         commentsInserted++;
+      }
+
+      // Now that all comments exist, patch solvedCommentId (satisfies the FK)
+      if (seed.solvedCommentId) {
+        await tx
+          .update(discussionThreads)
+          .set({ solvedCommentId: seed.solvedCommentId })
+          .where(eq(discussionThreads.threadId, seed.threadId));
       }
 
       for (const vote of seed.votes) {

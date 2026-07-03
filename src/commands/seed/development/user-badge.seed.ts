@@ -44,7 +44,7 @@ const USER_BADGE_SEEDS: UserBadgeSeed[] = [
     badgeSlug: 'perfect-score',
     earnedAt: '2026-06-30T10:00:00.000Z',
     progress: { perfectScores: 1, threshold: 1 },
-    metadata: { source: 'attempt_seed', attemptId: 'att-001-power-learner-perfect' },
+    metadata: { source: 'attempt_seed', attemptId: 'a0000001-0000-7000-8000-000000000001' },
   },
   {
     userBadgeId: '52222222-2222-7222-8222-222222222223',
