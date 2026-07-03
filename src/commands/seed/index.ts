@@ -12,7 +12,6 @@ import {
 
 import {
   runQuizSeed,
-  runAttemptSeed,
   runBookmarkSeed,
   runReviewSeed,
   runDiscussionSeed,
@@ -57,9 +56,10 @@ const runDevelopment = async (): Promise<void> => {
   let summaries: SeedSummary[] = [];
   await logger.group('Development seeds', async () => {
     const results: SeedSummary[] = [];
-    // Order: quizzes (base) → attempts → ranking → earned badges → notifications → reviews/discussions/bookmarks
+    // Order: quizzes (base) → ranking (sets xpTotal on users) → earned badges → notifications → reviews/discussions/bookmarks
+    // NOTE: quiz_attempts and quiz_attempt_answers are ❌ DO NOT SEED (Phase 10 audit).
+    // They are created by POST /attempts/start and POST /attempts/:id/answers in the real API flow.
     results.push(...(await runQuizSeed()));
-    results.push(...(await runAttemptSeed()));
     results.push(...(await runRankingSeed()));
     results.push(...(await runUserBadgeSeed()));
     results.push(...(await runNotificationSeed()));

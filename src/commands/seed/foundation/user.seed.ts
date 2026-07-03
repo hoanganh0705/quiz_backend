@@ -9,7 +9,7 @@ import {
   normalizeUserSeeds,
 } from '../infrastructure/utils';
 import type { NormalizedUserSeed, RawUserSeed, SeedDomain, SeedSummary } from '../infrastructure/types';
-import { users, userProfiles } from '@/core/database/schema';
+import { users } from '@/core/database/schema';
 
 const USER_SEEDS: readonly RawUserSeed[] = [
   {
