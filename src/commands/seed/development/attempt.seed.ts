@@ -13,7 +13,8 @@ import { logger } from '../infrastructure/seed-logger';
 
 const ATTEMPT_SEEDS: AttemptSeed[] = [
   {
-    attemptId: 'att-001-power-learner-perfect',
+    // att-001: power_user perfect score on javascript-fundamentals v1
+    attemptId: 'a0000001-0000-7000-8000-000000000001',
     userUsername: 'power_user',
     quizSlug: 'javascript-fundamentals',
     versionNumber: 1,
@@ -24,7 +25,8 @@ const ATTEMPT_SEEDS: AttemptSeed[] = [
     xpEarned: 100,
   },
   {
-    attemptId: 'att-002-learner-passed',
+    // att-002: learner_user passed javascript-fundamentals v1
+    attemptId: 'a0000002-0000-7000-8000-000000000002',
     userUsername: 'learner_user',
     quizSlug: 'javascript-fundamentals',
     versionNumber: 1,
@@ -35,7 +37,8 @@ const ATTEMPT_SEEDS: AttemptSeed[] = [
     xpEarned: 100,
   },
   {
-    attemptId: 'att-003-learner-failed',
+    // att-003: learner_user failed javascript-fundamentals v1
+    attemptId: 'a0000003-0000-7000-8000-000000000003',
     userUsername: 'learner_user',
     quizSlug: 'javascript-fundamentals',
     versionNumber: 1,
@@ -46,7 +49,8 @@ const ATTEMPT_SEEDS: AttemptSeed[] = [
     xpEarned: 0,
   },
   {
-    attemptId: 'att-004-power-learner-system-design',
+    // att-004: power_user passed system-design-v2 v2
+    attemptId: 'a0000004-0000-7000-8000-000000000004',
     userUsername: 'power_user',
     quizSlug: 'system-design-v2',
     versionNumber: 2,
@@ -57,21 +61,24 @@ const ATTEMPT_SEEDS: AttemptSeed[] = [
     xpEarned: 250,
   },
   {
-    attemptId: 'att-005-learner-abandoned',
+    // att-005: learner_user abandoned system-design-v2 v2
+    attemptId: 'a0000005-0000-7000-8000-000000000005',
     userUsername: 'learner_user',
     quizSlug: 'system-design-v2',
     versionNumber: 2,
     status: 'abandoned',
   },
   {
-    attemptId: 'att-006-power-learner-abandoned',
+    // att-006: power_user abandoned algorithms-advanced v1
+    attemptId: 'a0000006-0000-7000-8000-000000000006',
     userUsername: 'power_user',
     quizSlug: 'algorithms-advanced',
     versionNumber: 1,
     status: 'abandoned',
   },
   {
-    attemptId: 'att-007-learner-active',
+    // att-007: learner_user in-progress on algorithms-advanced v1
+    attemptId: 'a0000007-0000-7000-8000-000000000007',
     userUsername: 'learner_user',
     quizSlug: 'algorithms-advanced',
     versionNumber: 1,
