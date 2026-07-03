@@ -1,3 +1,4 @@
+import { eq } from 'drizzle-orm';
 import { db, type SeedContext } from '../infrastructure';
 import type { SeedSummary } from '../infrastructure/types';
 import { SeedLookup } from '../shared/seed-lookup';
@@ -5,6 +6,7 @@ import {
   rankHistory,
   rankingMilestones,
   userRanking,
+  users,
 } from '@/core/database/schema';
 import { logger } from '../infrastructure/seed-logger';
 
@@ -53,6 +55,9 @@ type UserRankingSeed = {
   milestones: RankingMilestoneRowSeed[];
 };
 
+// Per Phase 10 audit: every seed user must have a user_ranking row so that
+// GET /users/me/ranking and GET /leaderboard/me return non-null data for any
+// seed user JWT. Non-quiz users (admin, moderator) get rank entries with 0 XP.
 const USER_RANKING_SEEDS: UserRankingSeed[] = [
   {
     username: 'power_user',
@@ -201,6 +206,46 @@ const USER_RANKING_SEEDS: UserRankingSeed[] = [
       },
     ],
   },
+  // Admin account — no quiz activity, seeded so ranking endpoints are testable
+  {
+    username: 'admin_master',
+    allTimeXp: 0,
+    weeklyXp: 0,
+    monthlyXp: 0,
+    dailyXp: 0,
+    allTimeRank: 4,
+    weeklyRank: 4,
+    monthlyRank: 4,
+    dailyRank: 4,
+    peakAllTimeRank: 4,
+    peakWeeklyRank: 4,
+    peakMonthlyRank: 4,
+    peakDailyRank: 4,
+    peakAchievedAt: '2026-06-28T00:00:00.000Z',
+    lastActivityAt: '2026-06-28T00:00:00.000Z',
+    history: [],
+    milestones: [],
+  },
+  // Moderator account — no quiz activity, seeded so ranking endpoints are testable
+  {
+    username: 'community_moderator',
+    allTimeXp: 0,
+    weeklyXp: 0,
+    monthlyXp: 0,
+    dailyXp: 0,
+    allTimeRank: 5,
+    weeklyRank: 5,
+    monthlyRank: 5,
+    dailyRank: 5,
+    peakAllTimeRank: 5,
+    peakWeeklyRank: 5,
+    peakMonthlyRank: 5,
+    peakDailyRank: 5,
+    peakAchievedAt: '2026-06-28T00:00:00.000Z',
+    lastActivityAt: '2026-06-28T00:00:00.000Z',
+    history: [],
+    milestones: [],
+  },
 ];
 
 export const runRankingSeed = async (): Promise<SeedSummary[]> => {
@@ -270,6 +315,16 @@ export const runRankingSeed = async (): Promise<SeedSummary[]> => {
             isDirty: false,
           },
         });
+
+      // Also sync users.xpTotal so the profile endpoint shows the correct XP.
+      // Previously this was done as a side-effect in attempt.seed.ts; since
+      // quiz_attempts are ❌ DO NOT SEED, the ranking seed owns this update.
+      if (seed.allTimeXp > 0) {
+        await tx
+          .update(users)
+          .set({ xpTotal: seed.allTimeXp })
+          .where(eq(users.userId, userId));
+      }
 
       rankingRowsTouched++;
 

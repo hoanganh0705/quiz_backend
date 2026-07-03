@@ -1,4 +1,4 @@
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import { db, type SeedTx, type SeedContext } from '../infrastructure';
 import { assertUniqueBy, normalizeSlug } from '../infrastructure/utils';
 import type { RawBadgeSeed, SeedDomain, SeedSummary } from '../infrastructure/types';
@@ -307,7 +307,7 @@ export const createBadgesDomain = (): SeedDomain => ({
     const existingBadges = await tx
       .select({ badgeId: badges.badgeId, slug: badges.slug })
       .from(badges)
-      .where(sql`${badges.slug} = ANY(${slugs})`);
+      .where(inArray(badges.slug, slugs));
 
     const existingBySlug = new Map(existingBadges.map((row) => [row.slug, row]));
 
