@@ -1,3 +1,4 @@
+import { and, eq } from 'drizzle-orm';
 import { db, type SeedContext } from '../infrastructure';
 import type { InstanceSeed, SeedSummary } from '../infrastructure/types';
 import { SeedLookup } from '../shared/seed-lookup';
@@ -37,9 +38,34 @@ export const runInstanceSeed = async (): Promise<SeedSummary[]> => {
         instance.versionNumber,
       );
 
+      const domainKey = `instance:${instance.quizSlug}:v${instance.versionNumber}`;
+
       if (!quizVersionId) {
         logger.warn(`Instance seed: quiz version not found for "${instance.quizSlug}" v${instance.versionNumber}`);
-        summaries.push({ domain: `instance:${instance.quizSlug}:v${instance.versionNumber}`, inserted: 0, updated: 0, skipped: 1 });
+        summaries.push({ domain: domainKey, inserted: 0, updated: 0, skipped: 1 });
+        continue;
+      }
+
+      // Idempotency: skip if an instance for this (quizVersion, host, status) already
+      // exists. quiz_instances has no natural unique key, so we check explicitly
+      // rather than relying on onConflictDoNothing.
+      const [existing] = await tx
+        .select({ instanceId: quizInstances.instanceId })
+        .from(quizInstances)
+        .where(
+          and(
+            eq(quizInstances.quizVersionId, quizVersionId),
+            eq(quizInstances.hostUserId, hostUserId),
+            eq(quizInstances.status, instance.status),
+          ),
+        )
+        .limit(1);
+
+      if (existing) {
+        logger.info(
+          `Skipped existing instance for "${instance.quizSlug}" v${instance.versionNumber} hosted by ${instance.hostUsername}`,
+        );
+        summaries.push({ domain: domainKey, inserted: 0, updated: 0, skipped: 1 });
         continue;
       }
 
@@ -53,7 +79,7 @@ export const runInstanceSeed = async (): Promise<SeedSummary[]> => {
       });
 
       logger.info(`Created instance for "${instance.quizSlug}" v${instance.versionNumber} (${instance.status}) hosted by ${instance.hostUsername}`);
-      summaries.push({ domain: `instance:${instance.quizSlug}:v${instance.versionNumber}`, inserted: 1, updated: 0, skipped: 0 });
+      summaries.push({ domain: domainKey, inserted: 1, updated: 0, skipped: 0 });
     }
   });
 

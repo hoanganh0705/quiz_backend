@@ -140,18 +140,6 @@ export type QuizAnswerOptionSeed = {
   isCorrect: boolean;
 };
 
-export type AttemptSeed = {
-  attemptId: string;
-  userUsername: string;
-  quizSlug: string;
-  versionNumber: number;
-  status: 'started' | 'completed' | 'abandoned';
-  scorePercent?: string;
-  correctCount?: number;
-  timeTakenMs?: number;
-  xpEarned?: number;
-};
-
 export type TournamentSeed = {
   title: string;
   description: string | null;

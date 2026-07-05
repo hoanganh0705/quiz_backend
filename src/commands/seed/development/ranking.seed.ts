@@ -55,9 +55,14 @@ type UserRankingSeed = {
   milestones: RankingMilestoneRowSeed[];
 };
 
-// Per Phase 10 audit: every seed user must have a user_ranking row so that
-// GET /users/me/ranking and GET /leaderboard/me return non-null data for any
-// seed user JWT. Non-quiz users (admin, moderator) get rank entries with 0 XP.
+// Per Phase 10 audit: `user_ranking` is ✅ REQUIRED SEED because
+// GET /users/me/ranking and GET /leaderboard/me return null gracefully but
+// cannot be exercised end-to-end without a per-user row. Every seed user
+// gets one (active users get real XP/rank values; admin and moderator get
+// rank entries with 0 XP). `rank_history` and `ranking_milestones` are
+// ⚠ OPTIONAL — only seeded for the active users.
+// See `PHASE_10_EVIDENCE_REPORT.md` → "Ranking domain" for the full
+// classification rationale.
 const USER_RANKING_SEEDS: UserRankingSeed[] = [
   {
     username: 'power_user',
@@ -317,8 +322,8 @@ export const runRankingSeed = async (): Promise<SeedSummary[]> => {
         });
 
       // Also sync users.xpTotal so the profile endpoint shows the correct XP.
-      // Previously this was done as a side-effect in attempt.seed.ts; since
-      // quiz_attempts are ❌ DO NOT SEED, the ranking seed owns this update.
+      // quiz_attempts are ❌ DO NOT SEED (Phase 10 audit), so this seed owns
+      // the xpTotal side-effect that attempt-driven flows would otherwise set.
       if (seed.allTimeXp > 0) {
         await tx
           .update(users)
