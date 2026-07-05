@@ -479,6 +479,12 @@ async function ensureQuiz(
  * Assigns a quiz to its category and tags via the join tables.
  * Uses onConflictDoNothing so repeated seed runs are safe.
  * Only runs when categorySlug / tagSlugs are provided on the QuizSeed.
+ *
+ * NOTE: `quiz_categories` / `quiz_tags` are ❌ DO NOT SEED per the strict
+ * Phase 10 audit (the quiz create/update API accepts categories and tags
+ * inline). Seeding them here is a deliberate exception — see
+ * `PHASE_10_EVIDENCE_REPORT.md` → "Documented Deviations From The Strict
+ * Classification" for the rationale.
  */
 async function ensureTaxonomy(
   tx: SeedTx,

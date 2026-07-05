@@ -1,3 +1,9 @@
+// `user_badges` is ⚠ OPTIONAL SEED per the Phase 10 audit — rows can be
+// earned naturally by completing attempts. We seed a handful so the badge
+// list / revoke / re-evaluate endpoints have data immediately.
+// See `PHASE_10_EVIDENCE_REPORT.md` → "Achievement domain" for the
+// classification rationale.
+
 import { db, type SeedContext } from '../infrastructure';
 import type { SeedSummary } from '../infrastructure/types';
 import { SeedLookup } from '../shared/seed-lookup';
@@ -20,7 +26,7 @@ const USER_BADGE_SEEDS: UserBadgeSeed[] = [
     badgeSlug: 'first-quiz',
     earnedAt: '2026-06-28T08:00:00.000Z',
     progress: { quizzesCompleted: 1, threshold: 1 },
-    metadata: { source: 'attempt_seed', note: 'Completed first quiz' },
+    metadata: { source: 'direct_seed', note: 'Completed first quiz' },
   },
   {
     userBadgeId: '51111111-1111-7111-8111-111111111112',
@@ -36,7 +42,7 @@ const USER_BADGE_SEEDS: UserBadgeSeed[] = [
     badgeSlug: 'first-quiz',
     earnedAt: '2026-06-27T10:00:00.000Z',
     progress: { quizzesCompleted: 1, threshold: 1 },
-    metadata: { source: 'attempt_seed' },
+    metadata: { source: 'direct_seed' },
   },
   {
     userBadgeId: '52222222-2222-7222-8222-222222222222',
@@ -44,7 +50,7 @@ const USER_BADGE_SEEDS: UserBadgeSeed[] = [
     badgeSlug: 'perfect-score',
     earnedAt: '2026-06-30T10:00:00.000Z',
     progress: { perfectScores: 1, threshold: 1 },
-    metadata: { source: 'attempt_seed', attemptId: 'a0000001-0000-7000-8000-000000000001' },
+    metadata: { source: 'direct_seed', note: 'Seeded directly to exercise badge list / revoke endpoints' },
   },
   {
     userBadgeId: '52222222-2222-7222-8222-222222222223',

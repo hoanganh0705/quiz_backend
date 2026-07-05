@@ -1,3 +1,12 @@
+// =============================================================================
+// Seed orchestrator
+//
+// Run with one of: foundation | development | scenarios | all (default: all).
+//
+// The classification of every table written by these seeds is documented in
+// `PHASE_10_EVIDENCE_REPORT.md` at the repository root.
+// =============================================================================
+
 import 'dotenv/config';
 import { closePool } from './infrastructure';
 import { logger } from './infrastructure/seed-logger';
