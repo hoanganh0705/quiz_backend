@@ -1,5 +1,5 @@
 import { eq, and } from 'drizzle-orm';
-import { db, type SeedContext } from '../infrastructure';
+import { db, type SeedContext, recorder } from '../infrastructure';
 import type { SeedSummary } from '../infrastructure/types';
 import { SeedLookup } from '../shared/seed-lookup';
 import {
@@ -109,7 +109,27 @@ export const runBookmarkSeed = async (): Promise<SeedSummary[]> => {
 
         quizzesBookmarked++;
         logger.info(`Bookmarked "${quizSlug}" in "${collection.name}" for ${collection.userUsername}`);
+
+        recorder.record({
+          kind: 'Bookmarked Quizzes',
+          id: `${collection.name}:${quizSlug}`,
+          fields: {
+            collection: collection.name,
+            owner: collection.userUsername,
+            quizSlug,
+          },
+        });
       }
+
+      recorder.record({
+        kind: 'Bookmark Collections',
+        id: `${collection.userUsername}:${collection.name}`,
+        fields: {
+          name: collection.name,
+          owner: collection.userUsername,
+          quizzes: String(collection.quizSlugs.length),
+        },
+      });
     }
 
     summaries.push({

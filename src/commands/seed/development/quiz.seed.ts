@@ -1,5 +1,5 @@
 import { eq, sql } from 'drizzle-orm';
-import { db, type SeedContext, type SeedTx } from '../infrastructure';
+import { db, type SeedContext, type SeedTx, recorder } from '../infrastructure';
 import type {
   QuizSeed,
   QuizVersionSeed,
@@ -635,7 +635,34 @@ export const runQuizSeed = async (): Promise<SeedSummary[]> => {
 
           versionsInserted++;
           logger.info(`v${version.versionNumber} [${version.status}] with ${version.questions.length} questions`);
+
+          recorder.record({
+            kind: 'Quiz Versions',
+            id: `${quiz.slug}@v${version.versionNumber}`,
+            fields: {
+              quiz: quiz.slug,
+              version: String(version.versionNumber),
+              status: version.status,
+              questions: String(version.questions.length),
+              difficulty: version.difficulty,
+              durationMs: String(version.durationMs),
+              rewardXp: String(version.rewardXp),
+            },
+          });
         }
+
+        recorder.record({
+          kind: 'Quizzes',
+          id: quiz.slug,
+          fields: {
+            slug: quiz.slug,
+            title: quiz.title,
+            creator: quiz.creatorUsername,
+            versions: String(quiz.versions.length),
+            category: quiz.categorySlug ?? '',
+            tags: (quiz.tagSlugs ?? []).join(', '),
+          },
+        });
 
         summaries.push({
           domain: `quiz:${quiz.slug}`,
