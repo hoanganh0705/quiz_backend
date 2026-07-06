@@ -1,5 +1,5 @@
 import { and, inArray, isNull, or, sql } from 'drizzle-orm';
-import { db, type SeedTx, type SeedContext, requireEnv } from '../infrastructure';
+import { db, type SeedTx, type SeedContext, requireEnv, recorder } from '../infrastructure';
 import {
   assertUniqueBy,
   formatSummary,
@@ -165,6 +165,23 @@ export const createUsersDomain = (): SeedDomain => ({
     const inserted = touchedRows.filter((row) => row.inserted).length;
     const updated = touchedRows.length - inserted;
     const skipped = seeds.length - touchedRows.length;
+
+    // Emit one record per seed user so SEED_RECORD.md lists every login.
+    // We deliberately record from the seed payload (not the returned row)
+    // because the password is only available pre-hash.
+    for (const seed of seeds) {
+      recorder.record({
+        kind: 'Users',
+        id: seed.username,
+        fields: {
+          username: seed.username,
+          email: seed.email,
+          password: seed.password,
+          role: seed.role,
+          displayName: seed.displayName,
+        },
+      });
+    }
 
     return { domain: 'users', inserted, updated, skipped };
   },

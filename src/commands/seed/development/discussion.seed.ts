@@ -1,5 +1,5 @@
 import { eq } from 'drizzle-orm';
-import { db, type SeedContext } from '../infrastructure';
+import { db, type SeedContext, recorder } from '../infrastructure';
 import type { SeedSummary } from '../infrastructure/types';
 import { SeedLookup } from '../shared/seed-lookup';
 import {
@@ -257,6 +257,21 @@ export const runDiscussionSeed = async (): Promise<SeedSummary[]> => {
       }
 
       logger.info(`Discussion thread seeded: "${seed.title}" for quiz "${seed.quizSlug}"`);
+
+      recorder.record({
+        kind: 'Discussion Threads',
+        id: seed.threadId,
+        fields: {
+          threadId: seed.threadId,
+          quizSlug: seed.quizSlug,
+          author: seed.authorUsername,
+          title: seed.title,
+          status: seed.status,
+          isSolved: String(seed.isSolved),
+          comments: String(seed.comments.length),
+          votes: String(seed.votes.length),
+        },
+      });
     }
 
     summaries.push({

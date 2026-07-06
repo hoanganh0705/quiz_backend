@@ -1,5 +1,5 @@
 import { and, inArray, isNull, or, sql } from 'drizzle-orm';
-import { db, type SeedTx, type SeedContext } from '../infrastructure';
+import { db, type SeedTx, type SeedContext, recorder } from '../infrastructure';
 import {
   assertUniqueBy,
   normalizeCategorySeeds,
@@ -123,6 +123,18 @@ export const createCategoriesDomain = (): SeedDomain => ({
     const inserted = touchedRows.filter((row) => row.inserted).length;
     const updated = touchedRows.length - inserted;
     const skipped = seeds.length - touchedRows.length;
+
+    for (const seed of seeds) {
+      recorder.record({
+        kind: 'Categories',
+        id: seed.slug,
+        fields: {
+          slug: seed.slug,
+          name: seed.name,
+          description: seed.description,
+        },
+      });
+    }
 
     return { domain: 'categories', inserted, updated, skipped };
   },

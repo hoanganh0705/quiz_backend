@@ -1,5 +1,5 @@
 import { and, eq } from 'drizzle-orm';
-import { db, type SeedContext } from '../infrastructure';
+import { db, type SeedContext, recorder } from '../infrastructure';
 import type { InstanceSeed, SeedSummary } from '../infrastructure/types';
 import { SeedLookup } from '../shared/seed-lookup';
 import { quizInstances } from '@/core/database/schema';
@@ -65,6 +65,20 @@ export const runInstanceSeed = async (): Promise<SeedSummary[]> => {
         logger.info(
           `Skipped existing instance for "${instance.quizSlug}" v${instance.versionNumber} hosted by ${instance.hostUsername}`,
         );
+
+        // Still record the existing instance so SEED_RECORD.md reflects
+        // what's actually in the database on a re-run.
+        recorder.record({
+          kind: 'Quiz Instances',
+          id: `${instance.quizSlug}:v${instance.versionNumber}`,
+          fields: {
+            quizSlug: instance.quizSlug,
+            version: String(instance.versionNumber),
+            host: instance.hostUsername,
+            status: instance.status,
+            maxPlayers: String(instance.maxPlayers ?? ''),
+          },
+        });
         summaries.push({ domain: domainKey, inserted: 0, updated: 0, skipped: 1 });
         continue;
       }
@@ -79,6 +93,18 @@ export const runInstanceSeed = async (): Promise<SeedSummary[]> => {
       });
 
       logger.info(`Created instance for "${instance.quizSlug}" v${instance.versionNumber} (${instance.status}) hosted by ${instance.hostUsername}`);
+
+      recorder.record({
+        kind: 'Quiz Instances',
+        id: `${instance.quizSlug}:v${instance.versionNumber}`,
+        fields: {
+          quizSlug: instance.quizSlug,
+          version: String(instance.versionNumber),
+          host: instance.hostUsername,
+          status: instance.status,
+          maxPlayers: String(instance.maxPlayers ?? ''),
+        },
+      });
       summaries.push({ domain: domainKey, inserted: 1, updated: 0, skipped: 0 });
     }
   });

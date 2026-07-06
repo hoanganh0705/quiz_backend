@@ -55,3 +55,6 @@ pids
 
 # Diagnostic reports (https://nodejs.org/api/report.html)
 report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
+
+# Seed run artifacts — regenerated on every `pnpm db:seed:*` run.
+/SEED_RECORD.md

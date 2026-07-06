@@ -1,4 +1,4 @@
-import { db, type SeedContext } from '../infrastructure';
+import { db, type SeedContext, recorder } from '../infrastructure';
 import type { SeedSummary } from '../infrastructure/types';
 import { SeedLookup } from '../shared/seed-lookup';
 import { quizReviews } from '@/core/database/schema';
@@ -59,6 +59,17 @@ export const runReviewSeed = async (): Promise<SeedSummary[]> => {
 
       inserted++;
       logger.info(`Review: ${review.userUsername} rated "${review.quizSlug}" ${review.rating}/5`);
+
+      recorder.record({
+        kind: 'Quiz Reviews',
+        id: `${review.userUsername}:${review.quizSlug}`,
+        fields: {
+          username: review.userUsername,
+          quizSlug: review.quizSlug,
+          rating: String(review.rating),
+          comment: review.comment,
+        },
+      });
     }
 
     summaries.push({ domain: 'reviews', inserted, updated: 0, skipped });

@@ -162,7 +162,7 @@ class SessionListPayloadDto {
  * Runtime shape: { data: { message: string }, meta: { timestamp: string } }
  * Used for: register, logout, logout-all, verify-email, resend-verification-email,
  * forgot-password, reset-password, change-password, delete-account,
- * revoke-session, sessions/others, sessions/logout-others.
+ * revoke-session, sessions/others.
  */
 export class AuthWrappedMessageDto {
   @ApiProperty({

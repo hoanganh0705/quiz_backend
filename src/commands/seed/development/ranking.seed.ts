@@ -1,5 +1,5 @@
 import { eq } from 'drizzle-orm';
-import { db, type SeedContext } from '../infrastructure';
+import { db, type SeedContext, recorder } from '../infrastructure';
 import type { SeedSummary } from '../infrastructure/types';
 import { SeedLookup } from '../shared/seed-lookup';
 import {
@@ -368,6 +368,19 @@ export const runRankingSeed = async (): Promise<SeedSummary[]> => {
       }
 
       logger.info(`Ranking seeded for ${seed.username}: allTimeRank=${seed.allTimeRank} xp=${seed.allTimeXp}`);
+
+      recorder.record({
+        kind: 'User Rankings',
+        id: seed.username,
+        fields: {
+          username: seed.username,
+          allTimeRank: String(seed.allTimeRank),
+          allTimeXp: String(seed.allTimeXp),
+          weeklyXp: String(seed.weeklyXp),
+          monthlyXp: String(seed.monthlyXp),
+          peakAllTimeRank: String(seed.peakAllTimeRank),
+        },
+      });
     }
 
     summaries.push({
