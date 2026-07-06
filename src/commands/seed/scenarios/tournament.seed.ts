@@ -1,5 +1,5 @@
 import { and, eq, sql } from 'drizzle-orm';
-import { db, type SeedContext, type SeedTx } from '../infrastructure';
+import { db, type SeedContext, type SeedTx, recorder } from '../infrastructure';
 import type { TournamentSeed, SeedSummary } from '../infrastructure/types';
 import { SeedLookup } from '../shared/seed-lookup';
 import {
@@ -81,6 +81,23 @@ export const runTournamentSeed = async (): Promise<SeedSummary[]> => {
 
         if (existing) {
           tournamentId = existing.tournamentId;
+
+          // Record the existing tournament so SEED_RECORD.md reflects
+          // what's actually in the database on a re-run.
+          recorder.record({
+            kind: 'Tournaments',
+            id: tournament.title,
+            fields: {
+              title: tournament.title,
+              status: tournament.status,
+              difficulty: tournament.difficulty,
+              startAt: tournament.startAt,
+              endAt: tournament.endAt,
+              rounds: String(tournament.quizSlugs.length),
+              quizzes: tournament.quizSlugs.join(', '),
+              category: tournament.categorySlug ?? '',
+            },
+          });
         } else {
           const [created] = await tx
             .insert(tournaments)
@@ -101,6 +118,21 @@ export const runTournamentSeed = async (): Promise<SeedSummary[]> => {
 
           tournamentId = created.tournamentId;
           logger.info(`Created tournament: ${tournament.title}`);
+
+          recorder.record({
+            kind: 'Tournaments',
+            id: tournament.title,
+            fields: {
+              title: tournament.title,
+              status: tournament.status,
+              difficulty: tournament.difficulty,
+              startAt: tournament.startAt,
+              endAt: tournament.endAt,
+              rounds: String(tournament.quizSlugs.length),
+              quizzes: tournament.quizSlugs.join(', '),
+              category: tournament.categorySlug ?? '',
+            },
+          });
         }
 
         // Create rounds for each quiz version used in this tournament

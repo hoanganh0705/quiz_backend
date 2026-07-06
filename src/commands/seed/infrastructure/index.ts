@@ -13,3 +13,4 @@ export {
   normalizeTagSeeds,
 } from './utils';
 export * from './seed-logger';
+export * from './seed-recorder';

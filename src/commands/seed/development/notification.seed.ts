@@ -1,4 +1,4 @@
-import { db, type SeedContext } from '../infrastructure';
+import { db, type SeedContext, recorder } from '../infrastructure';
 import type { SeedSummary } from '../infrastructure/types';
 import { SeedLookup } from '../shared/seed-lookup';
 import {
@@ -277,6 +277,21 @@ export const runNotificationSeed = async (): Promise<SeedSummary[]> => {
         })
         .onConflictDoNothing()
         .returning({ notificationId: notifications.notificationId });
+
+      // Record the seeded notification so SEED_RECORD.md lists every entry
+// that the seed defines — even on re-runs where the row already exists.
+      recorder.record({
+        kind: 'Notifications',
+        id: seed.notificationId,
+        fields: {
+          notificationId: seed.notificationId,
+          username: seed.username,
+          type: seed.type,
+          channel: seed.channel,
+          title: seed.title,
+          isRead: String(seed.isRead),
+        },
+      });
 
       if (inserted.length === 0) {
         skipped++;

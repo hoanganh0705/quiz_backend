@@ -489,9 +489,10 @@ export class AuthController {
   @ApiAuth()
   @Delete('sessions/:sessionId')
   @ApiOperation({
-    summary: 'Revoke a session (legacy)',
+    summary: 'Revoke a session',
     description:
-      'Legacy route retained for compatibility. Revokes a specific session. ' +
+      'Revokes a specific session by ID. Use this when you want to terminate a single ' +
+      'device or browser while keeping the rest of your sessions active. ' +
       'If the target is the current session, the user is logged out (cookie cleared). ' +
       'Otherwise only the target session is invalidated.',
   })
@@ -535,31 +536,6 @@ export class AuthController {
   @ApiForbiddenResponse(forbiddenOptions)
   @ApiInternalServerErrorResponse(internalErrorOptions)
   async revokeOtherSessions(
-    @CurrentUser('sub') userId: string,
-    @CurrentUser('sessionId') currentSessionId: string,
-  ): Promise<SessionManagementResultDto> {
-    return await this.authApplicationService.revokeAllOtherSessions(userId, currentSessionId);
-  }
-
-  @ApiAuth()
-  @Post('sessions/logout-others')
-  @ApiOperation({
-    summary: 'Log out all other devices (legacy)',
-    description:
-      'Legacy route retained for compatibility. Keeps the current session and revokes every other active session for the user.',
-  })
-  @ApiOkResponse({
-    description: 'Other sessions revoked',
-    type: AuthWrappedMessageDto,
-    example: {
-      data: { message: '3 sessions revoked. Current device remains logged in.' },
-      meta: { timestamp: '2026-06-25T10:30:00.000Z' },
-    },
-  })
-  @ApiUnauthorizedResponse(unauthorizedOptions)
-  @ApiForbiddenResponse(forbiddenOptions)
-  @ApiInternalServerErrorResponse(internalErrorOptions)
-  async logoutOtherDevices(
     @CurrentUser('sub') userId: string,
     @CurrentUser('sessionId') currentSessionId: string,
   ): Promise<SessionManagementResultDto> {

@@ -1,5 +1,5 @@
 import { and, inArray, isNull, or, sql } from 'drizzle-orm';
-import { db, type SeedTx, type SeedContext } from '../infrastructure';
+import { db, type SeedTx, type SeedContext, recorder } from '../infrastructure';
 import { assertUniqueBy, normalizeSlug, normalizeTagSeeds } from '../infrastructure/utils';
 import type { NormalizedTagSeed, RawTagSeed, SeedDomain, SeedSummary } from '../infrastructure/types';
 import { tags } from '@/core/database/schema';
@@ -80,6 +80,17 @@ export const createTagsDomain = (): SeedDomain => ({
     const inserted = touchedRows.filter((row) => row.inserted).length;
     const updated = touchedRows.length - inserted;
     const skipped = seeds.length - touchedRows.length;
+
+    for (const seed of seeds) {
+      recorder.record({
+        kind: 'Tags',
+        id: seed.slug,
+        fields: {
+          slug: seed.slug,
+          name: seed.name,
+        },
+      });
+    }
 
     return { domain: 'tags', inserted, updated, skipped };
   },
