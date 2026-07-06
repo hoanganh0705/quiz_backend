@@ -1,5 +1,5 @@
 import { and, eq, inArray, sql } from 'drizzle-orm';
-import { db, type SeedTx, type SeedContext } from '../infrastructure';
+import { db, type SeedTx, type SeedContext, recorder } from '../infrastructure';
 import { assertUniqueBy, normalizeSlug } from '../infrastructure/utils';
 import type { RawBadgeSeed, SeedDomain, SeedSummary } from '../infrastructure/types';
 import { badges, badgeRules, badgeRuleType } from '@/core/database/schema';
@@ -383,6 +383,19 @@ export const createBadgesDomain = (): SeedDomain => ({
     const inserted = touchedBadgeRows.filter((row) => row.inserted).length;
     const updated = touchedBadgeRows.length - inserted;
     const skipped = BADGE_SEEDS.length - touchedBadgeRows.length;
+
+    for (const badge of BADGE_SEEDS) {
+      recorder.record({
+        kind: 'Badges',
+        id: badge.slug,
+        fields: {
+          slug: badge.slug,
+          name: badge.name,
+          type: badge.type,
+          rules: badge.rules.map((r) => r.ruleType).join(', '),
+        },
+      });
+    }
 
     return { domain: 'badges', inserted, updated, skipped };
   },

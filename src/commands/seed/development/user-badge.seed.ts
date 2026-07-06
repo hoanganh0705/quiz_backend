@@ -4,7 +4,7 @@
 // See `PHASE_10_EVIDENCE_REPORT.md` → "Achievement domain" for the
 // classification rationale.
 
-import { db, type SeedContext } from '../infrastructure';
+import { db, type SeedContext, recorder } from '../infrastructure';
 import type { SeedSummary } from '../infrastructure/types';
 import { SeedLookup } from '../shared/seed-lookup';
 import { userBadges } from '@/core/database/schema';
@@ -105,6 +105,18 @@ export const runUserBadgeSeed = async (): Promise<SeedSummary[]> => {
         })
         .onConflictDoNothing()
         .returning({ userBadgeId: userBadges.userBadgeId });
+
+      // Record the seeded user-badge so SEED_RECORD.md lists every award that
+// the seed defines — even on re-runs where the row already exists.
+      recorder.record({
+        kind: 'User Badges',
+        id: `${seed.username}:${seed.badgeSlug}`,
+        fields: {
+          username: seed.username,
+          badgeSlug: seed.badgeSlug,
+          earnedAt: seed.earnedAt,
+        },
+      });
 
       if (touched.length === 0) {
         skipped++;
