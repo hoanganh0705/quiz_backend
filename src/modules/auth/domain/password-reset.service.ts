@@ -113,6 +113,14 @@ export class PasswordResetService {
         eventPayload: {
           eventType: 'password_reset_completed',
           userId: existing.userId,
+          // The outbox adapter derives a deterministic idempotency
+          // key from `password_reset:completed:<userId>:<resetId>`.
+          // Without this field the explicit-key branch falls through
+          // to a SHA-256 hash of the payload, which still dedupes
+          // identical re-runs but cannot group semantically-equal
+          // events (e.g. two distinct `resetPassword` calls for the
+          // same consumed token).
+          passwordResetTokenId: existing.passwordResetTokenId,
           timestamp: nowIso,
           ipAddress,
         },
