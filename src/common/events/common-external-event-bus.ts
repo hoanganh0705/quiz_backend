@@ -48,8 +48,10 @@ export const EXTERNAL_EVENT_BUS_PRODUCER_PORT = Symbol('EXTERNAL_EVENT_BUS_PRODU
 export const EXTERNAL_EVENT_BUS_CONSUMER_PORT = Symbol('EXTERNAL_EVENT_BUS_CONSUMER_PORT');
 
 /**
- * Legacy aggregate port retained for backward compatibility. New code should
- * use the narrower producer/consumer ports.
+ * Aggregate port that exposes both producer and consumer capabilities.
+ * Used by modules that need to publish and subscribe through the same
+ * binding. Modules that only need one direction should inject the narrower
+ * ExternalEventBusProducerPort or ExternalEventBusConsumerPort instead.
  */
 export interface ExternalEventBusPort
   extends ExternalEventBusProducerPort, ExternalEventBusConsumerPort {}

@@ -11,10 +11,11 @@ import {
 import { TransactionalContext, TRANSACTIONAL_CONTEXT } from './interceptors/transactional-context';
 import { TransactionalInterceptor } from './interceptors/transactional.interceptor';
 import { AuditLogService } from './audit/audit-log.service';
+import { ID_GENERATOR, IdGenerator, IdGeneratorModule } from './utils/id-generator';
 
 @Global()
 @Module({
-  imports: [JwtModule.register({})],
+  imports: [JwtModule.register({}), IdGeneratorModule],
   providers: [
     JwtGuard,
     { provide: EXTERNAL_EVENT_BUS, useExisting: CommonExternalEventBus },
@@ -24,6 +25,8 @@ import { AuditLogService } from './audit/audit-log.service';
     { provide: TRANSACTIONAL_CONTEXT, useExisting: TransactionalContext },
     TransactionalContext,
     AuditLogService,
+    IdGenerator,
+    { provide: ID_GENERATOR, useExisting: IdGenerator },
     // Global interceptor: registered via APP_INTERCEPTOR so it applies to all
     // modules automatically (no need to add it to every module's providers).
     { provide: APP_INTERCEPTOR, useClass: TransactionalInterceptor },
@@ -38,6 +41,8 @@ import { AuditLogService } from './audit/audit-log.service';
     TRANSACTIONAL_CONTEXT,
     TransactionalContext,
     AuditLogService,
+    IdGenerator,
+    ID_GENERATOR,
   ],
 })
 export class CommonModule {}
