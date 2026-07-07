@@ -170,8 +170,8 @@ export class DiscussionDomainEventBus
       const nextAttempt = queued.attempt + 1;
       // Re-establish a correlation context for this retry tick so the
       // log lines and downstream effects can be traced back to the
-      // original emit. Falls back to a fresh UUID for legacy queued
-      // events that pre-date this fix.
+      // original emit. Falls back to a fresh UUID for queued events
+      // that were persisted before correlation IDs were introduced.
       const correlationId = queued.correlationId ?? createCorrelationId();
 
       correlationIdStorage.run({ correlationId }, () => {

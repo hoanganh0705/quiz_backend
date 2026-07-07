@@ -173,7 +173,7 @@ export class RankingController {
     description:
       'Returns the global leaderboard with optional period filter. ' +
       'Supports offset-based pagination via `limit` (1–500, default 100) and `offset`. ' +
-      'The response includes the authenticated user\'s rank position if a valid JWT is provided. ' +
+      "The response includes the authenticated user's rank position if a valid JWT is provided. " +
       'No 404 or 403 is possible on this endpoint.',
   })
   @ApiOkResponse({
@@ -272,7 +272,7 @@ export class RankingController {
     summary: "Get current user's rank for specific period",
     description:
       "Returns the authenticated user's rank summary for a specific period. " +
-      "If the user has no XP in the requested period, returns `undefined` (HTTP 200, " +
+      'If the user has no XP in the requested period, returns `undefined` (HTTP 200, ' +
       'no body data — the frontend should handle this nullability).',
   })
   @ApiOkResponse({
@@ -299,7 +299,7 @@ export class RankingController {
   @ApiOperation({
     summary: 'Get authenticated user percentile',
     description:
-      'Returns the authenticated user\'s percentile ranking in the selected period. ' +
+      "Returns the authenticated user's percentile ranking in the selected period. " +
       'All fields are nullable — if the user has no rank, every field returns null. ' +
       'The percentile is calculated as `((totalUsers - rank) / totalUsers) * 100` rounded to 2 decimal places.',
   })
@@ -327,7 +327,7 @@ export class RankingController {
   @ApiOperation({
     summary: 'Get authenticated user ranking milestones',
     description:
-      "Returns ranking milestones achieved by the authenticated user in chronological order. " +
+      'Returns ranking milestones achieved by the authenticated user in chronological order. ' +
       'A milestone is earned when the user reaches a specific rank threshold ' +
       '(e.g. TOP_100, TOP_10, TOP_1). Returns an empty `items` array if no milestones have been achieved.',
   })
@@ -353,7 +353,7 @@ export class RankingController {
     summary: 'Get nearby leaderboard ranks for authenticated user',
     description:
       'Returns leaderboard entries immediately above and below the authenticated user ' +
-      'for the selected period. The `me` field contains the authenticated user\'s own entry. ' +
+      "for the selected period. The `me` field contains the authenticated user's own entry. " +
       'All three fields (`above`, `me`, `below`) can be empty arrays or null depending on position.',
   })
   @ApiOkResponse({
@@ -461,8 +461,8 @@ export class RankingController {
   @ApiOperation({
     summary: 'Get user rank information',
     description:
-      "Returns public rank information for a specific user (all periods). " +
-      "If the user has no ranking data, returns a ghost response with null ranks (no 404). " +
+      'Returns public rank information for a specific user (all periods). ' +
+      'If the user has no ranking data, returns a ghost response with null ranks (no 404). ' +
       'Unlike the `/leaderboard/me` endpoint, this is public and requires no authentication.',
   })
   @ApiOkResponse({
@@ -515,7 +515,7 @@ export class RankingController {
     description:
       "Returns the user's public rank summary for a specific period. " +
       'Publicly accessible (no authentication required). ' +
-      "If the user has no XP in the period, returns `undefined` (HTTP 200, no body).",
+      'If the user has no XP in the period, returns `undefined` (HTTP 200, no body).',
   })
   @ApiOkResponse({
     description: 'User rank returned',

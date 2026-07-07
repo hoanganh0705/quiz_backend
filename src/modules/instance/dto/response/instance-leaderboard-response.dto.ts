@@ -88,7 +88,8 @@ export class InstanceLeaderboardResponseDto {
       'Decoded payload: `{ rank: number, instancePlayerId: string }`.',
     type: String,
     nullable: true,
-    example: 'eyJyYW5rIjogMjQsICJpbnN0YW5jZVBsYXllcklkIjogIjU1MGU4NDAwLWUyOWItNDFkNC1hNzE2LTQ0NjY1NTQ0MDA5OSJ9',
+    example:
+      'eyJyYW5rIjogMjQsICJpbnN0YW5jZVBsYXllcklkIjogIjU1MGU4NDAwLWUyOWItNDFkNC1hNzE2LTQ0NjY1NTQ0MDA5OSJ9',
   })
   nextCursor!: string | null;
 }

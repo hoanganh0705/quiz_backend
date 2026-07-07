@@ -1,6 +1,5 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { Inject, Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import { randomUUID } from 'crypto';
 import type {
   AccessTokenClaims,
   AuthIdentity,
@@ -10,16 +9,18 @@ import type {
 } from '../../types/auth-context.types';
 import type { TokenProvider } from '@/modules/auth/domain/ports/token.provider';
 import { TokenConfig } from '../../config/token.config';
+import { ID_GENERATOR, type IdGeneratorPort } from '@/common/utils/id-generator';
 
 @Injectable()
 export class JwtTokenAdapter implements TokenProvider {
   constructor(
     private readonly jwtService: JwtService,
     private readonly tokenConfig: TokenConfig,
+    @Inject(ID_GENERATOR) private readonly idGenerator: IdGeneratorPort,
   ) {}
 
   async issueTokens(identity: AuthIdentity, sessionId?: string): Promise<AuthTokens> {
-    const refreshTokenJti = randomUUID();
+    const refreshTokenJti = this.idGenerator.generate();
     const accessTokenPayload: AccessTokenClaims = {
       sub: identity.userId,
       role: identity.role,
