@@ -15,6 +15,7 @@
  */
 
 import { Inject, Injectable } from '@nestjs/common';
+import { sql } from 'drizzle-orm';
 import { DRIZZLE } from '@/core/database/drizzle.constants';
 import type { DrizzleDB } from '@/core/database/database.module';
 import { outboxEvents } from '@/core/database/schema';
@@ -41,6 +42,11 @@ export class RankingOutboxAdapter implements RankingOutboxPort {
     // partial unique index (NULL != NULL), so the producer-side
     // dedup is a no-op for that event and the processor-side dedup
     // is the only safety net.
+    //
+    // The `where` clause on the conflict target must match the
+    // partial-index predicate `WHERE processed_at IS NULL AND
+    // idempotency_key IS NOT NULL` verbatim — otherwise Postgres
+    // cannot infer the index and planning fails.
     await dbOrTx
       .insert(outboxEvents)
       .values({
@@ -52,6 +58,7 @@ export class RankingOutboxAdapter implements RankingOutboxPort {
       })
       .onConflictDoNothing({
         target: outboxEvents.idempotencyKey,
+        where: sql`processed_at IS NULL AND idempotency_key IS NOT NULL`,
       });
   }
 }
