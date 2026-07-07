@@ -68,11 +68,10 @@ export type AuditDomain =
 
 export type AuditRecordInput = {
   /**
-   * The legacy free-form event identifier. Kept for backward
-   * compatibility with the auth outbox, which writes values
-   * like `password_changed`, `account_deleted`,
-   * `session_revoked`. New code should prefer `domain` +
-   * `action` instead of inventing new `eventType` strings.
+   * Free-form event identifier. The auth outbox writes values like
+   * `password_changed`, `account_deleted`, `session_revoked`. New code
+   * should prefer the structured `domain` + `action` pair instead of
+   * inventing new `eventType` strings.
    */
   eventType: string;
   /**
@@ -100,7 +99,7 @@ export type AuditRecordInput = {
    */
   subjectUserId?: string;
   /**
-   * Legacy single-user field. If neither `actorId` nor
+   * Convenience single-user field. If neither `actorId` nor
    * `subjectUserId` is set, the value is stored in the
    * `userId` column. If only `actorId` is set (admin acting
    * on a different user), `userId` is populated with
@@ -165,7 +164,7 @@ export class AuditLogService {
     // Build a structured metadata payload that keeps the
     // original `metadata` untouched and prepends the
     // discriminator fields when they are present. Existing
-    // consumers (e.g. dashboards) that look up the legacy
+    // consumers (e.g. dashboards) that look up the historical
     // `aggregateType` field still see it; new consumers can
     // filter by `domain` / `action` instead.
     const metadata: Record<string, unknown> = {

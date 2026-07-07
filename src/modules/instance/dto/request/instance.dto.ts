@@ -37,7 +37,8 @@ export class GetLeaderboardQueryDto {
       'Opaque cursor for cursor-based pagination. Decode base64url to JSON `{ rank, instancePlayerId }`. ' +
       'Pass the `nextCursor` from the previous page response to continue pagination.',
     nullable: true,
-    example: 'eyJyYW5rIjogMjQsICJpbnN0YW5jZVBsYXllcklkIjogIjU1MGU4NDAwLWUyOWItNDFkNC1hNzE2LTQ0NjY1NTQ0MDA5OSJ9',
+    example:
+      'eyJyYW5rIjogMjQsICJpbnN0YW5jZVBsYXllcklkIjogIjU1MGU4NDAwLWUyOWItNDFkNC1hNzE2LTQ0NjY1NTQ0MDA5OSJ9',
   })
   @IsOptional()
   @IsString()

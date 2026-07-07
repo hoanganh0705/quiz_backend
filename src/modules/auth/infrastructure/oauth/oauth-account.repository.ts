@@ -7,6 +7,7 @@ import type { OAuthAccountRepositoryPort } from '../../domain/oauth/ports/oauth-
 import type { OAuthAccountRecord, OAuthProvider } from '../../domain/oauth/oauth.types';
 import type { OutboxPort } from '../../domain/ports/outbox.port';
 import { OUTBOX_PORT } from '../../domain/ports/outbox.port';
+import { ID_GENERATOR, type IdGeneratorPort } from '@/common/utils/id-generator';
 
 const OAUTH_NO_PASSWORD_HASH = '__OAUTH_NO_PASSWORD__';
 
@@ -15,6 +16,7 @@ export class OAuthAccountRepository implements OAuthAccountRepositoryPort {
   constructor(
     @Inject(DRIZZLE) private readonly db: DrizzleDB,
     @Inject(OUTBOX_PORT) private readonly outbox: OutboxPort,
+    @Inject(ID_GENERATOR) private readonly idGenerator: IdGeneratorPort,
   ) {}
 
   async findByProviderAndProviderUserId(
@@ -52,7 +54,7 @@ export class OAuthAccountRepository implements OAuthAccountRepositoryPort {
     role: 'admin' | 'moderator' | 'user';
     oauthAccountId: string;
   }> {
-    const preGeneratedUserId = crypto.randomUUID();
+    const preGeneratedUserId = this.idGenerator.generate();
     const nowIso = new Date().toISOString();
 
     const result = await this.db.transaction(async (tx) => {
