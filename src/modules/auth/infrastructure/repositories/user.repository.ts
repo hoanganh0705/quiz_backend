@@ -421,10 +421,17 @@ export class UserRepository implements UserRepositoryPort {
   async findActivePasswordResetTokenByHash(
     tokenHash: string,
     nowIso: string,
-  ): Promise<{ userId: string } | null> {
+  ): Promise<{ userId: string; passwordResetTokenId: string } | null> {
     const [record] = await this.db
       .select({
         userId: passwordResetTokens.userId,
+        // Needed so the auth domain can include the row's PK in the
+        // outbox event payload. The outbox adapter derives a
+        // deterministic idempotency key from
+        // `password_reset:completed:<userId>:<passwordResetTokenId>`,
+        // and that lookup requires either `resetId` or
+        // `passwordResetTokenId` in the payload.
+        passwordResetTokenId: passwordResetTokens.passwordResetTokenId,
       })
       .from(passwordResetTokens)
       .innerJoin(users, eq(passwordResetTokens.userId, users.userId))
@@ -443,7 +450,7 @@ export class UserRepository implements UserRepositoryPort {
         throw new InternalServerErrorException('Failed to find password reset token');
       });
 
-    return (record as { userId: string } | undefined) ?? null;
+    return (record as { userId: string; passwordResetTokenId: string } | undefined) ?? null;
   }
 
   async revokeAllActivePasswordResetTokensForUser(userId: string, nowIso: string): Promise<void> {

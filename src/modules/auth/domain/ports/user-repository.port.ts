@@ -92,7 +92,7 @@ export interface UserRepositoryPort {
   findActivePasswordResetTokenByHash(
     tokenHash: string,
     nowIso: string,
-  ): Promise<{ userId: string } | null>;
+  ): Promise<{ userId: string; passwordResetTokenId: string } | null>;
 
   revokeAllActivePasswordResetTokensForUser(userId: string, nowIso: string): Promise<void>;
 
