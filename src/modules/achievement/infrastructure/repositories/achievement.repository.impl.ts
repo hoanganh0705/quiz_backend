@@ -137,10 +137,15 @@ export class AchievementRepository implements AchievementRepositoryPort {
             // elsewhere too). Using the same key for the outbox event
             // means a retried award of the same (user, badge) silently
             // drops the duplicate outbox row at this INSERT.
+            //
+            // The `where` clause must match the partial unique index
+            // `uq_outbox_events_idempotency_unprocessed` verbatim so
+            // Postgres can infer the index for ON CONFLICT.
             idempotencyKey: `achievement:awarded:${params.userId}:${params.badgeId}`,
           })
           .onConflictDoNothing({
             target: outboxEvents.idempotencyKey,
+            where: sql`processed_at IS NULL AND idempotency_key IS NOT NULL`,
           });
       } catch (error) {
         if (isPostgresUniqueViolation(error)) {
@@ -569,10 +574,14 @@ export class AchievementRepository implements AchievementRepositoryPort {
           // is not silently dropped. Without the timestamp, the
           // second revocation would collide on (user, badge) and
           // never get scheduled.
+          //
+          // The `where` clause must match the partial unique index
+          // verbatim so Postgres can infer the index for ON CONFLICT.
           idempotencyKey: `achievement:revoked:${userId}:${badgeId}:${nowIso}`,
         })
         .onConflictDoNothing({
           target: outboxEvents.idempotencyKey,
+          where: sql`processed_at IS NULL AND idempotency_key IS NOT NULL`,
         });
 
       this.logger.info({

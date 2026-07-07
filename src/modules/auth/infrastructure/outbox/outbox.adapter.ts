@@ -1,5 +1,6 @@
 import { createHash } from 'crypto';
 import { Inject, Injectable } from '@nestjs/common';
+import { sql } from 'drizzle-orm';
 import { DRIZZLE } from '@/core/database/drizzle.constants';
 import type { DrizzleDB } from '@/core/database/database.module';
 import { outboxEvents } from '@/core/database/schema';
@@ -42,6 +43,13 @@ export class OutboxAdapter implements OutboxPort {
     // the same event twice, only one row is created. The processor
     // side has its own dedup (the `isIdempotencyConflict` path in
     // the dispatch catch block) as a second line of defense.
+    //
+    // The conflict target MUST include the partial-index `WHERE`
+    // clause verbatim — Postgres only infers the unique index when
+    // the ON CONFLICT specification matches both the column and the
+    // partial-index predicate. Without `where`, planning fails with
+    // "there is no unique or exclusion constraint matching the ON
+    // CONFLICT specification".
     await dbOrTx
       .insert(outboxEvents)
       .values({
@@ -53,6 +61,7 @@ export class OutboxAdapter implements OutboxPort {
       })
       .onConflictDoNothing({
         target: outboxEvents.idempotencyKey,
+        where: sql`processed_at IS NULL AND idempotency_key IS NOT NULL`,
       });
   }
 
