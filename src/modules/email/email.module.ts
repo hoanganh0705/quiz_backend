@@ -6,6 +6,9 @@ import { EmailService } from './email.service';
 import { EMAIL_QUEUE_NAME, EMAIL_QUEUE_TOKENS } from './email.constants';
 import { redisConfig } from '@/core/config';
 import type { RedisConfig } from '@/core/config';
+import { VerificationEmailHandler } from './handlers/verification.handler';
+import { PasswordResetEmailHandler } from './handlers/password-reset.handler';
+import { EmailResilienceRunner } from './resilience/email-resilience.runner';
 
 @Module({
   imports: [DatabaseModule],
@@ -27,6 +30,12 @@ import type { RedisConfig } from '@/core/config';
         return new Queue(EMAIL_QUEUE_NAME, { connection });
       },
     },
+    // One runner per process — the circuit-breaker listener is
+    // registered in its constructor and must fire exactly once per
+    // process. Handlers below consume the same instance via DI.
+    EmailResilienceRunner,
+    VerificationEmailHandler,
+    PasswordResetEmailHandler,
     EmailService,
     EmailProcessor,
   ],
