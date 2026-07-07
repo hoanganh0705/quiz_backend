@@ -420,15 +420,13 @@ export const ApiModeratorAction = (
   );
 
 // ─── Backward compatibility aliases ─────────────────────────────────────────────
+//
+// ApiAuthList and ApiPublicList are thin convenience wrappers over ApiAuthRead
+// and ApiPublicRead. They are kept because list endpoints dominate the API
+// surface and the shorter names read better at call sites. Not deprecated.
 
-/**
- * @deprecated Use ApiAuthRead instead. Alias preserved for backward compatibility.
- */
 export const ApiAuthList = (responseOptions: ApiResponseOptions = {}): MethodDecorator =>
   ApiAuthRead(responseOptions);
 
-/**
- * @deprecated Use ApiPublicRead instead. Alias preserved for backward compatibility.
- */
 export const ApiPublicList = (responseOptions: ApiResponseOptions = {}): MethodDecorator =>
   ApiPublicRead(responseOptions);

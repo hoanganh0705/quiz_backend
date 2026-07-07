@@ -8,6 +8,7 @@ import type { OAuthProvider } from './oauth.types';
 import type { OutboxPort } from '../ports/outbox.port';
 import { OUTBOX_PORT } from '../ports/outbox.port';
 import type { UserRole } from '@/common/types/user-role.type';
+import { ID_GENERATOR, type IdGeneratorPort } from '@/common/utils/id-generator';
 
 /**
  * OAuthAccountLinker
@@ -29,6 +30,7 @@ export class OAuthAccountLinker {
     @Inject(AUTH_USER_REPOSITORY_PORT)
     private readonly userRepository: UserRepositoryPort,
     @Inject(OUTBOX_PORT) private readonly outbox: OutboxPort,
+    @Inject(ID_GENERATOR) private readonly idGenerator: IdGeneratorPort,
     @InjectPinoLogger(OAuthAccountLinker.name) private readonly logger: PinoLogger,
   ) {}
 
@@ -103,7 +105,7 @@ export class OAuthAccountLinker {
     role: UserRole;
     oauthAccountId: string;
   }> {
-    const username = deriveOAuthUsername(params.email, crypto.randomUUID());
+    const username = deriveOAuthUsername(params.email, this.idGenerator.generate());
     const result = await this.oauthAccountRepository.createOAuthUserWithLink({
       ...params,
       username,

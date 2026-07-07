@@ -1,6 +1,5 @@
 import { Inject, Injectable, InternalServerErrorException } from '@nestjs/common';
 import { and, asc, desc, eq, gt, inArray, isNull, lt, sql } from 'drizzle-orm';
-import { randomUUID } from 'crypto';
 import { DRIZZLE } from '@/core/database/drizzle.constants';
 import type { DrizzleDB } from '@/core/database/database.module';
 import { userSessions } from '@/core/database/schema';
@@ -8,6 +7,7 @@ import type {
   SessionRepositoryPort,
   SessionRecord,
 } from '@/modules/auth/domain/ports/session-repository.port';
+import { ID_GENERATOR, type IdGeneratorPort } from '@/common/utils/id-generator';
 
 export type { SessionRecord };
 
@@ -27,7 +27,10 @@ const SESSION_LOOKUP_COLUMNS = {
 
 @Injectable()
 export class UserSessionRepository implements SessionRepositoryPort {
-  constructor(@Inject(DRIZZLE) private readonly db: DrizzleDB) {}
+  constructor(
+    @Inject(DRIZZLE) private readonly db: DrizzleDB,
+    @Inject(ID_GENERATOR) private readonly idGenerator: IdGeneratorPort,
+  ) {}
 
   async createSessionWithActiveLimit(
     data: {
@@ -54,7 +57,7 @@ export class UserSessionRepository implements SessionRepositoryPort {
       .transaction(async (tx) => {
         await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${data.userId}))`);
 
-        const sessionIdToUse = explicitSessionId ?? randomUUID();
+        const sessionIdToUse = explicitSessionId ?? this.idGenerator.generate();
 
         const [created] = await tx
           .insert(userSessions)

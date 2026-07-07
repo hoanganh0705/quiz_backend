@@ -1,5 +1,4 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { randomUUID } from 'crypto';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import type { LoginCommand } from './types/auth-commands';
 import type { SessionRequestContext } from '../types/auth-context.types';
@@ -13,6 +12,7 @@ import { SecurityService } from './security.service';
 import { normalizeEmail } from './utils/normalization.utils';
 import { InvalidCredentialsError } from './errors';
 import { VerificationTokenService } from './verification-token.service';
+import { ID_GENERATOR, type IdGeneratorPort } from '@/common/utils/id-generator';
 
 @Injectable()
 export class AuthLoginService {
@@ -26,6 +26,7 @@ export class AuthLoginService {
     private readonly sessionService: SessionService,
     private readonly securityService: SecurityService,
     private readonly verificationTokenService: VerificationTokenService,
+    @Inject(ID_GENERATOR) private readonly idGenerator: IdGeneratorPort,
     @InjectPinoLogger(AuthLoginService.name) private readonly logger: PinoLogger,
   ) {}
 
@@ -81,7 +82,7 @@ export class AuthLoginService {
     }
 
     const identity = toAuthIdentity(foundUser);
-    const sessionId = randomUUID();
+    const sessionId = this.idGenerator.generate();
     const tokens = await this.tokenService.issueTokens(identity, sessionId);
 
     await this.sessionService.createSession(
