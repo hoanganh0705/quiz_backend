@@ -1234,9 +1234,16 @@ export class DiscussionRepository implements DiscussionRepositoryPort {
       .select({
         commentsCreated: count(discussionComments.commentId),
         commentUpvotesReceived: sql<number>`COALESCE(SUM(${discussionComments.upvotesCount}), 0)::int`,
-        acceptedAnswers: sql<number>`COALESCE(SUM(CASE WHEN ${discussionComments.status} = 'accepted' THEN 1 ELSE 0 END), 0)::int`,
+        acceptedAnswers: sql<number>`COUNT(DISTINCT ${discussionComments.commentId})::int`,
       })
       .from(discussionComments)
+      .innerJoin(
+        discussionThreads,
+        and(
+          eq(discussionComments.commentId, discussionThreads.solvedCommentId),
+          isNull(discussionThreads.deletedAt),
+        ),
+      )
       .where(and(eq(discussionComments.authorId, userId), isNull(discussionComments.deletedAt)));
 
     const threadsCreated = Number(threadStats?.threadsCreated ?? 0);

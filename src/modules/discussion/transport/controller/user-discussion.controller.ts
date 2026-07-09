@@ -47,42 +47,18 @@ import { DiscussionDomainExceptionFilter } from '../filters/discussion-domain-ex
 export class UserDiscussionController {
   constructor(private readonly discussionApplicationService: DiscussionApplicationService) {}
 
-  @Get('users/:userId/discussions')
-  @Public()
-  @ApiPublicList({ description: 'User discussions returned', type: WrappedUserDiscussionsDto })
-  listDiscussionsByUser(
-    @Param('userId', new ParseUUIDPipe()) userId: string,
+  // ─── Authenticated /users/me/* routes (registered before :userId routes to avoid shadowing) ──
+
+  @Get('users/me/discussions')
+  @ApiAuthList({ description: 'My discussions returned', type: WrappedMyDiscussionsDto })
+  listMyDiscussions(
+    @CurrentUser() user: JwtPayload,
     @Query() query: ListMyDiscussionsQueryDto,
   ): Promise<MyDiscussionsResponseDto> {
-    return this.discussionApplicationService.listMyDiscussions(userId, {
+    return this.discussionApplicationService.listMyDiscussions(user.sub, {
       limit: query.limit,
       cursor: query.cursor ? QuizDiscussionCursorMapper.parse(query.cursor) : null,
     });
-  }
-
-  @Get('users/:userId/comments')
-  @Public()
-  @ApiPublicList({ description: 'User comments returned', type: WrappedUserCommentsDto })
-  listCommentsByUser(
-    @Param('userId', new ParseUUIDPipe()) userId: string,
-    @Query() query: ListMyCommentsQueryDto,
-  ): Promise<MyCommentsResponseDto> {
-    return this.discussionApplicationService.listCommentsByUser(userId, {
-      limit: query.limit,
-      cursor: query.cursor ? MyCommentCursorMapper.parse(query.cursor) : null,
-    });
-  }
-
-  @Get('users/:userId/discussion-profile')
-  @Public()
-  @ApiPublicList({
-    description: 'Public discussion profile returned',
-    type: WrappedPublicDiscussionProfileDto,
-  })
-  getPublicDiscussionProfile(
-    @Param('userId', new ParseUUIDPipe()) userId: string,
-  ): Promise<PublicDiscussionProfileResponseDto> {
-    return this.discussionApplicationService.getPublicDiscussionProfile(userId);
   }
 
   @Get('users/me/comments')
@@ -148,15 +124,43 @@ export class UserDiscussionController {
     });
   }
 
-  @Get('users/me/discussions')
-  @ApiAuthList({ description: 'My discussions returned', type: WrappedMyDiscussionsDto })
-  listMyDiscussions(
-    @CurrentUser() user: JwtPayload,
+  // ─── Public /users/:userId/* routes (registered after me/* routes) ──
+
+  @Get('users/:userId/discussions')
+  @Public()
+  @ApiPublicList({ description: 'User discussions returned', type: WrappedUserDiscussionsDto })
+  listDiscussionsByUser(
+    @Param('userId', new ParseUUIDPipe()) userId: string,
     @Query() query: ListMyDiscussionsQueryDto,
   ): Promise<MyDiscussionsResponseDto> {
-    return this.discussionApplicationService.listMyDiscussions(user.sub, {
+    return this.discussionApplicationService.listMyDiscussions(userId, {
       limit: query.limit,
       cursor: query.cursor ? QuizDiscussionCursorMapper.parse(query.cursor) : null,
     });
+  }
+
+  @Get('users/:userId/comments')
+  @Public()
+  @ApiPublicList({ description: 'User comments returned', type: WrappedUserCommentsDto })
+  listCommentsByUser(
+    @Param('userId', new ParseUUIDPipe()) userId: string,
+    @Query() query: ListMyCommentsQueryDto,
+  ): Promise<MyCommentsResponseDto> {
+    return this.discussionApplicationService.listCommentsByUser(userId, {
+      limit: query.limit,
+      cursor: query.cursor ? MyCommentCursorMapper.parse(query.cursor) : null,
+    });
+  }
+
+  @Get('users/:userId/discussion-profile')
+  @Public()
+  @ApiPublicList({
+    description: 'Public discussion profile returned',
+    type: WrappedPublicDiscussionProfileDto,
+  })
+  getPublicDiscussionProfile(
+    @Param('userId', new ParseUUIDPipe()) userId: string,
+  ): Promise<PublicDiscussionProfileResponseDto> {
+    return this.discussionApplicationService.getPublicDiscussionProfile(userId);
   }
 }

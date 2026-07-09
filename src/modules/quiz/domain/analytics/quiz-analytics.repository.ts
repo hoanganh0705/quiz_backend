@@ -359,7 +359,7 @@ export class QuizAnalyticsRepository implements QuizAnalyticsRepositoryPort {
         totalRatingWeighted: sql<number>`coalesce(sum(${quizStats.avgRating}::numeric * ${quizStats.ratingCount}), 0)`,
         totalRatingCount: sql<number>`coalesce(sum(${quizStats.ratingCount}), 0)`,
         totalBookmarks: sql<number>`coalesce(sum(${quizStats.bookmarkCount}), 0)`,
-        lastUpdated: sql<string>`coalesce(max(${quizStats.lastCalculatedAt}), max(${quizStats.updatedAt}), now()::text)`,
+        lastUpdated: sql<string>`coalesce(max(${quizStats.lastCalculatedAt})::text, max(${quizStats.updatedAt})::text, now()::text)`,
       })
       .from(quizzes)
       .leftJoin(quizVersions, eq(quizzes.publishedVersionId, quizVersions.quizVersionId))

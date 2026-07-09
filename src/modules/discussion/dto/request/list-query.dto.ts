@@ -35,7 +35,7 @@ export class ListThreadsQueryDto {
     nullable: true,
   })
   @IsOptional()
-  @IsUUID('4')
+  @IsUUID()
   quizId?: string;
 
   @ApiPropertyOptional({
@@ -45,7 +45,7 @@ export class ListThreadsQueryDto {
     nullable: true,
   })
   @IsOptional()
-  @IsUUID('4')
+  @IsUUID()
   authorId?: string;
 
   @ApiPropertyOptional({
@@ -113,6 +113,6 @@ export class ListCommentsQueryDto {
     nullable: true,
   })
   @IsOptional()
-  @IsUUID('4')
+  @IsUUID()
   parentCommentId?: string;
 }

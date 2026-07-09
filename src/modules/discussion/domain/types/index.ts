@@ -1,5 +1,5 @@
 export type DiscussionThreadStatus = 'open' | 'closed' | 'hidden' | 'deleted';
-export type DiscussionContentStatus = 'visible' | 'hidden' | 'deleted' | 'accepted';
+export type DiscussionContentStatus = 'visible' | 'hidden' | 'deleted';
 export type DiscussionVoteValue = 'upvote' | 'downvote';
 export type DiscussionReportStatus = 'open' | 'reviewed' | 'dismissed' | 'actioned';
 export type DiscussionReportTargetType = 'thread' | 'comment' | 'reply';
@@ -9,7 +9,7 @@ export type SortOrder = 'asc' | 'desc';
 // Const objects mirror the type aliases above — single source of truth for both
 // compile-time types (domain/service/repository) and runtime values (DTO validation + Swagger).
 export const DISCUSSION_THREAD_STATUS = ['open', 'closed', 'hidden', 'deleted'] as const;
-export const DISCUSSION_CONTENT_STATUS = ['visible', 'hidden', 'deleted', 'accepted'] as const;
+export const DISCUSSION_CONTENT_STATUS = ['visible', 'hidden', 'deleted'] as const;
 export const DISCUSSION_VOTE_VALUE = ['upvote', 'downvote'] as const;
 export const DISCUSSION_REPORT_STATUS = ['open', 'reviewed', 'dismissed', 'actioned'] as const;
 export const DISCUSSION_REPORT_TARGET_TYPE = ['thread', 'comment', 'reply'] as const;
