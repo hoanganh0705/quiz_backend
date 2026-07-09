@@ -2,11 +2,14 @@ import { ApiProperty } from '@nestjs/swagger';
 
 // ─── Category module documentation-only wrapper DTOs ─────────────────────────────
 //
-// ResponseFormatInterceptor wraps all responses as:
-//   { data: <payload>, meta: { timestamp } }
+// ResponseFormatInterceptor passes pre-formatted payloads through unchanged.
+// Every endpoint in this module returns the canonical envelope directly:
+//   { data: <T>, meta: { timestamp, [pagination] } }
 //
-// For paginated responses (when payload has { items, pagination }), it transforms to:
-//   { data: <items[]>, meta: { timestamp, pagination: { limit, nextCursor, hasNextPage } } }
+// T is one of:
+//   - a single object (e.g. CategoryResponseDto, CategoryAnalyticsResponseDto)
+//   - an array of items (e.g. CategoryResponseDto[], RankedCategoryResponseDto[])
+//   - a small message object (e.g. { message: string })
 //
 // Runtime DTO classes (CategoryResponseDto, etc.) remain unchanged.
 // These wrapper DTOs are used ONLY in @ApiOkResponse / @ApiCreatedResponse decorators
@@ -343,37 +346,18 @@ class PaginatedMetaDto {
 
 // ─── Wrapper DTOs (top-level envelope) ────────────────────────────────────────
 
-// ─── Nested list payloads (for non-paginated endpoints) ──────────────────────
+// ─── Wrapper DTOs (top-level envelope) ────────────────────────────────────────
 //
-// Endpoints that return `{ items }` without a `pagination` field are wrapped by
-// the response interceptor as `{ data: { items: [...] }, meta: { timestamp } }`,
-// not flattened to `{ data: [...], meta: { ..., pagination } }`. These inner
-// classes document that nested `data` shape for Swagger.
-class CategoryRankedListDataDto {
+// All endpoints in this module return `{ data, meta }` directly. For list
+// endpoints, `data` is a flat array; for single-resource endpoints, `data` is
+// the resource object. `meta.pagination` is present only for paginated lists.
+
+export class CategoryWrappedRankedListDto {
   @ApiProperty({
     description: 'Ranked category items',
     type: [RankedCategoryDataDto],
   })
-  items!: RankedCategoryDataDto[];
-}
-
-class CategoryRelatedListDataDto {
-  @ApiProperty({
-    description: 'Related category items',
-    type: [CategoryDataDto],
-  })
-  items!: CategoryDataDto[];
-}
-
-// ─── Wrapper DTOs (top-level envelope) ────────────────────────────────────────
-
-export class CategoryWrappedRankedListDto {
-  @ApiProperty({
-    description:
-      'Wrapped ranked category list. `data` is an object (not an array) because the endpoint returns `{ items }` without a `pagination` cursor, so the response interceptor does not flatten it.',
-    type: CategoryRankedListDataDto,
-  })
-  data!: CategoryRankedListDataDto;
+  data!: RankedCategoryDataDto[];
 
   @ApiProperty({
     description: 'Response metadata',
@@ -384,11 +368,10 @@ export class CategoryWrappedRankedListDto {
 
 export class CategoryWrappedRelatedListDto {
   @ApiProperty({
-    description:
-      'Wrapped related category list. `data` is an object (not an array) because the endpoint returns `{ items }` without a `pagination` cursor, so the response interceptor does not flatten it.',
-    type: CategoryRelatedListDataDto,
+    description: 'Related category items',
+    type: [CategoryDataDto],
   })
-  data!: CategoryRelatedListDataDto;
+  data!: CategoryDataDto[];
 
   @ApiProperty({
     description: 'Response metadata',

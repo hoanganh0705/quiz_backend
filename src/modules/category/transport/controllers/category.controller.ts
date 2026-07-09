@@ -22,7 +22,7 @@ import { ListCategoriesQueryDto } from '../../dto/request/list-categories-query.
 import { UpdateCategoryDto } from '../../dto/request/update-category.dto';
 import { CategoryRankingQueryDto } from '../../dto/request/category-ranking-query.dto';
 import { RelatedCategoriesQueryDto } from '../../dto/request/related-categories-query.dto';
-import { ListQuizzesQueryDto } from '@/modules/quiz/dto/request/list-quizzes-query.dto';
+import { ListCategoryQuizzesQueryDto } from '../../dto/request/list-category-quizzes-query.dto';
 import type {
   CreateCategoryCommand,
   ListCategoriesQuery,
@@ -75,7 +75,7 @@ export class CategoryController {
   @Get(':slug/quizzes')
   @Public()
   @ApiCategoryQuizzesResponse()
-  getCategoryQuizzes(@Param('slug') slug: string, @Query() query: ListQuizzesQueryDto) {
+  getCategoryQuizzes(@Param('slug') slug: string, @Query() query: ListCategoryQuizzesQueryDto) {
     return this.categoryQueryService.getCategoryQuizzesBySlug(slug, query);
   }
 

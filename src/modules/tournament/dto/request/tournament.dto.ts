@@ -66,7 +66,7 @@ export class ListTournamentsQueryDto {
     nullable: true,
   })
   @IsOptional()
-  @IsUUID('4')
+  @IsUUID()
   categoryId?: string;
 }
 
@@ -247,6 +247,6 @@ export class CreateTournamentDto {
     nullable: true,
   })
   @IsOptional()
-  @IsUUID('4')
+  @IsUUID()
   categoryId?: string;
 }
