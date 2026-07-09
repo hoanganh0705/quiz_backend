@@ -7,7 +7,7 @@ import { IsOptional, IsUUID } from 'class-validator';
 
 export class ReevaluateUserQueryDto {
   @IsOptional()
-  @IsUUID('4')
+  @IsUUID()
   @ApiPropertyOptional({
     description: 'Revoked-by user ID (admin actor). Defaults to the target userId if not provided.',
   })

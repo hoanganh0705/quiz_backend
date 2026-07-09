@@ -8,12 +8,9 @@ import type {
   UserActivityRow,
   UserBadgeRow,
   UserMeRow,
+  UserRankingRow,
 } from './ports/user-repository.port';
-import {
-  UserAnalyticsNotFoundError,
-  UserProfilePrivateError,
-  UserRankingNotFoundError,
-} from './errors';
+import { UserProfilePrivateError } from './errors';
 import type {
   ListUserBadgesQuery,
   UpdateProfileCommand,
@@ -114,11 +111,12 @@ export class UserDomainService {
   async getUserRanking(userId: string, requesterId: string): Promise<UserRankingSummary> {
     await this.assertProfileVisible(userId, requesterId);
 
-    const ranking = await this.userRepository.getUserRanking(userId);
+    let ranking = await this.userRepository.getUserRanking(userId);
 
     if (!ranking) {
-      this.logger.warn({ event: 'user_ranking_not_found', userId });
-      throw new UserRankingNotFoundError();
+      void this.logger.warn({ event: 'user_ranking_not_found_creating', userId });
+      const created: UserRankingRow = await this.userRepository.createUserRanking(userId);
+      ranking = created;
     }
 
     return {
@@ -133,14 +131,7 @@ export class UserDomainService {
   async getUserAnalytics(userId: string, requesterId: string): Promise<UserAnalytics> {
     await this.assertProfileVisible(userId, requesterId);
 
-    const analytics = await this.userRepository.getUserAnalytics(userId);
-
-    if (!analytics) {
-      this.logger.warn({ event: 'user_analytics_not_found', userId });
-      throw new UserAnalyticsNotFoundError();
-    }
-
-    return analytics;
+    return await this.userRepository.getUserAnalytics(userId);
   }
 
   async updateProfile(userId: string, command: UpdateProfileCommand): Promise<UserMeRow> {

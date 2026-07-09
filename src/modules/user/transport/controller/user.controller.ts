@@ -1,4 +1,14 @@
-import { Body, Controller, Get, Inject, Param, Patch, Query, UseFilters } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Inject,
+  Param,
+  ParseUUIDPipe,
+  Patch,
+  Query,
+  UseFilters,
+} from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
 import { ApiAuth } from '@/common/swagger/swagger-decorators';
@@ -76,50 +86,6 @@ export class UserController {
     return items;
   }
 
-  @Get(':userId/quizzes/analytics')
-  @ApiOperation({
-    summary: 'Get creator analytics for a user',
-    description: 'Returns aggregate creator-side quiz analytics for the given user.',
-  })
-  @ApiCreatorQuizAnalyticsResponse()
-  @ApiNotFoundAndInternal()
-  getUserQuizAnalytics(@Param('userId') userId: string): Promise<CreatorQuizAnalyticsDto> {
-    return this.quizListing.getMyQuizAnalytics(userId);
-  }
-
-  @Get(':userId/quizzes')
-  @ApiOperation({
-    summary: 'List quizzes created by a user',
-    description: 'Returns a cursor-paginated list of quizzes created by the specified user.',
-  })
-  @ApiUserQuizListResponse()
-  @ApiNotFoundBadRequestInternal()
-  listUserQuizzes(
-    @Param('userId') userId: string,
-    @Query() query: ListQuizzesQueryDto,
-  ): Promise<QuizListResponseDto> {
-    return this.quizListing.listQuizzesByCreator(userId, query);
-  }
-
-  @Get(':userId/badges')
-  @ApiOperation({
-    summary: 'List badges earned by a user',
-    description:
-      "Returns a cursor-paginated list of badges earned by the specified user. Honours the user's privacy settings — private profiles return 403.",
-  })
-  @ApiUserBadgesResponse()
-  @ApiNotFoundBadRequestForbiddenInternal()
-  listBadgesByUserId(
-    @Param('userId') userId: string,
-    @Query() query: ListUserBadgesQueryDto,
-    @CurrentUser('sub') requesterId: string,
-  ): Promise<UserBadgesResponseDto> {
-    return this.userApplicationService.listUserBadges(userId, requesterId, {
-      limit: query.limit,
-      cursor: query.cursor,
-    });
-  }
-
   @Get('me')
   @ApiAuth()
   @ApiOperation({
@@ -166,37 +132,6 @@ export class UserController {
       limit: query.limit,
       cursor: query.cursor,
     });
-  }
-
-  @Get(':userId/tournament-history')
-  @ApiOperation({
-    summary: 'Get public tournament history for a user',
-    description:
-      'Returns a cursor-paginated list of completed tournaments for the specified user. Honours privacy settings.',
-  })
-  @ApiPublicTournamentHistoryResponse()
-  @ApiNotFoundBadRequestForbiddenInternal()
-  getUserTournamentHistory(
-    @Param('userId') userId: string,
-    @Query() query: GetMyTournamentHistoryQueryDto,
-    @CurrentUser('sub') requesterId: string,
-  ): Promise<MyTournamentHistoryResponseDto> {
-    return this.userApplicationService.getMyTournamentHistory(userId, requesterId, query);
-  }
-
-  @Get(':userId/tournaments')
-  @ApiOperation({
-    summary: 'Get public tournament profile for a user',
-    description:
-      'Returns aggregate tournament stats for the specified user. Honours privacy settings.',
-  })
-  @ApiPublicTournamentProfileResponse()
-  @ApiNotFoundForbiddenInternal()
-  getPublicTournamentProfile(
-    @Param('userId') userId: string,
-    @CurrentUser('sub') requesterId: string,
-  ): Promise<PublicTournamentProfileResponseDto> {
-    return this.userApplicationService.getPublicTournamentProfile(userId, requesterId);
   }
 
   @Get('me/tournaments')
@@ -298,5 +233,84 @@ export class UserController {
     @Body() payload: UpdateMeSettingsDto,
   ): Promise<UserMeResponseDto> {
     return this.userApplicationService.updateSettings(userId, payload);
+  }
+
+  // ─── Public :userId routes (registered last to avoid shadowing /me/* routes) ──
+
+  @Get(':userId/quizzes/analytics')
+  @ApiOperation({
+    summary: 'Get creator analytics for a user',
+    description: 'Returns aggregate creator-side quiz analytics for the given user.',
+  })
+  @ApiCreatorQuizAnalyticsResponse()
+  @ApiNotFoundAndInternal()
+  getUserQuizAnalytics(
+    @Param('userId', new ParseUUIDPipe()) userId: string,
+  ): Promise<CreatorQuizAnalyticsDto> {
+    return this.quizListing.getMyQuizAnalytics(userId);
+  }
+
+  @Get(':userId/quizzes')
+  @ApiOperation({
+    summary: 'List quizzes created by a user',
+    description: 'Returns a cursor-paginated list of quizzes created by the specified user.',
+  })
+  @ApiUserQuizListResponse()
+  @ApiNotFoundBadRequestInternal()
+  listUserQuizzes(
+    @Param('userId', new ParseUUIDPipe()) userId: string,
+    @Query() query: ListQuizzesQueryDto,
+  ): Promise<QuizListResponseDto> {
+    return this.quizListing.listQuizzesByCreator(userId, query);
+  }
+
+  @Get(':userId/badges')
+  @ApiOperation({
+    summary: 'List badges earned by a user',
+    description:
+      "Returns a cursor-paginated list of badges earned by the specified user. Honours the user's privacy settings — private profiles return 403.",
+  })
+  @ApiUserBadgesResponse()
+  @ApiNotFoundBadRequestForbiddenInternal()
+  listBadgesByUserId(
+    @Param('userId', new ParseUUIDPipe()) userId: string,
+    @Query() query: ListUserBadgesQueryDto,
+    @CurrentUser('sub') requesterId: string,
+  ): Promise<UserBadgesResponseDto> {
+    return this.userApplicationService.listUserBadges(userId, requesterId, {
+      limit: query.limit,
+      cursor: query.cursor,
+    });
+  }
+
+  @Get(':userId/tournament-history')
+  @ApiOperation({
+    summary: 'Get public tournament history for a user',
+    description:
+      'Returns a cursor-paginated list of completed tournaments for the specified user. Honours privacy settings.',
+  })
+  @ApiPublicTournamentHistoryResponse()
+  @ApiNotFoundBadRequestForbiddenInternal()
+  getUserTournamentHistory(
+    @Param('userId', new ParseUUIDPipe()) userId: string,
+    @Query() query: GetMyTournamentHistoryQueryDto,
+    @CurrentUser('sub') requesterId: string,
+  ): Promise<MyTournamentHistoryResponseDto> {
+    return this.userApplicationService.getMyTournamentHistory(userId, requesterId, query);
+  }
+
+  @Get(':userId/tournaments')
+  @ApiOperation({
+    summary: 'Get public tournament profile for a user',
+    description:
+      'Returns aggregate tournament stats for the specified user. Honours privacy settings.',
+  })
+  @ApiPublicTournamentProfileResponse()
+  @ApiNotFoundForbiddenInternal()
+  getPublicTournamentProfile(
+    @Param('userId', new ParseUUIDPipe()) userId: string,
+    @CurrentUser('sub') requesterId: string,
+  ): Promise<PublicTournamentProfileResponseDto> {
+    return this.userApplicationService.getPublicTournamentProfile(userId, requesterId);
   }
 }

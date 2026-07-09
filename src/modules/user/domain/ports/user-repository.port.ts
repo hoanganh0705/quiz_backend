@@ -100,7 +100,8 @@ export interface UserRepositoryPort {
     cursor?: { earnedAt: string; userBadgeId: string } | null;
   }): Promise<UserBadgeRow[]>;
   getUserRanking(userId: string): Promise<UserRankingRow | null>;
-  getUserAnalytics(userId: string): Promise<UserAnalytics | null>;
+  createUserRanking(userId: string): Promise<UserRankingRow>;
+  getUserAnalytics(userId: string): Promise<UserAnalytics>;
   listUserActivity(params: {
     userId: string;
     limit: number;
