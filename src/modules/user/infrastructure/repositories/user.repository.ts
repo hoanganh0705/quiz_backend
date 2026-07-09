@@ -133,6 +133,15 @@ export class UserRepository implements UserRepositoryPort {
     return ranking ?? null;
   }
 
+  async createUserRanking(userId: string): Promise<UserRankingRow> {
+    const [result] = await this.db
+      .insert(userRanking)
+      .values({ userId })
+      .returning(USER_RANKING_COLUMNS);
+
+    return result as UserRankingRow;
+  }
+
   /**
    * Combined user analytics in a single round-trip.
    *
@@ -141,7 +150,7 @@ export class UserRepository implements UserRepositoryPort {
    * `quiz_attempts` is scanned only once and the favorites are
    * determined in the same pass.
    */
-  async getUserAnalytics(userId: string): Promise<UserAnalytics | null> {
+  async getUserAnalytics(userId: string): Promise<UserAnalytics> {
     const result = await this.db.execute(
       sql<{
         totalAttempts: number | string;
@@ -208,10 +217,10 @@ export class UserRepository implements UserRepositoryPort {
           s."completedQuizzes",
           s."averageScore",
           s."lastUpdated",
-          (SELECT category_id FROM category_counts WHERE rn = 1) AS "favoriteCategoryId",
-          (SELECT name FROM category_counts WHERE rn = 1) AS "favoriteCategoryName",
-          (SELECT tag_id FROM tag_counts WHERE rn = 1) AS "favoriteTagId",
-          (SELECT name FROM tag_counts WHERE rn = 1) AS "favoriteTagName"
+          (SELECT "categoryId" FROM category_counts WHERE rn = 1) AS "favoriteCategoryId",
+          (SELECT "name" FROM category_counts WHERE rn = 1) AS "favoriteCategoryName",
+          (SELECT "tagId" FROM tag_counts WHERE rn = 1) AS "favoriteTagId",
+          (SELECT "name" FROM tag_counts WHERE rn = 1) AS "favoriteTagName"
         FROM summary s
       `,
     );
@@ -230,9 +239,6 @@ export class UserRepository implements UserRepositoryPort {
       | undefined;
 
     const totalAttempts = Number(row?.totalAttempts ?? 0);
-    if (totalAttempts === 0) {
-      return null;
-    }
 
     return {
       userId,

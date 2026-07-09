@@ -7,7 +7,7 @@ export class MoveBookmarkDto {
     format: 'uuid',
     example: '660e8400-e29b-41d4-a716-446655440000',
   })
-  @IsUUID('4')
+  @IsUUID()
   quizId!: string;
 
   @ApiProperty({
@@ -15,6 +15,6 @@ export class MoveBookmarkDto {
     format: 'uuid',
     example: '770e8400-e29b-41d4-a716-446655440001',
   })
-  @IsUUID('4')
+  @IsUUID()
   targetCollectionId!: string;
 }

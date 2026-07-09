@@ -11,7 +11,7 @@ export class CreateQuizVersionDto {
     nullable: true,
   })
   @IsOptional()
-  @IsUUID('4')
+  @IsUUID()
   sourceVersionId?: string;
 
   @ApiProperty({ description: 'Quiz difficulty level', enum: QUIZ_DIFFICULTIES, example: 'medium' })

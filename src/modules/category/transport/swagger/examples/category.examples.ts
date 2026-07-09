@@ -42,24 +42,22 @@ export const CATEGORY_LIST_EXAMPLE = {
 } as const;
 
 export const CATEGORY_RANKED_LIST_EXAMPLE = {
-  data: { items: [RANKED_CATEGORY_ITEM] },
+  data: [RANKED_CATEGORY_ITEM],
   meta: { timestamp: EXAMPLE_TIMESTAMP },
 } as const;
 
+const RELATED_CATEGORY_ITEM = {
+  categoryId: '770e8400-e29b-41d4-a716-446655440001',
+  name: 'Science',
+  slug: 'science',
+  description: 'Explore the wonders of science',
+  imageUrl: null,
+  createdAt: '2025-02-10T09:00:00.000Z',
+  updatedAt: '2025-05-20T14:00:00.000Z',
+};
+
 export const CATEGORY_RELATED_LIST_EXAMPLE = {
-  data: {
-    items: [
-      {
-        categoryId: '770e8400-e29b-41d4-a716-446655440001',
-        name: 'Science',
-        slug: 'science',
-        description: 'Explore the wonders of science',
-        imageUrl: null,
-        createdAt: '2025-02-10T09:00:00.000Z',
-        updatedAt: '2025-05-20T14:00:00.000Z',
-      },
-    ],
-  },
+  data: [RELATED_CATEGORY_ITEM],
   meta: { timestamp: EXAMPLE_TIMESTAMP },
 } as const;
 

@@ -136,7 +136,7 @@ export class QuizRecommendationRepository implements QuizRecommendationRepositor
           ), 0)
           + ${WEIGHT_POPULARITY} * coalesce(${quizStats.popularityScore}::numeric, 0)
           + ${WEIGHT_TRENDING} * coalesce(${quizStats.trendingScore}::numeric, 0)
-        )`,
+        ) AS recommendation_score`,
       })
       .from(quizzes)
       .innerJoin(

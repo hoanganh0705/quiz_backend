@@ -79,24 +79,41 @@ export class GlobalExceptionFilter implements ExceptionFilter {
         });
       }
     } else if (exception instanceof Error) {
-      message = isProduction ? 'Internal server error' : exception.message;
       errorName = 'InternalServerError';
 
+      const causeChain: { name: string; message: string; code?: string }[] = [];
+      let cursor: unknown = exception.cause;
+      while (cursor instanceof Error && causeChain.length < 5) {
+        causeChain.push({
+          name: cursor.name,
+          message: cursor.message,
+          code: (cursor as Error & { code?: string }).code,
+        });
+        cursor = (cursor as Error & { cause?: unknown }).cause;
+      }
+
       if (isProduction) {
+        message = 'Internal server error';
         requestLogger.error({
           event: 'unhandled_exception',
           method: request.method,
           url: request.url,
           errorName: exception.name,
           errorMessage: exception.message,
+          causeChain: causeChain.length > 0 ? causeChain : undefined,
         });
       } else {
+        message =
+          causeChain.length > 0
+            ? `${exception.message}\nCause chain: ${JSON.stringify(causeChain)}`
+            : exception.message;
         requestLogger.error({
           event: 'unhandled_exception',
           method: request.method,
           url: request.url,
           errorName: exception.name,
           errorMessage: exception.message,
+          causeChain: causeChain.length > 0 ? causeChain : undefined,
           stack: exception.stack,
         });
       }

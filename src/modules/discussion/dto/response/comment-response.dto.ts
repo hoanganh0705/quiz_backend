@@ -1,7 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { AuthorDto } from './thread-response.dto';
 
-const CONTENT_STATUS_VALUES = ['visible', 'hidden', 'deleted', 'accepted'] as const;
+const CONTENT_STATUS_VALUES = ['visible', 'hidden', 'deleted'] as const;
 const VOTE_VALUES = ['upvote', 'downvote'] as const;
 
 export class CommentDto {

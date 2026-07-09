@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Query, UseFilters } from '@nestjs/common';
+import { Controller, Get, Param, ParseUUIDPipe, Query, UseFilters } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { Public } from '@/common/decorators/public.decorator';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
@@ -37,19 +37,6 @@ export class UserReviewController {
     });
   }
 
-  @Get(':userId/reviews')
-  @Public()
-  @ApiPublicList({ description: 'User reviews returned', type: WrappedMyReviewsListDto })
-  async listReviewsByUser(
-    @Param('userId', new ParseUUIDPipe()) userId: string,
-    @Query() query: ListMyReviewsQueryDto,
-  ): Promise<MyReviewsResponseDto> {
-    return this.reviewApplicationService.listReviewsByUser(userId, {
-      limit: query.limit,
-      cursor: query.cursor ? CursorMapper.parseReview(query.cursor) : null,
-    });
-  }
-
   @Get('me/reviews')
   @ApiAuthList({ description: 'My reviews returned', type: WrappedMyReviewsListDto })
   async listMyReviews(
@@ -71,5 +58,18 @@ export class UserReviewController {
     @CurrentUser() user: JwtPayload,
   ): Promise<ReviewDetailResponseDto | null> {
     return this.reviewApplicationService.getMyQuizReview(quizId, user.sub);
+  }
+
+  @Get(':userId/reviews')
+  @Public()
+  @ApiPublicList({ description: 'User reviews returned', type: WrappedMyReviewsListDto })
+  async listReviewsByUser(
+    @Param('userId', new ParseUUIDPipe()) userId: string,
+    @Query() query: ListMyReviewsQueryDto,
+  ): Promise<MyReviewsResponseDto> {
+    return this.reviewApplicationService.listReviewsByUser(userId, {
+      limit: query.limit,
+      cursor: query.cursor ? CursorMapper.parseReview(query.cursor) : null,
+    });
   }
 }

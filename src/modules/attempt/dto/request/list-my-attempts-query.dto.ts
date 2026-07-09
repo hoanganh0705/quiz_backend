@@ -52,7 +52,7 @@ export class ListMyAttemptsQueryDto {
     nullable: true,
   })
   @IsOptional()
-  @IsUUID('4')
+  @IsUUID()
   quizId?: string;
 
   @ApiPropertyOptional({
@@ -63,7 +63,7 @@ export class ListMyAttemptsQueryDto {
     nullable: true,
   })
   @IsOptional()
-  @IsUUID('4')
+  @IsUUID()
   categoryId?: string;
 
   @ApiPropertyOptional({
@@ -74,7 +74,7 @@ export class ListMyAttemptsQueryDto {
     nullable: true,
   })
   @IsOptional()
-  @IsUUID('4')
+  @IsUUID()
   tagId?: string;
 
   @ApiPropertyOptional({

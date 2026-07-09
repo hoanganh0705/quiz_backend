@@ -1,9 +1,17 @@
 import { Type } from 'class-transformer';
 import { IsIn, IsInt, IsOptional, IsString, IsUUID, Max, MaxLength, Min } from 'class-validator';
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { QUIZ_DIFFICULTIES, type QuizDifficulty } from '../../types/quiz.types';
+import { QUIZ_DIFFICULTIES, type QuizDifficulty } from '@/modules/quiz/types/quiz.types';
 
-export class ListQuizzesQueryDto {
+/**
+ * Query DTO for `GET /categories/:slug/quizzes`.
+ *
+ * The category is already uniquely identified by the path parameter `:slug`,
+ * so `categoryId` is intentionally absent. Clients that need a different
+ * scope should call the regular `GET /quizzes` endpoint and filter by
+ * `categoryId` there.
+ */
+export class ListCategoryQuizzesQueryDto {
   @ApiPropertyOptional({
     description: 'Cursor for cursor-based pagination',
     example:
@@ -41,17 +49,7 @@ export class ListQuizzesQueryDto {
   difficulty?: QuizDifficulty;
 
   @ApiPropertyOptional({
-    description: 'Filter by category UUID',
-    format: 'uuid',
-    example: '660e8400-e29b-41d4-a716-446655440000',
-    nullable: true,
-  })
-  @IsOptional()
-  @IsUUID()
-  categoryId?: string;
-
-  @ApiPropertyOptional({
-    description: 'Filter by tag UUID',
+    description: 'Optional tag UUID to further narrow the category quizzes',
     format: 'uuid',
     example: '770e8400-e29b-41d4-a716-446655440000',
     nullable: true,
