@@ -14,7 +14,6 @@ import {
 import {
   ApiTags,
   ApiOperation,
-  ApiCreatedResponse,
   ApiNotFoundResponse,
   ApiConflictResponse,
   ApiBadRequestResponse,
@@ -22,15 +21,16 @@ import {
   ApiForbiddenResponse,
   ApiUnprocessableEntityResponse,
   ApiBearerAuth,
-  ApiOkResponse,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
-import { ApiAuth, ApiAuthAction } from '@/common/swagger/swagger-decorators';
+import { ApiAuth } from '@/common/swagger/swagger-decorators';
+import { ApiCreatedResource, ApiOkResource, ApiOkResourceList } from '@/common/swagger/api-ok';
 import { ProblemDetailDto } from '@/common/swagger/swagger-schemas';
 import { AUTH_SECURITY_NAME } from '@/core/swagger/swagger.config';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
 import { AttemptApplicationService } from '../../application/attempt.application.service';
+import { AttemptPresenter } from '../presenters/attempt.presenter';
 import { StartAttemptDto, ListMyAttemptsQueryDto, SubmitAnswerDto } from '../../dto/request';
 import {
   AttemptResponseDto,
@@ -43,24 +43,16 @@ import {
   AttemptAnalyticsResponseDto,
   UserAttemptStatsResponseDto,
 } from '../../dto/response';
-import {
-  AttemptWrappedAttemptDto,
-  AttemptWrappedSubmitAnswerDto,
-  AttemptWrappedWithdrawAnswerDto,
-  AttemptWrappedAbandonAttemptDto,
-  AttemptWrappedCompleteAttemptDto,
-  AttemptWrappedAnswersDto,
-  AttemptWrappedAnalyticsDto,
-  AttemptWrappedUserStatsDto,
-  AttemptWrappedListDto,
-} from '../../dto/response/attempt-response-docs.dto';
 import { AttemptDomainExceptionFilter } from '../filters/attempt-domain-exception.filter';
 
 @ApiTags('attempts')
 @Controller()
 @UseFilters(AttemptDomainExceptionFilter)
 export class AttemptController {
-  constructor(private readonly attemptApplicationService: AttemptApplicationService) {}
+  constructor(
+    private readonly attemptApplicationService: AttemptApplicationService,
+    private readonly presenter: AttemptPresenter,
+  ) {}
 
   @Post('quizzes/:quizId/attempts')
   @ApiBearerAuth(AUTH_SECURITY_NAME)
@@ -69,7 +61,7 @@ export class AttemptController {
     description:
       'Resolves the published quiz version from the quizId and starts a new attempt for the authenticated user.',
   })
-  @ApiCreatedResponse({ description: 'Attempt started', type: AttemptWrappedAttemptDto })
+  @ApiCreatedResource(AttemptResponseDto, { description: 'Attempt started' })
   @ApiUnauthorizedResponse({
     description: 'Missing or invalid authentication token',
     type: ProblemDetailDto,
@@ -85,13 +77,14 @@ export class AttemptController {
     @Param('quizId', new ParseUUIDPipe()) quizId: string,
     @CurrentUser() user: JwtPayload,
     @Body() payload: StartAttemptDto,
-  ): Promise<AttemptResponseDto> {
-    return this.attemptApplicationService.startAttempt(quizId, user, payload);
+  ) {
+    const result = await this.attemptApplicationService.startAttempt(quizId, user, payload);
+    return this.presenter.startAttempt(result);
   }
 
   @Get('attempts/:attemptId')
   @ApiBearerAuth(AUTH_SECURITY_NAME)
-  @ApiOkResponse({ description: 'Attempt found', type: AttemptWrappedAttemptDto })
+  @ApiOkResource(AttemptResponseDto, { description: 'Attempt found' })
   @ApiUnauthorizedResponse({
     description: 'Missing or invalid authentication token',
     type: ProblemDetailDto,
@@ -106,8 +99,9 @@ export class AttemptController {
   async getAttemptById(
     @Param('attemptId', new ParseUUIDPipe()) attemptId: string,
     @CurrentUser() user: JwtPayload,
-  ): Promise<AttemptResponseDto> {
-    return this.attemptApplicationService.getAttemptById(attemptId, user);
+  ) {
+    const result = await this.attemptApplicationService.getAttemptById(attemptId, user);
+    return this.presenter.getAttemptById(result);
   }
 
   @Post('attempts/:attemptId/answers')
@@ -117,10 +111,7 @@ export class AttemptController {
     summary: 'Submit answer',
     description: 'Creates an answer record for a specific question within an active attempt.',
   })
-  @ApiCreatedResponse({
-    description: 'Answer recorded',
-    type: AttemptWrappedSubmitAnswerDto,
-  })
+  @ApiCreatedResource(SubmitAnswerResponseDto, { description: 'Answer recorded' })
   @ApiForbiddenResponse({ description: 'You do not have permission to access this attempt' })
   @ApiNotFoundResponse({ description: 'Attempt or question not found' })
   @ApiConflictResponse({ description: 'Attempt is not in an active state' })
@@ -131,23 +122,21 @@ export class AttemptController {
     @Param('attemptId', new ParseUUIDPipe()) attemptId: string,
     @CurrentUser() user: JwtPayload,
     @Body() payload: SubmitAnswerDto,
-  ): Promise<SubmitAnswerResponseDto> {
-    return this.attemptApplicationService.submitAnswer(
+  ) {
+    const result = await this.attemptApplicationService.submitAnswer(
       attemptId,
       payload.questionId,
       payload.selectedOptionId ?? null,
       payload.timeTakenMs,
       user,
     );
+    return this.presenter.submitAnswer(result);
   }
 
   @Delete('attempts/:attemptId/answers/:questionId')
   @HttpCode(HttpStatus.OK)
   @ApiBearerAuth(AUTH_SECURITY_NAME)
-  @ApiOkResponse({
-    description: 'Answer withdrawn',
-    type: AttemptWrappedWithdrawAnswerDto,
-  })
+  @ApiOkResource(WithdrawAnswerResponseDto, { description: 'Answer withdrawn' })
   @ApiUnauthorizedResponse({
     description: 'Missing or invalid authentication token',
     type: ProblemDetailDto,
@@ -166,22 +155,28 @@ export class AttemptController {
     @Param('attemptId', new ParseUUIDPipe()) attemptId: string,
     @Param('questionId', new ParseUUIDPipe()) questionId: string,
     @CurrentUser() user: JwtPayload,
-  ): Promise<WithdrawAnswerResponseDto> {
-    return this.attemptApplicationService.withdrawAnswer(attemptId, questionId, user);
+  ) {
+    const result = await this.attemptApplicationService.withdrawAnswer(attemptId, questionId, user);
+    return this.presenter.withdrawAnswer(result);
   }
 
   @Post('attempts/:attemptId/abandon')
   @HttpCode(HttpStatus.OK)
-  @ApiAuthAction({ description: 'Attempt abandoned', type: AttemptWrappedAbandonAttemptDto })
-  @ApiForbiddenResponse({ description: 'You do not have permission to access this attempt' })
+  @ApiAuth()
+  @ApiOperation({
+    summary: 'Abandon quiz attempt',
+  })
+  @ApiOkResource(AbandonAttemptResponseDto, { description: 'Attempt abandoned' })
   @ApiNotFoundResponse({ description: 'Quiz attempt not found' })
   @ApiConflictResponse({ description: 'Attempt is not in an active state' })
+  @ApiBadRequestResponse({ description: 'Path param is not a valid UUID' })
   @ApiInternalServerErrorResponse()
   async abandonAttempt(
     @Param('attemptId', new ParseUUIDPipe()) attemptId: string,
     @CurrentUser() user: JwtPayload,
-  ): Promise<AbandonAttemptResponseDto> {
-    return this.attemptApplicationService.abandonAttempt(attemptId, user);
+  ) {
+    const result = await this.attemptApplicationService.abandonAttempt(attemptId, user);
+    return this.presenter.abandonAttempt(result);
   }
 
   @Post('attempts/:attemptId/complete')
@@ -192,10 +187,7 @@ export class AttemptController {
       'Finalizes the attempt, computes the score, awards XP, and writes side effects. ' +
       'Only the owner (or an admin) of an attempt with status "started" can complete it.',
   })
-  @ApiCreatedResponse({
-    description: 'Attempt completed',
-    type: AttemptWrappedCompleteAttemptDto,
-  })
+  @ApiCreatedResource(CompleteAttemptResponseDto, { description: 'Attempt completed' })
   @ApiForbiddenResponse({ description: 'You do not have permission to access this attempt' })
   @ApiNotFoundResponse({ description: 'Quiz attempt not found' })
   @ApiConflictResponse({ description: 'Attempt is not in an active state' })
@@ -203,24 +195,22 @@ export class AttemptController {
   async completeAttempt(
     @Param('attemptId', new ParseUUIDPipe()) attemptId: string,
     @CurrentUser() user: JwtPayload,
-  ): Promise<CompleteAttemptResponseDto> {
-    return this.attemptApplicationService.completeAttempt(attemptId, user);
+  ) {
+    const result = await this.attemptApplicationService.completeAttempt(attemptId, user);
+    return this.presenter.completeAttempt(result);
   }
 
   @Get('users/me/attempts')
   @ApiBearerAuth(AUTH_SECURITY_NAME)
-  @ApiOkResponse({ description: 'Attempts returned', type: AttemptWrappedListDto })
+  @ApiOkResourceList(AttemptListResponseDto, 'cursor', { description: 'Attempts returned' })
   @ApiUnauthorizedResponse({
     description: 'Missing or invalid authentication token',
     type: ProblemDetailDto,
   })
   @ApiBadRequestResponse({ description: 'Query parameters failed validation' })
   @ApiInternalServerErrorResponse()
-  async listMyAttempts(
-    @CurrentUser() user: JwtPayload,
-    @Query() query: ListMyAttemptsQueryDto,
-  ): Promise<AttemptListResponseDto> {
-    return this.attemptApplicationService.listMyAttempts(user, {
+  async listMyAttempts(@CurrentUser() user: JwtPayload, @Query() query: ListMyAttemptsQueryDto) {
+    const result = await this.attemptApplicationService.listMyAttempts(user, {
       limit: query.limit ?? 20,
       cursor: query.cursor,
       status: query.status,
@@ -231,26 +221,25 @@ export class AttemptController {
       toDate: query.toDate,
       sortBy: query.sortBy,
     });
+    return this.presenter.listMyAttempts(result);
   }
 
   @Get('users/me/attempts/stats')
   @ApiBearerAuth(AUTH_SECURITY_NAME)
-  @ApiOkResponse({
-    description: 'Attempt statistics returned',
-    type: AttemptWrappedUserStatsDto,
-  })
+  @ApiOkResource(UserAttemptStatsResponseDto, { description: 'Attempt statistics returned' })
   @ApiUnauthorizedResponse({
     description: 'Missing or invalid authentication token',
     type: ProblemDetailDto,
   })
   @ApiInternalServerErrorResponse()
-  async getMyAttemptStats(@CurrentUser() user: JwtPayload): Promise<UserAttemptStatsResponseDto> {
-    return this.attemptApplicationService.getMyAttemptStats(user);
+  async getMyAttemptStats(@CurrentUser() user: JwtPayload) {
+    const result = await this.attemptApplicationService.getMyAttemptStats(user);
+    return this.presenter.getMyAttemptStats(result);
   }
 
   @Get('attempts/:attemptId/answers')
   @ApiBearerAuth(AUTH_SECURITY_NAME)
-  @ApiOkResponse({ description: 'Answers returned', type: AttemptWrappedAnswersDto })
+  @ApiOkResource(AttemptAnswersResponseDto, { description: 'Answers returned' })
   @ApiUnauthorizedResponse({
     description: 'Missing or invalid authentication token',
     type: ProblemDetailDto,
@@ -265,13 +254,14 @@ export class AttemptController {
   async getAttemptAnswers(
     @Param('attemptId', new ParseUUIDPipe()) attemptId: string,
     @CurrentUser() user: JwtPayload,
-  ): Promise<AttemptAnswersResponseDto> {
-    return this.attemptApplicationService.getAttemptAnswers(attemptId, user);
+  ) {
+    const result = await this.attemptApplicationService.getAttemptAnswers(attemptId, user);
+    return this.presenter.getAttemptAnswers(result);
   }
 
   @Get('attempts/:attemptId/analytics')
   @ApiBearerAuth(AUTH_SECURITY_NAME)
-  @ApiOkResponse({ description: 'Analytics returned', type: AttemptWrappedAnalyticsDto })
+  @ApiOkResource(AttemptAnalyticsResponseDto, { description: 'Analytics returned' })
   @ApiUnauthorizedResponse({
     description: 'Missing or invalid authentication token',
     type: ProblemDetailDto,
@@ -289,7 +279,8 @@ export class AttemptController {
   async getAttemptAnalytics(
     @Param('attemptId', new ParseUUIDPipe()) attemptId: string,
     @CurrentUser() user: JwtPayload,
-  ): Promise<AttemptAnalyticsResponseDto> {
-    return this.attemptApplicationService.getAttemptAnalytics(attemptId, user);
+  ) {
+    const result = await this.attemptApplicationService.getAttemptAnalytics(attemptId, user);
+    return this.presenter.getAttemptAnalytics(result);
   }
 }

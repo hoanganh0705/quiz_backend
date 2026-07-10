@@ -108,6 +108,14 @@ Per-module work:
 
 **Exit criteria:** five modules migrate cleanly. The interceptor's heuristic remains intact but is no longer triggered by these endpoints in practice.
 
+> ✅ **Phase 1 complete** (all five modules migrated, Jul 2026):
+> `auth` (20 endpoints) · `health` (1) · `search` (1) · `attempt` (10) · `bookmark` (16) = **48 endpoints total**.
+> `src/modules/auth/transport/presenters/auth.presenter.ts`, `src/modules/health/health.presenter.ts`,
+> `src/modules/search/transport/search.presenter.ts`, `src/modules/attempt/transport/presenters/attempt.presenter.ts`,
+> `src/modules/bookmark/transport/presenters/bookmark.presenter.ts` created. All `Wrapped*Dto` classes deleted from
+> `auth-response-docs.dto.ts`, `attempt-response-docs.dto.ts`, `bookmark-response-docs.dto.ts` (health and search had none).
+> Remaining Phase 1 cleanup (docs files, lint issues in unrelated files) tracked separately.
+
 ### Phase 2 — Roll out presenter to remaining modules (10-14 days)
 
 Same work pattern as Phase 1, in this order:
