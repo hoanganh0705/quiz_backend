@@ -59,6 +59,7 @@ import { RankingApplicationService } from './application/ranking.application.ser
 // Transport
 import { RankingController } from './transport/controller/ranking.controller';
 import { RankingAdminController } from './transport/controller/ranking-admin.controller';
+import { RankingPresenter } from './transport/presenters/ranking.presenter';
 import { RankingDomainExceptionFilter } from './transport/filters/ranking-domain-exception.filter';
 
 @Module({
@@ -121,6 +122,7 @@ import { RankingDomainExceptionFilter } from './transport/filters/ranking-domain
     RankingOutboxProcessorService,
 
     // Transport
+    RankingPresenter,
     RankingDomainExceptionFilter,
   ],
   controllers: [RankingController, RankingAdminController],

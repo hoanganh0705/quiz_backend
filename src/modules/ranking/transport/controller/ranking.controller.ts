@@ -27,9 +27,6 @@ import {
   ApiBadRequestResponse,
   ApiBearerAuth,
   ApiExtraModels,
-  ApiForbiddenResponse,
-  ApiNotFoundResponse,
-  ApiOkResponse,
   ApiOperation,
   ApiTags,
   ApiUnauthorizedResponse,
@@ -57,29 +54,17 @@ import {
   UserRankSummaryDto,
   NearbyRanksResponseDto,
   PeakRanksResponseDto,
-  RankingHistoryResponseDto,
   PublicRankingHistoryResponseDto,
   RankMovementResponseDto,
-  RankingMilestonesResponseDto,
-  TopMoversResponseDto,
   LeaderboardDistributionResponseDto,
   UserPercentileResponseDto,
+  RankingMilestoneDto,
+  TopMoverDto,
+  RankingHistoryItemDto,
 } from '../../dto/response';
-import {
-  WrappedLeaderboardResponseDto,
-  WrappedUserRankResponseDto,
-  WrappedUserRankSummaryDto,
-  WrappedNearbyRanksResponseDto,
-  WrappedPeakRanksResponseDto,
-  WrappedRankingHistoryResponseDto,
-  WrappedPublicRankingHistoryResponseDto,
-  WrappedRankMovementResponseDto,
-  WrappedRankingMilestonesResponseDto,
-  WrappedTopMoversResponseDto,
-  WrappedLeaderboardDistributionResponseDto,
-  WrappedUserPercentileResponseDto,
-  RankingDomainErrorDto,
-} from '../../dto/response';
+import { RankingDomainErrorDto } from '../../dto/error/ranking-domain-error.dto';
+import { RankingPresenter } from '../presenters/ranking.presenter';
+import { ApiOkResource, ApiOkResourceList } from '@/common/swagger/api-ok';
 import { GetLeaderboardDistributionQueryHandler } from '../../application/get-leaderboard-distribution.query';
 import {
   GetMyRankingHistoryQueryHandler,
@@ -115,19 +100,6 @@ function rankingUnauthorizedResponse(): MethodDecorator {
   );
 }
 
-/** 403 — PermissionsGuard denies access. */
-function rankingForbiddenResponse(): MethodDecorator {
-  return applyDecorators(
-    ApiForbiddenResponse({
-      description:
-        'Caller lacks the required permission role. ' +
-        'PermissionsGuard throws `ForbiddenException` which `RankingDomainExceptionFilter` ' +
-        'catches and re-writes to a `{ statusCode, message, code, timestamp }` envelope.',
-      schema: { $ref: getSchemaPath(RankingDomainErrorDto) },
-    }),
-  );
-}
-
 /** 400 — validation errors (class-validator, date range checks). */
 function rankingBadRequestResponse(): MethodDecorator {
   return applyDecorators(
@@ -158,6 +130,7 @@ export class RankingController {
     private readonly getNearbyRanksQueryHandler: GetNearbyRanksQueryHandler,
     private readonly getTopMoversQueryHandler: GetTopMoversQueryHandler,
     private readonly getUserRankingHistoryQueryHandler: GetUserRankingHistoryQueryHandler,
+    private readonly presenter: RankingPresenter,
   ) {}
 
   // ─── GET /leaderboard ─────────────────────────────────────────────────────
@@ -176,17 +149,15 @@ export class RankingController {
       "The response includes the authenticated user's rank position if a valid JWT is provided. " +
       'No 404 or 403 is possible on this endpoint.',
   })
-  @ApiOkResponse({
-    description: 'Leaderboard returned',
-    type: WrappedLeaderboardResponseDto,
-  })
+  @ApiOkResource(LeaderboardResponseDto, { description: 'Leaderboard returned' })
   @rankingBadRequestResponse()
-  async getGlobalLeaderboard(@Query() query: LeaderboardQueryDto): Promise<LeaderboardResponseDto> {
-    return this.leaderboardService.getGlobalLeaderboard({
+  async getGlobalLeaderboard(@Query() query: LeaderboardQueryDto) {
+    const result = await this.leaderboardService.getGlobalLeaderboard({
       period: query.period ?? RankingPeriodEnum.ALL_TIME,
       limit: query.limit ?? 100,
       offset: query.offset ?? 0,
     });
+    return this.presenter.getGlobalLeaderboard(result);
   }
 
   // ─── GET /leaderboard/distribution ─────────────────────────────────────────
@@ -201,22 +172,21 @@ export class RankingController {
       'Returns distribution statistics for the active leaderboard in the selected period. ' +
       'Groups users into percentile buckets (Top 1%, Top 5%, etc.).',
   })
-  @ApiOkResponse({
+  @ApiOkResource(LeaderboardDistributionResponseDto, {
     description: 'Leaderboard distribution returned',
-    type: WrappedLeaderboardDistributionResponseDto,
   })
   @rankingBadRequestResponse()
-  async getLeaderboardDistribution(
-    @Query() query: LeaderboardDistributionQueryDto,
-  ): Promise<LeaderboardDistributionResponseDto> {
-    return this.getLeaderboardDistributionQueryHandler.execute({
+  async getLeaderboardDistribution(@Query() query: LeaderboardDistributionQueryDto) {
+    const result = await this.getLeaderboardDistributionQueryHandler.execute({
       period: mapRankingPeriodEnumToDomain(query.period ?? RankingPeriodEnum.ALL_TIME),
     });
+    return this.presenter.getLeaderboardDistribution(result);
   }
 
   // ─── GET /leaderboard/top-movers ───────────────────────────────────────────
   //
   // Public endpoint. No 401/403/404 possible. 400 from validation only.
+  // The application returns `{ items }`; the presenter unwraps to a bare array.
   @Get('top-movers')
   @Public()
   @Throttle({ default: { limit: 30, ttl: 60_000 } })
@@ -226,16 +196,14 @@ export class RankingController {
       'Returns users with the largest positive ranking movement during the selected period. ' +
       'Results are sorted by `change` (previousRank - currentRank) descending.',
   })
-  @ApiOkResponse({
-    description: 'Top movers returned',
-    type: WrappedTopMoversResponseDto,
-  })
+  @ApiOkResourceList(TopMoverDto, 'cursor', { description: 'Top movers returned' })
   @rankingBadRequestResponse()
-  async getTopMovers(@Query() query: TopMoversQueryDto): Promise<TopMoversResponseDto> {
-    return this.getTopMoversQueryHandler.execute({
+  async getTopMovers(@Query() query: TopMoversQueryDto) {
+    const result = await this.getTopMoversQueryHandler.execute({
       period: mapRankingPeriodEnumToDomain(query.period ?? RankingPeriodEnum.DAILY),
       limit: query.limit ?? 10,
     });
+    return this.presenter.getTopMovers(result);
   }
 
   // ─── GET /leaderboard/me ──────────────────────────────────────────────────
@@ -252,12 +220,10 @@ export class RankingController {
       'peak ranks achieved, and activity badges. If the user has no ranking data, returns ' +
       'a "ghost" response with null ranks (no 404).',
   })
-  @ApiOkResponse({
-    description: 'User rank returned',
-    type: WrappedUserRankResponseDto,
-  })
-  async getMyRank(@CurrentUser() user: JwtPayload): Promise<UserRankResponseDto> {
-    return this.userRankService.getUserRank(user.sub);
+  @ApiOkResource(UserRankResponseDto, { description: 'User rank returned' })
+  async getMyRank(@CurrentUser() user: JwtPayload) {
+    const result = await this.userRankService.getUserRank(user.sub);
+    return this.presenter.getMyRank(result);
   }
 
   // ─── GET /leaderboard/me/rank ────────────────────────────────────────────
@@ -272,22 +238,17 @@ export class RankingController {
     summary: "Get current user's rank for specific period",
     description:
       "Returns the authenticated user's rank summary for a specific period. " +
-      'If the user has no XP in the requested period, returns `undefined` (HTTP 200, ' +
+      'If the user has no XP in the requested period, returns `null` (HTTP 200, ' +
       'no body data — the frontend should handle this nullability).',
   })
-  @ApiOkResponse({
-    description: 'User rank returned',
-    type: WrappedUserRankSummaryDto,
-  })
+  @ApiOkResource(UserRankSummaryDto, { description: 'User rank returned' })
   @rankingBadRequestResponse()
-  async getMyRankForPeriod(
-    @Query() query: LeaderboardQueryDto,
-    @CurrentUser() user: JwtPayload,
-  ): Promise<UserRankSummaryDto | undefined> {
-    return this.userRankService.getUserRankForPeriod(
+  async getMyRankForPeriod(@Query() query: LeaderboardQueryDto, @CurrentUser() user: JwtPayload) {
+    const result = await this.userRankService.getUserRankForPeriod(
       user.sub,
       query.period ?? RankingPeriodEnum.ALL_TIME,
     );
+    return this.presenter.getMyRankForPeriod(result);
   }
 
   // ─── GET /leaderboard/me/percentile ───────────────────────────────────────
@@ -303,24 +264,23 @@ export class RankingController {
       'All fields are nullable — if the user has no rank, every field returns null. ' +
       'The percentile is calculated as `((totalUsers - rank) / totalUsers) * 100` rounded to 2 decimal places.',
   })
-  @ApiOkResponse({
-    description: 'User percentile returned',
-    type: WrappedUserPercentileResponseDto,
-  })
+  @ApiOkResource(UserPercentileResponseDto, { description: 'User percentile returned' })
   @rankingBadRequestResponse()
   async getMyPercentile(
     @CurrentUser() user: JwtPayload,
     @Query() query: LeaderboardDistributionQueryDto,
-  ): Promise<UserPercentileResponseDto> {
-    return this.getMyPercentileQueryHandler.execute({
+  ) {
+    const result = await this.getMyPercentileQueryHandler.execute({
       userId: user.sub,
       period: mapRankingPeriodEnumToDomain(query.period ?? RankingPeriodEnum.ALL_TIME),
     });
+    return this.presenter.getMyPercentile(result);
   }
 
   // ─── GET /leaderboard/me/milestones ──────────────────────────────────────
   //
   // Protected by JwtGuard. Never throws.
+  // The application returns `{ items }`; the presenter unwraps to a bare array.
   @Get('me/milestones')
   @UseGuards(JwtGuard)
   @rankingUnauthorizedResponse()
@@ -329,18 +289,16 @@ export class RankingController {
     description:
       'Returns ranking milestones achieved by the authenticated user in chronological order. ' +
       'A milestone is earned when the user reaches a specific rank threshold ' +
-      '(e.g. TOP_100, TOP_10, TOP_1). Returns an empty `items` array if no milestones have been achieved.',
+      '(e.g. TOP_100, TOP_10, TOP_1). Returns an empty array if no milestones have been achieved.',
   })
-  @ApiOkResponse({
+  @ApiOkResourceList(RankingMilestoneDto, 'cursor', {
     description: 'Ranking milestones returned',
-    type: WrappedRankingMilestonesResponseDto,
   })
-  async getMyRankingMilestones(
-    @CurrentUser() user: JwtPayload,
-  ): Promise<RankingMilestonesResponseDto> {
-    return this.getMyRankingMilestonesQueryHandler.execute({
+  async getMyRankingMilestones(@CurrentUser() user: JwtPayload) {
+    const result = await this.getMyRankingMilestonesQueryHandler.execute({
       userId: user.sub,
     });
+    return this.presenter.getMyRankingMilestones(result);
   }
 
   // ─── GET /leaderboard/me/nearby ──────────────────────────────────────────
@@ -356,20 +314,15 @@ export class RankingController {
       "for the selected period. The `me` field contains the authenticated user's own entry. " +
       'All three fields (`above`, `me`, `below`) can be empty arrays or null depending on position.',
   })
-  @ApiOkResponse({
-    description: 'Nearby ranks returned',
-    type: WrappedNearbyRanksResponseDto,
-  })
+  @ApiOkResource(NearbyRanksResponseDto, { description: 'Nearby ranks returned' })
   @rankingBadRequestResponse()
-  async getNearbyRanks(
-    @CurrentUser() user: JwtPayload,
-    @Query() query: NearbyRanksQueryDto,
-  ): Promise<NearbyRanksResponseDto> {
-    return this.getNearbyRanksQueryHandler.execute({
+  async getNearbyRanks(@CurrentUser() user: JwtPayload, @Query() query: NearbyRanksQueryDto) {
+    const result = await this.getNearbyRanksQueryHandler.execute({
       userId: user.sub,
       period: mapRankingPeriodEnumToDomain(query.period ?? RankingPeriodEnum.ALL_TIME),
       radius: query.radius ?? 2,
     });
+    return this.presenter.getNearbyRanks(result);
   }
 
   // ─── GET /leaderboard/me/movement ───────────────────────────────────────
@@ -385,19 +338,14 @@ export class RankingController {
       '`change` is computed as `previousRank - currentRank`. All fields are nullable — if the user ' +
       'has no current rank, returns nulls and `direction: "unknown"`.',
   })
-  @ApiOkResponse({
-    description: 'Rank movement returned',
-    type: WrappedRankMovementResponseDto,
-  })
+  @ApiOkResource(RankMovementResponseDto, { description: 'Rank movement returned' })
   @rankingBadRequestResponse()
-  async getMyRankMovement(
-    @CurrentUser() user: JwtPayload,
-    @Query() query: RankMovementQueryDto,
-  ): Promise<RankMovementResponseDto> {
-    return this.getMyRankMovementQueryHandler.execute({
+  async getMyRankMovement(@CurrentUser() user: JwtPayload, @Query() query: RankMovementQueryDto) {
+    const result = await this.getMyRankMovementQueryHandler.execute({
       userId: user.sub,
       period: mapRankingPeriodEnumToDomain(query.period ?? RankingPeriodEnum.DAILY),
     });
+    return this.presenter.getMyRankMovement(result);
   }
 
   // ─── GET /leaderboard/me/peak-ranks ────────────────────────────────────
@@ -412,19 +360,16 @@ export class RankingController {
       "Returns the authenticated user's best ranking positions ever achieved across all periods " +
       '(daily, weekly, monthly, all-time). Each period can be null if no rank was achieved.',
   })
-  @ApiOkResponse({
-    description: 'Peak ranks returned',
-    type: WrappedPeakRanksResponseDto,
-  })
-  async getMyPeakRanks(@CurrentUser() user: JwtPayload): Promise<PeakRanksResponseDto> {
-    return this.getMyPeakRanksQueryHandler.execute({
-      userId: user.sub,
-    });
+  @ApiOkResource(PeakRanksResponseDto, { description: 'Peak ranks returned' })
+  async getMyPeakRanks(@CurrentUser() user: JwtPayload) {
+    const result = await this.getMyPeakRanksQueryHandler.execute({ userId: user.sub });
+    return this.presenter.getMyPeakRanks(result);
   }
 
   // ─── GET /leaderboard/me/history ────────────────────────────────────────
   //
   // Protected by JwtGuard. 400 from date validation (from/to checks).
+  // The application returns `{ items }`; the presenter unwraps to a bare array.
   @Get('me/history')
   @UseGuards(JwtGuard)
   @rankingUnauthorizedResponse()
@@ -435,21 +380,21 @@ export class RankingController {
       'Each entry is a daily snapshot `{ date, rank }`. Supports optional `from` and `to` ' +
       '(YYYY-MM-DD format) to filter the date range. 400 is returned if `from > to`.',
   })
-  @ApiOkResponse({
+  @ApiOkResourceList(RankingHistoryItemDto, 'cursor', {
     description: 'Ranking history returned',
-    type: WrappedRankingHistoryResponseDto,
   })
   @rankingBadRequestResponse()
   async getMyRankingHistory(
     @CurrentUser() user: JwtPayload,
     @Query() query: MyRankingHistoryQueryDto,
-  ): Promise<RankingHistoryResponseDto> {
-    return this.getMyRankingHistoryQueryHandler.execute({
+  ) {
+    const result = await this.getMyRankingHistoryQueryHandler.execute({
       userId: user.sub,
       period: mapRankingPeriodEnumToDomain(query.period ?? RankingPeriodEnum.ALL_TIME),
       from: query.from ? new Date(query.from) : undefined,
       to: query.to ? new Date(query.to) : undefined,
     });
+    return this.presenter.getMyRankingHistory(result);
   }
 
   // ─── GET /leaderboard/:userId ───────────────────────────────────────────
@@ -465,12 +410,10 @@ export class RankingController {
       'If the user has no ranking data, returns a ghost response with null ranks (no 404). ' +
       'Unlike the `/leaderboard/me` endpoint, this is public and requires no authentication.',
   })
-  @ApiOkResponse({
-    description: 'User rank returned',
-    type: WrappedUserRankResponseDto,
-  })
-  async getUserRank(@Param('userId') userId: string): Promise<UserRankResponseDto> {
-    return this.userRankService.getUserRank(userId);
+  @ApiOkResource(UserRankResponseDto, { description: 'User rank returned' })
+  async getUserRank(@Param('userId') userId: string) {
+    const result = await this.userRankService.getUserRank(userId);
+    return this.presenter.getUserRank(result);
   }
 
   // ─── GET /leaderboard/:userId/history ─────────────────────────────────
@@ -487,21 +430,21 @@ export class RankingController {
       'Supports optional `from` and `to` (YYYY-MM-DD) date filters. ' +
       '400 if `from > to`.',
   })
-  @ApiOkResponse({
+  @ApiOkResource(PublicRankingHistoryResponseDto, {
     description: 'Public ranking history returned',
-    type: WrappedPublicRankingHistoryResponseDto,
   })
   @rankingBadRequestResponse()
   async getUserRankingHistory(
     @Param('userId') userId: string,
     @Query() query: MyRankingHistoryQueryDto,
-  ): Promise<PublicRankingHistoryResponseDto> {
-    return this.getUserRankingHistoryQueryHandler.execute({
+  ) {
+    const result = await this.getUserRankingHistoryQueryHandler.execute({
       targetUserId: userId,
       period: mapRankingPeriodEnumToDomain(query.period ?? RankingPeriodEnum.ALL_TIME),
       from: query.from ? new Date(query.from) : undefined,
       to: query.to ? new Date(query.to) : undefined,
     });
+    return this.presenter.getUserRankingHistory(result);
   }
 
   // ─── GET /leaderboard/:userId/rank ─────────────────────────────────────
@@ -515,20 +458,15 @@ export class RankingController {
     description:
       "Returns the user's public rank summary for a specific period. " +
       'Publicly accessible (no authentication required). ' +
-      'If the user has no XP in the period, returns `undefined` (HTTP 200, no body).',
+      'If the user has no XP in the period, returns `null` (HTTP 200, no body).',
   })
-  @ApiOkResponse({
-    description: 'User rank returned',
-    type: WrappedUserRankSummaryDto,
-  })
+  @ApiOkResource(UserRankSummaryDto, { description: 'User rank returned' })
   @rankingBadRequestResponse()
-  async getUserRankForPeriod(
-    @Param('userId') userId: string,
-    @Query() query: LeaderboardQueryDto,
-  ): Promise<UserRankSummaryDto | undefined> {
-    return this.userRankService.getUserRankForPeriod(
+  async getUserRankForPeriod(@Param('userId') userId: string, @Query() query: LeaderboardQueryDto) {
+    const result = await this.userRankService.getUserRankForPeriod(
       userId,
       query.period ?? RankingPeriodEnum.ALL_TIME,
     );
+    return this.presenter.getUserRankForPeriod(result);
   }
 }
