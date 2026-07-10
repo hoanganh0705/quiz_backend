@@ -123,7 +123,7 @@ Same work pattern as Phase 1, in this order:
 1. **`category`** (15 endpoints). **Roll back** the previous "pre-wrapped envelope" change in `category-query.service.ts` so it returns `PaginatedResult<CategoryResponseDto>` (or `CategoryResponseDto[]` for non-paginated). The new `category.presenter.ts` does the wrapping.
 
    > ✅ **`category` migrated** (Jul 2026): 15 endpoints. `category-query.service.ts` rolled back to return raw DTOs / `PaginatedResult<T>`. `category.presenter.ts` does the wrapping via `ApiResponse.ok` / `ApiResponse.page`. `category-response-docs.dto.ts` deleted (452 lines). `category-swagger-decorators.ts` rewritten on top of `ApiOkResource / ApiCreatedResource / ApiOkResourceList`.
-2. `discussion` (44 endpoints). Re-shape the D-variant endpoints at the service level.
+2. **`discussion`** (45 endpoints; doc said 44 — count includes `quiz-discussion` and `user-discussion` controllers). D-variant endpoints re-shaped at the service level. ✅ done.
 3. `quiz` (21 endpoints). Fix the `POST .../questions/bulk` bare-array return.
 4. `social` (30 endpoints). Re-type the 5 bare-array endpoints and reshape the 4 D-variant endpoints.
 5. `tournament` (16 endpoints). Offset pagination preserved; `TournamentOffsetMetaDto` becomes the standard offset meta.
