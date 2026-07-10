@@ -10,6 +10,7 @@ import { UserExistenceAdapter } from './infrastructure/adapters/user-existence.a
 import { DiscussionController } from './transport/controller/discussion.controller';
 import { QuizDiscussionController } from './transport/controller/quiz-discussion.controller';
 import { UserDiscussionController } from './transport/controller/user-discussion.controller';
+import { DiscussionPresenter } from './transport/presenters/discussion.presenter';
 import { DiscussionDomainExceptionFilter } from './transport/filters/discussion-domain-exception.filter';
 import {
   DISCUSSION_REPOSITORY_PORT,
@@ -30,6 +31,7 @@ import { UserModule } from '@/modules/user/user.module';
     DiscussionCleanupService,
     QuizExistenceAdapter,
     UserExistenceAdapter,
+    DiscussionPresenter,
     DiscussionDomainExceptionFilter,
     { provide: DISCUSSION_REPOSITORY_PORT, useExisting: DiscussionRepository },
     { provide: DISCUSSION_DOMAIN_EVENT_BUS, useExisting: DiscussionDomainEventBus },

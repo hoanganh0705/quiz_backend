@@ -25,6 +25,7 @@ import {
 import { TrendingDiscussionCursorMapper } from '../mappers/trending-discussion-cursor.mapper';
 import { UnansweredDiscussionCursorMapper } from '../mappers/unanswered-discussion-cursor.mapper';
 import { SearchDiscussionsCursorMapper } from '../mappers/search-discussions-cursor.mapper';
+import { paginated, type PaginatedResult } from '@/common/responses/paginated-result';
 import {
   DiscussionThreadStatus,
   ThreadSortField,
@@ -101,8 +102,15 @@ export class DiscussionApplicationService {
       limit?: number;
       cursor?: string | null;
     },
-  ): Promise<{ items: DiscussionThread[]; hasNextPage: boolean }> {
-    return this.discussionService.listThreads(filters);
+  ): Promise<PaginatedResult<DiscussionThread>> {
+    const { items, hasNextPage } = await this.discussionService.listThreads(filters);
+    const limit = filters.limit ?? 20;
+    return paginated(items, {
+      kind: 'cursor' as const,
+      limit,
+      hasNextPage,
+      nextCursor: null,
+    });
   }
 
   async listQuizDiscussions(
@@ -385,16 +393,12 @@ export class DiscussionApplicationService {
   async listRelatedDiscussions(
     threadId: string,
     query: { limit?: number },
-  ): Promise<{ items: RelatedDiscussionListItem[] }> {
-    const items = await this.discussionService.listRelatedDiscussions(threadId, query);
-
-    return { items };
+  ): Promise<RelatedDiscussionListItem[]> {
+    return this.discussionService.listRelatedDiscussions(threadId, query);
   }
 
-  async listThreadParticipants(threadId: string): Promise<{ items: ThreadParticipantListItem[] }> {
-    const items = await this.discussionService.listThreadParticipants(threadId);
-
-    return { items };
+  async listThreadParticipants(threadId: string): Promise<ThreadParticipantListItem[]> {
+    return this.discussionService.listThreadParticipants(threadId);
   }
 
   async getPublicDiscussionProfile(userId: string): Promise<PublicDiscussionProfile> {
@@ -503,12 +507,19 @@ export class DiscussionApplicationService {
     user: JwtPayload,
     threadId: string,
     options?: { parentCommentId?: string | null; limit?: number; cursor?: string | null },
-  ): Promise<{ items: DiscussionCommentWithReplies[]; hasNextPage: boolean }> {
-    return this.discussionService.listComments({
+  ): Promise<PaginatedResult<DiscussionCommentWithReplies>> {
+    const { items, hasNextPage } = await this.discussionService.listComments({
       threadId,
       parentCommentId: options?.parentCommentId ?? null,
       limit: options?.limit ?? 20,
       cursor: options?.cursor ?? null,
+    });
+    const limit = options?.limit ?? 20;
+    return paginated(items, {
+      kind: 'cursor' as const,
+      limit,
+      hasNextPage,
+      nextCursor: null,
     });
   }
 
@@ -620,7 +631,14 @@ export class DiscussionApplicationService {
       limit?: number;
       cursor?: string | null;
     },
-  ): Promise<{ items: DiscussionReport[]; hasNextPage: boolean }> {
-    return this.discussionService.listReports(filters);
+  ): Promise<PaginatedResult<DiscussionReport>> {
+    const { items, hasNextPage } = await this.discussionService.listReports(filters);
+    const limit = filters.limit ?? 20;
+    return paginated(items, {
+      kind: 'cursor' as const,
+      limit,
+      hasNextPage,
+      nextCursor: null,
+    });
   }
 }
