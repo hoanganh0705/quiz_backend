@@ -16,8 +16,6 @@ import {
   ApiConflictResponse,
   ApiForbiddenResponse,
   ApiNotFoundResponse,
-  ApiOkResponse,
-  ApiCreatedResponse,
   ApiBearerAuth,
   ApiExtraModels,
   ApiOperation,
@@ -43,14 +41,13 @@ import {
 import {
   TournamentResponseDto,
   TournamentDetailResponseDto,
-  TournamentListResponseDto,
-  TournamentLeaderboardResponseDto,
-  TournamentWinnersResponseDto,
-  TournamentParticipantsResponseDto,
-  UpcomingTournamentsResponseDto,
-  ActiveTournamentsResponseDto,
-  CompletedTournamentsResponseDto,
-  RelatedTournamentsResponseDto,
+  TournamentLeaderboardEntryDto,
+  TournamentWinnerDto,
+  TournamentParticipantListItemDto,
+  UpcomingTournamentItemDto,
+  ActiveTournamentItemDto,
+  CompletedTournamentItemDto,
+  RelatedTournamentItemDto,
   TournamentStatsResponseDto,
   MyTournamentStandingResponseDto,
   RegisterTournamentResponseDto,
@@ -58,28 +55,12 @@ import {
   UnregisterTournamentResponseDto,
   WithdrawTournamentResponseDto,
 } from '../../dto/response';
-import {
-  TournamentDomainErrorDto,
-  WrappedTournamentResponseDto,
-  WrappedTournamentDetailResponseDto,
-  WrappedTournamentListResponseDto,
-  WrappedTournamentLeaderboardResponseDto,
-  WrappedTournamentWinnersResponseDto,
-  WrappedTournamentParticipantsResponseDto,
-  WrappedUpcomingTournamentsResponseDto,
-  WrappedActiveTournamentsResponseDto,
-  WrappedCompletedTournamentsResponseDto,
-  WrappedRelatedTournamentsResponseDto,
-  WrappedTournamentStatsResponseDto,
-  WrappedMyTournamentStandingResponseDto,
-  WrappedRegisterTournamentResponseDto,
-  WrappedStartTournamentAttemptResponseDto,
-  WrappedUnregisterTournamentResponseDto,
-  WrappedWithdrawTournamentResponseDto,
-} from '../../dto/response/tournament-response-docs.dto';
+import { TournamentDomainErrorDto } from '../../dto/error/tournament-domain-error.dto';
+import { TournamentPresenter } from '../presenters/tournament.presenter';
 import { TournamentDomainExceptionFilter } from '../filters/tournament-domain-exception.filter';
 import { AUTH_SECURITY_NAME } from '@/core/swagger/swagger.config';
 import { ProblemDetailDto, ErrorResponseExamples } from '@/common/swagger/swagger-schemas';
+import { ApiOkResource, ApiCreatedResource, ApiOkResourceList } from '@/common/swagger/api-ok';
 
 // Local helpers — these decorators emit the response schemas that match the
 // actual runtime error shapes produced by TournamentDomainExceptionFilter:
@@ -138,7 +119,10 @@ const tournamentUnauthorizedResponse = (
 @UseFilters(TournamentDomainExceptionFilter)
 @ApiExtraModels(ProblemDetailDto, TournamentDomainErrorDto)
 export class TournamentController {
-  constructor(private readonly tournamentApplicationService: TournamentApplicationService) {}
+  constructor(
+    private readonly tournamentApplicationService: TournamentApplicationService,
+    private readonly presenter: TournamentPresenter,
+  ) {}
 
   // createTournament throws TournamentValidationError (400) when endAt <= startAt.
   // It never throws 404 or 409 — those are not part of the implementation.
@@ -153,7 +137,7 @@ export class TournamentController {
       'A 400 is returned when the request body fails validation (e.g. `endAt` is not after `startAt`).',
   })
   @tournamentUnauthorizedResponse()
-  @ApiCreatedResponse({ description: 'Tournament created', type: WrappedTournamentResponseDto })
+  @ApiCreatedResource(TournamentResponseDto, { description: 'Tournament created' })
   @ApiBadRequestResponse({
     description:
       'Request body failed validation. The response can be an RFC 7807 ProblemDetail ' +
@@ -166,11 +150,10 @@ export class TournamentController {
       ],
     },
   })
-  createTournament(
-    @CurrentUser() user: JwtPayload,
-    @Body() payload: CreateTournamentDto,
-  ): Promise<TournamentResponseDto> {
-    return this.tournamentApplicationService.createTournament(user, payload);
+  createTournament(@CurrentUser() user: JwtPayload, @Body() payload: CreateTournamentDto) {
+    return this.tournamentApplicationService
+      .createTournament(user, payload)
+      .then((result) => this.presenter.createTournament(result));
   }
 
   // listTournaments is a public cursor-paginated listing that does not throw
@@ -182,14 +165,16 @@ export class TournamentController {
     summary: 'List tournaments',
     description: 'Returns a cursor-paginated list of tournaments filtered by optional criteria.',
   })
-  @ApiOkResponse({ description: 'Tournaments returned', type: WrappedTournamentListResponseDto })
+  @ApiOkResourceList(TournamentResponseDto, 'cursor', { description: 'Tournaments returned' })
   @ApiBadRequestResponse({
     description: 'Query parameters failed validation',
     type: ProblemDetailDto,
     example: ErrorResponseExamples.badRequest,
   })
-  listTournaments(@Query() query: ListTournamentsQueryDto): Promise<TournamentListResponseDto> {
-    return this.tournamentApplicationService.listTournaments(query);
+  listTournaments(@Query() query: ListTournamentsQueryDto) {
+    return this.tournamentApplicationService
+      .listTournaments(query)
+      .then((result) => this.presenter.listTournaments(result));
   }
 
   // getUpcomingTournaments is a public offset-paginated listing that does not
@@ -202,19 +187,18 @@ export class TournamentController {
       'Returns an offset-paginated list of tournaments that have not yet entered the registration phase. ' +
       'Sortable by `startAt` or `registrationDeadline`.',
   })
-  @ApiOkResponse({
+  @ApiOkResourceList(UpcomingTournamentItemDto, 'offset', {
     description: 'Upcoming tournaments returned',
-    type: WrappedUpcomingTournamentsResponseDto,
   })
   @ApiBadRequestResponse({
     description: 'Query parameters failed validation',
     type: ProblemDetailDto,
     example: ErrorResponseExamples.badRequest,
   })
-  getUpcomingTournaments(
-    @Query() query: GetUpcomingTournamentsQueryDto,
-  ): Promise<UpcomingTournamentsResponseDto> {
-    return this.tournamentApplicationService.getUpcomingTournaments(query);
+  getUpcomingTournaments(@Query() query: GetUpcomingTournamentsQueryDto) {
+    return this.tournamentApplicationService
+      .getUpcomingTournaments(query)
+      .then((result) => this.presenter.getUpcomingTournaments(result));
   }
 
   // getActiveTournaments is a public offset-paginated listing.
@@ -225,19 +209,18 @@ export class TournamentController {
     description:
       'Returns an offset-paginated list of tournaments currently in the registration, ongoing, or starting-soon phases.',
   })
-  @ApiOkResponse({
+  @ApiOkResourceList(ActiveTournamentItemDto, 'offset', {
     description: 'Active tournaments returned',
-    type: WrappedActiveTournamentsResponseDto,
   })
   @ApiBadRequestResponse({
     description: 'Query parameters failed validation',
     type: ProblemDetailDto,
     example: ErrorResponseExamples.badRequest,
   })
-  getActiveTournaments(
-    @Query() query: GetActiveTournamentsQueryDto,
-  ): Promise<ActiveTournamentsResponseDto> {
-    return this.tournamentApplicationService.getActiveTournaments(query);
+  getActiveTournaments(@Query() query: GetActiveTournamentsQueryDto) {
+    return this.tournamentApplicationService
+      .getActiveTournaments(query)
+      .then((result) => this.presenter.getActiveTournaments(result));
   }
 
   // getCompletedTournaments is a public offset-paginated listing.
@@ -247,19 +230,18 @@ export class TournamentController {
     summary: 'List completed tournaments',
     description: 'Returns an offset-paginated list of finished tournaments.',
   })
-  @ApiOkResponse({
+  @ApiOkResourceList(CompletedTournamentItemDto, 'offset', {
     description: 'Completed tournaments returned',
-    type: WrappedCompletedTournamentsResponseDto,
   })
   @ApiBadRequestResponse({
     description: 'Query parameters failed validation',
     type: ProblemDetailDto,
     example: ErrorResponseExamples.badRequest,
   })
-  getCompletedTournaments(
-    @Query() query: GetCompletedTournamentsQueryDto,
-  ): Promise<CompletedTournamentsResponseDto> {
-    return this.tournamentApplicationService.getCompletedTournaments(query);
+  getCompletedTournaments(@Query() query: GetCompletedTournamentsQueryDto) {
+    return this.tournamentApplicationService
+      .getCompletedTournaments(query)
+      .then((result) => this.presenter.getCompletedTournaments(result));
   }
 
   // getRelatedTournaments throws TournamentNotFoundError (404) when the
@@ -271,9 +253,8 @@ export class TournamentController {
     description:
       'Returns tournaments related to the given tournament (same category or adjacent time window).',
   })
-  @ApiOkResponse({
+  @ApiOkResourceList(RelatedTournamentItemDto, 'cursor', {
     description: 'Related tournaments returned',
-    type: WrappedRelatedTournamentsResponseDto,
   })
   @ApiBadRequestResponse({
     description: 'Path or query parameters failed validation',
@@ -284,8 +265,10 @@ export class TournamentController {
   getRelatedTournaments(
     @Param('id', new ParseUUIDPipe()) tournamentId: string,
     @Query() query: GetRelatedTournamentsQueryDto,
-  ): Promise<RelatedTournamentsResponseDto> {
-    return this.tournamentApplicationService.getRelatedTournaments(tournamentId, query);
+  ) {
+    return this.tournamentApplicationService
+      .getRelatedTournaments(tournamentId, query)
+      .then((result) => this.presenter.getRelatedTournaments(result));
   }
 
   // getTournamentStats throws TournamentNotFoundError (404) when the
@@ -296,20 +279,17 @@ export class TournamentController {
     summary: 'Get tournament stats',
     description: 'Returns aggregate statistics for the given tournament.',
   })
-  @ApiOkResponse({
-    description: 'Tournament stats returned',
-    type: WrappedTournamentStatsResponseDto,
-  })
+  @ApiOkResource(TournamentStatsResponseDto, { description: 'Tournament stats returned' })
   @ApiBadRequestResponse({
     description: 'Path or query parameters failed validation',
     type: ProblemDetailDto,
     example: ErrorResponseExamples.badRequest,
   })
   @tournamentNotFoundResponse()
-  getTournamentStats(
-    @Param('id', new ParseUUIDPipe()) tournamentId: string,
-  ): Promise<TournamentStatsResponseDto> {
-    return this.tournamentApplicationService.getTournamentStats(tournamentId);
+  getTournamentStats(@Param('id', new ParseUUIDPipe()) tournamentId: string) {
+    return this.tournamentApplicationService
+      .getTournamentStats(tournamentId)
+      .then((result) => this.presenter.getTournamentStats(result));
   }
 
   // getTournamentWinners throws TournamentNotFoundError (404) when the
@@ -322,9 +302,8 @@ export class TournamentController {
       'Returns the final winners of the tournament sorted by rank ascending. ' +
       'The default limit is 10; pass `limit` to fetch more.',
   })
-  @ApiOkResponse({
+  @ApiOkResourceList(TournamentWinnerDto, 'cursor', {
     description: 'Tournament winners returned',
-    type: WrappedTournamentWinnersResponseDto,
   })
   @ApiBadRequestResponse({
     description: 'Path or query parameters failed validation',
@@ -335,8 +314,10 @@ export class TournamentController {
   getTournamentWinners(
     @Param('id', new ParseUUIDPipe()) tournamentId: string,
     @Query() query: GetTournamentWinnersQueryDto,
-  ): Promise<TournamentWinnersResponseDto> {
-    return this.tournamentApplicationService.getTournamentWinners(tournamentId, query);
+  ) {
+    return this.tournamentApplicationService
+      .getTournamentWinners(tournamentId, query)
+      .then((result) => this.presenter.getTournamentWinners(result));
   }
 
   // getTournamentById throws TournamentNotFoundError (404) when the
@@ -348,20 +329,17 @@ export class TournamentController {
     description:
       'Returns a single tournament with its associated rounds, category info, and participant count.',
   })
-  @ApiOkResponse({
-    description: 'Tournament found',
-    type: WrappedTournamentDetailResponseDto,
-  })
+  @ApiOkResource(TournamentDetailResponseDto, { description: 'Tournament found' })
   @ApiBadRequestResponse({
     description: 'Path parameter failed validation',
     type: ProblemDetailDto,
     example: ErrorResponseExamples.badRequest,
   })
   @tournamentNotFoundResponse()
-  getTournamentById(
-    @Param('id', new ParseUUIDPipe()) tournamentId: string,
-  ): Promise<TournamentDetailResponseDto> {
-    return this.tournamentApplicationService.getTournamentById(tournamentId);
+  getTournamentById(@Param('id', new ParseUUIDPipe()) tournamentId: string) {
+    return this.tournamentApplicationService
+      .getTournamentById(tournamentId)
+      .then((result) => this.presenter.getTournamentById(result));
   }
 
   // getTournamentParticipants throws TournamentNotFoundError (404) when the
@@ -374,9 +352,8 @@ export class TournamentController {
       'Returns an offset-paginated list of users registered for the tournament, ' +
       'plus the total registered count.',
   })
-  @ApiOkResponse({
+  @ApiOkResourceList(TournamentParticipantListItemDto, 'offset', {
     description: 'Participants returned',
-    type: WrappedTournamentParticipantsResponseDto,
   })
   @ApiBadRequestResponse({
     description: 'Path or query parameters failed validation',
@@ -387,8 +364,10 @@ export class TournamentController {
   getTournamentParticipants(
     @Param('id', new ParseUUIDPipe()) tournamentId: string,
     @Query() query: GetTournamentParticipantsQueryDto,
-  ): Promise<TournamentParticipantsResponseDto> {
-    return this.tournamentApplicationService.getTournamentParticipants(tournamentId, query);
+  ) {
+    return this.tournamentApplicationService
+      .getTournamentParticipants(tournamentId, query)
+      .then((result) => this.presenter.getTournamentParticipants(result));
   }
 
   // registerForTournament can throw:
@@ -407,10 +386,7 @@ export class TournamentController {
       'Requires the `TOURNAMENT_REGISTER` permission.',
   })
   @tournamentUnauthorizedResponse()
-  @ApiOkResponse({
-    description: 'Registered successfully',
-    type: WrappedRegisterTournamentResponseDto,
-  })
+  @ApiOkResource(RegisterTournamentResponseDto, { description: 'Registered successfully' })
   @ApiBadRequestResponse({
     description:
       'Path parameter is malformed (RFC 7807 ProblemDetail), or the tournament ' +
@@ -428,8 +404,10 @@ export class TournamentController {
   registerForTournament(
     @Param('id', new ParseUUIDPipe()) tournamentId: string,
     @CurrentUser() user: JwtPayload,
-  ): Promise<RegisterTournamentResponseDto> {
-    return this.tournamentApplicationService.registerForTournament(tournamentId, user);
+  ) {
+    return this.tournamentApplicationService
+      .registerForTournament(tournamentId, user)
+      .then((result) => this.presenter.registerForTournament(result));
   }
 
   // getLeaderboard throws TournamentNotFoundError (404) when the
@@ -441,9 +419,8 @@ export class TournamentController {
     description:
       'Returns the live leaderboard for the tournament with each participant rank, score, and time.',
   })
-  @ApiOkResponse({
+  @ApiOkResourceList(TournamentLeaderboardEntryDto, 'cursor', {
     description: 'Leaderboard returned',
-    type: WrappedTournamentLeaderboardResponseDto,
   })
   @ApiBadRequestResponse({
     description: 'Path parameter failed validation',
@@ -451,10 +428,10 @@ export class TournamentController {
     example: ErrorResponseExamples.badRequest,
   })
   @tournamentNotFoundResponse()
-  getLeaderboard(
-    @Param('id', new ParseUUIDPipe()) tournamentId: string,
-  ): Promise<TournamentLeaderboardResponseDto> {
-    return this.tournamentApplicationService.getLeaderboard(tournamentId);
+  getLeaderboard(@Param('id', new ParseUUIDPipe()) tournamentId: string) {
+    return this.tournamentApplicationService
+      .getLeaderboard(tournamentId)
+      .then((result) => this.presenter.getLeaderboard(result));
   }
 
   // getMyTournamentStanding can throw:
@@ -469,10 +446,7 @@ export class TournamentController {
       'participants for the tournament. Requires the user to be an active participant.',
   })
   @tournamentUnauthorizedResponse()
-  @ApiOkResponse({
-    description: 'Standing returned',
-    type: WrappedMyTournamentStandingResponseDto,
-  })
+  @ApiOkResource(MyTournamentStandingResponseDto, { description: 'Standing returned' })
   @ApiBadRequestResponse({
     description: 'Path parameter failed validation',
     type: ProblemDetailDto,
@@ -483,8 +457,10 @@ export class TournamentController {
   getMyTournamentStanding(
     @Param('id', new ParseUUIDPipe()) tournamentId: string,
     @CurrentUser('sub') userId: string,
-  ): Promise<MyTournamentStandingResponseDto> {
-    return this.tournamentApplicationService.getMyTournamentStanding(tournamentId, userId);
+  ) {
+    return this.tournamentApplicationService
+      .getMyTournamentStanding(tournamentId, userId)
+      .then((result) => this.presenter.getMyTournamentStanding(result));
   }
 
   // startRoundAttempt can throw:
@@ -504,10 +480,7 @@ export class TournamentController {
       'Requires the `TOURNAMENT_ATTEMPT` permission.',
   })
   @tournamentUnauthorizedResponse()
-  @ApiOkResponse({
-    description: 'Attempt started',
-    type: WrappedStartTournamentAttemptResponseDto,
-  })
+  @ApiOkResource(StartTournamentAttemptResponseDto, { description: 'Attempt started' })
   @ApiBadRequestResponse({
     description:
       'Path parameter is malformed (RFC 7807 ProblemDetail), or the tournament ' +
@@ -527,8 +500,10 @@ export class TournamentController {
     @Param('id', new ParseUUIDPipe()) tournamentId: string,
     @Param('roundId', new ParseUUIDPipe()) roundId: string,
     @CurrentUser() user: JwtPayload,
-  ): Promise<StartTournamentAttemptResponseDto> {
-    return this.tournamentApplicationService.startRoundAttempt(tournamentId, roundId, user);
+  ) {
+    return this.tournamentApplicationService
+      .startRoundAttempt(tournamentId, roundId, user)
+      .then((result) => this.presenter.startRoundAttempt(result));
   }
 
   // unregisterFromTournament can throw:
@@ -548,10 +523,7 @@ export class TournamentController {
       'Requires the `TOURNAMENT_REGISTER` permission.',
   })
   @tournamentUnauthorizedResponse()
-  @ApiOkResponse({
-    description: 'Withdrawn successfully',
-    type: WrappedUnregisterTournamentResponseDto,
-  })
+  @ApiOkResource(UnregisterTournamentResponseDto, { description: 'Withdrawn successfully' })
   @ApiBadRequestResponse({
     description:
       'Path parameter is malformed (RFC 7807 ProblemDetail), or the tournament ' +
@@ -570,8 +542,10 @@ export class TournamentController {
   unregisterFromTournament(
     @Param('id', new ParseUUIDPipe()) tournamentId: string,
     @CurrentUser() user: JwtPayload,
-  ): Promise<UnregisterTournamentResponseDto> {
-    return this.tournamentApplicationService.unregisterFromTournament(tournamentId, user);
+  ) {
+    return this.tournamentApplicationService
+      .unregisterFromTournament(tournamentId, user)
+      .then((result) => this.presenter.unregisterFromTournament(result));
   }
 
   // withdrawFromTournament can throw:
@@ -590,10 +564,7 @@ export class TournamentController {
       'Requires the `TOURNAMENT_REGISTER` permission.',
   })
   @tournamentUnauthorizedResponse()
-  @ApiOkResponse({
-    description: 'Withdrawal successful',
-    type: WrappedWithdrawTournamentResponseDto,
-  })
+  @ApiOkResource(WithdrawTournamentResponseDto, { description: 'Withdrawal successful' })
   @ApiBadRequestResponse({
     description:
       'Path parameter is malformed (RFC 7807 ProblemDetail), or the tournament ' +
@@ -612,7 +583,9 @@ export class TournamentController {
   withdrawFromTournament(
     @Param('id', new ParseUUIDPipe()) tournamentId: string,
     @CurrentUser() user: JwtPayload,
-  ): Promise<WithdrawTournamentResponseDto> {
-    return this.tournamentApplicationService.withdrawFromTournament(tournamentId, user);
+  ) {
+    return this.tournamentApplicationService
+      .withdrawFromTournament(tournamentId, user)
+      .then((result) => this.presenter.withdrawFromTournament(result));
   }
 }
