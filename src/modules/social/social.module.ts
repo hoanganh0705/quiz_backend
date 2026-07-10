@@ -12,6 +12,7 @@ import { TournamentFeedListenerAdapter } from './infrastructure/adapters/tournam
 import { InstanceFeedListenerAdapter } from './infrastructure/adapters/instance-feed-listener.adapter';
 import { SocialNotificationListener } from './infrastructure/adapters/social-notification-listener.adapter';
 import { SocialController } from './transport/controller/social.controller';
+import { SocialPresenter } from './transport/presenters/social.presenter';
 import { SocialDomainExceptionFilter } from './transport/filters/social-domain-exception.filter';
 import { SOCIAL_REPOSITORY_PORT } from './domain/ports/social-ports';
 import { SocialDomainEventBus } from './domain/events';
@@ -45,6 +46,7 @@ import { AttemptFeedListenerAdapter } from './infrastructure/adapters/attempt-fe
     SocialApplicationService,
     SocialService,
     SocialRepository,
+    SocialPresenter,
     // Ranking port (SocialModule owns this adapter)
     RankingAdapter,
     // Event listener adapters

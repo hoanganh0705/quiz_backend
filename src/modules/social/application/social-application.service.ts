@@ -1,7 +1,8 @@
 import { Injectable } from '@nestjs/common';
+import { paginated, type PaginatedResult } from '@/common/responses/paginated-result';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
 import { SocialService } from '../domain/services/social.service';
-import type { UsernameSuggestion } from '@/modules/user/domain/ports/user-search.port';
+import type { BlockedUserDto } from '../dto/response/blocked.dto';
 import type {
   FriendRequest,
   Friend,
@@ -31,8 +32,9 @@ export class SocialApplicationService {
     return this.socialService.searchUsers(user.sub, query, limit);
   }
 
-  async searchUsernameSuggestions(query: string, limit: number): Promise<UsernameSuggestion[]> {
-    return this.socialService.searchUsernameSuggestions(query, limit);
+  async searchUsernameSuggestions(query: string, limit: number): Promise<string[]> {
+    const suggestions = await this.socialService.searchUsernameSuggestions(query, limit);
+    return suggestions.map((s) => s.username);
   }
 
   async getTrendingUsers(limit: number): Promise<TrendingUsersResult> {
@@ -75,11 +77,17 @@ export class SocialApplicationService {
     user: JwtPayload,
     limit: number,
     cursor?: string | null,
-  ): Promise<{ items: Friend[]; hasNextPage: boolean }> {
+  ): Promise<PaginatedResult<Friend>> {
     const items = await this.socialService.getFriends(user.sub, limit + 1, cursor);
     const hasNextPage = items.length > limit;
-    const result = hasNextPage ? items.slice(0, limit) : items;
-    return { items: result, hasNextPage };
+    const pageItems = hasNextPage ? items.slice(0, limit) : items;
+    const nextCursor = hasNextPage ? (pageItems[pageItems.length - 1]?.friendSince ?? null) : null;
+    return paginated(pageItems, {
+      kind: 'cursor' as const,
+      limit,
+      hasNextPage,
+      nextCursor,
+    });
   }
 
   /**
@@ -99,7 +107,7 @@ export class SocialApplicationService {
     targetUserId: string,
     limit: number,
     cursor?: string | null,
-  ): Promise<{ items: Friend[]; hasNextPage: boolean }> {
+  ): Promise<PaginatedResult<Friend>> {
     const items = await this.socialService.getFriendsOfUser(
       requesterId,
       targetUserId,
@@ -107,8 +115,14 @@ export class SocialApplicationService {
       cursor,
     );
     const hasNextPage = items.length > limit;
-    const result = hasNextPage ? items.slice(0, limit) : items;
-    return { items: result, hasNextPage };
+    const pageItems = hasNextPage ? items.slice(0, limit) : items;
+    const nextCursor = hasNextPage ? (pageItems[pageItems.length - 1]?.friendSince ?? null) : null;
+    return paginated(pageItems, {
+      kind: 'cursor' as const,
+      limit,
+      hasNextPage,
+      nextCursor,
+    });
   }
 
   async getFriendCount(user: JwtPayload): Promise<number> {
@@ -127,7 +141,7 @@ export class SocialApplicationService {
     return this.socialService.unblockUser(user.sub, blockedId);
   }
 
-  async getBlockedUsers(user: JwtPayload): Promise<{ blockedId: string; reason: string | null }[]> {
+  async getBlockedUsers(user: JwtPayload): Promise<BlockedUserDto[]> {
     return this.socialService.getBlockedUsers(user.sub);
   }
 
@@ -143,11 +157,17 @@ export class SocialApplicationService {
     user: JwtPayload,
     limit: number,
     cursor?: string | null,
-  ): Promise<{ items: Follower[]; hasNextPage: boolean }> {
+  ): Promise<PaginatedResult<Follower>> {
     const items = await this.socialService.getFollowers(user.sub, limit + 1, cursor);
     const hasNextPage = items.length > limit;
-    const result = hasNextPage ? items.slice(0, limit) : items;
-    return { items: result, hasNextPage };
+    const pageItems = hasNextPage ? items.slice(0, limit) : items;
+    const nextCursor = hasNextPage ? (pageItems[pageItems.length - 1]?.followedAt ?? null) : null;
+    return paginated(pageItems, {
+      kind: 'cursor' as const,
+      limit,
+      hasNextPage,
+      nextCursor,
+    });
   }
 
   async getFollowersOfUser(
@@ -163,11 +183,17 @@ export class SocialApplicationService {
     user: JwtPayload,
     limit: number,
     cursor?: string | null,
-  ): Promise<{ items: Following[]; hasNextPage: boolean }> {
+  ): Promise<PaginatedResult<Following>> {
     const items = await this.socialService.getFollowing(user.sub, limit + 1, cursor);
     const hasNextPage = items.length > limit;
-    const result = hasNextPage ? items.slice(0, limit) : items;
-    return { items: result, hasNextPage };
+    const pageItems = hasNextPage ? items.slice(0, limit) : items;
+    const nextCursor = hasNextPage ? (pageItems[pageItems.length - 1]?.followedAt ?? null) : null;
+    return paginated(pageItems, {
+      kind: 'cursor' as const,
+      limit,
+      hasNextPage,
+      nextCursor,
+    });
   }
 
   async getFollowingOfUser(

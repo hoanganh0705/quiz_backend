@@ -1,4 +1,3 @@
-export * from './social-response-docs.dto';
 export * from './friend.dto';
 export * from './follower-following.dto';
 export * from './paginated.dto';
@@ -11,3 +10,4 @@ export * from './relationship.dto';
 export * from './blocked.dto';
 export * from './search.dto';
 export * from './leaderboard.dto';
+export * from './message-response.dto';
