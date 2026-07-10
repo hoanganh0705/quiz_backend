@@ -14,28 +14,20 @@ import {
 } from '@nestjs/common';
 import {
   ApiTags,
-  ApiOperation,
-  ApiOkResponse,
-  ApiForbiddenResponse,
-  ApiNotFoundResponse,
-  ApiInternalServerErrorResponse,
   ApiQuery,
-  ApiUnprocessableEntityResponse,
   ApiBadRequestResponse,
   ApiConflictResponse,
+  ApiForbiddenResponse,
+  ApiInternalServerErrorResponse,
+  ApiNotFoundResponse,
   ApiUnauthorizedResponse,
+  ApiUnprocessableEntityResponse,
 } from '@nestjs/swagger';
 import { Permission } from '@/common/authorization/permissions';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
 import { Permissions } from '@/common/authorization/decorators/permissions.decorator';
 import { Public } from '@/common/decorators/public.decorator';
-import {
-  ApiAuth,
-  ApiAuthList,
-  ApiAuthCreate,
-  ApiPublicList,
-  ApiAuthUpdateWithState,
-} from '@/common/swagger/swagger-decorators';
+import { ApiOkResource, ApiOkResourceList, ApiCreatedResource } from '@/common/swagger/api-ok';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
 import { ParseUUIDOrSlugPipe, isUuid } from '@/common/pipes/parse-uuid-or-slug.pipe';
 import { QuizApplicationService } from '../../application/quiz.application.service';
@@ -43,23 +35,21 @@ import { QuizVersionApplicationService } from '../../application/quiz-version.ap
 import { QuizQuestionApplicationService } from '../../application/quiz-question.application.service';
 import { CreateQuizDto } from '../../dto/request/create-quiz.dto';
 import { QuizResponseDto } from '../../dto/response/quiz-response.dto';
-import { QuizListResponseDto } from '../../dto/response/quiz-list-response.dto';
-import { QuizStatsResponseDto } from '../../dto/response/quiz-stats-response.dto';
 import {
   CreatorQuizAnalyticsDto,
   PopularQuizzesResponseDto,
   TrendingQuizzesResponseDto,
 } from '../../dto/response/quiz-analytics.dto';
+import { BulkQuizQuestionsResponseDto } from '../../dto/response/bulk-quiz-questions-response.dto';
+import { QuizStatsResponseDto } from '../../dto/response/quiz-stats-response.dto';
 import { FeaturedQuizzesQueryDto } from '../../dto/request/featured-quizzes-query.dto';
 import { RelatedQuizzesQueryDto } from '../../dto/request/related-quizzes-query.dto';
-import { RelatedQuizzesResponseDto } from '../../dto/response/related-quizzes-response.dto';
 import { ListQuizzesQueryDto } from '../../dto/request/list-quizzes-query.dto';
 import { UpdateQuizDto } from '@/modules/quiz/dto/request/update-quiz.dto';
 import { DeleteQuizResponseDto } from '@/modules/quiz/dto/response/delete-quiz-response.dto';
 import { CreateQuizVersionDto } from '../../dto/request/create-quiz-version.dto';
 import { UpdateQuizVersionDto } from '../../dto/request/update-quiz-version.dto';
 import { ListQuizVersionsQueryDto } from '../../dto/request/list-quiz-versions-query.dto';
-import { QuizVersionListResponseDto } from '../../dto/response/quiz-version-list-response.dto';
 import { CreateQuizQuestionDto } from '@/modules/quiz/dto/request/create-quiz-question.dto';
 import { CreateQuizQuestionsDto } from '@/modules/quiz/dto/request/create-quiz-questions.dto';
 import { QuizQuestionResponseDto } from '@/modules/quiz/dto/response/quiz-question-response.dto';
@@ -68,21 +58,7 @@ import {
   QuizVersionDetailResponseDto,
   QuizVersionResponseDto,
 } from '../../dto/response/quiz-version-response.dto';
-import {
-  WrappedQuizResponseDto,
-  WrappedQuizListDto,
-  WrappedQuizVersionListDto,
-  WrappedQuizVersionResponseDto,
-  WrappedQuizVersionDetailResponseDto,
-  WrappedTrendingQuizzesDto,
-  WrappedPopularQuizzesDto,
-  WrappedCreatorAnalyticsDto,
-  WrappedQuizStatsDto,
-  WrappedRelatedQuizzesDto,
-  WrappedMessageDto,
-  WrappedQuizQuestionDto,
-  WrappedQuizQuestionArrayDto,
-} from '../../dto/response/quiz-response-docs.dto';
+import { QuizPresenter } from '../presenters/quiz.presenter';
 import {
   createQuizBadRequestExample,
   createQuizConflictExample,
@@ -177,11 +153,12 @@ export class QuizController {
     private readonly quizApplicationService: QuizApplicationService,
     private readonly quizVersionApplicationService: QuizVersionApplicationService,
     private readonly quizQuestionApplicationService: QuizQuestionApplicationService,
+    private readonly presenter: QuizPresenter,
   ) {}
 
   @Post()
   @Permissions(Permission.QUIZ_CREATE)
-  @ApiAuthCreate({ description: 'Quiz created', type: WrappedQuizResponseDto })
+  @ApiCreatedResource(QuizResponseDto, { description: 'Quiz created' })
   @ApiBadRequestResponse({
     description: 'Request body validation failed',
     example: createQuizBadRequestExample,
@@ -199,64 +176,63 @@ export class QuizController {
     example: createQuizUnauthorizedExample,
   })
   @ApiInternalServerErrorResponse({ example: createQuizInternalErrorExample })
-  createQuiz(
-    @CurrentUser() user: JwtPayload,
-    @Body() payload: CreateQuizDto,
-  ): Promise<QuizResponseDto> {
-    return this.quizApplicationService.createQuiz(user, payload);
+  async createQuiz(@CurrentUser() user: JwtPayload, @Body() payload: CreateQuizDto) {
+    const quiz = await this.quizApplicationService.createQuiz(user, payload);
+    return this.presenter.createQuiz(quiz);
   }
 
   @Get()
   @Public()
-  @ApiPublicList({ description: 'Quizzes returned', type: WrappedQuizListDto })
+  @ApiOkResourceList(QuizResponseDto, 'cursor', { description: 'Quizzes returned' })
   @ApiBadRequestResponse({
     description: 'Query parameters failed validation',
     example: listQuizzesBadRequestExample,
   })
   @ApiInternalServerErrorResponse({ example: listQuizzesInternalErrorExample })
-  listQuizzes(@Query() query: ListQuizzesQueryDto): Promise<QuizListResponseDto> {
-    return this.quizApplicationService.listQuizzes(query);
+  async listQuizzes(@Query() query: ListQuizzesQueryDto) {
+    const result = await this.quizApplicationService.listQuizzes(query);
+    return this.presenter.listQuizzes(result);
   }
 
   @Get('me')
-  @ApiAuthList({ description: 'Quizzes returned', type: WrappedQuizListDto })
+  @ApiOkResourceList(QuizResponseDto, 'cursor', { description: 'Quizzes returned' })
   @ApiUnauthorizedResponse({ example: meQuizzesUnauthorizedExample })
   @ApiForbiddenResponse({ example: meQuizzesForbiddenExample })
   @ApiInternalServerErrorResponse({ example: meQuizzesInternalErrorExample })
-  listMyQuizzes(
-    @CurrentUser('sub') userId: string,
-    @Query() query: ListQuizzesQueryDto,
-  ): Promise<QuizListResponseDto> {
-    return this.quizApplicationService.listMyQuizzes(userId, query);
+  async listMyQuizzes(@CurrentUser('sub') userId: string, @Query() query: ListQuizzesQueryDto) {
+    const result = await this.quizApplicationService.listMyQuizzes(userId, query);
+    return this.presenter.listMyQuizzes(result);
   }
 
   @Get('me/drafts')
-  @ApiAuthList({ description: 'Draft quizzes returned', type: WrappedQuizListDto })
+  @ApiOkResourceList(QuizResponseDto, 'cursor', { description: 'Draft quizzes returned' })
   @ApiUnauthorizedResponse({ example: meDraftsUnauthorizedExample })
   @ApiForbiddenResponse({ example: meDraftsForbiddenExample })
   @ApiInternalServerErrorResponse({ example: meDraftsInternalErrorExample })
-  listMyDraftQuizzes(
+  async listMyDraftQuizzes(
     @CurrentUser('sub') userId: string,
     @Query() query: ListQuizzesQueryDto,
-  ): Promise<QuizListResponseDto> {
-    return this.quizApplicationService.listMyDraftQuizzes(userId, query);
+  ) {
+    const result = await this.quizApplicationService.listMyDraftQuizzes(userId, query);
+    return this.presenter.listMyDraftQuizzes(result);
   }
 
   @Get('me/published')
-  @ApiAuthList({ description: 'Published quizzes returned', type: WrappedQuizListDto })
+  @ApiOkResourceList(QuizResponseDto, 'cursor', { description: 'Published quizzes returned' })
   @ApiUnauthorizedResponse({ example: mePublishedUnauthorizedExample })
   @ApiForbiddenResponse({ example: mePublishedForbiddenExample })
   @ApiInternalServerErrorResponse({ example: mePublishedInternalErrorExample })
-  listMyPublishedQuizzes(
+  async listMyPublishedQuizzes(
     @CurrentUser('sub') userId: string,
     @Query() query: ListQuizzesQueryDto,
-  ): Promise<QuizListResponseDto> {
-    return this.quizApplicationService.listMyPublishedQuizzes(userId, query);
+  ) {
+    const result = await this.quizApplicationService.listMyPublishedQuizzes(userId, query);
+    return this.presenter.listMyPublishedQuizzes(result);
   }
 
   @Get('trending')
   @Public()
-  @ApiPublicList({ description: 'Trending quizzes returned', type: WrappedTrendingQuizzesDto })
+  @ApiOkResource(TrendingQuizzesResponseDto, { description: 'Trending quizzes returned' })
   @ApiQuery({
     name: 'limit',
     required: false,
@@ -271,16 +247,17 @@ export class QuizController {
   })
   @ApiBadRequestResponse({ example: trendingBadRequestExample })
   @ApiInternalServerErrorResponse({ example: trendingInternalErrorExample })
-  getTrendingQuizzes(
+  async getTrendingQuizzes(
     @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit: number,
     @Query('categoryId') categoryId?: string,
-  ): Promise<TrendingQuizzesResponseDto> {
-    return this.quizApplicationService.getTrendingQuizzes(limit, categoryId);
+  ) {
+    const result = await this.quizApplicationService.getTrendingQuizzes(limit, categoryId);
+    return this.presenter.getTrendingQuizzes(result);
   }
 
   @Get('popular')
   @Public()
-  @ApiPublicList({ description: 'Popular quizzes returned', type: WrappedPopularQuizzesDto })
+  @ApiOkResource(PopularQuizzesResponseDto, { description: 'Popular quizzes returned' })
   @ApiQuery({
     name: 'limit',
     required: false,
@@ -295,34 +272,37 @@ export class QuizController {
   })
   @ApiBadRequestResponse({ example: popularBadRequestExample })
   @ApiInternalServerErrorResponse({ example: popularInternalErrorExample })
-  getPopularQuizzes(
+  async getPopularQuizzes(
     @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit: number,
     @Query('categoryId') categoryId?: string,
-  ): Promise<PopularQuizzesResponseDto> {
-    return this.quizApplicationService.getPopularQuizzes(limit, categoryId);
+  ) {
+    const result = await this.quizApplicationService.getPopularQuizzes(limit, categoryId);
+    return this.presenter.getPopularQuizzes(result);
   }
 
   @Get('me/analytics')
-  @ApiAuthList({ description: 'Quiz analytics returned', type: WrappedCreatorAnalyticsDto })
+  @ApiOkResource(CreatorQuizAnalyticsDto, { description: 'Quiz analytics returned' })
   @ApiUnauthorizedResponse({ example: meAnalyticsUnauthorizedExample })
   @ApiForbiddenResponse({ example: meAnalyticsForbiddenExample })
   @ApiInternalServerErrorResponse({ example: meAnalyticsInternalErrorExample })
-  getMyQuizAnalytics(@CurrentUser('sub') userId: string): Promise<CreatorQuizAnalyticsDto> {
-    return this.quizApplicationService.getMyQuizAnalytics(userId);
+  async getMyQuizAnalytics(@CurrentUser('sub') userId: string) {
+    const result = await this.quizApplicationService.getMyQuizAnalytics(userId);
+    return this.presenter.getMyQuizAnalytics(result);
   }
 
   @Get('featured')
   @Public()
-  @ApiPublicList({ description: 'Featured quizzes returned', type: WrappedRelatedQuizzesDto })
+  @ApiOkResourceList(QuizResponseDto, 'cursor', { description: 'Featured quizzes returned' })
   @ApiBadRequestResponse({ example: featuredBadRequestExample })
   @ApiInternalServerErrorResponse({ example: featuredInternalErrorExample })
-  getFeaturedQuizzes(@Query() query: FeaturedQuizzesQueryDto): Promise<RelatedQuizzesResponseDto> {
-    return this.quizApplicationService.getFeaturedQuizzes(query);
+  async getFeaturedQuizzes(@Query() query: FeaturedQuizzesQueryDto) {
+    const result = await this.quizApplicationService.getFeaturedQuizzes(query);
+    return this.presenter.getFeaturedQuizzes(result);
   }
 
   @Get(':id')
   @Public()
-  @ApiPublicList({ description: 'Quiz found', type: WrappedQuizResponseDto })
+  @ApiOkResource(QuizResponseDto, { description: 'Quiz found' })
   @ApiBadRequestResponse({
     description: 'Path param must be a UUID or slug',
     example: quizByIdBadRequestExample,
@@ -332,16 +312,16 @@ export class QuizController {
     example: quizByIdNotFoundExample,
   })
   @ApiInternalServerErrorResponse({ example: quizByIdInternalErrorExample })
-  getQuizById(@Param('id', new ParseUUIDOrSlugPipe()) idOrSlug: string): Promise<QuizResponseDto> {
-    if (isUuid(idOrSlug)) {
-      return this.quizApplicationService.getQuizById(idOrSlug);
-    }
-    return this.quizApplicationService.getQuizBySlug(idOrSlug);
+  async getQuizById(@Param('id', new ParseUUIDOrSlugPipe()) idOrSlug: string) {
+    const quiz = isUuid(idOrSlug)
+      ? await this.quizApplicationService.getQuizById(idOrSlug)
+      : await this.quizApplicationService.getQuizBySlug(idOrSlug);
+    return this.presenter.getQuiz(quiz);
   }
 
   @Get(':id/stats')
   @Public()
-  @ApiPublicList({ description: 'Quiz stats returned', type: WrappedQuizStatsDto })
+  @ApiOkResource(QuizStatsResponseDto, { description: 'Quiz stats returned' })
   @ApiBadRequestResponse({
     description: 'Path param must be a UUID',
     example: quizStatsBadRequestExample,
@@ -351,15 +331,14 @@ export class QuizController {
     example: quizStatsNotFoundExample,
   })
   @ApiInternalServerErrorResponse({ example: quizStatsInternalErrorExample })
-  getQuizStats(
-    @Param('id', new ParseUUIDPipe({ version: '4' })) quizId: string,
-  ): Promise<QuizStatsResponseDto> {
-    return this.quizApplicationService.getQuizStats(quizId);
+  async getQuizStats(@Param('id', new ParseUUIDPipe({ version: '4' })) quizId: string) {
+    const result = await this.quizApplicationService.getQuizStats(quizId);
+    return this.presenter.getQuizStats(result);
   }
 
   @Get(':slug/similar')
   @Public()
-  @ApiPublicList({ description: 'Related quizzes returned', type: WrappedRelatedQuizzesDto })
+  @ApiOkResourceList(QuizResponseDto, 'cursor', { description: 'Related quizzes returned' })
   @ApiNotFoundResponse({
     description: 'Quiz not found',
     example: relatedQuizzesNotFoundExample,
@@ -375,18 +354,16 @@ export class QuizController {
     description: 'Maximum number of related quizzes to return (1–100)',
     schema: { type: 'integer', minimum: 1, maximum: 100, default: 10 },
   })
-  async getRelatedQuizzes(
-    @Param('slug') slug: string,
-    @Query() query: RelatedQuizzesQueryDto,
-  ): Promise<RelatedQuizzesResponseDto> {
-    return this.quizApplicationService.getRelatedQuizzes(slug, {
+  async getRelatedQuizzes(@Param('slug') slug: string, @Query() query: RelatedQuizzesQueryDto) {
+    const result = await this.quizApplicationService.getRelatedQuizzes(slug, {
       limit: query.limit ?? 10,
     });
+    return this.presenter.getSimilarQuizzes(result);
   }
 
   @Patch(':id')
   @Permissions(Permission.QUIZ_EDIT_OWN, Permission.QUIZ_EDIT_ANY)
-  @ApiAuthUpdateWithState({ description: 'Quiz updated', type: WrappedQuizResponseDto })
+  @ApiOkResource(QuizResponseDto, { description: 'Quiz updated' })
   @ApiBadRequestResponse({
     description: 'Path param must be a UUID or request body failed validation',
     example: updateQuizBadRequestExample,
@@ -405,23 +382,18 @@ export class QuizController {
   })
   @ApiUnauthorizedResponse({ example: updateQuizUnauthorizedExample })
   @ApiInternalServerErrorResponse({ example: updateQuizInternalErrorExample })
-  updateQuiz(
+  async updateQuiz(
     @Param('id', new ParseUUIDPipe({ version: '4' })) quizId: string,
     @CurrentUser() user: JwtPayload,
     @Body() payload: UpdateQuizDto,
-  ): Promise<QuizResponseDto> {
-    return this.quizApplicationService.updateQuiz(quizId, user, payload);
+  ) {
+    const quiz = await this.quizApplicationService.updateQuiz(quizId, user, payload);
+    return this.presenter.updateQuiz(quiz);
   }
 
   @Delete(':id')
   @Permissions(Permission.QUIZ_DELETE_OWN, Permission.QUIZ_DELETE_ANY)
-  @ApiAuth()
-  @ApiOperation({
-    summary: 'Delete quiz',
-    description:
-      'Soft-deletes a quiz by ID. Requires `quiz:delete:own` or `quiz:delete:any` permission.',
-  })
-  @ApiOkResponse({ description: 'Quiz deleted', type: WrappedMessageDto })
+  @ApiOkResource(DeleteQuizResponseDto, { description: 'Quiz deleted' })
   @ApiNotFoundResponse({
     description: 'Quiz not found',
     example: deleteQuizNotFoundExample,
@@ -436,16 +408,17 @@ export class QuizController {
     example: quizByIdBadRequestExample,
   })
   @ApiInternalServerErrorResponse({ example: deleteQuizInternalErrorExample })
-  deleteQuiz(
+  async deleteQuiz(
     @Param('id', new ParseUUIDPipe({ version: '4' })) quizId: string,
     @CurrentUser() user: JwtPayload,
-  ): Promise<DeleteQuizResponseDto> {
-    return this.quizApplicationService.deleteQuiz(quizId, user);
+  ) {
+    const result = await this.quizApplicationService.deleteQuiz(quizId, user);
+    return this.presenter.deleteQuiz(result);
   }
 
   @Post(':id/versions')
   @Permissions(Permission.QUIZ_VERSION_CREATE_OWN, Permission.QUIZ_VERSION_CREATE_ANY)
-  @ApiAuthCreate({ description: 'Quiz version created', type: WrappedQuizVersionResponseDto })
+  @ApiCreatedResource(QuizVersionResponseDto, { description: 'Quiz version created' })
   @ApiBadRequestResponse({
     description: 'Path param must be a UUID or request body failed validation',
     example: createQuizVersionBadRequestExample,
@@ -464,17 +437,22 @@ export class QuizController {
     example: createQuizVersionConflictExample,
   })
   @ApiInternalServerErrorResponse({ example: createQuizVersionInternalErrorExample })
-  createQuizVersion(
+  async createQuizVersion(
     @Param('id', new ParseUUIDPipe({ version: '4' })) quizId: string,
     @CurrentUser() user: JwtPayload,
     @Body() payload: CreateQuizVersionDto,
-  ): Promise<QuizVersionResponseDto> {
-    return this.quizVersionApplicationService.createQuizVersion(quizId, user, payload);
+  ) {
+    const result = await this.quizVersionApplicationService.createQuizVersion(
+      quizId,
+      user,
+      payload,
+    );
+    return this.presenter.createQuizVersion(result);
   }
 
   @Get(':id/versions')
   @Permissions(Permission.QUIZ_VERSION_VIEW_OWN, Permission.QUIZ_VERSION_VIEW_ANY)
-  @ApiAuthList({ description: 'Versions returned', type: WrappedQuizVersionListDto })
+  @ApiOkResourceList(QuizVersionResponseDto, 'cursor', { description: 'Versions returned' })
   @ApiNotFoundResponse({
     description: 'Quiz not found',
     example: listQuizVersionsNotFoundExample,
@@ -489,20 +467,18 @@ export class QuizController {
     example: quizByIdBadRequestExample,
   })
   @ApiInternalServerErrorResponse({ example: listQuizVersionsInternalErrorExample })
-  listQuizVersions(
+  async listQuizVersions(
     @Param('id', new ParseUUIDPipe({ version: '4' })) quizId: string,
     @CurrentUser() user: JwtPayload,
     @Query() query: ListQuizVersionsQueryDto,
-  ): Promise<QuizVersionListResponseDto> {
-    return this.quizVersionApplicationService.listQuizVersions(quizId, user, query);
+  ) {
+    const result = await this.quizVersionApplicationService.listQuizVersions(quizId, user, query);
+    return this.presenter.listQuizVersions(result);
   }
 
   @Get(':id/versions/:versionId')
   @Permissions(Permission.QUIZ_VERSION_VIEW_OWN, Permission.QUIZ_VERSION_VIEW_ANY)
-  @ApiAuthList({
-    description: 'Quiz version returned',
-    type: WrappedQuizVersionDetailResponseDto,
-  })
+  @ApiOkResource(QuizVersionDetailResponseDto, { description: 'Quiz version returned' })
   @ApiBadRequestResponse({
     description: 'Path params must be UUIDs',
     example: getQuizVersionDetailBadRequestExample,
@@ -517,17 +493,22 @@ export class QuizController {
   })
   @ApiUnauthorizedResponse({ example: getQuizVersionDetailUnauthorizedExample })
   @ApiInternalServerErrorResponse({ example: getQuizVersionDetailInternalErrorExample })
-  getQuizVersionDetail(
+  async getQuizVersionDetail(
     @Param('id', new ParseUUIDPipe({ version: '4' })) quizId: string,
     @Param('versionId', new ParseUUIDPipe({ version: '4' })) quizVersionId: string,
     @CurrentUser() user: JwtPayload,
-  ): Promise<QuizVersionDetailResponseDto> {
-    return this.quizVersionApplicationService.getQuizVersionDetail(quizId, quizVersionId, user);
+  ) {
+    const result = await this.quizVersionApplicationService.getQuizVersionDetail(
+      quizId,
+      quizVersionId,
+      user,
+    );
+    return this.presenter.getQuizVersionDetail(result);
   }
 
   @Patch(':id/versions/:versionId')
   @Permissions(Permission.QUIZ_VERSION_EDIT_OWN, Permission.QUIZ_VERSION_EDIT_ANY)
-  @ApiAuthUpdateWithState({ description: 'Version updated', type: WrappedQuizVersionResponseDto })
+  @ApiOkResource(QuizVersionResponseDto, { description: 'Version updated' })
   @ApiBadRequestResponse({
     description: 'Path params must be UUIDs or request body failed validation',
     example: updateQuizVersionBadRequestExample,
@@ -546,28 +527,24 @@ export class QuizController {
   })
   @ApiUnauthorizedResponse({ example: updateQuizVersionUnauthorizedExample })
   @ApiInternalServerErrorResponse({ example: updateQuizVersionInternalErrorExample })
-  updateQuizVersion(
+  async updateQuizVersion(
     @Param('id', new ParseUUIDPipe({ version: '4' })) quizId: string,
     @Param('versionId', new ParseUUIDPipe({ version: '4' })) quizVersionId: string,
     @CurrentUser() user: JwtPayload,
     @Body() payload: UpdateQuizVersionDto,
-  ): Promise<QuizVersionResponseDto> {
-    return this.quizVersionApplicationService.updateQuizVersion(
+  ) {
+    const result = await this.quizVersionApplicationService.updateQuizVersion(
       quizId,
       quizVersionId,
       user,
       payload,
     );
+    return this.presenter.updateQuizVersion(result);
   }
 
   @Post(':id/versions/:versionId/publish')
   @Permissions(Permission.QUIZ_VERSION_PUBLISH_OWN, Permission.QUIZ_VERSION_PUBLISH_ANY)
-  @ApiAuth()
-  @ApiOperation({
-    summary: 'Publish quiz version',
-    description: `Publishes a draft quiz version, making it available for attempts. Only one version per quiz can be published at a time. The version must contain at least 5 questions. Requires \`quiz-version:publish:own\` or \`quiz-version:publish:any\`.`,
-  })
-  @ApiOkResponse({ description: 'Version published', type: WrappedQuizVersionResponseDto })
+  @ApiOkResource(QuizVersionResponseDto, { description: 'Version published' })
   @ApiBadRequestResponse({
     description: 'Version is not in draft state, or path params are not UUIDs',
     example: publishQuizVersionBadRequestExample,
@@ -586,17 +563,22 @@ export class QuizController {
     example: publishQuizVersionUnprocessableExample,
   })
   @ApiInternalServerErrorResponse({ example: publishQuizVersionInternalErrorExample })
-  publishQuizVersion(
+  async publishQuizVersion(
     @Param('id', new ParseUUIDPipe({ version: '4' })) quizId: string,
     @Param('versionId', new ParseUUIDPipe({ version: '4' })) quizVersionId: string,
     @CurrentUser() user: JwtPayload,
-  ): Promise<QuizVersionResponseDto> {
-    return this.quizVersionApplicationService.publishQuizVersion(quizId, quizVersionId, user);
+  ) {
+    const result = await this.quizVersionApplicationService.publishQuizVersion(
+      quizId,
+      quizVersionId,
+      user,
+    );
+    return this.presenter.publishQuizVersion(result);
   }
 
   @Post(':id/versions/:versionId/questions')
   @Permissions(Permission.QUIZ_VERSION_EDIT_OWN, Permission.QUIZ_VERSION_EDIT_ANY)
-  @ApiAuthCreate({ description: 'Question created', type: WrappedQuizQuestionDto })
+  @ApiCreatedResource(QuizQuestionResponseDto, { description: 'Question created' })
   @ApiBadRequestResponse({
     description: 'Path params must be UUIDs or request body failed validation',
     example: createQuizQuestionBadRequestExample,
@@ -615,23 +597,24 @@ export class QuizController {
   })
   @ApiUnauthorizedResponse({ example: createQuizQuestionUnauthorizedExample })
   @ApiInternalServerErrorResponse({ example: createQuizQuestionInternalErrorExample })
-  createQuizQuestion(
+  async createQuizQuestion(
     @Param('id', new ParseUUIDPipe({ version: '4' })) quizId: string,
     @Param('versionId', new ParseUUIDPipe({ version: '4' })) quizVersionId: string,
     @CurrentUser() user: JwtPayload,
     @Body() payload: CreateQuizQuestionDto,
-  ): Promise<QuizQuestionResponseDto> {
-    return this.quizQuestionApplicationService.createQuizQuestion(
+  ) {
+    const result = await this.quizQuestionApplicationService.createQuizQuestion(
       quizId,
       quizVersionId,
       user,
       payload,
     );
+    return this.presenter.createQuizQuestion(result);
   }
 
   @Post(':id/versions/:versionId/questions/bulk')
   @Permissions(Permission.QUIZ_VERSION_EDIT_OWN, Permission.QUIZ_VERSION_EDIT_ANY)
-  @ApiAuthCreate({ description: 'Questions created', type: WrappedQuizQuestionArrayDto })
+  @ApiCreatedResource(BulkQuizQuestionsResponseDto, { description: 'Questions created' })
   @ApiBadRequestResponse({
     description: 'Path params must be UUIDs or request body failed validation',
     example: createQuizQuestionsBadRequestExample,
@@ -651,17 +634,18 @@ export class QuizController {
   })
   @ApiUnauthorizedResponse({ example: createQuizQuestionsUnauthorizedExample })
   @ApiInternalServerErrorResponse({ example: createQuizQuestionsInternalErrorExample })
-  createQuizQuestions(
+  async createQuizQuestions(
     @Param('id', new ParseUUIDPipe({ version: '4' })) quizId: string,
     @Param('versionId', new ParseUUIDPipe({ version: '4' })) quizVersionId: string,
     @CurrentUser() user: JwtPayload,
     @Body() payload: CreateQuizQuestionsDto,
-  ): Promise<QuizQuestionResponseDto[]> {
-    return this.quizQuestionApplicationService.createQuizQuestions(
+  ) {
+    const result = await this.quizQuestionApplicationService.createQuizQuestions(
       quizId,
       quizVersionId,
       user,
       payload,
     );
+    return this.presenter.createQuizQuestions(result);
   }
 }

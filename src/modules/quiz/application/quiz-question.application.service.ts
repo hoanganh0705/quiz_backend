@@ -5,6 +5,7 @@ import { QuizQuestionResponseMapper } from '../mappers/quiz-question-response.ma
 import { CreateQuizQuestionDto } from '../dto/request/create-quiz-question.dto';
 import { CreateQuizQuestionsDto } from '../dto/request/create-quiz-questions.dto';
 import type { QuizQuestionResponseDto } from '../dto/response/quiz-question-response.dto';
+import type { BulkQuizQuestionsResponseDto } from '../dto/response/bulk-quiz-questions-response.dto';
 import type { CreateQuizQuestionCommand, CreateQuizQuestionsCommand } from '../domain/types';
 
 @Injectable()
@@ -43,7 +44,7 @@ export class QuizQuestionApplicationService {
     quizVersionId: string,
     user: JwtPayload,
     dto: CreateQuizQuestionsDto,
-  ): Promise<QuizQuestionResponseDto[]> {
+  ): Promise<BulkQuizQuestionsResponseDto> {
     const command: CreateQuizQuestionsCommand = {
       quizVersionId,
       questions: dto.questions.map((question) => ({
@@ -63,6 +64,8 @@ export class QuizQuestionApplicationService {
       user,
       command,
     );
-    return QuizQuestionResponseMapper.toQuestionResponses(rows);
+    return {
+      questions: QuizQuestionResponseMapper.toQuestionResponses(rows),
+    };
   }
 }
