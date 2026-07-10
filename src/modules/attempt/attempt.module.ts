@@ -5,6 +5,7 @@ import { AttemptCommandService } from './domain/attempt-command.service';
 import { AttemptQueryService } from './domain/attempt-query.service';
 import { AttemptResponseMapper } from './mappers/attempt-response.mapper';
 import { AttemptController } from './transport/controller/attempt.controller';
+import { AttemptPresenter } from './transport/presenters/attempt.presenter';
 import { AttemptDomainExceptionFilter } from './transport/filters/attempt-domain-exception.filter';
 import { ATTEMPT_REPOSITORY_PORT } from './domain/ports';
 import { AttemptRepository } from './infrastructure/repositories/attempt.repository';
@@ -31,6 +32,9 @@ import { QuizModule } from '@/modules/quiz/quiz.module';
 
     // Mapper
     AttemptResponseMapper,
+
+    // Presentation
+    AttemptPresenter,
 
     // Exception filter
     AttemptDomainExceptionFilter,
