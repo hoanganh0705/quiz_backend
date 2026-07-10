@@ -1,6 +1,7 @@
 import { applyDecorators, type Type } from '@nestjs/common';
 import {
   ApiOkResponse,
+  ApiCreatedResponse,
   getSchemaPath,
   ApiExtraModels,
   type ApiResponseOptions,
@@ -11,6 +12,35 @@ import {
   WrappedDto,
   WrappedPaginatedDto,
 } from './swagger-schemas';
+
+const buildResourceSchema = <T extends Type>(model: T) => ({
+  allOf: [
+    { $ref: getSchemaPath(WrappedDto) },
+    { properties: { data: { $ref: getSchemaPath(model) } } },
+  ],
+});
+
+const buildPaginatedSchema = <T extends Type>(
+  model: T,
+  paginationMetaSchema: typeof PaginationMetaDto | typeof OffsetPaginationMetaDto,
+) => ({
+  allOf: [
+    { $ref: getSchemaPath(WrappedPaginatedDto) },
+    {
+      properties: {
+        data: {
+          type: 'array' as const,
+          items: { $ref: getSchemaPath(model) },
+        },
+        meta: {
+          properties: {
+            pagination: { $ref: getSchemaPath(paginationMetaSchema) },
+          },
+        },
+      },
+    },
+  ],
+});
 
 /**
  * Compose `@ApiOkResponse({ ..., schema: { allOf: [...] } })` for a single
@@ -42,12 +72,25 @@ export const ApiOkResource = <T extends Type>(
     ApiExtraModels(model),
     ApiOkResponse({
       ...options,
-      schema: {
-        allOf: [
-          { $ref: getSchemaPath(WrappedDto) },
-          { properties: { data: { $ref: getSchemaPath(model) } } },
-        ],
-      },
+      schema: buildResourceSchema(model),
+    }),
+  );
+
+/**
+ * 201 Created variant of {@link ApiOkResource}. Same envelope shape, but the
+ * OpenAPI spec lists the response under the `201` status code instead of
+ * `200`. NestJS's `POST` handler returns 201 by default at runtime, so this is
+ * purely a documentation concern.
+ */
+export const ApiCreatedResource = <T extends Type>(
+  model: T,
+  options: Omit<ApiResponseOptions, 'schema' | 'type'> = {},
+): MethodDecorator =>
+  applyDecorators(
+    ApiExtraModels(model),
+    ApiCreatedResponse({
+      ...options,
+      schema: buildResourceSchema(model),
     }),
   );
 
@@ -81,24 +124,7 @@ export const ApiOkResourceList = <T extends Type>(
     ApiExtraModels(model, paginationMetaSchema),
     ApiOkResponse({
       ...options,
-      schema: {
-        allOf: [
-          { $ref: getSchemaPath(WrappedPaginatedDto) },
-          {
-            properties: {
-              data: {
-                type: 'array',
-                items: { $ref: getSchemaPath(model) },
-              },
-              meta: {
-                properties: {
-                  pagination: { $ref: getSchemaPath(paginationMetaSchema) },
-                },
-              },
-            },
-          },
-        ],
-      },
+      schema: buildPaginatedSchema(model, paginationMetaSchema),
     }),
   );
 };
