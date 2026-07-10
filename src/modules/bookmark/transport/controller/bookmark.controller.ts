@@ -13,22 +13,17 @@ import {
 import {
   ApiTags,
   ApiOperation,
-  ApiCreatedResponse,
   ApiNotFoundResponse,
-  ApiOkResponse,
   ApiBadRequestResponse,
   ApiConflictResponse,
   ApiForbiddenResponse,
 } from '@nestjs/swagger';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
-import {
-  ApiAuth,
-  ApiAuthList,
-  ApiAuthCreate,
-  ApiAuthAction,
-} from '@/common/swagger/swagger-decorators';
+import { ApiAuth, ApiAuthCreate } from '@/common/swagger/swagger-decorators';
+import { ApiCreatedResource, ApiOkResource, ApiOkResourceList } from '@/common/swagger/api-ok';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
 import { BookmarkApplicationService } from '../../application/bookmark.application.service';
+import { BookmarkPresenter } from '../presenters/bookmark.presenter';
 import {
   CreateCollectionDto,
   AddBookmarkDto,
@@ -42,7 +37,6 @@ import {
 } from '../../dto/request';
 import {
   BookmarkCollectionListResponseDto,
-  CreateCollectionResponseDto,
   AddBookmarkResponseDto,
   BulkAddBookmarksResponseDto,
   BulkRemoveBookmarksResponseDto,
@@ -60,25 +54,7 @@ import {
 } from '../../dto/response';
 import { BookmarkDomainExceptionFilter } from '../filters/bookmark-domain-exception.filter';
 import { BookmarkCursorMapper } from '../../mappers/bookmark-cursor.mapper';
-import {
-  BookmarkDomainErrorDto,
-  WrappedBookmarkStatusDto,
-  WrappedBookmarkCollectionsDto,
-  WrappedBookmarkListDto,
-  WrappedSearchBookmarksDto,
-  WrappedRecentBookmarksDto,
-  WrappedCreateCollectionDto,
-  WrappedAddBookmarkDto,
-  WrappedBulkAddDto,
-  WrappedBulkRemoveDto,
-  WrappedRemoveBookmarkDto,
-  WrappedUpdateBookmarkDto,
-  WrappedMoveBookmarkDto,
-  WrappedUpdateCollectionDto,
-  WrappedBookmarkStatsDto,
-  WrappedDeleteCollectionDto,
-  WrappedCollectionAnalyticsDto,
-} from '../../dto/response/bookmark-response-docs.dto';
+import { BookmarkDomainErrorDto } from '../../dto/response/bookmark-response-docs.dto';
 
 // Local helpers — these decorators emit the response schemas that match the
 // actual runtime error shapes produced by BookmarkDomainExceptionFilter:
@@ -86,9 +62,6 @@ import {
 //   { statusCode: number, message: string, error: string }
 //
 // Use these for any 403 / 404 / 409 produced by a bookmark domain error.
-// (401, 400, 500 are emitted by GlobalExceptionFilter as RFC 7807 ProblemDetail
-// and are handled by the generic ApiAuth / ApiAuthList / ApiAuthCreate /
-// ApiAuthAction decorators.)
 
 const bookmarkForbiddenResponse = (
   description = 'You do not have permission to manage this collection',
@@ -108,94 +81,112 @@ const bookmarkConflictResponse = (description = 'Resource already exists') =>
 @Controller('bookmarks')
 @UseFilters(BookmarkDomainExceptionFilter)
 export class BookmarkController {
-  constructor(private readonly bookmarkApplicationService: BookmarkApplicationService) {}
+  constructor(
+    private readonly bookmarkApplicationService: BookmarkApplicationService,
+    private readonly presenter: BookmarkPresenter,
+  ) {}
 
   @Get('search')
-  @ApiAuthList({ description: 'Bookmark search results returned', type: WrappedSearchBookmarksDto })
+  @ApiAuth()
+  @ApiOperation({ summary: 'Search bookmarks' })
+  @ApiOkResourceList(SearchBookmarksResponseDto, 'cursor', {
+    description: 'Bookmark search results returned',
+  })
   @ApiBadRequestResponse({ description: 'Query parameters failed validation' })
-  async searchBookmarks(
-    @CurrentUser() user: JwtPayload,
-    @Query() query: SearchBookmarksQueryDto,
-  ): Promise<SearchBookmarksResponseDto> {
-    return this.bookmarkApplicationService.searchBookmarks(user.sub, {
+  async searchBookmarks(@CurrentUser() user: JwtPayload, @Query() query: SearchBookmarksQueryDto) {
+    const result = await this.bookmarkApplicationService.searchBookmarks(user.sub, {
       q: query.q,
       limit: query.limit,
       cursor: query.cursor ? BookmarkCursorMapper.parse(query.cursor) : null,
     });
+    return this.presenter.searchBookmarks(result);
   }
 
   @Get('recent')
-  @ApiAuthList({ description: 'Recent bookmarks returned', type: WrappedRecentBookmarksDto })
+  @ApiAuth()
+  @ApiOperation({ summary: 'Get recent bookmarks' })
+  @ApiOkResourceList(RecentBookmarksResponseDto, 'cursor', {
+    description: 'Recent bookmarks returned',
+  })
   async getRecentBookmarks(
     @CurrentUser() user: JwtPayload,
     @Query() query: ListRecentBookmarksQueryDto,
-  ): Promise<RecentBookmarksResponseDto> {
-    return this.bookmarkApplicationService.getRecentBookmarks(user.sub, {
+  ) {
+    const result = await this.bookmarkApplicationService.getRecentBookmarks(user.sub, {
       limit: query.limit,
       cursor: query.cursor ? BookmarkCursorMapper.parse(query.cursor) : null,
     });
+    return this.presenter.getRecentBookmarks(result);
   }
 
   @Get('quizzes/:quizId/status')
-  @ApiAuthList({ description: 'Bookmark status returned', type: WrappedBookmarkStatusDto })
+  @ApiAuth()
+  @ApiOperation({ summary: 'Get bookmark status for a quiz' })
+  @ApiOkResource(BookmarkStatusResponseDto, { description: 'Bookmark status returned' })
   async getBookmarkStatus(
     @Param('quizId', new ParseUUIDPipe()) quizId: string,
     @CurrentUser() user: JwtPayload,
-  ): Promise<BookmarkStatusResponseDto> {
-    return this.bookmarkApplicationService.getBookmarkStatus(user, quizId);
+  ) {
+    const result = await this.bookmarkApplicationService.getBookmarkStatus(user, quizId);
+    return this.presenter.getBookmarkStatus(result);
   }
 
   @Get('collections')
-  @ApiAuthList({ description: 'Collections returned', type: WrappedBookmarkCollectionsDto })
-  async listCollections(
-    @CurrentUser() user: JwtPayload,
-  ): Promise<BookmarkCollectionListResponseDto> {
-    return this.bookmarkApplicationService.listCollections(user);
+  @ApiAuth()
+  @ApiOperation({ summary: 'List bookmark collections' })
+  @ApiOkResource(BookmarkCollectionListResponseDto, { description: 'Collections returned' })
+  async listCollections(@CurrentUser() user: JwtPayload) {
+    const result = await this.bookmarkApplicationService.listCollections(user);
+    return this.presenter.listCollections(result);
   }
 
   @Post('collections')
-  @ApiAuthCreate({ description: 'Collection created', type: WrappedCreateCollectionDto })
+  @ApiAuthCreate({ description: 'Collection created', type: undefined })
   @bookmarkConflictResponse('A collection with this name already exists')
-  async createCollection(
-    @CurrentUser() user: JwtPayload,
-    @Body() payload: CreateCollectionDto,
-  ): Promise<CreateCollectionResponseDto> {
-    return this.bookmarkApplicationService.createCollection(user, payload);
+  async createCollection(@CurrentUser() user: JwtPayload, @Body() payload: CreateCollectionDto) {
+    const result = await this.bookmarkApplicationService.createCollection(user, payload);
+    return this.presenter.createCollection(result);
   }
 
   // NOTE: GET /bookmarks/collections/{collectionId} returns the BOOKMARKED QUIZZES
-  // inside the collection, NOT the collection itself. There is no endpoint that
-  // returns a single bookmark collection by id.
+  // inside the collection, NOT the collection itself.
   @Get('collections/:collectionId')
-  @ApiAuthList({
+  @ApiAuth()
+  @ApiOperation({ summary: 'List bookmarks in a collection' })
+  @ApiOkResource(BookmarkListResponseDto, {
     description: 'Bookmarked quizzes inside the collection',
-    type: WrappedBookmarkListDto,
   })
   @bookmarkNotFoundResponse('Bookmark collection not found')
   async listBookmarksInCollection(
     @Param('collectionId', new ParseUUIDPipe()) collectionId: string,
     @CurrentUser() user: JwtPayload,
-  ): Promise<BookmarkListResponseDto> {
-    return this.bookmarkApplicationService.listBookmarksInCollection(collectionId, user);
+  ) {
+    const result = await this.bookmarkApplicationService.listBookmarksInCollection(
+      collectionId,
+      user,
+    );
+    return this.presenter.listBookmarksInCollection(result);
   }
 
   @Get('collections/:collectionId/analytics')
-  @ApiAuthList({
+  @ApiAuth()
+  @ApiOperation({ summary: 'Get collection analytics' })
+  @ApiOkResource(BookmarkCollectionAnalyticsResponseDto, {
     description: 'Bookmark collection analytics returned',
-    type: WrappedCollectionAnalyticsDto,
   })
   @bookmarkNotFoundResponse('Bookmark collection analytics not found')
   async getCollectionAnalytics(
     @Param('collectionId', new ParseUUIDPipe()) collectionId: string,
     @CurrentUser() user: JwtPayload,
-  ): Promise<BookmarkCollectionAnalyticsResponseDto> {
-    return this.bookmarkApplicationService.getCollectionAnalytics(collectionId, user);
+  ) {
+    const result = await this.bookmarkApplicationService.getCollectionAnalytics(collectionId, user);
+    return this.presenter.getCollectionAnalytics(result);
   }
 
   @Post('collections/:collectionId/quizzes')
   @ApiAuth()
   @ApiOperation({ summary: 'Add bookmark', description: 'Adds a quiz to a bookmark collection.' })
-  @ApiCreatedResponse({ description: 'Bookmark added', type: WrappedAddBookmarkDto })
+  @ApiCreatedResource(AddBookmarkResponseDto, { description: 'Bookmark added' })
   @bookmarkNotFoundResponse('Bookmark collection not found, or quiz not found')
   @bookmarkForbiddenResponse()
   @bookmarkConflictResponse('This quiz is already bookmarked in this collection')
@@ -203,13 +194,12 @@ export class BookmarkController {
     @Param('collectionId', new ParseUUIDPipe()) collectionId: string,
     @CurrentUser() user: JwtPayload,
     @Body() payload: AddBookmarkDto,
-  ): Promise<AddBookmarkResponseDto> {
-    return this.bookmarkApplicationService.addBookmark(collectionId, payload, user);
+  ) {
+    const result = await this.bookmarkApplicationService.addBookmark(collectionId, payload, user);
+    return this.presenter.addBookmark(result);
   }
 
   // Bulk add is idempotent: duplicates are silently skipped via onConflictDoNothing.
-  // The implementation never throws a 409 Conflict — use the singular /quizzes
-  // endpoint if a conflict response is required.
   @Post('collections/:collectionId/quizzes/bulk')
   @ApiAuth()
   @ApiOperation({
@@ -219,7 +209,7 @@ export class BookmarkController {
       'Duplicates and pairs that already exist in the collection are silently skipped ' +
       '(no 409 is produced). The response reports how many rows were actually inserted.',
   })
-  @ApiOkResponse({ description: 'Bulk add result', type: WrappedBulkAddDto })
+  @ApiOkResource(BulkAddBookmarksResponseDto, { description: 'Bulk add result' })
   @bookmarkNotFoundResponse(
     'Bookmark collection not found, or collection was deleted while processing this request',
   )
@@ -228,16 +218,16 @@ export class BookmarkController {
     @Param('collectionId', new ParseUUIDPipe()) collectionId: string,
     @CurrentUser() user: JwtPayload,
     @Body() payload: BulkAddBookmarksDto,
-  ): Promise<BulkAddBookmarksResponseDto> {
-    return this.bookmarkApplicationService.addBookmarksBulk(
+  ) {
+    const result = await this.bookmarkApplicationService.addBookmarksBulk(
       user.sub,
       collectionId,
       payload.quizIds,
     );
+    return this.presenter.addBookmarksBulk(result);
   }
 
   // Bulk remove is idempotent: removing a pair that does not exist is a no-op.
-  // The implementation never throws a 409 Conflict.
   @Delete('collections/:collectionId/quizzes/bulk')
   @ApiAuth()
   @ApiOperation({
@@ -247,30 +237,34 @@ export class BookmarkController {
       'Removing a pair that does not exist is a no-op (no 404 is produced). ' +
       'The response reports how many rows were actually removed.',
   })
-  @ApiOkResponse({ description: 'Bulk remove result', type: WrappedBulkRemoveDto })
+  @ApiOkResource(BulkRemoveBookmarksResponseDto, { description: 'Bulk remove result' })
   @bookmarkNotFoundResponse('Bookmark collection not found')
   @bookmarkForbiddenResponse()
   async removeBookmarksBulk(
     @Param('collectionId', new ParseUUIDPipe()) collectionId: string,
     @CurrentUser() user: JwtPayload,
     @Body() payload: BulkRemoveBookmarksDto,
-  ): Promise<BulkRemoveBookmarksResponseDto> {
-    return this.bookmarkApplicationService.removeBookmarksBulk(
+  ) {
+    const result = await this.bookmarkApplicationService.removeBookmarksBulk(
       user.sub,
       collectionId,
       payload.quizIds,
     );
+    return this.presenter.removeBookmarksBulk(result);
   }
 
   @Delete('collections/:collectionId/quizzes/:quizId')
-  @ApiAuthAction({ description: 'Bookmark removed', type: WrappedRemoveBookmarkDto })
+  @ApiAuth()
+  @ApiOperation({ summary: 'Remove bookmark' })
+  @ApiOkResource(RemoveBookmarkResponseDto, { description: 'Bookmark removed' })
   @bookmarkNotFoundResponse('Bookmark not found in this collection')
   async removeBookmark(
     @Param('collectionId', new ParseUUIDPipe()) collectionId: string,
     @Param('quizId', new ParseUUIDPipe()) quizId: string,
     @CurrentUser() user: JwtPayload,
-  ): Promise<RemoveBookmarkResponseDto> {
-    return this.bookmarkApplicationService.removeBookmark(collectionId, quizId, user);
+  ) {
+    const result = await this.bookmarkApplicationService.removeBookmark(collectionId, quizId, user);
+    return this.presenter.removeBookmark(result);
   }
 
   @Patch('collections/:collectionId/quizzes/:quizId')
@@ -279,7 +273,7 @@ export class BookmarkController {
     summary: 'Update bookmark',
     description: 'Updates the personal notes for a bookmarked quiz in a collection.',
   })
-  @ApiOkResponse({ description: 'Bookmark updated', type: WrappedUpdateBookmarkDto })
+  @ApiOkResource(UpdateBookmarkResponseDto, { description: 'Bookmark updated' })
   @bookmarkNotFoundResponse('Bookmark not found in this collection')
   @bookmarkForbiddenResponse()
   async updateBookmark(
@@ -287,8 +281,14 @@ export class BookmarkController {
     @Param('quizId', new ParseUUIDPipe()) quizId: string,
     @CurrentUser() user: JwtPayload,
     @Body() payload: UpdateBookmarkDto,
-  ): Promise<UpdateBookmarkResponseDto> {
-    return this.bookmarkApplicationService.updateBookmark(collectionId, quizId, payload, user);
+  ) {
+    const result = await this.bookmarkApplicationService.updateBookmark(
+      collectionId,
+      quizId,
+      payload,
+      user,
+    );
+    return this.presenter.updateBookmark(result);
   }
 
   @Post('collections/:collectionId/move')
@@ -299,7 +299,7 @@ export class BookmarkController {
       'Moves a bookmark from the collection identified by the path parameter ' +
       'into the target collection supplied in the request body.',
   })
-  @ApiOkResponse({ description: 'Bookmark moved', type: WrappedMoveBookmarkDto })
+  @ApiOkResource(MoveBookmarkResponseDto, { description: 'Bookmark moved' })
   @bookmarkNotFoundResponse('Source collection, target collection, or bookmark in source not found')
   @bookmarkForbiddenResponse()
   @bookmarkConflictResponse('The quiz is already bookmarked in the target collection')
@@ -307,8 +307,13 @@ export class BookmarkController {
     @Param('collectionId', new ParseUUIDPipe()) collectionId: string,
     @CurrentUser() user: JwtPayload,
     @Body() payload: MoveBookmarkDto,
-  ): Promise<MoveBookmarkResponseDto> {
-    return this.bookmarkApplicationService.moveBookmark(user.sub, collectionId, payload);
+  ) {
+    const result = await this.bookmarkApplicationService.moveBookmark(
+      user.sub,
+      collectionId,
+      payload,
+    );
+    return this.presenter.moveBookmark(result);
   }
 
   @Patch('collections/:collectionId')
@@ -317,7 +322,7 @@ export class BookmarkController {
     summary: 'Update collection',
     description: 'Updates the name and/or description of an owned bookmark collection.',
   })
-  @ApiOkResponse({ description: 'Collection updated', type: WrappedUpdateCollectionDto })
+  @ApiOkResource(UpdateCollectionResponseDto, { description: 'Collection updated' })
   @bookmarkNotFoundResponse('Bookmark collection not found')
   @bookmarkForbiddenResponse()
   @bookmarkConflictResponse('A collection with this name already exists')
@@ -325,14 +330,22 @@ export class BookmarkController {
     @Param('collectionId', new ParseUUIDPipe()) collectionId: string,
     @CurrentUser() user: JwtPayload,
     @Body() payload: UpdateCollectionDto,
-  ): Promise<UpdateCollectionResponseDto> {
-    return this.bookmarkApplicationService.updateCollection(collectionId, payload, user);
+  ) {
+    const result = await this.bookmarkApplicationService.updateCollection(
+      collectionId,
+      payload,
+      user,
+    );
+    return this.presenter.updateCollection(result);
   }
 
   @Get('me/stats')
-  @ApiAuthList({ description: 'Bookmark statistics returned', type: WrappedBookmarkStatsDto })
-  async getMyBookmarkStats(@CurrentUser() user: JwtPayload): Promise<BookmarkStatsResponseDto> {
-    return this.bookmarkApplicationService.getMyBookmarkStats(user);
+  @ApiAuth()
+  @ApiOperation({ summary: 'Get my bookmark statistics' })
+  @ApiOkResource(BookmarkStatsResponseDto, { description: 'Bookmark statistics returned' })
+  async getMyBookmarkStats(@CurrentUser() user: JwtPayload) {
+    const result = await this.bookmarkApplicationService.getMyBookmarkStats(user);
+    return this.presenter.getMyBookmarkStats(result);
   }
 
   @Delete('collections/:collectionId')
@@ -343,12 +356,13 @@ export class BookmarkController {
       'Deletes an owned bookmark collection and all bookmarks it contains. ' +
       'A 404 is returned when the collection does not exist or is not owned by the caller.',
   })
-  @ApiOkResponse({ description: 'Collection deleted', type: WrappedDeleteCollectionDto })
+  @ApiOkResource(DeleteCollectionResponseDto, { description: 'Collection deleted' })
   @bookmarkNotFoundResponse('Bookmark collection not found')
   async deleteCollection(
     @Param('collectionId', new ParseUUIDPipe()) collectionId: string,
     @CurrentUser() user: JwtPayload,
-  ): Promise<DeleteCollectionResponseDto> {
-    return this.bookmarkApplicationService.deleteCollection(collectionId, user);
+  ) {
+    const result = await this.bookmarkApplicationService.deleteCollection(collectionId, user);
+    return this.presenter.deleteCollection(result);
   }
 }
