@@ -1,21 +1,14 @@
 import { Controller, Get, HttpStatus, Inject, Res } from '@nestjs/common';
 import type { Response } from 'express';
-import {
-  ApiTags,
-  ApiOperation,
-  ApiOkResponse,
-  ApiServiceUnavailableResponse,
-} from '@nestjs/swagger';
+import { ApiOperation, ApiServiceUnavailableResponse, ApiTags } from '@nestjs/swagger';
 import { DRIZZLE } from '@/core/database/drizzle.constants';
 import type { DrizzleDB } from '@/core/database/database.module';
 import { RedisService } from '@/core/redis/redis.service';
 import { Public } from '@/common/decorators/public.decorator';
+import { ApiOkResource } from '@/common/swagger/api-ok';
 import { sql } from 'drizzle-orm';
-import {
-  HealthStatusDto,
-  WrappedHealthResponseDto,
-  type HealthStatusValue,
-} from './dto/health-response-docs.dto';
+import { HealthStatusDto, type HealthStatusValue } from './dto/health-response-docs.dto';
+import { HealthPresenter } from './health.presenter';
 
 /**
  * Health check endpoint.
@@ -46,6 +39,7 @@ export class HealthController {
   constructor(
     @Inject(DRIZZLE) private readonly db: DrizzleDB,
     private readonly redisService: RedisService,
+    private readonly presenter: HealthPresenter,
   ) {}
 
   @Get()
@@ -57,15 +51,14 @@ export class HealthController {
       'is down. The HTTP status code is `200` for `up` and `degraded`, and `503` for `down` ' +
       'so the orchestrator can route traffic away from a fully-broken pod.',
   })
-  @ApiOkResponse({
+  @ApiOkResource(HealthStatusDto, {
     description: 'Health status (database and/or Redis reachable)',
-    type: WrappedHealthResponseDto,
   })
   @ApiServiceUnavailableResponse({
     description: 'Database is down — the pod cannot serve any request safely',
-    type: WrappedHealthResponseDto,
+    type: HealthStatusDto,
   })
-  async check(@Res({ passthrough: true }) res: Response): Promise<HealthStatusDto> {
+  async check(@Res({ passthrough: true }) res: Response) {
     // Probe DB and Redis concurrently. The two probes are
     // independent — neither has to wait for the other, and
     // neither depends on the response from the other — so
@@ -98,7 +91,8 @@ export class HealthController {
     // so NestJS still serializes the return value as JSON).
     res.status(httpStatus);
 
-    return { status, database, redis };
+    const payload: HealthStatusDto = { status, database, redis };
+    return this.presenter.check(payload);
   }
 
   private async probeDb(): Promise<'up' | 'down'> {
