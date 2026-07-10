@@ -112,8 +112,19 @@ export const ErrorResponseExamples = {
 
 /**
  * Pagination metadata for cursor-based pagination.
+ *
+ * The `kind: 'cursor'` discriminator is required starting with the response
+ * envelope migration (see docs/migrations/RESPONSE_ENVELOPE_MIGRATION.md).
+ * Existing consumers continue to receive `limit`, `nextCursor`, `hasNextPage`
+ * as before — the new field is additive on the wire only after Phase 4 ships.
  */
 export class PaginationMetaDto {
+  @ApiProperty({
+    description: 'Discriminator field. Always "cursor" for cursor pagination.',
+    example: 'cursor',
+  })
+  kind!: 'cursor';
+
   @ApiProperty({ description: 'Number of items returned in this page', example: 20 })
   limit!: number;
 
@@ -128,6 +139,33 @@ export class PaginationMetaDto {
 
   @ApiProperty({ description: 'Whether more items exist after this page', example: true })
   hasNextPage!: boolean;
+}
+
+/**
+ * Pagination metadata for offset-based pagination. Used by leaderboards,
+ * tournaments, ranking tables, and any endpoint that requires random-access
+ * page jumps (`?page=5`) or total counts.
+ *
+ * Counterpart of {@link PaginationMetaDto}; disambiguated at runtime via `kind`.
+ */
+export class OffsetPaginationMetaDto {
+  @ApiProperty({
+    description: 'Discriminator field. Always "offset" for offset pagination.',
+    example: 'offset',
+  })
+  kind!: 'offset';
+
+  @ApiProperty({ description: '1-indexed page number that was just returned', example: 1 })
+  page!: number;
+
+  @ApiProperty({ description: 'Maximum number of items per page', example: 20 })
+  limit!: number;
+
+  @ApiProperty({ description: 'Total number of items matching the query', example: 1342 })
+  total!: number;
+
+  @ApiProperty({ description: 'Whether more pages exist after the current one', example: true })
+  hasMore!: boolean;
 }
 
 /**
