@@ -22,7 +22,6 @@ import {
   ApiBearerAuth,
   ApiExtraModels,
   ApiForbiddenResponse,
-  ApiOkResponse,
   ApiOperation,
   ApiTags,
   ApiUnauthorizedResponse,
@@ -44,12 +43,10 @@ import {
   RecalculateResponseDto,
   PeriodResetResponseDto,
   ConsistencyReportResponseDto,
-  WrappedRankingStatusResponseDto,
-  WrappedRecalculateResponseDto,
-  WrappedPeriodResetResponseDto,
-  WrappedConsistencyReportResponseDto,
-  RankingDomainErrorDto,
-} from '../../dto';
+} from '../../dto/response/ranking-admin-response.dto';
+import { RankingDomainErrorDto } from '../../dto/error/ranking-domain-error.dto';
+import { RankingPresenter } from '../presenters/ranking.presenter';
+import { ApiOkResource } from '@/common/swagger/api-ok';
 
 // ─── Local helper decorators ───────────────────────────────────────────────────
 
@@ -86,6 +83,7 @@ export class RankingAdminController {
   constructor(
     private readonly rankingAppService: RankingApplicationService,
     private readonly periodResetService: PeriodResetService,
+    private readonly presenter: RankingPresenter,
   ) {}
 
   // ─── GET /admin/ranking/status ─────────────────────────────────────────
@@ -102,13 +100,10 @@ export class RankingAdminController {
       'dirty queue size (users awaiting recalculation), next consistency check time, ' +
       'and next period reset times for each interval. Requires `RANKING_ADMIN` permission.',
   })
-  @ApiOkResponse({
-    description: 'Ranking status returned',
-    type: WrappedRankingStatusResponseDto,
-  })
-  async getStatus(): Promise<RankingStatusResponseDto> {
+  @ApiOkResource(RankingStatusResponseDto, { description: 'Ranking status returned' })
+  async getStatus() {
     const status = await this.rankingAppService.getStatus();
-    return {
+    const result: RankingStatusResponseDto = {
       schedulerRunning: status.schedulerRunning,
       dirtyQueueSize: status.dirtyQueueSize,
       nextConsistencyCheck: status.nextConsistencyCheck?.toISOString() ?? null,
@@ -118,6 +113,7 @@ export class RankingAdminController {
         daily: status.nextPeriodReset.daily?.toISOString() ?? null,
       },
     };
+    return this.presenter.getStatus(result);
   }
 
   // ─── POST /admin/ranking/recalculate ────────────────────────────────────
@@ -138,20 +134,18 @@ export class RankingAdminController {
       'This is an administrative operation — prefer the scheduled background process. ' +
       'Requires `RANKING_ADMIN` permission.',
   })
-  @ApiOkResponse({
-    description: 'Recalculation triggered',
-    type: WrappedRecalculateResponseDto,
-  })
-  async triggerRecalculation(@Query() query: RecalculateQueryDto): Promise<RecalculateResponseDto> {
+  @ApiOkResource(RecalculateResponseDto, { description: 'Recalculation triggered' })
+  async triggerRecalculation(@Query() query: RecalculateQueryDto) {
     const period = query.period ? mapRankingPeriodEnumToDomain(query.period) : undefined;
     await this.rankingAppService.triggerImmediateRecalculation(period);
 
-    return {
+    const result: RecalculateResponseDto = {
       message: query.period
         ? `Recalculation triggered for ${query.period}`
         : 'Recalculation triggered for all periods',
       period: query.period,
     };
+    return this.presenter.triggerRecalculation(result);
   }
 
   // ─── POST /admin/ranking/reset ─────────────────────────────────────────
@@ -170,22 +164,20 @@ export class RankingAdminController {
       'Otherwise resets all due periods (daily, weekly, monthly). ' +
       'Requires `RANKING_ADMIN` permission.',
   })
-  @ApiOkResponse({
-    description: 'Period reset triggered',
-    type: WrappedPeriodResetResponseDto,
-  })
-  async triggerPeriodReset(@Query() query: PeriodResetQueryDto): Promise<PeriodResetResponseDto> {
+  @ApiOkResource(PeriodResetResponseDto, { description: 'Period reset triggered' })
+  async triggerPeriodReset(@Query() query: PeriodResetQueryDto) {
+    let result: PeriodResetResponseDto;
     if (query.period) {
       const period = mapRankingPeriodEnumToDomain(query.period);
       await this.periodResetService.executeReset(period, new Date());
-      return { message: `Period reset initiated for ${query.period}`, period: query.period };
+      result = { message: `Period reset initiated for ${query.period}`, period: query.period };
+    } else {
+      await this.periodResetService.performDailyReset();
+      await this.periodResetService.performWeeklyReset();
+      await this.periodResetService.performMonthlyReset();
+      result = { message: 'Period reset initiated for all due periods', period: 'all' };
     }
-
-    await this.periodResetService.performDailyReset();
-    await this.periodResetService.performWeeklyReset();
-    await this.periodResetService.performMonthlyReset();
-
-    return { message: 'Period reset initiated for all due periods', period: 'all' };
+    return this.presenter.triggerPeriodReset(result);
   }
 
   // ─── POST /admin/ranking/consistency-check ─────────────────────────────
@@ -205,13 +197,10 @@ export class RankingAdminController {
       'Returns a report of all issues found and fixed. ' +
       'Requires `RANKING_ADMIN` permission.',
   })
-  @ApiOkResponse({
-    description: 'Consistency check completed',
-    type: WrappedConsistencyReportResponseDto,
-  })
-  async triggerConsistencyCheck(): Promise<ConsistencyReportResponseDto> {
+  @ApiOkResource(ConsistencyReportResponseDto, { description: 'Consistency check completed' })
+  async triggerConsistencyCheck() {
     const report = await this.rankingAppService.triggerConsistencyCheck();
-    return {
+    const result: ConsistencyReportResponseDto = {
       totalIssues: report.totalIssues,
       fixed: report.fixed,
       issues: report.issues.map((issue) => ({
@@ -221,5 +210,6 @@ export class RankingAdminController {
         severity: issue.severity,
       })),
     };
+    return this.presenter.triggerConsistencyCheck(result);
   }
 }
