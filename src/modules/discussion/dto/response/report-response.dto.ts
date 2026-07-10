@@ -81,11 +81,3 @@ export class ReportResponseDto {
   })
   updatedAt!: string;
 }
-
-export class PaginatedReportsDto {
-  @ApiProperty({ description: 'Report page items', type: () => [ReportResponseDto] })
-  items!: ReportResponseDto[];
-
-  @ApiProperty({ description: 'Whether another page is available', example: false })
-  hasNextPage!: boolean;
-}

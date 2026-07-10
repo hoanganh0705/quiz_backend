@@ -1,7 +1,5 @@
-export * from './discussion-response-docs.dto';
 export * from './thread-response.dto';
 export * from './comment-response.dto';
-export * from './paginated-response.dto';
 export * from './report-response.dto';
 export * from './quiz-discussion-list-response.dto';
 export * from './my-discussions-response.dto';

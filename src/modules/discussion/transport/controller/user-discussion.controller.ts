@@ -3,7 +3,7 @@ import { ApiTags } from '@nestjs/swagger';
 import { Public } from '@/common/decorators/public.decorator';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
-import { ApiAuthList, ApiPublicList } from '@/common/swagger/swagger-decorators';
+import { ApiOkResource, ApiOkResourceList } from '@/common/swagger/api-ok';
 import { DiscussionApplicationService } from '@/modules/discussion/application/discussion-application.service';
 import {
   ListMyCommentsQueryDto,
@@ -22,17 +22,7 @@ import {
   MySavedThreadsResponseDto,
   PublicDiscussionProfileResponseDto,
 } from '@/modules/discussion/dto/response';
-import {
-  WrappedUserDiscussionsDto,
-  WrappedUserCommentsDto,
-  WrappedPublicDiscussionProfileDto,
-  WrappedMyCommentsDto,
-  WrappedMyUpvotedThreadsDto,
-  WrappedMyUpvotedCommentsDto,
-  WrappedMyDiscussionSubscriptionsDto,
-  WrappedMySavedThreadsDto,
-  WrappedMyDiscussionsDto,
-} from '@/modules/discussion/dto/response/discussion-response-docs.dto';
+import { DiscussionPresenter } from '../presenters/discussion.presenter';
 import { MyCommentCursorMapper } from '@/modules/discussion/mappers/my-comment-cursor.mapper';
 import { MyUpvotedThreadCursorMapper } from '@/modules/discussion/mappers/my-upvoted-thread-cursor.mapper';
 import { MyUpvotedCommentCursorMapper } from '@/modules/discussion/mappers/my-upvoted-comment-cursor.mapper';
@@ -45,122 +35,139 @@ import { DiscussionDomainExceptionFilter } from '../filters/discussion-domain-ex
 @Controller()
 @UseFilters(DiscussionDomainExceptionFilter)
 export class UserDiscussionController {
-  constructor(private readonly discussionApplicationService: DiscussionApplicationService) {}
+  constructor(
+    private readonly discussionApplicationService: DiscussionApplicationService,
+    private readonly presenter: DiscussionPresenter,
+  ) {}
 
   // ─── Authenticated /users/me/* routes (registered before :userId routes to avoid shadowing) ──
 
   @Get('users/me/discussions')
-  @ApiAuthList({ description: 'My discussions returned', type: WrappedMyDiscussionsDto })
-  listMyDiscussions(
+  @ApiOkResourceList(MyDiscussionsResponseDto, 'cursor', {
+    description: 'My discussions returned',
+  })
+  async listMyDiscussions(
     @CurrentUser() user: JwtPayload,
     @Query() query: ListMyDiscussionsQueryDto,
-  ): Promise<MyDiscussionsResponseDto> {
-    return this.discussionApplicationService.listMyDiscussions(user.sub, {
+  ) {
+    const result = await this.discussionApplicationService.listMyDiscussions(user.sub, {
       limit: query.limit,
       cursor: query.cursor ? QuizDiscussionCursorMapper.parse(query.cursor) : null,
     });
+    return this.presenter.listMyDiscussions(result);
   }
 
   @Get('users/me/comments')
-  @ApiAuthList({ description: 'My comments returned', type: WrappedMyCommentsDto })
-  listMyComments(
-    @CurrentUser() user: JwtPayload,
-    @Query() query: ListMyCommentsQueryDto,
-  ): Promise<MyCommentsResponseDto> {
-    return this.discussionApplicationService.listMyComments(user.sub, {
+  @ApiOkResourceList(MyCommentsResponseDto, 'cursor', { description: 'My comments returned' })
+  async listMyComments(@CurrentUser() user: JwtPayload, @Query() query: ListMyCommentsQueryDto) {
+    const result = await this.discussionApplicationService.listMyComments(user.sub, {
       limit: query.limit,
       cursor: query.cursor ? MyCommentCursorMapper.parse(query.cursor) : null,
     });
+    return this.presenter.listMyComments(result);
   }
 
   @Get('users/me/upvoted-threads')
-  @ApiAuthList({ description: 'Upvoted threads returned', type: WrappedMyUpvotedThreadsDto })
-  listMyUpvotedThreads(
+  @ApiOkResourceList(MyUpvotedThreadsResponseDto, 'cursor', {
+    description: 'Upvoted threads returned',
+  })
+  async listMyUpvotedThreads(
     @CurrentUser() user: JwtPayload,
     @Query() query: ListMyUpvotedThreadsQueryDto,
-  ): Promise<MyUpvotedThreadsResponseDto> {
-    return this.discussionApplicationService.listMyUpvotedThreads(user, {
+  ) {
+    const result = await this.discussionApplicationService.listMyUpvotedThreads(user, {
       limit: query.limit,
       cursor: query.cursor ? MyUpvotedThreadCursorMapper.parse(query.cursor) : null,
     });
+    return this.presenter.listMyUpvotedThreads(result);
   }
 
   @Get('users/me/upvoted-comments')
-  @ApiAuthList({ description: 'Upvoted comments returned', type: WrappedMyUpvotedCommentsDto })
-  listMyUpvotedComments(
+  @ApiOkResourceList(MyUpvotedCommentsResponseDto, 'cursor', {
+    description: 'Upvoted comments returned',
+  })
+  async listMyUpvotedComments(
     @CurrentUser() user: JwtPayload,
     @Query() query: ListMyUpvotedCommentsQueryDto,
-  ): Promise<MyUpvotedCommentsResponseDto> {
-    return this.discussionApplicationService.listMyUpvotedComments(user, {
+  ) {
+    const result = await this.discussionApplicationService.listMyUpvotedComments(user, {
       limit: query.limit,
       cursor: query.cursor ? MyUpvotedCommentCursorMapper.parse(query.cursor) : null,
     });
+    return this.presenter.listMyUpvotedComments(result);
   }
 
   @Get('users/me/discussion-subscriptions')
-  @ApiAuthList({
+  @ApiOkResourceList(MyDiscussionSubscriptionsResponseDto, 'cursor', {
     description: 'Discussion subscriptions returned',
-    type: WrappedMyDiscussionSubscriptionsDto,
   })
-  listMyDiscussionSubscriptions(
+  async listMyDiscussionSubscriptions(
     @CurrentUser() user: JwtPayload,
     @Query() query: ListMyDiscussionSubscriptionsQueryDto,
-  ): Promise<MyDiscussionSubscriptionsResponseDto> {
-    return this.discussionApplicationService.listMyDiscussionSubscriptions(user, {
+  ) {
+    const result = await this.discussionApplicationService.listMyDiscussionSubscriptions(user, {
       limit: query.limit,
       cursor: query.cursor ? MyDiscussionSubscriptionCursorMapper.parse(query.cursor) : null,
     });
+    return this.presenter.listMyDiscussionSubscriptions(result);
   }
 
   @Get('users/me/saved-threads')
-  @ApiAuthList({ description: 'Saved threads returned', type: WrappedMySavedThreadsDto })
-  listMySavedThreads(
+  @ApiOkResourceList(MySavedThreadsResponseDto, 'cursor', {
+    description: 'Saved threads returned',
+  })
+  async listMySavedThreads(
     @CurrentUser() user: JwtPayload,
     @Query() query: ListMySavedThreadsQueryDto,
-  ): Promise<MySavedThreadsResponseDto> {
-    return this.discussionApplicationService.listMySavedThreads(user, {
+  ) {
+    const result = await this.discussionApplicationService.listMySavedThreads(user, {
       limit: query.limit,
       cursor: query.cursor ? MySavedThreadCursorMapper.parse(query.cursor) : null,
     });
+    return this.presenter.listMySavedThreads(result);
   }
 
   // ─── Public /users/:userId/* routes (registered after me/* routes) ──
 
   @Get('users/:userId/discussions')
   @Public()
-  @ApiPublicList({ description: 'User discussions returned', type: WrappedUserDiscussionsDto })
-  listDiscussionsByUser(
+  @ApiOkResourceList(MyDiscussionsResponseDto, 'cursor', {
+    description: 'User discussions returned',
+  })
+  async listDiscussionsByUser(
     @Param('userId', new ParseUUIDPipe()) userId: string,
     @Query() query: ListMyDiscussionsQueryDto,
-  ): Promise<MyDiscussionsResponseDto> {
-    return this.discussionApplicationService.listMyDiscussions(userId, {
+  ) {
+    const result = await this.discussionApplicationService.listMyDiscussions(userId, {
       limit: query.limit,
       cursor: query.cursor ? QuizDiscussionCursorMapper.parse(query.cursor) : null,
     });
+    return this.presenter.listDiscussionsByUser(result);
   }
 
   @Get('users/:userId/comments')
   @Public()
-  @ApiPublicList({ description: 'User comments returned', type: WrappedUserCommentsDto })
-  listCommentsByUser(
+  @ApiOkResourceList(MyCommentsResponseDto, 'cursor', {
+    description: 'User comments returned',
+  })
+  async listCommentsByUser(
     @Param('userId', new ParseUUIDPipe()) userId: string,
     @Query() query: ListMyCommentsQueryDto,
-  ): Promise<MyCommentsResponseDto> {
-    return this.discussionApplicationService.listCommentsByUser(userId, {
+  ) {
+    const result = await this.discussionApplicationService.listCommentsByUser(userId, {
       limit: query.limit,
       cursor: query.cursor ? MyCommentCursorMapper.parse(query.cursor) : null,
     });
+    return this.presenter.listCommentsByUser(result);
   }
 
   @Get('users/:userId/discussion-profile')
   @Public()
-  @ApiPublicList({
+  @ApiOkResource(PublicDiscussionProfileResponseDto, {
     description: 'Public discussion profile returned',
-    type: WrappedPublicDiscussionProfileDto,
   })
-  getPublicDiscussionProfile(
-    @Param('userId', new ParseUUIDPipe()) userId: string,
-  ): Promise<PublicDiscussionProfileResponseDto> {
-    return this.discussionApplicationService.getPublicDiscussionProfile(userId);
+  async getPublicDiscussionProfile(@Param('userId', new ParseUUIDPipe()) userId: string) {
+    const result = await this.discussionApplicationService.getPublicDiscussionProfile(userId);
+    return this.presenter.getPublicDiscussionProfile(result);
   }
 }

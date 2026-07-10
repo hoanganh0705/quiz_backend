@@ -14,57 +14,37 @@ import {
   UseFilters,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
-import { ApiTags, ApiOperation, ApiOkResponse, ApiCreatedResponse } from '@nestjs/swagger';
+import { ApiTags } from '@nestjs/swagger';
 import { Public } from '@/common/decorators/public.decorator';
 import { Permissions } from '@/common/authorization/decorators/permissions.decorator';
 import { Permission } from '@/common/authorization/permissions';
 import {
-  ApiAuth,
   ApiAuthAction,
   ApiAuthActionNoContent,
-  ApiPublicList,
-  ApiModeratorEndpoint,
   ApiModeratorAction,
 } from '@/common/swagger/swagger-decorators';
+import { ApiOkResource, ApiOkResourceList, ApiCreatedResource } from '@/common/swagger/api-ok';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
-import type { DiscussionThreadDetail } from '@/modules/discussion/domain/types';
 import { DiscussionApplicationService } from '@/modules/discussion/application/discussion-application.service';
+import { DiscussionPresenter } from '../presenters/discussion.presenter';
 import {
   ThreadDto,
   CommentDto,
-  PaginatedThreadsDto,
-  PaginatedCommentsDto,
-  PaginatedReportsDto,
-  TrendingDiscussionsResponseDto,
-  UnansweredDiscussionsResponseDto,
-  SearchDiscussionsResponseDto,
-  RelatedDiscussionsResponseDto,
-  ThreadParticipantsResponseDto,
+  ThreadDetailDto,
+  ReportResponseDto,
+  TrendingDiscussionItemResponseDto,
+  UnansweredDiscussionItemResponseDto,
+  SearchDiscussionItemResponseDto,
+  RelatedDiscussionItemResponseDto,
+  ThreadParticipantItemResponseDto,
   ThreadStatsResponseDto,
   MyDiscussionStatsResponseDto,
   DiscussionThreadSolveResponseDto,
   DiscussionThreadUnsolveResponseDto,
+  DiscussionSubscriptionActionResponseDto,
+  DiscussionSavedThreadActionResponseDto,
 } from '@/modules/discussion/dto/response';
-import {
-  WrappedTrendingDiscussionsDto,
-  WrappedUnansweredDiscussionsDto,
-  WrappedSearchDiscussionsDto,
-  WrappedRelatedDiscussionsDto,
-  WrappedThreadParticipantsDto,
-  WrappedThreadStatsDto,
-  WrappedMyDiscussionStatsDto,
-  WrappedThreadDto,
-  WrappedThreadDetailDto,
-  WrappedCommentDto,
-  WrappedPaginatedThreadsDto,
-  WrappedPaginatedCommentsDto,
-  WrappedSubscriptionActionDto,
-  WrappedSavedThreadActionDto,
-  WrappedThreadSolveDto,
-  WrappedThreadUnsolveDto,
-  WrappedPaginatedReportsDto,
-} from '@/modules/discussion/dto/response/discussion-response-docs.dto';
 import {
   UpdateThreadDto,
   CreateCommentDto,
@@ -92,164 +72,151 @@ import { DiscussionDomainExceptionFilter } from '../filters/discussion-domain-ex
 @Controller('discussions')
 @UseFilters(DiscussionDomainExceptionFilter)
 export class DiscussionController {
-  constructor(private readonly discussionService: DiscussionApplicationService) {}
+  constructor(
+    private readonly discussionService: DiscussionApplicationService,
+    private readonly presenter: DiscussionPresenter,
+  ) {}
 
   // ─── THREADS ──────────────────────────────────────────────────────────────
 
   @Get('trending')
   @Public()
-  @ApiPublicList({
-    description: 'Trending discussions returned',
-    type: WrappedTrendingDiscussionsDto,
-  })
-  async listTrendingDiscussions(
-    @Query() query: ListTrendingDiscussionsQueryDto,
-  ): Promise<TrendingDiscussionsResponseDto> {
-    return this.discussionService.listTrendingDiscussions({
+  @ApiOkResourceList(TrendingDiscussionItemResponseDto, 'cursor')
+  async listTrendingDiscussions(@Query() query: ListTrendingDiscussionsQueryDto) {
+    const result = await this.discussionService.listTrendingDiscussions({
       limit: query.limit,
       cursor: query.cursor ? TrendingDiscussionCursorMapper.parse(query.cursor) : null,
     });
+    return this.presenter.listTrendingDiscussions(result);
   }
 
   @Get('unanswered')
   @Public()
-  @ApiPublicList({
-    description: 'Unanswered discussions returned',
-    type: WrappedUnansweredDiscussionsDto,
-  })
-  async listUnansweredDiscussions(
-    @Query() query: ListUnansweredDiscussionsQueryDto,
-  ): Promise<UnansweredDiscussionsResponseDto> {
-    return this.discussionService.listUnansweredDiscussions({
+  @ApiOkResourceList(UnansweredDiscussionItemResponseDto, 'cursor')
+  async listUnansweredDiscussions(@Query() query: ListUnansweredDiscussionsQueryDto) {
+    const result = await this.discussionService.listUnansweredDiscussions({
       limit: query.limit,
       cursor: query.cursor ? UnansweredDiscussionCursorMapper.parse(query.cursor) : null,
     });
+    return this.presenter.listUnansweredDiscussions(result);
   }
 
   @Get('search')
   @Public()
-  @ApiPublicList({ description: 'Search results returned', type: WrappedSearchDiscussionsDto })
-  async searchDiscussions(
-    @Query() query: SearchDiscussionsQueryDto,
-  ): Promise<SearchDiscussionsResponseDto> {
-    return this.discussionService.searchDiscussions({
+  @ApiOkResourceList(SearchDiscussionItemResponseDto, 'cursor')
+  async searchDiscussions(@Query() query: SearchDiscussionsQueryDto) {
+    const result = await this.discussionService.searchDiscussions({
       q: query.q,
       limit: query.limit,
       cursor: query.cursor ? SearchDiscussionsCursorMapper.parse(query.cursor) : null,
     });
+    return this.presenter.searchDiscussions(result);
   }
 
   @Get('threads/:threadId/related')
   @Public()
-  @ApiPublicList({
+  @ApiOkResourceList(RelatedDiscussionItemResponseDto, 'cursor', {
     description: 'Related discussions returned',
-    type: WrappedRelatedDiscussionsDto,
   })
   async listRelatedDiscussions(
     @Param('threadId', new ParseUUIDPipe()) threadId: string,
     @Query() query: ListRelatedDiscussionsQueryDto,
-  ): Promise<RelatedDiscussionsResponseDto> {
-    return this.discussionService.listRelatedDiscussions(threadId, {
+  ) {
+    const items = await this.discussionService.listRelatedDiscussions(threadId, {
       limit: query.limit,
     });
+    return this.presenter.listRelatedDiscussions(items);
   }
 
   @Get('threads/:threadId/participants')
   @Public()
-  @ApiPublicList({
+  @ApiOkResourceList(ThreadParticipantItemResponseDto, 'cursor', {
     description: 'Thread participants returned',
-    type: WrappedThreadParticipantsDto,
   })
-  async listThreadParticipants(
-    @Param('threadId', new ParseUUIDPipe()) threadId: string,
-  ): Promise<ThreadParticipantsResponseDto> {
-    return this.discussionService.listThreadParticipants(threadId);
+  async listThreadParticipants(@Param('threadId', new ParseUUIDPipe()) threadId: string) {
+    const items = await this.discussionService.listThreadParticipants(threadId);
+    return this.presenter.listThreadParticipants(items);
   }
 
   @Get('threads/:threadId/stats')
   @Public()
-  @ApiPublicList({ description: 'Thread statistics returned', type: WrappedThreadStatsDto })
-  async getThreadStats(
-    @Param('threadId', new ParseUUIDPipe()) threadId: string,
-  ): Promise<ThreadStatsResponseDto | null> {
-    return this.discussionService.getThreadStats(threadId);
+  @ApiOkResource(ThreadStatsResponseDto, {
+    description: 'Thread statistics returned',
+  })
+  async getThreadStats(@Param('threadId', new ParseUUIDPipe()) threadId: string) {
+    const result = await this.discussionService.getThreadStats(threadId);
+    return this.presenter.getThreadStats(result);
   }
 
   @Get('me')
-  @ApiAuth()
-  @ApiOperation({
-    summary: 'Get my discussion stats',
-    description:
-      'Returns aggregated discussion statistics for the authenticated user including threads created, comments, replies, contributions, votes received, and latest activity.',
-  })
-  @ApiOkResponse({
+  @ApiOkResource(MyDiscussionStatsResponseDto, {
     description: 'Discussion statistics returned',
-    type: WrappedMyDiscussionStatsDto,
   })
-  async getMyDiscussionStats(
-    @CurrentUser() user: JwtPayload,
-  ): Promise<MyDiscussionStatsResponseDto> {
-    return this.discussionService.getMyDiscussionStats(user);
+  async getMyDiscussionStats(@CurrentUser() user: JwtPayload) {
+    const result = await this.discussionService.getMyDiscussionStats(user);
+    return this.presenter.getMyDiscussionStats(result);
   }
 
   @Throttle({ default: { limit: 30, ttl: 60_000 } })
   @Post('threads/:threadId/subscribe')
   @ApiAuthAction({
     description: 'Subscription recorded successfully',
-    type: WrappedSubscriptionActionDto,
+    type: DiscussionSubscriptionActionResponseDto,
   })
   async subscribeToThread(
     @CurrentUser() user: JwtPayload,
     @Param('threadId', new ParseUUIDPipe()) threadId: string,
-  ): Promise<{ success: true }> {
-    return this.discussionService.subscribeToThread(user, threadId);
+  ) {
+    const result = await this.discussionService.subscribeToThread(user, threadId);
+    return this.presenter.subscribeToThread(result);
   }
 
   @Throttle({ default: { limit: 30, ttl: 60_000 } })
   @Delete('threads/:threadId/subscribe')
   @ApiAuthAction({
     description: 'Subscription removed successfully',
-    type: WrappedSubscriptionActionDto,
+    type: DiscussionSubscriptionActionResponseDto,
   })
   async unsubscribeFromThread(
     @CurrentUser() user: JwtPayload,
     @Param('threadId', new ParseUUIDPipe()) threadId: string,
-  ): Promise<{ success: true }> {
-    return this.discussionService.unsubscribeFromThread(user, threadId);
+  ) {
+    const result = await this.discussionService.unsubscribeFromThread(user, threadId);
+    return this.presenter.unsubscribeFromThread(result);
   }
 
   @Throttle({ default: { limit: 30, ttl: 60_000 } })
   @Post('threads/:threadId/save')
-  @ApiAuthAction({ description: 'Thread saved successfully', type: WrappedSavedThreadActionDto })
+  @ApiAuthAction({
+    description: 'Thread saved successfully',
+    type: DiscussionSavedThreadActionResponseDto,
+  })
   async saveThread(
     @CurrentUser() user: JwtPayload,
     @Param('threadId', new ParseUUIDPipe()) threadId: string,
-  ): Promise<{ success: true }> {
-    return this.discussionService.saveThread(user, threadId);
+  ) {
+    const result = await this.discussionService.saveThread(user, threadId);
+    return this.presenter.saveThread(result);
   }
 
   @Throttle({ default: { limit: 30, ttl: 60_000 } })
   @Delete('threads/:threadId/save')
   @ApiAuthAction({
     description: 'Saved thread removed successfully',
-    type: WrappedSavedThreadActionDto,
+    type: DiscussionSavedThreadActionResponseDto,
   })
   async unsaveThread(
     @CurrentUser() user: JwtPayload,
     @Param('threadId', new ParseUUIDPipe()) threadId: string,
-  ): Promise<{ success: true }> {
-    return this.discussionService.unsaveThread(user, threadId);
+  ) {
+    const result = await this.discussionService.unsaveThread(user, threadId);
+    return this.presenter.unsaveThread(result);
   }
 
   @Get('threads')
-  @ApiAuth()
-  @ApiOperation({ summary: 'List discussion threads' })
-  @ApiOkResponse({ description: 'Threads returned', type: WrappedPaginatedThreadsDto })
-  async listThreads(
-    @CurrentUser() user: JwtPayload,
-    @Query() query: ListThreadsQueryDto,
-  ): Promise<PaginatedThreadsDto> {
-    return this.discussionService.listThreads(user, {
+  @ApiOkResourceList(ThreadDto, 'cursor', { description: 'Threads returned' })
+  async listThreads(@CurrentUser() user: JwtPayload, @Query() query: ListThreadsQueryDto) {
+    const result = await this.discussionService.listThreads(user, {
       quizId: query.quizId,
       authorId: query.authorId,
       status: query.status,
@@ -258,44 +225,39 @@ export class DiscussionController {
       limit: query.limit,
       cursor: query.cursor ?? null,
     });
+    return this.presenter.listThreads(result);
   }
 
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @Post('threads')
-  @ApiAuth()
-  @ApiOperation({
-    summary: 'Create a new discussion thread',
-    description:
-      'Creates a discussion thread for the specified quiz. The authenticated user becomes the thread author.',
-  })
-  @ApiCreatedResponse({ description: 'Thread created successfully', type: WrappedThreadDto })
-  async createThread(
-    @CurrentUser() user: JwtPayload,
-    @Body() dto: CreateThreadDto,
-  ): Promise<ThreadDto> {
-    return this.discussionService.createThread(user, dto.quizId, dto.title, dto.body);
+  @ApiCreatedResource(ThreadDto, { description: 'Thread created successfully' })
+  async createThread(@CurrentUser() user: JwtPayload, @Body() dto: CreateThreadDto) {
+    return this.presenter.createThread(
+      await this.discussionService.createThread(user, dto.quizId, dto.title, dto.body),
+    );
   }
 
   @Get('threads/:threadId')
-  @ApiAuth()
-  @ApiOperation({ summary: 'Get a thread with its comments' })
-  @ApiOkResponse({ description: 'Thread returned', type: WrappedThreadDetailDto })
+  @ApiOkResource(ThreadDetailDto, { description: 'Thread returned' })
   async getThread(
     @CurrentUser() user: JwtPayload,
     @Param('threadId', new ParseUUIDPipe()) threadId: string,
-  ): Promise<DiscussionThreadDetail | null> {
-    return this.discussionService.getThread(user, threadId);
+  ) {
+    const result = await this.discussionService.getThread(user, threadId);
+    return this.presenter.getThread(result);
   }
 
   @Throttle({ default: { limit: 20, ttl: 60_000 } })
   @Put('threads/:threadId')
-  @ApiAuthAction({ description: 'Thread updated', type: WrappedThreadDto })
+  @ApiAuthAction({ description: 'Thread updated', type: ThreadDto })
   async updateThread(
     @CurrentUser() user: JwtPayload,
     @Param('threadId', new ParseUUIDPipe()) threadId: string,
     @Body() dto: UpdateThreadDto,
-  ): Promise<ThreadDto> {
-    return this.discussionService.updateThread(user, threadId, dto);
+  ) {
+    return this.presenter.updateThread(
+      await this.discussionService.updateThread(user, threadId, dto),
+    );
   }
 
   @Throttle({ default: { limit: 30, ttl: 60_000 } })
@@ -324,34 +286,37 @@ export class DiscussionController {
   @Post('threads/:threadId/solve')
   @ApiAuthAction({
     description: 'Thread marked as solved successfully',
-    type: WrappedThreadSolveDto,
+    type: DiscussionThreadSolveResponseDto,
   })
   async markThreadAsSolved(
     @CurrentUser() user: JwtPayload,
     @Param('threadId', new ParseUUIDPipe()) threadId: string,
     @Body() dto: SolveThreadDto,
-  ): Promise<DiscussionThreadSolveResponseDto> {
+  ) {
     const thread = await this.discussionService.markThreadAsSolved(user, threadId, dto.commentId);
-    return {
+    return this.presenter.markThreadAsSolved({
       threadId: thread.threadId,
       isSolved: thread.isSolved,
       solvedCommentId: thread.solvedCommentId,
       solvedAt: thread.solvedAt,
-    };
+    });
   }
 
   @Throttle({ default: { limit: 20, ttl: 60_000 } })
   @Delete('threads/:threadId/solve')
-  @ApiAuthAction({ description: 'Thread unsolved successfully', type: WrappedThreadUnsolveDto })
+  @ApiAuthAction({
+    description: 'Thread unsolved successfully',
+    type: DiscussionThreadUnsolveResponseDto,
+  })
   async unsolveThread(
     @CurrentUser() user: JwtPayload,
     @Param('threadId', new ParseUUIDPipe()) threadId: string,
-  ): Promise<DiscussionThreadUnsolveResponseDto> {
+  ) {
     const thread = await this.discussionService.unsolveThread(user, threadId);
-    return {
+    return this.presenter.unsolveThread({
       threadId: thread.threadId,
       isSolved: thread.isSolved,
-    };
+    });
   }
 
   @Throttle({ default: { limit: 30, ttl: 60_000 } })
@@ -393,59 +358,61 @@ export class DiscussionController {
 
   @Throttle({ default: { limit: 20, ttl: 60_000 } })
   @Post('threads/:threadId/comments')
-  @ApiAuthAction({ description: 'Comment created', type: WrappedCommentDto })
+  @ApiCreatedResource(CommentDto, { description: 'Comment created' })
   async createComment(
     @CurrentUser() user: JwtPayload,
     @Param('threadId', new ParseUUIDPipe()) threadId: string,
     @Body() dto: CreateCommentDto,
-  ): Promise<CommentDto> {
-    return this.discussionService.createComment(
-      user,
-      threadId,
-      dto.body,
-      dto.parentCommentId ?? null,
+  ) {
+    return this.presenter.createComment(
+      await this.discussionService.createComment(
+        user,
+        threadId,
+        dto.body,
+        dto.parentCommentId ?? null,
+      ),
     );
   }
 
   @Get('threads/:threadId/comments')
-  @ApiAuth()
-  @ApiOperation({ summary: 'List comments on a thread' })
-  @ApiOkResponse({ description: 'Comments returned', type: WrappedPaginatedCommentsDto })
+  @ApiOkResourceList(CommentDto, 'cursor', { description: 'Comments returned' })
   async listComments(
     @CurrentUser() user: JwtPayload,
     @Param('threadId', new ParseUUIDPipe()) threadId: string,
     @Query() query: ListCommentsQueryDto,
-  ): Promise<PaginatedCommentsDto> {
-    return this.discussionService.listComments(user, threadId, {
+  ) {
+    const result = await this.discussionService.listComments(user, threadId, {
       parentCommentId: query.parentCommentId ?? null,
       limit: query.limit,
       cursor: query.cursor ?? null,
     });
+    return this.presenter.listComments(result);
   }
 
   @Get('comments/:commentId')
-  @ApiAuth()
-  @ApiOperation({ summary: 'Get a single comment' })
-  @ApiOkResponse({ description: 'Comment returned', type: WrappedCommentDto })
+  @ApiOkResource(CommentDto, { description: 'Comment returned' })
   async getComment(
     @CurrentUser() user: JwtPayload,
     @Param('commentId', new ParseUUIDPipe()) commentId: string,
-  ): Promise<CommentDto | null> {
-    return this.discussionService.getComment(user, commentId);
+  ) {
+    const result = await this.discussionService.getComment(user, commentId);
+    return this.presenter.getComment(result);
   }
 
   @Throttle({ default: { limit: 20, ttl: 60_000 } })
   @Put('comments/:commentId')
-  @ApiAuthAction({ description: 'Comment updated', type: WrappedCommentDto })
+  @ApiAuthAction({ description: 'Comment updated', type: CommentDto })
   async updateComment(
     @CurrentUser() user: JwtPayload,
     @Param('commentId', new ParseUUIDPipe()) commentId: string,
     @Body() dto: UpdateCommentDto,
-  ): Promise<CommentDto> {
+  ) {
     if (dto.body === undefined) {
       throw new BadRequestException('At least one field must be provided to update a comment');
     }
-    return this.discussionService.updateComment(user, commentId, dto.body);
+    return this.presenter.updateComment(
+      await this.discussionService.updateComment(user, commentId, dto.body),
+    );
   }
 
   @Throttle({ default: { limit: 30, ttl: 60_000 } })
@@ -532,15 +499,13 @@ export class DiscussionController {
 
   @Get('reports')
   @Permissions(Permission.DISCUSSION_MODERATE)
-  @ApiModeratorEndpoint({ description: 'Reports returned', type: WrappedPaginatedReportsDto })
-  async listReports(
-    @CurrentUser() user: JwtPayload,
-    @Query() query: ListReportsQueryDto,
-  ): Promise<PaginatedReportsDto> {
-    return this.discussionService.listReports(user, {
+  @ApiOkResourceList(ReportResponseDto, 'cursor', { description: 'Reports returned' })
+  async listReports(@CurrentUser() user: JwtPayload, @Query() query: ListReportsQueryDto) {
+    const result = await this.discussionService.listReports(user, {
       status: query.status,
       limit: query.limit,
       cursor: query.cursor ?? null,
     });
+    return this.presenter.listReports(result);
   }
 }
