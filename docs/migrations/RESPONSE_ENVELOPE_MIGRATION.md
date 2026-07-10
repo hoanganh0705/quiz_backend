@@ -80,10 +80,11 @@ payload
 **Additions only. Zero risk to existing code.**
 
 - Create `docs/migrations/RESPONSE_ENVELOPE_MIGRATION.md` (this document).
-- Add `src/common/http/api-response.ts` with `ApiResponse.ok()`, `ApiResponse.page()`, and the `PaginationMeta` type. Unit tests in `src/common/http/api-response.spec.ts`.
-- Add `src/common/types/paginated-result.ts` with `PaginatedResult<T>`.
+- Add `src/common/responses/api-response.ts` with `ApiResponse.ok()`, `ApiResponse.page()`, the `ApiResponse<T>` and `ResponseMeta` interfaces. Unit tests in `src/common/responses/api-response.spec.ts`.
+- Add `src/common/responses/pagination.ts` with `CursorPagination`, `OffsetPagination`, and the `PaginationMeta` discriminated union.
+- Add `src/common/responses/paginated-result.ts` with `PaginatedResult<T>` (a domain-level concept shared between application services and presenters).
 - Add `src/common/swagger/api-ok.ts` with `ApiOkResource()` and `ApiOkResourceList(model, 'cursor' | 'offset')` decorators.
-- Add `test/e2e/envelope.spec.ts` smoke test that hits one endpoint per module; asserts `data`, `meta.timestamp` (ISO 8601), and (when paginated) `meta.pagination`. This is the e2e backstop for the entire migration.
+- Add `test/e2e/envelope.spec.ts` smoke test that hits one endpoint per module; asserts `data`, `meta.timestamp` (ISO 8601), and (when paginated) `meta.pagination` (with the discriminator `kind` field set correctly per endpoint). This is the e2e backstop for the entire migration.
 
 **Exit criteria:** all tests pass; no production code touched.
 
@@ -195,31 +196,56 @@ For each of the 13 domain exception filters:
 
 Each of these decisions was discussed critically before adopting. This section explains the reasoning and the trade-offs considered.
 
-### Decision 1 — Minimal helper API (2 methods)
+### Decision 1 — Minimal helper API (2 methods, discriminated pagination)
 
-**Adopted:** `ApiResponse.ok(data)` and `ApiResponse.page(data, pagination)`. Optionally `ApiResponse.ack(message?)` for `Promise<void>` endpoints that want to return a body.
-
-**Why minimal is right:**
-- 5 method variants over-specify. Most endpoints have one of two cases: a resource (object or array) or a paginated resource. Three of the five previously considered methods (`array`, `offsetPaginated`, `acknowledged`) were redundant with type distinctions that didn't pay rent.
-- A smaller API is harder to misuse.
-- It scales better because every endpoint maps to one of two patterns, so adding a new method becomes a non-decision.
-
-**Pagination unification:** rather than `paginated()` + `offsetPaginated()`, a single `PaginationMeta` interface with optional fields:
+**Adopted:**
 
 ```ts
-interface PaginationMeta {
-  // cursor fields
-  limit?: number;
-  hasNextPage?: boolean;
-  nextCursor?: string | null;
-  // offset fields
-  page?: number;
-  total?: number;
-  hasMore?: boolean;
+class ApiResponse {
+  static ok<T>(data: T): ApiResponse<T>;
+  static page<T>(items: readonly T[], pagination: PaginationMeta): ApiResponse<T[]>;
 }
 ```
 
-…makes the discriminator implicit (which fields are populated) rather than explicit (which factory to call).
+…where `PaginationMeta` is a discriminated union:
+
+```ts
+interface CursorPagination {
+  readonly kind: 'cursor';
+  readonly limit: number;
+  readonly hasNextPage: boolean;
+  readonly nextCursor: string | null;
+}
+
+interface OffsetPagination {
+  readonly kind: 'offset';
+  readonly page: number;
+  readonly limit: number;
+  readonly total: number;
+  readonly hasMore: boolean;
+}
+
+type PaginationMeta = CursorPagination | OffsetPagination;
+```
+
+**Why two methods are right (and a third would be wrong):**
+- 5 method variants over-specify. Most endpoints have one of two cases: a resource (object or array) or a paginated resource. The original 5-method design had three methods (`array`, `offsetPaginated`, `acknowledged`) that were redundant with type distinctions that didn't pay rent.
+- A smaller API is harder to misuse.
+- It scales better because every endpoint maps to one of two patterns, so adding a new method becomes a non-decision.
+- `Promise<void>` handlers that want a message body should have the **service** return `{ message }` (or similar) and let the presenter wrap it via `ApiResponse.ok({ message })`. A separate `ApiResponse.ack(message?)` would re-introduce the "shape variant" problem the migration is trying to eliminate (it would return `ApiResponse<{ message } | null>`, a union inside `data`, which is the very inconsistency the migration eliminates elsewhere). For handlers with no body, `ApiResponse.ok(null)` is sufficient and matches current behavior.
+
+**Pagination unification (discriminated union, not optional fields):**
+
+The first draft of this plan proposed a single `PaginationMeta` interface with optional fields (`page?: number; total?: number; nextCursor?: string | null; …`). That's wrong. The optional-field approach lets TypeScript accept `{ limit: 10 }` (no cursor, no offset) — a shape with no valid consumer behavior — and produces a `Partial<PaginationMeta>` in client SDKs, which is awful.
+
+A discriminated union with a `kind: 'cursor' | 'offset'` literal:
+- Enforces at the call site that **exactly one** of the two shapes is passed.
+- Makes mixing `page` and `nextCursor` in the same object a compile error.
+- Narrowes correctly inside conditional blocks (`if (pagination.kind === 'cursor')`).
+- Renders cleanly in OpenAPI via a discriminator field (rather than `allOf` of two optional shapes).
+- Keeps the runtime helper to a single method: `ApiResponse.page(items, pagination)` — the type system does the discrimination. Splitting into `cursor()` + `offset()` would only add two factory methods that produce identical wire output.
+
+**One method or two at the Swagger layer?** Two schema classes (`CursorPaginationMeta`, `OffsetPaginationMeta`) are still needed for OpenAPI `$ref` generation, because the NestJS Swagger plugin emits `$ref` from concrete classes and doesn't natively model discriminated unions. That's a documentation-time concern, not a runtime concern: the runtime helper is one method (`page`); the schema classes are two. The decorator `ApiOkResourceList(model, kind)` takes a `kind` parameter at the *controller* layer to pick which schema class to reference — that parameter never appears in the wire response.
 
 ### Decision 2 — Services stay domain-clean; introduce a Presenter layer
 
@@ -350,17 +376,12 @@ This runs in parallel as Phase 3.
 
 ## 5. Helpers and infra to introduce
 
-### 5.1 `src/common/http/api-response.ts`
+### 5.1 `src/common/responses/api-response.ts`
 
 ```ts
-export interface PaginationMeta {
-  limit?: number;
-  hasNextPage?: boolean;
-  nextCursor?: string | null;
-  page?: number;
-  total?: number;
-  hasMore?: boolean;
-}
+import type { CursorPagination, OffsetPagination } from './pagination';
+
+export type PaginationMeta = CursorPagination | OffsetPagination;
 
 export interface ResponseMeta {
   timestamp: string;
@@ -380,29 +401,66 @@ export class ApiResponse {
   static page<T>(items: readonly T[], pagination: PaginationMeta): ApiResponse<T[]> {
     return { data: [...items], meta: { timestamp: new Date().toISOString(), pagination } };
   }
-
-  static ack(message?: string): ApiResponse<{ message: string } | null> {
-    return {
-      data: message ? { message } : null,
-      meta: { timestamp: new Date().toISOString() },
-    };
-  }
 }
 ```
 
-Unit tests in `src/common/http/api-response.spec.ts` covering: `ok` with various types (object, array, null), `page` with cursor meta and offset meta, `ack` with and without message.
-
-### 5.2 `src/common/types/paginated-result.ts`
+### 5.1a `src/common/responses/pagination.ts`
 
 ```ts
-import { PaginationMeta } from '@/common/http/api-response';
+import { ApiProperty } from '@nestjs/swagger';
+
+export class CursorPagination {
+  @ApiProperty({ example: 'cursor' })
+  readonly kind!: 'cursor';
+
+  @ApiProperty({ example: 20 })
+  readonly limit!: number;
+
+  @ApiProperty({ example: true })
+  readonly hasNextPage!: boolean;
+
+  @ApiProperty({ example: 'eyJpZCI6Li4ufQ==', nullable: true })
+  readonly nextCursor!: string | null;
+}
+
+export class OffsetPagination {
+  @ApiProperty({ example: 'offset' })
+  readonly kind!: 'offset';
+
+  @ApiProperty({ example: 1 })
+  readonly page!: number;
+
+  @ApiProperty({ example: 20 })
+  readonly limit!: number;
+
+  @ApiProperty({ example: 1342 })
+  readonly total!: number;
+
+  @ApiProperty({ example: false })
+  readonly hasMore!: boolean;
+}
+
+export type PaginationMeta = CursorPagination | OffsetPagination;
+```
+
+**Note:** `CursorPagination` and `OffsetPagination` are declared with `@ApiProperty` decorators because they serve double duty — they're the runtime TypeScript types *and* the OpenAPI schema classes for `meta.pagination`. The discriminator field `kind: 'cursor' | 'offset'` lets OpenAPI tooling (Swagger UI, `openapi-typescript`, `orval`) render them as a discriminated union.
+
+Unit tests in `src/common/responses/api-response.spec.ts` covering: `ok` with various types (object, array, null), `page` with cursor `PaginationMeta` and offset `PaginationMeta`. Confirm `ok(null)` produces `{ data: null, meta: { timestamp } }` (the canonical "no body" envelope).
+
+### 5.2 `src/common/responses/paginated-result.ts`
+
+```ts
+import type { PaginationMeta } from '@/common/responses/pagination';
 
 export interface PaginatedResult<T> {
   readonly items: readonly T[];
   readonly pagination: PaginationMeta;
 }
 
-export const paginated = <T>(items: readonly T[], pagination: PaginationMeta): PaginatedResult<T> => ({
+export const paginated = <T>(
+  items: readonly T[],
+  pagination: PaginationMeta,
+): PaginatedResult<T> => ({
   items,
   pagination,
 });
@@ -457,8 +515,8 @@ export const ApiOkResourceList = <T extends Type>(
 ### 5.4 `src/common/swagger/swagger-schemas.ts` additions
 
 ```ts
-import { ObjectType, Field } from '@nestjs/graphql';
 import { ApiProperty } from '@nestjs/swagger';
+import { CursorPagination, OffsetPagination } from '@/common/responses/pagination';
 
 export class TimestampOnly {
   @ApiProperty({ example: '2026-06-25T10:30:00.000Z' })
@@ -467,27 +525,12 @@ export class TimestampOnly {
 
 export class CursorPaginationMeta {
   @ApiProperty() timestamp!: string;
-  @ApiProperty({
-    properties: {
-      limit: { type: 'number' },
-      hasNextPage: { type: 'boolean' },
-      nextCursor: { type: 'string', nullable: true },
-    },
-  })
-  pagination!: { limit: number; hasNextPage: boolean; nextCursor: string | null };
+  @ApiProperty({ type: () => CursorPagination }) pagination!: CursorPagination;
 }
 
 export class OffsetPaginationMeta {
   @ApiProperty() timestamp!: string;
-  @ApiProperty({
-    properties: {
-      page: { type: 'number' },
-      limit: { type: 'number' },
-      total: { type: 'number' },
-      hasMore: { type: 'boolean' },
-    },
-  })
-  pagination!: { page: number; limit: number; total: number; hasMore: boolean };
+  @ApiProperty({ type: () => OffsetPagination }) pagination!: OffsetPagination;
 }
 
 export class WrappedDto<T> {
@@ -505,6 +548,10 @@ export class OffsetWrappedDto<T> {
   @ApiProperty({ type: () => OffsetPaginationMeta }) meta!: OffsetPaginationMeta;
 }
 ```
+
+**Why two schema classes (`CursorWrappedDto`, `OffsetWrappedDto`) instead of one generic `WrappedDto<T, P>`:** the Swagger plugin emits `$ref` from concrete classes, and OpenAPI client codegen (via `openapi-typescript`, `orval`, etc.) handles discriminated unions correctly only when the discriminator is a runtime field on a single class hierarchy — not when it's a generic type parameter. Two concrete classes share the discriminator field through the shared `CursorPagination` / `OffsetPagination` types, so the OpenAPI spec correctly renders two envelope variants with a discriminator. A multi-parameter generic `WrappedDto<T, P>` would force `allOf` composition and produce `Partial<PaginationMeta>` (or `unknown`) in client SDKs.
+
+**Why these schema classes are not in `src/common/responses/`:** they're not part of the runtime wire-format API. They're OpenAPI documentation-only. Co-locating them in `src/common/swagger/` keeps the runtime and documentation concerns separated.
 
 ### 5.5 `src/common/filters/global-exception.filter.ts`
 
@@ -565,7 +612,7 @@ Assuming 1 developer, sequential execution. With 2 developers on independent mod
 | Phase 4 removes heuristic before all services migrated → 500s | Low | Medium | Phase 4 is gated on Phase 2 completion. The wrap-fallback retains the same output as before, so the only change is the loss of "smart" inference — and that produces a `Logger.warn`, not a 500. |
 | Achievement E-variant breaks clients that read `data.total` | Medium | Medium | Phase 2 PR description explicitly documents the schema change. Coordinate with frontend before merge. |
 | Tag D-variant services are untyped in `tag.application.service.ts`, so the migration can't determine current shape | Medium | Low | Read the application service body and DTO during Phase 2. The Swagger examples already document the broken shape, so the D-variant status is observable from documentation alone. |
-| Offset pagination in tournament and ranking has a different `pagination` shape than cursor pagination | High | Low | The destination uses a single `PaginationMeta` interface with optional fields (cursor or offset discriminators). Both factory overloads produce the same envelope shape, just with different `pagination` content. Document the distinction in `PaginationMeta` JSDoc. |
+| Offset pagination in tournament and ranking has a different `pagination` shape than cursor pagination | High | Low | The destination uses a single `PaginationMeta` discriminated union (`CursorPagination | OffsetPagination`) — the `kind: 'cursor' \| 'offset'` discriminator field on the runtime object makes the shape explicit. The factory overload `ApiResponse.page(items, pagination)` accepts either branch. Document the discriminator in `PaginationMeta` JSDoc so Swagger schema generation picks up the `kind` field. |
 | Health endpoint's `@Res({ passthrough: true })` bypasses the interceptor | Low | Low | Phase 5 proposes an exception-based health refactor as a follow-up, not a blocker. Phase 4 retains the bypass branch. |
 | OpenAPI client generation breaks because `allOf` produces `any` types | Medium | Medium | Run the existing OpenAPI codegen (whatever the frontend uses) against the new spec early — preferably at end of Phase 1. Verify a few representative endpoints produce correct types. If not, fall back to per-module `Wrapped*Dto` classes (defeats some of the gain but keeps codegen happy). |
 | `Promise<void>` handlers now have a body — clients that check `response.status === 204` will see 200 with `data: null` | Low | Low | Currently all `Promise<void>` returns render as `{ data: null, meta: { timestamp } }` with HTTP 200 anyway. The migration doesn't change behavior here. Document it for client teams that relied on the `Promise<void>` semantics. |
@@ -731,9 +778,10 @@ Difficulty: medium. 1-2 days.
 
 | Path | Purpose |
 |---|---|
-| `src/common/http/api-response.ts` | `ApiResponse.ok`, `ApiResponse.page`, `ApiResponse.ack` |
-| `src/common/http/api-response.spec.ts` | Unit tests |
-| `src/common/types/paginated-result.ts` | `PaginatedResult<T>` |
+| `src/common/responses/api-response.ts` | `ApiResponse.ok`, `ApiResponse.page`, `ApiResponse<T>` and `ResponseMeta` types |
+| `src/common/responses/api-response.spec.ts` | Unit tests |
+| `src/common/responses/pagination.ts` | `CursorPagination`, `OffsetPagination`, `PaginationMeta` discriminated union |
+| `src/common/responses/paginated-result.ts` | `PaginatedResult<T>` (domain-level concept shared by services and presenters) |
 | `src/common/swagger/api-ok.ts` | `ApiOkResource`, `ApiOkResourceList` decorators |
 | `<module>/transport/presenters/<module>.presenter.ts` | One per module (~17 files) |
 | `test/e2e/envelope.spec.ts` | Smoke test for envelope shape |
@@ -756,6 +804,7 @@ Difficulty: medium. 1-2 days.
 
 ---
 
-**Document version:** 1.0
-**Last updated:** 2026-07-09
+**Document version:** 1.1
+**Last updated:** 2026-07-10
+**Changes since 1.0:** Decision 1 refactored — dropped `ApiResponse.ack()`, replaced the optional-fields `PaginationMeta` interface with a discriminated union (`CursorPagination | OffsetPagination`), and unified the runtime helper to a single `ApiResponse.page(items, pagination)` method. Renamed `src/common/http/` to `src/common/responses/` to reflect the architectural separation between presentation helpers and HTTP-specific concerns.
 **Owner:** TBD — please assign a reviewer and a per-phase owner once approved.
