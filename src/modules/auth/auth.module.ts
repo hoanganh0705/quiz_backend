@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { AuthController } from './transport/controller/auth.controller';
 import { AuthApplicationService } from './application/auth.application.service';
 import { AuthResponseMapper } from './mappers/auth-response.mapper';
+import { AuthPresenter } from './transport/presenters/auth.presenter';
 import { AuthLoginService } from './domain/auth-login.service';
 import { AuthRefreshService } from './domain/auth-refresh.service';
 import { AuthRegistrationService } from './domain/auth-registration.service';
@@ -76,6 +77,8 @@ import { AuthSecurityNotificationService } from '@/modules/notification/domain/s
     // Application
     AuthApplicationService,
     AuthResponseMapper,
+    // Presentation
+    AuthPresenter,
     // Domain services
     AuthRegistrationService,
     AuthLoginService,
