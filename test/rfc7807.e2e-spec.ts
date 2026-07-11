@@ -120,6 +120,32 @@ import {
   TournamentValidationError,
   TournamentWithdrawClosedError,
 } from '@/modules/tournament/domain/errors';
+import {
+  ReviewAlreadyReportedError,
+  ReviewAttemptRequiredError,
+  ReviewConflictError,
+  ReviewForbiddenError,
+  ReviewNotFoundError,
+  ReviewValidationError,
+} from '@/modules/review/domain/errors';
+import {
+  BookmarkCollectionNotFoundError,
+  BookmarkConflictError,
+  BookmarkNotFoundError,
+  BookmarkValidationError,
+  CollectionConflictError,
+  CollectionForbiddenError,
+  CollectionNotFoundError,
+} from '@/modules/bookmark/domain/errors';
+import {
+  InstanceAlreadyClosedError,
+  InstanceAlreadyStartedError,
+  InstanceFullError,
+  InstanceNotFoundError,
+  InstanceNotHostError,
+  InstanceNotOpenError,
+  PlayerAlreadyJoinedError,
+} from '@/modules/instance/domain/errors';
 import { serverConfig } from '@/core/config';
 
 interface ProblemWire {
@@ -528,6 +554,195 @@ class Rfc7807FixtureController {
   @Get('tournament/withdraw-closed')
   tournamentWithdrawClosed(): never {
     throw new TournamentWithdrawClosedError();
+  }
+
+  // Review-module endpoints — Phase 2 live-mapping coverage. 6 concrete
+  // exceptions → 4 status codes (400/403/404/409). Each endpoint throws
+  // a real review exception; if `ProblemCodeMapping` or the review
+  // classes drift, the e2e tests in the review describe-block below
+  // fail.
+
+  @Get('review/not-found')
+  reviewNotFound(): never {
+    // Verify wire-shape improvement: 3 throw sites pass `'Quiz not
+    // found'`. The prior filter rewrote them to `'Review not found'`.
+    // The global filter preserves the thrown message.
+    throw new ReviewNotFoundError('Quiz not found');
+  }
+
+  @Get('review/forbidden')
+  reviewForbidden(): never {
+    // Verify wire-shape improvement: prior filter rewrote all to
+    // `'You do not have permission to perform this action'`. Global
+    // filter preserves thrown message.
+    throw new ReviewForbiddenError();
+  }
+
+  @Get('review/conflict')
+  reviewConflict(): never {
+    // Verify wire-shape improvement: prior filter rewrote all to
+    // `'Resource already exists'`. Global filter preserves thrown
+    // message (`'You have already reviewed this quiz'`).
+    throw new ReviewConflictError();
+  }
+
+  @Get('review/validation')
+  reviewValidation(): never {
+    // Verify wire-shape improvement: prior filter rewrote all to
+    // `'Invalid request data'`. Global filter preserves thrown
+    // message.
+    throw new ReviewValidationError('You cannot vote on your own review');
+  }
+
+  @Get('review/attempt-required')
+  reviewAttemptRequired(): never {
+    // Verify wire-shape improvement: prior filter rewrote all to
+    // `'Invalid request data'`. Global filter preserves thrown
+    // message.
+    throw new ReviewAttemptRequiredError();
+  }
+
+  @Get('review/already-reported')
+  reviewAlreadyReported(): never {
+    // Verify wire-shape improvement: prior filter rewrote all to
+    // `'You have already reported this review'`. Global filter
+    // preserves thrown message (which happens to be the same string
+    // by default).
+    throw new ReviewAlreadyReportedError();
+  }
+
+  // Bookmark-module endpoints — Phase 2 live-mapping coverage. 7
+  // concrete exceptions → 4 status codes (400/403/404/409). Each
+  // endpoint throws a real bookmark exception; if
+  // `ProblemCodeMapping` or the bookmark classes drift, the e2e tests
+  // in the bookmark describe-block below fail.
+
+  @Get('bookmark/not-found')
+  bookmarkNotFound(): never {
+    // Verify wire-shape improvement: prior filter rewrote all to
+    // `'Resource not found'`. Global filter preserves thrown message.
+    throw new BookmarkNotFoundError();
+  }
+
+  @Get('bookmark/collection-not-found')
+  bookmarkCollectionNotFound(): never {
+    // Verify wire-shape improvement: prior filter rewrote all to
+    // `'Resource not found'`. Global filter preserves thrown message.
+    // One call site passes `'Quiz not found'`.
+    throw new CollectionNotFoundError('Quiz not found');
+  }
+
+  @Get('bookmark/analytics-not-found')
+  bookmarkAnalyticsNotFound(): never {
+    // Verify wire-shape improvement: prior filter rewrote all to
+    // `'Bookmark collection analytics not found'`, even when a
+    // distinct message was thrown. Global filter preserves thrown
+    // message.
+    throw new BookmarkCollectionNotFoundError(
+      'Collection was deleted while processing this request. Please retry.',
+    );
+  }
+
+  @Get('bookmark/collection-forbidden')
+  bookmarkCollectionForbidden(): never {
+    // Verify wire-shape improvement: prior filter rewrote all to
+    // `'You do not have permission to perform this action'`. Global
+    // filter preserves thrown message.
+    throw new CollectionForbiddenError();
+  }
+
+  @Get('bookmark/conflict')
+  bookmarkConflict(): never {
+    // Verify wire-shape improvement: prior filter rewrote all to
+    // `'Resource already exists'`. Global filter preserves thrown
+    // message.
+    throw new BookmarkConflictError();
+  }
+
+  @Get('bookmark/collection-conflict')
+  bookmarkCollectionConflict(): never {
+    // Verify wire-shape improvement: prior filter rewrote all to
+    // `'Resource already exists'`. Global filter preserves thrown
+    // message.
+    throw new CollectionConflictError();
+  }
+
+  @Get('bookmark/validation')
+  bookmarkValidation(): never {
+    // Verify wire-shape improvement: prior filter rewrote all to
+    // `'Invalid request data'`. Global filter preserves thrown
+    // message.
+    throw new BookmarkValidationError('Bookmark validation failed');
+  }
+
+  // Instance-module endpoints — Phase 2 live-mapping coverage. 7
+  // concrete exceptions → 4 status codes (400/403/404/409). Each
+  // endpoint throws a real instance exception; if
+  // `ProblemCodeMapping` or the instance classes drift, the e2e tests
+  // in the instance describe-block below fail.
+  //
+  // Special note: the instance module has TWO exception filters —
+  // `InstanceDomainExceptionFilter` (HTTP, controller-scoped, deleted
+  // in Phase 2) and `WsExceptionFilter` (WS gateway, KEPT — handles
+  // only auth/generic, not domain errors). The HTTP endpoint block
+  // here only exercises the HTTP path.
+
+  @Get('instance/not-found')
+  instanceNotFound(): never {
+    // Verify wire-shape improvement: prior filter rewrote all to
+    // `'Resource not found'`. Global filter preserves thrown
+    // message.
+    throw new InstanceNotFoundError();
+  }
+
+  @Get('instance/not-host')
+  instanceNotHost(): never {
+    // Verify wire-shape improvement: prior filter rewrote all to
+    // `'You do not have permission to perform this action'`. Global
+    // filter preserves thrown message.
+    throw new InstanceNotHostError();
+  }
+
+  @Get('instance/not-open')
+  instanceNotOpen(): never {
+    // Verify wire-shape improvement: prior filter rewrote all to
+    // `'Invalid request data'`. Global filter preserves thrown
+    // message.
+    throw new InstanceNotOpenError();
+  }
+
+  @Get('instance/full')
+  instanceFull(): never {
+    // Verify wire-shape improvement: prior filter rewrote all to
+    // `'Invalid request data'`. Global filter preserves thrown
+    // message.
+    throw new InstanceFullError();
+  }
+
+  @Get('instance/already-started')
+  instanceAlreadyStarted(): never {
+    // Verify wire-shape improvement: prior filter rewrote all to
+    // `'Invalid request data'`. Global filter preserves thrown
+    // message.
+    throw new InstanceAlreadyStartedError();
+  }
+
+  @Get('instance/already-closed')
+  instanceAlreadyClosed(): never {
+    // Verify wire-shape improvement: prior filter rewrote all to
+    // `'Invalid request data'`. Global filter preserves thrown
+    // message.
+    throw new InstanceAlreadyClosedError();
+  }
+
+  @Get('instance/player-already-joined')
+  instancePlayerAlreadyJoined(): never {
+    // Verify wire-shape improvement: prior filter rewrote all to
+    // `'Resource already exists'`. Global filter preserves thrown
+    // message. Note: this exception is defined but currently not
+    // thrown by `instance.service.ts` — see docblock on
+    // `PlayerAlreadyJoinedError`.
+    throw new PlayerAlreadyJoinedError();
   }
 
   @Get('http-not-found')
@@ -1485,6 +1700,303 @@ describe('RFC 7807 ProblemDetail (Phase 0 backstop)', () => {
         .expect(400);
       const body = res.body as ProblemWire;
       expect(body.extensions?.code).toBe('TOURNAMENT_WITHDRAW_CLOSED');
+    });
+  });
+
+  describe('Review-module exceptions (Phase 2 — fourth legacy → RFC 7807 conversion)', () => {
+    // 6 concrete exceptions → 4 status codes (400/403/404/409). Second
+    // module in Phase 2 with an existing `*DomainErrorDto` Swagger DTO
+    // to delete (the last is instance — see v4.5). The prior
+    // per-module filter rewrote almost every exception's message to
+    // a hardcoded generic. After Phase 2 the thrown message survives
+    // — verified per-row below.
+
+    it('ReviewNotFoundError → 404 REVIEW_NOT_FOUND (wire-shape improvement)', async () => {
+      // Wire-shape improvement: 3 throw sites in `review.service.ts`
+      // pass `'Quiz not found'`. The prior filter rewrote them to
+      // `'Review not found'`. The global filter preserves the thrown
+      // message.
+      const res = await request(app.getHttpServer())
+        .get('/rfc7807-fixture/review/not-found')
+        .expect(404);
+      const body = res.body as ProblemWire;
+      expect(body.title).toBe('NotFound');
+      expect(body.detail).toBe('Quiz not found');
+      expect(body.extensions?.code).toBe('REVIEW_NOT_FOUND');
+    });
+
+    it('ReviewForbiddenError → 403 REVIEW_FORBIDDEN (wire-shape improvement)', async () => {
+      // Wire-shape improvement: prior filter rewrote all to `'You do
+      // not have permission to perform this action'`. Global filter
+      // preserves thrown message.
+      const res = await request(app.getHttpServer())
+        .get('/rfc7807-fixture/review/forbidden')
+        .expect(403);
+      const body = res.body as ProblemWire;
+      expect(body.title).toBe('Forbidden');
+      expect(body.detail).toBe('You do not have permission to manage this review');
+      expect(body.extensions?.code).toBe('REVIEW_FORBIDDEN');
+    });
+
+    it('ReviewConflictError → 409 REVIEW_CONFLICT (wire-shape improvement)', async () => {
+      // Wire-shape improvement: prior filter rewrote all to
+      // `'Resource already exists'`. Global filter preserves thrown
+      // message.
+      const res = await request(app.getHttpServer())
+        .get('/rfc7807-fixture/review/conflict')
+        .expect(409);
+      const body = res.body as ProblemWire;
+      expect(body.title).toBe('Conflict');
+      expect(body.detail).toBe('You have already reviewed this quiz');
+      expect(body.extensions?.code).toBe('REVIEW_CONFLICT');
+    });
+
+    it('ReviewValidationError → 400 REVIEW_VALIDATION (wire-shape improvement)', async () => {
+      // Wire-shape improvement: prior filter rewrote all to
+      // `'Invalid request data'`. Global filter preserves thrown
+      // message.
+      const res = await request(app.getHttpServer())
+        .get('/rfc7807-fixture/review/validation')
+        .expect(400);
+      const body = res.body as ProblemWire;
+      expect(body.title).toBe('BadRequest');
+      expect(body.detail).toBe('You cannot vote on your own review');
+      expect(body.extensions?.code).toBe('REVIEW_VALIDATION');
+    });
+
+    it('ReviewAttemptRequiredError → 400 REVIEW_ATTEMPT_REQUIRED (wire-shape improvement)', async () => {
+      // Wire-shape improvement: prior filter rewrote all to
+      // `'Invalid request data'`. Global filter preserves thrown
+      // message.
+      const res = await request(app.getHttpServer())
+        .get('/rfc7807-fixture/review/attempt-required')
+        .expect(400);
+      const body = res.body as ProblemWire;
+      expect(body.detail).toBe('You must complete at least one attempt before reviewing this quiz');
+      expect(body.extensions?.code).toBe('REVIEW_ATTEMPT_REQUIRED');
+    });
+
+    it('ReviewAlreadyReportedError → 409 REVIEW_ALREADY_REPORTED (wire-shape improvement)', async () => {
+      // Wire-shape improvement: prior filter rewrote all to `'You
+      // have already reported this review'`. Global filter preserves
+      // thrown message (which matches the prior hardcoded string by
+      // default — verified here for completeness).
+      const res = await request(app.getHttpServer())
+        .get('/rfc7807-fixture/review/already-reported')
+        .expect(409);
+      const body = res.body as ProblemWire;
+      expect(body.title).toBe('Conflict');
+      expect(body.detail).toBe('You have already reported this review');
+      expect(body.extensions?.code).toBe('REVIEW_ALREADY_REPORTED');
+    });
+  });
+
+  describe('Bookmark-module exceptions (Phase 2 — fifth legacy → RFC 7807 conversion)', () => {
+    // 7 concrete exceptions → 4 status codes (400/403/404/409). Third
+    // module with an existing `*DomainErrorDto` Swagger DTO to delete
+    // (the last is instance — see v4.5+). The prior per-module filter
+    // rewrote almost every exception's message to a hardcoded
+    // generic. After Phase 2 the thrown message survives — verified
+    // per-row below.
+
+    it('BookmarkNotFoundError → 404 BOOKMARK_NOT_FOUND (wire-shape improvement)', async () => {
+      // Wire-shape improvement: prior filter rewrote all to
+      // `'Resource not found'`. Global filter preserves thrown
+      // message.
+      const res = await request(app.getHttpServer())
+        .get('/rfc7807-fixture/bookmark/not-found')
+        .expect(404);
+      const body = res.body as ProblemWire;
+      expect(body.title).toBe('NotFound');
+      expect(body.detail).toBe('Bookmark not found');
+      expect(body.extensions?.code).toBe('BOOKMARK_NOT_FOUND');
+    });
+
+    it('CollectionNotFoundError → 404 COLLECTION_NOT_FOUND (wire-shape improvement)', async () => {
+      // Wire-shape improvement: prior filter rewrote all to
+      // `'Resource not found'`. Global filter preserves thrown
+      // message. One call site (`bookmark-command.service.ts:161`)
+      // passes `'Quiz not found'` — verified here.
+      const res = await request(app.getHttpServer())
+        .get('/rfc7807-fixture/bookmark/collection-not-found')
+        .expect(404);
+      const body = res.body as ProblemWire;
+      expect(body.title).toBe('NotFound');
+      expect(body.detail).toBe('Quiz not found');
+      expect(body.extensions?.code).toBe('COLLECTION_NOT_FOUND');
+    });
+
+    it('BookmarkCollectionNotFoundError → 404 BOOKMARK_COLLECTION_NOT_FOUND (wire-shape improvement)', async () => {
+      // Wire-shape improvement: prior filter rewrote all to
+      // `'Bookmark collection analytics not found'`, even for throw
+      // sites that passed distinct messages. Global filter preserves
+      // thrown message.
+      const res = await request(app.getHttpServer())
+        .get('/rfc7807-fixture/bookmark/analytics-not-found')
+        .expect(404);
+      const body = res.body as ProblemWire;
+      expect(body.title).toBe('NotFound');
+      expect(body.detail).toBe(
+        'Collection was deleted while processing this request. Please retry.',
+      );
+      expect(body.extensions?.code).toBe('BOOKMARK_COLLECTION_NOT_FOUND');
+    });
+
+    it('CollectionForbiddenError → 403 COLLECTION_FORBIDDEN (wire-shape improvement)', async () => {
+      // Wire-shape improvement: prior filter rewrote all to `'You do
+      // not have permission to perform this action'`. Global filter
+      // preserves thrown message.
+      const res = await request(app.getHttpServer())
+        .get('/rfc7807-fixture/bookmark/collection-forbidden')
+        .expect(403);
+      const body = res.body as ProblemWire;
+      expect(body.title).toBe('Forbidden');
+      expect(body.detail).toBe('You do not have permission to manage this collection');
+      expect(body.extensions?.code).toBe('COLLECTION_FORBIDDEN');
+    });
+
+    it('BookmarkConflictError → 409 BOOKMARK_CONFLICT (wire-shape improvement)', async () => {
+      // Wire-shape improvement: prior filter rewrote all to
+      // `'Resource already exists'`. Global filter preserves thrown
+      // message.
+      const res = await request(app.getHttpServer())
+        .get('/rfc7807-fixture/bookmark/conflict')
+        .expect(409);
+      const body = res.body as ProblemWire;
+      expect(body.title).toBe('Conflict');
+      expect(body.detail).toBe('This quiz is already bookmarked in this collection');
+      expect(body.extensions?.code).toBe('BOOKMARK_CONFLICT');
+    });
+
+    it('CollectionConflictError → 409 COLLECTION_CONFLICT (wire-shape improvement)', async () => {
+      // Wire-shape improvement: prior filter rewrote all to
+      // `'Resource already exists'`. Global filter preserves thrown
+      // message.
+      const res = await request(app.getHttpServer())
+        .get('/rfc7807-fixture/bookmark/collection-conflict')
+        .expect(409);
+      const body = res.body as ProblemWire;
+      expect(body.title).toBe('Conflict');
+      expect(body.detail).toBe('A collection with this name already exists');
+      expect(body.extensions?.code).toBe('COLLECTION_CONFLICT');
+    });
+
+    it('BookmarkValidationError → 400 BOOKMARK_VALIDATION (wire-shape improvement)', async () => {
+      // Wire-shape improvement: prior filter rewrote all to
+      // `'Invalid request data'`. Global filter preserves thrown
+      // message.
+      const res = await request(app.getHttpServer())
+        .get('/rfc7807-fixture/bookmark/validation')
+        .expect(400);
+      const body = res.body as ProblemWire;
+      expect(body.title).toBe('BadRequest');
+      expect(body.detail).toBe('Bookmark validation failed');
+      expect(body.extensions?.code).toBe('BOOKMARK_VALIDATION');
+    });
+  });
+
+  describe('Instance-module exceptions (Phase 2 — sixth legacy → RFC 7807 conversion)', () => {
+    // 7 concrete exceptions → 4 status codes (400/403/404/409). Fourth
+    // module with an existing `*DomainErrorDto` Swagger DTO to delete
+    // (completing §8.3's "No *DomainErrorDto files remain" criterion).
+    // Most complex Phase-2 conversion so far: TWO filters in the module
+    // (HTTP + WS), `oneOf` schema simplification in the controller, and
+    // one exception (`PlayerAlreadyJoinedError`) defined but not
+    // currently thrown.
+    //
+    // The prior per-module HTTP filter rewrote almost every
+    // exception's message to a hardcoded generic. After Phase 2 the
+    // thrown message survives — verified per-row below.
+
+    it('InstanceNotFoundError → 404 INSTANCE_NOT_FOUND (wire-shape improvement)', async () => {
+      // Wire-shape improvement: prior filter rewrote all to
+      // `'Resource not found'`. Global filter preserves thrown
+      // message.
+      const res = await request(app.getHttpServer())
+        .get('/rfc7807-fixture/instance/not-found')
+        .expect(404);
+      const body = res.body as ProblemWire;
+      expect(body.title).toBe('NotFound');
+      expect(body.detail).toBe('Quiz instance not found');
+      expect(body.extensions?.code).toBe('INSTANCE_NOT_FOUND');
+    });
+
+    it('InstanceNotHostError → 403 INSTANCE_NOT_HOST (wire-shape improvement)', async () => {
+      // Wire-shape improvement: prior filter rewrote all to
+      // `'You do not have permission to perform this action'`.
+      // Global filter preserves thrown message.
+      const res = await request(app.getHttpServer())
+        .get('/rfc7807-fixture/instance/not-host')
+        .expect(403);
+      const body = res.body as ProblemWire;
+      expect(body.title).toBe('Forbidden');
+      expect(body.detail).toBe('Only the host can perform this action');
+      expect(body.extensions?.code).toBe('INSTANCE_NOT_HOST');
+    });
+
+    it('InstanceNotOpenError → 400 INSTANCE_NOT_OPEN (wire-shape improvement)', async () => {
+      // Wire-shape improvement: prior filter rewrote all to
+      // `'Invalid request data'`. Global filter preserves thrown
+      // message.
+      const res = await request(app.getHttpServer())
+        .get('/rfc7807-fixture/instance/not-open')
+        .expect(400);
+      const body = res.body as ProblemWire;
+      expect(body.title).toBe('BadRequest');
+      expect(body.detail).toBe('Instance is not open for joining');
+      expect(body.extensions?.code).toBe('INSTANCE_NOT_OPEN');
+    });
+
+    it('InstanceFullError → 400 INSTANCE_FULL (wire-shape improvement)', async () => {
+      // Wire-shape improvement: prior filter rewrote all to
+      // `'Invalid request data'`. Global filter preserves thrown
+      // message.
+      const res = await request(app.getHttpServer())
+        .get('/rfc7807-fixture/instance/full')
+        .expect(400);
+      const body = res.body as ProblemWire;
+      expect(body.title).toBe('BadRequest');
+      expect(body.detail).toBe('Instance is full');
+      expect(body.extensions?.code).toBe('INSTANCE_FULL');
+    });
+
+    it('InstanceAlreadyStartedError → 400 INSTANCE_ALREADY_STARTED (wire-shape improvement)', async () => {
+      // Wire-shape improvement: prior filter rewrote all to
+      // `'Invalid request data'`. Global filter preserves thrown
+      // message.
+      const res = await request(app.getHttpServer())
+        .get('/rfc7807-fixture/instance/already-started')
+        .expect(400);
+      const body = res.body as ProblemWire;
+      expect(body.detail).toBe('Instance has already started');
+      expect(body.extensions?.code).toBe('INSTANCE_ALREADY_STARTED');
+    });
+
+    it('InstanceAlreadyClosedError → 400 INSTANCE_ALREADY_CLOSED (wire-shape improvement)', async () => {
+      // Wire-shape improvement: prior filter rewrote all to
+      // `'Invalid request data'`. Global filter preserves thrown
+      // message.
+      const res = await request(app.getHttpServer())
+        .get('/rfc7807-fixture/instance/already-closed')
+        .expect(400);
+      const body = res.body as ProblemWire;
+      expect(body.detail).toBe('Instance is already closed');
+      expect(body.extensions?.code).toBe('INSTANCE_ALREADY_CLOSED');
+    });
+
+    it('PlayerAlreadyJoinedError → 409 PLAYER_ALREADY_JOINED (wire-shape improvement)', async () => {
+      // Wire-shape improvement: prior filter rewrote all to
+      // `'Resource already exists'`. Global filter preserves thrown
+      // message. Note: this exception is defined but currently not
+      // thrown by `instance.service.ts` — see docblock on
+      // `PlayerAlreadyJoinedError`.
+      const res = await request(app.getHttpServer())
+        .get('/rfc7807-fixture/instance/player-already-joined')
+        .expect(409);
+      const body = res.body as ProblemWire;
+      expect(body.title).toBe('Conflict');
+      expect(body.detail).toBe('You have already joined this instance');
+      expect(body.extensions?.code).toBe('PLAYER_ALREADY_JOINED');
     });
   });
 });

@@ -1,4 +1,3 @@
-export * from './bookmark-response-docs.dto';
 export * from './bookmark-list-response.dto';
 export * from './bookmark-collection-response.dto';
 export * from './create-collection-response.dto';

@@ -1,13 +1,4 @@
-import {
-  Body,
-  Controller,
-  Delete,
-  Get,
-  Param,
-  ParseUUIDPipe,
-  Post,
-  UseFilters,
-} from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Post } from '@nestjs/common';
 import {
   ApiBadRequestResponse,
   ApiConflictResponse,
@@ -25,31 +16,38 @@ import { HelpfulReviewResponseDto } from '../../dto/response/helpful-review-resp
 import { ReportReviewResponseDto } from '../../dto/response/report-review-response.dto';
 import { ReviewDashboardResponseDto } from '../../dto/response/review-dashboard-response.dto';
 import { ReviewDetailResponseDto } from '../../dto/response/review-detail-response.dto';
-import { ReviewDomainErrorDto } from '../../dto/response/review-domain-error.dto';
-import { ReviewDomainExceptionFilter } from '../filters/review-domain-exception.filter';
 import { ReviewPresenter } from '../presenters/review.presenter';
+import { ProblemDetailDto, ErrorResponseExamples } from '@/common/swagger/swagger-schemas';
 
-// Local helpers — these decorators emit the response schemas that match the
-// actual runtime error shapes produced by ReviewDomainExceptionFilter:
-//
-//   { statusCode: number, message: string, error: string }
-//
-// Use these for any 400 / 404 / 409 produced by a review domain error.
-// (401, 403, 500 are emitted by GlobalExceptionFilter as RFC 7807
-// ProblemDetail and are handled by ApiAuth / ApiPublicErrors.)
+// Local helpers — every review error response is now emitted by
+// GlobalExceptionFilter as RFC 7807 ProblemDetail (the per-module filter
+// was deleted in Phase 2). 401/403/500 still come from GlobalExceptionFilter
+// via `ApiAuth` / `ApiPublicErrors`. The helpers below cover 400/404/409
+// from review domain errors and reference `ProblemDetailDto` directly.
 
 const reviewNotFoundResponse = (description: string = 'Review not found') =>
-  ApiNotFoundResponse({ description, type: ReviewDomainErrorDto });
+  ApiNotFoundResponse({
+    description,
+    type: ProblemDetailDto,
+    example: ErrorResponseExamples.notFound,
+  });
 
 const reviewConflictResponse = (description: string = 'You have already reported this review') =>
-  ApiConflictResponse({ description, type: ReviewDomainErrorDto });
+  ApiConflictResponse({
+    description,
+    type: ProblemDetailDto,
+    example: ErrorResponseExamples.conflict,
+  });
 
 const reviewBadRequestResponse = (description: string = 'You cannot vote on your own review') =>
-  ApiBadRequestResponse({ description, type: ReviewDomainErrorDto });
+  ApiBadRequestResponse({
+    description,
+    type: ProblemDetailDto,
+    example: ErrorResponseExamples.badRequest,
+  });
 
 @ApiTags('reviews')
 @Controller('reviews')
-@UseFilters(ReviewDomainExceptionFilter)
 export class ReviewController {
   constructor(
     private readonly reviewApplicationService: ReviewApplicationService,
