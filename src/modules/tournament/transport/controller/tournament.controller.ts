@@ -7,7 +7,6 @@ import {
   ParseUUIDPipe,
   Post,
   Query,
-  UseFilters,
   applyDecorators,
 } from '@nestjs/common';
 import {
@@ -20,7 +19,6 @@ import {
   ApiExtraModels,
   ApiOperation,
   ApiUnauthorizedResponse,
-  getSchemaPath,
 } from '@nestjs/swagger';
 import { Permission } from '@/common/authorization/permissions';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
@@ -55,51 +53,47 @@ import {
   UnregisterTournamentResponseDto,
   WithdrawTournamentResponseDto,
 } from '../../dto/response';
-import { TournamentDomainErrorDto } from '../../dto/error/tournament-domain-error.dto';
 import { TournamentPresenter } from '../presenters/tournament.presenter';
-import { TournamentDomainExceptionFilter } from '../filters/tournament-domain-exception.filter';
 import { AUTH_SECURITY_NAME } from '@/core/swagger/swagger.config';
 import { ProblemDetailDto, ErrorResponseExamples } from '@/common/swagger/swagger-schemas';
 import { ApiOkResource, ApiCreatedResource, ApiOkResourceList } from '@/common/swagger/api-ok';
 
-// Local helpers — these decorators emit the response schemas that match the
-// actual runtime error shapes produced by TournamentDomainExceptionFilter:
-//
-//   { statusCode: number, message: string, error: string }
-//
-// Use these for any 400 / 403 / 404 / 409 produced by a tournament domain error.
-// (401 is emitted by GlobalExceptionFilter as RFC 7807 ProblemDetail and is
-// handled by the @ApiBearerAuth + ApiUnauthorizedResponse pair below.)
+// Local helpers — every tournament error response is now emitted by
+// GlobalExceptionFilter as RFC 7807 ProblemDetail (the per-module filter
+// was deleted in Phase 2). 401s were always emitted by GlobalExceptionFilter;
+// 400/403/404/409 from tournament domain errors are too now. All helpers
+// reference `ProblemDetailDto` and an example from `ErrorResponseExamples`.
 //
 // NOTE: Multiple @Api* decorators targeting the same status code collapse
 // to a single schema (the LAST one wins). When an endpoint can produce more
-// than one error shape for the same status code, use a single decorator with
-// `schema: { oneOf: [...] }` (see createTournament, unregisterFromTournament,
-// startRoundAttempt, withdrawFromTournament for examples).
+// than one error reason for the same status code, prefer a single decorator
+// with a description that enumerates them — the `oneOf` pattern from the
+// pre-Phase-2 era is no longer needed because every response is now a
+// single canonical shape.
 
 const tournamentNotFoundResponse = (description: string = 'Tournament not found') =>
-  ApiNotFoundResponse({ description, type: TournamentDomainErrorDto });
+  ApiNotFoundResponse({
+    description,
+    type: ProblemDetailDto,
+    example: ErrorResponseExamples.notFound,
+  });
 
 const tournamentForbiddenResponse = (
-  description: string = 'You do not have permission to manage this tournament',
+  description: string = 'Insufficient permissions for this action',
 ) =>
   ApiForbiddenResponse({
     description:
       description +
-      ' The response can be an RFC 7807 ProblemDetail (from PermissionsGuard) ' +
-      'or a tournament domain error envelope.',
-    schema: {
-      oneOf: [
-        { $ref: getSchemaPath(ProblemDetailDto) },
-        { $ref: getSchemaPath(TournamentDomainErrorDto) },
-      ],
-    },
+      '. Returns the RFC 7807 ProblemDetail envelope produced by GlobalExceptionFilter.',
+    type: ProblemDetailDto,
+    example: ErrorResponseExamples.forbidden,
   });
 
 const tournamentConflictResponse = (description: string = 'Resource conflict') =>
   ApiConflictResponse({
     description,
-    type: TournamentDomainErrorDto,
+    type: ProblemDetailDto,
+    example: ErrorResponseExamples.conflict,
   });
 
 const tournamentUnauthorizedResponse = (
@@ -116,8 +110,7 @@ const tournamentUnauthorizedResponse = (
 
 @ApiTags('tournaments')
 @Controller('tournaments')
-@UseFilters(TournamentDomainExceptionFilter)
-@ApiExtraModels(ProblemDetailDto, TournamentDomainErrorDto)
+@ApiExtraModels(ProblemDetailDto)
 export class TournamentController {
   constructor(
     private readonly tournamentApplicationService: TournamentApplicationService,
@@ -125,9 +118,7 @@ export class TournamentController {
   ) {}
 
   // createTournament throws TournamentValidationError (400) when endAt <= startAt.
-  // It never throws 404 or 409 — those are not part of the implementation.
-  // 400 can be either RFC 7807 ProblemDetail (class-validator body validation)
-  // or TournamentDomainErrorDto (TournamentValidationError for endAt <= startAt).
+  // 400 can also be a class-validator body validation failure — also RFC 7807.
   @Post()
   @Permissions(Permission.TOURNAMENT_CREATE)
   @ApiOperation({
@@ -140,15 +131,10 @@ export class TournamentController {
   @ApiCreatedResource(TournamentResponseDto, { description: 'Tournament created' })
   @ApiBadRequestResponse({
     description:
-      'Request body failed validation. The response can be an RFC 7807 ProblemDetail ' +
-      '(from class-validator) or a tournament domain error envelope ' +
-      '(e.g. endAt must be after startAt).',
-    schema: {
-      oneOf: [
-        { $ref: getSchemaPath(ProblemDetailDto) },
-        { $ref: getSchemaPath(TournamentDomainErrorDto) },
-      ],
-    },
+      'Request body failed validation. The response is an RFC 7807 ProblemDetail ' +
+      '(from class-validator or from the tournament domain for endAt <= startAt).',
+    type: ProblemDetailDto,
+    example: ErrorResponseExamples.badRequest,
   })
   createTournament(@CurrentUser() user: JwtPayload, @Body() payload: CreateTournamentDto) {
     return this.tournamentApplicationService
@@ -389,15 +375,11 @@ export class TournamentController {
   @ApiOkResource(RegisterTournamentResponseDto, { description: 'Registered successfully' })
   @ApiBadRequestResponse({
     description:
-      'Path parameter is malformed (RFC 7807 ProblemDetail), or the tournament ' +
-      'domain rejected the registration (domain error envelope). ' +
-      'Domain reasons: "Tournament registration is closed" or "Tournament is full".',
-    schema: {
-      oneOf: [
-        { $ref: getSchemaPath(ProblemDetailDto) },
-        { $ref: getSchemaPath(TournamentDomainErrorDto) },
-      ],
-    },
+      'Path parameter is malformed, or the tournament domain rejected the registration. ' +
+      'Returns the RFC 7807 ProblemDetail envelope. Domain reasons: "Tournament registration ' +
+      'is closed" or "Tournament is full".',
+    type: ProblemDetailDto,
+    example: ErrorResponseExamples.badRequest,
   })
   @tournamentNotFoundResponse()
   @tournamentConflictResponse('You are already registered for this tournament')
@@ -483,15 +465,10 @@ export class TournamentController {
   @ApiOkResource(StartTournamentAttemptResponseDto, { description: 'Attempt started' })
   @ApiBadRequestResponse({
     description:
-      'Path parameter is malformed (RFC 7807 ProblemDetail), or the tournament ' +
-      'domain rejected the attempt start (domain error envelope). ' +
-      'Domain reason: "Tournament round is not open".',
-    schema: {
-      oneOf: [
-        { $ref: getSchemaPath(ProblemDetailDto) },
-        { $ref: getSchemaPath(TournamentDomainErrorDto) },
-      ],
-    },
+      'Path parameter is malformed, or the tournament domain rejected the attempt start. ' +
+      'Returns the RFC 7807 ProblemDetail envelope. Domain reason: "Tournament round is not open".',
+    type: ProblemDetailDto,
+    example: ErrorResponseExamples.badRequest,
   })
   @tournamentNotFoundResponse('Tournament not found, or tournament round not found')
   @tournamentForbiddenResponse()
@@ -526,15 +503,11 @@ export class TournamentController {
   @ApiOkResource(UnregisterTournamentResponseDto, { description: 'Withdrawn successfully' })
   @ApiBadRequestResponse({
     description:
-      'Path parameter is malformed (RFC 7807 ProblemDetail), or the tournament ' +
-      'domain rejected the unregistration (domain error envelope). ' +
-      'Domain reason: "Tournament unregistration is only allowed during the registration phase".',
-    schema: {
-      oneOf: [
-        { $ref: getSchemaPath(ProblemDetailDto) },
-        { $ref: getSchemaPath(TournamentDomainErrorDto) },
-      ],
-    },
+      'Path parameter is malformed, or the tournament domain rejected the unregistration. ' +
+      'Returns the RFC 7807 ProblemDetail envelope. Domain reason: "Tournament unregistration ' +
+      'is only allowed during the registration phase".',
+    type: ProblemDetailDto,
+    example: ErrorResponseExamples.badRequest,
   })
   @tournamentNotFoundResponse('Tournament not found, or you are not registered for this tournament')
   @tournamentConflictResponse('Invalid participant state for this operation')
@@ -567,15 +540,11 @@ export class TournamentController {
   @ApiOkResource(WithdrawTournamentResponseDto, { description: 'Withdrawal successful' })
   @ApiBadRequestResponse({
     description:
-      'Path parameter is malformed (RFC 7807 ProblemDetail), or the tournament ' +
-      'domain rejected the withdrawal (domain error envelope). ' +
-      'Domain reason: "Tournament withdrawal is only allowed while the tournament is active".',
-    schema: {
-      oneOf: [
-        { $ref: getSchemaPath(ProblemDetailDto) },
-        { $ref: getSchemaPath(TournamentDomainErrorDto) },
-      ],
-    },
+      'Path parameter is malformed, or the tournament domain rejected the withdrawal. ' +
+      'Returns the RFC 7807 ProblemDetail envelope. Domain reason: "Tournament withdrawal ' +
+      'is only allowed while the tournament is active".',
+    type: ProblemDetailDto,
+    example: ErrorResponseExamples.badRequest,
   })
   @tournamentNotFoundResponse()
   @tournamentForbiddenResponse()

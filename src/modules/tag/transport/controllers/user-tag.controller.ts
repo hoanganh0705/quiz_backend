@@ -1,10 +1,9 @@
-import { Controller, Get, Query, UseFilters } from '@nestjs/common';
+import { Controller, Get, Query } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
 import { ListFollowedTagsQueryDto } from '../../dto/request/list-followed-tags-query.dto';
 import { TagApplicationService } from '../../application/tag.application.service';
-import { TagDomainExceptionFilter } from '../filters/tag-domain-exception.filter';
 import { FollowedTagCursorMapper } from '../../mappers/followed-tag-cursor.mapper';
 import { TagPresenter } from '../presenters/tag.presenter';
 import { ApiFollowedTagsResponse } from '../swagger/tag-swagger-decorators';
@@ -17,7 +16,6 @@ import { ApiFollowedTagsResponse } from '../swagger/tag-swagger-decorators';
  */
 @ApiTags('users')
 @Controller()
-@UseFilters(TagDomainExceptionFilter)
 export class UserTagController {
   constructor(
     private readonly tagApplicationService: TagApplicationService,
