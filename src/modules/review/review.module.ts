@@ -9,7 +9,6 @@ import { CursorMapper } from './mappers/review-cursor.mapper';
 import { ReviewController } from './transport/controller/review.controller';
 import { UserReviewController } from './transport/controller/user-review.controller';
 import { AdminReviewController } from './transport/controller/admin-review.controller';
-import { ReviewDomainExceptionFilter } from './transport/filters/review-domain-exception.filter';
 import { ReviewPresenter } from './transport/presenters/review.presenter';
 import { REVIEW_REPOSITORY_PORT } from './domain/ports';
 import {
@@ -39,9 +38,6 @@ import { quizReviewController } from './transport/controller/quiz-review.control
 
     // Presenter
     ReviewPresenter,
-
-    // Exception filter
-    ReviewDomainExceptionFilter,
 
     // Port bindings
     { provide: REVIEW_REPOSITORY_PORT, useExisting: ReviewRepository },

@@ -321,6 +321,152 @@ describe('ProblemCodeMapping', () => {
     });
   });
 
+  describe('resolveProblemInfo (review module — Phase 2, 6 entries)', () => {
+    // 6 entries covering 4 status codes:
+    //   404: REVIEW_NOT_FOUND
+    //   403: REVIEW_FORBIDDEN
+    //   409: REVIEW_CONFLICT, REVIEW_ALREADY_REPORTED
+    //   400: REVIEW_VALIDATION, REVIEW_ATTEMPT_REQUIRED
+    it('returns a 404 entry for REVIEW_NOT_FOUND', () => {
+      const info = resolveProblemInfo('REVIEW_NOT_FOUND');
+      expect(info.status).toBe(HttpStatus.NOT_FOUND);
+      expect(info.title).toBe('NotFound');
+      expect(info.typeUri).toBe('https://api.quiz.local/problems/review-not-found');
+    });
+
+    it('returns a 403 entry for REVIEW_FORBIDDEN', () => {
+      const info = resolveProblemInfo('REVIEW_FORBIDDEN');
+      expect(info.status).toBe(HttpStatus.FORBIDDEN);
+      expect(info.title).toBe('Forbidden');
+    });
+
+    it('returns a 409 entry for REVIEW_CONFLICT', () => {
+      const info = resolveProblemInfo('REVIEW_CONFLICT');
+      expect(info.status).toBe(HttpStatus.CONFLICT);
+      expect(info.title).toBe('Conflict');
+    });
+
+    it('returns a 409 entry for REVIEW_ALREADY_REPORTED', () => {
+      const info = resolveProblemInfo('REVIEW_ALREADY_REPORTED');
+      expect(info.status).toBe(HttpStatus.CONFLICT);
+      expect(info.title).toBe('Conflict');
+    });
+
+    it('returns a 400 entry for REVIEW_VALIDATION', () => {
+      const info = resolveProblemInfo('REVIEW_VALIDATION');
+      expect(info.status).toBe(HttpStatus.BAD_REQUEST);
+      expect(info.title).toBe('BadRequest');
+    });
+
+    it('returns a 400 entry for REVIEW_ATTEMPT_REQUIRED', () => {
+      const info = resolveProblemInfo('REVIEW_ATTEMPT_REQUIRED');
+      expect(info.status).toBe(HttpStatus.BAD_REQUEST);
+      expect(info.title).toBe('BadRequest');
+    });
+  });
+
+  describe('resolveProblemInfo (bookmark module — Phase 2, 7 entries)', () => {
+    // 7 entries covering 4 status codes:
+    //   404: BOOKMARK_NOT_FOUND, COLLECTION_NOT_FOUND, BOOKMARK_COLLECTION_NOT_FOUND
+    //   403: COLLECTION_FORBIDDEN
+    //   409: BOOKMARK_CONFLICT, COLLECTION_CONFLICT
+    //   400: BOOKMARK_VALIDATION
+    it('returns a 404 entry for BOOKMARK_NOT_FOUND', () => {
+      const info = resolveProblemInfo('BOOKMARK_NOT_FOUND');
+      expect(info.status).toBe(HttpStatus.NOT_FOUND);
+      expect(info.title).toBe('NotFound');
+      expect(info.typeUri).toBe('https://api.quiz.local/problems/bookmark-not-found');
+    });
+
+    it('returns a 404 entry for COLLECTION_NOT_FOUND', () => {
+      const info = resolveProblemInfo('COLLECTION_NOT_FOUND');
+      expect(info.status).toBe(HttpStatus.NOT_FOUND);
+      expect(info.title).toBe('NotFound');
+    });
+
+    it('returns a 404 entry for BOOKMARK_COLLECTION_NOT_FOUND', () => {
+      const info = resolveProblemInfo('BOOKMARK_COLLECTION_NOT_FOUND');
+      expect(info.status).toBe(HttpStatus.NOT_FOUND);
+      expect(info.title).toBe('NotFound');
+    });
+
+    it('returns a 403 entry for COLLECTION_FORBIDDEN', () => {
+      const info = resolveProblemInfo('COLLECTION_FORBIDDEN');
+      expect(info.status).toBe(HttpStatus.FORBIDDEN);
+      expect(info.title).toBe('Forbidden');
+    });
+
+    it('returns a 409 entry for BOOKMARK_CONFLICT', () => {
+      const info = resolveProblemInfo('BOOKMARK_CONFLICT');
+      expect(info.status).toBe(HttpStatus.CONFLICT);
+      expect(info.title).toBe('Conflict');
+    });
+
+    it('returns a 409 entry for COLLECTION_CONFLICT', () => {
+      const info = resolveProblemInfo('COLLECTION_CONFLICT');
+      expect(info.status).toBe(HttpStatus.CONFLICT);
+      expect(info.title).toBe('Conflict');
+    });
+
+    it('returns a 400 entry for BOOKMARK_VALIDATION', () => {
+      const info = resolveProblemInfo('BOOKMARK_VALIDATION');
+      expect(info.status).toBe(HttpStatus.BAD_REQUEST);
+      expect(info.title).toBe('BadRequest');
+    });
+  });
+
+  describe('resolveProblemInfo (instance module — Phase 2, 7 entries)', () => {
+    // 7 entries covering 4 status codes:
+    //   404: INSTANCE_NOT_FOUND
+    //   403: INSTANCE_NOT_HOST
+    //   409: PLAYER_ALREADY_JOINED (currently unused in service — see
+    //        exception class docblock for details)
+    //   400: INSTANCE_NOT_OPEN, INSTANCE_FULL, INSTANCE_ALREADY_STARTED,
+    //        INSTANCE_ALREADY_CLOSED
+    it('returns a 404 entry for INSTANCE_NOT_FOUND', () => {
+      const info = resolveProblemInfo('INSTANCE_NOT_FOUND');
+      expect(info.status).toBe(HttpStatus.NOT_FOUND);
+      expect(info.title).toBe('NotFound');
+      expect(info.typeUri).toBe('https://api.quiz.local/problems/instance-not-found');
+    });
+
+    it('returns a 403 entry for INSTANCE_NOT_HOST', () => {
+      const info = resolveProblemInfo('INSTANCE_NOT_HOST');
+      expect(info.status).toBe(HttpStatus.FORBIDDEN);
+      expect(info.title).toBe('Forbidden');
+    });
+
+    it('returns a 400 entry for INSTANCE_NOT_OPEN', () => {
+      const info = resolveProblemInfo('INSTANCE_NOT_OPEN');
+      expect(info.status).toBe(HttpStatus.BAD_REQUEST);
+      expect(info.title).toBe('BadRequest');
+    });
+
+    it('returns a 400 entry for INSTANCE_FULL', () => {
+      const info = resolveProblemInfo('INSTANCE_FULL');
+      expect(info.status).toBe(HttpStatus.BAD_REQUEST);
+      expect(info.title).toBe('BadRequest');
+    });
+
+    it('returns a 400 entry for INSTANCE_ALREADY_STARTED', () => {
+      const info = resolveProblemInfo('INSTANCE_ALREADY_STARTED');
+      expect(info.status).toBe(HttpStatus.BAD_REQUEST);
+      expect(info.title).toBe('BadRequest');
+    });
+
+    it('returns a 400 entry for INSTANCE_ALREADY_CLOSED', () => {
+      const info = resolveProblemInfo('INSTANCE_ALREADY_CLOSED');
+      expect(info.status).toBe(HttpStatus.BAD_REQUEST);
+      expect(info.title).toBe('BadRequest');
+    });
+
+    it('returns a 409 entry for PLAYER_ALREADY_JOINED', () => {
+      const info = resolveProblemInfo('PLAYER_ALREADY_JOINED');
+      expect(info.status).toBe(HttpStatus.CONFLICT);
+      expect(info.title).toBe('Conflict');
+    });
+  });
+
   describe('resolveProblemInfo (unknown code — loud-failure branch)', () => {
     it('returns a 500 entry with the generic title and 500 typeUri', () => {
       const info = resolveProblemInfo('NONEXISTENT_CODE_XYZ');

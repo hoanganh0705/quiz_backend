@@ -7,7 +7,6 @@ import { BookmarkResponseMapper } from './mappers/bookmark-response.mapper';
 import { BookmarkStatsResponseMapper } from './mappers/bookmark-stats-response.mapper';
 import { BookmarkController } from './transport/controller/bookmark.controller';
 import { BookmarkPresenter } from './transport/presenters/bookmark.presenter';
-import { BookmarkDomainExceptionFilter } from './transport/filters/bookmark-domain-exception.filter';
 import { BOOKMARK_REPOSITORY_PORT } from './domain/ports';
 import { BookmarkRepository } from './infrastructure/repositories/bookmark.repository';
 import { QuizModule } from '@/modules/quiz/quiz.module';
@@ -48,9 +47,6 @@ import { BookmarkAnalyticsEventHandler } from './domain/events/bookmark-analytic
 
     // Presentation
     BookmarkPresenter,
-
-    // Exception filter
-    BookmarkDomainExceptionFilter,
   ],
   controllers: [BookmarkController],
   exports: [BookmarkApplicationService, BOOKMARK_REPOSITORY_PORT, BOOKMARK_DOMAIN_EVENT_BUS],
