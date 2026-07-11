@@ -10,6 +10,8 @@ import type { Request, Response } from 'express';
 import { PinoLogger } from 'nestjs-pino';
 import { serverConfig } from '@/core/config';
 import type { ServerConfig } from '@/core/config';
+import { BaseDomainException } from '@/common/errors/base-domain.exception';
+import { ProblemCodeMapping, resolveProblemInfo } from '@/common/errors/problem-code-mapping';
 import type { ProblemDetail } from '@/common/types/problem-detail.type';
 import { RFC7807_TYPE_URIS } from '@/common/types/problem-detail.type';
 
@@ -42,9 +44,70 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     let statusCode = HttpStatus.INTERNAL_SERVER_ERROR;
     let message: string | string[] = 'Internal server error';
     let errorName = 'InternalServerError';
+    let domainCode: string | undefined;
+    let resolvedDomainInfo: ReturnType<typeof resolveProblemInfo> | undefined;
 
-    // Handle HTTP exceptions
-    if (exception instanceof HttpException) {
+    // Handle domain exceptions FIRST. They are the most common case in this
+    // codebase (every module's application layer throws `BaseDomainException`
+    // subclasses). Resolving them through `ProblemCodeMapping` keeps the
+    // mapping table the single source of HTTP semantics — the exception
+    // itself only carries the business identifier (`code`).
+    if (exception instanceof BaseDomainException) {
+      domainCode = exception.code;
+      const info = resolveProblemInfo(domainCode);
+      const isKnownCode: boolean = domainCode in ProblemCodeMapping;
+
+      if (!isKnownCode) {
+        // Loud-failure branch — the migration plan (§6.4) requires that
+        // every concrete class's `code` has a mapping entry. A missing
+        // entry is a developer error (typo, forgotten co-commit), not
+        // a runtime error. Surface it loudly so the gap is observable.
+        requestLogger.error({
+          event: 'unknown_error_code',
+          code: domainCode,
+          exceptionName: exception.name,
+          method: request.method,
+          url: request.url,
+        });
+      }
+
+      statusCode = info.status;
+      errorName = info.title;
+      message = exception.message;
+      // Stash the resolved info so the wire builder below doesn't call
+      // `resolveProblemInfo` a second time.
+      resolvedDomainInfo = info;
+
+      // Skip the standard http_client_error / http_server_error log line
+      // for unknown codes — the `unknown_error_code` log above already
+      // carries the relevant context (code, exceptionName, request URL).
+      // Logging both would double the on-call noise for a developer error.
+      if (isKnownCode) {
+        // Log domain errors at the same level as native HttpException:
+        // 4xx → warn, 5xx → error.
+        if (statusCode >= HttpStatus.INTERNAL_SERVER_ERROR) {
+          requestLogger.error({
+            event: 'http_server_error',
+            method: request.method,
+            url: request.url,
+            statusCode,
+            code: domainCode,
+            error: errorName,
+            details: message,
+          });
+        } else {
+          requestLogger.warn({
+            event: 'http_client_error',
+            method: request.method,
+            url: request.url,
+            statusCode,
+            code: domainCode,
+            error: errorName,
+            details: message,
+          });
+        }
+      }
+    } else if (exception instanceof HttpException) {
       statusCode = exception.getStatus();
       const exceptionResponse = exception.getResponse();
 
@@ -131,14 +194,20 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       errorName = 'InternalServerError';
     }
 
+    const typeUri =
+      resolvedDomainInfo !== undefined
+        ? resolvedDomainInfo.typeUri
+        : (RFC7807_TYPE_URIS[statusCode] ?? RFC7807_TYPE_URIS[500]);
+
     const problem: ProblemDetail = {
-      type: RFC7807_TYPE_URIS[statusCode] ?? RFC7807_TYPE_URIS[500],
+      type: typeUri,
       title: errorName,
       status: statusCode,
       detail: Array.isArray(message) ? message.join('; ') : message,
       instance: request.originalUrl ?? request.url,
       extensions: {
         requestId: request.id,
+        ...(domainCode !== undefined ? { code: domainCode } : {}),
       },
     };
 

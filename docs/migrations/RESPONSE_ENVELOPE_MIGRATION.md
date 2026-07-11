@@ -36,16 +36,16 @@ The backend currently produces **seven different runtime response shapes**, some
 
 ### 2.1 The seven runtime response shapes
 
-| Category | Shape returned to client | How produced | Module count | Endpoint count |
-|---|---|---|---|---|
-| **A** | `{ data: T, meta: { timestamp } }` | Default branch | 15+ | ~95 |
-| **B** | `{ data: T[], meta: { timestamp, pagination } }` | `isPaginatedPayload` branch | 13 | ~50 |
-| **C** | `{ data: T[] (or T), meta: { timestamp, [pagination] } }` | `isFormattedResponse` branch (category pre-wrap) | 1 | ~15 |
-| **D** | `{ data: { items: [...] }, meta: { timestamp } }` | Default branch (heuristic missed it) | 2 (tag, instance) | 5 |
-| **D-variant** | `{ data: { items, ...other fields } }` | Default branch | 6 modules | ~10 |
-| **E** | `{ data: { data: [...], total }, meta: { timestamp } }` | Default branch | 1 (achievement) | 4 |
-| **F** | `{ data: [...], meta: { timestamp } }` from bare array returns | Default branch | 3 modules | 7 |
-| **G** | `{ data: null, meta: { timestamp } }` from `Promise<void>` | Default branch | 8+ | 25 |
+| Category      | Shape returned to client                                       | How produced                                     | Module count      | Endpoint count |
+| ------------- | -------------------------------------------------------------- | ------------------------------------------------ | ----------------- | -------------- |
+| **A**         | `{ data: T, meta: { timestamp } }`                             | Default branch                                   | 15+               | ~95            |
+| **B**         | `{ data: T[], meta: { timestamp, pagination } }`               | `isPaginatedPayload` branch                      | 13                | ~50            |
+| **C**         | `{ data: T[] (or T), meta: { timestamp, [pagination] } }`      | `isFormattedResponse` branch (category pre-wrap) | 1                 | ~15            |
+| **D**         | `{ data: { items: [...] }, meta: { timestamp } }`              | Default branch (heuristic missed it)             | 2 (tag, instance) | 5              |
+| **D-variant** | `{ data: { items, ...other fields } }`                         | Default branch                                   | 6 modules         | ~10            |
+| **E**         | `{ data: { data: [...], total }, meta: { timestamp } }`        | Default branch                                   | 1 (achievement)   | 4              |
+| **F**         | `{ data: [...], meta: { timestamp } }` from bare array returns | Default branch                                   | 3 modules         | 7              |
+| **G**         | `{ data: null, meta: { timestamp } }` from `Promise<void>`     | Default branch                                   | 8+                | 25             |
 
 **Destination:** every endpoint becomes **A** (single resource) or **B** (paginated), with `B` supporting both cursor and offset pagination via a discriminated `meta.pagination` block.
 
@@ -123,35 +123,40 @@ Same work pattern as Phase 1, in this order:
 1. **`category`** (15 endpoints). **Roll back** the previous "pre-wrapped envelope" change in `category-query.service.ts` so it returns `PaginatedResult<CategoryResponseDto>` (or `CategoryResponseDto[]` for non-paginated). The new `category.presenter.ts` does the wrapping.
 
    > ✅ **`category` migrated** (Jul 2026): 15 endpoints. `category-query.service.ts` rolled back to return raw DTOs / `PaginatedResult<T>`. `category.presenter.ts` does the wrapping via `ApiResponse.ok` / `ApiResponse.page`. `category-response-docs.dto.ts` deleted (452 lines). `category-swagger-decorators.ts` rewritten on top of `ApiOkResource / ApiCreatedResource / ApiOkResourceList`.
+
 2. **`discussion`** (45 endpoints; doc said 44 — count includes `quiz-discussion` and `user-discussion` controllers). D-variant endpoints re-shaped at the service level. ✅ done.
 3. **`quiz`** (21 endpoints). `POST .../questions/bulk` bare-array return fixed. ✅ done.
 4. **`social`** (30 endpoints). 5 bare-array endpoints re-typed at the service level (`searchUsernameSuggestions` now returns `string[]` directly; `getBlockedUsers` now returns `BlockedUserDto[]`). 4 D-variant endpoints re-shaped to return `PaginatedResult<T>` (`getFriends`, `getFriendsOfUser`, `getFollowers`, `getFollowing`); cursor is the last item's `friendSince` / `followedAt` timestamp when `hasNextPage` is true. ✅ done.
 
    > ✅ **`social` migrated** (Jul 2026): 30 endpoints. `social-application.service.ts` reshaped — `searchUsernameSuggestions` → `string[]`, `getBlockedUsers` → `BlockedUserDto[]`, `getFriends`/`getFriendsOfUser`/`getFollowers`/`getFollowing` → `PaginatedResult<T>`. `social.presenter.ts` (30 methods) added; uses `wrapOffsetPaginatedDto` for offset-paginated DTOs and `ApiResponse.page` for cursor `PaginatedResult<T>`. `social-response-docs.dto.ts` (303 lines) deleted. `social-response.dto.ts` removed (was a no-op re-export). New `message-response.dto.ts` added for the `POST /block/:userId` confirmation. `social.controller.ts` rewritten on `ApiOkResource / ApiCreatedResource / ApiOkResourceList`; `string[]` `search/suggestions` uses a hand-rolled schema with `WrappedDto.allOf`. 204 endpoints (respond / cancel / remove friend / unblock / follow / unfollow) bypass the presenter entirely.
+
 5. **`tournament`** (16 endpoints). Offset pagination preserved; `TournamentOffsetMetaDto` becomes the standard offset meta. ✅ done.
 
    > ✅ **`tournament` migrated** (Jul 2026): 16 endpoints. `tournament.presenter.ts` added with inline `wrapCursorPaginatedDto` (re-uses `CursorPagination` kind) and `wrapOffsetPaginatedDto` (re-uses `OffsetPagination` kind, computing `hasMore = page < ceil(total/limit)`). `tournament-response-docs.dto.ts` (351 lines, including `TournamentDomainErrorDto`) deleted; `TournamentDomainErrorDto` extracted into a new `dto/error/tournament-domain-error.dto.ts` (still referenced by the controller for error-response documentation). `tournament.controller.ts` rewritten on `ApiOkResource / ApiCreatedResource / ApiOkResourceList`; error-response decorators (400, 403, 404, 409 with `oneOf` against `ProblemDetailDto + TournamentDomainErrorDto`) preserved verbatim. `tournament.module.ts` registers the new presenter. All 12 paginated/list endpoints now use the canonical envelope.
+
 6. **`ranking`** (18 endpoints: 14 in `ranking.controller.ts`, 4 in `ranking-admin.controller.ts`). D-variant endpoints re-shaped; ranking's custom pagination meta is normalized. ✅ done.
 
    > ✅ **`ranking` migrated** (Jul 2026): 18 endpoints. `ranking.presenter.ts` added with 18 methods. Three patterns in play: (a) single-resource endpoints (`getLeaderboardDistribution`, `getMyRank`, `getUserRank`, `getMyPercentile`, `getMyRankMovement`, `getMyPeakRanks`, `getUserRankingHistory`, `getNearbyRanks`, plus 4 admin endpoints) → `ApiResponse.ok`; (b) bare-array DTOs (`{ items }`) — `getTopMovers`, `getMyRankingMilestones`, `getMyRankingHistory` — unwrap to bare arrays via the presenter's `(payload) => ApiResponse.ok([...payload.items])`; (c) `LeaderboardResponseDto` (the only complex resource, carrying `entries`, `totalParticipants`, `userPosition`, `period`, plus a custom `pagination: { limit, offset, hasMore }` field inside the DTO) — kept as a single-resource wrap, since splitting entries out would orphan the user-position / period metadata. `getMyRankForPeriod` and `getUserRankForPeriod` collapse `undefined` (user has no rank in the period) into `ApiResponse.ok(null)` so the envelope is still well-formed. `leaderboard-response-docs.dto.ts` (350 lines, including `RankingDomainErrorDto`) deleted; `RankingDomainErrorDto` extracted into a new `dto/error/ranking-domain-error.dto.ts`. The custom `pagination: { limit, offset, hasMore }` shape inside `LeaderboardResponseDto` was intentionally NOT migrated to `{ kind: 'offset', page, limit, total, hasMore }` — changing the wire shape would break every frontend consumer; the migration's "normalized" note refers to envelope normalization only.
+
 7. **`notification`** (11 endpoints). Re-shape the D-variant (`{ items, unreadCount, hasNextPage }` → `PaginatedResult<NotificationDto>` plus a separate unread-count endpoint). ✅ done.
 
    > ✅ **`notification` migrated** (Jul 2026): 11 endpoints. `notification-application.service.ts` reshaped — `getNotifications` now returns `PaginatedResult<NotificationResponseDto>` (cursor pagination; `nextCursor` is the base64-encoded `{createdAt, notificationId}` pair, matching the pre-migration cursor format) and **drops the `unreadCount` field** — clients now call the dedicated `GET /notifications/unread-count` endpoint for that. The controller-side DTO projection (`DomainNotification → NotificationResponseDto`) and the row-level DTO projection (`NotificationPreferencesRow → NotificationPreferencesResponseDto`) moved into the application service. `notification.presenter.ts` (7 methods) added; uses `ApiResponse.page` for the cursor-paginated list and `ApiResponse.ok` for the 6 single-resource endpoints. `notification-response-docs.dto.ts` (111 lines, 6 `Wrapped*Dto` classes) deleted. `notification.controller.ts` rewritten on `ApiOkResource / ApiOkResourceList`; 204 endpoints (mark-read / mark-unread / mark-all-read / delete-notification) bypass the presenter entirely. `notification.module.ts` registers the new presenter.
+
 8. `user` (16 endpoints). Bare-array fix for recommended-quizzes. ✅ done.
 
    > ✅ **`user` migrated** (Jul 2026): 16 endpoints. `user.presenter.ts` added with 16 methods (1 per endpoint). Patterns in play: (a) **9 single-resource endpoints** (`me`, `updateMe`, `updateMeSettings`, `getUserRanking`, `getUserAnalytics`, `getMyTournamentAnalytics`, `getUserQuizAnalytics`, `getPublicTournamentProfile`, plus the `me` profile) → `ApiResponse.ok`; (b) **7 cursor-paginated endpoints** (`listMyBadges`, `listBadgesByUserId`, `listUserActivity`, `listMyTournaments`, `listMyTournamentHistory`, `getUserTournamentHistory`, `listUserQuizzes`) — projection is done locally via an inline `wrapPaginatedDto<T>` helper that mirrors the quiz module's helper and produces the standard `{ kind: 'cursor', limit, hasNextPage, nextCursor }` cursor meta; (c) **1 bare-array endpoint** (`getRecommendedQuizzes`) — service returned `RelatedQuizzesResponseDto = { items: QuizResponseDto[] }`, controller unwrapped to `[...items]`, presenter now does `ApiResponse.ok([...dto.items])` directly. `user-response-docs.dto.ts` (625 lines, 13 `Wrapped*Dto` classes) deleted. `user-swagger-decorators.ts` rewritten on `ApiOkResource / ApiOkResourceList`; composed error decorators (`ApiInternalError`, `ApiBadRequestAndInternal`, `ApiNotFoundAndInternal`, `ApiNotFoundBadRequestInternal`, `ApiNotFoundForbiddenInternal`, `ApiNotFoundBadRequestForbiddenInternal`) preserved verbatim with their `badRequestOptions`/`notFoundOptions`/`forbiddenOptions`/`internalErrorOptions` shared by all 16 endpoints. `user.module.ts` registers the new presenter. No application-service re-shaping was needed — every paginated DTO already returns `{ items, pagination }` with the expected cursor shape.
+
 9. `review` (17 endpoints). Move controller re-wrapping into the service. ✅ done. ✅ done.
 
    > ✅ **`review` migrated** (Jul 2026): 17 endpoints. `review.presenter.ts` added with 15 methods. Patterns: (a) **8 single-resource endpoints** (`getMyReviewDashboard`, `markReviewHelpful`, `removeHelpfulVote`, `reportReview`, `getReviewById`, `getCreatorQuizReviewAnalytics`, `updateReview`, `deleteReview`) → `ApiResponse.ok`; (b) **5 cursor-paginated endpoints** (`listReviews`, `listMyReportedReviews`, `listMyReviews`, `listReviewsByUser`, `listPlatformReports`) — inline `wrapPaginatedDto<T>` helper produces the standard cursor envelope; (c) **2 null-safe endpoints** (`getMyQuizReview` on quiz + user controllers) — service returns `ReviewDetailResponseDto | null`, presenter collapses `undefined`/`null` into `ApiResponse.ok(null)` so the envelope is well-formed. **`listPlatformReports` controller re-wrapping moved into the service** — the application service now calls `ReviewAdminService.listPlatformReports` (raw rows + pagination), runs the `PlatformReportItem → PlatformReportItemDto` projection with `CursorMapper.serializeReport`, and returns `PlatformReportsResponseDto` directly. `review-response-docs.dto.ts` (731 lines, 16 `Wrapped*Dto` classes plus `QuizAnalyticsDataDto` mirror) deleted; `ReviewDomainErrorDto` extracted into a new `review-domain-error.dto.ts` (still referenced by the controller for error documentation). `quiz-review.controller.ts` and `user-review.controller.ts` rewritten on `ApiOkResource / ApiOkResourceList`; admin controller rewritten on `ApiOkResourceList` for the paginated reports and `ApiOkResource` for the status update. All `ApiAuth / ApiPublicErrors` + 400/403/404/409 `ApiBadRequest / ApiForbidden / ApiNotFound / ApiConflict` decorators preserved verbatim with their `oneOf` (ProblemDetail + ReviewDomainErrorDto) schemas. `review.module.ts` registers the new presenter and wires `ReviewAdminService` into `ReviewApplicationService`.
+
 10. `instance` (8 endpoints). Re-shape the leaderboard D-variant. ✅ done.
 
-   > ✅ **`instance` migrated** (Jul 2026): 8 endpoints. `instance.presenter.ts` added with 8 methods. Patterns: (a) **5 single-resource endpoints** (`createInstance`, `joinInstance`, `startInstance`, `closeInstance`, `getInstanceById`, `listInstancePlayers`) → `ApiResponse.ok`; (b) **2 cursor-paginated endpoints** (`listInstances`, `getLeaderboard`) — inline `wrapPaginatedDto<T>` helper produces the standard cursor envelope. **`listInstancePlayers` returns a single-resource `{ instanceId, items, total }` DTO** (no `pagination` key), so it falls into the `ApiResponse.ok` path. **Leaderboard D-variant re-shaped at the service level** — `InstanceLeaderboardResponseDto` now has the canonical `{ items, pagination: { limit, hasNextPage, nextCursor } }` shape; previously it was `{ items, hasNextPage, nextCursor }` (no `pagination` key, `limit` not surfaced). The application service's `getLeaderboardForController` method computes the base64url-encoded cursor from `{ rank, instancePlayerId }` of the last item. Controller re-wrapping moved into the application service — `InstanceApplicationService` gained 7 `*ForController` methods (`createInstanceForController`, `joinInstanceForController`, `startInstanceForController`, `closeInstanceForController`, `getInstanceByIdForController`, `listInstancesForController`, `listInstancePlayersForController`, `getLeaderboardForController`) that now do the row-to-DTO projection; gateway still uses the existing shape-preserving `createInstance/joinInstance/startInstance` methods so the WebSocket handlers are untouched. `instance-leaderboard-response.dto.ts` rewritten on the canonical pagination shape. `instance-response-docs.dto.ts` (227 lines, 8 `Wrapped*Dto` classes) deleted; `InstanceDomainErrorDto` extracted into a new `instance-domain-error.dto.ts`. `instance.controller.ts` rewritten on `ApiCreatedResource / ApiOkResource / ApiOkResourceList`; `instanceNotFoundResponse` / `instanceForbiddenResponse` / `instanceBadRequestResponseDual` / `instanceBadRequestResponseValidation` / `instanceUnauthorizedResponse` helpers preserved verbatim with their `oneOf` (ProblemDetail + InstanceDomainErrorDto) schemas and `ApiExtraModels(ProblemDetailDto, InstanceDomainErrorDto)` registration. `instance.module.ts` registers the new presenter and injects `InstanceResponseMapper` into `InstanceApplicationService`.
-11. `tag` (14 endpoints). The popular/trending/related D-variants get re-shaped.
+> ✅ **`instance` migrated** (Jul 2026): 8 endpoints. `instance.presenter.ts` added with 8 methods. Patterns: (a) **5 single-resource endpoints** (`createInstance`, `joinInstance`, `startInstance`, `closeInstance`, `getInstanceById`, `listInstancePlayers`) → `ApiResponse.ok`; (b) **2 cursor-paginated endpoints** (`listInstances`, `getLeaderboard`) — inline `wrapPaginatedDto<T>` helper produces the standard cursor envelope. **`listInstancePlayers` returns a single-resource `{ instanceId, items, total }` DTO** (no `pagination` key), so it falls into the `ApiResponse.ok` path. **Leaderboard D-variant re-shaped at the service level** — `InstanceLeaderboardResponseDto` now has the canonical `{ items, pagination: { limit, hasNextPage, nextCursor } }` shape; previously it was `{ items, hasNextPage, nextCursor }` (no `pagination` key, `limit` not surfaced). The application service's `getLeaderboardForController` method computes the base64url-encoded cursor from `{ rank, instancePlayerId }` of the last item. Controller re-wrapping moved into the application service — `InstanceApplicationService` gained 7 `*ForController` methods (`createInstanceForController`, `joinInstanceForController`, `startInstanceForController`, `closeInstanceForController`, `getInstanceByIdForController`, `listInstancesForController`, `listInstancePlayersForController`, `getLeaderboardForController`) that now do the row-to-DTO projection; gateway still uses the existing shape-preserving `createInstance/joinInstance/startInstance` methods so the WebSocket handlers are untouched. `instance-leaderboard-response.dto.ts` rewritten on the canonical pagination shape. `instance-response-docs.dto.ts` (227 lines, 8 `Wrapped*Dto` classes) deleted; `InstanceDomainErrorDto` extracted into a new `instance-domain-error.dto.ts`. `instance.controller.ts` rewritten on `ApiCreatedResource / ApiOkResource / ApiOkResourceList`; `instanceNotFoundResponse` / `instanceForbiddenResponse` / `instanceBadRequestResponseDual` / `instanceBadRequestResponseValidation` / `instanceUnauthorizedResponse` helpers preserved verbatim with their `oneOf` (ProblemDetail + InstanceDomainErrorDto) schemas and `ApiExtraModels(ProblemDetailDto, InstanceDomainErrorDto)` registration. `instance.module.ts` registers the new presenter and injects `InstanceResponseMapper` into `InstanceApplicationService`. 11. `tag` (14 endpoints). The popular/trending/related D-variants get re-shaped.
 
-   > ✅ **`tag` migrated** (Jul 2026): 14 endpoints. `tag.presenter.ts` added with 13 methods. Patterns: (a) **9 single-resource endpoints** (`getTagBySlug`, `getTagAnalytics`, `createTag`, `updateTag`, `restoreTag`, `followTag`, `unfollowTag`, `deleteTag`, `getTagQuizzes`) → `ApiResponse.ok`; (b) **2 cursor-paginated endpoints** (`listTags`, `listFollowedTags`) — inline `wrapPaginatedDto<T>` helper produces the standard cursor envelope; (c) **3 bare-array D-variant endpoints** (`getPopularTags`, `getTrendingTags`, `getRelatedTags`) — service layer now returns `RankedTagResponseDto[]` / `TagResponseDto[]` directly (was previously `{ items: [...] }`), presenter unwraps with `ApiResponse.ok([...items])`. **D-variants re-shaped at the service level** — `getRelatedTags`, `getPopularTags`, `getTrendingTags` return bare arrays now (the runtime shape is unchanged on the wire thanks to the standard envelope, but the inner `{ items }` wrapper is gone from the application service). `tag-response-docs.dto.ts` (450 lines, 9 `Wrapped*Dto` classes plus their internal `MetaDto`/`PaginationMetaDataDto` mirrors) deleted; `RankedTagsResponseDto` / `RelatedTagsResponseDto` removed from `parity-response.dto.ts` (no longer referenced). `tag.controller.ts` and `user-tag.controller.ts` rewritten on `ApiOkResource / ApiCreatedResource / ApiOkResourceList`; all composed error decorators (`ApiPopularTagsResponse`, `ApiTrendingTagsResponse`, `ApiTagQuizzesResponse`, `ApiRelatedTagsResponse`, `ApiTagAnalyticsResponse`, `ApiFollowTagResponse`, `ApiUnfollowTagResponse`, `ApiRestoreTagResponse`, `ApiListTagsResponse`, `ApiTagBySlugResponse`, `ApiCreateTagResponse`, `ApiUpdateTagResponse`, `ApiDeleteTagResponse`, `ApiFollowedTagsResponse`) preserved verbatim with their per-endpoint `example.instance` paths. `tag.module.ts` registers the new presenter.
-12. `achievement` (10 endpoints). Flatten the E-variant (doubly-nested).
+> ✅ **`tag` migrated** (Jul 2026): 14 endpoints. `tag.presenter.ts` added with 13 methods. Patterns: (a) **9 single-resource endpoints** (`getTagBySlug`, `getTagAnalytics`, `createTag`, `updateTag`, `restoreTag`, `followTag`, `unfollowTag`, `deleteTag`, `getTagQuizzes`) → `ApiResponse.ok`; (b) **2 cursor-paginated endpoints** (`listTags`, `listFollowedTags`) — inline `wrapPaginatedDto<T>` helper produces the standard cursor envelope; (c) **3 bare-array D-variant endpoints** (`getPopularTags`, `getTrendingTags`, `getRelatedTags`) — service layer now returns `RankedTagResponseDto[]` / `TagResponseDto[]` directly (was previously `{ items: [...] }`), presenter unwraps with `ApiResponse.ok([...items])`. **D-variants re-shaped at the service level** — `getRelatedTags`, `getPopularTags`, `getTrendingTags` return bare arrays now (the runtime shape is unchanged on the wire thanks to the standard envelope, but the inner `{ items }` wrapper is gone from the application service). `tag-response-docs.dto.ts` (450 lines, 9 `Wrapped*Dto` classes plus their internal `MetaDto`/`PaginationMetaDataDto` mirrors) deleted; `RankedTagsResponseDto` / `RelatedTagsResponseDto` removed from `parity-response.dto.ts` (no longer referenced). `tag.controller.ts` and `user-tag.controller.ts` rewritten on `ApiOkResource / ApiCreatedResource / ApiOkResourceList`; all composed error decorators (`ApiPopularTagsResponse`, `ApiTrendingTagsResponse`, `ApiTagQuizzesResponse`, `ApiRelatedTagsResponse`, `ApiTagAnalyticsResponse`, `ApiFollowTagResponse`, `ApiUnfollowTagResponse`, `ApiRestoreTagResponse`, `ApiListTagsResponse`, `ApiTagBySlugResponse`, `ApiCreateTagResponse`, `ApiUpdateTagResponse`, `ApiDeleteTagResponse`, `ApiFollowedTagsResponse`) preserved verbatim with their per-endpoint `example.instance` paths. `tag.module.ts` registers the new presenter. 12. `achievement` (10 endpoints). Flatten the E-variant (doubly-nested).
 
-   > ✅ **`achievement` migrated** (Jul 2026): 10 endpoints. `achievement.presenter.ts` added with 9 methods. Patterns: (a) **5 single-resource endpoints** (`getBadgeDetails`, `getPublicAchievementProfile`, `getMyBadgeProgress`, `getMyBadgeAnalytics`, `reevaluateUser`) → `ApiResponse.ok`; (b) **4 bare-array endpoints** (`getBadgeCatalog`, `getMyBadges`, `getMyAchievementHistory`, `getUserHistory`) — service layer now returns `T[]` directly (was previously `{ data: T[], total }`, the doubly-nested E-variant), presenter unwraps with `ApiResponse.ok([...items])`. **E-variant flattened at the service level** — `getBadgeCatalog`, `getMyBadges`, `getMyAchievementHistory` return bare arrays now (the `total` field is dropped since it was only used to compute progress bars client-side and was redundant with `items.length`). The 10th endpoint (`revokeUserBadge`) is a `Promise<void>` 204 — bypasses the presenter entirely. **Admin re-wrapping moved into the application service** — `AchievementApplicationService` now injects `ScheduledEvaluationService` directly and exposes `reevaluateUserForController` and `getUserHistoryForController` methods that perform the row-to-DTO projection (replacing what was inline in `AchievementAdminController`). New `AdminAchievementHistoryItemDto` class added to `achievement-admin-response.dto.ts` (extracted from the deleted `achievement-response-docs.dto.ts` so the admin history endpoint has a proper, documented runtime DTO instead of returning the raw `AchievementHistoryEntry` interface). `achievement-response-docs.dto.ts` (419 lines, 10 `Wrapped*Dto` classes plus their nested data mirrors) deleted. `achievement.controller.ts` rewritten on `ApiAuth / ApiOkResource`; `achievement-admin.controller.ts` rewritten on `ApiOkResource`. `achievement.module.ts` registers the new presenter.
+> ✅ **`achievement` migrated** (Jul 2026): 10 endpoints. `achievement.presenter.ts` added with 9 methods. Patterns: (a) **5 single-resource endpoints** (`getBadgeDetails`, `getPublicAchievementProfile`, `getMyBadgeProgress`, `getMyBadgeAnalytics`, `reevaluateUser`) → `ApiResponse.ok`; (b) **4 bare-array endpoints** (`getBadgeCatalog`, `getMyBadges`, `getMyAchievementHistory`, `getUserHistory`) — service layer now returns `T[]` directly (was previously `{ data: T[], total }`, the doubly-nested E-variant), presenter unwraps with `ApiResponse.ok([...items])`. **E-variant flattened at the service level** — `getBadgeCatalog`, `getMyBadges`, `getMyAchievementHistory` return bare arrays now (the `total` field is dropped since it was only used to compute progress bars client-side and was redundant with `items.length`). The 10th endpoint (`revokeUserBadge`) is a `Promise<void>` 204 — bypasses the presenter entirely. **Admin re-wrapping moved into the application service** — `AchievementApplicationService` now injects `ScheduledEvaluationService` directly and exposes `reevaluateUserForController` and `getUserHistoryForController` methods that perform the row-to-DTO projection (replacing what was inline in `AchievementAdminController`). New `AdminAchievementHistoryItemDto` class added to `achievement-admin-response.dto.ts` (extracted from the deleted `achievement-response-docs.dto.ts` so the admin history endpoint has a proper, documented runtime DTO instead of returning the raw `AchievementHistoryEntry` interface). `achievement-response-docs.dto.ts` (419 lines, 10 `Wrapped*Dto` classes plus their nested data mirrors) deleted. `achievement.controller.ts` rewritten on `ApiAuth / ApiOkResource`; `achievement-admin.controller.ts` rewritten on `ApiOkResource`. `achievement.module.ts` registers the new presenter.
 
 **Risks:** medium. ~115 endpoints' documentation schemas shift to the generic `WrappedDto` family. Coordinate with frontend consumers via PR descriptions.
 
@@ -214,7 +219,7 @@ For each of the 13 domain exception filters:
 1. Delete the 160+ per-module `Wrapped*Dto` classes. Replace usages with `WrappedDto<T>`, `CursorWrappedDto<T>`, `OffsetWrappedDto<T>` (3 generic classes from `swagger-schemas.ts`).
 2. Update per-module `swagger-decorators.ts` files to use the generic helpers from `src/common/swagger/api-ok.ts`.
 3. Update example constants in `*-examples.ts` to match the new generic wrappers.
-4. *(Optional follow-up, not blocking)* Refactor the health endpoint from `@Res({ passthrough: true })` to throwing an exception, so `isNativeResponseHandled()` can be removed too.
+4. _(Optional follow-up, not blocking)_ Refactor the health endpoint from `@Res({ passthrough: true })` to throwing an exception, so `isNativeResponseHandled()` can be removed too.
 
 **Risks:** low. Documentation cleanup. Verify OpenAPI regenerates correctly.
 
@@ -257,6 +262,7 @@ type PaginationMeta = CursorPagination | OffsetPagination;
 ```
 
 **Why two methods are right (and a third would be wrong):**
+
 - 5 method variants over-specify. Most endpoints have one of two cases: a resource (object or array) or a paginated resource. The original 5-method design had three methods (`array`, `offsetPaginated`, `acknowledged`) that were redundant with type distinctions that didn't pay rent.
 - A smaller API is harder to misuse.
 - It scales better because every endpoint maps to one of two patterns, so adding a new method becomes a non-decision.
@@ -267,27 +273,30 @@ type PaginationMeta = CursorPagination | OffsetPagination;
 The first draft of this plan proposed a single `PaginationMeta` interface with optional fields (`page?: number; total?: number; nextCursor?: string | null; …`). That's wrong. The optional-field approach lets TypeScript accept `{ limit: 10 }` (no cursor, no offset) — a shape with no valid consumer behavior — and produces a `Partial<PaginationMeta>` in client SDKs, which is awful.
 
 A discriminated union with a `kind: 'cursor' | 'offset'` literal:
+
 - Enforces at the call site that **exactly one** of the two shapes is passed.
 - Makes mixing `page` and `nextCursor` in the same object a compile error.
 - Narrowes correctly inside conditional blocks (`if (pagination.kind === 'cursor')`).
 - Renders cleanly in OpenAPI via a discriminator field (rather than `allOf` of two optional shapes).
 - Keeps the runtime helper to a single method: `ApiResponse.page(items, pagination)` — the type system does the discrimination. Splitting into `cursor()` + `offset()` would only add two factory methods that produce identical wire output.
 
-**One method or two at the Swagger layer?** Two schema classes (`CursorPaginationMeta`, `OffsetPaginationMeta`) are still needed for OpenAPI `$ref` generation, because the NestJS Swagger plugin emits `$ref` from concrete classes and doesn't natively model discriminated unions. That's a documentation-time concern, not a runtime concern: the runtime helper is one method (`page`); the schema classes are two. The decorator `ApiOkResourceList(model, kind)` takes a `kind` parameter at the *controller* layer to pick which schema class to reference — that parameter never appears in the wire response.
+**One method or two at the Swagger layer?** Two schema classes (`CursorPaginationMeta`, `OffsetPaginationMeta`) are still needed for OpenAPI `$ref` generation, because the NestJS Swagger plugin emits `$ref` from concrete classes and doesn't natively model discriminated unions. That's a documentation-time concern, not a runtime concern: the runtime helper is one method (`page`); the schema classes are two. The decorator `ApiOkResourceList(model, kind)` takes a `kind` parameter at the _controller_ layer to pick which schema class to reference — that parameter never appears in the wire response.
 
 ### Decision 2 — Services stay domain-clean; introduce a Presenter layer
 
 **Adopted:** application services return domain DTOs or `PaginatedResult<T>` (never envelopes). A new `transport/presenters/<module>.presenter.ts` wraps application output into envelopes.
 
 **Why services should not return envelopes:**
+
 - Services are the application/business layer. They should be transport-agnostic so the same service can be reused over REST, GraphQL, gRPC, CLI, or background jobs.
 - Envelopes (`data`, `meta`, `timestamp`) are HTTP-specific wire-format concerns.
 - A service returning `{ data, meta }` couples the business layer to a specific transport. That's a leaky abstraction.
 
 **Why a separate Presenter layer (not in controllers directly, not in mappers):**
-- *In the controller:* the controller has too many responsibilities already (routing, validation, auth, status codes). One more concern is acceptable but starts to be untidy.
-- *In the mapper (`XxxResponseMapper`):* mappers handle entity-to-DTO conversion, which is a domain concern (what fields to expose, what to redact). Envelope wrapping is a transport concern. Folding them together conflates two distinct layers.
-- *In a new Presenter:* cleanly separates "what fields to expose" (DTO) from "how to wire-format" (envelope). The presenter is thin (often a one-liner) and trivially testable.
+
+- _In the controller:_ the controller has too many responsibilities already (routing, validation, auth, status codes). One more concern is acceptable but starts to be untidy.
+- _In the mapper (`XxxResponseMapper`):_ mappers handle entity-to-DTO conversion, which is a domain concern (what fields to expose, what to redact). Envelope wrapping is a transport concern. Folding them together conflates two distinct layers.
+- _In a new Presenter:_ cleanly separates "what fields to expose" (DTO) from "how to wire-format" (envelope). The presenter is thin (often a one-liner) and trivially testable.
 
 **Layered architecture:**
 
@@ -312,12 +321,14 @@ transport/controllers               → calls the presenter and returns the resu
 **Adopted:** the global interceptor stays resilient. Contracts are enforced via TypeScript, unit tests, integration tests, e2e tests, and code review. The interceptor remains a fallback (with a structured `Logger.warn` for unexpected shapes) but never throws.
 
 **Why throwing in a global interceptor is wrong:**
+
 - A single missed envelope becomes a process-wide outage depending on which request hits it first.
-- It conflates business-layer contract enforcement with infrastructure failure: a missing envelope is a *code bug*, not a *service health issue*. The bug surfaces as a 500 with the wrong log line, the wrong metrics, and the wrong alerting signal.
+- It conflates business-layer contract enforcement with infrastructure failure: a missing envelope is a _code bug_, not a _service health issue_. The bug surfaces as a 500 with the wrong log line, the wrong metrics, and the wrong alerting signal.
 - Defensive runtime checks in interceptors create a false sense of safety — they let broken code ship and only catch it under load.
 - Large NestJS codebases in production typically don't do this. The standard pattern is: typed services → typed presenters → interceptor does only date normalization and timestamp injection.
 
 **What replaces the throw:**
+
 - A `Logger.warn` in the wrap-fallback path (observability, no outage).
 - Compile-time guarantees via the generic `ApiResponse<T>` type and TypeScript branding.
 - ESLint rule banning raw return shapes from `*.application.service.ts` and `*.presenter.ts`.
@@ -328,6 +339,7 @@ transport/controllers               → calls the presenter and returns the resu
 **Adopted:** cursor pagination for feeds / discussions / notifications / quizzes; offset pagination for rankings / leaderboards / tournaments / admin reports. Both share the same envelope; `meta.pagination` is just shaped differently.
 
 **Why this is the right long-term design:**
+
 - Cursor and offset solve different problems. Cursor is stable under inserts and cheap at deep pages; offset supports random-access (`?page=5`) and total counts, both essential for admin tables and leaderboards.
 - Forcing one style would either:
   - Add expensive total counts to feed-style endpoints (bad for performance), or
@@ -341,11 +353,13 @@ transport/controllers               → calls the presenter and returns the resu
 **Adopted:** standardize on RFC 7807 Problem Details everywhere. Per-module `{ statusCode, message, error }` shapes are eliminated.
 
 **Why:**
+
 - The current state has 4+ error shapes (global filter, ranking filter, tournament filter, others). Frontend code that consumes these has to branch on shape to figure out which one it received.
 - RFC 7807 is widely adopted; most clients and SDKs handle it natively.
 - Adding `extensions.code` preserves the per-module machine-readable error IDs the ranking filter already produces.
 
 **Why a separate project:**
+
 - Error responses are a different contract from success responses. They aren't nested in `{ data, meta }`. Migrating them in the same phase conflates two concerns.
 - Different risk profile: error-handling code is often more brittle than success-path code. Splitting the migration reduces the blast radius of any single change.
 
@@ -356,6 +370,7 @@ This runs in parallel as Phase 3.
 **Adopted:** replace the 160+ hand-rolled wrapper classes with 3 generic wrappers (`WrappedDto<T>`, `CursorWrappedDto<T>`, `OffsetWrappedDto<T>`) from `src/common/swagger/swagger-schemas.ts`.
 
 **Why:**
+
 - 160+ nearly-identical classes is real maintenance debt. Each one repeats the same `data` / `meta` boilerplate.
 - The only meaningful distinctions across the 160+ classes are:
   1. The `T` in `data: T`
@@ -363,6 +378,7 @@ This runs in parallel as Phase 3.
 - 3 generic classes cover all cases.
 
 **Caveat — NestJS Swagger specifics:**
+
 - The Swagger plugin emits `$ref` schemas from concrete classes, not from TypeScript generics. So `WrappedDto<T>` cannot be referenced directly.
 - The standard workaround is `allOf` composition:
   ```ts
@@ -376,6 +392,7 @@ This runs in parallel as Phase 3.
 - `allOf` has known issues with some TypeScript client generators (they may produce `any` for the data field). Verify the frontend's OpenAPI client codegen still produces correct types after migration.
 
 **Three variants, not one:**
+
 - A single generic `WrappedDto<T>` cannot distinguish "cursor-paginated" from "offset-paginated" because both have `meta.pagination` of different shapes. Three variants (`WrappedDto<T>` for single, `CursorWrappedDto<T>` and `OffsetWrappedDto<T>` for lists) keep the Swagger meta accurate without exploding API surface.
 
 ### Decision 7 — Health endpoint keeps `@Res({ passthrough: true })`
@@ -383,6 +400,7 @@ This runs in parallel as Phase 3.
 **Adopted:** keep the current health pattern. HTTP status code (200 vs 503) is controlled by body content.
 
 **Why this is acceptable:**
+
 - Health endpoints are infrastructure, not business endpoints. They're consumed by load balancers and uptime monitors that rely on HTTP status codes.
 - `@Res({ passthrough: true })` keeps the body flowing through interceptors and filters normally, so logging/metrics still work.
 - `passthrough: true` is the documented NestJS pattern for status-code control without bypassing the rest of the response pipeline.
@@ -394,6 +412,7 @@ This runs in parallel as Phase 3.
 **Adopted:** the 6-phase plan in §3. Pre-flight first (zero-risk), then presenter layer (low-risk modules first), then bulk rollout, then interceptor simplification, then cleanup.
 
 **Why this ordering:**
+
 - Phase 0 establishes the helper + test infrastructure without touching production code, so everything after is purely additive.
 - Phase 1 builds the pattern on the smallest modules first, so the team learns the pattern on real code with low blast radius.
 - Phase 2 applies the proven pattern to larger modules in a deterministic order (smallest-blast-radius first).
@@ -471,7 +490,7 @@ export class OffsetPagination {
 export type PaginationMeta = CursorPagination | OffsetPagination;
 ```
 
-**Note:** `CursorPagination` and `OffsetPagination` are declared with `@ApiProperty` decorators because they serve double duty — they're the runtime TypeScript types *and* the OpenAPI schema classes for `meta.pagination`. The discriminator field `kind: 'cursor' | 'offset'` lets OpenAPI tooling (Swagger UI, `openapi-typescript`, `orval`) render them as a discriminated union.
+**Note:** `CursorPagination` and `OffsetPagination` are declared with `@ApiProperty` decorators because they serve double duty — they're the runtime TypeScript types _and_ the OpenAPI schema classes for `meta.pagination`. The discriminator field `kind: 'cursor' | 'offset'` lets OpenAPI tooling (Swagger UI, `openapi-typescript`, `orval`) render them as a discriminated union.
 
 Unit tests in `src/common/responses/api-response.spec.ts` covering: `ok` with various types (object, array, null), `page` with cursor `PaginationMeta` and offset `PaginationMeta`. Confirm `ok(null)` produces `{ data: null, meta: { timestamp } }` (the canonical "no body" envelope).
 
@@ -499,11 +518,7 @@ export const paginated = <T>(
 ```ts
 import { applyDecorators, Type } from '@nestjs/common';
 import { ApiOkResponse, getSchemaPath, ExtraModel } from '@nestjs/swagger';
-import {
-  WrappedDto,
-  CursorWrappedDto,
-  OffsetWrappedDto,
-} from './swagger-schemas';
+import { WrappedDto, CursorWrappedDto, OffsetWrappedDto } from './swagger-schemas';
 
 export const ApiOkResource = <T extends Type>(model: T, opts?: { description?: string }) =>
   applyDecorators(
@@ -607,10 +622,13 @@ Add a rule banning raw response shapes from `*.application.service.ts`:
 ```json
 {
   "rules": {
-    "no-restricted-syntax": ["error", {
-      "selector": "TSAsExpression[typeAnnotation.typeAnnotation.object] > TSTypeLiteral[members.properties.length=2]:has(> TSMappedType):has(> TSPropertySignature[key.name='items']):has(> TSPropertySignature[key.name='pagination'])",
-      "message": "Don't return { items, pagination } from application services. Return PaginatedResult<T> from '@/common/types/paginated-result' instead."
-    }]
+    "no-restricted-syntax": [
+      "error",
+      {
+        "selector": "TSAsExpression[typeAnnotation.typeAnnotation.object] > TSTypeLiteral[members.properties.length=2]:has(> TSMappedType):has(> TSPropertySignature[key.name='items']):has(> TSPropertySignature[key.name='pagination'])",
+        "message": "Don't return { items, pagination } from application services. Return PaginatedResult<T> from '@/common/types/paginated-result' instead."
+      }
+    ]
   }
 }
 ```
@@ -619,15 +637,15 @@ Add a rule banning raw response shapes from `*.application.service.ts`:
 
 ## 6. Execution timeline
 
-| Phase | Duration | Endpoints touched | Risk profile |
-|---|---|---|---|
-| Phase 0 — Pre-flight | 1 day | 0 (additions only) | Zero |
-| Phase 1 — Presenter layer (auth, health, search, attempt, bookmark) | 3-5 days | ~48 | Low |
-| Phase 2 — Presenter rollout (12 modules) | 10-14 days | ~147 | Medium |
-| Phase 3 — RFC 7807 error refactor (parallel track) | 5-7 days | 0 (error filters only) | Medium |
-| Phase 4 — Remove interceptor heuristic | 1 day | 0 (interceptor change only) | Low |
-| Phase 5 — Cleanup (delete 160+ DTOs) | 2-3 days | 0 (docs only) | Low |
-| **Total (sequential)** | **~3-4 weeks** | **All 195 endpoints** | |
+| Phase                                                               | Duration       | Endpoints touched           | Risk profile |
+| ------------------------------------------------------------------- | -------------- | --------------------------- | ------------ |
+| Phase 0 — Pre-flight                                                | 1 day          | 0 (additions only)          | Zero         |
+| Phase 1 — Presenter layer (auth, health, search, attempt, bookmark) | 3-5 days       | ~48                         | Low          |
+| Phase 2 — Presenter rollout (12 modules)                            | 10-14 days     | ~147                        | Medium       |
+| Phase 3 — RFC 7807 error refactor (parallel track)                  | 5-7 days       | 0 (error filters only)      | Medium       |
+| Phase 4 — Remove interceptor heuristic                              | 1 day          | 0 (interceptor change only) | Low          |
+| Phase 5 — Cleanup (delete 160+ DTOs)                                | 2-3 days       | 0 (docs only)               | Low          |
+| **Total (sequential)**                                              | **~3-4 weeks** | **All 195 endpoints**       |              |
 
 Assuming 1 developer, sequential execution. With 2 developers on independent modules in Phase 2, the timeline compresses to **~2-3 weeks**. Phase 3 can run in parallel with Phase 2 or after Phase 4; it doesn't block any other phase.
 
@@ -635,17 +653,17 @@ Assuming 1 developer, sequential execution. With 2 developers on independent mod
 
 ## 7. Risks and mitigations
 
-| Risk | Likelihood | Impact | Mitigation |
-|---|---|---|---|
-| Phase 4 removes heuristic before all services migrated → 500s | Low | Medium | Phase 4 is gated on Phase 2 completion. The wrap-fallback retains the same output as before, so the only change is the loss of "smart" inference — and that produces a `Logger.warn`, not a 500. |
-| Achievement E-variant breaks clients that read `data.total` | Medium | Medium | Phase 2 PR description explicitly documents the schema change. Coordinate with frontend before merge. |
-| Tag D-variant services are untyped in `tag.application.service.ts`, so the migration can't determine current shape | Medium | Low | Read the application service body and DTO during Phase 2. The Swagger examples already document the broken shape, so the D-variant status is observable from documentation alone. |
-| Offset pagination in tournament and ranking has a different `pagination` shape than cursor pagination | High | Low | The destination uses a single `PaginationMeta` discriminated union (`CursorPagination | OffsetPagination`) — the `kind: 'cursor' \| 'offset'` discriminator field on the runtime object makes the shape explicit. The factory overload `ApiResponse.page(items, pagination)` accepts either branch. Document the discriminator in `PaginationMeta` JSDoc so Swagger schema generation picks up the `kind` field. |
-| Health endpoint's `@Res({ passthrough: true })` bypasses the interceptor | Low | Low | Phase 5 proposes an exception-based health refactor as a follow-up, not a blocker. Phase 4 retains the bypass branch. |
-| OpenAPI client generation breaks because `allOf` produces `any` types | Medium | Medium | Run the existing OpenAPI codegen (whatever the frontend uses) against the new spec early — preferably at end of Phase 1. Verify a few representative endpoints produce correct types. If not, fall back to per-module `Wrapped*Dto` classes (defeats some of the gain but keeps codegen happy). |
-| `Promise<void>` handlers now have a body — clients that check `response.status === 204` will see 200 with `data: null` | Low | Low | Currently all `Promise<void>` returns render as `{ data: null, meta: { timestamp } }` with HTTP 200 anyway. The migration doesn't change behavior here. Document it for client teams that relied on the `Promise<void>` semantics. |
-| Frontend hardcoded error handling for non-RFC 7807 shapes | Medium | Medium | Phase 3 is its own track with its own PR description and migration window. Frontend can update error-handling code in the same release window. |
-| The `@Res()` health endpoint changes during Phase 5 break load balancer health-check configs | Low | High (load balancer outage) | Don't do the health endpoint refactor as part of Phase 5. Leave it for a separate, dedicated change with explicit LB config updates and a rollback window. |
+| Risk                                                                                                                   | Likelihood | Impact                      | Mitigation                                                                                                                                                                                                                                                                                      |
+| ---------------------------------------------------------------------------------------------------------------------- | ---------- | --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Phase 4 removes heuristic before all services migrated → 500s                                                          | Low        | Medium                      | Phase 4 is gated on Phase 2 completion. The wrap-fallback retains the same output as before, so the only change is the loss of "smart" inference — and that produces a `Logger.warn`, not a 500.                                                                                                |
+| Achievement E-variant breaks clients that read `data.total`                                                            | Medium     | Medium                      | Phase 2 PR description explicitly documents the schema change. Coordinate with frontend before merge.                                                                                                                                                                                           |
+| Tag D-variant services are untyped in `tag.application.service.ts`, so the migration can't determine current shape     | Medium     | Low                         | Read the application service body and DTO during Phase 2. The Swagger examples already document the broken shape, so the D-variant status is observable from documentation alone.                                                                                                               |
+| Offset pagination in tournament and ranking has a different `pagination` shape than cursor pagination                  | High       | Low                         | The destination uses a single `PaginationMeta` discriminated union (`CursorPagination                                                                                                                                                                                                           | OffsetPagination`) — the `kind: 'cursor' \| 'offset'`discriminator field on the runtime object makes the shape explicit. The factory overload`ApiResponse.page(items, pagination)`accepts either branch. Document the discriminator in`PaginationMeta`JSDoc so Swagger schema generation picks up the`kind` field. |
+| Health endpoint's `@Res({ passthrough: true })` bypasses the interceptor                                               | Low        | Low                         | Phase 5 proposes an exception-based health refactor as a follow-up, not a blocker. Phase 4 retains the bypass branch.                                                                                                                                                                           |
+| OpenAPI client generation breaks because `allOf` produces `any` types                                                  | Medium     | Medium                      | Run the existing OpenAPI codegen (whatever the frontend uses) against the new spec early — preferably at end of Phase 1. Verify a few representative endpoints produce correct types. If not, fall back to per-module `Wrapped*Dto` classes (defeats some of the gain but keeps codegen happy). |
+| `Promise<void>` handlers now have a body — clients that check `response.status === 204` will see 200 with `data: null` | Low        | Low                         | Currently all `Promise<void>` returns render as `{ data: null, meta: { timestamp } }` with HTTP 200 anyway. The migration doesn't change behavior here. Document it for client teams that relied on the `Promise<void>` semantics.                                                              |
+| Frontend hardcoded error handling for non-RFC 7807 shapes                                                              | Medium     | Medium                      | Phase 3 is its own track with its own PR description and migration window. Frontend can update error-handling code in the same release window.                                                                                                                                                  |
+| The `@Res()` health endpoint changes during Phase 5 break load balancer health-check configs                           | Low        | High (load balancer outage) | Don't do the health endpoint refactor as part of Phase 5. Leave it for a separate, dedicated change with explicit LB config updates and a rollback window.                                                                                                                                      |
 
 ---
 
@@ -667,19 +685,20 @@ This section is the operational reference for the migration. Each module lists i
 ### 8.2 `auth` (20 endpoints, A)
 
 All single resources. Plan:
+
 - Add `auth.presenter.ts` with `toEnvelope(dto)` per endpoint type.
 - Replace per-resource `@ApiOkResponse({ type: AuthWrappedMessageDto })` with `@ApiOkResource(MessageResponseDto)`.
 - Difficulty: trivial. 1 day for the whole module.
 
 ### 8.3 `bookmark` (16 endpoints, 12A + 4B)
 
-| Endpoint | Current | Target | Action |
-|---|---|---|---|
-| GET /bookmarks/search | B | B | presenter.toPaginatedEnvelope |
-| GET /bookmarks/recent | B | B | presenter.toPaginatedEnvelope |
-| GET /bookmarks/collections | B | B | presenter.toPaginatedEnvelope |
-| GET /bookmarks/collections/:id/quizzes | B | B | presenter.toPaginatedEnvelope |
-| Others (12) | A | A | presenter.toEnvelope |
+| Endpoint                               | Current | Target | Action                        |
+| -------------------------------------- | ------- | ------ | ----------------------------- |
+| GET /bookmarks/search                  | B       | B      | presenter.toPaginatedEnvelope |
+| GET /bookmarks/recent                  | B       | B      | presenter.toPaginatedEnvelope |
+| GET /bookmarks/collections             | B       | B      | presenter.toPaginatedEnvelope |
+| GET /bookmarks/collections/:id/quizzes | B       | B      | presenter.toPaginatedEnvelope |
+| Others (12)                            | A       | A      | presenter.toEnvelope          |
 
 Difficulty: low. 1 day.
 
@@ -692,6 +711,7 @@ Difficulty: low (the work itself) + medium (changing the existing pattern). 1-2 
 ### 8.5 `discussion` (44 endpoints, 31A + 8B + 4 D-variant + 1 nullable)
 
 Endpoints with D-variant shape (must be re-shaped at the service level):
+
 - `GET /discussions/threads/:id/related` (returns `{ items }` only) — fix service to return `PaginatedResult`.
 - `GET /discussions/threads/:id/participants` (same).
 - `GET /discussions/threads` (returns `{ items, hasNextPage }` — no `pagination` key) — fix service.
@@ -706,6 +726,7 @@ Leave `@Res({ passthrough: true })` in place. Difficulty: trivial.
 ### 8.7 `instance` (8 endpoints, 3B + 1 D-variant + 4A)
 
 D-variant to fix:
+
 - `GET /instances/:id/leaderboard` (returns `{ items, hasNextPage, nextCursor }` — controller currently does the pagination re-wrap). Move re-wrap into the service.
 
 Difficulty: low. 1 day.
@@ -713,6 +734,7 @@ Difficulty: low. 1 day.
 ### 8.8 `notification` (11 endpoints, 1 D-variant + 10A)
 
 D-variant to fix:
+
 - `GET /notifications` returns `{ items, unreadCount, hasNextPage }` (no `pagination`). Re-shape to `PaginatedResult<NotificationDto>` plus consider splitting `unreadCount` to a separate response field (either a header or an additional property in the service).
 
 Difficulty: low. 1 day.
@@ -720,9 +742,11 @@ Difficulty: low. 1 day.
 ### 8.9 `quiz` (21 endpoints, 5B + 1F + 1 F + 14A)
 
 F-variants to fix:
+
 - `POST /quizzes/:id/versions/:versionId/questions/bulk` — returns bare `QuizQuestionResponseDto[]`. Service should return the array; presenter wraps.
 
 D-variants to fix:
+
 - `GET /quizzes/featured` — returns `{ items }` only.
 - `GET /quizzes/:slug/similar` — same.
 
@@ -731,6 +755,7 @@ Difficulty: medium. 1-2 days.
 ### 8.10 `ranking` (14 endpoints, 3B + 2 D-variant + 9A)
 
 D-variants to fix:
+
 - `GET /leaderboard/top-movers` returns `{ items }` only.
 - `GET /leaderboard/me/milestones` returns `{ items }` only.
 
@@ -751,6 +776,7 @@ Single resource. Difficulty: trivial.
 ### 8.13 `social` (30 endpoints, 4B + 4 D-variant + 5F + 17A/G)
 
 F-variants to fix (bare-array returns):
+
 - `GET /social/search/suggestions`
 - `GET /social/users/search`
 - `GET /social/friend-requests/incoming`
@@ -764,6 +790,7 @@ Difficulty: medium-high (30 endpoints, many with the `as unknown as` cast that h
 ### 8.14 `tag` (14 endpoints, 4B + 3 D-variant + 7A)
 
 Tag D-variants need re-shaping at the service level:
+
 - `GET /tags/popular`
 - `GET /tags/trending`
 - `GET /tags/:slug/related`
@@ -779,6 +806,7 @@ Uses offset pagination. `TournamentOffsetMetaDto` aligns with `OffsetPaginationM
 ### 8.16 `user` (16 endpoints, 5B + 11A)
 
 F-variant to fix:
+
 - `GET /users/me/recommended-quizzes` — controller currently destructures `{ items }` from a port and returns bare array.
 
 Difficulty: low. 1 day.
@@ -790,10 +818,12 @@ Difficulty: low. 1 day.
 ### 8.18 `achievement` (10 endpoints, 2E + 7A + 1F)
 
 E-variants to flatten:
+
 - `GET /achievements/badges`
 - `GET /users/me/achievements/history`
 
 F-variant to wrap:
+
 - `GET /admin/achievements/reevaluate/:userId/history`
 
 The doubly-nested shape `data: { data: [...], total }` flattens to `data: [...], meta.pagination.total`.
@@ -804,31 +834,31 @@ Difficulty: medium. 1-2 days.
 
 ## Appendix A — Files to add
 
-| Path | Purpose |
-|---|---|
-| `src/common/responses/api-response.ts` | `ApiResponse.ok`, `ApiResponse.page`, `ApiResponse<T>` and `ResponseMeta` types |
-| `src/common/responses/api-response.spec.ts` | Unit tests |
-| `src/common/responses/pagination.ts` | `CursorPagination`, `OffsetPagination`, `PaginationMeta` discriminated union |
-| `src/common/responses/paginated-result.ts` | `PaginatedResult<T>` (domain-level concept shared by services and presenters) |
-| `src/common/swagger/api-ok.ts` | `ApiOkResource`, `ApiOkResourceList` decorators |
-| `<module>/transport/presenters/<module>.presenter.ts` | One per module (~17 files) |
-| `test/e2e/envelope.spec.ts` | Smoke test for envelope shape |
+| Path                                                  | Purpose                                                                         |
+| ----------------------------------------------------- | ------------------------------------------------------------------------------- |
+| `src/common/responses/api-response.ts`                | `ApiResponse.ok`, `ApiResponse.page`, `ApiResponse<T>` and `ResponseMeta` types |
+| `src/common/responses/api-response.spec.ts`           | Unit tests                                                                      |
+| `src/common/responses/pagination.ts`                  | `CursorPagination`, `OffsetPagination`, `PaginationMeta` discriminated union    |
+| `src/common/responses/paginated-result.ts`            | `PaginatedResult<T>` (domain-level concept shared by services and presenters)   |
+| `src/common/swagger/api-ok.ts`                        | `ApiOkResource`, `ApiOkResourceList` decorators                                 |
+| `<module>/transport/presenters/<module>.presenter.ts` | One per module (~17 files)                                                      |
+| `test/e2e/envelope.spec.ts`                           | Smoke test for envelope shape                                                   |
 
 ## Appendix B — Files to delete (Phase 5)
 
-| Path | Reason |
-|---|---|
-| `<module>/dto/response/<module>-response-docs.dto.ts` (per-module) — mostly the 160+ `Wrapped*Dto` classes | Replaced by generic `WrappedDto<T>` family |
+| Path                                                                                                           | Reason                                            |
+| -------------------------------------------------------------------------------------------------------------- | ------------------------------------------------- |
+| `<module>/dto/response/<module>-response-docs.dto.ts` (per-module) — mostly the 160+ `Wrapped*Dto` classes     | Replaced by generic `WrappedDto<T>` family        |
 | `<module>/transport/swagger/*-swagger-decorators.ts` per-endpoint factories with hardcoded `Wrapped*Dto` types | Replaced by `ApiOkResource` / `ApiOkResourceList` |
 
 ## Appendix C — Files to modify
 
-| Path | Reason |
-|---|---|
-| `src/common/interceptors/response-format.interceptor.ts` | Phase 4: simplify to wrap-without-inference, drop heuristic branches, add `Logger.warn` |
-| `src/common/filters/global-exception.filter.ts` | Phase 3: RFC 7807 ProblemDetail with `extensions.code` |
-| `<module>/application/<module>.application.service.ts` (16 of 17) | Strip any pre-wrapping; return DTOs or `PaginatedResult<T>` |
-| `<module>/transport/controllers/*.controller.ts` (26 files) | Add presenter call; replace per-endpoint `@ApiOkResponse` with `@ApiOkResource` / `@ApiOkResourceList` |
+| Path                                                              | Reason                                                                                                 |
+| ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `src/common/interceptors/response-format.interceptor.ts`          | Phase 4: simplify to wrap-without-inference, drop heuristic branches, add `Logger.warn`                |
+| `src/common/filters/global-exception.filter.ts`                   | Phase 3: RFC 7807 ProblemDetail with `extensions.code`                                                 |
+| `<module>/application/<module>.application.service.ts` (16 of 17) | Strip any pre-wrapping; return DTOs or `PaginatedResult<T>`                                            |
+| `<module>/transport/controllers/*.controller.ts` (26 files)       | Add presenter call; replace per-endpoint `@ApiOkResponse` with `@ApiOkResource` / `@ApiOkResourceList` |
 
 ---
 
