@@ -1,10 +1,9 @@
-import { Controller, Get, Query, UseFilters } from '@nestjs/common';
+import { Controller, Get, Query } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
 import { ListFollowedCategoriesQueryDto } from '../../dto/request/list-followed-categories-query.dto';
 import { CategoryQueryService } from '../../application/category-query.service';
-import { CategoryDomainExceptionFilter } from '../filters/category-domain-exception.filter';
 import { FollowedCategoryCursorMapper } from '../../mappers/followed-category-cursor.mapper';
 import { ApiFollowedCategoriesResponse } from '../swagger/category-swagger-decorators';
 
@@ -17,7 +16,6 @@ import { ApiFollowedCategoriesResponse } from '../swagger/category-swagger-decor
  */
 @ApiTags('users')
 @Controller()
-@UseFilters(CategoryDomainExceptionFilter)
 export class UserCategoryController {
   constructor(private readonly categoryQueryService: CategoryQueryService) {}
 

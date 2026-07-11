@@ -9,7 +9,6 @@ import { TournamentLifecycleService } from './domain/tournament-lifecycle.servic
 import { TournamentResponseMapper } from './mappers/tournament-response.mapper';
 import { TournamentController } from './transport/controller/tournament.controller';
 import { TournamentPresenter } from './transport/presenters/tournament.presenter';
-import { TournamentDomainExceptionFilter } from './transport/filters/tournament-domain-exception.filter';
 import { TOURNAMENT_REPOSITORY_PORT } from './domain/ports';
 import { TournamentRepository } from './infrastructure/repositories/tournament.repository';
 import {
@@ -37,7 +36,6 @@ import type { RedisConfig } from '@/core/config';
     TournamentSchedulerService,
     TournamentResponseMapper,
     TournamentPresenter,
-    TournamentDomainExceptionFilter,
     { provide: TOURNAMENT_REPOSITORY_PORT, useExisting: TournamentRepository },
     { provide: TOURNAMENT_DOMAIN_EVENT_BUS, useExisting: BullmqTournamentEventBusService },
     {
