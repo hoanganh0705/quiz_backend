@@ -1189,6 +1189,313 @@ export const ProblemCodeMapping: Readonly<Record<string, ProblemCodeInfo>> = {
     title: 'InternalServerError',
     typeUri: 'https://api.quiz.local/problems/achievement-grant-error',
   },
+
+  // ===========================================================================
+  // DISCUSSION module — src/modules/discussion/domain/errors/index.ts
+  // ===========================================================================
+  /** Phase 3.1 entry: discussion was deferred from Phase 2 because it
+   * used name-based status lookup (STATUS_MAP keyed by exception.name).
+   * After Phase 3.1 the lookup tables are replaced with these mapping
+   * entries. */
+  // 12 concrete exceptions → 4 status codes:
+  //   404: DISCUSSION_THREAD_NOT_FOUND, DISCUSSION_COMMENT_NOT_FOUND,
+  //        DISCUSSION_QUIZ_NOT_FOUND
+  //   403: DISCUSSION_THREAD_FORBIDDEN, DISCUSSION_COMMENT_FORBIDDEN,
+  //        DISCUSSION_SELF_VOTE, DISCUSSION_SELF_REPORT, DISCUSSION_MODERATOR_REQUIRED
+  //   409: DISCUSSION_THREAD_CLOSED, DISCUSSION_THREAD_NOT_ACTIVE,
+  //        DISCUSSION_DUPLICATE_REPORT
+  //   400: DISCUSSION_COMMENT_THREAD_MISMATCH
+  //
+  // Note on the cross-module `UserNotFoundError`: the prior per-module
+  // filter `@Catch(DiscussionError, UserNotFoundError)` also caught
+  // `UserNotFoundError` from the user module. After Phase 3.1 the
+  // discussion filter is removed; the global filter handles it via
+  // `ProblemCodeMapping['USER_NOT_FOUND']` (declared in Phase 1).
+  //
+  // Note on the `QuizNotFoundError` class-name collision: the
+  // discussion module declares its own `QuizNotFoundError` class. The
+  // `code` (`DISCUSSION_QUIZ_NOT_FOUND`) distinguishes it from the
+  // quiz-module version (`QUIZ_NOT_FOUND`) and the quiz-analytics
+  // version (`QUIZ_ANALYTICS_NOT_FOUND`). Clients should switch on
+  // `extensions.code`, never on the class name. The §9 item-1
+  // unification (merge these into a single class) is deferred.
+
+  /**
+   * Thrown when a discussion thread cannot be found. 404 Not Found.
+   *
+   * Wire-shape improvement: the prior per-module filter preserved the
+   * thrown message verbatim; behavior is unchanged. `title` changes
+   * from the class name `'ThreadNotFoundError'` to the standard
+   * RFC 7807 title `'NotFound'` (a Phase 3.1 deliverable per §8.4.1).
+   */
+  DISCUSSION_THREAD_NOT_FOUND: {
+    status: HttpStatus.NOT_FOUND,
+    title: 'NotFound',
+    typeUri: 'https://api.quiz.local/problems/discussion-thread-not-found',
+  },
+  /**
+   * Thrown when a discussion comment cannot be found. 404 Not Found.
+   *
+   * Wire-shape improvement: the prior per-module filter preserved the
+   * thrown message verbatim; behavior is unchanged. `title` changes
+   * from the class name `'CommentNotFoundError'` to the standard
+   * RFC 7807 title `'NotFound'`.
+   */
+  DISCUSSION_COMMENT_NOT_FOUND: {
+    status: HttpStatus.NOT_FOUND,
+    title: 'NotFound',
+    typeUri: 'https://api.quiz.local/problems/discussion-comment-not-found',
+  },
+  /**
+   * Thrown when the discussion module's `QuizNotFoundError` fires
+   * (quiz lookup during a discussion operation). 404 Not Found.
+   *
+   * This is the **discussion-module** version of the class; the
+   * quiz-module version uses `QUIZ_NOT_FOUND` and the quiz-analytics
+   * version uses `QUIZ_ANALYTICS_NOT_FOUND`. They share the
+   * JavaScript class name but are distinct at runtime. Clients
+   * should switch on `extensions.code`, never on the class name.
+   * The §9 item-1 unification (merge these into a single class) is
+   * deferred.
+   */
+  DISCUSSION_QUIZ_NOT_FOUND: {
+    status: HttpStatus.NOT_FOUND,
+    title: 'NotFound',
+    typeUri: 'https://api.quiz.local/problems/discussion-quiz-not-found',
+  },
+  /**
+   * Thrown when the authenticated user lacks permission to perform
+   * an action on a thread. 403 Forbidden.
+   */
+  DISCUSSION_THREAD_FORBIDDEN: {
+    status: HttpStatus.FORBIDDEN,
+    title: 'Forbidden',
+    typeUri: 'https://api.quiz.local/problems/discussion-thread-forbidden',
+  },
+  /**
+   * Thrown when the authenticated user lacks permission to perform
+   * an action on a comment. 403 Forbidden.
+   */
+  DISCUSSION_COMMENT_FORBIDDEN: {
+    status: HttpStatus.FORBIDDEN,
+    title: 'Forbidden',
+    typeUri: 'https://api.quiz.local/problems/discussion-comment-forbidden',
+  },
+  /**
+   * Thrown when the user attempts to vote on their own content. 403
+   * Forbidden.
+   */
+  DISCUSSION_SELF_VOTE: {
+    status: HttpStatus.FORBIDDEN,
+    title: 'Forbidden',
+    typeUri: 'https://api.quiz.local/problems/discussion-self-vote',
+  },
+  /**
+   * Thrown when the user attempts to report their own content. 403
+   * Forbidden.
+   */
+  DISCUSSION_SELF_REPORT: {
+    status: HttpStatus.FORBIDDEN,
+    title: 'Forbidden',
+    typeUri: 'https://api.quiz.local/problems/discussion-self-report',
+  },
+  /**
+   * Thrown when a moderator-only action is attempted by a non-
+   * moderator user. 403 Forbidden.
+   *
+   * Plan §8.4.1 risk note: this class's 403 status is non-obvious
+   * from the class name; the migration test captures it.
+   */
+  DISCUSSION_MODERATOR_REQUIRED: {
+    status: HttpStatus.FORBIDDEN,
+    title: 'Forbidden',
+    typeUri: 'https://api.quiz.local/problems/discussion-moderator-required',
+  },
+  /**
+   * Thrown when an attempt is made to modify a closed thread. 409
+   * Conflict.
+   */
+  DISCUSSION_THREAD_CLOSED: {
+    status: HttpStatus.CONFLICT,
+    title: 'Conflict',
+    typeUri: 'https://api.quiz.local/problems/discussion-thread-closed',
+  },
+  /**
+   * Thrown when an attempt is made to modify a thread whose status is
+   * not `'active'` (e.g. `'deleted'`). 409 Conflict.
+   */
+  DISCUSSION_THREAD_NOT_ACTIVE: {
+    status: HttpStatus.CONFLICT,
+    title: 'Conflict',
+    typeUri: 'https://api.quiz.local/problems/discussion-thread-not-active',
+  },
+  /**
+   * Thrown when the user attempts to report content that they have
+   * already reported. 409 Conflict.
+   */
+  DISCUSSION_DUPLICATE_REPORT: {
+    status: HttpStatus.CONFLICT,
+    title: 'Conflict',
+    typeUri: 'https://api.quiz.local/problems/discussion-duplicate-report',
+  },
+  /**
+   * Thrown when a parent comment does not belong to the thread the
+   * caller is replying to. 400 Bad Request.
+   *
+   * Plan §8.4.1 risk note: this class's 400 status is non-obvious
+   * from the class name (one might expect 409 Conflict for a
+   * cross-resource mismatch); the migration test captures it.
+   */
+  DISCUSSION_COMMENT_THREAD_MISMATCH: {
+    status: HttpStatus.BAD_REQUEST,
+    title: 'BadRequest',
+    typeUri: 'https://api.quiz.local/problems/discussion-comment-thread-mismatch',
+  },
+
+  // ===========================================================================
+  // RANKING module — src/modules/ranking/domain/errors/ranking-domain.errors.ts
+  // ===========================================================================
+  /** Phase 3.2 entry: ranking was the highest-risk Phase-3 module because
+   * its per-module `RankingDomainExceptionFilter` was a `@Catch()` catch-all
+   * that shadows `GlobalExceptionFilter`. After Phase 3.2 the lookup tables
+   * are replaced with these mapping entries; uncaught Errors now flow through
+   * the global filter's standard path. */
+  // 3 concrete exceptions → 2 status codes:
+  //   422: RANKING_INVALID_XP_EVENT (semantic upgrade — rejected XP event
+  //        input; was 500 catch-all under the prior filter)
+  //   500: RANKING_RANK_CALCULATION_ERROR, RANKING_PERIOD_RESET_ERROR
+  //
+  // Note on the prior `code` field: `RankingDomainError` carried a
+  // constructor-injected `code` (the only domain exception class in the
+  // codebase to do so, alongside `AchievementDomainError`). After Phase
+  // 3.2 the constructor arg becomes a class-level `readonly code` field
+  // per the plan §8.4.2 directive. Constructor signatures stay the same
+  // for `RankCalculationError` and `PeriodResetError` (they take
+  // `period` + `reason` + optional `context`); `InvalidXpEventError`
+  // takes `event` + `reason`. The `event` field stays as a public
+  // readonly instance field (separate from `code`) for in-process
+  // introspection; `context` is retained on the three concrete
+  // classes that use it.
+
+  /**
+   * Thrown when an XP event fails validation (negative amount,
+   * malformed structure, etc.). 422 Unprocessable Entity.
+   *
+   * Wire-shape improvement: prior per-module filter was a `@Catch()`
+   * catch-all that returned 500 with a hardcoded `'Internal server
+   * error'` envelope. The thrown message and the constructor-injected
+   * `code: 'INVALID_XP_EVENT'` were both discarded. After Phase 3.2
+   * the global filter resolves the new code `RANKING_INVALID_XP_EVENT`
+   * and preserves the thrown message.
+   *
+   * Status upgrade from 500 → 422: this is a semantic correction.
+   * The exception represents rejected input (a malformed XP event
+   * from the upstream pipeline), not an internal server failure.
+   * 422 Unprocessable Entity is the correct semantic.
+   */
+  RANKING_INVALID_XP_EVENT: {
+    status: HttpStatus.UNPROCESSABLE_ENTITY,
+    title: 'UnprocessableEntity',
+    typeUri: 'https://api.quiz.local/problems/ranking-invalid-xp-event',
+  },
+  /**
+   * Thrown when an internal rank calculation fails (database deadlock,
+   * consistency violation, etc.). 500 Internal Server Error.
+   *
+   * Wire-shape improvement: prior per-module filter was a `@Catch()`
+   * catch-all that returned 500 with a hardcoded `'Internal server
+   * error'` envelope. The thrown message and the constructor-injected
+   * `code: 'RANK_CALCULATION_ERROR'` were both discarded. After
+   * Phase 3.2 the global filter resolves the new code
+   * `RANKING_RANK_CALCULATION_ERROR` and preserves the thrown message.
+   */
+  RANKING_RANK_CALCULATION_ERROR: {
+    status: HttpStatus.INTERNAL_SERVER_ERROR,
+    title: 'InternalServerError',
+    typeUri: 'https://api.quiz.local/problems/ranking-rank-calculation-error',
+  },
+  /**
+   * Thrown when a period reset fails (scheduler failure, database
+   * deadlock, etc.). 500 Internal Server Error.
+   *
+   * Wire-shape improvement: prior per-module filter was a `@Catch()`
+   * catch-all that returned 500 with a hardcoded `'Internal server
+   * error'` envelope. The thrown message and the constructor-injected
+   * `code: 'PERIOD_RESET_ERROR'` were both discarded. After Phase
+   * 3.2 the global filter resolves the new code
+   * `RANKING_PERIOD_RESET_ERROR` and preserves the thrown message.
+   */
+  RANKING_PERIOD_RESET_ERROR: {
+    status: HttpStatus.INTERNAL_SERVER_ERROR,
+    title: 'InternalServerError',
+    typeUri: 'https://api.quiz.local/problems/ranking-period-reset-error',
+  },
+
+  // ===========================================================================
+  // NOTIFICATION module — src/modules/notification/domain/errors/notification.errors.ts
+  // ===========================================================================
+  /** Phase 5 (rev5.1) entry: notification was inadvertently skipped in
+   * Phases 1-3 because it had no per-module filter (no
+   * `NotificationDomainExceptionFilter` to delete). Its errors
+   * (`NotificationError` base + `NotificationNotFoundError` +
+   * `NotificationForbiddenError`) extended `Error` directly, so the
+   * global filter caught them via its `instanceof Error` branch and
+   * returned 500 with `title: 'InternalServerError'` — masking a
+   * legitimate 404 (notification not found) as a generic 500 and
+   * masking a legitimate 403 (user lacks permission for this
+   * notification) the same way.
+   *
+   * Phase 5 fix: convert to `BaseDomainException` + class-level
+   * `code`, add these two mapping entries. The global filter now
+   * resolves the correct status + `extensions.code` for the 2
+   * notification domain exceptions. 2 concrete exceptions → 2
+   * status codes (404 + 403). The abstract base `NotificationError`
+   * (no concrete instance throws it; audit at rev5.1 start: 0 grep
+   * hits for `new NotificationError(`) becomes a `BaseDomainException`
+   * subclass with no `code` field, matching the pattern used in all
+   * 14 migrated modules. */
+
+  /**
+   * Thrown when a notification lookup fails (notification does not
+   * exist or has been deleted). 404 Not Found.
+   *
+   * Wire-shape improvement: prior behavior routed
+   * `NotificationNotFoundError` (which `extends Error`) through the
+   * global filter's `instanceof Error` branch and returned 500 with
+   * `title: 'InternalServerError'`. After Phase 5 the global filter
+   * resolves the new code `NOTIFICATION_NOT_FOUND` and returns a
+   * proper 404 with `extensions.code = 'NOTIFICATION_NOT_FOUND'`.
+   */
+  NOTIFICATION_NOT_FOUND: {
+    status: HttpStatus.NOT_FOUND,
+    title: 'NotFound',
+    typeUri: 'https://api.quiz.local/problems/notification-not-found',
+  },
+  /**
+   * Thrown when a notification belongs to a different user than the
+   * authenticated caller (i.e. the caller is authenticated but lacks
+   * permission for this specific notification resource). 403
+   * Forbidden.
+   *
+   * Wire-shape improvement: prior behavior routed
+   * `NotificationForbiddenError` (which `extends Error`) through the
+   * global filter's `instanceof Error` branch and returned 500 with
+   * `title: 'InternalServerError'`. After Phase 5 the global filter
+   * resolves the new code `NOTIFICATION_FORBIDDEN` and returns a
+   * proper 403 with `extensions.code = 'NOTIFICATION_FORBIDDEN'`.
+   *
+   * Note on the 401 vs 403 distinction: `NotificationForbiddenError`
+   * is thrown AFTER `NotificationNotFoundError`, so the caller is
+   * authenticated — 403 is correct (forbidden), not 401 (unauthenticated).
+   * The throw-sites at `notification-application.service.ts:132,
+   * 160, 209` all check `notification.userId !== user.sub` after a
+   * successful lookup, confirming the 403 semantic.
+   */
+  NOTIFICATION_FORBIDDEN: {
+    status: HttpStatus.FORBIDDEN,
+    title: 'Forbidden',
+    typeUri: 'https://api.quiz.local/problems/notification-forbidden',
+  },
 };
 
 const DEFAULT_TYPE_URIS: Readonly<Record<number, string>> = {

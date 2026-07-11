@@ -1,4 +1,4 @@
-import { Controller, Get, Param, ParseUUIDPipe, Query, UseFilters } from '@nestjs/common';
+import { Controller, Get, Param, ParseUUIDPipe, Query } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { Public } from '@/common/decorators/public.decorator';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
@@ -29,11 +29,13 @@ import { MyUpvotedCommentCursorMapper } from '@/modules/discussion/mappers/my-up
 import { MyDiscussionSubscriptionCursorMapper } from '@/modules/discussion/mappers/my-discussion-subscription-cursor.mapper';
 import { MySavedThreadCursorMapper } from '@/modules/discussion/mappers/my-saved-thread-cursor.mapper';
 import { QuizDiscussionCursorMapper } from '@/modules/discussion/mappers/quiz-discussion-cursor.mapper';
-import { DiscussionDomainExceptionFilter } from '../filters/discussion-domain-exception.filter';
+
+// All error responses are routed through `GlobalExceptionFilter` as
+// RFC 7807 `ProblemDetailDto` after Phase 3.1. The per-module filter
+// has been removed.
 
 @ApiTags('users')
 @Controller()
-@UseFilters(DiscussionDomainExceptionFilter)
 export class UserDiscussionController {
   constructor(
     private readonly discussionApplicationService: DiscussionApplicationService,

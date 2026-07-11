@@ -25,6 +25,35 @@ type HttpExceptionResponseShape = {
   error?: string;
 };
 
+/**
+ * Status → synthesized `code` for native `HttpException` paths (Phase 4
+ * deliverable per plan §6.3 + §8.5). Lives with its sole consumer
+ * (the global filter) — no separate registry, no generated artifact.
+ *
+ * Why this exists: clients that switch on `extensions.code` should not
+ * be left empty-handed when the error came from a guard/pipe/interceptor
+ * (`UnauthorizedException`, `BadRequestException`, etc.) instead of from
+ * a domain exception class. With this table every RFC 7807 response
+ * carries an `extensions.code` — domain exceptions go through
+ * `ProblemCodeMapping`; everything else goes through this table.
+ *
+ * `GLOBAL_VALIDATION_FAILED` is special: it overrides
+ * `GLOBAL_BAD_REQUEST` for the specific shape produced by NestJS
+ * `ValidationPipe` (a `string[]` of field errors). Clients that
+ * render per-field UI use this code to skip the
+ * `detail: '...; ...; ...'` joined-string render and instead inspect
+ * the `extensions.validationErrors` array (Phase 5+; not implemented).
+ */
+const STATUS_TO_GLOBAL_CODE: Readonly<Record<number, string>> = {
+  [HttpStatus.BAD_REQUEST]: 'GLOBAL_BAD_REQUEST',
+  [HttpStatus.UNAUTHORIZED]: 'GLOBAL_UNAUTHENTICATED',
+  [HttpStatus.FORBIDDEN]: 'GLOBAL_FORBIDDEN',
+  [HttpStatus.NOT_FOUND]: 'GLOBAL_NOT_FOUND',
+  [HttpStatus.CONFLICT]: 'GLOBAL_CONFLICT',
+  [HttpStatus.UNPROCESSABLE_ENTITY]: 'GLOBAL_UNPROCESSABLE',
+  [HttpStatus.TOO_MANY_REQUESTS]: 'GLOBAL_RATE_LIMITED',
+};
+
 // this filter split into 3 cases: 1. HTTP exceptions, 2. Errors, 3. Non-error exceptions
 @Catch()
 export class GlobalExceptionFilter implements ExceptionFilter {
@@ -122,12 +151,42 @@ export class GlobalExceptionFilter implements ExceptionFilter {
         errorName = exception.name;
       }
 
+      // Phase 4 (§6.3 + §8.5): synthesize `extensions.code` for native
+      // `HttpException` paths so clients can switch on `code` uniformly
+      // for domain AND non-domain errors. Two overrides exist:
+      //
+      // 1. `BadRequestException` carrying a `string[]` message (the
+      //    shape produced by NestJS `ValidationPipe`) emits
+      //    `GLOBAL_VALIDATION_FAILED` instead of the default
+      //    `GLOBAL_BAD_REQUEST`. Clients rendering per-field UI use
+      //    this code to skip the joined-string `detail` and instead
+      //    inspect the `extensions.validationErrors` array (Phase 5+,
+      //    not yet implemented).
+      //
+      // 2. 5xx without an explicit table entry falls back to
+      //    `GLOBAL_INTERNAL_ERROR`. The table only enumerates
+      //    client-error status codes + `429`; 5xx is the catch-all
+      //    bucket. Per §6.3: "5xx → GLOBAL_INTERNAL_ERROR".
+      if (
+        statusCode === HttpStatus.BAD_REQUEST &&
+        typeof exceptionResponse === 'object' &&
+        exceptionResponse !== null &&
+        Array.isArray((exceptionResponse as { message?: unknown }).message)
+      ) {
+        domainCode = 'GLOBAL_VALIDATION_FAILED';
+      } else if (statusCode >= HttpStatus.INTERNAL_SERVER_ERROR) {
+        domainCode = 'GLOBAL_INTERNAL_ERROR';
+      } else {
+        domainCode = STATUS_TO_GLOBAL_CODE[statusCode] ?? 'GLOBAL_INTERNAL_ERROR';
+      }
+
       if (statusCode >= HttpStatus.INTERNAL_SERVER_ERROR) {
         requestLogger.error({
           event: 'http_server_error',
           method: request.method,
           url: request.url,
           statusCode,
+          code: domainCode,
           error: errorName,
           details: message,
         });
@@ -137,12 +196,19 @@ export class GlobalExceptionFilter implements ExceptionFilter {
           method: request.method,
           url: request.url,
           statusCode,
+          code: domainCode,
           error: errorName,
           details: message,
         });
       }
     } else if (exception instanceof Error) {
       errorName = 'InternalServerError';
+      // Phase 4 (§6.3): every 5xx carries `extensions.code =
+      // 'GLOBAL_INTERNAL_ERROR'` so clients switching on `code` see
+      // a uniform value across uncaught Errors, 5xx `HttpException`
+      // (e.g. `InternalServerErrorException` thrown directly), and
+      // unexpected 502/503/504 paths that fall through the table.
+      domainCode = 'GLOBAL_INTERNAL_ERROR';
 
       const causeChain: { name: string; message: string; code?: string }[] = [];
       let cursor: unknown = exception.cause;
@@ -207,6 +273,12 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       instance: request.originalUrl ?? request.url,
       extensions: {
         requestId: request.id,
+        // ISO 8601 timestamp of when this response was generated.
+        // Added in Phase 3.1 (per RFC 7807 migration plan §8.4.1) so
+        // every error response carries a consistent timestamp +
+        // requestId pair. Clients may use either to correlate a
+        // response with server-side logs.
+        timestamp: new Date().toISOString(),
         ...(domainCode !== undefined ? { code: domainCode } : {}),
       },
     };

@@ -4,39 +4,28 @@
  * API endpoints for leaderboards and user ranks.
  * Part of Phase 3 - Leaderboards & APIs.
  *
- * Error shape: ALL exceptions from this controller are intercepted by
- * `RankingDomainExceptionFilter` (via @UseFilters at the controller level).
- * Because the filter uses @Catch() with no argument, it catches EVERY
- * exception — including JwtGuard's UnauthorizedException, PermissionsGuard's
- * ForbiddenException, and class-validator's BadRequestException. All of
- * these are re-written to the same { statusCode, message, code, timestamp }
- * envelope, NOT the RFC 7807 ProblemDetailDto shape.
+ * Error shape: All error responses (RFC 7807 `ProblemDetailDto`) are
+ * produced by `GlobalExceptionFilter` after Phase 3.2. The prior
+ * `RankingDomainExceptionFilter` (a `@Catch()` catch-all that
+ * shadowed the global filter) has been removed. The
+ * `RankingDomainErrorDto` is also gone — see the plan §8.4.2
+ * completion criterion.
  */
 
-import {
-  Controller,
-  Get,
-  Param,
-  Query,
-  UseFilters,
-  UseGuards,
-  applyDecorators,
-} from '@nestjs/common';
+import { Controller, Get, Param, Query, UseGuards, applyDecorators } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import {
   ApiBadRequestResponse,
   ApiBearerAuth,
-  ApiExtraModels,
   ApiOperation,
   ApiTags,
   ApiUnauthorizedResponse,
-  getSchemaPath,
 } from '@nestjs/swagger';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
 import { Public } from '@/common/decorators/public.decorator';
 import { JwtGuard, type JwtPayload } from '@/common/guards/jwt.guard';
+import { ErrorResponseExamples, ProblemDetailDto } from '@/common/swagger/swagger-schemas';
 import { AUTH_SECURITY_NAME } from '@/core/swagger/swagger.config';
-import { RankingDomainExceptionFilter } from '../filters/ranking-domain-exception.filter';
 import { LeaderboardService } from '../../domain/services/leaderboard.service';
 import { UserRankService } from '../../domain/services/user-rank.service';
 import {
@@ -62,7 +51,6 @@ import {
   TopMoverDto,
   RankingHistoryItemDto,
 } from '../../dto/response';
-import { RankingDomainErrorDto } from '../../dto/error/ranking-domain-error.dto';
 import { RankingPresenter } from '../presenters/ranking.presenter';
 import { ApiOkResource, ApiOkResourceList } from '@/common/swagger/api-ok';
 import { GetLeaderboardDistributionQueryHandler } from '../../application/get-leaderboard-distribution.query';
@@ -80,10 +68,11 @@ import { GetUserRankingHistoryQueryHandler } from '../../application/get-user-ra
 
 // ─── Local helper decorators ───────────────────────────────────────────────────
 //
-// Every error from this controller is re-written by RankingDomainExceptionFilter
-// into { statusCode, message, code, timestamp } — NOT RFC 7807 ProblemDetailDto.
-// This is true even for JwtGuard's UnauthorizedException (caught by the filter,
-// not by GlobalExceptionFilter).
+// All error responses (401 from JwtGuard, 400 from class-validator /
+// date-range validation, 404 from cross-module UserNotFoundError, 500
+// from `InvalidXpEventError`/`RankCalculationError`/`PeriodResetError`)
+// are routed through `GlobalExceptionFilter` as RFC 7807
+// `ProblemDetailDto` after Phase 3.2.
 
 /** 401 — JwtGuard blocks unauthenticated requests. */
 function rankingUnauthorizedResponse(): MethodDecorator {
@@ -92,10 +81,11 @@ function rankingUnauthorizedResponse(): MethodDecorator {
     ApiUnauthorizedResponse({
       description:
         'Missing or invalid JWT bearer token. ' +
-        'JwtGuard throws `UnauthorizedException` which `RankingDomainExceptionFilter` ' +
-        'catches and re-writes to a `{ statusCode, message, code, timestamp }` envelope ' +
-        '(NOT RFC 7807 ProblemDetailDto).',
-      schema: { $ref: getSchemaPath(RankingDomainErrorDto) },
+        'JwtGuard throws `UnauthorizedException` which `GlobalExceptionFilter` ' +
+        'emits as RFC 7807 `ProblemDetailDto` (NOT the legacy ranking ' +
+        '`{ statusCode, message, code, timestamp }` envelope).',
+      type: ProblemDetailDto,
+      example: ErrorResponseExamples.unauthorized,
     }),
   );
 }
@@ -106,17 +96,16 @@ function rankingBadRequestResponse(): MethodDecorator {
     ApiBadRequestResponse({
       description:
         'Request validation failed (e.g. malformed query parameters, invalid date range). ' +
-        '`BadRequestException` from validation is caught by `RankingDomainExceptionFilter` ' +
-        'and re-written to a `{ statusCode, message, code, timestamp }` envelope.',
-      schema: { $ref: getSchemaPath(RankingDomainErrorDto) },
+        '`BadRequestException` from validation is caught by `GlobalExceptionFilter` ' +
+        'and emitted as RFC 7807 `ProblemDetailDto`.',
+      type: ProblemDetailDto,
+      example: ErrorResponseExamples.badRequest,
     }),
   );
 }
 
 @ApiTags('leaderboard')
-@ApiExtraModels(RankingDomainErrorDto)
 @Controller('leaderboard')
-@UseFilters(RankingDomainExceptionFilter)
 export class RankingController {
   constructor(
     private readonly leaderboardService: LeaderboardService,
