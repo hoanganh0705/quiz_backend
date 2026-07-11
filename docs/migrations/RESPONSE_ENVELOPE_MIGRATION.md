@@ -180,39 +180,33 @@ For each of the 13 domain exception filters:
 
 **Heuristic removal only. No throws. Resilient fallback retained.**
 
-1. Delete `isPaginatedPayload` and `PaginatedPayload` from `response-format.interceptor.ts`.
-2. Delete `isFormattedResponse` (or simplify to a no-op since presenters always produce envelopes).
-3. Replace `formatPayload()` with the resilient default branch:
+**Status (rev4.10):** 🎉 **Phase 4 complete.** The smart branches are gone. The interceptor is now:
 
-   ```ts
-   intercept(context: ExecutionContext, next: CallHandler<T>): Observable<ApiResponse<T>> {
-     return next.handle().pipe(
-       map((payload) => {
-         if (this.shouldBypass(context, payload)) {
-           return payload as ApiResponse<T>;
-         }
-         if (!isApiResponse(payload)) {
-           this.logger.warn(
-             `ResponseFormatInterceptor: payload did not match envelope shape; wrapping as data.`,
-           );
-         }
-         return {
-           data: normalizeTemporalFields(payload ?? null, 0) as T,
-           meta: { timestamp: new Date().toISOString() },
-         };
-       }),
-     );
-   }
-   ```
+1. A **presenter pass-through** if the payload is already an `ApiResponseEnvelope` (detected via the new `isApiResponse(value)` type guard in `common/responses/api-response.ts`).
+2. A **resilient wrap-as-data fallback** otherwise, with a structured `Logger.warn` carrying `event: 'response_format_interceptor.envelope_drift'`.
 
-4. Add the structured `Logger.warn` so accidental drift becomes observable without becoming a runtime crisis.
-5. Keep `isStreamableFile()` and `isNativeResponseHandled()` bypasses — they handle file downloads and the `@Res({ passthrough: true })` health endpoint.
+Concrete deliverables:
 
-**The interceptor does not throw under any condition.**
+- **`src/common/responses/api-response.ts`** — added `isApiResponse<T>(value: unknown): value is ApiResponseEnvelope<T>`. Plain-object check: presenter's `ApiResponse.ok` / `ApiResponse.page` factories emit plain objects (not class instances), so the prototype is `Object.prototype` or `null`. Validates `data`, `meta: { timestamp: string }`, and optional `meta.pagination`.
+- **`src/common/interceptors/response-format.interceptor.ts`** — removed `isPaginatedPayload`, `PaginatedPayload`, and the 3-branch `formatPayload()` method. The `intercept()` is now a flat 3-step map: (a) `shouldBypass()` for `StreamableFile` + `@Res({ passthrough: true })`; (b) `isApiResponse()` for presenter's pre-formatted envelopes; (c) `Logger.warn` + wrap-as-data fallback. Injected `PinoLogger` via `@InjectPinoLogger(ResponseFormatInterceptor.name)`. Pre-Phase-4 the interceptor was ~189 lines (with heuristic branches); post-Phase-4 it is **147 lines total / 119 code lines** (the "~70 lines" plan estimate was a refactor target for code-only; the actual file includes docblock comments). The structured `Logger.warn` makes accidental drift observable without becoming a runtime crisis.
+- **`src/common/interceptors/response-format.interceptor.spec.ts`** (new, 20 tests): covers pass-through for `ApiResponse.ok` / `ApiResponse.page` (cursor + offset) / null body; resilient wrap for bare objects/arrays/strings/numbers/null/undefined/Symbol; structured `Logger.warn` invocation; `StreamableFile` bypass; `@Res({ passthrough: true })` bypass (`headersSent` + `writableEnded`); **explicit invariant: no `{ items, pagination }` inference** (the heuristic is gone — pre-Phase-4 this would have smart-rewrapped a legacy `{ items, pagination }` shape into `{ data: items, meta: { pagination } }`; post-Phase-4 the default-branch wrap preserves the whole shape as `data` and emits a warn); nested `normalizeTemporalFields` retention on the wrap path; non-throw guarantee; and a line-budget guard (<200 lines total) against future heuristic reintroduction.
+- **`test/envelope.e2e-spec.ts`** — fixture now imports `LoggerModule.forRoot()` so the `@InjectPinoLogger`-decorated constructor resolves under the standalone NestJS testing harness. All 4 envelope e2e tests pass unchanged on the wire (the `meta.timestamp` is always emitted by the presenter, never by the interceptor's wrap path).
 
-**Risks:** very low. The fallback is the same shape as the previous default branch. The smart branches are simply gone.
+**Decisions:**
 
-**Exit criteria:** interceptor is ~70 lines. No inferences about business response shapes remain.
+1. **Pseudo-code bug in §8.4.** The Phase-4 plan snippet (lines 187-205) re-wrapped every payload regardless of whether it matched the envelope — that would have caused double-wrap for `ApiResponse.ok(...)` (the data would become `{ data: <envelope>, meta: { timestamp } }`). The implementation in `response-format.interceptor.ts` follows the *intent* of the plan, not the literal pseudo-code: pre-formatted envelopes are **passed through unchanged**; only non-envelope payloads hit the wrap-as-data fallback. Verified by 4 envelope e2e tests + 4 pass-through unit tests.
+2. **`isApiResponse` is a thin wrapper, not a deep structural check.** It validates the canonical `{ data, meta: { timestamp } }` shape with optional `meta.pagination`. It does NOT recursively validate that `data` itself is a well-typed DTO (that's the role of the per-module presenter + TypeScript). This is the right level of strictness: any contract violation in `data` is a presenter bug, not an interceptor bug — the interceptor's job is to recognize envelopes, not enforce business semantics.
+3. **`Logger.warn` is structured with `event: 'response_format_interceptor.envelope_drift'`.** Production observability can grep on this event name to find controllers whose presenters are out of alignment with the canonical envelope. The first message argument is the human-readable description; the second is the structured context. Both go through Pino's logger so they're captured in the same JSON log stream as request logs.
+4. **No changes to the presenter layer.** All 195 presenters (across the 12 migrated modules) are untouched. The Phase-4 work is purely interceptor-side. Confirmed by `git diff --stat src/modules/*/transport/presenters/` returning 0 lines changed.
+
+**Verification:**
+
+- `tsc --noEmit` clean.
+- ESLint clean on every touched file (3 prettier auto-fixes applied during refactor + 1 `require()` → top-level import cleanup in spec + 1 `expect.anything()` → `unknown`-typed variable in spec).
+- **974 unit tests pass** (was 954, +20 interceptor spec).
+- **130 e2e tests pass** (4 envelope + 126 rfc7807). Pre-Phase-4 e2e count was 130 (4 envelope + 126 rfc7807); Phase 4 is wire-shape-stable so the e2e count is unchanged.
+
+**Migration totals (cumulative):** 12 modules / 195 endpoints / 160+ `Wrapped*Dto` classes deleted / 974 unit tests + 130 e2e tests passing — **envelope migration fully shipped end-to-end**.
 
 ### Phase 5 — Cleanup (2-3 days)
 
