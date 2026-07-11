@@ -6,6 +6,7 @@ import { ListFollowedTagsQueryDto } from '../../dto/request/list-followed-tags-q
 import { TagApplicationService } from '../../application/tag.application.service';
 import { TagDomainExceptionFilter } from '../filters/tag-domain-exception.filter';
 import { FollowedTagCursorMapper } from '../../mappers/followed-tag-cursor.mapper';
+import { TagPresenter } from '../presenters/tag.presenter';
 import { ApiFollowedTagsResponse } from '../swagger/tag-swagger-decorators';
 
 /**
@@ -18,16 +19,23 @@ import { ApiFollowedTagsResponse } from '../swagger/tag-swagger-decorators';
 @Controller()
 @UseFilters(TagDomainExceptionFilter)
 export class UserTagController {
-  constructor(private readonly tagApplicationService: TagApplicationService) {}
+  constructor(
+    private readonly tagApplicationService: TagApplicationService,
+    private readonly presenter: TagPresenter,
+  ) {}
 
   @Get('users/me/followed-tags')
   @ApiFollowedTagsResponse()
-  listFollowedTags(@CurrentUser() user: JwtPayload, @Query() query: ListFollowedTagsQueryDto) {
+  async listFollowedTags(
+    @CurrentUser() user: JwtPayload,
+    @Query() query: ListFollowedTagsQueryDto,
+  ) {
     const cursor = query.cursor ? FollowedTagCursorMapper.parse(query.cursor) : null;
 
-    return this.tagApplicationService.listFollowedTags(user.sub, {
+    const result = await this.tagApplicationService.listFollowedTags(user.sub, {
       limit: query.limit,
       cursor,
     });
+    return this.presenter.listFollowedTags(result);
   }
 }
