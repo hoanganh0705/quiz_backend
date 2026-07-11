@@ -7,6 +7,7 @@ import { InstanceController } from './transport/controller/instance.controller';
 import { InstanceGateway } from './transport/gateway/instance.gateway';
 import { InstanceResponseMapper } from './mappers/instance-response.mapper';
 import { InstanceDomainExceptionFilter } from './transport/filters/instance-domain-exception.filter';
+import { InstancePresenter } from './transport/presenters/instance.presenter';
 import { WsExceptionFilter } from './transport/filters/ws-exception.filter';
 import { QUIZ_INSTANCE_REPOSITORY_PORT } from './domain/ports';
 import { QuizInstanceRepository } from './infrastructure/repositories/quiz-instance.repository';
@@ -53,6 +54,9 @@ import { ConfigService } from '@nestjs/config';
 
     // Mapper
     InstanceResponseMapper,
+
+    // Presenter
+    InstancePresenter,
 
     // Exception filters
     InstanceDomainExceptionFilter,
