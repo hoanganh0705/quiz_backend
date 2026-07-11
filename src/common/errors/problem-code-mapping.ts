@@ -103,6 +103,269 @@ export const ProblemCodeMapping: Readonly<Record<string, ProblemCodeInfo>> = {
     title: 'Conflict',
     typeUri: 'https://api.quiz.local/problems/auth-oauth-linking-required',
   },
+
+  // ===========================================================================
+  // QUIZ module — src/modules/quiz/domain/errors/quiz-domain.errors.ts
+  // ===========================================================================
+  /**
+   * Catch-all for unexpected domain operation failures (e.g. unmapped DB
+   * errors in repositories). Mapped to 500 because by the time we reach this
+   * code, the upstream domain layer has already failed to classify the
+   * failure into a more specific exception. The wire shape is identical to
+   * the prior filter's catch-all (which also returned 500 with the same
+   * generic title), but `extensions.code` is now present so on-call can
+   * correlate with structured logs.
+   */
+  QUIZ_OPERATION_FAILED: {
+    status: HttpStatus.INTERNAL_SERVER_ERROR,
+    title: 'InternalServerError',
+    typeUri: 'https://api.quiz.local/problems/quiz-operation-failed',
+  },
+  QUIZ_NOT_FOUND: {
+    status: HttpStatus.NOT_FOUND,
+    title: 'NotFound',
+    typeUri: 'https://api.quiz.local/problems/quiz-not-found',
+  },
+  QUIZ_FORBIDDEN: {
+    status: HttpStatus.FORBIDDEN,
+    title: 'Forbidden',
+    typeUri: 'https://api.quiz.local/problems/quiz-forbidden',
+  },
+  QUIZ_SLUG_CONFLICT: {
+    status: HttpStatus.CONFLICT,
+    title: 'Conflict',
+    typeUri: 'https://api.quiz.local/problems/quiz-slug-conflict',
+  },
+  QUIZ_CONFLICT: {
+    status: HttpStatus.CONFLICT,
+    title: 'Conflict',
+    typeUri: 'https://api.quiz.local/problems/quiz-conflict',
+  },
+  QUIZ_VALIDATION_FAILED: {
+    status: HttpStatus.BAD_REQUEST,
+    title: 'BadRequest',
+    typeUri: 'https://api.quiz.local/problems/quiz-validation-failed',
+  },
+  /**
+   * Wire-shape NOTE (improvement): the prior `QuizDomainExceptionFilter`
+   * hardcoded the `detail` for this exception to `'This quiz version
+   * cannot be modified'`, ignoring the thrown message. The new global
+   * filter preserves `exception.message`, so callers now receive the more
+   * specific state-machine message (e.g. `'Archived versions are immutable
+   * and cannot be edited'`). Documented in plan §8.2 v3.3.
+   */
+  QUIZ_VERSION_IMMUTABLE: {
+    status: HttpStatus.BAD_REQUEST,
+    title: 'BadRequest',
+    typeUri: 'https://api.quiz.local/problems/quiz-version-immutable',
+  },
+  QUIZ_INSUFFICIENT_QUESTIONS: {
+    status: HttpStatus.UNPROCESSABLE_ENTITY,
+    title: 'UnprocessableEntity',
+    typeUri: 'https://api.quiz.local/problems/quiz-insufficient-questions',
+  },
+  QUIZ_QUESTION_POSITION_CONFLICT: {
+    status: HttpStatus.CONFLICT,
+    title: 'Conflict',
+    typeUri: 'https://api.quiz.local/problems/quiz-question-position-conflict',
+  },
+  QUIZ_ANSWER_OPTION_POSITION_CONFLICT: {
+    status: HttpStatus.CONFLICT,
+    title: 'Conflict',
+    typeUri: 'https://api.quiz.local/problems/quiz-answer-option-position-conflict',
+  },
+  QUIZ_MULTIPLE_CORRECT_OPTIONS: {
+    status: HttpStatus.BAD_REQUEST,
+    title: 'BadRequest',
+    typeUri: 'https://api.quiz.local/problems/quiz-multiple-correct-options',
+  },
+
+  // ===========================================================================
+  // QUIZ module — analytics — src/modules/quiz/domain/analytics/errors/
+  // ===========================================================================
+  /**
+   * Wire-shape NOTE (improvement): the prior setup had no
+   * `@Catch(QuizAnalyticsError)` filter, so analytics errors fell through
+   * `GlobalExceptionFilter`'s plain-`Error` branch and surfaced as
+   * `500 InternalServerError`. After Phase 1, `QUIZ_ANALYTICS_NOT_FOUND`
+   * returns 404 (matching the prior comment in `quiz-review.controller.ts`
+   * that documented the *intended* behavior) and
+   * `QUIZ_ANALYTICS_CALCULATION_FAILED` returns 500 (a new explicit code
+   * for the previously-uncaught error class).
+   */
+  QUIZ_ANALYTICS_NOT_FOUND: {
+    status: HttpStatus.NOT_FOUND,
+    title: 'NotFound',
+    typeUri: 'https://api.quiz.local/problems/quiz-analytics-not-found',
+  },
+  QUIZ_ANALYTICS_CALCULATION_FAILED: {
+    status: HttpStatus.INTERNAL_SERVER_ERROR,
+    title: 'InternalServerError',
+    typeUri: 'https://api.quiz.local/problems/quiz-analytics-calculation-failed',
+  },
+
+  // ===========================================================================
+  // ATTEMPT module — src/modules/attempt/domain/errors/attempt-domain.errors.ts
+  // ===========================================================================
+  /**
+   * Thrown when a quiz attempt cannot be found by id. 404 Not Found.
+   */
+  ATTEMPT_NOT_FOUND: {
+    status: HttpStatus.NOT_FOUND,
+    title: 'NotFound',
+    typeUri: 'https://api.quiz.local/problems/attempt-not-found',
+  },
+  /**
+   * Thrown when the caller lacks permission to access an attempt. 403 Forbidden.
+   */
+  ATTEMPT_FORBIDDEN: {
+    status: HttpStatus.FORBIDDEN,
+    title: 'Forbidden',
+    typeUri: 'https://api.quiz.local/problems/attempt-forbidden',
+  },
+  /**
+   * Generic attempt-domain validation signal. Used for option-related
+   * validation failures in `attempt-command.service.ts`. 400 Bad Request.
+   *
+   * NOTE: In the prior module structure, three child exceptions
+   * (`QuizNotPublishedError`, `AttemptQuestionInvalidError`,
+   * `AttemptNotCompletedError`) extended `AttemptValidationError`. After
+   * Phase 1 they extend `AttemptDomainError` directly so each can carry
+   * its own `code` literal type. `AttemptValidationError` itself stays as
+   * a concrete standalone class for the one direct throw site in
+   * `attempt-command.service.ts`. See plan §8.2 v3.4 for details.
+   */
+  ATTEMPT_VALIDATION_FAILED: {
+    status: HttpStatus.BAD_REQUEST,
+    title: 'BadRequest',
+    typeUri: 'https://api.quiz.local/problems/attempt-validation-failed',
+  },
+  /**
+   * Thrown when the user attempts to start a second active attempt for the
+   * same quiz version. 409 Conflict.
+   */
+  ATTEMPT_ALREADY_STARTED: {
+    status: HttpStatus.CONFLICT,
+    title: 'Conflict',
+    typeUri: 'https://api.quiz.local/problems/attempt-already-started',
+  },
+  /**
+   * Thrown when a state-machine transition is attempted on an attempt
+   * that is not in the active state (already completed, abandoned, or
+   * never started). 409 Conflict.
+   */
+  ATTEMPT_NOT_ACTIVE: {
+    status: HttpStatus.CONFLICT,
+    title: 'Conflict',
+    typeUri: 'https://api.quiz.local/problems/attempt-not-active',
+  },
+  /**
+   * Thrown when the user attempts to submit or withdraw an answer for a
+   * question they've already answered in the same attempt. 409 Conflict.
+   */
+  ATTEMPT_QUESTION_ALREADY_ANSWERED: {
+    status: HttpStatus.CONFLICT,
+    title: 'Conflict',
+    typeUri: 'https://api.quiz.local/problems/attempt-question-already-answered',
+  },
+  /**
+   * Thrown when the user attempts to start an attempt on a quiz version
+   * that is not yet published. 422 Unprocessable Entity.
+   */
+  ATTEMPT_QUIZ_NOT_PUBLISHED: {
+    status: HttpStatus.UNPROCESSABLE_ENTITY,
+    title: 'UnprocessableEntity',
+    typeUri: 'https://api.quiz.local/problems/attempt-quiz-not-published',
+  },
+  /**
+   * Thrown when the question id in a submit-answer request does not
+   * belong to the attempt's quiz version. 422 Unprocessable Entity.
+   */
+  ATTEMPT_QUESTION_INVALID: {
+    status: HttpStatus.UNPROCESSABLE_ENTITY,
+    title: 'UnprocessableEntity',
+    typeUri: 'https://api.quiz.local/problems/attempt-question-invalid',
+  },
+  /**
+   * Thrown when analytics are requested for an attempt that has not yet
+   * been completed. 422 Unprocessable Entity.
+   */
+  ATTEMPT_NOT_COMPLETED: {
+    status: HttpStatus.UNPROCESSABLE_ENTITY,
+    title: 'UnprocessableEntity',
+    typeUri: 'https://api.quiz.local/problems/attempt-not-completed',
+  },
+  /**
+   * Thrown when a withdraw-answer request references an answer that does
+   * not exist on the attempt. 404 Not Found.
+   *
+   * NOTE: This exception is exported but never thrown anywhere in the
+   * current codebase. It is preserved with a sensible 404 mapping (the
+   * semantic analogue to `AttemptNotFoundError`). If it remains dead
+   * after the migration completes, delete it in a follow-up cleanup PR.
+   */
+  ATTEMPT_ANSWER_NOT_FOUND: {
+    status: HttpStatus.NOT_FOUND,
+    title: 'NotFound',
+    typeUri: 'https://api.quiz.local/problems/attempt-answer-not-found',
+  },
+
+  // ===========================================================================
+  // USER module — src/modules/user/domain/errors/
+  // ===========================================================================
+  /**
+   * Thrown by the user module's `UserService` (and a few read paths in
+   * ranking/social/discussion that import the user variant of
+   * `UserNotFoundError`) when a user cannot be found by id. 404 Not Found.
+   *
+   * Distinct from `AUTH_USER_NOT_FOUND` (401), which is the auth-flow
+   * variant thrown from refresh-token, password-change, and account-security
+   * services. Clients distinguish via `extensions.code`. Unification is
+   * deferred per plan §9 item 1.
+   */
+  USER_NOT_FOUND: {
+    status: HttpStatus.NOT_FOUND,
+    title: 'NotFound',
+    typeUri: 'https://api.quiz.local/problems/user-not-found',
+  },
+  /**
+   * Thrown when a user's ranking entry cannot be found. 404 Not Found.
+   *
+   * NOTE: exported but never thrown in the current codebase. Preserved
+   * with a sensible 404 mapping (semantic analogue to `UserNotFoundError`).
+   */
+  USER_RANKING_NOT_FOUND: {
+    status: HttpStatus.NOT_FOUND,
+    title: 'NotFound',
+    typeUri: 'https://api.quiz.local/problems/user-ranking-not-found',
+  },
+  /**
+   * Thrown when a user's analytics entry cannot be found. 404 Not Found.
+   *
+   * NOTE: exported but never thrown in the current codebase. Preserved
+   * with a sensible 404 mapping.
+   */
+  USER_ANALYTICS_NOT_FOUND: {
+    status: HttpStatus.NOT_FOUND,
+    title: 'NotFound',
+    typeUri: 'https://api.quiz.local/problems/user-analytics-not-found',
+  },
+  /**
+   * Thrown when a caller attempts to read another user's profile (or
+   * related analytics/ranking) but the target profile is private. 403
+   * Forbidden.
+   *
+   * This exception is also caught by the achievement module's
+   * per-module filter (out of scope for Phase 1). That filter's
+   * `instanceof UserProfilePrivateError` check continues to work because
+   * the class identity is preserved. The achievement filter's wire
+   * shape for this code path remains the old envelope until Phase 2.
+   */
+  USER_PROFILE_PRIVATE: {
+    status: HttpStatus.FORBIDDEN,
+    title: 'Forbidden',
+    typeUri: 'https://api.quiz.local/problems/user-profile-private',
+  },
 };
 
 const DEFAULT_TYPE_URIS: Readonly<Record<number, string>> = {

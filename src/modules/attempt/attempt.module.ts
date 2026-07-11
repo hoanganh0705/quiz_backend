@@ -6,7 +6,6 @@ import { AttemptQueryService } from './domain/attempt-query.service';
 import { AttemptResponseMapper } from './mappers/attempt-response.mapper';
 import { AttemptController } from './transport/controller/attempt.controller';
 import { AttemptPresenter } from './transport/presenters/attempt.presenter';
-import { AttemptDomainExceptionFilter } from './transport/filters/attempt-domain-exception.filter';
 import { ATTEMPT_REPOSITORY_PORT } from './domain/ports';
 import { AttemptRepository } from './infrastructure/repositories/attempt.repository';
 import { AttemptDomainEventBus } from './domain/events/attempt-domain.event-bus';
@@ -35,9 +34,6 @@ import { QuizModule } from '@/modules/quiz/quiz.module';
 
     // Presentation
     AttemptPresenter,
-
-    // Exception filter
-    AttemptDomainExceptionFilter,
 
     // Port bindings
     { provide: ATTEMPT_REPOSITORY_PORT, useExisting: AttemptRepository },
