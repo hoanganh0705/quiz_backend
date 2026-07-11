@@ -36,10 +36,9 @@ import { ReviewPresenter } from '../presenters/review.presenter';
 
 // Admin review endpoints never throw ReviewDomainError (the admin service
 // has no domain error classes; missing reports or invalid transitions result
-// in empty result sets, not exceptions), so the ReviewDomainExceptionFilter
-// has nothing to catch. Authentication and authorization failures fall
-// through to GlobalExceptionFilter and are emitted as RFC 7807 ProblemDetail
-// responses (401 from JwtGuard, 403 from PermissionsGuard).
+// in empty result sets, not exceptions). Authentication and authorization
+// failures are emitted as RFC 7807 ProblemDetail responses by the global
+// filter (401 from JwtGuard, 403 from PermissionsGuard).
 // 404 and 409 are intentionally NOT documented because the admin service
 // never throws them — listPlatformReports returns an empty result set, and
 // updateReportStatus is a no-op when the report does not exist.

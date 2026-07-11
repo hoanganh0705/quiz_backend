@@ -1,4 +1,4 @@
-import { Controller, Get, Param, ParseUUIDPipe, Query, UseFilters } from '@nestjs/common';
+import { Controller, Get, Param, ParseUUIDPipe, Query } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { Public } from '@/common/decorators/public.decorator';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
@@ -10,13 +10,11 @@ import { ListMyReviewsQueryDto, ListReportedReviewsQueryDto } from '../../dto/re
 import { MyReviewsResponseDto } from '../../dto/response/my-review-response.dto';
 import { ReportedReviewsResponseDto } from '../../dto/response/reported-review-response.dto';
 import { ReviewDetailResponseDto } from '../../dto/response/review-detail-response.dto';
-import { ReviewDomainExceptionFilter } from '../filters/review-domain-exception.filter';
 import { CursorMapper } from '../../mappers/review-cursor.mapper';
 import { ReviewPresenter } from '../presenters/review.presenter';
 
 @ApiTags('users')
 @Controller('users')
-@UseFilters(ReviewDomainExceptionFilter)
 export class UserReviewController {
   constructor(
     private readonly reviewApplicationService: ReviewApplicationService,

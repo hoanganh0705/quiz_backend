@@ -6,20 +6,17 @@ import {
   ParseUUIDPipe,
   Post,
   Query,
-  UseFilters,
   applyDecorators,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import {
   ApiBadRequestResponse,
   ApiBearerAuth,
-  ApiExtraModels,
   ApiForbiddenResponse,
   ApiNotFoundResponse,
   ApiOperation,
   ApiTags,
   ApiUnauthorizedResponse,
-  getSchemaPath,
 } from '@nestjs/swagger';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
 import { Transactional } from '@/common/interceptors/transactional.interceptor';
@@ -43,78 +40,62 @@ import {
   JoinInstanceResponseDto,
   StartInstanceResponseDto,
   CloseInstanceResponseDto,
-  InstanceDomainErrorDto,
 } from '../../dto/response';
 import { ApiCreatedResource, ApiOkResource, ApiOkResourceList } from '@/common/swagger/api-ok';
-import { InstanceDomainExceptionFilter } from '../filters/instance-domain-exception.filter';
 import { InstancePresenter } from '../presenters/instance.presenter';
 
 // ─── Local helper decorators ───────────────────────────────────────────────────
 //
-// `InstanceDomainExceptionFilter` rewrites every `InstanceDomainError` into
-// `{ statusCode, message, error }` (NOT RFC 7807), so we need:
-//   404 / 403 / 400 / 409 — InstanceDomainErrorDto shape (from the domain filter).
-//   401 / 400 (validator) / 400 (ParseUUIDPipe) — ProblemDetailDto (from GlobalExceptionFilter).
+// After Phase 2: every error response is emitted by GlobalExceptionFilter as
+// RFC 7807 `ProblemDetailDto` — there is no longer a domain-filtered
+// `{ statusCode, message, error }` envelope. So:
+//   - 401 / 400 (validator) / 400 (ParseUUIDPipe) → ProblemDetailDto
+//   - 400 / 403 / 404 / 409 (domain)                → ProblemDetailDto
 //
-// When the same HTTP status can originate from BOTH filters we use `schema.oneOf`.
+// The previous `schema.oneOf([ProblemDetailDto, InstanceDomainErrorDto])`
+// for the dual-400 helper is no longer needed: every error response is
+// uniform RFC 7807 now.
 
-/** 404 thrown by `InstanceService` → handled by InstanceDomainExceptionFilter. */
+/** 404 from `InstanceNotFoundError` (domain) → GlobalExceptionFilter. */
 function instanceNotFoundResponse(): MethodDecorator {
   return applyDecorators(
     ApiNotFoundResponse({
       description:
-        'Instance not found. Returned by the instance domain exception filter with a ' +
-        '`{ statusCode, message, error }` envelope (message is always "Resource not found").',
-      schema: { $ref: getSchemaPath(InstanceDomainErrorDto) },
+        'Instance not found. Returned as an RFC 7807 ProblemDetail. ' +
+        'Detail: "Quiz instance not found".',
+      type: ProblemDetailDto,
+      example: ErrorResponseExamples.notFound,
     }),
   );
 }
 
-/** 403 from `InstanceNotHostError` (domain) → InstanceDomainExceptionFilter. */
+/** 403 from `InstanceNotHostError` (domain) → GlobalExceptionFilter. */
 function instanceForbiddenResponse(): MethodDecorator {
   return applyDecorators(
     ApiForbiddenResponse({
       description:
-        'Caller is not the host of the instance. Returned by the instance domain exception filter ' +
-        'with a `{ statusCode, message, error }` envelope ' +
-        '(message is always "You do not have permission to perform this action").',
-      schema: { $ref: getSchemaPath(InstanceDomainErrorDto) },
+        'Caller is not the host of the instance. Returned as an RFC 7807 ProblemDetail. ' +
+        'Detail: "Only the host can perform this action".',
+      type: ProblemDetailDto,
+      example: ErrorResponseExamples.forbidden,
     }),
   );
 }
 
 /**
- * 400 that can be either:
- *   - `ProblemDetailDto` from `GlobalExceptionFilter` (class-validator on body, ParseUUIDPipe on path, etc.)
- *   - `InstanceDomainErrorDto` from `InstanceDomainExceptionFilter` (InstanceNotOpenError, InstanceFullError,
- *     InstanceAlreadyStartedError, InstanceAlreadyClosedError).
+ * 400 that can be either class-validator / ParseUUIDPipe validation or a
+ * domain-level precondition failure (InstanceNotOpenError, InstanceFullError,
+ * InstanceAlreadyStartedError, InstanceAlreadyClosedError). All are emitted
+ * as RFC 7807 ProblemDetail by GlobalExceptionFilter after Phase 2.
  */
-function instanceBadRequestResponseDual(): MethodDecorator {
+function instanceBadRequestResponse(): MethodDecorator {
   return applyDecorators(
     ApiBadRequestResponse({
       description:
-        'Request failed validation OR a domain-level precondition failed. The response is either ' +
-        'an RFC 7807 `ProblemDetailDto` (from class-validator on the body / ParseUUIDPipe on the path) ' +
-        'or an `InstanceDomainErrorDto` envelope from the instance domain exception filter ' +
-        '(`InstanceNotOpenError`, `InstanceFullError`, `InstanceAlreadyStartedError`, ' +
-        '`InstanceAlreadyClosedError` all map to 400 with the generic message "Invalid request data").',
-      schema: {
-        oneOf: [
-          { $ref: getSchemaPath(ProblemDetailDto) },
-          { $ref: getSchemaPath(InstanceDomainErrorDto) },
-        ],
-      },
-    }),
-  );
-}
-
-/** 400 from `ParseUUIDPipe` / query-param validation only — not domain. */
-function instanceBadRequestResponseValidation(): MethodDecorator {
-  return applyDecorators(
-    ApiBadRequestResponse({
-      description:
-        'Request failed validation (e.g. malformed UUID in the path or invalid query parameters). ' +
-        'RFC 7807 ProblemDetail envelope.',
+        'Request failed validation OR a domain-level precondition failed. ' +
+        'Returned as an RFC 7807 ProblemDetail. Domain errors: ' +
+        '`InstanceNotOpenError`, `InstanceFullError`, `InstanceAlreadyStartedError`, ' +
+        '`InstanceAlreadyClosedError`.',
       type: ProblemDetailDto,
       example: ErrorResponseExamples.badRequest,
     }),
@@ -135,9 +116,7 @@ function instanceUnauthorizedResponse(): MethodDecorator {
 }
 
 @ApiTags('instances')
-@ApiExtraModels(ProblemDetailDto, InstanceDomainErrorDto)
 @Controller('instances')
-@UseFilters(InstanceDomainExceptionFilter)
 export class InstanceController {
   constructor(
     private readonly applicationService: InstanceApplicationService,
@@ -194,7 +173,7 @@ export class InstanceController {
       '`status` (one of `open`, `running`, `closed`, `finished`), `difficulty` (`easy`, `medium`, `hard`). ' +
       '400 is returned only when the query parameters fail validation.',
   })
-  @instanceBadRequestResponseValidation()
+  @instanceBadRequestResponse()
   async listInstances(@Query() query: ListInstancesQueryDto) {
     const result = await this.applicationService.listInstancesForController({
       limit: query.limit ?? 20,
@@ -210,7 +189,7 @@ export class InstanceController {
   // ─── GET /instances/{id}/players ────────────────────────────────────────────
   //
   // `InstanceService.listInstancePlayers` throws `InstanceNotFoundError` when
-  // the instance does not exist → InstanceDomainExceptionFilter → 404.
+  // the instance does not exist → GlobalExceptionFilter → 404.
   // The response payload (`{ instanceId, items, total }`) does NOT contain a
   // `pagination` key, so the envelope wraps it as a non-paginated resource.
   @Get(':id/players')
@@ -222,7 +201,7 @@ export class InstanceController {
       'Returns the list of players currently in the instance, with a `total` count. ' +
       'Requires a valid JWT bearer token. 404 is returned when the instance does not exist.',
   })
-  @instanceBadRequestResponseValidation()
+  @instanceBadRequestResponse()
   @instanceNotFoundResponse()
   async listInstancePlayers(@Param('id', new ParseUUIDPipe()) instanceId: string) {
     const result = await this.applicationService.listInstancePlayersForController(instanceId);
@@ -232,7 +211,7 @@ export class InstanceController {
   // ─── GET /instances/{id} ────────────────────────────────────────────────────
   //
   // `InstanceService.getInstanceById` throws `InstanceNotFoundError` on miss
-  // → 404 via `InstanceDomainExceptionFilter`.
+  // → 404 via `GlobalExceptionFilter`.
   @Get(':id')
   @instanceUnauthorizedResponse()
   @ApiOkResource(InstanceDetailResponseDto, { description: 'Instance found' })
@@ -243,7 +222,7 @@ export class InstanceController {
       'and a snapshot of the current players. Requires a valid JWT bearer token. ' +
       '404 is returned when the instance does not exist.',
   })
-  @instanceBadRequestResponseValidation()
+  @instanceBadRequestResponse()
   @instanceNotFoundResponse()
   async getInstanceById(@Param('id', new ParseUUIDPipe()) instanceId: string) {
     const result = await this.applicationService.getInstanceByIdForController(instanceId);
@@ -253,11 +232,11 @@ export class InstanceController {
   // ─── POST /instances/{id}/join ─────────────────────────────────────────────
   //
   // `InstanceService.joinInstance` throws:
-  //   - `InstanceNotFoundError` → 404 InstanceDomainErrorDto
-  //   - `InstanceNotOpenError`  → 400 InstanceDomainErrorDto
-  //   - `InstanceFullError`     → 400 InstanceDomainErrorDto
+  //   - `InstanceNotFoundError` → 404 ProblemDetail
+  //   - `InstanceNotOpenError`  → 400 ProblemDetail
+  //   - `InstanceFullError`     → 400 ProblemDetail
   // Note: 403 (host check) and 409 (conflict) are NEVER thrown here.
-  // 400 can also come from class-validator / ParseUUIDPipe → ProblemDetailDto.
+  // 400 can also come from class-validator / ParseUUIDPipe → ProblemDetail.
   @Post(':id/join')
   @Transactional()
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
@@ -271,7 +250,7 @@ export class InstanceController {
       'or body validation failure) and 404 (instance does not exist). ' +
       'Returns 200 with `{ message: "Joined the instance successfully" }`.',
   })
-  @instanceBadRequestResponseDual()
+  @instanceBadRequestResponse()
   @instanceNotFoundResponse()
   async joinInstance(
     @Param('id', new ParseUUIDPipe()) instanceId: string,
@@ -284,9 +263,9 @@ export class InstanceController {
   // ─── POST /instances/{id}/start ─────────────────────────────────────────────
   //
   // `InstanceService.startInstance` throws:
-  //   - `InstanceNotFoundError`        → 404 InstanceDomainErrorDto
-  //   - `InstanceNotHostError`         → 403 InstanceDomainErrorDto
-  //   - `InstanceAlreadyStartedError`  → 400 InstanceDomainErrorDto
+  //   - `InstanceNotFoundError`        → 404 ProblemDetail
+  //   - `InstanceNotHostError`         → 403 ProblemDetail
+  //   - `InstanceAlreadyStartedError`  → 400 ProblemDetail
   // 409 is NEVER thrown here.
   @Post(':id/start')
   @instanceUnauthorizedResponse()
@@ -299,7 +278,7 @@ export class InstanceController {
       'or malformed path UUID), 403 (caller is not the host), 404 (instance does not exist). ' +
       'Returns 200 with `{ message: "Instance started" }`.',
   })
-  @instanceBadRequestResponseDual()
+  @instanceBadRequestResponse()
   @instanceForbiddenResponse()
   @instanceNotFoundResponse()
   async startInstance(
@@ -313,9 +292,9 @@ export class InstanceController {
   // ─── POST /instances/{id}/close ────────────────────────────────────────────
   //
   // `InstanceService.closeInstance` throws:
-  //   - `InstanceNotFoundError`        → 404 InstanceDomainErrorDto
-  //   - `InstanceNotHostError`         → 403 InstanceDomainErrorDto
-  //   - `InstanceAlreadyClosedError`   → 400 InstanceDomainErrorDto
+  //   - `InstanceNotFoundError`        → 404 ProblemDetail
+  //   - `InstanceNotHostError`         → 403 ProblemDetail
+  //   - `InstanceAlreadyClosedError`   → 400 ProblemDetail
   // 409 is NEVER thrown here.
   @Post(':id/close')
   @instanceUnauthorizedResponse()
@@ -328,7 +307,7 @@ export class InstanceController {
       'or malformed path UUID), 403 (caller is not the host), 404 (instance does not exist). ' +
       'Returns 200 with `{ message: "Instance closed" }`.',
   })
-  @instanceBadRequestResponseDual()
+  @instanceBadRequestResponse()
   @instanceForbiddenResponse()
   @instanceNotFoundResponse()
   async closeInstance(
@@ -360,7 +339,7 @@ export class InstanceController {
       '`{ rank, instancePlayerId }`) and `limit` (1–100, default 20). ' +
       '404 is returned when the instance does not exist.',
   })
-  @instanceBadRequestResponseValidation()
+  @instanceBadRequestResponse()
   @instanceNotFoundResponse()
   async getLeaderboard(
     @Param('id', new ParseUUIDPipe()) instanceId: string,

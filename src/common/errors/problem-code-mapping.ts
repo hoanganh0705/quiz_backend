@@ -643,6 +643,343 @@ export const ProblemCodeMapping: Readonly<Record<string, ProblemCodeInfo>> = {
     title: 'BadRequest',
     typeUri: 'https://api.quiz.local/problems/tournament-withdraw-closed',
   },
+
+  // ===========================================================================
+  // REVIEW module — src/modules/review/domain/errors/review-domain.errors.ts
+  // ===========================================================================
+  /** Fourth Phase-2 entry: legacy `{ statusCode, message, error }` → RFC 7807. */
+  // 6 concrete exceptions → 4 status codes:
+  //   404: REVIEW_NOT_FOUND
+  //   403: REVIEW_FORBIDDEN
+  //   409: REVIEW_CONFLICT, REVIEW_ALREADY_REPORTED
+  //   400: REVIEW_VALIDATION, REVIEW_ATTEMPT_REQUIRED
+
+  /**
+   * Thrown when a review cannot be found, or when a quiz is referenced
+   * in a review operation but does not exist (3 throw sites pass
+   * `'Quiz not found'`; the prior filter rewrote them to `'Review not
+   * found'`, but Phase 2 preserves the thrown message). 404 Not Found.
+   */
+  REVIEW_NOT_FOUND: {
+    status: HttpStatus.NOT_FOUND,
+    title: 'NotFound',
+    typeUri: 'https://api.quiz.local/problems/review-not-found',
+  },
+  /**
+   * Thrown when the authenticated user lacks permission to perform a
+   * review operation. 403 Forbidden.
+   *
+   * Wire-shape improvement: the prior per-module filter rewrote every
+   * `ReviewForbiddenError.message` to a hardcoded generic
+   * `'You do not have permission to perform this action'`, ignoring
+   * the thrown message. The global filter now preserves
+   * `exception.message`, so call sites that pass distinct messages
+   * (e.g. `'You do not have permission to view analytics for this
+   * quiz'`) surface them verbatim.
+   */
+  REVIEW_FORBIDDEN: {
+    status: HttpStatus.FORBIDDEN,
+    title: 'Forbidden',
+    typeUri: 'https://api.quiz.local/problems/review-forbidden',
+  },
+  /**
+   * Thrown when a review conflict is detected (e.g. user has already
+   * reviewed this quiz). 409 Conflict.
+   *
+   * Wire-shape improvement: the prior per-module filter rewrote every
+   * `ReviewConflictError.message` to a hardcoded `'Resource already
+   * exists'`, ignoring the thrown message
+   * (`REVIEW_QUIZ_USER_CONFLICT_MESSAGE = 'You have already reviewed
+   * this quiz'`). The global filter now preserves `exception.message`.
+   */
+  REVIEW_CONFLICT: {
+    status: HttpStatus.CONFLICT,
+    title: 'Conflict',
+    typeUri: 'https://api.quiz.local/problems/review-conflict',
+  },
+  /**
+   * Thrown when the user tries to report a review a second time. 409
+   * Conflict.
+   *
+   * Wire-shape improvement: the prior per-module filter rewrote every
+   * `ReviewAlreadyReportedError.message` to a hardcoded `'You have
+   * already reported this review'`, ignoring the thrown message. The
+   * global filter now preserves `exception.message`.
+   */
+  REVIEW_ALREADY_REPORTED: {
+    status: HttpStatus.CONFLICT,
+    title: 'Conflict',
+    typeUri: 'https://api.quiz.local/problems/review-already-reported',
+  },
+  /**
+   * Thrown when review-related input fails validation
+   * (e.g. `'You cannot vote on your own review'`). 400 Bad Request.
+   *
+   * Wire-shape improvement: the prior per-module filter rewrote every
+   * `ReviewValidationError.message` to a hardcoded `'Invalid request
+   * data'`. The global filter now preserves `exception.message`.
+   */
+  REVIEW_VALIDATION: {
+    status: HttpStatus.BAD_REQUEST,
+    title: 'BadRequest',
+    typeUri: 'https://api.quiz.local/problems/review-validation',
+  },
+  /**
+   * Thrown when a user tries to review a quiz without having completed
+   * at least one attempt. 400 Bad Request.
+   *
+   * Wire-shape improvement: the prior per-module filter rewrote every
+   * `ReviewAttemptRequiredError.message` to a hardcoded `'Invalid
+   * request data'`. The global filter now preserves `exception.message`
+   * (default: `'You must complete at least one attempt before
+   * reviewing this quiz'`).
+   */
+  REVIEW_ATTEMPT_REQUIRED: {
+    status: HttpStatus.BAD_REQUEST,
+    title: 'BadRequest',
+    typeUri: 'https://api.quiz.local/problems/review-attempt-required',
+  },
+
+  // ===========================================================================
+  // BOOKMARK module — src/modules/bookmark/domain/errors/bookmark-domain.errors.ts
+  // ===========================================================================
+  /** Fifth Phase-2 entry: legacy `{ statusCode, message, error }` → RFC 7807. */
+  // 7 concrete exceptions → 4 status codes:
+  //   404: BOOKMARK_NOT_FOUND, COLLECTION_NOT_FOUND, BOOKMARK_COLLECTION_NOT_FOUND
+  //   403: COLLECTION_FORBIDDEN
+  //   409: BOOKMARK_CONFLICT, COLLECTION_CONFLICT
+  //   400: BOOKMARK_VALIDATION
+
+  /**
+   * Thrown when a bookmark cannot be found. 404 Not Found.
+   *
+   * Wire-shape improvement: the prior per-module filter rewrote every
+   * `BookmarkNotFoundError.message` to a hardcoded generic
+   * `'Resource not found'`. The global filter now preserves
+   * `exception.message`.
+   */
+  BOOKMARK_NOT_FOUND: {
+    status: HttpStatus.NOT_FOUND,
+    title: 'NotFound',
+    typeUri: 'https://api.quiz.local/problems/bookmark-not-found',
+  },
+  /**
+   * Thrown when a collection cannot be found. 404 Not Found.
+   *
+   * Wire-shape improvement: the prior per-module filter rewrote every
+   * `CollectionNotFoundError.message` to a hardcoded generic
+   * `'Resource not found'`. The global filter now preserves
+   * `exception.message` (one throw site in
+   * `bookmark-command.service.ts:161` passes `'Quiz not found'`,
+   * which surfaces verbatim).
+   */
+  COLLECTION_NOT_FOUND: {
+    status: HttpStatus.NOT_FOUND,
+    title: 'NotFound',
+    typeUri: 'https://api.quiz.local/problems/collection-not-found',
+  },
+  /**
+   * Thrown when a bookmark's collection analytics entry cannot be
+   * found. 404 Not Found.
+   *
+   * Wire-shape improvement: the prior per-module filter rewrote every
+   * `BookmarkCollectionNotFoundError.message` to a hardcoded
+   * `'Bookmark collection analytics not found'`, even for throw sites
+   * that passed distinct messages (e.g.
+   * `'Collection was deleted while processing this request. Please
+   * retry.'` in `bookmark-command.service.ts:226`). The global filter
+   * now preserves `exception.message`.
+   */
+  BOOKMARK_COLLECTION_NOT_FOUND: {
+    status: HttpStatus.NOT_FOUND,
+    title: 'NotFound',
+    typeUri: 'https://api.quiz.local/problems/bookmark-collection-not-found',
+  },
+  /**
+   * Thrown when the authenticated user lacks permission to manage a
+   * collection. 403 Forbidden.
+   *
+   * Wire-shape improvement: the prior per-module filter rewrote every
+   * `CollectionForbiddenError.message` to a hardcoded generic
+   * `'You do not have permission to perform this action'`. The global
+   * filter now preserves `exception.message` (default:
+   * `'You do not have permission to manage this collection'`).
+   */
+  COLLECTION_FORBIDDEN: {
+    status: HttpStatus.FORBIDDEN,
+    title: 'Forbidden',
+    typeUri: 'https://api.quiz.local/problems/collection-forbidden',
+  },
+  /**
+   * Thrown when a bookmark conflict is detected (e.g. the user has
+   * already bookmarked this quiz in this collection). 409 Conflict.
+   *
+   * Wire-shape improvement: the prior per-module filter rewrote every
+   * `BookmarkConflictError.message` to a hardcoded generic
+   * `'Resource already exists'`. The global filter now preserves
+   * `exception.message` (default:
+   * `'This quiz is already bookmarked in this collection'`).
+   */
+  BOOKMARK_CONFLICT: {
+    status: HttpStatus.CONFLICT,
+    title: 'Conflict',
+    typeUri: 'https://api.quiz.local/problems/bookmark-conflict',
+  },
+  /**
+   * Thrown when a collection name conflict is detected (e.g. a
+   * collection with this name already exists for the user). 409
+   * Conflict.
+   *
+   * Wire-shape improvement: the prior per-module filter rewrote every
+   * `CollectionConflictError.message` to a hardcoded generic
+   * `'Resource already exists'`. The global filter now preserves
+   * `exception.message` (default:
+   * `'A collection with this name already exists'`).
+   */
+  COLLECTION_CONFLICT: {
+    status: HttpStatus.CONFLICT,
+    title: 'Conflict',
+    typeUri: 'https://api.quiz.local/problems/collection-conflict',
+  },
+  /**
+   * Thrown when bookmark-related input fails validation. 400 Bad
+   * Request.
+   *
+   * Wire-shape improvement: the prior per-module filter rewrote every
+   * `BookmarkValidationError.message` to a hardcoded generic
+   * `'Invalid request data'`. The global filter now preserves
+   * `exception.message`.
+   */
+  BOOKMARK_VALIDATION: {
+    status: HttpStatus.BAD_REQUEST,
+    title: 'BadRequest',
+    typeUri: 'https://api.quiz.local/problems/bookmark-validation',
+  },
+
+  // ===========================================================================
+  // INSTANCE module — src/modules/instance/domain/errors/instance-domain.errors.ts
+  // ===========================================================================
+  /** Sixth Phase-2 entry: legacy `{ statusCode, message, error }` → RFC 7807. */
+  // 7 concrete exceptions → 4 status codes:
+  //   404: INSTANCE_NOT_FOUND
+  //   403: INSTANCE_NOT_HOST
+  //   409: PLAYER_ALREADY_JOINED (defined but currently unused in service)
+  //   400: INSTANCE_NOT_OPEN, INSTANCE_FULL, INSTANCE_ALREADY_STARTED,
+  //        INSTANCE_ALREADY_CLOSED
+  //
+  // Special note: the instance module has TWO exception filters —
+  // `InstanceDomainExceptionFilter` (HTTP, controller-scoped, deleted in
+  // Phase 2) and `WsExceptionFilter` (WS gateway, KEPT — handles only
+  // auth/generic, not domain errors). The instance controller is the
+  // only place where the HTTP filter was wired.
+
+  /**
+   * Thrown when a quiz instance cannot be found. 404 Not Found.
+   *
+   * Wire-shape improvement: the prior per-module filter rewrote every
+   * `InstanceNotFoundError.message` to a hardcoded generic
+   * `'Resource not found'`. The global filter now preserves
+   * `exception.message` (default: `'Quiz instance not found'`).
+   */
+  INSTANCE_NOT_FOUND: {
+    status: HttpStatus.NOT_FOUND,
+    title: 'NotFound',
+    typeUri: 'https://api.quiz.local/problems/instance-not-found',
+  },
+  /**
+   * Thrown when the authenticated user is not the host of the
+   * instance. 403 Forbidden.
+   *
+   * Wire-shape improvement: the prior per-module filter rewrote every
+   * `InstanceNotHostError.message` to a hardcoded generic
+   * `'You do not have permission to perform this action'`. The global
+   * filter now preserves `exception.message` (default:
+   * `'Only the host can perform this action'`).
+   */
+  INSTANCE_NOT_HOST: {
+    status: HttpStatus.FORBIDDEN,
+    title: 'Forbidden',
+    typeUri: 'https://api.quiz.local/problems/instance-not-host',
+  },
+  /**
+   * Thrown when the user tries to join an instance whose state is not
+   * `'open'` (e.g. the instance is already running or closed). 400 Bad
+   * Request.
+   *
+   * Wire-shape improvement: the prior per-module filter rewrote every
+   * `InstanceNotOpenError.message` to a hardcoded generic
+   * `'Invalid request data'`. The global filter now preserves
+   * `exception.message` (default: `'Instance is not open for
+   * joining'`).
+   */
+  INSTANCE_NOT_OPEN: {
+    status: HttpStatus.BAD_REQUEST,
+    title: 'BadRequest',
+    typeUri: 'https://api.quiz.local/problems/instance-not-open',
+  },
+  /**
+   * Thrown when the user tries to join an instance that has already
+   * reached `maxPlayers`. 400 Bad Request.
+   *
+   * Wire-shape improvement: the prior per-module filter rewrote every
+   * `InstanceFullError.message` to a hardcoded generic `'Invalid
+   * request data'`. The global filter now preserves `exception.message`
+   * (default: `'Instance is full'`).
+   */
+  INSTANCE_FULL: {
+    status: HttpStatus.BAD_REQUEST,
+    title: 'BadRequest',
+    typeUri: 'https://api.quiz.local/problems/instance-full',
+  },
+  /**
+   * Thrown when the host tries to start an instance that has already
+   * started. 400 Bad Request.
+   *
+   * Wire-shape improvement: the prior per-module filter rewrote every
+   * `InstanceAlreadyStartedError.message` to a hardcoded generic
+   * `'Invalid request data'`. The global filter now preserves
+   * `exception.message` (default: `'Instance has already started'`).
+   */
+  INSTANCE_ALREADY_STARTED: {
+    status: HttpStatus.BAD_REQUEST,
+    title: 'BadRequest',
+    typeUri: 'https://api.quiz.local/problems/instance-already-started',
+  },
+  /**
+   * Thrown when the host tries to close an instance that is already
+   * closed. 400 Bad Request.
+   *
+   * Wire-shape improvement: the prior per-module filter rewrote every
+   * `InstanceAlreadyClosedError.message` to a hardcoded generic
+   * `'Invalid request data'`. The global filter now preserves
+   * `exception.message` (default: `'Instance is already closed'`).
+   */
+  INSTANCE_ALREADY_CLOSED: {
+    status: HttpStatus.BAD_REQUEST,
+    title: 'BadRequest',
+    typeUri: 'https://api.quiz.local/problems/instance-already-closed',
+  },
+  /**
+   * Thrown when the user tries to join an instance a second time. 409
+   * Conflict.
+   *
+   * Wire-shape improvement: the prior per-module filter rewrote every
+   * `PlayerAlreadyJoinedError.message` to a hardcoded generic
+   * `'Resource already exists'`. The global filter now preserves
+   * `exception.message` (default: `'You have already joined this
+   * instance'`).
+   *
+   * Note: this exception is defined and exported but is currently NOT
+   * thrown by `instance.service.ts` (audit at rev4.5 completion: 0
+   * grep hits). It is kept here as documentation / forward
+   * compatibility — the global filter will resolve the code if a
+   * future call site throws it.
+   */
+  PLAYER_ALREADY_JOINED: {
+    status: HttpStatus.CONFLICT,
+    title: 'Conflict',
+    typeUri: 'https://api.quiz.local/problems/player-already-joined',
+  },
 };
 
 const DEFAULT_TYPE_URIS: Readonly<Record<number, string>> = {
