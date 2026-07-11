@@ -1,7 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import { QuizListResponseDto } from '@/modules/quiz/dto/response/quiz-list-response.dto';
-import { TagResponseDto } from './tag-response.dto';
 
 export class TagQuizzesResponseDto extends QuizListResponseDto {}
 
@@ -23,16 +22,6 @@ export class RankedTagResponseDto {
 
   @ApiProperty({ description: 'Total quiz attempts across linked active quizzes (numeric string)' })
   totalAttempts!: string;
-}
-
-export class RankedTagsResponseDto {
-  @ApiProperty({ type: [RankedTagResponseDto] })
-  items!: RankedTagResponseDto[];
-}
-
-export class RelatedTagsResponseDto {
-  @ApiProperty({ type: [TagResponseDto], description: 'Related tag items' })
-  items!: TagResponseDto[];
 }
 
 export class TagFollowMessageResponseDto {
