@@ -11,7 +11,6 @@ import {
   ParseUUIDPipe,
   HttpCode,
   HttpStatus,
-  UseFilters,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { ApiTags } from '@nestjs/swagger';
@@ -66,11 +65,14 @@ import {
 import { TrendingDiscussionCursorMapper } from '@/modules/discussion/mappers/trending-discussion-cursor.mapper';
 import { UnansweredDiscussionCursorMapper } from '@/modules/discussion/mappers/unanswered-discussion-cursor.mapper';
 import { SearchDiscussionsCursorMapper } from '@/modules/discussion/mappers/search-discussions-cursor.mapper';
-import { DiscussionDomainExceptionFilter } from '../filters/discussion-domain-exception.filter';
+
+// All 400/403/404/409 error responses are routed through
+// `GlobalExceptionFilter` as RFC 7807 `ProblemDetailDto` after Phase 3.1.
+// The per-module `DiscussionDomainExceptionFilter` and its
+// `@UseFilters(...)` decorator have been removed.
 
 @ApiTags('discussions')
 @Controller('discussions')
-@UseFilters(DiscussionDomainExceptionFilter)
 export class DiscussionController {
   constructor(
     private readonly discussionService: DiscussionApplicationService,

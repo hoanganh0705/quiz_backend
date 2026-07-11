@@ -555,6 +555,153 @@ describe('ProblemCodeMapping', () => {
     });
   });
 
+  describe('resolveProblemInfo (discussion module — Phase 3.1, 12 entries)', () => {
+    // 12 entries covering 4 status codes:
+    //   404: DISCUSSION_THREAD_NOT_FOUND, DISCUSSION_COMMENT_NOT_FOUND,
+    //        DISCUSSION_QUIZ_NOT_FOUND (3)
+    //   403: DISCUSSION_THREAD_FORBIDDEN, DISCUSSION_COMMENT_FORBIDDEN,
+    //        DISCUSSION_SELF_VOTE, DISCUSSION_SELF_REPORT,
+    //        DISCUSSION_MODERATOR_REQUIRED (5)
+    //   409: DISCUSSION_THREAD_CLOSED, DISCUSSION_THREAD_NOT_ACTIVE,
+    //        DISCUSSION_DUPLICATE_REPORT (3)
+    //   400: DISCUSSION_COMMENT_THREAD_MISMATCH (1)
+    //
+    // Plan §8.4.1 risk notes: two of the 12 errors map to non-obvious
+    // statuses (`CommentThreadMismatchError` → 400; `ModeratorRequiredError` → 403).
+    // These are captured here so a future mapping change cannot
+    // silently regress them.
+    it('returns a 404 entry for DISCUSSION_THREAD_NOT_FOUND', () => {
+      const info = resolveProblemInfo('DISCUSSION_THREAD_NOT_FOUND');
+      expect(info.status).toBe(HttpStatus.NOT_FOUND);
+      expect(info.title).toBe('NotFound');
+      expect(info.typeUri).toBe('https://api.quiz.local/problems/discussion-thread-not-found');
+    });
+
+    it('returns a 404 entry for DISCUSSION_COMMENT_NOT_FOUND', () => {
+      const info = resolveProblemInfo('DISCUSSION_COMMENT_NOT_FOUND');
+      expect(info.status).toBe(HttpStatus.NOT_FOUND);
+      expect(info.title).toBe('NotFound');
+    });
+
+    it('returns a 404 entry for DISCUSSION_QUIZ_NOT_FOUND (collision with QUIZ_NOT_FOUND is documented at §9 item 1)', () => {
+      // The discussion-module version of `QuizNotFoundError` uses
+      // `DISCUSSION_QUIZ_NOT_FOUND`; the quiz-module version uses
+      // `QUIZ_NOT_FOUND`. Same class name, distinct `code`. Clients
+      // should switch on `extensions.code`.
+      const info = resolveProblemInfo('DISCUSSION_QUIZ_NOT_FOUND');
+      expect(info.status).toBe(HttpStatus.NOT_FOUND);
+      expect(info.title).toBe('NotFound');
+    });
+
+    it('returns a 403 entry for DISCUSSION_THREAD_FORBIDDEN', () => {
+      const info = resolveProblemInfo('DISCUSSION_THREAD_FORBIDDEN');
+      expect(info.status).toBe(HttpStatus.FORBIDDEN);
+      expect(info.title).toBe('Forbidden');
+    });
+
+    it('returns a 403 entry for DISCUSSION_COMMENT_FORBIDDEN', () => {
+      const info = resolveProblemInfo('DISCUSSION_COMMENT_FORBIDDEN');
+      expect(info.status).toBe(HttpStatus.FORBIDDEN);
+      expect(info.title).toBe('Forbidden');
+    });
+
+    it('returns a 403 entry for DISCUSSION_SELF_VOTE', () => {
+      const info = resolveProblemInfo('DISCUSSION_SELF_VOTE');
+      expect(info.status).toBe(HttpStatus.FORBIDDEN);
+      expect(info.title).toBe('Forbidden');
+    });
+
+    it('returns a 403 entry for DISCUSSION_SELF_REPORT', () => {
+      const info = resolveProblemInfo('DISCUSSION_SELF_REPORT');
+      expect(info.status).toBe(HttpStatus.FORBIDDEN);
+      expect(info.title).toBe('Forbidden');
+    });
+
+    it('returns a 403 entry for DISCUSSION_MODERATOR_REQUIRED (non-obvious 403 per §8.4.1)', () => {
+      // Plan §8.4.1 risk note: this is a non-obvious 403 (the class
+      // name suggests 401 or 403 for "auth required", but the actual
+      // semantic is "you're authenticated but lack the moderator
+      // role"). The migration test captures it.
+      const info = resolveProblemInfo('DISCUSSION_MODERATOR_REQUIRED');
+      expect(info.status).toBe(HttpStatus.FORBIDDEN);
+      expect(info.title).toBe('Forbidden');
+    });
+
+    it('returns a 409 entry for DISCUSSION_THREAD_CLOSED', () => {
+      const info = resolveProblemInfo('DISCUSSION_THREAD_CLOSED');
+      expect(info.status).toBe(HttpStatus.CONFLICT);
+      expect(info.title).toBe('Conflict');
+    });
+
+    it('returns a 409 entry for DISCUSSION_THREAD_NOT_ACTIVE', () => {
+      const info = resolveProblemInfo('DISCUSSION_THREAD_NOT_ACTIVE');
+      expect(info.status).toBe(HttpStatus.CONFLICT);
+      expect(info.title).toBe('Conflict');
+    });
+
+    it('returns a 409 entry for DISCUSSION_DUPLICATE_REPORT', () => {
+      const info = resolveProblemInfo('DISCUSSION_DUPLICATE_REPORT');
+      expect(info.status).toBe(HttpStatus.CONFLICT);
+      expect(info.title).toBe('Conflict');
+    });
+
+    it('returns a 400 entry for DISCUSSION_COMMENT_THREAD_MISMATCH (non-obvious 400 per §8.4.1)', () => {
+      // Plan §8.4.1 risk note: this is a non-obvious 400 (one might
+      // expect 409 Conflict for a cross-resource mismatch). The
+      // migration test captures it.
+      const info = resolveProblemInfo('DISCUSSION_COMMENT_THREAD_MISMATCH');
+      expect(info.status).toBe(HttpStatus.BAD_REQUEST);
+      expect(info.title).toBe('BadRequest');
+    });
+  });
+
+  describe('resolveProblemInfo (ranking module — Phase 3.2, 3 entries)', () => {
+    // 3 entries covering 2 status codes:
+    //   422: RANKING_INVALID_XP_EVENT (semantic upgrade — was 500
+    //        catch-all under the prior @Catch() filter)
+    //   500: RANKING_RANK_CALCULATION_ERROR, RANKING_PERIOD_RESET_ERROR
+    it('returns a 422 entry for RANKING_INVALID_XP_EVENT (semantic upgrade from 500)', () => {
+      // Wire-shape improvement: prior filter returned 500
+      // catch-all; semantic correction moves it to 422
+      // (rejected XP event input). The migration test captures it.
+      const info = resolveProblemInfo('RANKING_INVALID_XP_EVENT');
+      expect(info.status).toBe(HttpStatus.UNPROCESSABLE_ENTITY);
+      expect(info.title).toBe('UnprocessableEntity');
+      expect(info.typeUri).toBe('https://api.quiz.local/problems/ranking-invalid-xp-event');
+    });
+
+    it('returns a 500 entry for RANKING_RANK_CALCULATION_ERROR', () => {
+      const info = resolveProblemInfo('RANKING_RANK_CALCULATION_ERROR');
+      expect(info.status).toBe(HttpStatus.INTERNAL_SERVER_ERROR);
+      expect(info.title).toBe('InternalServerError');
+    });
+
+    it('returns a 500 entry for RANKING_PERIOD_RESET_ERROR', () => {
+      const info = resolveProblemInfo('RANKING_PERIOD_RESET_ERROR');
+      expect(info.status).toBe(HttpStatus.INTERNAL_SERVER_ERROR);
+      expect(info.title).toBe('InternalServerError');
+    });
+  });
+
+  describe('resolveProblemInfo (notification module — Phase 5 missed-module cleanup, 2 entries)', () => {
+    // Phase 5 (rev5.1) coverage: notification was inadvertently skipped
+    // in Phases 1-3 because it had no per-module filter. After Phase 5
+    // its errors resolve correctly (was: 500 catch-all via
+    // `instanceof Error`; now: 404/403 via the mapping table).
+    it('returns a 404 entry for NOTIFICATION_NOT_FOUND (was incorrectly 500 before Phase 5)', () => {
+      const info = resolveProblemInfo('NOTIFICATION_NOT_FOUND');
+      expect(info.status).toBe(HttpStatus.NOT_FOUND);
+      expect(info.title).toBe('NotFound');
+      expect(info.typeUri).toBe('https://api.quiz.local/problems/notification-not-found');
+    });
+
+    it('returns a 403 entry for NOTIFICATION_FORBIDDEN (was incorrectly 500 before Phase 5)', () => {
+      const info = resolveProblemInfo('NOTIFICATION_FORBIDDEN');
+      expect(info.status).toBe(HttpStatus.FORBIDDEN);
+      expect(info.title).toBe('Forbidden');
+    });
+  });
+
   describe('resolveProblemInfo (unknown code — loud-failure branch)', () => {
     it('returns a 500 entry with the generic title and 500 typeUri', () => {
       const info = resolveProblemInfo('NONEXISTENT_CODE_XYZ');

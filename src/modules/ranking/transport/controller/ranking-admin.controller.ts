@@ -4,8 +4,10 @@
  * Admin-only endpoints for ranking system management.
  * All endpoints require the 'admin' role via PermissionsGuard.
  *
- * Error shape: Uses RankingDomainExceptionFilter to ensure ALL exceptions
- * are re-written to { statusCode, message, code, timestamp }.
+ * Error shape: All error responses (RFC 7807 `ProblemDetailDto`) are
+ * produced by `GlobalExceptionFilter` after Phase 3.2. The prior
+ * `RankingDomainExceptionFilter` (a `@Catch()` catch-all) has been
+ * removed; `RankingDomainErrorDto` is also gone.
  */
 
 import {
@@ -15,22 +17,19 @@ import {
   Query,
   HttpCode,
   HttpStatus,
-  UseFilters,
   applyDecorators,
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
-  ApiExtraModels,
   ApiForbiddenResponse,
   ApiOperation,
   ApiTags,
   ApiUnauthorizedResponse,
-  getSchemaPath,
 } from '@nestjs/swagger';
 import { Permissions } from '@/common/authorization/decorators/permissions.decorator';
 import { Permission } from '@/common/authorization/permissions';
+import { ErrorResponseExamples, ProblemDetailDto } from '@/common/swagger/swagger-schemas';
 import { AUTH_SECURITY_NAME } from '@/core/swagger/swagger.config';
-import { RankingDomainExceptionFilter } from '../filters/ranking-domain-exception.filter';
 import { RankingApplicationService } from '../../application/ranking.application.service';
 import { PeriodResetService } from '../../domain/services';
 import { mapRankingPeriodEnumToDomain } from '../../application/get-my-ranking-history.query';
@@ -44,11 +43,15 @@ import {
   PeriodResetResponseDto,
   ConsistencyReportResponseDto,
 } from '../../dto/response/ranking-admin-response.dto';
-import { RankingDomainErrorDto } from '../../dto/error/ranking-domain-error.dto';
 import { RankingPresenter } from '../presenters/ranking.presenter';
 import { ApiOkResource } from '@/common/swagger/api-ok';
 
 // ─── Local helper decorators ───────────────────────────────────────────────────
+//
+// All error responses (401 from JwtGuard, 403 from PermissionsGuard,
+// 422 from `InvalidXpEventError`, 500 from `RankCalculationError` /
+// `PeriodResetError`) are routed through `GlobalExceptionFilter` as
+// RFC 7807 `ProblemDetailDto` after Phase 3.2.
 
 function rankingAdminUnauthorizedResponse(): MethodDecorator {
   return applyDecorators(
@@ -56,9 +59,10 @@ function rankingAdminUnauthorizedResponse(): MethodDecorator {
     ApiUnauthorizedResponse({
       description:
         'Missing or invalid JWT bearer token. ' +
-        'JwtGuard throws `UnauthorizedException` which `RankingDomainExceptionFilter` ' +
-        'catches and re-writes to `{ statusCode, message, code, timestamp }`.',
-      schema: { $ref: getSchemaPath(RankingDomainErrorDto) },
+        'JwtGuard throws `UnauthorizedException` which `GlobalExceptionFilter` ' +
+        'emits as RFC 7807 `ProblemDetailDto`.',
+      type: ProblemDetailDto,
+      example: ErrorResponseExamples.unauthorized,
     }),
   );
 }
@@ -68,17 +72,16 @@ function rankingAdminForbiddenResponse(): MethodDecorator {
     ApiForbiddenResponse({
       description:
         'Caller lacks the required `RANKING_ADMIN` permission. ' +
-        'PermissionsGuard throws `ForbiddenException` which `RankingDomainExceptionFilter` ' +
-        'catches and re-writes to `{ statusCode, message, code, timestamp }`.',
-      schema: { $ref: getSchemaPath(RankingDomainErrorDto) },
+        'PermissionsGuard throws `ForbiddenException` which `GlobalExceptionFilter` ' +
+        'emits as RFC 7807 `ProblemDetailDto`.',
+      type: ProblemDetailDto,
+      example: ErrorResponseExamples.forbidden,
     }),
   );
 }
 
 @ApiTags('leaderboard')
-@ApiExtraModels(RankingDomainErrorDto)
 @Controller('admin/ranking')
-@UseFilters(RankingDomainExceptionFilter)
 export class RankingAdminController {
   constructor(
     private readonly rankingAppService: RankingApplicationService,
