@@ -61,3 +61,58 @@ export class ApiResponse {
     };
   }
 }
+
+/**
+ * Type guard for the canonical response envelope. Returns `true` for any
+ * plain object that has the canonical `{ data, meta: { timestamp } }`
+ * shape (with optional `meta.pagination`).
+ *
+ * Used by `ResponseFormatInterceptor` (post-Phase-4) to detect envelopes
+ * that were already produced by a presenter and pass them through
+ * unchanged. Anything that does not match this shape is wrapped as `data`
+ * with a `Logger.warn` so accidental drift becomes observable without
+ * becoming a runtime crisis.
+ *
+ * Plain-object check: presenter's `ApiResponse.ok` / `ApiResponse.page`
+ * factories emit plain objects (not class instances), so the prototype
+ * is `Object.prototype` or `null`. Class instances would NOT pass this
+ * check.
+ */
+export function isApiResponse<T = unknown>(value: unknown): value is ApiResponseEnvelope<T> {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+    return false;
+  }
+
+  const candidate = value as Record<string, unknown>;
+  const dataKey = candidate.data;
+  const metaKey = candidate.meta;
+
+  if (!('data' in candidate) || !('meta' in candidate)) {
+    return false;
+  }
+
+  if (dataKey === undefined) {
+    return false;
+  }
+
+  if (metaKey === null || typeof metaKey !== 'object' || Array.isArray(metaKey)) {
+    return false;
+  }
+
+  const meta = metaKey as Record<string, unknown>;
+  if (typeof meta.timestamp !== 'string') {
+    return false;
+  }
+
+  if ('pagination' in meta && meta.pagination !== undefined) {
+    if (
+      meta.pagination === null ||
+      typeof meta.pagination !== 'object' ||
+      Array.isArray(meta.pagination)
+    ) {
+      return false;
+    }
+  }
+
+  return true;
+}
