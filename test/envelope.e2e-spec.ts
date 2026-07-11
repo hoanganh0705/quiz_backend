@@ -19,6 +19,7 @@ import { Controller, Get, INestApplication, UseInterceptors } from '@nestjs/comm
 import { Test, TestingModule } from '@nestjs/testing';
 import request from 'supertest';
 import type { App } from 'supertest/types';
+import { LoggerModule } from 'nestjs-pino';
 import { ApiResponse } from '@/common/responses/api-response';
 import { ResponseFormatInterceptor } from '@/common/interceptors/response-format.interceptor';
 
@@ -72,6 +73,7 @@ describe('Response envelope (Phase 0 fixture)', () => {
 
   beforeEach(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
+      imports: [LoggerModule.forRoot()],
       controllers: [EnvelopeFixtureController],
     }).compile();
 
