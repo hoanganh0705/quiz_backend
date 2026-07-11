@@ -1,14 +1,4 @@
-import {
-  Body,
-  Controller,
-  Get,
-  Inject,
-  Param,
-  ParseUUIDPipe,
-  Patch,
-  Query,
-  UseFilters,
-} from '@nestjs/common';
+import { Body, Controller, Get, Inject, Param, ParseUUIDPipe, Patch, Query } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
 import { ApiAuth } from '@/common/swagger/swagger-decorators';
@@ -21,7 +11,6 @@ import { ListUserBadgesQueryDto } from '../../dto/request/list-user-badges-query
 import { UpdateMeDto } from '../../dto/request/update-me.dto';
 import { UpdateMeSettingsDto } from '../../dto/request/update-me-settings.dto';
 import { UserApplicationService } from '../../application/user.application.service';
-import { UserDomainExceptionFilter } from '../filters/user-domain-exception.filter';
 import { UserPresenter } from '../presenters/user.presenter';
 import { QUIZ_LISTING_PORT, type QuizListingPort } from '@/modules/quiz/domain/analytics';
 import {
@@ -50,7 +39,6 @@ import {
 
 @ApiTags('users')
 @Controller('users')
-@UseFilters(UserDomainExceptionFilter)
 export class UserController {
   constructor(
     private readonly userApplicationService: UserApplicationService,

@@ -39,7 +39,6 @@ import { QUIZ_DOMAIN_EVENT_BUS } from './domain/ports/quiz-domain-event-bus.port
 // Transport
 import { QuizController } from './transport/controller/quiz.controller';
 import { QuizPresenter } from './transport/presenters/quiz.presenter';
-import { QuizDomainExceptionFilter } from './transport/filters/quiz-domain-exception.filter';
 
 // Repository Ports
 import { QUIZ_REPOSITORY_PORT } from './domain/ports/quiz-repository.port';
@@ -87,8 +86,6 @@ import { ReviewEventListenerAdapter } from './domain/events/review-event-listene
     QuizAttemptEventBootstrapService,
     ReviewEventListenerAdapter,
 
-    // Exception Filter
-    QuizDomainExceptionFilter,
     QuizPresenter,
 
     // Repository Implementations

@@ -1,5 +1,6 @@
 export {
   QuizDomainError,
+  QuizOperationFailedError,
   QuizNotFoundError,
   QuizForbiddenError,
   QuizSlugConflictError,

@@ -9,7 +9,6 @@ import {
   ParseUUIDPipe,
   Post,
   Query,
-  UseFilters,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -43,11 +42,9 @@ import {
   AttemptAnalyticsResponseDto,
   UserAttemptStatsResponseDto,
 } from '../../dto/response';
-import { AttemptDomainExceptionFilter } from '../filters/attempt-domain-exception.filter';
 
 @ApiTags('attempts')
 @Controller()
-@UseFilters(AttemptDomainExceptionFilter)
 export class AttemptController {
   constructor(
     private readonly attemptApplicationService: AttemptApplicationService,

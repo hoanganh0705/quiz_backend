@@ -8,7 +8,7 @@ import {
   isPostgresUniqueViolation,
   isPostgresForeignKeyViolation,
 } from '@/common/utils/db-error.util';
-import { QuizConflictError, QuizDomainError } from '@/modules/quiz/domain/errors';
+import { QuizConflictError, QuizOperationFailedError } from '@/modules/quiz/domain/errors';
 import { QUIZ_VERSION_CONFLICT_MESSAGE } from '@/modules/quiz/quiz.constants';
 import type {
   QuizVersionDetailRow,
@@ -362,6 +362,6 @@ export class QuizVersionRepository implements QuizVersionRepositoryPort {
       throw new QuizConflictError('Quiz not found');
     }
 
-    throw new QuizDomainError('Quiz version operation failed');
+    throw new QuizOperationFailedError('Quiz version operation failed');
   }
 }
