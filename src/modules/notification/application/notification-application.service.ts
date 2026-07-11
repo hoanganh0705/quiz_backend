@@ -1,6 +1,7 @@
 import { Inject, Injectable, Optional } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
+import { paginated, type PaginatedResult } from '@/common/responses/paginated-result';
 import { NotificationService } from '../domain/notification.service';
 import {
   NOTIFICATION_REPOSITORY_PORT,
@@ -22,6 +23,42 @@ import type {
   UpdatePreferencesParams,
   NotificationPreferencesRow,
 } from '../domain/types/notification.types';
+import type {
+  NotificationPreferencesResponseDto,
+  NotificationResponseDto,
+} from '../dto/response/notification-response.dto';
+
+const toNotificationDto = (n: DomainNotification): NotificationResponseDto => ({
+  notificationId: n.notificationId,
+  userId: n.userId,
+  type: n.type,
+  title: n.title,
+  message: n.message,
+  metadata: n.metadata,
+  channel: n.channel,
+  isRead: n.isRead,
+  readAt: n.readAt,
+  createdAt: n.createdAt,
+  expiresAt: n.expiresAt,
+});
+
+const toPreferencesDto = (
+  prefs: NotificationPreferencesRow,
+): NotificationPreferencesResponseDto => ({
+  inAppEnabled: prefs.inAppEnabled,
+  emailEnabled: prefs.emailEnabled,
+  pushEnabled: prefs.pushEnabled,
+  achievementEnabled: prefs.achievementEnabled,
+  tournamentEnabled: prefs.tournamentEnabled,
+  rankEnabled: prefs.rankEnabled,
+  friendEnabled: prefs.friendEnabled,
+  discussionEnabled: prefs.discussionEnabled,
+  summaryEnabled: prefs.summaryEnabled,
+  marketingEnabled: prefs.marketingEnabled,
+  rankImprovementThreshold: prefs.rankImprovementThreshold,
+  quietHoursStart: prefs.quietHoursStart,
+  quietHoursEnd: prefs.quietHoursEnd,
+});
 
 @Injectable()
 export class NotificationApplicationService {
@@ -45,35 +82,43 @@ export class NotificationApplicationService {
     cursor?: { createdAt: string; notificationId: string } | null,
     unreadOnly?: boolean,
     includeArchived?: boolean,
-  ): Promise<{ items: DomainNotification[]; unreadCount: number; hasNextPage: boolean }> {
+  ): Promise<PaginatedResult<NotificationResponseDto>> {
     const params: NotificationListParams = { limit, cursor, unreadOnly, includeArchived };
 
-    const [notifications, unreadCount] = await Promise.all([
-      this.notificationService.getNotifications(user.sub, params),
-      this.notificationService.getUnreadCount(user.sub),
-    ]);
+    const notifications = await this.notificationService.getNotifications(user.sub, params);
 
     const hasNextPage = notifications.length > limit;
     const items = hasNextPage ? notifications.slice(0, limit) : notifications;
+    const tail = items[items.length - 1];
+    const nextCursor =
+      hasNextPage && tail
+        ? Buffer.from(
+            JSON.stringify({ createdAt: tail.createdAt, notificationId: tail.notificationId }),
+          ).toString('base64')
+        : null;
 
-    return {
-      items,
-      unreadCount,
-      hasNextPage,
-    };
+    return paginated(
+      items.map((item) => toNotificationDto(item)),
+      {
+        kind: 'cursor',
+        limit,
+        hasNextPage,
+        nextCursor,
+      },
+    );
   }
 
   async getNotificationDetail(
     notificationId: string,
     user: JwtPayload,
-  ): Promise<DomainNotification> {
+  ): Promise<NotificationResponseDto> {
     const notification = await this.notificationService.getNotification(notificationId, user.sub);
 
     if (!notification) {
       throw new NotificationNotFoundError(notificationId);
     }
 
-    return notification;
+    return toNotificationDto(notification);
   }
 
   async markAsRead(notificationId: string, user: JwtPayload): Promise<void> {
@@ -199,17 +244,18 @@ export class NotificationApplicationService {
   async updatePreferences(
     user: JwtPayload,
     params: UpdatePreferencesParams,
-  ): Promise<NotificationPreferencesRow> {
+  ): Promise<NotificationPreferencesResponseDto> {
     const result = await this.notificationRepository.upsertPreferences(user.sub, params);
     await this.channelServiceInstance?.invalidatePreferencesCache(user.sub);
-    return result;
+    return toPreferencesDto(result);
   }
 
-  async getOrCreatePreferences(user: JwtPayload): Promise<NotificationPreferencesRow> {
+  async getOrCreatePreferences(user: JwtPayload): Promise<NotificationPreferencesResponseDto> {
     const existing = await this.notificationRepository.getPreferences(user.sub);
     if (existing) {
-      return existing;
+      return toPreferencesDto(existing);
     }
-    return this.notificationRepository.upsertPreferences(user.sub, {});
+    const created = await this.notificationRepository.upsertPreferences(user.sub, {});
+    return toPreferencesDto(created);
   }
 }

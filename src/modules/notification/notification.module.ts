@@ -39,6 +39,7 @@ import { UserModule } from '@/modules/user/user.module';
 import { UserNotificationListener } from './infrastructure/adapters/user-notification-listener.adapter';
 import { NotificationGateway } from './transport/gateway/notification.gateway';
 import { NotificationWebSocketListener } from './infrastructure/adapters/notification-websocket-listener.adapter';
+import { NotificationPresenter } from './transport/presenters/notification.presenter';
 
 @Module({
   imports: [
@@ -106,6 +107,7 @@ import { NotificationWebSocketListener } from './infrastructure/adapters/notific
     },
     NotificationGateway,
     NotificationWebSocketListener,
+    NotificationPresenter,
   ],
   controllers: [NotificationController],
   exports: [
