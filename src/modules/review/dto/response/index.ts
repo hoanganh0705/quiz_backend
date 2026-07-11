@@ -11,4 +11,4 @@ export * from './report-review-response.dto';
 export * from './my-review-response.dto';
 export * from './reported-review-response.dto';
 export * from './admin-review.dto';
-export * from './review-response-docs.dto';
+export * from './review-domain-error.dto';
