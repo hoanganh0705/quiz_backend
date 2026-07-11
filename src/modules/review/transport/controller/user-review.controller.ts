@@ -2,74 +2,82 @@ import { Controller, Get, Param, ParseUUIDPipe, Query, UseFilters } from '@nestj
 import { ApiTags } from '@nestjs/swagger';
 import { Public } from '@/common/decorators/public.decorator';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
-import { ApiAuthList, ApiPublicList } from '@/common/swagger/swagger-decorators';
+import { ApiAuth, ApiPublicErrors } from '@/common/swagger/swagger-decorators';
+import { ApiOkResource, ApiOkResourceList } from '@/common/swagger/api-ok';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
 import { ReviewApplicationService } from '../../application/review.application.service';
 import { ListMyReviewsQueryDto, ListReportedReviewsQueryDto } from '../../dto/request';
-import {
-  MyReviewsResponseDto,
-  ReportedReviewsResponseDto,
-  ReviewDetailResponseDto,
-} from '../../dto/response';
+import { MyReviewsResponseDto } from '../../dto/response/my-review-response.dto';
+import { ReportedReviewsResponseDto } from '../../dto/response/reported-review-response.dto';
+import { ReviewDetailResponseDto } from '../../dto/response/review-detail-response.dto';
 import { ReviewDomainExceptionFilter } from '../filters/review-domain-exception.filter';
 import { CursorMapper } from '../../mappers/review-cursor.mapper';
-import {
-  WrappedMyReviewsListDto,
-  WrappedReportedReviewsListDto,
-  WrappedMyReviewDto,
-} from '../../dto/response/review-response-docs.dto';
+import { ReviewPresenter } from '../presenters/review.presenter';
 
 @ApiTags('users')
 @Controller('users')
 @UseFilters(ReviewDomainExceptionFilter)
 export class UserReviewController {
-  constructor(private readonly reviewApplicationService: ReviewApplicationService) {}
+  constructor(
+    private readonly reviewApplicationService: ReviewApplicationService,
+    private readonly presenter: ReviewPresenter,
+  ) {}
 
   @Get('me/reported-reviews')
-  @ApiAuthList({ description: 'Reported reviews returned', type: WrappedReportedReviewsListDto })
+  @ApiAuth()
+  @ApiOkResourceList(ReportedReviewsResponseDto, 'cursor', {
+    description: 'Reported reviews returned',
+  })
   async listMyReportedReviews(
     @CurrentUser() user: JwtPayload,
     @Query() query: ListReportedReviewsQueryDto,
-  ): Promise<ReportedReviewsResponseDto> {
-    return this.reviewApplicationService.listReportedReviews(user.sub, {
+  ) {
+    const result = await this.reviewApplicationService.listReportedReviews(user.sub, {
       limit: query.limit,
       cursor: query.cursor ? CursorMapper.parseReport(query.cursor) : null,
     });
+    return this.presenter.listMyReportedReviews(result);
   }
 
   @Get('me/reviews')
-  @ApiAuthList({ description: 'My reviews returned', type: WrappedMyReviewsListDto })
-  async listMyReviews(
-    @CurrentUser() user: JwtPayload,
-    @Query() query: ListMyReviewsQueryDto,
-  ): Promise<MyReviewsResponseDto> {
-    return this.reviewApplicationService.listUserReviews(user.sub, {
+  @ApiAuth()
+  @ApiOkResourceList(MyReviewsResponseDto, 'cursor', { description: 'My reviews returned' })
+  async listMyReviews(@CurrentUser() user: JwtPayload, @Query() query: ListMyReviewsQueryDto) {
+    const result = await this.reviewApplicationService.listUserReviews(user.sub, {
       limit: query.limit,
       cursor: query.cursor ? CursorMapper.parseReview(query.cursor) : null,
     });
+    return this.presenter.listMyReviews(result);
   }
 
   // Implementation returns `null` when the user has not reviewed the quiz
   // (NOT a 404). The wrapper documents `data: ReviewDetailDataDto | null`.
   @Get('me/reviews/:quizId')
-  @ApiAuthList({ description: 'My review for the quiz returned', type: WrappedMyReviewDto })
+  @ApiAuth()
+  @ApiOkResource(ReviewDetailResponseDto, {
+    description:
+      'My review for the quiz. `data` is `null` when the user has not reviewed the quiz.',
+  })
   async getMyReviewForQuiz(
     @Param('quizId', new ParseUUIDPipe()) quizId: string,
     @CurrentUser() user: JwtPayload,
-  ): Promise<ReviewDetailResponseDto | null> {
-    return this.reviewApplicationService.getMyQuizReview(quizId, user.sub);
+  ) {
+    const result = await this.reviewApplicationService.getMyQuizReview(quizId, user.sub);
+    return this.presenter.getMyQuizReview(result);
   }
 
   @Get(':userId/reviews')
   @Public()
-  @ApiPublicList({ description: 'User reviews returned', type: WrappedMyReviewsListDto })
+  @ApiPublicErrors()
+  @ApiOkResourceList(MyReviewsResponseDto, 'cursor', { description: 'User reviews returned' })
   async listReviewsByUser(
     @Param('userId', new ParseUUIDPipe()) userId: string,
     @Query() query: ListMyReviewsQueryDto,
-  ): Promise<MyReviewsResponseDto> {
-    return this.reviewApplicationService.listReviewsByUser(userId, {
+  ) {
+    const result = await this.reviewApplicationService.listReviewsByUser(userId, {
       limit: query.limit,
       cursor: query.cursor ? CursorMapper.parseReview(query.cursor) : null,
     });
+    return this.presenter.listReviewsByUser(result);
   }
 }
