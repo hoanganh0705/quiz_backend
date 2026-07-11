@@ -9,7 +9,6 @@ import {
   Patch,
   Post,
   Query,
-  UseFilters,
   DefaultValuePipe,
 } from '@nestjs/common';
 import {
@@ -53,7 +52,6 @@ import { ListQuizVersionsQueryDto } from '../../dto/request/list-quiz-versions-q
 import { CreateQuizQuestionDto } from '@/modules/quiz/dto/request/create-quiz-question.dto';
 import { CreateQuizQuestionsDto } from '@/modules/quiz/dto/request/create-quiz-questions.dto';
 import { QuizQuestionResponseDto } from '@/modules/quiz/dto/response/quiz-question-response.dto';
-import { QuizDomainExceptionFilter } from '../filters/quiz-domain-exception.filter';
 import {
   QuizVersionDetailResponseDto,
   QuizVersionResponseDto,
@@ -147,7 +145,6 @@ import {
 
 @ApiTags('quizzes')
 @Controller('quizzes')
-@UseFilters(QuizDomainExceptionFilter)
 export class QuizController {
   constructor(
     private readonly quizApplicationService: QuizApplicationService,

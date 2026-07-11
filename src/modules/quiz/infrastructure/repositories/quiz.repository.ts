@@ -11,7 +11,7 @@ import {
 import {
   QuizSlugConflictError,
   QuizValidationError,
-  QuizDomainError,
+  QuizOperationFailedError,
 } from '@/modules/quiz/domain/errors';
 import {
   QUIZ_SLUG_CONFLICT_MESSAGE,
@@ -640,7 +640,7 @@ export class QuizRepository implements QuizRepositoryPort {
       throw new QuizValidationError(QUIZ_LINK_IDS_INVALID_MESSAGE);
     }
 
-    throw new QuizDomainError('Quiz operation failed');
+    throw new QuizOperationFailedError('Quiz operation failed');
   }
 
   private mapUpdateError(error: unknown): never {
@@ -652,6 +652,6 @@ export class QuizRepository implements QuizRepositoryPort {
       throw new QuizValidationError(QUIZ_LINK_IDS_INVALID_MESSAGE);
     }
 
-    throw new QuizDomainError('Quiz operation failed');
+    throw new QuizOperationFailedError('Quiz operation failed');
   }
 }

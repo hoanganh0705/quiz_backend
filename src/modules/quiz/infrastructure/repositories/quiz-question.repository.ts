@@ -8,7 +8,7 @@ import {
   QuizQuestionPositionConflictError,
   QuizAnswerOptionPositionConflictError,
   QuizMultipleCorrectOptionsError,
-  QuizDomainError,
+  QuizOperationFailedError,
 } from '@/modules/quiz/domain/errors';
 import {
   QUIZ_QUESTION_POSITION_CONFLICT_MESSAGE,
@@ -207,6 +207,6 @@ export class QuizQuestionRepository implements QuizQuestionRepositoryPort {
       }
     }
 
-    throw new QuizDomainError('Quiz question operation failed');
+    throw new QuizOperationFailedError('Quiz question operation failed');
   }
 }
