@@ -13,8 +13,15 @@ import {
   HttpStatus,
   BadRequestException,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiQuery } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiQuery,
+  ApiNotFoundResponse,
+  ApiForbiddenResponse,
+} from '@nestjs/swagger';
 import { ApiNoContent } from '@/common/swagger/swagger-decorators';
+import { ErrorResponseExamples, ProblemDetailDto } from '@/common/swagger/swagger-schemas';
 import { Transactional } from '@/common/interceptors/transactional.interceptor';
 import { NotificationApplicationService } from '@/modules/notification/application/notification-application.service';
 import {
@@ -156,6 +163,28 @@ export class NotificationController {
   @Get(':notificationId')
   @ApiOperation({ summary: 'Get notification detail' })
   @ApiOkResource(NotificationResponseDto, { description: 'Notification detail' })
+  // Phase 5 (rev5.1): `notificationApplicationService.getNotificationDetail`
+  // throws `NotificationNotFoundError` if the notification does not
+  // exist (or was deleted). Pre-Phase-5 this error fell through the
+  // global filter's `instanceof Error` branch as a misleading 500
+  // (the message was preserved but the status was wrong). After Phase
+  // 5 the global filter resolves `NOTIFICATION_NOT_FOUND` → 404 via
+  // `ProblemCodeMapping`. Documented here so the OpenAPI spec is
+  // accurate. No `@ApiForbiddenResponse` because this endpoint
+  // doesn't check ownership (any authenticated user with the
+  // notificationId is allowed to read the detail — actually, the
+  // service DOES check ownership via the `user.sub` filter in the
+  // repository, but a missing notification surfaces as 404, not 403,
+  // because the lookup is filtered by userId).
+  @ApiNotFoundResponse({
+    description:
+      'No notification exists with this `notificationId` for the authenticated user. ' +
+      '`notificationApplicationService.getNotificationDetail` throws `NotificationNotFoundError` ' +
+      'which `GlobalExceptionFilter` emits as RFC 7807 `ProblemDetailDto` with ' +
+      "`extensions.code = 'NOTIFICATION_NOT_FOUND'`.",
+    type: ProblemDetailDto,
+    example: ErrorResponseExamples.notFound,
+  })
   async getNotificationDetail(
     @Param('notificationId') notificationId: string,
     @CurrentUser() user: JwtPayload,
@@ -168,6 +197,30 @@ export class NotificationController {
   @Transactional()
   @ApiNoContent('Notification marked as read')
   @HttpCode(HttpStatus.NO_CONTENT)
+  // Phase 5 (rev5.1): `notificationApplicationService.markAsRead`
+  // throws `NotificationNotFoundError` (404) if the notification
+  // doesn't exist, and `NotificationForbiddenError` (403) if the
+  // notification belongs to a different user. Both were 500
+  // catch-alls pre-Phase-5; both are correctly resolved by the
+  // global filter post-Phase-5 via `ProblemCodeMapping`.
+  @ApiNotFoundResponse({
+    description:
+      'No notification exists with this `notificationId`. ' +
+      '`notificationApplicationService.markAsRead` throws `NotificationNotFoundError` ' +
+      'which `GlobalExceptionFilter` emits as RFC 7807 `ProblemDetailDto` with ' +
+      "`extensions.code = 'NOTIFICATION_NOT_FOUND'`.",
+    type: ProblemDetailDto,
+    example: ErrorResponseExamples.notFound,
+  })
+  @ApiForbiddenResponse({
+    description:
+      'The notification exists but belongs to a different user. ' +
+      '`notificationApplicationService.markAsRead` throws `NotificationForbiddenError` ' +
+      'when `notification.userId !== user.sub`. `GlobalExceptionFilter` emits it as RFC 7807 ' +
+      "`ProblemDetailDto` with `extensions.code = 'NOTIFICATION_FORBIDDEN'`.",
+    type: ProblemDetailDto,
+    example: ErrorResponseExamples.forbidden,
+  })
   async markAsRead(
     @Param('notificationId') notificationId: string,
     @CurrentUser() user: JwtPayload,
@@ -179,6 +232,28 @@ export class NotificationController {
   @Transactional()
   @ApiNoContent('Notification marked as unread')
   @HttpCode(HttpStatus.NO_CONTENT)
+  // Phase 5 (rev5.1): same 404 + 403 wiring as `markAsRead`. See
+  // the docblock there for rationale. Pre-Phase-5 both errors were
+  // 500 catch-alls; post-Phase-5 they resolve correctly via
+  // `ProblemCodeMapping`.
+  @ApiNotFoundResponse({
+    description:
+      'No notification exists with this `notificationId`. ' +
+      '`notificationApplicationService.markAsUnread` throws `NotificationNotFoundError` ' +
+      'which `GlobalExceptionFilter` emits as RFC 7807 `ProblemDetailDto` with ' +
+      "`extensions.code = 'NOTIFICATION_NOT_FOUND'`.",
+    type: ProblemDetailDto,
+    example: ErrorResponseExamples.notFound,
+  })
+  @ApiForbiddenResponse({
+    description:
+      'The notification exists but belongs to a different user. ' +
+      '`notificationApplicationService.markAsUnread` throws `NotificationForbiddenError` ' +
+      'when `notification.userId !== user.sub`. `GlobalExceptionFilter` emits it as RFC 7807 ' +
+      "`ProblemDetailDto` with `extensions.code = 'NOTIFICATION_FORBIDDEN'`.",
+    type: ProblemDetailDto,
+    example: ErrorResponseExamples.forbidden,
+  })
   async markAsUnread(
     @Param('notificationId') notificationId: string,
     @CurrentUser() user: JwtPayload,
@@ -208,6 +283,28 @@ export class NotificationController {
   @Transactional()
   @ApiNoContent('Notification deleted')
   @HttpCode(HttpStatus.NO_CONTENT)
+  // Phase 5 (rev5.1): same 404 + 403 wiring as `markAsRead`. See
+  // the docblock there for rationale. Pre-Phase-5 both errors were
+  // 500 catch-alls; post-Phase-5 they resolve correctly via
+  // `ProblemCodeMapping`.
+  @ApiNotFoundResponse({
+    description:
+      'No notification exists with this `notificationId`. ' +
+      '`notificationApplicationService.deleteNotification` throws `NotificationNotFoundError` ' +
+      'which `GlobalExceptionFilter` emits as RFC 7807 `ProblemDetailDto` with ' +
+      "`extensions.code = 'NOTIFICATION_NOT_FOUND'`.",
+    type: ProblemDetailDto,
+    example: ErrorResponseExamples.notFound,
+  })
+  @ApiForbiddenResponse({
+    description:
+      'The notification exists but belongs to a different user. ' +
+      '`notificationApplicationService.deleteNotification` throws `NotificationForbiddenError` ' +
+      'when `notification.userId !== user.sub`. `GlobalExceptionFilter` emits it as RFC 7807 ' +
+      "`ProblemDetailDto` with `extensions.code = 'NOTIFICATION_FORBIDDEN'`.",
+    type: ProblemDetailDto,
+    example: ErrorResponseExamples.forbidden,
+  })
   async deleteNotification(
     @Param('notificationId') notificationId: string,
     @CurrentUser() user: JwtPayload,

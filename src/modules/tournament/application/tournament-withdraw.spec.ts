@@ -15,15 +15,23 @@ describe('TournamentService withdrawFromTournament', () => {
       getParticipantStanding: jest.fn(),
     } as unknown as ConstructorParameters<typeof TournamentService>[0];
 
-    const attemptRepository = {} as ConstructorParameters<typeof TournamentService>[1];
     const eventBus = { publish: jest.fn() } as unknown as ConstructorParameters<
       typeof TournamentService
-    >[2];
+    >[1];
+
+    const logger = {
+      info: jest.fn(),
+      warn: jest.fn(),
+      error: jest.fn(),
+      debug: jest.fn(),
+      trace: jest.fn(),
+      fatal: jest.fn(),
+    } as unknown as ConstructorParameters<typeof TournamentService>[2];
 
     const service = new TournamentService(
       tournamentRepository as never,
-      attemptRepository as never,
       eventBus as never,
+      logger as never,
     );
 
     return {

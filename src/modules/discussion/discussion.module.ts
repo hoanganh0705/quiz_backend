@@ -11,7 +11,6 @@ import { DiscussionController } from './transport/controller/discussion.controll
 import { QuizDiscussionController } from './transport/controller/quiz-discussion.controller';
 import { UserDiscussionController } from './transport/controller/user-discussion.controller';
 import { DiscussionPresenter } from './transport/presenters/discussion.presenter';
-import { DiscussionDomainExceptionFilter } from './transport/filters/discussion-domain-exception.filter';
 import {
   DISCUSSION_REPOSITORY_PORT,
   QUIZ_EXISTENCE_PORT,
@@ -32,7 +31,6 @@ import { UserModule } from '@/modules/user/user.module';
     QuizExistenceAdapter,
     UserExistenceAdapter,
     DiscussionPresenter,
-    DiscussionDomainExceptionFilter,
     { provide: DISCUSSION_REPOSITORY_PORT, useExisting: DiscussionRepository },
     { provide: DISCUSSION_DOMAIN_EVENT_BUS, useExisting: DiscussionDomainEventBus },
     { provide: QUIZ_EXISTENCE_PORT, useExisting: QuizExistenceAdapter },

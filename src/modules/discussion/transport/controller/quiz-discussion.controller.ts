@@ -1,4 +1,4 @@
-import { Controller, Get, Param, ParseUUIDPipe, Query, UseFilters } from '@nestjs/common';
+import { Controller, Get, Param, ParseUUIDPipe, Query } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { Public } from '@/common/decorators/public.decorator';
 import { DiscussionApplicationService } from '@/modules/discussion/application/discussion-application.service';
@@ -7,11 +7,13 @@ import { QuizDiscussionItemResponseDto } from '@/modules/discussion/dto/response
 import { ApiOkResourceList } from '@/common/swagger/api-ok';
 import { DiscussionPresenter } from '../presenters/discussion.presenter';
 import { QuizDiscussionCursorMapper } from '@/modules/discussion/mappers/quiz-discussion-cursor.mapper';
-import { DiscussionDomainExceptionFilter } from '../filters/discussion-domain-exception.filter';
+
+// All error responses (404 from `DISCUSSION_QUIZ_NOT_FOUND`) are routed
+// through `GlobalExceptionFilter` as RFC 7807 `ProblemDetailDto` after
+// Phase 3.1. The per-module filter has been removed.
 
 @ApiTags('quizzes')
 @Controller('quizzes')
-@UseFilters(DiscussionDomainExceptionFilter)
 export class QuizDiscussionController {
   constructor(
     private readonly discussionApplicationService: DiscussionApplicationService,
