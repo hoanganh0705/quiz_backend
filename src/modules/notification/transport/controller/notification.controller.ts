@@ -13,24 +13,19 @@ import {
   HttpStatus,
   BadRequestException,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiQuery, ApiOkResponse } from '@nestjs/swagger';
-import { ApiNoContent, ApiAuthAction, ApiBadRequest } from '@/common/swagger/swagger-decorators';
+import { ApiTags, ApiOperation, ApiQuery } from '@nestjs/swagger';
+import { ApiNoContent } from '@/common/swagger/swagger-decorators';
 import { Transactional } from '@/common/interceptors/transactional.interceptor';
 import { NotificationApplicationService } from '@/modules/notification/application/notification-application.service';
 import {
-  NotificationListResponseDto,
   NotificationResponseDto,
   NotificationPreferencesResponseDto,
   UnreadCountResponseDto,
   DeletedReadNotificationsResponseDto,
   NotificationAnalyticsDto,
-  WrappedNotificationListResponseDto,
-  WrappedNotificationResponseDto,
-  WrappedNotificationPreferencesResponseDto,
-  WrappedUnreadCountResponseDto,
-  WrappedDeletedReadNotificationsResponseDto,
-  WrappedNotificationAnalyticsDto,
 } from '@/modules/notification/dto/response';
+import { NotificationPresenter } from '../presenters/notification.presenter';
+import { ApiOkResource, ApiOkResourceList } from '@/common/swagger/api-ok';
 import { RequireAuth } from '@/common/guards/jwt.guard';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
 import { UpdatePreferencesDto, GetNotificationsQueryDto } from '@/modules/notification/dto/request';
@@ -42,12 +37,15 @@ import { CurrentUser } from '@/common/decorators/current-user.decorator';
 @Controller('notifications')
 @RequireAuth()
 export class NotificationController {
-  constructor(private readonly notificationService: NotificationApplicationService) {}
+  constructor(
+    private readonly notificationService: NotificationApplicationService,
+    private readonly presenter: NotificationPresenter,
+  ) {}
 
   @Get()
   @ApiOperation({
     summary: 'List notifications',
-    description: 'Returns paginated notifications for the authenticated user.',
+    description: 'Returns cursor-paginated notifications for the authenticated user.',
   })
   @ApiQuery({
     name: 'limit',
@@ -74,14 +72,18 @@ export class NotificationController {
     description: 'Include archived notifications',
     example: false,
   })
-  @ApiOkResponse({ type: WrappedNotificationListResponseDto })
+  @ApiOkResourceList(NotificationResponseDto, 'cursor', {
+    description:
+      'Cursor-paginated list of notifications. The `unreadCount` is no longer carried ' +
+      'inside this payload — call `GET /notifications/unread-count` for that.',
+  })
   async getNotifications(
     @CurrentUser() user: JwtPayload,
     @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit: number,
     @Query('cursor') cursor?: string,
     @Query('unreadOnly', new DefaultValuePipe(false)) unreadOnly?: boolean,
     @Query() query?: GetNotificationsQueryDto,
-  ): Promise<NotificationListResponseDto> {
+  ) {
     let parsedCursor: { createdAt: string; notificationId: string } | null = null;
 
     if (cursor) {
@@ -103,114 +105,63 @@ export class NotificationController {
       query?.includeArchived,
     );
 
-    return {
-      items: result.items.map((n) => ({
-        notificationId: n.notificationId,
-        userId: n.userId,
-        type: n.type,
-        title: n.title,
-        message: n.message,
-        metadata: n.metadata,
-        channel: n.channel,
-        isRead: n.isRead,
-        readAt: n.readAt,
-        createdAt: n.createdAt,
-        expiresAt: n.expiresAt,
-      })),
-      unreadCount: result.unreadCount,
-      hasNextPage: result.hasNextPage,
-    };
+    return this.presenter.getNotifications(result);
   }
 
   @Get('unread-count')
   @ApiOperation({ summary: 'Get unread notification count' })
-  @ApiOkResponse({ type: WrappedUnreadCountResponseDto })
-  async getUnreadCount(@CurrentUser() user: JwtPayload): Promise<UnreadCountResponseDto> {
+  @ApiOkResource(UnreadCountResponseDto, { description: 'Unread notification count' })
+  async getUnreadCount(@CurrentUser() user: JwtPayload) {
     const count = await this.notificationService.getUnreadCount(user);
-    return { count };
+    return this.presenter.getUnreadCount({ count });
   }
 
   @Get('analytics')
   @Permissions(Permission.NOTIFICATION_ANALYTICS)
   @ApiOperation({ summary: 'Get notification analytics' })
-  @ApiOkResponse({ type: WrappedNotificationAnalyticsDto })
-  async getAnalytics(): Promise<NotificationAnalyticsDto> {
-    return this.notificationService.getAnalytics();
+  @ApiOkResource(NotificationAnalyticsDto, { description: 'Notification analytics' })
+  async getAnalytics() {
+    const result = await this.notificationService.getAnalytics();
+    const analytics: NotificationAnalyticsDto = {
+      total: result.total,
+      unread: result.unread,
+      byType: result.byType,
+      byChannel: result.byChannel,
+      last24h: result.last24h,
+      last7d: result.last7d,
+    };
+    return this.presenter.getAnalytics(analytics);
   }
 
   @Get('preferences')
   @ApiOperation({ summary: 'Get notification preferences' })
-  @ApiOkResponse({ type: WrappedNotificationPreferencesResponseDto })
-  async getPreferences(
-    @CurrentUser() user: JwtPayload,
-  ): Promise<NotificationPreferencesResponseDto> {
-    const prefs = await this.notificationService.getOrCreatePreferences(user);
-    return {
-      inAppEnabled: prefs.inAppEnabled,
-      emailEnabled: prefs.emailEnabled,
-      pushEnabled: prefs.pushEnabled,
-      achievementEnabled: prefs.achievementEnabled,
-      tournamentEnabled: prefs.tournamentEnabled,
-      rankEnabled: prefs.rankEnabled,
-      friendEnabled: prefs.friendEnabled,
-      discussionEnabled: prefs.discussionEnabled,
-      summaryEnabled: prefs.summaryEnabled,
-      marketingEnabled: prefs.marketingEnabled,
-      rankImprovementThreshold: prefs.rankImprovementThreshold,
-      quietHoursStart: prefs.quietHoursStart,
-      quietHoursEnd: prefs.quietHoursEnd,
-    };
+  @ApiOkResource(NotificationPreferencesResponseDto, { description: 'Notification preferences' })
+  async getPreferences(@CurrentUser() user: JwtPayload) {
+    const result = await this.notificationService.getOrCreatePreferences(user);
+    return this.presenter.getPreferences(result);
   }
 
   @Patch('preferences')
   @Transactional()
   @ApiOperation({ summary: 'Update notification preferences' })
-  @ApiBadRequest()
-  @ApiOkResponse({ type: WrappedNotificationPreferencesResponseDto })
+  @ApiOkResource(NotificationPreferencesResponseDto, { description: 'Notification preferences' })
   async updatePreferences(
     @CurrentUser() user: JwtPayload,
     @Body() updateDto: UpdatePreferencesDto,
-  ): Promise<NotificationPreferencesResponseDto> {
-    const prefs = await this.notificationService.updatePreferences(user, updateDto);
-    return {
-      inAppEnabled: prefs.inAppEnabled,
-      emailEnabled: prefs.emailEnabled,
-      pushEnabled: prefs.pushEnabled,
-      achievementEnabled: prefs.achievementEnabled,
-      tournamentEnabled: prefs.tournamentEnabled,
-      rankEnabled: prefs.rankEnabled,
-      friendEnabled: prefs.friendEnabled,
-      discussionEnabled: prefs.discussionEnabled,
-      summaryEnabled: prefs.summaryEnabled,
-      marketingEnabled: prefs.marketingEnabled,
-      rankImprovementThreshold: prefs.rankImprovementThreshold,
-      quietHoursStart: prefs.quietHoursStart,
-      quietHoursEnd: prefs.quietHoursEnd,
-    };
+  ) {
+    const result = await this.notificationService.updatePreferences(user, updateDto);
+    return this.presenter.updatePreferences(result);
   }
 
   @Get(':notificationId')
   @ApiOperation({ summary: 'Get notification detail' })
-  @ApiOkResponse({ type: WrappedNotificationResponseDto })
+  @ApiOkResource(NotificationResponseDto, { description: 'Notification detail' })
   async getNotificationDetail(
     @Param('notificationId') notificationId: string,
     @CurrentUser() user: JwtPayload,
-  ): Promise<NotificationResponseDto> {
-    const notification = await this.notificationService.getNotificationDetail(notificationId, user);
-
-    return {
-      notificationId: notification.notificationId,
-      userId: notification.userId,
-      type: notification.type,
-      title: notification.title,
-      message: notification.message,
-      metadata: notification.metadata,
-      channel: notification.channel,
-      isRead: notification.isRead,
-      readAt: notification.readAt,
-      createdAt: notification.createdAt,
-      expiresAt: notification.expiresAt,
-    };
+  ) {
+    const result = await this.notificationService.getNotificationDetail(notificationId, user);
+    return this.presenter.getNotificationDetail(result);
   }
 
   @Post(':notificationId/read')
@@ -245,15 +196,12 @@ export class NotificationController {
 
   @Delete('read')
   @Transactional()
-  @ApiAuthAction({
+  @ApiOkResource(DeletedReadNotificationsResponseDto, {
     description: 'Read notifications deleted',
-    type: WrappedDeletedReadNotificationsResponseDto,
   })
-  async deleteReadNotifications(
-    @CurrentUser() user: JwtPayload,
-  ): Promise<DeletedReadNotificationsResponseDto> {
+  async deleteReadNotifications(@CurrentUser() user: JwtPayload) {
     const deletedCount = await this.notificationService.deleteReadNotifications(user);
-    return { deletedCount };
+    return this.presenter.deleteReadNotifications({ deletedCount });
   }
 
   @Delete(':notificationId')
