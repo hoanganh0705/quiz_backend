@@ -8,7 +8,6 @@ import {
   Patch,
   Post,
   Query,
-  UseFilters,
 } from '@nestjs/common';
 import {
   ApiBadRequestResponse,
@@ -31,44 +30,50 @@ import { ReviewListResponseDto } from '../../dto/response/review-list-response.d
 import { ReviewStatsResponseDto } from '../../dto/response/review-stats-response.dto';
 import { UpdateReviewResponseDto } from '../../dto/response/update-review-response.dto';
 import { ReviewDetailResponseDto } from '../../dto/response/review-detail-response.dto';
-import { ReviewDomainErrorDto } from '../../dto/response/review-domain-error.dto';
-import { ReviewDomainExceptionFilter } from '../filters/review-domain-exception.filter';
 import { CursorMapper } from '../../mappers/review-cursor.mapper';
 import { QuizAnalyticsResponseDto } from '@/modules/quiz/dto/response/quiz-analytics.dto';
 import { ReviewPresenter } from '../presenters/review.presenter';
+import { ProblemDetailDto, ErrorResponseExamples } from '@/common/swagger/swagger-schemas';
 
-// Local helpers — these decorators emit the response schemas that match the
-// actual runtime error shapes produced by ReviewDomainExceptionFilter:
-//
-//   { statusCode: number, message: string, error: string }
-//
-// Use these for any 400 / 403 / 404 / 409 produced by a review domain error.
-// (401, 500 are emitted by GlobalExceptionFilter as RFC 7807 ProblemDetail
-// and are handled by ApiAuth + ApiAuthErrors / ApiPublicErrors.)
+// Local helpers — every review error response is now emitted by
+// GlobalExceptionFilter as RFC 7807 ProblemDetail (the per-module filter
+// was deleted in Phase 2). 401/500 come from GlobalExceptionFilter via
+// `ApiAuth` + `ApiAuthErrors` / `ApiPublicErrors`. The helpers below cover
+// 400/403/404/409 from review domain errors and reference `ProblemDetailDto`
+// directly.
 
 const reviewNotFoundResponse = (description: string = 'Review not found') =>
-  ApiNotFoundResponse({ description, type: ReviewDomainErrorDto });
+  ApiNotFoundResponse({
+    description,
+    type: ProblemDetailDto,
+    example: ErrorResponseExamples.notFound,
+  });
 
 const reviewForbiddenResponse = (
   description: string = 'You do not have permission to manage this review',
 ) =>
   ApiForbiddenResponse({
     description,
-    type: ReviewDomainErrorDto,
+    type: ProblemDetailDto,
+    example: ErrorResponseExamples.forbidden,
   });
 
 const reviewConflictResponse = (description: string = 'You have already reviewed this quiz') =>
   ApiConflictResponse({
     description,
-    type: ReviewDomainErrorDto,
+    type: ProblemDetailDto,
+    example: ErrorResponseExamples.conflict,
   });
 
 const reviewBadRequestResponse = (description: string = 'Invalid request data') =>
-  ApiBadRequestResponse({ description, type: ReviewDomainErrorDto });
+  ApiBadRequestResponse({
+    description,
+    type: ProblemDetailDto,
+    example: ErrorResponseExamples.badRequest,
+  });
 
 @ApiTags('quizzes')
 @Controller('quizzes')
-@UseFilters(ReviewDomainExceptionFilter)
 export class quizReviewController {
   constructor(
     private readonly reviewApplicationService: ReviewApplicationService,
@@ -122,11 +127,10 @@ export class quizReviewController {
 
   // Returns per-quiz analytics (not per-creator analytics).
   // The application service delegates to QuizAnalyticsService.getQuizAnalytics,
-  // which can also throw QuizAnalyticsError. QuizAnalyticsError is NOT a
-  // ReviewDomainError so the ReviewDomainExceptionFilter will not catch it;
-  // it falls through to GlobalExceptionFilter and produces a 404
-  // RFC 7807 ProblemDetail response (not the {statusCode, message, error}
-  // envelope documented for the domain-filtered errors below).
+  // which can also throw QuizAnalyticsError. QuizAnalyticsError is handled
+  // by the GlobalExceptionFilter and produces a 404 RFC 7807 ProblemDetail
+  // response (Phase 2: review-domain errors also flow through the same
+  // GlobalExceptionFilter, so the envelope shape is uniform).
   @Get(':quizId/reviews/analytics')
   @ApiAuth()
   @ApiAuthErrors()

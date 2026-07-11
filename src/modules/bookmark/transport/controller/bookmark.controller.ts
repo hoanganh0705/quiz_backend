@@ -8,7 +8,6 @@ import {
   Patch,
   Post,
   Query,
-  UseFilters,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -52,34 +51,40 @@ import {
   BookmarkCollectionAnalyticsResponseDto,
   UpdateBookmarkResponseDto,
 } from '../../dto/response';
-import { BookmarkDomainExceptionFilter } from '../filters/bookmark-domain-exception.filter';
 import { BookmarkCursorMapper } from '../../mappers/bookmark-cursor.mapper';
-import { BookmarkDomainErrorDto } from '../../dto/response/bookmark-response-docs.dto';
+import { ProblemDetailDto, ErrorResponseExamples } from '@/common/swagger/swagger-schemas';
 
-// Local helpers — these decorators emit the response schemas that match the
-// actual runtime error shapes produced by BookmarkDomainExceptionFilter:
-//
-//   { statusCode: number, message: string, error: string }
-//
-// Use these for any 403 / 404 / 409 produced by a bookmark domain error.
+// Local helpers — every bookmark error response is now emitted by
+// GlobalExceptionFilter as RFC 7807 ProblemDetail (the per-module filter
+// was deleted in Phase 2). 401/500 still come from GlobalExceptionFilter
+// via `ApiAuth` / `ApiAuthCreate`. The helpers below cover 403/404/409
+// from bookmark domain errors and reference `ProblemDetailDto` directly.
 
 const bookmarkForbiddenResponse = (
   description = 'You do not have permission to manage this collection',
 ) =>
   ApiForbiddenResponse({
     description,
-    type: BookmarkDomainErrorDto,
+    type: ProblemDetailDto,
+    example: ErrorResponseExamples.forbidden,
   });
 
 const bookmarkNotFoundResponse = (description = 'Bookmark collection not found') =>
-  ApiNotFoundResponse({ description, type: BookmarkDomainErrorDto });
+  ApiNotFoundResponse({
+    description,
+    type: ProblemDetailDto,
+    example: ErrorResponseExamples.notFound,
+  });
 
 const bookmarkConflictResponse = (description = 'Resource already exists') =>
-  ApiConflictResponse({ description, type: BookmarkDomainErrorDto });
+  ApiConflictResponse({
+    description,
+    type: ProblemDetailDto,
+    example: ErrorResponseExamples.conflict,
+  });
 
 @ApiTags('bookmarks')
 @Controller('bookmarks')
-@UseFilters(BookmarkDomainExceptionFilter)
 export class BookmarkController {
   constructor(
     private readonly bookmarkApplicationService: BookmarkApplicationService,
