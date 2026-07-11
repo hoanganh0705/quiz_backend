@@ -25,16 +25,21 @@ import {
   UserBadgeOwnershipNotFoundError,
 } from '../domain/errors';
 import { computeRarityString } from '../domain/constants/achievement.constants';
+import { ScheduledEvaluationService } from '../infrastructure/scheduled/scheduled-evaluation.service';
 import type { BadgeDetailsResponseDto } from '../dto/response/badge-details-response.dto';
 import type { BadgeProgressResponseDto } from '../dto/response/badge-progress-response.dto';
 import type { AchievementHistoryItemResponseDto } from '../dto/response/achievement-history-item-response.dto';
 import type { UserBadgeAnalyticsResponseDto } from '../dto/response/user-badge-analytics-response.dto';
 import type { BadgeCatalogItemResponseDto } from '../dto/response/badge-catalog-item-response.dto';
-import type { MyBadgesResponseDto } from '../dto/response/my-badges-response.dto';
+import type { MyBadgeItemDto } from '../dto/response/my-badges-response.dto';
 import type {
   PublicAchievementProfileResponseDto,
   FeaturedBadgeResponseDto,
 } from '../dto/response/public-achievement-profile-response.dto';
+import type {
+  AdminAchievementHistoryItemDto,
+  ReevaluateUserResponseDto,
+} from '../dto/response/achievement-admin-response.dto';
 import type { BadgeProgressSnapshot } from './progress-tracking.service';
 import { AuditLogService } from '@/common/audit/audit-log.service';
 
@@ -46,6 +51,7 @@ export class AchievementApplicationService {
     private readonly badgeAnalyticsService: BadgeAnalyticsService,
     private readonly badgeRevocationService: BadgeRevocationService,
     private readonly userDomainService: UserDomainService,
+    private readonly scheduledEvaluationService: ScheduledEvaluationService,
     @Inject(ACHIEVEMENT_REPOSITORY_PORT)
     private readonly achievementRepository: AchievementRepositoryPort,
     private readonly auditLogService: AuditLogService,
@@ -56,13 +62,10 @@ export class AchievementApplicationService {
   async getBadgeCatalog(params?: {
     limit?: number;
     offset?: number;
-  }): Promise<{ data: BadgeCatalogItemResponseDto[]; total: number }> {
-    const { data: badges, total } = await this.achievementRepository.getBadgeCatalog(params);
+  }): Promise<BadgeCatalogItemResponseDto[]> {
+    const { data: badges } = await this.achievementRepository.getBadgeCatalog(params);
 
-    return {
-      data: badges.map((badge) => this.toBadgeCatalogItemResponse(badge)),
-      total,
-    };
+    return badges.map((badge) => this.toBadgeCatalogItemResponse(badge));
   }
 
   async getBadgeDetails(badgeId: string): Promise<BadgeDetailsResponseDto> {
@@ -93,21 +96,18 @@ export class AchievementApplicationService {
   async getMyAchievementHistory(
     userId: string,
     options?: { limit?: number; offset?: number },
-  ): Promise<{ data: AchievementHistoryItemResponseDto[]; total: number }> {
+  ): Promise<AchievementHistoryItemResponseDto[]> {
     const history = await this.achievementHistoryService.getUserHistory(userId, {
       includeRevoked: false,
       limit: options?.limit ?? 50,
       offset: options?.offset ?? 0,
     });
 
-    return {
-      data: history.map((entry) => ({
-        badgeId: entry.badgeId,
-        badgeName: entry.badgeName,
-        earnedAt: entry.earnedAt.toISOString(),
-      })),
-      total: history.length,
-    };
+    return history.map((entry) => ({
+      badgeId: entry.badgeId,
+      badgeName: entry.badgeName,
+      earnedAt: entry.earnedAt.toISOString(),
+    }));
   }
 
   async getMyBadgeAnalytics(userId: string): Promise<UserBadgeAnalyticsResponseDto> {
@@ -124,8 +124,8 @@ export class AchievementApplicationService {
   async getMyBadges(
     userId: string,
     options?: { limit?: number; offset?: number },
-  ): Promise<MyBadgesResponseDto> {
-    const { data: userBadges, total } = await this.achievementRepository.getUserBadgesWithDetails(
+  ): Promise<MyBadgeItemDto[]> {
+    const { data: userBadges } = await this.achievementRepository.getUserBadgesWithDetails(
       userId,
       options,
     );
@@ -134,16 +134,13 @@ export class AchievementApplicationService {
     const earnerCounts =
       badgeIds.length > 0 ? await this.achievementRepository.getBadgeEarnersCounts(badgeIds) : {};
 
-    return {
-      data: userBadges.map((ub) => ({
-        badgeId: ub.badgeId,
-        name: ub.badge.name,
-        description: ub.badge.description,
-        rarity: computeRarityString(earnerCounts[ub.badgeId] ?? 0),
-        earnedAt: ub.earnedAt.toISOString(),
-      })),
-      total,
-    };
+    return userBadges.map((ub) => ({
+      badgeId: ub.badgeId,
+      name: ub.badge.name,
+      description: ub.badge.description,
+      rarity: computeRarityString(earnerCounts[ub.badgeId] ?? 0),
+      earnedAt: ub.earnedAt.toISOString(),
+    }));
   }
 
   async revokeUserBadge(userId: string, badgeId: string, revokedBy: string): Promise<void> {
@@ -269,6 +266,43 @@ export class AchievementApplicationService {
       rarity: badge.rarity,
       earnedCount: badge.earnedCount,
     };
+  }
+
+  async reevaluateUserForController(userId: string): Promise<ReevaluateUserResponseDto> {
+    const results = await this.scheduledEvaluationService.reevaluateUserBadges(userId);
+
+    const awarded = results.filter((r) => r.awarded).length;
+    const errors = results.filter((r) => !!r.error).length;
+
+    return {
+      message: `Re-evaluation completed for user ${userId}. Awarded ${awarded} badge(s), ${errors} error(s).`,
+      checked: results.length,
+      awarded,
+      errors,
+    };
+  }
+
+  async getUserHistoryForController(userId: string): Promise<AdminAchievementHistoryItemDto[]> {
+    const history = await this.achievementHistoryService.getUserHistory(userId, {
+      includeRevoked: true,
+    });
+
+    return history.map((entry) => ({
+      userBadgeId: entry.userBadgeId,
+      userId: entry.userId,
+      badgeId: entry.badgeId,
+      badgeSlug: entry.badgeSlug,
+      badgeName: entry.badgeName,
+      badgeType: entry.badgeType,
+      badgeCategory: entry.badgeCategory,
+      earnedAt: entry.earnedAt.toISOString(),
+      badgeVersion: entry.badgeVersion,
+      expiresAt: entry.expiresAt?.toISOString() ?? null,
+      revokedAt: entry.revokedAt?.toISOString() ?? null,
+      revocationReason: entry.revocationReason,
+      metadata: entry.metadata,
+      isActive: entry.isActive,
+    }));
   }
 
   private async assertUserExists(userId: string): Promise<void> {
