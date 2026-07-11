@@ -366,6 +366,283 @@ export const ProblemCodeMapping: Readonly<Record<string, ProblemCodeInfo>> = {
     title: 'Forbidden',
     typeUri: 'https://api.quiz.local/problems/user-profile-private',
   },
+
+  // ===========================================================================
+  // CATEGORY module — src/modules/category/domain/errors/category-domain.errors.ts
+  // ===========================================================================
+  /** First Phase-2 entry: legacy `{ statusCode, message, error }` → RFC 7807. */
+  /**
+   * Thrown by category read paths (`CategoryDomainService`,
+   * `CategoryController` GETs) when a category cannot be found by id or
+   * slug. 404 Not Found.
+   */
+  CATEGORY_NOT_FOUND: {
+    status: HttpStatus.NOT_FOUND,
+    title: 'NotFound',
+    typeUri: 'https://api.quiz.local/problems/category-not-found',
+  },
+  /**
+   * Thrown by `CategoryQueryService` when a category's analytics entry
+   * cannot be found. 404 Not Found.
+   */
+  CATEGORY_ANALYTICS_NOT_FOUND: {
+    status: HttpStatus.NOT_FOUND,
+    title: 'NotFound',
+    typeUri: 'https://api.quiz.local/problems/category-analytics-not-found',
+  },
+  /**
+   * Thrown by `CategoryRepository` when a unique-slug constraint is
+   * violated on insert/update. 409 Conflict.
+   */
+  CATEGORY_SLUG_CONFLICT: {
+    status: HttpStatus.CONFLICT,
+    title: 'Conflict',
+    typeUri: 'https://api.quiz.local/problems/category-slug-conflict',
+  },
+  /**
+   * Thrown by `CategoryDomainService` when restoring a category that is
+   * already active (the restore endpoint refuses to touch active rows).
+   * 409 Conflict.
+   */
+  CATEGORY_ALREADY_ACTIVE: {
+    status: HttpStatus.CONFLICT,
+    title: 'Conflict',
+    typeUri: 'https://api.quiz.local/problems/category-already-active',
+  },
+  /**
+   * Thrown by `CategoryDomainService` when the restore state machine
+   * reaches an invariant violation that shouldn't be reachable in normal
+   * flow (corrupted state). 500 Internal Server Error.
+   *
+   * The prior per-module filter mapped this to 500 with a generic
+   * `message: 'Internal server error'`. After Phase 2 the detail field
+   * surfaces the concrete message (`'Category restore invariant
+   * violated'`) — a wire-shape improvement, not a regression.
+   */
+  CATEGORY_RESTORE_INVARIANT: {
+    status: HttpStatus.INTERNAL_SERVER_ERROR,
+    title: 'InternalServerError',
+    typeUri: 'https://api.quiz.local/problems/category-restore-invariant',
+  },
+
+  // ===========================================================================
+  // TAG module — src/modules/tag/domain/errors/tag-domain.errors.ts
+  // ===========================================================================
+  /** Second Phase-2 entry: legacy `{ statusCode, message, error }` → RFC 7807. */
+  /**
+   * Thrown by tag read paths (`TagDomainService`, `TagController` GETs)
+   * when a tag cannot be found by id or slug. 404 Not Found.
+   */
+  TAG_NOT_FOUND: {
+    status: HttpStatus.NOT_FOUND,
+    title: 'NotFound',
+    typeUri: 'https://api.quiz.local/problems/tag-not-found',
+  },
+  /**
+   * Thrown by `TagApplicationService` when a tag's analytics entry
+   * cannot be found. 404 Not Found.
+   */
+  TAG_ANALYTICS_NOT_FOUND: {
+    status: HttpStatus.NOT_FOUND,
+    title: 'NotFound',
+    typeUri: 'https://api.quiz.local/problems/tag-analytics-not-found',
+  },
+  /**
+   * Thrown by `TagDomainService` when a unique-slug constraint is
+   * violated on insert/update. 409 Conflict.
+   */
+  TAG_SLUG_CONFLICT: {
+    status: HttpStatus.CONFLICT,
+    title: 'Conflict',
+    typeUri: 'https://api.quiz.local/problems/tag-slug-conflict',
+  },
+  /**
+   * Thrown by `TagDomainService` when restoring a tag that is already
+   * active (the restore endpoint refuses to touch active rows). 409
+   * Conflict.
+   */
+  TAG_ALREADY_ACTIVE: {
+    status: HttpStatus.CONFLICT,
+    title: 'Conflict',
+    typeUri: 'https://api.quiz.local/problems/tag-already-active',
+  },
+  /**
+   * Thrown by `TagDomainService` when the restore state machine reaches
+   * an invariant violation that shouldn't be reachable in normal flow
+   * (corrupted state). 500 Internal Server Error.
+   *
+   * Same wire-shape improvement as `CATEGORY_RESTORE_INVARIANT`: the
+   * prior per-module filter mapped this to 500 with a generic message;
+   * after Phase 2 the detail field surfaces the concrete message
+   * (`'Tag restore invariant violated'`).
+   */
+  TAG_RESTORE_INVARIANT: {
+    status: HttpStatus.INTERNAL_SERVER_ERROR,
+    title: 'InternalServerError',
+    typeUri: 'https://api.quiz.local/problems/tag-restore-invariant',
+  },
+
+  // ===========================================================================
+  // TOURNAMENT module — src/modules/tournament/domain/errors/tournament-domain.errors.ts
+  // ===========================================================================
+  /** Third Phase-2 entry: legacy `{ statusCode, message, error }` → RFC 7807. */
+  // Largest Phase-2 module: 15 concrete exceptions → 4 status codes
+  // (400/403/404/409). One of the 15 (TournamentAlreadyWithdrawnError)
+  // was previously mapped to 500 via the filter's default branch — Phase 2
+  // fixes that by routing it to 409 (semantic state conflict).
+
+  /**
+   * Thrown by `TournamentService` when a tournament cannot be found by
+   * id. 404 Not Found.
+   */
+  TOURNAMENT_NOT_FOUND: {
+    status: HttpStatus.NOT_FOUND,
+    title: 'NotFound',
+    typeUri: 'https://api.quiz.local/problems/tournament-not-found',
+  },
+  /**
+   * Thrown when a tournament round cannot be found. 404 Not Found.
+   *
+   * Wire-shape improvement: the prior per-module filter hardcoded the
+   * message to `'Tournament round not found'`. The global filter
+   * preserves `exception.message`.
+   */
+  TOURNAMENT_ROUND_NOT_FOUND: {
+    status: HttpStatus.NOT_FOUND,
+    title: 'NotFound',
+    typeUri: 'https://api.quiz.local/problems/tournament-round-not-found',
+  },
+  /**
+   * Thrown when the authenticated user is not registered for the
+   * tournament. 404 Not Found (the participant record does not exist).
+   */
+  TOURNAMENT_NOT_REGISTERED: {
+    status: HttpStatus.NOT_FOUND,
+    title: 'NotFound',
+    typeUri: 'https://api.quiz.local/problems/tournament-not-registered',
+  },
+  /**
+   * Thrown when the authenticated user lacks permission to perform a
+   * tournament action. 403 Forbidden.
+   *
+   * Wire-shape improvement: the prior per-module filter rewrote every
+   * `TournamentForbiddenError.message` to a hardcoded generic
+   * `'You do not have permission to perform this action'`, ignoring
+   * the thrown message. The global filter preserves `exception.message`,
+   * so call sites that throw
+   * `new TournamentForbiddenError(TOURNAMENT_FORBIDDEN_MESSAGE)` now
+   * surface `'You do not have permission to manage this tournament'`
+   * verbatim.
+   */
+  TOURNAMENT_FORBIDDEN: {
+    status: HttpStatus.FORBIDDEN,
+    title: 'Forbidden',
+    typeUri: 'https://api.quiz.local/problems/tournament-forbidden',
+  },
+  /**
+   * Generic tournament state conflict (caller should usually prefer a
+   * more specific subclass). 409 Conflict.
+   */
+  TOURNAMENT_CONFLICT: {
+    status: HttpStatus.CONFLICT,
+    title: 'Conflict',
+    typeUri: 'https://api.quiz.local/problems/tournament-conflict',
+  },
+  /**
+   * Thrown when the user tries to register for a tournament they are
+   * already actively participating in. 409 Conflict.
+   */
+  TOURNAMENT_ALREADY_REGISTERED: {
+    status: HttpStatus.CONFLICT,
+    title: 'Conflict',
+    typeUri: 'https://api.quiz.local/problems/tournament-already-registered',
+  },
+  /**
+   * Thrown when the user tries to start an attempt for a round they
+   * have already submitted. 409 Conflict.
+   */
+  TOURNAMENT_ATTEMPT_ALREADY_EXISTS: {
+    status: HttpStatus.CONFLICT,
+    title: 'Conflict',
+    typeUri: 'https://api.quiz.local/problems/tournament-attempt-already-exists',
+  },
+  /**
+   * Thrown when the participant is in an unexpected state for the
+   * requested operation. 409 Conflict.
+   */
+  TOURNAMENT_PARTICIPANT_STATE: {
+    status: HttpStatus.CONFLICT,
+    title: 'Conflict',
+    typeUri: 'https://api.quiz.local/problems/tournament-participant-state',
+  },
+  /**
+   * Thrown when the user tries to withdraw a second time. 409 Conflict.
+   *
+   * Wire-shape fix (not a regression): the prior per-module filter did
+   * NOT include this exception in `mapToHttp`, so it fell through to
+   * the default `INTERNAL_SERVER_ERROR` with a generic
+   * `'Internal server error'` message — an implicit bug. Phase 2 routes
+   * it to 409 (semantic state conflict) via this mapping entry.
+   */
+  TOURNAMENT_ALREADY_WITHDRAWN: {
+    status: HttpStatus.CONFLICT,
+    title: 'Conflict',
+    typeUri: 'https://api.quiz.local/problems/tournament-already-withdrawn',
+  },
+  /**
+   * Thrown when tournament parameters fail validation
+   * (e.g. `endAt <= startAt`). 400 Bad Request.
+   */
+  TOURNAMENT_VALIDATION: {
+    status: HttpStatus.BAD_REQUEST,
+    title: 'BadRequest',
+    typeUri: 'https://api.quiz.local/problems/tournament-validation',
+  },
+  /**
+   * Thrown when the user tries to register after the registration phase
+   * has ended. 400 Bad Request.
+   */
+  TOURNAMENT_REGISTRATION_CLOSED: {
+    status: HttpStatus.BAD_REQUEST,
+    title: 'BadRequest',
+    typeUri: 'https://api.quiz.local/problems/tournament-registration-closed',
+  },
+  /**
+   * Thrown when the tournament has reached `maxParticipants`. 400 Bad
+   * Request.
+   */
+  TOURNAMENT_FULL: {
+    status: HttpStatus.BAD_REQUEST,
+    title: 'BadRequest',
+    typeUri: 'https://api.quiz.local/problems/tournament-full',
+  },
+  /**
+   * Thrown when the user tries to start an attempt for a round that
+   * is not in `'open'` status. 400 Bad Request.
+   */
+  TOURNAMENT_ROUND_NOT_OPEN: {
+    status: HttpStatus.BAD_REQUEST,
+    title: 'BadRequest',
+    typeUri: 'https://api.quiz.local/problems/tournament-round-not-open',
+  },
+  /**
+   * Thrown when the user tries to unregister outside the registration
+   * phase. 400 Bad Request.
+   */
+  TOURNAMENT_UNREGISTER_CLOSED: {
+    status: HttpStatus.BAD_REQUEST,
+    title: 'BadRequest',
+    typeUri: 'https://api.quiz.local/problems/tournament-unregister-closed',
+  },
+  /**
+   * Thrown when the user tries to withdraw outside the `'ongoing'`
+   * tournament phase. 400 Bad Request.
+   */
+  TOURNAMENT_WITHDRAW_CLOSED: {
+    status: HttpStatus.BAD_REQUEST,
+    title: 'BadRequest',
+    typeUri: 'https://api.quiz.local/problems/tournament-withdraw-closed',
+  },
 };
 
 const DEFAULT_TYPE_URIS: Readonly<Record<number, string>> = {
