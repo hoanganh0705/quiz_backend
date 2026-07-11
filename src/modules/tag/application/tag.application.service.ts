@@ -13,8 +13,7 @@ import {
   type QuizListingPort,
 } from '@/modules/quiz/domain/analytics';
 import type {
-  RankedTagsResponseDto,
-  RelatedTagsResponseDto,
+  RankedTagResponseDto,
   TagFollowMessageResponseDto,
   FollowedTagsResponseDto,
   TagAnalyticsResponseDto,
@@ -72,9 +71,9 @@ export class TagApplicationService {
     });
   }
 
-  async getRelatedTags(slug: string, query: RelatedTagsQuery): Promise<RelatedTagsResponseDto> {
+  async getRelatedTags(slug: string, query: RelatedTagsQuery): Promise<TagResponseDto[]> {
     const items = await this.tagDomainService.getRelatedTags(slug, query);
-    return { items: items.map((item) => this.toTagResponse(item)) };
+    return items.map((item) => this.toTagResponse(item));
   }
 
   async createTag(payload: CreateTagCommand): Promise<TagResponseDto> {
@@ -129,14 +128,14 @@ export class TagApplicationService {
     };
   }
 
-  async getPopularTags(query: TagRankingQuery): Promise<RankedTagsResponseDto> {
+  async getPopularTags(query: TagRankingQuery): Promise<RankedTagResponseDto[]> {
     const items = await this.tagDomainService.getPopularTags(query);
-    return { items: items.map((item) => RankedTagResponseMapper.toResponse(item)) };
+    return items.map((item) => RankedTagResponseMapper.toResponse(item));
   }
 
-  async getTrendingTags(query: TagRankingQuery): Promise<RankedTagsResponseDto> {
+  async getTrendingTags(query: TagRankingQuery): Promise<RankedTagResponseDto[]> {
     const items = await this.tagDomainService.getTrendingTags(query);
-    return { items: items.map((item) => RankedTagResponseMapper.toResponse(item)) };
+    return items.map((item) => RankedTagResponseMapper.toResponse(item));
   }
 
   async getTagAnalytics(tagId: string): Promise<TagAnalyticsResponseDto> {

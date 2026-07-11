@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { TagController } from './transport/controllers/tag.controller';
 import { UserTagController } from './transport/controllers/user-tag.controller';
+import { TagPresenter } from './transport/presenters/tag.presenter';
 import { TagApplicationService } from './application/tag.application.service';
 import { TagDomainService } from './domain/tag.service';
 import { TagRepository } from './infrastructure/repositories/tag.repository';
@@ -23,6 +24,7 @@ import { QuizApplicationService } from '@/modules/quiz/application/quiz.applicat
     TagRepository,
     TagDomainEventBus,
     TagEventBootstrapService,
+    TagPresenter,
     { provide: TAG_REPOSITORY_PORT, useClass: TagRepository },
     { provide: TAG_DOMAIN_EVENT_BUS, useExisting: TagDomainEventBus },
     { provide: QUIZ_LISTING_PORT, useExisting: QuizApplicationService },

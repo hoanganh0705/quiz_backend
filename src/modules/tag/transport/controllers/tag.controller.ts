@@ -31,6 +31,7 @@ import type {
   ListTagsQuery,
   UpdateTagCommand,
 } from '../../domain/types/tag-commands';
+import { TagPresenter } from '../presenters/tag.presenter';
 import {
   ApiCreateTagResponse,
   ApiDeleteTagResponse,
@@ -51,102 +52,126 @@ import {
 @Controller('tags')
 @UseFilters(TagDomainExceptionFilter)
 export class TagController {
-  constructor(private readonly tagApplicationService: TagApplicationService) {}
+  constructor(
+    private readonly tagApplicationService: TagApplicationService,
+    private readonly presenter: TagPresenter,
+  ) {}
 
   @Get('popular')
   @Public()
   @ApiPopularTagsResponse()
-  getPopularTags(@Query() query: TagRankingQueryDto) {
-    return this.tagApplicationService.getPopularTags({ limit: query.limit });
+  async getPopularTags(@Query() query: TagRankingQueryDto) {
+    const items = await this.tagApplicationService.getPopularTags({ limit: query.limit });
+    return this.presenter.getPopularTags(items);
   }
 
   @Get('trending')
   @Public()
   @ApiTrendingTagsResponse()
-  getTrendingTags(@Query() query: TagRankingQueryDto) {
-    return this.tagApplicationService.getTrendingTags({ limit: query.limit });
+  async getTrendingTags(@Query() query: TagRankingQueryDto) {
+    const items = await this.tagApplicationService.getTrendingTags({ limit: query.limit });
+    return this.presenter.getTrendingTags(items);
   }
 
   @Get(':slug/quizzes')
   @Public()
   @ApiTagQuizzesResponse()
-  getTagQuizzes(@Param('slug') slug: string, @Query() query: ListQuizzesQueryDto) {
-    return this.tagApplicationService.getTagQuizzesBySlug(slug, query);
+  async getTagQuizzes(@Param('slug') slug: string, @Query() query: ListQuizzesQueryDto) {
+    const result = await this.tagApplicationService.getTagQuizzesBySlug(slug, query);
+    return this.presenter.getTagQuizzes(result);
   }
 
   @Get(':slug/related')
   @Public()
   @ApiRelatedTagsResponse()
-  getRelatedTags(@Param('slug') slug: string, @Query() query: RelatedTagsQueryDto) {
-    return this.tagApplicationService.getRelatedTags(slug, { limit: query.limit ?? 10 });
+  async getRelatedTags(@Param('slug') slug: string, @Query() query: RelatedTagsQueryDto) {
+    const items = await this.tagApplicationService.getRelatedTags(slug, {
+      limit: query.limit ?? 10,
+    });
+    return this.presenter.getRelatedTags(items);
   }
 
   @Get(':id/analytics')
   @Public()
   @ApiTagAnalyticsResponse()
-  getTagAnalytics(@Param('id', new ParseUUIDPipe()) tagId: string) {
-    return this.tagApplicationService.getTagAnalytics(tagId);
+  async getTagAnalytics(@Param('id', new ParseUUIDPipe()) tagId: string) {
+    const result = await this.tagApplicationService.getTagAnalytics(tagId);
+    return this.presenter.getTagAnalytics(result);
   }
 
   @Post(':id/follow')
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @ApiFollowTagResponse()
-  followTag(@Param('id', new ParseUUIDPipe()) tagId: string, @CurrentUser() user: JwtPayload) {
-    return this.tagApplicationService.followTag(user.sub, tagId);
+  async followTag(
+    @Param('id', new ParseUUIDPipe()) tagId: string,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    const result = await this.tagApplicationService.followTag(user.sub, tagId);
+    return this.presenter.followTag(result);
   }
 
   @Delete(':id/follow')
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @ApiUnfollowTagResponse()
-  unfollowTag(@Param('id', new ParseUUIDPipe()) tagId: string, @CurrentUser() user: JwtPayload) {
-    return this.tagApplicationService.unfollowTag(user.sub, tagId);
+  async unfollowTag(
+    @Param('id', new ParseUUIDPipe()) tagId: string,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    const result = await this.tagApplicationService.unfollowTag(user.sub, tagId);
+    return this.presenter.unfollowTag(result);
   }
 
   @Post(':id/restore')
   @Permissions(Permission.TAG_MANAGE)
   @ApiRestoreTagResponse()
-  restoreTag(@Param('id', new ParseUUIDPipe()) tagId: string) {
-    return this.tagApplicationService.restoreTag(tagId);
+  async restoreTag(@Param('id', new ParseUUIDPipe()) tagId: string) {
+    const result = await this.tagApplicationService.restoreTag(tagId);
+    return this.presenter.restoreTag(result);
   }
 
   @Get()
   @Public()
   @ApiListTagsResponse()
-  listTags(@Query() query: ListTagsQueryDto) {
+  async listTags(@Query() query: ListTagsQueryDto) {
     const command: ListTagsQuery = {
       limit: query.limit,
       cursor: query.cursor ? TagCursorMapper.parse(query.cursor) : null,
     };
-    return this.tagApplicationService.listTags(command);
+    const result = await this.tagApplicationService.listTags(command);
+    return this.presenter.listTags(result);
   }
 
   @Get(':slug')
   @Public()
   @ApiTagBySlugResponse()
-  getTagBySlug(@Param('slug') slug: string) {
-    return this.tagApplicationService.getTagBySlug(slug);
+  async getTagBySlug(@Param('slug') slug: string) {
+    const result = await this.tagApplicationService.getTagBySlug(slug);
+    return this.presenter.getTagBySlug(result);
   }
 
   @Post()
   @Permissions(Permission.TAG_MANAGE)
   @ApiCreateTagResponse()
-  createTag(@Body() payload: CreateTagDto) {
+  async createTag(@Body() payload: CreateTagDto) {
     const command: CreateTagCommand = { name: payload.name, slug: payload.slug };
-    return this.tagApplicationService.createTag(command);
+    const result = await this.tagApplicationService.createTag(command);
+    return this.presenter.createTag(result);
   }
 
   @Patch(':id')
   @Permissions(Permission.TAG_MANAGE)
   @ApiUpdateTagResponse()
-  updateTag(@Param('id', new ParseUUIDPipe()) tagId: string, @Body() payload: UpdateTagDto) {
+  async updateTag(@Param('id', new ParseUUIDPipe()) tagId: string, @Body() payload: UpdateTagDto) {
     const command: UpdateTagCommand = { name: payload.name, slug: payload.slug };
-    return this.tagApplicationService.updateTag(tagId, command);
+    const result = await this.tagApplicationService.updateTag(tagId, command);
+    return this.presenter.updateTag(result);
   }
 
   @Delete(':id')
   @Permissions(Permission.TAG_MANAGE)
   @ApiDeleteTagResponse()
-  deleteTag(@Param('id', new ParseUUIDPipe()) tagId: string) {
-    return this.tagApplicationService.deleteTag(tagId);
+  async deleteTag(@Param('id', new ParseUUIDPipe()) tagId: string) {
+    const result = await this.tagApplicationService.deleteTag(tagId);
+    return this.presenter.deleteTag(result);
   }
 }

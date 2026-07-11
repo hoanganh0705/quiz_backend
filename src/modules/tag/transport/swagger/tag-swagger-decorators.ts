@@ -3,28 +3,25 @@ import {
   ApiBadRequestResponse,
   ApiBearerAuth,
   ApiConflictResponse,
-  ApiCreatedResponse,
   ApiForbiddenResponse,
   ApiInternalServerErrorResponse,
   ApiNotFoundResponse,
-  ApiOkResponse,
   ApiTooManyRequestsResponse,
   ApiUnauthorizedResponse,
   type ApiResponseOptions,
 } from '@nestjs/swagger';
 import { AUTH_SECURITY_NAME } from '@/core/swagger/swagger.config';
 import { ProblemDetailDto } from '@/common/swagger/swagger-schemas';
-import { WrappedQuizListDto } from '@/modules/quiz/dto/response/quiz-response-docs.dto';
+import { ApiCreatedResource, ApiOkResource, ApiOkResourceList } from '@/common/swagger/api-ok';
+import { FollowedTagItemDto } from '../../dto/response/parity-response.dto';
+import { DeleteTagResponseDto } from '../../dto/response/delete-tag-response.dto';
 import {
-  TagWrappedAnalyticsDto,
-  TagWrappedDeleteMessageDto,
-  TagWrappedFollowMessageDto,
-  TagWrappedFollowedListDto,
-  TagWrappedListDto,
-  TagWrappedRankedListDto,
-  TagWrappedRelatedListDto,
-  TagWrappedTagDto,
-} from '../../dto/response/tag-response-docs.dto';
+  RankedTagResponseDto,
+  TagAnalyticsResponseDto,
+  TagFollowMessageResponseDto,
+} from '../../dto/response/parity-response.dto';
+import { TagResponseDto } from '../../dto/response/tag-response.dto';
+import { QuizListResponseDto } from '@/modules/quiz/dto/response/quiz-list-response.dto';
 import {
   analyticsBadRequestExample,
   analyticsInternalErrorExample,
@@ -78,53 +75,7 @@ import {
   updateTagInternalErrorExample,
   updateTagNotFoundExample,
   updateTagUnauthorizedExample,
-  TAG_ANALYTICS_EXAMPLE,
-  TAG_DELETE_MESSAGE_EXAMPLE,
-  TAG_DETAIL_EXAMPLE,
-  TAG_FOLLOW_MESSAGE_EXAMPLE,
-  TAG_FOLLOWED_LIST_EXAMPLE,
-  TAG_LIST_EXAMPLE,
-  TAG_QUIZZES_EXAMPLE,
-  TAG_RANKED_LIST_EXAMPLE,
-  TAG_RELATED_LIST_EXAMPLE,
-  TAG_UNFOLLOW_MESSAGE_EXAMPLE,
 } from './examples';
-
-// ─── 200/201 success response factory ──────────────────────────────────────────
-//
-// Single helper so every success decorator below stays a one-liner.
-const createDataResponse = (
-  status: 200 | 201,
-  description: string,
-  type: Type<unknown>,
-  example: object,
-): MethodDecorator =>
-  status === 201
-    ? ApiCreatedResponse({ description, type, example })
-    : ApiOkResponse({ description, type, example });
-
-// ─── Shared description strings ─────────────────────────────────────────────────
-//
-// One wording style across every endpoint: imperative third-person verb.
-
-const DESCRIPTIONS = {
-  // 200 — single tag
-  tagBySlug: 'Returns the requested tag.',
-  tagCreate: 'Returns the created tag.',
-  tagUpdate: 'Returns the updated tag.',
-  tagRestore: 'Returns the restored tag.',
-  // 200 — tag lists
-  tagList: 'Returns the requested tags.',
-  tagRanked: 'Returns the ranked tags.',
-  tagRelated: 'Returns the related tags.',
-  tagFollowed: 'Returns the followed tags.',
-  tagAnalytics: 'Returns the tag analytics.',
-  tagQuizzes: 'Returns the quizzes in the tag.',
-  // 200 — action confirmations
-  tagFollow: 'Confirms the tag was followed.',
-  tagUnfollow: 'Confirms the tag was unfollowed.',
-  tagDelete: 'Confirms the tag was deleted.',
-} as const;
 
 // ─── Error response option factory ──────────────────────────────────────────────
 //
@@ -171,19 +122,21 @@ const problem = {
 };
 
 // ─── Per-endpoint composed decorators ──────────────────────────────────────────
-//
-// Each function below documents one Tag endpoint's full response surface:
-// exactly the status codes the runtime can produce, with examples that point
-// at the correct request path. Decorators for authenticated endpoints also
-// declare the JWT bearer security scheme so Swagger UI prompts for a token.
+
+const resourceOk = <T extends Type>(model: T, description: string) =>
+  ApiOkResource(model, { description });
+
+const resourceCreated = <T extends Type>(model: T, description: string) =>
+  ApiCreatedResource(model, { description });
+
+const resourceList = <T extends Type>(model: T, kind: 'cursor' | 'offset', description: string) =>
+  ApiOkResourceList(model, kind, { description });
 
 export const ApiPopularTagsResponse = (): MethodDecorator =>
   applyDecorators(
-    createDataResponse(
-      200,
-      DESCRIPTIONS.tagRanked,
-      TagWrappedRankedListDto,
-      TAG_RANKED_LIST_EXAMPLE,
+    resourceOk<typeof RankedTagResponseDto>(
+      RankedTagResponseDto as unknown as Type,
+      'Returns the ranked tags.',
     ),
     ApiBadRequestResponse(problem.badRequest(popularBadRequestExample)),
     ApiInternalServerErrorResponse(problem.internalError(popularInternalErrorExample)),
@@ -191,11 +144,9 @@ export const ApiPopularTagsResponse = (): MethodDecorator =>
 
 export const ApiTrendingTagsResponse = (): MethodDecorator =>
   applyDecorators(
-    createDataResponse(
-      200,
-      DESCRIPTIONS.tagRanked,
-      TagWrappedRankedListDto,
-      TAG_RANKED_LIST_EXAMPLE,
+    resourceOk<typeof RankedTagResponseDto>(
+      RankedTagResponseDto as unknown as Type,
+      'Returns the ranked tags.',
     ),
     ApiBadRequestResponse(problem.badRequest(trendingBadRequestExample)),
     ApiInternalServerErrorResponse(problem.internalError(trendingInternalErrorExample)),
@@ -203,18 +154,20 @@ export const ApiTrendingTagsResponse = (): MethodDecorator =>
 
 export const ApiTagQuizzesResponse = (): MethodDecorator =>
   applyDecorators(
-    createDataResponse(200, DESCRIPTIONS.tagQuizzes, WrappedQuizListDto, TAG_QUIZZES_EXAMPLE),
+    resourceList<typeof QuizListResponseDto>(
+      QuizListResponseDto as unknown as Type,
+      'cursor',
+      'Returns the quizzes in the tag.',
+    ),
     ApiNotFoundResponse(problem.notFound(tagQuizzesNotFoundExample)),
     ApiInternalServerErrorResponse(problem.internalError(tagQuizzesInternalErrorExample)),
   );
 
 export const ApiRelatedTagsResponse = (): MethodDecorator =>
   applyDecorators(
-    createDataResponse(
-      200,
-      DESCRIPTIONS.tagRelated,
-      TagWrappedRelatedListDto,
-      TAG_RELATED_LIST_EXAMPLE,
+    resourceOk<typeof TagResponseDto>(
+      TagResponseDto as unknown as Type,
+      'Returns the related tags.',
     ),
     ApiBadRequestResponse(problem.badRequest(relatedBadRequestExample)),
     ApiNotFoundResponse(problem.notFound(relatedNotFoundExample)),
@@ -223,11 +176,9 @@ export const ApiRelatedTagsResponse = (): MethodDecorator =>
 
 export const ApiTagAnalyticsResponse = (): MethodDecorator =>
   applyDecorators(
-    createDataResponse(
-      200,
-      DESCRIPTIONS.tagAnalytics,
-      TagWrappedAnalyticsDto,
-      TAG_ANALYTICS_EXAMPLE,
+    resourceOk<typeof TagAnalyticsResponseDto>(
+      TagAnalyticsResponseDto as unknown as Type,
+      'Returns the tag analytics.',
     ),
     ApiBadRequestResponse(problem.badRequest(analyticsBadRequestExample)),
     ApiNotFoundResponse(problem.notFound(analyticsNotFoundExample)),
@@ -237,11 +188,9 @@ export const ApiTagAnalyticsResponse = (): MethodDecorator =>
 export const ApiFollowTagResponse = (): MethodDecorator =>
   applyDecorators(
     ApiBearerAuth(AUTH_SECURITY_NAME),
-    createDataResponse(
-      200,
-      DESCRIPTIONS.tagFollow,
-      TagWrappedFollowMessageDto,
-      TAG_FOLLOW_MESSAGE_EXAMPLE,
+    resourceOk<typeof TagFollowMessageResponseDto>(
+      TagFollowMessageResponseDto as unknown as Type,
+      'Confirms the tag was followed.',
     ),
     ApiBadRequestResponse(problem.badRequest(followBadRequestExample)),
     ApiUnauthorizedResponse(problem.unauthorized(followUnauthorizedExample)),
@@ -254,11 +203,9 @@ export const ApiFollowTagResponse = (): MethodDecorator =>
 export const ApiUnfollowTagResponse = (): MethodDecorator =>
   applyDecorators(
     ApiBearerAuth(AUTH_SECURITY_NAME),
-    createDataResponse(
-      200,
-      DESCRIPTIONS.tagUnfollow,
-      TagWrappedFollowMessageDto,
-      TAG_UNFOLLOW_MESSAGE_EXAMPLE,
+    resourceOk<typeof TagFollowMessageResponseDto>(
+      TagFollowMessageResponseDto as unknown as Type,
+      'Confirms the tag was unfollowed.',
     ),
     ApiBadRequestResponse(problem.badRequest(unfollowBadRequestExample)),
     ApiUnauthorizedResponse(problem.unauthorized(unfollowUnauthorizedExample)),
@@ -271,7 +218,10 @@ export const ApiUnfollowTagResponse = (): MethodDecorator =>
 export const ApiRestoreTagResponse = (): MethodDecorator =>
   applyDecorators(
     ApiBearerAuth(AUTH_SECURITY_NAME),
-    createDataResponse(200, DESCRIPTIONS.tagRestore, TagWrappedTagDto, TAG_DETAIL_EXAMPLE),
+    resourceOk<typeof TagResponseDto>(
+      TagResponseDto as unknown as Type,
+      'Returns the restored tag.',
+    ),
     ApiUnauthorizedResponse(problem.unauthorized(restoreUnauthorizedExample)),
     ApiForbiddenResponse(problem.forbidden(restoreForbiddenExample)),
     ApiNotFoundResponse(problem.notFound(restoreNotFoundExample)),
@@ -281,14 +231,21 @@ export const ApiRestoreTagResponse = (): MethodDecorator =>
 
 export const ApiListTagsResponse = (): MethodDecorator =>
   applyDecorators(
-    createDataResponse(200, DESCRIPTIONS.tagList, TagWrappedListDto, TAG_LIST_EXAMPLE),
+    resourceList<typeof TagResponseDto>(
+      TagResponseDto as unknown as Type,
+      'cursor',
+      'Returns the requested tags.',
+    ),
     ApiBadRequestResponse(problem.badRequest(listTagsBadRequestExample)),
     ApiInternalServerErrorResponse(problem.internalError(listTagsInternalErrorExample)),
   );
 
 export const ApiTagBySlugResponse = (): MethodDecorator =>
   applyDecorators(
-    createDataResponse(200, DESCRIPTIONS.tagBySlug, TagWrappedTagDto, TAG_DETAIL_EXAMPLE),
+    resourceOk<typeof TagResponseDto>(
+      TagResponseDto as unknown as Type,
+      'Returns the requested tag.',
+    ),
     ApiNotFoundResponse(problem.notFound(tagBySlugNotFoundExample)),
     ApiInternalServerErrorResponse(problem.internalError(tagBySlugInternalErrorExample)),
   );
@@ -296,7 +253,10 @@ export const ApiTagBySlugResponse = (): MethodDecorator =>
 export const ApiCreateTagResponse = (): MethodDecorator =>
   applyDecorators(
     ApiBearerAuth(AUTH_SECURITY_NAME),
-    createDataResponse(201, DESCRIPTIONS.tagCreate, TagWrappedTagDto, TAG_DETAIL_EXAMPLE),
+    resourceCreated<typeof TagResponseDto>(
+      TagResponseDto as unknown as Type,
+      'Returns the created tag.',
+    ),
     ApiBadRequestResponse(problem.badRequest(createTagBadRequestExample)),
     ApiUnauthorizedResponse(problem.unauthorized(createTagUnauthorizedExample)),
     ApiForbiddenResponse(problem.forbidden(createTagForbiddenExample)),
@@ -307,7 +267,10 @@ export const ApiCreateTagResponse = (): MethodDecorator =>
 export const ApiUpdateTagResponse = (): MethodDecorator =>
   applyDecorators(
     ApiBearerAuth(AUTH_SECURITY_NAME),
-    createDataResponse(200, DESCRIPTIONS.tagUpdate, TagWrappedTagDto, TAG_DETAIL_EXAMPLE),
+    resourceOk<typeof TagResponseDto>(
+      TagResponseDto as unknown as Type,
+      'Returns the updated tag.',
+    ),
     ApiBadRequestResponse(problem.badRequest(updateTagBadRequestExample)),
     ApiUnauthorizedResponse(problem.unauthorized(updateTagUnauthorizedExample)),
     ApiForbiddenResponse(problem.forbidden(updateTagForbiddenExample)),
@@ -319,11 +282,9 @@ export const ApiUpdateTagResponse = (): MethodDecorator =>
 export const ApiDeleteTagResponse = (): MethodDecorator =>
   applyDecorators(
     ApiBearerAuth(AUTH_SECURITY_NAME),
-    createDataResponse(
-      200,
-      DESCRIPTIONS.tagDelete,
-      TagWrappedDeleteMessageDto,
-      TAG_DELETE_MESSAGE_EXAMPLE,
+    resourceOk<typeof DeleteTagResponseDto>(
+      DeleteTagResponseDto as unknown as Type,
+      'Confirms the tag was deleted.',
     ),
     ApiUnauthorizedResponse(problem.unauthorized(deleteTagUnauthorizedExample)),
     ApiForbiddenResponse(problem.forbidden(deleteTagForbiddenExample)),
@@ -334,11 +295,10 @@ export const ApiDeleteTagResponse = (): MethodDecorator =>
 export const ApiFollowedTagsResponse = (): MethodDecorator =>
   applyDecorators(
     ApiBearerAuth(AUTH_SECURITY_NAME),
-    createDataResponse(
-      200,
-      DESCRIPTIONS.tagFollowed,
-      TagWrappedFollowedListDto,
-      TAG_FOLLOWED_LIST_EXAMPLE,
+    resourceList<typeof FollowedTagItemDto>(
+      FollowedTagItemDto as unknown as Type,
+      'cursor',
+      'Returns the followed tags.',
     ),
     ApiBadRequestResponse(problem.badRequest(followedTagsBadRequestExample)),
     ApiUnauthorizedResponse(problem.unauthorized(followedTagsUnauthorizedExample)),

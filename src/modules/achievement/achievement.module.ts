@@ -30,6 +30,7 @@ import { ProgressTrackingService } from './application/progress-tracking.service
 
 import { AchievementController } from './transport/controller/achievement.controller';
 import { AchievementAdminController } from './transport/controller/achievement-admin.controller';
+import { AchievementPresenter } from './transport/presenters/achievement.presenter';
 import { AchievementDomainExceptionFilter } from './transport/filters/achievement-domain-exception.filter';
 
 import { UserModule } from '@/modules/user/user.module';
@@ -89,6 +90,7 @@ import { BadgeAnalyticsService } from './application';
     AchievementHistoryService,
     BadgeAnalyticsService,
     AchievementOutboxProcessorService,
+    AchievementPresenter,
 
     AchievementDomainExceptionFilter,
   ],
