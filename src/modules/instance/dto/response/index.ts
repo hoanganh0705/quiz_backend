@@ -4,4 +4,4 @@ export * from './instance-leaderboard-response.dto';
 export * from './instance-list-response.dto';
 export * from './instance-player-response.dto';
 export * from './instance-players-response.dto';
-export * from './instance-response-docs.dto';
+export * from './instance-domain-error.dto';
