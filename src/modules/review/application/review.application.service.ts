@@ -2,6 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
 import type { QuizAnalyticsResponseDto } from '@/modules/quiz/dto/response/quiz-analytics.dto';
 import { ReviewService } from '../domain/review.service';
+import { ReviewAdminService, type PlatformReportItem } from '../domain/review-admin.service';
 import { IdempotencyService, IDEMPOTENCY_SERVICE } from '../domain/idempotency.service';
 import { ReviewResponseMapper } from '../mappers/review-response.mapper';
 import { CursorMapper } from '../mappers/review-cursor.mapper';
@@ -23,6 +24,8 @@ import {
   HelpfulReviewResponseDto,
   ReportReviewResponseDto,
   ReportedReviewsResponseDto,
+  PlatformReportsResponseDto,
+  PlatformReportItemDto,
 } from '../dto/response';
 
 @Injectable()
@@ -32,6 +35,7 @@ export class ReviewApplicationService {
     @Inject(IDEMPOTENCY_SERVICE)
     private readonly idempotencyService: IdempotencyService,
     private readonly reviewResponseMapper: ReviewResponseMapper,
+    private readonly reviewAdminService: ReviewAdminService,
   ) {}
 
   async createReview(
@@ -265,5 +269,50 @@ export class ReviewApplicationService {
     await this.reviewService.deleteReview(quizId, user);
 
     return { message: 'Review deleted successfully' };
+  }
+
+  async listPlatformReports(params: {
+    limit: number;
+    cursor?: { createdAt: string; reportId: string } | null;
+    status?: 'open' | 'reviewed' | 'dismissed' | 'actioned' | null;
+  }): Promise<PlatformReportsResponseDto> {
+    const { items, limit, hasNextPage, nextCursor } =
+      await this.reviewAdminService.listPlatformReports(params);
+
+    return {
+      items: items.map((row: PlatformReportItem) => this.toPlatformReportItem(row)),
+      pagination: {
+        limit,
+        hasNextPage,
+        nextCursor: nextCursor ? CursorMapper.serializeReport(nextCursor) : null,
+      },
+    };
+  }
+
+  async updateReportStatus(
+    reportId: string,
+    status: 'reviewed' | 'dismissed' | 'actioned',
+    actor: JwtPayload,
+  ): Promise<{ message: string }> {
+    await this.reviewAdminService.updateReportStatus(reportId, status, actor.sub);
+    return { message: 'Report status updated successfully' };
+  }
+
+  private toPlatformReportItem(row: PlatformReportItem): PlatformReportItemDto {
+    return {
+      reportId: row.reportId,
+      reviewId: row.reviewId,
+      quizId: row.quizId,
+      quizTitle: row.quizTitle,
+      reviewerUsername: row.reviewerUsername,
+      reportedUserId: row.reportedUserId,
+      rating: row.rating,
+      content: row.content,
+      reason: row.reason,
+      details: row.details,
+      status: row.status,
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+    };
   }
 }

@@ -13,7 +13,6 @@ import {
   ApiTags,
   ApiBearerAuth,
   ApiOperation,
-  ApiOkResponse,
   ApiUnauthorizedResponse,
   ApiForbiddenResponse,
   ApiBadRequestResponse,
@@ -23,7 +22,7 @@ import { Permissions } from '@/common/authorization/decorators/permissions.decor
 import { Permission } from '@/common/authorization/permissions';
 import { AUTH_SECURITY_NAME } from '@/core/swagger/swagger.config';
 import { ProblemDetailDto, ErrorResponseExamples } from '@/common/swagger/swagger-schemas';
-import { ReviewAdminService } from '@/modules/review/domain/review-admin.service';
+import { ReviewApplicationService } from '@/modules/review/application/review.application.service';
 import { CursorMapper } from '@/modules/review/mappers/review-cursor.mapper';
 import { ListPlatformReportsQueryDto, UpdateReportStatusDto } from '@/modules/review/dto/request';
 import {
@@ -32,10 +31,8 @@ import {
 } from '@/modules/review/dto/response';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
-import {
-  WrappedPlatformReportsListDto,
-  WrappedUpdateReportMessageDto,
-} from '@/modules/review/dto/response/review-response-docs.dto';
+import { ApiOkResource, ApiOkResourceList } from '@/common/swagger/api-ok';
+import { ReviewPresenter } from '../presenters/review.presenter';
 
 // Admin review endpoints never throw ReviewDomainError (the admin service
 // has no domain error classes; missing reports or invalid transitions result
@@ -51,7 +48,10 @@ import {
 @Controller('admin/reviews')
 @ApiBearerAuth(AUTH_SECURITY_NAME)
 export class AdminReviewController {
-  constructor(private readonly reviewAdminService: ReviewAdminService) {}
+  constructor(
+    private readonly reviewApplicationService: ReviewApplicationService,
+    private readonly presenter: ReviewPresenter,
+  ) {}
 
   @Get('reports')
   @Permissions(Permission.REVIEW_MODERATE)
@@ -62,9 +62,8 @@ export class AdminReviewController {
       'Returns a paginated list of all review reports across the platform. ' +
       'Only accessible by admin users.',
   })
-  @ApiOkResponse({
+  @ApiOkResourceList(PlatformReportsResponseDto, 'cursor', {
     description: 'Paginated list of platform-wide reports',
-    type: WrappedPlatformReportsListDto,
   })
   @ApiUnauthorizedResponse({
     description: 'Missing or invalid authentication token',
@@ -86,40 +85,14 @@ export class AdminReviewController {
     type: ProblemDetailDto,
     example: ErrorResponseExamples.internalServerError,
   })
-  async listPlatformReports(
-    @Query() query: ListPlatformReportsQueryDto,
-  ): Promise<PlatformReportsResponseDto> {
+  async listPlatformReports(@Query() query: ListPlatformReportsQueryDto) {
     const cursor = query.cursor ? CursorMapper.parseReport(query.cursor) : null;
-
-    const { items, limit, hasNextPage, nextCursor } =
-      await this.reviewAdminService.listPlatformReports({
-        limit: query.limit ?? 20,
-        cursor,
-        status: query.status ?? null,
-      });
-
-    return {
-      items: items.map((row) => ({
-        reportId: row.reportId,
-        reviewId: row.reviewId,
-        quizId: row.quizId,
-        quizTitle: row.quizTitle,
-        reviewerUsername: row.reviewerUsername,
-        reportedUserId: row.reportedUserId,
-        rating: row.rating,
-        content: row.content,
-        reason: row.reason,
-        details: row.details,
-        status: row.status,
-        createdAt: row.createdAt,
-        updatedAt: row.updatedAt,
-      })),
-      pagination: {
-        limit,
-        hasNextPage,
-        nextCursor: nextCursor ? CursorMapper.serializeReport(nextCursor) : null,
-      },
-    };
+    const result = await this.reviewApplicationService.listPlatformReports({
+      limit: query.limit ?? 20,
+      cursor,
+      status: query.status ?? null,
+    });
+    return this.presenter.listPlatformReports(result);
   }
 
   @Patch('reports/:reportId')
@@ -132,9 +105,8 @@ export class AdminReviewController {
       'Only accessible by admin users. ' +
       'If the report does not exist the update is a no-op.',
   })
-  @ApiOkResponse({
+  @ApiOkResource(UpdateReportStatusResponseDto, {
     description: 'Report status updated successfully',
-    type: WrappedUpdateReportMessageDto,
   })
   @ApiUnauthorizedResponse({
     description: 'Missing or invalid authentication token',
@@ -160,8 +132,12 @@ export class AdminReviewController {
     @Param('reportId', new ParseUUIDPipe()) reportId: string,
     @Body() body: UpdateReportStatusDto,
     @CurrentUser() actor: JwtPayload,
-  ): Promise<UpdateReportStatusResponseDto> {
-    await this.reviewAdminService.updateReportStatus(reportId, body.status, actor.sub);
-    return { message: 'Report status updated successfully' };
+  ) {
+    const result = await this.reviewApplicationService.updateReportStatus(
+      reportId,
+      body.status,
+      actor,
+    );
+    return this.presenter.updateReportStatus(result);
   }
 }
