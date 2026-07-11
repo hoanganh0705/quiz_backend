@@ -89,6 +89,37 @@ import {
   UserProfilePrivateError,
   UserRankingNotFoundError,
 } from '@/modules/user/domain/errors';
+import {
+  CategoryAlreadyActiveError,
+  CategoryAnalyticsNotFoundError,
+  CategoryNotFoundError,
+  CategoryRestoreInvariantError,
+  CategorySlugConflictError,
+} from '@/modules/category/domain/errors';
+import {
+  TagAlreadyActiveError,
+  TagAnalyticsNotFoundError,
+  TagNotFoundError,
+  TagRestoreInvariantError,
+  TagSlugConflictError,
+} from '@/modules/tag/domain/errors';
+import {
+  TournamentAlreadyRegisteredError,
+  TournamentAlreadyWithdrawnError,
+  TournamentAttemptAlreadyExistsError,
+  TournamentConflictError,
+  TournamentForbiddenError,
+  TournamentFullError,
+  TournamentNotFoundError,
+  TournamentNotRegisteredError,
+  TournamentParticipantStateError,
+  TournamentRegistrationClosedError,
+  TournamentRoundNotFoundError,
+  TournamentRoundNotOpenError,
+  TournamentUnregisterClosedError,
+  TournamentValidationError,
+  TournamentWithdrawClosedError,
+} from '@/modules/tournament/domain/errors';
 import { serverConfig } from '@/core/config';
 
 interface ProblemWire {
@@ -347,6 +378,156 @@ class Rfc7807FixtureController {
   @Get('user/profile-private')
   userProfilePrivate(): never {
     throw new UserProfilePrivateError('user-abc');
+  }
+
+  // Category-module endpoints — Phase 2 live-mapping coverage (first Phase 2
+  // module migrated). The category module previously emitted the legacy
+  // `{ statusCode, message, error }` envelope; after Phase 2 it emits the
+  // canonical ProblemDetail shape. Each endpoint throws a real category
+  // exception; if `ProblemCodeMapping` or the category classes drift, the
+  // e2e tests in the category describe-block below fail.
+
+  @Get('category/not-found')
+  categoryNotFound(): never {
+    throw new CategoryNotFoundError();
+  }
+
+  @Get('category/analytics-not-found')
+  categoryAnalyticsNotFound(): never {
+    throw new CategoryAnalyticsNotFoundError();
+  }
+
+  @Get('category/slug-conflict')
+  categorySlugConflict(): never {
+    throw new CategorySlugConflictError();
+  }
+
+  @Get('category/already-active')
+  categoryAlreadyActive(): never {
+    throw new CategoryAlreadyActiveError();
+  }
+
+  @Get('category/restore-invariant')
+  categoryRestoreInvariant(): never {
+    throw new CategoryRestoreInvariantError();
+  }
+
+  // Tag-module endpoints — Phase 2 live-mapping coverage. Structurally
+  // identical to category (same 5-class shape, same 404/404/409/409/500
+  // status mapping). Each endpoint throws a real tag exception; if
+  // `ProblemCodeMapping` or the tag classes drift, the e2e tests in the
+  // tag describe-block below fail.
+
+  @Get('tag/not-found')
+  tagNotFound(): never {
+    throw new TagNotFoundError();
+  }
+
+  @Get('tag/analytics-not-found')
+  tagAnalyticsNotFound(): never {
+    throw new TagAnalyticsNotFoundError();
+  }
+
+  @Get('tag/slug-conflict')
+  tagSlugConflict(): never {
+    throw new TagSlugConflictError();
+  }
+
+  @Get('tag/already-active')
+  tagAlreadyActive(): never {
+    throw new TagAlreadyActiveError();
+  }
+
+  @Get('tag/restore-invariant')
+  tagRestoreInvariant(): never {
+    throw new TagRestoreInvariantError();
+  }
+
+  // Tournament-module endpoints — Phase 2 live-mapping coverage. Largest
+  // Phase-2 module by class count (15 exceptions). Each endpoint throws
+  // a real tournament exception; if `ProblemCodeMapping` or the
+  // tournament classes drift, the e2e tests in the tournament
+  // describe-block below fail.
+
+  @Get('tournament/not-found')
+  tournamentNotFound(): never {
+    throw new TournamentNotFoundError();
+  }
+
+  @Get('tournament/round-not-found')
+  tournamentRoundNotFound(): never {
+    throw new TournamentRoundNotFoundError();
+  }
+
+  @Get('tournament/not-registered')
+  tournamentNotRegistered(): never {
+    throw new TournamentNotRegisteredError();
+  }
+
+  @Get('tournament/forbidden')
+  tournamentForbidden(): never {
+    throw new TournamentForbiddenError();
+  }
+
+  @Get('tournament/conflict')
+  tournamentConflict(): never {
+    throw new TournamentConflictError();
+  }
+
+  @Get('tournament/already-registered')
+  tournamentAlreadyRegistered(): never {
+    throw new TournamentAlreadyRegisteredError();
+  }
+
+  @Get('tournament/attempt-already-exists')
+  tournamentAttemptAlreadyExists(): never {
+    throw new TournamentAttemptAlreadyExistsError();
+  }
+
+  @Get('tournament/participant-state')
+  tournamentParticipantState(): never {
+    throw new TournamentParticipantStateError(
+      'Participant is in unexpected state "withdrawn" for this operation',
+    );
+  }
+
+  @Get('tournament/already-withdrawn')
+  tournamentAlreadyWithdrawn(): never {
+    // Wire-shape fix (not a regression): the prior per-module filter
+    // did NOT include this exception in `mapToHttp`, so it fell
+    // through to the default `INTERNAL_SERVER_ERROR` with a generic
+    // `'Internal server error'` message. Phase 2 routes it to 409.
+    throw new TournamentAlreadyWithdrawnError();
+  }
+
+  @Get('tournament/validation')
+  tournamentValidation(): never {
+    throw new TournamentValidationError();
+  }
+
+  @Get('tournament/registration-closed')
+  tournamentRegistrationClosed(): never {
+    throw new TournamentRegistrationClosedError();
+  }
+
+  @Get('tournament/full')
+  tournamentFull(): never {
+    throw new TournamentFullError();
+  }
+
+  @Get('tournament/round-not-open')
+  tournamentRoundNotOpen(): never {
+    throw new TournamentRoundNotOpenError();
+  }
+
+  @Get('tournament/unregister-closed')
+  tournamentUnregisterClosed(): never {
+    throw new TournamentUnregisterClosedError();
+  }
+
+  @Get('tournament/withdraw-closed')
+  tournamentWithdrawClosed(): never {
+    throw new TournamentWithdrawClosedError();
   }
 
   @Get('http-not-found')
@@ -1017,6 +1198,293 @@ describe('RFC 7807 ProblemDetail (Phase 0 backstop)', () => {
       // `UserProfilePrivateError` builds its message from the
       // `targetUserId` arg: `Profile of user <id> is not public`.
       expect(body.detail).toBe('Profile of user user-abc is not public');
+    });
+  });
+
+  describe('Category-module exceptions (Phase 2 — first legacy → RFC 7807 conversion)', () => {
+    // Phase 1 covered modules that already emitted RFC 7807 (just gained
+    // `extensions.code`). Phase 2 covers modules that *previously* emitted
+    // the legacy `{ statusCode, message, error }` envelope. The category
+    // module is the first Phase-2 module migrated.
+    //
+    // These tests pin the full wire shape (status, title, typeUri,
+    // extensions.code) for each migrated category exception. The previous
+    // envelope shape (`{ statusCode: 404, message: 'Category not found',
+    // error: 'Not Found' }`) is gone entirely — clients reading
+    // `err.response.data.statusCode` will break; clients reading
+    // `err.response.data.status` (or `extensions.code`) continue to work
+    // with a richer payload. The `LEGACY_COMPAT` shim is deferred to a
+    // separate PR per plan §8.3.
+    //
+    // Same shape as the Phase-1 module tests, but every wire field listed
+    // below is NEW (no envelope continuity with the prior per-module
+    // filter).
+
+    it('CategoryNotFoundError → 404 CATEGORY_NOT_FOUND', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/rfc7807-fixture/category/not-found')
+        .expect(404);
+      const body = res.body as ProblemWire;
+      expect(body.type).toBe('https://api.quiz.local/problems/category-not-found');
+      expect(body.title).toBe('NotFound');
+      expect(body.detail).toBe('Category not found');
+      expect(body.extensions?.code).toBe('CATEGORY_NOT_FOUND');
+    });
+
+    it('CategoryAnalyticsNotFoundError → 404 CATEGORY_ANALYTICS_NOT_FOUND', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/rfc7807-fixture/category/analytics-not-found')
+        .expect(404);
+      const body = res.body as ProblemWire;
+      expect(body.title).toBe('NotFound');
+      expect(body.extensions?.code).toBe('CATEGORY_ANALYTICS_NOT_FOUND');
+    });
+
+    it('CategorySlugConflictError → 409 CATEGORY_SLUG_CONFLICT', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/rfc7807-fixture/category/slug-conflict')
+        .expect(409);
+      const body = res.body as ProblemWire;
+      expect(body.title).toBe('Conflict');
+      expect(body.extensions?.code).toBe('CATEGORY_SLUG_CONFLICT');
+    });
+
+    it('CategoryAlreadyActiveError → 409 CATEGORY_ALREADY_ACTIVE', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/rfc7807-fixture/category/already-active')
+        .expect(409);
+      const body = res.body as ProblemWire;
+      expect(body.title).toBe('Conflict');
+      expect(body.extensions?.code).toBe('CATEGORY_ALREADY_ACTIVE');
+    });
+
+    it('CategoryRestoreInvariantError → 500 CATEGORY_RESTORE_INVARIANT (wire-shape improvement)', async () => {
+      // Wire-shape improvement: the prior per-module filter returned
+      // `{ statusCode: 500, message: 'Internal server error', error: 'Internal Server Error' }`.
+      // The global filter now surfaces the concrete message:
+      // `'Category restore invariant violated'`. The status code is
+      // unchanged (500). Clients switching on `extensions.code` get a
+      // precise classification that was previously absent.
+      const res = await request(app.getHttpServer())
+        .get('/rfc7807-fixture/category/restore-invariant')
+        .expect(500);
+      const body = res.body as ProblemWire;
+      expect(body.type).toBe('https://api.quiz.local/problems/category-restore-invariant');
+      expect(body.title).toBe('InternalServerError');
+      expect(body.detail).toBe('Category restore invariant violated');
+      expect(body.extensions?.code).toBe('CATEGORY_RESTORE_INVARIANT');
+    });
+  });
+
+  describe('Tag-module exceptions (Phase 2 — second legacy → RFC 7807 conversion)', () => {
+    // Structurally identical to the category describe-block above. The
+    // same wire-shape-change caveats apply (envelope replacement,
+    // `LEGACY_COMPAT` shim deferred). Kept as a separate describe block
+    // so failure signals from the two modules don't interleave.
+
+    it('TagNotFoundError → 404 TAG_NOT_FOUND', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/rfc7807-fixture/tag/not-found')
+        .expect(404);
+      const body = res.body as ProblemWire;
+      expect(body.type).toBe('https://api.quiz.local/problems/tag-not-found');
+      expect(body.title).toBe('NotFound');
+      expect(body.detail).toBe('Tag not found');
+      expect(body.extensions?.code).toBe('TAG_NOT_FOUND');
+    });
+
+    it('TagAnalyticsNotFoundError → 404 TAG_ANALYTICS_NOT_FOUND', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/rfc7807-fixture/tag/analytics-not-found')
+        .expect(404);
+      const body = res.body as ProblemWire;
+      expect(body.title).toBe('NotFound');
+      expect(body.extensions?.code).toBe('TAG_ANALYTICS_NOT_FOUND');
+    });
+
+    it('TagSlugConflictError → 409 TAG_SLUG_CONFLICT', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/rfc7807-fixture/tag/slug-conflict')
+        .expect(409);
+      const body = res.body as ProblemWire;
+      expect(body.title).toBe('Conflict');
+      expect(body.extensions?.code).toBe('TAG_SLUG_CONFLICT');
+    });
+
+    it('TagAlreadyActiveError → 409 TAG_ALREADY_ACTIVE', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/rfc7807-fixture/tag/already-active')
+        .expect(409);
+      const body = res.body as ProblemWire;
+      expect(body.title).toBe('Conflict');
+      expect(body.extensions?.code).toBe('TAG_ALREADY_ACTIVE');
+    });
+
+    it('TagRestoreInvariantError → 500 TAG_RESTORE_INVARIANT (wire-shape improvement)', async () => {
+      // Wire-shape improvement: the prior per-module filter returned
+      // `{ statusCode: 500, message: 'Internal server error', error: 'Internal Server Error' }`.
+      // The global filter now surfaces the concrete message:
+      // `'Tag restore invariant violated'`. Status code unchanged (500).
+      const res = await request(app.getHttpServer())
+        .get('/rfc7807-fixture/tag/restore-invariant')
+        .expect(500);
+      const body = res.body as ProblemWire;
+      expect(body.type).toBe('https://api.quiz.local/problems/tag-restore-invariant');
+      expect(body.title).toBe('InternalServerError');
+      expect(body.detail).toBe('Tag restore invariant violated');
+      expect(body.extensions?.code).toBe('TAG_RESTORE_INVARIANT');
+    });
+  });
+
+  describe('Tournament-module exceptions (Phase 2 — third legacy → RFC 7807 conversion)', () => {
+    // Largest Phase-2 module by class count. 15 exceptions → 4 status
+    // codes (400/403/404/409). One of the 15
+    // (TournamentAlreadyWithdrawnError) was previously mapped to 500
+    // via the filter's default branch — Phase 2 fixes that to 409.
+    //
+    // The first module in Phase 2 with an existing `*DomainErrorDto`
+    // Swagger DTO to delete (per §8.3 completion criteria).
+    //
+    // The per-module `tournamentForbiddenResponse` helper documents
+    // 403s using the RFC 7807 ProblemDetailDto type — verified by the
+    // `TOURNAMENT_FORBIDDEN` assertion below. The `oneOf` references
+    // (4 inline + 1 in `tournamentForbiddenResponse`) are all
+    // simplified to `ProblemDetailDto` alone.
+
+    it('TournamentNotFoundError → 404 TOURNAMENT_NOT_FOUND', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/rfc7807-fixture/tournament/not-found')
+        .expect(404);
+      const body = res.body as ProblemWire;
+      expect(body.title).toBe('NotFound');
+      expect(body.extensions?.code).toBe('TOURNAMENT_NOT_FOUND');
+    });
+
+    it('TournamentRoundNotFoundError → 404 TOURNAMENT_ROUND_NOT_FOUND', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/rfc7807-fixture/tournament/round-not-found')
+        .expect(404);
+      const body = res.body as ProblemWire;
+      expect(body.extensions?.code).toBe('TOURNAMENT_ROUND_NOT_FOUND');
+    });
+
+    it('TournamentNotRegisteredError → 404 TOURNAMENT_NOT_REGISTERED', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/rfc7807-fixture/tournament/not-registered')
+        .expect(404);
+      const body = res.body as ProblemWire;
+      expect(body.extensions?.code).toBe('TOURNAMENT_NOT_REGISTERED');
+    });
+
+    it('TournamentForbiddenError → 403 TOURNAMENT_FORBIDDEN (wire-shape improvement)', async () => {
+      // Wire-shape improvement: the prior per-module filter rewrote
+      // every `TournamentForbiddenError.message` to the generic
+      // `'You do not have permission to perform this action'`, ignoring
+      // the thrown message. The global filter now preserves
+      // `exception.message`, so the thrown
+      // `'You do not have permission to manage this tournament'`
+      // surfaces on the wire.
+      const res = await request(app.getHttpServer())
+        .get('/rfc7807-fixture/tournament/forbidden')
+        .expect(403);
+      const body = res.body as ProblemWire;
+      expect(body.title).toBe('Forbidden');
+      expect(body.detail).toBe('You do not have permission to manage this tournament');
+      expect(body.extensions?.code).toBe('TOURNAMENT_FORBIDDEN');
+    });
+
+    it('TournamentConflictError → 409 TOURNAMENT_CONFLICT', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/rfc7807-fixture/tournament/conflict')
+        .expect(409);
+      const body = res.body as ProblemWire;
+      expect(body.extensions?.code).toBe('TOURNAMENT_CONFLICT');
+    });
+
+    it('TournamentAlreadyRegisteredError → 409 TOURNAMENT_ALREADY_REGISTERED', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/rfc7807-fixture/tournament/already-registered')
+        .expect(409);
+      const body = res.body as ProblemWire;
+      expect(body.extensions?.code).toBe('TOURNAMENT_ALREADY_REGISTERED');
+    });
+
+    it('TournamentAttemptAlreadyExistsError → 409 TOURNAMENT_ATTEMPT_ALREADY_EXISTS', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/rfc7807-fixture/tournament/attempt-already-exists')
+        .expect(409);
+      const body = res.body as ProblemWire;
+      expect(body.extensions?.code).toBe('TOURNAMENT_ATTEMPT_ALREADY_EXISTS');
+    });
+
+    it('TournamentParticipantStateError → 409 TOURNAMENT_PARTICIPANT_STATE', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/rfc7807-fixture/tournament/participant-state')
+        .expect(409);
+      const body = res.body as ProblemWire;
+      expect(body.detail).toBe('Participant is in unexpected state "withdrawn" for this operation');
+      expect(body.extensions?.code).toBe('TOURNAMENT_PARTICIPANT_STATE');
+    });
+
+    it('TournamentAlreadyWithdrawnError → 409 TOURNAMENT_ALREADY_WITHDRAWN (was 500 in the prior filter)', async () => {
+      // Wire-shape fix: prior filter fell through to 500 default for
+      // this exception class. Phase 2 routes it to 409 (semantic
+      // state conflict).
+      const res = await request(app.getHttpServer())
+        .get('/rfc7807-fixture/tournament/already-withdrawn')
+        .expect(409);
+      const body = res.body as ProblemWire;
+      expect(body.title).toBe('Conflict');
+      expect(body.extensions?.code).toBe('TOURNAMENT_ALREADY_WITHDRAWN');
+    });
+
+    it('TournamentValidationError → 400 TOURNAMENT_VALIDATION', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/rfc7807-fixture/tournament/validation')
+        .expect(400);
+      const body = res.body as ProblemWire;
+      expect(body.title).toBe('BadRequest');
+      expect(body.extensions?.code).toBe('TOURNAMENT_VALIDATION');
+    });
+
+    it('TournamentRegistrationClosedError → 400 TOURNAMENT_REGISTRATION_CLOSED', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/rfc7807-fixture/tournament/registration-closed')
+        .expect(400);
+      const body = res.body as ProblemWire;
+      expect(body.extensions?.code).toBe('TOURNAMENT_REGISTRATION_CLOSED');
+    });
+
+    it('TournamentFullError → 400 TOURNAMENT_FULL', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/rfc7807-fixture/tournament/full')
+        .expect(400);
+      const body = res.body as ProblemWire;
+      expect(body.extensions?.code).toBe('TOURNAMENT_FULL');
+    });
+
+    it('TournamentRoundNotOpenError → 400 TOURNAMENT_ROUND_NOT_OPEN', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/rfc7807-fixture/tournament/round-not-open')
+        .expect(400);
+      const body = res.body as ProblemWire;
+      expect(body.extensions?.code).toBe('TOURNAMENT_ROUND_NOT_OPEN');
+    });
+
+    it('TournamentUnregisterClosedError → 400 TOURNAMENT_UNREGISTER_CLOSED', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/rfc7807-fixture/tournament/unregister-closed')
+        .expect(400);
+      const body = res.body as ProblemWire;
+      expect(body.extensions?.code).toBe('TOURNAMENT_UNREGISTER_CLOSED');
+    });
+
+    it('TournamentWithdrawClosedError → 400 TOURNAMENT_WITHDRAW_CLOSED', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/rfc7807-fixture/tournament/withdraw-closed')
+        .expect(400);
+      const body = res.body as ProblemWire;
+      expect(body.extensions?.code).toBe('TOURNAMENT_WITHDRAW_CLOSED');
     });
   });
 });

@@ -8,7 +8,6 @@ import {
   Patch,
   Post,
   Query,
-  UseFilters,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { ApiTags } from '@nestjs/swagger';
@@ -30,7 +29,6 @@ import type {
 } from '../../domain/types/category-commands';
 import { CategoryApplicationService } from '../../application/category.application.service';
 import { CategoryQueryService } from '../../application/category-query.service';
-import { CategoryDomainExceptionFilter } from '../filters/category-domain-exception.filter';
 import { CategoryCursorMapper } from '../../mappers/category-cursor.mapper';
 import {
   ApiCategoryAnalyticsResponse,
@@ -51,7 +49,6 @@ import {
 
 @ApiTags('categories')
 @Controller('categories')
-@UseFilters(CategoryDomainExceptionFilter)
 export class CategoryController {
   constructor(
     private readonly categoryApplicationService: CategoryApplicationService,

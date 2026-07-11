@@ -152,6 +152,175 @@ describe('ProblemCodeMapping', () => {
     });
   });
 
+  describe('resolveProblemInfo (category module — Phase 2)', () => {
+    it('returns a 404 entry for CATEGORY_NOT_FOUND', () => {
+      const info = resolveProblemInfo('CATEGORY_NOT_FOUND');
+      expect(info.status).toBe(HttpStatus.NOT_FOUND);
+      expect(info.title).toBe('NotFound');
+      expect(info.typeUri).toBe('https://api.quiz.local/problems/category-not-found');
+    });
+
+    it('returns a 404 entry for CATEGORY_ANALYTICS_NOT_FOUND', () => {
+      const info = resolveProblemInfo('CATEGORY_ANALYTICS_NOT_FOUND');
+      expect(info.status).toBe(HttpStatus.NOT_FOUND);
+      expect(info.title).toBe('NotFound');
+    });
+
+    it('returns a 409 entry for CATEGORY_SLUG_CONFLICT', () => {
+      const info = resolveProblemInfo('CATEGORY_SLUG_CONFLICT');
+      expect(info.status).toBe(HttpStatus.CONFLICT);
+      expect(info.title).toBe('Conflict');
+    });
+
+    it('returns a 409 entry for CATEGORY_ALREADY_ACTIVE', () => {
+      const info = resolveProblemInfo('CATEGORY_ALREADY_ACTIVE');
+      expect(info.status).toBe(HttpStatus.CONFLICT);
+      expect(info.title).toBe('Conflict');
+    });
+
+    it('returns a 500 entry for CATEGORY_RESTORE_INVARIANT', () => {
+      const info = resolveProblemInfo('CATEGORY_RESTORE_INVARIANT');
+      expect(info.status).toBe(HttpStatus.INTERNAL_SERVER_ERROR);
+      expect(info.title).toBe('InternalServerError');
+    });
+  });
+
+  describe('resolveProblemInfo (tag module — Phase 2)', () => {
+    it('returns a 404 entry for TAG_NOT_FOUND', () => {
+      const info = resolveProblemInfo('TAG_NOT_FOUND');
+      expect(info.status).toBe(HttpStatus.NOT_FOUND);
+      expect(info.title).toBe('NotFound');
+      expect(info.typeUri).toBe('https://api.quiz.local/problems/tag-not-found');
+    });
+
+    it('returns a 404 entry for TAG_ANALYTICS_NOT_FOUND', () => {
+      const info = resolveProblemInfo('TAG_ANALYTICS_NOT_FOUND');
+      expect(info.status).toBe(HttpStatus.NOT_FOUND);
+      expect(info.title).toBe('NotFound');
+    });
+
+    it('returns a 409 entry for TAG_SLUG_CONFLICT', () => {
+      const info = resolveProblemInfo('TAG_SLUG_CONFLICT');
+      expect(info.status).toBe(HttpStatus.CONFLICT);
+      expect(info.title).toBe('Conflict');
+    });
+
+    it('returns a 409 entry for TAG_ALREADY_ACTIVE', () => {
+      const info = resolveProblemInfo('TAG_ALREADY_ACTIVE');
+      expect(info.status).toBe(HttpStatus.CONFLICT);
+      expect(info.title).toBe('Conflict');
+    });
+
+    it('returns a 500 entry for TAG_RESTORE_INVARIANT', () => {
+      const info = resolveProblemInfo('TAG_RESTORE_INVARIANT');
+      expect(info.status).toBe(HttpStatus.INTERNAL_SERVER_ERROR);
+      expect(info.title).toBe('InternalServerError');
+    });
+  });
+
+  describe('resolveProblemInfo (tournament module — Phase 2, 15 entries)', () => {
+    // 15 entries covering 4 status codes:
+    //   404: TOURNAMENT_NOT_FOUND, TOURNAMENT_ROUND_NOT_FOUND, TOURNAMENT_NOT_REGISTERED
+    //   403: TOURNAMENT_FORBIDDEN
+    //   409: TOURNAMENT_CONFLICT, TOURNAMENT_ALREADY_REGISTERED, TOURNAMENT_ATTEMPT_ALREADY_EXISTS,
+    //        TOURNAMENT_PARTICIPANT_STATE, TOURNAMENT_ALREADY_WITHDRAWN (was 500 in the prior filter)
+    //   400: TOURNAMENT_VALIDATION, TOURNAMENT_REGISTRATION_CLOSED, TOURNAMENT_FULL,
+    //        TOURNAMENT_ROUND_NOT_OPEN, TOURNAMENT_UNREGISTER_CLOSED, TOURNAMENT_WITHDRAW_CLOSED
+    it('returns a 404 entry for TOURNAMENT_NOT_FOUND', () => {
+      const info = resolveProblemInfo('TOURNAMENT_NOT_FOUND');
+      expect(info.status).toBe(HttpStatus.NOT_FOUND);
+      expect(info.title).toBe('NotFound');
+      expect(info.typeUri).toBe('https://api.quiz.local/problems/tournament-not-found');
+    });
+
+    it('returns a 404 entry for TOURNAMENT_ROUND_NOT_FOUND', () => {
+      const info = resolveProblemInfo('TOURNAMENT_ROUND_NOT_FOUND');
+      expect(info.status).toBe(HttpStatus.NOT_FOUND);
+      expect(info.title).toBe('NotFound');
+    });
+
+    it('returns a 404 entry for TOURNAMENT_NOT_REGISTERED', () => {
+      const info = resolveProblemInfo('TOURNAMENT_NOT_REGISTERED');
+      expect(info.status).toBe(HttpStatus.NOT_FOUND);
+      expect(info.title).toBe('NotFound');
+    });
+
+    it('returns a 403 entry for TOURNAMENT_FORBIDDEN', () => {
+      const info = resolveProblemInfo('TOURNAMENT_FORBIDDEN');
+      expect(info.status).toBe(HttpStatus.FORBIDDEN);
+      expect(info.title).toBe('Forbidden');
+    });
+
+    it('returns a 409 entry for TOURNAMENT_CONFLICT', () => {
+      const info = resolveProblemInfo('TOURNAMENT_CONFLICT');
+      expect(info.status).toBe(HttpStatus.CONFLICT);
+      expect(info.title).toBe('Conflict');
+    });
+
+    it('returns a 409 entry for TOURNAMENT_ALREADY_REGISTERED', () => {
+      const info = resolveProblemInfo('TOURNAMENT_ALREADY_REGISTERED');
+      expect(info.status).toBe(HttpStatus.CONFLICT);
+      expect(info.title).toBe('Conflict');
+    });
+
+    it('returns a 409 entry for TOURNAMENT_ATTEMPT_ALREADY_EXISTS', () => {
+      const info = resolveProblemInfo('TOURNAMENT_ATTEMPT_ALREADY_EXISTS');
+      expect(info.status).toBe(HttpStatus.CONFLICT);
+      expect(info.title).toBe('Conflict');
+    });
+
+    it('returns a 409 entry for TOURNAMENT_PARTICIPANT_STATE', () => {
+      const info = resolveProblemInfo('TOURNAMENT_PARTICIPANT_STATE');
+      expect(info.status).toBe(HttpStatus.CONFLICT);
+      expect(info.title).toBe('Conflict');
+    });
+
+    it('returns a 409 entry for TOURNAMENT_ALREADY_WITHDRAWN (was 500 in the prior filter)', () => {
+      // Wire-shape fix: prior filter fell through to the 500 default
+      // for this exception class. Phase 2 routes it to 409 (semantic
+      // state conflict).
+      const info = resolveProblemInfo('TOURNAMENT_ALREADY_WITHDRAWN');
+      expect(info.status).toBe(HttpStatus.CONFLICT);
+      expect(info.title).toBe('Conflict');
+    });
+
+    it('returns a 400 entry for TOURNAMENT_VALIDATION', () => {
+      const info = resolveProblemInfo('TOURNAMENT_VALIDATION');
+      expect(info.status).toBe(HttpStatus.BAD_REQUEST);
+      expect(info.title).toBe('BadRequest');
+    });
+
+    it('returns a 400 entry for TOURNAMENT_REGISTRATION_CLOSED', () => {
+      const info = resolveProblemInfo('TOURNAMENT_REGISTRATION_CLOSED');
+      expect(info.status).toBe(HttpStatus.BAD_REQUEST);
+      expect(info.title).toBe('BadRequest');
+    });
+
+    it('returns a 400 entry for TOURNAMENT_FULL', () => {
+      const info = resolveProblemInfo('TOURNAMENT_FULL');
+      expect(info.status).toBe(HttpStatus.BAD_REQUEST);
+      expect(info.title).toBe('BadRequest');
+    });
+
+    it('returns a 400 entry for TOURNAMENT_ROUND_NOT_OPEN', () => {
+      const info = resolveProblemInfo('TOURNAMENT_ROUND_NOT_OPEN');
+      expect(info.status).toBe(HttpStatus.BAD_REQUEST);
+      expect(info.title).toBe('BadRequest');
+    });
+
+    it('returns a 400 entry for TOURNAMENT_UNREGISTER_CLOSED', () => {
+      const info = resolveProblemInfo('TOURNAMENT_UNREGISTER_CLOSED');
+      expect(info.status).toBe(HttpStatus.BAD_REQUEST);
+      expect(info.title).toBe('BadRequest');
+    });
+
+    it('returns a 400 entry for TOURNAMENT_WITHDRAW_CLOSED', () => {
+      const info = resolveProblemInfo('TOURNAMENT_WITHDRAW_CLOSED');
+      expect(info.status).toBe(HttpStatus.BAD_REQUEST);
+      expect(info.title).toBe('BadRequest');
+    });
+  });
+
   describe('resolveProblemInfo (unknown code — loud-failure branch)', () => {
     it('returns a 500 entry with the generic title and 500 typeUri', () => {
       const info = resolveProblemInfo('NONEXISTENT_CODE_XYZ');

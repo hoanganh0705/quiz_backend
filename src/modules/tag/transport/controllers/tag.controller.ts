@@ -8,7 +8,6 @@ import {
   Patch,
   Post,
   Query,
-  UseFilters,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { ApiTags } from '@nestjs/swagger';
@@ -23,7 +22,6 @@ import { UpdateTagDto } from '../../dto/request/update-tag.dto';
 import { TagRankingQueryDto } from '../../dto/request/tag-ranking-query.dto';
 import { RelatedTagsQueryDto } from '../../dto/request/related-tags-query.dto';
 import { TagApplicationService } from '../../application/tag.application.service';
-import { TagDomainExceptionFilter } from '../filters/tag-domain-exception.filter';
 import { TagCursorMapper } from '../../mappers/tag-cursor.mapper';
 import type { ListQuizzesQueryDto } from '@/modules/quiz/dto/request/list-quizzes-query.dto';
 import type {
@@ -50,7 +48,6 @@ import {
 
 @ApiTags('tags')
 @Controller('tags')
-@UseFilters(TagDomainExceptionFilter)
 export class TagController {
   constructor(
     private readonly tagApplicationService: TagApplicationService,
