@@ -15,6 +15,7 @@ import {
   USER_ACTIVITY_SERVICE,
   UserActivityServiceImpl,
 } from './application/user-activity.service';
+import { UserPresenter } from './transport/presenters/user.presenter';
 import { QuizModule } from '@/modules/quiz/quiz.module';
 import { QuizApplicationService } from '@/modules/quiz/application/quiz.application.service';
 import { StreakService } from './domain/services/streak.service';
@@ -39,6 +40,7 @@ import { RankingXpStreakListenerAdapter } from './infrastructure/adapters/rankin
     UserDomainExceptionFilter,
     StreakService,
     RankingXpStreakListenerAdapter,
+    UserPresenter,
   ],
   exports: [
     UserApplicationService,
