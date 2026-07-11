@@ -129,14 +129,20 @@ describe('User-domain errors (RFC 7807 mapping completeness)', () => {
       }
     });
 
-    it('every USER_* code in ProblemCodeMapping is declared by exactly one exception class', () => {
+    it('every USER_* code declared by an exception class resolves in ProblemCodeMapping', () => {
+      // This invariant asserts the **declared → mapped** direction
+      // (every declared code has a mapping entry) rather than the
+      // **mapped → declared** direction. The latter would falsely
+      // fail when a sibling module (e.g. achievement) declares a
+      // `USER_BADGE_*` code — those are not owned by the user
+      // module. See `achievement.errors.spec.ts` for the
+      // achievement-module ownership of `USER_BADGE_OWNERSHIP_NOT_FOUND`.
       const declared = new Set([
         ...USER_CODES.map((row) => row.expectedCode),
         'USER_PROFILE_PRIVATE',
       ]);
-      const mapped = Object.keys(ProblemCodeMapping).filter((k) => k.startsWith('USER_'));
-      for (const code of mapped) {
-        expect(declared.has(code)).toBe(true);
+      for (const code of declared) {
+        expect(Object.prototype.hasOwnProperty.call(ProblemCodeMapping, code)).toBe(true);
       }
     });
 

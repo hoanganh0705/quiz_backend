@@ -1,4 +1,4 @@
-import { Controller, Delete, Get, Param, ParseUUIDPipe, Query, UseFilters } from '@nestjs/common';
+import { Controller, Delete, Get, Param, ParseUUIDPipe, Query } from '@nestjs/common';
 import { ApiQuery, ApiTags } from '@nestjs/swagger';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
@@ -17,7 +17,6 @@ import { MyBadgeItemDto } from '../../dto/response/my-badges-response.dto';
 import { PublicAchievementProfileResponseDto } from '../../dto/response/public-achievement-profile-response.dto';
 import { UserBadgeAnalyticsResponseDto } from '../../dto/response/user-badge-analytics-response.dto';
 import { AchievementHistoryItemResponseDto } from '../../dto/response/achievement-history-item-response.dto';
-import { AchievementDomainExceptionFilter } from '../filters/achievement-domain-exception.filter';
 
 export class PaginationQueryDto {
   @ApiPropertyOptional({
@@ -47,9 +46,16 @@ export class PaginationQueryDto {
   offset?: number;
 }
 
+// All 404/403/500 error responses (BadgeNotFoundError,
+// AchievementUserNotFoundError, UserBadgeOwnershipNotFoundError → 404;
+// AchievementGrantError → 500; UserProfilePrivateError → 403 — handled
+// by the global filter via USER_PROFILE_PRIVATE mapping entry) flow
+// through `GlobalExceptionFilter` as RFC 7807 `ProblemDetailDto` after
+// Phase 2. The per-module `AchievementDomainExceptionFilter` and its
+// `@UseFilters(...)` decorator have been removed.
+
 @ApiTags('achievements')
 @Controller('achievements')
-@UseFilters(AchievementDomainExceptionFilter)
 export class AchievementController {
   constructor(
     private readonly achievementApplicationService: AchievementApplicationService,

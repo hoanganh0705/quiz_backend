@@ -467,6 +467,94 @@ describe('ProblemCodeMapping', () => {
     });
   });
 
+  describe('resolveProblemInfo (social module — Phase 2, 8 entries)', () => {
+    // 8 entries covering 4 status codes:
+    //   404: SOCIAL_FRIEND_REQUEST_NOT_FOUND
+    //   403: SOCIAL_FRIEND_REQUEST_FORBIDDEN, SOCIAL_FRIEND_LIST_FORBIDDEN,
+    //        SOCIAL_BLOCKED_USER, SOCIAL_USER_BLOCKED (4 distinct 403 codes)
+    //   409: SOCIAL_ALREADY_FRIENDS, SOCIAL_PENDING_REQUEST_EXISTS
+    //   400: SOCIAL_SELF_FRIEND_REQUEST
+    it('returns a 404 entry for SOCIAL_FRIEND_REQUEST_NOT_FOUND', () => {
+      const info = resolveProblemInfo('SOCIAL_FRIEND_REQUEST_NOT_FOUND');
+      expect(info.status).toBe(HttpStatus.NOT_FOUND);
+      expect(info.title).toBe('NotFound');
+      expect(info.typeUri).toBe('https://api.quiz.local/problems/social-friend-request-not-found');
+    });
+
+    it('returns a 403 entry for SOCIAL_FRIEND_REQUEST_FORBIDDEN', () => {
+      const info = resolveProblemInfo('SOCIAL_FRIEND_REQUEST_FORBIDDEN');
+      expect(info.status).toBe(HttpStatus.FORBIDDEN);
+      expect(info.title).toBe('Forbidden');
+    });
+
+    it('returns a 403 entry for SOCIAL_FRIEND_LIST_FORBIDDEN', () => {
+      const info = resolveProblemInfo('SOCIAL_FRIEND_LIST_FORBIDDEN');
+      expect(info.status).toBe(HttpStatus.FORBIDDEN);
+      expect(info.title).toBe('Forbidden');
+    });
+
+    it('returns a 403 entry for SOCIAL_BLOCKED_USER', () => {
+      const info = resolveProblemInfo('SOCIAL_BLOCKED_USER');
+      expect(info.status).toBe(HttpStatus.FORBIDDEN);
+      expect(info.title).toBe('Forbidden');
+    });
+
+    it('returns a 403 entry for SOCIAL_USER_BLOCKED', () => {
+      const info = resolveProblemInfo('SOCIAL_USER_BLOCKED');
+      expect(info.status).toBe(HttpStatus.FORBIDDEN);
+      expect(info.title).toBe('Forbidden');
+    });
+
+    it('returns a 400 entry for SOCIAL_SELF_FRIEND_REQUEST', () => {
+      const info = resolveProblemInfo('SOCIAL_SELF_FRIEND_REQUEST');
+      expect(info.status).toBe(HttpStatus.BAD_REQUEST);
+      expect(info.title).toBe('BadRequest');
+    });
+
+    it('returns a 409 entry for SOCIAL_ALREADY_FRIENDS', () => {
+      const info = resolveProblemInfo('SOCIAL_ALREADY_FRIENDS');
+      expect(info.status).toBe(HttpStatus.CONFLICT);
+      expect(info.title).toBe('Conflict');
+    });
+
+    it('returns a 409 entry for SOCIAL_PENDING_REQUEST_EXISTS', () => {
+      const info = resolveProblemInfo('SOCIAL_PENDING_REQUEST_EXISTS');
+      expect(info.status).toBe(HttpStatus.CONFLICT);
+      expect(info.title).toBe('Conflict');
+    });
+  });
+
+  describe('resolveProblemInfo (achievement module — Phase 2, 4 entries)', () => {
+    // 4 entries covering 2 status codes:
+    //   404: BADGE_NOT_FOUND, ACHIEVEMENT_USER_NOT_FOUND,
+    //        USER_BADGE_OWNERSHIP_NOT_FOUND (3)
+    //   500: ACHIEVEMENT_GRANT_ERROR (1 — defined but unused in service)
+    it('returns a 404 entry for BADGE_NOT_FOUND', () => {
+      const info = resolveProblemInfo('BADGE_NOT_FOUND');
+      expect(info.status).toBe(HttpStatus.NOT_FOUND);
+      expect(info.title).toBe('NotFound');
+      expect(info.typeUri).toBe('https://api.quiz.local/problems/badge-not-found');
+    });
+
+    it('returns a 404 entry for ACHIEVEMENT_USER_NOT_FOUND', () => {
+      const info = resolveProblemInfo('ACHIEVEMENT_USER_NOT_FOUND');
+      expect(info.status).toBe(HttpStatus.NOT_FOUND);
+      expect(info.title).toBe('NotFound');
+    });
+
+    it('returns a 404 entry for USER_BADGE_OWNERSHIP_NOT_FOUND', () => {
+      const info = resolveProblemInfo('USER_BADGE_OWNERSHIP_NOT_FOUND');
+      expect(info.status).toBe(HttpStatus.NOT_FOUND);
+      expect(info.title).toBe('NotFound');
+    });
+
+    it('returns a 500 entry for ACHIEVEMENT_GRANT_ERROR', () => {
+      const info = resolveProblemInfo('ACHIEVEMENT_GRANT_ERROR');
+      expect(info.status).toBe(HttpStatus.INTERNAL_SERVER_ERROR);
+      expect(info.title).toBe('InternalServerError');
+    });
+  });
+
   describe('resolveProblemInfo (unknown code — loud-failure branch)', () => {
     it('returns a 500 entry with the generic title and 500 typeUri', () => {
       const info = resolveProblemInfo('NONEXISTENT_CODE_XYZ');

@@ -980,6 +980,215 @@ export const ProblemCodeMapping: Readonly<Record<string, ProblemCodeInfo>> = {
     title: 'Conflict',
     typeUri: 'https://api.quiz.local/problems/player-already-joined',
   },
+
+  // ===========================================================================
+  // SOCIAL module — src/modules/social/domain/errors/social.errors.ts
+  // ===========================================================================
+  /** Seventh Phase-2 entry: legacy `{ statusCode, message, error }` → RFC 7807. */
+  // 8 concrete exceptions → 4 status codes:
+  //   404: SOCIAL_FRIEND_REQUEST_NOT_FOUND
+  //   403: SOCIAL_FRIEND_REQUEST_FORBIDDEN, SOCIAL_FRIEND_LIST_FORBIDDEN,
+  //        SOCIAL_BLOCKED_USER, SOCIAL_USER_BLOCKED
+  //   409: SOCIAL_ALREADY_FRIENDS, SOCIAL_PENDING_REQUEST_EXISTS
+  //   400: SOCIAL_SELF_FRIEND_REQUEST
+
+  /**
+   * Thrown when a friend request cannot be found by ID. 404 Not Found.
+   *
+   * Wire-shape improvement: the prior per-module filter dropped the
+   * request ID and rewrote every `FriendRequestNotFoundError.message`
+   * to a hardcoded generic `'Friend request not found'`. The global
+   * filter now preserves `exception.message` (default format:
+   * `'Friend request not found: <id>'`, with the ID interpolated
+   * from the constructor argument).
+   */
+  SOCIAL_FRIEND_REQUEST_NOT_FOUND: {
+    status: HttpStatus.NOT_FOUND,
+    title: 'NotFound',
+    typeUri: 'https://api.quiz.local/problems/social-friend-request-not-found',
+  },
+  /**
+   * Thrown when the authenticated user lacks permission to respond
+   * to a friend request. 403 Forbidden.
+   *
+   * Wire-shape improvement: the prior per-module filter rewrote every
+   * `FriendRequestForbiddenError.message` to a hardcoded generic
+   * `'You do not have permission to perform this action'`. The global
+   * filter now preserves `exception.message` (default:
+   * `'You do not have permission to respond to this friend request'`).
+   */
+  SOCIAL_FRIEND_REQUEST_FORBIDDEN: {
+    status: HttpStatus.FORBIDDEN,
+    title: 'Forbidden',
+    typeUri: 'https://api.quiz.local/problems/social-friend-request-forbidden',
+  },
+  /**
+   * Raised when a user attempts to read another user's friend list
+   * without being allowed to do so. Allow-list: self, or users who
+   * are mutual friends with the target (and neither side has blocked
+   * the other). 403 Forbidden.
+   *
+   * Wire-shape improvement: the prior per-module filter preserved
+   * the thrown message verbatim; behavior is unchanged.
+   */
+  SOCIAL_FRIEND_LIST_FORBIDDEN: {
+    status: HttpStatus.FORBIDDEN,
+    title: 'Forbidden',
+    typeUri: 'https://api.quiz.local/problems/social-friend-list-forbidden',
+  },
+  /**
+   * Thrown when a user attempts to send a friend request to
+   * themselves. 400 Bad Request.
+   *
+   * Wire-shape improvement: the prior per-module filter preserved
+   * the thrown message verbatim; behavior is unchanged.
+   */
+  SOCIAL_SELF_FRIEND_REQUEST: {
+    status: HttpStatus.BAD_REQUEST,
+    title: 'BadRequest',
+    typeUri: 'https://api.quiz.local/problems/social-self-friend-request',
+  },
+  /**
+   * Thrown when the user attempts to send a friend request to a user
+   * they are already friends with. 409 Conflict.
+   *
+   * Wire-shape improvement: the prior per-module filter preserved
+   * the thrown message verbatim; behavior is unchanged.
+   */
+  SOCIAL_ALREADY_FRIENDS: {
+    status: HttpStatus.CONFLICT,
+    title: 'Conflict',
+    typeUri: 'https://api.quiz.local/problems/social-already-friends',
+  },
+  /**
+   * Thrown when the actor has blocked the target user and the action
+   * is forbidden as a result. 403 Forbidden.
+   *
+   * Wire-shape improvement: the prior per-module filter preserved
+   * the thrown message verbatim; behavior is unchanged.
+   */
+  SOCIAL_BLOCKED_USER: {
+    status: HttpStatus.FORBIDDEN,
+    title: 'Forbidden',
+    typeUri: 'https://api.quiz.local/problems/social-blocked-user',
+  },
+  /**
+   * Thrown when the target user has blocked the actor. 403 Forbidden.
+   *
+   * Wire-shape improvement: the prior per-module filter preserved
+   * the thrown message verbatim; behavior is unchanged.
+   */
+  SOCIAL_USER_BLOCKED: {
+    status: HttpStatus.FORBIDDEN,
+    title: 'Forbidden',
+    typeUri: 'https://api.quiz.local/problems/social-user-blocked',
+  },
+  /**
+   * Thrown when an attempt is made to send a friend request while one
+   * is already pending between the two users. 409 Conflict.
+   *
+   * Wire-shape improvement: the prior per-module filter preserved
+   * the thrown message verbatim; behavior is unchanged.
+   */
+  SOCIAL_PENDING_REQUEST_EXISTS: {
+    status: HttpStatus.CONFLICT,
+    title: 'Conflict',
+    typeUri: 'https://api.quiz.local/problems/social-pending-request-exists',
+  },
+
+  // ===========================================================================
+  // ACHIEVEMENT module — src/modules/achievement/domain/errors/achievement.errors.ts
+  // ===========================================================================
+  /** Eighth and final Phase-2 entry: legacy `{ statusCode, message, error }` → RFC 7807. */
+  // 4 concrete exceptions → 2 status codes (404 + 500). Distinct from prior
+  // Phase-2 modules (most have 4 status codes) because AchievementGrantError
+  // is a server-side failure (rule-engine grant failure → 500).
+  //   404: BADGE_NOT_FOUND, ACHIEVEMENT_USER_NOT_FOUND,
+  //        USER_BADGE_OWNERSHIP_NOT_FOUND
+  //   500: ACHIEVEMENT_GRANT_ERROR (rule-engine grant failure; not used in
+  //        application service today — audit at rev4.7 verified — but kept
+  //        for forward-compatibility)
+  //
+  // Special note: the prior per-module filter
+  // `@Catch(AchievementDomainError, UserProfilePrivateError)` also caught a
+  // cross-module `UserProfilePrivateError` from the user module. After
+  // Phase 2 the achievement filter is removed; the global filter handles
+  // both via `ProblemCodeMapping['USER_PROFILE_PRIVATE']` (already declared
+  // in Phase 1). This brings achievement routes into a uniform RFC 7807
+  // wire shape.
+
+  /**
+   * Thrown when a badge lookup fails (no badge matches the given
+   * identifier). 404 Not Found.
+   *
+   * Wire-shape improvement: the prior per-module filter rewrote every
+   * `BadgeNotFoundError.message` to a hardcoded generic
+   * `'Badge not found'`. The global filter now preserves
+   * `exception.message` (default format: `'Badge not found: <badgeId>'`,
+   * with the ID interpolated from the constructor argument).
+   */
+  BADGE_NOT_FOUND: {
+    status: HttpStatus.NOT_FOUND,
+    title: 'NotFound',
+    typeUri: 'https://api.quiz.local/problems/badge-not-found',
+  },
+  /**
+   * Thrown when a user lookup fails during an achievement operation.
+   * 404 Not Found.
+   *
+   * Wire-shape improvement: the prior per-module filter rewrote every
+   * `AchievementUserNotFoundError.message` to a hardcoded generic
+   * `'User not found'`. The global filter now preserves
+   * `exception.message` (default format: `'User not found: <userId>'`,
+   * with the ID interpolated from the constructor argument).
+   */
+  ACHIEVEMENT_USER_NOT_FOUND: {
+    status: HttpStatus.NOT_FOUND,
+    title: 'NotFound',
+    typeUri: 'https://api.quiz.local/problems/achievement-user-not-found',
+  },
+  /**
+   * Thrown when the user does not own the badge they are trying to
+   * act on (revoke, progress-check, etc.). 404 Not Found.
+   *
+   * Wire-shape improvement: the prior per-module filter rewrote every
+   * `UserBadgeOwnershipNotFoundError.message` to a hardcoded generic
+   * `'User badge not found'`. The global filter now preserves
+   * `exception.message` (default format:
+   * `'Badge <badgeId> not owned by user <userId>'`, with both IDs
+   * interpolated from the constructor arguments).
+   */
+  USER_BADGE_OWNERSHIP_NOT_FOUND: {
+    status: HttpStatus.NOT_FOUND,
+    title: 'NotFound',
+    typeUri: 'https://api.quiz.local/problems/user-badge-ownership-not-found',
+  },
+  /**
+   * Thrown when the achievement rule engine fails to grant a badge to a
+   * user for an internal reason (corrupted grant record, database
+   * deadlock, etc.). 500 Internal Server Error.
+   *
+   * Wire-shape improvement: the prior per-module filter had NO branch
+   * for `AchievementGrantError` in its `mapToHttp` — the class fell
+   * through to the catch-all and was returned as `500 Internal Server
+   * Error` with a hardcoded generic message
+   * `'Internal server error'` (the thrown message and `context` were
+   * both discarded). The global filter now resolves the code correctly
+   * and preserves the thrown message (default format:
+   * `'Failed to grant achievement for user <userId>: <reason>'`,
+   * with both interpolated from the constructor arguments).
+   *
+   * Note: this exception is defined and exported but is currently NOT
+   * thrown by `achievement.application.service.ts` (audit at rev4.7
+   * completion: 0 grep hits). It is kept here as documentation /
+   * forward-compatibility — the global filter will resolve the code
+   * correctly if a future call site throws it.
+   */
+  ACHIEVEMENT_GRANT_ERROR: {
+    status: HttpStatus.INTERNAL_SERVER_ERROR,
+    title: 'InternalServerError',
+    typeUri: 'https://api.quiz.local/problems/achievement-grant-error',
+  },
 };
 
 const DEFAULT_TYPE_URIS: Readonly<Record<number, string>> = {
