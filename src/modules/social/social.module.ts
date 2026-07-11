@@ -13,7 +13,6 @@ import { InstanceFeedListenerAdapter } from './infrastructure/adapters/instance-
 import { SocialNotificationListener } from './infrastructure/adapters/social-notification-listener.adapter';
 import { SocialController } from './transport/controller/social.controller';
 import { SocialPresenter } from './transport/presenters/social.presenter';
-import { SocialDomainExceptionFilter } from './transport/filters/social-domain-exception.filter';
 import { SOCIAL_REPOSITORY_PORT } from './domain/ports/social-ports';
 import { SocialDomainEventBus } from './domain/events';
 import { RANKING_PORT } from './domain/ports/ranking.port';
@@ -57,7 +56,6 @@ import { AttemptFeedListenerAdapter } from './infrastructure/adapters/attempt-fe
     AttemptFeedListenerAdapter,
     InstanceFeedListenerAdapter,
     SocialNotificationListener,
-    SocialDomainExceptionFilter,
     SocialDomainEventBus,
     // Token bindings
     { provide: SOCIAL_DOMAIN_EVENT_BUS, useExisting: SocialDomainEventBus },

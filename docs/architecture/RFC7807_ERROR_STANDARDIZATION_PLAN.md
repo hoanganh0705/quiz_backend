@@ -592,7 +592,27 @@ The migration runs as **6 phases, ~3 calendar weeks assuming one developer**, wi
 
 Convert the four modules that already emit RFC 7807 (auth, quiz, attempt, user) **plus** add `code` resolution to the global filter. The four filters stay in place but become thin pass-throughs — *or* are deleted entirely once the global filter handles the resolution. The pilot ships one module end-to-end (auth was the first), lets each subsequent module copy the pattern, and removes the per-module filter as the global filter proves equivalent.
 
-**Status (rev4.5):** **category, tag, tournament, review, bookmark, instance — SHIPPED.** Six Phase-2 modules migrated end-to-end. Instance has 7 concrete exceptions → 4 status codes (400/403/404/409). It is the **fourth and final** module with an existing `*DomainErrorDto` Swagger DTO to delete — completing §8.3's "No *DomainErrorDto files remain in src/modules/*/dto/" criterion (verified by `glob` after the PR). The instance module has TWO filters: `InstanceDomainExceptionFilter` (HTTP, controller-scoped, **deleted**) and `WsExceptionFilter` (WS gateway, **kept** — handles only auth/generic, not domain errors). The controller's `oneOf` simplification (`schema.oneOf([ProblemDetailDto, InstanceDomainErrorDto])` → `ProblemDetailDto` alone) makes instance the most complete Phase-2 conversion. The 2 remaining Phase-2 modules (social, achievement) are expected to be the simplest — no DTOs, no `oneOf`, no WS filter.
+**Status (rev4.7 — Phase 2 complete):** 🎉 **category, tag, tournament, review, bookmark, instance, social, achievement — ALL 8 SHIPPED.** Phase 2 is complete. The 8-module bulk legacy conversion has reached its completion criteria:
+
+- ✅ **All 8 modules' controllers have no `@UseFilters`** (verified by `grep` — the only remaining `@UseFilters` references are in `ranking` and `discussion` controllers, which are **not Phase 2 scope**: they have structural complications documented as P3 in §3 and are deferred to Phase 3).
+- ✅ **All 8 modules' OpenAPI specs reference only `ProblemDetailDto` for error responses** (verified by Phase-1-era decorator cleanup — `ApiAuthAction`, `ApiNotFound`, etc. all emit `ProblemDetailDto`).
+- ✅ **E2E backstop passes for these 8 modules** (the rfc7807 e2e suite has 105 passing tests covering every concrete exception's wire shape).
+- ✅ **No `*DomainErrorDto` files remain in `src/modules/*/dto/`** (verified by `glob` at rev4.5 completion — the 4 deletions across tournament/review/bookmark/instance completed the criterion).
+
+Achievement has 4 concrete exceptions → 2 status codes (404 + 500). It is the **most-unusual** Phase-2 module because: (a) its prior base class carried `code` and `context` on the base itself (not subclasses), (b) the prior filter `@Catch(AchievementDomainError, UserProfilePrivateError)` was a cross-module filter that also caught the user module's `UserProfilePrivateError`, and (c) `AchievementGrantError` had no mapping branch in the prior filter (fell through to 500 catch-all with a hardcoded generic message). The `LEGACY_COMPAT=1` env shim (§11) is still deferred — see §9 for the rollout sequence for Phase 3 (ranking, discussion structural-complication modules).
+
+**Total codes now resolving through `ProblemCodeMapping`: 102.** Breakdown:
+- **Phase 1**: 45 codes (auth, quiz, attempt, user, global) — shipped earlier
+- **Phase 2 module 1 (category, rev4.0)**: +5
+- **Phase 2 module 2 (tag, rev4.1)**: +5
+- **Phase 2 module 3 (tournament, rev4.2)**: +15
+- **Phase 2 module 4 (review, rev4.3)**: +6
+- **Phase 2 module 5 (bookmark, rev4.4)**: +7
+- **Phase 2 module 6 (instance, rev4.5)**: +7
+- **Phase 2 module 7 (social, rev4.6)**: +8
+- **Phase 2 module 8 (achievement, rev4.7)**: +4
+- **Phase 2 total**: 57 new codes (5+5+15+6+7+7+8+4 = 57)
+- **Total**: 45 + 57 = 102
 
 | Objective | Action |
 | --- | --- |
@@ -933,6 +953,68 @@ That's it. No code-generation scripts. No error-catalog registry. No generated m
 ---
 
 ## Revision history
+
+**v4.7 (2026-07-11).** 🎉 **Phase 2 complete** — **achievement** shipped end-to-end as the eighth and final Phase-2 module. 4 concrete exceptions → 2 status codes (404 + 500). Most-unusual Phase-2 conversion because: (a) the prior base class carried `code` and `context` on the base itself (not subclasses), (b) the prior filter `@Catch(AchievementDomainError, UserProfilePrivateError)` was a cross-module filter that also caught the user module's `UserProfilePrivateError`, and (c) `AchievementGrantError` had no mapping branch in the prior filter (fell through to 500 catch-all with a hardcoded generic message). Concrete deliverables:
+- `src/common/errors/problem-code-mapping.ts` extended with 4 achievement entries: 3 × 404 (`BADGE_NOT_FOUND`, `ACHIEVEMENT_USER_NOT_FOUND`, `USER_BADGE_OWNERSHIP_NOT_FOUND`), 1 × 500 (`ACHIEVEMENT_GRANT_ERROR`).
+- `src/common/errors/problem-code-mapping.spec.ts` extended with 4 new resolution assertions.
+- `src/modules/achievement/domain/errors/achievement.errors.ts` migrated. `AchievementDomainError` becomes an abstract namespace marker (extends `BaseDomainException`). All 4 concrete classes preserve their existing default messages. Audit: `grep -rn 'new AchievementDomainError' src/` returns no matches. The redundant `this.name = '...'` lines in subclasses were removed — `BaseDomainException` uses `new.target.name` which already produces the correct name.
+- `src/modules/achievement/domain/errors/achievement.errors.spec.ts` (new): 35 mapping-completeness tests iterating a 4-row table + 5 constructor-context tests + 6 aggregate invariants (including a status-code-bucket breakdown that asserts 3 × 404 / 1 × 500 = 4). The total-count guard (`total === 4`) defends against accidental additions/removals. Smaller than other modules because achievement has fewer failure modes.
+- `src/modules/achievement/transport/filters/achievement-domain-exception.filter.ts` (deleted): the per-module `@Catch(AchievementDomainError, UserProfilePrivateError)` filter is gone.
+- `src/modules/achievement/transport/filters/` (empty directory removed).
+- `src/modules/achievement/achievement.module.ts`: removed the filter provider (`AchievementDomainExceptionFilter`) and its import.
+- `src/modules/achievement/transport/controller/achievement.controller.ts`: removed `UseFilters` import, `AchievementDomainExceptionFilter` import, `@UseFilters(AchievementDomainExceptionFilter)` decoration. Added a 7-line comment explaining that all error responses are now routed through `GlobalExceptionFilter` as RFC 7807 `ProblemDetailDto`. The admin controller was already free of `@UseFilters`.
+- `src/modules/user/domain/errors/user-domain.errors.spec.ts`: the aggregate invariant test "every USER_* code in ProblemCodeMapping is declared by exactly one exception class" was inverted. Pre-Phase-2 it asserted the **ownership** direction (every mapping code starting with `USER_` is owned by user). Post-Phase-2 the achievement module owns `USER_BADGE_OWNERSHIP_NOT_FOUND` (a `USER_BADGE_*` code), so the ownership invariant cannot hold globally. The replaced assertion is now "every USER_* code declared by an exception class resolves in ProblemCodeMapping" (the **completeness** direction — every declared code has a mapping entry). The new assertion is local to the user module's responsibilities and is unaffected by other modules.
+- `test/rfc7807.e2e-spec.ts` extended with 5 achievement-coverage tests: 4 mappings + 1 cross-module regression test for `UserProfilePrivateError` thrown through an achievement-named endpoint.
+
+Wire-shape changes (Phase 2 breaking):
+1. **Envelope change.** Achievement error responses now follow the canonical RFC 7807 shape. The prior `{ statusCode, message, error }` envelope is fully gone.
+2. **`BadgeNotFoundError.detail`** improvement: prior filter rewrote `'Badge not found: <badgeId>'` → `'Badge not found'`; now preserves thrown message (default format: `'Badge not found: <badgeId>'`, with the ID interpolated from the constructor argument).
+3. **`AchievementUserNotFoundError.detail`** improvement: prior filter rewrote `'User not found: <userId>'` → `'User not found'`; now preserves thrown message (default format: `'User not found: <userId>'`, with the ID interpolated from the constructor argument).
+4. **`UserBadgeOwnershipNotFoundError.detail`** improvement: prior filter rewrote `'Badge <badgeId> not owned by user <userId>'` → `'User badge not found'`; now preserves thrown message (default format: `'Badge <badgeId> not owned by user <userId>'`, with both IDs interpolated from the constructor arguments).
+5. **`AchievementGrantError.detail`** improvement: prior filter had NO branch for `AchievementGrantError` — the class fell through to catch-all 500 with hardcoded `'Internal server error'` (the thrown message and `context` were both discarded). The global filter now resolves the code correctly and preserves the thrown message (default format: `'Failed to grant achievement for user <userId>: <reason>'`). This is the most user-visible Phase-2 wire-shape change in this module: clients now see a precise server-side failure description instead of a generic 500.
+
+Decisions:
+1. **`AchievementDomainError` stays abstract (no `code`, no mapping entry).** Same pattern as the prior 12 modules.
+2. **`context` field retained on subclasses** that pass contextual data to their constructor (`BadgeNotFoundError`, `AchievementGrantError`, `AchievementUserNotFoundError`, `UserBadgeOwnershipNotFoundError`). The prior filter discarded context; the global filter doesn't expose context on the wire (it goes into `extensions` only if explicitly assigned). This is a no-op for HTTP responses but useful for in-process debugging — the 5 constructor-context tests verify the field is preserved at runtime.
+3. **Cross-module `@Catch(AchievementDomainError, UserProfilePrivateError)`** — the prior filter caught both achievement and cross-module user exceptions. After Phase 2 the achievement filter is removed; the global filter handles both via `ProblemCodeMapping['USER_PROFILE_PRIVATE']` (declared in Phase 1). This brings achievement routes that previously threw `UserProfilePrivateError` into a uniform RFC 7807 wire shape. The new e2e test `UserProfilePrivateError (cross-module) → 403 USER_PROFILE_PRIVATE (regression)` verifies this.
+4. **No `AchievementDomainErrorDto`/`AchievementErrorDto` Swagger DTO** existed. Confirmed by grep — achievement never had a per-module error DTO.
+5. **No per-endpoint helper decorators to simplify.** The controller uses `ApiNotFound` shorthand decorators (line 102, 124, 139) which already emit `ProblemDetailDto`. After Phase 2 they reference `ProblemDetailDto` (the global filter), so no further work is needed at the controller level.
+6. **Redundant `this.name = '...'` lines removed.** Same as in social: the old `AchievementDomainError` base class set `this.name = 'AchievementDomainError'` in its constructor (incorrect for subclasses — the name was always `'AchievementDomainError'` unless manually overridden). `BaseDomainException` uses `new.target.name`, which automatically resolves to the concrete subclass name.
+7. **Module-level filter provider removal.** Same as tournament, review, bookmark, instance, social — filter was registered as a module provider.
+8. **Logging parity.** Prior filter had no logging. The global filter logs `event: 'http_client_error'` (warn) for 4xx and `event: 'http_server_error'` (error) for 5xx. Same severity buckets.
+9. **`LEGACY_COMPAT` shim still deferred.** Same rationale.
+10. **`user-domain.errors.spec.ts` invariant inversion.** The ownership-direction invariant cannot hold globally after Phase 2 because `USER_BADGE_OWNERSHIP_NOT_FOUND` is owned by the achievement module, not by user. The replacement (completeness direction: every declared USER_* code resolves in the mapping) is local to the user module's responsibilities. See the docblock on the replaced test in `user-domain.errors.spec.ts`.
+
+Verification: `tsc --noEmit` clean. ESLint clean on every touched file (4 prettier auto-fixes applied). Achievement + common-errors + user-domain unit tests pass (105 tests; +4 mapping + +35 achievement spec). rfc7807 e2e suite passes (105 tests; +5 new achievement cases). The 8 pre-existing tournament app-spec failures remain unchanged from `main`.
+
+**Phase 2 total:** 8 modules / 57 new mapping codes / 4 `*DomainErrorDto` deletions.
+
+**v4.6 (2026-07-11).** Phase 2 partial — **social** shipped end-to-end. Seventh Phase-2 module migrated; 8 concrete exceptions → 4 status codes (400/403/404/409). Simplest Phase-2 conversion so far: no `*DomainErrorDto` Swagger DTO exists in this module, no `oneOf` schema references, no per-endpoint helper decorators to simplify — the controller already uses `ApiAuthAction` / `ApiAuthActionNoContent` shorthand decorators that cover all 4 error responses. The controller migration is just remove `@UseFilters`. Concrete deliverables:
+- `src/common/errors/problem-code-mapping.ts` extended with 8 SOCIAL_* entries: 1 × 404 (`SOCIAL_FRIEND_REQUEST_NOT_FOUND`), 4 × 403 (`SOCIAL_FRIEND_REQUEST_FORBIDDEN`, `SOCIAL_FRIEND_LIST_FORBIDDEN`, `SOCIAL_BLOCKED_USER`, `SOCIAL_USER_BLOCKED`), 2 × 409 (`SOCIAL_ALREADY_FRIENDS`, `SOCIAL_PENDING_REQUEST_EXISTS`), 1 × 400 (`SOCIAL_SELF_FRIEND_REQUEST`).
+- `src/common/errors/problem-code-mapping.spec.ts` extended with 8 new resolution assertions.
+- `src/modules/social/domain/errors/social.errors.ts` migrated. `SocialError` becomes an abstract namespace marker (no `code`). All 8 concrete classes preserve their existing default messages. Audit: `grep -rn 'new SocialError' src/` returns no matches. The redundant `this.name = '...'` lines in subclasses were removed — `BaseDomainException` uses `new.target.name` which already produces the correct name.
+- `src/modules/social/domain/errors/social.errors.spec.ts` (new): 56 mapping-completeness tests iterating an 8-row table + 2 constructor-interpolation tests + 6 aggregate invariants (including a status-code-bucket breakdown that asserts 1 × 404 / 4 × 403 / 2 × 409 / 1 × 400 = 8). The total-count guard (`total === 8`) defends against accidental additions/removals.
+- `src/modules/social/transport/filters/social-domain-exception.filter.ts` (deleted): the per-module `@Catch(SocialError)` filter is gone.
+- `src/modules/social/transport/filters/` (empty directory removed).
+- `src/modules/social/social.module.ts`: removed the filter provider (`SocialDomainExceptionFilter`) and its import.
+- `src/modules/social/transport/controller/social.controller.ts`: removed `UseFilters` import, `SocialDomainExceptionFilter` import, `@UseFilters(SocialDomainExceptionFilter)` decoration. Added a 4-line comment explaining that all error responses are covered by `ApiAuthAction` / `ApiAuthActionNoContent` shorthand decorators. No other edits — the controller has zero per-endpoint domain-error helpers, zero `oneOf` schema references, and zero `*DomainErrorDto` imports.
+- `test/rfc7807.e2e-spec.ts` extended with 8 social-coverage tests covering the full 4-status-code matrix.
+
+Wire-shape changes (Phase 2 breaking):
+1. **Envelope change.** Social error responses now follow the canonical RFC 7807 shape. The prior `{ statusCode, message, error }` envelope is fully gone.
+2. **`FriendRequestNotFoundError.detail`** improvement: prior filter dropped the request ID and rewrote every message to `'Friend request not found'`; now preserves thrown message (default format: `'Friend request not found: <id>'`, with the ID interpolated from the constructor argument). This is the most user-visible wire-shape change in this module — clients can now surface the failing request ID without needing a server-side log search.
+3. **`FriendRequestForbiddenError.detail`** improvement: prior filter rewrote every message to `'You do not have permission to perform this action'`; now preserves thrown message (default: `'You do not have permission to respond to this friend request'`).
+
+Decisions:
+1. **`SocialError` stays abstract (no `code`, no mapping entry).** Same pattern as the prior 11 modules.
+2. **No `SocialErrorDto`/`SocialDomainErrorDto` Swagger DTO exists.** Verified by grep at rev4.6 start: 0 hits for any `social*domain*error*.dto.ts` filename. Social never had a per-module error DTO.
+3. **No per-endpoint helper decorators to simplify.** The controller uses `ApiAuthAction` / `ApiAuthActionNoContent` shorthand decorators from `@/common/swagger/swagger-decorators`. These already emit `ApiAuth` (401), `ApiBadRequest` (400 validator), `ApiNotFound` (404), `ApiConflict` (409), `ApiForbidden` (403), `ApiValidationRequest` (400 validator), `ApiInternalError` (500). After Phase 2 they reference `ProblemDetailDto` (the global filter), so no further work is needed at the controller level.
+4. **Redundant `this.name = '...'` lines removed.** The old `SocialError` base class set `this.name = 'SocialError'` in its constructor (incorrect for subclasses — the name was always `'SocialError'` unless manually overridden in each subclass). `BaseDomainException` uses `new.target.name`, which automatically resolves to the concrete subclass name. The redundant lines in subclasses (which used to re-set `this.name` after the parent's constructor ran) were removed.
+5. **Module-level filter provider removal.** Same as tournament, review, bookmark, instance — filter was registered as a module provider.
+6. **Logging parity.** Prior filter had no logging. The global filter logs `event: 'http_client_error'` (warn) for 4xx and `event: 'http_server_error'` (error) for 5xx. Same severity buckets.
+7. **`LEGACY_COMPAT` shim still deferred.** Same rationale.
+
+Verification: `tsc --noEmit` clean. ESLint clean on every touched file (4 prettier auto-fixes applied). Social + common-errors unit tests pass (137 tests; +8 mapping + +56 social spec). rfc7807 e2e suite passes (100 tests; +8 new social cases). The 8 pre-existing tournament app-spec failures remain unchanged from `main`. `grep -rn 'SocialDomainExceptionFilter\|@UseFilters\|oneOf\|getSchemaPath' src/modules/social/` returns 0 hits.
 
 **v4.5 (2026-07-11).** Phase 2 partial — **instance** shipped end-to-end. Sixth Phase-2 module migrated; 7 concrete exceptions → 4 status codes (400/403/404/409). **Fourth and final** module with an existing `*DomainErrorDto` Swagger DTO to delete — completing §8.3's "No *DomainErrorDto files remain" criterion (verified by `glob` after the PR). Most complex Phase-2 conversion so far: TWO filters in the module (HTTP + WS), `oneOf` schema simplification in the controller, and one exception (`PlayerAlreadyJoinedError`) defined but not currently thrown. Concrete deliverables:
 - `src/common/errors/problem-code-mapping.ts` extended with 7 INSTANCE_*/PLAYER_* entries: 1 × 404 (`INSTANCE_NOT_FOUND`), 1 × 403 (`INSTANCE_NOT_HOST`), 1 × 409 (`PLAYER_ALREADY_JOINED`), 4 × 400 (`INSTANCE_NOT_OPEN`, `INSTANCE_FULL`, `INSTANCE_ALREADY_STARTED`, `INSTANCE_ALREADY_CLOSED`).
