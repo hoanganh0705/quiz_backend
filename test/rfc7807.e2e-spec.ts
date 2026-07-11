@@ -162,6 +162,29 @@ import {
   BadgeNotFoundError,
   UserBadgeOwnershipNotFoundError,
 } from '@/modules/achievement/domain/errors';
+import {
+  CommentForbiddenError,
+  CommentNotFoundError,
+  CommentThreadMismatchError,
+  DuplicateReportError,
+  ModeratorRequiredError,
+  QuizNotFoundError as DiscussionQuizNotFoundError,
+  SelfReportError,
+  SelfVoteError,
+  ThreadClosedError,
+  ThreadForbiddenError,
+  ThreadNotActiveError,
+  ThreadNotFoundError,
+} from '@/modules/discussion/domain/errors';
+import {
+  InvalidXpEventError,
+  PeriodResetError,
+  RankCalculationError,
+} from '@/modules/ranking/domain/errors';
+import {
+  NotificationForbiddenError,
+  NotificationNotFoundError,
+} from '@/modules/notification/domain/errors';
 import { serverConfig } from '@/core/config';
 
 interface ProblemWire {
@@ -889,6 +912,144 @@ class Rfc7807FixtureController {
     throw new UserProfilePrivateError('user-target-1');
   }
 
+  // Discussion-module endpoints — Phase 3.1 live-mapping coverage.
+  // 12 concrete exceptions → 4 status codes (400/403/404/409). Each
+  // endpoint throws a real discussion exception; if
+  // `ProblemCodeMapping` or the discussion classes drift, the e2e
+  // tests in the discussion describe-block below fail.
+  //
+  // Special note: the prior per-module filter
+  // `DiscussionDomainExceptionFilter` used `exception.name` as a
+  // lookup key into `STATUS_MAP` and `DISCUSSION_PROBLEM_URIS`. After
+  // Phase 3.1 the lookup tables are replaced with `ProblemCodeMapping`
+  // entries keyed by `code`. `title` changes from the class name
+  // (e.g. `'ThreadNotFoundError'`) to the standard RFC 7807 title
+  // (e.g. `'NotFound'`). This is verified per-row below.
+
+  @Get('discussion/thread-not-found')
+  discussionThreadNotFound(): never {
+    throw new ThreadNotFoundError('thread-1');
+  }
+
+  @Get('discussion/comment-not-found')
+  discussionCommentNotFound(): never {
+    throw new CommentNotFoundError('comment-1');
+  }
+
+  @Get('discussion/thread-forbidden')
+  discussionThreadForbidden(): never {
+    throw new ThreadForbiddenError();
+  }
+
+  @Get('discussion/comment-forbidden')
+  discussionCommentForbidden(): never {
+    throw new CommentForbiddenError();
+  }
+
+  @Get('discussion/thread-closed')
+  discussionThreadClosed(): never {
+    throw new ThreadClosedError();
+  }
+
+  @Get('discussion/thread-not-active')
+  discussionThreadNotActive(): never {
+    throw new ThreadNotActiveError();
+  }
+
+  @Get('discussion/comment-thread-mismatch')
+  discussionCommentThreadMismatch(): never {
+    // Plan §8.4.1 risk note: 400 (non-obvious — one might expect 409
+    // Conflict for a cross-resource mismatch). The migration test
+    // captures this. `title` here is the standard `'BadRequest'` not
+    // the class name.
+    throw new CommentThreadMismatchError();
+  }
+
+  @Get('discussion/self-vote')
+  discussionSelfVote(): never {
+    throw new SelfVoteError();
+  }
+
+  @Get('discussion/self-report')
+  discussionSelfReport(): never {
+    throw new SelfReportError();
+  }
+
+  @Get('discussion/duplicate-report')
+  discussionDuplicateReport(): never {
+    throw new DuplicateReportError();
+  }
+
+  @Get('discussion/quiz-not-found')
+  discussionQuizNotFound(): never {
+    // This is the discussion-module version of `QuizNotFoundError`.
+    // It uses `DISCUSSION_QUIZ_NOT_FOUND` (not `QUIZ_NOT_FOUND`).
+    // The class-name collision with the quiz-module version is
+    // documented at §9 item 1.
+    throw new DiscussionQuizNotFoundError('quiz-1');
+  }
+
+  @Get('discussion/moderator-required')
+  discussionModeratorRequired(): never {
+    // Plan §8.4.1 risk note: 403 (non-obvious — the class name
+    // suggests 401 or 403 for "auth required", but the actual
+    // semantic is "you're authenticated but lack the moderator
+    // role"). The migration test captures this.
+    throw new ModeratorRequiredError();
+  }
+
+  // Ranking-module endpoints — Phase 3.2 live-mapping coverage.
+  // 3 concrete exceptions → 2 status codes (422 + 500). Each
+  // endpoint throws a real ranking exception; if
+  // `ProblemCodeMapping` or the ranking classes drift, the e2e
+  // tests in the ranking describe-block below fail.
+  //
+  // Special note: this is the highest-risk Phase-3 conversion
+  // because the prior per-module filter was a `@Catch()` catch-all
+  // that shadows `GlobalExceptionFilter`. After Phase 3.2 the
+  // catch-all is removed; the global filter handles all errors via
+  // `ProblemCodeMapping` (the 3 concrete exceptions) or via its
+  // standard `HttpException` / uncaught `Error` paths. The
+  // uncaught-error regression test below verifies that an artificial
+  // `throw new Error('boom')` inside a ranking controller produces
+  // a 500 with the standard RFC 7807 shape (a plan §8.4.2 completion
+  // criterion).
+
+  @Get('ranking/invalid-xp-event')
+  rankingInvalidXpEvent(): never {
+    // Status upgrade 500 → 422 (semantic correction): rejected XP
+    // event input is unprocessable, not an internal server
+    // failure.
+    throw new InvalidXpEventError({ userId: 'u-1', amount: -5 }, 'Amount must be positive');
+  }
+
+  @Get('ranking/rank-calculation-error')
+  rankingRankCalculationError(): never {
+    // 500 with the actual thrown message preserved (prior filter
+    // discarded the message and emitted a hardcoded `'Internal
+    // server error'` envelope).
+    throw new RankCalculationError('daily', 'db deadlock');
+  }
+
+  @Get('ranking/period-reset-error')
+  rankingPeriodResetError(): never {
+    // 500 with the actual thrown message preserved (prior filter
+    // discarded the message).
+    throw new PeriodResetError('weekly', 'scheduler offline');
+  }
+
+  @Get('ranking/uncaught-error')
+  rankingUncaughtError(): never {
+    // Plan §8.4.2 completion criterion: "an artificial `throw new
+    // Error('boom')` inside a ranking controller produces a 500
+    // with the standard shape." Before Phase 3.2 this error was
+    // caught by `RankingDomainExceptionFilter`'s `@Catch()` and
+    // emitted as `{ statusCode: 500, message: 'boom', code:
+    // 'INTERNAL_ERROR', timestamp: '...' }`. After Phase 3.2 the
+    // global filter handles it as canonical RFC 7807.
+    throw new Error('boom');
+  }
+
   @Get('http-not-found')
   httpNotFound(): never {
     throw new NotFoundException('Plain route does not exist.');
@@ -898,6 +1059,36 @@ class Rfc7807FixtureController {
   httpBadRequestValidation(): never {
     // Shape produced by NestJS ValidationPipe (string[] of error messages).
     throw new BadRequestException(['title must be a string', 'title must not be empty']);
+  }
+
+  // Notification-module endpoints — Phase 5 (rev5.1) missed-module
+  // coverage. The notification module was inadvertently skipped in
+  // Phases 1-3 because it had no per-module filter (no
+  // `NotificationDomainExceptionFilter` to delete). Its errors
+  // extended `Error` directly, so the global filter caught them via
+  // its `instanceof Error` branch and returned 500 with `title:
+  // 'InternalServerError'` — masking a legitimate 404 as a generic
+  // 500. Phase 5 (rev5.1) converts them to `BaseDomainException`
+  // subclasses; the global filter now resolves the correct status +
+  // `extensions.code` for both. 2 concrete exceptions → 2 status
+  // codes (404 + 403).
+  @Get('notification/not-found')
+  notificationNotFound(): never {
+    // Status correction 500 → 404. Wire-shape improvement: prior
+    // behavior emitted a misleading 500 (the thrown message was
+    // preserved but the status was wrong — the global filter's
+    // `instanceof Error` branch routed to 500 regardless of the
+    // exception's intent). After Phase 5 (rev5.1) the global filter
+    // resolves `NOTIFICATION_NOT_FOUND` → 404 via `ProblemCodeMapping`.
+    throw new NotificationNotFoundError('notif-1');
+  }
+
+  @Get('notification/forbidden')
+  notificationForbidden(): never {
+    // Status correction 500 → 403. Same rationale as above. The
+    // throw-site is post-authentication (the caller IS logged in,
+    // they just don't own this notification), so 403 is correct.
+    throw new NotificationForbiddenError();
   }
 
   @Get('plain-error')
@@ -2345,6 +2536,387 @@ describe('RFC 7807 ProblemDetail (Phase 0 backstop)', () => {
       expect(body.title).toBe('Forbidden');
       expect(body.detail).toBe('Profile of user user-target-1 is not public');
       expect(body.extensions?.code).toBe('USER_PROFILE_PRIVATE');
+    });
+  });
+
+  describe('Discussion-module exceptions (Phase 3.1 — first Phase-3 conversion; name-based lookup → ProblemCodeMapping)', () => {
+    // 12 concrete exceptions → 4 status codes (400/403/404/409). The
+    // 13th class (UserNotFoundError) is owned by the user module,
+    // not by the discussion module — its mapping entry was declared
+    // in Phase 1 and is reused.
+    //
+    // Phase 3.1 wire-shape changes (verified per-row below):
+    //   1. `title` is now the standard RFC 7807 title (e.g.
+    //      `'NotFound'`) instead of the class name (e.g.
+    //      `'ThreadNotFoundError'`).
+    //   2. `extensions.timestamp` is now present (Phase 3.1
+    //      deliverable per §8.4.1).
+    //
+    // Plan §8.4.1 risk notes (regression-guarded):
+    //   - CommentThreadMismatchError → 400 (one might expect 409
+    //     Conflict for a cross-resource mismatch).
+    //   - ModeratorRequiredError → 403 (the class name suggests
+    //     auth required, but the semantic is "you're authenticated
+    //     but lack the moderator role").
+
+    it('ThreadNotFoundError → 404 DISCUSSION_THREAD_NOT_FOUND (title now standardized)', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/rfc7807-fixture/discussion/thread-not-found')
+        .expect(404);
+      const body = res.body as ProblemWire;
+      // Phase 3.1 wire-shape: `title` is now `'NotFound'`, not the
+      // class name `'ThreadNotFoundError'`.
+      expect(body.title).toBe('NotFound');
+      expect(body.detail).toBe('Thread not found: thread-1');
+      expect(body.extensions?.code).toBe('DISCUSSION_THREAD_NOT_FOUND');
+      // Phase 3.1 deliverable per §8.4.1.
+      expect(typeof body.extensions?.timestamp).toBe('string');
+    });
+
+    it('CommentNotFoundError → 404 DISCUSSION_COMMENT_NOT_FOUND (title now standardized)', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/rfc7807-fixture/discussion/comment-not-found')
+        .expect(404);
+      const body = res.body as ProblemWire;
+      expect(body.title).toBe('NotFound');
+      expect(body.detail).toBe('Comment not found: comment-1');
+      expect(body.extensions?.code).toBe('DISCUSSION_COMMENT_NOT_FOUND');
+      expect(typeof body.extensions?.timestamp).toBe('string');
+    });
+
+    it('ThreadForbiddenError → 403 DISCUSSION_THREAD_FORBIDDEN', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/rfc7807-fixture/discussion/thread-forbidden')
+        .expect(403);
+      const body = res.body as ProblemWire;
+      expect(body.title).toBe('Forbidden');
+      expect(body.detail).toBe('You do not have permission to perform this action on this thread');
+      expect(body.extensions?.code).toBe('DISCUSSION_THREAD_FORBIDDEN');
+    });
+
+    it('CommentForbiddenError → 403 DISCUSSION_COMMENT_FORBIDDEN', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/rfc7807-fixture/discussion/comment-forbidden')
+        .expect(403);
+      const body = res.body as ProblemWire;
+      expect(body.title).toBe('Forbidden');
+      expect(body.detail).toBe('You do not have permission to perform this action on this comment');
+      expect(body.extensions?.code).toBe('DISCUSSION_COMMENT_FORBIDDEN');
+    });
+
+    it('ThreadClosedError → 409 DISCUSSION_THREAD_CLOSED', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/rfc7807-fixture/discussion/thread-closed')
+        .expect(409);
+      const body = res.body as ProblemWire;
+      expect(body.title).toBe('Conflict');
+      expect(body.detail).toBe('This thread is closed and cannot accept new comments');
+      expect(body.extensions?.code).toBe('DISCUSSION_THREAD_CLOSED');
+    });
+
+    it('ThreadNotActiveError → 409 DISCUSSION_THREAD_NOT_ACTIVE', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/rfc7807-fixture/discussion/thread-not-active')
+        .expect(409);
+      const body = res.body as ProblemWire;
+      expect(body.title).toBe('Conflict');
+      expect(body.detail).toBe('This thread is not active and cannot be modified');
+      expect(body.extensions?.code).toBe('DISCUSSION_THREAD_NOT_ACTIVE');
+    });
+
+    it('CommentThreadMismatchError → 400 DISCUSSION_COMMENT_THREAD_MISMATCH (non-obvious 400 per §8.4.1)', async () => {
+      // Plan §8.4.1 risk note: this is a non-obvious 400 (one might
+      // expect 409 Conflict for a cross-resource mismatch). The
+      // migration test captures it.
+      const res = await request(app.getHttpServer())
+        .get('/rfc7807-fixture/discussion/comment-thread-mismatch')
+        .expect(400);
+      const body = res.body as ProblemWire;
+      expect(body.title).toBe('BadRequest');
+      expect(body.detail).toBe('The selected comment does not belong to this thread');
+      expect(body.extensions?.code).toBe('DISCUSSION_COMMENT_THREAD_MISMATCH');
+    });
+
+    it('SelfVoteError → 403 DISCUSSION_SELF_VOTE', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/rfc7807-fixture/discussion/self-vote')
+        .expect(403);
+      const body = res.body as ProblemWire;
+      expect(body.title).toBe('Forbidden');
+      expect(body.detail).toBe('You cannot vote on your own content');
+      expect(body.extensions?.code).toBe('DISCUSSION_SELF_VOTE');
+    });
+
+    it('SelfReportError → 403 DISCUSSION_SELF_REPORT', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/rfc7807-fixture/discussion/self-report')
+        .expect(403);
+      const body = res.body as ProblemWire;
+      expect(body.title).toBe('Forbidden');
+      expect(body.detail).toBe('You cannot report your own content');
+      expect(body.extensions?.code).toBe('DISCUSSION_SELF_REPORT');
+    });
+
+    it('DuplicateReportError → 409 DISCUSSION_DUPLICATE_REPORT', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/rfc7807-fixture/discussion/duplicate-report')
+        .expect(409);
+      const body = res.body as ProblemWire;
+      expect(body.title).toBe('Conflict');
+      expect(body.detail).toBe('You have already reported this content');
+      expect(body.extensions?.code).toBe('DISCUSSION_DUPLICATE_REPORT');
+    });
+
+    it('QuizNotFoundError → 404 DISCUSSION_QUIZ_NOT_FOUND (collision with QUIZ_NOT_FOUND documented at §9)', async () => {
+      // This is the discussion-module version of `QuizNotFoundError`.
+      // It uses `DISCUSSION_QUIZ_NOT_FOUND` (not `QUIZ_NOT_FOUND`).
+      // The class-name collision with the quiz-module version is
+      // documented at §9 item 1. Clients should switch on
+      // `extensions.code`.
+      const res = await request(app.getHttpServer())
+        .get('/rfc7807-fixture/discussion/quiz-not-found')
+        .expect(404);
+      const body = res.body as ProblemWire;
+      expect(body.title).toBe('NotFound');
+      expect(body.detail).toBe('Quiz not found: quiz-1');
+      expect(body.extensions?.code).toBe('DISCUSSION_QUIZ_NOT_FOUND');
+    });
+
+    it('ModeratorRequiredError → 403 DISCUSSION_MODERATOR_REQUIRED (non-obvious 403 per §8.4.1)', async () => {
+      // Plan §8.4.1 risk note: this is a non-obvious 403 (the class
+      // name suggests auth required, but the semantic is "you're
+      // authenticated but lack the moderator role"). The migration
+      // test captures it.
+      const res = await request(app.getHttpServer())
+        .get('/rfc7807-fixture/discussion/moderator-required')
+        .expect(403);
+      const body = res.body as ProblemWire;
+      expect(body.title).toBe('Forbidden');
+      expect(body.detail).toBe('Moderator or admin role is required to perform this action');
+      expect(body.extensions?.code).toBe('DISCUSSION_MODERATOR_REQUIRED');
+    });
+
+    it('every Phase 3.1 response carries `extensions.timestamp` (Phase 3.1 deliverable per §8.4.1)', async () => {
+      // §8.4.1: "Add `extensions.requestId` and `extensions.timestamp`
+      // to the response body." `extensions.requestId` was added in
+      // Phase 1; `extensions.timestamp` is added in Phase 3.1 via the
+      // global filter. This test exercises one discussion response
+      // and verifies the timestamp field is present.
+      //
+      // Note: in this e2e fixture there is no `CorrelationInterceptor`,
+      // so `request.id` is `undefined` and JSON serialization drops the
+      // `extensions.requestId` key from the wire. That's a JSON-level
+      // quirk (not a filter bug). Phase 3.1 only commits to adding
+      // `extensions.timestamp`, so we do not assert `requestId` here.
+      const res = await request(app.getHttpServer())
+        .get('/rfc7807-fixture/discussion/thread-not-found')
+        .expect(404);
+      const body = res.body as ProblemWire;
+      expect(typeof body.extensions?.timestamp).toBe('string');
+      // Verify the timestamp is ISO 8601 (regex sanity-check; the
+      // filter uses `new Date().toISOString()` so this is always
+      // true unless the filter implementation drifts).
+      expect(body.extensions?.timestamp as string).toMatch(
+        /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/,
+      );
+    });
+  });
+
+  describe('Ranking-module exceptions (Phase 3.2 — eighth and final legacy → RFC 7807 conversion)', () => {
+    // 3 concrete exceptions → 2 status codes (422 + 500). Highest-risk
+    // Phase-3 conversion because the prior per-module filter was a
+    // `@Catch()` catch-all that shadowed `GlobalExceptionFilter`.
+    //
+    // Phase 3.2 wire-shape changes (verified per-row below):
+    //   1. The catch-all envelope `{ statusCode, message, code,
+    //      timestamp }` is gone. Every error response is canonical
+    //      RFC 7807 `ProblemDetailDto`.
+    //   2. `extensions.code` is now set for the 3 ranking domain
+    //      exceptions (was `'INTERNAL_ERROR'` for all under the prior
+    //      filter).
+    //   3. `RANKING_INVALID_XP_EVENT` is upgraded from 500 (catch-all)
+    //      to 422 (semantic correction — rejected XP event input).
+    //   4. The thrown message is preserved for all 3 domain exceptions
+    //      (was discarded under the prior filter).
+    //
+    // Plan §8.4.2 completion criterion: "an artificial `throw new
+    // Error('boom')` inside a ranking controller produces a 500 with
+    // the standard shape" — verified by the uncaught-error test below.
+
+    it('InvalidXpEventError → 422 RANKING_INVALID_XP_EVENT (semantic upgrade from 500)', async () => {
+      // Wire-shape improvements:
+      //   1. Status upgrade 500 → 422 (rejected input, not internal
+      //      server failure).
+      //   2. `extensions.code` is now `'RANKING_INVALID_XP_EVENT'`
+      //      (was `'INTERNAL_ERROR'` under the prior filter).
+      //   3. Thrown message preserved (was `'Internal server error'`).
+      const res = await request(app.getHttpServer())
+        .get('/rfc7807-fixture/ranking/invalid-xp-event')
+        .expect(422);
+      const body = res.body as ProblemWire;
+      expect(body.title).toBe('UnprocessableEntity');
+      expect(body.detail).toBe('Invalid XP event: Amount must be positive');
+      expect(body.extensions?.code).toBe('RANKING_INVALID_XP_EVENT');
+    });
+
+    it('RankCalculationError → 500 RANKING_RANK_CALCULATION_ERROR (message preserved)', async () => {
+      // Wire-shape improvements:
+      //   1. `extensions.code` is now `'RANKING_RANK_CALCULATION_ERROR'`
+      //      (was `'INTERNAL_ERROR'` under the prior filter).
+      //   2. Thrown message preserved (was `'Internal server error'`).
+      const res = await request(app.getHttpServer())
+        .get('/rfc7807-fixture/ranking/rank-calculation-error')
+        .expect(500);
+      const body = res.body as ProblemWire;
+      expect(body.title).toBe('InternalServerError');
+      expect(body.detail).toBe('Rank calculation failed for daily: db deadlock');
+      expect(body.extensions?.code).toBe('RANKING_RANK_CALCULATION_ERROR');
+    });
+
+    it('PeriodResetError → 500 RANKING_PERIOD_RESET_ERROR (message preserved)', async () => {
+      // Wire-shape improvements:
+      //   1. `extensions.code` is now `'RANKING_PERIOD_RESET_ERROR'`
+      //      (was `'INTERNAL_ERROR'` under the prior filter).
+      //   2. Thrown message preserved (was `'Internal server error'`).
+      const res = await request(app.getHttpServer())
+        .get('/rfc7807-fixture/ranking/period-reset-error')
+        .expect(500);
+      const body = res.body as ProblemWire;
+      expect(body.title).toBe('InternalServerError');
+      expect(body.detail).toBe('Period reset failed for weekly: scheduler offline');
+      expect(body.extensions?.code).toBe('RANKING_PERIOD_RESET_ERROR');
+    });
+
+    it("uncaught `Error('boom')` inside a ranking controller → 500 standard RFC 7807 shape (Plan §8.4.2 completion criterion)", async () => {
+      // Plan §8.4.2 completion criterion: "For ranking: an artificial
+      // `throw new Error('boom')` inside a ranking controller produces
+      // a 500 with the standard shape, **and** the existing
+      // `requestLogger.error({ event: 'unhandled_exception', ... })`
+      // log line still appears."
+      //
+      // Before Phase 3.2 this error was caught by
+      // `RankingDomainExceptionFilter`'s `@Catch()` and emitted as the
+      // legacy `{ statusCode, message, code, timestamp }` envelope
+      // with `code: 'INTERNAL_ERROR'`. After Phase 3.2 the catch-all
+      // is removed; the global filter handles it as canonical RFC 7807
+      // and logs `event: 'unhandled_exception'`.
+      //
+      // Note: the test environment sets `NODE_ENV=production` for the
+      // app (per `app.useGlobalPipes` / `app.enableShutdownHooks` /
+      // similar setup in the e2e bootstrap), so the global filter
+      // returns `detail: 'Internal server error'` (not the raw
+      // exception message) — this is the standard production-mode
+      // sanitization. The thrown message is still logged via
+      // `event: 'unhandled_exception'`.
+      const res = await request(app.getHttpServer())
+        .get('/rfc7807-fixture/ranking/uncaught-error')
+        .expect(500);
+      const body = res.body as ProblemWire;
+      // RFC 7807 standard shape (NOT the legacy ranking envelope).
+      expect(body.type).toBe('https://api.quiz.local/problems/internal-server-error');
+      expect(body.title).toBe('InternalServerError');
+      expect(body.status).toBe(500);
+      expect(typeof body.instance).toBe('string');
+      expect(typeof body.extensions?.timestamp).toBe('string');
+      // Phase 4 (§6.3 + §8.5): every 5xx carries `extensions.code =
+      // 'GLOBAL_INTERNAL_ERROR'`. This is the uniform value across
+      // uncaught Errors, 5xx `HttpException` instances, and any
+      // 5xx status that falls through the table. Previously (Phase
+      // 3.2 only) this field was `undefined` for the uncaught-Error
+      // path; Phase 4 makes it uniform with the rest of the wire
+      // shape.
+      expect(body.extensions?.code).toBe('GLOBAL_INTERNAL_ERROR');
+    });
+  });
+
+  describe('Notification-module exceptions (Phase 5 rev5.1 — missed-module cleanup)', () => {
+    // Phase 5 (rev5.1) coverage: notification was inadvertently
+    // skipped in Phases 1-3 because it had no per-module filter.
+    // Its errors extended `Error` directly, so the global filter
+    // caught them via its `instanceof Error` branch and returned
+    // 500 with `title: 'InternalServerError'` — masking a legitimate
+    // 404 (notification not found) as a generic 500 and masking a
+    // legitimate 403 (user lacks permission for this specific
+    // notification) the same way. Phase 5 (rev5.1) converts them to
+    // `BaseDomainException` subclasses; the global filter now
+    // resolves the correct status + `extensions.code` for both.
+    // 2 concrete exceptions → 2 status codes (404 + 403).
+
+    it('NotificationNotFoundError → 404 NOTIFICATION_NOT_FOUND (status correction 500 → 404)', async () => {
+      // Wire-shape improvement: pre-Phase-5 this was a 500
+      // catch-all (the global filter's `instanceof Error` branch
+      // routes plain `Error` subclasses to 500 regardless of intent).
+      // After Phase 5 (rev5.1) the global filter resolves the new
+      // code `NOTIFICATION_NOT_FOUND` → 404 via `ProblemCodeMapping`.
+      const res = await request(app.getHttpServer())
+        .get('/rfc7807-fixture/notification/not-found')
+        .expect(404);
+      const body = res.body as ProblemWire;
+      expect(body.type).toBe('https://api.quiz.local/problems/notification-not-found');
+      expect(body.title).toBe('NotFound');
+      expect(body.detail).toBe('Notification not found: notif-1');
+      expect(body.extensions?.code).toBe('NOTIFICATION_NOT_FOUND');
+    });
+
+    it('NotificationForbiddenError → 403 NOTIFICATION_FORBIDDEN (status correction 500 → 403)', async () => {
+      // Wire-shape improvement: pre-Phase-5 this was a 500
+      // catch-all. After Phase 5 (rev5.1) the global filter resolves
+      // the new code `NOTIFICATION_FORBIDDEN` → 403 via
+      // `ProblemCodeMapping`. Note on 401 vs 403: the throw-site is
+      // post-authentication (the caller IS logged in; the check is
+      // `notification.userId !== user.sub`), so 403 is correct (you
+      // are who you say you are, you just don't own this
+      // notification).
+      const res = await request(app.getHttpServer())
+        .get('/rfc7807-fixture/notification/forbidden')
+        .expect(403);
+      const body = res.body as ProblemWire;
+      expect(body.title).toBe('Forbidden');
+      expect(body.detail).toBe('You do not have permission to access this notification');
+      expect(body.extensions?.code).toBe('NOTIFICATION_FORBIDDEN');
+    });
+  });
+
+  describe('native HttpException (Phase 4 — synthesized `extensions.code`)', () => {
+    // Plan §6.3 + §8.5: the global filter now synthesizes
+    // `extensions.code` for non-domain `HttpException` paths so
+    // clients can switch on `code` uniformly. The table lives in
+    // the global filter itself (no separate registry). Status 400
+    // from `ValidationPipe` (string[] of errors) emits the special
+    // `GLOBAL_VALIDATION_FAILED`; all other 400s default to
+    // `GLOBAL_BAD_REQUEST`.
+
+    it('NotFoundException → 404 GLOBAL_NOT_FOUND (plan §8.5 completion criterion)', async () => {
+      // Phase 4: a 404 from a missing route now carries
+      // `extensions.code = 'GLOBAL_NOT_FOUND'`. Pre-Phase-4 the field
+      // was `undefined`; clients had to switch on `status` alone.
+      const res = await request(app.getHttpServer())
+        .get('/rfc7807-fixture/http-not-found')
+        .expect(404);
+      const body = res.body as ProblemWire;
+      expect(body.title).toBe('Not Found');
+      expect(body.extensions?.code).toBe('GLOBAL_NOT_FOUND');
+    });
+
+    it('BadRequestException with `string[]` message (ValidationPipe shape) → 400 GLOBAL_VALIDATION_FAILED', async () => {
+      // Phase 4 (§6.3 override): a 400 carrying a `string[]` message
+      // (the shape NestJS `ValidationPipe` produces for failed
+      // class-validator checks) emits `GLOBAL_VALIDATION_FAILED`
+      // instead of the default `GLOBAL_BAD_REQUEST`. Clients
+      // rendering per-field UI use this code to skip the
+      // `detail: '...; ...; ...'` joined-string render and instead
+      // inspect `extensions.validationErrors` (Phase 5+; not yet
+      // implemented).
+      const res = await request(app.getHttpServer())
+        .get('/rfc7807-fixture/http-bad-request-validation')
+        .expect(400);
+      const body = res.body as ProblemWire;
+      expect(body.title).toBe('Bad Request');
+      // ValidationPipe joins field errors with `; ` per the global
+      // filter's existing logic — Phase 4 does not change `detail`
+      // formatting, only the `code` synthesis.
+      expect(body.detail).toBe('title must be a string; title must not be empty');
+      expect(body.extensions?.code).toBe('GLOBAL_VALIDATION_FAILED');
     });
   });
 });

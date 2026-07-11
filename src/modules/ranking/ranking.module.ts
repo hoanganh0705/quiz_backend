@@ -60,7 +60,6 @@ import { RankingApplicationService } from './application/ranking.application.ser
 import { RankingController } from './transport/controller/ranking.controller';
 import { RankingAdminController } from './transport/controller/ranking-admin.controller';
 import { RankingPresenter } from './transport/presenters/ranking.presenter';
-import { RankingDomainExceptionFilter } from './transport/filters/ranking-domain-exception.filter';
 
 @Module({
   imports: [NotificationModule, forwardRef(() => AttemptModule)],
@@ -123,7 +122,6 @@ import { RankingDomainExceptionFilter } from './transport/filters/ranking-domain
 
     // Transport
     RankingPresenter,
-    RankingDomainExceptionFilter,
   ],
   controllers: [RankingController, RankingAdminController],
   exports: [

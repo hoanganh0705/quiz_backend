@@ -49,6 +49,7 @@ import {
   TournamentUnregisterClosedError,
   TournamentParticipantStateError,
   TournamentWithdrawClosedError,
+  TournamentAlreadyWithdrawnError,
 } from './errors';
 import {
   TOURNAMENT_NOT_FOUND_MESSAGE,
@@ -61,6 +62,7 @@ import {
   TOURNAMENT_ATTEMPT_ALREADY_EXISTS_MESSAGE,
   TOURNAMENT_NOT_REGISTERED_MESSAGE,
   TOURNAMENT_UNREGISTER_CLOSED_MESSAGE,
+  TOURNAMENT_ALREADY_WITHDRAWN_MESSAGE,
   TOURNAMENT_PARTICIPANT_STATE_ERROR_MESSAGE,
   TOURNAMENT_WITHDRAW_CLOSED_MESSAGE,
 } from '../tournament.constants';
@@ -505,7 +507,7 @@ export class TournamentService {
     }
 
     if (participant.status === 'withdrawn') {
-      throw new TournamentParticipantStateError(TOURNAMENT_PARTICIPANT_STATE_ERROR_MESSAGE);
+      throw new TournamentAlreadyWithdrawnError(TOURNAMENT_ALREADY_WITHDRAWN_MESSAGE);
     }
 
     if (participant.status === 'completed') {

@@ -1,4 +1,12 @@
-import { ArgumentsHost, BadRequestException, HttpStatus, NotFoundException } from '@nestjs/common';
+import {
+  ArgumentsHost,
+  BadRequestException,
+  ForbiddenException,
+  HttpException,
+  HttpStatus,
+  NotFoundException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { PinoLogger } from 'nestjs-pino';
 import { BaseDomainException } from '@/common/errors/base-domain.exception';
 import { GlobalExceptionFilter } from '@/common/filters/global-exception.filter';
@@ -207,10 +215,12 @@ describe('GlobalExceptionFilter', () => {
       expect(body.type).toBe('https://api.quiz.local/problems/not-found');
       expect(body.title).toBe('Not Found');
       expect(body.detail).toBe('Plain route does not exist.');
-      // `extensions.code` is NOT set for native HttpException — that field
-      // is reserved for domain exceptions. Clients switch on status +
-      // the title/`type` URI for native errors.
-      expect(body.extensions?.code).toBeUndefined();
+      // Phase 4 (§6.3 + §8.5): `extensions.code` is now synthesized
+      // for native `HttpException` paths. Status 404 →
+      // `GLOBAL_NOT_FOUND`. Plan §8.5 completion criterion: "A 404
+      // from a missing route includes `extensions.code =
+      // 'GLOBAL_NOT_FOUND'`."
+      expect(body.extensions?.code).toBe('GLOBAL_NOT_FOUND');
       expect(body.extensions?.requestId).toBe('req-fixture-123');
     });
 
@@ -227,6 +237,100 @@ describe('GlobalExceptionFilter', () => {
       expect(body.type).toBe('https://api.quiz.local/problems/bad-request');
       expect(body.title).toBe('Bad Request');
       expect(body.detail).toBe('title must be a string; title must not be empty');
+      // Phase 4 (§6.3 override): `BadRequestException` with a
+      // `string[]` message (the `ValidationPipe` shape) synthesizes
+      // `GLOBAL_VALIDATION_FAILED` instead of the default
+      // `GLOBAL_BAD_REQUEST`. Clients rendering per-field UI use
+      // this code to skip the joined-string render and instead
+      // inspect `extensions.validationErrors` (Phase 5+; not yet
+      // implemented).
+      expect(body.extensions?.code).toBe('GLOBAL_VALIDATION_FAILED');
+    });
+
+    it('renders 400 with a string message → GLOBAL_BAD_REQUEST (default for non-validation)', () => {
+      // Phase 4 (§6.3): non-validation 400s default to
+      // `GLOBAL_BAD_REQUEST`. This is the path for manually-thrown
+      // `BadRequestException('Invalid from date')` from
+      // application-layer query validation (e.g. ranking's
+      // `get-user-ranking-history.query.ts:83,87,91`).
+      const { filter, host, captured } = buildFixture();
+
+      filter.catch(new BadRequestException('Invalid from date'), host);
+
+      expect(captured.status).toBe(HttpStatus.BAD_REQUEST);
+      const body = captured.body as ProblemWire;
+      expect(body.title).toBe('Bad Request');
+      expect(body.detail).toBe('Invalid from date');
+      expect(body.extensions?.code).toBe('GLOBAL_BAD_REQUEST');
+    });
+
+    it('renders 401 with GLOBAL_UNAUTHENTICATED (plan §8.5 completion criterion)', () => {
+      // Phase 4 (§8.5): "A 401 from `JwtGuard` now includes
+      // `extensions.code = 'GLOBAL_UNAUTHENTICATED'`." Exercised
+      // here by throwing `UnauthorizedException` directly (which is
+      // what `JwtGuard` throws in production).
+      const { filter, host, captured } = buildFixture();
+
+      filter.catch(new UnauthorizedException('Authorization header is missing'), host);
+
+      expect(captured.status).toBe(HttpStatus.UNAUTHORIZED);
+      const body = captured.body as ProblemWire;
+      expect(body.type).toBe('https://api.quiz.local/problems/unauthorized');
+      expect(body.extensions?.code).toBe('GLOBAL_UNAUTHENTICATED');
+    });
+
+    it('renders 403 with GLOBAL_FORBIDDEN', () => {
+      const { filter, host, captured } = buildFixture();
+
+      filter.catch(new ForbiddenException('Caller lacks required permission'), host);
+
+      expect(captured.status).toBe(HttpStatus.FORBIDDEN);
+      const body = captured.body as ProblemWire;
+      expect(body.extensions?.code).toBe('GLOBAL_FORBIDDEN');
+    });
+
+    it('renders 429 with GLOBAL_RATE_LIMITED (@nestjs/throttler shape)', () => {
+      // Phase 4 (§6.3): 429 → `GLOBAL_RATE_LIMITED`. This is the path
+      // for `@nestjs/throttler` rejecting an over-limit request.
+      const { filter, host, captured } = buildFixture();
+
+      filter.catch(new HttpException('Too Many Requests', HttpStatus.TOO_MANY_REQUESTS), host);
+
+      expect(captured.status).toBe(HttpStatus.TOO_MANY_REQUESTS);
+      const body = captured.body as ProblemWire;
+      expect(body.extensions?.code).toBe('GLOBAL_RATE_LIMITED');
+    });
+
+    it('renders 5xx with GLOBAL_INTERNAL_ERROR (e.g. InternalServerErrorException)', () => {
+      // Phase 4 (§6.3): "5xx → GLOBAL_INTERNAL_ERROR." This covers
+      // unmodeled 5xx paths like `ServiceUnavailableException` (503)
+      // or `BadGatewayException` (502).
+      const { filter, host, captured } = buildFixture();
+
+      filter.catch(new HttpException('Upstream offline', HttpStatus.SERVICE_UNAVAILABLE), host);
+
+      expect(captured.status).toBe(HttpStatus.SERVICE_UNAVAILABLE);
+      const body = captured.body as ProblemWire;
+      expect(body.extensions?.code).toBe('GLOBAL_INTERNAL_ERROR');
+    });
+
+    it('emits `http_client_error` at warn with the synthesized `code` (Phase 4 logging update)', () => {
+      const { filter, host, logger } = buildFixture();
+
+      filter.catch(new NotFoundException('Plain route does not exist.'), host);
+
+      // eslint-disable-next-line @typescript-eslint/unbound-method -- jest.fn stub; treat as Mock
+      const warn = logger.warn as unknown as jest.Mock;
+      expect(warn).toHaveBeenCalledWith(
+        expect.objectContaining({
+          event: 'http_client_error',
+          statusCode: 404,
+          // Phase 4: the synthesized `code` is included in the log
+          // line so on-call can grep for `GLOBAL_*` codes uniformly.
+          code: 'GLOBAL_NOT_FOUND',
+          error: 'Not Found',
+        }),
+      );
     });
   });
 
@@ -241,7 +345,10 @@ describe('GlobalExceptionFilter', () => {
       expect(body.type).toBe('https://api.quiz.local/problems/internal-server-error');
       expect(body.title).toBe('InternalServerError');
       expect(body.detail).toBe('boom');
-      expect(body.extensions?.code).toBeUndefined();
+      // Phase 4 (§6.3): every 5xx response carries `extensions.code
+      // = 'GLOBAL_INTERNAL_ERROR'`. Plain `Error` instances are
+      // mapped to 500 → GLOBAL_INTERNAL_ERROR.
+      expect(body.extensions?.code).toBe('GLOBAL_INTERNAL_ERROR');
     });
 
     it('renders 500 in production mode with a sanitized message', () => {
