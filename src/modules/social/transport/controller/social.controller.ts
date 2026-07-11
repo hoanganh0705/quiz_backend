@@ -8,7 +8,6 @@ import {
   ParseIntPipe,
   DefaultValuePipe,
   Body,
-  UseFilters,
   ParseUUIDPipe,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
@@ -47,12 +46,16 @@ import {
   GetUserFollowersQueryDto,
 } from '@/modules/social/dto/request';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
-import { SocialDomainExceptionFilter } from '../filters/social-domain-exception.filter';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
+
+// All error responses (401 / 400 / 403 / 404 / 409 / 500) are covered by
+// the `ApiAuthAction` / `ApiAuthActionNoContent` decorators below. After
+// Phase 2 the global exception filter emits RFC 7807 `ProblemDetailDto`
+// for every social-domain error; the per-module filter has been
+// removed.
 
 @ApiTags('social')
 @Controller('social')
-@UseFilters(SocialDomainExceptionFilter)
 export class SocialController {
   constructor(
     private readonly socialService: SocialApplicationService,

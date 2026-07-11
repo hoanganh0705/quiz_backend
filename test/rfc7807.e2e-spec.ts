@@ -146,6 +146,22 @@ import {
   InstanceNotOpenError,
   PlayerAlreadyJoinedError,
 } from '@/modules/instance/domain/errors';
+import {
+  AlreadyFriendsError,
+  BlockedUserError,
+  FriendListForbiddenError,
+  FriendRequestForbiddenError,
+  FriendRequestNotFoundError,
+  PendingRequestExistsError,
+  SelfFriendRequestError,
+  UserBlockedError,
+} from '@/modules/social/domain/errors';
+import {
+  AchievementGrantError,
+  AchievementUserNotFoundError,
+  BadgeNotFoundError,
+  UserBadgeOwnershipNotFoundError,
+} from '@/modules/achievement/domain/errors';
 import { serverConfig } from '@/core/config';
 
 interface ProblemWire {
@@ -743,6 +759,134 @@ class Rfc7807FixtureController {
     // thrown by `instance.service.ts` — see docblock on
     // `PlayerAlreadyJoinedError`.
     throw new PlayerAlreadyJoinedError();
+  }
+
+  // Social-module endpoints — Phase 2 live-mapping coverage. 8
+  // concrete exceptions → 4 status codes (400/403/404/409). Each
+  // endpoint throws a real social exception; if
+  // `ProblemCodeMapping` or the social classes drift, the e2e tests
+  // in the social describe-block below fail.
+
+  @Get('social/friend-request-not-found')
+  socialFriendRequestNotFound(): never {
+    // Verify wire-shape improvement: prior filter dropped the
+    // request ID and rewrote all to `'Friend request not found'`.
+    // Global filter preserves thrown message including the
+    // interpolated ID.
+    throw new FriendRequestNotFoundError('abc-123');
+  }
+
+  @Get('social/friend-request-forbidden')
+  socialFriendRequestForbidden(): never {
+    // Verify wire-shape improvement: prior filter rewrote all to
+    // `'You do not have permission to perform this action'`. Global
+    // filter preserves thrown message.
+    throw new FriendRequestForbiddenError();
+  }
+
+  @Get('social/friend-list-forbidden')
+  socialFriendListForbidden(): never {
+    // Prior filter preserved this message verbatim; behavior
+    // unchanged. Verifies mapping resolves to 403.
+    throw new FriendListForbiddenError();
+  }
+
+  @Get('social/self-friend-request')
+  socialSelfFriendRequest(): never {
+    // Prior filter preserved this message verbatim; behavior
+    // unchanged. Verifies mapping resolves to 400.
+    throw new SelfFriendRequestError();
+  }
+
+  @Get('social/already-friends')
+  socialAlreadyFriends(): never {
+    // Prior filter preserved this message verbatim; behavior
+    // unchanged. Verifies mapping resolves to 409.
+    throw new AlreadyFriendsError();
+  }
+
+  @Get('social/blocked-user')
+  socialBlockedUser(): never {
+    // Prior filter preserved this message verbatim; behavior
+    // unchanged. Verifies mapping resolves to 403.
+    throw new BlockedUserError();
+  }
+
+  @Get('social/user-blocked')
+  socialUserBlocked(): never {
+    // Prior filter preserved this message verbatim; behavior
+    // unchanged. Verifies mapping resolves to 403.
+    throw new UserBlockedError();
+  }
+
+  @Get('social/pending-request-exists')
+  socialPendingRequestExists(): never {
+    // Prior filter preserved this message verbatim; behavior
+    // unchanged. Verifies mapping resolves to 409.
+    throw new PendingRequestExistsError();
+  }
+
+  // Achievement-module endpoints — Phase 2 live-mapping coverage. 4
+  // concrete exceptions → 2 status codes (404 + 500). Each
+  // endpoint throws a real achievement exception; if
+  // `ProblemCodeMapping` or the achievement classes drift, the e2e
+  // tests in the achievement describe-block below fail.
+  //
+  // Special note: the prior per-module filter
+  // `@Catch(AchievementDomainError, UserProfilePrivateError)` also
+  // caught the cross-module `UserProfilePrivateError` from the user
+  // module. After Phase 2 the achievement filter is removed; the
+  // global filter handles both via their mapping entries. We exercise
+  // the `UserProfilePrivateError` resolution through an
+  // achievement-named endpoint so a regression test verifies the
+  // cross-module throwing path still routes correctly.
+
+  @Get('achievement/badge-not-found')
+  achievementBadgeNotFound(): never {
+    // Verify wire-shape improvement: prior filter rewrote all to
+    // `'Badge not found'`. Global filter preserves thrown message
+    // including the interpolated badge ID.
+    throw new BadgeNotFoundError('badge-abc');
+  }
+
+  @Get('achievement/user-not-found')
+  achievementUserNotFound(): never {
+    // Verify wire-shape improvement: prior filter rewrote all to
+    // `'User not found'`. Global filter preserves thrown message
+    // including the interpolated user ID.
+    throw new AchievementUserNotFoundError('user-1');
+  }
+
+  @Get('achievement/user-badge-ownership-not-found')
+  achievementUserBadgeOwnershipNotFound(): never {
+    // Verify wire-shape improvement: prior filter rewrote all to
+    // `'User badge not found'`. Global filter preserves thrown
+    // message including both interpolated IDs.
+    throw new UserBadgeOwnershipNotFoundError('user-1', 'badge-abc');
+  }
+
+  @Get('achievement/grant-error')
+  achievementGrantError(): never {
+    // Wire-shape improvement: prior filter had NO branch for
+    // `AchievementGrantError` — fell through to catch-all 500 with
+    // hardcoded `'Internal server error'`. Global filter resolves
+    // the code and preserves the thrown message including the user
+    // ID and reason. Note: this exception is defined but currently
+    // not thrown by `achievement.application.service.ts`.
+    throw new AchievementGrantError('user-1', 'rule-engine-timeout');
+  }
+
+  @Get('achievement/profile-private')
+  achievementProfilePrivate(): never {
+    // Cross-module regression test: the prior per-module filter also
+    // caught `UserProfilePrivateError` from the user module via
+    // `@Catch(AchievementDomainError, UserProfilePrivateError)`. After
+    // Phase 2 the achievement filter is removed; the global filter
+    // handles `UserProfilePrivateError` via its Phase-1 mapping entry
+    // (`USER_PROFILE_PRIVATE` → 403). This endpoint verifies that the
+    // cross-module throwing path still routes correctly without the
+    // achievement filter.
+    throw new UserProfilePrivateError('user-target-1');
   }
 
   @Get('http-not-found')
@@ -1997,6 +2141,210 @@ describe('RFC 7807 ProblemDetail (Phase 0 backstop)', () => {
       expect(body.title).toBe('Conflict');
       expect(body.detail).toBe('You have already joined this instance');
       expect(body.extensions?.code).toBe('PLAYER_ALREADY_JOINED');
+    });
+  });
+
+  describe('Social-module exceptions (Phase 2 — seventh legacy → RFC 7807 conversion)', () => {
+    // 8 concrete exceptions → 4 status codes (400/403/404/409). No
+    // `*DomainErrorDto` Swagger DTO exists in this module (verified by
+    // grep — social never had one). The single controller already
+    // uses `ApiAuthAction` / `ApiAuthActionNoContent` shorthand
+    // decorators that cover all 4 error responses — so the controller
+    // migration is the simplest possible: just remove `@UseFilters`.
+    //
+    // The prior per-module HTTP filter preserved most thrown messages
+    // verbatim — the two notable exceptions are documented per-row
+    // below.
+
+    it('FriendRequestNotFoundError → 404 SOCIAL_FRIEND_REQUEST_NOT_FOUND (wire-shape improvement)', async () => {
+      // Wire-shape improvement: prior filter dropped the request ID
+      // and rewrote all to `'Friend request not found'`. Global
+      // filter preserves thrown message including the interpolated
+      // ID.
+      const res = await request(app.getHttpServer())
+        .get('/rfc7807-fixture/social/friend-request-not-found')
+        .expect(404);
+      const body = res.body as ProblemWire;
+      expect(body.title).toBe('NotFound');
+      expect(body.detail).toBe('Friend request not found: abc-123');
+      expect(body.extensions?.code).toBe('SOCIAL_FRIEND_REQUEST_NOT_FOUND');
+    });
+
+    it('FriendRequestForbiddenError → 403 SOCIAL_FRIEND_REQUEST_FORBIDDEN (wire-shape improvement)', async () => {
+      // Wire-shape improvement: prior filter rewrote all to
+      // `'You do not have permission to perform this action'`.
+      // Global filter preserves thrown message.
+      const res = await request(app.getHttpServer())
+        .get('/rfc7807-fixture/social/friend-request-forbidden')
+        .expect(403);
+      const body = res.body as ProblemWire;
+      expect(body.title).toBe('Forbidden');
+      expect(body.detail).toBe('You do not have permission to respond to this friend request');
+      expect(body.extensions?.code).toBe('SOCIAL_FRIEND_REQUEST_FORBIDDEN');
+    });
+
+    it('FriendListForbiddenError → 403 SOCIAL_FRIEND_LIST_FORBIDDEN (message preserved verbatim)', async () => {
+      // Prior filter preserved this message verbatim; behavior
+      // unchanged. Verifies mapping resolves to 403.
+      const res = await request(app.getHttpServer())
+        .get('/rfc7807-fixture/social/friend-list-forbidden')
+        .expect(403);
+      const body = res.body as ProblemWire;
+      expect(body.title).toBe('Forbidden');
+      expect(body.detail).toBe('You do not have permission to view this user\u2019s friend list');
+      expect(body.extensions?.code).toBe('SOCIAL_FRIEND_LIST_FORBIDDEN');
+    });
+
+    it('SelfFriendRequestError → 400 SOCIAL_SELF_FRIEND_REQUEST (message preserved verbatim)', async () => {
+      // Prior filter preserved this message verbatim; behavior
+      // unchanged. Verifies mapping resolves to 400.
+      const res = await request(app.getHttpServer())
+        .get('/rfc7807-fixture/social/self-friend-request')
+        .expect(400);
+      const body = res.body as ProblemWire;
+      expect(body.title).toBe('BadRequest');
+      expect(body.detail).toBe('You cannot send a friend request to yourself');
+      expect(body.extensions?.code).toBe('SOCIAL_SELF_FRIEND_REQUEST');
+    });
+
+    it('AlreadyFriendsError → 409 SOCIAL_ALREADY_FRIENDS (message preserved verbatim)', async () => {
+      // Prior filter preserved this message verbatim; behavior
+      // unchanged. Verifies mapping resolves to 409.
+      const res = await request(app.getHttpServer())
+        .get('/rfc7807-fixture/social/already-friends')
+        .expect(409);
+      const body = res.body as ProblemWire;
+      expect(body.title).toBe('Conflict');
+      expect(body.detail).toBe('You are already friends with this user');
+      expect(body.extensions?.code).toBe('SOCIAL_ALREADY_FRIENDS');
+    });
+
+    it('BlockedUserError → 403 SOCIAL_BLOCKED_USER (message preserved verbatim)', async () => {
+      // Prior filter preserved this message verbatim; behavior
+      // unchanged. Verifies mapping resolves to 403.
+      const res = await request(app.getHttpServer())
+        .get('/rfc7807-fixture/social/blocked-user')
+        .expect(403);
+      const body = res.body as ProblemWire;
+      expect(body.title).toBe('Forbidden');
+      expect(body.detail).toBe('Cannot perform this action on a blocked user');
+      expect(body.extensions?.code).toBe('SOCIAL_BLOCKED_USER');
+    });
+
+    it('UserBlockedError → 403 SOCIAL_USER_BLOCKED (message preserved verbatim)', async () => {
+      // Prior filter preserved this message verbatim; behavior
+      // unchanged. Verifies mapping resolves to 403.
+      const res = await request(app.getHttpServer())
+        .get('/rfc7807-fixture/social/user-blocked')
+        .expect(403);
+      const body = res.body as ProblemWire;
+      expect(body.title).toBe('Forbidden');
+      expect(body.detail).toBe('This user has blocked you');
+      expect(body.extensions?.code).toBe('SOCIAL_USER_BLOCKED');
+    });
+
+    it('PendingRequestExistsError → 409 SOCIAL_PENDING_REQUEST_EXISTS (message preserved verbatim)', async () => {
+      // Prior filter preserved this message verbatim; behavior
+      // unchanged. Verifies mapping resolves to 409.
+      const res = await request(app.getHttpServer())
+        .get('/rfc7807-fixture/social/pending-request-exists')
+        .expect(409);
+      const body = res.body as ProblemWire;
+      expect(body.title).toBe('Conflict');
+      expect(body.detail).toBe('A friend request is already pending');
+      expect(body.extensions?.code).toBe('SOCIAL_PENDING_REQUEST_EXISTS');
+    });
+  });
+
+  describe('Achievement-module exceptions (Phase 2 — eighth and final legacy → RFC 7807 conversion)', () => {
+    // 4 concrete exceptions → 2 status codes (404 + 500). Distinct
+    // from prior Phase-2 modules (most have 4 status codes) because
+    // `AchievementGrantError` is a 500-class rule-engine grant failure.
+    // The cross-module `@Catch` (AchievementDomainError,
+    // UserProfilePrivateError) → `UserProfilePrivateError` (Phase 1)
+    // regression test verifies that the global filter handles
+    // achievement-route-thrown `UserProfilePrivateError` correctly.
+    //
+    // The prior per-module HTTP filter:
+    //   - rewrote `BadgeNotFoundError('Badge not found: <id>')` → `'Badge not found'`,
+    //   - rewrote `AchievementUserNotFoundError('User not found: <id>')` → `'User not found'`,
+    //   - rewrote `UserBadgeOwnershipNotFoundError('Badge <id> not owned by user <id>')` → `'User badge not found'`,
+    //   - had NO branch for `AchievementGrantError` → 500 catch-all with `'Internal server error'`.
+    // After Phase 2 the thrown message survives — verified per-row
+    // below.
+
+    it('BadgeNotFoundError → 404 BADGE_NOT_FOUND (wire-shape improvement)', async () => {
+      // Wire-shape improvement: prior filter rewrote all to
+      // `'Badge not found'`. Global filter preserves thrown
+      // message including the interpolated badge ID.
+      const res = await request(app.getHttpServer())
+        .get('/rfc7807-fixture/achievement/badge-not-found')
+        .expect(404);
+      const body = res.body as ProblemWire;
+      expect(body.title).toBe('NotFound');
+      expect(body.detail).toBe('Badge not found: badge-abc');
+      expect(body.extensions?.code).toBe('BADGE_NOT_FOUND');
+    });
+
+    it('AchievementUserNotFoundError → 404 ACHIEVEMENT_USER_NOT_FOUND (wire-shape improvement)', async () => {
+      // Wire-shape improvement: prior filter rewrote all to
+      // `'User not found'`. Global filter preserves thrown
+      // message including the interpolated user ID.
+      const res = await request(app.getHttpServer())
+        .get('/rfc7807-fixture/achievement/user-not-found')
+        .expect(404);
+      const body = res.body as ProblemWire;
+      expect(body.title).toBe('NotFound');
+      expect(body.detail).toBe('User not found: user-1');
+      expect(body.extensions?.code).toBe('ACHIEVEMENT_USER_NOT_FOUND');
+    });
+
+    it('UserBadgeOwnershipNotFoundError → 404 USER_BADGE_OWNERSHIP_NOT_FOUND (wire-shape improvement)', async () => {
+      // Wire-shape improvement: prior filter rewrote all to
+      // `'User badge not found'`. Global filter preserves thrown
+      // message including both interpolated IDs.
+      const res = await request(app.getHttpServer())
+        .get('/rfc7807-fixture/achievement/user-badge-ownership-not-found')
+        .expect(404);
+      const body = res.body as ProblemWire;
+      expect(body.title).toBe('NotFound');
+      expect(body.detail).toBe('Badge badge-abc not owned by user user-1');
+      expect(body.extensions?.code).toBe('USER_BADGE_OWNERSHIP_NOT_FOUND');
+    });
+
+    it('AchievementGrantError → 500 ACHIEVEMENT_GRANT_ERROR (wire-shape improvement)', async () => {
+      // Wire-shape improvement: prior filter had NO branch for
+      // `AchievementGrantError` — fell through to catch-all 500
+      // with hardcoded `'Internal server error'`. Global filter
+      // resolves the code and preserves the thrown message
+      // including the user ID and reason. Note: this exception is
+      // defined but currently not thrown by
+      // `achievement.application.service.ts`.
+      const res = await request(app.getHttpServer())
+        .get('/rfc7807-fixture/achievement/grant-error')
+        .expect(500);
+      const body = res.body as ProblemWire;
+      expect(body.title).toBe('InternalServerError');
+      expect(body.detail).toBe('Failed to grant achievement for user user-1: rule-engine-timeout');
+      expect(body.extensions?.code).toBe('ACHIEVEMENT_GRANT_ERROR');
+    });
+
+    it('UserProfilePrivateError (cross-module) → 403 USER_PROFILE_PRIVATE (regression)', async () => {
+      // Cross-module regression test: the prior per-module filter
+      // also caught `UserProfilePrivateError` from the user module
+      // via `@Catch(AchievementDomainError, UserProfilePrivateError)`.
+      // After Phase 2 the achievement filter is removed; the global
+      // filter handles `UserProfilePrivateError` via its Phase-1
+      // mapping entry (`USER_PROFILE_PRIVATE` → 403). This endpoint
+      // verifies that the cross-module throwing path still routes
+      // correctly without the achievement filter.
+      const res = await request(app.getHttpServer())
+        .get('/rfc7807-fixture/achievement/profile-private')
+        .expect(403);
+      const body = res.body as ProblemWire;
+      expect(body.title).toBe('Forbidden');
+      expect(body.detail).toBe('Profile of user user-target-1 is not public');
+      expect(body.extensions?.code).toBe('USER_PROFILE_PRIVATE');
     });
   });
 });
