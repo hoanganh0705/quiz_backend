@@ -13,11 +13,9 @@ import { Throttle } from '@nestjs/throttler';
 import {
   ApiBadRequestResponse,
   ApiBearerAuth,
-  ApiCreatedResponse,
   ApiExtraModels,
   ApiForbiddenResponse,
   ApiNotFoundResponse,
-  ApiOkResponse,
   ApiOperation,
   ApiTags,
   ApiUnauthorizedResponse,
@@ -29,8 +27,7 @@ import { ProblemDetailDto, ErrorResponseExamples } from '@/common/swagger/swagge
 import { decodeBase64JsonCursor } from '@/common/utils/cursor.util';
 import { type JwtPayload } from '@/common/guards/jwt.guard';
 import { AUTH_SECURITY_NAME } from '@/core/swagger/swagger.config';
-import { InstanceService } from '../../domain/instance.service';
-import { InstanceResponseMapper } from '../../mappers/instance-response.mapper';
+import { InstanceApplicationService } from '../../application/instance.application.service';
 import {
   CreateInstanceDto,
   GetLeaderboardQueryDto,
@@ -40,25 +37,17 @@ import type { LeaderboardCursorPayload } from '../../domain/ports';
 import {
   CreateInstanceResponseDto,
   InstanceDetailResponseDto,
-  JoinInstanceResponseDto,
-  StartInstanceResponseDto,
-  CloseInstanceResponseDto,
   InstanceLeaderboardResponseDto,
   InstanceListResponseDto,
   InstancePlayersResponseDto,
-} from '../../dto/response';
-import {
-  WrappedCreateInstanceResponseDto,
-  WrappedInstanceDetailResponseDto,
-  WrappedJoinInstanceResponseDto,
-  WrappedStartInstanceResponseDto,
-  WrappedCloseInstanceResponseDto,
-  WrappedInstanceListResponseDto,
-  WrappedInstanceLeaderboardResponseDto,
-  WrappedInstancePlayersResponseDto,
+  JoinInstanceResponseDto,
+  StartInstanceResponseDto,
+  CloseInstanceResponseDto,
   InstanceDomainErrorDto,
 } from '../../dto/response';
+import { ApiCreatedResource, ApiOkResource, ApiOkResourceList } from '@/common/swagger/api-ok';
 import { InstanceDomainExceptionFilter } from '../filters/instance-domain-exception.filter';
+import { InstancePresenter } from '../presenters/instance.presenter';
 
 // ─── Local helper decorators ───────────────────────────────────────────────────
 //
@@ -151,25 +140,20 @@ function instanceUnauthorizedResponse(): MethodDecorator {
 @UseFilters(InstanceDomainExceptionFilter)
 export class InstanceController {
   constructor(
-    private readonly instanceService: InstanceService,
-    private readonly mapper: InstanceResponseMapper,
+    private readonly applicationService: InstanceApplicationService,
+    private readonly presenter: InstancePresenter,
   ) {}
 
   // ─── POST /instances ────────────────────────────────────────────────────────
   //
   // `instanceService.createInstance` only inserts a row — it never throws any
   // `InstanceDomainError`. The only 400 path is class-validator on the body
-  // (handled by GlobalExceptionFilter → ProblemDetailDto). 404 and 409 from
-  // `@ApiAuthCreateWithState` were incorrect for this endpoint and have been
-  // removed.
+  // (handled by GlobalExceptionFilter → ProblemDetailDto).
   @Post()
   @Transactional()
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @instanceUnauthorizedResponse()
-  @ApiCreatedResponse({
-    description: 'Instance created',
-    type: WrappedCreateInstanceResponseDto,
-  })
+  @ApiCreatedResource(CreateInstanceResponseDto, { description: 'Instance created' })
   @ApiOperation({
     summary: 'Create instance',
     description:
@@ -186,32 +170,22 @@ export class InstanceController {
     type: ProblemDetailDto,
     example: ErrorResponseExamples.badRequest,
   })
-  async createInstance(
-    @CurrentUser() user: JwtPayload,
-    @Body() payload: CreateInstanceDto,
-  ): Promise<CreateInstanceResponseDto> {
-    const result = await this.instanceService.createInstance({
+  async createInstance(@CurrentUser() user: JwtPayload, @Body() payload: CreateInstanceDto) {
+    const result = await this.applicationService.createInstanceForController({
       quizVersionId: payload.quizVersionId,
       user,
       maxPlayers: payload.maxPlayers ?? null,
     });
-
-    return {
-      instanceId: result.instanceId,
-      message: 'Instance created successfully',
-    };
+    return this.presenter.createInstance(result);
   }
 
   // ─── GET /instances ─────────────────────────────────────────────────────────
   //
-  // Global JwtGuard enforces authentication even though `@ApiPublicRead` is
-  // applied, so 401 must be documented. 404 cannot occur (list endpoint).
+  // Global JwtGuard enforces authentication even though the endpoint is public
+  // by design. 404 cannot occur (list endpoint).
   @Get()
   @instanceUnauthorizedResponse()
-  @ApiOkResponse({
-    description: 'Instance list returned',
-    type: WrappedInstanceListResponseDto,
-  })
+  @ApiOkResourceList(InstanceListResponseDto, 'cursor', { description: 'Instance list returned' })
   @ApiOperation({
     summary: 'List instances',
     description:
@@ -221,8 +195,8 @@ export class InstanceController {
       '400 is returned only when the query parameters fail validation.',
   })
   @instanceBadRequestResponseValidation()
-  async listInstances(@Query() query: ListInstancesQueryDto): Promise<InstanceListResponseDto> {
-    const result = await this.instanceService.listInstances({
+  async listInstances(@Query() query: ListInstancesQueryDto) {
+    const result = await this.applicationService.listInstancesForController({
       limit: query.limit ?? 20,
       cursor: query.cursor,
       filters: {
@@ -230,15 +204,7 @@ export class InstanceController {
         difficulty: query.difficulty,
       },
     });
-
-    return {
-      items: result.rows.map((row) => this.mapper.toInstanceListItemResponse(row)),
-      pagination: {
-        limit: result.limit,
-        hasNextPage: result.hasNextPage,
-        nextCursor: result.nextCursor,
-      },
-    };
+    return this.presenter.listInstances(result);
   }
 
   // ─── GET /instances/{id}/players ────────────────────────────────────────────
@@ -246,13 +212,10 @@ export class InstanceController {
   // `InstanceService.listInstancePlayers` throws `InstanceNotFoundError` when
   // the instance does not exist → InstanceDomainExceptionFilter → 404.
   // The response payload (`{ instanceId, items, total }`) does NOT contain a
-  // `pagination` key, so the interceptor wraps it as a non-paginated envelope.
+  // `pagination` key, so the envelope wraps it as a non-paginated resource.
   @Get(':id/players')
   @instanceUnauthorizedResponse()
-  @ApiOkResponse({
-    description: 'Players returned',
-    type: WrappedInstancePlayersResponseDto,
-  })
+  @ApiOkResource(InstancePlayersResponseDto, { description: 'Players returned' })
   @ApiOperation({
     summary: 'List instance players',
     description:
@@ -261,16 +224,9 @@ export class InstanceController {
   })
   @instanceBadRequestResponseValidation()
   @instanceNotFoundResponse()
-  async listInstancePlayers(
-    @Param('id', new ParseUUIDPipe()) instanceId: string,
-  ): Promise<InstancePlayersResponseDto> {
-    const { items, total } = await this.instanceService.listInstancePlayers(instanceId);
-
-    return {
-      instanceId,
-      items: items.map((p) => this.mapper.toInstancePlayerResponse(p)),
-      total,
-    };
+  async listInstancePlayers(@Param('id', new ParseUUIDPipe()) instanceId: string) {
+    const result = await this.applicationService.listInstancePlayersForController(instanceId);
+    return this.presenter.listInstancePlayers(result);
   }
 
   // ─── GET /instances/{id} ────────────────────────────────────────────────────
@@ -279,10 +235,7 @@ export class InstanceController {
   // → 404 via `InstanceDomainExceptionFilter`.
   @Get(':id')
   @instanceUnauthorizedResponse()
-  @ApiOkResponse({
-    description: 'Instance found',
-    type: WrappedInstanceDetailResponseDto,
-  })
+  @ApiOkResource(InstanceDetailResponseDto, { description: 'Instance found' })
   @ApiOperation({
     summary: 'Get instance by id',
     description:
@@ -292,16 +245,9 @@ export class InstanceController {
   })
   @instanceBadRequestResponseValidation()
   @instanceNotFoundResponse()
-  getInstanceById(
-    @Param('id', new ParseUUIDPipe()) instanceId: string,
-  ): Promise<InstanceDetailResponseDto> {
-    return this.instanceService.getInstanceById(instanceId).then(async (row) => {
-      const { items: players } = await this.instanceService.listInstancePlayers(instanceId);
-      return this.mapper.toInstanceDetailResponse(
-        row,
-        players.map((p) => this.mapper.toInstancePlayerResponse(p)),
-      );
-    });
+  async getInstanceById(@Param('id', new ParseUUIDPipe()) instanceId: string) {
+    const result = await this.applicationService.getInstanceByIdForController(instanceId);
+    return this.presenter.getInstanceById(result);
   }
 
   // ─── POST /instances/{id}/join ─────────────────────────────────────────────
@@ -316,10 +262,7 @@ export class InstanceController {
   @Transactional()
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @instanceUnauthorizedResponse()
-  @ApiOkResponse({
-    description: 'Joined successfully',
-    type: WrappedJoinInstanceResponseDto,
-  })
+  @ApiOkResource(JoinInstanceResponseDto, { description: 'Joined successfully' })
   @ApiOperation({
     summary: 'Join instance',
     description:
@@ -333,8 +276,9 @@ export class InstanceController {
   async joinInstance(
     @Param('id', new ParseUUIDPipe()) instanceId: string,
     @CurrentUser() user: JwtPayload,
-  ): Promise<JoinInstanceResponseDto> {
-    return this.instanceService.joinInstance(instanceId, user);
+  ) {
+    const result = await this.applicationService.joinInstanceForController(instanceId, user);
+    return this.presenter.joinInstance(result);
   }
 
   // ─── POST /instances/{id}/start ─────────────────────────────────────────────
@@ -346,10 +290,7 @@ export class InstanceController {
   // 409 is NEVER thrown here.
   @Post(':id/start')
   @instanceUnauthorizedResponse()
-  @ApiOkResponse({
-    description: 'Instance started',
-    type: WrappedStartInstanceResponseDto,
-  })
+  @ApiOkResource(StartInstanceResponseDto, { description: 'Instance started' })
   @ApiOperation({
     summary: 'Start instance',
     description:
@@ -364,8 +305,9 @@ export class InstanceController {
   async startInstance(
     @Param('id', new ParseUUIDPipe()) instanceId: string,
     @CurrentUser() user: JwtPayload,
-  ): Promise<StartInstanceResponseDto> {
-    return this.instanceService.startInstance(instanceId, user);
+  ) {
+    const result = await this.applicationService.startInstanceForController(instanceId, user);
+    return this.presenter.startInstance(result);
   }
 
   // ─── POST /instances/{id}/close ────────────────────────────────────────────
@@ -377,10 +319,7 @@ export class InstanceController {
   // 409 is NEVER thrown here.
   @Post(':id/close')
   @instanceUnauthorizedResponse()
-  @ApiOkResponse({
-    description: 'Instance closed',
-    type: WrappedCloseInstanceResponseDto,
-  })
+  @ApiOkResource(CloseInstanceResponseDto, { description: 'Instance closed' })
   @ApiOperation({
     summary: 'Close instance',
     description:
@@ -395,21 +334,22 @@ export class InstanceController {
   async closeInstance(
     @Param('id', new ParseUUIDPipe()) instanceId: string,
     @CurrentUser() user: JwtPayload,
-  ): Promise<CloseInstanceResponseDto> {
-    return this.instanceService.closeInstance(instanceId, user);
+  ) {
+    const result = await this.applicationService.closeInstanceForController(instanceId, user);
+    return this.presenter.closeInstance(result);
   }
 
   // ─── GET /instances/{id}/leaderboard ───────────────────────────────────────
   //
   // `InstanceService.getLeaderboard` throws `InstanceNotFoundError` on miss → 404.
-  // The controller returns `{ items, hasNextPage, nextCursor }` (no `pagination` key),
-  // so `ResponseFormatInterceptor` wraps it as a non-paginated envelope: the entire
-  // object lives under `data` and `meta` only contains `timestamp`.
+  // The application service projects the leaderboard into the canonical cursor
+  // pagination shape `{ items, pagination: { limit, hasNextPage, nextCursor } }`,
+  // so the envelope contains a `pagination` block — the legacy "D-variant"
+  // (where `pagination` was hoisted up to `data`) is no longer used.
   @Get(':id/leaderboard')
   @instanceUnauthorizedResponse()
-  @ApiOkResponse({
+  @ApiOkResourceList(InstanceLeaderboardResponseDto, 'cursor', {
     description: 'Leaderboard returned',
-    type: WrappedInstanceLeaderboardResponseDto,
   })
   @ApiOperation({
     summary: 'Get instance leaderboard',
@@ -418,41 +358,24 @@ export class InstanceController {
       'by completion time. Requires a valid JWT bearer token. ' +
       'Supports cursor pagination via the `cursor` query parameter (decoded payload: ' +
       '`{ rank, instancePlayerId }`) and `limit` (1–100, default 20). ' +
-      'The response envelope is non-paginated: `data` is `{ items, hasNextPage, nextCursor }` ' +
-      'and `meta` only carries the `timestamp` (no nested `pagination`). ' +
       '404 is returned when the instance does not exist.',
   })
   @instanceBadRequestResponseValidation()
   @instanceNotFoundResponse()
-  getLeaderboard(
+  async getLeaderboard(
     @Param('id', new ParseUUIDPipe()) instanceId: string,
     @Query() query: GetLeaderboardQueryDto,
-  ): Promise<InstanceLeaderboardResponseDto> {
+  ) {
     const limit = query.limit ?? 20;
     const cursor: LeaderboardCursorPayload | undefined = query.cursor
       ? (decodeBase64JsonCursor<LeaderboardCursorPayload>(query.cursor) as LeaderboardCursorPayload)
       : undefined;
 
-    return this.instanceService
-      .getLeaderboard({ instanceId, limit, cursor: cursor ?? null })
-      .then(({ items, hasNextPage }) => {
-        const lastItem = items[items.length - 1];
-        const nextCursor =
-          hasNextPage && lastItem
-            ? Buffer.from(
-                JSON.stringify({
-                  rank: lastItem.rank,
-                  instancePlayerId: lastItem.instancePlayerId,
-                }),
-                'utf8',
-              ).toString('base64url')
-            : null;
-
-        return {
-          items: items.map((e) => this.mapper.toLeaderboardEntryResponse(e)),
-          hasNextPage,
-          nextCursor,
-        };
-      });
+    const result = await this.applicationService.getLeaderboardForController({
+      instanceId,
+      limit,
+      cursor: cursor ?? null,
+    });
+    return this.presenter.getLeaderboard(result);
   }
 }

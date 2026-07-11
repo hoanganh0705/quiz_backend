@@ -15,6 +15,18 @@ import {
   InstanceClosedEvent,
 } from '../domain/events';
 import type { Server } from 'socket.io';
+import { InstanceResponseMapper } from '../mappers/instance-response.mapper';
+import type { LeaderboardCursorPayload } from '../domain/ports';
+import {
+  CloseInstanceResponseDto,
+  CreateInstanceResponseDto,
+  InstanceDetailResponseDto,
+  InstanceLeaderboardResponseDto,
+  InstanceListResponseDto,
+  InstancePlayersResponseDto,
+  JoinInstanceResponseDto,
+  StartInstanceResponseDto,
+} from '../dto/response';
 
 /**
  * Orchestrates Instance domain operations and Socket.IO real-time event emission.
@@ -40,6 +52,7 @@ export class InstanceApplicationService {
 
   constructor(
     private readonly instanceService: InstanceService,
+    private readonly mapper: InstanceResponseMapper,
     @Inject(INSTANCE_DOMAIN_EVENT_BUS)
     private readonly eventBus: InstanceDomainEventBusPort,
     @InjectPinoLogger(InstanceApplicationService.name)
@@ -88,6 +101,113 @@ export class InstanceApplicationService {
 
   async startInstance(instanceId: string, user: JwtPayload): Promise<{ message: string }> {
     return this.instanceService.startInstance(instanceId, user);
+  }
+
+  // ─── HTTP-shaped methods (used by the REST controller) ────────────────────
+  //
+  // These return the response DTOs that the controller previously constructed
+  // inline. Moving the projection here lets the controller stay thin and the
+  // presenter emit the canonical `{ data, meta }` envelope.
+
+  async createInstanceForController(params: {
+    quizVersionId: string;
+    user: JwtPayload;
+    maxPlayers: number | null;
+  }): Promise<CreateInstanceResponseDto> {
+    const result = await this.instanceService.createInstance(params);
+    return {
+      instanceId: result.instanceId,
+      message: 'Instance created successfully',
+    };
+  }
+
+  async joinInstanceForController(
+    instanceId: string,
+    user: JwtPayload,
+  ): Promise<JoinInstanceResponseDto> {
+    const result = await this.instanceService.joinInstance(instanceId, user);
+    return result;
+  }
+
+  async startInstanceForController(
+    instanceId: string,
+    user: JwtPayload,
+  ): Promise<StartInstanceResponseDto> {
+    const result = await this.instanceService.startInstance(instanceId, user);
+    return result;
+  }
+
+  async closeInstanceForController(
+    instanceId: string,
+    user: JwtPayload,
+  ): Promise<CloseInstanceResponseDto> {
+    return this.instanceService.closeInstance(instanceId, user);
+  }
+
+  async getInstanceByIdForController(instanceId: string): Promise<InstanceDetailResponseDto> {
+    const row = await this.instanceService.getInstanceById(instanceId);
+    const { items: players } = await this.instanceService.listInstancePlayers(instanceId);
+    return this.mapper.toInstanceDetailResponse(
+      row,
+      players.map((p) => this.mapper.toInstancePlayerResponse(p)),
+    );
+  }
+
+  async listInstancesForController(params: {
+    limit: number;
+    cursor?: string | null;
+    filters?: {
+      status?: string;
+      difficulty?: string;
+    };
+  }): Promise<InstanceListResponseDto> {
+    const result = await this.instanceService.listInstances(params);
+    return {
+      items: result.rows.map((row) => this.mapper.toInstanceListItemResponse(row)),
+      pagination: {
+        limit: result.limit,
+        hasNextPage: result.hasNextPage,
+        nextCursor: result.nextCursor,
+      },
+    };
+  }
+
+  async listInstancePlayersForController(instanceId: string): Promise<InstancePlayersResponseDto> {
+    const { items, total } = await this.instanceService.listInstancePlayers(instanceId);
+    return {
+      instanceId,
+      items: items.map((p) => this.mapper.toInstancePlayerResponse(p)),
+      total,
+    };
+  }
+
+  async getLeaderboardForController(params: {
+    instanceId: string;
+    limit: number;
+    cursor?: LeaderboardCursorPayload | null;
+  }): Promise<InstanceLeaderboardResponseDto> {
+    const { items, hasNextPage } = await this.instanceService.getLeaderboard(params);
+
+    const lastItem = items.at(-1);
+    const nextCursor =
+      hasNextPage && lastItem
+        ? Buffer.from(
+            JSON.stringify({
+              rank: lastItem.rank,
+              instancePlayerId: lastItem.instancePlayerId,
+            }),
+            'utf8',
+          ).toString('base64url')
+        : null;
+
+    return {
+      items: items.map((entry) => this.mapper.toLeaderboardEntryResponse(entry)),
+      pagination: {
+        limit: params.limit,
+        hasNextPage,
+        nextCursor,
+      },
+    };
   }
 
   /**
