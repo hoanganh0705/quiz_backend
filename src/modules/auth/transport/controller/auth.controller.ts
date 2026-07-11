@@ -1,13 +1,4 @@
-import {
-  Body,
-  Controller,
-  Post,
-  UseFilters,
-  UseInterceptors,
-  Get,
-  Delete,
-  Param,
-} from '@nestjs/common';
+import { Body, Controller, Post, UseInterceptors, Get, Delete, Param } from '@nestjs/common';
 import {
   ApiTags,
   ApiOperation,
@@ -30,7 +21,6 @@ import { RefreshToken } from '../decorators/refresh-token.decorator';
 import { RequestContext } from '../decorators/request-context.decorator';
 import { RequestContextInterceptor } from '../interceptors/request-context.interceptor';
 import { RefreshTokenInterceptor } from '../interceptors/refresh-token.interceptor';
-import { AuthDomainExceptionFilter } from '../filters/auth-domain-exception.filter';
 import { AuthApplicationService } from '../../application/auth.application.service';
 import { LoginDto } from '../../dto/request/login.dto';
 import { LoginResponseDto } from '../../dto/response/login-response.dto';
@@ -160,7 +150,6 @@ registerCookieParam('/api/v1/auth/logout', 'post', {
 @ApiTags('auth')
 @Controller('auth')
 @UseInterceptors(RequestContextInterceptor, RefreshTokenInterceptor)
-@UseFilters(AuthDomainExceptionFilter)
 export class AuthController {
   constructor(
     private readonly authApplicationService: AuthApplicationService,

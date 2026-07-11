@@ -43,7 +43,6 @@ import { EMAIL_PROVIDER } from './domain/ports/email.provider';
 import { UserRepository } from './infrastructure/repositories/user.repository';
 import { UserSessionRepository } from './infrastructure/repositories/user-session.repository';
 import { EmailService } from '@/modules/email/email.service';
-import { AuthDomainExceptionFilter } from './transport/filters/auth-domain-exception.filter';
 import { VerificationTokenService } from './domain/verification-token.service';
 import { OutboxAdapter } from './infrastructure/outbox/outbox.adapter';
 import { OutboxProcessorService } from './infrastructure/outbox/outbox-processor.service';
@@ -106,7 +105,6 @@ import { AuthSecurityNotificationService } from '@/modules/notification/domain/s
     DeviceParserService,
     RequestContextInterceptor,
     RefreshTokenInterceptor,
-    AuthDomainExceptionFilter,
     UserRepository,
     UserSessionRepository,
     AuthAuditLogService,
