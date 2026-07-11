@@ -9,31 +9,25 @@ import {
   UseFilters,
 } from '@nestjs/common';
 import {
-  ApiTags,
-  ApiNotFoundResponse,
   ApiBadRequestResponse,
   ApiConflictResponse,
+  ApiNotFoundResponse,
+  ApiTags,
 } from '@nestjs/swagger';
 import { Public } from '@/common/decorators/public.decorator';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
-import { ApiAuthList, ApiPublicList } from '@/common/swagger/swagger-decorators';
+import { ApiAuth, ApiPublicErrors } from '@/common/swagger/swagger-decorators';
+import { ApiOkResource } from '@/common/swagger/api-ok';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
 import { ReviewApplicationService } from '../../application/review.application.service';
 import { HelpfulReviewDto, ReportReviewDto } from '../../dto/request';
-import {
-  ReviewDetailResponseDto,
-  ReviewDashboardResponseDto,
-  HelpfulReviewResponseDto,
-  ReportReviewResponseDto,
-} from '../../dto/response';
+import { HelpfulReviewResponseDto } from '../../dto/response/helpful-review-response.dto';
+import { ReportReviewResponseDto } from '../../dto/response/report-review-response.dto';
+import { ReviewDashboardResponseDto } from '../../dto/response/review-dashboard-response.dto';
+import { ReviewDetailResponseDto } from '../../dto/response/review-detail-response.dto';
+import { ReviewDomainErrorDto } from '../../dto/response/review-domain-error.dto';
 import { ReviewDomainExceptionFilter } from '../filters/review-domain-exception.filter';
-import {
-  ReviewDomainErrorDto,
-  WrappedReviewDetailDto,
-  WrappedMyDashboardDto,
-  WrappedHelpfulMessageDto,
-  WrappedReportMessageDto,
-} from '../../dto/response/review-response-docs.dto';
+import { ReviewPresenter } from '../presenters/review.presenter';
 
 // Local helpers — these decorators emit the response schemas that match the
 // actual runtime error shapes produced by ReviewDomainExceptionFilter:
@@ -42,8 +36,7 @@ import {
 //
 // Use these for any 400 / 404 / 409 produced by a review domain error.
 // (401, 403, 500 are emitted by GlobalExceptionFilter as RFC 7807
-// ProblemDetail and are handled by the generic ApiAuth / ApiAuthList /
-// ApiPublicList decorators.)
+// ProblemDetail and are handled by ApiAuth / ApiPublicErrors.)
 
 const reviewNotFoundResponse = (description: string = 'Review not found') =>
   ApiNotFoundResponse({ description, type: ReviewDomainErrorDto });
@@ -58,55 +51,66 @@ const reviewBadRequestResponse = (description: string = 'You cannot vote on your
 @Controller('reviews')
 @UseFilters(ReviewDomainExceptionFilter)
 export class ReviewController {
-  constructor(private readonly reviewApplicationService: ReviewApplicationService) {}
+  constructor(
+    private readonly reviewApplicationService: ReviewApplicationService,
+    private readonly presenter: ReviewPresenter,
+  ) {}
 
   @Get('me')
-  @ApiAuthList({ description: 'Review dashboard returned', type: WrappedMyDashboardDto })
-  async getMyReviewDashboard(@CurrentUser() user: JwtPayload): Promise<ReviewDashboardResponseDto> {
-    return this.reviewApplicationService.getMyReviewDashboard(user);
+  @ApiAuth()
+  @ApiOkResource(ReviewDashboardResponseDto, { description: 'Review dashboard returned' })
+  async getMyReviewDashboard(@CurrentUser() user: JwtPayload) {
+    const result = await this.reviewApplicationService.getMyReviewDashboard(user);
+    return this.presenter.getMyReviewDashboard(result);
   }
 
   @Post(':reviewId/helpful')
-  @ApiAuthList({ description: 'Helpful vote recorded', type: WrappedHelpfulMessageDto })
+  @ApiAuth()
+  @ApiOkResource(HelpfulReviewResponseDto, { description: 'Helpful vote recorded' })
   @reviewNotFoundResponse()
   @reviewBadRequestResponse()
   async markReviewHelpful(
     @Param('reviewId', new ParseUUIDPipe()) reviewId: string,
     @CurrentUser() user: JwtPayload,
     @Body() payload: HelpfulReviewDto,
-  ): Promise<HelpfulReviewResponseDto> {
-    return this.reviewApplicationService.markReviewHelpful(reviewId, payload, user);
+  ) {
+    const result = await this.reviewApplicationService.markReviewHelpful(reviewId, payload, user);
+    return this.presenter.markReviewHelpful(result);
   }
 
   @Delete(':reviewId/helpful')
-  @ApiAuthList({ description: 'Helpful vote removed', type: WrappedHelpfulMessageDto })
+  @ApiAuth()
+  @ApiOkResource(HelpfulReviewResponseDto, { description: 'Helpful vote removed' })
   @reviewNotFoundResponse()
   async removeHelpfulVote(
     @Param('reviewId', new ParseUUIDPipe()) reviewId: string,
     @CurrentUser() user: JwtPayload,
-  ): Promise<HelpfulReviewResponseDto> {
-    return this.reviewApplicationService.removeHelpfulVote(reviewId, user);
+  ) {
+    const result = await this.reviewApplicationService.removeHelpfulVote(reviewId, user);
+    return this.presenter.removeHelpfulVote(result);
   }
 
   @Post(':reviewId/report')
-  @ApiAuthList({ description: 'Review reported successfully', type: WrappedReportMessageDto })
+  @ApiAuth()
+  @ApiOkResource(ReportReviewResponseDto, { description: 'Review reported successfully' })
   @reviewNotFoundResponse()
   @reviewConflictResponse()
   async reportReview(
     @Param('reviewId', new ParseUUIDPipe()) reviewId: string,
     @CurrentUser() user: JwtPayload,
     @Body() payload: ReportReviewDto,
-  ): Promise<ReportReviewResponseDto> {
-    return this.reviewApplicationService.reportReview(reviewId, user, payload);
+  ) {
+    const result = await this.reviewApplicationService.reportReview(reviewId, user, payload);
+    return this.presenter.reportReview(result);
   }
 
   @Get(':reviewId')
   @Public()
-  @ApiPublicList({ description: 'Review detail returned', type: WrappedReviewDetailDto })
+  @ApiPublicErrors()
+  @ApiOkResource(ReviewDetailResponseDto, { description: 'Review detail returned' })
   @reviewNotFoundResponse()
-  async getReviewById(
-    @Param('reviewId', new ParseUUIDPipe()) reviewId: string,
-  ): Promise<ReviewDetailResponseDto> {
-    return this.reviewApplicationService.getReviewById(reviewId);
+  async getReviewById(@Param('reviewId', new ParseUUIDPipe()) reviewId: string) {
+    const result = await this.reviewApplicationService.getReviewById(reviewId);
+    return this.presenter.getReviewById(result);
   }
 }

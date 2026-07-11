@@ -10,6 +10,7 @@ import { ReviewController } from './transport/controller/review.controller';
 import { UserReviewController } from './transport/controller/user-review.controller';
 import { AdminReviewController } from './transport/controller/admin-review.controller';
 import { ReviewDomainExceptionFilter } from './transport/filters/review-domain-exception.filter';
+import { ReviewPresenter } from './transport/presenters/review.presenter';
 import { REVIEW_REPOSITORY_PORT } from './domain/ports';
 import {
   REVIEW_ANALYTICS_PORT,
@@ -35,6 +36,9 @@ import { quizReviewController } from './transport/controller/quiz-review.control
     // Mapper
     ReviewResponseMapper,
     CursorMapper,
+
+    // Presenter
+    ReviewPresenter,
 
     // Exception filter
     ReviewDomainExceptionFilter,
