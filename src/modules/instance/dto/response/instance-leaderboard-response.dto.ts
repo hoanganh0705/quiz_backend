@@ -72,12 +72,9 @@ export class InstanceLeaderboardEntryDto {
   timeTakenMs!: number | null;
 }
 
-export class InstanceLeaderboardResponseDto {
-  @ApiProperty({
-    description: 'Leaderboard entries sorted by rank',
-    type: () => [InstanceLeaderboardEntryDto],
-  })
-  items!: InstanceLeaderboardEntryDto[];
+export class InstanceLeaderboardPaginationDto {
+  @ApiProperty({ description: 'Items per page', example: 20 })
+  limit!: number;
 
   @ApiProperty({ description: 'Whether more entries exist beyond this page', example: true })
   hasNextPage!: boolean;
@@ -92,4 +89,18 @@ export class InstanceLeaderboardResponseDto {
       'eyJyYW5rIjogMjQsICJpbnN0YW5jZVBsYXllcklkIjogIjU1MGU4NDAwLWUyOWItNDFkNC1hNzE2LTQ0NjY1NTQ0MDA5OSJ9',
   })
   nextCursor!: string | null;
+}
+
+export class InstanceLeaderboardResponseDto {
+  @ApiProperty({
+    description: 'Leaderboard entries sorted by rank',
+    type: () => [InstanceLeaderboardEntryDto],
+  })
+  items!: InstanceLeaderboardEntryDto[];
+
+  @ApiProperty({
+    description: 'Cursor-based pagination metadata',
+    type: () => InstanceLeaderboardPaginationDto,
+  })
+  pagination!: InstanceLeaderboardPaginationDto;
 }

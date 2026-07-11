@@ -1,0 +1,71 @@
+import { Injectable } from '@nestjs/common';
+import { ApiResponse } from '@/common/responses/api-response';
+import type { ApiResponseEnvelope } from '@/common/responses/api-response';
+import type { CloseInstanceResponseDto } from '../../dto/response/instance-action-response.dto';
+import type { CreateInstanceResponseDto } from '../../dto/response/instance-action-response.dto';
+import type { JoinInstanceResponseDto } from '../../dto/response/instance-action-response.dto';
+import type { StartInstanceResponseDto } from '../../dto/response/instance-action-response.dto';
+import type { InstanceDetailResponseDto } from '../../dto/response/instance-detail-response.dto';
+import type { InstanceLeaderboardResponseDto } from '../../dto/response/instance-leaderboard-response.dto';
+import type { InstanceListResponseDto } from '../../dto/response/instance-list-response.dto';
+import type { InstancePlayersResponseDto } from '../../dto/response/instance-players-response.dto';
+
+/**
+ * Wrap a `{ items: T[], pagination: { limit, hasNextPage, nextCursor } }`
+ * payload as `{ data: T[], meta: { timestamp, pagination } }`.
+ *
+ * Used for cursor-paginated list endpoints whose application-service return is
+ * a class-instance `{ items, pagination }` DTO. The canonical envelope has to
+ * be a plain object (the interceptor's `isFormattedResponse()` guards on
+ * `Object` prototype), so we deliberately project out the DTO fields here
+ * instead of forwarding the class instance for the interceptor to re-wrap.
+ */
+const wrapPaginatedDto = <T>(payload: {
+  items: readonly T[];
+  pagination: { limit: number; hasNextPage: boolean; nextCursor: string | null };
+}): ApiResponseEnvelope<T[]> => ({
+  data: [...payload.items],
+  meta: {
+    timestamp: new Date().toISOString(),
+    pagination: {
+      kind: 'cursor' as const,
+      limit: payload.pagination.limit,
+      hasNextPage: payload.pagination.hasNextPage,
+      nextCursor: payload.pagination.nextCursor,
+    },
+  },
+});
+
+/**
+ * Presenter for the instance module. Wraps every application-service response
+ * in the canonical `{ data, meta.timestamp }` envelope.
+ *
+ * One presenter method per endpoint keeps `git grep presenter.<name>` a
+ * reliable index of which controllers have been migrated.
+ *
+ * The leaderboard endpoint emits the canonical `{ items, pagination }` shape
+ * directly from the application service so this presenter falls into the
+ * standard cursor pagination path.
+ *
+ * The `listInstancePlayers` endpoint returns a non-paginated
+ * `{ instanceId, items, total }` object, which is wrapped as a single-resource
+ * envelope.
+ */
+@Injectable()
+export class InstancePresenter {
+  private static readonly ok = <T>(payload: T): ApiResponseEnvelope<T> => ApiResponse.ok(payload);
+
+  // Lifecycle endpoints
+  readonly createInstance = InstancePresenter.ok<CreateInstanceResponseDto>;
+  readonly joinInstance = InstancePresenter.ok<JoinInstanceResponseDto>;
+  readonly startInstance = InstancePresenter.ok<StartInstanceResponseDto>;
+  readonly closeInstance = InstancePresenter.ok<CloseInstanceResponseDto>;
+
+  // Detail / players
+  readonly getInstanceById = InstancePresenter.ok<InstanceDetailResponseDto>;
+  readonly listInstancePlayers = InstancePresenter.ok<InstancePlayersResponseDto>;
+
+  // Paginated lists
+  readonly listInstances = wrapPaginatedDto<InstanceListResponseDto['items'][number]>;
+  readonly getLeaderboard = wrapPaginatedDto<InstanceLeaderboardResponseDto['items'][number]>;
+}
