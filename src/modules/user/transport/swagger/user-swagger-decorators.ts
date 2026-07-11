@@ -1,57 +1,24 @@
-import { applyDecorators, type Type } from '@nestjs/common';
+import { applyDecorators } from '@nestjs/common';
 import {
   ApiBadRequestResponse,
   ApiForbiddenResponse,
   ApiInternalServerErrorResponse,
   ApiNotFoundResponse,
-  ApiOkResponse,
 } from '@nestjs/swagger';
 import { ErrorResponseExamples, ProblemDetailDto } from '@/common/swagger/swagger-schemas';
-import {
-  UserWrappedActivityDto,
-  UserWrappedAnalyticsDto,
-  UserWrappedBadgesDto,
-  UserWrappedCreatorAnalyticsDto,
-  UserWrappedMeDto,
-  UserWrappedMyTournamentAnalyticsDto,
-  UserWrappedMyTournamentHistoryDto,
-  UserWrappedMyTournamentsDto,
-  UserWrappedPublicTournamentProfileDto,
-  UserWrappedRankingDto,
-  UserWrappedRelatedQuizzesDto,
-  UserWrappedUserQuizzesDto,
-} from '../../dto/response/user-response-docs.dto';
-import {
-  USER_ACTIVITY_EXAMPLE,
-  USER_ANALYTICS_EXAMPLE,
-  USER_BADGES_EXAMPLE,
-  USER_CREATOR_QUIZ_ANALYTICS_EXAMPLE,
-  USER_ME_EXAMPLE,
-  USER_ME_SETTINGS_UPDATED_EXAMPLE,
-  USER_ME_UPDATED_EXAMPLE,
-  USER_MY_TOURNAMENTS_EXAMPLE,
-  USER_RANKING_EXAMPLE,
-  USER_RECOMMENDED_QUIZZES_EXAMPLE,
-  USER_TOURNAMENT_ANALYTICS_EXAMPLE,
-  USER_TOURNAMENT_HISTORY_EXAMPLE,
-  USER_TOURNAMENT_PROFILE_EXAMPLE,
-  USER_QUIZZES_EXAMPLE,
-} from './examples';
-
-// ─── Shared 200 OK response factory ──────────────────────────────────────────────
-//
-// Wraps ApiOkResponse so every success decorator below can stay a one-liner.
-// Returns a MethodDecorator that NestJS will apply at class-evaluation time.
-const createOkResponse = (
-  description: string,
-  type: Type<unknown>,
-  example: object,
-): MethodDecorator =>
-  ApiOkResponse({
-    description,
-    type,
-    example,
-  });
+import { ApiOkResource, ApiOkResourceList } from '@/common/swagger/api-ok';
+import { UserMeResponseDto } from '../../dto/response/user-me.dto';
+import { UserAnalyticsResponseDto } from '../../dto/response/user-analytics.dto';
+import { UserBadgesResponseDto } from '../../dto/response/user-badges.dto';
+import { UserActivityResponseDto } from '../../dto/response/user-activity.dto';
+import { UserRankingResponseDto } from '../../dto/response/user-ranking.dto';
+import { MyTournamentAnalyticsResponseDto } from '../../dto/response/my-tournament-analytics.dto';
+import { MyTournamentHistoryResponseDto } from '../../dto/response/my-tournament-history.dto';
+import { MyTournamentsResponseDto } from '../../dto/response/my-tournaments.dto';
+import { PublicTournamentProfileResponseDto } from '../../dto/response/public-tournament-profile.dto';
+import { QuizListResponseDto } from '@/modules/quiz/dto/response/quiz-list-response.dto';
+import { CreatorQuizAnalyticsDto } from '@/modules/quiz/dto/response/quiz-analytics.dto';
+import { QuizResponseDto } from '@/modules/quiz/dto/response/quiz-response.dto';
 
 // ─── Standard error response options ─────────────────────────────────────────────
 
@@ -85,77 +52,57 @@ export const internalErrorOptions = {
 // exported names are kept stable so controllers don't need to change.
 
 export const ApiUserMeResponse = (): MethodDecorator =>
-  createOkResponse('Returns profile.', UserWrappedMeDto, USER_ME_EXAMPLE);
+  ApiOkResource(UserMeResponseDto, { description: 'Returns profile.' });
 
 export const ApiUserMeUpdatedResponse = (): MethodDecorator =>
-  createOkResponse('Updates profile.', UserWrappedMeDto, USER_ME_UPDATED_EXAMPLE);
+  ApiOkResource(UserMeResponseDto, { description: 'Updates profile.' });
 
 export const ApiUserSettingsUpdatedResponse = (): MethodDecorator =>
-  createOkResponse('Updates settings.', UserWrappedMeDto, USER_ME_SETTINGS_UPDATED_EXAMPLE);
+  ApiOkResource(UserMeResponseDto, { description: 'Updates settings.' });
 
 export const ApiUserBadgesResponse = (): MethodDecorator =>
-  createOkResponse('Returns badges.', UserWrappedBadgesDto, USER_BADGES_EXAMPLE);
+  ApiOkResourceList(UserBadgesResponseDto, 'cursor', { description: 'Returns badges.' });
 
 export const ApiUserActivityResponse = (): MethodDecorator =>
-  createOkResponse('Returns activity.', UserWrappedActivityDto, USER_ACTIVITY_EXAMPLE);
+  ApiOkResourceList(UserActivityResponseDto, 'cursor', { description: 'Returns activity.' });
 
 export const ApiUserRankingResponse = (): MethodDecorator =>
-  createOkResponse('Returns ranking.', UserWrappedRankingDto, USER_RANKING_EXAMPLE);
+  ApiOkResource(UserRankingResponseDto, { description: 'Returns ranking.' });
 
 export const ApiUserAnalyticsResponse = (): MethodDecorator =>
-  createOkResponse('Returns analytics.', UserWrappedAnalyticsDto, USER_ANALYTICS_EXAMPLE);
+  ApiOkResource(UserAnalyticsResponseDto, { description: 'Returns analytics.' });
 
 export const ApiMyTournamentsResponse = (): MethodDecorator =>
-  createOkResponse(
-    'Returns my tournaments.',
-    UserWrappedMyTournamentsDto,
-    USER_MY_TOURNAMENTS_EXAMPLE,
-  );
+  ApiOkResourceList(MyTournamentsResponseDto, 'cursor', { description: 'Returns my tournaments.' });
 
 export const ApiMyTournamentHistoryResponse = (): MethodDecorator =>
-  createOkResponse(
-    'Returns my tournament history.',
-    UserWrappedMyTournamentHistoryDto,
-    USER_TOURNAMENT_HISTORY_EXAMPLE,
-  );
+  ApiOkResourceList(MyTournamentHistoryResponseDto, 'cursor', {
+    description: 'Returns my tournament history.',
+  });
 
 export const ApiPublicTournamentHistoryResponse = (): MethodDecorator =>
-  createOkResponse(
-    'Returns tournament history.',
-    UserWrappedMyTournamentHistoryDto,
-    USER_TOURNAMENT_HISTORY_EXAMPLE,
-  );
+  ApiOkResourceList(MyTournamentHistoryResponseDto, 'cursor', {
+    description: 'Returns tournament history.',
+  });
 
 export const ApiMyTournamentAnalyticsResponse = (): MethodDecorator =>
-  createOkResponse(
-    'Returns my tournament analytics.',
-    UserWrappedMyTournamentAnalyticsDto,
-    USER_TOURNAMENT_ANALYTICS_EXAMPLE,
-  );
+  ApiOkResource(MyTournamentAnalyticsResponseDto, {
+    description: 'Returns my tournament analytics.',
+  });
 
 export const ApiPublicTournamentProfileResponse = (): MethodDecorator =>
-  createOkResponse(
-    'Returns tournament profile.',
-    UserWrappedPublicTournamentProfileDto,
-    USER_TOURNAMENT_PROFILE_EXAMPLE,
-  );
+  ApiOkResource(PublicTournamentProfileResponseDto, {
+    description: 'Returns tournament profile.',
+  });
 
 export const ApiUserQuizListResponse = (): MethodDecorator =>
-  createOkResponse('Returns quizzes.', UserWrappedUserQuizzesDto, USER_QUIZZES_EXAMPLE);
+  ApiOkResourceList(QuizListResponseDto, 'cursor', { description: 'Returns quizzes.' });
 
 export const ApiCreatorQuizAnalyticsResponse = (): MethodDecorator =>
-  createOkResponse(
-    'Returns quiz analytics.',
-    UserWrappedCreatorAnalyticsDto,
-    USER_CREATOR_QUIZ_ANALYTICS_EXAMPLE,
-  );
+  ApiOkResource(CreatorQuizAnalyticsDto, { description: 'Returns quiz analytics.' });
 
 export const ApiRecommendedQuizzesResponse = (): MethodDecorator =>
-  createOkResponse(
-    'Returns recommended quizzes.',
-    UserWrappedRelatedQuizzesDto,
-    USER_RECOMMENDED_QUIZZES_EXAMPLE,
-  );
+  ApiOkResourceList(QuizResponseDto, 'cursor', { description: 'Returns recommended quizzes.' });
 
 // ─── Composed error response decorators ───────────────────────────────────────────
 //

@@ -13,27 +13,16 @@ import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
 import { ApiAuth } from '@/common/swagger/swagger-decorators';
 import { RecommendedQuizzesQueryDto } from '@/modules/quiz/dto/request/recommended-quizzes-query.dto';
-import { QuizResponseDto } from '@/modules/quiz/dto/response/quiz-response.dto';
 import { ListQuizzesQueryDto } from '@/modules/quiz/dto/request/list-quizzes-query.dto';
-import { QuizListResponseDto } from '@/modules/quiz/dto/response/quiz-list-response.dto';
-import { CreatorQuizAnalyticsDto } from '@/modules/quiz/dto/response/quiz-analytics.dto';
 import { GetMyTournamentsQueryDto } from '../../dto/request/get-my-tournaments-query.dto';
 import { GetMyTournamentHistoryQueryDto } from '../../dto/request/get-my-tournament-history-query.dto';
 import { ListUserActivityQueryDto } from '../../dto/request/list-user-activity-query.dto';
 import { ListUserBadgesQueryDto } from '../../dto/request/list-user-badges-query.dto';
 import { UpdateMeDto } from '../../dto/request/update-me.dto';
 import { UpdateMeSettingsDto } from '../../dto/request/update-me-settings.dto';
-import { MyTournamentAnalyticsResponseDto } from '../../dto/response/my-tournament-analytics.dto';
-import { MyTournamentHistoryResponseDto } from '../../dto/response/my-tournament-history.dto';
-import { MyTournamentsResponseDto } from '../../dto/response/my-tournaments.dto';
-import { PublicTournamentProfileResponseDto } from '../../dto/response/public-tournament-profile.dto';
-import { UserActivityResponseDto } from '../../dto/response/user-activity.dto';
-import { UserAnalyticsResponseDto } from '../../dto/response/user-analytics.dto';
-import { UserBadgesResponseDto } from '../../dto/response/user-badges.dto';
-import { UserMeResponseDto } from '../../dto/response/user-me.dto';
-import { UserRankingResponseDto } from '../../dto/response/user-ranking.dto';
 import { UserApplicationService } from '../../application/user.application.service';
 import { UserDomainExceptionFilter } from '../filters/user-domain-exception.filter';
+import { UserPresenter } from '../presenters/user.presenter';
 import { QUIZ_LISTING_PORT, type QuizListingPort } from '@/modules/quiz/domain/analytics';
 import {
   ApiBadRequestAndInternal,
@@ -65,6 +54,7 @@ import {
 export class UserController {
   constructor(
     private readonly userApplicationService: UserApplicationService,
+    private readonly presenter: UserPresenter,
     @Inject(QUIZ_LISTING_PORT)
     private readonly quizListing: QuizListingPort,
   ) {}
@@ -81,9 +71,9 @@ export class UserController {
   async getRecommendedQuizzes(
     @CurrentUser('sub') userId: string,
     @Query() query: RecommendedQuizzesQueryDto,
-  ): Promise<QuizResponseDto[]> {
-    const { items } = await this.quizListing.getRecommendedQuizzes(userId, query);
-    return items;
+  ) {
+    const result = await this.quizListing.getRecommendedQuizzes(userId, query);
+    return this.presenter.getRecommendedQuizzes(result);
   }
 
   @Get('me')
@@ -94,8 +84,9 @@ export class UserController {
   })
   @ApiUserMeResponse()
   @ApiInternalError()
-  me(@CurrentUser('sub') userId: string): Promise<UserMeResponseDto> {
-    return this.userApplicationService.getMe(userId);
+  async me(@CurrentUser('sub') userId: string) {
+    const result = await this.userApplicationService.getMe(userId);
+    return this.presenter.getMe(result);
   }
 
   @Get('me/badges')
@@ -106,14 +97,12 @@ export class UserController {
   })
   @ApiUserBadgesResponse()
   @ApiBadRequestAndInternal()
-  listMyBadges(
-    @CurrentUser('sub') userId: string,
-    @Query() query: ListUserBadgesQueryDto,
-  ): Promise<UserBadgesResponseDto> {
-    return this.userApplicationService.listUserBadges(userId, userId, {
+  async listMyBadges(@CurrentUser('sub') userId: string, @Query() query: ListUserBadgesQueryDto) {
+    const result = await this.userApplicationService.listUserBadges(userId, userId, {
       limit: query.limit,
       cursor: query.cursor,
     });
+    return this.presenter.listMyBadges(result);
   }
 
   @Get('me/activity')
@@ -124,14 +113,15 @@ export class UserController {
   })
   @ApiUserActivityResponse()
   @ApiBadRequestAndInternal()
-  listUserActivity(
+  async listUserActivity(
     @CurrentUser('sub') userId: string,
     @Query() query: ListUserActivityQueryDto,
-  ): Promise<UserActivityResponseDto> {
-    return this.userApplicationService.listUserActivity(userId, {
+  ) {
+    const result = await this.userApplicationService.listUserActivity(userId, {
       limit: query.limit,
       cursor: query.cursor,
     });
+    return this.presenter.listUserActivity(result);
   }
 
   @Get('me/tournaments')
@@ -143,11 +133,12 @@ export class UserController {
   })
   @ApiMyTournamentsResponse()
   @ApiBadRequestAndInternal()
-  listMyTournaments(
+  async listMyTournaments(
     @CurrentUser('sub') userId: string,
     @Query() query: GetMyTournamentsQueryDto,
-  ): Promise<MyTournamentsResponseDto> {
-    return this.userApplicationService.getMyTournaments(userId, userId, query);
+  ) {
+    const result = await this.userApplicationService.getMyTournaments(userId, userId, query);
+    return this.presenter.listMyTournaments(result);
   }
 
   @Get('me/tournament-history')
@@ -159,11 +150,12 @@ export class UserController {
   })
   @ApiMyTournamentHistoryResponse()
   @ApiBadRequestAndInternal()
-  listMyTournamentHistory(
+  async listMyTournamentHistory(
     @CurrentUser('sub') userId: string,
     @Query() query: GetMyTournamentHistoryQueryDto,
-  ): Promise<MyTournamentHistoryResponseDto> {
-    return this.userApplicationService.getMyTournamentHistory(userId, userId, query);
+  ) {
+    const result = await this.userApplicationService.getMyTournamentHistory(userId, userId, query);
+    return this.presenter.listMyTournamentHistory(result);
   }
 
   @Get('me/tournaments/analytics')
@@ -174,10 +166,9 @@ export class UserController {
   })
   @ApiMyTournamentAnalyticsResponse()
   @ApiInternalError()
-  getMyTournamentAnalytics(
-    @CurrentUser('sub') userId: string,
-  ): Promise<MyTournamentAnalyticsResponseDto> {
-    return this.userApplicationService.getMyTournamentAnalytics(userId);
+  async getMyTournamentAnalytics(@CurrentUser('sub') userId: string) {
+    const result = await this.userApplicationService.getMyTournamentAnalytics(userId);
+    return this.presenter.getMyTournamentAnalytics(result);
   }
 
   @Get('me/ranking')
@@ -188,8 +179,9 @@ export class UserController {
   })
   @ApiUserRankingResponse()
   @ApiInternalError()
-  getMyRanking(@CurrentUser('sub') userId: string): Promise<UserRankingResponseDto> {
-    return this.userApplicationService.getUserRanking(userId, userId);
+  async getMyRanking(@CurrentUser('sub') userId: string) {
+    const result = await this.userApplicationService.getUserRanking(userId, userId);
+    return this.presenter.getUserRanking(result);
   }
 
   @Get('me/analytics')
@@ -200,8 +192,9 @@ export class UserController {
   })
   @ApiUserAnalyticsResponse()
   @ApiInternalError()
-  getMyAnalytics(@CurrentUser('sub') userId: string): Promise<UserAnalyticsResponseDto> {
-    return this.userApplicationService.getUserAnalytics(userId, userId);
+  async getMyAnalytics(@CurrentUser('sub') userId: string) {
+    const result = await this.userApplicationService.getUserAnalytics(userId, userId);
+    return this.presenter.getUserAnalytics(result);
   }
 
   @Patch('me')
@@ -213,11 +206,9 @@ export class UserController {
   })
   @ApiUserMeUpdatedResponse()
   @ApiBadRequestAndInternal()
-  updateMe(
-    @CurrentUser('sub') userId: string,
-    @Body() payload: UpdateMeDto,
-  ): Promise<UserMeResponseDto> {
-    return this.userApplicationService.updateProfile(userId, payload);
+  async updateMe(@CurrentUser('sub') userId: string, @Body() payload: UpdateMeDto) {
+    const result = await this.userApplicationService.updateProfile(userId, payload);
+    return this.presenter.updateMe(result);
   }
 
   @Patch('me/settings')
@@ -228,11 +219,9 @@ export class UserController {
   })
   @ApiUserSettingsUpdatedResponse()
   @ApiBadRequestAndInternal()
-  updateMeSettings(
-    @CurrentUser('sub') userId: string,
-    @Body() payload: UpdateMeSettingsDto,
-  ): Promise<UserMeResponseDto> {
-    return this.userApplicationService.updateSettings(userId, payload);
+  async updateMeSettings(@CurrentUser('sub') userId: string, @Body() payload: UpdateMeSettingsDto) {
+    const result = await this.userApplicationService.updateSettings(userId, payload);
+    return this.presenter.updateMeSettings(result);
   }
 
   // ─── Public :userId routes (registered last to avoid shadowing /me/* routes) ──
@@ -244,10 +233,9 @@ export class UserController {
   })
   @ApiCreatorQuizAnalyticsResponse()
   @ApiNotFoundAndInternal()
-  getUserQuizAnalytics(
-    @Param('userId', new ParseUUIDPipe()) userId: string,
-  ): Promise<CreatorQuizAnalyticsDto> {
-    return this.quizListing.getMyQuizAnalytics(userId);
+  async getUserQuizAnalytics(@Param('userId', new ParseUUIDPipe()) userId: string) {
+    const result = await this.quizListing.getMyQuizAnalytics(userId);
+    return this.presenter.getUserQuizAnalytics(result);
   }
 
   @Get(':userId/quizzes')
@@ -257,11 +245,12 @@ export class UserController {
   })
   @ApiUserQuizListResponse()
   @ApiNotFoundBadRequestInternal()
-  listUserQuizzes(
+  async listUserQuizzes(
     @Param('userId', new ParseUUIDPipe()) userId: string,
     @Query() query: ListQuizzesQueryDto,
-  ): Promise<QuizListResponseDto> {
-    return this.quizListing.listQuizzesByCreator(userId, query);
+  ) {
+    const result = await this.quizListing.listQuizzesByCreator(userId, query);
+    return this.presenter.listUserQuizzes(result);
   }
 
   @Get(':userId/badges')
@@ -272,15 +261,16 @@ export class UserController {
   })
   @ApiUserBadgesResponse()
   @ApiNotFoundBadRequestForbiddenInternal()
-  listBadgesByUserId(
+  async listBadgesByUserId(
     @Param('userId', new ParseUUIDPipe()) userId: string,
     @Query() query: ListUserBadgesQueryDto,
     @CurrentUser('sub') requesterId: string,
-  ): Promise<UserBadgesResponseDto> {
-    return this.userApplicationService.listUserBadges(userId, requesterId, {
+  ) {
+    const result = await this.userApplicationService.listUserBadges(userId, requesterId, {
       limit: query.limit,
       cursor: query.cursor,
     });
+    return this.presenter.listBadgesByUserId(result);
   }
 
   @Get(':userId/tournament-history')
@@ -291,12 +281,17 @@ export class UserController {
   })
   @ApiPublicTournamentHistoryResponse()
   @ApiNotFoundBadRequestForbiddenInternal()
-  getUserTournamentHistory(
+  async getUserTournamentHistory(
     @Param('userId', new ParseUUIDPipe()) userId: string,
     @Query() query: GetMyTournamentHistoryQueryDto,
     @CurrentUser('sub') requesterId: string,
-  ): Promise<MyTournamentHistoryResponseDto> {
-    return this.userApplicationService.getMyTournamentHistory(userId, requesterId, query);
+  ) {
+    const result = await this.userApplicationService.getMyTournamentHistory(
+      userId,
+      requesterId,
+      query,
+    );
+    return this.presenter.getUserTournamentHistory(result);
   }
 
   @Get(':userId/tournaments')
@@ -307,10 +302,14 @@ export class UserController {
   })
   @ApiPublicTournamentProfileResponse()
   @ApiNotFoundForbiddenInternal()
-  getPublicTournamentProfile(
+  async getPublicTournamentProfile(
     @Param('userId', new ParseUUIDPipe()) userId: string,
     @CurrentUser('sub') requesterId: string,
-  ): Promise<PublicTournamentProfileResponseDto> {
-    return this.userApplicationService.getPublicTournamentProfile(userId, requesterId);
+  ) {
+    const result = await this.userApplicationService.getPublicTournamentProfile(
+      userId,
+      requesterId,
+    );
+    return this.presenter.getPublicTournamentProfile(result);
   }
 }
