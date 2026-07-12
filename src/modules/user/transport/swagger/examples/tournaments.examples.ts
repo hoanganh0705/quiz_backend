@@ -27,7 +27,12 @@ export const USER_TOURNAMENT_HISTORY_EXAMPLE = {
   ],
   meta: {
     timestamp: EXAMPLE_TIMESTAMP,
-    pagination: { limit: 20, hasNextPage: false, nextCursor: null },
+    pagination: {
+      kind: 'cursor',
+      limit: 20,
+      hasNextPage: false,
+      nextCursor: null,
+    },
   },
 } as const;
 
@@ -61,6 +66,7 @@ export const USER_MY_TOURNAMENTS_EXAMPLE = {
   meta: {
     timestamp: EXAMPLE_TIMESTAMP,
     pagination: {
+      kind: 'cursor',
       limit: 20,
       hasNextPage: true,
       nextCursor:

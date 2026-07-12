@@ -29,6 +29,7 @@ import type {
 } from '../../domain/types/category-commands';
 import { CategoryApplicationService } from '../../application/category.application.service';
 import { CategoryQueryService } from '../../application/category-query.service';
+import { CategoryPresenter } from '../presenters/category.presenter';
 import { CategoryCursorMapper } from '../../mappers/category-cursor.mapper';
 import {
   ApiCategoryAnalyticsResponse,
@@ -53,100 +54,124 @@ export class CategoryController {
   constructor(
     private readonly categoryApplicationService: CategoryApplicationService,
     private readonly categoryQueryService: CategoryQueryService,
+    private readonly categoryPresenter: CategoryPresenter,
   ) {}
 
   @Get('popular')
   @Public()
   @ApiPopularCategoriesResponse()
-  getPopularCategories(@Query() query: CategoryRankingQueryDto) {
-    return this.categoryQueryService.getPopularCategories({ limit: query.limit ?? 10 });
+  async getPopularCategories(@Query() query: CategoryRankingQueryDto) {
+    const items = await this.categoryQueryService.getPopularCategories({
+      limit: query.limit ?? 10,
+    });
+    return this.categoryPresenter.getPopularCategories(items);
   }
 
   @Get('trending')
   @Public()
   @ApiTrendingCategoriesResponse()
-  getTrendingCategories(@Query() query: CategoryRankingQueryDto) {
-    return this.categoryQueryService.getTrendingCategories({ limit: query.limit ?? 10 });
+  async getTrendingCategories(@Query() query: CategoryRankingQueryDto) {
+    const items = await this.categoryQueryService.getTrendingCategories({
+      limit: query.limit ?? 10,
+    });
+    return this.categoryPresenter.getTrendingCategories(items);
   }
 
   @Get(':slug/quizzes')
   @Public()
   @ApiCategoryQuizzesResponse()
-  getCategoryQuizzes(@Param('slug') slug: string, @Query() query: ListCategoryQuizzesQueryDto) {
-    return this.categoryQueryService.getCategoryQuizzesBySlug(slug, query);
+  async getCategoryQuizzes(
+    @Param('slug') slug: string,
+    @Query() query: ListCategoryQuizzesQueryDto,
+  ) {
+    const result = await this.categoryQueryService.getCategoryQuizzesBySlug(slug, query);
+    return this.categoryPresenter.getCategoryQuizzesBySlug(result);
   }
 
   @Get(':slug/related')
   @Public()
   @ApiRelatedCategoriesResponse()
-  getRelatedCategories(@Param('slug') slug: string, @Query() query: RelatedCategoriesQueryDto) {
-    return this.categoryQueryService.getRelatedCategories(slug, { limit: query.limit ?? 10 });
+  async getRelatedCategories(
+    @Param('slug') slug: string,
+    @Query() query: RelatedCategoriesQueryDto,
+  ) {
+    const items = await this.categoryQueryService.getRelatedCategories(slug, {
+      limit: query.limit ?? 10,
+    });
+    return this.categoryPresenter.getRelatedCategories(items);
   }
 
   @Get(':id/analytics')
   @Public()
   @ApiCategoryAnalyticsResponse()
-  getCategoryAnalytics(@Param('id', new ParseUUIDPipe()) categoryId: string) {
-    return this.categoryQueryService.getCategoryAnalytics(categoryId);
+  async getCategoryAnalytics(@Param('id', new ParseUUIDPipe()) categoryId: string) {
+    const analytics = await this.categoryQueryService.getCategoryAnalytics(categoryId);
+    return this.categoryPresenter.getCategoryAnalytics(analytics);
   }
 
   @Post(':id/follow')
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @ApiFollowCategoryResponse()
-  followCategory(
+  async followCategory(
     @Param('id', new ParseUUIDPipe()) categoryId: string,
     @CurrentUser() user: JwtPayload,
   ) {
-    return this.categoryApplicationService.followCategory(user.sub, categoryId);
+    const result = await this.categoryApplicationService.followCategory(user.sub, categoryId);
+    return this.categoryPresenter.followCategory(result);
   }
 
   @Delete(':id/follow')
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @ApiUnfollowCategoryResponse()
-  unfollowCategory(
+  async unfollowCategory(
     @Param('id', new ParseUUIDPipe()) categoryId: string,
     @CurrentUser() user: JwtPayload,
   ) {
-    return this.categoryApplicationService.unfollowCategory(user.sub, categoryId);
+    const result = await this.categoryApplicationService.unfollowCategory(user.sub, categoryId);
+    return this.categoryPresenter.unfollowCategory(result);
   }
 
   @Post(':id/restore')
   @Permissions(Permission.CATEGORY_MANAGE)
   @ApiRestoreCategoryResponse()
-  restoreCategory(@Param('id', new ParseUUIDPipe()) categoryId: string) {
-    return this.categoryApplicationService.restoreCategory(categoryId);
+  async restoreCategory(@Param('id', new ParseUUIDPipe()) categoryId: string) {
+    const result = await this.categoryApplicationService.restoreCategory(categoryId);
+    return this.categoryPresenter.restoreCategory(result);
   }
 
   @Get()
   @Public()
   @ApiListCategoriesResponse()
-  listCategories(@Query() query: ListCategoriesQueryDto) {
+  async listCategories(@Query() query: ListCategoriesQueryDto) {
     const command: ListCategoriesQuery = {
       limit: query.limit,
       cursor: query.cursor ? CategoryCursorMapper.parse(query.cursor) : null,
     };
 
-    return this.categoryQueryService.listCategories(command);
+    const result = await this.categoryQueryService.listCategories(command);
+    return this.categoryPresenter.listCategories(result);
   }
 
   @Get(':id')
   @Public()
   @ApiCategoryByIdResponse()
-  getCategoryById(@Param('id', new ParseUUIDPipe()) categoryId: string) {
-    return this.categoryQueryService.getCategoryById(categoryId);
+  async getCategoryById(@Param('id', new ParseUUIDPipe()) categoryId: string) {
+    const result = await this.categoryQueryService.getCategoryById(categoryId);
+    return this.categoryPresenter.getCategoryById(result);
   }
 
   @Get(':slug')
   @Public()
   @ApiCategoryBySlugResponse()
-  getCategoryBySlug(@Param('slug') slug: string) {
-    return this.categoryQueryService.getCategoryBySlug(slug);
+  async getCategoryBySlug(@Param('slug') slug: string) {
+    const result = await this.categoryQueryService.getCategoryBySlug(slug);
+    return this.categoryPresenter.getCategoryBySlug(result);
   }
 
   @Post()
   @Permissions(Permission.CATEGORY_MANAGE)
   @ApiCreateCategoryResponse()
-  createCategory(@Body() payload: CreateCategoryDto) {
+  async createCategory(@Body() payload: CreateCategoryDto) {
     const command: CreateCategoryCommand = {
       name: payload.name,
       description: payload.description,
@@ -154,13 +179,14 @@ export class CategoryController {
       imageUrl: payload.imageUrl,
     };
 
-    return this.categoryApplicationService.createCategory(command);
+    const result = await this.categoryApplicationService.createCategory(command);
+    return this.categoryPresenter.createCategory(result);
   }
 
   @Patch(':id')
   @Permissions(Permission.CATEGORY_MANAGE)
   @ApiUpdateCategoryResponse()
-  updateCategory(
+  async updateCategory(
     @Param('id', new ParseUUIDPipe()) categoryId: string,
     @Body() payload: UpdateCategoryDto,
   ) {
@@ -171,13 +197,15 @@ export class CategoryController {
       imageUrl: payload.imageUrl,
     };
 
-    return this.categoryApplicationService.updateCategory(categoryId, command);
+    const result = await this.categoryApplicationService.updateCategory(categoryId, command);
+    return this.categoryPresenter.updateCategory(result);
   }
 
   @Delete(':id')
   @Permissions(Permission.CATEGORY_MANAGE)
   @ApiDeleteCategoryResponse()
-  deleteCategory(@Param('id', new ParseUUIDPipe()) categoryId: string) {
-    return this.categoryApplicationService.deleteCategory(categoryId);
+  async deleteCategory(@Param('id', new ParseUUIDPipe()) categoryId: string) {
+    const result = await this.categoryApplicationService.deleteCategory(categoryId);
+    return this.categoryPresenter.deleteCategory(result);
   }
 }

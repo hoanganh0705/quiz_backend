@@ -1,13 +1,17 @@
 import { ApiProperty } from '@nestjs/swagger';
 
-// ─── Health module documentation-only DTOs ───────────────────────────────────
-//
-// Runtime shape is produced by `HealthPresenter` + `ResponseFormatInterceptor`:
-//   { data: HealthStatusDto, meta: { timestamp } }
-//
-// `HealthStatusDto` is referenced by the OpenAPI annotations on the
-// controller. The wrapper envelope is composed centrally in `api-ok.ts`.
-
+/**
+ * Health module runtime DTO.
+ *
+ * Runtime shape (produced by `HealthPresenter`):
+ *   { data: HealthStatusDto, meta: { timestamp } }
+ *
+ * Previously lived in `dto/health-response-docs.dto.ts` alongside
+ * `WrappedMessageResponseDto`-style documentation wrappers. Moved here during
+ * Phase 5 of the response-envelope migration (see
+ * `docs/migrations/PHASE_5_SUBPLAN.md` §4 Step 1.3) so the controller import
+ * path stays valid after the docs file is deleted.
+ */
 export type HealthStatusValue = 'up' | 'down' | 'degraded';
 
 export class HealthStatusDto {

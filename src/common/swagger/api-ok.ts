@@ -1,11 +1,5 @@
 import { applyDecorators, type Type } from '@nestjs/common';
-import {
-  ApiOkResponse,
-  ApiCreatedResponse,
-  getSchemaPath,
-  ApiExtraModels,
-  type ApiResponseOptions,
-} from '@nestjs/swagger';
+import { ApiOkResponse, ApiCreatedResponse, getSchemaPath, ApiExtraModels } from '@nestjs/swagger';
 import {
   OffsetPaginationMetaDto,
   PaginationMetaDto,
@@ -13,10 +7,55 @@ import {
   WrappedPaginatedDto,
 } from './swagger-schemas';
 
+/**
+ * Options accepted by `ApiOkResource` / `ApiCreatedResource` / `ApiOkResourceList`
+ * / `ApiOkResourceArray`. A superset of the schema-host variant of
+ * `@nestjs/swagger`'s `ApiResponseOptions`, but with `schema` and `type` removed
+ * (the helpers compose those internally) and with `example` / `examples` re-enabled
+ * so callers can attach documentation metadata that the underlying schema-host
+ * variant of `ApiResponseOptions` disallows.
+ *
+ * At runtime, `@nestjs/swagger`'s response-object factory
+ * (`node_modules/@nestjs/swagger/dist/services/response-object-factory.js`)
+ * transparently moves `example` into `content['application/json'].example`
+ * regardless of whether the input was the schema-host variant or the
+ * `ApiResponseMetadata` variant. So accepting `example` here matches the
+ * actual runtime behavior.
+ *
+ * `headers` and `links` are typed loosely because the underlying
+ * `HeadersObject` / `LinksObject` types from `@nestjs/swagger`'s
+ * `interfaces/open-api-spec.interface` are not re-exported from the package's
+ * top-level entrypoint, and the schema-host variant of `ApiResponseOptions`
+ * uses a stricter shape than the `ApiResponseMetadata` variant. Callers that
+ * need to attach response headers should use the loose `Record<string, unknown>`
+ * shape — it round-trips through `@nestjs/swagger` correctly at runtime.
+ */
+export type ApiResourceOptions = {
+  description?: string;
+  example?: unknown;
+  examples?: Record<string, { summary: string; value: unknown }>;
+  headers?: Record<string, unknown>;
+  links?: Record<string, unknown>;
+};
+
 const buildResourceSchema = <T extends Type>(model: T) => ({
   allOf: [
     { $ref: getSchemaPath(WrappedDto) },
     { properties: { data: { $ref: getSchemaPath(model) } } },
+  ],
+});
+
+const buildResourceArraySchema = <T extends Type>(model: T) => ({
+  allOf: [
+    { $ref: getSchemaPath(WrappedDto) },
+    {
+      properties: {
+        data: {
+          type: 'array' as const,
+          items: { $ref: getSchemaPath(model) },
+        },
+      },
+    },
   ],
 });
 
@@ -66,14 +105,14 @@ const buildPaginatedSchema = <T extends Type>(
  */
 export const ApiOkResource = <T extends Type>(
   model: T,
-  options: Omit<ApiResponseOptions, 'schema' | 'type'> = {},
+  options: ApiResourceOptions = {},
 ): MethodDecorator =>
   applyDecorators(
     ApiExtraModels(model),
     ApiOkResponse({
       ...options,
       schema: buildResourceSchema(model),
-    }),
+    } as Parameters<typeof ApiOkResponse>[0]),
   );
 
 /**
@@ -84,14 +123,14 @@ export const ApiOkResource = <T extends Type>(
  */
 export const ApiCreatedResource = <T extends Type>(
   model: T,
-  options: Omit<ApiResponseOptions, 'schema' | 'type'> = {},
+  options: ApiResourceOptions = {},
 ): MethodDecorator =>
   applyDecorators(
     ApiExtraModels(model),
     ApiCreatedResponse({
       ...options,
       schema: buildResourceSchema(model),
-    }),
+    } as Parameters<typeof ApiCreatedResponse>[0]),
   );
 
 /**
@@ -116,7 +155,7 @@ export const ApiCreatedResource = <T extends Type>(
 export const ApiOkResourceList = <T extends Type>(
   model: T,
   kind: 'cursor' | 'offset',
-  options: Omit<ApiResponseOptions, 'schema' | 'type'> = {},
+  options: ApiResourceOptions = {},
 ): MethodDecorator => {
   const paginationMetaSchema = kind === 'cursor' ? PaginationMetaDto : OffsetPaginationMetaDto;
 
@@ -125,6 +164,45 @@ export const ApiOkResourceList = <T extends Type>(
     ApiOkResponse({
       ...options,
       schema: buildPaginatedSchema(model, paginationMetaSchema),
-    }),
+    } as Parameters<typeof ApiOkResponse>[0]),
   );
 };
+
+/**
+ * Compose `@ApiOkResponse({ ..., schema: { allOf: [...] } })` for a
+ * non-paginated bare-array resource wrapped in the canonical envelope.
+ *
+ * Use this on endpoints whose runtime payload is `{ data: T[], meta }` — i.e.
+ * a bare array of items with no `pagination` meta block. Examples include
+ * `GET /categories/popular`, `GET /tags/trending`, and the bare-array
+ * "F-variant" endpoints documented in
+ * `docs/migrations/RESPONSE_ENVELOPE_MIGRATION.md` §2.1.
+ *
+ * If the endpoint actually returns a cursor-paginated list, use
+ * {@link ApiOkResourceList} instead — the two produce different `meta` shapes
+ * (`{ timestamp }` vs `{ timestamp, pagination }`) and the schema must match.
+ *
+ * Added during Phase 5 of the response-envelope migration to replace the
+ * ad-hoc `CategoryWrappedRankedListDto` / `TagWrappedRankedListDto` /
+ * `CategoryWrappedRelatedListDto` classes — see
+ * `docs/migrations/PHASE_5_SUBPLAN.md` §4 Step 2.
+ *
+ * @example
+ *   @ApiOkResourceArray(RankedCategoryResponseDto, {
+ *     description: 'Returns the ranked categories.',
+ *     example: CATEGORY_RANKED_LIST_EXAMPLE,
+ *   })
+ *   @Get('popular')
+ *   async getPopular() { ... }
+ */
+export const ApiOkResourceArray = <T extends Type>(
+  model: T,
+  options: ApiResourceOptions = {},
+): MethodDecorator =>
+  applyDecorators(
+    ApiExtraModels(model),
+    ApiOkResponse({
+      ...options,
+      schema: buildResourceArraySchema(model),
+    } as Parameters<typeof ApiOkResponse>[0]),
+  );
