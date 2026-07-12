@@ -44,7 +44,7 @@ export const runReviewSeed = async (): Promise<SeedSummary[]> => {
         continue;
       }
 
-      await tx
+      const [touched] = await tx
         .insert(quizReviews)
         .values({
           quizId,
@@ -55,21 +55,41 @@ export const runReviewSeed = async (): Promise<SeedSummary[]> => {
           updatedAt: ctx.nowIso,
         })
         .onConflictDoNothing()
-        .returning();
+        .returning({
+          quizId: quizReviews.quizId,
+          userId: quizReviews.userId,
+          rating: quizReviews.rating,
+          comment: quizReviews.comment,
+          createdAt: quizReviews.createdAt,
+          updatedAt: quizReviews.updatedAt,
+        });
 
       inserted++;
+
       logger.info(`Review: ${review.userUsername} rated "${review.quizSlug}" ${review.rating}/5`);
 
-      recorder.record({
-        kind: 'Quiz Reviews',
-        id: `${review.userUsername}:${review.quizSlug}`,
-        fields: {
-          username: review.userUsername,
-          quizSlug: review.quizSlug,
-          rating: String(review.rating),
-          comment: review.comment,
-        },
-      });
+      if (touched) {
+        recorder.record({
+          kind: 'Quiz Reviews',
+          id: `${review.userUsername}:${review.quizSlug}`,
+          fields: {
+            username: review.userUsername,
+            quizSlug: review.quizSlug,
+            rating: String(review.rating),
+            comment: review.comment,
+          },
+          details: {
+            quizId: touched.quizId,
+            quizSlug: review.quizSlug,
+            userId: touched.userId,
+            username: review.userUsername,
+            rating: touched.rating,
+            comment: touched.comment,
+            createdAt: touched.createdAt,
+            updatedAt: touched.updatedAt,
+          },
+        });
+      }
     }
 
     summaries.push({ domain: 'reviews', inserted, updated: 0, skipped });

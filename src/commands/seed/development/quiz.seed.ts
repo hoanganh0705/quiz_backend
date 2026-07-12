@@ -444,17 +444,17 @@ async function ensureQuiz(
   lookup: SeedLookup,
   ctx: SeedContext,
   quiz: QuizSeed,
-): Promise<{ quizId: string }> {
+): Promise<{ quizId: string; creatorId: string; publishedVersionId: string | null }> {
   const creatorId = await lookup.userIdByUsername(quiz.creatorUsername);
 
   const [existing] = await tx
-    .select({ quizId: quizzes.quizId })
+    .select({ quizId: quizzes.quizId, publishedVersionId: quizzes.publishedVersionId })
     .from(quizzes)
     .where(eq(quizzes.slug, quiz.slug))
     .limit(1);
 
   if (existing) {
-    return { quizId: existing.quizId };
+    return { quizId: existing.quizId, creatorId, publishedVersionId: existing.publishedVersionId };
   }
 
   const [created] = await tx
@@ -470,9 +470,12 @@ async function ensureQuiz(
       createdAt: ctx.nowIso,
       updatedAt: ctx.nowIso,
     })
-    .returning({ quizId: quizzes.quizId });
+    .returning({
+      quizId: quizzes.quizId,
+      publishedVersionId: quizzes.publishedVersionId,
+    });
 
-  return { quizId: created.quizId };
+  return { quizId: created.quizId, creatorId, publishedVersionId: created.publishedVersionId };
 }
 
 /**
@@ -492,32 +495,40 @@ async function ensureTaxonomy(
   ctx: SeedContext,
   quizId: string,
   quiz: QuizSeed,
-): Promise<void> {
+): Promise<{ categoryId: string | null; categorySlug: string | null; tagIds: string[] }> {
+  let categoryId: string | null = null;
+  let categorySlug: string | null = null;
+
   if (quiz.categorySlug) {
-    const categoryId = await lookup.categoryIdBySlug(quiz.categorySlug);
-    if (!categoryId) {
-      logger.warn(`Quiz taxonomy: category "${quiz.categorySlug}" not found for quiz "${quiz.slug}", skipping`);
-    } else {
+    categoryId = await lookup.categoryIdBySlug(quiz.categorySlug);
+    if (categoryId) {
+      categorySlug = quiz.categorySlug;
       await tx
         .insert(quizCategories)
         .values({ quizId, categoryId, createdAt: ctx.nowIso })
         .onConflictDoNothing();
       logger.info(`Category "${quiz.categorySlug}" assigned to "${quiz.slug}"`);
+    } else {
+      logger.warn(`Quiz taxonomy: category "${quiz.categorySlug}" not found for quiz "${quiz.slug}", skipping`);
     }
   }
 
+  const tagIds: string[] = [];
   for (const tagSlug of quiz.tagSlugs ?? []) {
     const tagId = await lookup.tagIdBySlug(tagSlug);
-    if (!tagId) {
+    if (tagId) {
+      tagIds.push(tagId);
+      await tx
+        .insert(quizTags)
+        .values({ quizId, tagId, createdAt: ctx.nowIso })
+        .onConflictDoNothing();
+      logger.info(`Tag "${tagSlug}" assigned to "${quiz.slug}"`);
+    } else {
       logger.warn(`Quiz taxonomy: tag "${tagSlug}" not found for quiz "${quiz.slug}", skipping`);
-      continue;
     }
-    await tx
-      .insert(quizTags)
-      .values({ quizId, tagId, createdAt: ctx.nowIso })
-      .onConflictDoNothing();
-    logger.info(`Tag "${tagSlug}" assigned to "${quiz.slug}"`);
   }
+
+  return { categoryId, categorySlug, tagIds };
 }
 
 async function ensureQuizVersion(
@@ -609,16 +620,16 @@ export const runQuizSeed = async (): Promise<SeedSummary[]> => {
     for (const quiz of QUIZ_SEEDS) {
       await logger.group(`Quiz: ${quiz.slug}`, async () => {
         const creatorId = await lookup.userIdByUsername(quiz.creatorUsername);
-        const { quizId } = await ensureQuiz(tx, lookup, ctx, quiz);
+        const { quizId, creatorId: quizCreatorId, publishedVersionId } = await ensureQuiz(tx, lookup, ctx, quiz);
 
         // Assign category and tags via join tables so filter endpoints work.
-        await ensureTaxonomy(tx, lookup, ctx, quizId, quiz);
+        const taxonomy = await ensureTaxonomy(tx, lookup, ctx, quizId, quiz);
 
         let questionsInserted = 0;
         let versionsInserted = 0;
 
         for (const version of quiz.versions) {
-          const quizVersionId = await ensureQuizVersion(tx, ctx, quizId, creatorId, version);
+          const quizVersionId = await ensureQuizVersion(tx, ctx, quizId, quizCreatorId, version);
 
           if (version.questions.length > 0) {
             await ensureQuestions(tx, ctx, quizVersionId, version.questions);
@@ -648,8 +659,26 @@ export const runQuizSeed = async (): Promise<SeedSummary[]> => {
               durationMs: String(version.durationMs),
               rewardXp: String(version.rewardXp),
             },
+            details: {
+              quizVersionId,
+              quizId,
+              quizSlug: quiz.slug,
+              versionNumber: version.versionNumber,
+              status: version.status,
+              difficulty: version.difficulty,
+              durationMs: version.durationMs,
+              passingScorePercent: version.passingScorePercent,
+              rewardXp: version.rewardXp,
+              createdByUserId: quizCreatorId,
+              publishedAt: version.status === 'published' ? ctx.nowIso : null,
+              archivedAt: version.status === 'archived' ? ctx.nowIso : null,
+              createdAt: ctx.nowIso,
+              updatedAt: ctx.nowIso,
+            },
           });
         }
+
+        const effectivePublishedVersionId = publishedVersionId;
 
         recorder.record({
           kind: 'Quizzes',
@@ -659,8 +688,24 @@ export const runQuizSeed = async (): Promise<SeedSummary[]> => {
             title: quiz.title,
             creator: quiz.creatorUsername,
             versions: String(quiz.versions.length),
-            category: quiz.categorySlug ?? '',
+            category: taxonomy.categorySlug ?? '',
             tags: (quiz.tagSlugs ?? []).join(', '),
+          },
+          details: {
+            quizId,
+            creatorId: quizCreatorId,
+            title: quiz.title,
+            slug: quiz.slug,
+            description: quiz.description,
+            isFeatured: quiz.isFeatured,
+            isHidden: quiz.isHidden,
+            isVerified: false,
+            publishedVersionId: effectivePublishedVersionId,
+            categoryId: taxonomy.categoryId ?? null,
+            categorySlug: taxonomy.categorySlug,
+            tagIds: taxonomy.tagIds,
+            createdAt: ctx.nowIso,
+            updatedAt: ctx.nowIso,
           },
         });
 

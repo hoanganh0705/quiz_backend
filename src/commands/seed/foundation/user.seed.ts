@@ -159,6 +159,19 @@ export const createUsersDomain = (): SeedDomain => ({
         `,
       })
       .returning({
+        userId: users.userId,
+        username: users.username,
+        email: users.email,
+        role: users.role,
+        isVerified: users.isVerified,
+        emailVerifiedAt: users.emailVerifiedAt,
+        passwordChangedAt: users.passwordChangedAt,
+        xpTotal: users.xpTotal,
+        currentStreak: users.currentStreak,
+        longestStreak: users.longestStreak,
+        settings: users.settings,
+        createdAt: users.createdAt,
+        updatedAt: users.updatedAt,
         inserted: sql<boolean>`xmax = 0`,
       });
 
@@ -167,9 +180,17 @@ export const createUsersDomain = (): SeedDomain => ({
     const skipped = seeds.length - touchedRows.length;
 
     // Emit one record per seed user so SEED_RECORD.md lists every login.
-    // We deliberately record from the seed payload (not the returned row)
-    // because the password is only available pre-hash.
+    // We deliberately read the password from the seed payload (not the
+    // persisted row) because the password is only available pre-hash.
+    // The richer `details` block carries every other field — UUIDs,
+    // timestamps, streak counters, settings JSON — so the report is a
+    // complete reference even though the headline table only carries
+    // the most useful identifiers.
+    const rowByUsername = new Map(
+      touchedRows.map((row) => [normalizeUsername(row.username), row] as const),
+    );
     for (const seed of seeds) {
+      const row = rowByUsername.get(seed.username);
       recorder.record({
         kind: 'Users',
         id: seed.username,
@@ -179,6 +200,29 @@ export const createUsersDomain = (): SeedDomain => ({
           password: seed.password,
           role: seed.role,
           displayName: seed.displayName,
+          userId: row?.userId ?? '',
+          isVerified: row ? String(row.isVerified) : '',
+          xpTotal: row ? String(row.xpTotal) : '0',
+        },
+        details: {
+          userId: row?.userId ?? null,
+          username: seed.username,
+          email: seed.email,
+          role: seed.role,
+          isVerified: row?.isVerified ?? null,
+          emailVerifiedAt: row?.emailVerifiedAt ?? null,
+          passwordChangedAt: row?.passwordChangedAt ?? null,
+          xpTotal: row?.xpTotal ?? 0,
+          currentStreak: row?.currentStreak ?? 0,
+          longestStreak: row?.longestStreak ?? 0,
+          profile: {
+            displayName: seed.displayName,
+            bio: seed.bio,
+            avatarUrl: seed.avatarUrl,
+          },
+          settings: row?.settings ?? {},
+          createdAt: row?.createdAt ?? null,
+          updatedAt: row?.updatedAt ?? null,
         },
       });
     }
