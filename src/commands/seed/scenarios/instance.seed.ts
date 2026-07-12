@@ -78,19 +78,40 @@ export const runInstanceSeed = async (): Promise<SeedSummary[]> => {
             status: instance.status,
             maxPlayers: String(instance.maxPlayers ?? ''),
           },
+          details: {
+            instanceId: existing.instanceId,
+            quizVersionId,
+            quizSlug: instance.quizSlug,
+            hostUserId,
+            hostUsername: instance.hostUsername,
+            maxPlayers: instance.maxPlayers,
+            status: instance.status,
+            createdAt: ctx.nowIso,
+            updatedAt: ctx.nowIso,
+          },
         });
         summaries.push({ domain: domainKey, inserted: 0, updated: 0, skipped: 1 });
         continue;
       }
 
-      await tx.insert(quizInstances).values({
-        quizVersionId,
-        hostUserId,
-        maxPlayers: instance.maxPlayers,
-        status: instance.status,
-        createdAt: ctx.nowIso,
-        updatedAt: ctx.nowIso,
-      });
+      const [created] = await tx
+        .insert(quizInstances)
+        .values({
+          quizVersionId,
+          hostUserId,
+          maxPlayers: instance.maxPlayers,
+          status: instance.status,
+          createdAt: ctx.nowIso,
+          updatedAt: ctx.nowIso,
+        })
+        .returning({
+          instanceId: quizInstances.instanceId,
+          quizVersionId: quizInstances.quizVersionId,
+          hostUserId: quizInstances.hostUserId,
+          status: quizInstances.status,
+          createdAt: quizInstances.createdAt,
+          updatedAt: quizInstances.updatedAt,
+        });
 
       logger.info(`Created instance for "${instance.quizSlug}" v${instance.versionNumber} (${instance.status}) hosted by ${instance.hostUsername}`);
 
@@ -103,6 +124,17 @@ export const runInstanceSeed = async (): Promise<SeedSummary[]> => {
           host: instance.hostUsername,
           status: instance.status,
           maxPlayers: String(instance.maxPlayers ?? ''),
+        },
+        details: {
+          instanceId: created.instanceId,
+          quizVersionId: created.quizVersionId,
+          quizSlug: instance.quizSlug,
+          hostUserId: created.hostUserId,
+          hostUsername: instance.hostUsername,
+          maxPlayers: instance.maxPlayers,
+          status: created.status,
+          createdAt: created.createdAt,
+          updatedAt: created.updatedAt,
         },
       });
       summaries.push({ domain: domainKey, inserted: 1, updated: 0, skipped: 0 });

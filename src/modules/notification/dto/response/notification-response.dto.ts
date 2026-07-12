@@ -1,7 +1,6 @@
-import { Expose, Type } from 'class-transformer';
+import { Expose } from 'class-transformer';
 import {
   IsBoolean,
-  IsInt,
   IsISO8601,
   IsIn,
   IsNotEmpty,
@@ -10,7 +9,6 @@ import {
   IsOptional,
   IsString,
   IsUUID,
-  ValidateNested,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
@@ -125,33 +123,6 @@ export class NotificationResponseDto {
   @IsOptional()
   @IsISO8601()
   expiresAt!: string | null;
-}
-
-export class NotificationListResponseDto {
-  @ApiProperty({
-    description: 'Notification items for the current page',
-    type: () => [NotificationResponseDto],
-  })
-  @Expose()
-  @ValidateNested({ each: true })
-  @Type(() => NotificationResponseDto)
-  items!: NotificationResponseDto[];
-
-  @ApiProperty({
-    description: 'Total number of unread notifications for the user',
-    example: 5,
-  })
-  @Expose()
-  @IsInt()
-  unreadCount!: number;
-
-  @ApiProperty({
-    description: 'Whether more notifications exist beyond this page',
-    example: true,
-  })
-  @Expose()
-  @IsBoolean()
-  hasNextPage!: boolean;
 }
 
 export class NotificationPreferencesResponseDto {

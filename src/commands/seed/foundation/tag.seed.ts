@@ -74,20 +74,32 @@ export const createTagsDomain = (): SeedDomain => ({
         setWhere: sql`${tags.name} IS DISTINCT FROM excluded.name`,
       })
       .returning({
+        tagId: tags.tagId,
+        slug: tags.slug,
+        name: tags.name,
+        createdAt: tags.createdAt,
+        updatedAt: tags.updatedAt,
         inserted: sql<boolean>`xmax = 0`,
       });
 
-    const inserted = touchedRows.filter((row) => row.inserted).length;
-    const updated = touchedRows.length - inserted;
-    const skipped = seeds.length - touchedRows.length;
+    const rowBySlug = new Map(touchedRows.map((row) => [row.slug, row]));
 
     for (const seed of seeds) {
+      const row = rowBySlug.get(seed.slug);
       recorder.record({
         kind: 'Tags',
         id: seed.slug,
         fields: {
           slug: seed.slug,
           name: seed.name,
+          tagId: row?.tagId ?? '',
+        },
+        details: {
+          tagId: row?.tagId ?? null,
+          slug: seed.slug,
+          name: seed.name,
+          createdAt: row?.createdAt ?? null,
+          updatedAt: row?.updatedAt ?? null,
         },
       });
     }

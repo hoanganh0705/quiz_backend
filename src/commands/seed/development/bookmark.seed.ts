@@ -118,6 +118,15 @@ export const runBookmarkSeed = async (): Promise<SeedSummary[]> => {
             owner: collection.userUsername,
             quizSlug,
           },
+          details: {
+            bookmarkId: existingBookmark?.bookmarkId ?? null,
+            collectionId: existingBookmark?.collectionId ?? collectionId,
+            quizId,
+            quizSlug,
+            notes: null,
+            bookmarkedAt: ctx.nowIso,
+            updatedAt: ctx.nowIso,
+          },
         });
       }
 
@@ -128,6 +137,15 @@ export const runBookmarkSeed = async (): Promise<SeedSummary[]> => {
           name: collection.name,
           owner: collection.userUsername,
           quizzes: String(collection.quizSlugs.length),
+        },
+        details: {
+          collectionId: existing ? existing.collectionId : collectionId,
+          userId,
+          username: collection.userUsername,
+          name: collection.name,
+          description: collection.description,
+          createdAt: ctx.nowIso,
+          updatedAt: ctx.nowIso,
         },
       });
     }
