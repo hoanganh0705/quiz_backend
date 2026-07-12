@@ -82,8 +82,6 @@ export const runTournamentSeed = async (): Promise<SeedSummary[]> => {
         if (existing) {
           tournamentId = existing.tournamentId;
 
-          // Record the existing tournament so SEED_RECORD.md reflects
-          // what's actually in the database on a re-run.
           recorder.record({
             kind: 'Tournaments',
             id: tournament.title,
@@ -96,6 +94,21 @@ export const runTournamentSeed = async (): Promise<SeedSummary[]> => {
               rounds: String(tournament.quizSlugs.length),
               quizzes: tournament.quizSlugs.join(', '),
               category: tournament.categorySlug ?? '',
+            },
+            details: {
+              tournamentId: existing.tournamentId,
+              title: tournament.title,
+              description: tournament.description,
+              difficulty: tournament.difficulty,
+              status: tournament.status,
+              prize: tournament.prize,
+              startAt: tournament.startAt,
+              endAt: tournament.endAt,
+              maxParticipants: tournament.maxParticipants,
+              categoryId: categoryId ?? existing.tournamentId.slice(0, 8),
+              categorySlug: tournament.categorySlug,
+              createdAt: ctx.nowIso,
+              updatedAt: ctx.nowIso,
             },
           });
         } else {
@@ -132,10 +145,26 @@ export const runTournamentSeed = async (): Promise<SeedSummary[]> => {
               quizzes: tournament.quizSlugs.join(', '),
               category: tournament.categorySlug ?? '',
             },
+            details: {
+              tournamentId: created.tournamentId,
+              title: tournament.title,
+              description: tournament.description,
+              difficulty: tournament.difficulty,
+              status: tournament.status,
+              prize: tournament.prize,
+              startAt: tournament.startAt,
+              endAt: tournament.endAt,
+              maxParticipants: tournament.maxParticipants,
+              categoryId,
+              categorySlug: tournament.categorySlug,
+              createdAt: ctx.nowIso,
+              updatedAt: ctx.nowIso,
+            },
           });
         }
 
         // Create rounds for each quiz version used in this tournament
+        const createdRoundIds: string[] = [];
         let roundNumber = 1;
         for (const quizSlug of tournament.quizSlugs) {
           const quizVersionId = await lookup.publishedVersionIdByQuizSlug(quizSlug);
@@ -152,8 +181,47 @@ export const runTournamentSeed = async (): Promise<SeedSummary[]> => {
             )
             .limit(1);
 
+          let roundId: string;
           if (!existingRound) {
-            await tx.insert(tournamentRounds).values({
+            const [createdRound] = await tx
+              .insert(tournamentRounds)
+              .values({
+                tournamentId,
+                roundNumber,
+                name: `Round ${roundNumber}: ${quizSlug}`,
+                description: `Quiz: ${quizSlug}`,
+                quizVersionId,
+                status: tournament.status === 'finished' ? 'finished'
+                  : tournament.status === 'ongoing' ? 'open'
+                  : 'pending',
+                isElimination: false,
+                participantLimit: null,
+                createdAt: ctx.nowIso,
+                updatedAt: ctx.nowIso,
+              })
+              .returning({ roundId: tournamentRounds.roundId });
+            roundId = createdRound.roundId;
+            createdRoundIds.push(roundId);
+            logger.info(`Created round ${roundNumber} using ${quizSlug} (published version)`);
+          } else {
+            roundId = existingRound.roundId;
+            createdRoundIds.push(roundId);
+          }
+
+          recorder.record({
+            kind: 'Tournament Rounds',
+            id: `${tournament.title}:round${roundNumber}`,
+            fields: {
+              tournament: tournament.title,
+              round: String(roundNumber),
+              name: `Round ${roundNumber}: ${quizSlug}`,
+              quizSlug,
+              status: tournament.status === 'finished' ? 'finished'
+                : tournament.status === 'ongoing' ? 'open'
+                : 'pending',
+            },
+            details: {
+              roundId,
               tournamentId,
               roundNumber,
               name: `Round ${roundNumber}: ${quizSlug}`,
@@ -166,9 +234,8 @@ export const runTournamentSeed = async (): Promise<SeedSummary[]> => {
               participantLimit: null,
               createdAt: ctx.nowIso,
               updatedAt: ctx.nowIso,
-            });
-            logger.info(`Created round ${roundNumber} using ${quizSlug} (published version)`);
-          }
+            },
+          });
 
           roundNumber++;
         }
@@ -194,6 +261,7 @@ export const runTournamentSeed = async (): Promise<SeedSummary[]> => {
               )
               .limit(1);
 
+            let participantId: string;
             if (existingParticipant) {
               await tx
                 .update(tournamentParticipants)
@@ -204,20 +272,50 @@ export const runTournamentSeed = async (): Promise<SeedSummary[]> => {
                   updatedAt: ctx.nowIso,
                 })
                 .where(eq(tournamentParticipants.participantId, existingParticipant.participantId));
+              participantId = existingParticipant.participantId;
             } else {
-              await tx.insert(tournamentParticipants).values({
+              const [createdParticipant] = await tx
+                .insert(tournamentParticipants)
+                .values({
+                  tournamentId,
+                  userId,
+                  registeredAt: tournament.startAt,
+                  totalScore: entry.score,
+                  totalTimeMs: entry.timeMs,
+                  rankFinal: leaderboardData.indexOf(entry) + 1,
+                  status: 'active',
+                  updatedAt: ctx.nowIso,
+                })
+                .returning({ participantId: tournamentParticipants.participantId });
+              participantId = createdParticipant.participantId;
+            }
+
+            logger.info(`Leaderboard: ${entry.username} score=${entry.score} rank=${leaderboardData.indexOf(entry) + 1}`);
+
+            recorder.record({
+              kind: 'Tournament Participants',
+              id: `${tournament.title}:${entry.username}`,
+              fields: {
+                tournament: tournament.title,
+                username: entry.username,
+                score: String(entry.score),
+                timeMs: String(entry.timeMs),
+                rank: String(leaderboardData.indexOf(entry) + 1),
+                status: 'active',
+              },
+              details: {
+                participantId,
                 tournamentId,
                 userId,
+                username: entry.username,
                 registeredAt: tournament.startAt,
                 totalScore: entry.score,
                 totalTimeMs: entry.timeMs,
                 rankFinal: leaderboardData.indexOf(entry) + 1,
                 status: 'active',
                 updatedAt: ctx.nowIso,
-              });
-            }
-
-            logger.info(`Leaderboard: ${entry.username} score=${entry.score} rank=${leaderboardData.indexOf(entry) + 1}`);
+              },
+            });
           }
         }
       });

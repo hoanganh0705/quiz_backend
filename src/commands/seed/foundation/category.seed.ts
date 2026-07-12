@@ -117,14 +117,20 @@ export const createCategoriesDomain = (): SeedDomain => ({
         `,
       })
       .returning({
+        categoryId: categories.categoryId,
+        slug: categories.slug,
+        name: categories.name,
+        description: categories.description,
+        imageUrl: categories.imageUrl,
+        createdAt: categories.createdAt,
+        updatedAt: categories.updatedAt,
         inserted: sql<boolean>`xmax = 0`,
       });
 
-    const inserted = touchedRows.filter((row) => row.inserted).length;
-    const updated = touchedRows.length - inserted;
-    const skipped = seeds.length - touchedRows.length;
+    const rowBySlug = new Map(touchedRows.map((row) => [row.slug, row]));
 
     for (const seed of seeds) {
+      const row = rowBySlug.get(seed.slug);
       recorder.record({
         kind: 'Categories',
         id: seed.slug,
@@ -132,6 +138,16 @@ export const createCategoriesDomain = (): SeedDomain => ({
           slug: seed.slug,
           name: seed.name,
           description: seed.description,
+          categoryId: row?.categoryId ?? '',
+        },
+        details: {
+          categoryId: row?.categoryId ?? null,
+          slug: seed.slug,
+          name: seed.name,
+          description: seed.description,
+          imageUrl: row?.imageUrl ?? null,
+          createdAt: row?.createdAt ?? null,
+          updatedAt: row?.updatedAt ?? null,
         },
       });
     }

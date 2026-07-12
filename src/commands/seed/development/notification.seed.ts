@@ -254,6 +254,44 @@ export const runNotificationSeed = async (): Promise<SeedSummary[]> => {
           },
         });
 
+      recorder.record({
+        kind: 'Notification Preferences',
+        id: seed.username,
+        fields: {
+          username: seed.username,
+          inAppEnabled: String(seed.inAppEnabled),
+          emailEnabled: String(seed.emailEnabled),
+          pushEnabled: String(seed.pushEnabled),
+          achievementEnabled: String(seed.achievementEnabled),
+          tournamentEnabled: String(seed.tournamentEnabled),
+          rankEnabled: String(seed.rankEnabled),
+          friendEnabled: String(seed.friendEnabled),
+          discussionEnabled: String(seed.discussionEnabled),
+          summaryEnabled: String(seed.summaryEnabled),
+          marketingEnabled: String(seed.marketingEnabled),
+          rankImprovementThreshold: String(seed.rankImprovementThreshold),
+        },
+        details: {
+          userId,
+          username: seed.username,
+          inAppEnabled: seed.inAppEnabled,
+          emailEnabled: seed.emailEnabled,
+          pushEnabled: seed.pushEnabled,
+          achievementEnabled: seed.achievementEnabled,
+          tournamentEnabled: seed.tournamentEnabled,
+          rankEnabled: seed.rankEnabled,
+          friendEnabled: seed.friendEnabled,
+          discussionEnabled: seed.discussionEnabled,
+          summaryEnabled: seed.summaryEnabled,
+          marketingEnabled: seed.marketingEnabled,
+          rankImprovementThreshold: seed.rankImprovementThreshold,
+          quietHoursStart: seed.quietHoursStart,
+          quietHoursEnd: seed.quietHoursEnd,
+          createdAt: ctx.nowIso,
+          updatedAt: ctx.nowIso,
+        },
+      });
+
       preferencesTouched++;
     }
 
@@ -279,7 +317,7 @@ export const runNotificationSeed = async (): Promise<SeedSummary[]> => {
         .returning({ notificationId: notifications.notificationId });
 
       // Record the seeded notification so SEED_RECORD.md lists every entry
-// that the seed defines — even on re-runs where the row already exists.
+      // that the seed defines — even on re-runs where the row already exists.
       recorder.record({
         kind: 'Notifications',
         id: seed.notificationId,
@@ -290,6 +328,21 @@ export const runNotificationSeed = async (): Promise<SeedSummary[]> => {
           channel: seed.channel,
           title: seed.title,
           isRead: String(seed.isRead),
+        },
+        details: {
+          notificationId: seed.notificationId,
+          userId,
+          username: seed.username,
+          type: seed.type,
+          title: seed.title,
+          message: seed.message,
+          metadata: seed.metadata ?? {},
+          channel: seed.channel,
+          isRead: seed.isRead,
+          readAt: seed.isRead ? seed.readAt ?? seed.createdAt : null,
+          expiresAt: seed.expiresAt ?? null,
+          createdAt: seed.createdAt,
+          deletedAt: null,
         },
       });
 

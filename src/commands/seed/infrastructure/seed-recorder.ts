@@ -8,19 +8,29 @@ import { logger } from './seed-logger';
  * `kind` is the semantic category (e.g. "user", "badge", "quiz").
  * `id` is the human-readable identifier a tester would use to log in,
  * look up, or reference the row (e.g. username, email, slug).
- * `fields` is the table of details to render under the heading.
+ * `fields` is the table of headline details to render as columns.
+ *
+ * `details` is an optional richer payload rendered as a fenced code block
+ * immediately under the row. It carries every other field available at
+ * seed time (UUIDs, FK IDs, timestamps, JSON blobs, etc.) so the report
+ * doubles as a complete reference for development, debugging, and API
+ * testing — without forcing every field into the table view.
+ *
+ * `heading` overrides the markdown section heading (defaults to `kind`).
  */
 export type SeedRecord = {
   kind: string;
   id: string;
   fields: Record<string, string>;
+  /** Optional richer supplementary data rendered as a JSON block. */
+  details?: Record<string, unknown>;
   /** Optional override for the markdown section heading (defaults to the kind). */
   heading?: string;
 };
 
 /**
  * Singleton-style recorder. Seed modules call `recorder.record(...)`
- * as they insert rows. After all seeds finish, `writeRecord()`
+ * as they insert rows. After all seeds finish, `writeSeedRecord()`
  * flushes the buffer to a markdown file.
  *
  * Recording is best-effort: if a seed module forgets to call `record`,
@@ -84,7 +94,11 @@ export const writeSeedRecord = (outputDir: string): string => {
       `seed run. Do not edit by hand — re-run \`pnpm db:seed:all\` to refresh.`,
   );
   lines.push('');
-  lines.push('Use this file to find login credentials and human-readable IDs for every seeded row.');
+  lines.push(
+    'Use this file to find login credentials, identifiers, and a complete reference ' +
+      'of every field persisted for each seeded row (IDs, foreign keys, timestamps, ' +
+      'JSON blobs, and relationships).',
+  );
   lines.push('');
 
   for (const { heading, records } of grouped) {
@@ -108,6 +122,36 @@ export const writeSeedRecord = (outputDir: string): string => {
       lines.push(`| ${cells.join(' | ')} |`);
     }
     lines.push('');
+
+    // Emit a "Full record" block per entity when richer details were
+    // provided. This block carries every persisted field — IDs, FK IDs,
+    // timestamps, JSON metadata, etc. — so the report is a complete
+    // reference even though the headline table only carries the most
+    // useful identifiers.
+    const detailedRecords = records.filter((r) => r.details && Object.keys(r.details).length > 0);
+    if (detailedRecords.length > 0) {
+      lines.push('<details>');
+      lines.push('<summary>Full record details (click to expand)</summary>');
+      lines.push('');
+      for (const record of detailedRecords) {
+        const label =
+          record.fields.username
+            ?? record.fields.email
+            ?? record.fields.slug
+            ?? record.fields.title
+            ?? record.fields.name
+            ?? record.fields.quizSlug
+            ?? record.id;
+        lines.push(`**${label}**`);
+        lines.push('');
+        lines.push('```json');
+        lines.push(JSON.stringify(record.details, null, 2));
+        lines.push('```');
+        lines.push('');
+      }
+      lines.push('</details>');
+      lines.push('');
+    }
 
     // For records that contain a `password` field, also emit a copy-pasteable
     // code block with the credential pair so testers don't have to scrape the

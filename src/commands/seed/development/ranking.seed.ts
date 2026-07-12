@@ -369,6 +369,32 @@ export const runRankingSeed = async (): Promise<SeedSummary[]> => {
 
       logger.info(`Ranking seeded for ${seed.username}: allTimeRank=${seed.allTimeRank} xp=${seed.allTimeXp}`);
 
+      const rankingDetails: Record<string, unknown> = {
+        userId,
+        username: seed.username,
+        allTimeXp: seed.allTimeXp,
+        weeklyXp: seed.weeklyXp,
+        monthlyXp: seed.monthlyXp,
+        dailyXp: seed.dailyXp,
+        allTimeRank: seed.allTimeRank,
+        weeklyRank: seed.weeklyRank,
+        monthlyRank: seed.monthlyRank,
+        dailyRank: seed.dailyRank,
+        lastWeeklyResetAt: '2026-06-30T00:00:00.000Z',
+        lastMonthlyResetAt: '2026-06-01T00:00:00.000Z',
+        lastDailyResetAt: '2026-06-30T00:00:00.000Z',
+        peakAllTimeRank: seed.peakAllTimeRank,
+        peakAllTimeRankAchievedAt: seed.peakAchievedAt,
+        peakWeeklyRank: seed.peakWeeklyRank,
+        peakWeeklyRankAchievedAt: seed.peakAchievedAt,
+        peakMonthlyRank: seed.peakMonthlyRank,
+        peakMonthlyRankAchievedAt: seed.peakAchievedAt,
+        peakDailyRank: seed.peakDailyRank,
+        peakDailyRankAchievedAt: seed.peakAchievedAt,
+        lastActivityAt: seed.lastActivityAt,
+        isDirty: false,
+      };
+
       recorder.record({
         kind: 'User Rankings',
         id: seed.username,
@@ -380,7 +406,56 @@ export const runRankingSeed = async (): Promise<SeedSummary[]> => {
           monthlyXp: String(seed.monthlyXp),
           peakAllTimeRank: String(seed.peakAllTimeRank),
         },
+        details: rankingDetails,
       });
+
+      if (seed.history.length > 0) {
+        recorder.record({
+          kind: 'Ranking History',
+          id: seed.username,
+          fields: {
+            username: seed.username,
+            entries: String(seed.history.length),
+            periods: seed.history.map((h) => h.period).join(', '),
+          },
+          details: {
+            userId,
+            username: seed.username,
+            history: seed.history.map((h) => ({
+              historyId: h.historyId,
+              userId,
+              period: h.period,
+              snapshotDate: h.snapshotDate,
+              rank: h.rank,
+              xp: h.xp,
+              recordedAt: ctx.nowIso,
+            })),
+          },
+        });
+      }
+
+      if (seed.milestones.length > 0) {
+        recorder.record({
+          kind: 'Ranking Milestones',
+          id: seed.username,
+          fields: {
+            username: seed.username,
+            entries: String(seed.milestones.length),
+            milestones: seed.milestones.map((m) => m.milestone).join(', '),
+          },
+          details: {
+            userId,
+            username: seed.username,
+            milestones: seed.milestones.map((m) => ({
+              id: m.id,
+              userId,
+              milestone: m.milestone,
+              rank: m.rank,
+              achievedAt: m.achievedAt,
+            })),
+          },
+        });
+      }
     }
 
     summaries.push({

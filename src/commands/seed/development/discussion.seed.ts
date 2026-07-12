@@ -205,7 +205,7 @@ export const runDiscussionSeed = async (): Promise<SeedSummary[]> => {
       }
 
       for (const comment of seed.comments) {
-        const authorId = await lookup.userIdByUsername(comment.authorUsername);
+        const commentAuthorId = await lookup.userIdByUsername(comment.authorUsername);
         const [existingComment] = await tx
           .select({ commentId: discussionComments.commentId })
           .from(discussionComments)
@@ -217,7 +217,7 @@ export const runDiscussionSeed = async (): Promise<SeedSummary[]> => {
         await tx.insert(discussionComments).values({
           commentId: comment.commentId,
           threadId: seed.threadId,
-          authorId,
+          authorId: commentAuthorId,
           parentCommentId: comment.parentCommentId,
           body: comment.body,
           repliesCount: comment.repliesCount,
@@ -228,6 +228,35 @@ export const runDiscussionSeed = async (): Promise<SeedSummary[]> => {
           updatedAt: ctx.nowIso,
         });
         commentsInserted++;
+
+        recorder.record({
+          kind: 'Discussion Comments',
+          id: comment.commentId,
+          fields: {
+            commentId: comment.commentId,
+            threadId: seed.threadId,
+            author: comment.authorUsername,
+            body: comment.body.length > 80
+              ? comment.body.slice(0, 80) + '...'
+              : comment.body,
+            parentCommentId: comment.parentCommentId ?? '',
+            repliesCount: String(comment.repliesCount),
+          },
+          details: {
+            commentId: comment.commentId,
+            threadId: seed.threadId,
+            authorId: commentAuthorId,
+            authorUsername: comment.authorUsername,
+            parentCommentId: comment.parentCommentId,
+            body: comment.body,
+            repliesCount: comment.repliesCount,
+            votesCount: comment.votesCount,
+            upvotesCount: comment.upvotesCount,
+            downvotesCount: comment.downvotesCount,
+            createdAt: ctx.nowIso,
+            updatedAt: ctx.nowIso,
+          },
+        });
       }
 
       // Now that all comments exist, patch solvedCommentId (satisfies the FK)
@@ -254,6 +283,29 @@ export const runDiscussionSeed = async (): Promise<SeedSummary[]> => {
           .returning({ voteId: discussionVotes.voteId });
 
         votesInserted += inserted.length;
+
+        if (inserted.length > 0) {
+          recorder.record({
+            kind: 'Discussion Votes',
+            id: inserted[0].voteId,
+            fields: {
+              voteId: inserted[0].voteId,
+              username: vote.userUsername,
+              targetType: vote.targetType,
+              targetId: vote.targetId,
+              value: vote.value,
+            },
+            details: {
+              voteId: inserted[0].voteId,
+              userId,
+              targetType: vote.targetType,
+              targetId: vote.targetId,
+              value: vote.value,
+              createdAt: ctx.nowIso,
+              updatedAt: ctx.nowIso,
+            },
+          });
+        }
       }
 
       logger.info(`Discussion thread seeded: "${seed.title}" for quiz "${seed.quizSlug}"`);
@@ -270,6 +322,28 @@ export const runDiscussionSeed = async (): Promise<SeedSummary[]> => {
           isSolved: String(seed.isSolved),
           comments: String(seed.comments.length),
           votes: String(seed.votes.length),
+        },
+        details: {
+          threadId: seed.threadId,
+          quizId,
+          quizSlug: seed.quizSlug,
+          authorId,
+          authorUsername: seed.authorUsername,
+          title: seed.title,
+          body: seed.body,
+          status: seed.status,
+          commentsCount: seed.commentsCount,
+          votesCount: seed.votesCount,
+          upvotesCount: seed.upvotesCount,
+          downvotesCount: seed.downvotesCount,
+          isSolved: seed.isSolved,
+          solvedAt: seed.solvedAt ?? null,
+          solvedCommentId: seed.solvedCommentId ?? null,
+          solvedBy: seed.solvedByUsername
+            ? await lookup.userIdByUsername(seed.solvedByUsername)
+            : null,
+          createdAt: ctx.nowIso,
+          updatedAt: ctx.nowIso,
         },
       });
     }
