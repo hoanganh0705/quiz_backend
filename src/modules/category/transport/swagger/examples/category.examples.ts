@@ -3,12 +3,13 @@ import { EXAMPLE_TIMESTAMP } from './_timestamp';
 const PAGINATED_META = {
   timestamp: EXAMPLE_TIMESTAMP,
   pagination: {
+    kind: 'cursor',
     limit: 20,
     hasNextPage: true,
     nextCursor:
       'eyJjcmVhdGVkQXQiOiIyMDI1LTAxLTAxVDAwOjAwOjAwKzAwOjAwIiwiY3JlYXRpbmdVc2VySWQiOiI4MTIzMTIzLTEyMzQtMTIzNC0yMzQ0LTEyMzQxMjM0MTIzNDQifQ',
   },
-};
+} as const;
 
 const RANKED_CATEGORY_ITEM = {
   rank: 1,
@@ -120,6 +121,7 @@ export const CATEGORY_FOLLOWED_LIST_EXAMPLE = {
   meta: {
     timestamp: EXAMPLE_TIMESTAMP,
     pagination: {
+      kind: 'cursor',
       limit: 10,
       hasNextPage: false,
       nextCursor: null,

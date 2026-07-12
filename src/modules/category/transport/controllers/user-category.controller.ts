@@ -4,6 +4,7 @@ import { CurrentUser } from '@/common/decorators/current-user.decorator';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
 import { ListFollowedCategoriesQueryDto } from '../../dto/request/list-followed-categories-query.dto';
 import { CategoryQueryService } from '../../application/category-query.service';
+import { CategoryPresenter } from '../presenters/category.presenter';
 import { FollowedCategoryCursorMapper } from '../../mappers/followed-category-cursor.mapper';
 import { ApiFollowedCategoriesResponse } from '../swagger/category-swagger-decorators';
 
@@ -17,19 +18,23 @@ import { ApiFollowedCategoriesResponse } from '../swagger/category-swagger-decor
 @ApiTags('users')
 @Controller()
 export class UserCategoryController {
-  constructor(private readonly categoryQueryService: CategoryQueryService) {}
+  constructor(
+    private readonly categoryQueryService: CategoryQueryService,
+    private readonly categoryPresenter: CategoryPresenter,
+  ) {}
 
   @Get('users/me/followed-categories')
   @ApiFollowedCategoriesResponse()
-  listFollowedCategories(
+  async listFollowedCategories(
     @CurrentUser() user: JwtPayload,
     @Query() query: ListFollowedCategoriesQueryDto,
   ) {
     const cursor = query.cursor ? FollowedCategoryCursorMapper.parse(query.cursor) : null;
 
-    return this.categoryQueryService.listFollowedCategories(user.sub, {
+    const result = await this.categoryQueryService.listFollowedCategories(user.sub, {
       limit: query.limit,
       cursor,
     });
+    return this.categoryPresenter.listFollowedCategories(result);
   }
 }

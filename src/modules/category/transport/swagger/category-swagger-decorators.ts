@@ -1,29 +1,29 @@
-import { applyDecorators, type Type } from '@nestjs/common';
+import { applyDecorators } from '@nestjs/common';
 import {
   ApiBadRequestResponse,
   ApiBearerAuth,
   ApiConflictResponse,
-  ApiCreatedResponse,
   ApiForbiddenResponse,
   ApiInternalServerErrorResponse,
   ApiNotFoundResponse,
-  ApiOkResponse,
   ApiTooManyRequestsResponse,
   ApiUnauthorizedResponse,
   type ApiResponseOptions,
 } from '@nestjs/swagger';
 import { AUTH_SECURITY_NAME } from '@/core/swagger/swagger.config';
 import { ProblemDetailDto } from '@/common/swagger/swagger-schemas';
-import { WrappedQuizListDto } from '@/modules/quiz/dto/response/quiz-response-docs.dto';
 import {
-  CategoryWrappedAnalyticsDto,
-  CategoryWrappedCategoryDto,
-  CategoryWrappedFollowedListDto,
-  CategoryWrappedListDto,
-  CategoryWrappedMessageDto,
-  CategoryWrappedRankedListDto,
-  CategoryWrappedRelatedListDto,
-} from '../../dto/response/category-response-docs.dto';
+  ApiCreatedResource,
+  ApiOkResource,
+  ApiOkResourceArray,
+  ApiOkResourceList,
+} from '@/common/swagger/api-ok';
+import { CategoryAnalyticsResponseDto } from '../../dto/response/category-analytics-response.dto';
+import { CategoryResponseDto } from '../../dto/response/category-response.dto';
+import { FollowedCategoryItemDto } from '../../dto/response/followed-category-item.dto';
+import { MessageResponseDto } from '../../dto/response/message-response.dto';
+import { RankedCategoryResponseDto } from '../../dto/response/ranked-category-response.dto';
+import { QuizResponseDto } from '@/modules/quiz/dto/response/quiz-response.dto';
 import {
   analyticsBadRequestExample,
   analyticsInternalErrorExample,
@@ -91,19 +91,6 @@ import {
   CATEGORY_RELATED_LIST_EXAMPLE,
   CATEGORY_UNFOLLOW_MESSAGE_EXAMPLE,
 } from './examples';
-
-// ─── Success response factory ────────────────────────────────────────────────────
-//
-// Single helper so every success decorator stays a one-liner.
-const createDataResponse = (
-  status: 200 | 201,
-  description: string,
-  type: Type<unknown>,
-  example: object,
-): MethodDecorator =>
-  status === 201
-    ? ApiCreatedResponse({ description, type, example })
-    : ApiOkResponse({ description, type, example });
 
 // ─── Shared description strings ────────────────────────────────────────────────
 //
@@ -175,12 +162,10 @@ const problem = {
 /** GET /categories/popular */
 export const ApiPopularCategoriesResponse = (): MethodDecorator =>
   applyDecorators(
-    createDataResponse(
-      200,
-      DESCRIPTIONS.categoryRanked,
-      CategoryWrappedRankedListDto,
-      CATEGORY_RANKED_LIST_EXAMPLE,
-    ),
+    ApiOkResourceArray(RankedCategoryResponseDto, {
+      description: DESCRIPTIONS.categoryRanked,
+      example: CATEGORY_RANKED_LIST_EXAMPLE,
+    }),
     ApiBadRequestResponse(problem.badRequest(popularBadRequestExample)),
     ApiInternalServerErrorResponse(problem.internalError(popularInternalErrorExample)),
   );
@@ -188,12 +173,10 @@ export const ApiPopularCategoriesResponse = (): MethodDecorator =>
 /** GET /categories/trending */
 export const ApiTrendingCategoriesResponse = (): MethodDecorator =>
   applyDecorators(
-    createDataResponse(
-      200,
-      DESCRIPTIONS.categoryRanked,
-      CategoryWrappedRankedListDto,
-      CATEGORY_RANKED_LIST_EXAMPLE,
-    ),
+    ApiOkResourceArray(RankedCategoryResponseDto, {
+      description: DESCRIPTIONS.categoryRanked,
+      example: CATEGORY_RANKED_LIST_EXAMPLE,
+    }),
     ApiBadRequestResponse(problem.badRequest(trendingBadRequestExample)),
     ApiInternalServerErrorResponse(problem.internalError(trendingInternalErrorExample)),
   );
@@ -201,12 +184,10 @@ export const ApiTrendingCategoriesResponse = (): MethodDecorator =>
 /** GET /categories/:slug/quizzes */
 export const ApiCategoryQuizzesResponse = (): MethodDecorator =>
   applyDecorators(
-    createDataResponse(
-      200,
-      DESCRIPTIONS.categoryQuizzes,
-      WrappedQuizListDto,
-      CATEGORY_QUIZZES_EXAMPLE,
-    ),
+    ApiOkResourceList(QuizResponseDto, 'cursor', {
+      description: DESCRIPTIONS.categoryQuizzes,
+      example: CATEGORY_QUIZZES_EXAMPLE,
+    }),
     ApiNotFoundResponse(problem.notFound(categoryQuizzesNotFoundExample)),
     ApiInternalServerErrorResponse(problem.internalError(categoryQuizzesInternalErrorExample)),
   );
@@ -214,12 +195,10 @@ export const ApiCategoryQuizzesResponse = (): MethodDecorator =>
 /** GET /categories/:slug/related */
 export const ApiRelatedCategoriesResponse = (): MethodDecorator =>
   applyDecorators(
-    createDataResponse(
-      200,
-      DESCRIPTIONS.categoryRelated,
-      CategoryWrappedRelatedListDto,
-      CATEGORY_RELATED_LIST_EXAMPLE,
-    ),
+    ApiOkResourceArray(CategoryResponseDto, {
+      description: DESCRIPTIONS.categoryRelated,
+      example: CATEGORY_RELATED_LIST_EXAMPLE,
+    }),
     ApiBadRequestResponse(problem.badRequest(relatedBadRequestExample)),
     ApiNotFoundResponse(problem.notFound(relatedNotFoundExample)),
     ApiInternalServerErrorResponse(problem.internalError(relatedInternalErrorExample)),
@@ -228,12 +207,10 @@ export const ApiRelatedCategoriesResponse = (): MethodDecorator =>
 /** GET /categories/:id/analytics */
 export const ApiCategoryAnalyticsResponse = (): MethodDecorator =>
   applyDecorators(
-    createDataResponse(
-      200,
-      DESCRIPTIONS.categoryAnalytics,
-      CategoryWrappedAnalyticsDto,
-      CATEGORY_ANALYTICS_EXAMPLE,
-    ),
+    ApiOkResource(CategoryAnalyticsResponseDto, {
+      description: DESCRIPTIONS.categoryAnalytics,
+      example: CATEGORY_ANALYTICS_EXAMPLE,
+    }),
     ApiBadRequestResponse(problem.badRequest(analyticsBadRequestExample)),
     ApiNotFoundResponse(problem.notFound(analyticsNotFoundExample)),
     ApiInternalServerErrorResponse(problem.internalError(analyticsInternalErrorExample)),
@@ -243,12 +220,10 @@ export const ApiCategoryAnalyticsResponse = (): MethodDecorator =>
 export const ApiFollowCategoryResponse = (): MethodDecorator =>
   applyDecorators(
     ApiBearerAuth(AUTH_SECURITY_NAME),
-    createDataResponse(
-      200,
-      DESCRIPTIONS.categoryFollow,
-      CategoryWrappedMessageDto,
-      CATEGORY_FOLLOW_MESSAGE_EXAMPLE,
-    ),
+    ApiOkResource(MessageResponseDto, {
+      description: DESCRIPTIONS.categoryFollow,
+      example: CATEGORY_FOLLOW_MESSAGE_EXAMPLE,
+    }),
     ApiBadRequestResponse(problem.badRequest(followBadRequestExample)),
     ApiUnauthorizedResponse(problem.unauthorized(followUnauthorizedExample)),
     ApiForbiddenResponse(problem.forbidden(followForbiddenExample)),
@@ -261,12 +236,10 @@ export const ApiFollowCategoryResponse = (): MethodDecorator =>
 export const ApiUnfollowCategoryResponse = (): MethodDecorator =>
   applyDecorators(
     ApiBearerAuth(AUTH_SECURITY_NAME),
-    createDataResponse(
-      200,
-      DESCRIPTIONS.categoryUnfollow,
-      CategoryWrappedMessageDto,
-      CATEGORY_UNFOLLOW_MESSAGE_EXAMPLE,
-    ),
+    ApiOkResource(MessageResponseDto, {
+      description: DESCRIPTIONS.categoryUnfollow,
+      example: CATEGORY_UNFOLLOW_MESSAGE_EXAMPLE,
+    }),
     ApiBadRequestResponse(problem.badRequest(unfollowBadRequestExample)),
     ApiUnauthorizedResponse(problem.unauthorized(unfollowUnauthorizedExample)),
     ApiForbiddenResponse(problem.forbidden(unfollowForbiddenExample)),
@@ -279,12 +252,10 @@ export const ApiUnfollowCategoryResponse = (): MethodDecorator =>
 export const ApiRestoreCategoryResponse = (): MethodDecorator =>
   applyDecorators(
     ApiBearerAuth(AUTH_SECURITY_NAME),
-    createDataResponse(
-      200,
-      DESCRIPTIONS.categoryRestore,
-      CategoryWrappedCategoryDto,
-      CATEGORY_DETAIL_EXAMPLE,
-    ),
+    ApiOkResource(CategoryResponseDto, {
+      description: DESCRIPTIONS.categoryRestore,
+      example: CATEGORY_DETAIL_EXAMPLE,
+    }),
     ApiUnauthorizedResponse(problem.unauthorized(restoreUnauthorizedExample)),
     ApiForbiddenResponse(problem.forbidden(restoreForbiddenExample)),
     ApiNotFoundResponse(problem.notFound(restoreNotFoundExample)),
@@ -295,12 +266,10 @@ export const ApiRestoreCategoryResponse = (): MethodDecorator =>
 /** GET /categories */
 export const ApiListCategoriesResponse = (): MethodDecorator =>
   applyDecorators(
-    createDataResponse(
-      200,
-      DESCRIPTIONS.categoryList,
-      CategoryWrappedListDto,
-      CATEGORY_LIST_EXAMPLE,
-    ),
+    ApiOkResourceList(CategoryResponseDto, 'cursor', {
+      description: DESCRIPTIONS.categoryList,
+      example: CATEGORY_LIST_EXAMPLE,
+    }),
     ApiBadRequestResponse(problem.badRequest(listCategoriesBadRequestExample)),
     ApiInternalServerErrorResponse(problem.internalError(listCategoriesInternalErrorExample)),
   );
@@ -308,12 +277,10 @@ export const ApiListCategoriesResponse = (): MethodDecorator =>
 /** GET /categories/:id */
 export const ApiCategoryByIdResponse = (): MethodDecorator =>
   applyDecorators(
-    createDataResponse(
-      200,
-      DESCRIPTIONS.categoryById,
-      CategoryWrappedCategoryDto,
-      CATEGORY_DETAIL_EXAMPLE,
-    ),
+    ApiOkResource(CategoryResponseDto, {
+      description: DESCRIPTIONS.categoryById,
+      example: CATEGORY_DETAIL_EXAMPLE,
+    }),
     ApiBadRequestResponse(problem.badRequest(categoryByIdBadRequestExample)),
     ApiNotFoundResponse(problem.notFound(categoryByIdNotFoundExample)),
     ApiInternalServerErrorResponse(problem.internalError(categoryByIdInternalErrorExample)),
@@ -322,12 +289,10 @@ export const ApiCategoryByIdResponse = (): MethodDecorator =>
 /** GET /categories/:slug */
 export const ApiCategoryBySlugResponse = (): MethodDecorator =>
   applyDecorators(
-    createDataResponse(
-      200,
-      DESCRIPTIONS.categoryBySlug,
-      CategoryWrappedCategoryDto,
-      CATEGORY_DETAIL_EXAMPLE,
-    ),
+    ApiOkResource(CategoryResponseDto, {
+      description: DESCRIPTIONS.categoryBySlug,
+      example: CATEGORY_DETAIL_EXAMPLE,
+    }),
     ApiNotFoundResponse(problem.notFound(categoryBySlugNotFoundExample)),
     ApiInternalServerErrorResponse(problem.internalError(categoryBySlugInternalErrorExample)),
   );
@@ -336,12 +301,10 @@ export const ApiCategoryBySlugResponse = (): MethodDecorator =>
 export const ApiCreateCategoryResponse = (): MethodDecorator =>
   applyDecorators(
     ApiBearerAuth(AUTH_SECURITY_NAME),
-    createDataResponse(
-      201,
-      DESCRIPTIONS.categoryCreate,
-      CategoryWrappedCategoryDto,
-      CATEGORY_DETAIL_EXAMPLE,
-    ),
+    ApiCreatedResource(CategoryResponseDto, {
+      description: DESCRIPTIONS.categoryCreate,
+      example: CATEGORY_DETAIL_EXAMPLE,
+    }),
     ApiBadRequestResponse(problem.badRequest(createCategoryBadRequestExample)),
     ApiUnauthorizedResponse(problem.unauthorized(createCategoryUnauthorizedExample)),
     ApiForbiddenResponse(problem.forbidden(createCategoryForbiddenExample)),
@@ -353,12 +316,10 @@ export const ApiCreateCategoryResponse = (): MethodDecorator =>
 export const ApiUpdateCategoryResponse = (): MethodDecorator =>
   applyDecorators(
     ApiBearerAuth(AUTH_SECURITY_NAME),
-    createDataResponse(
-      200,
-      DESCRIPTIONS.categoryUpdate,
-      CategoryWrappedCategoryDto,
-      CATEGORY_DETAIL_EXAMPLE,
-    ),
+    ApiOkResource(CategoryResponseDto, {
+      description: DESCRIPTIONS.categoryUpdate,
+      example: CATEGORY_DETAIL_EXAMPLE,
+    }),
     ApiBadRequestResponse(problem.badRequest(updateCategoryBadRequestExample)),
     ApiUnauthorizedResponse(problem.unauthorized(updateCategoryUnauthorizedExample)),
     ApiForbiddenResponse(problem.forbidden(updateCategoryForbiddenExample)),
@@ -371,12 +332,10 @@ export const ApiUpdateCategoryResponse = (): MethodDecorator =>
 export const ApiDeleteCategoryResponse = (): MethodDecorator =>
   applyDecorators(
     ApiBearerAuth(AUTH_SECURITY_NAME),
-    createDataResponse(
-      200,
-      DESCRIPTIONS.categoryDelete,
-      CategoryWrappedMessageDto,
-      CATEGORY_DELETE_MESSAGE_EXAMPLE,
-    ),
+    ApiOkResource(MessageResponseDto, {
+      description: DESCRIPTIONS.categoryDelete,
+      example: CATEGORY_DELETE_MESSAGE_EXAMPLE,
+    }),
     ApiUnauthorizedResponse(problem.unauthorized(deleteCategoryUnauthorizedExample)),
     ApiForbiddenResponse(problem.forbidden(deleteCategoryForbiddenExample)),
     ApiNotFoundResponse(problem.notFound(deleteCategoryNotFoundExample)),
@@ -387,12 +346,10 @@ export const ApiDeleteCategoryResponse = (): MethodDecorator =>
 export const ApiFollowedCategoriesResponse = (): MethodDecorator =>
   applyDecorators(
     ApiBearerAuth(AUTH_SECURITY_NAME),
-    createDataResponse(
-      200,
-      DESCRIPTIONS.categoryFollowed,
-      CategoryWrappedFollowedListDto,
-      CATEGORY_FOLLOWED_LIST_EXAMPLE,
-    ),
+    ApiOkResourceList(FollowedCategoryItemDto, 'cursor', {
+      description: DESCRIPTIONS.categoryFollowed,
+      example: CATEGORY_FOLLOWED_LIST_EXAMPLE,
+    }),
     ApiBadRequestResponse(problem.badRequest(followedCategoriesBadRequestExample)),
     ApiUnauthorizedResponse(problem.unauthorized(followedCategoriesUnauthorizedExample)),
     ApiForbiddenResponse(problem.forbidden(followedCategoriesForbiddenExample)),
