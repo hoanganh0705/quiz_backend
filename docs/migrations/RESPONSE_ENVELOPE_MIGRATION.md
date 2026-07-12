@@ -210,10 +210,14 @@ Concrete deliverables:
 
 ### Phase 5 — Cleanup (2-3 days)
 
+> **Sub-plan:** see [`docs/migrations/PHASE_5_SUBPLAN.md`](./PHASE_5_SUBPLAN.md) for the file-by-file inventory, executor checklist, and PR strategy.
+
 1. Delete the 160+ per-module `Wrapped*Dto` classes. Replace usages with `WrappedDto<T>`, `CursorWrappedDto<T>`, `OffsetWrappedDto<T>` (3 generic classes from `swagger-schemas.ts`).
 2. Update per-module `swagger-decorators.ts` files to use the generic helpers from `src/common/swagger/api-ok.ts`.
 3. Update example constants in `*-examples.ts` to match the new generic wrappers.
 4. _(Optional follow-up, not blocking)_ Refactor the health endpoint from `@Res({ passthrough: true })` to throwing an exception, so `isNativeResponseHandled()` can be removed too.
+
+**Status (2026-07-11):** 🎯 **Phase 5 not started.** Working tree audit shows 17 surviving `Wrapped*Dto` classes across 5 files, but **12 of them are dead** (zero importers in `src/`) and the remaining 5 are only referenced from `src/modules/category/transport/swagger/category-swagger-decorators.ts` — the only per-module `swagger-decorators.ts` that hasn't yet migrated to the generic helpers. The sub-plan breaks the work into 4 sequential steps (delete dead classes → migrate the category swagger-decorators → delete the now-dead category/quiz docs files → add `kind: 'cursor' | 'offset'` discriminator to example constants that pre-date Phase 4), with the health refactor deferred to a separate PR.
 
 **Risks:** low. Documentation cleanup. Verify OpenAPI regenerates correctly.
 
@@ -856,7 +860,7 @@ Difficulty: medium. 1-2 days.
 
 ---
 
-**Document version:** 1.1
-**Last updated:** 2026-07-10
-**Changes since 1.0:** Decision 1 refactored — dropped `ApiResponse.ack()`, replaced the optional-fields `PaginationMeta` interface with a discriminated union (`CursorPagination | OffsetPagination`), and unified the runtime helper to a single `ApiResponse.page(items, pagination)` method. Renamed `src/common/http/` to `src/common/responses/` to reflect the architectural separation between presentation helpers and HTTP-specific concerns.
+**Document version:** 1.2
+**Last updated:** 2026-07-11
+**Changes since 1.1:** Phase 5 section expanded with a pointer to the new sub-plan ([`docs/migrations/PHASE_5_SUBPLAN.md`](./PHASE_5_SUBPLAN.md)) and a working-tree audit summary (17 surviving `Wrapped*Dto` classes across 5 files, 12 of them dead, 5 referenced only from `category-swagger-decorators.ts`). The sub-plan itself breaks Phase 5 into 4 sequential steps (delete dead classes → migrate the category swagger-decorators → delete the now-dead category/quiz docs files → add `kind: 'cursor' | 'offset'` discriminator to example constants) with the health refactor explicitly deferred to a separate PR.
 **Owner:** TBD — please assign a reviewer and a per-phase owner once approved.

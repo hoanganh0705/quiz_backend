@@ -24,6 +24,7 @@ export const TAG_LIST_EXAMPLE = {
   meta: {
     timestamp: EXAMPLE_TIMESTAMP,
     pagination: {
+      kind: 'cursor',
       limit: 20,
       hasNextPage: true,
       nextCursor:
@@ -44,6 +45,7 @@ export const TAG_QUIZZES_EXAMPLE = {
   meta: {
     timestamp: EXAMPLE_TIMESTAMP,
     pagination: {
+      kind: 'cursor',
       limit: 20,
       hasNextPage: true,
       nextCursor:

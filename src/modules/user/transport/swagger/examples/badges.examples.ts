@@ -11,7 +11,12 @@ export const USER_BADGES_EXAMPLE = {
   ],
   meta: {
     timestamp: EXAMPLE_TIMESTAMP,
-    pagination: { limit: 10, hasNextPage: false, nextCursor: null },
+    pagination: {
+      kind: 'cursor',
+      limit: 10,
+      hasNextPage: false,
+      nextCursor: null,
+    },
   },
 } as const;
 
@@ -27,6 +32,7 @@ export const USER_ACTIVITY_EXAMPLE = {
   meta: {
     timestamp: EXAMPLE_TIMESTAMP,
     pagination: {
+      kind: 'cursor',
       limit: 20,
       hasNextPage: true,
       nextCursor: 'eyJjcmVhdGVkQXQiOiIyMDI2LTAxLTAxVDAwOjAwOjAwWiIsImV2ZW50SWQiOiJ1dWlkIn0',

@@ -6,7 +6,7 @@ import type { CategoryAnalyticsResponseDto } from '../../dto/response/category-a
 import type { CategoryResponseDto } from '../../dto/response/category-response.dto';
 import type { FollowedCategoryItemDto } from '../../dto/response/followed-category-item.dto';
 import type { MessageResponseDto } from '../../dto/response/message-response.dto';
-import type { RankedCategoriesResponseDto } from '../../dto/response/ranked-categories-response.dto';
+import type { RankedCategoryResponseDto } from '../../dto/response/ranked-category-response.dto';
 import type { QuizResponseDto } from '@/modules/quiz/dto/response/quiz-response.dto';
 
 /**
@@ -37,8 +37,8 @@ export class CategoryPresenter {
   readonly listFollowedCategories = (payload: PaginatedResult<FollowedCategoryItemDto>) =>
     ApiResponse.page(payload.items, payload.pagination);
 
-  readonly getPopularCategories = (payload: RankedCategoriesResponseDto) => ApiResponse.ok(payload);
-  readonly getTrendingCategories = (payload: RankedCategoriesResponseDto) =>
+  readonly getPopularCategories = (payload: RankedCategoryResponseDto[]) => ApiResponse.ok(payload);
+  readonly getTrendingCategories = (payload: RankedCategoryResponseDto[]) =>
     ApiResponse.ok(payload);
   readonly getCategoryAnalytics = CategoryPresenter.ok<CategoryAnalyticsResponseDto>;
   readonly createCategory = CategoryPresenter.ok<CategoryResponseDto>;

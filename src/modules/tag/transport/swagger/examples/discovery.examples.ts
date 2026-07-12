@@ -73,6 +73,7 @@ export const TAG_FOLLOWED_LIST_EXAMPLE = {
   meta: {
     timestamp: EXAMPLE_TIMESTAMP,
     pagination: {
+      kind: 'cursor',
       limit: 10,
       hasNextPage: false,
       nextCursor: null,

@@ -24,6 +24,7 @@ export const USER_QUIZZES_EXAMPLE = {
   meta: {
     timestamp: EXAMPLE_TIMESTAMP,
     pagination: {
+      kind: 'cursor',
       limit: 20,
       hasNextPage: true,
       nextCursor: 'eyJjcmVhdGVkQXQiOiIyMDI2LTAxLTAxVDAwOjAwOjAwWiJ9',
