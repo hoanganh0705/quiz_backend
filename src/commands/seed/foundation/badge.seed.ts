@@ -340,6 +340,9 @@ export const createBadgesDomain = (): SeedDomain => ({
       .returning({
         badgeId: badges.badgeId,
         slug: badges.slug,
+        name: badges.name,
+        createdAt: badges.createdAt,
+        updatedAt: badges.updatedAt,
         inserted: sql<boolean>`xmax = 0`,
       });
 
@@ -384,7 +387,17 @@ export const createBadgesDomain = (): SeedDomain => ({
     const updated = touchedBadgeRows.length - inserted;
     const skipped = BADGE_SEEDS.length - touchedBadgeRows.length;
 
+    const rowBySlug = new Map(touchedBadgeRows.map((row) => [row.slug, row]));
+
     for (const badge of BADGE_SEEDS) {
+      const row = rowBySlug.get(normalizeSlug(badge.slug));
+      const rulesDetail = badge.rules.map((r) => ({
+        ruleType: r.ruleType,
+        priority: r.priority ?? 0,
+        config: r.config,
+        isActive: r.isActive ?? true,
+      }));
+
       recorder.record({
         kind: 'Badges',
         id: badge.slug,
@@ -392,7 +405,20 @@ export const createBadgesDomain = (): SeedDomain => ({
           slug: badge.slug,
           name: badge.name,
           type: badge.type,
-          rules: badge.rules.map((r) => r.ruleType).join(', '),
+          rules: String(badge.rules.length),
+        },
+        details: {
+          badgeId: row?.badgeId ?? slugToBadgeId.get(normalizeSlug(badge.slug)) ?? null,
+          slug: badge.slug,
+          category: 'quiz',
+          type: badge.type,
+          name: badge.name,
+          description: badge.description ?? null,
+          iconUrl: badge.iconUrl ?? null,
+          isActive: badge.isActive,
+          rules: rulesDetail,
+          createdAt: row?.createdAt ?? null,
+          updatedAt: row?.updatedAt ?? null,
         },
       });
     }

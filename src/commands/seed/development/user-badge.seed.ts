@@ -107,7 +107,7 @@ export const runUserBadgeSeed = async (): Promise<SeedSummary[]> => {
         .returning({ userBadgeId: userBadges.userBadgeId });
 
       // Record the seeded user-badge so SEED_RECORD.md lists every award that
-// the seed defines — even on re-runs where the row already exists.
+      // the seed defines — even on re-runs where the row already exists.
       recorder.record({
         kind: 'User Badges',
         id: `${seed.username}:${seed.badgeSlug}`,
@@ -115,6 +115,20 @@ export const runUserBadgeSeed = async (): Promise<SeedSummary[]> => {
           username: seed.username,
           badgeSlug: seed.badgeSlug,
           earnedAt: seed.earnedAt,
+        },
+        details: {
+          userBadgeId: seed.userBadgeId,
+          userId,
+          badgeId,
+          badgeSlug: seed.badgeSlug,
+          username: seed.username,
+          earnedAt: seed.earnedAt,
+          badgeVersion: '1.0.0',
+          progress: seed.progress ?? {},
+          metadata: seed.metadata ?? {},
+          expiresAt: null,
+          revokedAt: null,
+          revocationReason: null,
         },
       });
 

@@ -39,6 +39,15 @@ import { UpdatePreferencesDto, GetNotificationsQueryDto } from '@/modules/notifi
 import { Permissions } from '@/common/authorization/decorators/permissions.decorator';
 import { Permission } from '@/common/authorization/permissions';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
+import {
+  NOTIFICATION_ANALYTICS_EXAMPLE,
+  NOTIFICATION_DELETED_READ_EXAMPLE,
+  NOTIFICATION_DETAIL_EXAMPLE,
+  NOTIFICATION_LIST_EXAMPLE,
+  NOTIFICATION_PREFERENCES_EXAMPLE,
+  NOTIFICATION_PREFERENCES_UPDATE_EXAMPLE,
+  NOTIFICATION_UNREAD_COUNT_EXAMPLE,
+} from '../swagger/examples/notification.examples';
 
 @ApiTags('notifications')
 @Controller('notifications')
@@ -63,9 +72,10 @@ export class NotificationController {
   @ApiQuery({
     name: 'cursor',
     required: false,
-    description: 'Base64-encoded cursor for pagination',
+    description:
+      'Base64-encoded cursor for pagination. Decodes to `{ createdAt, notificationId }`.',
     example:
-      'eyJjcmVhdGVkQXQiOiIyMDI1LTAxLTAxVDAwOjAwOjAwKzAwOjAwIiwiZGlzdGluY3Rpb25JZCI6IjU1MGU4NDAwLWUyOWItNDFkNC1hNzE2LTQ0NjY1NTQ0MDAwMDAifQ==',
+      'eyJjcmVhdGVkQXQiOiIyMDI2LTAxLTAxVDAwOjAwOjAwLjAwMFoiLCJub3RpZmljYXRpb25JZCI6IjU1MGU4NDAwLWUyOWItNDFkNC1hNzE2LTQ0NjY1NTQ0MDAwMCJ9',
   })
   @ApiQuery({
     name: 'unreadOnly',
@@ -83,6 +93,7 @@ export class NotificationController {
     description:
       'Cursor-paginated list of notifications. The `unreadCount` is no longer carried ' +
       'inside this payload — call `GET /notifications/unread-count` for that.',
+    example: NOTIFICATION_LIST_EXAMPLE,
   })
   async getNotifications(
     @CurrentUser() user: JwtPayload,
@@ -117,7 +128,10 @@ export class NotificationController {
 
   @Get('unread-count')
   @ApiOperation({ summary: 'Get unread notification count' })
-  @ApiOkResource(UnreadCountResponseDto, { description: 'Unread notification count' })
+  @ApiOkResource(UnreadCountResponseDto, {
+    description: 'Unread notification count',
+    example: NOTIFICATION_UNREAD_COUNT_EXAMPLE,
+  })
   async getUnreadCount(@CurrentUser() user: JwtPayload) {
     const count = await this.notificationService.getUnreadCount(user);
     return this.presenter.getUnreadCount({ count });
@@ -126,7 +140,10 @@ export class NotificationController {
   @Get('analytics')
   @Permissions(Permission.NOTIFICATION_ANALYTICS)
   @ApiOperation({ summary: 'Get notification analytics' })
-  @ApiOkResource(NotificationAnalyticsDto, { description: 'Notification analytics' })
+  @ApiOkResource(NotificationAnalyticsDto, {
+    description: 'Notification analytics',
+    example: NOTIFICATION_ANALYTICS_EXAMPLE,
+  })
   async getAnalytics() {
     const result = await this.notificationService.getAnalytics();
     const analytics: NotificationAnalyticsDto = {
@@ -142,7 +159,10 @@ export class NotificationController {
 
   @Get('preferences')
   @ApiOperation({ summary: 'Get notification preferences' })
-  @ApiOkResource(NotificationPreferencesResponseDto, { description: 'Notification preferences' })
+  @ApiOkResource(NotificationPreferencesResponseDto, {
+    description: 'Notification preferences',
+    example: NOTIFICATION_PREFERENCES_EXAMPLE,
+  })
   async getPreferences(@CurrentUser() user: JwtPayload) {
     const result = await this.notificationService.getOrCreatePreferences(user);
     return this.presenter.getPreferences(result);
@@ -151,7 +171,10 @@ export class NotificationController {
   @Patch('preferences')
   @Transactional()
   @ApiOperation({ summary: 'Update notification preferences' })
-  @ApiOkResource(NotificationPreferencesResponseDto, { description: 'Notification preferences' })
+  @ApiOkResource(NotificationPreferencesResponseDto, {
+    description: 'Notification preferences',
+    example: NOTIFICATION_PREFERENCES_UPDATE_EXAMPLE,
+  })
   async updatePreferences(
     @CurrentUser() user: JwtPayload,
     @Body() updateDto: UpdatePreferencesDto,
@@ -162,7 +185,10 @@ export class NotificationController {
 
   @Get(':notificationId')
   @ApiOperation({ summary: 'Get notification detail' })
-  @ApiOkResource(NotificationResponseDto, { description: 'Notification detail' })
+  @ApiOkResource(NotificationResponseDto, {
+    description: 'Notification detail',
+    example: NOTIFICATION_DETAIL_EXAMPLE,
+  })
   // Phase 5 (rev5.1): `notificationApplicationService.getNotificationDetail`
   // throws `NotificationNotFoundError` if the notification does not
   // exist (or was deleted). Pre-Phase-5 this error fell through the
@@ -273,6 +299,7 @@ export class NotificationController {
   @Transactional()
   @ApiOkResource(DeletedReadNotificationsResponseDto, {
     description: 'Read notifications deleted',
+    example: NOTIFICATION_DELETED_READ_EXAMPLE,
   })
   async deleteReadNotifications(@CurrentUser() user: JwtPayload) {
     const deletedCount = await this.notificationService.deleteReadNotifications(user);
