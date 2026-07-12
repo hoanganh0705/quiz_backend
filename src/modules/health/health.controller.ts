@@ -7,7 +7,7 @@ import { RedisService } from '@/core/redis/redis.service';
 import { Public } from '@/common/decorators/public.decorator';
 import { ApiOkResource } from '@/common/swagger/api-ok';
 import { sql } from 'drizzle-orm';
-import { HealthStatusDto, type HealthStatusValue } from './dto/health-response-docs.dto';
+import { HealthStatusDto, type HealthStatusValue } from './dto/health-status.dto';
 import { HealthPresenter } from './health.presenter';
 
 /**

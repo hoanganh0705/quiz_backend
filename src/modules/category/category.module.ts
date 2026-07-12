@@ -3,6 +3,7 @@ import { CategoryController } from './transport/controllers/category.controller'
 import { UserCategoryController } from './transport/controllers/user-category.controller';
 import { CategoryApplicationService } from './application/category.application.service';
 import { CategoryQueryService } from './application/category-query.service';
+import { CategoryPresenter } from './transport/presenters/category.presenter';
 import { CategoryDomainService } from './domain/category.service';
 import { CategoryRepository } from './infrastructure/repositories/category.repository';
 import { CategoryDomainEventBus } from './domain/events/category-domain.event-bus';
@@ -17,6 +18,7 @@ import { CategoryEventBootstrapService } from './category-event-bootstrap.servic
   providers: [
     CategoryApplicationService,
     CategoryQueryService,
+    CategoryPresenter,
     CategoryDomainService,
     CategoryRepository,
     CategoryDomainEventBus,
