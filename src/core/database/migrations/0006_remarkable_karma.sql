@@ -1,9 +1,13 @@
 ALTER TABLE "quizzes" ADD COLUMN "category_id" uuid;--> statement-breakpoint
 
-INSERT INTO "quizzes" ("quiz_id", "category_id")
-SELECT DISTINCT ON ("quiz_id") "quiz_id", "category_id"
-FROM "quiz_categories"
-ORDER BY "quiz_id", "category_id";--> statement-breakpoint
+UPDATE "quizzes" AS q
+SET "category_id" = qc."category_id"
+FROM (
+  SELECT DISTINCT ON ("quiz_id") "quiz_id", "category_id"
+  FROM "quiz_categories"
+  ORDER BY "quiz_id", "category_id"
+) AS qc
+WHERE q."quiz_id" = qc."quiz_id";--> statement-breakpoint
 
 DROP TABLE "quiz_categories" CASCADE;--> statement-breakpoint
 

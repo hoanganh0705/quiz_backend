@@ -8,7 +8,6 @@ import {
   bookmarkedQuizzes,
   categories,
   quizzes,
-  quizCategories,
   quizReviews,
   quizTags,
   tags,
@@ -489,7 +488,7 @@ export class BookmarkRepository implements BookmarkRepositoryPort {
           totalBookmarks: sql<number>`COUNT(${bookmarkedQuizzes.bookmarkId})::int`,
           totalQuizzes: sql<number>`COUNT(DISTINCT ${bookmarkedQuizzes.quizId})::int`,
           averageQuizRating: sql<number>`ROUND(COALESCE(AVG(${quizReviews.rating}::numeric), 0), 2)`,
-          uniqueCategories: sql<number>`COUNT(DISTINCT ${quizCategories.categoryId})::int`,
+          uniqueCategories: sql<number>`COUNT(DISTINCT ${quizzes.categoryId})::int`,
           uniqueTags: sql<number>`COUNT(DISTINCT ${quizTags.tagId})::int`,
         })
         .from(bookmarkCollections)
@@ -499,7 +498,6 @@ export class BookmarkRepository implements BookmarkRepositoryPort {
         )
         .leftJoin(quizzes, eq(bookmarkedQuizzes.quizId, quizzes.quizId))
         .leftJoin(quizReviews, eq(quizzes.quizId, quizReviews.quizId))
-        .leftJoin(quizCategories, eq(quizzes.quizId, quizCategories.quizId))
         .leftJoin(quizTags, eq(quizzes.quizId, quizTags.quizId))
         .where(and(eq(bookmarkCollections.collectionId, collectionId), isNull(quizzes.deletedAt))),
       this.db
@@ -515,8 +513,7 @@ export class BookmarkRepository implements BookmarkRepositoryPort {
           eq(bookmarkedQuizzes.collectionId, bookmarkCollections.collectionId),
         )
         .innerJoin(quizzes, eq(bookmarkedQuizzes.quizId, quizzes.quizId))
-        .innerJoin(quizCategories, eq(quizzes.quizId, quizCategories.quizId))
-        .innerJoin(categories, eq(quizCategories.categoryId, categories.categoryId))
+        .innerJoin(categories, eq(quizzes.categoryId, categories.categoryId))
         .where(
           and(
             eq(bookmarkCollections.collectionId, collectionId),
@@ -614,8 +611,7 @@ export class BookmarkRepository implements BookmarkRepositoryPort {
         eq(bookmarkCollections.collectionId, bookmarkedQuizzes.collectionId),
       )
       .innerJoin(quizzes, eq(bookmarkedQuizzes.quizId, quizzes.quizId))
-      .innerJoin(quizCategories, eq(quizzes.quizId, quizCategories.quizId))
-      .innerJoin(categories, eq(quizCategories.categoryId, categories.categoryId))
+      .innerJoin(categories, eq(quizzes.categoryId, categories.categoryId))
       .where(
         and(
           eq(bookmarkCollections.userId, userId),

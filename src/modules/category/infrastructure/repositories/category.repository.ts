@@ -5,7 +5,6 @@ import {
   quizzes,
   categories,
   categoryFollows,
-  quizCategories,
   quizStats,
 } from '@/core/database/schema';
 import type { AnyPgColumn } from 'drizzle-orm/pg-core';
@@ -121,17 +120,17 @@ export class CategoryRepository implements CategoryRepositoryPort {
       .$with('source_quiz_ids')
       .as(
         this.db
-          .selectDistinct({ quizId: quizCategories.quizId })
-          .from(quizCategories)
-          .innerJoin(sourceCategory, eq(quizCategories.categoryId, sourceCategory.categoryId)),
+          .selectDistinct({ quizId: quizzes.quizId })
+          .from(quizzes)
+          .innerJoin(sourceCategory, eq(quizzes.categoryId, sourceCategory.categoryId)),
       );
 
     const rows = await this.db
       .with(sourceCategory, sourceQuizIds)
       .select(CATEGORY_COLUMNS)
       .from(categories)
-      .innerJoin(quizCategories, eq(quizCategories.categoryId, categories.categoryId))
-      .innerJoin(sourceQuizIds, eq(sourceQuizIds.quizId, quizCategories.quizId))
+      .innerJoin(quizzes, eq(quizzes.categoryId, categories.categoryId))
+      .innerJoin(sourceQuizIds, eq(sourceQuizIds.quizId, quizzes.quizId))
       .where(
         and(
           isNull(categories.deletedAt),
@@ -140,7 +139,6 @@ export class CategoryRepository implements CategoryRepositoryPort {
           eq((quizzes as { isHidden: AnyPgColumn }).isHidden, false),
         ),
       )
-      .innerJoin(quizzes, eq((quizzes as { quizId: AnyPgColumn }).quizId, quizCategories.quizId))
       .groupBy(
         categories.categoryId,
         categories.name,
@@ -150,7 +148,7 @@ export class CategoryRepository implements CategoryRepositoryPort {
         categories.createdAt,
         categories.updatedAt,
       )
-      .orderBy(desc(sql<number>`COUNT(DISTINCT ${quizCategories.quizId})`), asc(categories.name))
+      .orderBy(desc(sql<number>`COUNT(DISTINCT ${quizzes.quizId})`), asc(categories.name))
       .limit(limit);
 
     return rows;
@@ -349,11 +347,10 @@ export class CategoryRepository implements CategoryRepositoryPort {
         totalAttempts: sql<string>`SUM(${quizStats.totalAttempts})`,
       })
       .from(categories)
-      .innerJoin(quizCategories, eq(quizCategories.categoryId, categories.categoryId))
       .innerJoin(
         quizzes,
         and(
-          eq((quizzes as { quizId: AnyPgColumn }).quizId, quizCategories.quizId),
+          eq(quizzes.categoryId, categories.categoryId),
           isNull((quizzes as { deletedAt: AnyPgColumn }).deletedAt),
           eq((quizzes as { isHidden: AnyPgColumn }).isHidden, false),
         ),

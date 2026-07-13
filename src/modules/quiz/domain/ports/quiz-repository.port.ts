@@ -19,6 +19,7 @@ export type QuizWithPublishedVersionRow = {
   slug: string;
   requirements: string | null;
   imageUrl: string | null;
+  categoryId: string | null;
   isFeatured: boolean;
   isHidden: boolean;
   isVerified: boolean;
@@ -71,7 +72,7 @@ export type CreateQuizPayload = {
     passingScorePercent: number;
     rewardXp: number;
   };
-  categoryIds: string[];
+  categoryId: string | null;
   tagIds: string[];
   nowIso: string;
 };
@@ -151,7 +152,7 @@ export interface QuizRepositoryPort {
   updateQuizWithLinks(params: {
     quizId: string;
     patch: UpdateQuizPatch;
-    categoryIds: string[] | null;
+    categoryId: string | null;
     tagIds: string[] | null;
     nowIso: string;
   }): Promise<void>;
