@@ -108,7 +108,7 @@ export class UpdateQuizDto {
   @IsArray()
   @ArrayMaxSize(50)
   @ArrayUnique()
-  @IsUUID('4', { each: true })
+  @IsUUID('all', { each: true })
   categoryIds?: string[];
 
   @ApiPropertyOptional({
@@ -122,6 +122,6 @@ export class UpdateQuizDto {
   @IsArray()
   @ArrayMaxSize(50)
   @ArrayUnique()
-  @IsUUID('4', { each: true })
+  @IsUUID('all', { each: true })
   tagIds?: string[];
 }

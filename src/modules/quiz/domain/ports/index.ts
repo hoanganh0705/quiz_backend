@@ -7,6 +7,7 @@ export {
   type QuizRecordRow,
   type QuizRepositoryPort,
   type QuizStatsRow,
+  type QuizTagRow,
   type QuizWithPublishedVersionRow,
 } from './quiz-repository.port';
 export {

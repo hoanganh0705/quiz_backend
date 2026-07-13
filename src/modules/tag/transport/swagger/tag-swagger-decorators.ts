@@ -12,7 +12,12 @@ import {
 } from '@nestjs/swagger';
 import { AUTH_SECURITY_NAME } from '@/core/swagger/swagger.config';
 import { ProblemDetailDto } from '@/common/swagger/swagger-schemas';
-import { ApiCreatedResource, ApiOkResource, ApiOkResourceList } from '@/common/swagger/api-ok';
+import {
+  ApiCreatedResource,
+  ApiOkResource,
+  ApiOkResourceArray,
+  ApiOkResourceList,
+} from '@/common/swagger/api-ok';
 import { FollowedTagItemDto } from '../../dto/response/parity-response.dto';
 import { DeleteTagResponseDto } from '../../dto/response/delete-tag-response.dto';
 import {
@@ -22,6 +27,7 @@ import {
 } from '../../dto/response/parity-response.dto';
 import { TagResponseDto } from '../../dto/response/tag-response.dto';
 import { QuizListResponseDto } from '@/modules/quiz/dto/response/quiz-list-response.dto';
+import { TAG_QUIZZES_EXAMPLE } from './examples/tag.examples';
 import {
   analyticsBadRequestExample,
   analyticsInternalErrorExample,
@@ -76,6 +82,7 @@ import {
   updateTagNotFoundExample,
   updateTagUnauthorizedExample,
 } from './examples';
+import { TAG_RANKED_LIST_EXAMPLE, TAG_RELATED_LIST_EXAMPLE } from './examples/discovery.examples';
 
 // ─── Error response option factory ──────────────────────────────────────────────
 //
@@ -129,25 +136,29 @@ const resourceOk = <T extends Type>(model: T, description: string) =>
 const resourceCreated = <T extends Type>(model: T, description: string) =>
   ApiCreatedResource(model, { description });
 
-const resourceList = <T extends Type>(model: T, kind: 'cursor' | 'offset', description: string) =>
-  ApiOkResourceList(model, kind, { description });
+const resourceList = <T extends Type>(
+  model: T,
+  kind: 'cursor' | 'offset',
+  description: string,
+  example?: unknown,
+) => ApiOkResourceList(model, kind, { description, example });
 
 export const ApiPopularTagsResponse = (): MethodDecorator =>
   applyDecorators(
-    resourceOk<typeof RankedTagResponseDto>(
-      RankedTagResponseDto as unknown as Type,
-      'Returns the ranked tags.',
-    ),
+    ApiOkResourceArray(RankedTagResponseDto, {
+      description: 'Returns the ranked tags.',
+      example: TAG_RANKED_LIST_EXAMPLE,
+    }),
     ApiBadRequestResponse(problem.badRequest(popularBadRequestExample)),
     ApiInternalServerErrorResponse(problem.internalError(popularInternalErrorExample)),
   );
 
 export const ApiTrendingTagsResponse = (): MethodDecorator =>
   applyDecorators(
-    resourceOk<typeof RankedTagResponseDto>(
-      RankedTagResponseDto as unknown as Type,
-      'Returns the ranked tags.',
-    ),
+    ApiOkResourceArray(RankedTagResponseDto, {
+      description: 'Returns the ranked tags.',
+      example: TAG_RANKED_LIST_EXAMPLE,
+    }),
     ApiBadRequestResponse(problem.badRequest(trendingBadRequestExample)),
     ApiInternalServerErrorResponse(problem.internalError(trendingInternalErrorExample)),
   );
@@ -158,6 +169,7 @@ export const ApiTagQuizzesResponse = (): MethodDecorator =>
       QuizListResponseDto as unknown as Type,
       'cursor',
       'Returns the quizzes in the tag.',
+      TAG_QUIZZES_EXAMPLE,
     ),
     ApiNotFoundResponse(problem.notFound(tagQuizzesNotFoundExample)),
     ApiInternalServerErrorResponse(problem.internalError(tagQuizzesInternalErrorExample)),
@@ -165,10 +177,10 @@ export const ApiTagQuizzesResponse = (): MethodDecorator =>
 
 export const ApiRelatedTagsResponse = (): MethodDecorator =>
   applyDecorators(
-    resourceOk<typeof TagResponseDto>(
-      TagResponseDto as unknown as Type,
-      'Returns the related tags.',
-    ),
+    ApiOkResourceArray(TagResponseDto, {
+      description: 'Returns the related tags.',
+      example: TAG_RELATED_LIST_EXAMPLE,
+    }),
     ApiBadRequestResponse(problem.badRequest(relatedBadRequestExample)),
     ApiNotFoundResponse(problem.notFound(relatedNotFoundExample)),
     ApiInternalServerErrorResponse(problem.internalError(relatedInternalErrorExample)),

@@ -16,6 +16,7 @@ import {
 } from '../analytics/ports';
 import type { CreatorAnalytics } from '../analytics/types';
 import type { QuizRecordRow } from '../ports/quiz-repository.port';
+import type { QuizTagRow } from '../ports/quiz-repository.port';
 import type { QuizQuestionJoinRow } from '../ports/quiz-question-repository.port';
 import type { ListQuizzesQuery } from '../types/list-quizzes.query';
 import type { QuizCursor } from '../ports/quiz-repository.port';
@@ -102,23 +103,33 @@ export class QuizQueryService {
     return quiz;
   }
 
-  async getQuizById(quizId: string): Promise<QuizWithPublishedVersionRow> {
+  async getQuizById(quizId: string): Promise<{
+    row: QuizWithPublishedVersionRow;
+    tags: QuizTagRow[];
+  }> {
     const row = await this.quizRepository.getQuizWithPublishedVersionById(quizId);
 
     if (!row) {
       throw new QuizNotFoundError();
     }
 
-    return row;
+    const tags = await this.quizRepository.getTagsForQuiz(row.quizId);
+    return { row, tags };
   }
 
-  async getQuizStats(quizId: string): Promise<QuizStats> {
-    await this.getQuizById(quizId);
+  async getQuizStats(
+    quizId: string | undefined,
+    slug: string,
+  ): Promise<QuizStats> {
+    const result = await this.getQuizBySlug(slug);
+    const resolvedQuizId = result.row.quizId;
 
-    const stats = await this.quizRepository.getQuizStats(quizId);
+    const stats = await this.quizRepository.getQuizStats(
+      quizId ?? resolvedQuizId,
+    );
 
     return {
-      quizId,
+      quizId: resolvedQuizId,
       totalAttempts: Number(stats?.totalAttempts ?? 0),
       totalPlayers: Number(stats?.totalPlayers ?? 0),
       averageScore: Number(stats?.avgScorePercent ?? 0),
@@ -204,9 +215,11 @@ export class QuizQueryService {
     return this.quizAnalyticsRepository.getCreatorAnalytics(userId);
   }
 
-  async getQuizBySlug(
-    slug: string,
-  ): Promise<{ row: QuizWithPublishedVersionRow; questions: QuizQuestionJoinRow[] | null }> {
+  async getQuizBySlug(slug: string): Promise<{
+    row: QuizWithPublishedVersionRow;
+    questions: QuizQuestionJoinRow[] | null;
+    tags: QuizTagRow[];
+  }> {
     const normalizedSlug = normalizeQuizSlug(slug);
 
     const row = await this.quizRepository.getQuizWithPublishedVersionBySlug(normalizedSlug);
@@ -215,14 +228,16 @@ export class QuizQueryService {
       throw new QuizNotFoundError();
     }
 
+    const tags = await this.quizRepository.getTagsForQuiz(row.quizId);
+
     if (!row.publishedVersionQuizVersionId) {
-      return { row, questions: null };
+      return { row, questions: null, tags };
     }
 
     const questions = await this.quizQuestionRepository.getQuestionsByVersionId(
       row.publishedVersionQuizVersionId,
     );
 
-    return { row, questions };
+    return { row, questions, tags };
   }
 }
