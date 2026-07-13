@@ -146,19 +146,15 @@ export class CreateQuizDto {
   isHidden?: boolean;
 
   @ApiPropertyOptional({
-    description: 'UUIDs of associated categories (max 50)',
-    type: Array,
-    maxItems: 50,
+    description: 'UUID of the associated category',
+    type: String,
     format: 'uuid',
-    example: ['660e8400-e29b-41d4-a716-446655440000'],
+    example: '660e8400-e29b-41d4-a716-446655440000',
     nullable: true,
   })
   @IsOptional()
-  @IsArray()
-  @ArrayMaxSize(50)
-  @ArrayUnique()
-  @IsUUID('all', { each: true })
-  categoryIds?: string[];
+  @IsUUID('all')
+  categoryId?: string;
 
   @ApiPropertyOptional({
     description: 'UUIDs of associated tags (max 50)',

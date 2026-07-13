@@ -15,7 +15,7 @@ export type CreateQuizCommand = {
     passingScorePercent: number;
     rewardXp: number;
   };
-  categoryIds: string[];
+  categoryId: string | null;
   tagIds: string[];
 };
 
@@ -27,6 +27,6 @@ export type UpdateQuizCommand = {
   imageUrl?: string | null;
   isFeatured?: boolean;
   isHidden?: boolean;
-  categoryIds?: string[] | null;
+  categoryId?: string | null;
   tagIds?: string[] | null;
 };

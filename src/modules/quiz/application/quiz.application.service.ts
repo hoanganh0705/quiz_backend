@@ -48,7 +48,7 @@ export class QuizApplicationService implements QuizListingPort {
       isFeatured: dto.isFeatured ?? false,
       isHidden: dto.isHidden ?? false,
       initialVersion: dto.initialVersion,
-      categoryIds: dto.categoryIds ?? [],
+      categoryId: dto.categoryId ?? null,
       tagIds: dto.tagIds ?? [],
     };
     const { row, tags } = await this.quizCommandService.createQuiz(user, command);
@@ -216,10 +216,7 @@ export class QuizApplicationService implements QuizListingPort {
     };
   }
 
-  async getTrendingQuizzes(
-    limit: number,
-    categoryId?: string,
-  ): Promise<TrendingQuizItemDto[]> {
+  async getTrendingQuizzes(limit: number, categoryId?: string): Promise<TrendingQuizItemDto[]> {
     const quizzes = await this.quizAnalyticsService.getTrendingQuizzes(limit, categoryId);
 
     return quizzes.map((q) => ({
@@ -264,7 +261,7 @@ export class QuizApplicationService implements QuizListingPort {
       imageUrl: dto.imageUrl,
       isFeatured: dto.isFeatured,
       isHidden: dto.isHidden,
-      categoryIds: dto.categoryIds,
+      categoryId: dto.categoryId,
       tagIds: dto.tagIds,
     };
     const { row, tags } = await this.quizCommandService.updateQuiz(quizId, user, command);

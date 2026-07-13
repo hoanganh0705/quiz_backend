@@ -60,7 +60,7 @@ export class QuizCommandService {
     const description = normalizeNullableText(command.description) ?? null;
     const requirements = normalizeNullableText(command.requirements) ?? null;
     const imageUrl = normalizeNullableText(command.imageUrl) ?? null;
-    const categoryIds = normalizeLinkIds(command.categoryIds);
+    const categoryId = command.categoryId ?? null;
     const tagIds = normalizeLinkIds(command.tagIds);
     const nowIso = new Date().toISOString();
 
@@ -74,7 +74,7 @@ export class QuizCommandService {
       isFeatured: command.isFeatured,
       isHidden: command.isHidden,
       initialVersion: command.initialVersion,
-      categoryIds,
+      categoryId,
       tagIds,
       nowIso,
     });
@@ -132,13 +132,13 @@ export class QuizCommandService {
       patch.isHidden = command.isHidden;
     }
 
-    const hasCategoryIds = hasOwn(command, 'categoryIds');
+    const hasCategoryId = hasOwn(command, 'categoryId');
     const hasTagIds = hasOwn(command, 'tagIds');
 
-    const categoryIds = hasCategoryIds ? normalizeLinkIds(command.categoryIds ?? undefined) : null;
+    const categoryId = hasCategoryId ? command.categoryId ?? null : null;
     const tagIds = hasTagIds ? normalizeLinkIds(command.tagIds ?? undefined) : null;
 
-    if (Object.keys(patch).length === 0 && !hasCategoryIds && !hasTagIds) {
+    if (Object.keys(patch).length === 0 && !hasCategoryId && !hasTagIds) {
       return this.refetchQuiz(quizId);
     }
 
@@ -147,7 +147,7 @@ export class QuizCommandService {
     await this.quizRepository.updateQuizWithLinks({
       quizId,
       patch,
-      categoryIds,
+      categoryId,
       tagIds,
       nowIso,
     });

@@ -12,7 +12,6 @@ import {
   quizzes,
   discussionThreadSubscriptions,
   discussionSavedThreads,
-  quizCategories,
 } from '@/core/database/schema';
 import type {
   DiscussionThread,
@@ -1054,21 +1053,21 @@ export class DiscussionRepository implements DiscussionRepositoryPort {
       .$with('base_categories')
       .as(
         this.db
-          .select({ categoryId: quizCategories.categoryId })
-          .from(quizCategories)
-          .innerJoin(baseThread, eq(quizCategories.quizId, baseThread.quizId)),
+          .select({ categoryId: quizzes.categoryId })
+          .from(quizzes)
+          .innerJoin(baseThread, eq(quizzes.quizId, baseThread.quizId)),
       );
 
     const candidateCategories = this.db.$with('candidate_categories').as(
       this.db
         .select({
-          quizId: quizCategories.quizId,
-          categoryOverlap: count(quizCategories.categoryId).as('category_overlap'),
+          quizId: quizzes.quizId,
+          categoryOverlap: count(quizzes.categoryId).as('category_overlap'),
         })
-        .from(quizCategories)
-        .innerJoin(baseCategories, eq(quizCategories.categoryId, baseCategories.categoryId))
-        .where(sql`${quizCategories.quizId} <> ${baseThread.quizId}`)
-        .groupBy(quizCategories.quizId),
+        .from(quizzes)
+        .innerJoin(baseCategories, eq(quizzes.categoryId, baseCategories.categoryId))
+        .where(sql`${quizzes.quizId} <> ${baseThread.quizId}`)
+        .groupBy(quizzes.quizId),
     );
 
     const rows = await this.db

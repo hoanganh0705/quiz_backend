@@ -10,7 +10,6 @@ import {
   quizAttempts,
   quizVersions,
   userProfiles,
-  quizCategories,
   categories,
   quizTags,
   tags,
@@ -301,8 +300,8 @@ export class ReviewRepository implements ReviewRepositoryPort {
         name: categories.name,
       })
       .from(quizReviews)
-      .innerJoin(quizCategories, eq(quizReviews.quizId, quizCategories.quizId))
-      .innerJoin(categories, eq(quizCategories.categoryId, categories.categoryId))
+      .innerJoin(quizzes, eq(quizReviews.quizId, quizzes.quizId))
+      .innerJoin(categories, eq(quizzes.categoryId, categories.categoryId))
       .where(eq(quizReviews.userId, userId))
       .groupBy(categories.categoryId, categories.name)
       .orderBy(sql`COUNT(*) DESC`, categories.name)
