@@ -9,11 +9,9 @@ const SLUG_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
  * that looks like neither.
  *
  * The pipe is intentionally permissive: it does not enforce the version
- * nibble of UUIDs (ParseUUIDPipe({ version: '4' }) is too strict and breaks
- * real UUIDs in the seed data that use other versions). Anything that is not
- * a UUID must look like a valid kebab-case slug, otherwise the request is
- * rejected with a 400 (which the global exception filter turns into a
- * ProblemDetail).
+ * nibble of UUIDs. Anything that is not a UUID must look like a valid
+ * kebab-case slug, otherwise the request is rejected with a 400 (which the
+ * global exception filter turns into a ProblemDetail).
  */
 @Injectable()
 export class ParseUUIDOrSlugPipe implements PipeTransform<string, string> {

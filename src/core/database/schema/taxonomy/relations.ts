@@ -2,8 +2,7 @@
 // Taxonomy bounded context — relations
 //
 // All four taxonomy tables anchor on a small set of joins:
-//   - categories and tags are the catalog; both have many
-//     junction-table rows (quizCategories / quizTags) plus many
+//   - tags are the catalog; both have many
 //     follow-through rows
 //   - *Follows tables each point back to their user and their
 //     category/tag
@@ -19,10 +18,12 @@ import { relations } from 'drizzle-orm/relations';
 
 import { categories, categoryFollows, tagFollows, tags } from './schema';
 import { users } from '../auth/schema';
-import { quizCategories, quizTags, tournaments } from '..';
+import { quizTags, quizzes, tournaments } from '..';
 
 export const categoriesRelations = relations(categories, ({ many }) => ({
-  quizCategories: many(quizCategories),
+  quizzes: many(quizzes, {
+    relationName: 'quizzes_category_id_categories_category_id',
+  }),
   tournaments: many(tournaments),
   categoryFollows: many(categoryFollows),
 }));

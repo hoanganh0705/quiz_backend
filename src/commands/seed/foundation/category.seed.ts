@@ -128,6 +128,8 @@ export const createCategoriesDomain = (): SeedDomain => ({
       });
 
     const rowBySlug = new Map(touchedRows.map((row) => [row.slug, row]));
+    const insertedCount = touchedRows.filter((row) => row.inserted).length;
+    const updatedCount = touchedRows.length - insertedCount;
 
     for (const seed of seeds) {
       const row = rowBySlug.get(seed.slug);
@@ -152,7 +154,12 @@ export const createCategoriesDomain = (): SeedDomain => ({
       });
     }
 
-    return { domain: 'categories', inserted, updated, skipped };
+    return {
+      domain: 'categories',
+      inserted: insertedCount,
+      updated: updatedCount,
+      skipped: 0,
+    };
   },
 });
 

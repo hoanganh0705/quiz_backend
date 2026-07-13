@@ -1,9 +1,9 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, desc, eq, isNull, or, sql, type SQL } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNull, or, sql, type SQL } from 'drizzle-orm';
 import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 import { DRIZZLE } from '@/core/database/drizzle.constants';
 import type { DrizzleDB } from '@/core/database/database.module';
-import { quizCategories, quizTags, quizVersions, quizzes } from '@/core/database/schema';
+import { quizCategories, quizTags, quizVersions, quizzes, tags } from '@/core/database/schema';
 import {
   isPostgresUniqueViolation,
   isPostgresForeignKeyViolation,
@@ -25,6 +25,7 @@ import type {
   QuizRecordRow,
   QuizRepositoryPort,
   QuizStatsRow,
+  QuizTagRow,
   QuizWithPublishedVersionRow,
 } from '@/modules/quiz/domain/ports';
 
@@ -145,6 +146,21 @@ export class QuizRepository implements QuizRepositoryPort {
     return (row as QuizWithPublishedVersionRow | undefined) ?? null;
   }
 
+  async getTagsForQuiz(quizId: string): Promise<QuizTagRow[]> {
+    const rows = await this.db
+      .select({
+        tagId: tags.tagId,
+        name: tags.name,
+        slug: tags.slug,
+      })
+      .from(quizTags)
+      .innerJoin(tags, eq(quizTags.tagId, tags.tagId))
+      .where(and(eq(quizTags.quizId, quizId), isNull(tags.deletedAt)))
+      .orderBy(asc(tags.name));
+
+    return rows as QuizTagRow[];
+  }
+
   async listQuizzes(params: {
     limit: number;
     cursor?: QuizCursor | null;
@@ -175,13 +191,13 @@ export class QuizRepository implements QuizRepositoryPort {
       );
     }
 
-    if (params.filters?.tagId) {
+    if (params.filters?.tagIds && params.filters.tagIds.length > 0) {
       filters.push(
         sql`exists (
           select 1
-          from ${quizTags} qt_filter
-          where qt_filter.quiz_id = ${QUIZ_COLUMNS.quizId}
-            and qt_filter.tag_id = ${params.filters.tagId}
+          from ${quizTags}
+          where ${quizTags.quizId} = ${QUIZ_COLUMNS.quizId}
+            and ${inArray(quizTags.tagId, params.filters.tagIds)}
         )`,
       );
     }

@@ -71,10 +71,7 @@ export class PasswordResetEmailHandler implements EmailJobHandler<SendPasswordRe
         : 'http://localhost:3000/reset-password';
   }
 
-  async process(
-    data: SendPasswordResetEmailJobData,
-    ctx: EmailJobContext,
-  ): Promise<void> {
+  async process(data: SendPasswordResetEmailJobData, ctx: EmailJobContext): Promise<void> {
     const userId = data.userId;
     const { correlationId, jobId } = ctx;
 

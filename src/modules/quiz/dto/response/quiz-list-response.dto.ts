@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { QuizResponseDto } from './quiz-response.dto';
+import { QuizListItemDto } from './quiz-list-item.dto';
 
 export class QuizPaginationResponseDto {
   @ApiProperty({ description: 'Number of items returned in this page', example: 20 })
@@ -17,8 +17,8 @@ export class QuizPaginationResponseDto {
 }
 
 export class QuizListResponseDto {
-  @ApiProperty({ description: 'Quiz items', type: () => [QuizResponseDto] })
-  items!: QuizResponseDto[];
+  @ApiProperty({ description: 'Quiz items', type: () => [QuizListItemDto] })
+  items!: QuizListItemDto[];
 
   @ApiProperty({ description: 'Pagination metadata', type: () => QuizPaginationResponseDto })
   pagination!: QuizPaginationResponseDto;

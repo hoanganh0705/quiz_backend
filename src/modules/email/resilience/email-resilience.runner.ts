@@ -1,9 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
-import {
-  emailConfig,
-  type EmailConfig,
-} from '@/core/config';
+import { emailConfig, type EmailConfig } from '@/core/config';
 import { CircuitBreaker, type CircuitState } from '@/common/resilience/circuit-breaker';
 
 /**
@@ -63,9 +60,7 @@ export class EmailResilienceRunner {
    * outbound HTTP call (e.g. Resend's SDK) when the timeout
    * fires.
    */
-  async runWithResilience<T>(
-    buildTask: (signal: AbortSignal) => Promise<T>,
-  ): Promise<T> {
+  async runWithResilience<T>(buildTask: (signal: AbortSignal) => Promise<T>): Promise<T> {
     const controller = new AbortController();
     return this.withTimeout(
       this.resendBreaker.exec(() => buildTask(controller.signal)),
