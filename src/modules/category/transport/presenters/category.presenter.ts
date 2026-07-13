@@ -7,7 +7,7 @@ import type { CategoryResponseDto } from '../../dto/response/category-response.d
 import type { FollowedCategoryItemDto } from '../../dto/response/followed-category-item.dto';
 import type { MessageResponseDto } from '../../dto/response/message-response.dto';
 import type { RankedCategoryResponseDto } from '../../dto/response/ranked-category-response.dto';
-import type { QuizResponseDto } from '@/modules/quiz/dto/response/quiz-response.dto';
+import type { QuizListItemDto } from '@/modules/quiz/dto/response/quiz-list-item.dto';
 
 /**
  * Presenter for the category module. Wraps every application-service response
@@ -31,7 +31,7 @@ export class CategoryPresenter {
   readonly getCategoryById = CategoryPresenter.ok<CategoryResponseDto>;
   readonly getCategoryBySlug = CategoryPresenter.ok<CategoryResponseDto>;
   readonly getRelatedCategories = (payload: CategoryResponseDto[]) => ApiResponse.ok(payload);
-  readonly getCategoryQuizzesBySlug = (payload: PaginatedResult<QuizResponseDto>) =>
+  readonly getCategoryQuizzesBySlug = (payload: PaginatedResult<QuizListItemDto>) =>
     ApiResponse.page(payload.items, payload.pagination);
 
   readonly listFollowedCategories = (payload: PaginatedResult<FollowedCategoryItemDto>) =>

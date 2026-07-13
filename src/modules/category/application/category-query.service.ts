@@ -21,7 +21,7 @@ import type {
   RelatedCategoriesQuery,
 } from '../domain/types/category-commands';
 import type { ListCategoryQuizzesQueryDto } from '../dto/request/list-category-quizzes-query.dto';
-import type { QuizResponseDto } from '@/modules/quiz/dto/response/quiz-response.dto';
+import type { QuizListItemDto } from '@/modules/quiz/dto/response/quiz-list-item.dto';
 import type { FollowedCategoryRow } from '../domain/ports';
 import { CategoryAnalyticsNotFoundError } from '../domain/errors/category-domain.errors';
 
@@ -32,14 +32,14 @@ import { CategoryAnalyticsNotFoundError } from '../domain/errors/category-domain
  */
 const cursorResultFromQuizDto = (
   payload: Awaited<ReturnType<QuizApplicationService['listQuizzes']>>,
-): PaginatedResult<QuizResponseDto> => {
+): PaginatedResult<QuizListItemDto> => {
   const pagination: CursorPagination = {
     kind: 'cursor',
     limit: payload.pagination.limit,
     hasNextPage: payload.pagination.hasNextPage,
     nextCursor: payload.pagination.nextCursor,
   };
-  return paginated<QuizResponseDto>(payload.items, pagination);
+  return paginated<QuizListItemDto>(payload.items, pagination);
 };
 
 /**
@@ -100,7 +100,7 @@ export class CategoryQueryService {
   async getCategoryQuizzesBySlug(
     slug: string,
     quizQuery: ListCategoryQuizzesQueryDto,
-  ): Promise<PaginatedResult<QuizResponseDto>> {
+  ): Promise<PaginatedResult<QuizListItemDto>> {
     const category = await this.categoryDomainService.getCategoryBySlug(slug);
 
     const result = await this.quizApplicationService.listQuizzes({

@@ -156,9 +156,11 @@ export const quizByIdInternalErrorExample = withInstance(
 
 // ─── GET /quizzes/:id/stats ───────────────────────────────────────────────────
 
+const ID_OR_SLUG_BAD_REQUEST_DETAIL = 'Path param must be a UUID or a kebab-case slug';
+
 export const quizStatsBadRequestExample = {
   ...withInstance(ErrorResponseExamples.badRequest, `/quizzes/${UUID_ID}/stats`),
-  detail: UUID_BAD_REQUEST_DETAIL,
+  detail: ID_OR_SLUG_BAD_REQUEST_DETAIL,
   extensions: { requestId: 'req_abc123' },
 };
 export const quizStatsNotFoundExample = withInstance(

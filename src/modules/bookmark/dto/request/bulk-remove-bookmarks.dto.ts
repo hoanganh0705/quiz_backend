@@ -12,6 +12,6 @@ export class BulkRemoveBookmarksDto {
   @Type(() => String)
   @IsArray()
   @ArrayMaxSize(100)
-  @IsUUID('4', { each: true })
+  @IsUUID('all', { each: true })
   quizIds!: string[];
 }

@@ -1,8 +1,16 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { QuizVersionResponseDto } from './quiz-version-response.dto';
-import { QuizTagDto } from './quiz-tag.dto';
 
-export class QuizResponseDto {
+/**
+ * Slim list-item shape used by listing endpoints.
+ *
+ * Identical to `QuizResponseDto` except it omits `tags`, because the only
+ * UI consumer of tags today is the detail page. Listing endpoints (catalog,
+ * category, tag, featured, trending, popular, related, recommendations)
+ * stay slim — keeping payload small and avoiding the batched join that
+ * would be needed to populate `tags` across a whole page.
+ */
+export class QuizListItemDto {
   @ApiProperty({
     description: 'Unique quiz identifier',
     example: '660e8400-e29b-41d4-a716-446655440000',
@@ -66,10 +74,4 @@ export class QuizResponseDto {
     nullable: true,
   })
   publishedVersion!: QuizVersionResponseDto | null;
-
-  @ApiProperty({
-    description: 'Tags attached to the quiz (only populated on detail endpoints)',
-    type: () => [QuizTagDto],
-  })
-  tags!: QuizTagDto[];
 }

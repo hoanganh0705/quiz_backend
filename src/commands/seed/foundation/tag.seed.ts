@@ -83,6 +83,8 @@ export const createTagsDomain = (): SeedDomain => ({
       });
 
     const rowBySlug = new Map(touchedRows.map((row) => [row.slug, row]));
+    const insertedCount = touchedRows.filter((row) => row.inserted).length;
+    const updatedCount = touchedRows.length - insertedCount;
 
     for (const seed of seeds) {
       const row = rowBySlug.get(seed.slug);
@@ -104,7 +106,12 @@ export const createTagsDomain = (): SeedDomain => ({
       });
     }
 
-    return { domain: 'tags', inserted, updated, skipped };
+    return {
+      domain: 'tags',
+      inserted: insertedCount,
+      updated: updatedCount,
+      skipped: 0,
+    };
   },
 });
 

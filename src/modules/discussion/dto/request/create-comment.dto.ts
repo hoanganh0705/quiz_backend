@@ -23,6 +23,6 @@ export class CreateCommentDto {
     nullable: true,
   })
   @IsOptional()
-  @IsUUID('4', { message: 'parentCommentId must be a valid UUID' })
+  @IsUUID('all', { message: 'parentCommentId must be a valid UUID' })
   parentCommentId?: string;
 }

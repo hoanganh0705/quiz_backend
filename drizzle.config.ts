@@ -10,7 +10,7 @@ if (!process.env.DATABASE_URL) {
 
 export default defineConfig({
   dialect: 'postgresql',
-  out: resolve(__dirname, 'src/core/database/migrations'),
+  out: 'src/core/database/migrations',
   schema: './src/core/database/schema',
   dbCredentials: {
     url: process.env.DATABASE_URL,

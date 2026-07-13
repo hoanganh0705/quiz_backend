@@ -1,5 +1,18 @@
 import { Type } from 'class-transformer';
-import { IsIn, IsInt, IsOptional, IsString, IsUUID, Max, MaxLength, Min } from 'class-validator';
+import {
+  ArrayMaxSize,
+  ArrayMinSize,
+  ArrayUnique,
+  IsArray,
+  IsIn,
+  IsInt,
+  IsOptional,
+  IsString,
+  IsUUID,
+  Max,
+  MaxLength,
+  Min,
+} from 'class-validator';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { QUIZ_DIFFICULTIES, type QuizDifficulty } from '@/modules/quiz/types/quiz.types';
 
@@ -49,12 +62,20 @@ export class ListCategoryQuizzesQueryDto {
   difficulty?: QuizDifficulty;
 
   @ApiPropertyOptional({
-    description: 'Optional tag UUID to further narrow the category quizzes',
+    description:
+      'Optional list of tag UUIDs to further narrow the category quizzes (OR semantics — quiz matches if it has at least one of the given tags)',
+    type: String,
+    isArray: true,
     format: 'uuid',
-    example: '770e8400-e29b-41d4-a716-446655440000',
+    maxItems: 50,
+    example: ['770e8400-e29b-41d4-a716-446655440000'],
     nullable: true,
   })
   @IsOptional()
-  @IsUUID()
-  tagId?: string;
+  @IsArray()
+  @ArrayMaxSize(50)
+  @ArrayMinSize(1)
+  @ArrayUnique()
+  @IsUUID('all', { each: true })
+  tagIds?: string[];
 }

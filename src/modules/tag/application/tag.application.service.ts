@@ -66,7 +66,7 @@ export class TagApplicationService {
     const tag = await this.tagDomainService.getTagBySlug(slug);
 
     return this.quizListingService.listQuizzesByTag({
-      tagId: tag.tagId,
+      tagIds: [tag.tagId],
       dto: quizQuery,
     });
   }

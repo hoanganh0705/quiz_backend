@@ -5,6 +5,12 @@ export type QuizRecordRow = {
   creatorId: string | null;
 };
 
+export type QuizTagRow = {
+  tagId: string;
+  name: string;
+  slug: string;
+};
+
 export type QuizWithPublishedVersionRow = {
   quizId: string;
   creatorId: string | null;
@@ -36,7 +42,7 @@ export type QuizWithPublishedVersionRow = {
 export type QuizListFilters = {
   difficulty?: QuizDifficulty;
   categoryId?: string;
-  tagId?: string;
+  tagIds?: string[];
   creatorId?: string;
 };
 
@@ -102,6 +108,8 @@ export interface QuizRepositoryPort {
   getQuizWithPublishedVersionById(quizId: string): Promise<QuizWithPublishedVersionRow | null>;
 
   getQuizWithPublishedVersionBySlug(slug: string): Promise<QuizWithPublishedVersionRow | null>;
+
+  getTagsForQuiz(quizId: string): Promise<QuizTagRow[]>;
 
   listQuizzes(params: {
     limit: number;

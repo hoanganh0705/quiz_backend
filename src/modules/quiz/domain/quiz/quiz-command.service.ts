@@ -14,6 +14,7 @@ import type { CreateQuizCommand, UpdateQuizCommand } from '../types';
 import {
   QUIZ_REPOSITORY_PORT,
   type QuizRepositoryPort,
+  type QuizTagRow,
   type QuizWithPublishedVersionRow,
 } from '../ports/quiz-repository.port';
 import { QUIZ_DOMAIN_EVENT_BUS } from '../ports/quiz-domain-event-bus.port';
@@ -40,14 +41,17 @@ export class QuizCommandService {
     @InjectPinoLogger(QuizCommandService.name) private readonly logger: PinoLogger,
   ) {}
 
-  private refetchQuiz(quizId: string): Promise<QuizWithPublishedVersionRow> {
+  private async refetchQuiz(quizId: string): Promise<{
+    row: QuizWithPublishedVersionRow;
+    tags: QuizTagRow[];
+  }> {
     return this.quizQueryService.getQuizById(quizId);
   }
 
   async createQuiz(
     user: JwtPayload,
     command: CreateQuizCommand,
-  ): Promise<QuizWithPublishedVersionRow> {
+  ): Promise<{ row: QuizWithPublishedVersionRow; tags: QuizTagRow[] }> {
     QuizPolicy.assertCanCreate(user);
 
     const title = command.title.trim();
@@ -86,7 +90,7 @@ export class QuizCommandService {
     quizId: string,
     user: JwtPayload,
     command: UpdateQuizCommand,
-  ): Promise<QuizWithPublishedVersionRow> {
+  ): Promise<{ row: QuizWithPublishedVersionRow; tags: QuizTagRow[] }> {
     const quiz = await this.quizQueryService.getActiveQuizRecordById(quizId);
     QuizPolicy.assertCanEdit(quiz.creatorId, user);
 

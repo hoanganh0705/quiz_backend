@@ -51,7 +51,8 @@ export class VerificationEmailHandler implements EmailJobHandler<SendVerificatio
   constructor(
     @Inject(DRIZZLE) private readonly db: DrizzleDB,
     @Inject(emailConfig.KEY) private readonly email: EmailConfig,
-    @Inject(emailVerificationConfig.KEY) private readonly emailVerification: EmailVerificationConfig,
+    @Inject(emailVerificationConfig.KEY)
+    private readonly emailVerification: EmailVerificationConfig,
     private readonly resilience: EmailResilienceRunner,
     @InjectPinoLogger(VerificationEmailHandler.name) private readonly logger: PinoLogger,
   ) {
@@ -71,10 +72,7 @@ export class VerificationEmailHandler implements EmailJobHandler<SendVerificatio
     this.tokenTtlSeconds = this.emailVerification.tokenTtlSeconds;
   }
 
-  async process(
-    data: SendVerificationEmailJobData,
-    ctx: EmailJobContext,
-  ): Promise<void> {
+  async process(data: SendVerificationEmailJobData, ctx: EmailJobContext): Promise<void> {
     const userId = data.userId;
     const { correlationId, jobId } = ctx;
 

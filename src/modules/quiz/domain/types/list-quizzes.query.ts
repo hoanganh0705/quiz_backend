@@ -6,7 +6,7 @@ export type ListQuizzesQuery = {
   filters?: {
     difficulty?: string;
     categoryId?: string;
-    tagId?: string;
+    tagIds?: string[];
     creatorId?: string;
   };
 };
