@@ -8,7 +8,7 @@ export const QUIZ_LISTING_PORT = Symbol('QUIZ_LISTING_PORT');
 
 export interface QuizListingPort {
   listQuizzesByTag(params: {
-    tagId: string;
+    tagIds: string[];
     dto: ListQuizzesQueryDto;
   }): Promise<QuizListResponseDto>;
 

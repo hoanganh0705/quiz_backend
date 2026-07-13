@@ -36,6 +36,13 @@
       "when": 1782095444257,
       "tag": "0004_flashy_karma",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1783935563039,
+      "tag": "0006_remarkable_karma",
+      "breakpoints": true
     }
   ]
 }

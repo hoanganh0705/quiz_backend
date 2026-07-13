@@ -6,7 +6,6 @@
 //   - quizVersions                  (immutable content snapshots per quiz)
 //   - quizQuestions                 (questions belonging to a quiz version)
 //   - quizAnswerOptions             (multiple-choice options per question)
-//   - quizCategories                (quiz ↔ taxonomy join; many-to-many)
 //   - quizTags                      (quiz ↔ taxonomy join; many-to-many)
 //   - quizStats                     (denormalised analytics per quiz)
 //   - quizAttempts                  (a single user's play-through of a version)
@@ -61,7 +60,8 @@ import {
   tsvector,
 } from '../shared';
 import { users } from '../auth/schema';
-import { categories, tags } from '..';
+import { categories } from '../taxonomy/schema';
+import { tags } from '..';
 
 // =============================================================================
 // quizzes
@@ -100,6 +100,7 @@ export const quizzes = pgTable(
         onDelete: 'set null',
       },
     ),
+    categoryId: uuid('category_id'),
   },
   (table) => [
     index('idx_quizzes_active_created_at')
@@ -114,6 +115,9 @@ export const quizzes = pgTable(
     index('idx_quizzes_search_vector')
       .using('gin', table.quizSearchVector)
       .where(sql`deleted_at IS NULL AND is_hidden = false`),
+    index('idx_quizzes_category_id')
+      .using('btree', table.categoryId.asc().nullsLast().op('uuid_ops'))
+      .where(sql`(category_id IS NOT NULL)`),
     uniqueIndex('uq_quizzes_slug_active')
       .using('btree', table.slug.asc().nullsLast().op('text_ops'))
       .where(sql`(deleted_at IS NULL)`),
@@ -121,6 +125,11 @@ export const quizzes = pgTable(
       columns: [table.creatorId],
       foreignColumns: [users.userId],
       name: 'quizzes_creator_id_fkey',
+    }).onDelete('set null'),
+    foreignKey({
+      columns: [table.categoryId],
+      foreignColumns: [(categories as { categoryId: AnyPgColumn }).categoryId],
+      name: 'quizzes_category_id_fkey',
     }).onDelete('set null'),
     check(
       'quizzes_slug_format',
@@ -254,51 +263,6 @@ export const quizAnswerOptions = pgTable(
     unique('uq_quiz_answer_options_question_position').on(table.position, table.questionId),
     check('quiz_answer_options_position_positive', sql`"position" > 0`),
     check('quiz_answer_options_value_nonblank', sql`length(btrim(value)) > 0`),
-  ],
-);
-
-// =============================================================================
-// quizCategories (quiz ↔ taxonomy join)
-// =============================================================================
-
-export const quizCategories = pgTable(
-  'quiz_categories',
-  {
-    quizCategoryId: uuid('quiz_category_id')
-      .default(sql`uuidv7()`)
-      .primaryKey()
-      .notNull(),
-    quizId: uuid('quiz_id').notNull(),
-    categoryId: uuid('category_id').notNull(),
-    createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' })
-      .defaultNow()
-      .notNull(),
-  },
-  (table) => [
-    index('idx_quiz_categories_category_id').using(
-      'btree',
-      table.categoryId.asc().nullsLast().op('uuid_ops'),
-    ),
-    index('idx_quiz_categories_category_quiz').using(
-      'btree',
-      table.categoryId.asc().nullsLast().op('uuid_ops'),
-      table.quizId.asc().nullsLast().op('uuid_ops'),
-    ),
-    index('idx_quiz_categories_quiz_id').using(
-      'btree',
-      table.quizId.asc().nullsLast().op('uuid_ops'),
-    ),
-    foreignKey({
-      columns: [table.categoryId],
-      foreignColumns: [categories.categoryId],
-      name: 'quiz_categories_category_id_fkey',
-    }).onDelete('cascade'),
-    foreignKey({
-      columns: [table.quizId],
-      foreignColumns: [(quizzes as { quizId: AnyPgColumn }).quizId],
-      name: 'quiz_categories_quiz_id_fkey',
-    }).onDelete('cascade'),
-    unique('uq_quiz_categories_pair').on(table.categoryId, table.quizId),
   ],
 );
 

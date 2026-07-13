@@ -87,7 +87,10 @@ export const runBookmarkSeed = async (): Promise<SeedSummary[]> => {
         }
 
         const [existingBookmark] = await tx
-          .select({ bookmarkId: bookmarkedQuizzes.bookmarkId })
+          .select({
+            bookmarkId: bookmarkedQuizzes.bookmarkId,
+            collectionId: bookmarkedQuizzes.collectionId,
+          })
           .from(bookmarkedQuizzes)
           .where(
             and(
@@ -98,36 +101,60 @@ export const runBookmarkSeed = async (): Promise<SeedSummary[]> => {
           .limit(1);
 
         if (!existingBookmark) {
-          await tx.insert(bookmarkedQuizzes).values({
-            collectionId,
-            quizId,
-            notes: null,
-            bookmarkedAt: ctx.nowIso,
-            updatedAt: ctx.nowIso,
+          const [insertedBookmark] = await tx
+            .insert(bookmarkedQuizzes)
+            .values({
+              collectionId,
+              quizId,
+              notes: null,
+              bookmarkedAt: ctx.nowIso,
+              updatedAt: ctx.nowIso,
+            })
+            .returning({
+              bookmarkId: bookmarkedQuizzes.bookmarkId,
+              collectionId: bookmarkedQuizzes.collectionId,
+            });
+          quizzesBookmarked++;
+          recorder.record({
+            kind: 'Bookmarked Quizzes',
+            id: `${collection.name}:${quizSlug}`,
+            fields: {
+              collection: collection.name,
+              owner: collection.userUsername,
+              quizSlug,
+            },
+            details: {
+              bookmarkId: insertedBookmark?.bookmarkId ?? null,
+              collectionId: insertedBookmark?.collectionId ?? collectionId,
+              quizId,
+              quizSlug,
+              notes: null,
+              bookmarkedAt: ctx.nowIso,
+              updatedAt: ctx.nowIso,
+            },
+          });
+        } else {
+          recorder.record({
+            kind: 'Bookmarked Quizzes',
+            id: `${collection.name}:${quizSlug}`,
+            fields: {
+              collection: collection.name,
+              owner: collection.userUsername,
+              quizSlug,
+            },
+            details: {
+              bookmarkId: existingBookmark.bookmarkId,
+              collectionId: existingBookmark.collectionId,
+              quizId,
+              quizSlug,
+              notes: null,
+              bookmarkedAt: ctx.nowIso,
+              updatedAt: ctx.nowIso,
+            },
           });
         }
 
-        quizzesBookmarked++;
         logger.info(`Bookmarked "${quizSlug}" in "${collection.name}" for ${collection.userUsername}`);
-
-        recorder.record({
-          kind: 'Bookmarked Quizzes',
-          id: `${collection.name}:${quizSlug}`,
-          fields: {
-            collection: collection.name,
-            owner: collection.userUsername,
-            quizSlug,
-          },
-          details: {
-            bookmarkId: existingBookmark?.bookmarkId ?? null,
-            collectionId: existingBookmark?.collectionId ?? collectionId,
-            quizId,
-            quizSlug,
-            notes: null,
-            bookmarkedAt: ctx.nowIso,
-            updatedAt: ctx.nowIso,
-          },
-        });
       }
 
       recorder.record({

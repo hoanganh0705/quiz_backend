@@ -19,7 +19,6 @@ import {
   quizVersions,
   quizQuestions,
   quizAnswerOptions,
-  quizCategories,
   quizTags,
   quizStats,
   quizAttempts,
@@ -47,8 +46,11 @@ export const quizzesRelations = relations(quizzes, ({ one, many }) => ({
   quizVersions: many(quizVersions, {
     relationName: 'quizVersions_quizId_quizzes_quizId',
   }),
-  quizCategories: many(quizCategories),
   quizTags: many(quizTags),
+  category: one(categories, {
+    fields: [quizzes.categoryId],
+    references: [categories.categoryId],
+  }),
   quizStats: one(quizStats),
   quizReviews: many(quizReviews),
   bookmarkedQuizzes: many(bookmarkedQuizzes),
@@ -90,20 +92,6 @@ export const quizAnswerOptionsRelations = relations(quizAnswerOptions, ({ one, m
   }),
   quizAttemptAnswers: many(quizAttemptAnswers),
   quizAttemptEvents: many(quizAttemptEvents),
-}));
-
-export const quizCategoriesRelations = relations(quizCategories, ({ one }) => ({
-  // `categories` (taxonomy) is still inline in the barrel. The relation here
-  // uses the live binding from `..` — the callback is evaluated lazily so
-  // the value will be resolved by the time Drizzle builds the relations.
-  category: one(categories, {
-    fields: [quizCategories.categoryId],
-    references: [categories.categoryId],
-  }),
-  quiz: one(quizzes, {
-    fields: [quizCategories.quizId],
-    references: [quizzes.quizId],
-  }),
 }));
 
 export const quizTagsRelations = relations(quizTags, ({ one }) => ({

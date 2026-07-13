@@ -5,7 +5,6 @@ import {
   Get,
   Param,
   ParseIntPipe,
-  ParseUUIDPipe,
   Patch,
   Post,
   Query,
@@ -26,7 +25,12 @@ import { Permission } from '@/common/authorization/permissions';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
 import { Permissions } from '@/common/authorization/decorators/permissions.decorator';
 import { Public } from '@/common/decorators/public.decorator';
-import { ApiOkResource, ApiOkResourceList, ApiCreatedResource } from '@/common/swagger/api-ok';
+import {
+  ApiOkResource,
+  ApiOkResourceArray,
+  ApiOkResourceList,
+  ApiCreatedResource,
+} from '@/common/swagger/api-ok';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
 import { ParseUUIDOrSlugPipe, isUuid } from '@/common/pipes/parse-uuid-or-slug.pipe';
 import { QuizApplicationService } from '../../application/quiz.application.service';
@@ -36,8 +40,8 @@ import { CreateQuizDto } from '../../dto/request/create-quiz.dto';
 import { QuizResponseDto } from '../../dto/response/quiz-response.dto';
 import {
   CreatorQuizAnalyticsDto,
-  PopularQuizzesResponseDto,
-  TrendingQuizzesResponseDto,
+  PopularQuizItemDto,
+  TrendingQuizItemDto,
 } from '../../dto/response/quiz-analytics.dto';
 import { BulkQuizQuestionsResponseDto } from '../../dto/response/bulk-quiz-questions-response.dto';
 import { QuizStatsResponseDto } from '../../dto/response/quiz-stats-response.dto';
@@ -229,7 +233,7 @@ export class QuizController {
 
   @Get('trending')
   @Public()
-  @ApiOkResource(TrendingQuizzesResponseDto, { description: 'Trending quizzes returned' })
+  @ApiOkResourceArray(TrendingQuizItemDto, { description: 'Trending quizzes returned' })
   @ApiQuery({
     name: 'limit',
     required: false,
@@ -254,7 +258,7 @@ export class QuizController {
 
   @Get('popular')
   @Public()
-  @ApiOkResource(PopularQuizzesResponseDto, { description: 'Popular quizzes returned' })
+  @ApiOkResourceArray(PopularQuizItemDto, { description: 'Popular quizzes returned' })
   @ApiQuery({
     name: 'limit',
     required: false,
@@ -320,7 +324,7 @@ export class QuizController {
   @Public()
   @ApiOkResource(QuizStatsResponseDto, { description: 'Quiz stats returned' })
   @ApiBadRequestResponse({
-    description: 'Path param must be a UUID',
+    description: 'Path param must be a UUID or a kebab-case slug',
     example: quizStatsBadRequestExample,
   })
   @ApiNotFoundResponse({
@@ -328,8 +332,11 @@ export class QuizController {
     example: quizStatsNotFoundExample,
   })
   @ApiInternalServerErrorResponse({ example: quizStatsInternalErrorExample })
-  async getQuizStats(@Param('id', new ParseUUIDPipe({ version: '4' })) quizId: string) {
-    const result = await this.quizApplicationService.getQuizStats(quizId);
+  async getQuizStats(@Param('id', new ParseUUIDOrSlugPipe()) quizId: string) {
+    const result = await this.quizApplicationService.getQuizStats(
+      isUuid(quizId) ? quizId : undefined,
+      quizId,
+    );
     return this.presenter.getQuizStats(result);
   }
 
@@ -380,7 +387,7 @@ export class QuizController {
   @ApiUnauthorizedResponse({ example: updateQuizUnauthorizedExample })
   @ApiInternalServerErrorResponse({ example: updateQuizInternalErrorExample })
   async updateQuiz(
-    @Param('id', new ParseUUIDPipe({ version: '4' })) quizId: string,
+    @Param('id', new ParseUUIDOrSlugPipe()) quizId: string,
     @CurrentUser() user: JwtPayload,
     @Body() payload: UpdateQuizDto,
   ) {
@@ -406,7 +413,7 @@ export class QuizController {
   })
   @ApiInternalServerErrorResponse({ example: deleteQuizInternalErrorExample })
   async deleteQuiz(
-    @Param('id', new ParseUUIDPipe({ version: '4' })) quizId: string,
+    @Param('id', new ParseUUIDOrSlugPipe()) quizId: string,
     @CurrentUser() user: JwtPayload,
   ) {
     const result = await this.quizApplicationService.deleteQuiz(quizId, user);
@@ -435,7 +442,7 @@ export class QuizController {
   })
   @ApiInternalServerErrorResponse({ example: createQuizVersionInternalErrorExample })
   async createQuizVersion(
-    @Param('id', new ParseUUIDPipe({ version: '4' })) quizId: string,
+    @Param('id', new ParseUUIDOrSlugPipe()) quizId: string,
     @CurrentUser() user: JwtPayload,
     @Body() payload: CreateQuizVersionDto,
   ) {
@@ -465,7 +472,7 @@ export class QuizController {
   })
   @ApiInternalServerErrorResponse({ example: listQuizVersionsInternalErrorExample })
   async listQuizVersions(
-    @Param('id', new ParseUUIDPipe({ version: '4' })) quizId: string,
+    @Param('id', new ParseUUIDOrSlugPipe()) quizId: string,
     @CurrentUser() user: JwtPayload,
     @Query() query: ListQuizVersionsQueryDto,
   ) {
@@ -491,8 +498,8 @@ export class QuizController {
   @ApiUnauthorizedResponse({ example: getQuizVersionDetailUnauthorizedExample })
   @ApiInternalServerErrorResponse({ example: getQuizVersionDetailInternalErrorExample })
   async getQuizVersionDetail(
-    @Param('id', new ParseUUIDPipe({ version: '4' })) quizId: string,
-    @Param('versionId', new ParseUUIDPipe({ version: '4' })) quizVersionId: string,
+    @Param('id', new ParseUUIDOrSlugPipe()) quizId: string,
+    @Param('versionId', new ParseUUIDOrSlugPipe()) quizVersionId: string,
     @CurrentUser() user: JwtPayload,
   ) {
     const result = await this.quizVersionApplicationService.getQuizVersionDetail(
@@ -525,8 +532,8 @@ export class QuizController {
   @ApiUnauthorizedResponse({ example: updateQuizVersionUnauthorizedExample })
   @ApiInternalServerErrorResponse({ example: updateQuizVersionInternalErrorExample })
   async updateQuizVersion(
-    @Param('id', new ParseUUIDPipe({ version: '4' })) quizId: string,
-    @Param('versionId', new ParseUUIDPipe({ version: '4' })) quizVersionId: string,
+    @Param('id', new ParseUUIDOrSlugPipe()) quizId: string,
+    @Param('versionId', new ParseUUIDOrSlugPipe()) quizVersionId: string,
     @CurrentUser() user: JwtPayload,
     @Body() payload: UpdateQuizVersionDto,
   ) {
@@ -561,8 +568,8 @@ export class QuizController {
   })
   @ApiInternalServerErrorResponse({ example: publishQuizVersionInternalErrorExample })
   async publishQuizVersion(
-    @Param('id', new ParseUUIDPipe({ version: '4' })) quizId: string,
-    @Param('versionId', new ParseUUIDPipe({ version: '4' })) quizVersionId: string,
+    @Param('id', new ParseUUIDOrSlugPipe()) quizId: string,
+    @Param('versionId', new ParseUUIDOrSlugPipe()) quizVersionId: string,
     @CurrentUser() user: JwtPayload,
   ) {
     const result = await this.quizVersionApplicationService.publishQuizVersion(
@@ -595,8 +602,8 @@ export class QuizController {
   @ApiUnauthorizedResponse({ example: createQuizQuestionUnauthorizedExample })
   @ApiInternalServerErrorResponse({ example: createQuizQuestionInternalErrorExample })
   async createQuizQuestion(
-    @Param('id', new ParseUUIDPipe({ version: '4' })) quizId: string,
-    @Param('versionId', new ParseUUIDPipe({ version: '4' })) quizVersionId: string,
+    @Param('id', new ParseUUIDOrSlugPipe()) quizId: string,
+    @Param('versionId', new ParseUUIDOrSlugPipe()) quizVersionId: string,
     @CurrentUser() user: JwtPayload,
     @Body() payload: CreateQuizQuestionDto,
   ) {
@@ -632,8 +639,8 @@ export class QuizController {
   @ApiUnauthorizedResponse({ example: createQuizQuestionsUnauthorizedExample })
   @ApiInternalServerErrorResponse({ example: createQuizQuestionsInternalErrorExample })
   async createQuizQuestions(
-    @Param('id', new ParseUUIDPipe({ version: '4' })) quizId: string,
-    @Param('versionId', new ParseUUIDPipe({ version: '4' })) quizVersionId: string,
+    @Param('id', new ParseUUIDOrSlugPipe()) quizId: string,
+    @Param('versionId', new ParseUUIDOrSlugPipe()) quizVersionId: string,
     @CurrentUser() user: JwtPayload,
     @Body() payload: CreateQuizQuestionsDto,
   ) {

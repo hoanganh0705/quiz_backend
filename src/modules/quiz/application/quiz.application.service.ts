@@ -21,8 +21,8 @@ import type { QuizStatsResponseDto } from '../dto/response/quiz-stats-response.d
 import type { QuizListingPort } from '../domain/analytics/ports/quiz-listing.port';
 import type {
   CreatorQuizAnalyticsDto,
-  PopularQuizzesResponseDto,
-  TrendingQuizzesResponseDto,
+  PopularQuizItemDto,
+  TrendingQuizItemDto,
 } from '../dto/response/quiz-analytics.dto';
 import type { RelatedQuizzesResponseDto } from '../dto/response/related-quizzes-response.dto';
 import type { DeleteQuizResponseDto } from '../dto/response/delete-quiz-response.dto';
@@ -51,8 +51,8 @@ export class QuizApplicationService implements QuizListingPort {
       categoryIds: dto.categoryIds ?? [],
       tagIds: dto.tagIds ?? [],
     };
-    const result = await this.quizCommandService.createQuiz(user, command);
-    return QuizResponseMapper.toQuizResponse(result);
+    const { row, tags } = await this.quizCommandService.createQuiz(user, command);
+    return QuizResponseMapper.toQuizResponse(row, undefined, tags);
   }
 
   async listQuizzes(dto: ListQuizzesQueryDto): Promise<QuizListResponseDto> {
@@ -65,12 +65,12 @@ export class QuizApplicationService implements QuizListingPort {
       filters: {
         difficulty: dto.difficulty as QuizDifficulty,
         categoryId: dto.categoryId,
-        tagId: dto.tagId,
+        tagIds: dto.tagIds,
       },
     });
 
     return {
-      items: result.rows.map((row) => QuizResponseMapper.toQuizResponse(row)),
+      items: result.rows.map((row) => QuizResponseMapper.toListItem(row)),
       pagination: {
         limit: result.limit,
         nextCursor: result.nextCursor ? QuizCursorMapper.serialize(result.nextCursor) : null,
@@ -85,7 +85,7 @@ export class QuizApplicationService implements QuizListingPort {
     });
 
     return {
-      items: items.map((item) => QuizResponseMapper.toQuizResponse(item)),
+      items: items.map((item) => QuizResponseMapper.toListItem(item)),
     };
   }
 
@@ -98,25 +98,25 @@ export class QuizApplicationService implements QuizListingPort {
     });
 
     return {
-      items: items.map((item) => QuizResponseMapper.toQuizResponse(item)),
+      items: items.map((item) => QuizResponseMapper.toListItem(item)),
     };
   }
 
   async getQuizById(quizId: string): Promise<QuizResponseDto> {
-    const quiz = await this.quizQueryService.getQuizById(quizId);
-    return QuizResponseMapper.toQuizResponse(quiz);
+    const { row, tags } = await this.quizQueryService.getQuizById(quizId);
+    return QuizResponseMapper.toQuizResponse(row, undefined, tags);
   }
 
   async getQuizBySlug(slug: string): Promise<QuizResponseDto> {
-    const { row, questions } = await this.quizQueryService.getQuizBySlug(slug);
+    const { row, questions, tags } = await this.quizQueryService.getQuizBySlug(slug);
     const mappedQuestions = questions
       ? QuizQuestionResponseMapper.toQuestionResponses(questions)
       : undefined;
-    return QuizResponseMapper.toQuizResponse(row, mappedQuestions);
+    return QuizResponseMapper.toQuizResponse(row, mappedQuestions, tags);
   }
 
-  async getQuizStats(quizId: string): Promise<QuizStatsResponseDto> {
-    const stats = await this.quizQueryService.getQuizStats(quizId);
+  async getQuizStats(quizId: string | undefined, slug: string): Promise<QuizStatsResponseDto> {
+    const stats = await this.quizQueryService.getQuizStats(quizId, slug);
     return QuizStatsResponseMapper.toResponse(stats);
   }
 
@@ -127,7 +127,7 @@ export class QuizApplicationService implements QuizListingPort {
     const items = await this.quizQueryService.getRelatedQuizzes(slug, query);
 
     return {
-      items: items.map((item) => QuizResponseMapper.toQuizResponse(item)),
+      items: items.map((item) => QuizResponseMapper.toListItem(item)),
     };
   }
 
@@ -147,7 +147,7 @@ export class QuizApplicationService implements QuizListingPort {
     });
 
     return {
-      items: result.rows.map((row) => QuizResponseMapper.toQuizResponse(row)),
+      items: result.rows.map((row) => QuizResponseMapper.toListItem(row)),
       pagination: {
         limit: result.limit,
         nextCursor: result.nextCursor ? QuizCursorMapper.serialize(result.nextCursor) : null,
@@ -166,7 +166,7 @@ export class QuizApplicationService implements QuizListingPort {
     });
 
     return {
-      items: result.rows.map((row) => QuizResponseMapper.toQuizResponse(row)),
+      items: result.rows.map((row) => QuizResponseMapper.toListItem(row)),
       pagination: {
         limit: result.limit,
         nextCursor: result.nextCursor ? QuizCursorMapper.serialize(result.nextCursor) : null,
@@ -185,7 +185,7 @@ export class QuizApplicationService implements QuizListingPort {
     });
 
     return {
-      items: result.rows.map((row) => QuizResponseMapper.toQuizResponse(row)),
+      items: result.rows.map((row) => QuizResponseMapper.toListItem(row)),
       pagination: {
         limit: result.limit,
         nextCursor: result.nextCursor ? QuizCursorMapper.serialize(result.nextCursor) : null,
@@ -207,7 +207,7 @@ export class QuizApplicationService implements QuizListingPort {
     });
 
     return {
-      items: result.rows.map((row) => QuizResponseMapper.toQuizResponse(row)),
+      items: result.rows.map((row) => QuizResponseMapper.toListItem(row)),
       pagination: {
         limit: result.limit,
         nextCursor: result.nextCursor ? QuizCursorMapper.serialize(result.nextCursor) : null,
@@ -219,42 +219,35 @@ export class QuizApplicationService implements QuizListingPort {
   async getTrendingQuizzes(
     limit: number,
     categoryId?: string,
-  ): Promise<TrendingQuizzesResponseDto> {
+  ): Promise<TrendingQuizItemDto[]> {
     const quizzes = await this.quizAnalyticsService.getTrendingQuizzes(limit, categoryId);
 
-    return {
-      period: 'weekly',
-      quizzes: quizzes.map((q) => ({
-        rank: q.rank,
-        quizId: q.quizId,
-        title: q.title,
-        slug: q.slug,
-        imageUrl: q.imageUrl,
-        trendingScore: q.trendingScore,
-        totalAttempts: q.totalAttempts,
-        recentAttempts: q.recentAttempts,
-      })),
-      lastUpdated: new Date().toISOString(),
-    };
+    return quizzes.map((q) => ({
+      rank: q.rank,
+      quizId: q.quizId,
+      title: q.title,
+      slug: q.slug,
+      imageUrl: q.imageUrl,
+      trendingScore: q.trendingScore,
+      totalAttempts: q.totalAttempts,
+      recentAttempts: q.recentAttempts,
+    }));
   }
 
-  async getPopularQuizzes(limit: number, categoryId?: string): Promise<PopularQuizzesResponseDto> {
+  async getPopularQuizzes(limit: number, categoryId?: string): Promise<PopularQuizItemDto[]> {
     const quizzes = await this.quizAnalyticsService.getPopularQuizzes(limit, categoryId);
 
-    return {
-      quizzes: quizzes.map((q) => ({
-        rank: q.rank,
-        quizId: q.quizId,
-        title: q.title,
-        slug: q.slug,
-        imageUrl: q.imageUrl,
-        popularityScore: q.popularityScore,
-        totalAttempts: q.totalAttempts,
-        averageRating: q.averageRating,
-        bookmarkCount: q.bookmarkCount,
-      })),
-      lastUpdated: new Date().toISOString(),
-    };
+    return quizzes.map((q) => ({
+      rank: q.rank,
+      quizId: q.quizId,
+      title: q.title,
+      slug: q.slug,
+      imageUrl: q.imageUrl,
+      popularityScore: q.popularityScore,
+      totalAttempts: q.totalAttempts,
+      averageRating: q.averageRating,
+      bookmarkCount: q.bookmarkCount,
+    }));
   }
 
   async getMyQuizAnalytics(userId: string): Promise<CreatorQuizAnalyticsDto> {
@@ -274,8 +267,8 @@ export class QuizApplicationService implements QuizListingPort {
       categoryIds: dto.categoryIds,
       tagIds: dto.tagIds,
     };
-    const result = await this.quizCommandService.updateQuiz(quizId, user, command);
-    return QuizResponseMapper.toQuizResponse(result);
+    const { row, tags } = await this.quizCommandService.updateQuiz(quizId, user, command);
+    return QuizResponseMapper.toQuizResponse(row, undefined, tags);
   }
 
   async deleteQuiz(quizId: string, user: JwtPayload): Promise<DeleteQuizResponseDto> {
@@ -283,9 +276,9 @@ export class QuizApplicationService implements QuizListingPort {
   }
 
   async listQuizzesByTag(params: {
-    tagId: string;
+    tagIds: string[];
     dto: ListQuizzesQueryDto;
   }): Promise<QuizListResponseDto> {
-    return this.listQuizzes({ ...params.dto, tagId: params.tagId });
+    return this.listQuizzes({ ...params.dto, tagIds: params.tagIds });
   }
 }

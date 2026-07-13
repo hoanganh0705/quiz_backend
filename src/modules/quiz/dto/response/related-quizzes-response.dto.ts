@@ -1,7 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { QuizResponseDto } from './quiz-response.dto';
+import { QuizListItemDto } from './quiz-list-item.dto';
 
 export class RelatedQuizzesResponseDto {
-  @ApiProperty({ description: 'Related quiz items', type: () => [QuizResponseDto] })
-  items!: QuizResponseDto[];
+  @ApiProperty({ description: 'Related quiz items', type: () => [QuizListItemDto] })
+  items!: QuizListItemDto[];
 }

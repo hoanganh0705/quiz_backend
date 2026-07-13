@@ -8,6 +8,7 @@ import type {
   TagAnalyticsResponseDto,
   TagFollowMessageResponseDto,
 } from '../../dto/response/parity-response.dto';
+import type { QuizListItemDto } from '@/modules/quiz/dto/response/quiz-list-item.dto';
 import type { QuizListResponseDto } from '@/modules/quiz/dto/response/quiz-list-response.dto';
 import type { TagListResponseDto } from '../../dto/response/tag-list-response.dto';
 import type { TagResponseDto } from '../../dto/response/tag-response.dto';
@@ -61,7 +62,13 @@ export class TagPresenter {
   readonly followTag = TagPresenter.ok<TagFollowMessageResponseDto>;
   readonly unfollowTag = TagPresenter.ok<TagFollowMessageResponseDto>;
   readonly deleteTag = TagPresenter.ok<DeleteTagResponseDto>;
-  readonly getTagQuizzes = TagPresenter.ok<QuizListResponseDto>;
+
+  // `GET /tags/:slug/quizzes` returns a cursor-paginated list. The application
+  // service returns a `QuizListResponseDto` class instance — unwrap to the
+  // canonical `{ data, meta.pagination }` envelope via the same helper used by
+  // `listTags` so the wire shape matches `GET /categories/:slug/quizzes`.
+  readonly getTagQuizzes = (payload: QuizListResponseDto) =>
+    wrapPaginatedDto<QuizListItemDto>(payload);
 
   // Cursor-paginated lists — `{ items, pagination }` unwrapped.
   readonly listTags = wrapPaginatedDto<TagListResponseDto['items'][number]>;
