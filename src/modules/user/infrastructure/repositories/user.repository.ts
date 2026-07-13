@@ -5,7 +5,6 @@ import {
   badges,
   categories,
   quizAttempts,
-  quizCategories,
   quizTags,
   quizVersions,
   tags,
@@ -188,8 +187,8 @@ export class UserRepository implements UserRepositoryPort {
             ROW_NUMBER() OVER (ORDER BY COUNT(*) DESC, c.name ASC) AS rn
           FROM quiz_attempts a
           INNER JOIN quiz_versions v ON v.quiz_version_id = a.quiz_version_id
-          INNER JOIN quiz_categories qc ON qc.quiz_id = v.quiz_id
-          INNER JOIN categories c ON c.category_id = qc.category_id
+          INNER JOIN quizzes q ON q.quiz_id = v.quiz_id
+          INNER JOIN categories c ON c.category_id = q.category_id
           INNER JOIN users u ON u.user_id = a.user_id
           WHERE a.user_id = ${userId}::uuid
             AND u.deleted_at IS NULL

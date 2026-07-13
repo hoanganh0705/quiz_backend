@@ -3,7 +3,7 @@ import { and, asc, desc, eq, inArray, isNull, or, sql, type SQL } from 'drizzle-
 import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 import { DRIZZLE } from '@/core/database/drizzle.constants';
 import type { DrizzleDB } from '@/core/database/database.module';
-import { quizCategories, quizTags, quizVersions, quizzes, tags } from '@/core/database/schema';
+import { quizTags, quizVersions, quizzes, tags } from '@/core/database/schema';
 import {
   isPostgresUniqueViolation,
   isPostgresForeignKeyViolation,
@@ -41,6 +41,7 @@ const QUIZ_COLUMNS = quizzes as unknown as {
   isHidden: AnyPgColumn;
   isVerified: AnyPgColumn;
   publishedVersionId: AnyPgColumn;
+  categoryId: AnyPgColumn;
   createdAt: AnyPgColumn;
   updatedAt: AnyPgColumn;
   deletedAt: AnyPgColumn;
@@ -78,6 +79,7 @@ const QUIZ_WITH_VERSION_PROJECTION = {
   isHidden: QUIZ_COLUMNS.isHidden,
   isVerified: QUIZ_COLUMNS.isVerified,
   publishedVersionId: QUIZ_COLUMNS.publishedVersionId,
+  categoryId: QUIZ_COLUMNS.categoryId,
   createdAt: QUIZ_COLUMNS.createdAt,
   updatedAt: QUIZ_COLUMNS.updatedAt,
   publishedVersionQuizVersionId: QUIZ_VERSION_COLUMNS.quizVersionId,
@@ -181,14 +183,7 @@ export class QuizRepository implements QuizRepositoryPort {
     }
 
     if (params.filters?.categoryId) {
-      filters.push(
-        sql`exists (
-          select 1
-          from ${quizCategories} qc_filter
-          where qc_filter.quiz_id = ${QUIZ_COLUMNS.quizId}
-            and qc_filter.category_id = ${params.filters.categoryId}
-        )`,
-      );
+      filters.push(eq(QUIZ_COLUMNS.categoryId, params.filters.categoryId));
     }
 
     if (params.filters?.tagIds && params.filters.tagIds.length > 0) {
@@ -373,16 +368,11 @@ export class QuizRepository implements QuizRepositoryPort {
       .select({
         ...QUIZ_WITH_VERSION_PROJECTION,
         categoryMatchCount: sql<number>`(
-          select count(distinct qc.category_id)
-          from ${quizCategories} qc
-          where qc.quiz_id = ${QUIZ_COLUMNS.quizId}
-            and qc.category_id in (
-              select src_qc.category_id
-              from ${quizCategories} src_qc
-              inner join ${quizzes} src_q on src_q.quiz_id = src_qc.quiz_id
-              where src_q.slug = ${params.slug}
-                and src_q.deleted_at is null
-            )
+          select 1
+          from ${quizzes} src_q
+          where src_q.slug = ${params.slug}
+            and src_q.deleted_at is null
+            and src_q.category_id = ${QUIZ_COLUMNS.categoryId}
         )`,
         tagMatchCount: sql<number>`(
           select count(distinct qt.tag_id)
@@ -421,15 +411,10 @@ export class QuizRepository implements QuizRepositoryPort {
           sql`(
             exists (
               select 1
-              from ${quizCategories} qc_match
-              where qc_match.quiz_id = ${QUIZ_COLUMNS.quizId}
-                and qc_match.category_id in (
-                  select src_qc.category_id
-                  from ${quizCategories} src_qc
-                  inner join ${quizzes} src_q on src_q.quiz_id = src_qc.quiz_id
-                  where src_q.slug = ${params.slug}
-                    and src_q.deleted_at is null
-                )
+              from ${quizzes} src_q
+              where src_q.slug = ${params.slug}
+                and src_q.deleted_at is null
+                and src_q.category_id = ${QUIZ_COLUMNS.categoryId}
             )
             or exists (
               select 1
@@ -448,16 +433,11 @@ export class QuizRepository implements QuizRepositoryPort {
       )
       .orderBy(
         desc(sql`(
-          select count(distinct qc.category_id)
-          from ${quizCategories} qc
-          where qc.quiz_id = ${QUIZ_COLUMNS.quizId}
-            and qc.category_id in (
-              select src_qc.category_id
-              from ${quizCategories} src_qc
-              inner join ${quizzes} src_q on src_q.quiz_id = src_qc.quiz_id
-              where src_q.slug = ${params.slug}
-                and src_q.deleted_at is null
-            )
+          select 1
+          from ${quizzes} src_q
+          where src_q.slug = ${params.slug}
+            and src_q.deleted_at is null
+            and src_q.category_id = ${QUIZ_COLUMNS.categoryId}
         )`),
         desc(sql`(
           select count(distinct qt.tag_id)
@@ -548,14 +528,11 @@ export class QuizRepository implements QuizRepositoryPort {
           updatedAt: nowIso,
         });
 
-        if (payload.categoryIds.length > 0) {
-          await tx.insert(quizCategories).values(
-            payload.categoryIds.map((categoryId) => ({
-              quizId,
-              categoryId,
-              createdAt: nowIso,
-            })),
-          );
+        if (payload.categoryId !== null && payload.categoryId !== undefined) {
+          await tx
+            .update(quizzes)
+            .set({ categoryId: payload.categoryId as string, updatedAt: nowIso })
+            .where(eq(QUIZ_COLUMNS.quizId, quizId));
         }
 
         if (payload.tagIds.length > 0) {
@@ -588,7 +565,7 @@ export class QuizRepository implements QuizRepositoryPort {
       isFeatured?: boolean;
       isHidden?: boolean;
     };
-    categoryIds: string[] | null;
+    categoryId: string | null;
     tagIds: string[] | null;
     nowIso: string;
   }): Promise<void> {
@@ -604,18 +581,11 @@ export class QuizRepository implements QuizRepositoryPort {
             .where(and(eq(QUIZ_COLUMNS.quizId, params.quizId), isNull(QUIZ_COLUMNS.deletedAt)));
         }
 
-        if (params.categoryIds) {
-          await tx.delete(quizCategories).where(eq(QUIZ_COLUMNS.quizId, params.quizId));
-
-          if (params.categoryIds.length > 0) {
-            await tx.insert(quizCategories).values(
-              params.categoryIds.map((categoryId) => ({
-                quizId: params.quizId,
-                categoryId,
-                createdAt: params.nowIso,
-              })),
-            );
-          }
+        if (params.categoryId !== undefined) {
+          await tx
+            .update(quizzes)
+            .set({ categoryId: params.categoryId, updatedAt: params.nowIso })
+            .where(and(eq(QUIZ_COLUMNS.quizId, params.quizId), isNull(QUIZ_COLUMNS.deletedAt)));
         }
 
         if (params.tagIds) {

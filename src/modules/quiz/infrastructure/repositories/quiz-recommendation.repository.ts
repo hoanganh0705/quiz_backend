@@ -2,14 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { and, desc, eq, isNull, sql } from 'drizzle-orm';
 import { DRIZZLE } from '@/core/database/drizzle.constants';
 import type { DrizzleDB } from '@/core/database/database.module';
-import {
-  quizAttempts,
-  quizCategories,
-  quizStats,
-  quizTags,
-  quizVersions,
-  quizzes,
-} from '@/core/database/schema';
+import { quizAttempts, quizStats, quizTags, quizVersions, quizzes } from '@/core/database/schema';
 import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 import type {
   QuizRecommendationRepositoryPort,
@@ -24,6 +17,7 @@ const QUIZ_COLUMNS = quizzes as unknown as {
   slug: AnyPgColumn;
   requirements: AnyPgColumn;
   imageUrl: AnyPgColumn;
+  categoryId: AnyPgColumn;
   isFeatured: AnyPgColumn;
   isHidden: AnyPgColumn;
   isVerified: AnyPgColumn;
@@ -61,6 +55,7 @@ export class QuizRecommendationRepository implements QuizRecommendationRepositor
         slug: QUIZ_COLUMNS.slug,
         requirements: QUIZ_COLUMNS.requirements,
         imageUrl: QUIZ_COLUMNS.imageUrl,
+        categoryId: QUIZ_COLUMNS.categoryId,
         isFeatured: QUIZ_COLUMNS.isFeatured,
         isHidden: QUIZ_COLUMNS.isHidden,
         isVerified: QUIZ_COLUMNS.isVerified,
@@ -80,17 +75,17 @@ export class QuizRecommendationRepository implements QuizRecommendationRepositor
         publishedVersionArchivedAt: sql`null`,
         publishedVersionUpdatedAt: sql`null`,
         categoryMatchCount: sql<number>`COALESCE((
-          select count(distinct qc_matching.category_id)
-          from ${quizCategories} qc_matching
-          inner join ${quizCategories} qc_user on qc_matching.category_id = qc_user.category_id
-          inner join ${quizAttempts} attempt_user on
-            exists (
-              select 1 from ${quizVersions} qv_excl
-              where qv_excl.quiz_id = qc_user.quiz_id
-                and qv_excl.quiz_version_id = attempt_user.quiz_version_id
-            )
-          where qc_matching.quiz_id = ${QUIZ_COLUMNS.quizId}
+          select 1
+          from ${quizAttempts} attempt_user
+          inner join ${quizVersions} qv_user on qv_user.quiz_version_id = attempt_user.quiz_version_id
+          where qv_user.quiz_id = ${QUIZ_COLUMNS.quizId}
             and attempt_user.user_id = ${params.userId}
+            and exists (
+              select 1 from ${quizzes} q_user
+              inner join ${quizzes} q_match on q_match.category_id = q_user.category_id
+              where q_user.quiz_id = qv_user.quiz_id
+                and q_match.quiz_id = ${QUIZ_COLUMNS.quizId}
+            )
         ), 0)`,
         tagMatchCount: sql<number>`COALESCE((
           select count(distinct qt_matching.tag_id)
@@ -109,17 +104,17 @@ export class QuizRecommendationRepository implements QuizRecommendationRepositor
         trendingScore: sql<number>`coalesce(${quizStats.trendingScore}::numeric, 0)`,
         recommendationScore: sql<number>`(
           ${WEIGHT_CATEGORY} * COALESCE((
-            select count(distinct qc_matching.category_id)
-            from ${quizCategories} qc_matching
-            inner join ${quizCategories} qc_user on qc_matching.category_id = qc_user.category_id
-            inner join ${quizAttempts} attempt_user on
-              exists (
-                select 1 from ${quizVersions} qv_excl
-                where qv_excl.quiz_id = qc_user.quiz_id
-                  and qv_excl.quiz_version_id = attempt_user.quiz_version_id
-              )
-            where qc_matching.quiz_id = ${QUIZ_COLUMNS.quizId}
+            select 1
+            from ${quizAttempts} attempt_user
+            inner join ${quizVersions} qv_user on qv_user.quiz_version_id = attempt_user.quiz_version_id
+            where qv_user.quiz_id = ${QUIZ_COLUMNS.quizId}
               and attempt_user.user_id = ${params.userId}
+              and exists (
+                select 1 from ${quizzes} q_user
+                inner join ${quizzes} q_match on q_match.category_id = q_user.category_id
+                where q_user.quiz_id = qv_user.quiz_id
+                  and q_match.quiz_id = ${QUIZ_COLUMNS.quizId}
+              )
           ), 0)
           + ${WEIGHT_TAG} * COALESCE((
             select count(distinct qt_matching.tag_id)

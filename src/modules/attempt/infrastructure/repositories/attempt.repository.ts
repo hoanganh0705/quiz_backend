@@ -11,10 +11,6 @@ import {
   quizVersions,
   quizzes,
   quizAttemptAnswers,
-  quizCategories,
-  categories,
-  quizTags,
-  tags,
   quizAttemptEvents,
 } from '@/core/database/schema';
 import type { AttemptContextType } from '@/modules/attempt/types/attempt.types';
@@ -37,6 +33,7 @@ const QUIZ_COLUMNS = quizzes as unknown as {
   title: AnyPgColumn;
   slug: AnyPgColumn;
   creatorId: AnyPgColumn;
+  categoryId: AnyPgColumn;
   deletedAt: AnyPgColumn;
 };
 
@@ -214,14 +211,7 @@ export class AttemptRepository implements AttemptRepositoryPort {
     }
 
     if (params.categoryId) {
-      filters.push(
-        sql`EXISTS (
-          SELECT 1
-          FROM quiz_categories qc
-          WHERE qc.quiz_id = ${QUIZ_COLUMNS.quizId}
-            AND qc.category_id = ${params.categoryId}
-        )`,
-      );
+      filters.push(sql`${QUIZ_COLUMNS.categoryId} = ${params.categoryId}`);
     }
 
     if (params.tagId) {
@@ -773,8 +763,8 @@ export class AttemptRepository implements AttemptRepositoryPort {
             ) AS rn
           FROM quiz_attempts a
           INNER JOIN quiz_versions v ON v.quiz_version_id = a.quiz_version_id
-          INNER JOIN quiz_categories qc ON qc.quiz_id = v.quiz_id
-          INNER JOIN categories c ON c.category_id = qc.category_id
+          INNER JOIN quizzes q ON q.quiz_id = v.quiz_id
+          INNER JOIN categories c ON c.category_id = q.category_id
           WHERE a.user_id = ${userId}::uuid
             AND c.deleted_at IS NULL
           GROUP BY c.category_id, c.name

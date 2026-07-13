@@ -98,18 +98,14 @@ export class UpdateQuizDto {
   isHidden?: boolean;
 
   @ApiPropertyOptional({
-    description: 'Associated category UUIDs (max 50)',
-    type: Array,
-    maxItems: 50,
+    description: 'Associated category UUID',
+    type: String,
     format: 'uuid',
     nullable: true,
   })
   @IsOptional()
-  @IsArray()
-  @ArrayMaxSize(50)
-  @ArrayUnique()
-  @IsUUID('all', { each: true })
-  categoryIds?: string[];
+  @IsUUID('4')
+  categoryId?: string;
 
   @ApiPropertyOptional({
     description: 'Associated tag UUIDs (max 50)',
