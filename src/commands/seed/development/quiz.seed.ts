@@ -12,7 +12,6 @@ import {
   quizVersions,
   quizQuestions,
   quizAnswerOptions,
-  quizCategories,
   quizTags,
 } from '@/core/database/schema';
 import { logger } from '../infrastructure/seed-logger';
@@ -479,15 +478,11 @@ async function ensureQuiz(
 }
 
 /**
- * Assigns a quiz to its category and tags via the join tables.
+ * Assigns a quiz to its category and tags.
+ * For categories, updates the `quizzes.category_id` column directly.
+ * For tags, uses the quiz_tags join table.
  * Uses onConflictDoNothing so repeated seed runs are safe.
  * Only runs when categorySlug / tagSlugs are provided on the QuizSeed.
- *
- * NOTE: `quiz_categories` / `quiz_tags` are ❌ DO NOT SEED per the strict
- * Phase 10 audit (the quiz create/update API accepts categories and tags
- * inline). Seeding them here is a deliberate exception — see
- * `PHASE_10_EVIDENCE_REPORT.md` → "Documented Deviations From The Strict
- * Classification" for the rationale.
  */
 async function ensureTaxonomy(
   tx: SeedTx,
@@ -504,9 +499,9 @@ async function ensureTaxonomy(
     if (categoryId) {
       categorySlug = quiz.categorySlug;
       await tx
-        .insert(quizCategories)
-        .values({ quizId, categoryId, createdAt: ctx.nowIso })
-        .onConflictDoNothing();
+        .update(quizzes)
+        .set({ categoryId, updatedAt: ctx.nowIso })
+        .where(eq(quizzes.quizId, quizId));
       logger.info(`Category "${quiz.categorySlug}" assigned to "${quiz.slug}"`);
     } else {
       logger.warn(`Quiz taxonomy: category "${quiz.categorySlug}" not found for quiz "${quiz.slug}", skipping`);

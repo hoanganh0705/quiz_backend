@@ -40,6 +40,16 @@ export class QuizListItemDto {
   })
   imageUrl!: string | null;
 
+  @ApiPropertyOptional({
+    description:
+      'Associated category identifier (singular — each quiz belongs to at most one category)',
+    type: String,
+    format: 'uuid',
+    nullable: true,
+    example: '550e8400-e29b-41d4-a716-446655440000',
+  })
+  categoryId!: string | null;
+
   @ApiProperty({ description: 'Whether the quiz is featured', example: true })
   isFeatured!: boolean;
 

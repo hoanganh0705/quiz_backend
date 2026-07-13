@@ -8,7 +8,6 @@ import {
   quizAttempts,
   quizReviews,
   bookmarkedQuizzes,
-  quizCategories,
   categories,
   tags,
   quizTags,
@@ -98,9 +97,9 @@ export class QuizAnalyticsRepository implements QuizAnalyticsRepositoryPort {
 
   async getQuizIdsByCategory(categoryId: string): Promise<string[]> {
     const rows = await this.db
-      .select({ quizId: quizCategories.quizId })
-      .from(quizCategories)
-      .where(eq(quizCategories.categoryId, categoryId));
+      .select({ quizId: quizzes.quizId })
+      .from(quizzes)
+      .where(eq(quizzes.categoryId, categoryId));
     return rows.map((r) => r.quizId);
   }
 
@@ -192,9 +191,9 @@ export class QuizAnalyticsRepository implements QuizAnalyticsRepositoryPort {
     }> = results;
     if (categoryId) {
       const categoryQuizIds = await this.db
-        .select({ quizId: quizCategories.quizId })
-        .from(quizCategories)
-        .where(eq(quizCategories.categoryId, categoryId));
+        .select({ quizId: quizzes.quizId })
+        .from(quizzes)
+        .where(eq(quizzes.categoryId, categoryId));
 
       const categoryQuizIdSet = new Set(categoryQuizIds.map((c) => c.quizId));
       filtered = results.filter((r) => categoryQuizIdSet.has(r.quizId)).slice(0, limit);
@@ -250,9 +249,9 @@ export class QuizAnalyticsRepository implements QuizAnalyticsRepositoryPort {
     }> = results;
     if (categoryId) {
       const categoryQuizIds = await this.db
-        .select({ quizId: quizCategories.quizId })
-        .from(quizCategories)
-        .where(eq(quizCategories.categoryId, categoryId));
+        .select({ quizId: quizzes.quizId })
+        .from(quizzes)
+        .where(eq(quizzes.categoryId, categoryId));
 
       const categoryQuizIdSet = new Set(categoryQuizIds.map((c) => c.quizId));
       filtered = results.filter((r) => categoryQuizIdSet.has(r.quizId)).slice(0, limit);
@@ -283,9 +282,9 @@ export class QuizAnalyticsRepository implements QuizAnalyticsRepositoryPort {
     if (!category) return null;
 
     const categoryQuizIds = await this.db
-      .select({ quizId: quizCategories.quizId })
-      .from(quizCategories)
-      .where(eq(quizCategories.categoryId, categoryId));
+      .select({ quizId: quizzes.quizId })
+      .from(quizzes)
+      .where(eq(quizzes.categoryId, categoryId));
 
     const quizIdList = categoryQuizIds.map((c) => c.quizId);
 
