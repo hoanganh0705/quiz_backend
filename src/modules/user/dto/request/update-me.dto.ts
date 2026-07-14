@@ -4,8 +4,16 @@ import { ApiPropertyOptional } from '@nestjs/swagger';
 import { trimStringToNullIfBlank } from '@/common/utils/text.util';
 
 export class UpdateMeDto {
+  /**
+   * Three-way semantics: `undefined` = no-op (leave current value),
+   * `null` / `""` = clear field. The `trimStringToNullIfBlank` transform
+   * collapses `""` → `null` before the validator runs, so both mean "clear".
+   */
   @ApiPropertyOptional({
-    description: 'Display name shown in the app (null or blank removes it)',
+    description:
+      'Display name shown in the app. ' +
+      'Send `null` or a blank string to clear. ' +
+      'Omit the field (or send `undefined`) to leave the current value unchanged.',
     type: String,
     maxLength: 100,
     example: 'Alice',
@@ -18,7 +26,10 @@ export class UpdateMeDto {
   displayName?: string | null;
 
   @ApiPropertyOptional({
-    description: 'Short bio (null or blank removes it)',
+    description:
+      'Short bio shown on the profile. ' +
+      'Send `null` or a blank string to clear. ' +
+      'Omit the field to leave the current value unchanged.',
     type: String,
     maxLength: 500,
     example: 'Quiz enthusiast and trivia lover',
@@ -31,7 +42,11 @@ export class UpdateMeDto {
   bio?: string | null;
 
   @ApiPropertyOptional({
-    description: 'Avatar image URL (null or blank removes it)',
+    description:
+      'Avatar image URL. ' +
+      'Send `null` or a blank string to clear. ' +
+      'Omit the field to leave the current value unchanged. ' +
+      'Must be a valid `http://` or `https://` URL.',
     type: String,
     maxLength: 2048,
     example: 'https://example.com/avatars/alice.jpg',
@@ -39,7 +54,11 @@ export class UpdateMeDto {
   })
   @IsOptional()
   @Transform(({ value }: { value: unknown }) => trimStringToNullIfBlank(value))
-  @IsUrl({ require_tld: false })
+  @IsUrl({
+    protocols: ['http', 'https'],
+    require_protocol: true,
+    require_valid_protocol: true,
+  })
   @MaxLength(2048)
   avatarUrl?: string | null;
 }

@@ -1,7 +1,7 @@
 import { Module, forwardRef } from '@nestjs/common';
 import { UserController } from './transport/controller/user.controller';
 import { UserApplicationService } from './application/user.application.service';
-import { UserDomainService } from './domain/user.service';
+import { UserDomainService, USER_DOMAIN_SERVICE } from './domain/user.service';
 import { UserRepository } from './infrastructure/repositories/user.repository';
 import { UserSearchAdapter } from './infrastructure/adapters/user-search.adapter';
 import { UserDomainEventBus } from './domain/events/user-domain.event-bus';
@@ -36,6 +36,7 @@ import { RankingXpStreakListenerAdapter } from './infrastructure/adapters/rankin
     { provide: USER_SEARCH_PORT, useExisting: UserSearchAdapter },
     { provide: USER_ACTIVITY_SERVICE, useExisting: UserActivityServiceImpl },
     { provide: QUIZ_LISTING_PORT, useExisting: QuizApplicationService },
+    { provide: USER_DOMAIN_SERVICE, useExisting: UserDomainService },
     StreakService,
     RankingXpStreakListenerAdapter,
     UserPresenter,
@@ -47,6 +48,7 @@ import { RankingXpStreakListenerAdapter } from './infrastructure/adapters/rankin
     USER_DOMAIN_EVENT_BUS,
     USER_SEARCH_PORT,
     USER_ACTIVITY_SERVICE,
+    USER_DOMAIN_SERVICE,
     UserDomainEventBus,
     UserActivityServiceImpl,
     StreakService,

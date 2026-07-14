@@ -3,11 +3,6 @@ import { DRIZZLE } from '@/core/database/drizzle.constants';
 import type { DrizzleDB } from '@/core/database/database.module';
 import {
   badges,
-  categories,
-  quizAttempts,
-  quizTags,
-  quizVersions,
-  tags,
   tournamentParticipants,
   tournaments,
   userActivityEvents,
@@ -17,7 +12,7 @@ import {
   userRanking,
   users,
 } from '@/core/database/schema';
-import { and, count, desc, eq, inArray, isNull, or, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNull, or, sql } from 'drizzle-orm';
 import type { UserAnalytics } from '../../domain/types/user-analytics';
 import type {
   MyTournamentAnalyticsRow,
@@ -372,16 +367,6 @@ export class UserRepository implements UserRepositoryPort {
 
     const whereClause = cursorCondition ? and(baseConditions, cursorCondition) : baseConditions;
 
-    const participantCountSubquery = this.db
-      .select({
-        tournamentId: tournamentParticipants.tournamentId,
-        participantCount: count(),
-      })
-      .from(tournamentParticipants)
-      .where(sql`${tournamentParticipants.rankFinal} IS NOT NULL`)
-      .groupBy(tournamentParticipants.tournamentId)
-      .as('participant_count_subquery');
-
     const rows = await this.db
       .select({
         participantId: tournamentParticipants.participantId,
@@ -389,16 +374,16 @@ export class UserRepository implements UserRepositoryPort {
         tournamentName: tournaments.title,
         finalRank: tournamentParticipants.rankFinal,
         finalScore: tournamentParticipants.totalScore,
-        participantCount: participantCountSubquery.participantCount,
+        participantCount: sql<number>`(
+          SELECT COUNT(*)::int FROM ${tournamentParticipants} tp2
+          WHERE tp2.tournament_id = ${tournaments.tournamentId}
+            AND tp2.rank_final IS NOT NULL
+        )`,
         completedAt: tournaments.endAt,
       })
       .from(tournamentParticipants)
       .innerJoin(tournaments, eq(tournamentParticipants.tournamentId, tournaments.tournamentId))
       .innerJoin(users, eq(tournamentParticipants.userId, users.userId))
-      .innerJoin(
-        participantCountSubquery,
-        eq(tournaments.tournamentId, participantCountSubquery.tournamentId),
-      )
       .where(whereClause)
       .orderBy(desc(tournaments.endAt), desc(tournamentParticipants.participantId))
       .limit(limit + 1);
