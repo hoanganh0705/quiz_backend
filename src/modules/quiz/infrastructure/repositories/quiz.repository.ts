@@ -531,7 +531,7 @@ export class QuizRepository implements QuizRepositoryPort {
         if (payload.categoryId !== null && payload.categoryId !== undefined) {
           await tx
             .update(quizzes)
-            .set({ categoryId: payload.categoryId as string, updatedAt: nowIso })
+            .set({ categoryId: payload.categoryId, updatedAt: nowIso })
             .where(eq(QUIZ_COLUMNS.quizId, quizId));
         }
 

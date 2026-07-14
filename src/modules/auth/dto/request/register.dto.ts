@@ -3,11 +3,12 @@ import { ApiProperty } from '@nestjs/swagger';
 
 export class RegisterDto {
   @ApiProperty({
-    description: 'Unique username (letters, numbers, periods, underscores, hyphens)',
+    description:
+      'Username (case-insensitive; stored lowercase). Accepts letters, numbers, periods, underscores, hyphens.',
     minLength: 3,
     maxLength: 50,
     pattern: '^[a-zA-Z0-9._-]+$',
-    example: 'alice_wonder',
+    example: 'john_doe',
   })
   @IsString()
   @Length(3, 50)

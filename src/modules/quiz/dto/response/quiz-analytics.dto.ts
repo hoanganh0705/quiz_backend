@@ -68,8 +68,8 @@ export class QuizAnalyticsResponseDto {
   popularity!: PopularityDto;
 
   @ApiProperty({
-    description: 'Timestamp of the last analytics refresh (ISO 8601)',
-    example: '2025-06-01T00:00:00.000Z',
+    description: 'Timestamp of the last analytics refresh',
+    example: '2026-07-13 09:11:05.026+00',
   })
   lastUpdated!: string;
 }
@@ -125,8 +125,8 @@ export class TrendingQuizzesResponseDto {
   quizzes!: TrendingQuizItemDto[];
 
   @ApiProperty({
-    description: 'Timestamp of the last trending refresh (ISO 8601)',
-    example: '2025-06-01T00:00:00.000Z',
+    description: 'Timestamp of the last trending refresh',
+    example: '2026-07-13 09:11:05.026+00',
   })
   lastUpdated!: string;
 }
@@ -178,8 +178,8 @@ export class PopularQuizzesResponseDto {
   quizzes!: PopularQuizItemDto[];
 
   @ApiProperty({
-    description: 'Timestamp of the last popularity refresh (ISO 8601)',
-    example: '2025-06-01T00:00:00.000Z',
+    description: 'Timestamp of the last popularity refresh',
+    example: '2026-07-13 09:11:05.026+00',
   })
   lastUpdated!: string;
 }
@@ -225,8 +225,8 @@ export class CategoryAnalyticsResponseDto {
   topQuizzes!: PopularQuizItemDto[];
 
   @ApiProperty({
-    description: 'Timestamp of the last analytics refresh (ISO 8601)',
-    example: '2025-06-01T00:00:00.000Z',
+    description: 'Timestamp of the last analytics refresh',
+    example: '2026-07-13 09:11:05.026+00',
   })
   lastUpdated!: string;
 }
@@ -267,8 +267,8 @@ export class CreatorQuizAnalyticsDto {
   totalReviews!: number;
 
   @ApiProperty({
-    description: 'Timestamp of the last analytics refresh (ISO 8601)',
-    example: '2025-06-01T00:00:00.000Z',
+    description: 'Timestamp of the last analytics refresh',
+    example: '2026-07-13 09:11:05.026+00',
   })
   lastUpdated!: string;
 }

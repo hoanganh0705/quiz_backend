@@ -1,12 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { DRIZZLE } from '@/core/database/drizzle.constants';
 import type { DrizzleDB } from '@/core/database/database.module';
-import {
-  quizzes,
-  categories,
-  categoryFollows,
-  quizStats,
-} from '@/core/database/schema';
+import { quizzes, categories, categoryFollows, quizStats } from '@/core/database/schema';
 import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 import { and, desc, eq, isNull, or, sql, asc, ne } from 'drizzle-orm';
 import { CategorySlugConflictError } from '../../domain/errors';

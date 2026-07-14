@@ -38,6 +38,7 @@ import { QuizVersionApplicationService } from '../../application/quiz-version.ap
 import { QuizQuestionApplicationService } from '../../application/quiz-question.application.service';
 import { CreateQuizDto } from '../../dto/request/create-quiz.dto';
 import { QuizResponseDto } from '../../dto/response/quiz-response.dto';
+import { QuizListItemDto } from '../../dto/response/quiz-list-item.dto';
 import {
   CreatorQuizAnalyticsDto,
   PopularQuizItemDto,
@@ -184,7 +185,7 @@ export class QuizController {
 
   @Get()
   @Public()
-  @ApiOkResourceList(QuizResponseDto, 'cursor', { description: 'Quizzes returned' })
+  @ApiOkResourceList(QuizListItemDto, 'cursor', { description: 'Quizzes returned' })
   @ApiBadRequestResponse({
     description: 'Query parameters failed validation',
     example: listQuizzesBadRequestExample,
@@ -196,7 +197,7 @@ export class QuizController {
   }
 
   @Get('me')
-  @ApiOkResourceList(QuizResponseDto, 'cursor', { description: 'Quizzes returned' })
+  @ApiOkResourceList(QuizListItemDto, 'cursor', { description: 'Quizzes returned' })
   @ApiUnauthorizedResponse({ example: meQuizzesUnauthorizedExample })
   @ApiForbiddenResponse({ example: meQuizzesForbiddenExample })
   @ApiInternalServerErrorResponse({ example: meQuizzesInternalErrorExample })
@@ -206,7 +207,7 @@ export class QuizController {
   }
 
   @Get('me/drafts')
-  @ApiOkResourceList(QuizResponseDto, 'cursor', { description: 'Draft quizzes returned' })
+  @ApiOkResourceList(QuizListItemDto, 'cursor', { description: 'Draft quizzes returned' })
   @ApiUnauthorizedResponse({ example: meDraftsUnauthorizedExample })
   @ApiForbiddenResponse({ example: meDraftsForbiddenExample })
   @ApiInternalServerErrorResponse({ example: meDraftsInternalErrorExample })
@@ -219,7 +220,7 @@ export class QuizController {
   }
 
   @Get('me/published')
-  @ApiOkResourceList(QuizResponseDto, 'cursor', { description: 'Published quizzes returned' })
+  @ApiOkResourceList(QuizListItemDto, 'cursor', { description: 'Published quizzes returned' })
   @ApiUnauthorizedResponse({ example: mePublishedUnauthorizedExample })
   @ApiForbiddenResponse({ example: mePublishedForbiddenExample })
   @ApiInternalServerErrorResponse({ example: mePublishedInternalErrorExample })
@@ -293,7 +294,7 @@ export class QuizController {
 
   @Get('featured')
   @Public()
-  @ApiOkResourceList(QuizResponseDto, 'cursor', { description: 'Featured quizzes returned' })
+  @ApiOkResourceArray(QuizListItemDto, { description: 'Featured quizzes returned' })
   @ApiBadRequestResponse({ example: featuredBadRequestExample })
   @ApiInternalServerErrorResponse({ example: featuredInternalErrorExample })
   async getFeaturedQuizzes(@Query() query: FeaturedQuizzesQueryDto) {
@@ -342,7 +343,7 @@ export class QuizController {
 
   @Get(':slug/similar')
   @Public()
-  @ApiOkResourceList(QuizResponseDto, 'cursor', { description: 'Related quizzes returned' })
+  @ApiOkResourceArray(QuizListItemDto, { description: 'Related quizzes returned' })
   @ApiNotFoundResponse({
     description: 'Quiz not found',
     example: relatedQuizzesNotFoundExample,

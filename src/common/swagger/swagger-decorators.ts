@@ -67,24 +67,25 @@ const internalErrorOptions: ApiResponseOptions = {
 
 /**
  * Marks an endpoint as protected with JWT Bearer authentication.
- * Documents 401 Unauthorized and 403 Forbidden responses.
+ * Documents the 401 Unauthorized response.
+ *
+ * Does NOT document 403 Forbidden by default — historically this was
+ * inherited here, but the auth module never throws `ForbiddenException`.
+ * For permission-protected endpoints in other modules, add `@ApiForbiddenResponse(...)`
+ * explicitly per-route. For convenience, the `ApiStandardErrors()` and
+ * `ApiAuthErrors()` helpers still include 403.
  */
 export const ApiAuth = (): MethodDecorator & ClassDecorator =>
-  applyDecorators(
-    ApiBearerAuth(AUTH_SECURITY_NAME),
-    ApiUnauthorizedResponse(unauthorizedOptions),
-    ApiForbiddenResponse(forbiddenOptions),
-  );
+  applyDecorators(ApiBearerAuth(AUTH_SECURITY_NAME), ApiUnauthorizedResponse(unauthorizedOptions));
 
 /**
- * Documents 401 Unauthorized and 403 Forbidden responses only.
- * Use alongside @ApiAuth() or on its own for endpoints that may throw auth errors.
+ * Documents the 401 Unauthorized response only.
+ * Use alongside `@ApiAuth()` or on its own for endpoints that may throw auth errors.
+ * For permission-protected endpoints (403), use `ApiStandardErrors()` or
+ * add `@ApiForbiddenResponse(...)` explicitly.
  */
 export const ApiAuthResponses = (): MethodDecorator =>
-  applyDecorators(
-    ApiUnauthorizedResponse(unauthorizedOptions),
-    ApiForbiddenResponse(forbiddenOptions),
-  );
+  applyDecorators(ApiUnauthorizedResponse(unauthorizedOptions));
 
 // ─── Error response decorators ─────────────────────────────────────────────────
 
