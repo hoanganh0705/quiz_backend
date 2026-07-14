@@ -1,4 +1,13 @@
-import { Body, Controller, Post, UseInterceptors, Get, Delete, Param } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Post,
+  UseInterceptors,
+  Get,
+  Delete,
+  Param,
+  ParseUUIDPipe,
+} from '@nestjs/common';
 import {
   ApiTags,
   ApiOperation,
@@ -8,7 +17,6 @@ import {
   ApiNotFoundResponse,
   ApiConflictResponse,
   ApiInternalServerErrorResponse,
-  ApiForbiddenResponse,
 } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import { Public } from '@/common/decorators/public.decorator';
@@ -76,22 +84,16 @@ const setCookieHeaderSchema = {
   description: 'Refresh token cookie. HttpOnly, SameSite=Lax, Secure in production.',
   schema: {
     type: 'string',
-    example: 'refreshToken=a1b2c3d4...; Path=/; HttpOnly; SameSite=Lax; Max-Age=2592000',
+    example: 'refreshToken=<token>; Path=/; HttpOnly; SameSite=Lax; Max-Age=604800',
   },
 };
 
 const clearCookieHeaderSchema = {
-  description: 'Cleared refresh token cookie.',
+  description: 'Cleared refresh token cookie (Max-Age=0 with expires in the past).',
   schema: {
     type: 'string',
-    example: 'refreshToken=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0',
+    example: 'refreshToken=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT; HttpOnly',
   },
-};
-
-const forbiddenOptions = {
-  description: 'Authenticated user lacks required role or permission',
-  type: ProblemDetailDto,
-  example: ErrorResponseExamples.forbidden,
 };
 
 const notFoundOptions = {
@@ -162,13 +164,37 @@ export class AuthController {
   @ApiOperation({
     summary: 'Register a new account',
     description:
-      'Creates a new user account and sends a verification email to the provided address.',
+      'Creates a new user account and sends a verification email to the provided address. ' +
+      'Returns 201 with a generic acknowledgement message regardless of whether the email ' +
+      'or username is already registered, to prevent account enumeration. ' +
+      'Clients should treat a 201 response as "your request was received" and ' +
+      'attempt to log in (or check the inbox) to determine the actual outcome.',
   })
   @ApiCreatedResource(RegisterResponseDto, {
-    description: 'Account created successfully',
+    description:
+      'Generic acknowledgement — the same message is returned whether the email/username was already registered or not, to prevent account enumeration.',
+    examples: {
+      newAccount: {
+        summary: 'New account (verification email sent)',
+        value: {
+          data: {
+            message: 'If your registration can be completed, a verification email will be sent.',
+          },
+          meta: { timestamp: '2026-07-14T01:23:45.000Z' },
+        },
+      },
+      duplicateEmailOrUsername: {
+        summary: 'Duplicate email or username (anti-enumeration)',
+        value: {
+          data: {
+            message: 'If your registration can be completed, a verification email will be sent.',
+          },
+          meta: { timestamp: '2026-07-14T01:23:45.000Z' },
+        },
+      },
+    },
   })
   @ApiBadRequestResponse(badRequestOptions)
-  @ApiConflictResponse(conflictOptions)
   @ApiTooManyRequestsResponse(tooManyRequestsOptions)
   @ApiInternalServerErrorResponse(internalErrorOptions)
   async register(@Body() registerDto: RegisterDto) {
@@ -187,10 +213,36 @@ export class AuthController {
   @Post('verify-email')
   @ApiOperation({
     summary: 'Verify email address',
-    description: 'Confirms an email address using the token from the verification email.',
+    description:
+      'Confirms an email address using the token from the verification email. ' +
+      'Returns the same generic acknowledgement message regardless of whether ' +
+      'the token is valid, expired, or unknown — this prevents account/token enumeration. ' +
+      'Clients should treat a 200 response as "your request was received" and ' +
+      'verify the email through other means (e.g., attempting to log in).',
   })
-  @ApiOkResource(VerifyEmailResponseDto, {
-    description: 'Email verified successfully',
+  @ApiCreatedResource(VerifyEmailResponseDto, {
+    description:
+      'Generic acknowledgement — the same message is returned for valid, expired, and unknown tokens to prevent enumeration.',
+    examples: {
+      validToken: {
+        summary: 'Valid, unexpired token',
+        value: {
+          data: {
+            message: 'Verification processed. If valid, your email is now verified.',
+          },
+          meta: { timestamp: '2026-07-14T01:23:45.000Z' },
+        },
+      },
+      unknownOrExpiredToken: {
+        summary: 'Unknown or expired token (anti-enumeration)',
+        value: {
+          data: {
+            message: 'Verification processed. If valid, your email is now verified.',
+          },
+          meta: { timestamp: '2026-07-14T01:23:45.000Z' },
+        },
+      },
+    },
   })
   @ApiBadRequestResponse(badRequestOptions)
   @ApiTooManyRequestsResponse(tooManyRequestsOptions)
@@ -210,10 +262,37 @@ export class AuthController {
   @ApiOperation({
     summary: 'Resend verification email',
     description:
-      'Sends a new verification email to the provided address if the account exists and is unverified.',
+      'Sends a new verification email to the provided address if the account exists and is unverified. ' +
+      'Returns the same generic acknowledgement message regardless of whether the email ' +
+      'is registered, already verified, or unknown — this prevents account enumeration. ' +
+      'Clients should treat a 200 response as "your request was received" and ' +
+      'check the inbox (or attempt to log in) to confirm.',
   })
-  @ApiOkResource(VerifyEmailResponseDto, {
-    description: 'Verification email sent',
+  @ApiCreatedResource(VerifyEmailResponseDto, {
+    description:
+      'Generic acknowledgement — the same message is returned whether the email exists, is already verified, or is unknown, to prevent enumeration.',
+    examples: {
+      unverifiedEmailExists: {
+        summary: 'Unverified email exists (new email sent)',
+        value: {
+          data: {
+            message:
+              'If this email exists and is not verified, a verification email has been sent.',
+          },
+          meta: { timestamp: '2026-07-14T01:23:45.000Z' },
+        },
+      },
+      unknownOrAlreadyVerifiedEmail: {
+        summary: 'Unknown or already-verified email (anti-enumeration)',
+        value: {
+          data: {
+            message:
+              'If this email exists and is not verified, a verification email has been sent.',
+          },
+          meta: { timestamp: '2026-07-14T01:23:45.000Z' },
+        },
+      },
+    },
   })
   @ApiBadRequestResponse(badRequestOptions)
   @ApiTooManyRequestsResponse(tooManyRequestsOptions)
@@ -228,6 +307,7 @@ export class AuthController {
   }
 
   @Public()
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @Post('login')
   @ApiOperation({
     summary: 'Log in',
@@ -235,7 +315,7 @@ export class AuthController {
       'Authenticates with email and password and returns a JWT access token. ' +
       'A refresh token cookie is set on success. Device information is collected for security purposes.',
   })
-  @ApiOkResource(LoginResponseDto, {
+  @ApiCreatedResource(LoginResponseDto, {
     description: 'Login successful',
     headers: { 'Set-Cookie': setCookieHeaderSchema },
   })
@@ -264,7 +344,7 @@ export class AuthController {
       'If no account exists for the Google user, one is created automatically. ' +
       'A refresh token cookie is set on success.',
   })
-  @ApiOkResource(LoginResponseDto, {
+  @ApiCreatedResource(LoginResponseDto, {
     description: 'Login successful',
     headers: { 'Set-Cookie': setCookieHeaderSchema },
   })
@@ -295,7 +375,7 @@ export class AuthController {
       'Exchanges a valid refresh token cookie for a new JWT access token. ' +
       'The refresh token cookie is rotated on success.',
   })
-  @ApiOkResource(RefreshTokenResponseDto, {
+  @ApiCreatedResource(RefreshTokenResponseDto, {
     description: 'Token refreshed',
     headers: { 'Set-Cookie': setCookieHeaderSchema },
   })
@@ -325,7 +405,7 @@ export class AuthController {
       'Clears the refresh token cookie. The access token remains valid until it expires. ' +
       'Requires the refresh token cookie to be present.',
   })
-  @ApiOkResource(LogoutResponseDto, {
+  @ApiCreatedResource(LogoutResponseDto, {
     description: 'Logged out successfully',
     headers: { 'Set-Cookie': clearCookieHeaderSchema },
   })
@@ -347,12 +427,11 @@ export class AuthController {
     description:
       'Invalidates ALL active sessions for the authenticated user and clears the refresh token cookie.',
   })
-  @ApiOkResource(LogoutResponseDto, {
+  @ApiCreatedResource(LogoutResponseDto, {
     description: 'All sessions terminated',
     headers: { 'Set-Cookie': clearCookieHeaderSchema },
   })
   @ApiUnauthorizedResponse(unauthorizedOptions)
-  @ApiForbiddenResponse(forbiddenOptions)
   @ApiInternalServerErrorResponse(internalErrorOptions)
   async logoutAll(
     @CurrentUser('sub') userId: string,
@@ -377,7 +456,6 @@ export class AuthController {
     description: 'Active sessions retrieved',
   })
   @ApiUnauthorizedResponse(unauthorizedOptions)
-  @ApiForbiddenResponse(forbiddenOptions)
   @ApiInternalServerErrorResponse(internalErrorOptions)
   async getActiveSessions(
     @CurrentUser('sub') userId: string,
@@ -385,6 +463,29 @@ export class AuthController {
   ) {
     const result = await this.authApplicationService.getActiveSessions(userId, currentSessionId);
     return this.presenter.getActiveSessions(result);
+  }
+
+  @ApiAuth()
+  @Delete('sessions/others')
+  @ApiOperation({
+    summary: 'Log out all other devices',
+    description:
+      'Normalized REST route. Keeps the current session and revokes every other active session for the user.',
+  })
+  @ApiOkResource(SessionManagementResultDto, {
+    description: 'Other sessions revoked',
+  })
+  @ApiUnauthorizedResponse(unauthorizedOptions)
+  @ApiInternalServerErrorResponse(internalErrorOptions)
+  async revokeOtherSessions(
+    @CurrentUser('sub') userId: string,
+    @CurrentUser('sessionId') currentSessionId: string,
+  ) {
+    const result = await this.authApplicationService.revokeAllOtherSessions(
+      userId,
+      currentSessionId,
+    );
+    return this.presenter.revokeOtherSessions(result);
   }
 
   @ApiAuth()
@@ -402,13 +503,12 @@ export class AuthController {
     headers: { 'Set-Cookie': clearCookieHeaderSchema },
   })
   @ApiUnauthorizedResponse(unauthorizedOptions)
-  @ApiForbiddenResponse(forbiddenOptions)
   @ApiNotFoundResponse(notFoundOptions)
   @ApiInternalServerErrorResponse(internalErrorOptions)
   async revokeSession(
     @CurrentUser('sub') userId: string,
     @CurrentUser('sessionId') currentSessionId: string,
-    @Param('sessionId') sessionId: string,
+    @Param('sessionId', new ParseUUIDPipe({ version: '7' })) sessionId: string,
   ) {
     const result = await this.authApplicationService.revokeSession(
       userId,
@@ -416,30 +516,6 @@ export class AuthController {
       currentSessionId,
     );
     return this.presenter.revokeSession(result);
-  }
-
-  @ApiAuth()
-  @Delete('sessions/others')
-  @ApiOperation({
-    summary: 'Log out all other devices',
-    description:
-      'Normalized REST route. Keeps the current session and revokes every other active session for the user.',
-  })
-  @ApiOkResource(SessionManagementResultDto, {
-    description: 'Other sessions revoked',
-  })
-  @ApiUnauthorizedResponse(unauthorizedOptions)
-  @ApiForbiddenResponse(forbiddenOptions)
-  @ApiInternalServerErrorResponse(internalErrorOptions)
-  async revokeOtherSessions(
-    @CurrentUser('sub') userId: string,
-    @CurrentUser('sessionId') currentSessionId: string,
-  ) {
-    const result = await this.authApplicationService.revokeAllOtherSessions(
-      userId,
-      currentSessionId,
-    );
-    return this.presenter.revokeOtherSessions(result);
   }
 
   @ApiAuth()
@@ -452,7 +528,6 @@ export class AuthController {
     description: 'Security dashboard retrieved',
   })
   @ApiUnauthorizedResponse(unauthorizedOptions)
-  @ApiForbiddenResponse(forbiddenOptions)
   @ApiInternalServerErrorResponse(internalErrorOptions)
   async getSecurityDashboard(@CurrentUser('sub') userId: string) {
     const result = await this.authApplicationService.getSecurityDashboard(userId);
@@ -470,7 +545,7 @@ export class AuthController {
       'Sends a password reset email if the account exists. ' +
       'Always returns a generic success message to prevent email enumeration.',
   })
-  @ApiOkResource(ForgotPasswordResponseDto, {
+  @ApiCreatedResource(ForgotPasswordResponseDto, {
     description: 'Password reset email sent (if account exists)',
   })
   @ApiBadRequestResponse(badRequestOptions)
@@ -490,7 +565,7 @@ export class AuthController {
       'Resets the account password using a valid token. ' +
       'All active sessions are immediately invalidated after a successful reset.',
   })
-  @ApiOkResource(ResetPasswordResponseDto, {
+  @ApiCreatedResource(ResetPasswordResponseDto, {
     description: 'Password reset successfully',
   })
   @ApiBadRequestResponse(badRequestOptions)
@@ -513,11 +588,10 @@ export class AuthController {
       'Changes the account password for an authenticated user. ' +
       'Requires the current password and terminates all other active sessions.',
   })
-  @ApiOkResource(ChangePasswordResponseDto, {
+  @ApiCreatedResource(ChangePasswordResponseDto, {
     description: 'Password changed successfully',
   })
   @ApiUnauthorizedResponse(unauthorizedOptions)
-  @ApiForbiddenResponse(forbiddenOptions)
   @ApiBadRequestResponse(badRequestOptions)
   @ApiConflictResponse(conflictOptions)
   @ApiTooManyRequestsResponse(tooManyRequestsOptions)
@@ -549,7 +623,6 @@ export class AuthController {
     description: 'Current user profile retrieved',
   })
   @ApiUnauthorizedResponse(unauthorizedOptions)
-  @ApiForbiddenResponse(forbiddenOptions)
   @ApiInternalServerErrorResponse(internalErrorOptions)
   async getCurrentUser(@CurrentUser('sub') userId: string) {
     const result = await this.authApplicationService.getCurrentUser(userId);
@@ -567,7 +640,7 @@ export class AuthController {
       'Checks whether an email address is available for registration. ' +
       'Does not reveal whether an account exists.',
   })
-  @ApiOkResource(CheckEmailResponseDto, {
+  @ApiCreatedResource(CheckEmailResponseDto, {
     description: 'Email availability checked',
   })
   @ApiBadRequestResponse(badRequestOptions)
@@ -587,7 +660,7 @@ export class AuthController {
       'Checks whether a username is available for registration. ' +
       'Does not reveal whether an account exists.',
   })
-  @ApiOkResource(CheckUsernameResponseDto, {
+  @ApiCreatedResource(CheckUsernameResponseDto, {
     description: 'Username availability checked',
   })
   @ApiBadRequestResponse(badRequestOptions)
@@ -608,11 +681,10 @@ export class AuthController {
       "Verifies the authenticated user's current password without issuing tokens or sessions. " +
       'Intended as a confirmation step before sensitive operations.',
   })
-  @ApiOkResource(VerifyPasswordResponseDto, {
+  @ApiCreatedResource(VerifyPasswordResponseDto, {
     description: 'Password verification result',
   })
   @ApiUnauthorizedResponse(unauthorizedOptions)
-  @ApiForbiddenResponse(forbiddenOptions)
   @ApiInternalServerErrorResponse(internalErrorOptions)
   async verifyPassword(@CurrentUser('sub') userId: string, @Body() dto: VerifyPasswordDto) {
     const result = await this.authApplicationService.verifyPassword(userId, dto.password);
@@ -634,7 +706,6 @@ export class AuthController {
     headers: { 'Set-Cookie': clearCookieHeaderSchema },
   })
   @ApiUnauthorizedResponse(unauthorizedOptions)
-  @ApiForbiddenResponse(forbiddenOptions)
   @ApiBadRequestResponse(badRequestOptions)
   @ApiConflictResponse(conflictOptions)
   @ApiInternalServerErrorResponse(internalErrorOptions)

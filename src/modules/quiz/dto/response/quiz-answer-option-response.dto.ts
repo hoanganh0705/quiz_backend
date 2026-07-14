@@ -17,8 +17,8 @@ export class QuizAnswerOptionResponseDto {
   isCorrect!: boolean;
 
   @ApiProperty({
-    description: 'Creation timestamp (ISO 8601)',
-    example: '2025-01-15T08:30:00.000Z',
+    description: 'Creation timestamp',
+    example: '2026-07-13 09:11:05.026+00',
   })
   createdAt!: string;
 }
