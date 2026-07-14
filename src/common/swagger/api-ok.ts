@@ -2,7 +2,9 @@ import { applyDecorators, type Type } from '@nestjs/common';
 import { ApiOkResponse, ApiCreatedResponse, getSchemaPath, ApiExtraModels } from '@nestjs/swagger';
 import {
   OffsetPaginationMetaDto,
+  PaginatedResponseMetaDto,
   PaginationMetaDto,
+  ResponseMetaDto,
   WrappedDto,
   WrappedPaginatedDto,
 } from './swagger-schemas';
@@ -108,7 +110,7 @@ export const ApiOkResource = <T extends Type>(
   options: ApiResourceOptions = {},
 ): MethodDecorator =>
   applyDecorators(
-    ApiExtraModels(model),
+    ApiExtraModels(WrappedDto, ResponseMetaDto, model),
     ApiOkResponse({
       ...options,
       schema: buildResourceSchema(model),
@@ -126,7 +128,7 @@ export const ApiCreatedResource = <T extends Type>(
   options: ApiResourceOptions = {},
 ): MethodDecorator =>
   applyDecorators(
-    ApiExtraModels(model),
+    ApiExtraModels(WrappedDto, ResponseMetaDto, model),
     ApiCreatedResponse({
       ...options,
       schema: buildResourceSchema(model),
@@ -160,7 +162,7 @@ export const ApiOkResourceList = <T extends Type>(
   const paginationMetaSchema = kind === 'cursor' ? PaginationMetaDto : OffsetPaginationMetaDto;
 
   return applyDecorators(
-    ApiExtraModels(model, paginationMetaSchema),
+    ApiExtraModels(WrappedPaginatedDto, PaginatedResponseMetaDto, paginationMetaSchema, model),
     ApiOkResponse({
       ...options,
       schema: buildPaginatedSchema(model, paginationMetaSchema),
@@ -200,7 +202,7 @@ export const ApiOkResourceArray = <T extends Type>(
   options: ApiResourceOptions = {},
 ): MethodDecorator =>
   applyDecorators(
-    ApiExtraModels(model),
+    ApiExtraModels(WrappedDto, ResponseMetaDto, model),
     ApiOkResponse({
       ...options,
       schema: buildResourceArraySchema(model),
