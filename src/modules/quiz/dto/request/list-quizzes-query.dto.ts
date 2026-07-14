@@ -1,4 +1,4 @@
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import {
   ArrayMaxSize,
   ArrayMinSize,
@@ -74,6 +74,16 @@ export class ListQuizzesQueryDto {
     nullable: true,
   })
   @IsOptional()
+  @Transform(({ value }: { value: unknown }) => {
+    // Query string `?tagIds=<uuid>` parses as a single string; wrap it so
+    // the existing `@IsArray()` contract accepts both forms (single value
+    // and repeated `?tagIds=<uuid>&tagIds=<uuid>`) without changing the
+    // OpenAPI surface.
+    if (value === undefined || value === null) return value;
+    if (Array.isArray(value)) return value as string[];
+    if (typeof value === 'string') return [value];
+    return value;
+  })
   @IsArray()
   @ArrayMaxSize(50)
   @ArrayMinSize(1)

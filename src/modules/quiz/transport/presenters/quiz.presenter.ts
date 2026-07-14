@@ -87,5 +87,5 @@ export class QuizPresenter {
   // Questions
   readonly createQuizQuestion = QuizPresenter.ok<QuizQuestionResponseDto>;
   readonly createQuizQuestions = (result: { questions: QuizQuestionResponseDto[] }) =>
-    ApiResponse.ok([...result.questions]);
+    ApiResponse.ok({ questions: [...result.questions] });
 }

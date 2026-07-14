@@ -117,16 +117,11 @@ export class QuizQueryService {
     return { row, tags };
   }
 
-  async getQuizStats(
-    quizId: string | undefined,
-    slug: string,
-  ): Promise<QuizStats> {
+  async getQuizStats(quizId: string | undefined, slug: string): Promise<QuizStats> {
     const result = await this.getQuizBySlug(slug);
     const resolvedQuizId = result.row.quizId;
 
-    const stats = await this.quizRepository.getQuizStats(
-      quizId ?? resolvedQuizId,
-    );
+    const stats = await this.quizRepository.getQuizStats(quizId ?? resolvedQuizId);
 
     return {
       quizId: resolvedQuizId,

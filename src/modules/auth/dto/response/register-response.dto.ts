@@ -2,8 +2,9 @@ import { ApiProperty } from '@nestjs/swagger';
 
 export class RegisterResponseDto {
   @ApiProperty({
-    description: 'Confirmation message',
-    example: 'Registration successful. Please check your email to verify your account.',
+    description:
+      'Generic acknowledgement message (same for new account, duplicate email, duplicate username)',
+    example: 'If your registration can be completed, a verification email will be sent.',
   })
   message!: string;
 }

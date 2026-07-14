@@ -131,8 +131,7 @@ export class PaginationMetaDto {
   @ApiPropertyOptional({
     description:
       'Opaque cursor string for fetching the next page. `null` when there is no next page.',
-    example:
-      'eyJjcmVhdGVkQXQiOiIyMDI1LTAxLTAxVDAwOjAwOjAwKzAwOjAwIiwiY3JlYXRpbmdVc2VySWQiOiI4MTIzMTIzLTEyMzQtMTIzNC0xMjM0LTEyMzQxMjM0MTIzNDQifQ',
+    example: null,
     nullable: true,
   })
   nextCursor!: string | null;
