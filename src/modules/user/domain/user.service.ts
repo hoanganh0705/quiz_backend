@@ -37,6 +37,9 @@ function calculateLevel(totalXp: number): number {
   return Math.floor(totalXp / XP_PER_LEVEL) + 1;
 }
 
+/** DI token for `UserDomainService` — allows other modules (e.g. quiz) to inject it without importing the concrete class. */
+export const USER_DOMAIN_SERVICE = Symbol('USER_DOMAIN_SERVICE');
+
 @Injectable()
 export class UserDomainService {
   constructor(
@@ -64,8 +67,20 @@ export class UserDomainService {
     return settings?.isPublic ?? true;
   }
 
+  /**
+   * Phase 2.3 (H5): Added `findMeById` check so a non-existent user throws
+   * `UserNotFoundError` (→ 404) instead of silently returning 200 with empty
+   * data.  The privacy check (`isUserProfilePublic`) runs only when the user
+   * is known to exist, preserving the documented 404 contract.
+   */
   async assertProfileVisible(targetUserId: string, requesterId: string): Promise<void> {
     if (requesterId === targetUserId) return;
+
+    const user = await this.userRepository.findMeById(targetUserId);
+    if (!user) {
+      throw new UserNotFoundError();
+    }
+
     const isPublic = await this.isUserProfilePublic(targetUserId);
     if (!isPublic) {
       throw new UserProfilePrivateError(targetUserId);
@@ -108,6 +123,11 @@ export class UserDomainService {
     };
   }
 
+  /**
+   * Phase 4.1 (L1): Calling this method may create a `user_rankings` row
+   * (write-on-read) if the user has no ranking yet. The 200 response is
+   * still returned either way, but the first call has a side effect.
+   */
   async getUserRanking(userId: string, requesterId: string): Promise<UserRankingSummary> {
     await this.assertProfileVisible(userId, requesterId);
 

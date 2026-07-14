@@ -27,6 +27,7 @@ import {
   ApiUserActivityResponse,
   ApiUserAnalyticsResponse,
   ApiUserBadgesResponse,
+  ApiUserIdParam,
   ApiUserMeResponse,
   ApiUserMeUpdatedResponse,
   ApiUserQuizListResponse,
@@ -213,8 +214,11 @@ export class UserController {
   }
 
   // ─── Public :userId routes (registered last to avoid shadowing /me/* routes) ──
+  // NOTE: Global JwtGuard enforces authentication; @ApiAuth() documents this in OpenAPI.
 
   @Get(':userId/quizzes/analytics')
+  @ApiUserIdParam()
+  @ApiAuth()
   @ApiOperation({
     summary: 'Get creator analytics for a user',
     description: 'Returns aggregate creator-side quiz analytics for the given user.',
@@ -227,6 +231,8 @@ export class UserController {
   }
 
   @Get(':userId/quizzes')
+  @ApiUserIdParam()
+  @ApiAuth()
   @ApiOperation({
     summary: 'List quizzes created by a user',
     description: 'Returns a cursor-paginated list of quizzes created by the specified user.',
@@ -242,6 +248,8 @@ export class UserController {
   }
 
   @Get(':userId/badges')
+  @ApiUserIdParam()
+  @ApiAuth()
   @ApiOperation({
     summary: 'List badges earned by a user',
     description:
@@ -262,6 +270,8 @@ export class UserController {
   }
 
   @Get(':userId/tournament-history')
+  @ApiUserIdParam()
+  @ApiAuth()
   @ApiOperation({
     summary: 'Get public tournament history for a user',
     description:
@@ -283,6 +293,8 @@ export class UserController {
   }
 
   @Get(':userId/tournaments')
+  @ApiUserIdParam()
+  @ApiAuth()
   @ApiOperation({
     summary: 'Get public tournament profile for a user',
     description:

@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { QuizAnalyticsService } from '../domain/analytics';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
 import { QuizQueryService } from '../domain/quiz/quiz-query.service';
@@ -28,6 +28,7 @@ import type { RelatedQuizzesResponseDto } from '../dto/response/related-quizzes-
 import type { DeleteQuizResponseDto } from '../dto/response/delete-quiz-response.dto';
 import type { CreateQuizCommand, RelatedQuizzesQuery, UpdateQuizCommand } from '../domain/types';
 import type { QuizDifficulty } from '../types/quiz.types';
+import { USER_DOMAIN_SERVICE, type UserDomainService } from '@/modules/user/domain/user.service';
 
 @Injectable()
 export class QuizApplicationService implements QuizListingPort {
@@ -35,6 +36,8 @@ export class QuizApplicationService implements QuizListingPort {
     private readonly quizQueryService: QuizQueryService,
     private readonly quizCommandService: QuizCommandService,
     private readonly quizAnalyticsService: QuizAnalyticsService,
+    @Inject(USER_DOMAIN_SERVICE)
+    private readonly userDomainService: UserDomainService,
   ) {}
 
   async createQuiz(user: JwtPayload, dto: CreateQuizDto): Promise<QuizResponseDto> {
@@ -247,7 +250,13 @@ export class QuizApplicationService implements QuizListingPort {
     }));
   }
 
+  /**
+   * Phase 2.3 (H3): Asserts the user exists before returning analytics.
+   * `userDomainService.getMe` throws `UserNotFoundError` → 404 if the user
+   * does not exist, restoring the documented contract for this endpoint.
+   */
   async getMyQuizAnalytics(userId: string): Promise<CreatorQuizAnalyticsDto> {
+    await this.userDomainService.getMe(userId);
     const analytics = await this.quizQueryService.getCreatorAnalytics(userId);
     return CreatorQuizAnalyticsResponseMapper.toResponse(analytics);
   }

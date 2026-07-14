@@ -60,7 +60,8 @@ export class UserMeResponseDto {
   createdAt!: string;
 
   @ApiProperty({
-    description: 'Last profile update timestamp (ISO 8601)',
+    description:
+      'Last write to the user record (any column, not just profile). ISO 8601 timestamp.',
     example: '2025-06-01T12:00:00.000Z',
   })
   updatedAt!: string;

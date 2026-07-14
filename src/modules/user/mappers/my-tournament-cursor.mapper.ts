@@ -1,14 +1,15 @@
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+import { decodeBase64JsonCursor, encodeBase64JsonCursor } from '@/common/utils/cursor.util';
 
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/;
 
 export class MyTournamentCursorMapper {
   static serialize(cursor: { registeredAt: string; participantId: string }): string {
-    return Buffer.from(JSON.stringify(cursor)).toString('base64url');
+    return encodeBase64JsonCursor(cursor);
   }
 
   static parse(cursor: string): { registeredAt: string; participantId: string } {
-    const parsed = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf-8'));
+    const parsed = decodeBase64JsonCursor<{ registeredAt: string; participantId: string }>(cursor);
 
     if (typeof parsed.registeredAt !== 'string' || !ISO_DATE_PATTERN.test(parsed.registeredAt)) {
       throw new Error('Invalid cursor: registeredAt must be an ISO date string');

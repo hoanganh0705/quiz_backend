@@ -54,9 +54,15 @@ import { QuizQuestionRepository } from './infrastructure/repositories/quiz-quest
 import { AttemptModule } from '@/modules/attempt/attempt.module';
 import { ReviewModule } from '@/modules/review/review.module';
 import { ReviewEventListenerAdapter } from './domain/events/review-event-listener.adapter';
+import { UserModule } from '@/modules/user/user.module';
 
 @Module({
-  imports: [DatabaseModule, forwardRef(() => AttemptModule), forwardRef(() => ReviewModule)],
+  imports: [
+    DatabaseModule,
+    forwardRef(() => AttemptModule),
+    forwardRef(() => ReviewModule),
+    forwardRef(() => UserModule),
+  ],
   providers: [
     // Application Services
     QuizApplicationService,

@@ -9,10 +9,7 @@ import { Controller, Get, Post, Param, HttpCode, HttpStatus, ParseUUIDPipe } fro
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Permissions } from '@/common/authorization/decorators/permissions.decorator';
 import { Permission } from '@/common/authorization/permissions';
-import {
-  ApiForbidden,
-  ApiAuth,
-} from '@/common/swagger/swagger-decorators';
+import { ApiForbidden, ApiAuth } from '@/common/swagger/swagger-decorators';
 import { ApiOkResource } from '@/common/swagger/api-ok';
 import { AchievementApplicationService } from '../../application/achievement.application.service';
 import { AchievementPresenter } from '../presenters/achievement.presenter';

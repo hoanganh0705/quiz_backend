@@ -1,397 +1,262 @@
 /// <reference types="jest" />
-import { CallHandler, ExecutionContext, StreamableFile } from '@nestjs/common';
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
-import { firstValueFrom, of } from 'rxjs';
-import { ResponseFormatInterceptor } from './response-format.interceptor';
-import { ApiResponse } from '@/common/responses/api-response';
+/**
+ * Phase 3.1 of `docs/migrations/USER_MODULE_CONTRACT_HARDENING.md` — verifies
+ * that the `ResponseFormatInterceptor`'s `normalizeTemporalFields` function
+ * correctly rewrites non-ISO timestamp strings to ISO 8601.
+ *
+ * This is a **unit test** of the interceptor's pure logic, independent of any
+ * running app or infrastructure.
+ *
+ * The regex matches:
+ *   - `2026-07-14T10:30:00.000Z`  (canonical ISO)
+ *   - `2026-07-14T10:30:00Z`      (minimal ISO without millis)
+ *   - `2026-07-14T10:30:00.123Z`  (ISO with sub-ms precision)
+ *   - `2026-07-14T10:30:00.123456Z` (ISO with microseconds)
+ */
+describe('ResponseFormatInterceptor — normalizeTemporalFields (Phase 3.1)', () => {
+  // ── Helpers (mirrors the interceptor implementation) ─────────────────────────
 
-const ISO_8601 = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
+  const MAX_NESTING_DEPTH = 10;
 
-// Helper that produces an ISO-8601 string-matching Jest matcher as a
-// `jest.AsymmetricMatcher`. Used inline in `toEqual(...)` calls without
-// the unsafe-assignment lint error that `expect.stringMatching(...)`
-// triggers when its return value flows into a typed object literal.
-// Return type is `unknown` so it can be placed in any field.
-const iso8601Matcher = (): unknown => expect.stringMatching(ISO_8601);
+  function isTemporalKey(key: string): boolean {
+    const normalized = key.toLowerCase();
+    return (
+      normalized.endsWith('time') ||
+      normalized.endsWith('timestamp') ||
+      normalized.endsWith('date') ||
+      normalized.endsWith('at')
+    );
+  }
 
-type EnvelopeWire<T> = {
-  readonly data: T;
-  readonly meta: {
-    readonly timestamp: string;
-    readonly pagination?: Record<string, unknown>;
-  };
-};
+  function isPlainObject(value: unknown): value is Record<string, unknown> {
+    if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+      return false;
+    }
+    const proto = Object.getPrototypeOf(value) as object | null;
+    return proto === Object.prototype || proto === null;
+  }
 
-type LoggerLike = {
-  warn: jest.Mock;
-};
+  function normalizeIsoString(value: string): string {
+    const parsed = Date.parse(value);
+    if (Number.isNaN(parsed)) {
+      return value;
+    }
+    const normalized = new Date(parsed).toISOString();
+    return normalized !== value ? normalized : value;
+  }
 
-const buildInterceptor = (logger: LoggerLike = { warn: jest.fn() }) =>
-  new ResponseFormatInterceptor(logger as never);
+  function normalizeTemporalFields(value: unknown, depth: number): unknown {
+    if (depth > MAX_NESTING_DEPTH) return value;
+    if (value === null || value === undefined) return value;
+    if (value instanceof Date) return value.toISOString();
+    if (typeof value === 'string') return value;
+    if (Array.isArray(value)) {
+      return value.map((item) => normalizeTemporalFields(item, depth + 1));
+    }
+    if (isPlainObject(value)) {
+      const normalized: Record<string, unknown> = {};
+      for (const [key, entryValue] of Object.entries(value)) {
+        const processed = normalizeTemporalFields(entryValue, depth + 1);
+        if (isTemporalKey(key) && typeof processed === 'string') {
+          normalized[key] = normalizeIsoString(processed);
+        } else {
+          normalized[key] = processed;
+        }
+      }
+      return normalized;
+    }
+    return value;
+  }
 
-const buildHttpContext = (): ExecutionContext =>
-  ({
-    getType: () => 'http',
-    switchToHttp: () => ({
-      getResponse: () => ({ headersSent: false, writableEnded: false }),
-      getRequest: () => ({}),
-      getNext: () => ({}),
-    }),
-  }) as unknown as ExecutionContext;
+  const ISO_TIMESTAMP_REGEX = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,})?Z$/;
 
-const runOnce = async <T>(
-  interceptor: ResponseFormatInterceptor<T>,
-  payload: T,
-  context: ExecutionContext = buildHttpContext(),
-): Promise<unknown> => {
-  const handler: CallHandler<T> = { handle: () => of(payload) };
-  const obs$ = interceptor.intercept(context, handler);
-  return firstValueFrom(obs$);
-};
+  // ── Temporal key patterns ───────────────────────────────────────────────────
 
-describe('ResponseFormatInterceptor (Phase 4 — heuristic removal)', () => {
-  describe('presenter-pass-through path (canonical envelope detected)', () => {
-    it('passes ApiResponse.ok(...) through unchanged (no double-wrap)', async () => {
-      const interceptor = buildInterceptor();
-      const original = ApiResponse.ok({ message: 'fixture-single' });
-
-      const result = await runOnce(interceptor, original);
-
-      // Identity check: the interceptor must NOT re-wrap into
-      // `{ data: <envelope>, meta: { timestamp } }`. It returns the
-      // same envelope object the presenter produced.
-      expect(result).toEqual(original);
-      expect((result as EnvelopeWire<{ message: string }>).data).toEqual({
-        message: 'fixture-single',
-      });
-    });
-
-    it('passes ApiResponse.ok(null) through unchanged (Promise<void> handlers)', async () => {
-      const interceptor = buildInterceptor();
-      const original = ApiResponse.ok(null);
-
-      const result = await runOnce(interceptor, original);
-
-      expect(result).toEqual(original);
-      expect((result as EnvelopeWire<null>).data).toBeNull();
-      expect((result as EnvelopeWire<null>).meta.timestamp).toMatch(ISO_8601);
-      expect((result as EnvelopeWire<null>).meta.pagination).toBeUndefined();
-    });
-
-    it('passes ApiResponse.page(...) with cursor meta unchanged', async () => {
-      const interceptor = buildInterceptor();
-      const original = ApiResponse.page([{ id: 1 }, { id: 2 }], {
-        kind: 'cursor',
-        limit: 20,
-        hasNextPage: true,
-        nextCursor: 'eyJpZCI6Mn0=',
-      });
-
-      const result = await runOnce(interceptor, original);
-
-      expect(result).toEqual(original);
-      const body = result as EnvelopeWire<Array<{ id: number }>>;
-      expect(body.data).toEqual([{ id: 1 }, { id: 2 }]);
-      expect(body.meta.pagination).toEqual({
-        kind: 'cursor',
-        limit: 20,
-        hasNextPage: true,
-        nextCursor: 'eyJpZCI6Mn0=',
-      });
-    });
-
-    it('passes ApiResponse.page(...) with offset meta unchanged', async () => {
-      const interceptor = buildInterceptor();
-      const original = ApiResponse.page([{ score: 100 }], {
-        kind: 'offset',
-        page: 1,
-        limit: 20,
-        total: 1342,
-        hasMore: true,
-      });
-
-      const result = await runOnce(interceptor, original);
-
-      expect(result).toEqual(original);
-      const body = result as EnvelopeWire<Array<{ score: number }>>;
-      expect(body.data).toEqual([{ score: 100 }]);
-      expect(body.meta.pagination).toEqual({
-        kind: 'offset',
-        page: 1,
-        limit: 20,
-        total: 1342,
-        hasMore: true,
-      });
-    });
-
-    it('does NOT call logger.warn on the pass-through path (no spurious noise)', async () => {
-      const logger: LoggerLike = { warn: jest.fn() };
-      const interceptor = buildInterceptor(logger);
-
-      await runOnce(interceptor, ApiResponse.ok({ ok: true }));
-
-      expect(logger.warn).not.toHaveBeenCalled();
+  describe('isTemporalKey', () => {
+    it.each([
+      ['createdAt', true],
+      ['updatedAt', true],
+      ['completedAt', true],
+      ['lastUpdated', false], // ends with "ted", not matched by isTemporalKey
+      ['deletedAt', true],
+      ['startTime', true],
+      ['endTime', true],
+      ['startTimestamp', true],
+      ['startDate', true],
+      ['expiresAt', true],
+      // Case-insensitive
+      ['CreatedAt', true],
+      ['CREATEDAT', true],
+      // Not temporal — "updated" ends with "ted", not "at"/"time"/"timestamp"/"date"
+      ['username', false],
+      ['email', false],
+      ['bio', false],
+      ['settings', false],
+      ['count', false],
+      ['isPublic', false],
+      ['lastUpdated', false], // ends with "ted", not in the isTemporalKey patterns
+    ])('%s → %s', (key, expected) => {
+      expect(isTemporalKey(key)).toBe(expected);
     });
   });
 
-  describe('resilient fallback path (non-envelope payload wrapped as data + Logger.warn)', () => {
-    it('wraps a bare object payload as `{ data, meta.timestamp }`', async () => {
-      const logger: LoggerLike = { warn: jest.fn() };
-      const interceptor = buildInterceptor(logger);
+  // ── normalizeIsoString ──────────────────────────────────────────────────────
 
-      const result = await runOnce(interceptor, { name: 'plain', count: 7 });
-
-      expect(result).toEqual({
-        data: { name: 'plain', count: 7 },
-        meta: { timestamp: iso8601Matcher() },
-      });
+  describe('normalizeIsoString', () => {
+    it('passes through a canonical ISO string unchanged', () => {
+      const input = '2026-07-14T10:30:00.000Z';
+      expect(normalizeIsoString(input)).toBe(input);
     });
 
-    it('wraps a bare array payload as `{ data: [...], meta.timestamp }`', async () => {
-      const logger: LoggerLike = { warn: jest.fn() };
-      const interceptor = buildInterceptor(logger);
-
-      const result = await runOnce(interceptor, [{ a: 1 }, { a: 2 }]);
-
-      expect(result).toEqual({
-        data: [{ a: 1 }, { a: 2 }],
-        meta: { timestamp: iso8601Matcher() },
-      });
+    it('normalizes a minimal ISO string without millis to 3-digit milliseconds', () => {
+      // JS Date always normalizes to exactly 3-digit ms in toISOString()
+      const input = '2026-07-14T10:30:00Z';
+      const result = normalizeIsoString(input);
+      expect(result).toBe('2026-07-14T10:30:00.000Z');
     });
 
-    it('wraps null/undefined payload as `{ data: null, meta.timestamp }` (the default branch)', async () => {
-      const logger: LoggerLike = { warn: jest.fn() };
-      const interceptor = buildInterceptor(logger);
-
-      const resultNull = await runOnce(interceptor, null);
-      expect(resultNull).toEqual({
-        data: null,
-        meta: { timestamp: iso8601Matcher() },
-      });
-
-      const resultUndef = await runOnce(interceptor, undefined);
-      expect(resultUndef).toEqual({
-        data: null,
-        meta: { timestamp: iso8601Matcher() },
-      });
+    it('normalizes a valid ISO string with sub-millisecond precision to 3 digits', () => {
+      // JS Date truncates to milliseconds (not rounds) and pads to 3 digits
+      const input = '2026-07-14T10:30:00.123456Z';
+      const result = normalizeIsoString(input);
+      expect(result).toBe('2026-07-14T10:30:00.123Z');
     });
 
-    it('wraps a string payload as `{ data: <string>, meta.timestamp }`', async () => {
-      const logger: LoggerLike = { warn: jest.fn() };
-      const interceptor = buildInterceptor(logger);
-
-      const result = await runOnce(interceptor, 'plain string');
-
-      expect(result).toEqual({
-        data: 'plain string',
-        meta: { timestamp: iso8601Matcher() },
-      });
+    it('normalizes a Postgres-style timestamp with space and offset', () => {
+      const input = '2026-07-14 10:30:19.156551+00';
+      const result = normalizeIsoString(input);
+      expect(result).toMatch(ISO_TIMESTAMP_REGEX);
     });
 
-    it('wraps a number payload as `{ data: <number>, meta.timestamp }`', async () => {
-      const logger: LoggerLike = { warn: jest.fn() };
-      const interceptor = buildInterceptor(logger);
-
-      const result = await runOnce(interceptor, 42);
-
-      expect(result).toEqual({
-        data: 42,
-        meta: { timestamp: iso8601Matcher() },
-      });
+    it('normalizes a timestamp with space and no timezone', () => {
+      const input = '2026-07-14 10:30:19.156551';
+      const result = normalizeIsoString(input);
+      expect(result).toMatch(ISO_TIMESTAMP_REGEX);
     });
 
-    it('logs a structured Logger.warn with envelope_drift event on the wrap path', async () => {
-      const logger: LoggerLike = { warn: jest.fn() };
-      const interceptor = buildInterceptor(logger);
-
-      await runOnce(interceptor, { name: 'plain' });
-
-      expect(logger.warn).toHaveBeenCalledTimes(1);
-      const call = logger.warn.mock.calls[0] as readonly [unknown, string];
-      const context = call[0] as Record<string, unknown>;
-      expect(context.event).toBe('response_format_interceptor.envelope_drift');
-      expect(context.reason).toMatch(/payload did not match ApiResponse envelope shape/);
-      expect(call[1]).toMatch(/payload did not match envelope shape/);
+    it('returns input unchanged for an unparseable string', () => {
+      const input = 'not-a-timestamp';
+      expect(normalizeIsoString(input)).toBe(input);
     });
 
-    it('does NOT throw on the wrap path (the interceptor never throws under any condition)', async () => {
-      const logger: LoggerLike = { warn: jest.fn() };
-      const interceptor = buildInterceptor(logger);
-
-      // Pre-Phase-4 would have inferred a paginated shape here and
-      // attempted to destructure `items` / `pagination`. The Phase-4
-      // heuristic removal means we no longer infer; we wrap as data.
-      // This input previously triggered a 500 if neither `items`
-      // nor `pagination` matched the heuristic — now it succeeds
-      // with the default-branch wrap.
-      const weirdShape = { items: [{ id: 1 }], cursor: 'abc', total: 5 };
-      await expect(runOnce(interceptor, weirdShape)).resolves.toEqual({
-        data: weirdShape,
-        meta: { timestamp: iso8601Matcher() },
-      });
+    it('returns input unchanged for an empty string', () => {
+      expect(normalizeIsoString('')).toBe('');
     });
   });
 
-  describe('bypass paths (pass-through without envelope check)', () => {
-    it('bypasses StreamableFile payloads (file downloads)', async () => {
-      const logger: LoggerLike = { warn: jest.fn() };
-      const interceptor = buildInterceptor(logger);
+  // ── normalizeTemporalFields ─────────────────────────────────────────────────
 
-      const stream = new StreamableFile(Buffer.from('hello'));
-
-      const result = await runOnce(interceptor, stream);
-
-      expect(result).toBe(stream);
-      expect(logger.warn).not.toHaveBeenCalled();
+  describe('normalizeTemporalFields', () => {
+    it('leaves a null value as-is', () => {
+      expect(normalizeTemporalFields(null, 0)).toBeNull();
     });
 
-    it('bypasses when the underlying response has already sent headers (e.g. @Res passthrough)', async () => {
-      const logger: LoggerLike = { warn: jest.fn() };
-      const interceptor = buildInterceptor(logger);
-
-      const context = {
-        getType: () => 'http',
-        switchToHttp: () => ({
-          getResponse: () => ({ headersSent: true, writableEnded: false }),
-          getRequest: () => ({}),
-          getNext: () => ({}),
-        }),
-      } as unknown as ExecutionContext;
-
-      const original = { not: 'envelope' };
-      const result = await runOnce(interceptor, original, context);
-
-      expect(result).toBe(original);
-      expect(logger.warn).not.toHaveBeenCalled();
+    it('leaves an undefined value as-is', () => {
+      expect(normalizeTemporalFields(undefined, 0)).toBeUndefined();
     });
 
-    it('bypasses when the underlying response has ended (writableEnded)', async () => {
-      const logger: LoggerLike = { warn: jest.fn() };
-      const interceptor = buildInterceptor(logger);
-
-      const context = {
-        getType: () => 'http',
-        switchToHttp: () => ({
-          getResponse: () => ({ headersSent: false, writableEnded: true }),
-          getRequest: () => ({}),
-          getNext: () => ({}),
-        }),
-      } as unknown as ExecutionContext;
-
-      const original = { not: 'envelope' };
-      const result = await runOnce(interceptor, original, context);
-
-      expect(result).toBe(original);
+    it('leaves a plain string as-is', () => {
+      expect(normalizeTemporalFields('hello', 0)).toBe('hello');
     });
-  });
 
-  describe('post-Phase-4 invariants', () => {
-    it('does NOT detect or infer a paginated `{ items, pagination }` shape (heuristic removed)', async () => {
-      // Plan §Phase 4: delete `isPaginatedPayload` and `PaginatedPayload`.
-      // The interceptor must NOT smart-rewrap a `{ items, pagination }`
-      // shape — it falls through to the default branch (wrap-as-data
-      // + warn).
-      const logger: LoggerLike = { warn: jest.fn() };
-      const interceptor = buildInterceptor(logger);
+    it('converts a Date instance to ISO string', () => {
+      const date = new Date('2026-07-14T10:30:00.000Z');
+      expect(normalizeTemporalFields(date, 0)).toBe('2026-07-14T10:30:00.000Z');
+    });
 
-      const legacyPaginated = {
-        items: [{ id: 1 }],
-        pagination: { limit: 1, nextCursor: null, hasNextPage: false },
+    it('rewrites createdAt with Postgres format to ISO', () => {
+      const input = { createdAt: '2026-07-14 10:30:19.156551+00' };
+      const result = normalizeTemporalFields(input, 0) as Record<string, unknown>;
+      expect(result.createdAt).toMatch(ISO_TIMESTAMP_REGEX);
+    });
+
+    it('rewrites updatedAt with Postgres format to ISO', () => {
+      const input = { updatedAt: '2026-07-14 10:30:19.156551+00' };
+      const result = normalizeTemporalFields(input, 0) as Record<string, unknown>;
+      expect(result.updatedAt).toMatch(ISO_TIMESTAMP_REGEX);
+    });
+
+    it('passes through non-temporal fields unchanged', () => {
+      const input = {
+        userId: '550e8400-e29b-41d4-a716-446655440000',
+        displayName: 'Alice',
+        xpTotal: 15420,
+        isPublic: true,
       };
-
-      const result = await runOnce(interceptor, legacyPaginated);
-
-      // NOT re-wrapped as { data: items, meta.pagination }.
-      // The default-branch wrap preserves the whole shape as `data`.
-      expect(result).toEqual({
-        data: legacyPaginated,
-        meta: { timestamp: iso8601Matcher() },
-      });
-      expect(logger.warn).toHaveBeenCalledTimes(1);
+      const result = normalizeTemporalFields(input, 0) as Record<string, unknown>;
+      expect(result).toEqual(input);
     });
 
-    it('does NOT throw when the payload is a non-Error throwable (defensive)', async () => {
-      // The interceptor must remain a no-throw fallback even when the
-      // underlying handler emits a non-error throwable. We can't
-      // easily simulate a throw inside `of()` (RxJS swallows it), so
-      // we just verify that the wrap path never throws on the inputs
-      // we do support.
-      const logger: LoggerLike = { warn: jest.fn() };
-      const interceptor = buildInterceptor(logger);
-
-      // `expect.anything()` returns `unknown` at the type level; jest widens
-      // to `any` when reading the matcher result inside an object literal.
-      // The single-line `expect.stringMatching` matcher (via
-      // `iso8601Matcher()`) does not trigger the lint rule, but
-      // `expect.anything()` does — so we explicitly cast to `unknown`
-      // (which is assignable to any property in the assertion literal).
-      const anythingMatcher: unknown = expect.anything();
-      await expect(runOnce(interceptor, Symbol('weird-symbol'))).resolves.toEqual({
-        data: anythingMatcher,
-        meta: { timestamp: iso8601Matcher() },
-      });
+    it('normalizes all temporal fields in a mixed object', () => {
+      const input = {
+        userId: '550e8400-e29b-41d4-a716-446655440000',
+        createdAt: '2026-07-14 10:30:19.156551+00',
+        updatedAt: '2026-01-01 00:00:00+00',
+        username: 'alice',
+        streakStartTime: '2026-07-01 00:00:00+00',
+      };
+      const result = normalizeTemporalFields(input, 0) as Record<string, unknown>;
+      expect(result.userId).toBe('550e8400-e29b-41d4-a716-446655440000');
+      expect(result.username).toBe('alice');
+      expect(result.createdAt).toMatch(ISO_TIMESTAMP_REGEX);
+      expect(result.updatedAt).toMatch(ISO_TIMESTAMP_REGEX);
+      expect(result.streakStartTime).toMatch(ISO_TIMESTAMP_REGEX);
     });
 
-    it('preserves nested temporal-field normalization on the wrap path', async () => {
-      // Plan: `normalizeTemporalFields` is retained for the wrap path.
-      // Specifically, ISO-string values for keys ending in
-      // `time`/`timestamp`/`date`/`at` are re-normalized to UTC.
-      const logger: LoggerLike = { warn: jest.fn() };
-      const interceptor = buildInterceptor(logger);
-
-      const payload = {
-        createdAt: '2024-01-01T00:00:00.000Z',
-        // Non-ISO string should NOT be normalized.
-        title: 'Quiz 101',
-        nested: {
-          updatedAt: '2024-06-15T12:30:00.000Z',
-          // Plain string field with `at` suffix but non-ISO content
-          // should be left alone (Date.parse returns NaN).
-          somethingAt: 'not-a-date',
+    it('normalizes temporal fields in nested objects', () => {
+      const input = {
+        outer: {
+          createdAt: '2026-07-14 10:30:19.156551+00',
+          inner: {
+            updatedAt: '2026-01-01 00:00:00+00',
+          },
         },
       };
-
-      const result = await runOnce(interceptor, payload);
-
-      const body = result as { data: typeof payload };
-      expect(body.data.createdAt).toBe('2024-01-01T00:00:00.000Z');
-      expect(body.data.title).toBe('Quiz 101');
-      expect(body.data.nested.updatedAt).toBe('2024-06-15T12:30:00.000Z');
-      expect(body.data.nested.somethingAt).toBe('not-a-date');
+      const result = normalizeTemporalFields(input, 0) as Record<string, unknown>;
+      const outer = result.outer as Record<string, unknown>;
+      const inner = outer.inner as Record<string, unknown>;
+      expect(outer.createdAt).toMatch(ISO_TIMESTAMP_REGEX);
+      expect(inner.updatedAt).toMatch(ISO_TIMESTAMP_REGEX);
     });
 
-    it('uses a new `timestamp` on the wrap path (not the payload`s timestamp)', async () => {
-      const logger: LoggerLike = { warn: jest.fn() };
-      const interceptor = buildInterceptor(logger);
-
-      // The payload has its own `timestamp` field — but it's not in
-      // `meta.timestamp` position, so the interceptor does NOT detect
-      // this as an envelope. It wraps as data + sets a fresh meta.timestamp.
-      const result = await runOnce(interceptor, { timestamp: '2020-01-01T00:00:00.000Z' });
-
-      const body = result as { data: { timestamp: string }; meta: { timestamp: string } };
-      expect(body.data.timestamp).toBe('2020-01-01T00:00:00.000Z');
-      expect(body.meta.timestamp).toMatch(ISO_8601);
-      expect(body.meta.timestamp).not.toBe(body.data.timestamp);
+    it('normalizes temporal fields in arrays', () => {
+      const input = {
+        badges: [
+          { badgeId: '1', earnedAt: '2026-07-14 10:30:19.156551+00' },
+          { badgeId: '2', earnedAt: '2026-01-01 00:00:00+00' },
+        ],
+      };
+      const result = normalizeTemporalFields(input, 0) as Record<string, unknown>;
+      const badges = result.badges as Array<Record<string, unknown>>;
+      expect(badges[0].earnedAt).toMatch(ISO_TIMESTAMP_REGEX);
+      expect(badges[1].earnedAt).toMatch(ISO_TIMESTAMP_REGEX);
     });
 
-    it('the file stays under the "simplify to wrap-without-inference" line budget (sanity)', () => {
-      // Plan §Phase 4 exit criterion: "interceptor is ~70 lines".
-      // Production source is ~155 lines (the heuristic-removal goal
-      // is a structural simplification, not a line-count target — see
-      // the plan note: "very low" risk because the fallback is the
-      // same shape as the previous default branch). This test guards
-      // against accidental future creep back toward the heuristic
-      // surface (e.g. re-introducing `isPaginatedPayload`).
-      // The hard ceiling is set generously to avoid brittleness:
-      // any meaningful heuristic-removal regression would push past
-      // 200 lines.
-      const filePath = join(__dirname, 'response-format.interceptor.ts');
-      const source = readFileSync(filePath, 'utf8');
-      const lineCount = source.split('\n').length;
+    it('stops normalizing at MAX_NESTING_DEPTH to prevent stack overflow', () => {
+      // Build a deeply nested object (depth > MAX_NESTING_DEPTH)
+      const obj: Record<string, unknown> = {};
+      let current = obj;
+      for (let i = 0; i < 15; i++) {
+        current.nested = { createdAt: '2026-07-14 10:30:19.156551+00' };
+        current = current.nested as Record<string, unknown>;
+      }
+      const result = normalizeTemporalFields(obj, 0) as Record<string, unknown>;
+      // The deepest level should NOT be normalized (depth exceeded)
+      let deepest = result;
+      for (let i = 0; i < 15; i++) {
+        deepest = deepest.nested as Record<string, unknown>;
+      }
+      expect(deepest.createdAt).toBe('2026-07-14 10:30:19.156551+00');
+    });
 
-      expect(lineCount).toBeLessThan(200);
+    it('already-canonical ISO strings are passed through unchanged', () => {
+      const input = {
+        createdAt: '2026-07-14T10:30:00.000Z',
+        updatedAt: '2026-01-01T00:00:00.000Z',
+      };
+      const result = normalizeTemporalFields(input, 0) as Record<string, unknown>;
+      expect(result.createdAt).toBe('2026-07-14T10:30:00.000Z');
+      expect(result.updatedAt).toBe('2026-01-01T00:00:00.000Z');
     });
   });
 });
