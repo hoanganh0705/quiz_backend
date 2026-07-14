@@ -22,7 +22,7 @@ export class UserRankingResponseDto {
   totalScore!: number;
 
   @ApiProperty({
-    description: 'Derived user level from total score',
+    description: 'Derived level = floor(totalScore / 500) + 1. Reflects all-time XP progression.',
     example: 14,
   })
   level!: number;
