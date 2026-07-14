@@ -6,7 +6,7 @@ import { IsInt, IsOptional, Max, Min } from 'class-validator';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
 import { Permissions } from '@/common/authorization/decorators/permissions.decorator';
 import { Permission } from '@/common/authorization/permissions';
-import { ApiAuth, ApiNotFound } from '@/common/swagger/swagger-decorators';
+import { ApiForbidden, ApiAuth, ApiNotFound } from '@/common/swagger/swagger-decorators';
 import { ApiOkResource } from '@/common/swagger/api-ok';
 import { AchievementApplicationService } from '../../application/achievement.application.service';
 import { AchievementPresenter } from '../presenters/achievement.presenter';
@@ -114,6 +114,7 @@ export class AchievementController {
   @Delete('/users/:userId/badges/:badgeId')
   @Permissions(Permission.ACHIEVEMENT_REVOKE)
   @ApiAuth()
+  @ApiForbidden()
   async revokeUserBadge(
     @Param('userId', new ParseUUIDPipe()) userId: string,
     @Param('badgeId', new ParseUUIDPipe()) badgeId: string,

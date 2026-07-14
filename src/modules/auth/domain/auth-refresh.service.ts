@@ -149,7 +149,7 @@ export class AuthRefreshService {
     }
 
     const identity = toAuthIdentity(user);
-    const tokens = await this.tokenService.issueTokens(identity);
+    const tokens = await this.tokenService.issueTokens(identity, existingSession.sessionId);
 
     await this.sessionService.rotateSession(existingSession.sessionId, tokens, context, nowIso);
 

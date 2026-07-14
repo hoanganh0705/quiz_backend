@@ -9,7 +9,10 @@ import { Controller, Get, Post, Param, HttpCode, HttpStatus, ParseUUIDPipe } fro
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Permissions } from '@/common/authorization/decorators/permissions.decorator';
 import { Permission } from '@/common/authorization/permissions';
-import { ApiAuth } from '@/common/swagger/swagger-decorators';
+import {
+  ApiForbidden,
+  ApiAuth,
+} from '@/common/swagger/swagger-decorators';
 import { ApiOkResource } from '@/common/swagger/api-ok';
 import { AchievementApplicationService } from '../../application/achievement.application.service';
 import { AchievementPresenter } from '../presenters/achievement.presenter';
@@ -29,6 +32,7 @@ export class AchievementAdminController {
 
   @Post('reevaluate/:userId')
   @Permissions(Permission.ACHIEVEMENT_ADMIN)
+  @ApiForbidden()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Re-evaluate all badges for a user',
@@ -45,6 +49,7 @@ export class AchievementAdminController {
 
   @Get('reevaluate/:userId/history')
   @Permissions(Permission.ACHIEVEMENT_ADMIN)
+  @ApiForbidden()
   @ApiOperation({ summary: 'Get achievement history for a user (admin)' })
   @ApiOkResource(AdminAchievementHistoryItemDto, {
     description: 'Achievement history returned',

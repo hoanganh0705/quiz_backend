@@ -13,8 +13,10 @@ export class ForgotPasswordDto {
 
 export class ResetPasswordDto {
   @ApiProperty({
-    description: 'Password reset token from email',
-    example: 'a1b2c3d4e5f6...',
+    description: 'Password reset token (64-character hex string from the password-reset email)',
+    example: 'a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2',
+    minLength: 32,
+    maxLength: 128,
   })
   @IsString()
   @MinLength(32, { message: 'Invalid reset token' })
@@ -40,11 +42,11 @@ export class ResetPasswordDto {
 export class ChangePasswordDto {
   @ApiProperty({
     description: 'Current password',
-    minLength: 8,
+    minLength: 1,
     maxLength: 128,
   })
   @IsString()
-  @MinLength(8)
+  @MinLength(1)
   @MaxLength(128)
   currentPassword!: string;
 

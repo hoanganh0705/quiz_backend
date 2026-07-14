@@ -2,8 +2,8 @@ import { ApiProperty } from '@nestjs/swagger';
 
 export class LoginResponseDto {
   @ApiProperty({
-    description: 'Unique user identifier',
-    example: '550e8400-e29b-41d4-a716-446655440000',
+    description: 'Unique user identifier (UUIDv7)',
+    example: '019f5e13-1fca-798f-93cc-b5ef8699de25',
   })
   userId!: string;
 
@@ -21,8 +21,8 @@ export class LoginResponseDto {
   accessToken!: string;
 
   @ApiProperty({
-    description: 'Current session identifier for session management operations',
-    example: '7c9e6679-7425-40de-944b-e07fc1f90ae7',
+    description: 'Current session identifier for session management operations (UUIDv7)',
+    example: '019f5e4c-b6fa-72cd-a5a5-ffe59539701d',
   })
   sessionId!: string;
 }

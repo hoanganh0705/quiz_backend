@@ -135,7 +135,7 @@ export class QuizCommandService {
     const hasCategoryId = hasOwn(command, 'categoryId');
     const hasTagIds = hasOwn(command, 'tagIds');
 
-    const categoryId = hasCategoryId ? command.categoryId ?? null : null;
+    const categoryId = hasCategoryId ? (command.categoryId ?? null) : null;
     const tagIds = hasTagIds ? normalizeLinkIds(command.tagIds ?? undefined) : null;
 
     if (Object.keys(patch).length === 0 && !hasCategoryId && !hasTagIds) {
