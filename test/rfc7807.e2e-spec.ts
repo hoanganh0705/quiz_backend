@@ -135,7 +135,6 @@ import {
   BookmarkValidationError,
   CollectionConflictError,
   CollectionForbiddenError,
-  CollectionNotFoundError,
 } from '@/modules/bookmark/domain/errors';
 import {
   InstanceAlreadyClosedError,
@@ -668,7 +667,7 @@ class Rfc7807FixtureController {
     // Verify wire-shape improvement: prior filter rewrote all to
     // `'Resource not found'`. Global filter preserves thrown message.
     // One call site passes `'Quiz not found'`.
-    throw new CollectionNotFoundError('Quiz not found');
+    throw new BookmarkCollectionNotFoundError('Quiz not found');
   }
 
   @Get('bookmark/analytics-not-found')

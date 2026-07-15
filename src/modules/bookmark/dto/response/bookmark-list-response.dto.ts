@@ -40,7 +40,7 @@ export class BookmarkedQuizResponseDto {
 export class BookmarkListResponseDto {
   @ApiProperty({
     description: 'Bookmarked quizzes in the collection',
-    type: () => [BookmarkedQuizResponseDto],
+    type: [BookmarkedQuizResponseDto],
   })
   items!: BookmarkedQuizResponseDto[];
 }

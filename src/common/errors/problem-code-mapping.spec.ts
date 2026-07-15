@@ -367,7 +367,7 @@ describe('ProblemCodeMapping', () => {
 
   describe('resolveProblemInfo (bookmark module — Phase 2, 7 entries)', () => {
     // 7 entries covering 4 status codes:
-    //   404: BOOKMARK_NOT_FOUND, COLLECTION_NOT_FOUND, BOOKMARK_COLLECTION_NOT_FOUND
+    //   404: BOOKMARK_NOT_FOUND, BOOKMARK_COLLECTION_NOT_FOUND
     //   403: COLLECTION_FORBIDDEN
     //   409: BOOKMARK_CONFLICT, COLLECTION_CONFLICT
     //   400: BOOKMARK_VALIDATION
@@ -376,12 +376,6 @@ describe('ProblemCodeMapping', () => {
       expect(info.status).toBe(HttpStatus.NOT_FOUND);
       expect(info.title).toBe('NotFound');
       expect(info.typeUri).toBe('https://api.quiz.local/problems/bookmark-not-found');
-    });
-
-    it('returns a 404 entry for COLLECTION_NOT_FOUND', () => {
-      const info = resolveProblemInfo('COLLECTION_NOT_FOUND');
-      expect(info.status).toBe(HttpStatus.NOT_FOUND);
-      expect(info.title).toBe('NotFound');
     });
 
     it('returns a 404 entry for BOOKMARK_COLLECTION_NOT_FOUND', () => {

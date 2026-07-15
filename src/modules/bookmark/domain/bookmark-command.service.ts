@@ -1,15 +1,15 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
-import { isPostgresForeignKeyViolation } from '@/common/utils/db-error.util';
+import { isPostgresForeignKeyViolation, resolvePgError } from '@/common/utils/db-error.util';
 import {
   BOOKMARK_REPOSITORY_PORT,
   type BookmarkRepositoryPort,
   type BookmarkCollectionRow,
 } from './ports/bookmark-repository.port';
 import { QUIZ_REPOSITORY_PORT } from '@/modules/quiz/domain/ports';
+import { QuizNotFoundError } from '@/modules/quiz/domain/errors';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
 import {
-  CollectionNotFoundError,
   BookmarkCollectionNotFoundError,
   CollectionForbiddenError,
   CollectionConflictError,
@@ -61,7 +61,7 @@ export class BookmarkCommandService {
     const collection = await this.bookmarkRepository.getCollectionById(collectionId);
 
     if (!collection) {
-      throw new CollectionNotFoundError(COLLECTION_NOT_FOUND_MESSAGE);
+      throw new BookmarkCollectionNotFoundError(COLLECTION_NOT_FOUND_MESSAGE);
     }
 
     if (collection.userId !== user.sub && user.role !== 'admin') {
@@ -90,7 +90,7 @@ export class BookmarkCommandService {
 
       return collection;
     } catch (error) {
-      const pgError = error as { code?: string; constraint?: string };
+      const pgError = resolvePgError(error);
       if (pgError.code === '23505' && pgError.constraint === 'uq_bookmark_collections_user_name') {
         this.logger.warn({ event: 'collection_create_name_conflict', userId: user.sub, name });
         throw new CollectionConflictError(COLLECTION_NAME_CONFLICT_MESSAGE);
@@ -125,7 +125,7 @@ export class BookmarkCommandService {
 
       return updated;
     } catch (error) {
-      const pgError = error as { code?: string; constraint?: string };
+      const pgError = resolvePgError(error);
       if (pgError.code === '23505' && pgError.constraint === 'uq_bookmark_collections_user_name') {
         this.logger.warn({ event: 'collection_update_name_conflict', userId: user.sub, name });
         throw new CollectionConflictError(COLLECTION_NAME_CONFLICT_MESSAGE);
@@ -158,7 +158,7 @@ export class BookmarkCommandService {
 
     const quiz = await this.quizRepository.getActiveQuizRecordById(quizId);
     if (!quiz) {
-      throw new CollectionNotFoundError('Quiz not found');
+      throw new QuizNotFoundError();
     }
 
     try {
@@ -182,7 +182,7 @@ export class BookmarkCommandService {
 
       return bookmark;
     } catch (error) {
-      const pgError = error as { code?: string; constraint?: string };
+      const pgError = resolvePgError(error);
       if (pgError.code === '23505' && pgError.constraint === 'uq_bookmarked_quizzes_pair') {
         this.logger.warn({
           event: 'bookmark_duplicate',

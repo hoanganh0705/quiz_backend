@@ -764,23 +764,7 @@ export const ProblemCodeMapping: Readonly<Record<string, ProblemCodeInfo>> = {
     typeUri: 'https://api.quiz.local/problems/bookmark-not-found',
   },
   /**
-   * Thrown when a collection cannot be found. 404 Not Found.
-   *
-   * Wire-shape improvement: the prior per-module filter rewrote every
-   * `CollectionNotFoundError.message` to a hardcoded generic
-   * `'Resource not found'`. The global filter now preserves
-   * `exception.message` (one throw site in
-   * `bookmark-command.service.ts:161` passes `'Quiz not found'`,
-   * which surfaces verbatim).
-   */
-  COLLECTION_NOT_FOUND: {
-    status: HttpStatus.NOT_FOUND,
-    title: 'NotFound',
-    typeUri: 'https://api.quiz.local/problems/collection-not-found',
-  },
-  /**
-   * Thrown when a bookmark's collection analytics entry cannot be
-   * found. 404 Not Found.
+   * Thrown when a bookmark's collection cannot be found. 404 Not Found.
    *
    * Wire-shape improvement: the prior per-module filter rewrote every
    * `BookmarkCollectionNotFoundError.message` to a hardcoded
