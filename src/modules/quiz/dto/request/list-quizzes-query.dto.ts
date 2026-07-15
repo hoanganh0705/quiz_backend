@@ -54,18 +54,18 @@ export class ListQuizzesQueryDto {
   difficulty?: QuizDifficulty;
 
   @ApiPropertyOptional({
-    description: 'Filter by category UUID',
+    description: 'Filter by category UUID (must be a valid UUID v4)',
     format: 'uuid',
     example: '660e8400-e29b-41d4-a716-446655440000',
     nullable: true,
   })
   @IsOptional()
-  @IsUUID()
+  @IsUUID('4')
   categoryId?: string;
 
   @ApiPropertyOptional({
     description:
-      'Filter by one or more tag UUIDs (OR semantics — quiz matches if it has at least one of the given tags)',
+      'Filter by one or more tag UUIDs (OR semantics — quiz matches if it has at least one of the given tags). Must be valid UUID v4 values.',
     type: String,
     isArray: true,
     format: 'uuid',
@@ -88,6 +88,6 @@ export class ListQuizzesQueryDto {
   @ArrayMaxSize(50)
   @ArrayMinSize(1)
   @ArrayUnique()
-  @IsUUID('all', { each: true })
+  @IsUUID('4', { each: true })
   tagIds?: string[];
 }

@@ -104,6 +104,7 @@ export class CreateQuizDto {
     description: 'Prerequisites or requirements to attempt this quiz',
     type: String,
     maxLength: 5000,
+    example: 'Basic understanding of HTML and CSS',
     nullable: true,
   })
   @IsOptional()
@@ -117,6 +118,7 @@ export class CreateQuizDto {
     type: String,
     maxLength: 2048,
     format: 'uri',
+    example: 'https://example.com/covers/javascript-fundamentals.png',
     nullable: true,
   })
   @IsOptional()
@@ -128,7 +130,7 @@ export class CreateQuizDto {
   @ApiPropertyOptional({
     description: 'Whether the quiz is featured on the home page',
     default: false,
-    example: true,
+    example: false,
     nullable: true,
   })
   @IsOptional()
@@ -153,7 +155,7 @@ export class CreateQuizDto {
     nullable: true,
   })
   @IsOptional()
-  @IsUUID('all')
+  @IsUUID('4')
   categoryId?: string;
 
   @ApiPropertyOptional({
@@ -168,12 +170,18 @@ export class CreateQuizDto {
   @IsArray()
   @ArrayMaxSize(50)
   @ArrayUnique()
-  @IsUUID('all', { each: true })
+  @IsUUID('4', { each: true })
   tagIds?: string[];
 
   @ApiProperty({
     description: 'Initial version metadata for the quiz',
     type: () => CreateInitialQuizVersionDto,
+    example: {
+      difficulty: 'medium',
+      durationMs: 600000,
+      passingScorePercent: 70,
+      rewardXp: 100,
+    },
   })
   @ValidateNested()
   @Type(() => CreateInitialQuizVersionDto)

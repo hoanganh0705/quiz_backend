@@ -225,6 +225,7 @@ export class QuizApplicationService implements QuizListingPort {
     return quizzes.map((q) => ({
       rank: q.rank,
       quizId: q.quizId,
+      creatorId: null, // TODO: Populate when analytics queries include creatorId
       title: q.title,
       slug: q.slug,
       imageUrl: q.imageUrl,
@@ -240,6 +241,7 @@ export class QuizApplicationService implements QuizListingPort {
     return quizzes.map((q) => ({
       rank: q.rank,
       quizId: q.quizId,
+      creatorId: null, // TODO: Populate when analytics queries include creatorId
       title: q.title,
       slug: q.slug,
       imageUrl: q.imageUrl,

@@ -1,3 +1,26 @@
+/**
+ * Quiz module constants.
+ *
+ * ## Slug Validation Rules
+ * Quiz slugs must:
+ * - Be lowercase (automatically enforced by transformation)
+ * - Contain only letters (a-z), numbers (0-9), and hyphens (-)
+ * - Start with a letter or number
+ * - End with a letter or number
+ * - Have a maximum length of 120 characters
+ * - Be unique across all quizzes
+ *
+ * Examples of valid slugs:
+ * - "javascript-fundamentals"
+ * - "python-101"
+ * - "web-development-basics"
+ *
+ * Examples of invalid slugs:
+ * - "JavaScript_Fundamentals" (uppercase, contains underscore)
+ * - "-leading-hyphen" (starts with hyphen)
+ * - "trailing-hyphen-" (ends with hyphen)
+ */
+
 export const QUIZ_SLUG_EMPTY_MESSAGE = 'Quiz slug cannot be empty';
 
 export const QUIZ_SLUG_INVALID_MESSAGE =

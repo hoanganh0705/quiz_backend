@@ -49,7 +49,7 @@ export class QuizVersionResponseMapper {
     questions: QuizQuestionResponseDto[],
   ): QuizVersionDetailResponseDto {
     return {
-      versionId: row.quizVersionId,
+      quizVersionId: row.quizVersionId,
       quizId: row.quizId,
       versionNumber: row.versionNumber,
       status: row.status,
