@@ -143,17 +143,11 @@ const problem = {
 
 // ─── Per-endpoint composed decorators ──────────────────────────────────────────
 
-const resourceOk = <T extends Type>(
-  model: T,
-  description: string,
-  example?: unknown,
-) => ApiOkResource(model, { description, example });
+const resourceOk = <T extends Type>(model: T, description: string, example?: unknown) =>
+  ApiOkResource(model, { description, example });
 
-const resourceCreated = <T extends Type>(
-  model: T,
-  description: string,
-  example?: unknown,
-) => ApiCreatedResource(model, { description, example });
+const resourceCreated = <T extends Type>(model: T, description: string, example?: unknown) =>
+  ApiCreatedResource(model, { description, example });
 
 const resourceList = <T extends Type>(
   model: T,

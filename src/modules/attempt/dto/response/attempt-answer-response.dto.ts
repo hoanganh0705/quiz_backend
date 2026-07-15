@@ -20,6 +20,7 @@ export class AttemptAnswerResponseDto {
     type: String,
     format: 'uuid',
     nullable: true,
+    example: '550e8400-e29b-41d4-a716-446655440010',
   })
   selectedOptionId!: string | null;
 
@@ -33,6 +34,7 @@ export class AttemptAnswerResponseDto {
     description: 'Time taken in milliseconds',
     type: Number,
     nullable: true,
+    example: 15000,
   })
   timeTakenMs!: number | null;
 
@@ -40,6 +42,7 @@ export class AttemptAnswerResponseDto {
     description: 'Whether the answer was correct (null if attempt is not yet complete)',
     type: Boolean,
     nullable: true,
+    example: true,
   })
   isCorrect!: boolean | null;
 }

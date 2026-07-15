@@ -4,7 +4,6 @@ import {
   ApiBearerAuth,
   ApiConflictResponse,
   ApiForbiddenResponse,
-  ApiImplicitParam,
   ApiInternalServerErrorResponse,
   ApiNotFoundResponse,
   ApiParam,
@@ -103,19 +102,23 @@ const DESCRIPTIONS = {
   categoryById: 'Returns the requested category.',
   categoryBySlug: 'Returns the requested category.',
   categoryCreate: 'Returns the created category.',
-  categoryUpdate: 'Returns the updated category. If no fields are provided, returns the current category state (idempotent behavior).',
+  categoryUpdate:
+    'Returns the updated category. If no fields are provided, returns the current category state (idempotent behavior).',
   categoryRestore: 'Returns the restored category.',
   // lists
   categoryList: 'Returns the requested categories.',
-  categoryRanked: 'Returns the ranked categories. Note: `totalScore` and `totalAttempts` are returned as strings (SQL SUM aggregation). Timestamps (createdAt, updatedAt) are not included in ranked responses.',
+  categoryRanked:
+    'Returns the ranked categories. Note: `totalScore` and `totalAttempts` are returned as strings (SQL SUM aggregation). Timestamps (createdAt, updatedAt) are not included in ranked responses.',
   categoryRelated: 'Returns the related categories.',
   categoryFollowed: 'Returns the categories followed by the authenticated user.',
   categoryAnalytics: 'Returns the category analytics.',
   categoryQuizzes: 'Returns the quizzes in the category.',
   // action confirmations
-  categoryFollow: 'Confirms the category was followed. This operation is idempotent — following a category you already follow succeeds silently.',
+  categoryFollow:
+    'Confirms the category was followed. This operation is idempotent — following a category you already follow succeeds silently.',
   categoryUnfollow: 'Confirms the category was unfollowed.',
-  categoryDelete: 'Confirms the category was deleted. Returns 200 OK with a confirmation message (soft delete — the category can be restored).',
+  categoryDelete:
+    'Confirms the category was deleted. Returns 200 OK with a confirmation message (soft delete — the category can be restored).',
 } as const;
 
 // ─── Error response option factory ────────────────────────────────────────────
@@ -187,7 +190,11 @@ export const ApiTrendingCategoriesResponse = (): MethodDecorator =>
 /** GET /categories/:slug/quizzes */
 export const ApiCategoryQuizzesResponse = (): MethodDecorator =>
   applyDecorators(
-    ApiParam({ name: 'slug', description: 'Category slug (URL-friendly identifier)', schema: { type: 'string' } }),
+    ApiParam({
+      name: 'slug',
+      description: 'Category slug (URL-friendly identifier)',
+      schema: { type: 'string' },
+    }),
     ApiOkResourceList(QuizListItemDto, 'cursor', {
       description: DESCRIPTIONS.categoryQuizzes,
       example: CATEGORY_QUIZZES_EXAMPLE,
@@ -199,7 +206,11 @@ export const ApiCategoryQuizzesResponse = (): MethodDecorator =>
 /** GET /categories/:slug/related */
 export const ApiRelatedCategoriesResponse = (): MethodDecorator =>
   applyDecorators(
-    ApiParam({ name: 'slug', description: 'Category slug (URL-friendly identifier)', schema: { type: 'string' } }),
+    ApiParam({
+      name: 'slug',
+      description: 'Category slug (URL-friendly identifier)',
+      schema: { type: 'string' },
+    }),
     ApiOkResourceArray(CategoryResponseDto, {
       description: DESCRIPTIONS.categoryRelated,
       example: CATEGORY_RELATED_LIST_EXAMPLE,
@@ -212,7 +223,11 @@ export const ApiRelatedCategoriesResponse = (): MethodDecorator =>
 /** GET /categories/:id/analytics */
 export const ApiCategoryAnalyticsResponse = (): MethodDecorator =>
   applyDecorators(
-    ApiParam({ name: 'id', description: 'Category ID (UUID)', schema: { type: 'string', format: 'uuid' } }),
+    ApiParam({
+      name: 'id',
+      description: 'Category ID (UUID)',
+      schema: { type: 'string', format: 'uuid' },
+    }),
     ApiOkResource(CategoryAnalyticsResponseDto, {
       description: DESCRIPTIONS.categoryAnalytics,
       example: CATEGORY_ANALYTICS_EXAMPLE,
@@ -225,7 +240,11 @@ export const ApiCategoryAnalyticsResponse = (): MethodDecorator =>
 /** POST /categories/:id/follow */
 export const ApiFollowCategoryResponse = (): MethodDecorator =>
   applyDecorators(
-    ApiParam({ name: 'id', description: 'Category ID (UUID)', schema: { type: 'string', format: 'uuid' } }),
+    ApiParam({
+      name: 'id',
+      description: 'Category ID (UUID)',
+      schema: { type: 'string', format: 'uuid' },
+    }),
     ApiBearerAuth(AUTH_SECURITY_NAME),
     ApiOkResource(MessageResponseDto, {
       description: DESCRIPTIONS.categoryFollow,
@@ -242,7 +261,11 @@ export const ApiFollowCategoryResponse = (): MethodDecorator =>
 /** DELETE /categories/:id/follow */
 export const ApiUnfollowCategoryResponse = (): MethodDecorator =>
   applyDecorators(
-    ApiParam({ name: 'id', description: 'Category ID (UUID)', schema: { type: 'string', format: 'uuid' } }),
+    ApiParam({
+      name: 'id',
+      description: 'Category ID (UUID)',
+      schema: { type: 'string', format: 'uuid' },
+    }),
     ApiBearerAuth(AUTH_SECURITY_NAME),
     ApiOkResource(MessageResponseDto, {
       description: DESCRIPTIONS.categoryUnfollow,
@@ -259,7 +282,11 @@ export const ApiUnfollowCategoryResponse = (): MethodDecorator =>
 /** POST /categories/:id/restore */
 export const ApiRestoreCategoryResponse = (): MethodDecorator =>
   applyDecorators(
-    ApiParam({ name: 'id', description: 'Category ID (UUID)', schema: { type: 'string', format: 'uuid' } }),
+    ApiParam({
+      name: 'id',
+      description: 'Category ID (UUID)',
+      schema: { type: 'string', format: 'uuid' },
+    }),
     ApiBearerAuth(AUTH_SECURITY_NAME),
     ApiOkResource(CategoryResponseDto, {
       description: DESCRIPTIONS.categoryRestore,
@@ -286,7 +313,11 @@ export const ApiListCategoriesResponse = (): MethodDecorator =>
 /** GET /categories/:id */
 export const ApiCategoryByIdResponse = (): MethodDecorator =>
   applyDecorators(
-    ApiParam({ name: 'id', description: 'Category ID (UUID)', schema: { type: 'string', format: 'uuid' } }),
+    ApiParam({
+      name: 'id',
+      description: 'Category ID (UUID)',
+      schema: { type: 'string', format: 'uuid' },
+    }),
     ApiOkResource(CategoryResponseDto, {
       description: DESCRIPTIONS.categoryById,
       example: CATEGORY_DETAIL_EXAMPLE,
@@ -299,7 +330,11 @@ export const ApiCategoryByIdResponse = (): MethodDecorator =>
 /** GET /categories/:slug */
 export const ApiCategoryBySlugResponse = (): MethodDecorator =>
   applyDecorators(
-    ApiParam({ name: 'slug', description: 'Category slug (URL-friendly identifier)', schema: { type: 'string' } }),
+    ApiParam({
+      name: 'slug',
+      description: 'Category slug (URL-friendly identifier)',
+      schema: { type: 'string' },
+    }),
     ApiOkResource(CategoryResponseDto, {
       description: DESCRIPTIONS.categoryBySlug,
       example: CATEGORY_DETAIL_EXAMPLE,
@@ -326,7 +361,11 @@ export const ApiCreateCategoryResponse = (): MethodDecorator =>
 /** PATCH /categories/:id */
 export const ApiUpdateCategoryResponse = (): MethodDecorator =>
   applyDecorators(
-    ApiParam({ name: 'id', description: 'Category ID (UUID)', schema: { type: 'string', format: 'uuid' } }),
+    ApiParam({
+      name: 'id',
+      description: 'Category ID (UUID)',
+      schema: { type: 'string', format: 'uuid' },
+    }),
     ApiBearerAuth(AUTH_SECURITY_NAME),
     ApiOkResource(CategoryResponseDto, {
       description: DESCRIPTIONS.categoryUpdate,
@@ -343,7 +382,11 @@ export const ApiUpdateCategoryResponse = (): MethodDecorator =>
 /** DELETE /categories/:id */
 export const ApiDeleteCategoryResponse = (): MethodDecorator =>
   applyDecorators(
-    ApiParam({ name: 'id', description: 'Category ID (UUID)', schema: { type: 'string', format: 'uuid' } }),
+    ApiParam({
+      name: 'id',
+      description: 'Category ID (UUID)',
+      schema: { type: 'string', format: 'uuid' },
+    }),
     ApiBearerAuth(AUTH_SECURITY_NAME),
     ApiOkResource(MessageResponseDto, {
       description: DESCRIPTIONS.categoryDelete,
