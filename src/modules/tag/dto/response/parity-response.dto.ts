@@ -1,4 +1,4 @@
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { ApiProperty } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import { QuizListResponseDto } from '@/modules/quiz/dto/response/quiz-list-response.dto';
 
@@ -8,7 +8,7 @@ export class RankedTagResponseDto {
   @ApiProperty({ description: '1-based rank position' })
   rank!: number;
 
-  @ApiProperty()
+  @ApiProperty({ format: 'uuid' })
   tagId!: string;
 
   @ApiProperty()
@@ -22,6 +22,12 @@ export class RankedTagResponseDto {
 
   @ApiProperty({ description: 'Total quiz attempts across linked active quizzes (numeric string)' })
   totalAttempts!: string;
+
+  @ApiProperty({ description: 'Tag creation timestamp (ISO 8601)' })
+  createdAt!: string;
+
+  @ApiProperty({ description: 'Tag last update timestamp (ISO 8601)' })
+  updatedAt!: string;
 }
 
 export class TagFollowMessageResponseDto {
@@ -42,9 +48,10 @@ export class FollowedTagItemDto {
   @ApiProperty()
   slug!: string;
 
-  @ApiPropertyOptional({
+  @ApiProperty({
     description: 'ISO 8601 timestamp when the user followed this tag',
-    type: String,
+    example: '2025-06-01T12:00:00.000Z',
+    required: true,
   })
   followedAt!: string;
 }

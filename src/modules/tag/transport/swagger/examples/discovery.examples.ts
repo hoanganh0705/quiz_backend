@@ -99,3 +99,36 @@ export const TAG_DELETE_MESSAGE_EXAMPLE = {
   },
   meta: { timestamp: EXAMPLE_TIMESTAMP },
 } as const;
+
+export const TAG_CREATED_EXAMPLE = {
+  data: {
+    tagId: '770e8400-e29b-41d4-a716-446655440000',
+    name: 'Algorithms',
+    slug: 'algorithms',
+    createdAt: '2026-07-14T00:42:19.472Z',
+    updatedAt: '2026-07-14T00:42:19.472Z',
+  },
+  meta: { timestamp: EXAMPLE_TIMESTAMP },
+} as const;
+
+export const TAG_UPDATED_EXAMPLE = {
+  data: {
+    tagId: '770e8400-e29b-41d4-a716-446655440000',
+    name: 'Algorithms (renamed)',
+    slug: 'algorithms',
+    createdAt: '2026-07-14T00:42:19.472Z',
+    updatedAt: '2026-07-15T01:15:00.000Z',
+  },
+  meta: { timestamp: EXAMPLE_TIMESTAMP },
+} as const;
+
+export const TAG_RESTORED_EXAMPLE = {
+  data: {
+    tagId: '770e8400-e29b-41d4-a716-446655440000',
+    name: 'JavaScript',
+    slug: 'javascript',
+    createdAt: '2025-01-15T08:30:00.000Z',
+    updatedAt: '2026-07-15T01:15:00.000Z',
+  },
+  meta: { timestamp: EXAMPLE_TIMESTAMP },
+} as const;
