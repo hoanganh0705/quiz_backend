@@ -22,7 +22,9 @@ export class BookmarkResponseMapper {
       userId: row.userId,
       name: row.name,
       description: row.description,
-      quizCount: row.quizCount,
+      // `count()` returns bigint, which `pg` surfaces as a string to avoid
+      // Number precision loss. The DTO declares `number`, so coerce here.
+      quizCount: typeof row.quizCount === 'string' ? Number(row.quizCount) : row.quizCount,
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
     };

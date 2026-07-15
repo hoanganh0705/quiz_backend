@@ -15,6 +15,7 @@ export class AddBookmarkDto {
     type: String,
     nullable: true,
     maxLength: 500,
+    example: 'Personal note about this quiz',
   })
   @IsOptional()
   @IsString()

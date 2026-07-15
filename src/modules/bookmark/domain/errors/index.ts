@@ -3,7 +3,6 @@ export {
   BookmarkNotFoundError,
   BookmarkConflictError,
   BookmarkValidationError,
-  CollectionNotFoundError,
   BookmarkCollectionNotFoundError,
   CollectionForbiddenError,
   CollectionConflictError,

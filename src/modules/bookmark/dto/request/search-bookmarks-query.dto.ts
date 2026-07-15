@@ -13,9 +13,8 @@ export class SearchBookmarksQueryDto {
   q!: string;
 
   @ApiPropertyOptional({
-    description: 'Opaque cursor for pagination',
+    description: 'Opaque cursor for pagination (omit for the first page)',
     type: String,
-    nullable: true,
     example: 'eyJib29rbWFya2VkQXQiOiIyMDI2LTAxLTAxVDAwOjAwOjAwWiIsImJvb2ttYXJrSWQiOiJ1dWlkIn0=',
   })
   @IsOptional()

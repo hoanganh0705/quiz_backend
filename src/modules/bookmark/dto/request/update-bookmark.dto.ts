@@ -7,6 +7,7 @@ export class UpdateBookmarkDto {
     type: String,
     nullable: true,
     maxLength: 500,
+    example: 'Revised personal note for this quiz',
   })
   @IsOptional()
   @IsString()

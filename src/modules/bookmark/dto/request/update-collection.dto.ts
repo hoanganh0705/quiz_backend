@@ -7,7 +7,7 @@ export class UpdateCollectionDto {
     description: 'Updated collection name',
     minLength: 1,
     maxLength: 100,
-    example: 'My Favorite Quizzes',
+    example: 'My Renamed Collection',
   })
   @IsOptional()
   @Transform(({ value }: { value: unknown }) => {
@@ -22,10 +22,11 @@ export class UpdateCollectionDto {
   name?: string;
 
   @ApiPropertyOptional({
-    description: 'Updated collection description',
+    description: 'Updated collection description (omit to leave unchanged)',
     type: String,
     nullable: true,
     maxLength: 500,
+    example: 'A curated set of frontend interview quizzes',
   })
   @IsOptional()
   @IsString()

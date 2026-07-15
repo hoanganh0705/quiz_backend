@@ -21,12 +21,12 @@ Owns **user-curated quiz collections**: named collections with personal notes, b
 
 | Concept | Description |
 |---|---|
-| **BookmarkCollection** | A named collection: `name`, `description`, `coverImageUrl`, `isPublic`, `shareCode`. Soft-deleted. |
-| **Bookmark** | A quiz's membership in a collection: `collectionId`, `quizId`, `note`. |
+| **BookmarkCollection** | A named collection: `name`, `description`, `coverImageUrl`, `isPublic`, `shareCode`. **Hard-deleted** (rows are removed from the table; no `deletedAt` column exists). |
+| **Bookmark** | A quiz's membership in a collection: `collectionId`, `quizId`, `note`. **Hard-deleted** when removed via `removeBookmark` / bulk remove, or cascade-deleted when the parent collection is deleted. |
 
 ## Business Rules
 
-- **Slug uniqueness**: active collections have unique slugs.
+- **Name uniqueness per owner**: a `(name, userId)` pair is unique; collision raises `COLLECTION_CONFLICT` (409).
 - **Bulk add idempotency**: duplicate `(collectionId, quizId)` pairs are silently skipped via `ON CONFLICT DO NOTHING`.
 - **Bulk remove idempotency**: removing non-existent pairs is a no-op.
 - **Collection ownership**: only the owner may rename, update visibility, delete, or manage the collection's members.
@@ -51,19 +51,29 @@ Bookmark
 ### BookmarkCollection
 
 ```
-Active (deletedAt = null)
+Active (row in bookmark_collections)
     ↓ deleteCollection()
-Soft-deleted (deletedAt = now; bookmarks cascade soft-delete)
-    ↓ (no restore — not implemented)
+Deleted (rows removed from bookmark_collections; bookmarked_quizzes rows cascade-deleted via FK)
+    ↓ (no restore — see "Future Extension Points")
 ```
+
+> **Implementation note (2026-07-15):** collections are **hard-deleted**. The audit at
+> `docs/audits/BOOKMARK_API_CONTRACT_AUDIT.md` finding **C4** previously documented this
+> table as soft-deleted with a future restore endpoint, which did not match the schema
+> (no `deleted_at` column) or the repository (a `DELETE FROM` statement). The decision
+> recorded in that audit was to keep the implementation as hard delete and align the
+> documentation. There is no restore endpoint.
 
 ### Bookmark
 
 ```
-Active (in collection)
+Active (row in bookmarked_quizzes)
     ↓ removeBookmark() / bulk remove
-Not present (soft-deleted; can be re-added via bulk add)
+Not present (row deleted; can be re-added via addBookmark / bulk add)
 ```
+
+A bookmark row is also deleted automatically (cascade FK) when its parent collection is
+deleted.
 
 ## Permissions
 
@@ -79,9 +89,12 @@ No RBAC `@Permissions` guards. All endpoints require a valid JWT; data is scoped
 
 - A bookmark always belongs to exactly one active collection and one active quiz.
 - Exactly one bookmark per quiz per collection at any time.
-- Collection slugs are unique among active collections.
+- Collection names are unique per `(name, userId)`.
 
 ## Future Extension Points
 
-- **Collection restore**: not implemented (soft-deleted collections cannot be restored).
+- **Collection restore**: not implemented. Because collections are hard-deleted, a deleted
+  collection cannot be restored from the API. Restoring would require either a schema
+  change (adding a `deleted_at` column) or a separate backup/snapshot mechanism. Out of
+  scope for the current contract.
 - **Collection sharing URL**: a `shareCode` field exists but the sharing flow is not yet implemented.
