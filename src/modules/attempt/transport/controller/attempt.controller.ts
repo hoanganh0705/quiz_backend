@@ -21,6 +21,7 @@ import {
   ApiUnprocessableEntityResponse,
   ApiBearerAuth,
   ApiUnauthorizedResponse,
+  ApiParam,
 } from '@nestjs/swagger';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
 import { ApiAuth } from '@/common/swagger/swagger-decorators';
@@ -58,6 +59,12 @@ export class AttemptController {
     description:
       'Resolves the published quiz version from the quizId and starts a new attempt for the authenticated user.',
   })
+  @ApiParam({
+    name: 'quizId',
+    description: 'Quiz identifier',
+    format: 'uuid',
+    example: '660e8400-e29b-41d4-a716-446655440000',
+  })
   @ApiCreatedResource(AttemptResponseDto, { description: 'Attempt started' })
   @ApiUnauthorizedResponse({
     description: 'Missing or invalid authentication token',
@@ -81,6 +88,17 @@ export class AttemptController {
 
   @Get('attempts/:attemptId')
   @ApiBearerAuth(AUTH_SECURITY_NAME)
+  @ApiOperation({
+    summary: 'Get attempt by ID',
+    description:
+      'Retrieves a single quiz attempt by its identifier. Only accessible by the attempt owner or admin.',
+  })
+  @ApiParam({
+    name: 'attemptId',
+    description: 'Attempt identifier',
+    format: 'uuid',
+    example: '550e8400-e29b-41d4-a716-446655440099',
+  })
   @ApiOkResource(AttemptResponseDto, { description: 'Attempt found' })
   @ApiUnauthorizedResponse({
     description: 'Missing or invalid authentication token',
@@ -108,6 +126,12 @@ export class AttemptController {
     summary: 'Submit answer',
     description: 'Creates an answer record for a specific question within an active attempt.',
   })
+  @ApiParam({
+    name: 'attemptId',
+    description: 'Attempt identifier',
+    format: 'uuid',
+    example: '550e8400-e29b-41d4-a716-446655440099',
+  })
   @ApiCreatedResource(SubmitAnswerResponseDto, { description: 'Answer recorded' })
   @ApiForbiddenResponse({ description: 'You do not have permission to access this attempt' })
   @ApiNotFoundResponse({ description: 'Attempt or question not found' })
@@ -133,6 +157,22 @@ export class AttemptController {
   @Delete('attempts/:attemptId/answers/:questionId')
   @HttpCode(HttpStatus.OK)
   @ApiBearerAuth(AUTH_SECURITY_NAME)
+  @ApiOperation({
+    summary: 'Withdraw answer',
+    description: 'Removes a previously submitted answer from an active attempt.',
+  })
+  @ApiParam({
+    name: 'attemptId',
+    description: 'Attempt identifier',
+    format: 'uuid',
+    example: '550e8400-e29b-41d4-a716-446655440099',
+  })
+  @ApiParam({
+    name: 'questionId',
+    description: 'Question identifier',
+    format: 'uuid',
+    example: '550e8400-e29b-41d4-a716-446655440001',
+  })
   @ApiOkResource(WithdrawAnswerResponseDto, { description: 'Answer withdrawn' })
   @ApiUnauthorizedResponse({
     description: 'Missing or invalid authentication token',
@@ -162,9 +202,21 @@ export class AttemptController {
   @ApiAuth()
   @ApiOperation({
     summary: 'Abandon quiz attempt',
+    description:
+      'Abandons an active quiz attempt. No score or XP is awarded for abandoned attempts.',
+  })
+  @ApiParam({
+    name: 'attemptId',
+    description: 'Attempt identifier',
+    format: 'uuid',
+    example: '550e8400-e29b-41d4-a716-446655440099',
   })
   @ApiOkResource(AbandonAttemptResponseDto, { description: 'Attempt abandoned' })
   @ApiNotFoundResponse({ description: 'Quiz attempt not found' })
+  @ApiForbiddenResponse({
+    description: 'Authenticated user does not own this attempt',
+    type: ProblemDetailDto,
+  })
   @ApiConflictResponse({ description: 'Attempt is not in an active state' })
   @ApiBadRequestResponse({ description: 'Path param is not a valid UUID' })
   @ApiInternalServerErrorResponse()
@@ -184,10 +236,17 @@ export class AttemptController {
       'Finalizes the attempt, computes the score, awards XP, and writes side effects. ' +
       'Only the owner (or an admin) of an attempt with status "started" can complete it.',
   })
+  @ApiParam({
+    name: 'attemptId',
+    description: 'Attempt identifier',
+    format: 'uuid',
+    example: '550e8400-e29b-41d4-a716-446655440099',
+  })
   @ApiCreatedResource(CompleteAttemptResponseDto, { description: 'Attempt completed' })
   @ApiForbiddenResponse({ description: 'You do not have permission to access this attempt' })
   @ApiNotFoundResponse({ description: 'Quiz attempt not found' })
   @ApiConflictResponse({ description: 'Attempt is not in an active state' })
+  @ApiBadRequestResponse({ description: 'Path param is not a valid UUID' })
   @ApiInternalServerErrorResponse()
   async completeAttempt(
     @Param('attemptId', new ParseUUIDPipe()) attemptId: string,
@@ -236,6 +295,18 @@ export class AttemptController {
 
   @Get('attempts/:attemptId/answers')
   @ApiBearerAuth(AUTH_SECURITY_NAME)
+  @ApiOperation({
+    summary: 'Get attempt answers',
+    description:
+      'Returns all submitted answers for a specific attempt. ' +
+      'Answers are returned without correctness information until the attempt is completed.',
+  })
+  @ApiParam({
+    name: 'attemptId',
+    description: 'Attempt identifier',
+    format: 'uuid',
+    example: '550e8400-e29b-41d4-a716-446655440099',
+  })
   @ApiOkResource(AttemptAnswersResponseDto, { description: 'Answers returned' })
   @ApiUnauthorizedResponse({
     description: 'Missing or invalid authentication token',
@@ -258,6 +329,18 @@ export class AttemptController {
 
   @Get('attempts/:attemptId/analytics')
   @ApiBearerAuth(AUTH_SECURITY_NAME)
+  @ApiOperation({
+    summary: 'Get attempt analytics',
+    description:
+      'Returns detailed analytics for a completed attempt, including score, accuracy, percentile rank, and time spent. ' +
+      'Analytics are only available for completed attempts.',
+  })
+  @ApiParam({
+    name: 'attemptId',
+    description: 'Attempt identifier',
+    format: 'uuid',
+    example: '550e8400-e29b-41d4-a716-446655440099',
+  })
   @ApiOkResource(AttemptAnalyticsResponseDto, { description: 'Analytics returned' })
   @ApiUnauthorizedResponse({
     description: 'Missing or invalid authentication token',
