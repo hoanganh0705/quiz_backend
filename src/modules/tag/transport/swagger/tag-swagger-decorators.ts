@@ -6,6 +6,7 @@ import {
   ApiForbiddenResponse,
   ApiInternalServerErrorResponse,
   ApiNotFoundResponse,
+  ApiParam,
   ApiTooManyRequestsResponse,
   ApiUnauthorizedResponse,
   type ApiResponseOptions,
@@ -83,6 +84,18 @@ import {
   updateTagUnauthorizedExample,
 } from './examples';
 import { TAG_RANKED_LIST_EXAMPLE, TAG_RELATED_LIST_EXAMPLE } from './examples/discovery.examples';
+import {
+  TAG_ANALYTICS_EXAMPLE,
+  TAG_CREATED_EXAMPLE,
+  TAG_DELETE_MESSAGE_EXAMPLE,
+  TAG_DETAIL_EXAMPLE,
+  TAG_FOLLOWED_LIST_EXAMPLE,
+  TAG_FOLLOW_MESSAGE_EXAMPLE,
+  TAG_LIST_EXAMPLE,
+  TAG_RESTORED_EXAMPLE,
+  TAG_UNFOLLOW_MESSAGE_EXAMPLE,
+  TAG_UPDATED_EXAMPLE,
+} from './examples';
 
 // ─── Error response option factory ──────────────────────────────────────────────
 //
@@ -130,11 +143,17 @@ const problem = {
 
 // ─── Per-endpoint composed decorators ──────────────────────────────────────────
 
-const resourceOk = <T extends Type>(model: T, description: string) =>
-  ApiOkResource(model, { description });
+const resourceOk = <T extends Type>(
+  model: T,
+  description: string,
+  example?: unknown,
+) => ApiOkResource(model, { description, example });
 
-const resourceCreated = <T extends Type>(model: T, description: string) =>
-  ApiCreatedResource(model, { description });
+const resourceCreated = <T extends Type>(
+  model: T,
+  description: string,
+  example?: unknown,
+) => ApiCreatedResource(model, { description, example });
 
 const resourceList = <T extends Type>(
   model: T,
@@ -191,6 +210,7 @@ export const ApiTagAnalyticsResponse = (): MethodDecorator =>
     resourceOk<typeof TagAnalyticsResponseDto>(
       TagAnalyticsResponseDto as unknown as Type,
       'Returns the tag analytics.',
+      TAG_ANALYTICS_EXAMPLE,
     ),
     ApiBadRequestResponse(problem.badRequest(analyticsBadRequestExample)),
     ApiNotFoundResponse(problem.notFound(analyticsNotFoundExample)),
@@ -203,6 +223,7 @@ export const ApiFollowTagResponse = (): MethodDecorator =>
     resourceOk<typeof TagFollowMessageResponseDto>(
       TagFollowMessageResponseDto as unknown as Type,
       'Confirms the tag was followed.',
+      TAG_FOLLOW_MESSAGE_EXAMPLE,
     ),
     ApiBadRequestResponse(problem.badRequest(followBadRequestExample)),
     ApiUnauthorizedResponse(problem.unauthorized(followUnauthorizedExample)),
@@ -218,6 +239,7 @@ export const ApiUnfollowTagResponse = (): MethodDecorator =>
     resourceOk<typeof TagFollowMessageResponseDto>(
       TagFollowMessageResponseDto as unknown as Type,
       'Confirms the tag was unfollowed.',
+      TAG_UNFOLLOW_MESSAGE_EXAMPLE,
     ),
     ApiBadRequestResponse(problem.badRequest(unfollowBadRequestExample)),
     ApiUnauthorizedResponse(problem.unauthorized(unfollowUnauthorizedExample)),
@@ -233,6 +255,7 @@ export const ApiRestoreTagResponse = (): MethodDecorator =>
     resourceOk<typeof TagResponseDto>(
       TagResponseDto as unknown as Type,
       'Returns the restored tag.',
+      TAG_RESTORED_EXAMPLE,
     ),
     ApiUnauthorizedResponse(problem.unauthorized(restoreUnauthorizedExample)),
     ApiForbiddenResponse(problem.forbidden(restoreForbiddenExample)),
@@ -247,6 +270,7 @@ export const ApiListTagsResponse = (): MethodDecorator =>
       TagResponseDto as unknown as Type,
       'cursor',
       'Returns the requested tags.',
+      TAG_LIST_EXAMPLE,
     ),
     ApiBadRequestResponse(problem.badRequest(listTagsBadRequestExample)),
     ApiInternalServerErrorResponse(problem.internalError(listTagsInternalErrorExample)),
@@ -257,6 +281,7 @@ export const ApiTagBySlugResponse = (): MethodDecorator =>
     resourceOk<typeof TagResponseDto>(
       TagResponseDto as unknown as Type,
       'Returns the requested tag.',
+      TAG_DETAIL_EXAMPLE,
     ),
     ApiNotFoundResponse(problem.notFound(tagBySlugNotFoundExample)),
     ApiInternalServerErrorResponse(problem.internalError(tagBySlugInternalErrorExample)),
@@ -268,6 +293,7 @@ export const ApiCreateTagResponse = (): MethodDecorator =>
     resourceCreated<typeof TagResponseDto>(
       TagResponseDto as unknown as Type,
       'Returns the created tag.',
+      TAG_CREATED_EXAMPLE,
     ),
     ApiBadRequestResponse(problem.badRequest(createTagBadRequestExample)),
     ApiUnauthorizedResponse(problem.unauthorized(createTagUnauthorizedExample)),
@@ -282,6 +308,7 @@ export const ApiUpdateTagResponse = (): MethodDecorator =>
     resourceOk<typeof TagResponseDto>(
       TagResponseDto as unknown as Type,
       'Returns the updated tag.',
+      TAG_UPDATED_EXAMPLE,
     ),
     ApiBadRequestResponse(problem.badRequest(updateTagBadRequestExample)),
     ApiUnauthorizedResponse(problem.unauthorized(updateTagUnauthorizedExample)),
@@ -297,6 +324,7 @@ export const ApiDeleteTagResponse = (): MethodDecorator =>
     resourceOk<typeof DeleteTagResponseDto>(
       DeleteTagResponseDto as unknown as Type,
       'Confirms the tag was deleted.',
+      TAG_DELETE_MESSAGE_EXAMPLE,
     ),
     ApiUnauthorizedResponse(problem.unauthorized(deleteTagUnauthorizedExample)),
     ApiForbiddenResponse(problem.forbidden(deleteTagForbiddenExample)),
@@ -311,9 +339,29 @@ export const ApiFollowedTagsResponse = (): MethodDecorator =>
       FollowedTagItemDto as unknown as Type,
       'cursor',
       'Returns the followed tags.',
+      TAG_FOLLOWED_LIST_EXAMPLE,
     ),
     ApiBadRequestResponse(problem.badRequest(followedTagsBadRequestExample)),
     ApiUnauthorizedResponse(problem.unauthorized(followedTagsUnauthorizedExample)),
     ApiForbiddenResponse(problem.forbidden(followedTagsForbiddenExample)),
     ApiInternalServerErrorResponse(problem.internalError(followedTagsInternalErrorExample)),
   );
+
+/**
+ * Documents the `:id` path parameter as a UUID, mirroring the runtime
+ * `ParseUUIDPipe` enforcement on every admin/mutation tag endpoint.
+ *
+ * Without this decorator the OpenAPI generator renders the parameter as a
+ * plain `{ type: 'string' }` with no format hint — generated SDKs (Orval,
+ * OpenAPI Generator) would emit `string` instead of `UUID`, dropping the
+ * type safety that `ParseUUIDPipe` provides at runtime.
+ *
+ * Phase 3 of `docs/api-contract-audit-tag.md`.
+ */
+export const ApiTagIdParam = (): MethodDecorator =>
+  ApiParam({
+    name: 'id',
+    description: 'UUID of the tag',
+    format: 'uuid',
+    example: '770e8400-e29b-41d4-a716-446655440000',
+  });
