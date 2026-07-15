@@ -8,7 +8,30 @@ export class CreateQuizQuestionsDto {
     description: 'Questions to create (minimum 1, maximum 50 per request)',
     minItems: 1,
     maxItems: 50,
-    type: () => [CreateQuizQuestionDto],
+    type: () => CreateQuizQuestionDto,
+    example: [
+      {
+        position: 1,
+        questionText: 'What does `console.log` do in JavaScript?',
+        imageUrl: null,
+        answerOptions: [
+          { position: 1, value: 'Outputs text to the console', isCorrect: true },
+          { position: 2, value: 'Creates a new variable', isCorrect: false },
+          { position: 3, value: 'Defines a function', isCorrect: false },
+          { position: 4, value: 'Adds an element to the DOM', isCorrect: false },
+        ],
+      },
+      {
+        position: 2,
+        questionText: 'Which keyword declares a block-scoped variable?',
+        answerOptions: [
+          { position: 1, value: 'var', isCorrect: false },
+          { position: 2, value: 'let', isCorrect: true },
+          { position: 3, value: 'function', isCorrect: false },
+          { position: 4, value: 'class', isCorrect: false },
+        ],
+      },
+    ],
   })
   @IsArray()
   @ArrayMinSize(1)

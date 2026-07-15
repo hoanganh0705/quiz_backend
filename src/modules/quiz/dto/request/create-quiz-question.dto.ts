@@ -41,7 +41,11 @@ class CreateQuizAnswerOptionDto {
 }
 
 export class CreateQuizQuestionDto {
-  @ApiProperty({ description: 'Display order of the question (1-based)', minimum: 1, example: 1 })
+  @ApiProperty({
+    description: 'Display order of the question (1-based)',
+    minimum: 1,
+    example: 1,
+  })
   @Type(() => Number)
   @IsInt()
   @Min(1)
@@ -64,6 +68,7 @@ export class CreateQuizQuestionDto {
     type: String,
     maxLength: 2048,
     format: 'uri',
+    example: 'https://example.com/questions/console-log.png',
     nullable: true,
   })
   @IsOptional()
@@ -76,7 +81,13 @@ export class CreateQuizQuestionDto {
     description: 'Answer options (minimum 2, maximum 10)',
     minItems: 2,
     maxItems: 10,
-    type: () => [CreateQuizAnswerOptionDto],
+    type: () => CreateQuizAnswerOptionDto,
+    example: [
+      { position: 1, value: 'Outputs text to the console', isCorrect: true },
+      { position: 2, value: 'Creates a new variable', isCorrect: false },
+      { position: 3, value: 'Defines a function', isCorrect: false },
+      { position: 4, value: 'Adds an element to the DOM', isCorrect: false },
+    ],
   })
   @IsArray()
   @ArrayMinSize(2)
@@ -86,17 +97,4 @@ export class CreateQuizQuestionDto {
   answerOptions!: CreateQuizAnswerOptionDto[];
 }
 
-export class CreateQuizQuestionsDto {
-  @ApiProperty({
-    description: 'Questions to create (maximum 50 per request)',
-    minItems: 1,
-    maxItems: 50,
-    type: () => [CreateQuizQuestionDto],
-  })
-  @IsArray()
-  @ArrayMinSize(1)
-  @ArrayMaxSize(50)
-  @ValidateNested({ each: true })
-  @Type(() => CreateQuizQuestionDto)
-  questions!: CreateQuizQuestionDto[];
-}
+export { CreateQuizQuestionsDto } from './create-quiz-questions.dto';

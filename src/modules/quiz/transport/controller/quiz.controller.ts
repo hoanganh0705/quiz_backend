@@ -20,6 +20,8 @@ import {
   ApiNotFoundResponse,
   ApiUnauthorizedResponse,
   ApiUnprocessableEntityResponse,
+  ApiHeaders,
+  ApiHeader,
 } from '@nestjs/swagger';
 import { Permission } from '@/common/authorization/permissions';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
@@ -148,6 +150,15 @@ import {
   createQuizQuestionsInternalErrorExample,
 } from '../swagger/examples/errors.examples';
 
+/**
+ * Quiz module API controller.
+ *
+ * ## Rate Limiting
+ * Public read endpoints (`GET /quizzes`, `GET /quizzes/:id`, etc.) are rate-limited
+ * to 100 requests per minute per IP. Authenticated endpoints allow 1000 requests
+ * per minute per user. Write operations (`POST`, `PATCH`, `DELETE`) are limited to
+ * 100 requests per minute per user.
+ */
 @ApiTags('quizzes')
 @Controller('quizzes')
 export class QuizController {
@@ -341,6 +352,13 @@ export class QuizController {
     return this.presenter.getQuizStats(result);
   }
 
+  /**
+   * Get quizzes similar to the specified quiz.
+   *
+   * The `:slug` path parameter accepts a kebab-case quiz slug (e.g., "javascript-fundamentals").
+   * Related quizzes are determined by shared category and tags with the source quiz.
+   * Returns quizzes sorted by relevance score, limited by the `limit` query parameter.
+   */
   @Get(':slug/similar')
   @Public()
   @ApiOkResourceArray(QuizListItemDto, { description: 'Related quizzes returned' })

@@ -85,6 +85,14 @@ export class TrendingQuizItemDto {
   })
   quizId!: string;
 
+  @ApiPropertyOptional({
+    description: 'Creator user identifier',
+    format: 'uuid',
+    example: '550e8400-e29b-41d4-a716-446655440001',
+    nullable: true,
+  })
+  creatorId!: string | null;
+
   @ApiProperty({ description: 'Quiz title', example: 'JavaScript Fundamentals' })
   title!: string;
 
@@ -141,6 +149,14 @@ export class PopularQuizItemDto {
     example: '660e8400-e29b-41d4-a716-446655440000',
   })
   quizId!: string;
+
+  @ApiPropertyOptional({
+    description: 'Creator user identifier',
+    format: 'uuid',
+    example: '550e8400-e29b-41d4-a716-446655440001',
+    nullable: true,
+  })
+  creatorId!: string | null;
 
   @ApiProperty({ description: 'Quiz title', example: 'JavaScript Fundamentals' })
   title!: string;

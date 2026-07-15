@@ -18,8 +18,8 @@ export class ListQuizVersionsQueryDto {
     description: 'Maximum number of versions to return per page',
     minimum: 1,
     maximum: 100,
-    default: 20,
-    example: 20,
+    default: 10,
+    example: 10,
     nullable: true,
   })
   @IsOptional()
@@ -27,5 +27,5 @@ export class ListQuizVersionsQueryDto {
   @IsInt()
   @Min(1)
   @Max(100)
-  limit?: number;
+  limit?: number = 10;
 }

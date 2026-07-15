@@ -26,7 +26,7 @@ export class UpdateQuizDto {
     description: 'Quiz title',
     minLength: 1,
     maxLength: 255,
-    example: 'JavaScript Fundamentals',
+    example: 'Advanced JavaScript',
   })
   @IsOptional()
   @Transform(({ value }: { value: unknown }) => trimString(value))
@@ -39,6 +39,7 @@ export class UpdateQuizDto {
     description: 'Quiz description',
     type: String,
     maxLength: 2000,
+    example: 'Test your advanced JavaScript knowledge including closures, prototypes, and async patterns.',
     nullable: true,
   })
   @IsOptional()
@@ -51,6 +52,7 @@ export class UpdateQuizDto {
     description: 'URL-friendly slug',
     maxLength: 120,
     pattern: DEFAULT_SLUG_PATTERN.source,
+    example: 'advanced-javascript',
     nullable: true,
   })
   @IsOptional()
@@ -66,6 +68,7 @@ export class UpdateQuizDto {
     description: 'Prerequisites',
     type: String,
     maxLength: 5000,
+    example: 'Basic understanding of JavaScript fundamentals',
     nullable: true,
   })
   @IsOptional()
@@ -79,6 +82,7 @@ export class UpdateQuizDto {
     type: String,
     maxLength: 2048,
     format: 'uri',
+    example: 'https://example.com/covers/advanced-javascript.png',
     nullable: true,
   })
   @IsOptional()
@@ -87,12 +91,20 @@ export class UpdateQuizDto {
   @MaxLength(2048)
   imageUrl?: string | null;
 
-  @ApiPropertyOptional({ description: 'Featured on home page', nullable: true })
+  @ApiPropertyOptional({
+    description: 'Featured on home page',
+    example: true,
+    nullable: true,
+  })
   @IsOptional()
   @IsBoolean()
   isFeatured?: boolean;
 
-  @ApiPropertyOptional({ description: 'Hidden from public listings', nullable: true })
+  @ApiPropertyOptional({
+    description: 'Hidden from public listings',
+    example: false,
+    nullable: true,
+  })
   @IsOptional()
   @IsBoolean()
   isHidden?: boolean;
@@ -101,6 +113,7 @@ export class UpdateQuizDto {
     description: 'Associated category UUID',
     type: String,
     format: 'uuid',
+    example: '660e8400-e29b-41d4-a716-446655440000',
     nullable: true,
   })
   @IsOptional()
@@ -112,12 +125,13 @@ export class UpdateQuizDto {
     type: Array,
     maxItems: 50,
     format: 'uuid',
+    example: ['770e8400-e29b-41d4-a716-446655440000'],
     nullable: true,
   })
   @IsOptional()
   @IsArray()
   @ArrayMaxSize(50)
   @ArrayUnique()
-  @IsUUID('all', { each: true })
+  @IsUUID('4', { each: true })
   tagIds?: string[];
 }
