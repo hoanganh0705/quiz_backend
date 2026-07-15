@@ -8,7 +8,6 @@ import {
   BookmarkValidationError,
   CollectionConflictError,
   CollectionForbiddenError,
-  CollectionNotFoundError,
 } from './bookmark-domain.errors';
 
 const BOOKMARK_CODES: ReadonlyArray<{
@@ -22,12 +21,6 @@ const BOOKMARK_CODES: ReadonlyArray<{
     ctor: BookmarkNotFoundError,
     expectedCode: 'BOOKMARK_NOT_FOUND',
     message: 'Bookmark not found',
-  },
-  {
-    name: 'CollectionNotFoundError',
-    ctor: CollectionNotFoundError,
-    expectedCode: 'COLLECTION_NOT_FOUND',
-    message: 'Bookmark collection not found',
   },
   {
     name: 'BookmarkCollectionNotFoundError',
@@ -136,10 +129,11 @@ describe('Bookmark-domain errors (RFC 7807 mapping completeness — Phase 2)', (
       ).toBeUndefined();
     });
 
-    it('total exception count is 7 (matches the design plan)', () => {
+    it('total exception count is 6 (matches the design plan)', () => {
       // This guards against accidental additions/removals during
-      // refactors.
-      expect(BOOKMARK_CODES.length).toBe(7);
+      // refactors. (Phase 4 X1 consolidated CollectionNotFoundError into
+      // BookmarkCollectionNotFoundError, dropping the count from 7 to 6.)
+      expect(BOOKMARK_CODES.length).toBe(6);
     });
   });
 });

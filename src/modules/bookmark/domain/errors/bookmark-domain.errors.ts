@@ -40,25 +40,7 @@ export class BookmarkNotFoundError extends BookmarkDomainError {
 }
 
 /**
- * Thrown when a collection cannot be found. 404 Not Found.
- *
- * Wire-shape improvement: the prior per-module filter rewrote every
- * `CollectionNotFoundError.message` to a hardcoded generic
- * `'Resource not found'`. The global filter now preserves
- * `exception.message` (one throw site in
- * `bookmark-command.service.ts:161` passes `'Quiz not found'`, which
- * surfaces verbatim).
- */
-export class CollectionNotFoundError extends BookmarkDomainError {
-  readonly code = 'COLLECTION_NOT_FOUND';
-  constructor(message = COLLECTION_NOT_FOUND_MESSAGE) {
-    super(message);
-  }
-}
-
-/**
- * Thrown when a bookmark's collection analytics entry cannot be
- * found. 404 Not Found.
+ * Thrown when a bookmark's collection cannot be found. 404 Not Found.
  *
  * Wire-shape improvement: the prior per-module filter rewrote every
  * `BookmarkCollectionNotFoundError.message` to a hardcoded

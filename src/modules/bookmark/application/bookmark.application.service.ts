@@ -85,6 +85,7 @@ export class BookmarkApplicationService {
         bookmarkedAt: item.bookmarkedAt,
       })),
       pagination: {
+        kind: 'cursor',
         limit,
         hasNextPage,
         nextCursor: nextCursor ? BookmarkCursorMapper.serialize(nextCursor) : null,
@@ -111,6 +112,7 @@ export class BookmarkApplicationService {
         bookmarkedAt: item.bookmarkedAt,
       })),
       pagination: {
+        kind: 'cursor',
         limit,
         hasNextPage,
         nextCursor: nextCursor ? BookmarkCursorMapper.serialize(nextCursor) : null,

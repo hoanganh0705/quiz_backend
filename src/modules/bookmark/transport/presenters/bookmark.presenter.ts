@@ -12,19 +12,45 @@ import type { BulkRemoveBookmarksResponseDto } from '../../dto/response/bookmark
 import type { CreateCollectionResponseDto } from '../../dto/response/create-collection-response.dto';
 import type { DeleteCollectionResponseDto } from '../../dto/response/collection-response.dto';
 import type { MoveBookmarkResponseDto } from '../../dto/response/bookmark-message-response.dto';
-import type { RecentBookmarksResponseDto } from '../../dto/response/recent-bookmarks-response.dto';
+import type { RecentBookmarkItemDto } from '../../dto/response/recent-bookmarks-response.dto';
 import type { RemoveBookmarkResponseDto } from '../../dto/response/bookmark-message-response.dto';
-import type { SearchBookmarksResponseDto } from '../../dto/response/search-bookmarks-response.dto';
+import type { SearchBookmarkItemDto } from '../../dto/response/search-bookmarks-response.dto';
 import type { UpdateBookmarkResponseDto } from '../../dto/response/update-bookmark-response.dto';
 import type { UpdateCollectionResponseDto } from '../../dto/response/collection-response.dto';
 
 /**
- * Presenter for the bookmark module. Wraps every application-service response
- * in the canonical `{ data, meta.timestamp }` envelope.
+ * Wrap a `{ items: T[], pagination: { kind, limit, hasNextPage, nextCursor } }`
+ * payload as `{ data: T[], meta: { timestamp, pagination } }`.
  *
- * Currently a thin pass-through to {@link ApiResponse.ok}. The layer exists
- * separately from the controller so future module-specific shaping (sensitive
- * field redaction, conditional fields, additional meta) has a stable seam.
+ * Mirrors `src/modules/tag/transport/presenters/tag.presenter.ts:wrapPaginatedDto`.
+ * Used for the cursor-paginated search and recent-bookmarks endpoints whose
+ * application-service return is a `{ items, pagination }` DTO. The canonical
+ * envelope has to be a plain object (the interceptor's `isFormattedResponse()`
+ * guards on `Object` prototype), so we deliberately project out the DTO
+ * fields here instead of forwarding the class instance for the interceptor
+ * to re-wrap.
+ */
+const wrapPaginatedDto = <T>(payload: {
+  items: readonly T[];
+  pagination: { kind: 'cursor'; limit: number; hasNextPage: boolean; nextCursor: string | null };
+}): ApiResponseEnvelope<T[]> => {
+  return {
+    data: [...payload.items] as T[],
+    meta: {
+      timestamp: new Date().toISOString(),
+      pagination: {
+        kind: 'cursor' as const,
+        limit: payload.pagination.limit,
+        hasNextPage: payload.pagination.hasNextPage,
+        nextCursor: payload.pagination.nextCursor,
+      },
+    },
+  };
+};
+
+/**
+ * Presenter for the bookmark module. Wraps every application-service response
+ * in the canonical `{ data, meta }` envelope.
  *
  * One presenter method per endpoint keeps `git grep presenter.<name>` a
  * reliable index of which controllers have been migrated.
@@ -33,8 +59,12 @@ import type { UpdateCollectionResponseDto } from '../../dto/response/collection-
 export class BookmarkPresenter {
   private static readonly ok = <T>(payload: T): ApiResponseEnvelope<T> => ApiResponse.ok(payload);
 
-  readonly searchBookmarks = BookmarkPresenter.ok<SearchBookmarksResponseDto>;
-  readonly getRecentBookmarks = BookmarkPresenter.ok<RecentBookmarksResponseDto>;
+  // Cursor-paginated lists — `{ items, pagination }` unwrapped to
+  // `{ data: T[], meta: { timestamp, pagination: { kind: 'cursor', ... } } }`.
+  readonly searchBookmarks = wrapPaginatedDto<SearchBookmarkItemDto>;
+  readonly getRecentBookmarks = wrapPaginatedDto<RecentBookmarkItemDto>;
+
+  // Single-resource endpoints — wrap whole DTO as `data`.
   readonly getBookmarkStatus = BookmarkPresenter.ok<BookmarkStatusResponseDto>;
   readonly listCollections = BookmarkPresenter.ok<BookmarkCollectionListResponseDto>;
   readonly createCollection = BookmarkPresenter.ok<CreateCollectionResponseDto>;

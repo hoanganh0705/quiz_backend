@@ -32,6 +32,12 @@ export class RecentBookmarkItemDto {
 }
 
 export class RecentBookmarksPaginationDto {
+  @ApiProperty({
+    description: 'Discriminator field. Always "cursor" for cursor pagination.',
+    example: 'cursor',
+  })
+  kind!: 'cursor';
+
   @ApiProperty({ description: 'Maximum number of items returned', example: 10 })
   limit!: number;
 
