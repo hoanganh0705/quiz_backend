@@ -15,7 +15,11 @@ export class CompleteAttemptResponseDto {
   })
   quizId!: string;
 
-  @ApiProperty({ description: 'Final status', example: 'completed' })
+  @ApiProperty({
+    description: 'Final status',
+    example: 'completed',
+    enum: ['started', 'completed', 'abandoned'],
+  })
   status!: string;
 
   @ApiPropertyOptional({
@@ -38,6 +42,7 @@ export class CompleteAttemptResponseDto {
     description: 'Total time taken in milliseconds',
     type: Number,
     nullable: true,
+    example: 2700000,
   })
   timeTakenMs!: number | null;
 

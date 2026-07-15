@@ -223,7 +223,10 @@ export class LimitQueryDto {
  * This is the canonical shared MessageResponseDto — do not create module-specific duplicates.
  */
 export class MessageResponseDto {
-  @ApiProperty({ description: 'Human-readable confirmation message', example: 'Operation completed successfully' })
+  @ApiProperty({
+    description: 'Human-readable confirmation message',
+    example: 'Operation completed successfully',
+  })
   message!: string;
 }
 

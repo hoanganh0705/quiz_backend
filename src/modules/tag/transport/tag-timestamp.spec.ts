@@ -116,7 +116,10 @@ describe('TagPresenter — timestamps normalized to ISO 8601 (Phase 1)', () => {
   describe('listTags (wrapPaginatedDto — ApiResponse.page)', () => {
     it('normalizes createdAt and updatedAt in every item', () => {
       const result = presenter.listTags({
-        items: [FIXTURE_TAG_RESPONSE, { ...FIXTURE_TAG_RESPONSE, tagId: '019f5e13-1fd1-7eaa-a65b-defe94642216' }],
+        items: [
+          FIXTURE_TAG_RESPONSE,
+          { ...FIXTURE_TAG_RESPONSE, tagId: '019f5e13-1fd1-7eaa-a65b-defe94642216' },
+        ],
         pagination: PAGINATION,
       });
 
@@ -224,7 +227,10 @@ describe('TagPresenter — timestamps normalized to ISO 8601 (Phase 1)', () => {
     });
 
     it('unfollowTag normalizes meta.timestamp', () => {
-      const result = presenter.unfollowTag({ message: 'Tag unfollowed successfully', changed: true });
+      const result = presenter.unfollowTag({
+        message: 'Tag unfollowed successfully',
+        changed: true,
+      });
 
       expect(result.data.message).toBe('Tag unfollowed successfully');
       expect(result.data.changed).toBe(true);

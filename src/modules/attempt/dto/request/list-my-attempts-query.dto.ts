@@ -25,6 +25,7 @@ export class ListMyAttemptsQueryDto {
     maximum: 100,
     default: 20,
     nullable: true,
+    example: 20,
   })
   @IsOptional()
   @Type(() => Number)

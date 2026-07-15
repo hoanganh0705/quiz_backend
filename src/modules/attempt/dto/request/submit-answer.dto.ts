@@ -17,6 +17,7 @@ export class SubmitAnswerDto {
     type: String,
     format: 'uuid',
     nullable: true,
+    example: '550e8400-e29b-41d4-a716-446655440010',
   })
   @IsOptional()
   @IsUUID()
@@ -26,6 +27,7 @@ export class SubmitAnswerDto {
     description: 'Time taken to answer in milliseconds',
     type: Number,
     nullable: true,
+    example: 15000,
   })
   @IsOptional()
   @Type(() => Number)

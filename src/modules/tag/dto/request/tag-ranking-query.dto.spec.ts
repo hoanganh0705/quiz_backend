@@ -40,13 +40,14 @@ describe('TagRankingQueryDto — limit validation (Phase 2)', () => {
       expect(errors).toEqual([]);
     });
 
-    it.each([['lower bound', 1], ['middle', 50], ['upper bound', 100]])(
-      'accepts limit=%s (%i)',
-      async (_label, value) => {
-        const errors = await runValidate({ limit: value });
-        expect(limitErrors(errors)).toEqual([]);
-      },
-    );
+    it.each([
+      ['lower bound', 1],
+      ['middle', 50],
+      ['upper bound', 100],
+    ])('accepts limit=%s (%i)', async (_label, value) => {
+      const errors = await runValidate({ limit: value });
+      expect(limitErrors(errors)).toEqual([]);
+    });
 
     it('accepts explicit undefined', async () => {
       const errors = await runValidate({ limit: undefined });
