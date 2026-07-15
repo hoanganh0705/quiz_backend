@@ -11,14 +11,22 @@ export class CreateQuizVersionDto {
     nullable: true,
   })
   @IsOptional()
-  @IsUUID()
+  @IsUUID('4')
   sourceVersionId?: string;
 
-  @ApiProperty({ description: 'Quiz difficulty level', enum: QUIZ_DIFFICULTIES, example: 'medium' })
+  @ApiProperty({
+    description: 'Quiz difficulty level',
+    enum: QUIZ_DIFFICULTIES,
+    example: 'medium',
+  })
   @IsIn(QUIZ_DIFFICULTIES)
   difficulty!: QuizDifficulty;
 
-  @ApiProperty({ description: 'Time limit in milliseconds', minimum: 1, example: 600000 })
+  @ApiProperty({
+    description: 'Time limit in milliseconds',
+    minimum: 1,
+    example: 600000,
+  })
   @Type(() => Number)
   @IsInt()
   @Min(1)
@@ -36,7 +44,11 @@ export class CreateQuizVersionDto {
   @Max(100)
   passingScorePercent!: number;
 
-  @ApiProperty({ description: 'XP reward for passing', minimum: 0, example: 100 })
+  @ApiProperty({
+    description: 'XP reward for passing',
+    minimum: 0,
+    example: 100,
+  })
   @Type(() => Number)
   @IsInt()
   @Min(0)
