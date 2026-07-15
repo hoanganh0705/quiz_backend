@@ -1,4 +1,4 @@
-import { IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
+import { IsInt, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 
@@ -11,6 +11,7 @@ export class ListFollowedCategoriesQueryDto {
   })
   @IsOptional()
   @IsString()
+  @MaxLength(512)
   cursor?: string;
 
   @ApiPropertyOptional({
