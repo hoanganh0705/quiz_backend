@@ -20,6 +20,7 @@ export class SubmitAnswerResponseDto {
     type: String,
     format: 'uuid',
     nullable: true,
+    example: '550e8400-e29b-41d4-a716-446655440010',
   })
   selectedOptionId!: string | null;
 
@@ -33,6 +34,7 @@ export class SubmitAnswerResponseDto {
     description: 'Time taken in ms',
     type: Number,
     nullable: true,
+    example: 15000,
   })
   timeTakenMs!: number | null;
 
@@ -40,6 +42,7 @@ export class SubmitAnswerResponseDto {
     description: 'Whether the answer was correct',
     type: Boolean,
     nullable: true,
+    example: true,
   })
   isCorrect!: boolean | null;
 }

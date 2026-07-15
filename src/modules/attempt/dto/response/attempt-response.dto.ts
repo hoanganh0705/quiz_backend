@@ -51,16 +51,22 @@ export class AttemptResponseDto {
     description: 'Context reference ID',
     type: String,
     nullable: true,
+    example: '770e8400-e29b-41d4-a716-446655440000',
   })
   contextRefId!: string | null;
 
-  @ApiProperty({ description: 'Attempt status', example: 'started' })
+  @ApiProperty({
+    description: 'Attempt status',
+    example: 'started',
+    enum: ['started', 'completed', 'abandoned'],
+  })
   status!: string;
 
   @ApiPropertyOptional({
     description: 'Final score as a percentage string (null if not yet complete)',
     type: String,
     nullable: true,
+    example: '85.00',
   })
   scorePercent!: string | null;
 
@@ -68,6 +74,7 @@ export class AttemptResponseDto {
     description: 'Number of correct answers (null if not yet complete)',
     type: Number,
     nullable: true,
+    example: 17,
   })
   correctCount!: number | null;
 
@@ -81,6 +88,7 @@ export class AttemptResponseDto {
     description: 'Completion timestamp (ISO 8601, null if not yet complete)',
     type: String,
     nullable: true,
+    example: '2025-06-01T12:45:00.000Z',
   })
   finishedAt!: string | null;
 
@@ -88,6 +96,7 @@ export class AttemptResponseDto {
     description: 'Total time taken in milliseconds (null if not yet complete)',
     type: Number,
     nullable: true,
+    example: 2700000,
   })
   timeTakenMs!: number | null;
 
