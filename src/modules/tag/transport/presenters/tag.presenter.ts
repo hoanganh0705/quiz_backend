@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { ApiResponse } from '@/common/responses/api-response';
 import type { ApiResponseEnvelope } from '@/common/responses/api-response';
+import { normalizeTemporalFields } from '@/common/utils/temporal-normalizer.util';
 import type { DeleteTagResponseDto } from '../../dto/response/delete-tag-response.dto';
 import type {
   FollowedTagsResponseDto,
@@ -26,18 +27,21 @@ import type { TagResponseDto } from '../../dto/response/tag-response.dto';
 const wrapPaginatedDto = <T>(payload: {
   items: readonly T[];
   pagination: { limit: number; hasNextPage: boolean; nextCursor: string | null };
-}): ApiResponseEnvelope<T[]> => ({
-  data: [...payload.items],
-  meta: {
-    timestamp: new Date().toISOString(),
-    pagination: {
-      kind: 'cursor' as const,
-      limit: payload.pagination.limit,
-      hasNextPage: payload.pagination.hasNextPage,
-      nextCursor: payload.pagination.nextCursor,
+}): ApiResponseEnvelope<T[]> => {
+  const data = normalizeTemporalFields([...payload.items]) as T[];
+  return {
+    data,
+    meta: {
+      timestamp: new Date().toISOString(),
+      pagination: {
+        kind: 'cursor' as const,
+        limit: payload.pagination.limit,
+        hasNextPage: payload.pagination.hasNextPage,
+        nextCursor: payload.pagination.nextCursor,
+      },
     },
-  },
-});
+  };
+};
 
 /**
  * Presenter for the tag module. Wraps every application-service response in
