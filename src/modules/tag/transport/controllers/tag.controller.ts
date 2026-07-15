@@ -40,6 +40,7 @@ import {
   ApiRestoreTagResponse,
   ApiTagAnalyticsResponse,
   ApiTagBySlugResponse,
+  ApiTagIdParam,
   ApiTagQuizzesResponse,
   ApiTrendingTagsResponse,
   ApiUnfollowTagResponse,
@@ -91,6 +92,7 @@ export class TagController {
   @Get(':id/analytics')
   @Public()
   @ApiTagAnalyticsResponse()
+  @ApiTagIdParam()
   async getTagAnalytics(@Param('id', new ParseUUIDPipe()) tagId: string) {
     const result = await this.tagApplicationService.getTagAnalytics(tagId);
     return this.presenter.getTagAnalytics(result);
@@ -99,6 +101,7 @@ export class TagController {
   @Post(':id/follow')
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @ApiFollowTagResponse()
+  @ApiTagIdParam()
   async followTag(
     @Param('id', new ParseUUIDPipe()) tagId: string,
     @CurrentUser() user: JwtPayload,
@@ -110,6 +113,7 @@ export class TagController {
   @Delete(':id/follow')
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @ApiUnfollowTagResponse()
+  @ApiTagIdParam()
   async unfollowTag(
     @Param('id', new ParseUUIDPipe()) tagId: string,
     @CurrentUser() user: JwtPayload,
@@ -121,6 +125,7 @@ export class TagController {
   @Post(':id/restore')
   @Permissions(Permission.TAG_MANAGE)
   @ApiRestoreTagResponse()
+  @ApiTagIdParam()
   async restoreTag(@Param('id', new ParseUUIDPipe()) tagId: string) {
     const result = await this.tagApplicationService.restoreTag(tagId);
     return this.presenter.restoreTag(result);
@@ -158,6 +163,7 @@ export class TagController {
   @Patch(':id')
   @Permissions(Permission.TAG_MANAGE)
   @ApiUpdateTagResponse()
+  @ApiTagIdParam()
   async updateTag(@Param('id', new ParseUUIDPipe()) tagId: string, @Body() payload: UpdateTagDto) {
     const command: UpdateTagCommand = { name: payload.name, slug: payload.slug };
     const result = await this.tagApplicationService.updateTag(tagId, command);
@@ -167,6 +173,7 @@ export class TagController {
   @Delete(':id')
   @Permissions(Permission.TAG_MANAGE)
   @ApiDeleteTagResponse()
+  @ApiTagIdParam()
   async deleteTag(@Param('id', new ParseUUIDPipe()) tagId: string) {
     const result = await this.tagApplicationService.deleteTag(tagId);
     return this.presenter.deleteTag(result);

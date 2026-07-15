@@ -1,4 +1,5 @@
 import type { PaginationMeta } from './pagination';
+import { normalizeTemporalFields } from '@/common/utils/temporal-normalizer.util';
 
 /**
  * Wire-shape envelope returned by every successful HTTP endpoint.
@@ -39,7 +40,7 @@ export class ApiResponse {
    */
   static ok<T>(data: T): ApiResponseEnvelope<T> {
     return {
-      data,
+      data: normalizeTemporalFields(data) as T,
       meta: { timestamp: new Date().toISOString() },
     };
   }
@@ -56,7 +57,7 @@ export class ApiResponse {
    */
   static page<T>(items: readonly T[], pagination: PaginationMeta): ApiResponseEnvelope<T[]> {
     return {
-      data: [...items],
+      data: normalizeTemporalFields([...items]) as T[],
       meta: { timestamp: new Date().toISOString(), pagination },
     };
   }

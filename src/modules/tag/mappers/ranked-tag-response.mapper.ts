@@ -10,6 +10,8 @@ export class RankedTagResponseMapper {
       slug: item.slug,
       totalScore: item.totalScore,
       totalAttempts: item.totalAttempts,
+      createdAt: item.createdAt,
+      updatedAt: item.updatedAt,
     };
   }
 }
