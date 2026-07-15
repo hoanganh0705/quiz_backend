@@ -1,6 +1,5 @@
-import { ApiProperty } from '@nestjs/swagger';
-
-export class MessageResponseDto {
-  @ApiProperty({ example: 'Operation completed successfully' })
-  message!: string;
-}
+/**
+ * @deprecated Use {@link MessageResponseDto} from `@/common/swagger/swagger-schemas` instead.
+ * This file is kept for backward compatibility.
+ */
+export { MessageResponseDto } from '@/common/swagger/swagger-schemas';
