@@ -218,6 +218,17 @@ export class LimitQueryDto {
 
 /**
  * Simple success response with a message.
+ *
+ * Use this DTO for simple action confirmation responses (e.g., "Category followed successfully").
+ * This is the canonical shared MessageResponseDto — do not create module-specific duplicates.
+ */
+export class MessageResponseDto {
+  @ApiProperty({ description: 'Human-readable confirmation message', example: 'Operation completed successfully' })
+  message!: string;
+}
+
+/**
+ * @deprecated Use {@link MessageResponseDto} instead. Kept for backward compatibility.
  */
 export class SuccessResponseDto {
   @ApiProperty({ description: 'Confirmation message', example: 'Operation completed successfully' })

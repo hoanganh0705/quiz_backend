@@ -18,6 +18,7 @@ const RANKED_CATEGORY_ITEM = {
   slug: 'general-knowledge',
   imageUrl: 'https://example.com/images/general-knowledge.jpg',
   description: 'Test your knowledge across a wide range of topics',
+  // Note: totalScore and totalAttempts are strings due to SQL SUM aggregation
   totalScore: '1250.5',
   totalAttempts: '4800',
 };
@@ -96,6 +97,8 @@ export const CATEGORY_FOLLOW_MESSAGE_EXAMPLE = {
   data: { message: 'Category followed successfully' },
   meta: { timestamp: EXAMPLE_TIMESTAMP },
 } as const;
+
+// Note: Following an already-followed category returns the same success message (idempotent)
 
 export const CATEGORY_UNFOLLOW_MESSAGE_EXAMPLE = {
   data: { message: 'Category unfollowed successfully' },

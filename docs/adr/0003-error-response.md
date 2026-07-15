@@ -12,7 +12,7 @@ All HTTP error responses must be consistent in shape, machine-readable, and debu
 
 **Format:** Every error response uses `application/problem+json` content type and conforms to RFC 7807 with the following fields:
 
-```
+```Shell
 type     — stable URI from RFC7807_TYPE_URIS or a project-specific URI
 title    — short human-readable summary
 status   — HTTP status code (number)
@@ -34,12 +34,14 @@ extensions.timestamp — ISO 8601 UTC timestamp
 ## Consequences
 
 **Advantages**
+
 - A single source of truth for all error semantics makes the API predictable.
 - Clients can programmatically handle errors by `code` without parsing `detail`.
 - The `code` is stable across API versions; the HTTP status may change without breaking clients that key on `code`.
 - The loud-failure invariant (`ProblemCodeMapping.spec.ts` asserts every code has an entry) prevents silent misconfiguration.
 
 **Trade-offs**
+
 - The `type` URI requires maintenance when the URI structure changes.
 - Synthesizing an error code for non-domain exceptions (e.g. `HttpException`) loses domain-specific nuance — the `STATUS_TO_GLOBAL_CODE` mapping is coarser than per-code mapping.
 - The `detail` field is the only human-readable message; it is not i18n-ready.
