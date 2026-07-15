@@ -129,15 +129,18 @@ export class AttemptResponseMapper {
     const total = row.totalQuestions;
     const answered = answeredCount;
 
-    const incorrectAnswers =
-      correctAnswers !== null ? Math.max(0, answered - correctAnswers) : null;
-
-    const unansweredQuestions = Math.max(0, total - answered);
-
+    // accuracy = correct / total * 100 (percentage of all questions answered correctly)
     const accuracy =
       correctAnswers !== null && total > 0
         ? Number(((correctAnswers / total) * 100).toFixed(2))
         : null;
+
+    // incorrectAnswers = questions answered minus correct answers
+    const incorrectAnswers =
+      correctAnswers !== null ? Math.max(0, answered - correctAnswers) : null;
+
+    // unansweredQuestions = total questions minus questions answered
+    const unansweredQuestions = Math.max(0, total - answered);
 
     const timeSpentSeconds =
       row.timeTakenMs !== null ? Number((row.timeTakenMs / 1000).toFixed(2)) : null;

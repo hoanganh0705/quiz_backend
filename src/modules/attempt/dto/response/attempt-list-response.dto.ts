@@ -9,6 +9,8 @@ export class AttemptPaginationResponseDto {
     description: 'Cursor for next page',
     type: String,
     nullable: true,
+    example:
+      'eyJzb3J0VmFsdWUiOiIyMDI1LTA2LTAxVDEyOjQ1OjAwLjAwMFoiLCJhdHRlbXB0SWQiOiI1NTBlODQwMC1lMjliLTQxZDQtYTcxNi00NDY2NTU0NDAwOTkifQ==',
   })
   nextCursor!: string | null;
 

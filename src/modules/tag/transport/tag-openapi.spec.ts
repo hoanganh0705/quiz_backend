@@ -128,22 +128,25 @@ describe('Tag module — OpenAPI contract (Phase 3)', () => {
       ['/api/v1/tags/trending', 'get'],
     ];
 
-    it.each(rankingEndpoints)('%s [%s] documents limit as optional with default=10', (route, method) => {
-      const pathObj = spec.paths[route];
-      expect(pathObj).toBeDefined();
-      const limitParam = findLimitParam(pathObj, method);
-      expect(limitParam).toBeDefined();
+    it.each(rankingEndpoints)(
+      '%s [%s] documents limit as optional with default=10',
+      (route, method) => {
+        const pathObj = spec.paths[route];
+        expect(pathObj).toBeDefined();
+        const limitParam = findLimitParam(pathObj, method);
+        expect(limitParam).toBeDefined();
 
-      // `required: false` (or absent, which defaults to false in OpenAPI)
-      if ('required' in limitParam!) {
-        expect(limitParam!.required).toBe(false);
-      }
+        // `required: false` (or absent, which defaults to false in OpenAPI)
+        if ('required' in limitParam!) {
+          expect(limitParam.required).toBe(false);
+        }
 
-      const schema = (limitParam?.schema as Record<string, unknown>) ?? {};
-      expect(schema.default).toBe(10);
-      expect(schema.minimum).toBe(1);
-      expect(schema.maximum).toBe(100);
-    });
+        const schema = (limitParam?.schema as Record<string, unknown>) ?? {};
+        expect(schema.default).toBe(10);
+        expect(schema.minimum).toBe(1);
+        expect(schema.maximum).toBe(100);
+      },
+    );
   });
 
   // ── 3. Phase 4 — every tag operation documents a response example ───────
@@ -186,7 +189,7 @@ describe('Tag module — OpenAPI contract (Phase 3)', () => {
       const env = example as Record<string, unknown>;
       expect(env).toHaveProperty('data');
       expect(env).toHaveProperty('meta');
-      expect((env.meta as Record<string, unknown>)).toHaveProperty('timestamp');
+      expect(env.meta as Record<string, unknown>).toHaveProperty('timestamp');
     });
 
     it('lists all 14 tag operations', () => {

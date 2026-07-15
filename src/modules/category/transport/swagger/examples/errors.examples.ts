@@ -16,10 +16,7 @@ const withInstance = (
 // ─── /categories/popular ────────────────────────────────────────────────────────
 
 export const popularBadRequestExample = {
-  ...withInstance(
-    ErrorResponseExamples.badRequest,
-    '/categories/popular',
-  ),
+  ...withInstance(ErrorResponseExamples.badRequest, '/categories/popular'),
   detail: 'Request validation failed',
   extensions: {
     errors: ['limit must be a positive integer'],
@@ -34,10 +31,7 @@ export const popularInternalErrorExample = withInstance(
 // ─── /categories/trending ───────────────────────────────────────────────────────
 
 export const trendingBadRequestExample = {
-  ...withInstance(
-    ErrorResponseExamples.badRequest,
-    '/categories/trending',
-  ),
+  ...withInstance(ErrorResponseExamples.badRequest, '/categories/trending'),
   detail: 'Request validation failed',
   extensions: {
     errors: ['limit must be a positive integer'],
@@ -52,10 +46,7 @@ export const trendingInternalErrorExample = withInstance(
 // ─── /categories/:slug/quizzes ────────────────────────────────────────────────
 
 export const categoryQuizzesNotFoundExample = {
-  ...withInstance(
-    ErrorResponseExamples.notFound,
-    '/categories/general-knowledge/quizzes',
-  ),
+  ...withInstance(ErrorResponseExamples.notFound, '/categories/general-knowledge/quizzes'),
   detail: 'Category with slug "general-knowledge" not found or has been deleted',
 };
 export const categoryQuizzesInternalErrorExample = withInstance(
@@ -66,10 +57,7 @@ export const categoryQuizzesInternalErrorExample = withInstance(
 // ─── /categories/:slug/related ────────────────────────────────────────────────
 
 export const relatedBadRequestExample = {
-  ...withInstance(
-    ErrorResponseExamples.badRequest,
-    '/categories/general-knowledge/related',
-  ),
+  ...withInstance(ErrorResponseExamples.badRequest, '/categories/general-knowledge/related'),
   detail: 'Request validation failed',
   extensions: {
     errors: ['limit must be a positive integer'],
@@ -77,10 +65,7 @@ export const relatedBadRequestExample = {
   },
 };
 export const relatedNotFoundExample = {
-  ...withInstance(
-    ErrorResponseExamples.notFound,
-    '/categories/general-knowledge/related',
-  ),
+  ...withInstance(ErrorResponseExamples.notFound, '/categories/general-knowledge/related'),
   detail: 'Category with slug "general-knowledge" not found or has been deleted',
 };
 export const relatedInternalErrorExample = withInstance(
@@ -210,10 +195,7 @@ export const restoreInternalErrorExample = withInstance(
 // ─── /categories (GET list) ────────────────────────────────────────────────────
 
 export const listCategoriesBadRequestExample = {
-  ...withInstance(
-    ErrorResponseExamples.badRequest,
-    '/categories',
-  ),
+  ...withInstance(ErrorResponseExamples.badRequest, '/categories'),
   detail: 'Request validation failed',
   extensions: {
     errors: ['limit must be a positive integer', 'cursor must be a string'],
@@ -250,10 +232,7 @@ export const categoryByIdInternalErrorExample = withInstance(
 // ─── /categories/:slug (GET by slug) ───────────────────────────────────────────
 
 export const categoryBySlugNotFoundExample = {
-  ...withInstance(
-    ErrorResponseExamples.notFound,
-    '/categories/general-knowledge',
-  ),
+  ...withInstance(ErrorResponseExamples.notFound, '/categories/general-knowledge'),
   detail: 'Category with slug "general-knowledge" not found or has been deleted',
 };
 export const categoryBySlugInternalErrorExample = withInstance(
@@ -264,10 +243,7 @@ export const categoryBySlugInternalErrorExample = withInstance(
 // ─── /categories (POST create) ─────────────────────────────────────────────────
 
 export const createCategoryBadRequestExample = {
-  ...withInstance(
-    ErrorResponseExamples.badRequest,
-    '/categories',
-  ),
+  ...withInstance(ErrorResponseExamples.badRequest, '/categories'),
   detail: 'Request validation failed',
   extensions: {
     errors: [
@@ -287,10 +263,7 @@ export const createCategoryForbiddenExample = withInstance(
   '/categories',
 );
 export const createCategoryConflictExample = {
-  ...withInstance(
-    ErrorResponseExamples.conflict,
-    '/categories',
-  ),
+  ...withInstance(ErrorResponseExamples.conflict, '/categories'),
   detail: 'Category with slug "general-knowledge" already exists',
 };
 export const createCategoryInternalErrorExample = withInstance(
@@ -363,10 +336,7 @@ export const deleteCategoryInternalErrorExample = withInstance(
 // ─── /users/me/followed-categories ───────────────────────────────────────────
 
 export const followedCategoriesBadRequestExample = {
-  ...withInstance(
-    ErrorResponseExamples.badRequest,
-    '/users/me/followed-categories',
-  ),
+  ...withInstance(ErrorResponseExamples.badRequest, '/users/me/followed-categories'),
   detail: 'Request validation failed',
   extensions: {
     errors: ['cursor must be a string', 'limit must be a positive integer'],

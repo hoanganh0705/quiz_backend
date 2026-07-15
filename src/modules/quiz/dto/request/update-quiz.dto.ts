@@ -39,7 +39,8 @@ export class UpdateQuizDto {
     description: 'Quiz description',
     type: String,
     maxLength: 2000,
-    example: 'Test your advanced JavaScript knowledge including closures, prototypes, and async patterns.',
+    example:
+      'Test your advanced JavaScript knowledge including closures, prototypes, and async patterns.',
     nullable: true,
   })
   @IsOptional()

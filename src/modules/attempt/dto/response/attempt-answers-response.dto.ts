@@ -21,6 +21,7 @@ export class AttemptAnswerItemDto {
     description: 'Whether the answer was correct (null until the attempt is completed)',
     type: Boolean,
     nullable: true,
+    example: true,
   })
   isCorrect!: boolean | null;
 

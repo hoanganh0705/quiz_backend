@@ -30,13 +30,18 @@ export class AttemptSummaryResponseDto {
   @ApiProperty({ description: 'Context type', example: 'solo' })
   contextType!: string;
 
-  @ApiProperty({ description: 'Attempt status', example: 'completed' })
+  @ApiProperty({
+    description: 'Attempt status',
+    example: 'completed',
+    enum: ['started', 'completed', 'abandoned'],
+  })
   status!: string;
 
   @ApiPropertyOptional({
     description: 'Score percent (null if not yet complete)',
     type: String,
     nullable: true,
+    example: '85.00',
   })
   scorePercent!: string | null;
 
@@ -44,6 +49,7 @@ export class AttemptSummaryResponseDto {
     description: 'Correct answer count (null if not yet complete)',
     type: Number,
     nullable: true,
+    example: 17,
   })
   correctCount!: number | null;
 
@@ -57,6 +63,7 @@ export class AttemptSummaryResponseDto {
     description: 'Completion timestamp (ISO 8601)',
     type: String,
     nullable: true,
+    example: '2025-06-01T12:45:00.000Z',
   })
   finishedAt!: string | null;
 
