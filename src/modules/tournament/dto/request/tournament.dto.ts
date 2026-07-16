@@ -230,9 +230,9 @@ export class CreateTournamentDto {
   endAt!: string;
 
   @ApiPropertyOptional({
-    description: 'Maximum number of participants',
+    description:
+      'Maximum number of participants. If omitted or null, no participant limit is enforced.',
     minimum: 2,
-    default: 100,
     nullable: true,
   })
   @IsOptional()

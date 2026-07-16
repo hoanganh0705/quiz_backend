@@ -70,7 +70,7 @@ export class MyTournamentStandingResponseDto {
   percentile!: number;
 
   @ApiProperty({
-    description: 'Total number of active participants in the tournament',
+    description: 'Total number of registered participants in the tournament',
     example: 523,
   })
   participantCount!: number;
