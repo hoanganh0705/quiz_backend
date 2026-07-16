@@ -28,7 +28,7 @@ export class RegisterTournamentResponseDto {
 
   @ApiProperty({
     description: 'Registration result message',
-    example: 'Successfully registered for the tournament.',
+    example: 'Successfully registered for the tournament',
   })
   message!: string;
 }
@@ -54,7 +54,7 @@ export class StartTournamentAttemptResponseDto {
 
   @ApiProperty({
     description: 'Attempt start message',
-    example: 'Round started. Good luck!',
+    example: 'Attempt started successfully. Use the attempt endpoint to continue.',
   })
   message!: string;
 }

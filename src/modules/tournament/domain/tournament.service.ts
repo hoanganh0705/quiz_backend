@@ -382,10 +382,6 @@ export class TournamentService {
 
     const tournament = await this.getActiveTournamentOrThrow(tournamentId);
 
-    if (tournament.status === 'upcoming') {
-      throw new TournamentRegistrationClosedError(TOURNAMENT_REGISTRATION_CLOSED_MESSAGE);
-    }
-
     if (tournament.status !== 'registration') {
       throw new TournamentRegistrationClosedError(TOURNAMENT_REGISTRATION_CLOSED_MESSAGE);
     }
