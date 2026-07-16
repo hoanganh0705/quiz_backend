@@ -29,11 +29,11 @@ export class ReportedReviewItemDto {
   rating!: number;
 
   @ApiPropertyOptional({
-    description: 'Content of the reported review',
+    description: 'Comment of the reported review',
     type: String,
     nullable: true,
   })
-  content!: string | null;
+  comment!: string | null;
 
   @ApiProperty({ description: 'Reason for reporting the review', example: 'spam' })
   reason!: string;

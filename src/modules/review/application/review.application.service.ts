@@ -307,7 +307,7 @@ export class ReviewApplicationService {
       reviewerUsername: row.reviewerUsername,
       reportedUserId: row.reportedUserId,
       rating: row.rating,
-      content: row.content,
+      comment: row.comment,
       reason: row.reason,
       details: row.details,
       status: row.status,

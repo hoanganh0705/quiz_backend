@@ -3,7 +3,10 @@ import { IsString, IsOptional, MaxLength } from 'class-validator';
 
 export class ReportReviewDto {
   @ApiProperty({
-    description: 'Reason for reporting the review',
+    description:
+      'Reason for reporting the review. This is a free-form string field. ' +
+      'Common values include: spam, harassment, inappropriate_content, other. ' +
+      'Maximum length is 255 characters.',
     example: 'spam',
   })
   @IsString()

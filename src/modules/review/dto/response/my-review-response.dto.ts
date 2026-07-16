@@ -20,11 +20,11 @@ export class MyReviewItemDto {
   rating!: number;
 
   @ApiPropertyOptional({
-    description: 'Written review content',
+    description: 'Written review comment',
     type: String,
     nullable: true,
   })
-  content!: string | null;
+  comment!: string | null;
 
   @ApiProperty({
     description: 'Creation timestamp (ISO 8601)',
