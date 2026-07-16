@@ -18,7 +18,7 @@ export class ReviewRatingDistributionDto {
 }
 
 export class ReviewStatsResponseDto {
-  @ApiProperty({ description: 'Average rating for the quiz', example: 4.7 })
+  @ApiProperty({ description: 'Average rating for the quiz', example: 4.3 })
   averageRating!: number;
 
   @ApiProperty({ description: 'Total number of reviews for the quiz', example: 1250 })

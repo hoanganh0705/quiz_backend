@@ -6,7 +6,6 @@ export class ListMyReviewsQueryDto {
   @ApiPropertyOptional({
     description: 'Opaque cursor for pagination. Pass the `nextCursor` from a previous response.',
     type: String,
-    nullable: true,
     example:
       'eyJjcmVhdGVkQXQiOiAiMjAyNi0wMS0wMVQwMDowMDowMC4wMDBaIiwgInJldmlld0lkIjogIjU1MGU4NDAwLWUyOWItNDFkNC1hNzE2LTQ0NjY1NTQ0MDA5OSJ9',
   })

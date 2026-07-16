@@ -2,16 +2,18 @@ import { Controller, Get, Param, ParseUUIDPipe, Query } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { Public } from '@/common/decorators/public.decorator';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
-import { ApiAuth, ApiPublicErrors } from '@/common/swagger/swagger-decorators';
-import { ApiOkResource, ApiOkResourceList } from '@/common/swagger/api-ok';
+import { ApiAuth } from '@/common/swagger/swagger-decorators';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
 import { ReviewApplicationService } from '../../application/review.application.service';
 import { ListMyReviewsQueryDto, ListReportedReviewsQueryDto } from '../../dto/request';
-import { MyReviewsResponseDto } from '../../dto/response/my-review-response.dto';
-import { ReportedReviewsResponseDto } from '../../dto/response/reported-review-response.dto';
-import { ReviewDetailResponseDto } from '../../dto/response/review-detail-response.dto';
 import { CursorMapper } from '../../mappers/review-cursor.mapper';
 import { ReviewPresenter } from '../presenters/review.presenter';
+import {
+  ApiGetMyReviewForQuizResponses,
+  ApiListMyReportedReviewsResponses,
+  ApiListMyReviewsResponses,
+  ApiListReviewsByUserResponses,
+} from '../swagger/review-swagger-decorators';
 
 @ApiTags('users')
 @Controller('users')
@@ -23,9 +25,7 @@ export class UserReviewController {
 
   @Get('me/reported-reviews')
   @ApiAuth()
-  @ApiOkResourceList(ReportedReviewsResponseDto, 'cursor', {
-    description: 'Reported reviews returned',
-  })
+  @ApiListMyReportedReviewsResponses()
   async listMyReportedReviews(
     @CurrentUser() user: JwtPayload,
     @Query() query: ListReportedReviewsQueryDto,
@@ -39,7 +39,7 @@ export class UserReviewController {
 
   @Get('me/reviews')
   @ApiAuth()
-  @ApiOkResourceList(MyReviewsResponseDto, 'cursor', { description: 'My reviews returned' })
+  @ApiListMyReviewsResponses()
   async listMyReviews(@CurrentUser() user: JwtPayload, @Query() query: ListMyReviewsQueryDto) {
     const result = await this.reviewApplicationService.listUserReviews(user.sub, {
       limit: query.limit,
@@ -48,14 +48,9 @@ export class UserReviewController {
     return this.presenter.listMyReviews(result);
   }
 
-  // Implementation returns `null` when the user has not reviewed the quiz
-  // (NOT a 404). The wrapper documents `data: ReviewDetailDataDto | null`.
   @Get('me/reviews/:quizId')
   @ApiAuth()
-  @ApiOkResource(ReviewDetailResponseDto, {
-    description:
-      'My review for the quiz. `data` is `null` when the user has not reviewed the quiz.',
-  })
+  @ApiGetMyReviewForQuizResponses()
   async getMyReviewForQuiz(
     @Param('quizId', new ParseUUIDPipe()) quizId: string,
     @CurrentUser() user: JwtPayload,
@@ -66,8 +61,7 @@ export class UserReviewController {
 
   @Get(':userId/reviews')
   @Public()
-  @ApiPublicErrors()
-  @ApiOkResourceList(MyReviewsResponseDto, 'cursor', { description: 'User reviews returned' })
+  @ApiListReviewsByUserResponses()
   async listReviewsByUser(
     @Param('userId', new ParseUUIDPipe()) userId: string,
     @Query() query: ListMyReviewsQueryDto,
