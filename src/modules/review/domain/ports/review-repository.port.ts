@@ -21,7 +21,7 @@ export type ReviewDetailByIdRow = {
   userId: string;
   username: string;
   rating: number;
-  content: string | null;
+  comment: string | null;
   createdAt: string;
   updatedAt: string;
   helpfulCount?: number;
@@ -32,7 +32,7 @@ export type MyReviewRow = {
   quizId: string;
   quizTitle: string;
   rating: number;
-  content: string | null;
+  comment: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -97,7 +97,7 @@ export type ReportedReviewRow = {
   quizTitle: string;
   reviewerUsername: string;
   rating: number;
-  content: string | null;
+  comment: string | null;
   reason: string;
   details: string | null;
   status: 'open' | 'reviewed' | 'dismissed' | 'actioned';
@@ -113,7 +113,7 @@ export type PlatformReportRow = {
   reviewerUsername: string;
   reportedUserId: string;
   rating: number;
-  content: string | null;
+  comment: string | null;
   reason: string;
   details: string | null;
   status: 'open' | 'reviewed' | 'dismissed' | 'actioned';
