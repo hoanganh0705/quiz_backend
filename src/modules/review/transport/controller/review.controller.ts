@@ -1,14 +1,8 @@
 import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Post } from '@nestjs/common';
-import {
-  ApiBadRequestResponse,
-  ApiConflictResponse,
-  ApiNotFoundResponse,
-  ApiTags,
-} from '@nestjs/swagger';
+import { ApiTags } from '@nestjs/swagger';
 import { Public } from '@/common/decorators/public.decorator';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
-import { ApiAuth, ApiPublicErrors } from '@/common/swagger/swagger-decorators';
-import { ApiOkResource } from '@/common/swagger/api-ok';
+import { ApiAuth } from '@/common/swagger/swagger-decorators';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
 import { ReviewApplicationService } from '../../application/review.application.service';
 import { HelpfulReviewDto, ReportReviewDto } from '../../dto/request';
@@ -17,34 +11,14 @@ import { ReportReviewResponseDto } from '../../dto/response/report-review-respon
 import { ReviewDashboardResponseDto } from '../../dto/response/review-dashboard-response.dto';
 import { ReviewDetailResponseDto } from '../../dto/response/review-detail-response.dto';
 import { ReviewPresenter } from '../presenters/review.presenter';
-import { ProblemDetailDto, ErrorResponseExamples } from '@/common/swagger/swagger-schemas';
-
-// Local helpers — every review error response is now emitted by
-// GlobalExceptionFilter as RFC 7807 ProblemDetail (the per-module filter
-// was deleted in Phase 2). 401/403/500 still come from GlobalExceptionFilter
-// via `ApiAuth` / `ApiPublicErrors`. The helpers below cover 400/404/409
-// from review domain errors and reference `ProblemDetailDto` directly.
-
-const reviewNotFoundResponse = (description: string = 'Review not found') =>
-  ApiNotFoundResponse({
-    description,
-    type: ProblemDetailDto,
-    example: ErrorResponseExamples.notFound,
-  });
-
-const reviewConflictResponse = (description: string = 'You have already reported this review') =>
-  ApiConflictResponse({
-    description,
-    type: ProblemDetailDto,
-    example: ErrorResponseExamples.conflict,
-  });
-
-const reviewBadRequestResponse = (description: string = 'You cannot vote on your own review') =>
-  ApiBadRequestResponse({
-    description,
-    type: ProblemDetailDto,
-    example: ErrorResponseExamples.badRequest,
-  });
+import {
+  ApiGetReviewByIdResponses,
+  ApiListMyReviewsResponses,
+  ApiMarkReviewHelpfulResponses,
+  ApiRemoveHelpfulVoteResponses,
+  ApiReportReviewResponses,
+  ApiReviewDashboardResponses,
+} from '../swagger/review-swagger-decorators';
 
 @ApiTags('reviews')
 @Controller('reviews')
@@ -56,7 +30,7 @@ export class ReviewController {
 
   @Get('me')
   @ApiAuth()
-  @ApiOkResource(ReviewDashboardResponseDto, { description: 'Review dashboard returned' })
+  @ApiReviewDashboardResponses()
   async getMyReviewDashboard(@CurrentUser() user: JwtPayload) {
     const result = await this.reviewApplicationService.getMyReviewDashboard(user);
     return this.presenter.getMyReviewDashboard(result);
@@ -64,9 +38,7 @@ export class ReviewController {
 
   @Post(':reviewId/helpful')
   @ApiAuth()
-  @ApiOkResource(HelpfulReviewResponseDto, { description: 'Helpful vote recorded' })
-  @reviewNotFoundResponse()
-  @reviewBadRequestResponse()
+  @ApiMarkReviewHelpfulResponses()
   async markReviewHelpful(
     @Param('reviewId', new ParseUUIDPipe()) reviewId: string,
     @CurrentUser() user: JwtPayload,
@@ -78,8 +50,7 @@ export class ReviewController {
 
   @Delete(':reviewId/helpful')
   @ApiAuth()
-  @ApiOkResource(HelpfulReviewResponseDto, { description: 'Helpful vote removed' })
-  @reviewNotFoundResponse()
+  @ApiRemoveHelpfulVoteResponses()
   async removeHelpfulVote(
     @Param('reviewId', new ParseUUIDPipe()) reviewId: string,
     @CurrentUser() user: JwtPayload,
@@ -90,9 +61,7 @@ export class ReviewController {
 
   @Post(':reviewId/report')
   @ApiAuth()
-  @ApiOkResource(ReportReviewResponseDto, { description: 'Review reported successfully' })
-  @reviewNotFoundResponse()
-  @reviewConflictResponse()
+  @ApiReportReviewResponses()
   async reportReview(
     @Param('reviewId', new ParseUUIDPipe()) reviewId: string,
     @CurrentUser() user: JwtPayload,
@@ -104,9 +73,7 @@ export class ReviewController {
 
   @Get(':reviewId')
   @Public()
-  @ApiPublicErrors()
-  @ApiOkResource(ReviewDetailResponseDto, { description: 'Review detail returned' })
-  @reviewNotFoundResponse()
+  @ApiGetReviewByIdResponses()
   async getReviewById(@Param('reviewId', new ParseUUIDPipe()) reviewId: string) {
     const result = await this.reviewApplicationService.getReviewById(reviewId);
     return this.presenter.getReviewById(result);

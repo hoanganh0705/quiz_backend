@@ -1,8 +1,11 @@
-import { ApiPropertyOptional } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsInt, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
 
 export class UpdateReviewDto {
-  @ApiPropertyOptional({
+  // NOTE: The domain service requires rating to be provided. This is a documented
+  // requirement (Phase 2 H3 fix). Changed from @ApiPropertyOptional to @ApiProperty
+  // to align OpenAPI documentation with the runtime validation (no @IsOptional() decorator).
+  @ApiProperty({
     description: 'Updated rating from 1 to 5 stars',
     minimum: 1,
     maximum: 5,
@@ -18,6 +21,7 @@ export class UpdateReviewDto {
     type: String,
     nullable: true,
     maxLength: 1000,
+    example: 'Updated my review after retaking the quiz.',
   })
   @IsOptional()
   @IsString()

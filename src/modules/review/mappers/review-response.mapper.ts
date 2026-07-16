@@ -42,7 +42,7 @@ export class ReviewResponseMapper {
       quizId: row.quizId,
       quizTitle: row.quizTitle,
       rating: row.rating,
-      content: row.content,
+      comment: row.comment,
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
     };
@@ -60,22 +60,7 @@ export class ReviewResponseMapper {
       userId: row.userId,
       username: row.username,
       rating: row.rating,
-      content: row.content,
-      createdAt: row.createdAt,
-      updatedAt: row.updatedAt,
-      helpfulCount: row.helpfulCount ?? 0,
-    };
-  }
-
-  toMyQuizReviewResponse(row: ReviewDetailByIdRow): ReviewDetailResponseDto {
-    return {
-      reviewId: row.reviewId,
-      quizId: row.quizId,
-      quizTitle: row.quizTitle,
-      userId: row.userId,
-      username: row.username,
-      rating: row.rating,
-      content: row.content,
+      comment: row.comment,
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
       helpfulCount: row.helpfulCount ?? 0,
@@ -110,7 +95,7 @@ export class ReviewResponseMapper {
       quizTitle: row.quizTitle,
       reviewerUsername: row.reviewerUsername,
       rating: row.rating,
-      content: row.content,
+      comment: row.comment,
       reason: row.reason,
       details: row.details,
       status: row.status,

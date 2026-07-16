@@ -11,7 +11,7 @@ export type PlatformReportItem = {
   reviewerUsername: string;
   reportedUserId: string;
   rating: number;
-  content: string | null;
+  comment: string | null;
   reason: string;
   details: string | null;
   status: 'open' | 'reviewed' | 'dismissed' | 'actioned';
