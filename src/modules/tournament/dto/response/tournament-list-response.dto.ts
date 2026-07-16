@@ -29,7 +29,7 @@ export class UpcomingTournamentItemDto {
   })
   endAt!: string;
 
-  @ApiProperty({ description: 'Current number of active participants', example: 523 })
+  @ApiProperty({ description: 'Number of registered participants', example: 523 })
   participantCount!: number;
 }
 
@@ -74,7 +74,7 @@ export class ActiveTournamentItemDto {
   })
   endAt!: string;
 
-  @ApiProperty({ description: 'Current number of active participants', example: 523 })
+  @ApiProperty({ description: 'Number of registered participants', example: 523 })
   participantCount!: number;
 }
 
@@ -119,7 +119,7 @@ export class CompletedTournamentItemDto {
   })
   endAt!: string;
 
-  @ApiProperty({ description: 'Current number of active participants', example: 523 })
+  @ApiProperty({ description: 'Number of registered participants', example: 523 })
   participantCount!: number;
 }
 
@@ -158,7 +158,7 @@ export class RelatedTournamentItemDto {
   })
   startAt!: string;
 
-  @ApiProperty({ description: 'Current number of active participants', example: 312 })
+  @ApiProperty({ description: 'Number of registered participants', example: 312 })
   participantCount!: number;
 }
 
