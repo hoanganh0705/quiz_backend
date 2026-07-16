@@ -57,6 +57,28 @@ import { TournamentPresenter } from '../presenters/tournament.presenter';
 import { AUTH_SECURITY_NAME } from '@/core/swagger/swagger.config';
 import { ProblemDetailDto, ErrorResponseExamples } from '@/common/swagger/swagger-schemas';
 import { ApiOkResource, ApiCreatedResource, ApiOkResourceList } from '@/common/swagger/api-ok';
+import {
+  ApiTournamentIdParam,
+  ApiTournamentRoundIdParam,
+} from '../swagger/tournament-swagger-decorators';
+import {
+  TOURNAMENT_DETAIL_EXAMPLE,
+  TOURNAMENT_LIST_EXAMPLE,
+  UPCOMING_TOURNAMENTS_EXAMPLE,
+  ACTIVE_TOURNAMENTS_EXAMPLE,
+  COMPLETED_TOURNAMENTS_EXAMPLE,
+  RELATED_TOURNAMENTS_EXAMPLE,
+  TOURNAMENT_LEADERBOARD_EXAMPLE,
+  TOURNAMENT_WINNERS_EXAMPLE,
+  TOURNAMENT_STATS_EXAMPLE,
+  MY_STANDING_EXAMPLE,
+  PARTICIPANTS_EXAMPLE,
+  REGISTER_SUCCESS_EXAMPLE,
+  START_ATTEMPT_SUCCESS_EXAMPLE,
+  UNREGISTER_SUCCESS_EXAMPLE,
+  WITHDRAW_SUCCESS_EXAMPLE,
+  CREATE_TOURNAMENT_EXAMPLE,
+} from '../swagger/examples';
 
 // Local helpers — every tournament error response is now emitted by
 // GlobalExceptionFilter as RFC 7807 ProblemDetail (the per-module filter
@@ -128,7 +150,10 @@ export class TournamentController {
       'A 400 is returned when the request body fails validation (e.g. `endAt` is not after `startAt`).',
   })
   @tournamentUnauthorizedResponse()
-  @ApiCreatedResource(TournamentResponseDto, { description: 'Tournament created' })
+  @ApiCreatedResource(TournamentResponseDto, {
+    description: 'Tournament created',
+    example: CREATE_TOURNAMENT_EXAMPLE,
+  })
   @ApiBadRequestResponse({
     description:
       'Request body failed validation. The response is an RFC 7807 ProblemDetail ' +
@@ -151,7 +176,10 @@ export class TournamentController {
     summary: 'List tournaments',
     description: 'Returns a cursor-paginated list of tournaments filtered by optional criteria.',
   })
-  @ApiOkResourceList(TournamentResponseDto, 'cursor', { description: 'Tournaments returned' })
+  @ApiOkResourceList(TournamentResponseDto, 'cursor', {
+    description: 'Tournaments returned',
+    example: TOURNAMENT_LIST_EXAMPLE,
+  })
   @ApiBadRequestResponse({
     description: 'Query parameters failed validation',
     type: ProblemDetailDto,
@@ -175,6 +203,7 @@ export class TournamentController {
   })
   @ApiOkResourceList(UpcomingTournamentItemDto, 'offset', {
     description: 'Upcoming tournaments returned',
+    example: UPCOMING_TOURNAMENTS_EXAMPLE,
   })
   @ApiBadRequestResponse({
     description: 'Query parameters failed validation',
@@ -197,6 +226,7 @@ export class TournamentController {
   })
   @ApiOkResourceList(ActiveTournamentItemDto, 'offset', {
     description: 'Active tournaments returned',
+    example: ACTIVE_TOURNAMENTS_EXAMPLE,
   })
   @ApiBadRequestResponse({
     description: 'Query parameters failed validation',
@@ -218,6 +248,7 @@ export class TournamentController {
   })
   @ApiOkResourceList(CompletedTournamentItemDto, 'offset', {
     description: 'Completed tournaments returned',
+    example: COMPLETED_TOURNAMENTS_EXAMPLE,
   })
   @ApiBadRequestResponse({
     description: 'Query parameters failed validation',
@@ -239,8 +270,10 @@ export class TournamentController {
     description:
       'Returns tournaments related to the given tournament (same category or adjacent time window).',
   })
-  @ApiOkResourceList(RelatedTournamentItemDto, 'cursor', {
+  @ApiTournamentIdParam()
+  @ApiOkResource(RelatedTournamentItemDto, {
     description: 'Related tournaments returned',
+    example: RELATED_TOURNAMENTS_EXAMPLE,
   })
   @ApiBadRequestResponse({
     description: 'Path or query parameters failed validation',
@@ -265,7 +298,11 @@ export class TournamentController {
     summary: 'Get tournament stats',
     description: 'Returns aggregate statistics for the given tournament.',
   })
-  @ApiOkResource(TournamentStatsResponseDto, { description: 'Tournament stats returned' })
+  @ApiTournamentIdParam()
+  @ApiOkResource(TournamentStatsResponseDto, {
+    description: 'Tournament stats returned',
+    example: TOURNAMENT_STATS_EXAMPLE,
+  })
   @ApiBadRequestResponse({
     description: 'Path or query parameters failed validation',
     type: ProblemDetailDto,
@@ -288,8 +325,10 @@ export class TournamentController {
       'Returns the final winners of the tournament sorted by rank ascending. ' +
       'The default limit is 10; pass `limit` to fetch more.',
   })
-  @ApiOkResourceList(TournamentWinnerDto, 'cursor', {
+  @ApiTournamentIdParam()
+  @ApiOkResource(TournamentWinnerDto, {
     description: 'Tournament winners returned',
+    example: TOURNAMENT_WINNERS_EXAMPLE,
   })
   @ApiBadRequestResponse({
     description: 'Path or query parameters failed validation',
@@ -315,7 +354,11 @@ export class TournamentController {
     description:
       'Returns a single tournament with its associated rounds, category info, and participant count.',
   })
-  @ApiOkResource(TournamentDetailResponseDto, { description: 'Tournament found' })
+  @ApiTournamentIdParam()
+  @ApiOkResource(TournamentDetailResponseDto, {
+    description: 'Tournament found',
+    example: TOURNAMENT_DETAIL_EXAMPLE,
+  })
   @ApiBadRequestResponse({
     description: 'Path parameter failed validation',
     type: ProblemDetailDto,
@@ -338,8 +381,10 @@ export class TournamentController {
       'Returns an offset-paginated list of users registered for the tournament, ' +
       'plus the total registered count.',
   })
+  @ApiTournamentIdParam()
   @ApiOkResourceList(TournamentParticipantListItemDto, 'offset', {
     description: 'Participants returned',
+    example: PARTICIPANTS_EXAMPLE,
   })
   @ApiBadRequestResponse({
     description: 'Path or query parameters failed validation',
@@ -372,7 +417,11 @@ export class TournamentController {
       'Requires the `TOURNAMENT_REGISTER` permission.',
   })
   @tournamentUnauthorizedResponse()
-  @ApiOkResource(RegisterTournamentResponseDto, { description: 'Registered successfully' })
+  @ApiTournamentIdParam()
+  @ApiOkResource(RegisterTournamentResponseDto, {
+    description: 'Registered successfully',
+    example: REGISTER_SUCCESS_EXAMPLE,
+  })
   @ApiBadRequestResponse({
     description:
       'Path parameter is malformed, or the tournament domain rejected the registration. ' +
@@ -401,8 +450,10 @@ export class TournamentController {
     description:
       'Returns the live leaderboard for the tournament with each participant rank, score, and time.',
   })
-  @ApiOkResourceList(TournamentLeaderboardEntryDto, 'cursor', {
+  @ApiTournamentIdParam()
+  @ApiOkResource(TournamentLeaderboardEntryDto, {
     description: 'Leaderboard returned',
+    example: TOURNAMENT_LEADERBOARD_EXAMPLE,
   })
   @ApiBadRequestResponse({
     description: 'Path parameter failed validation',
@@ -428,7 +479,11 @@ export class TournamentController {
       'participants for the tournament. Requires the user to be an active participant.',
   })
   @tournamentUnauthorizedResponse()
-  @ApiOkResource(MyTournamentStandingResponseDto, { description: 'Standing returned' })
+  @ApiTournamentIdParam()
+  @ApiOkResource(MyTournamentStandingResponseDto, {
+    description: 'Standing returned',
+    example: MY_STANDING_EXAMPLE,
+  })
   @ApiBadRequestResponse({
     description: 'Path parameter failed validation',
     type: ProblemDetailDto,
@@ -462,7 +517,12 @@ export class TournamentController {
       'Requires the `TOURNAMENT_ATTEMPT` permission.',
   })
   @tournamentUnauthorizedResponse()
-  @ApiOkResource(StartTournamentAttemptResponseDto, { description: 'Attempt started' })
+  @ApiTournamentIdParam()
+  @ApiTournamentRoundIdParam()
+  @ApiOkResource(StartTournamentAttemptResponseDto, {
+    description: 'Attempt started',
+    example: START_ATTEMPT_SUCCESS_EXAMPLE,
+  })
   @ApiBadRequestResponse({
     description:
       'Path parameter is malformed, or the tournament domain rejected the attempt start. ' +
@@ -500,7 +560,11 @@ export class TournamentController {
       'Requires the `TOURNAMENT_REGISTER` permission.',
   })
   @tournamentUnauthorizedResponse()
-  @ApiOkResource(UnregisterTournamentResponseDto, { description: 'Withdrawn successfully' })
+  @ApiTournamentIdParam()
+  @ApiOkResource(UnregisterTournamentResponseDto, {
+    description: 'Unregistered successfully',
+    example: UNREGISTER_SUCCESS_EXAMPLE,
+  })
   @ApiBadRequestResponse({
     description:
       'Path parameter is malformed, or the tournament domain rejected the unregistration. ' +
@@ -537,7 +601,11 @@ export class TournamentController {
       'Requires the `TOURNAMENT_REGISTER` permission.',
   })
   @tournamentUnauthorizedResponse()
-  @ApiOkResource(WithdrawTournamentResponseDto, { description: 'Withdrawal successful' })
+  @ApiTournamentIdParam()
+  @ApiOkResource(WithdrawTournamentResponseDto, {
+    description: 'Withdrawal successful',
+    example: WITHDRAW_SUCCESS_EXAMPLE,
+  })
   @ApiBadRequestResponse({
     description:
       'Path parameter is malformed, or the tournament domain rejected the withdrawal. ' +
