@@ -805,9 +805,17 @@ export class DiscussionRepository implements DiscussionRepositoryPort {
       this.db
         .select({
           threadId: discussionComments.threadId,
-          recentCommentCount: sql<number>`COUNT(*) FILTER (WHERE ${discussionComments.createdAt} > NOW() - INTERVAL '7 days')::int`,
-          replyCount: sql<number>`COUNT(*) FILTER (WHERE ${discussionComments.parentCommentId} IS NOT NULL)::int`,
-          latestCommentAt: sql<Date | null>`MAX(${discussionComments.createdAt})`,
+          recentCommentCount:
+            sql<number>`COUNT(*) FILTER (WHERE ${discussionComments.createdAt} > NOW() - INTERVAL '7 days')::int`.as(
+              'recent_comment_count',
+            ),
+          replyCount:
+            sql<number>`COUNT(*) FILTER (WHERE ${discussionComments.parentCommentId} IS NOT NULL)::int`.as(
+              'reply_count',
+            ),
+          latestCommentAt: sql<Date | null>`MAX(${discussionComments.createdAt})`.as(
+            'latest_comment_at',
+          ),
         })
         .from(discussionComments)
         .where(isNull(discussionComments.deletedAt))
@@ -817,10 +825,13 @@ export class DiscussionRepository implements DiscussionRepositoryPort {
     // Score expression reused in both the cursor condition and
     // the ORDER BY. Defined once so the planner sees the same
     // expression in both places and can share derived state.
+    // Note: CTE columns must use raw SQL identifiers (not Drizzle template
+    // interpolation) because Drizzle cannot resolve ${threadCommentStats.col}
+    // references at compile time.
     const scoreExpression = sql<number>`(
       ${discussionThreads.votesCount} * 3 +
       ${discussionThreads.commentsCount} * 2 +
-      COALESCE(${threadCommentStats.recentCommentCount}, 0)
+      COALESCE(thread_comment_stats.recent_comment_count, 0)
     )::float`;
 
     const cursorCondition = cursor
@@ -854,12 +865,12 @@ export class DiscussionRepository implements DiscussionRepositoryPort {
         displayName: userProfiles.displayName,
         avatarUrl: userProfiles.avatarUrl,
 
-        replyCount: sql<number>`COALESCE(${threadCommentStats.replyCount}, 0)`,
+        replyCount: sql<number>`COALESCE(thread_comment_stats.reply_count, 0)`,
 
         latestActivityAt: sql<Date>`GREATEST(
           ${discussionThreads.updatedAt},
           COALESCE(
-            ${threadCommentStats.latestCommentAt},
+            thread_comment_stats.latest_comment_at,
             ${discussionThreads.updatedAt}
           )
         )`,
@@ -1624,7 +1635,7 @@ export class DiscussionRepository implements DiscussionRepositoryPort {
   async removeVote(
     params: {
       userId: string;
-      targetType: 'thread' | 'comment' | 'reply';
+      targetType: 'thread' | 'comment';
       targetId: string;
     },
     db?: DrizzleDB,
@@ -1673,13 +1684,14 @@ export class DiscussionRepository implements DiscussionRepositoryPort {
     targetId: string,
     db: DrizzleDB,
   ): Promise<DiscussionVoteValue | null> {
-    const [vote] = await db
+    const result = await db
       .execute(
         sql`SELECT "value" FROM "discussion_votes" WHERE "user_id" = ${userId} AND "target_type" = ${targetType} AND "target_id" = ${targetId} FOR UPDATE`,
       )
-      .catch(() => []);
+      .catch(() => ({ rows: [] }));
 
-    return (vote as { value: DiscussionVoteValue } | undefined)?.value ?? null;
+    const vote = (result as { rows: { value: DiscussionVoteValue }[] }).rows[0];
+    return vote?.value ?? null;
   }
 
   // ─── REPORTS ────────────────────────────────────────────────────────────────
@@ -1875,10 +1887,10 @@ export class DiscussionRepository implements DiscussionRepositoryPort {
 
   async getReportTargetSummary(params: {
     reportId: string;
-    targetType: 'thread' | 'comment' | 'reply';
+    targetType: 'thread' | 'comment';
     targetId: string;
   }): Promise<{
-    targetType: 'thread' | 'comment' | 'reply';
+    targetType: 'thread' | 'comment';
     targetId: string;
     threadId: string;
     threadTitle: string;
