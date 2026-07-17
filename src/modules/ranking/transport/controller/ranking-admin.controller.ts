@@ -163,9 +163,10 @@ export class RankingAdminController {
     summary: 'Trigger period reset',
     description:
       'Manually triggers period resets for the ranking system. ' +
-      'If `period` is provided, resets only that period. ' +
-      'Otherwise resets all due periods (daily, weekly, monthly). ' +
-      'Requires `RANKING_ADMIN` permission.',
+      'If `period` is provided, resets only that period regardless of the current time. ' +
+      'If `period` is omitted, fires daily, weekly, and monthly resets only when their ' +
+      'UTC schedules are due (each method short-circuits silently if not at the scheduled time, ' +
+      'returning 0 users affected). Requires `RANKING_ADMIN` permission.',
   })
   @ApiOkResource(PeriodResetResponseDto, { description: 'Period reset triggered' })
   async triggerPeriodReset(@Query() query: PeriodResetQueryDto) {

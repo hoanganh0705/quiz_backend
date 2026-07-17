@@ -6,6 +6,7 @@ import {
   type RankingRepositoryPort,
 } from '../domain/ports/ranking-repository.port';
 import type { UserPercentileResponseDto } from '../dto/response/leaderboard-stats.dto';
+import { getPercentileLabel } from '../domain/types/ranking.types';
 
 @Injectable()
 export class GetMyPercentileQueryHandler {
@@ -33,6 +34,7 @@ export class GetMyPercentileQueryHandler {
         rank: null,
         totalUsers,
         percentile: null,
+        percentileLabel: null,
         betterThanUsers: null,
         worseThanUsers: null,
       };
@@ -46,6 +48,7 @@ export class GetMyPercentileQueryHandler {
       rank,
       totalUsers,
       percentile,
+      percentileLabel: getPercentileLabel(percentile),
       betterThanUsers,
       worseThanUsers,
     };

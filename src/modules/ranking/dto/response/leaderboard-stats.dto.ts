@@ -53,6 +53,17 @@ export class UserPercentileResponseDto {
   percentile!: number | null;
 
   @ApiPropertyOptional({
+    description:
+      'Human-readable percentile bucket (e.g. "Top 5%"). ' +
+      'Mirrors `UserRankPositionDto.percentileLabel` and `UserRankSummaryDto.percentileLabel`. ' +
+      'Null when the user has no rank in the selected period.',
+    type: String,
+    example: 'Top 5%',
+    nullable: true,
+  })
+  percentileLabel!: string | null;
+
+  @ApiPropertyOptional({
     description: 'Number of users the authenticated user is ahead of',
     type: Number,
     example: 9875,

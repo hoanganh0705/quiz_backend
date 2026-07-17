@@ -1,9 +1,20 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import {
+  ApiTimestampProperty,
+  ApiOptionalTimestampProperty,
+  ApiUuidProperty,
+} from '@/common/decorators/api-uuid-property.decorator';
 
 export const RANK_TREND_VALUES = ['up', 'down', 'same', 'new'] as const;
 export type RankTrend = (typeof RANK_TREND_VALUES)[number];
 
 export const RANK_DIRECTION_VALUES = ['up', 'down', 'stable', 'unknown'] as const;
+/**
+ * @deprecated Use `RankTrend` from `leaderboard-entry.dto` instead.
+ *   `RANK_DIRECTION_VALUES` will be removed in the next major release.
+ *   Migrate consumers to `RANK_TREND_VALUES` = `['up', 'down', 'same', 'new']`.
+ *   Mapping: `stable` → `same`; `unknown` → `new`.
+ */
 export type RankDirection = (typeof RANK_DIRECTION_VALUES)[number];
 
 export class LeaderboardEntryDto {
@@ -13,7 +24,7 @@ export class LeaderboardEntryDto {
   @ApiProperty({ description: 'Dense rank (no gaps for ties)', example: 1 })
   denseRank!: number;
 
-  @ApiProperty({ description: 'User ID', example: '550e8400-e29b-41d4-a716-446655440000' })
+  @ApiUuidProperty({ description: 'User ID' })
   userId!: string;
 
   @ApiProperty({ description: 'User display name', example: 'QuizMaster' })
@@ -50,17 +61,12 @@ export class PeriodInfoDto {
   })
   type!: 'daily' | 'weekly' | 'monthly' | 'all_time';
 
-  @ApiProperty({
-    description: 'Period start date',
-    example: '2026-05-25T00:00:00.000Z',
-  })
+  @ApiTimestampProperty({ description: 'Period start date', example: '2026-05-25T00:00:00.000Z' })
   start!: string;
 
-  @ApiPropertyOptional({
+  @ApiOptionalTimestampProperty({
     description: 'Period end date (null for all_time)',
-    type: String,
     example: '2026-05-31T23:59:59.999Z',
-    nullable: true,
   })
   end!: string | null;
 
@@ -149,6 +155,14 @@ export class GlobalRankingDto {
   allTime!: UserRankPositionDto | null;
 }
 
+/**
+ * @deprecated Use `PeakRanksResponseDto` instead.
+ * This number-only shape was replaced by the richer `{ rank, achievedAt }`
+ * shape so that `/leaderboard/me` and `/leaderboard/me/peak-ranks` expose
+ * the same data structure. Kept temporarily for backwards compatibility.
+ *
+ * @see PeakRanksResponseDto
+ */
 export class PeakRanksDto {
   @ApiPropertyOptional({
     description: 'Best weekly rank achieved',

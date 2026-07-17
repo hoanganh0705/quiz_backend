@@ -1,13 +1,14 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { ApiOptionalTimestampProperty } from '@/common/decorators/api-uuid-property.decorator';
 import {
   LeaderboardEntryDto,
   PeriodInfoDto,
   PaginationDto,
   UserRankPositionDto,
   GlobalRankingDto,
-  PeakRanksDto,
   UserBadgesDto,
 } from './leaderboard-entry.dto';
+import { PeakRanksResponseDto } from './leaderboard-history.dto';
 
 export class LeaderboardResponseDto {
   @ApiProperty({
@@ -50,16 +51,14 @@ export class UserRankResponseDto {
   global!: GlobalRankingDto;
 
   @ApiProperty({
-    description: 'Best ranks ever achieved',
-    type: () => PeakRanksDto,
+    description: 'Best ranks ever achieved (rank + when they were achieved)',
+    type: () => PeakRanksResponseDto,
   })
-  peakRanks!: PeakRanksDto;
+  peakRanks!: PeakRanksResponseDto;
 
-  @ApiPropertyOptional({
+  @ApiOptionalTimestampProperty({
     description: 'Last activity timestamp',
-    type: String,
     example: '2026-06-01T12:00:00.000Z',
-    nullable: true,
   })
   lastActivityAt!: string | null;
 

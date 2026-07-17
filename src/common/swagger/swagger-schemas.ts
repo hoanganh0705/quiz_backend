@@ -54,7 +54,7 @@ export const ErrorResponseExamples = {
     title: 'BadRequest',
     status: 400,
     detail: 'Request validation failed',
-    instance: '/quizzes',
+    instance: '/api/v1/endpoint',
     extensions: {
       errors: ['email must be an email', 'password must be longer than 5 characters'],
       requestId: 'req_abc123',
@@ -65,7 +65,7 @@ export const ErrorResponseExamples = {
     title: 'Unauthorized',
     status: 401,
     detail: 'Invalid or expired access token',
-    instance: '/auth/login',
+    instance: '/api/v1/endpoint',
     extensions: { requestId: 'req_abc123' },
   },
   forbidden: {
@@ -73,7 +73,7 @@ export const ErrorResponseExamples = {
     title: 'Forbidden',
     status: 403,
     detail: 'You do not have permission to perform this action',
-    instance: '/quizzes/660e8400-e29b-41d4-a716-446655440000',
+    instance: '/api/v1/endpoint',
     extensions: { requestId: 'req_abc123' },
   },
   notFound: {
@@ -81,7 +81,7 @@ export const ErrorResponseExamples = {
     title: 'NotFound',
     status: 404,
     detail: 'The requested resource was not found',
-    instance: '/quizzes/660e8400-e29b-41d4-a716-446655440000',
+    instance: '/api/v1/endpoint',
     extensions: { requestId: 'req_abc123' },
   },
   conflict: {
@@ -89,7 +89,7 @@ export const ErrorResponseExamples = {
     title: 'Conflict',
     status: 409,
     detail: 'The request conflicts with the current state of the resource',
-    instance: '/quizzes/660e8400-e29b-41d4-a716-446655440000',
+    instance: '/api/v1/endpoint',
     extensions: { requestId: 'req_abc123' },
   },
   tooManyRequests: {
@@ -97,7 +97,7 @@ export const ErrorResponseExamples = {
     title: 'TooManyRequests',
     status: 429,
     detail: 'Rate limit exceeded. Please try again later',
-    instance: '/auth/login',
+    instance: '/api/v1/endpoint',
     extensions: { requestId: 'req_abc123', retryAfter: 60 },
   },
   internalServerError: {
@@ -105,7 +105,7 @@ export const ErrorResponseExamples = {
     title: 'InternalServerError',
     status: 500,
     detail: 'An unexpected error occurred',
-    instance: '/quizzes',
+    instance: '/api/v1/endpoint',
     extensions: { requestId: 'req_abc123' },
   },
 } as const;
@@ -267,6 +267,7 @@ export class SuccessResponseDto {
 export class ResponseMetaDto {
   @ApiProperty({
     description: 'ISO 8601 timestamp of when the response was generated',
+    format: 'date-time',
     example: '2026-06-25T10:30:00.000Z',
   })
   timestamp!: string;

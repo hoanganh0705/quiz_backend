@@ -1,4 +1,10 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import {
+  ApiOptionalTimestampProperty,
+  ApiTimestampProperty,
+  ApiUuidProperty,
+} from '@/common/decorators/api-uuid-property.decorator';
+import { RANK_TREND_VALUES } from './leaderboard-entry.dto';
 
 export class RankingHistoryItemDto {
   @ApiProperty({ description: 'Snapshot date in YYYY-MM-DD format', example: '2026-06-01' })
@@ -17,10 +23,7 @@ export class RankingHistoryResponseDto {
 }
 
 export class PublicRankingHistoryResponseDto {
-  @ApiProperty({
-    description: 'User identifier',
-    example: '550e8400-e29b-41d4-a716-446655440000',
-  })
+  @ApiUuidProperty({ description: 'User identifier' })
   userId!: string;
 
   @ApiProperty({ description: 'Public username', example: 'Anh' })
@@ -37,11 +40,9 @@ export class PeakRankDto {
   @ApiProperty({ description: 'Best rank achieved for the period', example: 1 })
   rank!: number;
 
-  @ApiPropertyOptional({
+  @ApiOptionalTimestampProperty({
     description: 'Timestamp when the peak rank was achieved',
-    type: String,
-    example: '2026-05-01T12:00:00Z',
-    nullable: true,
+    example: '2026-05-01T12:00:00.000Z',
   })
   achievedAt!: string | null;
 }
@@ -103,10 +104,10 @@ export class RankMovementResponseDto {
 
   @ApiProperty({
     description: 'Movement direction',
-    enum: ['up', 'down', 'stable', 'unknown'],
+    enum: RANK_TREND_VALUES,
     example: 'up',
   })
-  direction!: 'up' | 'down' | 'stable' | 'unknown';
+  direction!: (typeof RANK_TREND_VALUES)[number];
 }
 
 export const MILESTONE_ENUM = [
@@ -131,9 +132,9 @@ export class RankingMilestoneDto {
   @ApiProperty({ description: 'Rank threshold achieved for this milestone', example: 100 })
   rank!: number;
 
-  @ApiProperty({
+  @ApiTimestampProperty({
     description: 'Timestamp when the milestone was first achieved',
-    example: '2026-03-10T10:00:00Z',
+    example: '2026-03-10T10:00:00.000Z',
   })
   achievedAt!: string;
 }

@@ -355,7 +355,7 @@ export function getPercentileLabel(percentile: number): string {
   return RANKING_CONSTANTS.PERCENTILE_LABELS[0];
 }
 
-import { RankingPeriodEnum } from '../../dto/request/leaderboard-query.dto';
+import { LeaderboardPeriodEnum, RankingPeriodEnum } from '../../dto/request/leaderboard-query.dto';
 
 export function calculatePercentile(rank: number, totalUsers: number): number {
   if (rank <= 0 || totalUsers <= 0) return 0;
@@ -363,7 +363,7 @@ export function calculatePercentile(rank: number, totalUsers: number): number {
 }
 
 /** Convert a RankingPeriodEnum (controller layer) to a RankingPeriod (domain). */
-export function enumToPeriod(periodEnum: RankingPeriodEnum): RankingPeriod {
+export function enumToPeriod(periodEnum: RankingPeriodEnum | LeaderboardPeriodEnum): RankingPeriod {
   return periodEnum as unknown as RankingPeriod;
 }
 
