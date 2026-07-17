@@ -123,6 +123,7 @@ export class AchievementOutboxProcessorService implements OnModuleInit {
     }
   }
 
+  // eslint-disable-next-line @typescript-eslint/require-await
   private async dispatch(event: OutboxEventRow): Promise<void> {
     if (!this.isSupportedEventType(event.eventType)) {
       // Unknown event type — fail permanently so it doesn't loop forever.
@@ -132,7 +133,8 @@ export class AchievementOutboxProcessorService implements OnModuleInit {
     const domainEvent = event.payload as unknown as AchievementDomainEvent;
     const correlationId = event.correlationId ?? createCorrelationId();
 
-    correlationIdStorage.run({ correlationId }, () => {
+    // EventBus.emit is synchronous; intentionally not awaited
+    void correlationIdStorage.run({ correlationId }, () => {
       this.eventBus.emit(domainEvent);
     });
   }

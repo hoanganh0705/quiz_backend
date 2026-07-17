@@ -6,14 +6,9 @@ import { ApiAuth } from '@/common/swagger/swagger-decorators';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
 import { ReviewApplicationService } from '../../application/review.application.service';
 import { HelpfulReviewDto, ReportReviewDto } from '../../dto/request';
-import { HelpfulReviewResponseDto } from '../../dto/response/helpful-review-response.dto';
-import { ReportReviewResponseDto } from '../../dto/response/report-review-response.dto';
-import { ReviewDashboardResponseDto } from '../../dto/response/review-dashboard-response.dto';
-import { ReviewDetailResponseDto } from '../../dto/response/review-detail-response.dto';
 import { ReviewPresenter } from '../presenters/review.presenter';
 import {
   ApiGetReviewByIdResponses,
-  ApiListMyReviewsResponses,
   ApiMarkReviewHelpfulResponses,
   ApiRemoveHelpfulVoteResponses,
   ApiReportReviewResponses,

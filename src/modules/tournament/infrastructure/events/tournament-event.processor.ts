@@ -124,6 +124,7 @@ export class TournamentEventProcessor implements OnModuleInit, OnModuleDestroy {
         });
       }
     }
+    return Promise.resolve();
   }
 }
 

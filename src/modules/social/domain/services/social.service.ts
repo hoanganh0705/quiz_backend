@@ -1,6 +1,15 @@
 import { BadRequestException, Inject, Injectable } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
-import { SOCIAL_REPOSITORY_PORT, type SocialRepositoryPort } from '../ports/social-ports';
+import {
+  SOCIAL_REPOSITORY_PORT,
+  FRIENDSHIP_REPOSITORY_PORT,
+  USER_FOLLOW_REPOSITORY_PORT,
+  BLOCK_REPOSITORY_PORT,
+  type SocialRepositoryPort,
+  type FriendshipRepositoryPort,
+  type UserFollowRepositoryPort,
+  type BlockRepositoryPort,
+} from '../ports';
 import { SOCIAL_DOMAIN_EVENT_BUS, type SocialDomainEventBusPort } from '../ports';
 import {
   USER_SEARCH_PORT,
@@ -52,6 +61,12 @@ import { AuditLogService } from '@/common/audit/audit-log.service';
 @Injectable()
 export class SocialService {
   constructor(
+    @Inject(FRIENDSHIP_REPOSITORY_PORT)
+    private readonly friendshipRepository: FriendshipRepositoryPort,
+    @Inject(USER_FOLLOW_REPOSITORY_PORT)
+    private readonly userFollowRepository: UserFollowRepositoryPort,
+    @Inject(BLOCK_REPOSITORY_PORT)
+    private readonly blockRepository: BlockRepositoryPort,
     @Inject(SOCIAL_REPOSITORY_PORT)
     private readonly socialRepository: SocialRepositoryPort,
     @Inject(SOCIAL_DOMAIN_EVENT_BUS)
@@ -99,7 +114,10 @@ export class SocialService {
     }
 
     try {
-      const friendship = await this.socialRepository.createFriendRequest(requesterId, addresseeId);
+      const friendship = await this.friendshipRepository.createFriendRequest(
+        requesterId,
+        addresseeId,
+      );
 
       this.logger.info({
         event: 'friend_request_sent',
@@ -119,7 +137,7 @@ export class SocialService {
         timestamp: new Date(),
       });
 
-      const requests = await this.socialRepository.getSentRequests(requesterId);
+      const requests = await this.friendshipRepository.getSentRequests(requesterId);
       return requests[0];
     } catch (error) {
       if (isPostgresUniqueViolation(error)) {
@@ -134,7 +152,7 @@ export class SocialService {
     friendshipId: string,
     accept: boolean,
   ): Promise<void> {
-    const friendship = await this.socialRepository.getFriendRequest(friendshipId);
+    const friendship = await this.friendshipRepository.getFriendRequest(friendshipId);
 
     if (!friendship) {
       throw new FriendRequestNotFoundError(friendshipId);
@@ -144,7 +162,7 @@ export class SocialService {
       throw new FriendRequestForbiddenError();
     }
 
-    await this.socialRepository.respondToFriendRequest({ friendshipId, accept }, userId);
+    await this.friendshipRepository.respondToFriendRequest({ friendshipId, accept }, userId);
 
     this.logger.info({
       event: accept ? 'friend_request_accepted' : 'friend_request_rejected',
@@ -154,7 +172,7 @@ export class SocialService {
 
     // Emit domain event
     if (accept) {
-      const { followerUsername } = await this.socialRepository.getUsernamesForUsers(
+      const { followerUsername } = await this.userFollowRepository.getUsernamesForUsers(
         friendship.requesterId,
         friendship.addresseeId,
       );
@@ -179,7 +197,7 @@ export class SocialService {
   }
 
   async cancelFriendRequest(requesterId: string, friendshipId: string): Promise<void> {
-    const friendship = await this.socialRepository.getFriendRequest(friendshipId);
+    const friendship = await this.friendshipRepository.getFriendRequest(friendshipId);
 
     if (!friendship) {
       throw new FriendRequestNotFoundError(friendshipId);
@@ -190,7 +208,7 @@ export class SocialService {
     }
 
     const addresseeId = friendship.addresseeId;
-    await this.socialRepository.removeFriend(requesterId, addresseeId);
+    await this.friendshipRepository.removeFriend(requesterId, addresseeId);
 
     this.logger.info({
       event: 'friend_request_cancelled',
@@ -209,15 +227,15 @@ export class SocialService {
   }
 
   async getPendingRequests(userId: string): Promise<FriendRequest[]> {
-    return this.socialRepository.getPendingRequests(userId);
+    return this.friendshipRepository.getPendingRequests(userId);
   }
 
   async getSentRequests(userId: string): Promise<FriendRequest[]> {
-    return this.socialRepository.getSentRequests(userId);
+    return this.friendshipRepository.getSentRequests(userId);
   }
 
   async getFriends(userId: string, limit: number, cursor?: string | null): Promise<Friend[]> {
-    return this.socialRepository.getFriends(userId, limit, cursor);
+    return this.friendshipRepository.getFriends(userId, limit, cursor ?? undefined);
   }
 
   /**
@@ -239,7 +257,7 @@ export class SocialService {
     cursor?: string | null,
   ): Promise<Friend[]> {
     if (requesterId === targetUserId) {
-      return this.socialRepository.getFriends(targetUserId, limit, cursor);
+      return this.friendshipRepository.getFriends(targetUserId, limit, cursor ?? undefined);
     }
 
     const relationship = await this.socialRepository.getRelationshipStatus(
@@ -255,15 +273,15 @@ export class SocialService {
       throw new FriendListForbiddenError();
     }
 
-    return this.socialRepository.getFriends(targetUserId, limit, cursor);
+    return this.friendshipRepository.getFriends(targetUserId, limit, cursor ?? undefined);
   }
 
   async getFriendCount(userId: string): Promise<number> {
-    return this.socialRepository.getFriendCount(userId);
+    return this.friendshipRepository.getFriendCount(userId);
   }
 
   async removeFriend(userId: string, friendId: string): Promise<void> {
-    await this.socialRepository.removeFriend(userId, friendId);
+    await this.friendshipRepository.removeFriend(userId, friendId);
 
     this.logger.info({
       event: 'friend_removed',
@@ -285,7 +303,7 @@ export class SocialService {
       throw new SelfFriendRequestError();
     }
 
-    await this.socialRepository.blockUser(blockerId, blockedId, reason);
+    await this.blockRepository.blockUser(blockerId, blockedId, reason);
 
     this.logger.info({
       event: 'user_blocked',
@@ -329,11 +347,11 @@ export class SocialService {
       timestamp: new Date(),
     });
 
-    await this.socialRepository.removeFriend(blockerId, blockedId);
+    await this.friendshipRepository.removeFriend(blockerId, blockedId);
   }
 
   async unblockUser(blockerId: string, blockedId: string): Promise<void> {
-    await this.socialRepository.unblockUser(blockerId, blockedId);
+    await this.blockRepository.unblockUser(blockerId, blockedId);
 
     this.logger.info({
       event: 'user_unblocked',
@@ -374,7 +392,7 @@ export class SocialService {
   async getBlockedUsers(
     blockerId: string,
   ): Promise<{ blockedId: string; reason: string | null }[]> {
-    const blocked = await this.socialRepository.getBlockedUsers(blockerId);
+    const blocked = await this.blockRepository.getBlockedUsers(blockerId);
     return blocked.map((b) => ({ blockedId: b.blockedId, reason: b.reason }));
   }
 
@@ -390,7 +408,7 @@ export class SocialService {
     }
 
     try {
-      const follow = await this.socialRepository.followUser(followerId, followingId);
+      const follow = await this.userFollowRepository.followUser(followerId, followingId);
 
       this.logger.info({
         event: 'user_followed',
@@ -417,10 +435,10 @@ export class SocialService {
   }
 
   async unfollowUser(followerId: string, followingId: string): Promise<void> {
-    await this.socialRepository.unfollowUser(followerId, followingId);
+    await this.userFollowRepository.unfollowUser(followerId, followingId);
 
     const { followerUsername, followingUsername } =
-      await this.socialRepository.getUsernamesForUsers(followerId, followingId);
+      await this.userFollowRepository.getUsernamesForUsers(followerId, followingId);
 
     this.logger.info({
       event: 'user_unfollowed',
@@ -440,7 +458,7 @@ export class SocialService {
   }
 
   async getFollowers(userId: string, limit: number, cursor?: string | null): Promise<Follower[]> {
-    return this.socialRepository.getFollowers(userId, limit, cursor);
+    return this.userFollowRepository.getFollowers(userId, limit, cursor ?? undefined);
   }
 
   async getFollowersOfUser(
@@ -466,11 +484,11 @@ export class SocialService {
       limit,
     });
 
-    return this.socialRepository.getFollowersOfUser(targetUserId, page, limit);
+    return this.userFollowRepository.getFollowersOfUser(targetUserId, page, limit);
   }
 
   async getFollowing(userId: string, limit: number, cursor?: string | null): Promise<Following[]> {
-    return this.socialRepository.getFollowing(userId, limit, cursor);
+    return this.userFollowRepository.getFollowing(userId, limit, cursor ?? undefined);
   }
 
   async getFollowingOfUser(
@@ -496,7 +514,7 @@ export class SocialService {
       limit,
     });
 
-    return this.socialRepository.getFollowingOfUser(targetUserId, page, limit);
+    return this.userFollowRepository.getFollowingOfUser(targetUserId, page, limit);
   }
 
   async getMutualFriends(
@@ -522,7 +540,7 @@ export class SocialService {
       limit,
     });
 
-    return this.socialRepository.getMutualFriends(requesterId, targetUserId, page, limit);
+    return this.friendshipRepository.getMutualFriends(requesterId, targetUserId, page, limit);
   }
 
   async getMutualFollowers(
@@ -548,7 +566,7 @@ export class SocialService {
       limit,
     });
 
-    return this.socialRepository.getMutualFollowers(requesterId, targetUserId, page, limit);
+    return this.userFollowRepository.getMutualFollowers(requesterId, targetUserId, page, limit);
   }
 
   async getFeed(userId: string, page: number, limit: number): Promise<PaginatedSocialFeedResult> {

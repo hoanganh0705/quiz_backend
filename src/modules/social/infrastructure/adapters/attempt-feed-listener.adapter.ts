@@ -13,7 +13,6 @@ import type {
   AttemptCompletedEvent,
   QuizMilestoneEvent,
 } from '@/modules/attempt/domain/events/attempt-domain.events';
-import type { SocialFeedActivityType } from '../../domain/types/social.types';
 import { SocialService } from '../../domain/services/social.service';
 
 type AttemptFeedEvent = AttemptCompletedEvent | QuizMilestoneEvent;

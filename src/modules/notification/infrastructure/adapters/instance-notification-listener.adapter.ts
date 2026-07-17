@@ -38,8 +38,8 @@ export class InstanceNotificationListener implements OnModuleInit, OnModuleDestr
   }
 
   private subscribe(): void {
-    this.unsubscribe = this.instanceEventBus.subscribe((event: InstanceDomainEvent) => {
-      void this.handleEvent(event);
+    this.unsubscribe = this.instanceEventBus.subscribe((event: unknown) => {
+      void this.handleEvent(event as InstanceDomainEvent);
     });
 
     this.logger.info({
@@ -186,28 +186,21 @@ export class InstanceNotificationListener implements OnModuleInit, OnModuleDestr
     }
   }
 
-  private async getInstanceHostInfo(
+  private getInstanceHostInfo(
     instanceId: string,
   ): Promise<{ hostUserId: string; playerName?: string } | null> {
-    // Placeholder - in a real implementation, this would look up the instance
-    // to get the host user ID. For now we return null to avoid breaking
-    // the event chain if the lookup isn't available.
-    // TODO: Inject QuizInstanceRepository and look up the host.
     this.logger.debug({
       event: 'instance_host_lookup_stub',
       instanceId,
     });
-    return null;
+    return Promise.resolve(null);
   }
 
-  private async getInstancePlayerIds(instanceId: string): Promise<{ playerIds: string[] } | null> {
-    // Placeholder - in a real implementation, this would look up the instance
-    // to get all player IDs.
-    // TODO: Inject QuizInstanceRepository and look up the players.
+  private getInstancePlayerIds(instanceId: string): Promise<{ playerIds: string[] } | null> {
     this.logger.debug({
       event: 'instance_player_ids_lookup_stub',
       instanceId,
     });
-    return null;
+    return Promise.resolve(null);
   }
 }

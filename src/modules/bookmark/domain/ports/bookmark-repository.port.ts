@@ -1,18 +1,5 @@
 import type { BookmarkCollectionAnalytics } from '../types/bookmark-collection-analytics';
 
-export type BookmarkCollectionRow = {
-  collectionId: string;
-  userId: string;
-  name: string;
-  description: string | null;
-  createdAt: string;
-  updatedAt: string;
-};
-
-export type BookmarkCollectionWithCountRow = BookmarkCollectionRow & {
-  quizCount: number;
-};
-
 export type BookmarkedQuizRow = {
   bookmarkId: string;
   collectionId: string;
@@ -68,27 +55,6 @@ export type BookmarkSearchResult = {
 };
 
 export interface BookmarkRepositoryPort {
-  // Collection operations
-  getCollectionById(collectionId: string): Promise<BookmarkCollectionRow | null>;
-
-  listCollectionsByUser(userId: string): Promise<BookmarkCollectionWithCountRow[]>;
-
-  createCollection(params: {
-    userId: string;
-    name: string;
-    description: string | null;
-    nowIso: string;
-  }): Promise<BookmarkCollectionRow>;
-
-  updateCollection(params: {
-    collectionId: string;
-    name?: string;
-    description?: string | null;
-    nowIso: string;
-  }): Promise<BookmarkCollectionRow>;
-
-  deleteCollection(collectionId: string): Promise<void>;
-
   // Bookmark operations
   getBookmarkedQuiz(collectionId: string, quizId: string): Promise<BookmarkedQuizRow | null>;
 

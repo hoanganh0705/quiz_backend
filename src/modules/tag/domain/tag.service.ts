@@ -5,11 +5,15 @@ import { hasOwn } from '@/common/utils/object.util';
 import { TAG_SLUG_EMPTY_MESSAGE, TAG_SLUG_INVALID_MESSAGE } from '../tag.constants';
 import {
   TAG_REPOSITORY_PORT,
+  TAG_FOLLOW_REPOSITORY_PORT,
+  TAG_RANKING_REPOSITORY_PORT,
   type TagRepositoryPort,
+  type TagFollowRepositoryPort,
+  type TagRankingRepositoryPort,
   type TagRow,
   type FollowedTagRow,
   type RankedTagRow,
-} from './ports/tag-repository.port';
+} from './ports';
 import {
   TagAlreadyActiveError,
   TagNotFoundError,
@@ -46,6 +50,10 @@ export class TagDomainService {
   constructor(
     @Inject(TAG_REPOSITORY_PORT)
     private readonly tagRepository: TagRepositoryPort,
+    @Inject(TAG_FOLLOW_REPOSITORY_PORT)
+    private readonly tagFollowRepository: TagFollowRepositoryPort,
+    @Inject(TAG_RANKING_REPOSITORY_PORT)
+    private readonly tagRankingRepository: TagRankingRepositoryPort,
     @Inject(TAG_DOMAIN_EVENT_BUS)
     private readonly eventBus: TagDomainEventBusPort,
     private readonly cache: RedisService,
@@ -107,7 +115,7 @@ export class TagDomainService {
 
   async getRelatedTags(slug: string, query: RelatedTagsQuery): Promise<TagRow[]> {
     const normalizedSlug = this.normalizeSlug(slug);
-    const relatedTags = await this.tagRepository.findRelatedBySlug({
+    const relatedTags = await this.tagRankingRepository.findRelatedBySlug({
       slug: normalizedSlug,
       limit: query.limit,
     });
@@ -255,7 +263,7 @@ export class TagDomainService {
     await this.getTagById(tagId);
 
     const nowIso = new Date().toISOString();
-    const follow = await this.tagRepository.followTag({ userId, tagId, nowIso });
+    const follow = await this.tagFollowRepository.followTag({ userId, tagId, nowIso });
 
     this.logger.info({
       event: 'tag_followed',
@@ -268,7 +276,7 @@ export class TagDomainService {
 
   async unfollowTag(userId: string, tagId: string): Promise<boolean> {
     const nowIso = new Date().toISOString();
-    const result = await this.tagRepository.unfollowTag({ userId, tagId, nowIso });
+    const result = await this.tagFollowRepository.unfollowTag({ userId, tagId, nowIso });
     this.logger.info({ event: 'tag_unfollowed', userId, tagId, unfollowed: result.unfollowed });
     if (result.unfollowed) {
       this.eventBus.emitTagUnfollowed(new TagUnfollowedEvent(userId, tagId, nowIso));
@@ -288,7 +296,7 @@ export class TagDomainService {
     const limit = query.limit ?? 10;
     const cursor = query.cursor ?? null;
 
-    const rows = await this.tagRepository.listFollowedTags({
+    const rows = await this.tagFollowRepository.listFollowedTags({
       userId,
       limit,
       cursor,
@@ -314,7 +322,7 @@ export class TagDomainService {
     if (cached !== null) {
       return JSON.parse(cached) as RankedTagRow[];
     }
-    const rows = await this.tagRepository.getPopularTags(limit);
+    const rows = await this.tagRankingRepository.getPopularTags(limit);
     await this.cache.set(cacheKey, JSON.stringify(rows), RANKING_CACHE_TTL_MS);
     return rows;
   }
@@ -327,7 +335,7 @@ export class TagDomainService {
     if (cached !== null) {
       return JSON.parse(cached) as RankedTagRow[];
     }
-    const rows = await this.tagRepository.getTrendingTags(limit);
+    const rows = await this.tagRankingRepository.getTrendingTags(limit);
     await this.cache.set(cacheKey, JSON.stringify(rows), RANKING_CACHE_TTL_MS);
     return rows;
   }

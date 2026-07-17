@@ -65,7 +65,7 @@ export class XpIngestionService {
 
     const now = new Date();
     const nowIso = now.toISOString();
-    const idempotencyKey = deriveIdempotencyKey(event, nowIso);
+    const idempotencyKey = deriveIdempotencyKey(event);
 
     this.logger.info({
       event: 'xp_event_received',
@@ -179,7 +179,7 @@ export class XpIngestionService {
  * 3. `tournamentId` — unique per tournament participation
  * 4. `{userId}:{source}:{timestamp}` — generic fallback
  */
-function deriveIdempotencyKey(event: ExternalXpEarnedEvent, _nowIso: string): string {
+function deriveIdempotencyKey(event: ExternalXpEarnedEvent): string {
   const raw = event as unknown as Record<string, unknown>;
 
   if (typeof raw.idempotencyKey === 'string') {

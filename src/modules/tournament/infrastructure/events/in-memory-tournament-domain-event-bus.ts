@@ -16,7 +16,7 @@ export class InMemoryTournamentDomainEventBus implements TournamentDomainEventBu
     };
   }
 
-  publish(event: TournamentDomainEvent): void {
+  publish(event: TournamentDomainEvent): Promise<void> {
     for (const handler of this.handlers) {
       try {
         handler(event);
@@ -24,5 +24,6 @@ export class InMemoryTournamentDomainEventBus implements TournamentDomainEventBu
         console.error('Error in tournament event handler:', error);
       }
     }
+    return Promise.resolve();
   }
 }

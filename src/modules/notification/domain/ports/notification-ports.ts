@@ -1,6 +1,5 @@
 import type {
   Notification,
-  NotificationPreferencesRow,
   CreateNotificationParams,
   NotificationListParams,
 } from '../types/notification.types';
@@ -29,12 +28,6 @@ export interface NotificationRepositoryPort {
   deleteReadNotifications(userId: string): Promise<number>;
   delete(notificationId: string, userId: string): Promise<void>;
   softDelete(notificationId: string, userId: string): Promise<void>;
-
-  getPreferences(userId: string): Promise<NotificationPreferencesRow | null>;
-  upsertPreferences(
-    userId: string,
-    prefs: Partial<NotificationPreferencesRow>,
-  ): Promise<NotificationPreferencesRow>;
 
   /**
    * Permanently deletes all expired notifications (expiresAt < now).

@@ -9,6 +9,10 @@ import {
   ATTEMPT_REPOSITORY_PORT,
   type AttemptRepositoryPort,
 } from './ports/attempt-repository.port';
+import {
+  ATTEMPT_ANSWER_REPOSITORY_PORT,
+  type AttemptAnswerRepositoryPort,
+} from './ports/attempt-answer-repository.port';
 import { QUIZ_REPOSITORY_PORT } from '@/modules/quiz/domain/ports';
 import { AttemptNotFoundError, AttemptForbiddenError, AttemptNotCompletedError } from './errors';
 import {
@@ -30,6 +34,8 @@ export class AttemptQueryService {
   constructor(
     @Inject(ATTEMPT_REPOSITORY_PORT)
     private readonly attemptRepository: AttemptRepositoryPort,
+    @Inject(ATTEMPT_ANSWER_REPOSITORY_PORT)
+    private readonly attemptAnswerRepository: AttemptAnswerRepositoryPort,
     @Inject(QUIZ_REPOSITORY_PORT)
     private readonly quizRepository: {
       getQuizWithPublishedVersionById: (quizId: string) => Promise<{
@@ -87,7 +93,7 @@ export class AttemptQueryService {
   }
 
   async getAnswersByAttemptId(attemptId: string) {
-    return this.attemptRepository.getAttemptAnswersByAttemptId(attemptId);
+    return this.attemptAnswerRepository.getAttemptAnswersByAttemptId(attemptId);
   }
 
   /**
@@ -106,7 +112,7 @@ export class AttemptQueryService {
       throw new AttemptForbiddenError(ATTEMPT_FORBIDDEN_MESSAGE);
     }
 
-    const answers = await this.attemptRepository.getAttemptAnswersByAttemptId(attemptId);
+    const answers = await this.attemptAnswerRepository.getAttemptAnswersByAttemptId(attemptId);
 
     return { attempt, answers };
   }
@@ -137,10 +143,9 @@ export class AttemptQueryService {
 
     const [analyticsRow, answers] = await Promise.all([
       this.attemptRepository.getAttemptAnalytics(attemptId),
-      this.attemptRepository.getAttemptAnswersByAttemptId(attemptId),
+      this.attemptAnswerRepository.getAttemptAnswersByAttemptId(attemptId),
     ]);
 
-    // analyticsRow should always be present for a completed attempt, but guard defensively.
     if (!analyticsRow) {
       throw new AttemptNotFoundError(ATTEMPT_NOT_FOUND_MESSAGE);
     }

@@ -5,6 +5,10 @@ import type { DrizzleDB } from '@/core/database/database.module';
 import { DRIZZLE } from '@/core/database/drizzle.constants';
 import { quizReviews } from '@/core/database/schema';
 import { REVIEW_REPOSITORY_PORT, type ReviewRepositoryPort } from './ports/review-repository.port';
+import {
+  REVIEW_REPORT_REPOSITORY_PORT,
+  type ReviewReportRepositoryPort,
+} from './ports/review-report-repository.port';
 import { QUIZ_REPOSITORY_PORT } from '@/modules/quiz/domain/ports';
 import { QuizAnalyticsService } from '@/modules/quiz/domain/analytics';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
@@ -44,6 +48,8 @@ export class ReviewService {
     @Inject(DRIZZLE) private readonly db: DrizzleDB,
     @Inject(REVIEW_REPOSITORY_PORT)
     private readonly reviewRepository: ReviewRepositoryPort,
+    @Inject(REVIEW_REPORT_REPOSITORY_PORT)
+    private readonly reportRepository: ReviewReportRepositoryPort,
     @Inject(QUIZ_REPOSITORY_PORT)
     private readonly quizRepository: {
       getActiveQuizRecordById: (
@@ -308,14 +314,14 @@ export class ReviewService {
       throw new ReviewNotFoundError(REVIEW_NOT_FOUND_MESSAGE);
     }
 
-    const hasReported = await this.reviewRepository.hasUserReportedReview(reviewId, reporterId);
+    const hasReported = await this.reportRepository.hasUserReportedReview(reviewId, reporterId);
 
     if (hasReported) {
       this.logger.warn({ event: 'review_report_duplicate', reviewId, reporterId, reason });
       throw new ReviewAlreadyReportedError();
     }
 
-    const report = await this.reviewRepository.createReport({
+    const report = await this.reportRepository.createReport({
       reviewId,
       reporterId,
       reason,
@@ -414,7 +420,7 @@ export class ReviewService {
     const limit = query.limit ?? 10;
     const cursor = query.cursor ?? null;
 
-    const rows = await this.reviewRepository.listReportedReviews({ reporterId, limit, cursor });
+    const rows = await this.reportRepository.listReportedReviews({ reporterId, limit, cursor });
 
     const hasNextPage = rows.length > limit;
     const items = hasNextPage ? rows.slice(0, limit) : rows;

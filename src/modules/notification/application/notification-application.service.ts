@@ -5,12 +5,14 @@ import { paginated, type PaginatedResult } from '@/common/responses/paginated-re
 import { NotificationService } from '../domain/notification.service';
 import {
   NOTIFICATION_REPOSITORY_PORT,
+  NOTIFICATION_PREFERENCES_REPOSITORY_PORT,
   NOTIFICATION_DOMAIN_EVENT_BUS,
   NOTIFICATION_CHANNEL_SERVICE_INSTANCE,
   type NotificationRepositoryPort,
+  type NotificationPreferencesRepositoryPort,
   type NotificationDomainEventBus,
   type NotificationChannelServiceInstance,
-} from '../domain/ports/notification-ports';
+} from '../domain/ports';
 import { NotificationForbiddenError, NotificationNotFoundError } from '../domain/errors';
 import type {
   NotificationReadEvent,
@@ -66,6 +68,8 @@ export class NotificationApplicationService {
     private readonly notificationService: NotificationService,
     @Inject(NOTIFICATION_REPOSITORY_PORT)
     private readonly notificationRepository: NotificationRepositoryPort,
+    @Inject(NOTIFICATION_PREFERENCES_REPOSITORY_PORT)
+    private readonly preferencesRepository: NotificationPreferencesRepositoryPort,
     @Inject(NOTIFICATION_DOMAIN_EVENT_BUS)
     private readonly eventBus: NotificationDomainEventBus,
     @Optional()
@@ -84,7 +88,13 @@ export class NotificationApplicationService {
     includeArchived?: boolean,
     type?: string,
   ): Promise<PaginatedResult<NotificationResponseDto>> {
-    const params: NotificationListParams = { limit, cursor, unreadOnly, includeArchived, type: type as NotificationListParams['type'] };
+    const params: NotificationListParams = {
+      limit,
+      cursor,
+      unreadOnly,
+      includeArchived,
+      type: type as NotificationListParams['type'],
+    };
 
     const notifications = await this.notificationService.getNotifications(user.sub, params);
 
@@ -246,17 +256,17 @@ export class NotificationApplicationService {
     user: JwtPayload,
     params: UpdatePreferencesParams,
   ): Promise<NotificationPreferencesResponseDto> {
-    const result = await this.notificationRepository.upsertPreferences(user.sub, params);
+    const result = await this.preferencesRepository.upsertPreferences(user.sub, params);
     await this.channelServiceInstance?.invalidatePreferencesCache(user.sub);
     return toPreferencesDto(result);
   }
 
   async getOrCreatePreferences(user: JwtPayload): Promise<NotificationPreferencesResponseDto> {
-    const existing = await this.notificationRepository.getPreferences(user.sub);
+    const existing = await this.preferencesRepository.getPreferences(user.sub);
     if (existing) {
       return toPreferencesDto(existing);
     }
-    const created = await this.notificationRepository.upsertPreferences(user.sub, {});
+    const created = await this.preferencesRepository.upsertPreferences(user.sub, {});
     return toPreferencesDto(created);
   }
 }

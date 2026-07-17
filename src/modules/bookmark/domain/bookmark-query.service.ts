@@ -9,6 +9,10 @@ import {
   type BookmarkSearchResult,
   type UserBookmarkStatsRow,
 } from './ports/bookmark-repository.port';
+import {
+  BOOKMARK_COLLECTION_REPOSITORY_PORT,
+  type BookmarkCollectionRepositoryPort,
+} from './ports/bookmark-collection-repository.port';
 import type { BookmarkCollectionAnalytics } from './types/bookmark-collection-analytics';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
 import { BookmarkCollectionNotFoundError, CollectionForbiddenError } from './errors';
@@ -32,6 +36,8 @@ export class BookmarkQueryService {
   constructor(
     @Inject(BOOKMARK_REPOSITORY_PORT)
     private readonly bookmarkRepository: BookmarkRepositoryPort,
+    @Inject(BOOKMARK_COLLECTION_REPOSITORY_PORT)
+    private readonly collectionRepository: BookmarkCollectionRepositoryPort,
     @Inject(CACHE_PROVIDER)
     private readonly cache: CacheProvider,
     @InjectPinoLogger(BookmarkQueryService.name)
@@ -39,7 +45,7 @@ export class BookmarkQueryService {
   ) {}
 
   async listCollections(user: JwtPayload) {
-    return this.bookmarkRepository.listCollectionsByUser(user.sub);
+    return this.collectionRepository.listCollectionsByUser(user.sub);
   }
 
   async getBookmarkStatus(user: JwtPayload, quizId: string): Promise<BookmarkStatusRow> {
@@ -162,7 +168,7 @@ export class BookmarkQueryService {
   }
 
   private async verifyCollectionOwnership(collectionId: string, user: JwtPayload): Promise<void> {
-    const collection = await this.bookmarkRepository.getCollectionById(collectionId);
+    const collection = await this.collectionRepository.getCollectionById(collectionId);
     if (!collection) {
       throw new BookmarkCollectionNotFoundError();
     }

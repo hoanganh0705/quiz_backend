@@ -16,11 +16,13 @@ import type {
 } from '../../domain/types/notification.types';
 import {
   NOTIFICATION_REPOSITORY_PORT,
+  NOTIFICATION_PREFERENCES_REPOSITORY_PORT,
   NOTIFICATION_DOMAIN_EVENT_BUS,
   type NotificationRepositoryPort,
+  type NotificationPreferencesRepositoryPort,
   type NotificationDomainEventBus,
   type NotificationChannelServiceInstance,
-} from '../../domain/ports/notification-ports';
+} from '../../domain/ports';
 import type { NotificationSentEvent } from '../../domain/events/notification.events';
 import { CACHE_PROVIDER, type CacheProvider } from '@/common/ports/cache.provider';
 
@@ -33,6 +35,8 @@ export class NotificationChannelService implements NotificationChannelServiceIns
   constructor(
     @Inject(NOTIFICATION_REPOSITORY_PORT)
     private readonly notificationRepository: NotificationRepositoryPort,
+    @Inject(NOTIFICATION_PREFERENCES_REPOSITORY_PORT)
+    private readonly preferencesRepository: NotificationPreferencesRepositoryPort,
     @Optional()
     @Inject(NOTIFICATION_DOMAIN_EVENT_BUS)
     private readonly eventBus?: NotificationDomainEventBus,
@@ -86,7 +90,7 @@ export class NotificationChannelService implements NotificationChannelServiceIns
       }
     }
 
-    const prefs = await this.notificationRepository.getPreferences(userId);
+    const prefs = await this.preferencesRepository.getPreferences(userId);
 
     if (this.cache) {
       const cacheValue = prefs ? JSON.stringify(prefs) : '';

@@ -311,14 +311,12 @@ export class DiscussionRepository implements DiscussionRepositoryPort {
       .orderBy(orderDir(orderCol))
       .limit(limit + 1);
 
-    return Promise.all(
-      rows.map((row) =>
-        this.enrichThread(row.thread as unknown as DiscussionThreadRow, {
-          username: row.authorUsername,
-          displayName: row.authorDisplayName,
-          avatarUrl: row.authorAvatarUrl,
-        }),
-      ),
+    return rows.map((row) =>
+      this.enrichThread(row.thread as unknown as DiscussionThreadRow, {
+        username: row.authorUsername,
+        displayName: row.authorDisplayName,
+        avatarUrl: row.authorAvatarUrl,
+      }),
     );
   }
 
@@ -1121,6 +1119,8 @@ export class DiscussionRepository implements DiscussionRepositoryPort {
   }
 
   async listThreadParticipants(threadId: string): Promise<ThreadParticipantListItem[]> {
+    // Drizzle raw SQL returns untyped rows
+
     const participantRows = (await this.db.execute(sql`
       WITH participant_counts AS (
         SELECT
@@ -1684,6 +1684,8 @@ export class DiscussionRepository implements DiscussionRepositoryPort {
     targetId: string,
     db: DrizzleDB,
   ): Promise<DiscussionVoteValue | null> {
+    // Drizzle raw SQL returns untyped rows
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
     const result = await db
       .execute(
         sql`SELECT "value" FROM "discussion_votes" WHERE "user_id" = ${userId} AND "target_type" = ${targetType} AND "target_id" = ${targetId} FOR UPDATE`,
