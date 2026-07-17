@@ -112,11 +112,13 @@ export class RankingOutboxProcessorService implements OnModuleInit {
     }
   }
 
+  // eslint-disable-next-line @typescript-eslint/require-await
   private async dispatch(event: OutboxEventRow): Promise<void> {
     const domainEvent = event.payload as unknown as RankingDomainEvent;
     const correlationId = event.correlationId ?? createCorrelationId();
 
-    correlationIdStorage.run({ correlationId }, () => {
+    // EventBus.dispatchToSubscribers is synchronous; intentionally not awaited
+    void correlationIdStorage.run({ correlationId }, () => {
       this.eventBus.dispatchToSubscribers(domainEvent);
     });
   }

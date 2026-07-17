@@ -5,12 +5,18 @@ import { TagPresenter } from './transport/presenters/tag.presenter';
 import { TagApplicationService } from './application/tag.application.service';
 import { TagDomainService } from './domain/tag.service';
 import { TagRepository } from './infrastructure/repositories/tag.repository';
+import { TagFollowRepository } from './infrastructure/repositories/tag-follow.repository';
+import { TagRankingRepository } from './infrastructure/repositories/tag-ranking.repository';
 import { TagDomainEventBus } from './domain/events/tag-domain.event-bus';
 import { TagEventBootstrapService } from './tag-event-bootstrap.service';
 import { DatabaseModule } from '@/core/database/database.module';
 import { RedisModule } from '@/core/redis/redis.module';
 import { QuizModule } from '@/modules/quiz/quiz.module';
-import { TAG_REPOSITORY_PORT } from './domain/ports/tag-repository.port';
+import {
+  TAG_REPOSITORY_PORT,
+  TAG_FOLLOW_REPOSITORY_PORT,
+  TAG_RANKING_REPOSITORY_PORT,
+} from './domain/ports';
 import { TAG_DOMAIN_EVENT_BUS } from './domain/events/tag-domain-event-bus.port';
 import { QUIZ_LISTING_PORT } from '@/modules/quiz/domain/analytics';
 import { QuizApplicationService } from '@/modules/quiz/application/quiz.application.service';
@@ -22,13 +28,23 @@ import { QuizApplicationService } from '@/modules/quiz/application/quiz.applicat
     TagApplicationService,
     TagDomainService,
     TagRepository,
+    TagFollowRepository,
+    TagRankingRepository,
     TagDomainEventBus,
     TagEventBootstrapService,
     TagPresenter,
     { provide: TAG_REPOSITORY_PORT, useClass: TagRepository },
+    { provide: TAG_FOLLOW_REPOSITORY_PORT, useClass: TagFollowRepository },
+    { provide: TAG_RANKING_REPOSITORY_PORT, useClass: TagRankingRepository },
     { provide: TAG_DOMAIN_EVENT_BUS, useExisting: TagDomainEventBus },
     { provide: QUIZ_LISTING_PORT, useExisting: QuizApplicationService },
   ],
-  exports: [TagApplicationService, TAG_REPOSITORY_PORT, TAG_DOMAIN_EVENT_BUS],
+  exports: [
+    TagApplicationService,
+    TAG_REPOSITORY_PORT,
+    TAG_FOLLOW_REPOSITORY_PORT,
+    TAG_RANKING_REPOSITORY_PORT,
+    TAG_DOMAIN_EVENT_BUS,
+  ],
 })
 export class TagModule {}

@@ -17,7 +17,7 @@
  *   - Events survive process crashes (recovered from the outbox on restart)
  */
 
-import { Inject, Injectable } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import type {
   XpAddedEvent,
@@ -29,7 +29,6 @@ import type {
   ConsistencyCheckEvent,
 } from './ranking-domain.events';
 import { RankingDomainEventBusPort } from '../ports';
-import type { RankingOutboxPort } from '../ports/ranking-outbox.port';
 
 type RankingDomainEvent =
   | XpAddedEvent

@@ -229,9 +229,9 @@ export class InstanceApplicationService {
    * Called by the gateway on disconnect.
    * Removes the socket from tracking, emits PlayerDisconnectedEvent, and notifies the host.
    */
-  async handlePlayerLeftSocket(params: { socketId: string; instanceId: string }): Promise<void> {
+  handlePlayerLeftSocket(params: { socketId: string; instanceId: string }): Promise<void> {
     const meta = this.socketIdToMeta.get(params.socketId);
-    if (!meta) return;
+    if (!meta) return Promise.resolve();
 
     this.socketIdToMeta.delete(params.socketId);
 
@@ -241,6 +241,7 @@ export class InstanceApplicationService {
     );
 
     void this.notifyHostPlayerDisconnected(meta.instanceId, meta.userId);
+    return Promise.resolve();
   }
 
   private async notifyHostPlayerDisconnected(
@@ -263,7 +264,7 @@ export class InstanceApplicationService {
 
   async handleJoinInstanceSocket(
     instanceId: string,
-    user: JwtPayload,
+    _user: JwtPayload,
   ): Promise<{ status: string; quizTitle: string }> {
     const instance = await this.instanceService.getInstanceById(instanceId);
     return { status: instance.status, quizTitle: instance.quizTitle };

@@ -33,6 +33,8 @@ export class StreakService {
    * The attempt completion timestamp is used to determine if the streak continues
    * (same UTC day as last attempt) or resets.
    */
+  // TODO: Implement actual streak calculation with database queries
+  // eslint-disable-next-line @typescript-eslint/require-await
   async recalculateStreak(userId: string, attemptTimestamp: Date): Promise<StreakResult> {
     const lastAttemptDate = null; // TODO: fetch from user record or attempt history
     const previousStreak = 0; // TODO: fetch from user record

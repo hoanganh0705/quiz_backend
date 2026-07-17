@@ -3,7 +3,12 @@ import { JwtModule } from '@nestjs/jwt';
 import { DatabaseModule } from '@/core/database/database.module';
 import { SocialApplicationService } from './application/social-application.service';
 import { SocialService } from './domain/services/social.service';
-import { SocialRepository } from './infrastructure/repositories/social.repository';
+import {
+  SocialRepository,
+  FriendshipRepository,
+  UserFollowRepository,
+  BlockRepository,
+} from './infrastructure/repositories';
 import { RankingAdapter } from './infrastructure/adapters/ranking.adapter';
 import { AchievementFeedListenerAdapter } from './infrastructure/adapters/achievement-feed-listener.adapter';
 import { RankingFeedListenerAdapter } from './infrastructure/adapters/ranking-feed-listener.adapter';
@@ -13,7 +18,12 @@ import { InstanceFeedListenerAdapter } from './infrastructure/adapters/instance-
 import { SocialNotificationListener } from './infrastructure/adapters/social-notification-listener.adapter';
 import { SocialController } from './transport/controller/social.controller';
 import { SocialPresenter } from './transport/presenters/social.presenter';
-import { SOCIAL_REPOSITORY_PORT } from './domain/ports/social-ports';
+import {
+  SOCIAL_REPOSITORY_PORT,
+  FRIENDSHIP_REPOSITORY_PORT,
+  USER_FOLLOW_REPOSITORY_PORT,
+  BLOCK_REPOSITORY_PORT,
+} from './domain/ports';
 import { SocialDomainEventBus } from './domain/events';
 import { RANKING_PORT } from './domain/ports/ranking.port';
 import { SOCIAL_DOMAIN_EVENT_BUS } from './domain/events/social-event-bus.port';
@@ -44,7 +54,12 @@ import { AttemptFeedListenerAdapter } from './infrastructure/adapters/attempt-fe
   providers: [
     SocialApplicationService,
     SocialService,
+    // Specialized repositories
     SocialRepository,
+    FriendshipRepository,
+    UserFollowRepository,
+    BlockRepository,
+    // Presenter
     SocialPresenter,
     // Ranking port (SocialModule owns this adapter)
     RankingAdapter,
@@ -60,9 +75,20 @@ import { AttemptFeedListenerAdapter } from './infrastructure/adapters/attempt-fe
     // Token bindings
     { provide: SOCIAL_DOMAIN_EVENT_BUS, useExisting: SocialDomainEventBus },
     { provide: SOCIAL_REPOSITORY_PORT, useExisting: SocialRepository },
+    { provide: FRIENDSHIP_REPOSITORY_PORT, useExisting: FriendshipRepository },
+    { provide: USER_FOLLOW_REPOSITORY_PORT, useExisting: UserFollowRepository },
+    { provide: BLOCK_REPOSITORY_PORT, useExisting: BlockRepository },
     { provide: RANKING_PORT, useExisting: RankingAdapter },
   ],
   controllers: [SocialController],
-  exports: [SocialService, SocialApplicationService, SocialDomainEventBus, SOCIAL_DOMAIN_EVENT_BUS],
+  exports: [
+    SocialService,
+    SocialApplicationService,
+    SocialDomainEventBus,
+    SOCIAL_DOMAIN_EVENT_BUS,
+    FRIENDSHIP_REPOSITORY_PORT,
+    USER_FOLLOW_REPOSITORY_PORT,
+    BLOCK_REPOSITORY_PORT,
+  ],
 })
 export class SocialModule {}

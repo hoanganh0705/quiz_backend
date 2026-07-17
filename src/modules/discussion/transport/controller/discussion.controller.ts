@@ -112,7 +112,8 @@ export class DiscussionController {
   @Get('search')
   @Public()
   @ApiOkResourceList(SearchDiscussionItemResponseDto, 'cursor', {
-    description: 'Search returns a paginated list of discussion threads matching the query. Empty searches return { "data": [], "meta": {...} }.',
+    description:
+      'Search returns a paginated list of discussion threads matching the query. Empty searches return { "data": [], "meta": {...} }.',
   })
   async searchDiscussions(@Query() query: SearchDiscussionsQueryDto) {
     const result = await this.discussionService.searchDiscussions({

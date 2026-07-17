@@ -1,4 +1,4 @@
-import { Injectable, Module, Global } from '@nestjs/common';
+import { Injectable, Module } from '@nestjs/common';
 import { randomBytes } from 'crypto';
 
 /**

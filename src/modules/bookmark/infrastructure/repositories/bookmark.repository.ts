@@ -13,14 +13,13 @@ import {
   tags,
 } from '@/core/database/schema';
 import type {
-  BookmarkCollectionRow,
-  BookmarkCollectionWithCountRow,
   BookmarkedQuizRow,
   BookmarkedQuizDetailRow,
   BookmarkRepositoryPort,
   UserBookmarkStatsRow,
   BookmarkStatusRow,
   SearchBookmarkRow,
+  RecentBookmarkRow,
 } from '@/modules/bookmark/domain/ports';
 import type { BookmarkCollectionAnalytics } from '@/modules/bookmark/domain/types/bookmark-collection-analytics';
 
@@ -36,115 +35,6 @@ const QUIZ_COLUMNS = quizzes as unknown as {
 @Injectable()
 export class BookmarkRepository implements BookmarkRepositoryPort {
   constructor(@Inject(DRIZZLE) private readonly db: DrizzleDB) {}
-
-  async getCollectionById(collectionId: string): Promise<BookmarkCollectionRow | null> {
-    const [row] = await this.db
-      .select({
-        collectionId: bookmarkCollections.collectionId,
-        userId: bookmarkCollections.userId,
-        name: bookmarkCollections.name,
-        description: bookmarkCollections.description,
-        createdAt: bookmarkCollections.createdAt,
-        updatedAt: bookmarkCollections.updatedAt,
-      })
-      .from(bookmarkCollections)
-      .where(eq(bookmarkCollections.collectionId, collectionId))
-      .limit(1);
-
-    return (row as BookmarkCollectionRow | undefined) ?? null;
-  }
-
-  async listCollectionsByUser(userId: string): Promise<BookmarkCollectionWithCountRow[]> {
-    const rows = await this.db
-      .select({
-        collectionId: bookmarkCollections.collectionId,
-        userId: bookmarkCollections.userId,
-        name: bookmarkCollections.name,
-        description: bookmarkCollections.description,
-        createdAt: bookmarkCollections.createdAt,
-        updatedAt: bookmarkCollections.updatedAt,
-        quizCount: sql<number>`count(${bookmarkedQuizzes.bookmarkId})`.as('quiz_count'),
-      })
-      .from(bookmarkCollections)
-      .leftJoin(
-        bookmarkedQuizzes,
-        eq(bookmarkCollections.collectionId, bookmarkedQuizzes.collectionId),
-      )
-      .where(eq(bookmarkCollections.userId, userId))
-      .groupBy(bookmarkCollections.collectionId)
-      .orderBy(bookmarkCollections.createdAt);
-
-    return rows as BookmarkCollectionWithCountRow[];
-  }
-
-  async createCollection(params: {
-    userId: string;
-    name: string;
-    description: string | null;
-    nowIso: string;
-  }): Promise<BookmarkCollectionRow> {
-    const [created] = await this.db
-      .insert(bookmarkCollections)
-      .values({
-        userId: params.userId,
-        name: params.name,
-        description: params.description,
-        createdAt: params.nowIso,
-        updatedAt: params.nowIso,
-      })
-      .returning({
-        collectionId: bookmarkCollections.collectionId,
-        userId: bookmarkCollections.userId,
-        name: bookmarkCollections.name,
-        description: bookmarkCollections.description,
-        createdAt: bookmarkCollections.createdAt,
-        updatedAt: bookmarkCollections.updatedAt,
-      });
-
-    return created as BookmarkCollectionRow;
-  }
-
-  async updateCollection(params: {
-    collectionId: string;
-    name?: string;
-    description?: string | null;
-    nowIso: string;
-  }): Promise<BookmarkCollectionRow> {
-    const setValues: Record<string, unknown> = { updatedAt: params.nowIso };
-
-    if (params.name !== undefined) {
-      setValues['name'] = params.name;
-    }
-
-    if (params.description !== undefined) {
-      setValues['description'] = params.description;
-    }
-
-    const [updated] = await this.db
-      .update(bookmarkCollections)
-      .set(setValues)
-      .where(eq(bookmarkCollections.collectionId, params.collectionId))
-      .returning({
-        collectionId: bookmarkCollections.collectionId,
-        userId: bookmarkCollections.userId,
-        name: bookmarkCollections.name,
-        description: bookmarkCollections.description,
-        createdAt: bookmarkCollections.createdAt,
-        updatedAt: bookmarkCollections.updatedAt,
-      });
-
-    return updated as BookmarkCollectionRow;
-  }
-
-  async deleteCollection(collectionId: string): Promise<void> {
-    await this.db.transaction(async (tx) => {
-      await tx.delete(bookmarkedQuizzes).where(eq(bookmarkedQuizzes.collectionId, collectionId));
-
-      await tx
-        .delete(bookmarkCollections)
-        .where(eq(bookmarkCollections.collectionId, collectionId));
-    });
-  }
 
   async getBookmarkedQuiz(collectionId: string, quizId: string): Promise<BookmarkedQuizRow | null> {
     const [row] = await this.db
@@ -219,7 +109,7 @@ export class BookmarkRepository implements BookmarkRepositoryPort {
     userId: string;
     limit: number;
     cursor?: { bookmarkedAt: string; bookmarkId: string } | null;
-  }): Promise<import('@/modules/bookmark/domain/ports').RecentBookmarkRow[]> {
+  }): Promise<RecentBookmarkRow[]> {
     const cursorCondition = params.cursor
       ? and(
           sql`${bookmarkedQuizzes.bookmarkedAt} <= ${params.cursor.bookmarkedAt}`,
@@ -575,17 +465,6 @@ export class BookmarkRepository implements BookmarkRepositoryPort {
     };
   }
 
-  /**
-   * Returns aggregated bookmark statistics for a given user.
-   *
-   * Mirrors the pattern used in AttemptRepository.getUserAttemptStats and
-   * UserRepository.getUserAnalytics:
-   *  - Query 1: total collections and total bookmarks
-   *  - Query 2: favorite category (most bookmarked quizzes by category)
-   *  - Query 3: favorite tag (most bookmarked quizzes by tag)
-   *
-   * All aggregation logic lives here; no business logic.
-   */
   async getUserBookmarkStats(userId: string): Promise<UserBookmarkStatsRow> {
     const [summary] = await this.db
       .select({
