@@ -6,8 +6,7 @@ import {
   Delete,
   Param,
   Query,
-  ParseIntPipe,
-  DefaultValuePipe,
+  ParseUUIDPipe,
   Body,
   HttpCode,
   HttpStatus,
@@ -16,12 +15,12 @@ import {
 import {
   ApiTags,
   ApiOperation,
-  ApiQuery,
+  ApiParam,
   ApiNotFoundResponse,
   ApiForbiddenResponse,
 } from '@nestjs/swagger';
 import { ApiNoContent } from '@/common/swagger/swagger-decorators';
-import { ErrorResponseExamples, ProblemDetailDto } from '@/common/swagger/swagger-schemas';
+import { ProblemDetailDto } from '@/common/swagger/swagger-schemas';
 import { Transactional } from '@/common/interceptors/transactional.interceptor';
 import { NotificationApplicationService } from '@/modules/notification/application/notification-application.service';
 import {
@@ -48,6 +47,15 @@ import {
   NOTIFICATION_PREFERENCES_UPDATE_EXAMPLE,
   NOTIFICATION_UNREAD_COUNT_EXAMPLE,
 } from '../swagger/examples/notification.examples';
+import {
+  getNotificationNotFoundExample,
+  markAsReadNotFoundExample,
+  markAsReadForbiddenExample,
+  markAsUnreadNotFoundExample,
+  markAsUnreadForbiddenExample,
+  deleteNotificationNotFoundExample,
+  deleteNotificationForbiddenExample,
+} from '../swagger/examples/errors.examples';
 
 @ApiTags('notifications')
 @Controller('notifications')
@@ -63,32 +71,6 @@ export class NotificationController {
     summary: 'List notifications',
     description: 'Returns cursor-paginated notifications for the authenticated user.',
   })
-  @ApiQuery({
-    name: 'limit',
-    required: false,
-    description: 'Number of items per page (default 20)',
-    example: 20,
-  })
-  @ApiQuery({
-    name: 'cursor',
-    required: false,
-    description:
-      'Base64-encoded cursor for pagination. Decodes to `{ createdAt, notificationId }`.',
-    example:
-      'eyJjcmVhdGVkQXQiOiIyMDI2LTAxLTAxVDAwOjAwOjAwLjAwMFoiLCJub3RpZmljYXRpb25JZCI6IjU1MGU4NDAwLWUyOWItNDFkNC1hNzE2LTQ0NjY1NTQ0MDAwMCJ9',
-  })
-  @ApiQuery({
-    name: 'unreadOnly',
-    required: false,
-    description: 'Filter to unread notifications only',
-    example: false,
-  })
-  @ApiQuery({
-    name: 'includeArchived',
-    required: false,
-    description: 'Include archived notifications',
-    example: false,
-  })
   @ApiOkResourceList(NotificationResponseDto, 'cursor', {
     description:
       'Cursor-paginated list of notifications. The `unreadCount` is no longer carried ' +
@@ -97,16 +79,14 @@ export class NotificationController {
   })
   async getNotifications(
     @CurrentUser() user: JwtPayload,
-    @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit: number,
-    @Query('cursor') cursor?: string,
-    @Query('unreadOnly', new DefaultValuePipe(false)) unreadOnly?: boolean,
-    @Query() query?: GetNotificationsQueryDto,
+    @Query() query: GetNotificationsQueryDto,
   ) {
     let parsedCursor: { createdAt: string; notificationId: string } | null = null;
+    const limit = query.limit ?? 20;
 
-    if (cursor) {
+    if (query.cursor) {
       try {
-        parsedCursor = JSON.parse(Buffer.from(cursor, 'base64').toString()) as {
+        parsedCursor = JSON.parse(Buffer.from(query.cursor, 'base64').toString()) as {
           createdAt: string;
           notificationId: string;
         };
@@ -119,8 +99,9 @@ export class NotificationController {
       user,
       limit,
       parsedCursor,
-      unreadOnly,
-      query?.includeArchived,
+      query.unreadOnly,
+      query.includeArchived,
+      query.type,
     );
 
     return this.presenter.getNotifications(result);
@@ -139,7 +120,12 @@ export class NotificationController {
 
   @Get('analytics')
   @Permissions(Permission.NOTIFICATION_ANALYTICS)
-  @ApiOperation({ summary: 'Get notification analytics' })
+  @ApiOperation({
+    summary: 'Get notification analytics',
+    description:
+      'Returns platform-wide notification analytics. Requires `NOTIFICATION_ANALYTICS` permission. ' +
+      'Authentication via Bearer token is required.',
+  })
   @ApiOkResource(NotificationAnalyticsDto, {
     description: 'Notification analytics',
     example: NOTIFICATION_ANALYTICS_EXAMPLE,
@@ -185,6 +171,12 @@ export class NotificationController {
 
   @Get(':notificationId')
   @ApiOperation({ summary: 'Get notification detail' })
+  @ApiParam({
+    name: 'notificationId',
+    type: String,
+    format: 'uuid',
+    description: 'Notification UUID',
+  })
   @ApiOkResource(NotificationResponseDto, {
     description: 'Notification detail',
     example: NOTIFICATION_DETAIL_EXAMPLE,
@@ -209,10 +201,10 @@ export class NotificationController {
       'which `GlobalExceptionFilter` emits as RFC 7807 `ProblemDetailDto` with ' +
       "`extensions.code = 'NOTIFICATION_NOT_FOUND'`.",
     type: ProblemDetailDto,
-    example: ErrorResponseExamples.notFound,
+    example: getNotificationNotFoundExample,
   })
   async getNotificationDetail(
-    @Param('notificationId') notificationId: string,
+    @Param('notificationId', ParseUUIDPipe) notificationId: string,
     @CurrentUser() user: JwtPayload,
   ) {
     const result = await this.notificationService.getNotificationDetail(notificationId, user);
@@ -222,6 +214,12 @@ export class NotificationController {
   @Post(':notificationId/read')
   @Transactional()
   @ApiNoContent('Notification marked as read')
+  @ApiParam({
+    name: 'notificationId',
+    type: String,
+    format: 'uuid',
+    description: 'Notification UUID',
+  })
   @HttpCode(HttpStatus.NO_CONTENT)
   // Phase 5 (rev5.1): `notificationApplicationService.markAsRead`
   // throws `NotificationNotFoundError` (404) if the notification
@@ -236,7 +234,7 @@ export class NotificationController {
       'which `GlobalExceptionFilter` emits as RFC 7807 `ProblemDetailDto` with ' +
       "`extensions.code = 'NOTIFICATION_NOT_FOUND'`.",
     type: ProblemDetailDto,
-    example: ErrorResponseExamples.notFound,
+    example: markAsReadNotFoundExample,
   })
   @ApiForbiddenResponse({
     description:
@@ -245,10 +243,10 @@ export class NotificationController {
       'when `notification.userId !== user.sub`. `GlobalExceptionFilter` emits it as RFC 7807 ' +
       "`ProblemDetailDto` with `extensions.code = 'NOTIFICATION_FORBIDDEN'`.",
     type: ProblemDetailDto,
-    example: ErrorResponseExamples.forbidden,
+    example: markAsReadForbiddenExample,
   })
   async markAsRead(
-    @Param('notificationId') notificationId: string,
+    @Param('notificationId', ParseUUIDPipe) notificationId: string,
     @CurrentUser() user: JwtPayload,
   ): Promise<void> {
     await this.notificationService.markAsRead(notificationId, user);
@@ -257,6 +255,12 @@ export class NotificationController {
   @Post(':notificationId/unread')
   @Transactional()
   @ApiNoContent('Notification marked as unread')
+  @ApiParam({
+    name: 'notificationId',
+    type: String,
+    format: 'uuid',
+    description: 'Notification UUID',
+  })
   @HttpCode(HttpStatus.NO_CONTENT)
   // Phase 5 (rev5.1): same 404 + 403 wiring as `markAsRead`. See
   // the docblock there for rationale. Pre-Phase-5 both errors were
@@ -269,7 +273,7 @@ export class NotificationController {
       'which `GlobalExceptionFilter` emits as RFC 7807 `ProblemDetailDto` with ' +
       "`extensions.code = 'NOTIFICATION_NOT_FOUND'`.",
     type: ProblemDetailDto,
-    example: ErrorResponseExamples.notFound,
+    example: markAsUnreadNotFoundExample,
   })
   @ApiForbiddenResponse({
     description:
@@ -278,10 +282,10 @@ export class NotificationController {
       'when `notification.userId !== user.sub`. `GlobalExceptionFilter` emits it as RFC 7807 ' +
       "`ProblemDetailDto` with `extensions.code = 'NOTIFICATION_FORBIDDEN'`.",
     type: ProblemDetailDto,
-    example: ErrorResponseExamples.forbidden,
+    example: markAsUnreadForbiddenExample,
   })
   async markAsUnread(
-    @Param('notificationId') notificationId: string,
+    @Param('notificationId', ParseUUIDPipe) notificationId: string,
     @CurrentUser() user: JwtPayload,
   ): Promise<void> {
     await this.notificationService.markAsUnread(notificationId, user);
@@ -309,6 +313,12 @@ export class NotificationController {
   @Delete(':notificationId')
   @Transactional()
   @ApiNoContent('Notification deleted')
+  @ApiParam({
+    name: 'notificationId',
+    type: String,
+    format: 'uuid',
+    description: 'Notification UUID',
+  })
   @HttpCode(HttpStatus.NO_CONTENT)
   // Phase 5 (rev5.1): same 404 + 403 wiring as `markAsRead`. See
   // the docblock there for rationale. Pre-Phase-5 both errors were
@@ -321,7 +331,7 @@ export class NotificationController {
       'which `GlobalExceptionFilter` emits as RFC 7807 `ProblemDetailDto` with ' +
       "`extensions.code = 'NOTIFICATION_NOT_FOUND'`.",
     type: ProblemDetailDto,
-    example: ErrorResponseExamples.notFound,
+    example: deleteNotificationNotFoundExample,
   })
   @ApiForbiddenResponse({
     description:
@@ -330,10 +340,10 @@ export class NotificationController {
       'when `notification.userId !== user.sub`. `GlobalExceptionFilter` emits it as RFC 7807 ' +
       "`ProblemDetailDto` with `extensions.code = 'NOTIFICATION_FORBIDDEN'`.",
     type: ProblemDetailDto,
-    example: ErrorResponseExamples.forbidden,
+    example: deleteNotificationForbiddenExample,
   })
   async deleteNotification(
-    @Param('notificationId') notificationId: string,
+    @Param('notificationId', ParseUUIDPipe) notificationId: string,
     @CurrentUser() user: JwtPayload,
   ): Promise<void> {
     await this.notificationService.deleteNotification(notificationId, user);
