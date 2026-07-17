@@ -66,7 +66,7 @@ export interface ContentReportedEvent {
   readonly eventType: 'content_reported';
   readonly reportId: string;
   readonly reporterId: string;
-  readonly targetType: 'thread' | 'comment' | 'reply';
+  readonly targetType: 'thread' | 'comment';
   readonly targetId: string;
   readonly reason: string;
   readonly timestamp: Date;

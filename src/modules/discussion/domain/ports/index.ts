@@ -164,19 +164,19 @@ export interface DiscussionRepositoryPort {
   removeVote(
     params: {
       userId: string;
-      targetType: 'thread' | 'comment' | 'reply';
+      targetType: 'thread' | 'comment';
       targetId: string;
     },
     db?: DrizzleDB,
   ): Promise<void>;
   getUserVote(
     userId: string,
-    targetType: 'thread' | 'comment' | 'reply',
+    targetType: 'thread' | 'comment',
     targetId: string,
   ): Promise<DiscussionVoteValue | null>;
   getUserVoteForUpdate(
     userId: string,
-    targetType: 'thread' | 'comment' | 'reply',
+    targetType: 'thread' | 'comment',
     targetId: string,
     db: DrizzleDB,
   ): Promise<DiscussionVoteValue | null>;
@@ -205,10 +205,10 @@ export interface DiscussionRepositoryPort {
    */
   getReportTargetSummary(params: {
     reportId: string;
-    targetType: 'thread' | 'comment' | 'reply';
+    targetType: 'thread' | 'comment';
     targetId: string;
   }): Promise<{
-    targetType: 'thread' | 'comment' | 'reply';
+    targetType: 'thread' | 'comment';
     targetId: string;
     threadId: string;
     threadTitle: string;
