@@ -12,6 +12,7 @@ export class UserBadgeAnalyticsResponseDto {
 
   @ApiProperty({
     description: 'ISO 8601 timestamp of the most recently earned badge',
+    type: 'string',
     nullable: true,
     example: '2026-06-01T10:00:00Z',
   })
