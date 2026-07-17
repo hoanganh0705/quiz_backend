@@ -6,10 +6,17 @@ import { CategoryQueryService } from './application/category-query.service';
 import { CategoryPresenter } from './transport/presenters/category.presenter';
 import { CategoryDomainService } from './domain/category.service';
 import { CategoryRepository } from './infrastructure/repositories/category.repository';
+import { CategoryFollowRepository } from './infrastructure/repositories/category-follow.repository';
+import { CategoryRankingRepository } from './infrastructure/repositories/category-ranking.repository';
 import { CategoryDomainEventBus } from './domain/events/category-domain.event-bus';
 import { DatabaseModule } from '@/core/database/database.module';
 import { QuizModule } from '@/modules/quiz/quiz.module';
-import { CATEGORY_REPOSITORY_PORT, CATEGORY_DOMAIN_EVENT_BUS } from './domain/ports';
+import {
+  CATEGORY_REPOSITORY_PORT,
+  CATEGORY_FOLLOW_REPOSITORY_PORT,
+  CATEGORY_RANKING_REPOSITORY_PORT,
+  CATEGORY_DOMAIN_EVENT_BUS,
+} from './domain/ports';
 import { CategoryEventBootstrapService } from './category-event-bootstrap.service';
 
 @Module({
@@ -21,15 +28,21 @@ import { CategoryEventBootstrapService } from './category-event-bootstrap.servic
     CategoryPresenter,
     CategoryDomainService,
     CategoryRepository,
+    CategoryFollowRepository,
+    CategoryRankingRepository,
     CategoryDomainEventBus,
     CategoryEventBootstrapService,
     { provide: CATEGORY_REPOSITORY_PORT, useClass: CategoryRepository },
+    { provide: CATEGORY_FOLLOW_REPOSITORY_PORT, useClass: CategoryFollowRepository },
+    { provide: CATEGORY_RANKING_REPOSITORY_PORT, useClass: CategoryRankingRepository },
     { provide: CATEGORY_DOMAIN_EVENT_BUS, useExisting: CategoryDomainEventBus },
   ],
   exports: [
     CategoryApplicationService,
     CategoryQueryService,
     CATEGORY_REPOSITORY_PORT,
+    CATEGORY_FOLLOW_REPOSITORY_PORT,
+    CATEGORY_RANKING_REPOSITORY_PORT,
     CATEGORY_DOMAIN_EVENT_BUS,
   ],
 })
