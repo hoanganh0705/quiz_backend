@@ -157,9 +157,9 @@ describe('Bookmark module — OpenAPI contract regression guards', () => {
           const op = pathObj[method];
           const security = op?.security ?? [];
           expect(security.length).toBeGreaterThan(0);
-          expect(
-            security.some((s) => Object.prototype.hasOwnProperty.call(s, 'BearerAuth')),
-          ).toBe(true);
+          expect(security.some((s) => Object.prototype.hasOwnProperty.call(s, 'BearerAuth'))).toBe(
+            true,
+          );
 
           const responses = op?.responses ?? {};
           expect(responses).toHaveProperty('401');

@@ -66,7 +66,8 @@ export const TOURNAMENT_LIST_EXAMPLE = {
       kind: 'cursor',
       limit: 20,
       hasNextPage: true,
-      nextCursor: 'eyJjcmVhdGVkQXQiOiIyMDI2LTA3LTAxVDEyOjAwOjAwLjAwMFoiLCJ0b3VybmFtZW50SWQiOiI2NjBlODQwMC1lMjliLTQxZDQtYTcxNi00NDY2NTU0NDAwMDAifQ',
+      nextCursor:
+        'eyJjcmVhdGVkQXQiOiIyMDI2LTA3LTAxVDEyOjAwOjAwLjAwMFoiLCJ0b3VybmFtZW50SWQiOiI2NjBlODQwMC1lMjliLTQxZDQtYTcxNi00NDY2NTU0NDAwMDAifQ',
     },
   },
 } as const;

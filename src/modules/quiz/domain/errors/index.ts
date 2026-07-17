@@ -7,6 +7,7 @@ export {
   QuizConflictError,
   QuizValidationError,
   QuizVersionImmutableError,
+  QuizVersionNotFoundError,
   QuizInsufficientQuestionsError,
   QuizQuestionPositionConflictError,
   QuizAnswerOptionPositionConflictError,
