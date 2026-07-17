@@ -1,9 +1,8 @@
 import { BadRequestException, Inject, Injectable } from '@nestjs/common';
-import { and, eq, isNull, or, sql } from 'drizzle-orm';
+import { sql } from 'drizzle-orm';
 import type { SQL } from 'drizzle-orm';
 import { DRIZZLE } from '@/core/database/drizzle.constants';
 import type { DrizzleDB } from '@/core/database/database.module';
-import { userProfiles, users } from '@/core/database/schema';
 import type {
   GlobalSearchResult,
   SearchDiscussionResult,
@@ -97,7 +96,7 @@ export class SearchApplicationService {
 
   private async searchUsers(query: string, limit: number): Promise<SearchUserResult[]> {
     const userSearchCondition = this.buildSearchCondition(
-      { sql: sql`users.user_search_vector` },
+      { sql: sql`u.user_search_vector` },
       'simple',
       query,
     );
@@ -106,29 +105,26 @@ export class SearchApplicationService {
       'simple',
       query,
     );
-    const userRank = this.buildRankExpression(
-      { sql: sql`users.user_search_vector` },
-      'simple',
-      query,
-    );
+    const userRank = this.buildRankExpression({ sql: sql`u.user_search_vector` }, 'simple', query);
     const displayNameRank = this.buildRankExpression(
       { sql: sql`to_tsvector('simple', coalesce(up.display_name, ''))` },
       'simple',
       query,
     );
 
-    const rows = await this.db
-      .select({
-        userId: users.userId,
-        username: users.username,
-        displayName: userProfiles.displayName,
-        rank: sql<number>`greatest(${userRank}, ${displayNameRank})`,
-      })
-      .from(users)
-      .leftJoin(userProfiles, eq(userProfiles.userId, users.userId))
-      .where(and(isNull(users.deletedAt), or(userSearchCondition, displayNameSearchCondition)))
-      .orderBy(sql`rank DESC`, sql`length(${users.username}) ASC`, users.username)
-      .limit(limit);
+    const rows = await this.executeTypedQuery<SearchUserResult & { rank: number }>(sql`
+      SELECT
+        u.user_id AS "userId",
+        u.username AS "username",
+        up.display_name AS "displayName",
+        greatest(${userRank}, ${displayNameRank}) AS "rank"
+      FROM users u
+      LEFT JOIN user_profiles up ON up.user_id = u.user_id
+      WHERE u.deleted_at IS NULL
+        AND (${userSearchCondition} OR ${displayNameSearchCondition})
+      ORDER BY "rank" DESC, length(u.username) ASC, u.username ASC
+      LIMIT ${limit}
+    `);
 
     return rows.map(({ userId, username, displayName }) => ({ userId, username, displayName }));
   }

@@ -1,13 +1,14 @@
 import { Controller, Delete, Get, Param, ParseUUIDPipe, Query } from '@nestjs/common';
-import { ApiQuery, ApiTags } from '@nestjs/swagger';
+import { ApiParam, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import { IsInt, IsOptional, Max, Min } from 'class-validator';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
+import { Public } from '@/common/decorators/public.decorator';
 import { Permissions } from '@/common/authorization/decorators/permissions.decorator';
 import { Permission } from '@/common/authorization/permissions';
 import { ApiForbidden, ApiAuth, ApiNotFound } from '@/common/swagger/swagger-decorators';
-import { ApiOkResource } from '@/common/swagger/api-ok';
+import { ApiOkResource, ApiOkResourceArray } from '@/common/swagger/api-ok';
 import { AchievementApplicationService } from '../../application/achievement.application.service';
 import { AchievementPresenter } from '../presenters/achievement.presenter';
 import { BadgeDetailsResponseDto } from '../../dto/response/badge-details-response.dto';
@@ -63,7 +64,8 @@ export class AchievementController {
   ) {}
 
   @Get('badges')
-  @ApiOkResource(BadgeCatalogItemResponseDto, {
+  @Public()
+  @ApiOkResourceArray(BadgeCatalogItemResponseDto, {
     description: 'Badge catalog returned',
   })
   @ApiQuery({
@@ -104,6 +106,8 @@ export class AchievementController {
   }
 
   @Get('badges/:badgeId')
+  @Public()
+  @ApiParam({ name: 'badgeId', format: 'uuid' })
   @ApiOkResource(BadgeDetailsResponseDto, { description: 'Badge details returned' })
   @ApiNotFound('Badge not found')
   async getBadgeDetails(@Param('badgeId', new ParseUUIDPipe()) badgeId: string) {
@@ -115,6 +119,8 @@ export class AchievementController {
   @Permissions(Permission.ACHIEVEMENT_REVOKE)
   @ApiAuth()
   @ApiForbidden()
+  @ApiParam({ name: 'userId', format: 'uuid' })
+  @ApiParam({ name: 'badgeId', format: 'uuid' })
   async revokeUserBadge(
     @Param('userId', new ParseUUIDPipe()) userId: string,
     @Param('badgeId', new ParseUUIDPipe()) badgeId: string,
@@ -125,6 +131,7 @@ export class AchievementController {
 
   @Get('/users/:userId/achievements')
   @ApiAuth()
+  @ApiParam({ name: 'userId', format: 'uuid' })
   @ApiOkResource(PublicAchievementProfileResponseDto, {
     description: 'Public achievement profile returned',
   })
@@ -142,6 +149,7 @@ export class AchievementController {
 
   @Get('/users/me/badges/:badgeId/progress')
   @ApiAuth()
+  @ApiParam({ name: 'badgeId', format: 'uuid' })
   @ApiOkResource(BadgeProgressResponseDto, { description: 'Badge progress returned' })
   @ApiNotFound('Badge not found')
   async getMyBadgeProgress(
@@ -154,7 +162,7 @@ export class AchievementController {
 
   @Get('/users/me/achievements/history')
   @ApiAuth()
-  @ApiOkResource(AchievementHistoryItemResponseDto, {
+  @ApiOkResourceArray(AchievementHistoryItemResponseDto, {
     description: 'Achievement history returned',
   })
   @ApiQuery({

@@ -6,11 +6,11 @@
  */
 
 import { Controller, Get, Post, Param, HttpCode, HttpStatus, ParseUUIDPipe } from '@nestjs/common';
-import { ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
 import { Permissions } from '@/common/authorization/decorators/permissions.decorator';
 import { Permission } from '@/common/authorization/permissions';
 import { ApiForbidden, ApiAuth } from '@/common/swagger/swagger-decorators';
-import { ApiOkResource } from '@/common/swagger/api-ok';
+import { ApiOkResource, ApiOkResourceArray } from '@/common/swagger/api-ok';
 import { AchievementApplicationService } from '../../application/achievement.application.service';
 import { AchievementPresenter } from '../presenters/achievement.presenter';
 import {
@@ -38,6 +38,7 @@ export class AchievementAdminController {
       'does not yet have will be checked against the rule engine. Use this to correct missed ' +
       'awards or retroactively grant badges after data fixes.',
   })
+  @ApiParam({ name: 'userId', format: 'uuid' })
   @ApiOkResource(ReevaluateUserResponseDto, { description: 'Re-evaluation completed' })
   async reevaluateUser(@Param('userId', new ParseUUIDPipe()) userId: string) {
     const result = await this.achievementApplicationService.reevaluateUserForController(userId);
@@ -48,7 +49,8 @@ export class AchievementAdminController {
   @Permissions(Permission.ACHIEVEMENT_ADMIN)
   @ApiForbidden()
   @ApiOperation({ summary: 'Get achievement history for a user (admin)' })
-  @ApiOkResource(AdminAchievementHistoryItemDto, {
+  @ApiParam({ name: 'userId', format: 'uuid' })
+  @ApiOkResourceArray(AdminAchievementHistoryItemDto, {
     description: 'Achievement history returned',
   })
   async getUserHistory(@Param('userId', new ParseUUIDPipe()) userId: string) {
