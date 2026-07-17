@@ -77,7 +77,7 @@ export class RankingPeriodResetNotificationAdapter implements OnModuleInit, OnMo
     );
   }
 
-  private async handleResetInitiated(event: PeriodResetInitiatedEvent): Promise<void> {
+  private handleResetInitiated(event: PeriodResetInitiatedEvent): Promise<void> {
     const periodLabel = this.formatPeriodLabel(event.period);
 
     this.logger.info({
@@ -87,9 +87,10 @@ export class RankingPeriodResetNotificationAdapter implements OnModuleInit, OnMo
       usersAffected: event.usersAffected,
       resetAt: event.resetAt,
     });
+    return Promise.resolve();
   }
 
-  private async handleResetCompleted(event: PeriodResetCompletedEvent): Promise<void> {
+  private handleResetCompleted(event: PeriodResetCompletedEvent): Promise<void> {
     const periodLabel = this.formatPeriodLabel(event.period);
 
     this.logger.info({
@@ -99,6 +100,7 @@ export class RankingPeriodResetNotificationAdapter implements OnModuleInit, OnMo
       archivedRecords: event.archivedRecords,
       newPeriodStart: event.newPeriodStart,
     });
+    return Promise.resolve();
   }
 
   private formatPeriodLabel(period: RankingPeriod): string {

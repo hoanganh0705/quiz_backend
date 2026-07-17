@@ -1,16 +1,12 @@
 import { Inject, Injectable, Optional } from '@nestjs/common';
 import { DRIZZLE } from '@/core/database/drizzle.constants';
 import type { DrizzleDB } from '@/core/database/database.module';
-import { notifications, notificationPreferences } from '@/core/database/schema';
+import { notifications } from '@/core/database/schema';
 
 import { eq, and, desc, sql, isNull, or, count, gt } from 'drizzle-orm';
 import { NotificationRepositoryPort } from '../../domain/ports';
 import type { Notification as DomainNotification } from '../../domain/types';
-import {
-  CreateNotificationParams,
-  NotificationListParams,
-  NotificationPreferencesRow,
-} from '../../domain/types';
+import { CreateNotificationParams, NotificationListParams } from '../../domain/types';
 import {
   TransactionalContext,
   TRANSACTIONAL_CONTEXT,
@@ -187,116 +183,6 @@ export class NotificationRepository implements NotificationRepositoryPort {
       );
   }
 
-  async getPreferences(userId: string): Promise<NotificationPreferencesRow | null> {
-    const [prefs] = await this.getDb()
-      .select()
-      .from(notificationPreferences)
-      .where(eq(notificationPreferences.userId, userId));
-
-    return prefs ? this.mapToPreferences(prefs) : null;
-  }
-
-  async upsertPreferences(
-    userId: string,
-    prefs: Partial<NotificationPreferencesRow>,
-  ): Promise<NotificationPreferencesRow> {
-    const existing = await this.getPreferences(userId);
-
-    if (existing) {
-      const [updated] = await this.getDb()
-        .update(notificationPreferences)
-        .set({
-          ...this.stripPreferenceFields(prefs),
-          updatedAt: new Date().toISOString(),
-        })
-        .where(eq(notificationPreferences.userId, userId))
-        .returning();
-
-      return this.mapToPreferences(updated);
-    } else {
-      const defaults = {
-        inAppEnabled: prefs.inAppEnabled ?? true,
-        emailEnabled: prefs.emailEnabled ?? true,
-        pushEnabled: prefs.pushEnabled ?? true,
-        achievementEnabled: prefs.achievementEnabled ?? true,
-        tournamentEnabled: prefs.tournamentEnabled ?? true,
-        rankEnabled: prefs.rankEnabled ?? true,
-        friendEnabled: prefs.friendEnabled ?? true,
-        discussionEnabled: prefs.discussionEnabled ?? true,
-        summaryEnabled: prefs.summaryEnabled ?? true,
-        marketingEnabled: prefs.marketingEnabled ?? false,
-        rankImprovementThreshold: prefs.rankImprovementThreshold ?? 5,
-        quietHoursStart: prefs.quietHoursStart ?? null,
-        quietHoursEnd: prefs.quietHoursEnd ?? null,
-      };
-
-      const [created] = await this.getDb()
-        .insert(notificationPreferences)
-        .values({
-          userId,
-          ...defaults,
-        })
-        .returning();
-
-      return this.mapToPreferences(created);
-    }
-  }
-
-  private mapToNotification(row: typeof notifications.$inferSelect): DomainNotification {
-    return {
-      notificationId: row.notificationId,
-      userId: row.userId,
-      type: row.type,
-      title: row.title,
-      message: row.message,
-      metadata: row.metadata as Record<string, unknown>,
-      channel: row.channel,
-      isRead: row.isRead,
-      readAt: row.readAt,
-      expiresAt: row.expiresAt,
-      createdAt: row.createdAt,
-      deletedAt: row.deletedAt,
-    };
-  }
-
-  private mapToPreferences(
-    row: typeof notificationPreferences.$inferSelect,
-  ): NotificationPreferencesRow {
-    return {
-      preferencesId: row.preferencesId,
-      userId: row.userId,
-      inAppEnabled: row.inAppEnabled,
-      emailEnabled: row.emailEnabled,
-      pushEnabled: row.pushEnabled,
-      achievementEnabled: row.achievementEnabled,
-      tournamentEnabled: row.tournamentEnabled,
-      rankEnabled: row.rankEnabled,
-      friendEnabled: row.friendEnabled,
-      discussionEnabled: row.discussionEnabled,
-      summaryEnabled: row.summaryEnabled,
-      marketingEnabled: row.marketingEnabled,
-      rankImprovementThreshold: row.rankImprovementThreshold,
-      quietHoursStart: row.quietHoursStart,
-      quietHoursEnd: row.quietHoursEnd,
-      updatedAt: row.updatedAt,
-      createdAt: row.createdAt,
-    };
-  }
-
-  private stripPreferenceFields(
-    prefs: Partial<NotificationPreferencesRow>,
-  ): Partial<typeof notificationPreferences.$inferInsert> {
-    const { preferencesId, userId, createdAt, updatedAt, ...rest } = prefs as Required<
-      Pick<NotificationPreferencesRow, 'preferencesId' | 'userId' | 'createdAt' | 'updatedAt'>
-    > &
-      Partial<NotificationPreferencesRow>;
-    void preferencesId;
-    void userId;
-    void createdAt;
-    void updatedAt;
-    return rest;
-  }
-
   async deleteExpired(): Promise<number> {
     const now = new Date().toISOString();
     const result = await this.db
@@ -368,6 +254,23 @@ export class NotificationRepository implements NotificationRepositoryPort {
       byChannel,
       last24h: Number(last24hResult?.value ?? 0),
       last7d: Number(last7dResult?.value ?? 0),
+    };
+  }
+
+  private mapToNotification(row: typeof notifications.$inferSelect): DomainNotification {
+    return {
+      notificationId: row.notificationId,
+      userId: row.userId,
+      type: row.type,
+      title: row.title,
+      message: row.message,
+      metadata: row.metadata as Record<string, unknown>,
+      channel: row.channel,
+      isRead: row.isRead,
+      readAt: row.readAt,
+      expiresAt: row.expiresAt,
+      createdAt: row.createdAt,
+      deletedAt: row.deletedAt,
     };
   }
 }

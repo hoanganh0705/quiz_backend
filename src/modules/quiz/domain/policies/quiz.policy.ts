@@ -15,7 +15,7 @@ export const QuizPolicy = {
    * Currently allows any authenticated user to create quizzes.
    * Throws QuizForbiddenError if assertion fails.
    */
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+
   assertCanCreate(_user: JwtPayload): void {
     // Any authenticated user can create a quiz (no restrictions currently)
   },

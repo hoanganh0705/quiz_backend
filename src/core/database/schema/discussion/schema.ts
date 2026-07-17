@@ -34,7 +34,6 @@ import {
   timestamp,
   integer,
   boolean,
-  jsonb,
   foreignKey,
   type AnyPgColumn,
 } from 'drizzle-orm/pg-core';

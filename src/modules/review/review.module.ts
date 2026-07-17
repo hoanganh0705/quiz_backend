@@ -10,13 +10,14 @@ import { ReviewController } from './transport/controller/review.controller';
 import { UserReviewController } from './transport/controller/user-review.controller';
 import { AdminReviewController } from './transport/controller/admin-review.controller';
 import { ReviewPresenter } from './transport/presenters/review.presenter';
-import { REVIEW_REPOSITORY_PORT } from './domain/ports';
+import { REVIEW_REPOSITORY_PORT, REVIEW_REPORT_REPOSITORY_PORT } from './domain/ports';
 import {
   REVIEW_ANALYTICS_PORT,
   REVIEW_DOMAIN_EVENT_BUS,
   ReviewDomainEventBus,
 } from './domain/events';
 import { ReviewRepository } from './infrastructure/repositories/review.repository';
+import { ReviewReportRepository } from './infrastructure/repositories/review-report.repository';
 import { ReviewAnalyticsAdapter } from './infrastructure/repositories/review-analytics.adapter';
 import { QuizModule } from '@/modules/quiz/quiz.module';
 import { quizReviewController } from './transport/controller/quiz-review.controller';
@@ -39,13 +40,17 @@ import { quizReviewController } from './transport/controller/quiz-review.control
     // Presenter
     ReviewPresenter,
 
+    // Repository Implementations
+    ReviewRepository,
+    ReviewReportRepository,
+
     // Port bindings
     { provide: REVIEW_REPOSITORY_PORT, useExisting: ReviewRepository },
+    { provide: REVIEW_REPORT_REPOSITORY_PORT, useExisting: ReviewReportRepository },
     { provide: IDEMPOTENCY_SERVICE, useExisting: IdempotencyService },
     { provide: REVIEW_ANALYTICS_PORT, useExisting: ReviewAnalyticsAdapter },
 
     // Infrastructure
-    ReviewRepository,
     ReviewAnalyticsAdapter,
     IdempotencyService,
 

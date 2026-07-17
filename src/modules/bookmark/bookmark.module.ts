@@ -8,7 +8,9 @@ import { BookmarkStatsResponseMapper } from './mappers/bookmark-stats-response.m
 import { BookmarkController } from './transport/controller/bookmark.controller';
 import { BookmarkPresenter } from './transport/presenters/bookmark.presenter';
 import { BOOKMARK_REPOSITORY_PORT } from './domain/ports';
+import { BOOKMARK_COLLECTION_REPOSITORY_PORT } from './domain/ports/bookmark-collection-repository.port';
 import { BookmarkRepository } from './infrastructure/repositories/bookmark.repository';
+import { BookmarkCollectionRepository } from './infrastructure/repositories/bookmark-collection.repository';
 import { QuizModule } from '@/modules/quiz/quiz.module';
 import {
   BOOKMARK_DOMAIN_EVENT_BUS,
@@ -26,8 +28,9 @@ import { BookmarkAnalyticsEventHandler } from './domain/events/bookmark-analytic
     BookmarkQueryService,
     BookmarkCommandService,
 
-    // Infrastructure
+    // Repository Implementations
     BookmarkRepository,
+    BookmarkCollectionRepository,
 
     // Event Bus
     BookmarkDomainEventBus,
@@ -40,6 +43,7 @@ import { BookmarkAnalyticsEventHandler } from './domain/events/bookmark-analytic
 
     // Port bindings
     { provide: BOOKMARK_REPOSITORY_PORT, useExisting: BookmarkRepository },
+    { provide: BOOKMARK_COLLECTION_REPOSITORY_PORT, useExisting: BookmarkCollectionRepository },
 
     // Mapper
     BookmarkResponseMapper,
@@ -49,6 +53,11 @@ import { BookmarkAnalyticsEventHandler } from './domain/events/bookmark-analytic
     BookmarkPresenter,
   ],
   controllers: [BookmarkController],
-  exports: [BookmarkApplicationService, BOOKMARK_REPOSITORY_PORT, BOOKMARK_DOMAIN_EVENT_BUS],
+  exports: [
+    BookmarkApplicationService,
+    BOOKMARK_REPOSITORY_PORT,
+    BOOKMARK_COLLECTION_REPOSITORY_PORT,
+    BOOKMARK_DOMAIN_EVENT_BUS,
+  ],
 })
 export class BookmarkModule {}

@@ -9,15 +9,11 @@
  * This adapter subscribes to the internal bus and re-emits events on the shared bus.
  */
 
-import { Inject, Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import { Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { RankingDomainEventBus } from '../events/ranking-domain.event-bus';
-import type {
-  RankingDomainEventBusPort,
-  PublishedRankingDomainEvent,
-} from '../ports/ranking-event-bus.port';
+import type { PublishedRankingDomainEvent } from '../ports/ranking-event-bus.port';
 import {
-  SHARED_RANKING_EVENT_BUS,
   type SharedRankingEventBusPort,
   type SharedRankingDomainEvent,
 } from '@/common/events/ranking-shared-events';

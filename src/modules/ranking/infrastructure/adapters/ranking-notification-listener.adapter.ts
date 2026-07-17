@@ -18,7 +18,9 @@ import {
   RANK_NOTIFICATION_PORT,
   type RankNotificationPort,
   NOTIFICATION_REPOSITORY_PORT,
+  NOTIFICATION_PREFERENCES_REPOSITORY_PORT,
   type NotificationRepositoryPort,
+  type NotificationPreferencesRepositoryPort,
 } from '@/modules/notification/domain/ports';
 
 @Injectable()
@@ -32,6 +34,8 @@ export class RankingNotificationListenerAdapter implements OnModuleInit, OnModul
     private readonly eventBus: RankingDomainEventBusPort,
     @Inject(NOTIFICATION_REPOSITORY_PORT)
     private readonly notificationRepository: NotificationRepositoryPort,
+    @Inject(NOTIFICATION_PREFERENCES_REPOSITORY_PORT)
+    private readonly preferencesRepository: NotificationPreferencesRepositoryPort,
     @InjectPinoLogger(RankingNotificationListenerAdapter.name)
     private readonly logger: PinoLogger,
   ) {}
@@ -73,7 +77,7 @@ export class RankingNotificationListenerAdapter implements OnModuleInit, OnModul
 
     const improvement = event.previousRank - event.newRank;
 
-    const prefs = await this.notificationRepository.getPreferences(event.userId);
+    const prefs = await this.preferencesRepository.getPreferences(event.userId);
     const threshold = prefs?.rankImprovementThreshold ?? 5;
 
     if (improvement >= threshold) {

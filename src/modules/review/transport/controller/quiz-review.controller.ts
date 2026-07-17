@@ -22,7 +22,6 @@ import {
   ApiCreateReviewResponses,
   ApiCreatorQuizReviewAnalyticsResponses,
   ApiDeleteReviewResponses,
-  ApiGetMyReviewForQuizResponses,
   ApiListReviewsResponses,
   ApiMyQuizReviewResponses,
   ApiQuizReviewStatsResponses,

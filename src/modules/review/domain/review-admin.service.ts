@@ -1,6 +1,9 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
-import { REVIEW_REPOSITORY_PORT, type ReviewRepositoryPort } from './ports/review-repository.port';
+import {
+  REVIEW_REPORT_REPOSITORY_PORT,
+  type ReviewReportRepositoryPort,
+} from './ports/review-report-repository.port';
 import { AuditLogService } from '@/common/audit/audit-log.service';
 
 export type PlatformReportItem = {
@@ -22,8 +25,8 @@ export type PlatformReportItem = {
 @Injectable()
 export class ReviewAdminService {
   constructor(
-    @Inject(REVIEW_REPOSITORY_PORT)
-    private readonly reviewRepository: ReviewRepositoryPort,
+    @Inject(REVIEW_REPORT_REPOSITORY_PORT)
+    private readonly reportRepository: ReviewReportRepositoryPort,
     private readonly auditLogService: AuditLogService,
     @InjectPinoLogger(ReviewAdminService.name)
     private readonly logger: PinoLogger,
@@ -42,7 +45,7 @@ export class ReviewAdminService {
     const limit = params.limit ?? 20;
     const cursor = params.cursor ?? null;
 
-    const rows = await this.reviewRepository.listPlatformReports({
+    const rows = await this.reportRepository.listPlatformReports({
       limit,
       cursor,
       status: params.status,
@@ -69,7 +72,7 @@ export class ReviewAdminService {
     actorId: string,
   ): Promise<void> {
     const nowIso = new Date().toISOString();
-    await this.reviewRepository.updateReportStatus({
+    await this.reportRepository.updateReportStatus({
       reportId,
       status,
       nowIso,
