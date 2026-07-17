@@ -62,7 +62,7 @@ import {
   RankingHistoryItemDto,
 } from '../../dto/response';
 import { RankingPresenter } from '../presenters/ranking.presenter';
-import { ApiOkResource, ApiOkResourceList } from '@/common/swagger/api-ok';
+import { ApiOkResource, ApiOkResourceArray } from '@/common/swagger/api-ok';
 import { GetLeaderboardDistributionQueryHandler } from '../../application/get-leaderboard-distribution.query';
 import {
   GetMyRankingHistoryQueryHandler,
@@ -215,7 +215,7 @@ export class RankingController {
       'Returns users with the largest positive ranking movement during the selected period. ' +
       'Results are sorted by `change` (previousRank - currentRank) descending.',
   })
-  @ApiOkResourceList(TopMoverDto, 'cursor', { description: 'Top movers returned' })
+  @ApiOkResourceArray(TopMoverDto, { description: 'Top movers returned' })
   @rankingBadRequestResponse()
   async getTopMovers(@Query() query: TopMoversQueryDto) {
     const result = await this.getTopMoversQueryHandler.execute({
@@ -310,7 +310,7 @@ export class RankingController {
       'A milestone is earned when the user reaches a specific rank threshold ' +
       '(e.g. TOP_100, TOP_10, TOP_1). Returns an empty array if no milestones have been achieved.',
   })
-  @ApiOkResourceList(RankingMilestoneDto, 'cursor', {
+  @ApiOkResourceArray(RankingMilestoneDto, {
     description: 'Ranking milestones returned',
   })
   async getMyRankingMilestones(@CurrentUser() user: JwtPayload) {
@@ -399,7 +399,7 @@ export class RankingController {
       'Each entry is a daily snapshot `{ date, rank }`. Supports optional `from` and `to` ' +
       '(YYYY-MM-DD format) to filter the date range. 400 is returned if `from > to`.',
   })
-  @ApiOkResourceList(RankingHistoryItemDto, 'cursor', {
+  @ApiOkResourceArray(RankingHistoryItemDto, {
     description: 'Ranking history returned',
   })
   @rankingBadRequestResponse()
@@ -427,7 +427,7 @@ export class RankingController {
   @ApiOperation({
     summary: 'Get user rank information',
     description:
-      'Returns public rank information for a specific user (all periods). ' +
+      'Returns public rank information for a specific user (weekly, monthly, all-time). ' +
       'If the user has no ranking data, returns a ghost response with null ranks (no 404). ' +
       'Unlike the `/leaderboard/me` endpoint, this is public and requires no authentication.',
   })

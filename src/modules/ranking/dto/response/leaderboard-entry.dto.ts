@@ -1,5 +1,9 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { ApiUuidProperty } from '@/common/decorators/api-uuid-property.decorator';
+import {
+  ApiTimestampProperty,
+  ApiOptionalTimestampProperty,
+  ApiUuidProperty,
+} from '@/common/decorators/api-uuid-property.decorator';
 
 export const RANK_TREND_VALUES = ['up', 'down', 'same', 'new'] as const;
 export type RankTrend = (typeof RANK_TREND_VALUES)[number];
@@ -51,17 +55,12 @@ export class PeriodInfoDto {
   })
   type!: 'daily' | 'weekly' | 'monthly' | 'all_time';
 
-  @ApiProperty({
-    description: 'Period start date',
-    example: '2026-05-25T00:00:00.000Z',
-  })
+  @ApiTimestampProperty({ description: 'Period start date', example: '2026-05-25T00:00:00.000Z' })
   start!: string;
 
-  @ApiPropertyOptional({
+  @ApiOptionalTimestampProperty({
     description: 'Period end date (null for all_time)',
-    type: String,
     example: '2026-05-31T23:59:59.999Z',
-    nullable: true,
   })
   end!: string | null;
 

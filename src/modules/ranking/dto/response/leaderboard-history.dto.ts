@@ -1,5 +1,9 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { ApiUuidProperty } from '@/common/decorators/api-uuid-property.decorator';
+import {
+  ApiOptionalTimestampProperty,
+  ApiTimestampProperty,
+  ApiUuidProperty,
+} from '@/common/decorators/api-uuid-property.decorator';
 
 export class RankingHistoryItemDto {
   @ApiProperty({ description: 'Snapshot date in YYYY-MM-DD format', example: '2026-06-01' })
@@ -35,11 +39,9 @@ export class PeakRankDto {
   @ApiProperty({ description: 'Best rank achieved for the period', example: 1 })
   rank!: number;
 
-  @ApiPropertyOptional({
+  @ApiOptionalTimestampProperty({
     description: 'Timestamp when the peak rank was achieved',
-    type: String,
-    example: '2026-05-01T12:00:00Z',
-    nullable: true,
+    example: '2026-05-01T12:00:00.000Z',
   })
   achievedAt!: string | null;
 }
@@ -129,9 +131,9 @@ export class RankingMilestoneDto {
   @ApiProperty({ description: 'Rank threshold achieved for this milestone', example: 100 })
   rank!: number;
 
-  @ApiProperty({
+  @ApiTimestampProperty({
     description: 'Timestamp when the milestone was first achieved',
-    example: '2026-03-10T10:00:00Z',
+    example: '2026-03-10T10:00:00.000Z',
   })
   achievedAt!: string;
 }

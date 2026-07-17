@@ -49,3 +49,49 @@ export function ApiOptionalUuidProperty(options: ApiUuidOptions = {}) {
     IsUUID(),
   );
 }
+
+/**
+ * Shared timestamp property decorators for API DTOs.
+ *
+ * Combines `@ApiProperty({ format: 'date-time' })` for Swagger/OpenAPI docs
+ * with `@IsISO8601()` for runtime validation. `PROJECT_CONSTITUTION.md`
+ * mandates ISO 8601 timestamps and `api.md` requires `format: 'date-time'`
+ * for all date-time fields.
+ *
+ * Use for any field that represents an instant in time (not a local date
+ * or time-of-day only). Examples: `createdAt`, `updatedAt`, `achievedAt`,
+ * `recordedAt`, `lastActivityAt`, `nextConsistencyCheck`.
+ *
+ * NOTE: Fields named `start` / `end` / `date` / `snapshotDate` that represent
+ * date-only boundaries (not instants) should NOT use this — use a plain
+ * `@ApiProperty({ example: '2026-06-30' })` with `@IsDateString()` instead.
+ */
+
+interface ApiTimestampOptions {
+  description?: string;
+  example?: string;
+  nullable?: boolean;
+}
+
+const ISO8601_EXAMPLE = '2026-06-30T10:00:00.000Z';
+
+export function ApiTimestampProperty(options: ApiTimestampOptions = {}) {
+  return ApiProperty({
+    description: options.description ?? 'ISO 8601 timestamp',
+    format: 'date-time',
+    example: options.example ?? ISO8601_EXAMPLE,
+    nullable: options.nullable,
+  });
+}
+
+export function ApiOptionalTimestampProperty(options: ApiTimestampOptions = {}) {
+  return applyDecorators(
+    ApiPropertyOptional({
+      description: options.description ?? 'ISO 8601 timestamp',
+      format: 'date-time',
+      example: options.example ?? ISO8601_EXAMPLE,
+      nullable: options.nullable,
+    }),
+    IsOptional(),
+  );
+}
