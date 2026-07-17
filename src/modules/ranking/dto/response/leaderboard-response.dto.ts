@@ -1,4 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { ApiOptionalTimestampProperty } from '@/common/decorators/api-uuid-property.decorator';
 import {
   LeaderboardEntryDto,
   PeriodInfoDto,
@@ -55,11 +56,9 @@ export class UserRankResponseDto {
   })
   peakRanks!: PeakRanksResponseDto;
 
-  @ApiPropertyOptional({
+  @ApiOptionalTimestampProperty({
     description: 'Last activity timestamp',
-    type: String,
     example: '2026-06-01T12:00:00.000Z',
-    nullable: true,
   })
   lastActivityAt!: string | null;
 
