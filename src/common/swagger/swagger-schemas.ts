@@ -1,4 +1,4 @@
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { ApiExtraModels, ApiProperty, ApiPropertyOptional, getSchemaPath } from '@nestjs/swagger';
 import { RFC7807_TYPE_URIS } from '@/common/types/problem-detail.type';
 
 /**
@@ -128,10 +128,18 @@ export class PaginationMetaDto {
   @ApiProperty({ description: 'Number of items returned in this page', example: 20 })
   limit!: number;
 
-  @ApiPropertyOptional({
+  @ApiProperty({
     description:
       'Opaque cursor string for fetching the next page. `null` when there is no next page.',
-    example: null,
+    // Phase 4 (audit issue 3.3): explicit `type: 'string'` was missing
+    // — when `@ApiPropertyOptional({ nullable: true })` is paired with
+    // `string | null`, the swagger plugin emits `{ type: 'object' }`
+    // (or worse, `{ type: 'object', nullable: true }`) in the
+    // generated `openapi.json`, which breaks generated SDKs that try
+    // to type the cursor as a JS string. Forcing `type: 'string'`
+    // here aligns the OpenAPI artifact with the runtime wire shape.
+    type: 'string',
+    example: 'eyJjcmVhdGVkQXQiOiIyMDI1LTAxLTAxVDAwOjAwOjAwKzAwOjAwIn0',
     nullable: true,
   })
   nextCursor!: string | null;
@@ -266,10 +274,24 @@ export class ResponseMetaDto {
 
 /**
  * Paginated response meta — includes timestamp plus pagination fields.
+ *
+ * Phase 4 (audit issue 3.3): the `pagination` field previously had
+ * `type: 'object'` and no schema reference, which caused SDK generators
+ * to emit a generic `Record<string, unknown>`. It is now typed as a
+ * oneOf of the two canonical pagination metas (`PaginationMetaDto` for
+ * cursor, `OffsetPaginationMetaDto` for offset) so generated clients
+ * can switch on the `kind` discriminator.
  */
 export class PaginatedResponseMetaDto extends ResponseMetaDto {
-  @ApiPropertyOptional({ description: 'Pagination metadata returned by cursor-based pagination' })
-  pagination?: Record<string, unknown>;
+  @ApiExtraModels(PaginationMetaDto, OffsetPaginationMetaDto)
+  @ApiPropertyOptional({
+    description: 'Pagination metadata — discriminated by the `kind` field',
+    oneOf: [
+      { $ref: getSchemaPath(PaginationMetaDto) },
+      { $ref: getSchemaPath(OffsetPaginationMetaDto) },
+    ],
+  })
+  pagination?: PaginationMetaDto | OffsetPaginationMetaDto;
 }
 
 /**

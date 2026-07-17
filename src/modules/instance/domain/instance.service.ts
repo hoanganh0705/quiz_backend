@@ -1,8 +1,9 @@
 import { Inject, Injectable, Optional, forwardRef } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
+import { decodeInstanceCursor } from '@/common/utils/cursor.util';
 import { QUIZ_INSTANCE_REPOSITORY_PORT } from './ports';
-import type { QuizInstanceRepositoryPort } from './ports';
+import type { QuizInstanceRepositoryPort, InstanceCursorPayload } from './ports';
 import { INSTANCE_DOMAIN_EVENT_BUS } from './events';
 import type { InstanceDomainEventBusPort } from './events';
 import {
@@ -12,6 +13,7 @@ import {
   INSTANCE_FULL_MESSAGE,
   INSTANCE_ALREADY_STARTED_MESSAGE,
   INSTANCE_ALREADY_CLOSED_MESSAGE,
+  INSTANCE_ALREADY_FINISHED_MESSAGE,
 } from '../instance.constants';
 import {
   InstanceNotFoundError,
@@ -20,6 +22,8 @@ import {
   InstanceFullError,
   InstanceAlreadyStartedError,
   InstanceAlreadyClosedError,
+  InstanceAlreadyFinishedError,
+  PlayerAlreadyJoinedError,
 } from './errors';
 import {
   InstanceCreatedEvent,
@@ -111,8 +115,13 @@ export class InstanceService {
         nowIso,
       });
 
+      // Phase 2 (issue 5.1): distinguish duplicate join from capacity-full.
+      // Before Phase 2 both were conflated under `INSTANCE_FULL` (400), which
+      // misled clients into thinking the instance was at capacity when the
+      // user was actually already a member. `PlayerAlreadyJoinedError` is
+      // mapped to 409 `PLAYER_ALREADY_JOINED` via ProblemCodeMapping.
       if (!result.joined) {
-        throw new InstanceFullError(INSTANCE_FULL_MESSAGE);
+        throw new PlayerAlreadyJoinedError();
       }
 
       this.logger.info({
@@ -143,6 +152,7 @@ export class InstanceService {
       if (error instanceof Error && error.message === 'INSTANCE_FULL') {
         throw new InstanceFullError(INSTANCE_FULL_MESSAGE);
       }
+      // Rethrow domain errors (PlayerAlreadyJoinedError, etc.) untouched.
       throw error;
     }
   }
@@ -160,8 +170,16 @@ export class InstanceService {
       throw new InstanceNotHostError(INSTANCE_NOT_HOST_MESSAGE);
     }
 
-    if (instance.status !== 'open') {
+    // Phase 3 (issue 6.1): differentiate state-machine paths. The audit
+    // documented three states (`open → running → closed`) but the DB
+    // includes a fourth (`finished`) for terminal/soft-archive use.
+    //   - `running`           → already started → `InstanceAlreadyStartedError`
+    //   - `closed` / `finished` → already terminal → `InstanceAlreadyClosedError`
+    if (instance.status === 'running') {
       throw new InstanceAlreadyStartedError(INSTANCE_ALREADY_STARTED_MESSAGE);
+    }
+    if (instance.status === 'closed' || instance.status === 'finished') {
+      throw new InstanceAlreadyClosedError(INSTANCE_ALREADY_CLOSED_MESSAGE);
     }
 
     await this.instanceRepository.updateInstanceStatus({
@@ -195,8 +213,19 @@ export class InstanceService {
       throw new InstanceNotHostError(INSTANCE_NOT_HOST_MESSAGE);
     }
 
-    if (instance.status === 'closed' || instance.status === 'finished') {
+    // Phase 3 (issue 7.1): differentiate state-machine paths. The audit
+    // documented three states (`open → running → closed`) but the DB
+    // includes a fourth (`finished`) for terminal/soft-archive use.
+    //   - `closed`   → user-closed     → `InstanceAlreadyClosedError`
+    //   - `finished` → terminal archive → `InstanceAlreadyFinishedError`
+    // Previously both paths conflated under `INSTANCE_ALREADY_CLOSED`,
+    // making the wire shape ambiguous for callers inspecting
+    // `extensions.code`.
+    if (instance.status === 'closed') {
       throw new InstanceAlreadyClosedError(INSTANCE_ALREADY_CLOSED_MESSAGE);
+    }
+    if (instance.status === 'finished') {
+      throw new InstanceAlreadyFinishedError(INSTANCE_ALREADY_FINISHED_MESSAGE);
     }
 
     await this.instanceRepository.updateInstanceStatus({
@@ -267,10 +296,10 @@ export class InstanceService {
     const limit = params.limit ?? 20;
     const cursorValue = typeof params.cursor === 'string' ? params.cursor : undefined;
 
-    const cursor: import('./ports').InstanceCursorPayload | null = cursorValue
-      ? (JSON.parse(
-          Buffer.from(cursorValue, 'base64').toString('utf-8'),
-        ) as import('./ports').InstanceCursorPayload)
+    // Phase 2 (issue 2.4): validate the cursor shape so a tampered or
+    // malformed payload can't reach the SQL layer as `undefined`.
+    const cursor: InstanceCursorPayload | null = cursorValue
+      ? decodeInstanceCursor(cursorValue)
       : null;
 
     const rows = await this.instanceRepository.listInstances({
@@ -291,12 +320,21 @@ export class InstanceService {
       hasNextPage,
       nextCursor:
         hasNextPage && lastItem
-          ? Buffer.from(
+          ? // Phase 2 (issue 2.5): normalize `createdAt` to ISO 8601 so
+            //   the cursor round-trips through any client that decodes
+            //   it without encountering PG-formatted timestamps.
+            // Phase 4 (audit issue 2.9): switched to base64url to align
+            //   with the rest of the codebase (the leaderboard cursor
+            //   already used base64url). base64url is a strict subset
+            //   of base64 — Node's `Buffer.from(s, 'base64')` decoder
+            //   accepts both encodings, so existing clients keep
+            //   working.
+            Buffer.from(
               JSON.stringify({
-                createdAt: lastItem.createdAt,
+                createdAt: new Date(lastItem.createdAt).toISOString(),
                 instanceId: lastItem.instanceId,
               }),
-            ).toString('base64')
+            ).toString('base64url')
           : null,
     };
   }

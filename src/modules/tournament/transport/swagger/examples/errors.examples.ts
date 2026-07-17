@@ -63,7 +63,8 @@ export const tournamentRoundNotOpenExample = {
   title: 'BadRequest',
   status: 400,
   detail: 'Tournament round is not open',
-  instance: '/api/v1/tournaments/660e8400-e29b-41d4-a716-446655440000/rounds/880e8400-e29b-41d4-a716-446655440001/attempts',
+  instance:
+    '/api/v1/tournaments/660e8400-e29b-41d4-a716-446655440000/rounds/880e8400-e29b-41d4-a716-446655440001/attempts',
   extensions: {
     requestId: REQUEST_ID,
   },
@@ -138,7 +139,8 @@ export const tournamentRoundNotFoundExample = {
   title: 'NotFound',
   status: 404,
   detail: 'Tournament round not found',
-  instance: '/api/v1/tournaments/660e8400-e29b-41d4-a716-446655440000/rounds/880e8400-e29b-41d4-a716-446655440001/attempts',
+  instance:
+    '/api/v1/tournaments/660e8400-e29b-41d4-a716-446655440000/rounds/880e8400-e29b-41d4-a716-446655440001/attempts',
   extensions: { requestId: REQUEST_ID },
 } as const;
 
@@ -167,7 +169,8 @@ export const tournamentAttemptAlreadyExistsExample = {
   title: 'Conflict',
   status: 409,
   detail: 'You have already submitted an attempt for this round',
-  instance: '/api/v1/tournaments/660e8400-e29b-41d4-a716-446655440000/rounds/880e8400-e29b-41d4-a716-446655440001/attempts',
+  instance:
+    '/api/v1/tournaments/660e8400-e29b-41d4-a716-446655440000/rounds/880e8400-e29b-41d4-a716-446655440001/attempts',
   extensions: { requestId: REQUEST_ID },
 } as const;
 

@@ -12,6 +12,7 @@ import { Throttle } from '@nestjs/throttler';
 import {
   ApiBadRequestResponse,
   ApiBearerAuth,
+  ApiConflictResponse,
   ApiForbiddenResponse,
   ApiNotFoundResponse,
   ApiOperation,
@@ -21,7 +22,7 @@ import {
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
 import { Transactional } from '@/common/interceptors/transactional.interceptor';
 import { ProblemDetailDto, ErrorResponseExamples } from '@/common/swagger/swagger-schemas';
-import { decodeBase64JsonCursor } from '@/common/utils/cursor.util';
+import { decodeLeaderboardCursor } from '@/common/utils/cursor.util';
 import { type JwtPayload } from '@/common/guards/jwt.guard';
 import { AUTH_SECURITY_NAME } from '@/core/swagger/swagger.config';
 import { InstanceApplicationService } from '../../application/instance.application.service';
@@ -43,6 +44,10 @@ import {
 } from '../../dto/response';
 import { ApiCreatedResource, ApiOkResource, ApiOkResourceList } from '@/common/swagger/api-ok';
 import { InstancePresenter } from '../presenters/instance.presenter';
+import {
+  ApiInstanceIdParam,
+  InstanceErrorResponseExamples,
+} from '../swagger/instance-swagger-decorators';
 
 // ─── Local helper decorators ───────────────────────────────────────────────────
 //
@@ -55,6 +60,12 @@ import { InstancePresenter } from '../presenters/instance.presenter';
 // The previous `schema.oneOf([ProblemDetailDto, InstanceDomainErrorDto])`
 // for the dual-400 helper is no longer needed: every error response is
 // uniform RFC 7807 now.
+//
+// Phase 4 (audit issue 3.2): all error examples now point to the
+// per-module `InstanceErrorResponseExamples` payloads so the wire shape
+// in the OpenAPI artifact matches the runtime RFC 7807 detail (no more
+// generic "The requested resource was not found" / `/quizzes/…`
+// `instance` URIs leaking from the shared examples).
 
 /** 404 from `InstanceNotFoundError` (domain) → GlobalExceptionFilter. */
 function instanceNotFoundResponse(): MethodDecorator {
@@ -64,7 +75,7 @@ function instanceNotFoundResponse(): MethodDecorator {
         'Instance not found. Returned as an RFC 7807 ProblemDetail. ' +
         'Detail: "Quiz instance not found".',
       type: ProblemDetailDto,
-      example: ErrorResponseExamples.notFound,
+      example: InstanceErrorResponseExamples.instanceNotFound,
     }),
   );
 }
@@ -77,7 +88,10 @@ function instanceForbiddenResponse(): MethodDecorator {
         'Caller is not the host of the instance. Returned as an RFC 7807 ProblemDetail. ' +
         'Detail: "Only the host can perform this action".',
       type: ProblemDetailDto,
-      example: ErrorResponseExamples.forbidden,
+      // Phase 4 (audit issue 6.3): 403 example now matches the
+      // `INSTANCE_NOT_HOST` runtime detail (was the generic "You do
+      // not have permission..." string in the shared example).
+      example: InstanceErrorResponseExamples.instanceNotHost,
     }),
   );
 }
@@ -87,6 +101,9 @@ function instanceForbiddenResponse(): MethodDecorator {
  * domain-level precondition failure (InstanceNotOpenError, InstanceFullError,
  * InstanceAlreadyStartedError, InstanceAlreadyClosedError). All are emitted
  * as RFC 7807 ProblemDetail by GlobalExceptionFilter after Phase 2.
+ *
+ * The example payload uses `INSTANCE_NOT_OPEN` since that is the most
+ * common 400 domain path on `POST /instances/{id}/join`.
  */
 function instanceBadRequestResponse(): MethodDecorator {
   return applyDecorators(
@@ -97,7 +114,24 @@ function instanceBadRequestResponse(): MethodDecorator {
         '`InstanceNotOpenError`, `InstanceFullError`, `InstanceAlreadyStartedError`, ' +
         '`InstanceAlreadyClosedError`.',
       type: ProblemDetailDto,
-      example: ErrorResponseExamples.badRequest,
+      example: InstanceErrorResponseExamples.instanceNotOpen,
+    }),
+  );
+}
+
+/**
+ * 400 variant for `startInstance` and `closeInstance` paths where the
+ * "started" or "closed" codes are the most common outcome.
+ */
+function instanceStartBadRequestResponse(): MethodDecorator {
+  return applyDecorators(
+    ApiBadRequestResponse({
+      description:
+        'Domain precondition failed. Returned as an RFC 7807 ProblemDetail. ' +
+        'Domain errors: `InstanceAlreadyStartedError`, `InstanceAlreadyClosedError`, ' +
+        '`InstanceAlreadyFinishedError`.',
+      type: ProblemDetailDto,
+      example: InstanceErrorResponseExamples.instanceAlreadyStarted,
     }),
   );
 }
@@ -106,11 +140,29 @@ function instanceBadRequestResponse(): MethodDecorator {
 function instanceUnauthorizedResponse(): MethodDecorator {
   return applyDecorators(
     ApiBearerAuth(AUTH_SECURITY_NAME),
+    // Phase 4 (audit issue 1.4): the JwtGuard's runtime `detail`
+    // matches the shared `unauthorized` example verbatim, so we keep
+    // the shared example but document the equivalence in the
+    // description. See `swagger-schemas.ts` for the canonical entry.
     ApiUnauthorizedResponse({
       description:
-        'Missing or invalid JWT bearer token. Returned by the global JwtGuard as an RFC 7807 ProblemDetail.',
+        'Missing or invalid JWT bearer token. Returned by the global JwtGuard as an RFC 7807 ProblemDetail. ' +
+        'Detail: "Invalid or expired access token" (matches the shared `ErrorResponseExamples.unauthorized`).',
       type: ProblemDetailDto,
       example: ErrorResponseExamples.unauthorized,
+    }),
+  );
+}
+
+/** 409 from `PlayerAlreadyJoinedError` (Phase 2 — duplicate join). */
+function instanceConflictResponse(): MethodDecorator {
+  return applyDecorators(
+    ApiConflictResponse({
+      description:
+        'Caller is already a player in the instance. Returned as an RFC 7807 ProblemDetail. ' +
+        'Detail: "You have already joined this instance".',
+      type: ProblemDetailDto,
+      example: InstanceErrorResponseExamples.playerAlreadyJoined,
     }),
   );
 }
@@ -162,6 +214,12 @@ export class InstanceController {
   //
   // Global JwtGuard enforces authentication even though the endpoint is public
   // by design. 404 cannot occur (list endpoint).
+  //
+  // Phase 4 (audit issue 2.3): the `limit` default is documented in
+  // `ListInstancesQueryDto` via `@ApiPropertyOptional({ default: 20 })`.
+  // Phase 4 (audit issue 2.9): the cursor payload is base64- (not
+  // base64url-) encoded; the DTO docstring above the `cursor` field
+  // spells that out so generated SDKs decode correctly.
   @Get()
   @instanceUnauthorizedResponse()
   @ApiOkResourceList(InstanceListResponseDto, 'cursor', { description: 'Instance list returned' })
@@ -203,6 +261,7 @@ export class InstanceController {
   })
   @instanceBadRequestResponse()
   @instanceNotFoundResponse()
+  @ApiInstanceIdParam()
   async listInstancePlayers(@Param('id', new ParseUUIDPipe()) instanceId: string) {
     const result = await this.applicationService.listInstancePlayersForController(instanceId);
     return this.presenter.listInstancePlayers(result);
@@ -224,6 +283,7 @@ export class InstanceController {
   })
   @instanceBadRequestResponse()
   @instanceNotFoundResponse()
+  @ApiInstanceIdParam()
   async getInstanceById(@Param('id', new ParseUUIDPipe()) instanceId: string) {
     const result = await this.applicationService.getInstanceByIdForController(instanceId);
     return this.presenter.getInstanceById(result);
@@ -232,26 +292,29 @@ export class InstanceController {
   // ─── POST /instances/{id}/join ─────────────────────────────────────────────
   //
   // `InstanceService.joinInstance` throws:
-  //   - `InstanceNotFoundError` → 404 ProblemDetail
-  //   - `InstanceNotOpenError`  → 400 ProblemDetail
-  //   - `InstanceFullError`     → 400 ProblemDetail
-  // Note: 403 (host check) and 409 (conflict) are NEVER thrown here.
+  //   - `InstanceNotFoundError`     → 404 ProblemDetail
+  //   - `InstanceNotOpenError`      → 400 ProblemDetail
+  //   - `InstanceFullError`         → 400 ProblemDetail (instance at capacity)
+  //   - `PlayerAlreadyJoinedError` → 409 ProblemDetail (duplicate join — Phase 2)
+  // Note: 403 (host check) is NEVER thrown here.
   // 400 can also come from class-validator / ParseUUIDPipe → ProblemDetail.
   @Post(':id/join')
   @Transactional()
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @instanceUnauthorizedResponse()
   @ApiOkResource(JoinInstanceResponseDto, { description: 'Joined successfully' })
+  @instanceConflictResponse()
   @ApiOperation({
     summary: 'Join instance',
     description:
       'Adds the caller as a player in the instance. Requires a valid JWT bearer token. ' +
-      'Possible errors: 400 (instance is not open, instance is full, malformed path UUID, ' +
-      'or body validation failure) and 404 (instance does not exist). ' +
-      'Returns 200 with `{ message: "Joined the instance successfully" }`.',
+      'Possible errors: 400 (instance is not open, instance is at capacity, malformed path UUID, ' +
+      'or body validation failure), 404 (instance does not exist), and 409 (caller is already a ' +
+      'player in the instance). Returns 200 with `{ message: "Joined the instance successfully" }`.',
   })
   @instanceBadRequestResponse()
   @instanceNotFoundResponse()
+  @ApiInstanceIdParam()
   async joinInstance(
     @Param('id', new ParseUUIDPipe()) instanceId: string,
     @CurrentUser() user: JwtPayload,
@@ -262,10 +325,11 @@ export class InstanceController {
 
   // ─── POST /instances/{id}/start ─────────────────────────────────────────────
   //
-  // `InstanceService.startInstance` throws:
+  // `InstanceService.startInstance` throws (Phase 3 — issue 6.1):
   //   - `InstanceNotFoundError`        → 404 ProblemDetail
   //   - `InstanceNotHostError`         → 403 ProblemDetail
-  //   - `InstanceAlreadyStartedError`  → 400 ProblemDetail
+  //   - `InstanceAlreadyStartedError`  → 400 ProblemDetail  (status = 'running')
+  //   - `InstanceAlreadyClosedError`   → 400 ProblemDetail  (status = 'closed'/'finished')
   // 409 is NEVER thrown here.
   @Post(':id/start')
   @instanceUnauthorizedResponse()
@@ -274,13 +338,15 @@ export class InstanceController {
     summary: 'Start instance',
     description:
       'Transitions an open instance into the `running` state. Only the host can start an instance. ' +
-      'Requires a valid JWT bearer token. Possible errors: 400 (instance has already started, ' +
-      'or malformed path UUID), 403 (caller is not the host), 404 (instance does not exist). ' +
+      'Requires a valid JWT bearer token. Possible errors: 400 (instance is already in a non-open ' +
+      'state — see `INSTANCE_ALREADY_STARTED` for `running`, `INSTANCE_ALREADY_CLOSED` for ' +
+      '`closed`/`finished`), 403 (caller is not the host), 404 (instance does not exist). ' +
       'Returns 200 with `{ message: "Instance started" }`.',
   })
-  @instanceBadRequestResponse()
+  @instanceStartBadRequestResponse()
   @instanceForbiddenResponse()
   @instanceNotFoundResponse()
+  @ApiInstanceIdParam()
   async startInstance(
     @Param('id', new ParseUUIDPipe()) instanceId: string,
     @CurrentUser() user: JwtPayload,
@@ -291,10 +357,11 @@ export class InstanceController {
 
   // ─── POST /instances/{id}/close ────────────────────────────────────────────
   //
-  // `InstanceService.closeInstance` throws:
+  // `InstanceService.closeInstance` throws (Phase 3 — issue 7.1):
   //   - `InstanceNotFoundError`        → 404 ProblemDetail
   //   - `InstanceNotHostError`         → 403 ProblemDetail
-  //   - `InstanceAlreadyClosedError`   → 400 ProblemDetail
+  //   - `InstanceAlreadyClosedError`   → 400 ProblemDetail  (status = 'closed')
+  //   - `InstanceAlreadyFinishedError` → 400 ProblemDetail  (status = 'finished')
   // 409 is NEVER thrown here.
   @Post(':id/close')
   @instanceUnauthorizedResponse()
@@ -303,13 +370,15 @@ export class InstanceController {
     summary: 'Close instance',
     description:
       'Transitions the instance into the `closed` state. Only the host can close an instance. ' +
-      'Requires a valid JWT bearer token. Possible errors: 400 (instance is already closed, ' +
+      'Requires a valid JWT bearer token. Possible errors: 400 (instance is already closed ' +
+      '(`INSTANCE_ALREADY_CLOSED`) or already finished (`INSTANCE_ALREADY_FINISHED`), ' +
       'or malformed path UUID), 403 (caller is not the host), 404 (instance does not exist). ' +
       'Returns 200 with `{ message: "Instance closed" }`.',
   })
-  @instanceBadRequestResponse()
+  @instanceStartBadRequestResponse()
   @instanceForbiddenResponse()
   @instanceNotFoundResponse()
+  @ApiInstanceIdParam()
   async closeInstance(
     @Param('id', new ParseUUIDPipe()) instanceId: string,
     @CurrentUser() user: JwtPayload,
@@ -325,6 +394,10 @@ export class InstanceController {
   // pagination shape `{ items, pagination: { limit, hasNextPage, nextCursor } }`,
   // so the envelope contains a `pagination` block — the legacy "D-variant"
   // (where `pagination` was hoisted up to `data`) is no longer used.
+  //
+  // Phase 4 (audit issue 2.9): the leaderboard cursor is base64url-encoded
+  // (unified with the rest of the codebase). The DTO docstring above the
+  // `cursor` field spells that out.
   @Get(':id/leaderboard')
   @instanceUnauthorizedResponse()
   @ApiOkResourceList(InstanceLeaderboardResponseDto, 'cursor', {
@@ -341,13 +414,17 @@ export class InstanceController {
   })
   @instanceBadRequestResponse()
   @instanceNotFoundResponse()
+  @ApiInstanceIdParam()
   async getLeaderboard(
     @Param('id', new ParseUUIDPipe()) instanceId: string,
     @Query() query: GetLeaderboardQueryDto,
   ) {
     const limit = query.limit ?? 20;
+    // Phase 2 (issue 2.4 — leaderboard variant): strict cursor parser
+    // throws `400 BadRequestException` on malformed shape, so the
+    // application service never sees `undefined` cursors.
     const cursor: LeaderboardCursorPayload | undefined = query.cursor
-      ? (decodeBase64JsonCursor<LeaderboardCursorPayload>(query.cursor) as LeaderboardCursorPayload)
+      ? decodeLeaderboardCursor(query.cursor)
       : undefined;
 
     const result = await this.applicationService.getLeaderboardForController({

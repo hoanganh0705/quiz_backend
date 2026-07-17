@@ -1,7 +1,7 @@
 import { Type } from 'class-transformer';
-import { IsInt, IsOptional, IsString, IsUUID, Max, MaxLength, Min } from 'class-validator';
+import { IsIn, IsInt, IsOptional, IsString, IsUUID, Max, MaxLength, Min } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { QUIZ_DIFFICULTIES } from '@/modules/quiz/types/quiz.types';
+import { QUIZ_DIFFICULTIES, type QuizDifficulty } from '@/modules/quiz/types/quiz.types';
 
 export class CreateInstanceDto {
   @ApiProperty({
@@ -62,12 +62,17 @@ export class GetLeaderboardQueryDto {
 
 export class ListInstancesQueryDto {
   @ApiPropertyOptional({
+    // Phase 4 (audit issue 2.9): aligned with the rest of the codebase
+    // (the shared `encodeBase64JsonCursor` utility emits base64url, as
+    // does the leaderboard cursor). The previous docstring called this
+    // "Decode base64" which misled SDK generators that round-trip via
+    // base64url.
     description:
-      'Opaque cursor for cursor-based pagination. Decode base64 to JSON `{ createdAt, instanceId }`. ' +
+      'Opaque cursor for cursor-based pagination. Decode base64url to JSON `{ createdAt, instanceId }`. ' +
       'Pass the `nextCursor` from the previous page response to continue pagination.',
     nullable: true,
     example:
-      'eyJjcmVhdGVkQXQiOiIyMDI2LTA2LTI1VDEwOjMwOjAwLjAwMFoiLCJpbnN0YW5jZUlkIjoiNjYwZTg0MDAtZTI5Yi00MWQ0LWE3MTYtNDQ2NjU1NDQwMDAwIn0=',
+      'eyJjcmVhdGVkQXQiOiIyMDI2LTA2LTI1VDEwOjMwOjAwLjAwMFoiLCJpbnN0YW5jZUlkIjoiNjYwZTg0MDAtZTI5Yi00MWQ0LWE3MTYtNDQ2NjU1NDQwMDAwIn0',
   })
   @IsOptional()
   @IsString()
@@ -95,6 +100,7 @@ export class ListInstancesQueryDto {
     nullable: true,
   })
   @IsOptional()
+  @IsIn(INSTANCE_STATUSES)
   status?: InstanceStatus;
 
   @ApiPropertyOptional({
@@ -104,5 +110,6 @@ export class ListInstancesQueryDto {
     nullable: true,
   })
   @IsOptional()
-  difficulty?: string;
+  @IsIn(QUIZ_DIFFICULTIES)
+  difficulty?: QuizDifficulty;
 }

@@ -42,7 +42,7 @@ const findPathParam = (
 };
 
 const getExample = (pathObj: OpenApiPath, method: string, status: string): unknown => {
-  const op = pathObj[method] as Record<string, unknown> ?? {};
+  const op = (pathObj[method] as Record<string, unknown>) ?? {};
   const responses = (op.responses as Record<string, Record<string, unknown>>) ?? {};
   const respObj = responses[status] ?? {};
   const content = (respObj.content as Record<string, Record<string, unknown>>) ?? {};
@@ -157,19 +157,22 @@ describe('Tournament module — OpenAPI contract', () => {
       ['/api/v1/tournaments/{id}/withdraw', 'post', '200'], // withdrawFromTournament
     ];
 
-    it.each(tournamentOps)('%s [%s] has response example for status %s', (route, method, status) => {
-      const pathObj = spec.paths[route];
-      expect(pathObj).toBeDefined();
+    it.each(tournamentOps)(
+      '%s [%s] has response example for status %s',
+      (route, method, status) => {
+        const pathObj = spec.paths[route];
+        expect(pathObj).toBeDefined();
 
-      const example = getExample(pathObj, method, status);
-      expect(example).toBeDefined();
+        const example = getExample(pathObj, method, status);
+        expect(example).toBeDefined();
 
-      // Each example must be a `{ data, meta }` envelope object
-      const env = example as Record<string, unknown>;
-      expect(env).toHaveProperty('data');
-      expect(env).toHaveProperty('meta');
-      expect(env.meta as Record<string, unknown>).toHaveProperty('timestamp');
-    });
+        // Each example must be a `{ data, meta }` envelope object
+        const env = example as Record<string, unknown>;
+        expect(env).toHaveProperty('data');
+        expect(env).toHaveProperty('meta');
+        expect(env.meta as Record<string, unknown>).toHaveProperty('timestamp');
+      },
+    );
 
     it('lists all 16 tournament operations', () => {
       expect(tournamentOps).toHaveLength(16);
