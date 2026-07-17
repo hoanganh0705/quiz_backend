@@ -12,11 +12,7 @@ import {
   RANKING_DOMAIN_EVENT_BUS,
   type RankingDomainEventBusPort,
 } from '../domain/ports/ranking-event-bus.port';
-import {
-  RANKING_CONSTANTS,
-  RankingPeriod,
-  type ConsistencyReport,
-} from '../domain/types/ranking.types';
+import { RankingPeriod, type ConsistencyReport } from '../domain/types/ranking.types';
 import { PeriodResetService, RankCalculationService } from '../domain/services';
 import {
   RANKING_REPOSITORY_PORT,

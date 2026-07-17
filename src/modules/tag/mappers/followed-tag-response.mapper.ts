@@ -1,4 +1,4 @@
-import type { FollowedTagRow } from '../domain/ports/tag-repository.port';
+import type { FollowedTagRow } from '../domain/ports';
 import type { FollowedTagItemDto } from '../dto/response/parity-response.dto';
 
 export class FollowedTagResponseMapper {

@@ -6,6 +6,10 @@ import {
   ATTEMPT_REPOSITORY_PORT,
   type AttemptRepositoryPort,
 } from './ports/attempt-repository.port';
+import {
+  ATTEMPT_ANSWER_REPOSITORY_PORT,
+  type AttemptAnswerRepositoryPort,
+} from './ports/attempt-answer-repository.port';
 import type { AttemptContextType } from '../types/attempt.types';
 import {
   AttemptNotFoundError,
@@ -58,6 +62,8 @@ export class AttemptCommandService {
   constructor(
     @Inject(ATTEMPT_REPOSITORY_PORT)
     private readonly attemptRepository: AttemptRepositoryPort,
+    @Inject(ATTEMPT_ANSWER_REPOSITORY_PORT)
+    private readonly attemptAnswerRepository: AttemptAnswerRepositoryPort,
     private readonly attemptQueryService: AttemptQueryService,
     @Inject(ATTEMPT_DOMAIN_EVENT_BUS)
     private readonly eventBus: AttemptDomainEventBusPort,
@@ -93,7 +99,7 @@ export class AttemptCommandService {
       throw new QuizNotPublishedError(QUIZ_NOT_PUBLISHED_MESSAGE);
     }
 
-    const questionCount = await this.attemptRepository.countQuestionsByVersionId(
+    const questionCount = await this.attemptAnswerRepository.countQuestionsByVersionId(
       quiz.publishedVersionId,
     );
     if (questionCount < MIN_QUESTIONS_TO_PUBLISH) {
@@ -180,7 +186,7 @@ export class AttemptCommandService {
       throw new AttemptNotActiveError(ATTEMPT_NOT_STARTED_OR_FINISHED_MESSAGE);
     }
 
-    const questionBelongs = await this.attemptRepository.checkQuestionBelongsToVersion(
+    const questionBelongs = await this.attemptAnswerRepository.checkQuestionBelongsToVersion(
       questionId,
       attempt.quizVersionId,
     );
@@ -196,7 +202,7 @@ export class AttemptCommandService {
     }
 
     if (selectedOptionId) {
-      const belongs = await this.attemptRepository.checkAnswerOptionBelongsToQuestion(
+      const belongs = await this.attemptAnswerRepository.checkAnswerOptionBelongsToQuestion(
         questionId,
         selectedOptionId,
       );
@@ -213,9 +219,8 @@ export class AttemptCommandService {
     }
 
     try {
-      const answer = await this.attemptRepository.submitAnswer({
+      const answer = await this.attemptAnswerRepository.submitAnswer({
         attemptId,
-        userId: user.sub,
         questionId,
         selectedOptionId,
         nowIso,
@@ -302,7 +307,7 @@ export class AttemptCommandService {
       throw new AttemptNotActiveError(ATTEMPT_NOT_STARTED_OR_FINISHED_MESSAGE);
     }
 
-    const scoringData = await this.attemptRepository.getAttemptAnswerScoringData(attemptId);
+    const scoringData = await this.attemptAnswerRepository.getAttemptAnswerScoringData(attemptId);
 
     const timeTakenMs = AttemptScoringService.calculateTimeTakenMs(attemptDetail.startedAt, nowIso);
     const scorePercent = AttemptScoringService.calculateScorePercent(
@@ -372,7 +377,6 @@ export class AttemptCommandService {
       });
     }
 
-    // Emit quiz.milestone event if the user crossed a milestone threshold
     const completedCount = await this.attemptRepository.countCompletedAttempts(
       attemptDetail.userId,
     );
@@ -413,9 +417,8 @@ export class AttemptCommandService {
       throw new AttemptNotActiveError(ATTEMPT_NOT_STARTED_OR_FINISHED_MESSAGE);
     }
 
-    await this.attemptRepository.deleteAnswer({
+    await this.attemptAnswerRepository.deleteAnswer({
       attemptId,
-      userId: attempt.userId,
       questionId,
     });
 

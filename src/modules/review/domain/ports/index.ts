@@ -6,12 +6,17 @@ export {
   type ReviewStatsRow,
   type ReviewDashboardRow,
   type ReviewHelpfulVoteRow,
-  type ReviewReportRow,
-  type ReportedReviewRow,
-  type PlatformReportRow,
   type ReviewCursor,
-  type ReportCursor,
   ReviewSort,
   type ReviewRepositoryPort,
   REVIEW_REPOSITORY_PORT,
 } from './review-repository.port';
+
+export {
+  type ReviewReportRow,
+  type ReportedReviewRow,
+  type PlatformReportRow,
+  type ReportCursor,
+  type ReviewReportRepositoryPort,
+  REVIEW_REPORT_REPOSITORY_PORT,
+} from './review-report-repository.port';

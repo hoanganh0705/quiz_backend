@@ -15,6 +15,8 @@ export class TransactionalInterceptor implements NestInterceptor {
       return next.handle();
     }
 
+    // async wrapper required for transaction context
+    // eslint-disable-next-line @typescript-eslint/require-await
     return from(this.context.run(async () => next.handle()));
   }
 }

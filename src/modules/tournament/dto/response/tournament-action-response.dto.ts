@@ -1,4 +1,4 @@
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { ApiProperty } from '@nestjs/swagger';
 import { TOURNAMENT_PARTICIPANT_STATUSES } from '../../types/tournament.types';
 
 export class RegisterTournamentResponseDto {

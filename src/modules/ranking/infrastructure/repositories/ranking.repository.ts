@@ -38,7 +38,6 @@ import {
   RankingMilestone,
   getXpColumn,
   getRankFieldName,
-  getResetColumn,
   getWeekStart,
   getMonthStart,
   getDayStart,
@@ -401,6 +400,8 @@ export class RankingRepository implements RankingRepositoryPort {
 
     // Subquery: users in the input set that have no rows in the
     // work-items table. Single round-trip via a CTE.
+    // Drizzle raw SQL returns untyped rows
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
     const result = await this.db.execute(sql<{ userId: string }>`
       WITH users_with_pending AS (
         SELECT DISTINCT user_id
@@ -1021,6 +1022,8 @@ export class RankingRepository implements RankingRepositoryPort {
     // IDs: DAILY=0, WEEKLY=1, MONTHLY=2
     const periodLockId =
       period === RankingPeriod.DAILY ? 0 : period === RankingPeriod.WEEKLY ? 1 : 2;
+    // Drizzle raw SQL returns untyped rows
+
     await tx.execute(sql`SELECT pg_advisory_xact_lock(${periodLockId})`);
 
     const xpColumn = getXpColumn(period);
@@ -1034,6 +1037,8 @@ export class RankingRepository implements RankingRepositoryPort {
     // plus ON CONFLICT DO NOTHING makes this idempotent: if the process is
     // killed mid-reset and a new reset attempt is made for the same
     // snapshot_date, the archive rows are not duplicated.
+    // Drizzle raw SQL returns untyped rows
+
     await tx.execute(sql`
       INSERT INTO rank_history (user_id, period, snapshot_date, rank, xp, recorded_at)
       SELECT
@@ -1429,6 +1434,8 @@ export class RankingRepository implements RankingRepositoryPort {
   }
 
   private async executeRaw<T>(query: ReturnType<typeof sql>): Promise<RawQueryResult<T>> {
+    // Drizzle raw SQL returns untyped rows
+
     return (await this.db.execute(query)) as unknown as RawQueryResult<T>;
   }
 

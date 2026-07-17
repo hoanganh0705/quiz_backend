@@ -1,4 +1,4 @@
-import type { RankedTagRow } from '../domain/ports/tag-repository.port';
+import type { RankedTagRow } from '../domain/ports';
 import type { RankedTagResponseDto } from '../dto/response/parity-response.dto';
 
 export class RankedTagResponseMapper {

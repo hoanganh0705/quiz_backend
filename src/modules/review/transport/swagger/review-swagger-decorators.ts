@@ -6,7 +6,6 @@ import {
   ApiForbiddenResponse,
   ApiInternalServerErrorResponse,
   ApiNotFoundResponse,
-  ApiOperation,
   ApiParam,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
@@ -17,17 +16,8 @@ import { AUTH_SECURITY_NAME } from '@/core/swagger/swagger.config';
 import { QuizAnalyticsResponseDto } from '@/modules/quiz/dto/response/quiz-analytics.dto';
 
 // Request DTOs
-import {
-  CreateReviewDto,
-  HelpfulReviewDto,
-  ListMyReviewsQueryDto,
-  ListPlatformReportsQueryDto,
-  ListReportedReviewsQueryDto,
-  ListReviewsQueryDto,
-  ReportReviewDto,
-  UpdateReportStatusDto,
-  UpdateReviewDto,
-} from '../../dto/request';
+// Note: These DTOs are exported for type usage but not directly used in decorators
+// The decorators use ApiResponseOptions for documentation
 
 // Response DTOs
 import {
@@ -61,9 +51,7 @@ import {
   REVIEW_HELPFUL_EXAMPLE,
   REVIEW_HELPFUL_REMOVED_EXAMPLE,
   REVIEW_LIST_EXAMPLE,
-  REVIEW_LIST_EMPTY_EXAMPLE,
   REVIEW_MY_FOR_QUIZ_EXAMPLE,
-  REVIEW_MY_FOR_QUIZ_NULL_EXAMPLE,
   REVIEW_REPORTED_EXAMPLE,
   REVIEW_STATS_EXAMPLE,
   REVIEW_UPDATED_EXAMPLE,

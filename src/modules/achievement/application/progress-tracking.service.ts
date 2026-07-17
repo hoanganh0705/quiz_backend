@@ -225,11 +225,11 @@ export class ProgressTrackingService {
     });
   }
 
-  async getMilestones(_badgeId: string): Promise<number[]> {
-    return [...PROGRESS_MILESTONES];
+  getMilestones(): Promise<number[]> {
+    return Promise.resolve([...PROGRESS_MILESTONES]);
   }
 
-  async calculateStreakProgress(
+  calculateStreakProgress(
     _userId: string,
     _badgeId: string,
     streakDays: number,
@@ -249,16 +249,16 @@ export class ProgressTrackingService {
       target = t;
     }
 
-    return {
+    return Promise.resolve({
       current: streakDays,
       target,
       percentage: target > 0 ? Math.min(100, Math.round((streakDays / target) * 100)) : 0,
       lastUpdated: new Date(),
       isComplete: streakDays >= target,
-    };
+    });
   }
 
-  async calculateRankProgress(
+  calculateRankProgress(
     _userId: string,
     _badgeId: string,
     currentRank: number,
@@ -280,13 +280,13 @@ export class ProgressTrackingService {
 
     const percentage = target > 0 ? Math.max(0, Math.round(100 - (currentRank / target) * 100)) : 0;
 
-    return {
+    return Promise.resolve({
       current: currentRank,
       target,
       percentage,
       lastUpdated: new Date(),
       isComplete: currentRank <= target,
-    };
+    });
   }
 
   private determineVisibility(

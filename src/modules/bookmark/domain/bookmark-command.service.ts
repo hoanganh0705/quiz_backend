@@ -4,8 +4,12 @@ import { isPostgresForeignKeyViolation, resolvePgError } from '@/common/utils/db
 import {
   BOOKMARK_REPOSITORY_PORT,
   type BookmarkRepositoryPort,
-  type BookmarkCollectionRow,
 } from './ports/bookmark-repository.port';
+import {
+  BOOKMARK_COLLECTION_REPOSITORY_PORT,
+  type BookmarkCollectionRepositoryPort,
+  type BookmarkCollectionRow,
+} from './ports/bookmark-collection-repository.port';
 import { QUIZ_REPOSITORY_PORT } from '@/modules/quiz/domain/ports';
 import { QuizNotFoundError } from '@/modules/quiz/domain/errors';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
@@ -44,6 +48,8 @@ export class BookmarkCommandService {
   constructor(
     @Inject(BOOKMARK_REPOSITORY_PORT)
     private readonly bookmarkRepository: BookmarkRepositoryPort,
+    @Inject(BOOKMARK_COLLECTION_REPOSITORY_PORT)
+    private readonly collectionRepository: BookmarkCollectionRepositoryPort,
     @Inject(QUIZ_REPOSITORY_PORT)
     private readonly quizRepository: {
       getActiveQuizRecordById: (quizId: string) => Promise<{ quizId: string } | null>;
@@ -58,7 +64,7 @@ export class BookmarkCommandService {
     collectionId: string,
     user: JwtPayload,
   ): Promise<BookmarkCollectionRow> {
-    const collection = await this.bookmarkRepository.getCollectionById(collectionId);
+    const collection = await this.collectionRepository.getCollectionById(collectionId);
 
     if (!collection) {
       throw new BookmarkCollectionNotFoundError(COLLECTION_NOT_FOUND_MESSAGE);
@@ -75,7 +81,7 @@ export class BookmarkCommandService {
     const nowIso = new Date().toISOString();
 
     try {
-      const collection = await this.bookmarkRepository.createCollection({
+      const collection = await this.collectionRepository.createCollection({
         userId: user.sub,
         name,
         description: description ?? null,
@@ -110,7 +116,7 @@ export class BookmarkCommandService {
     const nowIso = new Date().toISOString();
 
     try {
-      const updated = await this.bookmarkRepository.updateCollection({
+      const updated = await this.collectionRepository.updateCollection({
         collectionId,
         name,
         description,
@@ -137,7 +143,7 @@ export class BookmarkCommandService {
   async deleteCollection(collectionId: string, user: JwtPayload) {
     await this.getOwnedCollectionOrThrow(collectionId, user);
 
-    await this.bookmarkRepository.deleteCollection(collectionId);
+    await this.collectionRepository.deleteCollection(collectionId);
 
     this.logger.info({
       event: 'collection_deleted',
@@ -303,7 +309,7 @@ export class BookmarkCommandService {
     targetCollectionId: string,
     quizId: string,
   ): Promise<void> {
-    const sourceCollection = await this.bookmarkRepository.getCollectionById(sourceCollectionId);
+    const sourceCollection = await this.collectionRepository.getCollectionById(sourceCollectionId);
     if (!sourceCollection) {
       throw new BookmarkCollectionNotFoundError(COLLECTION_NOT_FOUND_MESSAGE);
     }
@@ -312,7 +318,7 @@ export class BookmarkCommandService {
       throw new CollectionForbiddenError(COLLECTION_FORBIDDEN_MESSAGE);
     }
 
-    const targetCollection = await this.bookmarkRepository.getCollectionById(targetCollectionId);
+    const targetCollection = await this.collectionRepository.getCollectionById(targetCollectionId);
     if (!targetCollection) {
       throw new BookmarkCollectionNotFoundError(COLLECTION_NOT_FOUND_MESSAGE);
     }
@@ -321,7 +327,6 @@ export class BookmarkCommandService {
       throw new CollectionForbiddenError(COLLECTION_FORBIDDEN_MESSAGE);
     }
 
-    // Check if quiz already exists in target (outside the transaction — fast path)
     const existingTargetBookmark = await this.bookmarkRepository.getBookmarkedQuiz(
       targetCollectionId,
       quizId,
@@ -332,8 +337,6 @@ export class BookmarkCommandService {
 
     const nowIso = new Date().toISOString();
 
-    // verifySource=true moves existence check inside the transaction — prevents
-    // TOCTOU: a concurrent removeBookmark between our check and the delete.
     await this.bookmarkRepository.moveBookmark({
       userId,
       sourceCollectionId,

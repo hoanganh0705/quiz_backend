@@ -4,9 +4,7 @@ import { DRIZZLE } from '@/core/database/drizzle.constants';
 import type { DrizzleDB } from '@/core/database/database.module';
 import { quizzes, categories, quizStats } from '@/core/database/schema';
 import type { AnyPgColumn } from 'drizzle-orm/pg-core';
-import type {
-  CategoryRankingRepositoryPort,
-} from '../../domain/ports/category-ranking-repository.port';
+import type { CategoryRankingRepositoryPort } from '../../domain/ports/category-ranking-repository.port';
 import type { CategoryRow, RankedCategoryRow } from '../../domain/ports/category-repository.types';
 
 const CATEGORY_COLUMNS = {

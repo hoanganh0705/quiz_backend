@@ -5,11 +5,13 @@ import { NotificationApplicationService } from './application/notification-appli
 import { NotificationSchedulerService } from './application/notification-scheduler.service';
 import { NotificationService } from './domain/notification.service';
 import { NotificationRepository } from './infrastructure/repositories/notification.repository';
+import { NotificationPreferencesRepository } from './infrastructure/repositories/notification-preferences.repository';
 import { NotificationController } from './transport/controller/notification.controller';
 import {
   NOTIFICATION_CHANNEL_SERVICE,
   NOTIFICATION_CHANNEL_SERVICE_INSTANCE,
   NOTIFICATION_REPOSITORY_PORT,
+  NOTIFICATION_PREFERENCES_REPOSITORY_PORT,
   NOTIFICATION_DOMAIN_EVENT_BUS,
   SOCIAL_NOTIFICATION_PORT,
   ACHIEVEMENT_NOTIFICATION_PORT,
@@ -53,9 +55,14 @@ import { NotificationPresenter } from './transport/presenters/notification.prese
   ],
   providers: [
     NotificationRepository,
+    NotificationPreferencesRepository,
     {
       provide: NOTIFICATION_REPOSITORY_PORT,
       useExisting: NotificationRepository,
+    },
+    {
+      provide: NOTIFICATION_PREFERENCES_REPOSITORY_PORT,
+      useExisting: NotificationPreferencesRepository,
     },
     NotificationService,
     {
@@ -112,6 +119,7 @@ import { NotificationPresenter } from './transport/presenters/notification.prese
   controllers: [NotificationController],
   exports: [
     NOTIFICATION_REPOSITORY_PORT,
+    NOTIFICATION_PREFERENCES_REPOSITORY_PORT,
     NOTIFICATION_CHANNEL_SERVICE,
     NOTIFICATION_CHANNEL_SERVICE_INSTANCE,
     NOTIFICATION_DOMAIN_EVENT_BUS,
