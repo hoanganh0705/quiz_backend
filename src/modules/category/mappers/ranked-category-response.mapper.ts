@@ -1,4 +1,4 @@
-import type { RankedCategoryRow } from '../domain/ports/category-repository.port';
+import type { RankedCategoryRow } from '../domain/ports';
 import type { RankedCategoryResponseDto } from '../dto/response/ranked-category-response.dto';
 
 /**

@@ -7,8 +7,12 @@ import { CATEGORY_SLUG_EMPTY_MESSAGE, CATEGORY_SLUG_INVALID_MESSAGE } from '../c
 import {
   CATEGORY_DOMAIN_EVENT_BUS,
   CATEGORY_REPOSITORY_PORT,
+  CATEGORY_FOLLOW_REPOSITORY_PORT,
+  CATEGORY_RANKING_REPOSITORY_PORT,
   type CategoryDomainEventBusPort,
   type CategoryRepositoryPort,
+  type CategoryFollowRepositoryPort,
+  type CategoryRankingRepositoryPort,
   type CategoryRow,
   type FollowedCategoryRow,
   type RankedCategoryRow,
@@ -33,6 +37,10 @@ export class CategoryDomainService {
   constructor(
     @Inject(CATEGORY_REPOSITORY_PORT)
     private readonly categoryRepository: CategoryRepositoryPort,
+    @Inject(CATEGORY_FOLLOW_REPOSITORY_PORT)
+    private readonly categoryFollowRepository: CategoryFollowRepositoryPort,
+    @Inject(CATEGORY_RANKING_REPOSITORY_PORT)
+    private readonly categoryRankingRepository: CategoryRankingRepositoryPort,
     @Inject(CATEGORY_DOMAIN_EVENT_BUS)
     private readonly eventBus: CategoryDomainEventBusPort,
     @InjectPinoLogger(CategoryDomainService.name) private readonly logger: PinoLogger,
@@ -93,7 +101,7 @@ export class CategoryDomainService {
 
   async getRelatedCategories(slug: string, query: RelatedCategoriesQuery): Promise<CategoryRow[]> {
     const normalizedSlug = this.normalizeSlug(slug);
-    const relatedCategories = await this.categoryRepository.findRelatedBySlug({
+    const relatedCategories = await this.categoryRankingRepository.findRelatedBySlug({
       slug: normalizedSlug,
       limit: query.limit,
     });
@@ -231,7 +239,7 @@ export class CategoryDomainService {
     const nowIso = new Date().toISOString();
 
     try {
-      const follow = await this.categoryRepository.followCategory({ userId, categoryId, nowIso });
+      const follow = await this.categoryFollowRepository.follow({ userId, categoryId, nowIso });
 
       this.logger.info({
         event: 'category_followed',
@@ -254,7 +262,7 @@ export class CategoryDomainService {
     const nowIso = new Date().toISOString();
 
     try {
-      await this.categoryRepository.unfollowCategory({ userId, categoryId, nowIso });
+      await this.categoryFollowRepository.unfollow({ userId, categoryId, nowIso });
       this.logger.info({ event: 'category_unfollowed', userId, categoryId });
     } catch (error: unknown) {
       this.logger.error({
@@ -279,7 +287,7 @@ export class CategoryDomainService {
     const limit = query.limit ?? 10;
     const cursor = query.cursor ?? null;
 
-    const rows = await this.categoryRepository.listFollowedCategories({
+    const rows = await this.categoryFollowRepository.listFollowedCategories({
       userId,
       limit,
       cursor,
@@ -301,10 +309,10 @@ export class CategoryDomainService {
   }
 
   async getPopularCategories(query: CategoryRankingQuery): Promise<RankedCategoryRow[]> {
-    return this.categoryRepository.getPopularCategories(query.limit);
+    return this.categoryRankingRepository.getPopularCategories(query.limit);
   }
 
   async getTrendingCategories(query: CategoryRankingQuery): Promise<RankedCategoryRow[]> {
-    return this.categoryRepository.getTrendingCategories(query.limit);
+    return this.categoryRankingRepository.getTrendingCategories(query.limit);
   }
 }
