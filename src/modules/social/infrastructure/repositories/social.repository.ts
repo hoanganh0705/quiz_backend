@@ -82,6 +82,7 @@ export class SocialRepository implements SocialRepositoryPort {
       .select({
         friendshipId: friendships.friendshipId,
         requesterId: friendships.requesterId,
+        addresseeId: friendships.addresseeId,
         createdAt: friendships.createdAt,
         username: users.username,
         displayName: userProfiles.displayName,
@@ -102,6 +103,7 @@ export class SocialRepository implements SocialRepositoryPort {
     return rows.map((r) => ({
       friendshipId: r.friendshipId,
       requesterId: r.requesterId,
+      addresseeId: r.addresseeId,
       requesterUsername: r.username,
       requesterDisplayName: r.displayName,
       requesterAvatarUrl: r.avatarUrl,
@@ -135,6 +137,7 @@ export class SocialRepository implements SocialRepositoryPort {
     return rows.map((r) => ({
       friendshipId: r.friendshipId,
       requesterId: r.requesterId,
+      addresseeId: r.addresseeId,
       requesterUsername: r.username,
       requesterDisplayName: r.displayName,
       requesterAvatarUrl: r.avatarUrl,
@@ -1249,9 +1252,9 @@ export class SocialRepository implements SocialRepositoryPort {
       ),
       scored_users AS (
         SELECT
-          u.${users.userId} AS "userId",
-          u.${users.username} AS username,
-          up.${userProfiles.avatarUrl} AS "avatarUrl",
+          u.user_id AS "userId",
+          u.username AS username,
+          up.avatar_url AS "avatarUrl",
           COALESCE(ft.followers, 0)::int AS followers,
           COALESCE(nf.new_followers_last_30_days, 0)::int AS new_followers_last_30_days,
           COALESCE(nfr.new_friendships_last_30_days, 0)::int AS new_friendships_last_30_days,
@@ -1263,12 +1266,12 @@ export class SocialRepository implements SocialRepositoryPort {
             + COALESCE(ac.activity_count_last_30_days, 0) * 2
           )::int AS "trendScore"
         FROM ${users} u
-        LEFT JOIN ${userProfiles} up ON up.${userProfiles.userId} = u.${users.userId}
-        LEFT JOIN follower_totals ft ON ft.user_id = u.${users.userId}
-        LEFT JOIN new_followers nf ON nf.user_id = u.${users.userId}
-        LEFT JOIN new_friendships nfr ON nfr.user_id = u.${users.userId}
-        LEFT JOIN activity_counts ac ON ac.user_id = u.${users.userId}
-        WHERE u.${users.deletedAt} IS NULL
+        LEFT JOIN ${userProfiles} up ON up.user_id = u.user_id
+        LEFT JOIN follower_totals ft ON ft.user_id = u.user_id
+        LEFT JOIN new_followers nf ON nf.user_id = u.user_id
+        LEFT JOIN new_friendships nfr ON nfr.user_id = u.user_id
+        LEFT JOIN activity_counts ac ON ac.user_id = u.user_id
+        WHERE u.deleted_at IS NULL
       )
       SELECT
         "userId",
