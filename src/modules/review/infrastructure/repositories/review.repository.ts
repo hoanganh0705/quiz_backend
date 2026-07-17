@@ -29,10 +29,6 @@ import type {
   PlatformReportRow,
 } from '@/modules/review/domain/ports';
 
-const QUIZ_COLUMNS = quizzes as unknown as {
-  quizId: AnyPgColumn;
-};
-
 const QUIZ_VERSION_COLUMNS = quizVersions as unknown as {
   quizVersionId: AnyPgColumn;
   quizId: AnyPgColumn;

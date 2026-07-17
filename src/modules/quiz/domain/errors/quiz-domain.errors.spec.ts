@@ -13,6 +13,7 @@ import {
   QuizSlugConflictError,
   QuizValidationError,
   QuizVersionImmutableError,
+  QuizVersionNotFoundError,
 } from './quiz-domain.errors';
 
 /**
@@ -79,6 +80,12 @@ const QUIZ_CODES: ReadonlyArray<{
     ctor: QuizVersionImmutableError,
     expectedCode: 'QUIZ_VERSION_IMMUTABLE',
     message: 'This quiz version cannot be modified',
+  },
+  {
+    name: 'QuizVersionNotFoundError',
+    ctor: QuizVersionNotFoundError,
+    expectedCode: 'QUIZ_VERSION_NOT_FOUND',
+    message: 'Quiz version not found',
   },
   {
     name: 'QuizInsufficientQuestionsError',

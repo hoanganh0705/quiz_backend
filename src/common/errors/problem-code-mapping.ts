@@ -159,6 +159,11 @@ export const ProblemCodeMapping: Readonly<Record<string, ProblemCodeInfo>> = {
     title: 'BadRequest',
     typeUri: 'https://api.quiz.local/problems/quiz-version-immutable',
   },
+  QUIZ_VERSION_NOT_FOUND: {
+    status: HttpStatus.NOT_FOUND,
+    title: 'NotFound',
+    typeUri: 'https://api.quiz.local/problems/quiz-version-not-found',
+  },
   QUIZ_INSUFFICIENT_QUESTIONS: {
     status: HttpStatus.UNPROCESSABLE_ENTITY,
     title: 'UnprocessableEntity',
@@ -944,6 +949,18 @@ export const ProblemCodeMapping: Readonly<Record<string, ProblemCodeInfo>> = {
     typeUri: 'https://api.quiz.local/problems/instance-already-closed',
   },
   /**
+   * Thrown when the host tries to close an instance whose lifecycle is
+   * already in the terminal `finished` state. 400 Bad Request.
+   *
+   * Phase 3 (audit issue 7.1): distinguished from `INSTANCE_ALREADY_CLOSED`
+   * so the wire shape no longer conflates `closed` and `finished`.
+   */
+  INSTANCE_ALREADY_FINISHED: {
+    status: HttpStatus.BAD_REQUEST,
+    title: 'BadRequest',
+    typeUri: 'https://api.quiz.local/problems/instance-already-finished',
+  },
+  /**
    * Thrown when the user tries to join an instance a second time. 409
    * Conflict.
    *
@@ -953,11 +970,8 @@ export const ProblemCodeMapping: Readonly<Record<string, ProblemCodeInfo>> = {
    * `exception.message` (default: `'You have already joined this
    * instance'`).
    *
-   * Note: this exception is defined and exported but is currently NOT
-   * thrown by `instance.service.ts` (audit at rev4.5 completion: 0
-   * grep hits). It is kept here as documentation / forward
-   * compatibility — the global filter will resolve the code if a
-   * future call site throws it.
+   * Phase 2 (audit issue 5.1): this code is now thrown from
+   * `instance.service.ts:joinInstance` for the duplicate-join case.
    */
   PLAYER_ALREADY_JOINED: {
     status: HttpStatus.CONFLICT,

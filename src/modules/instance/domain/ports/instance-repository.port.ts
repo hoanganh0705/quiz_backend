@@ -51,7 +51,11 @@ export type InstanceLeaderboardEntry = {
   username: string;
   displayName: string | null;
   avatarUrl: string | null;
-  scorePercent: string | null;
+  // Phase 5 (audit issue 8.7): the repository now casts
+  // `score_percent` to `double precision` so Drizzle returns a JS
+  // number instead of a numeric-string. The previous `parseFloat`
+  // workaround in `instance-response.mapper.ts` is no longer needed.
+  scorePercent: number | null;
   correctCount: number | null;
   timeTakenMs: number | null;
   rank: number;

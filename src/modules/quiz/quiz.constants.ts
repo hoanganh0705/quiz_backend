@@ -32,6 +32,8 @@ export const QUIZ_LINK_IDS_INVALID_MESSAGE = 'One or more category IDs or tag ID
 
 export const QUIZ_VERSION_CONFLICT_MESSAGE = 'Quiz version already exists';
 
+export const QUIZ_VERSION_NOT_FOUND_MESSAGE = 'Quiz version not found';
+
 export const QUIZ_QUESTION_POSITION_CONFLICT_MESSAGE = 'Question position already exists';
 
 export const QUIZ_QUESTION_OPTION_POSITION_CONFLICT_MESSAGE =

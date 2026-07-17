@@ -1,4 +1,5 @@
 import { BaseDomainException } from '@/common/errors/base-domain.exception';
+import { QUIZ_VERSION_NOT_FOUND_MESSAGE } from '../../quiz.constants';
 
 /**
  * Quiz-module namespace marker for all quiz-domain exceptions.
@@ -123,6 +124,24 @@ export class QuizValidationError extends QuizDomainError {
 export class QuizVersionImmutableError extends QuizDomainError {
   readonly code = 'QUIZ_VERSION_IMMUTABLE';
   constructor(message = 'This quiz version cannot be modified') {
+    super(message);
+  }
+}
+
+/**
+ * Thrown when a quiz version that a caller referenced cannot be found.
+ * 404 Not Found.
+ *
+ * Today this is thrown by downstream modules (e.g. `instance` on
+ * `POST /instances` with a non-existent `quizVersionId`) when the
+ * `quiz_versions_quiz_version_id_fkey` foreign-key constraint fires.
+ * The repository translates the raw PG `23503` violation into this
+ * domain error so callers can distinguish "version not found" from a
+ * generic operation failure.
+ */
+export class QuizVersionNotFoundError extends QuizDomainError {
+  readonly code = 'QUIZ_VERSION_NOT_FOUND';
+  constructor(message = QUIZ_VERSION_NOT_FOUND_MESSAGE) {
     super(message);
   }
 }
