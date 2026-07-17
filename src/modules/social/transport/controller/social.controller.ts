@@ -11,7 +11,7 @@ import {
   ParseUUIDPipe,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
-import { ApiTags, ApiOperation, ApiParam, ApiOkResponse } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiParam, ApiOkResponse, ApiQuery, ApiBody } from '@nestjs/swagger';
 import { Public } from '@/common/decorators/public.decorator';
 import { ApiAuthAction, ApiAuthActionNoContent } from '@/common/swagger/swagger-decorators';
 import { ApiOkResource, ApiCreatedResource, ApiOkResourceList } from '@/common/swagger/api-ok';
@@ -44,6 +44,8 @@ import {
   GetSocialSuggestionsQueryDto,
   GetTrendingUsersQueryDto,
   GetUserFollowersQueryDto,
+  RespondFriendRequestDto,
+  BlockUserDto,
 } from '@/modules/social/dto/request';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
@@ -95,6 +97,13 @@ export class SocialController {
   @ApiAuthAction()
   @ApiOperation({ summary: 'Search users by username' })
   @ApiOkResourceList(SearchableUserDto, 'cursor', { description: 'Search results returned' })
+  @ApiQuery({ name: 'q', description: 'Search query', schema: { type: 'string' } })
+  @ApiQuery({
+    name: 'limit',
+    description: 'Maximum number of results',
+    required: false,
+    schema: { type: 'integer', minimum: 1, maximum: 100, default: 20 },
+  })
   searchUsers(
     @CurrentUser() user: JwtPayload,
     @Query('q') query: string,
@@ -237,6 +246,7 @@ export class SocialController {
 
   @Throttle({ default: { limit: 20, ttl: 60_000 } })
   @Post('friend-request/:userId')
+  @ApiAuthAction()
   @ApiCreatedResource(FriendRequestDto, { description: 'Friend request sent' })
   async sendFriendRequest(
     @CurrentUser() user: JwtPayload,
@@ -250,7 +260,7 @@ export class SocialController {
   @Get('friend-requests/incoming')
   @ApiAuthAction()
   @ApiOperation({ summary: 'Get incoming friend requests' })
-  @ApiOkResourceList(FriendRequestDto, 'cursor', {
+  @ApiOkResource(FriendRequestDto, {
     description: 'Incoming friend requests returned',
   })
   async getPendingRequests(@CurrentUser() user: JwtPayload) {
@@ -260,7 +270,7 @@ export class SocialController {
   @Get('friend-requests/outgoing')
   @ApiAuthAction()
   @ApiOperation({ summary: 'Get outgoing friend requests' })
-  @ApiOkResourceList(FriendRequestDto, 'cursor', {
+  @ApiOkResource(FriendRequestDto, {
     description: 'Outgoing friend requests returned',
   })
   async getSentRequests(@CurrentUser() user: JwtPayload) {
@@ -270,12 +280,13 @@ export class SocialController {
   @Throttle({ default: { limit: 20, ttl: 60_000 } })
   @Post('friend-requests/:friendshipId/respond')
   @ApiAuthActionNoContent('Friend request responded to')
+  @ApiBody({ type: RespondFriendRequestDto })
   async respondToFriendRequest(
     @CurrentUser() user: JwtPayload,
     @Param('friendshipId', new ParseUUIDPipe()) friendshipId: string,
-    @Body() body: { accept: boolean },
+    @Body() dto: RespondFriendRequestDto,
   ): Promise<void> {
-    await this.socialService.respondToFriendRequest(user, friendshipId, body.accept);
+    await this.socialService.respondToFriendRequest(user, friendshipId, dto.accept);
   }
 
   @Delete('friend-requests/:friendshipId')
@@ -293,6 +304,18 @@ export class SocialController {
   @ApiAuthAction()
   @ApiOperation({ summary: 'Get my friends' })
   @ApiOkResourceList(FriendDto, 'cursor', { description: 'Friends returned' })
+  @ApiQuery({
+    name: 'limit',
+    description: 'Maximum number of friends to return',
+    required: false,
+    schema: { type: 'integer', minimum: 1, maximum: 100, default: 20 },
+  })
+  @ApiQuery({
+    name: 'cursor',
+    description: 'Opaque cursor for pagination',
+    required: false,
+    schema: { type: 'string' },
+  })
   async getFriends(
     @CurrentUser() user: JwtPayload,
     @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit: number,
@@ -343,6 +366,7 @@ export class SocialController {
 
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @Post('block/:userId')
+  @ApiAuthActionNoContent('User blocked')
   @ApiCreatedResource(MessageResponseDto, { description: 'User blocked' })
   @ApiParam({
     name: 'userId',
@@ -350,12 +374,13 @@ export class SocialController {
     format: 'uuid',
     example: '660e8400-e29b-41d4-a716-446655440000',
   })
+  @ApiBody({ type: BlockUserDto, description: 'Optional reason for blocking' })
   async blockUser(
     @CurrentUser() user: JwtPayload,
     @Param('userId', new ParseUUIDPipe()) blockedId: string,
-    @Body() body: { reason?: string },
+    @Body() dto: BlockUserDto,
   ) {
-    await this.socialService.blockUser(user, blockedId, body.reason);
+    await this.socialService.blockUser(user, blockedId, dto.reason);
     return this.presenter.blockUser({ message: 'User blocked' });
   }
 

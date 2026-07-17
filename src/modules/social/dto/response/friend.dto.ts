@@ -15,6 +15,13 @@ export class FriendRequestDto {
   })
   requesterId!: string;
 
+  @ApiProperty({
+    description: 'User identifier of the person who received the request',
+    format: 'uuid',
+    example: '770e8400-e29b-41d4-a716-446655440001',
+  })
+  addresseeId!: string;
+
   @ApiProperty({ description: 'Username of the requester', example: 'alice_wonder' })
   requesterUsername!: string;
 
