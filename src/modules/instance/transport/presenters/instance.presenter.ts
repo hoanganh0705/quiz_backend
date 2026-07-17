@@ -19,22 +19,22 @@ import type { InstancePlayersResponseDto } from '../../dto/response/instance-pla
  * be a plain object (the interceptor's `isFormattedResponse()` guards on
  * `Object` prototype), so we deliberately project out the DTO fields here
  * instead of forwarding the class instance for the interceptor to re-wrap.
+ *
+ * Implementation note (Phase 2 — audit issue 2.2): delegates to
+ * `ApiResponse.page(...)` so the items array passes through
+ * `normalizeTemporalFields` exactly once, matching every other
+ * paginated endpoint on the wire.
  */
 const wrapPaginatedDto = <T>(payload: {
   items: readonly T[];
   pagination: { limit: number; hasNextPage: boolean; nextCursor: string | null };
-}): ApiResponseEnvelope<T[]> => ({
-  data: [...payload.items],
-  meta: {
-    timestamp: new Date().toISOString(),
-    pagination: {
-      kind: 'cursor' as const,
-      limit: payload.pagination.limit,
-      hasNextPage: payload.pagination.hasNextPage,
-      nextCursor: payload.pagination.nextCursor,
-    },
-  },
-});
+}): ApiResponseEnvelope<T[]> =>
+  ApiResponse.page<T>([...payload.items], {
+    kind: 'cursor',
+    limit: payload.pagination.limit,
+    hasNextPage: payload.pagination.hasNextPage,
+    nextCursor: payload.pagination.nextCursor,
+  });
 
 /**
  * Presenter for the instance module. Wraps every application-service response

@@ -213,7 +213,11 @@ export const ApiQuizReviewStatsResponses = (): MethodDecorator =>
 export const ApiCreatorQuizReviewAnalyticsResponses = (): MethodDecorator =>
   applyDecorators(
     ApiBearerAuth(AUTH_SECURITY_NAME),
-    resourceOk(QuizAnalyticsResponseDto, 'Quiz review analytics returned', REVIEW_ANALYTICS_EXAMPLE),
+    resourceOk(
+      QuizAnalyticsResponseDto,
+      'Quiz review analytics returned',
+      REVIEW_ANALYTICS_EXAMPLE,
+    ),
     ApiUnauthorizedResponse(problem.unauthorized(reviewUnauthorizedExample)),
     ApiForbiddenResponse(problem.forbidden(reviewForbiddenAnalyticsExample)),
     ApiNotFoundResponse(problem.notFound(quizNotFoundExample, 'Quiz not found')),

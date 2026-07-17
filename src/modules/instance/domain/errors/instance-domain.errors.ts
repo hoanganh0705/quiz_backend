@@ -2,6 +2,7 @@ import { BaseDomainException } from '@/common/errors/base-domain.exception';
 import {
   INSTANCE_ALREADY_CLOSED_MESSAGE,
   INSTANCE_ALREADY_STARTED_MESSAGE,
+  INSTANCE_ALREADY_FINISHED_MESSAGE,
   INSTANCE_FULL_MESSAGE,
   INSTANCE_NOT_FOUND_MESSAGE,
   INSTANCE_NOT_HOST_MESSAGE,
@@ -131,6 +132,24 @@ export class InstanceAlreadyClosedError extends InstanceDomainError {
 }
 
 /**
+ * Thrown when the host tries to close an instance whose lifecycle is
+ * already in the terminal `finished` state (e.g. archived via a
+ * soft-delete flow). 400 Bad Request.
+ *
+ * Phase 3 (audit issue 7.1): previously conflated with
+ * `InstanceAlreadyClosedError`, which made the wire shape ambiguous for
+ * callers inspecting `extensions.code`. The two are now distinct:
+ *   - `closed`   → user-closed (re-creatable by the host)
+ *   - `finished` → terminal DB enum value, used for tombstoning
+ */
+export class InstanceAlreadyFinishedError extends InstanceDomainError {
+  readonly code = 'INSTANCE_ALREADY_FINISHED';
+  constructor(message = INSTANCE_ALREADY_FINISHED_MESSAGE) {
+    super(message);
+  }
+}
+
+/**
  * Thrown when the user tries to join an instance a second time. 409
  * Conflict.
  *
@@ -140,11 +159,11 @@ export class InstanceAlreadyClosedError extends InstanceDomainError {
  * `exception.message` (default: `'You have already joined this
  * instance'`).
  *
- * Note: this exception is defined and exported but is currently NOT
- * thrown by `instance.service.ts` (audit at rev4.5 completion: 0
- * grep hits). It is kept here as documentation / forward
- * compatibility — the global filter will resolve the code if a
- * future call site throws it.
+ * Phase 2 (audit issue 5.1): this exception is now thrown from
+ * `instance.service.ts:joinInstance` when the duplicate case is
+ * detected (the repository returns `{ joined: false }` for both
+ * "duplicate" and "capacity reached", but Phase 2 routes capacity to
+ * `InstanceFullError` and duplicates here — 409 instead of 400).
  */
 export class PlayerAlreadyJoinedError extends InstanceDomainError {
   readonly code = 'PLAYER_ALREADY_JOINED';

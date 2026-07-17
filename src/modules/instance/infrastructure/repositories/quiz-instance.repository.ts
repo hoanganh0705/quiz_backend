@@ -3,7 +3,11 @@ import { and, count, desc, eq, sql } from 'drizzle-orm';
 import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 import { DRIZZLE } from '@/core/database/drizzle.constants';
 import type { DrizzleDB } from '@/core/database/database.module';
-import { isPostgresUniqueViolation } from '@/common/utils/db-error.util';
+import {
+  isPostgresForeignKeyViolation,
+  isPostgresUniqueViolation,
+} from '@/common/utils/db-error.util';
+import { QuizVersionNotFoundError } from '@/modules/quiz/domain/errors';
 import {
   TransactionalContext,
   TRANSACTIONAL_CONTEXT,
@@ -50,25 +54,42 @@ export class QuizInstanceRepository implements QuizInstanceRepositoryPort {
     private readonly transactionalContext?: TransactionalContext,
   ) {}
 
+  /**
+   * Translate raw Postgres errors raised while inserting a `quiz_instances`
+   * row. Today only one FK violation is recoverable into a domain error:
+   * missing `quiz_versions.quiz_version_id` → 404 `QUIZ_VERSION_NOT_FOUND`.
+   * Other unique/foreign-key violations bubble up unchanged.
+   */
+  private mapCreateInstanceError(error: unknown): never {
+    if (isPostgresForeignKeyViolation(error)) {
+      throw new QuizVersionNotFoundError();
+    }
+    throw error;
+  }
+
   async createInstance(params: {
     quizVersionId: string;
     hostUserId: string;
     maxPlayers: number | null;
     nowIso: string;
   }): Promise<{ instanceId: string }> {
-    const [result] = await this.db
-      .insert(quizInstances)
-      .values({
-        quizVersionId: params.quizVersionId,
-        hostUserId: params.hostUserId,
-        maxPlayers: params.maxPlayers,
-        status: 'open',
-        createdAt: params.nowIso,
-        updatedAt: params.nowIso,
-      })
-      .returning({ instanceId: quizInstances.instanceId });
+    try {
+      const [result] = await this.db
+        .insert(quizInstances)
+        .values({
+          quizVersionId: params.quizVersionId,
+          hostUserId: params.hostUserId,
+          maxPlayers: params.maxPlayers,
+          status: 'open',
+          createdAt: params.nowIso,
+          updatedAt: params.nowIso,
+        })
+        .returning({ instanceId: quizInstances.instanceId });
 
-    return { instanceId: result.instanceId };
+      return { instanceId: result.instanceId };
+    } catch (error) {
+      this.mapCreateInstanceError(error);
+    }
   }
 
   async createInstanceWithHost(params: {
@@ -79,10 +100,12 @@ export class QuizInstanceRepository implements QuizInstanceRepositoryPort {
   }): Promise<{ instanceId: string; hostPlayerId: string }> {
     const existingTx = this.transactionalContext?.getDbClient() as DrizzleDB | null;
 
-    if (existingTx) {
-      // Already inside a transaction (e.g., a @Transactional controller handler
-      // opened an outer transaction) — reuse it as a savepoint.
-      const [instance] = await existingTx
+    const executeCreate = async (
+      tx: unknown,
+    ): Promise<{ instanceId: string; hostPlayerId: string }> => {
+      const db = tx as DrizzleDB;
+
+      const [instance] = await db
         .insert(quizInstances)
         .values({
           quizVersionId: params.quizVersionId,
@@ -94,7 +117,7 @@ export class QuizInstanceRepository implements QuizInstanceRepositoryPort {
         })
         .returning({ instanceId: quizInstances.instanceId });
 
-      const [player] = await existingTx
+      const [player] = await db
         .insert(quizInstancePlayers)
         .values({
           instanceId: instance.instanceId,
@@ -105,33 +128,19 @@ export class QuizInstanceRepository implements QuizInstanceRepositoryPort {
         .returning({ instancePlayerId: quizInstancePlayers.instancePlayerId });
 
       return { instanceId: instance.instanceId, hostPlayerId: player.instancePlayerId };
+    };
+
+    try {
+      if (existingTx) {
+        // Already inside a transaction (e.g., a @Transactional controller handler
+        // opened an outer transaction) — reuse it as a savepoint.
+        return await executeCreate(existingTx);
+      }
+
+      return await this.db.transaction(async (tx) => executeCreate(tx));
+    } catch (error) {
+      this.mapCreateInstanceError(error);
     }
-
-    return this.db.transaction(async (tx) => {
-      const [instance] = await tx
-        .insert(quizInstances)
-        .values({
-          quizVersionId: params.quizVersionId,
-          hostUserId: params.hostUserId,
-          maxPlayers: params.maxPlayers,
-          status: 'open',
-          createdAt: params.nowIso,
-          updatedAt: params.nowIso,
-        })
-        .returning({ instanceId: quizInstances.instanceId });
-
-      const [player] = await tx
-        .insert(quizInstancePlayers)
-        .values({
-          instanceId: instance.instanceId,
-          userId: params.hostUserId,
-          status: 'joined',
-          joinedAt: params.nowIso,
-        })
-        .returning({ instancePlayerId: quizInstancePlayers.instancePlayerId });
-
-      return { instanceId: instance.instanceId, hostPlayerId: player.instancePlayerId };
-    });
   }
 
   async getInstanceById(
@@ -385,51 +394,83 @@ export class QuizInstanceRepository implements QuizInstanceRepositoryPort {
     items: import('@/modules/instance/domain/ports').InstanceLeaderboardEntry[];
     hasNextPage: boolean;
   }> {
-    const conditions = [eq(quizInstancePlayers.instanceId, params.instanceId)];
+    // The leaderboard needs a windowed `row_number()` for ranking, but
+    // Postgres forbids using a window function directly inside a `WHERE`
+    // clause. Wrap the windowed projection in a CTE, then filter the
+    // cursor pagination (`rowRank`, `instancePlayerId`) on the outer
+    // query. `rowRank` is also cast to `int` so the wire shape matches
+    // the DTO/contract (number), instead of the Drizzle/PG default
+    // serialization as a string.
+    const ranked = this.db.$with('leaderboard_ranked').as(
+      this.db
+        .select({
+          instancePlayerId: quizInstancePlayers.instancePlayerId,
+          instanceId: quizInstancePlayers.instanceId,
+          userId: quizInstancePlayers.userId,
+          attemptId: quizInstancePlayers.attemptId,
+          status: quizInstancePlayers.status,
+          joinedAt: quizInstancePlayers.joinedAt,
+          leftAt: quizInstancePlayers.leftAt,
+          username: users.username,
+          displayName: userProfiles.displayName,
+          avatarUrl: userProfiles.avatarUrl,
+          scorePercent: sql<number | null>`${quizAttempts.scorePercent}::double precision`,
+          correctCount: quizAttempts.correctCount,
+          timeTakenMs: quizAttempts.timeTakenMs,
+          rowRank: sql<number>`row_number() over (
+            order by ${quizAttempts.scorePercent} desc nulls last,
+                     ${quizAttempts.timeTakenMs} asc nulls last,
+                     ${quizInstances.instanceId} asc,
+                     /* Phase 2 (issue 8.4): stable tiebreaker. When every
+                        sort key above is NULL or tied (e.g. no attempt
+                        submitted yet), Postgres previously returned an
+                        implementation-defined order across requests. Use
+                        joinedAt ASC so the leaderboard is deterministic
+                        even for players who have not finished their attempt. */
+                     ${quizInstancePlayers.joinedAt} asc
+          )::int`.as('row_rank'),
+        })
+        .from(quizInstancePlayers)
+        .innerJoin(users, eq(quizInstancePlayers.userId, users.userId))
+        .leftJoin(userProfiles, eq(users.userId, userProfiles.userId))
+        .leftJoin(quizAttempts, eq(quizInstancePlayers.attemptId, quizAttempts.attemptId))
+        .innerJoin(quizInstances, eq(quizInstancePlayers.instanceId, quizInstances.instanceId))
+        .where(eq(quizInstancePlayers.instanceId, params.instanceId)),
+    );
 
+    const outerConditions = [eq(ranked.instanceId, params.instanceId)];
     if (params.cursor) {
       // Cursor = last item of previous page (rank, instancePlayerId).
       // Rows after the cursor: rank > cursor.rank, OR same rank but instancePlayerId > cursor.instancePlayerId.
-      conditions.push(
+      outerConditions.push(
         sql`(
-          (row_rank > ${params.cursor.rank})
-          OR (row_rank = ${params.cursor.rank} AND ${quizInstancePlayers.instancePlayerId} > ${params.cursor.instancePlayerId})
+          (${ranked.rowRank} > ${params.cursor.rank})
+          OR (${ranked.rowRank} = ${params.cursor.rank} AND ${ranked.instancePlayerId} > ${params.cursor.instancePlayerId})
         )`,
       );
     }
 
     const rows = await this.db
+      .with(ranked)
       .select({
-        instancePlayerId: quizInstancePlayers.instancePlayerId,
-        instanceId: quizInstancePlayers.instanceId,
-        userId: quizInstancePlayers.userId,
-        attemptId: quizInstancePlayers.attemptId,
-        status: quizInstancePlayers.status,
-        joinedAt: quizInstancePlayers.joinedAt,
-        leftAt: quizInstancePlayers.leftAt,
-        username: users.username,
-        displayName: userProfiles.displayName,
-        avatarUrl: userProfiles.avatarUrl,
-        scorePercent: quizAttempts.scorePercent,
-        correctCount: quizAttempts.correctCount,
-        timeTakenMs: quizAttempts.timeTakenMs,
-        rowRank: sql<number>`row_number() over (
-          order by ${quizAttempts.scorePercent} desc nulls last,
-                   ${quizAttempts.timeTakenMs} asc nulls last,
-                   ${quizInstances.instanceId} asc
-        )`.as('row_rank'),
+        instancePlayerId: ranked.instancePlayerId,
+        instanceId: ranked.instanceId,
+        userId: ranked.userId,
+        attemptId: ranked.attemptId,
+        status: ranked.status,
+        joinedAt: ranked.joinedAt,
+        leftAt: ranked.leftAt,
+        username: ranked.username,
+        displayName: ranked.displayName,
+        avatarUrl: ranked.avatarUrl,
+        scorePercent: ranked.scorePercent,
+        correctCount: ranked.correctCount,
+        timeTakenMs: ranked.timeTakenMs,
+        rowRank: ranked.rowRank,
       })
-      .from(quizInstancePlayers)
-      .innerJoin(users, eq(quizInstancePlayers.userId, users.userId))
-      .leftJoin(userProfiles, eq(users.userId, userProfiles.userId))
-      .leftJoin(quizAttempts, eq(quizInstancePlayers.attemptId, quizAttempts.attemptId))
-      .innerJoin(quizInstances, eq(quizInstancePlayers.instanceId, quizInstances.instanceId))
-      .where(and(...conditions))
-      .orderBy(
-        desc(quizAttempts.scorePercent),
-        quizAttempts.timeTakenMs,
-        quizInstancePlayers.instancePlayerId,
-      )
+      .from(ranked)
+      .where(and(...outerConditions))
+      .orderBy(ranked.rowRank, ranked.instancePlayerId)
       .limit(params.limit + 1);
 
     const hasNextPage = rows.length > params.limit;

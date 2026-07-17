@@ -71,7 +71,7 @@ export class InstanceResponseMapper {
       displayName: entry.displayName,
       avatarUrl: entry.avatarUrl,
       status: entry.status as QuizInstancePlayerStatus,
-      scorePercent: entry.scorePercent !== null ? parseFloat(entry.scorePercent) : null,
+      scorePercent: entry.scorePercent,
       correctCount: entry.correctCount,
       timeTakenMs: entry.timeTakenMs,
     };
