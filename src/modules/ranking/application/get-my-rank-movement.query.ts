@@ -6,6 +6,7 @@ import {
   type RankingRepositoryPort,
 } from '../domain/ports/ranking-repository.port';
 import type { RankMovementResponseDto } from '../dto/response/leaderboard-history.dto';
+import { RANK_TREND_VALUES } from '../dto/response/leaderboard-entry.dto';
 
 @Injectable()
 export class GetMyRankMovementQueryHandler {
@@ -36,7 +37,7 @@ export class GetMyRankMovementQueryHandler {
         previousRank: null,
         currentRank: null,
         change: null,
-        direction: 'unknown',
+        direction: RANK_TREND_VALUES[3], // 'new'
       };
     }
 
@@ -45,7 +46,7 @@ export class GetMyRankMovementQueryHandler {
         previousRank: null,
         currentRank,
         change: null,
-        direction: 'unknown',
+        direction: RANK_TREND_VALUES[3], // 'new'
       };
     }
 
@@ -59,7 +60,7 @@ export class GetMyRankMovementQueryHandler {
     };
   }
 
-  private getDirection(change: number): RankMovementResponseDto['direction'] {
+  private getDirection(change: number): (typeof RANK_TREND_VALUES)[number] {
     if (change > 0) {
       return 'up';
     }
@@ -68,6 +69,6 @@ export class GetMyRankMovementQueryHandler {
       return 'down';
     }
 
-    return 'stable';
+    return 'same';
   }
 }

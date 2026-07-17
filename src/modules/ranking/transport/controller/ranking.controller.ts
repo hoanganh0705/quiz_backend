@@ -165,8 +165,8 @@ export class RankingController {
     description:
       'Returns the global leaderboard with optional period filter. ' +
       'Supports offset-based pagination via `limit` (1–500, default 100) and `offset`. ' +
-      "The response includes the authenticated user's rank position if a valid JWT is provided. " +
-      'No 404 or 403 is possible on this endpoint.',
+      'No 404 or 403 is possible on this endpoint. ' +
+      'Note: `userPosition` is always `null` on this public variant.',
   })
   @ApiOkResource(LeaderboardResponseDto, { description: 'Leaderboard returned' })
   @rankingBadRequestResponse()
@@ -189,7 +189,8 @@ export class RankingController {
     summary: 'Get leaderboard distribution',
     description:
       'Returns distribution statistics for the active leaderboard in the selected period. ' +
-      'Groups users into percentile buckets (Top 1%, Top 5%, etc.).',
+      'Groups users into percentile buckets (Top 1%, Top 5%, etc.). ' +
+      'Public endpoint — accessible without authentication.',
   })
   @ApiOkResource(LeaderboardDistributionResponseDto, {
     description: 'Leaderboard distribution returned',

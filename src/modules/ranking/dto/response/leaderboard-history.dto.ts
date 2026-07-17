@@ -4,6 +4,7 @@ import {
   ApiTimestampProperty,
   ApiUuidProperty,
 } from '@/common/decorators/api-uuid-property.decorator';
+import { RANK_TREND_VALUES } from './leaderboard-entry.dto';
 
 export class RankingHistoryItemDto {
   @ApiProperty({ description: 'Snapshot date in YYYY-MM-DD format', example: '2026-06-01' })
@@ -103,10 +104,10 @@ export class RankMovementResponseDto {
 
   @ApiProperty({
     description: 'Movement direction',
-    enum: ['up', 'down', 'stable', 'unknown'],
+    enum: RANK_TREND_VALUES,
     example: 'up',
   })
-  direction!: 'up' | 'down' | 'stable' | 'unknown';
+  direction!: (typeof RANK_TREND_VALUES)[number];
 }
 
 export const MILESTONE_ENUM = [
