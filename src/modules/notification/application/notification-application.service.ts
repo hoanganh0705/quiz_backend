@@ -82,8 +82,9 @@ export class NotificationApplicationService {
     cursor?: { createdAt: string; notificationId: string } | null,
     unreadOnly?: boolean,
     includeArchived?: boolean,
+    type?: string,
   ): Promise<PaginatedResult<NotificationResponseDto>> {
-    const params: NotificationListParams = { limit, cursor, unreadOnly, includeArchived };
+    const params: NotificationListParams = { limit, cursor, unreadOnly, includeArchived, type: type as NotificationListParams['type'] };
 
     const notifications = await this.notificationService.getNotifications(user.sub, params);
 

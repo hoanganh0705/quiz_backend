@@ -49,7 +49,7 @@ export class NotificationChannelService implements NotificationChannelServiceIns
    */
   async invalidatePreferencesCache(userId: string): Promise<void> {
     if (!this.cache) return;
-    await this.cache.set(this.cacheKeyPrefix + userId, '', 0);
+    await this.cache.set(this.cacheKeyPrefix + userId, '', 1);
   }
 
   async send(params: {
