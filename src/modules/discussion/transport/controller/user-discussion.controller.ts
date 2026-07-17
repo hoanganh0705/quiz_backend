@@ -1,5 +1,5 @@
 import { Controller, Get, Param, ParseUUIDPipe, Query } from '@nestjs/common';
-import { ApiTags } from '@nestjs/swagger';
+import { ApiTags, ApiParam } from '@nestjs/swagger';
 import { Public } from '@/common/decorators/public.decorator';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
@@ -136,6 +136,7 @@ export class UserDiscussionController {
   @ApiOkResourceList(MyDiscussionsResponseDto, 'cursor', {
     description: 'User discussions returned',
   })
+  @ApiParam({ name: 'userId', format: 'uuid' })
   async listDiscussionsByUser(
     @Param('userId', new ParseUUIDPipe()) userId: string,
     @Query() query: ListMyDiscussionsQueryDto,
@@ -152,6 +153,7 @@ export class UserDiscussionController {
   @ApiOkResourceList(MyCommentsResponseDto, 'cursor', {
     description: 'User comments returned',
   })
+  @ApiParam({ name: 'userId', format: 'uuid' })
   async listCommentsByUser(
     @Param('userId', new ParseUUIDPipe()) userId: string,
     @Query() query: ListMyCommentsQueryDto,
@@ -168,6 +170,7 @@ export class UserDiscussionController {
   @ApiOkResource(PublicDiscussionProfileResponseDto, {
     description: 'Public discussion profile returned',
   })
+  @ApiParam({ name: 'userId', format: 'uuid' })
   async getPublicDiscussionProfile(@Param('userId', new ParseUUIDPipe()) userId: string) {
     const result = await this.discussionApplicationService.getPublicDiscussionProfile(userId);
     return this.presenter.getPublicDiscussionProfile(result);

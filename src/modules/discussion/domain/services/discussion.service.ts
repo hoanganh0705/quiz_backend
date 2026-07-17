@@ -1000,9 +1000,7 @@ export class DiscussionService {
     }
 
     await this.repo.transactionally(async (tx) => {
-      const [existingVote] = await Promise.all([
-        this.repo.getUserVoteForUpdate(userId, targetType, targetId, tx),
-      ]);
+      const existingVote = await this.repo.getUserVoteForUpdate(userId, targetType, targetId, tx);
 
       if (existingVote === value) {
         await this.repo.removeVote({ userId, targetType, targetId }, tx);
@@ -1040,7 +1038,7 @@ export class DiscussionService {
 
   async removeVote(params: {
     userId: string;
-    targetType: 'thread' | 'comment' | 'reply';
+    targetType: 'thread' | 'comment';
     targetId: string;
   }): Promise<void> {
     const { userId, targetType, targetId } = params;

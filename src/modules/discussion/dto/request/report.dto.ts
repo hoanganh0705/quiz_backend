@@ -33,6 +33,7 @@ export class CreateReportDto {
 
   @ApiPropertyOptional({
     description: 'Additional details about the report',
+    type: String,
     maxLength: 1000,
     example: 'This comment contains repeated promotional links.',
     nullable: true,

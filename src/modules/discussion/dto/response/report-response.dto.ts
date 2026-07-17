@@ -1,7 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 const REPORT_STATUS_VALUES = ['open', 'reviewed', 'dismissed', 'actioned'] as const;
-const REPORT_TARGET_TYPE_VALUES = ['thread', 'comment', 'reply'] as const;
+const REPORT_TARGET_TYPE_VALUES = ['thread', 'comment'] as const;
 
 export class ReportResponseDto {
   @ApiProperty({
