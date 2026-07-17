@@ -71,7 +71,7 @@ export class ConsistencyReportIssueDto {
 
   @ApiPropertyOptional({
     description: 'Affected user identifier',
-    type: String,
+    format: 'uuid',
     nullable: true,
   })
   userId!: string | null | undefined;

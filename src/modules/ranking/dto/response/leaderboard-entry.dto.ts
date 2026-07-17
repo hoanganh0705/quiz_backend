@@ -1,4 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { ApiUuidProperty } from '@/common/decorators/api-uuid-property.decorator';
 
 export const RANK_TREND_VALUES = ['up', 'down', 'same', 'new'] as const;
 export type RankTrend = (typeof RANK_TREND_VALUES)[number];
@@ -13,7 +14,7 @@ export class LeaderboardEntryDto {
   @ApiProperty({ description: 'Dense rank (no gaps for ties)', example: 1 })
   denseRank!: number;
 
-  @ApiProperty({ description: 'User ID', example: '550e8400-e29b-41d4-a716-446655440000' })
+  @ApiUuidProperty({ description: 'User ID' })
   userId!: string;
 
   @ApiProperty({ description: 'User display name', example: 'QuizMaster' })
@@ -149,6 +150,14 @@ export class GlobalRankingDto {
   allTime!: UserRankPositionDto | null;
 }
 
+/**
+ * @deprecated Use `PeakRanksResponseDto` instead.
+ * This number-only shape was replaced by the richer `{ rank, achievedAt }`
+ * shape so that `/leaderboard/me` and `/leaderboard/me/peak-ranks` expose
+ * the same data structure. Kept temporarily for backwards compatibility.
+ *
+ * @see PeakRanksResponseDto
+ */
 export class PeakRanksDto {
   @ApiPropertyOptional({
     description: 'Best weekly rank achieved',
