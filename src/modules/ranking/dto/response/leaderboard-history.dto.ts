@@ -1,4 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { ApiUuidProperty } from '@/common/decorators/api-uuid-property.decorator';
 
 export class RankingHistoryItemDto {
   @ApiProperty({ description: 'Snapshot date in YYYY-MM-DD format', example: '2026-06-01' })
@@ -17,10 +18,7 @@ export class RankingHistoryResponseDto {
 }
 
 export class PublicRankingHistoryResponseDto {
-  @ApiProperty({
-    description: 'User identifier',
-    example: '550e8400-e29b-41d4-a716-446655440000',
-  })
+  @ApiUuidProperty({ description: 'User identifier' })
   userId!: string;
 
   @ApiProperty({ description: 'Public username', example: 'Anh' })

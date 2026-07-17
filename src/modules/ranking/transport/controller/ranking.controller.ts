@@ -12,12 +12,21 @@
  * completion criterion.
  */
 
-import { Controller, Get, Param, Query, UseGuards, applyDecorators } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Param,
+  ParseUUIDPipe,
+  Query,
+  UseGuards,
+  applyDecorators,
+} from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import {
   ApiBadRequestResponse,
   ApiBearerAuth,
   ApiOperation,
+  ApiParam,
   ApiTags,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
@@ -29,6 +38,7 @@ import { AUTH_SECURITY_NAME } from '@/core/swagger/swagger.config';
 import { LeaderboardService } from '../../domain/services/leaderboard.service';
 import { UserRankService } from '../../domain/services/user-rank.service';
 import {
+  LeaderboardPeriodEnum,
   LeaderboardQueryDto,
   LeaderboardDistributionQueryDto,
   MyRankingHistoryQueryDto,
@@ -100,6 +110,26 @@ function rankingBadRequestResponse(): MethodDecorator {
         'and emitted as RFC 7807 `ProblemDetailDto`.',
       type: ProblemDetailDto,
       example: ErrorResponseExamples.badRequest,
+    }),
+  );
+}
+
+/**
+ * Documents a UUID path parameter and feeds it through `ParseUUIDPipe`.
+ *
+ * Without this, a value like `/leaderboard/not-a-uuid` reached the SQL layer
+ * and produced a 500 (`invalid input syntax for type uuid`). The pipe turns
+ * it into a 400 at the boundary, and the `@ApiParam` annotation teaches
+ * generated SDKs / Swagger UI to render `format: uuid` on the parameter
+ * (see audit L-02).
+ */
+function rankingUserIdParam(): MethodDecorator {
+  return applyDecorators(
+    ApiParam({
+      name: 'userId',
+      format: 'uuid',
+      required: true,
+      description: 'User identifier (UUIDv7).',
     }),
   );
 }
@@ -189,7 +219,7 @@ export class RankingController {
   @rankingBadRequestResponse()
   async getTopMovers(@Query() query: TopMoversQueryDto) {
     const result = await this.getTopMoversQueryHandler.execute({
-      period: mapRankingPeriodEnumToDomain(query.period ?? RankingPeriodEnum.DAILY),
+      period: mapRankingPeriodEnumToDomain(query.period ?? LeaderboardPeriodEnum.WEEKLY),
       limit: query.limit ?? 10,
     });
     return this.presenter.getTopMovers(result);
@@ -332,7 +362,7 @@ export class RankingController {
   async getMyRankMovement(@CurrentUser() user: JwtPayload, @Query() query: RankMovementQueryDto) {
     const result = await this.getMyRankMovementQueryHandler.execute({
       userId: user.sub,
-      period: mapRankingPeriodEnumToDomain(query.period ?? RankingPeriodEnum.DAILY),
+      period: mapRankingPeriodEnumToDomain(query.period ?? LeaderboardPeriodEnum.WEEKLY),
     });
     return this.presenter.getMyRankMovement(result);
   }
@@ -389,9 +419,11 @@ export class RankingController {
   // ─── GET /leaderboard/:userId ───────────────────────────────────────────
   //
   // Public endpoint. No 401/403/404. For unknown users, builds empty rank response.
+  // `:userId` must be a UUID; ParseUUIDPipe rejects non-UUIDs at the boundary.
   @Get(':userId')
   @Public()
   @Throttle({ default: { limit: 30, ttl: 60_000 } })
+  @rankingUserIdParam()
   @ApiOperation({
     summary: 'Get user rank information',
     description:
@@ -400,7 +432,7 @@ export class RankingController {
       'Unlike the `/leaderboard/me` endpoint, this is public and requires no authentication.',
   })
   @ApiOkResource(UserRankResponseDto, { description: 'User rank returned' })
-  async getUserRank(@Param('userId') userId: string) {
+  async getUserRank(@Param('userId', ParseUUIDPipe) userId: string) {
     const result = await this.userRankService.getUserRank(userId);
     return this.presenter.getUserRank(result);
   }
@@ -411,6 +443,7 @@ export class RankingController {
   @Get(':userId/history')
   @Public()
   @Throttle({ default: { limit: 30, ttl: 60_000 } })
+  @rankingUserIdParam()
   @ApiOperation({
     summary: 'Get public user ranking history',
     description:
@@ -424,7 +457,7 @@ export class RankingController {
   })
   @rankingBadRequestResponse()
   async getUserRankingHistory(
-    @Param('userId') userId: string,
+    @Param('userId', ParseUUIDPipe) userId: string,
     @Query() query: MyRankingHistoryQueryDto,
   ) {
     const result = await this.getUserRankingHistoryQueryHandler.execute({
@@ -442,6 +475,7 @@ export class RankingController {
   @Get(':userId/rank')
   @Public()
   @Throttle({ default: { limit: 30, ttl: 60_000 } })
+  @rankingUserIdParam()
   @ApiOperation({
     summary: 'Get user rank for specific period',
     description:
@@ -451,7 +485,10 @@ export class RankingController {
   })
   @ApiOkResource(UserRankSummaryDto, { description: 'User rank returned' })
   @rankingBadRequestResponse()
-  async getUserRankForPeriod(@Param('userId') userId: string, @Query() query: LeaderboardQueryDto) {
+  async getUserRankForPeriod(
+    @Param('userId', ParseUUIDPipe) userId: string,
+    @Query() query: LeaderboardQueryDto,
+  ) {
     const result = await this.userRankService.getUserRankForPeriod(
       userId,
       query.period ?? RankingPeriodEnum.ALL_TIME,

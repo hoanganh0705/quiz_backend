@@ -21,22 +21,23 @@ import {
   getXpField,
   enumToPeriod,
 } from '../types/ranking.types';
-import { RankingPeriodEnum } from '../../dto/request/leaderboard-query.dto';
+import { LeaderboardPeriodEnum, RankingPeriodEnum } from '../../dto/request/leaderboard-query.dto';
 import type {
   UserRankResponseDto,
   GlobalRankingDto,
   PeakRankDto,
-  PeakRanksDto,
   PeakRanksResponseDto,
   UserBadgesDto,
   UserRankSummaryDto,
 } from '../../dto';
+import { PeriodResetService } from './period-reset.service';
 
 @Injectable()
 export class UserRankService {
   constructor(
     @Inject(RANKING_REPOSITORY_PORT)
     private readonly rankingRepository: RankingRepositoryPort,
+    private readonly periodResetService: PeriodResetService,
     @InjectPinoLogger(UserRankService.name)
     private readonly logger: PinoLogger,
   ) {}
@@ -89,7 +90,7 @@ export class UserRankService {
    */
   async getUserRankForPeriod(
     userId: string,
-    periodEnum: RankingPeriodEnum,
+    periodEnum: RankingPeriodEnum | LeaderboardPeriodEnum,
   ): Promise<UserRankSummaryDto | undefined> {
     const period = enumToPeriod(periodEnum);
 
@@ -120,13 +121,8 @@ export class UserRankService {
       nextRankXp,
       trend: 'same',
       trendAmount: null,
-      period:
-        period === RankingPeriod.WEEKLY
-          ? 'weekly'
-          : period === RankingPeriod.MONTHLY
-            ? 'monthly'
-            : 'all_time',
-      resetInSeconds: 0,
+      period: this.toPeriodValue(period),
+      resetInSeconds: this.computeResetInSeconds(period),
     };
   }
 
@@ -203,16 +199,28 @@ export class UserRankService {
 
   /**
    * Get peak rank info (inlined from peak-rank service).
+   *
+   * Aligned with the `/leaderboard/me/peak-ranks` response shape so the two
+   * surfaces expose the same data structure (rank + achievedAt). Daily is
+   * included here because `user_ranking` tracks `peak_daily_rank` and
+   * `peak_daily_rank_achieved_at` even though daily leaderboards are not
+   * publicly queryable yet.
    */
   private getPeakRankInfo(ranking: {
+    peakDailyRank: number | null;
+    peakDailyRankAchievedAt: string | null;
     peakWeeklyRank: number | null;
+    peakWeeklyRankAchievedAt: string | null;
     peakMonthlyRank: number | null;
+    peakMonthlyRankAchievedAt: string | null;
     peakAllTimeRank: number | null;
-  }): PeakRanksDto {
+    peakAllTimeRankAchievedAt: string | null;
+  }): PeakRanksResponseDto {
     return {
-      weekly: ranking.peakWeeklyRank,
-      monthly: ranking.peakMonthlyRank,
-      allTime: ranking.peakAllTimeRank,
+      daily: this.toPeakRankDto(ranking.peakDailyRank, ranking.peakDailyRankAchievedAt),
+      weekly: this.toPeakRankDto(ranking.peakWeeklyRank, ranking.peakWeeklyRankAchievedAt),
+      monthly: this.toPeakRankDto(ranking.peakMonthlyRank, ranking.peakMonthlyRankAchievedAt),
+      allTime: this.toPeakRankDto(ranking.peakAllTimeRank, ranking.peakAllTimeRankAchievedAt),
     };
   }
 
@@ -257,6 +265,7 @@ export class UserRankService {
         allTime: null,
       },
       peakRanks: {
+        daily: null,
         weekly: null,
         monthly: null,
         allTime: null,
@@ -268,5 +277,39 @@ export class UserRankService {
         isActive: false,
       },
     };
+  }
+
+  /**
+   * Map a domain `RankingPeriod` to the public wire value advertised by
+   * `UserRankSummaryDto.period`. Mirrors the same labels used by
+   * `LeaderboardResponseDto.period.type` and `PeriodInfoDto.type`.
+   */
+  private toPeriodValue(period: RankingPeriod): UserRankSummaryDto['period'] {
+    switch (period) {
+      case RankingPeriod.WEEKLY:
+        return 'weekly';
+      case RankingPeriod.MONTHLY:
+        return 'monthly';
+      case RankingPeriod.ALL_TIME:
+        return 'all_time';
+      case RankingPeriod.DAILY:
+      default:
+        return 'all_time';
+    }
+  }
+
+  /**
+   * Seconds until the next period reset for the supplied period.
+   * Returns 0 for `all_time` because there is no reset schedule.
+   */
+  private computeResetInSeconds(period: RankingPeriod): number {
+    if (period === RankingPeriod.ALL_TIME) {
+      return 0;
+    }
+
+    const now = new Date();
+    const nextReset = this.periodResetService.getNextResetTime(period, now);
+
+    return Math.max(0, Math.floor((nextReset.getTime() - now.getTime()) / 1000));
   }
 }

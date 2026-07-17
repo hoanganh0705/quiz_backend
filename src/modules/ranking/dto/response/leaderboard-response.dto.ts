@@ -5,9 +5,9 @@ import {
   PaginationDto,
   UserRankPositionDto,
   GlobalRankingDto,
-  PeakRanksDto,
   UserBadgesDto,
 } from './leaderboard-entry.dto';
+import { PeakRanksResponseDto } from './leaderboard-history.dto';
 
 export class LeaderboardResponseDto {
   @ApiProperty({
@@ -50,10 +50,10 @@ export class UserRankResponseDto {
   global!: GlobalRankingDto;
 
   @ApiProperty({
-    description: 'Best ranks ever achieved',
-    type: () => PeakRanksDto,
+    description: 'Best ranks ever achieved (rank + when they were achieved)',
+    type: () => PeakRanksResponseDto,
   })
-  peakRanks!: PeakRanksDto;
+  peakRanks!: PeakRanksResponseDto;
 
   @ApiPropertyOptional({
     description: 'Last activity timestamp',

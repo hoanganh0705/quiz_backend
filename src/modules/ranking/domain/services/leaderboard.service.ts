@@ -45,7 +45,7 @@ import {
 } from '../types/ranking.types';
 import { RANKING_REPOSITORY_PORT } from '../ports/ranking-repository.port';
 import { PeriodResetService } from './period-reset.service';
-import { RankingPeriodEnum } from '../../dto/request/leaderboard-query.dto';
+import { LeaderboardPeriodEnum, RankingPeriodEnum } from '../../dto/request/leaderboard-query.dto';
 import type {
   LeaderboardResponseDto,
   LeaderboardEntryDto,
@@ -94,7 +94,7 @@ export class LeaderboardService implements OnModuleInit, OnModuleDestroy {
    * Get global leaderboard for a specific period.
    */
   async getGlobalLeaderboard(params: {
-    period: RankingPeriodEnum;
+    period: RankingPeriodEnum | LeaderboardPeriodEnum;
     limit: number;
     offset: number;
     currentUserId?: string;
@@ -150,7 +150,7 @@ export class LeaderboardService implements OnModuleInit, OnModuleDestroy {
    */
   async getUserPosition(
     userId: string,
-    periodEnum: RankingPeriodEnum,
+    periodEnum: RankingPeriodEnum | LeaderboardPeriodEnum,
   ): Promise<UserRankPositionDto | undefined> {
     const period = enumToPeriod(periodEnum);
 
