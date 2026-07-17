@@ -23,6 +23,7 @@ export class PublicAchievementProfileResponseDto {
 
   @ApiProperty({
     description: 'Best public rank achieved by the user',
+    type: 'number',
     example: 12,
     nullable: true,
   })

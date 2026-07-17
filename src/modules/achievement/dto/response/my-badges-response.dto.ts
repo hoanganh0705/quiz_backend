@@ -7,7 +7,7 @@ export class MyBadgeItemDto {
   @ApiProperty({ description: 'Badge display name' })
   name!: string;
 
-  @ApiProperty({ nullable: true, description: 'Badge description' })
+  @ApiProperty({ type: 'string', nullable: true, description: 'Badge description' })
   description!: string | null;
 
   @ApiProperty({ description: 'Badge rarity tier' })
