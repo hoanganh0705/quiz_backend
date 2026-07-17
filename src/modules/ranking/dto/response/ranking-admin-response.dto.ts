@@ -1,4 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { ApiOptionalTimestampProperty } from '@/common/decorators/api-uuid-property.decorator';
 import { RankingPeriodEnum } from '../../dto/request/leaderboard-query.dto';
 
 export class RankingStatusResponseDto {
@@ -14,10 +15,8 @@ export class RankingStatusResponseDto {
   })
   dirtyQueueSize!: number;
 
-  @ApiPropertyOptional({
+  @ApiOptionalTimestampProperty({
     description: 'ISO 8601 timestamp of the next scheduled consistency check',
-    type: String,
-    nullable: true,
   })
   nextConsistencyCheck!: string | null;
 
@@ -71,7 +70,7 @@ export class ConsistencyReportIssueDto {
 
   @ApiPropertyOptional({
     description: 'Affected user identifier',
-    type: String,
+    format: 'uuid',
     nullable: true,
   })
   userId!: string | null | undefined;
@@ -84,10 +83,10 @@ export class ConsistencyReportIssueDto {
 
   @ApiProperty({
     description: 'Severity level of the issue',
-    enum: ['low', 'medium', 'high'],
+    enum: ['low', 'medium', 'high', 'critical'],
     example: 'medium',
   })
-  severity!: 'low' | 'medium' | 'high';
+  severity!: 'low' | 'medium' | 'high' | 'critical';
 }
 
 export class ConsistencyReportResponseDto {

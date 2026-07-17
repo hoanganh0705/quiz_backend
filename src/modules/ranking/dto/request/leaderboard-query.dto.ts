@@ -9,15 +9,37 @@ export enum RankingPeriodEnum {
   ALL_TIME = 'all_time',
 }
 
+/**
+ * Periods supported by the *leaderboard* endpoints (`/leaderboard`,
+ * `/leaderboard/distribution`, `/leaderboard/me/rank`, `/leaderboard/:userId/rank`,
+ * `/leaderboard/me/nearby`).
+ *
+ * Note: `daily` is intentionally **not** exposed here. The `user_ranking`
+ * snapshot only tracks `weekly` / `monthly` / `all_time` XP — daily XP is
+ * captured separately and the repository's `getXpColumn` rejects
+ * `RankingPeriod.DAILY`. Keeping this enum in sync with what the repository
+ * can serve means invalid `period` values are rejected at the controller
+ * boundary (400) instead of crashing inside the SQL layer (500).
+ *
+ * Admin endpoints (`/admin/ranking/recalculate`, `/admin/ranking/reset`)
+ * continue to use the full `RankingPeriodEnum` because they *write* to
+ * the daily XP fields.
+ */
+export enum LeaderboardPeriodEnum {
+  WEEKLY = RankingPeriodEnum.WEEKLY,
+  MONTHLY = RankingPeriodEnum.MONTHLY,
+  ALL_TIME = RankingPeriodEnum.ALL_TIME,
+}
+
 export class LeaderboardQueryDto {
   @ApiPropertyOptional({
     description: 'Ranking period',
-    enum: RankingPeriodEnum,
-    default: RankingPeriodEnum.ALL_TIME,
+    enum: LeaderboardPeriodEnum,
+    default: LeaderboardPeriodEnum.ALL_TIME,
   })
-  @IsEnum(RankingPeriodEnum)
+  @IsEnum(LeaderboardPeriodEnum)
   @IsOptional()
-  period?: RankingPeriodEnum = RankingPeriodEnum.ALL_TIME;
+  period?: LeaderboardPeriodEnum = LeaderboardPeriodEnum.ALL_TIME;
 
   @ApiPropertyOptional({
     description: 'Number of items to return',
@@ -76,23 +98,23 @@ export class MyRankingHistoryQueryDto {
 export class RankMovementQueryDto {
   @ApiPropertyOptional({
     description: 'Ranking movement period',
-    enum: RankingPeriodEnum,
-    default: RankingPeriodEnum.DAILY,
+    enum: LeaderboardPeriodEnum,
+    default: LeaderboardPeriodEnum.WEEKLY,
   })
-  @IsEnum(RankingPeriodEnum)
+  @IsEnum(LeaderboardPeriodEnum)
   @IsOptional()
-  period?: RankingPeriodEnum = RankingPeriodEnum.DAILY;
+  period?: LeaderboardPeriodEnum = LeaderboardPeriodEnum.WEEKLY;
 }
 
 export class TopMoversQueryDto {
   @ApiPropertyOptional({
     description: 'Top movers period',
-    enum: [RankingPeriodEnum.DAILY, RankingPeriodEnum.WEEKLY, RankingPeriodEnum.MONTHLY],
-    default: RankingPeriodEnum.DAILY,
+    enum: [LeaderboardPeriodEnum.WEEKLY, LeaderboardPeriodEnum.MONTHLY],
+    default: LeaderboardPeriodEnum.WEEKLY,
   })
-  @IsEnum(RankingPeriodEnum)
+  @IsEnum(LeaderboardPeriodEnum)
   @IsOptional()
-  period?: RankingPeriodEnum = RankingPeriodEnum.DAILY;
+  period?: LeaderboardPeriodEnum = LeaderboardPeriodEnum.WEEKLY;
 
   @ApiPropertyOptional({
     description: 'Number of top movers to return',
@@ -111,12 +133,12 @@ export class TopMoversQueryDto {
 export class NearbyRanksQueryDto {
   @ApiPropertyOptional({
     description: 'Nearby ranks period',
-    enum: RankingPeriodEnum,
-    default: RankingPeriodEnum.ALL_TIME,
+    enum: LeaderboardPeriodEnum,
+    default: LeaderboardPeriodEnum.ALL_TIME,
   })
-  @IsEnum(RankingPeriodEnum)
+  @IsEnum(LeaderboardPeriodEnum)
   @IsOptional()
-  period?: RankingPeriodEnum = RankingPeriodEnum.ALL_TIME;
+  period?: LeaderboardPeriodEnum = LeaderboardPeriodEnum.ALL_TIME;
 
   @ApiPropertyOptional({
     description: 'Number of ranks above and below to return',
@@ -135,10 +157,10 @@ export class NearbyRanksQueryDto {
 export class LeaderboardDistributionQueryDto {
   @ApiPropertyOptional({
     description: 'Leaderboard distribution period',
-    enum: RankingPeriodEnum,
-    default: RankingPeriodEnum.ALL_TIME,
+    enum: LeaderboardPeriodEnum,
+    default: LeaderboardPeriodEnum.ALL_TIME,
   })
-  @IsEnum(RankingPeriodEnum)
+  @IsEnum(LeaderboardPeriodEnum)
   @IsOptional()
-  period?: RankingPeriodEnum = RankingPeriodEnum.ALL_TIME;
+  period?: LeaderboardPeriodEnum = LeaderboardPeriodEnum.ALL_TIME;
 }

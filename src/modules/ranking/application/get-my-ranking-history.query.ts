@@ -6,7 +6,7 @@ import {
   type RankingRepositoryPort,
 } from '../domain/ports/ranking-repository.port';
 import { RankingPeriod } from '../domain/types/ranking.types';
-import { RankingPeriodEnum } from '../dto/request/leaderboard-query.dto';
+import { LeaderboardPeriodEnum, RankingPeriodEnum } from '../dto/request/leaderboard-query.dto';
 import type {
   RankingHistoryItemDto,
   RankingHistoryResponseDto,
@@ -66,7 +66,9 @@ export class GetMyRankingHistoryQueryHandler {
   }
 }
 
-export const mapRankingPeriodEnumToDomain = (period: RankingPeriodEnum): RankingPeriod => {
+export const mapRankingPeriodEnumToDomain = (
+  period: RankingPeriodEnum | LeaderboardPeriodEnum,
+): RankingPeriod => {
   switch (period) {
     case RankingPeriodEnum.DAILY:
       return RankingPeriod.DAILY;

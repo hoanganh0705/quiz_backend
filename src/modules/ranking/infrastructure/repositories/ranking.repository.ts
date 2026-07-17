@@ -8,7 +8,7 @@
 import { Inject, Injectable, Optional } from '@nestjs/common';
 import { DRIZZLE } from '@/core/database/drizzle.constants';
 import { NodePgDatabase } from 'drizzle-orm/node-postgres';
-import { eq, sql, desc, and, inArray, gte, lte, asc } from 'drizzle-orm';
+import { eq, sql, desc, and, inArray, gte, lte, asc, gt } from 'drizzle-orm';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import * as schema from '@/core/database/schema';
 import {
@@ -99,10 +99,11 @@ export class RankingRepository implements RankingRepositoryPort {
         ur.is_dirty as "isDirty",
         ur.updated_at as "updatedAt",
         u.username as "username",
-        u.display_name as "displayName",
-        u.avatar_url as "avatarUrl"
+        up.display_name as "displayName",
+        up.avatar_url as "avatarUrl"
       FROM user_ranking ur
       INNER JOIN users u ON u.user_id = ur.user_id
+      LEFT JOIN user_profiles up ON up.user_id = u.user_id
       WHERE ur.user_id = ${userId}
       LIMIT 1
     `);
@@ -518,12 +519,16 @@ export class RankingRepository implements RankingRepositoryPort {
     // Use raw SQL with DENSE_RANK() for proper tie handling
     // DENSE_RANK() gives the same rank to tied users with no gaps
     // RANK() gives the same rank to tied users with gaps
+    // `display_name` and `avatar_url` live on `user_profiles`, not `users`,
+    // so we LEFT JOIN the profile table. The fall back to `username` happens
+    // in the application layer (`transformLeaderboardEntries`) — the SQL
+    // returns NULL when a profile is missing and lets the DTO surface that.
     const results = await this.executeRaw<LeaderboardRow>(sql`
       SELECT
         u.user_id as "userId",
-        u.display_name as "displayName",
+        up.display_name as "displayName",
         u.username as "username",
-        u.avatar_url as "avatarUrl",
+        up.avatar_url as "avatarUrl",
         ur.${sql.raw(xpColumn)} as xp,
         RANK() OVER (
           ORDER BY ur.${sql.raw(xpColumn)} DESC, u.created_at ASC
@@ -533,6 +538,7 @@ export class RankingRepository implements RankingRepositoryPort {
         ) as "denseRank"
       FROM user_ranking ur
       INNER JOIN users u ON u.user_id = ur.user_id
+      LEFT JOIN user_profiles up ON up.user_id = u.user_id
       WHERE ur.${sql.raw(xpColumn)} > 0
         AND u.deleted_at IS NULL
       ORDER BY ur.${sql.raw(xpColumn)} DESC, u.created_at ASC
@@ -749,6 +755,9 @@ export class RankingRepository implements RankingRepositoryPort {
   }> {
     const xpColumn = this.getXpColumn(params.period);
 
+    // `current_user` is a reserved identifier in PostgreSQL (CURRENT_USER
+    // returns the current session user), so we name the CTE `target_user`
+    // to keep the planner happy.
     const results = await this.executeRaw<
       NearbyRankEntryRow & { position: 'above' | 'me' | 'below' }
     >(sql`
@@ -765,7 +774,7 @@ export class RankingRepository implements RankingRepositoryPort {
         WHERE ur.${sql.raw(xpColumn)} > 0
           AND u.deleted_at IS NULL
       ),
-      current_user AS (
+      target_user AS (
         SELECT *
         FROM ranked_users
         WHERE "userId" = ${params.userId}
@@ -776,13 +785,13 @@ export class RankingRepository implements RankingRepositoryPort {
         ranked_users.username AS username,
         ranked_users.xp AS xp,
         CASE
-          WHEN ranked_users."userId" = current_user."userId" THEN 'me'
-          WHEN ranked_users.rank < current_user.rank THEN 'above'
+          WHEN ranked_users."userId" = target_user."userId" THEN 'me'
+          WHEN ranked_users.rank < target_user.rank THEN 'above'
           ELSE 'below'
         END AS position
       FROM ranked_users
-      CROSS JOIN current_user
-      WHERE ranked_users.rank BETWEEN current_user.rank - ${params.radius} AND current_user.rank + ${params.radius}
+      CROSS JOIN target_user
+      WHERE ranked_users.rank BETWEEN target_user.rank - ${params.radius} AND target_user.rank + ${params.radius}
       ORDER BY ranked_users.rank ASC, ranked_users.username ASC
     `);
 
@@ -1015,8 +1024,6 @@ export class RankingRepository implements RankingRepositoryPort {
     await tx.execute(sql`SELECT pg_advisory_xact_lock(${periodLockId})`);
 
     const xpColumn = getXpColumn(period);
-    const rankFieldName = getRankFieldName(period);
-    const resetColumn = getResetColumn(period);
     const resetAtIso = resetAt.toISOString();
 
     const snapshotDate = getDayStart(resetAt);
@@ -1045,19 +1052,93 @@ export class RankingRepository implements RankingRepositoryPort {
     `);
 
     // Reset XP and rank for all active users in one atomic UPDATE.
+    //
+    // Both the SET and WHERE clauses are dispatched on the period so we use
+    // typed drizzle column references. The previous implementation used a
+    // dynamic-key SET (`{ [xpColumn]: 0 }`) plus a raw `sql\`${column} > 0\``
+    // WHERE template. Drizzle silently dropped the dynamic SET keys (they're
+    // not typed column references), and the raw WHERE template emitted a
+    // malformed `where  > 0` clause under certain paths, causing the manual
+    // `/admin/ranking/reset` endpoint to 500 (see audit L-04).
+    const resetFields = this.getResetFields(period);
     const resetResult = (await tx
       .update(userRanking)
-      .set({
-        [xpColumn]: 0,
-        [rankFieldName]: null,
-        [resetColumn]: resetAtIso,
-        updatedAt: resetAtIso,
-      })
-      .where(sql`${userRanking[xpColumn as keyof typeof userRanking]} > 0`)) as unknown as {
+      .set(resetFields.set(resetAtIso))
+      .where(gt(resetFields.xpColumn, 0))) as unknown as {
       rowCount?: number | null;
     };
 
     return resetResult.rowCount ?? 0;
+  }
+
+  /**
+   * Period-specific reset fields and target column for `resetPeriod`.
+   *
+   * Returns:
+   *   - `xpColumn` — the typed XP column to compare in the WHERE clause
+   *   - `set(resetAtIso)` — a builder that produces the typed SET clause for
+   *     this period, zeroing the XP column, clearing the rank column, and
+   *     stamping the reset timestamp + `updatedAt`.
+   *
+   * The return type is intentionally narrowed to `allTimeXp` / `allTimeRank`
+   * / `lastWeeklyResetAt` literals because drizzle's `PgColumn` carries its
+   * `name` as a literal type parameter, and TS can't unify different columns
+   * into a discriminated union. Each branch casts to a common base.
+   */
+  private getResetFields(period: RankingPeriod): {
+    xpColumn: typeof userRanking.allTimeXp;
+    set: (resetAtIso: string) => Record<string, unknown>;
+  } {
+    switch (period) {
+      case RankingPeriod.WEEKLY: {
+        const xpColumn = userRanking.weeklyXp as unknown as typeof userRanking.allTimeXp;
+        return {
+          xpColumn,
+          set: (resetAtIso) => ({
+            weeklyXp: 0,
+            weeklyRank: null,
+            lastWeeklyResetAt: resetAtIso,
+            updatedAt: resetAtIso,
+          }),
+        };
+      }
+      case RankingPeriod.MONTHLY: {
+        const xpColumn = userRanking.monthlyXp as unknown as typeof userRanking.allTimeXp;
+        return {
+          xpColumn,
+          set: (resetAtIso) => ({
+            monthlyXp: 0,
+            monthlyRank: null,
+            lastMonthlyResetAt: resetAtIso,
+            updatedAt: resetAtIso,
+          }),
+        };
+      }
+      case RankingPeriod.DAILY: {
+        const xpColumn = userRanking.dailyXp as unknown as typeof userRanking.allTimeXp;
+        return {
+          xpColumn,
+          set: (resetAtIso) => ({
+            dailyXp: 0,
+            dailyRank: null,
+            lastDailyResetAt: resetAtIso,
+            updatedAt: resetAtIso,
+          }),
+        };
+      }
+      case RankingPeriod.ALL_TIME:
+      default: {
+        const xpColumn = userRanking.allTimeXp;
+        return {
+          xpColumn,
+          set: (resetAtIso) => ({
+            allTimeXp: 0,
+            allTimeRank: null,
+            updatedAt: resetAtIso,
+          }),
+        };
+      }
+    }
   }
 
   async getUsersWithRanking(): Promise<string[]> {
