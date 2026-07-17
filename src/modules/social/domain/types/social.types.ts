@@ -29,6 +29,7 @@ export interface UserFollow {
 export interface FriendRequest {
   friendshipId: string;
   requesterId: string;
+  addresseeId: string;
   requesterUsername: string;
   requesterDisplayName: string | null;
   requesterAvatarUrl: string | null;
