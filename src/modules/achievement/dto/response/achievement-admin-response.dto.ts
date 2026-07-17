@@ -48,12 +48,14 @@ export class AdminAchievementHistoryItemDto {
 
   @ApiProperty({
     description: 'ISO 8601 timestamp when the badge expires',
+    type: 'string',
     nullable: true,
   })
   expiresAt!: string | null;
 
   @ApiProperty({
     description: 'ISO 8601 timestamp when the badge was revoked',
+    type: 'string',
     nullable: true,
   })
   revokedAt!: string | null;

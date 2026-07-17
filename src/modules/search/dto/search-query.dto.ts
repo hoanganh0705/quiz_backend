@@ -1,10 +1,10 @@
 import { Type } from 'class-transformer';
-import { ApiPropertyOptional } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsInt, IsString, Max, Min, MinLength } from 'class-validator';
 import { Transform } from 'class-transformer';
 
 export class SearchQueryDto {
-  @ApiPropertyOptional({
+  @ApiProperty({
     description: 'Search term used across users, quizzes, and discussion threads',
     example: 'nestjs advanced',
     minLength: 2,

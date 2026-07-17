@@ -9,6 +9,7 @@ export class BadgeCatalogItemResponseDto {
 
   @ApiProperty({
     description: 'Badge description',
+    type: 'string',
     example: 'Reach Top 10 ranking',
     nullable: true,
   })
