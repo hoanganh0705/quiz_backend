@@ -9,6 +9,12 @@ export const RANK_TREND_VALUES = ['up', 'down', 'same', 'new'] as const;
 export type RankTrend = (typeof RANK_TREND_VALUES)[number];
 
 export const RANK_DIRECTION_VALUES = ['up', 'down', 'stable', 'unknown'] as const;
+/**
+ * @deprecated Use `RankTrend` from `leaderboard-entry.dto` instead.
+ *   `RANK_DIRECTION_VALUES` will be removed in the next major release.
+ *   Migrate consumers to `RANK_TREND_VALUES` = `['up', 'down', 'same', 'new']`.
+ *   Mapping: `stable` → `same`; `unknown` → `new`.
+ */
 export type RankDirection = (typeof RANK_DIRECTION_VALUES)[number];
 
 export class LeaderboardEntryDto {
