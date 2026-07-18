@@ -58,9 +58,15 @@ export class MyTournamentHistoryPaginationDto {
 }
 
 export class MyTournamentHistoryResponseDto {
-  @ApiProperty({ type: () => [MyTournamentHistoryItemDto] })
+  @ApiProperty({
+    description: 'Tournament participation history for the authenticated user, newest first',
+    type: () => [MyTournamentHistoryItemDto],
+  })
   items!: MyTournamentHistoryItemDto[];
 
-  @ApiProperty({ type: () => MyTournamentHistoryPaginationDto })
+  @ApiProperty({
+    description: 'Cursor pagination metadata',
+    type: () => MyTournamentHistoryPaginationDto,
+  })
   pagination!: MyTournamentHistoryPaginationDto;
 }

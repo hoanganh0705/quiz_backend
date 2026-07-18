@@ -1,10 +1,10 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class SearchUserResultDto {
-  @ApiProperty({ example: '550e8400-e29b-41d4-a716-446655440000' })
+  @ApiProperty({ description: 'User identifier', example: '550e8400-e29b-41d4-a716-446655440000' })
   userId!: string;
 
-  @ApiProperty({ example: 'nestjs_dev' })
+  @ApiProperty({ description: 'Username (handle)', example: 'nestjs_dev' })
   username!: string;
 
   @ApiPropertyOptional({
@@ -17,34 +17,46 @@ export class SearchUserResultDto {
 }
 
 export class SearchQuizResultDto {
-  @ApiProperty({ example: '660e8400-e29b-41d4-a716-446655440000' })
+  @ApiProperty({ description: 'Quiz identifier', example: '660e8400-e29b-41d4-a716-446655440000' })
   quizId!: string;
 
-  @ApiProperty({ example: 'Advanced NestJS Patterns' })
+  @ApiProperty({ description: 'Quiz title', example: 'Advanced NestJS Patterns' })
   title!: string;
 
-  @ApiProperty({ example: 'advanced-nestjs-patterns' })
+  @ApiProperty({ description: 'Kebab-case quiz slug', example: 'advanced-nestjs-patterns' })
   slug!: string;
 }
 
 export class SearchDiscussionResultDto {
-  @ApiProperty({ example: '770e8400-e29b-41d4-a716-446655440000' })
+  @ApiProperty({
+    description: 'Discussion thread identifier',
+    example: '770e8400-e29b-41d4-a716-446655440000',
+  })
   threadId!: string;
 
-  @ApiProperty({ example: 'How to structure providers in NestJS?' })
+  @ApiProperty({ description: 'Thread title', example: 'How to structure providers in NestJS?' })
   title!: string;
 }
 
 export class SearchResponseDto {
-  @ApiProperty({ example: 'nestjs' })
+  @ApiProperty({ description: 'The query string echoed back as performed', example: 'nestjs' })
   query!: string;
 
-  @ApiProperty({ type: () => [SearchUserResultDto] })
+  @ApiProperty({
+    description: 'Matching users, ordered by relevance',
+    type: () => [SearchUserResultDto],
+  })
   users!: SearchUserResultDto[];
 
-  @ApiProperty({ type: () => [SearchQuizResultDto] })
+  @ApiProperty({
+    description: 'Matching quizzes, ordered by relevance',
+    type: () => [SearchQuizResultDto],
+  })
   quizzes!: SearchQuizResultDto[];
 
-  @ApiProperty({ type: () => [SearchDiscussionResultDto] })
+  @ApiProperty({
+    description: 'Matching discussion threads, ordered by relevance',
+    type: () => [SearchDiscussionResultDto],
+  })
   discussions!: SearchDiscussionResultDto[];
 }
