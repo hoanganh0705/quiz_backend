@@ -10,7 +10,7 @@ import {
   Query,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
-import { ApiTags } from '@nestjs/swagger';
+import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { Public } from '@/common/decorators/public.decorator';
 import { Permissions } from '@/common/authorization/decorators/permissions.decorator';
 import { Permission } from '@/common/authorization/permissions';
@@ -59,6 +59,7 @@ export class CategoryController {
 
   @Get('popular')
   @Public()
+  @ApiOperation({ summary: 'List popular categories' })
   @ApiPopularCategoriesResponse()
   async getPopularCategories(@Query() query: CategoryRankingQueryDto) {
     const items = await this.categoryQueryService.getPopularCategories({
@@ -69,6 +70,7 @@ export class CategoryController {
 
   @Get('trending')
   @Public()
+  @ApiOperation({ summary: 'List trending categories' })
   @ApiTrendingCategoriesResponse()
   async getTrendingCategories(@Query() query: CategoryRankingQueryDto) {
     const items = await this.categoryQueryService.getTrendingCategories({
@@ -79,6 +81,7 @@ export class CategoryController {
 
   @Get(':slug/quizzes')
   @Public()
+  @ApiOperation({ summary: 'List quizzes in a category' })
   @ApiCategoryQuizzesResponse()
   async getCategoryQuizzes(
     @Param('slug') slug: string,
@@ -90,6 +93,7 @@ export class CategoryController {
 
   @Get(':slug/related')
   @Public()
+  @ApiOperation({ summary: 'List categories related to a category' })
   @ApiRelatedCategoriesResponse()
   async getRelatedCategories(
     @Param('slug') slug: string,
@@ -103,17 +107,19 @@ export class CategoryController {
 
   @Get(':id/analytics')
   @Public()
+  @ApiOperation({ summary: 'Get analytics for a category' })
   @ApiCategoryAnalyticsResponse()
-  async getCategoryAnalytics(@Param('id', new ParseUUIDPipe()) categoryId: string) {
+  async getCategoryAnalytics(@Param('id', new ParseUUIDPipe({ version: '7' })) categoryId: string) {
     const analytics = await this.categoryQueryService.getCategoryAnalytics(categoryId);
     return this.categoryPresenter.getCategoryAnalytics(analytics);
   }
 
   @Post(':id/follow')
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @ApiOperation({ summary: 'Follow a category' })
   @ApiFollowCategoryResponse()
   async followCategory(
-    @Param('id', new ParseUUIDPipe()) categoryId: string,
+    @Param('id', new ParseUUIDPipe({ version: '7' })) categoryId: string,
     @CurrentUser() user: JwtPayload,
   ) {
     const result = await this.categoryApplicationService.followCategory(user.sub, categoryId);
@@ -122,9 +128,10 @@ export class CategoryController {
 
   @Delete(':id/follow')
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @ApiOperation({ summary: 'Unfollow a category' })
   @ApiUnfollowCategoryResponse()
   async unfollowCategory(
-    @Param('id', new ParseUUIDPipe()) categoryId: string,
+    @Param('id', new ParseUUIDPipe({ version: '7' })) categoryId: string,
     @CurrentUser() user: JwtPayload,
   ) {
     const result = await this.categoryApplicationService.unfollowCategory(user.sub, categoryId);
@@ -133,14 +140,16 @@ export class CategoryController {
 
   @Post(':id/restore')
   @Permissions(Permission.CATEGORY_MANAGE)
+  @ApiOperation({ summary: 'Restore a deleted category' })
   @ApiRestoreCategoryResponse()
-  async restoreCategory(@Param('id', new ParseUUIDPipe()) categoryId: string) {
+  async restoreCategory(@Param('id', new ParseUUIDPipe({ version: '7' })) categoryId: string) {
     const result = await this.categoryApplicationService.restoreCategory(categoryId);
     return this.categoryPresenter.restoreCategory(result);
   }
 
   @Get()
   @Public()
+  @ApiOperation({ summary: 'List all categories' })
   @ApiListCategoriesResponse()
   async listCategories(@Query() query: ListCategoriesQueryDto) {
     const command: ListCategoriesQuery = {
@@ -154,14 +163,16 @@ export class CategoryController {
 
   @Get(':id')
   @Public()
+  @ApiOperation({ summary: 'Get a category by ID' })
   @ApiCategoryByIdResponse()
-  async getCategoryById(@Param('id', new ParseUUIDPipe()) categoryId: string) {
+  async getCategoryById(@Param('id', new ParseUUIDPipe({ version: '7' })) categoryId: string) {
     const result = await this.categoryQueryService.getCategoryById(categoryId);
     return this.categoryPresenter.getCategoryById(result);
   }
 
   @Get(':slug')
   @Public()
+  @ApiOperation({ summary: 'Get a category by slug' })
   @ApiCategoryBySlugResponse()
   async getCategoryBySlug(@Param('slug') slug: string) {
     const result = await this.categoryQueryService.getCategoryBySlug(slug);
@@ -170,6 +181,7 @@ export class CategoryController {
 
   @Post()
   @Permissions(Permission.CATEGORY_MANAGE)
+  @ApiOperation({ summary: 'Create a category' })
   @ApiCreateCategoryResponse()
   async createCategory(@Body() payload: CreateCategoryDto) {
     const command: CreateCategoryCommand = {
@@ -185,9 +197,10 @@ export class CategoryController {
 
   @Patch(':id')
   @Permissions(Permission.CATEGORY_MANAGE)
+  @ApiOperation({ summary: 'Update a category' })
   @ApiUpdateCategoryResponse()
   async updateCategory(
-    @Param('id', new ParseUUIDPipe()) categoryId: string,
+    @Param('id', new ParseUUIDPipe({ version: '7' })) categoryId: string,
     @Body() payload: UpdateCategoryDto,
   ) {
     const command: UpdateCategoryCommand = {
@@ -203,8 +216,9 @@ export class CategoryController {
 
   @Delete(':id')
   @Permissions(Permission.CATEGORY_MANAGE)
+  @ApiOperation({ summary: 'Delete a category' })
   @ApiDeleteCategoryResponse()
-  async deleteCategory(@Param('id', new ParseUUIDPipe()) categoryId: string) {
+  async deleteCategory(@Param('id', new ParseUUIDPipe({ version: '7' })) categoryId: string) {
     const result = await this.categoryApplicationService.deleteCategory(categoryId);
     return this.categoryPresenter.deleteCategory(result);
   }

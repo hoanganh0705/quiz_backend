@@ -512,7 +512,7 @@ export class AttemptRepository implements AttemptRepositoryPort {
 
   async getAttemptAnalytics(attemptId: string): Promise<AttemptAnalyticsRow | null> {
     // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-    const [row] = await this.db.execute<{
+    const result = await this.db.execute<{
       attempt_id: string;
       quiz_version_id: string;
       score_percent: string | null;
@@ -557,9 +557,22 @@ export class AttemptRepository implements AttemptRepositoryPort {
       LIMIT 1
     `);
 
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+    const row = result.rows[0] as
+      | {
+          attempt_id: string;
+          quiz_version_id: string;
+          score_percent: string | null;
+          correct_count: number | null;
+          total_questions: number;
+          time_taken_ms: number | null;
+          percentile_rank: number;
+          finished_at: string | null;
+        }
+      | undefined;
+
     if (!row) return null;
 
-    /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access */
     const attemptAnalyticsRow: AttemptAnalyticsRow = {
       attemptId: row.attempt_id,
       quizVersionId: row.quiz_version_id,
@@ -570,7 +583,6 @@ export class AttemptRepository implements AttemptRepositoryPort {
       percentileRank: Number(row.percentile_rank),
       finishedAt: row.finished_at,
     };
-    /* eslint-enable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access */
     return attemptAnalyticsRow;
   }
 
@@ -646,9 +658,9 @@ export class AttemptRepository implements AttemptRepositoryPort {
           s."averageScore",
           s."totalTimeTakenMs",
           s."lastAttemptAt",
-          (SELECT category_id FROM category_counts WHERE rn = 1) AS "favoriteCategoryId",
+          (SELECT "categoryId" FROM category_counts WHERE rn = 1) AS "favoriteCategoryId",
           (SELECT name FROM category_counts WHERE rn = 1) AS "favoriteCategoryName",
-          (SELECT tag_id FROM tag_counts WHERE rn = 1) AS "favoriteTagId",
+          (SELECT "tagId" FROM tag_counts WHERE rn = 1) AS "favoriteTagId",
           (SELECT name FROM tag_counts WHERE rn = 1) AS "favoriteTagName"
         FROM summary s
       `,

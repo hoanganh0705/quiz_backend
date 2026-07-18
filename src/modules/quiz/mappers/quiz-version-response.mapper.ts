@@ -2,7 +2,7 @@ import type {
   QuizVersionRow,
   QuizVersionDetailRow,
 } from '../domain/ports/quiz-version-repository.port';
-import type { QuizQuestionResponseDto } from '../dto/response/quiz-question-response.dto';
+import type { QuizQuestionAuthorDto } from '../dto/response/quiz-question-author.dto';
 import type {
   QuizVersionResponseDto,
   QuizVersionDetailResponseDto,
@@ -11,6 +11,9 @@ import type {
 /**
  * Pure stateless mapper — no DI needed.
  * Translates QuizVersionRow database projections to QuizVersionResponseDto.
+ *
+ * Author-only mapper: the questions argument is typed as the author DTO,
+ * which carries the `isCorrect` flag on each option.
  */
 export class QuizVersionResponseMapper {
   static toQuizVersionResponse(row: QuizVersionRow): QuizVersionResponseDto {
@@ -46,7 +49,7 @@ export class QuizVersionResponseMapper {
       title: string;
       description: string | null;
     },
-    questions: QuizQuestionResponseDto[],
+    questions: QuizQuestionAuthorDto[],
   ): QuizVersionDetailResponseDto {
     return {
       quizVersionId: row.quizVersionId,

@@ -17,8 +17,8 @@ const withInstance = (
   instance: string,
 ): Record<string, unknown> => ({ ...base, instance });
 
-const SAMPLE_COLLECTION_ID = '770e8400-e29b-41d4-a716-446655440000';
-const SAMPLE_QUIZ_ID = '660e8400-e29b-41d4-a716-446655440000';
+const SAMPLE_COLLECTION_ID = '770e8400-e29b-71d4-a716-446655440000';
+const SAMPLE_QUIZ_ID = '660e8400-e29b-71d4-a716-446655440000';
 const COLLECTION_PATH = `/api/v1/bookmarks/collections/${SAMPLE_COLLECTION_ID}`;
 const QUIZ_PATH = `/api/v1/bookmarks/collections/${SAMPLE_COLLECTION_ID}/quizzes/${SAMPLE_QUIZ_ID}`;
 

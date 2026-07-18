@@ -59,7 +59,7 @@ export const notFoundOptions = {
   type: ProblemDetailDto,
   example: {
     ...ErrorResponseExamples.notFound,
-    instance: '/users/660e8400-e29b-41d4-a716-446655440000',
+    instance: '/users/660e8400-e29b-71d4-a716-446655440000',
   },
 };
 
@@ -72,7 +72,7 @@ export const forbiddenOptions = {
   type: ProblemDetailDto,
   example: {
     ...ErrorResponseExamples.forbidden,
-    instance: '/users/660e8400-e29b-41d4-a716-446655440000/badges',
+    instance: '/users/660e8400-e29b-71d4-a716-446655440000/badges',
   },
 };
 
@@ -259,5 +259,5 @@ export const ApiUserIdParam = () =>
     name: 'userId',
     description: 'UUID of the target user',
     format: 'uuid',
-    example: '550e8400-e29b-41d4-a716-446655440000',
+    example: '550e8400-e29b-71d4-a716-446655440000',
   });

@@ -151,11 +151,11 @@ export class CreateQuizDto {
     description: 'UUID of the associated category',
     type: String,
     format: 'uuid',
-    example: '660e8400-e29b-41d4-a716-446655440000',
+    example: '660e8400-e29b-71d4-a716-446655440000',
     nullable: true,
   })
   @IsOptional()
-  @IsUUID('4')
+  @IsUUID('7')
   categoryId?: string;
 
   @ApiPropertyOptional({
@@ -163,14 +163,14 @@ export class CreateQuizDto {
     type: Array,
     maxItems: 50,
     format: 'uuid',
-    example: ['770e8400-e29b-41d4-a716-446655440000'],
+    example: ['770e8400-e29b-71d4-a716-446655440000'],
     nullable: true,
   })
   @IsOptional()
   @IsArray()
   @ArrayMaxSize(50)
   @ArrayUnique()
-  @IsUUID('4', { each: true })
+  @IsUUID('7', { each: true })
   tagIds?: string[];
 
   @ApiProperty({

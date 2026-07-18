@@ -3,13 +3,13 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 export class BookmarkCollectionResponseDto {
   @ApiProperty({
     description: 'Collection identifier',
-    example: '770e8400-e29b-41d4-a716-446655440000',
+    example: '770e8400-e29b-71d4-a716-446655440000',
   })
   collectionId!: string;
 
   @ApiProperty({
     description: 'Owner user identifier',
-    example: '550e8400-e29b-41d4-a716-446655440000',
+    example: '550e8400-e29b-71d4-a716-446655440000',
   })
   userId!: string;
 

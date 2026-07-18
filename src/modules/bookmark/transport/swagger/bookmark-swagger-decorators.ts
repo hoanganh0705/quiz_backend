@@ -432,7 +432,7 @@ export const ApiCollectionIdParam = (): MethodDecorator =>
     name: 'collectionId',
     description: 'UUID of the bookmark collection',
     format: 'uuid',
-    example: '770e8400-e29b-41d4-a716-446655440000',
+    example: '770e8400-e29b-71d4-a716-446655440000',
   });
 
 export const ApiBookmarkQuizIdParam = (): MethodDecorator =>
@@ -440,7 +440,7 @@ export const ApiBookmarkQuizIdParam = (): MethodDecorator =>
     name: 'quizId',
     description: 'UUID of the bookmarked quiz',
     format: 'uuid',
-    example: '660e8400-e29b-41d4-a716-446655440000',
+    example: '660e8400-e29b-71d4-a716-446655440000',
   });
 
 export const ApiStatusQuizIdParam = (): MethodDecorator =>
@@ -448,7 +448,7 @@ export const ApiStatusQuizIdParam = (): MethodDecorator =>
     name: 'quizId',
     description: 'UUID of the quiz to look up bookmark status for',
     format: 'uuid',
-    example: '660e8400-e29b-41d4-a716-446655440000',
+    example: '660e8400-e29b-71d4-a716-446655440000',
   });
 
 // ─── Bookmark module's complete DTO surface (re-export for the contract test) ─

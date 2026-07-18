@@ -13,6 +13,7 @@ import {
 import {
   ApiTags,
   ApiQuery,
+  ApiOperation,
   ApiBadRequestResponse,
   ApiConflictResponse,
   ApiForbiddenResponse,
@@ -20,6 +21,7 @@ import {
   ApiNotFoundResponse,
   ApiUnauthorizedResponse,
   ApiUnprocessableEntityResponse,
+  ApiExtraModels,
 } from '@nestjs/swagger';
 import { Permission } from '@/common/authorization/permissions';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
@@ -56,7 +58,9 @@ import { UpdateQuizVersionDto } from '../../dto/request/update-quiz-version.dto'
 import { ListQuizVersionsQueryDto } from '../../dto/request/list-quiz-versions-query.dto';
 import { CreateQuizQuestionDto } from '@/modules/quiz/dto/request/create-quiz-question.dto';
 import { CreateQuizQuestionsDto } from '@/modules/quiz/dto/request/create-quiz-questions.dto';
-import { QuizQuestionResponseDto } from '@/modules/quiz/dto/response/quiz-question-response.dto';
+import { QuizQuestionAuthorDto } from '@/modules/quiz/dto/response/quiz-question-author.dto';
+import { QuizAnswerOptionPlayerDto } from '@/modules/quiz/dto/response/quiz-answer-option-player.dto';
+import { QuizQuestionPlayerDto } from '@/modules/quiz/dto/response/quiz-question-player.dto';
 import {
   QuizVersionDetailResponseDto,
   QuizVersionResponseDto,
@@ -169,6 +173,7 @@ export class QuizController {
 
   @Post()
   @Permissions(Permission.QUIZ_CREATE)
+  @ApiOperation({ summary: 'Create a new quiz' })
   @ApiCreatedResource(QuizResponseDto, { description: 'Quiz created' })
   @ApiBadRequestResponse({
     description: 'Request body validation failed',
@@ -194,6 +199,7 @@ export class QuizController {
 
   @Get()
   @Public()
+  @ApiOperation({ summary: 'List all public quizzes' })
   @ApiOkResourceList(QuizListItemDto, 'cursor', { description: 'Quizzes returned' })
   @ApiBadRequestResponse({
     description: 'Query parameters failed validation',
@@ -206,6 +212,7 @@ export class QuizController {
   }
 
   @Get('me')
+  @ApiOperation({ summary: 'List quizzes created by the authenticated user' })
   @ApiOkResourceList(QuizListItemDto, 'cursor', { description: 'Quizzes returned' })
   @ApiUnauthorizedResponse({ example: meQuizzesUnauthorizedExample })
   @ApiForbiddenResponse({ example: meQuizzesForbiddenExample })
@@ -216,6 +223,7 @@ export class QuizController {
   }
 
   @Get('me/drafts')
+  @ApiOperation({ summary: "List the authenticated user's draft quizzes" })
   @ApiOkResourceList(QuizListItemDto, 'cursor', { description: 'Draft quizzes returned' })
   @ApiUnauthorizedResponse({ example: meDraftsUnauthorizedExample })
   @ApiForbiddenResponse({ example: meDraftsForbiddenExample })
@@ -229,6 +237,7 @@ export class QuizController {
   }
 
   @Get('me/published')
+  @ApiOperation({ summary: "List the authenticated user's published quizzes" })
   @ApiOkResourceList(QuizListItemDto, 'cursor', { description: 'Published quizzes returned' })
   @ApiUnauthorizedResponse({ example: mePublishedUnauthorizedExample })
   @ApiForbiddenResponse({ example: mePublishedForbiddenExample })
@@ -243,6 +252,7 @@ export class QuizController {
 
   @Get('trending')
   @Public()
+  @ApiOperation({ summary: 'List trending quizzes' })
   @ApiOkResourceArray(TrendingQuizItemDto, { description: 'Trending quizzes returned' })
   @ApiQuery({
     name: 'limit',
@@ -268,6 +278,7 @@ export class QuizController {
 
   @Get('popular')
   @Public()
+  @ApiOperation({ summary: 'List popular quizzes' })
   @ApiOkResourceArray(PopularQuizItemDto, { description: 'Popular quizzes returned' })
   @ApiQuery({
     name: 'limit',
@@ -292,6 +303,7 @@ export class QuizController {
   }
 
   @Get('me/analytics')
+  @ApiOperation({ summary: "Get analytics for the authenticated user's quizzes" })
   @ApiOkResource(CreatorQuizAnalyticsDto, { description: 'Quiz analytics returned' })
   @ApiUnauthorizedResponse({ example: meAnalyticsUnauthorizedExample })
   @ApiForbiddenResponse({ example: meAnalyticsForbiddenExample })
@@ -303,6 +315,7 @@ export class QuizController {
 
   @Get('featured')
   @Public()
+  @ApiOperation({ summary: 'List featured quizzes' })
   @ApiOkResourceArray(QuizListItemDto, { description: 'Featured quizzes returned' })
   @ApiBadRequestResponse({ example: featuredBadRequestExample })
   @ApiInternalServerErrorResponse({ example: featuredInternalErrorExample })
@@ -313,6 +326,16 @@ export class QuizController {
 
   @Get(':id')
   @Public()
+  @ApiExtraModels(QuizQuestionPlayerDto, QuizAnswerOptionPlayerDto)
+  @ApiOperation({
+    summary: 'Get quiz by ID or slug',
+    description:
+      'Returns the quiz and, when one is published, its published version. ' +
+      'For player-facing access (this public endpoint), the published version ' +
+      'includes questions but the `isCorrect` flag is stripped from each answer ' +
+      'option to prevent spoilers — correct answers are revealed only after the ' +
+      'user finishes an attempt, via GET /attempts/{attemptId}/review.',
+  })
   @ApiOkResource(QuizResponseDto, { description: 'Quiz found' })
   @ApiBadRequestResponse({
     description: 'Path param must be a UUID or slug',
@@ -332,6 +355,7 @@ export class QuizController {
 
   @Get(':id/stats')
   @Public()
+  @ApiOperation({ summary: 'Get quiz statistics' })
   @ApiOkResource(QuizStatsResponseDto, { description: 'Quiz stats returned' })
   @ApiBadRequestResponse({
     description: 'Path param must be a UUID or a kebab-case slug',
@@ -342,10 +366,10 @@ export class QuizController {
     example: quizStatsNotFoundExample,
   })
   @ApiInternalServerErrorResponse({ example: quizStatsInternalErrorExample })
-  async getQuizStats(@Param('id', new ParseUUIDOrSlugPipe()) quizId: string) {
+  async getQuizStats(@Param('id', new ParseUUIDOrSlugPipe()) quizIdOrSlug: string) {
     const result = await this.quizApplicationService.getQuizStats(
-      isUuid(quizId) ? quizId : undefined,
-      quizId,
+      isUuid(quizIdOrSlug) ? quizIdOrSlug : undefined,
+      quizIdOrSlug,
     );
     return this.presenter.getQuizStats(result);
   }
@@ -359,6 +383,7 @@ export class QuizController {
    */
   @Get(':slug/similar')
   @Public()
+  @ApiOperation({ summary: 'Get quizzes related to the specified quiz' })
   @ApiOkResourceArray(QuizListItemDto, { description: 'Related quizzes returned' })
   @ApiNotFoundResponse({
     description: 'Quiz not found',
@@ -384,6 +409,7 @@ export class QuizController {
 
   @Patch(':id')
   @Permissions(Permission.QUIZ_EDIT_OWN, Permission.QUIZ_EDIT_ANY)
+  @ApiOperation({ summary: 'Update a quiz' })
   @ApiOkResource(QuizResponseDto, { description: 'Quiz updated' })
   @ApiBadRequestResponse({
     description: 'Path param must be a UUID or request body failed validation',
@@ -414,6 +440,7 @@ export class QuizController {
 
   @Delete(':id')
   @Permissions(Permission.QUIZ_DELETE_OWN, Permission.QUIZ_DELETE_ANY)
+  @ApiOperation({ summary: 'Delete a quiz' })
   @ApiOkResource(DeleteQuizResponseDto, { description: 'Quiz deleted' })
   @ApiNotFoundResponse({
     description: 'Quiz not found',
@@ -439,6 +466,7 @@ export class QuizController {
 
   @Post(':id/versions')
   @Permissions(Permission.QUIZ_VERSION_CREATE_OWN, Permission.QUIZ_VERSION_CREATE_ANY)
+  @ApiOperation({ summary: 'Create a new draft version for a quiz' })
   @ApiCreatedResource(QuizVersionResponseDto, { description: 'Quiz version created' })
   @ApiBadRequestResponse({
     description: 'Path param must be a UUID or request body failed validation',
@@ -473,6 +501,7 @@ export class QuizController {
 
   @Get(':id/versions')
   @Permissions(Permission.QUIZ_VERSION_VIEW_OWN, Permission.QUIZ_VERSION_VIEW_ANY)
+  @ApiOperation({ summary: 'List all versions of a quiz' })
   @ApiOkResourceList(QuizVersionResponseDto, 'cursor', { description: 'Versions returned' })
   @ApiNotFoundResponse({
     description: 'Quiz not found',
@@ -499,6 +528,7 @@ export class QuizController {
 
   @Get(':id/versions/:versionId')
   @Permissions(Permission.QUIZ_VERSION_VIEW_OWN, Permission.QUIZ_VERSION_VIEW_ANY)
+  @ApiOperation({ summary: 'Get a specific quiz version' })
   @ApiOkResource(QuizVersionDetailResponseDto, { description: 'Quiz version returned' })
   @ApiBadRequestResponse({
     description: 'Path params must be UUIDs',
@@ -529,6 +559,7 @@ export class QuizController {
 
   @Patch(':id/versions/:versionId')
   @Permissions(Permission.QUIZ_VERSION_EDIT_OWN, Permission.QUIZ_VERSION_EDIT_ANY)
+  @ApiOperation({ summary: 'Update a quiz version' })
   @ApiOkResource(QuizVersionResponseDto, { description: 'Version updated' })
   @ApiBadRequestResponse({
     description: 'Path params must be UUIDs or request body failed validation',
@@ -565,6 +596,7 @@ export class QuizController {
 
   @Post(':id/versions/:versionId/publish')
   @Permissions(Permission.QUIZ_VERSION_PUBLISH_OWN, Permission.QUIZ_VERSION_PUBLISH_ANY)
+  @ApiOperation({ summary: 'Publish a quiz version' })
   @ApiOkResource(QuizVersionResponseDto, { description: 'Version published' })
   @ApiBadRequestResponse({
     description: 'Version is not in draft state, or path params are not UUIDs',
@@ -599,7 +631,8 @@ export class QuizController {
 
   @Post(':id/versions/:versionId/questions')
   @Permissions(Permission.QUIZ_VERSION_EDIT_OWN, Permission.QUIZ_VERSION_EDIT_ANY)
-  @ApiCreatedResource(QuizQuestionResponseDto, { description: 'Question created' })
+  @ApiOperation({ summary: 'Add a question to a quiz version' })
+  @ApiCreatedResource(QuizQuestionAuthorDto, { description: 'Question created' })
   @ApiBadRequestResponse({
     description: 'Path params must be UUIDs or request body failed validation',
     example: createQuizQuestionBadRequestExample,
@@ -635,6 +668,7 @@ export class QuizController {
 
   @Post(':id/versions/:versionId/questions/bulk')
   @Permissions(Permission.QUIZ_VERSION_EDIT_OWN, Permission.QUIZ_VERSION_EDIT_ANY)
+  @ApiOperation({ summary: 'Add multiple questions to a quiz version in bulk' })
   @ApiCreatedResource(BulkQuizQuestionsResponseDto, { description: 'Questions created' })
   @ApiBadRequestResponse({
     description: 'Path params must be UUIDs or request body failed validation',

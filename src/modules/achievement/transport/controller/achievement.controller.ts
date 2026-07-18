@@ -1,5 +1,5 @@
 import { Controller, Delete, Get, Param, ParseUUIDPipe, Query } from '@nestjs/common';
-import { ApiParam, ApiQuery, ApiTags } from '@nestjs/swagger';
+import { ApiParam, ApiQuery, ApiTags, ApiOperation } from '@nestjs/swagger';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import { IsInt, IsOptional, Max, Min } from 'class-validator';
@@ -65,6 +65,7 @@ export class AchievementController {
 
   @Get('badges')
   @Public()
+  @ApiOperation({ summary: 'List all available badges' })
   @ApiOkResourceArray(BadgeCatalogItemResponseDto, {
     description: 'Badge catalog returned',
   })
@@ -87,6 +88,7 @@ export class AchievementController {
 
   @Get('me/badges')
   @ApiAuth()
+  @ApiOperation({ summary: 'List badges earned by the authenticated user' })
   @ApiOkResource(MyBadgeItemDto, { description: 'User badges returned' })
   @ApiQuery({
     name: 'limit',
@@ -107,23 +109,25 @@ export class AchievementController {
 
   @Get('badges/:badgeId')
   @Public()
+  @ApiOperation({ summary: 'Get badge details' })
   @ApiParam({ name: 'badgeId', format: 'uuid' })
   @ApiOkResource(BadgeDetailsResponseDto, { description: 'Badge details returned' })
   @ApiNotFound('Badge not found')
-  async getBadgeDetails(@Param('badgeId', new ParseUUIDPipe()) badgeId: string) {
+  async getBadgeDetails(@Param('badgeId', new ParseUUIDPipe({ version: '7' })) badgeId: string) {
     const result = await this.achievementApplicationService.getBadgeDetails(badgeId);
     return this.presenter.getBadgeDetails(result);
   }
 
   @Delete('/users/:userId/badges/:badgeId')
   @Permissions(Permission.ACHIEVEMENT_REVOKE)
+  @ApiOperation({ summary: 'Revoke a badge from a user' })
   @ApiAuth()
   @ApiForbidden()
   @ApiParam({ name: 'userId', format: 'uuid' })
   @ApiParam({ name: 'badgeId', format: 'uuid' })
   async revokeUserBadge(
-    @Param('userId', new ParseUUIDPipe()) userId: string,
-    @Param('badgeId', new ParseUUIDPipe()) badgeId: string,
+    @Param('userId', new ParseUUIDPipe({ version: '7' })) userId: string,
+    @Param('badgeId', new ParseUUIDPipe({ version: '7' })) badgeId: string,
     @CurrentUser('sub') revokedBy: string,
   ): Promise<void> {
     await this.achievementApplicationService.revokeUserBadge(userId, badgeId, revokedBy);
@@ -131,13 +135,14 @@ export class AchievementController {
 
   @Get('/users/:userId/achievements')
   @ApiAuth()
+  @ApiOperation({ summary: "Get a user's public achievement profile" })
   @ApiParam({ name: 'userId', format: 'uuid' })
   @ApiOkResource(PublicAchievementProfileResponseDto, {
     description: 'Public achievement profile returned',
   })
   @ApiNotFound('User not found')
   async getPublicAchievementProfile(
-    @Param('userId', new ParseUUIDPipe()) userId: string,
+    @Param('userId', new ParseUUIDPipe({ version: '7' })) userId: string,
     @CurrentUser('sub') requesterId: string,
   ) {
     const result = await this.achievementApplicationService.getPublicAchievementProfile(
@@ -149,12 +154,13 @@ export class AchievementController {
 
   @Get('/users/me/badges/:badgeId/progress')
   @ApiAuth()
+  @ApiOperation({ summary: "Get the authenticated user's progress toward a badge" })
   @ApiParam({ name: 'badgeId', format: 'uuid' })
   @ApiOkResource(BadgeProgressResponseDto, { description: 'Badge progress returned' })
   @ApiNotFound('Badge not found')
   async getMyBadgeProgress(
     @CurrentUser('sub') userId: string,
-    @Param('badgeId', new ParseUUIDPipe()) badgeId: string,
+    @Param('badgeId', new ParseUUIDPipe({ version: '7' })) badgeId: string,
   ) {
     const result = await this.achievementApplicationService.getMyBadgeProgress(userId, badgeId);
     return this.presenter.getMyBadgeProgress(result);
@@ -162,6 +168,7 @@ export class AchievementController {
 
   @Get('/users/me/achievements/history')
   @ApiAuth()
+  @ApiOperation({ summary: "Get the authenticated user's badge earning history" })
   @ApiOkResourceArray(AchievementHistoryItemResponseDto, {
     description: 'Achievement history returned',
   })
@@ -187,6 +194,7 @@ export class AchievementController {
 
   @Get('/users/me/badges/analytics')
   @ApiAuth()
+  @ApiOperation({ summary: "Get the authenticated user's badge analytics" })
   @ApiOkResource(UserBadgeAnalyticsResponseDto, {
     description: 'Badge analytics returned',
   })

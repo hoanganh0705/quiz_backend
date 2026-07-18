@@ -56,11 +56,11 @@ export class ListQuizzesQueryDto {
   @ApiPropertyOptional({
     description: 'Filter by category UUID (must be a valid UUID v4)',
     format: 'uuid',
-    example: '660e8400-e29b-41d4-a716-446655440000',
+    example: '660e8400-e29b-71d4-a716-446655440000',
     nullable: true,
   })
   @IsOptional()
-  @IsUUID('4')
+  @IsUUID('7')
   categoryId?: string;
 
   @ApiPropertyOptional({
@@ -70,7 +70,7 @@ export class ListQuizzesQueryDto {
     isArray: true,
     format: 'uuid',
     maxItems: 50,
-    example: ['770e8400-e29b-41d4-a716-446655440000', '880e8400-e29b-41d4-a716-446655440001'],
+    example: ['770e8400-e29b-71d4-a716-446655440000', '880e8400-e29b-71d4-a716-446655440001'],
     nullable: true,
   })
   @IsOptional()
@@ -88,6 +88,6 @@ export class ListQuizzesQueryDto {
   @ArrayMaxSize(50)
   @ArrayMinSize(1)
   @ArrayUnique()
-  @IsUUID('4', { each: true })
+  @IsUUID('7', { each: true })
   tagIds?: string[];
 }

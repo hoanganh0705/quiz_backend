@@ -1,8 +1,8 @@
 import { EXAMPLE_TIMESTAMP } from './_timestamp';
 
 const NOTIFICATION_ITEM = {
-  notificationId: '550e8400-e29b-41d4-a716-446655440000',
-  userId: '660e8400-e29b-41d4-a716-446655440000',
+  notificationId: '550e8400-e29b-71d4-a716-446655440000',
+  userId: '660e8400-e29b-71d4-a716-446655440000',
   type: 'achievement_earned',
   title: 'Achievement Unlocked!',
   message: 'You earned the "JavaScript Master" badge!',

@@ -78,7 +78,7 @@ export const relatedInternalErrorExample = withInstance(
 export const analyticsBadRequestExample = {
   ...withInstance(
     ErrorResponseExamples.badRequest,
-    '/categories/660e8400-e29b-41d4-a716-446655440000/analytics',
+    '/categories/660e8400-e29b-71d4-a716-446655440000/analytics',
   ),
   detail: 'Validation failed (uuid is expected)',
   extensions: { requestId: 'req_abc123' },
@@ -86,110 +86,110 @@ export const analyticsBadRequestExample = {
 export const analyticsNotFoundExample = {
   ...withInstance(
     ErrorResponseExamples.notFound,
-    '/categories/660e8400-e29b-41d4-a716-446655440000/analytics',
+    '/categories/660e8400-e29b-71d4-a716-446655440000/analytics',
   ),
-  detail: 'Category with ID "660e8400-e29b-41d4-a716-446655440000" not found or has been deleted',
+  detail: 'Category with ID "660e8400-e29b-71d4-a716-446655440000" not found or has been deleted',
 };
 export const analyticsInternalErrorExample = withInstance(
   ErrorResponseExamples.internalServerError,
-  '/categories/660e8400-e29b-41d4-a716-446655440000/analytics',
+  '/categories/660e8400-e29b-71d4-a716-446655440000/analytics',
 );
 
 // ─── /categories/:id/follow (POST) ──────────────────────────────────────────
 
 export const followUnauthorizedExample = withInstance(
   ErrorResponseExamples.unauthorized,
-  '/categories/660e8400-e29b-41d4-a716-446655440000/follow',
+  '/categories/660e8400-e29b-71d4-a716-446655440000/follow',
 );
 export const followForbiddenExample = withInstance(
   ErrorResponseExamples.forbidden,
-  '/categories/660e8400-e29b-41d4-a716-446655440000/follow',
+  '/categories/660e8400-e29b-71d4-a716-446655440000/follow',
 );
 export const followNotFoundExample = {
   ...withInstance(
     ErrorResponseExamples.notFound,
-    '/categories/660e8400-e29b-41d4-a716-446655440000/follow',
+    '/categories/660e8400-e29b-71d4-a716-446655440000/follow',
   ),
-  detail: 'Category with ID "660e8400-e29b-41d4-a716-446655440000" not found or has been deleted',
+  detail: 'Category with ID "660e8400-e29b-71d4-a716-446655440000" not found or has been deleted',
 };
 export const followInternalErrorExample = withInstance(
   ErrorResponseExamples.internalServerError,
-  '/categories/660e8400-e29b-41d4-a716-446655440000/follow',
+  '/categories/660e8400-e29b-71d4-a716-446655440000/follow',
 );
 export const followBadRequestExample = {
   ...withInstance(
     ErrorResponseExamples.badRequest,
-    '/categories/660e8400-e29b-41d4-a716-446655440000/follow',
+    '/categories/660e8400-e29b-71d4-a716-446655440000/follow',
   ),
   detail: 'Validation failed (uuid is expected)',
   extensions: { requestId: 'req_abc123' },
 };
 export const followTooManyRequestsExample = withInstance(
   ErrorResponseExamples.tooManyRequests,
-  '/categories/660e8400-e29b-41d4-a716-446655440000/follow',
+  '/categories/660e8400-e29b-71d4-a716-446655440000/follow',
 );
 
 // ─── /categories/:id/follow (DELETE) ───────────────────────────────────────────
 
 export const unfollowUnauthorizedExample = withInstance(
   ErrorResponseExamples.unauthorized,
-  '/categories/660e8400-e29b-41d4-a716-446655440000/follow',
+  '/categories/660e8400-e29b-71d4-a716-446655440000/follow',
 );
 export const unfollowForbiddenExample = withInstance(
   ErrorResponseExamples.forbidden,
-  '/categories/660e8400-e29b-41d4-a716-446655440000/follow',
+  '/categories/660e8400-e29b-71d4-a716-446655440000/follow',
 );
 export const unfollowNotFoundExample = {
   ...withInstance(
     ErrorResponseExamples.notFound,
-    '/categories/660e8400-e29b-41d4-a716-446655440000/follow',
+    '/categories/660e8400-e29b-71d4-a716-446655440000/follow',
   ),
-  detail: 'Category with ID "660e8400-e29b-41d4-a716-446655440000" not found or has been deleted',
+  detail: 'Category with ID "660e8400-e29b-71d4-a716-446655440000" not found or has been deleted',
 };
 export const unfollowInternalErrorExample = withInstance(
   ErrorResponseExamples.internalServerError,
-  '/categories/660e8400-e29b-41d4-a716-446655440000/follow',
+  '/categories/660e8400-e29b-71d4-a716-446655440000/follow',
 );
 export const unfollowBadRequestExample = {
   ...withInstance(
     ErrorResponseExamples.badRequest,
-    '/categories/660e8400-e29b-41d4-a716-446655440000/follow',
+    '/categories/660e8400-e29b-71d4-a716-446655440000/follow',
   ),
   detail: 'Validation failed (uuid is expected)',
   extensions: { requestId: 'req_abc123' },
 };
 export const unfollowTooManyRequestsExample = withInstance(
   ErrorResponseExamples.tooManyRequests,
-  '/categories/660e8400-e29b-41d4-a716-446655440000/follow',
+  '/categories/660e8400-e29b-71d4-a716-446655440000/follow',
 );
 
 // ─── /categories/:id/restore ──────────────────────────────────────────────────
 
 export const restoreUnauthorizedExample = withInstance(
   ErrorResponseExamples.unauthorized,
-  '/categories/660e8400-e29b-41d4-a716-446655440000/restore',
+  '/categories/660e8400-e29b-71d4-a716-446655440000/restore',
 );
 export const restoreForbiddenExample = withInstance(
   ErrorResponseExamples.forbidden,
-  '/categories/660e8400-e29b-41d4-a716-446655440000/restore',
+  '/categories/660e8400-e29b-71d4-a716-446655440000/restore',
 );
 export const restoreNotFoundExample = {
   ...withInstance(
     ErrorResponseExamples.notFound,
-    '/categories/660e8400-e29b-41d4-a716-446655440000/restore',
+    '/categories/660e8400-e29b-71d4-a716-446655440000/restore',
   ),
-  detail: 'Category with ID "660e8400-e29b-41d4-a716-446655440000" not found',
+  detail: 'Category with ID "660e8400-e29b-71d4-a716-446655440000" not found',
 };
 export const restoreConflictExample = {
   ...withInstance(
     ErrorResponseExamples.conflict,
-    '/categories/660e8400-e29b-41d4-a716-446655440000/restore',
+    '/categories/660e8400-e29b-71d4-a716-446655440000/restore',
   ),
   detail: 'Category is already active and cannot be restored',
 };
 export const restoreInternalErrorExample = withInstance(
   ErrorResponseExamples.internalServerError,
-  '/categories/660e8400-e29b-41d4-a716-446655440000/restore',
+  '/categories/660e8400-e29b-71d4-a716-446655440000/restore',
 );
 
 // ─── /categories (GET list) ────────────────────────────────────────────────────
@@ -212,21 +212,21 @@ export const listCategoriesInternalErrorExample = withInstance(
 export const categoryByIdNotFoundExample = {
   ...withInstance(
     ErrorResponseExamples.notFound,
-    '/categories/660e8400-e29b-41d4-a716-446655440000',
+    '/categories/660e8400-e29b-71d4-a716-446655440000',
   ),
-  detail: 'Category with ID "660e8400-e29b-41d4-a716-446655440000" not found or has been deleted',
+  detail: 'Category with ID "660e8400-e29b-71d4-a716-446655440000" not found or has been deleted',
 };
 export const categoryByIdBadRequestExample = {
   ...withInstance(
     ErrorResponseExamples.badRequest,
-    '/categories/660e8400-e29b-41d4-a716-446655440000',
+    '/categories/660e8400-e29b-71d4-a716-446655440000',
   ),
   detail: 'Validation failed (uuid is expected)',
   extensions: { requestId: 'req_abc123' },
 };
 export const categoryByIdInternalErrorExample = withInstance(
   ErrorResponseExamples.internalServerError,
-  '/categories/660e8400-e29b-41d4-a716-446655440000',
+  '/categories/660e8400-e29b-71d4-a716-446655440000',
 );
 
 // ─── /categories/:slug (GET by slug) ───────────────────────────────────────────
@@ -276,7 +276,7 @@ export const createCategoryInternalErrorExample = withInstance(
 export const updateCategoryBadRequestExample = {
   ...withInstance(
     ErrorResponseExamples.badRequest,
-    '/categories/660e8400-e29b-41d4-a716-446655440000',
+    '/categories/660e8400-e29b-71d4-a716-446655440000',
   ),
   detail: 'Request validation failed',
   extensions: {
@@ -286,51 +286,51 @@ export const updateCategoryBadRequestExample = {
 };
 export const updateCategoryUnauthorizedExample = withInstance(
   ErrorResponseExamples.unauthorized,
-  '/categories/660e8400-e29b-41d4-a716-446655440000',
+  '/categories/660e8400-e29b-71d4-a716-446655440000',
 );
 export const updateCategoryForbiddenExample = withInstance(
   ErrorResponseExamples.forbidden,
-  '/categories/660e8400-e29b-41d4-a716-446655440000',
+  '/categories/660e8400-e29b-71d4-a716-446655440000',
 );
 export const updateCategoryNotFoundExample = {
   ...withInstance(
     ErrorResponseExamples.notFound,
-    '/categories/660e8400-e29b-41d4-a716-446655440000',
+    '/categories/660e8400-e29b-71d4-a716-446655440000',
   ),
-  detail: 'Category with ID "660e8400-e29b-41d4-a716-446655440000" not found or has been deleted',
+  detail: 'Category with ID "660e8400-e29b-71d4-a716-446655440000" not found or has been deleted',
 };
 export const updateCategoryConflictExample = {
   ...withInstance(
     ErrorResponseExamples.conflict,
-    '/categories/660e8400-e29b-41d4-a716-446655440000',
+    '/categories/660e8400-e29b-71d4-a716-446655440000',
   ),
   detail: 'Category with slug "general-knowledge" already exists',
 };
 export const updateCategoryInternalErrorExample = withInstance(
   ErrorResponseExamples.internalServerError,
-  '/categories/660e8400-e29b-41d4-a716-446655440000',
+  '/categories/660e8400-e29b-71d4-a716-446655440000',
 );
 
 // ─── /categories/:id (DELETE) ─────────────────────────────────────────────────
 
 export const deleteCategoryUnauthorizedExample = withInstance(
   ErrorResponseExamples.unauthorized,
-  '/categories/660e8400-e29b-41d4-a716-446655440000',
+  '/categories/660e8400-e29b-71d4-a716-446655440000',
 );
 export const deleteCategoryForbiddenExample = withInstance(
   ErrorResponseExamples.forbidden,
-  '/categories/660e8400-e29b-41d4-a716-446655440000',
+  '/categories/660e8400-e29b-71d4-a716-446655440000',
 );
 export const deleteCategoryNotFoundExample = {
   ...withInstance(
     ErrorResponseExamples.notFound,
-    '/categories/660e8400-e29b-41d4-a716-446655440000',
+    '/categories/660e8400-e29b-71d4-a716-446655440000',
   ),
-  detail: 'Category with ID "660e8400-e29b-41d4-a716-446655440000" not found or has been deleted',
+  detail: 'Category with ID "660e8400-e29b-71d4-a716-446655440000" not found or has been deleted',
 };
 export const deleteCategoryInternalErrorExample = withInstance(
   ErrorResponseExamples.internalServerError,
-  '/categories/660e8400-e29b-41d4-a716-446655440000',
+  '/categories/660e8400-e29b-71d4-a716-446655440000',
 );
 
 // ─── /users/me/followed-categories ───────────────────────────────────────────

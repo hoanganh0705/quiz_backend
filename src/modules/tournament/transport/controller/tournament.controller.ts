@@ -282,7 +282,7 @@ export class TournamentController {
   })
   @tournamentNotFoundResponse()
   getRelatedTournaments(
-    @Param('id', new ParseUUIDPipe()) tournamentId: string,
+    @Param('id', new ParseUUIDPipe({ version: '7' })) tournamentId: string,
     @Query() query: GetRelatedTournamentsQueryDto,
   ) {
     return this.tournamentApplicationService
@@ -309,7 +309,7 @@ export class TournamentController {
     example: ErrorResponseExamples.badRequest,
   })
   @tournamentNotFoundResponse()
-  getTournamentStats(@Param('id', new ParseUUIDPipe()) tournamentId: string) {
+  getTournamentStats(@Param('id', new ParseUUIDPipe({ version: '7' })) tournamentId: string) {
     return this.tournamentApplicationService
       .getTournamentStats(tournamentId)
       .then((result) => this.presenter.getTournamentStats(result));
@@ -337,7 +337,7 @@ export class TournamentController {
   })
   @tournamentNotFoundResponse()
   getTournamentWinners(
-    @Param('id', new ParseUUIDPipe()) tournamentId: string,
+    @Param('id', new ParseUUIDPipe({ version: '7' })) tournamentId: string,
     @Query() query: GetTournamentWinnersQueryDto,
   ) {
     return this.tournamentApplicationService
@@ -365,7 +365,7 @@ export class TournamentController {
     example: ErrorResponseExamples.badRequest,
   })
   @tournamentNotFoundResponse()
-  getTournamentById(@Param('id', new ParseUUIDPipe()) tournamentId: string) {
+  getTournamentById(@Param('id', new ParseUUIDPipe({ version: '7' })) tournamentId: string) {
     return this.tournamentApplicationService
       .getTournamentById(tournamentId)
       .then((result) => this.presenter.getTournamentById(result));
@@ -393,7 +393,7 @@ export class TournamentController {
   })
   @tournamentNotFoundResponse()
   getTournamentParticipants(
-    @Param('id', new ParseUUIDPipe()) tournamentId: string,
+    @Param('id', new ParseUUIDPipe({ version: '7' })) tournamentId: string,
     @Query() query: GetTournamentParticipantsQueryDto,
   ) {
     return this.tournamentApplicationService
@@ -433,7 +433,7 @@ export class TournamentController {
   @tournamentNotFoundResponse()
   @tournamentConflictResponse('You are already registered for this tournament')
   registerForTournament(
-    @Param('id', new ParseUUIDPipe()) tournamentId: string,
+    @Param('id', new ParseUUIDPipe({ version: '7' })) tournamentId: string,
     @CurrentUser() user: JwtPayload,
   ) {
     return this.tournamentApplicationService
@@ -461,7 +461,7 @@ export class TournamentController {
     example: ErrorResponseExamples.badRequest,
   })
   @tournamentNotFoundResponse()
-  getLeaderboard(@Param('id', new ParseUUIDPipe()) tournamentId: string) {
+  getLeaderboard(@Param('id', new ParseUUIDPipe({ version: '7' })) tournamentId: string) {
     return this.tournamentApplicationService
       .getLeaderboard(tournamentId)
       .then((result) => this.presenter.getLeaderboard(result));
@@ -492,7 +492,7 @@ export class TournamentController {
   @tournamentNotFoundResponse('Tournament not found, or you are not registered for this tournament')
   @tournamentForbiddenResponse()
   getMyTournamentStanding(
-    @Param('id', new ParseUUIDPipe()) tournamentId: string,
+    @Param('id', new ParseUUIDPipe({ version: '7' })) tournamentId: string,
     @CurrentUser('sub') userId: string,
   ) {
     return this.tournamentApplicationService
@@ -534,8 +534,8 @@ export class TournamentController {
   @tournamentForbiddenResponse()
   @tournamentConflictResponse('You have already submitted an attempt for this round')
   startRoundAttempt(
-    @Param('id', new ParseUUIDPipe()) tournamentId: string,
-    @Param('roundId', new ParseUUIDPipe()) roundId: string,
+    @Param('id', new ParseUUIDPipe({ version: '7' })) tournamentId: string,
+    @Param('roundId', new ParseUUIDPipe({ version: '7' })) roundId: string,
     @CurrentUser() user: JwtPayload,
   ) {
     return this.tournamentApplicationService
@@ -577,7 +577,7 @@ export class TournamentController {
   @tournamentConflictResponse('Invalid participant state for this operation')
   @tournamentForbiddenResponse()
   unregisterFromTournament(
-    @Param('id', new ParseUUIDPipe()) tournamentId: string,
+    @Param('id', new ParseUUIDPipe({ version: '7' })) tournamentId: string,
     @CurrentUser() user: JwtPayload,
   ) {
     return this.tournamentApplicationService
@@ -618,7 +618,7 @@ export class TournamentController {
   @tournamentForbiddenResponse()
   @tournamentConflictResponse('Invalid participant state for this operation')
   withdrawFromTournament(
-    @Param('id', new ParseUUIDPipe()) tournamentId: string,
+    @Param('id', new ParseUUIDPipe({ version: '7' })) tournamentId: string,
     @CurrentUser() user: JwtPayload,
   ) {
     return this.tournamentApplicationService

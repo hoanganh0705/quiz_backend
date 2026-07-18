@@ -386,7 +386,7 @@ export const ApiQuizIdParam = (): MethodDecorator =>
     name: 'quizId',
     description: 'UUID of the quiz',
     format: 'uuid',
-    example: '660e8400-e29b-41d4-a716-446655440000',
+    example: '660e8400-e29b-71d4-a716-446655440000',
   });
 
 export const ApiReviewIdParam = (): MethodDecorator =>
@@ -394,7 +394,7 @@ export const ApiReviewIdParam = (): MethodDecorator =>
     name: 'reviewId',
     description: 'UUID of the review',
     format: 'uuid',
-    example: '550e8400-e29b-41d4-a716-446655440099',
+    example: '550e8400-e29b-71d4-a716-446655440099',
   });
 
 export const ApiUserIdParam = (): MethodDecorator =>
@@ -402,7 +402,7 @@ export const ApiUserIdParam = (): MethodDecorator =>
     name: 'userId',
     description: 'UUID of the user',
     format: 'uuid',
-    example: '550e8400-e29b-41d4-a716-446655440001',
+    example: '550e8400-e29b-71d4-a716-446655440001',
   });
 
 export const ApiReportIdParam = (): MethodDecorator =>
@@ -410,5 +410,5 @@ export const ApiReportIdParam = (): MethodDecorator =>
     name: 'reportId',
     description: 'UUID of the report',
     format: 'uuid',
-    example: '990e8400-e29b-41d4-a716-446655440001',
+    example: '990e8400-e29b-71d4-a716-446655440001',
   });

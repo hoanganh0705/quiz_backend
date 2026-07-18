@@ -35,7 +35,7 @@ describe('instance.dto — Phase 1/4 validation contract', () => {
     describe('quizVersionId', () => {
       it('accepts a valid UUID', async () => {
         const errors = await runValidate(CreateInstanceDto, {
-          quizVersionId: '550e8400-e29b-41d4-a716-446655440000',
+          quizVersionId: '550e8400-e29b-71d4-a716-446655440000',
         });
         expect(errors).toEqual([]);
       });
@@ -56,14 +56,14 @@ describe('instance.dto — Phase 1/4 validation contract', () => {
     describe('maxPlayers', () => {
       it('is optional (omitted → no errors)', async () => {
         const errors = await runValidate(CreateInstanceDto, {
-          quizVersionId: '550e8400-e29b-41d4-a716-446655440000',
+          quizVersionId: '550e8400-e29b-71d4-a716-446655440000',
         });
         expect(errors).toEqual([]);
       });
 
       it.each([2, 50, 100])('accepts maxPlayers=%i (within bounds)', async (value) => {
         const errors = await runValidate(CreateInstanceDto, {
-          quizVersionId: '550e8400-e29b-41d4-a716-446655440000',
+          quizVersionId: '550e8400-e29b-71d4-a716-446655440000',
           maxPlayers: value,
         });
         expect(errors).toEqual([]);
@@ -71,7 +71,7 @@ describe('instance.dto — Phase 1/4 validation contract', () => {
 
       it('rejects maxPlayers=1 (below minimum)', async () => {
         const errors = await runValidate(CreateInstanceDto, {
-          quizVersionId: '550e8400-e29b-41d4-a716-446655440000',
+          quizVersionId: '550e8400-e29b-71d4-a716-446655440000',
           maxPlayers: 1,
         });
         expect(errors.length).toBeGreaterThan(0);
@@ -79,7 +79,7 @@ describe('instance.dto — Phase 1/4 validation contract', () => {
 
       it('rejects maxPlayers=101 (above maximum)', async () => {
         const errors = await runValidate(CreateInstanceDto, {
-          quizVersionId: '550e8400-e29b-41d4-a716-446655440000',
+          quizVersionId: '550e8400-e29b-71d4-a716-446655440000',
           maxPlayers: 101,
         });
         expect(errors.length).toBeGreaterThan(0);
@@ -87,7 +87,7 @@ describe('instance.dto — Phase 1/4 validation contract', () => {
 
       it('rejects non-integer maxPlayers', async () => {
         const errors = await runValidate(CreateInstanceDto, {
-          quizVersionId: '550e8400-e29b-41d4-a716-446655440000',
+          quizVersionId: '550e8400-e29b-71d4-a716-446655440000',
           maxPlayers: 3.5,
         });
         expect(errors.length).toBeGreaterThan(0);
@@ -204,13 +204,13 @@ describe('instance.dto — Phase 1/4 validation contract', () => {
         const cursor = Buffer.from(
           JSON.stringify({
             createdAt: '2026-06-25T10:30:00.000Z',
-            instanceId: '660e8400-e29b-41d4-a716-446655440001',
+            instanceId: '660e8400-e29b-71d4-a716-446655440001',
           }),
         ).toString('base64url');
 
         const decoded = decodeInstanceCursor(cursor);
         expect(decoded.createdAt).toBe('2026-06-25T10:30:00.000Z');
-        expect(decoded.instanceId).toBe('660e8400-e29b-41d4-a716-446655440001');
+        expect(decoded.instanceId).toBe('660e8400-e29b-71d4-a716-446655440001');
       });
 
       it('also accepts legacy base64 cursors (backward-compatible decode)', () => {
@@ -221,12 +221,12 @@ describe('instance.dto — Phase 1/4 validation contract', () => {
         const cursor = Buffer.from(
           JSON.stringify({
             createdAt: '2026-06-25T10:30:00.000Z',
-            instanceId: '660e8400-e29b-41d4-a716-446655440001',
+            instanceId: '660e8400-e29b-71d4-a716-446655440001',
           }),
         ).toString('base64');
 
         const decoded = decodeInstanceCursor(cursor);
-        expect(decoded.instanceId).toBe('660e8400-e29b-41d4-a716-446655440001');
+        expect(decoded.instanceId).toBe('660e8400-e29b-71d4-a716-446655440001');
       });
 
       it('throws 400 on cursor with missing keys', () => {
@@ -240,7 +240,7 @@ describe('instance.dto — Phase 1/4 validation contract', () => {
         const cursor = Buffer.from(
           JSON.stringify({
             createdAt: 12345,
-            instanceId: '660e8400-e29b-41d4-a716-446655440001',
+            instanceId: '660e8400-e29b-71d4-a716-446655440001',
           }),
         ).toString('base64url');
         expect(() => decodeInstanceCursor(cursor)).toThrow();
@@ -257,13 +257,13 @@ describe('instance.dto — Phase 1/4 validation contract', () => {
         const cursor = Buffer.from(
           JSON.stringify({
             rank: 5,
-            instancePlayerId: '550e8400-e29b-41d4-a716-446655440099',
+            instancePlayerId: '550e8400-e29b-71d4-a716-446655440099',
           }),
         ).toString('base64url');
 
         const decoded = decodeLeaderboardCursor(cursor);
         expect(decoded.rank).toBe(5);
-        expect(decoded.instancePlayerId).toBe('550e8400-e29b-41d4-a716-446655440099');
+        expect(decoded.instancePlayerId).toBe('550e8400-e29b-71d4-a716-446655440099');
       });
 
       it('throws 400 on cursor with missing keys', () => {
@@ -275,7 +275,7 @@ describe('instance.dto — Phase 1/4 validation contract', () => {
         const cursor = Buffer.from(
           JSON.stringify({
             rank: 'not-a-number',
-            instancePlayerId: '550e8400-e29b-41d4-a716-446655440099',
+            instancePlayerId: '550e8400-e29b-71d4-a716-446655440099',
           }),
         ).toString('base64url');
         expect(() => decodeLeaderboardCursor(cursor)).toThrow();

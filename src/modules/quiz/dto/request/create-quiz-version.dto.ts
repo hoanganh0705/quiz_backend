@@ -7,11 +7,11 @@ export class CreateQuizVersionDto {
   @ApiPropertyOptional({
     description: 'Source version UUID to copy questions from (optional)',
     format: 'uuid',
-    example: '550e8400-e29b-41d4-a716-446655440000',
+    example: '550e8400-e29b-71d4-a716-446655440000',
     nullable: true,
   })
   @IsOptional()
-  @IsUUID('4')
+  @IsUUID('7')
   sourceVersionId?: string;
 
   @ApiProperty({

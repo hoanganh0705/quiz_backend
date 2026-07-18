@@ -129,7 +129,7 @@ describe('Social-domain errors (RFC 7807 mapping completeness — Phase 2)', () 
     // interpolated at construction time via the constructor argument.
 
     it('interpolates a UUID-style ID into the message', () => {
-      const id = 'f47ac10b-58cc-4372-a567-0e02b2c3d479';
+      const id = 'f47ac10b-58cc-7372-a567-0e02b2c3d479';
       const instance = new FriendRequestNotFoundError(id);
       expect(instance.message).toBe(`Friend request not found: ${id}`);
     });

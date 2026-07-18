@@ -4,19 +4,19 @@ import { TOURNAMENT_PARTICIPANT_STATUSES } from '../../types/tournament.types';
 export class RegisterTournamentResponseDto {
   @ApiProperty({
     description: 'Participant record identifier',
-    example: '550e8400-e29b-41d4-a716-446655440099',
+    example: '550e8400-e29b-71d4-a716-446655440099',
   })
   participantId!: string;
 
   @ApiProperty({
     description: 'Tournament identifier',
-    example: '660e8400-e29b-41d4-a716-446655440000',
+    example: '660e8400-e29b-71d4-a716-446655440000',
   })
   tournamentId!: string;
 
   @ApiProperty({
     description: 'User identifier',
-    example: '550e8400-e29b-41d4-a716-446655440000',
+    example: '550e8400-e29b-71d4-a716-446655440000',
   })
   userId!: string;
 
@@ -36,19 +36,19 @@ export class RegisterTournamentResponseDto {
 export class StartTournamentAttemptResponseDto {
   @ApiProperty({
     description: 'Attempt identifier for the tournament round',
-    example: '550e8400-e29b-41d4-a716-446655440099',
+    example: '550e8400-e29b-71d4-a716-446655440099',
   })
   attemptId!: string;
 
   @ApiProperty({
     description: 'Quiz version identifier for this round',
-    example: '770e8400-e29b-41d4-a716-446655440000',
+    example: '770e8400-e29b-71d4-a716-446655440000',
   })
   quizVersionId!: string;
 
   @ApiProperty({
     description: 'Participant record identifier',
-    example: '550e8400-e29b-41d4-a716-446655440099',
+    example: '550e8400-e29b-71d4-a716-446655440099',
   })
   participantId!: string;
 
@@ -73,7 +73,7 @@ export class WithdrawTournamentResponseDto {
 
   @ApiProperty({
     description: 'Tournament identifier',
-    example: '660e8400-e29b-41d4-a716-446655440000',
+    example: '660e8400-e29b-71d4-a716-446655440000',
   })
   tournamentId!: string;
 

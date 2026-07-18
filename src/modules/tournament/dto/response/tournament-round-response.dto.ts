@@ -5,12 +5,12 @@ import {
 } from '../../types/tournament.types';
 
 export class TournamentRoundResponseDto {
-  @ApiProperty({ description: 'Round identifier', example: '550e8400-e29b-41d4-a716-446655440001' })
+  @ApiProperty({ description: 'Round identifier', example: '550e8400-e29b-71d4-a716-446655440001' })
   roundId!: string;
 
   @ApiProperty({
     description: 'Parent tournament identifier',
-    example: '660e8400-e29b-41d4-a716-446655440000',
+    example: '660e8400-e29b-71d4-a716-446655440000',
   })
   tournamentId!: string;
 
@@ -29,7 +29,7 @@ export class TournamentRoundResponseDto {
 
   @ApiProperty({
     description: 'Quiz version used in this round',
-    example: '770e8400-e29b-41d4-a716-446655440000',
+    example: '770e8400-e29b-71d4-a716-446655440000',
   })
   quizVersionId!: string;
 

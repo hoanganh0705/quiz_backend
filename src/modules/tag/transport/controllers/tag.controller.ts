@@ -10,7 +10,7 @@ import {
   Query,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
-import { ApiTags } from '@nestjs/swagger';
+import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { Public } from '@/common/decorators/public.decorator';
 import { Permissions } from '@/common/authorization/decorators/permissions.decorator';
 import { Permission } from '@/common/authorization/permissions';
@@ -57,6 +57,7 @@ export class TagController {
 
   @Get('popular')
   @Public()
+  @ApiOperation({ summary: 'List popular tags' })
   @ApiPopularTagsResponse()
   async getPopularTags(@Query() query: TagRankingQueryDto) {
     const items = await this.tagApplicationService.getPopularTags({ limit: query.limit });
@@ -65,6 +66,7 @@ export class TagController {
 
   @Get('trending')
   @Public()
+  @ApiOperation({ summary: 'List trending tags' })
   @ApiTrendingTagsResponse()
   async getTrendingTags(@Query() query: TagRankingQueryDto) {
     const items = await this.tagApplicationService.getTrendingTags({ limit: query.limit });
@@ -73,6 +75,7 @@ export class TagController {
 
   @Get(':slug/quizzes')
   @Public()
+  @ApiOperation({ summary: 'List quizzes in a tag' })
   @ApiTagQuizzesResponse()
   async getTagQuizzes(@Param('slug') slug: string, @Query() query: ListQuizzesQueryDto) {
     const result = await this.tagApplicationService.getTagQuizzesBySlug(slug, query);
@@ -81,6 +84,7 @@ export class TagController {
 
   @Get(':slug/related')
   @Public()
+  @ApiOperation({ summary: 'List tags related to a tag' })
   @ApiRelatedTagsResponse()
   async getRelatedTags(@Param('slug') slug: string, @Query() query: RelatedTagsQueryDto) {
     const items = await this.tagApplicationService.getRelatedTags(slug, {
@@ -91,19 +95,21 @@ export class TagController {
 
   @Get(':id/analytics')
   @Public()
+  @ApiOperation({ summary: 'Get analytics for a tag' })
   @ApiTagAnalyticsResponse()
   @ApiTagIdParam()
-  async getTagAnalytics(@Param('id', new ParseUUIDPipe()) tagId: string) {
+  async getTagAnalytics(@Param('id', new ParseUUIDPipe({ version: '7' })) tagId: string) {
     const result = await this.tagApplicationService.getTagAnalytics(tagId);
     return this.presenter.getTagAnalytics(result);
   }
 
   @Post(':id/follow')
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @ApiOperation({ summary: 'Follow a tag' })
   @ApiFollowTagResponse()
   @ApiTagIdParam()
   async followTag(
-    @Param('id', new ParseUUIDPipe()) tagId: string,
+    @Param('id', new ParseUUIDPipe({ version: '7' })) tagId: string,
     @CurrentUser() user: JwtPayload,
   ) {
     const result = await this.tagApplicationService.followTag(user.sub, tagId);
@@ -112,10 +118,11 @@ export class TagController {
 
   @Delete(':id/follow')
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @ApiOperation({ summary: 'Unfollow a tag' })
   @ApiUnfollowTagResponse()
   @ApiTagIdParam()
   async unfollowTag(
-    @Param('id', new ParseUUIDPipe()) tagId: string,
+    @Param('id', new ParseUUIDPipe({ version: '7' })) tagId: string,
     @CurrentUser() user: JwtPayload,
   ) {
     const result = await this.tagApplicationService.unfollowTag(user.sub, tagId);
@@ -124,15 +131,17 @@ export class TagController {
 
   @Post(':id/restore')
   @Permissions(Permission.TAG_MANAGE)
+  @ApiOperation({ summary: 'Restore a deleted tag' })
   @ApiRestoreTagResponse()
   @ApiTagIdParam()
-  async restoreTag(@Param('id', new ParseUUIDPipe()) tagId: string) {
+  async restoreTag(@Param('id', new ParseUUIDPipe({ version: '7' })) tagId: string) {
     const result = await this.tagApplicationService.restoreTag(tagId);
     return this.presenter.restoreTag(result);
   }
 
   @Get()
   @Public()
+  @ApiOperation({ summary: 'List all tags' })
   @ApiListTagsResponse()
   async listTags(@Query() query: ListTagsQueryDto) {
     const command: ListTagsQuery = {
@@ -145,6 +154,7 @@ export class TagController {
 
   @Get(':slug')
   @Public()
+  @ApiOperation({ summary: 'Get a tag by slug' })
   @ApiTagBySlugResponse()
   async getTagBySlug(@Param('slug') slug: string) {
     const result = await this.tagApplicationService.getTagBySlug(slug);
@@ -153,6 +163,7 @@ export class TagController {
 
   @Post()
   @Permissions(Permission.TAG_MANAGE)
+  @ApiOperation({ summary: 'Create a tag' })
   @ApiCreateTagResponse()
   async createTag(@Body() payload: CreateTagDto) {
     const command: CreateTagCommand = { name: payload.name, slug: payload.slug };
@@ -162,9 +173,13 @@ export class TagController {
 
   @Patch(':id')
   @Permissions(Permission.TAG_MANAGE)
+  @ApiOperation({ summary: 'Update a tag' })
   @ApiUpdateTagResponse()
   @ApiTagIdParam()
-  async updateTag(@Param('id', new ParseUUIDPipe()) tagId: string, @Body() payload: UpdateTagDto) {
+  async updateTag(
+    @Param('id', new ParseUUIDPipe({ version: '7' })) tagId: string,
+    @Body() payload: UpdateTagDto,
+  ) {
     const command: UpdateTagCommand = { name: payload.name, slug: payload.slug };
     const result = await this.tagApplicationService.updateTag(tagId, command);
     return this.presenter.updateTag(result);
@@ -172,9 +187,10 @@ export class TagController {
 
   @Delete(':id')
   @Permissions(Permission.TAG_MANAGE)
+  @ApiOperation({ summary: 'Delete a tag' })
   @ApiDeleteTagResponse()
   @ApiTagIdParam()
-  async deleteTag(@Param('id', new ParseUUIDPipe()) tagId: string) {
+  async deleteTag(@Param('id', new ParseUUIDPipe({ version: '7' })) tagId: string) {
     const result = await this.tagApplicationService.deleteTag(tagId);
     return this.presenter.deleteTag(result);
   }

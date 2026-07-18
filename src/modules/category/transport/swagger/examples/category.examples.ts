@@ -13,7 +13,7 @@ const PAGINATED_META = {
 
 const RANKED_CATEGORY_ITEM = {
   rank: 1,
-  categoryId: '660e8400-e29b-41d4-a716-446655440000',
+  categoryId: '660e8400-e29b-71d4-a716-446655440000',
   name: 'General Knowledge',
   slug: 'general-knowledge',
   imageUrl: 'https://example.com/images/general-knowledge.jpg',
@@ -24,7 +24,7 @@ const RANKED_CATEGORY_ITEM = {
 };
 
 const CATEGORY_ITEM = {
-  categoryId: '660e8400-e29b-41d4-a716-446655440000',
+  categoryId: '660e8400-e29b-71d4-a716-446655440000',
   name: 'General Knowledge',
   slug: 'general-knowledge',
   description: 'Test your knowledge across a wide range of topics',
@@ -49,7 +49,7 @@ export const CATEGORY_RANKED_LIST_EXAMPLE = {
 } as const;
 
 const RELATED_CATEGORY_ITEM = {
-  categoryId: '770e8400-e29b-41d4-a716-446655440001',
+  categoryId: '770e8400-e29b-71d4-a716-446655440001',
   name: 'Science',
   slug: 'science',
   description: 'Explore the wonders of science',
@@ -65,7 +65,7 @@ export const CATEGORY_RELATED_LIST_EXAMPLE = {
 
 export const CATEGORY_ANALYTICS_EXAMPLE = {
   data: {
-    categoryId: '660e8400-e29b-41d4-a716-446655440000',
+    categoryId: '660e8400-e29b-71d4-a716-446655440000',
     categoryName: 'General Knowledge',
     summary: {
       totalQuizzes: 12,
@@ -78,7 +78,7 @@ export const CATEGORY_ANALYTICS_EXAMPLE = {
     topQuizzes: [
       {
         rank: 1,
-        quizId: '550e8400-e29b-41d4-a716-446655440001',
+        quizId: '550e8400-e29b-71d4-a716-446655440001',
         title: 'World Geography',
         slug: 'world-geography',
         imageUrl: 'https://example.com/covers/geography.png',
@@ -113,7 +113,7 @@ export const CATEGORY_DELETE_MESSAGE_EXAMPLE = {
 export const CATEGORY_FOLLOWED_LIST_EXAMPLE = {
   data: [
     {
-      categoryId: '660e8400-e29b-41d4-a716-446655440000',
+      categoryId: '660e8400-e29b-71d4-a716-446655440000',
       name: 'General Knowledge',
       slug: 'general-knowledge',
       imageUrl: 'https://example.com/images/general-knowledge.jpg',
@@ -135,7 +135,7 @@ export const CATEGORY_FOLLOWED_LIST_EXAMPLE = {
 export const CATEGORY_QUIZZES_EXAMPLE = {
   data: [
     {
-      quizId: '550e8400-e29b-41d4-a716-446655440001',
+      quizId: '550e8400-e29b-71d4-a716-446655440001',
       title: 'World Geography',
       slug: 'world-geography',
       imageUrl: 'https://example.com/covers/geography.png',

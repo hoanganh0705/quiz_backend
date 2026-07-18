@@ -4,7 +4,7 @@ export class AttemptStatsFavoriteCategoryDto {
   @ApiProperty({
     description: 'Category identifier',
     format: 'uuid',
-    example: '550e8400-e29b-41d4-a716-446655440001',
+    example: '550e8400-e29b-71d4-a716-446655440001',
   })
   categoryId!: string;
 
@@ -16,7 +16,7 @@ export class AttemptStatsFavoriteTagDto {
   @ApiProperty({
     description: 'Tag identifier',
     format: 'uuid',
-    example: '550e8400-e29b-41d4-a716-446655440002',
+    example: '550e8400-e29b-71d4-a716-446655440002',
   })
   tagId!: string;
 
@@ -50,7 +50,7 @@ export class UserAttemptStatsResponseDto {
     description: 'Category attempted most frequently. Null if no attempts have been made.',
     type: AttemptStatsFavoriteCategoryDto,
     nullable: true,
-    example: { categoryId: '550e8400-e29b-41d4-a716-446655440001', name: 'Science' },
+    example: { categoryId: '550e8400-e29b-71d4-a716-446655440001', name: 'Science' },
   })
   favoriteCategory!: AttemptStatsFavoriteCategoryDto | null;
 
@@ -58,7 +58,7 @@ export class UserAttemptStatsResponseDto {
     description: 'Tag attempted most frequently. Null if no attempts have been made.',
     type: AttemptStatsFavoriteTagDto,
     nullable: true,
-    example: { tagId: '550e8400-e29b-41d4-a716-446655440002', name: 'Physics' },
+    example: { tagId: '550e8400-e29b-71d4-a716-446655440002', name: 'Physics' },
   })
   favoriteTag!: AttemptStatsFavoriteTagDto | null;
 

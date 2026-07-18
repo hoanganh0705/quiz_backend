@@ -1,5 +1,5 @@
 import { Controller, Get, Param, ParseUUIDPipe, Query } from '@nestjs/common';
-import { ApiTags, ApiParam } from '@nestjs/swagger';
+import { ApiTags, ApiParam, ApiOperation } from '@nestjs/swagger';
 import { Public } from '@/common/decorators/public.decorator';
 import { DiscussionApplicationService } from '@/modules/discussion/application/discussion-application.service';
 import { ListQuizDiscussionsQueryDto } from '@/modules/discussion/dto/request';
@@ -22,12 +22,13 @@ export class QuizDiscussionController {
 
   @Get(':quizId/discussions')
   @Public()
+  @ApiOperation({ summary: 'List discussion threads for a quiz' })
   @ApiOkResourceList(QuizDiscussionItemResponseDto, 'cursor', {
     description: 'Discussion threads returned',
   })
   @ApiParam({ name: 'quizId', format: 'uuid' })
   async listQuizDiscussions(
-    @Param('quizId', new ParseUUIDPipe()) quizId: string,
+    @Param('quizId', new ParseUUIDPipe({ version: '7' })) quizId: string,
     @Query() query: ListQuizDiscussionsQueryDto,
   ) {
     const result = await this.discussionApplicationService.listQuizDiscussions(quizId, {

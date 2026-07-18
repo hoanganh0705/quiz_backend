@@ -3,7 +3,7 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 export class UserActivityItemDto {
   @ApiProperty({
     description: 'Activity event identifier',
-    example: '7c9e6679-7425-40de-944b-e07fc1f90ae7',
+    example: '7c9e6679-7425-70de-944b-e07fc1f90ae7',
   })
   eventId!: string;
 
@@ -33,7 +33,7 @@ export class UserActivityItemDto {
     description: 'Event-specific metadata payload',
     type: 'object',
     additionalProperties: true,
-    example: { quizId: '660e8400-e29b-41d4-a716-446655440000', score: 88 },
+    example: { quizId: '660e8400-e29b-71d4-a716-446655440000', score: 88 },
   })
   metadata!: Record<string, unknown>;
 }

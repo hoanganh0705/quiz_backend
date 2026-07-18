@@ -9,7 +9,7 @@ import type {
 import type { DeleteQuizResponseDto } from '../../dto/response/delete-quiz-response.dto';
 import type { QuizStatsResponseDto } from '../../dto/response/quiz-stats-response.dto';
 import type { RelatedQuizzesResponseDto } from '../../dto/response/related-quizzes-response.dto';
-import type { QuizQuestionResponseDto } from '../../dto/response/quiz-question-response.dto';
+import type { QuizQuestionAuthorDto } from '../../dto/response/quiz-question-author.dto';
 import type {
   QuizVersionDetailResponseDto,
   QuizVersionResponseDto,
@@ -85,7 +85,7 @@ export class QuizPresenter {
   readonly getQuizVersionDetail = QuizPresenter.ok<QuizVersionDetailResponseDto>;
 
   // Questions
-  readonly createQuizQuestion = QuizPresenter.ok<QuizQuestionResponseDto>;
-  readonly createQuizQuestions = (result: { questions: QuizQuestionResponseDto[] }) =>
+  readonly createQuizQuestion = QuizPresenter.ok<QuizQuestionAuthorDto>;
+  readonly createQuizQuestions = (result: { questions: QuizQuestionAuthorDto[] }) =>
     ApiResponse.ok({ questions: [...result.questions] });
 }
