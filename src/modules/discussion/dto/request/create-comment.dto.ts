@@ -19,10 +19,10 @@ export class CreateCommentDto {
   @ApiPropertyOptional({
     description: 'UUID of the parent comment if this is a reply',
     format: 'uuid',
-    example: '770e8400-e29b-41d4-a716-446655440000',
+    example: '770e8400-e29b-71d4-a716-446655440000',
     nullable: true,
   })
   @IsOptional()
-  @IsUUID('all', { message: 'parentCommentId must be a valid UUID' })
+  @IsUUID('7', { message: 'parentCommentId must be a valid UUID' })
   parentCommentId?: string;
 }

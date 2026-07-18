@@ -127,7 +127,7 @@ describe('normalizeTemporalFields — shared utility (Phase 3.1)', () => {
 
     it('passes through non-temporal fields unchanged', () => {
       const input = {
-        tagId: '550e8400-e29b-41d4-a716-446655440000',
+        tagId: '550e8400-e29b-71d4-a716-446655440000',
         name: 'JavaScript',
         slug: 'javascript',
         xpTotal: 15420,
@@ -138,13 +138,13 @@ describe('normalizeTemporalFields — shared utility (Phase 3.1)', () => {
 
     it('normalizes all temporal fields in a mixed object', () => {
       const input = {
-        tagId: '550e8400-e29b-41d4-a716-446655440000',
+        tagId: '550e8400-e29b-71d4-a716-446655440000',
         createdAt: '2026-07-14 10:30:19.156551+00',
         updatedAt: '2026-01-01 00:00:00+00',
         name: 'JavaScript',
       };
       const result = normalizeTemporalFields(input) as Record<string, unknown>;
-      expect(result.tagId).toBe('550e8400-e29b-41d4-a716-446655440000');
+      expect(result.tagId).toBe('550e8400-e29b-71d4-a716-446655440000');
       expect(result.name).toBe('JavaScript');
       expect(result.createdAt).toMatch(ISO_TIMESTAMP_REGEX);
       expect(result.updatedAt).toMatch(ISO_TIMESTAMP_REGEX);

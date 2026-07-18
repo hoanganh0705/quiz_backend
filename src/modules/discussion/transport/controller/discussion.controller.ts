@@ -13,7 +13,7 @@ import {
   HttpStatus,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
-import { ApiBearerAuth, ApiTags, ApiParam } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiTags, ApiParam, ApiOperation } from '@nestjs/swagger';
 import { Public } from '@/common/decorators/public.decorator';
 import { Permissions } from '@/common/authorization/decorators/permissions.decorator';
 import { Permission } from '@/common/authorization/permissions';
@@ -85,6 +85,7 @@ export class DiscussionController {
 
   @Get('trending')
   @Public()
+  @ApiOperation({ summary: 'List trending discussion threads' })
   @ApiOkResourceList(TrendingDiscussionItemResponseDto, 'cursor', {
     description: 'Returns a list of trending discussion threads, sorted by a relevance score.',
   })
@@ -98,6 +99,7 @@ export class DiscussionController {
 
   @Get('unanswered')
   @Public()
+  @ApiOperation({ summary: 'List discussion threads with no comments' })
   @ApiOkResourceList(UnansweredDiscussionItemResponseDto, 'cursor', {
     description: 'Returns discussion threads that have no comments yet.',
   })
@@ -111,6 +113,7 @@ export class DiscussionController {
 
   @Get('search')
   @Public()
+  @ApiOperation({ summary: 'Search discussion threads' })
   @ApiOkResourceList(SearchDiscussionItemResponseDto, 'cursor', {
     description:
       'Search returns a paginated list of discussion threads matching the query. Empty searches return { "data": [], "meta": {...} }.',
@@ -126,12 +129,13 @@ export class DiscussionController {
 
   @Get('threads/:threadId/related')
   @Public()
+  @ApiOperation({ summary: 'List threads related to a thread' })
   @ApiOkResourceList(RelatedDiscussionItemResponseDto, 'cursor', {
     description: 'Related discussions returned',
   })
   @ApiParam({ name: 'threadId', format: 'uuid' })
   async listRelatedDiscussions(
-    @Param('threadId', new ParseUUIDPipe()) threadId: string,
+    @Param('threadId', new ParseUUIDPipe({ version: '7' })) threadId: string,
     @Query() query: ListRelatedDiscussionsQueryDto,
   ) {
     const items = await this.discussionService.listRelatedDiscussions(threadId, {
@@ -142,27 +146,32 @@ export class DiscussionController {
 
   @Get('threads/:threadId/participants')
   @Public()
+  @ApiOperation({ summary: 'List participants of a thread' })
   @ApiOkResourceList(ThreadParticipantItemResponseDto, 'cursor', {
     description: 'Thread participants returned',
   })
   @ApiParam({ name: 'threadId', format: 'uuid' })
-  async listThreadParticipants(@Param('threadId', new ParseUUIDPipe()) threadId: string) {
+  async listThreadParticipants(
+    @Param('threadId', new ParseUUIDPipe({ version: '7' })) threadId: string,
+  ) {
     const items = await this.discussionService.listThreadParticipants(threadId);
     return this.presenter.listThreadParticipants(items);
   }
 
   @Get('threads/:threadId/stats')
   @Public()
+  @ApiOperation({ summary: 'Get statistics for a thread' })
   @ApiOkResource(ThreadStatsResponseDto, {
     description: 'Thread statistics returned',
   })
   @ApiParam({ name: 'threadId', format: 'uuid' })
-  async getThreadStats(@Param('threadId', new ParseUUIDPipe()) threadId: string) {
+  async getThreadStats(@Param('threadId', new ParseUUIDPipe({ version: '7' })) threadId: string) {
     const result = await this.discussionService.getThreadStats(threadId);
     return this.presenter.getThreadStats(result);
   }
 
   @Get('me')
+  @ApiOperation({ summary: "Get the authenticated user's discussion statistics" })
   @ApiOkResource(MyDiscussionStatsResponseDto, {
     description: 'Discussion statistics returned',
   })
@@ -173,6 +182,7 @@ export class DiscussionController {
 
   @Throttle({ default: { limit: 30, ttl: 60_000 } })
   @Post('threads/:threadId/subscribe')
+  @ApiOperation({ summary: 'Subscribe to a thread' })
   @ApiAuthAction({
     description: 'Subscription recorded successfully',
     type: DiscussionSubscriptionActionResponseDto,
@@ -180,7 +190,7 @@ export class DiscussionController {
   @ApiParam({ name: 'threadId', format: 'uuid' })
   async subscribeToThread(
     @CurrentUser() user: JwtPayload,
-    @Param('threadId', new ParseUUIDPipe()) threadId: string,
+    @Param('threadId', new ParseUUIDPipe({ version: '7' })) threadId: string,
   ) {
     const result = await this.discussionService.subscribeToThread(user, threadId);
     return this.presenter.subscribeToThread(result);
@@ -188,6 +198,7 @@ export class DiscussionController {
 
   @Throttle({ default: { limit: 30, ttl: 60_000 } })
   @Delete('threads/:threadId/subscribe')
+  @ApiOperation({ summary: 'Unsubscribe from a thread' })
   @ApiAuthAction({
     description: 'Subscription removed successfully',
     type: DiscussionSubscriptionActionResponseDto,
@@ -195,7 +206,7 @@ export class DiscussionController {
   @ApiParam({ name: 'threadId', format: 'uuid' })
   async unsubscribeFromThread(
     @CurrentUser() user: JwtPayload,
-    @Param('threadId', new ParseUUIDPipe()) threadId: string,
+    @Param('threadId', new ParseUUIDPipe({ version: '7' })) threadId: string,
   ) {
     const result = await this.discussionService.unsubscribeFromThread(user, threadId);
     return this.presenter.unsubscribeFromThread(result);
@@ -203,6 +214,7 @@ export class DiscussionController {
 
   @Throttle({ default: { limit: 30, ttl: 60_000 } })
   @Post('threads/:threadId/save')
+  @ApiOperation({ summary: 'Save a thread' })
   @ApiAuthAction({
     description: 'Thread saved successfully',
     type: DiscussionSavedThreadActionResponseDto,
@@ -210,7 +222,7 @@ export class DiscussionController {
   @ApiParam({ name: 'threadId', format: 'uuid' })
   async saveThread(
     @CurrentUser() user: JwtPayload,
-    @Param('threadId', new ParseUUIDPipe()) threadId: string,
+    @Param('threadId', new ParseUUIDPipe({ version: '7' })) threadId: string,
   ) {
     const result = await this.discussionService.saveThread(user, threadId);
     return this.presenter.saveThread(result);
@@ -218,6 +230,7 @@ export class DiscussionController {
 
   @Throttle({ default: { limit: 30, ttl: 60_000 } })
   @Delete('threads/:threadId/save')
+  @ApiOperation({ summary: 'Unsave a thread' })
   @ApiAuthAction({
     description: 'Saved thread removed successfully',
     type: DiscussionSavedThreadActionResponseDto,
@@ -225,13 +238,14 @@ export class DiscussionController {
   @ApiParam({ name: 'threadId', format: 'uuid' })
   async unsaveThread(
     @CurrentUser() user: JwtPayload,
-    @Param('threadId', new ParseUUIDPipe()) threadId: string,
+    @Param('threadId', new ParseUUIDPipe({ version: '7' })) threadId: string,
   ) {
     const result = await this.discussionService.unsaveThread(user, threadId);
     return this.presenter.unsaveThread(result);
   }
 
   @Get('threads')
+  @ApiOperation({ summary: 'List threads' })
   @ApiOkResourceList(ThreadDto, 'cursor', { description: 'Threads returned' })
   async listThreads(@CurrentUser() user: JwtPayload, @Query() query: ListThreadsQueryDto) {
     const result = await this.discussionService.listThreads(user, {
@@ -248,6 +262,7 @@ export class DiscussionController {
 
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @Post('threads')
+  @ApiOperation({ summary: 'Create a discussion thread' })
   @ApiCreatedResource(ThreadDto, { description: 'Thread created successfully' })
   async createThread(@CurrentUser() user: JwtPayload, @Body() dto: CreateThreadDto) {
     return this.presenter.createThread(
@@ -256,12 +271,13 @@ export class DiscussionController {
   }
 
   @Get('threads/:threadId')
+  @ApiOperation({ summary: 'Get a discussion thread by ID' })
   @ApiOkResource(ThreadDetailDto, { description: 'Thread returned' })
   @ApiNotFound()
   @ApiParam({ name: 'threadId', format: 'uuid' })
   async getThread(
     @CurrentUser() user: JwtPayload,
-    @Param('threadId', new ParseUUIDPipe()) threadId: string,
+    @Param('threadId', new ParseUUIDPipe({ version: '7' })) threadId: string,
   ) {
     const result = await this.discussionService.getThread(user, threadId);
     if (!result) {
@@ -272,11 +288,12 @@ export class DiscussionController {
 
   @Throttle({ default: { limit: 20, ttl: 60_000 } })
   @Put('threads/:threadId')
+  @ApiOperation({ summary: 'Update a discussion thread' })
   @ApiAuthAction({ description: 'Thread updated', type: ThreadDto })
   @ApiParam({ name: 'threadId', format: 'uuid' })
   async updateThread(
     @CurrentUser() user: JwtPayload,
-    @Param('threadId', new ParseUUIDPipe()) threadId: string,
+    @Param('threadId', new ParseUUIDPipe({ version: '7' })) threadId: string,
     @Body() dto: UpdateThreadDto,
   ) {
     if (dto.title === undefined && dto.body === undefined) {
@@ -289,30 +306,33 @@ export class DiscussionController {
 
   @Throttle({ default: { limit: 30, ttl: 60_000 } })
   @Post('threads/:threadId/close')
+  @ApiOperation({ summary: 'Close a discussion thread' })
   @ApiAuthActionNoContent('Thread closed')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiParam({ name: 'threadId', format: 'uuid' })
   async closeThread(
     @CurrentUser() user: JwtPayload,
-    @Param('threadId', new ParseUUIDPipe()) threadId: string,
+    @Param('threadId', new ParseUUIDPipe({ version: '7' })) threadId: string,
   ): Promise<void> {
     await this.discussionService.closeThread(user, threadId);
   }
 
   @Throttle({ default: { limit: 30, ttl: 60_000 } })
   @Post('threads/:threadId/reopen')
+  @ApiOperation({ summary: 'Reopen a closed discussion thread' })
   @ApiAuthActionNoContent('Thread reopened')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiParam({ name: 'threadId', format: 'uuid' })
   async reopenThread(
     @CurrentUser() user: JwtPayload,
-    @Param('threadId', new ParseUUIDPipe()) threadId: string,
+    @Param('threadId', new ParseUUIDPipe({ version: '7' })) threadId: string,
   ): Promise<void> {
     await this.discussionService.reopenThread(user, threadId);
   }
 
   @Throttle({ default: { limit: 20, ttl: 60_000 } })
   @Post('threads/:threadId/solve')
+  @ApiOperation({ summary: 'Mark a thread as solved' })
   @ApiAuthAction({
     description: 'Thread marked as solved successfully',
     type: DiscussionThreadSolveResponseDto,
@@ -320,7 +340,7 @@ export class DiscussionController {
   @ApiParam({ name: 'threadId', format: 'uuid' })
   async markThreadAsSolved(
     @CurrentUser() user: JwtPayload,
-    @Param('threadId', new ParseUUIDPipe()) threadId: string,
+    @Param('threadId', new ParseUUIDPipe({ version: '7' })) threadId: string,
     @Body() dto: SolveThreadDto,
   ) {
     const thread = await this.discussionService.markThreadAsSolved(user, threadId, dto.commentId);
@@ -334,6 +354,7 @@ export class DiscussionController {
 
   @Throttle({ default: { limit: 20, ttl: 60_000 } })
   @Delete('threads/:threadId/solve')
+  @ApiOperation({ summary: 'Remove the solved status from a thread' })
   @ApiAuthAction({
     description: 'Thread unsolved successfully',
     type: DiscussionThreadUnsolveResponseDto,
@@ -341,7 +362,7 @@ export class DiscussionController {
   @ApiParam({ name: 'threadId', format: 'uuid' })
   async unsolveThread(
     @CurrentUser() user: JwtPayload,
-    @Param('threadId', new ParseUUIDPipe()) threadId: string,
+    @Param('threadId', new ParseUUIDPipe({ version: '7' })) threadId: string,
   ) {
     const thread = await this.discussionService.unsolveThread(user, threadId);
     return this.presenter.unsolveThread({
@@ -352,38 +373,39 @@ export class DiscussionController {
 
   @Throttle({ default: { limit: 30, ttl: 60_000 } })
   @Delete('threads/:threadId')
+  @ApiOperation({ summary: 'Delete a discussion thread' })
   @ApiAuthActionNoContent('Thread deleted')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiParam({ name: 'threadId', format: 'uuid' })
   async deleteThread(
     @CurrentUser() user: JwtPayload,
-    @Param('threadId', new ParseUUIDPipe()) threadId: string,
+    @Param('threadId', new ParseUUIDPipe({ version: '7' })) threadId: string,
   ): Promise<void> {
     await this.discussionService.deleteThread(user, threadId);
   }
 
   @Throttle({ default: { limit: 30, ttl: 60_000 } })
   @Post('threads/:threadId/hide')
-  @Permissions(Permission.DISCUSSION_MODERATE)
+  @ApiOperation({ summary: 'Hide a discussion thread (moderator)' })
   @ApiModeratorAction('Thread hidden')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiParam({ name: 'threadId', format: 'uuid' })
   async hideThread(
     @CurrentUser() user: JwtPayload,
-    @Param('threadId', new ParseUUIDPipe()) threadId: string,
+    @Param('threadId', new ParseUUIDPipe({ version: '7' })) threadId: string,
   ): Promise<void> {
     await this.discussionService.hideThread(user, threadId);
   }
 
   @Throttle({ default: { limit: 30, ttl: 60_000 } })
   @Post('threads/:threadId/restore')
-  @Permissions(Permission.DISCUSSION_MODERATE)
+  @ApiOperation({ summary: 'Restore a hidden discussion thread (moderator)' })
   @ApiModeratorAction('Thread restored')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiParam({ name: 'threadId', format: 'uuid' })
   async restoreThread(
     @CurrentUser() user: JwtPayload,
-    @Param('threadId', new ParseUUIDPipe()) threadId: string,
+    @Param('threadId', new ParseUUIDPipe({ version: '7' })) threadId: string,
   ): Promise<void> {
     await this.discussionService.restoreThread(user, threadId);
   }
@@ -392,11 +414,12 @@ export class DiscussionController {
 
   @Throttle({ default: { limit: 20, ttl: 60_000 } })
   @Post('threads/:threadId/comments')
+  @ApiOperation({ summary: 'Post a comment on a thread' })
   @ApiCreatedResource(CommentDto, { description: 'Comment created' })
   @ApiParam({ name: 'threadId', format: 'uuid' })
   async createComment(
     @CurrentUser() user: JwtPayload,
-    @Param('threadId', new ParseUUIDPipe()) threadId: string,
+    @Param('threadId', new ParseUUIDPipe({ version: '7' })) threadId: string,
     @Body() dto: CreateCommentDto,
   ) {
     return this.presenter.createComment(
@@ -410,11 +433,12 @@ export class DiscussionController {
   }
 
   @Get('threads/:threadId/comments')
+  @ApiOperation({ summary: 'List comments on a thread' })
   @ApiOkResourceList(CommentDto, 'cursor', { description: 'Comments returned' })
   @ApiParam({ name: 'threadId', format: 'uuid' })
   async listComments(
     @CurrentUser() user: JwtPayload,
-    @Param('threadId', new ParseUUIDPipe()) threadId: string,
+    @Param('threadId', new ParseUUIDPipe({ version: '7' })) threadId: string,
     @Query() query: ListCommentsQueryDto,
   ) {
     const result = await this.discussionService.listComments(user, threadId, {
@@ -426,11 +450,12 @@ export class DiscussionController {
   }
 
   @Get('comments/:commentId')
+  @ApiOperation({ summary: 'Get a comment by ID' })
   @ApiOkResource(CommentDto, { description: 'Comment returned' })
   @ApiParam({ name: 'commentId', format: 'uuid' })
   async getComment(
     @CurrentUser() user: JwtPayload,
-    @Param('commentId', new ParseUUIDPipe()) commentId: string,
+    @Param('commentId', new ParseUUIDPipe({ version: '7' })) commentId: string,
   ) {
     const result = await this.discussionService.getComment(user, commentId);
     return this.presenter.getComment(result);
@@ -438,11 +463,12 @@ export class DiscussionController {
 
   @Throttle({ default: { limit: 20, ttl: 60_000 } })
   @Put('comments/:commentId')
+  @ApiOperation({ summary: 'Update a comment' })
   @ApiAuthAction({ description: 'Comment updated', type: CommentDto })
   @ApiParam({ name: 'commentId', format: 'uuid' })
   async updateComment(
     @CurrentUser() user: JwtPayload,
-    @Param('commentId', new ParseUUIDPipe()) commentId: string,
+    @Param('commentId', new ParseUUIDPipe({ version: '7' })) commentId: string,
     @Body() dto: UpdateCommentDto,
   ) {
     if (dto.body === undefined) {
@@ -455,38 +481,39 @@ export class DiscussionController {
 
   @Throttle({ default: { limit: 30, ttl: 60_000 } })
   @Delete('comments/:commentId')
+  @ApiOperation({ summary: 'Delete a comment' })
   @ApiAuthActionNoContent('Comment deleted')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiParam({ name: 'commentId', format: 'uuid' })
   async deleteComment(
     @CurrentUser() user: JwtPayload,
-    @Param('commentId', new ParseUUIDPipe()) commentId: string,
+    @Param('commentId', new ParseUUIDPipe({ version: '7' })) commentId: string,
   ): Promise<void> {
     await this.discussionService.deleteComment(user, commentId);
   }
 
   @Throttle({ default: { limit: 30, ttl: 60_000 } })
   @Post('comments/:commentId/hide')
-  @Permissions(Permission.DISCUSSION_MODERATE)
+  @ApiOperation({ summary: 'Hide a comment (moderator)' })
   @ApiModeratorAction('Comment hidden')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiParam({ name: 'commentId', format: 'uuid' })
   async hideComment(
     @CurrentUser() user: JwtPayload,
-    @Param('commentId', new ParseUUIDPipe()) commentId: string,
+    @Param('commentId', new ParseUUIDPipe({ version: '7' })) commentId: string,
   ): Promise<void> {
     await this.discussionService.hideComment(user, commentId);
   }
 
   @Throttle({ default: { limit: 30, ttl: 60_000 } })
   @Post('comments/:commentId/restore')
-  @Permissions(Permission.DISCUSSION_MODERATE)
+  @ApiOperation({ summary: 'Restore a hidden comment (moderator)' })
   @ApiModeratorAction('Comment restored')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiParam({ name: 'commentId', format: 'uuid' })
   async restoreComment(
     @CurrentUser() user: JwtPayload,
-    @Param('commentId', new ParseUUIDPipe()) commentId: string,
+    @Param('commentId', new ParseUUIDPipe({ version: '7' })) commentId: string,
   ): Promise<void> {
     await this.discussionService.restoreComment(user, commentId);
   }
@@ -495,6 +522,7 @@ export class DiscussionController {
 
   @Throttle({ default: { limit: 20, ttl: 60_000 } })
   @Post('vote')
+  @ApiOperation({ summary: 'Upvote or downvote a thread or comment' })
   @ApiAuthActionNoContent('Vote recorded')
   @HttpCode(HttpStatus.NO_CONTENT)
   async vote(@CurrentUser() user: JwtPayload, @Body() dto: VoteDto): Promise<void> {
@@ -503,6 +531,7 @@ export class DiscussionController {
 
   @Throttle({ default: { limit: 20, ttl: 60_000 } })
   @Delete('vote')
+  @ApiOperation({ summary: 'Remove a vote from a thread or comment' })
   @ApiAuthActionNoContent('Vote removed')
   @HttpCode(HttpStatus.NO_CONTENT)
   async removeVote(@CurrentUser() user: JwtPayload, @Body() dto: RemoveVoteDto): Promise<void> {
@@ -513,6 +542,7 @@ export class DiscussionController {
 
   @Throttle({ default: { limit: 5, ttl: 60_000 } })
   @Post('report')
+  @ApiOperation({ summary: 'Report a thread or comment' })
   @ApiAuthActionNoContent('Report submitted')
   @HttpCode(HttpStatus.NO_CONTENT)
   async report(@CurrentUser() user: JwtPayload, @Body() dto: CreateReportDto): Promise<void> {
@@ -527,13 +557,13 @@ export class DiscussionController {
 
   @Throttle({ default: { limit: 20, ttl: 60_000 } })
   @Post('reports/:reportId/review')
-  @Permissions(Permission.DISCUSSION_MODERATE)
+  @ApiOperation({ summary: 'Review a report (moderator)' })
   @ApiModeratorAction('Report reviewed')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiParam({ name: 'reportId', format: 'uuid' })
   async reviewReport(
     @CurrentUser() user: JwtPayload,
-    @Param('reportId', new ParseUUIDPipe()) reportId: string,
+    @Param('reportId', new ParseUUIDPipe({ version: '7' })) reportId: string,
     @Body() dto: ReviewReportDto,
   ): Promise<void> {
     await this.discussionService.reviewReport(user, reportId, dto.status, dto.actionTaken ?? false);
@@ -541,6 +571,7 @@ export class DiscussionController {
 
   @Get('reports')
   @Permissions(Permission.DISCUSSION_MODERATE)
+  @ApiOperation({ summary: 'List discussion reports (moderator)' })
   @ApiBearerAuth()
   @ApiOkResourceList(ReportResponseDto, 'cursor', { description: 'Reports returned' })
   async listReports(@CurrentUser() user: JwtPayload, @Query() query: ListReportsQueryDto) {

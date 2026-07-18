@@ -3,7 +3,7 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 export class UserBadgeItemDto {
   @ApiProperty({
     description: 'Badge identifier',
-    example: 'b9d6f3a0-7d6e-4d6c-b4d2-1a4f6b2aef90',
+    example: 'b9d6f3a0-7d6e-7d6c-b4d2-1a4f6b2aef90',
   })
   badgeId!: string;
 

@@ -28,7 +28,7 @@ export class ReportReviewDto {
     description: 'Idempotency key to prevent duplicate reports on retry.',
     type: String,
     nullable: true,
-    example: 'report-review-550e8400-e29b-41d4-a716-446655440099-charlie',
+    example: 'report-review-550e8400-e29b-71d4-a716-446655440099-charlie',
   })
   @IsOptional()
   @IsString()

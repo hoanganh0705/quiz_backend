@@ -1,16 +1,25 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { QuizAnswerOptionResponseDto } from './quiz-answer-option-response.dto';
+import { QuizAnswerOptionPlayerDto } from './quiz-answer-option-player.dto';
 
-export class QuizQuestionResponseDto {
+/**
+ * Player-facing question DTO. Embeds `QuizAnswerOptionPlayerDto` per option,
+ * which does NOT expose `isCorrect`.
+ *
+ * Used by the public quiz-detail endpoint (`GET /quizzes/:id`) and any
+ * future player-facing question surface.
+ *
+ * For author-only endpoints, use `QuizQuestionAuthorDto`.
+ */
+export class QuizQuestionPlayerDto {
   @ApiProperty({
     description: 'Unique question identifier',
-    example: '550e8400-e29b-41d4-a716-446655440001',
+    example: '550e8400-e29b-71d4-a716-446655440001',
   })
   questionId!: string;
 
   @ApiProperty({
     description: 'Parent quiz version identifier',
-    example: '550e8400-e29b-41d4-a716-446655440000',
+    example: '550e8400-e29b-71d4-a716-446655440000',
   })
   quizVersionId!: string;
 
@@ -43,6 +52,11 @@ export class QuizQuestionResponseDto {
   })
   updatedAt!: string;
 
-  @ApiProperty({ description: 'Answer options', type: () => [QuizAnswerOptionResponseDto] })
-  answerOptions!: QuizAnswerOptionResponseDto[];
+  @ApiProperty({
+    description:
+      'Answer options (no `isCorrect` flag — player view; correct answers are revealed ' +
+      'only via the post-attempt review endpoint after completion)',
+    type: () => [QuizAnswerOptionPlayerDto],
+  })
+  answerOptions!: QuizAnswerOptionPlayerDto[];
 }

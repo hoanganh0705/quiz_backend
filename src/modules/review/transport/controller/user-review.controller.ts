@@ -1,5 +1,5 @@
 import { Controller, Get, Param, ParseUUIDPipe, Query } from '@nestjs/common';
-import { ApiTags } from '@nestjs/swagger';
+import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { Public } from '@/common/decorators/public.decorator';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
 import { ApiAuth } from '@/common/swagger/swagger-decorators';
@@ -25,6 +25,7 @@ export class UserReviewController {
 
   @Get('me/reported-reviews')
   @ApiAuth()
+  @ApiOperation({ summary: 'List reviews reported by the authenticated user' })
   @ApiListMyReportedReviewsResponses()
   async listMyReportedReviews(
     @CurrentUser() user: JwtPayload,
@@ -39,6 +40,7 @@ export class UserReviewController {
 
   @Get('me/reviews')
   @ApiAuth()
+  @ApiOperation({ summary: "List the authenticated user's reviews" })
   @ApiListMyReviewsResponses()
   async listMyReviews(@CurrentUser() user: JwtPayload, @Query() query: ListMyReviewsQueryDto) {
     const result = await this.reviewApplicationService.listUserReviews(user.sub, {
@@ -50,9 +52,10 @@ export class UserReviewController {
 
   @Get('me/reviews/:quizId')
   @ApiAuth()
+  @ApiOperation({ summary: "Get the authenticated user's review for a specific quiz" })
   @ApiGetMyReviewForQuizResponses()
   async getMyReviewForQuiz(
-    @Param('quizId', new ParseUUIDPipe()) quizId: string,
+    @Param('quizId', new ParseUUIDPipe({ version: '7' })) quizId: string,
     @CurrentUser() user: JwtPayload,
   ) {
     const result = await this.reviewApplicationService.getMyQuizReview(quizId, user.sub);
@@ -61,9 +64,10 @@ export class UserReviewController {
 
   @Get(':userId/reviews')
   @Public()
+  @ApiOperation({ summary: 'List reviews created by a user' })
   @ApiListReviewsByUserResponses()
   async listReviewsByUser(
-    @Param('userId', new ParseUUIDPipe()) userId: string,
+    @Param('userId', new ParseUUIDPipe({ version: '7' })) userId: string,
     @Query() query: ListMyReviewsQueryDto,
   ) {
     const result = await this.reviewApplicationService.listReviewsByUser(userId, {

@@ -55,7 +55,7 @@ export const InstanceErrorResponseExamples = {
     title: 'NotFound',
     status: 404,
     detail: 'Quiz instance not found',
-    instance: '/api/v1/instances/660e8400-e29b-41d4-a716-446655440000',
+    instance: '/api/v1/instances/660e8400-e29b-71d4-a716-446655440000',
     extensions: { code: 'INSTANCE_NOT_FOUND', requestId: 'req_abc123' },
   },
   instanceNotHost: {
@@ -63,7 +63,7 @@ export const InstanceErrorResponseExamples = {
     title: 'Forbidden',
     status: 403,
     detail: 'Only the host can perform this action',
-    instance: '/api/v1/instances/660e8400-e29b-41d4-a716-446655440000/start',
+    instance: '/api/v1/instances/660e8400-e29b-71d4-a716-446655440000/start',
     extensions: { code: 'INSTANCE_NOT_HOST', requestId: 'req_abc123' },
   },
   instanceNotOpen: {
@@ -71,7 +71,7 @@ export const InstanceErrorResponseExamples = {
     title: 'BadRequest',
     status: 400,
     detail: 'Instance is not open for joining',
-    instance: '/api/v1/instances/660e8400-e29b-41d4-a716-446655440000/join',
+    instance: '/api/v1/instances/660e8400-e29b-71d4-a716-446655440000/join',
     extensions: { code: 'INSTANCE_NOT_OPEN', requestId: 'req_abc123' },
   },
   instanceFull: {
@@ -79,7 +79,7 @@ export const InstanceErrorResponseExamples = {
     title: 'BadRequest',
     status: 400,
     detail: 'Instance is full',
-    instance: '/api/v1/instances/660e8400-e29b-41d4-a716-446655440000/join',
+    instance: '/api/v1/instances/660e8400-e29b-71d4-a716-446655440000/join',
     extensions: { code: 'INSTANCE_FULL', requestId: 'req_abc123' },
   },
   instanceAlreadyStarted: {
@@ -87,7 +87,7 @@ export const InstanceErrorResponseExamples = {
     title: 'BadRequest',
     status: 400,
     detail: 'Instance has already started',
-    instance: '/api/v1/instances/660e8400-e29b-41d4-a716-446655440000/start',
+    instance: '/api/v1/instances/660e8400-e29b-71d4-a716-446655440000/start',
     extensions: { code: 'INSTANCE_ALREADY_STARTED', requestId: 'req_abc123' },
   },
   instanceAlreadyClosed: {
@@ -95,7 +95,7 @@ export const InstanceErrorResponseExamples = {
     title: 'BadRequest',
     status: 400,
     detail: 'Instance is already closed',
-    instance: '/api/v1/instances/660e8400-e29b-41d4-a716-446655440000/start',
+    instance: '/api/v1/instances/660e8400-e29b-71d4-a716-446655440000/start',
     extensions: { code: 'INSTANCE_ALREADY_CLOSED', requestId: 'req_abc123' },
   },
   playerAlreadyJoined: {
@@ -103,7 +103,7 @@ export const InstanceErrorResponseExamples = {
     title: 'Conflict',
     status: 409,
     detail: 'You have already joined this instance',
-    instance: '/api/v1/instances/660e8400-e29b-41d4-a716-446655440000/join',
+    instance: '/api/v1/instances/660e8400-e29b-71d4-a716-446655440000/join',
     extensions: { code: 'PLAYER_ALREADY_JOINED', requestId: 'req_abc123' },
   },
 } as const;

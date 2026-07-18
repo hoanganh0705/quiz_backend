@@ -5,7 +5,7 @@ import { QuizTagDto } from './quiz-tag.dto';
 export class QuizResponseDto {
   @ApiProperty({
     description: 'Unique quiz identifier',
-    example: '660e8400-e29b-41d4-a716-446655440000',
+    example: '660e8400-e29b-71d4-a716-446655440000',
   })
   quizId!: string;
 
@@ -38,7 +38,7 @@ export class QuizResponseDto {
     type: String,
     format: 'uuid',
     nullable: true,
-    example: '550e8400-e29b-41d4-a716-446655440000',
+    example: '550e8400-e29b-71d4-a716-446655440000',
   })
   categoryId!: string | null;
 

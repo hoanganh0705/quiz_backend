@@ -4,7 +4,7 @@ export class AttemptAnswerItemDto {
   @ApiProperty({
     description: 'Question identifier',
     format: 'uuid',
-    example: '550e8400-e29b-41d4-a716-446655440001',
+    example: '550e8400-e29b-71d4-a716-446655440001',
   })
   questionId!: string;
 
@@ -13,17 +13,9 @@ export class AttemptAnswerItemDto {
     type: String,
     format: 'uuid',
     nullable: true,
-    example: '550e8400-e29b-41d4-a716-446655440010',
+    example: '550e8400-e29b-71d4-a716-446655440010',
   })
   selectedOptionId!: string | null;
-
-  @ApiPropertyOptional({
-    description: 'Whether the answer was correct (null until the attempt is completed)',
-    type: Boolean,
-    nullable: true,
-    example: true,
-  })
-  isCorrect!: boolean | null;
 
   @ApiProperty({
     description: 'Answer submission timestamp (ISO 8601)',
@@ -36,7 +28,7 @@ export class AttemptAnswersResponseDto {
   @ApiProperty({
     description: 'Attempt identifier',
     format: 'uuid',
-    example: '550e8400-e29b-41d4-a716-446655440099',
+    example: '550e8400-e29b-71d4-a716-446655440099',
   })
   attemptId!: string;
 

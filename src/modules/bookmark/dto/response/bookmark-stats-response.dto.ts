@@ -4,7 +4,7 @@ export class BookmarkStatsFavoriteCategoryDto {
   @ApiProperty({
     description: 'Category identifier',
     format: 'uuid',
-    example: '550e8400-e29b-41d4-a716-446655440001',
+    example: '550e8400-e29b-71d4-a716-446655440001',
   })
   categoryId!: string;
 
@@ -19,7 +19,7 @@ export class BookmarkStatsFavoriteTagDto {
   @ApiProperty({
     description: 'Tag identifier',
     format: 'uuid',
-    example: '550e8400-e29b-41d4-a716-446655440002',
+    example: '550e8400-e29b-71d4-a716-446655440002',
   })
   tagId!: string;
 

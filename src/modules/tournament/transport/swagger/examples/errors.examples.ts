@@ -41,7 +41,7 @@ export const tournamentRegistrationClosedExample = {
   title: 'BadRequest',
   status: 400,
   detail: 'Tournament registration is closed',
-  instance: '/api/v1/tournaments/660e8400-e29b-41d4-a716-446655440000/register',
+  instance: '/api/v1/tournaments/660e8400-e29b-71d4-a716-446655440000/register',
   extensions: {
     requestId: REQUEST_ID,
   },
@@ -52,7 +52,7 @@ export const tournamentFullExample = {
   title: 'BadRequest',
   status: 400,
   detail: 'Tournament is full',
-  instance: '/api/v1/tournaments/660e8400-e29b-41d4-a716-446655440000/register',
+  instance: '/api/v1/tournaments/660e8400-e29b-71d4-a716-446655440000/register',
   extensions: {
     requestId: REQUEST_ID,
   },
@@ -64,7 +64,7 @@ export const tournamentRoundNotOpenExample = {
   status: 400,
   detail: 'Tournament round is not open',
   instance:
-    '/api/v1/tournaments/660e8400-e29b-41d4-a716-446655440000/rounds/880e8400-e29b-41d4-a716-446655440001/attempts',
+    '/api/v1/tournaments/660e8400-e29b-71d4-a716-446655440000/rounds/880e8400-e29b-71d4-a716-446655440001/attempts',
   extensions: {
     requestId: REQUEST_ID,
   },
@@ -75,7 +75,7 @@ export const tournamentUnregisterClosedExample = {
   title: 'BadRequest',
   status: 400,
   detail: 'Tournament unregistration is only allowed during the registration phase',
-  instance: '/api/v1/tournaments/660e8400-e29b-41d4-a716-446655440000/register',
+  instance: '/api/v1/tournaments/660e8400-e29b-71d4-a716-446655440000/register',
   extensions: {
     requestId: REQUEST_ID,
   },
@@ -86,7 +86,7 @@ export const tournamentWithdrawClosedExample = {
   title: 'BadRequest',
   status: 400,
   detail: 'Tournament withdrawal is only allowed while the tournament is active',
-  instance: '/api/v1/tournaments/660e8400-e29b-41d4-a716-446655440000/withdraw',
+  instance: '/api/v1/tournaments/660e8400-e29b-71d4-a716-446655440000/withdraw',
   extensions: {
     requestId: REQUEST_ID,
   },
@@ -110,7 +110,7 @@ export const tournamentForbiddenExample = {
   title: 'Forbidden',
   status: 403,
   detail: 'You do not have permission to manage this tournament',
-  instance: '/api/v1/tournaments/660e8400-e29b-41d4-a716-446655440000/register',
+  instance: '/api/v1/tournaments/660e8400-e29b-71d4-a716-446655440000/register',
   extensions: { requestId: REQUEST_ID },
 } as const;
 
@@ -119,7 +119,7 @@ export const tournamentParticipantForbiddenExample = {
   title: 'Forbidden',
   status: 403,
   detail: 'You do not have permission to manage this tournament',
-  instance: '/api/v1/tournaments/660e8400-e29b-41d4-a716-446655440000/withdraw',
+  instance: '/api/v1/tournaments/660e8400-e29b-71d4-a716-446655440000/withdraw',
   extensions: { requestId: REQUEST_ID },
 } as const;
 
@@ -130,7 +130,7 @@ export const tournamentNotFoundExample = {
   title: 'NotFound',
   status: 404,
   detail: 'Tournament not found',
-  instance: '/api/v1/tournaments/660e8400-e29b-41d4-a716-446655440000',
+  instance: '/api/v1/tournaments/660e8400-e29b-71d4-a716-446655440000',
   extensions: { requestId: REQUEST_ID },
 } as const;
 
@@ -140,7 +140,7 @@ export const tournamentRoundNotFoundExample = {
   status: 404,
   detail: 'Tournament round not found',
   instance:
-    '/api/v1/tournaments/660e8400-e29b-41d4-a716-446655440000/rounds/880e8400-e29b-41d4-a716-446655440001/attempts',
+    '/api/v1/tournaments/660e8400-e29b-71d4-a716-446655440000/rounds/880e8400-e29b-71d4-a716-446655440001/attempts',
   extensions: { requestId: REQUEST_ID },
 } as const;
 
@@ -149,7 +149,7 @@ export const tournamentNotRegisteredExample = {
   title: 'NotFound',
   status: 404,
   detail: 'You are not registered for this tournament',
-  instance: '/api/v1/tournaments/660e8400-e29b-41d4-a716-446655440000/register',
+  instance: '/api/v1/tournaments/660e8400-e29b-71d4-a716-446655440000/register',
   extensions: { requestId: REQUEST_ID },
 } as const;
 
@@ -160,7 +160,7 @@ export const tournamentAlreadyRegisteredExample = {
   title: 'Conflict',
   status: 409,
   detail: 'You are already registered for this tournament',
-  instance: '/api/v1/tournaments/660e8400-e29b-41d4-a716-446655440000/register',
+  instance: '/api/v1/tournaments/660e8400-e29b-71d4-a716-446655440000/register',
   extensions: { requestId: REQUEST_ID },
 } as const;
 
@@ -170,7 +170,7 @@ export const tournamentAttemptAlreadyExistsExample = {
   status: 409,
   detail: 'You have already submitted an attempt for this round',
   instance:
-    '/api/v1/tournaments/660e8400-e29b-41d4-a716-446655440000/rounds/880e8400-e29b-41d4-a716-446655440001/attempts',
+    '/api/v1/tournaments/660e8400-e29b-71d4-a716-446655440000/rounds/880e8400-e29b-71d4-a716-446655440001/attempts',
   extensions: { requestId: REQUEST_ID },
 } as const;
 
@@ -179,7 +179,7 @@ export const tournamentParticipantStateExample = {
   title: 'Conflict',
   status: 409,
   detail: 'Invalid participant state for this operation',
-  instance: '/api/v1/tournaments/660e8400-e29b-41d4-a716-446655440000/register',
+  instance: '/api/v1/tournaments/660e8400-e29b-71d4-a716-446655440000/register',
   extensions: { requestId: REQUEST_ID },
 } as const;
 
@@ -188,6 +188,6 @@ export const tournamentAlreadyWithdrawnExample = {
   title: 'Conflict',
   status: 409,
   detail: 'You have already withdrawn from this tournament',
-  instance: '/api/v1/tournaments/660e8400-e29b-41d4-a716-446655440000/withdraw',
+  instance: '/api/v1/tournaments/660e8400-e29b-71d4-a716-446655440000/withdraw',
   extensions: { requestId: REQUEST_ID },
 } as const;

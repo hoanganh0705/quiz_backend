@@ -40,7 +40,7 @@ export class AchievementAdminController {
   })
   @ApiParam({ name: 'userId', format: 'uuid' })
   @ApiOkResource(ReevaluateUserResponseDto, { description: 'Re-evaluation completed' })
-  async reevaluateUser(@Param('userId', new ParseUUIDPipe()) userId: string) {
+  async reevaluateUser(@Param('userId', new ParseUUIDPipe({ version: '7' })) userId: string) {
     const result = await this.achievementApplicationService.reevaluateUserForController(userId);
     return this.presenter.reevaluateUser(result);
   }
@@ -53,7 +53,7 @@ export class AchievementAdminController {
   @ApiOkResourceArray(AdminAchievementHistoryItemDto, {
     description: 'Achievement history returned',
   })
-  async getUserHistory(@Param('userId', new ParseUUIDPipe()) userId: string) {
+  async getUserHistory(@Param('userId', new ParseUUIDPipe({ version: '7' })) userId: string) {
     const items = await this.achievementApplicationService.getUserHistoryForController(userId);
     return this.presenter.getUserHistory(items);
   }

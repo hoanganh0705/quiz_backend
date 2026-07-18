@@ -9,7 +9,7 @@ import {
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
-import { ApiTags } from '@nestjs/swagger';
+import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { Permissions } from '@/common/authorization/decorators/permissions.decorator';
 import { Permission } from '@/common/authorization/permissions';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
@@ -34,6 +34,7 @@ export class AdminReviewController {
   @Get('reports')
   @Permissions(Permission.REVIEW_MODERATE)
   @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'List all reported reviews (moderator)' })
   @ApiListPlatformReportsResponses()
   async listPlatformReports(@Query() query: ListPlatformReportsQueryDto) {
     const cursor = query.cursor ? CursorMapper.parseReport(query.cursor) : null;
@@ -48,9 +49,10 @@ export class AdminReviewController {
   @Patch('reports/:reportId')
   @Permissions(Permission.REVIEW_MODERATE)
   @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Update the status of a report (moderator)' })
   @ApiUpdateReportStatusResponses()
   async updateReportStatus(
-    @Param('reportId', new ParseUUIDPipe()) reportId: string,
+    @Param('reportId', new ParseUUIDPipe({ version: '7' })) reportId: string,
     @Body() body: UpdateReportStatusDto,
     @CurrentUser() actor: JwtPayload,
   ) {

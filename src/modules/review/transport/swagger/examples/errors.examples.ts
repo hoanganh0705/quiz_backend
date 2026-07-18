@@ -18,7 +18,7 @@ export const reviewBadRequestExample = {
   title: 'BadRequest',
   status: 400,
   detail: BAD_REQUEST_DETAIL,
-  instance: '/quizzes/660e8400-e29b-41d4-a716-446655440000/reviews',
+  instance: '/quizzes/660e8400-e29b-71d4-a716-446655440000/reviews',
   extensions: {
     errors: ['rating must not be greater than 5'],
     requestId: REQUEST_ID,
@@ -43,7 +43,7 @@ export const reviewForbiddenExample = {
   title: 'Forbidden',
   status: 403,
   detail: 'You do not have permission to manage this review',
-  instance: '/quizzes/660e8400-e29b-41d4-a716-446655440000/reviews',
+  instance: '/quizzes/660e8400-e29b-71d4-a716-446655440000/reviews',
   extensions: { requestId: REQUEST_ID },
 } as const;
 
@@ -52,7 +52,7 @@ export const reviewForbiddenAnalyticsExample = {
   title: 'Forbidden',
   status: 403,
   detail: 'You do not have permission to view analytics for this quiz',
-  instance: '/quizzes/660e8400-e29b-41d4-a716-446655440000/reviews/analytics',
+  instance: '/quizzes/660e8400-e29b-71d4-a716-446655440000/reviews/analytics',
   extensions: { requestId: REQUEST_ID },
 } as const;
 
@@ -72,7 +72,7 @@ export const reviewNotFoundExample = {
   title: 'NotFound',
   status: 404,
   detail: 'Review not found',
-  instance: '/reviews/550e8400-e29b-41d4-a716-446655440099',
+  instance: '/reviews/550e8400-e29b-71d4-a716-446655440099',
   extensions: { requestId: REQUEST_ID },
 } as const;
 
@@ -81,7 +81,7 @@ export const quizNotFoundExample = {
   title: 'NotFound',
   status: 404,
   detail: 'Quiz not found',
-  instance: '/quizzes/660e8400-e29b-41d4-a716-446655440000/reviews',
+  instance: '/quizzes/660e8400-e29b-71d4-a716-446655440000/reviews',
   extensions: { requestId: REQUEST_ID },
 } as const;
 
@@ -92,7 +92,7 @@ export const reviewConflictExample = {
   title: 'Conflict',
   status: 409,
   detail: 'You have already reviewed this quiz',
-  instance: '/quizzes/660e8400-e29b-41d4-a716-446655440000/reviews',
+  instance: '/quizzes/660e8400-e29b-71d4-a716-446655440000/reviews',
   extensions: { requestId: REQUEST_ID },
 } as const;
 
@@ -101,7 +101,7 @@ export const reviewAlreadyReportedExample = {
   title: 'Conflict',
   status: 409,
   detail: 'You have already reported this review',
-  instance: '/reviews/550e8400-e29b-41d4-a716-446655440099/report',
+  instance: '/reviews/550e8400-e29b-71d4-a716-446655440099/report',
   extensions: { requestId: REQUEST_ID },
 } as const;
 
@@ -123,7 +123,7 @@ export const reviewAttemptRequiredExample = {
   title: 'BadRequest',
   status: 400,
   detail: 'You must complete at least one attempt before reviewing this quiz',
-  instance: '/quizzes/660e8400-e29b-41d4-a716-446655440000/reviews',
+  instance: '/quizzes/660e8400-e29b-71d4-a716-446655440000/reviews',
   extensions: { requestId: REQUEST_ID },
 } as const;
 
@@ -132,6 +132,6 @@ export const reviewSelfVoteExample = {
   title: 'BadRequest',
   status: 400,
   detail: 'You cannot vote on your own review',
-  instance: '/reviews/550e8400-e29b-41d4-a716-446655440099/helpful',
+  instance: '/reviews/550e8400-e29b-71d4-a716-446655440099/helpful',
   extensions: { requestId: REQUEST_ID },
 } as const;

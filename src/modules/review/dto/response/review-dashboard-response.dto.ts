@@ -4,7 +4,7 @@ export class ReviewDashboardFavoriteCategoryDto {
   @ApiProperty({
     description: 'Category identifier',
     format: 'uuid',
-    example: '770e8400-e29b-41d4-a716-446655440000',
+    example: '770e8400-e29b-71d4-a716-446655440000',
   })
   categoryId!: string;
 
@@ -16,7 +16,7 @@ export class ReviewDashboardFavoriteTagDto {
   @ApiProperty({
     description: 'Tag identifier',
     format: 'uuid',
-    example: '880e8400-e29b-41d4-a716-446655440000',
+    example: '880e8400-e29b-71d4-a716-446655440000',
   })
   tagId!: string;
 

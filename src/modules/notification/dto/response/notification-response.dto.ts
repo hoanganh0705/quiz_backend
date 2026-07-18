@@ -24,20 +24,20 @@ export class NotificationResponseDto {
     description: 'Unique notification identifier',
     type: String,
     format: 'uuid',
-    example: '550e8400-e29b-41d4-a716-446655440000',
+    example: '550e8400-e29b-71d4-a716-446655440000',
   })
   @Expose()
-  @IsUUID()
+  @IsUUID('7')
   notificationId!: string;
 
   @ApiProperty({
     description: 'Recipient user identifier',
     type: String,
     format: 'uuid',
-    example: '660e8400-e29b-41d4-a716-446655440000',
+    example: '660e8400-e29b-71d4-a716-446655440000',
   })
   @Expose()
-  @IsUUID()
+  @IsUUID('7')
   userId!: string;
 
   @ApiProperty({

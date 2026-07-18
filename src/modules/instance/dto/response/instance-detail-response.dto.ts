@@ -7,19 +7,19 @@ import { InstancePlayerResponseDto } from './instance-player-response.dto';
 export class InstanceDetailResponseDto {
   @ApiProperty({
     description: 'Unique instance identifier',
-    example: '660e8400-e29b-41d4-a716-446655440000',
+    example: '660e8400-e29b-71d4-a716-446655440000',
   })
   instanceId!: string;
 
   @ApiProperty({
     description: 'Quiz version hosted in this instance',
-    example: '550e8400-e29b-41d4-a716-446655440000',
+    example: '550e8400-e29b-71d4-a716-446655440000',
   })
   quizVersionId!: string;
 
   @ApiProperty({
     description: 'Host user identifier',
-    example: '550e8400-e29b-41d4-a716-446655440000',
+    example: '550e8400-e29b-71d4-a716-446655440000',
   })
   hostUserId!: string;
 
@@ -70,7 +70,7 @@ export class InstanceDetailResponseDto {
 
   @ApiProperty({
     description: 'Parent quiz identifier',
-    example: '660e8400-e29b-41d4-a716-446655440099',
+    example: '660e8400-e29b-71d4-a716-446655440099',
   })
   quizId!: string;
 

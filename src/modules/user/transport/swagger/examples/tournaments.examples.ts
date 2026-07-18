@@ -2,7 +2,7 @@ import { EXAMPLE_TIMESTAMP } from './_timestamp';
 
 export const USER_TOURNAMENT_PROFILE_EXAMPLE = {
   data: {
-    userId: '550e8400-e29b-41d4-a716-446655440000',
+    userId: '550e8400-e29b-71d4-a716-446655440000',
     tournamentsPlayed: 32,
     tournamentsWon: 4,
     bestRank: 1,
@@ -17,7 +17,7 @@ export const USER_TOURNAMENT_PROFILE_EXAMPLE = {
 export const USER_TOURNAMENT_HISTORY_EXAMPLE = {
   data: [
     {
-      tournamentId: '660e8400-e29b-41d4-a716-446655440000',
+      tournamentId: '660e8400-e29b-71d4-a716-446655440000',
       tournamentName: 'Spring Challenge',
       rank: 12,
       score: 540,
@@ -55,7 +55,7 @@ export const USER_TOURNAMENT_ANALYTICS_EXAMPLE = {
 export const USER_MY_TOURNAMENTS_EXAMPLE = {
   data: [
     {
-      tournamentId: '660e8400-e29b-41d4-a716-446655440000',
+      tournamentId: '660e8400-e29b-71d4-a716-446655440000',
       name: 'Spring Challenge',
       status: 'upcoming',
       registeredAt: '2026-06-01T00:00:00.000Z',

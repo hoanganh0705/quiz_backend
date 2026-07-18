@@ -49,33 +49,33 @@ export class ListMyAttemptsQueryDto {
     description: 'Filter attempts by quiz identifier',
     type: String,
     format: 'uuid',
-    example: '550e8400-e29b-41d4-a716-446655440100',
+    example: '550e8400-e29b-71d4-a716-446655440100',
     nullable: true,
   })
   @IsOptional()
-  @IsUUID()
+  @IsUUID('7')
   quizId?: string;
 
   @ApiPropertyOptional({
     description: 'Filter attempts by category identifier',
     type: String,
     format: 'uuid',
-    example: '550e8400-e29b-41d4-a716-446655440101',
+    example: '550e8400-e29b-71d4-a716-446655440101',
     nullable: true,
   })
   @IsOptional()
-  @IsUUID()
+  @IsUUID('7')
   categoryId?: string;
 
   @ApiPropertyOptional({
     description: 'Filter attempts by tag identifier',
     type: String,
     format: 'uuid',
-    example: '550e8400-e29b-41d4-a716-446655440102',
+    example: '550e8400-e29b-71d4-a716-446655440102',
     nullable: true,
   })
   @IsOptional()
-  @IsUUID()
+  @IsUUID('7')
   tagId?: string;
 
   @ApiPropertyOptional({

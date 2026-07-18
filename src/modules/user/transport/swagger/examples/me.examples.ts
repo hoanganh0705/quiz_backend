@@ -2,7 +2,7 @@ import { EXAMPLE_TIMESTAMP } from './_timestamp';
 
 export const USER_ME_EXAMPLE = {
   data: {
-    userId: '550e8400-e29b-41d4-a716-446655440000',
+    userId: '550e8400-e29b-71d4-a716-446655440000',
     username: 'alice_wonder',
     email: 'alice@example.com',
     displayName: 'Alice',
@@ -20,7 +20,7 @@ export const USER_ME_EXAMPLE = {
 
 export const USER_ME_UPDATED_EXAMPLE = {
   data: {
-    userId: '550e8400-e29b-41d4-a716-446655440000',
+    userId: '550e8400-e29b-71d4-a716-446655440000',
     username: 'alice_wonder',
     email: 'alice@example.com',
     displayName: 'Alice',
@@ -38,7 +38,7 @@ export const USER_ME_UPDATED_EXAMPLE = {
 
 export const USER_ME_SETTINGS_UPDATED_EXAMPLE = {
   data: {
-    userId: '550e8400-e29b-41d4-a716-446655440000',
+    userId: '550e8400-e29b-71d4-a716-446655440000',
     username: 'alice_wonder',
     email: 'alice@example.com',
     displayName: 'Alice',

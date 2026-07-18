@@ -3,7 +3,7 @@ import { ApiProperty } from '@nestjs/swagger';
 export class BookmarkStatusCollectionDto {
   @ApiProperty({
     description: 'Collection identifier containing the bookmarked quiz',
-    example: '770e8400-e29b-41d4-a716-446655440000',
+    example: '770e8400-e29b-71d4-a716-446655440000',
   })
   collectionId!: string;
 
@@ -37,11 +37,11 @@ export class BookmarkStatusResponseDto {
     type: [BookmarkStatusCollectionDto],
     example: [
       {
-        collectionId: '770e8400-e29b-41d4-a716-446655440000',
+        collectionId: '770e8400-e29b-71d4-a716-446655440000',
         name: 'Favorites',
       },
       {
-        collectionId: '770e8400-e29b-41d4-a716-446655440001',
+        collectionId: '770e8400-e29b-71d4-a716-446655440001',
         name: 'React Learning',
       },
     ],

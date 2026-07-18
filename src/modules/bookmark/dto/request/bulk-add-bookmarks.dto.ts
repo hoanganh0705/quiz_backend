@@ -9,14 +9,14 @@ export class BulkAddBookmarksDto {
     items: {
       type: 'string',
       format: 'uuid',
-      example: '660e8400-e29b-41d4-a716-446655440000',
+      example: '660e8400-e29b-71d4-a716-446655440000',
     },
     maxItems: 100,
-    example: ['660e8400-e29b-41d4-a716-446655440000', '660e8400-e29b-41d4-a716-446655440001'],
+    example: ['660e8400-e29b-71d4-a716-446655440000', '660e8400-e29b-71d4-a716-446655440001'],
   })
   @Type(() => String)
   @IsArray()
   @ArrayMaxSize(100)
-  @IsUUID('all', { each: true })
+  @IsUUID('7', { each: true })
   quizIds!: string[];
 }

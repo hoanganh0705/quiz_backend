@@ -4,7 +4,7 @@ export class WithdrawAnswerResponseDto {
   @ApiProperty({
     description: 'Question identifier',
     format: 'uuid',
-    example: '550e8400-e29b-41d4-a716-446655440001',
+    example: '550e8400-e29b-71d4-a716-446655440001',
   })
   questionId!: string;
 
