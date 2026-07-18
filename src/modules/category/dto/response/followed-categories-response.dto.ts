@@ -3,9 +3,12 @@ import { CategoryPaginationResponseDto } from './category-list-response.dto';
 import { FollowedCategoryItemDto } from './followed-category-item.dto';
 
 export class FollowedCategoriesResponseDto {
-  @ApiProperty({ type: [FollowedCategoryItemDto] })
+  @ApiProperty({
+    description: 'Categories the authenticated user follows, ordered by most recently followed',
+    type: [FollowedCategoryItemDto],
+  })
   items!: FollowedCategoryItemDto[];
 
-  @ApiProperty({ type: CategoryPaginationResponseDto })
+  @ApiProperty({ description: 'Cursor pagination metadata', type: CategoryPaginationResponseDto })
   pagination!: CategoryPaginationResponseDto;
 }

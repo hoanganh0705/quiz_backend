@@ -1,30 +1,36 @@
 import { ApiProperty } from '@nestjs/swagger';
 
 export class QuizStatsResponseDto {
-  @ApiProperty({ format: 'uuid' })
+  @ApiProperty({ description: 'Quiz identifier', format: 'uuid' })
   quizId!: string;
 
-  @ApiProperty({ example: 1240 })
+  @ApiProperty({ description: 'Total number of attempts recorded for this quiz', example: 1240 })
   totalAttempts!: number;
 
-  @ApiProperty({ example: 830 })
+  @ApiProperty({ description: 'Number of distinct users who attempted this quiz', example: 830 })
   totalPlayers!: number;
 
-  @ApiProperty({ example: 78.4 })
+  @ApiProperty({ description: 'Average score percent across all attempts', example: 78.4 })
   averageScore!: number;
 
-  @ApiProperty({ example: 4.6 })
+  @ApiProperty({
+    description: 'Average review rating across all reviews (0–5 scale)',
+    example: 4.6,
+  })
   averageRating!: number;
 
-  @ApiProperty({ example: 95 })
+  @ApiProperty({ description: 'Number of users who bookmarked this quiz', example: 95 })
   bookmarkCount!: number;
 
-  @ApiProperty({ example: 86.5 })
+  @ApiProperty({
+    description: 'Percentage of started attempts that reached completion',
+    example: 86.5,
+  })
   completionRate!: number;
 
-  @ApiProperty({ example: 91.2743 })
+  @ApiProperty({ description: 'Computed long-term popularity score', example: 91.2743 })
   popularityScore!: number;
 
-  @ApiProperty({ example: 43.1182 })
+  @ApiProperty({ description: 'Computed short-term trending score', example: 43.1182 })
   trendingScore!: number;
 }

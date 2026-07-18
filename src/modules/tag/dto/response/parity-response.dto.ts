@@ -8,13 +8,13 @@ export class RankedTagResponseDto {
   @ApiProperty({ description: '1-based rank position' })
   rank!: number;
 
-  @ApiProperty({ format: 'uuid' })
+  @ApiProperty({ description: 'Tag identifier', format: 'uuid' })
   tagId!: string;
 
-  @ApiProperty()
+  @ApiProperty({ description: 'Tag name', example: 'JavaScript' })
   name!: string;
 
-  @ApiProperty()
+  @ApiProperty({ description: 'Kebab-case tag slug', example: 'javascript' })
   slug!: string;
 
   @ApiProperty({ description: 'Aggregated popularity or trending score (numeric string)' })
@@ -31,7 +31,10 @@ export class RankedTagResponseDto {
 }
 
 export class TagFollowMessageResponseDto {
-  @ApiProperty({ example: 'Tag followed successfully' })
+  @ApiProperty({
+    description: 'Human-readable result of the follow/unfollow request',
+    example: 'Tag followed successfully',
+  })
   message!: string;
 
   @ApiProperty({ example: true, description: 'Whether the requested follow state changed.' })
@@ -39,13 +42,13 @@ export class TagFollowMessageResponseDto {
 }
 
 export class FollowedTagItemDto {
-  @ApiProperty()
+  @ApiProperty({ description: 'Tag identifier', format: 'uuid' })
   tagId!: string;
 
-  @ApiProperty()
+  @ApiProperty({ description: 'Tag name', example: 'JavaScript' })
   name!: string;
 
-  @ApiProperty()
+  @ApiProperty({ description: 'Kebab-case tag slug', example: 'javascript' })
   slug!: string;
 
   @ApiProperty({
@@ -72,44 +75,62 @@ class FollowedTagsPaginationDto {
 }
 
 export class FollowedTagsResponseDto {
-  @ApiProperty({ type: [FollowedTagItemDto] })
+  @ApiProperty({
+    description: 'Tags the authenticated user follows, ordered by most recently followed',
+    type: [FollowedTagItemDto],
+  })
   items!: FollowedTagItemDto[];
 
-  @ApiProperty({ type: FollowedTagsPaginationDto })
+  @ApiProperty({ description: 'Cursor pagination metadata', type: FollowedTagsPaginationDto })
   pagination!: FollowedTagsPaginationDto;
 }
 
 export class TagAnalyticsSummaryDto {
-  @ApiProperty({ example: 12 })
+  @ApiProperty({ description: 'Total quizzes carrying the tag (any status)', example: 12 })
   totalQuizzes!: number;
 
-  @ApiProperty({ example: 10 })
+  @ApiProperty({ description: 'Number of currently active quizzes carrying the tag', example: 10 })
   activeQuizzes!: number;
 
-  @ApiProperty({ example: 2480 })
+  @ApiProperty({
+    description: 'Cumulative attempt count across all active quizzes carrying the tag',
+    example: 2480,
+  })
   totalAttempts!: number;
 
-  @ApiProperty({ example: 920 })
+  @ApiProperty({
+    description: 'Number of distinct users who attempted any quiz carrying the tag',
+    example: 920,
+  })
   totalPlayers!: number;
 
-  @ApiProperty({ example: 78.4 })
+  @ApiProperty({
+    description: 'Average score percent across attempts in tagged quizzes',
+    example: 78.4,
+  })
   averageScore!: number;
 
-  @ApiProperty({ example: 4.6 })
+  @ApiProperty({
+    description: 'Average review rating across tagged quizzes (0–5 scale)',
+    example: 4.6,
+  })
   averageRating!: number;
 }
 
 export class TagAnalyticsTopQuizDto {
-  @ApiProperty({ example: 1 })
+  @ApiProperty({
+    description: '1-based rank within the tag, sorted by popularity score',
+    example: 1,
+  })
   rank!: number;
 
-  @ApiProperty({ format: 'uuid' })
+  @ApiProperty({ description: 'Quiz identifier', format: 'uuid' })
   quizId!: string;
 
-  @ApiProperty({ example: 'JavaScript Fundamentals' })
+  @ApiProperty({ description: 'Quiz title', example: 'JavaScript Fundamentals' })
   title!: string;
 
-  @ApiProperty({ example: 'javascript-fundamentals' })
+  @ApiProperty({ description: 'Kebab-case quiz slug', example: 'javascript-fundamentals' })
   slug!: string;
 
   @ApiProperty({
@@ -120,34 +141,43 @@ export class TagAnalyticsTopQuizDto {
   })
   imageUrl!: string | null;
 
-  @ApiProperty({ example: 87.6 })
+  @ApiProperty({ description: 'Computed popularity score (higher = more popular)', example: 87.6 })
   popularityScore!: number;
 
-  @ApiProperty({ example: 1250 })
+  @ApiProperty({ description: 'Cumulative attempt count for this quiz', example: 1250 })
   totalAttempts!: number;
 
-  @ApiProperty({ example: 4.3 })
+  @ApiProperty({ description: 'Average review rating for this quiz (0–5 scale)', example: 4.3 })
   averageRating!: number;
 
-  @ApiProperty({ example: 95 })
+  @ApiProperty({ description: 'Number of users who bookmarked this quiz', example: 95 })
   bookmarkCount!: number;
 }
 
 export class TagAnalyticsResponseDto {
-  @ApiProperty({ format: 'uuid' })
+  @ApiProperty({ description: 'Tag identifier', format: 'uuid' })
   tagId!: string;
 
-  @ApiProperty({ example: 'JavaScript' })
+  @ApiProperty({ description: 'Tag name', example: 'JavaScript' })
   tagName!: string;
 
-  @ApiProperty({ type: TagAnalyticsSummaryDto })
+  @ApiProperty({
+    description: 'Aggregate counts and averages for the tag',
+    type: TagAnalyticsSummaryDto,
+  })
   @Type(() => TagAnalyticsSummaryDto)
   summary!: TagAnalyticsSummaryDto;
 
-  @ApiProperty({ type: [TagAnalyticsTopQuizDto] })
+  @ApiProperty({
+    description: 'Top quizzes carrying the tag, ordered by popularity score',
+    type: [TagAnalyticsTopQuizDto],
+  })
   @Type(() => TagAnalyticsTopQuizDto)
   topQuizzes!: TagAnalyticsTopQuizDto[];
 
-  @ApiProperty({ example: '2026-06-05T01:00:00.000Z' })
+  @ApiProperty({
+    description: 'ISO 8601 timestamp when these analytics were last computed',
+    example: '2026-06-05T01:00:00.000Z',
+  })
   lastUpdated!: string;
 }

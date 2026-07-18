@@ -53,9 +53,12 @@ export class RecentBookmarksPaginationDto {
 }
 
 export class RecentBookmarksResponseDto {
-  @ApiProperty({ type: [RecentBookmarkItemDto] })
+  @ApiProperty({
+    description: 'Recent bookmarks for the authenticated user, newest first',
+    type: [RecentBookmarkItemDto],
+  })
   items!: RecentBookmarkItemDto[];
 
-  @ApiProperty({ type: RecentBookmarksPaginationDto })
+  @ApiProperty({ description: 'Cursor pagination metadata', type: RecentBookmarksPaginationDto })
   pagination!: RecentBookmarksPaginationDto;
 }
