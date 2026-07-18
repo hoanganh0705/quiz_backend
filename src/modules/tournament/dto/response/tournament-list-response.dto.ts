@@ -45,10 +45,16 @@ export class UpcomingTournamentsPaginationDto {
 }
 
 export class UpcomingTournamentsResponseDto {
-  @ApiProperty({ type: () => [UpcomingTournamentItemDto] })
+  @ApiProperty({
+    description: 'Upcoming tournaments ordered by start time',
+    type: () => [UpcomingTournamentItemDto],
+  })
   items!: UpcomingTournamentItemDto[];
 
-  @ApiProperty({ type: () => UpcomingTournamentsPaginationDto })
+  @ApiProperty({
+    description: 'Offset pagination metadata',
+    type: () => UpcomingTournamentsPaginationDto,
+  })
   pagination!: UpcomingTournamentsPaginationDto;
 }
 
@@ -90,10 +96,16 @@ export class ActiveTournamentsPaginationDto {
 }
 
 export class ActiveTournamentsResponseDto {
-  @ApiProperty({ type: () => [ActiveTournamentItemDto] })
+  @ApiProperty({
+    description: 'Currently active tournaments ordered by start time',
+    type: () => [ActiveTournamentItemDto],
+  })
   items!: ActiveTournamentItemDto[];
 
-  @ApiProperty({ type: () => ActiveTournamentsPaginationDto })
+  @ApiProperty({
+    description: 'Offset pagination metadata',
+    type: () => ActiveTournamentsPaginationDto,
+  })
   pagination!: ActiveTournamentsPaginationDto;
 }
 
@@ -135,10 +147,16 @@ export class CompletedTournamentsPaginationDto {
 }
 
 export class CompletedTournamentsResponseDto {
-  @ApiProperty({ type: () => [CompletedTournamentItemDto] })
+  @ApiProperty({
+    description: 'Completed tournaments ordered by most recent end time',
+    type: () => [CompletedTournamentItemDto],
+  })
   items!: CompletedTournamentItemDto[];
 
-  @ApiProperty({ type: () => CompletedTournamentsPaginationDto })
+  @ApiProperty({
+    description: 'Offset pagination metadata',
+    type: () => CompletedTournamentsPaginationDto,
+  })
   pagination!: CompletedTournamentsPaginationDto;
 }
 
@@ -163,6 +181,9 @@ export class RelatedTournamentItemDto {
 }
 
 export class RelatedTournamentsResponseDto {
-  @ApiProperty({ type: () => [RelatedTournamentItemDto] })
+  @ApiProperty({
+    description: 'Tournaments related to the source tournament, ordered by relevance',
+    type: () => [RelatedTournamentItemDto],
+  })
   items!: RelatedTournamentItemDto[];
 }
