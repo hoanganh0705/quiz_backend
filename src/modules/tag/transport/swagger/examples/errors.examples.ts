@@ -70,103 +70,103 @@ export const relatedInternalErrorExample = withInstance(
 export const analyticsBadRequestExample = {
   ...withInstance(
     ErrorResponseExamples.badRequest,
-    '/tags/770e8400-e29b-41d4-a716-446655440000/analytics',
+    '/tags/770e8400-e29b-71d4-a716-446655440000/analytics',
   ),
   detail: 'Validation failed (uuid is expected)',
   extensions: { requestId: 'req_abc123' },
 };
 export const analyticsNotFoundExample = withInstance(
   ErrorResponseExamples.notFound,
-  '/tags/770e8400-e29b-41d4-a716-446655440000/analytics',
+  '/tags/770e8400-e29b-71d4-a716-446655440000/analytics',
 );
 export const analyticsInternalErrorExample = withInstance(
   ErrorResponseExamples.internalServerError,
-  '/tags/770e8400-e29b-41d4-a716-446655440000/analytics',
+  '/tags/770e8400-e29b-71d4-a716-446655440000/analytics',
 );
 
 // ─── /tags/:id/follow (POST) ────────────────────────────────────────────────────
 
 export const followUnauthorizedExample = withInstance(
   ErrorResponseExamples.unauthorized,
-  '/tags/770e8400-e29b-41d4-a716-446655440000/follow',
+  '/tags/770e8400-e29b-71d4-a716-446655440000/follow',
 );
 export const followForbiddenExample = withInstance(
   ErrorResponseExamples.forbidden,
-  '/tags/770e8400-e29b-41d4-a716-446655440000/follow',
+  '/tags/770e8400-e29b-71d4-a716-446655440000/follow',
 );
 export const followNotFoundExample = withInstance(
   ErrorResponseExamples.notFound,
-  '/tags/770e8400-e29b-41d4-a716-446655440000/follow',
+  '/tags/770e8400-e29b-71d4-a716-446655440000/follow',
 );
 export const followTooManyRequestsExample = withInstance(
   ErrorResponseExamples.tooManyRequests,
-  '/tags/770e8400-e29b-41d4-a716-446655440000/follow',
+  '/tags/770e8400-e29b-71d4-a716-446655440000/follow',
 );
 export const followBadRequestExample = {
   ...withInstance(
     ErrorResponseExamples.badRequest,
-    '/tags/770e8400-e29b-41d4-a716-446655440000/follow',
+    '/tags/770e8400-e29b-71d4-a716-446655440000/follow',
   ),
   detail: 'Validation failed (uuid is expected)',
   extensions: { requestId: 'req_abc123' },
 };
 export const followInternalErrorExample = withInstance(
   ErrorResponseExamples.internalServerError,
-  '/tags/770e8400-e29b-41d4-a716-446655440000/follow',
+  '/tags/770e8400-e29b-71d4-a716-446655440000/follow',
 );
 
 // ─── /tags/:id/follow (DELETE) ──────────────────────────────────────────────────
 
 export const unfollowUnauthorizedExample = withInstance(
   ErrorResponseExamples.unauthorized,
-  '/tags/770e8400-e29b-41d4-a716-446655440000/follow',
+  '/tags/770e8400-e29b-71d4-a716-446655440000/follow',
 );
 export const unfollowForbiddenExample = withInstance(
   ErrorResponseExamples.forbidden,
-  '/tags/770e8400-e29b-41d4-a716-446655440000/follow',
+  '/tags/770e8400-e29b-71d4-a716-446655440000/follow',
 );
 export const unfollowNotFoundExample = withInstance(
   ErrorResponseExamples.notFound,
-  '/tags/770e8400-e29b-41d4-a716-446655440000/follow',
+  '/tags/770e8400-e29b-71d4-a716-446655440000/follow',
 );
 export const unfollowTooManyRequestsExample = withInstance(
   ErrorResponseExamples.tooManyRequests,
-  '/tags/770e8400-e29b-41d4-a716-446655440000/follow',
+  '/tags/770e8400-e29b-71d4-a716-446655440000/follow',
 );
 export const unfollowBadRequestExample = {
   ...withInstance(
     ErrorResponseExamples.badRequest,
-    '/tags/770e8400-e29b-41d4-a716-446655440000/follow',
+    '/tags/770e8400-e29b-71d4-a716-446655440000/follow',
   ),
   detail: 'Validation failed (uuid is expected)',
   extensions: { requestId: 'req_abc123' },
 };
 export const unfollowInternalErrorExample = withInstance(
   ErrorResponseExamples.internalServerError,
-  '/tags/770e8400-e29b-41d4-a716-446655440000/follow',
+  '/tags/770e8400-e29b-71d4-a716-446655440000/follow',
 );
 
 // ─── /tags/:id/restore ─────────────────────────────────────────────────────────
 
 export const restoreUnauthorizedExample = withInstance(
   ErrorResponseExamples.unauthorized,
-  '/tags/770e8400-e29b-41d4-a716-446655440000/restore',
+  '/tags/770e8400-e29b-71d4-a716-446655440000/restore',
 );
 export const restoreForbiddenExample = withInstance(
   ErrorResponseExamples.forbidden,
-  '/tags/770e8400-e29b-41d4-a716-446655440000/restore',
+  '/tags/770e8400-e29b-71d4-a716-446655440000/restore',
 );
 export const restoreNotFoundExample = withInstance(
   ErrorResponseExamples.notFound,
-  '/tags/770e8400-e29b-41d4-a716-446655440000/restore',
+  '/tags/770e8400-e29b-71d4-a716-446655440000/restore',
 );
 export const restoreConflictExample = withInstance(
   ErrorResponseExamples.conflict,
-  '/tags/770e8400-e29b-41d4-a716-446655440000/restore',
+  '/tags/770e8400-e29b-71d4-a716-446655440000/restore',
 );
 export const restoreInternalErrorExample = withInstance(
   ErrorResponseExamples.internalServerError,
-  '/tags/770e8400-e29b-41d4-a716-446655440000/restore',
+  '/tags/770e8400-e29b-71d4-a716-446655440000/restore',
 );
 
 // ─── /tags (GET list) ───────────────────────────────────────────────────────────
@@ -206,46 +206,46 @@ export const createTagInternalErrorExample = withInstance(
 
 export const updateTagBadRequestExample = withInstance(
   ErrorResponseExamples.badRequest,
-  '/tags/770e8400-e29b-41d4-a716-446655440000',
+  '/tags/770e8400-e29b-71d4-a716-446655440000',
 );
 export const updateTagUnauthorizedExample = withInstance(
   ErrorResponseExamples.unauthorized,
-  '/tags/770e8400-e29b-41d4-a716-446655440000',
+  '/tags/770e8400-e29b-71d4-a716-446655440000',
 );
 export const updateTagForbiddenExample = withInstance(
   ErrorResponseExamples.forbidden,
-  '/tags/770e8400-e29b-41d4-a716-446655440000',
+  '/tags/770e8400-e29b-71d4-a716-446655440000',
 );
 export const updateTagNotFoundExample = withInstance(
   ErrorResponseExamples.notFound,
-  '/tags/770e8400-e29b-41d4-a716-446655440000',
+  '/tags/770e8400-e29b-71d4-a716-446655440000',
 );
 export const updateTagConflictExample = withInstance(
   ErrorResponseExamples.conflict,
-  '/tags/770e8400-e29b-41d4-a716-446655440000',
+  '/tags/770e8400-e29b-71d4-a716-446655440000',
 );
 export const updateTagInternalErrorExample = withInstance(
   ErrorResponseExamples.internalServerError,
-  '/tags/770e8400-e29b-41d4-a716-446655440000',
+  '/tags/770e8400-e29b-71d4-a716-446655440000',
 );
 
 // ─── /tags/:id (DELETE) ─────────────────────────────────────────────────────────
 
 export const deleteTagUnauthorizedExample = withInstance(
   ErrorResponseExamples.unauthorized,
-  '/tags/770e8400-e29b-41d4-a716-446655440000',
+  '/tags/770e8400-e29b-71d4-a716-446655440000',
 );
 export const deleteTagForbiddenExample = withInstance(
   ErrorResponseExamples.forbidden,
-  '/tags/770e8400-e29b-41d4-a716-446655440000',
+  '/tags/770e8400-e29b-71d4-a716-446655440000',
 );
 export const deleteTagNotFoundExample = withInstance(
   ErrorResponseExamples.notFound,
-  '/tags/770e8400-e29b-41d4-a716-446655440000',
+  '/tags/770e8400-e29b-71d4-a716-446655440000',
 );
 export const deleteTagInternalErrorExample = withInstance(
   ErrorResponseExamples.internalServerError,
-  '/tags/770e8400-e29b-41d4-a716-446655440000',
+  '/tags/770e8400-e29b-71d4-a716-446655440000',
 );
 
 // ─── /users/me/followed-tags ────────────────────────────────────────────────────

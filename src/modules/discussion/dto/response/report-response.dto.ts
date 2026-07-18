@@ -6,13 +6,13 @@ const REPORT_TARGET_TYPE_VALUES = ['thread', 'comment'] as const;
 export class ReportResponseDto {
   @ApiProperty({
     description: 'Report identifier',
-    example: '990e8400-e29b-41d4-a716-446655440000',
+    example: '990e8400-e29b-71d4-a716-446655440000',
   })
   reportId!: string;
 
   @ApiProperty({
     description: 'Reporting user identifier',
-    example: '550e8400-e29b-41d4-a716-446655440000',
+    example: '550e8400-e29b-71d4-a716-446655440000',
   })
   reporterId!: string;
 
@@ -25,7 +25,7 @@ export class ReportResponseDto {
 
   @ApiProperty({
     description: 'Identifier of the reported target',
-    example: '880e8400-e29b-41d4-a716-446655440000',
+    example: '880e8400-e29b-71d4-a716-446655440000',
   })
   targetId!: string;
 

@@ -1,5 +1,5 @@
 import { Controller, Get, Query } from '@nestjs/common';
-import { ApiTags } from '@nestjs/swagger';
+import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
 import { ListFollowedTagsQueryDto } from '../../dto/request/list-followed-tags-query.dto';
@@ -23,6 +23,7 @@ export class UserTagController {
   ) {}
 
   @Get('users/me/followed-tags')
+  @ApiOperation({ summary: 'List tags followed by the authenticated user' })
   @ApiFollowedTagsResponse()
   async listFollowedTags(
     @CurrentUser() user: JwtPayload,

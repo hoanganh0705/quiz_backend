@@ -1,5 +1,5 @@
 import { Controller, Get, Param, ParseUUIDPipe, Query } from '@nestjs/common';
-import { ApiTags, ApiParam } from '@nestjs/swagger';
+import { ApiTags, ApiParam, ApiOperation } from '@nestjs/swagger';
 import { Public } from '@/common/decorators/public.decorator';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
@@ -45,6 +45,7 @@ export class UserDiscussionController {
   // ─── Authenticated /users/me/* routes (registered before :userId routes to avoid shadowing) ──
 
   @Get('users/me/discussions')
+  @ApiOperation({ summary: "List the authenticated user's discussion threads" })
   @ApiOkResourceList(MyDiscussionsResponseDto, 'cursor', {
     description: 'My discussions returned',
   })
@@ -60,6 +61,7 @@ export class UserDiscussionController {
   }
 
   @Get('users/me/comments')
+  @ApiOperation({ summary: "List the authenticated user's comments" })
   @ApiOkResourceList(MyCommentsResponseDto, 'cursor', { description: 'My comments returned' })
   async listMyComments(@CurrentUser() user: JwtPayload, @Query() query: ListMyCommentsQueryDto) {
     const result = await this.discussionApplicationService.listMyComments(user.sub, {
@@ -70,6 +72,7 @@ export class UserDiscussionController {
   }
 
   @Get('users/me/upvoted-threads')
+  @ApiOperation({ summary: 'List threads upvoted by the authenticated user' })
   @ApiOkResourceList(MyUpvotedThreadsResponseDto, 'cursor', {
     description: 'Upvoted threads returned',
   })
@@ -85,6 +88,7 @@ export class UserDiscussionController {
   }
 
   @Get('users/me/upvoted-comments')
+  @ApiOperation({ summary: 'List comments upvoted by the authenticated user' })
   @ApiOkResourceList(MyUpvotedCommentsResponseDto, 'cursor', {
     description: 'Upvoted comments returned',
   })
@@ -100,6 +104,7 @@ export class UserDiscussionController {
   }
 
   @Get('users/me/discussion-subscriptions')
+  @ApiOperation({ summary: "List the authenticated user's thread subscriptions" })
   @ApiOkResourceList(MyDiscussionSubscriptionsResponseDto, 'cursor', {
     description: 'Discussion subscriptions returned',
   })
@@ -115,6 +120,7 @@ export class UserDiscussionController {
   }
 
   @Get('users/me/saved-threads')
+  @ApiOperation({ summary: 'List threads saved by the authenticated user' })
   @ApiOkResourceList(MySavedThreadsResponseDto, 'cursor', {
     description: 'Saved threads returned',
   })
@@ -133,12 +139,13 @@ export class UserDiscussionController {
 
   @Get('users/:userId/discussions')
   @Public()
+  @ApiOperation({ summary: 'List discussion threads created by a user' })
   @ApiOkResourceList(MyDiscussionsResponseDto, 'cursor', {
     description: 'User discussions returned',
   })
   @ApiParam({ name: 'userId', format: 'uuid' })
   async listDiscussionsByUser(
-    @Param('userId', new ParseUUIDPipe()) userId: string,
+    @Param('userId', new ParseUUIDPipe({ version: '7' })) userId: string,
     @Query() query: ListMyDiscussionsQueryDto,
   ) {
     const result = await this.discussionApplicationService.listMyDiscussions(userId, {
@@ -150,12 +157,13 @@ export class UserDiscussionController {
 
   @Get('users/:userId/comments')
   @Public()
+  @ApiOperation({ summary: 'List comments created by a user' })
   @ApiOkResourceList(MyCommentsResponseDto, 'cursor', {
     description: 'User comments returned',
   })
   @ApiParam({ name: 'userId', format: 'uuid' })
   async listCommentsByUser(
-    @Param('userId', new ParseUUIDPipe()) userId: string,
+    @Param('userId', new ParseUUIDPipe({ version: '7' })) userId: string,
     @Query() query: ListMyCommentsQueryDto,
   ) {
     const result = await this.discussionApplicationService.listCommentsByUser(userId, {
@@ -167,11 +175,14 @@ export class UserDiscussionController {
 
   @Get('users/:userId/discussion-profile')
   @Public()
+  @ApiOperation({ summary: 'Get a user public discussion profile' })
   @ApiOkResource(PublicDiscussionProfileResponseDto, {
     description: 'Public discussion profile returned',
   })
   @ApiParam({ name: 'userId', format: 'uuid' })
-  async getPublicDiscussionProfile(@Param('userId', new ParseUUIDPipe()) userId: string) {
+  async getPublicDiscussionProfile(
+    @Param('userId', new ParseUUIDPipe({ version: '7' })) userId: string,
+  ) {
     const result = await this.discussionApplicationService.getPublicDiscussionProfile(userId);
     return this.presenter.getPublicDiscussionProfile(result);
   }

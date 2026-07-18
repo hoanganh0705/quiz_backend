@@ -1,5 +1,5 @@
 import { Controller, Get, Query } from '@nestjs/common';
-import { ApiTags } from '@nestjs/swagger';
+import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
 import { ListFollowedCategoriesQueryDto } from '../../dto/request/list-followed-categories-query.dto';
@@ -24,6 +24,7 @@ export class UserCategoryController {
   ) {}
 
   @Get('users/me/followed-categories')
+  @ApiOperation({ summary: 'List categories followed by the authenticated user' })
   @ApiFollowedCategoriesResponse()
   async listFollowedCategories(
     @CurrentUser() user: JwtPayload,

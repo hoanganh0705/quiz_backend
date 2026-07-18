@@ -1,5 +1,5 @@
 import type { QuizQuestionJoinRow } from '../domain/ports/quiz-question-repository.port';
-import type { QuizQuestionResponseDto } from '../dto/response/quiz-question-response.dto';
+import type { QuizQuestionPlayerDto } from '../dto/response/quiz-question-player.dto';
 import {
   hydrateQuestions,
   type HydratedQuizQuestion,
@@ -7,20 +7,24 @@ import {
 
 /**
  * Pure stateless mapper — no DI needed.
- * Translates flat QuizQuestionJoinRow join results into structured QuizQuestionResponseDto[].
- * Delegates row-to-aggregate hydration to quiz-question.hydrator.
+ * Translates flat QuizQuestionJoinRow join results into structured
+ * QuizQuestionPlayerDto[] (player view — `isCorrect` is intentionally omitted
+ * to prevent spoilers).
+ *
+ * Use this mapper for any player-facing surface (e.g. `GET /quizzes/:id`).
+ * For author-only endpoints, use {@link QuizQuestionAuthorResponseMapper}.
  */
-export class QuizQuestionResponseMapper {
-  static toQuestionResponses(rows: QuizQuestionJoinRow[]): QuizQuestionResponseDto[] {
+export class QuizQuestionPlayerResponseMapper {
+  static toPlayerQuestionResponses(rows: QuizQuestionJoinRow[]): QuizQuestionPlayerDto[] {
     if (rows.length === 0) {
       return [];
     }
 
     const questions = hydrateQuestions(rows);
-    return questions.map((q) => QuizQuestionResponseMapper.toQuestionResponse(q));
+    return questions.map((q) => QuizQuestionPlayerResponseMapper.toPlayerQuestionResponse(q));
   }
 
-  private static toQuestionResponse(question: HydratedQuizQuestion): QuizQuestionResponseDto {
+  private static toPlayerQuestionResponse(question: HydratedQuizQuestion): QuizQuestionPlayerDto {
     return {
       questionId: question.questionId,
       quizVersionId: question.quizVersionId,
@@ -29,11 +33,11 @@ export class QuizQuestionResponseMapper {
       imageUrl: question.imageUrl,
       createdAt: question.createdAt,
       updatedAt: question.updatedAt,
+      // Note: `isCorrect` is intentionally NOT copied into the player view.
       answerOptions: question.answerOptions.map((option) => ({
         optionId: option.optionId,
         position: option.position,
         value: option.value,
-        isCorrect: option.isCorrect,
         createdAt: option.createdAt,
       })),
     };

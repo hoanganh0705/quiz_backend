@@ -225,7 +225,7 @@ export class UserController {
   })
   @ApiCreatorQuizAnalyticsResponse()
   @ApiNotFoundAndInternal()
-  async getUserQuizAnalytics(@Param('userId', new ParseUUIDPipe()) userId: string) {
+  async getUserQuizAnalytics(@Param('userId', new ParseUUIDPipe({ version: '7' })) userId: string) {
     const result = await this.quizListing.getMyQuizAnalytics(userId);
     return this.presenter.getUserQuizAnalytics(result);
   }
@@ -240,7 +240,7 @@ export class UserController {
   @ApiUserQuizListResponse()
   @ApiNotFoundBadRequestInternal()
   async listUserQuizzes(
-    @Param('userId', new ParseUUIDPipe()) userId: string,
+    @Param('userId', new ParseUUIDPipe({ version: '7' })) userId: string,
     @Query() query: ListQuizzesQueryDto,
   ) {
     const result = await this.quizListing.listQuizzesByCreator(userId, query);
@@ -258,7 +258,7 @@ export class UserController {
   @ApiUserBadgesResponse()
   @ApiNotFoundBadRequestForbiddenInternal()
   async listBadgesByUserId(
-    @Param('userId', new ParseUUIDPipe()) userId: string,
+    @Param('userId', new ParseUUIDPipe({ version: '7' })) userId: string,
     @Query() query: ListUserBadgesQueryDto,
     @CurrentUser('sub') requesterId: string,
   ) {
@@ -280,7 +280,7 @@ export class UserController {
   @ApiPublicTournamentHistoryResponse()
   @ApiNotFoundBadRequestForbiddenInternal()
   async getUserTournamentHistory(
-    @Param('userId', new ParseUUIDPipe()) userId: string,
+    @Param('userId', new ParseUUIDPipe({ version: '7' })) userId: string,
     @Query() query: GetMyTournamentHistoryQueryDto,
     @CurrentUser('sub') requesterId: string,
   ) {
@@ -303,7 +303,7 @@ export class UserController {
   @ApiPublicTournamentProfileResponse()
   @ApiNotFoundForbiddenInternal()
   async getPublicTournamentProfile(
-    @Param('userId', new ParseUUIDPipe()) userId: string,
+    @Param('userId', new ParseUUIDPipe({ version: '7' })) userId: string,
     @CurrentUser('sub') requesterId: string,
   ) {
     const result = await this.userApplicationService.getPublicTournamentProfile(

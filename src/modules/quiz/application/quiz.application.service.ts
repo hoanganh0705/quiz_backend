@@ -5,7 +5,7 @@ import { QuizQueryService } from '../domain/quiz/quiz-query.service';
 import { QuizCommandService } from '../domain/quiz/quiz-command.service';
 import {
   QuizResponseMapper,
-  QuizQuestionResponseMapper,
+  QuizQuestionPlayerResponseMapper,
   QuizStatsResponseMapper,
 } from '../mappers';
 import { CreatorQuizAnalyticsResponseMapper } from '../mappers/creator-quiz-analytics-response.mapper';
@@ -112,8 +112,13 @@ export class QuizApplicationService implements QuizListingPort {
 
   async getQuizBySlug(slug: string): Promise<QuizResponseDto> {
     const { row, questions, tags } = await this.quizQueryService.getQuizBySlug(slug);
+    // Player-facing endpoint (`GET /quizzes/:id` resolves to `getQuizBySlug` for
+    // slugs and is `@Public()`). Use the player mapper so the response does
+    // NOT include the `isCorrect` flag on each option. Correct answers are
+    // revealed to the player only via the post-attempt review endpoint after
+    // they finish a quiz.
     const mappedQuestions = questions
-      ? QuizQuestionResponseMapper.toQuestionResponses(questions)
+      ? QuizQuestionPlayerResponseMapper.toPlayerQuestionResponses(questions)
       : undefined;
     return QuizResponseMapper.toQuizResponse(row, mappedQuestions, tags);
   }

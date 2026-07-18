@@ -13,7 +13,7 @@ export class HelpfulReviewDto {
     description: 'Idempotency key to prevent duplicate helpful votes on retry.',
     type: String,
     nullable: true,
-    example: 'helpful-review-550e8400-e29b-41d4-a716-446655440099-bob',
+    example: 'helpful-review-550e8400-e29b-71d4-a716-446655440099-bob',
   })
   @IsOptional()
   @IsString()

@@ -31,7 +31,7 @@ export class CreateReviewDto {
       'If a review was already submitted with this key, the cached response is returned.',
     type: String,
     nullable: true,
-    example: 'create-review-550e8400-e29b-41d4-a716-446655440000-alice',
+    example: 'create-review-550e8400-e29b-71d4-a716-446655440000-alice',
   })
   @IsOptional()
   @IsString()

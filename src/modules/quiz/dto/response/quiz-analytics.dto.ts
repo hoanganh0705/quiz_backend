@@ -51,7 +51,7 @@ export class QuizAnalyticsResponseDto {
   @ApiProperty({
     description: 'Quiz identifier',
     format: 'uuid',
-    example: '660e8400-e29b-41d4-a716-446655440000',
+    example: '660e8400-e29b-71d4-a716-446655440000',
   })
   quizId!: string;
 
@@ -81,14 +81,14 @@ export class TrendingQuizItemDto {
   @ApiProperty({
     description: 'Quiz identifier',
     format: 'uuid',
-    example: '660e8400-e29b-41d4-a716-446655440000',
+    example: '660e8400-e29b-71d4-a716-446655440000',
   })
   quizId!: string;
 
   @ApiPropertyOptional({
     description: 'Creator user identifier',
     format: 'uuid',
-    example: '550e8400-e29b-41d4-a716-446655440001',
+    example: '550e8400-e29b-71d4-a716-446655440001',
     nullable: true,
   })
   creatorId!: string | null;
@@ -146,14 +146,14 @@ export class PopularQuizItemDto {
   @ApiProperty({
     description: 'Quiz identifier',
     format: 'uuid',
-    example: '660e8400-e29b-41d4-a716-446655440000',
+    example: '660e8400-e29b-71d4-a716-446655440000',
   })
   quizId!: string;
 
   @ApiPropertyOptional({
     description: 'Creator user identifier',
     format: 'uuid',
-    example: '550e8400-e29b-41d4-a716-446655440001',
+    example: '550e8400-e29b-71d4-a716-446655440001',
     nullable: true,
   })
   creatorId!: string | null;
@@ -224,7 +224,7 @@ export class CategoryAnalyticsResponseDto {
   @ApiProperty({
     description: 'Category identifier',
     format: 'uuid',
-    example: '550e8400-e29b-41d4-a716-446655440000',
+    example: '550e8400-e29b-71d4-a716-446655440000',
   })
   categoryId!: string;
 
@@ -251,7 +251,7 @@ export class CreatorQuizAnalyticsDto {
   @ApiProperty({
     description: 'Creator user identifier',
     format: 'uuid',
-    example: '550e8400-e29b-41d4-a716-446655440000',
+    example: '550e8400-e29b-71d4-a716-446655440000',
   })
   userId!: string;
 

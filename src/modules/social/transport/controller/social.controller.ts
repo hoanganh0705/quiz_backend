@@ -68,6 +68,7 @@ export class SocialController {
 
   @Get('search/suggestions')
   @Public()
+  @ApiOperation({ summary: 'Get username search suggestions' })
   @ApiOkResponse({
     description: 'Username suggestions returned',
     schema: {
@@ -169,6 +170,7 @@ export class SocialController {
 
   @Get('users/trending')
   @Public()
+  @ApiOperation({ summary: 'List trending users' })
   @ApiOkResourceList(TrendingUserResponseDto, 'cursor', {
     description: 'Trending users returned',
   })
@@ -189,14 +191,14 @@ export class SocialController {
     name: 'userId',
     description: 'Target user identifier',
     format: 'uuid',
-    example: '660e8400-e29b-41d4-a716-446655440000',
+    example: '660e8400-e29b-71d4-a716-446655440000',
   })
   @ApiOkResourceList(UserActivityItemDto, 'offset', {
     description: 'Paginated public user activity returned',
   })
   async getUserActivity(
     @CurrentUser() user: JwtPayload,
-    @Param('userId', new ParseUUIDPipe()) targetUserId: string,
+    @Param('userId', new ParseUUIDPipe({ version: '7' })) targetUserId: string,
     @Query() query: GetUserFollowersQueryDto,
   ) {
     return this.presenter.getUserActivity(
@@ -211,6 +213,7 @@ export class SocialController {
 
   @Get('users/:userId/stats')
   @Public()
+  @ApiOperation({ summary: "Get a user's public social statistics" })
   @ApiOkResource(UserSocialStatsResponseDto, {
     description: 'Public user social stats returned',
   })
@@ -218,9 +221,11 @@ export class SocialController {
     name: 'userId',
     description: 'Target user identifier',
     format: 'uuid',
-    example: '660e8400-e29b-41d4-a716-446655440000',
+    example: '660e8400-e29b-71d4-a716-446655440000',
   })
-  async getUserSocialStats(@Param('userId', new ParseUUIDPipe()) targetUserId: string) {
+  async getUserSocialStats(
+    @Param('userId', new ParseUUIDPipe({ version: '7' })) targetUserId: string,
+  ) {
     return this.presenter.getUserSocialStats(
       await this.socialService.getUserSocialStats(targetUserId),
     );
@@ -246,11 +251,12 @@ export class SocialController {
 
   @Throttle({ default: { limit: 20, ttl: 60_000 } })
   @Post('friend-request/:userId')
+  @ApiOperation({ summary: 'Send a friend request' })
   @ApiAuthAction()
   @ApiCreatedResource(FriendRequestDto, { description: 'Friend request sent' })
   async sendFriendRequest(
     @CurrentUser() user: JwtPayload,
-    @Param('userId', new ParseUUIDPipe()) addresseeId: string,
+    @Param('userId', new ParseUUIDPipe({ version: '7' })) addresseeId: string,
   ) {
     return this.presenter.sendFriendRequest(
       await this.socialService.sendFriendRequest(user, addresseeId),
@@ -279,21 +285,23 @@ export class SocialController {
 
   @Throttle({ default: { limit: 20, ttl: 60_000 } })
   @Post('friend-requests/:friendshipId/respond')
+  @ApiOperation({ summary: 'Accept or decline a friend request' })
   @ApiAuthActionNoContent('Friend request responded to')
   @ApiBody({ type: RespondFriendRequestDto })
   async respondToFriendRequest(
     @CurrentUser() user: JwtPayload,
-    @Param('friendshipId', new ParseUUIDPipe()) friendshipId: string,
+    @Param('friendshipId', new ParseUUIDPipe({ version: '7' })) friendshipId: string,
     @Body() dto: RespondFriendRequestDto,
   ): Promise<void> {
     await this.socialService.respondToFriendRequest(user, friendshipId, dto.accept);
   }
 
   @Delete('friend-requests/:friendshipId')
+  @ApiOperation({ summary: 'Cancel a sent friend request' })
   @ApiAuthActionNoContent('Friend request cancelled')
   async cancelFriendRequest(
     @CurrentUser() user: JwtPayload,
-    @Param('friendshipId', new ParseUUIDPipe()) friendshipId: string,
+    @Param('friendshipId', new ParseUUIDPipe({ version: '7' })) friendshipId: string,
   ): Promise<void> {
     await this.socialService.cancelFriendRequest(user, friendshipId);
   }
@@ -334,11 +342,11 @@ export class SocialController {
     name: 'userId',
     description: 'Target user identifier',
     format: 'uuid',
-    example: '660e8400-e29b-41d4-a716-446655440000',
+    example: '660e8400-e29b-71d4-a716-446655440000',
   })
   async getFriendsOfUser(
     @CurrentUser() user: JwtPayload,
-    @Param('userId', new ParseUUIDPipe()) targetUserId: string,
+    @Param('userId', new ParseUUIDPipe({ version: '7' })) targetUserId: string,
     @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit: number,
     @Query('cursor') cursor?: string,
   ) {
@@ -348,16 +356,17 @@ export class SocialController {
   }
 
   @Delete('friends/:userId')
+  @ApiOperation({ summary: 'Remove a friend' })
   @ApiAuthActionNoContent('Friend removed')
   @ApiParam({
     name: 'userId',
     description: 'Friend user identifier',
     format: 'uuid',
-    example: '660e8400-e29b-41d4-a716-446655440000',
+    example: '660e8400-e29b-71d4-a716-446655440000',
   })
   async removeFriend(
     @CurrentUser() user: JwtPayload,
-    @Param('userId', new ParseUUIDPipe()) friendId: string,
+    @Param('userId', new ParseUUIDPipe({ version: '7' })) friendId: string,
   ): Promise<void> {
     await this.socialService.removeFriend(user, friendId);
   }
@@ -366,18 +375,19 @@ export class SocialController {
 
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @Post('block/:userId')
+  @ApiOperation({ summary: 'Block a user' })
   @ApiAuthActionNoContent('User blocked')
   @ApiCreatedResource(MessageResponseDto, { description: 'User blocked' })
   @ApiParam({
     name: 'userId',
     description: 'User to block',
     format: 'uuid',
-    example: '660e8400-e29b-41d4-a716-446655440000',
+    example: '660e8400-e29b-71d4-a716-446655440000',
   })
   @ApiBody({ type: BlockUserDto, description: 'Optional reason for blocking' })
   async blockUser(
     @CurrentUser() user: JwtPayload,
-    @Param('userId', new ParseUUIDPipe()) blockedId: string,
+    @Param('userId', new ParseUUIDPipe({ version: '7' })) blockedId: string,
     @Body() dto: BlockUserDto,
   ) {
     await this.socialService.blockUser(user, blockedId, dto.reason);
@@ -385,16 +395,17 @@ export class SocialController {
   }
 
   @Delete('block/:userId')
+  @ApiOperation({ summary: 'Unblock a user' })
   @ApiAuthActionNoContent('User unblocked')
   @ApiParam({
     name: 'userId',
     description: 'User to unblock',
     format: 'uuid',
-    example: '660e8400-e29b-41d4-a716-446655440000',
+    example: '660e8400-e29b-71d4-a716-446655440000',
   })
   async unblockUser(
     @CurrentUser() user: JwtPayload,
-    @Param('userId', new ParseUUIDPipe()) blockedId: string,
+    @Param('userId', new ParseUUIDPipe({ version: '7' })) blockedId: string,
   ): Promise<void> {
     await this.socialService.unblockUser(user, blockedId);
   }
@@ -411,32 +422,34 @@ export class SocialController {
 
   @Throttle({ default: { limit: 30, ttl: 60_000 } })
   @Post('follow/:userId')
+  @ApiOperation({ summary: 'Follow a user' })
   @ApiAuthActionNoContent('Now following user')
   @ApiParam({
     name: 'userId',
     description: 'User to follow',
     format: 'uuid',
-    example: '660e8400-e29b-41d4-a716-446655440000',
+    example: '660e8400-e29b-71d4-a716-446655440000',
   })
   async followUser(
     @CurrentUser() user: JwtPayload,
-    @Param('userId', new ParseUUIDPipe()) followingId: string,
+    @Param('userId', new ParseUUIDPipe({ version: '7' })) followingId: string,
   ): Promise<void> {
     await this.socialService.followUser(user, followingId);
   }
 
   @Throttle({ default: { limit: 30, ttl: 60_000 } })
   @Delete('follow/:userId')
+  @ApiOperation({ summary: 'Unfollow a user' })
   @ApiAuthActionNoContent('Unfollowed user')
   @ApiParam({
     name: 'userId',
     description: 'User to unfollow',
     format: 'uuid',
-    example: '660e8400-e29b-41d4-a716-446655440000',
+    example: '660e8400-e29b-71d4-a716-446655440000',
   })
   async unfollowUser(
     @CurrentUser() user: JwtPayload,
-    @Param('userId', new ParseUUIDPipe()) followingId: string,
+    @Param('userId', new ParseUUIDPipe({ version: '7' })) followingId: string,
   ): Promise<void> {
     await this.socialService.unfollowUser(user, followingId);
   }
@@ -466,14 +479,14 @@ export class SocialController {
     name: 'userId',
     description: 'Target user identifier',
     format: 'uuid',
-    example: '660e8400-e29b-41d4-a716-446655440000',
+    example: '660e8400-e29b-71d4-a716-446655440000',
   })
   @ApiOkResourceList(UserFollowerItemDto, 'offset', {
     description: 'Paginated followers returned',
   })
   async getUserFollowers(
     @CurrentUser() user: JwtPayload,
-    @Param('userId', new ParseUUIDPipe()) targetUserId: string,
+    @Param('userId', new ParseUUIDPipe({ version: '7' })) targetUserId: string,
     @Query() query: GetUserFollowersQueryDto,
   ) {
     return this.presenter.getFollowersOfUser(
@@ -497,14 +510,14 @@ export class SocialController {
     name: 'userId',
     description: 'Target user identifier',
     format: 'uuid',
-    example: '660e8400-e29b-41d4-a716-446655440000',
+    example: '660e8400-e29b-71d4-a716-446655440000',
   })
   @ApiOkResourceList(MutualFriendItemDto, 'offset', {
     description: 'Paginated mutual friends returned',
   })
   async getMutualFriends(
     @CurrentUser() user: JwtPayload,
-    @Param('userId', new ParseUUIDPipe()) targetUserId: string,
+    @Param('userId', new ParseUUIDPipe({ version: '7' })) targetUserId: string,
     @Query() query: GetUserFollowersQueryDto,
   ) {
     return this.presenter.getMutualFriends(
@@ -528,14 +541,14 @@ export class SocialController {
     name: 'userId',
     description: 'Target user identifier',
     format: 'uuid',
-    example: '660e8400-e29b-41d4-a716-446655440000',
+    example: '660e8400-e29b-71d4-a716-446655440000',
   })
   @ApiOkResourceList(MutualFollowerItemDto, 'offset', {
     description: 'Paginated mutual followers returned',
   })
   async getMutualFollowers(
     @CurrentUser() user: JwtPayload,
-    @Param('userId', new ParseUUIDPipe()) targetUserId: string,
+    @Param('userId', new ParseUUIDPipe({ version: '7' })) targetUserId: string,
     @Query() query: GetUserFollowersQueryDto,
   ) {
     return this.presenter.getMutualFollowers(
@@ -559,14 +572,14 @@ export class SocialController {
     name: 'userId',
     description: 'Target user identifier',
     format: 'uuid',
-    example: '660e8400-e29b-41d4-a716-446655440000',
+    example: '660e8400-e29b-71d4-a716-446655440000',
   })
   @ApiOkResourceList(UserFollowingItemDto, 'offset', {
     description: 'Paginated following returned',
   })
   async getUserFollowing(
     @CurrentUser() user: JwtPayload,
-    @Param('userId', new ParseUUIDPipe()) targetUserId: string,
+    @Param('userId', new ParseUUIDPipe({ version: '7' })) targetUserId: string,
     @Query() query: GetUserFollowersQueryDto,
   ) {
     return this.presenter.getFollowingOfUser(
@@ -603,11 +616,11 @@ export class SocialController {
     name: 'userId',
     description: 'Target user identifier',
     format: 'uuid',
-    example: '660e8400-e29b-41d4-a716-446655440000',
+    example: '660e8400-e29b-71d4-a716-446655440000',
   })
   async getRelationshipStatus(
     @CurrentUser() user: JwtPayload,
-    @Param('userId', new ParseUUIDPipe()) targetId: string,
+    @Param('userId', new ParseUUIDPipe({ version: '7' })) targetId: string,
   ) {
     return this.presenter.getRelationshipStatus(
       await this.socialService.getRelationshipStatus(user, targetId),

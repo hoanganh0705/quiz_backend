@@ -3,19 +3,19 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 export class ReportedReviewItemDto {
   @ApiProperty({
     description: 'Unique report identifier',
-    example: '990e8400-e29b-41d4-a716-446655440001',
+    example: '990e8400-e29b-71d4-a716-446655440001',
   })
   reportId!: string;
 
   @ApiProperty({
     description: 'Reported review identifier',
-    example: '550e8400-e29b-41d4-a716-446655440099',
+    example: '550e8400-e29b-71d4-a716-446655440099',
   })
   reviewId!: string;
 
   @ApiProperty({
     description: 'Quiz identifier',
-    example: '660e8400-e29b-41d4-a716-446655440000',
+    example: '660e8400-e29b-71d4-a716-446655440000',
   })
   quizId!: string;
 

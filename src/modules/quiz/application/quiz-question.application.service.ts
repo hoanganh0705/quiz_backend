@@ -1,10 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
 import { QuizQuestionService } from '../domain/question/quiz-question.service';
-import { QuizQuestionResponseMapper } from '../mappers/quiz-question-response.mapper';
+import { QuizQuestionAuthorResponseMapper } from '../mappers/quiz-question-author-response.mapper';
 import { CreateQuizQuestionDto } from '../dto/request/create-quiz-question.dto';
 import { CreateQuizQuestionsDto } from '../dto/request/create-quiz-questions.dto';
-import type { QuizQuestionResponseDto } from '../dto/response/quiz-question-response.dto';
+import type { QuizQuestionAuthorDto } from '../dto/response/quiz-question-author.dto';
 import type { BulkQuizQuestionsResponseDto } from '../dto/response/bulk-quiz-questions-response.dto';
 import type { CreateQuizQuestionCommand, CreateQuizQuestionsCommand } from '../domain/types';
 
@@ -17,7 +17,7 @@ export class QuizQuestionApplicationService {
     quizVersionId: string,
     user: JwtPayload,
     dto: CreateQuizQuestionDto,
-  ): Promise<QuizQuestionResponseDto> {
+  ): Promise<QuizQuestionAuthorDto> {
     const command: CreateQuizQuestionCommand = {
       quizVersionId,
       position: dto.position,
@@ -35,7 +35,7 @@ export class QuizQuestionApplicationService {
       user,
       command,
     );
-    const responses = QuizQuestionResponseMapper.toQuestionResponses(rows);
+    const responses = QuizQuestionAuthorResponseMapper.toAuthorQuestionResponses(rows);
     return responses[0];
   }
 
@@ -65,7 +65,7 @@ export class QuizQuestionApplicationService {
       command,
     );
     return {
-      questions: QuizQuestionResponseMapper.toQuestionResponses(rows),
+      questions: QuizQuestionAuthorResponseMapper.toAuthorQuestionResponses(rows),
     };
   }
 }

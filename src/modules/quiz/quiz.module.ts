@@ -117,6 +117,7 @@ import { UserModule } from '@/modules/user/user.module';
   controllers: [QuizController],
   exports: [
     QUIZ_REPOSITORY_PORT,
+    QUIZ_QUESTION_REPOSITORY_PORT,
     QUIZ_DOMAIN_EVENT_BUS,
     QUIZ_ANALYTICS_PORT,
     QUIZ_LISTING_PORT,
