@@ -33,9 +33,12 @@ export class SearchBookmarkItemDto {
 }
 
 export class SearchBookmarksResponseDto {
-  @ApiProperty({ type: [SearchBookmarkItemDto] })
+  @ApiProperty({
+    description: 'Bookmarks matching the search query, ordered by relevance',
+    type: [SearchBookmarkItemDto],
+  })
   items!: SearchBookmarkItemDto[];
 
-  @ApiProperty({ type: RecentBookmarksPaginationDto })
+  @ApiProperty({ description: 'Cursor pagination metadata', type: RecentBookmarksPaginationDto })
   pagination!: RecentBookmarksPaginationDto;
 }
