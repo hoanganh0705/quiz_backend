@@ -99,7 +99,7 @@ export class BookmarkController {
   @ApiStatusQuizIdParam()
   @ApiOperation({ summary: 'Get bookmark status for a quiz' })
   async getBookmarkStatus(
-    @Param('quizId', new ParseUUIDPipe()) quizId: string,
+    @Param('quizId', new ParseUUIDPipe({ version: '7' })) quizId: string,
     @CurrentUser() user: JwtPayload,
   ) {
     const result = await this.bookmarkApplicationService.getBookmarkStatus(user, quizId);
@@ -132,7 +132,7 @@ export class BookmarkController {
   @ApiCollectionIdParam()
   @ApiOperation({ summary: 'List bookmarks in a collection' })
   async listBookmarksInCollection(
-    @Param('collectionId', new ParseUUIDPipe()) collectionId: string,
+    @Param('collectionId', new ParseUUIDPipe({ version: '7' })) collectionId: string,
     @CurrentUser() user: JwtPayload,
   ) {
     const result = await this.bookmarkApplicationService.listBookmarksInCollection(
@@ -148,7 +148,7 @@ export class BookmarkController {
   @ApiCollectionIdParam()
   @ApiOperation({ summary: 'Get collection analytics' })
   async getCollectionAnalytics(
-    @Param('collectionId', new ParseUUIDPipe()) collectionId: string,
+    @Param('collectionId', new ParseUUIDPipe({ version: '7' })) collectionId: string,
     @CurrentUser() user: JwtPayload,
   ) {
     const result = await this.bookmarkApplicationService.getCollectionAnalytics(collectionId, user);
@@ -161,7 +161,7 @@ export class BookmarkController {
   @ApiCollectionIdParam()
   @ApiOperation({ summary: 'Add bookmark', description: 'Adds a quiz to a bookmark collection.' })
   async addBookmark(
-    @Param('collectionId', new ParseUUIDPipe()) collectionId: string,
+    @Param('collectionId', new ParseUUIDPipe({ version: '7' })) collectionId: string,
     @CurrentUser() user: JwtPayload,
     @Body() payload: AddBookmarkDto,
   ) {
@@ -182,7 +182,7 @@ export class BookmarkController {
       '(no 409 is produced). The response reports how many rows were actually inserted.',
   })
   async addBookmarksBulk(
-    @Param('collectionId', new ParseUUIDPipe()) collectionId: string,
+    @Param('collectionId', new ParseUUIDPipe({ version: '7' })) collectionId: string,
     @CurrentUser() user: JwtPayload,
     @Body() payload: BulkAddBookmarksDto,
   ) {
@@ -207,7 +207,7 @@ export class BookmarkController {
       'The response reports how many rows were actually removed.',
   })
   async removeBookmarksBulk(
-    @Param('collectionId', new ParseUUIDPipe()) collectionId: string,
+    @Param('collectionId', new ParseUUIDPipe({ version: '7' })) collectionId: string,
     @CurrentUser() user: JwtPayload,
     @Body() payload: BulkRemoveBookmarksDto,
   ) {
@@ -226,8 +226,8 @@ export class BookmarkController {
   @ApiBookmarkQuizIdParam()
   @ApiOperation({ summary: 'Remove bookmark' })
   async removeBookmark(
-    @Param('collectionId', new ParseUUIDPipe()) collectionId: string,
-    @Param('quizId', new ParseUUIDPipe()) quizId: string,
+    @Param('collectionId', new ParseUUIDPipe({ version: '7' })) collectionId: string,
+    @Param('quizId', new ParseUUIDPipe({ version: '7' })) quizId: string,
     @CurrentUser() user: JwtPayload,
   ) {
     const result = await this.bookmarkApplicationService.removeBookmark(collectionId, quizId, user);
@@ -244,8 +244,8 @@ export class BookmarkController {
     description: 'Updates the personal notes for a bookmarked quiz in a collection.',
   })
   async updateBookmark(
-    @Param('collectionId', new ParseUUIDPipe()) collectionId: string,
-    @Param('quizId', new ParseUUIDPipe()) quizId: string,
+    @Param('collectionId', new ParseUUIDPipe({ version: '7' })) collectionId: string,
+    @Param('quizId', new ParseUUIDPipe({ version: '7' })) quizId: string,
     @CurrentUser() user: JwtPayload,
     @Body() payload: UpdateBookmarkDto,
   ) {
@@ -269,7 +269,7 @@ export class BookmarkController {
       'into the target collection supplied in the request body.',
   })
   async moveBookmark(
-    @Param('collectionId', new ParseUUIDPipe()) collectionId: string,
+    @Param('collectionId', new ParseUUIDPipe({ version: '7' })) collectionId: string,
     @CurrentUser() user: JwtPayload,
     @Body() payload: MoveBookmarkDto,
   ) {
@@ -290,7 +290,7 @@ export class BookmarkController {
     description: 'Updates the name and/or description of an owned bookmark collection.',
   })
   async updateCollection(
-    @Param('collectionId', new ParseUUIDPipe()) collectionId: string,
+    @Param('collectionId', new ParseUUIDPipe({ version: '7' })) collectionId: string,
     @CurrentUser() user: JwtPayload,
     @Body() payload: UpdateCollectionDto,
   ) {
@@ -322,7 +322,7 @@ export class BookmarkController {
       'A 404 is returned when the collection does not exist or is not owned by the caller.',
   })
   async deleteCollection(
-    @Param('collectionId', new ParseUUIDPipe()) collectionId: string,
+    @Param('collectionId', new ParseUUIDPipe({ version: '7' })) collectionId: string,
     @CurrentUser() user: JwtPayload,
   ) {
     const result = await this.bookmarkApplicationService.deleteCollection(collectionId, user);

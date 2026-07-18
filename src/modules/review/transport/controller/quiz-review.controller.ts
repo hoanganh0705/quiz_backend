@@ -9,7 +9,7 @@ import {
   Post,
   Query,
 } from '@nestjs/common';
-import { ApiTags } from '@nestjs/swagger';
+import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { Public } from '@/common/decorators/public.decorator';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
 import { ApiAuth } from '@/common/swagger/swagger-decorators';
@@ -38,9 +38,10 @@ export class quizReviewController {
 
   @Post(':quizId/reviews')
   @ApiAuth()
+  @ApiOperation({ summary: 'Create a review for a quiz' })
   @ApiCreateReviewResponses()
   async createReview(
-    @Param('quizId', new ParseUUIDPipe()) quizId: string,
+    @Param('quizId', new ParseUUIDPipe({ version: '7' })) quizId: string,
     @CurrentUser() user: JwtPayload,
     @Body() payload: CreateReviewDto,
   ) {
@@ -50,9 +51,10 @@ export class quizReviewController {
 
   @Get(':quizId/reviews')
   @Public()
+  @ApiOperation({ summary: 'List reviews for a quiz' })
   @ApiListReviewsResponses()
   async listReviews(
-    @Param('quizId', new ParseUUIDPipe()) quizId: string,
+    @Param('quizId', new ParseUUIDPipe({ version: '7' })) quizId: string,
     @Query() query: ListReviewsQueryDto,
   ) {
     const limit = query.limit ?? 20;
@@ -69,17 +71,19 @@ export class quizReviewController {
 
   @Get(':quizId/reviews/stats')
   @Public()
+  @ApiOperation({ summary: 'Get review statistics for a quiz' })
   @ApiQuizReviewStatsResponses()
-  async getQuizReviewStats(@Param('quizId', new ParseUUIDPipe()) quizId: string) {
+  async getQuizReviewStats(@Param('quizId', new ParseUUIDPipe({ version: '7' })) quizId: string) {
     const result = await this.reviewApplicationService.getQuizReviewStats(quizId);
     return this.presenter.getQuizReviewStats(result);
   }
 
   @Get(':quizId/reviews/analytics')
   @ApiAuth()
+  @ApiOperation({ summary: 'Get review analytics for a quiz (creator only)' })
   @ApiCreatorQuizReviewAnalyticsResponses()
   async getCreatorQuizReviewAnalytics(
-    @Param('quizId', new ParseUUIDPipe()) quizId: string,
+    @Param('quizId', new ParseUUIDPipe({ version: '7' })) quizId: string,
     @CurrentUser() user: JwtPayload,
   ) {
     const result = await this.reviewApplicationService.getCreatorQuizReviewAnalytics(quizId, user);
@@ -88,9 +92,10 @@ export class quizReviewController {
 
   @Get(':quizId/reviews/me')
   @ApiAuth()
+  @ApiOperation({ summary: "Get the authenticated user's review for a quiz" })
   @ApiMyQuizReviewResponses()
   async getMyQuizReview(
-    @Param('quizId', new ParseUUIDPipe()) quizId: string,
+    @Param('quizId', new ParseUUIDPipe({ version: '7' })) quizId: string,
     @CurrentUser() user: JwtPayload,
   ) {
     const result = await this.reviewApplicationService.getMyQuizReview(quizId, user.sub);
@@ -99,9 +104,10 @@ export class quizReviewController {
 
   @Patch(':quizId/reviews')
   @ApiAuth()
+  @ApiOperation({ summary: 'Update the authenticated user review for a quiz' })
   @ApiUpdateReviewResponses()
   async updateReview(
-    @Param('quizId', new ParseUUIDPipe()) quizId: string,
+    @Param('quizId', new ParseUUIDPipe({ version: '7' })) quizId: string,
     @CurrentUser() user: JwtPayload,
     @Body() payload: UpdateReviewDto,
   ) {
@@ -111,9 +117,10 @@ export class quizReviewController {
 
   @Delete(':quizId/reviews')
   @ApiAuth()
+  @ApiOperation({ summary: 'Delete the authenticated user review for a quiz' })
   @ApiDeleteReviewResponses()
   async deleteReview(
-    @Param('quizId', new ParseUUIDPipe()) quizId: string,
+    @Param('quizId', new ParseUUIDPipe({ version: '7' })) quizId: string,
     @CurrentUser() user: JwtPayload,
   ) {
     const result = await this.reviewApplicationService.deleteReview(quizId, user);

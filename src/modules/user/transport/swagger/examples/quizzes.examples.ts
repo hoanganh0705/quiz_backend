@@ -3,7 +3,7 @@ import { EXAMPLE_TIMESTAMP } from './_timestamp';
 export const USER_RECOMMENDED_QUIZZES_EXAMPLE = {
   data: [
     {
-      quizId: '660e8400-e29b-41d4-a716-446655440000',
+      quizId: '660e8400-e29b-71d4-a716-446655440000',
       title: 'JavaScript Fundamentals',
       slug: 'javascript-fundamentals',
       imageUrl: 'https://example.com/covers/js.png',
@@ -15,7 +15,7 @@ export const USER_RECOMMENDED_QUIZZES_EXAMPLE = {
 export const USER_QUIZZES_EXAMPLE = {
   data: [
     {
-      quizId: '660e8400-e29b-41d4-a716-446655440000',
+      quizId: '660e8400-e29b-71d4-a716-446655440000',
       title: 'JavaScript Fundamentals',
       slug: 'javascript-fundamentals',
       imageUrl: 'https://example.com/covers/js.png',

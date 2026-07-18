@@ -19,11 +19,11 @@ export const REVIEW_DASHBOARD_EXAMPLE = {
     totalReviews: 85,
     averageRatingGiven: 4.2,
     favoriteCategory: {
-      categoryId: '770e8400-e29b-41d4-a716-446655440001',
+      categoryId: '770e8400-e29b-71d4-a716-446655440001',
       name: 'Science',
     },
     favoriteTag: {
-      tagId: '880e8400-e29b-41d4-a716-446655440002',
+      tagId: '880e8400-e29b-71d4-a716-446655440002',
       name: 'Biology',
     },
     lastUpdated: '2026-07-15T08:00:00.000Z',
@@ -35,8 +35,8 @@ export const REVIEW_DASHBOARD_EXAMPLE = {
 
 export const REVIEW_CREATED_EXAMPLE = {
   data: {
-    reviewId: '550e8400-e29b-41d4-a716-446655440099',
-    quizId: '660e8400-e29b-41d4-a716-446655440000',
+    reviewId: '550e8400-e29b-71d4-a716-446655440099',
+    quizId: '660e8400-e29b-71d4-a716-446655440000',
     rating: 4,
     comment: 'Great quiz! Some questions were tricky but fair.',
     createdAt: EXAMPLE_TIMESTAMP,
@@ -49,9 +49,9 @@ export const REVIEW_CREATED_EXAMPLE = {
 export const REVIEW_LIST_EXAMPLE = {
   data: [
     {
-      reviewId: '550e8400-e29b-41d4-a716-446655440099',
-      quizId: '660e8400-e29b-41d4-a716-446655440000',
-      userId: '550e8400-e29b-41d4-a716-446655440001',
+      reviewId: '550e8400-e29b-71d4-a716-446655440099',
+      quizId: '660e8400-e29b-71d4-a716-446655440000',
+      userId: '550e8400-e29b-71d4-a716-446655440001',
       username: 'alice_wonder',
       userAvatarUrl: 'https://example.com/avatars/alice.png',
       rating: 5,
@@ -61,9 +61,9 @@ export const REVIEW_LIST_EXAMPLE = {
       helpfulCount: 42,
     },
     {
-      reviewId: '550e8400-e29b-41d4-a716-446655440098',
-      quizId: '660e8400-e29b-41d4-a716-446655440000',
-      userId: '550e8400-e29b-41d4-a716-446655440002',
+      reviewId: '550e8400-e29b-71d4-a716-446655440098',
+      quizId: '660e8400-e29b-71d4-a716-446655440000',
+      userId: '550e8400-e29b-71d4-a716-446655440002',
       username: 'bob_builder',
       userAvatarUrl: null,
       rating: 4,
@@ -119,7 +119,7 @@ export const REVIEW_STATS_EXAMPLE = {
 // Note: This returns QuizAnalyticsResponseDto from the quiz module.
 export const REVIEW_ANALYTICS_EXAMPLE = {
   data: {
-    quizId: '660e8400-e29b-41d4-a716-446655440000',
+    quizId: '660e8400-e29b-71d4-a716-446655440000',
     metrics: {
       totalAttempts: 1250,
       uniquePlayers: 820,
@@ -147,10 +147,10 @@ export const REVIEW_ANALYTICS_EXAMPLE = {
 
 export const REVIEW_MY_FOR_QUIZ_EXAMPLE = {
   data: {
-    reviewId: '550e8400-e29b-41d4-a716-446655440099',
-    quizId: '660e8400-e29b-41d4-a716-446655440000',
+    reviewId: '550e8400-e29b-71d4-a716-446655440099',
+    quizId: '660e8400-e29b-71d4-a716-446655440000',
     quizTitle: 'JavaScript Fundamentals',
-    userId: '550e8400-e29b-41d4-a716-446655440001',
+    userId: '550e8400-e29b-71d4-a716-446655440001',
     username: 'alice_wonder',
     rating: 4,
     comment: 'Great quiz! Some questions were tricky but fair.',
@@ -170,8 +170,8 @@ export const REVIEW_MY_FOR_QUIZ_NULL_EXAMPLE = {
 
 export const REVIEW_UPDATED_EXAMPLE = {
   data: {
-    reviewId: '550e8400-e29b-41d4-a716-446655440099',
-    quizId: '660e8400-e29b-41d4-a716-446655440000',
+    reviewId: '550e8400-e29b-71d4-a716-446655440099',
+    quizId: '660e8400-e29b-71d4-a716-446655440000',
     rating: 5,
     comment: 'Updated my review after retaking the quiz.',
     updatedAt: EXAMPLE_TIMESTAMP,
@@ -219,10 +219,10 @@ export const REVIEW_REPORTED_EXAMPLE = {
 
 export const REVIEW_DETAIL_EXAMPLE = {
   data: {
-    reviewId: '550e8400-e29b-41d4-a716-446655440099',
-    quizId: '660e8400-e29b-41d4-a716-446655440000',
+    reviewId: '550e8400-e29b-71d4-a716-446655440099',
+    quizId: '660e8400-e29b-71d4-a716-446655440000',
     quizTitle: 'JavaScript Fundamentals',
-    userId: '550e8400-e29b-41d4-a716-446655440001',
+    userId: '550e8400-e29b-71d4-a716-446655440001',
     username: 'alice_wonder',
     rating: 4,
     comment: 'Great quiz! Some questions were tricky but fair.',
@@ -238,8 +238,8 @@ export const REVIEW_DETAIL_EXAMPLE = {
 export const MY_REVIEWS_LIST_EXAMPLE = {
   data: [
     {
-      reviewId: '550e8400-e29b-41d4-a716-446655440099',
-      quizId: '660e8400-e29b-41d4-a716-446655440000',
+      reviewId: '550e8400-e29b-71d4-a716-446655440099',
+      quizId: '660e8400-e29b-71d4-a716-446655440000',
       quizTitle: 'JavaScript Fundamentals',
       rating: 5,
       comment: 'Excellent quiz! Very well structured.',
@@ -247,8 +247,8 @@ export const MY_REVIEWS_LIST_EXAMPLE = {
       updatedAt: '2026-07-01T12:00:00.000Z',
     },
     {
-      reviewId: '550e8400-e29b-41d4-a716-446655440098',
-      quizId: '660e8400-e29b-41d4-a716-446655440001',
+      reviewId: '550e8400-e29b-71d4-a716-446655440098',
+      quizId: '660e8400-e29b-71d4-a716-446655440001',
       quizTitle: 'Python Basics',
       rating: 4,
       comment: 'Good introduction to Python.',
@@ -272,9 +272,9 @@ export const MY_REVIEWS_LIST_EXAMPLE = {
 export const REPORTED_REVIEWS_LIST_EXAMPLE = {
   data: [
     {
-      reportId: '990e8400-e29b-41d4-a716-446655440001',
-      reviewId: '550e8400-e29b-41d4-a716-446655440099',
-      quizId: '660e8400-e29b-41d4-a716-446655440000',
+      reportId: '990e8400-e29b-71d4-a716-446655440001',
+      reviewId: '550e8400-e29b-71d4-a716-446655440099',
+      quizId: '660e8400-e29b-71d4-a716-446655440000',
       quizTitle: 'JavaScript Fundamentals',
       reviewerUsername: 'bad_actor',
       rating: 1,
@@ -301,10 +301,10 @@ export const REPORTED_REVIEWS_LIST_EXAMPLE = {
 
 export const MY_REVIEW_FOR_QUIZ_EXAMPLE = {
   data: {
-    reviewId: '550e8400-e29b-41d4-a716-446655440099',
-    quizId: '660e8400-e29b-41d4-a716-446655440000',
+    reviewId: '550e8400-e29b-71d4-a716-446655440099',
+    quizId: '660e8400-e29b-71d4-a716-446655440000',
     quizTitle: 'JavaScript Fundamentals',
-    userId: '550e8400-e29b-41d4-a716-446655440001',
+    userId: '550e8400-e29b-71d4-a716-446655440001',
     username: 'alice_wonder',
     rating: 4,
     comment: 'Great quiz! Some questions were tricky but fair.',
@@ -320,8 +320,8 @@ export const MY_REVIEW_FOR_QUIZ_EXAMPLE = {
 export const USER_REVIEWS_LIST_EXAMPLE = {
   data: [
     {
-      reviewId: '550e8400-e29b-41d4-a716-446655440099',
-      quizId: '660e8400-e29b-41d4-a716-446655440000',
+      reviewId: '550e8400-e29b-71d4-a716-446655440099',
+      quizId: '660e8400-e29b-71d4-a716-446655440000',
       quizTitle: 'JavaScript Fundamentals',
       rating: 5,
       comment: 'Excellent quiz! Very well structured.',
@@ -345,12 +345,12 @@ export const USER_REVIEWS_LIST_EXAMPLE = {
 export const ADMIN_REPORTS_LIST_EXAMPLE = {
   data: [
     {
-      reportId: '990e8400-e29b-41d4-a716-446655440001',
-      reviewId: '550e8400-e29b-41d4-a716-446655440099',
-      quizId: '660e8400-e29b-41d4-a716-446655440000',
+      reportId: '990e8400-e29b-71d4-a716-446655440001',
+      reviewId: '550e8400-e29b-71d4-a716-446655440099',
+      quizId: '660e8400-e29b-71d4-a716-446655440000',
       quizTitle: 'JavaScript Fundamentals',
       reviewerUsername: 'bad_actor',
-      reportedUserId: '550e8400-e29b-41d4-a716-446655440099',
+      reportedUserId: '550e8400-e29b-71d4-a716-446655440099',
       rating: 1,
       comment: 'Spam content with advertising links.',
       reason: 'spam',
@@ -360,12 +360,12 @@ export const ADMIN_REPORTS_LIST_EXAMPLE = {
       updatedAt: null,
     },
     {
-      reportId: '990e8400-e29b-41d4-a716-446655440002',
-      reviewId: '550e8400-e29b-41d4-a716-446655440098',
-      quizId: '660e8400-e29b-41d4-a716-446655440001',
+      reportId: '990e8400-e29b-71d4-a716-446655440002',
+      reviewId: '550e8400-e29b-71d4-a716-446655440098',
+      quizId: '660e8400-e29b-71d4-a716-446655440001',
       quizTitle: 'Python Basics',
       reviewerUsername: 'annoying_user',
-      reportedUserId: '550e8400-e29b-41d4-a716-446655440098',
+      reportedUserId: '550e8400-e29b-71d4-a716-446655440098',
       rating: 1,
       comment: 'Inappropriate content.',
       reason: 'harassment',

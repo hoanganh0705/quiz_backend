@@ -33,7 +33,7 @@ export class ProblemDetailDto {
 
   @ApiPropertyOptional({
     description: 'URI reference that identifies the specific occurrence of the problem',
-    example: '/quizzes/660e8400-e29b-41d4-a716-446655440000',
+    example: '/quizzes/660e8400-e29b-71d4-a716-446655440000',
   })
   instance?: string;
 

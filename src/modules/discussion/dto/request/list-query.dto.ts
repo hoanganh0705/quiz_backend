@@ -31,21 +31,21 @@ export class ListThreadsQueryDto {
   @ApiPropertyOptional({
     description: 'Filter by quiz UUID',
     format: 'uuid',
-    example: '660e8400-e29b-41d4-a716-446655440000',
+    example: '660e8400-e29b-71d4-a716-446655440000',
     nullable: true,
   })
   @IsOptional()
-  @IsUUID()
+  @IsUUID('7')
   quizId?: string;
 
   @ApiPropertyOptional({
     description: 'Filter by author UUID',
     format: 'uuid',
-    example: '770e8400-e29b-41d4-a716-446655440000',
+    example: '770e8400-e29b-71d4-a716-446655440000',
     nullable: true,
   })
   @IsOptional()
-  @IsUUID()
+  @IsUUID('7')
   authorId?: string;
 
   @ApiPropertyOptional({
@@ -109,10 +109,10 @@ export class ListCommentsQueryDto {
     description:
       'UUID of the parent comment to fetch replies for. Omit to fetch only top-level comments.',
     format: 'uuid',
-    example: '770e8400-e29b-41d4-a716-446655440000',
+    example: '770e8400-e29b-71d4-a716-446655440000',
     nullable: true,
   })
   @IsOptional()
-  @IsUUID()
+  @IsUUID('7')
   parentCommentId?: string;
 }

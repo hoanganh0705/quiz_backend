@@ -204,7 +204,7 @@ export class NotificationController {
     example: getNotificationNotFoundExample,
   })
   async getNotificationDetail(
-    @Param('notificationId', ParseUUIDPipe) notificationId: string,
+    @Param('notificationId', new ParseUUIDPipe({ version: '7' })) notificationId: string,
     @CurrentUser() user: JwtPayload,
   ) {
     const result = await this.notificationService.getNotificationDetail(notificationId, user);
@@ -213,6 +213,7 @@ export class NotificationController {
 
   @Post(':notificationId/read')
   @Transactional()
+  @ApiOperation({ summary: 'Mark a notification as read' })
   @ApiNoContent('Notification marked as read')
   @ApiParam({
     name: 'notificationId',
@@ -246,7 +247,7 @@ export class NotificationController {
     example: markAsReadForbiddenExample,
   })
   async markAsRead(
-    @Param('notificationId', ParseUUIDPipe) notificationId: string,
+    @Param('notificationId', new ParseUUIDPipe({ version: '7' })) notificationId: string,
     @CurrentUser() user: JwtPayload,
   ): Promise<void> {
     await this.notificationService.markAsRead(notificationId, user);
@@ -254,6 +255,7 @@ export class NotificationController {
 
   @Post(':notificationId/unread')
   @Transactional()
+  @ApiOperation({ summary: 'Mark a notification as unread' })
   @ApiNoContent('Notification marked as unread')
   @ApiParam({
     name: 'notificationId',
@@ -285,7 +287,7 @@ export class NotificationController {
     example: markAsUnreadForbiddenExample,
   })
   async markAsUnread(
-    @Param('notificationId', ParseUUIDPipe) notificationId: string,
+    @Param('notificationId', new ParseUUIDPipe({ version: '7' })) notificationId: string,
     @CurrentUser() user: JwtPayload,
   ): Promise<void> {
     await this.notificationService.markAsUnread(notificationId, user);
@@ -293,6 +295,7 @@ export class NotificationController {
 
   @Post('read-all')
   @Transactional()
+  @ApiOperation({ summary: 'Mark all notifications as read' })
   @ApiNoContent('All notifications marked as read')
   @HttpCode(HttpStatus.NO_CONTENT)
   async markAllAsRead(@CurrentUser() user: JwtPayload): Promise<void> {
@@ -301,6 +304,7 @@ export class NotificationController {
 
   @Delete('read')
   @Transactional()
+  @ApiOperation({ summary: 'Delete all read notifications' })
   @ApiOkResource(DeletedReadNotificationsResponseDto, {
     description: 'Read notifications deleted',
     example: NOTIFICATION_DELETED_READ_EXAMPLE,
@@ -312,6 +316,7 @@ export class NotificationController {
 
   @Delete(':notificationId')
   @Transactional()
+  @ApiOperation({ summary: 'Delete a notification' })
   @ApiNoContent('Notification deleted')
   @ApiParam({
     name: 'notificationId',
@@ -343,7 +348,7 @@ export class NotificationController {
     example: deleteNotificationForbiddenExample,
   })
   async deleteNotification(
-    @Param('notificationId', ParseUUIDPipe) notificationId: string,
+    @Param('notificationId', new ParseUUIDPipe({ version: '7' })) notificationId: string,
     @CurrentUser() user: JwtPayload,
   ): Promise<void> {
     await this.notificationService.deleteNotification(notificationId, user);

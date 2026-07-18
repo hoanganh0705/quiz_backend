@@ -7,9 +7,9 @@ export class SubmitAnswerDto {
     description: 'UUID of the question being answered',
     type: String,
     format: 'uuid',
-    example: '550e8400-e29b-41d4-a716-446655440001',
+    example: '550e8400-e29b-71d4-a716-446655440001',
   })
-  @IsUUID()
+  @IsUUID('7')
   questionId!: string;
 
   @ApiPropertyOptional({
@@ -17,10 +17,10 @@ export class SubmitAnswerDto {
     type: String,
     format: 'uuid',
     nullable: true,
-    example: '550e8400-e29b-41d4-a716-446655440010',
+    example: '550e8400-e29b-71d4-a716-446655440010',
   })
   @IsOptional()
-  @IsUUID()
+  @IsUUID('7')
   selectedOptionId?: string | null;
 
   @ApiPropertyOptional({

@@ -1,9 +1,16 @@
 import { ApiProperty } from '@nestjs/swagger';
 
-export class QuizAnswerOptionResponseDto {
+/**
+ * Author-facing answer option DTO. Includes the `isCorrect` flag so quiz
+ * authors can verify the correct answer for each option.
+ *
+ * For player-facing endpoints, use `QuizAnswerOptionPlayerDto` instead — it
+ * omits `isCorrect` to prevent spoilers before/during a quiz attempt.
+ */
+export class QuizAnswerOptionAuthorDto {
   @ApiProperty({
     description: 'Unique answer option identifier',
-    example: '550e8400-e29b-41d4-a716-446655440000',
+    example: '550e8400-e29b-71d4-a716-446655440000',
   })
   optionId!: string;
 

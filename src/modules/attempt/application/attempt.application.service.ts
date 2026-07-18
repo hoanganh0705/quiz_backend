@@ -14,6 +14,7 @@ import {
   AttemptAnswersResponseDto,
   AttemptAnalyticsResponseDto,
   UserAttemptStatsResponseDto,
+  AttemptReviewResponseDto,
 } from '../dto/response';
 
 @Injectable()
@@ -164,6 +165,15 @@ export class AttemptApplicationService {
     );
 
     return this.attemptResponseMapper.toAttemptAnalyticsResponse(analyticsRow, answeredCount);
+  }
+
+  async getAttemptReview(attemptId: string, user: JwtPayload): Promise<AttemptReviewResponseDto> {
+    const { attempt, answers, questionRows } = await this.attemptQueryService.getAttemptReview(
+      attemptId,
+      user,
+    );
+
+    return this.attemptResponseMapper.toAttemptReviewResponse(attempt, answers, questionRows);
   }
 
   async getMyAttemptStats(user: JwtPayload): Promise<UserAttemptStatsResponseDto> {

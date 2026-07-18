@@ -6,6 +6,7 @@ import type { AttemptAnalyticsResponseDto } from '../../dto/response/attempt-ana
 import type { AttemptAnswersResponseDto } from '../../dto/response/attempt-answers-response.dto';
 import type { AttemptListResponseDto } from '../../dto/response/attempt-list-response.dto';
 import type { AttemptResponseDto } from '../../dto/response/attempt-response.dto';
+import type { AttemptReviewResponseDto } from '../../dto/response/attempt-review-response.dto';
 import type { CompleteAttemptResponseDto } from '../../dto/response/complete-attempt-response.dto';
 import type { SubmitAnswerResponseDto } from '../../dto/response/submit-answer-response.dto';
 import type { UserAttemptStatsResponseDto } from '../../dto/response/user-attempt-stats-response.dto';
@@ -38,4 +39,5 @@ export class AttemptPresenter {
   readonly getMyAttemptStats = AttemptPresenter.ok<UserAttemptStatsResponseDto>;
   readonly getAttemptAnswers = AttemptPresenter.ok<AttemptAnswersResponseDto>;
   readonly getAttemptAnalytics = AttemptPresenter.ok<AttemptAnalyticsResponseDto>;
+  readonly getAttemptReview = AttemptPresenter.ok<AttemptReviewResponseDto>;
 }

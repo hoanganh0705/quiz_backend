@@ -1,17 +1,21 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import type { QuizDifficulty, QuizVersionStatus } from '@/modules/quiz/types/quiz.types';
-import { QuizQuestionResponseDto } from './quiz-question-response.dto';
+import { QuizQuestionAuthorDto } from './quiz-question-author.dto';
 
+/**
+ * Author-only version detail response (used by `GET /quizzes/:id/versions/:versionId`).
+ * Includes the full question list with `isCorrect` flags.
+ */
 export class QuizVersionDetailResponseDto {
   @ApiProperty({
     description: 'Quiz version identifier',
-    example: '550e8400-e29b-41d4-a716-446655440000',
+    example: '550e8400-e29b-71d4-a716-446655440000',
   })
   quizVersionId!: string;
 
   @ApiProperty({
     description: 'Parent quiz identifier',
-    example: '660e8400-e29b-41d4-a716-446655440000',
+    example: '660e8400-e29b-71d4-a716-446655440000',
   })
   quizId!: string;
 
@@ -43,10 +47,11 @@ export class QuizVersionDetailResponseDto {
   timeLimit!: number;
 
   @ApiProperty({
-    description: 'Questions included in this version',
-    type: () => [QuizQuestionResponseDto],
+    description:
+      'Questions included in this version (author view — includes `isCorrect` on each option)',
+    type: () => [QuizQuestionAuthorDto],
   })
-  questions!: QuizQuestionResponseDto[];
+  questions!: QuizQuestionAuthorDto[];
 
   @ApiProperty({
     description: 'Creation timestamp',
@@ -64,13 +69,13 @@ export class QuizVersionDetailResponseDto {
 export class QuizVersionResponseDto {
   @ApiProperty({
     description: 'Unique quiz version identifier',
-    example: '550e8400-e29b-41d4-a716-446655440000',
+    example: '550e8400-e29b-71d4-a716-446655440000',
   })
   quizVersionId!: string;
 
   @ApiProperty({
     description: 'Parent quiz identifier',
-    example: '660e8400-e29b-41d4-a716-446655440000',
+    example: '660e8400-e29b-71d4-a716-446655440000',
   })
   quizId!: string;
 
@@ -133,9 +138,10 @@ export class QuizVersionResponseDto {
 
   @ApiPropertyOptional({
     description:
-      'Questions included in this version (only populated when version detail is requested)',
-    type: () => [QuizQuestionResponseDto],
+      'Questions included in this version (only populated when version detail is requested; ' +
+      'author view — includes `isCorrect` on each option)',
+    type: () => [QuizQuestionAuthorDto],
     nullable: true,
   })
-  questions?: QuizQuestionResponseDto[];
+  questions?: QuizQuestionAuthorDto[];
 }

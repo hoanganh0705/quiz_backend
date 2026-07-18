@@ -48,6 +48,7 @@ const ATTEMPT_PATHS = [
   '/attempts/{attemptId}/abandon',
   '/attempts/{attemptId}/complete',
   '/attempts/{attemptId}/analytics',
+  '/attempts/{attemptId}/review',
   '/users/me/attempts',
   '/users/me/attempts/stats',
 ];
@@ -169,6 +170,7 @@ describe('Attempt module — OpenAPI contract regression guards', () => {
       { path: '/attempts/{attemptId}/abandon', method: 'post' as const },
       { path: '/attempts/{attemptId}/complete', method: 'post' as const },
       { path: '/attempts/{attemptId}/analytics', method: 'get' as const },
+      { path: '/attempts/{attemptId}/review', method: 'get' as const },
       { path: '/users/me/attempts', method: 'get' as const },
       { path: '/users/me/attempts/stats', method: 'get' as const },
     ];
@@ -203,6 +205,7 @@ describe('Attempt module — OpenAPI contract regression guards', () => {
       { path: '/attempts/{attemptId}/abandon', method: 'post' as const, status: '200' },
       { path: '/attempts/{attemptId}/complete', method: 'post' as const, status: '200' },
       { path: '/attempts/{attemptId}/analytics', method: 'get' as const, status: '200' },
+      { path: '/attempts/{attemptId}/review', method: 'get' as const, status: '200' },
       { path: '/users/me/attempts', method: 'get' as const, status: '200' },
       { path: '/users/me/attempts/stats', method: 'get' as const, status: '200' },
     ];
@@ -236,6 +239,7 @@ describe('Attempt module — OpenAPI contract regression guards', () => {
       'WithdrawAnswerResponseDto',
       'AttemptAnalyticsResponseDto',
       'UserAttemptStatsResponseDto',
+      'AttemptReviewResponseDto',
     ];
 
     for (const dto of requiredDtos) {

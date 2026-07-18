@@ -23,17 +23,17 @@ interface ApiUuidOptions {
   nullable?: boolean;
 }
 
-const UUID_EXAMPLE = '01900000-0000-7000-8000-000000000001';
+const UUID_V7_EXAMPLE = '01900000-0000-7000-8000-000000000001';
 
 export function ApiUuidProperty(options: ApiUuidOptions = {}) {
   return applyDecorators(
     ApiProperty({
       description: options.description ?? 'UUIDv7 identifier',
       format: 'uuid',
-      example: options.example ?? UUID_EXAMPLE,
+      example: options.example ?? UUID_V7_EXAMPLE,
       nullable: options.nullable,
     }),
-    IsUUID(),
+    IsUUID('7'),
   );
 }
 
@@ -42,11 +42,11 @@ export function ApiOptionalUuidProperty(options: ApiUuidOptions = {}) {
     ApiPropertyOptional({
       description: options.description ?? 'UUIDv7 identifier',
       format: 'uuid',
-      example: options.example ?? UUID_EXAMPLE,
+      example: options.example ?? UUID_V7_EXAMPLE,
       nullable: options.nullable,
     }),
     IsOptional(),
-    IsUUID(),
+    IsUUID('7'),
   );
 }
 

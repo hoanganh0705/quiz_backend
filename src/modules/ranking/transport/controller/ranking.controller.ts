@@ -433,7 +433,7 @@ export class RankingController {
       'Unlike the `/leaderboard/me` endpoint, this is public and requires no authentication.',
   })
   @ApiOkResource(UserRankResponseDto, { description: 'User rank returned' })
-  async getUserRank(@Param('userId', ParseUUIDPipe) userId: string) {
+  async getUserRank(@Param('userId', new ParseUUIDPipe({ version: '7' })) userId: string) {
     const result = await this.userRankService.getUserRank(userId);
     return this.presenter.getUserRank(result);
   }
@@ -458,7 +458,7 @@ export class RankingController {
   })
   @rankingBadRequestResponse()
   async getUserRankingHistory(
-    @Param('userId', ParseUUIDPipe) userId: string,
+    @Param('userId', new ParseUUIDPipe({ version: '7' })) userId: string,
     @Query() query: MyRankingHistoryQueryDto,
   ) {
     const result = await this.getUserRankingHistoryQueryHandler.execute({
@@ -487,7 +487,7 @@ export class RankingController {
   @ApiOkResource(UserRankSummaryDto, { description: 'User rank returned' })
   @rankingBadRequestResponse()
   async getUserRankForPeriod(
-    @Param('userId', ParseUUIDPipe) userId: string,
+    @Param('userId', new ParseUUIDPipe({ version: '7' })) userId: string,
     @Query() query: LeaderboardQueryDto,
   ) {
     const result = await this.userRankService.getUserRankForPeriod(

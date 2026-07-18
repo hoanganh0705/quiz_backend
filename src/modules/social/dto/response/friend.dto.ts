@@ -4,21 +4,21 @@ export class FriendRequestDto {
   @ApiProperty({
     description: 'Friendship record identifier',
     format: 'uuid',
-    example: '550e8400-e29b-41d4-a716-446655440000',
+    example: '550e8400-e29b-71d4-a716-446655440000',
   })
   friendshipId!: string;
 
   @ApiProperty({
     description: 'User identifier of the person who sent the request',
     format: 'uuid',
-    example: '660e8400-e29b-41d4-a716-446655440000',
+    example: '660e8400-e29b-71d4-a716-446655440000',
   })
   requesterId!: string;
 
   @ApiProperty({
     description: 'User identifier of the person who received the request',
     format: 'uuid',
-    example: '770e8400-e29b-41d4-a716-446655440001',
+    example: '770e8400-e29b-71d4-a716-446655440001',
   })
   addresseeId!: string;
 
@@ -51,14 +51,14 @@ export class FriendDto {
   @ApiProperty({
     description: 'Friendship record identifier',
     format: 'uuid',
-    example: '550e8400-e29b-41d4-a716-446655440000',
+    example: '550e8400-e29b-71d4-a716-446655440000',
   })
   friendshipId!: string;
 
   @ApiProperty({
     description: "The friend's user identifier",
     format: 'uuid',
-    example: '660e8400-e29b-41d4-a716-446655440000',
+    example: '660e8400-e29b-71d4-a716-446655440000',
   })
   userId!: string;
 

@@ -14,8 +14,8 @@ const withInstance = (
 ): Record<string, unknown> => ({ ...base, instance });
 
 const UUID_BAD_REQUEST_DETAIL = 'Validation failed (uuid is expected)';
-const UUID_ID = '660e8400-e29b-41d4-a716-446655440000';
-const UUID_VERSION_ID = '550e8400-e29b-41d4-a716-446655440000';
+const UUID_ID = '660e8400-e29b-71d4-a716-446655440000';
+const UUID_VERSION_ID = '550e8400-e29b-71d4-a716-446655440000';
 
 // ─── POST /quizzes ────────────────────────────────────────────────────────────
 

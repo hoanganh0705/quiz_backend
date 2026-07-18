@@ -5,21 +5,21 @@ export class AttemptResponseDto {
   @ApiProperty({
     description: 'Unique attempt identifier',
     format: 'uuid',
-    example: '550e8400-e29b-41d4-a716-446655440099',
+    example: '550e8400-e29b-71d4-a716-446655440099',
   })
   attemptId!: string;
 
   @ApiProperty({
     description: 'User identifier',
     format: 'uuid',
-    example: '550e8400-e29b-41d4-a716-446655440000',
+    example: '550e8400-e29b-71d4-a716-446655440000',
   })
   userId!: string;
 
   @ApiProperty({
     description: 'Quiz identifier',
     format: 'uuid',
-    example: '660e8400-e29b-41d4-a716-446655440000',
+    example: '660e8400-e29b-71d4-a716-446655440000',
   })
   quizId!: string;
 
@@ -51,7 +51,7 @@ export class AttemptResponseDto {
     description: 'Context reference ID',
     type: String,
     nullable: true,
-    example: '770e8400-e29b-41d4-a716-446655440000',
+    example: '770e8400-e29b-71d4-a716-446655440000',
   })
   contextRefId!: string | null;
 

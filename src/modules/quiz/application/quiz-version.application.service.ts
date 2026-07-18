@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
 import { QuizVersionService } from '../domain/version/quiz-version.service';
 import { QuizVersionResponseMapper } from '../mappers/quiz-version-response.mapper';
-import { QuizQuestionResponseMapper } from '../mappers/quiz-question-response.mapper';
+import { QuizQuestionAuthorResponseMapper } from '../mappers/quiz-question-author-response.mapper';
 import { QuizVersionCursorMapper } from '../mappers/quiz-cursor.mapper';
 import { CreateQuizVersionDto } from '../dto/request/create-quiz-version.dto';
 import { UpdateQuizVersionDto } from '../dto/request/update-quiz-version.dto';
@@ -70,7 +70,7 @@ export class QuizVersionApplicationService {
 
     return QuizVersionResponseMapper.toQuizVersionDetailResponse(
       version,
-      QuizQuestionResponseMapper.toQuestionResponses(questions),
+      QuizQuestionAuthorResponseMapper.toAuthorQuestionResponses(questions),
     );
   }
 

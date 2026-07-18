@@ -1,5 +1,6 @@
 import type { QuizWithPublishedVersionRow } from '../domain/ports/quiz-repository.port';
-import type { QuizQuestionResponseDto } from '../dto/response/quiz-question-response.dto';
+import type { QuizQuestionAuthorDto } from '../dto/response/quiz-question-author.dto';
+import type { QuizQuestionPlayerDto } from '../dto/response/quiz-question-player.dto';
 import type { QuizTagDto } from '../dto/response/quiz-tag.dto';
 import type { QuizVersionResponseDto } from '../dto/response/quiz-version-response.dto';
 import type { QuizResponseDto } from '../dto/response/quiz-response.dto';
@@ -13,11 +14,17 @@ import type { QuizListItemDto } from '../dto/response/quiz-list-item.dto';
  * (`getQuizById`, `getQuizBySlug`, `createQuiz`, `updateQuiz`). Listing
  * endpoints use `toListItem` instead, which produces a slim shape that
  * omits the `tags` field.
+ *
+ * `publishedQuestions` accepts either player or author question DTOs.
+ * The public `GET /quizzes/:id` endpoint passes player questions (no
+ * `isCorrect`); no current code path passes author questions here, but
+ * the union keeps the mapper reusable if an author-only detail route is
+ * added later.
  */
 export class QuizResponseMapper {
   static toQuizResponse(
     row: QuizWithPublishedVersionRow,
-    publishedQuestions?: QuizQuestionResponseDto[],
+    publishedQuestions?: (QuizQuestionPlayerDto | QuizQuestionAuthorDto)[],
     tags: QuizTagDto[] = [],
   ): QuizResponseDto {
     const hasPublishedVersion =
@@ -69,7 +76,12 @@ export class QuizResponseMapper {
     };
 
     if (publishedQuestions) {
-      publishedVersion.questions = publishedQuestions;
+      // `QuizVersionResponseDto.questions` is typed as `QuizQuestionAuthorDto[]?`
+      // — both author and player DTOs share the same questionId/quizVersionId/
+      // position/questionText/imageUrl/createdAt/updatedAt/answerOptions shape,
+      // so the assignment is structurally safe. Author DTOs add `isCorrect`
+      // to each option; player DTOs omit it.
+      publishedVersion.questions = publishedQuestions as QuizQuestionAuthorDto[];
     }
 
     return {

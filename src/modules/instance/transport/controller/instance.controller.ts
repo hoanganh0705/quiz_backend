@@ -262,7 +262,7 @@ export class InstanceController {
   @instanceBadRequestResponse()
   @instanceNotFoundResponse()
   @ApiInstanceIdParam()
-  async listInstancePlayers(@Param('id', new ParseUUIDPipe()) instanceId: string) {
+  async listInstancePlayers(@Param('id', new ParseUUIDPipe({ version: '7' })) instanceId: string) {
     const result = await this.applicationService.listInstancePlayersForController(instanceId);
     return this.presenter.listInstancePlayers(result);
   }
@@ -284,7 +284,7 @@ export class InstanceController {
   @instanceBadRequestResponse()
   @instanceNotFoundResponse()
   @ApiInstanceIdParam()
-  async getInstanceById(@Param('id', new ParseUUIDPipe()) instanceId: string) {
+  async getInstanceById(@Param('id', new ParseUUIDPipe({ version: '7' })) instanceId: string) {
     const result = await this.applicationService.getInstanceByIdForController(instanceId);
     return this.presenter.getInstanceById(result);
   }
@@ -316,7 +316,7 @@ export class InstanceController {
   @instanceNotFoundResponse()
   @ApiInstanceIdParam()
   async joinInstance(
-    @Param('id', new ParseUUIDPipe()) instanceId: string,
+    @Param('id', new ParseUUIDPipe({ version: '7' })) instanceId: string,
     @CurrentUser() user: JwtPayload,
   ) {
     const result = await this.applicationService.joinInstanceForController(instanceId, user);
@@ -348,7 +348,7 @@ export class InstanceController {
   @instanceNotFoundResponse()
   @ApiInstanceIdParam()
   async startInstance(
-    @Param('id', new ParseUUIDPipe()) instanceId: string,
+    @Param('id', new ParseUUIDPipe({ version: '7' })) instanceId: string,
     @CurrentUser() user: JwtPayload,
   ) {
     const result = await this.applicationService.startInstanceForController(instanceId, user);
@@ -380,7 +380,7 @@ export class InstanceController {
   @instanceNotFoundResponse()
   @ApiInstanceIdParam()
   async closeInstance(
-    @Param('id', new ParseUUIDPipe()) instanceId: string,
+    @Param('id', new ParseUUIDPipe({ version: '7' })) instanceId: string,
     @CurrentUser() user: JwtPayload,
   ) {
     const result = await this.applicationService.closeInstanceForController(instanceId, user);
@@ -416,7 +416,7 @@ export class InstanceController {
   @instanceNotFoundResponse()
   @ApiInstanceIdParam()
   async getLeaderboard(
-    @Param('id', new ParseUUIDPipe()) instanceId: string,
+    @Param('id', new ParseUUIDPipe({ version: '7' })) instanceId: string,
     @Query() query: GetLeaderboardQueryDto,
   ) {
     const limit = query.limit ?? 20;

@@ -7,19 +7,19 @@ import {
 export class InstancePlayerResponseDto {
   @ApiProperty({
     description: 'Instance player record identifier',
-    example: '550e8400-e29b-41d4-a716-446655440099',
+    example: '550e8400-e29b-71d4-a716-446655440099',
   })
   instancePlayerId!: string;
 
   @ApiProperty({
     description: 'Parent instance identifier',
-    example: '660e8400-e29b-41d4-a716-446655440000',
+    example: '660e8400-e29b-71d4-a716-446655440000',
   })
   instanceId!: string;
 
   @ApiProperty({
     description: 'Player user identifier',
-    example: '550e8400-e29b-41d4-a716-446655440000',
+    example: '550e8400-e29b-71d4-a716-446655440000',
   })
   userId!: string;
 
@@ -54,7 +54,7 @@ export class InstancePlayerResponseDto {
     description: 'Attempt identifier if player has started',
     type: String,
     format: 'uuid',
-    example: '880e8400-e29b-41d4-a716-446655440000',
+    example: '880e8400-e29b-71d4-a716-446655440000',
     nullable: true,
   })
   attemptId!: string | null;

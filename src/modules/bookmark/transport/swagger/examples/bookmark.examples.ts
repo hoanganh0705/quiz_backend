@@ -17,20 +17,20 @@ import { EXAMPLE_TIMESTAMP } from './_timestamp';
 export const BOOKMARK_SEARCH_EXAMPLE = {
   data: [
     {
-      quizId: '660e8400-e29b-41d4-a716-446655440000',
+      quizId: '660e8400-e29b-71d4-a716-446655440000',
       title: 'React Hooks Fundamentals',
       slug: 'react-hooks-fundamentals',
       imageUrl: 'https://example.com/covers/react-hooks.png',
-      collectionId: '770e8400-e29b-41d4-a716-446655440000',
+      collectionId: '770e8400-e29b-71d4-a716-446655440000',
       collectionName: 'React Learning',
       bookmarkedAt: '2026-06-25T09:30:00.000Z',
     },
     {
-      quizId: '660e8400-e29b-41d4-a716-446655440001',
+      quizId: '660e8400-e29b-71d4-a716-446655440001',
       title: 'React Server Components',
       slug: 'react-server-components',
       imageUrl: null,
-      collectionId: '770e8400-e29b-41d4-a716-446655440000',
+      collectionId: '770e8400-e29b-71d4-a716-446655440000',
       collectionName: 'React Learning',
       bookmarkedAt: '2026-06-20T11:00:00.000Z',
     },
@@ -52,11 +52,11 @@ export const BOOKMARK_SEARCH_EXAMPLE = {
 export const BOOKMARK_RECENT_EXAMPLE = {
   data: [
     {
-      quizId: '660e8400-e29b-41d4-a716-446655440000',
+      quizId: '660e8400-e29b-71d4-a716-446655440000',
       title: 'JavaScript Fundamentals',
       slug: 'javascript-fundamentals',
       imageUrl: null,
-      collectionId: '770e8400-e29b-41d4-a716-446655440000',
+      collectionId: '770e8400-e29b-71d4-a716-446655440000',
       collectionName: 'Updated Favorites',
       bookmarkedAt: '2026-07-10T11:51:20.265Z',
     },
@@ -79,11 +79,11 @@ export const BOOKMARK_STATUS_EXAMPLE = {
     bookmarked: true,
     collections: [
       {
-        collectionId: '770e8400-e29b-41d4-a716-446655440000',
+        collectionId: '770e8400-e29b-71d4-a716-446655440000',
         name: 'Favorites',
       },
       {
-        collectionId: '770e8400-e29b-41d4-a716-446655440001',
+        collectionId: '770e8400-e29b-71d4-a716-446655440001',
         name: 'React Learning',
       },
     ],
@@ -105,8 +105,8 @@ export const BOOKMARK_COLLECTION_LIST_EXAMPLE = {
   data: {
     items: [
       {
-        collectionId: '770e8400-e29b-41d4-a716-446655440000',
-        userId: '550e8400-e29b-41d4-a716-446655440000',
+        collectionId: '770e8400-e29b-71d4-a716-446655440000',
+        userId: '550e8400-e29b-71d4-a716-446655440000',
         name: 'Frontend Study List',
         description: 'A curated set of frontend interview quizzes',
         quizCount: 5,
@@ -114,8 +114,8 @@ export const BOOKMARK_COLLECTION_LIST_EXAMPLE = {
         updatedAt: '2026-07-12T08:30:00.000Z',
       },
       {
-        collectionId: '770e8400-e29b-41d4-a716-446655440001',
-        userId: '550e8400-e29b-41d4-a716-446655440000',
+        collectionId: '770e8400-e29b-71d4-a716-446655440001',
+        userId: '550e8400-e29b-71d4-a716-446655440000',
         name: 'React Learning',
         description: null,
         quizCount: 12,
@@ -131,7 +131,7 @@ export const BOOKMARK_COLLECTION_LIST_EXAMPLE = {
 
 export const BOOKMARK_COLLECTION_CREATED_EXAMPLE = {
   data: {
-    collectionId: '770e8400-e29b-41d4-a716-446655440000',
+    collectionId: '770e8400-e29b-71d4-a716-446655440000',
     name: 'My Favorite Quizzes',
     description: 'A curated set of frontend interview quizzes',
     createdAt: EXAMPLE_TIMESTAMP,
@@ -145,8 +145,8 @@ export const BOOKMARK_LIST_EXAMPLE = {
   data: {
     items: [
       {
-        bookmarkId: '550e8400-e29b-41d4-a716-446655440099',
-        quizId: '660e8400-e29b-41d4-a716-446655440000',
+        bookmarkId: '550e8400-e29b-71d4-a716-446655440099',
+        quizId: '660e8400-e29b-71d4-a716-446655440000',
         quizTitle: 'JavaScript Fundamentals',
         quizSlug: 'javascript-fundamentals',
         quizImageUrl: 'https://example.com/covers/js.png',
@@ -163,7 +163,7 @@ export const BOOKMARK_LIST_EXAMPLE = {
 
 export const BOOKMARK_COLLECTION_ANALYTICS_EXAMPLE = {
   data: {
-    collectionId: '770e8400-e29b-41d4-a716-446655440000',
+    collectionId: '770e8400-e29b-71d4-a716-446655440000',
     collectionName: 'Frontend Study List',
     summary: {
       totalBookmarks: 24,
@@ -174,7 +174,7 @@ export const BOOKMARK_COLLECTION_ANALYTICS_EXAMPLE = {
     },
     topCategories: [
       {
-        categoryId: '550e8400-e29b-41d4-a716-446655440001',
+        categoryId: '550e8400-e29b-71d4-a716-446655440001',
         name: 'Science',
         slug: 'science',
         bookmarkCount: 8,
@@ -182,7 +182,7 @@ export const BOOKMARK_COLLECTION_ANALYTICS_EXAMPLE = {
     ],
     topTags: [
       {
-        tagId: '550e8400-e29b-41d4-a716-446655440002',
+        tagId: '550e8400-e29b-71d4-a716-446655440002',
         name: 'Physics',
         slug: 'physics',
         bookmarkCount: 5,
@@ -197,9 +197,9 @@ export const BOOKMARK_COLLECTION_ANALYTICS_EXAMPLE = {
 
 export const BOOKMARK_ADDED_EXAMPLE = {
   data: {
-    bookmarkId: '550e8400-e29b-41d4-a716-446655440099',
-    collectionId: '770e8400-e29b-41d4-a716-446655440000',
-    quizId: '660e8400-e29b-41d4-a716-446655440000',
+    bookmarkId: '550e8400-e29b-71d4-a716-446655440099',
+    collectionId: '770e8400-e29b-71d4-a716-446655440000',
+    quizId: '660e8400-e29b-71d4-a716-446655440000',
     notes: 'Review before the interview',
     bookmarkedAt: EXAMPLE_TIMESTAMP,
   },
@@ -237,9 +237,9 @@ export const BOOKMARK_REMOVED_EXAMPLE = {
 
 export const BOOKMARK_UPDATED_EXAMPLE = {
   data: {
-    bookmarkId: '550e8400-e29b-41d4-a716-446655440099',
-    collectionId: '770e8400-e29b-41d4-a716-446655440000',
-    quizId: '660e8400-e29b-41d4-a716-446655440000',
+    bookmarkId: '550e8400-e29b-71d4-a716-446655440099',
+    collectionId: '770e8400-e29b-71d4-a716-446655440000',
+    quizId: '660e8400-e29b-71d4-a716-446655440000',
     notes: 'Revised personal note',
     updatedAt: EXAMPLE_TIMESTAMP,
   },
@@ -259,7 +259,7 @@ export const BOOKMARK_MOVED_EXAMPLE = {
 
 export const BOOKMARK_COLLECTION_UPDATED_EXAMPLE = {
   data: {
-    collectionId: '770e8400-e29b-41d4-a716-446655440000',
+    collectionId: '770e8400-e29b-71d4-a716-446655440000',
     name: 'My Renamed Collection',
     description: 'A curated set of frontend interview quizzes',
     createdAt: '2026-05-01T12:00:00.000Z',
@@ -275,12 +275,12 @@ export const BOOKMARK_STATS_EXAMPLE = {
     totalCollections: 3,
     totalBookmarks: 27,
     favoriteCategory: {
-      categoryId: '550e8400-e29b-41d4-a716-446655440001',
+      categoryId: '550e8400-e29b-71d4-a716-446655440001',
       name: 'Science',
       slug: 'science',
     },
     favoriteTag: {
-      tagId: '550e8400-e29b-41d4-a716-446655440002',
+      tagId: '550e8400-e29b-71d4-a716-446655440002',
       name: 'Physics',
       slug: 'physics',
     },

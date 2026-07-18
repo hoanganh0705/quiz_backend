@@ -1,5 +1,5 @@
 import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Post } from '@nestjs/common';
-import { ApiTags } from '@nestjs/swagger';
+import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { Public } from '@/common/decorators/public.decorator';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
 import { ApiAuth } from '@/common/swagger/swagger-decorators';
@@ -25,6 +25,7 @@ export class ReviewController {
 
   @Get('me')
   @ApiAuth()
+  @ApiOperation({ summary: "Get the authenticated user's review dashboard" })
   @ApiReviewDashboardResponses()
   async getMyReviewDashboard(@CurrentUser() user: JwtPayload) {
     const result = await this.reviewApplicationService.getMyReviewDashboard(user);
@@ -33,9 +34,10 @@ export class ReviewController {
 
   @Post(':reviewId/helpful')
   @ApiAuth()
+  @ApiOperation({ summary: 'Mark a review as helpful' })
   @ApiMarkReviewHelpfulResponses()
   async markReviewHelpful(
-    @Param('reviewId', new ParseUUIDPipe()) reviewId: string,
+    @Param('reviewId', new ParseUUIDPipe({ version: '7' })) reviewId: string,
     @CurrentUser() user: JwtPayload,
     @Body() payload: HelpfulReviewDto,
   ) {
@@ -45,9 +47,10 @@ export class ReviewController {
 
   @Delete(':reviewId/helpful')
   @ApiAuth()
+  @ApiOperation({ summary: 'Remove the helpful vote on a review' })
   @ApiRemoveHelpfulVoteResponses()
   async removeHelpfulVote(
-    @Param('reviewId', new ParseUUIDPipe()) reviewId: string,
+    @Param('reviewId', new ParseUUIDPipe({ version: '7' })) reviewId: string,
     @CurrentUser() user: JwtPayload,
   ) {
     const result = await this.reviewApplicationService.removeHelpfulVote(reviewId, user);
@@ -56,9 +59,10 @@ export class ReviewController {
 
   @Post(':reviewId/report')
   @ApiAuth()
+  @ApiOperation({ summary: 'Report a review' })
   @ApiReportReviewResponses()
   async reportReview(
-    @Param('reviewId', new ParseUUIDPipe()) reviewId: string,
+    @Param('reviewId', new ParseUUIDPipe({ version: '7' })) reviewId: string,
     @CurrentUser() user: JwtPayload,
     @Body() payload: ReportReviewDto,
   ) {
@@ -68,8 +72,9 @@ export class ReviewController {
 
   @Get(':reviewId')
   @Public()
+  @ApiOperation({ summary: 'Get a review by ID' })
   @ApiGetReviewByIdResponses()
-  async getReviewById(@Param('reviewId', new ParseUUIDPipe()) reviewId: string) {
+  async getReviewById(@Param('reviewId', new ParseUUIDPipe({ version: '7' })) reviewId: string) {
     const result = await this.reviewApplicationService.getReviewById(reviewId);
     return this.presenter.getReviewById(result);
   }

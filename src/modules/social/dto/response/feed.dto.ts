@@ -23,7 +23,7 @@ export class SocialFeedUserDto {
   @ApiProperty({
     description: 'User identifier for the activity actor',
     format: 'uuid',
-    example: '660e8400-e29b-41d4-a716-446655440000',
+    example: '660e8400-e29b-71d4-a716-446655440000',
   })
   userId!: string;
 
@@ -35,7 +35,7 @@ export class SocialFeedItemDto {
   @ApiProperty({
     description: 'Feed activity identifier',
     format: 'uuid',
-    example: '660e8400-e29b-41d4-a716-446655440000',
+    example: '660e8400-e29b-71d4-a716-446655440000',
   })
   id!: string;
 

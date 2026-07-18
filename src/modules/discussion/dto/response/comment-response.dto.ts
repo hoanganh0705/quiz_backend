@@ -7,19 +7,19 @@ const VOTE_VALUES = ['upvote', 'downvote'] as const;
 export class CommentDto {
   @ApiProperty({
     description: 'Comment identifier',
-    example: '880e8400-e29b-41d4-a716-446655440000',
+    example: '880e8400-e29b-71d4-a716-446655440000',
   })
   commentId!: string;
 
   @ApiProperty({
     description: 'Parent thread identifier',
-    example: '660e8400-e29b-41d4-a716-446655440000',
+    example: '660e8400-e29b-71d4-a716-446655440000',
   })
   threadId!: string;
 
   @ApiProperty({
     description: 'Author identifier',
-    example: '550e8400-e29b-41d4-a716-446655440000',
+    example: '550e8400-e29b-71d4-a716-446655440000',
   })
   authorId!: string;
 

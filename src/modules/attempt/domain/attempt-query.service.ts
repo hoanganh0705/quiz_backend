@@ -13,7 +13,7 @@ import {
   ATTEMPT_ANSWER_REPOSITORY_PORT,
   type AttemptAnswerRepositoryPort,
 } from './ports/attempt-answer-repository.port';
-import { QUIZ_REPOSITORY_PORT } from '@/modules/quiz/domain/ports';
+import { QUIZ_REPOSITORY_PORT, QUIZ_QUESTION_REPOSITORY_PORT } from '@/modules/quiz/domain/ports';
 import { AttemptNotFoundError, AttemptForbiddenError, AttemptNotCompletedError } from './errors';
 import {
   ATTEMPT_NOT_FOUND_MESSAGE,
@@ -43,6 +43,25 @@ export class AttemptQueryService {
         title: string;
         slug: string;
       } | null>;
+    },
+    @Inject(QUIZ_QUESTION_REPOSITORY_PORT)
+    private readonly quizQuestionRepository: {
+      getQuestionsByVersionId: (quizVersionId: string) => Promise<
+        Array<{
+          questionId: string;
+          quizVersionId: string;
+          position: number;
+          questionText: string;
+          imageUrl: string | null;
+          createdAt: string;
+          updatedAt: string;
+          optionId: string | null;
+          optionPosition: number | null;
+          optionValue: string | null;
+          optionIsCorrect: boolean | null;
+          optionCreatedAt: string | null;
+        }>
+      >;
     },
     @InjectPinoLogger(AttemptQueryService.name)
     private readonly logger: PinoLogger,
@@ -151,6 +170,46 @@ export class AttemptQueryService {
     }
 
     return { analyticsRow, answeredCount: answers.length };
+  }
+
+  /**
+   * Returns the post-attempt review (per-question debrief) for a completed attempt.
+   *
+   * Verifies (in this order):
+   *   1. The attempt exists.
+   *   2. The caller owns the attempt (or is an admin).
+   *   3. The attempt status is 'completed'.
+   *
+   * Composes two projections:
+   *   - The attempt's submitted answers (AttemptAnswerRow[])
+   *   - The quiz version's questions+options (QuizQuestionJoinRow[])
+   *
+   * The mapper merges these into a single per-question review payload. No grading
+   * logic is duplicated here: the join against `quiz_answer_options.is_correct`
+   * is the same source of truth that `getAttemptAnswerScoringData` uses at
+   * completion time. This method only adds the read-side projection on top.
+   */
+  async getAttemptReview(attemptId: string, user: JwtPayload) {
+    const attempt = await this.attemptRepository.getAttemptDetailById(attemptId);
+
+    if (!attempt) {
+      throw new AttemptNotFoundError(ATTEMPT_NOT_FOUND_MESSAGE);
+    }
+
+    if (attempt.userId !== user.sub && user.role !== 'admin') {
+      throw new AttemptForbiddenError(ATTEMPT_FORBIDDEN_MESSAGE);
+    }
+
+    if (attempt.status !== 'completed') {
+      throw new AttemptNotCompletedError(ATTEMPT_NOT_COMPLETED_MESSAGE);
+    }
+
+    const [answers, questionRows] = await Promise.all([
+      this.attemptAnswerRepository.getAttemptAnswersByAttemptId(attemptId),
+      this.quizQuestionRepository.getQuestionsByVersionId(attempt.quizVersionId),
+    ]);
+
+    return { attempt, answers, questionRows };
   }
 
   /**
