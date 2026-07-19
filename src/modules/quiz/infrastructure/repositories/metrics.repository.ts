@@ -2,7 +2,13 @@ import { Inject, Injectable } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { DRIZZLE } from '@/core/database/drizzle.constants';
 import type { DrizzleDB } from '@/core/database/database.module';
-import { quizAttempts, quizVersions, quizReviews, bookmarkedQuizzes } from '@/core/database/schema';
+import {
+  quizAttempts,
+  quizVersions,
+  quizReviews,
+  bookmarkedQuizzes,
+  bookmarkCollections,
+} from '@/core/database/schema';
 import { count, eq, and, sql, gte } from 'drizzle-orm';
 import type { MetricsRepositoryPort } from '../../domain/analytics/ports/metrics-repository.port';
 
@@ -107,8 +113,12 @@ export class MetricsRepository implements MetricsRepositoryPort {
 
   async calculateBookmarkCount(quizId: string): Promise<number> {
     const result = await this.db
-      .select({ count: count() })
+      .select({ count: sql<number>`COUNT(DISTINCT ${bookmarkCollections.userId})::int` })
       .from(bookmarkedQuizzes)
+      .innerJoin(
+        bookmarkCollections,
+        eq(bookmarkedQuizzes.collectionId, bookmarkCollections.collectionId),
+      )
       .where(eq(bookmarkedQuizzes.quizId, quizId));
 
     return Number(result[0]?.count ?? 0);

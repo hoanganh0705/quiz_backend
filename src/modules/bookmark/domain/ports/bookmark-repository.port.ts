@@ -9,6 +9,11 @@ export type BookmarkedQuizRow = {
   updatedAt: string;
 };
 
+export type BulkBookmarkMutationRow = {
+  bookmarkId: string;
+  quizId: string;
+};
+
 export type BookmarkedQuizDetailRow = BookmarkedQuizRow & {
   quizTitle: string;
   quizSlug: string;
@@ -87,13 +92,13 @@ export interface BookmarkRepositoryPort {
     collectionId: string;
     quizIds: string[];
     nowIso: string;
-  }): Promise<number>;
+  }): Promise<BulkBookmarkMutationRow[]>;
 
   removeBookmarksBulk(params: {
     userId: string;
     collectionId: string;
     quizIds: string[];
-  }): Promise<number>;
+  }): Promise<BulkBookmarkMutationRow[]>;
 
   moveBookmark(params: {
     userId: string;

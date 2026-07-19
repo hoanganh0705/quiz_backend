@@ -212,10 +212,10 @@ export class BookmarkCommandService {
     }
 
     const nowIso = new Date().toISOString();
-    let addedCount: number;
+    let addedRows: Awaited<ReturnType<BookmarkRepositoryPort['addBookmarksBulk']>>;
 
     try {
-      addedCount = await this.bookmarkRepository.addBookmarksBulk({
+      addedRows = await this.bookmarkRepository.addBookmarksBulk({
         userId,
         collectionId,
         quizIds: uniqueQuizIds,
@@ -236,16 +236,22 @@ export class BookmarkCommandService {
       throw error;
     }
 
+    for (const row of addedRows) {
+      this.eventBus.emitBookmarkAdded(
+        new BookmarkAddedEvent(row.bookmarkId, collectionId, row.quizId, userId, nowIso),
+      );
+    }
+
     this.logger.info({
       event: 'bulk_bookmarks_added',
       collectionId,
       userId,
       requestedCount: quizIds.length,
       uniqueCount: uniqueQuizIds.length,
-      addedCount,
+      addedCount: addedRows.length,
     });
 
-    return addedCount;
+    return addedRows.length;
   }
 
   async removeBookmarksBulk(
@@ -261,11 +267,18 @@ export class BookmarkCommandService {
       return 0;
     }
 
-    const removedCount = await this.bookmarkRepository.removeBookmarksBulk({
+    const nowIso = new Date().toISOString();
+    const removedRows = await this.bookmarkRepository.removeBookmarksBulk({
       userId,
       collectionId,
       quizIds: uniqueQuizIds,
     });
+
+    for (const row of removedRows) {
+      this.eventBus.emitBookmarkRemoved(
+        new BookmarkRemovedEvent(row.bookmarkId, collectionId, row.quizId, userId, nowIso),
+      );
+    }
 
     this.logger.info({
       event: 'bulk_bookmarks_removed',
@@ -273,10 +286,10 @@ export class BookmarkCommandService {
       userId,
       requestedCount: quizIds.length,
       uniqueCount: uniqueQuizIds.length,
-      removedCount,
+      removedCount: removedRows.length,
     });
 
-    return removedCount;
+    return removedRows.length;
   }
 
   async removeBookmark(collectionId: string, quizId: string, user: JwtPayload) {

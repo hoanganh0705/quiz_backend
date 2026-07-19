@@ -171,6 +171,36 @@ export class QuizAnalyticsService implements QuizAnalyticsPort {
     });
   }
 
+  async refreshAllBookmarkMetrics(): Promise<{
+    quizzesEvaluated: number;
+    quizzesRefreshed: number;
+    errorCount: number;
+  }> {
+    const quizIds = await this.analyticsRepository.getAllActiveQuizIds();
+    let quizzesRefreshed = 0;
+    let errorCount = 0;
+
+    for (const quizId of quizIds) {
+      try {
+        await this.refreshBookmarkMetrics(quizId);
+        quizzesRefreshed += 1;
+      } catch (error) {
+        errorCount += 1;
+        this.logger.error({
+          event: 'bookmark_metrics_backfill_quiz_failed',
+          quizId,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+
+    return {
+      quizzesEvaluated: quizIds.length,
+      quizzesRefreshed,
+      errorCount,
+    };
+  }
+
   async refreshTrendingScore(quizId: string): Promise<void> {
     const nowIso = new Date().toISOString();
 
@@ -338,6 +368,51 @@ export class QuizAnalyticsService implements QuizAnalyticsPort {
 
   async getTagAnalytics(tagId: string): Promise<TagAnalytics | null> {
     return this.analyticsRepository.getTagAnalytics(tagId);
+  }
+
+  /**
+   * Defense-in-depth reconciliation for `quiz_stats.total_attempts` and
+   * `avg_score_percent`. The inline path inside
+   * `AttemptRepository.completeAttemptAndSideEffects` increments these inside
+   * the attempt-completion transaction, but a process crash, a manual
+   * `UPDATE quiz_attempts`, or any future schema change can desynchronize the
+   * running counter from the source-of-truth aggregation.
+   *
+   * Iterates every active quiz (including ones that have no `quiz_stats` row
+   * yet) and recomputes the attempt-side counters from
+   * `quiz_attempts` + `quiz_versions` via `refreshQuizMetrics`. Per-quiz
+   * failures are logged and swallowed so a single broken row cannot stop the
+   * sweep — the next daily cron will retry it.
+   */
+  async reconcileAllQuizMetrics(): Promise<{
+    quizzesEvaluated: number;
+    quizzesRefreshed: number;
+    errorCount: number;
+  }> {
+    const quizIds = await this.analyticsRepository.getAllActiveQuizIds();
+
+    let quizzesRefreshed = 0;
+    let errorCount = 0;
+
+    for (const quizId of quizIds) {
+      try {
+        await this.refreshQuizMetrics(quizId);
+        quizzesRefreshed += 1;
+      } catch (error) {
+        errorCount += 1;
+        this.logger.error({
+          event: 'quiz_metrics_reconcile_quiz_failed',
+          quizId,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+
+    return {
+      quizzesEvaluated: quizIds.length,
+      quizzesRefreshed,
+      errorCount,
+    };
   }
 
   /**
