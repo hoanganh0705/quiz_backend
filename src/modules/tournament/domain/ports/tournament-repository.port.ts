@@ -310,6 +310,34 @@ export interface TournamentRepositoryPort {
     roundParticipantId: string;
     nowIso: string;
   }): Promise<{ attemptId: string }>;
+
+  /**
+   * Recomputes `tournament_participants.total_score` and
+   * `tournament_participants.total_time_ms` from the matching rows in
+   * `tournament_round_participants` (SUM(round_score), SUM(round_time_ms))
+   * and writes the result back to the participant in a single UPDATE.
+   *
+   * Acts as the recompute primitive for Fix #1 of
+   * docs/plans/denormalized-counters-audit.md: it makes the denormalized
+   * columns a pure projection of their source of truth, idempotent and
+   * safe to call after every round-participant write or on a schedule.
+   *
+   * When `tx` is provided the recompute is executed inside that transaction
+   * (so callers can compose it with their own round-participant write).
+   * Otherwise the method runs in its own implicit transaction.
+   */
+  recalculateParticipantTotals(participantId: string, tx?: unknown): Promise<void>;
+
+  /**
+   * Bulk variant of `recalculateParticipantTotals` that re-runs the same
+   * two-pass UPDATE as the 0008 migration, across every tournament
+   * participant. Intended for the daily cron on
+   * `TournamentSchedulerService` to repair drift that may have
+   * accumulated between scheduled recomputes.
+   *
+   * Returns the number of participant rows whose totals changed.
+   */
+  reconcileAllParticipantTotals(): Promise<{ updated: number }>;
 }
 
 export const TOURNAMENT_REPOSITORY_PORT = Symbol('TOURNAMENT_REPOSITORY_PORT');

@@ -1226,21 +1226,39 @@ export class TournamentRepository implements TournamentRepositoryPort {
       // Streaming batched UPDATE: pull (participantId, userId, rank) chunks
       // and update each batch with one statement that joins to a VALUES list.
       // A single SQL round-trip per batch instead of one per participant.
+      //
+      // The leaderboard ranking here is *derived* from
+      // `tournament_round_participants.round_score` / `round_time_ms` sums
+      // (not from the cached `tp.total_score` / `total_time_ms`), per
+      // docs/plans/denormalized-counters-audit.md — Fix #1. This guarantees
+      // the leaderboard is correct even if the cached counters ever drift.
       const BATCH_SIZE = 1000;
       let offset = 0;
 
       while (true) {
         const batch = await tx.execute(
           sql<{ participantId: string; userId: string; rank: number | string }>`
-            WITH ranked AS (
+            WITH round_totals AS (
+              SELECT
+                trp.participant_id,
+                SUM(trp.round_score)::int   AS total_score,
+                SUM(trp.round_time_ms)::int AS total_time_ms
+              FROM tournament_round_participants trp
+              GROUP BY trp.participant_id
+            ),
+            ranked AS (
               SELECT
                 tp.participant_id as "participantId",
                 tp.user_id as "userId",
                 ROW_NUMBER() OVER (
-                  ORDER BY tp.total_score DESC, tp.total_time_ms ASC, tp.participant_id ASC
+                  ORDER BY
+                    COALESCE(rt.total_score,   0) DESC,
+                    COALESCE(rt.total_time_ms, 0) ASC,
+                    tp.participant_id ASC
                 )::int as rank
               FROM tournament_participants tp
               INNER JOIN users u ON u.user_id = tp.user_id
+              LEFT JOIN round_totals rt ON rt.participant_id = tp.participant_id
               WHERE tp.tournament_id = ${params.tournamentId}::uuid
                 AND tp.withdrawn_at IS NULL
                 AND u.deleted_at IS NULL
@@ -1287,18 +1305,38 @@ export class TournamentRepository implements TournamentRepositoryPort {
       // we materialize the full result set, and it's bounded by the
       // number of participants in this tournament (necessary because
       // the API contract returns the full standings list).
+      //
+      // Same projection rationale as above: derive ordering from
+      // `tournament_round_participants` so the result is correct even if
+      // the cached totals on `tournament_participants` drift.
       const finalStandings = await tx.execute(
         sql<{ userId: string; rank: number | string }>`
-          SELECT
-            tp.user_id as "userId",
-            ROW_NUMBER() OVER (
-              ORDER BY tp.total_score DESC, tp.total_time_ms ASC, tp.participant_id ASC
-            )::int as rank
-          FROM tournament_participants tp
-          INNER JOIN users u ON u.user_id = tp.user_id
-          WHERE tp.tournament_id = ${params.tournamentId}::uuid
-            AND tp.withdrawn_at IS NULL
-            AND u.deleted_at IS NULL
+          WITH round_totals AS (
+            SELECT
+              trp.participant_id,
+              SUM(trp.round_score)::int   AS total_score,
+              SUM(trp.round_time_ms)::int AS total_time_ms
+            FROM tournament_round_participants trp
+            GROUP BY trp.participant_id
+          ),
+          ranked AS (
+            SELECT
+              tp.user_id as "userId",
+              ROW_NUMBER() OVER (
+                ORDER BY
+                  COALESCE(rt.total_score,   0) DESC,
+                  COALESCE(rt.total_time_ms, 0) ASC,
+                  tp.participant_id ASC
+              )::int as rank
+            FROM tournament_participants tp
+            INNER JOIN users u ON u.user_id = tp.user_id
+            LEFT JOIN round_totals rt ON rt.participant_id = tp.participant_id
+            WHERE tp.tournament_id = ${params.tournamentId}::uuid
+              AND tp.withdrawn_at IS NULL
+              AND u.deleted_at IS NULL
+          )
+          SELECT "userId", rank
+          FROM ranked
           ORDER BY rank
         `,
       );
@@ -1311,5 +1349,105 @@ export class TournamentRepository implements TournamentRepositoryPort {
         }),
       );
     });
+  }
+
+  async recalculateParticipantTotals(participantId: string, tx?: unknown): Promise<void> {
+    // Single-statement projection of `tournament_round_participants` onto the
+    // denormalized totals on `tournament_participants`. Widen the stored
+    // rounding of SUMs to int to match the schema's `integer` columns. The
+    // `NOW()` set on updated_at is intentional — totals drift recovery is
+    // itself a "real" write from the application's POV.
+    const upsertTotals = async (client: unknown): Promise<void> => {
+      await (client as DrizzleDB).execute(sql`
+        UPDATE tournament_participants AS tp
+        SET
+          total_score   = agg.total_score,
+          total_time_ms = agg.total_time_ms,
+          updated_at    = NOW()
+        FROM (
+          SELECT
+            ${participantId}::uuid AS participant_id,
+            COALESCE(SUM(round_score),   0)::int AS total_score,
+            COALESCE(SUM(round_time_ms), 0)::int AS total_time_ms
+          FROM tournament_round_participants
+          WHERE participant_id = ${participantId}::uuid
+        ) AS agg
+        WHERE tp.participant_id = ${participantId}::uuid
+          AND (
+            tp.total_score   IS DISTINCT FROM agg.total_score
+            OR tp.total_time_ms IS DISTINCT FROM agg.total_time_ms
+          );
+      `);
+    };
+
+    if (tx) {
+      await upsertTotals(tx);
+      return;
+    }
+
+    await this.db.transaction(async (inner) => {
+      await upsertTotals(inner);
+    });
+  }
+
+  /**
+   * Reconciliation variant of `recalculateParticipantTotals` intended for the
+   * daily cron (see `TournamentSchedulerService`).
+   *
+   * Re-applies the same two-pass UPDATE as the 0008 migration:
+   *
+   *   1. For every participant with at least one round participant, set
+   *      totals to SUM(round_score) / SUM(round_time_ms). WHERE filters out
+   *      rows that already match.
+   *   2. For every participant with zero round participants that still
+   *      carries a non-zero denormalized counter, zero the counters.
+   *
+   * Idempotent. Returns the number of rows reconciled for logging.
+   */
+  async reconcileAllParticipantTotals(): Promise<{ updated: number }> {
+    const result = await this.executeRaw<{ updated: number | string }>(sql`
+      WITH before_totals AS (
+        SELECT tp.participant_id, tp.total_score, tp.total_time_ms
+        FROM tournament_participants tp
+      ),
+      agg AS (
+        SELECT
+          trp.participant_id,
+          COALESCE(SUM(trp.round_score),   0)::int AS total_score,
+          COALESCE(SUM(trp.round_time_ms), 0)::int AS total_time_ms
+        FROM tournament_round_participants trp
+        GROUP BY trp.participant_id
+      ),
+      drift_pass AS (
+        UPDATE tournament_participants AS tp
+        SET total_score   = agg.total_score,
+            total_time_ms = agg.total_time_ms,
+            updated_at    = NOW()
+        FROM agg
+        WHERE tp.participant_id = agg.participant_id
+          AND (
+            tp.total_score   IS DISTINCT FROM agg.total_score
+            OR tp.total_time_ms IS DISTINCT FROM agg.total_time_ms
+          )
+        RETURNING 1
+      ),
+      zero_pass AS (
+        UPDATE tournament_participants AS tp
+        SET total_score   = 0,
+            total_time_ms = 0,
+            updated_at    = NOW()
+        WHERE (tp.total_score <> 0 OR tp.total_time_ms <> 0)
+          AND NOT EXISTS (
+            SELECT 1 FROM tournament_round_participants trp
+            WHERE trp.participant_id = tp.participant_id
+          )
+        RETURNING 1
+      )
+      SELECT (SELECT COUNT(*) FROM drift_pass)::int
+           + (SELECT COUNT(*) FROM zero_pass)::int AS updated;
+    `);
+
+    const updatedRaw = (result.rows[0] as { updated?: unknown } | undefined)?.updated;
+    return { updated: Number(updatedRaw ?? 0) };
   }
 }

@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConnectionOptions, Queue } from 'bullmq';
 import { DatabaseModule } from '@/core/database/database.module';
 import { NotificationModule } from '@/modules/notification/notification.module';
+import { AttemptModule } from '@/modules/attempt/attempt.module';
 import { SHARED_TOURNAMENT_EVENT_BUS } from '@/common/events/tournament-shared-events';
 import { TournamentApplicationService } from './application/tournament.application.service';
 import { TournamentService } from './domain/tournament.service';
@@ -20,12 +21,13 @@ import { BullmqTournamentEventBusService } from './infrastructure/events/bullmq-
 import { TournamentEventProcessor } from './infrastructure/events/tournament-event.processor';
 import { TournamentSchedulerService } from './infrastructure/scheduler/tournament-scheduler.service';
 import { TournamentListenerAdapter } from './infrastructure/adapters/tournament-listener.adapter';
+import { TournamentAttemptEventListenerAdapter } from './infrastructure/adapters/tournament-attempt-event-listener.adapter';
 import { SharedTournamentEventBusAdapter } from './domain/events/shared-tournament-event-bus.adapter';
 import { redisConfig } from '@/core/config';
 import type { RedisConfig } from '@/core/config';
 
 @Module({
-  imports: [DatabaseModule, NotificationModule],
+  imports: [DatabaseModule, NotificationModule, AttemptModule],
   providers: [
     TournamentApplicationService,
     TournamentService,
@@ -56,6 +58,7 @@ import type { RedisConfig } from '@/core/config';
       },
     },
     TournamentListenerAdapter,
+    TournamentAttemptEventListenerAdapter,
     SharedTournamentEventBusAdapter,
     {
       provide: SHARED_TOURNAMENT_EVENT_BUS,
