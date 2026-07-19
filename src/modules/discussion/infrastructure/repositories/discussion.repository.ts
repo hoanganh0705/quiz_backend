@@ -49,7 +49,7 @@ import type {
   UnsolveThreadParams,
 } from '../../domain/types';
 import { eq, and, inArray, sql, desc, asc, lte, gte, isNull, count, isNotNull } from 'drizzle-orm';
-import type { DiscussionRepositoryPort } from '../../domain/ports';
+import type { DiscussionRepositoryPort, TransactionClient } from '../../domain/ports';
 
 export const MAX_REPLIES_PER_COMMENT = 100;
 
@@ -1362,8 +1362,13 @@ export class DiscussionRepository implements DiscussionRepositoryPort {
       .where(eq(discussionThreads.threadId, params.threadId));
   }
 
-  async incrementThreadCommentCount(threadId: string, delta: number): Promise<void> {
-    await this.db
+  async incrementThreadCommentCount(
+    threadId: string,
+    delta: number,
+    db?: DrizzleDB | TransactionClient,
+  ): Promise<void> {
+    const client = db ?? this.db;
+    await client
       .update(discussionThreads)
       .set({
         commentsCount: sql`${discussionThreads.commentsCount} + ${delta}`,
@@ -1393,8 +1398,12 @@ export class DiscussionRepository implements DiscussionRepositoryPort {
 
   // ─── COMMENTS ───────────────────────────────────────────────────────────────
 
-  async createComment(params: CreateCommentParams): Promise<DiscussionComment> {
-    const [comment] = await this.db
+  async createComment(
+    params: CreateCommentParams,
+    db?: DrizzleDB | TransactionClient,
+  ): Promise<DiscussionComment> {
+    const client = db ?? this.db;
+    const [comment] = await client
       .insert(discussionComments)
       .values({
         threadId: params.threadId,
@@ -1423,6 +1432,74 @@ export class DiscussionRepository implements DiscussionRepositoryPort {
         and(eq(discussionComments.commentId, commentId), isNull(discussionComments.deletedAt)),
       );
 
+    if (!row) return null;
+    return this.enrichComment(row.comment as unknown as DiscussionCommentRow, {
+      username: row.authorUsername,
+      displayName: row.authorDisplayName,
+      avatarUrl: row.authorAvatarUrl,
+    });
+  }
+
+  /**
+   * Transactional variant of `getThreadById`. Issues `SELECT … FOR UPDATE`
+   * inside the supplied `tx` so the row is locked until the calling
+   * transaction commits/rolls back. Used by services that mutate denormalized
+   * counters under Fix #2 to close the TOCTOU window between the validation
+   * read and the write — without it, a concurrent `softDeleteThread` could
+   * slip in and leave `comments_count` incremented on a soft-deleted row.
+   */
+  async getThreadByIdForUpdate(
+    threadId: string,
+    tx: DrizzleDB | TransactionClient,
+  ): Promise<DiscussionThread | null> {
+    const rows = await tx
+      .select({
+        thread: discussionThreads,
+        authorUsername: users.username,
+        authorDisplayName: userProfiles.displayName,
+        authorAvatarUrl: userProfiles.avatarUrl,
+      })
+      .from(discussionThreads)
+      .innerJoin(users, eq(discussionThreads.authorId, users.userId))
+      .leftJoin(userProfiles, eq(users.userId, userProfiles.userId))
+      .where(eq(discussionThreads.threadId, threadId))
+      .for('update')
+      .limit(1);
+
+    const row = rows[0];
+    if (!row) return null;
+    return this.enrichThread(row.thread as unknown as DiscussionThreadRow, {
+      username: row.authorUsername,
+      displayName: row.authorDisplayName,
+      avatarUrl: row.authorAvatarUrl,
+    });
+  }
+
+  /**
+   * Transactional variant of `getCommentById` (mirror of
+   * `getThreadByIdForUpdate`). Locks the row inside `tx` so concurrent
+   * `softDeleteComment` / `deleteComment` on the same comment cannot
+   * race the counter decrement under Fix #2.
+   */
+  async getCommentByIdForUpdate(
+    commentId: string,
+    tx: DrizzleDB | TransactionClient,
+  ): Promise<DiscussionComment | null> {
+    const rows = await tx
+      .select({
+        comment: discussionComments,
+        authorUsername: users.username,
+        authorDisplayName: userProfiles.displayName,
+        authorAvatarUrl: userProfiles.avatarUrl,
+      })
+      .from(discussionComments)
+      .innerJoin(users, eq(discussionComments.authorId, users.userId))
+      .leftJoin(userProfiles, eq(users.userId, userProfiles.userId))
+      .where(eq(discussionComments.commentId, commentId))
+      .for('update')
+      .limit(1);
+
+    const row = rows[0];
     if (!row) return null;
     return this.enrichComment(row.comment as unknown as DiscussionCommentRow, {
       username: row.authorUsername,
@@ -1548,9 +1625,13 @@ export class DiscussionRepository implements DiscussionRepositoryPort {
     return this.enrichComment(updated as unknown as DiscussionCommentRow);
   }
 
-  async softDeleteComment(params: { commentId: string; authorId: string }): Promise<void> {
+  async softDeleteComment(
+    params: { commentId: string; authorId: string },
+    db?: DrizzleDB | TransactionClient,
+  ): Promise<void> {
+    const client = db ?? this.db;
     const now = new Date().toISOString();
-    await this.db
+    await client
       .update(discussionComments)
       .set({ deletedAt: now, updatedAt: now, status: 'deleted' })
       .where(
@@ -1580,8 +1661,13 @@ export class DiscussionRepository implements DiscussionRepositoryPort {
       .where(and(eq(discussionComments.threadId, threadId), isNull(discussionComments.deletedAt)));
   }
 
-  async incrementCommentRepliesCount(commentId: string, delta: number): Promise<void> {
-    await this.db
+  async incrementCommentRepliesCount(
+    commentId: string,
+    delta: number,
+    db?: DrizzleDB | TransactionClient,
+  ): Promise<void> {
+    const client = db ?? this.db;
+    await client
       .update(discussionComments)
       .set({
         repliesCount: sql`${discussionComments.repliesCount} + ${delta}`,
