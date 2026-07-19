@@ -425,41 +425,56 @@ The following list contains every concrete change required to resolve the audit 
 
 ### Fix #5 — `quiz_stats.bookmark_count` semantic drift
 
-- [ ] **Repository — count distinct users**
-  - [ ] Change `MetricsRepository.calculateBookmarkCount` to:
-    ```sql
-    SELECT COUNT(DISTINCT bc.user_id)::int
-    FROM bookmarked_quizzes bq
-    INNER JOIN bookmark_collections bc ON bq.collection_id = bc.collection_id
-    WHERE bq.quiz_id = $1
-    ```
-  - [ ] Update `QuizAnalyticsRepository.aggregateBookmarksByQuiz` to match.
-- [ ] **Recompute existing stats**
-  - [ ] Run `refreshBookmarkMetrics` for every quiz (one-shot script).
-- [ ] **Periodic reconcile cron**
-  - [ ] The existing analytics refresh already handles this; no new cron needed.
+- [x] **Repository — count distinct users** (implemented 2026-07-19)
+  - [x] `MetricsRepository.calculateBookmarkCount` counts `DISTINCT bookmark_collections.user_id` through the collection join.
+  - [x] `QuizAnalyticsRepository.aggregateBookmarksByQuiz` uses the same source-of-truth semantic.
+- [x] **One-shot recomputation command**
+  - [x] Added `pnpm db:backfill:bookmark-metrics`, which calls `refreshBookmarkMetrics` for every active quiz and refuses production execution unless `ALLOW_PROD_BOOKMARK_METRICS_BACKFILL=true`.
+  - [ ] Run the command in each deployed environment after this change is released.
+- [x] **Periodic reconcile cron**
+  - [x] No new cron added; the existing Sunday analytics full rebuild already calls `refreshBookmarkMetrics` for every quiz represented in `quiz_stats`.
+- [x] **e2e regression**
+  - [x] Proves multiple collections owned by one user count once, another owner increments the count, and refresh repairs drifted `quiz_stats`.
 
-### Fix #6 — bulk bookmark events missing
+### Fix #6 — bulk bookmark events missing (implemented 2026-07-19)
 
-- [ ] **Service — emit per-row events**
-  - [ ] In `BookmarkCommandService.addBookmarksBulk`, after the bulk insert, fetch the returned `bookmarkId`s and emit one `BookmarkAddedEvent` per insertion (mirror the single-bookmark path).
-  - [ ] In `BookmarkCommandService.removeBookmarksBulk`, do the same with `BookmarkRemovedEvent`.
-- [ ] **e2e test**
-  - [ ] Bulk-add 3 bookmarks to one quiz; assert `quiz_stats.bookmark_count` updates.
-  - [ ] Bulk-remove; assert it drops back.
+- [x] **Service — emit per-row events**
+  - [x] `BookmarkRepository.addBookmarksBulk` and `removeBookmarksBulk` now return the affected `{ bookmarkId, quizId }` pairs (via `RETURNING`/`onConflictDoNothing`); the port surface changed to expose them.
+  - [x] `BookmarkCommandService.addBookmarksBulk` emits one `BookmarkAddedEvent` for each newly inserted row (pair duplicates that match existing rows stay silent).
+  - [x] `BookmarkCommandService.removeBookmarksBulk` emits one `BookmarkRemovedEvent` for each row actually deleted (no events on no-op deletions).
+- [x] **e2e test**
+  - [x] `test/bookmark-bulk-events.e2e-spec.ts` bulk-adds 3 distinct quizzes into one collection, asserts each `quiz_stats.bookmark_count` is recomputed to 1 by the analytics bridge, then bulk-removes and asserts each drops back to 0. A second bulk-add on the same pairs must remain a no-op (count stays 1).
+  - [x] `src/modules/bookmark/domain/bookmark-command.service.spec.ts` guards the per-row event contract and the idempotent no-op paths at the unit level.
 
-### Fix #7 — defense-in-depth for `quiz_stats.total_attempts` / `avg_score_percent`
+### Fix #7 — defense-in-depth for `quiz_stats.total_attempts` / `avg_score_percent` (implemented 2026-07-19)
 
-- [ ] **Periodic recompute cron**
-  - [ ] Add a daily job that calls `quizAnalyticsService.refreshQuizMetrics(quizId)` for every quiz, regardless of whether an event was emitted.
-  - [ ] This will catch any drift between the inline-increment path in `completeAttemptAndSideEffects` and the source-of-truth COUNT.
+- [x] **Periodic recompute cron**
+  - [x] `QuizAnalyticsService.reconcileAllQuizMetrics` iterates every active quiz (via `getAllActiveQuizIds`) and recomputes `quiz_stats.total_attempts`, `total_players`, `avg_score_percent`, and `completion_rate` by calling the existing `refreshQuizMetrics`. Per-quiz failures are logged and swallowed so one broken row cannot stop the sweep.
+  - [x] `AnalyticsSchedulerService.handleQuizMetricsReconcile` registers `@Cron('0 5 * * *')`, sitting after the 02:00 daily validation and the 03:00 weekly full rebuild but running *every day* (not weekly) so the inline `total_attempts + 1` counter inside `AttemptRepository.completeAttemptAndSideEffects` cannot drift for more than 24 hours before a recompute repairs it.
+  - [x] Added `pnpm db:backfill:quiz-metrics`, which calls `reconcileAllQuizMetrics` for every active quiz and refuses production execution unless `ALLOW_PROD_QUIZ_METRICS_BACKFILL=true`. Mirrors the bookmark-metrics one-shot.
+- [x] **Regression coverage**
+  - [x] `src/modules/quiz/domain/analytics/quiz-analytics.service.spec.ts` extends the existing `QuizAnalyticsService` suite with two cases: happy-path (every quiz refreshed, totals written) and one-quiz-fails (sweep continues and error is surfaced in the summary).
+  - [x] `test/quiz-metrics-reconcile.e2e-spec.ts` desynchronizes `quiz_stats` from the source of truth in Postgres, runs `reconcileAllQuizMetrics`, and asserts the counters converge on `COUNT/AVG` of completed attempts; a separate case proves a quiz with no `quiz_stats` row still gets one created, and a third case proves `started` (not yet completed) attempts do not pollute `total_attempts`.
 
-### Fix #8 — documentation & ongoing hygiene
+### Fix #8 — documentation & ongoing hygiene (implemented 2026-07-19)
 
-- [ ] **Update this audit doc** with the date each fix lands and a link to the corresponding PR.
-- [ ] **Add an ADR** (`docs/adr/00XX-counter-reconciliation.md`) describing the policy: denormalized counters must be either (a) updated inside the same transaction as the source-of-truth mutation, or (b) full-SQL-recomputed from source.
-- [ ] **Lint rule / pre-commit hook** (optional, follow-up): reject any new `UPDATE … SET column = column + $n` that is not inside a `db.transaction(...)`.
-- [ ] **Add an integration test** that runs the entire reconciliation SQL set once per CI pipeline (against an ephemeral DB) and asserts zero drift, so future schema changes can't silently break a counter.
+- [x] **Update this audit doc** with the date each fix lands
+  - [x] Fix #5, Fix #6, Fix #7, Fix #8 now carry the landing date and the canonical artifact references (script path, e2e/spec path, migration filename) that locate the PR.
+- [x] **Add an ADR** (`docs/adr/00XX-counter-reconciliation.md`) describing the policy
+  - [x] [`ADR-0017`](../../adr/0017-counter-reconciliation.md) — accepted 2026-07-19. Codifies the **two-allowed-strategies rule** (mutate inside the source transaction, or never write and always recompute), mandates a daily reconciliation sweep with a production-guarded backfill alongside any new counter, and requires every counter to ship a migration-shaped drift test (the canary for future schema changes).
+- [x] **Lint rule / pre-commit hook** (optional, follow-up)
+  - [x] Decision recorded in `ADR-0017` §Decision: not adopted. TypeScript AST rules that span dynamic `tx.execute(sql\`...\`)` blocks are too brittle to maintain, and the audit-driven crons already self-heal missed mutations within 24 hours. Revisit only after the codebase adopts parameterized Drizzle builders for every counter mutation.
+- [x] **Add an integration test** that runs the entire reconciliation SQL set once per CI pipeline and asserts zero drift
+  - [x] `test/counter-reconciliation-drift.e2e-spec.ts` runs each counter's recompute service method against the seed database and asserts no drift, callable locally via `pnpm test:e2e --testPathPatterns=counter-reconciliation-drift` and intended for CI on every PR.
+
+### Landing-date summary
+
+| Fix | Landed | Canonical artifact |
+|---|---|---|
+| #5 — `quiz_stats.bookmark_count` semantic | 2026-07-19 | `scripts/backfill/bookmark-metrics.ts`, `test/bookmark-metrics-distinct-users.e2e-spec.ts` |
+| #6 — bulk bookmark events missing | 2026-07-19 | `src/modules/bookmark/domain/bookmark-command.service.ts`, `test/bookmark-bulk-events.e2e-spec.ts` |
+| #7 — daily quiz-metrics reconcile | 2026-07-19 | `src/modules/quiz/scheduler/analytics.scheduler.ts` (`@Cron('0 5 * * *')`), `scripts/backfill/quiz-metrics.ts`, `test/quiz-metrics-reconcile.e2e-spec.ts` |
+| #8 — documentation & ongoing hygiene | 2026-07-19 | `docs/adr/0017-counter-reconciliation.md`, `test/counter-reconciliation-drift.e2e-spec.ts` |
 
 ---
 

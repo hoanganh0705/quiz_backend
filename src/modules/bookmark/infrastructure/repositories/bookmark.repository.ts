@@ -20,6 +20,7 @@ import type {
   BookmarkStatusRow,
   SearchBookmarkRow,
   RecentBookmarkRow,
+  BulkBookmarkMutationRow,
 } from '@/modules/bookmark/domain/ports';
 import type { BookmarkCollectionAnalytics } from '@/modules/bookmark/domain/types/bookmark-collection-analytics';
 
@@ -236,9 +237,9 @@ export class BookmarkRepository implements BookmarkRepositoryPort {
     collectionId: string;
     quizIds: string[];
     nowIso: string;
-  }): Promise<number> {
+  }): Promise<BulkBookmarkMutationRow[]> {
     if (params.quizIds.length === 0) {
-      return 0;
+      return [];
     }
 
     const insertedRows = await this.db
@@ -256,18 +257,19 @@ export class BookmarkRepository implements BookmarkRepositoryPort {
       })
       .returning({
         bookmarkId: bookmarkedQuizzes.bookmarkId,
+        quizId: bookmarkedQuizzes.quizId,
       });
 
-    return insertedRows.length;
+    return insertedRows;
   }
 
   async removeBookmarksBulk(params: {
     userId: string;
     collectionId: string;
     quizIds: string[];
-  }): Promise<number> {
+  }): Promise<BulkBookmarkMutationRow[]> {
     if (params.quizIds.length === 0) {
-      return 0;
+      return [];
     }
 
     const deletedRows = await this.db
@@ -280,9 +282,10 @@ export class BookmarkRepository implements BookmarkRepositoryPort {
       )
       .returning({
         bookmarkId: bookmarkedQuizzes.bookmarkId,
+        quizId: bookmarkedQuizzes.quizId,
       });
 
-    return deletedRows.length;
+    return deletedRows;
   }
 
   async moveBookmark(params: {

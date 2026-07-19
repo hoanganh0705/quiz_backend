@@ -8,6 +8,7 @@ import {
   quizAttempts,
   quizReviews,
   bookmarkedQuizzes,
+  bookmarkCollections,
   categories,
   tags,
   quizTags,
@@ -103,6 +104,15 @@ export class QuizAnalyticsRepository implements QuizAnalyticsRepositoryPort {
     return rows.map((r) => r.quizId);
   }
 
+  async getAllActiveQuizIds(): Promise<string[]> {
+    const rows = await this.db
+      .select({ quizId: quizzes.quizId })
+      .from(quizzes)
+      .where(isNull(quizzes.deletedAt))
+      .orderBy(quizzes.quizId);
+    return rows.map((row) => row.quizId);
+  }
+
   async getAllQuizStats(): Promise<QuizStatsRow[]> {
     return this.db.select().from(quizStats);
   }
@@ -155,8 +165,12 @@ export class QuizAnalyticsRepository implements QuizAnalyticsRepositoryPort {
 
   async aggregateBookmarksByQuiz(quizId: string): Promise<number> {
     const [result] = await this.db
-      .select({ count: count() })
+      .select({ count: sql<number>`COUNT(DISTINCT ${bookmarkCollections.userId})::int` })
       .from(bookmarkedQuizzes)
+      .innerJoin(
+        bookmarkCollections,
+        eq(bookmarkedQuizzes.collectionId, bookmarkCollections.collectionId),
+      )
       .where(eq(bookmarkedQuizzes.quizId, quizId));
 
     return Number(result?.count ?? 0);

@@ -22,6 +22,7 @@ export interface QuizAnalyticsRepositoryPort {
   batchUpsertQuizStats(entries: QuizStatsUpsertPayload[]): Promise<void>;
   deleteQuizStats(quizId: string): Promise<void>;
   getQuizIdsByCategory(categoryId: string): Promise<string[]>;
+  getAllActiveQuizIds(): Promise<string[]>;
 
   aggregateAttemptsByQuiz(quizId: string): Promise<AttemptAggregation>;
   aggregateReviewsByQuiz(quizId: string): Promise<ReviewAggregation>;
