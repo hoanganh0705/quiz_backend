@@ -67,13 +67,6 @@ export type ReviewDashboardRow = {
   lastUpdated: string;
 };
 
-export type ReviewHelpfulVoteRow = {
-  voteId: string;
-  reviewId: string;
-  userId: string;
-  createdAt: string;
-};
-
 export interface ReviewRepositoryPort {
   getReviewByQuizAndUser(quizId: string, userId: string): Promise<ReviewRow | null>;
 
@@ -101,17 +94,30 @@ export interface ReviewRepositoryPort {
 
   getUserReviewDashboard(userId: string): Promise<ReviewDashboardRow>;
 
-  markReviewHelpful(params: {
-    reviewId: string;
-    userId: string;
-    nowIso: string;
-  }): Promise<ReviewHelpfulVoteRow>;
+  /**
+   * Atomically insert a helpful vote for `(reviewId, userId)` and bump
+   * `quiz_reviews.helpful_count` by 1 in the same transaction.
+   *
+   * Idempotent at the database level: a duplicate insert is a no-op and the
+   * counter is left untouched.
+   *
+   * Returns `true` when the vote was actually inserted (state changed),
+   * `false` when the vote already existed (no state change).
+   *
+   * `voteId` is intentionally not returned: it has no consumer outside the
+   * legacy pino log line at `review.service.ts:282`. If a future feature
+   * needs it, extend this method then.
+   */
+  addHelpfulVote(params: { reviewId: string; userId: string; nowIso: string }): Promise<boolean>;
 
-  removeReviewHelpfulVote(params: {
-    reviewId: string;
-    userId: string;
-    nowIso: string;
-  }): Promise<void>;
+  /**
+   * Atomically delete a helpful vote for `(reviewId, userId)` and decrement
+   * `quiz_reviews.helpful_count` by 1 in the same transaction.
+   *
+   * Returns `true` when a row was actually deleted (state changed),
+   * `false` when there was no vote to remove (no state change).
+   */
+  removeHelpfulVote(params: { reviewId: string; userId: string; nowIso: string }): Promise<boolean>;
 
   createReview(params: {
     quizId: string;
@@ -129,8 +135,6 @@ export interface ReviewRepositoryPort {
   }): Promise<ReviewRow>;
 
   deleteReview(reviewId: string): Promise<void>;
-
-  updateHelpfulCount(reviewId: string, increment: number): Promise<void>;
 
   hasCompletedAttempt(quizId: string, userId: string): Promise<boolean>;
 }

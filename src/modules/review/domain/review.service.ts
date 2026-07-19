@@ -241,7 +241,16 @@ export class ReviewService {
     };
   }
 
-  async markReviewHelpful(reviewId: string, helpful: boolean, userId: string): Promise<void> {
+  /**
+   * Load the review and assert that `userId` is allowed to vote on it.
+   *
+   * Throws `ReviewNotFoundError` if the review does not exist, and
+   * `ReviewValidationError` if the actor is the review's author.
+   *
+   * Shared by `addHelpfulVote` and `removeHelpfulVote` so both endpoints
+   * share one fetch and one self-vote rejection.
+   */
+  private async assertCanVote(reviewId: string, userId: string): Promise<void> {
     const review = await this.reviewRepository.getReviewById(reviewId);
 
     if (!review) {
@@ -252,53 +261,38 @@ export class ReviewService {
       this.logger.warn({ event: 'review_self_helpful_vote', reviewId, userId });
       throw new ReviewValidationError('You cannot vote on your own review');
     }
-
-    if (!helpful) {
-      await this.reviewRepository.removeReviewHelpfulVote({
-        reviewId,
-        userId,
-        nowIso: new Date().toISOString(),
-      });
-
-      await this.reviewRepository.updateHelpfulCount(reviewId, -1);
-
-      this.logger.info({ event: 'review_helpful_vote_removed', reviewId, userId, helpful: false });
-      return;
-    }
-
-    const vote = await this.reviewRepository.markReviewHelpful({
-      reviewId,
-      userId,
-      nowIso: new Date().toISOString(),
-    });
-
-    await this.reviewRepository.updateHelpfulCount(reviewId, 1);
-
-    this.logger.info({
-      event: 'review_helpful_voted',
-      reviewId,
-      userId,
-      helpful: true,
-      voteId: vote.voteId,
-    });
   }
 
-  async removeHelpfulVote(reviewId: string, userId: string): Promise<void> {
-    const review = await this.reviewRepository.getReviewById(reviewId);
+  async addHelpfulVote(reviewId: string, userId: string): Promise<boolean> {
+    await this.assertCanVote(reviewId, userId);
 
-    if (!review) {
-      throw new ReviewNotFoundError(REVIEW_NOT_FOUND_MESSAGE);
-    }
-
-    await this.reviewRepository.removeReviewHelpfulVote({
+    const inserted = await this.reviewRepository.addHelpfulVote({
       reviewId,
       userId,
       nowIso: new Date().toISOString(),
     });
 
-    await this.reviewRepository.updateHelpfulCount(reviewId, -1);
+    if (inserted) {
+      this.logger.info({ event: 'review_helpful_voted', reviewId, userId, helpful: true });
+    }
 
-    this.logger.info({ event: 'review_helpful_vote_removed', reviewId, userId, helpful: false });
+    return inserted;
+  }
+
+  async removeHelpfulVote(reviewId: string, userId: string): Promise<boolean> {
+    await this.assertCanVote(reviewId, userId);
+
+    const removed = await this.reviewRepository.removeHelpfulVote({
+      reviewId,
+      userId,
+      nowIso: new Date().toISOString(),
+    });
+
+    if (removed) {
+      this.logger.info({ event: 'review_helpful_vote_removed', reviewId, userId, helpful: false });
+    }
+
+    return removed;
   }
 
   async reportReview(

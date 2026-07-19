@@ -178,25 +178,30 @@ export class ReviewApplicationService {
     user: JwtPayload,
   ): Promise<HelpfulReviewResponseDto> {
     if (payload.idempotencyKey) {
-      await this.idempotencyService.checkAndSet(
+      const { response } = await this.idempotencyService.checkAndSet(
         payload.idempotencyKey,
         user.sub,
         'markReviewHelpful',
         async () => {
-          await this.reviewService.markReviewHelpful(reviewId, payload.helpful, user.sub);
-          return { message: 'Review marked as helpful' };
+          const result = payload.helpful
+            ? await this.reviewService.addHelpfulVote(reviewId, user.sub)
+            : await this.reviewService.removeHelpfulVote(reviewId, user.sub);
+          return { message: selectHelpfulMessage(payload.helpful, result) };
         },
       );
-      return { message: 'Review marked as helpful' };
+      return response!;
     }
 
-    await this.reviewService.markReviewHelpful(reviewId, payload.helpful, user.sub);
-    return { message: 'Review marked as helpful' };
+    const result = payload.helpful
+      ? await this.reviewService.addHelpfulVote(reviewId, user.sub)
+      : await this.reviewService.removeHelpfulVote(reviewId, user.sub);
+
+    return { message: selectHelpfulMessage(payload.helpful, result) };
   }
 
   async removeHelpfulVote(reviewId: string, user: JwtPayload): Promise<HelpfulReviewResponseDto> {
-    await this.reviewService.removeHelpfulVote(reviewId, user.sub);
-    return { message: 'Helpful vote removed' };
+    const result = await this.reviewService.removeHelpfulVote(reviewId, user.sub);
+    return { message: result ? 'Helpful vote removed' : 'No helpful vote to remove' };
   }
 
   async reportReview(
@@ -315,4 +320,18 @@ export class ReviewApplicationService {
       updatedAt: row.updatedAt,
     };
   }
+}
+
+/**
+ * Map `(helpful, repositoryResult)` to the user-visible message.
+ *
+ * Lives at module scope (not on the class) because it has no dependency on
+ * instance state — keeping it here makes it trivial to unit-test in isolation
+ * and keeps `ReviewApplicationService` focused on orchestration.
+ */
+function selectHelpfulMessage(helpful: boolean, result: boolean): string {
+  if (helpful) {
+    return result ? 'Review marked as helpful' : 'Review was already marked as helpful';
+  }
+  return result ? 'Helpful vote removed' : 'No helpful vote to remove';
 }
