@@ -1,4 +1,3 @@
-import { eq } from 'drizzle-orm';
 import { db, type SeedContext, recorder } from '../infrastructure';
 import type { SeedSummary } from '../infrastructure/types';
 import { SeedLookup } from '../shared/seed-lookup';
@@ -6,7 +5,6 @@ import {
   rankHistory,
   rankingMilestones,
   userRanking,
-  users,
 } from '@/core/database/schema';
 import { logger } from '../infrastructure/seed-logger';
 
@@ -321,15 +319,11 @@ export const runRankingSeed = async (): Promise<SeedSummary[]> => {
           },
         });
 
-      // Also sync users.xpTotal so the profile endpoint shows the correct XP.
-      // quiz_attempts are ❌ DO NOT SEED (Phase 10 audit), so this seed owns
-      // the xpTotal side-effect that attempt-driven flows would otherwise set.
-      if (seed.allTimeXp > 0) {
-        await tx
-          .update(users)
-          .set({ xpTotal: seed.allTimeXp })
-          .where(eq(users.userId, userId));
-      }
+      // `users.xp_total` was dropped in migration 0010 — XP is owned
+      // exclusively by `user_ranking.all_time_xp`. The profile endpoint
+      // sources its `xpTotal` field via LEFT JOIN in the user/auth
+      // repository SELECT, so this seed only has to populate the
+      // ranking row.
 
       rankingRowsTouched++;
 
