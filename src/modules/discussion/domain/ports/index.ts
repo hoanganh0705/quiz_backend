@@ -61,6 +61,19 @@ export interface DiscussionRepositoryPort {
   // Threads
   createThread(params: CreateThreadParams): Promise<DiscussionThread>;
   getThreadById(threadId: string): Promise<DiscussionThread | null>;
+  /**
+   * Transactional row-locking variant of `getThreadById`. Issues
+   * `SELECT … FOR UPDATE` against `discussion_threads` so the row stays
+   * locked until the calling transaction commits/rolls back. Closes the
+   * TOCTOU window on Fix #2 (counter mutation under `comments_count`)
+   * against a concurrent `softDeleteThread` / `updateThreadStatus`.
+   * Must be called inside a transaction (`tx` is the only client
+   * accepted, no implicit `this.db` fallback).
+   */
+  getThreadByIdForUpdate(
+    threadId: string,
+    tx: DrizzleDB | TransactionClient,
+  ): Promise<DiscussionThread | null>;
   getThreadDetail(threadId: string, userId?: string | null): Promise<DiscussionThreadDetail | null>;
   listThreads(params: ListThreadsParams): Promise<DiscussionThread[]>;
   listQuizDiscussions(params: {
@@ -132,7 +145,11 @@ export interface DiscussionRepositoryPort {
     threadId: string;
     status: 'open' | 'closed' | 'hidden' | 'deleted';
   }): Promise<void>;
-  incrementThreadCommentCount(threadId: string, delta: number): Promise<void>;
+  incrementThreadCommentCount(
+    threadId: string,
+    delta: number,
+    db?: DrizzleDB | TransactionClient,
+  ): Promise<void>;
   updateThreadVotes(
     threadId: string,
     deltaUpvotes: number,
@@ -141,17 +158,39 @@ export interface DiscussionRepositoryPort {
   ): Promise<void>;
 
   // Comments
-  createComment(params: CreateCommentParams): Promise<DiscussionComment>;
+  createComment(
+    params: CreateCommentParams,
+    db?: DrizzleDB | TransactionClient,
+  ): Promise<DiscussionComment>;
   getCommentById(commentId: string): Promise<DiscussionComment | null>;
+  /**
+   * Transactional row-locking variant of `getCommentById`. Issues
+   * `SELECT … FOR UPDATE` against `discussion_comments` so the row
+   * stays locked until the calling transaction commits/rolls back.
+   * Closes the TOCTOU window on Fix #2 (counter mutation under
+   * `comments_count` / `replies_count`) against concurrent deletes
+   * of the same comment.
+   */
+  getCommentByIdForUpdate(
+    commentId: string,
+    tx: DrizzleDB | TransactionClient,
+  ): Promise<DiscussionComment | null>;
   listComments(params: ListCommentsParams): Promise<DiscussionCommentWithReplies[]>;
   updateComment(params: UpdateCommentParams): Promise<DiscussionComment>;
-  softDeleteComment(params: { commentId: string; authorId: string }): Promise<void>;
+  softDeleteComment(
+    params: { commentId: string; authorId: string },
+    db?: DrizzleDB | TransactionClient,
+  ): Promise<void>;
   updateCommentStatus(params: {
     commentId: string;
     status: 'visible' | 'hidden' | 'deleted';
   }): Promise<void>;
   softDeleteCommentsByThread(threadId: string, db?: DrizzleDB): Promise<void>;
-  incrementCommentRepliesCount(commentId: string, delta: number): Promise<void>;
+  incrementCommentRepliesCount(
+    commentId: string,
+    delta: number,
+    db?: DrizzleDB | TransactionClient,
+  ): Promise<void>;
   updateCommentVotes(
     commentId: string,
     deltaUpvotes: number,
