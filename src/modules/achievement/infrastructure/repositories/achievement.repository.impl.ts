@@ -7,7 +7,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { DRIZZLE } from '@/core/database/drizzle.constants';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
-import { and, eq, desc, isNull, count, sql, asc, gt } from 'drizzle-orm';
+import { and, eq, desc, isNull, count, sql, asc, gt, inArray } from 'drizzle-orm';
 import { isPostgresUniqueViolation } from '@/common/utils/db-error.util';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import type * as schema from '@/core/database/schema';
@@ -71,7 +71,7 @@ export class AchievementRepository implements AchievementRepositoryPort {
       .where(
         and(
           eq(userBadges.userId, userId),
-          sql`${userBadges.badgeId} = ANY(${badgeIds})`,
+          inArray(userBadges.badgeId, badgeIds),
           isNull(userBadges.revokedAt),
         ),
       );
@@ -389,10 +389,7 @@ export class AchievementRepository implements AchievementRepositoryPort {
   async getBadgesByIds(badgeIds: string[]): Promise<BadgeDefinitionRow[]> {
     if (badgeIds.length === 0) return [];
 
-    const results = await this.db
-      .select()
-      .from(badges)
-      .where(sql`${badges.badgeId} = ANY(${badgeIds})`);
+    const results = await this.db.select().from(badges).where(inArray(badges.badgeId, badgeIds));
 
     return results.map((row) => this.mapBadgeRow(row));
   }
@@ -504,7 +501,7 @@ export class AchievementRepository implements AchievementRepositoryPort {
       .where(
         and(
           eq(userBadges.userId, userId),
-          sql`${userBadges.badgeId} = ANY(${badgeIds})`,
+          inArray(userBadges.badgeId, badgeIds),
           isNull(userBadges.revokedAt),
         ),
       );
@@ -670,7 +667,7 @@ export class AchievementRepository implements AchievementRepositoryPort {
         count: count(),
       })
       .from(userBadges)
-      .where(and(isNull(userBadges.revokedAt), sql`${userBadges.badgeId} = ANY(${badgeIds})`))
+      .where(and(isNull(userBadges.revokedAt), inArray(userBadges.badgeId, badgeIds)))
       .groupBy(userBadges.badgeId);
 
     const map: Record<string, number> = {};

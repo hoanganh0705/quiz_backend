@@ -400,17 +400,23 @@ export class RankingRepository implements RankingRepositoryPort {
 
     // Subquery: users in the input set that have no rows in the
     // work-items table. Single round-trip via a CTE.
+    // Drizzle's `sql` template does not bind JS arrays as Postgres array
+    // literals — `${arr}::uuid[]` is sent as a single string parameter and
+    // PG errors with `malformed array literal`. Inline the UUIDs as a
+    // typed ARRAY[...] literal instead.
+    const userIdsArray = sql.raw(
+      `ARRAY[${userIds.map((id) => `'${id.replace(/'/g, "''")}'::uuid`).join(',')}]`,
+    );
     // Drizzle raw SQL returns untyped rows
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
     const result = await this.db.execute(sql<{ userId: string }>`
       WITH users_with_pending AS (
         SELECT DISTINCT user_id
         FROM rank_recalculation_work_items
-        WHERE user_id = ANY(${userIds}::uuid[])
+        WHERE user_id = ANY(${userIdsArray})
       ),
       users_to_clear AS (
         SELECT u.user_id
-        FROM unnest(${userIds}::uuid[]) AS u(user_id)
+        FROM unnest(${userIdsArray}) AS u(user_id)
         LEFT JOIN users_with_pending p ON p.user_id = u.user_id
         WHERE p.user_id IS NULL
       )
@@ -913,6 +919,14 @@ export class RankingRepository implements RankingRepositoryPort {
     if (params.userIds.length === 0) return [];
 
     const xpColumn = getXpColumn(params.period);
+    // Drizzle's `sql` template does not bind JS arrays as Postgres array
+    // literals — `${arr}` is sent as a single parameter, which causes
+    // PG to error with `malformed array literal`. Inline the UUIDs as a
+    // typed ARRAY[...] literal instead. userIds are validated server-side
+    // UUIDs, so the inline form is safe.
+    const userIdsArray = sql.raw(
+      `ARRAY[${params.userIds.map((id) => `'${id.replace(/'/g, "''")}'::uuid`).join(',')}]`,
+    );
 
     const result = await this.executeRaw<{
       userId: string;
@@ -924,7 +938,7 @@ export class RankingRepository implements RankingRepositoryPort {
         SELECT ur.user_id, ur.${sql.raw(xpColumn)} as xp
         FROM user_ranking ur
         INNER JOIN users u ON u.user_id = ur.user_id
-        WHERE ur.user_id = ANY(${params.userIds})
+        WHERE ur.user_id = ANY(${userIdsArray})
           AND ur.${sql.raw(xpColumn)} > 0
           AND u.deleted_at IS NULL
       ),
