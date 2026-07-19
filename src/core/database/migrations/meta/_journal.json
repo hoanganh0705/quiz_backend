@@ -57,6 +57,13 @@
       "when": 1783935563041,
       "tag": "0008_reconcile_tournament_participant_totals",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1783935563042,
+      "tag": "0009_reconcile_discussion_counts",
+      "breakpoints": true
     }
   ]
 }

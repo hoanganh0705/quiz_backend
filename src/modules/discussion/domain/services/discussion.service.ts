@@ -810,27 +810,43 @@ export class DiscussionService {
   // ─── COMMENTS ───────────────────────────────────────────────────────────────
 
   async createComment(params: CreateCommentParams): Promise<DiscussionComment> {
-    const thread = await this.repo.getThreadById(params.threadId);
-    if (!thread) throw new ThreadNotFoundError(params.threadId);
-    if (thread.status === 'deleted') throw new ThreadNotActiveError();
-    if (thread.status === 'closed') throw new ThreadClosedError();
+    // Open one transaction that owns both the validation read and the
+    // write side. Pre-Fix #2 the service did:
+    //   1) getThreadById outside any tx
+    //   2) createComment + counter increments auto-committed
+    // which left a TOCTOU window where a concurrent soft-delete could
+    // race the increment and leave `comments_count` over-counted. Now
+    // the thread row is locked `FOR UPDATE` inside the tx before the
+    // write; the parent comment (if any) is locked the same way.
+    const result = await this.repo.transactionally(async (tx) => {
+      const thread = await this.repo.getThreadByIdForUpdate(params.threadId, tx);
+      if (!thread) throw new ThreadNotFoundError(params.threadId);
+      if (thread.status === 'deleted') throw new ThreadNotActiveError();
+      if (thread.status === 'closed') throw new ThreadClosedError();
 
-    const parent = params.parentCommentId
-      ? await this.repo.getCommentById(params.parentCommentId)
-      : null;
-    if (params.parentCommentId && !parent) {
-      throw new CommentNotFoundError(params.parentCommentId);
-    }
-    if (parent && parent.threadId !== params.threadId) {
-      throw new CommentThreadMismatchError();
-    }
+      let parent: DiscussionComment | null = null;
+      if (params.parentCommentId) {
+        parent = await this.repo.getCommentByIdForUpdate(params.parentCommentId, tx);
+        if (!parent) throw new CommentNotFoundError(params.parentCommentId);
+        if (parent.threadId !== params.threadId) throw new CommentThreadMismatchError();
+        if (parent.status !== 'visible') {
+          // Parent was soft-deleted between the client's check and our
+          // lock acquisition — no visible parent to reply to.
+          throw new CommentNotFoundError(params.parentCommentId);
+        }
+      }
 
-    const comment = await this.repo.createComment(params);
-    await this.repo.incrementThreadCommentCount(params.threadId, 1);
+      const created = await this.repo.createComment(params, tx);
+      await this.repo.incrementThreadCommentCount(params.threadId, 1, tx);
 
-    if (params.parentCommentId) {
-      await this.repo.incrementCommentRepliesCount(params.parentCommentId, 1);
-    }
+      if (params.parentCommentId) {
+        await this.repo.incrementCommentRepliesCount(params.parentCommentId, 1, tx);
+      }
+
+      return { created, thread, parent };
+    });
+
+    const { created: comment, thread, parent } = result;
 
     this.logger.debug({
       event: 'comment_created',
@@ -928,16 +944,36 @@ export class DiscussionService {
   }
 
   async deleteComment(commentId: string, authorId: string): Promise<void> {
-    const comment = await this.repo.getCommentById(commentId);
-    if (!comment) throw new CommentNotFoundError(commentId);
-    if (comment.authorId !== authorId) throw new CommentForbiddenError();
+    // Atomic write side, with the read inside the same transaction so a
+    // concurrent delete cannot double-decrement `comments_count` /
+    // `replies_count` under Fix #2.
+    const result = await this.repo.transactionally(async (tx) => {
+      const comment = await this.repo.getCommentByIdForUpdate(commentId, tx);
+      if (!comment) throw new CommentNotFoundError(commentId);
+      if (comment.authorId !== authorId) throw new CommentForbiddenError();
+      if (comment.status !== 'visible') {
+        // Already deleted / hidden — no-op to keep counters consistent.
+        // We deliberately don't decrement because the prior delete (if any)
+        // already did.
+        return null;
+      }
 
-    await this.repo.softDeleteComment({ commentId, authorId });
-    await this.repo.incrementThreadCommentCount(comment.threadId, -1);
+      await this.repo.softDeleteComment({ commentId, authorId }, tx);
+      await this.repo.incrementThreadCommentCount(comment.threadId, -1, tx);
 
-    if (comment.parentCommentId) {
-      await this.repo.incrementCommentRepliesCount(comment.parentCommentId, -1);
+      if (comment.parentCommentId) {
+        await this.repo.incrementCommentRepliesCount(comment.parentCommentId, -1, tx);
+      }
+
+      return comment;
+    });
+
+    if (result === null) {
+      // Comment was already deleted; nothing to do.
+      return;
     }
+
+    const comment = result;
 
     this.eventBus.emitCommentDeleted({
       eventType: 'comment_deleted',
@@ -988,18 +1024,23 @@ export class DiscussionService {
   async vote(params: VoteParams): Promise<void> {
     const { userId, targetType, targetId, value } = params;
 
-    // Validate target exists and check self-vote
-    if (targetType === 'thread') {
-      const thread = await this.repo.getThreadById(targetId);
-      if (!thread) throw new ThreadNotFoundError(targetId);
-      if (thread.authorId === userId) throw new SelfVoteError();
-    } else {
-      const comment = await this.repo.getCommentById(targetId);
-      if (!comment) throw new CommentNotFoundError(targetId);
-      if (comment.authorId === userId) throw new SelfVoteError();
-    }
-
+    // Single transaction owns the validation read (`FOR UPDATE` on the
+    // target row), the vote upsert/remove, and the counter increments.
+    // Pre-Fix-#2 the validation read ran outside the tx which left a
+    // TOCTOU window where a soft-delete could race the counter write.
     await this.repo.transactionally(async (tx) => {
+      if (targetType === 'thread') {
+        const thread = await this.repo.getThreadByIdForUpdate(targetId, tx);
+        if (!thread) throw new ThreadNotFoundError(targetId);
+        if (thread.status === 'deleted') throw new ThreadNotActiveError();
+        if (thread.authorId === userId) throw new SelfVoteError();
+      } else {
+        const comment = await this.repo.getCommentByIdForUpdate(targetId, tx);
+        if (!comment) throw new CommentNotFoundError(targetId);
+        if (comment.status !== 'visible') throw new CommentNotFoundError(targetId);
+        if (comment.authorId === userId) throw new SelfVoteError();
+      }
+
       const existingVote = await this.repo.getUserVoteForUpdate(userId, targetType, targetId, tx);
 
       if (existingVote === value) {
@@ -1044,6 +1085,19 @@ export class DiscussionService {
     const { userId, targetType, targetId } = params;
 
     await this.repo.transactionally(async (tx) => {
+      // Lock the target row before looking up the existing vote row so a
+      // concurrent soft-delete on the target can't race our counter
+      // decrement. Same TOCTOU-tightening as `vote()`.
+      if (targetType === 'thread') {
+        const thread = await this.repo.getThreadByIdForUpdate(targetId, tx);
+        if (!thread) throw new ThreadNotFoundError(targetId);
+        if (thread.status === 'deleted') throw new ThreadNotActiveError();
+      } else {
+        const comment = await this.repo.getCommentByIdForUpdate(targetId, tx);
+        if (!comment) throw new CommentNotFoundError(targetId);
+        if (comment.status !== 'visible') throw new CommentNotFoundError(targetId);
+      }
+
       const existingVote = await this.repo.getUserVoteForUpdate(userId, targetType, targetId, tx);
       if (!existingVote) return;
 

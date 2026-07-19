@@ -18,7 +18,7 @@ import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { DRIZZLE } from '@/core/database/drizzle.constants';
 import type { DrizzleDB } from '@/core/database/database.module';
 import { discussionVotes, discussionComments, discussionThreads } from '@/core/database/schema';
-import { and, eq, inArray, isNotNull } from 'drizzle-orm';
+import { and, eq, inArray, isNotNull, sql } from 'drizzle-orm';
 
 @Injectable()
 export class DiscussionCleanupService {
@@ -111,5 +111,77 @@ export class DiscussionCleanupService {
     }
 
     return totalDeleted;
+  }
+
+  /**
+   * Runs daily at 3:30 AM to reconcile the denormalized counters
+   * `discussion_threads.comments_count` and
+   * `discussion_comments.replies_count` with the actual rows.
+   *
+   * Scheduled 30 minutes after `cleanupOrphanedVotes` (3 AM) so the
+   * orphan-vote cleanup can't race with the counter recompute on shared
+   * rows. Lives before any analytics path runs (analytics scheduler is
+   * at 2 AM/3 AM for quiz-related work; this slot is otherwise empty).
+   *
+   * See `docs/plans/denormalized-counters-audit.md` — Fix #2, last bullet.
+   */
+  @Cron('30 3 * * *')
+  async reconcileDiscussionCounts(): Promise<void> {
+    this.logger.info({ event: 'discussion_counts_reconcile_start' });
+
+    try {
+      // Mirror the SQL in `0009_reconcile_discussion_counts.sql`: each
+      // pass is itself idempotent (IS DISTINCT FROM) and either pass can
+      // be re-run without effect. The whole job is one transactional
+      // batch so partial application isn't possible.
+      const result = await this.db.transaction(async (tx) => {
+        const threads = await tx.execute(sql`
+          UPDATE discussion_threads AS t
+          SET comments_count = counts.cnt,
+              updated_at    = NOW()
+          FROM (
+            SELECT thread_id, COUNT(*)::int AS cnt
+            FROM discussion_comments
+            WHERE status = 'visible'
+            GROUP BY thread_id
+          ) AS counts
+          WHERE t.thread_id = counts.thread_id
+            AND t.comments_count IS DISTINCT FROM counts.cnt
+          RETURNING 1
+        `);
+
+        const replies = await tx.execute(sql`
+          UPDATE discussion_comments AS c
+          SET replies_count = counts.cnt,
+              updated_at   = NOW()
+          FROM (
+            SELECT parent_comment_id AS comment_id, COUNT(*)::int AS cnt
+            FROM discussion_comments
+            WHERE status = 'visible'
+              AND parent_comment_id IS NOT NULL
+            GROUP BY parent_comment_id
+          ) AS counts
+          WHERE c.comment_id = counts.comment_id
+            AND c.replies_count IS DISTINCT FROM counts.cnt
+          RETURNING 1
+        `);
+
+        return {
+          threads: (threads.rows ?? []).length,
+          replies: (replies.rows ?? []).length,
+        };
+      });
+
+      this.logger.info({
+        event: 'discussion_counts_reconcile_complete',
+        threadsUpdated: result.threads,
+        repliesUpdated: result.replies,
+      });
+    } catch (error) {
+      this.logger.error({
+        event: 'discussion_counts_reconcile_failed',
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
   }
 }
