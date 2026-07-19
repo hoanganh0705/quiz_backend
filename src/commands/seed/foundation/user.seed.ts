@@ -166,7 +166,6 @@ export const createUsersDomain = (): SeedDomain => ({
         isVerified: users.isVerified,
         emailVerifiedAt: users.emailVerifiedAt,
         passwordChangedAt: users.passwordChangedAt,
-        xpTotal: users.xpTotal,
         currentStreak: users.currentStreak,
         longestStreak: users.longestStreak,
         settings: users.settings,
@@ -186,6 +185,9 @@ export const createUsersDomain = (): SeedDomain => ({
     // timestamps, streak counters, settings JSON — so the report is a
     // complete reference even though the headline table only carries
     // the most useful identifiers.
+    // `xp_total` was dropped in migration 0010; we report 0 here because
+    // foundation seed users have no `user_ranking` row, and the
+    // profile endpoint treats the absence of a ranking row as 0 XP.
     const rowByUsername = new Map(
       touchedRows.map((row) => [normalizeUsername(row.username), row] as const),
     );
@@ -202,7 +204,7 @@ export const createUsersDomain = (): SeedDomain => ({
           displayName: seed.displayName,
           userId: row?.userId ?? '',
           isVerified: row ? String(row.isVerified) : '',
-          xpTotal: row ? String(row.xpTotal) : '0',
+          xpTotal: '0',
         },
         details: {
           userId: row?.userId ?? null,
@@ -212,7 +214,7 @@ export const createUsersDomain = (): SeedDomain => ({
           isVerified: row?.isVerified ?? null,
           emailVerifiedAt: row?.emailVerifiedAt ?? null,
           passwordChangedAt: row?.passwordChangedAt ?? null,
-          xpTotal: row?.xpTotal ?? 0,
+          xpTotal: 0,
           currentStreak: row?.currentStreak ?? 0,
           longestStreak: row?.longestStreak ?? 0,
           profile: {

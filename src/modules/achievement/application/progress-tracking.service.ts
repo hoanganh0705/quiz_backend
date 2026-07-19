@@ -330,10 +330,6 @@ export class ProgressTrackingService {
       return 0;
     }
 
-    if (metric === 'xp_total') {
-      return 0;
-    }
-
     return 0;
   }
 

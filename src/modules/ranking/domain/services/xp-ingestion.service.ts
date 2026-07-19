@@ -75,7 +75,7 @@ export class XpIngestionService {
       idempotencyKey,
     });
 
-    // Atomic: XP update + outbox row in the same transaction
+    // Atomic: XP update + outbox row in the same transaction.
     await this.db.transaction(async (tx) => {
       const updatedRanking = await this.rankingRepository.updateXpInTx(tx, {
         userId: event.userId,

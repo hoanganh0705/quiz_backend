@@ -6,6 +6,7 @@ import {
   users,
   userProfiles,
   userSessions,
+  userRanking,
   passwordResetTokens,
   passwordHistory,
 } from '@/core/database/schema';
@@ -290,7 +291,10 @@ export class UserRepository implements UserRepositoryPort {
         userId: users.userId,
         username: users.username,
         email: users.email,
-        xpTotal: users.xpTotal,
+        // `xp_total` was dropped in migration 0010; LEFT JOIN
+        // `user_ranking.all_time_xp` is the authoritative source. See
+        // `docs/plans/denormalized-counters-audit.md` — Fix #3.
+        xpTotal: sql<number>`COALESCE(${userRanking.allTimeXp}, 0)`,
         currentStreak: users.currentStreak,
         longestStreak: users.longestStreak,
         settings: users.settings,
@@ -302,6 +306,7 @@ export class UserRepository implements UserRepositoryPort {
       })
       .from(users)
       .leftJoin(userProfiles, eq(users.userId, userProfiles.userId))
+      .leftJoin(userRanking, eq(users.userId, userRanking.userId))
       .where(and(eq(users.userId, userId), isNull(users.deletedAt)))
       .limit(1)
       .catch(() => {

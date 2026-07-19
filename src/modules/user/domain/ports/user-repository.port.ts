@@ -1,5 +1,6 @@
 import type { UserAnalytics } from '../types/user-analytics';
 import type { TournamentStatus } from '@/modules/tournament/types/tournament.types';
+import type { DrizzleDB } from '@/core/database/database.module';
 
 export interface UserMeRow {
   userId: string;
@@ -38,6 +39,20 @@ export interface UserRankingRow {
   globalRank: number | null;
   totalScore: number;
   updatedAt: string;
+}
+
+/**
+ * Result of `updateStreakCache` — the new streak cache state after the
+ * atomic UPDATE in `docs/plans/user-streak-system.md` §3.1.
+ *
+ * `lastStreakDay` is the most recent UTC calendar day on which the user
+ * has a completed `quiz_attempts` row. Returns `null` for soft-deleted
+ * users (the FROM subselect is empty and the UPDATE affects 0 rows).
+ */
+export interface StreakCacheUpdateResult {
+  currentStreak: number;
+  longestStreak: number;
+  lastStreakDay: string | null;
 }
 
 export interface UserActivityRow {
@@ -133,6 +148,26 @@ export interface UserRepositoryPort {
     settings: Record<string, unknown>,
     nowIso: string,
   ): Promise<UserMeRow | null>;
+
+  /**
+   * Atomic streak-cache transition driven by a single completed
+   * `quiz_attempts.finished_at`. Implements the §3.1 SQL in
+   * `docs/plans/user-streak-system.md`: reads `last_streak_day` from the
+   * `users` row, applies the §1.3 gap rule, clamps `last_streak_day`
+   * to `GREATEST(prev, $day)` to defend against out-of-order commits
+   * (see §3.5.1), and short-circuits when no cache column would
+   * change.
+   *
+   * `tx` MUST be supplied so the streak update commits atomically with
+   * the calling transaction (typically the attempt-completion
+   * transaction in `AttemptRepository.completeAttemptAndSideEffects`).
+   * Returns `null` for soft-deleted users (FROM subselect empty).
+   */
+  updateStreakCache(
+    userId: string,
+    finishedAt: Date,
+    tx: DrizzleDB,
+  ): Promise<StreakCacheUpdateResult | null>;
 
   findByUsernames(usernames: string[]): Promise<UserPublicRow[]>;
 

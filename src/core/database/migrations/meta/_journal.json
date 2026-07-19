@@ -64,6 +64,20 @@
       "when": 1783935563042,
       "tag": "0009_reconcile_discussion_counts",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1783935563043,
+      "tag": "0010_drop_users_xp_total",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1783935563044,
+      "tag": "0011_add_users_last_streak_day",
+      "breakpoints": true
     }
   ]
 }
