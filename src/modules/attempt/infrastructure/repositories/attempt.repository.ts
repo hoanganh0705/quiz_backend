@@ -467,6 +467,53 @@ export class AttemptRepository implements AttemptRepositoryPort {
         },
       });
 
+      // Streak-cache transition (Fix #4 — `docs/plans/user-streak-system.md`
+      // §3.1 + §4.3). The SQL is inlined here rather than routed via
+      // `UserRepository.updateStreakCache` to avoid creating a new
+      // Attempt ↔ User ↔ Ranking DI cycle that conflicts with the
+      // existing ranking/attempt cycle. `UserRepository.updateStreakCache`
+      // remains the canonical entry point for any caller that is not
+      // inside `completeAttemptAndSideEffects` (e.g. the Phase B
+      // backfill script). The `$day::date` cast happens in Postgres so
+      // the application server's timezone never leaks into the
+      // streak-day comparison.
+      const finishedAtIso = params.nowIso;
+      await tx.execute(sql`
+        UPDATE users u
+        SET
+          current_streak  = src.new_current,
+          longest_streak  = src.new_longest,
+          last_streak_day = GREATEST(u.last_streak_day, ${finishedAtIso}::date)
+        FROM (
+          SELECT
+            u.user_id,
+            u.current_streak,
+            u.longest_streak,
+            u.last_streak_day,
+            CASE
+              WHEN ${finishedAtIso}::date < u.last_streak_day                            THEN u.current_streak
+              WHEN ${finishedAtIso}::date = u.last_streak_day                            THEN u.current_streak
+              WHEN ${finishedAtIso}::date = u.last_streak_day + INTERVAL '1 day'         THEN u.current_streak + 1
+              ELSE 1
+            END AS new_current,
+            GREATEST(
+              u.longest_streak,
+              CASE
+                WHEN ${finishedAtIso}::date < u.last_streak_day                            THEN u.current_streak
+                WHEN ${finishedAtIso}::date = u.last_streak_day                            THEN u.current_streak
+                WHEN ${finishedAtIso}::date = u.last_streak_day + INTERVAL '1 day'         THEN u.current_streak + 1
+                ELSE 1
+              END
+            ) AS new_longest
+          FROM users u
+          WHERE u.user_id = ${params.userId}::uuid AND u.deleted_at IS NULL
+        ) src
+        WHERE u.user_id = src.user_id
+          AND (u.current_streak  IS DISTINCT FROM src.new_current
+            OR u.longest_streak  IS DISTINCT FROM src.new_longest
+            OR u.last_streak_day IS DISTINCT FROM GREATEST(u.last_streak_day, ${finishedAtIso}::date))
+      `);
+
       return updated as AttemptRow;
     });
   }

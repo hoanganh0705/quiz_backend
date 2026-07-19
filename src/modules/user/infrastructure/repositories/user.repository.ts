@@ -19,6 +19,7 @@ import type {
   MyTournamentHistoryRow,
   MyTournamentRow,
   PublicTournamentProfileRow,
+  StreakCacheUpdateResult,
   UserActivityRow,
   UserBadgeRow,
   UserMeRow,
@@ -53,7 +54,12 @@ export class UserRepository implements UserRepositoryPort {
         userId: users.userId,
         username: users.username,
         email: users.email,
-        xpTotal: users.xpTotal,
+        // `xpTotal` is sourced via LEFT JOIN so the profile endpoint
+        // reflects the authoritative `user_ranking.all_time_xp`. We
+        // coalesce NULL to 0 to preserve the contract: a user with no
+        // ranking row reads as 0 XP rather than `null`. See
+        // `docs/plans/denormalized-counters-audit.md` — Fix #3.
+        xpTotal: sql<number>`COALESCE(${userRanking.allTimeXp}, 0)`,
         currentStreak: users.currentStreak,
         longestStreak: users.longestStreak,
         settings: users.settings,
@@ -65,6 +71,7 @@ export class UserRepository implements UserRepositoryPort {
       })
       .from(users)
       .leftJoin(userProfiles, eq(users.userId, userProfiles.userId))
+      .leftJoin(userRanking, eq(users.userId, userRanking.userId))
       .where(and(eq(users.userId, userId), isNull(users.deletedAt)))
       .limit(1);
 
@@ -518,7 +525,7 @@ export class UserRepository implements UserRepositoryPort {
           userId: users.userId,
           username: users.username,
           email: users.email,
-          xpTotal: users.xpTotal,
+          xpTotal: sql<number>`COALESCE(${userRanking.allTimeXp}, 0)`,
           currentStreak: users.currentStreak,
           longestStreak: users.longestStreak,
           settings: users.settings,
@@ -530,6 +537,7 @@ export class UserRepository implements UserRepositoryPort {
         })
         .from(users)
         .leftJoin(userProfiles, eq(users.userId, userProfiles.userId))
+        .leftJoin(userRanking, eq(users.userId, userRanking.userId))
         .where(and(eq(users.userId, userId), isNull(users.deletedAt)))
         .limit(1);
 
@@ -554,7 +562,6 @@ export class UserRepository implements UserRepositoryPort {
           userId: users.userId,
           username: users.username,
           email: users.email,
-          xpTotal: users.xpTotal,
           currentStreak: users.currentStreak,
           longestStreak: users.longestStreak,
           settings: users.settings,
@@ -563,6 +570,17 @@ export class UserRepository implements UserRepositoryPort {
         });
 
       if (!updated) return null;
+
+      // xp_total was dropped in migration 0010 — pull the live XP from
+      // the authoritative source via LEFT JOIN, coalesced to 0 when no
+      // ranking row exists yet.
+      const [ranking] = await tx
+        .select({
+          xpTotal: sql<number>`COALESCE(${userRanking.allTimeXp}, 0)`,
+        })
+        .from(userRanking)
+        .where(eq(userRanking.userId, userId))
+        .limit(1);
 
       const [profile] = await tx
         .select({
@@ -576,6 +594,7 @@ export class UserRepository implements UserRepositoryPort {
 
       return {
         ...updated,
+        xpTotal: ranking?.xpTotal ?? 0,
         settings: updated.settings as Record<string, unknown>,
         displayName: profile?.displayName ?? null,
         avatarUrl: profile?.avatarUrl ?? null,
@@ -615,5 +634,89 @@ export class UserRepository implements UserRepositoryPort {
       .where(and(inArray(users.role, roles), isNull(users.deletedAt)));
 
     return rows.map((r) => ({ userId: r.userId }));
+  }
+
+  /**
+   * Atomic streak-cache transition driven by a single completed
+   * `quiz_attempts.finished_at`. See
+   * `docs/plans/user-streak-system.md` §3.1 for the full algorithm.
+   *
+   * The §3.1 SQL implements the §1.3 gap rule as a `CASE` over
+   * `last_streak_day`, with one extra branch (`$day < last_streak_day`)
+   * added in §3.5.1 to defend against out-of-order completion commits —
+   * the `GREATEST(...)` clamp on the SET clause prevents the cache from
+   * regressing in the same direction.
+   *
+   * `tx` MUST be supplied so this commit joins the calling transaction
+   * (the attempt-completion tx in `AttemptRepository.completeAttemptAndSideEffects`).
+   * Returns `null` for soft-deleted users (the `FROM` subselect is empty).
+   */
+  async updateStreakCache(
+    userId: string,
+    finishedAt: Date,
+    tx: DrizzleDB,
+  ): Promise<StreakCacheUpdateResult | null> {
+    const client = tx ?? this.db;
+    // `$day::date` cast must happen in Postgres so the application
+    // server's timezone never leaks into the streak-day comparison. The
+    // bound parameter is an ISO-8601 string in UTC.
+    const dayIso = finishedAt.toISOString();
+
+    const rows = await client.execute<{
+      current_streak: number | string;
+      longest_streak: number | string;
+      last_streak_day: string | null;
+    }>(sql`
+      UPDATE users u
+      SET
+        current_streak  = src.new_current,
+        longest_streak  = src.new_longest,
+        last_streak_day = GREATEST(u.last_streak_day, ${dayIso}::date)
+      FROM (
+        SELECT
+          u.user_id,
+          u.current_streak,
+          u.longest_streak,
+          u.last_streak_day,
+          CASE
+            WHEN ${dayIso}::date < u.last_streak_day                            THEN u.current_streak
+            WHEN ${dayIso}::date = u.last_streak_day                            THEN u.current_streak
+            WHEN ${dayIso}::date = u.last_streak_day + INTERVAL '1 day'         THEN u.current_streak + 1
+            ELSE 1
+          END AS new_current,
+          GREATEST(
+            u.longest_streak,
+            CASE
+              WHEN ${dayIso}::date < u.last_streak_day                            THEN u.current_streak
+              WHEN ${dayIso}::date = u.last_streak_day                            THEN u.current_streak
+              WHEN ${dayIso}::date = u.last_streak_day + INTERVAL '1 day'         THEN u.current_streak + 1
+              ELSE 1
+            END
+          ) AS new_longest
+        FROM users u
+        WHERE u.user_id = ${userId}::uuid AND u.deleted_at IS NULL
+      ) src
+      WHERE u.user_id = src.user_id
+        AND (u.current_streak  IS DISTINCT FROM src.new_current
+          OR u.longest_streak  IS DISTINCT FROM src.new_longest
+          OR u.last_streak_day IS DISTINCT FROM GREATEST(u.last_streak_day, ${dayIso}::date))
+      RETURNING u.current_streak, u.longest_streak, u.last_streak_day
+    `);
+
+    const row = rows.rows[0] as
+      | {
+          current_streak: number | string;
+          longest_streak: number | string;
+          last_streak_day: string | null;
+        }
+      | undefined;
+
+    if (!row) return null;
+
+    return {
+      currentStreak: Number(row.current_streak),
+      longestStreak: Number(row.longest_streak),
+      lastStreakDay: row.last_streak_day,
+    };
   }
 }
