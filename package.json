@@ -37,6 +37,8 @@
     "db:seed:all": "node -r ts-node/register -r tsconfig-paths/register src/commands/seed/index.ts all",
     "db:backfill:user-streak": "node -r ts-node/register -r tsconfig-paths/register scripts/backfill/user-streak.ts",
     "db:backfill:user-streak:dry-run": "node -r ts-node/register -r tsconfig-paths/register scripts/backfill/user-streak.ts --dry-run",
+    "db:backfill:bookmark-metrics": "node -r ts-node/register -r tsconfig-paths/register scripts/backfill/bookmark-metrics.ts",
+    "db:backfill:quiz-metrics": "node -r ts-node/register -r tsconfig-paths/register scripts/backfill/quiz-metrics.ts",
     "outbox:inspect": "node -r ts-node/register -r tsconfig-paths/register src/commands/outbox.ts inspect",
     "outbox:retry": "node -r ts-node/register -r tsconfig-paths/register src/commands/outbox.ts retry",
     "outbox:discard": "node -r ts-node/register -r tsconfig-paths/register src/commands/outbox.ts discard",
