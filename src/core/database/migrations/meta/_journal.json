@@ -43,6 +43,13 @@
       "when": 1783935563039,
       "tag": "0006_remarkable_karma",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1783935563040,
+      "tag": "0007_reconcile_helpful_count",
+      "breakpoints": true
     }
   ]
 }

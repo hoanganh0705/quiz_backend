@@ -1,8 +1,12 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
 import { and, asc, desc, eq, or, sql } from 'drizzle-orm';
 import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 import { DRIZZLE } from '@/core/database/drizzle.constants';
 import type { DrizzleDB } from '@/core/database/database.module';
+import {
+  TransactionalContext,
+  TRANSACTIONAL_CONTEXT,
+} from '@/common/interceptors/transactional-context';
 import {
   quizReviews,
   users,
@@ -22,7 +26,6 @@ import type {
   ReviewRepositoryPort,
   ReviewStatsRow,
   ReviewDashboardRow,
-  ReviewHelpfulVoteRow,
   ReviewDetailByIdRow,
 } from '@/modules/review/domain/ports';
 import type { ReviewSort } from '@/modules/review/domain/ports';
@@ -42,7 +45,12 @@ const QUIZ_ATTEMPT_COLUMNS = quizAttempts as unknown as {
 
 @Injectable()
 export class ReviewRepository implements ReviewRepositoryPort {
-  constructor(@Inject(DRIZZLE) private readonly db: DrizzleDB) {}
+  constructor(
+    @Inject(DRIZZLE) private readonly db: DrizzleDB,
+    @Optional()
+    @Inject(TRANSACTIONAL_CONTEXT)
+    private readonly transactionalContext?: TransactionalContext,
+  ) {}
 
   async getReviewByQuizAndUser(quizId: string, userId: string): Promise<ReviewRow | null> {
     const [row] = await this.db
@@ -276,7 +284,7 @@ export class ReviewRepository implements ReviewRepositoryPort {
           sql<number>`COALESCE(ROUND(AVG(${quizReviews.rating})::numeric, 1), 0)`.as(
             'average_rating_given',
           ),
-        lastUpdated: sql<string>`COALESCE(MAX(${quizReviews.updatedAt}), NOW()::text)`.as(
+        lastUpdated: sql<string>`COALESCE(MAX(${quizReviews.updatedAt})::text, NOW()::text)`.as(
           'last_updated',
         ),
       })
@@ -318,51 +326,105 @@ export class ReviewRepository implements ReviewRepositoryPort {
     };
   }
 
-  async markReviewHelpful(params: {
+  /**
+   * Atomically insert a helpful vote for `(reviewId, userId)` and bump
+   * `quiz_reviews.helpful_count` by 1 in the same transaction.
+   *
+   * Idempotent at the database level: the unique constraint on
+   * `review_helpful_votes (review_id, user_id)` makes a duplicate insert a
+   * no-op (no row returned from the `ON CONFLICT DO NOTHING RETURNING`),
+   * and the counter is left untouched in that case.
+   *
+   * Returns `true` when the vote was actually inserted, `false` when the
+   * vote already existed.
+   *
+   * Joins the active outer transaction if one is open (via the shared
+   * `TransactionalContext`); otherwise opens its own transaction so the
+   * insert and the counter bump commit or roll back together.
+   */
+  async addHelpfulVote(params: {
     reviewId: string;
     userId: string;
     nowIso: string;
-  }): Promise<ReviewHelpfulVoteRow> {
+  }): Promise<boolean> {
     const { reviewId, userId, nowIso } = params;
 
-    const [existingVote] = await this.db
-      .select({
-        voteId: reviewHelpfulVotes.voteId,
-        reviewId: reviewHelpfulVotes.reviewId,
-        userId: reviewHelpfulVotes.userId,
-        createdAt: reviewHelpfulVotes.createdAt,
-      })
-      .from(reviewHelpfulVotes)
-      .where(and(eq(reviewHelpfulVotes.reviewId, reviewId), eq(reviewHelpfulVotes.userId, userId)))
-      .limit(1);
+    const executeAdd = async (tx: unknown): Promise<boolean> => {
+      const db = tx as DrizzleDB;
 
-    if (existingVote) {
-      return existingVote as ReviewHelpfulVoteRow;
+      const inserted = await db
+        .insert(reviewHelpfulVotes)
+        .values({ reviewId, userId, createdAt: nowIso })
+        .onConflictDoNothing({
+          target: [reviewHelpfulVotes.reviewId, reviewHelpfulVotes.userId],
+        })
+        .returning({ voteId: reviewHelpfulVotes.voteId });
+
+      if (inserted.length === 0) {
+        return false;
+      }
+
+      await db
+        .update(quizReviews)
+        .set({ helpfulCount: sql`helpful_count + 1` })
+        .where(eq(quizReviews.reviewId, reviewId));
+
+      return true;
+    };
+
+    const existingTx = this.transactionalContext?.getDbClient() as DrizzleDB | null;
+    if (existingTx) {
+      return executeAdd(existingTx);
     }
 
-    const [createdVote] = await this.db
-      .insert(reviewHelpfulVotes)
-      .values({ reviewId, userId, createdAt: nowIso })
-      .returning({
-        voteId: reviewHelpfulVotes.voteId,
-        reviewId: reviewHelpfulVotes.reviewId,
-        userId: reviewHelpfulVotes.userId,
-        createdAt: reviewHelpfulVotes.createdAt,
-      });
-
-    return createdVote as ReviewHelpfulVoteRow;
+    return this.db.transaction(async (tx) => executeAdd(tx));
   }
 
-  async removeReviewHelpfulVote(params: {
+  /**
+   * Atomically delete a helpful vote for `(reviewId, userId)` and decrement
+   * `quiz_reviews.helpful_count` by 1 in the same transaction.
+   *
+   * Returns `true` when a row was actually deleted, `false` when there was
+   * no vote to remove.
+   *
+   * Joins the active outer transaction if one is open; otherwise opens
+   * its own transaction.
+   */
+  async removeHelpfulVote(params: {
     reviewId: string;
     userId: string;
     nowIso: string;
-  }): Promise<void> {
+  }): Promise<boolean> {
     const { reviewId, userId } = params;
 
-    await this.db
-      .delete(reviewHelpfulVotes)
-      .where(and(eq(reviewHelpfulVotes.reviewId, reviewId), eq(reviewHelpfulVotes.userId, userId)));
+    const executeRemove = async (tx: unknown): Promise<boolean> => {
+      const db = tx as DrizzleDB;
+
+      const deleted = await db
+        .delete(reviewHelpfulVotes)
+        .where(
+          and(eq(reviewHelpfulVotes.reviewId, reviewId), eq(reviewHelpfulVotes.userId, userId)),
+        )
+        .returning({ voteId: reviewHelpfulVotes.voteId });
+
+      if (deleted.length === 0) {
+        return false;
+      }
+
+      await db
+        .update(quizReviews)
+        .set({ helpfulCount: sql`helpful_count - 1` })
+        .where(eq(quizReviews.reviewId, reviewId));
+
+      return true;
+    };
+
+    const existingTx = this.transactionalContext?.getDbClient() as DrizzleDB | null;
+    if (existingTx) {
+      return executeRemove(existingTx);
+    }
+
+    return this.db.transaction(async (tx) => executeRemove(tx));
   }
 
   async createReview(params: {
@@ -424,13 +486,6 @@ export class ReviewRepository implements ReviewRepositoryPort {
 
   async deleteReview(reviewId: string): Promise<void> {
     await this.db.delete(quizReviews).where(eq(quizReviews.reviewId, reviewId));
-  }
-
-  async updateHelpfulCount(reviewId: string, increment: number): Promise<void> {
-    await this.db
-      .update(quizReviews)
-      .set({ helpfulCount: sql`helpful_count + ${increment}` })
-      .where(eq(quizReviews.reviewId, reviewId));
   }
 
   async hasCompletedAttempt(quizId: string, userId: string): Promise<boolean> {

@@ -66,9 +66,11 @@ export class BookmarkPresenter {
 
   // Single-resource endpoints — wrap whole DTO as `data`.
   readonly getBookmarkStatus = BookmarkPresenter.ok<BookmarkStatusResponseDto>;
-  readonly listCollections = BookmarkPresenter.ok<BookmarkCollectionListResponseDto>;
+  readonly listCollections = (dto: BookmarkCollectionListResponseDto) =>
+    ApiResponse.ok([...dto.items]);
   readonly createCollection = BookmarkPresenter.ok<CreateCollectionResponseDto>;
-  readonly listBookmarksInCollection = BookmarkPresenter.ok<BookmarkListResponseDto>;
+  readonly listBookmarksInCollection = (dto: BookmarkListResponseDto) =>
+    ApiResponse.ok([...dto.items]);
   readonly getCollectionAnalytics = BookmarkPresenter.ok<BookmarkCollectionAnalyticsResponseDto>;
   readonly addBookmark = BookmarkPresenter.ok<AddBookmarkResponseDto>;
   readonly addBookmarksBulk = BookmarkPresenter.ok<BulkAddBookmarksResponseDto>;

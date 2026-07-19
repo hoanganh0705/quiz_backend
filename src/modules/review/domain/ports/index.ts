@@ -5,7 +5,6 @@ export {
   type MyReviewRow,
   type ReviewStatsRow,
   type ReviewDashboardRow,
-  type ReviewHelpfulVoteRow,
   type ReviewCursor,
   ReviewSort,
   type ReviewRepositoryPort,

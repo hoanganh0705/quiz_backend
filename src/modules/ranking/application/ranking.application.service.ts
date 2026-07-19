@@ -70,9 +70,18 @@ export class RankingApplicationService implements OnModuleInit, OnModuleDestroy 
         try {
           await this.runSchedulerCycle();
         } catch (error) {
+          const cause = error instanceof Error && 'cause' in error ? error.cause : undefined;
           this.logger.error({
             event: 'scheduler_cycle_error',
             error: error instanceof Error ? error.message : 'Unknown error',
+            errorName: error instanceof Error ? error.name : undefined,
+            cause: cause instanceof Error ? cause.message : undefined,
+            causeName: cause instanceof Error ? cause.name : undefined,
+            causeCode:
+              cause && typeof cause === 'object' && 'code' in cause
+                ? (cause as { code?: string }).code
+                : undefined,
+            stack: error instanceof Error ? error.stack : undefined,
           });
         } finally {
           this.isRunning = false;
