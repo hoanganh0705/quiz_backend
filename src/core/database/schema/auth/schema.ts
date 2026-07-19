@@ -32,6 +32,7 @@ import {
   timestamp,
   boolean,
   integer,
+  date,
   jsonb,
   foreignKey,
 } from 'drizzle-orm/pg-core';
@@ -63,9 +64,14 @@ export const users = pgTable(
     }),
     emailVerifiedAt: timestamp('email_verified_at', { withTimezone: true, mode: 'string' }),
     passwordChangedAt: timestamp('password_changed_at', { withTimezone: true, mode: 'string' }),
-    xpTotal: integer('xp_total').default(0).notNull(),
     currentStreak: integer('current_streak').default(0).notNull(),
     longestStreak: integer('longest_streak').default(0).notNull(),
+    // Most recent UTC calendar day on which the user has a completed
+    // `quiz_attempts` row. Nullable: a user who has never completed an
+    // attempt has `NULL`. The hot-path UPDATE in
+    // `docs/plans/user-streak-system.md` §3.1 reads this column to
+    // derive the next cache state.
+    lastStreakDay: date('last_streak_day'),
     settings: jsonb().default({}).notNull(),
     createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' })
       .defaultNow()
@@ -96,11 +102,17 @@ export const users = pgTable(
     check('users_settings_object', sql`jsonb_typeof(settings) = 'object'::text`),
     check('users_streak_nonneg', sql`(current_streak >= 0) AND (longest_streak >= 0)`),
     check('users_streak_order', sql`longest_streak >= current_streak`),
+    // `last_streak_day` may be NULL (no completed attempts ever) but
+    // never future-dated — `finished_at` clock skew is bounded upstream
+    // by the attempt repository.
+    check(
+      'users_streak_day_not_future',
+      sql`(last_streak_day IS NULL) OR (last_streak_day <= CURRENT_DATE)`,
+    ),
     check(
       'users_username_len',
       sql`(length((username)::text) >= 3) AND (length((username)::text) <= 50)`,
     ),
-    check('users_xp_nonneg', sql`xp_total >= 0`),
   ],
 );
 

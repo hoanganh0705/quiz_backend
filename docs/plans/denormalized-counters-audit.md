@@ -382,16 +382,26 @@ The following list contains every concrete change required to resolve the audit 
 
 ### Fix #3 — `users.xp_total`
 
-- [ ] **Decision — drop the column or keep it**
-  - [ ] Confirm with product whether the profile endpoint should keep showing total XP. If yes, mirror it. If no, write a migration to drop it.
-  - [ ] _Default if no answer_: keep the column and mirror it.
-- [ ] **Migration 0010 — backfill `users.xp_total`**
-  - [ ] Write `0010_reconcile_users_xp_total.sql` with `UPDATE users SET xp_total = ur.all_time_xp FROM user_ranking ur WHERE … IS DISTINCT FROM`.
-  - [ ] Snapshot + journal entry.
-  - [ ] e2e test.
-- [ ] **Service — mirror after each XP write**
-  - [ ] In `XpIngestionService.processXpEvent`, after the `rankingRepository.updateXpInTx` call (still inside the same transaction), add `UPDATE users SET xp_total = $newAllTimeXp WHERE user_id = $userId`.
-  - [ ] If the decision was to drop the column, remove `xpTotal` from `users` in the schema, drop the column via migration, and remove the field from `UserMeResponseDto` / DTO mappers.
+- [x] **Decision — drop the column or keep it**
+  - [x] Confirmed (re-affirmed by product): **drop the column**. The column was a denormalized mirror that was never written in production (the XP write path goes exclusively through `user_ranking`), so it always read 0 in production while `user_ranking.all_time_xp` had the real value. A LEFT JOIN in the user/auth repository SELECT gives the profile endpoint the authoritative `xpTotal` field while removing the drift vector entirely.
+- [x] **Migration 0010 — drop `users.xp_total`**
+  - [x] Write `0010_drop_users_xp_total.sql` with `ALTER TABLE users DROP CONSTRAINT IF EXISTS users_xp_nonneg; ALTER TABLE users DROP COLUMN IF EXISTS xp_total;`. Both operations use `IF EXISTS` so the migration is idempotent on already-dropped databases.
+  - [x] Regenerate snapshot `meta/0010_snapshot.json` (chain from 0009) with the `xp_total` column block and `users_xp_nonneg` check block removed. Renamed the migration file from `0010_reconcile_users_xp_total.sql` to `0010_drop_users_xp_total.sql` and updated `_journal.json` accordingly.
+  - [x] e2e test (`test/drop-users-xp-total.e2e-spec.ts`, 4 cases: SQL well-formedness, IF-EXISTS idempotency, column-absent-after-migration, constraint-absent-after-migration).
+- [x] **Schema — remove from Drizzle**
+  - [x] Drop `xpTotal: integer('xp_total')…` and `check('users_xp_nonneg', sql\`xp_total >= 0\`)` from `src/core/database/schema/auth/schema.ts`.
+  - [x] The `'xp_total'` value of the `badge_rule_type` enum is intentionally retained (removing a Postgres enum value cleanly would require a CREATE/ALTER/DROP-TYPE dance unrelated to this fix and could leave dependent `badge_rules` rows orphaned). The rule-engine branch in `progress-tracking.service.ts` for the `'xp_total'` metric has been removed since it never worked (returned 0).
+- [x] **Repositories — LEFT JOIN `user_ranking` instead**
+  - [x] `src/modules/user/infrastructure/repositories/user.repository.ts` — `findMeById`, `updateProfile`, `updateSettings` now source `xpTotal` via `LEFT JOIN userRanking ON users.user_id = userRanking.user_id` and project `sql<number>\`COALESCE(${userRanking.allTimeXp}, 0)\``. The DTO field name stays `xpTotal`.
+  - [x] `src/modules/auth/infrastructure/repositories/user.repository.ts` — same pattern in `findMeById`.
+- [x] **Service — remove the mirror in `XpIngestionService.processXpEvent`**
+  - [x] The `UPDATE users SET xp_total = …` mirror added in the prior attempt has been removed. `processXpEvent` only updates `user_ranking` now. Cleanup also removed now-unused imports (`eq`, `sql`, `and` from drizzle-orm; `users` from schema).
+- [x] **No reconcile cron needed**
+  - [x] `RankingReconciliationScheduler` (and its module wiring) was deleted along with the column. There is no longer a `users.xp_total` to reconcile.
+- [x] **Seeds — drop the xpTotal writeback**
+  - [x] `src/commands/seed/development/ranking.seed.ts` — removed the post-insert `UPDATE users SET xpTotal = seed.allTimeXp` and its `users`/`eq` imports. Seed only populates `user_ranking`.
+  - [x] `src/commands/seed/foundation/user.seed.ts` — removed `xpTotal` from the upsert `.returning()` projection; the seed report now records `xpTotal: 0` for foundation users (which have no `user_ranking` row).
+  - [x] `src/commands/seed/index.ts` — updated the inline comment in `runDevelopment` to read "ranking (sets xp on user_ranking)".
 
 ### Fix #4 — `users.current_streak` / `users.longest_streak`
 
@@ -473,6 +483,6 @@ To keep each PR small and reviewable, ship them in this order. Each PR is indepe
 ## 7. Summary
 
 - **16 distinct denormalized counters / cached aggregates** were identified.
-- **7 of those are HIGH-risk** — primarily because the application either (a) never writes them at all, or (b) writes them outside the surrounding transaction. Three are silently broken in production right now (`tournament_participants.total_score`, `tournament_participants.total_time_ms`, and the `users.xp_total / streak` columns all return 0).
+- **7 of those are HIGH-risk** — primarily because the application either (a) never writes them at all, or (b) writes them outside the surrounding transaction. Three were silently broken in production right now (`tournament_participants.total_score`, `tournament_participants.total_time_ms`, and the `users.xp_total / streak` columns all returning 0); `users.xp_total` has since been dropped (Fix #3) and is no longer a column at all.
 - **6 are LOW-risk** because they are fully recomputed from authoritative source tables.
-- **All HIGH-risk counters are recomputable from other tables** — no counter requires schema changes, only application code changes plus data-only backfill migrations mirroring `0007_reconcile_helpful_count.sql`.
+- **All HIGH-risk counters are recomputable from other tables** — no counter requires schema changes, only application code changes plus data-only backfill migrations mirroring `0007_reconcile_helpful_count.sql`. (`0010_drop_users_xp_total.sql` is the only structural migration to date — it drops the broken `users.xp_total` rather than backfilling it, and replaces it with a LEFT JOIN to `user_ranking.all_time_xp`.)
