@@ -82,4 +82,33 @@ export class AnalyticsSchedulerService {
       });
     }
   }
+
+  /**
+   * Daily reconciliation of quiz attempt/avg-score counters at 5 AM.
+   *
+   * Fix #7 — `denormalized-counters-audit.md` §Fix #7. Recomputes
+   * `quiz_stats.total_attempts` and `avg_score_percent` for every active quiz
+   * by calling `refreshQuizMetrics`, healing any drift between the inline
+   * `total_attempts + 1` running counter in
+   * `AttemptRepository.completeAttemptAndSideEffects` and the source-of-truth
+   * `COUNT(quiz_attempts)`. Runs every day, not just weekly, so a single
+   * bad attempt completion (e.g. process crash mid-transaction, manual DB
+   * fix, future schema change) is repaired within 24 hours.
+   */
+  @Cron('0 5 * * *')
+  async handleQuizMetricsReconcile(): Promise<void> {
+    this.logger.info({ event: 'cron_quiz_metrics_reconcile_start' });
+    try {
+      const summary = await this.quizAnalyticsService.reconcileAllQuizMetrics();
+      this.logger.info({
+        event: 'cron_quiz_metrics_reconcile_complete',
+        ...summary,
+      });
+    } catch (error) {
+      this.logger.error({
+        event: 'cron_quiz_metrics_reconcile_failed',
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
 }
