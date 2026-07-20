@@ -65,6 +65,12 @@ const QUIZ_VERSION_COLUMNS = quizVersions as unknown as {
 const QUIZ_RECORD_PROJECTION = {
   quizId: QUIZ_COLUMNS.quizId,
   creatorId: QUIZ_COLUMNS.creatorId,
+  // Phase 1 / Issue #1 + #25 — these two columns are required by the
+  // review module to gate visibility on its public endpoints. We project
+  // them here so callers do not have to make a second round-trip to
+  // re-fetch the quiz with `getQuizWithPublishedVersionById`.
+  isHidden: QUIZ_COLUMNS.isHidden,
+  publishedVersionId: QUIZ_COLUMNS.publishedVersionId,
 };
 
 const QUIZ_WITH_VERSION_PROJECTION = {

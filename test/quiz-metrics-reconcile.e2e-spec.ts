@@ -27,13 +27,7 @@ import { PinoLogger } from 'nestjs-pino';
 import { Pool } from 'pg';
 import type { DrizzleDB } from '@/core/database/database.module';
 import * as schema from '@/core/database/schema';
-import {
-  quizAttempts,
-  quizzes,
-  quizStats,
-  quizVersions,
-  users,
-} from '@/core/database/schema';
+import { quizAttempts, quizzes, quizStats, quizVersions, users } from '@/core/database/schema';
 import { PopularityService } from '@/modules/quiz/domain/analytics/popularity.service';
 import { QuizAnalyticsRepository } from '@/modules/quiz/domain/analytics/quiz-analytics.repository';
 import { QuizAnalyticsService } from '@/modules/quiz/domain/analytics/quiz-analytics.service';
@@ -75,11 +69,7 @@ describe('Quiz attempt/avg-score counter reconciliation (Fix #7 e2e)', () => {
         analyticsRepository,
         metricsRepository,
         new TrendingService(metricsRepository, createLogger(TrendingService.name)),
-        new PopularityService(
-          metricsRepository,
-          db,
-          createLogger(PopularityService.name),
-        ),
+        new PopularityService(metricsRepository, db, createLogger(PopularityService.name)),
         createLogger(QuizAnalyticsService.name),
       );
 
@@ -167,9 +157,7 @@ describe('Quiz attempt/avg-score counter reconciliation (Fix #7 e2e)', () => {
 
     afterAll(async () => {
       if (quizIds.length > 0) {
-        await db
-          .delete(quizStats)
-          .where(eq(quizStats.quizId, quizIds[0]));
+        await db.delete(quizStats).where(eq(quizStats.quizId, quizIds[0]));
       }
       if (versionIds.length > 0) {
         await db.delete(quizAttempts).where(eq(quizAttempts.quizVersionId, versionIds[0]));

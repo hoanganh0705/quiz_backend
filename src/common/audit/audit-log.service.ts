@@ -50,7 +50,6 @@ import { lt } from 'drizzle-orm';
 import { DRIZZLE } from '@/core/database/drizzle.constants';
 import type { DrizzleDB } from '@/core/database/database.module';
 import { authAuditLogs } from '@/core/database/schema';
-
 /**
  * Coarse domain tag. New domains may be added as long as the
  * column stays short — the value lands in `metadata` as a
@@ -149,6 +148,27 @@ export class AuditLogService {
   constructor(@Inject(DRIZZLE) private readonly db: DrizzleDB) {}
 
   async record(input: AuditRecordInput): Promise<void> {
+    return this.recordWithExecutor(this.db, input);
+  }
+
+  /**
+   * Phase 5 / Issue #37 — transactional variant. When the audit
+   * row must commit atomically with a domain mutation (e.g. the
+   * moderator status update), callers can pass the open
+   * `pg.transaction` `tx` and the INSERT will join the same
+   * COMMIT as the mutation. If the audit row fails, the mutation
+   * rolls back; if the mutation fails, the audit row is never
+   * persisted.
+   *
+   * The executor is typed structurally — both `DrizzleDB` and the
+   * `PgTransaction` returned by `db.transaction(...)` expose
+   * `insert(table).values(...)` with the same shape, and Drizzle
+   * guarantees the runtime contract.
+   */
+  async recordWithExecutor(
+    executor: { insert: DrizzleDB['insert'] } | unknown,
+    input: AuditRecordInput,
+  ): Promise<void> {
     const createdAt = input.createdAt ?? new Date().toISOString();
     const retentionDays = input.retentionDays ?? DEFAULT_AUDIT_RETENTION_DAYS;
     const expiresAt = new Date(createdAt);
@@ -175,7 +195,8 @@ export class AuditLogService {
     if (input.actorId !== undefined) metadata.actorId = input.actorId;
     if (input.subjectUserId !== undefined) metadata.subjectUserId = input.subjectUserId;
 
-    await this.db.insert(authAuditLogs).values({
+    const exec = executor as DrizzleDB;
+    await exec.insert(authAuditLogs).values({
       eventType: input.eventType,
       userId: indexedUserId,
       ipAddress: input.ipAddress ?? null,

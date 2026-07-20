@@ -192,7 +192,7 @@ export const REVIEW_DELETED_EXAMPLE = {
 
 export const REVIEW_HELPFUL_EXAMPLE = {
   data: {
-    message: 'Review marked as helpful',
+    message: 'Helpful vote recorded',
   },
   meta: { timestamp: EXAMPLE_TIMESTAMP },
 } as const;

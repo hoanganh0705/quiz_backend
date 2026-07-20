@@ -135,3 +135,12 @@ export const reviewSelfVoteExample = {
   instance: '/reviews/550e8400-e29b-71d4-a716-446655440099/helpful',
   extensions: { requestId: REQUEST_ID },
 } as const;
+
+export const reviewSelfReportExample = {
+  type: RFC7807_TYPE_URIS[400],
+  title: 'BadRequest',
+  status: 400,
+  detail: 'You cannot report your own review',
+  instance: '/reviews/550e8400-e29b-71d4-a716-446655440099/report',
+  extensions: { requestId: REQUEST_ID },
+} as const;

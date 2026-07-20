@@ -1,6 +1,6 @@
 import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Post } from '@nestjs/common';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
-import { Public } from '@/common/decorators/public.decorator';
+import { Throttle } from '@nestjs/throttler';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
 import { ApiAuth } from '@/common/swagger/swagger-decorators';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
@@ -59,6 +59,15 @@ export class ReviewController {
 
   @Post(':reviewId/report')
   @ApiAuth()
+  // Phase 2 / Issue #16 — cap report filing at 5 requests / minute /
+  // IP. Without this, a bot network can file 100k reports against a
+  // single review by 100k distinct user accounts (the per-user
+  // UNIQUE constraint blocks *duplicate* reports from one user but
+  // not the cross-user spam). This makes reports costlier to file,
+  // matches the rate limit used for discussion reports (same threat
+  // model), and gives the global throttler a clean 429 surface for
+  // abusive clients.
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
   @ApiOperation({ summary: 'Report a review' })
   @ApiReportReviewResponses()
   async reportReview(
@@ -71,10 +80,25 @@ export class ReviewController {
   }
 
   @Get(':reviewId')
-  @Public()
+  // Phase 5 / Issue #20 — the previous `@Public()` decorator let
+  // any unauthenticated client enumerate UUIDs and read review
+  // content (including sensitive text like harassment / profanity)
+  // against hidden quizzes. The endpoint is now `@ApiAuth()` only;
+  // the service-layer policy still returns 404 for reviews of
+  // hidden / unpublished quizzes via `assertQuizVisibleById`, so a
+  // hidden quiz's review remains inaccessible.
+  @ApiAuth()
   @ApiOperation({ summary: 'Get a review by ID' })
   @ApiGetReviewByIdResponses()
-  async getReviewById(@Param('reviewId', new ParseUUIDPipe({ version: '7' })) reviewId: string) {
+  async getReviewById(
+    @Param('reviewId', new ParseUUIDPipe({ version: '7' })) reviewId: string,
+    @CurrentUser() _user: JwtPayload,
+  ) {
+    // `_user` is unused at the service layer; it is required
+    // solely to force `JwtGuard` to authenticate the request.
+    // The controller accepts it through `@CurrentUser` so a
+    // missing token is rejected with 401 before the request
+    // reaches the repository.
     const result = await this.reviewApplicationService.getReviewById(reviewId);
     return this.presenter.getReviewById(result);
   }

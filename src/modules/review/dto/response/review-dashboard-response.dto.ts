@@ -48,9 +48,11 @@ export class ReviewDashboardResponseDto {
   })
   favoriteTag!: ReviewDashboardFavoriteTagDto | null;
 
-  @ApiProperty({
-    description: 'Timestamp when the dashboard was last calculated (ISO 8601)',
+  @ApiPropertyOptional({
+    description:
+      'Timestamp when the dashboard was last calculated (ISO 8601). `null` when the user has no reviews yet — there is nothing to compute.',
     example: '2026-01-01T00:00:00.000Z',
+    nullable: true,
   })
-  lastUpdated!: string;
+  lastUpdated!: string | null;
 }

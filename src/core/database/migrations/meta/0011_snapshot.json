@@ -2268,6 +2268,14 @@
         "quiz_reviews_rating_range": {
           "name": "quiz_reviews_rating_range",
           "value": "(rating >= 1) AND (rating <= 5)"
+        },
+        "quiz_reviews_helpful_count_nonneg": {
+          "name": "quiz_reviews_helpful_count_nonneg",
+          "value": "helpful_count >= 0"
+        },
+        "quiz_reviews_comment_length": {
+          "name": "quiz_reviews_comment_length",
+          "value": "comment IS NULL OR length(comment) <= 1000"
         }
       },
       "isRLSEnabled": false
@@ -3320,6 +3328,10 @@
         "review_reports_reason_nonblank": {
           "name": "review_reports_reason_nonblank",
           "value": "length(btrim(reason)) > 0"
+        },
+        "review_reports_reason_enum": {
+          "name": "review_reports_reason_enum",
+          "value": "reason IN ('spam', 'harassment', 'inappropriate_content', 'misinformation', 'other')"
         }
       },
       "isRLSEnabled": false

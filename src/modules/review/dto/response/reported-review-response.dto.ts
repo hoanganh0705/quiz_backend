@@ -1,4 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { REPORT_REASON_VALUES } from '../../domain/policies/review-report-status.policy';
 
 export class ReportedReviewItemDto {
   @ApiProperty({
@@ -13,20 +14,42 @@ export class ReportedReviewItemDto {
   })
   reviewId!: string;
 
+  // Phase 4 / Issue #35 — the four fields below are nullable
+  // because the underlying review row may have been hard-deleted
+  // (the FK is `ON DELETE CASCADE`). The report itself still
+  // exists and the user needs to see it, but the joined context
+  // fields are gone. A `null` here is the contract signal that the
+  // review no longer exists; clients should render a
+  // "[deleted review]" placeholder rather than treat the absence
+  // as data corruption.
+
   @ApiProperty({
     description: 'Quiz identifier',
     example: '660e8400-e29b-71d4-a716-446655440000',
+    nullable: true,
   })
-  quizId!: string;
+  quizId!: string | null;
 
-  @ApiProperty({ description: 'Quiz title', example: 'JavaScript Fundamentals' })
-  quizTitle!: string;
+  @ApiProperty({
+    description: 'Quiz title',
+    example: 'JavaScript Fundamentals',
+    nullable: true,
+  })
+  quizTitle!: string | null;
 
-  @ApiProperty({ description: 'Username of the review author', example: 'bob_builder' })
-  reviewerUsername!: string;
+  @ApiProperty({
+    description: 'Username of the review author',
+    example: 'bob_builder',
+    nullable: true,
+  })
+  reviewerUsername!: string | null;
 
-  @ApiProperty({ description: 'Star rating of the reported review (1–5)', example: 1 })
-  rating!: number;
+  @ApiProperty({
+    description: 'Star rating of the reported review (1–5)',
+    example: 1,
+    nullable: true,
+  })
+  rating!: number | null;
 
   @ApiPropertyOptional({
     description: 'Comment of the reported review',
@@ -35,8 +58,12 @@ export class ReportedReviewItemDto {
   })
   comment!: string | null;
 
-  @ApiProperty({ description: 'Reason for reporting the review', example: 'spam' })
-  reason!: string;
+  @ApiProperty({
+    description: 'Reason for reporting the review (closed set)',
+    example: 'spam',
+    enum: REPORT_REASON_VALUES,
+  })
+  reason!: import('@/modules/review/domain/policies/review-report-status.policy').ReviewReportReason;
 
   @ApiPropertyOptional({
     description: 'Additional moderation details',

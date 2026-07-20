@@ -4,23 +4,26 @@ import { ReviewApplicationService } from './application/review.application.servi
 import { ReviewService } from './domain/review.service';
 import { ReviewAdminService } from './domain/review-admin.service';
 import { IdempotencyService, IDEMPOTENCY_SERVICE } from './domain/idempotency.service';
+import { IdempotencyCleanupScheduler } from './domain/idempotency-cleanup.scheduler';
 import { ReviewResponseMapper } from './mappers/review-response.mapper';
 import { CursorMapper } from './mappers/review-cursor.mapper';
 import { ReviewController } from './transport/controller/review.controller';
 import { UserReviewController } from './transport/controller/user-review.controller';
 import { AdminReviewController } from './transport/controller/admin-review.controller';
 import { ReviewPresenter } from './transport/presenters/review.presenter';
-import { REVIEW_REPOSITORY_PORT, REVIEW_REPORT_REPOSITORY_PORT } from './domain/ports';
 import {
-  REVIEW_ANALYTICS_PORT,
-  REVIEW_DOMAIN_EVENT_BUS,
-  ReviewDomainEventBus,
-} from './domain/events';
+  REVIEW_REPOSITORY_PORT,
+  REVIEW_REPORT_REPOSITORY_PORT,
+  REVIEW_OUTBOX_PORT,
+} from './domain/ports';
+import { REVIEW_DOMAIN_EVENT_BUS, ReviewDomainEventBus } from './domain/events';
 import { ReviewRepository } from './infrastructure/repositories/review.repository';
 import { ReviewReportRepository } from './infrastructure/repositories/review-report.repository';
-import { ReviewAnalyticsAdapter } from './infrastructure/repositories/review-analytics.adapter';
 import { QuizModule } from '@/modules/quiz/quiz.module';
 import { quizReviewController } from './transport/controller/quiz-review.controller';
+import { ReviewOutboxAdapter } from './infrastructure/outbox/review-outbox.adapter';
+import { ReviewOutboxProcessorService } from './infrastructure/outbox/review-outbox-processor.service';
+import { ReviewOutboxSchedulerService } from './infrastructure/outbox/review-outbox.scheduler';
 
 @Module({
   imports: [DatabaseModule, forwardRef(() => QuizModule)],
@@ -47,12 +50,15 @@ import { quizReviewController } from './transport/controller/quiz-review.control
     // Port bindings
     { provide: REVIEW_REPOSITORY_PORT, useExisting: ReviewRepository },
     { provide: REVIEW_REPORT_REPOSITORY_PORT, useExisting: ReviewReportRepository },
+    { provide: REVIEW_OUTBOX_PORT, useExisting: ReviewOutboxAdapter },
     { provide: IDEMPOTENCY_SERVICE, useExisting: IdempotencyService },
-    { provide: REVIEW_ANALYTICS_PORT, useExisting: ReviewAnalyticsAdapter },
 
     // Infrastructure
-    ReviewAnalyticsAdapter,
     IdempotencyService,
+    ReviewOutboxAdapter,
+    ReviewOutboxProcessorService,
+    ReviewOutboxSchedulerService,
+    IdempotencyCleanupScheduler,
 
     // Domain Event Bus
     ReviewDomainEventBus,

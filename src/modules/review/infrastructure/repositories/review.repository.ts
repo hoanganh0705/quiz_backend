@@ -1,5 +1,5 @@
 import { Inject, Injectable, Optional } from '@nestjs/common';
-import { and, asc, desc, eq, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, isNotNull, isNull, or, sql } from 'drizzle-orm';
 import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 import { DRIZZLE } from '@/core/database/drizzle.constants';
 import type { DrizzleDB } from '@/core/database/database.module';
@@ -27,8 +27,11 @@ import type {
   ReviewStatsRow,
   ReviewDashboardRow,
   ReviewDetailByIdRow,
+  ReviewCursor,
+  ReviewHelpfulCursor,
+  ReviewListCursor,
+  ReviewSort,
 } from '@/modules/review/domain/ports';
-import type { ReviewSort } from '@/modules/review/domain/ports';
 
 const QUIZ_VERSION_COLUMNS = quizVersions as unknown as {
   quizVersionId: AnyPgColumn;
@@ -52,6 +55,15 @@ export class ReviewRepository implements ReviewRepositoryPort {
     private readonly transactionalContext?: TransactionalContext,
   ) {}
 
+  /**
+   * Phase 5 / Issue #17 — "active review" predicate. Every
+   * public read path appends `quiz_reviews.deleted_at IS NULL`
+   * so soft-deleted reviews stay invisible to clients while
+   * remaining in the table for vote-history preservation,
+   * moderation audit, and reconciliation jobs.
+   */
+  private static readonly ACTIVE_REVIEW_PREDICATE = isNull(quizReviews.deletedAt);
+
   async getReviewByQuizAndUser(quizId: string, userId: string): Promise<ReviewRow | null> {
     const [row] = await this.db
       .select({
@@ -64,7 +76,13 @@ export class ReviewRepository implements ReviewRepositoryPort {
         updatedAt: quizReviews.updatedAt,
       })
       .from(quizReviews)
-      .where(and(eq(quizReviews.quizId, quizId), eq(quizReviews.userId, userId)))
+      .where(
+        and(
+          eq(quizReviews.quizId, quizId),
+          eq(quizReviews.userId, userId),
+          ReviewRepository.ACTIVE_REVIEW_PREDICATE,
+        ),
+      )
       .limit(1);
 
     return (row as ReviewRow | undefined) ?? null;
@@ -86,7 +104,13 @@ export class ReviewRepository implements ReviewRepositoryPort {
       .from(quizReviews)
       .innerJoin(quizzes, eq(quizReviews.quizId, quizzes.quizId))
       .innerJoin(users, eq(quizReviews.userId, users.userId))
-      .where(and(eq(quizReviews.quizId, quizId), eq(quizReviews.userId, userId)))
+      .where(
+        and(
+          eq(quizReviews.quizId, quizId),
+          eq(quizReviews.userId, userId),
+          ReviewRepository.ACTIVE_REVIEW_PREDICATE,
+        ),
+      )
       .limit(1);
 
     return (row as ReviewDetailByIdRow | undefined) ?? null;
@@ -104,7 +128,7 @@ export class ReviewRepository implements ReviewRepositoryPort {
         updatedAt: quizReviews.updatedAt,
       })
       .from(quizReviews)
-      .where(eq(quizReviews.reviewId, reviewId))
+      .where(and(eq(quizReviews.reviewId, reviewId), ReviewRepository.ACTIVE_REVIEW_PREDICATE))
       .limit(1);
 
     return (row as ReviewRow | undefined) ?? null;
@@ -127,7 +151,7 @@ export class ReviewRepository implements ReviewRepositoryPort {
       .from(quizReviews)
       .innerJoin(quizzes, eq(quizReviews.quizId, quizzes.quizId))
       .innerJoin(users, eq(quizReviews.userId, users.userId))
-      .where(eq(quizReviews.reviewId, reviewId))
+      .where(and(eq(quizReviews.reviewId, reviewId), ReviewRepository.ACTIVE_REVIEW_PREDICATE))
       .limit(1);
 
     return (row as ReviewDetailByIdRow | undefined) ?? null;
@@ -136,24 +160,22 @@ export class ReviewRepository implements ReviewRepositoryPort {
   async listReviewsByQuiz(params: {
     quizId: string;
     limit: number;
-    cursor?: { createdAt: string; reviewId: string } | null;
+    // Phase 5 / Issue #11 — the cursor type now depends on the
+    // sort. The repository branches on `params.sort` and validates
+    // the cursor shape implicitly. The controller-layer mapper
+    // serializes/deserializes the right shape per sort.
+    cursor?: ReviewListCursor | null;
     rating?: number;
     sort?: ReviewSort;
   }): Promise<ReviewDetailRow[]> {
-    const cursorCondition = params.cursor
-      ? or(
-          sql`${quizReviews.createdAt} < ${params.cursor.createdAt}`,
-          and(
-            eq(quizReviews.createdAt, params.cursor.createdAt),
-            sql`${quizReviews.reviewId} < ${params.cursor.reviewId}`,
-          ),
-        )
-      : undefined;
-
     const baseWhere =
       params.rating !== undefined
-        ? and(eq(quizReviews.quizId, params.quizId), eq(quizReviews.rating, params.rating))
-        : eq(quizReviews.quizId, params.quizId);
+        ? and(
+            eq(quizReviews.quizId, params.quizId),
+            eq(quizReviews.rating, params.rating),
+            ReviewRepository.ACTIVE_REVIEW_PREDICATE,
+          )
+        : and(eq(quizReviews.quizId, params.quizId), ReviewRepository.ACTIVE_REVIEW_PREDICATE);
 
     const baseSelect = {
       reviewId: quizReviews.reviewId,
@@ -169,6 +191,23 @@ export class ReviewRepository implements ReviewRepositoryPort {
     };
 
     if (params.sort === 'helpful') {
+      // Phase 5 / Issue #11 — the helpful-sort cursor carries
+      // `{ helpfulCount, reviewId }` so the predicate matches
+      // the ORDER BY columns exactly. The previous shape
+      // reused the `createdAt` cursor and let pages skip /
+      // duplicate rows because the cursor predicate and the
+      // sort key were on different columns.
+      const cursor = params.cursor as ReviewHelpfulCursor | null | undefined;
+      const cursorCondition = cursor
+        ? or(
+            sql`${quizReviews.helpfulCount} < ${cursor.helpfulCount}`,
+            and(
+              eq(quizReviews.helpfulCount, cursor.helpfulCount),
+              sql`${quizReviews.reviewId} < ${cursor.reviewId}`,
+            ),
+          )
+        : undefined;
+
       const rows = await this.db
         .select(baseSelect)
         .from(quizReviews)
@@ -180,6 +219,19 @@ export class ReviewRepository implements ReviewRepositoryPort {
 
       return rows as unknown as ReviewDetailRow[];
     }
+
+    // For the other sorts, the cursor is the original
+    // `{ createdAt, reviewId }` shape.
+    const cursor = params.cursor as ReviewCursor | null | undefined;
+    const cursorCondition = cursor
+      ? or(
+          sql`${quizReviews.createdAt} < ${cursor.createdAt}`,
+          and(
+            eq(quizReviews.createdAt, cursor.createdAt),
+            sql`${quizReviews.reviewId} < ${cursor.reviewId}`,
+          ),
+        )
+      : undefined;
 
     if (params.sort === 'highest_rating') {
       const rows = await this.db
@@ -234,6 +286,32 @@ export class ReviewRepository implements ReviewRepositoryPort {
         )
       : undefined;
 
+    // Phase 5 / Issue #15 — visibility predicate for the
+    // `listUserReviews` query. The query joins `quizzes` and
+    // exposes `quizzes.title` to the response. The previous shape
+    // INNER-JOINed every row regardless of the parent quiz's
+    // visibility, so:
+    //
+    //   - `GET /users/me/reviews` (authenticated, self-only)
+    //     leaked the title of a quiz the author later hid.
+    //   - `GET /users/:userId/reviews` (public!) leaked hidden
+    //     quiz titles to any attacker guessing reviewer UUIDs —
+    //     the canonical "hidden quiz IDOR" pattern.
+    //
+    // The predicate mirrors `isVisibleToReviewers`:
+    // `is_hidden = false AND published_version_id IS NOT NULL`.
+    const visibilityPredicate = and(
+      eq(quizzes.isHidden, false),
+      isNotNull(quizzes.publishedVersionId),
+    );
+
+    // Phase 5 / Issue #17 — exclude soft-deleted reviews from
+    // the user's review history. A review the author (or a
+    // moderator) soft-deleted should not appear on
+    // `GET /users/me/reviews` or the public
+    // `GET /users/:userId/reviews` listing.
+    const visibilityAndActive = and(visibilityPredicate, ReviewRepository.ACTIVE_REVIEW_PREDICATE);
+
     const rows = await this.db
       .select({
         reviewId: quizReviews.reviewId,
@@ -248,8 +326,8 @@ export class ReviewRepository implements ReviewRepositoryPort {
       .innerJoin(quizzes, eq(quizReviews.quizId, quizzes.quizId))
       .where(
         params.cursor
-          ? and(eq(quizReviews.userId, params.userId), cursorCondition)
-          : eq(quizReviews.userId, params.userId),
+          ? and(eq(quizReviews.userId, params.userId), visibilityAndActive, cursorCondition)
+          : and(eq(quizReviews.userId, params.userId), visibilityAndActive),
       )
       .orderBy(desc(quizReviews.createdAt), desc(quizReviews.reviewId))
       .limit(params.limit + 1);
@@ -271,7 +349,7 @@ export class ReviewRepository implements ReviewRepositoryPort {
         rating5: sql<number>`COUNT(CASE WHEN ${quizReviews.rating} = 5 THEN 1 END)`.as('rating_5'),
       })
       .from(quizReviews)
-      .where(eq(quizReviews.quizId, quizId));
+      .where(and(eq(quizReviews.quizId, quizId), ReviewRepository.ACTIVE_REVIEW_PREDICATE));
 
     return (row as ReviewStatsRow | undefined) ?? null;
   }
@@ -284,12 +362,34 @@ export class ReviewRepository implements ReviewRepositoryPort {
           sql<number>`COALESCE(ROUND(AVG(${quizReviews.rating})::numeric, 1), 0)`.as(
             'average_rating_given',
           ),
-        lastUpdated: sql<string>`COALESCE(MAX(${quizReviews.updatedAt})::text, NOW()::text)`.as(
-          'last_updated',
-        ),
+        // Phase 5 / Issue #30 — when a user has no reviews, the
+        // previous `COALESCE(MAX(updated_at)::text, NOW()::text)`
+        // surfaced the wall-clock DB time as "dashboard last
+        // updated at <now>", which is misleading. Return `null`
+        // when there are no rows; the service layer translates
+        // that to `null` in the response.
+        lastUpdated: sql<string | null>`MAX(${quizReviews.updatedAt})::text`.as('last_updated'),
       })
       .from(quizReviews)
-      .where(eq(quizReviews.userId, userId));
+      .where(and(eq(quizReviews.userId, userId), ReviewRepository.ACTIVE_REVIEW_PREDICATE));
+
+    // Phase 3 / Issue #26 — exclude reviews on hidden or
+    // unpublished quizzes from the `favoriteCategory` /
+    // `favoriteTag` aggregates. Otherwise a user whose activity
+    // includes test quizzes that were later hidden still surfaces
+    // those categories/tags in their dashboard, which leaks
+    // categories the user has nominally interacted with but which
+    // are no longer canonical. The same predicate is used in the
+    // review-visibility policy (`isVisibleToReviewers`) and the
+    // public listing paths.
+    //
+    // Phase 5 / Issue #17 — also exclude soft-deleted reviews.
+    const visibleQuizWhere = and(
+      eq(quizReviews.userId, userId),
+      eq(quizzes.isHidden, false),
+      isNotNull(quizzes.publishedVersionId),
+      ReviewRepository.ACTIVE_REVIEW_PREDICATE,
+    );
 
     const [favoriteCategory] = await this.db
       .select({
@@ -299,7 +399,7 @@ export class ReviewRepository implements ReviewRepositoryPort {
       .from(quizReviews)
       .innerJoin(quizzes, eq(quizReviews.quizId, quizzes.quizId))
       .innerJoin(categories, eq(quizzes.categoryId, categories.categoryId))
-      .where(eq(quizReviews.userId, userId))
+      .where(visibleQuizWhere)
       .groupBy(categories.categoryId, categories.name)
       .orderBy(sql`COUNT(*) DESC`, categories.name)
       .limit(1);
@@ -312,7 +412,8 @@ export class ReviewRepository implements ReviewRepositoryPort {
       .from(quizReviews)
       .innerJoin(quizTags, eq(quizReviews.quizId, quizTags.quizId))
       .innerJoin(tags, eq(quizTags.tagId, tags.tagId))
-      .where(eq(quizReviews.userId, userId))
+      .innerJoin(quizzes, eq(quizReviews.quizId, quizzes.quizId))
+      .where(visibleQuizWhere)
       .groupBy(tags.tagId, tags.name)
       .orderBy(sql`COUNT(*) DESC`, tags.name)
       .limit(1);
@@ -322,7 +423,12 @@ export class ReviewRepository implements ReviewRepositoryPort {
       averageRatingGiven: Number(summaryRow?.averageRatingGiven ?? 0),
       favoriteCategory: favoriteCategory ?? null,
       favoriteTag: favoriteTag ?? null,
-      lastUpdated: summaryRow?.lastUpdated ?? new Date().toISOString(),
+      // Phase 5 / Issue #30 — propagate the repository's `null`
+      // (no reviews) through to the response. The service layer
+      // must no longer fall back to `new Date().toISOString()`,
+      // which is what produced the misleading "dashboard last
+      // updated at <now>" output for users with no reviews.
+      lastUpdated: summaryRow?.lastUpdated ?? null,
     };
   }
 
@@ -460,16 +566,29 @@ export class ReviewRepository implements ReviewRepositoryPort {
   async updateReview(params: {
     reviewId: string;
     rating: number;
-    comment: string | null;
+    // Phase 5 / Issue #24 — `comment` is an explicit
+    // `{ set: string | null }` carrier so the repository can
+    // distinguish "field absent in the PATCH payload" (no write)
+    // from "field present and set to null" (clear the comment).
+    // The previous `comment: string | null` parameter silently
+    // nulled the comment whenever the client omitted the field.
+    comment?: { set: string | null };
     nowIso: string;
   }): Promise<ReviewRow> {
+    // Build the SET clause incrementally. Rating is always
+    // required (the DTO enforces it), so it is always present.
+    // `comment` is the only optional PATCH field today.
+    const setClause: { rating: number; updatedAt: string; comment?: string | null } = {
+      rating: params.rating,
+      updatedAt: params.nowIso,
+    };
+    if (params.comment !== undefined) {
+      setClause.comment = params.comment.set;
+    }
+
     const [updated] = await this.db
       .update(quizReviews)
-      .set({
-        rating: params.rating,
-        comment: params.comment,
-        updatedAt: params.nowIso,
-      })
+      .set(setClause)
       .where(eq(quizReviews.reviewId, params.reviewId))
       .returning({
         reviewId: quizReviews.reviewId,
@@ -484,8 +603,84 @@ export class ReviewRepository implements ReviewRepositoryPort {
     return updated as ReviewRow;
   }
 
-  async deleteReview(reviewId: string): Promise<void> {
-    await this.db.delete(quizReviews).where(eq(quizReviews.reviewId, reviewId));
+  /**
+   * Phase 5 / Issue #17 — slim existence check that ignores the
+   * `deleted_at` filter. Used by the helpful-vote withdrawal
+   * path: a user with an existing vote on a now-soft-deleted
+   * review should still be able to withdraw that vote
+   * (otherwise their vote row would survive forever). The
+   * `addHelpfulVote` path does NOT use this helper — adding a
+   * fresh vote on a soft-deleted review still surfaces a 404.
+   */
+  async reviewExistsIncludingDeleted(reviewId: string): Promise<boolean> {
+    const [row] = await this.db
+      .select({ reviewId: quizReviews.reviewId })
+      .from(quizReviews)
+      .where(eq(quizReviews.reviewId, reviewId))
+      .limit(1);
+
+    return row !== undefined;
+  }
+
+  /**
+   * Phase 5 / Issue #39 — fetch the `quiz_id` for a review
+   * (active OR soft-deleted) inside the caller's transaction.
+   * Used by the admin actioned-status transition to populate
+   * the analytics-refresh outbox event payload. Returns `null`
+   * when the review id does not exist at all.
+   */
+  async getQuizIdByReviewIdInTx(reviewId: string, tx: unknown): Promise<string | null> {
+    const executor = tx as DrizzleDB;
+    const [row] = await executor
+      .select({ quizId: quizReviews.quizId })
+      .from(quizReviews)
+      .where(eq(quizReviews.reviewId, reviewId))
+      .limit(1);
+
+    return row?.quizId ?? null;
+  }
+
+  /**
+   * Phase 5 / Issue #39 — tx-aware soft-delete. The admin service
+   * uses this inside the actioned-status transition so the
+   * soft-delete, status UPDATE, audit row, and analytics outbox
+   * event all commit atomically. The non-tx `softDeleteReview`
+   * variant remains for the public self-delete path.
+   *
+   * Returns `true` when a row was updated (i.e. the review
+   * existed and was not already soft-deleted), `false`
+   * otherwise. The actioned-status path treats `false` as a
+   * no-op (the review was already taken down).
+   */
+  async softDeleteReviewInTx(reviewId: string, nowIso: string, tx: unknown): Promise<boolean> {
+    const executor = tx as DrizzleDB;
+    const updated = await executor
+      .update(quizReviews)
+      .set({ deletedAt: nowIso })
+      .where(and(eq(quizReviews.reviewId, reviewId), ReviewRepository.ACTIVE_REVIEW_PREDICATE))
+      .returning({ reviewId: quizReviews.reviewId });
+
+    return updated.length > 0;
+  }
+
+  /**
+   * Phase 5 / Issue #17 — soft-delete a review. The previous
+   * shape issued `DELETE FROM quiz_reviews` and let the FK
+   * `ON DELETE CASCADE` on `review_helpful_votes` erase every
+   * vote against this review, with no UI signal for the
+   * voters. Soft-delete writes `deleted_at = now` instead, the
+   * repository filters every public read by `deleted_at IS NULL`
+   * so the row is invisible everywhere, and the helpful-vote
+   * rows survive the soft-delete so the voter can withdraw
+   * their vote through `removeHelpfulVote`.
+   *
+   * Returns `true` when a row was updated (i.e. the review
+   * existed and was not already soft-deleted), `false`
+   * otherwise. The service layer is responsible for acting on
+   * the boolean and emitting analytics / events accordingly.
+   */
+  async softDeleteReview(reviewId: string, nowIso: string): Promise<boolean> {
+    return this.softDeleteReviewInTx(reviewId, nowIso, this.db);
   }
 
   async hasCompletedAttempt(quizId: string, userId: string): Promise<boolean> {

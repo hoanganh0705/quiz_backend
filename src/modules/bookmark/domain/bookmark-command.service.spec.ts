@@ -80,9 +80,7 @@ describe('BookmarkCommandService', () => {
     const { service, bookmarkRepository, eventBus } = createService();
     bookmarkRepository.addBookmarksBulk.mockResolvedValue([]);
 
-    await expect(
-      service.addBookmarksBulk('user-1', 'collection-1', ['quiz-1']),
-    ).resolves.toBe(0);
+    await expect(service.addBookmarksBulk('user-1', 'collection-1', ['quiz-1'])).resolves.toBe(0);
     expect(eventBus.emitBookmarkAdded).not.toHaveBeenCalled();
   });
 
@@ -112,9 +110,9 @@ describe('BookmarkCommandService', () => {
     const { service, bookmarkRepository, eventBus } = createService();
     bookmarkRepository.removeBookmarksBulk.mockResolvedValue([]);
 
-    await expect(
-      service.removeBookmarksBulk('user-1', 'collection-1', ['quiz-1']),
-    ).resolves.toBe(0);
+    await expect(service.removeBookmarksBulk('user-1', 'collection-1', ['quiz-1'])).resolves.toBe(
+      0,
+    );
     expect(eventBus.emitBookmarkRemoved).not.toHaveBeenCalled();
   });
 });

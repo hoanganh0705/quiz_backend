@@ -6,8 +6,6 @@ export {
   ReviewDeletedEvent,
 } from './review-domain.events';
 
-export { REVIEW_ANALYTICS_PORT, type ReviewAnalyticsPort } from './review-analytics.port';
-
 export {
   REVIEW_DOMAIN_EVENT_BUS,
   type ReviewDomainEventBusPort,
