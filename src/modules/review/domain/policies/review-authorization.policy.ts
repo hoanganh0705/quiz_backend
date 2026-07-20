@@ -10,6 +10,14 @@ export type ReviewTarget = {
   userId: string;
 };
 
+export type ReviewReportSubject = {
+  reviewId: string;
+  // Author of the review — used to enforce the "you cannot report
+  // your own review" invariant.
+  authorUserId: string;
+  reporterUserId: string;
+};
+
 export type ReviewQuizTarget = {
   quizId: string;
   creatorId: string | null;
@@ -64,5 +72,29 @@ export const ReviewAuthorizationPolicy = {
     if (quiz.isHidden) return false;
     if (quiz.publishedVersionId === null) return false;
     return true;
+  },
+
+  /**
+   * Self-report guard.
+   *
+   * Returns `true` when the caller is allowed to file a report against
+   * the given review, `false` when they are the review's author.
+   *
+   * The previous shape lived inline in `ReviewService.reportReview` as
+   * `review.userId === reporterId`. That ad-hoc check was easy to
+   * miss in code review and was never tested at the integration layer,
+   * so a regression could let an admin (or any role) self-report and
+   * pollute the moderation queue. Centralizing the rule here makes
+   * the invariant explicit and gives us one place to add a unit spec
+   * for it.
+   *
+   * Note: the role of the actor does NOT bypass this guard. Even an
+   * admin cannot self-report — the moderation queue should not be
+   * polluted by self-reports, and the per-review moderation tools
+   * (`PATCH /admin/reviews/reports/:reportId` → `actioned`) are the
+   * correct path for taking down a review the admin authored.
+   */
+  canReport(subject: ReviewReportSubject): boolean {
+    return subject.authorUserId !== subject.reporterUserId;
   },
 } as const;

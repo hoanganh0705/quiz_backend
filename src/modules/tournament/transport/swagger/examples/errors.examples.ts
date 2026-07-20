@@ -191,3 +191,32 @@ export const tournamentAlreadyWithdrawnExample = {
   instance: '/api/v1/tournaments/660e8400-e29b-71d4-a716-446655440000/withdraw',
   extensions: { requestId: REQUEST_ID },
 } as const;
+
+// ─── Phase 1 / Issue #1 — admin endpoint error examples ──────────────────
+
+export const tournamentTerminalStateExample = {
+  type: RFC7807_TYPE_URIS[409],
+  title: 'Conflict',
+  status: 409,
+  detail: 'Tournament cannot be cancelled in its current state',
+  instance: '/api/v1/tournaments/660e8400-e29b-71d4-a716-446655440000/cancel',
+  extensions: { requestId: REQUEST_ID },
+} as const;
+
+export const tournamentCapacityReductionExample = {
+  type: RFC7807_TYPE_URIS[409],
+  title: 'Conflict',
+  status: 409,
+  detail: 'maxParticipants cannot be reduced after registration has started',
+  instance: '/api/v1/tournaments/660e8400-e29b-71d4-a716-446655440000',
+  extensions: { requestId: REQUEST_ID },
+} as const;
+
+export const tournamentEmptyUpdateExample = {
+  type: RFC7807_TYPE_URIS[400],
+  title: 'BadRequest',
+  status: 400,
+  detail: 'At least one field must be provided to update a tournament',
+  instance: '/api/v1/tournaments/660e8400-e29b-71d4-a716-446655440000',
+  extensions: { requestId: REQUEST_ID },
+} as const;
