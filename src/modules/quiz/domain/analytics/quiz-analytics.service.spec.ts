@@ -82,9 +82,7 @@ describe('QuizAnalyticsService', () => {
     it('refreshes attempt metrics for every active quiz', async () => {
       const { service, analyticsRepository, metricsRepository } = createService();
       analyticsRepository.getAllActiveQuizIds.mockResolvedValue(['quiz-a', 'quiz-b']);
-      metricsRepository.calculateTotalAttempts
-        .mockResolvedValueOnce(3)
-        .mockResolvedValueOnce(7);
+      metricsRepository.calculateTotalAttempts.mockResolvedValueOnce(3).mockResolvedValueOnce(7);
       metricsRepository.calculateUniquePlayers.mockResolvedValue(2);
       metricsRepository.calculateAverageScore.mockResolvedValue(72.5);
       metricsRepository.calculateCompletionRate.mockResolvedValue(100);

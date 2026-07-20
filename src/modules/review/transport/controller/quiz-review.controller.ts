@@ -13,6 +13,8 @@ import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { Public } from '@/common/decorators/public.decorator';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
 import { ApiAuth } from '@/common/swagger/swagger-decorators';
+import { Permissions } from '@/common/authorization/decorators/permissions.decorator';
+import { Permission } from '@/common/authorization/permissions';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
 import { ReviewApplicationService } from '../../application/review.application.service';
 import { CreateReviewDto, UpdateReviewDto, ListReviewsQueryDto } from '../../dto/request';
@@ -58,7 +60,15 @@ export class quizReviewController {
     @Query() query: ListReviewsQueryDto,
   ) {
     const limit = query.limit ?? 20;
-    const cursor = query.cursor ? CursorMapper.parseReview(query.cursor) : null;
+    // Phase 5 / Issue #11 — the cursor shape depends on the
+    // sort. The `helpful` sort uses a `{helpfulCount, reviewId}`
+    // cursor so the predicate matches the ORDER BY; other sorts
+    // use the original `{createdAt, reviewId}` cursor.
+    const cursor = query.cursor
+      ? query.sort === 'helpful'
+        ? CursorMapper.parseHelpful(query.cursor)
+        : CursorMapper.parseReview(query.cursor)
+      : null;
     const result = await this.reviewApplicationService.listReviews(
       quizId,
       limit,
@@ -80,7 +90,16 @@ export class quizReviewController {
 
   @Get(':quizId/reviews/analytics')
   @ApiAuth()
-  @ApiOperation({ summary: 'Get review analytics for a quiz (creator only)' })
+  // Phase 5 / Issue #21 — gate the creator-only analytics route
+  // at the boundary via `PermissionsGuard`. The previous shape
+  // was `@ApiAuth()` only: any authenticated user could reach the
+  // service-layer policy check, which is defense-in-depth but
+  // exposes the route to authenticated non-owners. The guard
+  // closes the route to non-permitted callers before the service
+  // runs. The service-layer `canViewAnalytics` check still runs
+  // for ownership / moderation decisions.
+  @Permissions(Permission.REVIEW_VIEW_QUIZ_ANALYTICS)
+  @ApiOperation({ summary: 'Get review analytics for a quiz (creator or moderator)' })
   @ApiCreatorQuizReviewAnalyticsResponses()
   async getCreatorQuizReviewAnalytics(
     @Param('quizId', new ParseUUIDPipe({ version: '7' })) quizId: string,

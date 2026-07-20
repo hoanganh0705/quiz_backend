@@ -34,6 +34,11 @@ export class UserReviewController {
     const result = await this.reviewApplicationService.listReportedReviews(user.sub, {
       limit: query.limit,
       cursor: query.cursor ? CursorMapper.parseReport(query.cursor) : null,
+      // Phase 3 / Issue #7 — pass the optional `status` filter
+      // through to the application service. Validated against
+      // `REPORT_STATUS_VALUES` in the DTO; absent values default to
+      // "all statuses" (back-compat with the previous contract).
+      status: query.status ?? null,
     });
     return this.presenter.listMyReportedReviews(result);
   }

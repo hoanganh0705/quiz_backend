@@ -1,20 +1,23 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsString, IsOptional, MaxLength } from 'class-validator';
+import { IsIn, IsOptional, IsString, MaxLength } from 'class-validator';
+import {
+  REPORT_REASON_VALUES,
+  type ReviewReportReason,
+} from '../../domain/policies/review-report-status.policy';
 
 export class ReportReviewDto {
   @ApiProperty({
     description:
-      'Reason for reporting the review. This is a free-form string field. ' +
-      'Common values include: spam, harassment, inappropriate_content, other. ' +
-      'Maximum length is 255 characters.',
+      'Structured reason tag for the report. The closed set lets the moderation dashboard ' +
+      'group reports reliably. Use `details` for free-form context.',
+    enum: REPORT_REASON_VALUES,
     example: 'spam',
   })
-  @IsString()
-  @MaxLength(255)
-  reason!: string;
+  @IsIn(REPORT_REASON_VALUES)
+  reason!: ReviewReportReason;
 
   @ApiPropertyOptional({
-    description: 'Additional moderation details',
+    description: 'Additional moderation details (free text).',
     type: String,
     nullable: true,
     example: 'Contains advertising links',

@@ -74,11 +74,7 @@ describe('Counter reconciliation drift canary (Fix #8 / ADR-0017)', () => {
         analyticsRepository,
         metricsRepository,
         new TrendingService(metricsRepository, createLogger(TrendingService.name)),
-        new PopularityService(
-          metricsRepository,
-          db,
-          createLogger(PopularityService.name),
-        ),
+        new PopularityService(metricsRepository, db, createLogger(PopularityService.name)),
         createLogger(QuizAnalyticsService.name),
       );
     });
@@ -184,7 +180,9 @@ describe('Counter reconciliation drift canary (Fix #8 / ADR-0017)', () => {
           ), '0')                                                            AS src_rating_count
         FROM quiz_stats qs
       `);
-      const rows = (result as unknown as { rows: typeof result extends Array<infer R> ? R[] : never }).rows;
+      const rows = (
+        result as unknown as { rows: typeof result extends Array<infer R> ? R[] : never }
+      ).rows;
 
       const drift: DriftRow[] = [];
       const COUNT_TOLERANCE = 0;
@@ -198,7 +196,12 @@ describe('Counter reconciliation drift canary (Fix #8 / ADR-0017)', () => {
       };
 
       for (const row of rows) {
-        const comparisons: Array<{ counter: string; cached: string; source: string; tolerance: number }> = [
+        const comparisons: Array<{
+          counter: string;
+          cached: string;
+          source: string;
+          tolerance: number;
+        }> = [
           {
             counter: 'total_attempts',
             cached: row.cached_total_attempts,
@@ -270,9 +273,7 @@ describe('Counter reconciliation drift canary (Fix #8 / ADR-0017)', () => {
       // Bookmark semantic lives behind refreshBookmarkMetrics which Fix #5
       // wired to COUNT(DISTINCT bc.user_id). Verify the cached column by
       // re-querying the same semantic SQL the service uses.
-      const ids = await db
-        .select({ quizId: quizStats.quizId })
-        .from(quizStats);
+      const ids = await db.select({ quizId: quizStats.quizId }).from(quizStats);
       expect(ids.length).toBeGreaterThan(0);
 
       for (const { quizId } of ids) {
@@ -283,9 +284,7 @@ describe('Counter reconciliation drift canary (Fix #8 / ADR-0017)', () => {
             ON bq.collection_id = bc.collection_id
           WHERE bq.quiz_id = ${quizId}::uuid
         `);
-        const bookmarkRows = (
-          bookmarkResult as unknown as { rows: Array<{ src: string }> }
-        ).rows;
+        const bookmarkRows = (bookmarkResult as unknown as { rows: Array<{ src: string }> }).rows;
         const src = bookmarkRows[0]?.src ?? '0';
 
         const [row] = await db

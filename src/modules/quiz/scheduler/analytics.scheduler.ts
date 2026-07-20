@@ -111,4 +111,36 @@ export class AnalyticsSchedulerService {
       });
     }
   }
+
+  /**
+   * Phase 1 / Issue #9 — daily reconciliation of review counters at 5:30 AM.
+   *
+   * The denormalized `quiz_stats.avg_rating` and `rating_count` columns
+   * are refreshed on every review create/delete via the transactional
+   * outbox (`ReviewOutboxProcessorService`). That path is durable, but
+   * drift can still occur from manual SQL fixes, future schema changes,
+   * or DLQ'd events. This sweep re-reads `quiz_reviews` for every active
+   * quiz and writes the correct values back, healing whatever drift
+   * accumulated since the last run.
+   *
+   * Staggered at 5:30 AM (30 min after the attempt/avg-score sweep) so
+   * the two cron jobs do not contend for the same `quiz_stats` row in
+   * the same minute.
+   */
+  @Cron('30 5 * * *')
+  async handleReviewMetricsReconcile(): Promise<void> {
+    this.logger.info({ event: 'cron_review_metrics_reconcile_start' });
+    try {
+      const summary = await this.quizAnalyticsService.reconcileAllReviewMetrics();
+      this.logger.info({
+        event: 'cron_review_metrics_reconcile_complete',
+        ...summary,
+      });
+    } catch (error) {
+      this.logger.error({
+        event: 'cron_review_metrics_reconcile_failed',
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
 }

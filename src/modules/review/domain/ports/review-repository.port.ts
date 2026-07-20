@@ -42,6 +42,24 @@ export type ReviewCursor = {
   reviewId: string;
 };
 
+// Phase 5 / Issue #11 — separate cursor type for the
+// `helpful` sort. The previous shape reused the `createdAt`/
+// `reviewId` cursor but ordered by `helpful_count DESC, review_id
+// DESC`, which made cursor pagination unstable — the cursor
+// predicate filtered rows by `createdAt` while the ORDER BY used
+// `helpful_count`, so pages could skip or duplicate rows. The new
+// cursor carries the same columns as the ORDER BY so the predicate
+// matches the sort key.
+export type ReviewHelpfulCursor = {
+  helpfulCount: number;
+  reviewId: string;
+};
+
+// Cursor union — `listReviewsByQuiz` accepts either based on
+// the `sort` parameter. Repository callers must supply the right
+// shape; the controller-layer mapper already validates that.
+export type ReviewListCursor = ReviewCursor | ReviewHelpfulCursor;
+
 export enum ReviewSort {
   HELPFUL = 'helpful',
   NEWEST = 'newest',
@@ -64,7 +82,8 @@ export type ReviewDashboardRow = {
   averageRatingGiven: number;
   favoriteCategory: { categoryId: string; name: string } | null;
   favoriteTag: { tagId: string; name: string } | null;
-  lastUpdated: string;
+  // Phase 5 / Issue #30 — `null` when the user has no reviews yet.
+  lastUpdated: string | null;
 };
 
 export interface ReviewRepositoryPort {
@@ -79,7 +98,11 @@ export interface ReviewRepositoryPort {
   listReviewsByQuiz(params: {
     quizId: string;
     limit: number;
-    cursor?: ReviewCursor | null;
+    // Phase 5 / Issue #11 — the cursor type now depends on the
+    // sort. The repository branches on `params.sort` and validates
+    // the cursor shape implicitly. The controller-layer mapper
+    // serializes/deserializes the right shape per sort.
+    cursor?: ReviewListCursor | null;
     rating?: number;
     sort?: ReviewSort;
   }): Promise<ReviewDetailRow[]>;
@@ -130,11 +153,51 @@ export interface ReviewRepositoryPort {
   updateReview(params: {
     reviewId: string;
     rating: number;
-    comment: string | null;
+    // Phase 5 / Issue #24 — `comment` is an explicit
+    // `{ set: string | null }` carrier so the repository can
+    // distinguish "field absent in the PATCH payload" (no write)
+    // from "field present and set to null" (clear the comment).
+    comment?: { set: string | null };
     nowIso: string;
   }): Promise<ReviewRow>;
 
-  deleteReview(reviewId: string): Promise<void>;
+  /**
+   * Phase 5 / Issue #17 — soft-delete a review. Returns `true`
+   * when a row was updated (i.e. the review existed and was not
+   * already soft-deleted), `false` otherwise.
+   *
+   * The previous `deleteReview(reviewId)` shape issued a hard
+   * `DELETE` and triggered the FK cascade on
+   * `review_helpful_votes`. Soft-delete preserves those vote
+   * rows and the review row itself; the repository filters
+   * every public read by `deleted_at IS NULL` so the row is
+   * invisible to clients.
+   */
+  softDeleteReview(reviewId: string, nowIso: string): Promise<boolean>;
+
+  /**
+   * Phase 5 / Issue #39 — tx-aware soft-delete variant. The
+   * admin service uses this inside the actioned-status
+   * transition so the soft-delete, status UPDATE, audit row, and
+   * analytics outbox event all commit atomically.
+   */
+  softDeleteReviewInTx(reviewId: string, nowIso: string, tx: unknown): Promise<boolean>;
+
+  /**
+   * Phase 5 / Issue #17 — slim existence check that ignores the
+   * `deleted_at` filter. Used by the helpful-vote withdrawal
+   * path: a user with an existing vote on a soft-deleted review
+   * should still be able to withdraw it.
+   */
+  reviewExistsIncludingDeleted(reviewId: string): Promise<boolean>;
+
+  /**
+   * Phase 5 / Issue #39 — fetch the `quiz_id` for a review
+   * (active OR soft-deleted) inside the caller's transaction.
+   * Used by the admin actioned-status transition to populate
+   * the analytics-refresh outbox event payload.
+   */
+  getQuizIdByReviewIdInTx(reviewId: string, tx: unknown): Promise<string | null>;
 
   hasCompletedAttempt(quizId: string, userId: string): Promise<boolean>;
 }
