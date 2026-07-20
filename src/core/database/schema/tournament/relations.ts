@@ -29,6 +29,10 @@ export const tournamentsRelations = relations(tournaments, ({ one, many }) => ({
     fields: [tournaments.categoryId],
     references: [categories.categoryId],
   }),
+  owner: one(users, {
+    fields: [tournaments.ownerUserId],
+    references: [users.userId],
+  }),
   tournamentParticipants: many(tournamentParticipants),
   stats: one(tournamentStats),
 }));

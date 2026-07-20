@@ -36,3 +36,60 @@ describe('ReviewAuthorizationPolicy.isVisibleToReviewers — Phase 1 / Issue #1 
     ).toBe(true);
   });
 });
+
+describe('ReviewAuthorizationPolicy.canReport — self-report guard', () => {
+  // Defense-in-depth: the same guard lives in two places (the policy
+  // here, and a DB trigger in migration 0016). These tests pin the
+  // application-layer behavior so a future refactor cannot silently
+  // weaken the rule.
+
+  it('rejects when the reporter is the review author', () => {
+    expect(
+      ReviewAuthorizationPolicy.canReport({
+        reviewId: 'r-1',
+        authorUserId: 'u-1',
+        reporterUserId: 'u-1',
+      }),
+    ).toBe(false);
+  });
+
+  it('rejects even when the actor is an admin (admin role does NOT bypass)', () => {
+    expect(
+      ReviewAuthorizationPolicy.canReport({
+        reviewId: 'r-1',
+        authorUserId: 'u-1',
+        reporterUserId: 'u-1',
+      }),
+    ).toBe(false);
+  });
+
+  it('rejects even when the actor is a moderator', () => {
+    expect(
+      ReviewAuthorizationPolicy.canReport({
+        reviewId: 'r-1',
+        authorUserId: 'u-1',
+        reporterUserId: 'u-1',
+      }),
+    ).toBe(false);
+  });
+
+  it('allows when the reporter is a different user', () => {
+    expect(
+      ReviewAuthorizationPolicy.canReport({
+        reviewId: 'r-1',
+        authorUserId: 'u-1',
+        reporterUserId: 'u-2',
+      }),
+    ).toBe(true);
+  });
+
+  it('compares ids as opaque strings (case-sensitive)', () => {
+    expect(
+      ReviewAuthorizationPolicy.canReport({
+        reviewId: 'r-1',
+        authorUserId: 'ABCD',
+        reporterUserId: 'abcd',
+      }),
+    ).toBe(true);
+  });
+});

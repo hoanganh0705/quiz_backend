@@ -491,11 +491,8 @@ describe('ReviewApplicationService.reportReview — idempotency replay', () => {
     const USER_ID = 'user-1';
 
     const reviewService = {
-      reportReview: jest
-        .fn()
-        .mockRejectedValueOnce(new Error('should-not-be-called-on-replay'))
-        .mockResolvedValueOnce(undefined),
-    } as never;
+      reportReview: jest.fn(),
+    } as unknown as { reportReview: jest.Mock };
 
     const idempotencyService = {
       checkAndSet: jest.fn().mockImplementation(() => {
@@ -514,7 +511,7 @@ describe('ReviewApplicationService.reportReview — idempotency replay', () => {
     const reviewAdminService = {} as never;
 
     const app = new ReviewApplicationService(
-      reviewService,
+      reviewService as never,
       idempotencyService as never,
       reviewResponseMapper,
       reviewAdminService,
