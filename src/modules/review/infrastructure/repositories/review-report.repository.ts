@@ -10,7 +10,7 @@ import type {
   ReportCursor,
   ReviewReportRepositoryPort,
 } from '../../domain/ports/review-report-repository.port';
-import { ReviewAlreadyReportedError } from '../../domain/errors';
+import { ReviewAlreadyReportedError, ReviewValidationError } from '../../domain/errors';
 
 @Injectable()
 export class ReviewReportRepository implements ReviewReportRepositoryPort {
@@ -142,10 +142,30 @@ export class ReviewReportRepository implements ReviewReportRepositoryPort {
       // second insert. Translate the Postgres 23505 into the
       // application-level `ReviewAlreadyReportedError` so the caller
       // sees a clean 409 instead of a 500.
-      const pgError = error as { code?: string; constraint?: string };
+      const pgError = error as { code?: string; constraint?: string; message?: string };
+
       if (pgError.code === '23505' && pgError.constraint === 'uq_review_reports_review_reporter') {
         throw new ReviewAlreadyReportedError();
       }
+
+      // Defense-in-depth / migration 0016 — the BEFORE INSERT
+      // trigger `trg_review_reports_reject_self_report` raises
+      // `23514` with message `review_reports_self_report_forbidden`
+      // when the reporter is the review's author. The application-
+      // layer guard in `ReviewService.reportReview` catches the
+      // same case before this code path is hit, but a future
+      // regression that bypasses the guard (or a direct DBA INSERT)
+      // must surface the same user-facing 400. Translate the
+      // `23514` into `ReviewValidationError` so the controller
+      // layer can map it to the standard error envelope.
+      if (
+        pgError.code === '23514' &&
+        typeof pgError.message === 'string' &&
+        pgError.message.includes('review_reports_self_report_forbidden')
+      ) {
+        throw new ReviewValidationError('You cannot report your own review');
+      }
+
       throw error;
     }
   }

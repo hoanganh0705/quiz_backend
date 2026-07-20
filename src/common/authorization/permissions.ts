@@ -25,6 +25,40 @@ export enum Permission {
   TOURNAMENT_CREATE = 'TOURNAMENT_CREATE',
   TOURNAMENT_REGISTER = 'TOURNAMENT_REGISTER',
   TOURNAMENT_ATTEMPT = 'TOURNAMENT_ATTEMPT',
+  // Phase 1 / Issue #1 — three new permissions to gate the admin
+  // endpoints added by Phase 1 (PATCH /:id, DELETE /:id, POST /:id/cancel).
+  //
+  //   * `TOURNAMENT_EDIT_OWN`  — the caller's `user.sub` matches the
+  //                              tournament's `owner_user_id`. Granted
+  //                              to every authenticated role that has
+  //                              `TOURNAMENT_CREATE`. This avoids the
+  //                              need to grant a global "edit" permission
+  //                              to every regular user; instead the
+  //                              application-layer policy checks
+  //                              ownership before allowing the mutation.
+  //
+  //   * `TOURNAMENT_EDIT_ANY`  — bypass the ownership check. Granted
+  //                              only to `admin` (Phase 1 does not give
+  //                              moderators tournament-moderation power;
+  //                              that is a future audit item).
+  //
+  //   * `TOURNAMENT_CANCEL`    — gate the `POST /:id/cancel` endpoint,
+  //                              which transitions a tournament to the
+  //                              `cancelled` status. Granted to `admin`
+  //                              only — cancelling a tournament affects
+  //                              every registered participant, so the
+  //                              audit demands admin-only authority.
+  //
+  // The `OWN` / `ANY` separation mirrors the existing
+  // `QUIZ_EDIT_OWN` / `QUIZ_EDIT_ANY` /
+  // `QUIZ_DELETE_OWN` / `QUIZ_DELETE_ANY` /
+  // `QUIZ_VERSION_EDIT_OWN` / `QUIZ_VERSION_EDIT_ANY` /
+  // `QUIZ_VERSION_PUBLISH_OWN` / `QUIZ_VERSION_PUBLISH_ANY` shape, so
+  // the controller decorator pattern in this module can stay aligned
+  // with the quiz module's `@Permissions` conventions.
+  TOURNAMENT_EDIT_OWN = 'TOURNAMENT_EDIT_OWN',
+  TOURNAMENT_EDIT_ANY = 'TOURNAMENT_EDIT_ANY',
+  TOURNAMENT_CANCEL = 'TOURNAMENT_CANCEL',
 
   // Moderation
   DISCUSSION_MODERATE = 'DISCUSSION_MODERATE',
@@ -72,6 +106,15 @@ export const ROLE_PERMISSIONS: Record<UserRole, readonly Permission[]> = {
     Permission.TOURNAMENT_CREATE,
     Permission.TOURNAMENT_REGISTER,
     Permission.TOURNAMENT_ATTEMPT,
+    // Phase 1 / Issue #1 — admins get the bypass permissions so
+    // `TOURNAMENT_EDIT_ANY` and `TOURNAMENT_CANCEL` grant real
+    // authority. `TOURNAMENT_EDIT_OWN` is also granted to admins so
+    // a future audit log that asks "which role owns this tournament?"
+    // has the same answer regardless of whether the owner is the
+    // admin who created the tournament or a regular user.
+    Permission.TOURNAMENT_EDIT_OWN,
+    Permission.TOURNAMENT_EDIT_ANY,
+    Permission.TOURNAMENT_CANCEL,
 
     // Moderation
     Permission.DISCUSSION_MODERATE,
@@ -123,6 +166,18 @@ export const ROLE_PERMISSIONS: Record<UserRole, readonly Permission[]> = {
     Permission.QUIZ_VERSION_PUBLISH_OWN,
     Permission.TOURNAMENT_REGISTER,
     Permission.TOURNAMENT_ATTEMPT,
+    // Phase 1 / Issue #1 — a regular user who calls
+    // `POST /tournaments` is recorded as the tournament's
+    // `owner_user_id`. Granting `TOURNAMENT_EDIT_OWN` here is
+    // necessary for that user to reach the new `PATCH /:id` and
+    // `DELETE /:id` endpoints for tournaments they own.
+    //
+    // The application-layer policy (`TournamentAuthorizationPolicy`)
+    // compares the caller's `user.sub` against the loaded
+    // `tournament.owner_user_id` before allowing the mutation, so
+    // this permission alone cannot escalate — the OWN / ANY split
+    // is enforced at the service layer, not by the role alone.
+    Permission.TOURNAMENT_EDIT_OWN,
     // Phase 5 / Issue #21 — quiz creators are not granted the
     // permission globally; the route's `PermissionsGuard` plus
     // the service-layer `canViewAnalytics` policy check covers

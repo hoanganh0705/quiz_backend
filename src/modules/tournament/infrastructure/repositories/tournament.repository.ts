@@ -67,8 +67,10 @@ export class TournamentRepository implements TournamentRepositoryPort {
         endAt: tournaments.endAt,
         maxParticipants: tournaments.maxParticipants,
         categoryId: tournaments.categoryId,
+        ownerUserId: tournaments.ownerUserId,
         createdAt: tournaments.createdAt,
         updatedAt: tournaments.updatedAt,
+        deletedAt: tournaments.deletedAt,
       })
       .from(tournaments)
       .where(and(eq(tournaments.tournamentId, tournamentId), isNull(tournaments.deletedAt)))
@@ -90,8 +92,10 @@ export class TournamentRepository implements TournamentRepositoryPort {
         endAt: tournaments.endAt,
         maxParticipants: tournaments.maxParticipants,
         categoryId: tournaments.categoryId,
+        ownerUserId: tournaments.ownerUserId,
         createdAt: tournaments.createdAt,
         updatedAt: tournaments.updatedAt,
+        deletedAt: tournaments.deletedAt,
         categoryName: categories.name,
         categorySlug: categories.slug,
         totalParticipants:
@@ -169,8 +173,10 @@ export class TournamentRepository implements TournamentRepositoryPort {
         endAt: tournaments.endAt,
         maxParticipants: tournaments.maxParticipants,
         categoryId: tournaments.categoryId,
+        ownerUserId: tournaments.ownerUserId,
         createdAt: tournaments.createdAt,
         updatedAt: tournaments.updatedAt,
+        deletedAt: tournaments.deletedAt,
       })
       .from(tournaments)
       .where(and(...filters))
@@ -523,6 +529,7 @@ export class TournamentRepository implements TournamentRepositoryPort {
     endAt: string;
     maxParticipants: number | null;
     categoryId: string | null;
+    ownerUserId: string;
     nowIso: string;
   }): Promise<{ tournamentId: string }> {
     const [result] = await this.db
@@ -536,6 +543,10 @@ export class TournamentRepository implements TournamentRepositoryPort {
         endAt: params.endAt,
         maxParticipants: params.maxParticipants,
         categoryId: params.categoryId,
+        // Phase 1 / Issue #2 — `owner_user_id` is NOT NULL on the
+        // table; the migration backfilled historical rows to the
+        // system actor, so every tournament ever has an owner.
+        ownerUserId: params.ownerUserId,
         status: 'upcoming',
         createdAt: params.nowIso,
         updatedAt: params.nowIso,
@@ -543,6 +554,160 @@ export class TournamentRepository implements TournamentRepositoryPort {
       .returning({ tournamentId: tournaments.tournamentId });
 
     return { tournamentId: result.tournamentId };
+  }
+
+  /**
+   * Phase 1 / Issue #1 — partial update for `PATCH /tournaments/:id`.
+   *
+   * Builds a partial `set` payload from whichever fields the caller
+   * provided. Fields set to `undefined` in `params` are omitted
+   * from the UPDATE entirely (Drizzle's `.set()` accepts undefined
+   * to mean "leave alone"). The check for `tournamentId` not yet
+   * being soft-deleted is part of the WHERE so a deleted row stays
+   * deleted and the UPDATE returns zero rows.
+   *
+   * The `WHERE` returns rows using `isNull(deletedAt)` — even though
+   * the matching row may have been touched — and the `RETURNING`
+   * clause does a full projection so callers get a `TournamentRow`
+   * shaped value back without a follow-up SELECT.
+   *
+   * Returns `null` when no row matches the predicate (the row was
+   * missing or already soft-deleted). The service layer maps `null`
+   * to `TournamentNotFoundError`.
+   */
+  async updateTournament(params: {
+    tournamentId: string;
+    title?: string;
+    description?: string | null;
+    difficulty?: TournamentDifficulty;
+    prize?: string | null;
+    startAt?: string;
+    endAt?: string;
+    maxParticipants?: number | null;
+    categoryId?: string | null;
+    nowIso: string;
+  }): Promise<TournamentRow | null> {
+    const set: Partial<typeof tournaments.$inferInsert> = { updatedAt: params.nowIso };
+    if (params.title !== undefined) set.title = params.title;
+    if (params.description !== undefined) set.description = params.description;
+    if (params.difficulty !== undefined) set.difficulty = params.difficulty;
+    if (params.prize !== undefined) set.prize = params.prize;
+    if (params.startAt !== undefined) set.startAt = params.startAt;
+    if (params.endAt !== undefined) set.endAt = params.endAt;
+    if (params.maxParticipants !== undefined) set.maxParticipants = params.maxParticipants;
+    if (params.categoryId !== undefined) set.categoryId = params.categoryId;
+
+    const [row] = await this.db
+      .update(tournaments)
+      .set(set)
+      .where(and(eq(tournaments.tournamentId, params.tournamentId), isNull(tournaments.deletedAt)))
+      .returning({
+        tournamentId: tournaments.tournamentId,
+        title: tournaments.title,
+        description: tournaments.description,
+        difficulty: tournaments.difficulty,
+        status: tournaments.status,
+        prize: tournaments.prize,
+        startAt: tournaments.startAt,
+        endAt: tournaments.endAt,
+        maxParticipants: tournaments.maxParticipants,
+        categoryId: tournaments.categoryId,
+        ownerUserId: tournaments.ownerUserId,
+        createdAt: tournaments.createdAt,
+        updatedAt: tournaments.updatedAt,
+        deletedAt: tournaments.deletedAt,
+      });
+
+    return (row as TournamentRow | undefined) ?? null;
+  }
+
+  /**
+   * Phase 1 / Issue #1 — soft delete for `DELETE /tournaments/:id`.
+   *
+   * Writes `deleted_at = nowIso()`. The `RETURNING` includes the
+   * (already-set) `deleted_at`, so the caller can echo the soft-delete
+   * timestamp back without a second SELECT.
+   *
+   * Idempotent: a soft-deleted row stays soft-deleted (the WHERE does
+   * not match a row with `deleted_at IS NOT NULL`, so a second
+   * DELETE returns `null` rather than mutating the timestamp). The
+   * service layer translates `null` into either
+   * `TournamentNotFoundError` or `TournamentAlreadyDeletedError` based
+   * on its own state check.
+   */
+  async softDeleteTournament(params: {
+    tournamentId: string;
+    nowIso: string;
+  }): Promise<TournamentRow | null> {
+    const [row] = await this.db
+      .update(tournaments)
+      .set({
+        deletedAt: params.nowIso,
+        updatedAt: params.nowIso,
+      })
+      .where(and(eq(tournaments.tournamentId, params.tournamentId), isNull(tournaments.deletedAt)))
+      .returning({
+        tournamentId: tournaments.tournamentId,
+        title: tournaments.title,
+        description: tournaments.description,
+        difficulty: tournaments.difficulty,
+        status: tournaments.status,
+        prize: tournaments.prize,
+        startAt: tournaments.startAt,
+        endAt: tournaments.endAt,
+        maxParticipants: tournaments.maxParticipants,
+        categoryId: tournaments.categoryId,
+        ownerUserId: tournaments.ownerUserId,
+        createdAt: tournaments.createdAt,
+        updatedAt: tournaments.updatedAt,
+        deletedAt: tournaments.deletedAt,
+      });
+
+    return (row as TournamentRow | undefined) ?? null;
+  }
+
+  /**
+   * Phase 1 / Issue #1 — cancel transition for `POST /tournaments/:id/cancel`.
+   *
+   * The state guard lives in the service layer (it needs to read the
+   * current row first to make the cancel-vs-already-canceled
+   * distinction observable to the client). The repository accepts a
+   * transition for any row that is currently live
+   * (`deleted_at IS NULL`).
+   *
+   * Returns the post-mutation row, or `null` when no live row
+   * matches the predicate (the row no longer exists or was
+   * soft-deleted between the caller's `SELECT` and the `UPDATE`).
+   */
+  async cancelTournament(params: {
+    tournamentId: string;
+    nowIso: string;
+  }): Promise<TournamentRow | null> {
+    const [row] = await this.db
+      .update(tournaments)
+      .set({
+        status: 'cancelled',
+        updatedAt: params.nowIso,
+      })
+      .where(and(eq(tournaments.tournamentId, params.tournamentId), isNull(tournaments.deletedAt)))
+      .returning({
+        tournamentId: tournaments.tournamentId,
+        title: tournaments.title,
+        description: tournaments.description,
+        difficulty: tournaments.difficulty,
+        status: tournaments.status,
+        prize: tournaments.prize,
+        startAt: tournaments.startAt,
+        endAt: tournaments.endAt,
+        maxParticipants: tournaments.maxParticipants,
+        categoryId: tournaments.categoryId,
+        ownerUserId: tournaments.ownerUserId,
+        createdAt: tournaments.createdAt,
+        updatedAt: tournaments.updatedAt,
+        deletedAt: tournaments.deletedAt,
+      });
+
+    return (row as TournamentRow | undefined) ?? null;
   }
 
   async getParticipant(participantId: string): Promise<TournamentParticipantRow | null> {
@@ -1193,8 +1358,10 @@ export class TournamentRepository implements TournamentRepositoryPort {
         endAt: tournaments.endAt,
         maxParticipants: tournaments.maxParticipants,
         categoryId: tournaments.categoryId,
+        ownerUserId: tournaments.ownerUserId,
         createdAt: tournaments.createdAt,
         updatedAt: tournaments.updatedAt,
+        deletedAt: tournaments.deletedAt,
       });
 
     return (row as TournamentRow | undefined) ?? null;

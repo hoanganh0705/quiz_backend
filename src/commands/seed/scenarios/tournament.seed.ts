@@ -112,6 +112,13 @@ export const runTournamentSeed = async (): Promise<SeedSummary[]> => {
             },
           });
         } else {
+          // Phase 1 / Issue #2 — every tournament must have an
+          // owner. Seed tournaments are attributed to the platform
+          // admin so the owner-based authorization policy has a
+          // real human UUID to compare against when editing seed
+          // data through the new admin endpoints.
+          const ownerUserId = await lookup.userIdByUsername('admin_master');
+
           const [created] = await tx
             .insert(tournaments)
             .values({
@@ -124,6 +131,7 @@ export const runTournamentSeed = async (): Promise<SeedSummary[]> => {
               endAt: tournament.endAt,
               maxParticipants: tournament.maxParticipants,
               categoryId,
+              ownerUserId,
               createdAt: ctx.nowIso,
               updatedAt: ctx.nowIso,
             })

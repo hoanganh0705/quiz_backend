@@ -3,8 +3,11 @@ import {
   Controller,
   Delete,
   Get,
+  HttpCode,
+  HttpStatus,
   Param,
   ParseUUIDPipe,
+  Patch,
   Post,
   Query,
   applyDecorators,
@@ -35,6 +38,7 @@ import {
   GetActiveTournamentsQueryDto,
   GetCompletedTournamentsQueryDto,
   GetRelatedTournamentsQueryDto,
+  UpdateTournamentDto,
 } from '../../dto/request';
 import {
   TournamentResponseDto,
@@ -52,6 +56,8 @@ import {
   StartTournamentAttemptResponseDto,
   UnregisterTournamentResponseDto,
   WithdrawTournamentResponseDto,
+  CancelTournamentResponseDto,
+  SoftDeleteTournamentResponseDto,
 } from '../../dto/response';
 import { TournamentPresenter } from '../presenters/tournament.presenter';
 import { AUTH_SECURITY_NAME } from '@/core/swagger/swagger.config';
@@ -78,7 +84,15 @@ import {
   UNREGISTER_SUCCESS_EXAMPLE,
   WITHDRAW_SUCCESS_EXAMPLE,
   CREATE_TOURNAMENT_EXAMPLE,
+  UPDATE_TOURNAMENT_SUCCESS_EXAMPLE,
+  CANCEL_TOURNAMENT_SUCCESS_EXAMPLE,
+  SOFT_DELETE_TOURNAMENT_SUCCESS_EXAMPLE,
 } from '../swagger/examples';
+import {
+  tournamentEmptyUpdateExample,
+  tournamentTerminalStateExample,
+  tournamentCapacityReductionExample,
+} from '../swagger/examples/errors.examples';
 
 // Local helpers — every tournament error response is now emitted by
 // GlobalExceptionFilter as RFC 7807 ProblemDetail (the per-module filter
@@ -399,6 +413,163 @@ export class TournamentController {
     return this.tournamentApplicationService
       .getTournamentParticipants(tournamentId, query)
       .then((result) => this.presenter.getTournamentParticipants(result));
+  }
+
+  // Phase 1 / Issue #1 — admin endpoints (PATCH / DELETE / cancel).
+  //
+  // The three endpoints below were the canonical "Phase 1 fix":
+  //
+  //   * `PATCH /:id` — partial update of an existing tournament.
+  //   * `DELETE /:id` — soft delete (sets `deleted_at`, leaves the row
+  //     in place for audit).
+  //   * `POST /:id/cancel` — transition to the `cancelled` status.
+  //
+  // Authorization is layered:
+  //
+  //   1. Coarse-grained via `@Permissions(...)` so the JWT must
+  //      carry `TOURNAMENT_EDIT_OWN` or `TOURNAMENT_EDIT_ANY`
+  //      (for `PATCH` / `DELETE`), or `TOURNAMENT_CANCEL` (for
+  //      cancel).
+  //   2. Fine-grained at the service / policy layer — the
+  //      `TournamentAuthorizationPolicy` compares the JWT subject
+  //      against `tournaments.owner_user_id` before allowing the
+  //      mutation. The role check alone is not sufficient.
+  //
+  //   - 400 / 409 errors map to the corresponding RFC 7807 examples
+  //     declared in `errors.examples.ts`. Each documented in the
+  //     `@ApiBadRequestResponse` / `@ApiConflictResponse` blocks
+  //     below.
+  //   - 401 + 403 come from the global exception filter; both are
+  //     declared uniformly across the controller's existing endpoints
+  //     via `tournamentUnauthorizedResponse()` /
+  //     `tournamentForbiddenResponse()`.
+  @Patch(':id')
+  @Permissions(Permission.TOURNAMENT_EDIT_OWN)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Update tournament',
+    description:
+      'Phase 1 / Issue #1 — partially updates a tournament. Callers must hold `TOURNAMENT_EDIT_OWN` ' +
+      'and own the tournament, or hold `TOURNAMENT_EDIT_ANY`. Body is optional-only: every omitted field is ' +
+      'left untouched. Editing is only allowed while the tournament is in `upcoming`, `registration`, or `ongoing`; ' +
+      'while `ongoing`, only `prize` is editable. Reducing `maxParticipants` after registration has started is ' +
+      'rejected to protect already-registered participants.',
+  })
+  @tournamentUnauthorizedResponse()
+  @ApiTournamentIdParam()
+  @ApiOkResource(TournamentResponseDto, {
+    description: 'Tournament updated',
+    example: UPDATE_TOURNAMENT_SUCCESS_EXAMPLE,
+  })
+  @ApiBadRequestResponse({
+    description:
+      'Path parameter or body failed validation. Returns the RFC 7807 ProblemDetail. ' +
+      'Domain reasons include "At least one field must be provided to update a tournament".',
+    type: ProblemDetailDto,
+    example: tournamentEmptyUpdateExample,
+  })
+  @tournamentNotFoundResponse()
+  @tournamentForbiddenResponse('Caller is not the tournament owner and lacks `TOURNAMENT_EDIT_ANY`')
+  @tournamentConflictResponse(
+    'Attempted mutation violates a lifecycle rule (capacity reduction in registration; updating a tournament ' +
+      "in the 'finished' or 'cancelled' status; updating anything other than `prize` while in 'ongoing').",
+  )
+  @ApiConflictResponse({
+    description:
+      'Capacity reduction rejected — `maxParticipants` cannot be lowered once the tournament has entered ' +
+      'the registration phase, because the change would silently evict already-registered users.',
+    type: ProblemDetailDto,
+    example: tournamentCapacityReductionExample,
+  })
+  updateTournament(
+    @Param('id', new ParseUUIDPipe({ version: '7' })) tournamentId: string,
+    @CurrentUser() user: JwtPayload,
+    @Body() payload: UpdateTournamentDto,
+  ) {
+    return this.tournamentApplicationService
+      .updateTournament(tournamentId, user, payload)
+      .then((result) => this.presenter.updateTournament(result));
+  }
+
+  @Delete(':id')
+  @Permissions(Permission.TOURNAMENT_EDIT_OWN)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Soft-delete tournament',
+    description:
+      'Phase 1 / Issue #1 — soft-deletes a tournament by setting `deleted_at = now()`. The row remains ' +
+      'in the database for audit, but every read endpoint filters `deleted_at IS NULL` so the row is ' +
+      'invisible to clients. The two precondition checks: (1) the caller must own the tournament or hold ' +
+      '`TOURNAMENT_EDIT_ANY`; (2) the tournament must be in `upcoming` or `registration` (a tournament ' +
+      'with participants who have submitted attempts cannot be soft-deleted without breaking the audit trail).',
+  })
+  @tournamentUnauthorizedResponse()
+  @ApiTournamentIdParam()
+  @ApiOkResource(SoftDeleteTournamentResponseDto, {
+    description: 'Tournament soft-deleted',
+    example: SOFT_DELETE_TOURNAMENT_SUCCESS_EXAMPLE,
+  })
+  @ApiBadRequestResponse({
+    description: 'Path parameter failed validation',
+    type: ProblemDetailDto,
+    example: ErrorResponseExamples.badRequest,
+  })
+  @tournamentNotFoundResponse()
+  @tournamentForbiddenResponse('Caller is not the tournament owner and lacks `TOURNAMENT_EDIT_ANY`')
+  @tournamentConflictResponse(
+    'Tournament cannot be soft-deleted in its current lifecycle state ' +
+      '(only `upcoming` and `registration` are deletable).',
+  )
+  softDeleteTournament(
+    @Param('id', new ParseUUIDPipe({ version: '7' })) tournamentId: string,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.tournamentApplicationService
+      .softDeleteTournament(tournamentId, user)
+      .then((result) => this.presenter.softDeleteTournament(result));
+  }
+
+  @Post(':id/cancel')
+  @Permissions(Permission.TOURNAMENT_CANCEL)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Cancel tournament',
+    description:
+      'Phase 1 / Issue #1 — transitions a tournament to the `cancelled` lifecycle status. Requires the ' +
+      '`TOURNAMENT_CANCEL` permission (admin-only in Phase 1). Cancelling is only allowed while the ' +
+      'tournament is in `upcoming` or `registration`; an `ongoing`/`finished` tournament is protected ' +
+      'because the audit reserves those states for the finalization pipeline. A re-cancel of an already-`cancelled` ' +
+      'tournament is idempotent at the repository layer — the controller will surface it as 409 if the row was ' +
+      'mutated by a concurrent finalize cron between the SELECT and the UPDATE.',
+  })
+  @tournamentUnauthorizedResponse()
+  @ApiTournamentIdParam()
+  @ApiOkResource(CancelTournamentResponseDto, {
+    description: 'Tournament cancelled',
+    example: CANCEL_TOURNAMENT_SUCCESS_EXAMPLE,
+  })
+  @ApiBadRequestResponse({
+    description: 'Path parameter failed validation',
+    type: ProblemDetailDto,
+    example: ErrorResponseExamples.badRequest,
+  })
+  @tournamentNotFoundResponse()
+  @tournamentForbiddenResponse()
+  @tournamentConflictResponse('Tournament cannot be cancelled in its current lifecycle state')
+  @ApiConflictResponse({
+    description:
+      'Lifecycle conflict — the tournament is already in `finished` or `cancelled` status. The wire ' +
+      'example is `tournamentTerminalStateExample` (see `errors.examples.ts`).',
+    type: ProblemDetailDto,
+    example: tournamentTerminalStateExample,
+  })
+  cancelTournament(
+    @Param('id', new ParseUUIDPipe({ version: '7' })) tournamentId: string,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.tournamentApplicationService
+      .cancelTournament(tournamentId, user)
+      .then((result) => this.presenter.cancelTournament(result));
   }
 
   // registerForTournament can throw:

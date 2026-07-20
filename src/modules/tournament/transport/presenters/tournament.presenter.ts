@@ -16,6 +16,10 @@ import type {
 import type { TournamentWinnerDto } from '../../dto/response/tournament-winners-response.dto';
 import type { TournamentStatsResponseDto } from '../../dto/response/tournament-stats-response.dto';
 import type { MyTournamentStandingResponseDto } from '../../dto/response/tournament-stats-response.dto';
+import {
+  CancelTournamentResponseDto,
+  SoftDeleteTournamentResponseDto,
+} from '../../dto/response/tournament-admin-response.dto';
 import type {
   RegisterTournamentResponseDto,
   StartTournamentAttemptResponseDto,
@@ -120,4 +124,12 @@ export class TournamentPresenter {
   readonly startRoundAttempt = TournamentPresenter.ok<StartTournamentAttemptResponseDto>;
   readonly unregisterFromTournament = TournamentPresenter.ok<UnregisterTournamentResponseDto>;
   readonly withdrawFromTournament = TournamentPresenter.ok<WithdrawTournamentResponseDto>;
+
+  // Phase 1 / Issue #1 — admin endpoints (PATCH / DELETE / cancel).
+  // PATCH returns the updated `TournamentResponseDto`; the rest use
+  // dedicated envelope-friendly DTOs (`CancelTournamentResponseDto`,
+  // `SoftDeleteTournamentResponseDto`).
+  readonly updateTournament = TournamentPresenter.ok<TournamentResponseDto>;
+  readonly cancelTournament = TournamentPresenter.ok<CancelTournamentResponseDto>;
+  readonly softDeleteTournament = TournamentPresenter.ok<SoftDeleteTournamentResponseDto>;
 }

@@ -51,6 +51,19 @@ export const tournaments = pgTable(
     endAt: timestamp('end_at', { withTimezone: true, mode: 'string' }).notNull(),
     maxParticipants: integer('max_participants'),
     categoryId: uuid('category_id'),
+    // Phase 1 / Issue #2 — tournament ownership column. The FK targets
+    // `users.user_id` with `ON DELETE RESTRICT`: dropping a user who
+    // still owns tournaments must fail at the DB layer in addition
+    // to the application-layer ownership policy. The migration that
+    // introduced this column (`0017_tournaments_owner_user_id.sql`)
+    // backfilled every pre-existing row to a seeded `system` actor so
+    // the column is `NOT NULL` from day one.
+    //
+    // The partial index `idx_tournaments_owner_active` on this column
+    // (same shape as the existing category-active index) covers the
+    // ownership reads added by Phase 1: "list tournaments I own" plus
+    // the `PATCH` / `DELETE` ownership checks.
+    ownerUserId: uuid('owner_user_id').notNull(),
     createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' })
       .defaultNow()
       .notNull(),
@@ -68,11 +81,22 @@ export const tournaments = pgTable(
       table.status.asc().nullsLast().op('enum_ops'),
       table.startAt.asc().nullsLast().op('timestamptz_ops'),
     ),
+    // Phase 1 / Issue #2 — partial index that matches the existing
+    // category-active shape so ownership reads can use the same scan
+    // plan. Created by migration 0017.
+    index('idx_tournaments_owner_active')
+      .using('btree', table.ownerUserId.asc().nullsLast().op('uuid_ops'))
+      .where(sql`(deleted_at IS NULL)`),
     foreignKey({
       columns: [table.categoryId],
       foreignColumns: [categories.categoryId],
       name: 'tournaments_category_id_fkey',
     }).onDelete('set null'),
+    foreignKey({
+      columns: [table.ownerUserId],
+      foreignColumns: [users.userId],
+      name: 'tournaments_owner_user_id_fkey',
+    }).onDelete('restrict'),
     check(
       'tournaments_max_participants_positive',
       sql`(max_participants IS NULL) OR (max_participants > 0)`,

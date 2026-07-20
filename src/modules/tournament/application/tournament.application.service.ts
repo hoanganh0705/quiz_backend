@@ -12,6 +12,7 @@ import {
   GetActiveTournamentsQueryDto,
   GetCompletedTournamentsQueryDto,
   GetRelatedTournamentsQueryDto,
+  UpdateTournamentDto,
 } from '../dto/request';
 import {
   TournamentResponseDto,
@@ -30,6 +31,8 @@ import {
   StartTournamentAttemptResponseDto,
   UnregisterTournamentResponseDto,
   WithdrawTournamentResponseDto,
+  CancelTournamentResponseDto,
+  SoftDeleteTournamentResponseDto,
 } from '../dto/response';
 
 @Injectable()
@@ -412,6 +415,79 @@ export class TournamentApplicationService {
       tournamentId: participant.tournamentId,
       status: participant.status,
       withdrawnAt: participant.withdrawnAt ?? participant.updatedAt,
+    };
+  }
+
+  /**
+   * Phase 1 / Issue #1 — `PATCH /tournaments/:id` application entry.
+   *
+   * Thin wrapper around the domain service. The domain service
+   * enforces ownership and state guards; the application service
+   * only maps the resulting `TournamentRow` into a
+   * `TournamentResponseDto` for the response envelope.
+   */
+  async updateTournament(
+    tournamentId: string,
+    user: JwtPayload,
+    payload: UpdateTournamentDto,
+  ): Promise<TournamentResponseDto> {
+    this.logger.info({
+      event: 'app_update_tournament',
+      tournamentId,
+      userId: user.sub,
+    });
+
+    const updated = await this.tournamentService.updateTournament(tournamentId, user, payload);
+
+    return this.mapper.toTournamentResponse(updated);
+  }
+
+  /**
+   * Phase 1 / Issue #1 — `DELETE /tournaments/:id` (soft delete)
+   * application entry. Maps the post-mutation row to a
+   * `SoftDeleteTournamentResponseDto` (so the controller can echo
+   * `deletedAt` back to the client).
+   */
+  async softDeleteTournament(
+    tournamentId: string,
+    user: JwtPayload,
+  ): Promise<SoftDeleteTournamentResponseDto> {
+    this.logger.info({
+      event: 'app_soft_delete_tournament',
+      tournamentId,
+      userId: user.sub,
+    });
+
+    const deleted = await this.tournamentService.softDeleteTournament(tournamentId, user);
+
+    return {
+      tournamentId: deleted.tournamentId,
+      deletedAt: deleted.deletedAt ?? deleted.updatedAt,
+    };
+  }
+
+  /**
+   * Phase 1 / Issue #1 — `POST /tournaments/:id/cancel` application
+   * entry. The domain service returns the post-mutation row so we
+   * can surface `status` and `updated_at` (today there is no
+   * dedicated `cancelled_at` column).
+   */
+  async cancelTournament(
+    tournamentId: string,
+    user: JwtPayload,
+  ): Promise<CancelTournamentResponseDto> {
+    this.logger.info({
+      event: 'app_cancel_tournament',
+      tournamentId,
+      userId: user.sub,
+    });
+
+    const cancelled = await this.tournamentService.cancelTournament(tournamentId, user);
+
+    return {
+      tournamentId: cancelled.tournamentId,
+      status: 'cancelled',
+      cancelledAt: cancelled.updatedAt,
     };
   }
 }
