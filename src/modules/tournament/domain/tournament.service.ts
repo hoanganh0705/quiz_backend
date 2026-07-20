@@ -47,7 +47,6 @@ import {
   TournamentAttemptAlreadyExistsError,
   TournamentNotRegisteredError,
   TournamentUnregisterClosedError,
-  TournamentParticipantStateError,
   TournamentWithdrawClosedError,
   TournamentAlreadyWithdrawnError,
   TournamentTerminalStateError,
@@ -66,7 +65,6 @@ import {
   TOURNAMENT_NOT_REGISTERED_MESSAGE,
   TOURNAMENT_UNREGISTER_CLOSED_MESSAGE,
   TOURNAMENT_ALREADY_WITHDRAWN_MESSAGE,
-  TOURNAMENT_PARTICIPANT_STATE_ERROR_MESSAGE,
   TOURNAMENT_WITHDRAW_CLOSED_MESSAGE,
 } from '../tournament.constants';
 import {
@@ -642,58 +640,74 @@ export class TournamentService {
       throw new TournamentRegistrationClosedError(TOURNAMENT_REGISTRATION_CLOSED_MESSAGE);
     }
 
-    const existingParticipant = await this.tournamentRepository.getParticipantByUserAndTournament(
-      user.sub,
-      tournamentId,
-    );
+    /**
+     * Phase 2 / Issues #3, #4 — atomic registration.
+     *
+     * The previous read-then-write pattern had two TOCTOU races:
+     *
+     *   (a) `getParticipantByUserAndTournament` + `registerParticipant` —
+     *       two concurrent requests both see no participant and both insert.
+     *       The DB unique constraint rejects the second, but it threw a 500.
+     *
+     *   (b) `countParticipants` + `registerParticipant` — two concurrent
+     *       requests both see count == max-1 and both insert, over-filling
+     *       the tournament.
+     *
+     *   (c) `reactivateParticipant` — when a withdrawn user re-registers,
+     *       the capacity check was never re-run, allowing the spot to be
+     *       re-taken even after new users filled the vacancy.
+     *
+     * The new `atomicRegister` method fixes all three by:
+     *
+     *   1. Acquiring `SELECT … FOR UPDATE` on the tournament row,
+     *      serializing all registrations for this tournament.
+     *   2. Recounting active participants inside the lock.
+     *   3. Using `INSERT … ON CONFLICT DO NOTHING` so concurrent
+     *      duplicates resolve to a re-read rather than a 500.
+     *
+     * The `inserted` flag tells us whether the participant row was
+     * freshly created (`true`) or already existed (`false`). We only
+     * publish `TournamentJoinedEvent` for fresh registrations.
+     */
+    try {
+      const { participant, inserted } = await this.tournamentRepository.atomicRegister({
+        tournamentId,
+        userId: user.sub,
+        nowIso,
+      });
 
-    if (existingParticipant) {
-      if (existingParticipant.status === 'withdrawn') {
-        const reactivated = await this.tournamentRepository.reactivateParticipant(
-          existingParticipant.participantId,
-          nowIso,
-        );
-
-        this.logger.info({
-          event: 'tournament_registration_reactivated',
-          tournamentId,
-          userId: user.sub,
-          participantId: reactivated.participantId,
-        });
-
-        return reactivated;
+      if (!inserted) {
+        if (participant.status === 'withdrawn') {
+          this.logger.info({
+            event: 'tournament_registration_reactivated',
+            tournamentId,
+            userId: user.sub,
+            participantId: participant.participantId,
+          });
+          return participant;
+        }
+        throw new TournamentAlreadyRegisteredError(TOURNAMENT_ALREADY_REGISTERED_MESSAGE);
       }
 
-      throw new TournamentAlreadyRegisteredError(TOURNAMENT_ALREADY_REGISTERED_MESSAGE);
-    }
+      this.eventBus.publish(
+        new TournamentJoinedEvent(tournamentId, user.sub, tournament.title, new Date(nowIso)),
+      );
 
-    if (tournament.maxParticipants !== null) {
-      const count = await this.tournamentRepository.countParticipants(tournamentId);
-      if (count >= tournament.maxParticipants) {
+      this.logger.info({
+        event: 'tournament_registered',
+        tournamentId,
+        userId: user.sub,
+        participantId: participant.participantId,
+      });
+
+      return participant;
+    } catch (error) {
+      if (error instanceof Error && error.message === 'TOURNAMENT_FULL') {
         throw new TournamentFullError(TOURNAMENT_FULL_MESSAGE);
       }
+      throw error;
     }
-
-    const participant = await this.tournamentRepository.registerParticipant({
-      tournamentId,
-      userId: user.sub,
-      nowIso,
-    });
-
-    this.logger.info({
-      event: 'tournament_registered',
-      tournamentId,
-      userId: user.sub,
-      participantId: participant.participantId,
-    });
-
-    this.eventBus.publish(
-      new TournamentJoinedEvent(tournamentId, user.sub, tournament.title, new Date(nowIso)),
-    );
-
-    return participant;
   }
-
   async unregisterFromTournament(
     tournamentId: string,
     user: JwtPayload,
@@ -706,33 +720,39 @@ export class TournamentService {
       throw new TournamentUnregisterClosedError(TOURNAMENT_UNREGISTER_CLOSED_MESSAGE);
     }
 
-    const participant = await this.tournamentRepository.getParticipantByUserAndTournament(
-      user.sub,
+    /**
+     * Phase 2 / Issue #2 — atomic withdrawal.
+     *
+     * The previous read-then-write pattern had a TOCTOU race:
+     *
+     *   1. `getParticipantByUserAndTournament` — no lock
+     *   2. `withdrawParticipant` — unconditional update
+     *
+     * A concurrent re-registration arriving between steps 1 and 2
+     * could see the participant as `active` (the withdrawal hadn't
+     * committed yet) and re-activate it, only to have the subsequent
+     * `withdrawParticipant` overwrite it back to `withdrawn`.
+     *
+     * The new `atomicWithdraw` method serializes all actions for this
+     * tournament behind a `FOR UPDATE` lock and uses a conditional
+     * `WHERE status='active'` in the UPDATE so a concurrent
+     * re-activation cannot be immediately overwritten.
+     */
+    const withdrawn = await this.tournamentRepository.atomicWithdraw({
       tournamentId,
-    );
+      userId: user.sub,
+      nowIso,
+    });
 
-    if (!participant) {
+    if (!withdrawn) {
       throw new TournamentNotRegisteredError(TOURNAMENT_NOT_REGISTERED_MESSAGE);
     }
-
-    if (participant.status === 'withdrawn') {
-      throw new TournamentParticipantStateError(TOURNAMENT_PARTICIPANT_STATE_ERROR_MESSAGE);
-    }
-
-    if (participant.status !== 'active') {
-      throw new TournamentForbiddenError(TOURNAMENT_FORBIDDEN_MESSAGE);
-    }
-
-    const withdrawn = await this.tournamentRepository.withdrawParticipant(
-      participant.participantId,
-      nowIso,
-    );
 
     this.logger.info({
       event: 'tournament_unregistered',
       tournamentId,
       userId: user.sub,
-      participantId: participant.participantId,
+      participantId: withdrawn.participantId,
     });
 
     return withdrawn;
@@ -857,11 +877,32 @@ export class TournamentService {
       throw new TournamentAttemptAlreadyExistsError(TOURNAMENT_ATTEMPT_ALREADY_EXISTS_MESSAGE);
     }
 
+    /**
+     * Phase 2 / Issues #6, #50 — atomic round-start with idempotency.
+     *
+     * Two paths:
+     *
+     *   (a) `!existingRoundParticipant` — no round participant row yet.
+     *       `startRoundAttemptTx` atomically inserts the round_participant,
+     *       creates the attempt, and links it. The `inserted` flag tells
+     *       us whether the round_participant was freshly inserted (true)
+     *       or already existed (false, meaning a concurrent request beat
+     *       us to the insert and already set up the attempt).
+     *
+     *   (b) `existingRoundParticipant` (no attemptId) — round participant
+     *       row exists but no attempt linked. `createAttemptForRound` takes
+     *       a FOR UPDATE lock on the row and creates the attempt. If a
+     *       concurrent `startRoundAttemptTx` beat us to the attempt creation,
+     *       it returns the existing `attemptId` without creating a duplicate.
+     *
+     * The pre-Tx `existingRoundParticipant?.attemptId` check above is the
+     * fast path for the 99% case (user has no existing attempt). The
+     * transaction-level idempotency inside both methods is the safety net
+     * for the race between the pre-Tx check and the transaction.
+     */
     let attemptId: string;
 
     if (!existingRoundParticipant) {
-      // No round participant yet — atomically insert both round participant and attempt
-
       const result = await this.tournamentRepository.startRoundAttemptTx({
         roundId,
         participantId: participant.participantId,
@@ -873,8 +914,6 @@ export class TournamentService {
 
       attemptId = result.attemptId;
     } else {
-      // Round participant exists but has no attempt — create attempt only
-
       const createdAttempt = await this.tournamentRepository.createAttemptForRound({
         userId: user.sub,
         quizVersionId: roundDetail.quizVersionId,

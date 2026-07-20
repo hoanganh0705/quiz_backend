@@ -63,7 +63,7 @@ export class TournamentEventProcessor implements OnModuleInit, OnModuleDestroy {
             correlationId,
           });
 
-          await this.handleEvent(event);
+          await this.handleEvent(event, correlationId);
         });
       },
       { connection: this.connection, concurrency: this.concurrency },
@@ -95,22 +95,43 @@ export class TournamentEventProcessor implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  private async handleEvent(event: TournamentDomainEvent): Promise<void> {
+  private async handleEvent(event: TournamentDomainEvent, correlationId: string): Promise<void> {
     if (event.eventType === 'tournament.won') {
       const xp = computeTournamentXp(event.rank);
 
       if (xp > 0) {
+        // Phase 2 / Issue #9 — idempotency key + correlation ID propagation.
+        //
+        // Idempotency key: The same tournament win event must never produce
+        // duplicate XP grants. A retry of the BullMQ job (e.g. worker crash
+        // before acknowledgment) would re-deliver the event and re-grant XP
+        // without this key. The `XpIngestionService` uses this key verbatim
+        // (the `deriveIdempotencyKey` function checks `event.idempotencyKey`
+        // first) so the duplicate is safely dropped.
+        //
+        // The key encodes `${tournamentId}:${userId}:${rank}` — unique per
+        // tournament finish, per user, per rank. A user finishing 2nd in
+        // tournament T gets the key `T:userX:2`, and a retry delivering the
+        // same `TournamentWonEvent` will produce the same `ExternalXpEarnedEvent`
+        // with the same `idempotencyKey`, which the XP ledger dedupes.
+        //
+        // Correlation ID: Instead of minting a fresh UUID (which breaks the
+        // log trace chain), we pass the correlation ID that was captured
+        // from the BullMQ job data into `correlationIdStorage` by the worker
+        // and now passed as a parameter. This propagates the original
+        // correlation ID from the publish site through the entire XP grant chain.
+        const idempotencyKey = `${event.tournamentId}:${event.userId}:${event.rank}`;
+
         const xpEvent: ExternalXpEarnedEvent = {
           eventType: 'external.xp.earned',
           userId: event.userId,
           amount: xp,
           source: 'tournament',
           tournamentId: event.tournamentId,
+          rank: event.rank,
           timestamp: event.timestamp,
-          // Propagate the same correlation ID that the BullMQ worker restored
-          // into AsyncLocalStorage so the downstream Ranking handler observes
-          // the same correlation chain.
-          correlationId: createCorrelationId(),
+          idempotencyKey,
+          correlationId,
         };
 
         this.externalEventBus.publishXpEarned(xpEvent);
@@ -121,6 +142,8 @@ export class TournamentEventProcessor implements OnModuleInit, OnModuleDestroy {
           tournamentId: event.tournamentId,
           rank: event.rank,
           xpAwarded: xp,
+          idempotencyKey,
+          correlationId,
         });
       }
     }
