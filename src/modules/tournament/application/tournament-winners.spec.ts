@@ -6,11 +6,12 @@ describe('TournamentService getTournamentWinners', () => {
     const tournamentRepository = {
       getTournamentById: jest.fn(),
       getWinners: jest.fn(),
-    } as unknown as ConstructorParameters<typeof TournamentService>[0];
+    };
 
-    const eventBus = { publish: jest.fn() } as unknown as ConstructorParameters<
-      typeof TournamentService
-    >[1];
+    const _attemptRepository = {} as never;
+    const _eventBus = {} as never;
+    const _tournamentOutbox = {} as never;
+    const _db = {} as never;
 
     const logger = {
       info: jest.fn(),
@@ -19,11 +20,13 @@ describe('TournamentService getTournamentWinners', () => {
       debug: jest.fn(),
       trace: jest.fn(),
       fatal: jest.fn(),
-    } as unknown as ConstructorParameters<typeof TournamentService>[2];
+    };
 
     const service = new TournamentService(
       tournamentRepository as never,
-      eventBus as never,
+      _eventBus,
+      _tournamentOutbox,
+      _db,
       logger as never,
     );
 
