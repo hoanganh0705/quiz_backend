@@ -848,6 +848,205 @@ export class TournamentRepository implements TournamentRepositoryPort {
     return row as TournamentParticipantRow;
   }
 
+  /**
+   * Phase 2 / Issues #3, #4 — atomic tournament registration.
+   *
+   * Wraps the full read-check-insert sequence inside a single transaction
+   * with a row-level lock on the tournament so the capacity check is
+   * always consistent. Uses `INSERT … ON CONFLICT DO NOTHING` to safely
+   * handle the case where two concurrent requests both find no existing
+   * participant and both try to insert — the second receives zero rows
+   * back and the method falls through to a re-read.
+   *
+   * Returns the newly-inserted or pre-existing participant row.
+   * The `inserted` flag indicates whether the row was freshly created.
+   */
+  async atomicRegister(params: {
+    tournamentId: string;
+    userId: string;
+    nowIso: string;
+  }): Promise<{ participant: TournamentParticipantRow; inserted: boolean }> {
+    return this.db.transaction(async (tx) => {
+      // 1. Lock the tournament row — prevents concurrent registration from
+      //    racing the capacity count.
+      const [tournament] = await tx
+        .select({
+          tournamentId: tournaments.tournamentId,
+          maxParticipants: tournaments.maxParticipants,
+          status: tournaments.status,
+        })
+        .from(tournaments)
+        .where(
+          and(eq(tournaments.tournamentId, params.tournamentId), isNull(tournaments.deletedAt)),
+        )
+        .limit(1)
+        .for('update');
+
+      if (!tournament) {
+        throw new Error('Tournament not found');
+      }
+
+      // 2. Re-count active participants under the lock — this is now
+      //    fully consistent; two concurrent requests that both see
+      //    count == max-1 will serialize on the FOR UPDATE and the
+      //    second one will correctly see count == max and raise.
+      if (tournament.maxParticipants !== null) {
+        const activeCountResult = await tx
+          .select({ activeCount: count() })
+          .from(tournamentParticipants)
+          .where(
+            and(
+              eq(tournamentParticipants.tournamentId, params.tournamentId),
+              eq(tournamentParticipants.status, 'active' as TournamentParticipantStatus),
+            ),
+          )
+          .limit(1);
+
+        const activeCount = activeCountResult[0]?.activeCount ?? 0;
+        if (activeCount >= tournament.maxParticipants) {
+          throw new Error('TOURNAMENT_FULL');
+        }
+      }
+
+      // 3. Upsert: insert if no row exists; silently ignore conflicts.
+      //    `onConflictDoNothing` returns an empty array when the unique
+      //    constraint fires. We then re-read the existing row so the
+      //    caller can decide how to proceed based on the returned status.
+      const inserted = await tx
+        .insert(tournamentParticipants)
+        .values({
+          tournamentId: params.tournamentId,
+          userId: params.userId,
+          registeredAt: params.nowIso,
+          totalScore: 0,
+          totalTimeMs: 0,
+          status: 'active' as TournamentParticipantStatus,
+          updatedAt: params.nowIso,
+        })
+        .onConflictDoNothing({
+          target: [tournamentParticipants.tournamentId, tournamentParticipants.userId],
+        })
+        .returning({
+          participantId: tournamentParticipants.participantId,
+          tournamentId: tournamentParticipants.tournamentId,
+          userId: tournamentParticipants.userId,
+          registeredAt: tournamentParticipants.registeredAt,
+          totalScore: tournamentParticipants.totalScore,
+          totalTimeMs: tournamentParticipants.totalTimeMs,
+          rankFinal: tournamentParticipants.rankFinal,
+          status: tournamentParticipants.status,
+          withdrawnAt: tournamentParticipants.withdrawnAt,
+          updatedAt: tournamentParticipants.updatedAt,
+        });
+
+      if (inserted.length > 0) {
+        return {
+          participant: inserted[0] as TournamentParticipantRow,
+          inserted: true,
+        };
+      }
+
+      // Conflict — user was already registered (or withdrawn). Re-read
+      // the current state so the service can decide what to do.
+      const [existing] = await tx
+        .select({
+          participantId: tournamentParticipants.participantId,
+          tournamentId: tournamentParticipants.tournamentId,
+          userId: tournamentParticipants.userId,
+          registeredAt: tournamentParticipants.registeredAt,
+          totalScore: tournamentParticipants.totalScore,
+          totalTimeMs: tournamentParticipants.totalTimeMs,
+          rankFinal: tournamentParticipants.rankFinal,
+          status: tournamentParticipants.status,
+          withdrawnAt: tournamentParticipants.withdrawnAt,
+          updatedAt: tournamentParticipants.updatedAt,
+        })
+        .from(tournamentParticipants)
+        .where(
+          and(
+            eq(tournamentParticipants.tournamentId, params.tournamentId),
+            eq(tournamentParticipants.userId, params.userId),
+          ),
+        )
+        .limit(1);
+
+      if (!existing) {
+        throw new Error('Participant not found after registration conflict');
+      }
+
+      return {
+        participant: existing as TournamentParticipantRow,
+        inserted: false,
+      };
+    });
+  }
+
+  /**
+   * Phase 2 / Issue #2 (part 2) — atomic tournament withdrawal.
+   *
+   * Locks the tournament row with `SELECT … FOR UPDATE`, then
+   * conditionally updates the participant to `status='withdrawn'`
+   * only when they are currently `active`. This prevents the
+   * TOCTOU race described in the port interface.
+   *
+   * Returns the updated participant, or `null` if no active
+   * participant existed for this (user, tournament) pair.
+   */
+  async atomicWithdraw(params: {
+    tournamentId: string;
+    userId: string;
+    nowIso: string;
+  }): Promise<TournamentParticipantRow | null> {
+    return this.db.transaction(async (tx) => {
+      // Lock the tournament row for consistency (prevents concurrent
+      // re-registration from racing the withdrawal).
+      const [tournament] = await tx
+        .select({ tournamentId: tournaments.tournamentId })
+        .from(tournaments)
+        .where(
+          and(eq(tournaments.tournamentId, params.tournamentId), isNull(tournaments.deletedAt)),
+        )
+        .limit(1)
+        .for('update');
+
+      if (!tournament) {
+        return null;
+      }
+
+      // Conditionally withdraw — only succeeds when the participant
+      // is currently `active`. The `WHERE` on status prevents a
+      // concurrent re-activation from being immediately re-withdrawn.
+      const [withdrawn] = await tx
+        .update(tournamentParticipants)
+        .set({
+          status: 'withdrawn' as TournamentParticipantStatus,
+          withdrawnAt: params.nowIso,
+          updatedAt: params.nowIso,
+        })
+        .where(
+          and(
+            eq(tournamentParticipants.tournamentId, params.tournamentId),
+            eq(tournamentParticipants.userId, params.userId),
+            eq(tournamentParticipants.status, 'active' as TournamentParticipantStatus),
+          ),
+        )
+        .returning({
+          participantId: tournamentParticipants.participantId,
+          tournamentId: tournamentParticipants.tournamentId,
+          userId: tournamentParticipants.userId,
+          registeredAt: tournamentParticipants.registeredAt,
+          totalScore: tournamentParticipants.totalScore,
+          totalTimeMs: tournamentParticipants.totalTimeMs,
+          rankFinal: tournamentParticipants.rankFinal,
+          status: tournamentParticipants.status,
+          withdrawnAt: tournamentParticipants.withdrawnAt,
+          updatedAt: tournamentParticipants.updatedAt,
+        });
+
+      return (withdrawn as TournamentParticipantRow | undefined) ?? null;
+    });
+  }
+
   async getRoundById(roundId: string): Promise<TournamentRoundRow | null> {
     const [row] = await this.db
       .select({
@@ -991,8 +1190,26 @@ export class TournamentRepository implements TournamentRepositoryPort {
   }
 
   /**
-   * Atomically creates a round participant and its associated quiz attempt
-   * within a single database transaction.
+   * Phase 2 / Issues #6, #50 — atomic round-start with idempotency.
+   *
+   * Replaces the service-layer TOCTOU check with a single atomic
+   * transaction that:
+   *
+   *   1. Tries to insert the round_participant row with
+   *      `ON CONFLICT DO NOTHING`. If the row already exists (duplicate
+   *      request or the `existingRoundParticipant` case from the service
+   *      layer), the INSERT silently succeeds with zero rows returned.
+   *
+   *   2. Re-reads the round_participant row (with `FOR UPDATE` to
+   *      prevent a concurrent `createAttemptForRound` from racing).
+   *
+   *   3. If `attemptId` is already set, returns it immediately
+   *      (idempotent — user already started this round).
+   *
+   *   4. Otherwise, creates the quiz_attempt and links it back.
+   *
+   * The service layer pre-checks `round.tournamentId === tournamentId`
+   * (cross-tournament attack prevention) before calling this method.
    */
   async startRoundAttemptTx(params: {
     roundId: string;
@@ -1001,9 +1218,16 @@ export class TournamentRepository implements TournamentRepositoryPort {
     quizVersionId: string;
     tournamentId: string;
     nowIso: string;
-  }): Promise<{ attemptId: string; roundParticipant: TournamentRoundParticipantRow }> {
+  }): Promise<{
+    attemptId: string;
+    roundParticipant: TournamentRoundParticipantRow;
+    inserted: boolean;
+  }> {
     return this.db.transaction(async (tx) => {
-      const [roundParticipant] = await tx
+      // Step 1: Try to insert the round_participant. If it already exists,
+      // ON CONFLICT DO NOTHING returns an empty array and we fall through
+      // to re-read the existing row.
+      const insertedRp = await tx
         .insert(tournamentRoundParticipants)
         .values({
           roundId: params.roundId,
@@ -1013,6 +1237,9 @@ export class TournamentRepository implements TournamentRepositoryPort {
           roundTimeMs: 0,
           isQualified: true,
           updatedAt: params.nowIso,
+        })
+        .onConflictDoNothing({
+          target: [tournamentRoundParticipants.participantId, tournamentRoundParticipants.roundId],
         })
         .returning({
           roundParticipantId: tournamentRoundParticipants.roundParticipantId,
@@ -1027,6 +1254,63 @@ export class TournamentRepository implements TournamentRepositoryPort {
           updatedAt: tournamentRoundParticipants.updatedAt,
         });
 
+      let roundParticipantId: string;
+
+      if (insertedRp.length > 0) {
+        // Fresh insert — no existing round participant.
+        roundParticipantId = insertedRp[0].roundParticipantId;
+      } else {
+        // Duplicate — re-read the existing row under lock so we can
+        // safely check whether an attempt already exists.
+        const [existingRp] = await tx
+          .select({ roundParticipantId: tournamentRoundParticipants.roundParticipantId })
+          .from(tournamentRoundParticipants)
+          .where(
+            and(
+              eq(tournamentRoundParticipants.roundId, params.roundId),
+              eq(tournamentRoundParticipants.participantId, params.participantId),
+            ),
+          )
+          .limit(1)
+          .for('update');
+
+        if (!existingRp) {
+          throw new Error('Round participant not found after conflict');
+        }
+        roundParticipantId = existingRp.roundParticipantId;
+      }
+
+      // Step 2: Re-read the round participant under FOR UPDATE to
+      // check if an attempt already exists (prevents the race between
+      // this call and a concurrent `createAttemptForRound` call).
+      const [rp] = await tx
+        .select({
+          roundParticipantId: tournamentRoundParticipants.roundParticipantId,
+          roundId: tournamentRoundParticipants.roundId,
+          participantId: tournamentRoundParticipants.participantId,
+          attemptId: tournamentRoundParticipants.attemptId,
+          joinedAt: tournamentRoundParticipants.joinedAt,
+          roundScore: tournamentRoundParticipants.roundScore,
+          roundTimeMs: tournamentRoundParticipants.roundTimeMs,
+          rankInRound: tournamentRoundParticipants.rankInRound,
+          isQualified: tournamentRoundParticipants.isQualified,
+          updatedAt: tournamentRoundParticipants.updatedAt,
+        })
+        .from(tournamentRoundParticipants)
+        .where(eq(tournamentRoundParticipants.roundParticipantId, roundParticipantId))
+        .limit(1)
+        .for('update');
+
+      if (rp.attemptId) {
+        // Idempotent: round already has an attempt linked.
+        return {
+          attemptId: rp.attemptId,
+          roundParticipant: rp as TournamentRoundParticipantRow,
+          inserted: false,
+        };
+      }
+
+      // Step 3: No existing attempt — create one and link it.
       const [createdAttempt] = await tx
         .insert(quizAttempts)
         .values({
@@ -1044,12 +1328,9 @@ export class TournamentRepository implements TournamentRepositoryPort {
       await tx
         .update(tournamentRoundParticipants)
         .set({ attemptId: createdAttempt.attemptId, updatedAt: params.nowIso })
+        .where(eq(tournamentRoundParticipants.roundParticipantId, roundParticipantId));
 
-        .where(
-          eq(tournamentRoundParticipants.roundParticipantId, roundParticipant.roundParticipantId),
-        );
-
-      const [updatedRoundParticipant] = await tx
+      const [updatedRp] = await tx
         .select({
           roundParticipantId: tournamentRoundParticipants.roundParticipantId,
           roundId: tournamentRoundParticipants.roundId,
@@ -1063,22 +1344,28 @@ export class TournamentRepository implements TournamentRepositoryPort {
           updatedAt: tournamentRoundParticipants.updatedAt,
         })
         .from(tournamentRoundParticipants)
-
-        .where(
-          eq(tournamentRoundParticipants.roundParticipantId, roundParticipant.roundParticipantId),
-        )
+        .where(eq(tournamentRoundParticipants.roundParticipantId, roundParticipantId))
         .limit(1);
 
       return {
         attemptId: createdAttempt.attemptId,
-        roundParticipant: updatedRoundParticipant as TournamentRoundParticipantRow,
+        roundParticipant: updatedRp as TournamentRoundParticipantRow,
+        inserted: insertedRp.length > 0,
       };
     });
   }
 
   /**
-   * Creates a quiz attempt for an existing round participant and links it back
-   * to the round participant — all within a single transaction.
+   * Phase 2 / Issues #6, #50 — atomic attempt creation with idempotency.
+   *
+   * Used when a round_participant row already exists but has no
+   * `attemptId` linked. The service calls this after confirming
+   * `existingRoundParticipant` (from a pre-Tx read) has no attempt.
+   *
+   * The idempotency guarantee: if two concurrent calls both reach this
+   * method for the same `roundParticipantId`, the `FOR UPDATE` on the
+   * round_participant row ensures only one succeeds. The winner creates
+   * the attempt; the loser re-reads and returns the existing `attemptId`.
    */
   async createAttemptForRound(params: {
     userId: string;
@@ -1089,6 +1376,24 @@ export class TournamentRepository implements TournamentRepositoryPort {
     nowIso: string;
   }): Promise<{ attemptId: string }> {
     return this.db.transaction(async (tx) => {
+      // Lock the round participant so concurrent callers are serialized.
+      const [rp] = await tx
+        .select({ attemptId: tournamentRoundParticipants.attemptId })
+        .from(tournamentRoundParticipants)
+        .where(eq(tournamentRoundParticipants.roundParticipantId, params.roundParticipantId))
+        .limit(1)
+        .for('update');
+
+      if (!rp) {
+        throw new Error('Round participant not found');
+      }
+
+      if (rp.attemptId) {
+        // Idempotent — another concurrent call already created the attempt.
+        return { attemptId: rp.attemptId };
+      }
+
+      // No existing attempt — create one.
       const [createdAttempt] = await tx
         .insert(quizAttempts)
         .values({
