@@ -74,6 +74,18 @@ export class TournamentResponseDto {
   categoryId!: string | null;
 
   @ApiProperty({
+    description:
+      'Phase 1 / Issue #2 — UUID of the user who created the tournament. ' +
+      'Used by the authorization layer for `PATCH /tournaments/:id`, ' +
+      '`DELETE /tournaments/:id`, and `POST /tournaments/:id/cancel`. ' +
+      'The application-layer policy compares this against the JWT subject ' +
+      'to decide whether the caller can mutate the tournament.',
+    format: 'uuid',
+    example: '550e8400-e29b-71d4-a716-446655440000',
+  })
+  ownerUserId!: string;
+
+  @ApiProperty({
     description: 'Creation timestamp (ISO 8601)',
     example: '2025-06-01T12:00:00.000Z',
   })

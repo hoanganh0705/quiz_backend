@@ -18,6 +18,7 @@ export const TOURNAMENT_DETAIL_EXAMPLE = {
     categoryId: '770e8400-e29b-71d4-a716-446655440001',
     categoryName: 'General Knowledge',
     categorySlug: 'general-knowledge',
+    ownerUserId: '550e8400-e29b-71d4-a716-446655440099',
     totalParticipants: 47,
     rounds: [
       {
@@ -56,6 +57,7 @@ export const TOURNAMENT_LIST_EXAMPLE = {
       endAt: '2026-07-20T12:00:00.000Z',
       maxParticipants: 100,
       categoryId: '770e8400-e29b-71d4-a716-446655440001',
+      ownerUserId: '550e8400-e29b-71d4-a716-446655440099',
       createdAt: '2026-07-01T12:00:00.000Z',
       updatedAt: '2026-07-15T08:30:00.000Z',
     },
@@ -304,8 +306,51 @@ export const CREATE_TOURNAMENT_EXAMPLE = {
     endAt: '2026-07-20T12:00:00.000Z',
     maxParticipants: 100,
     categoryId: '770e8400-e29b-71d4-a716-446655440001',
+    // Phase 1 / Issue #2 — the response now echoes the
+    // authenticated user's UUID as the tournament's owner.
+    ownerUserId: '550e8400-e29b-41d4-a716-446655440099',
     createdAt: EXAMPLE_TIMESTAMP,
     updatedAt: EXAMPLE_TIMESTAMP,
+  },
+  meta: { timestamp: EXAMPLE_TIMESTAMP },
+} as const;
+
+// ===========================================================================
+// Phase 1 / Issue #1 — admin endpoint examples.
+// ===========================================================================
+
+export const UPDATE_TOURNAMENT_SUCCESS_EXAMPLE = {
+  data: {
+    tournamentId: '660e8400-e29b-71d4-a716-446655440000',
+    title: 'Weekly Trivia Challenge (revised)',
+    description: 'Test your knowledge across various topics every week.',
+    difficulty: 'medium',
+    status: 'registration',
+    prize: '500 XP and exclusive badge',
+    startAt: '2026-07-20T10:00:00.000Z',
+    endAt: '2026-07-20T12:00:00.000Z',
+    maxParticipants: 100,
+    categoryId: '770e8400-e29b-71d4-a716-446655440001',
+    ownerUserId: '550e8400-e29b-71d4-a716-446655440099',
+    createdAt: '2026-07-01T12:00:00.000Z',
+    updatedAt: EXAMPLE_TIMESTAMP,
+  },
+  meta: { timestamp: EXAMPLE_TIMESTAMP },
+} as const;
+
+export const CANCEL_TOURNAMENT_SUCCESS_EXAMPLE = {
+  data: {
+    tournamentId: '660e8400-e29b-71d4-a716-446655440000',
+    status: 'cancelled',
+    cancelledAt: EXAMPLE_TIMESTAMP,
+  },
+  meta: { timestamp: EXAMPLE_TIMESTAMP },
+} as const;
+
+export const SOFT_DELETE_TOURNAMENT_SUCCESS_EXAMPLE = {
+  data: {
+    tournamentId: '660e8400-e29b-71d4-a716-446655440000',
+    deletedAt: EXAMPLE_TIMESTAMP,
   },
   meta: { timestamp: EXAMPLE_TIMESTAMP },
 } as const;

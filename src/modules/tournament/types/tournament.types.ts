@@ -2,9 +2,15 @@ export const TOURNAMENT_DIFFICULTIES = ['easy', 'medium', 'hard'] as const;
 
 export type TournamentDifficulty = 'easy' | 'medium' | 'hard';
 
-export const TOURNAMENT_STATUSES = ['upcoming', 'registration', 'ongoing', 'finished'] as const;
+export const TOURNAMENT_STATUSES = [
+  'upcoming',
+  'registration',
+  'ongoing',
+  'finished',
+  'cancelled',
+] as const;
 
-export type TournamentStatus = 'upcoming' | 'registration' | 'ongoing' | 'finished';
+export type TournamentStatus = 'upcoming' | 'registration' | 'ongoing' | 'finished' | 'cancelled';
 
 export const TOURNAMENT_ROUND_STATUSES = ['pending', 'open', 'running', 'finished'] as const;
 

@@ -19,8 +19,12 @@ export type TournamentRow = {
   endAt: string;
   maxParticipants: number | null;
   categoryId: string | null;
+  // Phase 1 / Issue #2 — owner column added by migration 0017.
+  // Exposed on every read; `TournamentAuthorizationPolicy` consumes it.
+  ownerUserId: string;
   createdAt: string;
   updatedAt: string;
+  deletedAt: string | null;
 };
 
 export type TournamentDetailRow = TournamentRow & {
@@ -188,8 +192,72 @@ export interface TournamentRepositoryPort {
     endAt: string;
     maxParticipants: number | null;
     categoryId: string | null;
+    /**
+     * Phase 1 / Issue #2 — the user creating the tournament. Becomes
+     * `tournaments.owner_user_id`; required by the application-layer
+     * authorization policy for the new admin endpoints
+     * (`PATCH /:id`, `DELETE /:id`, `POST /:id/cancel`).
+     */
+    ownerUserId: string;
     nowIso: string;
   }): Promise<{ tournamentId: string }>;
+
+  /**
+   * Phase 1 / Issue #1 — partial update for `PATCH /tournaments/:id`.
+   *
+   * Only the fields that are explicitly listed in `params` are
+   * touched; `undefined` means "leave alone". The service layer is
+   * the source of truth for which fields are editable in which
+   * tournament status — the repository treats `undefined` as a
+   * no-op.
+   *
+   * Returns the updated row. Returns `null` when the row no longer
+   * exists (it was soft-deleted between the caller's `SELECT` and
+   * the `UPDATE`) — the service maps `null` to
+   * `TournamentNotFoundError`.
+   */
+  updateTournament(params: {
+    tournamentId: string;
+    title?: string;
+    description?: string | null;
+    difficulty?: TournamentDifficulty;
+    prize?: string | null;
+    startAt?: string;
+    endAt?: string;
+    maxParticipants?: number | null;
+    categoryId?: string | null;
+    nowIso: string;
+  }): Promise<TournamentRow | null>;
+
+  /**
+   * Phase 1 / Issue #1 — soft delete for `DELETE /tournaments/:id`.
+   *
+   * Writes `deleted_at = nowIso()` and `updated_at = nowIso()` only
+   * when the row is currently live (`deleted_at IS NULL`); rows that
+   * are already soft-deleted are returned unchanged so the second
+   * `DELETE` in a row is idempotent at the repository layer.
+   *
+   * Returns the post-mutation row, or `null` if the row does not
+   * exist.
+   */
+  softDeleteTournament(params: {
+    tournamentId: string;
+    nowIso: string;
+  }): Promise<TournamentRow | null>;
+
+  /**
+   * Phase 1 / Issue #1 — cancel transition for `POST /tournaments/:id/cancel`.
+   *
+   * Writes `status = 'cancelled'` and `updated_at = nowIso()` only
+   * when the row is currently in `upcoming` or `registration`. Rows
+   * already in `ongoing` / `finished` / `cancelled` are returned
+   * unchanged so callers can distinguish "the cancel was a no-op"
+   * (return value reflects unchanged `status`) from "the row is
+   * gone" (`null`).
+   *
+   * Returns the post-mutation row.
+   */
+  cancelTournament(params: { tournamentId: string; nowIso: string }): Promise<TournamentRow | null>;
 
   getParticipant(participantId: string): Promise<TournamentParticipantRow | null>;
 

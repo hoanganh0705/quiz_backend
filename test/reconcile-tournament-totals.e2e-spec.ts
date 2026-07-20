@@ -197,6 +197,14 @@ describe('0008_reconcile_tournament_participant_totals — migration e2e (e2e)',
           startAt: nowIso,
           endAt: nowIso,
           maxParticipants: 10,
+          // Phase 1 / Issue #2 — `owner_user_id` is `NOT NULL` on the
+          // tournaments table. Attribute the fixture to the first
+          // seeded user (`userIdA`) so the hard-delete teardown can
+          // still cascade the row away via the participant FKs (the
+          // `users` delete cascades into `tournament_participants`,
+          // leaving the orphaned tournament to be hard-deleted by
+          // the `afterEach`).
+          ownerUserId: userIdA,
         })
         .returning({ tournamentId: tournaments.tournamentId });
       createdTournamentIds.push(tour.tournamentId);

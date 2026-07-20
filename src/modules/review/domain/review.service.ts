@@ -460,8 +460,30 @@ export class ReviewService {
     // off-limits to public moderation flows.
     await this.assertQuizVisibleById(review.quizId);
 
-    if (review.userId === reporterId) {
-      this.logger.warn({ event: 'review_self_report', reviewId, reporterId });
+    if (
+      !ReviewAuthorizationPolicy.canReport({
+        reviewId,
+        authorUserId: review.userId,
+        reporterUserId: reporterId,
+      })
+    ) {
+      // Phase 5 / hardening — the previous shape inlined this
+      // check as `review.userId === reporterId`. It was easy to
+      // miss in review and was never tested at the integration
+      // layer. The rule now lives in
+      // `ReviewAuthorizationPolicy.canReport` so it has a single
+      // source of truth and a dedicated unit spec. The DB also
+      // enforces the same invariant through a CHECK constraint on
+      // `review_reports` (migration `0016`), so even a future code
+      // path that bypasses the application guard cannot insert a
+      // self-report — Postgres raises `23514` and the repository
+      // translates it back to `ReviewValidationError`.
+      this.logger.warn({
+        event: 'review_self_report',
+        reviewId,
+        reporterId,
+        authorUserId: review.userId,
+      });
       throw new ReviewValidationError('You cannot report your own review');
     }
 

@@ -26,14 +26,14 @@ import {
 } from '../swagger/review-swagger-decorators';
 
 @ApiTags('reviews')
-@Controller('admin/reviews')
+@Controller('admin')
 export class AdminReviewController {
   constructor(
     private readonly reviewApplicationService: ReviewApplicationService,
     private readonly presenter: ReviewPresenter,
   ) {}
 
-  @Get('reports')
+  @Get('reviews/reports')
   @Permissions(Permission.REVIEW_MODERATE)
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'List all reported reviews (moderator)' })
@@ -59,7 +59,7 @@ export class AdminReviewController {
     return this.presenter.listPlatformReports(result);
   }
 
-  @Patch('reports/:reportId')
+  @Patch('reviews/reports/:reportId')
   @Permissions(Permission.REVIEW_MODERATE)
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Update the status of a report (moderator)' })
