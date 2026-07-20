@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, asc, count, desc, eq, isNull, or, sql } from 'drizzle-orm';
+import { and, asc, count, desc, eq, isNull, ne, or, sql } from 'drizzle-orm';
 import { DRIZZLE } from '@/core/database/drizzle.constants';
 import type { DrizzleDB } from '@/core/database/database.module';
 import {
@@ -193,14 +193,22 @@ export class TournamentRepository implements TournamentRepositoryPort {
     nowIso: string;
   }): Promise<{ items: UpcomingTournamentRow[]; total: number }> {
     const offset = (params.page - 1) * params.limit;
+    // Filter on status = 'upcoming' AND startAt > now.
+    // Issue #13: Previously only filtered startAt > now, which would include
+    // any tournament whose startAt is in the future regardless of status
+    // (e.g. cancelled tournaments could appear).
     const conditions = and(
       isNull(tournaments.deletedAt),
+      eq(tournaments.status, 'upcoming'),
       sql`${tournaments.startAt} > ${params.nowIso}`,
     );
 
     const [totalRow] = await this.db.select({ count: count() }).from(tournaments).where(conditions);
 
     const participantCountSql = sql<number>`count(${tournamentParticipants.participantId})`;
+    // Issue #80: `sortBy = 'registrationDeadline'` actually sorts by `createdAt`.
+    // There is no `registration_deadline` column on tournaments. This is documented
+    // in the controller's OpenAPI description.
     const orderColumn =
       params.sortBy === 'registrationDeadline' ? tournaments.createdAt : tournaments.startAt;
 
@@ -246,8 +254,13 @@ export class TournamentRepository implements TournamentRepositoryPort {
     nowIso: string;
   }): Promise<{ items: ActiveTournamentRow[]; total: number }> {
     const offset = (params.page - 1) * params.limit;
+    // Issue #12: Filter on status IN ('registration', 'ongoing') AND time window.
+    // Previously only filtered on time window, which would include any tournament
+    // whose [startAt, endAt] window contains "now" regardless of status
+    // (e.g. finished tournaments with misconfigured endAt could appear).
     const conditions = and(
       isNull(tournaments.deletedAt),
+      or(eq(tournaments.status, 'registration'), eq(tournaments.status, 'ongoing')),
       sql`${tournaments.startAt} <= ${params.nowIso}`,
       sql`${tournaments.endAt} >= ${params.nowIso}`,
     );
@@ -290,8 +303,13 @@ export class TournamentRepository implements TournamentRepositoryPort {
     nowIso: string;
   }): Promise<{ items: CompletedTournamentRow[]; total: number }> {
     const offset = (params.page - 1) * params.limit;
+    // Filter on status = 'finished' AND endAt < now.
+    // Issue #14: Previously only filtered endAt < now, which would include
+    // any tournament whose endAt is in the past regardless of status
+    // (e.g. cancelled tournaments with endAt in the past would appear).
     const conditions = and(
       isNull(tournaments.deletedAt),
+      eq(tournaments.status, 'finished'),
       sql`${tournaments.endAt} < ${params.nowIso}`,
     );
 
@@ -353,6 +371,9 @@ export class TournamentRepository implements TournamentRepositoryPort {
       .where(
         and(
           isNull(tournaments.deletedAt),
+          // Issue #15: Include non-cancelled tournaments only.
+          // Allow 'finished' for historical browsing but exclude 'cancelled'.
+          ne(tournaments.status, 'cancelled'),
           sql`${tournaments.tournamentId} != ${params.tournamentId}`,
         ),
       )
@@ -476,8 +497,9 @@ export class TournamentRepository implements TournamentRepositoryPort {
     };
   }
 
-  private async refreshTournamentStats(tournamentId: string): Promise<void> {
-    await this.executeRaw(sql`
+  private async refreshTournamentStats(tournamentId: string, tx?: unknown): Promise<void> {
+    const client = tx != null ? (tx as DrizzleDB) : this.db;
+    await client.execute(sql`
       INSERT INTO tournament_stats AS ts (
         tournament_id, participants, completed_participants,
         average_score, highest_score, lowest_score,
@@ -795,8 +817,10 @@ export class TournamentRepository implements TournamentRepositoryPort {
   async withdrawParticipant(
     participantId: string,
     nowIso: string,
+    tx?: unknown,
   ): Promise<TournamentParticipantRow> {
-    const [row] = await this.db
+    const client = tx != null ? (tx as DrizzleDB) : this.db;
+    const [row] = await client
       .update(tournamentParticipants)
       .set({
         status: 'withdrawn' as TournamentParticipantStatus,
@@ -865,8 +889,9 @@ export class TournamentRepository implements TournamentRepositoryPort {
     tournamentId: string;
     userId: string;
     nowIso: string;
+    tx?: unknown;
   }): Promise<{ participant: TournamentParticipantRow; inserted: boolean }> {
-    return this.db.transaction(async (tx) => {
+    return (params.tx != null ? (params.tx as DrizzleDB) : this.db).transaction(async (tx) => {
       // 1. Lock the tournament row — prevents concurrent registration from
       //    racing the capacity count.
       const [tournament] = await tx
@@ -996,8 +1021,9 @@ export class TournamentRepository implements TournamentRepositoryPort {
     tournamentId: string;
     userId: string;
     nowIso: string;
+    tx?: unknown;
   }): Promise<TournamentParticipantRow | null> {
-    return this.db.transaction(async (tx) => {
+    return (params.tx != null ? (params.tx as DrizzleDB) : this.db).transaction(async (tx) => {
       // Lock the tournament row for consistency (prevents concurrent
       // re-registration from racing the withdrawal).
       const [tournament] = await tx
@@ -1554,7 +1580,11 @@ export class TournamentRepository implements TournamentRepositoryPort {
         tp.total_score,
         tp.total_time_ms,
         COUNT(*) OVER ()::int AS participant_count,
-        ROW_NUMBER() OVER (
+        -- Issue #30: Use RANK() instead of ROW_NUMBER() so tied participants
+        -- (identical total_score and total_time_ms) share the same rank.
+        -- ROW_NUMBER() gave unique sequential numbers even for ties, which
+        -- was unfair and confusing for leaderboards.
+        RANK() OVER (
           ORDER BY tp.total_score DESC, tp.total_time_ms ASC
         ) AS rank
       FROM tournament_participants tp
@@ -1638,8 +1668,10 @@ export class TournamentRepository implements TournamentRepositoryPort {
     fromStatus: TournamentStatus;
     toStatus: TournamentStatus;
     nowIso: string;
+    tx?: unknown;
   }): Promise<TournamentRow | null> {
-    const [row] = await this.db
+    const client = params.tx != null ? (params.tx as DrizzleDB) : this.db;
+    const [row] = await client
       .update(tournaments)
       .set({
         status: params.toStatus,
@@ -1675,8 +1707,9 @@ export class TournamentRepository implements TournamentRepositoryPort {
   async finalizeTournament(params: {
     tournamentId: string;
     nowIso: string;
+    tx?: unknown;
   }): Promise<FinalizedTournamentParticipantRow[]> {
-    return this.db.transaction(async (tx) => {
+    return (params.tx != null ? (params.tx as DrizzleDB) : this.db).transaction(async (tx) => {
       // Compute ranks entirely in SQL with ROW_NUMBER(). The CTE orders
       // participants by score (descending) and tie-breaks by total time
       // (ascending — faster finishes win ties), then materializes the
@@ -1684,13 +1717,13 @@ export class TournamentRepository implements TournamentRepositoryPort {
       // into application memory: only the (participantId, userId, rank)
       // tuples are streamed out, in batches of 1000.
       const totalResult = await tx.execute(sql<{ total: number | string }>`
-        SELECT COUNT(*)::bigint AS total
-        FROM tournament_participants tp
-        INNER JOIN users u ON u.user_id = tp.user_id
-        WHERE tp.tournament_id = ${params.tournamentId}::uuid
-          AND tp.withdrawn_at IS NULL
-          AND u.deleted_at IS NULL
-      `);
+          SELECT COUNT(*)::bigint AS total
+          FROM tournament_participants tp
+          INNER JOIN users u ON u.user_id = tp.user_id
+          WHERE tp.tournament_id = ${params.tournamentId}::uuid
+            AND tp.withdrawn_at IS NULL
+            AND u.deleted_at IS NULL
+        `);
       const totalParticipants = Number(
         (totalResult.rows[0] as { total?: unknown } | undefined)?.total ?? 0,
       );
@@ -1710,36 +1743,36 @@ export class TournamentRepository implements TournamentRepositoryPort {
       while (true) {
         const batch = await tx.execute(
           sql<{ participantId: string; userId: string; rank: number | string }>`
-            WITH round_totals AS (
-              SELECT
-                trp.participant_id,
-                SUM(trp.round_score)::int   AS total_score,
-                SUM(trp.round_time_ms)::int AS total_time_ms
-              FROM tournament_round_participants trp
-              GROUP BY trp.participant_id
-            ),
-            ranked AS (
-              SELECT
-                tp.participant_id as "participantId",
-                tp.user_id as "userId",
-                ROW_NUMBER() OVER (
-                  ORDER BY
-                    COALESCE(rt.total_score,   0) DESC,
-                    COALESCE(rt.total_time_ms, 0) ASC,
-                    tp.participant_id ASC
-                )::int as rank
-              FROM tournament_participants tp
-              INNER JOIN users u ON u.user_id = tp.user_id
-              LEFT JOIN round_totals rt ON rt.participant_id = tp.participant_id
-              WHERE tp.tournament_id = ${params.tournamentId}::uuid
-                AND tp.withdrawn_at IS NULL
-                AND u.deleted_at IS NULL
-            )
-            SELECT "participantId", "userId", rank
-            FROM ranked
-            ORDER BY rank
-            LIMIT ${BATCH_SIZE} OFFSET ${offset}
-          `,
+              WITH round_totals AS (
+                SELECT
+                  trp.participant_id,
+                  SUM(trp.round_score)::int   AS total_score,
+                  SUM(trp.round_time_ms)::int AS total_time_ms
+                FROM tournament_round_participants trp
+                GROUP BY trp.participant_id
+              ),
+              ranked AS (
+                SELECT
+                  tp.participant_id as "participantId",
+                  tp.user_id as "userId",
+                  ROW_NUMBER() OVER (
+                    ORDER BY
+                      COALESCE(rt.total_score,   0) DESC,
+                      COALESCE(rt.total_time_ms, 0) ASC,
+                      tp.participant_id ASC
+                  )::int as rank
+                FROM tournament_participants tp
+                INNER JOIN users u ON u.user_id = tp.user_id
+                LEFT JOIN round_totals rt ON rt.participant_id = tp.participant_id
+                WHERE tp.tournament_id = ${params.tournamentId}::uuid
+                  AND tp.withdrawn_at IS NULL
+                  AND u.deleted_at IS NULL
+              )
+              SELECT "participantId", "userId", rank
+              FROM ranked
+              ORDER BY rank
+              LIMIT ${BATCH_SIZE} OFFSET ${offset}
+            `,
         );
 
         const rows = batch.rows as Array<{
@@ -1758,20 +1791,20 @@ export class TournamentRepository implements TournamentRepositoryPort {
         );
 
         await tx.execute(sql`
-          UPDATE tournament_participants AS tp
-          SET
-            rank_final = v.rank,
-            status = 'completed',
-            updated_at = ${params.nowIso}::timestamptz
-          FROM (VALUES ${valuesSql}) AS v(participant_id, rank)
-          WHERE tp.participant_id = v.participant_id
-        `);
+            UPDATE tournament_participants AS tp
+            SET
+              rank_final = v.rank,
+              status = 'completed',
+              updated_at = ${params.nowIso}::timestamptz
+            FROM (VALUES ${valuesSql}) AS v(participant_id, rank)
+            WHERE tp.participant_id = v.participant_id
+          `);
 
         if (rows.length < BATCH_SIZE) break;
         offset += BATCH_SIZE;
       }
 
-      await this.refreshTournamentStats(params.tournamentId);
+      await this.refreshTournamentStats(params.tournamentId, tx);
 
       // Return the final standings in rank order. This is the only place
       // we materialize the full result set, and it's bounded by the
@@ -1783,34 +1816,34 @@ export class TournamentRepository implements TournamentRepositoryPort {
       // the cached totals on `tournament_participants` drift.
       const finalStandings = await tx.execute(
         sql<{ userId: string; rank: number | string }>`
-          WITH round_totals AS (
-            SELECT
-              trp.participant_id,
-              SUM(trp.round_score)::int   AS total_score,
-              SUM(trp.round_time_ms)::int AS total_time_ms
-            FROM tournament_round_participants trp
-            GROUP BY trp.participant_id
-          ),
-          ranked AS (
-            SELECT
-              tp.user_id as "userId",
-              ROW_NUMBER() OVER (
-                ORDER BY
-                  COALESCE(rt.total_score,   0) DESC,
-                  COALESCE(rt.total_time_ms, 0) ASC,
-                  tp.participant_id ASC
-              )::int as rank
-            FROM tournament_participants tp
-            INNER JOIN users u ON u.user_id = tp.user_id
-            LEFT JOIN round_totals rt ON rt.participant_id = tp.participant_id
-            WHERE tp.tournament_id = ${params.tournamentId}::uuid
-              AND tp.withdrawn_at IS NULL
-              AND u.deleted_at IS NULL
-          )
-          SELECT "userId", rank
-          FROM ranked
-          ORDER BY rank
-        `,
+            WITH round_totals AS (
+              SELECT
+                trp.participant_id,
+                SUM(trp.round_score)::int   AS total_score,
+                SUM(trp.round_time_ms)::int AS total_time_ms
+              FROM tournament_round_participants trp
+              GROUP BY trp.participant_id
+            ),
+            ranked AS (
+              SELECT
+                tp.user_id as "userId",
+                ROW_NUMBER() OVER (
+                  ORDER BY
+                    COALESCE(rt.total_score,   0) DESC,
+                    COALESCE(rt.total_time_ms, 0) ASC,
+                    tp.participant_id ASC
+                )::int as rank
+              FROM tournament_participants tp
+              INNER JOIN users u ON u.user_id = tp.user_id
+              LEFT JOIN round_totals rt ON rt.participant_id = tp.participant_id
+              WHERE tp.tournament_id = ${params.tournamentId}::uuid
+                AND tp.withdrawn_at IS NULL
+                AND u.deleted_at IS NULL
+            )
+            SELECT "userId", rank
+            FROM ranked
+            ORDER BY rank
+          `,
       );
 
       return (finalStandings.rows as Array<{ userId: string; rank: number | string }>).map(

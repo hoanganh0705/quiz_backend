@@ -10,7 +10,7 @@ import { TournamentLifecycleService } from './domain/tournament-lifecycle.servic
 import { TournamentResponseMapper } from './mappers/tournament-response.mapper';
 import { TournamentController } from './transport/controller/tournament.controller';
 import { TournamentPresenter } from './transport/presenters/tournament.presenter';
-import { TOURNAMENT_REPOSITORY_PORT } from './domain/ports';
+import { TOURNAMENT_REPOSITORY_PORT, TOURNAMENT_OUTBOX_PORT } from './domain/ports';
 import { TournamentRepository } from './infrastructure/repositories/tournament.repository';
 import {
   TOURNAMENT_DOMAIN_EVENT_BUS,
@@ -23,6 +23,9 @@ import { TournamentSchedulerService } from './infrastructure/scheduler/tournamen
 import { TournamentListenerAdapter } from './infrastructure/adapters/tournament-listener.adapter';
 import { TournamentAttemptEventListenerAdapter } from './infrastructure/adapters/tournament-attempt-event-listener.adapter';
 import { SharedTournamentEventBusAdapter } from './domain/events/shared-tournament-event-bus.adapter';
+import { TournamentOutboxAdapter } from './infrastructure/outbox/tournament-outbox.adapter';
+import { TournamentOutboxProcessorService } from './infrastructure/outbox/tournament-outbox-processor.service';
+import { TournamentOutboxSchedulerService } from './infrastructure/outbox/tournament-outbox-scheduler.service';
 import { redisConfig } from '@/core/config';
 import type { RedisConfig } from '@/core/config';
 
@@ -40,6 +43,11 @@ import type { RedisConfig } from '@/core/config';
     TournamentPresenter,
     { provide: TOURNAMENT_REPOSITORY_PORT, useExisting: TournamentRepository },
     { provide: TOURNAMENT_DOMAIN_EVENT_BUS, useExisting: BullmqTournamentEventBusService },
+    // Phase 3 / Issue #5 — transactional outbox for tournament events
+    TournamentOutboxAdapter,
+    { provide: TOURNAMENT_OUTBOX_PORT, useExisting: TournamentOutboxAdapter },
+    TournamentOutboxProcessorService,
+    TournamentOutboxSchedulerService,
     {
       provide: TOURNAMENT_QUEUE_TOKENS.CONNECTION,
       inject: [redisConfig.KEY],

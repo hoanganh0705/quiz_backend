@@ -30,3 +30,11 @@ export {
   TOURNAMENT_DOMAIN_EVENT_BUS,
   type TournamentDomainEventBusPort,
 } from './tournament-domain-event-bus.port';
+
+// Outbox port
+export {
+  TOURNAMENT_OUTBOX_PORT,
+  type TournamentOutboxPort,
+  type TournamentOutboxPayload,
+  type TournamentOutboxEventType,
+} from './tournament-outbox.port';
