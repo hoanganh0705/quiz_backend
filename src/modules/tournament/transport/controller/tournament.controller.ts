@@ -213,7 +213,7 @@ export class TournamentController {
     summary: 'List upcoming tournaments',
     description:
       'Returns an offset-paginated list of tournaments that have not yet entered the registration phase. ' +
-      'Sortable by `startAt` or `registrationDeadline`.',
+      'Sortable by `startAt` (default) or `registrationDeadline` (sorts by creation date — there is no separate registration deadline column).',
   })
   @ApiOkResourceList(UpcomingTournamentItemDto, 'offset', {
     description: 'Upcoming tournaments returned',
@@ -236,7 +236,8 @@ export class TournamentController {
   @ApiOperation({
     summary: 'List active tournaments',
     description:
-      'Returns an offset-paginated list of tournaments currently in the registration, ongoing, or starting-soon phases.',
+      'Returns an offset-paginated list of tournaments in the registration or ongoing phases whose [startAt, endAt] window contains the current time. ' +
+      'Note: "starting-soon" is a sub-phase of the upcoming status, not a separate status.',
   })
   @ApiOkResourceList(ActiveTournamentItemDto, 'offset', {
     description: 'Active tournaments returned',

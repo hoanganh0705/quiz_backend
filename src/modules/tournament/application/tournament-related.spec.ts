@@ -6,19 +6,24 @@ describe('TournamentService getRelatedTournaments', () => {
     const tournamentRepository = {
       getTournamentById: jest.fn(),
       listRelatedTournaments: jest.fn(),
-    } as unknown as ConstructorParameters<typeof TournamentService>[0];
+    };
 
-    const attemptRepository = {} as ConstructorParameters<typeof TournamentService>[1];
+    const _attemptRepository = {} as never;
+    const _eventBus = {} as never;
+    const _tournamentOutbox = {} as never;
+    const _db = {} as never;
 
     const logger = {
       info: jest.fn(),
       warn: jest.fn(),
       error: jest.fn(),
-    } as unknown as ConstructorParameters<typeof TournamentService>[2];
+    };
 
     const service = new TournamentService(
       tournamentRepository as never,
-      attemptRepository as never,
+      _eventBus,
+      _tournamentOutbox,
+      _db,
       logger as never,
     );
 

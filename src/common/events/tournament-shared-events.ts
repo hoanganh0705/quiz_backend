@@ -57,6 +57,12 @@ export type SharedTournamentDomainEvent =
  *
  * Consumers inject this port to subscribe to Tournament events.
  * The Tournament module provides the implementation via SharedTournamentEventBusAdapter.
+ *
+ * Phase 3 / Issue #41 — the port now exposes a `publish` method in addition to
+ * `subscribe`. The outbox processor calls `publish` directly to dispatch events
+ * to shared bus consumers (AchievementService, SocialFeedService), replacing the
+ * previous architecture where SharedTournamentEventBusAdapter subscribed to the
+ * internal bus, creating a duplicate delivery path.
  */
 export interface SharedTournamentEventBusPort {
   /**
@@ -64,6 +70,15 @@ export interface SharedTournamentEventBusPort {
    * Returns an unsubscribe function.
    */
   subscribe(handler: (event: SharedTournamentDomainEvent) => void): () => void;
+
+  /**
+   * Publish a shared tournament event to all subscribers.
+   *
+   * Called directly by `TournamentOutboxProcessorService` after draining
+   * events from the outbox table, replacing the previous architecture where
+   * SharedTournamentEventBusAdapter subscribed to the internal bus.
+   */
+  publish(event: SharedTournamentDomainEvent): void;
 }
 
 export const SHARED_TOURNAMENT_EVENT_BUS = Symbol('SHARED_TOURNAMENT_EVENT_BUS');
