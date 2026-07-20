@@ -25,7 +25,6 @@ import {
   ApiCreatorQuizReviewAnalyticsResponses,
   ApiDeleteReviewResponses,
   ApiListReviewsResponses,
-  ApiMyQuizReviewResponses,
   ApiQuizReviewStatsResponses,
   ApiUpdateReviewResponses,
 } from '../swagger/review-swagger-decorators';
@@ -107,18 +106,6 @@ export class quizReviewController {
   ) {
     const result = await this.reviewApplicationService.getCreatorQuizReviewAnalytics(quizId, user);
     return this.presenter.getCreatorQuizReviewAnalytics(result);
-  }
-
-  @Get(':quizId/reviews/me')
-  @ApiAuth()
-  @ApiOperation({ summary: "Get the authenticated user's review for a quiz" })
-  @ApiMyQuizReviewResponses()
-  async getMyQuizReview(
-    @Param('quizId', new ParseUUIDPipe({ version: '7' })) quizId: string,
-    @CurrentUser() user: JwtPayload,
-  ) {
-    const result = await this.reviewApplicationService.getMyQuizReview(quizId, user.sub);
-    return this.presenter.getMyQuizReview(result);
   }
 
   @Patch(':quizId/reviews')

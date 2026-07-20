@@ -24,7 +24,7 @@ import {
   ApiNotFound,
 } from '@/common/swagger/swagger-decorators';
 import { ApiOkResource, ApiOkResourceList, ApiCreatedResource } from '@/common/swagger/api-ok';
-import { CurrentUser } from '@/common/decorators/current-user.decorator';
+import { CurrentUser, OptionalCurrentUser } from '@/common/decorators/current-user.decorator';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
 import { DiscussionApplicationService } from '@/modules/discussion/application/discussion-application.service';
 import { DiscussionPresenter } from '../presenters/discussion.presenter';
@@ -40,7 +40,6 @@ import {
   RelatedDiscussionItemResponseDto,
   ThreadParticipantItemResponseDto,
   ThreadStatsResponseDto,
-  MyDiscussionStatsResponseDto,
   DiscussionThreadSolveResponseDto,
   DiscussionThreadUnsolveResponseDto,
   DiscussionSubscriptionActionResponseDto,
@@ -170,16 +169,6 @@ export class DiscussionController {
     return this.presenter.getThreadStats(result);
   }
 
-  @Get('me')
-  @ApiOperation({ summary: "Get the authenticated user's discussion statistics" })
-  @ApiOkResource(MyDiscussionStatsResponseDto, {
-    description: 'Discussion statistics returned',
-  })
-  async getMyDiscussionStats(@CurrentUser() user: JwtPayload) {
-    const result = await this.discussionService.getMyDiscussionStats(user);
-    return this.presenter.getMyDiscussionStats(result);
-  }
-
   @Throttle({ default: { limit: 30, ttl: 60_000 } })
   @Post('threads/:threadId/subscribe')
   @ApiOperation({ summary: 'Subscribe to a thread' })
@@ -248,7 +237,7 @@ export class DiscussionController {
   @ApiOperation({ summary: 'List threads' })
   @ApiOkResourceList(ThreadDto, 'cursor', { description: 'Threads returned' })
   async listThreads(@CurrentUser() user: JwtPayload, @Query() query: ListThreadsQueryDto) {
-    const result = await this.discussionService.listThreads(user, {
+    const result = await this.discussionService.listThreads({
       quizId: query.quizId,
       authorId: query.authorId,
       status: query.status,
@@ -270,13 +259,19 @@ export class DiscussionController {
     );
   }
 
+  // Phase 4: Made public - no longer requires authentication
   @Get('threads/:threadId')
-  @ApiOperation({ summary: 'Get a discussion thread by ID' })
+  @Public()
+  @ApiOperation({
+    summary: 'Get a discussion thread by ID',
+    description:
+      'Returns a single discussion thread by its ID. Public endpoint - accessible without authentication.',
+  })
   @ApiOkResource(ThreadDetailDto, { description: 'Thread returned' })
   @ApiNotFound()
   @ApiParam({ name: 'threadId', format: 'uuid' })
   async getThread(
-    @CurrentUser() user: JwtPayload,
+    @OptionalCurrentUser() user: JwtPayload | undefined,
     @Param('threadId', new ParseUUIDPipe({ version: '7' })) threadId: string,
   ) {
     const result = await this.discussionService.getThread(user, threadId);
@@ -432,12 +427,18 @@ export class DiscussionController {
     );
   }
 
+  // Phase 4: Made public - no longer requires authentication
   @Get('threads/:threadId/comments')
-  @ApiOperation({ summary: 'List comments on a thread' })
+  @Public()
+  @ApiOperation({
+    summary: 'List comments on a thread',
+    description:
+      'Returns a paginated list of comments for a given thread. Public endpoint - accessible without authentication.',
+  })
   @ApiOkResourceList(CommentDto, 'cursor', { description: 'Comments returned' })
   @ApiParam({ name: 'threadId', format: 'uuid' })
   async listComments(
-    @CurrentUser() user: JwtPayload,
+    @OptionalCurrentUser() user: JwtPayload | undefined,
     @Param('threadId', new ParseUUIDPipe({ version: '7' })) threadId: string,
     @Query() query: ListCommentsQueryDto,
   ) {

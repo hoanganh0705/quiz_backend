@@ -112,4 +112,22 @@ export class ListInstancesQueryDto {
   @IsOptional()
   @IsIn(QUIZ_DIFFICULTIES)
   difficulty?: QuizDifficulty;
+
+  @ApiPropertyOptional({
+    description: 'Filter by quiz UUID',
+    format: 'uuid',
+    nullable: true,
+  })
+  @IsOptional()
+  @IsUUID('7')
+  quizId?: string;
+
+  @ApiPropertyOptional({
+    description: 'Filter by host/creator UUID',
+    format: 'uuid',
+    nullable: true,
+  })
+  @IsOptional()
+  @IsUUID('7')
+  creatorId?: string;
 }

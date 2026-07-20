@@ -58,22 +58,49 @@ const wrapCursorPaginatedDto = <T>(payload: {
  * payload as `{ data: T[], meta: { timestamp, pagination: { kind: "offset", ... } } }`.
  *
  * `hasMore` is computed from `page < ceil(total / limit)`.
+ *
+ * Issue #28: Extended to handle both formats:
+ *   - Legacy: { items, pagination: { page, limit, total } }
+ *   - New: { items, total, limit, offset }
  */
-const wrapOffsetPaginatedDto = <T>(payload: {
-  items: readonly T[];
-  pagination: { page: number; limit: number; total: number };
-}): ApiResponseEnvelope<T[]> => {
-  const totalPages = Math.max(1, Math.ceil(payload.pagination.total / payload.pagination.limit));
-  const hasMore = payload.pagination.page < totalPages;
+const wrapOffsetPaginatedDto = <T>(
+  payload:
+    | {
+        items: readonly T[];
+        total: number;
+        limit: number;
+        offset: number;
+      }
+    | {
+        items: readonly T[];
+        pagination: { page: number; limit: number; total: number };
+      },
+): ApiResponseEnvelope<T[]> => {
+  let page: number;
+  let limit: number;
+  let total: number;
+
+  if ('pagination' in payload) {
+    page = payload.pagination.page;
+    limit = payload.pagination.limit;
+    total = payload.pagination.total;
+  } else {
+    page = Math.floor(payload.offset / payload.limit) + 1;
+    limit = payload.limit;
+    total = payload.total;
+  }
+
+  const totalPages = Math.max(1, Math.ceil(total / limit));
+  const hasMore = page < totalPages;
   return {
     data: [...payload.items],
     meta: {
       timestamp: new Date().toISOString(),
       pagination: {
         kind: 'offset' as const,
-        page: payload.pagination.page,
-        limit: payload.pagination.limit,
-        total: payload.pagination.total,
+        page,
+        limit,
+        total,
         hasMore,
       },
     },
@@ -113,8 +140,8 @@ export class TournamentPresenter {
   // Winners & leaderboard (items-only DTOs unwrapped to bare arrays)
   readonly getTournamentWinners = (payload: { items: readonly TournamentWinnerDto[] }) =>
     ApiResponse.ok([...payload.items]);
-  readonly getLeaderboard = (payload: { items: readonly TournamentLeaderboardEntryDto[] }) =>
-    ApiResponse.ok([...payload.items]);
+  // Issue #28: Leaderboard is now paginated with limit/offset.
+  readonly getLeaderboard = wrapOffsetPaginatedDto<TournamentLeaderboardEntryDto>;
 
   // Participants (offset paginated DTO)
   readonly getTournamentParticipants = wrapOffsetPaginatedDto<TournamentParticipantListItemDto>;

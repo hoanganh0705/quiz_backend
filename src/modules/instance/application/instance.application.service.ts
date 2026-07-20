@@ -159,6 +159,8 @@ export class InstanceApplicationService {
     filters?: {
       status?: string;
       difficulty?: string;
+      quizId?: string;
+      creatorId?: string;
     };
   }): Promise<InstanceListResponseDto> {
     const result = await this.instanceService.listInstances(params);

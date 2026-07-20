@@ -228,7 +228,8 @@ export class InstanceController {
     description:
       'Returns a paginated cursor-based list of quiz instances. Requires a valid JWT bearer token. ' +
       'Query parameters: `cursor` (opaque pagination cursor), `limit` (1–100, default 20), ' +
-      '`status` (one of `open`, `running`, `closed`, `finished`), `difficulty` (`easy`, `medium`, `hard`). ' +
+      '`status` (one of `open`, `running`, `closed`, `finished`), `difficulty` (`easy`, `medium`, `hard`), ' +
+      '`quizId` (filter by quiz UUID), `creatorId` (filter by host UUID). ' +
       '400 is returned only when the query parameters fail validation.',
   })
   @instanceBadRequestResponse()
@@ -239,6 +240,8 @@ export class InstanceController {
       filters: {
         status: query.status,
         difficulty: query.difficulty,
+        quizId: query.quizId,
+        creatorId: query.creatorId,
       },
     });
     return this.presenter.listInstances(result);
