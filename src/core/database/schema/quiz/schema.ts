@@ -570,6 +570,18 @@ export const quizReviews = pgTable(
       .defaultNow()
       .notNull(),
     helpfulCount: smallint('helpful_count').notNull().default(0),
+    // Phase 5 / Issue #17 — soft-delete column. The previous
+    // shape used `DELETE FROM quiz_reviews` and let the FK
+    // `ON DELETE CASCADE` on `review_helpful_votes` erase votes
+    // silently — users who voted "helpful" lost their vote
+    // with no UI signal. Soft-deleting the review instead
+    // preserves the row for moderation audit, allows withdrawal
+    // of votes against soft-deleted reviews (FK was already
+    // deleted when the row was DELETEd), and survives the
+    // `helpful_count` reconciliation sweep. The repository filters
+    // every read by `IS NULL` so the public surface keeps
+    // showing only live reviews.
+    deletedAt: timestamp('deleted_at', { withTimezone: true, mode: 'string' }),
   },
   (table) => [
     index('idx_quiz_reviews_quiz_created_at_desc').using(
@@ -599,6 +611,33 @@ export const quizReviews = pgTable(
     }).onDelete('restrict'),
     unique('uq_quiz_reviews_quiz_user').on(table.quizId, table.userId),
     check('quiz_reviews_rating_range', sql`(rating >= 1) AND (rating <= 5)`),
+    // Phase 2 / Issue #4 — defense in depth against a negative
+    // `helpful_count` reaching the public API. The application-level
+    // `addHelpfulVote` / `removeHelpfulVote` paths already guard the
+    // counter, but a regression that introduces an unconditional
+    // decrement, or a manual DBA fix that bypasses the repository,
+    // would otherwise produce a row with `helpful_count = -1` that
+    // survives every reconciliation job. Postgres rejects it at
+    // commit time instead.
+    check('quiz_reviews_helpful_count_nonneg', sql`helpful_count >= 0`),
+    // Phase 3 / Issue #31 — defense in depth against oversized
+    // review comments. The DTO layer already enforces
+    // `MaxLength(1000)` via class-validator, but a direct DB INSERT
+    // (DBA migration, out-of-band ETL, future GraphQL endpoint that
+    // skips validation) would otherwise write a multi-megabyte
+    // comment. Postgres rejects it at commit time instead.
+    check('quiz_reviews_comment_length', sql`comment IS NULL OR length(comment) <= 1000`),
+    // Phase 5 / Issue #17 — partial indexes on the live rows.
+    // The repository filters every public read by
+    // `deleted_at IS NULL`, so the partial index keeps the
+    // same scan shape as the original full index while staying
+    // small as soft-deleted rows accumulate.
+    index('idx_quiz_reviews_active_created_at_desc')
+      .using('btree', table.quizId.asc(), table.createdAt.desc())
+      .where(sql`${table.deletedAt} IS NULL`),
+    index('idx_quiz_reviews_active_helpful_count_desc')
+      .using('btree', table.helpfulCount.desc(), table.reviewId.desc())
+      .where(sql`${table.deletedAt} IS NULL`),
   ],
 );
 
@@ -903,5 +942,15 @@ export const reviewReports = pgTable(
       name: 'review_reports_reporter_id_fkey',
     }).onDelete('cascade'),
     check('review_reports_reason_nonblank', sql`length(btrim(reason)) > 0`),
+    // Phase 5 / Issue #18 — defense-in-depth against typo'd
+    // reasons. The DTO already validates `@IsIn(REPORT_REASON_VALUES)`,
+    // but a direct DB write (DBA migration, ETL, future internal
+    // job) would otherwise persist an arbitrary tag. Postgres
+    // rejects it at COMMIT time so the structured-reason
+    // invariant holds end-to-end.
+    check(
+      'review_reports_reason_enum',
+      sql`reason IN ('spam', 'harassment', 'inappropriate_content', 'misinformation', 'other')`,
+    ),
   ],
 );

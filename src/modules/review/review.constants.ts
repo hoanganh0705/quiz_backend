@@ -4,3 +4,6 @@ export const REVIEW_QUIZ_USER_CONFLICT_MESSAGE = 'You have already reviewed this
 export const REVIEW_ATTEMPT_REQUIRED_MESSAGE =
   'You must complete at least one attempt before reviewing this quiz';
 export const REVIEW_ALREADY_REPORTED_MESSAGE = 'You have already reported this review';
+export const REVIEW_REPORT_NOT_FOUND_MESSAGE = 'Report not found';
+export const REVIEW_REPORT_INVALID_TRANSITION_MESSAGE =
+  'Report status can only transition from open to reviewed, dismissed, or actioned';

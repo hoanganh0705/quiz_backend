@@ -55,7 +55,24 @@ export class ReviewEventListenerAdapter implements OnModuleInit, OnModuleDestroy
     }
 
     this.unsubscribe = this.reviewEventBus.subscribe((event: PublishedReviewDomainEvent) => {
-      void this.handleEvent(event);
+      // Phase 4 / Issue #34 — the bus dispatches synchronously and
+      // does not await subscriber promises. The previous shape
+      // (`void this.handleEvent(event)`) discards the returned
+      // promise, so any rejection from `handleEvent` becomes an
+      // unhandled rejection outside the bus's try/catch. Capture the
+      // promise here and route rejections through the structured
+      // logger so they are observable and never escape as
+      // `unhandledRejection`. The durable analytics refresh still
+      // happens through the outbox worker (`ReviewOutboxProcessorService`),
+      // so this listener is a fast-path signal that should never
+      // block the HTTP request.
+      this.handleEvent(event).catch((error) => {
+        this.logger.error({
+          event: 'review_event_handler_failed',
+          eventType: event.eventType,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      });
     });
 
     this.logger.info({

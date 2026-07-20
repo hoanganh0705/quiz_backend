@@ -1,4 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { REPORT_REASON_VALUES } from '@/modules/review/domain/policies/review-report-status.policy';
 
 export class PlatformReportItemDto {
   @ApiProperty({
@@ -47,8 +48,12 @@ export class PlatformReportItemDto {
   })
   comment!: string | null;
 
-  @ApiProperty({ description: 'Reason for reporting the review', example: 'spam' })
-  reason!: string;
+  @ApiProperty({
+    description: 'Reason for reporting the review (closed set)',
+    example: 'spam',
+    enum: REPORT_REASON_VALUES,
+  })
+  reason!: import('@/modules/review/domain/policies/review-report-status.policy').ReviewReportReason;
 
   @ApiPropertyOptional({
     description: 'Additional moderation details',

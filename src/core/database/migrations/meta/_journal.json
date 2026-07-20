@@ -78,6 +78,34 @@
       "when": 1783935563044,
       "tag": "0011_add_users_last_streak_day",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1783935563045,
+      "tag": "0012_quiz_reviews_helpful_count_nonneg",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1783935563046,
+      "tag": "0013_quiz_reviews_comment_length",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1783935563047,
+      "tag": "0014_review_reports_reason_enum",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1783935563048,
+      "tag": "0015_quiz_reviews_soft_delete",
+      "breakpoints": true
     }
   ]
 }

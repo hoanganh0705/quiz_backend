@@ -3,6 +3,28 @@ import type { QuizDifficulty, QuizVersionStatus } from '../../types/quiz.types';
 export type QuizRecordRow = {
   quizId: string;
   creatorId: string | null;
+  /**
+   * Whether the quiz is hidden from public listings.
+   *
+   * Surfaced on `getActiveQuizRecordById` so callers (e.g. review
+   * gating, analytics) can apply the visibility predicate without
+   * making a second round-trip.
+   *
+   * Phase 1 / Issue #25 — public review-stats endpoint must refuse
+   * hidden quizzes so that quiz owners do not leak rating data on
+   * an unpublished asset.
+   *
+   * Phase 1 / Issue #1 — review creation also requires the quiz to
+   * be visible, since hidden assets are off-limits to user input.
+   */
+  isHidden: boolean;
+  /**
+   * The id of the currently published version, if any.
+   *
+   * A quiz without a published version is a draft and must not be
+   * publicly reviewable. Used by both Issue #1 and #25.
+   */
+  publishedVersionId: string | null;
 };
 
 export type QuizTagRow = {

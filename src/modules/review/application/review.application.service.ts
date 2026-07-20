@@ -74,7 +74,10 @@ export class ReviewApplicationService {
   async listReviews(
     quizId: string,
     limit: number,
-    cursor?: { createdAt: string; reviewId: string } | null,
+    // Phase 5 / Issue #11 — `cursor` is now a union shape. The
+    // service passes it through to the repository, which branches
+    // on `sort` to validate the cursor shape.
+    cursor?: import('../domain/ports').ReviewListCursor | null,
     rating?: number,
     sort?: import('../domain/ports').ReviewSort,
   ): Promise<ReviewListResponseDto> {
@@ -89,7 +92,27 @@ export class ReviewApplicationService {
       pagination: {
         limit,
         hasNextPage,
-        nextCursor: lastItem && hasNextPage ? CursorMapper.serializeReview(lastItem) : null,
+        // Phase 5 / Issue #11 — serialize the cursor in the
+        // shape the next-page client will need. For the
+        // `helpful` sort the next-cursor carries the
+        // `(helpfulCount, reviewId)` pair; for every other sort
+        // it carries the original `(createdAt, reviewId)`.
+        nextCursor:
+          lastItem && hasNextPage
+            ? sort === 'helpful'
+              ? CursorMapper.serializeHelpful({
+                  // The repository always selects `helpfulCount`
+                  // in the helpful-sort branch; the optional
+                  // marker on the row type reflects the broader
+                  // row contract.
+                  helpfulCount: lastItem.helpfulCount ?? 0,
+                  reviewId: lastItem.reviewId,
+                })
+              : CursorMapper.serializeReview({
+                  createdAt: lastItem.createdAt,
+                  reviewId: lastItem.reviewId,
+                })
+            : null,
       },
     };
   }
@@ -200,8 +223,19 @@ export class ReviewApplicationService {
   }
 
   async removeHelpfulVote(reviewId: string, user: JwtPayload): Promise<HelpfulReviewResponseDto> {
-    const result = await this.reviewService.removeHelpfulVote(reviewId, user.sub);
-    return { message: result ? 'Helpful vote removed' : 'No helpful vote to remove' };
+    await this.reviewService.removeHelpfulVote(reviewId, user.sub);
+    // Phase 5 / Issue #5 — DELETE is idempotent. The previous
+    // shape surfaced "Helpful vote removed" on the first call and
+    // "No helpful vote to remove" on the second call. Both
+    // endpoints (DELETE /reviews/:id/helpful and POST
+    // /reviews/:id/helpful with `{helpful:false}`) ended up in the
+    // same path; a retry after a network hiccup saw a different
+    // response payload and confused clients. RFC 7231: DELETE on
+    // an already-deleted resource is idempotent — the same effect
+    // on the long-term state. We collapse both outcomes into a
+    // single, stable response so a retrying client sees no
+    // difference.
+    return { message: 'Helpful vote removed' };
   }
 
   async reportReview(
@@ -210,7 +244,14 @@ export class ReviewApplicationService {
     payload: ReportReviewDto,
   ): Promise<ReportReviewResponseDto> {
     if (payload.idempotencyKey) {
-      await this.idempotencyService.checkAndSet(
+      // Phase 2 / Issue #13 — return the cached response on replay
+      // instead of building a fresh one. Without this, the cached
+      // idempotency row bypasses the duplicate-report pre-check, the
+      // service throws `ReviewAlreadyReportedError`, and the user sees
+      // a 409 on a retry of a *successful* request. The other two
+      // idempotency wrappers in this file already return `response!`;
+      // this one was the outlier.
+      const { response } = await this.idempotencyService.checkAndSet(
         payload.idempotencyKey,
         user.sub,
         'reportReview',
@@ -224,7 +265,7 @@ export class ReviewApplicationService {
           return { message: 'Review reported successfully' };
         },
       );
-      return { message: 'Review reported successfully' };
+      return response!;
     }
 
     await this.reviewService.reportReview(
@@ -238,7 +279,11 @@ export class ReviewApplicationService {
 
   async listReportedReviews(
     userId: string,
-    query: { limit?: number; cursor?: { createdAt: string; reportId: string } | null },
+    query: {
+      limit?: number;
+      cursor?: { createdAt: string; reportId: string } | null;
+      status?: import('../domain/policies/review-report-status.policy').ReviewReportStatus | null;
+    },
   ): Promise<ReportedReviewsResponseDto> {
     const { items, limit, hasNextPage, nextCursor } = await this.reviewService.listReportedReviews(
       userId,
@@ -260,10 +305,18 @@ export class ReviewApplicationService {
     payload: UpdateReviewDto,
     user: JwtPayload,
   ): Promise<UpdateReviewResponseDto> {
+    // Phase 5 / Issue #24 — translate the DTO's `comment?: string | null`
+    // into the service's `{ set } | undefined` carrier. The carrier
+    // is `undefined` when the client omitted `comment` in the
+    // PATCH body, and `{ set: <value> }` when the client explicitly
+    // sent the field (including `null`).
+    const commentCarrier =
+      'comment' in payload && payload.comment !== undefined ? { set: payload.comment } : undefined;
+
     const review = await this.reviewService.updateReview(
       quizId,
       payload.rating,
-      payload.comment,
+      commentCarrier,
       user,
     );
 
@@ -303,6 +356,16 @@ export class ReviewApplicationService {
     return { message: 'Report status updated successfully' };
   }
 
+  /**
+   * Phase 1 / Issue #22 — moderator-initiated delete of any review by id.
+   * Authorization is enforced by the `REVIEW_MODERATE` route guard;
+   * the actor is captured into the audit log by `ReviewAdminService`.
+   */
+  async adminDeleteReview(reviewId: string, actor: JwtPayload): Promise<DeleteReviewResponseDto> {
+    await this.reviewAdminService.adminDeleteReview(reviewId, actor.sub);
+    return { message: 'Review deleted by moderator' };
+  }
+
   private toPlatformReportItem(row: PlatformReportItem): PlatformReportItemDto {
     return {
       reportId: row.reportId,
@@ -329,9 +392,22 @@ export class ReviewApplicationService {
  * instance state — keeping it here makes it trivial to unit-test in isolation
  * and keeps `ReviewApplicationService` focused on orchestration.
  */
-function selectHelpfulMessage(helpful: boolean, result: boolean): string {
+function selectHelpfulMessage(helpful: boolean, _result: boolean): string {
+  // Phase 5 / Issue #5 — make the helpful-vote endpoint
+  // idempotent at the response surface. The previous shape
+  // returned two different messages depending on whether a row
+  // was actually inserted/deleted. POST/DELETE with `helpful:true`
+  // is now "Helpful vote recorded" regardless of whether the
+  // underlying row was new or already existed; the same with
+  // `helpful:false`. A retrying client (network hiccup, idempotency
+  // cache replay) sees an identical payload each time.
+  //
+  // `_result` is intentionally unused — the function collapses
+  // both the "row inserted" and "row already existed" outcomes to
+  // one message. Keeping the parameter preserves the call site so
+  // a future change can re-introduce the distinction.
   if (helpful) {
-    return result ? 'Review marked as helpful' : 'Review was already marked as helpful';
+    return 'Helpful vote recorded';
   }
-  return result ? 'Helpful vote removed' : 'No helpful vote to remove';
+  return 'Helpful vote removed';
 }
