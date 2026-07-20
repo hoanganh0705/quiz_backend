@@ -39,6 +39,7 @@ import {
   GetCompletedTournamentsQueryDto,
   GetRelatedTournamentsQueryDto,
   UpdateTournamentDto,
+  GetTournamentLeaderboardQueryDto,
 } from '../../dto/request';
 import {
   TournamentResponseDto,
@@ -70,9 +71,6 @@ import {
 import {
   TOURNAMENT_DETAIL_EXAMPLE,
   TOURNAMENT_LIST_EXAMPLE,
-  UPCOMING_TOURNAMENTS_EXAMPLE,
-  ACTIVE_TOURNAMENTS_EXAMPLE,
-  COMPLETED_TOURNAMENTS_EXAMPLE,
   RELATED_TOURNAMENTS_EXAMPLE,
   TOURNAMENT_LEADERBOARD_EXAMPLE,
   TOURNAMENT_WINNERS_EXAMPLE,
@@ -153,7 +151,8 @@ export class TournamentController {
     private readonly presenter: TournamentPresenter,
   ) {}
 
-  // createTournament throws TournamentValidationError (400) when endAt <= startAt.
+  // createTournament throws TournamentValidationError (400) when endAt <= startAt,
+  // or CategoryNotFoundError (400) when the supplied categoryId does not exist.
   // 400 can also be a class-validator body validation failure — also RFC 7807.
   @Post()
   @Permissions(Permission.TOURNAMENT_CREATE)
@@ -161,7 +160,8 @@ export class TournamentController {
     summary: 'Create tournament',
     description:
       'Creates a new tournament. Requires the `TOURNAMENT_CREATE` permission. ' +
-      'A 400 is returned when the request body fails validation (e.g. `endAt` is not after `startAt`).',
+      'A 400 is returned when the request body fails validation (e.g. `endAt` is not after `startAt`) ' +
+      'or when `categoryId` references a non-existent category.',
   })
   @tournamentUnauthorizedResponse()
   @ApiCreatedResource(TournamentResponseDto, {
@@ -170,8 +170,8 @@ export class TournamentController {
   })
   @ApiBadRequestResponse({
     description:
-      'Request body failed validation. The response is an RFC 7807 ProblemDetail ' +
-      '(from class-validator or from the tournament domain for endAt <= startAt).',
+      'Request body failed validation, or `categoryId` references a non-existent category. ' +
+      'The response is an RFC 7807 ProblemDetail (from class-validator, TournamentValidationError, or CategoryNotFoundError).',
     type: ProblemDetailDto,
     example: ErrorResponseExamples.badRequest,
   })
@@ -205,77 +205,6 @@ export class TournamentController {
       .then((result) => this.presenter.listTournaments(result));
   }
 
-  // getUpcomingTournaments is a public offset-paginated listing that does not
-  // throw any tournament domain errors.
-  @Get('upcoming')
-  @Public()
-  @ApiOperation({
-    summary: 'List upcoming tournaments',
-    description:
-      'Returns an offset-paginated list of tournaments that have not yet entered the registration phase. ' +
-      'Sortable by `startAt` (default) or `registrationDeadline` (sorts by creation date — there is no separate registration deadline column).',
-  })
-  @ApiOkResourceList(UpcomingTournamentItemDto, 'offset', {
-    description: 'Upcoming tournaments returned',
-    example: UPCOMING_TOURNAMENTS_EXAMPLE,
-  })
-  @ApiBadRequestResponse({
-    description: 'Query parameters failed validation',
-    type: ProblemDetailDto,
-    example: ErrorResponseExamples.badRequest,
-  })
-  getUpcomingTournaments(@Query() query: GetUpcomingTournamentsQueryDto) {
-    return this.tournamentApplicationService
-      .getUpcomingTournaments(query)
-      .then((result) => this.presenter.getUpcomingTournaments(result));
-  }
-
-  // getActiveTournaments is a public offset-paginated listing.
-  @Get('active')
-  @Public()
-  @ApiOperation({
-    summary: 'List active tournaments',
-    description:
-      'Returns an offset-paginated list of tournaments in the registration or ongoing phases whose [startAt, endAt] window contains the current time. ' +
-      'Note: "starting-soon" is a sub-phase of the upcoming status, not a separate status.',
-  })
-  @ApiOkResourceList(ActiveTournamentItemDto, 'offset', {
-    description: 'Active tournaments returned',
-    example: ACTIVE_TOURNAMENTS_EXAMPLE,
-  })
-  @ApiBadRequestResponse({
-    description: 'Query parameters failed validation',
-    type: ProblemDetailDto,
-    example: ErrorResponseExamples.badRequest,
-  })
-  getActiveTournaments(@Query() query: GetActiveTournamentsQueryDto) {
-    return this.tournamentApplicationService
-      .getActiveTournaments(query)
-      .then((result) => this.presenter.getActiveTournaments(result));
-  }
-
-  // getCompletedTournaments is a public offset-paginated listing.
-  @Get('completed')
-  @Public()
-  @ApiOperation({
-    summary: 'List completed tournaments',
-    description: 'Returns an offset-paginated list of finished tournaments.',
-  })
-  @ApiOkResourceList(CompletedTournamentItemDto, 'offset', {
-    description: 'Completed tournaments returned',
-    example: COMPLETED_TOURNAMENTS_EXAMPLE,
-  })
-  @ApiBadRequestResponse({
-    description: 'Query parameters failed validation',
-    type: ProblemDetailDto,
-    example: ErrorResponseExamples.badRequest,
-  })
-  getCompletedTournaments(@Query() query: GetCompletedTournamentsQueryDto) {
-    return this.tournamentApplicationService
-      .getCompletedTournaments(query)
-      .then((result) => this.presenter.getCompletedTournaments(result));
-  }
-
   // getRelatedTournaments throws TournamentNotFoundError (404) when the
   // source tournament does not exist.
   @Get(':id/related')
@@ -283,7 +212,8 @@ export class TournamentController {
   @ApiOperation({
     summary: 'List related tournaments',
     description:
-      'Returns tournaments related to the given tournament (same category or adjacent time window).',
+      'Returns tournaments related to the given tournament, ranked by category match (+3), description word overlap (+1 per word), and title word overlap (+0.5 per word). ' +
+      'Includes tournaments with any status except `cancelled` (includes finished tournaments for historical browsing).',
   })
   @ApiTournamentIdParam()
   @ApiOkResource(RelatedTournamentItemDto, {
@@ -454,7 +384,8 @@ export class TournamentController {
       'and own the tournament, or hold `TOURNAMENT_EDIT_ANY`. Body is optional-only: every omitted field is ' +
       'left untouched. Editing is only allowed while the tournament is in `upcoming`, `registration`, or `ongoing`; ' +
       'while `ongoing`, only `prize` is editable. Reducing `maxParticipants` after registration has started is ' +
-      'rejected to protect already-registered participants.',
+      'rejected to protect already-registered participants. A 400 is returned when `categoryId` ' +
+      'references a non-existent category.',
   })
   @tournamentUnauthorizedResponse()
   @ApiTournamentIdParam()
@@ -590,8 +521,10 @@ export class TournamentController {
   })
   @tournamentUnauthorizedResponse()
   @ApiTournamentIdParam()
-  @ApiOkResource(RegisterTournamentResponseDto, {
-    description: 'Registered successfully',
+  // Issue #70: Use ApiCreatedResource (201) instead of ApiOkResource (200)
+  // since this endpoint creates a participant resource.
+  @ApiCreatedResource(RegisterTournamentResponseDto, {
+    description: 'Registered successfully (201 Created)',
     example: REGISTER_SUCCESS_EXAMPLE,
   })
   @ApiBadRequestResponse({
@@ -620,7 +553,8 @@ export class TournamentController {
   @ApiOperation({
     summary: 'Get tournament leaderboard',
     description:
-      'Returns the live leaderboard for the tournament with each participant rank, score, and time.',
+      'Returns the live leaderboard for the tournament with each participant rank, score, and time. ' +
+      'Results are paginated with limit and offset.',
   })
   @ApiTournamentIdParam()
   @ApiOkResource(TournamentLeaderboardEntryDto, {
@@ -633,9 +567,12 @@ export class TournamentController {
     example: ErrorResponseExamples.badRequest,
   })
   @tournamentNotFoundResponse()
-  getLeaderboard(@Param('id', new ParseUUIDPipe({ version: '7' })) tournamentId: string) {
+  getLeaderboard(
+    @Param('id', new ParseUUIDPipe({ version: '7' })) tournamentId: string,
+    @Query() query: GetTournamentLeaderboardQueryDto,
+  ) {
     return this.tournamentApplicationService
-      .getLeaderboard(tournamentId)
+      .getLeaderboard(tournamentId, { limit: query.limit ?? 50, offset: query.offset ?? 0 })
       .then((result) => this.presenter.getLeaderboard(result));
   }
 
@@ -691,8 +628,10 @@ export class TournamentController {
   @tournamentUnauthorizedResponse()
   @ApiTournamentIdParam()
   @ApiTournamentRoundIdParam()
-  @ApiOkResource(StartTournamentAttemptResponseDto, {
-    description: 'Attempt started',
+  // Issue #71: Use ApiCreatedResource (201) instead of ApiOkResource (200)
+  // since this endpoint creates an attempt resource.
+  @ApiCreatedResource(StartTournamentAttemptResponseDto, {
+    description: 'Attempt started (201 Created)',
     example: START_ATTEMPT_SUCCESS_EXAMPLE,
   })
   @ApiBadRequestResponse({
@@ -729,6 +668,7 @@ export class TournamentController {
     description:
       'Removes the authenticated user from the tournament participant list. ' +
       'Only allowed while the tournament is still in the registration phase. ' +
+      'Returns 200 with a success message body. ' +
       'Requires the `TOURNAMENT_REGISTER` permission.',
   })
   @tournamentUnauthorizedResponse()
@@ -770,6 +710,7 @@ export class TournamentController {
     description:
       'Withdraws the authenticated user from an ongoing tournament. ' +
       'Only allowed while the tournament status is `ongoing`. ' +
+      'Returns 200 with a success message body. ' +
       'Requires the `TOURNAMENT_REGISTER` permission.',
   })
   @tournamentUnauthorizedResponse()

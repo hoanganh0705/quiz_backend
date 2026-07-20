@@ -20,7 +20,6 @@ import {
   MyUpvotedCommentsResponseDto,
   MyDiscussionSubscriptionsResponseDto,
   MySavedThreadsResponseDto,
-  PublicDiscussionProfileResponseDto,
 } from '@/modules/discussion/dto/response';
 import { DiscussionPresenter } from '../presenters/discussion.presenter';
 import { MyCommentCursorMapper } from '@/modules/discussion/mappers/my-comment-cursor.mapper';
@@ -171,19 +170,5 @@ export class UserDiscussionController {
       cursor: query.cursor ? MyCommentCursorMapper.parse(query.cursor) : null,
     });
     return this.presenter.listCommentsByUser(result);
-  }
-
-  @Get('users/:userId/discussion-profile')
-  @Public()
-  @ApiOperation({ summary: 'Get a user public discussion profile' })
-  @ApiOkResource(PublicDiscussionProfileResponseDto, {
-    description: 'Public discussion profile returned',
-  })
-  @ApiParam({ name: 'userId', format: 'uuid' })
-  async getPublicDiscussionProfile(
-    @Param('userId', new ParseUUIDPipe({ version: '7' })) userId: string,
-  ) {
-    const result = await this.discussionApplicationService.getPublicDiscussionProfile(userId);
-    return this.presenter.getPublicDiscussionProfile(result);
   }
 }

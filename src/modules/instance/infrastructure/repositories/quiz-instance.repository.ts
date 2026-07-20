@@ -562,6 +562,8 @@ export class QuizInstanceRepository implements QuizInstanceRepositoryPort {
     filters?: {
       status?: string;
       difficulty?: string;
+      quizId?: string;
+      creatorId?: string;
     };
   }): Promise<import('@/modules/instance/domain/ports').QuizInstanceListRow[]> {
     const conditions: ReturnType<typeof eq>[] = [];
@@ -576,6 +578,12 @@ export class QuizInstanceRepository implements QuizInstanceRepositoryPort {
     }
     if (params.filters?.difficulty) {
       conditions.push(eq(QUIZ_VERSION_COLUMNS.difficulty, params.filters.difficulty));
+    }
+    if (params.filters?.quizId) {
+      conditions.push(eq(QUIZ_COLUMNS.quizId, params.filters.quizId));
+    }
+    if (params.filters?.creatorId) {
+      conditions.push(eq(QUIZ_COLUMNS.creatorId, params.filters.creatorId));
     }
     if (params.cursor) {
       conditions.push(

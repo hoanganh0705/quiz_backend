@@ -57,10 +57,35 @@ export class TournamentLeaderboardEntryDto {
   status!: string;
 }
 
+// Issue #28: Added pagination metadata to leaderboard response.
 export class TournamentLeaderboardResponseDto {
   @ApiProperty({
     description: 'Leaderboard entries sorted by rank',
     type: () => [TournamentLeaderboardEntryDto],
   })
   items!: TournamentLeaderboardEntryDto[];
+
+  @ApiProperty({
+    description: 'Total number of participants in the leaderboard',
+    example: 1523,
+  })
+  total!: number;
+
+  @ApiProperty({
+    description: 'Number of entries returned in this page',
+    example: 50,
+  })
+  limit!: number;
+
+  @ApiProperty({
+    description: 'Number of entries skipped (offset)',
+    example: 0,
+  })
+  offset!: number;
+
+  @ApiProperty({
+    description: 'Current page number (1-based)',
+    example: 1,
+  })
+  page!: number;
 }

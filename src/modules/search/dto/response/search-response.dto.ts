@@ -38,6 +38,35 @@ export class SearchDiscussionResultDto {
   title!: string;
 }
 
+export class SearchCategoryResultDto {
+  @ApiProperty({
+    description: 'Category identifier',
+    example: '880e8400-e29b-71d4-a716-446655440000',
+  })
+  categoryId!: string;
+
+  @ApiProperty({ description: 'Category name', example: 'Web Development' })
+  name!: string;
+
+  @ApiPropertyOptional({
+    description: 'Category slug',
+    example: 'web-development',
+    nullable: true,
+  })
+  slug!: string | null;
+}
+
+export class SearchTagResultDto {
+  @ApiProperty({
+    description: 'Tag identifier',
+    example: '990e8400-e29b-71d4-a716-446655440000',
+  })
+  tagId!: string;
+
+  @ApiProperty({ description: 'Tag name', example: 'typescript' })
+  name!: string;
+}
+
 export class SearchResponseDto {
   @ApiProperty({ description: 'The query string echoed back as performed', example: 'nestjs' })
   query!: string;
@@ -59,4 +88,18 @@ export class SearchResponseDto {
     type: () => [SearchDiscussionResultDto],
   })
   discussions!: SearchDiscussionResultDto[];
+
+  @ApiProperty({
+    description: 'Matching categories, ordered by relevance',
+    type: () => [SearchCategoryResultDto],
+    default: [],
+  })
+  categories!: SearchCategoryResultDto[];
+
+  @ApiProperty({
+    description: 'Matching tags, ordered by relevance',
+    type: () => [SearchTagResultDto],
+    default: [],
+  })
+  tags!: SearchTagResultDto[];
 }

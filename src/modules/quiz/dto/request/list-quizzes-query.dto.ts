@@ -4,6 +4,7 @@ import {
   ArrayMinSize,
   ArrayUnique,
   IsArray,
+  IsBoolean,
   IsIn,
   IsInt,
   IsOptional,
@@ -75,10 +76,6 @@ export class ListQuizzesQueryDto {
   })
   @IsOptional()
   @Transform(({ value }: { value: unknown }) => {
-    // Query string `?tagIds=<uuid>` parses as a single string; wrap it so
-    // the existing `@IsArray()` contract accepts both forms (single value
-    // and repeated `?tagIds=<uuid>&tagIds=<uuid>`) without changing the
-    // OpenAPI surface.
     if (value === undefined || value === null) return value;
     if (Array.isArray(value)) return value as string[];
     if (typeof value === 'string') return [value];
@@ -90,4 +87,38 @@ export class ListQuizzesQueryDto {
   @ArrayUnique()
   @IsUUID('7', { each: true })
   tagIds?: string[];
+
+  @ApiPropertyOptional({
+    description: 'Filter by creator/owner UUID',
+    format: 'uuid',
+    example: '550e8400-e29b-71d4-a716-446655440000',
+    nullable: true,
+  })
+  @IsOptional()
+  @IsUUID('7')
+  creatorId?: string;
+
+  @ApiPropertyOptional({
+    description: 'Filter by quiz status (draft or published)',
+    type: String,
+    nullable: true,
+  })
+  @IsOptional()
+  @IsIn(['draft', 'published'])
+  status?: 'draft' | 'published';
+
+  @ApiPropertyOptional({
+    description: 'Filter to featured quizzes only',
+    type: Boolean,
+    default: false,
+    nullable: true,
+  })
+  @IsOptional()
+  @Transform(({ value }: { value: unknown }) => {
+    if (typeof value === 'boolean') return value;
+    if (typeof value === 'string') return value === 'true';
+    return value;
+  })
+  @IsBoolean()
+  featured?: boolean;
 }

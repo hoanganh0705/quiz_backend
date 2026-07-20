@@ -161,6 +161,8 @@ export interface QuizInstanceRepositoryPort {
     filters?: {
       status?: 'open' | 'running' | 'closed' | 'finished';
       difficulty?: string;
+      quizId?: string;
+      creatorId?: string;
     };
   }): Promise<QuizInstanceListRow[]>;
 

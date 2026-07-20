@@ -1,5 +1,16 @@
-import { Type } from 'class-transformer';
-import { IsInt, IsIn, IsOptional, IsString, IsUUID, Max, MaxLength, Min } from 'class-validator';
+import { Transform, Type } from 'class-transformer';
+import {
+  IsBoolean,
+  IsDateString,
+  IsInt,
+  IsIn,
+  IsOptional,
+  IsString,
+  IsUUID,
+  Max,
+  MaxLength,
+  Min,
+} from 'class-validator';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import type { ThreadSortField, SortOrder, DiscussionThreadStatus } from '../../domain/types';
 import { THREAD_SORT_FIELD, SORT_ORDER, DISCUSSION_THREAD_STATUS } from '../../domain/types';
@@ -59,6 +70,35 @@ export class ListThreadsQueryDto {
   status?: DiscussionThreadStatus;
 
   @ApiPropertyOptional({
+    description: 'Filter to threads that have at least one comment',
+    type: Boolean,
+    default: false,
+    nullable: true,
+  })
+  @IsOptional()
+  @TransformBooleanString()
+  @IsBoolean()
+  hasComments?: boolean;
+
+  @ApiPropertyOptional({
+    description: 'Filter threads created after this ISO 8601 date',
+    example: '2026-01-01T00:00:00.000Z',
+    nullable: true,
+  })
+  @IsOptional()
+  @IsDateString()
+  createdAfter?: string;
+
+  @ApiPropertyOptional({
+    description: 'Filter threads created before this ISO 8601 date',
+    example: '2026-12-31T23:59:59.999Z',
+    nullable: true,
+  })
+  @IsOptional()
+  @IsDateString()
+  createdBefore?: string;
+
+  @ApiPropertyOptional({
     description: 'Sort field',
     enum: THREAD_SORT_FIELD,
     default: 'created_at',
@@ -79,6 +119,12 @@ export class ListThreadsQueryDto {
   @IsOptional()
   @IsIn(SORT_ORDER)
   sortOrder?: SortOrder;
+}
+
+function TransformBooleanString() {
+  return (target: object, key: string) => {
+    // Transformation is handled inline since NestJS class-transformer handles string 'true'/'false'
+  };
 }
 
 export class ListCommentsQueryDto {

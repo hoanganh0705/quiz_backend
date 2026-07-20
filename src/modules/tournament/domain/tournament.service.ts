@@ -2,6 +2,8 @@ import { Inject, Injectable } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { DRIZZLE } from '@/core/database/drizzle.constants';
 import type { DrizzleDB } from '@/core/database/database.module';
+import { CATEGORY_REPOSITORY_PORT, type CategoryRepositoryPort } from '@/modules/category/domain/ports';
+import { CategoryNotFoundError } from '@/modules/category/domain/errors';
 import { getCorrelationId } from '@/common/interceptors/correlation-id';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
 import {
@@ -104,6 +106,8 @@ export class TournamentService {
     private readonly eventBus: TournamentDomainEventBusPort,
     @Inject(TOURNAMENT_OUTBOX_PORT)
     private readonly tournamentOutbox: TournamentOutboxPort,
+    @Inject(CATEGORY_REPOSITORY_PORT)
+    private readonly categoryRepository: CategoryRepositoryPort,
     @Inject(DRIZZLE) private readonly db: DrizzleDB,
     @InjectPinoLogger(TournamentService.name)
     private readonly logger: PinoLogger,
@@ -121,6 +125,14 @@ export class TournamentService {
     if (new Date(payload.endAt) <= new Date(payload.startAt)) {
       throw new TournamentValidationError('endAt must be after startAt');
     }
+
+    if (payload.categoryId !== undefined && payload.categoryId !== null) {
+      const category = await this.categoryRepository.findById(payload.categoryId);
+      if (!category) {
+        throw new CategoryNotFoundError();
+      }
+    }
+
     const nowIso = new Date().toISOString();
 
     const result = await this.tournamentRepository.createTournament({
@@ -243,6 +255,13 @@ export class TournamentService {
       throw new TournamentCapacityReductionError(
         'maxParticipants cannot be reduced after registration has started',
       );
+    }
+
+    if (payload.categoryId !== undefined && payload.categoryId !== null) {
+      const category = await this.categoryRepository.findById(payload.categoryId);
+      if (!category) {
+        throw new CategoryNotFoundError();
+      }
     }
 
     const nowIso = new Date().toISOString();
@@ -908,9 +927,17 @@ export class TournamentService {
     return withdrawn;
   }
 
-  async getLeaderboard(tournamentId: string): Promise<TournamentLeaderboardEntry[]> {
+  // Issue #28: Added pagination to prevent unbounded responses.
+  async getLeaderboard(
+    tournamentId: string,
+    query: { limit: number; offset: number },
+  ): Promise<{ items: TournamentLeaderboardEntry[]; total: number }> {
     await this.getActiveTournamentOrThrow(tournamentId);
-    return this.tournamentRepository.getLeaderboard(tournamentId);
+    return this.tournamentRepository.getLeaderboard({
+      tournamentId,
+      limit: query.limit,
+      offset: query.offset,
+    });
   }
 
   async startRoundAttempt(

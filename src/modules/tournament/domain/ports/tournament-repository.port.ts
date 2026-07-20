@@ -366,7 +366,12 @@ export interface TournamentRepositoryPort {
     nowIso: string;
   }): Promise<TournamentRoundParticipantRow>;
 
-  getLeaderboard(tournamentId: string): Promise<TournamentLeaderboardEntry[]>;
+  // Issue #28: Added pagination to prevent unbounded responses.
+  getLeaderboard(params: {
+    tournamentId: string;
+    limit: number;
+    offset: number;
+  }): Promise<{ items: TournamentLeaderboardEntry[]; total: number }>;
 
   getWinners(params: { tournamentId: string; limit: number }): Promise<TournamentWinnerRow[]>;
 

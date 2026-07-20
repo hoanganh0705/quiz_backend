@@ -286,6 +286,8 @@ export class InstanceService {
     filters?: {
       status?: string;
       difficulty?: string;
+      quizId?: string;
+      creatorId?: string;
     };
   }): Promise<{
     rows: import('./ports').QuizInstanceListRow[];
@@ -306,7 +308,7 @@ export class InstanceService {
       limit,
       cursor,
       filters: params.filters as
-        | { status?: 'open' | 'running' | 'closed' | 'finished'; difficulty?: string }
+        | { status?: 'open' | 'running' | 'closed' | 'finished'; difficulty?: string; quizId?: string; creatorId?: string }
         | undefined,
     });
 
