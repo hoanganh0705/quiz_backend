@@ -5,6 +5,8 @@ import {
   REVIEW_FORBIDDEN_MESSAGE,
   REVIEW_NOT_FOUND_MESSAGE,
   REVIEW_QUIZ_USER_CONFLICT_MESSAGE,
+  REVIEW_REPORT_INVALID_TRANSITION_MESSAGE,
+  REVIEW_REPORT_NOT_FOUND_MESSAGE,
 } from '../../review.constants';
 
 /**
@@ -119,6 +121,31 @@ export class ReviewAttemptRequiredError extends ReviewDomainError {
 export class ReviewAlreadyReportedError extends ReviewDomainError {
   readonly code = 'REVIEW_ALREADY_REPORTED';
   constructor(message = REVIEW_ALREADY_REPORTED_MESSAGE) {
+    super(message);
+  }
+}
+
+/**
+ * Phase 2 / Issue #38 — thrown when a moderator tries to change
+ * the status of a report that does not exist. 404 Not Found.
+ */
+export class ReviewReportNotFoundError extends ReviewDomainError {
+  readonly code = 'REVIEW_REPORT_NOT_FOUND';
+  constructor(message = REVIEW_REPORT_NOT_FOUND_MESSAGE) {
+    super(message);
+  }
+}
+
+/**
+ * Phase 2 / Issue #38 — thrown when a moderator tries to change
+ * the status of a report to a value the state machine does not
+ * permit (e.g. `reviewed → open`, or any transition out of the
+ * terminal `reviewed` / `dismissed` / `actioned` states). 409
+ * Conflict.
+ */
+export class ReviewReportInvalidTransitionError extends ReviewDomainError {
+  readonly code = 'REVIEW_REPORT_INVALID_TRANSITION';
+  constructor(message = REVIEW_REPORT_INVALID_TRANSITION_MESSAGE) {
     super(message);
   }
 }

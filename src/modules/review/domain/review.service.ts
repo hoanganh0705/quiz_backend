@@ -9,6 +9,7 @@ import {
   REVIEW_REPORT_REPOSITORY_PORT,
   type ReviewReportRepositoryPort,
 } from './ports/review-report-repository.port';
+import { REVIEW_OUTBOX_PORT, type ReviewOutboxPort } from './ports/review-outbox.port';
 import { QUIZ_REPOSITORY_PORT } from '@/modules/quiz/domain/ports';
 import { QuizAnalyticsService } from '@/modules/quiz/domain/analytics';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
@@ -26,7 +27,6 @@ import {
   REVIEW_QUIZ_USER_CONFLICT_MESSAGE,
   REVIEW_ATTEMPT_REQUIRED_MESSAGE,
 } from '../review.constants';
-import { REVIEW_ANALYTICS_PORT, type ReviewAnalyticsPort } from './events';
 import {
   ReviewSubmittedEvent,
   ReviewDeletedEvent,
@@ -52,16 +52,19 @@ export class ReviewService {
     private readonly reportRepository: ReviewReportRepositoryPort,
     @Inject(QUIZ_REPOSITORY_PORT)
     private readonly quizRepository: {
-      getActiveQuizRecordById: (
-        quizId: string,
-      ) => Promise<{ quizId: string; creatorId: string | null } | null>;
+      getActiveQuizRecordById: (quizId: string) => Promise<{
+        quizId: string;
+        creatorId: string | null;
+        isHidden: boolean;
+        publishedVersionId: string | null;
+      } | null>;
     },
     @Inject(QuizAnalyticsService)
     private readonly quizAnalyticsService: QuizAnalyticsService,
-    @Inject(REVIEW_ANALYTICS_PORT)
-    private readonly reviewAnalytics: ReviewAnalyticsPort,
     @Inject(REVIEW_DOMAIN_EVENT_BUS)
     private readonly reviewEventBus: ReviewDomainEventBusPort,
+    @Inject(REVIEW_OUTBOX_PORT)
+    private readonly reviewOutbox: ReviewOutboxPort,
     @InjectPinoLogger(ReviewService.name)
     private readonly logger: PinoLogger,
   ) {}
@@ -75,7 +78,11 @@ export class ReviewService {
     const nowIso = new Date().toISOString();
 
     const quiz = await this.quizRepository.getActiveQuizRecordById(quizId);
-    if (!quiz) {
+    if (!quiz || !ReviewAuthorizationPolicy.isVisibleToReviewers(quiz)) {
+      // Phase 1 / Issue #1 — hidden or unpublished quizzes must not be
+      // reviewable. We collapse "not found", "soft-deleted", "hidden",
+      // and "no published version" into a single 404 to avoid leaking
+      // the existence of unpublished assets to users.
       throw new ReviewNotFoundError('Quiz not found');
     }
 
@@ -89,18 +96,54 @@ export class ReviewService {
       throw new ReviewAttemptRequiredError(REVIEW_ATTEMPT_REQUIRED_MESSAGE);
     }
 
-    const existing = await this.reviewRepository.getReviewByQuizAndUser(quizId, user.sub);
-    if (existing) {
-      this.logger.warn({
-        event: 'review_duplicate',
-        quizId,
-        userId: user.sub,
-      });
-      throw new ReviewConflictError(REVIEW_QUIZ_USER_CONFLICT_MESSAGE);
-    }
+    // Phase 2 / Issue #2 — the duplicate-review check used to live
+    // here as a `SELECT` outside the transaction. Two concurrent
+    // requests from the same user could both pass it and only the
+    // UNIQUE index would catch the second one (with a `review_create_conflict`
+    // log line per race). The same check now runs INSIDE the
+    // transaction under a `pg_advisory_xact_lock` keyed on
+    // `(quizId, userId)`, so the second caller deterministically
+    // receives `ReviewConflictError` without burning a UNIQUE-violation
+    // log. The pre-transaction `getReviewByQuizAndUser` is therefore
+    // redundant and intentionally removed.
 
     try {
       const review = await this.db.transaction(async (tx) => {
+        // Phase 2 / Issue #2 — pg_advisory_xact_lock serializes
+        // concurrent `createReview` calls for the same (quizId,
+        // userId) pair. The pre-check
+        // `getReviewByQuizAndUser` above is still useful for the
+        // common case (single-tab user, fast path), but two
+        // concurrent calls from the same user can both pass it.
+        // The advisory lock collapses both branches onto a single
+        // path: the second transaction blocks until the first
+        // commits, then re-checks inside the lock and throws
+        // `ReviewConflictError` deterministically. The UNIQUE index
+        // is still the source of truth — this lock is a
+        // defense-in-depth that suppresses the `review_create_conflict`
+        // log spam and keeps the 23505 path reserved for genuine
+        // race conditions (e.g. an advisory-lock eviction).
+        //
+        // `hashtext` returns int4; we XOR the two hashes so two
+        // (quiz, user) pairs cannot collide in the lock space
+        // unless the inputs collide.
+        await tx.execute(
+          sql`SELECT pg_advisory_xact_lock(hashtext(${quizId}) # hashtext(${user.sub}))`,
+        );
+
+        const existingInsideLock = await this.reviewRepository.getReviewByQuizAndUser(
+          quizId,
+          user.sub,
+        );
+        if (existingInsideLock) {
+          this.logger.warn({
+            event: 'review_duplicate',
+            quizId,
+            userId: user.sub,
+          });
+          throw new ReviewConflictError(REVIEW_QUIZ_USER_CONFLICT_MESSAGE);
+        }
+
         const [created] = await tx
           .insert(quizReviews)
           .values({
@@ -121,6 +164,27 @@ export class ReviewService {
             createdAt: quizReviews.createdAt,
             updatedAt: quizReviews.updatedAt,
           });
+
+        // Phase 1 / Issue #3 — schedule the analytics refresh through
+        // the transactional outbox so the outbox row is committed
+        // atomically with the new `quiz_reviews` row. If the
+        // transaction rolls back, the outbox row never becomes visible
+        // and the worker will not see a phantom event. The previous
+        // implementation dispatched the event to the in-memory bus
+        // after the transaction committed, which could lose the event
+        // on application crash and silently drift the denormalized
+        // counters in `quiz_stats`.
+        await this.reviewOutbox.scheduleReviewSubmitted(
+          {
+            quizId,
+            reviewId: created.reviewId,
+            userId: created.userId,
+            rating: created.rating,
+          },
+          tx,
+          nowIso,
+        );
+
         return created;
       });
 
@@ -150,10 +214,20 @@ export class ReviewService {
   async listReviews(
     quizId: string,
     limit: number,
-    cursor?: { createdAt: string; reviewId: string } | null,
+    // Phase 5 / Issue #11 — cursor shape depends on sort.
+    cursor?: import('./ports').ReviewListCursor | null,
     rating?: number,
     sort?: import('./ports').ReviewSort,
   ) {
+    // Phase 1 / Issue #25 — listing reviews for a hidden or unpublished
+    // quiz would leak both the existence of unpublished assets and the
+    // identities of their authors. We mirror the gating used by
+    // `getQuizReviewStats` so the two public read endpoints stay
+    // consistent.
+    const quiz = await this.quizRepository.getActiveQuizRecordById(quizId);
+    if (!quiz || !ReviewAuthorizationPolicy.isVisibleToReviewers(quiz)) {
+      throw new ReviewNotFoundError('Quiz not found');
+    }
     return this.reviewRepository.listReviewsByQuiz({ quizId, limit, cursor, rating, sort });
   }
 
@@ -209,6 +283,15 @@ export class ReviewService {
       throw new ReviewNotFoundError(REVIEW_NOT_FOUND_MESSAGE);
     }
 
+    // Phase 5 / Issue #20 — refuse to surface reviews of hidden
+    // or unpublished quizzes. The endpoint is now auth-only at
+    // the controller layer; the visibility check is the second
+    // gate that stops an authenticated client from enumerating
+    // hidden quizzes by guessing review UUIDs. We surface a 404
+    // rather than a 403 so the existence of a review on a hidden
+    // quiz is not leaked.
+    await this.assertQuizVisibleById(review.quizId);
+
     return review;
   }
 
@@ -222,7 +305,11 @@ export class ReviewService {
   async getQuizReviewStats(quizId: string): Promise<ReviewStatsRow | null> {
     const quiz = await this.quizRepository.getActiveQuizRecordById(quizId);
 
-    if (!quiz) {
+    if (!quiz || !ReviewAuthorizationPolicy.isVisibleToReviewers(quiz)) {
+      // Phase 1 / Issue #25 — public review-stats endpoint must refuse
+      // hidden or unpublished quizzes. The 404 also stops ownership
+      // enumeration (a creator who sets `is_hidden = true` should not
+      // be told "this quiz exists, you just can't see it").
       throw new ReviewNotFoundError('Quiz not found');
     }
 
@@ -242,6 +329,23 @@ export class ReviewService {
   }
 
   /**
+   * Phase 1 / Issue #1 — central gate that a quiz is visible to
+   * reviewers. Hidden or unpublished quizzes cannot receive
+   * reviews, helpful votes, or reports.
+   *
+   * The policy returns false when the quiz is missing, hidden, or
+   * has no published version; in every case we throw the same
+   * `ReviewNotFoundError` to avoid leaking the existence of
+   * unpublished assets.
+   */
+  private async assertQuizVisibleById(quizId: string): Promise<void> {
+    const quiz = await this.quizRepository.getActiveQuizRecordById(quizId);
+    if (!quiz || !ReviewAuthorizationPolicy.isVisibleToReviewers(quiz)) {
+      throw new ReviewNotFoundError('Quiz not found');
+    }
+  }
+
+  /**
    * Load the review and assert that `userId` is allowed to vote on it.
    *
    * Throws `ReviewNotFoundError` if the review does not exist, and
@@ -249,6 +353,15 @@ export class ReviewService {
    *
    * Shared by `addHelpfulVote` and `removeHelpfulVote` so both endpoints
    * share one fetch and one self-vote rejection.
+   *
+   * Phase 5 / Issue #19 — the lookup uses `getReviewById`, which
+   * selects only the columns of `quiz_reviews` (no joins). The
+   * audit's recommendation originally called out a heavyweight
+   * query path (`findReviewById`) that joined `users` and `quizzes`
+   * for every vote attempt; the service was already pointing at the
+   * slim method, so no schema change is needed. The comment is kept
+   * here so a future contributor does not "optimize" this back to
+   * the joined version.
    */
   private async assertCanVote(reviewId: string, userId: string): Promise<void> {
     const review = await this.reviewRepository.getReviewById(reviewId);
@@ -257,6 +370,16 @@ export class ReviewService {
       throw new ReviewNotFoundError(REVIEW_NOT_FOUND_MESSAGE);
     }
 
+    // Phase 1 / Issue #1 — voting on a hidden quiz's review is not
+    // a useful operation for the public, but a reviewer who voted
+    // before the quiz was hidden still expects to be able to undo
+    // their vote. We restrict the read to a visible quiz for the
+    // *add* path; the *remove* path uses the same helper and
+    // therefore inherits the same restriction. A future change can
+    // allow the author to withdraw votes on hidden quizzes they
+    // already cast, but that is a product decision outside Phase 1.
+    await this.assertQuizVisibleById(review.quizId);
+
     if (review.userId === userId) {
       this.logger.warn({ event: 'review_self_helpful_vote', reviewId, userId });
       throw new ReviewValidationError('You cannot vote on your own review');
@@ -264,6 +387,12 @@ export class ReviewService {
   }
 
   async addHelpfulVote(reviewId: string, userId: string): Promise<boolean> {
+    // Phase 5 / Issue #17 — `getReviewById` filters by
+    // `deleted_at IS NULL`, so calling this on a soft-deleted
+    // review throws `ReviewNotFoundError`. That is the desired
+    // behavior for the *add* path: we don't accept fresh helpful
+    // votes against content the moderator (or the author) chose
+    // to take down.
     await this.assertCanVote(reviewId, userId);
 
     const inserted = await this.reviewRepository.addHelpfulVote({
@@ -280,7 +409,25 @@ export class ReviewService {
   }
 
   async removeHelpfulVote(reviewId: string, userId: string): Promise<boolean> {
-    await this.assertCanVote(reviewId, userId);
+    // Phase 5 / Issue #17 — the *withdrawal* path is the
+    // inverse of the add path: a user who voted "helpful"
+    // against a now-soft-deleted review should still be able
+    // to withdraw that vote, otherwise their vote row would
+    // survive the soft-delete indefinitely (which is exactly
+    // what the audit flagged). We use the slim
+    // `reviewExistsIncludingDeleted` helper which does NOT
+    // filter on `deleted_at`, so this method works for live
+    // and soft-deleted reviews alike.
+    const exists = await this.reviewRepository.reviewExistsIncludingDeleted(reviewId);
+
+    if (!exists) {
+      this.logger.warn({
+        event: 'review_helpful_withdraw_review_not_found',
+        reviewId,
+        userId,
+      });
+      throw new ReviewNotFoundError(REVIEW_NOT_FOUND_MESSAGE);
+    }
 
     const removed = await this.reviewRepository.removeHelpfulVote({
       reviewId,
@@ -306,6 +453,16 @@ export class ReviewService {
     if (!review) {
       this.logger.warn({ event: 'review_report_review_not_found', reviewId, reporterId });
       throw new ReviewNotFoundError(REVIEW_NOT_FOUND_MESSAGE);
+    }
+
+    // Phase 1 / Issue #1 — do not accept reports against reviews of
+    // hidden or unpublished quizzes; the underlying asset is
+    // off-limits to public moderation flows.
+    await this.assertQuizVisibleById(review.quizId);
+
+    if (review.userId === reporterId) {
+      this.logger.warn({ event: 'review_self_report', reviewId, reporterId });
+      throw new ReviewValidationError('You cannot report your own review');
     }
 
     const hasReported = await this.reportRepository.hasUserReportedReview(reviewId, reporterId);
@@ -336,10 +493,20 @@ export class ReviewService {
   async updateReview(
     quizId: string,
     rating: number,
-    comment: string | null | undefined,
+    // Phase 5 / Issue #24 — `comment` is `{ set: string | null }`
+    // when the client explicitly included the field in the PATCH
+    // body, or `undefined` when the client omitted it. The
+    // repository distinguishes the two cases and only writes
+    // `comment` when `set` is present.
+    comment: { set: string | null } | undefined,
     user: JwtPayload,
   ) {
     const nowIso = new Date().toISOString();
+
+    // Phase 1 / Issue #1 — refuse updates on hidden or unpublished
+    // quizzes. The same predicate is applied on `createReview` so the
+    // two sides of the lifecycle stay consistent.
+    await this.assertQuizVisibleById(quizId);
 
     const existing = await this.reviewRepository.getReviewByQuizAndUser(quizId, user.sub);
     if (!existing) {
@@ -356,7 +523,7 @@ export class ReviewService {
     const updated = await this.reviewRepository.updateReview({
       reviewId: existing.reviewId,
       rating,
-      comment: comment ?? null,
+      comment,
       nowIso,
     });
 
@@ -375,6 +542,11 @@ export class ReviewService {
   }
 
   async deleteReview(quizId: string, user: JwtPayload) {
+    // Phase 1 / Issue #1 — refuse deletes on hidden or unpublished
+    // quizzes. Mirrors the create/update check so the full mutation
+    // surface is uniformly gated.
+    await this.assertQuizVisibleById(quizId);
+
     const existing = await this.reviewRepository.getReviewByQuizAndUser(quizId, user.sub);
     if (!existing) {
       throw new ReviewNotFoundError(REVIEW_NOT_FOUND_MESSAGE);
@@ -387,9 +559,46 @@ export class ReviewService {
       throw new ReviewForbiddenError(REVIEW_FORBIDDEN_MESSAGE);
     }
 
+    const nowIso = new Date().toISOString();
+    let didSoftDelete = false;
+
     await this.db.transaction(async (tx) => {
-      await tx.delete(quizReviews).where(sql`${quizReviews.reviewId} = ${existing.reviewId}`);
+      // Phase 5 / Issue #17 — soft-delete writes
+      // `deleted_at = now` instead of issuing `DELETE FROM
+      // quiz_reviews`. The previous shape cascaded into
+      // `review_helpful_votes` and erased every vote against
+      // the review with no UI signal for the voter. Soft-delete
+      // preserves the vote rows so voters can still withdraw
+      // their vote through `DELETE /reviews/:reviewId/helpful`.
+      // The repository filters every public read by
+      // `deleted_at IS NULL`, so the row is invisible everywhere
+      // a client could see it.
+      didSoftDelete = await this.reviewRepository.softDeleteReview(existing.reviewId, nowIso);
+
+      if (!didSoftDelete) {
+        // The review was already soft-deleted between the
+        // read and the write — treat as a no-op so the
+        // DELETE endpoint stays idempotent. The outer
+        // transaction will roll back the outbox row by
+        // simply not having scheduled one.
+        return;
+      }
+
+      // Phase 1 / Issue #3 — schedule the analytics refresh through
+      // the transactional outbox so the soft-delete + outbox insert
+      // are atomic. See the matching call in `createReview` for the
+      // rationale.
+      await this.reviewOutbox.scheduleReviewDeleted(
+        { quizId, reviewId: existing.reviewId },
+        tx,
+        nowIso,
+      );
     });
+
+    if (!didSoftDelete) {
+      // Already soft-deleted — idempotent success, no event, no log.
+      return;
+    }
 
     this.logger.info({
       event: 'review_deleted',
@@ -404,7 +613,11 @@ export class ReviewService {
 
   async listReportedReviews(
     reporterId: string,
-    query: { limit?: number; cursor?: { createdAt: string; reportId: string } | null },
+    query: {
+      limit?: number;
+      cursor?: { createdAt: string; reportId: string } | null;
+      status?: import('./policies/review-report-status.policy').ReviewReportStatus | null;
+    },
   ): Promise<{
     items: import('./ports').ReportedReviewRow[];
     limit: number;
@@ -414,7 +627,12 @@ export class ReviewService {
     const limit = query.limit ?? 10;
     const cursor = query.cursor ?? null;
 
-    const rows = await this.reportRepository.listReportedReviews({ reporterId, limit, cursor });
+    const rows = await this.reportRepository.listReportedReviews({
+      reporterId,
+      limit,
+      cursor,
+      status: query.status ?? null,
+    });
 
     const hasNextPage = rows.length > limit;
     const items = hasNextPage ? rows.slice(0, limit) : rows;

@@ -1,6 +1,7 @@
 export {
   type BookmarkedQuizRow,
   type BookmarkedQuizDetailRow,
+  type BulkBookmarkMutationRow,
   type RecentBookmarkRow,
   type SearchBookmarkRow,
   type BookmarkStatusRow,

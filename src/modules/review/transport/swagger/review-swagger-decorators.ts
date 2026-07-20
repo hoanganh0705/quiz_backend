@@ -6,6 +6,7 @@ import {
   ApiForbiddenResponse,
   ApiInternalServerErrorResponse,
   ApiNotFoundResponse,
+  ApiOperation,
   ApiParam,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
@@ -70,6 +71,7 @@ import {
   reviewForbiddenPermissionExample,
   reviewInternalErrorExample,
   reviewNotFoundExample,
+  reviewSelfReportExample,
   reviewSelfVoteExample,
   reviewUnauthorizedExample,
 } from './examples/errors.examples';
@@ -277,6 +279,9 @@ export const ApiReportReviewResponses = (): MethodDecorator =>
   applyDecorators(
     resourceOk(ReportReviewResponseDto, 'Review reported successfully', REVIEW_REPORTED_EXAMPLE),
     ApiUnauthorizedResponse(problem.unauthorized(reviewUnauthorizedExample)),
+    ApiBadRequestResponse(
+      problem.badRequest(reviewSelfReportExample, 'You cannot report your own review'),
+    ),
     ApiNotFoundResponse(problem.notFound(reviewNotFoundExample)),
     ApiConflictResponse(
       problem.conflict(reviewAlreadyReportedExample, 'You have already reported this review'),
@@ -376,6 +381,31 @@ export const ApiUpdateReportStatusResponses = (): MethodDecorator =>
     ApiUnauthorizedResponse(problem.unauthorized(reviewUnauthorizedExample)),
     ApiForbiddenResponse(problem.forbidden(reviewForbiddenPermissionExample)),
     ApiBadRequestResponse(problem.badRequest(reviewBadRequestExample)),
+    ApiInternalServerErrorResponse(problem.internalError(reviewInternalErrorExample)),
+  );
+
+// ─── DELETE /admin/reviews/:reviewId ─────────────────────────────────
+
+export const ApiAdminDeleteReviewResponses = (): MethodDecorator =>
+  applyDecorators(
+    ApiBearerAuth(AUTH_SECURITY_NAME),
+    ApiOperation({
+      summary: 'Delete any review by id (moderator)',
+      description:
+        'Phase 1 / Issue #22 — moderator route for removing any review, including ' +
+        'reviews authored by other users. The self-delete endpoint ' +
+        '`DELETE /quizzes/:quizId/reviews` is keyed on `(quizId, user.sub)` ' +
+        'and cannot reach another author. The action is recorded in the audit log.',
+    }),
+    ApiParam({
+      name: 'reviewId',
+      description: 'Review identifier',
+      example: '550e8400-e29b-71d4-a716-446655440099',
+    }),
+    resourceOk(DeleteReviewResponseDto, 'Review deleted by moderator', REVIEW_DELETED_EXAMPLE),
+    ApiUnauthorizedResponse(problem.unauthorized(reviewUnauthorizedExample)),
+    ApiForbiddenResponse(problem.forbidden(reviewForbiddenPermissionExample)),
+    ApiNotFoundResponse(problem.notFound(reviewNotFoundExample)),
     ApiInternalServerErrorResponse(problem.internalError(reviewInternalErrorExample)),
   );
 

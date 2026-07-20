@@ -146,12 +146,12 @@ describe('Bulk bookmark events refresh quiz_stats (e2e)', () => {
 
     afterAll(async () => {
       if (quizIds.length > 0) {
-        await db
-          .delete(bookmarkedQuizzes)
-          .where(eq(bookmarkedQuizzes.collectionId, collectionId));
+        await db.delete(bookmarkedQuizzes).where(eq(bookmarkedQuizzes.collectionId, collectionId));
       }
       if (collectionId) {
-        await db.delete(bookmarkCollections).where(eq(bookmarkCollections.collectionId, collectionId));
+        await db
+          .delete(bookmarkCollections)
+          .where(eq(bookmarkCollections.collectionId, collectionId));
       }
       if (quizIds.length > 0) {
         await db.delete(quizzes).where(eq(quizzes.quizId, quizIds[0]));
@@ -195,11 +195,7 @@ describe('Bulk bookmark events refresh quiz_stats (e2e)', () => {
     }
 
     it('emits one event per row added, refreshing quiz_stats for every distinct quiz', async () => {
-      const addedCount = await commandService.addBookmarksBulk(
-        ownerUserId,
-        collectionId,
-        quizIds,
-      );
+      const addedCount = await commandService.addBookmarksBulk(ownerUserId, collectionId, quizIds);
       expect(addedCount).toBe(3);
 
       for (const quizId of quizIds) {
@@ -208,11 +204,7 @@ describe('Bulk bookmark events refresh quiz_stats (e2e)', () => {
 
       // Idempotent re-add must NOT double-count: the unique pair constraint turns the
       // insert into a no-op, no events are emitted, and quiz_stats stays at 1.
-      const secondPass = await commandService.addBookmarksBulk(
-        ownerUserId,
-        collectionId,
-        quizIds,
-      );
+      const secondPass = await commandService.addBookmarksBulk(ownerUserId, collectionId, quizIds);
       expect(secondPass).toBe(0);
 
       for (const quizId of quizIds) {

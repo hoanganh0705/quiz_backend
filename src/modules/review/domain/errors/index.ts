@@ -6,4 +6,6 @@ export {
   ReviewValidationError,
   ReviewAttemptRequiredError,
   ReviewAlreadyReportedError,
+  ReviewReportNotFoundError,
+  ReviewReportInvalidTransitionError,
 } from './review-domain.errors';
