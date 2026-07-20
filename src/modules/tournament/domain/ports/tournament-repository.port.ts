@@ -276,6 +276,71 @@ export interface TournamentRepositoryPort {
 
   reactivateParticipant(participantId: string, nowIso: string): Promise<TournamentParticipantRow>;
 
+  /**
+   * Phase 2 / Issues #3, #4 — atomic tournament registration.
+   *
+   * Replaces the read-then-write pattern in `registerForTournament`
+   * with a single transaction that:
+   *
+   *   1. Locks the tournament row with `SELECT … FOR UPDATE` to
+   *      prevent concurrent capacity-check races.
+   *   2. Counts active participants (now fully consistent inside the lock).
+   *   3. Upserts the participant row with `ON CONFLICT DO NOTHING` so
+   *      concurrent duplicate registrations resolve cleanly rather than
+   *      throwing a 500.
+   *   4. If nothing was inserted (user already registered / withdrawn),
+   *      re-reads and returns the existing row.
+   *
+   * The capacity check runs inside the row lock so two concurrent
+   * registrations when `count == max - 1` cannot both succeed — the
+   * second transaction blocks on the FOR UPDATE and sees the correct
+   * post-insert count.
+   *
+   * The `ON CONFLICT DO NOTHING` makes re-registration idempotent at
+   * the DB level; the return value disambiguates "inserted fresh"
+   * from "already active / withdrawn" for the service layer.
+   *
+   * Throws `TournamentFullError` (via the service) when the cap
+   * would be exceeded. Throws nothing when the user is already
+   * registered (service maps `null` return → `TournamentAlreadyRegisteredError`).
+   *
+   * Returns `{ participant, inserted }` where `inserted` is `true`
+   * when the participant row was freshly created, allowing the
+   * service to distinguish a first-time registration from an
+   * idempotent re-entry (for event publishing decisions).
+   */
+  atomicRegister(params: {
+    tournamentId: string;
+    userId: string;
+    nowIso: string;
+  }): Promise<{ participant: TournamentParticipantRow; inserted: boolean }>;
+
+  /**
+   * Phase 2 / Issue #2 (part 2) — atomic tournament withdrawal.
+   *
+   * Replaces the read-then-write pattern in `unregisterFromTournament`
+   * with a single transaction that:
+   *
+   *   1. Locks the tournament row with `SELECT … FOR UPDATE`.
+   *   2. Conditionally updates the participant to `status='withdrawn'`
+   *      only when the participant exists and is currently `active`.
+   *
+   * This prevents the TOCTOU race where a concurrent re-registration
+   * arrives while a withdrawal is in-flight: the withdrawal blocks
+   * on the FOR UPDATE, sees the participant in `active` state, and
+   * updates it to `withdrawn`. The re-registration then sees the
+   * withdrawn row and re-activates it correctly.
+   *
+   * Returns the updated participant row, or `null` when no active
+   * participant exists for this (user, tournament) pair. The service
+   * maps `null` → `TournamentNotRegisteredError`.
+   */
+  atomicWithdraw(params: {
+    tournamentId: string;
+    userId: string;
+    nowIso: string;
+  }): Promise<TournamentParticipantRow | null>;
+
   getRoundById(roundId: string): Promise<TournamentRoundRow | null>;
 
   getRoundDetailById(roundId: string): Promise<TournamentRoundDetailRow | null>;
@@ -354,8 +419,17 @@ export interface TournamentRepositoryPort {
   }): Promise<FinalizedTournamentParticipantRow[]>;
 
   /**
-   * Atomically creates a round participant and its associated quiz attempt
-   * within a single database transaction.
+   * Phase 2 / Issues #6, #50 — atomic round-start with idempotency.
+   *
+   * Atomically inserts the round_participant row (with `ON CONFLICT DO NOTHING`
+   * for idempotency), then creates the quiz_attempt and links it back.
+   *
+   * The service layer performs the pre-Tx `tournamentId` cross-check and
+   * the pre-Tx `existingRoundParticipant?.attemptId` check; this method
+   * provides the idempotency guarantee inside the transaction.
+   *
+   * Returns `attemptId`, `roundParticipant` (with `attemptId` set), and
+   * `inserted` (whether the round_participant row was freshly inserted).
    */
   startRoundAttemptTx(params: {
     roundId: string;
@@ -364,11 +438,23 @@ export interface TournamentRepositoryPort {
     quizVersionId: string;
     tournamentId: string;
     nowIso: string;
-  }): Promise<{ attemptId: string; roundParticipant: TournamentRoundParticipantRow }>;
+  }): Promise<{
+    attemptId: string;
+    roundParticipant: TournamentRoundParticipantRow;
+    inserted: boolean;
+  }>;
 
   /**
-   * Creates a quiz attempt for an existing round participant and links it back
-   * to the round participant — all within a single transaction.
+   * Phase 2 / Issues #6, #50 — atomic attempt creation with idempotency.
+   *
+   * Used when a round_participant row already exists but has no `attemptId`.
+   * The service calls this after confirming (via a pre-Tx read) that
+   * `existingRoundParticipant` has no attempt yet.
+   *
+   * Internally uses `FOR UPDATE` on the round_participant row to
+   * serialize concurrent callers. If the `attemptId` is already set
+   * (a concurrent `startRoundAttemptTx` beat us), returns the existing
+   * `attemptId` without creating a duplicate.
    */
   createAttemptForRound(params: {
     userId: string;
