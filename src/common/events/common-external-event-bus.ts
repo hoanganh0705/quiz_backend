@@ -67,6 +67,13 @@ export interface ExternalEventBusPort
  * AsyncLocalStorage before invoking any subscriber, so consumers can simply
  * call `getCorrelationId()` and read the same ID without having to thread
  * it through their own bookkeeping.
+ *
+ * **Idempotency.** Callers that produce XP events MUST set an
+ * `idempotencyKey` that is unique per logical XP grant (e.g.
+ * `${tournamentId}:${userId}:${rank}` for tournament XP). Downstream
+ * consumers (`XpIngestionService`) use this key to deduplicate retry
+ * deliveries. When `idempotencyKey` is absent, the consumer falls back
+ * to a heuristic based on `source` + `attemptId` / `tournamentId`.
  */
 export interface ExternalXpEarnedEvent {
   readonly eventType: 'external.xp.earned';
@@ -76,8 +83,15 @@ export interface ExternalXpEarnedEvent {
   readonly attemptId?: string;
   readonly tournamentId?: string;
   readonly categoryId?: string;
+  /** Tournament finish rank — used as part of the idempotency key for tournament XP. */
+  readonly rank?: number;
   readonly timestamp: Date;
   readonly correlationId?: string;
+  /**
+   * Deterministic key for deduplication. When present, downstream consumers
+   * MUST use this value verbatim rather than deriving their own key.
+   */
+  readonly idempotencyKey?: string;
 }
 
 export type ExternalEvent = ExternalXpEarnedEvent;
@@ -92,8 +106,10 @@ interface SerializedExternalEvent {
   attemptId?: string;
   tournamentId?: string;
   categoryId?: string;
+  rank?: number;
   timestamp: string;
   correlationId?: string;
+  idempotencyKey?: string;
 }
 
 @Injectable()
@@ -301,8 +317,10 @@ export class CommonExternalEventBus implements ExternalEventBusPort, OnModuleIni
       attemptId: parsed.attemptId,
       tournamentId: parsed.tournamentId,
       categoryId: parsed.categoryId,
+      rank: parsed.rank,
       timestamp,
       correlationId: parsed.correlationId,
+      idempotencyKey: parsed.idempotencyKey,
     });
   }
 
