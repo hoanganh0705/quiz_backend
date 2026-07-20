@@ -1443,7 +1443,30 @@ export class TournamentRepository implements TournamentRepositoryPort {
     });
   }
 
-  async getLeaderboard(tournamentId: string): Promise<TournamentLeaderboardEntry[]> {
+  // Issue #28: Added pagination to prevent unbounded responses for tournaments with many participants.
+  // Issue #29: Use RANK() instead of in-memory index assignment so tied participants share ranks.
+  async getLeaderboard(params: {
+    tournamentId: string;
+    limit: number;
+    offset: number;
+  }): Promise<{ items: TournamentLeaderboardEntry[]; total: number }> {
+    const totalResult = await this.db
+      .select({ count: count() })
+      .from(tournamentParticipants)
+      .where(
+        and(
+          eq(tournamentParticipants.tournamentId, params.tournamentId),
+          or(
+            eq(tournamentParticipants.status, 'active'),
+            eq(tournamentParticipants.status, 'completed'),
+          ),
+        ),
+      );
+
+    const total = Number(totalResult[0]?.count ?? 0);
+
+    // Use RANK() OVER to compute ranks in SQL. This handles ties correctly
+    // (participants with identical totalScore and totalTimeMs share the same rank).
     const rows = await this.db
       .select({
         participantId: tournamentParticipants.participantId,
@@ -1459,25 +1482,30 @@ export class TournamentRepository implements TournamentRepositoryPort {
         username: users.username,
         displayName: userProfiles.displayName,
         avatarUrl: userProfiles.avatarUrl,
+        rank: sql<number>`RANK() OVER (
+          ORDER BY ${tournamentParticipants.totalScore} DESC, ${tournamentParticipants.totalTimeMs} ASC
+        )`.as('rank'),
       })
       .from(tournamentParticipants)
       .innerJoin(users, eq(tournamentParticipants.userId, users.userId))
       .leftJoin(userProfiles, eq(users.userId, userProfiles.userId))
       .where(
         and(
-          eq(tournamentParticipants.tournamentId, tournamentId),
+          eq(tournamentParticipants.tournamentId, params.tournamentId),
           or(
             eq(tournamentParticipants.status, 'active'),
             eq(tournamentParticipants.status, 'completed'),
           ),
         ),
       )
-      .orderBy(desc(tournamentParticipants.totalScore), tournamentParticipants.totalTimeMs);
+      .orderBy(desc(tournamentParticipants.totalScore), tournamentParticipants.totalTimeMs)
+      .limit(params.limit)
+      .offset(params.offset);
 
-    return rows.map((row, index) => ({
-      ...(row as Omit<TournamentLeaderboardEntry, 'rank'>),
-      rank: index + 1,
-    })) as TournamentLeaderboardEntry[];
+    return {
+      items: rows as TournamentLeaderboardEntry[],
+      total,
+    };
   }
 
   async getWinners(params: {
@@ -1503,7 +1531,9 @@ export class TournamentRepository implements TournamentRepositoryPort {
           sql`${tournamentParticipants.rankFinal} is not null`,
         ),
       )
-      .orderBy(asc(tournamentParticipants.rankFinal))
+      // Issue #58: Added userId ASC as tiebreaker for deterministic ordering
+      // when two participants share the same rankFinal.
+      .orderBy(asc(tournamentParticipants.rankFinal), asc(tournamentParticipants.userId))
       .limit(params.limit);
 
     return rows.map((row) => ({

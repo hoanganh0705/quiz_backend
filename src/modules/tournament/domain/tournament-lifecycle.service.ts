@@ -134,29 +134,49 @@ export class TournamentLifecycleService {
    * Phase 3 / Issue #40 — wraps markTournamentStatus + finalizeTournament in one
    * transaction so both succeed or neither does. Events are scheduled to the outbox
    * inside the same transaction.
+   *
+   * Issue #94: Added pagination loop to process ALL due tournaments, not just the first 100.
+   * Previously, if more than 100 tournaments were due for finalization, the rest
+   * would be deferred to the next cron tick.
    */
   async finalizeDueTournaments(nowIso: string): Promise<number> {
-    const completed = await this.tournamentRepository.listCompletedTournaments({
-      page: 1,
-      limit: 100,
-      nowIso,
-    });
-
+    const PAGE_SIZE = 100;
+    let page = 1;
     let finalized = 0;
     const timestamp = new Date(nowIso);
     const correlationId = getCorrelationId() ?? 'system';
 
-    for (const item of completed.items) {
-      const result = await this.finalizeSingleTournament(
-        item.tournamentId,
+    // Loop through all pages of completed tournaments until no more items.
+    while (true) {
+      const completed = await this.tournamentRepository.listCompletedTournaments({
+        page,
+        limit: PAGE_SIZE,
         nowIso,
-        timestamp.toISOString(),
-        correlationId,
-      );
+      });
 
-      if (result) {
-        finalized += 1;
+      if (completed.items.length === 0) {
+        break;
       }
+
+      for (const item of completed.items) {
+        const result = await this.finalizeSingleTournament(
+          item.tournamentId,
+          nowIso,
+          timestamp.toISOString(),
+          correlationId,
+        );
+
+        if (result) {
+          finalized += 1;
+        }
+      }
+
+      // If we got fewer items than the page size, we've reached the last page.
+      if (completed.items.length < PAGE_SIZE) {
+        break;
+      }
+
+      page += 1;
     }
 
     this.logger.info({

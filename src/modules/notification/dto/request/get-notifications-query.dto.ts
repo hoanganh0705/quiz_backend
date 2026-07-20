@@ -1,5 +1,5 @@
 import { Transform, Type } from 'class-transformer';
-import { IsBoolean, IsIn, IsInt, IsOptional, IsString, Max, Min, MaxLength } from 'class-validator';
+import { IsBoolean, IsDateString, IsIn, IsInt, IsOptional, IsString, Max, Min, MaxLength } from 'class-validator';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { NOTIFICATION_TYPE_VALUES } from '../../domain/types/notification.types';
 
@@ -72,4 +72,22 @@ export class GetNotificationsQueryDto {
   @IsOptional()
   @IsIn(NOTIFICATION_TYPE_VALUES)
   type?: string;
+
+  @ApiPropertyOptional({
+    description: 'Filter notifications created after this ISO 8601 date',
+    example: '2026-01-01T00:00:00.000Z',
+    nullable: true,
+  })
+  @IsOptional()
+  @IsDateString()
+  fromDate?: string;
+
+  @ApiPropertyOptional({
+    description: 'Filter notifications created before this ISO 8601 date',
+    example: '2026-12-31T23:59:59.999Z',
+    nullable: true,
+  })
+  @IsOptional()
+  @IsDateString()
+  toDate?: string;
 }

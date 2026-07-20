@@ -10,6 +10,7 @@ describe('TournamentService getUpcomingTournaments', () => {
     const _attemptRepository = {} as never;
     const _eventBus = {} as never;
     const _tournamentOutbox = {} as never;
+    const _categoryRepository = {} as never;
     const _db = {} as never;
 
     const logger = {
@@ -22,6 +23,7 @@ describe('TournamentService getUpcomingTournaments', () => {
       tournamentRepository as never,
       _eventBus,
       _tournamentOutbox,
+      _categoryRepository,
       _db,
       logger as never,
     );

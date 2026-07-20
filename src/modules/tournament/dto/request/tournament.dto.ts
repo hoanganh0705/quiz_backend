@@ -1,5 +1,19 @@
 import { Transform, Type } from 'class-transformer';
-import { IsIn, IsInt, IsOptional, IsString, IsUUID, Max, MaxLength, Min } from 'class-validator';
+import {
+  IsIn,
+  IsInt,
+  IsOptional,
+  IsString,
+  IsUUID,
+  Max,
+  MaxLength,
+  Min,
+  MinLength,
+  IsArray,
+  ArrayMaxSize,
+  ArrayMinSize,
+  ArrayUnique,
+} from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
   TOURNAMENT_DIFFICULTIES,
@@ -68,6 +82,40 @@ export class ListTournamentsQueryDto {
   @IsOptional()
   @IsUUID('7')
   categoryId?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Filter by one or more tag UUIDs (AND semantics — tournament must have ALL specified tags). ' +
+      'Must be valid UUID v4 values. Use comma-separated values or repeat the query parameter.',
+    type: String,
+    isArray: true,
+    format: 'uuid',
+    maxItems: 50,
+    example: ['770e8400-e29b-71d4-a716-446655440000', '880e8400-e29b-71d4-a716-446655440001'],
+    nullable: true,
+  })
+  @IsOptional()
+  @Transform(({ value }: { value: unknown }) => {
+    if (value === undefined || value === null) return value;
+    if (Array.isArray(value)) return value as string[];
+    if (typeof value === 'string') return [value];
+    return value;
+  })
+  @IsArray()
+  @ArrayMaxSize(50)
+  @ArrayMinSize(1)
+  @ArrayUnique()
+  @IsUUID('7', { each: true })
+  tagIds?: string[];
+
+  @ApiPropertyOptional({
+    description: 'Filter by creator/owner UUID',
+    format: 'uuid',
+    nullable: true,
+  })
+  @IsOptional()
+  @IsUUID('7')
+  creatorId?: string;
 }
 
 export class GetUpcomingTournamentsQueryDto {
@@ -181,7 +229,7 @@ export class CreateTournamentDto {
   })
   @Transform(({ value }: { value: unknown }) => trimString(value))
   @IsString()
-  @Min(1)
+  @MinLength(1)
   @MaxLength(255)
   title!: string;
 
@@ -189,6 +237,7 @@ export class CreateTournamentDto {
     description: 'Tournament description',
     maxLength: 2000,
     nullable: true,
+    example: 'Test your knowledge across various topics every week.',
   })
   @IsOptional()
   @Transform(({ value }: { value: unknown }) => trimStringToNullIfBlank(value))
@@ -208,6 +257,7 @@ export class CreateTournamentDto {
     description: 'Prize description',
     maxLength: 1000,
     nullable: true,
+    example: '500 XP and exclusive badge',
   })
   @IsOptional()
   @Transform(({ value }: { value: unknown }) => trimStringToNullIfBlank(value))
@@ -217,14 +267,14 @@ export class CreateTournamentDto {
 
   @ApiProperty({
     description: 'Tournament start timestamp (ISO 8601)',
-    example: '2025-07-01T10:00:00.000Z',
+    example: '2026-08-01T10:00:00.000Z',
   })
   @IsString()
   startAt!: string;
 
   @ApiProperty({
     description: 'Tournament end timestamp (ISO 8601)',
-    example: '2025-07-01T12:00:00.000Z',
+    example: '2026-08-01T12:00:00.000Z',
   })
   @IsString()
   endAt!: string;

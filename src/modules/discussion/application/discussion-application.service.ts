@@ -87,22 +87,22 @@ export class DiscussionApplicationService {
     });
   }
 
-  async getThread(user: JwtPayload, threadId: string): Promise<DiscussionThreadDetail | null> {
-    return this.discussionService.getThread(threadId, user.sub);
+  async getThread(
+    user: JwtPayload | undefined,
+    threadId: string,
+  ): Promise<DiscussionThreadDetail | null> {
+    return this.discussionService.getThread(threadId, user?.sub);
   }
 
-  async listThreads(
-    user: JwtPayload,
-    filters: {
-      quizId?: string;
-      authorId?: string;
-      status?: DiscussionThreadStatus;
-      sortBy?: ThreadSortField;
-      sortOrder?: SortOrder;
-      limit?: number;
-      cursor?: string | null;
-    },
-  ): Promise<PaginatedResult<DiscussionThread>> {
+  async listThreads(filters: {
+    quizId?: string;
+    authorId?: string;
+    status?: DiscussionThreadStatus;
+    sortBy?: ThreadSortField;
+    sortOrder?: SortOrder;
+    limit?: number;
+    cursor?: string | null;
+  }): Promise<PaginatedResult<DiscussionThread>> {
     const { items, hasNextPage } = await this.discussionService.listThreads(filters);
     const limit = filters.limit ?? 20;
     return paginated(items, {
@@ -504,7 +504,7 @@ export class DiscussionApplicationService {
   }
 
   async listComments(
-    user: JwtPayload,
+    user: JwtPayload | undefined,
     threadId: string,
     options?: { parentCommentId?: string | null; limit?: number; cursor?: string | null },
   ): Promise<PaginatedResult<DiscussionCommentWithReplies>> {
