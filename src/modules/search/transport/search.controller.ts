@@ -18,7 +18,7 @@ export class SearchController {
   @Public()
   @ApiOkResource(SearchResponseDto, {
     description:
-      'Aggregated full-text search results across users, quizzes, and discussion threads',
+      'Aggregated full-text search results across users, quizzes, discussion threads, categories, and tags',
   })
   async getSearchResults(@Query() query: SearchQueryDto) {
     const result = await this.searchApplicationService.search(query.q, query.limit);

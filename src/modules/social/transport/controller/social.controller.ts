@@ -20,8 +20,6 @@ import { SocialPresenter } from '../presenters/social.presenter';
 import {
   FriendRequestDto,
   FriendDto,
-  FollowerDto,
-  FollowingDto,
   SocialCountsDto,
   RelationshipStatusDto,
   BlockedUserDto,
@@ -308,32 +306,6 @@ export class SocialController {
 
   // ─── Friends ─────────────────────────────────────────────────────────────
 
-  @Get('friends')
-  @ApiAuthAction()
-  @ApiOperation({ summary: 'Get my friends' })
-  @ApiOkResourceList(FriendDto, 'cursor', { description: 'Friends returned' })
-  @ApiQuery({
-    name: 'limit',
-    description: 'Maximum number of friends to return',
-    required: false,
-    schema: { type: 'integer', minimum: 1, maximum: 100, default: 20 },
-  })
-  @ApiQuery({
-    name: 'cursor',
-    description: 'Opaque cursor for pagination',
-    required: false,
-    schema: { type: 'string' },
-  })
-  async getFriends(
-    @CurrentUser() user: JwtPayload,
-    @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit: number,
-    @Query('cursor') cursor?: string,
-  ) {
-    return this.presenter.getFriends(
-      await this.socialService.getFriends(user, limit, cursor ?? null),
-    );
-  }
-
   @Get('friends/:userId')
   @ApiAuthAction()
   @ApiOperation({ summary: "Get another user's friends" })
@@ -452,20 +424,6 @@ export class SocialController {
     @Param('userId', new ParseUUIDPipe({ version: '7' })) followingId: string,
   ): Promise<void> {
     await this.socialService.unfollowUser(user, followingId);
-  }
-
-  @Get('followers')
-  @ApiAuthAction()
-  @ApiOperation({ summary: 'Get my followers' })
-  @ApiOkResourceList(FollowerDto, 'cursor', { description: 'Followers returned' })
-  async getFollowers(
-    @CurrentUser() user: JwtPayload,
-    @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit: number,
-    @Query('cursor') cursor?: string,
-  ) {
-    return this.presenter.getFollowers(
-      await this.socialService.getFollowers(user, limit, cursor ?? null),
-    );
   }
 
   @Get('users/:userId/followers')
@@ -589,20 +547,6 @@ export class SocialController {
         query.page ?? 1,
         query.limit ?? 20,
       ),
-    );
-  }
-
-  @Get('following')
-  @ApiAuthAction()
-  @ApiOperation({ summary: 'Get accounts I follow' })
-  @ApiOkResourceList(FollowingDto, 'cursor', { description: 'Following returned' })
-  async getFollowing(
-    @CurrentUser() user: JwtPayload,
-    @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit: number,
-    @Query('cursor') cursor?: string,
-  ) {
-    return this.presenter.getFollowing(
-      await this.socialService.getFollowing(user, limit, cursor ?? null),
     );
   }
 

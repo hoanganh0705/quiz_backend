@@ -3,6 +3,7 @@ import { ConnectionOptions, Queue } from 'bullmq';
 import { DatabaseModule } from '@/core/database/database.module';
 import { NotificationModule } from '@/modules/notification/notification.module';
 import { AttemptModule } from '@/modules/attempt/attempt.module';
+import { CategoryModule } from '@/modules/category/category.module';
 import { SHARED_TOURNAMENT_EVENT_BUS } from '@/common/events/tournament-shared-events';
 import { TournamentApplicationService } from './application/tournament.application.service';
 import { TournamentService } from './domain/tournament.service';
@@ -30,7 +31,7 @@ import { redisConfig } from '@/core/config';
 import type { RedisConfig } from '@/core/config';
 
 @Module({
-  imports: [DatabaseModule, NotificationModule, AttemptModule],
+  imports: [DatabaseModule, NotificationModule, AttemptModule, CategoryModule],
   providers: [
     TournamentApplicationService,
     TournamentService,

@@ -345,16 +345,29 @@ export class TournamentApplicationService {
     };
   }
 
-  async getLeaderboard(tournamentId: string): Promise<TournamentLeaderboardResponseDto> {
+  // Issue #28: Added pagination support to leaderboard endpoint.
+  async getLeaderboard(
+    tournamentId: string,
+    query: { limit: number; offset: number },
+  ): Promise<TournamentLeaderboardResponseDto> {
     this.logger.info({
       event: 'app_get_leaderboard',
       tournamentId,
+      limit: query.limit,
+      offset: query.offset,
     });
 
-    const entries = await this.tournamentService.getLeaderboard(tournamentId);
+    const result = await this.tournamentService.getLeaderboard(tournamentId, {
+      limit: query.limit,
+      offset: query.offset,
+    });
 
     return {
-      items: entries.map((entry) => this.mapper.toLeaderboardEntryResponse(entry)),
+      items: result.items.map((entry) => this.mapper.toLeaderboardEntryResponse(entry)),
+      total: result.total,
+      limit: query.limit,
+      offset: query.offset,
+      page: Math.floor(query.offset / query.limit) + 1,
     };
   }
 

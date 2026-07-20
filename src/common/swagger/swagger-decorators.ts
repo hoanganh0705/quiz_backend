@@ -11,6 +11,8 @@ import {
   ApiNoContentResponse,
   ApiCreatedResponse,
   ApiOkResponse,
+  ApiHeader,
+  ApiOperation,
   type ApiResponseOptions,
 } from '@nestjs/swagger';
 import { AUTH_SECURITY_NAME } from '@/core/swagger/swagger.config';
@@ -431,3 +433,74 @@ export const ApiAuthList = (responseOptions: ApiResponseOptions = {}): MethodDec
 
 export const ApiPublicList = (responseOptions: ApiResponseOptions = {}): MethodDecorator =>
   ApiPublicRead(responseOptions);
+
+// ─── Deprecation decorators ─────────────────────────────────────────────────────
+
+/**
+ * Marks an endpoint as deprecated with RFC 8599 Sunset header support.
+ * Use this decorator to signal that an endpoint should no longer be used.
+ *
+ * @param sunsetDate - Optional date when the endpoint will be removed (ISO 8601)
+ * @param deprecationDate - Optional date when the deprecation was announced
+ * @param replacement - Optional path to the replacement endpoint
+ *
+ * @example
+ * ```typescript
+ * @ApiDeprecated({
+ *   sunsetDate: '2027-01-01',
+ *   replacement: '/tournaments?status=upcoming',
+ * })
+ * ```
+ */
+export const ApiDeprecated = (options?: {
+  sunsetDate?: string;
+  deprecationDate?: string;
+  replacement?: string;
+}): MethodDecorator & ClassDecorator =>
+  applyDecorators(
+    ApiOperation({ deprecated: true }),
+    ApiHeader({
+      name: 'Sunset',
+      description: 'Date/time after which this endpoint will no longer be available',
+      required: false,
+      schema: {
+        type: 'string',
+        format: 'date-time',
+        example: options?.sunsetDate ?? 'Sat, 01 Jan 2027 00:00:00 GMT',
+      },
+    }),
+    ApiHeader({
+      name: 'Deprecation',
+      description: 'Marks this endpoint as deprecated',
+      required: false,
+      schema: {
+        type: 'string',
+        example: options?.deprecationDate ?? new Date().toISOString(),
+      },
+    }),
+    ApiHeader({
+      name: 'Link',
+      description: 'Link to the replacement endpoint',
+      required: false,
+      schema: {
+        type: 'string',
+        format: 'uri',
+        example: options?.replacement
+          ? `</${options.replacement}>; rel="deprecation"; type="text/html"`
+          : undefined,
+      },
+    }),
+  );
+
+/**
+ * Convenience decorator for marking a deprecated endpoint with a sunset date.
+ * The endpoint will be removed on the specified date.
+ */
+export const ApiSunsetDeprecated = (
+  sunsetDate: string,
+  replacement?: string,
+): MethodDecorator & ClassDecorator =>
+  ApiDeprecated({
+    sunsetDate,
+    replacement,
+  });

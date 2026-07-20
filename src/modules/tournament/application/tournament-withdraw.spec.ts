@@ -30,6 +30,7 @@ describe('TournamentService withdrawFromTournament', () => {
     const tournamentOutbox = {
       scheduleTournamentEvent: jest.fn().mockResolvedValue(undefined),
     };
+    const _categoryRepository = {} as never;
 
     const logger = {
       info: jest.fn(),
@@ -44,6 +45,7 @@ describe('TournamentService withdrawFromTournament', () => {
       tournamentRepository as never,
       eventBus,
       tournamentOutbox as never,
+      _categoryRepository,
       db as never,
       logger as never,
     );

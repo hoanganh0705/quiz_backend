@@ -1,6 +1,12 @@
 import { Type } from 'class-transformer';
-import { IsInt, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
+import { IsInt, IsIn, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
 import { ApiPropertyOptional } from '@nestjs/swagger';
+
+export const CATEGORY_SORT_OPTIONS = ['name', 'createdAt'] as const;
+export type CategorySortOption = (typeof CATEGORY_SORT_OPTIONS)[number];
+
+export const SORT_ORDER = ['asc', 'desc'] as const;
+export type SortOrder = (typeof SORT_ORDER)[number];
 
 export class ListCategoriesQueryDto {
   @ApiPropertyOptional({
@@ -29,4 +35,26 @@ export class ListCategoriesQueryDto {
   @Min(1)
   @Max(100)
   limit?: number;
+
+  @ApiPropertyOptional({
+    description: 'Sort categories by name or creation date',
+    enum: CATEGORY_SORT_OPTIONS,
+    default: 'name',
+    example: 'name',
+    nullable: true,
+  })
+  @IsOptional()
+  @IsIn(CATEGORY_SORT_OPTIONS)
+  sort?: CategorySortOption;
+
+  @ApiPropertyOptional({
+    description: 'Sort direction (ascending or descending)',
+    enum: SORT_ORDER,
+    default: 'asc',
+    example: 'asc',
+    nullable: true,
+  })
+  @IsOptional()
+  @IsIn(SORT_ORDER)
+  order?: SortOrder;
 }

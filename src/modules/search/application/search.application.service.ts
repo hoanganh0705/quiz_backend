@@ -8,6 +8,8 @@ import type {
   SearchDiscussionResult,
   SearchQuizResult,
   SearchUserResult,
+  SearchCategoryResult,
+  SearchTagResult,
 } from '../domain';
 
 type TsQueryConfig = 'simple' | 'english';
@@ -80,10 +82,12 @@ export class SearchApplicationService {
       throw new BadRequestException('Search query must not be empty');
     }
 
-    const [usersResult, quizzesResult, discussionsResult] = await Promise.all([
+    const [usersResult, quizzesResult, discussionsResult, categoriesResult, tagsResult] = await Promise.all([
       this.searchUsers(query, limit),
       this.searchQuizzes(query, limit),
       this.searchDiscussions(query, limit),
+      this.searchCategories(query, limit),
+      this.searchTags(query, limit),
     ]);
 
     return {
@@ -91,6 +95,8 @@ export class SearchApplicationService {
       users: usersResult,
       quizzes: quizzesResult,
       discussions: discussionsResult,
+      categories: categoriesResult,
+      tags: tagsResult,
     };
   }
 
@@ -175,5 +181,48 @@ export class SearchApplicationService {
     `);
 
     return rows.map(({ threadId, title }) => ({ threadId, title }));
+  }
+
+  private async searchCategories(query: string, limit: number): Promise<SearchCategoryResult[]> {
+    const categorySearchCondition = this.buildSearchCondition(
+      { sql: sql`c.category_search_vector` },
+      'simple',
+      query,
+    );
+    const categoryRank = this.buildRankExpression({ sql: sql`c.category_search_vector` }, 'simple', query);
+    const rows = await this.executeTypedQuery<SearchCategoryResult>(sql`
+      SELECT
+        c.category_id AS "categoryId",
+        c.name AS "name",
+        c.slug AS "slug"
+      FROM categories c
+      WHERE c.deleted_at IS NULL
+        AND ${categorySearchCondition}
+      ORDER BY ${categoryRank} DESC, c.name ASC
+      LIMIT ${limit}
+    `);
+
+    return rows.map(({ categoryId, name, slug }) => ({ categoryId, name, slug }));
+  }
+
+  private async searchTags(query: string, limit: number): Promise<SearchTagResult[]> {
+    const tagSearchCondition = this.buildSearchCondition(
+      { sql: sql`t.tag_search_vector` },
+      'simple',
+      query,
+    );
+    const tagRank = this.buildRankExpression({ sql: sql`t.tag_search_vector` }, 'simple', query);
+    const rows = await this.executeTypedQuery<SearchTagResult>(sql`
+      SELECT
+        t.tag_id AS "tagId",
+        t.name AS "name"
+      FROM tags t
+      WHERE t.deleted_at IS NULL
+        AND ${tagSearchCondition}
+      ORDER BY ${tagRank} DESC, t.name ASC
+      LIMIT ${limit}
+    `);
+
+    return rows.map(({ tagId, name }) => ({ tagId, name }));
   }
 }
