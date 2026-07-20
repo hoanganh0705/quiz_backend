@@ -8,16 +8,28 @@ import {
 
 describe('TournamentService withdrawFromTournament', () => {
   const createService = () => {
+    const mockTx = {
+      select: jest.fn(),
+      update: jest.fn(),
+      insert: jest.fn(),
+      execute: jest.fn(),
+    };
+
+    const db = {
+      transaction: jest.fn((fn: (tx: typeof mockTx) => Promise<unknown>) => fn(mockTx)),
+    };
+
     const tournamentRepository = {
       getTournamentById: jest.fn(),
       getParticipantByUserAndTournament: jest.fn(),
       withdrawParticipant: jest.fn(),
       getParticipantStanding: jest.fn(),
-    } as unknown as ConstructorParameters<typeof TournamentService>[0];
+    };
 
-    const eventBus = { publish: jest.fn() } as unknown as ConstructorParameters<
-      typeof TournamentService
-    >[1];
+    const eventBus = {} as never;
+    const tournamentOutbox = {
+      scheduleTournamentEvent: jest.fn().mockResolvedValue(undefined),
+    };
 
     const logger = {
       info: jest.fn(),
@@ -26,28 +38,28 @@ describe('TournamentService withdrawFromTournament', () => {
       debug: jest.fn(),
       trace: jest.fn(),
       fatal: jest.fn(),
-    } as unknown as ConstructorParameters<typeof TournamentService>[2];
+    };
 
     const service = new TournamentService(
       tournamentRepository as never,
-      eventBus as never,
+      eventBus,
+      tournamentOutbox as never,
+      db as never,
       logger as never,
     );
 
     return {
       service,
-      eventBus: eventBus as unknown as { publish: jest.Mock },
-      tournamentRepository: tournamentRepository as unknown as {
-        getTournamentById: jest.Mock;
-        getParticipantByUserAndTournament: jest.Mock;
-        withdrawParticipant: jest.Mock;
-        getParticipantStanding: jest.Mock;
-      },
+      tournamentRepository,
+      tournamentOutbox,
+      db,
+      mockTx,
+      logger,
     };
   };
 
-  it('withdraws successfully', async () => {
-    const { service, tournamentRepository } = createService();
+  it('withdraws successfully and schedules event to outbox', async () => {
+    const { service, tournamentRepository, tournamentOutbox, db } = createService();
     tournamentRepository.getTournamentById.mockResolvedValue({
       tournamentId: 't-1',
       status: 'ongoing',
@@ -71,6 +83,8 @@ describe('TournamentService withdrawFromTournament', () => {
 
     expect(result.status).toBe('withdrawn');
     expect(result.withdrawnAt).toBe('2026-06-08T10:00:00Z');
+    expect(db.transaction).toHaveBeenCalled();
+    expect(tournamentOutbox.scheduleTournamentEvent).toHaveBeenCalled();
   });
 
   it('throws for non participant withdrawal', async () => {
@@ -114,32 +128,6 @@ describe('TournamentService withdrawFromTournament', () => {
     await expect(
       service.withdrawFromTournament({ tournamentId: 't-1', userId: 'u-1' }),
     ).rejects.toBeInstanceOf(TournamentWithdrawClosedError);
-  });
-
-  it('publishes withdrawal event', async () => {
-    const { service, tournamentRepository, eventBus } = createService();
-    tournamentRepository.getTournamentById.mockResolvedValue({
-      tournamentId: 't-1',
-      status: 'ongoing',
-    });
-    tournamentRepository.getParticipantByUserAndTournament.mockResolvedValue({
-      participantId: 'p-1',
-      tournamentId: 't-1',
-      userId: 'u-1',
-      status: 'active',
-    });
-    tournamentRepository.withdrawParticipant.mockResolvedValue({
-      participantId: 'p-1',
-      tournamentId: 't-1',
-      userId: 'u-1',
-      status: 'withdrawn',
-      withdrawnAt: '2026-06-08T10:00:00Z',
-      updatedAt: '2026-06-08T10:00:00Z',
-    });
-
-    await service.withdrawFromTournament({ tournamentId: 't-1', userId: 'u-1' });
-
-    expect(eventBus.publish).toHaveBeenCalledTimes(1);
   });
 
   it('excludes withdrawn participant from ranking calculations', async () => {

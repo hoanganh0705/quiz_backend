@@ -1,5 +1,8 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
+import { DRIZZLE } from '@/core/database/drizzle.constants';
+import type { DrizzleDB } from '@/core/database/database.module';
+import { getCorrelationId } from '@/common/interceptors/correlation-id';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
 import {
   TOURNAMENT_REPOSITORY_PORT,
@@ -24,7 +27,7 @@ import {
   TOURNAMENT_DOMAIN_EVENT_BUS,
   type TournamentDomainEventBusPort,
 } from './ports/tournament-domain-event-bus.port';
-import { TournamentParticipantWithdrawnEvent, TournamentJoinedEvent } from './events';
+import { TOURNAMENT_OUTBOX_PORT, type TournamentOutboxPort } from './ports/tournament-outbox.port';
 import { CreateTournamentDto, UpdateTournamentDto } from '../dto/request';
 import type { GetTournamentParticipantsQuery } from './types/get-tournament-participants.query';
 import type { GetMyTournamentStandingQuery } from './types/get-my-tournament-standing.query';
@@ -99,6 +102,9 @@ export class TournamentService {
     private readonly tournamentRepository: TournamentRepositoryPort,
     @Inject(TOURNAMENT_DOMAIN_EVENT_BUS)
     private readonly eventBus: TournamentDomainEventBusPort,
+    @Inject(TOURNAMENT_OUTBOX_PORT)
+    private readonly tournamentOutbox: TournamentOutboxPort,
+    @Inject(DRIZZLE) private readonly db: DrizzleDB,
     @InjectPinoLogger(TournamentService.name)
     private readonly logger: PinoLogger,
   ) {}
@@ -641,6 +647,21 @@ export class TournamentService {
     }
 
     /**
+     * Issue #45 — also reject if the tournament has already started.
+     *
+     * The scheduler transitions `registration → ongoing` every 5 minutes.
+     * If the scheduler is down for >5 minutes and `startAt` has passed,
+     * the tournament status is still `registration` but `startAt < now`.
+     * Users could register into a tournament that has already started.
+     *
+     * This guard ensures registration is rejected when `startAt <= now`
+     * regardless of the cached status value.
+     */
+    if (tournament.startAt && tournament.startAt <= nowIso) {
+      throw new TournamentRegistrationClosedError(TOURNAMENT_REGISTRATION_CLOSED_MESSAGE);
+    }
+
+    /**
      * Phase 2 / Issues #3, #4 — atomic registration.
      *
      * The previous read-then-write pattern had two TOCTOU races:
@@ -667,40 +688,78 @@ export class TournamentService {
      *
      * The `inserted` flag tells us whether the participant row was
      * freshly created (`true`) or already existed (`false`). We only
-     * publish `TournamentJoinedEvent` for fresh registrations.
+     * schedule `TournamentJoinedEvent` to the outbox for fresh registrations.
+     *
+     * Phase 3 / Issue #5 — the event is now scheduled to the outbox INSIDE
+     * the same transaction as the participant insert, guaranteeing at-least-once
+     * delivery even if the process crashes between commit and publish.
      */
     try {
-      const { participant, inserted } = await this.tournamentRepository.atomicRegister({
-        tournamentId,
-        userId: user.sub,
-        nowIso,
+      let isNewRegistration = false;
+      let registeredParticipant: TournamentParticipantRow;
+
+      await this.db.transaction(async (tx) => {
+        const result = await this.tournamentRepository.atomicRegister({
+          tournamentId,
+          userId: user.sub,
+          nowIso,
+          tx,
+        });
+
+        registeredParticipant = result.participant;
+
+        if (!result.inserted) {
+          // User already registered (or withdrawn).
+          if (result.participant.status === 'withdrawn') {
+            this.logger.info({
+              event: 'tournament_registration_reactivated',
+              tournamentId,
+              userId: user.sub,
+              participantId: result.participant.participantId,
+            });
+          }
+          // Don't throw here — return the participant and let the outer code decide
+          return;
+        }
+
+        isNewRegistration = true;
+
+        // Phase 3 / Issue #5 — schedule event to outbox inside the same tx
+        await this.tournamentOutbox.scheduleTournamentEvent(
+          {
+            eventType: 'tournament.joined',
+            payload: {
+              eventType: 'tournament.joined',
+              tournamentId,
+              userId: user.sub,
+              tournamentTitle: tournament.title,
+              timestamp: nowIso,
+            },
+            idempotencyKey: `tournament:joined:${tournamentId}:${user.sub}`,
+            correlationId: getCorrelationId(),
+          },
+          tx,
+          nowIso,
+        );
       });
 
-      if (!inserted) {
-        if (participant.status === 'withdrawn') {
-          this.logger.info({
-            event: 'tournament_registration_reactivated',
-            tournamentId,
-            userId: user.sub,
-            participantId: participant.participantId,
-          });
-          return participant;
+      // At this point, the transaction has committed
+      if (!isNewRegistration) {
+        if (registeredParticipant!.status !== 'withdrawn') {
+          throw new TournamentAlreadyRegisteredError(TOURNAMENT_ALREADY_REGISTERED_MESSAGE);
         }
-        throw new TournamentAlreadyRegisteredError(TOURNAMENT_ALREADY_REGISTERED_MESSAGE);
+        // Reactivation case — return without publishing event (already handled inside tx)
+        return registeredParticipant!;
       }
-
-      this.eventBus.publish(
-        new TournamentJoinedEvent(tournamentId, user.sub, tournament.title, new Date(nowIso)),
-      );
 
       this.logger.info({
         event: 'tournament_registered',
         tournamentId,
         userId: user.sub,
-        participantId: participant.participantId,
+        participantId: registeredParticipant!.participantId,
       });
 
-      return participant;
+      return registeredParticipant!;
     } catch (error) {
       if (error instanceof Error && error.message === 'TOURNAMENT_FULL') {
         throw new TournamentFullError(TOURNAMENT_FULL_MESSAGE);
@@ -737,16 +796,41 @@ export class TournamentService {
      * tournament behind a `FOR UPDATE` lock and uses a conditional
      * `WHERE status='active'` in the UPDATE so a concurrent
      * re-activation cannot be immediately overwritten.
+     *
+     * Phase 3 / Issue #5 — the `TournamentParticipantWithdrawnEvent` is now
+     * scheduled to the outbox INSIDE the same transaction as the withdrawal.
      */
-    const withdrawn = await this.tournamentRepository.atomicWithdraw({
-      tournamentId,
-      userId: user.sub,
-      nowIso,
-    });
+    const withdrawn = await this.db.transaction(async (tx) => {
+      const result = await this.tournamentRepository.atomicWithdraw({
+        tournamentId,
+        userId: user.sub,
+        nowIso,
+        tx,
+      });
 
-    if (!withdrawn) {
-      throw new TournamentNotRegisteredError(TOURNAMENT_NOT_REGISTERED_MESSAGE);
-    }
+      if (!result) {
+        throw new TournamentNotRegisteredError(TOURNAMENT_NOT_REGISTERED_MESSAGE);
+      }
+
+      // Phase 3 / Issue #5 — schedule event to outbox inside the same tx
+      await this.tournamentOutbox.scheduleTournamentEvent(
+        {
+          eventType: 'tournament.participant.withdrawn',
+          payload: {
+            eventType: 'tournament.participant.withdrawn',
+            tournamentId,
+            userId: user.sub,
+            timestamp: nowIso,
+          },
+          idempotencyKey: `tournament:withdrawn:${tournamentId}:${user.sub}`,
+          correlationId: getCorrelationId(),
+        },
+        tx,
+        nowIso,
+      );
+
+      return result;
+    });
 
     this.logger.info({
       event: 'tournament_unregistered',
@@ -786,18 +870,32 @@ export class TournamentService {
       throw new TournamentWithdrawClosedError(TOURNAMENT_WITHDRAW_CLOSED_MESSAGE);
     }
 
-    const withdrawn = await this.tournamentRepository.withdrawParticipant(
-      participant.participantId,
-      nowIso,
-    );
+    // Phase 3 / Issue #5 — wrap withdrawal + event scheduling in a transaction
+    const withdrawn = await this.db.transaction(async (tx) => {
+      const result = await this.tournamentRepository.withdrawParticipant(
+        participant.participantId,
+        nowIso,
+        tx,
+      );
 
-    this.eventBus.publish(
-      new TournamentParticipantWithdrawnEvent(
-        command.tournamentId,
-        command.userId,
-        new Date(nowIso),
-      ),
-    );
+      await this.tournamentOutbox.scheduleTournamentEvent(
+        {
+          eventType: 'tournament.participant.withdrawn',
+          payload: {
+            eventType: 'tournament.participant.withdrawn',
+            tournamentId: command.tournamentId,
+            userId: command.userId,
+            timestamp: nowIso,
+          },
+          idempotencyKey: `tournament:withdrawn:${command.tournamentId}:${command.userId}`,
+          correlationId: getCorrelationId(),
+        },
+        tx,
+        nowIso,
+      );
+
+      return result;
+    });
 
     this.logger.info({
       event: 'tournament_participant_withdrawn',

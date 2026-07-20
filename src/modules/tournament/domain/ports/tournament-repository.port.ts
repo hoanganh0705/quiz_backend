@@ -272,7 +272,11 @@ export interface TournamentRepositoryPort {
     nowIso: string;
   }): Promise<TournamentParticipantRow>;
 
-  withdrawParticipant(participantId: string, nowIso: string): Promise<TournamentParticipantRow>;
+  withdrawParticipant(
+    participantId: string,
+    nowIso: string,
+    tx?: unknown,
+  ): Promise<TournamentParticipantRow>;
 
   reactivateParticipant(participantId: string, nowIso: string): Promise<TournamentParticipantRow>;
 
@@ -313,6 +317,8 @@ export interface TournamentRepositoryPort {
     tournamentId: string;
     userId: string;
     nowIso: string;
+    /** Optional transaction client. When provided, the operation joins the caller's transaction. */
+    tx?: unknown;
   }): Promise<{ participant: TournamentParticipantRow; inserted: boolean }>;
 
   /**
@@ -339,6 +345,8 @@ export interface TournamentRepositoryPort {
     tournamentId: string;
     userId: string;
     nowIso: string;
+    /** Optional transaction client. When provided, the operation joins the caller's transaction. */
+    tx?: unknown;
   }): Promise<TournamentParticipantRow | null>;
 
   getRoundById(roundId: string): Promise<TournamentRoundRow | null>;
@@ -411,11 +419,15 @@ export interface TournamentRepositoryPort {
     fromStatus: TournamentStatus;
     toStatus: TournamentStatus;
     nowIso: string;
+    /** Optional transaction client. When provided, the operation joins the caller's transaction. */
+    tx?: unknown;
   }): Promise<TournamentRow | null>;
 
   finalizeTournament(params: {
     tournamentId: string;
     nowIso: string;
+    /** Optional transaction client. When provided, the operation joins the caller's transaction. */
+    tx?: unknown;
   }): Promise<FinalizedTournamentParticipantRow[]>;
 
   /**
