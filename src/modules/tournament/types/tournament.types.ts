@@ -12,9 +12,9 @@ export const TOURNAMENT_STATUSES = [
 
 export type TournamentStatus = 'upcoming' | 'registration' | 'ongoing' | 'finished' | 'cancelled';
 
-export const TOURNAMENT_ROUND_STATUSES = ['pending', 'open', 'running', 'finished'] as const;
+export const TOURNAMENT_ROUND_STATUSES = ['pending', 'open', 'finished'] as const;
 
-export type TournamentRoundStatus = 'pending' | 'open' | 'running' | 'finished';
+export type TournamentRoundStatus = 'pending' | 'open' | 'finished';
 
 export const TOURNAMENT_PARTICIPANT_STATUSES = ['active', 'withdrawn', 'completed'] as const;
 

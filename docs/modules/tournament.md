@@ -24,7 +24,7 @@ Owns the **competitive quiz event lifecycle**: tournament creation, registration
 |---|---|
 | **Tournament** | An event: `title`, `description`, `quizId`, `startAt`, `endAt`, `status ∈ {upcoming, registration, ongoing, finished}`, `maxParticipants`. |
 | **TournamentParticipant** | A user's registration: `status ∈ {active, withdrawn, completed}`, `registeredAt`. |
-| **TournamentRound** | A round within a tournament with `status ∈ {pending, open, running, finished}`. |
+| **TournamentRound** | A round within a tournament with `status ∈ {pending, open, finished}`. |
 
 ## Business Rules
 
@@ -92,6 +92,27 @@ Active (reactivated)
 Completed (status = completed) — tournament finished with final rank
 ```
 
+### TournamentRound
+
+Round status transitions are automatic and time-driven, mirroring the tournament lifecycle above. A dedicated `TournamentSchedulerService` runs two `@nestjs/schedule` cron jobs (every minute, each protected by a Redis advisory lock) and delegates transitions to `TournamentLifecycleService`. No HTTP endpoint or manual command drives these transitions — see `docs/round-lifecycle.md` for the implementation plan.
+
+```
+Pending (status = pending) — round created, not yet open for play
+    ↓ openDueRounds() — cron every minute, when now >= round.startAt AND tournament.status = ongoing
+Open (status = open) — participants may start an attempt
+    ↓ closeDueRounds() — cron every minute, when now >= round.endAt
+Finished (status = finished) — round sealed; no further attempts
+```
+
+**Transition rules**
+
+| Transition | Conditions |
+|---|---|
+| `pending → open` | `round.startAt IS NOT NULL` AND `now >= round.startAt` AND `tournament.status = 'ongoing'` AND `tournament.deletedAt IS NULL` |
+| `open → finished` | `round.endAt IS NOT NULL` AND `now >= round.endAt` |
+
+Rounds with `startAt = NULL` never auto-open (caller chooses for one-off tournaments). Rounds with `endAt = NULL` never auto-close (duration governs). The `'running'` enum value from earlier drafts is dropped — no code path writes it, and it is not part of the state machine.
+
 ## Permissions
 
 | Action | Permission |
@@ -99,6 +120,8 @@ Completed (status = completed) — tournament finished with final rank
 | Create tournament | `TOURNAMENT_CREATE` |
 | Register | `TOURNAMENT_REGISTER` |
 | Submit attempt inside tournament | `TOURNAMENT_ATTEMPT` |
+
+> Round status transitions (`pending → open → finished`) are **not** permission-gated. They are system-managed by the `TournamentSchedulerService` cron. No business API or admin endpoint exposes round-state mutation.
 
 ## Cross-module Interactions
 
@@ -116,8 +139,11 @@ Completed (status = completed) — tournament finished with final rank
 - `endAt > startAt`.
 - Registration is only accepted during `registration` status.
 - Participant capacity cannot exceed `maxParticipants`.
+- Round status transitions are system-driven only. `round.status` is mutated by `TournamentLifecycleService` (cron); no API or direct DB write is a supported path.
+- Round auto-open requires the parent tournament to be `ongoing`. A round whose tournament is `cancelled` or `finished` never opens, regardless of `startAt`.
 
 ## Future Extension Points
 
 - **Bracket formats**: single-elimination, double-elimination, round-robin — not yet modeled.
 - **Team tournaments**: not yet modeled (participants are individual users today).
+- **Round-lifecycle admin overrides**: not implemented today. The architecture leaves a seam (`TournamentLifecycleService.openDueRounds` / `closeDueRounds`) so a future admin override / replay endpoint can be added without modifying the scheduler. See `docs/round-lifecycle.md` § Rollout.

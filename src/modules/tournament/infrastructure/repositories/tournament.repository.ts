@@ -17,6 +17,7 @@ import {
 import type {
   TournamentDifficulty,
   TournamentParticipantStatus,
+  TournamentRoundStatus,
   TournamentStatus,
 } from '@/modules/tournament/types/tournament.types';
 import type {
@@ -1693,6 +1694,37 @@ export class TournamentRepository implements TournamentRepositoryPort {
     return rows as TournamentRow[];
   }
 
+  async listTournamentsStartingPlay(params: { nowIso: string }): Promise<TournamentRow[]> {
+    const rows = await this.db
+      .select({
+        tournamentId: tournaments.tournamentId,
+        title: tournaments.title,
+        description: tournaments.description,
+        difficulty: tournaments.difficulty,
+        status: tournaments.status,
+        prize: tournaments.prize,
+        startAt: tournaments.startAt,
+        endAt: tournaments.endAt,
+        maxParticipants: tournaments.maxParticipants,
+        categoryId: tournaments.categoryId,
+        ownerUserId: tournaments.ownerUserId,
+        createdAt: tournaments.createdAt,
+        updatedAt: tournaments.updatedAt,
+        deletedAt: tournaments.deletedAt,
+      })
+      .from(tournaments)
+      .where(
+        and(
+          isNull(tournaments.deletedAt),
+          eq(tournaments.status, 'registration' as TournamentStatus),
+          sql`${tournaments.startAt} <= ${params.nowIso}`,
+        ),
+      )
+      .orderBy(asc(tournaments.startAt), asc(tournaments.tournamentId));
+
+    return rows as TournamentRow[];
+  }
+
   async markTournamentStatus(params: {
     tournamentId: string;
     fromStatus: TournamentStatus;
@@ -1732,6 +1764,171 @@ export class TournamentRepository implements TournamentRepositoryPort {
       });
 
     return (row as TournamentRow | undefined) ?? null;
+  }
+
+  /**
+   * Round lifecycle / Issue #round-lifecycle — pagination loop support
+   * for `openDueRounds`. Mirrors `listCompletedTournaments` exactly:
+   * page/limit, total count for the predicate, ascending order on
+   * the time column. The tournament-status filter (`status = 'ongoing'`)
+   * and soft-delete filter (`deleted_at IS NULL`) live in the SQL so
+   * the lifecycle service iterates only over rows that can actually
+   * transition.
+   */
+  async listDueRoundOpens(params: {
+    page: number;
+    limit: number;
+    nowIso: string;
+  }): Promise<{ items: TournamentRoundRow[]; total: number }> {
+    const offset = (params.page - 1) * params.limit;
+    const conditions = and(
+      eq(tournamentRounds.status, 'pending' as TournamentRoundStatus),
+      sql`${tournamentRounds.startAt} IS NOT NULL`,
+      sql`${tournamentRounds.startAt} <= ${params.nowIso}`,
+      eq(tournaments.status, 'ongoing' as TournamentStatus),
+      isNull(tournaments.deletedAt),
+    );
+
+    const [totalRow] = await this.db
+      .select({ count: count() })
+      .from(tournamentRounds)
+      .innerJoin(tournaments, eq(tournamentRounds.tournamentId, tournaments.tournamentId))
+      .where(conditions);
+
+    const items = await this.db
+      .select({
+        roundId: tournamentRounds.roundId,
+        tournamentId: tournamentRounds.tournamentId,
+        roundNumber: tournamentRounds.roundNumber,
+        name: tournamentRounds.name,
+        description: tournamentRounds.description,
+        quizVersionId: tournamentRounds.quizVersionId,
+        startAt: tournamentRounds.startAt,
+        endAt: tournamentRounds.endAt,
+        durationMs: tournamentRounds.durationMs,
+        status: tournamentRounds.status,
+        isElimination: tournamentRounds.isElimination,
+        participantLimit: tournamentRounds.participantLimit,
+        createdAt: tournamentRounds.createdAt,
+        updatedAt: tournamentRounds.updatedAt,
+      })
+      .from(tournamentRounds)
+      .innerJoin(tournaments, eq(tournamentRounds.tournamentId, tournaments.tournamentId))
+      .where(conditions)
+      .orderBy(asc(tournamentRounds.startAt), asc(tournamentRounds.roundId))
+      .limit(params.limit)
+      .offset(offset);
+
+    return {
+      items: items as TournamentRoundRow[],
+      total: totalRow?.count ?? 0,
+    };
+  }
+
+  /**
+   * Round lifecycle / Issue #round-lifecycle — pagination loop support
+   * for `closeDueRounds`. Symmetric to `listDueRoundOpens` but the
+   * tournament-status filter is intentionally absent: a round whose
+   * parent tournament has already finished still closes on its own
+   * `end_at` (per `docs/round-lifecycle.md` § Transition Rules).
+   */
+  async listDueRoundCloses(params: {
+    page: number;
+    limit: number;
+    nowIso: string;
+  }): Promise<{ items: TournamentRoundRow[]; total: number }> {
+    const offset = (params.page - 1) * params.limit;
+    const conditions = and(
+      eq(tournamentRounds.status, 'open' as TournamentRoundStatus),
+      sql`${tournamentRounds.endAt} IS NOT NULL`,
+      sql`${tournamentRounds.endAt} <= ${params.nowIso}`,
+    );
+
+    const [totalRow] = await this.db
+      .select({ count: count() })
+      .from(tournamentRounds)
+      .where(conditions);
+
+    const items = await this.db
+      .select({
+        roundId: tournamentRounds.roundId,
+        tournamentId: tournamentRounds.tournamentId,
+        roundNumber: tournamentRounds.roundNumber,
+        name: tournamentRounds.name,
+        description: tournamentRounds.description,
+        quizVersionId: tournamentRounds.quizVersionId,
+        startAt: tournamentRounds.startAt,
+        endAt: tournamentRounds.endAt,
+        durationMs: tournamentRounds.durationMs,
+        status: tournamentRounds.status,
+        isElimination: tournamentRounds.isElimination,
+        participantLimit: tournamentRounds.participantLimit,
+        createdAt: tournamentRounds.createdAt,
+        updatedAt: tournamentRounds.updatedAt,
+      })
+      .from(tournamentRounds)
+      .where(conditions)
+      .orderBy(asc(tournamentRounds.endAt), asc(tournamentRounds.roundId))
+      .limit(params.limit)
+      .offset(offset);
+
+    return {
+      items: items as TournamentRoundRow[],
+      total: totalRow?.count ?? 0,
+    };
+  }
+
+  /**
+   * Round lifecycle / Issue #round-lifecycle — guarded state
+   * transition for `tournament_rounds.status`. Mirrors
+   * `markTournamentStatus` exactly: writes `status = toStatus` only
+   * when the current status equals `fromStatus`, and returns the
+   * post-mutation row (or `null` when no row matched). A concurrent
+   * caller that already advanced the round sees `null` and the
+   * lifecycle service counts it as a no-op.
+   *
+   * The `tx?` parameter is reserved for future transactional
+   * composition. Today a single guarded UPDATE is sufficient and
+   * matches the tournament equivalent.
+   */
+  async markRoundStatus(params: {
+    roundId: string;
+    fromStatus: TournamentRoundStatus;
+    toStatus: TournamentRoundStatus;
+    nowIso: string;
+    tx?: unknown;
+  }): Promise<TournamentRoundRow | null> {
+    const client = params.tx != null ? (params.tx as DrizzleDB) : this.db;
+    const [row] = await client
+      .update(tournamentRounds)
+      .set({
+        status: params.toStatus,
+        updatedAt: params.nowIso,
+      })
+      .where(
+        and(
+          eq(tournamentRounds.roundId, params.roundId),
+          eq(tournamentRounds.status, params.fromStatus),
+        ),
+      )
+      .returning({
+        roundId: tournamentRounds.roundId,
+        tournamentId: tournamentRounds.tournamentId,
+        roundNumber: tournamentRounds.roundNumber,
+        name: tournamentRounds.name,
+        description: tournamentRounds.description,
+        quizVersionId: tournamentRounds.quizVersionId,
+        startAt: tournamentRounds.startAt,
+        endAt: tournamentRounds.endAt,
+        durationMs: tournamentRounds.durationMs,
+        status: tournamentRounds.status,
+        isElimination: tournamentRounds.isElimination,
+        participantLimit: tournamentRounds.participantLimit,
+        createdAt: tournamentRounds.createdAt,
+        updatedAt: tournamentRounds.updatedAt,
+      });
+
+    return (row as TournamentRoundRow | undefined) ?? null;
   }
 
   async finalizeTournament(params: {

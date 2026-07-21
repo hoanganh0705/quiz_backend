@@ -103,9 +103,8 @@ export class TournamentLifecycleService {
   }
 
   async startDueTournaments(nowIso: string): Promise<number> {
-    const tournaments = await this.tournamentRepository.listTournamentsStartingSoon({
-      windowStartIso: '1970-01-01T00:00:00.000Z',
-      windowEndIso: nowIso,
+    const tournaments = await this.tournamentRepository.listTournamentsStartingPlay({
+      nowIso,
     });
 
     let transitioned = 0;
@@ -128,6 +127,114 @@ export class TournamentLifecycleService {
     });
 
     return transitioned;
+  }
+
+  /**
+   * Round lifecycle / Issue #round-lifecycle — open rounds whose
+   * `start_at` is at or before `nowIso` AND whose parent tournament is
+   * `ongoing`. Mirrors `finalizeDueTournaments` for pagination: a
+   * bounded outer loop with `PAGE_SIZE = 100` so a single tick can
+   * drain arbitrarily many due rows without unbounded runtime. The
+   * guard in `markRoundStatus` (`WHERE status = fromStatus`) makes
+   * each transition concurrency-safe across replicas.
+   *
+   * Returns the total number of rounds transitioned to `open` so the
+   * scheduler can log it.
+   */
+  async openDueRounds(nowIso: string): Promise<number> {
+    const PAGE_SIZE = 100;
+    let page = 1;
+    let opened = 0;
+
+    while (true) {
+      const due = await this.tournamentRepository.listDueRoundOpens({
+        page,
+        limit: PAGE_SIZE,
+        nowIso,
+      });
+
+      if (due.items.length === 0) {
+        break;
+      }
+
+      for (const item of due.items) {
+        const advanced = await this.tournamentRepository.markRoundStatus({
+          roundId: item.roundId,
+          fromStatus: 'pending',
+          toStatus: 'open',
+          nowIso,
+        });
+
+        if (advanced) {
+          opened += 1;
+        }
+      }
+
+      if (due.items.length < PAGE_SIZE) {
+        break;
+      }
+
+      page += 1;
+    }
+
+    this.logger.info({
+      event: 'rounds_opened',
+      opened,
+    });
+
+    return opened;
+  }
+
+  /**
+   * Round lifecycle / Issue #round-lifecycle — close rounds whose
+   * `end_at` is at or before `nowIso`. Symmetric to `openDueRounds`:
+   * same pagination shape, same per-row guarded UPDATE. The parent
+   * tournament's status is intentionally not constrained — a round
+   * whose tournament transitioned `ongoing → finished` mid-round
+   * still closes on its own `end_at`.
+   */
+  async closeDueRounds(nowIso: string): Promise<number> {
+    const PAGE_SIZE = 100;
+    let page = 1;
+    let closed = 0;
+
+    while (true) {
+      const due = await this.tournamentRepository.listDueRoundCloses({
+        page,
+        limit: PAGE_SIZE,
+        nowIso,
+      });
+
+      if (due.items.length === 0) {
+        break;
+      }
+
+      for (const item of due.items) {
+        const advanced = await this.tournamentRepository.markRoundStatus({
+          roundId: item.roundId,
+          fromStatus: 'open',
+          toStatus: 'finished',
+          nowIso,
+        });
+
+        if (advanced) {
+          closed += 1;
+        }
+      }
+
+      if (due.items.length < PAGE_SIZE) {
+        break;
+      }
+
+      page += 1;
+    }
+
+    this.logger.info({
+      event: 'rounds_closed',
+      closed,
+    });
+
+    return closed;
   }
 
   /**
