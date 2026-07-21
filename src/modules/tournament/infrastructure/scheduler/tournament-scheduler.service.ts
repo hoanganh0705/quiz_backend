@@ -22,6 +22,9 @@ const LOCK_TTL_MS = Object.freeze({
   TOURNAMENT_START: 5 * 60 * 1000,
   /** 15-minute TTL — `handleTournamentFinalize` runs every 15 min */
   TOURNAMENT_FINALIZE: 15 * 60 * 1000,
+  /** 5-minute TTL — round lifecycle jobs run every minute; 5x headroom for batched drain */
+  ROUND_OPEN: 5 * 60 * 1000,
+  ROUND_CLOSE: 5 * 60 * 1000,
   /** 60-minute TTL — `handleParticipantTotalsReconcile` runs daily at 4:30 AM */
   TOTALS_RECONCILE: 60 * 60 * 1000,
 });
@@ -219,6 +222,102 @@ export class TournamentSchedulerService {
     } catch (error) {
       this.logger.error({
         event: 'tournament_scheduler_totals_reconcile_failed',
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  /**
+   * Round lifecycle / Issue #round-lifecycle — opens rounds whose
+   * `start_at` has elapsed AND whose parent tournament is `ongoing`.
+   * Runs every minute for ≤60s user-perceived latency from
+   * `round.startAt` to "Round is now open."
+   *
+   * Protected by a Redis advisory lock so that only one replica
+   * processes this job at a time; other replicas skip immediately.
+   * Per-tick batch size is bounded inside the lifecycle service
+   * (`PAGE_SIZE = 100`), so the lock TTL has 5x headroom against the
+   * worst-case drain.
+   */
+  @Cron('* * * * *')
+  async handleOpenDueRounds(): Promise<void> {
+    const lockKey = 'tournament:cron:round-open';
+    const lockToken = crypto.randomUUID();
+    const acquired = await this.cache.acquireAdvisoryLock(lockKey, LOCK_TTL_MS.ROUND_OPEN);
+    if (!acquired) {
+      this.logger.info({
+        event: 'tournament_scheduler_skipped_lock_held',
+        job: 'handleOpenDueRounds',
+      });
+      return;
+    }
+
+    try {
+      await this.runOpenDueRounds();
+    } finally {
+      await this.cache.releaseAdvisoryLock(lockKey, lockToken);
+    }
+  }
+
+  private async runOpenDueRounds(): Promise<void> {
+    const now = new Date().toISOString();
+    this.logger.info({ event: 'tournament_scheduler_round_open_start' });
+
+    try {
+      const result = await this.lifecycleService.openDueRounds(now);
+
+      this.logger.info({
+        event: 'tournament_scheduler_round_open_complete',
+        roundsOpened: result,
+      });
+    } catch (error) {
+      this.logger.error({
+        event: 'tournament_scheduler_round_open_failed',
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  /**
+   * Round lifecycle / Issue #round-lifecycle — closes rounds whose
+   * `end_at` has elapsed. Symmetric to `handleOpenDueRounds`: every
+   * minute, Redis advisory lock, paginated drain inside the lifecycle
+   * service.
+   */
+  @Cron('* * * * *')
+  async handleCloseDueRounds(): Promise<void> {
+    const lockKey = 'tournament:cron:round-close';
+    const lockToken = crypto.randomUUID();
+    const acquired = await this.cache.acquireAdvisoryLock(lockKey, LOCK_TTL_MS.ROUND_CLOSE);
+    if (!acquired) {
+      this.logger.info({
+        event: 'tournament_scheduler_skipped_lock_held',
+        job: 'handleCloseDueRounds',
+      });
+      return;
+    }
+
+    try {
+      await this.runCloseDueRounds();
+    } finally {
+      await this.cache.releaseAdvisoryLock(lockKey, lockToken);
+    }
+  }
+
+  private async runCloseDueRounds(): Promise<void> {
+    const now = new Date().toISOString();
+    this.logger.info({ event: 'tournament_scheduler_round_close_start' });
+
+    try {
+      const result = await this.lifecycleService.closeDueRounds(now);
+
+      this.logger.info({
+        event: 'tournament_scheduler_round_close_complete',
+        roundsClosed: result,
+      });
+    } catch (error) {
+      this.logger.error({
+        event: 'tournament_scheduler_round_close_failed',
         error: error instanceof Error ? error.message : String(error),
       });
     }
