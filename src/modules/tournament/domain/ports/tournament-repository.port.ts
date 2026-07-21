@@ -419,6 +419,17 @@ export interface TournamentRepositoryPort {
     windowEndIso: string;
   }): Promise<TournamentRow[]>;
 
+  /**
+   * Lists tournaments that are in `registration` status and have passed their
+   * `start_at`. Used by `TournamentLifecycleService.startDueTournaments` to
+   * drive the `registration → ongoing` transition.
+   *
+   * Does NOT filter by a date window — every `registration` tournament whose
+   * `start_at` has elapsed is eligible, regardless of how late the scheduler
+   * tick runs.
+   */
+  listTournamentsStartingPlay(params: { nowIso: string }): Promise<TournamentRow[]>;
+
   markTournamentStatus(params: {
     tournamentId: string;
     fromStatus: TournamentStatus;
@@ -427,6 +438,63 @@ export interface TournamentRepositoryPort {
     /** Optional transaction client. When provided, the operation joins the caller's transaction. */
     tx?: unknown;
   }): Promise<TournamentRow | null>;
+
+  /**
+   * Round lifecycle / Issue #round-lifecycle — list rounds whose
+   * `start_at` is at or before `nowIso` AND whose parent tournament is
+   * currently `ongoing`. Status filter is applied at the SQL level so
+   * the lifecycle service iterates only over candidates that need a
+   * transition. Pagination is page/limit so the caller can loop until
+   * empty (mirrors `listCompletedTournaments`).
+   *
+   * Returns the page of `TournamentRoundRow` items in
+   * `start_at ASC, round_id ASC` order (longest-waiting first).
+   */
+  listDueRoundOpens(params: {
+    page: number;
+    limit: number;
+    nowIso: string;
+  }): Promise<{ items: TournamentRoundRow[]; total: number }>;
+
+  /**
+   * Round lifecycle / Issue #round-lifecycle — list rounds whose
+   * `end_at` is at or before `nowIso`. The parent tournament's status
+   * is intentionally not constrained: a round whose tournament
+   * transitioned `ongoing → finished` mid-round still closes on its
+   * own `end_at`.
+   *
+   * Returns the page of `TournamentRoundRow` items in
+   * `end_at ASC, round_id ASC` order.
+   */
+  listDueRoundCloses(params: {
+    page: number;
+    limit: number;
+    nowIso: string;
+  }): Promise<{ items: TournamentRoundRow[]; total: number }>;
+
+  /**
+   * Round lifecycle / Issue #round-lifecycle — guarded state
+   * transition for `tournament_rounds.status`. Mirrors
+   * `markTournamentStatus` exactly: writes `status = toStatus` only
+   * when the current status equals `fromStatus`, and returns the
+   * post-mutation row (or `null` when no row matched — e.g., a
+   * concurrent caller already advanced the round).
+   *
+   * The optional `tx?` parameter is reserved for future transactional
+   * composition. Today's lifecycle service does not need it (single
+   * guarded UPDATE is sufficient and matches the tournament
+   * equivalent), but the slot is kept open so callers can compose
+   * the transition with a downstream write later without changing
+   * the lifecycle method signature.
+   */
+  markRoundStatus(params: {
+    roundId: string;
+    fromStatus: TournamentRoundStatus;
+    toStatus: TournamentRoundStatus;
+    nowIso: string;
+    /** Optional transaction client. When provided, the operation joins the caller's transaction. */
+    tx?: unknown;
+  }): Promise<TournamentRoundRow | null>;
 
   finalizeTournament(params: {
     tournamentId: string;
