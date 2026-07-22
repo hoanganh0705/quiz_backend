@@ -354,3 +354,27 @@ export const SOFT_DELETE_TOURNAMENT_SUCCESS_EXAMPLE = {
   },
   meta: { timestamp: EXAMPLE_TIMESTAMP },
 } as const;
+
+// ===========================================================================
+// Tournament round examples.
+// ===========================================================================
+
+export const CREATE_ROUND_SUCCESS_EXAMPLE = {
+  data: {
+    roundId: '880e8400-e29b-71d4-a716-446655440001',
+    tournamentId: '660e8400-e29b-71d4-a716-446655440000',
+    roundNumber: 1,
+    name: 'Quarter Finals',
+    description: 'The first elimination round of the tournament.',
+    quizVersionId: '990e8400-e29b-71d4-a716-446655440001',
+    startAt: '2026-07-20T10:00:00.000Z',
+    endAt: '2026-07-20T11:00:00.000Z',
+    durationMs: 3_600_000,
+    status: 'pending',
+    isElimination: false,
+    participantLimit: null,
+    createdAt: EXAMPLE_TIMESTAMP,
+    updatedAt: EXAMPLE_TIMESTAMP,
+  },
+  meta: { timestamp: EXAMPLE_TIMESTAMP },
+} as const;

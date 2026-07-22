@@ -2,7 +2,10 @@ import { Inject, Injectable } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { DRIZZLE } from '@/core/database/drizzle.constants';
 import type { DrizzleDB } from '@/core/database/database.module';
-import { CATEGORY_REPOSITORY_PORT, type CategoryRepositoryPort } from '@/modules/category/domain/ports';
+import {
+  CATEGORY_REPOSITORY_PORT,
+  type CategoryRepositoryPort,
+} from '@/modules/category/domain/ports';
 import { CategoryNotFoundError } from '@/modules/category/domain/errors';
 import { getCorrelationId } from '@/common/interceptors/correlation-id';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
@@ -30,7 +33,7 @@ import {
   type TournamentDomainEventBusPort,
 } from './ports/tournament-domain-event-bus.port';
 import { TOURNAMENT_OUTBOX_PORT, type TournamentOutboxPort } from './ports/tournament-outbox.port';
-import { CreateTournamentDto, UpdateTournamentDto } from '../dto/request';
+import { CreateTournamentDto, CreateTournamentRoundDto, UpdateTournamentDto } from '../dto/request';
 import type { GetTournamentParticipantsQuery } from './types/get-tournament-participants.query';
 import type { GetMyTournamentStandingQuery } from './types/get-my-tournament-standing.query';
 import type { GetUpcomingTournamentsQuery } from './types/get-upcoming-tournaments.query';
@@ -57,6 +60,7 @@ import {
   TournamentTerminalStateError,
   TournamentCapacityReductionError,
   TournamentEmptyUpdateError,
+  TournamentParticipantStateError,
 } from './errors';
 import {
   TOURNAMENT_NOT_FOUND_MESSAGE,
@@ -581,6 +585,60 @@ export class TournamentService {
     return this.tournamentRepository.getRoundsByTournament(tournamentId);
   }
 
+  async createTournamentRound(
+    tournamentId: string,
+    payload: CreateTournamentRoundDto,
+  ): Promise<TournamentRoundRow> {
+    const nowIso = new Date().toISOString();
+
+    const tournament = await this.getActiveTournamentOrThrow(tournamentId);
+
+    if (
+      tournament.status === 'ongoing' ||
+      tournament.status === 'finished' ||
+      tournament.status === 'cancelled'
+    ) {
+      throw new TournamentValidationError(
+        'Cannot add rounds to a tournament that is ongoing, finished, or cancelled',
+      );
+    }
+
+    if (payload.startAt !== undefined && payload.startAt !== null) {
+      if (new Date(payload.startAt) < new Date(tournament.startAt)) {
+        throw new TournamentValidationError('Round startAt must be >= tournament startAt');
+      }
+    }
+
+    if (payload.endAt !== undefined && payload.endAt !== null) {
+      if (new Date(payload.endAt) > new Date(tournament.endAt)) {
+        throw new TournamentValidationError('Round endAt must be <= tournament endAt');
+      }
+    }
+
+    const round = await this.tournamentRepository.createRound({
+      tournamentId,
+      name: payload.name.trim(),
+      description: payload.description?.trim() ?? null,
+      quizVersionId: payload.quizVersionId,
+      startAt: payload.startAt ?? null,
+      endAt: payload.endAt ?? null,
+      durationMs: payload.durationMs ?? null,
+      isElimination: payload.isElimination ?? false,
+      participantLimit: payload.participantLimit ?? null,
+      nowIso,
+    });
+
+    this.logger.info({
+      event: 'tournament_round_created',
+      tournamentId,
+      roundId: round.roundId,
+      roundNumber: round.roundNumber,
+      name: round.name,
+    });
+
+    return round;
+  }
+
   async getTournamentParticipants(query: GetTournamentParticipantsQuery): Promise<{
     items: TournamentParticipantListItemRow[];
     total: number;
@@ -715,6 +773,7 @@ export class TournamentService {
      */
     try {
       let isNewRegistration = false;
+      let wasReactivated = false;
       let registeredParticipant: TournamentParticipantRow;
 
       await this.db.transaction(async (tx) => {
@@ -728,15 +787,7 @@ export class TournamentService {
         registeredParticipant = result.participant;
 
         if (!result.inserted) {
-          // User already registered (or withdrawn).
-          if (result.participant.status === 'withdrawn') {
-            this.logger.info({
-              event: 'tournament_registration_reactivated',
-              tournamentId,
-              userId: user.sub,
-              participantId: result.participant.participantId,
-            });
-          }
+          wasReactivated = result.reactivated;
           // Don't throw here — return the participant and let the outer code decide
           return;
         }
@@ -764,11 +815,18 @@ export class TournamentService {
 
       // At this point, the transaction has committed
       if (!isNewRegistration) {
-        if (registeredParticipant!.status !== 'withdrawn') {
-          throw new TournamentAlreadyRegisteredError(TOURNAMENT_ALREADY_REGISTERED_MESSAGE);
+        if (wasReactivated) {
+          // Participant was withdrawn and is now re-activated. Log and return.
+          this.logger.info({
+            event: 'tournament_registration_reactivated',
+            tournamentId,
+            userId: user.sub,
+            participantId: registeredParticipant!.participantId,
+          });
+          return registeredParticipant!;
         }
-        // Reactivation case — return without publishing event (already handled inside tx)
-        return registeredParticipant!;
+        // User was already active — this is a duplicate registration attempt.
+        throw new TournamentAlreadyRegisteredError(TOURNAMENT_ALREADY_REGISTERED_MESSAGE);
       }
 
       this.logger.info({
@@ -782,6 +840,11 @@ export class TournamentService {
     } catch (error) {
       if (error instanceof Error && error.message === 'TOURNAMENT_FULL') {
         throw new TournamentFullError(TOURNAMENT_FULL_MESSAGE);
+      }
+      if (error instanceof Error && error.message.startsWith('TOURNAMENT_PARTICIPANT_STATE:')) {
+        throw new TournamentParticipantStateError(
+          `Cannot re-register: participant state is ${error.message.split(':')[1]}`,
+        );
       }
       throw error;
     }

@@ -40,6 +40,7 @@ import {
   GetRelatedTournamentsQueryDto,
   UpdateTournamentDto,
   GetTournamentLeaderboardQueryDto,
+  CreateTournamentRoundDto,
 } from '../../dto/request';
 import {
   TournamentResponseDto,
@@ -59,6 +60,7 @@ import {
   WithdrawTournamentResponseDto,
   CancelTournamentResponseDto,
   SoftDeleteTournamentResponseDto,
+  TournamentRoundResponseDto,
 } from '../../dto/response';
 import { TournamentPresenter } from '../presenters/tournament.presenter';
 import { AUTH_SECURITY_NAME } from '@/core/swagger/swagger.config';
@@ -85,6 +87,7 @@ import {
   UPDATE_TOURNAMENT_SUCCESS_EXAMPLE,
   CANCEL_TOURNAMENT_SUCCESS_EXAMPLE,
   SOFT_DELETE_TOURNAMENT_SUCCESS_EXAMPLE,
+  CREATE_ROUND_SUCCESS_EXAMPLE,
 } from '../swagger/examples';
 import {
   tournamentEmptyUpdateExample,
@@ -179,6 +182,43 @@ export class TournamentController {
     return this.tournamentApplicationService
       .createTournament(user, payload)
       .then((result) => this.presenter.createTournament(result));
+  }
+
+  // createTournamentRound can throw:
+  //   - TournamentNotFoundError (404)          — tournament missing
+  //   - TournamentValidationError (400)        — terminal tournament state, or startAt/endAt out of bounds
+  //   - 400 from class-validator                — request body validation failure
+  @Post(':id/rounds')
+  @Permissions(Permission.TOURNAMENT_CREATE)
+  @ApiOperation({
+    summary: 'Create tournament round',
+    description:
+      'Creates a new round for the given tournament. Requires the `TOURNAMENT_CREATE` permission. ' +
+      'Rounds can only be added to tournaments that are in `upcoming` or `registration` status. ' +
+      'If provided, `startAt` must be >= the tournament startAt, and `endAt` must be <= the tournament endAt.',
+  })
+  @tournamentUnauthorizedResponse()
+  @ApiTournamentIdParam()
+  @ApiCreatedResource(TournamentRoundResponseDto, {
+    description: 'Round created',
+    example: CREATE_ROUND_SUCCESS_EXAMPLE,
+  })
+  @ApiBadRequestResponse({
+    description:
+      'Request body failed validation, the tournament is in a terminal state, ' +
+      'or round timestamps are outside the tournament window. ' +
+      'Returns the RFC 7807 ProblemDetail envelope.',
+    type: ProblemDetailDto,
+    example: ErrorResponseExamples.badRequest,
+  })
+  @tournamentNotFoundResponse('Tournament not found')
+  createTournamentRound(
+    @Param('id', new ParseUUIDPipe({ version: '7' })) tournamentId: string,
+    @Body() payload: CreateTournamentRoundDto,
+  ) {
+    return this.tournamentApplicationService
+      .createTournamentRound(tournamentId, payload)
+      .then((result) => this.presenter.createTournamentRound(result));
   }
 
   // listTournaments is a public cursor-paginated listing that does not throw
