@@ -5,6 +5,7 @@ import { TournamentService } from '../domain/tournament.service';
 import { TournamentResponseMapper } from '../mappers/tournament-response.mapper';
 import {
   CreateTournamentDto,
+  CreateTournamentRoundDto,
   ListTournamentsQueryDto,
   GetTournamentParticipantsQueryDto,
   GetTournamentWinnersQueryDto,
@@ -33,6 +34,7 @@ import {
   WithdrawTournamentResponseDto,
   CancelTournamentResponseDto,
   SoftDeleteTournamentResponseDto,
+  TournamentRoundResponseDto,
 } from '../dto/response';
 
 @Injectable()
@@ -268,6 +270,37 @@ export class TournamentApplicationService {
     });
 
     return this.mapper.toTournamentDetailResponse(detail, rounds);
+  }
+
+  async createTournamentRound(
+    tournamentId: string,
+    payload: CreateTournamentRoundDto,
+  ): Promise<TournamentRoundResponseDto> {
+    this.logger.info({
+      event: 'app_create_tournament_round',
+      tournamentId,
+      quizVersionId: payload.quizVersionId,
+      name: payload.name,
+    });
+
+    const round = await this.tournamentService.createTournamentRound(tournamentId, payload);
+
+    return {
+      roundId: round.roundId,
+      tournamentId: round.tournamentId,
+      roundNumber: round.roundNumber,
+      name: round.name,
+      description: round.description,
+      quizVersionId: round.quizVersionId,
+      startAt: round.startAt,
+      endAt: round.endAt,
+      durationMs: round.durationMs,
+      status: round.status,
+      isElimination: round.isElimination,
+      participantLimit: round.participantLimit,
+      createdAt: round.createdAt,
+      updatedAt: round.updatedAt,
+    };
   }
 
   async getTournamentParticipants(

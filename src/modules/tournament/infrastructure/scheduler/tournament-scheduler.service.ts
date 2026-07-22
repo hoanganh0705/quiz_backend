@@ -69,13 +69,15 @@ export class TournamentSchedulerService {
   }
 
   private async runRegistrationOpen(): Promise<void> {
-    const now = new Date().toISOString();
+    const now = new Date();
+    const fiveMinutesAgo = new Date(now.getTime() - 5 * 60 * 1000);
+    const fiveMinutesFromNow = new Date(now.getTime() + 5 * 60 * 1000);
     this.logger.info({ event: 'tournament_scheduler_registration_open_start' });
 
     try {
       const result = await this.lifecycleService.dispatchStartingSoonNotifications({
-        windowStartIso: now,
-        windowEndIso: now,
+        windowStartIso: fiveMinutesAgo.toISOString(),
+        windowEndIso: fiveMinutesFromNow.toISOString(),
       });
 
       this.logger.info({

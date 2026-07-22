@@ -891,7 +891,7 @@ export class TournamentRepository implements TournamentRepositoryPort {
     userId: string;
     nowIso: string;
     tx?: unknown;
-  }): Promise<{ participant: TournamentParticipantRow; inserted: boolean }> {
+  }): Promise<{ participant: TournamentParticipantRow; inserted: boolean; reactivated: boolean }> {
     return (params.tx != null ? (params.tx as DrizzleDB) : this.db).transaction(async (tx) => {
       // 1. Lock the tournament row — prevents concurrent registration from
       //    racing the capacity count.
@@ -969,6 +969,7 @@ export class TournamentRepository implements TournamentRepositoryPort {
         return {
           participant: inserted[0] as TournamentParticipantRow,
           inserted: true,
+          reactivated: false,
         };
       }
 
@@ -1000,9 +1001,50 @@ export class TournamentRepository implements TournamentRepositoryPort {
         throw new Error('Participant not found after registration conflict');
       }
 
+      // A participant in 'completed' state cannot re-register for the same tournament.
+      // Their totals were frozen at finalization — allowing re-entry would corrupt the
+      // leaderboard and rank_final. Surface this as a participant-state error.
+      if (existing.status === 'completed') {
+        throw new Error('TOURNAMENT_PARTICIPANT_STATE:completed');
+      }
+
+      // If the participant was previously withdrawn, reactivate them.
+      // The capacity check above already ran before this conflict path was reached,
+      // so the withdrawn slot was still reserved — the user wins their capacity race
+      // the same way a first-time registrant would.
+      if (existing.status === 'withdrawn') {
+        const [reactivated] = await tx
+          .update(tournamentParticipants)
+          .set({
+            status: 'active' as TournamentParticipantStatus,
+            withdrawnAt: null,
+            updatedAt: params.nowIso,
+          })
+          .where(eq(tournamentParticipants.participantId, existing.participantId))
+          .returning({
+            participantId: tournamentParticipants.participantId,
+            tournamentId: tournamentParticipants.tournamentId,
+            userId: tournamentParticipants.userId,
+            registeredAt: tournamentParticipants.registeredAt,
+            totalScore: tournamentParticipants.totalScore,
+            totalTimeMs: tournamentParticipants.totalTimeMs,
+            rankFinal: tournamentParticipants.rankFinal,
+            status: tournamentParticipants.status,
+            withdrawnAt: tournamentParticipants.withdrawnAt,
+            updatedAt: tournamentParticipants.updatedAt,
+          });
+
+        return {
+          participant: reactivated as TournamentParticipantRow,
+          inserted: false,
+          reactivated: true,
+        };
+      }
+
       return {
         participant: existing as TournamentParticipantRow,
         inserted: false,
+        reactivated: false,
       };
     });
   }
@@ -1097,6 +1139,63 @@ export class TournamentRepository implements TournamentRepositoryPort {
       .limit(1);
 
     return (row as TournamentRoundRow | undefined) ?? null;
+  }
+
+  async createRound(params: {
+    tournamentId: string;
+    name: string;
+    description: string | null;
+    quizVersionId: string;
+    startAt: string | null;
+    endAt: string | null;
+    durationMs: number | null;
+    isElimination: boolean;
+    participantLimit: number | null;
+    nowIso: string;
+  }): Promise<TournamentRoundRow> {
+    // Auto-assign roundNumber: count existing rounds for this tournament + 1.
+    const [countRow] = await this.db
+      .select({ count: count() })
+      .from(tournamentRounds)
+      .where(eq(tournamentRounds.tournamentId, params.tournamentId))
+      .limit(1);
+    const roundNumber = (countRow?.count ?? 0) + 1;
+
+    const [row] = await this.db
+      .insert(tournamentRounds)
+      .values({
+        tournamentId: params.tournamentId,
+        roundNumber,
+        name: params.name,
+        description: params.description,
+        quizVersionId: params.quizVersionId,
+        startAt: params.startAt,
+        endAt: params.endAt,
+        durationMs: params.durationMs,
+        status: 'pending',
+        isElimination: params.isElimination,
+        participantLimit: params.participantLimit,
+        createdAt: params.nowIso,
+        updatedAt: params.nowIso,
+      })
+      .returning({
+        roundId: tournamentRounds.roundId,
+        tournamentId: tournamentRounds.tournamentId,
+        roundNumber: tournamentRounds.roundNumber,
+        name: tournamentRounds.name,
+        description: tournamentRounds.description,
+        quizVersionId: tournamentRounds.quizVersionId,
+        startAt: tournamentRounds.startAt,
+        endAt: tournamentRounds.endAt,
+        durationMs: tournamentRounds.durationMs,
+        status: tournamentRounds.status,
+        isElimination: tournamentRounds.isElimination,
+        participantLimit: tournamentRounds.participantLimit,
+        createdAt: tournamentRounds.createdAt,
+        updatedAt: tournamentRounds.updatedAt,
+      });
+
+    return row as TournamentRoundRow;
   }
 
   async getRoundDetailById(roundId: string): Promise<TournamentRoundDetailRow | null> {
@@ -1527,9 +1626,10 @@ export class TournamentRepository implements TournamentRepositoryPort {
       .where(
         and(
           eq(tournamentParticipants.tournamentId, params.tournamentId),
-          isNull(tournamentParticipants.withdrawnAt),
-          isNull(users.deletedAt),
+          // rank_final IS NOT NULL implies the participant was not withdrawn at finalization time.
+          // No need to also filter withdrawn_at IS NULL — it is already implied.
           sql`${tournamentParticipants.rankFinal} is not null`,
+          isNull(users.deletedAt),
         ),
       )
       // Issue #58: Added userId ASC as tiebreaker for deterministic ordering

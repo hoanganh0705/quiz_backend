@@ -319,7 +319,7 @@ export interface TournamentRepositoryPort {
     nowIso: string;
     /** Optional transaction client. When provided, the operation joins the caller's transaction. */
     tx?: unknown;
-  }): Promise<{ participant: TournamentParticipantRow; inserted: boolean }>;
+  }): Promise<{ participant: TournamentParticipantRow; inserted: boolean; reactivated: boolean }>;
 
   /**
    * Phase 2 / Issue #2 (part 2) — atomic tournament withdrawal.
@@ -350,6 +350,19 @@ export interface TournamentRepositoryPort {
   }): Promise<TournamentParticipantRow | null>;
 
   getRoundById(roundId: string): Promise<TournamentRoundRow | null>;
+
+  createRound(params: {
+    tournamentId: string;
+    name: string;
+    description: string | null;
+    quizVersionId: string;
+    startAt: string | null;
+    endAt: string | null;
+    durationMs: number | null;
+    isElimination: boolean;
+    participantLimit: number | null;
+    nowIso: string;
+  }): Promise<TournamentRoundRow>;
 
   getRoundDetailById(roundId: string): Promise<TournamentRoundDetailRow | null>;
 
