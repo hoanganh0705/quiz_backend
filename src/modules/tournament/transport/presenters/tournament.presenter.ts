@@ -5,6 +5,7 @@ import type {
   TournamentDetailResponseDto,
   TournamentResponseDto,
 } from '../../dto/response/tournament-response.dto';
+import type { TournamentRoundResponseDto } from '../../dto/response/tournament-round-response.dto';
 import type { TournamentLeaderboardEntryDto } from '../../dto/response/tournament-leaderboard-response.dto';
 import type { TournamentParticipantListItemDto } from '../../dto/response/tournament-participants-response.dto';
 import type {
@@ -123,6 +124,7 @@ export class TournamentPresenter {
 
   // CRUD
   readonly createTournament = TournamentPresenter.ok<TournamentResponseDto>;
+  readonly createTournamentRound = TournamentPresenter.ok<TournamentRoundResponseDto>;
   readonly getTournamentById = TournamentPresenter.ok<TournamentDetailResponseDto>;
 
   // Lists
