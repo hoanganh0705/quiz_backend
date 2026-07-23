@@ -14,6 +14,9 @@ import {
   PlayerDisconnectedEvent,
   InstanceStartedEvent,
   InstanceClosedEvent,
+  CountdownStartedEvent,
+  CountdownCancelledEvent,
+  CountdownCompletedEvent,
 } from './instance-domain.events';
 
 /**
@@ -135,6 +138,39 @@ export class InstanceDomainEventBus implements InstanceDomainEventBusPort {
       eventType: 'instance.closed',
       instanceId: event.instanceId,
       hostUserId: event.hostUserId,
+    });
+    this.emit(event);
+  }
+
+  emitCountdownStarted(event: CountdownStartedEvent): void {
+    this.logger.debug({
+      event: 'instance_event_emitted',
+      eventType: 'instance.countdown_started',
+      instanceId: event.instanceId,
+      hostUserId: event.hostUserId,
+      countdownStartedAt: event.countdownStartedAt,
+      countdownEndsAt: event.countdownEndsAt,
+    });
+    this.emit(event);
+  }
+
+  emitCountdownCancelled(event: CountdownCancelledEvent): void {
+    this.logger.debug({
+      event: 'instance_event_emitted',
+      eventType: 'instance.countdown_cancelled',
+      instanceId: event.instanceId,
+      hostUserId: event.hostUserId,
+      reason: event.reason,
+    });
+    this.emit(event);
+  }
+
+  emitCountdownCompleted(event: CountdownCompletedEvent): void {
+    this.logger.debug({
+      event: 'instance_event_emitted',
+      eventType: 'instance.countdown_completed',
+      instanceId: event.instanceId,
+      startedAt: event.startedAt,
     });
     this.emit(event);
   }

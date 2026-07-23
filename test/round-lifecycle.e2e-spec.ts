@@ -128,12 +128,8 @@ describe('round-lifecycle — repository SQL semantics (e2e)', () => {
       }
       if (createdQuizIds.length > 0) {
         const arrayLiteral = `ARRAY[${createdQuizIds.map((id) => `'${id}'`).join(',')}]::uuid[]`;
-        await db.execute(
-          sql.raw(`DELETE FROM quiz_versions WHERE quiz_id = ANY(${arrayLiteral})`),
-        );
-        await db.execute(
-          sql.raw(`DELETE FROM quizzes WHERE quiz_id = ANY(${arrayLiteral})`),
-        );
+        await db.execute(sql.raw(`DELETE FROM quiz_versions WHERE quiz_id = ANY(${arrayLiteral})`));
+        await db.execute(sql.raw(`DELETE FROM quizzes WHERE quiz_id = ANY(${arrayLiteral})`));
       }
       if (createdCategoryIds.length > 0) {
         const arrayLiteral = `ARRAY[${createdCategoryIds.map((id) => `'${id}'`).join(',')}]::uuid[]`;
@@ -143,9 +139,7 @@ describe('round-lifecycle — repository SQL semantics (e2e)', () => {
       }
       if (createdUserIds.length > 0) {
         const arrayLiteral = `ARRAY[${createdUserIds.map((id) => `'${id}'`).join(',')}]::uuid[]`;
-        await db.execute(
-          sql.raw(`DELETE FROM users WHERE user_id = ANY(${arrayLiteral})`),
-        );
+        await db.execute(sql.raw(`DELETE FROM users WHERE user_id = ANY(${arrayLiteral})`));
       }
       await pool.end();
     });
@@ -249,10 +243,8 @@ describe('round-lifecycle — repository SQL semantics (e2e)', () => {
       // which Postgres cannot coerce to timestamptz; we pre-format
       // to ISO strings before binding.
       const roundId = crypto.randomUUID();
-      const startAtIso =
-        params.round.startAt === null ? null : params.round.startAt.toISOString();
-      const endAtIso =
-        params.round.endAt === null ? null : params.round.endAt.toISOString();
+      const startAtIso = params.round.startAt === null ? null : params.round.startAt.toISOString();
+      const endAtIso = params.round.endAt === null ? null : params.round.endAt.toISOString();
       await db.execute(sql`
         INSERT INTO tournament_rounds (
           round_id, tournament_id, round_number, name, description,
@@ -302,7 +294,7 @@ describe('round-lifecycle — repository SQL semantics (e2e)', () => {
         RETURNING tr.status
       `);
       const rows = (result as unknown as { rows: Array<{ status: RoundStatus }> }).rows;
-      return rows.length > 0 ? { status: rows[0]!.status } : null;
+      return rows.length > 0 ? { status: rows[0].status } : null;
     }
 
     async function getRoundStatus(roundId: string): Promise<RoundStatus | null> {

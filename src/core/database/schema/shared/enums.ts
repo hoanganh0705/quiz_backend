@@ -84,6 +84,7 @@ export const quizDifficulty = pgEnum('quiz_difficulty', ['easy', 'medium', 'hard
 
 export const quizInstanceStatus = pgEnum('quiz_instance_status', [
   'open',
+  'countdown',
   'running',
   'closed',
   'finished',

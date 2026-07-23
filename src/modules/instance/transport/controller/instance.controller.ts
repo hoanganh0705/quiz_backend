@@ -18,6 +18,7 @@ import {
   ApiOperation,
   ApiTags,
   ApiUnauthorizedResponse,
+  ApiUnprocessableEntityResponse,
 } from '@nestjs/swagger';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
 import { Transactional } from '@/common/interceptors/transactional.interceptor';
@@ -30,15 +31,18 @@ import {
   CreateInstanceDto,
   GetLeaderboardQueryDto,
   ListInstancesQueryDto,
+  StartCountdownDto,
 } from '../../dto/request';
 import type { LeaderboardCursorPayload } from '../../domain/ports';
 import {
+  CancelCountdownResponseDto,
   CreateInstanceResponseDto,
   InstanceDetailResponseDto,
   InstanceLeaderboardResponseDto,
   InstanceListResponseDto,
   InstancePlayersResponseDto,
   JoinInstanceResponseDto,
+  StartCountdownResponseDto,
   StartInstanceResponseDto,
   CloseInstanceResponseDto,
 } from '../../dto/response';
@@ -167,6 +171,37 @@ function instanceConflictResponse(): MethodDecorator {
   );
 }
 
+/** 422 from `MinPlayersNotMetError` (Phase 2 — multiplayer-only guard). */
+function instanceUnprocessableEntityResponse(): MethodDecorator {
+  return applyDecorators(
+    ApiUnprocessableEntityResponse({
+      description:
+        'Instance does not satisfy the multiplayer precondition. Returned as an RFC 7807 ' +
+        'ProblemDetail. Detail: "Instance requires at least 2 players before the host can ' +
+        'start the countdown".',
+      type: ProblemDetailDto,
+      example: InstanceErrorResponseExamples.minPlayersNotMet,
+    }),
+  );
+}
+
+/**
+ * 409 variant for countdown-only operations
+ * (`cancelCountdown`, `startInstance` while still in `open`). Both
+ * share the `INSTANCE_NOT_IN_COUNTDOWN` problem type.
+ */
+function instanceNotInCountdownResponse(): MethodDecorator {
+  return applyDecorators(
+    ApiConflictResponse({
+      description:
+        'Instance is not in the `countdown` state. Returned as an RFC 7807 ProblemDetail. ' +
+        'Detail: "Instance is not in the countdown state".',
+      type: ProblemDetailDto,
+      example: InstanceErrorResponseExamples.instanceNotInCountdown,
+    }),
+  );
+}
+
 @ApiTags('instances')
 @Controller('instances')
 export class InstanceController {
@@ -188,22 +223,22 @@ export class InstanceController {
   @ApiOperation({
     summary: 'Create instance',
     description:
-      'Creates a new quiz instance for the given published quiz version and automatically ' +
-      'adds the caller as a host player. Requires a valid JWT bearer token. ' +
-      'A 400 is returned only when the request body fails validation ' +
-      '(e.g. `quizVersionId` is not a valid UUID or `maxPlayers` is outside 2–100). ' +
+      'Creates a new quiz instance for the given quiz, automatically adding the caller as a host player. ' +
+      'The latest published version of the quiz is resolved server-side — clients only need to know the `quizId`. ' +
+      'Requires a valid JWT bearer token. A 400 is returned only when the request body fails validation ' +
+      '(e.g. `quizId` is not a valid UUID or `maxPlayers` is outside 2–100). ' +
       '500 can be returned for unexpected server errors (e.g. database failures).',
   })
   @ApiBadRequestResponse({
     description:
-      'Request body failed validation (e.g. invalid `quizVersionId`, invalid `maxPlayers`). ' +
+      'Request body failed validation (e.g. invalid `quizId`, invalid `maxPlayers`). ' +
       'RFC 7807 ProblemDetail envelope.',
     type: ProblemDetailDto,
     example: ErrorResponseExamples.badRequest,
   })
   async createInstance(@CurrentUser() user: JwtPayload, @Body() payload: CreateInstanceDto) {
     const result = await this.applicationService.createInstanceForController({
-      quizVersionId: payload.quizVersionId,
+      quizId: payload.quizId,
       user,
       maxPlayers: payload.maxPlayers ?? null,
     });
@@ -328,27 +363,37 @@ export class InstanceController {
 
   // ─── POST /instances/{id}/start ─────────────────────────────────────────────
   //
-  // `InstanceService.startInstance` throws (Phase 3 — issue 6.1):
+  // Phase 2 (Gameplay Lifecycle) — host-driven `countdown → running`
+  // transition. The host must call `startCountdown` first; calling
+  // `start` on an open instance now yields `INSTANCE_NOT_IN_COUNTDOWN`.
+  // Minimum-player validation runs here too — see `MinPlayersNotMetError`.
+  //
+  // `InstanceService.startInstance` throws:
   //   - `InstanceNotFoundError`        → 404 ProblemDetail
   //   - `InstanceNotHostError`         → 403 ProblemDetail
+  //   - `InstanceNotInCountdownError`  → 409 ProblemDetail  (status = 'open')
   //   - `InstanceAlreadyStartedError`  → 400 ProblemDetail  (status = 'running')
   //   - `InstanceAlreadyClosedError`   → 400 ProblemDetail  (status = 'closed'/'finished')
-  // 409 is NEVER thrown here.
+  //   - `MinPlayersNotMetError`        → 422 ProblemDetail  (< 2 players)
   @Post(':id/start')
   @instanceUnauthorizedResponse()
   @ApiOkResource(StartInstanceResponseDto, { description: 'Instance started' })
   @ApiOperation({
     summary: 'Start instance',
     description:
-      'Transitions an open instance into the `running` state. Only the host can start an instance. ' +
-      'Requires a valid JWT bearer token. Possible errors: 400 (instance is already in a non-open ' +
-      'state — see `INSTANCE_ALREADY_STARTED` for `running`, `INSTANCE_ALREADY_CLOSED` for ' +
-      '`closed`/`finished`), 403 (caller is not the host), 404 (instance does not exist). ' +
-      'Returns 200 with `{ message: "Instance started" }`.',
+      'Transitions a `countdown` instance into the `running` state. Only the host can start an instance. ' +
+      'Requires a valid JWT bearer token. Possible errors: 400 (instance is already `running` ' +
+      '(`INSTANCE_ALREADY_STARTED`) or already terminal `closed`/`finished` ' +
+      '(`INSTANCE_ALREADY_CLOSED`)), 403 (caller is not the host), ' +
+      '404 (instance does not exist), 409 (instance is still in `open` and the countdown has ' +
+      'not been started — `INSTANCE_NOT_IN_COUNTDOWN`), and 422 (fewer than 2 players joined — ' +
+      '`MIN_PLAYERS_NOT_MET`). Returns 200 with `{ message: "Instance started" }`.',
   })
   @instanceStartBadRequestResponse()
   @instanceForbiddenResponse()
   @instanceNotFoundResponse()
+  @instanceNotInCountdownResponse()
+  @instanceUnprocessableEntityResponse()
   @ApiInstanceIdParam()
   async startInstance(
     @Param('id', new ParseUUIDPipe({ version: '7' })) instanceId: string,
@@ -388,6 +433,94 @@ export class InstanceController {
   ) {
     const result = await this.applicationService.closeInstanceForController(instanceId, user);
     return this.presenter.closeInstance(result);
+  }
+
+  // ─── POST /instances/{id}/countdown ────────────────────────────────────────
+  //
+  // Phase 2 (Gameplay Lifecycle) — host-driven `open → countdown`
+  // transition. Emits the `countdown_started` WebSocket event clients
+  // use to render the warmup timer.
+  //
+  // Idempotency
+  // -----------
+  // The application service folds
+  // `InstanceCountdownAlreadyStartedError` into a 200 carrying the
+  // existing anchor, so a host double-click is a no-op on the wire.
+  // Clients that want strict per-request dedup can also pass
+  // `idempotencyKey` in the body — see `StartCountdownDto` for the
+  // semantics.
+  //
+  // Throws (handled by GlobalExceptionFilter → RFC 7807 ProblemDetail):
+  //   - 400 `INSTANCE_NOT_OPEN`         → instance is `running`/`closed`/`finished`
+  //   - 403 `INSTANCE_NOT_HOST`         → caller is not the host
+  //   - 404 `INSTANCE_NOT_FOUND`        → no such instance
+  //   - 422 (unused here — startInstance owns min-player enforcement)
+  @Post(':id/countdown')
+  @Transactional()
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @instanceUnauthorizedResponse()
+  @ApiOkResource(StartCountdownResponseDto, { description: 'Countdown started' })
+  @ApiOperation({
+    summary: 'Start countdown',
+    description:
+      'Transitions an open instance into the `countdown` state. Only the host can start the countdown. ' +
+      'Persists `countdownStartedAt` and emits the `countdown_started` WebSocket event. ' +
+      'Idempotent: a retry of the same call returns the existing anchor. Requires a valid JWT bearer token. ' +
+      'Possible errors: 400 (instance is not open), 403 (caller is not the host), ' +
+      '404 (instance does not exist).',
+  })
+  @instanceBadRequestResponse()
+  @instanceForbiddenResponse()
+  @instanceNotFoundResponse()
+  @ApiInstanceIdParam()
+  async startCountdown(
+    @Param('id', new ParseUUIDPipe({ version: '7' })) instanceId: string,
+    @CurrentUser() user: JwtPayload,
+    @Body() payload: StartCountdownDto,
+  ) {
+    // The idempotency key is honored as a structured-log breadcrumb in
+    // Phase 2; the durable dedup row is added in a follow-up so this
+    // controller does not yet depend on the review module's
+    // `IdempotencyService`.
+    if (payload.idempotencyKey) {
+      this.applicationService.logCountdownIdempotencyKey({
+        instanceId,
+        userId: user.sub,
+        idempotencyKey: payload.idempotencyKey,
+      });
+    }
+    const result = await this.applicationService.startCountdownForController(instanceId, user);
+    return this.presenter.startCountdown(result);
+  }
+
+  // ─── POST /instances/{id}/countdown/cancel ─────────────────────────────────
+  //
+  // Phase 2 (Gameplay Lifecycle) — host-driven `countdown → open`
+  // transition. Emits the `countdown_cancelled` WebSocket event so
+  // clients drop their warmup UI.
+  @Post(':id/countdown/cancel')
+  @Transactional()
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @instanceUnauthorizedResponse()
+  @ApiOkResource(CancelCountdownResponseDto, { description: 'Countdown cancelled' })
+  @ApiOperation({
+    summary: 'Cancel countdown',
+    description:
+      'Transitions an instance in the `countdown` state back to `open`. Only the host can cancel. ' +
+      'Emits the `countdown_cancelled` WebSocket event. Requires a valid JWT bearer token. ' +
+      'Possible errors: 403 (caller is not the host), 404 (instance does not exist), ' +
+      '409 (instance is not in the `countdown` state).',
+  })
+  @instanceForbiddenResponse()
+  @instanceNotFoundResponse()
+  @instanceNotInCountdownResponse()
+  @ApiInstanceIdParam()
+  async cancelCountdown(
+    @Param('id', new ParseUUIDPipe({ version: '7' })) instanceId: string,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    const result = await this.applicationService.cancelCountdownForController(instanceId, user);
+    return this.presenter.cancelCountdown(result);
   }
 
   // ─── GET /instances/{id}/leaderboard ───────────────────────────────────────

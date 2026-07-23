@@ -7,6 +7,9 @@ import type {
   PlayerDisconnectedEvent,
   InstanceStartedEvent,
   InstanceClosedEvent,
+  CountdownStartedEvent,
+  CountdownCancelledEvent,
+  CountdownCompletedEvent,
 } from './instance-domain.events';
 
 export const INSTANCE_DOMAIN_EVENT_BUS = Symbol('INSTANCE_DOMAIN_EVENT_BUS');
@@ -24,4 +27,7 @@ export interface InstanceDomainEventBusPort {
   emitPlayerDisconnected(event: PlayerDisconnectedEvent): void;
   emitInstanceStarted(event: InstanceStartedEvent): void;
   emitInstanceClosed(event: InstanceClosedEvent): void;
+  emitCountdownStarted(event: CountdownStartedEvent): void;
+  emitCountdownCancelled(event: CountdownCancelledEvent): void;
+  emitCountdownCompleted(event: CountdownCompletedEvent): void;
 }

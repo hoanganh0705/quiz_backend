@@ -10,6 +10,27 @@ export interface CacheProvider {
   set(key: string, value: string, ttlMs: number): Promise<void>;
 
   /**
+   * Delete a key. Returns `true` if the key existed and was
+   * deleted, `false` otherwise. Does not throw on missing keys.
+   *
+   * Used by single-shot consumers (e.g. socket-connection
+   * metadata drains) where atomicity with the read is not
+   * required.
+   */
+  del(key: string): Promise<boolean>;
+
+  /**
+   * Atomic read-and-delete. Returns the value the key held
+   * before deletion, or `null` if the key did not exist.
+   *
+   * Implemented as the upstream Redis `GETDEL` command on
+   * supported deployments, falling back to a Lua script
+   * otherwise. Use this for any read-modify-delete that must not
+   * race with a concurrent caller.
+   */
+  getDel(key: string): Promise<string | null>;
+
+  /**
    * Gets a cached value or computes and caches it if missing.
    * @param key Redis key
    * @param ttlMs TTL in milliseconds
