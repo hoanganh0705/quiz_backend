@@ -5,8 +5,20 @@
  * All endpoints require the ACHIEVEMENT_ADMIN permission.
  */
 
-import { Controller, Get, Post, Param, HttpCode, HttpStatus, ParseUUIDPipe } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Param,
+  Query,
+  HttpCode,
+  HttpStatus,
+  ParseUUIDPipe,
+} from '@nestjs/common';
 import { ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
+import { IsOptional, IsInt, Min } from 'class-validator';
+import { Type } from 'class-transformer';
+import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Permissions } from '@/common/authorization/decorators/permissions.decorator';
 import { Permission } from '@/common/authorization/permissions';
 import { ApiForbidden, ApiAuth } from '@/common/swagger/swagger-decorators';
@@ -17,6 +29,32 @@ import {
   AdminAchievementHistoryItemDto,
   ReevaluateUserResponseDto,
 } from '../../dto/response/achievement-admin-response.dto';
+
+class PaginationQueryDto {
+  @ApiPropertyOptional({
+    description: 'Maximum number of items to return',
+    type: Number,
+    minimum: 1,
+    default: 50,
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  limit?: number;
+
+  @ApiPropertyOptional({
+    description: 'Number of items to skip',
+    type: Number,
+    minimum: 0,
+    default: 0,
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  offset?: number;
+}
 
 @ApiTags('achievements')
 @Controller('admin/achievements')
@@ -53,8 +91,14 @@ export class AchievementAdminController {
   @ApiOkResourceArray(AdminAchievementHistoryItemDto, {
     description: 'Achievement history returned',
   })
-  async getUserHistory(@Param('userId', new ParseUUIDPipe({ version: '7' })) userId: string) {
-    const items = await this.achievementApplicationService.getUserHistoryForController(userId);
+  async getUserHistory(
+    @Param('userId', new ParseUUIDPipe({ version: '7' })) userId: string,
+    @Query() query: PaginationQueryDto,
+  ) {
+    const items = await this.achievementApplicationService.getUserHistoryForController(
+      userId,
+      query,
+    );
     return this.presenter.getUserHistory(items);
   }
 }

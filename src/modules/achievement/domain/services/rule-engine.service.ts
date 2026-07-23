@@ -3,6 +3,9 @@
  *
  * Evaluates badge rules and triggers awards based on user activity.
  * This is the core evaluation engine that drives the Achievement Domain.
+ *
+ * Uses distributed Redis cache for badge definitions and rules to ensure
+ * consistency across multiple instances.
  */
 
 import { Inject, Injectable } from '@nestjs/common';
@@ -11,9 +14,13 @@ import { ACHIEVEMENT_REPOSITORY_PORT } from '../../infrastructure/repositories/a
 import type { AchievementRepositoryPort } from '../../infrastructure/repositories/achievement.repository';
 import type {
   BadgeDefinitionRow,
-  BadgeRuleRow,
   UserBadgeRow,
 } from '../../infrastructure/repositories/achievement.repository';
+import { AchievementCacheService } from '../../infrastructure/cache/achievement-cache.service';
+import type {
+  BadgeCacheEntry,
+  RuleCacheEntry,
+} from '../../infrastructure/cache/achievement-cache.service';
 
 export interface EvaluationContext {
   userId: string;
@@ -39,14 +46,10 @@ export interface EvaluationResult {
 
 @Injectable()
 export class RuleEngineService {
-  private badgeDefinitionsCache: Map<string, BadgeDefinitionRow> = new Map();
-  private rulesCache: Map<string, BadgeRuleRow[]> = new Map();
-  private cacheTimestamp: number = 0;
-  private readonly CACHE_TTL_MS = 60_000; // 1 minute
-
   constructor(
     @Inject(ACHIEVEMENT_REPOSITORY_PORT)
     private readonly achievementRepository: AchievementRepositoryPort,
+    private readonly cacheService: AchievementCacheService,
     @InjectPinoLogger(RuleEngineService.name)
     private readonly logger: PinoLogger,
   ) {}
@@ -55,18 +58,20 @@ export class RuleEngineService {
    * Evaluate all applicable badges for an event.
    */
   async evaluateEvent(context: EvaluationContext): Promise<EvaluationResult[]> {
-    await this.refreshCacheIfNeeded();
+    const [badges, rulesByType] = await Promise.all([
+      this.cacheService.getBadges(),
+      this.getRulesByType(context.eventType),
+    ]);
 
     const results: EvaluationResult[] = [];
-    const applicableRules = this.findApplicableRules(context.eventType);
 
-    for (const rule of applicableRules) {
-      const badge = this.badgeDefinitionsCache.get(rule.badgeId);
-      if (!badge || !this.achievementRepository.isBadgeValid(badge)) {
+    for (const rule of rulesByType) {
+      const badge = badges[rule.badgeId];
+      if (!badge || !badge.isValid || !badge.isActive) {
         continue;
       }
 
-      const result = await this.evaluateRule(rule, context);
+      const result = await this.evaluateRule(rule, badge, context);
       results.push(result);
     }
 
@@ -80,18 +85,20 @@ export class RuleEngineService {
     context: EvaluationContext,
     category: string,
   ): Promise<EvaluationResult[]> {
-    await this.refreshCacheIfNeeded();
+    const [badges, rulesByType] = await Promise.all([
+      this.cacheService.getBadges(),
+      this.getRulesByType(context.eventType),
+    ]);
 
     const results: EvaluationResult[] = [];
-    const applicableRules = this.findApplicableRules(context.eventType);
 
-    for (const rule of applicableRules) {
-      const badge = this.badgeDefinitionsCache.get(rule.badgeId);
-      if (!badge || badge.category !== category) {
+    for (const rule of rulesByType) {
+      const badge = badges[rule.badgeId];
+      if (!badge || !badge.isValid || !badge.isActive || badge.category !== category) {
         continue;
       }
 
-      const result = await this.evaluateRule(rule, context);
+      const result = await this.evaluateRule(rule, badge, context);
       results.push(result);
     }
 
@@ -150,77 +157,33 @@ export class RuleEngineService {
   }
 
   /**
-   * Refresh the cache if needed.
+   * Invalidate caches. Call after badge/rule mutations.
    */
-  private async refreshCacheIfNeeded(): Promise<void> {
-    const now = Date.now();
-    if (now - this.cacheTimestamp < this.CACHE_TTL_MS) {
-      return;
-    }
-
-    const badges = await this.achievementRepository.getAllActiveBadges();
-    this.badgeDefinitionsCache.clear();
-    for (const badge of badges) {
-      this.badgeDefinitionsCache.set(badge.badgeId, badge);
-    }
-
-    const rules = await this.achievementRepository.getAllActiveRules();
-    this.rulesCache.clear();
-    for (const rule of rules) {
-      const existing = this.rulesCache.get(rule.ruleType) ?? [];
-      existing.push(rule);
-      this.rulesCache.set(rule.ruleType, existing);
-    }
-
-    this.cacheTimestamp = now;
-
-    this.logger.debug({
-      event: 'rule_engine_cache_refreshed',
-      badgesCount: badges.length,
-      rulesCount: rules.length,
+  async invalidateCaches(): Promise<void> {
+    await this.cacheService.invalidateAllCaches();
+    this.logger.info({
+      event: 'rule_engine_caches_invalidated',
     });
   }
 
   /**
-   * Find rules applicable for an event type.
+   * Force cache refresh (for testing or manual invalidation).
    */
-  private findApplicableRules(eventType: string): BadgeRuleRow[] {
-    const rules: BadgeRuleRow[] = [];
-
-    // Map event types to rule types
-    const eventToRuleType: Record<string, string[]> = {
-      'attempt.completed': ['count', 'perfect_score'],
-      perfect_score: ['perfect_score'],
-      'ranking.rank_changed': ['rank', 'rank_period'],
-      'ranking.milestone': ['rank', 'rank_period'],
-      'tournament.won': ['tournament_win'],
-      'user.streak_updated': ['streak'],
-      'xp.added': ['xp_total'],
-      'user.created': ['count'],
-    };
-
-    const relevantRuleTypes = eventToRuleType[eventType] ?? [];
-
-    for (const ruleType of relevantRuleTypes) {
-      const typeRules = this.rulesCache.get(ruleType) ?? [];
-      rules.push(...typeRules);
-    }
-
-    return rules.sort((a, b) => b.priority - a.priority);
+  async forceCacheRefresh(): Promise<void> {
+    await this.cacheService.forceRefresh();
   }
 
-  /**
-   * Evaluate a single rule against the context.
-   */
+  private async getRulesByType(eventType: string): Promise<RuleCacheEntry[]> {
+    return this.cacheService.getRulesByEventType(eventType);
+  }
+
   private async evaluateRule(
-    rule: BadgeRuleRow,
+    rule: RuleCacheEntry,
+    badge: BadgeCacheEntry,
     context: EvaluationContext,
   ): Promise<EvaluationResult> {
-    const badge = this.badgeDefinitionsCache.get(rule.badgeId)!;
-    const config = rule.config as unknown as RuleConfig;
-
     try {
-      const conditionMet = this.checkCondition(rule.ruleType, config, context);
+      const conditionMet = this.checkCondition(rule.ruleType, rule.config, context);
 
       if (conditionMet) {
         const alreadyHas = await this.achievementRepository.hasBadge(context.userId, rule.badgeId);
@@ -263,30 +226,25 @@ export class RuleEngineService {
     }
   }
 
-  /**
-   * Check if a rule's condition is met.
-   */
   private checkCondition(
     ruleType: string,
-    config: RuleConfig,
+    config: Record<string, unknown>,
     context: EvaluationContext,
   ): boolean {
     void ruleType;
-    const currentValue = this.extractMetricValue(config.metric, context);
+    const ruleConfig = config as unknown as RuleConfig;
+    const currentValue = this.extractMetricValue(ruleConfig.metric, context);
 
     if (currentValue === null) {
       return false;
     }
 
-    const threshold = config.threshold ?? 1;
-    const operator = config.operator ?? '>=';
+    const threshold = ruleConfig.threshold ?? 1;
+    const operator = ruleConfig.operator ?? '>=';
 
     return this.compareValues(currentValue, operator, threshold);
   }
 
-  /**
-   * Extract metric value from event data.
-   */
   private extractMetricValue(metric: string, context: EvaluationContext): number | null {
     const eventData = context.eventData;
 
@@ -324,9 +282,6 @@ export class RuleEngineService {
     }
   }
 
-  /**
-   * Compare values using the specified operator.
-   */
   private compareValues(current: number, operator: string, threshold: number): boolean {
     switch (operator) {
       case '>=':
@@ -346,11 +301,8 @@ export class RuleEngineService {
     }
   }
 
-  /**
-   * Calculate progress for a rule.
-   */
   private calculateProgress(
-    rule: BadgeRuleRow,
+    rule: RuleCacheEntry,
     context: EvaluationContext,
   ): Record<string, unknown> {
     const config = rule.config as unknown as RuleConfig;
@@ -365,13 +317,5 @@ export class RuleEngineService {
           ? Math.min(100, Math.round((currentValue / threshold) * 100))
           : 0,
     };
-  }
-
-  /**
-   * Force cache refresh (for testing or manual invalidation).
-   */
-  async forceCacheRefresh(): Promise<void> {
-    this.cacheTimestamp = 0;
-    await this.refreshCacheIfNeeded();
   }
 }
