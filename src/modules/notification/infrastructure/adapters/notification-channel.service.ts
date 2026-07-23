@@ -27,6 +27,7 @@ import type { NotificationSentEvent } from '../../domain/events/notification.eve
 import { CACHE_PROVIDER, type CacheProvider } from '@/common/ports/cache.provider';
 
 const NOTIF_PREFS_TTL_MS = 5 * 60 * 1000; // 5 minutes
+const BATCH_INSERT_SIZE = 100;
 
 @Injectable()
 export class NotificationChannelService implements NotificationChannelServiceInstance {
@@ -73,6 +74,68 @@ export class NotificationChannelService implements NotificationChannelServiceIns
     for (const channel of channels) {
       await this.sendToChannel(params, channel, prefs);
     }
+  }
+
+  /**
+   * Phase 5 (Performance Optimization) — Batch send notifications to multiple users.
+   * Optimizes fan-out scenarios where the same notification is sent to many users
+   * (e.g., instance started, tournament announcement).
+   *
+   * @param params Notification parameters (without userId)
+   * @param userIds Array of user IDs to notify
+   * @param channels Notification channels (defaults to ['in_app'])
+   */
+  async sendBatch(params: {
+    type: NotificationType;
+    title: string;
+    body: string;
+    metadata?: Record<string, unknown>;
+    channels?: NotificationChannel[];
+    recipientEmail?: string;
+    pushToken?: string;
+  }, userIds: string[]): Promise<{ sent: number; skipped: number }> {
+    const channels = params.channels ?? (['in_app'] as NotificationChannel[]);
+    let sent = 0;
+    let skipped = 0;
+
+    for (const userId of userIds) {
+      const prefs = await this.getPreferences(userId);
+
+      for (const channel of channels) {
+        const shouldSend = this.shouldSendNotification(userId, params.type, channel, prefs);
+        if (shouldSend) {
+          try {
+            await this.notificationRepository.create({
+              userId,
+              type: params.type,
+              title: params.title,
+              message: params.body,
+              metadata: params.metadata,
+              channel,
+            });
+            sent++;
+          } catch (error) {
+            this.logger?.error({
+              event: 'batch_notification_send_failed',
+              userId,
+              type: params.type,
+              error: error instanceof Error ? error.message : String(error),
+            });
+          }
+        } else {
+          skipped++;
+        }
+      }
+    }
+
+    this.logger?.info({
+      event: 'batch_notification_complete',
+      total: userIds.length,
+      sent,
+      skipped,
+    });
+
+    return { sent, skipped };
   }
 
   private async getPreferences(userId: string): Promise<NotificationPreferencesRow | null> {

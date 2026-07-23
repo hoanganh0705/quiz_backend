@@ -15,6 +15,10 @@ import {
 } from '@/modules/instance/domain/events';
 import type { InstanceDomainEvent } from '@/modules/instance/domain/events';
 import { InstanceNotificationService } from '../../domain/services/instance-notification.service';
+import {
+  QUIZ_INSTANCE_REPOSITORY_PORT,
+  type QuizInstanceRepositoryPort,
+} from '@/modules/instance/domain/ports/instance-repository.port';
 
 @Injectable()
 export class InstanceNotificationListener implements OnModuleInit, OnModuleDestroy {
@@ -24,6 +28,8 @@ export class InstanceNotificationListener implements OnModuleInit, OnModuleDestr
     @Inject(forwardRef(() => INSTANCE_DOMAIN_EVENT_BUS))
     private readonly instanceEventBus: InstanceDomainEventBusPort,
     private readonly instanceNotificationService: InstanceNotificationService,
+    @Inject(forwardRef(() => QUIZ_INSTANCE_REPOSITORY_PORT))
+    private readonly instanceRepository: QuizInstanceRepositoryPort,
     @InjectPinoLogger(InstanceNotificationListener.name)
     private readonly logger: PinoLogger,
   ) {}
@@ -186,21 +192,26 @@ export class InstanceNotificationListener implements OnModuleInit, OnModuleDestr
     }
   }
 
-  private getInstanceHostInfo(
+  private async getInstanceHostInfo(
     instanceId: string,
   ): Promise<{ hostUserId: string; playerName?: string } | null> {
-    this.logger.debug({
-      event: 'instance_host_lookup_stub',
-      instanceId,
-    });
-    return Promise.resolve(null);
+    const instance = await this.instanceRepository.getInstanceDetailById(instanceId);
+    if (!instance) {
+      return null;
+    }
+    return {
+      hostUserId: instance.hostUserId,
+      playerName: instance.hostDisplayName ?? instance.hostUsername,
+    };
   }
 
-  private getInstancePlayerIds(instanceId: string): Promise<{ playerIds: string[] } | null> {
-    this.logger.debug({
-      event: 'instance_player_ids_lookup_stub',
-      instanceId,
-    });
-    return Promise.resolve(null);
+  private async getInstancePlayerIds(instanceId: string): Promise<{ playerIds: string[] } | null> {
+    const players = await this.instanceRepository.listPlayersWithProfile({ instanceId });
+    if (players.length === 0) {
+      return null;
+    }
+    return {
+      playerIds: players.map((p) => p.userId),
+    };
   }
 }

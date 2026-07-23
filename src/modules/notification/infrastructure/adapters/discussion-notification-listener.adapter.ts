@@ -161,16 +161,27 @@ export class DiscussionNotificationListener implements OnModuleInit, OnModuleDes
     try {
       const subscribers = await this.discussionRepository.listThreadSubscribers(event.threadId);
 
-      const notified = subscribers.filter(
-        (s) => s.userId !== event.authorId && s.userId !== event.threadAuthorId,
-      );
+      const notifiedUserIds = subscribers
+        .map((s) => s.userId)
+        .filter((userId) => userId !== event.authorId && userId !== event.threadAuthorId);
 
-      if (notified.length === 0) return;
+      if (notifiedUserIds.length === 0) return;
 
-      await Promise.allSettled(
-        notified.map((s) =>
-          this.channelService.send({
-            userId: s.userId,
+      const channelServiceWithBatch = this.channelService as {
+        sendBatch?: (
+          params: {
+            type: string;
+            title: string;
+            body: string;
+            metadata?: Record<string, unknown>;
+          },
+          userIds: string[],
+        ) => Promise<{ sent: number; skipped: number }>;
+      };
+
+      if (channelServiceWithBatch.sendBatch) {
+        await channelServiceWithBatch.sendBatch(
+          {
             type: 'discussion_reply',
             title: 'New comment on a subscribed thread',
             body: `${event.authorUsername} commented on a thread you're subscribed to`,
@@ -178,15 +189,31 @@ export class DiscussionNotificationListener implements OnModuleInit, OnModuleDes
               threadId: event.threadId,
               commentId: event.commentId,
             },
-          }),
-        ),
-      );
+          },
+          notifiedUserIds,
+        );
+      } else {
+        await Promise.allSettled(
+          notifiedUserIds.map((userId) =>
+            this.channelService.send({
+              userId,
+              type: 'discussion_reply',
+              title: 'New comment on a subscribed thread',
+              body: `${event.authorUsername} commented on a thread you're subscribed to`,
+              metadata: {
+                threadId: event.threadId,
+                commentId: event.commentId,
+              },
+            }),
+          ),
+        );
+      }
 
       this.logger.info({
         event: 'thread_subscription_notifications_sent',
         threadId: event.threadId,
         commentId: event.commentId,
-        count: notified.length,
+        count: notifiedUserIds.length,
       });
     } catch (error) {
       this.logger.error({
