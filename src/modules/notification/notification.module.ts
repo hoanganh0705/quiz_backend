@@ -2,7 +2,6 @@ import { Module, forwardRef } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { DatabaseModule } from '@/core/database/database.module';
 import { NotificationApplicationService } from './application/notification-application.service';
-import { NotificationSchedulerService } from './application/notification-scheduler.service';
 import { NotificationService } from './domain/notification.service';
 import { NotificationRepository } from './infrastructure/repositories/notification.repository';
 import { NotificationPreferencesRepository } from './infrastructure/repositories/notification-preferences.repository';
@@ -42,6 +41,7 @@ import { UserNotificationListener } from './infrastructure/adapters/user-notific
 import { NotificationGateway } from './transport/gateway/notification.gateway';
 import { NotificationWebSocketListener } from './infrastructure/adapters/notification-websocket-listener.adapter';
 import { NotificationPresenter } from './transport/presenters/notification.presenter';
+import { NotificationCleanupScheduler } from './infrastructure/scheduler/notification-cleanup.scheduler';
 
 @Module({
   imports: [
@@ -80,7 +80,7 @@ import { NotificationPresenter } from './transport/presenters/notification.prese
     NotificationChannelService,
     NotificationDomainEventBus,
     NotificationApplicationService,
-    NotificationSchedulerService,
+    NotificationCleanupScheduler,
     RankNotificationService,
     {
       provide: RANK_NOTIFICATION_PORT,
@@ -127,7 +127,7 @@ import { NotificationPresenter } from './transport/presenters/notification.prese
     NotificationChannelService,
     NotificationDomainEventBus,
     NotificationApplicationService,
-    NotificationSchedulerService,
+    NotificationCleanupScheduler,
     RankNotificationService,
     RANK_NOTIFICATION_PORT,
     TournamentNotificationService,

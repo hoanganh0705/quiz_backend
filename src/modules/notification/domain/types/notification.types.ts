@@ -59,6 +59,8 @@ export interface NotificationListParams {
   unreadOnly?: boolean;
   includeArchived?: boolean;
   type?: NotificationType;
+  fromDate?: string;
+  toDate?: string;
 }
 
 export interface UpdatePreferencesParams {

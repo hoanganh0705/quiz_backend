@@ -26,7 +26,9 @@ interface MockDbState {
   returnRows: unknown[];
 }
 
-const createMockDb = (returnRows: unknown[] = []): {
+const createMockDb = (
+  returnRows: unknown[] = [],
+): {
   state: MockDbState;
   db: {
     query: {
@@ -135,16 +137,18 @@ describe('RankingRepository', () => {
 
   describe('getLeaderboard', () => {
     it('returns leaderboard entries for all_time period', async () => {
-      const { db } = createMockDb([{
-        userId: 'u1',
-        username: 'alice',
-        displayName: 'Alice',
-        avatarUrl: null,
-        xp: 1000,
-        rank: 1,
-        denseRank: 1,
-      }]);
-      const repo = new RankingRepository(db as never, mockLogger);
+      const { db } = createMockDb([
+        {
+          userId: 'u1',
+          username: 'alice',
+          displayName: 'Alice',
+          avatarUrl: null,
+          xp: 1000,
+          rank: 1,
+          denseRank: 1,
+        },
+      ]);
+      const repo = new RankingRepository(db as never, mockLogger as unknown as PinoLogger);
 
       const result = await repo.getLeaderboard({
         period: RankingPeriod.ALL_TIME,
@@ -162,15 +166,17 @@ describe('RankingRepository', () => {
     });
 
     it('returns leaderboard entries for weekly period', async () => {
-      const { db } = createMockDb([{
-        userId: 'u2',
-        username: 'bob',
-        displayName: 'Bob',
-        avatarUrl: null,
-        xp: 500,
-        rank: 1,
-        denseRank: 1,
-      }]);
+      const { db } = createMockDb([
+        {
+          userId: 'u2',
+          username: 'bob',
+          displayName: 'Bob',
+          avatarUrl: null,
+          xp: 500,
+          rank: 1,
+          denseRank: 1,
+        },
+      ]);
       const repo = new RankingRepository(db as never, mockLogger);
 
       const result = await repo.getLeaderboard({
@@ -275,25 +281,25 @@ describe('RankingRepository', () => {
       const { db } = createMockDb([]);
       const repo = new RankingRepository(db as never, mockLogger);
 
-      await expect(
-        repo.completeRecalculationWorkItemsInTx(db, []),
-      ).resolves.toBeUndefined();
+      await expect(repo.completeRecalculationWorkItemsInTx(db, [])).resolves.toBeUndefined();
     });
   });
 
   describe('getUserRanking', () => {
     it('returns user ranking when user exists', async () => {
-      const { db } = createMockDb([{
-        userId: 'u1',
-        allTimeXp: 1000,
-        weeklyXp: 500,
-        monthlyXp: 750,
-        dailyXp: 100,
-        allTimeRank: 5,
-        weeklyRank: 2,
-        monthlyRank: 3,
-        dailyRank: 1,
-      }]);
+      const { db } = createMockDb([
+        {
+          userId: 'u1',
+          allTimeXp: 1000,
+          weeklyXp: 500,
+          monthlyXp: 750,
+          dailyXp: 100,
+          allTimeRank: 5,
+          weeklyRank: 2,
+          monthlyRank: 3,
+          dailyRank: 1,
+        },
+      ]);
       const repo = new RankingRepository(db as never, mockLogger);
 
       const result = await repo.getUserRanking('u1');
