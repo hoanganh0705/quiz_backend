@@ -1740,7 +1740,7 @@ export class DiscussionRepository implements DiscussionRepositoryPort {
 
   async getUserVote(
     userId: string,
-    targetType: 'thread' | 'comment' | 'reply',
+    targetType: 'thread' | 'comment',
     targetId: string,
     db?: DrizzleDB,
   ): Promise<DiscussionVoteValue | null> {
@@ -1766,7 +1766,7 @@ export class DiscussionRepository implements DiscussionRepositoryPort {
    */
   async getUserVoteForUpdate(
     userId: string,
-    targetType: 'thread' | 'comment' | 'reply',
+    targetType: 'thread' | 'comment',
     targetId: string,
     db: DrizzleDB,
   ): Promise<DiscussionVoteValue | null> {
@@ -2029,6 +2029,20 @@ export class DiscussionRepository implements DiscussionRepositoryPort {
       threadTitle: row.threadTitle,
       excerpt: row.body.length > excerptLimit ? `${row.body.slice(0, excerptLimit)}…` : row.body,
     };
+  }
+
+  async countReplies(parentCommentId: string): Promise<number> {
+    const [result] = await this.db
+      .select({ count: count() })
+      .from(discussionComments)
+      .where(
+        and(
+          eq(discussionComments.parentCommentId, parentCommentId),
+          eq(discussionComments.status, 'visible'),
+          isNull(discussionComments.deletedAt),
+        ),
+      );
+    return result?.count ?? 0;
   }
 
   async transactionally<T>(fn: (tx: DrizzleDB) => Promise<T>): Promise<T> {

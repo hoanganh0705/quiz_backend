@@ -232,6 +232,7 @@ export interface DiscussionRepositoryPort {
   // Helpers
   getUsernamesForUsers(userIds: string[]): Promise<Map<string, string>>;
   transactionally<T>(fn: (tx: DrizzleDB) => Promise<T>): Promise<T>;
+  countReplies(parentCommentId: string): Promise<number>;
 
   // Author/reporter lookups for notification listeners
   getCommentAuthor(commentId: string): Promise<{ authorId: string } | null>;
