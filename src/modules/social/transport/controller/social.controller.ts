@@ -13,6 +13,7 @@ import {
 import { Throttle } from '@nestjs/throttler';
 import { ApiTags, ApiOperation, ApiParam, ApiOkResponse, ApiQuery, ApiBody } from '@nestjs/swagger';
 import { Public } from '@/common/decorators/public.decorator';
+import { Transactional } from '@/common/interceptors/transactional.interceptor';
 import { ApiAuthAction, ApiAuthActionNoContent } from '@/common/swagger/swagger-decorators';
 import { ApiOkResource, ApiCreatedResource, ApiOkResourceList } from '@/common/swagger/api-ok';
 import { SocialApplicationService } from '@/modules/social/application/social-application.service';
@@ -39,9 +40,10 @@ import {
 } from '@/modules/social/dto/response';
 import {
   GetSearchSuggestionsQueryDto,
-  GetSocialSuggestionsQueryDto,
+  GetSocialSuggestionsCursorDto,
+  GetFeedCursorQueryDto,
+  GetFollowCursorQueryDto,
   GetTrendingUsersQueryDto,
-  GetUserFollowersQueryDto,
   RespondFriendRequestDto,
   BlockUserDto,
 } from '@/modules/social/dto/request';
@@ -122,16 +124,16 @@ export class SocialController {
     description:
       'Returns paginated suggested users to connect with, ranked by mutual friends and mutual followers.',
   })
-  @ApiOkResourceList(SocialSuggestionItemDto, 'offset', {
+  @ApiOkResourceList(SocialSuggestionItemDto, 'cursor', {
     description: 'Suggested users returned',
   })
   async getSuggestions(
     @CurrentUser() user: JwtPayload,
-    @Query() query: GetSocialSuggestionsQueryDto,
+    @Query() query: GetSocialSuggestionsCursorDto,
   ) {
     const result = await this.socialService.getSuggestions(
       user,
-      query.page ?? 1,
+      query.cursor ?? null,
       query.limit ?? 20,
     );
     return this.presenter.getSuggestions(result);
@@ -142,13 +144,13 @@ export class SocialController {
   @ApiOperation({
     summary: 'Get social feed',
     description:
-      'Returns a paginated unified social activity feed across supported modules, ordered by newest activity first.',
+      "Returns a paginated unified social activity feed from the authenticated user's network, ordered by newest activity first.",
   })
-  @ApiOkResourceList(SocialFeedItemDto, 'offset', {
+  @ApiOkResourceList(SocialFeedItemDto, 'cursor', {
     description: 'Paginated social feed returned',
   })
-  async getFeed(@CurrentUser() user: JwtPayload, @Query() query: GetUserFollowersQueryDto) {
-    const result = await this.socialService.getFeed(user, query.page ?? 1, query.limit ?? 20);
+  async getFeed(@CurrentUser() user: JwtPayload, @Query() query: GetFeedCursorQueryDto) {
+    const result = await this.socialService.getFeed(user, query.cursor ?? null, query.limit ?? 20);
     return this.presenter.getFeed(result);
   }
 
@@ -191,19 +193,19 @@ export class SocialController {
     format: 'uuid',
     example: '660e8400-e29b-71d4-a716-446655440000',
   })
-  @ApiOkResourceList(UserActivityItemDto, 'offset', {
+  @ApiOkResourceList(UserActivityItemDto, 'cursor', {
     description: 'Paginated public user activity returned',
   })
   async getUserActivity(
     @CurrentUser() user: JwtPayload,
     @Param('userId', new ParseUUIDPipe({ version: '7' })) targetUserId: string,
-    @Query() query: GetUserFollowersQueryDto,
+    @Query() query: GetFeedCursorQueryDto,
   ) {
     return this.presenter.getUserActivity(
       await this.socialService.getUserActivity(
         user,
         targetUserId,
-        query.page ?? 1,
+        query.cursor ?? null,
         query.limit ?? 20,
       ),
     );
@@ -248,6 +250,7 @@ export class SocialController {
   // ─── Friend Requests ──────────────────────────────────────────────────────
 
   @Throttle({ default: { limit: 20, ttl: 60_000 } })
+  @Transactional()
   @Post('friend-request/:userId')
   @ApiOperation({ summary: 'Send a friend request' })
   @ApiAuthAction()
@@ -282,6 +285,7 @@ export class SocialController {
   }
 
   @Throttle({ default: { limit: 20, ttl: 60_000 } })
+  @Transactional()
   @Post('friend-requests/:friendshipId/respond')
   @ApiOperation({ summary: 'Accept or decline a friend request' })
   @ApiAuthActionNoContent('Friend request responded to')
@@ -294,6 +298,7 @@ export class SocialController {
     await this.socialService.respondToFriendRequest(user, friendshipId, dto.accept);
   }
 
+  @Transactional()
   @Delete('friend-requests/:friendshipId')
   @ApiOperation({ summary: 'Cancel a sent friend request' })
   @ApiAuthActionNoContent('Friend request cancelled')
@@ -327,6 +332,7 @@ export class SocialController {
     );
   }
 
+  @Transactional()
   @Delete('friends/:userId')
   @ApiOperation({ summary: 'Remove a friend' })
   @ApiAuthActionNoContent('Friend removed')
@@ -346,6 +352,7 @@ export class SocialController {
   // ─── Blocking ────────────────────────────────────────────────────────────
 
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @Transactional()
   @Post('block/:userId')
   @ApiOperation({ summary: 'Block a user' })
   @ApiAuthActionNoContent('User blocked')
@@ -366,6 +373,7 @@ export class SocialController {
     return this.presenter.blockUser({ message: 'User blocked' });
   }
 
+  @Transactional()
   @Delete('block/:userId')
   @ApiOperation({ summary: 'Unblock a user' })
   @ApiAuthActionNoContent('User unblocked')
@@ -393,6 +401,7 @@ export class SocialController {
   // ─── Following ────────────────────────────────────────────────────────────
 
   @Throttle({ default: { limit: 30, ttl: 60_000 } })
+  @Transactional()
   @Post('follow/:userId')
   @ApiOperation({ summary: 'Follow a user' })
   @ApiAuthActionNoContent('Now following user')
@@ -410,6 +419,7 @@ export class SocialController {
   }
 
   @Throttle({ default: { limit: 30, ttl: 60_000 } })
+  @Transactional()
   @Delete('follow/:userId')
   @ApiOperation({ summary: 'Unfollow a user' })
   @ApiAuthActionNoContent('Unfollowed user')
@@ -439,19 +449,19 @@ export class SocialController {
     format: 'uuid',
     example: '660e8400-e29b-71d4-a716-446655440000',
   })
-  @ApiOkResourceList(UserFollowerItemDto, 'offset', {
+  @ApiOkResourceList(UserFollowerItemDto, 'cursor', {
     description: 'Paginated followers returned',
   })
   async getUserFollowers(
     @CurrentUser() user: JwtPayload,
     @Param('userId', new ParseUUIDPipe({ version: '7' })) targetUserId: string,
-    @Query() query: GetUserFollowersQueryDto,
+    @Query() query: GetFollowCursorQueryDto,
   ) {
     return this.presenter.getFollowersOfUser(
       await this.socialService.getFollowersOfUser(
         user,
         targetUserId,
-        query.page ?? 1,
+        query.cursor ?? null,
         query.limit ?? 20,
       ),
     );
@@ -470,19 +480,19 @@ export class SocialController {
     format: 'uuid',
     example: '660e8400-e29b-71d4-a716-446655440000',
   })
-  @ApiOkResourceList(MutualFriendItemDto, 'offset', {
+  @ApiOkResourceList(MutualFriendItemDto, 'cursor', {
     description: 'Paginated mutual friends returned',
   })
   async getMutualFriends(
     @CurrentUser() user: JwtPayload,
     @Param('userId', new ParseUUIDPipe({ version: '7' })) targetUserId: string,
-    @Query() query: GetUserFollowersQueryDto,
+    @Query() query: GetFollowCursorQueryDto,
   ) {
     return this.presenter.getMutualFriends(
       await this.socialService.getMutualFriends(
         user,
         targetUserId,
-        query.page ?? 1,
+        query.cursor ?? null,
         query.limit ?? 20,
       ),
     );
@@ -501,19 +511,19 @@ export class SocialController {
     format: 'uuid',
     example: '660e8400-e29b-71d4-a716-446655440000',
   })
-  @ApiOkResourceList(MutualFollowerItemDto, 'offset', {
+  @ApiOkResourceList(MutualFollowerItemDto, 'cursor', {
     description: 'Paginated mutual followers returned',
   })
   async getMutualFollowers(
     @CurrentUser() user: JwtPayload,
     @Param('userId', new ParseUUIDPipe({ version: '7' })) targetUserId: string,
-    @Query() query: GetUserFollowersQueryDto,
+    @Query() query: GetFollowCursorQueryDto,
   ) {
     return this.presenter.getMutualFollowers(
       await this.socialService.getMutualFollowers(
         user,
         targetUserId,
-        query.page ?? 1,
+        query.cursor ?? null,
         query.limit ?? 20,
       ),
     );
@@ -532,19 +542,19 @@ export class SocialController {
     format: 'uuid',
     example: '660e8400-e29b-71d4-a716-446655440000',
   })
-  @ApiOkResourceList(UserFollowingItemDto, 'offset', {
+  @ApiOkResourceList(UserFollowingItemDto, 'cursor', {
     description: 'Paginated following returned',
   })
   async getUserFollowing(
     @CurrentUser() user: JwtPayload,
     @Param('userId', new ParseUUIDPipe({ version: '7' })) targetUserId: string,
-    @Query() query: GetUserFollowersQueryDto,
+    @Query() query: GetFollowCursorQueryDto,
   ) {
     return this.presenter.getFollowingOfUser(
       await this.socialService.getFollowingOfUser(
         user,
         targetUserId,
-        query.page ?? 1,
+        query.cursor ?? null,
         query.limit ?? 20,
       ),
     );

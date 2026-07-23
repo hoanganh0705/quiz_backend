@@ -130,49 +130,6 @@ export class UserFollowRepository implements UserFollowRepositoryPort {
     }));
   }
 
-  async getFollowersOfUser(
-    userId: string,
-    page: number,
-    limit: number,
-  ): Promise<PaginatedFollowersResult> {
-    const offset = (page - 1) * limit;
-
-    const [rows, totalResult] = await Promise.all([
-      this.db
-        .select({
-          userId: userFollows.followerId,
-          username: users.username,
-          avatarUrl: userProfiles.avatarUrl,
-          followedAt: userFollows.createdAt,
-        })
-        .from(userFollows)
-        .innerJoin(users, eq(userFollows.followerId, users.userId))
-        .leftJoin(userProfiles, eq(users.userId, userProfiles.userId))
-        .where(and(eq(userFollows.followingId, userId), isNull(userFollows.deletedAt)))
-        .orderBy(desc(userFollows.createdAt))
-        .limit(limit)
-        .offset(offset),
-      this.db
-        .select({ count: count() })
-        .from(userFollows)
-        .where(and(eq(userFollows.followingId, userId), isNull(userFollows.deletedAt))),
-    ]);
-
-    return {
-      items: rows.map((row) => ({
-        userId: row.userId,
-        username: row.username,
-        avatarUrl: row.avatarUrl,
-        followedAt: row.followedAt,
-      })),
-      pagination: {
-        page,
-        limit,
-        total: Number(totalResult[0]?.count ?? 0),
-      },
-    };
-  }
-
   async getFollowing(userId: string, limit: number, cursor?: string): Promise<Following[]> {
     const baseCondition = eq(userFollows.followerId, userId);
     const cursorCondition = cursor ? lte(userFollows.createdAt, cursor) : undefined;
@@ -207,45 +164,138 @@ export class UserFollowRepository implements UserFollowRepositoryPort {
     }));
   }
 
-  async getFollowingOfUser(
+  async getFollowersOfUser(
     userId: string,
-    page: number,
-    limit: number,
-  ): Promise<PaginatedFollowingResult> {
-    const offset = (page - 1) * limit;
+    cursor?: string | null,
+    limit?: number,
+  ): Promise<PaginatedFollowersResult> {
+    const effectiveLimit = limit ?? 20;
 
-    const [rows, totalResult] = await Promise.all([
-      this.db
-        .select({
-          userId: userFollows.followingId,
-          username: users.username,
-          avatarUrl: userProfiles.avatarUrl,
-          followedAt: userFollows.createdAt,
-        })
-        .from(userFollows)
-        .innerJoin(users, eq(userFollows.followingId, users.userId))
-        .leftJoin(userProfiles, eq(users.userId, userProfiles.userId))
-        .where(and(eq(userFollows.followerId, userId), isNull(userFollows.deletedAt)))
-        .orderBy(desc(userFollows.createdAt))
-        .limit(limit)
-        .offset(offset),
-      this.db
-        .select({ count: count() })
-        .from(userFollows)
-        .where(and(eq(userFollows.followerId, userId), isNull(userFollows.deletedAt))),
-    ]);
+    // Decode cursor if provided
+    let cursorCondition = '';
+    if (cursor) {
+      try {
+        const decoded = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8'));
+        cursorCondition = `AND (uf.created_at < '${decoded.followedAt}' OR (uf.created_at = '${decoded.followedAt}' AND uf.follow_id < '${decoded.followId}'::uuid))`;
+      } catch {
+        cursorCondition = '';
+      }
+    }
+
+    const rows = await this.db.execute(sql`
+      SELECT
+        uf.follower_id AS "userId",
+        u.username AS username,
+        up.avatar_url AS "avatarUrl",
+        uf.created_at AS "followedAt"
+      FROM user_follows uf
+      INNER JOIN users u ON u.user_id = uf.follower_id
+      LEFT JOIN user_profiles up ON up.user_id = u.user_id
+      WHERE uf.following_id = ${userId}::uuid
+        AND uf.deleted_at IS NULL
+        ${sql.raw(cursorCondition ? ` ${cursorCondition}` : '')}
+      ORDER BY uf.created_at DESC, uf.follow_id DESC
+      LIMIT ${effectiveLimit + 1}
+    `);
+
+    const followerRows = rows.rows as Array<{
+      userId: string;
+      username: string;
+      avatarUrl: string | null;
+      followedAt: string;
+    }>;
+
+    const hasNextPage = followerRows.length > effectiveLimit;
+    const items = hasNextPage ? followerRows.slice(0, effectiveLimit) : followerRows;
+    const lastItem = items[items.length - 1];
+    const nextCursor =
+      hasNextPage && lastItem
+        ? Buffer.from(
+            JSON.stringify({ followedAt: lastItem.followedAt, followId: lastItem.userId }),
+            'utf8',
+          ).toString('base64url')
+        : null;
 
     return {
-      items: rows.map((row) => ({
+      items: items.map((row) => ({
         userId: row.userId,
         username: row.username,
         avatarUrl: row.avatarUrl,
         followedAt: row.followedAt,
       })),
       pagination: {
-        page,
-        limit,
-        total: Number(totalResult[0]?.count ?? 0),
+        kind: 'cursor',
+        limit: effectiveLimit,
+        hasNextPage,
+        nextCursor,
+      },
+    };
+  }
+
+  async getFollowingOfUser(
+    userId: string,
+    cursor?: string | null,
+    limit?: number,
+  ): Promise<PaginatedFollowingResult> {
+    const effectiveLimit = limit ?? 20;
+
+    // Decode cursor if provided
+    let cursorCondition = '';
+    if (cursor) {
+      try {
+        const decoded = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8'));
+        cursorCondition = `AND (uf.created_at < '${decoded.followedAt}' OR (uf.created_at = '${decoded.followedAt}' AND uf.follow_id < '${decoded.followId}'::uuid))`;
+      } catch {
+        cursorCondition = '';
+      }
+    }
+
+    const rows = await this.db.execute(sql`
+      SELECT
+        uf.following_id AS "userId",
+        u.username AS username,
+        up.avatar_url AS "avatarUrl",
+        uf.created_at AS "followedAt"
+      FROM user_follows uf
+      INNER JOIN users u ON u.user_id = uf.following_id
+      LEFT JOIN user_profiles up ON up.user_id = u.user_id
+      WHERE uf.follower_id = ${userId}::uuid
+        AND uf.deleted_at IS NULL
+        ${sql.raw(cursorCondition ? ` ${cursorCondition}` : '')}
+      ORDER BY uf.created_at DESC, uf.follow_id DESC
+      LIMIT ${effectiveLimit + 1}
+    `);
+
+    const followingRows = rows.rows as Array<{
+      userId: string;
+      username: string;
+      avatarUrl: string | null;
+      followedAt: string;
+    }>;
+
+    const hasNextPage = followingRows.length > effectiveLimit;
+    const items = hasNextPage ? followingRows.slice(0, effectiveLimit) : followingRows;
+    const lastItem = items[items.length - 1];
+    const nextCursor =
+      hasNextPage && lastItem
+        ? Buffer.from(
+            JSON.stringify({ followedAt: lastItem.followedAt, followId: lastItem.userId }),
+            'utf8',
+          ).toString('base64url')
+        : null;
+
+    return {
+      items: items.map((row) => ({
+        userId: row.userId,
+        username: row.username,
+        avatarUrl: row.avatarUrl,
+        followedAt: row.followedAt,
+      })),
+      pagination: {
+        kind: 'cursor',
+        limit: effectiveLimit,
+        hasNextPage,
+        nextCursor,
       },
     };
   }
@@ -253,10 +303,21 @@ export class UserFollowRepository implements UserFollowRepositoryPort {
   async getMutualFollowers(
     userId: string,
     targetUserId: string,
-    page: number,
-    limit: number,
+    cursor?: string | null,
+    limit?: number,
   ): Promise<PaginatedMutualFollowersResult> {
-    const offset = (page - 1) * limit;
+    const effectiveLimit = limit ?? 20;
+
+    // Decode cursor if provided (for username-based cursor)
+    let cursorCondition = '';
+    if (cursor) {
+      try {
+        const decoded = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8'));
+        cursorCondition = `AND shared_following.username > '${decoded.username}'`;
+      } catch {
+        cursorCondition = '';
+      }
+    }
 
     const mutualFollowersQuery = sql<{
       userId: string;
@@ -311,38 +372,39 @@ export class UserFollowRepository implements UserFollowRepositoryPort {
       WHERE u.${users.deletedAt} IS NULL
     `;
 
-    const rowsPromise = this.db.execute(sql`
+    const rowsResult = await this.db.execute(sql`
       SELECT *
-      FROM (${mutualFollowersQuery}) mutual_followers
-      ORDER BY mutual_followers.username ASC
-      LIMIT ${limit}
-      OFFSET ${offset}
+      FROM (${mutualFollowersQuery}) shared_following
+      WHERE 1=1 ${sql.raw(cursorCondition ? ` ${cursorCondition}` : '')}
+      ORDER BY shared_following.username ASC
+      LIMIT ${effectiveLimit + 1}
     `);
-
-    const totalPromise = this.db.execute(sql`
-      SELECT COUNT(*)::int AS total
-      FROM (${mutualFollowersQuery}) mutual_followers
-    `);
-
-    const [rowsResult, totalResult] = await Promise.all([rowsPromise, totalPromise]);
 
     const rows = rowsResult.rows as Array<{
       userId: string;
       username: string;
       avatarUrl: string | null;
     }>;
-    const total = Number((totalResult.rows[0] as { total?: number } | undefined)?.total ?? 0);
+
+    const hasNextPage = rows.length > effectiveLimit;
+    const items = hasNextPage ? rows.slice(0, effectiveLimit) : rows;
+    const lastItem = items[items.length - 1];
+    const nextCursor =
+      hasNextPage && lastItem
+        ? Buffer.from(JSON.stringify({ username: lastItem.username }), 'utf8').toString('base64url')
+        : null;
 
     return {
-      items: rows.map((row) => ({
+      items: items.map((row) => ({
         userId: row.userId,
         username: row.username,
         avatarUrl: row.avatarUrl,
       })),
       pagination: {
-        page,
-        limit,
-        total,
+        kind: 'cursor',
+        limit: effectiveLimit,
+        hasNextPage,
+        nextCursor,
       },
     };
   }

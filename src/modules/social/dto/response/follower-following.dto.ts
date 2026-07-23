@@ -1,13 +1,10 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
+/**
+ * Public follower item DTO.
+ * Note: followId is intentionally excluded as it's an internal database ID.
+ */
 export class FollowerDto {
-  @ApiProperty({
-    description: 'Follow record identifier',
-    format: 'uuid',
-    example: '550e8400-e29b-71d4-a716-446655440000',
-  })
-  followId!: string;
-
   @ApiProperty({
     description: "The follower's user identifier",
     format: 'uuid',
@@ -40,14 +37,11 @@ export class FollowerDto {
   followedAt!: string;
 }
 
+/**
+ * Public following item DTO.
+ * Note: followId is intentionally excluded as it's an internal database ID.
+ */
 export class FollowingDto {
-  @ApiProperty({
-    description: 'Follow record identifier',
-    format: 'uuid',
-    example: '550e8400-e29b-71d4-a716-446655440000',
-  })
-  followId!: string;
-
   @ApiProperty({
     description: 'User identifier of the person being followed',
     format: 'uuid',
