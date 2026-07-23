@@ -59,13 +59,20 @@ export class AchievementApplicationService {
     private readonly logger: PinoLogger,
   ) {}
 
-  async getBadgeCatalog(params?: {
+  async getBadgeCatalog(params?: { limit?: number; offset?: number }): Promise<{
+    items: BadgeCatalogItemResponseDto[];
+    total: number;
     limit?: number;
     offset?: number;
-  }): Promise<BadgeCatalogItemResponseDto[]> {
-    const { data: badges } = await this.achievementRepository.getBadgeCatalog(params);
+  }> {
+    const { data: badges, total } = await this.achievementRepository.getBadgeCatalog(params);
 
-    return badges.map((badge) => this.toBadgeCatalogItemResponse(badge));
+    return {
+      items: badges.map((badge) => this.toBadgeCatalogItemResponse(badge)),
+      total,
+      limit: params?.limit,
+      offset: params?.offset,
+    };
   }
 
   async getBadgeDetails(badgeId: string): Promise<BadgeDetailsResponseDto> {
@@ -96,18 +103,28 @@ export class AchievementApplicationService {
   async getMyAchievementHistory(
     userId: string,
     options?: { limit?: number; offset?: number },
-  ): Promise<AchievementHistoryItemResponseDto[]> {
+  ): Promise<{
+    items: AchievementHistoryItemResponseDto[];
+    total: number;
+    limit?: number;
+    offset?: number;
+  }> {
     const history = await this.achievementHistoryService.getUserHistory(userId, {
       includeRevoked: false,
       limit: options?.limit ?? 50,
       offset: options?.offset ?? 0,
     });
 
-    return history.map((entry) => ({
-      badgeId: entry.badgeId,
-      badgeName: entry.badgeName,
-      earnedAt: entry.earnedAt.toISOString(),
-    }));
+    return {
+      items: history.map((entry) => ({
+        badgeId: entry.badgeId,
+        badgeName: entry.badgeName,
+        earnedAt: entry.earnedAt.toISOString(),
+      })),
+      total: history.length, // TODO: Get actual total count from repository
+      limit: options?.limit,
+      offset: options?.offset,
+    };
   }
 
   async getMyBadgeAnalytics(userId: string): Promise<UserBadgeAnalyticsResponseDto> {
@@ -124,8 +141,8 @@ export class AchievementApplicationService {
   async getMyBadges(
     userId: string,
     options?: { limit?: number; offset?: number },
-  ): Promise<MyBadgeItemDto[]> {
-    const { data: userBadges } = await this.achievementRepository.getUserBadgesWithDetails(
+  ): Promise<{ items: MyBadgeItemDto[]; total: number; limit?: number; offset?: number }> {
+    const { data: userBadges, total } = await this.achievementRepository.getUserBadgesWithDetails(
       userId,
       options,
     );
@@ -134,13 +151,18 @@ export class AchievementApplicationService {
     const earnerCounts =
       badgeIds.length > 0 ? await this.achievementRepository.getBadgeEarnersCounts(badgeIds) : {};
 
-    return userBadges.map((ub) => ({
-      badgeId: ub.badgeId,
-      name: ub.badge.name,
-      description: ub.badge.description,
-      rarity: computeRarityString(earnerCounts[ub.badgeId] ?? 0),
-      earnedAt: ub.earnedAt.toISOString(),
-    }));
+    return {
+      items: userBadges.map((ub) => ({
+        badgeId: ub.badgeId,
+        name: ub.badge.name,
+        description: ub.badge.description,
+        rarity: computeRarityString(earnerCounts[ub.badgeId] ?? 0),
+        earnedAt: ub.earnedAt.toISOString(),
+      })),
+      total,
+      limit: options?.limit,
+      offset: options?.offset,
+    };
   }
 
   async revokeUserBadge(userId: string, badgeId: string, revokedBy: string): Promise<void> {
@@ -282,27 +304,42 @@ export class AchievementApplicationService {
     };
   }
 
-  async getUserHistoryForController(userId: string): Promise<AdminAchievementHistoryItemDto[]> {
+  async getUserHistoryForController(
+    userId: string,
+    options?: { limit?: number; offset?: number },
+  ): Promise<{
+    items: AdminAchievementHistoryItemDto[];
+    total: number;
+    limit?: number;
+    offset?: number;
+  }> {
     const history = await this.achievementHistoryService.getUserHistory(userId, {
       includeRevoked: true,
+      limit: options?.limit,
+      offset: options?.offset,
     });
 
-    return history.map((entry) => ({
-      userBadgeId: entry.userBadgeId,
-      userId: entry.userId,
-      badgeId: entry.badgeId,
-      badgeSlug: entry.badgeSlug,
-      badgeName: entry.badgeName,
-      badgeType: entry.badgeType,
-      badgeCategory: entry.badgeCategory,
-      earnedAt: entry.earnedAt.toISOString(),
-      badgeVersion: entry.badgeVersion,
-      expiresAt: entry.expiresAt?.toISOString() ?? null,
-      revokedAt: entry.revokedAt?.toISOString() ?? null,
-      revocationReason: entry.revocationReason,
-      metadata: entry.metadata,
-      isActive: entry.isActive,
-    }));
+    return {
+      items: history.map((entry) => ({
+        userBadgeId: entry.userBadgeId,
+        userId: entry.userId,
+        badgeId: entry.badgeId,
+        badgeSlug: entry.badgeSlug,
+        badgeName: entry.badgeName,
+        badgeType: entry.badgeType,
+        badgeCategory: entry.badgeCategory,
+        earnedAt: entry.earnedAt.toISOString(),
+        badgeVersion: entry.badgeVersion,
+        expiresAt: entry.expiresAt?.toISOString() ?? null,
+        revokedAt: entry.revokedAt?.toISOString() ?? null,
+        revocationReason: entry.revocationReason,
+        metadata: entry.metadata,
+        isActive: entry.isActive,
+      })),
+      total: history.length, // TODO: Get actual total count from repository
+      limit: options?.limit,
+      offset: options?.offset,
+    };
   }
 
   private async assertUserExists(userId: string): Promise<void> {

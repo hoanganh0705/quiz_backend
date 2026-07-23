@@ -727,6 +727,326 @@ export class AchievementRepository implements AchievementRepositoryPort {
     };
   }
 
+  async getDistinctBadgeEarners(): Promise<string[]> {
+    const results = await this.db
+      .selectDistinct({ userId: userBadges.userId })
+      .from(userBadges)
+      .where(isNull(userBadges.revokedAt));
+
+    return results.map((row) => row.userId);
+  }
+
+  async getUsersEligibleForStreakBadge(
+    minStreakDays: number,
+    excludeBadgeId: string,
+    limit = 1000,
+    offset = 0,
+  ): Promise<{ userId: string; currentStreak: number }[]> {
+    // Get users who have streak meeting threshold but don't already have this badge
+    const results = await this.db
+      .select({
+        userId: users.userId,
+        currentStreak: users.currentStreak,
+      })
+      .from(users)
+      .leftJoin(
+        userBadges,
+        and(
+          eq(userBadges.userId, users.userId),
+          eq(userBadges.badgeId, excludeBadgeId),
+          isNull(userBadges.revokedAt),
+        ),
+      )
+      .where(
+        and(
+          sql`${users.currentStreak} >= ${minStreakDays}`,
+          sql`${users.currentStreak} > 0`,
+          sql`${users.deletedAt} IS NULL`,
+        ),
+      )
+      .limit(limit)
+      .offset(offset)
+      .execute();
+
+    return results
+      .filter((row) => row.currentStreak !== null)
+      .map((row) => ({
+        userId: row.userId,
+        currentStreak: row.currentStreak ?? 0,
+      }));
+  }
+
+  async getUsersEligibleForRankBadge(
+    maxRank: number,
+    period: string,
+    excludeBadgeId: string,
+    limit = 1000,
+    offset = 0,
+  ): Promise<{ userId: string; currentRank: number }[]> {
+    // Determine which rank column to use from userRanking table based on period
+    const rankColumn =
+      period === 'daily'
+        ? userRanking.dailyRank
+        : period === 'weekly'
+          ? userRanking.weeklyRank
+          : period === 'monthly'
+            ? userRanking.monthlyRank
+            : userRanking.allTimeRank;
+
+    // Get users who have rank meeting threshold but don't already have this badge
+    const results = await this.db
+      .select({
+        userId: users.userId,
+        currentRank: rankColumn,
+      })
+      .from(users)
+      .innerJoin(userRanking, eq(userRanking.userId, users.userId))
+      .leftJoin(
+        userBadges,
+        and(
+          eq(userBadges.userId, users.userId),
+          eq(userBadges.badgeId, excludeBadgeId),
+          isNull(userBadges.revokedAt),
+        ),
+      )
+      .where(
+        and(
+          sql`${rankColumn} IS NOT NULL`,
+          sql`${rankColumn} <= ${maxRank}`,
+          sql`${users.deletedAt} IS NULL`,
+        ),
+      )
+      .limit(limit)
+      .offset(offset)
+      .execute();
+
+    return results
+      .filter((row) => row.currentRank !== null)
+      .map((row) => ({
+        userId: row.userId,
+        currentRank: row.currentRank ?? 0,
+      }));
+  }
+
+  async getUserBadgeById(
+    userBadgeId: string,
+  ): Promise<(UserBadgeRow & { badge: BadgeDefinitionRow }) | null> {
+    const results = await this.db
+      .select()
+      .from(userBadges)
+      .innerJoin(badges, eq(userBadges.badgeId, badges.badgeId))
+      .where(eq(userBadges.userBadgeId, userBadgeId))
+      .limit(1)
+      .execute();
+
+    if (results.length === 0) return null;
+
+    return {
+      ...this.mapUserBadgeRow(results[0].user_badges),
+      badge: this.mapBadgeRow(results[0].badges),
+    };
+  }
+
+  async getRevokedUserBadges(
+    userId?: string,
+    badgeId?: string,
+    options: { limit?: number; offset?: number } = {},
+  ): Promise<{ data: (UserBadgeRow & { badge: BadgeDefinitionRow })[]; total: number }> {
+    const limit = options?.limit ?? 50;
+    const offset = options?.offset ?? 0;
+
+    const conditions = [sql`${userBadges.revokedAt} IS NOT NULL`];
+    if (userId) {
+      conditions.push(eq(userBadges.userId, userId));
+    }
+    if (badgeId) {
+      conditions.push(eq(userBadges.badgeId, badgeId));
+    }
+
+    const [results, countResult] = await Promise.all([
+      this.db
+        .select()
+        .from(userBadges)
+        .innerJoin(badges, eq(userBadges.badgeId, badges.badgeId))
+        .where(and(...conditions))
+        .orderBy(desc(userBadges.revokedAt))
+        .limit(limit)
+        .offset(offset)
+        .execute(),
+      this.db
+        .select({ count: count() })
+        .from(userBadges)
+        .where(and(...conditions))
+        .execute(),
+    ]);
+
+    return {
+      data: results.map((row) => ({
+        ...this.mapUserBadgeRow(row.user_badges),
+        badge: this.mapBadgeRow(row.badges),
+      })),
+      total: countResult[0]?.count ?? 0,
+    };
+  }
+
+  async getRecentAwards(
+    limit = 20,
+  ): Promise<{ userId: string; badgeId: string; earnedAt: Date }[]> {
+    const results = await this.db
+      .select({
+        userId: userBadges.userId,
+        badgeId: userBadges.badgeId,
+        earnedAt: userBadges.earnedAt,
+      })
+      .from(userBadges)
+      .where(isNull(userBadges.revokedAt))
+      .orderBy(desc(userBadges.earnedAt))
+      .limit(limit)
+      .execute();
+
+    return results.map((row) => ({
+      userId: row.userId,
+      badgeId: row.badgeId,
+      earnedAt: this.toDate(row.earnedAt) ?? new Date(),
+    }));
+  }
+
+  async getAwardsByCategory(
+    category: string,
+    options: { limit?: number; offset?: number } = {},
+  ): Promise<{ data: (UserBadgeRow & { badge: BadgeDefinitionRow })[]; total: number }> {
+    const limit = options?.limit ?? 50;
+    const offset = options?.offset ?? 0;
+
+    const [results, countResult] = await Promise.all([
+      this.db
+        .select()
+        .from(userBadges)
+        .innerJoin(badges, eq(userBadges.badgeId, badges.badgeId))
+        .where(
+          and(
+            eq(badges.category, category as (typeof badgeCategory.enumValues)[number]),
+            isNull(userBadges.revokedAt),
+          ),
+        )
+        .orderBy(desc(userBadges.earnedAt))
+        .limit(limit)
+        .offset(offset)
+        .execute(),
+      this.db
+        .select({ count: count() })
+        .from(userBadges)
+        .innerJoin(badges, eq(userBadges.badgeId, badges.badgeId))
+        .where(
+          and(
+            eq(badges.category, category as (typeof badgeCategory.enumValues)[number]),
+            isNull(userBadges.revokedAt),
+          ),
+        )
+        .execute(),
+    ]);
+
+    return {
+      data: results.map((row) => ({
+        ...this.mapUserBadgeRow(row.user_badges),
+        badge: this.mapBadgeRow(row.badges),
+      })),
+      total: countResult[0]?.count ?? 0,
+    };
+  }
+
+  async getBadgeAwards(
+    badgeId: string,
+    options: { limit?: number; offset?: number; includeRevoked?: boolean } = {},
+  ): Promise<{ data: (UserBadgeRow & { badge: BadgeDefinitionRow })[]; total: number }> {
+    const limit = options?.limit ?? 50;
+    const offset = options?.offset ?? 0;
+
+    const conditions = options.includeRevoked
+      ? [eq(userBadges.badgeId, badgeId)]
+      : [eq(userBadges.badgeId, badgeId), isNull(userBadges.revokedAt)];
+
+    const [results, countResult] = await Promise.all([
+      this.db
+        .select()
+        .from(userBadges)
+        .innerJoin(badges, eq(userBadges.badgeId, badges.badgeId))
+        .where(and(...conditions))
+        .orderBy(desc(userBadges.earnedAt))
+        .limit(limit)
+        .offset(offset)
+        .execute(),
+      this.db
+        .select({ count: count() })
+        .from(userBadges)
+        .where(eq(userBadges.badgeId, badgeId))
+        .execute(),
+    ]);
+
+    return {
+      data: results.map((row) => ({
+        ...this.mapUserBadgeRow(row.user_badges),
+        badge: this.mapBadgeRow(row.badges),
+      })),
+      total: countResult[0]?.count ?? 0,
+    };
+  }
+
+  async getBadgeTopEarners(
+    badgeId: string,
+    limit = 10,
+  ): Promise<{ userId: string; earnedAt: Date }[]> {
+    const results = await this.db
+      .select({
+        userId: userBadges.userId,
+        earnedAt: userBadges.earnedAt,
+      })
+      .from(userBadges)
+      .where(and(eq(userBadges.badgeId, badgeId), isNull(userBadges.revokedAt)))
+      .orderBy(asc(userBadges.earnedAt))
+      .limit(limit)
+      .execute();
+
+    return results.map((row) => ({
+      userId: row.userId,
+      earnedAt: this.toDate(row.earnedAt) ?? new Date(),
+    }));
+  }
+
+  async getAwardTrendData(
+    badgeIds: string[],
+    days: number,
+  ): Promise<{ date: string; badgeId: string; count: number }[]> {
+    if (badgeIds.length === 0) return [];
+
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - days);
+
+    const results = await this.db
+      .select({
+        date: sql<string>`DATE(${userBadges.earnedAt})`,
+        badgeId: userBadges.badgeId,
+        count: count(),
+      })
+      .from(userBadges)
+      .where(
+        and(
+          inArray(userBadges.badgeId, badgeIds),
+          isNull(userBadges.revokedAt),
+          gt(userBadges.earnedAt, startDate.toISOString()),
+        ),
+      )
+      .groupBy(sql`DATE(${userBadges.earnedAt})`, userBadges.badgeId)
+      .orderBy(sql`DATE(${userBadges.earnedAt})`)
+      .execute();
+
+    return results.map((row) => ({
+      date: row.date,
+      badgeId: row.badgeId,
+      count: Number(row.count),
+    }));
+  }
+
   private mapBadgeRarity(earnedCount: number): string {
     return computeRarityString(earnedCount);
   }

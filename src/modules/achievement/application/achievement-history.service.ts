@@ -101,12 +101,16 @@ export class AchievementHistoryService {
       .map((ub) => this.toHistoryEntry(ub, now));
   }
 
-  getHistoryEntry(userBadgeId: string): Promise<AchievementHistoryEntry | null> {
+  async getHistoryEntry(userBadgeId: string): Promise<AchievementHistoryEntry | null> {
     this.logger.debug({
       event: 'get_history_entry',
       userBadgeId,
     });
-    return Promise.resolve(null);
+
+    const result = await this.achievementRepository.getUserBadgeById(userBadgeId);
+    if (!result) return null;
+
+    return this.toHistoryEntry(result, new Date());
   }
 
   async getUserHistorySummary(userId: string): Promise<HistorySummary> {
@@ -143,18 +147,34 @@ export class AchievementHistoryService {
 
   async getBadgeHistory(
     badgeId: string,
-    _options: Partial<HistoryQueryOptions> = {},
+    options: Partial<HistoryQueryOptions> = {},
   ): Promise<AchievementHistoryEntry[]> {
-    void _options;
     const badge = await this.achievementRepository.getBadgeById(badgeId);
     if (!badge) return [];
 
-    this.logger.debug({
-      event: 'get_badge_history',
-      badgeId,
+    const { data: badgeAwards, total } = await this.achievementRepository.getBadgeAwards(badgeId, {
+      limit: options.limit ?? 50,
+      offset: options.offset ?? 0,
+      includeRevoked: options.includeRevoked ?? false,
     });
 
-    return [];
+    void total;
+
+    const now = new Date();
+    return badgeAwards
+      .filter((award) => {
+        if (!options.includeRevoked && award.revokedAt) {
+          return false;
+        }
+        if (options.startDate && award.earnedAt < options.startDate) {
+          return false;
+        }
+        if (options.endDate && award.earnedAt > options.endDate) {
+          return false;
+        }
+        return true;
+      })
+      .map((award) => this.toHistoryEntry(award, now));
   }
 
   async getBadgeVersionHistory(badgeId: string): Promise<BadgeVersionHistory | null> {
@@ -173,32 +193,56 @@ export class AchievementHistoryService {
     };
   }
 
-  wasBadgePreviouslyRevoked(userId: string, badgeId: string): Promise<boolean> {
+  async wasBadgePreviouslyRevoked(userId: string, badgeId: string): Promise<boolean> {
     this.logger.debug({
       event: 'check_badge_revoked',
       userId,
       badgeId,
     });
-    return Promise.resolve(false);
+
+    const { data: revokedBadges } = await this.achievementRepository.getRevokedUserBadges(
+      userId,
+      badgeId,
+    );
+    return revokedBadges.length > 0;
   }
 
-  getRecentAwards(limit: number = 20): Promise<AchievementHistoryEntry[]> {
+  async getRecentAwards(limit: number = 20): Promise<AchievementHistoryEntry[]> {
     this.logger.debug({
       event: 'get_recent_awards',
       limit,
     });
 
-    return Promise.resolve([]);
+    const recentAwards = await this.achievementRepository.getRecentAwards(limit);
+    const now = new Date();
+
+    const entries: AchievementHistoryEntry[] = [];
+    for (const award of recentAwards) {
+      const fullRecord = await this.achievementRepository.getUserBadgeById(award.badgeId);
+      if (fullRecord) {
+        entries.push(this.toHistoryEntry(fullRecord, now));
+      }
+    }
+
+    return entries;
   }
 
-  getAwardsByCategory(category: string, limit: number = 50): Promise<AchievementHistoryEntry[]> {
+  async getAwardsByCategory(
+    category: string,
+    limit: number = 50,
+  ): Promise<AchievementHistoryEntry[]> {
     this.logger.debug({
       event: 'get_awards_by_category',
       category,
       limit,
     });
 
-    return Promise.resolve([]);
+    const { data: awards } = await this.achievementRepository.getAwardsByCategory(category, {
+      limit,
+    });
+    const now = new Date();
+
+    return awards.map((award) => this.toHistoryEntry(award, now));
   }
 
   async getUserAwardTimeline(

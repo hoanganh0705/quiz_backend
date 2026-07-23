@@ -149,7 +149,7 @@ export class BadgeRevocationService {
   async reverseRevocation(
     userId: string,
     badgeId: string,
-    reversedBy: string,
+    reversedByAdmin: string,
     reason: string,
   ): Promise<RevocationResult> {
     // Verify the badge was revoked
@@ -159,21 +159,45 @@ export class BadgeRevocationService {
     }
 
     try {
-      // In a real implementation, this would:
-      // 1. Find the revoked record
-      // 2. Clear revokedAt and revocationReason
-      // 3. Re-enable the badge
-
-      const revocation: RevocationRecord = {
-        userBadgeId: '',
+      // Find the revoked record
+      const { data: revokedRecords } = await this.achievementRepository.getRevokedUserBadges(
         userId,
         badgeId,
-        badgeSlug: '',
-        revokedAt: new Date(), // Original revocation date would be from record
-        revokedBy: 'unknown',
+        {
+          limit: 1,
+        },
+      );
+
+      const revokedRecord = revokedRecords[0];
+      if (!revokedRecord) {
+        return { success: false, error: 'No revoked record found' };
+      }
+
+      // Re-award the badge (this clears the revokedAt and revocationReason via the unique constraint)
+      const reAwarded = await this.achievementRepository.awardBadge({
+        userId,
+        badgeId,
+        badgeVersion: revokedRecord.badgeVersion,
+        earnedAt: new Date(),
+        progress: revokedRecord.progress,
+        metadata: revokedRecord.metadata,
+        expiresAt: revokedRecord.expiresAt ?? undefined,
+      });
+
+      if (!reAwarded) {
+        return { success: false, error: 'Failed to re-award badge' };
+      }
+
+      const revocation: RevocationRecord = {
+        userBadgeId: revokedRecord.userBadgeId,
+        userId,
+        badgeId,
+        badgeSlug: revokedRecord.badge.slug,
+        revokedAt: revokedRecord.revokedAt ?? new Date(),
+        revokedBy: revokedRecord.revocationReason ?? 'unknown',
         reason: 'Original revocation',
         reversedAt: new Date(),
-        reversedBy,
+        reversedBy: reversedByAdmin,
         reversedReason: reason,
       };
 
@@ -181,8 +205,20 @@ export class BadgeRevocationService {
         event: 'revocation_reversed',
         userId,
         badgeId,
-        reversedBy,
+        reversedBy: reversedByAdmin,
         reason,
+      });
+
+      const revokedAt = revokedRecord.revokedAt ?? new Date();
+      const badgeSlug = revokedRecord.badge.slug;
+
+      this.achievementDomainEventBus.emitBadgeRevoked({
+        userId,
+        badgeId,
+        badgeSlug,
+        revokedAt,
+        reason: `Reversed: ${reason}`,
+        revokedBy: reversedByAdmin,
       });
 
       return { success: true, revocation };
@@ -201,49 +237,94 @@ export class BadgeRevocationService {
   /**
    * Get revocation history for a badge.
    */
-  getBadgeRevocationHistory(badgeId: string): Promise<RevocationRecord[]> {
-    // In a real implementation, this would query the userBadges table
-    // for revoked records
+  async getBadgeRevocationHistory(badgeId: string): Promise<RevocationRecord[]> {
     this.logger.debug({
       event: 'get_badge_revocation_history',
       badgeId,
     });
 
-    return Promise.resolve([]);
+    const { data: revokedRecords } = await this.achievementRepository.getRevokedUserBadges(
+      undefined,
+      badgeId,
+    );
+
+    return revokedRecords.map((record) => ({
+      userBadgeId: record.userBadgeId,
+      userId: record.userId,
+      badgeId: record.badgeId,
+      badgeSlug: record.badge.slug,
+      revokedAt: record.revokedAt ?? new Date(),
+      revokedBy: 'admin',
+      reason: record.revocationReason ?? 'Unknown',
+    }));
   }
 
   /**
    * Get revocation history for a user.
    */
-  getUserRevocationHistory(userId: string): Promise<RevocationRecord[]> {
-    // In a real implementation, this would query the userBadges table
-    // for revoked records
+  async getUserRevocationHistory(userId: string): Promise<RevocationRecord[]> {
     this.logger.debug({
       event: 'get_user_revocation_history',
       userId,
     });
 
-    return Promise.resolve([]);
+    const { data: revokedRecords } = await this.achievementRepository.getRevokedUserBadges(userId);
+
+    return revokedRecords.map((record) => ({
+      userBadgeId: record.userBadgeId,
+      userId: record.userId,
+      badgeId: record.badgeId,
+      badgeSlug: record.badge.slug,
+      revokedAt: record.revokedAt ?? new Date(),
+      revokedBy: 'admin',
+      reason: record.revocationReason ?? 'Unknown',
+    }));
   }
 
   /**
    * Get revocation statistics.
    */
-  getRevocationStats(): Promise<{
+  async getRevocationStats(): Promise<{
     totalRevocations: number;
     byReason: Record<string, number>;
     recentRevocations: RevocationRecord[];
   }> {
-    // In a real implementation, this would aggregate revocation data
     this.logger.debug({
       event: 'get_revocation_stats',
     });
 
-    return Promise.resolve({
-      totalRevocations: 0,
-      byReason: {},
-      recentRevocations: [],
-    });
+    const { data: allRevokedRecords } = await this.achievementRepository.getRevokedUserBadges(
+      undefined,
+      undefined,
+      {
+        limit: 100,
+      },
+    );
+
+    const byReason: Record<string, number> = {};
+    let totalRevocations = 0;
+
+    for (const record of allRevokedRecords) {
+      totalRevocations++;
+      const reason = record.revocationReason ?? 'Unknown';
+      byReason[reason] = (byReason[reason] ?? 0) + 1;
+    }
+
+    const recentRevocations: RevocationRecord[] = allRevokedRecords.slice(0, 10).map((record) => ({
+      userBadgeId: record.userBadgeId,
+      userId: record.userId,
+      badgeId: record.badgeId,
+      badgeSlug: record.badge.slug,
+      revokedAt: record.revokedAt ?? new Date(),
+      revokedBy: 'admin',
+      reason: record.revocationReason ?? 'Unknown',
+    }));
+
+    return {
+      totalRevocations,
+      byReason,
+      recentRevocations,
+    };
   }
 
   private toRevocationRecord(
