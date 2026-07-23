@@ -32,23 +32,34 @@ describe('instance.dto — Phase 1/4 validation contract', () => {
   };
 
   describe('CreateInstanceDto', () => {
-    describe('quizVersionId', () => {
+    describe('quizId — Phase 1 (Foundational Correctness)', () => {
       it('accepts a valid UUID', async () => {
         const errors = await runValidate(CreateInstanceDto, {
-          quizVersionId: '550e8400-e29b-71d4-a716-446655440000',
+          quizId: '660e8400-e29b-71d4-a716-446655440099',
         });
         expect(errors).toEqual([]);
       });
 
       it('rejects a non-UUID string', async () => {
         const errors = await runValidate(CreateInstanceDto, {
-          quizVersionId: 'not-a-uuid',
+          quizId: 'not-a-uuid',
         });
         expect(errors.length).toBeGreaterThan(0);
       });
 
-      it('rejects a missing quizVersionId', async () => {
+      it('rejects a missing quizId', async () => {
         const errors = await runValidate(CreateInstanceDto, {});
+        expect(errors.length).toBeGreaterThan(0);
+      });
+
+      it('rejects the legacy quizVersionId field name (wire-shape migration complete)', async () => {
+        // Phase 1 (Foundational Correctness) — the DTO only accepts `quizId` now.
+        // The legacy `quizVersionId` field must be rejected so that no
+        // client accidentally re-introduces it.
+        const errors = await runValidate(CreateInstanceDto, {
+          quizVersionId: '550e8400-e29b-71d4-a716-446655440000',
+        });
+        // `forbidNonWhitelisted: true` turns unknown props into errors.
         expect(errors.length).toBeGreaterThan(0);
       });
     });
@@ -56,14 +67,14 @@ describe('instance.dto — Phase 1/4 validation contract', () => {
     describe('maxPlayers', () => {
       it('is optional (omitted → no errors)', async () => {
         const errors = await runValidate(CreateInstanceDto, {
-          quizVersionId: '550e8400-e29b-71d4-a716-446655440000',
+          quizId: '660e8400-e29b-71d4-a716-446655440099',
         });
         expect(errors).toEqual([]);
       });
 
       it.each([2, 50, 100])('accepts maxPlayers=%i (within bounds)', async (value) => {
         const errors = await runValidate(CreateInstanceDto, {
-          quizVersionId: '550e8400-e29b-71d4-a716-446655440000',
+          quizId: '660e8400-e29b-71d4-a716-446655440099',
           maxPlayers: value,
         });
         expect(errors).toEqual([]);
@@ -71,7 +82,7 @@ describe('instance.dto — Phase 1/4 validation contract', () => {
 
       it('rejects maxPlayers=1 (below minimum)', async () => {
         const errors = await runValidate(CreateInstanceDto, {
-          quizVersionId: '550e8400-e29b-71d4-a716-446655440000',
+          quizId: '660e8400-e29b-71d4-a716-446655440099',
           maxPlayers: 1,
         });
         expect(errors.length).toBeGreaterThan(0);
@@ -79,7 +90,7 @@ describe('instance.dto — Phase 1/4 validation contract', () => {
 
       it('rejects maxPlayers=101 (above maximum)', async () => {
         const errors = await runValidate(CreateInstanceDto, {
-          quizVersionId: '550e8400-e29b-71d4-a716-446655440000',
+          quizId: '660e8400-e29b-71d4-a716-446655440099',
           maxPlayers: 101,
         });
         expect(errors.length).toBeGreaterThan(0);
@@ -87,7 +98,7 @@ describe('instance.dto — Phase 1/4 validation contract', () => {
 
       it('rejects non-integer maxPlayers', async () => {
         const errors = await runValidate(CreateInstanceDto, {
-          quizVersionId: '550e8400-e29b-71d4-a716-446655440000',
+          quizId: '660e8400-e29b-71d4-a716-446655440099',
           maxPlayers: 3.5,
         });
         expect(errors.length).toBeGreaterThan(0);
@@ -290,8 +301,8 @@ describe('instance.dto — Phase 1/4 validation contract', () => {
   // ───────────────────────────────────────────────────────────────────────
 
   describe('Phase 4 — enum canonical invariants (issue 2.1)', () => {
-    it('INSTANCE_STATUSES is the canonical 4-value list', () => {
-      expect(INSTANCE_STATUSES).toEqual(['open', 'running', 'closed', 'finished']);
+    it('INSTANCE_STATUSES is the canonical 5-value list (Phase 2 — countdown)', () => {
+      expect(INSTANCE_STATUSES).toEqual(['open', 'countdown', 'running', 'closed', 'finished']);
     });
 
     it('QUIZ_DIFFICULTIES is the canonical 3-value list', () => {

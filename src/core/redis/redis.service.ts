@@ -109,6 +109,21 @@ export class RedisService implements CacheProvider, PubSubProvider, OnModuleDest
     await this.client.set(key, value, 'PX', ttlMs);
   }
 
+  async del(key: string): Promise<boolean> {
+    const result = await this.client.del(key);
+    return result > 0;
+  }
+
+  async getDel(key: string): Promise<string | null> {
+    // Native GETDEL is supported on Redis 6.2+. ioredis typings
+    // expose the method, and Redis 8 ships in our docker-compose,
+    // so the native path is safe in production. The Lua fallback
+    // would be a one-liner if needed later, but since the field
+    // is automatically written-and-deleted via TTL we don't need
+    // the upgrade here.
+    return this.client.getdel(key);
+  }
+
   async getOrSet<T>(key: string, ttlMs: number, fetcher: () => Promise<T>): Promise<T> {
     const cached = await this.get(key);
     if (cached !== null) {

@@ -4,11 +4,15 @@ import {
   InstanceAlreadyClosedError,
   InstanceAlreadyFinishedError,
   InstanceAlreadyStartedError,
+  InstanceCountdownAlreadyStartedError,
   InstanceDomainError,
   InstanceFullError,
   InstanceNotFoundError,
   InstanceNotHostError,
+  InstanceNotInCountdownError,
   InstanceNotOpenError,
+  InstanceOptimisticLockError,
+  MinPlayersNotMetError,
   PlayerAlreadyJoinedError,
 } from './instance-domain.errors';
 
@@ -66,6 +70,30 @@ const INSTANCE_CODES: ReadonlyArray<{
     expectedCode: 'PLAYER_ALREADY_JOINED',
     message: 'You have already joined this instance',
   },
+  {
+    name: 'InstanceOptimisticLockError',
+    ctor: InstanceOptimisticLockError,
+    expectedCode: 'INSTANCE_OPTIMISTIC_LOCK',
+    message: 'Instance was modified concurrently — please retry the operation',
+  },
+  {
+    name: 'MinPlayersNotMetError',
+    ctor: MinPlayersNotMetError,
+    expectedCode: 'MIN_PLAYERS_NOT_MET',
+    message: 'Instance requires at least 2 players before the host can start the countdown',
+  },
+  {
+    name: 'InstanceNotInCountdownError',
+    ctor: InstanceNotInCountdownError,
+    expectedCode: 'INSTANCE_NOT_IN_COUNTDOWN',
+    message: 'Instance is not in the countdown state',
+  },
+  {
+    name: 'InstanceCountdownAlreadyStartedError',
+    ctor: InstanceCountdownAlreadyStartedError,
+    expectedCode: 'INSTANCE_COUNTDOWN_ALREADY_STARTED',
+    message: 'Countdown has already started for this instance',
+  },
 ];
 
 describe('Instance-domain errors (RFC 7807 mapping completeness — Phase 2)', () => {
@@ -108,19 +136,24 @@ describe('Instance-domain errors (RFC 7807 mapping completeness — Phase 2)', (
       expect(new Set(codes).size).toBe(codes.length);
     });
 
-    it('declares only INSTANCE_* or PLAYER_* codes (no namespace pollution)', () => {
+    it('declares only INSTANCE_* / PLAYER_* / MIN_* codes (no namespace pollution)', () => {
+      // Phase 2 (Gameplay Lifecycle): `MIN_PLAYERS_NOT_MET` is intentionally
+      // not prefixed with `INSTANCE_` because the code reads as a business
+      // predicate ("the multiplayer precondition was violated"), not as
+      // an instance-state machine error. It still belongs to this module.
       for (const row of INSTANCE_CODES) {
         const code = row.expectedCode;
         const isInstance = code.startsWith('INSTANCE_');
         const isPlayer = code.startsWith('PLAYER_');
-        expect(isInstance || isPlayer).toBe(true);
+        const isMin = code.startsWith('MIN_');
+        expect(isInstance || isPlayer || isMin).toBe(true);
       }
     });
 
-    it('every INSTANCE_* or PLAYER_* code in ProblemCodeMapping is declared by exactly one exception class', () => {
+    it('every INSTANCE_* / PLAYER_* / MIN_* code in ProblemCodeMapping is declared by exactly one exception class', () => {
       const declared = new Set(INSTANCE_CODES.map((row) => row.expectedCode));
       const mapped = Object.keys(ProblemCodeMapping).filter(
-        (k) => k.startsWith('INSTANCE_') || k.startsWith('PLAYER_'),
+        (k) => k.startsWith('INSTANCE_') || k.startsWith('PLAYER_') || k.startsWith('MIN_'),
       );
       for (const code of mapped) {
         expect(declared.has(code)).toBe(true);
@@ -143,11 +176,14 @@ describe('Instance-domain errors (RFC 7807 mapping completeness — Phase 2)', (
       ).toBeUndefined();
     });
 
-    it('total exception count is 8 (matches the design plan: 6 lifecycle + 1 conflict + 1 finished)', () => {
-      // This guards against accidental additions/removals during
-      // refactors. Phase 3 (audit issue 7.1) added
-      // `InstanceAlreadyFinishedError` so the count moved from 7 to 8.
-      expect(INSTANCE_CODES.length).toBe(8);
+    it('total exception count is 12 (Phase 1: +1 optimistic-lock; Phase 2: +3 countdown lifecycle)', () => {
+      // Phase 1 (Foundational Correctness) added `InstanceOptimisticLockError`,
+      // bringing the total from 8 to 9. Phase 2 (Gameplay Lifecycle) added
+      // `MinPlayersNotMetError`, `InstanceNotInCountdownError`, and
+      // `InstanceCountdownAlreadyStartedError`, bringing the total to 12.
+      // Counts must change explicitly here so an accidental add/remove
+      // shows up in this test.
+      expect(INSTANCE_CODES.length).toBe(12);
     });
   });
 
@@ -166,6 +202,47 @@ describe('Instance-domain errors (RFC 7807 mapping completeness — Phase 2)', (
       expect(ProblemCodeMapping.INSTANCE_ALREADY_FINISHED.status).toBe(400);
       expect(ProblemCodeMapping.INSTANCE_ALREADY_FINISHED.typeUri).not.toBe(
         ProblemCodeMapping.INSTANCE_ALREADY_CLOSED.typeUri,
+      );
+    });
+
+    it('INSTANCE_OPTIMISTIC_LOCK is mapped to 409 Conflict in ProblemCodeMapping', () => {
+      // Phase 1 (Foundational Correctness): the optimistic-locking
+      // protocol surfaces as a 409 so clients know they must re-read
+      // and decide whether to retry. Same status as PLAYER_ALREADY_JOINED
+      // but a distinct `typeUri` (clients dispatch on `extensions.code`).
+      expect(ProblemCodeMapping.INSTANCE_OPTIMISTIC_LOCK.status).toBe(409);
+      expect(ProblemCodeMapping.INSTANCE_OPTIMISTIC_LOCK.typeUri).not.toBe(
+        ProblemCodeMapping.PLAYER_ALREADY_JOINED.typeUri,
+      );
+    });
+
+    it('MIN_PLAYERS_NOT_MET is mapped to 422 UnprocessableEntity in ProblemCodeMapping', () => {
+      // Phase 2 (Gameplay Lifecycle): the multiplayer-only precondition
+      // is a state-rejection, not a malformed-request 400. 422 says
+      // "the request is well-formed but the current server-side state
+      // rejects it" — the canonical mapping for capacity-style gates.
+      expect(ProblemCodeMapping.MIN_PLAYERS_NOT_MET.status).toBe(422);
+    });
+
+    it('INSTANCE_NOT_IN_COUNTDOWN is mapped to 409 Conflict in ProblemCodeMapping', () => {
+      // Phase 2 (Gameplay Lifecycle): cancelCountdown and startInstance
+      // (when the host skipped the countdown) both surface this. Same
+      // status as `INSTANCE_OPTIMISTIC_LOCK` (409) but distinct `typeUri`.
+      expect(ProblemCodeMapping.INSTANCE_NOT_IN_COUNTDOWN.status).toBe(409);
+      expect(ProblemCodeMapping.INSTANCE_NOT_IN_COUNTDOWN.typeUri).not.toBe(
+        ProblemCodeMapping.INSTANCE_OPTIMISTIC_LOCK.typeUri,
+      );
+    });
+
+    it('INSTANCE_COUNTDOWN_ALREADY_STARTED is mapped to 409 Conflict in ProblemCodeMapping', () => {
+      // Phase 2 (Gameplay Lifecycle): the natural idempotency guard
+      // on a duplicate `startCountdown` call. Same status as
+      // `INSTANCE_OPTIMISTIC_LOCK` (409) but distinct `typeUri`; the
+      // controller catches this and folds it into a 200 with the
+      // existing anchor.
+      expect(ProblemCodeMapping.INSTANCE_COUNTDOWN_ALREADY_STARTED.status).toBe(409);
+      expect(ProblemCodeMapping.INSTANCE_COUNTDOWN_ALREADY_STARTED.typeUri).not.toBe(
+        ProblemCodeMapping.INSTANCE_NOT_IN_COUNTDOWN.typeUri,
       );
     });
   });

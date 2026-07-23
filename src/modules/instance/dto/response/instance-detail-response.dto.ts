@@ -12,12 +12,6 @@ export class InstanceDetailResponseDto {
   instanceId!: string;
 
   @ApiProperty({
-    description: 'Quiz version hosted in this instance',
-    example: '550e8400-e29b-71d4-a716-446655440000',
-  })
-  quizVersionId!: string;
-
-  @ApiProperty({
     description: 'Host user identifier',
     example: '550e8400-e29b-71d4-a716-446655440000',
   })
@@ -48,9 +42,6 @@ export class InstanceDetailResponseDto {
     example: 'open',
   })
   status!: QuizInstanceStatus;
-
-  @ApiProperty({ description: 'Quiz version number', example: 1 })
-  versionNumber!: number;
 
   @ApiProperty({
     description: 'Quiz difficulty',

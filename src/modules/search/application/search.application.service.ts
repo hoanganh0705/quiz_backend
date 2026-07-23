@@ -82,13 +82,14 @@ export class SearchApplicationService {
       throw new BadRequestException('Search query must not be empty');
     }
 
-    const [usersResult, quizzesResult, discussionsResult, categoriesResult, tagsResult] = await Promise.all([
-      this.searchUsers(query, limit),
-      this.searchQuizzes(query, limit),
-      this.searchDiscussions(query, limit),
-      this.searchCategories(query, limit),
-      this.searchTags(query, limit),
-    ]);
+    const [usersResult, quizzesResult, discussionsResult, categoriesResult, tagsResult] =
+      await Promise.all([
+        this.searchUsers(query, limit),
+        this.searchQuizzes(query, limit),
+        this.searchDiscussions(query, limit),
+        this.searchCategories(query, limit),
+        this.searchTags(query, limit),
+      ]);
 
     return {
       query,
@@ -189,7 +190,11 @@ export class SearchApplicationService {
       'simple',
       query,
     );
-    const categoryRank = this.buildRankExpression({ sql: sql`c.category_search_vector` }, 'simple', query);
+    const categoryRank = this.buildRankExpression(
+      { sql: sql`c.category_search_vector` },
+      'simple',
+      query,
+    );
     const rows = await this.executeTypedQuery<SearchCategoryResult>(sql`
       SELECT
         c.category_id AS "categoryId",

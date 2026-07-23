@@ -138,6 +138,78 @@ export class InstanceClosedEvent {
 }
 
 /**
+ * Phase 2 (Gameplay Lifecycle) — emitted on the host-driven transition
+ * `open → countdown`. The application service forwards this as the
+ * `countdown_started` WebSocket event so clients can render the warmup
+ * timer. `countdownStartedAt` and `countdownEndsAt` are the same
+ * timestamp from two perspectives (anchor vs. deadline).
+ */
+export class CountdownStartedEvent {
+  constructor(
+    public readonly instanceId: string,
+    public readonly hostUserId: string,
+    public readonly countdownStartedAt: string,
+    public readonly countdownEndsAt: string,
+    public readonly nowIso: string,
+  ) {}
+
+  get eventType(): 'instance.countdown_started' {
+    return 'instance.countdown_started';
+  }
+
+  get timestamp(): Date {
+    return new Date(this.nowIso);
+  }
+}
+
+/**
+ * Phase 2 (Gameplay Lifecycle) — emitted on `cancelCountdown`, the
+ * `countdown → open` transition. Clients should drop their warmup UI
+ * and return to the lobby. Cancellation does not delete the
+ * `countdownStartedAt` until the optimistic-locking UPDATE clears it
+ * alongside the status.
+ */
+export class CountdownCancelledEvent {
+  constructor(
+    public readonly instanceId: string,
+    public readonly hostUserId: string,
+    public readonly reason: 'host_cancelled' | 'host_disconnected' | 'instance_closed',
+    public readonly nowIso: string,
+  ) {}
+
+  get eventType(): 'instance.countdown_cancelled' {
+    return 'instance.countdown_cancelled';
+  }
+
+  get timestamp(): Date {
+    return new Date(this.nowIso);
+  }
+}
+
+/**
+ * Phase 2 (Gameplay Lifecycle) — emitted by the scheduler when a
+ * `countdown → running` transition fires after the deadline elapses.
+ * Distinct from `InstanceStartedEvent` so clients and downstream
+ * listeners can differentiate "the host pressed Start" from
+ * "the countdown timer fired automatically".
+ */
+export class CountdownCompletedEvent {
+  constructor(
+    public readonly instanceId: string,
+    public readonly startedAt: string,
+    public readonly nowIso: string,
+  ) {}
+
+  get eventType(): 'instance.countdown_completed' {
+    return 'instance.countdown_completed';
+  }
+
+  get timestamp(): Date {
+    return new Date(this.nowIso);
+  }
+}
+
+/**
  * Emitted when a player's attempt earns XP and the ranking has been updated.
  * Carries the XP delta so Socket.IO can push a live XP gain notification to the client.
  */
@@ -167,4 +239,7 @@ export type InstanceDomainEvent =
   | PlayerFinishedEvent
   | PlayerDisconnectedEvent
   | InstanceStartedEvent
-  | InstanceClosedEvent;
+  | InstanceClosedEvent
+  | CountdownStartedEvent
+  | CountdownCancelledEvent
+  | CountdownCompletedEvent;

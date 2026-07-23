@@ -4,6 +4,8 @@ import type { JwtPayload } from '@/common/guards/jwt.guard';
 import { InstanceService } from '../domain/instance.service';
 import { INSTANCE_DOMAIN_EVENT_BUS } from '../domain/events';
 import type { InstanceDomainEventBusPort } from '../domain/events';
+import { SOCKET_CONNECTION_REGISTRY_PORT } from '../domain/ports';
+import type { SocketConnectionRegistryPort } from '../domain/ports';
 import {
   InstanceCreatedEvent,
   PlayerJoinedEvent,
@@ -13,7 +15,11 @@ import {
   PlayerDisconnectedEvent,
   InstanceStartedEvent,
   InstanceClosedEvent,
+  CountdownStartedEvent,
+  CountdownCancelledEvent,
+  CountdownCompletedEvent,
 } from '../domain/events';
+import { InstanceCountdownAlreadyStartedError } from '../domain/errors';
 import type { Server } from 'socket.io';
 import { InstanceResponseMapper } from '../mappers/instance-response.mapper';
 import type { LeaderboardCursorPayload } from '../domain/ports';
@@ -25,6 +31,7 @@ import {
   InstanceListResponseDto,
   InstancePlayersResponseDto,
   JoinInstanceResponseDto,
+  StartCountdownResponseDto,
   StartInstanceResponseDto,
 } from '../dto/response';
 
@@ -38,23 +45,28 @@ import {
  * Architecture:
  *   Gateway → InstanceApplicationService → InstanceService (domain)
  *                                         ↘ InstanceDomainEventBus → InstanceApplicationService (event subscription)
- *                                                               ↘ Socket.IO server
+ *                                                               ↘ Socket.IO server (cross-instance via RedisIoAdapter)
+ *
+ * Phase 3 (Production Deployment Readiness) — added:
+ *   - SocketConnectionRegistryPort dependency for cross-instance
+ *     socketId → {instanceId, userId} tracking. The previous
+ *     process-local Map only worked in single-process deployments;
+ *     under horizontal scaling a socket that disconnects on
+ *     instance B is no longer visible to the in-process map on
+ *     instance A, so `PlayerDisconnectedEvent` was being silently
+ *     dropped. The Redis-backed registry fixes that.
  */
 @Injectable()
 export class InstanceApplicationService {
   private server: Server | null = null;
-
-  /**
-   * Maps socket ID → { instanceId, userId } for active connections.
-   * Used to emit PlayerDisconnectedEvent when a socket disconnects.
-   */
-  private readonly socketIdToMeta = new Map<string, { instanceId: string; userId: string }>();
 
   constructor(
     private readonly instanceService: InstanceService,
     private readonly mapper: InstanceResponseMapper,
     @Inject(INSTANCE_DOMAIN_EVENT_BUS)
     private readonly eventBus: InstanceDomainEventBusPort,
+    @Inject(SOCKET_CONNECTION_REGISTRY_PORT)
+    private readonly socketConnectionRegistry: SocketConnectionRegistryPort,
     @InjectPinoLogger(InstanceApplicationService.name)
     private readonly logger: PinoLogger,
   ) {
@@ -83,12 +95,18 @@ export class InstanceApplicationService {
         this.onInstanceStarted(event);
       } else if (event instanceof InstanceClosedEvent) {
         this.onInstanceClosed(event);
+      } else if (event instanceof CountdownStartedEvent) {
+        this.onCountdownStarted(event);
+      } else if (event instanceof CountdownCancelledEvent) {
+        this.onCountdownCancelled(event);
+      } else if (event instanceof CountdownCompletedEvent) {
+        this.onCountdownCompleted(event);
       }
     });
   }
 
   async createInstance(params: {
-    quizVersionId: string;
+    quizId: string;
     user: JwtPayload;
     maxPlayers: number | null;
   }): Promise<{ instanceId: string; hostUserId: string }> {
@@ -103,6 +121,82 @@ export class InstanceApplicationService {
     return this.instanceService.startInstance(instanceId, user);
   }
 
+  /**
+   * Phase 2 (Gameplay Lifecycle) — controller-facing wrapper for
+   * `InstanceService.startCountdown`. Translates the
+   * `InstanceCountdownAlreadyStartedError` into a 200 idempotent
+   * response: when the host double-clicks, the controller surfaces
+   * the existing countdown anchor rather than a 409.
+   *
+   * Idempotency keys are honored at the controller layer (see
+   * `InstanceController.startCountdown`). The application service is
+   * intentionally simple: it either transitions the row or folds a
+   * `COUNTDOWN_ALREADY_STARTED` error into the existing anchor.
+   */
+  async startCountdownForController(
+    instanceId: string,
+    user: JwtPayload,
+  ): Promise<StartCountdownResponseDto> {
+    try {
+      const result = await this.instanceService.startCountdown(instanceId, user);
+      return {
+        instanceId: result.instanceId,
+        status: result.status,
+        countdownStartedAt: result.countdownStartedAt,
+        countdownEndsAt: result.countdownEndsAt,
+      };
+    } catch (error) {
+      if (error instanceof InstanceCountdownAlreadyStartedError) {
+        // Idempotent retry — return the existing countdown anchor so
+        // the host's double-click is a no-op rather than an error.
+        const instance = await this.instanceService.getInstanceById(instanceId);
+        if (instance.status === 'countdown' && instance.countdownStartedAt) {
+          const endsAt = new Date(
+            new Date(instance.countdownStartedAt).getTime() + InstanceService.COUNTDOWN_DURATION_MS,
+          ).toISOString();
+          return {
+            instanceId,
+            status: 'countdown',
+            countdownStartedAt: instance.countdownStartedAt,
+            countdownEndsAt: endsAt,
+          };
+        }
+      }
+      throw error;
+    }
+  }
+
+  async cancelCountdownForController(
+    instanceId: string,
+    user: JwtPayload,
+  ): Promise<{ message: string }> {
+    return this.instanceService.cancelCountdown(instanceId, user, 'host_cancelled');
+  }
+
+  /**
+   * Phase 2 (Gameplay Lifecycle) — controller-facing breadcrumb for the
+   * optional `idempotencyKey` field on `POST /instances/:id/countdown`.
+   *
+   * The key is honored as a structured log entry; the durable dedup
+   * claim is added in a follow-up that depends on the review module's
+   * `IdempotencyService`. Until then the natural idempotency
+   * (`status === 'countdown'` short-circuits to a 200) is the only
+   * safety net, and this log line gives observability into clients
+   * that want strict per-request dedup.
+   */
+  logCountdownIdempotencyKey(params: {
+    instanceId: string;
+    userId: string;
+    idempotencyKey: string;
+  }): void {
+    this.logger.debug({
+      event: 'instance_countdown_idempotency_key_seen',
+      instanceId: params.instanceId,
+      userId: params.userId,
+      keyPrefix: params.idempotencyKey.slice(0, 12),
+    });
+  }
+
   // ─── HTTP-shaped methods (used by the REST controller) ────────────────────
   //
   // These return the response DTOs that the controller previously constructed
@@ -110,7 +204,7 @@ export class InstanceApplicationService {
   // presenter emit the canonical `{ data, meta }` envelope.
 
   async createInstanceForController(params: {
-    quizVersionId: string;
+    quizId: string;
     user: JwtPayload;
     maxPlayers: number | null;
   }): Promise<CreateInstanceResponseDto> {
@@ -214,14 +308,33 @@ export class InstanceApplicationService {
 
   /**
    * Called by the gateway when a player joins an instance.
-   * Registers the socket so handlePlayerLeftSocket can emit PlayerDisconnectedEvent on disconnect.
+   * Registers the socket in the cross-instance
+   * `SocketConnectionRegistry` so that the disconnect hot path on
+   * any replica can still resolve `{ instanceId, userId }` from the
+   * socket id.
+   *
+   * Phase 3: previously held a process-local Map; under
+   * horizontal scaling that Map only saw sockets that joined on
+   * the current replica, so cross-instance disconnects silently
+   * dropped `PlayerDisconnectedEvent`. The Redis-backed registry
+   * fixes that without changing the call surface.
    */
   handlePlayerJoinedSocket(params: {
     socketId: string;
     instanceId: string;
     user: JwtPayload;
   }): void {
-    this.socketIdToMeta.set(params.socketId, {
+    if (!params.user?.sub) {
+      this.logger.warn({
+        event: 'socket_connection_registry_join_refused',
+        reason: 'missing_jwt_sub',
+        socketId: params.socketId,
+        instanceId: params.instanceId,
+      });
+      return;
+    }
+
+    void this.socketConnectionRegistry.record(params.socketId, {
       instanceId: params.instanceId,
       userId: params.user.sub,
     });
@@ -229,13 +342,17 @@ export class InstanceApplicationService {
 
   /**
    * Called by the gateway on disconnect.
-   * Removes the socket from tracking, emits PlayerDisconnectedEvent, and notifies the host.
+   *
+   * Atomically reads-and-deletes the metadata for the given socket
+   * id from the cross-instance registry. If a prior replica, a
+   * dropped TCP segment, or a stale `disconnect` event already
+   * consumed the entry, the call returns `null` and we emit no
+   * event — that is correct: the same disconnect must not surface
+   * twice.
    */
-  handlePlayerLeftSocket(params: { socketId: string; instanceId: string }): Promise<void> {
-    const meta = this.socketIdToMeta.get(params.socketId);
-    if (!meta) return Promise.resolve();
-
-    this.socketIdToMeta.delete(params.socketId);
+  async handlePlayerLeftSocket(params: { socketId: string; instanceId: string }): Promise<void> {
+    const meta = await this.socketConnectionRegistry.consume(params.socketId);
+    if (!meta) return;
 
     const nowIso = new Date().toISOString();
     this.eventBus.emitPlayerDisconnected(
@@ -243,7 +360,6 @@ export class InstanceApplicationService {
     );
 
     void this.notifyHostPlayerDisconnected(meta.instanceId, meta.userId);
-    return Promise.resolve();
   }
 
   private async notifyHostPlayerDisconnected(
@@ -353,6 +469,33 @@ export class InstanceApplicationService {
   private onInstanceClosed(event: InstanceClosedEvent): void {
     this.emitToRoom(event.instanceId, 'game_finished', {
       instanceId: event.instanceId,
+      timestamp: event.timestamp.toISOString(),
+    });
+  }
+
+  private onCountdownStarted(event: CountdownStartedEvent): void {
+    this.emitToRoom(event.instanceId, 'countdown_started', {
+      instanceId: event.instanceId,
+      startedBy: event.hostUserId,
+      countdownStartedAt: event.countdownStartedAt,
+      countdownEndsAt: event.countdownEndsAt,
+      timestamp: event.timestamp.toISOString(),
+    });
+  }
+
+  private onCountdownCancelled(event: CountdownCancelledEvent): void {
+    this.emitToRoom(event.instanceId, 'countdown_cancelled', {
+      instanceId: event.instanceId,
+      cancelledBy: event.hostUserId,
+      reason: event.reason,
+      timestamp: event.timestamp.toISOString(),
+    });
+  }
+
+  private onCountdownCompleted(event: CountdownCompletedEvent): void {
+    this.emitToRoom(event.instanceId, 'countdown_completed', {
+      instanceId: event.instanceId,
+      startedAt: event.startedAt,
       timestamp: event.timestamp.toISOString(),
     });
   }

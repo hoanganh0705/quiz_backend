@@ -5,12 +5,13 @@ import { QUIZ_DIFFICULTIES, type QuizDifficulty } from '@/modules/quiz/types/qui
 
 export class CreateInstanceDto {
   @ApiProperty({
-    description: 'UUID of the published quiz version to host',
+    description:
+      'UUID of the quiz to host. The latest published version of the quiz is resolved server-side.',
     format: 'uuid',
-    example: '550e8400-e29b-71d4-a716-446655440000',
+    example: '660e8400-e29b-71d4-a716-446655440099',
   })
   @IsUUID('7')
-  quizVersionId!: string;
+  quizId!: string;
 
   @ApiPropertyOptional({
     description: 'Maximum number of players (2–100, defaults to unlimited)',
@@ -28,7 +29,7 @@ export class CreateInstanceDto {
   maxPlayers?: number;
 }
 
-export const INSTANCE_STATUSES = ['open', 'running', 'closed', 'finished'] as const;
+export const INSTANCE_STATUSES = ['open', 'countdown', 'running', 'closed', 'finished'] as const;
 export type InstanceStatus = (typeof INSTANCE_STATUSES)[number];
 
 export class GetLeaderboardQueryDto {

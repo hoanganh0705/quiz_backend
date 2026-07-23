@@ -10,6 +10,20 @@ export type QuizInstanceRow = {
   startedAt: string | null;
   closedAt: string | null;
   updatedAt: string;
+  /**
+   * Phase 1 (Foundational Correctness) — optimistic-locking version.
+   * Internal concurrency primitive; not exposed via any response DTO.
+   * Every state transition must read this value, then issue an UPDATE
+   * with `WHERE version = $prev`. A zero-row result signals a lost race.
+   */
+  version: number;
+  /**
+   * Phase 2 (Gameplay Lifecycle) — wall-clock anchor the countdown
+   * scheduler scans to find due transitions. Set by `startCountdown`,
+   * cleared on completion or cancellation. Not exposed via any response
+   * DTO; internal primitive of the state machine.
+   */
+  countdownStartedAt: string | null;
 };
 
 export type QuizInstanceDetailRow = QuizInstanceRow & {
@@ -114,7 +128,24 @@ export interface QuizInstanceRepositoryPort {
     nowIso: string;
     startedAt?: string;
     closedAt?: string;
-  }): Promise<void>;
+    /**
+     * Phase 2 (Gameplay Lifecycle) — wall-clock anchor the scheduler
+     * watches. The repository does NOT validate this against the
+     * `status`; the constraint is enforced by the database CHECK
+     * `quiz_instances_countdown_started_at_consistent`. The service
+     * layer threads a value here only on `status: 'countdown'`, and
+     * an explicit `null` here clears it on every other transition.
+     */
+    countdownStartedAt?: string | null;
+    /**
+     * Phase 1 (Foundational Correctness) — the version observed by the
+     * caller before the transition. The UPDATE includes
+     * `WHERE version = $expectedVersion`. If zero rows match, the
+     * repository throws `InstanceOptimisticLockError` so the caller
+     * knows another writer won the race.
+     */
+    expectedVersion: number;
+  }): Promise<{ version: number }>;
 
   getPlayer(instanceId: string, userId: string): Promise<QuizInstancePlayerRow | null>;
 
@@ -159,12 +190,25 @@ export interface QuizInstanceRepositoryPort {
     limit: number;
     cursor?: InstanceCursorPayload | null;
     filters?: {
-      status?: 'open' | 'running' | 'closed' | 'finished';
+      status?: 'open' | 'countdown' | 'running' | 'closed' | 'finished';
       difficulty?: string;
       quizId?: string;
       creatorId?: string;
     };
   }): Promise<QuizInstanceListRow[]>;
+
+  /**
+   * Phase 2 (Gameplay Lifecycle) — find all `countdown` instances whose
+   * deadline has elapsed, so the scheduler can advance them. The query
+   * hits the partial index `idx_quiz_instances_countdown_due`.
+   */
+  findDueCountdowns(params: { nowIso: string; limit: number }): Promise<
+    Array<{
+      instanceId: string;
+      version: number;
+      countdownStartedAt: string;
+    }>
+  >;
 
   listPlayersWithProfile(params: { instanceId: string }): Promise<InstancePlayerWithProfile[]>;
 
