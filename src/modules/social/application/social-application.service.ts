@@ -173,10 +173,10 @@ export class SocialApplicationService {
   async getFollowersOfUser(
     user: JwtPayload,
     targetUserId: string,
-    page: number,
-    limit: number,
-  ): Promise<PaginatedFollowersResult> {
-    return this.socialService.getFollowersOfUser(user.sub, targetUserId, page, limit);
+    cursor?: string | null,
+    limit?: number,
+  ): Promise<PaginatedResult<PaginatedFollowersResult['items'][number]>> {
+    return this.socialService.getFollowersOfUser(user.sub, targetUserId, cursor, limit ?? 20);
   }
 
   async getFollowing(
@@ -199,49 +199,53 @@ export class SocialApplicationService {
   async getFollowingOfUser(
     user: JwtPayload,
     targetUserId: string,
-    page: number,
-    limit: number,
-  ): Promise<PaginatedFollowingResult> {
-    return this.socialService.getFollowingOfUser(user.sub, targetUserId, page, limit);
+    cursor?: string | null,
+    limit?: number,
+  ): Promise<PaginatedResult<PaginatedFollowingResult['items'][number]>> {
+    return this.socialService.getFollowingOfUser(user.sub, targetUserId, cursor, limit ?? 20);
   }
 
   async getMutualFriends(
     user: JwtPayload,
     targetUserId: string,
-    page: number,
-    limit: number,
-  ): Promise<PaginatedMutualFriendsResult> {
-    return this.socialService.getMutualFriends(user.sub, targetUserId, page, limit);
+    cursor?: string | null,
+    limit?: number,
+  ): Promise<PaginatedResult<PaginatedMutualFriendsResult['items'][number]>> {
+    return this.socialService.getMutualFriends(user.sub, targetUserId, cursor, limit ?? 20);
   }
 
   async getMutualFollowers(
     user: JwtPayload,
     targetUserId: string,
-    page: number,
-    limit: number,
-  ): Promise<PaginatedMutualFollowersResult> {
-    return this.socialService.getMutualFollowers(user.sub, targetUserId, page, limit);
+    cursor?: string | null,
+    limit?: number,
+  ): Promise<PaginatedResult<PaginatedMutualFollowersResult['items'][number]>> {
+    return this.socialService.getMutualFollowers(user.sub, targetUserId, cursor, limit ?? 20);
   }
 
-  async getFeed(user: JwtPayload, page: number, limit: number): Promise<PaginatedSocialFeedResult> {
-    return this.socialService.getFeed(user.sub, page, limit);
+  async getFeed(
+    user: JwtPayload,
+    cursor?: string | null,
+    limit?: number,
+  ): Promise<PaginatedResult<PaginatedSocialFeedResult['items'][number]>> {
+    return this.socialService.getFeed(user.sub, cursor, limit ?? 20);
   }
 
   async getUserActivity(
     user: JwtPayload,
     targetUserId: string,
-    page: number,
-    limit: number,
-  ): Promise<PaginatedUserActivityResult> {
-    return this.socialService.getUserActivity(user.sub, targetUserId, page, limit);
+    cursor?: string | null,
+    limit?: number,
+  ): Promise<PaginatedResult<PaginatedUserActivityResult['items'][number]>> {
+    return this.socialService.getUserActivity(user.sub, targetUserId, cursor, limit ?? 20);
   }
 
   async getSuggestions(
     user: JwtPayload,
-    page: number,
-    limit: number,
-  ): Promise<PaginatedSocialSuggestionsResult> {
-    return this.socialService.getSuggestions(user.sub, page, limit);
+    cursor?: string | null,
+    limit?: number,
+  ): Promise<PaginatedResult<PaginatedSocialSuggestionsResult['items'][number]>> {
+    return this.socialService.getSuggestions(user.sub, cursor, limit ?? 20);
   }
 
   async getRelationshipStatus(user: JwtPayload, targetId: string): Promise<RelationshipStatus> {

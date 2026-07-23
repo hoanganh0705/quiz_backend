@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { UserFollowersPaginationDto } from './paginated.dto';
+import { CursorPagination } from '@/common/responses/pagination';
 
 const SOCIAL_FEED_ACTIVITY_TYPES = [
   'badge_earned',
@@ -67,11 +67,18 @@ export class SocialFeedResponseDto {
   @ApiProperty({ description: 'Feed items', type: () => [SocialFeedItemDto] })
   items!: SocialFeedItemDto[];
 
-  @ApiProperty({ description: 'Pagination metadata', type: () => UserFollowersPaginationDto })
-  pagination!: UserFollowersPaginationDto;
+  @ApiProperty({ description: 'Pagination metadata', type: () => CursorPagination })
+  pagination!: CursorPagination;
 }
 
 export class UserActivityItemDto {
+  @ApiProperty({
+    description: 'Activity identifier',
+    format: 'uuid',
+    example: '660e8400-e29b-71d4-a716-446655440000',
+  })
+  id!: string;
+
   @ApiProperty({
     description: 'User activity type',
     enum: SOCIAL_FEED_ACTIVITY_TYPES,
@@ -97,6 +104,6 @@ export class UserActivityResponseDto {
   @ApiProperty({ description: 'User activity items', type: () => [UserActivityItemDto] })
   items!: UserActivityItemDto[];
 
-  @ApiProperty({ description: 'Pagination metadata', type: () => UserFollowersPaginationDto })
-  pagination!: UserFollowersPaginationDto;
+  @ApiProperty({ description: 'Pagination metadata', type: () => CursorPagination })
+  pagination!: CursorPagination;
 }

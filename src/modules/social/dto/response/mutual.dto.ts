@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { UserFollowersPaginationDto } from './paginated.dto';
+import { CursorPagination } from '@/common/responses/pagination';
 
 export class MutualFriendItemDto {
   @ApiProperty({
@@ -25,8 +25,8 @@ export class MutualFriendsResponseDto {
   @ApiProperty({ description: 'Mutual friend items', type: () => [MutualFriendItemDto] })
   items!: MutualFriendItemDto[];
 
-  @ApiProperty({ description: 'Pagination metadata', type: () => UserFollowersPaginationDto })
-  pagination!: UserFollowersPaginationDto;
+  @ApiProperty({ description: 'Pagination metadata', type: () => CursorPagination })
+  pagination!: CursorPagination;
 }
 
 export class MutualFollowerItemDto {
@@ -53,6 +53,6 @@ export class MutualFollowersResponseDto {
   @ApiProperty({ description: 'Mutual follower items', type: () => [MutualFollowerItemDto] })
   items!: MutualFollowerItemDto[];
 
-  @ApiProperty({ description: 'Pagination metadata', type: () => UserFollowersPaginationDto })
-  pagination!: UserFollowersPaginationDto;
+  @ApiProperty({ description: 'Pagination metadata', type: () => CursorPagination })
+  pagination!: CursorPagination;
 }

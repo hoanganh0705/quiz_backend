@@ -71,9 +71,10 @@ export interface PaginatedFollowersResult {
     followedAt: string;
   }>;
   pagination: {
-    page: number;
+    kind: 'cursor';
     limit: number;
-    total: number;
+    hasNextPage: boolean;
+    nextCursor: string | null;
   };
 }
 
@@ -85,9 +86,10 @@ export interface PaginatedFollowingResult {
     followedAt: string;
   }>;
   pagination: {
-    page: number;
+    kind: 'cursor';
     limit: number;
-    total: number;
+    hasNextPage: boolean;
+    nextCursor: string | null;
   };
 }
 
@@ -103,9 +105,10 @@ export interface SocialSuggestion {
 export interface PaginatedSocialSuggestionsResult {
   items: SocialSuggestion[];
   pagination: {
-    page: number;
+    kind: 'cursor';
     limit: number;
-    total: number;
+    hasNextPage: boolean;
+    nextCursor: string | null;
   };
 }
 
@@ -116,9 +119,10 @@ export interface PaginatedMutualFriendsResult {
     avatarUrl: string | null;
   }>;
   pagination: {
-    page: number;
+    kind: 'cursor';
     limit: number;
-    total: number;
+    hasNextPage: boolean;
+    nextCursor: string | null;
   };
 }
 
@@ -129,9 +133,10 @@ export interface PaginatedMutualFollowersResult {
     avatarUrl: string | null;
   }>;
   pagination: {
-    page: number;
+    kind: 'cursor';
     limit: number;
-    total: number;
+    hasNextPage: boolean;
+    nextCursor: string | null;
   };
 }
 
@@ -166,22 +171,25 @@ export interface SocialFeedActivity {
 export interface PaginatedSocialFeedResult {
   items: SocialFeedActivity[];
   pagination: {
-    page: number;
+    kind: 'cursor';
     limit: number;
-    total: number;
+    hasNextPage: boolean;
+    nextCursor: string | null;
   };
 }
 
 export interface PaginatedUserActivityResult {
   items: Array<{
+    id: string;
     type: SocialFeedActivityType;
     occurredAt: string;
     payload: Record<string, unknown>;
   }>;
   pagination: {
-    page: number;
+    kind: 'cursor';
     limit: number;
-    total: number;
+    hasNextPage: boolean;
+    nextCursor: string | null;
   };
 }
 
