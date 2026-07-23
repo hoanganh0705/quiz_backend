@@ -48,32 +48,36 @@ export interface SocialRepositoryPort {
   getFollowers(userId: string, limit: number, cursor?: string | null): Promise<Follower[]>;
   getFollowersOfUser(
     userId: string,
-    page: number,
-    limit: number,
+    cursor?: string | null,
+    limit?: number,
   ): Promise<PaginatedFollowersResult>;
   getFollowing(userId: string, limit: number, cursor?: string | null): Promise<Following[]>;
   getFollowingOfUser(
     userId: string,
-    page: number,
-    limit: number,
+    cursor?: string | null,
+    limit?: number,
   ): Promise<PaginatedFollowingResult>;
   getMutualFriends(
     userId: string,
     targetUserId: string,
-    page: number,
-    limit: number,
+    cursor?: string | null,
+    limit?: number,
   ): Promise<PaginatedMutualFriendsResult>;
   getMutualFollowers(
     userId: string,
     targetUserId: string,
-    page: number,
-    limit: number,
+    cursor?: string | null,
+    limit?: number,
   ): Promise<PaginatedMutualFollowersResult>;
-  getFeed(page: number, limit: number): Promise<PaginatedSocialFeedResult>;
+  getFeed(
+    userId: string,
+    cursor?: string | null,
+    limit?: number,
+  ): Promise<PaginatedSocialFeedResult>;
   findActivitiesByUserId(
     userId: string,
-    page: number,
-    limit: number,
+    cursor?: string | null,
+    limit?: number,
   ): Promise<PaginatedUserActivityResult>;
   createFeedActivity(params: {
     userId: string;
@@ -86,8 +90,8 @@ export interface SocialRepositoryPort {
   getTrendingUsers(limit: number): Promise<TrendingUsersResult>;
   getSuggestions(
     userId: string,
-    page: number,
-    limit: number,
+    cursor?: string | null,
+    limit?: number,
   ): Promise<PaginatedSocialSuggestionsResult>;
   getFollowerCount(userId: string): Promise<number>;
   getFollowingCount(userId: string): Promise<number>;
@@ -95,6 +99,10 @@ export interface SocialRepositoryPort {
 
   // Relationship
   getRelationshipStatus(userId: string, targetId: string): Promise<RelationshipStatus>;
+  getRelationshipStatusesBatch(
+    userId: string,
+    targetIds: string[],
+  ): Promise<Map<string, RelationshipStatus>>;
   getSocialCounts(userId: string): Promise<SocialCounts>;
   getUsernamesForUsers(
     followerId: string,

@@ -28,7 +28,7 @@ export interface FriendshipRepositoryPort {
   getMutualFriends(
     userId: string,
     targetUserId: string,
-    page: number,
-    limit: number,
+    cursor?: string | null,
+    limit?: number,
   ): Promise<PaginatedMutualFriendsResult>;
 }

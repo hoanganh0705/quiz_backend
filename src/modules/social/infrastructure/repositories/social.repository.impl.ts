@@ -21,7 +21,7 @@ import type {
   RelationshipStatus,
   PaginatedSocialSuggestionsResult,
 } from '../../domain/types/social.types';
-import { eq, and, count, desc, isNull, sql, lte, or } from 'drizzle-orm';
+import { eq, and, count, isNull, sql, lte, or } from 'drizzle-orm';
 import {
   FRIENDSHIP_REPOSITORY_PORT,
   type FriendshipRepositoryPort,
@@ -62,30 +62,91 @@ export class SocialRepository implements SocialRepositoryPort {
     });
   }
 
-  async getFeed(page: number, limit: number): Promise<PaginatedSocialFeedResult> {
-    const offset = (page - 1) * limit;
+  async getFeed(
+    userId: string,
+    cursor?: string | null,
+    limit?: number,
+  ): Promise<PaginatedSocialFeedResult> {
+    const effectiveLimit = limit ?? 20;
 
-    const [rows, totalResult] = await Promise.all([
-      this.db
-        .select({
-          id: socialFeedActivities.activityId,
-          type: socialFeedActivities.activityType,
-          occurredAt: socialFeedActivities.occurredAt,
-          userId: users.userId,
-          username: users.username,
-          payload: socialFeedActivities.payload,
-        })
-        .from(socialFeedActivities)
-        .innerJoin(users, eq(socialFeedActivities.userId, users.userId))
-        .where(isNull(users.deletedAt))
-        .orderBy(desc(socialFeedActivities.occurredAt), desc(socialFeedActivities.activityId))
-        .limit(limit)
-        .offset(offset),
-      this.db.select({ count: count() }).from(socialFeedActivities),
-    ]);
+    // Decode cursor if provided
+    let cursorCondition = '';
+    if (cursor) {
+      try {
+        const decoded = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8'));
+        cursorCondition = `AND (sfa.occurred_at < '${decoded.occurredAt}' OR (sfa.occurred_at = '${decoded.occurredAt}' AND sfa.activity_id < '${decoded.activityId}'::uuid))`;
+      } catch {
+        cursorCondition = '';
+      }
+    }
+
+    // Build a query that filters activities to only show:
+    // - Friends of the user (accepted friendships where user is either requester or addressee)
+    // - Users the user follows
+    // - Exclude blocked users (in both directions)
+    const rows = await this.db.execute(sql`
+      WITH user_network AS (
+        -- Friends (accepted friendships)
+        SELECT
+          CASE
+            WHEN f.requester_id = ${userId}::uuid THEN f.addressee_id
+            ELSE f.requester_id
+          END AS user_id
+        FROM friendships f
+        WHERE (f.requester_id = ${userId}::uuid OR f.addressee_id = ${userId}::uuid)
+          AND f.status = 'accepted'
+          AND f.deleted_at IS NULL
+        UNION
+        -- Users being followed
+        SELECT uf.following_id AS user_id
+        FROM user_follows uf
+        WHERE uf.follower_id = ${userId}::uuid
+          AND uf.deleted_at IS NULL
+      ),
+      blocked_ids AS (
+        SELECT blocked_id AS user_id FROM blocked_users WHERE blocker_id = ${userId}::uuid AND deleted_at IS NULL
+        UNION
+        SELECT blocker_id AS user_id FROM blocked_users WHERE blocked_id = ${userId}::uuid AND deleted_at IS NULL
+      )
+      SELECT
+        sfa.activity_id AS id,
+        sfa.activity_type AS type,
+        sfa.occurred_at AS "occurredAt",
+        sfa.user_id AS "userId",
+        u.username AS username,
+        sfa.payload AS payload
+      FROM social_feed_activities sfa
+      INNER JOIN users u ON u.user_id = sfa.user_id
+      INNER JOIN user_network un ON un.user_id = sfa.user_id
+      WHERE u.deleted_at IS NULL
+        AND sfa.user_id NOT IN (SELECT user_id FROM blocked_ids)
+        ${sql.raw(cursorCondition ? ` ${cursorCondition}` : '')}
+      ORDER BY sfa.occurred_at DESC, sfa.activity_id DESC
+      LIMIT ${effectiveLimit + 1}
+    `);
+
+    const feedRows = rows.rows as Array<{
+      id: string;
+      type: SocialFeedActivityType;
+      occurredAt: string;
+      userId: string;
+      username: string;
+      payload: Record<string, unknown>;
+    }>;
+
+    const hasNextPage = feedRows.length > effectiveLimit;
+    const items = hasNextPage ? feedRows.slice(0, effectiveLimit) : feedRows;
+    const lastItem = items[items.length - 1];
+    const nextCursor =
+      hasNextPage && lastItem
+        ? Buffer.from(
+            JSON.stringify({ occurredAt: lastItem.occurredAt, activityId: lastItem.id }),
+            'utf8',
+          ).toString('base64url')
+        : null;
 
     return {
-      items: rows.map((row) => ({
+      items: items.map((row) => ({
         id: row.id,
         type: row.type,
         occurredAt: row.occurredAt,
@@ -93,53 +154,80 @@ export class SocialRepository implements SocialRepositoryPort {
           userId: row.userId,
           username: row.username,
         },
-        payload: row.payload as Record<string, unknown>,
+        payload: row.payload,
       })),
       pagination: {
-        page,
-        limit,
-        total: Number(totalResult[0]?.count ?? 0),
+        kind: 'cursor',
+        limit: effectiveLimit,
+        hasNextPage,
+        nextCursor,
       },
     };
   }
 
   async findActivitiesByUserId(
     userId: string,
-    page: number,
-    limit: number,
+    cursor?: string | null,
+    limit?: number,
   ): Promise<PaginatedUserActivityResult> {
-    const offset = (page - 1) * limit;
+    const effectiveLimit = limit ?? 20;
 
-    const [rows, totalResult] = await Promise.all([
-      this.db
-        .select({
-          type: socialFeedActivities.activityType,
-          occurredAt: socialFeedActivities.occurredAt,
-          payload: socialFeedActivities.payload,
-        })
-        .from(socialFeedActivities)
-        .innerJoin(users, eq(socialFeedActivities.userId, users.userId))
-        .where(and(eq(socialFeedActivities.userId, userId), isNull(users.deletedAt)))
-        .orderBy(desc(socialFeedActivities.occurredAt), desc(socialFeedActivities.activityId))
-        .limit(limit)
-        .offset(offset),
-      this.db
-        .select({ count: count() })
-        .from(socialFeedActivities)
-        .innerJoin(users, eq(socialFeedActivities.userId, users.userId))
-        .where(and(eq(socialFeedActivities.userId, userId), isNull(users.deletedAt))),
-    ]);
+    // Decode cursor if provided
+    let cursorCondition = '';
+    if (cursor) {
+      try {
+        const decoded = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8'));
+        cursorCondition = `AND (sfa.occurred_at < '${decoded.occurredAt}' OR (sfa.occurred_at = '${decoded.occurredAt}' AND sfa.activity_id < '${decoded.activityId}'::uuid))`;
+      } catch {
+        cursorCondition = '';
+      }
+    }
+
+    const rows = await this.db.execute(sql`
+      SELECT
+        sfa.activity_id AS id,
+        sfa.activity_type AS type,
+        sfa.occurred_at AS "occurredAt",
+        sfa.payload AS payload
+      FROM social_feed_activities sfa
+      INNER JOIN users u ON u.user_id = sfa.user_id
+      WHERE sfa.user_id = ${userId}::uuid
+        AND u.deleted_at IS NULL
+        ${sql.raw(cursorCondition ? ` ${cursorCondition}` : '')}
+      ORDER BY sfa.occurred_at DESC, sfa.activity_id DESC
+      LIMIT ${effectiveLimit + 1}
+    `);
+
+    const activityRows = rows.rows as Array<{
+      id: string;
+      type: SocialFeedActivityType;
+      occurredAt: string;
+      payload: Record<string, unknown>;
+    }>;
+
+    const hasNextPage = activityRows.length > effectiveLimit;
+    const items = hasNextPage ? activityRows.slice(0, effectiveLimit) : activityRows;
+    const lastItem = items[items.length - 1];
+    const nextCursor =
+      hasNextPage && lastItem
+        ? Buffer.from(
+            JSON.stringify({ occurredAt: lastItem.occurredAt, activityId: lastItem.id }),
+            'utf8',
+          ).toString('base64url')
+        : null;
 
     return {
-      items: rows.map((row) => ({
+      items: items.map((row) => ({
+        id: row.id,
         type: row.type,
         occurredAt: row.occurredAt,
-        payload: row.payload as Record<string, unknown>,
+        payload: row.payload,
       })),
       pagination: {
-        page,
-        limit,
-        total: Number(totalResult[0]?.count ?? 0),
+        kind: 'cursor',
+        limit: effectiveLimit,
+        hasNextPage,
+        nextCursor,
       },
     };
   }
@@ -205,10 +293,21 @@ export class SocialRepository implements SocialRepositoryPort {
   // Discovery methods
   async getSuggestions(
     userId: string,
-    page: number,
-    limit: number,
+    cursor?: string | null,
+    limit?: number,
   ): Promise<PaginatedSocialSuggestionsResult> {
-    const offset = (page - 1) * limit;
+    const effectiveLimit = limit ?? 20;
+
+    // Decode cursor if provided
+    let cursorCondition = '';
+    if (cursor) {
+      try {
+        const decoded = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8'));
+        cursorCondition = `AND (ranked.score < ${decoded.score} OR (ranked.score = ${decoded.score} AND ranked."mutualFriends" < ${decoded.mutualFriends}) OR (ranked.score = ${decoded.score} AND ranked."mutualFriends" = ${decoded.mutualFriends} AND ranked."mutualFollowers" < ${decoded.mutualFollowers}) OR (ranked.score = ${decoded.score} AND ranked."mutualFriends" = ${decoded.mutualFriends} AND ranked."mutualFollowers" = ${decoded.mutualFollowers} AND ranked.username > '${decoded.username}'))`;
+      } catch {
+        cursorCondition = '';
+      }
+    }
 
     const candidates = sql<{
       userId: string;
@@ -320,20 +419,13 @@ export class SocialRepository implements SocialRepositoryPort {
       FROM ranked_candidates
     `;
 
-    const rowsPromise = this.db.execute(sql`
+    const rowsResult = await this.db.execute(sql`
       SELECT *
       FROM (${candidates}) ranked
+      WHERE 1=1 ${sql.raw(cursorCondition ? ` ${cursorCondition}` : '')}
       ORDER BY ranked.score DESC, ranked."mutualFriends" DESC, ranked."mutualFollowers" DESC, ranked.username ASC
-      LIMIT ${limit}
-      OFFSET ${offset}
+      LIMIT ${effectiveLimit + 1}
     `);
-
-    const totalPromise = this.db.execute(sql`
-      SELECT COUNT(*)::int AS total
-      FROM (${candidates}) ranked
-    `);
-
-    const [rowsResult, totalResult] = await Promise.all([rowsPromise, totalPromise]);
 
     const rows = rowsResult.rows as Array<{
       userId: string;
@@ -343,10 +435,25 @@ export class SocialRepository implements SocialRepositoryPort {
       mutualFollowers: number;
       score: number;
     }>;
-    const total = Number((totalResult.rows[0] as { total?: number } | undefined)?.total ?? 0);
+
+    const hasNextPage = rows.length > effectiveLimit;
+    const items = hasNextPage ? rows.slice(0, effectiveLimit) : rows;
+    const lastItem = items[items.length - 1];
+    const nextCursor =
+      hasNextPage && lastItem
+        ? Buffer.from(
+            JSON.stringify({
+              score: lastItem.score,
+              mutualFriends: lastItem.mutualFriends,
+              mutualFollowers: lastItem.mutualFollowers,
+              username: lastItem.username,
+            }),
+            'utf8',
+          ).toString('base64url')
+        : null;
 
     return {
-      items: rows.map((row) => ({
+      items: items.map((row) => ({
         userId: row.userId,
         username: row.username,
         avatarUrl: row.avatarUrl,
@@ -362,9 +469,10 @@ export class SocialRepository implements SocialRepositoryPort {
                 : MUTUAL_FRIENDS_REASON_FALLBACK,
       })),
       pagination: {
-        page,
-        limit,
-        total,
+        kind: 'cursor',
+        limit: effectiveLimit,
+        hasNextPage,
+        nextCursor,
       },
     };
   }
@@ -552,6 +660,120 @@ export class SocialRepository implements SocialRepositoryPort {
     };
   }
 
+  /**
+   * Batch fetch relationship statuses for multiple target users.
+   * Optimizes N+1 queries in search results.
+   */
+  async getRelationshipStatusesBatch(
+    userId: string,
+    targetIds: string[],
+  ): Promise<Map<string, RelationshipStatus>> {
+    if (targetIds.length === 0) {
+      return new Map();
+    }
+
+    // Batch query friendships
+    const friendRows = await this.db.execute(sql`
+      SELECT
+        CASE
+          WHEN f.requester_id = ${userId}::uuid THEN f.addressee_id
+          ELSE f.requester_id
+        END AS friend_id,
+        'accepted' AS status
+      FROM friendships f
+      WHERE (f.requester_id = ${userId}::uuid OR f.addressee_id = ${userId}::uuid)
+        AND f.status = 'accepted'
+        AND f.deleted_at IS NULL
+    `);
+
+    // Batch query pending requests (sent by user)
+    const pendingSentRows = await this.db.execute(sql`
+      SELECT addressee_id AS target_id
+      FROM friendships
+      WHERE requester_id = ${userId}::uuid
+        AND status = 'pending'
+        AND deleted_at IS NULL
+    `);
+
+    // Batch query pending requests (received by user)
+    const pendingReceivedRows = await this.db.execute(sql`
+      SELECT requester_id AS target_id
+      FROM friendships
+      WHERE addressee_id = ${userId}::uuid
+        AND status = 'pending'
+        AND deleted_at IS NULL
+    `);
+
+    // Batch query followers (who follows the user)
+    const followerRows = await this.db.execute(sql`
+      SELECT follower_id AS target_id
+      FROM user_follows
+      WHERE following_id = ${userId}::uuid
+        AND deleted_at IS NULL
+    `);
+
+    // Batch query following (who the user follows)
+    const followingRows = await this.db.execute(sql`
+      SELECT following_id AS target_id
+      FROM user_follows
+      WHERE follower_id = ${userId}::uuid
+        AND deleted_at IS NULL
+    `);
+
+    // Batch query blocks
+    const blockedRows = await this.db.execute(sql`
+      SELECT blocked_id AS target_id
+      FROM blocked_users
+      WHERE blocker_id = ${userId}::uuid
+        AND deleted_at IS NULL
+    `);
+
+    const blockedByRows = await this.db.execute(sql`
+      SELECT blocker_id AS target_id
+      FROM blocked_users
+      WHERE blocked_id = ${userId}::uuid
+        AND deleted_at IS NULL
+    `);
+
+    // Build sets for O(1) lookups
+    const friendsSet = new Set(
+      (friendRows.rows as Array<{ friend_id: string }>).map((r) => r.friend_id),
+    );
+    const pendingSentSet = new Set(
+      (pendingSentRows.rows as Array<{ target_id: string }>).map((r) => r.target_id),
+    );
+    const pendingReceivedSet = new Set(
+      (pendingReceivedRows.rows as Array<{ target_id: string }>).map((r) => r.target_id),
+    );
+    const followersSet = new Set(
+      (followerRows.rows as Array<{ target_id: string }>).map((r) => r.target_id),
+    );
+    const followingSet = new Set(
+      (followingRows.rows as Array<{ target_id: string }>).map((r) => r.target_id),
+    );
+    const blockedSet = new Set(
+      (blockedRows.rows as Array<{ target_id: string }>).map((r) => r.target_id),
+    );
+    const blockedBySet = new Set(
+      (blockedByRows.rows as Array<{ target_id: string }>).map((r) => r.target_id),
+    );
+
+    // Build result map
+    const result = new Map<string, RelationshipStatus>();
+    for (const targetId of targetIds) {
+      result.set(targetId, {
+        isFriend: friendsSet.has(targetId),
+        hasPendingRequest: pendingSentSet.has(targetId) || pendingReceivedSet.has(targetId),
+        isFollower: followersSet.has(targetId),
+        isFollowing: followingSet.has(targetId),
+        isBlocked: blockedSet.has(targetId),
+        isBlockedBy: blockedBySet.has(targetId),
+      });
+    }
+
+    return result;
+  }
+
   async getUsernamesForUsers(
     followerId: string,
     followingId: string,
@@ -594,8 +816,13 @@ export class SocialRepository implements SocialRepositoryPort {
     return this.friendshipRepository.removeFriend(userId, friendId);
   }
 
-  async getMutualFriends(userId: string, targetUserId: string, page: number, limit: number) {
-    return this.friendshipRepository.getMutualFriends(userId, targetUserId, page, limit);
+  async getMutualFriends(
+    userId: string,
+    targetUserId: string,
+    cursor?: string | null,
+    limit?: number,
+  ) {
+    return this.friendshipRepository.getMutualFriends(userId, targetUserId, cursor, limit);
   }
 
   // Following
@@ -611,20 +838,25 @@ export class SocialRepository implements SocialRepositoryPort {
     return this.userFollowRepository.getFollowers(userId, limit, cursor ?? undefined);
   }
 
-  async getFollowersOfUser(userId: string, page: number, limit: number) {
-    return this.userFollowRepository.getFollowersOfUser(userId, page, limit);
+  async getFollowersOfUser(userId: string, cursor?: string | null, limit?: number) {
+    return this.userFollowRepository.getFollowersOfUser(userId, cursor, limit);
   }
 
   async getFollowing(userId: string, limit: number, cursor?: string | null) {
     return this.userFollowRepository.getFollowing(userId, limit, cursor ?? undefined);
   }
 
-  async getFollowingOfUser(userId: string, page: number, limit: number) {
-    return this.userFollowRepository.getFollowingOfUser(userId, page, limit);
+  async getFollowingOfUser(userId: string, cursor?: string | null, limit?: number) {
+    return this.userFollowRepository.getFollowingOfUser(userId, cursor, limit);
   }
 
-  async getMutualFollowers(userId: string, targetUserId: string, page: number, limit: number) {
-    return this.userFollowRepository.getMutualFollowers(userId, targetUserId, page, limit);
+  async getMutualFollowers(
+    userId: string,
+    targetUserId: string,
+    cursor?: string | null,
+    limit?: number,
+  ) {
+    return this.userFollowRepository.getMutualFollowers(userId, targetUserId, cursor, limit);
   }
 
   async getFollowerCount(userId: string) {
