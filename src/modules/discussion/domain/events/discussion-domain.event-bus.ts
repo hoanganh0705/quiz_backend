@@ -28,6 +28,7 @@ import type {
   ThreadHiddenEvent,
   ContentReportedEvent,
   ReportReviewedEvent,
+  VoteRemovedEvent,
 } from './discussion-domain.events';
 import {
   correlationIdStorage,
@@ -185,6 +186,10 @@ export class DiscussionDomainEventBus
         }
       });
     }
+  }
+
+  emitVoteRemoved(event: VoteRemovedEvent): void {
+    this.emit(event);
   }
 
   emitCommentCreated(event: CommentCreatedEvent): void {

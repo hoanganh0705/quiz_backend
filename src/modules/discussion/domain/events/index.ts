@@ -13,6 +13,7 @@ export type {
   DiscussionThreadCreatedEvent,
   DiscussionThreadSolvedEvent,
   ReportReviewedEvent,
+  VoteRemovedEvent,
   DiscussionDomainEvent,
 } from './discussion-domain.events';
 export {

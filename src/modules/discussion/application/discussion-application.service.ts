@@ -105,11 +105,12 @@ export class DiscussionApplicationService {
   }): Promise<PaginatedResult<DiscussionThread>> {
     const { items, hasNextPage } = await this.discussionService.listThreads(filters);
     const limit = filters.limit ?? 20;
+    const lastItem = items.at(-1);
     return paginated(items, {
       kind: 'cursor' as const,
       limit,
       hasNextPage,
-      nextCursor: null,
+      nextCursor: hasNextPage && lastItem ? lastItem.createdAt : null,
     });
   }
 
