@@ -5,7 +5,7 @@ import { DISCUSSION_REPOSITORY_PORT, QUIZ_EXISTENCE_PORT, USER_EXISTENCE_PORT } 
 import type { DiscussionRepositoryPort, QuizExistencePort, UserExistencePort } from '../ports';
 import { DISCUSSION_DOMAIN_EVENT_BUS } from '../events';
 import type { DiscussionDomainEventBusPort } from '../events';
-import type { CommentMentionedEvent } from '../events/discussion-domain.events';
+import type { CommentMentionedEvent, VoteRemovedEvent } from '../events/discussion-domain.events';
 import type {
   DiscussionThread,
   DiscussionThreadDetail,
@@ -62,7 +62,9 @@ import {
   SelfReportError,
   DuplicateReportError,
   QuizNotFoundError,
+  ReplyLimitExceededError,
 } from '../errors';
+import { MAX_REPLIES_PER_COMMENT } from '../../infrastructure/repositories/discussion.repository';
 import { DiscussionAuthorizationPolicy } from '../policies/discussion-authorization.policy';
 
 @Injectable()
@@ -347,24 +349,28 @@ export class DiscussionService {
   }
 
   async subscribeToThread(userId: string, threadId: string): Promise<{ success: true }> {
-    const thread = await this.repo.getThreadById(threadId);
+    // Wrap existence check and subscription in a transaction with FOR UPDATE
+    // to close the TOCTOU window between check and write.
+    await this.repo.transactionally(async (tx) => {
+      const thread = await this.repo.getThreadByIdForUpdate(threadId, tx);
 
-    if (!thread) {
-      this.logger.warn({ event: 'discussion_thread_not_found', threadId, userId });
-      throw new ThreadNotFoundError(threadId);
-    }
+      if (!thread) {
+        this.logger.warn({ event: 'discussion_thread_not_found', threadId, userId });
+        throw new ThreadNotFoundError(threadId);
+      }
 
-    if (thread.status !== 'open') {
-      this.logger.warn({
-        event: 'discussion_thread_not_active',
-        threadId,
-        userId,
-        status: thread.status,
-      });
-      throw new ThreadNotActiveError();
-    }
+      if (thread.status !== 'open') {
+        this.logger.warn({
+          event: 'discussion_thread_not_active',
+          threadId,
+          userId,
+          status: thread.status,
+        });
+        throw new ThreadNotActiveError();
+      }
 
-    await this.repo.subscribeToThread({ userId, threadId });
+      await this.repo.subscribeToThread({ userId, threadId });
+    });
 
     this.logger.info({ event: 'thread_subscribed', userId, threadId });
 
@@ -372,13 +378,6 @@ export class DiscussionService {
   }
 
   async unsubscribeFromThread(userId: string, threadId: string): Promise<{ success: true }> {
-    const thread = await this.repo.getThreadById(threadId);
-
-    if (!thread) {
-      this.logger.warn({ event: 'discussion_thread_not_found', threadId, userId });
-      throw new ThreadNotFoundError(threadId);
-    }
-
     await this.repo.unsubscribeFromThread({ userId, threadId });
 
     this.logger.info({ event: 'thread_unsubscribed', userId, threadId });
@@ -387,24 +386,28 @@ export class DiscussionService {
   }
 
   async saveThread(userId: string, threadId: string): Promise<{ success: true }> {
-    const thread = await this.repo.getThreadById(threadId);
+    // Wrap existence check and save in a transaction with FOR UPDATE
+    // to close the TOCTOU window between check and write.
+    await this.repo.transactionally(async (tx) => {
+      const thread = await this.repo.getThreadByIdForUpdate(threadId, tx);
 
-    if (!thread) {
-      this.logger.warn({ event: 'discussion_thread_not_found', threadId, userId });
-      throw new ThreadNotFoundError(threadId);
-    }
+      if (!thread) {
+        this.logger.warn({ event: 'discussion_thread_not_found', threadId, userId });
+        throw new ThreadNotFoundError(threadId);
+      }
 
-    if (thread.status !== 'open') {
-      this.logger.warn({
-        event: 'discussion_thread_not_active',
-        threadId,
-        userId,
-        status: thread.status,
-      });
-      throw new ThreadNotActiveError();
-    }
+      if (thread.status !== 'open') {
+        this.logger.warn({
+          event: 'discussion_thread_not_active',
+          threadId,
+          userId,
+          status: thread.status,
+        });
+        throw new ThreadNotActiveError();
+      }
 
-    await this.repo.saveThread({ userId, threadId });
+      await this.repo.saveThread({ userId, threadId });
+    });
 
     this.logger.info({ event: 'thread_saved', userId, threadId });
 
@@ -412,13 +415,6 @@ export class DiscussionService {
   }
 
   async unsaveThread(userId: string, threadId: string): Promise<{ success: true }> {
-    const thread = await this.repo.getThreadById(threadId);
-
-    if (!thread) {
-      this.logger.warn({ event: 'discussion_thread_not_found', threadId, userId });
-      throw new ThreadNotFoundError(threadId);
-    }
-
     await this.repo.unsaveThread({ userId, threadId });
 
     this.logger.info({ event: 'thread_unsaved', userId, threadId });
@@ -834,6 +830,11 @@ export class DiscussionService {
           // lock acquisition — no visible parent to reply to.
           throw new CommentNotFoundError(params.parentCommentId);
         }
+        // Validate reply depth limit: max 100 replies per comment
+        const replyCount = await this.repo.countReplies(params.parentCommentId);
+        if (replyCount >= MAX_REPLIES_PER_COMMENT) {
+          throw new ReplyLimitExceededError(MAX_REPLIES_PER_COMMENT);
+        }
       }
 
       const created = await this.repo.createComment(params, tx);
@@ -1106,6 +1107,14 @@ export class DiscussionService {
 
       await this.updateTargetVotesWithTx(targetType, targetId, deltaUp, deltaDown, tx);
       await this.repo.removeVote({ userId, targetType, targetId }, tx);
+    });
+
+    this.eventBus.emitVoteRemoved({
+      eventType: 'vote_removed',
+      userId,
+      targetType,
+      targetId,
+      timestamp: new Date(),
     });
 
     this.logger.debug({ event: 'vote_removed', userId, targetType, targetId });

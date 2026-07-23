@@ -6,6 +6,7 @@
 
 import type {
   DiscussionDomainEvent,
+  VoteRemovedEvent,
   CommentCreatedEvent,
   CommentDeletedEvent,
   CommentHiddenEvent,
@@ -25,6 +26,7 @@ import type {
 export interface DiscussionDomainEventBusPort {
   subscribe(handler: (event: DiscussionDomainEvent) => void): () => void;
 
+  emitVoteRemoved(event: VoteRemovedEvent): void;
   emitCommentCreated(event: CommentCreatedEvent): void;
   emitCommentDeleted(event: CommentDeletedEvent): void;
   emitCommentHidden(event: CommentHiddenEvent): void;

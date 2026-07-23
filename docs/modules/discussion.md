@@ -41,13 +41,14 @@ Owns the **per-quiz Q&A and threaded discussion surface**: discussion threads an
 - **Thread delete**: only the author may soft-delete; cascades soft-delete to all comments.
 - **Thread status transitions**: `open` → `closed` (author) → `open` (author); any non-deleted → `hidden` (moderator) → `open` (moderator restore).
 - **Comment creation**: only on `open` threads; only on `visible` threads for subscription/save.
-- **Comment reply depth**: two-level only (comment or reply as parent). Max 100 replies per parent comment.
+- **Comment reply depth**: two-level only (comment or reply as parent). Max 100 replies per parent comment (enforced via `ReplyLimitExceededError`).
 - **Comment ownership**: only the author may delete their comment.
 - **Moderation**: only `DISCUSSION_MODERATE` holders may hide/restore threads and comments, review reports, and list reports.
 - **Self-vote and self-report prohibited**: a user cannot vote on or report their own content.
 - **Duplicate report prohibited**: one open report per user per target.
 - **Solve marking**: only the thread author; the nominated comment must belong to the same thread; `solvedCommentId` is `ON DELETE SET NULL`.
 - **Cascade deletes**: deleting a thread cascades to comments (soft-delete); deleting a user cascades to their threads and comments.
+- **Parent comment filter**: `listComments` supports `parentCommentId` filter — `null` fetches top-level comments, a UUID fetches replies to that comment.
 
 ## Relationships
 
@@ -141,3 +142,13 @@ Reviewed | Dismissed | Actioned
 - **Upvote-only or combined score**: votes are stored as distinct up/down records; net score is computed in queries.
 - **Thread pinning**: not yet modeled.
 - **Moderation appeals**: not yet modeled.
+
+## Implementation Notes
+
+### Vote Target Type
+
+The `DiscussionVote.targetType` field uses the type `'thread' | 'comment'`. The `'reply'` type mentioned in some repository implementations is **dead code** and has been removed — comments and replies are both stored in `discussionComments` with the `parentCommentId` field distinguishing replies from top-level comments.
+
+### Cursor Pagination
+
+All list endpoints use cursor-based pagination. The `listThreads` endpoint accepts a raw ISO timestamp cursor (not base64-encoded) and returns `createdAt` of the last item as the `nextCursor`.

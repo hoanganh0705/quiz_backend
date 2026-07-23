@@ -182,3 +182,14 @@ export class ModeratorRequiredError extends DiscussionError {
     super('Moderator or admin role is required to perform this action');
   }
 }
+
+/**
+ * Thrown when a user attempts to reply to a comment that has already
+ * reached the maximum reply limit (100 replies). 409 Conflict.
+ */
+export class ReplyLimitExceededError extends DiscussionError {
+  readonly code = 'DISCUSSION_REPLY_LIMIT_EXCEEDED';
+  constructor(maxReplies: number) {
+    super(`Maximum reply limit of ${maxReplies} reached for this comment`);
+  }
+}

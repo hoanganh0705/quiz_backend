@@ -4,6 +4,14 @@
  * Defines all events emitted by the Discussion Domain.
  */
 
+export interface VoteRemovedEvent {
+  readonly eventType: 'vote_removed';
+  readonly userId: string;
+  readonly targetType: 'thread' | 'comment';
+  readonly targetId: string;
+  readonly timestamp: Date;
+}
+
 export interface CommentCreatedEvent {
   readonly eventType: 'comment_created';
   readonly commentId: string;
@@ -130,6 +138,7 @@ export interface ThreadRestoredEvent {
 }
 
 export type DiscussionDomainEvent =
+  | VoteRemovedEvent
   | CommentCreatedEvent
   | CommentDeletedEvent
   | CommentHiddenEvent
