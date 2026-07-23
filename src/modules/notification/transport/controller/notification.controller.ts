@@ -102,6 +102,8 @@ export class NotificationController {
       query.unreadOnly,
       query.includeArchived,
       query.type,
+      query.fromDate,
+      query.toDate,
     );
 
     return this.presenter.getNotifications(result);
