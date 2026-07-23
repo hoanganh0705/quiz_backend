@@ -1,5 +1,15 @@
 import { Transform } from 'class-transformer';
-import { IsBoolean, IsInt, IsNotEmpty, IsOptional, IsString, IsUUID, Max, MaxLength, Min } from 'class-validator';
+import {
+  IsBoolean,
+  IsInt,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  IsUUID,
+  Max,
+  MaxLength,
+  Min,
+} from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { trimString } from '@/common/utils/text.util';
 
@@ -23,7 +33,9 @@ export class CreateTournamentRoundDto {
     example: 'The first elimination round of the tournament.',
   })
   @IsOptional()
-  @Transform(({ value }: { value: unknown }) => (typeof value === 'string' ? trimString(value) : value))
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' ? trimString(value) : value,
+  )
   @IsString()
   @MaxLength(1000)
   description?: string | null;

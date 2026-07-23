@@ -26,6 +26,11 @@ const INSTANCE_ALREADY_STARTED_TYPE_URI =
   'https://api.quiz.local/problems/instance-already-started';
 const INSTANCE_ALREADY_CLOSED_TYPE_URI = 'https://api.quiz.local/problems/instance-already-closed';
 const PLAYER_ALREADY_JOINED_TYPE_URI = 'https://api.quiz.local/problems/player-already-joined';
+const MIN_PLAYERS_NOT_MET_TYPE_URI = 'https://api.quiz.local/problems/min-players-not-met';
+const INSTANCE_NOT_IN_COUNTDOWN_TYPE_URI =
+  'https://api.quiz.local/problems/instance-not-in-countdown';
+const INSTANCE_COUNTDOWN_ALREADY_STARTED_TYPE_URI =
+  'https://api.quiz.local/problems/instance-countdown-already-started';
 
 /**
  * Documents the `:id` path parameter as `format: uuid` on every
@@ -105,6 +110,30 @@ export const InstanceErrorResponseExamples = {
     detail: 'You have already joined this instance',
     instance: '/api/v1/instances/660e8400-e29b-71d4-a716-446655440000/join',
     extensions: { code: 'PLAYER_ALREADY_JOINED', requestId: 'req_abc123' },
+  },
+  minPlayersNotMet: {
+    type: MIN_PLAYERS_NOT_MET_TYPE_URI,
+    title: 'UnprocessableEntity',
+    status: 422,
+    detail: 'Instance requires at least 2 players before the host can start the countdown',
+    instance: '/api/v1/instances/660e8400-e29b-71d4-a716-446655440000/start',
+    extensions: { code: 'MIN_PLAYERS_NOT_MET', requestId: 'req_abc123' },
+  },
+  instanceNotInCountdown: {
+    type: INSTANCE_NOT_IN_COUNTDOWN_TYPE_URI,
+    title: 'Conflict',
+    status: 409,
+    detail: 'Instance is not in the countdown state',
+    instance: '/api/v1/instances/660e8400-e29b-71d4-a716-446655440000/start',
+    extensions: { code: 'INSTANCE_NOT_IN_COUNTDOWN', requestId: 'req_abc123' },
+  },
+  instanceCountdownAlreadyStarted: {
+    type: INSTANCE_COUNTDOWN_ALREADY_STARTED_TYPE_URI,
+    title: 'Conflict',
+    status: 409,
+    detail: 'Countdown has already started for this instance',
+    instance: '/api/v1/instances/660e8400-e29b-71d4-a716-446655440000/countdown',
+    extensions: { code: 'INSTANCE_COUNTDOWN_ALREADY_STARTED', requestId: 'req_abc123' },
   },
 } as const;
 

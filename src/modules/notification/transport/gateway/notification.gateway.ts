@@ -8,6 +8,20 @@
  * On connect, the client joins a user-scoped room `user:{userId}`.
  * When notification events are published via NotificationDomainEventBus,
  * this gateway broadcasts them to all connected sockets for that user.
+ *
+ * Phase 3 (Production Deployment Readiness) — emit path updated to
+ * `server.to(userRoom).emit(...)` so the Redis-backed Socket.IO
+ * adapter (configured in `main.ts`) actually fans the event out to
+ * every replica the user is connected to. Pre-Phase-3 the gateway
+ * iterated a process-local `userSockets` Map and emitted to each
+ * socket directly; that pattern silently dropped notifications
+ * delivered to any replica other than the originator.
+ *
+ * The local `userSockets` Map is retained to back the `ping`
+ * handler's reply on the local replica (a "yes, I'm connected to
+ * *this* instance" check). Cross-instance counts are answered via
+ * the Socket.IO adapter's `fetchSockets` so a client that has a
+ * socket on instance B gets a positive answer from instance A.
  */
 
 import {
@@ -18,7 +32,7 @@ import {
   SubscribeMessage,
   ConnectedSocket,
 } from '@nestjs/websockets';
-import { Server, Socket } from 'socket.io';
+import { Server, Socket, RemoteSocket } from 'socket.io';
 import { UseFilters, UseGuards } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { WsJwtGuard, type AuthenticatedSocket } from '@/common/guards/ws-jwt.guard';
@@ -44,8 +58,10 @@ export class NotificationGateway implements OnGatewayConnection, OnGatewayDiscon
   server!: Server;
 
   /**
-   * Maps userId → Set of connected socket IDs.
-   * Used to track active connections per user and route events correctly.
+   * Local per-replica mirror of `server.rooms`. Used only for the
+   * `ping` handler's local-replica count, NOT for fan-out (which
+   * goes through `server.to(room).emit` so the Redis adapter can
+   * reach every replica the target user is connected to).
    */
   private readonly userSockets = new Map<string, Set<string>>();
 
@@ -60,7 +76,7 @@ export class NotificationGateway implements OnGatewayConnection, OnGatewayDiscon
     if (!user?.sub) return;
 
     const userId = user.sub;
-    client.join(`${USER_ROOM_PREFIX}${userId}`);
+    void client.join(`${USER_ROOM_PREFIX}${userId}`);
 
     if (!this.userSockets.has(userId)) {
       this.userSockets.set(userId, new Set());
@@ -80,7 +96,7 @@ export class NotificationGateway implements OnGatewayConnection, OnGatewayDiscon
     if (!user?.sub) return;
 
     const userId = user.sub;
-    client.leave(`${USER_ROOM_PREFIX}${userId}`);
+    void client.leave(`${USER_ROOM_PREFIX}${userId}`);
 
     const sockets = this.userSockets.get(userId);
     if (sockets) {
@@ -99,11 +115,39 @@ export class NotificationGateway implements OnGatewayConnection, OnGatewayDiscon
 
   /**
    * Client explicitly requests the count of currently connected sockets for their user.
+   *
+   * Phase 3 — this now resolves through the Socket.IO adapter so a
+   * client connected to instance B that pings instance A still
+   * observes the correct cross-instance count. The local Map is
+   * kept for observability but is no longer the source of truth.
    */
   @SubscribeMessage('ping')
-  handlePing(@WsCurrentUser() user: JwtPayload): { ok: boolean; connectedCount: number } {
-    const sockets = this.userSockets.get(user.sub);
-    return { ok: true, connectedCount: sockets?.size ?? 0 };
+  async handlePing(@WsCurrentUser() user: JwtPayload): Promise<{
+    ok: boolean;
+    connectedCount: number;
+    localCount: number;
+  }> {
+    const localCount = this.userSockets.get(user.sub)?.size ?? 0;
+    let connectedCount = localCount;
+    try {
+      const remoteSockets = (await this.server
+        .in(`${USER_ROOM_PREFIX}${user.sub}`)
+        .fetchSockets()) as RemoteSocket<Record<string, never>, unknown>[];
+      connectedCount = remoteSockets.length;
+    } catch (error) {
+      // `fetchSockets` requires the client to be in the namespace,
+      // which it always is here. A failure indicates a configuration
+      // problem (e.g. the Redis adapter was disabled mid-flight) —
+      // surface it in the logs and return the local count as a
+      // conservative fallback rather than throwing.
+      this.logger.warn({
+        event: 'notification_ping_fetch_sockets_failed',
+        userId: user.sub,
+        message: error instanceof Error ? error.message : 'unknown',
+      });
+    }
+
+    return { ok: true, connectedCount, localCount };
   }
 
   /**
@@ -124,35 +168,27 @@ export class NotificationGateway implements OnGatewayConnection, OnGatewayDiscon
   }
 
   /**
-   * Push a notification domain event to all connected sockets of the target user.
-   * Called by NotificationWebSocketListener after subscribing to NotificationDomainEventBus.
+   * Push a notification domain event to all connected sockets of
+   * the target user. Called by NotificationWebSocketListener after
+   * subscribing to NotificationDomainEventBus.
+   *
+   * Phase 3 — emit is now addressed to the user-scoped room, so
+   * the Redis-backed Socket.IO adapter handles cross-instance
+   * fan-out. The previous local-Map iteration would silently drop
+   * notifications for clients connected to any replica other than
+   * the originator; that bug is fixed here.
    */
   pushToUser(event: NotificationDomainEvent): void {
-    const socketIds = this.userSockets.get(event.userId);
-
-    if (!socketIds || socketIds.size === 0) {
-      this.logger.debug({
-        event: 'notification_push_no_active_sockets',
-        eventType: event.eventType,
-        userId: event.userId,
-      });
-      return;
-    }
-
+    const room = `${USER_ROOM_PREFIX}${event.userId}`;
     const payload = this.serializeEvent(event);
 
-    for (const socketId of socketIds) {
-      const socket = this.server.sockets.sockets.get(socketId);
-      if (socket) {
-        socket.emit('notification', payload);
-      }
-    }
+    this.server.to(room).emit('notification', payload);
 
     this.logger.debug({
       event: 'notification_pushed_to_user',
       eventType: event.eventType,
       userId: event.userId,
-      recipientCount: socketIds.size,
+      room,
     });
   }
 

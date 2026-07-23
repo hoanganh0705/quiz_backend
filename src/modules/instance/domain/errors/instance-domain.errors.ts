@@ -3,10 +3,14 @@ import {
   INSTANCE_ALREADY_CLOSED_MESSAGE,
   INSTANCE_ALREADY_STARTED_MESSAGE,
   INSTANCE_ALREADY_FINISHED_MESSAGE,
+  INSTANCE_COUNTDOWN_ALREADY_STARTED_MESSAGE,
   INSTANCE_FULL_MESSAGE,
   INSTANCE_NOT_FOUND_MESSAGE,
   INSTANCE_NOT_HOST_MESSAGE,
+  INSTANCE_NOT_IN_COUNTDOWN_MESSAGE,
   INSTANCE_NOT_OPEN_MESSAGE,
+  INSTANCE_OPTIMISTIC_LOCK_MESSAGE,
+  MIN_PLAYERS_NOT_MET_MESSAGE,
   PLAYER_ALREADY_JOINED_MESSAGE,
 } from '../../instance.constants';
 
@@ -168,6 +172,92 @@ export class InstanceAlreadyFinishedError extends InstanceDomainError {
 export class PlayerAlreadyJoinedError extends InstanceDomainError {
   readonly code = 'PLAYER_ALREADY_JOINED';
   constructor(message = PLAYER_ALREADY_JOINED_MESSAGE) {
+    super(message);
+  }
+}
+
+/**
+ * Thrown when a status transition's optimistic-locking predicate
+ * (`WHERE version = $prev`) matches zero rows. 409 Conflict.
+ *
+ * Phase 1 (Foundational Correctness): previously `updateInstanceStatus`
+ * performed an unconditional UPDATE keyed only on `instance_id`, so two
+ * concurrent `startInstance` calls could each pass the in-memory
+ * "status is open" check and both transition the row. The new
+ * invariant is `WHERE instance_id = $1 AND version = $2`; a zero-row
+ * result means another writer won the race and the caller should
+ * re-read the instance and decide whether to retry.
+ *
+ * Surfaced to clients as a 409 with code `INSTANCE_OPTIMISTIC_LOCK`.
+ */
+export class InstanceOptimisticLockError extends InstanceDomainError {
+  readonly code = 'INSTANCE_OPTIMISTIC_LOCK';
+  constructor(message = INSTANCE_OPTIMISTIC_LOCK_MESSAGE) {
+    super(message);
+  }
+}
+
+/**
+ * Phase 2 (Gameplay Lifecycle) — thrown when the host attempts to start
+ * the countdown or the game, but fewer than `MIN_PLAYERS_PER_INSTANCE`
+ * (currently 2 — instance is a multiplayer-only room per the review's
+ * foundational correctness fix) players have joined. 422 Unprocessable
+ * Entity.
+ *
+ * The pre-Phase-2 state machine skipped this check entirely: the host
+ * could start a one-player game and the lobby collapsed on the first
+ * disconnect. The review classifies multiplayer-only enforcement as a
+ * "Required Fix"; the lifecycle of `startInstance` now requires
+ * `currentPlayers >= 2` before any state transition is allowed.
+ */
+export class MinPlayersNotMetError extends InstanceDomainError {
+  readonly code = 'MIN_PLAYERS_NOT_MET';
+  constructor(message = MIN_PLAYERS_NOT_MET_MESSAGE) {
+    super(message);
+  }
+}
+
+/**
+ * Phase 2 (Gameplay Lifecycle) — thrown when a countdown-only operation
+ * (cancel, tick-completion, scheduler-driven `startInstance`) targets an
+ * instance whose state is not `countdown`. 409 Conflict.
+ *
+ * The state-machine invariants are now:
+ *   - `startCountdown` requires `status = 'open'`
+ *   - `cancelCountdown` requires `status = 'countdown'`
+ *   - The scheduler's `countdown → running` transition requires
+ *     `status = 'countdown'`
+ *
+ * Any other state surfaces this error so the client sees a clear
+ * `INSTANCE_NOT_IN_COUNTDOWN` rather than a generic `INSTANCE_OPTIMISTIC_LOCK`.
+ */
+export class InstanceNotInCountdownError extends InstanceDomainError {
+  readonly code = 'INSTANCE_NOT_IN_COUNTDOWN';
+  constructor(message = INSTANCE_NOT_IN_COUNTDOWN_MESSAGE) {
+    super(message);
+  }
+}
+
+/**
+ * Phase 2 (Gameplay Lifecycle) — thrown when `startCountdown` is invoked
+ * on an instance whose status is already `countdown`. 409 Conflict.
+ *
+ * This is the natural idempotency guard. The repository's optimistic
+ * lock would also reject a concurrent second call, but throwing here on
+ * the optimistic lock would conflate two failure modes:
+ *   - The client double-clicked the "start" button (deterministic
+ *     `COUNTDOWN_ALREADY_STARTED` — the controller can return 200 with
+ *     the current countdown anchor)
+ *   - Two replicas raced on the same call (true
+ *     `INSTANCE_OPTIMISTIC_LOCK`)
+ *
+ * The `startCountdown` controller therefore treats this error as a
+ * "fetch the current state" instruction, while `INSTANCE_OPTIMISTIC_LOCK`
+ * remains the genuine race signal.
+ */
+export class InstanceCountdownAlreadyStartedError extends InstanceDomainError {
+  readonly code = 'INSTANCE_COUNTDOWN_ALREADY_STARTED';
+  constructor(message = INSTANCE_COUNTDOWN_ALREADY_STARTED_MESSAGE) {
     super(message);
   }
 }

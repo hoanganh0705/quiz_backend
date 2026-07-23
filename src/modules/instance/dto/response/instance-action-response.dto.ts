@@ -37,3 +37,45 @@ export class CloseInstanceResponseDto {
   })
   message!: string;
 }
+
+/**
+ * Phase 2 (Gameplay Lifecycle) — returned by `POST /instances/:id/countdown`.
+ * Carries the wall-clock anchor the WebSocket `countdown_started` event
+ * also publishes. The `status` is always `'countdown'` — the controller
+ * is the only entry point that uses this DTO.
+ */
+export class StartCountdownResponseDto {
+  @ApiProperty({
+    description: 'Instance identifier',
+    example: '660e8400-e29b-71d4-a716-446655440000',
+  })
+  instanceId!: string;
+
+  @ApiProperty({
+    description: 'Status of the instance after the countdown started',
+    enum: ['countdown'],
+    example: 'countdown',
+  })
+  status!: 'countdown';
+
+  @ApiProperty({
+    description: 'Wall-clock instant the countdown started (ISO 8601 UTC)',
+    example: '2026-07-23T08:30:00.000Z',
+  })
+  countdownStartedAt!: string;
+
+  @ApiProperty({
+    description:
+      'Wall-clock instant the countdown will fire and the instance transitions to running (ISO 8601 UTC)',
+    example: '2026-07-23T08:30:05.000Z',
+  })
+  countdownEndsAt!: string;
+}
+
+export class CancelCountdownResponseDto {
+  @ApiProperty({
+    description: 'Human-readable confirmation message returned by the cancel handler',
+    example: 'Countdown cancelled',
+  })
+  message!: string;
+}

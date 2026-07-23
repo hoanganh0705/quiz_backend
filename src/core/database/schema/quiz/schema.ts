@@ -740,6 +740,19 @@ export const quizInstances = pgTable(
     updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'string' })
       .defaultNow()
       .notNull(),
+    // Phase 1 / Foundational Correctness — optimistic locking.
+    // Every status transition performs `UPDATE … SET version = version + 1
+    // WHERE version = $prev`. A zero-row result signals a lost race, which the
+    // repository surfaces to the application layer as `InstanceOptimisticLockError`.
+    // Not exposed via any response DTO — internal concurrency primitive only.
+    // Phase 2 / Gameplay Lifecycle — set by `startCountdown`, cleared
+    // on completion or cancellation. The countdown scheduler scans
+    // `countdown_started_at` to drive the `countdown → running` transition.
+    countdownStartedAt: timestamp('countdown_started_at', {
+      withTimezone: true,
+      mode: 'string',
+    }),
+    version: integer('version').notNull().default(1),
   },
   (table) => [
     index('idx_quiz_instances_host_status').using(
@@ -752,6 +765,12 @@ export const quizInstances = pgTable(
       table.quizVersionId.asc().nullsLast().op('uuid_ops'),
       table.status.asc().nullsLast().op('enum_ops'),
     ),
+    // Phase 2 — partial index the countdown scheduler relies on. The
+    // scheduler's filter is `status = 'countdown' AND countdown_started_at <= now()`,
+    // so this index keeps that scan single-sided.
+    index('idx_quiz_instances_countdown_due')
+      .using('btree', table.countdownStartedAt.asc().nullsLast().op('timestamptz_ops'))
+      .where(sql`${table.status} = 'countdown'`),
     foreignKey({
       columns: [table.hostUserId],
       foreignColumns: [users.userId],
@@ -766,6 +785,15 @@ export const quizInstances = pgTable(
     check(
       'quiz_instances_started_closed_order',
       sql`(started_at IS NULL) OR (closed_at IS NULL) OR (closed_at >= started_at)`,
+    ),
+    check('quiz_instances_version_nonneg', sql`version >= 0`),
+    // Phase 2 — a non-`countdown` row must have no countdown anchor and
+    // a `countdown` row must have one. The constraint defends against
+    // a regression that forgets to clear `countdownStartedAt` after a
+    // `running`/`closed`/`finished` transition.
+    check(
+      'quiz_instances_countdown_started_at_consistent',
+      sql`(status = 'countdown' AND countdown_started_at IS NOT NULL) OR (status <> 'countdown' AND countdown_started_at IS NULL)`,
     ),
   ],
 );

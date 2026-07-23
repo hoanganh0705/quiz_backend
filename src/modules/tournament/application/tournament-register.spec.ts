@@ -1,6 +1,9 @@
 /// <reference types="jest" />
 import { TournamentService } from '../domain/tournament.service';
-import { TournamentAlreadyRegisteredError, TournamentRegistrationClosedError } from '../domain/errors';
+import {
+  TournamentAlreadyRegisteredError,
+  TournamentRegistrationClosedError,
+} from '../domain/errors';
 
 describe('TournamentService registerForTournament', () => {
   const createService = () => {

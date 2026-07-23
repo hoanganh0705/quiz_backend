@@ -1,5 +1,5 @@
 import { Inject, Injectable, Optional } from '@nestjs/common';
-import { and, count, desc, eq, sql } from 'drizzle-orm';
+import { and, count, desc, eq, isNotNull, lte, sql } from 'drizzle-orm';
 import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 import { DRIZZLE } from '@/core/database/drizzle.constants';
 import type { DrizzleDB } from '@/core/database/database.module';
@@ -8,6 +8,7 @@ import {
   isPostgresUniqueViolation,
 } from '@/common/utils/db-error.util';
 import { QuizVersionNotFoundError } from '@/modules/quiz/domain/errors';
+import { InstanceOptimisticLockError } from '@/modules/instance/domain/errors';
 import {
   TransactionalContext,
   TRANSACTIONAL_CONTEXT,
@@ -157,6 +158,8 @@ export class QuizInstanceRepository implements QuizInstanceRepositoryPort {
         startedAt: quizInstances.startedAt,
         closedAt: quizInstances.closedAt,
         updatedAt: quizInstances.updatedAt,
+        version: quizInstances.version,
+        countdownStartedAt: quizInstances.countdownStartedAt,
       })
       .from(quizInstances)
       .where(eq(quizInstances.instanceId, instanceId))
@@ -213,18 +216,90 @@ export class QuizInstanceRepository implements QuizInstanceRepositoryPort {
     nowIso: string;
     startedAt?: string;
     closedAt?: string;
-  }): Promise<void> {
+    countdownStartedAt?: string | null;
+    expectedVersion: number;
+  }): Promise<{ version: number }> {
+    // Phase 1 (Foundational Correctness) — optimistic locking.
+    // The UPDATE is conditional on `version = $expectedVersion`; the
+    // version is then incremented atomically (`version = version + 1`)
+    // inside the same statement. A zero-row result means another writer
+    // won the race; we translate it into a domain error so the caller
+    // can decide whether to retry or surface a 409.
     const update: Record<string, unknown> = {
       status: params.status,
       updatedAt: params.nowIso,
+      version: sql`${quizInstances.version} + 1`,
     };
     if (params.startedAt) update.startedAt = params.startedAt;
     if (params.closedAt) update.closedAt = params.closedAt;
+    // Phase 2 — explicit `null` clears the countdown anchor; `undefined`
+    // leaves it untouched (used by `start`/`close` which don't touch it).
+    if (params.countdownStartedAt !== undefined) {
+      update.countdownStartedAt = params.countdownStartedAt;
+    }
 
-    await this.db
+    const [row] = await this.db
       .update(quizInstances)
       .set(update)
-      .where(eq(quizInstances.instanceId, params.instanceId));
+      .where(
+        and(
+          eq(quizInstances.instanceId, params.instanceId),
+          eq(quizInstances.version, params.expectedVersion),
+        ),
+      )
+      .returning({ version: quizInstances.version });
+
+    if (!row) {
+      // Either the row was deleted, or another writer transitioned it
+      // first. Either way the caller's observed version is stale.
+      throw new InstanceOptimisticLockError();
+    }
+
+    return { version: row.version };
+  }
+
+  /**
+   * Phase 2 (Gameplay Lifecycle) — finds all countdown instances whose
+   * deadline has elapsed. The scheduler calls this on each tick and
+   * transitions the returned rows into `running`.
+   *
+   * The query hits the partial index `idx_quiz_instances_countdown_due`
+   * defined alongside the column. Each row carries the optimistic-lock
+   * `version`, which the scheduler passes back into
+   * `updateInstanceStatus` so concurrent host-driven transitions still
+   * surface as a clean 409 instead of a silent overwrite.
+   */
+  async findDueCountdowns(params: { nowIso: string; limit: number }): Promise<
+    Array<{
+      instanceId: string;
+      version: number;
+      countdownStartedAt: string;
+    }>
+  > {
+    const rows = await this.db
+      .select({
+        instanceId: quizInstances.instanceId,
+        version: quizInstances.version,
+        countdownStartedAt: quizInstances.countdownStartedAt,
+      })
+      .from(quizInstances)
+      .where(
+        and(
+          eq(quizInstances.status, 'countdown'),
+          lte(quizInstances.countdownStartedAt, params.nowIso),
+          isNotNull(quizInstances.countdownStartedAt),
+        ),
+      )
+      .orderBy(quizInstances.countdownStartedAt)
+      .limit(params.limit);
+
+    return rows
+      .filter((r): r is typeof r & { countdownStartedAt: string } => r.countdownStartedAt !== null)
+      .map((r) => ({
+        instanceId: r.instanceId,
+        version: r.version,
+        countdownStartedAt: r.countdownStartedAt,
+      }));
   }
 
   async getPlayer(
@@ -316,6 +391,24 @@ export class QuizInstanceRepository implements QuizInstanceRepositoryPort {
       player?: import('@/modules/instance/domain/ports').QuizInstancePlayerRow;
     }> => {
       const db = tx as DrizzleDB;
+
+      // Phase 1 (Foundational Correctness) — row-level locking.
+      // Take an exclusive lock on the instance row for the duration of
+      // this transaction. Two concurrent `joinInstance` calls against
+      // the same instance now serialize: the second one waits for the
+      // first to commit, then re-reads the (now-incremented) player
+      // count and rejects at capacity.
+      //
+      // Without this lock, the count-then-insert pattern below could
+      // see `count = maxPlayers - 1` and let the second writer through,
+      // producing `maxPlayers + 1` rows on capacity exhaustion.
+      //
+      // `FOR UPDATE` matches Postgres' default `READ COMMITTED`
+      // isolation: it acquires a row-level write lock that other
+      // transactions block on until commit/rollback.
+      await db.execute(
+        sql`SELECT 1 FROM ${quizInstances} WHERE ${quizInstances.instanceId} = ${params.instanceId} FOR UPDATE`,
+      );
 
       const [existing] = await db
         .select({ instancePlayerId: quizInstancePlayers.instancePlayerId })
@@ -572,7 +665,7 @@ export class QuizInstanceRepository implements QuizInstanceRepositoryPort {
       conditions.push(
         eq(
           quizInstances.status,
-          params.filters.status as 'open' | 'running' | 'closed' | 'finished',
+          params.filters.status as 'open' | 'countdown' | 'running' | 'closed' | 'finished',
         ),
       );
     }

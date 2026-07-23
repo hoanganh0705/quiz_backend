@@ -1,10 +1,14 @@
 import { Injectable } from '@nestjs/common';
 import { ApiResponse } from '@/common/responses/api-response';
 import type { ApiResponseEnvelope } from '@/common/responses/api-response';
-import type { CloseInstanceResponseDto } from '../../dto/response/instance-action-response.dto';
-import type { CreateInstanceResponseDto } from '../../dto/response/instance-action-response.dto';
-import type { JoinInstanceResponseDto } from '../../dto/response/instance-action-response.dto';
-import type { StartInstanceResponseDto } from '../../dto/response/instance-action-response.dto';
+import type {
+  CancelCountdownResponseDto,
+  CloseInstanceResponseDto,
+  CreateInstanceResponseDto,
+  JoinInstanceResponseDto,
+  StartCountdownResponseDto,
+  StartInstanceResponseDto,
+} from '../../dto/response/instance-action-response.dto';
 import type { InstanceDetailResponseDto } from '../../dto/response/instance-detail-response.dto';
 import type { InstanceLeaderboardResponseDto } from '../../dto/response/instance-leaderboard-response.dto';
 import type { InstanceListResponseDto } from '../../dto/response/instance-list-response.dto';
@@ -60,6 +64,9 @@ export class InstancePresenter {
   readonly joinInstance = InstancePresenter.ok<JoinInstanceResponseDto>;
   readonly startInstance = InstancePresenter.ok<StartInstanceResponseDto>;
   readonly closeInstance = InstancePresenter.ok<CloseInstanceResponseDto>;
+  // Phase 2 — countdown lifecycle endpoints.
+  readonly startCountdown = InstancePresenter.ok<StartCountdownResponseDto>;
+  readonly cancelCountdown = InstancePresenter.ok<CancelCountdownResponseDto>;
 
   // Detail / players
   readonly getInstanceById = InstancePresenter.ok<InstanceDetailResponseDto>;

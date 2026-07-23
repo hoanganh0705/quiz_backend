@@ -978,6 +978,65 @@ export const ProblemCodeMapping: Readonly<Record<string, ProblemCodeInfo>> = {
     title: 'Conflict',
     typeUri: 'https://api.quiz.local/problems/player-already-joined',
   },
+  /**
+   * Thrown when a status transition's optimistic-locking predicate
+   * (`WHERE version = $expectedVersion`) matches zero rows. 409 Conflict.
+   *
+   * Phase 1 (Foundational Correctness): previously `updateInstanceStatus`
+   * performed an unconditional UPDATE keyed only on `instance_id`, so two
+   * concurrent `startInstance` calls could each pass the in-memory
+   * "status is open" check and both transition the row. The new
+   * invariant is `WHERE instance_id = $1 AND version = $2`; a zero-row
+   * result translates to `INSTANCE_OPTIMISTIC_LOCK`, signalling the caller
+   * to re-read and retry the operation.
+   *
+   * Shares its HTTP status (409) with `PLAYER_ALREADY_JOINED` but uses
+   * a distinct `typeUri` and `code` so clients dispatch on
+   * `extensions.code`.
+   */
+  INSTANCE_OPTIMISTIC_LOCK: {
+    status: HttpStatus.CONFLICT,
+    title: 'Conflict',
+    typeUri: 'https://api.quiz.local/problems/instance-optimistic-lock',
+  },
+  /**
+   * Phase 2 (Gameplay Lifecycle) — thrown when the host tries to start
+   * the countdown or the game on an instance with fewer than 2 joined
+   * players. 422 Unprocessable Entity.
+   *
+   * The instance is a multiplayer-only room per the review's foundational
+   * correctness fix; a one-player game is not a valid game. Surfacing
+   * `MIN_PLAYERS_NOT_MET` as a 422 (rather than 400) signals "the request
+   * is well-formed but the current server-side state rejects it" — the
+   * same shape the review prescribes for capacity/full cases.
+   */
+  MIN_PLAYERS_NOT_MET: {
+    status: HttpStatus.UNPROCESSABLE_ENTITY,
+    title: 'UnprocessableEntity',
+    typeUri: 'https://api.quiz.local/problems/min-players-not-met',
+  },
+  /**
+   * Phase 2 (Gameplay Lifecycle) — thrown when a countdown-only operation
+   * targets an instance whose status is not `countdown`. 409 Conflict.
+   */
+  INSTANCE_NOT_IN_COUNTDOWN: {
+    status: HttpStatus.CONFLICT,
+    title: 'Conflict',
+    typeUri: 'https://api.quiz.local/problems/instance-not-in-countdown',
+  },
+  /**
+   * Phase 2 (Gameplay Lifecycle) — thrown when the host calls
+   * `startCountdown` twice on the same instance. 409 Conflict.
+   *
+   * The natural idempotency guard. Controllers detect this and return
+   * 200 with the existing `countdownStartedAt`, so the client sees a
+   * no-op retry as success rather than as an error.
+   */
+  INSTANCE_COUNTDOWN_ALREADY_STARTED: {
+    status: HttpStatus.CONFLICT,
+    title: 'Conflict',
+    typeUri: 'https://api.quiz.local/problems/instance-countdown-already-started',
+  },
 
   // ===========================================================================
   // SOCIAL module — src/modules/social/domain/errors/social.errors.ts
