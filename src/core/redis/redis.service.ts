@@ -142,6 +142,85 @@ export class RedisService implements CacheProvider, PubSubProvider, OnModuleDest
     return value;
   }
 
+  /**
+   * Gets a cached value with stampede protection.
+   *
+   * When the cache is cold (expired or missing), only one caller
+   * executes the fetcher while others wait. This prevents the
+   * "thundering herd" problem where many concurrent requests all
+   * hit the database on a cache miss.
+   */
+  async getOrSetWithStampedeProtection<T>(
+    key: string,
+    ttlMs: number,
+    fetcher: () => Promise<T>,
+    lockTtlMs = 5000,
+    retryDelayMs = 50,
+    maxRetries = 10,
+  ): Promise<T> {
+    // First, try to get from cache
+    const cached = await this.get(key);
+    if (cached !== null) {
+      try {
+        return JSON.parse(cached) as T;
+      } catch {
+        this.logger.warn({
+          event: 'redis_cache_parse_failed',
+          key,
+        });
+      }
+    }
+
+    // Cache miss - try to acquire the computing lock
+    const lockKey = `${key}:computing`;
+    const lockAcquired = await this.client.set(lockKey, '1', 'PX', lockTtlMs, 'NX');
+
+    if (lockAcquired) {
+      // We got the lock - we're responsible for computing and caching
+      try {
+        const value = await fetcher();
+        await this.set(key, JSON.stringify(value), ttlMs);
+        return value;
+      } finally {
+        // Release the lock
+        await this.client.del(lockKey);
+      }
+    }
+
+    // Another process is computing - wait and retry cache lookup
+    for (let i = 0; i < maxRetries; i++) {
+      await this.sleep(retryDelayMs);
+
+      const retryCached = await this.get(key);
+      if (retryCached !== null) {
+        try {
+          return JSON.parse(retryCached) as T;
+        } catch {
+          this.logger.warn({
+            event: 'redis_cache_parse_failed_retry',
+            key,
+            attempt: i + 1,
+          });
+        }
+      }
+    }
+
+    // Timeout waiting for other process - compute ourselves
+    this.logger.warn({
+      event: 'redis_cache_stampede_timeout',
+      key,
+      retries: maxRetries,
+    });
+
+    const value = await fetcher();
+    await this.set(key, JSON.stringify(value), ttlMs);
+    return value;
+  }
+
+  private sleep(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
   async rpushJson<T>(key: string, item: T): Promise<number> {
     return this.client.rpush(key, JSON.stringify(item));
   }

@@ -38,6 +38,36 @@ export interface CacheProvider {
    */
   getOrSet<T>(key: string, ttlMs: number, fetcher: () => Promise<T>): Promise<T>;
 
+  /**
+   * Gets a cached value with stampede protection.
+   *
+   * When the cache is cold (expired or missing), only one caller
+   * executes the fetcher while others wait. This prevents the
+   * "thundering herd" problem where many concurrent requests all
+   * hit the database on a cache miss.
+   *
+   * How it works:
+   * 1. Try to get the cached value
+   * 2. If miss, try to acquire a short-lived "computing" lock (using SET NX)
+   * 3. If lock acquired: execute fetcher, cache result, release lock
+   * 4. If lock not acquired: wait briefly and retry the cache lookup
+   *
+   * @param key         Redis key for the cached value
+   * @param ttlMs        TTL in milliseconds for the cached value
+   * @param fetcher      Async function to compute the value if not cached
+   * @param lockTtlMs    TTL for the computing lock (default: 5 seconds)
+   * @param retryDelayMs Delay between retries while waiting for the lock (default: 50ms)
+   * @param maxRetries   Maximum retries while waiting (default: 10)
+   */
+  getOrSetWithStampedeProtection<T>(
+    key: string,
+    ttlMs: number,
+    fetcher: () => Promise<T>,
+    lockTtlMs?: number,
+    retryDelayMs?: number,
+    maxRetries?: number,
+  ): Promise<T>;
+
   rpushJson<T>(key: string, item: T): Promise<number>;
 
   lpopJson<T>(key: string): Promise<T | null>;
