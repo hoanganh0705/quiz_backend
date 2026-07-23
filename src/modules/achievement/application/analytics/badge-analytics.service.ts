@@ -158,8 +158,13 @@ export class BadgeAnalyticsService {
       totalAwards += count;
     }
 
-    const uniqueEarners = 0;
+    // Calculate unique earners by querying distinct user IDs who have earned any badge
+    const uniqueEarnersList = await this.achievementRepository.getDistinctBadgeEarners();
+    const uniqueEarners = uniqueEarnersList.length;
     const averageBadgesPerUser = uniqueEarners > 0 ? totalAwards / uniqueEarners : 0;
+
+    // Calculate time-windowed awards
+    const awardTimeline = await this.calculatePlatformAwardTimeline(badges);
 
     return {
       totalBadges: badges.length,
@@ -168,10 +173,42 @@ export class BadgeAnalyticsService {
       totalAwards,
       uniqueEarners,
       averageBadgesPerUser: Math.round(averageBadgesPerUser * 100) / 100,
-      awardsLast24Hours: 0,
-      awardsLast7Days: 0,
-      awardsLast30Days: 0,
+      awardsLast24Hours: awardTimeline.last24Hours,
+      awardsLast7Days: awardTimeline.last7Days,
+      awardsLast30Days: awardTimeline.last30Days,
     };
+  }
+
+  /**
+   * Calculate platform-wide award counts for different time windows.
+   */
+  private async calculatePlatformAwardTimeline(
+    badges: { badgeId: string }[],
+  ): Promise<{ last24Hours: number; last7Days: number; last30Days: number }> {
+    if (badges.length === 0) {
+      return { last24Hours: 0, last7Days: 0, last30Days: 0 };
+    }
+
+    const badgeIds = badges.map((b) => b.badgeId);
+
+    // Get earners timeline for all badges and aggregate
+    const timelinePromises = badgeIds.map((badgeId) =>
+      this.achievementRepository.getBadgeEarnersCountTimeline(badgeId),
+    );
+
+    const timelines = await Promise.all(timelinePromises);
+
+    let last24Hours = 0;
+    let last7Days = 0;
+    let last30Days = 0;
+
+    for (const timeline of timelines) {
+      last24Hours += timeline.last24Hours;
+      last7Days += timeline.last7Days;
+      last30Days += timeline.last30Days;
+    }
+
+    return { last24Hours, last7Days, last30Days };
   }
 
   async getBadgeAnalytics(badgeId: string): Promise<BadgeAnalytics | null> {
@@ -301,7 +338,35 @@ export class BadgeAnalyticsService {
     };
   }
 
-  getTrendAnalysis(days: number = 30): Promise<TrendAnalysis[]> {
+  async getTrendAnalysis(days: number = 30): Promise<TrendAnalysis[]> {
+    const badges = await this.achievementRepository.getAllActiveBadges();
+    const badgeIds = badges.map((b) => b.badgeId);
+
+    if (badgeIds.length === 0) {
+      const now = new Date();
+      const trends: TrendAnalysis[] = [];
+      for (let i = days - 1; i >= 0; i--) {
+        const date = new Date(now);
+        date.setDate(date.getDate() - i);
+        trends.push({
+          date: date.toISOString().split('T')[0],
+          newAwards: 0,
+          cumulativeAwards: 0,
+          activeEarners: 0,
+        });
+      }
+      return trends;
+    }
+
+    const trendData = await this.achievementRepository.getAwardTrendData(badgeIds, days);
+
+    const awardCountsByDate = new Map<string, number>();
+    for (const row of trendData) {
+      const existing = awardCountsByDate.get(row.date) ?? 0;
+      awardCountsByDate.set(row.date, existing + row.count);
+    }
+
+    let cumulative = 0;
     const trends: TrendAnalysis[] = [];
     const now = new Date();
 
@@ -310,15 +375,18 @@ export class BadgeAnalyticsService {
       date.setDate(date.getDate() - i);
       const dateStr = date.toISOString().split('T')[0];
 
+      const newAwards = awardCountsByDate.get(dateStr) ?? 0;
+      cumulative += newAwards;
+
       trends.push({
         date: dateStr,
-        newAwards: 0,
-        cumulativeAwards: 0,
+        newAwards,
+        cumulativeAwards: cumulative,
         activeEarners: 0,
       });
     }
 
-    return Promise.resolve(trends);
+    return trends;
   }
 
   async getPopularityRanking(limit: number = 50): Promise<BadgePopularityRanking[]> {
@@ -367,7 +435,7 @@ export class BadgeAnalyticsService {
     };
   }
 
-  private getTopEarners(
+  async getTopEarners(
     badgeId: string,
     limit: number,
   ): Promise<{ userId: string; earnedAt: Date }[]> {
@@ -377,7 +445,7 @@ export class BadgeAnalyticsService {
       limit,
     });
 
-    return Promise.resolve([]);
+    return this.achievementRepository.getBadgeTopEarners(badgeId, limit);
   }
 
   async calculateEarningVelocity(badgeId: string, days: number = 7): Promise<number> {

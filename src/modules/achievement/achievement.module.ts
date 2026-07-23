@@ -16,6 +16,7 @@ import { AchievementRepository } from './infrastructure/repositories/achievement
 import { ACHIEVEMENT_REPOSITORY_PORT } from './infrastructure/repositories/achievement.repository';
 import { ScheduledEvaluationService } from './infrastructure/scheduled/scheduled-evaluation.service';
 import { AchievementOutboxProcessorService } from './infrastructure/outbox/achievement-outbox-processor.service';
+import { AchievementCacheService } from './infrastructure/cache/achievement-cache.service';
 
 import { AchievementAttemptEventListenerAdapter } from './infrastructure/adapters/attempt-listener.adapter';
 import { AchievementTournamentEventListenerAdapter } from './infrastructure/adapters/tournament-listener.adapter';
@@ -74,6 +75,8 @@ import { BadgeAnalyticsService } from './application';
       useExisting: AchievementRepository,
     },
 
+    AchievementCacheService,
+
     ScheduledEvaluationService,
 
     AchievementAttemptEventListenerAdapter,
@@ -101,6 +104,8 @@ import { BadgeAnalyticsService } from './application';
     BadgeRevocationService,
 
     ACHIEVEMENT_REPOSITORY_PORT,
+
+    AchievementCacheService,
 
     ScheduledEvaluationService,
     ProgressTrackingService,
