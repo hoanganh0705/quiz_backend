@@ -1,4 +1,5 @@
 import { Inject, Injectable, Optional } from '@nestjs/common';
+import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { DRIZZLE } from '@/core/database/drizzle.constants';
 import type { DrizzleDB } from '@/core/database/database.module';
 import { notifications } from '@/core/database/schema';
@@ -11,6 +12,18 @@ import {
   TransactionalContext,
   TRANSACTIONAL_CONTEXT,
 } from '@/common/interceptors/transactional-context';
+import { CACHE_PROVIDER, type CacheProvider } from '@/common/ports/cache.provider';
+
+const ANALYTICS_CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
+const ANALYTICS_CACHE_KEY = 'notif:analytics:platform';
+
+export function generateNotificationIdempotencyKey(
+  type: string,
+  userId: string,
+  eventId: string,
+): string {
+  return `notif:${type}:${userId}:${eventId}`;
+}
 
 @Injectable()
 export class NotificationRepository implements NotificationRepositoryPort {
@@ -19,6 +32,12 @@ export class NotificationRepository implements NotificationRepositoryPort {
     @Optional()
     @Inject(TRANSACTIONAL_CONTEXT)
     private readonly transactionalContext?: TransactionalContext,
+    @Optional()
+    @Inject(CACHE_PROVIDER)
+    private readonly cache?: CacheProvider,
+    @Optional()
+    @InjectPinoLogger(NotificationRepository.name)
+    private readonly logger?: PinoLogger,
   ) {}
 
   private getDb(): DrizzleDB {
@@ -41,6 +60,28 @@ export class NotificationRepository implements NotificationRepositoryPort {
       .returning();
 
     return this.mapToNotification(notification);
+  }
+
+  /**
+   * Check if a notification with the given idempotency key already exists.
+   * Returns the existing notification if found, null otherwise.
+   */
+  async findByIdempotencyKey(
+    idempotencyKey: string,
+    userId: string,
+  ): Promise<DomainNotification | null> {
+    const [notification] = await this.db
+      .select()
+      .from(notifications)
+      .where(
+        and(
+          sql`metadata->>'idempotencyKey' = ${idempotencyKey}`,
+          eq(notifications.userId, userId),
+          isNull(notifications.deletedAt),
+        ),
+      );
+
+    return notification ? this.mapToNotification(notification) : null;
   }
 
   async findById(id: string): Promise<DomainNotification | null> {
@@ -79,6 +120,14 @@ export class NotificationRepository implements NotificationRepositoryPort {
 
     if (params.type) {
       conditions.push(eq(notifications.type, params.type));
+    }
+
+    if (params.fromDate) {
+      conditions.push(sql`${notifications.createdAt} >= ${params.fromDate}`);
+    }
+
+    if (params.toDate) {
+      conditions.push(sql`${notifications.createdAt} <= ${params.toDate}`);
     }
 
     const query = this.db
@@ -133,10 +182,11 @@ export class NotificationRepository implements NotificationRepositoryPort {
       );
   }
 
-  async markAllAsRead(userId: string): Promise<void> {
-    await this.getDb()
+  async markAllAsRead(userId: string): Promise<number> {
+    const now = new Date().toISOString();
+    const result = await this.getDb()
       .update(notifications)
-      .set({ isRead: true, readAt: new Date().toISOString() })
+      .set({ isRead: true, readAt: now })
       .where(
         and(
           eq(notifications.userId, userId),
@@ -144,6 +194,8 @@ export class NotificationRepository implements NotificationRepositoryPort {
           isNull(notifications.deletedAt),
         ),
       );
+
+    return Number(result.rowCount ?? 0);
   }
 
   async deleteReadNotifications(userId: string): Promise<number> {
@@ -163,11 +215,7 @@ export class NotificationRepository implements NotificationRepositoryPort {
   }
 
   async delete(notificationId: string, userId: string): Promise<void> {
-    await this.getDb()
-      .delete(notifications)
-      .where(
-        and(eq(notifications.notificationId, notificationId), eq(notifications.userId, userId)),
-      );
+    await this.softDelete(notificationId, userId);
   }
 
   async softDelete(notificationId: string, userId: string): Promise<void> {
@@ -193,6 +241,46 @@ export class NotificationRepository implements NotificationRepositoryPort {
   }
 
   async getAnalytics(): Promise<{
+    total: number;
+    unread: number;
+    byType: Record<string, number>;
+    byChannel: Record<string, number>;
+    last24h: number;
+    last7d: number;
+  }> {
+    if (this.cache) {
+      const cached = await this.cache.get(ANALYTICS_CACHE_KEY);
+      if (cached) {
+        try {
+          this.logger?.debug({ event: 'analytics_cache_hit' });
+          return JSON.parse(cached) as ReturnType<typeof this.getAnalyticsUncached>;
+        } catch {
+          this.logger?.warn({ event: 'analytics_cache_parse_failed' });
+        }
+      }
+    }
+
+    const result = await this.getAnalyticsUncached();
+
+    if (this.cache) {
+      await this.cache.set(ANALYTICS_CACHE_KEY, JSON.stringify(result), ANALYTICS_CACHE_TTL_MS);
+    }
+
+    return result;
+  }
+
+  /**
+   * Invalidate the analytics cache.
+   * Call this after significant notification activity.
+   */
+  async invalidateAnalyticsCache(): Promise<void> {
+    if (this.cache) {
+      await this.cache.del(ANALYTICS_CACHE_KEY);
+      this.logger?.info({ event: 'analytics_cache_invalidated' });
+    }
+  }
+
+  private async getAnalyticsUncached(): Promise<{
     total: number;
     unread: number;
     byType: Record<string, number>;

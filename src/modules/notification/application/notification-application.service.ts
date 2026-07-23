@@ -87,6 +87,8 @@ export class NotificationApplicationService {
     unreadOnly?: boolean,
     includeArchived?: boolean,
     type?: string,
+    fromDate?: string,
+    toDate?: string,
   ): Promise<PaginatedResult<NotificationResponseDto>> {
     const params: NotificationListParams = {
       limit,
@@ -94,6 +96,8 @@ export class NotificationApplicationService {
       unreadOnly,
       includeArchived,
       type: type as NotificationListParams['type'],
+      fromDate,
+      toDate,
     };
 
     const notifications = await this.notificationService.getNotifications(user.sub, params);

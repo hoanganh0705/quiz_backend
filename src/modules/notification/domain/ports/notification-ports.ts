@@ -24,7 +24,7 @@ export interface NotificationRepositoryPort {
   countUnread(userId: string): Promise<number>;
   markAsRead(notificationId: string, userId: string): Promise<void>;
   markAsUnread(notificationId: string, userId: string): Promise<void>;
-  markAllAsRead(userId: string): Promise<void>;
+  markAllAsRead(userId: string): Promise<number>;
   deleteReadNotifications(userId: string): Promise<number>;
   delete(notificationId: string, userId: string): Promise<void>;
   softDelete(notificationId: string, userId: string): Promise<void>;
@@ -46,6 +46,13 @@ export interface NotificationRepositoryPort {
     last24h: number;
     last7d: number;
   }>;
+
+  /**
+   * Check if a notification with the given idempotency key already exists.
+   * Returns the existing notification if found, null otherwise.
+   * Used to prevent duplicate notifications in fan-out scenarios.
+   */
+  findByIdempotencyKey(idempotencyKey: string, userId: string): Promise<Notification | null>;
 }
 
 export interface NotificationSenderPort {
