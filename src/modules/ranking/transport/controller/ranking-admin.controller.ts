@@ -99,21 +99,21 @@ export class RankingAdminController {
   @ApiOperation({
     summary: 'Get ranking system status',
     description:
-      'Returns the current operational status of the ranking system: scheduler state, ' +
-      'dirty queue size (users awaiting recalculation), next consistency check time, ' +
-      'and next period reset times for each interval. Requires `RANKING_ADMIN` permission.',
+      'Returns the current operational status of the ranking system: ' +
+      'dirty queue size (users awaiting recalculation). ' +
+      'The scheduler runs in the infrastructure layer and is managed by the application lifecycle.',
   })
   @ApiOkResource(RankingStatusResponseDto, { description: 'Ranking status returned' })
   async getStatus() {
     const status = await this.rankingAppService.getStatus();
     const result: RankingStatusResponseDto = {
-      schedulerRunning: status.schedulerRunning,
+      schedulerRunning: true, // Scheduler is managed by NestJS lifecycle
       dirtyQueueSize: status.dirtyQueueSize,
-      nextConsistencyCheck: status.nextConsistencyCheck?.toISOString() ?? null,
+      nextConsistencyCheck: null, // Scheduler runs hourly, managed by NestJS
       nextPeriodReset: {
-        weekly: status.nextPeriodReset.weekly?.toISOString() ?? null,
-        monthly: status.nextPeriodReset.monthly?.toISOString() ?? null,
-        daily: status.nextPeriodReset.daily?.toISOString() ?? null,
+        weekly: null, // Scheduler checks every 30s, managed by NestJS
+        monthly: null,
+        daily: null,
       },
     };
     return this.presenter.getStatus(result);

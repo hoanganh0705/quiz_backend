@@ -17,6 +17,8 @@
 
 import { Inject, Injectable } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
+import { DRIZZLE } from '@/core/database/drizzle.constants';
+import type { DrizzleDB } from '@/core/database/database.module';
 import {
   RANKING_REPOSITORY_PORT,
   type RankingRepositoryPort,
@@ -46,6 +48,7 @@ export class RankCalculationService {
     private readonly rankingRepository: RankingRepositoryPort,
     @Inject(RANKING_DOMAIN_EVENT_BUS)
     private readonly eventBus: RankingDomainEventBusPort,
+    @Inject(DRIZZLE) private readonly db: DrizzleDB,
     @InjectPinoLogger(RankCalculationService.name)
     private readonly logger: PinoLogger,
   ) {}
@@ -178,6 +181,11 @@ export class RankCalculationService {
    * `workItemId`; the previous one is gone. The `is_dirty` latch on
    * `user_ranking` is cleared only when the user has no more pending
    * work items.
+   *
+   * Transaction safety: Work item deletion and dirty-flag clearing are
+   * wrapped in a single database transaction. If the transaction fails,
+   * both operations roll back together, preventing inconsistent state
+   * where work items are deleted but latches remain set (or vice versa).
    */
   async processDirtyRankings(limit = RANKING_CONSTANTS.INCREMENTAL_BATCH_SIZE): Promise<number> {
     const workItems = await this.rankingRepository.getPendingRecalculationWorkItems(limit);
@@ -194,17 +202,9 @@ export class RankCalculationService {
     }
 
     for (const [period, userIds] of byPeriod) {
-      // Deduplicate within the batch (defense in depth; the unique
-      // index already prevents duplicate enqueues).
       const deduped = Array.from(new Set(userIds));
       await this.recalculateRanksForUsers(deduped, period as RankingPeriod);
     }
-
-    // Mark all consumed work items as complete. This is the only
-    // deletion path; the next batch sees only new work items.
-    await this.rankingRepository.completeRecalculationWorkItems(
-      workItems.map((wi) => wi.workItemId),
-    );
 
     // For every user that had at least one work item, check whether
     // they still have pending work. If not, clear the per-user latch.
@@ -212,7 +212,17 @@ export class RankCalculationService {
     // work item in this batch, count their remaining work items; users
     // with zero remaining get their latch cleared in one statement.
     const usersWithWork = Array.from(new Set(workItems.map((wi) => wi.userId)));
-    await this.rankingRepository.clearDirtyFlagsForUsersWithNoPendingWork(usersWithWork);
+
+    // Atomically delete work items and clear dirty flags within a transaction.
+    // This ensures that if the deletion succeeds but latch clearing fails,
+    // the transaction rolls back and the next run will retry both operations.
+    await this.db.transaction(async (tx) => {
+      await this.rankingRepository.completeRecalculationWorkItemsInTx(
+        tx,
+        workItems.map((wi) => wi.workItemId),
+      );
+      await this.rankingRepository.clearDirtyFlagsForUsersWithNoPendingWorkInTx(tx, usersWithWork);
+    });
 
     this.logger.info({
       event: 'dirty_rankings_processed',

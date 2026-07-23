@@ -173,6 +173,12 @@ export interface RankingRepositoryPort {
    */
   completeRecalculationWorkItems(workItemIds: string[]): Promise<void>;
 
+  /**
+   * Like {@link completeRecalculationWorkItems} but accepts an explicit
+   * transaction client for atomic batch completion.
+   */
+  completeRecalculationWorkItemsInTx(tx: unknown, workItemIds: string[]): Promise<void>;
+
   getDirtyUsers(limit: number): Promise<UserRankingRow[]>;
 
   clearDirtyFlags(userIds: string[]): Promise<void>;
@@ -186,6 +192,12 @@ export interface RankingRepositoryPort {
    * drained for each user.
    */
   clearDirtyFlagsForUsersWithNoPendingWork(userIds: string[]): Promise<void>;
+
+  /**
+   * Like {@link clearDirtyFlagsForUsersWithNoPendingWork} but accepts
+   * an explicit transaction client for atomic latch clearing.
+   */
+  clearDirtyFlagsForUsersWithNoPendingWorkInTx(tx: unknown, userIds: string[]): Promise<void>;
 
   // Rank Operations
   updateRank(params: {

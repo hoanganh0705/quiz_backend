@@ -12,13 +12,21 @@
  * `Map`, which meant a 3-instance deployment could return three
  * different leaderboards to the same user.
  *
- * The cache is read-through (`getOrSet`) with a short TTL. When a
- * user's XP changes, the cached leaderboard keys naturally expire
- * within `LEADERBOARD_CACHE_TTL` seconds; we deliberately do not
- * delete the key from inside the local process because that would
- * only affect the instance that received the XP event, not its
- * peers. With a 30-second TTL, the worst-case staleness across the
- * cluster is bounded by that window.
+ * The cache is read-through (`getOrSetWithStampedeProtection`) with
+ * a short TTL. When a user's XP changes, the cached leaderboard
+ * keys naturally expire within `LEADERBOARD_CACHE_TTL` seconds;
+ * we deliberately do not delete the key from inside the local
+ * process because that would only affect the instance that received
+ * the XP event, not its peers. With a 30-second TTL, the worst-case
+ * staleness across the cluster is bounded by that window.
+ *
+ * Cache Stampede Protection
+ * --------------------------
+ * The leaderboard and user position queries use
+ * `getOrSetWithStampedeProtection` to prevent thundering herd
+ * problems. When a cache expires, only one process computes the
+ * new value while others wait. This is critical for expensive
+ * leaderboard queries that aggregate across many users.
  *
  * If an immediate cross-instance invalidation is needed in the
  * future, wire up a Redis pub/sub channel: publish a `leaderboard:
@@ -105,7 +113,8 @@ export class LeaderboardService implements OnModuleInit, OnModuleDestroy {
     const cacheKey = `lb:${period}:${limit}:${offset}`;
     const ttlMs = RANKING_CONSTANTS.LEADERBOARD_CACHE_TTL * 1000;
 
-    const cachedPayload = await this.cache.getOrSet<{
+    // Use stampede protection for expensive leaderboard queries
+    const cachedPayload = await this.cache.getOrSetWithStampedeProtection<{
       entries: LeaderboardEntryDto[];
       totalParticipants: number;
     }>(cacheKey, ttlMs, async () => {
@@ -148,7 +157,7 @@ export class LeaderboardService implements OnModuleInit, OnModuleDestroy {
   /**
    * Get user position for a specific period.
    */
-  async getUserPosition(
+  getUserPosition(
     userId: string,
     periodEnum: RankingPeriodEnum | LeaderboardPeriodEnum,
   ): Promise<UserRankPositionDto | undefined> {
@@ -157,8 +166,9 @@ export class LeaderboardService implements OnModuleInit, OnModuleDestroy {
     const cacheKey = `pos:${userId}:${period}`;
     const ttlMs = RANKING_CONSTANTS.USER_RANK_CACHE_TTL * 1000;
 
+    // Use stampede protection for user position queries
     return this.cache
-      .getOrSet<UserRankPositionDto | null>(cacheKey, ttlMs, async () => {
+      .getOrSetWithStampedeProtection<UserRankPositionDto | null>(cacheKey, ttlMs, async () => {
         this.logger.debug({ event: 'get_user_position', userId, period });
         const ranking = await this.rankingRepository.getUserRanking(userId);
         if (!ranking) return null;
@@ -171,10 +181,18 @@ export class LeaderboardService implements OnModuleInit, OnModuleDestroy {
         const rank = await this.rankingRepository.getUserRank(userId, period);
         if (rank === null) return null;
 
+        // Fetch rank history for trend calculation
+        const snapshots = await this.rankingRepository.getLatestRankSnapshots({
+          userId,
+          period: RankingPeriod.ALL_TIME,
+        });
+
         const totalParticipants = await this.getCachedTotalParticipants(period);
         const percentile = calculatePercentile(rank, totalParticipants);
         const nextRankXp = await this.rankingRepository.getNextRankXp(period, rank);
         const xpToNextRank = nextRankXp !== null ? nextRankXp - xp : null;
+        const trend = this.determineTrendWithSnapshots(rank, snapshots);
+        const trendAmount = this.calculateTrendAmount(rank, snapshots);
 
         return {
           rank,
@@ -184,8 +202,8 @@ export class LeaderboardService implements OnModuleInit, OnModuleDestroy {
           xp,
           xpToNextRank,
           nextRankXp,
-          trend: this.determineTrend(ranking),
-          trendAmount: null,
+          trend,
+          trendAmount,
         };
       })
       .then((value) => value ?? undefined);
@@ -269,21 +287,57 @@ export class LeaderboardService implements OnModuleInit, OnModuleDestroy {
     };
   }
 
-  private determineTrend(ranking: {
-    dailyRank: number | null;
-    weeklyRank: number | null;
-    monthlyRank: number | null;
-    allTimeRank: number | null;
-  }): 'up' | 'down' | 'same' | 'new' {
-    if (ranking.allTimeRank === null) return 'new';
+  /**
+   * Determine the user's rank trend by comparing current rank to previous rank.
+   *
+   * Trend calculation:
+   * - 'new': User has no all-time rank (first time appearing in leaderboard)
+   * - 'up': Current rank is better (lower number) than previous rank
+   * - 'down': Current rank is worse (higher number) than previous rank
+   * - 'same': Rank hasn't changed
+   *
+   * Uses the rank history snapshots to compare current rank with the most recent
+   * snapshot to determine the direction of rank movement.
+   */
+  private determineTrendWithSnapshots(
+    currentRank: number,
+    snapshots: { current: { rank: number } | null; previous: { rank: number } | null },
+  ): 'up' | 'down' | 'same' | 'new' {
+    const previousSnapshot = snapshots.previous;
+    if (!previousSnapshot) {
+      return 'new';
+    }
+
+    const previousRank = previousSnapshot.rank;
+    if (currentRank < previousRank) {
+      return 'up';
+    } else if (currentRank > previousRank) {
+      return 'down';
+    }
     return 'same';
   }
 
-  private async getCachedTotalParticipants(period: RankingPeriod): Promise<number> {
+  /**
+   * Calculate the absolute rank change amount.
+   * Returns null if no previous snapshot exists.
+   */
+  private calculateTrendAmount(
+    currentRank: number,
+    snapshots: { current: { rank: number } | null; previous: { rank: number } | null },
+  ): number | null {
+    const previousSnapshot = snapshots.previous;
+    if (!previousSnapshot) {
+      return null;
+    }
+    return previousSnapshot.rank - currentRank;
+  }
+
+  private getCachedTotalParticipants(period: RankingPeriod): Promise<number> {
     const cacheKey = `total:${period}`;
     const ttlMs = RANKING_CONSTANTS.TOTAL_USERS_CACHE_TTL * 1000;
 
-    return this.cache.getOrSet<number>(cacheKey, ttlMs, async () => {
+    // Use stampede protection for total participants count
+    return this.cache.getOrSetWithStampedeProtection<number>(cacheKey, ttlMs, async () => {
       this.logger.debug({ event: 'get_total_participants', period });
       return this.rankingRepository.getTotalParticipants(period);
     });

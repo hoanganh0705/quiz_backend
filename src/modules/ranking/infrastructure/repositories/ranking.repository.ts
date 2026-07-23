@@ -377,6 +377,15 @@ export class RankingRepository implements RankingRepositoryPort {
       .where(inArray(rankRecalculationWorkItems.workItemId, workItemIds));
   }
 
+  async completeRecalculationWorkItemsInTx(tx: unknown, workItemIds: string[]): Promise<void> {
+    if (workItemIds.length === 0) return;
+
+    const client = tx as typeof this.db;
+    await client
+      .delete(rankRecalculationWorkItems)
+      .where(inArray(rankRecalculationWorkItems.workItemId, workItemIds));
+  }
+
   async getDirtyUsers(limit: number): Promise<UserRankingRow[]> {
     const results = await this.db.query.userRanking.findMany({
       where: eq(userRanking.isDirty, true),
@@ -398,17 +407,52 @@ export class RankingRepository implements RankingRepositoryPort {
   async clearDirtyFlagsForUsersWithNoPendingWork(userIds: string[]): Promise<void> {
     if (userIds.length === 0) return;
 
-    // Subquery: users in the input set that have no rows in the
-    // work-items table. Single round-trip via a CTE.
-    // Drizzle's `sql` template does not bind JS arrays as Postgres array
-    // literals — `${arr}::uuid[]` is sent as a single string parameter and
-    // PG errors with `malformed array literal`. Inline the UUIDs as a
-    // typed ARRAY[...] literal instead.
+    const result = await this.executeClearDirtyFlags(userIds);
+    const cleared = (result.rows as Array<{ userId: string }>).map((r) => r.userId);
+    if (cleared.length > 0) {
+      this.logger.debug({
+        event: 'ranking_latch_cleared',
+        usersCleared: cleared.length,
+      });
+    }
+  }
+
+  async clearDirtyFlagsForUsersWithNoPendingWorkInTx(
+    tx: unknown,
+    userIds: string[],
+  ): Promise<void> {
+    if (userIds.length === 0) return;
+
+    const client = tx as typeof this.db;
     const userIdsArray = sql.raw(
       `ARRAY[${userIds.map((id) => `'${id.replace(/'/g, "''")}'::uuid`).join(',')}]`,
     );
-    // Drizzle raw SQL returns untyped rows
-    const result = await this.db.execute(sql<{ userId: string }>`
+
+    await client.execute(sql`
+      WITH users_with_pending AS (
+        SELECT DISTINCT user_id
+        FROM rank_recalculation_work_items
+        WHERE user_id = ANY(${userIdsArray})
+      ),
+      users_to_clear AS (
+        SELECT u.user_id
+        FROM unnest(${userIdsArray}) AS u(user_id)
+        LEFT JOIN users_with_pending p ON p.user_id = u.user_id
+        WHERE p.user_id IS NULL
+      )
+      UPDATE user_ranking
+      SET is_dirty = false
+      WHERE user_id IN (SELECT user_id FROM users_to_clear)
+    `);
+  }
+
+  private async executeClearDirtyFlags(
+    userIds: string[],
+  ): Promise<RawQueryResult<{ userId: string }>> {
+    const userIdsArray = sql.raw(
+      `ARRAY[${userIds.map((id) => `'${id.replace(/'/g, "''")}'::uuid`).join(',')}]`,
+    );
+    return this.db.execute(sql<{ userId: string }>`
       WITH users_with_pending AS (
         SELECT DISTINCT user_id
         FROM rank_recalculation_work_items
@@ -425,14 +469,6 @@ export class RankingRepository implements RankingRepositoryPort {
       WHERE user_id IN (SELECT user_id FROM users_to_clear)
       RETURNING user_id AS "userId"
     `);
-
-    const cleared = (result.rows as Array<{ userId: string }>).map((r) => r.userId);
-    if (cleared.length > 0) {
-      this.logger.debug({
-        event: 'ranking_latch_cleared',
-        usersCleared: cleared.length,
-      });
-    }
   }
 
   async updateRank(params: {
@@ -601,25 +637,52 @@ export class RankingRepository implements RankingRepositoryPort {
 
     const xpColumn = getXpColumn(period);
 
-    // Find the minimum XP among all users with a strictly better rank (rank < currentRank).
+    // Find the minimum XP among users with a strictly better rank than currentRank.
     // This is the XP threshold the user needs to cross to move up.
-    // Using MIN avoids the off-by-one error that OFFSET causes with tied ranks.
+    //
+    // Why RANK() here instead of OFFSET:
+    // OFFSET-based pagination fails with tied ranks. If two users share the same XP
+    // but occupy ranks 1 and 2, OFFSET 1 returns that shared XP. We then look for
+    // users with XP < shared_XP, which returns nothing, even though the user at
+    // rank 2 hasn't "passed" anyone with a different score.
+    //
+    // Using RANK() (which includes gaps for ties):
+    //   SELECT xp, RANK() OVER (ORDER BY xp DESC) as rank FROM users;
+    // If scores are [100, 100, 90], RANK() gives [1, 1, 3].
+    //
+    // For a user at RANK=2 (XP=100), the next better rank is RANK=1 (XP=100).
+    // But since they share the same XP, there's no "next rank" to show.
+    // We need to find users with strictly better RANK() values AND strictly
+    // higher XP than the current user.
+    //
+    // Strategy:
+    // 1. Get current user's XP
+    // 2. Find minimum XP among users where RANK() < currentRank
+    // 3. Return that minimum XP (null if current user is rank 1)
+    //
+    // This handles ties correctly: if you're rank 2 with the same XP as rank 1,
+    // we return null because no one with a different, higher XP is directly above you.
     const result = await this.executeRaw<{ xp: number | string | null }>(sql`
-      SELECT MIN(ur.${sql.raw(xpColumn)}) AS xp
-      FROM user_ranking ur
-      INNER JOIN users u ON u.user_id = ur.user_id
-      WHERE ur.${sql.raw(xpColumn)} > 0
-        AND u.deleted_at IS NULL
-        AND ur.${sql.raw(xpColumn)} < (
-          SELECT ur2.${sql.raw(xpColumn)}
-          FROM user_ranking ur2
-          INNER JOIN users u2 ON u2.user_id = ur2.user_id
-          WHERE ur2.${sql.raw(xpColumn)} > 0
-            AND u2.deleted_at IS NULL
-          ORDER BY ur2.${sql.raw(xpColumn)} DESC
-          LIMIT 1
-          OFFSET ${currentRank - 1}
-        )
+      WITH ranked_users AS (
+        SELECT
+          ${sql.raw(xpColumn)} AS xp,
+          RANK() OVER (ORDER BY ${sql.raw(xpColumn)} DESC, user_id ASC) AS rank
+        FROM user_ranking
+        WHERE ${sql.raw(xpColumn)} > 0
+          AND user_id IN (
+            SELECT user_id FROM users WHERE deleted_at IS NULL
+          )
+      ),
+      current_user AS (
+        SELECT xp FROM ranked_users WHERE rank = ${currentRank}
+      ),
+      next_rank_users AS (
+        SELECT MIN(xp) AS xp
+        FROM ranked_users
+        WHERE rank < ${currentRank}
+          AND xp > (SELECT xp FROM current_user)
+      )
+      SELECT xp FROM next_rank_users
     `);
 
     const xp = result.rows[0]?.xp;
@@ -1394,31 +1457,29 @@ export class RankingRepository implements RankingRepositoryPort {
   // ============================================
 
   private getXpColumn(period: RankingPeriod): string {
-    const mapping: Partial<Record<RankingPeriod, string>> = {
-      [RankingPeriod.ALL_TIME]: 'all_time_xp',
-      [RankingPeriod.WEEKLY]: 'weekly_xp',
-      [RankingPeriod.MONTHLY]: 'monthly_xp',
-    };
-
-    if (period === RankingPeriod.DAILY) {
-      throw new Error('Daily leaderboard is not supported by user_ranking snapshots');
+    switch (period) {
+      case RankingPeriod.DAILY:
+        return 'daily_xp';
+      case RankingPeriod.WEEKLY:
+        return 'weekly_xp';
+      case RankingPeriod.MONTHLY:
+        return 'monthly_xp';
+      case RankingPeriod.ALL_TIME:
+        return 'all_time_xp';
     }
-
-    return mapping[period] ?? 'all_time_xp';
   }
 
   private getRankColumn(period: RankingPeriod): string {
-    const mapping: Partial<Record<RankingPeriod, string>> = {
-      [RankingPeriod.ALL_TIME]: 'all_time_rank',
-      [RankingPeriod.WEEKLY]: 'weekly_rank',
-      [RankingPeriod.MONTHLY]: 'monthly_rank',
-    };
-
-    if (period === RankingPeriod.DAILY) {
-      throw new Error('Daily leaderboard is not supported by user_ranking snapshots');
+    switch (period) {
+      case RankingPeriod.DAILY:
+        return 'daily_rank';
+      case RankingPeriod.WEEKLY:
+        return 'weekly_rank';
+      case RankingPeriod.MONTHLY:
+        return 'monthly_rank';
+      case RankingPeriod.ALL_TIME:
+        return 'all_time_rank';
     }
-
-    return mapping[period] ?? 'all_time_rank';
   }
 
   private getPeakRankColumn(period: RankingPeriod): PeakRankField {
