@@ -6,14 +6,15 @@
  *
  * Architecture follows the same conventions as Quiz, Attempt, Auth, and User modules:
  * - domain/: Business logic (services, types, errors, events, ports)
- * - infrastructure/: Implementations (repositories)
+ * - infrastructure/: Implementations (repositories, scheduler, adapters)
  * - transport/: HTTP layer (controllers, filters)
- * - application/: Orchestration (schedulers, background jobs)
+ * - application/: Orchestration (query handlers)
  */
 
 import { forwardRef, Module } from '@nestjs/common';
 import { NotificationModule } from '@/modules/notification/notification.module';
 import { AttemptModule } from '@/modules/attempt/attempt.module';
+import { RedisModule } from '@/core/redis/redis.module';
 
 // Infrastructure
 import { RankingRepository } from './infrastructure/repositories/ranking.repository';
@@ -23,6 +24,8 @@ import { RankingOutboxProcessorService } from './infrastructure/outbox/ranking-o
 import { RankingOutboxAdapter } from './infrastructure/outbox/ranking-outbox.adapter';
 import { AttemptRankingListenerAdapter } from './infrastructure/adapters/attempt-ranking-listener.adapter';
 import { RankingPeriodResetNotificationAdapter } from './infrastructure/adapters/ranking-period-reset-notification.adapter';
+import { RankingSchedulerService } from './infrastructure/scheduler/ranking-scheduler.service';
+import { RankHistoryCleanupService } from './infrastructure/scheduler/rank-history-cleanup.service';
 
 // Domain Events
 import { RankingDomainEventBus } from './domain/events/ranking-domain.event-bus';
@@ -62,7 +65,7 @@ import { RankingAdminController } from './transport/controller/ranking-admin.con
 import { RankingPresenter } from './transport/presenters/ranking.presenter';
 
 @Module({
-  imports: [NotificationModule, forwardRef(() => AttemptModule)],
+  imports: [RedisModule, NotificationModule, forwardRef(() => AttemptModule)],
   providers: [
     // Infrastructure
     RankingRepository,
@@ -119,6 +122,10 @@ import { RankingPresenter } from './transport/presenters/ranking.presenter';
 
     // Outbox Processor
     RankingOutboxProcessorService,
+
+    // Scheduler
+    RankingSchedulerService,
+    RankHistoryCleanupService,
 
     // Transport
     RankingPresenter,
