@@ -51,7 +51,17 @@ export class InstanceGateway implements OnGatewayConnection, OnGatewayDisconnect
     const rooms = Array.from(client.rooms).filter((r) => r !== client.id);
     for (const roomId of rooms) {
       void client.leave(roomId);
-      this.instanceAppService.handlePlayerLeftSocket({ socketId: client.id, instanceId: roomId });
+      // Phase 3: `handlePlayerLeftSocket` is now async and reads
+      // the cross-instance socket-connection registry atomically.
+      // Multiple room iterations on the same socket id resolve to
+      // a single `consume()` (subsequent calls return `null`), so
+      // emitting `PlayerDisconnectedEvent` exactly once per
+      // disconnect — even when Socket.IO fires `disconnect` twice
+      // for an aborted transport.
+      void this.instanceAppService.handlePlayerLeftSocket({
+        socketId: client.id,
+        instanceId: roomId,
+      });
     }
   }
 
@@ -111,6 +121,73 @@ export class InstanceGateway implements OnGatewayConnection, OnGatewayDisconnect
     });
 
     return { event: 'ack', data: result };
+  }
+
+  /**
+   * Phase 2 (Gameplay Lifecycle) — host-driven `open → countdown`
+   * transition over Socket.IO. The `countdown_started` event is
+   * broadcast back to the room by the application service's domain
+   * event subscriber; this handler's only job is to acknowledge the
+   * host's call.
+   */
+  @UseGuards(WsJwtGuard)
+  @SubscribeMessage('start_countdown')
+  async handleStartCountdown(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: { instanceId: string },
+    @WsCurrentUser() user: JwtPayload,
+  ): Promise<{ event: string; data: Record<string, unknown> }> {
+    const { instanceId } = data;
+
+    const isHost = await this.instanceAppService.handleStartGameSocket(instanceId, user);
+    if (!isHost) {
+      return { event: 'error', data: ERR_FORBIDDEN };
+    }
+
+    const result = await this.instanceAppService.startCountdownForController(instanceId, user);
+
+    this.logger.info({
+      event: 'ws_countdown_started',
+      instanceId,
+      userId: user.sub,
+    });
+
+    return {
+      event: 'ack',
+      data: { ...result, instanceId },
+    };
+  }
+
+  /**
+   * Phase 2 (Gameplay Lifecycle) — host-driven `countdown → open`
+   * transition over Socket.IO.
+   */
+  @UseGuards(WsJwtGuard)
+  @SubscribeMessage('cancel_countdown')
+  async handleCancelCountdown(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: { instanceId: string },
+    @WsCurrentUser() user: JwtPayload,
+  ): Promise<{ event: string; data: Record<string, unknown> }> {
+    const { instanceId } = data;
+
+    const isHost = await this.instanceAppService.handleStartGameSocket(instanceId, user);
+    if (!isHost) {
+      return { event: 'error', data: ERR_FORBIDDEN };
+    }
+
+    const result = await this.instanceAppService.cancelCountdownForController(instanceId, user);
+
+    this.logger.info({
+      event: 'ws_countdown_cancelled',
+      instanceId,
+      userId: user.sub,
+    });
+
+    return {
+      event: 'ack',
+      data: { ...result, instanceId },
+    };
   }
 
   @UseGuards(WsJwtGuard)

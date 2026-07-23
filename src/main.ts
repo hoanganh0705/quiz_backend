@@ -6,6 +6,16 @@ import cookieParser from 'cookie-parser'; // cookie-parser is a middleware that 
 import helmet from 'helmet'; // Helmet is a collection of middleware functions that help secure Express apps by setting various HTTP headers. It can help protect against common web vulnerabilities such as XSS, clickjacking, and MIME-sniffing attacks.
 import { isSwaggerEnabled, setupSwagger, buildSwaggerConfig } from './core/swagger/swagger.config';
 import { serverConfig, appConfig, swaggerConfig } from './core/config';
+import { RedisIoAdapter } from './core/redis/redis-io.adapter';
+
+/**
+ * Toggle the Socket.IO Redis adapter on/off. The adapter is a Phase 3
+ * production deployment concern: in single-instance mode it is still
+ * wired up (it's harmless and lets dev match prod), but the operator
+ * can opt out via `DISABLE_REDIS_SOCKET_ADAPTER=true` for environments
+ * where Redis is unavailable (CI, local debugging without Redis).
+ */
+const isRedisSocketAdapterEnabled = process.env.DISABLE_REDIS_SOCKET_ADAPTER !== 'true';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, { bufferLogs: true }); // bufferLogs: true ensures logs are written even when the app is not ready to handle requests, preventing important logs from being lost during startup
@@ -51,6 +61,26 @@ async function bootstrap() {
       transform: true, // Auto-transform payload types to match DTO declarations
     }),
   );
+
+  /**
+   * Phase 3: Socket.IO Redis adapter.
+   *
+   * When REDIS is reachable and the operator has not explicitly
+   * disabled the adapter via `DISABLE_REDIS_SOCKET_ADAPTER=true`,
+   * `RedisIoAdapter` replaces the default in-process Socket.IO
+   * adapter with the Redis-backed one. This is what makes
+   * `server.to(room).emit(...)` actually cross-instance; without it,
+   * horizontally-scaled deployments silently drop events for clients
+   * not on the originating replica.
+   *
+   * The adapter throws on the first `createIOServer()` call if Redis
+   * is unreachable, which surfaces the misconfiguration at boot time
+   * rather than mid-request. See the operational runbook for
+   * guidance on sizing / monitoring the Redis instance.
+   */
+  if (isRedisSocketAdapterEnabled) {
+    app.useWebSocketAdapter(new RedisIoAdapter(app));
+  }
 
   await app.listen(server.port);
 }

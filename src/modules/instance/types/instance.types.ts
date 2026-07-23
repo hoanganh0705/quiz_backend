@@ -1,4 +1,4 @@
-export const INSTANCE_STATUSES = ['open', 'running', 'closed', 'finished'] as const;
+export const INSTANCE_STATUSES = ['open', 'countdown', 'running', 'closed', 'finished'] as const;
 export const INSTANCE_PLAYER_STATUSES = [
   'joined',
   'ready',
