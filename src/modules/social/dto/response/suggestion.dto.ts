@@ -1,5 +1,5 @@
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { UserFollowersPaginationDto } from './paginated.dto';
+import { ApiProperty } from '@nestjs/swagger';
+import { CursorPagination } from '@/common/responses/pagination';
 
 export class SocialSuggestionItemDto {
   @ApiProperty({
@@ -12,7 +12,7 @@ export class SocialSuggestionItemDto {
   @ApiProperty({ description: 'Suggested username', example: 'anh_dev' })
   username!: string;
 
-  @ApiPropertyOptional({
+  @ApiProperty({
     description: 'Suggested user avatar URL',
     format: 'uri',
     example: 'https://example.com/avatars/anh.jpg',
@@ -37,6 +37,6 @@ export class SocialSuggestionsResponseDto {
   @ApiProperty({ description: 'Suggested users', type: () => [SocialSuggestionItemDto] })
   items!: SocialSuggestionItemDto[];
 
-  @ApiProperty({ description: 'Pagination metadata', type: () => UserFollowersPaginationDto })
-  pagination!: UserFollowersPaginationDto;
+  @ApiProperty({ description: 'Pagination metadata', type: () => CursorPagination })
+  pagination!: CursorPagination;
 }

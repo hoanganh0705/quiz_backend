@@ -207,10 +207,21 @@ export class FriendshipRepository implements FriendshipRepositoryPort {
   async getMutualFriends(
     userId: string,
     targetUserId: string,
-    page: number,
-    limit: number,
+    cursor?: string | null,
+    limit?: number,
   ): Promise<PaginatedMutualFriendsResult> {
-    const offset = (page - 1) * limit;
+    const effectiveLimit = limit ?? 20;
+
+    // Decode cursor if provided (for username-based cursor)
+    let cursorCondition = '';
+    if (cursor) {
+      try {
+        const decoded = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8'));
+        cursorCondition = `AND mutual_friends.username > '${decoded.username}'`;
+      } catch {
+        cursorCondition = '';
+      }
+    }
 
     const mutualFriendsQuery = sql<{
       userId: string;
@@ -273,38 +284,39 @@ export class FriendshipRepository implements FriendshipRepositoryPort {
       WHERE u.${users.deletedAt} IS NULL
     `;
 
-    const rowsPromise = this.db.execute(sql`
+    const rowsResult = await this.db.execute(sql`
       SELECT *
       FROM (${mutualFriendsQuery}) mutual_friends
+      WHERE 1=1 ${sql.raw(cursorCondition ? ` ${cursorCondition}` : '')}
       ORDER BY mutual_friends.username ASC
-      LIMIT ${limit}
-      OFFSET ${offset}
+      LIMIT ${effectiveLimit + 1}
     `);
-
-    const totalPromise = this.db.execute(sql`
-      SELECT COUNT(*)::int AS total
-      FROM (${mutualFriendsQuery}) mutual_friends
-    `);
-
-    const [rowsResult, totalResult] = await Promise.all([rowsPromise, totalPromise]);
 
     const rows = rowsResult.rows as Array<{
       userId: string;
       username: string;
       avatarUrl: string | null;
     }>;
-    const total = Number((totalResult.rows[0] as { total?: number } | undefined)?.total ?? 0);
+
+    const hasNextPage = rows.length > effectiveLimit;
+    const items = hasNextPage ? rows.slice(0, effectiveLimit) : rows;
+    const lastItem = items[items.length - 1];
+    const nextCursor =
+      hasNextPage && lastItem
+        ? Buffer.from(JSON.stringify({ username: lastItem.username }), 'utf8').toString('base64url')
+        : null;
 
     return {
-      items: rows.map((row) => ({
+      items: items.map((row) => ({
         userId: row.userId,
         username: row.username,
         avatarUrl: row.avatarUrl,
       })),
       pagination: {
-        page,
-        limit,
-        total,
+        kind: 'cursor',
+        limit: effectiveLimit,
+        hasNextPage,
+        nextCursor,
       },
     };
   }

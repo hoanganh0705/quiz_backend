@@ -1,6 +1,7 @@
 import { Module, forwardRef } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { DatabaseModule } from '@/core/database/database.module';
+import { RedisModule } from '@/core/redis/redis.module';
 import { SocialApplicationService } from './application/social-application.service';
 import { SocialService } from './domain/services/social.service';
 import {
@@ -9,6 +10,7 @@ import {
   UserFollowRepository,
   BlockRepository,
 } from './infrastructure/repositories';
+import { SocialCacheService } from './infrastructure/cache';
 import { RankingAdapter } from './infrastructure/adapters/ranking.adapter';
 import { AchievementFeedListenerAdapter } from './infrastructure/adapters/achievement-feed-listener.adapter';
 import { RankingFeedListenerAdapter } from './infrastructure/adapters/ranking-feed-listener.adapter';
@@ -41,6 +43,7 @@ import { AttemptFeedListenerAdapter } from './infrastructure/adapters/attempt-fe
 @Module({
   imports: [
     DatabaseModule,
+    RedisModule,
     UserModule,
     AchievementModule,
     DiscussionModule,
@@ -59,6 +62,8 @@ import { AttemptFeedListenerAdapter } from './infrastructure/adapters/attempt-fe
     FriendshipRepository,
     UserFollowRepository,
     BlockRepository,
+    // Cache service
+    SocialCacheService,
     // Presenter
     SocialPresenter,
     // Ranking port (SocialModule owns this adapter)

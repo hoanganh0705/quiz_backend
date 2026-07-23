@@ -18,23 +18,23 @@ export interface UserFollowRepositoryPort {
 
   getFollowersOfUser(
     userId: string,
-    page: number,
-    limit: number,
+    cursor?: string | null,
+    limit?: number,
   ): Promise<PaginatedFollowersResult>;
 
   getFollowing(userId: string, limit: number, cursor?: string | null): Promise<Following[]>;
 
   getFollowingOfUser(
     userId: string,
-    page: number,
-    limit: number,
+    cursor?: string | null,
+    limit?: number,
   ): Promise<PaginatedFollowingResult>;
 
   getMutualFollowers(
     userId: string,
     targetUserId: string,
-    page: number,
-    limit: number,
+    cursor?: string | null,
+    limit?: number,
   ): Promise<PaginatedMutualFollowersResult>;
 
   getFollowerCount(userId: string): Promise<number>;

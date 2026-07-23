@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { ApiResponse } from '@/common/responses/api-response';
 import type { ApiResponseEnvelope } from '@/common/responses/api-response';
 import type { PaginatedResult } from '@/common/responses/paginated-result';
+import type { CursorPagination } from '@/common/responses/pagination';
 import type { BlockedUserDto } from '../../dto/response/blocked.dto';
 import type { FriendRequestDto } from '../../dto/response/friend.dto';
 import type {
@@ -32,32 +33,18 @@ import type {
 } from '../../domain/types/social.types';
 
 /**
- * Wrap a `{ items: T[], pagination: { page, limit, total } }`
- * payload as `{ data: T[], meta: { timestamp, pagination: { kind: "offset", ... } } }`.
- *
- * Used for offset-paginated list endpoints whose application-service return is a
- * class-instance `{ items, pagination }` DTO. The canonical envelope has to be
- * a plain object (the interceptor's `isFormattedResponse()` guards on `Object`
- * prototype), so we deliberately project out the DTO fields here instead of
- * forwarding the class instance for the interceptor to re-wrap.
+ * Wrap a paginated result with cursor pagination metadata.
+ * Used for endpoints that return PaginatedResult<T> with cursor-based pagination.
  */
-const wrapOffsetPaginatedDto = <T>(payload: {
-  items: readonly T[];
-  pagination: { page: number; limit: number; total: number };
-}): ApiResponseEnvelope<T[]> => {
-  const totalPages = Math.max(1, Math.ceil(payload.pagination.total / payload.pagination.limit));
-  const hasMore = payload.pagination.page < totalPages;
+const wrapCursorPaginatedDto = <T>(
+  items: readonly T[],
+  pagination: CursorPagination,
+): ApiResponseEnvelope<T[]> => {
   return {
-    data: [...payload.items],
+    data: [...items],
     meta: {
       timestamp: new Date().toISOString(),
-      pagination: {
-        kind: 'offset' as const,
-        page: payload.pagination.page,
-        limit: payload.pagination.limit,
-        total: payload.pagination.total,
-        hasMore,
-      },
+      pagination,
     },
   };
 };
@@ -81,9 +68,12 @@ export class SocialPresenter {
   readonly searchUsers = (payload: SearchableUser[]) =>
     ApiResponse.ok(payload as SearchableUserDto[]);
 
-  // Suggestions & feed (offset paginated DTOs)
-  readonly getSuggestions = wrapOffsetPaginatedDto<SocialSuggestionsResponseDto['items'][number]>;
-  readonly getFeed = wrapOffsetPaginatedDto<SocialFeedResponseDto['items'][number]>;
+  // Suggestions & feed (cursor paginated)
+  readonly getSuggestions = (
+    payload: PaginatedResult<SocialSuggestionsResponseDto['items'][number]>,
+  ) => wrapCursorPaginatedDto(payload.items, payload.pagination as CursorPagination);
+  readonly getFeed = (payload: PaginatedResult<SocialFeedResponseDto['items'][number]>) =>
+    wrapCursorPaginatedDto(payload.items, payload.pagination as CursorPagination);
 
   // Analytics & stats
   readonly getMySocialAnalytics = SocialPresenter.ok<MySocialAnalyticsResponseDto>;
@@ -92,8 +82,9 @@ export class SocialPresenter {
   // Trending (no pagination meta — items-only DTO unwrapped to bare array)
   readonly getTrendingUsers = (dto: TrendingUsersListResponseDto) => ApiResponse.ok([...dto.items]);
 
-  // User activity (offset paginated DTO)
-  readonly getUserActivity = wrapOffsetPaginatedDto<UserActivityResponseDto['items'][number]>;
+  // User activity (cursor paginated)
+  readonly getUserActivity = (payload: PaginatedResult<UserActivityResponseDto['items'][number]>) =>
+    wrapCursorPaginatedDto(payload.items, payload.pagination as CursorPagination);
 
   // Friend leaderboard
   readonly getFriendLeaderboard = SocialPresenter.ok<FriendLeaderboardDto>;
@@ -121,14 +112,22 @@ export class SocialPresenter {
   readonly getFollowers = (payload: PaginatedResult<Follower>) =>
     ApiResponse.page(payload.items, payload.pagination);
 
-  // Offset paginated DTOs (anchored to a target user)
-  readonly getFollowersOfUser = wrapOffsetPaginatedDto<UserFollowersResponseDto['items'][number]>;
-  readonly getMutualFriends = wrapOffsetPaginatedDto<MutualFriendsResponseDto['items'][number]>;
-  readonly getMutualFollowers = wrapOffsetPaginatedDto<MutualFollowersResponseDto['items'][number]>;
+  // Cursor paginated DTOs (anchored to a target user)
+  readonly getFollowersOfUser = (
+    payload: PaginatedResult<UserFollowersResponseDto['items'][number]>,
+  ) => wrapCursorPaginatedDto(payload.items, payload.pagination as CursorPagination);
+  readonly getMutualFriends = (
+    payload: PaginatedResult<MutualFriendsResponseDto['items'][number]>,
+  ) => wrapCursorPaginatedDto(payload.items, payload.pagination as CursorPagination);
+  readonly getMutualFollowers = (
+    payload: PaginatedResult<MutualFollowersResponseDto['items'][number]>,
+  ) => wrapCursorPaginatedDto(payload.items, payload.pagination as CursorPagination);
 
   readonly getFollowing = (payload: PaginatedResult<Following>) =>
     ApiResponse.page(payload.items, payload.pagination);
-  readonly getFollowingOfUser = wrapOffsetPaginatedDto<UserFollowingResponseDto['items'][number]>;
+  readonly getFollowingOfUser = (
+    payload: PaginatedResult<UserFollowingResponseDto['items'][number]>,
+  ) => wrapCursorPaginatedDto(payload.items, payload.pagination as CursorPagination);
 
   // Relationship & counts
   readonly getRelationshipStatus = SocialPresenter.ok<RelationshipStatusDto>;

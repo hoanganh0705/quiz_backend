@@ -1,5 +1,34 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
+/**
+ * Cursor-based pagination for user followers/following.
+ */
+export class UserFollowCursorPaginationDto {
+  @ApiProperty({
+    description: 'Discriminator field. Always "cursor" for cursor pagination.',
+    example: 'cursor',
+  })
+  readonly kind = 'cursor' as const;
+
+  @ApiProperty({ description: 'Number of items returned in this page', example: 20 })
+  limit!: number;
+
+  @ApiProperty({ description: 'Whether more items exist after this page', example: true })
+  hasNextPage!: boolean;
+
+  @ApiProperty({
+    description:
+      'Opaque cursor string for fetching the next page. `null` when there is no next page.',
+    example:
+      'eyJmb2xsb3dlZEF0IjoiMjAyNS0wNS0yMFQwOTowMDowMC4wMDBaIiwiZm9sbG93SWQiOiI1NTBlODQwMC1lMjliLTcxZDQtYTcxNi00NDY2NTU0NDAwMDAwIn0=',
+    nullable: true,
+  })
+  nextCursor!: string | null;
+}
+
+/**
+ * Offset-based pagination for user followers/following (legacy, use cursor-based).
+ */
 export class UserFollowersPaginationDto {
   @ApiProperty({ description: 'Current page number', example: 1 })
   page!: number;
@@ -11,6 +40,10 @@ export class UserFollowersPaginationDto {
   total!: number;
 }
 
+/**
+ * User follower list item (public DTO).
+ * Note: followId is intentionally excluded as it's an internal database ID.
+ */
 export class UserFollowerItemDto {
   @ApiProperty({
     description: "The follower's user identifier",
@@ -41,10 +74,14 @@ export class UserFollowersResponseDto {
   @ApiProperty({ description: 'Follower items', type: () => [UserFollowerItemDto] })
   items!: UserFollowerItemDto[];
 
-  @ApiProperty({ description: 'Pagination metadata', type: () => UserFollowersPaginationDto })
-  pagination!: UserFollowersPaginationDto;
+  @ApiProperty({ description: 'Pagination metadata', type: () => UserFollowCursorPaginationDto })
+  pagination!: UserFollowCursorPaginationDto;
 }
 
+/**
+ * User following list item (public DTO).
+ * Note: followId is intentionally excluded as it's an internal database ID.
+ */
 export class UserFollowingItemDto {
   @ApiProperty({
     description: 'User identifier of the person being followed',
@@ -75,6 +112,6 @@ export class UserFollowingResponseDto {
   @ApiProperty({ description: 'Following items', type: () => [UserFollowingItemDto] })
   items!: UserFollowingItemDto[];
 
-  @ApiProperty({ description: 'Pagination metadata', type: () => UserFollowersPaginationDto })
-  pagination!: UserFollowersPaginationDto;
+  @ApiProperty({ description: 'Pagination metadata', type: () => UserFollowCursorPaginationDto })
+  pagination!: UserFollowCursorPaginationDto;
 }

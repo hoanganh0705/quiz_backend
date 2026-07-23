@@ -57,6 +57,7 @@ import {
 import { UserNotFoundError } from '@/modules/user/domain/errors';
 import { isPostgresUniqueViolation } from '@/common/utils/db-error.util';
 import { AuditLogService } from '@/common/audit/audit-log.service';
+import { SocialCacheService } from '../../infrastructure/cache/social-cache.service';
 
 @Injectable()
 export class SocialService {
@@ -78,6 +79,7 @@ export class SocialService {
     @Inject(USER_REPOSITORY_PORT)
     private readonly userRepository: UserRepositoryPort,
     private readonly auditLogService: AuditLogService,
+    private readonly socialCacheService: SocialCacheService,
     @InjectPinoLogger(SocialService.name)
     private readonly logger: PinoLogger,
   ) {}
@@ -137,6 +139,9 @@ export class SocialService {
         timestamp: new Date(),
       });
 
+      // Invalidate social counts cache for both users
+      await this.socialCacheService.invalidateCountsBatch([requesterId, addresseeId]);
+
       const requests = await this.friendshipRepository.getSentRequests(requesterId);
       return requests[0];
     } catch (error) {
@@ -163,6 +168,9 @@ export class SocialService {
     }
 
     await this.friendshipRepository.respondToFriendRequest({ friendshipId, accept }, userId);
+
+    // Invalidate social counts cache for both users
+    await this.socialCacheService.invalidateCountsBatch([userId, friendship.requesterId]);
 
     this.logger.info({
       event: accept ? 'friend_request_accepted' : 'friend_request_rejected',
@@ -209,6 +217,9 @@ export class SocialService {
 
     const addresseeId = friendship.addresseeId;
     await this.friendshipRepository.removeFriend(requesterId, addresseeId);
+
+    // Invalidate social counts cache for both users
+    await this.socialCacheService.invalidateCountsBatch([requesterId, addresseeId]);
 
     this.logger.info({
       event: 'friend_request_cancelled',
@@ -283,6 +294,9 @@ export class SocialService {
   async removeFriend(userId: string, friendId: string): Promise<void> {
     await this.friendshipRepository.removeFriend(userId, friendId);
 
+    // Invalidate social counts cache for both users
+    await this.socialCacheService.invalidateCountsBatch([userId, friendId]);
+
     this.logger.info({
       event: 'friend_removed',
       userId,
@@ -304,6 +318,9 @@ export class SocialService {
     }
 
     await this.blockRepository.blockUser(blockerId, blockedId, reason);
+
+    // Invalidate social counts cache for both users
+    await this.socialCacheService.invalidateCountsBatch([blockerId, blockedId]);
 
     this.logger.info({
       event: 'user_blocked',
@@ -352,6 +369,9 @@ export class SocialService {
 
   async unblockUser(blockerId: string, blockedId: string): Promise<void> {
     await this.blockRepository.unblockUser(blockerId, blockedId);
+
+    // Invalidate social counts cache for both users
+    await this.socialCacheService.invalidateCountsBatch([blockerId, blockedId]);
 
     this.logger.info({
       event: 'user_unblocked',
@@ -410,6 +430,9 @@ export class SocialService {
     try {
       const follow = await this.userFollowRepository.followUser(followerId, followingId);
 
+      // Invalidate social counts cache for both users
+      await this.socialCacheService.invalidateCountsBatch([followerId, followingId]);
+
       this.logger.info({
         event: 'user_followed',
         followerId,
@@ -436,6 +459,9 @@ export class SocialService {
 
   async unfollowUser(followerId: string, followingId: string): Promise<void> {
     await this.userFollowRepository.unfollowUser(followerId, followingId);
+
+    // Invalidate social counts cache for both users
+    await this.socialCacheService.invalidateCountsBatch([followerId, followingId]);
 
     const { followerUsername, followingUsername } =
       await this.userFollowRepository.getUsernamesForUsers(followerId, followingId);
@@ -464,8 +490,8 @@ export class SocialService {
   async getFollowersOfUser(
     requesterId: string,
     targetUserId: string,
-    page: number,
-    limit: number,
+    cursor?: string | null,
+    limit?: number,
   ): Promise<PaginatedFollowersResult> {
     const relationship = await this.socialRepository.getRelationshipStatus(
       requesterId,
@@ -480,11 +506,11 @@ export class SocialService {
       event: 'user_followers_requested',
       requesterId,
       targetUserId,
-      page,
+      cursor,
       limit,
     });
 
-    return this.userFollowRepository.getFollowersOfUser(targetUserId, page, limit);
+    return this.userFollowRepository.getFollowersOfUser(targetUserId, cursor, limit);
   }
 
   async getFollowing(userId: string, limit: number, cursor?: string | null): Promise<Following[]> {
@@ -494,8 +520,8 @@ export class SocialService {
   async getFollowingOfUser(
     requesterId: string,
     targetUserId: string,
-    page: number,
-    limit: number,
+    cursor?: string | null,
+    limit?: number,
   ): Promise<PaginatedFollowingResult> {
     const relationship = await this.socialRepository.getRelationshipStatus(
       requesterId,
@@ -510,18 +536,18 @@ export class SocialService {
       event: 'user_following_requested',
       requesterId,
       targetUserId,
-      page,
+      cursor,
       limit,
     });
 
-    return this.userFollowRepository.getFollowingOfUser(targetUserId, page, limit);
+    return this.userFollowRepository.getFollowingOfUser(targetUserId, cursor, limit);
   }
 
   async getMutualFriends(
     requesterId: string,
     targetUserId: string,
-    page: number,
-    limit: number,
+    cursor?: string | null,
+    limit?: number,
   ): Promise<PaginatedMutualFriendsResult> {
     const relationship = await this.socialRepository.getRelationshipStatus(
       requesterId,
@@ -536,18 +562,18 @@ export class SocialService {
       event: 'mutual_friends_requested',
       requesterId,
       targetUserId,
-      page,
+      cursor,
       limit,
     });
 
-    return this.friendshipRepository.getMutualFriends(requesterId, targetUserId, page, limit);
+    return this.friendshipRepository.getMutualFriends(requesterId, targetUserId, cursor, limit);
   }
 
   async getMutualFollowers(
     requesterId: string,
     targetUserId: string,
-    page: number,
-    limit: number,
+    cursor?: string | null,
+    limit?: number,
   ): Promise<PaginatedMutualFollowersResult> {
     const relationship = await this.socialRepository.getRelationshipStatus(
       requesterId,
@@ -562,29 +588,33 @@ export class SocialService {
       event: 'mutual_followers_requested',
       requesterId,
       targetUserId,
-      page,
+      cursor,
       limit,
     });
 
-    return this.userFollowRepository.getMutualFollowers(requesterId, targetUserId, page, limit);
+    return this.userFollowRepository.getMutualFollowers(requesterId, targetUserId, cursor, limit);
   }
 
-  async getFeed(userId: string, page: number, limit: number): Promise<PaginatedSocialFeedResult> {
+  async getFeed(
+    userId: string,
+    cursor?: string | null,
+    limit?: number,
+  ): Promise<PaginatedSocialFeedResult> {
     this.logger.debug({
       event: 'social_feed_requested',
       userId,
-      page,
+      cursor,
       limit,
     });
 
-    return await this.socialRepository.getFeed(page, limit);
+    return await this.socialRepository.getFeed(userId, cursor, limit);
   }
 
   async getUserActivity(
     requesterId: string,
     targetUserId: string,
-    page: number,
-    limit: number,
+    cursor?: string | null,
+    limit?: number,
   ): Promise<PaginatedUserActivityResult> {
     const relationship = await this.socialRepository.getRelationshipStatus(
       requesterId,
@@ -599,11 +629,11 @@ export class SocialService {
       event: 'social_user_activity_requested',
       requesterId,
       targetUserId,
-      page,
+      cursor,
       limit,
     });
 
-    return this.socialRepository.findActivitiesByUserId(targetUserId, page, limit);
+    return this.socialRepository.findActivitiesByUserId(targetUserId, cursor, limit);
   }
 
   async recordFeedActivity(params: {
@@ -624,17 +654,17 @@ export class SocialService {
 
   async getSuggestions(
     userId: string,
-    page: number,
-    limit: number,
+    cursor?: string | null,
+    limit?: number,
   ): Promise<PaginatedSocialSuggestionsResult> {
     this.logger.debug({
       event: 'social_suggestions_requested',
       userId,
-      page,
+      cursor,
       limit,
     });
 
-    return await this.socialRepository.getSuggestions(userId, page, limit);
+    return await this.socialRepository.getSuggestions(userId, cursor, limit);
   }
 
   async getRelationshipStatus(userId: string, targetId: string): Promise<RelationshipStatus> {
@@ -642,7 +672,9 @@ export class SocialService {
   }
 
   async getSocialCounts(userId: string): Promise<SocialCounts> {
-    return await this.socialRepository.getSocialCounts(userId);
+    return this.socialCacheService.getCountsWithCache(userId, () =>
+      this.socialRepository.getSocialCounts(userId),
+    );
   }
 
   async getUserSocialStats(userId: string): Promise<UserSocialStats> {
@@ -759,21 +791,30 @@ export class SocialService {
       return [];
     }
 
-    // Get relationship status for each user
-    const searchableUsers: SearchableUser[] = await Promise.all(
-      users.map(async (user) => {
-        const status = await this.socialRepository.getRelationshipStatus(searcherId, user.userId);
-        return {
-          userId: user.userId,
-          username: user.username,
-          displayName: user.displayName,
-          avatarUrl: user.avatarUrl,
-          isFriend: status.isFriend,
-          hasPendingRequest: status.hasPendingRequest,
-          isBlocked: status.isBlocked,
-        };
-      }),
-    );
+    // Batch fetch relationship statuses for all searched users (fixes N+1)
+    const userIds = users.map((u) => u.userId);
+    const statusMap = await this.socialRepository.getRelationshipStatusesBatch(searcherId, userIds);
+
+    // Build searchable users with relationship status
+    const searchableUsers: SearchableUser[] = users.map((user) => {
+      const status = statusMap.get(user.userId) ?? {
+        isFriend: false,
+        hasPendingRequest: false,
+        isFollower: false,
+        isFollowing: false,
+        isBlocked: false,
+        isBlockedBy: false,
+      };
+      return {
+        userId: user.userId,
+        username: user.username,
+        displayName: user.displayName,
+        avatarUrl: user.avatarUrl,
+        isFriend: status.isFriend,
+        hasPendingRequest: status.hasPendingRequest,
+        isBlocked: status.isBlocked,
+      };
+    });
 
     // Filter out blocked users
     const filteredUsers = searchableUsers.filter((u) => !u.isBlocked);
