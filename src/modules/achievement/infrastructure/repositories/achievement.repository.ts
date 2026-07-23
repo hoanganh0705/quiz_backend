@@ -260,6 +260,88 @@ export interface AchievementRepositoryPort {
     last7Days: number;
     last30Days: number;
   }>;
+
+  /**
+   * Get all distinct user IDs who have earned at least one badge.
+   * Used for platform analytics to calculate unique earners.
+   */
+  getDistinctBadgeEarners(): Promise<string[]>;
+
+  /**
+   * Get users eligible for streak-based badges.
+   * Returns users whose current streak meets or exceeds the threshold.
+   */
+  getUsersEligibleForStreakBadge(
+    minStreakDays: number,
+    excludeBadgeId: string,
+    limit?: number,
+    offset?: number,
+  ): Promise<{ userId: string; currentStreak: number }[]>;
+
+  /**
+   * Get users eligible for rank-based badges.
+   * Returns users whose rank meets or exceeds the threshold.
+   */
+  getUsersEligibleForRankBadge(
+    maxRank: number,
+    period: string,
+    excludeBadgeId: string,
+    limit?: number,
+    offset?: number,
+  ): Promise<{ userId: string; currentRank: number }[]>;
+
+  /**
+   * Get a specific user badge by its ID.
+   */
+  getUserBadgeById(
+    userBadgeId: string,
+  ): Promise<(UserBadgeRow & { badge: BadgeDefinitionRow }) | null>;
+
+  /**
+   * Get revoked user badges (optionally filtered by badge).
+   */
+  getRevokedUserBadges(
+    userId?: string,
+    badgeId?: string,
+    options?: { limit?: number; offset?: number },
+  ): Promise<{ data: (UserBadgeRow & { badge: BadgeDefinitionRow })[]; total: number }>;
+
+  /**
+   * Get recent badge awards ordered by earnedAt DESC.
+   */
+  getRecentAwards(limit?: number): Promise<{ userId: string; badgeId: string; earnedAt: Date }[]>;
+
+  /**
+   * Get badge awards filtered by category.
+   */
+  getAwardsByCategory(
+    category: string,
+    options?: { limit?: number; offset?: number },
+  ): Promise<{ data: (UserBadgeRow & { badge: BadgeDefinitionRow })[]; total: number }>;
+
+  /**
+   * Get all awards for a specific badge (with optional pagination).
+   */
+  getBadgeAwards(
+    badgeId: string,
+    options?: { limit?: number; offset?: number; includeRevoked?: boolean },
+  ): Promise<{ data: (UserBadgeRow & { badge: BadgeDefinitionRow })[]; total: number }>;
+
+  /**
+   * Get top earners for a specific badge.
+   */
+  getBadgeTopEarners(
+    badgeId: string,
+    limit?: number,
+  ): Promise<{ userId: string; earnedAt: Date }[]>;
+
+  /**
+   * Get award counts per day for trend analysis.
+   */
+  getAwardTrendData(
+    badgeIds: string[],
+    days: number,
+  ): Promise<{ date: string; badgeId: string; count: number }[]>;
 }
 
 export const ACHIEVEMENT_REPOSITORY_PORT: unique symbol = Symbol('ACHIEVEMENT_REPOSITORY_PORT');
