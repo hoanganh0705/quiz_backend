@@ -205,8 +205,11 @@ describe('Instance module — OpenAPI contract regression guards', () => {
     });
 
     it('cursor endpoints reference PaginationMetaDto via allOf schema', () => {
+      // Phase 6 (api-contract audit): `/instances/{id}/players` is now
+      // cursor-paginated alongside the list and leaderboard endpoints.
       const cursorEndpoints: Array<[string, string]> = [
         ['/instances', 'get'],
+        ['/instances/{id}/players', 'get'],
         ['/instances/{id}/leaderboard', 'get'],
       ];
 
@@ -364,6 +367,7 @@ describe('Instance module — OpenAPI contract regression guards', () => {
       'CloseInstanceResponseDto',
       'InstanceDetailResponseDto',
       'InstancePlayersResponseDto',
+      'InstancePlayersPaginationDto',
       'InstanceListResponseDto',
       'InstanceListItemDto',
       'InstanceListPaginationDto',
@@ -429,6 +433,19 @@ describe('Instance module — OpenAPI contract regression guards', () => {
       const params = op?.parameters ?? [];
       expect(params.find((p) => p.name === 'cursor')).toBeDefined();
       expect(params.find((p) => p.name === 'limit')).toBeDefined();
+    });
+
+    // Phase 6 (api-contract audit): the players endpoint now uses
+    // cursor pagination, so the canonical `cursor` + `limit` query
+    // params must be documented.
+    it('GET /instances/{id}/players declares cursor + limit (Phase 6)', () => {
+      const op = spec.paths['/api/v1/instances/{id}/players']?.get;
+      const params = op?.parameters ?? [];
+      const cursorParam = params.find((p) => p.name === 'cursor');
+      const limitParam = params.find((p) => p.name === 'limit');
+      expect(cursorParam).toBeDefined();
+      expect(limitParam).toBeDefined();
+      expect(limitParam?.schema?.default).toBe(20);
     });
   });
 });

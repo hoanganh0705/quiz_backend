@@ -72,7 +72,25 @@ export class InstanceCountdownSchedulerService {
    */
   @Cron(CronExpression.EVERY_SECOND)
   async handleDueCountdowns(): Promise<void> {
-    const nowIso = new Date().toISOString();
+    // Phase 2 — bug fix. The previous query was
+    // `countdown_started_at <= nowIso`, which matches every active
+    // countdown row regardless of whether the 5-second warmup window
+    // has elapsed. That caused the scheduler to fire
+    // `countdown → running` (or `countdown → open` for under-filled
+    // lobbies) within one second of `startCountdown`, leaving the
+    // host with no time to call `startInstance` or `cancelCountdown`.
+    //
+    // The intended behavior — documented in `InstanceService`
+    // (`countdown_started_at + COUNTDOWN_DURATION_MS <= nowIso`) —
+    // is to fire only for countdowns whose 5-second window has
+    // actually elapsed. We subtract `COUNTDOWN_DURATION_MS` from the
+    // current time and pass the cutoff as `nowIso` so the existing
+    // `countdown_started_at <= $cutoff` predicate selects only the
+    // expired rows. The partial index
+    // `idx_quiz_instances_countdown_due` already indexes
+    // `(countdown_started_at)` filtered by `status = 'countdown'`, so
+    // the new condition keeps the same scan shape.
+    const cutoffIso = new Date(Date.now() - InstanceService.COUNTDOWN_DURATION_MS).toISOString();
 
     let due: ReadonlyArray<{
       instanceId: string;
@@ -81,7 +99,7 @@ export class InstanceCountdownSchedulerService {
     }>;
     try {
       due = await this.instanceRepository.findDueCountdowns({
-        nowIso,
+        nowIso: cutoffIso,
         limit: InstanceCountdownSchedulerService.TICK_BATCH_SIZE,
       });
     } catch (error) {

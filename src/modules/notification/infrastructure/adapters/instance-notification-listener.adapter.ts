@@ -206,7 +206,13 @@ export class InstanceNotificationListener implements OnModuleInit, OnModuleDestr
   }
 
   private async getInstancePlayerIds(instanceId: string): Promise<{ playerIds: string[] } | null> {
-    const players = await this.instanceRepository.listPlayersWithProfile({ instanceId });
+    const { items: players } = await this.instanceRepository.listPlayersWithProfile({
+      instanceId,
+      // Host notifications read the full players list. Instance capacity
+      // is capped at 100 by `CreateInstanceDto.maxPlayers`, so a single
+      // over-sized page is safe.
+      limit: 100,
+    });
     if (players.length === 0) {
       return null;
     }

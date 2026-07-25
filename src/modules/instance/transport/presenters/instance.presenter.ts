@@ -51,9 +51,13 @@ const wrapPaginatedDto = <T>(payload: {
  * directly from the application service so this presenter falls into the
  * standard cursor pagination path.
  *
- * The `listInstancePlayers` endpoint returns a non-paginated
- * `{ instanceId, items, total }` object, which is wrapped as a single-resource
- * envelope.
+ * The `listInstancePlayers` endpoint now uses the canonical cursor
+ * pagination path (Phase 6 — api-contract audit) so this presenter
+ * follows the same `wrapPaginatedDto` shape as the leaderboard. The
+ * legacy `{ instanceId, items, total }` wrapper was removed because
+ * (a) `total` is an offset-pagination field and the project standard
+ * reserves offset pagination for endpoints without a stable natural
+ * sort key, and (b) `instanceId` was redundant with the path parameter.
  */
 @Injectable()
 export class InstancePresenter {
@@ -70,7 +74,11 @@ export class InstancePresenter {
 
   // Detail / players
   readonly getInstanceById = InstancePresenter.ok<InstanceDetailResponseDto>;
-  readonly listInstancePlayers = InstancePresenter.ok<InstancePlayersResponseDto>;
+  // Phase 6 (api-contract audit): the players endpoint now uses the
+  // canonical cursor-paginated envelope — `data` is the raw player
+  // array and `meta.pagination` carries the cursor discriminator.
+  readonly listInstancePlayers =
+    wrapPaginatedDto<InstancePlayersResponseDto['items'][number]>;
 
   // Paginated lists
   readonly listInstances = wrapPaginatedDto<InstanceListResponseDto['items'][number]>;

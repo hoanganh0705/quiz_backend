@@ -34,9 +34,6 @@ import {
   ListTournamentsQueryDto,
   GetTournamentParticipantsQueryDto,
   GetTournamentWinnersQueryDto,
-  GetUpcomingTournamentsQueryDto,
-  GetActiveTournamentsQueryDto,
-  GetCompletedTournamentsQueryDto,
   GetRelatedTournamentsQueryDto,
   UpdateTournamentDto,
   GetTournamentLeaderboardQueryDto,
@@ -48,9 +45,6 @@ import {
   TournamentLeaderboardEntryDto,
   TournamentWinnerDto,
   TournamentParticipantListItemDto,
-  UpcomingTournamentItemDto,
-  ActiveTournamentItemDto,
-  CompletedTournamentItemDto,
   RelatedTournamentItemDto,
   TournamentStatsResponseDto,
   MyTournamentStandingResponseDto,
@@ -65,7 +59,12 @@ import {
 import { TournamentPresenter } from '../presenters/tournament.presenter';
 import { AUTH_SECURITY_NAME } from '@/core/swagger/swagger.config';
 import { ProblemDetailDto, ErrorResponseExamples } from '@/common/swagger/swagger-schemas';
-import { ApiOkResource, ApiCreatedResource, ApiOkResourceList } from '@/common/swagger/api-ok';
+import {
+  ApiOkResource,
+  ApiCreatedResource,
+  ApiOkResourceList,
+  ApiOkResourceArray,
+} from '@/common/swagger/api-ok';
 import {
   ApiTournamentIdParam,
   ApiTournamentRoundIdParam,
@@ -253,10 +252,15 @@ export class TournamentController {
     summary: 'List related tournaments',
     description:
       'Returns tournaments related to the given tournament, ranked by category match (+3), description word overlap (+1 per word), and title word overlap (+0.5 per word). ' +
-      'Includes tournaments with any status except `cancelled` (includes finished tournaments for historical browsing).',
+      'Includes tournaments with any status except `cancelled` (includes finished tournaments for historical browsing). ' +
+      'The list is bounded by `limit` (default 5) and is returned as a non-paginated bare array.',
   })
   @ApiTournamentIdParam()
-  @ApiOkResource(RelatedTournamentItemDto, {
+  // Phase 7 (api-contract audit): the runtime emits a bare array
+  // (`{ data: T[], meta }` without `pagination`), so the OpenAPI
+  // schema must match — `ApiOkResourceArray` is the canonical
+  // decorator for non-paginated bare arrays.
+  @ApiOkResourceArray(RelatedTournamentItemDto, {
     description: 'Related tournaments returned',
     example: RELATED_TOURNAMENTS_EXAMPLE,
   })
@@ -308,10 +312,15 @@ export class TournamentController {
     summary: 'Get tournament winners',
     description:
       'Returns the final winners of the tournament sorted by rank ascending. ' +
-      'The default limit is 10; pass `limit` to fetch more.',
+      'The default limit is 10; pass `limit` to fetch more. ' +
+      'The list is bounded by `limit` and is returned as a non-paginated bare array.',
   })
   @ApiTournamentIdParam()
-  @ApiOkResource(TournamentWinnerDto, {
+  // Phase 7 (api-contract audit): the runtime emits a bare array
+  // (`{ data: T[], meta }` without `pagination`), so the OpenAPI
+  // schema must match — `ApiOkResourceArray` is the canonical
+  // decorator for non-paginated bare arrays.
+  @ApiOkResourceArray(TournamentWinnerDto, {
     description: 'Tournament winners returned',
     example: TOURNAMENT_WINNERS_EXAMPLE,
   })
@@ -594,10 +603,14 @@ export class TournamentController {
     summary: 'Get tournament leaderboard',
     description:
       'Returns the live leaderboard for the tournament with each participant rank, score, and time. ' +
-      'Results are paginated with limit and offset.',
+      'Results are paginated with `limit` (default 50) and `offset` (default 0).',
   })
   @ApiTournamentIdParam()
-  @ApiOkResource(TournamentLeaderboardEntryDto, {
+  // Phase 7 (api-contract audit): the runtime emits an offset-paginated
+  // payload (`{ data: T[], meta: { pagination: { kind: 'offset', ... } } }`),
+  // so the OpenAPI schema must match — `ApiOkResourceList(..., 'offset')` is
+  // the canonical decorator for offset-paginated lists.
+  @ApiOkResourceList(TournamentLeaderboardEntryDto, 'offset', {
     description: 'Leaderboard returned',
     example: TOURNAMENT_LEADERBOARD_EXAMPLE,
   })

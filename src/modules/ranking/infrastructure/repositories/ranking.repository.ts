@@ -662,6 +662,10 @@ export class RankingRepository implements RankingRepositoryPort {
     //
     // This handles ties correctly: if you're rank 2 with the same XP as rank 1,
     // we return null because no one with a different, higher XP is directly above you.
+    // `current_user` is a reserved identifier in PostgreSQL (CURRENT_USER
+    // returns the current session user), so we name the CTE `target_user`
+    // to keep the planner happy — same convention as the neighbouring
+    // `getNearbyRanks` query.
     const result = await this.executeRaw<{ xp: number | string | null }>(sql`
       WITH ranked_users AS (
         SELECT
@@ -673,14 +677,14 @@ export class RankingRepository implements RankingRepositoryPort {
             SELECT user_id FROM users WHERE deleted_at IS NULL
           )
       ),
-      current_user AS (
+      target_user AS (
         SELECT xp FROM ranked_users WHERE rank = ${currentRank}
       ),
       next_rank_users AS (
         SELECT MIN(xp) AS xp
         FROM ranked_users
         WHERE rank < ${currentRank}
-          AND xp > (SELECT xp FROM current_user)
+          AND xp > (SELECT xp FROM target_user)
       )
       SELECT xp FROM next_rank_users
     `);
