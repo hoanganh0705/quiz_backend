@@ -66,11 +66,14 @@ export class BookmarkPresenter {
 
   // Single-resource endpoints — wrap whole DTO as `data`.
   readonly getBookmarkStatus = BookmarkPresenter.ok<BookmarkStatusResponseDto>;
-  readonly listCollections = (dto: BookmarkCollectionListResponseDto) =>
-    ApiResponse.ok([...dto.items]);
+  // Phase 7 (api-contract audit): the OpenAPI documents these endpoints
+  // with a single-resource envelope `{ data: { items: [...] }, meta }`
+  // because the lists are bounded by the user-owned resource count.
+  // The presenter must emit the wrapper, not a bare array, so the
+  // runtime matches the documented wire shape.
+  readonly listCollections = BookmarkPresenter.ok<BookmarkCollectionListResponseDto>;
   readonly createCollection = BookmarkPresenter.ok<CreateCollectionResponseDto>;
-  readonly listBookmarksInCollection = (dto: BookmarkListResponseDto) =>
-    ApiResponse.ok([...dto.items]);
+  readonly listBookmarksInCollection = BookmarkPresenter.ok<BookmarkListResponseDto>;
   readonly getCollectionAnalytics = BookmarkPresenter.ok<BookmarkCollectionAnalyticsResponseDto>;
   readonly addBookmark = BookmarkPresenter.ok<AddBookmarkResponseDto>;
   readonly addBookmarksBulk = BookmarkPresenter.ok<BulkAddBookmarksResponseDto>;

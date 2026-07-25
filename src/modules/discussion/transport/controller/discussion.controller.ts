@@ -23,7 +23,7 @@ import {
   ApiModeratorAction,
   ApiNotFound,
 } from '@/common/swagger/swagger-decorators';
-import { ApiOkResource, ApiOkResourceList, ApiCreatedResource } from '@/common/swagger/api-ok';
+import { ApiOkResource, ApiOkResourceList, ApiOkResourceArray, ApiCreatedResource } from '@/common/swagger/api-ok';
 import { CurrentUser, OptionalCurrentUser } from '@/common/decorators/current-user.decorator';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
 import { DiscussionApplicationService } from '@/modules/discussion/application/discussion-application.service';
@@ -129,7 +129,11 @@ export class DiscussionController {
   @Get('threads/:threadId/related')
   @Public()
   @ApiOperation({ summary: 'List threads related to a thread' })
-  @ApiOkResourceList(RelatedDiscussionItemResponseDto, 'cursor', {
+  // Phase 7 (api-contract audit): the runtime emits a non-paginated
+  // bare array (bounded by `limit`), so the OpenAPI schema must match —
+  // `ApiOkResourceArray` is the canonical decorator for non-paginated
+  // bare arrays. The endpoint does not implement cursor pagination.
+  @ApiOkResourceArray(RelatedDiscussionItemResponseDto, {
     description: 'Related discussions returned',
   })
   @ApiParam({ name: 'threadId', format: 'uuid' })
@@ -146,7 +150,12 @@ export class DiscussionController {
   @Get('threads/:threadId/participants')
   @Public()
   @ApiOperation({ summary: 'List participants of a thread' })
-  @ApiOkResourceList(ThreadParticipantItemResponseDto, 'cursor', {
+  // Phase 7 (api-contract audit): the runtime emits a non-paginated
+  // bare array (bounded by the participant count of the thread), so
+  // the OpenAPI schema must match — `ApiOkResourceArray` is the
+  // canonical decorator for non-paginated bare arrays. The endpoint
+  // does not implement cursor pagination.
+  @ApiOkResourceArray(ThreadParticipantItemResponseDto, {
     description: 'Thread participants returned',
   })
   @ApiParam({ name: 'threadId', format: 'uuid' })

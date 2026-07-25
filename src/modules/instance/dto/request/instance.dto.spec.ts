@@ -3,12 +3,17 @@ import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
 import {
   CreateInstanceDto,
+  GetInstancePlayersQueryDto,
   GetLeaderboardQueryDto,
   INSTANCE_STATUSES,
   ListInstancesQueryDto,
 } from './instance.dto';
 import { QUIZ_DIFFICULTIES } from '@/modules/quiz/types/quiz.types';
-import { decodeInstanceCursor, decodeLeaderboardCursor } from '@/common/utils/cursor.util';
+import {
+  decodeInstanceCursor,
+  decodeInstancePlayerCursor,
+  decodeLeaderboardCursor,
+} from '@/common/utils/cursor.util';
 
 /**
  * `instance.dto.spec.ts` — guard the request-DTO contract for the
@@ -291,6 +296,78 @@ describe('instance.dto — Phase 1/4 validation contract', () => {
         ).toString('base64url');
         expect(() => decodeLeaderboardCursor(cursor)).toThrow();
       });
+    });
+
+    // Phase 6 (api-contract audit): the players endpoint now uses
+    // cursor pagination, so it ships a dedicated cursor parser.
+    describe('decodeInstancePlayerCursor', () => {
+      it('accepts a valid base64url cursor', () => {
+        const cursor = Buffer.from(
+          JSON.stringify({
+            joinedAt: '2026-06-25T10:30:00.000Z',
+            instancePlayerId: '550e8400-e29b-41d4-a716-446655440099',
+          }),
+        ).toString('base64url');
+
+        const decoded = decodeInstancePlayerCursor(cursor);
+        expect(decoded.joinedAt).toBe('2026-06-25T10:30:00.000Z');
+        expect(decoded.instancePlayerId).toBe('550e8400-e29b-41d4-a716-446655440099');
+      });
+
+      it('throws 400 on cursor with missing keys', () => {
+        const cursor = Buffer.from(
+          JSON.stringify({ joinedAt: '2026-06-25T10:30:00.000Z' }),
+        ).toString('base64url');
+        expect(() => decodeInstancePlayerCursor(cursor)).toThrow();
+      });
+
+      it('throws 400 on cursor with non-string keys', () => {
+        const cursor = Buffer.from(
+          JSON.stringify({
+            joinedAt: 12345,
+            instancePlayerId: '550e8400-e29b-41d4-a716-446655440099',
+          }),
+        ).toString('base64url');
+        expect(() => decodeInstancePlayerCursor(cursor)).toThrow();
+      });
+
+      it('throws 400 on cursor with non-JSON content', () => {
+        const cursor = Buffer.from('not-json').toString('base64url');
+        expect(() => decodeInstancePlayerCursor(cursor)).toThrow();
+      });
+    });
+  });
+
+  // ───────────────────────────────────────────────────────────────────────
+  // Phase 6 — `GetInstancePlayersQueryDto` (mirrors the leaderboard DTO)
+  // ───────────────────────────────────────────────────────────────────────
+
+  describe('GetInstancePlayersQueryDto (Phase 6)', () => {
+    it('accepts an empty object (uses class defaults)', async () => {
+      const errors = await runValidate(GetInstancePlayersQueryDto, {});
+      expect(errors).toEqual([]);
+    });
+
+    it.each([1, 20, 100])('accepts limit=%i', async (value) => {
+      const errors = await runValidate(GetInstancePlayersQueryDto, { limit: value });
+      expect(errors).toEqual([]);
+    });
+
+    it('rejects limit=0', async () => {
+      const errors = await runValidate(GetInstancePlayersQueryDto, { limit: 0 });
+      expect(errors.length).toBeGreaterThan(0);
+    });
+
+    it('rejects limit=101', async () => {
+      const errors = await runValidate(GetInstancePlayersQueryDto, { limit: 101 });
+      expect(errors.length).toBeGreaterThan(0);
+    });
+
+    it('accepts a short cursor string', async () => {
+      const errors = await runValidate(GetInstancePlayersQueryDto, {
+        cursor: 'eyJqb2luZWRBdCI6IjIwMjYtMDYtMjVUMTA6MzA6MDAuMDAwWiJ9',
+      });
+      expect(errors).toEqual([]);
     });
   });
 

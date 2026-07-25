@@ -13,6 +13,8 @@ import type { MyDiscussionStatsResponseDto } from '../../dto/response/my-discuss
 import type { PublicDiscussionProfileResponseDto } from '../../dto/response/public-discussion-profile-response.dto';
 import type { ThreadDto } from '../../dto/response/thread-response.dto';
 import type { ThreadStatsResponseDto } from '../../dto/response/thread-stats-response.dto';
+import type { RelatedDiscussionItemResponseDto } from '../../dto/response/related-discussions-response.dto';
+import type { ThreadParticipantItemResponseDto } from '../../dto/response/thread-participants-response.dto';
 import type {
   DiscussionThread,
   DiscussionCommentWithReplies,
@@ -83,8 +85,14 @@ export class DiscussionPresenter {
   readonly listTrendingDiscussions = wrapPaginatedDto;
   readonly listUnansweredDiscussions = wrapPaginatedDto;
   readonly searchDiscussions = wrapPaginatedDto;
-  readonly listRelatedDiscussions = (items: readonly unknown[]) => ApiResponse.ok(items);
-  readonly listThreadParticipants = (items: readonly unknown[]) => ApiResponse.ok(items);
+  // Phase 7 (api-contract audit): these endpoints emit bounded bare
+  // arrays and the controllers declare `ApiOkResourceArray` (not
+  // paginated). The presenter must preserve that shape so the wire
+  // contract matches the documented schema.
+  readonly listRelatedDiscussions = (items: readonly RelatedDiscussionItemResponseDto[]) =>
+    ApiResponse.ok([...items]);
+  readonly listThreadParticipants = (items: readonly ThreadParticipantItemResponseDto[]) =>
+    ApiResponse.ok([...items]);
   readonly getThreadStats = DiscussionPresenter.ok<ThreadStatsResponseDto | null>;
   readonly getMyDiscussionStats = DiscussionPresenter.ok<MyDiscussionStatsResponseDto>;
 

@@ -15,7 +15,12 @@ import { ApiTags, ApiOperation, ApiParam, ApiOkResponse, ApiQuery, ApiBody } fro
 import { Public } from '@/common/decorators/public.decorator';
 import { Transactional } from '@/common/interceptors/transactional.interceptor';
 import { ApiAuthAction, ApiAuthActionNoContent } from '@/common/swagger/swagger-decorators';
-import { ApiOkResource, ApiCreatedResource, ApiOkResourceList } from '@/common/swagger/api-ok';
+import {
+  ApiOkResource,
+  ApiCreatedResource,
+  ApiOkResourceList,
+  ApiOkResourceArray,
+} from '@/common/swagger/api-ok';
 import { SocialApplicationService } from '@/modules/social/application/social-application.service';
 import { SocialPresenter } from '../presenters/social.presenter';
 import {
@@ -171,7 +176,11 @@ export class SocialController {
   @Get('users/trending')
   @Public()
   @ApiOperation({ summary: 'List trending users' })
-  @ApiOkResourceList(TrendingUserResponseDto, 'cursor', {
+  // Phase 7 (api-contract audit): the runtime emits a non-paginated
+  // bare array (bounded by `limit`), so the OpenAPI schema must match —
+  // `ApiOkResourceArray` is the canonical decorator for non-paginated
+  // bare arrays. The endpoint does not implement cursor pagination.
+  @ApiOkResourceArray(TrendingUserResponseDto, {
     description: 'Trending users returned',
   })
   async getTrendingUsers(@Query() query: GetTrendingUsersQueryDto) {
@@ -267,7 +276,10 @@ export class SocialController {
   @Get('friend-requests/incoming')
   @ApiAuthAction()
   @ApiOperation({ summary: 'Get incoming friend requests' })
-  @ApiOkResource(FriendRequestDto, {
+  // Phase 7 (api-contract audit): the runtime emits a non-paginated
+  // bare array, so the OpenAPI schema must match — `ApiOkResourceArray`
+  // is the canonical decorator for non-paginated bare arrays.
+  @ApiOkResourceArray(FriendRequestDto, {
     description: 'Incoming friend requests returned',
   })
   async getPendingRequests(@CurrentUser() user: JwtPayload) {
@@ -277,7 +289,10 @@ export class SocialController {
   @Get('friend-requests/outgoing')
   @ApiAuthAction()
   @ApiOperation({ summary: 'Get outgoing friend requests' })
-  @ApiOkResource(FriendRequestDto, {
+  // Phase 7 (api-contract audit): the runtime emits a non-paginated
+  // bare array, so the OpenAPI schema must match — `ApiOkResourceArray`
+  // is the canonical decorator for non-paginated bare arrays.
+  @ApiOkResourceArray(FriendRequestDto, {
     description: 'Outgoing friend requests returned',
   })
   async getSentRequests(@CurrentUser() user: JwtPayload) {
@@ -393,7 +408,10 @@ export class SocialController {
   @Get('blocked')
   @ApiAuthAction()
   @ApiOperation({ summary: 'Get blocked users' })
-  @ApiOkResourceList(BlockedUserDto, 'cursor', { description: 'Blocked users returned' })
+  // Phase 7 (api-contract audit): the runtime emits a non-paginated
+  // bare array, so the OpenAPI schema must match — `ApiOkResourceArray`
+  // is the canonical decorator for non-paginated bare arrays.
+  @ApiOkResourceArray(BlockedUserDto, { description: 'Blocked users returned' })
   async getBlockedUsers(@CurrentUser() user: JwtPayload) {
     return this.presenter.getBlockedUsers(await this.socialService.getBlockedUsers(user));
   }
