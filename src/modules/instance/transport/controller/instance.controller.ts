@@ -23,12 +23,13 @@ import {
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
 import { Transactional } from '@/common/interceptors/transactional.interceptor';
 import { ProblemDetailDto, ErrorResponseExamples } from '@/common/swagger/swagger-schemas';
-import { decodeLeaderboardCursor } from '@/common/utils/cursor.util';
+import { decodeInstancePlayerCursor, decodeLeaderboardCursor } from '@/common/utils/cursor.util';
 import { type JwtPayload } from '@/common/guards/jwt.guard';
 import { AUTH_SECURITY_NAME } from '@/core/swagger/swagger.config';
 import { InstanceApplicationService } from '../../application/instance.application.service';
 import {
   CreateInstanceDto,
+  GetInstancePlayersQueryDto,
   GetLeaderboardQueryDto,
   ListInstancesQueryDto,
   StartCountdownDto,
@@ -40,6 +41,7 @@ import {
   InstanceDetailResponseDto,
   InstanceLeaderboardResponseDto,
   InstanceListResponseDto,
+  InstancePlayerResponseDto,
   InstancePlayersResponseDto,
   JoinInstanceResponseDto,
   StartCountdownResponseDto,
@@ -286,22 +288,41 @@ export class InstanceController {
   //
   // `InstanceService.listInstancePlayers` throws `InstanceNotFoundError` when
   // the instance does not exist → GlobalExceptionFilter → 404.
-  // The response payload (`{ instanceId, items, total }`) does NOT contain a
-  // `pagination` key, so the envelope wraps it as a non-paginated resource.
+  //
+  // Phase 6 (api-contract audit): the players endpoint now uses the
+  // canonical cursor-paginated envelope — `data` is the raw player array
+  // and `meta.pagination` carries the discriminator (`kind: 'cursor'`).
+  // The legacy `{ data: { instanceId, items, total } }` wrapper was
+  // removed because (a) `total` is an offset-pagination field that the
+  // project standard reserves for ranking/leaderboard use, and (b)
+  // `instanceId` was redundant with the path parameter.
   @Get(':id/players')
   @instanceUnauthorizedResponse()
-  @ApiOkResource(InstancePlayersResponseDto, { description: 'Players returned' })
+  @ApiOkResourceList(InstancePlayerResponseDto, 'cursor', { description: 'Players returned' })
   @ApiOperation({
     summary: 'List instance players',
     description:
-      'Returns the list of players currently in the instance, with a `total` count. ' +
-      'Requires a valid JWT bearer token. 404 is returned when the instance does not exist.',
+      'Returns the cursor-paginated list of players currently in the instance, sorted by join time. ' +
+      'Requires a valid JWT bearer token. Query parameters: `cursor` (opaque pagination cursor, ' +
+      'decoded payload: `{ joinedAt, instancePlayerId }`) and `limit` (1–100, default 20). ' +
+      '404 is returned when the instance does not exist.',
   })
   @instanceBadRequestResponse()
   @instanceNotFoundResponse()
   @ApiInstanceIdParam()
-  async listInstancePlayers(@Param('id', new ParseUUIDPipe({ version: '7' })) instanceId: string) {
-    const result = await this.applicationService.listInstancePlayersForController(instanceId);
+  async listInstancePlayers(
+    @Param('id', new ParseUUIDPipe({ version: '7' })) instanceId: string,
+    @Query() query: GetInstancePlayersQueryDto,
+  ) {
+    const limit = query.limit ?? 20;
+    const cursor: { joinedAt: string; instancePlayerId: string } | undefined = query.cursor
+      ? decodeInstancePlayerCursor(query.cursor)
+      : undefined;
+    const result = await this.applicationService.listInstancePlayersForController({
+      instanceId,
+      limit,
+      cursor: cursor ?? null,
+    });
     return this.presenter.listInstancePlayers(result);
   }
 

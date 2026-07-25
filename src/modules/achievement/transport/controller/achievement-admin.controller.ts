@@ -22,7 +22,7 @@ import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Permissions } from '@/common/authorization/decorators/permissions.decorator';
 import { Permission } from '@/common/authorization/permissions';
 import { ApiForbidden, ApiAuth } from '@/common/swagger/swagger-decorators';
-import { ApiOkResource, ApiOkResourceArray } from '@/common/swagger/api-ok';
+import { ApiOkResource, ApiOkResourceArray, ApiOkResourceList } from '@/common/swagger/api-ok';
 import { AchievementApplicationService } from '../../application/achievement.application.service';
 import { AchievementPresenter } from '../presenters/achievement.presenter';
 import {
@@ -88,7 +88,10 @@ export class AchievementAdminController {
   @ApiForbidden()
   @ApiOperation({ summary: 'Get achievement history for a user (admin)' })
   @ApiParam({ name: 'userId', format: 'uuid' })
-  @ApiOkResourceArray(AdminAchievementHistoryItemDto, {
+  // Phase 7 (api-contract audit): the runtime emits an offset-paginated
+  // payload, so the OpenAPI schema must match — `ApiOkResourceList(..., 'offset')`
+  // is the canonical decorator for offset-paginated lists.
+  @ApiOkResourceList(AdminAchievementHistoryItemDto, 'offset', {
     description: 'Achievement history returned',
   })
   async getUserHistory(

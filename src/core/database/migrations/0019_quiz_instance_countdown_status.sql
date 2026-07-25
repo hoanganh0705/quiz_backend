@@ -96,7 +96,10 @@ ALTER TABLE quiz_instances
   );
 
 -- An index that the countdown scheduler relies on to find due rows cheaply.
--- The scheduler's WHERE clause is `status = 'countdown' AND countdown_started_at <= now()`,
+-- The scheduler's WHERE clause is
+--   `status = 'countdown' AND countdown_started_at <= now() - COUNTDOWN_DURATION_MS`
+-- (the cutoff is computed in the application layer to keep
+-- `COUNTDOWN_DURATION_MS` as a single source of truth in the codebase),
 -- so a partial btree index keyed by `(countdown_started_at)` filtered to
 -- `status = 'countdown'` is the natural shape.
 CREATE INDEX IF NOT EXISTS idx_quiz_instances_countdown_due

@@ -210,7 +210,11 @@ export interface QuizInstanceRepositoryPort {
     }>
   >;
 
-  listPlayersWithProfile(params: { instanceId: string }): Promise<InstancePlayerWithProfile[]>;
+  listPlayersWithProfile(params: {
+    instanceId: string;
+    limit: number;
+    cursor?: { joinedAt: string; instancePlayerId: string } | null;
+  }): Promise<{ items: InstancePlayerWithProfile[]; hasNextPage: boolean }>;
 
   /** Count the total number of instances hosted by a user. */
   countInstancesHostedByUser(userId: string): Promise<number>;

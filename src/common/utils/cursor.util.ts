@@ -82,3 +82,33 @@ export function decodeLeaderboardCursor(cursor: string): {
 
   return { rank: record.rank, instancePlayerId: record.instancePlayerId };
 }
+
+/**
+ * Phase 6 (api-contract audit — `GET /instances/{id}/players`): strict cursor
+ * parser for the players endpoint. The cursor is a base64url-encoded JSON
+ * `{ joinedAt: string, instancePlayerId: string }`. The sort key for the
+ * players list is `(joinedAt ASC, instancePlayerId ASC)` (matches the leaderboard
+ * tiebreaker convention).
+ */
+export function decodeInstancePlayerCursor(cursor: string): {
+  joinedAt: string;
+  instancePlayerId: string;
+} {
+  let decoded: unknown;
+  try {
+    decoded = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf-8'));
+  } catch {
+    throw new BadRequestException('Invalid cursor');
+  }
+
+  if (decoded === null || typeof decoded !== 'object') {
+    throw new BadRequestException('Invalid cursor');
+  }
+
+  const record = decoded as Record<string, unknown>;
+  if (typeof record.joinedAt !== 'string' || typeof record.instancePlayerId !== 'string') {
+    throw new BadRequestException('Invalid cursor');
+  }
+
+  return { joinedAt: record.joinedAt, instancePlayerId: record.instancePlayerId };
+}

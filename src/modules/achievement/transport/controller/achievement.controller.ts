@@ -8,7 +8,7 @@ import { Public } from '@/common/decorators/public.decorator';
 import { Permissions } from '@/common/authorization/decorators/permissions.decorator';
 import { Permission } from '@/common/authorization/permissions';
 import { ApiForbidden, ApiAuth, ApiNotFound } from '@/common/swagger/swagger-decorators';
-import { ApiOkResource, ApiOkResourceArray } from '@/common/swagger/api-ok';
+import { ApiOkResource, ApiOkResourceList } from '@/common/swagger/api-ok';
 import { AchievementApplicationService } from '../../application/achievement.application.service';
 import { AchievementPresenter } from '../presenters/achievement.presenter';
 import { BadgeDetailsResponseDto } from '../../dto/response/badge-details-response.dto';
@@ -66,7 +66,11 @@ export class AchievementController {
   @Get('badges')
   @Public()
   @ApiOperation({ summary: 'List all available badges' })
-  @ApiOkResourceArray(BadgeCatalogItemResponseDto, {
+  // Phase 7 (api-contract audit): the runtime emits an offset-paginated
+  // payload (`{ data: T[], meta: { pagination: { kind: 'offset', ... } } }`),
+  // so the OpenAPI schema must match — `ApiOkResourceList(..., 'offset')` is
+  // the canonical decorator for offset-paginated lists.
+  @ApiOkResourceList(BadgeCatalogItemResponseDto, 'offset', {
     description: 'Badge catalog returned',
   })
   @ApiQuery({
@@ -89,7 +93,10 @@ export class AchievementController {
   @Get('me/badges')
   @ApiAuth()
   @ApiOperation({ summary: 'List badges earned by the authenticated user' })
-  @ApiOkResource(MyBadgeItemDto, { description: 'User badges returned' })
+  // Phase 7 (api-contract audit): the runtime emits an offset-paginated
+  // payload, so the OpenAPI schema must match — `ApiOkResourceList(..., 'offset')`
+  // is the canonical decorator for offset-paginated lists.
+  @ApiOkResourceList(MyBadgeItemDto, 'offset', { description: 'User badges returned' })
   @ApiQuery({
     name: 'limit',
     required: false,
@@ -169,7 +176,10 @@ export class AchievementController {
   @Get('/users/me/achievements/history')
   @ApiAuth()
   @ApiOperation({ summary: "Get the authenticated user's badge earning history" })
-  @ApiOkResourceArray(AchievementHistoryItemResponseDto, {
+  // Phase 7 (api-contract audit): the runtime emits an offset-paginated
+  // payload, so the OpenAPI schema must match — `ApiOkResourceList(..., 'offset')`
+  // is the canonical decorator for offset-paginated lists.
+  @ApiOkResourceList(AchievementHistoryItemResponseDto, 'offset', {
     description: 'Achievement history returned',
   })
   @ApiQuery({

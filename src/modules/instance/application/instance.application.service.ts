@@ -240,7 +240,13 @@ export class InstanceApplicationService {
 
   async getInstanceByIdForController(instanceId: string): Promise<InstanceDetailResponseDto> {
     const row = await this.instanceService.getInstanceById(instanceId);
-    const { items: players } = await this.instanceService.listInstancePlayers(instanceId);
+    // The detail view embeds the full players list. Instance capacity
+    // is capped at 100 by `CreateInstanceDto.maxPlayers`, so a single
+    // over-sized page is safe. If the cap changes, switch to paginated
+    // assembly here.
+    const { items: players } = await this.instanceService.listInstancePlayers(instanceId, {
+      limit: 100,
+    });
     return this.mapper.toInstanceDetailResponse(
       row,
       players.map((p) => this.mapper.toInstancePlayerResponse(p)),
@@ -268,12 +274,22 @@ export class InstanceApplicationService {
     };
   }
 
-  async listInstancePlayersForController(instanceId: string): Promise<InstancePlayersResponseDto> {
-    const { items, total } = await this.instanceService.listInstancePlayers(instanceId);
+  async listInstancePlayersForController(params: {
+    instanceId: string;
+    limit: number;
+    cursor?: { joinedAt: string; instancePlayerId: string } | null;
+  }): Promise<InstancePlayersResponseDto> {
+    const { items, hasNextPage, nextCursor } = await this.instanceService.listInstancePlayers(
+      params.instanceId,
+      { limit: params.limit, cursor: params.cursor ?? null },
+    );
     return {
-      instanceId,
       items: items.map((p) => this.mapper.toInstancePlayerResponse(p)),
-      total,
+      pagination: {
+        limit: params.limit,
+        hasNextPage,
+        nextCursor,
+      },
     };
   }
 
