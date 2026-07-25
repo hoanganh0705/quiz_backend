@@ -507,7 +507,9 @@ export class QuizInstanceRepository implements QuizInstanceRepositoryPort {
           username: users.username,
           displayName: userProfiles.displayName,
           avatarUrl: userProfiles.avatarUrl,
-          scorePercent: sql<number | null>`${quizAttempts.scorePercent}::double precision`,
+          scorePercent: sql<number | null>`${quizAttempts.scorePercent}::double precision`.as(
+            'score_percent',
+          ),
           correctCount: quizAttempts.correctCount,
           timeTakenMs: quizAttempts.timeTakenMs,
           rowRank: sql<number>`row_number() over (
@@ -731,7 +733,25 @@ export class QuizInstanceRepository implements QuizInstanceRepositoryPort {
 
   async listPlayersWithProfile(params: {
     instanceId: string;
-  }): Promise<import('@/modules/instance/domain/ports').InstancePlayerWithProfile[]> {
+    limit: number;
+    cursor?: { joinedAt: string; instancePlayerId: string } | null;
+  }): Promise<{
+    items: import('@/modules/instance/domain/ports').InstancePlayerWithProfile[];
+    hasNextPage: boolean;
+  }> {
+    const conditions = [eq(quizInstancePlayers.instanceId, params.instanceId)];
+
+    if (params.cursor) {
+      // Cursor = last `(joinedAt, instancePlayerId)` of the previous page.
+      // Rows after the cursor: joinedAt > cursor.joinedAt, OR same joinedAt
+      // but instancePlayerId > cursor.instancePlayerId. Matches the
+      // leaderboard's tiebreaker plumbing so the players list is
+      // deterministic across pages.
+      conditions.push(
+        sql`(${quizInstancePlayers.joinedAt}, ${quizInstancePlayers.instancePlayerId}) > (${params.cursor.joinedAt}, ${params.cursor.instancePlayerId})`,
+      );
+    }
+
     const rows = await this.db
       .select({
         instancePlayerId: quizInstancePlayers.instancePlayerId,
@@ -747,10 +767,17 @@ export class QuizInstanceRepository implements QuizInstanceRepositoryPort {
       .from(quizInstancePlayers)
       .innerJoin(users, eq(quizInstancePlayers.userId, users.userId))
       .leftJoin(userProfiles, eq(users.userId, userProfiles.userId))
-      .where(eq(quizInstancePlayers.instanceId, params.instanceId))
-      .orderBy(quizInstancePlayers.joinedAt);
+      .where(and(...conditions))
+      .orderBy(quizInstancePlayers.joinedAt, quizInstancePlayers.instancePlayerId)
+      // Fetch one extra row to detect `hasNextPage` without a second round-trip.
+      .limit(params.limit + 1);
 
-    return rows as import('@/modules/instance/domain/ports').InstancePlayerWithProfile[];
+    const hasNextPage = rows.length > params.limit;
+    const items = (
+      hasNextPage ? rows.slice(0, params.limit) : rows
+    ) as import('@/modules/instance/domain/ports').InstancePlayerWithProfile[];
+
+    return { items, hasNextPage };
   }
 
   async countInstancesHostedByUser(userId: string): Promise<number> {

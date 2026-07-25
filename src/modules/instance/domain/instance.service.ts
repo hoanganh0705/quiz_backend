@@ -763,16 +763,40 @@ export class InstanceService {
 
   async listInstancePlayers(
     instanceId: string,
-  ): Promise<{ items: import('./ports').InstancePlayerWithProfile[]; total: number }> {
+    params: {
+      limit: number;
+      cursor?: { joinedAt: string; instancePlayerId: string } | null;
+    },
+  ): Promise<{
+    items: import('./ports').InstancePlayerWithProfile[];
+    hasNextPage: boolean;
+    nextCursor: string | null;
+  }> {
     const instance = await this.instanceRepository.getInstanceById(instanceId);
 
     if (!instance) {
       throw new InstanceNotFoundError(INSTANCE_NOT_FOUND_MESSAGE);
     }
 
-    const players = await this.instanceRepository.listPlayersWithProfile({ instanceId });
+    const { items, hasNextPage } = await this.instanceRepository.listPlayersWithProfile({
+      instanceId,
+      limit: params.limit,
+      cursor: params.cursor ?? null,
+    });
 
-    return { items: players, total: players.length };
+    const lastItem = items.at(-1);
+    const nextCursor =
+      hasNextPage && lastItem
+        ? Buffer.from(
+            JSON.stringify({
+              joinedAt: new Date(lastItem.joinedAt).toISOString(),
+              instancePlayerId: lastItem.instancePlayerId,
+            }),
+            'utf8',
+          ).toString('base64url')
+        : null;
+
+    return { items, hasNextPage, nextCursor };
   }
 
   async notifyHostPlayerJoined(params: {
