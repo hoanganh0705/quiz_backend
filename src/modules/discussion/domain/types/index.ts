@@ -1,286 +1,118 @@
-export type DiscussionThreadStatus = 'open' | 'closed' | 'hidden' | 'deleted';
-export type DiscussionContentStatus = 'visible' | 'hidden' | 'deleted';
-export type DiscussionVoteValue = 'upvote' | 'downvote';
-export type DiscussionReportStatus = 'open' | 'reviewed' | 'dismissed' | 'actioned';
-export type DiscussionReportTargetType = 'thread' | 'comment';
-export type ThreadSortField = 'created_at' | 'votes_count' | 'comments_count';
+/**
+ * Discussion module — domain types.
+ *
+ * Single source of truth for the comment-only domain:
+ *  - the `Comment` aggregate and its read-projection shapes,
+ *  - the `AuthorView` value object,
+ *  - the `VoteValue` and `ReportStatus` enums,
+ *  - the `CommentSortField` enum (recency and popularity),
+ *  - the command and query parameter shapes consumed by the
+ *    domain service and repository port,
+ *  - the cursor shapes used by the list endpoints.
+ *
+ * Each `type` alias is paired with a `const` tuple of the same name so
+ * that the same source of truth can be used at compile time (for
+ * domain / service / repository code) and at runtime (for DTO
+ * validation and Swagger). This is the project's "single source of
+ * truth" convention.
+ */
+
+// ─── Enums ──────────────────────────────────────────────────────────────────
+
+export type VoteValue = 'upvote' | 'downvote';
+export type ReportStatus = 'open' | 'reviewed' | 'dismissed' | 'actioned';
+export type CommentSortField = 'created_at' | 'votes_count';
 export type SortOrder = 'asc' | 'desc';
 
-// Const objects mirror the type aliases above — single source of truth for both
-// compile-time types (domain/service/repository) and runtime values (DTO validation + Swagger).
-export const DISCUSSION_THREAD_STATUS = ['open', 'closed', 'hidden', 'deleted'] as const;
-export const DISCUSSION_CONTENT_STATUS = ['visible', 'hidden', 'deleted'] as const;
-export const DISCUSSION_VOTE_VALUE = ['upvote', 'downvote'] as const;
-export const DISCUSSION_REPORT_STATUS = ['open', 'reviewed', 'dismissed', 'actioned'] as const;
-export const DISCUSSION_REPORT_TARGET_TYPE = ['thread', 'comment'] as const;
-export const THREAD_SORT_FIELD = ['created_at', 'votes_count', 'comments_count'] as const;
+export const VOTE_VALUE = ['upvote', 'downvote'] as const;
+export const REPORT_STATUS = ['open', 'reviewed', 'dismissed', 'actioned'] as const;
+// `comment_created` defaults to `desc`; `comment_votes` defaults to `desc`.
+// The `default` is the recommended sort for the Quiz comment surface.
+export const COMMENT_SORT_FIELD = ['created_at', 'votes_count'] as const;
 export const SORT_ORDER = ['asc', 'desc'] as const;
 
-// Subset of DISCUSSION_REPORT_STATUS — only valid statuses when reviewing a report
+// Subset of REPORT_STATUS — only valid statuses when reviewing a report.
 export const REVIEW_REPORT_STATUS = ['reviewed', 'dismissed', 'actioned'] as const;
 export type ReviewReportStatus = 'reviewed' | 'dismissed' | 'actioned';
 
-export interface DiscussionThreadAuthor {
+// ─── Value objects ──────────────────────────────────────────────────────────
+
+export interface AuthorView {
   userId: string;
   username: string;
   displayName: string | null;
   avatarUrl: string | null;
 }
 
-export interface DiscussionThread {
-  threadId: string;
+// ─── Aggregate ──────────────────────────────────────────────────────────────
+
+/**
+ * Canonical comment shape used by the domain service, the repository
+ * port, and the application service. The `id` field is the comment
+ * identifier. The `isHidden` boolean replaces the prior
+ * `DiscussionContentStatus` enum: there are exactly two moderation
+ * states.
+ */
+export interface Comment {
+  id: string;
   quizId: string;
   authorId: string;
-  author: DiscussionThreadAuthor;
-  title: string;
-  body: string;
-  status: DiscussionThreadStatus;
-  isSolved: boolean;
-  solvedAt: string | null;
-  solvedCommentId: string | null;
-  solvedBy: string | null;
-  commentsCount: number;
-  votesCount: number;
-  upvotesCount: number;
-  downvotesCount: number;
-  createdAt: string;
-  updatedAt: string;
-  deletedAt: string | null;
-}
-
-export interface QuizDiscussionCursor {
-  createdAt: string;
-  threadId: string;
-}
-
-export interface QuizDiscussionListItem {
-  threadId: string;
-  quizId: string;
-  title: string;
-  author: DiscussionThreadAuthor;
-  commentCount: number;
-  voteCount: number;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface MyDiscussionListItem {
-  threadId: string;
-  quizId: string;
-  quizTitle: string;
-  title: string;
-  commentCount: number;
-  voteCount: number;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface MyCommentCursor {
-  createdAt: string;
-  commentId: string;
-}
-
-export interface MyUpvotedThreadCursor {
-  upvotedAt: string;
-  threadId: string;
-}
-
-export interface MyUpvotedCommentCursor {
-  upvotedAt: string;
-  commentId: string;
-}
-
-export interface MyDiscussionSubscriptionCursor {
-  subscribedAt: string;
-  threadId: string;
-}
-
-export interface MySavedThreadCursor {
-  savedAt: string;
-  threadId: string;
-}
-
-export interface MyCommentListItem {
-  commentId: string;
-  threadId: string;
-  threadTitle: string;
-  quizId: string;
-  content: string;
-  createdAt: string;
-  updatedAt: string;
-  repliesCount: number;
-  votesCount: number;
-}
-
-export interface MyUpvotedThreadListItem {
-  threadId: string;
-  title: string;
-  voteCount: number;
-  commentCount: number;
-  createdAt: string;
-  upvotedAt: string;
-}
-
-export interface MyUpvotedCommentListItem {
-  commentId: string;
-  threadId: string;
-  content: string;
-  voteCount: number;
-  createdAt: string;
-  upvotedAt: string;
-}
-
-export interface MyDiscussionSubscriptionListItem {
-  threadId: string;
-  title: string;
-  commentCount: number;
-  voteCount: number;
-  subscribedAt: string;
-}
-
-export interface MySavedThreadListItem {
-  threadId: string;
-  title: string;
-  commentCount: number;
-  voteCount: number;
-  savedAt: string;
-}
-
-export interface TrendingDiscussionCursor {
-  score: number;
-  createdAt: string;
-  threadId: string;
-}
-
-export interface TrendingDiscussionListItem {
-  threadId: string;
-  quizId: string;
-  title: string;
-  author: DiscussionThreadAuthor;
-  commentCount: number;
-  replyCount: number;
-  voteCount: number;
-  latestActivityAt: string;
-  createdAt: string;
-  trendingScore: number;
-}
-
-export interface UnansweredDiscussionCursor {
-  createdAt: string;
-  threadId: string;
-}
-
-export interface UnansweredDiscussionListItem {
-  threadId: string;
-  quizId: string;
-  title: string;
-  author: DiscussionThreadAuthor;
-  commentCount: number;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface SearchDiscussionsCursor {
-  createdAt: string;
-  threadId: string;
-}
-
-export interface SearchDiscussionListItem {
-  threadId: string;
-  quizId: string;
-  title: string;
-  author: DiscussionThreadAuthor;
-  commentCount: number;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface RelatedDiscussionListItem {
-  threadId: string;
-  title: string;
-  commentCount: number;
-  voteCount: number;
-  relevanceScore: number;
-}
-
-export interface ThreadParticipantListItem {
-  userId: string;
-  username: string;
-  commentCount: number;
-}
-
-export interface PublicDiscussionProfile {
-  threadsCreated: number;
-  commentsCreated: number;
-  acceptedAnswers: number;
-  reputation: number;
-}
-
-export interface ThreadStats {
-  threadId: string;
-  totalComments: number;
-  totalReplies: number;
-  totalParticipants: number;
-  upvotes: number;
-  downvotes: number;
-  latestActivityAt: string;
-}
-
-export interface MyDiscussionStats {
-  totalThreadsCreated: number;
-  totalCommentsCreated: number;
-  totalRepliesCreated: number;
-  totalDiscussionContributions: number;
-  totalReceivedVotes: number;
-  latestDiscussionActivityAt: string | null;
-}
-
-export interface DiscussionComment {
-  commentId: string;
-  threadId: string;
-  authorId: string;
-  author: DiscussionThreadAuthor;
   parentCommentId: string | null;
   body: string;
-  status: DiscussionContentStatus;
-  repliesCount: number;
+  isHidden: boolean;
+  hiddenById: string | null;
+  hiddenAt: string | null;
   votesCount: number;
   upvotesCount: number;
   downvotesCount: number;
+  repliesCount: number;
   createdAt: string;
   updatedAt: string;
   deletedAt: string | null;
 }
 
-export interface DiscussionCommentWithReplies extends DiscussionComment {
-  replies: DiscussionComment[];
-  userVote: DiscussionVoteValue | null;
+/**
+ * Read projection of a comment with the author pre-joined. The
+ * repository returns this shape so the application layer can pass it
+ * straight to the presenter without re-issuing an author lookup.
+ */
+export interface CommentView extends Comment {
+  author: AuthorView;
 }
 
-export interface DiscussionThreadDetail extends Omit<DiscussionThread, 'author'> {
-  author: DiscussionThreadAuthor;
-  userVote: DiscussionVoteValue | null;
-  comments: DiscussionCommentWithReplies[];
+/**
+ * Read projection of a comment with its first-page replies. Returned
+ * by `listComments` along with the `userVote` of the requesting
+ * viewer (when authenticated).
+ */
+export interface CommentWithRepliesView extends CommentView {
+  replies: CommentView[];
+  userVote: VoteValue | null;
 }
 
-export interface DiscussionVote {
-  voteId: string;
-  userId: string;
-  targetType: DiscussionReportTargetType;
-  targetId: string;
-  value: DiscussionVoteValue;
+/**
+ * Read projection for `listMyComments` and `users/:userId/comments`.
+ * The `quizTitle` is denormalized for display; the repository JOINs
+ * `discussion_comments` to `quizzes` to populate it.
+ */
+export interface MyCommentView {
+  commentId: string;
+  quizId: string;
+  quizTitle: string;
+  body: string;
+  votesCount: number;
+  repliesCount: number;
   createdAt: string;
   updatedAt: string;
 }
 
-export interface DiscussionReport {
+export interface ReportView {
   reportId: string;
   reporterId: string;
-  targetType: DiscussionReportTargetType;
-  targetId: string;
+  commentId: string;
   reason: string;
   details: string | null;
-  status: 'reviewed' | 'dismissed' | 'actioned';
+  status: ReportStatus;
   reviewedByUserId: string | null;
   reviewedAt: string | null;
   actionTaken: boolean;
@@ -288,88 +120,102 @@ export interface DiscussionReport {
   updatedAt: string;
 }
 
-// Query types
-export interface ListThreadsParams {
-  quizId?: string;
-  authorId?: string;
-  status?: DiscussionThreadStatus;
-  sortBy?: 'created_at' | 'votes_count' | 'comments_count';
-  sortOrder?: 'asc' | 'desc';
-  limit?: number;
-  cursor?: string | null;
-}
-
-export interface ListCommentsParams {
-  threadId: string;
-  parentCommentId?: string | null;
-  limit?: number;
-  cursor?: string | null;
-}
-
-// Action params
-export interface CreateThreadParams {
-  quizId: string;
-  authorId: string;
-  title: string;
-  body: string;
-}
-
-export interface UpdateThreadParams {
-  threadId: string;
-  authorId: string;
-  title?: string;
-  body?: string;
-}
+// ─── Command parameters ─────────────────────────────────────────────────────
 
 export interface CreateCommentParams {
-  threadId: string;
+  quizId: string;
   authorId: string;
-  parentCommentId?: string | null;
+  parentCommentId: string | null;
   body: string;
 }
 
-export interface UpdateCommentParams {
+export interface EditCommentParams {
   commentId: string;
   authorId: string;
   body: string;
 }
 
-export interface MarkThreadAsSolvedParams {
-  threadId: string;
+export interface DeleteCommentParams {
   commentId: string;
-  actorId: string;
-  solverUsername: string;
-}
-
-export interface UnsolveThreadParams {
-  threadId: string;
-  actorId: string;
+  authorId: string;
 }
 
 export interface VoteParams {
   userId: string;
-  targetType: DiscussionReportTargetType;
-  targetId: string;
-  value: DiscussionVoteValue;
+  commentId: string;
+  value: VoteValue;
 }
 
-export interface ReportParams {
+export interface ReportCommentParams {
   reporterId: string;
-  targetType: DiscussionReportTargetType;
-  targetId: string;
+  commentId: string;
   reason: string;
-  details?: string | null;
+  details: string | null;
 }
 
 export interface ReviewReportParams {
   reportId: string;
   reviewerId: string;
-  status: 'reviewed' | 'dismissed' | 'actioned';
-  actionTaken?: boolean;
+  status: ReviewReportStatus;
+  actionTaken: boolean;
+}
+
+export interface HideCommentParams {
+  commentId: string;
+  moderatorId: string;
+}
+
+export interface RestoreCommentParams {
+  commentId: string;
+  moderatorId: string;
+}
+
+// ─── Query parameters ───────────────────────────────────────────────────────
+
+export interface ListQuizCommentsParams {
+  quizId: string;
+  limit?: number;
+  cursor?: CommentCursor | null;
+}
+
+export interface ListMyCommentsParams {
+  userId: string;
+  limit?: number;
+  cursor?: CommentCursor | null;
 }
 
 export interface ListReportsParams {
-  status?: DiscussionReportStatus;
+  status?: ReportStatus;
   limit?: number;
-  cursor?: string | null;
+  cursor?: ReportCursor | null;
+}
+
+export interface GetCommentParams {
+  commentId: string;
+  viewerId?: string | null;
+}
+
+// ─── Cursors ────────────────────────────────────────────────────────────────
+
+/**
+ * Cursor for the `created_at` sort. The cursor's `id` is the
+ * tiebreaker for the stable secondary sort.
+ */
+export interface CommentCursor {
+  createdAt: string;
+  id: string;
+}
+
+/**
+ * Cursor for the `votes_count` sort. `votesCount` is the primary sort
+ * and `commentId` is the tiebreaker.
+ */
+export interface CommentVotesCursor {
+  votesCount: number;
+  commentId: string;
+}
+
+export interface ReportCursor {
+  createdAt: string;
+  id: string;
 }
