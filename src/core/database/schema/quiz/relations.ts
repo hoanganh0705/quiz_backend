@@ -8,8 +8,8 @@
 //
 // Cross-domain imports in this file:
 //   - users (auth)              — quiz creators, hosts, reviewers, players
-//   - discussionThreads         — declared by the discussion domain in a
-//                                 later phase; imported here from the barrel
+//   - discussionComments        — declared by the comment domain; imported
+//                                  here from the barrel
 // =============================================================================
 
 import { relations } from 'drizzle-orm/relations';
@@ -31,7 +31,7 @@ import {
   quizInstancePlayers,
 } from './schema';
 import { users } from '../auth/schema';
-import { categories, discussionThreads, tags } from '..';
+import { categories, discussionComments, tags } from '..';
 
 export const quizzesRelations = relations(quizzes, ({ one, many }) => ({
   user: one(users, {
@@ -54,7 +54,7 @@ export const quizzesRelations = relations(quizzes, ({ one, many }) => ({
   quizStats: one(quizStats),
   quizReviews: many(quizReviews),
   bookmarkedQuizzes: many(bookmarkedQuizzes),
-  discussionThreads: many(discussionThreads),
+  discussionComments: many(discussionComments),
 }));
 
 export const quizVersionsRelations = relations(quizVersions, ({ one, many }) => ({

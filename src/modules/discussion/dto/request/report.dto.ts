@@ -1,45 +1,35 @@
-import { IsIn, IsOptional, IsString, IsUUID, MaxLength, MinLength } from 'class-validator';
+import { Transform } from 'class-transformer';
+import { IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { DISCUSSION_REPORT_TARGET_TYPE } from '../../domain/types';
-import type { DiscussionReportTargetType } from '../../domain/types';
+import { trimString } from '@/common/utils/text.util';
+import {
+  MAX_REPORT_DETAILS_LENGTH,
+  MAX_REPORT_REASON_LENGTH,
+} from '../../domain/constants';
 
-export class CreateReportDto {
+export class ReportCommentDto {
   @ApiProperty({
-    description: 'Type of content being reported',
-    enum: DISCUSSION_REPORT_TARGET_TYPE,
-    example: 'comment',
-  })
-  @IsIn(DISCUSSION_REPORT_TARGET_TYPE)
-  targetType!: DiscussionReportTargetType;
-
-  @ApiProperty({
-    description: 'UUID of the thread, comment, or reply being reported',
-    format: 'uuid',
-    example: '660e8400-e29b-71d4-a716-446655440000',
-  })
-  @IsUUID('7')
-  targetId!: string;
-
-  @ApiProperty({
-    description: 'Reason for reporting',
-    minLength: 3,
-    maxLength: 200,
+    description: 'Short reason for the report',
+    minLength: 1,
+    maxLength: MAX_REPORT_REASON_LENGTH,
     example: 'spam',
   })
+  @Transform(({ value }: { value: unknown }) => trimString(value))
   @IsString()
-  @MinLength(3)
-  @MaxLength(200)
+  @MinLength(1)
+  @MaxLength(MAX_REPORT_REASON_LENGTH)
   reason!: string;
 
   @ApiPropertyOptional({
-    description: 'Additional details about the report',
+    description: 'Optional longer explanation',
     type: String,
-    maxLength: 1000,
-    example: 'This comment contains repeated promotional links.',
+    maxLength: MAX_REPORT_DETAILS_LENGTH,
     nullable: true,
+    example: 'Repeated promotional links.',
   })
   @IsOptional()
+  @Transform(({ value }: { value: unknown }) => trimString(value))
   @IsString()
-  @MaxLength(1000)
+  @MaxLength(MAX_REPORT_DETAILS_LENGTH)
   details?: string | null;
 }
