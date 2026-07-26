@@ -42,6 +42,25 @@ export const discussionReportTargetType = pgEnum('discussion_report_target_type'
   'reply',
 ]);
 
+// Renamed in Phase 9.1. The new names correspond to the comment-only
+// module identity. The old symbols above are retained so the schema
+// file remains a single export surface for the migration in Phase 10
+// and any cross-module consumers that still reference the old names.
+// The database enum names (`discussion_*`) are also retained so the
+// migration can drop the old enum types in a follow-up step rather
+// than in this change.
+export const discussionCommentVoteValue = pgEnum('discussion_comment_vote_value', [
+  'upvote',
+  'downvote',
+]);
+
+export const discussionCommentReportStatus = pgEnum('discussion_comment_report_status', [
+  'open',
+  'reviewed',
+  'dismissed',
+  'actioned',
+]);
+
 // -- Review -------------------------------------------------------------------
 
 export const reviewReportStatus = pgEnum('review_report_status', [

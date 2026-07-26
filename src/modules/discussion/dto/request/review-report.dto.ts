@@ -1,11 +1,10 @@
 import { IsBoolean, IsIn, IsOptional } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { REVIEW_REPORT_STATUS } from '../../domain/types';
-import type { ReviewReportStatus } from '../../domain/types';
+import { REVIEW_REPORT_STATUS, type ReviewReportStatus } from '../../domain/types';
 
 export class ReviewReportDto {
   @ApiProperty({
-    description: 'Resolution status of the report',
+    description: 'New status for the report',
     enum: REVIEW_REPORT_STATUS,
     example: 'actioned',
   })
@@ -13,9 +12,10 @@ export class ReviewReportDto {
   status!: ReviewReportStatus;
 
   @ApiPropertyOptional({
-    description: 'Whether moderation action was taken on the reported content',
+    description:
+      'Whether the moderator took a content action (e.g. hid the comment) as part of the review. Informational only.',
+    type: Boolean,
     default: false,
-    example: true,
   })
   @IsOptional()
   @IsBoolean()

@@ -30,7 +30,7 @@ import {
 } from './domain/services';
 import { NotificationDomainEventBus } from './domain/events/notification-domain.event-bus';
 import { DiscussionModule } from '@/modules/discussion/discussion.module';
-import { DiscussionNotificationListener } from './infrastructure/adapters/discussion-notification-listener.adapter';
+import { CommentNotificationListener } from './infrastructure/adapters/comment-notification-listener.adapter';
 import { InstanceModule } from '@/modules/instance/instance.module';
 import { InstanceNotificationListener } from './infrastructure/adapters/instance-notification-listener.adapter';
 import { ReviewModule } from '@/modules/review/review.module';
@@ -96,7 +96,7 @@ import { NotificationCleanupScheduler } from './infrastructure/scheduler/notific
       provide: INSTANCE_NOTIFICATION_PORT,
       useExisting: InstanceNotificationService,
     },
-    DiscussionNotificationListener,
+    CommentNotificationListener,
     InstanceNotificationListener,
     ReviewNotificationListener,
     ReviewNotificationService,
