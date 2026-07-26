@@ -12,7 +12,8 @@
 // - ranking:    User rankings and history
 // - achievement: Badges and user achievements
 // - user:       User profiles and settings
-// - discussion: Discussion threads and comments
+// - comment:    Per-quiz comment section (replaces the legacy discussion
+//               module: no threads, no subscriptions, no saved-threads)
 // - social:     Social features (friends, follows, feed)
 // - notification: User notifications
 // - tournament: Tournament management
@@ -47,9 +48,10 @@ export * from './achievement/relations';
 export * from './user/schema';
 export * from './user/relations';
 
-// Discussion
-export * from './discussion/schema';
-export * from './discussion/relations';
+// Comment (replaces the legacy discussion module as of Phase 9.6;
+// the old discussion/ re-export has been removed in the same change.)
+export * from './comment/schema';
+export * from './comment/relations';
 
 // Social
 export * from './social/schema';
