@@ -1,23 +1,50 @@
+// =============================================================================
+// Comment seed (Phase 9.x — replaces the legacy Q/A thread discussion seed)
+//
+// Seeds the per-quiz comment section: top-level comments + one-level replies,
+// per-user votes, and moderator reports. The Q/A-era concepts (threads,
+// subscriptions, saved threads, solve marking) no longer exist, so the seed
+// writes only what the post-refactor schema models.
+//
+// Order of writes inside the transaction:
+//   1. top-level comments (parentCommentId = null)
+//   2. replies (parentCommentId = <a top-level commentId>)
+//   3. votes (one per (user, comment))
+//   4. reports (one per (reporter, comment))
+//
+// Subscriptions, saved-threads, and "thread-level" votes were removed by
+// the comment refactor; if they ever need to come back, they belong in
+// their own bounded context, not in this seed.
+// =============================================================================
+
 import { eq } from 'drizzle-orm';
 import { db, type SeedContext, recorder } from '../infrastructure';
 import type { SeedSummary } from '../infrastructure/types';
 import { SeedLookup } from '../shared/seed-lookup';
 import {
   discussionComments,
-  discussionThreads,
-  discussionVotes,
+  discussionCommentVotes,
+  discussionCommentReports,
 } from '@/core/database/schema';
 import { logger } from '../infrastructure/seed-logger';
 
-type DiscussionVoteSeed = {
+type CommentVoteSeed = {
   userUsername: string;
-  targetType: 'thread' | 'comment' | 'reply';
-  targetId: string;
+  commentId: string;
   value: 'upvote' | 'downvote';
 };
 
-type DiscussionCommentSeed = {
+type CommentReportSeed = {
+  reporterUsername: string;
   commentId: string;
+  reason: string;
+  status?: 'open' | 'dismissed' | 'actioned';
+  reviewedByUsername?: string;
+};
+
+type CommentSeed = {
+  commentId: string;
+  quizSlug: string;
   authorUsername: string;
   body: string;
   parentCommentId: string | null;
@@ -25,124 +52,60 @@ type DiscussionCommentSeed = {
   votesCount: number;
   upvotesCount: number;
   downvotesCount: number;
+  isHidden?: boolean;
+  votes: CommentVoteSeed[];
+  reports: CommentReportSeed[];
 };
 
-type DiscussionThreadSeed = {
-  threadId: string;
-  quizSlug: string;
-  authorUsername: string;
-  title: string;
-  body: string;
-  status: 'open' | 'closed' | 'hidden' | 'deleted';
-  isSolved: boolean;
-  commentsCount: number;
-  votesCount: number;
-  upvotesCount: number;
-  downvotesCount: number;
-  solvedAt?: string;
-  solvedCommentId?: string;
-  solvedByUsername?: string;
-  comments: DiscussionCommentSeed[];
-  // NOTE: subscriptions and savedBy are ❌ DO NOT SEED.
-  // These rows must be created via POST /discussions/threads/:id/subscribe
-  // and POST /discussions/threads/:id/save so those endpoints remain testable.
-  votes: DiscussionVoteSeed[];
-};
-
-const DISCUSSION_THREAD_SEEDS: DiscussionThreadSeed[] = [
+const COMMENT_SEEDS: CommentSeed[] = [
   {
-    threadId: '11111111-1111-7111-8111-111111111111',
+    commentId: '11111111-1111-7111-8111-111111111112',
     quizSlug: 'javascript-fundamentals',
-    authorUsername: 'learner_user',
-    title: 'Why does `typeof null` return `object`?',
-    body:
-      'I got the question right, but I still do not fully understand why JavaScript reports `null` as an object. Is that behavior still important in modern code?',
-    status: 'open' as const,
-    isSolved: false,
-    commentsCount: 2,
-    votesCount: 2,
-    upvotesCount: 2,
-    downvotesCount: 0,
-    comments: [
-      {
-        commentId: '11111111-1111-7111-8111-111111111112',
-        authorUsername: 'content_author',
-        body:
-          'It is a long-standing JavaScript bug from the earliest implementation. You still see it today for compatibility reasons, so the practical takeaway is to avoid using `typeof` alone when you need to detect `null`.',
-        parentCommentId: null,
-        repliesCount: 1,
-        votesCount: 1,
-        upvotesCount: 1,
-        downvotesCount: 0,
-      },
-      {
-        commentId: '11111111-1111-7111-8111-111111111113',
-        authorUsername: 'power_user',
-        body:
-          'A safer check is `value === null`, and for arrays use `Array.isArray(value)` instead of relying on `typeof`.',
-        parentCommentId: '11111111-1111-7111-8111-111111111112',
-        repliesCount: 0,
-        votesCount: 0,
-        upvotesCount: 0,
-        downvotesCount: 0,
-      },
-    ],
-    votes: [
-      {
-        userUsername: 'content_author',
-        targetType: 'thread' as const,
-        targetId: '11111111-1111-7111-8111-111111111111',
-        value: 'upvote' as const,
-      },
-      {
-        userUsername: 'power_user',
-        targetType: 'thread' as const,
-        targetId: '11111111-1111-7111-8111-111111111111',
-        value: 'upvote' as const,
-      },
-      {
-        userUsername: 'learner_user',
-        targetType: 'comment' as const,
-        targetId: '11111111-1111-7111-8111-111111111112',
-        value: 'upvote' as const,
-      },
-    ],
-  },
-  {
-    threadId: '22222222-2222-7222-8222-222222222222',
-    quizSlug: 'system-design-v2',
-    authorUsername: 'power_user',
-    title: 'How should I think about reverse proxy vs load balancer here?',
-    body:
-      'The quiz mentions reverse proxies and load balancing in related concepts. I would love a mental model for when a reverse proxy is acting as the load balancer versus when those are separate layers.',
-    status: 'open' as const,
-    isSolved: true,
-    commentsCount: 1,
+    authorUsername: 'content_author',
+    body: 'It is a long-standing JavaScript bug from the earliest implementation. You still see it today for compatibility reasons, so the practical takeaway is to avoid using `typeof` alone when you need to detect `null`.',
+    parentCommentId: null,
+    repliesCount: 1,
     votesCount: 1,
     upvotesCount: 1,
     downvotesCount: 0,
-    solvedAt: '2026-06-01T09:30:00.000Z',
-    solvedCommentId: '22222222-2222-7222-8222-222222222223',
-    solvedByUsername: 'power_user',
-    comments: [
-      {
-        commentId: '22222222-2222-7222-8222-222222222223',
-        authorUsername: 'content_author',
-        body:
-          'A reverse proxy sits in front of servers and can provide caching, TLS termination, and routing. Load balancing is one capability it may provide, but not every reverse proxy setup is primarily about balancing traffic.',
-        parentCommentId: null,
-        repliesCount: 0,
-        votesCount: 0,
-        upvotesCount: 0,
-        downvotesCount: 0,
-      },
-    ],
     votes: [
+      { userUsername: 'learner_user', commentId: '11111111-1111-7111-8111-111111111112', value: 'upvote' },
+    ],
+    reports: [],
+  },
+  {
+    commentId: '11111111-1111-7111-8111-111111111113',
+    quizSlug: 'javascript-fundamentals',
+    authorUsername: 'power_user',
+    body: 'A safer check is `value === null`, and for arrays use `Array.isArray(value)` instead of relying on `typeof`.',
+    parentCommentId: '11111111-1111-7111-8111-111111111112',
+    repliesCount: 0,
+    votesCount: 0,
+    upvotesCount: 0,
+    downvotesCount: 0,
+    votes: [],
+    reports: [],
+  },
+  {
+    commentId: '22222222-2222-7222-8222-222222222223',
+    quizSlug: 'system-design-v2',
+    authorUsername: 'content_author',
+    body: 'A reverse proxy sits in front of servers and can provide caching, TLS termination, and routing. Load balancing is one capability it may provide, but not every reverse proxy setup is primarily about balancing traffic.',
+    parentCommentId: null,
+    repliesCount: 0,
+    votesCount: 1,
+    upvotesCount: 1,
+    downvotesCount: 0,
+    votes: [
+      { userUsername: 'learner_user', commentId: '22222222-2222-7222-8222-222222222223', value: 'upvote' },
+    ],
+    reports: [
       {
-        userUsername: 'learner_user',
-        targetType: 'thread' as const,
-        targetId: '22222222-2222-7222-8222-222222222222',
-        value: 'upvote' as const,
+        reporterUsername: 'power_user',
+        commentId: '22222222-2222-7222-8222-222222222223',
+        reason: 'spam',
+        status: 'dismissed',
+        reviewedByUsername: 'admin_user',
       },
     ],
   },
@@ -154,152 +117,110 @@ export const runDiscussionSeed = async (): Promise<SeedSummary[]> => {
 
   await db.transaction(async (tx) => {
     const lookup = new SeedLookup(tx);
-    let threadsInserted = 0;
     let commentsInserted = 0;
     let votesInserted = 0;
+    let reportsInserted = 0;
     let skipped = 0;
 
-    for (const seed of DISCUSSION_THREAD_SEEDS) {
+    for (const seed of COMMENT_SEEDS) {
       const quizId = await lookup.quizIdBySlug(seed.quizSlug);
       if (!quizId) {
-        logger.warn(`Discussion seed: quiz "${seed.quizSlug}" not found, skipping thread "${seed.title}"`);
+        logger.warn(
+          `Comment seed: quiz "${seed.quizSlug}" not found, skipping comment "${seed.commentId}"`,
+        );
         skipped++;
         continue;
       }
 
       const authorId = await lookup.userIdByUsername(seed.authorUsername);
-      const solvedBy = seed.solvedByUsername
-        ? await lookup.userIdByUsername(seed.solvedByUsername)
-        : null;
 
-      const [existingThread] = await tx
-        .select({ threadId: discussionThreads.threadId })
-        .from(discussionThreads)
-        .where(eq(discussionThreads.threadId, seed.threadId))
+      const [existing] = await tx
+        .select({ commentId: discussionComments.commentId })
+        .from(discussionComments)
+        .where(eq(discussionComments.commentId, seed.commentId))
         .limit(1);
 
-      if (!existingThread) {
-        await tx.insert(discussionThreads).values({
-          threadId: seed.threadId,
+      if (existing) {
+        skipped++;
+        continue;
+      }
+
+      await tx.insert(discussionComments).values({
+        commentId: seed.commentId,
+        quizId,
+        authorId,
+        parentCommentId: seed.parentCommentId,
+        body: seed.body,
+        isHidden: seed.isHidden ?? false,
+        repliesCount: seed.repliesCount,
+        votesCount: seed.votesCount,
+        upvotesCount: seed.upvotesCount,
+        downvotesCount: seed.downvotesCount,
+        createdAt: ctx.nowIso,
+        updatedAt: ctx.nowIso,
+      });
+      commentsInserted++;
+
+      recorder.record({
+        kind: 'Comments',
+        id: seed.commentId,
+        fields: {
+          commentId: seed.commentId,
+          quizSlug: seed.quizSlug,
+          author: seed.authorUsername,
+          parentCommentId: seed.parentCommentId ?? '',
+          body: seed.body.length > 80 ? seed.body.slice(0, 80) + '...' : seed.body,
+          repliesCount: String(seed.repliesCount),
+          votesCount: String(seed.votesCount),
+        },
+        details: {
+          commentId: seed.commentId,
           quizId,
           authorId,
-          title: seed.title,
+          authorUsername: seed.authorUsername,
+          parentCommentId: seed.parentCommentId,
           body: seed.body,
-          status: seed.status,
-          commentsCount: seed.commentsCount,
+          repliesCount: seed.repliesCount,
           votesCount: seed.votesCount,
           upvotesCount: seed.upvotesCount,
           downvotesCount: seed.downvotesCount,
-          isSolved: seed.isSolved,
-          solvedAt: seed.solvedAt ?? null,
-          // Insert null first — the FK to discussion_comments requires the comment to
-          // exist before we can set solvedCommentId. We patch it after inserting comments.
-          solvedCommentId: null,
-          solvedBy,
+          isHidden: seed.isHidden ?? false,
           createdAt: ctx.nowIso,
           updatedAt: ctx.nowIso,
-        });
-        threadsInserted++;
-      } else {
-        skipped++;
-      }
-
-      for (const comment of seed.comments) {
-        const commentAuthorId = await lookup.userIdByUsername(comment.authorUsername);
-        const [existingComment] = await tx
-          .select({ commentId: discussionComments.commentId })
-          .from(discussionComments)
-          .where(eq(discussionComments.commentId, comment.commentId))
-          .limit(1);
-
-        if (existingComment) continue;
-
-        await tx.insert(discussionComments).values({
-          commentId: comment.commentId,
-          threadId: seed.threadId,
-          authorId: commentAuthorId,
-          parentCommentId: comment.parentCommentId,
-          body: comment.body,
-          repliesCount: comment.repliesCount,
-          votesCount: comment.votesCount,
-          upvotesCount: comment.upvotesCount,
-          downvotesCount: comment.downvotesCount,
-          createdAt: ctx.nowIso,
-          updatedAt: ctx.nowIso,
-        });
-        commentsInserted++;
-
-        recorder.record({
-          kind: 'Discussion Comments',
-          id: comment.commentId,
-          fields: {
-            commentId: comment.commentId,
-            threadId: seed.threadId,
-            author: comment.authorUsername,
-            body: comment.body.length > 80
-              ? comment.body.slice(0, 80) + '...'
-              : comment.body,
-            parentCommentId: comment.parentCommentId ?? '',
-            repliesCount: String(comment.repliesCount),
-          },
-          details: {
-            commentId: comment.commentId,
-            threadId: seed.threadId,
-            authorId: commentAuthorId,
-            authorUsername: comment.authorUsername,
-            parentCommentId: comment.parentCommentId,
-            body: comment.body,
-            repliesCount: comment.repliesCount,
-            votesCount: comment.votesCount,
-            upvotesCount: comment.upvotesCount,
-            downvotesCount: comment.downvotesCount,
-            createdAt: ctx.nowIso,
-            updatedAt: ctx.nowIso,
-          },
-        });
-      }
-
-      // Now that all comments exist, patch solvedCommentId (satisfies the FK)
-      if (seed.solvedCommentId) {
-        await tx
-          .update(discussionThreads)
-          .set({ solvedCommentId: seed.solvedCommentId })
-          .where(eq(discussionThreads.threadId, seed.threadId));
-      }
+        },
+      });
 
       for (const vote of seed.votes) {
         const userId = await lookup.userIdByUsername(vote.userUsername);
+
         const inserted = await tx
-          .insert(discussionVotes)
+          .insert(discussionCommentVotes)
           .values({
             userId,
-            targetType: vote.targetType,
-            targetId: vote.targetId,
+            commentId: vote.commentId,
             value: vote.value,
             createdAt: ctx.nowIso,
             updatedAt: ctx.nowIso,
           })
           .onConflictDoNothing()
-          .returning({ voteId: discussionVotes.voteId });
+          .returning({ voteId: discussionCommentVotes.voteId });
 
         votesInserted += inserted.length;
 
         if (inserted.length > 0) {
           recorder.record({
-            kind: 'Discussion Votes',
+            kind: 'Comment Votes',
             id: inserted[0].voteId,
             fields: {
               voteId: inserted[0].voteId,
               username: vote.userUsername,
-              targetType: vote.targetType,
-              targetId: vote.targetId,
+              commentId: vote.commentId,
               value: vote.value,
             },
             details: {
               voteId: inserted[0].voteId,
               userId,
-              targetType: vote.targetType,
-              targetId: vote.targetId,
+              commentId: vote.commentId,
               value: vote.value,
               createdAt: ctx.nowIso,
               updatedAt: ctx.nowIso,
@@ -308,49 +229,65 @@ export const runDiscussionSeed = async (): Promise<SeedSummary[]> => {
         }
       }
 
-      logger.info(`Discussion thread seeded: "${seed.title}" for quiz "${seed.quizSlug}"`);
+      for (const report of seed.reports) {
+        const reporterId = await lookup.userIdByUsername(report.reporterUsername);
+        const reviewedByUserId = report.reviewedByUsername
+          ? await lookup.userIdByUsername(report.reviewedByUsername)
+          : null;
 
-      recorder.record({
-        kind: 'Discussion Threads',
-        id: seed.threadId,
-        fields: {
-          threadId: seed.threadId,
-          quizSlug: seed.quizSlug,
-          author: seed.authorUsername,
-          title: seed.title,
-          status: seed.status,
-          isSolved: String(seed.isSolved),
-          comments: String(seed.comments.length),
-          votes: String(seed.votes.length),
-        },
-        details: {
-          threadId: seed.threadId,
-          quizId,
-          quizSlug: seed.quizSlug,
-          authorId,
-          authorUsername: seed.authorUsername,
-          title: seed.title,
-          body: seed.body,
-          status: seed.status,
-          commentsCount: seed.commentsCount,
-          votesCount: seed.votesCount,
-          upvotesCount: seed.upvotesCount,
-          downvotesCount: seed.downvotesCount,
-          isSolved: seed.isSolved,
-          solvedAt: seed.solvedAt ?? null,
-          solvedCommentId: seed.solvedCommentId ?? null,
-          solvedBy: seed.solvedByUsername
-            ? await lookup.userIdByUsername(seed.solvedByUsername)
-            : null,
-          createdAt: ctx.nowIso,
-          updatedAt: ctx.nowIso,
-        },
-      });
+        const inserted = await tx
+          .insert(discussionCommentReports)
+          .values({
+            reporterId,
+            commentId: report.commentId,
+            reason: report.reason,
+            status: report.status ?? 'open',
+            reviewedByUserId,
+            reviewedAt: report.status && report.status !== 'open' ? ctx.nowIso : null,
+            actionTaken: report.status === 'actioned',
+            createdAt: ctx.nowIso,
+            updatedAt: ctx.nowIso,
+          })
+          .onConflictDoNothing()
+          .returning({ reportId: discussionCommentReports.reportId });
+
+        reportsInserted += inserted.length;
+
+        if (inserted.length > 0) {
+          recorder.record({
+            kind: 'Comment Reports',
+            id: inserted[0].reportId,
+            fields: {
+              reportId: inserted[0].reportId,
+              reporter: report.reporterUsername,
+              commentId: report.commentId,
+              reason: report.reason,
+              status: report.status ?? 'open',
+            },
+            details: {
+              reportId: inserted[0].reportId,
+              reporterId,
+              commentId: report.commentId,
+              reason: report.reason,
+              status: report.status ?? 'open',
+              reviewedByUserId,
+              reviewedAt: report.status && report.status !== 'open' ? ctx.nowIso : null,
+              actionTaken: report.status === 'actioned',
+              createdAt: ctx.nowIso,
+              updatedAt: ctx.nowIso,
+            },
+          });
+        }
+      }
+
+      logger.info(
+        `Comment seeded: "${seed.commentId.slice(0, 8)}…" on quiz "${seed.quizSlug}" (author=${seed.authorUsername})`,
+      );
     }
 
     summaries.push({
-      domain: 'discussions',
-      inserted: threadsInserted + commentsInserted + votesInserted,
+      domain: 'comments',
+      inserted: commentsInserted + votesInserted + reportsInserted,
       updated: 0,
       skipped,
     });

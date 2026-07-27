@@ -101,9 +101,9 @@ interface CommentAuthorForViewInput {
 
 /**
  * Convert a raw `discussion_comments` row + pre-joined author into
- * a `CommentView`. The field renaming mirrors the column renaming
- * in Phase 9.1 (`commentId` → `id`, `discussionContentStatus` →
- * `isHidden`).
+ * a `CommentView`. The field projection mirrors the column shape in
+ * `core/database/schema/comment/schema.ts` (`commentId` → `id`,
+ * `isHidden` → `isHidden`).
  */
 export function commentAuthorForView(input: CommentAuthorForViewInput): CommentView {
   const { row, author } = input;
