@@ -46,4 +46,12 @@ export const RFC7807_TYPE_URIS: Record<number, string> = {
   423: 'https://api.quiz.local/problems/locked',
   429: 'https://api.quiz.local/problems/too-many-requests',
   500: 'https://api.quiz.local/problems/internal-server-error',
+  /**
+   * Reserved for the deprecated-route pattern (e.g. the singular
+   * `/friend-request` stub in `SocialController`). The global exception
+   * filter maps `HttpException` with status 405 through
+   * `GLOBAL_METHOD_NOT_ALLOWED`, so callers receive a machine-readable
+   * RFC 7807 envelope rather than a plain NestJS string.
+   */
+  405: 'https://api.quiz.local/problems/method-not-allowed',
 };

@@ -71,6 +71,25 @@ export class CategoryFollowRepository implements CategoryFollowRepositoryPort {
       );
   }
 
+  async findActiveFollow(params: {
+    userId: string;
+    categoryId: string;
+  }): Promise<{ followId: string; userId: string; categoryId: string; createdAt: string } | null> {
+    const [row] = await this.db
+      .select(FOLLOW_COLUMNS)
+      .from(categoryFollows)
+      .where(
+        and(
+          eq(categoryFollows.userId, params.userId),
+          eq(categoryFollows.categoryId, params.categoryId),
+          isNull(categoryFollows.deletedAt),
+        ),
+      )
+      .limit(1);
+
+    return row ?? null;
+  }
+
   async listFollowedCategories(params: {
     userId: string;
     limit: number;

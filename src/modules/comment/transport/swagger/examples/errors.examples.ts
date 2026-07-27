@@ -119,8 +119,7 @@ export const createCommentParentCrossThreadExample = {
   type: RFC7807_TYPE_URIS[400],
   title: 'BadRequest',
   status: 400,
-  detail:
-    'The selected parent comment is not a top-level comment on this quiz',
+  detail: 'The selected parent comment is not a top-level comment on this quiz',
   instance: '/quizzes/660e8400-e29b-71d4-a716-446655440000/comments',
   extensions: { requestId: REQUEST_ID, code: 'COMMENT_PARENT_COMMENT_CROSS_THREAD' },
 };

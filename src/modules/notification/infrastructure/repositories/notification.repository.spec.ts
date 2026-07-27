@@ -95,20 +95,22 @@ const mockLogger = {
   debug: jest.Mock;
 }>;
 
-const createNotificationRow = (overrides: Partial<{
-  notificationId: string;
-  userId: string;
-  type: string;
-  title: string;
-  message: string;
-  metadata: Record<string, unknown>;
-  channel: string;
-  isRead: boolean;
-  readAt: string | null;
-  expiresAt: string | null;
-  createdAt: string;
-  deletedAt: string | null;
-}> = {}) => ({
+const createNotificationRow = (
+  overrides: Partial<{
+    notificationId: string;
+    userId: string;
+    type: string;
+    title: string;
+    message: string;
+    metadata: Record<string, unknown>;
+    channel: string;
+    isRead: boolean;
+    readAt: string | null;
+    expiresAt: string | null;
+    createdAt: string;
+    deletedAt: string | null;
+  }> = {},
+) => ({
   notificationId: 'notif-1',
   userId: 'user-1',
   type: 'achievement_earned',
@@ -129,7 +131,11 @@ describe('NotificationRepository', () => {
     it('creates a notification with all required fields', async () => {
       const notificationRow = createNotificationRow();
       const { db } = createMockDb([notificationRow]);
-      const repo = new NotificationRepository(db as never, mockLogger, mockTransactionalContext as never);
+      const repo = new NotificationRepository(
+        db as never,
+        mockLogger,
+        mockTransactionalContext as never,
+      );
 
       const result = await repo.create({
         userId: 'user-1',
@@ -148,7 +154,11 @@ describe('NotificationRepository', () => {
       const metadata = { achievementId: 'badge-123', tier: 'gold' };
       const notificationRow = createNotificationRow({ metadata });
       const { db } = createMockDb([notificationRow]);
-      const repo = new NotificationRepository(db as never, mockLogger, mockTransactionalContext as never);
+      const repo = new NotificationRepository(
+        db as never,
+        mockLogger,
+        mockTransactionalContext as never,
+      );
 
       const result = await repo.create({
         userId: 'user-1',
@@ -164,7 +174,11 @@ describe('NotificationRepository', () => {
     it('creates a notification with custom channel', async () => {
       const notificationRow = createNotificationRow({ channel: 'email' });
       const { db } = createMockDb([notificationRow]);
-      const repo = new NotificationRepository(db as never, mockLogger, mockTransactionalContext as never);
+      const repo = new NotificationRepository(
+        db as never,
+        mockLogger,
+        mockTransactionalContext as never,
+      );
 
       const result = await repo.create({
         userId: 'user-1',
@@ -181,7 +195,11 @@ describe('NotificationRepository', () => {
       const expiresAt = '2024-12-31T23:59:59.000Z';
       const notificationRow = createNotificationRow({ expiresAt });
       const { db } = createMockDb([notificationRow]);
-      const repo = new NotificationRepository(db as never, mockLogger, mockTransactionalContext as never);
+      const repo = new NotificationRepository(
+        db as never,
+        mockLogger,
+        mockTransactionalContext as never,
+      );
 
       const result = await repo.create({
         userId: 'user-1',
@@ -199,7 +217,11 @@ describe('NotificationRepository', () => {
     it('returns notification when found', async () => {
       const notificationRow = createNotificationRow();
       const { db } = createMockDb([notificationRow]);
-      const repo = new NotificationRepository(db as never, mockLogger, mockTransactionalContext as never);
+      const repo = new NotificationRepository(
+        db as never,
+        mockLogger,
+        mockTransactionalContext as never,
+      );
 
       const result = await repo.findById('notif-1');
 
@@ -209,7 +231,11 @@ describe('NotificationRepository', () => {
 
     it('returns null when not found', async () => {
       const { db } = createMockDb([]);
-      const repo = new NotificationRepository(db as never, mockLogger, mockTransactionalContext as never);
+      const repo = new NotificationRepository(
+        db as never,
+        mockLogger,
+        mockTransactionalContext as never,
+      );
 
       const result = await repo.findById('nonexistent');
 
@@ -218,7 +244,11 @@ describe('NotificationRepository', () => {
 
     it('excludes deleted notifications', async () => {
       const { db } = createMockDb([]);
-      const repo = new NotificationRepository(db as never, mockLogger, mockTransactionalContext as never);
+      const repo = new NotificationRepository(
+        db as never,
+        mockLogger,
+        mockTransactionalContext as never,
+      );
 
       await repo.findById('deleted-notif');
 
@@ -233,7 +263,11 @@ describe('NotificationRepository', () => {
         createNotificationRow({ notificationId: 'notif-2' }),
       ];
       const { db } = createMockDb(notifications);
-      const repo = new NotificationRepository(db as never, mockLogger, mockTransactionalContext as never);
+      const repo = new NotificationRepository(
+        db as never,
+        mockLogger,
+        mockTransactionalContext as never,
+      );
 
       const result = await repo.findByUser({
         userId: 'user-1',
@@ -248,7 +282,11 @@ describe('NotificationRepository', () => {
         createNotificationRow({ notificationId: `notif-${i}` }),
       );
       const { db } = createMockDb(notifications);
-      const repo = new NotificationRepository(db as never, mockLogger, mockTransactionalContext as never);
+      const repo = new NotificationRepository(
+        db as never,
+        mockLogger,
+        mockTransactionalContext as never,
+      );
 
       await repo.findByUser({
         userId: 'user-1',
@@ -260,7 +298,11 @@ describe('NotificationRepository', () => {
 
     it('filters by unreadOnly when specified', async () => {
       const { db } = createMockDb([]);
-      const repo = new NotificationRepository(db as never, mockLogger, mockTransactionalContext as never);
+      const repo = new NotificationRepository(
+        db as never,
+        mockLogger,
+        mockTransactionalContext as never,
+      );
 
       await repo.findByUser({
         userId: 'user-1',
@@ -273,7 +315,11 @@ describe('NotificationRepository', () => {
 
     it('filters by type when specified', async () => {
       const { db } = createMockDb([]);
-      const repo = new NotificationRepository(db as never, mockLogger, mockTransactionalContext as never);
+      const repo = new NotificationRepository(
+        db as never,
+        mockLogger,
+        mockTransactionalContext as never,
+      );
 
       await repo.findByUser({
         userId: 'user-1',
@@ -286,7 +332,11 @@ describe('NotificationRepository', () => {
 
     it('filters by fromDate when specified', async () => {
       const { db } = createMockDb([]);
-      const repo = new NotificationRepository(db as never, mockLogger, mockTransactionalContext as never);
+      const repo = new NotificationRepository(
+        db as never,
+        mockLogger,
+        mockTransactionalContext as never,
+      );
 
       await repo.findByUser({
         userId: 'user-1',
@@ -299,7 +349,11 @@ describe('NotificationRepository', () => {
 
     it('filters by toDate when specified', async () => {
       const { db } = createMockDb([]);
-      const repo = new NotificationRepository(db as never, mockLogger, mockTransactionalContext as never);
+      const repo = new NotificationRepository(
+        db as never,
+        mockLogger,
+        mockTransactionalContext as never,
+      );
 
       await repo.findByUser({
         userId: 'user-1',
@@ -312,7 +366,11 @@ describe('NotificationRepository', () => {
 
     it('filters by both fromDate and toDate when specified', async () => {
       const { db } = createMockDb([]);
-      const repo = new NotificationRepository(db as never, mockLogger, mockTransactionalContext as never);
+      const repo = new NotificationRepository(
+        db as never,
+        mockLogger,
+        mockTransactionalContext as never,
+      );
 
       await repo.findByUser({
         userId: 'user-1',
@@ -326,7 +384,11 @@ describe('NotificationRepository', () => {
 
     it('returns empty array when no notifications exist', async () => {
       const { db } = createMockDb([]);
-      const repo = new NotificationRepository(db as never, mockLogger, mockTransactionalContext as never);
+      const repo = new NotificationRepository(
+        db as never,
+        mockLogger,
+        mockTransactionalContext as never,
+      );
 
       const result = await repo.findByUser({
         userId: 'user-1',
@@ -338,7 +400,11 @@ describe('NotificationRepository', () => {
 
     it('excludes archived notifications by default', async () => {
       const { db } = createMockDb([]);
-      const repo = new NotificationRepository(db as never, mockLogger, mockTransactionalContext as never);
+      const repo = new NotificationRepository(
+        db as never,
+        mockLogger,
+        mockTransactionalContext as never,
+      );
 
       await repo.findByUser({
         userId: 'user-1',
@@ -353,7 +419,11 @@ describe('NotificationRepository', () => {
   describe('countUnread', () => {
     it('returns the count of unread notifications', async () => {
       const { db } = createMockDb([[{ value: 5 }]]);
-      const repo = new NotificationRepository(db as never, mockLogger, mockTransactionalContext as never);
+      const repo = new NotificationRepository(
+        db as never,
+        mockLogger,
+        mockTransactionalContext as never,
+      );
 
       const result = await repo.countUnread('user-1');
 
@@ -362,7 +432,11 @@ describe('NotificationRepository', () => {
 
     it('returns 0 when no unread notifications', async () => {
       const { db } = createMockDb([[{ value: 0 }]]);
-      const repo = new NotificationRepository(db as never, mockLogger, mockTransactionalContext as never);
+      const repo = new NotificationRepository(
+        db as never,
+        mockLogger,
+        mockTransactionalContext as never,
+      );
 
       const result = await repo.countUnread('user-1');
 
@@ -373,7 +447,11 @@ describe('NotificationRepository', () => {
   describe('markAsRead', () => {
     it('marks a notification as read', async () => {
       const { db } = createMockDb([]);
-      const repo = new NotificationRepository(db as never, mockLogger, mockTransactionalContext as never);
+      const repo = new NotificationRepository(
+        db as never,
+        mockLogger,
+        mockTransactionalContext as never,
+      );
 
       await repo.markAsRead('notif-1', 'user-1');
 
@@ -382,7 +460,11 @@ describe('NotificationRepository', () => {
 
     it('sets the readAt timestamp', async () => {
       const { db } = createMockDb([]);
-      const repo = new NotificationRepository(db as never, mockLogger, mockTransactionalContext as never);
+      const repo = new NotificationRepository(
+        db as never,
+        mockLogger,
+        mockTransactionalContext as never,
+      );
 
       await repo.markAsRead('notif-1', 'user-1');
 
@@ -393,7 +475,11 @@ describe('NotificationRepository', () => {
   describe('markAsUnread', () => {
     it('marks a notification as unread', async () => {
       const { db } = createMockDb([]);
-      const repo = new NotificationRepository(db as never, mockLogger, mockTransactionalContext as never);
+      const repo = new NotificationRepository(
+        db as never,
+        mockLogger,
+        mockTransactionalContext as never,
+      );
 
       await repo.markAsUnread('notif-1', 'user-1');
 
@@ -402,7 +488,11 @@ describe('NotificationRepository', () => {
 
     it('clears the readAt timestamp', async () => {
       const { db } = createMockDb([]);
-      const repo = new NotificationRepository(db as never, mockLogger, mockTransactionalContext as never);
+      const repo = new NotificationRepository(
+        db as never,
+        mockLogger,
+        mockTransactionalContext as never,
+      );
 
       await repo.markAsUnread('notif-1', 'user-1');
 
@@ -413,7 +503,11 @@ describe('NotificationRepository', () => {
   describe('markAllAsRead', () => {
     it('marks all user notifications as read', async () => {
       const { db } = createMockDb([]);
-      const repo = new NotificationRepository(db as never, mockLogger, mockTransactionalContext as never);
+      const repo = new NotificationRepository(
+        db as never,
+        mockLogger,
+        mockTransactionalContext as never,
+      );
 
       await repo.markAllAsRead('user-1');
 
@@ -424,7 +518,11 @@ describe('NotificationRepository', () => {
   describe('softDelete', () => {
     it('sets deletedAt timestamp instead of hard delete', async () => {
       const { db } = createMockDb([]);
-      const repo = new NotificationRepository(db as never, mockLogger, mockTransactionalContext as never);
+      const repo = new NotificationRepository(
+        db as never,
+        mockLogger,
+        mockTransactionalContext as never,
+      );
 
       await repo.softDelete('notif-1', 'user-1');
 
@@ -433,7 +531,11 @@ describe('NotificationRepository', () => {
 
     it('only affects non-deleted notifications', async () => {
       const { db } = createMockDb([]);
-      const repo = new NotificationRepository(db as never, mockLogger, mockTransactionalContext as never);
+      const repo = new NotificationRepository(
+        db as never,
+        mockLogger,
+        mockTransactionalContext as never,
+      );
 
       await repo.softDelete('notif-1', 'user-1');
 
@@ -444,7 +546,11 @@ describe('NotificationRepository', () => {
   describe('delete', () => {
     it('calls softDelete instead of hard delete', async () => {
       const { db } = createMockDb([]);
-      const repo = new NotificationRepository(db as never, mockLogger, mockTransactionalContext as never);
+      const repo = new NotificationRepository(
+        db as never,
+        mockLogger,
+        mockTransactionalContext as never,
+      );
 
       await repo.delete('notif-1', 'user-1');
 
@@ -455,7 +561,11 @@ describe('NotificationRepository', () => {
   describe('deleteReadNotifications', () => {
     it('soft deletes all read notifications for a user', async () => {
       const { db } = createMockDb([{ rowCount: 3 }]);
-      const repo = new NotificationRepository(db as never, mockLogger, mockTransactionalContext as never);
+      const repo = new NotificationRepository(
+        db as never,
+        mockLogger,
+        mockTransactionalContext as never,
+      );
 
       const result = await repo.deleteReadNotifications('user-1');
 
@@ -465,7 +575,11 @@ describe('NotificationRepository', () => {
 
     it('returns 0 when no read notifications exist', async () => {
       const { db } = createMockDb([{ rowCount: 0 }]);
-      const repo = new NotificationRepository(db as never, mockLogger, mockTransactionalContext as never);
+      const repo = new NotificationRepository(
+        db as never,
+        mockLogger,
+        mockTransactionalContext as never,
+      );
 
       const result = await repo.deleteReadNotifications('user-1');
 
@@ -476,7 +590,11 @@ describe('NotificationRepository', () => {
   describe('deleteExpired', () => {
     it('hard deletes expired notifications', async () => {
       const { db } = createMockDb([{ rowCount: 10 }]);
-      const repo = new NotificationRepository(db as never, mockLogger, mockTransactionalContext as never);
+      const repo = new NotificationRepository(
+        db as never,
+        mockLogger,
+        mockTransactionalContext as never,
+      );
 
       const result = await repo.deleteExpired();
 
@@ -486,7 +604,11 @@ describe('NotificationRepository', () => {
 
     it('returns 0 when no expired notifications exist', async () => {
       const { db } = createMockDb([{ rowCount: 0 }]);
-      const repo = new NotificationRepository(db as never, mockLogger, mockTransactionalContext as never);
+      const repo = new NotificationRepository(
+        db as never,
+        mockLogger,
+        mockTransactionalContext as never,
+      );
 
       const result = await repo.deleteExpired();
 
@@ -506,7 +628,11 @@ describe('NotificationRepository', () => {
       ];
 
       const { db } = createMockDb(mockResults);
-      const repo = new NotificationRepository(db as never, mockLogger, mockTransactionalContext as never);
+      const repo = new NotificationRepository(
+        db as never,
+        mockLogger,
+        mockTransactionalContext as never,
+      );
 
       const result = await repo.getAnalytics();
 
@@ -517,17 +643,14 @@ describe('NotificationRepository', () => {
     });
 
     it('returns empty byType when no data', async () => {
-      const mockResults = [
-        [{ value: 0 }],
-        [{ value: 0 }],
-        [],
-        [],
-        [{ value: 0 }],
-        [{ value: 0 }],
-      ];
+      const mockResults = [[{ value: 0 }], [{ value: 0 }], [], [], [{ value: 0 }], [{ value: 0 }]];
 
       const { db } = createMockDb(mockResults);
-      const repo = new NotificationRepository(db as never, mockLogger, mockTransactionalContext as never);
+      const repo = new NotificationRepository(
+        db as never,
+        mockLogger,
+        mockTransactionalContext as never,
+      );
 
       const result = await repo.getAnalytics();
 

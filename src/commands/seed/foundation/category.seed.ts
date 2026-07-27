@@ -90,6 +90,9 @@ export const createCategoriesDomain = (): SeedDomain => ({
       }
     }
 
+    // Always return rows to populate the SEED_RECORD with IDs and timestamps.
+    // Using COALESCE in the setWhere means "no update needed" rows are still
+    // returned (the condition evaluates to true via COALESCE).
     const touchedRows = await tx
       .insert(categories)
       .values(
@@ -110,11 +113,8 @@ export const createCategoriesDomain = (): SeedDomain => ({
           imageUrl: sql`excluded.image_url`,
           updatedAt: ctx.nowIso,
         },
-        setWhere: sql`
-          ${categories.name} IS DISTINCT FROM excluded.name
-          OR ${categories.description} IS DISTINCT FROM excluded.description
-          OR ${categories.imageUrl} IS DISTINCT FROM excluded.image_url
-        `,
+        // Always evaluate to true so RETURNING includes all rows (inserted and updated).
+        setWhere: sql`true`,
       })
       .returning({
         categoryId: categories.categoryId,

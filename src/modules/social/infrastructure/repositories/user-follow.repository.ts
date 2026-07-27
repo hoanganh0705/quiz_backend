@@ -11,7 +11,7 @@ import type {
   PaginatedFollowingResult,
   PaginatedMutualFollowersResult,
 } from '../../domain/types/social.types';
-import { eq, and, sql, desc, count, lte, isNull } from 'drizzle-orm';
+import { eq, and, sql, desc, count, lte, isNull, aliasedTable } from 'drizzle-orm';
 
 @Injectable()
 export class UserFollowRepository implements UserFollowRepositoryPort {
@@ -94,6 +94,22 @@ export class UserFollowRepository implements UserFollowRepositoryPort {
       .update(userFollows)
       .set({ deletedAt: now })
       .where(and(eq(userFollows.followerId, followerId), eq(userFollows.followingId, followingId)));
+  }
+
+  async findActiveFollow(followerId: string, followingId: string): Promise<UserFollow | null> {
+    const [row] = await this.db
+      .select()
+      .from(userFollows)
+      .where(
+        and(
+          eq(userFollows.followerId, followerId),
+          eq(userFollows.followingId, followingId),
+          isNull(userFollows.deletedAt),
+        ),
+      )
+      .limit(1);
+
+    return (row as unknown as UserFollow) ?? null;
   }
 
   async getFollowers(userId: string, limit: number, cursor?: string): Promise<Follower[]> {
@@ -319,6 +335,9 @@ export class UserFollowRepository implements UserFollowRepositoryPort {
       }
     }
 
+    const u = aliasedTable(users, 'u');
+    const up = aliasedTable(userProfiles, 'up');
+
     const mutualFollowersQuery = sql<{
       userId: string;
       username: string;
@@ -363,13 +382,13 @@ export class UserFollowRepository implements UserFollowRepositoryPort {
         )
       )
       SELECT
-        u.${users.userId} AS "userId",
-        u.${users.username} AS username,
-        up.${userProfiles.avatarUrl} AS "avatarUrl"
+        ${u.userId} AS "userId",
+        ${u.username} AS username,
+        ${up.avatarUrl} AS "avatarUrl"
       FROM shared_following sf
-      INNER JOIN ${users} u ON u.${users.userId} = sf.user_id
-      LEFT JOIN ${userProfiles} up ON up.${userProfiles.userId} = u.${users.userId}
-      WHERE u.${users.deletedAt} IS NULL
+      INNER JOIN ${users} u ON ${u.userId} = sf.user_id
+      LEFT JOIN ${userProfiles} up ON ${up.userId} = ${u.userId}
+      WHERE ${u.deletedAt} IS NULL
     `;
 
     const rowsResult = await this.db.execute(sql`
