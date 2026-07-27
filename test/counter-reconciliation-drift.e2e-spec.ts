@@ -180,9 +180,23 @@ describe('Counter reconciliation drift canary (Fix #8 / ADR-0017)', () => {
           ), '0')                                                            AS src_rating_count
         FROM quiz_stats qs
       `);
-      const rows = (
-        result as unknown as { rows: typeof result extends Array<infer R> ? R[] : never }
-      ).rows;
+      type DriftSqlRow = {
+        quiz_id: string;
+        cached_total_attempts: string;
+        cached_total_players: string;
+        cached_avg_score_percent: string;
+        cached_completion_rate: string;
+        cached_avg_rating: string;
+        cached_rating_count: string;
+        src_total_attempts: string;
+        src_total_players: string;
+        src_avg_score_percent: string | null;
+        src_completion_rate: string | null;
+        src_avg_rating: string | null;
+        src_rating_count: string;
+      };
+
+      const rows = (result.rows as unknown as DriftSqlRow[]) ?? [];
 
       const drift: DriftRow[] = [];
       const COUNT_TOLERANCE = 0;
