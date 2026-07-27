@@ -32,7 +32,7 @@ import {
   HttpStatus,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
-import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { ApiTags } from '@nestjs/swagger';
 import { Public } from '@/common/decorators/public.decorator';
 import { Permissions } from '@/common/authorization/decorators/permissions.decorator';
 import { Permission } from '@/common/authorization/permissions';
@@ -41,11 +41,17 @@ import type { JwtPayload } from '@/common/guards/jwt.guard';
 import { CommentApplicationService } from '../../application/comment-application.service';
 import { CommentPresenter } from '../presenters/comment.presenter';
 import { CommentNotFoundError } from '../../domain/errors';
+import { EditCommentDto, VoteDto, ReportCommentDto } from '../../dto/request';
 import {
-  EditCommentDto,
-  VoteDto,
-  ReportCommentDto,
-} from '../../dto/request';
+  ApiDeleteCommentResponses,
+  ApiEditCommentResponses,
+  ApiGetCommentResponses,
+  ApiHideCommentResponses,
+  ApiRemoveVoteResponses,
+  ApiReportCommentResponses,
+  ApiRestoreCommentResponses,
+  ApiVoteCommentResponses,
+} from '../swagger/discussion-swagger-decorators';
 
 @ApiTags('comments')
 @Controller('comments')
@@ -57,6 +63,7 @@ export class CommentController {
 
   @Get(':commentId')
   @Public()
+  @ApiGetCommentResponses()
   async getComment(
     @OptionalCurrentUser() viewer: JwtPayload | undefined,
     @Param('commentId', new ParseUUIDPipe({ version: '7' })) commentId: string,
@@ -69,9 +76,9 @@ export class CommentController {
   }
 
   @Patch(':commentId')
-  @ApiBearerAuth()
   @Throttle({ default: { limit: 20, ttl: 60_000 } })
   @HttpCode(HttpStatus.OK)
+  @ApiEditCommentResponses()
   async editComment(
     @CurrentUser() user: JwtPayload,
     @Param('commentId', new ParseUUIDPipe({ version: '7' })) commentId: string,
@@ -82,9 +89,9 @@ export class CommentController {
   }
 
   @Delete(':commentId')
-  @ApiBearerAuth()
   @Throttle({ default: { limit: 30, ttl: 60_000 } })
   @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiDeleteCommentResponses()
   async deleteComment(
     @CurrentUser() user: JwtPayload,
     @Param('commentId', new ParseUUIDPipe({ version: '7' })) commentId: string,
@@ -93,9 +100,9 @@ export class CommentController {
   }
 
   @Put(':commentId/vote')
-  @ApiBearerAuth()
   @Throttle({ default: { limit: 20, ttl: 60_000 } })
   @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiVoteCommentResponses()
   async vote(
     @CurrentUser() user: JwtPayload,
     @Param('commentId', new ParseUUIDPipe({ version: '7' })) commentId: string,
@@ -105,9 +112,9 @@ export class CommentController {
   }
 
   @Delete(':commentId/vote')
-  @ApiBearerAuth()
   @Throttle({ default: { limit: 20, ttl: 60_000 } })
   @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiRemoveVoteResponses()
   async removeVote(
     @CurrentUser() user: JwtPayload,
     @Param('commentId', new ParseUUIDPipe({ version: '7' })) commentId: string,
@@ -116,9 +123,9 @@ export class CommentController {
   }
 
   @Post(':commentId/reports')
-  @ApiBearerAuth()
   @Throttle({ default: { limit: 5, ttl: 60_000 } })
   @HttpCode(HttpStatus.CREATED)
+  @ApiReportCommentResponses()
   async reportComment(
     @CurrentUser() user: JwtPayload,
     @Param('commentId', new ParseUUIDPipe({ version: '7' })) commentId: string,
@@ -129,10 +136,10 @@ export class CommentController {
   }
 
   @Post(':commentId/hide')
-  @ApiBearerAuth()
   @Permissions(Permission.DISCUSSION_MODERATE)
   @Throttle({ default: { limit: 30, ttl: 60_000 } })
   @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiHideCommentResponses()
   async hideComment(
     @CurrentUser() moderator: JwtPayload,
     @Param('commentId', new ParseUUIDPipe({ version: '7' })) commentId: string,
@@ -141,10 +148,10 @@ export class CommentController {
   }
 
   @Post(':commentId/restore')
-  @ApiBearerAuth()
   @Permissions(Permission.DISCUSSION_MODERATE)
   @Throttle({ default: { limit: 30, ttl: 60_000 } })
   @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiRestoreCommentResponses()
   async restoreComment(
     @CurrentUser() moderator: JwtPayload,
     @Param('commentId', new ParseUUIDPipe({ version: '7' })) commentId: string,

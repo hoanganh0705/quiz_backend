@@ -22,16 +22,17 @@ import {
   HttpStatus,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
-import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { ApiTags } from '@nestjs/swagger';
 import { Public } from '@/common/decorators/public.decorator';
 import { CurrentUser, OptionalCurrentUser } from '@/common/decorators/current-user.decorator';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
 import { CommentApplicationService } from '../../application/comment-application.service';
 import { CommentPresenter } from '../presenters/comment.presenter';
+import { CreateCommentDto, ListCommentsQueryDto } from '../../dto/request';
 import {
-  CreateCommentDto,
-  ListCommentsQueryDto,
-} from '../../dto/request';
+  ApiCreateCommentResponses,
+  ApiListQuizCommentsResponses,
+} from '../swagger/discussion-swagger-decorators';
 
 @ApiTags('quizzes')
 @Controller('quizzes')
@@ -43,6 +44,7 @@ export class QuizCommentController {
 
   @Get(':quizId/comments')
   @Public()
+  @ApiListQuizCommentsResponses()
   async listQuizComments(
     @OptionalCurrentUser() viewer: JwtPayload | undefined,
     @Param('quizId', new ParseUUIDPipe({ version: '7' })) quizId: string,
@@ -53,9 +55,9 @@ export class QuizCommentController {
   }
 
   @Post(':quizId/comments')
-  @ApiBearerAuth()
   @Throttle({ default: { limit: 20, ttl: 60_000 } })
   @HttpCode(HttpStatus.CREATED)
+  @ApiCreateCommentResponses()
   async createComment(
     @CurrentUser() user: JwtPayload,
     @Param('quizId', new ParseUUIDPipe({ version: '7' })) quizId: string,
