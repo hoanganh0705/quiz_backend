@@ -78,13 +78,14 @@ export class InvalidXpEventError extends RankingDomainError {
  * error'` envelope. The thrown message and the constructor-injected
  * `code: 'RANK_CALCULATION_ERROR'` were both discarded. After Phase
  * 3.2 the global filter resolves the new code
- * `RANKING_RANK_CALCULATION_ERROR` and preserves the thrown message.
+ * `RANKING_RANK_CALCULATION_ERROR` and returns a sanitized message
+ * without exposing internal details.
  */
 export class RankCalculationError extends RankingDomainError {
   readonly code = 'RANKING_RANK_CALCULATION_ERROR';
   readonly context: Readonly<Record<string, unknown>>;
   constructor(period: string, reason: string, context?: Record<string, unknown>) {
-    super(`Rank calculation failed for ${period}: ${reason}`);
+    super('Rank calculation failed');
     this.context = { period, ...(context ?? {}) };
   }
 }
@@ -98,13 +99,14 @@ export class RankCalculationError extends RankingDomainError {
  * error'` envelope. The thrown message and the constructor-injected
  * `code: 'PERIOD_RESET_ERROR'` were both discarded. After Phase 3.2
  * the global filter resolves the new code
- * `RANKING_PERIOD_RESET_ERROR` and preserves the thrown message.
+ * `RANKING_PERIOD_RESET_ERROR` and returns a sanitized message
+ * without exposing internal details.
  */
 export class PeriodResetError extends RankingDomainError {
   readonly code = 'RANKING_PERIOD_RESET_ERROR';
   readonly context: Readonly<Record<string, unknown>>;
   constructor(period: string, reason: string, context?: Record<string, unknown>) {
-    super(`Period reset failed for ${period}: ${reason}`);
+    super('Period reset failed');
     this.context = { period, ...(context ?? {}) };
   }
 }

@@ -34,6 +34,8 @@ export abstract class AchievementDomainError extends BaseDomainException {}
  * `'Badge not found'`. The global filter now preserves
  * `exception.message` (default format: `'Badge not found: <badgeId>'`,
  * with the ID interpolated from the constructor argument).
+ *
+ * Internal details (userId, reason) are not exposed to clients.
  */
 export class BadgeNotFoundError extends AchievementDomainError {
   readonly code = 'BADGE_NOT_FOUND';
@@ -52,12 +54,9 @@ export class BadgeNotFoundError extends AchievementDomainError {
  * Wire-shape improvement: the prior per-module filter had NO branch
  * for `AchievementGrantError` in its `mapToHttp` — the class fell
  * through to the catch-all and was returned as `500 Internal Server
- * Error` with a hardcoded generic message
- * `'Internal server error'` (the thrown message and `context` were
- * both discarded). The global filter now resolves the code correctly
- * and preserves the thrown message (default format:
- * `'Failed to grant achievement for user <userId>: <reason>'`,
- * with both interpolated from the constructor arguments).
+ * Error` with a hardcoded generic message. The global filter now
+ * resolves the code correctly and returns a sanitized message without
+ * exposing internal details (userId, reason).
  *
  * Note: this exception is defined and exported but is currently NOT
  * thrown by `achievement.application.service.ts` (audit at rev4.7
@@ -69,7 +68,7 @@ export class AchievementGrantError extends AchievementDomainError {
   readonly code = 'ACHIEVEMENT_GRANT_ERROR';
   readonly context: { readonly userId: string; readonly reason: string };
   constructor(userId: string, reason: string) {
-    super(`Failed to grant achievement for user ${userId}: ${reason}`);
+    super('Failed to grant achievement');
     this.context = { userId, reason };
   }
 }

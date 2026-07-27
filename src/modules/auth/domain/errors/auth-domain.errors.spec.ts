@@ -58,7 +58,7 @@ const AUTH_CODES: ReadonlyArray<{
     name: 'TokenReuseDetectedError',
     ctor: TokenReuseDetectedError,
     expectedCode: 'AUTH_TOKEN_REUSED',
-    message: 'Refresh token reuse detected. All sessions have been revoked',
+    message: 'Security action taken on your account. Please log in again.',
   },
   {
     name: 'SessionContextMismatchError',
