@@ -10,7 +10,7 @@ import { BaseDomainException } from '@/common/errors/base-domain.exception';
  * `code` via `ProblemCodeMapping` instead. The intermediate stays as a
  * domain-side marker for symmetry with the auth, quiz, attempt, user,
  * category, tag, tournament, review, bookmark, instance, social,
- * achievement, and discussion modules.)
+ * achievement, and comment modules.)
  *
  * Abstract — does not declare a `code` — because no concrete exception
  * needs a generic `code` for an unmapped operation failure. Audit:

@@ -51,9 +51,9 @@ export class QuizOperationFailedError extends QuizDomainError {
  * variant is a CRUD-style "quiz resource missing"; the analytics variant
  * is a "no analytics row exists for this quiz" lookup. Same name, different
  * hierarchy, different code — clients switch on `extensions.code`, never
- * on the class name. The discussion module also has its own
- * `QuizNotFoundError` in `src/modules/discussion/domain/errors` with code
- * `DISCUSSION_QUIZ_NOT_FOUND` (planned in Phase 1's user-module PR).
+ * on the class name. The comment module also has its own
+ * `QuizNotFoundError` in `src/modules/comment/domain/errors` with code
+ * `COMMENT_QUIZ_NOT_FOUND`.
  */
 export class QuizNotFoundError extends QuizDomainError {
   readonly code = 'QUIZ_NOT_FOUND';

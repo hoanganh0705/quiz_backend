@@ -61,7 +61,7 @@ export enum Permission {
   TOURNAMENT_CANCEL = 'TOURNAMENT_CANCEL',
 
   // Moderation
-  DISCUSSION_MODERATE = 'DISCUSSION_MODERATE',
+  COMMENT_MODERATE = 'COMMENT_MODERATE',
   REVIEW_MODERATE = 'REVIEW_MODERATE',
 
   // Phase 5 / Issue #21 — gate the creator-only review analytics
@@ -117,7 +117,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, readonly Permission[]> = {
     Permission.TOURNAMENT_CANCEL,
 
     // Moderation
-    Permission.DISCUSSION_MODERATE,
+    Permission.COMMENT_MODERATE,
     Permission.REVIEW_MODERATE,
 
     // Phase 5 / Issue #21 — admins always have analytics access
@@ -147,7 +147,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, readonly Permission[]> = {
     Permission.TOURNAMENT_ATTEMPT,
 
     // Moderation
-    Permission.DISCUSSION_MODERATE,
+    Permission.COMMENT_MODERATE,
     Permission.REVIEW_MODERATE,
 
     // Phase 5 / Issue #21 — moderators get analytics access so

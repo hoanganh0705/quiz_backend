@@ -15,7 +15,7 @@ Applies to everything under `src/`. Out of scope for this document: API envelope
 
 - `docs/PROJECT_CONSTITUTION.md` §2 (Architecture Principles), §3.2 (Boundaries that must never move), §3.3 (Rules that apply to changes).
 - `src/app.module.ts` — global provider wiring.
-- `src/modules/tag/` — reference module; every other module (`quiz/`, `user/`, `category/`, `auth/`, `attempt/`, `bookmark/`, `review/`, `tournament/`, `instance/`, `ranking/`, `achievement/`, `notification/`, `discussion/`, `social/`, `search/`, `health/`) mirrors the same shape.
+- `src/modules/tag/` — reference module; every other module (`quiz/`, `user/`, `category/`, `auth/`, `attempt/`, `bookmark/`, `review/`, `tournament/`, `instance/`, `ranking/`, `achievement/`, `notification/`, `comment/`, `social/`, `search/`, `health/`) mirrors the same shape.
 - `src/core/` — infrastructure layer; the only place that imports `drizzle-orm`, `pg`, `ioredis`, `nestjs-pino`, or owns `core/database/schema/`.
 
 ## Rules

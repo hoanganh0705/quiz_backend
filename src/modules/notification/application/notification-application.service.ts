@@ -54,7 +54,7 @@ const toPreferencesDto = (
   tournamentEnabled: prefs.tournamentEnabled,
   rankEnabled: prefs.rankEnabled,
   friendEnabled: prefs.friendEnabled,
-  discussionEnabled: prefs.discussionEnabled,
+  commentEnabled: prefs.commentEnabled,
   summaryEnabled: prefs.summaryEnabled,
   marketingEnabled: prefs.marketingEnabled,
   rankImprovementThreshold: prefs.rankImprovementThreshold,

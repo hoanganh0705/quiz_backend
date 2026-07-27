@@ -8,7 +8,7 @@
 //
 // Cross-domain imports in this file:
 //   - users (auth)              — quiz creators, hosts, reviewers, players
-//   - discussionComments        — declared by the comment domain; imported
+//   - commentRows        — declared by the comment domain; imported
 //                                  here from the barrel
 // =============================================================================
 
@@ -31,7 +31,7 @@ import {
   quizInstancePlayers,
 } from './schema';
 import { users } from '../auth/schema';
-import { categories, discussionComments, tags } from '..';
+import { categories, commentRows, tags } from '..';
 
 export const quizzesRelations = relations(quizzes, ({ one, many }) => ({
   user: one(users, {
@@ -54,7 +54,7 @@ export const quizzesRelations = relations(quizzes, ({ one, many }) => ({
   quizStats: one(quizStats),
   quizReviews: many(quizReviews),
   bookmarkedQuizzes: many(bookmarkedQuizzes),
-  discussionComments: many(discussionComments),
+  commentRows: many(commentRows),
 }));
 
 export const quizVersionsRelations = relations(quizVersions, ({ one, many }) => ({

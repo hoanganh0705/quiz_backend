@@ -5,14 +5,14 @@
  * domains. Writes to the existing `auth_audit_logs` table —
  * that table is intentionally generic (`user_id`, `event_type`,
  * `ip_address`, `metadata` jsonb, `created_at`, `expires_at`),
- * which is what the `DiscussionModeratorAuditService` already
+ * which is what the `CommentModeratorAuditService` already
  * relies on (`eventType: 'moderator_action'`).
  *
  * Why this exists
  * ---------------
  * Before this service, every module that needed auditing had to
  * either write its own INSERT into `auth_audit_logs` (as
- * `DiscussionModeratorAuditService` does) or call
+ * `CommentModeratorAuditService` does) or call
  * `AuthAuditLogService`, which was scoped to auth events in
  * name only but had a narrow mental model that pushed callers
  * away from using it for non-auth events. The result: profile
@@ -63,7 +63,7 @@ export type AuditDomain =
   | 'review'
   | 'social'
   | 'quiz'
-  | 'discussion';
+  | 'comment';
 
 export type AuditRecordInput = {
   /**
@@ -129,7 +129,7 @@ export type AuditRecordInput = {
    * auth-domain retention (`SecurityConfig.authAuditRetentionDays`)
    * for backward compatibility. Callers from domains with a
    * stricter compliance requirement (e.g. moderation) should
-   * set this explicitly — the `DiscussionModeratorAuditService`
+   * set this explicitly — the `CommentModeratorAuditService`
    * uses 365 days, which is the longest reasonable horizon for
    * an audit log of moderator actions.
    */

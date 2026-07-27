@@ -21,8 +21,8 @@ src/core/database/schema/
 ├── quiz/
 │   ├── schema.ts              ← quizzes, quiz_versions, quiz_questions, quiz_answer_options, quiz_tags, quiz_stats, ...
 │   └── relations.ts
-├── discussion/
-│   ├── schema.ts              ← discussion_threads, discussion_comments, discussion_votes, discussion_reports, ...
+├── comment/
+│   ├── schema.ts              ← comments, comment_votes, comment_reports, ...
 │   └── relations.ts
 ├── outbox/
 │   └── schema.ts              ← outbox_events (shared by all modules)

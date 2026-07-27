@@ -70,5 +70,5 @@ The audit's optional lint rule / pre-commit hook to reject `UPDATE ... SET col =
 - `src/modules/quiz/scheduler/analytics.scheduler.ts` — defense-in-depth crons (`@Cron('0 5 * * *')` reconcile, `@Cron('0 3 * * 0')` full rebuild) that re-run Strategy B over every active quiz.
 - `scripts/backfill/bookmark-metrics.ts` / `scripts/backfill/quiz-metrics.ts` — production-guarded one-shot reconciliation commands that share the sweep entry point with the crons.
 - `src/core/database/migrations/0007_reconcile_helpful_count.sql` — reconciliation migration SQL, executed as a data-only migration that calls the same recompute expression used by Strategy B.
-- `test/reconcile-helpful-count.e2e-spec.ts` / `test/reconcile-discussion-counts.e2e-spec.ts` / `test/reconcile-tournament-totals.e2e-spec.ts` / `test/quiz-metrics-reconcile.e2e-spec.ts` — migration-shaped drift tests for every counter that has one.
+- `test/reconcile-helpful-count.e2e-spec.ts` / `test/counter-reconciliation-drift.e2e-spec.ts` / `test/reconcile-tournament-totals.e2e-spec.ts` / `test/quiz-metrics-reconcile.e2e-spec.ts` — migration-shaped drift tests for every counter that has one.
 - ADR-0006 (Request Lifecycle) and ADR-0009 (Transaction Management) — the upstream transactions for Strategy A; this ADR depends on both.

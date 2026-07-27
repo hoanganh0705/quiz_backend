@@ -50,7 +50,7 @@ Each role maps to a set of permissions:
 | `QUIZ_VERIFY` | ✓ | ✓ | |
 | `TAG_MANAGE` | ✓ | | |
 | `CATEGORY_MANAGE` | ✓ | | |
-| `DISCUSSION_MODERATE` | ✓ | ✓ | |
+| `COMMENT_MODERATE` | ✓ | ✓ | |
 | `TOURNAMENT_CREATE` | ✓ | | |
 | `TOURNAMENT_REGISTER` | ✓ | | ✓ |
 | `TOURNAMENT_ATTEMPT` | ✓ | | ✓ |
@@ -125,7 +125,7 @@ Domain policy classes are the authoritative ownership gate. They are called from
 |---|---|---|
 | Quiz | `QuizPolicy` | `src/modules/quiz/domain/policies/quiz.policy.ts` |
 | Quiz | `QuizVersionPolicy` | `src/modules/quiz/domain/policies/quiz-version.policy.ts` |
-| Discussion | `DiscussionAuthorizationPolicy` | `src/modules/discussion/domain/policies/discussion-authorization.policy.ts` |
+| Comment | `CommentAuthorizationPolicy` | `src/modules/comment/domain/policies/comment-authorization.policy.ts` |
 | Bookmark | (implicit in domain service) | `src/modules/bookmark/domain/bookmark-command.service.ts` |
 
 ### Ownership Check Pattern
@@ -149,7 +149,7 @@ The policy checks both ownership (`creatorId === userId`) and override permissio
 | Quiz Version | Inherits quiz ownership | `QUIZ_VERSION_EDIT_ANY`, `QUIZ_VERSION_PUBLISH_ANY` |
 | Category | No ownership model (admin only) | `CATEGORY_MANAGE` |
 | Tag | No ownership model (admin only) | `TAG_MANAGE` |
-| Discussion | `authorId === userId` | `DISCUSSION_MODERATE` |
+| Comment | `authorId === userId` | `COMMENT_MODERATE` |
 | Bookmark Collection | `ownerId === userId` | None |
 | Review | `authorId === userId` | `REVIEW_MODERATE` |
 | Attempt | `userId === actorId` | None |
@@ -162,8 +162,8 @@ The policy checks both ownership (`creatorId === userId`) and override permissio
 Some actions have an additional constraint: a user cannot act on their own resource in certain ways:
 
 ```
-Self-vote prohibited:  Discussion (vote on own thread/comment → SelfVoteError)
-Self-report prohibited:  Discussion (report own content → SelfReportError)
+Self-vote prohibited:  Comment (vote on own thread/comment → SelfVoteError)
+Self-report prohibited:  Comment (report own content → SelfReportError)
 Self-follow prohibited:  Not enforced (users can follow their own quiz's tags)
 ```
 
@@ -176,9 +176,9 @@ Tag module: user follows a tag
   → Tag module: no ownership check (tags are public)
   → Auth module: user must have valid JWT
 
-Discussion module: user posts on a quiz's thread
-  → Discussion module: user must have valid JWT
-  → Quiz module: Discussion validates quiz existence (not authorization)
+Comment module: user posts on a quiz's thread
+  → Comment module: user must have valid JWT
+  → Quiz module: Comment validates quiz existence (not authorization)
 
 Attempt module: user starts an attempt
   → Attempt module: user must have valid JWT
@@ -197,7 +197,7 @@ Public endpoints still pass through `ThrottlerGuard` (rate limiting) and `Respon
 
 Security-sensitive write operations must emit an audit record via `AuditLogService`. The authorization decision is made by the policy; the audit record is written by the application service after the policy passes.
 
-Evidence: `src/modules/discussion/infrastructure/audit/discussion-moderator-audit.service.ts` records all moderator actions with 365-day retention.
+Evidence: `src/modules/comment/infrastructure/audit/comment-moderator-audit.service.ts` records all moderator actions with 365-day retention.
 
 ## Needs Clarification
 

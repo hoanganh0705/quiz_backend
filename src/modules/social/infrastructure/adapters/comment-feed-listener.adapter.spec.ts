@@ -10,8 +10,8 @@ import type {
   CommentCreatedEvent,
   CommentMentionedEvent,
   CommentReportedEvent,
-} from '@/modules/discussion/domain/events/comment.events';
-import type { CommentDomainEventBusPort } from '@/modules/discussion/domain/events';
+} from '@/modules/comment/domain/events/comment.events';
+import type { CommentDomainEventBusPort } from '@/modules/comment/domain/events';
 import type { SocialService } from '../../domain/services/social.service';
 
 const mockLogger = {

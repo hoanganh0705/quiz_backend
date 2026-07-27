@@ -17,8 +17,8 @@ export abstract class QuizAnalyticsError extends BaseDomainException {}
  *
  * Distinct from the quiz-main `QuizNotFoundError` (code `QUIZ_NOT_FOUND`)
  * — that one is the CRUD resource lookup; this one is the analytics lookup.
- * The discussion module has a third `QuizNotFoundError` in
- * `src/modules/discussion/domain/errors` with code `DISCUSSION_QUIZ_NOT_FOUND`
+ * The comment module has a third `QuizNotFoundError` in
+ * `src/modules/comments/domain/errors` with code `COMMENT_QUIZ_NOT_FOUND`
  * (planned in Phase 1's user-module PR). The three classes are distinct at
  * the TypeScript level; clients distinguish them via `extensions.code`.
  *

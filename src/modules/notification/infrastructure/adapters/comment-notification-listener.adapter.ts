@@ -2,12 +2,12 @@
  * Comment Notification Listener
  *
  * Subscribes to Comment domain events and dispatches notifications.
- * Hosted in NotificationModule — DiscussionModule no longer imports
+ * Hosted in NotificationModule — CommentModule no longer imports
  * NotificationModule. All event payloads are self-contained: this
- * listener does not import the discussion repository, the discussion
- * service, or any other discussion-side adapter, so the dependency
+ * listener does not import the comment repository, the comment
+ * service, or any other comment-side adapter, so the dependency
  * graph between the two modules stays a one-way arrow
- * (Notification → Discussion for the bus token only).
+ * (Notification → Comment for the bus token only).
  *
  * Handled events:
  *   - `comment_created`  → notify the parent comment's author when
@@ -31,13 +31,13 @@ import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import {
   COMMENT_DOMAIN_EVENT_BUS,
   type CommentDomainEventBusPort,
-} from '@/modules/discussion/domain/events';
+} from '@/modules/comment/domain/events';
 import type {
   CommentCreatedEvent,
   CommentDomainEvent,
   CommentMentionedEvent,
   CommentReportedEvent,
-} from '@/modules/discussion/domain/events/comment.events';
+} from '@/modules/comment/domain/events/comment.events';
 import { NOTIFICATION_CHANNEL_SERVICE } from '../../domain/ports';
 import type { NotificationChannelServicePort } from '../../domain/ports';
 import {
@@ -94,7 +94,7 @@ export class CommentNotificationListener implements OnModuleInit, OnModuleDestro
     try {
       await this.channelService.send({
         userId: event.parentCommentAuthorId,
-        type: 'discussion_reply',
+        type: 'comment_reply',
         title: 'New reply to your comment',
         body: `${event.authorUsername} replied to your comment`,
         metadata: {
@@ -127,7 +127,7 @@ export class CommentNotificationListener implements OnModuleInit, OnModuleDestro
     try {
       await this.channelService.send({
         userId: event.mentionedUserId,
-        type: 'discussion_mention',
+        type: 'comment_mention',
         title: 'You were mentioned',
         body: `${event.authorUsername} mentioned you in a comment`,
         metadata: {
