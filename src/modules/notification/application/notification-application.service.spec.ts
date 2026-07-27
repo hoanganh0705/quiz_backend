@@ -92,7 +92,7 @@ const createPreferences = (overrides: Partial<{
   tournamentEnabled: true,
   rankEnabled: true,
   friendEnabled: true,
-  discussionEnabled: true,
+  commentEnabled: true,
   summaryEnabled: true,
   marketingEnabled: false,
   rankImprovementThreshold: 5,

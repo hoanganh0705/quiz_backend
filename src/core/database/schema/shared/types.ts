@@ -11,7 +11,7 @@ import { customType } from 'drizzle-orm/pg-core';
  * PostgreSQL `tsvector` full-text search type.
  *
  * Used for generated full-text search columns on `users`, `quizzes`, and
- * `discussionThreads`. Stored as text in Drizzle's TypeScript layer because
+ * `comments` (Q/A-era `comments_threads` was dropped). Stored as text in Drizzle's TypeScript layer because
  * drizzle-orm does not provide a native tsvector type.
  */
 export const tsvector = customType<{ data: string }>({

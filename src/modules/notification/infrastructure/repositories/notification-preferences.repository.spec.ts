@@ -63,7 +63,7 @@ const createPreferencesRow = (
     tournamentEnabled: boolean;
     rankEnabled: boolean;
     friendEnabled: boolean;
-    discussionEnabled: boolean;
+    commentEnabled: boolean;
     summaryEnabled: boolean;
     marketingEnabled: boolean;
     rankImprovementThreshold: number;
@@ -82,7 +82,7 @@ const createPreferencesRow = (
   tournamentEnabled: true,
   rankEnabled: true,
   friendEnabled: true,
-  discussionEnabled: true,
+  commentEnabled: true,
   summaryEnabled: true,
   marketingEnabled: false,
   rankImprovementThreshold: 5,
@@ -277,7 +277,7 @@ describe('NotificationPreferencesRepository', () => {
           tournamentEnabled: true,
           rankEnabled: true,
           friendEnabled: true,
-          discussionEnabled: true,
+          commentEnabled: true,
           summaryEnabled: true,
           marketingEnabled: false,
           rankImprovementThreshold: 5,

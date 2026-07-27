@@ -168,12 +168,12 @@ import {
   ModeratorRequiredError,
   ParentCommentCrossThreadError,
   ParentCommentNotFoundError,
-  QuizNotFoundError as DiscussionQuizNotFoundError,
+  QuizNotFoundError as CommentQuizNotFoundError,
   ReplyLimitExceededError,
   ReportNotFoundError,
   SelfReportError,
   SelfVoteError,
-} from '@/modules/discussion/domain/errors';
+} from '@/modules/comment/domain/errors';
 import {
   InvalidXpEventError,
   PeriodResetError,
@@ -910,37 +910,37 @@ class Rfc7807FixtureController {
     throw new UserProfilePrivateError('user-target-1');
   }
 
-  // Discussion-module endpoints — Phase 3.x live-mapping coverage.
+  // comment-module endpoints — Phase 3.x live-mapping coverage.
   // 11 concrete exceptions → 4 status codes (400/403/404/409). Each
-  // endpoint throws a real discussion exception; if
-  // `ProblemCodeMapping` or the discussion classes drift, the e2e
-  // tests in the discussion describe-block below fail.
+  // endpoint throws a real comment exception; if
+  // `ProblemCodeMapping` or the comment classes drift, the e2e
+  // tests in the comment describe-block below fail.
   //
   // Special note: the prior per-module filter
-  // `DiscussionDomainExceptionFilter` used `exception.name` as a
-  // lookup key into `STATUS_MAP` and `DISCUSSION_PROBLEM_URIS`. After
+  // `CommentDomainExceptionFilter` used `exception.name` as a
+  // lookup key into `STATUS_MAP` and `COMMENT_PROBLEM_URIS`. After
   // Phase 3.1 the lookup tables are replaced with `ProblemCodeMapping`
   // entries keyed by `code`. `title` changes from the class name
   // (e.g. `'CommentNotFoundError'`) to the standard RFC 7807 title
   // (e.g. `'NotFound'`). This is verified per-row below.
 
-  @Get('discussion/parent-comment-not-found')
-  discussionParentCommentNotFound(): never {
+  @Get('comment/parent-comment-not-found')
+  commentParentCommentNotFound(): never {
     throw new ParentCommentNotFoundError('parent-1');
   }
 
-  @Get('discussion/comment-not-found')
-  discussionCommentNotFound(): never {
+  @Get('comment/comment-not-found')
+  commentCommentNotFound(): never {
     throw new CommentNotFoundError('comment-1');
   }
 
-  @Get('discussion/comment-forbidden')
-  discussionCommentForbidden(): never {
+  @Get('comment/comment-forbidden')
+  commentCommentForbidden(): never {
     throw new CommentForbiddenError();
   }
 
-  @Get('discussion/parent-comment-cross-thread')
-  discussionParentCommentCrossThread(): never {
+  @Get('comment/parent-comment-cross-thread')
+  commentParentCommentCrossThread(): never {
     // Plan §8.4.1 risk note: 400 (non-obvious — one might expect 409
     // Conflict for a cross-resource mismatch). The migration test
     // captures it. `title` here is the standard `'BadRequest'` not
@@ -948,37 +948,37 @@ class Rfc7807FixtureController {
     throw new ParentCommentCrossThreadError();
   }
 
-  @Get('discussion/reply-limit-exceeded')
-  discussionReplyLimitExceeded(): never {
+  @Get('comment/reply-limit-exceeded')
+  commentReplyLimitExceeded(): never {
     throw new ReplyLimitExceededError(100);
   }
 
-  @Get('discussion/self-vote')
-  discussionSelfVote(): never {
+  @Get('comment/self-vote')
+  commentSelfVote(): never {
     throw new SelfVoteError();
   }
 
-  @Get('discussion/self-report')
-  discussionSelfReport(): never {
+  @Get('comment/self-report')
+  commentSelfReport(): never {
     throw new SelfReportError();
   }
 
-  @Get('discussion/duplicate-report')
-  discussionDuplicateReport(): never {
+  @Get('comment/duplicate-report')
+  commentDuplicateReport(): never {
     throw new DuplicateReportError();
   }
 
-  @Get('discussion/quiz-not-found')
-  discussionQuizNotFound(): never {
-    // This is the discussion-module version of `QuizNotFoundError`.
-    // It uses `DISCUSSION_QUIZ_NOT_FOUND` (not `QUIZ_NOT_FOUND`).
+  @Get('comment/quiz-not-found')
+  commentQuizNotFound(): never {
+    // This is the comment-module version of `QuizNotFoundError`.
+    // It uses `COMMENT_QUIZ_NOT_FOUND` (not `QUIZ_NOT_FOUND`).
     // The class-name collision with the quiz-module version is
     // documented at §9 item 1.
-    throw new DiscussionQuizNotFoundError('quiz-1');
+    throw new CommentQuizNotFoundError('quiz-1');
   }
 
-  @Get('discussion/moderator-required')
-  discussionModeratorRequired(): never {
+  @Get('comment/moderator-required')
+  commentModeratorRequired(): never {
     // Plan §8.4.1 risk note: 403 (non-obvious — the class name
     // suggests 401 or 403 for "auth required", but the actual
     // semantic is "you're authenticated but lack the moderator
@@ -2527,10 +2527,10 @@ describe('RFC 7807 ProblemDetail (Phase 0 backstop)', () => {
     });
   });
 
-  describe('Discussion-module exceptions (Phase 3.1 — first Phase-3 conversion; name-based lookup → ProblemCodeMapping)', () => {
+  describe('comment-module exceptions (Phase 3.1 — first Phase-3 conversion; name-based lookup → ProblemCodeMapping)', () => {
     // 12 concrete exceptions → 4 status codes (400/403/404/409). The
     // 13th class (UserNotFoundError) is owned by the user module,
-    // not by the discussion module — its mapping entry was declared
+    // not by the comment module — its mapping entry was declared
     // in Phase 1 and is reused.
     //
     // Phase 3.1 wire-shape changes (verified per-row below):
@@ -2547,132 +2547,132 @@ describe('RFC 7807 ProblemDetail (Phase 0 backstop)', () => {
     //     auth required, but the semantic is "you're authenticated
     //     but lack the moderator role").
 
-    it('ParentCommentNotFoundError → 404 DISCUSSION_PARENT_COMMENT_NOT_FOUND', async () => {
+    it('ParentCommentNotFoundError → 404 COMMENT_PARENT_COMMENT_NOT_FOUND', async () => {
       const res = await request(app.getHttpServer())
-        .get('/rfc7807-fixture/discussion/parent-comment-not-found')
+        .get('/rfc7807-fixture/comment/parent-comment-not-found')
         .expect(404);
       const body = res.body as ProblemWire;
       expect(body.title).toBe('NotFound');
       expect(body.detail).toBe('Parent comment not found: parent-1');
-      expect(body.extensions?.code).toBe('DISCUSSION_PARENT_COMMENT_NOT_FOUND');
+      expect(body.extensions?.code).toBe('COMMENT_PARENT_COMMENT_NOT_FOUND');
       expect(typeof body.extensions?.timestamp).toBe('string');
     });
 
-    it('CommentNotFoundError → 404 DISCUSSION_COMMENT_NOT_FOUND (title now standardized)', async () => {
+    it('CommentNotFoundError → 404 COMMENT_NOT_FOUND (title now standardized)', async () => {
       const res = await request(app.getHttpServer())
-        .get('/rfc7807-fixture/discussion/comment-not-found')
+        .get('/rfc7807-fixture/comment/comment-not-found')
         .expect(404);
       const body = res.body as ProblemWire;
       expect(body.title).toBe('NotFound');
       expect(body.detail).toBe('Comment not found: comment-1');
-      expect(body.extensions?.code).toBe('DISCUSSION_COMMENT_NOT_FOUND');
+      expect(body.extensions?.code).toBe('COMMENT_NOT_FOUND');
       expect(typeof body.extensions?.timestamp).toBe('string');
     });
 
-    it('ParentCommentCrossThreadError → 400 DISCUSSION_PARENT_COMMENT_CROSS_THREAD (non-obvious 400 per §8.4.1)', async () => {
+    it('ParentCommentCrossThreadError → 400 COMMENT_PARENT_COMMENT_CROSS_THREAD (non-obvious 400 per §8.4.1)', async () => {
       const res = await request(app.getHttpServer())
-        .get('/rfc7807-fixture/discussion/parent-comment-cross-thread')
+        .get('/rfc7807-fixture/comment/parent-comment-cross-thread')
         .expect(400);
       const body = res.body as ProblemWire;
       expect(body.title).toBe('BadRequest');
       expect(body.detail).toBe('The selected parent comment is not a top-level comment on this quiz');
-      expect(body.extensions?.code).toBe('DISCUSSION_PARENT_COMMENT_CROSS_THREAD');
+      expect(body.extensions?.code).toBe('COMMENT_PARENT_COMMENT_CROSS_THREAD');
     });
 
-    it('CommentForbiddenError → 403 DISCUSSION_COMMENT_FORBIDDEN', async () => {
+    it('CommentForbiddenError → 403 COMMENT_FORBIDDEN', async () => {
       const res = await request(app.getHttpServer())
-        .get('/rfc7807-fixture/discussion/comment-forbidden')
+        .get('/rfc7807-fixture/comment/comment-forbidden')
         .expect(403);
       const body = res.body as ProblemWire;
       expect(body.title).toBe('Forbidden');
       expect(body.detail).toBe('You do not have permission to perform this action on this comment');
-      expect(body.extensions?.code).toBe('DISCUSSION_COMMENT_FORBIDDEN');
+      expect(body.extensions?.code).toBe('COMMENT_FORBIDDEN');
     });
 
-    it('ReplyLimitExceededError → 409 DISCUSSION_REPLY_LIMIT_EXCEEDED', async () => {
+    it('ReplyLimitExceededError → 409 COMMENT_REPLY_LIMIT_EXCEEDED', async () => {
       const res = await request(app.getHttpServer())
-        .get('/rfc7807-fixture/discussion/reply-limit-exceeded')
+        .get('/rfc7807-fixture/comment/reply-limit-exceeded')
         .expect(409);
       const body = res.body as ProblemWire;
       expect(body.title).toBe('Conflict');
       expect(body.detail).toBe('Maximum reply limit of 100 reached for this comment');
-      expect(body.extensions?.code).toBe('DISCUSSION_REPLY_LIMIT_EXCEEDED');
+      expect(body.extensions?.code).toBe('COMMENT_REPLY_LIMIT_EXCEEDED');
     });
 
-    it('ReportNotFoundError → 404 DISCUSSION_REPORT_NOT_FOUND', async () => {
+    it('ReportNotFoundError → 404 COMMENT_REPORT_NOT_FOUND', async () => {
       const res = await request(app.getHttpServer())
-        .get('/rfc7807-fixture/discussion/report-not-found')
+        .get('/rfc7807-fixture/comment/report-not-found')
         .expect(404);
       const body = res.body as ProblemWire;
       expect(body.title).toBe('NotFound');
       expect(body.detail).toBe('Report not found: report-1');
-      expect(body.extensions?.code).toBe('DISCUSSION_REPORT_NOT_FOUND');
+      expect(body.extensions?.code).toBe('COMMENT_REPORT_NOT_FOUND');
     });
 
-    it('SelfVoteError → 403 DISCUSSION_SELF_VOTE', async () => {
+    it('SelfVoteError → 403 COMMENT_SELF_VOTE', async () => {
       const res = await request(app.getHttpServer())
-        .get('/rfc7807-fixture/discussion/self-vote')
+        .get('/rfc7807-fixture/comment/self-vote')
         .expect(403);
       const body = res.body as ProblemWire;
       expect(body.title).toBe('Forbidden');
       expect(body.detail).toBe('You cannot vote on your own content');
-      expect(body.extensions?.code).toBe('DISCUSSION_SELF_VOTE');
+      expect(body.extensions?.code).toBe('COMMENT_SELF_VOTE');
     });
 
-    it('SelfReportError → 403 DISCUSSION_SELF_REPORT', async () => {
+    it('SelfReportError → 403 COMMENT_SELF_REPORT', async () => {
       const res = await request(app.getHttpServer())
-        .get('/rfc7807-fixture/discussion/self-report')
+        .get('/rfc7807-fixture/comment/self-report')
         .expect(403);
       const body = res.body as ProblemWire;
       expect(body.title).toBe('Forbidden');
       expect(body.detail).toBe('You cannot report your own content');
-      expect(body.extensions?.code).toBe('DISCUSSION_SELF_REPORT');
+      expect(body.extensions?.code).toBe('COMMENT_SELF_REPORT');
     });
 
-    it('DuplicateReportError → 409 DISCUSSION_DUPLICATE_REPORT', async () => {
+    it('DuplicateReportError → 409 COMMENT_DUPLICATE_REPORT', async () => {
       const res = await request(app.getHttpServer())
-        .get('/rfc7807-fixture/discussion/duplicate-report')
+        .get('/rfc7807-fixture/comment/duplicate-report')
         .expect(409);
       const body = res.body as ProblemWire;
       expect(body.title).toBe('Conflict');
       expect(body.detail).toBe('You have already reported this content');
-      expect(body.extensions?.code).toBe('DISCUSSION_DUPLICATE_REPORT');
+      expect(body.extensions?.code).toBe('COMMENT_DUPLICATE_REPORT');
     });
 
-    it('QuizNotFoundError → 404 DISCUSSION_QUIZ_NOT_FOUND (collision with QUIZ_NOT_FOUND documented at §9)', async () => {
-      // This is the discussion-module version of `QuizNotFoundError`.
-      // It uses `DISCUSSION_QUIZ_NOT_FOUND` (not `QUIZ_NOT_FOUND`).
+    it('QuizNotFoundError → 404 COMMENT_QUIZ_NOT_FOUND (collision with QUIZ_NOT_FOUND documented at §9)', async () => {
+      // This is the comment-module version of `QuizNotFoundError`.
+      // It uses `COMMENT_QUIZ_NOT_FOUND` (not `QUIZ_NOT_FOUND`).
       // The class-name collision with the quiz-module version is
       // documented at §9 item 1. Clients should switch on
       // `extensions.code`.
       const res = await request(app.getHttpServer())
-        .get('/rfc7807-fixture/discussion/quiz-not-found')
+        .get('/rfc7807-fixture/comment/quiz-not-found')
         .expect(404);
       const body = res.body as ProblemWire;
       expect(body.title).toBe('NotFound');
       expect(body.detail).toBe('Quiz not found: quiz-1');
-      expect(body.extensions?.code).toBe('DISCUSSION_QUIZ_NOT_FOUND');
+      expect(body.extensions?.code).toBe('COMMENT_QUIZ_NOT_FOUND');
     });
 
-    it('ModeratorRequiredError → 403 DISCUSSION_MODERATOR_REQUIRED (non-obvious 403 per §8.4.1)', async () => {
+    it('ModeratorRequiredError → 403 COMMENT_MODERATOR_REQUIRED (non-obvious 403 per §8.4.1)', async () => {
       // Plan §8.4.1 risk note: this is a non-obvious 403 (the class
       // name suggests auth required, but the semantic is "you're
       // authenticated but lack the moderator role"). The migration
       // test captures it.
       const res = await request(app.getHttpServer())
-        .get('/rfc7807-fixture/discussion/moderator-required')
+        .get('/rfc7807-fixture/comment/moderator-required')
         .expect(403);
       const body = res.body as ProblemWire;
       expect(body.title).toBe('Forbidden');
       expect(body.detail).toBe('Moderator or admin role is required to perform this action');
-      expect(body.extensions?.code).toBe('DISCUSSION_MODERATOR_REQUIRED');
+      expect(body.extensions?.code).toBe('COMMENT_MODERATOR_REQUIRED');
     });
 
     it('every Phase 3.1 response carries `extensions.timestamp` (Phase 3.1 deliverable per §8.4.1)', async () => {
       // §8.4.1: "Add `extensions.requestId` and `extensions.timestamp`
       // to the response body." `extensions.requestId` was added in
       // Phase 1; `extensions.timestamp` is added in Phase 3.1 via the
-      // global filter. This test exercises one discussion response
+      // global filter. This test exercises one comment response
       // and verifies the timestamp field is present.
       //
       // Note: in this e2e fixture there is no `CorrelationInterceptor`,
@@ -2681,7 +2681,7 @@ describe('RFC 7807 ProblemDetail (Phase 0 backstop)', () => {
       // quirk (not a filter bug). Phase 3.1 only commits to adding
       // `extensions.timestamp`, so we do not assert `requestId` here.
       const res = await request(app.getHttpServer())
-        .get('/rfc7807-fixture/discussion/comment-not-found')
+        .get('/rfc7807-fixture/comment/comment-not-found')
         .expect(404);
       const body = res.body as ProblemWire;
       expect(typeof body.extensions?.timestamp).toBe('string');

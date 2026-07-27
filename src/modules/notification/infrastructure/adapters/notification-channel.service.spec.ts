@@ -47,7 +47,7 @@ const createPreferences = (overrides: Partial<{
   tournamentEnabled: boolean;
   rankEnabled: boolean;
   friendEnabled: boolean;
-  discussionEnabled: boolean;
+  commentEnabled: boolean;
   summaryEnabled: boolean;
   marketingEnabled: boolean;
   quietHoursStart: string | null;
@@ -62,7 +62,7 @@ const createPreferences = (overrides: Partial<{
   tournamentEnabled: true,
   rankEnabled: true,
   friendEnabled: true,
-  discussionEnabled: true,
+  commentEnabled: true,
   summaryEnabled: true,
   marketingEnabled: false,
   rankImprovementThreshold: 5,
@@ -313,9 +313,9 @@ describe('NotificationChannelService', () => {
         expect(result).toBe(false);
       });
 
-      it('respects discussionEnabled for discussion_reply', () => {
-        const prefs = createPreferences({ discussionEnabled: false });
-        const result = service.shouldSendNotification('user-1', 'discussion_reply', 'in_app', prefs);
+      it('respects commentEnabled for comment_reply', () => {
+        const prefs = createPreferences({ commentEnabled: false });
+        const result = service.shouldSendNotification('user-1', 'comment_reply', 'in_app', prefs);
         expect(result).toBe(false);
       });
 
@@ -336,7 +336,7 @@ describe('NotificationChannelService', () => {
       });
 
       it('allows quiz_review_received regardless of preferences', () => {
-        const prefs = createPreferences({ discussionEnabled: false });
+        const prefs = createPreferences({ commentEnabled: false });
         const result = service.shouldSendNotification('user-1', 'quiz_review_received', 'in_app', prefs);
         expect(result).toBe(true);
       });

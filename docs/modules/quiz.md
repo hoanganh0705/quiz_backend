@@ -4,7 +4,7 @@
 
 Owns the **full quiz authoring and publication lifecycle**: quizzes, versions, questions, answer options, tag associations, analytics (popularity, trending, category/tag rollups), and related quiz discovery.
 
-> User attempts at quizzes belong to the **Attempt module**. Bookmarks belong to the **Bookmark module**. Reviews belong to the **Review module**. Discussions belong to the **Discussion module**.
+> User attempts at quizzes belong to the **Attempt module**. Bookmarks belong to the **Bookmark module**. Reviews belong to the **Review module**. Comments belong to the **Comment module**.
 
 ## Responsibilities
 
@@ -62,7 +62,7 @@ Quiz
 │       ├── has many → Questions
 │       │       └── has many → AnswerOptions (exactly one isCorrect)
 ├── has one → QuizStats
-├── has many → Discussions (Discussion module — FK from Discussion side)
+├── has many → Comments (Comment module — FK from Comment side)
 ├── has many → Attempts (Attempt module — FK from Attempt side)
 ├── has many → Bookmarks (Bookmark module — FK from Bookmark side)
 ├── has many → Reviews (Review module — FK from Review side)

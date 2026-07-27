@@ -33,9 +33,9 @@ import {
   friendships,
   blockedUsers,
   userFollows,
-  discussionComments,
-  discussionCommentVotes,
-  discussionCommentReports,
+  commentRows,
+  commentVotes,
+  commentReports,
   notifications,
   notificationPreferences,
   categoryFollows,
@@ -73,10 +73,10 @@ export const usersRelations = relations(users, ({ many, one }) => ({
   blockedByUsers: many(blockedUsers, { relationName: 'blocked' }),
   followers: many(userFollows, { relationName: 'follower' }),
   following: many(userFollows, { relationName: 'following' }),
-  // Comment domain (replaces the legacy discussion domain as of Phase 9.6)
-  discussionComments: many(discussionComments),
-  discussionCommentVotes: many(discussionCommentVotes),
-  discussionCommentReports: many(discussionCommentReports),
+  // Comment domain (replaces the legacy comments domain as of Phase 9.6 (post-Q&A rename))
+  commentRows: many(commentRows),
+  commentVotes: many(commentVotes),
+  commentReports: many(commentReports),
   // Notification domain
   notifications: many(notifications),
   notificationPreferences: one(notificationPreferences),

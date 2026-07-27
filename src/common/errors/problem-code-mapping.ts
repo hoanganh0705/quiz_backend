@@ -320,7 +320,7 @@ export const ProblemCodeMapping: Readonly<Record<string, ProblemCodeInfo>> = {
   // ===========================================================================
   /**
    * Thrown by the user module's `UserService` (and a few read paths in
-   * ranking/social/discussion that import the user variant of
+   * ranking/social/comments that import the user variant of
    * `UserNotFoundError`) when a user cannot be found by id. 404 Not Found.
    *
    * Distinct from `AUTH_USER_NOT_FOUND` (401), which is the auth-flow
@@ -1248,32 +1248,32 @@ export const ProblemCodeMapping: Readonly<Record<string, ProblemCodeInfo>> = {
   },
 
   // ===========================================================================
-  // DISCUSSION module — src/modules/discussion/domain/errors/comment.errors.ts
+  // DISCUSSION module — src/modules/comments/domain/errors/comment.errors.ts
   // ===========================================================================
-  /** Phase 9.5 entry: the discussion module is rewritten as a comment
+  /** Phase 9.5 entry: the comment module is rewritten as a comment
    * section (per the architecture document §3.6). The error set is the
    * narrow 11-class list scoped to comment-only operations: there is no
    * thread, no solved state, no subscriptions, no bookmarks. The prior
-   * 12-class discussion block is retired in the same change. */
+   * 12-class comments block is retired in the same change. */
   // 11 concrete exceptions → 4 status codes:
-  //   404: DISCUSSION_COMMENT_NOT_FOUND, DISCUSSION_QUIZ_NOT_FOUND,
-  //        DISCUSSION_PARENT_COMMENT_NOT_FOUND, DISCUSSION_REPORT_NOT_FOUND (4)
-  //   403: DISCUSSION_COMMENT_FORBIDDEN, DISCUSSION_SELF_VOTE,
-  //        DISCUSSION_SELF_REPORT, DISCUSSION_MODERATOR_REQUIRED (4)
-  //   409: DISCUSSION_REPLY_LIMIT_EXCEEDED, DISCUSSION_DUPLICATE_REPORT (2)
-  //   400: DISCUSSION_PARENT_COMMENT_CROSS_THREAD (1)
+  //   404: COMMENT_NOT_FOUND, COMMENT_QUIZ_NOT_FOUND,
+  //        COMMENT_PARENT_COMMENT_NOT_FOUND, COMMENT_REPORT_NOT_FOUND (4)
+  //   403: COMMENT_FORBIDDEN, COMMENT_SELF_VOTE,
+  //        COMMENT_SELF_REPORT, COMMENT_MODERATOR_REQUIRED (4)
+  //   409: COMMENT_REPLY_LIMIT_EXCEEDED, COMMENT_DUPLICATE_REPORT (2)
+  //   400: COMMENT_PARENT_COMMENT_CROSS_THREAD (1)
   //
   // Total = 4 + 4 + 2 + 1 = 11.
   //
   // Note on the cross-module `UserNotFoundError`: the prior per-module
-  // filter `@Catch(DiscussionError, UserNotFoundError)` also caught
+  // filter `@Catch(CommentError, UserNotFoundError)` also caught
   // `UserNotFoundError` from the user module. After Phase 9.5 the
-  // discussion filter is removed; the global filter handles it via
+  // comments filter is removed; the global filter handles it via
   // `ProblemCodeMapping['USER_NOT_FOUND']` (declared in Phase 1).
   //
   // Note on the `QuizNotFoundError` class-name collision: the
-  // discussion module declares its own `QuizNotFoundError` class. The
-  // `code` (`DISCUSSION_QUIZ_NOT_FOUND`) distinguishes it from the
+  // comment module declares its own `QuizNotFoundError` class. The
+  // `code` (`COMMENT_QUIZ_NOT_FOUND`) distinguishes it from the
   // quiz-module version (`QUIZ_NOT_FOUND`) and the quiz-analytics
   // version (`QUIZ_ANALYTICS_NOT_FOUND`). Clients should switch on
   // `extensions.code`, never on the class name. The §9 item-1
@@ -1283,16 +1283,16 @@ export const ProblemCodeMapping: Readonly<Record<string, ProblemCodeInfo>> = {
    * Thrown when a comment cannot be found by id, or when a reply's
    * parent comment has been hidden or soft-deleted. 404 Not Found.
    */
-  DISCUSSION_COMMENT_NOT_FOUND: {
+  COMMENT_NOT_FOUND: {
     status: HttpStatus.NOT_FOUND,
     title: 'NotFound',
-    typeUri: 'https://api.quiz.local/problems/discussion-comment-not-found',
+    typeUri: 'https://api.quiz.local/problems/comment-comment-not-found',
   },
   /**
-   * Thrown when the discussion module's `QuizNotFoundError` fires
+   * Thrown when the comment module's `QuizNotFoundError` fires
    * (quiz lookup during a comment operation). 404 Not Found.
    *
-   * This is the **discussion-module** version of the class; the
+   * This is the **comment-module** version of the class; the
    * quiz-module version uses `QUIZ_NOT_FOUND` and the quiz-analytics
    * version uses `QUIZ_ANALYTICS_NOT_FOUND`. They share the
    * JavaScript class name but are distinct at runtime. Clients
@@ -1300,55 +1300,55 @@ export const ProblemCodeMapping: Readonly<Record<string, ProblemCodeInfo>> = {
    * The §9 item-1 unification (merge these into a single class) is
    * deferred.
    */
-  DISCUSSION_QUIZ_NOT_FOUND: {
+  COMMENT_QUIZ_NOT_FOUND: {
     status: HttpStatus.NOT_FOUND,
     title: 'NotFound',
-    typeUri: 'https://api.quiz.local/problems/discussion-quiz-not-found',
+    typeUri: 'https://api.quiz.local/problems/comment-quiz-not-found',
   },
   /**
    * Thrown when a reply references a parent comment that does not
    * exist or has been hidden / soft-deleted. 404 Not Found.
    */
-  DISCUSSION_PARENT_COMMENT_NOT_FOUND: {
+  COMMENT_PARENT_COMMENT_NOT_FOUND: {
     status: HttpStatus.NOT_FOUND,
     title: 'NotFound',
-    typeUri: 'https://api.quiz.local/problems/discussion-parent-comment-not-found',
+    typeUri: 'https://api.quiz.local/problems/comment-parent-comment-not-found',
   },
   /**
    * Thrown when a moderator tries to review a report that does not
    * exist. 404 Not Found.
    */
-  DISCUSSION_REPORT_NOT_FOUND: {
+  COMMENT_REPORT_NOT_FOUND: {
     status: HttpStatus.NOT_FOUND,
     title: 'NotFound',
-    typeUri: 'https://api.quiz.local/problems/discussion-report-not-found',
+    typeUri: 'https://api.quiz.local/problems/comment-report-not-found',
   },
   /**
    * Thrown when the authenticated user lacks permission to perform
    * an action on a comment. 403 Forbidden.
    */
-  DISCUSSION_COMMENT_FORBIDDEN: {
+  COMMENT_FORBIDDEN: {
     status: HttpStatus.FORBIDDEN,
     title: 'Forbidden',
-    typeUri: 'https://api.quiz.local/problems/discussion-comment-forbidden',
+    typeUri: 'https://api.quiz.local/problems/comment-comment-forbidden',
   },
   /**
    * Thrown when the user attempts to vote on their own comment. 403
    * Forbidden.
    */
-  DISCUSSION_SELF_VOTE: {
+  COMMENT_SELF_VOTE: {
     status: HttpStatus.FORBIDDEN,
     title: 'Forbidden',
-    typeUri: 'https://api.quiz.local/problems/discussion-self-vote',
+    typeUri: 'https://api.quiz.local/problems/comment-self-vote',
   },
   /**
    * Thrown when the user attempts to report their own comment. 403
    * Forbidden.
    */
-  DISCUSSION_SELF_REPORT: {
+  COMMENT_SELF_REPORT: {
     status: HttpStatus.FORBIDDEN,
     title: 'Forbidden',
-    typeUri: 'https://api.quiz.local/problems/discussion-self-report',
+    typeUri: 'https://api.quiz.local/problems/comment-self-report',
   },
   /**
    * Thrown when a moderator-only action is attempted by a non-
@@ -1357,30 +1357,30 @@ export const ProblemCodeMapping: Readonly<Record<string, ProblemCodeInfo>> = {
    * Plan §8.4.1 risk note: this class's 403 status is non-obvious
    * from the class name; the migration test captures it.
    */
-  DISCUSSION_MODERATOR_REQUIRED: {
+  COMMENT_MODERATOR_REQUIRED: {
     status: HttpStatus.FORBIDDEN,
     title: 'Forbidden',
-    typeUri: 'https://api.quiz.local/problems/discussion-moderator-required',
+    typeUri: 'https://api.quiz.local/problems/comment-moderator-required',
   },
   /**
    * Thrown when a reply is attempted against a comment that has
    * already reached the maximum reply limit (100 replies). 409
    * Conflict.
    */
-  DISCUSSION_REPLY_LIMIT_EXCEEDED: {
+  COMMENT_REPLY_LIMIT_EXCEEDED: {
     status: HttpStatus.CONFLICT,
     title: 'Conflict',
-    typeUri: 'https://api.quiz.local/problems/discussion-reply-limit-exceeded',
+    typeUri: 'https://api.quiz.local/problems/comment-reply-limit-exceeded',
   },
   /**
    * Thrown when the user attempts to report a comment that they
    * have already reported and the prior report is still `'open'`.
    * 409 Conflict.
    */
-  DISCUSSION_DUPLICATE_REPORT: {
+  COMMENT_DUPLICATE_REPORT: {
     status: HttpStatus.CONFLICT,
     title: 'Conflict',
-    typeUri: 'https://api.quiz.local/problems/discussion-duplicate-report',
+    typeUri: 'https://api.quiz.local/problems/comment-duplicate-report',
   },
   /**
    * Thrown when a reply's parent comment is on a different quiz
@@ -1392,10 +1392,10 @@ export const ProblemCodeMapping: Readonly<Record<string, ProblemCodeInfo>> = {
    * from the class name (one might expect 409 Conflict for a
    * cross-resource mismatch); the migration test captures it.
    */
-  DISCUSSION_PARENT_COMMENT_CROSS_THREAD: {
+  COMMENT_PARENT_COMMENT_CROSS_THREAD: {
     status: HttpStatus.BAD_REQUEST,
     title: 'BadRequest',
-    typeUri: 'https://api.quiz.local/problems/discussion-parent-comment-cross-thread',
+    typeUri: 'https://api.quiz.local/problems/comment-parent-comment-cross-thread',
   },
 
   // ===========================================================================

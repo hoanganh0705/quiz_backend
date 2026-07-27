@@ -29,7 +29,7 @@ import {
   AchievementNotificationService,
 } from './domain/services';
 import { NotificationDomainEventBus } from './domain/events/notification-domain.event-bus';
-import { DiscussionModule } from '@/modules/discussion/discussion.module';
+import { CommentModule } from '@/modules/comment/comment.module';
 import { CommentNotificationListener } from './infrastructure/adapters/comment-notification-listener.adapter';
 import { InstanceModule } from '@/modules/instance/instance.module';
 import { InstanceNotificationListener } from './infrastructure/adapters/instance-notification-listener.adapter';
@@ -47,7 +47,7 @@ import { NotificationCleanupScheduler } from './infrastructure/scheduler/notific
   imports: [
     DatabaseModule,
     JwtModule,
-    forwardRef(() => DiscussionModule),
+    forwardRef(() => CommentModule),
     forwardRef(() => InstanceModule),
     forwardRef(() => ReviewModule),
     forwardRef(() => QuizModule),

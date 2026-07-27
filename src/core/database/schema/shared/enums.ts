@@ -12,21 +12,9 @@ import { pgEnum } from 'drizzle-orm/pg-core';
 // schema files.
 // =============================================================================
 
-// Renamed in Phase 9.1. The new names correspond to the comment-only
-// module identity. The old enum types (`discussion_thread_status`,
-// `discussion_report_status`, `discussion_report_target_type`,
-// `discussion_vote_value`, `discussion_content_status`) were dropped
-// from this file in the same Phase. The TypeScript symbols above the
-// blank line below are intentionally not present: any leftover
-// reference in code or migration scripts must be replaced with the
-// comment-only names declared further down.
+export const commentVoteValue = pgEnum('comment_vote_value', ['upvote', 'downvote']);
 
-export const discussionCommentVoteValue = pgEnum('discussion_comment_vote_value', [
-  'upvote',
-  'downvote',
-]);
-
-export const discussionCommentReportStatus = pgEnum('discussion_comment_report_status', [
+export const commentReportStatus = pgEnum('comment_report_status', [
   'open',
   'reviewed',
   'dismissed',
@@ -126,8 +114,6 @@ export const socialFeedActivityType = pgEnum('social_feed_activity_type', [
   'tournament_completed',
   'tournament_won',
   'comment_created',
-  'discussion_created',
-  'discussion_solved',
   'quiz_completed',
   'quiz_milestone',
   'instance_created',
@@ -161,9 +147,9 @@ export const notificationType = pgEnum('notification_type', [
   'weekly_summary',
   'system_announcement',
   'followed',
-  'discussion_reply',
-  'discussion_mention',
-  'discussion_solved',
+  'comment_reply',
+  'comment_mention',
+  'comment_created',
   'badge_earned',
   'badge_revoked',
   'tournament_started',

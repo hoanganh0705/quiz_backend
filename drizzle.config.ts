@@ -1,6 +1,5 @@
 import 'dotenv/config';
 import { defineConfig } from 'drizzle-kit';
-import { resolve } from 'node:path';
 
 if (!process.env.DATABASE_URL) {
   throw new Error(
@@ -23,11 +22,10 @@ export default defineConfig({
   // schemaFilter: 'public',
   // tablesFilter: '*',
 
-  // migrations: {
-  //   prefix: 'timestamp',
-  //   table: '__drizzle_migrations__',
-  //   schema: 'public',
-  // },
+  migrations: {
+    table: '__drizzle_migrations',
+    schema: 'drizzle',
+  },
 
   // entities: {
   //   roles: {
