@@ -22,7 +22,7 @@ import {
   HttpStatus,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
-import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { ApiTags } from '@nestjs/swagger';
 import { Permissions } from '@/common/authorization/decorators/permissions.decorator';
 import { Permission } from '@/common/authorization/permissions';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
@@ -30,6 +30,10 @@ import type { JwtPayload } from '@/common/guards/jwt.guard';
 import { CommentApplicationService } from '../../application/comment-application.service';
 import { CommentPresenter } from '../presenters/comment.presenter';
 import { ListReportsQueryDto, ReviewReportDto } from '../../dto/request';
+import {
+  ApiListCommentReportsResponses,
+  ApiReviewCommentReportResponses,
+} from '../swagger/discussion-swagger-decorators';
 
 @ApiTags('comments')
 @Controller('comments/reports')
@@ -40,21 +44,18 @@ export class ReportController {
   ) {}
 
   @Get()
-  @ApiBearerAuth()
   @Permissions(Permission.DISCUSSION_MODERATE)
-  async listReports(
-    @CurrentUser() moderator: JwtPayload,
-    @Query() query: ListReportsQueryDto,
-  ) {
+  @ApiListCommentReportsResponses()
+  async listReports(@CurrentUser() moderator: JwtPayload, @Query() query: ListReportsQueryDto) {
     const result = await this.application.listReports(moderator, query);
     return this.presenter.listReports(result);
   }
 
   @Post(':reportId/review')
-  @ApiBearerAuth()
   @Permissions(Permission.DISCUSSION_MODERATE)
   @Throttle({ default: { limit: 20, ttl: 60_000 } })
   @HttpCode(HttpStatus.OK)
+  @ApiReviewCommentReportResponses()
   async reviewReport(
     @CurrentUser() moderator: JwtPayload,
     @Param('reportId', new ParseUUIDPipe({ version: '7' })) reportId: string,
