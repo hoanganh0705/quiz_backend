@@ -10,13 +10,17 @@
  */
 
 import { Controller, Get, Param, Query, ParseUUIDPipe } from '@nestjs/common';
-import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { ApiTags } from '@nestjs/swagger';
 import { Public } from '@/common/decorators/public.decorator';
 import { CurrentUser, OptionalCurrentUser } from '@/common/decorators/current-user.decorator';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
 import { CommentApplicationService } from '../../application/comment-application.service';
 import { CommentPresenter } from '../presenters/comment.presenter';
 import { ListCommentsQueryDto } from '../../dto/request';
+import {
+  ApiListMyCommentsResponses,
+  ApiListUserCommentsResponses,
+} from '../swagger/discussion-swagger-decorators';
 
 @ApiTags('users')
 @Controller('users')
@@ -27,7 +31,7 @@ export class UserCommentController {
   ) {}
 
   @Get('me/comments')
-  @ApiBearerAuth()
+  @ApiListMyCommentsResponses()
   async listMyComments(
     @CurrentUser() user: JwtPayload,
     @Query() query: ListCommentsQueryDto,
@@ -38,6 +42,7 @@ export class UserCommentController {
 
   @Get(':userId/comments')
   @Public()
+  @ApiListUserCommentsResponses()
   async listUserComments(
     @OptionalCurrentUser() viewer: JwtPayload | undefined,
     @Param('userId', new ParseUUIDPipe({ version: '7' })) userId: string,
