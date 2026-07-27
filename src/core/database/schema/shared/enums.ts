@@ -3,7 +3,7 @@ import { pgEnum } from 'drizzle-orm/pg-core';
 // =============================================================================
 // Shared enums
 //
-// All 20 PostgreSQL enums used across bounded contexts live here so that each
+// PostgreSQL enums used across bounded contexts live here so that each
 // domain schema file can import them from a single source of truth. Enums
 // have no foreign key dependencies on tables, so centralising them does not
 // introduce cross-domain import cycles.
@@ -12,43 +12,15 @@ import { pgEnum } from 'drizzle-orm/pg-core';
 // schema files.
 // =============================================================================
 
-// -- Discussion ---------------------------------------------------------------
-
-export const discussionThreadStatus = pgEnum('discussion_thread_status', [
-  'open',
-  'closed',
-  'hidden',
-  'deleted',
-]);
-
-export const discussionContentStatus = pgEnum('discussion_content_status', [
-  'visible',
-  'hidden',
-  'deleted',
-]);
-
-export const discussionVoteValue = pgEnum('discussion_vote_value', ['upvote', 'downvote']);
-
-export const discussionReportStatus = pgEnum('discussion_report_status', [
-  'open',
-  'reviewed',
-  'dismissed',
-  'actioned',
-]);
-
-export const discussionReportTargetType = pgEnum('discussion_report_target_type', [
-  'thread',
-  'comment',
-  'reply',
-]);
-
 // Renamed in Phase 9.1. The new names correspond to the comment-only
-// module identity. The old symbols above are retained so the schema
-// file remains a single export surface for the migration in Phase 10
-// and any cross-module consumers that still reference the old names.
-// The database enum names (`discussion_*`) are also retained so the
-// migration can drop the old enum types in a follow-up step rather
-// than in this change.
+// module identity. The old enum types (`discussion_thread_status`,
+// `discussion_report_status`, `discussion_report_target_type`,
+// `discussion_vote_value`, `discussion_content_status`) were dropped
+// from this file in the same Phase. The TypeScript symbols above the
+// blank line below are intentionally not present: any leftover
+// reference in code or migration scripts must be replaced with the
+// comment-only names declared further down.
+
 export const discussionCommentVoteValue = pgEnum('discussion_comment_vote_value', [
   'upvote',
   'downvote',
