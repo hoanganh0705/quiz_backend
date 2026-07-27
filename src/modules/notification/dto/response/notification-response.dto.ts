@@ -183,12 +183,12 @@ export class NotificationPreferencesResponseDto {
   friendEnabled!: boolean;
 
   @ApiProperty({
-    description: 'Whether discussion reply and mention notifications are enabled',
+    description: 'Whether comment reply and mention notifications are enabled',
     example: true,
   })
   @Expose()
   @IsBoolean()
-  discussionEnabled!: boolean;
+  commentEnabled!: boolean;
 
   @ApiProperty({
     description: 'Whether weekly summary notifications are enabled',

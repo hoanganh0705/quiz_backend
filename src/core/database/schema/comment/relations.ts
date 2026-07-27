@@ -1,71 +1,50 @@
+import { relations } from 'drizzle-orm';
+import { commentRows, commentVotes, commentReports } from './schema';
+
 // =============================================================================
-// Comment bounded context — relations
+// Comment domain — relations
 //
-// Each `relations()` callback uses lazy evaluation: the callback is
-// stored as a function and only invoked when Drizzle resolves the
-// relational query API. This means cross-domain table references
-// (via live bindings from `..` or from extracted sibling domains) are
-// safe — the values will be resolved by the time the callback runs.
+// `commentRowsRelations` declares the parent/reply tree on the comment table
+// itself (self-referential FK on `comments.parent_comment_id`) plus the
+// relations to votes and reports tables.
+//
+// The reverse relations (author → comments, hiddenBy → comments, reporter →
+// reports, reviewer → reports) are declared in auth/relations.ts via
+// `usersRelations` so that auth does not import from the comment domain.
 // =============================================================================
 
-import { relations } from 'drizzle-orm/relations';
+export const commentRowsRelations = relations(commentRows, ({ one, many }) => ({
+  // Author and moderator (hiddenBy) are declared in auth/relations.ts as
+  // reverse relations; Drizzle infers them from the column names.
 
-import {
-  discussionComments,
-  discussionCommentVotes,
-  discussionCommentReports,
-} from './schema';
-import { users } from '../auth/schema';
+  // Self-referential parent/reply tree.
+  parentComment: one(commentRows, {
+    fields: [commentRows.parentCommentId],
+    references: [commentRows.commentId],
+    relationName: 'commentParent',
+  }),
+  replies: many(commentRows, {
+    relationName: 'commentParent',
+  }),
 
-export const discussionCommentsRelations = relations(discussionComments, ({ one, many }) => ({
-  author: one(users, {
-    fields: [discussionComments.authorId],
-    references: [users.userId],
-  }),
-  hiddenBy: one(users, {
-    fields: [discussionComments.hiddenById],
-    references: [users.userId],
-    relationName: 'discussionCommentHiddenBy',
-  }),
-  parentComment: one(discussionComments, {
-    fields: [discussionComments.parentCommentId],
-    references: [discussionComments.commentId],
-    relationName: 'discussionCommentParent',
-  }),
-  replies: many(discussionComments, {
-    relationName: 'discussionCommentParent',
-  }),
-  votes: many(discussionCommentVotes),
-  reports: many(discussionCommentReports),
+  votes: many(commentVotes),
+  reports: many(commentReports),
 }));
 
-export const discussionCommentVotesRelations = relations(discussionCommentVotes, ({ one }) => ({
-  user: one(users, {
-    fields: [discussionCommentVotes.userId],
-    references: [users.userId],
-  }),
-  comment: one(discussionComments, {
-    fields: [discussionCommentVotes.commentId],
-    references: [discussionComments.commentId],
+export const commentVotesRelations = relations(commentVotes, ({ one }) => ({
+  // Voter is declared in auth/relations.ts as a reverse relation.
+  comment: one(commentRows, {
+    fields: [commentVotes.commentId],
+    references: [commentRows.commentId],
+    relationName: 'comment',
   }),
 }));
 
-export const discussionCommentReportsRelations = relations(
-  discussionCommentReports,
-  ({ one }) => ({
-    reporter: one(users, {
-      fields: [discussionCommentReports.reporterId],
-      references: [users.userId],
-      relationName: 'discussionCommentReportReporter',
-    }),
-    reviewedBy: one(users, {
-      fields: [discussionCommentReports.reviewedByUserId],
-      references: [users.userId],
-      relationName: 'discussionCommentReportReviewer',
-    }),
-    comment: one(discussionComments, {
-      fields: [discussionCommentReports.commentId],
-      references: [discussionComments.commentId],
-    }),
+export const commentReportsRelations = relations(commentReports, ({ one }) => ({
+  // Reporter and reviewer are declared in auth/relations.ts as reverse relations.
+  comment: one(commentRows, {
+    fields: [commentReports.commentId],
+    references: [commentRows.commentId],
+    relationName: 'comment',
   }),
-);
+}));

@@ -5,7 +5,7 @@ import { Transform } from 'class-transformer';
 
 export class SearchQueryDto {
   @ApiProperty({
-    description: 'Search term used across users, quizzes, and discussion threads',
+    description: 'Search term used across users, quizzes, and comments',
     example: 'nestjs advanced',
     minLength: 2,
   })

@@ -293,9 +293,9 @@ readonly getMyBadges = (items: MyBadgeItemDto[]) => ApiResponse.ok([...items]);
 | Fix `uniqueEarners = 0` | Platform analytics are broken | Line 161 in `getPlatformStats()` |
 | Consistent pagination | API inconsistency | Controllers return bare arrays |
 
-### Product Discussion
+### Product Comment
 
-| Capability | Why Needs Discussion |
+| Capability | Why Needs Comment |
 |-----------|---------------------|
 | Achievement history table | Currently history is derived from revoked records; cannot capture grants-only |
 | XP reward computation | Documentation says "XP computation (Ranking module)" but no evidence in code |
@@ -321,7 +321,7 @@ readonly getMyBadges = (items: MyBadgeItemDto[]) => ApiResponse.ok([...items]);
 
 | Recommendation | Decision | Rationale |
 |----------------|----------|----------|
-| Deferred badge evaluation | **Product Discussion Required** | The scheduled evaluation infrastructure exists but is broken. Before fixing, product must clarify: which badge types should use deferred evaluation vs immediate? |
+| Deferred badge evaluation | **Product Comment Required** | The scheduled evaluation infrastructure exists but is broken. Before fixing, product must clarify: which badge types should use deferred evaluation vs immediate? |
 | Analytics stubs | **Merge Immediately** | These are internal analytics methods with no external consumers. Can be fixed post-merge. |
 | Pagination consistency | **Merge Immediately** | Architectural fix, not a breaking change since no external consumers depend on current behavior |
 | History table | **Future Roadmap** | Significant design work needed; impacts multiple modules |

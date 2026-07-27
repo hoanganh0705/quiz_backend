@@ -13,7 +13,7 @@ import {
  * classes named `QuizNotFoundError` in this codebase
  *   - quiz/domain/errors/quiz-domain.errors.ts     (code QUIZ_NOT_FOUND)
  *   - quiz/domain/analytics/errors/quiz-analytics.errors.ts  (this file)
- *   - discussion/domain/errors/index.ts            (code DISCUSSION_QUIZ_NOT_FOUND, planned for Phase 1 user-module PR)
+ *   - comments/domain/errors/index.ts            (code COMMENT_QUIZ_NOT_FOUND, planned for Phase 1 user-module PR)
  *
  * They are distinct classes at runtime. The Phase 0/1 spec does not
  * unify them — that cross-module coordination is captured in plan §9
@@ -73,7 +73,7 @@ describe('Quiz-analytics errors (RFC 7807 mapping completeness)', () => {
       const instance = new ctor('anything');
       // The class name on the Error instance is the *declared* name
       // (e.g. 'QuizNotFoundError'), even though the analytics one shares
-      // that name with the quiz-main and discussion variants. The
+      // that name with the quiz-main and comments variants. The
       // TypeScript runtime distinguishes them by reference, not by name.
       const expectedName =
         name === 'QuizNotFoundError (analytics)'

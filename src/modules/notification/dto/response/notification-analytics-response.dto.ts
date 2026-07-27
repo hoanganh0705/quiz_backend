@@ -9,7 +9,7 @@ export class NotificationAnalyticsDto {
 
   @ApiProperty({
     description: 'Notification counts grouped by type',
-    example: { achievement_earned: 450, rank_achievement: 300, discussion_reply: 498 },
+    example: { achievement_earned: 450, rank_achievement: 300, comment_reply: 498 },
   })
   byType!: Record<string, number>;
 

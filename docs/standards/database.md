@@ -25,7 +25,7 @@ Applies to `src/core/database/schema/`, `src/core/database/migrations/`, `src/co
 
 ### Schema definitions
 
-- Every table MUST be defined in a `<context>/schema.ts` file inside `src/core/database/schema/<context>/`. Bounded contexts include `auth/`, `taxonomy/`, `quiz/`, `user/`, `ranking/`, `achievement/`, `social/`, `discussion/`, `review/`, `notification/`, `instance/`, and `outbox/`.
+- Every table MUST be defined in a `<context>/schema.ts` file inside `src/core/database/schema/<context>/`. Bounded contexts include `auth/`, `taxonomy/`, `quiz/`, `user/`, `ranking/`, `achievement/`, `social/`, `comment/`, `review/`, `notification/`, `instance/`, and `outbox/`.
 - Every table MUST export a TypeScript function returning the columns (`pgTable` factory) — not a constant — so Drizzle can compose relations. Reference: `src/core/database/schema/taxonomy/schema.ts`.
 - Every bounded context MUST export a `relations.ts` file that wires Drizzle relations for the context's tables; `core/database/schema/index.ts` MUST re-export both.
 - Every table's primary key MUST be `id: uuid('id').primaryKey().default(sql\`uuidv7()\`)` or a named timestamp-prefixed UUIDv7 (`src/common/utils/id-generator.ts`). Other ID strategies MUST go through a new standard.

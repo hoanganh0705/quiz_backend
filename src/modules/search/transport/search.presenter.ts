@@ -5,7 +5,7 @@ import type { SearchResponseDto } from '../dto/response/search-response.dto';
 
 /**
  * Presenter for the global search module. Wraps the application service's
- * `SearchResponseDto` (an aggregate of users, quizzes, and discussion results)
+ * `SearchResponseDto` (an aggregate of users, quizzes, and comment results)
  * in the canonical envelope. Currently a thin pass-through to {@link ApiResponse.ok}.
  */
 @Injectable()

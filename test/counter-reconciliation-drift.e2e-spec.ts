@@ -20,7 +20,7 @@
  *
  * Counters the audit classified HIGH-risk but which still need their own
  * service path (e.g. `tournament_participants.total_score`,
- * `discussion_threads.comments_count`, `users.current_streak`) are not
+ * `comments.replies_count`, `users.current_streak`) are not
  * asserted here — those are governed by their own `reconcile-*.e2e-spec.ts`
  * and the audit doc.
  */

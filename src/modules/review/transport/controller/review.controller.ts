@@ -64,7 +64,7 @@ export class ReviewController {
   // single review by 100k distinct user accounts (the per-user
   // UNIQUE constraint blocks *duplicate* reports from one user but
   // not the cross-user spam). This makes reports costlier to file,
-  // matches the rate limit used for discussion reports (same threat
+  // matches the rate limit used for comments reports (same threat
   // model), and gives the global throttler a clean 429 surface for
   // abusive clients.
   @Throttle({ default: { limit: 5, ttl: 60_000 } })

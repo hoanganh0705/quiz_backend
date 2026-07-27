@@ -32,7 +32,7 @@ import { SOCIAL_DOMAIN_EVENT_BUS } from './domain/events/social-event-bus.port';
 // Other domain modules (needed for event bus tokens)
 import { UserModule } from '@/modules/user/user.module';
 import { AchievementModule } from '@/modules/achievement/achievement.module';
-import { DiscussionModule } from '@/modules/discussion/discussion.module';
+import { CommentModule } from '@/modules/comment/comment.module';
 import { TournamentModule } from '@/modules/tournament/tournament.module';
 import { NotificationModule } from '@/modules/notification/notification.module';
 import { RankingModule } from '@/modules/ranking/ranking.module';
@@ -46,7 +46,7 @@ import { AttemptFeedListenerAdapter } from './infrastructure/adapters/attempt-fe
     RedisModule,
     UserModule,
     AchievementModule,
-    DiscussionModule,
+    CommentModule,
     TournamentModule,
     forwardRef(() => NotificationModule),
     forwardRef(() => RankingModule),

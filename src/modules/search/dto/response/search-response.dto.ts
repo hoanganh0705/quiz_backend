@@ -27,15 +27,15 @@ export class SearchQuizResultDto {
   slug!: string;
 }
 
-export class SearchDiscussionResultDto {
+export class SearchCommentResultDto {
   @ApiProperty({
-    description: 'Discussion thread identifier',
+    description: 'Comment identifier',
     example: '770e8400-e29b-71d4-a716-446655440000',
   })
-  threadId!: string;
+  commentId!: string;
 
-  @ApiProperty({ description: 'Thread title', example: 'How to structure providers in NestJS?' })
-  title!: string;
+  @ApiProperty({ description: 'Quiz identifier the comment belongs to', example: '880e8400-e29b-71d4-a716-446655440000' })
+  quizId!: string;
 }
 
 export class SearchCategoryResultDto {
@@ -84,10 +84,10 @@ export class SearchResponseDto {
   quizzes!: SearchQuizResultDto[];
 
   @ApiProperty({
-    description: 'Matching discussion threads, ordered by relevance',
-    type: () => [SearchDiscussionResultDto],
+    description: 'Matching comments, ordered by relevance',
+    type: () => [SearchCommentResultDto],
   })
-  discussions!: SearchDiscussionResultDto[];
+  commentss!: SearchCommentResultDto[];
 
   @ApiProperty({
     description: 'Matching categories, ordered by relevance',

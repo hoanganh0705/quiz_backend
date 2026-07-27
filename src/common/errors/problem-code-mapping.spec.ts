@@ -551,12 +551,12 @@ describe('ProblemCodeMapping', () => {
 
   describe('resolveProblemInfo (comment module — Phase 9.5, 11 entries)', () => {
     // 11 entries covering 4 status codes:
-    //   404: DISCUSSION_COMMENT_NOT_FOUND, DISCUSSION_QUIZ_NOT_FOUND,
-    //        DISCUSSION_PARENT_COMMENT_NOT_FOUND, DISCUSSION_REPORT_NOT_FOUND (4)
-    //   403: DISCUSSION_COMMENT_FORBIDDEN, DISCUSSION_SELF_VOTE,
-    //        DISCUSSION_SELF_REPORT, DISCUSSION_MODERATOR_REQUIRED (4)
-    //   409: DISCUSSION_REPLY_LIMIT_EXCEEDED, DISCUSSION_DUPLICATE_REPORT (2)
-    //   400: DISCUSSION_PARENT_COMMENT_CROSS_THREAD (1)
+    //   404: COMMENT_NOT_FOUND, COMMENT_QUIZ_NOT_FOUND,
+    //        COMMENT_PARENT_COMMENT_NOT_FOUND, COMMENT_REPORT_NOT_FOUND (4)
+    //   403: COMMENT_FORBIDDEN, COMMENT_SELF_VOTE,
+    //        COMMENT_SELF_REPORT, COMMENT_MODERATOR_REQUIRED (4)
+    //   409: COMMENT_REPLY_LIMIT_EXCEEDED, COMMENT_DUPLICATE_REPORT (2)
+    //   400: COMMENT_PARENT_COMMENT_CROSS_THREAD (1)
     //
     // Total = 4 + 4 + 2 + 1 = 11.
     //
@@ -564,80 +564,80 @@ describe('ProblemCodeMapping', () => {
     // statuses (`ParentCommentCrossThreadError` → 400;
     // `ModeratorRequiredError` → 403). These are captured here so a
     // future mapping change cannot silently regress them.
-    it('returns a 404 entry for DISCUSSION_COMMENT_NOT_FOUND', () => {
-      const info = resolveProblemInfo('DISCUSSION_COMMENT_NOT_FOUND');
+    it('returns a 404 entry for COMMENT_NOT_FOUND', () => {
+      const info = resolveProblemInfo('COMMENT_NOT_FOUND');
       expect(info.status).toBe(HttpStatus.NOT_FOUND);
       expect(info.title).toBe('NotFound');
-      expect(info.typeUri).toBe('https://api.quiz.local/problems/discussion-comment-not-found');
+      expect(info.typeUri).toBe('https://api.quiz.local/problems/comment-comment-not-found');
     });
 
-    it('returns a 404 entry for DISCUSSION_QUIZ_NOT_FOUND (collision with QUIZ_NOT_FOUND is documented at §9 item 1)', () => {
-      // The discussion-module version of `QuizNotFoundError` uses
-      // `DISCUSSION_QUIZ_NOT_FOUND`; the quiz-module version uses
+    it('returns a 404 entry for COMMENT_QUIZ_NOT_FOUND (collision with QUIZ_NOT_FOUND is documented at §9 item 1)', () => {
+      // The comment-module version of `QuizNotFoundError` uses
+      // `COMMENT_QUIZ_NOT_FOUND`; the quiz-module version uses
       // `QUIZ_NOT_FOUND`. Same class name, distinct `code`. Clients
       // should switch on `extensions.code`.
-      const info = resolveProblemInfo('DISCUSSION_QUIZ_NOT_FOUND');
+      const info = resolveProblemInfo('COMMENT_QUIZ_NOT_FOUND');
       expect(info.status).toBe(HttpStatus.NOT_FOUND);
       expect(info.title).toBe('NotFound');
     });
 
-    it('returns a 404 entry for DISCUSSION_PARENT_COMMENT_NOT_FOUND', () => {
-      const info = resolveProblemInfo('DISCUSSION_PARENT_COMMENT_NOT_FOUND');
+    it('returns a 404 entry for COMMENT_PARENT_COMMENT_NOT_FOUND', () => {
+      const info = resolveProblemInfo('COMMENT_PARENT_COMMENT_NOT_FOUND');
       expect(info.status).toBe(HttpStatus.NOT_FOUND);
       expect(info.title).toBe('NotFound');
     });
 
-    it('returns a 404 entry for DISCUSSION_REPORT_NOT_FOUND', () => {
-      const info = resolveProblemInfo('DISCUSSION_REPORT_NOT_FOUND');
+    it('returns a 404 entry for COMMENT_REPORT_NOT_FOUND', () => {
+      const info = resolveProblemInfo('COMMENT_REPORT_NOT_FOUND');
       expect(info.status).toBe(HttpStatus.NOT_FOUND);
       expect(info.title).toBe('NotFound');
     });
 
-    it('returns a 403 entry for DISCUSSION_COMMENT_FORBIDDEN', () => {
-      const info = resolveProblemInfo('DISCUSSION_COMMENT_FORBIDDEN');
+    it('returns a 403 entry for COMMENT_FORBIDDEN', () => {
+      const info = resolveProblemInfo('COMMENT_FORBIDDEN');
       expect(info.status).toBe(HttpStatus.FORBIDDEN);
       expect(info.title).toBe('Forbidden');
     });
 
-    it('returns a 403 entry for DISCUSSION_SELF_VOTE', () => {
-      const info = resolveProblemInfo('DISCUSSION_SELF_VOTE');
+    it('returns a 403 entry for COMMENT_SELF_VOTE', () => {
+      const info = resolveProblemInfo('COMMENT_SELF_VOTE');
       expect(info.status).toBe(HttpStatus.FORBIDDEN);
       expect(info.title).toBe('Forbidden');
     });
 
-    it('returns a 403 entry for DISCUSSION_SELF_REPORT', () => {
-      const info = resolveProblemInfo('DISCUSSION_SELF_REPORT');
+    it('returns a 403 entry for COMMENT_SELF_REPORT', () => {
+      const info = resolveProblemInfo('COMMENT_SELF_REPORT');
       expect(info.status).toBe(HttpStatus.FORBIDDEN);
       expect(info.title).toBe('Forbidden');
     });
 
-    it('returns a 403 entry for DISCUSSION_MODERATOR_REQUIRED (non-obvious 403 per §8.4.1)', () => {
+    it('returns a 403 entry for COMMENT_MODERATOR_REQUIRED (non-obvious 403 per §8.4.1)', () => {
       // Plan §8.4.1 risk note: this is a non-obvious 403 (the class
       // name suggests 401 or 403 for "auth required", but the actual
       // semantic is "you're authenticated but lack the moderator
       // role"). The migration test captures it.
-      const info = resolveProblemInfo('DISCUSSION_MODERATOR_REQUIRED');
+      const info = resolveProblemInfo('COMMENT_MODERATOR_REQUIRED');
       expect(info.status).toBe(HttpStatus.FORBIDDEN);
       expect(info.title).toBe('Forbidden');
     });
 
-    it('returns a 409 entry for DISCUSSION_REPLY_LIMIT_EXCEEDED', () => {
-      const info = resolveProblemInfo('DISCUSSION_REPLY_LIMIT_EXCEEDED');
+    it('returns a 409 entry for COMMENT_REPLY_LIMIT_EXCEEDED', () => {
+      const info = resolveProblemInfo('COMMENT_REPLY_LIMIT_EXCEEDED');
       expect(info.status).toBe(HttpStatus.CONFLICT);
       expect(info.title).toBe('Conflict');
     });
 
-    it('returns a 409 entry for DISCUSSION_DUPLICATE_REPORT', () => {
-      const info = resolveProblemInfo('DISCUSSION_DUPLICATE_REPORT');
+    it('returns a 409 entry for COMMENT_DUPLICATE_REPORT', () => {
+      const info = resolveProblemInfo('COMMENT_DUPLICATE_REPORT');
       expect(info.status).toBe(HttpStatus.CONFLICT);
       expect(info.title).toBe('Conflict');
     });
 
-    it('returns a 400 entry for DISCUSSION_PARENT_COMMENT_CROSS_THREAD (non-obvious 400 per §8.4.1)', () => {
+    it('returns a 400 entry for COMMENT_PARENT_COMMENT_CROSS_THREAD (non-obvious 400 per §8.4.1)', () => {
       // Plan §8.4.1 risk note: this is a non-obvious 400 (one might
       // expect 409 Conflict for a cross-resource mismatch). The
       // migration test captures it.
-      const info = resolveProblemInfo('DISCUSSION_PARENT_COMMENT_CROSS_THREAD');
+      const info = resolveProblemInfo('COMMENT_PARENT_COMMENT_CROSS_THREAD');
       expect(info.status).toBe(HttpStatus.BAD_REQUEST);
       expect(info.title).toBe('BadRequest');
     });

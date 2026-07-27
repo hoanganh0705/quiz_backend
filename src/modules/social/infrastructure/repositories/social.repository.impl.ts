@@ -527,8 +527,8 @@ export class SocialRepository implements SocialRepositoryPort {
             'badge_earned',
             'tournament_joined',
             'tournament_won',
-            'discussion_created',
-            'discussion_solved',
+            'comment_created',
+            'comment_created',
             'rank_milestone'
           )
         GROUP BY ${socialFeedActivities.userId}

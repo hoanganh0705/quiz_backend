@@ -337,7 +337,7 @@ const searchableUsers: SearchableUser[] = await Promise.all(
 |------------|-------------|----------|
 | Personalized feed | Current feed shows all platform activity, not user's network | `social.repository.impl.ts:65-103` |
 
-### Product Discussion
+### Product Comment
 
 | Capability | Why Discuss | Notes |
 |------------|------------|-------|
@@ -366,7 +366,7 @@ const searchableUsers: SearchableUser[] = await Promise.all(
 | Category | Recommendation | Rationale |
 |----------|----------------|-----------|
 | Core friend/follow/block features | **Merge Immediately** | Well-implemented, tested, follows conventions |
-| Personalized feed fix | **Product Discussion Required** | Design decision needed |
+| Personalized feed fix | **Product Comment Required** | Design decision needed |
 | Transaction boundaries | **Future Roadmap** | Low risk at current scale |
 | Pagination consistency | **Future Roadmap** | Low risk, UX improvement |
 | Module documentation | **Future Roadmap** | Helpful but not blocking |

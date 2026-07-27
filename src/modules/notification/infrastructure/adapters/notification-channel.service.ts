@@ -27,7 +27,6 @@ import type { NotificationSentEvent } from '../../domain/events/notification.eve
 import { CACHE_PROVIDER, type CacheProvider } from '@/common/ports/cache.provider';
 
 const NOTIF_PREFS_TTL_MS = 5 * 60 * 1000; // 5 minutes
-const BATCH_INSERT_SIZE = 100;
 
 @Injectable()
 export class NotificationChannelService implements NotificationChannelServiceInstance {
@@ -85,15 +84,18 @@ export class NotificationChannelService implements NotificationChannelServiceIns
    * @param userIds Array of user IDs to notify
    * @param channels Notification channels (defaults to ['in_app'])
    */
-  async sendBatch(params: {
-    type: NotificationType;
-    title: string;
-    body: string;
-    metadata?: Record<string, unknown>;
-    channels?: NotificationChannel[];
-    recipientEmail?: string;
-    pushToken?: string;
-  }, userIds: string[]): Promise<{ sent: number; skipped: number }> {
+  async sendBatch(
+    params: {
+      type: NotificationType;
+      title: string;
+      body: string;
+      metadata?: Record<string, unknown>;
+      channels?: NotificationChannel[];
+      recipientEmail?: string;
+      pushToken?: string;
+    },
+    userIds: string[],
+  ): Promise<{ sent: number; skipped: number }> {
     const channels = params.channels ?? (['in_app'] as NotificationChannel[]);
     let sent = 0;
     let skipped = 0;
@@ -269,10 +271,9 @@ export class NotificationChannelService implements NotificationChannelServiceIns
       case 'followed':
         if (!prefs.friendEnabled) return false;
         break;
-      case 'discussion_reply':
-      case 'discussion_mention':
-      case 'discussion_solved':
-        if (!prefs.discussionEnabled) return false;
+      case 'comment_reply':
+      case 'comment_mention':
+        if (!prefs.commentEnabled) return false;
         break;
       case 'weekly_summary':
         if (!prefs.summaryEnabled) return false;
