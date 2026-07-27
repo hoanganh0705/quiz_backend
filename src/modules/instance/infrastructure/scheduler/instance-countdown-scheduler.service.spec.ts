@@ -96,4 +96,3 @@ describe('InstanceCountdownSchedulerService — Phase 2 cutoff guard', () => {
     expect(oneSecondOldCountdownMs).toBeGreaterThan(cutoffMs);
   });
 });
-

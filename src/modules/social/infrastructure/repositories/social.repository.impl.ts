@@ -21,7 +21,7 @@ import type {
   RelationshipStatus,
   PaginatedSocialSuggestionsResult,
 } from '../../domain/types/social.types';
-import { eq, and, count, isNull, sql, lte, or } from 'drizzle-orm';
+import { eq, and, count, isNull, sql, lte, or, aliasedTable } from 'drizzle-orm';
 import {
   FRIENDSHIP_REPOSITORY_PORT,
   type FriendshipRepositoryPort,
@@ -309,6 +309,9 @@ export class SocialRepository implements SocialRepositoryPort {
       }
     }
 
+    const u = aliasedTable(users, 'u');
+    const up = aliasedTable(userProfiles, 'up');
+
     const candidates = sql<{
       userId: string;
       username: string;
@@ -395,18 +398,18 @@ export class SocialRepository implements SocialRepositoryPort {
       ),
       ranked_candidates AS (
         SELECT
-          u.${users.userId} AS user_id,
-          u.${users.username} AS username,
-          up.${userProfiles.avatarUrl} AS avatar_url,
+          ${u.userId} AS user_id,
+          ${u.username} AS username,
+          ${up.avatarUrl} AS avatar_url,
           COALESCE(mfc.mutual_friends, 0)::int AS mutual_friends,
           COALESCE(mfol.mutual_followers, 0)::int AS mutual_followers,
           (COALESCE(mfc.mutual_friends, 0) * 1000 + COALESCE(mfol.mutual_followers, 0) * 100)::int AS score
         FROM ${users} u
-        LEFT JOIN ${userProfiles} up ON up.${userProfiles.userId} = u.${users.userId}
-        LEFT JOIN mutual_friend_counts mfc ON mfc.candidate_id = u.${users.userId}
-        LEFT JOIN mutual_follower_counts mfol ON mfol.candidate_id = u.${users.userId}
-        WHERE u.${users.deletedAt} IS NULL
-          AND u.${users.userId} NOT IN (SELECT user_id FROM excluded_users)
+        LEFT JOIN ${userProfiles} up ON ${up.userId} = ${u.userId}
+        LEFT JOIN mutual_friend_counts mfc ON mfc.candidate_id = ${u.userId}
+        LEFT JOIN mutual_follower_counts mfol ON mfol.candidate_id = ${u.userId}
+        WHERE ${u.deletedAt} IS NULL
+          AND ${u.userId} NOT IN (SELECT user_id FROM excluded_users)
           AND (COALESCE(mfc.mutual_friends, 0) > 0 OR COALESCE(mfol.mutual_followers, 0) > 0)
       )
       SELECT
@@ -816,6 +819,10 @@ export class SocialRepository implements SocialRepositoryPort {
     return this.friendshipRepository.removeFriend(userId, friendId);
   }
 
+  async findAcceptedFriendship(userId: string, friendId: string) {
+    return this.friendshipRepository.findAcceptedFriendship(userId, friendId);
+  }
+
   async getMutualFriends(
     userId: string,
     targetUserId: string,
@@ -832,6 +839,10 @@ export class SocialRepository implements SocialRepositoryPort {
 
   async unfollowUser(followerId: string, followingId: string) {
     return this.userFollowRepository.unfollowUser(followerId, followingId);
+  }
+
+  async findActiveFollow(followerId: string, followingId: string) {
+    return this.userFollowRepository.findActiveFollow(followerId, followingId);
   }
 
   async getFollowers(userId: string, limit: number, cursor?: string | null) {
@@ -878,6 +889,10 @@ export class SocialRepository implements SocialRepositoryPort {
 
   async unblockUser(blockerId: string, blockedId: string) {
     return this.blockRepository.unblockUser(blockerId, blockedId);
+  }
+
+  async findActiveBlock(blockerId: string, blockedId: string) {
+    return this.blockRepository.findActiveBlock(blockerId, blockedId);
   }
 
   async isBlocked(blockerId: string, blockedId: string) {

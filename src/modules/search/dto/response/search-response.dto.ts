@@ -34,7 +34,10 @@ export class SearchCommentResultDto {
   })
   commentId!: string;
 
-  @ApiProperty({ description: 'Quiz identifier the comment belongs to', example: '880e8400-e29b-71d4-a716-446655440000' })
+  @ApiProperty({
+    description: 'Quiz identifier the comment belongs to',
+    example: '880e8400-e29b-71d4-a716-446655440000',
+  })
   quizId!: string;
 }
 

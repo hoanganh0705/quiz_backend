@@ -148,9 +148,7 @@ export class NotificationOutboxAdapter {
     }
   }
 
-  private async processEvent(
-    event: typeof outboxEvents.$inferSelect,
-  ): Promise<void> {
+  private async processEvent(event: typeof outboxEvents.$inferSelect): Promise<void> {
     const payload = event.payload as NotificationOutboxEvent;
 
     try {
@@ -187,9 +185,7 @@ export class NotificationOutboxAdapter {
           lastError: error instanceof Error ? error.message : String(error),
           nextAttemptAt,
           failedAt: isFinalAttempt ? new Date().toISOString() : null,
-          dlqReason: isFinalAttempt
-            ? `Max retry attempts (${MAX_RETRY_ATTEMPTS}) exceeded`
-            : null,
+          dlqReason: isFinalAttempt ? `Max retry attempts (${MAX_RETRY_ATTEMPTS}) exceeded` : null,
         })
         .where(eq(outboxEvents.eventId, event.eventId));
 
@@ -223,10 +219,7 @@ export class NotificationOutboxAdapter {
   }
 
   private calculateBackoff(attemptCount: number): number {
-    return Math.min(
-      INITIAL_RETRY_DELAY_MS * Math.pow(2, attemptCount - 1),
-      60 * 1000,
-    );
+    return Math.min(INITIAL_RETRY_DELAY_MS * Math.pow(2, attemptCount - 1), 60 * 1000);
   }
 
   /**
@@ -239,24 +232,14 @@ export class NotificationOutboxAdapter {
     const beforeCount = await this.db
       .select({ count: sql<number>`count(*)::int` })
       .from(outboxEvents)
-      .where(
-        and(
-          isNull(outboxEvents.processedAt),
-          isNull(outboxEvents.failedAt),
-        ),
-      );
+      .where(and(isNull(outboxEvents.processedAt), isNull(outboxEvents.failedAt)));
 
     await this.processBatch();
 
     const afterCount = await this.db
       .select({ count: sql<number>`count(*)::int` })
       .from(outboxEvents)
-      .where(
-        and(
-          isNull(outboxEvents.processedAt),
-          isNull(outboxEvents.failedAt),
-        ),
-      );
+      .where(and(isNull(outboxEvents.processedAt), isNull(outboxEvents.failedAt)));
 
     const processed = Number(beforeCount[0]?.count ?? 0) - Number(afterCount[0]?.count ?? 0);
 

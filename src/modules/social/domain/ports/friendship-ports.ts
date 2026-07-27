@@ -25,6 +25,17 @@ export interface FriendshipRepositoryPort {
 
   removeFriend(userId: string, friendId: string): Promise<void>;
 
+  /**
+   * Find an active (non-soft-deleted) accepted friendship between
+   * two users. Returns `null` when no such friendship exists.
+   *
+   * Used by `SocialService.removeFriend` to enforce the existence
+   * precondition before mutating (audit issue: silent-success
+   * DELETE). The match is direction-agnostic — either side may
+   * appear as `requesterId` or `addresseeId`.
+   */
+  findAcceptedFriendship(userId: string, friendId: string): Promise<Friendship | null>;
+
   getMutualFriends(
     userId: string,
     targetUserId: string,

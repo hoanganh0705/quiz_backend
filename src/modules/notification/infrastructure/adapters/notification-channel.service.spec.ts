@@ -39,20 +39,22 @@ const createMockPreferencesRepository = () => ({
   getPreferences: jest.fn(),
 });
 
-const createPreferences = (overrides: Partial<{
-  inAppEnabled: boolean;
-  emailEnabled: boolean;
-  pushEnabled: boolean;
-  achievementEnabled: boolean;
-  tournamentEnabled: boolean;
-  rankEnabled: boolean;
-  friendEnabled: boolean;
-  commentEnabled: boolean;
-  summaryEnabled: boolean;
-  marketingEnabled: boolean;
-  quietHoursStart: string | null;
-  quietHoursEnd: string | null;
-}> = {}) => ({
+const createPreferences = (
+  overrides: Partial<{
+    inAppEnabled: boolean;
+    emailEnabled: boolean;
+    pushEnabled: boolean;
+    achievementEnabled: boolean;
+    tournamentEnabled: boolean;
+    rankEnabled: boolean;
+    friendEnabled: boolean;
+    commentEnabled: boolean;
+    summaryEnabled: boolean;
+    marketingEnabled: boolean;
+    quietHoursStart: string | null;
+    quietHoursEnd: string | null;
+  }> = {},
+) => ({
   preferencesId: 'pref-1',
   userId: 'user-1',
   inAppEnabled: true,
@@ -73,14 +75,16 @@ const createPreferences = (overrides: Partial<{
   ...overrides,
 });
 
-const createNotification = (overrides: Partial<{
-  notificationId: string;
-  userId: string;
-  type: string;
-  title: string;
-  message: string;
-  channel: string;
-}> = {}) => ({
+const createNotification = (
+  overrides: Partial<{
+    notificationId: string;
+    userId: string;
+    type: string;
+    title: string;
+    message: string;
+    channel: string;
+  }> = {},
+) => ({
   notificationId: 'notif-1',
   userId: 'user-1',
   type: 'achievement_earned',
@@ -124,9 +128,7 @@ describe('NotificationChannelService', () => {
         mockLogger,
       );
 
-      await expect(
-        service.invalidatePreferencesCache('user-1'),
-      ).resolves.toBeUndefined();
+      await expect(service.invalidatePreferencesCache('user-1')).resolves.toBeUndefined();
     });
   });
 
@@ -158,9 +160,7 @@ describe('NotificationChannelService', () => {
     it('respects in-app channel preference', async () => {
       const mockRepo = createMockRepository();
       const mockPrefsRepo = createMockPreferencesRepository();
-      mockPrefsRepo.getPreferences.mockResolvedValue(
-        createPreferences({ inAppEnabled: false }),
-      );
+      mockPrefsRepo.getPreferences.mockResolvedValue(createPreferences({ inAppEnabled: false }));
 
       const service = new NotificationChannelService(
         mockRepo,
@@ -184,9 +184,7 @@ describe('NotificationChannelService', () => {
     it('respects email channel preference', async () => {
       const mockRepo = createMockRepository();
       const mockPrefsRepo = createMockPreferencesRepository();
-      mockPrefsRepo.getPreferences.mockResolvedValue(
-        createPreferences({ emailEnabled: false }),
-      );
+      mockPrefsRepo.getPreferences.mockResolvedValue(createPreferences({ emailEnabled: false }));
 
       const service = new NotificationChannelService(
         mockRepo,
@@ -211,9 +209,7 @@ describe('NotificationChannelService', () => {
     it('respects push channel preference', async () => {
       const mockRepo = createMockRepository();
       const mockPrefsRepo = createMockPreferencesRepository();
-      mockPrefsRepo.getPreferences.mockResolvedValue(
-        createPreferences({ pushEnabled: false }),
-      );
+      mockPrefsRepo.getPreferences.mockResolvedValue(createPreferences({ pushEnabled: false }));
 
       const service = new NotificationChannelService(
         mockRepo,
@@ -279,7 +275,12 @@ describe('NotificationChannelService', () => {
     describe('notification type filtering', () => {
       it('respects achievementEnabled for achievement_earned', () => {
         const prefs = createPreferences({ achievementEnabled: false });
-        const result = service.shouldSendNotification('user-1', 'achievement_earned', 'in_app', prefs);
+        const result = service.shouldSendNotification(
+          'user-1',
+          'achievement_earned',
+          'in_app',
+          prefs,
+        );
         expect(result).toBe(false);
       });
 
@@ -291,19 +292,34 @@ describe('NotificationChannelService', () => {
 
       it('respects rankEnabled for rank_achievement', () => {
         const prefs = createPreferences({ rankEnabled: false });
-        const result = service.shouldSendNotification('user-1', 'rank_achievement', 'in_app', prefs);
+        const result = service.shouldSendNotification(
+          'user-1',
+          'rank_achievement',
+          'in_app',
+          prefs,
+        );
         expect(result).toBe(false);
       });
 
       it('respects rankEnabled for rank_improvement', () => {
         const prefs = createPreferences({ rankEnabled: true });
-        const result = service.shouldSendNotification('user-1', 'rank_improvement', 'in_app', prefs);
+        const result = service.shouldSendNotification(
+          'user-1',
+          'rank_improvement',
+          'in_app',
+          prefs,
+        );
         expect(result).toBe(true);
       });
 
       it('respects tournamentEnabled for tournament_starting', () => {
         const prefs = createPreferences({ tournamentEnabled: false });
-        const result = service.shouldSendNotification('user-1', 'tournament_starting', 'in_app', prefs);
+        const result = service.shouldSendNotification(
+          'user-1',
+          'tournament_starting',
+          'in_app',
+          prefs,
+        );
         expect(result).toBe(false);
       });
 
@@ -331,13 +347,23 @@ describe('NotificationChannelService', () => {
           emailEnabled: false,
           pushEnabled: false,
         });
-        const result = service.shouldSendNotification('user-1', 'system_announcement', 'in_app', prefs);
+        const result = service.shouldSendNotification(
+          'user-1',
+          'system_announcement',
+          'in_app',
+          prefs,
+        );
         expect(result).toBe(true);
       });
 
       it('allows quiz_review_received regardless of preferences', () => {
         const prefs = createPreferences({ commentEnabled: false });
-        const result = service.shouldSendNotification('user-1', 'quiz_review_received', 'in_app', prefs);
+        const result = service.shouldSendNotification(
+          'user-1',
+          'quiz_review_received',
+          'in_app',
+          prefs,
+        );
         expect(result).toBe(true);
       });
     });
@@ -345,25 +371,45 @@ describe('NotificationChannelService', () => {
     describe('channel filtering', () => {
       it('respects inAppEnabled preference', () => {
         const prefs = createPreferences({ inAppEnabled: false });
-        const result = service.shouldSendNotification('user-1', 'achievement_earned', 'in_app', prefs);
+        const result = service.shouldSendNotification(
+          'user-1',
+          'achievement_earned',
+          'in_app',
+          prefs,
+        );
         expect(result).toBe(false);
       });
 
       it('respects emailEnabled preference', () => {
         const prefs = createPreferences({ emailEnabled: false });
-        const result = service.shouldSendNotification('user-1', 'achievement_earned', 'email', prefs);
+        const result = service.shouldSendNotification(
+          'user-1',
+          'achievement_earned',
+          'email',
+          prefs,
+        );
         expect(result).toBe(false);
       });
 
       it('respects pushEnabled preference', () => {
         const prefs = createPreferences({ pushEnabled: false });
-        const result = service.shouldSendNotification('user-1', 'achievement_earned', 'push', prefs);
+        const result = service.shouldSendNotification(
+          'user-1',
+          'achievement_earned',
+          'push',
+          prefs,
+        );
         expect(result).toBe(false);
       });
 
       it('allows notification when channel is enabled', () => {
         const prefs = createPreferences({ inAppEnabled: true });
-        const result = service.shouldSendNotification('user-1', 'achievement_earned', 'in_app', prefs);
+        const result = service.shouldSendNotification(
+          'user-1',
+          'achievement_earned',
+          'in_app',
+          prefs,
+        );
         expect(result).toBe(true);
       });
     });
@@ -385,7 +431,12 @@ describe('NotificationChannelService', () => {
           inAppEnabled: true,
         });
 
-        const result = service.shouldSendNotification('user-1', 'achievement_earned', 'in_app', prefs);
+        const result = service.shouldSendNotification(
+          'user-1',
+          'achievement_earned',
+          'in_app',
+          prefs,
+        );
         expect(result).toBe(false);
       });
 
@@ -396,7 +447,12 @@ describe('NotificationChannelService', () => {
           inAppEnabled: true,
         });
 
-        const result = service.shouldSendNotification('user-1', 'achievement_earned', 'in_app', prefs);
+        const result = service.shouldSendNotification(
+          'user-1',
+          'achievement_earned',
+          'in_app',
+          prefs,
+        );
         expect(result).toBe(true);
       });
 
@@ -407,7 +463,12 @@ describe('NotificationChannelService', () => {
           inAppEnabled: true,
         });
 
-        const result = service.shouldSendNotification('user-1', 'achievement_earned', 'in_app', prefs);
+        const result = service.shouldSendNotification(
+          'user-1',
+          'achievement_earned',
+          'in_app',
+          prefs,
+        );
         expect(result).toBe(true);
       });
     });

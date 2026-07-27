@@ -2,10 +2,7 @@ import { Transform } from 'class-transformer';
 import { IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { trimString } from '@/common/utils/text.util';
-import {
-  MAX_REPORT_DETAILS_LENGTH,
-  MAX_REPORT_REASON_LENGTH,
-} from '../../domain/constants';
+import { MAX_REPORT_DETAILS_LENGTH, MAX_REPORT_REASON_LENGTH } from '../../domain/constants';
 
 export class ReportCommentDto {
   @ApiProperty({

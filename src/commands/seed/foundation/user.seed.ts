@@ -134,6 +134,9 @@ export const createUsersDomain = (): SeedDomain => ({
       }),
     );
 
+    // Always return rows to populate the SEED_RECORD with IDs and timestamps.
+    // Using COALESCE in the setWhere means "no update needed" rows are still
+    // returned (the condition evaluates to true via COALESCE).
     const touchedRows = await tx
       .insert(users)
       .values(upsertValues)
@@ -149,14 +152,10 @@ export const createUsersDomain = (): SeedDomain => ({
           emailVerifiedAt: sql`COALESCE(${users.emailVerifiedAt}, excluded.email_verified_at)`,
           updatedAt: ctx.nowIso,
         },
-        setWhere: sql`
-          ${users.username} IS DISTINCT FROM excluded.username
-          OR ${users.role} IS DISTINCT FROM excluded.role
-          OR ${users.isVerified} IS DISTINCT FROM true
-          OR ${users.emailVerifiedAt} IS NULL
-          OR ${users.emailVerificationTokenHash} IS NOT NULL
-          OR ${users.emailVerificationExpiresAt} IS NOT NULL
-        `,
+        // Always evaluate to true so RETURNING includes all rows (inserted and updated).
+        // PostgreSQL's ON CONFLICT DO UPDATE requires setWhere to evaluate to true
+        // for RETURNING to include the row. Using a simple 'true' ensures this.
+        setWhere: sql`true`,
       })
       .returning({
         userId: users.userId,

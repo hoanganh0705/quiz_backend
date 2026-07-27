@@ -255,9 +255,7 @@ describe('Comment-domain errors (RFC 7807 mapping completeness — Phase 9.5)', 
       // Plan §8.4.1 risk note: the class name suggests 401 or 403 for
       // "auth required", but the actual semantic is "you're
       // authenticated but lack the moderator role". 403 is correct.
-      expect(ProblemCodeMapping['COMMENT_MODERATOR_REQUIRED'].status).toBe(
-        HttpStatus.FORBIDDEN,
-      );
+      expect(ProblemCodeMapping['COMMENT_MODERATOR_REQUIRED'].status).toBe(HttpStatus.FORBIDDEN);
     });
   });
 });

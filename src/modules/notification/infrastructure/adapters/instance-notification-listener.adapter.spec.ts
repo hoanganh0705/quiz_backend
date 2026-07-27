@@ -9,7 +9,13 @@
  *   - `handlePlayerDisconnected` — notifies player of disconnection
  */
 import { InstanceNotificationListener } from './instance-notification-listener.adapter';
-import { PlayerJoinedEvent, InstanceStartedEvent, PlayerXpEarnedEvent, InstanceClosedEvent, PlayerDisconnectedEvent } from '@/modules/instance/domain/events';
+import {
+  PlayerJoinedEvent,
+  InstanceStartedEvent,
+  PlayerXpEarnedEvent,
+  InstanceClosedEvent,
+  PlayerDisconnectedEvent,
+} from '@/modules/instance/domain/events';
 
 const mockLogger = {
   info: jest.fn(),

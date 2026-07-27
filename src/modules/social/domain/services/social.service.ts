@@ -53,6 +53,9 @@ import {
   FriendRequestNotFoundError,
   FriendRequestForbiddenError,
   FriendListForbiddenError,
+  FriendshipNotFoundError,
+  UserNotBlockedError,
+  FollowNotFoundError,
 } from '../errors/social.errors';
 import { UserNotFoundError } from '@/modules/user/domain/errors';
 import { isPostgresUniqueViolation } from '@/common/utils/db-error.util';
@@ -292,6 +295,15 @@ export class SocialService {
   }
 
   async removeFriend(userId: string, friendId: string): Promise<void> {
+    if (userId === friendId) {
+      throw new SelfFriendRequestError();
+    }
+
+    const friendship = await this.friendshipRepository.findAcceptedFriendship(userId, friendId);
+    if (!friendship) {
+      throw new FriendshipNotFoundError(friendId);
+    }
+
     await this.friendshipRepository.removeFriend(userId, friendId);
 
     // Invalidate social counts cache for both users
@@ -368,6 +380,15 @@ export class SocialService {
   }
 
   async unblockUser(blockerId: string, blockedId: string): Promise<void> {
+    if (blockerId === blockedId) {
+      throw new SelfFriendRequestError();
+    }
+
+    const block = await this.blockRepository.findActiveBlock(blockerId, blockedId);
+    if (!block) {
+      throw new UserNotBlockedError(blockedId);
+    }
+
     await this.blockRepository.unblockUser(blockerId, blockedId);
 
     // Invalidate social counts cache for both users
@@ -458,13 +479,19 @@ export class SocialService {
   }
 
   async unfollowUser(followerId: string, followingId: string): Promise<void> {
+    if (followerId === followingId) {
+      throw new SelfFriendRequestError();
+    }
+
+    const follow = await this.userFollowRepository.findActiveFollow(followerId, followingId);
+    if (!follow) {
+      throw new FollowNotFoundError(followingId);
+    }
+
     await this.userFollowRepository.unfollowUser(followerId, followingId);
 
     // Invalidate social counts cache for both users
     await this.socialCacheService.invalidateCountsBatch([followerId, followingId]);
-
-    const { followerUsername, followingUsername } =
-      await this.userFollowRepository.getUsernamesForUsers(followerId, followingId);
 
     this.logger.info({
       event: 'user_unfollowed',
@@ -476,9 +503,9 @@ export class SocialService {
     this.eventBus.emitUserUnfollowed({
       eventType: 'user_unfollowed',
       followerId,
-      followerUsername,
+      followerUsername: follow.followerUsername,
       followingId,
-      followingUsername,
+      followingUsername: follow.followingUsername,
       timestamp: new Date(),
     });
   }

@@ -5,10 +5,7 @@
  * application layer can depend on a single import path.
  */
 
-export {
-  COMMENT_DOMAIN_EVENT_BUS,
-  type CommentDomainEventBusPort,
-} from './comment-event-bus.port';
+export { COMMENT_DOMAIN_EVENT_BUS, type CommentDomainEventBusPort } from './comment-event-bus.port';
 
 export { CommentDomainEventBus } from './comment-event-bus';
 

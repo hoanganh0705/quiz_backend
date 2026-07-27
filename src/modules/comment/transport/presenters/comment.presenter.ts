@@ -66,32 +66,36 @@ export class CommentPresenter {
   readonly listQuizComments = (payload: {
     items: readonly CommentWithRepliesView[];
     pagination: { limit: number; hasNextPage: boolean; nextCursor: string | null };
-  }): ApiResponseEnvelope<CommentWithRepliesDto[]> => wrapPaginated<CommentWithRepliesDto>({
-    items: payload.items.map(toCommentWithRepliesDto),
-    pagination: payload.pagination,
-  });
+  }): ApiResponseEnvelope<CommentWithRepliesDto[]> =>
+    wrapPaginated<CommentWithRepliesDto>({
+      items: payload.items.map(toCommentWithRepliesDto),
+      pagination: payload.pagination,
+    });
 
   readonly listMyComments = (payload: {
     items: readonly MyCommentView[];
     pagination: { limit: number; hasNextPage: boolean; nextCursor: string | null };
-  }): ApiResponseEnvelope<MyCommentDto[]> => wrapPaginated<MyCommentDto>({
-    items: payload.items.map(toMyCommentDto),
-    pagination: payload.pagination,
-  });
+  }): ApiResponseEnvelope<MyCommentDto[]> =>
+    wrapPaginated<MyCommentDto>({
+      items: payload.items.map(toMyCommentDto),
+      pagination: payload.pagination,
+    });
 
   readonly listUserComments = (payload: {
     items: readonly MyCommentView[];
     pagination: { limit: number; hasNextPage: boolean; nextCursor: string | null };
-  }): ApiResponseEnvelope<MyCommentDto[]> => wrapPaginated<MyCommentDto>({
-    items: payload.items.map(toMyCommentDto),
-    pagination: payload.pagination,
-  });
+  }): ApiResponseEnvelope<MyCommentDto[]> =>
+    wrapPaginated<MyCommentDto>({
+      items: payload.items.map(toMyCommentDto),
+      pagination: payload.pagination,
+    });
 
   readonly listReports = (payload: {
     items: readonly ReportView[];
     pagination: { limit: number; hasNextPage: boolean; nextCursor: string | null };
-  }): ApiResponseEnvelope<ReportDto[]> => wrapPaginated<ReportDto>({
-    items: payload.items.map(toReportDto),
-    pagination: payload.pagination,
-  });
+  }): ApiResponseEnvelope<ReportDto[]> =>
+    wrapPaginated<ReportDto>({
+      items: payload.items.map(toReportDto),
+      pagination: payload.pagination,
+    });
 }
