@@ -3,12 +3,15 @@ import {
   Get,
   Post,
   Delete,
+  All,
   Param,
   Query,
   ParseIntPipe,
   DefaultValuePipe,
   Body,
   ParseUUIDPipe,
+  HttpException,
+  HttpStatus,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { ApiTags, ApiOperation, ApiParam, ApiOkResponse, ApiQuery, ApiBody } from '@nestjs/swagger';
@@ -257,10 +260,18 @@ export class SocialController {
   }
 
   // ─── Friend Requests ──────────────────────────────────────────────────────
+  //
+  // All friend-request endpoints use the plural resource noun
+  // `friend-requests`. The previous singular form (`POST /friend-request/:userId`)
+  // was renamed for consistency with the rest of the surface. A single
+  // `@All('friend-request')` handler below preserves the singular path
+  // and returns RFC 7807 405 Method Not Allowed so existing SDKs that
+  // cached the old URL fail loudly instead of silently misrouting.
+  // The stub is intentionally kept forever — see docs/standards/api.md.
 
   @Throttle({ default: { limit: 20, ttl: 60_000 } })
   @Transactional()
-  @Post('friend-request/:userId')
+  @Post('friend-requests/:userId')
   @ApiOperation({ summary: 'Send a friend request' })
   @ApiAuthAction()
   @ApiCreatedResource(FriendRequestDto, { description: 'Friend request sent' })
@@ -270,6 +281,39 @@ export class SocialController {
   ) {
     return this.presenter.sendFriendRequest(
       await this.socialService.sendFriendRequest(user, addresseeId),
+    );
+  }
+
+  /**
+   * Deprecated singular path. The friend-request resource is always accessed
+   * through `/friend-requests` (or `/friend-requests/{friendshipId}/...`).
+   * Any HTTP verb that lands here is intentionally rejected with 405 so
+   * clients that cached the old URL surface the misroute instead of being
+   * silently dropped to a 404.
+   */
+  @All('friend-request')
+  @ApiOperation({
+    summary: 'Deprecated singular friend-request path (always returns 405)',
+    description:
+      'Retained indefinitely for forward-compatibility with SDKs that cached ' +
+      'the pre-consolidation path. Every method on this path returns ' +
+      '`405 Method Not Allowed`. Migrate callers to `POST /friend-requests/:userId` ' +
+      'or the matching plural route.',
+  })
+  @ApiOkResponse({ description: 'Stub — never returns 200' })
+  // 405 is intentionally not in `ApiOkResource` etc.; declare it explicitly.
+  // The RuntimeException is caught by `GlobalExceptionFilter` and emitted as
+  // an RFC 7807 ProblemDetail with `extensions.code = 'GLOBAL_METHOD_NOT_ALLOWED'`.
+  deprecatedFriendRequestPath(): never {
+    throw new HttpException(
+      {
+        statusCode: HttpStatus.METHOD_NOT_ALLOWED,
+        error: 'Method Not Allowed',
+        message:
+          "The plural form '/friend-requests' is canonical. " +
+          'This singular path is retained only to emit 405 for cached URLs.',
+      },
+      HttpStatus.METHOD_NOT_ALLOWED,
     );
   }
 

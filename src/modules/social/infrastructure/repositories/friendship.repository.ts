@@ -10,7 +10,7 @@ import type {
   PaginatedMutualFriendsResult,
   RespondToFriendRequestParams,
 } from '../../domain/types/social.types';
-import { eq, and, or, sql, desc, count, lte, isNull } from 'drizzle-orm';
+import { eq, and, or, sql, desc, count, lte, isNull, aliasedTable } from 'drizzle-orm';
 
 @Injectable()
 export class FriendshipRepository implements FriendshipRepositoryPort {
@@ -84,7 +84,7 @@ export class FriendshipRepository implements FriendshipRepositoryPort {
         avatarUrl: userProfiles.avatarUrl,
       })
       .from(friendships)
-      .innerJoin(users, eq(friendships.addresseeId, users.userId))
+      .innerJoin(users, eq(friendships.requesterId, users.userId))
       .leftJoin(userProfiles, eq(users.userId, userProfiles.userId))
       .where(
         and(
@@ -204,6 +204,25 @@ export class FriendshipRepository implements FriendshipRepositoryPort {
       );
   }
 
+  async findAcceptedFriendship(userId: string, friendId: string): Promise<Friendship | null> {
+    const [row] = await this.db
+      .select()
+      .from(friendships)
+      .where(
+        and(
+          or(
+            and(eq(friendships.requesterId, userId), eq(friendships.addresseeId, friendId)),
+            and(eq(friendships.requesterId, friendId), eq(friendships.addresseeId, userId)),
+          ),
+          eq(friendships.status, 'accepted'),
+          isNull(friendships.deletedAt),
+        ),
+      )
+      .limit(1);
+
+    return (row as Friendship | undefined) ?? null;
+  }
+
   async getMutualFriends(
     userId: string,
     targetUserId: string,
@@ -222,6 +241,9 @@ export class FriendshipRepository implements FriendshipRepositoryPort {
         cursorCondition = '';
       }
     }
+
+    const u = aliasedTable(users, 'u');
+    const up = aliasedTable(userProfiles, 'up');
 
     const mutualFriendsQuery = sql<{
       userId: string;
@@ -275,13 +297,13 @@ export class FriendshipRepository implements FriendshipRepositoryPort {
         )
       )
       SELECT
-        u.${users.userId} AS "userId",
-        u.${users.username} AS username,
-        up.${userProfiles.avatarUrl} AS "avatarUrl"
+        ${u.userId} AS "userId",
+        ${u.username} AS username,
+        ${up.avatarUrl} AS "avatarUrl"
       FROM shared_friends sf
-      INNER JOIN ${users} u ON u.${users.userId} = sf.user_id
-      LEFT JOIN ${userProfiles} up ON up.${userProfiles.userId} = u.${users.userId}
-      WHERE u.${users.deletedAt} IS NULL
+      INNER JOIN ${users} u ON ${u.userId} = sf.user_id
+      LEFT JOIN ${userProfiles} up ON ${up.userId} = ${u.userId}
+      WHERE ${u.deletedAt} IS NULL
     `;
 
     const rowsResult = await this.db.execute(sql`

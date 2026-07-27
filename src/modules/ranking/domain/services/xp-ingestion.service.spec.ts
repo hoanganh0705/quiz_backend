@@ -54,10 +54,7 @@ interface StubBus {
 }
 
 interface StubRankCalc {
-  queueRankRecalculationInTx: jest.Mock<
-    Promise<void>,
-    [unknown, string, RankingPeriod[]]
-  >;
+  queueRankRecalculationInTx: jest.Mock<Promise<void>, [unknown, string, RankingPeriod[]]>;
 }
 
 const ok = <T>(value: T): Promise<T> => Promise.resolve(value);
@@ -67,7 +64,12 @@ const mockLogger = {
   warn: jest.fn(),
   error: jest.fn(),
   debug: jest.fn(),
-} as unknown as jest.Mocked<{ info: jest.Mock; warn: jest.Mock; error: jest.Mock; debug: jest.Mock }>;
+} as unknown as jest.Mocked<{
+  info: jest.Mock;
+  warn: jest.Mock;
+  error: jest.Mock;
+  debug: jest.Mock;
+}>;
 
 const buildStubRepo = (): StubRepo => ({
   updateXp: jest.fn(),
@@ -184,11 +186,12 @@ describe('XpIngestionService', () => {
         expect.objectContaining({ userId: 'u1', amount: 100 }),
       );
       expect(outbox.scheduleRankingEvent).toHaveBeenCalled();
-      expect(rankCalc.queueRankRecalculationInTx).toHaveBeenCalledWith(
-        {},
-        'u1',
-        [RankingPeriod.ALL_TIME, RankingPeriod.WEEKLY, RankingPeriod.MONTHLY, RankingPeriod.DAILY],
-      );
+      expect(rankCalc.queueRankRecalculationInTx).toHaveBeenCalledWith({}, 'u1', [
+        RankingPeriod.ALL_TIME,
+        RankingPeriod.WEEKLY,
+        RankingPeriod.MONTHLY,
+        RankingPeriod.DAILY,
+      ]);
     });
 
     it('schedules rank recalculation for all periods', async () => {
@@ -216,11 +219,12 @@ describe('XpIngestionService', () => {
         timestamp: new Date(),
       });
 
-      expect(rankCalc.queueRankRecalculationInTx).toHaveBeenCalledWith(
-        {},
-        'u1',
-        [RankingPeriod.ALL_TIME, RankingPeriod.WEEKLY, RankingPeriod.MONTHLY, RankingPeriod.DAILY],
-      );
+      expect(rankCalc.queueRankRecalculationInTx).toHaveBeenCalledWith({}, 'u1', [
+        RankingPeriod.ALL_TIME,
+        RankingPeriod.WEEKLY,
+        RankingPeriod.MONTHLY,
+        RankingPeriod.DAILY,
+      ]);
     });
 
     it('logs xp_event_received and xp_event_processed', async () => {

@@ -57,13 +57,15 @@ const createMockChannelService = () => ({
   invalidatePreferencesCache: jest.fn(),
 });
 
-const createNotification = (overrides: Partial<{
-  notificationId: string;
-  userId: string;
-  type: string;
-  title: string;
-  message: string;
-}> = {}) => ({
+const createNotification = (
+  overrides: Partial<{
+    notificationId: string;
+    userId: string;
+    type: string;
+    title: string;
+    message: string;
+  }> = {},
+) => ({
   notificationId: 'notif-1',
   userId: 'user-1',
   type: 'achievement_earned',
@@ -79,10 +81,12 @@ const createNotification = (overrides: Partial<{
   ...overrides,
 });
 
-const createPreferences = (overrides: Partial<{
-  inAppEnabled: boolean;
-  emailEnabled: boolean;
-}> = {}) => ({
+const createPreferences = (
+  overrides: Partial<{
+    inAppEnabled: boolean;
+    emailEnabled: boolean;
+  }> = {},
+) => ({
   preferencesId: 'pref-1',
   userId: 'user-1',
   inAppEnabled: true,
@@ -251,9 +255,7 @@ describe('NotificationApplicationService', () => {
       mockRepo.findById.mockResolvedValue(notification);
 
       const user = createUser();
-      await expect(service.markAsRead('notif-1', user)).rejects.toThrow(
-        NotificationForbiddenError,
-      );
+      await expect(service.markAsRead('notif-1', user)).rejects.toThrow(NotificationForbiddenError);
     });
   });
 
@@ -415,7 +417,9 @@ describe('NotificationApplicationService', () => {
       const user = createUser();
       const result = await service.updatePreferences(user, { inAppEnabled: false });
 
-      expect(mockPrefsRepo.upsertPreferences).toHaveBeenCalledWith('user-1', { inAppEnabled: false });
+      expect(mockPrefsRepo.upsertPreferences).toHaveBeenCalledWith('user-1', {
+        inAppEnabled: false,
+      });
       expect(mockChannelService.invalidatePreferencesCache).toHaveBeenCalledWith('user-1');
       expect(result.inAppEnabled).toBe(false);
     });

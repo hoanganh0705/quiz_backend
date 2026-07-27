@@ -137,10 +137,10 @@
 
 | Transition | Owner | Trigger |
 |------------|-------|---------|
-| Send request | User | `POST /social/friend-request/:userId` |
-| Accept request | Addressee | `POST /social/friend-requests/:id/respond` |
-| Reject request | Addressee | `POST /social/friend-requests/:id/respond` |
-| Cancel request | Requester | `DELETE /social/friend-requests/:id` |
+| Send request | User | `POST /social/friend-requests/:userId` |
+| Accept request | Addressee | `POST /social/friend-requests/:friendshipId/respond` |
+| Reject request | Addressee | `POST /social/friend-requests/:friendshipId/respond` |
+| Cancel request | Requester | `DELETE /social/friend-requests/:friendshipId` |
 | Remove friend | Either | `DELETE /social/friends/:userId` |
 | Block user | User | `POST /social/block/:userId` |
 | Unblock user | User | `DELETE /social/block/:userId` |

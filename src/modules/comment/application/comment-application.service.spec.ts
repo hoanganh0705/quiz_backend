@@ -122,9 +122,10 @@ const createMockCommentService = (): jest.Mocked<
   restoreComment: jest.fn(),
 });
 
-const createMockAudit = (): jest.Mocked<CommentModeratorAuditService> => ({
-  log: jest.fn().mockResolvedValue(undefined),
-} as unknown as jest.Mocked<CommentModeratorAuditService>);
+const createMockAudit = (): jest.Mocked<CommentModeratorAuditService> =>
+  ({
+    log: jest.fn().mockResolvedValue(undefined),
+  }) as unknown as jest.Mocked<CommentModeratorAuditService>;
 
 describe('CommentApplicationService', () => {
   let service: CommentApplicationService;

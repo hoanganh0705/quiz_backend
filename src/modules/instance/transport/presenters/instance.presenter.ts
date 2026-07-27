@@ -77,8 +77,7 @@ export class InstancePresenter {
   // Phase 6 (api-contract audit): the players endpoint now uses the
   // canonical cursor-paginated envelope — `data` is the raw player
   // array and `meta.pagination` carries the cursor discriminator.
-  readonly listInstancePlayers =
-    wrapPaginatedDto<InstancePlayersResponseDto['items'][number]>;
+  readonly listInstancePlayers = wrapPaginatedDto<InstancePlayersResponseDto['items'][number]>;
 
   // Paginated lists
   readonly listInstances = wrapPaginatedDto<InstanceListResponseDto['items'][number]>;

@@ -135,3 +135,65 @@ export class PendingRequestExistsError extends SocialError {
     super('A friend request is already pending');
   }
 }
+
+/**
+ * Thrown when `DELETE /social/friends/:userId` is called but no
+ * accepted friendship exists between the caller and `:userId`.
+ *
+ * Business rationale (audit issue: silent-success DELETE): the
+ * endpoint means "delete an existing friendship", not "ensure no
+ * friendship exists". When the friendship is absent, the resource
+ * the URL targets does not exist — the correct wire shape is 404,
+ * not silent 204. The sibling `cancelFriendRequest` already throws
+ * `FriendRequestNotFoundError` (404) for the same reason; this
+ * class is the parallel shape for the accepted-friendship table.
+ *
+ * The endpoint's downstream side effects (cache invalidation,
+ * `friend_removed` domain event, audit log) are conditional on the
+ * existence check — see `SocialService.removeFriend`. Skipping the
+ * throw here would let those side effects fire on no-op calls.
+ */
+export class FriendshipNotFoundError extends SocialError {
+  readonly code = 'SOCIAL_FRIENDSHIP_NOT_FOUND';
+  constructor(friendId: string) {
+    super(`You are not friends with user ${friendId}`);
+  }
+}
+
+/**
+ * Thrown when `DELETE /social/block/:userId` is called but no
+ * active block exists between the caller and `:userId`.
+ *
+ * Business rationale (audit issue: silent-success DELETE): the
+ * endpoint means "unblock an existing block", not "ensure no block
+ * exists". The audit-log side effect (`social.user.unblocked`
+ * event) is the most user-visible consequence of the bug — every
+ * silent-no-op call writes a false-positive audit entry that
+ * pollutes forensic queries. After this class is thrown, the audit
+ * write is conditional on the existence check.
+ */
+export class UserNotBlockedError extends SocialError {
+  readonly code = 'SOCIAL_USER_NOT_BLOCKED';
+  constructor(blockedId: string) {
+    super(`You have not blocked user ${blockedId}`);
+  }
+}
+
+/**
+ * Thrown when `DELETE /social/follow/:userId` is called but no
+ * active follow relationship exists between the caller and
+ * `:userId`.
+ *
+ * Business rationale (audit issue: silent-success DELETE): the
+ * endpoint means "unfollow an existing follow", not "ensure no
+ * follow exists". The notification side effect
+ * (`user_unfollowed` event consumed by the social notification
+ * listener) is the most user-visible consequence — the target user
+ * could be told "X unfollowed you" when X was never following them.
+ */
+export class FollowNotFoundError extends SocialError {
+  readonly code = 'SOCIAL_FOLLOW_NOT_FOUND';
+  constructor(followingId: string) {
+    super(`You are not following user ${followingId}`);
+  }
+}

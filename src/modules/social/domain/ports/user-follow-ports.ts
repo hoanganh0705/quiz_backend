@@ -14,6 +14,17 @@ export interface UserFollowRepositoryPort {
 
   unfollowUser(followerId: string, followingId: string): Promise<void>;
 
+  /**
+   * Find an active (non-soft-deleted) follow relationship.
+   * Returns `null` when no such follow exists.
+   *
+   * Used by `SocialService.unfollowUser` to enforce the existence
+   * precondition before mutating (audit issue: silent-success
+   * DELETE). The match is direction-specific: `followerId` must
+   * match the caller's id.
+   */
+  findActiveFollow(followerId: string, followingId: string): Promise<UserFollow | null>;
+
   getFollowers(userId: string, limit: number, cursor?: string | null): Promise<Follower[]>;
 
   getFollowersOfUser(

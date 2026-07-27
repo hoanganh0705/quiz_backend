@@ -20,7 +20,10 @@ import {
   COMMENT_DOMAIN_EVENT_BUS,
   type CommentDomainEventBusPort,
 } from '@/modules/comment/domain/events';
-import type { CommentCreatedEvent, CommentDomainEvent } from '@/modules/comment/domain/events/comment.events';
+import type {
+  CommentCreatedEvent,
+  CommentDomainEvent,
+} from '@/modules/comment/domain/events/comment.events';
 import { SocialService } from '../../domain/services/social.service';
 import { getCorrelationId, createCorrelationId } from '@/common/interceptors/correlation-id';
 

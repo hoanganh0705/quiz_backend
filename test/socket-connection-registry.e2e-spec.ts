@@ -61,8 +61,14 @@ const cleanupKeys = async (redis: RedisService, label: string) => {
   // test may have created. We use the underlying client directly
   // because `CacheProvider` does not expose a scan operation.
   try {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const client = (redis as unknown as { client: { keys: (k: string) => Promise<string[]>; del: (...keys: string[]) => Promise<number> } }).client;
+    const client = (
+      redis as unknown as {
+        client: {
+          keys: (k: string) => Promise<string[]>;
+          del: (...keys: string[]) => Promise<number>;
+        };
+      }
+    ).client;
     const keys = await client.keys(`socket-connection:*`);
     if (keys.length > 0) await client.del(...keys);
   } catch (error) {
@@ -76,15 +82,12 @@ suite('RedisSocketConnectionRegistry — Phase 3 live Redis integration', () => 
 
   beforeAll(() => {
     seedRedisUrl();
-    redis = new RedisService(
-      redisConfig(),
-      {
-        info: () => undefined,
-        warn: () => undefined,
-        error: () => undefined,
-        debug: () => undefined,
-      } as unknown as ConstructorParameters<typeof RedisService>[1],
-    );
+    redis = new RedisService(redisConfig(), {
+      info: () => undefined,
+      warn: () => undefined,
+      error: () => undefined,
+      debug: () => undefined,
+    } as unknown as ConstructorParameters<typeof RedisService>[1]);
   }, 10_000);
 
   afterAll(async () => {
@@ -140,8 +143,15 @@ suite('RedisSocketConnectionRegistry — Phase 3 live Redis integration', () => 
 
   it('writes the canonical `socket-connection:` key prefix', async () => {
     if (!redis) throw new Error('Redis not initialized');
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const client = (redis as unknown as { client: { keys: (k: string) => Promise<string[]>; get: (k: string) => Promise<string | null> } }).client;
+
+    const client = (
+      redis as unknown as {
+        client: {
+          keys: (k: string) => Promise<string[]>;
+          get: (k: string) => Promise<string | null>;
+        };
+      }
+    ).client;
     const registry = makeRegistry(redis, 60_000);
 
     const socketId = `sock-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
