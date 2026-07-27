@@ -44,7 +44,7 @@ export class InvalidRefreshTokenError extends AuthDomainError {
  */
 export class TokenReuseDetectedError extends AuthDomainError {
   readonly code = 'AUTH_TOKEN_REUSED';
-  constructor(message = 'Refresh token reuse detected. All sessions have been revoked') {
+  constructor(message = 'Security action taken on your account. Please log in again.') {
     super(message);
   }
 }

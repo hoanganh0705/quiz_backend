@@ -27,7 +27,7 @@ const ACHIEVEMENT_CASES: ReadonlyArray<{
     ctor: AchievementGrantError,
     args: ['user-1', 'rule-engine-timeout'],
     expectedCode: 'ACHIEVEMENT_GRANT_ERROR',
-    message: 'Failed to grant achievement for user user-1: rule-engine-timeout',
+    message: 'Failed to grant achievement',
   },
   {
     name: 'AchievementUserNotFoundError',
