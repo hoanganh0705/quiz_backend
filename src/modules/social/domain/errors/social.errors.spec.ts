@@ -3,13 +3,16 @@ import { BaseDomainException } from '@/common/errors/base-domain.exception';
 import {
   AlreadyFriendsError,
   BlockedUserError,
+  FollowNotFoundError,
   FriendListForbiddenError,
   FriendRequestForbiddenError,
   FriendRequestNotFoundError,
+  FriendshipNotFoundError,
   PendingRequestExistsError,
   SelfFriendRequestError,
   SocialError,
   UserBlockedError,
+  UserNotBlockedError,
 } from './social.errors';
 
 type ExceptionCtor = new (...args: string[]) => BaseDomainException;
@@ -83,6 +86,27 @@ const SOCIAL_CASES: ReadonlyArray<{
     args: [],
     expectedCode: 'SOCIAL_PENDING_REQUEST_EXISTS',
     message: 'A friend request is already pending',
+  },
+  {
+    name: 'FriendshipNotFoundError',
+    ctor: FriendshipNotFoundError,
+    args: ['user-abc'],
+    expectedCode: 'SOCIAL_FRIENDSHIP_NOT_FOUND',
+    message: 'You are not friends with user user-abc',
+  },
+  {
+    name: 'UserNotBlockedError',
+    ctor: UserNotBlockedError,
+    args: ['user-xyz'],
+    expectedCode: 'SOCIAL_USER_NOT_BLOCKED',
+    message: 'You have not blocked user user-xyz',
+  },
+  {
+    name: 'FollowNotFoundError',
+    ctor: FollowNotFoundError,
+    args: ['user-qrs'],
+    expectedCode: 'SOCIAL_FOLLOW_NOT_FOUND',
+    message: 'You are not following user user-qrs',
   },
 ];
 
@@ -175,27 +199,32 @@ describe('Social-domain errors (RFC 7807 mapping completeness — Phase 2)', () 
       expect(SOCIAL_CASES.find((row) => (row.ctor as unknown) === abstractAsValue)).toBeUndefined();
     });
 
-    it('total exception count is 8 (matches the design plan)', () => {
+    it('total exception count is 11 (matches the design plan)', () => {
+      // 8 prior exceptions + 3 new from the audit-fix PR
+      // (FriendshipNotFoundError, UserNotBlockedError,
+      // FollowNotFoundError).
+      //
       // This guards against accidental additions/removals during
       // refactors.
-      expect(SOCIAL_CASES.length).toBe(8);
+      expect(SOCIAL_CASES.length).toBe(11);
     });
 
     it('counted status-code buckets match the design plan', () => {
-      // 8 entries covering 4 status codes:
-      //   404: SOCIAL_FRIEND_REQUEST_NOT_FOUND (1)
+      // 11 entries covering 4 status codes:
+      //   404: SOCIAL_FRIEND_REQUEST_NOT_FOUND, SOCIAL_FRIENDSHIP_NOT_FOUND,
+      //        SOCIAL_USER_NOT_BLOCKED, SOCIAL_FOLLOW_NOT_FOUND (4)
       //   403: SOCIAL_FRIEND_REQUEST_FORBIDDEN, SOCIAL_FRIEND_LIST_FORBIDDEN,
       //        SOCIAL_BLOCKED_USER, SOCIAL_USER_BLOCKED (4)
       //   409: SOCIAL_ALREADY_FRIENDS, SOCIAL_PENDING_REQUEST_EXISTS (2)
       //   400: SOCIAL_SELF_FRIEND_REQUEST (1)
-      // Total = 1 + 4 + 2 + 1 = 8.
+      // Total = 4 + 4 + 2 + 1 = 11.
       const byStatus = SOCIAL_CASES.reduce<Record<string, string[]>>((acc, row) => {
         const status = String(ProblemCodeMapping[row.expectedCode].status);
         if (!acc[status]) acc[status] = [];
         acc[status].push(row.expectedCode);
         return acc;
       }, {});
-      expect(byStatus['404']?.length).toBe(1);
+      expect(byStatus['404']?.length).toBe(4);
       expect(byStatus['403']?.length).toBe(4);
       expect(byStatus['409']?.length).toBe(2);
       expect(byStatus['400']?.length).toBe(1);

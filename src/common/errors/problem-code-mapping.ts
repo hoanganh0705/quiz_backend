@@ -387,6 +387,22 @@ export const ProblemCodeMapping: Readonly<Record<string, ProblemCodeInfo>> = {
     typeUri: 'https://api.quiz.local/problems/category-not-found',
   },
   /**
+   * Thrown when the caller tries to unfollow a category they are not
+   * currently following. 404 Not Found.
+   *
+   * Audit issue (silent-success DELETE): the previous implementation
+   * returned 204 unconditionally and logged a `category_unfollowed`
+   * event when nothing actually changed. After this mapping, the
+   * service checks for the active follow first and throws when
+   * absent. Mirrors the social module's `SOCIAL_FRIENDSHIP_NOT_FOUND`
+   * / `SOCIAL_FOLLOW_NOT_FOUND` pattern.
+   */
+  CATEGORY_FOLLOW_NOT_FOUND: {
+    status: HttpStatus.NOT_FOUND,
+    title: 'NotFound',
+    typeUri: 'https://api.quiz.local/problems/category-follow-not-found',
+  },
+  /**
    * Thrown by `CategoryQueryService` when a category's analytics entry
    * cannot be found. 404 Not Found.
    */
@@ -1042,12 +1058,13 @@ export const ProblemCodeMapping: Readonly<Record<string, ProblemCodeInfo>> = {
   // SOCIAL module — src/modules/social/domain/errors/social.errors.ts
   // ===========================================================================
   /** Seventh Phase-2 entry: legacy `{ statusCode, message, error }` → RFC 7807. */
-  // 8 concrete exceptions → 4 status codes:
-  //   404: SOCIAL_FRIEND_REQUEST_NOT_FOUND
+  // 11 concrete exceptions → 4 status codes:
+  //   404: SOCIAL_FRIEND_REQUEST_NOT_FOUND, SOCIAL_FRIENDSHIP_NOT_FOUND,
+  //        SOCIAL_USER_NOT_BLOCKED, SOCIAL_FOLLOW_NOT_FOUND (4)
   //   403: SOCIAL_FRIEND_REQUEST_FORBIDDEN, SOCIAL_FRIEND_LIST_FORBIDDEN,
-  //        SOCIAL_BLOCKED_USER, SOCIAL_USER_BLOCKED
-  //   409: SOCIAL_ALREADY_FRIENDS, SOCIAL_PENDING_REQUEST_EXISTS
-  //   400: SOCIAL_SELF_FRIEND_REQUEST
+  //        SOCIAL_BLOCKED_USER, SOCIAL_USER_BLOCKED (4)
+  //   409: SOCIAL_ALREADY_FRIENDS, SOCIAL_PENDING_REQUEST_EXISTS (2)
+  //   400: SOCIAL_SELF_FRIEND_REQUEST (1)
 
   /**
    * Thrown when a friend request cannot be found by ID. 404 Not Found.
@@ -1151,6 +1168,53 @@ export const ProblemCodeMapping: Readonly<Record<string, ProblemCodeInfo>> = {
     status: HttpStatus.CONFLICT,
     title: 'Conflict',
     typeUri: 'https://api.quiz.local/problems/social-pending-request-exists',
+  },
+  /**
+   * Thrown when `DELETE /social/friends/:userId` is called but no
+   * accepted friendship exists between the caller and `:userId`.
+   * 404 Not Found.
+   *
+   * Audit issue (silent-success DELETE): the previous implementation
+   * returned 204 unconditionally and emitted a `friend_removed`
+   * event even when nothing was removed. After this mapping, the
+   * service fetches the friendship first and throws when absent;
+   * cache invalidation + event emission are conditional on the row
+   * existing. See `SocialService.removeFriend` and the audit report
+   * in the social-module review.
+   */
+  SOCIAL_FRIENDSHIP_NOT_FOUND: {
+    status: HttpStatus.NOT_FOUND,
+    title: 'NotFound',
+    typeUri: 'https://api.quiz.local/problems/social-friendship-not-found',
+  },
+  /**
+   * Thrown when `DELETE /social/block/:userId` is called but no
+   * active block exists. 404 Not Found.
+   *
+   * Audit issue (silent-success DELETE): the previous implementation
+   * wrote a `social.user.unblocked` audit-log entry even when no
+   * unblock happened, polluting forensic queries. The audit write +
+   * event emission are now conditional on the existence check.
+   */
+  SOCIAL_USER_NOT_BLOCKED: {
+    status: HttpStatus.NOT_FOUND,
+    title: 'NotFound',
+    typeUri: 'https://api.quiz.local/problems/social-user-not-blocked',
+  },
+  /**
+   * Thrown when `DELETE /social/follow/:userId` is called but no
+   * active follow exists. 404 Not Found.
+   *
+   * Audit issue (silent-success DELETE): the previous implementation
+   * emitted a `user_unfollowed` event even when no unfollow happened,
+   * causing the notification listener to dispatch a false-positive
+   * "X unfollowed you" push. The event emission is now conditional
+   * on the existence check.
+   */
+  SOCIAL_FOLLOW_NOT_FOUND: {
+    status: HttpStatus.NOT_FOUND,
+    title: 'NotFound',
+    typeUri: 'https://api.quiz.local/problems/social-follow-not-found',
   },
 
   // ===========================================================================

@@ -4,6 +4,7 @@ import {
   CategoryAlreadyActiveError,
   CategoryAnalyticsNotFoundError,
   CategoryDomainError,
+  CategoryFollowNotFoundError,
   CategoryNotFoundError,
   CategoryRestoreInvariantError,
   CategorySlugConflictError,
@@ -48,6 +49,12 @@ const CATEGORY_CODES: ReadonlyArray<{
     ctor: CategoryAnalyticsNotFoundError,
     expectedCode: 'CATEGORY_ANALYTICS_NOT_FOUND',
     message: 'Category analytics not found',
+  },
+  {
+    name: 'CategoryFollowNotFoundError',
+    ctor: CategoryFollowNotFoundError,
+    expectedCode: 'CATEGORY_FOLLOW_NOT_FOUND',
+    message: 'You are not following this category',
   },
   {
     name: 'CategorySlugConflictError',

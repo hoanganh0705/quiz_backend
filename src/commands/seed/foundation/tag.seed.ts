@@ -55,6 +55,9 @@ export const createTagsDomain = (): SeedDomain => ({
       }
     }
 
+    // Always return rows to populate the SEED_RECORD with IDs and timestamps.
+    // Using COALESCE in the setWhere means "no update needed" rows are still
+    // returned (the condition evaluates to true via COALESCE).
     const touchedRows = await tx
       .insert(tags)
       .values(
@@ -71,7 +74,8 @@ export const createTagsDomain = (): SeedDomain => ({
           name: sql`excluded.name`,
           updatedAt: ctx.nowIso,
         },
-        setWhere: sql`${tags.name} IS DISTINCT FROM excluded.name`,
+        // Always evaluate to true so RETURNING includes all rows (inserted or updated).
+        setWhere: sql`true`,
       })
       .returning({
         tagId: tags.tagId,

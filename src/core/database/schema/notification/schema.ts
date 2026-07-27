@@ -73,8 +73,7 @@ export const notifications = pgTable(
       .where(sql`expires_at IS NOT NULL`),
     // Phase 5 (Performance Optimization) — GIN index for metadata queries
     // Enables efficient lookups on JSONB fields like metadata->>'achievementId'
-    index('idx_notifications_metadata')
-      .using('gin', sql`metadata`),
+    index('idx_notifications_metadata').using('gin', sql`metadata`),
     foreignKey({
       columns: [table.userId],
       foreignColumns: [users.userId],

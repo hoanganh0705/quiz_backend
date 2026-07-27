@@ -90,6 +90,26 @@ All list endpoints use **cursor-based pagination** for stability and efficiency 
 | Block/Unblock user | Authenticated user |
 | Follow/Unfollow user | Authenticated user |
 
+## Remove-style endpoint semantics
+
+State-transition DELETE endpoints in this module require the target
+relationship to exist. If the resource is absent, the endpoint
+throws a 404 `BaseDomainException` so the caller can distinguish
+"the action did something" from "the action had nothing to act on".
+This is consistent with the sibling endpoints (`DELETE
+/friend-requests/:friendshipId` already throws
+`FriendRequestNotFoundError`) and with the codebase-wide pattern
+used by notification / bookmark / review / achievement removes.
+
+| Endpoint | 404 code | Side-effect notes |
+|---|---|---|
+| `DELETE /social/friends/:userId` | `SOCIAL_FRIENDSHIP_NOT_FOUND` | `friend_removed` event + cache invalidation only fire on actual removal |
+| `DELETE /social/block/:userId` | `SOCIAL_USER_NOT_BLOCKED` | `social.user.unblocked` audit log entry only written on actual unblock |
+| `DELETE /social/follow/:userId` | `SOCIAL_FOLLOW_NOT_FOUND` | `user_unfollowed` event only emitted on actual unfollow (preventing false-positive notifications) |
+
+The same rule is applied in the category module for
+`DELETE /categories/:id/follow` (`CATEGORY_FOLLOW_NOT_FOUND`).
+
 ## Cross-module Interactions
 
 | Module | Interaction |
@@ -139,11 +159,12 @@ All list endpoints use **cursor-based pagination** for stability and efficiency 
 | Method | Endpoint | Description |
 |---|---|---|
 | `GET` | `/social/relationship/:userId` | Get relationship status with a user |
-| `POST` | `/social/friend-request/:userId` | Send friend request |
-| `POST` | `/social/friend-requests/:id/respond` | Accept or decline friend request |
-| `DELETE` | `/social/friend-requests/:id` | Cancel outgoing friend request |
+| `POST` | `/social/friend-requests/:userId` | Send friend request |
+| `POST` | `/social/friend-requests/:friendshipId/respond` | Accept or decline a friend request |
+| `DELETE` | `/social/friend-requests/:friendshipId` | Cancel an outgoing friend request |
 | `GET` | `/social/friend-requests/incoming` | Get incoming friend requests |
 | `GET` | `/social/friend-requests/outgoing` | Get outgoing friend requests |
+| `ANY` | `/social/friend-request` | **Deprecated.** Stub that always returns `405 Method Not Allowed` (`GLOBAL_METHOD_NOT_ALLOWED`). Migrate to the plural paths above. Retained indefinitely for SDKs that cached the old URL. |
 | `DELETE` | `/social/friends/:userId` | Remove a friend |
 | `POST` | `/social/block/:userId` | Block a user |
 | `DELETE` | `/social/block/:userId` | Unblock a user |

@@ -154,9 +154,7 @@ export class CommentDomainEventBus
     const now = Date.now();
 
     while (true) {
-      const queued = await this.cache.lpopJson<QueuedEvent>(
-        CommentDomainEventBus.RETRY_QUEUE_KEY,
-      );
+      const queued = await this.cache.lpopJson<QueuedEvent>(CommentDomainEventBus.RETRY_QUEUE_KEY);
       if (queued === null) break;
 
       if (queued.nextRetryAt > now) {

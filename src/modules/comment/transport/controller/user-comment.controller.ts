@@ -32,10 +32,7 @@ export class UserCommentController {
 
   @Get('me/comments')
   @ApiListMyCommentsResponses()
-  async listMyComments(
-    @CurrentUser() user: JwtPayload,
-    @Query() query: ListCommentsQueryDto,
-  ) {
+  async listMyComments(@CurrentUser() user: JwtPayload, @Query() query: ListCommentsQueryDto) {
     const result = await this.application.listMyComments(user, query);
     return this.presenter.listMyComments(result);
   }

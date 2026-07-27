@@ -20,7 +20,10 @@ import { Cron } from '@nestjs/schedule';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { DRIZZLE } from '@/core/database/drizzle.constants';
 import type { DrizzleDB } from '@/core/database/database.module';
-import { COMMENT_REPOSITORY_PORT, type CommentRepositoryPort } from '../../domain/ports/comment-repository.port';
+import {
+  COMMENT_REPOSITORY_PORT,
+  type CommentRepositoryPort,
+} from '../../domain/ports/comment-repository.port';
 
 @Injectable()
 export class CommentCounterReconcilerService {

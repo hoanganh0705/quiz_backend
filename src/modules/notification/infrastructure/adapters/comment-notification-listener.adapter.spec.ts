@@ -35,9 +35,10 @@ const createMockChannelService = (): jest.Mocked<NotificationChannelServicePort>
   send: jest.fn().mockResolvedValue(undefined),
 });
 
-const createMockUserRepository = (): jest.Mocked<UserRepositoryPort> => ({
-  findUsersByRole: jest.fn(),
-} as unknown as jest.Mocked<UserRepositoryPort>);
+const createMockUserRepository = (): jest.Mocked<UserRepositoryPort> =>
+  ({
+    findUsersByRole: jest.fn(),
+  }) as unknown as jest.Mocked<UserRepositoryPort>;
 
 const createMockEventBus = () => {
   const unsubscribe = jest.fn();
@@ -112,7 +113,11 @@ describe('CommentNotificationListener', () => {
     });
 
     it('skips the notification for top-level comments', async () => {
-      const event = buildEvent({ isReply: false, parentCommentId: null, parentCommentAuthorId: null });
+      const event = buildEvent({
+        isReply: false,
+        parentCommentId: null,
+        parentCommentAuthorId: null,
+      });
 
       await listener['handleEvent'](event);
 
@@ -245,9 +250,7 @@ describe('CommentNotificationListener', () => {
         { userId: 'admin-1' },
         { userId: 'mod-1' },
       ]);
-      channelService.send
-        .mockResolvedValueOnce(undefined)
-        .mockRejectedValueOnce(new Error('down'));
+      channelService.send.mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error('down'));
       const event = buildEvent();
 
       await expect(listener['handleEvent'](event)).resolves.toBeUndefined();

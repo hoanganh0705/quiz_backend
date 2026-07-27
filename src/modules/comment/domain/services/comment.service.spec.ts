@@ -23,12 +23,7 @@ import type { CommentRepositoryPort } from '../ports/comment-repository.port';
 import type { QuizExistencePort } from '../ports/quiz-existence.port';
 import type { UserExistencePort, UserPublicInfo } from '../ports/user-existence.port';
 import type { CommentDomainEventBusPort } from '../events';
-import type {
-  AuthorView,
-  CommentView,
-  CreateCommentParams,
-  ReportView,
-} from '../types';
+import type { AuthorView, CommentView, CreateCommentParams, ReportView } from '../types';
 import {
   CommentForbiddenError,
   CommentNotFoundError,
@@ -300,26 +295,26 @@ describe('CommentService', () => {
         repo.countReplies.mockResolvedValue(0);
       });
 
-    it('locks the parent row, increments replies count, and emits the reply event', async () => {
-      const reply = { ...mockCommentView, parentCommentId: PARENT_ID };
-      repo.createComment.mockResolvedValueOnce(reply);
-      // `createComment` calls `getCommentById` (non-tx variant) to
-      // resolve the parent's author id for the event payload.
-      repo.getCommentById.mockResolvedValueOnce(parentCommentView);
+      it('locks the parent row, increments replies count, and emits the reply event', async () => {
+        const reply = { ...mockCommentView, parentCommentId: PARENT_ID };
+        repo.createComment.mockResolvedValueOnce(reply);
+        // `createComment` calls `getCommentById` (non-tx variant) to
+        // resolve the parent's author id for the event payload.
+        repo.getCommentById.mockResolvedValueOnce(parentCommentView);
 
-      const result = await service.createComment(replyParams);
+        const result = await service.createComment(replyParams);
 
-      expect(repo.getCommentByIdForUpdate).toHaveBeenCalledWith(PARENT_ID, expect.anything());
-      expect(repo.incrementRepliesCount).toHaveBeenCalledWith(PARENT_ID, 1, expect.anything());
-      expect(eventBus.emitCommentCreated).toHaveBeenCalledWith(
-        expect.objectContaining({
-          parentCommentId: PARENT_ID,
-          isReply: true,
-          parentCommentAuthorId: USER_ID,
-        }),
-      );
-      expect(result).toBe(reply);
-    });
+        expect(repo.getCommentByIdForUpdate).toHaveBeenCalledWith(PARENT_ID, expect.anything());
+        expect(repo.incrementRepliesCount).toHaveBeenCalledWith(PARENT_ID, 1, expect.anything());
+        expect(eventBus.emitCommentCreated).toHaveBeenCalledWith(
+          expect.objectContaining({
+            parentCommentId: PARENT_ID,
+            isReply: true,
+            parentCommentAuthorId: USER_ID,
+          }),
+        );
+        expect(result).toBe(reply);
+      });
 
       it('rejects when the parent belongs to a different quiz', async () => {
         repo.getCommentByIdForUpdate.mockResolvedValueOnce({
@@ -616,10 +611,7 @@ describe('CommentService', () => {
   describe('moderation', () => {
     it('hideComment rejects non-moderators', async () => {
       await expect(
-        service.hideComment(
-          { commentId: COMMENT_ID, moderatorId: VOTER_ID },
-          { role: 'user' },
-        ),
+        service.hideComment({ commentId: COMMENT_ID, moderatorId: VOTER_ID }, { role: 'user' }),
       ).rejects.toBeInstanceOf(ModeratorRequiredError);
     });
 

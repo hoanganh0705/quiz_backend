@@ -50,7 +50,13 @@ interface StubRepo {
   clearDirtyFlagsForUsersWithNoPendingWork: jest.Mock<Promise<void>, [string[]]>;
   clearDirtyFlagsForUsersWithNoPendingWorkInTx: jest.Mock<Promise<void>, [unknown, string[]]>;
   getUserRanking: jest.Mock<
-    Promise<{ userId: string; allTimeXp: number; weeklyXp: number; monthlyXp: number; dailyXp: number } | null>,
+    Promise<{
+      userId: string;
+      allTimeXp: number;
+      weeklyXp: number;
+      monthlyXp: number;
+      dailyXp: number;
+    } | null>,
     [string]
   >;
   countRankAbove: jest.Mock<Promise<number>, [number, RankingPeriod]>;
@@ -81,7 +87,12 @@ const mockLogger = {
   warn: jest.fn(),
   error: jest.fn(),
   debug: jest.fn(),
-} as unknown as jest.Mocked<{ info: jest.Mock; warn: jest.Mock; error: jest.Mock; debug: jest.Mock }>;
+} as unknown as jest.Mocked<{
+  info: jest.Mock;
+  warn: jest.Mock;
+  error: jest.Mock;
+  debug: jest.Mock;
+}>;
 
 const buildStubRepo = (): StubRepo => ({
   calculateAllRanks: jest.fn(),
@@ -137,7 +148,12 @@ describe('RankCalculationService', () => {
       repo.updatePeakRank.mockResolvedValue({ updated: false, previousPeakRank: null });
       repo.getTotalParticipants.mockResolvedValue(100);
       repo.hasMilestone.mockResolvedValue(false);
-      repo.createMilestone.mockResolvedValue({ id: 'm1', userId: 'u1', milestone: 'TOP_10', rank: 1 });
+      repo.createMilestone.mockResolvedValue({
+        id: 'm1',
+        userId: 'u1',
+        milestone: 'TOP_10',
+        rank: 1,
+      });
 
       const service = createService(repo, bus);
       const results = await service.calculateAllRanks(RankingPeriod.ALL_TIME);
@@ -151,14 +167,17 @@ describe('RankCalculationService', () => {
       const repo = buildStubRepo();
       const bus = buildStubBus();
 
-      repo.calculateAllRanks.mockResolvedValue([
-        { userId: 'u1', xp: 1000, rank: 5, denseRank: 5 },
-      ]);
+      repo.calculateAllRanks.mockResolvedValue([{ userId: 'u1', xp: 1000, rank: 5, denseRank: 5 }]);
       repo.updateRank.mockResolvedValue(10); // Previous rank was worse
       repo.updatePeakRank.mockResolvedValue({ updated: false, previousPeakRank: null });
       repo.getTotalParticipants.mockResolvedValue(100);
       repo.hasMilestone.mockResolvedValue(false);
-      repo.createMilestone.mockResolvedValue({ id: 'm1', userId: 'u1', milestone: 'TOP_10', rank: 5 });
+      repo.createMilestone.mockResolvedValue({
+        id: 'm1',
+        userId: 'u1',
+        milestone: 'TOP_10',
+        rank: 5,
+      });
 
       const service = createService(repo, bus);
       await service.calculateAllRanks(RankingPeriod.ALL_TIME);
@@ -176,9 +195,7 @@ describe('RankCalculationService', () => {
       const repo = buildStubRepo();
       const bus = buildStubBus();
 
-      repo.calculateAllRanks.mockResolvedValue([
-        { userId: 'u1', xp: 1000, rank: 5, denseRank: 5 },
-      ]);
+      repo.calculateAllRanks.mockResolvedValue([{ userId: 'u1', xp: 1000, rank: 5, denseRank: 5 }]);
       repo.updateRank.mockResolvedValue(5); // Same rank
       repo.updatePeakRank.mockResolvedValue({ updated: false, previousPeakRank: null });
       repo.getTotalParticipants.mockResolvedValue(100);
@@ -216,7 +233,12 @@ describe('RankCalculationService', () => {
       repo.updatePeakRank.mockResolvedValue({ updated: false, previousPeakRank: null });
       repo.getTotalParticipants.mockResolvedValue(100);
       repo.hasMilestone.mockResolvedValue(false);
-      repo.createMilestone.mockResolvedValue({ id: 'm1', userId: 'u1', milestone: 'TOP_10', rank: 1 });
+      repo.createMilestone.mockResolvedValue({
+        id: 'm1',
+        userId: 'u1',
+        milestone: 'TOP_10',
+        rank: 1,
+      });
 
       const service = createService(repo, bus);
       await service.recalculateRanksForUsers(['u1'], RankingPeriod.WEEKLY);
@@ -313,10 +335,7 @@ describe('RankCalculationService', () => {
       repo.enqueueRecalculation.mockResolvedValue(undefined);
 
       const service = createService(repo, bus);
-      await service.queueRankRecalculation('u1', [
-        RankingPeriod.WEEKLY,
-        RankingPeriod.MONTHLY,
-      ]);
+      await service.queueRankRecalculation('u1', [RankingPeriod.WEEKLY, RankingPeriod.MONTHLY]);
 
       expect(repo.enqueueRecalculation).toHaveBeenCalledWith({
         userIds: ['u1'],
@@ -359,7 +378,12 @@ describe('RankCalculationService', () => {
       repo.updatePeakRank.mockResolvedValue({ updated: false, previousPeakRank: null });
       repo.getTotalParticipants.mockResolvedValue(100);
       repo.hasMilestone.mockResolvedValue(false);
-      repo.createMilestone.mockResolvedValue({ id: 'm1', userId: 'u1', milestone: 'TOP_10', rank: 1 });
+      repo.createMilestone.mockResolvedValue({
+        id: 'm1',
+        userId: 'u1',
+        milestone: 'TOP_10',
+        rank: 1,
+      });
 
       const service = createService(repo, bus, db);
       const processed = await service.processDirtyRankings(100);

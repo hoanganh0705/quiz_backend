@@ -21,13 +21,15 @@ const mockLogger = {
   debug: jest.Mock;
 }>;
 
-const createNotification = (overrides: Partial<{
-  notificationId: string;
-  userId: string;
-  type: string;
-  title: string;
-  message: string;
-}> = {}) => ({
+const createNotification = (
+  overrides: Partial<{
+    notificationId: string;
+    userId: string;
+    type: string;
+    title: string;
+    message: string;
+  }> = {},
+) => ({
   notificationId: 'notif-1',
   userId: 'user-1',
   type: 'achievement_earned',

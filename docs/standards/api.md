@@ -31,6 +31,19 @@ Applies to controllers and the wire-format only. Out of scope: error mapping (se
 - Path parameters MUST use lowercase, plural nouns (`/tags`, `/quizzes`, `/users`, `/follows`) unless the resource is itself singular (`/health`).
 - Path parameters MUST be UUIDv7 by default; MUST surface human-readable slugs only via `ParseUUIDOrSlugPipe` (reference: `src/common/pipes/parse-uuid-or-slug.pipe.ts`).
 
+#### Documented singular exceptions
+
+The following route names are deliberately singular. They are exhaustively enumerated so the standard stays testable and the next REST audit does not have to re-discover them by inspection.
+
+| Route | Why singular |
+| --- | --- |
+| `GET /health`, `GET /health/...` | A single resource describing the process. Health is not a collection. |
+| `GET /leaderboard`, `GET /leaderboard/:userId`, ... | The global leaderboard is a single ranked view; "leaderboards of" is a stretch. Sub-collection routes under `/leaderboard` (`/me`, `/me/rank`, `/me/percentile`, `/me/nearby`, `/me/movement`, `/me/milestones`, `/me/peak-ranks`, `/me/history`, `/top-movers`, `/distribution`) are all expressed against that one conceptual resource. |
+| `/admin/...` (e.g. `/admin/ranking`, `/admin/achievements`) | Admin scopes are not collections of admins; they are administrative surfaces over module internals. They follow the same singular-scoped-noun pattern as `/leaderboard`. |
+| `/auth/security/dashboard`, `/auth/me` | Single-user surfaces; the "resource" is the authenticated user's own profile/security state. |
+
+All other resource paths MUST use plural collection nouns. Any new singular route MUST be added to this table in the same PR that introduces it, with a one-line rationale — otherwise the route is non-conforming and the standard's `pnpm run audit:routes` script (see Future considerations) MUST flag it.
+
 ### Response envelope
 
 - Every successful HTTP response MUST be wrapped in `{ data, meta }` by `ResponseFormatInterceptor` (`src/common/interceptors/response-format.interceptor.ts:ResponseFormatInterceptor#intercept`). The interceptor is registered globally and MUST NOT be re-registered per-module.
@@ -136,3 +149,13 @@ export class TagController {
 
 - If a v2 prefix is introduced, a dual-prefixed listener period is allowed; the migration belongs in `migration.md`.
 - A consistent approach for `OPTIONS` discovery or signed HTTP routes is not yet defined in the codebase; future work MUST add a new standard rather than expand this file.
+- A lint-style guard (`pnpm run audit:routes`) MUST be added that walks `transport/controller` files, asserts every `@Controller('...')` and `@Get/@Post/@Patch/@Put/@Delete/@All('...')` segment uses a plural collection noun, and diffs the exception list above against routes that intentionally deviate. Until that script exists, REST audits are done by inspection as documented in PR descriptions.
+
+### Deprecation of legacy singular paths
+
+When a route is renamed for REST consistency (for example, the singular `POST /social/friend-request/:userId` was renamed to plural `POST /social/friend-requests/:userId`):
+
+- The canonical new route MUST be the one documented in OpenAPI and used by every test fixture.
+- A deprecated-route stub MUST be registered at the old path via `@All('...')` returning `HttpException(..., HttpStatus.METHOD_NOT_ALLOWED)`. The global exception filter maps this to an RFC 7807 ProblemDetail with `extensions.code = 'GLOBAL_METHOD_NOT_ALLOWED'`.
+- The deprecated stub MUST be retained indefinitely; documenting a removal version is acceptable only if the v2 migration cycle has begun.
+- The `@ApiOperation` description of the deprecated stub MUST name the canonical replacement route in plain language.

@@ -149,8 +149,6 @@ export type SocialFeedActivityType =
   | 'tournament_completed'
   | 'tournament_won'
   | 'comment_created'
-  | 'comment_created'
-  | 'comment_created'
   | 'quiz_completed'
   | 'quiz_milestone'
   | 'instance_created'

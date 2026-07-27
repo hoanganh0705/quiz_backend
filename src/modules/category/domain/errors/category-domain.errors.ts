@@ -84,3 +84,23 @@ export class CategoryRestoreInvariantError extends CategoryDomainError {
     super(message);
   }
 }
+
+/**
+ * Thrown by `CategoryDomainService.unfollowCategory` when the caller
+ * is not currently following the target category.
+ *
+ * Business rationale (audit issue: silent-success DELETE): the
+ * endpoint means "remove an existing follow", not "ensure no follow
+ * exists". The previous implementation returned 204 unconditionally,
+ * silently logging a `category_unfollowed` event when nothing
+ * actually changed. After this class is thrown, the cache write and
+ * log line are conditional on the existence check. Mirrors the social
+ * module's `FriendshipNotFoundError` / `UserNotBlockedError` /
+ * `FollowNotFoundError` pattern.
+ */
+export class CategoryFollowNotFoundError extends CategoryDomainError {
+  readonly code = 'CATEGORY_FOLLOW_NOT_FOUND';
+  constructor(message = 'You are not following this category') {
+    super(message);
+  }
+}

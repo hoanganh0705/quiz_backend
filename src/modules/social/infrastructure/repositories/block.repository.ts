@@ -63,6 +63,22 @@ export class BlockRepository implements BlockRepositoryPort {
       .where(and(eq(blockedUsers.blockerId, blockerId), eq(blockedUsers.blockedId, blockedId)));
   }
 
+  async findActiveBlock(blockerId: string, blockedId: string): Promise<BlockedUser | null> {
+    const [row] = await this.db
+      .select()
+      .from(blockedUsers)
+      .where(
+        and(
+          eq(blockedUsers.blockerId, blockerId),
+          eq(blockedUsers.blockedId, blockedId),
+          isNull(blockedUsers.deletedAt),
+        ),
+      )
+      .limit(1);
+
+    return (row as BlockedUser | undefined) ?? null;
+  }
+
   async isBlocked(blockerId: string, blockedId: string): Promise<boolean> {
     const [result] = await this.db
       .select({ count: count() })

@@ -81,10 +81,7 @@ export interface CommentRepositoryPort {
   listMyComments(params: ListMyCommentsParams): Promise<MyCommentView[]>;
 
   editComment(params: EditCommentParams): Promise<CommentView>;
-  softDeleteComment(
-    params: { commentId: string; authorId: string },
-    tx?: Db,
-  ): Promise<void>;
+  softDeleteComment(params: { commentId: string; authorId: string }, tx?: Db): Promise<void>;
   setHiddenState(
     params: { commentId: string; hidden: boolean; moderatorId: string },
     tx?: Db,
@@ -105,21 +102,14 @@ export interface CommentRepositoryPort {
     params: { userId: string; commentId: string; value: VoteValue },
     tx: Db,
   ): Promise<void>;
-  removeVote(
-    params: { userId: string; commentId: string },
-    tx: Db,
-  ): Promise<void>;
+  removeVote(params: { userId: string; commentId: string }, tx: Db): Promise<void>;
   /**
    * Look up the requesting viewer's vote on a comment. Returns the
    * non-transactional state when called without `tx` (used for the
    * `userVote` projection on `CommentWithRepliesView`); with `tx` it
    * issues a row-locking read used by `CommentService.vote`.
    */
-  getUserVoteForComment(
-    userId: string,
-    commentId: string,
-    tx?: Db,
-  ): Promise<VoteValue | null>;
+  getUserVoteForComment(userId: string, commentId: string, tx?: Db): Promise<VoteValue | null>;
 
   // ─── Reports ─────────────────────────────────────────────────────────────
   createReport(params: {
@@ -163,12 +153,10 @@ export interface CommentRepositoryPort {
 export interface ListCommentsParamsForPort {
   quizId: string;
   limit?: number;
-  cursor?:
-    | {
-        createdAt: string;
-        commentId: string;
-      }
-    | null;
+  cursor?: {
+    createdAt: string;
+    commentId: string;
+  } | null;
   /**
    * The viewer id, used to populate the per-comment `userVote`
    * projection. `undefined` means the call is anonymous and the

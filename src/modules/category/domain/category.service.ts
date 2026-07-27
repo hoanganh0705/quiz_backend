@@ -19,6 +19,7 @@ import {
 } from '../domain/ports';
 import {
   CategoryAlreadyActiveError,
+  CategoryFollowNotFoundError,
   CategoryNotFoundError,
   CategoryRestoreInvariantError,
 } from '../domain/errors';
@@ -260,6 +261,11 @@ export class CategoryDomainService {
 
   async unfollowCategory(userId: string, categoryId: string): Promise<void> {
     const nowIso = new Date().toISOString();
+
+    const follow = await this.categoryFollowRepository.findActiveFollow({ userId, categoryId });
+    if (!follow) {
+      throw new CategoryFollowNotFoundError(`You are not following category ${categoryId}`);
+    }
 
     try {
       await this.categoryFollowRepository.unfollow({ userId, categoryId, nowIso });
