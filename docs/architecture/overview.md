@@ -189,7 +189,7 @@ quiz/                     ← TagModule, CategoryModule, AttemptModule, Discussi
 tag/                      ← (quiz exposes QUIZ_LISTING_PORT consumed by tag)
 category/                 ← (quiz exposes QUIZ_LISTING_PORT consumed by category)
 attempt/                  ← (quiz listens to ATTEMPT_DOMAIN_EVENT_BUS)
-discussion/               ← (quiz provides QuizExistencePort consumed by discussion)
+discussion/               ← (comment section per quiz; quiz provides QuizExistencePort; notification consumes COMMENT_DOMAIN_EVENT_BUS)
 bookmark/                 ← (quiz provides QUIZ_ANALYTICS_PORT consumed by bookmark)
 review/                   ← (quiz listens to REVIEW_DOMAIN_EVENT_BUS)
 tournament/               ← (ranking, achievement, instance consume SHARED_TOURNAMENT_EVENT_BUS)

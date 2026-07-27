@@ -1,154 +1,168 @@
 # Discussion Module
 
+> **Status (Phase 9.x):** This module owns the **per-quiz comment section**. It is intentionally narrow — exactly the surface area of the YouTube-style comments area below each quiz. Threads, subscriptions, bookmarks, solve marking, trending feeds, and saved-thread history have been removed; see [`docs/migrations/discussion-module-refactor.md`](../migrations/discussion-module-refactor.md) for the rationale.
+
 ## Purpose
 
-Owns the **per-quiz Q&A and threaded discussion surface**: discussion threads anchored to a quiz, comments with a two-level reply hierarchy, votes, solve marking, moderation, and user subscriptions.
+Owns the **comment section attached to each quiz**: comments anchored to a quiz, replies (two-level hierarchy only), votes, content reporting, and moderator hide/restore. The comment section is **not** a standalone discussion platform.
 
 ## Responsibilities
 
 **Owns**
-- Discussion threads anchored to a quiz
-- Comments and two-level replies (comment → reply)
-- Upvote/downvote on threads and comments
-- Solve marking (thread author nominates a reply as the accepted answer)
-- Thread subscriptions (notify on new comment)
-- Thread saving (personal bookmark)
+- Comments anchored to a quiz
+- Two-level reply hierarchy (comment → reply, no nesting beyond that)
+- Upvote / downvote on comments
 - Content reporting and moderator review pipeline
-- Moderation audit log (365-day retention)
-- Trending, unanswered, and search feeds
+- Moderation audit log
 
 **Does not own**
-- The quizzes being discussed (Quiz module owns the FK)
+- The quizzes being commented on (Quiz module owns the FK)
 - User profiles (User module)
-- Notifications (Notification module — discussion events are consumed there)
-- Social feeds (Social module — discussion events are consumed there)
+- Notifications (Notification module consumes the comment event bus)
+- The threads, subscriptions, bookmarks, trending, or solved-comment concepts that used to live here
 
 ## Core Concepts
 
 | Concept | Description |
 |---|---|
-| **DiscussionThread** | A Q&A thread anchored to a quiz: `title`, `body`, `authorId`, `quizId`, `status ∈ {open, closed, hidden, deleted}`, `solvedCommentId`. |
-| **DiscussionComment** | A comment on a thread or a reply to a comment. Two-level hierarchy via `parentCommentId`. `contentStatus ∈ {visible, hidden, deleted}`. |
-| **DiscussionVote** | A vote (up/down) on a thread or comment. Polymorphic via `targetId` + `targetType`. |
-| **DiscussionReport** | A user report on a thread or comment. `status ∈ {open, reviewed, dismissed, actioned}`. |
-| **DiscussionThreadSubscription** | A user's subscription to a thread (notify on new comment). |
-| **DiscussionSavedThread** | A user's saved/bookmark of a thread. |
+| **Comment** | A comment on a quiz, or a reply to a comment. `parentCommentId` distinguishes top-level comments from replies; replies-to-replies are forbidden. |
+| **CommentVote** | A single (user, comment, value) row representing one vote. The repository enforces a unique-vote-per-user invariant. |
+| **CommentReport** | A user report on a comment. `status ∈ {open, dismissed, actioned}`. One open report per (reporter, comment). |
+
+There is no `DiscussionThread`, no `DiscussionSubscription`, no `SavedDiscussion`, no `TrendingDiscussion`, no `SolvedComment` anymore.
 
 ## Business Rules
 
-- **Thread always attached to a quiz**: a thread must reference an existing, non-deleted quiz.
-- **Thread edit window**: only the author may edit their thread; thread must not be `deleted`.
-- **Thread delete**: only the author may soft-delete; cascades soft-delete to all comments.
-- **Thread status transitions**: `open` → `closed` (author) → `open` (author); any non-deleted → `hidden` (moderator) → `open` (moderator restore).
-- **Comment creation**: only on `open` threads; only on `visible` threads for subscription/save.
-- **Comment reply depth**: two-level only (comment or reply as parent). Max 100 replies per parent comment (enforced via `ReplyLimitExceededError`).
-- **Comment ownership**: only the author may delete their comment.
-- **Moderation**: only `DISCUSSION_MODERATE` holders may hide/restore threads and comments, review reports, and list reports.
-- **Self-vote and self-report prohibited**: a user cannot vote on or report their own content.
-- **Duplicate report prohibited**: one open report per user per target.
-- **Solve marking**: only the thread author; the nominated comment must belong to the same thread; `solvedCommentId` is `ON DELETE SET NULL`.
-- **Cascade deletes**: deleting a thread cascades to comments (soft-delete); deleting a user cascades to their threads and comments.
-- **Parent comment filter**: `listComments` supports `parentCommentId` filter — `null` fetches top-level comments, a UUID fetches replies to that comment.
+- **Comment is always attached to a quiz**: a comment must reference an existing, non-deleted quiz.
+- **Two-level hierarchy only**: the parent of a reply must be a top-level comment (`parentCommentId IS NULL`). Replying to a reply is rejected with `ParentCommentCrossThreadError`.
+- **Reply cap**: a top-level comment may have at most `MAX_REPLIES_PER_COMMENT` replies (default `100`). The cap is enforced inside the same transaction that inserts the reply.
+- **Edit window**: only the comment author may edit; the comment must not be hidden or deleted.
+- **Soft delete**: only the author may soft-delete (`deletedAt` set); when the deleted comment is itself a reply, the parent's `repliesCount` is decremented atomically.
+- **Vote ownership**: any authenticated user may vote on any non-self comment. Re-applying the same value toggles the vote off; applying the opposite value flips it.
+- **Self-vote / self-report forbidden**: `SelfVoteError` / `SelfReportError`.
+- **Duplicate report forbidden**: one open report per reporter per comment (`DuplicateReportError`).
+- **Moderation**: only `DISCUSSION_MODERATE` holders may hide / restore comments and review reports. Authorization is enforced by `DiscussionAuthorizationPolicy` inside the domain service.
+- **Hidden comments are still readable**: the comment row remains in the database and counts toward pagination, but is invisible to non-moderators at the transport layer.
 
 ## Relationships
 
 ```
-DiscussionThread
-├── belongs to → Quiz (FK, cascade)
-├── belongs to → Author User (FK, cascade)
-├── has many → Comments (DiscussionComment, cascade)
-├── has many → Votes (DiscussionVote, cascade)
-├── has many → Reports (DiscussionReport, cascade)
-├── has many → Subscriptions (DiscussionThreadSubscription, cascade)
-├── has many → Saved threads (DiscussionSavedThread, cascade)
-└── optionally points to → SolvedComment (DiscussionComment, ON DELETE SET NULL)
+Quiz
+└── has many → Comments         (FK, cascade on quiz delete)
 
-DiscussionComment
-├── belongs to → Thread (FK, cascade)
-├── belongs to → Author User (FK, cascade)
-├── optionally belongs to → Parent Comment (self-referential FK, cascade)
-└── has many → Votes (DiscussionVote, cascade)
+Comment
+├── belongs to → Quiz           (FK, validated via QuizExistencePort)
+├── belongs to → Author User    (FK, validated via UserExistencePort)
+├── optionally belongs to → Parent Comment (self-FK, cascade on parent soft-delete)
+├── has many → Votes            (one row per voter, unique constraint)
+└── has many → Reports          (one row per reporter, unique on (reporter, comment))
 ```
 
 ## Lifecycle
 
-### DiscussionThread
-
 ```
-Open (status = open) — accepts comments and votes
-    ↓ closeThread() [author]
-Closed (status = closed) — no new comments
-    ↓ reopenThread() [author]
-Open
-    ↓ hideThread() [moderator]
-Hidden (status = hidden) — invisible to non-author/non-mod
-    ↓ restoreThread() [moderator]
-Open
-    ↓ deleteThread() [author only]
-Deleted (status = deleted, deletedAt = now) — soft-deleted; no mutations allowed
-```
-
-### DiscussionComment
-
-```
-Visible (contentStatus = visible)
-    ↓ hideComment() [moderator]
-Hidden (contentStatus = hidden) — visible to moderators only
-    ↓ restoreComment() [moderator]
-Visible
-    ↓ deleteComment() [author only]
-Deleted (contentStatus = deleted, deletedAt = now)
-```
-
-### DiscussionReport
-
-```
-Open (status = open)
-    ↓ reviewReport() [moderator]
-Reviewed | Dismissed | Actioned
+Comment
+├── Visible
+│     ├── edit()            [author only, not deleted, not hidden]
+│     └── delete()          [author only] → Soft-deleted (deletedAt)
+├── Hidden                  [moderator hide] → not deletable by author
+│     └── restore()         [moderator only] → Visible
+└── Soft-deleted            → idempotent no-op for further delete calls
 ```
 
 ## Permissions
 
 | Action | Requirement |
 |---|---|
-| Create thread, comment, vote, report, subscribe, save, solve, close/reopen | Authenticated user |
-| Hide/restore thread or comment, review reports | `DISCUSSION_MODERATE` (Admin, Moderator) |
-| List reports | `DISCUSSION_MODERATE` |
-| Browse trending, unanswered, search, quiz discussions | Public |
+| Read a comment | Public |
+| List comments on a quiz, list a user's comments | Public |
+| Create a comment | Authenticated user |
+| Edit / soft-delete own comment | Authenticated user (must be author) |
+| Vote / remove vote | Authenticated user (not self) |
+| Open a report | Authenticated user (not self, no existing open report) |
+| Hide / restore a comment, list reports, review reports | `DISCUSSION_MODERATE` (Admin, Moderator) |
 
 ## Cross-module Interactions
 
 | Module | Interaction |
 |---|---|
-| **Quiz** | Validates quiz existence via `QuizExistencePort` before thread creation. |
-| **User** | Validates user existence via `UserExistencePort` for profiles and `@username` mention resolution. |
-| **Notification** | All domain events are consumed by `DiscussionNotificationListener` (Notification module) to dispatch in-app, WebSocket, email, or push notifications. |
-| **Social** | All domain events are consumed by `DiscussionFeedListenerAdapter` (Social module) to record social feed activities. |
+| **Quiz** | `QuizExistencePort` is consumed before any comment is created. |
+| **User** | `UserExistencePort` is consumed for `@username` mention resolution and author lookup. |
+| **Notification** | `CommentDomainEventBus` is consumed by `CommentNotificationListener` to dispatch notifications (replies, mentions, moderator alerts on new reports). |
+| **Social** | No direct feed integration — the comment surface is intentionally not a feed generator. |
+
+The dependency graph is one-way: only `Notification` depends on `Discussion` (for the bus symbol and event types). `Discussion` depends on `Quiz` and `User` via their existence ports.
+
+## Domain Events
+
+All events are emitted via the in-process `CommentDomainEventBus` (Redis-backed retry / DLQ). No outbox or external event bus for the comment module — events are observable inside the same process lifetime.
+
+| Event | When |
+|---|---|
+| `comment_created` | A new comment is committed. |
+| `comment_edited` | An author edits their own comment. |
+| `comment_deleted` | An author soft-deletes their own comment. |
+| `comment_hidden` | A moderator hides a comment. |
+| `comment_restored` | A moderator restores a hidden comment. |
+| `comment_mentioned` | A comment body mentions `@username` for a known user (other than the author). |
+| `vote_cast` | A user casts / flips / toggles a vote. |
+| `vote_removed` | A user explicitly removes their vote. |
+| `comment_reported` | A user opens a report on a comment. |
+| `report_reviewed` | A moderator reviews an open report. |
+
+`comment_created`, `comment_mentioned`, and `comment_reported` are observed by the Notification module. The remaining events are emitted for the audit log and for future consumers.
 
 ## Invariants
 
-- A thread always belongs to exactly one existing quiz.
-- A comment always belongs to exactly one thread.
-- A reply always belongs to exactly one parent comment; the parent belongs to the same thread as the reply.
-- Exactly one correct answer per solved thread.
-- No user may vote on or report their own content.
-- No two open reports from the same user on the same target.
-- Moderation actions are never deleted; they are immutable with 365-day retention.
+- Every comment references exactly one existing quiz.
+- A reply's `quizId` equals its parent's `quizId` (cross-thread replies are rejected).
+- A reply's parent is always a top-level comment (two-level rule).
+- A `repliesCount` is always equal to the count of non-deleted children of the comment.
+- A user has at most one vote per comment and at most one open report per comment.
 
-## Future Extension Points
+## Endpoints
 
-- **Rich text / markdown**: comment bodies are plain text today.
-- **Upvote-only or combined score**: votes are stored as distinct up/down records; net score is computed in queries.
-- **Thread pinning**: not yet modeled.
-- **Moderation appeals**: not yet modeled.
+The full route map is documented in [`docs/standards/api-discussion.md`](../standards/api-discussion.md). Summary:
+
+| Verb / Path | Module controller |
+|---|---|
+| `GET    /quizzes/:quizId/comments` | `QuizCommentController` |
+| `POST   /quizzes/:quizId/comments` | `QuizCommentController` |
+| `GET    /comments/:commentId` | `CommentController` |
+| `PATCH  /comments/:commentId` | `CommentController` |
+| `DELETE /comments/:commentId` | `CommentController` |
+| `PUT    /comments/:commentId/vote` | `CommentController` |
+| `DELETE /comments/:commentId/vote` | `CommentController` |
+| `POST   /comments/:commentId/reports` | `CommentController` |
+| `POST   /comments/:commentId/hide` | `CommentController` |
+| `POST   /comments/:commentId/restore` | `CommentController` |
+| `GET    /users/me/comments` | `UserCommentController` |
+| `GET    /users/:userId/comments` | `UserCommentController` |
+| `GET    /comments/reports` | `ReportController` |
+| `PATCH  /comments/reports/:reportId` | `ReportController` |
 
 ## Implementation Notes
 
-### Vote Target Type
+### Cursor pagination
 
-The `DiscussionVote.targetType` field uses the type `'thread' | 'comment'`. The `'reply'` type mentioned in some repository implementations is **dead code** and has been removed — comments and replies are both stored in `discussionComments` with the `parentCommentId` field distinguishing replies from top-level comments.
+All list endpoints use cursor pagination. The cursor encodes `{ createdAt: ISO-8601, id: UUIDv7 }` as a base64-JSON envelope (`@/common/utils/cursor.util`). The repository scans in `(createdAt DESC, id DESC)` order so paginating by `createdAt` alone is stable across inserts because UUIDv7 is time-ordered.
 
-### Cursor Pagination
+### Two-level rule
 
-All list endpoints use cursor-based pagination. The `listThreads` endpoint accepts a raw ISO timestamp cursor (not base64-encoded) and returns `createdAt` of the last item as the `nextCursor`.
+The "parent of a reply must be top-level" rule is checked by reading the parent row under `SELECT ... FOR UPDATE` inside the same transaction that inserts the reply. This prevents a race where the parent is concurrently deleted or hidden between the read and the write.
+
+### Reply cap
+
+The reply cap is enforced the same way: the cap check, the parent existence check, and the insert all happen inside a single transaction. A concurrent delete on the parent would also try to acquire the row lock, so exactly one wins.
+
+### `Db` opaque type
+
+The repository port exposes `Db` (an opaque handle for the Drizzle transaction). Application-layer code never imports `DrizzleDB`; the `Db` type is what crosses the layer boundary.
+
+### Counter reconciliation
+
+`CommentCounterReconcilerService` runs daily at 03:30 to recompute `discussion_comments.replies_count` from the underlying rows. Updates are idempotent (`IS DISTINCT FROM`), so a re-run is safe. The reconciler is the only scheduled job in the module.
+
+### Moderation audit
+
+`CommentModeratorAuditService` records moderator actions (`hide_comment`, `restore_comment`, `review_report`) through `AuditLogService`. Audit records are immutable; retention is governed by `AuditLogService`'s TTL.

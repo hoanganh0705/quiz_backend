@@ -164,16 +164,15 @@ import {
 import {
   CommentForbiddenError,
   CommentNotFoundError,
-  CommentThreadMismatchError,
   DuplicateReportError,
   ModeratorRequiredError,
+  ParentCommentCrossThreadError,
+  ParentCommentNotFoundError,
   QuizNotFoundError as DiscussionQuizNotFoundError,
+  ReplyLimitExceededError,
+  ReportNotFoundError,
   SelfReportError,
   SelfVoteError,
-  ThreadClosedError,
-  ThreadForbiddenError,
-  ThreadNotActiveError,
-  ThreadNotFoundError,
 } from '@/modules/discussion/domain/errors';
 import {
   InvalidXpEventError,
@@ -911,8 +910,8 @@ class Rfc7807FixtureController {
     throw new UserProfilePrivateError('user-target-1');
   }
 
-  // Discussion-module endpoints — Phase 3.1 live-mapping coverage.
-  // 12 concrete exceptions → 4 status codes (400/403/404/409). Each
+  // Discussion-module endpoints — Phase 3.x live-mapping coverage.
+  // 11 concrete exceptions → 4 status codes (400/403/404/409). Each
   // endpoint throws a real discussion exception; if
   // `ProblemCodeMapping` or the discussion classes drift, the e2e
   // tests in the discussion describe-block below fail.
@@ -922,12 +921,12 @@ class Rfc7807FixtureController {
   // lookup key into `STATUS_MAP` and `DISCUSSION_PROBLEM_URIS`. After
   // Phase 3.1 the lookup tables are replaced with `ProblemCodeMapping`
   // entries keyed by `code`. `title` changes from the class name
-  // (e.g. `'ThreadNotFoundError'`) to the standard RFC 7807 title
+  // (e.g. `'CommentNotFoundError'`) to the standard RFC 7807 title
   // (e.g. `'NotFound'`). This is verified per-row below.
 
-  @Get('discussion/thread-not-found')
-  discussionThreadNotFound(): never {
-    throw new ThreadNotFoundError('thread-1');
+  @Get('discussion/parent-comment-not-found')
+  discussionParentCommentNotFound(): never {
+    throw new ParentCommentNotFoundError('parent-1');
   }
 
   @Get('discussion/comment-not-found')
@@ -935,33 +934,23 @@ class Rfc7807FixtureController {
     throw new CommentNotFoundError('comment-1');
   }
 
-  @Get('discussion/thread-forbidden')
-  discussionThreadForbidden(): never {
-    throw new ThreadForbiddenError();
-  }
-
   @Get('discussion/comment-forbidden')
   discussionCommentForbidden(): never {
     throw new CommentForbiddenError();
   }
 
-  @Get('discussion/thread-closed')
-  discussionThreadClosed(): never {
-    throw new ThreadClosedError();
-  }
-
-  @Get('discussion/thread-not-active')
-  discussionThreadNotActive(): never {
-    throw new ThreadNotActiveError();
-  }
-
-  @Get('discussion/comment-thread-mismatch')
-  discussionCommentThreadMismatch(): never {
+  @Get('discussion/parent-comment-cross-thread')
+  discussionParentCommentCrossThread(): never {
     // Plan §8.4.1 risk note: 400 (non-obvious — one might expect 409
     // Conflict for a cross-resource mismatch). The migration test
-    // captures this. `title` here is the standard `'BadRequest'` not
+    // captures it. `title` here is the standard `'BadRequest'` not
     // the class name.
-    throw new CommentThreadMismatchError();
+    throw new ParentCommentCrossThreadError();
+  }
+
+  @Get('discussion/reply-limit-exceeded')
+  discussionReplyLimitExceeded(): never {
+    throw new ReplyLimitExceededError(100);
   }
 
   @Get('discussion/self-vote')
@@ -2547,28 +2536,25 @@ describe('RFC 7807 ProblemDetail (Phase 0 backstop)', () => {
     // Phase 3.1 wire-shape changes (verified per-row below):
     //   1. `title` is now the standard RFC 7807 title (e.g.
     //      `'NotFound'`) instead of the class name (e.g.
-    //      `'ThreadNotFoundError'`).
+    //      `'CommentNotFoundError'`).
     //   2. `extensions.timestamp` is now present (Phase 3.1
     //      deliverable per §8.4.1).
     //
     // Plan §8.4.1 risk notes (regression-guarded):
-    //   - CommentThreadMismatchError → 400 (one might expect 409
+    //   - ParentCommentCrossThreadError → 400 (one might expect 409
     //     Conflict for a cross-resource mismatch).
     //   - ModeratorRequiredError → 403 (the class name suggests
     //     auth required, but the semantic is "you're authenticated
     //     but lack the moderator role").
 
-    it('ThreadNotFoundError → 404 DISCUSSION_THREAD_NOT_FOUND (title now standardized)', async () => {
+    it('ParentCommentNotFoundError → 404 DISCUSSION_PARENT_COMMENT_NOT_FOUND', async () => {
       const res = await request(app.getHttpServer())
-        .get('/rfc7807-fixture/discussion/thread-not-found')
+        .get('/rfc7807-fixture/discussion/parent-comment-not-found')
         .expect(404);
       const body = res.body as ProblemWire;
-      // Phase 3.1 wire-shape: `title` is now `'NotFound'`, not the
-      // class name `'ThreadNotFoundError'`.
       expect(body.title).toBe('NotFound');
-      expect(body.detail).toBe('Thread not found: thread-1');
-      expect(body.extensions?.code).toBe('DISCUSSION_THREAD_NOT_FOUND');
-      // Phase 3.1 deliverable per §8.4.1.
+      expect(body.detail).toBe('Parent comment not found: parent-1');
+      expect(body.extensions?.code).toBe('DISCUSSION_PARENT_COMMENT_NOT_FOUND');
       expect(typeof body.extensions?.timestamp).toBe('string');
     });
 
@@ -2583,14 +2569,14 @@ describe('RFC 7807 ProblemDetail (Phase 0 backstop)', () => {
       expect(typeof body.extensions?.timestamp).toBe('string');
     });
 
-    it('ThreadForbiddenError → 403 DISCUSSION_THREAD_FORBIDDEN', async () => {
+    it('ParentCommentCrossThreadError → 400 DISCUSSION_PARENT_COMMENT_CROSS_THREAD (non-obvious 400 per §8.4.1)', async () => {
       const res = await request(app.getHttpServer())
-        .get('/rfc7807-fixture/discussion/thread-forbidden')
-        .expect(403);
+        .get('/rfc7807-fixture/discussion/parent-comment-cross-thread')
+        .expect(400);
       const body = res.body as ProblemWire;
-      expect(body.title).toBe('Forbidden');
-      expect(body.detail).toBe('You do not have permission to perform this action on this thread');
-      expect(body.extensions?.code).toBe('DISCUSSION_THREAD_FORBIDDEN');
+      expect(body.title).toBe('BadRequest');
+      expect(body.detail).toBe('The selected parent comment is not a top-level comment on this quiz');
+      expect(body.extensions?.code).toBe('DISCUSSION_PARENT_COMMENT_CROSS_THREAD');
     });
 
     it('CommentForbiddenError → 403 DISCUSSION_COMMENT_FORBIDDEN', async () => {
@@ -2603,37 +2589,24 @@ describe('RFC 7807 ProblemDetail (Phase 0 backstop)', () => {
       expect(body.extensions?.code).toBe('DISCUSSION_COMMENT_FORBIDDEN');
     });
 
-    it('ThreadClosedError → 409 DISCUSSION_THREAD_CLOSED', async () => {
+    it('ReplyLimitExceededError → 409 DISCUSSION_REPLY_LIMIT_EXCEEDED', async () => {
       const res = await request(app.getHttpServer())
-        .get('/rfc7807-fixture/discussion/thread-closed')
+        .get('/rfc7807-fixture/discussion/reply-limit-exceeded')
         .expect(409);
       const body = res.body as ProblemWire;
       expect(body.title).toBe('Conflict');
-      expect(body.detail).toBe('This thread is closed and cannot accept new comments');
-      expect(body.extensions?.code).toBe('DISCUSSION_THREAD_CLOSED');
+      expect(body.detail).toBe('Maximum reply limit of 100 reached for this comment');
+      expect(body.extensions?.code).toBe('DISCUSSION_REPLY_LIMIT_EXCEEDED');
     });
 
-    it('ThreadNotActiveError → 409 DISCUSSION_THREAD_NOT_ACTIVE', async () => {
+    it('ReportNotFoundError → 404 DISCUSSION_REPORT_NOT_FOUND', async () => {
       const res = await request(app.getHttpServer())
-        .get('/rfc7807-fixture/discussion/thread-not-active')
-        .expect(409);
+        .get('/rfc7807-fixture/discussion/report-not-found')
+        .expect(404);
       const body = res.body as ProblemWire;
-      expect(body.title).toBe('Conflict');
-      expect(body.detail).toBe('This thread is not active and cannot be modified');
-      expect(body.extensions?.code).toBe('DISCUSSION_THREAD_NOT_ACTIVE');
-    });
-
-    it('CommentThreadMismatchError → 400 DISCUSSION_COMMENT_THREAD_MISMATCH (non-obvious 400 per §8.4.1)', async () => {
-      // Plan §8.4.1 risk note: this is a non-obvious 400 (one might
-      // expect 409 Conflict for a cross-resource mismatch). The
-      // migration test captures it.
-      const res = await request(app.getHttpServer())
-        .get('/rfc7807-fixture/discussion/comment-thread-mismatch')
-        .expect(400);
-      const body = res.body as ProblemWire;
-      expect(body.title).toBe('BadRequest');
-      expect(body.detail).toBe('The selected comment does not belong to this thread');
-      expect(body.extensions?.code).toBe('DISCUSSION_COMMENT_THREAD_MISMATCH');
+      expect(body.title).toBe('NotFound');
+      expect(body.detail).toBe('Report not found: report-1');
+      expect(body.extensions?.code).toBe('DISCUSSION_REPORT_NOT_FOUND');
     });
 
     it('SelfVoteError → 403 DISCUSSION_SELF_VOTE', async () => {
@@ -2708,7 +2681,7 @@ describe('RFC 7807 ProblemDetail (Phase 0 backstop)', () => {
       // quirk (not a filter bug). Phase 3.1 only commits to adding
       // `extensions.timestamp`, so we do not assert `requestId` here.
       const res = await request(app.getHttpServer())
-        .get('/rfc7807-fixture/discussion/thread-not-found')
+        .get('/rfc7807-fixture/discussion/comment-not-found')
         .expect(404);
       const body = res.body as ProblemWire;
       expect(typeof body.extensions?.timestamp).toBe('string');

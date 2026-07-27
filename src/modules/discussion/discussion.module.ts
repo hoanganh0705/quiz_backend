@@ -1,52 +1,97 @@
+/**
+ * Discussion Module (Phase 9.10)
+ *
+ * Wires the comment section module after the Q&A-thread refactor.
+ *
+ * The module class name (`DiscussionModule`) is preserved — it is the
+ * public identity of the module (referenced by `app.module.ts` and
+ * every cross-module forwardRef). The internal providers, controllers,
+ * and exports are all renamed to the comment era.
+ *
+ * Layering:
+ *   - `domain/`     — pure business rules, ports, events, errors.
+ *   - `application/` — orchestrates the domain service with cursor
+ *                      (de)serialization, JWT wiring, and audit logs.
+ *   - `infrastructure/` — Drizzle repository, cross-module adapters,
+ *                         audit, scheduler.
+ *   - `transport/` — controllers and presenter only.
+ *
+ * Exports the bus and the application service so cross-module
+ * listeners can subscribe (Notification) and cross-module callers
+ * can read (none today, but kept on principle).
+ */
+
 import { Module, forwardRef } from '@nestjs/common';
 import { DatabaseModule } from '@/core/database/database.module';
-import { DiscussionApplicationService } from './application/discussion-application.service';
-import { DiscussionService } from './domain/services/discussion.service';
-import { DiscussionRepository } from './infrastructure/repositories/discussion.repository';
-import { DiscussionModeratorAuditService } from './infrastructure/audit/discussion-moderator-audit.service';
-import { DiscussionCleanupService } from './infrastructure/scheduler/discussion-cleanup.service';
+import { RedisModule } from '@/core/redis/redis.module';
+import { CommonModule } from '@/common/common.module';
+
+import { CommentApplicationService } from './application/comment-application.service';
+import { CommentService } from './domain/services/comment.service';
+import { CommentDomainEventBus } from './domain/events/comment-event-bus';
+import { CommentRepository } from './infrastructure/repositories/comment.repository';
+import { CommentModeratorAuditService } from './infrastructure/audit/comment-moderator-audit.service';
+import { CommentCounterReconcilerService } from './infrastructure/scheduler/comment-counter-reconciler.service';
 import { QuizExistenceAdapter } from './infrastructure/adapters/quiz-existence.adapter';
 import { UserExistenceAdapter } from './infrastructure/adapters/user-existence.adapter';
-import { DiscussionController } from './transport/controller/discussion.controller';
-import { QuizDiscussionController } from './transport/controller/quiz-discussion.controller';
-import { UserDiscussionController } from './transport/controller/user-discussion.controller';
-import { DiscussionPresenter } from './transport/presenters/discussion.presenter';
-import {
-  DISCUSSION_REPOSITORY_PORT,
-  QUIZ_EXISTENCE_PORT,
-  USER_EXISTENCE_PORT,
-} from './domain/ports';
-import { DISCUSSION_DOMAIN_EVENT_BUS, DiscussionDomainEventBus } from './domain/events';
+import { CommentController } from './transport/controller/comment.controller';
+import { QuizCommentController } from './transport/controller/quiz-comment.controller';
+import { UserCommentController } from './transport/controller/user-comment.controller';
+import { ReportController } from './transport/controller/report.controller';
+import { CommentPresenter } from './transport/presenters/comment.presenter';
+
+import { COMMENT_REPOSITORY_PORT, QUIZ_EXISTENCE_PORT, USER_EXISTENCE_PORT } from './domain/ports';
+import { COMMENT_DOMAIN_EVENT_BUS } from './domain/events';
 import { QuizModule } from '@/modules/quiz/quiz.module';
 import { UserModule } from '@/modules/user/user.module';
 
 @Module({
-  imports: [DatabaseModule, forwardRef(() => QuizModule), forwardRef(() => UserModule)],
-  providers: [
-    DiscussionApplicationService,
-    DiscussionService,
-    DiscussionRepository,
-    DiscussionModeratorAuditService,
-    DiscussionCleanupService,
-    QuizExistenceAdapter,
-    UserExistenceAdapter,
-    DiscussionPresenter,
-    { provide: DISCUSSION_REPOSITORY_PORT, useExisting: DiscussionRepository },
-    { provide: DISCUSSION_DOMAIN_EVENT_BUS, useExisting: DiscussionDomainEventBus },
-    { provide: QUIZ_EXISTENCE_PORT, useExisting: QuizExistenceAdapter },
-    { provide: USER_EXISTENCE_PORT, useExisting: UserExistenceAdapter },
-    DiscussionDomainEventBus,
+  imports: [
+    DatabaseModule,
+    RedisModule,
+    CommonModule,
+    forwardRef(() => QuizModule),
+    forwardRef(() => UserModule),
   ],
-  controllers: [DiscussionController, QuizDiscussionController, UserDiscussionController],
+  providers: [
+    // Application
+    CommentApplicationService,
+    // Domain
+    CommentService,
+    {
+      provide: COMMENT_DOMAIN_EVENT_BUS,
+      useExisting: CommentDomainEventBus,
+    },
+    CommentDomainEventBus,
+    // Infrastructure
+    CommentRepository,
+    {
+      provide: COMMENT_REPOSITORY_PORT,
+      useExisting: CommentRepository,
+    },
+    CommentModeratorAuditService,
+    CommentCounterReconcilerService,
+    QuizExistenceAdapter,
+    {
+      provide: QUIZ_EXISTENCE_PORT,
+      useExisting: QuizExistenceAdapter,
+    },
+    UserExistenceAdapter,
+    {
+      provide: USER_EXISTENCE_PORT,
+      useExisting: UserExistenceAdapter,
+    },
+    // Transport
+    CommentPresenter,
+  ],
+  controllers: [CommentController, QuizCommentController, UserCommentController, ReportController],
   exports: [
-    DiscussionService,
-    DiscussionApplicationService,
-    DISCUSSION_REPOSITORY_PORT,
-    DISCUSSION_DOMAIN_EVENT_BUS,
-    DiscussionDomainEventBus,
+    CommentApplicationService,
+    COMMENT_DOMAIN_EVENT_BUS,
+    CommentDomainEventBus,
+    CommentModeratorAuditService,
     QUIZ_EXISTENCE_PORT,
     USER_EXISTENCE_PORT,
-    DiscussionModeratorAuditService,
   ],
 })
 export class DiscussionModule {}
