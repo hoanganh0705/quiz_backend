@@ -23,7 +23,7 @@ import { InstanceModule } from './modules/instance/instance.module';
 import { RankingModule } from './modules/ranking/ranking.module';
 import { AchievementModule } from './modules/achievement/achievement.module';
 import { NotificationModule } from './modules/notification/notification.module';
-import { DiscussionModule } from './modules/discussion/discussion.module';
+import { CommentModule } from './modules/comment/comment.module';
 import {
   validateEnv,
   appConfig,
@@ -103,7 +103,7 @@ import { HealthModule } from './modules/health/health.module';
     RankingModule,
     AchievementModule,
     NotificationModule,
-    DiscussionModule,
+    CommentModule,
     SocialModule,
     SearchModule,
     HealthModule,

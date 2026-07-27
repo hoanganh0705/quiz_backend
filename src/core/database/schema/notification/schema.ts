@@ -103,7 +103,7 @@ export const notificationPreferences = pgTable(
     tournamentEnabled: boolean('tournament_enabled').default(true).notNull(),
     rankEnabled: boolean('rank_enabled').default(true).notNull(),
     friendEnabled: boolean('friend_enabled').default(true).notNull(),
-    discussionEnabled: boolean('discussion_enabled').default(true).notNull(),
+    commentEnabled: boolean('comment_enabled').default(true).notNull(),
     summaryEnabled: boolean('summary_enabled').default(true).notNull(),
     marketingEnabled: boolean('marketing_enabled').default(false).notNull(),
     rankImprovementThreshold: integer('rank_improvement_threshold').default(5).notNull(),

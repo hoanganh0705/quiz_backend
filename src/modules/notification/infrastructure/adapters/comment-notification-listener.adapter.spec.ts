@@ -14,8 +14,8 @@ import type {
   CommentMentionedEvent,
   CommentReportedEvent,
   VoteCastEvent,
-} from '@/modules/discussion/domain/events/comment.events';
-import type { CommentDomainEventBusPort } from '@/modules/discussion/domain/events';
+} from '@/modules/comment/domain/events/comment.events';
+import type { CommentDomainEventBusPort } from '@/modules/comment/domain/events';
 import type { NotificationChannelServicePort } from '../../domain/ports';
 import type { UserRepositoryPort } from '@/modules/user/domain/ports/user-repository.port';
 
@@ -100,7 +100,7 @@ describe('CommentNotificationListener', () => {
 
       expect(channelService.send).toHaveBeenCalledWith({
         userId: 'parent-author-1',
-        type: 'discussion_reply',
+        type: 'comment_reply',
         title: 'New reply to your comment',
         body: 'alice replied to your comment',
         metadata: {
@@ -150,7 +150,7 @@ describe('CommentNotificationListener', () => {
 
       expect(channelService.send).toHaveBeenCalledWith({
         userId: 'mentioned-1',
-        type: 'discussion_mention',
+        type: 'comment_mention',
         title: 'You were mentioned',
         body: 'alice mentioned you in a comment',
         metadata: {

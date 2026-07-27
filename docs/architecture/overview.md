@@ -184,12 +184,12 @@ common/                   ← all feature modules + app bootstrap
 
 auth/                     ← UserModule
 user/                     ← QuizModule, RankingModule
-quiz/                     ← TagModule, CategoryModule, AttemptModule, DiscussionModule,
+quiz/                     ← TagModule, CategoryModule, AttemptModule, CommentModule,
 │                          BookmarkModule, ReviewModule, InstanceModule
 tag/                      ← (quiz exposes QUIZ_LISTING_PORT consumed by tag)
 category/                 ← (quiz exposes QUIZ_LISTING_PORT consumed by category)
 attempt/                  ← (quiz listens to ATTEMPT_DOMAIN_EVENT_BUS)
-discussion/               ← (comment section per quiz; quiz provides QuizExistencePort; notification consumes COMMENT_DOMAIN_EVENT_BUS)
+comment/               ← (comment section per quiz; quiz provides QuizExistencePort; notification consumes COMMENT_DOMAIN_EVENT_BUS)
 bookmark/                 ← (quiz provides QUIZ_ANALYTICS_PORT consumed by bookmark)
 review/                   ← (quiz listens to REVIEW_DOMAIN_EVENT_BUS)
 tournament/               ← (ranking, achievement, instance consume SHARED_TOURNAMENT_EVENT_BUS)

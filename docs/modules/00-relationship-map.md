@@ -12,7 +12,7 @@ This document shows how every bounded context interacts with every other bounded
 [Q] — Quiz module (quizzes, versions, questions, options, stats)
 [Ta] — Tag module (tags, follows, ranking)
 [Ca] — Category module (categories, follows)
-[D] — Discussion module (threads, comments, votes, reports, moderation)
+[D] — Comment module (threads, comments, votes, reports, moderation)
 [At] — Attempt module (attempts, answers, scoring)
 [B] — Bookmark module (collections, bookmarks)
 [Rv] — Review module (reviews, votes, reports)
@@ -39,11 +39,11 @@ This document shows how every bounded context interacts with every other bounded
 | [At] Attempt | [To] Tournament | Attempt inside tournament round → participant result | ForwardRef to [To] |
 | [Q] Quiz | [Ta] Tag | Tag lists filtered by `quizStats`; Tag analytics via `QUIZ_ANALYTICS_PORT` | `QUIZ_LISTING_PORT`, `QUIZ_ANALYTICS_PORT` |
 | [Q] Quiz | [Ca] Category | Category lists filtered by `quizStats`; Category analytics via `QUIZ_ANALYTICS_PORT` | `QUIZ_LISTING_PORT`, `QUIZ_ANALYTICS_PORT` |
-| [Q] Quiz | [D] Discussion | `quiz.deleted` audit event; Discussion validates quiz existence | `QuizExistencePort` (inbound to [D]) |
+| [Q] Quiz | [D] Comment | `quiz.deleted` audit event; Comment validates quiz existence | `QuizExistencePort` (inbound to [D]) |
 | [Q] Quiz | [Rv] Review | `review.submitted/deleted` → refresh `quizStats.avgRating` | `REVIEW_DOMAIN_EVENT_BUS` |
-| [D] Discussion | [U] User | Discussion validates user existence; `@username` mention resolution | `UserExistencePort` (inbound to [D]) |
-| [D] Discussion | [U] Notification | `notification.sent` → user notified | `DiscussionNotificationListener` (inbound to Notification module) |
-| [D] Discussion | [U] Social | Social feed records `comment_created`, `discussion_created`, `discussion_solved` | `DiscussionFeedListenerAdapter` (inbound to Social module) |
+| [D] Comment | [U] User | Comment validates user existence; `@username` mention resolution | `UserExistencePort` (inbound to [D]) |
+| [D] Comment | [U] Notification | `notification.sent` → user notified | `CommentNotificationListener` (inbound to Notification module) |
+| [D] Comment | [U] Social | Social feed records `comment_created`, `comment_created` | `CommentFeedListenerAdapter` (inbound to Social module) |
 | [Ta] Tag | [Q] Quiz | Tag lists quizzes via `QUIZ_LISTING_PORT`; reads tag analytics via `QUIZ_ANALYTICS_PORT` | `QUIZ_LISTING_PORT`, `QUIZ_ANALYTICS_PORT` |
 | [Ca] Category | [Q] Quiz | Category lists quizzes via `QUIZ_LISTING_PORT`; reads category analytics via `QUIZ_ANALYTICS_PORT` | `QUIZ_LISTING_PORT`, `QUIZ_ANALYTICS_PORT` |
 | [Rv] Review | [Q] Quiz | Review validates attempt existence before review creation | Inbound to [Q] |
@@ -105,7 +105,7 @@ This document shows how every bounded context interacts with every other bounded
  events │                    │                     │                  │
         │                    ▼                     │                  ▼
         │   ┌──────────────────────────────────┐ │      ┌──────────────────────────┐
-        │   │        TOURNAMENT [To]           │◄┘      │    DISCUSSION [D]        │
+        │   │        TOURNAMENT [To]           │◄┘      │    COMMENT [D]        │
         │   │ Owns: tournaments, participants, │        │ Owns: threads, comments, │
         │   │ rounds, BullMQ lifecycle         │        │ votes, reports, mod      │
         │   └──────────┬──────────────┬─────────┘        └──────────┬─────────────┘
@@ -117,14 +117,14 @@ This document shows how every bounded context interacts with every other bounded
                                                                   Notification
                    ┌───────────▼──────────────────────────────────────────────┐
                    │  Notification Module (fan-out delivery; NOT a bounded ctx) │
-                   │  Listens to: Auth, Discussion, Ranking, Achievement,      │
+                   │  Listens to: Auth, Comment, Ranking, Achievement,      │
                    │             Tournament, User events                        │
                    └───────────────────────────────────────────────────────────┘
 
                    ┌───────────────────────────────────────────────────────────┐
                    │  Social Module (cross-module integration hub; NOT a       │
                    │  bounded context)                                         │
-                   │  Listens to: Discussion, Tournament, Ranking, Achievement │
+                   │  Listens to: Comment, Tournament, Ranking, Achievement │
                    └───────────────────────────────────────────────────────────┘
 ```
 
@@ -141,7 +141,7 @@ This document shows how every bounded context interacts with every other bounded
 | `REVIEW_DOMAIN_EVENT_BUS` | Review | Quiz |
 | `RANKING_DOMAIN_EVENT_BUS` | Ranking | Notification |
 | `USER_DOMAIN_EVENT_BUS` | User | — |
-| `DISCUSSION_DOMAIN_EVENT_BUS` | Discussion | Notification, Social |
+| `COMMENT_DOMAIN_EVENT_BUS` | Comment | Notification, Social |
 
 ---
 
@@ -166,12 +166,12 @@ users.userId       ← tag_follows.userId        (cascade)
 users.userId       ← category_follows.userId    (cascade)
 categories.catId   ← quizzes.categoryId         (set null)
 users.userId       ← quizzes.creatorId          (set null)
-quizzes.quizId     ← discussion_threads.quizId  (cascade)
+quizzes.quizId     ← comments.quizId  (cascade)
 quizzes.quizId     ← quizAttempts.quizId       (cascade)
 quizzes.quizId     ← reviews.quizId            (cascade)
 quizzes.quizId     ← bookmarked_quizzes.quizId (cascade)
 quizzes.quizId     ← quiz_instances.quizId      (restrict)
-users.userId       ← discussion_threads.authorId (cascade)
+users.userId       ← comments.authorId (cascade)
 users.userId       ← quizAttempts.userId        (cascade)
 users.userId       ← reviews.userId            (cascade)
 ```
@@ -187,7 +187,7 @@ users.userId       ← reviews.userId            (cascade)
 | [Q] Quiz | Quizzes, Versions, Questions, Options, Stats | Tag (tag lists), Category (category lists), Review (rating refresh) |
 | [Ta] Tag | Tags, Follows, Rankings | Quiz (quiz listings, analytics) |
 | [Ca] Category | Categories, Follows, Rankings | Quiz (quiz listings, analytics) |
-| [D] Discussion | Threads, Comments, Votes, Reports | Quiz (quiz existence), User (user existence) |
+| [D] Comment | Threads, Comments, Votes, Reports | Quiz (quiz existence), User (user existence) |
 | [At] Attempt | Attempts, Answers, Scoring | Quiz (quiz version data), Ranking (XP), Achievement (milestones), Instance (attempt linking) |
 | [B] Bookmark | Collections, Bookmarks | Quiz (quiz existence, analytics) |
 | [Rv] Review | Reviews, Votes, Reports | Quiz (attempt validation), Quiz (rating refresh) |

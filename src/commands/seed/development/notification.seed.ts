@@ -15,8 +15,8 @@ type NotificationSeed = {
     | 'badge_unlocked'
     | 'rank_achievement'
     | 'rank_improvement'
-    | 'discussion_reply'
-    | 'discussion_solved'
+    | 'comment_reply'
+    | 'comment_created'
     | 'quiz_review_received'
     | 'weekly_summary'
     | 'system_announcement';
@@ -39,7 +39,7 @@ type NotificationPreferenceSeed = {
   tournamentEnabled: boolean;
   rankEnabled: boolean;
   friendEnabled: boolean;
-  discussionEnabled: boolean;
+  commentEnabled: boolean;
   summaryEnabled: boolean;
   marketingEnabled: boolean;
   rankImprovementThreshold: number;
@@ -74,9 +74,9 @@ const NOTIFICATION_SEEDS: NotificationSeed[] = [
   {
     notificationId: '62222222-2222-7222-8222-222222222221',
     username: 'learner_user',
-    type: 'discussion_reply',
+    type: 'comment_reply',
     title: 'New Reply On Your Thread',
-    message: 'Someone replied to your discussion about `typeof null`.',
+    message: 'Someone replied to your comment on `typeof null`.',
     channel: 'in_app',
     isRead: false,
     createdAt: '2026-06-30T09:00:00.000Z',
@@ -113,7 +113,7 @@ const NOTIFICATION_SEEDS: NotificationSeed[] = [
     username: 'content_author',
     type: 'weekly_summary',
     title: 'Weekly Summary Ready',
-    message: 'Your weekly creator summary is ready with new quiz attempts, reviews, and discussion activity.',
+    message: 'Your weekly creator summary is ready with new quiz attempts, reviews, and comment activity.',
     channel: 'email',
     isRead: false,
     createdAt: '2026-06-30T07:00:00.000Z',
@@ -144,7 +144,7 @@ const NOTIFICATION_PREFERENCE_SEEDS: NotificationPreferenceSeed[] = [
     tournamentEnabled: true,
     rankEnabled: true,
     friendEnabled: true,
-    discussionEnabled: true,
+    commentEnabled: true,
     summaryEnabled: true,
     marketingEnabled: false,
     rankImprovementThreshold: 1,
@@ -160,7 +160,7 @@ const NOTIFICATION_PREFERENCE_SEEDS: NotificationPreferenceSeed[] = [
     tournamentEnabled: true,
     rankEnabled: true,
     friendEnabled: true,
-    discussionEnabled: true,
+    commentEnabled: true,
     summaryEnabled: true,
     marketingEnabled: false,
     rankImprovementThreshold: 3,
@@ -176,7 +176,7 @@ const NOTIFICATION_PREFERENCE_SEEDS: NotificationPreferenceSeed[] = [
     tournamentEnabled: false,
     rankEnabled: true,
     friendEnabled: true,
-    discussionEnabled: true,
+    commentEnabled: true,
     summaryEnabled: true,
     marketingEnabled: false,
     rankImprovementThreshold: 5,
@@ -192,7 +192,7 @@ const NOTIFICATION_PREFERENCE_SEEDS: NotificationPreferenceSeed[] = [
     tournamentEnabled: true,
     rankEnabled: true,
     friendEnabled: true,
-    discussionEnabled: true,
+    commentEnabled: true,
     summaryEnabled: true,
     marketingEnabled: false,
     rankImprovementThreshold: 5,
@@ -225,7 +225,7 @@ export const runNotificationSeed = async (): Promise<SeedSummary[]> => {
           tournamentEnabled: seed.tournamentEnabled,
           rankEnabled: seed.rankEnabled,
           friendEnabled: seed.friendEnabled,
-          discussionEnabled: seed.discussionEnabled,
+          commentEnabled: seed.commentEnabled,
           summaryEnabled: seed.summaryEnabled,
           marketingEnabled: seed.marketingEnabled,
           rankImprovementThreshold: seed.rankImprovementThreshold,
@@ -244,7 +244,7 @@ export const runNotificationSeed = async (): Promise<SeedSummary[]> => {
             tournamentEnabled: seed.tournamentEnabled,
             rankEnabled: seed.rankEnabled,
             friendEnabled: seed.friendEnabled,
-            discussionEnabled: seed.discussionEnabled,
+            commentEnabled: seed.commentEnabled,
             summaryEnabled: seed.summaryEnabled,
             marketingEnabled: seed.marketingEnabled,
             rankImprovementThreshold: seed.rankImprovementThreshold,
@@ -266,7 +266,7 @@ export const runNotificationSeed = async (): Promise<SeedSummary[]> => {
           tournamentEnabled: String(seed.tournamentEnabled),
           rankEnabled: String(seed.rankEnabled),
           friendEnabled: String(seed.friendEnabled),
-          discussionEnabled: String(seed.discussionEnabled),
+          commentEnabled: String(seed.commentEnabled),
           summaryEnabled: String(seed.summaryEnabled),
           marketingEnabled: String(seed.marketingEnabled),
           rankImprovementThreshold: String(seed.rankImprovementThreshold),
@@ -281,7 +281,7 @@ export const runNotificationSeed = async (): Promise<SeedSummary[]> => {
           tournamentEnabled: seed.tournamentEnabled,
           rankEnabled: seed.rankEnabled,
           friendEnabled: seed.friendEnabled,
-          discussionEnabled: seed.discussionEnabled,
+          commentEnabled: seed.commentEnabled,
           summaryEnabled: seed.summaryEnabled,
           marketingEnabled: seed.marketingEnabled,
           rankImprovementThreshold: seed.rankImprovementThreshold,

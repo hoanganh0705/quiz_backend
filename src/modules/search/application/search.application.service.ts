@@ -5,7 +5,7 @@ import { DRIZZLE } from '@/core/database/drizzle.constants';
 import type { DrizzleDB } from '@/core/database/database.module';
 import type {
   GlobalSearchResult,
-  SearchDiscussionResult,
+  SearchCommentResult,
   SearchQuizResult,
   SearchUserResult,
   SearchCategoryResult,
@@ -82,11 +82,11 @@ export class SearchApplicationService {
       throw new BadRequestException('Search query must not be empty');
     }
 
-    const [usersResult, quizzesResult, discussionsResult, categoriesResult, tagsResult] =
+    const [usersResult, quizzesResult, commentResults, categoriesResult, tagsResult] =
       await Promise.all([
         this.searchUsers(query, limit),
         this.searchQuizzes(query, limit),
-        this.searchDiscussions(query, limit),
+        this.searchComments(query, limit),
         this.searchCategories(query, limit),
         this.searchTags(query, limit),
       ]);
@@ -95,7 +95,7 @@ export class SearchApplicationService {
       query,
       users: usersResult,
       quizzes: quizzesResult,
-      discussions: discussionsResult,
+      commentss: commentResults,
       categories: categoriesResult,
       tags: tagsResult,
     };
@@ -159,29 +159,22 @@ export class SearchApplicationService {
     return rows.map(({ quizId, title, slug }) => ({ quizId, title, slug }));
   }
 
-  private async searchDiscussions(query: string, limit: number): Promise<SearchDiscussionResult[]> {
-    const discussionSearchCondition = this.buildSearchCondition(
-      { sql: sql`dt.discussion_search_vector` },
-      'english',
-      query,
-    );
-    const discussionRank = this.buildRankExpression(
-      { sql: sql`dt.discussion_search_vector` },
-      'english',
-      query,
-    );
-    const rows = await this.executeTypedQuery<SearchDiscussionResult>(sql`
+  private async searchComments(query: string, limit: number): Promise<SearchCommentResult[]> {
+    // Simple ILIKE search on comment body — no full-text search vector exists
+    // on the comments table (the Q/A-era comments_threads.full_text_search
+    // was tied to the now-dropped table).
+    const rows = await this.executeTypedQuery<{ commentId: string; quizId: string }>(sql`
       SELECT
-        dt.thread_id AS "threadId",
-        dt.title AS "title"
-      FROM discussion_threads dt
-      WHERE dt.deleted_at IS NULL
-        AND ${discussionSearchCondition}
-      ORDER BY ${discussionRank} DESC, dt.created_at DESC
+        c.comment_id AS "commentId",
+        c.quiz_id AS "quizId"
+      FROM comments c
+      WHERE c.deleted_at IS NULL
+        AND c.body ILIKE '%' || ${query} || '%'
+      ORDER BY c.created_at DESC
       LIMIT ${limit}
     `);
 
-    return rows.map(({ threadId, title }) => ({ threadId, title }));
+    return rows.map(({ commentId, quizId }) => ({ commentId, quizId }));
   }
 
   private async searchCategories(query: string, limit: number): Promise<SearchCategoryResult[]> {

@@ -53,7 +53,7 @@ TagDomainEventBus    →  TagEventBootstrapService
 QuizDomainEventBus   →  QuizDomainEventBootstrapService
 CategoryDomainEventBus → CategoryEventBootstrapService
 BookmarkDomainEventBus →  (log-only)
-DiscussionDomainEventBus → (Notification + Social listeners)
+CommentDomainEventBus → (Notification + Social listeners)
 ```
 
 ### Files
@@ -403,6 +403,6 @@ correlationIdStorage.run({ correlationId }, () => {
 
 ## Needs Clarification
 
-- The `DiscussionDomainEventBus` is referenced but the social/notification listeners are not traced to confirm whether they subscribe to it or to a separate integration event.
+- The `CommentDomainEventBus` is referenced but the social/notification listeners are not traced to confirm whether they subscribe to it or to a separate integration event.
 - The `SocialModule` subscribes to many event buses; whether the social feed is computed eagerly (on event) or lazily (on read) is not traced.
 - The `NotificationModule` is the fan-out delivery layer; the preference-gating logic (which channels to use per user) is referenced but the implementation is not traced.

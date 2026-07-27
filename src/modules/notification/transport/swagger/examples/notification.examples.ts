@@ -54,7 +54,7 @@ export const NOTIFICATION_ANALYTICS_EXAMPLE = {
     byType: {
       achievement_earned: 450,
       rank_achievement: 300,
-      discussion_reply: 498,
+      comment_reply: 498,
     },
     byChannel: {
       in_app: 1100,
@@ -74,7 +74,7 @@ const NOTIFICATION_PREFERENCES = {
   tournamentEnabled: true,
   rankEnabled: true,
   friendEnabled: true,
-  discussionEnabled: true,
+  commentEnabled: true,
   summaryEnabled: true,
   marketingEnabled: false,
   rankImprovementThreshold: 5,

@@ -10,9 +10,9 @@ export type SearchQuizResult = {
   slug: string;
 };
 
-export type SearchDiscussionResult = {
-  threadId: string;
-  title: string;
+export type SearchCommentResult = {
+  commentId: string;
+  quizId: string;
 };
 
 export type SearchCategoryResult = {
@@ -30,7 +30,7 @@ export type GlobalSearchResult = {
   query: string;
   users: SearchUserResult[];
   quizzes: SearchQuizResult[];
-  discussions: SearchDiscussionResult[];
+  commentss: SearchCommentResult[];
   categories: SearchCategoryResult[];
   tags: SearchTagResult[];
 };
