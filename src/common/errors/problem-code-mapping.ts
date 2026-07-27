@@ -1231,9 +1231,7 @@ export const ProblemCodeMapping: Readonly<Record<string, ProblemCodeInfo>> = {
    * Error` with a hardcoded generic message
    * `'Internal server error'` (the thrown message and `context` were
    * both discarded). The global filter now resolves the code correctly
-   * and preserves the thrown message (default format:
-   * `'Failed to grant achievement for user <userId>: <reason>'`,
-   * with both interpolated from the constructor arguments).
+   * and returns a sanitized message without exposing internal details.
    *
    * Note: this exception is defined and exported but is currently NOT
    * thrown by `achievement.application.service.ts` (audit at rev4.7
@@ -1286,7 +1284,7 @@ export const ProblemCodeMapping: Readonly<Record<string, ProblemCodeInfo>> = {
   COMMENT_NOT_FOUND: {
     status: HttpStatus.NOT_FOUND,
     title: 'NotFound',
-    typeUri: 'https://api.quiz.local/problems/comment-comment-not-found',
+    typeUri: 'https://api.quiz.local/problems/comment-not-found',
   },
   /**
    * Thrown when the comment module's `QuizNotFoundError` fires
@@ -1330,7 +1328,7 @@ export const ProblemCodeMapping: Readonly<Record<string, ProblemCodeInfo>> = {
   COMMENT_FORBIDDEN: {
     status: HttpStatus.FORBIDDEN,
     title: 'Forbidden',
-    typeUri: 'https://api.quiz.local/problems/comment-comment-forbidden',
+    typeUri: 'https://api.quiz.local/problems/comment-forbidden',
   },
   /**
    * Thrown when the user attempts to vote on their own comment. 403

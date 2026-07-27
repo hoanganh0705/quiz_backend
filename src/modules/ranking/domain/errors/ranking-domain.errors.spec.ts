@@ -30,24 +30,24 @@ const RANKING_CASES: ReadonlyArray<{
 }> = [
   {
     name: 'InvalidXpEventError',
-    ctor: InvalidXpEventError,
+    ctor: InvalidXpEventError as unknown as ExceptionCtor,
     args: [{ userId: 'u-1', amount: -5 }, 'Amount must be positive'],
     expectedCode: 'RANKING_INVALID_XP_EVENT',
     message: 'Invalid XP event: Amount must be positive',
   },
   {
     name: 'RankCalculationError',
-    ctor: RankCalculationError,
+    ctor: RankCalculationError as unknown as ExceptionCtor,
     args: ['daily', 'db deadlock'],
     expectedCode: 'RANKING_RANK_CALCULATION_ERROR',
-    message: 'Rank calculation failed for daily: db deadlock',
+    message: 'Rank calculation failed',
   },
   {
     name: 'PeriodResetError',
-    ctor: PeriodResetError,
+    ctor: PeriodResetError as unknown as ExceptionCtor,
     args: ['weekly', 'scheduler offline'],
     expectedCode: 'RANKING_PERIOD_RESET_ERROR',
-    message: 'Period reset failed for weekly: scheduler offline',
+    message: 'Period reset failed',
   },
 ];
 

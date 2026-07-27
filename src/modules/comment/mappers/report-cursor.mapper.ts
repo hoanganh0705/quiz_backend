@@ -12,8 +12,13 @@ export interface ReportCursor {
   readonly id: string;
 }
 
-const UUID_PATTERN =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-7][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+// RFC 9562 UUIDv7: third group's first hex digit is `7`
+// (version), fourth group's first hex digit is `8`, `9`, `a`, or
+// `b` (variant). The previous pattern enforced `[1-7]` for the
+// version digit which could accept non-v7 UUIDs. Tier 2 cursors use
+// the same lower-cased hyphenated form as `generateUuidV7()`
+// and `pg_uuidv7`, so the regex mirrors that.
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export function serializeReportCursor(cursor: ReportCursor | null): string | null {
   if (cursor === null) return null;

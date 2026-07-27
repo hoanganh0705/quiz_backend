@@ -170,7 +170,6 @@ import {
   ParentCommentNotFoundError,
   QuizNotFoundError as CommentQuizNotFoundError,
   ReplyLimitExceededError,
-  ReportNotFoundError,
   SelfReportError,
   SelfVoteError,
 } from '@/modules/comment/domain/errors';
@@ -2495,8 +2494,8 @@ describe('RFC 7807 ProblemDetail (Phase 0 backstop)', () => {
       // Wire-shape improvement: prior filter had NO branch for
       // `AchievementGrantError` — fell through to catch-all 500
       // with hardcoded `'Internal server error'`. Global filter
-      // resolves the code and preserves the thrown message
-      // including the user ID and reason. Note: this exception is
+      // resolves the code and preserves a generic message (internal
+      // details are not exposed to clients). Note: this exception is
       // defined but currently not thrown by
       // `achievement.application.service.ts`.
       const res = await request(app.getHttpServer())
@@ -2504,7 +2503,7 @@ describe('RFC 7807 ProblemDetail (Phase 0 backstop)', () => {
         .expect(500);
       const body = res.body as ProblemWire;
       expect(body.title).toBe('InternalServerError');
-      expect(body.detail).toBe('Failed to grant achievement for user user-1: rule-engine-timeout');
+      expect(body.detail).toBe('Failed to grant achievement');
       expect(body.extensions?.code).toBe('ACHIEVEMENT_GRANT_ERROR');
     });
 
@@ -2575,7 +2574,9 @@ describe('RFC 7807 ProblemDetail (Phase 0 backstop)', () => {
         .expect(400);
       const body = res.body as ProblemWire;
       expect(body.title).toBe('BadRequest');
-      expect(body.detail).toBe('The selected parent comment is not a top-level comment on this quiz');
+      expect(body.detail).toBe(
+        'The selected parent comment is not a top-level comment on this quiz',
+      );
       expect(body.extensions?.code).toBe('COMMENT_PARENT_COMMENT_CROSS_THREAD');
     });
 
@@ -2735,13 +2736,13 @@ describe('RFC 7807 ProblemDetail (Phase 0 backstop)', () => {
       // Wire-shape improvements:
       //   1. `extensions.code` is now `'RANKING_RANK_CALCULATION_ERROR'`
       //      (was `'INTERNAL_ERROR'` under the prior filter).
-      //   2. Thrown message preserved (was `'Internal server error'`).
+      //   2. Internal details are not exposed to clients (message is sanitized).
       const res = await request(app.getHttpServer())
         .get('/rfc7807-fixture/ranking/rank-calculation-error')
         .expect(500);
       const body = res.body as ProblemWire;
       expect(body.title).toBe('InternalServerError');
-      expect(body.detail).toBe('Rank calculation failed for daily: db deadlock');
+      expect(body.detail).toBe('Rank calculation failed');
       expect(body.extensions?.code).toBe('RANKING_RANK_CALCULATION_ERROR');
     });
 
@@ -2749,13 +2750,13 @@ describe('RFC 7807 ProblemDetail (Phase 0 backstop)', () => {
       // Wire-shape improvements:
       //   1. `extensions.code` is now `'RANKING_PERIOD_RESET_ERROR'`
       //      (was `'INTERNAL_ERROR'` under the prior filter).
-      //   2. Thrown message preserved (was `'Internal server error'`).
+      //   2. Internal details are not exposed to clients (message is sanitized).
       const res = await request(app.getHttpServer())
         .get('/rfc7807-fixture/ranking/period-reset-error')
         .expect(500);
       const body = res.body as ProblemWire;
       expect(body.title).toBe('InternalServerError');
-      expect(body.detail).toBe('Period reset failed for weekly: scheduler offline');
+      expect(body.detail).toBe('Period reset failed');
       expect(body.extensions?.code).toBe('RANKING_PERIOD_RESET_ERROR');
     });
 
