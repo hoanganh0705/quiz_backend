@@ -12,7 +12,7 @@ export class ListReportsQueryDto {
   @ApiPropertyOptional({
     description: 'Opaque pagination cursor returned by the previous page',
     example:
-      'eyJjcmVhdGVkQXQiOiIyMDI2LTA2LTAyVDEwOjM1OjAwLjAwMFoiLCJpZCI6Ijk5MGU4NDAwLWUyOWItNzFkNC1hNzE2LTQ0NjY1NTQ0MDAwMDAifQ',
+      'eyJjcmVhdGVkQXQiOiIyMDI2LTA2LTAyVDEwOjM1OjAwLjAwMFoiLCJpZCI6Ijk5MGU4NDAwLWUyOWItNzFkNC1hNzE2LTQ0NjY1NTQ0MDA5OSJ9',
   })
   @IsOptional()
   @IsString()

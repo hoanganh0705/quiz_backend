@@ -12,7 +12,7 @@ import { CRYPTO_PROVIDER, type CryptoProvider } from './ports/crypto.provider';
 import { AUTH_USER_REPOSITORY_PORT, type UserRepositoryPort } from './ports/user-repository.port';
 import { SessionContextMismatchError, TokenReuseDetectedError, UserNotFoundError } from './errors';
 
-const REFRESH_TOKEN_REUSE_MESSAGE = 'Refresh token reuse detected. All sessions have been revoked';
+const REFRESH_TOKEN_REUSE_MESSAGE = 'Security action taken on your account. Please log in again.';
 
 @Injectable()
 export class AuthRefreshService {
