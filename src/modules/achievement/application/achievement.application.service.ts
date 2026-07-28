@@ -109,19 +109,19 @@ export class AchievementApplicationService {
     limit?: number;
     offset?: number;
   }> {
-    const history = await this.achievementHistoryService.getUserHistory(userId, {
+    const { entries, total } = await this.achievementHistoryService.getUserHistory(userId, {
       includeRevoked: false,
-      limit: options?.limit ?? 50,
+      limit: options?.limit ?? 20,
       offset: options?.offset ?? 0,
     });
 
     return {
-      items: history.map((entry) => ({
+      items: entries.map((entry) => ({
         badgeId: entry.badgeId,
         badgeName: entry.badgeName,
         earnedAt: entry.earnedAt.toISOString(),
       })),
-      total: history.length, // TODO: Get actual total count from repository
+      total,
       limit: options?.limit,
       offset: options?.offset,
     };
@@ -206,7 +206,7 @@ export class AchievementApplicationService {
     // badges did admin X revoke last month?".
     try {
       await this.auditLogService.record({
-        eventType: 'achievement.badge.revoked',
+        eventType: 'badge.revoked',
         domain: 'achievement',
         action: 'badge.revoked',
         actorId: revokedBy,
@@ -313,14 +313,14 @@ export class AchievementApplicationService {
     limit?: number;
     offset?: number;
   }> {
-    const history = await this.achievementHistoryService.getUserHistory(userId, {
+    const { entries, total } = await this.achievementHistoryService.getUserHistory(userId, {
       includeRevoked: true,
       limit: options?.limit,
       offset: options?.offset,
     });
 
     return {
-      items: history.map((entry) => ({
+      items: entries.map((entry) => ({
         userBadgeId: entry.userBadgeId,
         userId: entry.userId,
         badgeId: entry.badgeId,
@@ -336,7 +336,7 @@ export class AchievementApplicationService {
         metadata: entry.metadata,
         isActive: entry.isActive,
       })),
-      total: history.length, // TODO: Get actual total count from repository
+      total,
       limit: options?.limit,
       offset: options?.offset,
     };

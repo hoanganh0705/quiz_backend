@@ -16,45 +16,17 @@ import {
   ParseUUIDPipe,
 } from '@nestjs/common';
 import { ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
-import { IsOptional, IsInt, Min } from 'class-validator';
-import { Type } from 'class-transformer';
-import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Permissions } from '@/common/authorization/decorators/permissions.decorator';
 import { Permission } from '@/common/authorization/permissions';
 import { ApiForbidden, ApiAuth } from '@/common/swagger/swagger-decorators';
-import { ApiOkResource, ApiOkResourceArray, ApiOkResourceList } from '@/common/swagger/api-ok';
+import { ApiOkResource, ApiOkResourceList } from '@/common/swagger/api-ok';
+import { PaginationQueryDto } from '@/common/dto/pagination-query.dto';
 import { AchievementApplicationService } from '../../application/achievement.application.service';
 import { AchievementPresenter } from '../presenters/achievement.presenter';
 import {
   AdminAchievementHistoryItemDto,
   ReevaluateUserResponseDto,
 } from '../../dto/response/achievement-admin-response.dto';
-
-class PaginationQueryDto {
-  @ApiPropertyOptional({
-    description: 'Maximum number of items to return',
-    type: Number,
-    minimum: 1,
-    default: 50,
-  })
-  @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  @Min(1)
-  limit?: number;
-
-  @ApiPropertyOptional({
-    description: 'Number of items to skip',
-    type: Number,
-    minimum: 0,
-    default: 0,
-  })
-  @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  @Min(0)
-  offset?: number;
-}
 
 @ApiTags('achievements')
 @Controller('admin/achievements')
@@ -70,6 +42,7 @@ export class AchievementAdminController {
   @ApiForbidden()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
+    operationId: 'reevaluateUserBadges',
     summary: 'Re-evaluate all badges for a user',
     description:
       'Forces re-evaluation of every active badge for the specified user. Badges the user ' +
@@ -86,7 +59,10 @@ export class AchievementAdminController {
   @Get('reevaluate/:userId/history')
   @Permissions(Permission.ACHIEVEMENT_ADMIN)
   @ApiForbidden()
-  @ApiOperation({ summary: 'Get achievement history for a user (admin)' })
+  @ApiOperation({
+    operationId: 'getUserAchievementHistory',
+    summary: 'Get achievement history for a user (admin)',
+  })
   @ApiParam({ name: 'userId', format: 'uuid' })
   // Phase 7 (api-contract audit): the runtime emits an offset-paginated
   // payload, so the OpenAPI schema must match — `ApiOkResourceList(..., 'offset')`
