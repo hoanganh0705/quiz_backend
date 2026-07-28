@@ -68,6 +68,7 @@ import {
   TOURNAMENT_FULL_MESSAGE,
   TOURNAMENT_ALREADY_REGISTERED_MESSAGE,
   TOURNAMENT_FORBIDDEN_MESSAGE,
+  TOURNAMENT_STANDING_WITHDRAWN_MESSAGE,
   TOURNAMENT_ROUND_NOT_FOUND_MESSAGE,
   TOURNAMENT_ROUND_NOT_OPEN_MESSAGE,
   TOURNAMENT_ATTEMPT_ALREADY_EXISTS_MESSAGE,
@@ -687,7 +688,7 @@ export class TournamentService {
     }
 
     if (participant.status === 'withdrawn') {
-      throw new TournamentForbiddenError(TOURNAMENT_FORBIDDEN_MESSAGE);
+      throw new TournamentForbiddenError(TOURNAMENT_STANDING_WITHDRAWN_MESSAGE);
     }
 
     const standing = await this.tournamentRepository.getParticipantStanding({

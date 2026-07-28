@@ -38,6 +38,9 @@ import {
   UpdateTournamentDto,
   GetTournamentLeaderboardQueryDto,
   CreateTournamentRoundDto,
+  GetUpcomingTournamentsQueryDto,
+  GetActiveTournamentsQueryDto,
+  GetCompletedTournamentsQueryDto,
 } from '../../dto/request';
 import {
   TournamentResponseDto,
@@ -55,6 +58,9 @@ import {
   CancelTournamentResponseDto,
   SoftDeleteTournamentResponseDto,
   TournamentRoundResponseDto,
+  UpcomingTournamentItemDto,
+  ActiveTournamentItemDto,
+  CompletedTournamentItemDto,
 } from '../../dto/response';
 import { TournamentPresenter } from '../presenters/tournament.presenter';
 import { AUTH_SECURITY_NAME } from '@/core/swagger/swagger.config';
@@ -72,6 +78,9 @@ import {
 import {
   TOURNAMENT_DETAIL_EXAMPLE,
   TOURNAMENT_LIST_EXAMPLE,
+  UPCOMING_TOURNAMENTS_EXAMPLE,
+  ACTIVE_TOURNAMENTS_EXAMPLE,
+  COMPLETED_TOURNAMENTS_EXAMPLE,
   RELATED_TOURNAMENTS_EXAMPLE,
   TOURNAMENT_LEADERBOARD_EXAMPLE,
   TOURNAMENT_WINNERS_EXAMPLE,
@@ -242,6 +251,78 @@ export class TournamentController {
     return this.tournamentApplicationService
       .listTournaments(query)
       .then((result) => this.presenter.listTournaments(result));
+  }
+
+  // getUpcomingTournaments is a public offset-paginated listing of upcoming tournaments.
+  @Get('upcoming')
+  @Public()
+  @ApiOperation({
+    summary: 'List upcoming tournaments',
+    description:
+      'Returns an offset-paginated list of tournaments that are in `upcoming` status and have a future startAt. ' +
+      'Ordered by startAt ascending by default, or by registration deadline if specified.',
+  })
+  @ApiOkResourceList(UpcomingTournamentItemDto, 'offset', {
+    description: 'Upcoming tournaments returned',
+    example: UPCOMING_TOURNAMENTS_EXAMPLE,
+  })
+  @ApiBadRequestResponse({
+    description: 'Query parameters failed validation',
+    type: ProblemDetailDto,
+    example: ErrorResponseExamples.badRequest,
+  })
+  getUpcomingTournaments(@Query() query: GetUpcomingTournamentsQueryDto) {
+    return this.tournamentApplicationService
+      .getUpcomingTournaments(query)
+      .then((result) => this.presenter.getUpcomingTournaments(result));
+  }
+
+  // getActiveTournaments is a public offset-paginated listing of active tournaments.
+  @Get('active')
+  @Public()
+  @ApiOperation({
+    summary: 'List active tournaments',
+    description:
+      'Returns an offset-paginated list of tournaments that are currently active ' +
+      '(in `registration` or `ongoing` status and within their time window).',
+  })
+  @ApiOkResourceList(ActiveTournamentItemDto, 'offset', {
+    description: 'Active tournaments returned',
+    example: ACTIVE_TOURNAMENTS_EXAMPLE,
+  })
+  @ApiBadRequestResponse({
+    description: 'Query parameters failed validation',
+    type: ProblemDetailDto,
+    example: ErrorResponseExamples.badRequest,
+  })
+  getActiveTournaments(@Query() query: GetActiveTournamentsQueryDto) {
+    return this.tournamentApplicationService
+      .getActiveTournaments(query)
+      .then((result) => this.presenter.getActiveTournaments(result));
+  }
+
+  // getCompletedTournaments is a public offset-paginated listing of completed tournaments.
+  @Get('completed')
+  @Public()
+  @ApiOperation({
+    summary: 'List completed tournaments',
+    description:
+      'Returns an offset-paginated list of tournaments that are in `finished` status ' +
+      'and have ended (endAt < now).',
+  })
+  @ApiOkResourceList(CompletedTournamentItemDto, 'offset', {
+    description: 'Completed tournaments returned',
+    example: COMPLETED_TOURNAMENTS_EXAMPLE,
+  })
+  @ApiBadRequestResponse({
+    description: 'Query parameters failed validation',
+    type: ProblemDetailDto,
+    example: ErrorResponseExamples.badRequest,
+  })
+  getCompletedTournaments(@Query() query: GetCompletedTournamentsQueryDto) {
+    return this.tournamentApplicationService
+      .getCompletedTournaments(query)
+      .then((result) => this.presenter.getCompletedTournaments(result));
   }
 
   // getRelatedTournaments throws TournamentNotFoundError (404) when the
