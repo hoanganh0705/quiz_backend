@@ -18,6 +18,14 @@ import type {
 } from '../infrastructure/repositories/achievement.repository';
 import { BADGE_THRESHOLDS, PROGRESS_MILESTONES } from '../domain/constants/achievement.constants';
 
+/**
+ * Visibility levels for badge progress.
+ *
+ * NOTE: This enum is used internally by `getBadgeProgress()` and `getUserProgress()`.
+ * The current public API exposes progress via `getBadgeProgressSnapshot()` which returns
+ * `BadgeProgressSnapshot` (without visibility). If visibility should be exposed to clients
+ * in the future, update BadgeProgressResponseDto to include this field.
+ */
 export enum ProgressVisibility {
   VISIBLE = 'visible',
   HIDDEN = 'hidden',
