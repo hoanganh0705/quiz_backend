@@ -9,13 +9,10 @@ import {
   ParseUUIDPipe,
   Body,
   BadRequestException,
+  HttpCode,
+  HttpStatus,
 } from '@nestjs/common';
-import {
-  ApiTags,
-  ApiParam,
-  ApiNotFoundResponse,
-  ApiForbiddenResponse,
-} from '@nestjs/swagger';
+import { ApiTags, ApiParam, ApiNotFoundResponse, ApiForbiddenResponse } from '@nestjs/swagger';
 import { ApiAuthAction, ApiAuthActionNoContent } from '@/common/swagger/swagger-decorators';
 import { ProblemDetailDto } from '@/common/swagger/swagger-schemas';
 import { Transactional } from '@/common/interceptors/transactional.interceptor';
@@ -24,7 +21,6 @@ import {
   NotificationResponseDto,
   NotificationPreferencesResponseDto,
   UnreadCountResponseDto,
-  DeletedReadNotificationsResponseDto,
   NotificationAnalyticsDto,
 } from '@/modules/notification/dto/response';
 import { NotificationPresenter } from '../presenters/notification.presenter';
@@ -36,7 +32,6 @@ import { Permission } from '@/common/authorization/permissions';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
 import {
   NOTIFICATION_ANALYTICS_EXAMPLE,
-  NOTIFICATION_DELETED_READ_EXAMPLE,
   NOTIFICATION_DETAIL_EXAMPLE,
   NOTIFICATION_LIST_EXAMPLE,
   NOTIFICATION_PREFERENCES_EXAMPLE,

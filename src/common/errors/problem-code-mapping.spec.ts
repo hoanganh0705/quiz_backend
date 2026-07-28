@@ -553,18 +553,18 @@ describe('ProblemCodeMapping', () => {
     });
   });
 
-  describe('resolveProblemInfo (comment module — Phase 9.5, 11 entries)', () => {
-    // 11 entries covering 4 status codes:
+  describe('resolveProblemInfo (comment module — Phase 9.5, 10 entries; reduced to 10 after Phase 1 audit removed unused ParentCommentNotFoundError)', () => {
+    // 10 entries covering 4 status codes:
     //   404: COMMENT_NOT_FOUND, COMMENT_QUIZ_NOT_FOUND,
-    //        COMMENT_PARENT_COMMENT_NOT_FOUND, COMMENT_REPORT_NOT_FOUND (4)
+    //        COMMENT_REPORT_NOT_FOUND (3) - ParentCommentNotFoundError removed
     //   403: COMMENT_FORBIDDEN, COMMENT_SELF_VOTE,
     //        COMMENT_SELF_REPORT, COMMENT_MODERATOR_REQUIRED (4)
     //   409: COMMENT_REPLY_LIMIT_EXCEEDED, COMMENT_DUPLICATE_REPORT (2)
     //   400: COMMENT_PARENT_COMMENT_CROSS_THREAD (1)
     //
-    // Total = 4 + 4 + 2 + 1 = 11.
+    // Total = 3 + 4 + 2 + 1 = 10.
     //
-    // Plan §8.4.1 risk notes: two of the 11 errors map to non-obvious
+    // Plan §8.4.1 risk notes: two of the 10 errors map to non-obvious
     // statuses (`ParentCommentCrossThreadError` → 400;
     // `ModeratorRequiredError` → 403). These are captured here so a
     // future mapping change cannot silently regress them.
@@ -572,7 +572,7 @@ describe('ProblemCodeMapping', () => {
       const info = resolveProblemInfo('COMMENT_NOT_FOUND');
       expect(info.status).toBe(HttpStatus.NOT_FOUND);
       expect(info.title).toBe('NotFound');
-      expect(info.typeUri).toBe('https://api.quiz.local/problems/comment-comment-not-found');
+      expect(info.typeUri).toBe('https://api.quiz.local/problems/comment-not-found');
     });
 
     it('returns a 404 entry for COMMENT_QUIZ_NOT_FOUND (collision with QUIZ_NOT_FOUND is documented at §9 item 1)', () => {
@@ -581,12 +581,6 @@ describe('ProblemCodeMapping', () => {
       // `QUIZ_NOT_FOUND`. Same class name, distinct `code`. Clients
       // should switch on `extensions.code`.
       const info = resolveProblemInfo('COMMENT_QUIZ_NOT_FOUND');
-      expect(info.status).toBe(HttpStatus.NOT_FOUND);
-      expect(info.title).toBe('NotFound');
-    });
-
-    it('returns a 404 entry for COMMENT_PARENT_COMMENT_NOT_FOUND', () => {
-      const info = resolveProblemInfo('COMMENT_PARENT_COMMENT_NOT_FOUND');
       expect(info.status).toBe(HttpStatus.NOT_FOUND);
       expect(info.title).toBe('NotFound');
     });

@@ -40,6 +40,7 @@ import type {
   ListMyCommentsParams,
   ListQuizCommentsParams,
   ListReportsParams,
+  ModerationResult,
   MyCommentView,
   ReportCommentParams,
   ReportCursor,
@@ -491,8 +492,10 @@ export class CommentService {
 
   // ─── Moderation ───────────────────────────────────────────────────────────
 
-  async hideComment(params: HideCommentParams, actor: Pick<JwtPayload, 'role'>): Promise<void> {
+  async hideComment(params: HideCommentParams, actor: Pick<JwtPayload, 'role'>): Promise<ModerationResult> {
     CommentAuthorizationPolicy.assertCanModerate({ sub: params.moderatorId, role: actor.role });
+
+    let wasHidden = false;
 
     await this.repo.transactionally(async (tx) => {
       const comment = await this.repo.getCommentByIdForUpdate(params.commentId, tx);
@@ -503,17 +506,17 @@ export class CommentService {
         throw new CommentNotFoundError(params.commentId);
       }
 
-      await this.repo.setHiddenState(
-        { commentId: params.commentId, hidden: true, moderatorId: params.moderatorId },
-        tx,
-      );
+      wasHidden = comment.isHidden;
+      if (!wasHidden) {
+        await this.repo.setHiddenState(
+          { commentId: params.commentId, hidden: true, moderatorId: params.moderatorId },
+          tx,
+        );
+      }
     });
 
-    // Read the quiz id outside the tx so the event payload is consistent
-    // with the post-commit state.
     const comment = await this.repo.getCommentById(params.commentId);
     if (comment === null) {
-      // Should not happen — we just hid it inside a tx.
       throw new CommentNotFoundError(params.commentId);
     }
 
@@ -530,18 +533,31 @@ export class CommentService {
       commentId: params.commentId,
       moderatorId: params.moderatorId,
     });
+
+    return {
+      commentId: params.commentId,
+      isHidden: true,
+      changed: !wasHidden,
+    };
   }
 
   async restoreComment(
     params: RestoreCommentParams,
     actor: Pick<JwtPayload, 'role'>,
-  ): Promise<void> {
+  ): Promise<ModerationResult> {
     CommentAuthorizationPolicy.assertCanModerate({ sub: params.moderatorId, role: actor.role });
+
+    let wasVisible = false;
 
     await this.repo.transactionally(async (tx) => {
       const comment = await this.repo.getCommentByIdForUpdate(params.commentId, tx);
       if (!comment) {
         throw new CommentNotFoundError(params.commentId);
+      }
+
+      wasVisible = !comment.isHidden;
+      if (wasVisible) {
+        return;
       }
 
       await this.repo.setHiddenState(
@@ -568,6 +584,12 @@ export class CommentService {
       commentId: params.commentId,
       moderatorId: params.moderatorId,
     });
+
+    return {
+      commentId: params.commentId,
+      isHidden: false,
+      changed: wasVisible,
+    };
   }
 }
 
