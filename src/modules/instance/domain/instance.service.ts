@@ -26,6 +26,7 @@ import {
   InstanceNotHostError,
   InstanceNotOpenError,
   InstanceFullError,
+  InstanceFullCapacityError,
   InstanceAlreadyStartedError,
   InstanceAlreadyClosedError,
   InstanceAlreadyFinishedError,
@@ -187,7 +188,9 @@ export class InstanceService {
 
       return { message: 'Joined the instance successfully' };
     } catch (error) {
-      if (error instanceof Error && error.message === 'INSTANCE_FULL') {
+      // Phase 7 (audit Finding 3): catch the typed error class instead of
+      // relying on string comparison. This is robust against future message changes.
+      if (error instanceof InstanceFullCapacityError) {
         throw new InstanceFullError(INSTANCE_FULL_MESSAGE);
       }
       // Rethrow domain errors (PlayerAlreadyJoinedError, etc.) untouched.
@@ -658,6 +661,11 @@ export class InstanceService {
    *
    * 5 seconds matches the multiplayer-room feel used in the
    * reference architecture. Tunable via env in a later phase.
+   *
+   * TODO (Phase 8 — audit Finding 11): Consider exposing this via environment
+   * configuration (e.g. `INSTANCE_COUNTDOWN_DURATION_MS`). This would allow
+   * tuning the countdown duration without a code deployment. The env var
+   * could default to 5000ms if not set.
    */
   static readonly COUNTDOWN_DURATION_MS = 5_000;
 

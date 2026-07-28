@@ -43,6 +43,19 @@ export class CloseInstanceResponseDto {
  * Carries the wall-clock anchor the WebSocket `countdown_started` event
  * also publishes. The `status` is always `'countdown'` — the controller
  * is the only entry point that uses this DTO.
+ *
+ * Design note (Phase 7 — audit Finding 7): unlike other action responses
+ * (`JoinInstanceResponseDto`, `StartInstanceResponseDto`, etc.) which
+ * return `{ message: string }`, this DTO returns the full countdown state
+ * (`instanceId`, `status`, `countdownStartedAt`, `countdownEndsAt`). This
+ * is intentional because:
+ *   1. The client needs the exact `countdownEndsAt` to render a countdown
+ *      timer in the UI without having to re-fetch the instance.
+ *   2. The timing data is generated server-side and cannot be reliably
+ *      computed client-side (clock skew).
+ *   3. Returning this data avoids an additional round-trip to
+ *      `GET /instances/{id}` after starting the countdown.
+ * Clients that only need confirmation can ignore the additional fields.
  */
 export class StartCountdownResponseDto {
   @ApiProperty({
