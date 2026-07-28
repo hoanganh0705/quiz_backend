@@ -104,13 +104,6 @@ export type AttemptContextInfo = {
 };
 
 export interface QuizInstanceRepositoryPort {
-  createInstance(params: {
-    quizVersionId: string;
-    hostUserId: string;
-    maxPlayers: number | null;
-    nowIso: string;
-  }): Promise<{ instanceId: string }>;
-
   createInstanceWithHost(params: {
     quizVersionId: string;
     hostUserId: string;

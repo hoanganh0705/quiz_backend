@@ -16,6 +16,32 @@ import type { JwtPayload } from '@/common/guards/jwt.guard';
 import { WsExceptionFilter } from '../filters/ws-exception.filter';
 import { InstanceApplicationService } from '../../application/instance.application.service';
 
+/**
+ * WebSocket error contract (Phase 7 — audit Finding 10)
+ * =======================================================
+ *
+ * The Socket.IO error format differs from the REST API's RFC 7807 format:
+ *
+ *   REST API errors:  RFC 7807 ProblemDetail
+ *     { type, title, status, detail, instance, extensions: { code } }
+ *
+ *   WebSocket errors: Simple { code, message }
+ *     { code: 'NOT_HOST' | 'FORBIDDEN' | 'INTERNAL_ERROR', message: string }
+ *
+ * This is intentional because:
+ *   1. Socket.IO acknowledgements are synchronous by design
+ *   2. The `{ code, message }` format is lightweight and sufficient for WS
+ *   3. Frontend clients can differentiate based on the `event: 'error'` response
+ *
+ * Error codes used:
+ *   - `NOT_HOST`: Caller is not the host of the instance
+ *   - `FORBIDDEN`: Generic permission denied
+ *   - `INTERNAL_ERROR`: Unexpected server error (never exposed directly)
+ *
+ * Frontend clients should check `data.event === 'error'` and inspect
+ * `data.code` for error handling. All error responses use the same
+ * `event: 'error'` envelope.
+ */
 const ERR_NOT_HOST = { code: 'NOT_HOST', message: 'Only the host can perform this action' };
 const ERR_FORBIDDEN = { code: 'FORBIDDEN', message: 'You do not have permission for this action' };
 

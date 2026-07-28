@@ -17,23 +17,38 @@ import {
 /**
  * Instance-module namespace marker for instance-domain exceptions.
  *
- * Per the RFC 7807 migration plan (§7.1), intermediate abstract layers are
- * removed — but a module-namespace marker is a legitimate use of an
- * intermediate class. (Today no dispatch on this class happens at the
- * global-filter level; the filter resolves each concrete exception's
- * `code` via `ProblemCodeMapping` instead. The intermediate stays as a
- * domain-side marker for symmetry with the auth, quiz, attempt, user,
- * category, tag, tournament, review, and bookmark modules.)
+ * Error code naming conventions (Phase 7 - audit Finding 8)
+ * ========================================================
+ * The module uses a deliberate two-pattern system for error codes:
  *
- * Abstract — does not declare a `code` — because no concrete exception
- * needs a generic `code` for an unmapped operation failure. Audit:
- * `grep -rn 'new InstanceDomainError' src/` returns no matches.
+ * Pattern 1: INSTANCE_NOT_STATE - Precondition not met. Used when a request
+ * cannot proceed because a precondition is not satisfied (typically 400/403/404/409).
+ * Examples: INSTANCE_NOT_FOUND, INSTANCE_NOT_HOST, INSTANCE_NOT_OPEN,
+ * INSTANCE_NOT_IN_COUNTDOWN.
  *
- * Special note: the instance module has TWO exception filters —
- * `InstanceDomainExceptionFilter` (HTTP, controller-scoped, deleted in
- * Phase 2) and `WsExceptionFilter` (WS gateway, KEPT — handles only
- * auth/generic, not domain errors). The instance controller is the
- * only place where the HTTP filter was wired.
+ * Pattern 2: INSTANCE_ALREADY_STATE - Invariant already violated. Used when
+ * a request tries to transition to a state the resource already occupies
+ * (typically 400).
+ * Examples: INSTANCE_ALREADY_STARTED, INSTANCE_ALREADY_CLOSED,
+ * INSTANCE_ALREADY_FINISHED, INSTANCE_COUNTDOWN_ALREADY_STARTED.
+ *
+ * Special codes: INSTANCE_FULL (400), MIN_PLAYERS_NOT_MET (422),
+ * PLAYER_ALREADY_JOINED (409), INSTANCE_OPTIMISTIC_LOCK (409).
+ *
+ * Rationale: The distinction helps clients distinguish between
+ * "You cannot do this yet" (NOT_*) vs "This is already done" (ALREADY_*).
+ *
+ * Per the RFC 7807 migration plan, intermediate abstract layers are removed
+ * but a module-namespace marker is a legitimate use. The filter resolves each
+ * concrete exception's code via ProblemCodeMapping. The abstract class stays
+ * as a domain-side marker for symmetry with other modules.
+ *
+ * Abstract - does not declare a code - because no concrete exception needs
+ * a generic code for an unmapped operation failure.
+ *
+ * Special note: the instance module has TWO exception filters -
+ * InstanceDomainExceptionFilter (HTTP, deleted in Phase 2) and WsExceptionFilter
+ * (WS gateway, kept - handles only auth/generic, not domain errors).
  */
 export abstract class InstanceDomainError extends BaseDomainException {}
 
@@ -84,6 +99,23 @@ export class InstanceNotOpenError extends InstanceDomainError {
   readonly code = 'INSTANCE_NOT_OPEN';
   constructor(message = INSTANCE_NOT_OPEN_MESSAGE) {
     super(message);
+  }
+}
+
+/**
+ * Thrown by `QuizInstanceRepository.joinInstanceAtomic` when the instance
+ * has reached `maxPlayers` capacity. This is a repository-level domain
+ * error that the service layer translates into `InstanceFullError`.
+ *
+ * Phase 7 (audit Finding 3): previously the repository threw a raw
+ * `new Error('INSTANCE_FULL')` and the service matched it by string
+ * comparison of `error.message`. Using a typed error class makes the
+ * detection robust against future message changes.
+ */
+export class InstanceFullCapacityError extends BaseDomainException {
+  readonly code = 'INSTANCE_FULL';
+  constructor(readonly maxPlayers: number) {
+    super(`Instance has reached maximum capacity of ${maxPlayers} players`);
   }
 }
 
