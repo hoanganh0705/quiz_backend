@@ -37,6 +37,7 @@ import {
   sessionsConfig,
   passwordResetConfig,
   authSecurityConfig,
+  authThrottleConfig,
   googleOAuthConfig,
   swaggerConfig,
 } from './core/config';
@@ -66,6 +67,7 @@ import { HealthModule } from './modules/health/health.module';
         sessionsConfig,
         passwordResetConfig,
         authSecurityConfig,
+        authThrottleConfig,
         googleOAuthConfig,
         swaggerConfig,
       ],

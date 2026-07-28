@@ -31,5 +31,6 @@ export { serverConfig, type ServerConfig } from './server.config';
 export { sessionsConfig, type SessionsConfig } from './sessions.config';
 export { passwordResetConfig, type PasswordResetConfig } from './password-reset.config';
 export { authSecurityConfig, type AuthSecurityConfig } from './auth-security.config';
+export { authThrottleConfig, type AuthThrottleConfig } from './auth-throttle.config';
 export { googleOAuthConfig, type GoogleOAuthConfig } from './google-oauth.config';
 export { swaggerConfig, type SwaggerConfig } from './swagger.config';
