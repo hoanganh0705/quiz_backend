@@ -10,10 +10,8 @@ import type { BookmarkStatusResponseDto } from '../../dto/response/bookmark-stat
 import type { BulkAddBookmarksResponseDto } from '../../dto/response/bookmark-bulk-response.dto';
 import type { BulkRemoveBookmarksResponseDto } from '../../dto/response/bookmark-bulk-response.dto';
 import type { CreateCollectionResponseDto } from '../../dto/response/create-collection-response.dto';
-import type { DeleteCollectionResponseDto } from '../../dto/response/collection-response.dto';
-import type { MoveBookmarkResponseDto } from '../../dto/response/bookmark-message-response.dto';
+import type { MessageResponseDto } from '../../dto/response/bookmark-message-response.dto';
 import type { RecentBookmarkItemDto } from '../../dto/response/recent-bookmarks-response.dto';
-import type { RemoveBookmarkResponseDto } from '../../dto/response/bookmark-message-response.dto';
 import type { SearchBookmarkItemDto } from '../../dto/response/search-bookmarks-response.dto';
 import type { UpdateBookmarkResponseDto } from '../../dto/response/update-bookmark-response.dto';
 import type { UpdateCollectionResponseDto } from '../../dto/response/collection-response.dto';
@@ -78,10 +76,8 @@ export class BookmarkPresenter {
   readonly addBookmark = BookmarkPresenter.ok<AddBookmarkResponseDto>;
   readonly addBookmarksBulk = BookmarkPresenter.ok<BulkAddBookmarksResponseDto>;
   readonly removeBookmarksBulk = BookmarkPresenter.ok<BulkRemoveBookmarksResponseDto>;
-  readonly removeBookmark = BookmarkPresenter.ok<RemoveBookmarkResponseDto>;
   readonly updateBookmark = BookmarkPresenter.ok<UpdateBookmarkResponseDto>;
-  readonly moveBookmark = BookmarkPresenter.ok<MoveBookmarkResponseDto>;
+  readonly moveBookmark = BookmarkPresenter.ok<MessageResponseDto>;
   readonly updateCollection = BookmarkPresenter.ok<UpdateCollectionResponseDto>;
   readonly getMyBookmarkStats = BookmarkPresenter.ok<BookmarkStatsResponseDto>;
-  readonly deleteCollection = BookmarkPresenter.ok<DeleteCollectionResponseDto>;
 }

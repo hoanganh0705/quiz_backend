@@ -3,6 +3,8 @@ import {
   Controller,
   Delete,
   Get,
+  HttpCode,
+  HttpStatus,
   Param,
   ParseUUIDPipe,
   Patch,
@@ -171,6 +173,7 @@ export class BookmarkController {
 
   // Bulk add is idempotent: duplicates are silently skipped via onConflictDoNothing.
   @Post('collections/:collectionId/quizzes/bulk')
+  @HttpCode(HttpStatus.OK)
   @ApiAuth()
   @ApiBulkAddBookmarksResponse()
   @ApiCollectionIdParam()
@@ -221,6 +224,7 @@ export class BookmarkController {
 
   @Delete('collections/:collectionId/quizzes/:quizId')
   @ApiAuth()
+  @HttpCode(HttpStatus.NO_CONTENT)
   @ApiRemoveBookmarkResponse()
   @ApiCollectionIdParam()
   @ApiBookmarkQuizIdParam()
@@ -229,9 +233,8 @@ export class BookmarkController {
     @Param('collectionId', new ParseUUIDPipe({ version: '7' })) collectionId: string,
     @Param('quizId', new ParseUUIDPipe({ version: '7' })) quizId: string,
     @CurrentUser() user: JwtPayload,
-  ) {
-    const result = await this.bookmarkApplicationService.removeBookmark(collectionId, quizId, user);
-    return this.presenter.removeBookmark(result);
+  ): Promise<void> {
+    await this.bookmarkApplicationService.removeBookmark(collectionId, quizId, user);
   }
 
   @Patch('collections/:collectionId/quizzes/:quizId')
@@ -313,6 +316,7 @@ export class BookmarkController {
 
   @Delete('collections/:collectionId')
   @ApiAuth()
+  @HttpCode(HttpStatus.NO_CONTENT)
   @ApiDeleteCollectionResponse()
   @ApiCollectionIdParam()
   @ApiOperation({
@@ -324,8 +328,7 @@ export class BookmarkController {
   async deleteCollection(
     @Param('collectionId', new ParseUUIDPipe({ version: '7' })) collectionId: string,
     @CurrentUser() user: JwtPayload,
-  ) {
-    const result = await this.bookmarkApplicationService.deleteCollection(collectionId, user);
-    return this.presenter.deleteCollection(result);
+  ): Promise<void> {
+    await this.bookmarkApplicationService.deleteCollection(collectionId, user);
   }
 }
