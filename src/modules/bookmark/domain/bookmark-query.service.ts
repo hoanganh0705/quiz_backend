@@ -16,7 +16,7 @@ import {
 import type { BookmarkCollectionAnalytics } from './types/bookmark-collection-analytics';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
 import { BookmarkCollectionNotFoundError, CollectionForbiddenError } from './errors';
-import { COLLECTION_FORBIDDEN_MESSAGE } from '../bookmark.constants';
+import { ANALYTICS_CACHE_TTL_MS, COLLECTION_FORBIDDEN_MESSAGE } from '../bookmark.constants';
 import { CACHE_PROVIDER } from '@/common/ports/cache.provider';
 import type { CacheProvider } from '@/common/ports/cache.provider';
 
@@ -31,8 +31,6 @@ import type { CacheProvider } from '@/common/ports/cache.provider';
  */
 @Injectable()
 export class BookmarkQueryService {
-  private static readonly ANALYTICS_CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes
-
   constructor(
     @Inject(BOOKMARK_REPOSITORY_PORT)
     private readonly bookmarkRepository: BookmarkRepositoryPort,
@@ -151,11 +149,7 @@ export class BookmarkQueryService {
     }
 
     try {
-      await this.cache.set(
-        cacheKey,
-        JSON.stringify(analytics),
-        BookmarkQueryService.ANALYTICS_CACHE_TTL_MS,
-      );
+      await this.cache.set(cacheKey, JSON.stringify(analytics), ANALYTICS_CACHE_TTL_MS);
     } catch {
       // Cache write errors are non-fatal
     }

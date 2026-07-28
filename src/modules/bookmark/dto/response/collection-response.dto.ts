@@ -25,8 +25,3 @@ export class UpdateCollectionResponseDto {
   })
   updatedAt!: string;
 }
-
-export class DeleteCollectionResponseDto {
-  @ApiProperty({ description: 'Deletion confirmation', example: 'Collection deleted successfully' })
-  message!: string;
-}

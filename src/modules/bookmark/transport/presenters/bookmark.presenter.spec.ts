@@ -86,10 +86,5 @@ describe('BookmarkPresenter', () => {
       expect(out.data).toEqual({ bookmarkId: 'bm-1' });
       expect(typeof out.meta.timestamp).toBe('string');
     });
-
-    it('deleteCollection wraps the whole DTO as data', () => {
-      const out = presenter.deleteCollection({ message: 'deleted' } as never);
-      expect(out.data).toEqual({ message: 'deleted' });
-    });
   });
 });
