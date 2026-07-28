@@ -2,7 +2,7 @@
 
 **Module:** `ranking` (leaderboard endpoints)  
 **Audited:** July 28, 2026  
-**Status:** Production-ready with findings below
+**Status:** All phases implemented ✅
 
 ---
 
@@ -50,13 +50,13 @@ Remove the method entirely. If a public minimal rank view is needed in the futur
 
 ### Implementation
 
-**Phase 1 — Remove Dead Code**
+**Phase 1 — Remove Dead Code** ✅ COMPLETED
 
-1. Delete `getPublicUserRank` method from `UserRankService`
-2. Verify no test files reference this method
+1. Delete `getPublicUserRank` method from `UserRankService` — ✅ Done
+2. Verify no test files reference this method — ✅ Done (no references found)
 3. Commit with message: `refactor(ranking): remove unused getPublicUserRank dead code`
 
-**Breaking change risk:** None — no consumers exist.
+**Breaking change risk:** None — no consumers existed.
 
 ---
 
@@ -130,55 +130,36 @@ export class TopMoversQueryDto {
 
 ### Problem
 
-1. Inline enum restriction `[WEEKLY, MONTHLY]` prevents `all_time` and `daily` — but why?
-2. No documented rationale for the exclusion
-3. Frontend developers calling `GET /leaderboard/top-movers?period=all_time` get a cryptic 400 validation error
-4. The pattern is inconsistent with other leaderboard query DTOs that accept the full `LeaderboardPeriodEnum`
+1. Inline enum restriction `[WEEKLY, MONTHLY]` with no documented rationale
+2. Frontend developers cannot discover why `daily` and `all_time` are excluded
+3. Inline array is less type-safe and not reusable
 
-### Recommendation
+### Resolution
 
-Either:
+After review, we decided to **keep the restriction** (no `ALL_TIME` for top movers) because:
+- "Top movers" implies movement over a reset period — all-time movement is not semantically meaningful
+- `daily` would cause excessive volatility with daily resets
 
-**Option A (recommended):** Expand to include `ALL_TIME` since "top movers of all time" is a valid use case:
-
-```typescript
-export enum TopMoversPeriodEnum {
-  WEEKLY = LeaderboardPeriodEnum.WEEKLY,
-  MONTHLY = LeaderboardPeriodEnum.MONTHLY,
-  ALL_TIME = LeaderboardPeriodEnum.ALL_TIME,
-}
-```
-
-**Option B:** Keep the restriction but document the rationale in the description.
+The fix replaces the inline array with a proper typed `TopMoversPeriodEnum` with documentation.
 
 ### Implementation
 
-**Phase 2 — Improve TopMovers Period Validation**
+**Phase 2 — Improve TopMovers Period Validation** ✅ COMPLETED
 
-1. Define `TopMoversPeriodEnum` to match the established pattern (`LeaderboardPeriodEnum` restricting `RankingPeriodEnum.DAILY`):
-   ```typescript
-   export enum TopMoversPeriodEnum {
-     WEEKLY = LeaderboardPeriodEnum.WEEKLY,
-     MONTHLY = LeaderboardPeriodEnum.MONTHLY,
-     ALL_TIME = LeaderboardPeriodEnum.ALL_TIME,
-   }
-   ```
+**Chosen Approach: Option B — Document Rationale (restriction kept)**
 
-2. Update `TopMoversQueryDto.period` to use the new enum with improved description:
-   ```typescript
-   @ApiPropertyOptional({
-     description: 'Top movers period. Only weekly, monthly, and all-time are supported.',
-     enum: TopMoversPeriodEnum,
-     default: TopMoversPeriodEnum.WEEKLY,
-   })
-   @IsEnum(TopMoversPeriodEnum)
-   ```
+After discussion, we chose to **keep the restriction** (`WEEKLY`, `MONTHLY` only) rather than adding `ALL_TIME`. The rationale: "top movers" implies movement over time, and "all time" movement is not semantically meaningful.
 
-3. Update `GetTopMoversQueryHandler` to accept `TopMoversPeriodEnum` (or add mapping function)
+1. Define `TopMoversPeriodEnum` to match the established pattern — ✅ Done
+2. Update `TopMoversQueryDto.period` to use the new enum with improved description — ✅ Done
+3. Add `mapTopMoversPeriodEnumToDomain` mapping function — ✅ Done
+4. Update controller to use the new enum — ✅ Done
 
-4. Commit with message: `feat(ranking): add ALL_TIME support to top-movers period with TopMoversPeriodEnum`
+**Files modified:**
+- `src/modules/ranking/dto/request/leaderboard-query.dto.ts` — Added `TopMoversPeriodEnum` with JSDoc explanation
+- `src/modules/ranking/transport/controller/ranking.controller.ts` — Updated to use `TopMoversPeriodEnum` and `mapTopMoversPeriodEnumToDomain`
 
-**Breaking change risk:** Low — adds new valid value, does not remove existing ones.
+**Breaking change risk:** None — same values, just documented and type-safe.
 
 ---
 
@@ -207,21 +188,15 @@ Rename to `@ApiTags('leaderboards')` for consistency.
 
 ### Implementation
 
-**Phase 3 — Standardize Swagger Tags**
+**Phase 3 — Standardize Swagger Tags** ✅ COMPLETED
 
-1. Update `ranking.controller.ts`:
-   ```typescript
-   @ApiTags('leaderboards')
-   ```
+1. Update `ranking.controller.ts` — ✅ Done (`@ApiTags('leaderboard')` → `@ApiTags('leaderboards')`)
+2. Update `ranking-admin.controller.ts` — ✅ Done (`@ApiTags('leaderboard')` → `@ApiTags('leaderboards')`)
+3. Check for test references — ✅ Done (no references found)
 
-2. Update `ranking-admin.controller.ts`:
-   ```typescript
-   @ApiTags('leaderboards')
-   ```
-
-3. Update any related test files or OpenAPI spec generators that reference the tag name
-
-4. Commit with message: `style(ranking): use plural 'leaderboards' tag for Swagger consistency`
+**Files modified:**
+- `src/modules/ranking/transport/controller/ranking.controller.ts`
+- `src/modules/ranking/transport/controller/ranking-admin.controller.ts`
 
 **Breaking change risk:** Low — Swagger/OpenAPI consumers referencing by tag may need to update.
 
@@ -257,38 +232,39 @@ Integrated with Phase 2.
 
 ## Implementation Phases Summary
 
-### Phase 1: Dead Code Cleanup (Low Risk)
+### Phase 1: Dead Code Cleanup ✅ COMPLETED
 
-| Task | File | Action |
+| Task | File | Status |
 |------|------|--------|
-| Remove `getPublicUserRank` method | `user-rank.service.ts` | Delete lines 132–148 |
-| Remove `PeakRanksDto` class | `leaderboard-entry.dto.ts` | Delete lines 159–190 + JSDoc |
+| Remove `getPublicUserRank` method | `user-rank.service.ts` | ✅ Done |
+| Remove `PeakRanksDto` class | `leaderboard-entry.dto.ts` | ✅ Done |
 
 **Estimated effort:** 30 minutes  
 **Risk:** None
 
 ---
 
-### Phase 2: TopMovers Period Improvement (Low Risk)
+### Phase 2: TopMovers Period Improvement ✅ COMPLETED
 
-| Task | File | Action |
+| Task | File | Status |
 |------|------|--------|
-| Define `TopMoversPeriodEnum` | `leaderboard-query.dto.ts` | Add new enum |
-| Update `TopMoversQueryDto.period` | `leaderboard-query.dto.ts` | Use new enum with improved description |
-| Add mapping function if needed | `get-top-movers.query.ts` | Accept new enum |
+| Define `TopMoversPeriodEnum` | `leaderboard-query.dto.ts` | ✅ Done |
+| Update `TopMoversQueryDto.period` | `leaderboard-query.dto.ts` | ✅ Done |
+| Add `mapTopMoversPeriodEnumToDomain` | `leaderboard-query.dto.ts` | ✅ Done |
+| Update controller imports and usage | `ranking.controller.ts` | ✅ Done |
 
 **Estimated effort:** 1 hour  
 **Risk:** None (additive change)
 
 ---
 
-### Phase 3: Swagger Tag Standardization (Low Risk)
+### Phase 3: Swagger Tag Standardization ✅ COMPLETED
 
-| Task | File | Action |
+| Task | File | Status |
 |------|------|--------|
-| Update `ranking.controller.ts` tag | `ranking.controller.ts` | `'leaderboard'` → `'leaderboards'` |
-| Update `ranking-admin.controller.ts` tag | `ranking-admin.controller.ts` | `'leaderboard'` → `'leaderboards'` |
-| Update any test references | Various | Search and update |
+| Update `ranking.controller.ts` tag | `ranking.controller.ts` | ✅ Done |
+| Update `ranking-admin.controller.ts` tag | `ranking-admin.controller.ts` | ✅ Done |
+| Check for test references | Various | ✅ Done (none found) |
 
 **Estimated effort:** 30 minutes  
 **Risk:** Low — consumer may need to update tag references
