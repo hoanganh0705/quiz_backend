@@ -127,27 +127,6 @@ export class UserRankService {
   }
 
   /**
-   * Get public rank info for a user.
-   */
-  async getPublicUserRank(userId: string): Promise<{
-    rank: number;
-    period: RankingPeriod;
-    xp: number;
-    displayName: string;
-  } | null> {
-    const rankingWithUser = await this.rankingRepository.getUserRankingWithUser(userId);
-
-    if (!rankingWithUser) return null;
-
-    return {
-      rank: rankingWithUser.allTimeRank ?? 0,
-      period: RankingPeriod.ALL_TIME,
-      xp: rankingWithUser.allTimeXp,
-      displayName: rankingWithUser.displayName || rankingWithUser.username,
-    };
-  }
-
-  /**
    * Build global ranking for all periods.
    */
   private async buildGlobalRanking(userId: string): Promise<GlobalRankingDto> {
