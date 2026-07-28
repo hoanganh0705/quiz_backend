@@ -52,6 +52,21 @@ export const uuidV7Bytes = (): Buffer => {
  */
 const UUID_V7_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
+/**
+ * Stricter UUIDv7 check that enforces the version-7 nibble AND the
+ * RFC 4122 / RFC 9562 variant bits (`8`, `9`, `a`, `b`). Use this
+ * when the caller is parsing a UUID that was *produced* by the
+ * project — every UUID surfaced over the wire is UUIDv7, so a v4 /
+ * unknown-version UUID is a sign of tampering or stale data.
+ *
+ * `isUuidV7()` above is more permissive (canonical hyphenated form
+ * only, no version/variant check) because it is used at write-time
+ * when generating IDs locally. `isUuidV7Strict()` is the read-side
+ * counterpart for cursor parsers and other untrusted inputs.
+ */
+const UUID_V7_STRICT_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+
 export const generateUuidV7 = (): string => {
   const bytes = uuidV7Bytes();
   const hex = bytes.toString('hex');
@@ -60,6 +75,9 @@ export const generateUuidV7 = (): string => {
 
 export const isUuidV7 = (value: unknown): value is string =>
   typeof value === 'string' && UUID_V7_PATTERN.test(value);
+
+export const isUuidV7Strict = (value: unknown): value is string =>
+  typeof value === 'string' && UUID_V7_STRICT_PATTERN.test(value);
 
 export const ID_GENERATOR = Symbol('ID_GENERATOR');
 

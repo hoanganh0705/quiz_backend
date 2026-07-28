@@ -87,7 +87,6 @@ import {
   UserAnalyticsNotFoundError,
   UserNotFoundError as UserModuleNotFoundError,
   UserProfilePrivateError,
-  UserRankingNotFoundError,
 } from '@/modules/user/domain/errors';
 import {
   CategoryAlreadyActiveError,
@@ -423,12 +422,6 @@ class Rfc7807FixtureController {
     // global filter preserves `exception.message`, so a custom message
     // now reaches the wire.
     throw new UserModuleNotFoundError('User not found or already deleted');
-  }
-
-  @Get('user/ranking-not-found')
-  userRankingNotFound(): never {
-    // Dead-code class — exported but never thrown in the codebase.
-    throw new UserRankingNotFoundError();
   }
 
   @Get('user/analytics-not-found')
@@ -1701,17 +1694,13 @@ describe('RFC 7807 ProblemDetail (Phase 0 backstop)', () => {
       expect(body.extensions?.code).toBe('USER_NOT_FOUND');
     });
 
-    it('UserRankingNotFoundError → 404 USER_RANKING_NOT_FOUND (dead-code class with sensible mapping)', async () => {
-      // This class is exported but never thrown in the current
-      // codebase. It is preserved with a 404 mapping (semantic
-      // analogue to `UserNotFoundError`).
-      const res = await request(app.getHttpServer())
-        .get('/rfc7807-fixture/user/ranking-not-found')
-        .expect(404);
-      const body = res.body as ProblemWire;
-      expect(body.type).toBe('https://api.quiz.local/problems/user-ranking-not-found');
-      expect(body.extensions?.code).toBe('USER_RANKING_NOT_FOUND');
-    });
+    // Phase 7 (F-18): `UserRankingNotFoundError` was removed because it
+    // was exported and mapped but never thrown. The mapping entry was
+    // also deleted (see `problem-code-mapping.ts`). The fixture
+    // controller method that exercised this code path is gone too.
+    // A test that the *removed* code 404-maps correctly has nothing to
+    // assert anymore — the global filter now falls back to the unknown
+    // code branch and the route no longer exists.
 
     it('UserAnalyticsNotFoundError → 404 USER_ANALYTICS_NOT_FOUND (dead-code class with sensible mapping)', async () => {
       // Dead-code class — exported but never thrown. Preserved with a

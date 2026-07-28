@@ -23,14 +23,25 @@ export class UserSettingsUpdatedEvent {
   ) {}
 }
 
-export interface UserStreakUpdatedEvent {
-  readonly eventType: 'user.streak_updated';
-  readonly userId: string;
-  readonly currentStreak: number;
-  readonly longestStreak: number;
-  readonly previousStreak: number;
-  readonly isNewRecord: boolean;
-  readonly timestamp: Date;
+/**
+ * Phase 2 (F-9): Promoted from a TypeScript `interface` to a class so
+ * `StreakService` can emit a real instance (matching the
+ * `UserProfileUpdatedEvent` / `UserSettingsUpdatedEvent` style). The
+ * `eventType` discriminator stays on the class so consumers that switch
+ * on `event.eventType` continue to work, and the
+ * `UserDomainEventBus.emitStreakUpdated` signature is now a proper
+ * class-based contract instead of an `unknown` payload.
+ */
+export class UserStreakUpdatedEvent {
+  readonly eventType = 'user.streak_updated' as const;
+  constructor(
+    public readonly userId: string,
+    public readonly currentStreak: number,
+    public readonly longestStreak: number,
+    public readonly previousStreak: number,
+    public readonly isNewRecord: boolean,
+    public readonly timestamp: Date,
+  ) {}
 }
 
 export type UserDomainEvent =

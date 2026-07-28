@@ -14,10 +14,10 @@ import { UserBadgeItemDto } from '../../dto/response/user-badges.dto';
 import { UserActivityItemDto } from '../../dto/response/user-activity.dto';
 import { UserRankingResponseDto } from '../../dto/response/user-ranking.dto';
 import { MyTournamentAnalyticsResponseDto } from '../../dto/response/my-tournament-analytics.dto';
-import { MyTournamentHistoryResponseDto } from '../../dto/response/my-tournament-history.dto';
-import { MyTournamentsResponseDto } from '../../dto/response/my-tournaments.dto';
+import { MyTournamentHistoryItemDto } from '../../dto/response/my-tournament-history.dto';
+import { MyTournamentItemDto } from '../../dto/response/my-tournaments.dto';
+import { PublicTournamentHistoryItemDto } from '../../dto/response/public-tournament-history.dto';
 import { PublicTournamentProfileResponseDto } from '../../dto/response/public-tournament-profile.dto';
-import { QuizListResponseDto } from '@/modules/quiz/dto/response/quiz-list-response.dto';
 import { CreatorQuizAnalyticsDto } from '@/modules/quiz/dto/response/quiz-analytics.dto';
 import { QuizListItemDto } from '@/modules/quiz/dto/response/quiz-list-item.dto';
 import {
@@ -120,10 +120,14 @@ export const ApiUserBadgesResponse = (): MethodDecorator =>
 
 /**
  * Phase 2.1 (H1): Use the item DTO for activity list items.
+ *
+ * Phase 4 (F-29): description expanded to document the privacy gate.
  */
 export const ApiUserActivityResponse = (): MethodDecorator =>
   ApiOkResourceList(UserActivityItemDto, 'cursor', {
-    description: 'Returns activity.',
+    description:
+      "Returns activity. Honours the authenticated user's `showActivity` " +
+      'privacy flag (403 when the flag is false and the requester is not the owner).',
     example: USER_ACTIVITY_EXAMPLE,
   });
 
@@ -143,21 +147,43 @@ export const ApiUserAnalyticsResponse = (): MethodDecorator =>
     example: USER_ANALYTICS_EXAMPLE,
   });
 
+/**
+ * Phase 4 (F-11): Use the item DTO (`MyTournamentItemDto`) instead of
+ * the wrapper `MyTournamentsResponseDto`. Before: `data` was typed as
+ * `MyTournamentsResponseDto[]` which leaked the `pagination` field as
+ * if every list item carried its own meta block. After: `data` is
+ * `MyTournamentItemDto[]` matching the wire shape.
+ */
 export const ApiMyTournamentsResponse = (): MethodDecorator =>
-  ApiOkResourceList(MyTournamentsResponseDto, 'cursor', {
+  ApiOkResourceList(MyTournamentItemDto, 'cursor', {
     description: 'Returns my tournaments.',
     example: USER_MY_TOURNAMENTS_EXAMPLE,
   });
 
+/**
+ * Phase 4 (F-11): Use the item DTO (`MyTournamentHistoryItemDto`)
+ * instead of the wrapper `MyTournamentHistoryResponseDto`. Mirrors the
+ * badges/activity pattern (Phase 2.1 / H1).
+ */
 export const ApiMyTournamentHistoryResponse = (): MethodDecorator =>
-  ApiOkResourceList(MyTournamentHistoryResponseDto, 'cursor', {
-    description: 'Returns my tournament history.',
+  ApiOkResourceList(MyTournamentHistoryItemDto, 'cursor', {
+    description: "Returns the authenticated user's tournament completion history, newest first.",
     example: USER_TOURNAMENT_HISTORY_EXAMPLE,
   });
 
+/**
+ * Phase 4 (F-10, F-11): Use the *public* item DTO
+ * (`PublicTournamentHistoryItemDto`) so the OpenAPI schema for the
+ * cross-user route can document the privacy-gating behaviour
+ * independently of the me-route (see the public DTO for the
+ * description). Also fixes the wrapper-DTO leak (F-11).
+ */
 export const ApiPublicTournamentHistoryResponse = (): MethodDecorator =>
-  ApiOkResourceList(MyTournamentHistoryResponseDto, 'cursor', {
-    description: 'Returns tournament history.',
+  ApiOkResourceList(PublicTournamentHistoryItemDto, 'cursor', {
+    description:
+      "Returns the target user's public tournament completion history, newest first. " +
+      "Honours the target user's `showTournamentActivity` privacy flag (403 when the flag " +
+      'is false and the requester is not the owner).',
     example: USER_TOURNAMENT_HISTORY_EXAMPLE,
   });
 
@@ -173,8 +199,12 @@ export const ApiPublicTournamentProfileResponse = (): MethodDecorator =>
     example: USER_TOURNAMENT_PROFILE_EXAMPLE,
   });
 
+/**
+ * Phase 4 (F-11): Use the item DTO (`QuizListItemDto`) instead of the
+ * wrapper `QuizListResponseDto`. Mirrors the badges/activity pattern.
+ */
 export const ApiUserQuizListResponse = (): MethodDecorator =>
-  ApiOkResourceList(QuizListResponseDto, 'cursor', {
+  ApiOkResourceList(QuizListItemDto, 'cursor', {
     description: 'Returns quizzes.',
     example: USER_QUIZZES_EXAMPLE,
   });

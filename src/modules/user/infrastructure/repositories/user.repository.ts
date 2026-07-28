@@ -14,6 +14,7 @@ import {
 } from '@/core/database/schema';
 import { and, desc, eq, inArray, isNull, or, sql } from 'drizzle-orm';
 import type { UserAnalytics } from '../../domain/types/user-analytics';
+import { isObjectRecord } from '@/common/utils/object.util';
 import type {
   MyTournamentAnalyticsRow,
   MyTournamentHistoryRow,
@@ -81,6 +82,37 @@ export class UserRepository implements UserRepositoryPort {
   async findUserProfileSettings(userId: string): Promise<{ isPublic: boolean } | null> {
     const [row] = await this.db
       .select({ isPublic: userProfileSettings.isPublic })
+      .from(userProfileSettings)
+      .where(eq(userProfileSettings.userId, userId))
+      .limit(1);
+
+    return row ?? null;
+  }
+
+  /**
+   * Phase 3 (F-7): Read every granular privacy flag for the target user.
+   * Returns `null` when no `user_profile_settings` row exists. Callers
+   * treat `null` as "all defaults" (every flag defaults to `true` per
+   * the schema), so a brand-new user with no settings row is still
+   * visible to everyone.
+   */
+  async findUserPrivacyFlags(userId: string): Promise<{
+    isPublic: boolean;
+    showStatistics: boolean;
+    showAchievements: boolean;
+    showActivity: boolean;
+    showRankImprovement: boolean;
+    showTournamentActivity: boolean;
+  } | null> {
+    const [row] = await this.db
+      .select({
+        isPublic: userProfileSettings.isPublic,
+        showStatistics: userProfileSettings.showStatistics,
+        showAchievements: userProfileSettings.showAchievements,
+        showActivity: userProfileSettings.showActivity,
+        showRankImprovement: userProfileSettings.showRankImprovement,
+        showTournamentActivity: userProfileSettings.showTournamentActivity,
+      })
       .from(userProfileSettings)
       .where(eq(userProfileSettings.userId, userId))
       .limit(1);
@@ -501,24 +533,56 @@ export class UserRepository implements UserRepositoryPort {
     nowIso: string,
   ): Promise<UserMeRow | null> {
     return this.db.transaction(async (tx) => {
-      await tx
-        .insert(userProfiles)
-        .values({
+      // Phase 1 (F-2): preserve three-way semantics — fields absent from the
+      // patch object are no-ops, fields explicitly set to `null` clear the
+      // column. The previous `patch.field ?? null` collapsed both cases,
+      // nulling every omitted field on every PATCH.
+      //
+      // To distinguish "absent" from "explicit null" we have to look at key
+      // presence, not just truthiness. Build a `set` object that only
+      // contains keys the caller actually sent.
+      const profileSet: {
+        displayName?: string | null;
+        bio?: string | null;
+        avatarUrl?: string | null;
+        updatedAt: string;
+      } = { updatedAt: nowIso };
+
+      if ('displayName' in patch) profileSet.displayName = patch.displayName;
+      if ('bio' in patch) profileSet.bio = patch.bio;
+      if ('avatarUrl' in patch) profileSet.avatarUrl = patch.avatarUrl;
+
+      const existing = await tx
+        .select({ userId: userProfiles.userId })
+        .from(userProfiles)
+        .where(eq(userProfiles.userId, userId))
+        .limit(1);
+
+      if (existing.length === 0) {
+        // First-time profile creation: insert with all three columns. Fields
+        // absent from `patch` are stored as NULL — the user has no prior
+        // value to preserve.
+        await tx.insert(userProfiles).values({
           userId,
           displayName: patch.displayName ?? null,
           avatarUrl: patch.avatarUrl ?? null,
           bio: patch.bio ?? null,
           updatedAt: nowIso,
-        })
-        .onConflictDoUpdate({
-          target: userProfiles.userId,
-          set: {
-            displayName: patch.displayName ?? null,
-            avatarUrl: patch.avatarUrl ?? null,
-            bio: patch.bio ?? null,
-            updatedAt: nowIso,
-          },
         });
+      } else if (Object.keys(profileSet).length > 1) {
+        // Partial update: only update columns the caller actually sent.
+        // `profileSet.updatedAt` is always present, so the `length > 1` guard
+        // ensures we don't issue a no-op UPDATE.
+        await tx.update(userProfiles).set(profileSet).where(eq(userProfiles.userId, userId));
+      }
+
+      // Phase 6 (F-15): also bump `users.updatedAt` so the profile endpoint
+      // shows a fresh timestamp after a PATCH. The application layer reads
+      // `users.updatedAt` (via the LEFT JOIN in the SELECT below) and
+      // returns it as `UserMeResponseDto.updatedAt`. Without this the
+      // timestamp stays pinned to the last `users`-table write (account
+      // create / settings change / streak update), which is misleading.
+      await tx.update(users).set({ updatedAt: nowIso }).where(eq(users.userId, userId));
 
       const [user] = await tx
         .select({
@@ -545,11 +609,14 @@ export class UserRepository implements UserRepositoryPort {
     });
   }
 
-  async updateSettings(
+  async updatePreferences(
     userId: string,
-    settings: Record<string, unknown>,
+    settings: Record<string, unknown> | undefined,
     nowIso: string,
   ): Promise<UserMeRow | null> {
+    if (settings === undefined) {
+      return this.fetchUserMe(userId);
+    }
     return this.db.transaction(async (tx) => {
       const [updated] = await tx
         .update(users)
@@ -571,36 +638,172 @@ export class UserRepository implements UserRepositoryPort {
 
       if (!updated) return null;
 
-      // xp_total was dropped in migration 0010 — pull the live XP from
-      // the authoritative source via LEFT JOIN, coalesced to 0 when no
-      // ranking row exists yet.
-      const [ranking] = await tx
-        .select({
-          xpTotal: sql<number>`COALESCE(${userRanking.allTimeXp}, 0)`,
-        })
-        .from(userRanking)
-        .where(eq(userRanking.userId, userId))
-        .limit(1);
-
-      const [profile] = await tx
-        .select({
-          displayName: userProfiles.displayName,
-          avatarUrl: userProfiles.avatarUrl,
-          bio: userProfiles.bio,
-        })
-        .from(userProfiles)
-        .where(eq(userProfiles.userId, userId))
-        .limit(1);
-
-      return {
-        ...updated,
-        xpTotal: ranking?.xpTotal ?? 0,
-        settings: updated.settings as Record<string, unknown>,
-        displayName: profile?.displayName ?? null,
-        avatarUrl: profile?.avatarUrl ?? null,
-        bio: profile?.bio ?? null,
-      };
+      return await this.assembleUserMeRow(tx, updated);
     });
+  }
+
+  /**
+   * Phase 3 (F-6 + F-7): Write one or more granular privacy flags to
+   * `user_profile_settings`. Uses an UPSERT — the row may not exist
+   * yet for a brand-new user; in that case every unspecified flag
+   * falls back to its schema default (`true`). The pattern mirrors
+   * the partial-update discipline used by `updateProfile` (Phase 1 /
+   * F-2): only the columns the caller actually sent are touched.
+   */
+  async updatePrivacy(
+    userId: string,
+    flags:
+      | {
+          isPublic?: boolean;
+          showStatistics?: boolean;
+          showAchievements?: boolean;
+          showActivity?: boolean;
+          showRankImprovement?: boolean;
+          showTournamentActivity?: boolean;
+        }
+      | undefined,
+    nowIso: string,
+  ): Promise<UserMeRow | null> {
+    if (flags === undefined) {
+      return this.fetchUserMe(userId);
+    }
+
+    // Build a partial `set` that only contains the keys the caller
+    // explicitly supplied. `updatedAt` is always included so the row
+    // gets bumped whenever at least one flag changes.
+    const set: Record<string, unknown> = { updatedAt: nowIso };
+    if ('isPublic' in flags) set.isPublic = flags.isPublic;
+    if ('showStatistics' in flags) set.showStatistics = flags.showStatistics;
+    if ('showAchievements' in flags) set.showAchievements = flags.showAchievements;
+    if ('showActivity' in flags) set.showActivity = flags.showActivity;
+    if ('showRankImprovement' in flags) set.showRankImprovement = flags.showRankImprovement;
+    if ('showTournamentActivity' in flags)
+      set.showTournamentActivity = flags.showTournamentActivity;
+
+    if (Object.keys(set).length === 1) {
+      // No flags supplied — pure no-op; skip the UPSERT but still
+      // refresh the row timestamp consistency by re-fetching.
+      return this.fetchUserMe(userId);
+    }
+
+    return this.db.transaction(async (tx) => {
+      const inserted = await tx
+        .insert(userProfileSettings)
+        .values({ userId, ...set })
+        .onConflictDoUpdate({
+          target: userProfileSettings.userId,
+          set,
+        })
+        .returning({ userId: userProfileSettings.userId });
+
+      if (!inserted.length) return null;
+
+      // Phase 6 (F-15): also bump `users.updatedAt` so the privacy write
+      // shows up in the profile's `updatedAt` timestamp. The privacy
+      // settings row has its own `updatedAt` but the DTO contract reads
+      // from `users.updatedAt`, mirroring the fix in `updateProfile`.
+      await tx.update(users).set({ updatedAt: nowIso }).where(eq(users.userId, userId));
+
+      const [updated] = await tx
+        .select({
+          userId: users.userId,
+          username: users.username,
+          email: users.email,
+          currentStreak: users.currentStreak,
+          longestStreak: users.longestStreak,
+          settings: users.settings,
+          createdAt: users.createdAt,
+          updatedAt: users.updatedAt,
+        })
+        .from(users)
+        .where(and(eq(users.userId, userId), isNull(users.deletedAt)))
+        .limit(1);
+
+      if (!updated) return null;
+
+      return await this.assembleUserMeRow(tx, updated);
+    });
+  }
+
+  /**
+   * Phase 3 (F-6): helper that fetches a fresh `UserMeRow` outside of a
+   * transaction. Used by `updatePreferences` / `updatePrivacy` when the
+   * caller passes `undefined` (no-op). Returns `null` for soft-deleted
+   * users.
+   */
+  private async fetchUserMe(userId: string): Promise<UserMeRow | null> {
+    const [user] = await this.db
+      .select({
+        userId: users.userId,
+        username: users.username,
+        email: users.email,
+        xpTotal: sql<number>`COALESCE(${userRanking.allTimeXp}, 0)`,
+        currentStreak: users.currentStreak,
+        longestStreak: users.longestStreak,
+        settings: users.settings,
+        createdAt: users.createdAt,
+        updatedAt: users.updatedAt,
+        displayName: userProfiles.displayName,
+        avatarUrl: userProfiles.avatarUrl,
+        bio: userProfiles.bio,
+      })
+      .from(users)
+      .leftJoin(userProfiles, eq(users.userId, userProfiles.userId))
+      .leftJoin(userRanking, eq(users.userId, userRanking.userId))
+      .where(and(eq(users.userId, userId), isNull(users.deletedAt)))
+      .limit(1);
+
+    return (user as UserMeRow | undefined) ?? null;
+  }
+
+  /**
+   * Phase 3 (F-6): helper that joins the user's `xp_total` (from
+   * `user_ranking`) and the `user_profiles` columns onto a partial
+   * `users`-only row, returning a complete `UserMeRow`. Shared by
+   * `updatePreferences` and `updatePrivacy`.
+   */
+  private async assembleUserMeRow(
+    tx: Parameters<Parameters<typeof this.db.transaction>[0]>[0],
+    updated: {
+      userId: string;
+      username: string;
+      email: string;
+      currentStreak: number;
+      longestStreak: number;
+      settings: unknown;
+      createdAt: string;
+      updatedAt: string;
+    },
+  ): Promise<UserMeRow | null> {
+    // xp_total was dropped in migration 0010 — pull the live XP from
+    // the authoritative source via LEFT JOIN, coalesced to 0 when no
+    // ranking row exists yet.
+    const [ranking] = await tx
+      .select({
+        xpTotal: sql<number>`COALESCE(${userRanking.allTimeXp}, 0)`,
+      })
+      .from(userRanking)
+      .where(eq(userRanking.userId, updated.userId))
+      .limit(1);
+
+    const [profile] = await tx
+      .select({
+        displayName: userProfiles.displayName,
+        avatarUrl: userProfiles.avatarUrl,
+        bio: userProfiles.bio,
+      })
+      .from(userProfiles)
+      .where(eq(userProfiles.userId, updated.userId))
+      .limit(1);
+
+    return {
+      ...updated,
+      xpTotal: ranking?.xpTotal ?? 0,
+      settings: isObjectRecord(updated.settings) ? updated.settings : {},
+      displayName: profile?.displayName ?? null,
+      avatarUrl: profile?.avatarUrl ?? null,
+      bio: profile?.bio ?? null,
+    };
   }
 
   async findByUsernames(usernames: string[]): Promise<UserPublicRow[]> {

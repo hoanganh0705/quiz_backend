@@ -4,7 +4,6 @@ import {
   UserAnalyticsNotFoundError,
   UserDomainError,
   UserNotFoundError,
-  UserRankingNotFoundError,
 } from './user-domain.errors';
 import { UserProfilePrivateError } from './user-profile-private.error';
 
@@ -39,12 +38,11 @@ const USER_CODES: ReadonlyArray<{
     expectedCode: 'USER_NOT_FOUND',
     message: 'User not found',
   },
-  {
-    name: 'UserRankingNotFoundError',
-    ctor: UserRankingNotFoundError,
-    expectedCode: 'USER_RANKING_NOT_FOUND',
-    message: 'User ranking not found',
-  },
+  // Phase 7 (F-18): `UserRankingNotFoundError` was removed because it
+  // was never thrown. The class no longer exists, so its test row was
+  // deleted. `UserAnalyticsNotFoundError` is still here because the
+  // Phase 1 (F-1) IDOR fix in `user.service.ts:assertCanReadCreatorAnalytics`
+  // throws it.
   {
     name: 'UserAnalyticsNotFoundError',
     ctor: UserAnalyticsNotFoundError,
