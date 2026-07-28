@@ -16,6 +16,7 @@ import {
   UserAttemptStatsResponseDto,
   AttemptReviewResponseDto,
 } from '../dto/response';
+import { AttemptStatusEnum, AttemptContextTypeEnum } from '../types/attempt.types';
 
 @Injectable()
 export class AttemptApplicationService {
@@ -33,7 +34,7 @@ export class AttemptApplicationService {
     const attempt = await this.attemptCommandService.startAttempt(
       quizId,
       user,
-      payload.contextType ?? 'solo',
+      payload.contextType ?? AttemptContextTypeEnum.Solo,
       payload.contextRefId ?? null,
     );
 
@@ -73,7 +74,7 @@ export class AttemptApplicationService {
 
     return {
       attemptId: abandoned.attemptId,
-      status: abandoned.status,
+      status: abandoned.status as AttemptStatusEnum,
       finishedAt: abandoned.finishedAt ?? new Date().toISOString(),
       message: 'Attempt abandoned successfully',
     };
@@ -140,8 +141,9 @@ export class AttemptApplicationService {
     return {
       attemptId: result.attemptId,
       quizId: result.quizId,
-      status: result.status,
-      scorePercent: result.scorePercent,
+      status: result.status as AttemptStatusEnum,
+      scorePercent:
+        result.scorePercent !== null ? Number(parseFloat(result.scorePercent).toFixed(2)) : null,
       correctCount: result.correctCount,
       timeTakenMs: result.timeTakenMs,
       xpEarned: result.xpEarned,

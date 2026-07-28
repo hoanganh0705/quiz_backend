@@ -126,11 +126,6 @@ export class AttemptQuestionInvalidError extends AttemptDomainError {
 /**
  * Thrown when an answer id passed to a withdraw-answer request does not
  * exist on the attempt. 404 Not Found.
- *
- * NOTE: exported but never thrown anywhere in the current codebase. It
- * is preserved with a sensible 404 mapping (semantically analogous to
- * `AttemptNotFoundError`). If it remains dead after the migration
- * completes, delete it in a follow-up cleanup PR.
  */
 export class AttemptAnswerNotFoundError extends AttemptDomainError {
   readonly code = 'ATTEMPT_ANSWER_NOT_FOUND';
