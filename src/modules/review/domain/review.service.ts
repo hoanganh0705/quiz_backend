@@ -26,6 +26,10 @@ import {
   REVIEW_FORBIDDEN_MESSAGE,
   REVIEW_QUIZ_USER_CONFLICT_MESSAGE,
   REVIEW_ATTEMPT_REQUIRED_MESSAGE,
+  REVIEW_QUIZ_NOT_FOUND_MESSAGE,
+  REVIEW_SELF_VOTE_MESSAGE,
+  REVIEW_SELF_REPORT_MESSAGE,
+  REVIEW_FORBIDDEN_ANALYTICS_MESSAGE,
 } from '../review.constants';
 import {
   ReviewSubmittedEvent,
@@ -83,7 +87,7 @@ export class ReviewService {
       // reviewable. We collapse "not found", "soft-deleted", "hidden",
       // and "no published version" into a single 404 to avoid leaking
       // the existence of unpublished assets to users.
-      throw new ReviewNotFoundError('Quiz not found');
+      throw new ReviewNotFoundError(REVIEW_QUIZ_NOT_FOUND_MESSAGE);
     }
 
     const hasAttempt = await this.reviewRepository.hasCompletedAttempt(quizId, user.sub);
@@ -226,7 +230,7 @@ export class ReviewService {
     // consistent.
     const quiz = await this.quizRepository.getActiveQuizRecordById(quizId);
     if (!quiz || !ReviewAuthorizationPolicy.isVisibleToReviewers(quiz)) {
-      throw new ReviewNotFoundError('Quiz not found');
+      throw new ReviewNotFoundError(REVIEW_QUIZ_NOT_FOUND_MESSAGE);
     }
     return this.reviewRepository.listReviewsByQuiz({ quizId, limit, cursor, rating, sort });
   }
@@ -310,7 +314,7 @@ export class ReviewService {
       // hidden or unpublished quizzes. The 404 also stops ownership
       // enumeration (a creator who sets `is_hidden = true` should not
       // be told "this quiz exists, you just can't see it").
-      throw new ReviewNotFoundError('Quiz not found');
+      throw new ReviewNotFoundError(REVIEW_QUIZ_NOT_FOUND_MESSAGE);
     }
 
     return this.reviewRepository.getQuizReviewStats(quizId);
@@ -341,7 +345,7 @@ export class ReviewService {
   private async assertQuizVisibleById(quizId: string): Promise<void> {
     const quiz = await this.quizRepository.getActiveQuizRecordById(quizId);
     if (!quiz || !ReviewAuthorizationPolicy.isVisibleToReviewers(quiz)) {
-      throw new ReviewNotFoundError('Quiz not found');
+      throw new ReviewNotFoundError(REVIEW_QUIZ_NOT_FOUND_MESSAGE);
     }
   }
 
@@ -382,7 +386,7 @@ export class ReviewService {
 
     if (review.userId === userId) {
       this.logger.warn({ event: 'review_self_helpful_vote', reviewId, userId });
-      throw new ReviewValidationError('You cannot vote on your own review');
+      throw new ReviewValidationError(REVIEW_SELF_VOTE_MESSAGE);
     }
   }
 
@@ -484,7 +488,7 @@ export class ReviewService {
         reporterId,
         authorUserId: review.userId,
       });
-      throw new ReviewValidationError('You cannot report your own review');
+      throw new ReviewValidationError(REVIEW_SELF_REPORT_MESSAGE);
     }
 
     const hasReported = await this.reportRepository.hasUserReportedReview(reviewId, reporterId);
@@ -679,13 +683,13 @@ export class ReviewService {
     const quiz = await this.quizRepository.getActiveQuizRecordById(quizId);
 
     if (!quiz) {
-      throw new ReviewNotFoundError('Quiz not found');
+      throw new ReviewNotFoundError(REVIEW_QUIZ_NOT_FOUND_MESSAGE);
     }
 
     const analyticsTarget: ReviewQuizTarget = { quizId, creatorId: quiz.creatorId };
 
     if (!ReviewAuthorizationPolicy.canViewAnalytics(actor, analyticsTarget)) {
-      throw new ReviewForbiddenError('You do not have permission to view analytics for this quiz');
+      throw new ReviewForbiddenError(REVIEW_FORBIDDEN_ANALYTICS_MESSAGE);
     }
 
     return this.quizAnalyticsService.getQuizAnalytics(quizId);

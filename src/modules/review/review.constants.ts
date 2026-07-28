@@ -7,3 +7,7 @@ export const REVIEW_ALREADY_REPORTED_MESSAGE = 'You have already reported this r
 export const REVIEW_REPORT_NOT_FOUND_MESSAGE = 'Report not found';
 export const REVIEW_REPORT_INVALID_TRANSITION_MESSAGE =
   'Report status can only transition from open to reviewed, dismissed, or actioned';
+export const REVIEW_QUIZ_NOT_FOUND_MESSAGE = 'Quiz not found';
+export const REVIEW_SELF_VOTE_MESSAGE = 'You cannot vote on your own review';
+export const REVIEW_SELF_REPORT_MESSAGE = 'You cannot report your own review';
+export const REVIEW_FORBIDDEN_ANALYTICS_MESSAGE = 'You do not have permission to view analytics for this quiz';

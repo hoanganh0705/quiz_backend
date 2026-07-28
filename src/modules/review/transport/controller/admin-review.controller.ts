@@ -86,14 +86,13 @@ export class AdminReviewController {
    */
   @Delete('reviews/:reviewId')
   @Permissions(Permission.REVIEW_MODERATE)
-  @HttpCode(HttpStatus.OK)
+  @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Delete any review (moderator)' })
   @ApiAdminDeleteReviewResponses()
   async adminDeleteReview(
     @Param('reviewId', new ParseUUIDPipe({ version: '7' })) reviewId: string,
     @CurrentUser() actor: JwtPayload,
-  ) {
-    const result = await this.reviewApplicationService.adminDeleteReview(reviewId, actor);
-    return this.presenter.deleteReview(result);
+  ): Promise<void> {
+    await this.reviewApplicationService.adminDeleteReview(reviewId, actor);
   }
 }

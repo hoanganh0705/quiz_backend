@@ -5,6 +5,7 @@ import {
   ApiConflictResponse,
   ApiForbiddenResponse,
   ApiInternalServerErrorResponse,
+  ApiNoContentResponse,
   ApiNotFoundResponse,
   ApiOperation,
   ApiParam,
@@ -23,7 +24,6 @@ import { QuizAnalyticsResponseDto } from '@/modules/quiz/dto/response/quiz-analy
 // Response DTOs
 import {
   CreateReviewResponseDto,
-  DeleteReviewResponseDto,
   HelpfulReviewResponseDto,
   MyReviewsResponseDto,
   PlatformReportsResponseDto,
@@ -47,10 +47,8 @@ import {
   REVIEW_ANALYTICS_EXAMPLE,
   REVIEW_CREATED_EXAMPLE,
   REVIEW_DASHBOARD_EXAMPLE,
-  REVIEW_DELETED_EXAMPLE,
   REVIEW_DETAIL_EXAMPLE,
   REVIEW_HELPFUL_EXAMPLE,
-  REVIEW_HELPFUL_REMOVED_EXAMPLE,
   REVIEW_LIST_EXAMPLE,
   REVIEW_MY_FOR_QUIZ_EXAMPLE,
   REVIEW_REPORTED_EXAMPLE,
@@ -185,6 +183,7 @@ export const ApiListReviewsResponses = (): MethodDecorator =>
   applyDecorators(
     resourceList(ReviewListResponseDto, 'cursor', 'Reviews returned', REVIEW_LIST_EXAMPLE),
     ApiBadRequestResponse(problem.badRequest(reviewBadRequestExample)),
+    ApiNotFoundResponse(problem.notFound(quizNotFoundExample, 'Quiz not found')),
     ApiInternalServerErrorResponse(problem.internalError(reviewInternalErrorExample)),
   );
 
@@ -243,7 +242,7 @@ export const ApiUpdateReviewResponses = (): MethodDecorator =>
 
 export const ApiDeleteReviewResponses = (): MethodDecorator =>
   applyDecorators(
-    resourceOk(DeleteReviewResponseDto, 'Review deleted', REVIEW_DELETED_EXAMPLE),
+    ApiNoContentResponse({ description: 'Review deleted' }),
     ApiUnauthorizedResponse(problem.unauthorized(reviewUnauthorizedExample)),
     ApiNotFoundResponse(problem.notFound(reviewNotFoundExample, 'Review not found')),
     ApiForbiddenResponse(problem.forbidden(reviewForbiddenExample)),
@@ -267,7 +266,7 @@ export const ApiMarkReviewHelpfulResponses = (): MethodDecorator =>
 
 export const ApiRemoveHelpfulVoteResponses = (): MethodDecorator =>
   applyDecorators(
-    resourceOk(HelpfulReviewResponseDto, 'Helpful vote removed', REVIEW_HELPFUL_REMOVED_EXAMPLE),
+    ApiNoContentResponse({ description: 'Helpful vote removed' }),
     ApiUnauthorizedResponse(problem.unauthorized(reviewUnauthorizedExample)),
     ApiNotFoundResponse(problem.notFound(reviewNotFoundExample)),
     ApiInternalServerErrorResponse(problem.internalError(reviewInternalErrorExample)),
@@ -294,6 +293,7 @@ export const ApiReportReviewResponses = (): MethodDecorator =>
 export const ApiGetReviewByIdResponses = (): MethodDecorator =>
   applyDecorators(
     resourceOk(ReviewDetailResponseDto, 'Review detail returned', REVIEW_DETAIL_EXAMPLE),
+    ApiUnauthorizedResponse(problem.unauthorized(reviewUnauthorizedExample)),
     ApiBadRequestResponse(problem.badRequest(reviewBadRequestExample)),
     ApiNotFoundResponse(problem.notFound(reviewNotFoundExample)),
     ApiInternalServerErrorResponse(problem.internalError(reviewInternalErrorExample)),
@@ -402,7 +402,7 @@ export const ApiAdminDeleteReviewResponses = (): MethodDecorator =>
       description: 'Review identifier',
       example: '550e8400-e29b-71d4-a716-446655440099',
     }),
-    resourceOk(DeleteReviewResponseDto, 'Review deleted by moderator', REVIEW_DELETED_EXAMPLE),
+    ApiNoContentResponse({ description: 'Review deleted by moderator' }),
     ApiUnauthorizedResponse(problem.unauthorized(reviewUnauthorizedExample)),
     ApiForbiddenResponse(problem.forbidden(reviewForbiddenPermissionExample)),
     ApiNotFoundResponse(problem.notFound(reviewNotFoundExample)),
