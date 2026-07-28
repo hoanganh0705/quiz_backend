@@ -41,13 +41,31 @@ import type { JwtPayload } from '@/common/guards/jwt.guard';
 import { WsExceptionFilter } from '@/modules/instance/transport/filters/ws-exception.filter';
 import type { NotificationDomainEvent } from '@/modules/notification/domain/events';
 
+/**
+ * CORS origins for the WebSocket gateway, sourced from the same CORS_ORIGINS
+ * environment variable used by the HTTP layer (server.config.ts).
+ *
+ * Phase 6 (rev6.1): changed from `origin: '*'` to explicit origins for
+ * improved security posture. The previous wildcard configuration was
+ * technically rejected by browsers when `credentials: true` is set (browsers
+ * don't allow `*` with credentials), but the explicit configuration makes
+ * the intent clear and aligns with the HTTP layer's CORS policy.
+ */
+const getCorsOrigins = (): string | string[] => {
+  const origins = (process.env.CORS_ORIGINS ?? '')
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter((origin) => origin.length > 0);
+  return origins.length > 0 ? origins : '*';
+};
+
 const NAMESPACE = '/notifications';
 const USER_ROOM_PREFIX = 'user:';
 
 @WebSocketGateway({
   namespace: NAMESPACE,
   cors: {
-    origin: '*',
+    origin: getCorsOrigins(),
     credentials: true,
   },
 })

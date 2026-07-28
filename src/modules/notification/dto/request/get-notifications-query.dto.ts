@@ -75,7 +75,9 @@ export class GetNotificationsQueryDto {
   includeArchived?: boolean;
 
   @ApiPropertyOptional({
-    description: 'Filter notifications by type',
+    description:
+      'Filter notifications by type. Currently only single-type filtering is supported. ' +
+      'Multi-type filtering (e.g., `?type=ACHIEVEMENT&type=FRIEND_REQUEST`) may be added in a future API version.',
     enum: NOTIFICATION_TYPE_VALUES,
     isArray: false,
   })
