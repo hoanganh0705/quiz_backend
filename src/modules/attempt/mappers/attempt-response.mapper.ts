@@ -17,6 +17,7 @@ import type {
   UserAttemptStatsRow,
 } from '../domain/ports';
 import type { AttemptListRow } from '../domain/ports';
+import { AttemptStatusEnum, AttemptContextTypeEnum } from '../types/attempt.types';
 
 /**
  * Shape of a flat row from `quizQuestionRepository.getQuestionsByVersionId`.
@@ -55,10 +56,13 @@ export class AttemptResponseMapper {
       durationMs: attempt.durationMs,
       passingScorePercent: attempt.passingScorePercent,
       rewardXp: attempt.rewardXp,
-      contextType: attempt.contextType,
+      contextType: attempt.contextType as AttemptContextTypeEnum,
       contextRefId: attempt.contextRefId,
-      status: attempt.status,
-      scorePercent: attempt.scorePercent,
+      status: attempt.status as AttemptStatusEnum,
+      scorePercent:
+        attempt.scorePercent !== null
+          ? Number(parseFloat(attempt.scorePercent).toFixed(2))
+          : null,
       correctCount: attempt.correctCount,
       startedAt: attempt.startedAt,
       finishedAt: attempt.finishedAt,
@@ -84,9 +88,12 @@ export class AttemptResponseMapper {
       quizSlug: attempt.quizSlug,
       versionNumber: attempt.versionNumber,
       difficulty: attempt.difficulty,
-      contextType: attempt.contextType,
-      status: attempt.status,
-      scorePercent: attempt.scorePercent,
+      contextType: attempt.contextType as AttemptContextTypeEnum,
+      status: attempt.status as AttemptStatusEnum,
+      scorePercent:
+        attempt.scorePercent !== null
+          ? Number(parseFloat(attempt.scorePercent).toFixed(2))
+          : null,
       correctCount: attempt.correctCount,
       startedAt: attempt.startedAt,
       finishedAt: attempt.finishedAt,

@@ -1,4 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { AttemptStatusEnum, AttemptContextTypeEnum } from '../../types/attempt.types';
 
 export class AttemptSummaryResponseDto {
   @ApiProperty({
@@ -27,23 +28,27 @@ export class AttemptSummaryResponseDto {
   @ApiProperty({ description: 'Difficulty level', example: 'medium' })
   difficulty!: string;
 
-  @ApiProperty({ description: 'Context type', example: 'solo' })
-  contextType!: string;
+  @ApiProperty({
+    description: 'Context type',
+    enum: AttemptContextTypeEnum,
+    example: AttemptContextTypeEnum.Solo,
+  })
+  contextType!: AttemptContextTypeEnum;
 
   @ApiProperty({
     description: 'Attempt status',
-    example: 'completed',
-    enum: ['started', 'completed', 'abandoned'],
+    enum: AttemptStatusEnum,
+    example: AttemptStatusEnum.Completed,
   })
-  status!: string;
+  status!: AttemptStatusEnum;
 
   @ApiPropertyOptional({
     description: 'Score percent (null if not yet complete)',
-    type: String,
+    type: Number,
     nullable: true,
-    example: '85.00',
+    example: 85.0,
   })
-  scorePercent!: string | null;
+  scorePercent!: number | null;
 
   @ApiPropertyOptional({
     description: 'Correct answer count (null if not yet complete)',

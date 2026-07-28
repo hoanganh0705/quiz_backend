@@ -118,20 +118,6 @@ export interface AttemptRepositoryPort {
     nowIso: string;
   }): Promise<AttemptRow>;
 
-  checkAnswerOptionBelongsToQuestion(questionId: string, optionId: string): Promise<boolean>;
-
-  /**
-   * Returns the total number of questions for a given quiz version.
-   * Used to enforce a minimum question count before an attempt can be started.
-   */
-  countQuestionsByVersionId(quizVersionId: string): Promise<number>;
-
-  /**
-   * Verifies that a question exists and belongs to the specified quiz version.
-   * Used to prevent cross-quiz answer submissions and invalid question references.
-   */
-  checkQuestionBelongsToVersion(questionId: string, quizVersionId: string): Promise<boolean>;
-
   /**
    * @transactional
    * Completes an attempt and all its side effects (quiz stats, XP) in a single atomic transaction.
@@ -146,14 +132,6 @@ export interface AttemptRepositoryPort {
     nowIso: string;
     quizId: string;
     userId: string;
-  }): Promise<AttemptRow>;
-
-  createTournamentAttempt(params: {
-    userId: string;
-    quizVersionId: string;
-    tournamentId: string;
-    roundId: string;
-    nowIso: string;
   }): Promise<AttemptRow>;
 
   /**

@@ -41,6 +41,54 @@ import {
   UserAttemptStatsResponseDto,
   AttemptReviewResponseDto,
 } from '../../dto/response';
+import {
+  startAttemptBadRequestExample,
+  startAttemptConflictExample,
+  startAttemptUnprocessableExample,
+  startAttemptInternalErrorExample,
+  getAttemptNotFoundExample,
+  getAttemptForbiddenExample,
+  getAttemptBadRequestExample,
+  getAttemptInternalErrorExample,
+  submitAnswerBadRequestExample,
+  submitAnswerNotFoundExample,
+  submitAnswerForbiddenExample,
+  submitAnswerConflictExample,
+  submitAnswerUnprocessableExample,
+  submitAnswerInternalErrorExample,
+  withdrawAnswerBadRequestExample,
+  withdrawAnswerForbiddenExample,
+  withdrawAnswerNotFoundExample,
+  withdrawAnswerConflictExample,
+  withdrawAnswerInternalErrorExample,
+  abandonAttemptNotFoundExample,
+  abandonAttemptForbiddenExample,
+  abandonAttemptConflictExample,
+  abandonAttemptBadRequestExample,
+  abandonAttemptInternalErrorExample,
+  completeAttemptNotFoundExample,
+  completeAttemptForbiddenExample,
+  completeAttemptConflictExample,
+  completeAttemptBadRequestExample,
+  completeAttemptInternalErrorExample,
+  listMyAttemptsBadRequestExample,
+  listMyAttemptsInternalErrorExample,
+  getMyAttemptStatsInternalErrorExample,
+  getAttemptAnswersNotFoundExample,
+  getAttemptAnswersForbiddenExample,
+  getAttemptAnswersBadRequestExample,
+  getAttemptAnswersInternalErrorExample,
+  getAttemptAnalyticsNotFoundExample,
+  getAttemptAnalyticsForbiddenExample,
+  getAttemptAnalyticsBadRequestExample,
+  getAttemptAnalyticsUnprocessableExample,
+  getAttemptAnalyticsInternalErrorExample,
+  getAttemptReviewNotFoundExample,
+  getAttemptReviewForbiddenExample,
+  getAttemptReviewBadRequestExample,
+  getAttemptReviewUnprocessableExample,
+  getAttemptReviewInternalErrorExample,
+} from '../swagger/examples/errors.examples';
 
 @ApiTags('attempts')
 @Controller()
@@ -64,13 +112,26 @@ export class AttemptController {
     example: '660e8400-e29b-71d4-a716-446655440000',
   })
   @ApiCreatedResource(AttemptResponseDto, { description: 'Attempt started' })
-  @ApiBadRequestResponse({ description: 'Request body or path param failed validation' })
+  @ApiBadRequestResponse({
+    description: 'Request body or path param failed validation',
+    type: ProblemDetailDto,
+    example: startAttemptBadRequestExample,
+  })
   @ApiUnprocessableEntityResponse({
     description:
       'Quiz is not published, has no published version, or cannot be attempted (e.g. insufficient questions)',
+    type: ProblemDetailDto,
+    example: startAttemptUnprocessableExample,
   })
-  @ApiConflictResponse({ description: 'You already have an active attempt for this quiz' })
-  @ApiInternalServerErrorResponse()
+  @ApiConflictResponse({
+    description: 'You already have an active attempt for this quiz',
+    type: ProblemDetailDto,
+    example: startAttemptConflictExample,
+  })
+  @ApiInternalServerErrorResponse({
+    type: ProblemDetailDto,
+    example: startAttemptInternalErrorExample,
+  })
   async startAttempt(
     @Param('quizId', new ParseUUIDPipe({ version: '7' })) quizId: string,
     @CurrentUser() user: JwtPayload,
@@ -97,10 +158,22 @@ export class AttemptController {
   @ApiForbiddenResponse({
     description: 'Authenticated user does not own this attempt',
     type: ProblemDetailDto,
+    example: getAttemptForbiddenExample,
   })
-  @ApiNotFoundResponse({ description: 'Quiz attempt not found' })
-  @ApiBadRequestResponse({ description: 'Path param is not a valid UUID' })
-  @ApiInternalServerErrorResponse()
+  @ApiNotFoundResponse({
+    description: 'Quiz attempt not found',
+    type: ProblemDetailDto,
+    example: getAttemptNotFoundExample,
+  })
+  @ApiBadRequestResponse({
+    description: 'Path param is not a valid UUID',
+    type: ProblemDetailDto,
+    example: getAttemptBadRequestExample,
+  })
+  @ApiInternalServerErrorResponse({
+    type: ProblemDetailDto,
+    example: getAttemptInternalErrorExample,
+  })
   async getAttemptById(
     @Param('attemptId', new ParseUUIDPipe({ version: '7' })) attemptId: string,
     @CurrentUser() user: JwtPayload,
@@ -123,12 +196,35 @@ export class AttemptController {
     example: '550e8400-e29b-71d4-a716-446655440099',
   })
   @ApiCreatedResource(SubmitAnswerResponseDto, { description: 'Answer recorded' })
-  @ApiForbiddenResponse({ description: 'You do not have permission to access this attempt' })
-  @ApiNotFoundResponse({ description: 'Attempt or question not found' })
-  @ApiConflictResponse({ description: 'Attempt is not in an active state' })
-  @ApiUnprocessableEntityResponse({ description: 'Question is invalid for this attempt' })
-  @ApiBadRequestResponse({ description: 'Path param or request body failed validation' })
-  @ApiInternalServerErrorResponse()
+  @ApiForbiddenResponse({
+    description: 'You do not have permission to access this attempt',
+    type: ProblemDetailDto,
+    example: submitAnswerForbiddenExample,
+  })
+  @ApiNotFoundResponse({
+    description: 'Attempt or question not found',
+    type: ProblemDetailDto,
+    example: submitAnswerNotFoundExample,
+  })
+  @ApiConflictResponse({
+    description: 'Attempt is not in an active state',
+    type: ProblemDetailDto,
+    example: submitAnswerConflictExample,
+  })
+  @ApiUnprocessableEntityResponse({
+    description: 'Question is invalid for this attempt',
+    type: ProblemDetailDto,
+    example: submitAnswerUnprocessableExample,
+  })
+  @ApiBadRequestResponse({
+    description: 'Path param or request body failed validation',
+    type: ProblemDetailDto,
+    example: submitAnswerBadRequestExample,
+  })
+  @ApiInternalServerErrorResponse({
+    type: ProblemDetailDto,
+    example: submitAnswerInternalErrorExample,
+  })
   async submitAnswer(
     @Param('attemptId', new ParseUUIDPipe({ version: '7' })) attemptId: string,
     @CurrentUser() user: JwtPayload,
@@ -167,13 +263,27 @@ export class AttemptController {
   @ApiForbiddenResponse({
     description: 'Authenticated user does not own this attempt',
     type: ProblemDetailDto,
+    example: withdrawAnswerForbiddenExample,
   })
-  @ApiBadRequestResponse({ description: 'Path param is not a valid UUID' })
+  @ApiBadRequestResponse({
+    description: 'Path param is not a valid UUID',
+    type: ProblemDetailDto,
+    example: withdrawAnswerBadRequestExample,
+  })
+  @ApiNotFoundResponse({
+    description: 'Answer to withdraw not found',
+    type: ProblemDetailDto,
+    example: withdrawAnswerNotFoundExample,
+  })
   @ApiConflictResponse({
     description: 'Attempt is not in an active state',
     type: ProblemDetailDto,
+    example: withdrawAnswerConflictExample,
   })
-  @ApiInternalServerErrorResponse()
+  @ApiInternalServerErrorResponse({
+    type: ProblemDetailDto,
+    example: withdrawAnswerInternalErrorExample,
+  })
   async withdrawAnswer(
     @Param('attemptId', new ParseUUIDPipe({ version: '7' })) attemptId: string,
     @Param('questionId', new ParseUUIDPipe({ version: '7' })) questionId: string,
@@ -198,14 +308,30 @@ export class AttemptController {
     example: '550e8400-e29b-71d4-a716-446655440099',
   })
   @ApiOkResource(AbandonAttemptResponseDto, { description: 'Attempt abandoned' })
-  @ApiNotFoundResponse({ description: 'Quiz attempt not found' })
+  @ApiNotFoundResponse({
+    description: 'Quiz attempt not found',
+    type: ProblemDetailDto,
+    example: abandonAttemptNotFoundExample,
+  })
   @ApiForbiddenResponse({
     description: 'Authenticated user does not own this attempt',
     type: ProblemDetailDto,
+    example: abandonAttemptForbiddenExample,
   })
-  @ApiConflictResponse({ description: 'Attempt is not in an active state' })
-  @ApiBadRequestResponse({ description: 'Path param is not a valid UUID' })
-  @ApiInternalServerErrorResponse()
+  @ApiConflictResponse({
+    description: 'Attempt is not in an active state',
+    type: ProblemDetailDto,
+    example: abandonAttemptConflictExample,
+  })
+  @ApiBadRequestResponse({
+    description: 'Path param is not a valid UUID',
+    type: ProblemDetailDto,
+    example: abandonAttemptBadRequestExample,
+  })
+  @ApiInternalServerErrorResponse({
+    type: ProblemDetailDto,
+    example: abandonAttemptInternalErrorExample,
+  })
   async abandonAttempt(
     @Param('attemptId', new ParseUUIDPipe({ version: '7' })) attemptId: string,
     @CurrentUser() user: JwtPayload,
@@ -229,11 +355,30 @@ export class AttemptController {
     example: '550e8400-e29b-71d4-a716-446655440099',
   })
   @ApiOkResource(CompleteAttemptResponseDto, { description: 'Attempt completed' })
-  @ApiForbiddenResponse({ description: 'You do not have permission to access this attempt' })
-  @ApiNotFoundResponse({ description: 'Quiz attempt not found' })
-  @ApiConflictResponse({ description: 'Attempt is not in an active state' })
-  @ApiBadRequestResponse({ description: 'Path param is not a valid UUID' })
-  @ApiInternalServerErrorResponse()
+  @ApiForbiddenResponse({
+    description: 'You do not have permission to access this attempt',
+    type: ProblemDetailDto,
+    example: completeAttemptForbiddenExample,
+  })
+  @ApiNotFoundResponse({
+    description: 'Quiz attempt not found',
+    type: ProblemDetailDto,
+    example: completeAttemptNotFoundExample,
+  })
+  @ApiConflictResponse({
+    description: 'Attempt is not in an active state',
+    type: ProblemDetailDto,
+    example: completeAttemptConflictExample,
+  })
+  @ApiBadRequestResponse({
+    description: 'Path param is not a valid UUID',
+    type: ProblemDetailDto,
+    example: completeAttemptBadRequestExample,
+  })
+  @ApiInternalServerErrorResponse({
+    type: ProblemDetailDto,
+    example: completeAttemptInternalErrorExample,
+  })
   async completeAttempt(
     @Param('attemptId', new ParseUUIDPipe({ version: '7' })) attemptId: string,
     @CurrentUser() user: JwtPayload,
@@ -250,8 +395,15 @@ export class AttemptController {
       'Returns a cursor-paginated list of attempts for the authenticated user. Supports filtering by status, quiz, category, tag, and date range.',
   })
   @ApiOkResourceList(AttemptListResponseDto, 'cursor', { description: 'Attempts returned' })
-  @ApiBadRequestResponse({ description: 'Query parameters failed validation' })
-  @ApiInternalServerErrorResponse()
+  @ApiBadRequestResponse({
+    description: 'Query parameters failed validation',
+    type: ProblemDetailDto,
+    example: listMyAttemptsBadRequestExample,
+  })
+  @ApiInternalServerErrorResponse({
+    type: ProblemDetailDto,
+    example: listMyAttemptsInternalErrorExample,
+  })
   async listMyAttempts(@CurrentUser() user: JwtPayload, @Query() query: ListMyAttemptsQueryDto) {
     const result = await this.attemptApplicationService.listMyAttempts(user, {
       limit: query.limit ?? 20,
@@ -275,7 +427,10 @@ export class AttemptController {
       'Returns aggregated statistics for the authenticated user, including total attempts, average score, total time spent, and favorite category/tag.',
   })
   @ApiOkResource(UserAttemptStatsResponseDto, { description: 'Attempt statistics returned' })
-  @ApiInternalServerErrorResponse()
+  @ApiInternalServerErrorResponse({
+    type: ProblemDetailDto,
+    example: getMyAttemptStatsInternalErrorExample,
+  })
   async getMyAttemptStats(@CurrentUser() user: JwtPayload) {
     const result = await this.attemptApplicationService.getMyAttemptStats(user);
     return this.presenter.getMyAttemptStats(result);
@@ -300,10 +455,22 @@ export class AttemptController {
   @ApiForbiddenResponse({
     description: 'Authenticated user does not own this attempt',
     type: ProblemDetailDto,
+    example: getAttemptAnswersForbiddenExample,
   })
-  @ApiNotFoundResponse({ description: 'Quiz attempt not found' })
-  @ApiBadRequestResponse({ description: 'Path param is not a valid UUID' })
-  @ApiInternalServerErrorResponse()
+  @ApiNotFoundResponse({
+    description: 'Quiz attempt not found',
+    type: ProblemDetailDto,
+    example: getAttemptAnswersNotFoundExample,
+  })
+  @ApiBadRequestResponse({
+    description: 'Path param is not a valid UUID',
+    type: ProblemDetailDto,
+    example: getAttemptAnswersBadRequestExample,
+  })
+  @ApiInternalServerErrorResponse({
+    type: ProblemDetailDto,
+    example: getAttemptAnswersInternalErrorExample,
+  })
   async getAttemptAnswers(
     @Param('attemptId', new ParseUUIDPipe({ version: '7' })) attemptId: string,
     @CurrentUser() user: JwtPayload,
@@ -330,13 +497,27 @@ export class AttemptController {
   @ApiForbiddenResponse({
     description: 'Authenticated user does not own this attempt',
     type: ProblemDetailDto,
+    example: getAttemptAnalyticsForbiddenExample,
   })
-  @ApiNotFoundResponse({ description: 'Quiz attempt not found' })
-  @ApiBadRequestResponse({ description: 'Path param is not a valid UUID' })
+  @ApiNotFoundResponse({
+    description: 'Quiz attempt not found',
+    type: ProblemDetailDto,
+    example: getAttemptAnalyticsNotFoundExample,
+  })
+  @ApiBadRequestResponse({
+    description: 'Path param is not a valid UUID',
+    type: ProblemDetailDto,
+    example: getAttemptAnalyticsBadRequestExample,
+  })
   @ApiUnprocessableEntityResponse({
     description: 'Analytics are only available for completed attempts',
+    type: ProblemDetailDto,
+    example: getAttemptAnalyticsUnprocessableExample,
   })
-  @ApiInternalServerErrorResponse()
+  @ApiInternalServerErrorResponse({
+    type: ProblemDetailDto,
+    example: getAttemptAnalyticsInternalErrorExample,
+  })
   async getAttemptAnalytics(
     @Param('attemptId', new ParseUUIDPipe({ version: '7' })) attemptId: string,
     @CurrentUser() user: JwtPayload,
@@ -365,13 +546,27 @@ export class AttemptController {
   @ApiForbiddenResponse({
     description: 'Authenticated user does not own this attempt',
     type: ProblemDetailDto,
+    example: getAttemptReviewForbiddenExample,
   })
-  @ApiNotFoundResponse({ description: 'Quiz attempt not found' })
-  @ApiBadRequestResponse({ description: 'Path param is not a valid UUID' })
+  @ApiNotFoundResponse({
+    description: 'Quiz attempt not found',
+    type: ProblemDetailDto,
+    example: getAttemptReviewNotFoundExample,
+  })
+  @ApiBadRequestResponse({
+    description: 'Path param is not a valid UUID',
+    type: ProblemDetailDto,
+    example: getAttemptReviewBadRequestExample,
+  })
   @ApiUnprocessableEntityResponse({
     description: 'Review is only available for completed attempts',
+    type: ProblemDetailDto,
+    example: getAttemptReviewUnprocessableExample,
   })
-  @ApiInternalServerErrorResponse()
+  @ApiInternalServerErrorResponse({
+    type: ProblemDetailDto,
+    example: getAttemptReviewInternalErrorExample,
+  })
   async getAttemptReview(
     @Param('attemptId', new ParseUUIDPipe({ version: '7' })) attemptId: string,
     @CurrentUser() user: JwtPayload,
