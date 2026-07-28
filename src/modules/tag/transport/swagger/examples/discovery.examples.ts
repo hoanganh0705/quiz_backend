@@ -77,22 +77,6 @@ export const TAG_FOLLOWED_LIST_EXAMPLE = {
   },
 } as const;
 
-export const TAG_FOLLOW_MESSAGE_EXAMPLE = {
-  data: {
-    message: 'Tag followed successfully',
-    changed: true,
-  },
-  meta: { timestamp: EXAMPLE_TIMESTAMP },
-} as const;
-
-export const TAG_UNFOLLOW_MESSAGE_EXAMPLE = {
-  data: {
-    message: 'Tag unfollowed successfully',
-    changed: true,
-  },
-  meta: { timestamp: EXAMPLE_TIMESTAMP },
-} as const;
-
 export const TAG_DELETE_MESSAGE_EXAMPLE = {
   data: {
     message: 'Tag deleted successfully',

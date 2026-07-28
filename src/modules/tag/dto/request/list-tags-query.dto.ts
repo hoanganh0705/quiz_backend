@@ -1,12 +1,6 @@
 import { Type } from 'class-transformer';
-import { IsInt, IsIn, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
+import { IsInt, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
 import { ApiPropertyOptional } from '@nestjs/swagger';
-
-export const TAG_SORT_OPTIONS = ['name', 'createdAt'] as const;
-export type TagSortOption = (typeof TAG_SORT_OPTIONS)[number];
-
-export const SORT_ORDER = ['asc', 'desc'] as const;
-export type SortOrder = (typeof SORT_ORDER)[number];
 
 export class ListTagsQueryDto {
   @ApiPropertyOptional({
@@ -35,26 +29,4 @@ export class ListTagsQueryDto {
   @Min(1)
   @Max(100)
   limit?: number;
-
-  @ApiPropertyOptional({
-    description: 'Sort tags by name or creation date',
-    enum: TAG_SORT_OPTIONS,
-    default: 'name',
-    example: 'name',
-    nullable: true,
-  })
-  @IsOptional()
-  @IsIn(TAG_SORT_OPTIONS)
-  sort?: TagSortOption;
-
-  @ApiPropertyOptional({
-    description: 'Sort direction (ascending or descending)',
-    enum: SORT_ORDER,
-    default: 'asc',
-    example: 'asc',
-    nullable: true,
-  })
-  @IsOptional()
-  @IsIn(SORT_ORDER)
-  order?: SortOrder;
 }

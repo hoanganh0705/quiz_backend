@@ -12,6 +12,7 @@ export interface TagDeleteStatus {
 
 export interface FollowResult {
   followId: string;
+  isNew: boolean;
 }
 
 export interface TagUnfollowResult {

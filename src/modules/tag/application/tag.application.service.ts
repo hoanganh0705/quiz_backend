@@ -14,7 +14,6 @@ import {
 } from '@/modules/quiz/domain/analytics';
 import type {
   RankedTagResponseDto,
-  TagFollowMessageResponseDto,
   FollowedTagsResponseDto,
   TagAnalyticsResponseDto,
 } from '../dto/response/parity-response.dto';
@@ -28,6 +27,7 @@ import type {
 } from '../domain/types/tag-commands';
 import type { TagRow } from '../domain/ports/tag-repository.port';
 import type { ListQuizzesQueryDto } from '@/modules/quiz/dto/request/list-quizzes-query.dto';
+import type { QuizListResponseDto } from '@/modules/quiz/dto/response/quiz-list-response.dto';
 import { DeleteTagResponseDto, TagListResponseDto, TagResponseDto } from '../dto/response';
 import { TagAnalyticsNotFoundError } from '../domain/errors';
 
@@ -47,6 +47,7 @@ export class TagApplicationService {
     return {
       items: items.map((item) => this.toTagResponse(item)),
       pagination: {
+        kind: 'cursor' as const,
         limit,
         hasNextPage,
         nextCursor: nextCursor ? TagCursorMapper.serialize(nextCursor) : null,
@@ -59,10 +60,15 @@ export class TagApplicationService {
     return this.toTagResponse(row);
   }
 
+  async getTagById(tagId: string): Promise<TagResponseDto> {
+    const row = await this.tagDomainService.getTagById(tagId);
+    return this.toTagResponse(row);
+  }
+
   async getTagQuizzesBySlug(
     slug: string,
     quizQuery: ListQuizzesQueryDto,
-  ): Promise<import('@/modules/quiz/dto/response/quiz-list-response.dto').QuizListResponseDto> {
+  ): Promise<QuizListResponseDto> {
     const tag = await this.tagDomainService.getTagBySlug(slug);
 
     return this.quizListingService.listQuizzesByTag({
@@ -96,17 +102,12 @@ export class TagApplicationService {
     return this.toTagResponse(row);
   }
 
-  async followTag(userId: string, tagId: string): Promise<TagFollowMessageResponseDto> {
+  async followTag(userId: string, tagId: string): Promise<void> {
     await this.tagDomainService.followTag(userId, tagId);
-    return { message: 'Tag followed successfully', changed: true };
   }
 
-  async unfollowTag(userId: string, tagId: string): Promise<TagFollowMessageResponseDto> {
-    const unfollowed = await this.tagDomainService.unfollowTag(userId, tagId);
-    return {
-      message: unfollowed ? 'Tag unfollowed successfully' : 'Tag was not followed',
-      changed: unfollowed,
-    };
+  async unfollowTag(userId: string, tagId: string): Promise<void> {
+    await this.tagDomainService.unfollowTag(userId, tagId);
   }
 
   async listFollowedTags(
@@ -121,6 +122,7 @@ export class TagApplicationService {
     return {
       items: items.map((item) => FollowedTagResponseMapper.toItem(item)),
       pagination: {
+        kind: 'cursor' as const,
         limit,
         hasNextPage,
         nextCursor: nextCursor ? FollowedTagCursorMapper.serialize(nextCursor) : null,

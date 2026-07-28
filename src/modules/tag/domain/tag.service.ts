@@ -253,9 +253,12 @@ export class TagDomainService {
    * with the same user/tag pair has no additional effect after the first call.
    *
    * The repository implements three cases:
-   *   1. An active follow already exists → returns it as-is.
-   *   2. A soft-deleted follow exists → restores it.
-   *   3. No follow exists → creates a new one.
+   *   1. An active follow already exists → returns it with `isNew: false`.
+   *   2. A soft-deleted follow exists → restores it with `isNew: false`.
+   *   3. No follow exists → creates a new one with `isNew: true`.
+   *
+   * The `TagFollowedEvent` is only emitted when `isNew: true` to avoid
+   * cascading side effects (notifications, analytics) on idempotent calls.
    *
    * Throws `TagNotFoundError` if the tag does not exist or is soft-deleted.
    */
@@ -265,13 +268,15 @@ export class TagDomainService {
     const nowIso = new Date().toISOString();
     const follow = await this.tagFollowRepository.followTag({ userId, tagId, nowIso });
 
-    this.logger.info({
-      event: 'tag_followed',
-      userId,
-      tagId,
-      followId: follow.followId,
-    });
-    this.eventBus.emitTagFollowed(new TagFollowedEvent(userId, tagId, follow.followId, nowIso));
+    if (follow.isNew) {
+      this.logger.info({
+        event: 'tag_followed',
+        userId,
+        tagId,
+        followId: follow.followId,
+      });
+      this.eventBus.emitTagFollowed(new TagFollowedEvent(userId, tagId, follow.followId, nowIso));
+    }
   }
 
   async unfollowTag(userId: string, tagId: string): Promise<boolean> {
@@ -315,7 +320,7 @@ export class TagDomainService {
   }
 
   async getPopularTags(query: TagRankingQuery): Promise<RankedTagRow[]> {
-    const { limit } = query;
+    const limit = query.limit ?? 10;
     const version = await this.getRankingVersion();
     const cacheKey = `tag:ranking:popular:${limit}:v${version}`;
     const cached = await this.cache.get(cacheKey);
@@ -328,7 +333,7 @@ export class TagDomainService {
   }
 
   async getTrendingTags(query: TagRankingQuery): Promise<RankedTagRow[]> {
-    const { limit } = query;
+    const limit = query.limit ?? 10;
     const version = await this.getRankingVersion();
     const cacheKey = `tag:ranking:trending:${limit}:v${version}`;
     const cached = await this.cache.get(cacheKey);
