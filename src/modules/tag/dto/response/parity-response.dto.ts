@@ -1,5 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
+import { CursorPagination } from '@/common/responses/pagination';
 import { QuizListResponseDto } from '@/modules/quiz/dto/response/quiz-list-response.dto';
 
 export class TagQuizzesResponseDto extends QuizListResponseDto {}
@@ -30,17 +31,6 @@ export class RankedTagResponseDto {
   updatedAt!: string;
 }
 
-export class TagFollowMessageResponseDto {
-  @ApiProperty({
-    description: 'Human-readable result of the follow/unfollow request',
-    example: 'Tag followed successfully',
-  })
-  message!: string;
-
-  @ApiProperty({ example: true, description: 'Whether the requested follow state changed.' })
-  changed!: boolean;
-}
-
 export class FollowedTagItemDto {
   @ApiProperty({ description: 'Tag identifier', format: 'uuid' })
   tagId!: string;
@@ -59,21 +49,6 @@ export class FollowedTagItemDto {
   followedAt!: string;
 }
 
-class FollowedTagsPaginationDto {
-  @ApiProperty({ description: 'Number of items returned in this page', example: 20 })
-  limit!: number;
-
-  @ApiProperty({
-    description: 'Cursor for fetching the next page. `null` when there is no next page.',
-    type: String,
-    nullable: true,
-  })
-  nextCursor!: string | null;
-
-  @ApiProperty({ description: 'Whether more items exist after this page', example: true })
-  hasNextPage!: boolean;
-}
-
 export class FollowedTagsResponseDto {
   @ApiProperty({
     description: 'Tags the authenticated user follows, ordered by most recently followed',
@@ -81,8 +56,8 @@ export class FollowedTagsResponseDto {
   })
   items!: FollowedTagItemDto[];
 
-  @ApiProperty({ description: 'Cursor pagination metadata', type: FollowedTagsPaginationDto })
-  pagination!: FollowedTagsPaginationDto;
+  @ApiProperty({ description: 'Cursor pagination metadata', type: () => CursorPagination })
+  pagination!: CursorPagination;
 }
 
 export class TagAnalyticsSummaryDto {

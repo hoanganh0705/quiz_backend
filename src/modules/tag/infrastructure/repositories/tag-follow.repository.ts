@@ -34,7 +34,7 @@ export class TagFollowRepository implements TagFollowRepositoryPort {
       .limit(1);
 
     if (existingActiveFollow) {
-      return existingActiveFollow;
+      return { followId: existingActiveFollow.followId, isNew: false };
     }
 
     const [existingDeletedFollow] = await this.db
@@ -56,7 +56,7 @@ export class TagFollowRepository implements TagFollowRepositoryPort {
         .where(eq(tagFollows.followId, existingDeletedFollow.followId))
         .returning({ followId: tagFollows.followId });
 
-      return restored;
+      return { followId: restored.followId, isNew: false };
     }
 
     const [newFollow] = await this.db
@@ -68,7 +68,7 @@ export class TagFollowRepository implements TagFollowRepositoryPort {
       })
       .returning({ followId: tagFollows.followId });
 
-    return newFollow;
+    return { followId: newFollow.followId, isNew: true };
   }
 
   async unfollowTag(params: {
