@@ -1,47 +1,16 @@
 import { Injectable } from '@nestjs/common';
 import { ApiResponse } from '@/common/responses/api-response';
 import type { ApiResponseEnvelope } from '@/common/responses/api-response';
-import { normalizeTemporalFields } from '@/common/utils/temporal-normalizer.util';
+import type { PaginationMeta } from '@/common/responses/pagination';
 import type { DeleteTagResponseDto } from '../../dto/response/delete-tag-response.dto';
 import type {
   FollowedTagsResponseDto,
   RankedTagResponseDto,
   TagAnalyticsResponseDto,
-  TagFollowMessageResponseDto,
 } from '../../dto/response/parity-response.dto';
-import type { QuizListItemDto } from '@/modules/quiz/dto/response/quiz-list-item.dto';
 import type { QuizListResponseDto } from '@/modules/quiz/dto/response/quiz-list-response.dto';
 import type { TagListResponseDto } from '../../dto/response/tag-list-response.dto';
 import type { TagResponseDto } from '../../dto/response/tag-response.dto';
-
-/**
- * Wrap a `{ items: T[], pagination: { limit, nextCursor, hasNextPage } }`
- * payload as `{ data: T[], meta: { timestamp, pagination } }`.
- *
- * Used for cursor-paginated list endpoints whose application-service return is
- * a class-instance `{ items, pagination }` DTO. The canonical envelope has to
- * be a plain object (the interceptor's `isFormattedResponse()` guards on
- * `Object` prototype), so we deliberately project out the DTO fields here
- * instead of forwarding the class instance for the interceptor to re-wrap.
- */
-const wrapPaginatedDto = <T>(payload: {
-  items: readonly T[];
-  pagination: { limit: number; hasNextPage: boolean; nextCursor: string | null };
-}): ApiResponseEnvelope<T[]> => {
-  const data = normalizeTemporalFields([...payload.items]) as T[];
-  return {
-    data,
-    meta: {
-      timestamp: new Date().toISOString(),
-      pagination: {
-        kind: 'cursor' as const,
-        limit: payload.pagination.limit,
-        hasNextPage: payload.pagination.hasNextPage,
-        nextCursor: payload.pagination.nextCursor,
-      },
-    },
-  };
-};
 
 /**
  * Presenter for the tag module. Wraps every application-service response in
@@ -58,25 +27,23 @@ export class TagPresenter {
   private static readonly ok = <T>(payload: T): ApiResponseEnvelope<T> => ApiResponse.ok(payload);
 
   // Single-resource endpoints — wrap whole DTO as `data`.
+  readonly getTagById = TagPresenter.ok<TagResponseDto>;
   readonly getTagBySlug = TagPresenter.ok<TagResponseDto>;
   readonly getTagAnalytics = TagPresenter.ok<TagAnalyticsResponseDto>;
   readonly createTag = TagPresenter.ok<TagResponseDto>;
   readonly updateTag = TagPresenter.ok<TagResponseDto>;
   readonly restoreTag = TagPresenter.ok<TagResponseDto>;
-  readonly followTag = TagPresenter.ok<TagFollowMessageResponseDto>;
-  readonly unfollowTag = TagPresenter.ok<TagFollowMessageResponseDto>;
   readonly deleteTag = TagPresenter.ok<DeleteTagResponseDto>;
 
-  // `GET /tags/:slug/quizzes` returns a cursor-paginated list. The application
-  // service returns a `QuizListResponseDto` class instance — unwrap to the
-  // canonical `{ data, meta.pagination }` envelope via the same helper used by
-  // `listTags` so the wire shape matches `GET /categories/:slug/quizzes`.
+  // Cursor-paginated lists.
   readonly getTagQuizzes = (payload: QuizListResponseDto) =>
-    wrapPaginatedDto<QuizListItemDto>(payload);
+    ApiResponse.page(payload.items, payload.pagination as PaginationMeta);
 
-  // Cursor-paginated lists — `{ items, pagination }` unwrapped.
-  readonly listTags = wrapPaginatedDto<TagListResponseDto['items'][number]>;
-  readonly listFollowedTags = wrapPaginatedDto<FollowedTagsResponseDto['items'][number]>;
+  readonly listTags = (payload: TagListResponseDto) =>
+    ApiResponse.page(payload.items, payload.pagination);
+
+  readonly listFollowedTags = (payload: FollowedTagsResponseDto) =>
+    ApiResponse.page(payload.items, payload.pagination);
 
   // Bare-array endpoints — `{ items }` unwrapped to a flat list.
   readonly getPopularTags = (items: RankedTagResponseDto[]) => ApiResponse.ok([...items]);

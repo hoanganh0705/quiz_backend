@@ -14,7 +14,7 @@ import { ApiFollowedTagsResponse } from '../swagger/tag-swagger-decorators';
  * `/users/me/followed-tags` without conflicting with TagController's
  * `:slug` wildcard route.
  */
-@ApiTags('users')
+@ApiTags('tags')
 @Controller()
 export class UserTagController {
   constructor(

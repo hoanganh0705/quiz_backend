@@ -188,6 +188,17 @@ export const tagBySlugInternalErrorExample = withInstance(
   '/tags/javascript',
 );
 
+// ─── /tags/:id (GET by id) ────────────────────────────────────────────────────
+
+export const tagByIdNotFoundExample = withInstance(
+  ErrorResponseExamples.notFound,
+  '/tags/770e8400-e29b-71d4-a716-446655440000',
+);
+export const tagByIdInternalErrorExample = withInstance(
+  ErrorResponseExamples.internalServerError,
+  '/tags/770e8400-e29b-71d4-a716-446655440000',
+);
+
 // ─── /tags (POST create) ────────────────────────────────────────────────────────
 
 export const createTagBadRequestExample = withInstance(ErrorResponseExamples.badRequest, '/tags');

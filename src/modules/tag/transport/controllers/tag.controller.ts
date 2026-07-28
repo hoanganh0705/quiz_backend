@@ -3,6 +3,8 @@ import {
   Controller,
   Delete,
   Get,
+  HttpCode,
+  HttpStatus,
   Param,
   ParseUUIDPipe,
   Patch,
@@ -10,6 +12,7 @@ import {
   Query,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
+import { Transactional } from '@/common/interceptors/transactional.interceptor';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { Public } from '@/common/decorators/public.decorator';
 import { Permissions } from '@/common/authorization/decorators/permissions.decorator';
@@ -39,6 +42,7 @@ import {
   ApiRelatedTagsResponse,
   ApiRestoreTagResponse,
   ApiTagAnalyticsResponse,
+  ApiTagByIdResponse,
   ApiTagBySlugResponse,
   ApiTagIdParam,
   ApiTagQuizzesResponse,
@@ -60,7 +64,7 @@ export class TagController {
   @ApiOperation({ summary: 'List popular tags' })
   @ApiPopularTagsResponse()
   async getPopularTags(@Query() query: TagRankingQueryDto) {
-    const items = await this.tagApplicationService.getPopularTags({ limit: query.limit });
+    const items = await this.tagApplicationService.getPopularTags({ limit: query.limit ?? 10 });
     return this.presenter.getPopularTags(items);
   }
 
@@ -69,7 +73,7 @@ export class TagController {
   @ApiOperation({ summary: 'List trending tags' })
   @ApiTrendingTagsResponse()
   async getTrendingTags(@Query() query: TagRankingQueryDto) {
-    const items = await this.tagApplicationService.getTrendingTags({ limit: query.limit });
+    const items = await this.tagApplicationService.getTrendingTags({ limit: query.limit ?? 10 });
     return this.presenter.getTrendingTags(items);
   }
 
@@ -103,30 +107,42 @@ export class TagController {
     return this.presenter.getTagAnalytics(result);
   }
 
+  @Get(':id')
+  @Public()
+  @ApiOperation({ summary: 'Get a tag by ID' })
+  @ApiTagByIdResponse()
+  @ApiTagIdParam()
+  async getTagById(@Param('id', new ParseUUIDPipe({ version: '7' })) tagId: string) {
+    const result = await this.tagApplicationService.getTagById(tagId);
+    return this.presenter.getTagById(result);
+  }
+
   @Post(':id/follow')
+  @Transactional()
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Follow a tag' })
   @ApiFollowTagResponse()
   @ApiTagIdParam()
   async followTag(
     @Param('id', new ParseUUIDPipe({ version: '7' })) tagId: string,
     @CurrentUser() user: JwtPayload,
-  ) {
-    const result = await this.tagApplicationService.followTag(user.sub, tagId);
-    return this.presenter.followTag(result);
+  ): Promise<void> {
+    await this.tagApplicationService.followTag(user.sub, tagId);
   }
 
   @Delete(':id/follow')
+  @Transactional()
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Unfollow a tag' })
   @ApiUnfollowTagResponse()
   @ApiTagIdParam()
   async unfollowTag(
     @Param('id', new ParseUUIDPipe({ version: '7' })) tagId: string,
     @CurrentUser() user: JwtPayload,
-  ) {
-    const result = await this.tagApplicationService.unfollowTag(user.sub, tagId);
-    return this.presenter.unfollowTag(result);
+  ): Promise<void> {
+    await this.tagApplicationService.unfollowTag(user.sub, tagId);
   }
 
   @Post(':id/restore')
