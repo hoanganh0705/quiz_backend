@@ -224,15 +224,6 @@ export const BOOKMARK_BULK_REMOVED_EXAMPLE = {
   meta: { timestamp: EXAMPLE_TIMESTAMP },
 } as const;
 
-// ─── DELETE /bookmarks/collections/:collectionId/quizzes/:quizId ────────────
-
-export const BOOKMARK_REMOVED_EXAMPLE = {
-  data: {
-    message: 'Bookmark removed successfully',
-  },
-  meta: { timestamp: EXAMPLE_TIMESTAMP },
-} as const;
-
 // ─── PATCH /bookmarks/collections/:collectionId/quizzes/:quizId ────────────
 
 export const BOOKMARK_UPDATED_EXAMPLE = {
@@ -284,15 +275,6 @@ export const BOOKMARK_STATS_EXAMPLE = {
       name: 'Physics',
       slug: 'physics',
     },
-  },
-  meta: { timestamp: EXAMPLE_TIMESTAMP },
-} as const;
-
-// ─── DELETE /bookmarks/collections/:collectionId ─────────────────────────────
-
-export const BOOKMARK_COLLECTION_DELETED_EXAMPLE = {
-  data: {
-    message: 'Collection deleted successfully',
   },
   meta: { timestamp: EXAMPLE_TIMESTAMP },
 } as const;

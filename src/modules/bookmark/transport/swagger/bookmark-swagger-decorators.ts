@@ -11,6 +11,7 @@ import {
 } from '@nestjs/swagger';
 import { ProblemDetailDto } from '@/common/swagger/swagger-schemas';
 import { ApiCreatedResource, ApiOkResource, ApiOkResourceList } from '@/common/swagger/api-ok';
+import { ApiNoContent } from '@/common/swagger/swagger-decorators';
 
 import {
   AddBookmarkResponseDto,
@@ -22,10 +23,8 @@ import {
   BulkAddBookmarksResponseDto,
   BulkRemoveBookmarksResponseDto,
   CreateCollectionResponseDto,
-  DeleteCollectionResponseDto,
-  MoveBookmarkResponseDto,
+  MessageResponseDto,
   RecentBookmarkItemDto,
-  RemoveBookmarkResponseDto,
   SearchBookmarkItemDto,
   UpdateBookmarkResponseDto,
   UpdateCollectionResponseDto,
@@ -37,13 +36,11 @@ import {
   BOOKMARK_BULK_REMOVED_EXAMPLE,
   BOOKMARK_COLLECTION_ANALYTICS_EXAMPLE,
   BOOKMARK_COLLECTION_CREATED_EXAMPLE,
-  BOOKMARK_COLLECTION_DELETED_EXAMPLE,
   BOOKMARK_COLLECTION_LIST_EXAMPLE,
   BOOKMARK_COLLECTION_UPDATED_EXAMPLE,
   BOOKMARK_LIST_EXAMPLE,
   BOOKMARK_MOVED_EXAMPLE,
   BOOKMARK_RECENT_EXAMPLE,
-  BOOKMARK_REMOVED_EXAMPLE,
   BOOKMARK_SEARCH_EXAMPLE,
   BOOKMARK_STATS_EXAMPLE,
   BOOKMARK_STATUS_EXAMPLE,
@@ -98,6 +95,7 @@ import {
   recentInternalErrorExample,
   recentUnauthorizedExample,
   removeBookmarkBadRequestExample,
+  removeBookmarkForbiddenExample,
   removeBookmarkInternalErrorExample,
   removeBookmarkNotFoundExample,
   removeBookmarkUnauthorizedExample,
@@ -303,9 +301,9 @@ export const ApiAddBookmarkResponse = (): MethodDecorator =>
 
 export const ApiBulkAddBookmarksResponse = (): MethodDecorator =>
   applyDecorators(
-    resourceCreated<typeof BulkAddBookmarksResponseDto>(
+    resourceOk<typeof BulkAddBookmarksResponseDto>(
       BulkAddBookmarksResponseDto,
-      'Bulk add result. Duplicates are silently skipped.',
+      'Bulk add result. Duplicates are silently skipped. Returns 200 regardless of how many were actually added.',
       BOOKMARK_BULK_ADDED_EXAMPLE,
     ),
     ApiBadRequestResponse(problem.badRequest(bulkAddBadRequestExample)),
@@ -335,13 +333,10 @@ export const ApiBulkRemoveBookmarksResponse = (): MethodDecorator =>
 
 export const ApiRemoveBookmarkResponse = (): MethodDecorator =>
   applyDecorators(
-    resourceOk<typeof RemoveBookmarkResponseDto>(
-      RemoveBookmarkResponseDto,
-      'Bookmark removed.',
-      BOOKMARK_REMOVED_EXAMPLE,
-    ),
+    ApiNoContent('Bookmark removed. Returns 204 even if the bookmark did not exist (idempotent).'),
     ApiBadRequestResponse(problem.badRequest(removeBookmarkBadRequestExample)),
     ApiUnauthorizedResponse(problem.unauthorized(removeBookmarkUnauthorizedExample)),
+    ApiForbiddenResponse(problem.forbidden(removeBookmarkForbiddenExample)),
     ApiNotFoundResponse(problem.notFound(removeBookmarkNotFoundExample)),
     ApiInternalServerErrorResponse(problem.internalError(removeBookmarkInternalErrorExample)),
   );
@@ -366,9 +361,9 @@ export const ApiUpdateBookmarkResponse = (): MethodDecorator =>
 
 export const ApiMoveBookmarkResponse = (): MethodDecorator =>
   applyDecorators(
-    resourceCreated<typeof MoveBookmarkResponseDto>(
-      MoveBookmarkResponseDto,
-      'Bookmark moved.',
+    resourceOk<typeof MessageResponseDto>(
+      MessageResponseDto,
+      'Bookmark moved. Returns 200 on success.',
       BOOKMARK_MOVED_EXAMPLE,
     ),
     ApiBadRequestResponse(problem.badRequest(moveBookmarkBadRequestExample)),
@@ -413,10 +408,8 @@ export const ApiMyBookmarkStatsResponse = (): MethodDecorator =>
 
 export const ApiDeleteCollectionResponse = (): MethodDecorator =>
   applyDecorators(
-    resourceOk<typeof DeleteCollectionResponseDto>(
-      DeleteCollectionResponseDto,
-      'Collection deleted (hard delete — not recoverable via the API).',
-      BOOKMARK_COLLECTION_DELETED_EXAMPLE,
+    ApiNoContent(
+      'Collection deleted (hard delete — not recoverable via the API). Returns 204 even if the collection did not exist (idempotent).',
     ),
     ApiBadRequestResponse(problem.badRequest(deleteCollectionBadRequestExample)),
     ApiUnauthorizedResponse(problem.unauthorized(deleteCollectionUnauthorizedExample)),
@@ -435,21 +428,37 @@ export const ApiCollectionIdParam = (): MethodDecorator =>
     example: '770e8400-e29b-71d4-a716-446655440000',
   });
 
-export const ApiBookmarkQuizIdParam = (): MethodDecorator =>
+const SAMPLE_QUIZ_ID = '660e8400-e29b-71d4-a716-446655440000';
+
+/**
+ * Creates a quizId path parameter decorator with a custom description.
+ *
+ * @example
+ * // For bookmark-related operations:
+ * @ApiQuizIdParam('UUID of the bookmarked quiz')
+ *
+ * // For status check operations:
+ * @ApiQuizIdParam('UUID of the quiz to look up bookmark status for')
+ */
+export const ApiQuizIdParam = (description: string): MethodDecorator =>
   ApiParam({
     name: 'quizId',
-    description: 'UUID of the bookmarked quiz',
+    description,
     format: 'uuid',
-    example: '660e8400-e29b-71d4-a716-446655440000',
+    example: SAMPLE_QUIZ_ID,
   });
 
+/**
+ * @deprecated Use ApiQuizIdParam('UUID of the bookmarked quiz') instead.
+ */
+export const ApiBookmarkQuizIdParam = (): MethodDecorator =>
+  ApiQuizIdParam('UUID of the bookmarked quiz');
+
+/**
+ * @deprecated Use ApiQuizIdParam('UUID of the quiz to look up bookmark status for') instead.
+ */
 export const ApiStatusQuizIdParam = (): MethodDecorator =>
-  ApiParam({
-    name: 'quizId',
-    description: 'UUID of the quiz to look up bookmark status for',
-    format: 'uuid',
-    example: '660e8400-e29b-71d4-a716-446655440000',
-  });
+  ApiQuizIdParam('UUID of the quiz to look up bookmark status for');
 
 // ─── Bookmark module's complete DTO surface (re-export for the contract test) ─
 
@@ -458,7 +467,6 @@ export const BOOKMARK_DTOS_FOR_CONTRACT_TEST: ReadonlyArray<string> = [
   'BookmarkCollectionListResponseDto',
   'CreateCollectionResponseDto',
   'UpdateCollectionResponseDto',
-  'DeleteCollectionResponseDto',
   'BookmarkCollectionAnalyticsResponseDto',
   'BookmarkCollectionAnalyticsSummaryDto',
   'BookmarkCollectionAnalyticsTopCategoryDto',
@@ -469,8 +477,7 @@ export const BOOKMARK_DTOS_FOR_CONTRACT_TEST: ReadonlyArray<string> = [
   'BookmarkedQuizResponseDto',
   'AddBookmarkResponseDto',
   'UpdateBookmarkResponseDto',
-  'RemoveBookmarkResponseDto',
-  'MoveBookmarkResponseDto',
+  'MessageResponseDto',
   'BookmarkStatsResponseDto',
   'BookmarkStatsFavoriteCategoryDto',
   'BookmarkStatsFavoriteTagDto',

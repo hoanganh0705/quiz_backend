@@ -222,6 +222,10 @@ export const removeBookmarkUnauthorizedExample = withInstance(
   ErrorResponseExamples.unauthorized,
   QUIZ_PATH,
 );
+export const removeBookmarkForbiddenExample = withInstance(
+  ErrorResponseExamples.forbidden,
+  QUIZ_PATH,
+);
 export const removeBookmarkNotFoundExample = withInstance(
   ErrorResponseExamples.notFound,
   QUIZ_PATH,

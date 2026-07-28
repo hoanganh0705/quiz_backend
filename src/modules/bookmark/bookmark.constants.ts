@@ -4,3 +4,5 @@ export const COLLECTION_NAME_CONFLICT_MESSAGE = 'A collection with this name alr
 export const BOOKMARK_NOT_FOUND_MESSAGE = 'Bookmark not found';
 export const BOOKMARK_QUIZ_ALREADY_EXISTS_MESSAGE =
   'This quiz is already bookmarked in this collection';
+
+export const ANALYTICS_CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes
