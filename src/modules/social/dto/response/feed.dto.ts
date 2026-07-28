@@ -1,7 +1,12 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { CursorPagination } from '@/common/responses/pagination';
+import type { SocialFeedActivityType } from '../../domain/types/social.types';
 
-const SOCIAL_FEED_ACTIVITY_TYPES = [
+/**
+ * Canonical list of valid feed activity types.
+ * Sourced from SocialFeedActivityType in social.types.ts to prevent drift.
+ */
+const SOCIAL_FEED_ACTIVITY_TYPES: readonly SocialFeedActivityType[] = [
   'badge_earned',
   'badge_revoked',
   'rank_milestone',
@@ -9,8 +14,6 @@ const SOCIAL_FEED_ACTIVITY_TYPES = [
   'tournament_joined',
   'tournament_completed',
   'tournament_won',
-  'comment_created',
-  'comment_created',
   'comment_created',
   'quiz_completed',
   'quiz_milestone',
@@ -44,7 +47,7 @@ export class SocialFeedItemDto {
     enum: SOCIAL_FEED_ACTIVITY_TYPES,
     example: 'badge_earned',
   })
-  type!: (typeof SOCIAL_FEED_ACTIVITY_TYPES)[number];
+  type!: SocialFeedActivityType;
 
   @ApiProperty({
     description: 'Timestamp when the activity occurred (ISO 8601)',
@@ -84,7 +87,7 @@ export class UserActivityItemDto {
     enum: SOCIAL_FEED_ACTIVITY_TYPES,
     example: 'badge_earned',
   })
-  type!: (typeof SOCIAL_FEED_ACTIVITY_TYPES)[number];
+  type!: SocialFeedActivityType;
 
   @ApiProperty({
     description: 'Timestamp when the activity occurred (ISO 8601)',

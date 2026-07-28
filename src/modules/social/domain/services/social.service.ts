@@ -870,6 +870,11 @@ export class SocialService {
   /**
    * Get leaderboard of friends sorted by XP.
    * Supports weekly, monthly, and all-time rankings.
+   *
+   * Optimization: Fetches a capped number of friends (max of 3x limit or 50)
+   * instead of always fetching 1000. This reduces database load for small limits
+   * while still fetching enough candidates to fill the leaderboard after filtering
+   * friends with zero XP.
    */
   async getFriendLeaderboard(
     userId: string,
@@ -883,8 +888,11 @@ export class SocialService {
       limit,
     });
 
-    // Get all friends
-    const friends = await this.socialRepository.getFriends(userId, 1000, null);
+    // Optimization: Fetch enough friends to get `limit` entries after XP filtering.
+    // Use 3x multiplier as a balance between fetching too many and having enough candidates.
+    // Minimum of 50 ensures we have enough candidates for small limits.
+    const friendFetchLimit = Math.max(limit * 3, 50);
+    const friends = await this.socialRepository.getFriends(userId, friendFetchLimit, null);
 
     if (friends.length === 0) {
       return {
@@ -968,6 +976,9 @@ export class SocialService {
       event: 'friend_leaderboard_completed',
       userId,
       period,
+      limit,
+      requestedLimit: limit,
+      friendFetchLimit,
       totalFriends: friends.length,
       rankedFriends: entries.length,
     });
