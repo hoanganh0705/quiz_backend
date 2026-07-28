@@ -10,7 +10,7 @@ export class CategoryAnalyticsResponseMapper {
         totalQuizzes: analytics.summary.totalQuizzes,
         activeQuizzes: analytics.summary.activeQuizzes,
         totalAttempts: analytics.summary.totalAttempts,
-        totalPlayers: analytics.summary.totalPlayers,
+        uniquePlayers: analytics.summary.uniquePlayers,
         averageScore: analytics.summary.averageScore,
         averageRating: analytics.summary.averageRating,
       },

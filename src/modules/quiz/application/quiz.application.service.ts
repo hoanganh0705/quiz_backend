@@ -73,7 +73,7 @@ export class QuizApplicationService implements QuizListingPort {
     });
 
     return {
-      items: result.rows.map((row) => QuizResponseMapper.toListItem(row)),
+      items: result.items.map((row) => QuizResponseMapper.toListItem(row)),
       pagination: {
         limit: result.limit,
         nextCursor: result.nextCursor ? QuizCursorMapper.serialize(result.nextCursor) : null,
@@ -155,7 +155,7 @@ export class QuizApplicationService implements QuizListingPort {
     });
 
     return {
-      items: result.rows.map((row) => QuizResponseMapper.toListItem(row)),
+      items: result.items.map((row) => QuizResponseMapper.toListItem(row)),
       pagination: {
         limit: result.limit,
         nextCursor: result.nextCursor ? QuizCursorMapper.serialize(result.nextCursor) : null,
@@ -174,7 +174,7 @@ export class QuizApplicationService implements QuizListingPort {
     });
 
     return {
-      items: result.rows.map((row) => QuizResponseMapper.toListItem(row)),
+      items: result.items.map((row) => QuizResponseMapper.toListItem(row)),
       pagination: {
         limit: result.limit,
         nextCursor: result.nextCursor ? QuizCursorMapper.serialize(result.nextCursor) : null,
@@ -193,7 +193,7 @@ export class QuizApplicationService implements QuizListingPort {
     });
 
     return {
-      items: result.rows.map((row) => QuizResponseMapper.toListItem(row)),
+      items: result.items.map((row) => QuizResponseMapper.toListItem(row)),
       pagination: {
         limit: result.limit,
         nextCursor: result.nextCursor ? QuizCursorMapper.serialize(result.nextCursor) : null,
@@ -215,7 +215,7 @@ export class QuizApplicationService implements QuizListingPort {
     });
 
     return {
-      items: result.rows.map((row) => QuizResponseMapper.toListItem(row)),
+      items: result.items.map((row) => QuizResponseMapper.toListItem(row)),
       pagination: {
         limit: result.limit,
         nextCursor: result.nextCursor ? QuizCursorMapper.serialize(result.nextCursor) : null,

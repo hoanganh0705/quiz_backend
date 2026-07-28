@@ -8,7 +8,7 @@ export class QuizStatsResponseDto {
   totalAttempts!: number;
 
   @ApiProperty({ description: 'Number of distinct users who attempted this quiz', example: 830 })
-  totalPlayers!: number;
+  uniquePlayers!: number;
 
   @ApiProperty({ description: 'Average score percent across all attempts', example: 78.4 })
   averageScore!: number;

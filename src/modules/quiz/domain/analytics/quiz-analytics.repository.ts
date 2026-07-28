@@ -190,7 +190,7 @@ export class QuizAnalyticsRepository implements QuizAnalyticsRepositoryPort {
       })
       .from(quizStats)
       .innerJoin(quizzes, eq(quizStats.quizId, quizzes.quizId))
-      .where(isNull(quizzes.deletedAt))
+      .where(and(isNull(quizzes.deletedAt), eq(quizzes.isHidden, false)))
       .orderBy(desc(quizStats.trendingScore))
       .limit(limit);
 
@@ -247,7 +247,7 @@ export class QuizAnalyticsRepository implements QuizAnalyticsRepositoryPort {
       })
       .from(quizStats)
       .innerJoin(quizzes, eq(quizStats.quizId, quizzes.quizId))
-      .where(isNull(quizzes.deletedAt))
+      .where(and(isNull(quizzes.deletedAt), eq(quizzes.isHidden, false)))
       .orderBy(desc(quizStats.popularityScore))
       .limit(limit);
 
@@ -298,7 +298,7 @@ export class QuizAnalyticsRepository implements QuizAnalyticsRepositoryPort {
     const categoryQuizIds = await this.db
       .select({ quizId: quizzes.quizId })
       .from(quizzes)
-      .where(eq(quizzes.categoryId, categoryId));
+      .where(and(eq(quizzes.categoryId, categoryId), eq(quizzes.isHidden, false)));
 
     const quizIdList = categoryQuizIds.map((c) => c.quizId);
 
@@ -310,7 +310,7 @@ export class QuizAnalyticsRepository implements QuizAnalyticsRepositoryPort {
           totalQuizzes: 0,
           activeQuizzes: 0,
           totalAttempts: 0,
-          totalPlayers: 0,
+          uniquePlayers: 0,
           averageScore: 0,
           averageRating: 0,
         },
@@ -328,7 +328,7 @@ export class QuizAnalyticsRepository implements QuizAnalyticsRepositoryPort {
     const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
 
     const totalAttempts = stats.reduce((sum, s) => sum + Number(s.totalAttempts), 0);
-    const totalPlayers = stats.reduce((sum, s) => sum + Number(s.totalPlayers), 0);
+    const uniquePlayers = stats.reduce((sum, s) => sum + Number(s.totalPlayers), 0);
     const activeQuizzes = stats.filter(
       (s) => s.lastAttemptAt && s.lastAttemptAt >= thirtyDaysAgo,
     ).length;
@@ -350,7 +350,7 @@ export class QuizAnalyticsRepository implements QuizAnalyticsRepositoryPort {
         totalQuizzes: quizIdList.length,
         activeQuizzes,
         totalAttempts,
-        totalPlayers,
+        uniquePlayers,
         averageScore,
         averageRating: totalRatingCount > 0 ? totalRatingSum / totalRatingCount : 0,
       },
@@ -385,7 +385,7 @@ export class QuizAnalyticsRepository implements QuizAnalyticsRepositoryPort {
       draftQuizzes: Number(row?.draftQuizzes ?? 0),
       publishedQuizzes: Number(row?.publishedQuizzes ?? 0),
       totalAttempts: Number(row?.totalAttempts ?? 0),
-      totalPlayers: Number(row?.totalPlayers ?? 0),
+      uniquePlayers: Number(row?.totalPlayers ?? 0),
       averageScore:
         Number(row?.totalAttemptsWeight ?? 0) > 0
           ? Number(row?.totalScoreWeighted ?? 0) / Number(row?.totalAttemptsWeight ?? 0)
@@ -426,7 +426,7 @@ export class QuizAnalyticsRepository implements QuizAnalyticsRepositoryPort {
           totalQuizzes: 0,
           activeQuizzes: 0,
           totalAttempts: 0,
-          totalPlayers: 0,
+          uniquePlayers: 0,
           averageScore: 0,
           averageRating: 0,
         },
@@ -443,7 +443,7 @@ export class QuizAnalyticsRepository implements QuizAnalyticsRepositoryPort {
     const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
 
     const totalAttempts = stats.reduce((sum, s) => sum + Number(s.totalAttempts), 0);
-    const totalPlayers = stats.reduce((sum, s) => sum + Number(s.totalPlayers), 0);
+    const uniquePlayers = stats.reduce((sum, s) => sum + Number(s.totalPlayers), 0);
     const activeQuizzes = stats.filter(
       (s) => s.lastAttemptAt && s.lastAttemptAt >= thirtyDaysAgo,
     ).length;
@@ -465,7 +465,7 @@ export class QuizAnalyticsRepository implements QuizAnalyticsRepositoryPort {
         totalQuizzes: quizIdList.length,
         activeQuizzes,
         totalAttempts,
-        totalPlayers,
+        uniquePlayers,
         averageScore,
         averageRating: totalRatingCount > 0 ? totalRatingSum / totalRatingCount : 0,
       },
@@ -495,7 +495,7 @@ export class QuizAnalyticsRepository implements QuizAnalyticsRepositoryPort {
       })
       .from(quizStats)
       .innerJoin(quizzes, eq(quizStats.quizId, quizzes.quizId))
-      .where(and(inArray(quizStats.quizId, tagQuizIds), isNull(quizzes.deletedAt)))
+      .where(and(inArray(quizStats.quizId, tagQuizIds), isNull(quizzes.deletedAt), eq(quizzes.isHidden, false)))
       .orderBy(desc(quizStats.popularityScore))
       .limit(limit);
 
