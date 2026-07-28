@@ -1,5 +1,11 @@
 import { applyDecorators, type Type } from '@nestjs/common';
-import { ApiOkResponse, ApiCreatedResponse, getSchemaPath, ApiExtraModels } from '@nestjs/swagger';
+import {
+  ApiOkResponse,
+  ApiCreatedResponse,
+  ApiResponse,
+  getSchemaPath,
+  ApiExtraModels,
+} from '@nestjs/swagger';
 import {
   OffsetPaginationMetaDto,
   PaginatedResponseMetaDto,
@@ -133,6 +139,31 @@ export const ApiCreatedResource = <T extends Type>(
       ...options,
       schema: buildResourceSchema(model),
     } as Parameters<typeof ApiCreatedResponse>[0]),
+  );
+
+/**
+ * 202 Accepted variant of {@link ApiOkResource}. Same envelope shape, but the
+ * OpenAPI spec lists the response under the `202` status code instead of
+ * `200`. Use this for state-transition operations that trigger asynchronous
+ * side effects (e.g. WebSocket broadcasts, scheduler interactions) where the
+ * response is returned before processing is complete.
+ *
+ * @example
+ *   @ApiAcceptedResource(StartInstanceResponseDto)
+ *   @Post(':id/start')
+ *   async startInstance(...): Promise<...> { ... }
+ */
+export const ApiAcceptedResource = <T extends Type>(
+  model: T,
+  options: ApiResourceOptions = {},
+): MethodDecorator =>
+  applyDecorators(
+    ApiExtraModels(WrappedDto, ResponseMetaDto, model),
+    ApiResponse({
+      status: 202,
+      ...options,
+      schema: buildResourceSchema(model),
+    } as Parameters<typeof ApiResponse>[0]),
   );
 
 /**

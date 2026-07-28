@@ -2,6 +2,7 @@ import { Type } from 'class-transformer';
 import { IsIn, IsInt, IsOptional, IsString, IsUUID, Max, MaxLength, Min } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { QUIZ_DIFFICULTIES, type QuizDifficulty } from '@/modules/quiz/types/quiz.types';
+import { INSTANCE_STATUSES, type QuizInstanceStatus } from '../../types/instance.types';
 
 export class CreateInstanceDto {
   @ApiProperty({
@@ -29,8 +30,10 @@ export class CreateInstanceDto {
   maxPlayers?: number;
 }
 
-export const INSTANCE_STATUSES = ['open', 'countdown', 'running', 'closed', 'finished'] as const;
-export type InstanceStatus = (typeof INSTANCE_STATUSES)[number];
+// Phase 7 (audit Finding 5): INSTANCE_STATUSES is now imported from types/instance.types.ts.
+// This re-export maintains backwards compatibility for existing imports.
+export { INSTANCE_STATUSES };
+export type InstanceStatus = QuizInstanceStatus;
 
 export class GetLeaderboardQueryDto {
   @ApiPropertyOptional({
@@ -53,6 +56,9 @@ export class GetLeaderboardQueryDto {
     default: 20,
     nullable: true,
   })
+  // NOTE: This default is also mirrored in the controller (`query.limit ?? 20`)
+  // as NestJS does not automatically apply TypeScript property defaults.
+  // Both locations must be kept in sync.
   @IsOptional()
   @Type(() => Number)
   @IsInt()
@@ -92,6 +98,9 @@ export class GetInstancePlayersQueryDto {
     default: 20,
     nullable: true,
   })
+  // NOTE: This default is also mirrored in the controller (`query.limit ?? 20`)
+  // as NestJS does not automatically apply TypeScript property defaults.
+  // Both locations must be kept in sync.
   @IsOptional()
   @Type(() => Number)
   @IsInt()
@@ -126,6 +135,9 @@ export class ListInstancesQueryDto {
     default: 20,
     nullable: true,
   })
+  // NOTE: This default is also mirrored in the controller (`query.limit ?? 20`)
+  // as NestJS does not automatically apply TypeScript property defaults.
+  // Both locations must be kept in sync.
   @IsOptional()
   @Type(() => Number)
   @IsInt()
