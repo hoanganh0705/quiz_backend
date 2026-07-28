@@ -56,7 +56,7 @@ export interface CategorySummary {
   totalQuizzes: number;
   activeQuizzes: number;
   totalAttempts: number;
-  totalPlayers: number;
+  uniquePlayers: number;
   averageScore: number;
   averageRating: number;
 }
@@ -76,7 +76,7 @@ export interface TagAnalytics {
     totalQuizzes: number;
     activeQuizzes: number;
     totalAttempts: number;
-    totalPlayers: number;
+    uniquePlayers: number;
     averageScore: number;
     averageRating: number;
   };
@@ -100,7 +100,7 @@ export interface CreatorAnalytics {
   draftQuizzes: number;
   publishedQuizzes: number;
   totalAttempts: number;
-  totalPlayers: number;
+  uniquePlayers: number;
   averageScore: number;
   averageRating: number;
   totalBookmarks: number;

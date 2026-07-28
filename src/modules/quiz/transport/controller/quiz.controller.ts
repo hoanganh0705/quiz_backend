@@ -59,6 +59,7 @@ import { ListQuizVersionsQueryDto } from '../../dto/request/list-quiz-versions-q
 import { CreateQuizQuestionDto } from '@/modules/quiz/dto/request/create-quiz-question.dto';
 import { CreateQuizQuestionsDto } from '@/modules/quiz/dto/request/create-quiz-questions.dto';
 import { QuizQuestionAuthorDto } from '@/modules/quiz/dto/response/quiz-question-author.dto';
+import { QuizAnswerOptionAuthorDto } from '@/modules/quiz/dto/response/quiz-answer-option-author.dto';
 import { QuizAnswerOptionPlayerDto } from '@/modules/quiz/dto/response/quiz-answer-option-player.dto';
 import { QuizQuestionPlayerDto } from '@/modules/quiz/dto/response/quiz-question-player.dto';
 import {
@@ -315,8 +316,16 @@ export class QuizController {
 
   @Get('featured')
   @Public()
-  @ApiOperation({ summary: 'List featured quizzes' })
-  @ApiOkResourceArray(QuizListItemDto, { description: 'Featured quizzes returned' })
+  @ApiOperation({
+    summary: 'List featured quizzes',
+    description:
+      'Returns editorially curated featured quizzes. ' +
+      'Results are limited (max 100) with no cursor pagination — ' +
+      'featured quizzes are a static editorial set, not a browsable feed.',
+  })
+  @ApiOkResourceArray(QuizListItemDto, {
+    description: 'Featured quizzes returned (no pagination — fixed editorial set)',
+  })
   @ApiBadRequestResponse({ example: featuredBadRequestExample })
   @ApiInternalServerErrorResponse({ example: featuredInternalErrorExample })
   async getFeaturedQuizzes(@Query() query: FeaturedQuizzesQueryDto) {
@@ -375,16 +384,24 @@ export class QuizController {
   }
 
   /**
-   * Get quizzes similar to the specified quiz.
+   * Get quizzes related to the specified quiz.
    *
    * The `:slug` path parameter accepts a kebab-case quiz slug (e.g., "javascript-fundamentals").
    * Related quizzes are determined by shared category and tags with the source quiz.
    * Returns quizzes sorted by relevance score, limited by the `limit` query parameter.
    */
-  @Get(':slug/similar')
+  @Get(':slug/related')
   @Public()
-  @ApiOperation({ summary: 'Get quizzes related to the specified quiz' })
-  @ApiOkResourceArray(QuizListItemDto, { description: 'Related quizzes returned' })
+  @ApiOperation({
+    summary: 'Get quizzes related to the specified quiz',
+    description:
+      'Returns quizzes that share a category or tags with the source quiz, ' +
+      'sorted by relevance. Results are limited (max 100) with no cursor pagination — ' +
+      'this is a discovery hint, not a browsable feed.',
+  })
+  @ApiOkResourceArray(QuizListItemDto, {
+    description: 'Related quizzes returned (no pagination — relevance-ranked discovery set)',
+  })
   @ApiNotFoundResponse({
     description: 'Quiz not found',
     example: relatedQuizzesNotFoundExample,
@@ -404,7 +421,7 @@ export class QuizController {
     const result = await this.quizApplicationService.getRelatedQuizzes(slug, {
       limit: query.limit ?? 10,
     });
-    return this.presenter.getSimilarQuizzes(result);
+    return this.presenter.getRelatedQuizzes(result);
   }
 
   @Patch(':id')
@@ -528,6 +545,7 @@ export class QuizController {
 
   @Get(':id/versions/:versionId')
   @Permissions(Permission.QUIZ_VERSION_VIEW_OWN, Permission.QUIZ_VERSION_VIEW_ANY)
+  @ApiExtraModels(QuizQuestionAuthorDto, QuizAnswerOptionAuthorDto)
   @ApiOperation({ summary: 'Get a specific quiz version' })
   @ApiOkResource(QuizVersionDetailResponseDto, { description: 'Quiz version returned' })
   @ApiBadRequestResponse({

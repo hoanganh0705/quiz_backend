@@ -35,7 +35,7 @@ export const TAG_ANALYTICS_EXAMPLE = {
       totalQuizzes: 12,
       activeQuizzes: 10,
       totalAttempts: 2480,
-      totalPlayers: 920,
+      uniquePlayers: 920,
       averageScore: 78.4,
       averageRating: 4.6,
     },

@@ -29,18 +29,17 @@ import {
   QUIZ_RECOMMENDATION_REPOSITORY_PORT,
   type QuizRecommendationRepositoryPort,
 } from '../analytics';
+import { applyCursorPagination, type CursorPaginationResult } from '@/common/utils/pagination.util';
 
 export type PaginatedQuizRow = {
   createdAt: string;
   quizId: string;
 };
 
-export type ListQuizzesResult = {
-  rows: QuizWithPublishedVersionRow[];
-  limit: number;
-  hasNextPage: boolean;
-  nextCursor: QuizCursor | null;
-};
+export type ListQuizzesResult = CursorPaginationResult<
+  QuizWithPublishedVersionRow,
+  { createdAt: string; quizId: string }
+>;
 
 /**
  * QuizQueryService — Query orchestration for the Quiz aggregate.
@@ -73,24 +72,11 @@ export class QuizQueryService {
     rows: QuizWithPublishedVersionRow[],
     limit: number,
   ): ListQuizzesResult {
-    const hasNextPage = rows.length > limit;
-    const items = hasNextPage ? rows.slice(0, limit) : rows;
-    const lastItem = items.at(-1);
-
-    const nextCursor =
-      hasNextPage && lastItem
-        ? {
-            createdAt: lastItem.createdAt,
-            quizId: lastItem.quizId,
-          }
-        : null;
-
-    return {
-      rows: items,
+    return applyCursorPagination<QuizWithPublishedVersionRow, { createdAt: string; quizId: string }>(
+      rows,
       limit,
-      hasNextPage,
-      nextCursor,
-    };
+      (row) => ({ createdAt: row.createdAt, quizId: row.quizId }),
+    );
   }
 
   async getActiveQuizRecordById(quizId: string): Promise<QuizRecordRow> {
@@ -126,7 +112,7 @@ export class QuizQueryService {
     return {
       quizId: resolvedQuizId,
       totalAttempts: Number(stats?.totalAttempts ?? 0),
-      totalPlayers: Number(stats?.totalPlayers ?? 0),
+      uniquePlayers: Number(stats?.totalPlayers ?? 0),
       averageScore: Number(stats?.avgScorePercent ?? 0),
       averageRating: Number(stats?.avgRating ?? 0),
       bookmarkCount: Number(stats?.bookmarkCount ?? 0),

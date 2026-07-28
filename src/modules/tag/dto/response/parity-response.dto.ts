@@ -77,7 +77,7 @@ export class TagAnalyticsSummaryDto {
     description: 'Number of distinct users who attempted any quiz carrying the tag',
     example: 920,
   })
-  totalPlayers!: number;
+  uniquePlayers!: number;
 
   @ApiProperty({
     description: 'Average score percent across attempts in tagged quizzes',

@@ -1,7 +1,7 @@
 export type QuizStats = {
   quizId: string;
   totalAttempts: number;
-  totalPlayers: number;
+  uniquePlayers: number;
   averageScore: number;
   averageRating: number;
   bookmarkCount: number;
