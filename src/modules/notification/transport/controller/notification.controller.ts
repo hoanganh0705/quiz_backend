@@ -8,18 +8,15 @@ import {
   Query,
   ParseUUIDPipe,
   Body,
-  HttpCode,
-  HttpStatus,
   BadRequestException,
 } from '@nestjs/common';
 import {
   ApiTags,
-  ApiOperation,
   ApiParam,
   ApiNotFoundResponse,
   ApiForbiddenResponse,
 } from '@nestjs/swagger';
-import { ApiNoContent } from '@/common/swagger/swagger-decorators';
+import { ApiAuthAction, ApiAuthActionNoContent } from '@/common/swagger/swagger-decorators';
 import { ProblemDetailDto } from '@/common/swagger/swagger-schemas';
 import { Transactional } from '@/common/interceptors/transactional.interceptor';
 import { NotificationApplicationService } from '@/modules/notification/application/notification-application.service';
@@ -32,7 +29,6 @@ import {
 } from '@/modules/notification/dto/response';
 import { NotificationPresenter } from '../presenters/notification.presenter';
 import { ApiOkResource, ApiOkResourceList } from '@/common/swagger/api-ok';
-import { RequireAuth } from '@/common/guards/jwt.guard';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
 import { UpdatePreferencesDto, GetNotificationsQueryDto } from '@/modules/notification/dto/request';
 import { Permissions } from '@/common/authorization/decorators/permissions.decorator';
@@ -59,7 +55,8 @@ import {
 
 @ApiTags('notifications')
 @Controller('notifications')
-@RequireAuth()
+// Phase 6 (rev6.1): replaced class-level @RequireAuth() with per-method @ApiAuthAction decorators
+// for consistency with the social module pattern. All endpoints require authentication.
 export class NotificationController {
   constructor(
     private readonly notificationService: NotificationApplicationService,
@@ -67,9 +64,10 @@ export class NotificationController {
   ) {}
 
   @Get()
-  @ApiOperation({
+  @ApiAuthAction({
     summary: 'List notifications',
     description: 'Returns cursor-paginated notifications for the authenticated user.',
+    operationId: 'getNotifications',
   })
   @ApiOkResourceList(NotificationResponseDto, 'cursor', {
     description:
@@ -110,7 +108,10 @@ export class NotificationController {
   }
 
   @Get('unread-count')
-  @ApiOperation({ summary: 'Get unread notification count' })
+  @ApiAuthAction({
+    summary: 'Get unread notification count',
+    operationId: 'getUnreadCount',
+  })
   @ApiOkResource(UnreadCountResponseDto, {
     description: 'Unread notification count',
     example: NOTIFICATION_UNREAD_COUNT_EXAMPLE,
@@ -122,11 +123,12 @@ export class NotificationController {
 
   @Get('analytics')
   @Permissions(Permission.NOTIFICATION_ANALYTICS)
-  @ApiOperation({
+  @ApiAuthAction({
     summary: 'Get notification analytics',
     description:
       'Returns platform-wide notification analytics. Requires `NOTIFICATION_ANALYTICS` permission. ' +
       'Authentication via Bearer token is required.',
+    operationId: 'getNotificationAnalytics',
   })
   @ApiOkResource(NotificationAnalyticsDto, {
     description: 'Notification analytics',
@@ -146,7 +148,10 @@ export class NotificationController {
   }
 
   @Get('preferences')
-  @ApiOperation({ summary: 'Get notification preferences' })
+  @ApiAuthAction({
+    summary: 'Get notification preferences',
+    operationId: 'getNotificationPreferences',
+  })
   @ApiOkResource(NotificationPreferencesResponseDto, {
     description: 'Notification preferences',
     example: NOTIFICATION_PREFERENCES_EXAMPLE,
@@ -158,7 +163,10 @@ export class NotificationController {
 
   @Patch('preferences')
   @Transactional()
-  @ApiOperation({ summary: 'Update notification preferences' })
+  @ApiAuthAction({
+    summary: 'Update notification preferences',
+    operationId: 'updateNotificationPreferences',
+  })
   @ApiOkResource(NotificationPreferencesResponseDto, {
     description: 'Notification preferences',
     example: NOTIFICATION_PREFERENCES_UPDATE_EXAMPLE,
@@ -172,7 +180,10 @@ export class NotificationController {
   }
 
   @Get(':notificationId')
-  @ApiOperation({ summary: 'Get notification detail' })
+  @ApiAuthAction({
+    summary: 'Get notification detail',
+    operationId: 'getNotificationDetail',
+  })
   @ApiParam({
     name: 'notificationId',
     type: String,
@@ -215,8 +226,7 @@ export class NotificationController {
 
   @Post(':notificationId/read')
   @Transactional()
-  @ApiOperation({ summary: 'Mark a notification as read' })
-  @ApiNoContent('Notification marked as read')
+  @ApiAuthActionNoContent('Notification marked as read')
   @ApiParam({
     name: 'notificationId',
     type: String,
@@ -257,8 +267,7 @@ export class NotificationController {
 
   @Post(':notificationId/unread')
   @Transactional()
-  @ApiOperation({ summary: 'Mark a notification as unread' })
-  @ApiNoContent('Notification marked as unread')
+  @ApiAuthActionNoContent('Notification marked as unread')
   @ApiParam({
     name: 'notificationId',
     type: String,
@@ -297,29 +306,21 @@ export class NotificationController {
 
   @Post('read-all')
   @Transactional()
-  @ApiOperation({ summary: 'Mark all notifications as read' })
-  @ApiNoContent('All notifications marked as read')
-  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiAuthActionNoContent('All notifications marked as read')
   async markAllAsRead(@CurrentUser() user: JwtPayload): Promise<void> {
     await this.notificationService.markAllAsRead(user);
   }
 
-  @Delete('read')
+  @Delete('read-all')
   @Transactional()
-  @ApiOperation({ summary: 'Delete all read notifications' })
-  @ApiOkResource(DeletedReadNotificationsResponseDto, {
-    description: 'Read notifications deleted',
-    example: NOTIFICATION_DELETED_READ_EXAMPLE,
-  })
-  async deleteReadNotifications(@CurrentUser() user: JwtPayload) {
-    const deletedCount = await this.notificationService.deleteReadNotifications(user);
-    return this.presenter.deleteReadNotifications({ deletedCount });
+  @ApiAuthActionNoContent('Read notifications deleted')
+  async deleteReadNotifications(@CurrentUser() user: JwtPayload): Promise<void> {
+    await this.notificationService.deleteReadNotifications(user);
   }
 
   @Delete(':notificationId')
   @Transactional()
-  @ApiOperation({ summary: 'Delete a notification' })
-  @ApiNoContent('Notification deleted')
+  @ApiAuthActionNoContent('Notification deleted')
   @ApiParam({
     name: 'notificationId',
     type: String,
