@@ -248,6 +248,7 @@ export class FriendshipRepository implements FriendshipRepositoryPort {
     const mutualFriendsQuery = sql<{
       userId: string;
       username: string;
+      displayName: string | null;
       avatarUrl: string | null;
     }>`
       WITH user_friends AS (
@@ -299,6 +300,7 @@ export class FriendshipRepository implements FriendshipRepositoryPort {
       SELECT
         ${u.userId} AS "userId",
         ${u.username} AS username,
+        ${up.displayName} AS "displayName",
         ${up.avatarUrl} AS "avatarUrl"
       FROM shared_friends sf
       INNER JOIN ${users} u ON ${u.userId} = sf.user_id
@@ -317,6 +319,7 @@ export class FriendshipRepository implements FriendshipRepositoryPort {
     const rows = rowsResult.rows as Array<{
       userId: string;
       username: string;
+      displayName: string | null;
       avatarUrl: string | null;
     }>;
 
@@ -332,6 +335,7 @@ export class FriendshipRepository implements FriendshipRepositoryPort {
       items: items.map((row) => ({
         userId: row.userId,
         username: row.username,
+        displayName: row.displayName,
         avatarUrl: row.avatarUrl,
       })),
       pagination: {
