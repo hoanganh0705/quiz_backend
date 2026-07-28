@@ -69,6 +69,8 @@ describe('CommentController', () => {
       getComment: jest.fn(),
       editComment: jest.fn(),
       createReport: jest.fn(),
+      hideComment: jest.fn(),
+      restoreComment: jest.fn(),
     } as unknown as jest.Mocked<CommentPresenter>;
 
     controller = new CommentController(application, presenter);
@@ -124,7 +126,7 @@ describe('CommentController', () => {
       const dto: VoteDto = { value: 'upvote' };
       application.vote.mockResolvedValueOnce(undefined);
 
-      await controller.vote(user, commentId, dto);
+      await controller.castVote(user, commentId, dto);
 
       expect(application.vote).toHaveBeenCalledWith(user, commentId, 'upvote');
     });
@@ -166,20 +168,33 @@ describe('CommentController', () => {
   });
 
   describe('moderator actions', () => {
-    it('hideComment delegates to the application with the JWT payload', async () => {
-      application.hideComment.mockResolvedValueOnce(undefined);
+    const mockModerationResult = {
+      commentId,
+      isHidden: true,
+      changed: true,
+    };
 
-      await controller.hideComment(moderator, commentId);
+    it('hideComment delegates to the application with the JWT payload and returns presenter result', async () => {
+      application.hideComment.mockResolvedValueOnce(mockModerationResult);
+      presenter.hideComment.mockReturnValueOnce({ data: mockModerationResult, meta: { timestamp: '2026-07-28T00:00:00.000Z' } } as never);
+
+      const result = await controller.hideComment(moderator, commentId);
 
       expect(application.hideComment).toHaveBeenCalledWith(moderator, commentId);
+      expect(presenter.hideComment).toHaveBeenCalledWith(mockModerationResult);
+      expect(result).toHaveProperty('data');
     });
 
-    it('restoreComment delegates to the application with the JWT payload', async () => {
-      application.restoreComment.mockResolvedValueOnce(undefined);
+    it('restoreComment delegates to the application with the JWT payload and returns presenter result', async () => {
+      const mockRestoreResult = { ...mockModerationResult, isHidden: false };
+      application.restoreComment.mockResolvedValueOnce(mockRestoreResult);
+      presenter.restoreComment.mockReturnValueOnce({ data: mockRestoreResult, meta: { timestamp: '2026-07-28T00:00:00.000Z' } } as never);
 
-      await controller.restoreComment(moderator, commentId);
+      const result = await controller.restoreComment(moderator, commentId);
 
       expect(application.restoreComment).toHaveBeenCalledWith(moderator, commentId);
+      expect(presenter.restoreComment).toHaveBeenCalledWith(mockRestoreResult);
+      expect(result).toHaveProperty('data');
     });
   });
 });

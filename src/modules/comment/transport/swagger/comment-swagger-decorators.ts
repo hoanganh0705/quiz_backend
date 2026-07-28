@@ -17,6 +17,7 @@ import { AUTH_SECURITY_NAME } from '@/core/swagger/swagger.config';
 import { ProblemDetailDto } from '@/common/swagger/swagger-schemas';
 import { ApiCreatedResource, ApiOkResource, ApiOkResourceList } from '@/common/swagger/api-ok';
 import { CommentDto, CommentWithRepliesDto } from '../../dto/response/comment.dto';
+import { ModerationResultDto } from '../../dto/response/moderation-result.dto';
 import { MyCommentDto } from '../../dto/response/my-comment.dto';
 import { ReportDto } from '../../dto/response/report.dto';
 
@@ -198,6 +199,7 @@ export const ApiListQuizCommentsResponses = (): MethodDecorator =>
       QUIZ_COMMENTS_LIST_EXAMPLE,
     ),
     ApiOperation({
+      operationId: 'listQuizComments',
       summary: 'List comments for a quiz',
       description:
         'Returns a cursor-paginated list of top-level comments on a quiz. The ' +
@@ -217,6 +219,7 @@ export const ApiCreateCommentResponses = (): MethodDecorator =>
   applyDecorators(
     resourceCreated(CommentDto, 'Comment created', COMMENT_CREATED_EXAMPLE),
     ApiOperation({
+      operationId: 'createComment',
       summary: 'Create a top-level comment or reply on a quiz',
       description:
         'Creates a top-level comment when `parentCommentId` is omitted, or a ' +
@@ -256,6 +259,7 @@ export const ApiGetCommentResponses = (): MethodDecorator =>
   applyDecorators(
     resourceOk(CommentDto, 'Comment returned', COMMENT_DETAIL_EXAMPLE),
     ApiOperation({
+      operationId: 'getComment',
       summary: 'Get a comment by id',
       description:
         'Returns the comment when it exists and is not soft-deleted. Throws ' +
@@ -276,6 +280,7 @@ export const ApiEditCommentResponses = (): MethodDecorator =>
       applyDecorators(
         resourceOk(CommentDto, 'Comment updated', COMMENT_UPDATED_EXAMPLE),
         ApiOperation({
+          operationId: 'editComment',
           summary: 'Edit a comment you authored',
           description:
             'Replaces the body of a comment you authored. Returns 403 ' +
@@ -300,6 +305,7 @@ export const ApiDeleteCommentResponses = (): MethodDecorator =>
       applyDecorators(
         ApiNoContentResponse({ description: 'Comment soft-deleted' }),
         ApiOperation({
+          operationId: 'deleteComment',
           summary: 'Soft-delete a comment you authored',
           description:
             'Sets `deletedAt` on a comment you authored. The row is preserved ' +
@@ -321,6 +327,7 @@ export const ApiVoteCommentResponses = (): MethodDecorator =>
       applyDecorators(
         ApiNoContentResponse({ description: 'Vote recorded' }),
         ApiOperation({
+          operationId: 'castVote',
           summary: 'Cast, change, or flip your vote on a comment',
           description:
             'Idempotent. Replaying the same value removes the vote. Posting ' +
@@ -346,7 +353,10 @@ export const ApiRemoveVoteResponses = (): MethodDecorator =>
     authThen(
       applyDecorators(
         ApiNoContentResponse({ description: 'Vote removed' }),
-        ApiOperation({ summary: 'Remove your vote from a comment' }),
+        ApiOperation({
+          operationId: 'removeVote',
+          summary: 'Remove your vote from a comment',
+        }),
         ApiBadRequestResponse(
           problem.badRequest(removeVoteBadRequestExample, '`commentId` must be a UUID'),
         ),
@@ -365,6 +375,7 @@ export const ApiReportCommentResponses = (): MethodDecorator =>
       applyDecorators(
         resourceCreated(ReportDto, 'Report opened', COMMENT_REPORT_CREATED_EXAMPLE),
         ApiOperation({
+          operationId: 'reportComment',
           summary: 'Report a comment to moderators',
           description:
             'Throttled at 5 requests per minute per IP. Returns 409 ' +
@@ -391,16 +402,27 @@ export const ApiReportCommentResponses = (): MethodDecorator =>
 
 // ─── POST /comments/:commentId/hide  &  POST /comments/:commentId/restore ──
 
+const MODERATION_RESULT_EXAMPLE = {
+  commentId: '880e8400-e29b-71d4-a716-446655440000',
+  isHidden: true,
+  changed: true,
+};
+
 export const ApiHideCommentResponses = (): MethodDecorator =>
   applyDecorators(
     authThen(
       applyDecorators(
-        ApiNoContentResponse({ description: 'Comment hidden by moderator' }),
+        ApiOkResource(ModerationResultDto, {
+          description: 'Comment hidden by moderator',
+          example: MODERATION_RESULT_EXAMPLE,
+        }),
         ApiOperation({
+          operationId: 'hideComment',
           summary: 'Hide a comment as a moderator',
           description:
             'Sets `isHidden = true` and records `hiddenById` / `hiddenAt`. The ' +
             'comment remains in the database but disappears from public reads. ' +
+            'Returns `changed: false` if the comment was already hidden. ' +
             'Requires the `COMMENT_MODERATE` permission.',
         }),
         ApiUnauthorizedResponse(problem.unauthorized(hideCommentUnauthorizedExample)),
@@ -420,12 +442,17 @@ export const ApiRestoreCommentResponses = (): MethodDecorator =>
   applyDecorators(
     authThen(
       applyDecorators(
-        ApiNoContentResponse({ description: 'Comment restored by moderator' }),
+        ApiOkResource(ModerationResultDto, {
+          description: 'Comment restored by moderator',
+          example: { ...MODERATION_RESULT_EXAMPLE, isHidden: false },
+        }),
         ApiOperation({
+          operationId: 'restoreComment',
           summary: 'Restore a previously hidden comment',
           description:
-            'Clears `isHidden`, `hiddenById`, and `hiddenAt`. Requires the ' +
-            '`COMMENT_MODERATE` permission. No-op if the comment was not hidden.',
+            'Clears `isHidden`, `hiddenById`, and `hiddenAt`. ' +
+            'Returns `changed: false` if the comment was not hidden. ' +
+            'Requires the `COMMENT_MODERATE` permission.',
         }),
         ApiUnauthorizedResponse(problem.unauthorized(restoreCommentUnauthorizedExample)),
         ApiForbiddenResponse(
@@ -448,6 +475,7 @@ export const ApiListCommentReportsResponses = (): MethodDecorator =>
       applyDecorators(
         resourceList(ReportDto, 'cursor', 'Comment reports returned', COMMENT_REPORTS_LIST_EXAMPLE),
         ApiOperation({
+          operationId: 'listReports',
           summary: 'List open and historical comment reports (moderator only)',
           description:
             'Cursor-paginated feed of reports. Use the `status` query parameter ' +
@@ -474,6 +502,7 @@ export const ApiReviewCommentReportResponses = (): MethodDecorator =>
       applyDecorators(
         resourceOk(ReportDto, 'Report reviewed', COMMENT_REPORT_REVIEWED_EXAMPLE),
         ApiOperation({
+          operationId: 'reviewReport',
           summary: 'Review and close a comment report (moderator only)',
           description:
             'Transitions a report from `open` to `reviewed`, `dismissed`, or ' +
@@ -509,6 +538,7 @@ export const ApiListMyCommentsResponses = (): MethodDecorator =>
           MY_COMMENTS_LIST_EXAMPLE,
         ),
         ApiOperation({
+          operationId: 'listMyComments',
           summary: "List the authenticated viewer's comment history",
           description:
             'Cursor-paginated; the quiz title is denormalized into each ' +
@@ -532,6 +562,7 @@ export const ApiListUserCommentsResponses = (): MethodDecorator =>
       USER_COMMENTS_LIST_EXAMPLE,
     ),
     ApiOperation({
+      operationId: 'listUserComments',
       summary: "List any user's public comment history",
       description:
         'Public endpoint. Hidden and soft-deleted comments are filtered ' +

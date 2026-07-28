@@ -1313,18 +1313,21 @@ export const ProblemCodeMapping: Readonly<Record<string, ProblemCodeInfo>> = {
   // ===========================================================================
   /** Phase 9.5 entry: the comment module is rewritten as a comment
    * section (per the architecture document §3.6). The error set is the
-   * narrow 11-class list scoped to comment-only operations: there is no
+   * narrow 10-class list scoped to comment-only operations: there is no
    * thread, no solved state, no subscriptions, no bookmarks. The prior
-   * 12-class comments block is retired in the same change. */
-  // 11 concrete exceptions → 4 status codes:
+   * 12-class comments block is retired in the same change.
+   *
+   * Phase 1 audit: removed unused COMMENT_PARENT_COMMENT_NOT_FOUND
+   * as it was dead code (defined but never thrown). */
+  // 10 concrete exceptions → 4 status codes:
   //   404: COMMENT_NOT_FOUND, COMMENT_QUIZ_NOT_FOUND,
-  //        COMMENT_PARENT_COMMENT_NOT_FOUND, COMMENT_REPORT_NOT_FOUND (4)
+  //        COMMENT_REPORT_NOT_FOUND (3) - ParentCommentNotFoundError removed
   //   403: COMMENT_FORBIDDEN, COMMENT_SELF_VOTE,
   //        COMMENT_SELF_REPORT, COMMENT_MODERATOR_REQUIRED (4)
   //   409: COMMENT_REPLY_LIMIT_EXCEEDED, COMMENT_DUPLICATE_REPORT (2)
   //   400: COMMENT_PARENT_COMMENT_CROSS_THREAD (1)
   //
-  // Total = 4 + 4 + 2 + 1 = 11.
+  // Total = 3 + 4 + 2 + 1 = 10.
   //
   // Note on the cross-module `UserNotFoundError`: the prior per-module
   // filter `@Catch(CommentError, UserNotFoundError)` also caught
@@ -1365,15 +1368,6 @@ export const ProblemCodeMapping: Readonly<Record<string, ProblemCodeInfo>> = {
     status: HttpStatus.NOT_FOUND,
     title: 'NotFound',
     typeUri: 'https://api.quiz.local/problems/comment-quiz-not-found',
-  },
-  /**
-   * Thrown when a reply references a parent comment that does not
-   * exist or has been hidden / soft-deleted. 404 Not Found.
-   */
-  COMMENT_PARENT_COMMENT_NOT_FOUND: {
-    status: HttpStatus.NOT_FOUND,
-    title: 'NotFound',
-    typeUri: 'https://api.quiz.local/problems/comment-parent-comment-not-found',
   },
   /**
    * Thrown when a moderator tries to review a report that does not
