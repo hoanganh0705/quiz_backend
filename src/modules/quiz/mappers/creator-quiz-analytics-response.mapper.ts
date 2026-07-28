@@ -9,7 +9,7 @@ export class CreatorQuizAnalyticsResponseMapper {
       draftQuizzes: analytics.draftQuizzes,
       publishedQuizzes: analytics.publishedQuizzes,
       totalAttempts: analytics.totalAttempts,
-      totalPlayers: analytics.totalPlayers,
+      uniquePlayers: analytics.uniquePlayers,
       averageScore: analytics.averageScore,
       averageRating: analytics.averageRating,
       totalBookmarks: analytics.totalBookmarks,

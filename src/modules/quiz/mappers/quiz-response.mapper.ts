@@ -68,7 +68,7 @@ export class QuizResponseMapper {
       durationMs: row.publishedVersionDurationMs!,
       passingScorePercent: row.publishedVersionPassingScorePercent!,
       rewardXp: row.publishedVersionRewardXp!,
-      createdByUserId: row.publishedVersionCreatedByUserId,
+      creatorId: row.publishedVersionCreatedByUserId,
       createdAt: row.publishedVersionCreatedAt!,
       publishedAt: row.publishedVersionPublishedAt,
       archivedAt: row.publishedVersionArchivedAt,

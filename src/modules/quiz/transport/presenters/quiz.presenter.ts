@@ -72,10 +72,9 @@ export class QuizPresenter {
   readonly getMyQuizAnalytics = QuizPresenter.ok<CreatorQuizAnalyticsDto>;
   readonly getQuizStats = QuizPresenter.ok<QuizStatsResponseDto>;
 
-  // Related (related / featured / similar): items-only DTOs unwrapped to bare array
-  readonly getFeaturedQuizzes = (dto: RelatedQuizzesResponseDto) => ApiResponse.ok([...dto.items]);
+  // Related: items-only DTO unwrapped to bare array
   readonly getRelatedQuizzes = (dto: RelatedQuizzesResponseDto) => ApiResponse.ok([...dto.items]);
-  readonly getSimilarQuizzes = (dto: RelatedQuizzesResponseDto) => ApiResponse.ok([...dto.items]);
+  readonly getFeaturedQuizzes = (dto: RelatedQuizzesResponseDto) => ApiResponse.ok([...dto.items]);
 
   // Quiz versions
   readonly createQuizVersion = QuizPresenter.ok<QuizVersionResponseDto>;

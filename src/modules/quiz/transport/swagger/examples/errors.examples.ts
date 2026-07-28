@@ -1,5 +1,6 @@
 import { ErrorResponseExamples } from '@/common/swagger/swagger-schemas';
 import { RFC7807_TYPE_URIS } from '@/common/types/problem-detail.type';
+import { QUIZ_INSUFFICIENT_QUESTIONS_MESSAGE } from '../../../quiz.constants';
 
 /**
  * Quiz module error examples with endpoint-correct `instance` paths.
@@ -172,19 +173,19 @@ export const quizStatsInternalErrorExample = withInstance(
   `/quizzes/${UUID_ID}/stats`,
 );
 
-// ─── GET /quizzes/:slug/similar ───────────────────────────────────────────────
+// ─── GET /quizzes/:slug/related ───────────────────────────────────────────────
 
 export const relatedQuizzesBadRequestExample = withInstance(
   ErrorResponseExamples.badRequest,
-  '/quizzes/javascript-fundamentals/similar',
+  '/quizzes/javascript-fundamentals/related',
 );
 export const relatedQuizzesNotFoundExample = withInstance(
   ErrorResponseExamples.notFound,
-  '/quizzes/javascript-fundamentals/similar',
+  '/quizzes/javascript-fundamentals/related',
 );
 export const relatedQuizzesInternalErrorExample = withInstance(
   ErrorResponseExamples.internalServerError,
-  '/quizzes/javascript-fundamentals/similar',
+  '/quizzes/javascript-fundamentals/related',
 );
 
 // ─── PATCH /quizzes/:id ──────────────────────────────────────────────────────
@@ -365,7 +366,7 @@ export const publishQuizVersionUnprocessableExample = {
   type: RFC7807_TYPE_URIS[422],
   title: 'UnprocessableEntity',
   status: 422,
-  detail: 'Quiz version must contain at least 5 questions to be published',
+  detail: QUIZ_INSUFFICIENT_QUESTIONS_MESSAGE,
   instance: `/quizzes/${UUID_ID}/versions/${UUID_VERSION_ID}/publish`,
   extensions: { requestId: 'req_abc123' },
 };
