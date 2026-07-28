@@ -80,7 +80,7 @@ function rankingAdminForbiddenResponse(): MethodDecorator {
   );
 }
 
-@ApiTags('leaderboard')
+@ApiTags('leaderboards')
 @Controller('admin/ranking')
 export class RankingAdminController {
   constructor(

@@ -46,6 +46,8 @@ import {
   RankMovementQueryDto,
   RankingPeriodEnum,
   TopMoversQueryDto,
+  TopMoversPeriodEnum,
+  mapTopMoversPeriodEnumToDomain,
 } from '../../dto/request/leaderboard-query.dto';
 import {
   LeaderboardResponseDto,
@@ -134,7 +136,7 @@ function rankingUserIdParam(): MethodDecorator {
   );
 }
 
-@ApiTags('leaderboard')
+@ApiTags('leaderboards')
 @Controller('leaderboard')
 export class RankingController {
   constructor(
@@ -220,7 +222,7 @@ export class RankingController {
   @rankingBadRequestResponse()
   async getTopMovers(@Query() query: TopMoversQueryDto) {
     const result = await this.getTopMoversQueryHandler.execute({
-      period: mapRankingPeriodEnumToDomain(query.period ?? LeaderboardPeriodEnum.WEEKLY),
+      period: mapTopMoversPeriodEnumToDomain(query.period ?? TopMoversPeriodEnum.WEEKLY),
       limit: query.limit ?? 10,
     });
     return this.presenter.getTopMovers(result);

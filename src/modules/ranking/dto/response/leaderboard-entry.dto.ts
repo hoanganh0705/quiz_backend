@@ -155,40 +155,6 @@ export class GlobalRankingDto {
   allTime!: UserRankPositionDto | null;
 }
 
-/**
- * @deprecated Use `PeakRanksResponseDto` instead.
- * This number-only shape was replaced by the richer `{ rank, achievedAt }`
- * shape so that `/leaderboard/me` and `/leaderboard/me/peak-ranks` expose
- * the same data structure. Kept temporarily for backwards compatibility.
- *
- * @see PeakRanksResponseDto
- */
-export class PeakRanksDto {
-  @ApiPropertyOptional({
-    description: 'Best weekly rank achieved',
-    type: Number,
-    example: 15,
-    nullable: true,
-  })
-  weekly!: number | null;
-
-  @ApiPropertyOptional({
-    description: 'Best monthly rank achieved',
-    type: Number,
-    example: 8,
-    nullable: true,
-  })
-  monthly!: number | null;
-
-  @ApiPropertyOptional({
-    description: 'Best all-time rank achieved',
-    type: Number,
-    example: 3,
-    nullable: true,
-  })
-  allTime!: number | null;
-}
-
 export class UserBadgesDto {
   @ApiProperty({ description: 'Whether user is newer than 7 days', example: false })
   isNew!: boolean;

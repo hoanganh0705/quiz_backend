@@ -1,6 +1,7 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import { IsDateString, IsEnum, IsInt, IsOptional, Max, Min, ValidateIf } from 'class-validator';
+import { RankingPeriod } from '../../domain/types/ranking.types';
 
 export enum RankingPeriodEnum {
   DAILY = 'daily',
@@ -106,15 +107,28 @@ export class RankMovementQueryDto {
   period?: LeaderboardPeriodEnum = LeaderboardPeriodEnum.WEEKLY;
 }
 
+/**
+ * Periods supported by the *top movers* endpoint (`/leaderboard/top-movers`).
+ *
+ * Note: `daily` is intentionally **not** supported. Top movers track ranking
+ * movement over a period — daily resets would cause excessive volatility and
+ * are not meaningful for this feature. `all_time` is also excluded since
+ * "movement" over all time is not semantically meaningful.
+ */
+export enum TopMoversPeriodEnum {
+  WEEKLY = LeaderboardPeriodEnum.WEEKLY,
+  MONTHLY = LeaderboardPeriodEnum.MONTHLY,
+}
+
 export class TopMoversQueryDto {
   @ApiPropertyOptional({
-    description: 'Top movers period',
-    enum: [LeaderboardPeriodEnum.WEEKLY, LeaderboardPeriodEnum.MONTHLY],
-    default: LeaderboardPeriodEnum.WEEKLY,
+    description: 'Top movers period. Only weekly and monthly are supported.',
+    enum: TopMoversPeriodEnum,
+    default: TopMoversPeriodEnum.WEEKLY,
   })
-  @IsEnum(LeaderboardPeriodEnum)
+  @IsEnum(TopMoversPeriodEnum)
   @IsOptional()
-  period?: LeaderboardPeriodEnum = LeaderboardPeriodEnum.WEEKLY;
+  period?: TopMoversPeriodEnum = TopMoversPeriodEnum.WEEKLY;
 
   @ApiPropertyOptional({
     description: 'Number of top movers to return',
@@ -163,4 +177,11 @@ export class LeaderboardDistributionQueryDto {
   @IsEnum(LeaderboardPeriodEnum)
   @IsOptional()
   period?: LeaderboardPeriodEnum = LeaderboardPeriodEnum.ALL_TIME;
+}
+
+/** Map TopMoversPeriodEnum to domain RankingPeriod. */
+export function mapTopMoversPeriodEnumToDomain(
+  period: TopMoversPeriodEnum | undefined,
+): RankingPeriod {
+  return period as unknown as RankingPeriod;
 }
