@@ -63,13 +63,17 @@ export class NotificationNotFoundError extends NotificationError {
  * is thrown AFTER `NotificationNotFoundError`, so the caller is
  * authenticated — 403 is correct (forbidden), not 401
  * (unauthenticated). The throw-sites at
- * `notification-application.service.ts:132, 160, 209` all check
+ * `notification-application.service.ts` all check
  * `notification.userId !== user.sub` after a successful lookup,
  * confirming the 403 semantic.
+ *
+ * Audit (rev6.1): constructor now accepts `notificationId` for
+ * improved debuggability, cross-module consistency, and better
+ * error message rendering in multi-language scenarios.
  */
 export class NotificationForbiddenError extends NotificationError {
   readonly code = 'NOTIFICATION_FORBIDDEN';
-  constructor() {
-    super('You do not have permission to access this notification');
+  constructor(notificationId: string) {
+    super(`You do not have permission to access notification ${notificationId}`);
   }
 }

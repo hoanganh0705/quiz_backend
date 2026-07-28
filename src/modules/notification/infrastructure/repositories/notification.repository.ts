@@ -214,10 +214,24 @@ export class NotificationRepository implements NotificationRepositoryPort {
     return Number(result.rowCount ?? 0);
   }
 
+  /**
+   * Alias for softDelete to satisfy the repository interface contract.
+   * All deletes in this module are soft deletes; hard deletes only occur
+   * via `deleteExpired()` for records past their expiresAt.
+   *
+   * Phase 6 (rev6.1): added this clarifying comment. The delegation
+   * from `delete()` to `softDelete()` is intentional — the interface
+   * declares `delete()` but the implementation always performs a soft delete.
+   */
   async delete(notificationId: string, userId: string): Promise<void> {
     await this.softDelete(notificationId, userId);
   }
 
+  /**
+   * Performs a soft delete by setting `deletedAt` to the current timestamp.
+   * The record remains in the database but is excluded from normal queries
+   * via the `isNull(deletedAt)` filter applied in all read operations.
+   */
   async softDelete(notificationId: string, userId: string): Promise<void> {
     await this.getDb()
       .update(notifications)
