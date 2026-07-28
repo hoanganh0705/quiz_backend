@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Post } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, ParseUUIDPipe, Post } from '@nestjs/common';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
@@ -47,14 +47,14 @@ export class ReviewController {
 
   @Delete(':reviewId/helpful')
   @ApiAuth()
+  @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Remove the helpful vote on a review' })
   @ApiRemoveHelpfulVoteResponses()
   async removeHelpfulVote(
     @Param('reviewId', new ParseUUIDPipe({ version: '7' })) reviewId: string,
     @CurrentUser() user: JwtPayload,
-  ) {
-    const result = await this.reviewApplicationService.removeHelpfulVote(reviewId, user);
-    return this.presenter.removeHelpfulVote(result);
+  ): Promise<void> {
+    await this.reviewApplicationService.removeHelpfulVote(reviewId, user);
   }
 
   @Post(':reviewId/report')

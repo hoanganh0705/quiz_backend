@@ -3,6 +3,8 @@ import {
   Controller,
   Delete,
   Get,
+  HttpCode,
+  HttpStatus,
   Param,
   ParseUUIDPipe,
   Patch,
@@ -31,7 +33,7 @@ import {
 
 @ApiTags('quizzes')
 @Controller('quizzes')
-export class quizReviewController {
+export class QuizReviewController {
   constructor(
     private readonly reviewApplicationService: ReviewApplicationService,
     private readonly presenter: ReviewPresenter,
@@ -123,13 +125,13 @@ export class quizReviewController {
 
   @Delete(':quizId/reviews')
   @ApiAuth()
+  @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Delete the authenticated user review for a quiz' })
   @ApiDeleteReviewResponses()
   async deleteReview(
     @Param('quizId', new ParseUUIDPipe({ version: '7' })) quizId: string,
     @CurrentUser() user: JwtPayload,
-  ) {
-    const result = await this.reviewApplicationService.deleteReview(quizId, user);
-    return this.presenter.deleteReview(result);
+  ): Promise<void> {
+    await this.reviewApplicationService.deleteReview(quizId, user);
   }
 }

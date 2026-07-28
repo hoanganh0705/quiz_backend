@@ -3,7 +3,6 @@ import { ApiResponse } from '@/common/responses/api-response';
 import type { ApiResponseEnvelope } from '@/common/responses/api-response';
 import type { QuizAnalyticsResponseDto } from '@/modules/quiz/dto/response/quiz-analytics.dto';
 import type { CreateReviewResponseDto } from '../../dto/response/create-review-response.dto';
-import type { DeleteReviewResponseDto } from '../../dto/response/delete-review-response.dto';
 import type { HelpfulReviewResponseDto } from '../../dto/response/helpful-review-response.dto';
 import type { MyReviewsResponseDto } from '../../dto/response/my-review-response.dto';
 import type { PlatformReportsResponseDto } from '../../dto/response/admin-review.dto';
@@ -59,7 +58,6 @@ export class ReviewPresenter {
   // /reviews (top-level) — single-resource / message endpoints
   readonly getMyReviewDashboard = ReviewPresenter.ok<ReviewDashboardResponseDto>;
   readonly markReviewHelpful = ReviewPresenter.ok<HelpfulReviewResponseDto>;
-  readonly removeHelpfulVote = ReviewPresenter.ok<HelpfulReviewResponseDto>;
   readonly reportReview = ReviewPresenter.ok<ReportReviewResponseDto>;
   readonly getReviewById = ReviewPresenter.ok<ReviewDetailResponseDto>;
 
@@ -69,7 +67,6 @@ export class ReviewPresenter {
   readonly getQuizReviewStats = ReviewPresenter.ok<ReviewStatsResponseDto>;
   readonly getCreatorQuizReviewAnalytics = ReviewPresenter.ok<QuizAnalyticsResponseDto>;
   readonly updateReview = ReviewPresenter.ok<UpdateReviewResponseDto>;
-  readonly deleteReview = ReviewPresenter.ok<DeleteReviewResponseDto>;
 
   // /users/* reviews — paginated user-scoped reads + null-safe my-review
   readonly listMyReportedReviews = wrapPaginatedDto<ReportedReviewsResponseDto['items'][number]>;
