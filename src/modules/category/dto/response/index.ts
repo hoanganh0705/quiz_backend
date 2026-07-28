@@ -3,7 +3,7 @@ export {
   CategoryPaginationResponseDto,
 } from './category-list-response.dto';
 export { CategoryResponseDto } from './category-response.dto';
-export { MessageResponseDto } from './message-response.dto';
+export { MessageResponseDto } from '@/common/swagger/swagger-schemas';
 export { RankedCategoryResponseDto } from './ranked-category-response.dto';
 export { RankedCategoriesResponseDto } from './ranked-categories-response.dto';
 export { RelatedCategoriesResponseDto } from './related-categories-response.dto';

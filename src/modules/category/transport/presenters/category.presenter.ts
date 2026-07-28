@@ -5,7 +5,7 @@ import type { PaginatedResult } from '@/common/responses/paginated-result';
 import type { CategoryAnalyticsResponseDto } from '../../dto/response/category-analytics-response.dto';
 import type { CategoryResponseDto } from '../../dto/response/category-response.dto';
 import type { FollowedCategoryItemDto } from '../../dto/response/followed-category-item.dto';
-import type { MessageResponseDto } from '../../dto/response/message-response.dto';
+import type { MessageResponseDto } from '@/common/swagger/swagger-schemas';
 import type { RankedCategoryResponseDto } from '../../dto/response/ranked-category-response.dto';
 import type { QuizListItemDto } from '@/modules/quiz/dto/response/quiz-list-item.dto';
 

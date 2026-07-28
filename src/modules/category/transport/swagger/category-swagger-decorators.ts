@@ -5,6 +5,7 @@ import {
   ApiConflictResponse,
   ApiForbiddenResponse,
   ApiInternalServerErrorResponse,
+  ApiNoContentResponse,
   ApiNotFoundResponse,
   ApiParam,
   ApiTooManyRequestsResponse,
@@ -12,7 +13,7 @@ import {
   type ApiResponseOptions,
 } from '@nestjs/swagger';
 import { AUTH_SECURITY_NAME } from '@/core/swagger/swagger.config';
-import { ProblemDetailDto } from '@/common/swagger/swagger-schemas';
+import { MessageResponseDto, ProblemDetailDto } from '@/common/swagger/swagger-schemas';
 import {
   ApiCreatedResource,
   ApiOkResource,
@@ -22,7 +23,6 @@ import {
 import { CategoryAnalyticsResponseDto } from '../../dto/response/category-analytics-response.dto';
 import { CategoryResponseDto } from '../../dto/response/category-response.dto';
 import { FollowedCategoryItemDto } from '../../dto/response/followed-category-item.dto';
-import { MessageResponseDto } from '../../dto/response/message-response.dto';
 import { RankedCategoryResponseDto } from '../../dto/response/ranked-category-response.dto';
 import { QuizListItemDto } from '@/modules/quiz/dto/response/quiz-list-item.dto';
 import {
@@ -85,12 +85,10 @@ import {
   CATEGORY_DELETE_MESSAGE_EXAMPLE,
   CATEGORY_DETAIL_EXAMPLE,
   CATEGORY_FOLLOWED_LIST_EXAMPLE,
-  CATEGORY_FOLLOW_MESSAGE_EXAMPLE,
   CATEGORY_LIST_EXAMPLE,
   CATEGORY_QUIZZES_EXAMPLE,
   CATEGORY_RANKED_LIST_EXAMPLE,
   CATEGORY_RELATED_LIST_EXAMPLE,
-  CATEGORY_UNFOLLOW_MESSAGE_EXAMPLE,
 } from './examples';
 
 // ─── Shared description strings ────────────────────────────────────────────────
@@ -246,10 +244,7 @@ export const ApiFollowCategoryResponse = (): MethodDecorator =>
       schema: { type: 'string', format: 'uuid' },
     }),
     ApiBearerAuth(AUTH_SECURITY_NAME),
-    ApiOkResource(MessageResponseDto, {
-      description: DESCRIPTIONS.categoryFollow,
-      example: CATEGORY_FOLLOW_MESSAGE_EXAMPLE,
-    }),
+    ApiNoContentResponse({ description: DESCRIPTIONS.categoryFollow }),
     ApiBadRequestResponse(problem.badRequest(followBadRequestExample)),
     ApiUnauthorizedResponse(problem.unauthorized(followUnauthorizedExample)),
     ApiForbiddenResponse(problem.forbidden(followForbiddenExample)),
@@ -267,10 +262,7 @@ export const ApiUnfollowCategoryResponse = (): MethodDecorator =>
       schema: { type: 'string', format: 'uuid' },
     }),
     ApiBearerAuth(AUTH_SECURITY_NAME),
-    ApiOkResource(MessageResponseDto, {
-      description: DESCRIPTIONS.categoryUnfollow,
-      example: CATEGORY_UNFOLLOW_MESSAGE_EXAMPLE,
-    }),
+    ApiNoContentResponse({ description: DESCRIPTIONS.categoryUnfollow }),
     ApiBadRequestResponse(problem.badRequest(unfollowBadRequestExample)),
     ApiUnauthorizedResponse(problem.unauthorized(unfollowUnauthorizedExample)),
     ApiForbiddenResponse(problem.forbidden(unfollowForbiddenExample)),

@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { CategoryDomainService } from '../domain/category.service';
 import type { CategoryResponseDto } from '../dto/response/category-response.dto';
-import type { MessageResponseDto } from '../dto/response/message-response.dto';
+import type { MessageResponseDto } from '@/common/swagger/swagger-schemas';
 import type {
   CreateCategoryCommand,
   UpdateCategoryCommand,

@@ -60,7 +60,7 @@ export class CategoryDomainService {
     hasNextPage: boolean;
     nextCursor: Pick<CategoryRow, 'createdAt' | 'categoryId'> | null;
   }> {
-    const limit = query.limit ?? 10;
+    const limit = query.limit ?? 20;
     const cursor = query.cursor ?? null;
 
     const rows = await this.categoryRepository.findMany({ limit, cursor });
@@ -264,7 +264,7 @@ export class CategoryDomainService {
 
     const follow = await this.categoryFollowRepository.findActiveFollow({ userId, categoryId });
     if (!follow) {
-      throw new CategoryFollowNotFoundError(`You are not following category ${categoryId}`);
+      throw new CategoryFollowNotFoundError();
     }
 
     try {
