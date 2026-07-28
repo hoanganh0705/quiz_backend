@@ -38,9 +38,9 @@ import {
 } from '../dto/response/password-reset.dto';
 import {
   SessionListResponseDto,
-  AccountSecurityDto,
   SessionManagementResultDto,
 } from '../dto/response/session-management.dto';
+import { AccountSecurityDto } from '../dto/response/account-security.dto';
 import { CurrentUserResponseDto } from '../dto/response/current-user-response.dto';
 import { VerifyPasswordResponseDto } from '../dto/response/verify-password-response.dto';
 import { CheckEmailResponseDto } from '../dto/response/check-email-response.dto';
@@ -186,18 +186,26 @@ export class AuthApplicationService {
     userId: string,
     sessionId: string,
     currentSessionId: string,
+    ipAddress?: string,
   ): Promise<SessionManagementResultDto> {
-    await this.sessionManagementService.revokeSession(userId, sessionId, currentSessionId);
+    await this.sessionManagementService.revokeSession(
+      userId,
+      sessionId,
+      currentSessionId,
+      ipAddress,
+    );
     return { message: 'Session revoked successfully' };
   }
 
   async revokeAllOtherSessions(
     userId: string,
     currentSessionId: string,
+    ipAddress?: string,
   ): Promise<SessionManagementResultDto> {
     const count = await this.sessionManagementService.revokeAllOtherSessions(
       userId,
       currentSessionId,
+      ipAddress,
     );
     return {
       message: `${count} session${count !== 1 ? 's' : ''} revoked. Current device remains logged in.`,
@@ -207,11 +215,22 @@ export class AuthApplicationService {
   async getSecurityDashboard(userId: string): Promise<AccountSecurityDto> {
     const metadata = await this.accountSecurityService.getAccountSecurity(userId);
 
+    const passwordAgeDays =
+      metadata.lastPasswordChangedAt === null
+        ? null
+        : Math.max(
+            0,
+            Math.floor(
+              (Date.now() - Date.parse(metadata.lastPasswordChangedAt)) / (1000 * 60 * 60 * 24),
+            ),
+          );
+
     return {
       emailVerified: metadata.emailVerified,
       activeSessionCount: metadata.activeSessionCount,
       lastSuccessfulLoginAt: metadata.lastLoginAt,
       lastPasswordChangeAt: metadata.lastPasswordChangedAt,
+      passwordAgeDays,
     };
   }
 

@@ -1,30 +1,32 @@
 import {
   Body,
   Controller,
+  HttpCode,
+  HttpStatus,
   Post,
+  Query,
   UseInterceptors,
   Get,
   Delete,
   Param,
   ParseUUIDPipe,
 } from '@nestjs/common';
-import {
-  ApiTags,
-  ApiOperation,
-  ApiTooManyRequestsResponse,
-  ApiBadRequestResponse,
-  ApiUnauthorizedResponse,
-  ApiNotFoundResponse,
-  ApiConflictResponse,
-  ApiInternalServerErrorResponse,
-} from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiConflictResponse } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import { Public } from '@/common/decorators/public.decorator';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
 import { ApiAuth } from '@/common/swagger/swagger-decorators';
+import {
+  ApiBadRequest,
+  ApiConflict,
+  ApiInternalError,
+  ApiNotFound,
+  ApiTooManyRequests,
+  ApiUnauthorized,
+} from '@/common/swagger/swagger-decorators';
 import { ApiCookieParam, registerCookieParam } from '@/common/swagger/cookie-params.plugin';
 import { ApiOkResource, ApiCreatedResource } from '@/common/swagger/api-ok';
-import { ProblemDetailDto, ErrorResponseExamples } from '@/common/swagger/swagger-schemas';
+import { ProblemDetailDto } from '@/common/swagger/swagger-schemas';
 import { RefreshToken } from '../decorators/refresh-token.decorator';
 import { RequestContext } from '../decorators/request-context.decorator';
 import { RequestContextInterceptor } from '../interceptors/request-context.interceptor';
@@ -51,9 +53,9 @@ import {
 } from '../../dto/response/password-reset.dto';
 import {
   SessionListResponseDto,
-  AccountSecurityDto,
   SessionManagementResultDto,
 } from '../../dto/response/session-management.dto';
+import { AccountSecurityDto } from '../../dto/response/account-security.dto';
 import { CurrentUserResponseDto } from '../../dto/response/current-user-response.dto';
 import { VerifyPasswordResponseDto } from '../../dto/response/verify-password-response.dto';
 import { CheckEmailDto } from '../../dto/request/check-email.dto';
@@ -64,6 +66,7 @@ import { DeleteAccountDto } from '../../dto/request/delete-account.dto';
 import { DeleteAccountResponseDto } from '../../dto/response/delete-account-response.dto';
 import { GoogleLoginDto } from '../../dto/request/google-login.dto';
 import { AuthPresenter } from '../presenters/auth.presenter';
+import { AUTH_THROTTLE } from '../../config/throttle.constants';
 // All endpoints now use @ApiOkResource / @ApiCreatedResource with the
 // presenter layer. The hand-rolled AuthWrapped*Dto classes in
 // `auth-response-docs.dto.ts` are no longer referenced and have been removed
@@ -96,42 +99,6 @@ const clearCookieHeaderSchema = {
   },
 };
 
-const notFoundOptions = {
-  description: 'The requested resource does not exist or has been deleted',
-  type: ProblemDetailDto,
-  example: ErrorResponseExamples.notFound,
-};
-
-const conflictOptions = {
-  description: 'The request conflicts with the current state of the resource',
-  type: ProblemDetailDto,
-  example: ErrorResponseExamples.conflict,
-};
-
-const badRequestOptions = {
-  description: 'Request body, query, or params failed validation',
-  type: ProblemDetailDto,
-  example: ErrorResponseExamples.badRequest,
-};
-
-const unauthorizedOptions = {
-  description: 'Missing or invalid authentication credentials',
-  type: ProblemDetailDto,
-  example: ErrorResponseExamples.unauthorized,
-};
-
-const tooManyRequestsOptions = {
-  description: 'Rate limit exceeded',
-  type: ProblemDetailDto,
-  example: ErrorResponseExamples.tooManyRequests,
-};
-
-const internalErrorOptions = {
-  description: 'Unexpected server error',
-  type: ProblemDetailDto,
-  example: ErrorResponseExamples.internalServerError,
-};
-
 /**
  * Side-effect: register the cookie parameters consumed by this controller's
  * routes so the Swagger plugin can inject `in: 'cookie'` parameters into the
@@ -151,6 +118,8 @@ registerCookieParam('/api/v1/auth/logout', 'post', {
 
 @ApiTags('auth')
 @Controller('auth')
+// Order matters: RefreshTokenInterceptor MUST wrap RequestContextInterceptor
+// so its finalize() callback sees the populated AuthRequestContext.cookieInstructions.
 @UseInterceptors(RequestContextInterceptor, RefreshTokenInterceptor)
 export class AuthController {
   constructor(
@@ -159,7 +128,7 @@ export class AuthController {
   ) {}
 
   @Public()
-  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @Throttle({ default: AUTH_THROTTLE.register })
   @Post('register')
   @ApiOperation({
     summary: 'Register a new account',
@@ -194,9 +163,9 @@ export class AuthController {
       },
     },
   })
-  @ApiBadRequestResponse(badRequestOptions)
-  @ApiTooManyRequestsResponse(tooManyRequestsOptions)
-  @ApiInternalServerErrorResponse(internalErrorOptions)
+  @ApiBadRequest()
+  @ApiTooManyRequests()
+  @ApiInternalError()
   async register(@Body() registerDto: RegisterDto) {
     const command: RegisterCommand = {
       username: registerDto.username,
@@ -209,8 +178,9 @@ export class AuthController {
   }
 
   @Public()
-  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @Throttle({ default: AUTH_THROTTLE.verifyEmail })
   @Post('verify-email')
+  @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Verify email address',
     description:
@@ -220,7 +190,7 @@ export class AuthController {
       'Clients should treat a 200 response as "your request was received" and ' +
       'verify the email through other means (e.g., attempting to log in).',
   })
-  @ApiCreatedResource(VerifyEmailResponseDto, {
+  @ApiOkResource(VerifyEmailResponseDto, {
     description:
       'Generic acknowledgement — the same message is returned for valid, expired, and unknown tokens to prevent enumeration.',
     examples: {
@@ -244,9 +214,9 @@ export class AuthController {
       },
     },
   })
-  @ApiBadRequestResponse(badRequestOptions)
-  @ApiTooManyRequestsResponse(tooManyRequestsOptions)
-  @ApiInternalServerErrorResponse(internalErrorOptions)
+  @ApiBadRequest()
+  @ApiTooManyRequests()
+  @ApiInternalError()
   async verifyEmail(@Body() verifyEmailDto: VerifyEmailDto) {
     const command: VerifyEmailCommand = {
       token: verifyEmailDto.token,
@@ -257,7 +227,7 @@ export class AuthController {
   }
 
   @Public()
-  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @Throttle({ default: AUTH_THROTTLE.resendVerificationEmail })
   @Post('resend-verification-email')
   @ApiOperation({
     summary: 'Resend verification email',
@@ -294,9 +264,9 @@ export class AuthController {
       },
     },
   })
-  @ApiBadRequestResponse(badRequestOptions)
-  @ApiTooManyRequestsResponse(tooManyRequestsOptions)
-  @ApiInternalServerErrorResponse(internalErrorOptions)
+  @ApiBadRequest()
+  @ApiTooManyRequests()
+  @ApiInternalError()
   async resendVerificationEmail(@Body() resendVerificationDto: ResendVerificationDto) {
     const command: ResendVerificationEmailCommand = {
       email: resendVerificationDto.email,
@@ -307,7 +277,7 @@ export class AuthController {
   }
 
   @Public()
-  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @Throttle({ default: AUTH_THROTTLE.login })
   @Post('login')
   @ApiOperation({
     summary: 'Log in',
@@ -319,10 +289,10 @@ export class AuthController {
     description: 'Login successful',
     headers: { 'Set-Cookie': setCookieHeaderSchema },
   })
-  @ApiUnauthorizedResponse(unauthorizedOptions)
-  @ApiBadRequestResponse(badRequestOptions)
-  @ApiTooManyRequestsResponse(tooManyRequestsOptions)
-  @ApiInternalServerErrorResponse(internalErrorOptions)
+  @ApiUnauthorized()
+  @ApiBadRequest()
+  @ApiTooManyRequests()
+  @ApiInternalError()
   async login(@Body() loginDto: LoginDto, @RequestContext() context: AuthRequestContext) {
     const command: LoginCommand = {
       email: loginDto.email,
@@ -335,7 +305,7 @@ export class AuthController {
   }
 
   @Public()
-  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @Throttle({ default: AUTH_THROTTLE.googleLogin })
   @Post('oauth/google')
   @ApiOperation({
     summary: 'Log in with Google',
@@ -348,11 +318,11 @@ export class AuthController {
     description: 'Login successful',
     headers: { 'Set-Cookie': setCookieHeaderSchema },
   })
-  @ApiUnauthorizedResponse(unauthorizedOptions)
-  @ApiBadRequestResponse(badRequestOptions)
-  @ApiConflictResponse(conflictOptions)
-  @ApiTooManyRequestsResponse(tooManyRequestsOptions)
-  @ApiInternalServerErrorResponse(internalErrorOptions)
+  @ApiUnauthorized()
+  @ApiBadRequest()
+  @ApiConflict()
+  @ApiTooManyRequests()
+  @ApiInternalError()
   async googleLogin(
     @Body() googleLoginDto: GoogleLoginDto,
     @RequestContext() context: AuthRequestContext,
@@ -379,10 +349,10 @@ export class AuthController {
     description: 'Token refreshed',
     headers: { 'Set-Cookie': setCookieHeaderSchema },
   })
-  @ApiUnauthorizedResponse(unauthorizedOptions)
-  @ApiBadRequestResponse(badRequestOptions)
-  @ApiTooManyRequestsResponse(tooManyRequestsOptions)
-  @ApiInternalServerErrorResponse(internalErrorOptions)
+  @ApiUnauthorized()
+  @ApiBadRequest()
+  @ApiTooManyRequests()
+  @ApiInternalError()
   async refreshToken(
     @RefreshToken({ required: true }) refreshToken: string,
     @RequestContext() context: AuthRequestContext,
@@ -402,15 +372,15 @@ export class AuthController {
   @ApiOperation({
     summary: 'Log out',
     description:
-      'Clears the refresh token cookie. The access token remains valid until it expires. ' +
-      'Requires the refresh token cookie to be present.',
+      'Idempotent logout. Always returns 201 and clears the refresh token cookie. ' +
+      'If the cookie is missing, the request still succeeds (the cookie is already cleared). ' +
+      'The access token remains valid until it expires.',
   })
   @ApiCreatedResource(LogoutResponseDto, {
     description: 'Logged out successfully',
     headers: { 'Set-Cookie': clearCookieHeaderSchema },
   })
-  @ApiUnauthorizedResponse(unauthorizedOptions)
-  @ApiInternalServerErrorResponse(internalErrorOptions)
+  @ApiInternalError()
   async logout(
     @RefreshToken() refreshToken: string | null,
     @RequestContext() context: AuthRequestContext,
@@ -422,17 +392,18 @@ export class AuthController {
 
   @ApiAuth()
   @Post('logout-all')
+  @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Log out all sessions',
     description:
       'Invalidates ALL active sessions for the authenticated user and clears the refresh token cookie.',
   })
-  @ApiCreatedResource(LogoutResponseDto, {
+  @ApiOkResource(LogoutResponseDto, {
     description: 'All sessions terminated',
     headers: { 'Set-Cookie': clearCookieHeaderSchema },
   })
-  @ApiUnauthorizedResponse(unauthorizedOptions)
-  @ApiInternalServerErrorResponse(internalErrorOptions)
+  @ApiUnauthorized()
+  @ApiInternalError()
   async logoutAll(
     @CurrentUser('sub') userId: string,
     @RequestContext() context: AuthRequestContext,
@@ -455,8 +426,8 @@ export class AuthController {
   @ApiOkResource(SessionListResponseDto, {
     description: 'Active sessions retrieved',
   })
-  @ApiUnauthorizedResponse(unauthorizedOptions)
-  @ApiInternalServerErrorResponse(internalErrorOptions)
+  @ApiUnauthorized()
+  @ApiInternalError()
   async getActiveSessions(
     @CurrentUser('sub') userId: string,
     @CurrentUser('sessionId') currentSessionId: string,
@@ -475,15 +446,17 @@ export class AuthController {
   @ApiOkResource(SessionManagementResultDto, {
     description: 'Other sessions revoked',
   })
-  @ApiUnauthorizedResponse(unauthorizedOptions)
-  @ApiInternalServerErrorResponse(internalErrorOptions)
+  @ApiUnauthorized()
+  @ApiInternalError()
   async revokeOtherSessions(
     @CurrentUser('sub') userId: string,
     @CurrentUser('sessionId') currentSessionId: string,
+    @RequestContext() context: AuthRequestContext,
   ) {
     const result = await this.authApplicationService.revokeAllOtherSessions(
       userId,
       currentSessionId,
+      context.session.ipAddress ?? undefined,
     );
     return this.presenter.revokeOtherSessions(result);
   }
@@ -502,18 +475,20 @@ export class AuthController {
     description: 'Session revoked',
     headers: { 'Set-Cookie': clearCookieHeaderSchema },
   })
-  @ApiUnauthorizedResponse(unauthorizedOptions)
-  @ApiNotFoundResponse(notFoundOptions)
-  @ApiInternalServerErrorResponse(internalErrorOptions)
+  @ApiUnauthorized()
+  @ApiNotFound()
+  @ApiInternalError()
   async revokeSession(
     @CurrentUser('sub') userId: string,
     @CurrentUser('sessionId') currentSessionId: string,
     @Param('sessionId', new ParseUUIDPipe({ version: '7' })) sessionId: string,
+    @RequestContext() context: AuthRequestContext,
   ) {
     const result = await this.authApplicationService.revokeSession(
       userId,
       sessionId,
       currentSessionId,
+      context.session.ipAddress ?? undefined,
     );
     return this.presenter.revokeSession(result);
   }
@@ -527,8 +502,8 @@ export class AuthController {
   @ApiOkResource(AccountSecurityDto, {
     description: 'Security dashboard retrieved',
   })
-  @ApiUnauthorizedResponse(unauthorizedOptions)
-  @ApiInternalServerErrorResponse(internalErrorOptions)
+  @ApiUnauthorized()
+  @ApiInternalError()
   async getSecurityDashboard(@CurrentUser('sub') userId: string) {
     const result = await this.authApplicationService.getSecurityDashboard(userId);
     return this.presenter.getSecurityDashboard(result);
@@ -537,20 +512,21 @@ export class AuthController {
   // ─── FEATURE 2: Password Reset ────────────────────────────────────────────
 
   @Public()
-  @Throttle({ default: { limit: 3, ttl: 60_000 } })
+  @Throttle({ default: AUTH_THROTTLE.forgotPassword })
   @Post('forgot-password')
+  @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Request password reset',
     description:
       'Sends a password reset email if the account exists. ' +
       'Always returns a generic success message to prevent email enumeration.',
   })
-  @ApiCreatedResource(ForgotPasswordResponseDto, {
+  @ApiOkResource(ForgotPasswordResponseDto, {
     description: 'Password reset email sent (if account exists)',
   })
-  @ApiBadRequestResponse(badRequestOptions)
-  @ApiTooManyRequestsResponse(tooManyRequestsOptions)
-  @ApiInternalServerErrorResponse(internalErrorOptions)
+  @ApiBadRequest()
+  @ApiTooManyRequests()
+  @ApiInternalError()
   async forgotPassword(@Body() forgotPasswordDto: ForgotPasswordDto) {
     const command: ForgotPasswordCommand = { email: forgotPasswordDto.email };
     const result = await this.authApplicationService.forgotPassword(command);
@@ -568,9 +544,9 @@ export class AuthController {
   @ApiCreatedResource(ResetPasswordResponseDto, {
     description: 'Password reset successfully',
   })
-  @ApiBadRequestResponse(badRequestOptions)
-  @ApiTooManyRequestsResponse(tooManyRequestsOptions)
-  @ApiInternalServerErrorResponse(internalErrorOptions)
+  @ApiBadRequest()
+  @ApiTooManyRequests()
+  @ApiInternalError()
   async resetPassword(@Body() resetPasswordDto: ResetPasswordDto) {
     const command: ResetPasswordCommand = {
       token: resetPasswordDto.token,
@@ -591,11 +567,25 @@ export class AuthController {
   @ApiCreatedResource(ChangePasswordResponseDto, {
     description: 'Password changed successfully',
   })
-  @ApiUnauthorizedResponse(unauthorizedOptions)
-  @ApiBadRequestResponse(badRequestOptions)
-  @ApiConflictResponse(conflictOptions)
-  @ApiTooManyRequestsResponse(tooManyRequestsOptions)
-  @ApiInternalServerErrorResponse(internalErrorOptions)
+  @ApiUnauthorized()
+  @ApiBadRequest()
+  @ApiConflictResponse({
+    description: 'New password has been used recently. Please choose a different password.',
+    type: ProblemDetailDto,
+    example: {
+      type: 'https://docs.Quiz.dev/errors/auth-password-reuse',
+      title: 'Password Recently Used',
+      status: 409,
+      detail: 'Password has been used recently. Please choose a different password.',
+      instance: '/api/v1/auth/change-password',
+      extensions: {
+        code: 'AUTH_PASSWORD_REUSE',
+        requestId: 'req_abc123',
+      },
+    },
+  })
+  @ApiTooManyRequests()
+  @ApiInternalError()
   async changePassword(
     @CurrentUser('sub') userId: string,
     @CurrentUser('sessionId') currentSessionId: string,
@@ -615,15 +605,19 @@ export class AuthController {
   @ApiAuth()
   @Get('me')
   @ApiOperation({
-    summary: 'Get current user profile',
+    summary: 'Get current user identity',
     description:
-      'Returns the authenticated user profile (userId, username, email, role, isVerified).',
+      'Returns the authenticated principal identity (userId, username, email, role, isVerified).\n\n' +
+      'This is the slim identity payload used to bootstrap the auth state on the client. ' +
+      'For the full user profile (display name, avatar, bio, XP, streaks, settings, timestamps), ' +
+      'use `GET /api/v1/users/me` instead. ' +
+      'The two endpoints are complementary, not interchangeable.',
   })
   @ApiOkResource(CurrentUserResponseDto, {
-    description: 'Current user profile retrieved',
+    description: 'Current user identity retrieved',
   })
-  @ApiUnauthorizedResponse(unauthorizedOptions)
-  @ApiInternalServerErrorResponse(internalErrorOptions)
+  @ApiUnauthorized()
+  @ApiInternalError()
   async getCurrentUser(@CurrentUser('sub') userId: string) {
     const result = await this.authApplicationService.getCurrentUser(userId);
     return this.presenter.getCurrentUser(result);
@@ -632,41 +626,95 @@ export class AuthController {
   // ─── FEATURE 4: Availability Check ───────────────────────────────────────
 
   @Public()
-  @Throttle({ default: { limit: 10, ttl: 60_000 } })
-  @Post('check-email')
+  @Throttle({ default: AUTH_THROTTLE.checkAvailability })
+  @Get('check-email')
   @ApiOperation({
     summary: 'Check email availability',
     description:
       'Checks whether an email address is available for registration. ' +
       'Does not reveal whether an account exists.',
   })
-  @ApiCreatedResource(CheckEmailResponseDto, {
+  @ApiOkResource(CheckEmailResponseDto, {
     description: 'Email availability checked',
   })
-  @ApiBadRequestResponse(badRequestOptions)
-  @ApiTooManyRequestsResponse(tooManyRequestsOptions)
-  @ApiInternalServerErrorResponse(internalErrorOptions)
-  async checkEmail(@Body() dto: CheckEmailDto) {
+  @ApiBadRequest()
+  @ApiTooManyRequests()
+  @ApiInternalError()
+  async checkEmail(@Query() dto: CheckEmailDto) {
+    const result = await this.authApplicationService.checkEmailAvailability(dto.email);
+    return this.presenter.checkEmail(result);
+  }
+
+  /**
+   * Deprecated: prefer `GET /auth/check-email?email=...`. This POST alias is
+   * kept for one minor version to give frontend teams time to migrate. It
+   * forwards to the same service and returns the same response shape.
+   */
+  @Public()
+  @Throttle({ default: AUTH_THROTTLE.checkAvailability })
+  @Post('check-email')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Check email availability (deprecated)',
+    deprecated: true,
+    description:
+      'Deprecated alias of `GET /auth/check-email?email=...`. Returns the same response. ' +
+      'Prefer the GET form; this POST route will be removed in the next minor version.',
+  })
+  @ApiOkResource(CheckEmailResponseDto, {
+    description: 'Email availability checked (deprecated POST alias)',
+  })
+  @ApiBadRequest()
+  @ApiTooManyRequests()
+  @ApiInternalError()
+  async checkEmailDeprecated(@Body() dto: CheckEmailDto) {
     const result = await this.authApplicationService.checkEmailAvailability(dto.email);
     return this.presenter.checkEmail(result);
   }
 
   @Public()
-  @Throttle({ default: { limit: 10, ttl: 60_000 } })
-  @Post('check-username')
+  @Throttle({ default: AUTH_THROTTLE.checkAvailability })
+  @Get('check-username')
   @ApiOperation({
     summary: 'Check username availability',
     description:
       'Checks whether a username is available for registration. ' +
       'Does not reveal whether an account exists.',
   })
-  @ApiCreatedResource(CheckUsernameResponseDto, {
+  @ApiOkResource(CheckUsernameResponseDto, {
     description: 'Username availability checked',
   })
-  @ApiBadRequestResponse(badRequestOptions)
-  @ApiTooManyRequestsResponse(tooManyRequestsOptions)
-  @ApiInternalServerErrorResponse(internalErrorOptions)
-  async checkUsername(@Body() dto: CheckUsernameDto) {
+  @ApiBadRequest()
+  @ApiTooManyRequests()
+  @ApiInternalError()
+  async checkUsername(@Query() dto: CheckUsernameDto) {
+    const result = await this.authApplicationService.checkUsernameAvailability(dto.username);
+    return this.presenter.checkUsername(result);
+  }
+
+  /**
+   * Deprecated: prefer `GET /auth/check-username?username=...`. This POST alias
+   * is kept for one minor version to give frontend teams time to migrate. It
+   * forwards to the same service and returns the same response shape.
+   */
+  @Public()
+  @Throttle({ default: AUTH_THROTTLE.checkAvailability })
+  @Post('check-username')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Check username availability (deprecated)',
+    deprecated: true,
+    description:
+      'Deprecated alias of `GET /auth/check-username?username=...`. Returns the same response. ' +
+      'Prefer the GET form; this POST route will be removed in the next minor version.',
+  })
+  @ApiOkResource(CheckUsernameResponseDto, {
+    description: 'Username availability checked (deprecated POST alias)',
+  })
+  @ApiBadRequest()
+  @ApiTooManyRequests()
+  @ApiInternalError()
+  async checkUsernameDeprecated(@Body() dto: CheckUsernameDto) {
     const result = await this.authApplicationService.checkUsernameAvailability(dto.username);
     return this.presenter.checkUsername(result);
   }
@@ -684,8 +732,8 @@ export class AuthController {
   @ApiCreatedResource(VerifyPasswordResponseDto, {
     description: 'Password verification result',
   })
-  @ApiUnauthorizedResponse(unauthorizedOptions)
-  @ApiInternalServerErrorResponse(internalErrorOptions)
+  @ApiUnauthorized()
+  @ApiInternalError()
   async verifyPassword(@CurrentUser('sub') userId: string, @Body() dto: VerifyPasswordDto) {
     const result = await this.authApplicationService.verifyPassword(userId, dto.password);
     return this.presenter.verifyPassword(result);
@@ -705,10 +753,10 @@ export class AuthController {
     description: 'Account deleted',
     headers: { 'Set-Cookie': clearCookieHeaderSchema },
   })
-  @ApiUnauthorizedResponse(unauthorizedOptions)
-  @ApiBadRequestResponse(badRequestOptions)
-  @ApiConflictResponse(conflictOptions)
-  @ApiInternalServerErrorResponse(internalErrorOptions)
+  @ApiUnauthorized()
+  @ApiBadRequest()
+  @ApiConflict()
+  @ApiInternalError()
   async deleteAccount(
     @CurrentUser('sub') userId: string,
     @Body() dto: DeleteAccountDto,
