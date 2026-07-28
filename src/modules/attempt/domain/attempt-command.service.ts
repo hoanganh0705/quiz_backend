@@ -20,6 +20,7 @@ import {
   AttemptValidationError,
   QuizNotPublishedError,
   AttemptQuestionInvalidError,
+  AttemptAnswerNotFoundError,
 } from './errors';
 import {
   QUIZ_NOT_PUBLISHED_MESSAGE,
@@ -30,6 +31,8 @@ import {
   ATTEMPT_QUESTION_ALREADY_ANSWERED_MESSAGE,
   ATTEMPT_OPTION_INVALID_MESSAGE,
   ATTEMPT_QUESTION_INVALID_MESSAGE,
+  ATTEMPT_ANSWER_NOT_FOUND_MESSAGE,
+  QUIZ_COMPLETION_MILESTONES,
 } from '../attempt.constants';
 import { MIN_QUESTIONS_TO_PUBLISH } from '@/modules/quiz/quiz.constants';
 import { AttemptQueryService } from './attempt-query.service';
@@ -380,8 +383,7 @@ export class AttemptCommandService {
     const completedCount = await this.attemptRepository.countCompletedAttempts(
       attemptDetail.userId,
     );
-    const MILESTONE_THRESHOLDS = [10, 50, 100, 250, 500, 1000];
-    const crossedMilestone = MILESTONE_THRESHOLDS.find((m) => completedCount === m);
+    const crossedMilestone = QUIZ_COMPLETION_MILESTONES.find((m) => completedCount === m);
     if (crossedMilestone !== undefined) {
       this.eventBus.emitQuizMilestone(
         new QuizMilestoneEvent(attemptDetail.userId, completedCount, crossedMilestone, nowIso),
@@ -415,6 +417,15 @@ export class AttemptCommandService {
 
     if (attempt.status !== 'started') {
       throw new AttemptNotActiveError(ATTEMPT_NOT_STARTED_OR_FINISHED_MESSAGE);
+    }
+
+    const existingAnswer = await this.attemptAnswerRepository.getAnswerByAttemptAndQuestion(
+      attemptId,
+      questionId,
+    );
+
+    if (!existingAnswer) {
+      throw new AttemptAnswerNotFoundError(ATTEMPT_ANSWER_NOT_FOUND_MESSAGE);
     }
 
     await this.attemptAnswerRepository.deleteAnswer({

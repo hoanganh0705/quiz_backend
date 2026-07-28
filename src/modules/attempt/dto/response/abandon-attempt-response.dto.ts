@@ -1,4 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { AttemptStatusEnum } from '../../types/attempt.types';
 
 export class AbandonAttemptResponseDto {
   @ApiProperty({
@@ -8,8 +9,12 @@ export class AbandonAttemptResponseDto {
   })
   attemptId!: string;
 
-  @ApiProperty({ description: 'Final status', example: 'abandoned' })
-  status!: string;
+  @ApiProperty({
+    description: 'Final status',
+    enum: AttemptStatusEnum,
+    example: AttemptStatusEnum.Abandoned,
+  })
+  status!: AttemptStatusEnum;
 
   @ApiProperty({
     description: 'Abandonment timestamp (ISO 8601)',

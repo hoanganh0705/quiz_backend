@@ -92,3 +92,30 @@ No RBAC `@Permissions` guards are used. All attempt endpoints require a valid JW
 - **Time-limited attempts**: the version has `durationMs` but time-bound enforcement is not yet implemented.
 - **Partial scoring**: not yet modeled (all-or-nothing on attempt completion today).
 - **Attempt review**: completed attempts can be reviewed for correct answers; the current implementation does not surface the correct-answer key to the user after completion.
+
+## Conventions
+
+### Event Naming
+
+Events follow the pattern `<domain>.<action>` using dot notation. The attempt module emits:
+
+| Event | Description |
+|-------|-------------|
+| `attempt.started` | User begins a quiz attempt |
+| `attempt.completed` | User finishes a quiz (triggers XP, stats, achievements) |
+| `attempt.abandoned` | User abandons a quiz attempt |
+| `quiz.milestone` | User reaches a quiz completion milestone (10, 50, 100, 250, 500, 1000) |
+
+See [ADR-0014 Event Architecture](./adr/0014-event-architecture.md) for the three-layer event bus design.
+
+### Verb Conventions for DELETE Operations
+
+| Resource | Verb | Rationale |
+|----------|------|-----------|
+| Answer | `withdrawAnswer` | User can resubmit; not a hard delete |
+| Tag | `unfollow` | Social relationship (see tag module) |
+| Bookmark | `remove` | Clear action (see bookmark module) |
+
+### Why Question Hydration is Duplicated
+
+The attempt module duplicates question hydration logic from the quiz module. This is **intentional** to avoid circular dependencies — the attempt module uses `forwardRef` to access quiz module repositories, but the hydration logic requires data from both modules. By duplicating the hydrator locally, each module remains independently deployable.
