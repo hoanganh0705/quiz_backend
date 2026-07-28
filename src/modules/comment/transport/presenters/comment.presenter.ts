@@ -15,6 +15,7 @@ import { Injectable } from '@nestjs/common';
 import { ApiResponse } from '@/common/responses/api-response';
 import type { ApiResponseEnvelope } from '@/common/responses/api-response';
 import type { CommentDto, CommentWithRepliesDto } from '../../dto/response/comment.dto';
+import type { ModerationResultDto } from '../../dto/response/moderation-result.dto';
 import type { MyCommentDto } from '../../dto/response/my-comment.dto';
 import type { ReportDto } from '../../dto/response/report.dto';
 import type {
@@ -58,9 +59,16 @@ export class CommentPresenter {
   readonly editComment = (view: CommentView): ApiResponseEnvelope<CommentDto> =>
     ApiResponse.ok(toCommentDto(view));
   readonly createReport = (view: ReportView): ApiResponseEnvelope<ReportDto> =>
-    ApiResponse.ok(toReportDto(view));
+    ApiResponse.created(toReportDto(view));
   readonly reviewReport = (view: ReportView): ApiResponseEnvelope<ReportDto> =>
     ApiResponse.ok(toReportDto(view));
+
+  readonly hideComment = (result: ModerationResultDto): ApiResponseEnvelope<ModerationResultDto> =>
+    ApiResponse.ok(result);
+
+  readonly restoreComment = (
+    result: ModerationResultDto,
+  ): ApiResponseEnvelope<ModerationResultDto> => ApiResponse.ok(result);
 
   // ─── Paginated lists ─────────────────────────────────────────────────────
   readonly listQuizComments = (payload: {

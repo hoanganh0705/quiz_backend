@@ -1,8 +1,8 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { AuthorDto } from './author.dto';
+import { VOTE_VALUE } from '../../domain/types';
 
-const VOTE_VALUES = ['upvote', 'downvote'] as const;
-export type VoteValueWire = (typeof VOTE_VALUES)[number] | null;
+export type VoteValueWire = (typeof VOTE_VALUE)[number] | null;
 
 /**
  * Wire-shape projection of a comment returned by every comment
@@ -112,8 +112,8 @@ export class CommentWithRepliesDto extends CommentDto {
   replies!: CommentDto[];
 
   @ApiPropertyOptional({
-    description: 'The authenticated viewer’s vote on this comment, if any',
-    enum: VOTE_VALUES,
+    description: "The authenticated viewer's vote on this comment, if any",
+    enum: VOTE_VALUE,
     type: String,
     nullable: true,
     example: 'upvote',

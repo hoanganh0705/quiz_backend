@@ -8,7 +8,6 @@ import {
   DuplicateReportError,
   ModeratorRequiredError,
   ParentCommentCrossThreadError,
-  ParentCommentNotFoundError,
   QuizNotFoundError,
   ReplyLimitExceededError,
   ReportNotFoundError,
@@ -35,7 +34,7 @@ const COMMENT_CASES: ReadonlyArray<{
 }> = [
   {
     name: 'CommentNotFoundError',
-    ctor: CommentNotFoundError,
+    ctor: CommentNotFoundError as unknown as ExceptionCtor,
     args: ['comment-1'],
     expectedCode: 'COMMENT_NOT_FOUND',
     message: 'Comment not found: comment-1',
@@ -49,17 +48,10 @@ const COMMENT_CASES: ReadonlyArray<{
   },
   {
     name: 'QuizNotFoundError',
-    ctor: QuizNotFoundError,
+    ctor: QuizNotFoundError as unknown as ExceptionCtor,
     args: ['quiz-1'],
     expectedCode: 'COMMENT_QUIZ_NOT_FOUND',
     message: 'Quiz not found: quiz-1',
-  },
-  {
-    name: 'ParentCommentNotFoundError',
-    ctor: ParentCommentNotFoundError,
-    args: ['parent-1'],
-    expectedCode: 'COMMENT_PARENT_COMMENT_NOT_FOUND',
-    message: 'Parent comment not found: parent-1',
   },
   {
     name: 'ParentCommentCrossThreadError',
@@ -70,7 +62,7 @@ const COMMENT_CASES: ReadonlyArray<{
   },
   {
     name: 'ReplyLimitExceededError',
-    ctor: ReplyLimitExceededError,
+    ctor: ReplyLimitExceededError as unknown as ExceptionCtor,
     args: ['100'],
     expectedCode: 'COMMENT_REPLY_LIMIT_EXCEEDED',
     message: 'Maximum reply limit of 100 reached for this comment',
@@ -84,21 +76,21 @@ const COMMENT_CASES: ReadonlyArray<{
   },
   {
     name: 'SelfReportError',
-    ctor: SelfReportError,
+    ctor: SelfReportError as unknown as ExceptionCtor,
     args: [],
     expectedCode: 'COMMENT_SELF_REPORT',
     message: 'You cannot report your own comment',
   },
   {
     name: 'DuplicateReportError',
-    ctor: DuplicateReportError,
+    ctor: DuplicateReportError as unknown as ExceptionCtor,
     args: [],
     expectedCode: 'COMMENT_DUPLICATE_REPORT',
     message: 'You have already reported this comment',
   },
   {
     name: 'ReportNotFoundError',
-    ctor: ReportNotFoundError,
+    ctor: ReportNotFoundError as unknown as ExceptionCtor,
     args: ['report-1'],
     expectedCode: 'COMMENT_REPORT_NOT_FOUND',
     message: 'Report not found: report-1',
@@ -165,12 +157,6 @@ describe('Comment-domain errors (RFC 7807 mapping completeness — Phase 9.5)', 
       expect(instance.code).toBe('COMMENT_QUIZ_NOT_FOUND');
     });
 
-    it('ParentCommentNotFoundError interpolates a parent comment ID', () => {
-      const id = 'parent-abc-123';
-      const instance = new ParentCommentNotFoundError(id);
-      expect(instance.message).toBe(`Parent comment not found: ${id}`);
-    });
-
     it('ReportNotFoundError interpolates a report ID', () => {
       const id = 'report-abc-123';
       const instance = new ReportNotFoundError(id);
@@ -214,26 +200,26 @@ describe('Comment-domain errors (RFC 7807 mapping completeness — Phase 9.5)', 
       ).toBeUndefined();
     });
 
-    it('total exception count is 11 (matches the design plan §3.6)', () => {
-      expect(COMMENT_CASES.length).toBe(11);
+    it('total exception count is 10 (matches the design plan §3.6; reduced to 10 after Phase 1 audit removed unused ParentCommentNotFoundError)', () => {
+      expect(COMMENT_CASES.length).toBe(10);
     });
 
     it('counted status-code buckets match the design plan', () => {
-      // 11 entries covering 4 status codes:
+      // 10 entries covering 4 status codes:
       //   404: COMMENT_NOT_FOUND, COMMENT_QUIZ_NOT_FOUND,
-      //        COMMENT_PARENT_COMMENT_NOT_FOUND, COMMENT_REPORT_NOT_FOUND (4)
+      //        COMMENT_REPORT_NOT_FOUND (3) - ParentCommentNotFoundError removed in Phase 1
       //   403: COMMENT_FORBIDDEN, COMMENT_SELF_VOTE,
       //        COMMENT_SELF_REPORT, COMMENT_MODERATOR_REQUIRED (4)
       //   409: COMMENT_REPLY_LIMIT_EXCEEDED, COMMENT_DUPLICATE_REPORT (2)
       //   400: COMMENT_PARENT_COMMENT_CROSS_THREAD (1)
-      // Total = 4 + 4 + 2 + 1 = 11.
+      // Total = 3 + 4 + 2 + 1 = 10.
       const byStatus = COMMENT_CASES.reduce<Record<string, string[]>>((acc, row) => {
         const status = String(ProblemCodeMapping[row.expectedCode].status);
         if (!acc[status]) acc[status] = [];
         acc[status].push(row.expectedCode);
         return acc;
       }, {});
-      expect(byStatus['404']?.length).toBe(4);
+      expect(byStatus['404']?.length).toBe(3); // Reduced from 4 (ParentCommentNotFoundError removed)
       expect(byStatus['403']?.length).toBe(4);
       expect(byStatus['409']?.length).toBe(2);
       expect(byStatus['400']?.length).toBe(1);

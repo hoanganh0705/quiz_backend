@@ -294,10 +294,25 @@ export const ApiAuthDeleteWithState = (
 /**
  * Action endpoint (POST) returning 200 OK.
  * Use for: follow, unfollow, like
+ *
+ * @param options - Response options including optional operation metadata (summary, description, operationId)
  */
-export const ApiAuthAction = (responseOptions: ApiResponseOptions = {}): MethodDecorator =>
-  applyDecorators(
+export const ApiAuthAction = (
+  options: ApiResponseOptions & {
+    summary?: string;
+    description?: string;
+    operationId?: string;
+  } = {},
+): MethodDecorator => {
+  const { summary, description, operationId, ...responseOptions } = options;
+  const operationOptions: { summary?: string; description?: string; operationId?: string } = {};
+  if (summary) operationOptions.summary = summary;
+  if (description) operationOptions.description = description;
+  if (operationId) operationOptions.operationId = operationId;
+
+  return applyDecorators(
     ApiAuth(),
+    ...(Object.keys(operationOptions).length > 0 ? [ApiOperation(operationOptions)] : []),
     ApiOkResponse(responseOptions),
     ApiNotFound(),
     ApiConflict(),
@@ -306,17 +321,42 @@ export const ApiAuthAction = (responseOptions: ApiResponseOptions = {}): MethodD
     ApiValidationRequest(),
     ApiInternalError(),
   );
+};
 
 /**
  * Action endpoint (POST) returning 204 No Content.
  * Use for: mark-as-read, bulk operations
+ *
+ * @param options - Can be a simple description string or full options including operation metadata
  */
 export const ApiAuthActionNoContent = (
-  description = 'Operation completed successfully',
-): MethodDecorator =>
-  applyDecorators(
+  options:
+    | string
+    | {
+        summary?: string;
+        description?: string;
+        operationId?: string;
+        example?: unknown;
+        examples?: Record<string, unknown>;
+      } = {},
+): MethodDecorator => {
+  const isString = typeof options === 'string';
+  const { summary, description, operationId } = isString
+    ? {
+        summary: undefined,
+        description: undefined,
+        operationId: undefined,
+      }
+    : options;
+  const operationOptions: { summary?: string; description?: string; operationId?: string } = {};
+  if (summary) operationOptions.summary = summary;
+  if (description) operationOptions.description = description;
+  if (operationId) operationOptions.operationId = operationId;
+
+  return applyDecorators(
     ApiAuth(),
-    ApiNoContent(description),
+    ...(Object.keys(operationOptions).length > 0 ? [ApiOperation(operationOptions)] : []),
+    ApiNoContent(isString ? options : (description ?? 'Operation completed successfully')),
     ApiNotFound(),
     ApiConflict(),
     ApiForbidden(),
@@ -324,6 +364,7 @@ export const ApiAuthActionNoContent = (
     ApiValidationRequest(),
     ApiInternalError(),
   );
+};
 
 // ─── Admin endpoint decorators ───────────────────────────────────────────────────
 
