@@ -21,6 +21,35 @@ import {
 } from '@/modules/auth/domain/errors';
 import { AuthIdentity } from '../../types/auth-context.types';
 
+/**
+ * Timing-safety invariant for login-related queries.
+ *
+ * Methods that look up a user by an attacker-controlled identifier
+ * (`findActiveByEmailWithPassword` and similar) intentionally return
+ * `null` for the "no such user" case WITHOUT performing a bcrypt
+ * compare. Callers — primarily `AuthLoginService` — are responsible
+ * for always running a `passwordProvider.verify(suppliedPassword,
+ * passwordProvider.getDummyHash())` before propagating the "not
+ * found" / "wrong password" branch as an error. This keeps the
+ * response time of the not-found branch indistinguishable from the
+ * response time of a real `verify(suppliedPassword, realHash)`
+ * attempt, preventing account enumeration via timing side channels.
+ *
+ * Do NOT "optimise" this contract by:
+ *  - returning `null` directly from callers (skips the dummy compare
+ *    and leaks existence through timing);
+ *  - having the repository itself run the bcrypt compare against a
+ *    dummy hash (moves security policy into the persistence layer,
+ *    where it cannot be audited alongside the auth domain services).
+ *
+ * If a new caller (e.g. a future password-reset-confirm endpoint)
+ * adds a lookup by email/userId, it MUST follow the same
+ * dummy-compare-on-miss pattern. See `auth-login.service.ts:login`
+ * for the reference implementation.
+ *
+ * @see docs/audits/AUTH_MODULE_PRODUCTION_READINESS_AUDIT.md §Phase 8 #19
+ */
+
 const USER_IDENTITY_COLUMNS = {
   userId: users.userId,
   username: users.username,

@@ -69,7 +69,11 @@ export class UserController {
   @ApiAuth()
   @ApiOperation({
     summary: 'Get my profile',
-    description: "Returns the authenticated user's full profile.",
+    description:
+      "Returns the authenticated user's full profile. " +
+      'For the slim identity payload (userId, username, email, role, isVerified) used to bootstrap ' +
+      'the auth state on the client, use `GET /api/v1/auth/me` instead. ' +
+      'The two endpoints are complementary, not interchangeable.',
   })
   @ApiUserMeResponse()
   @ApiInternalError()

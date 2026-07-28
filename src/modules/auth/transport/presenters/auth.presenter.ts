@@ -1,13 +1,14 @@
 import { Injectable } from '@nestjs/common';
 import { ApiResponse } from '@/common/responses/api-response';
 import type { ApiResponseEnvelope } from '@/common/responses/api-response';
-import type { AccountSecurityDto } from '../../dto/response/session-management.dto';
+import type { AccountSecurityDto } from '../../dto/response/account-security.dto';
 import type { ChangePasswordResponseDto } from '../../dto/response/change-password-response.dto';
 import type { CheckEmailResponseDto } from '../../dto/response/check-email-response.dto';
 import type { CheckUsernameResponseDto } from '../../dto/response/check-username-response.dto';
 import type { CurrentUserResponseDto } from '../../dto/response/current-user-response.dto';
 import type { DeleteAccountResponseDto } from '../../dto/response/delete-account-response.dto';
 import type { ForgotPasswordResponseDto } from '../../dto/response/password-reset.dto';
+import type { ResetPasswordResponseDto } from '../../dto/response/password-reset.dto';
 import type { LoginResponseDto } from '../../dto/response/login-response.dto';
 import type { LogoutResponseDto } from '../../dto/response/logout-response.dto';
 import type { RefreshTokenResponseDto } from '../../dto/response/refresh-token-response.dto';
@@ -50,7 +51,7 @@ export class AuthPresenter {
   readonly getActiveSessions = AuthPresenter.ok<SessionListResponseDto>;
   readonly getSecurityDashboard = AuthPresenter.ok<AccountSecurityDto>;
   readonly forgotPassword = AuthPresenter.ok<ForgotPasswordResponseDto>;
-  readonly resetPassword = AuthPresenter.ok<VerifyEmailResponseDto>;
+  readonly resetPassword = AuthPresenter.ok<ResetPasswordResponseDto>;
   readonly changePassword = AuthPresenter.ok<ChangePasswordResponseDto>;
   readonly getCurrentUser = AuthPresenter.ok<CurrentUserResponseDto>;
   readonly checkEmail = AuthPresenter.ok<CheckEmailResponseDto>;
