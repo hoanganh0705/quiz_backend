@@ -2,6 +2,11 @@ import { Transform } from 'class-transformer';
 import { IsOptional, IsString, IsUrl, MaxLength } from 'class-validator';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { trimStringToNullIfBlank } from '@/common/utils/text.util';
+import {
+  PROFILE_AVATAR_URL_MAX_LENGTH,
+  PROFILE_BIO_MAX_LENGTH,
+  PROFILE_DISPLAY_NAME_MAX_LENGTH,
+} from '../../domain/constants/user.domain-constants';
 
 export class UpdateMeDto {
   /**
@@ -15,14 +20,14 @@ export class UpdateMeDto {
       'Send `null` or a blank string to clear. ' +
       'Omit the field (or send `undefined`) to leave the current value unchanged.',
     type: String,
-    maxLength: 100,
+    maxLength: PROFILE_DISPLAY_NAME_MAX_LENGTH,
     example: 'Alice',
     nullable: true,
   })
   @IsOptional()
   @Transform(({ value }: { value: unknown }) => trimStringToNullIfBlank(value))
   @IsString()
-  @MaxLength(100)
+  @MaxLength(PROFILE_DISPLAY_NAME_MAX_LENGTH)
   displayName?: string | null;
 
   @ApiPropertyOptional({
@@ -31,14 +36,14 @@ export class UpdateMeDto {
       'Send `null` or a blank string to clear. ' +
       'Omit the field to leave the current value unchanged.',
     type: String,
-    maxLength: 500,
+    maxLength: PROFILE_BIO_MAX_LENGTH,
     example: 'Quiz enthusiast and trivia lover',
     nullable: true,
   })
   @IsOptional()
   @Transform(({ value }: { value: unknown }) => trimStringToNullIfBlank(value))
   @IsString()
-  @MaxLength(500)
+  @MaxLength(PROFILE_BIO_MAX_LENGTH)
   bio?: string | null;
 
   @ApiPropertyOptional({
@@ -48,7 +53,7 @@ export class UpdateMeDto {
       'Omit the field to leave the current value unchanged. ' +
       'Must be a valid `http://` or `https://` URL.',
     type: String,
-    maxLength: 2048,
+    maxLength: PROFILE_AVATAR_URL_MAX_LENGTH,
     example: 'https://example.com/avatars/alice.jpg',
     nullable: true,
   })
@@ -59,6 +64,6 @@ export class UpdateMeDto {
     require_protocol: true,
     require_valid_protocol: true,
   })
-  @MaxLength(2048)
+  @MaxLength(PROFILE_AVATAR_URL_MAX_LENGTH)
   avatarUrl?: string | null;
 }

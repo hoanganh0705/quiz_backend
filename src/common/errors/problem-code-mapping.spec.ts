@@ -132,10 +132,14 @@ describe('ProblemCodeMapping', () => {
       expect(info.typeUri).toBe('https://api.quiz.local/problems/user-not-found');
     });
 
-    it('returns a 404 entry for USER_RANKING_NOT_FOUND (dead-code class with sensible mapping)', () => {
+    it('returns the 500 fallback for USER_RANKING_NOT_FOUND — Phase 7 (F-18) removed the mapping', () => {
+      // The `UserRankingNotFoundError` class was exported and mapped but
+      // never thrown; per F-18 the mapping was deleted as dead code.
+      // The resolver falls back to the "unknown code" path, which the
+      // global filter turns into a 500. This test pins that contract.
       const info = resolveProblemInfo('USER_RANKING_NOT_FOUND');
-      expect(info.status).toBe(HttpStatus.NOT_FOUND);
-      expect(info.title).toBe('NotFound');
+      expect(info.status).toBe(HttpStatus.INTERNAL_SERVER_ERROR);
+      expect(info.title).toBe('InternalServerError');
     });
 
     it('returns a 404 entry for USER_ANALYTICS_NOT_FOUND (dead-code class with sensible mapping)', () => {

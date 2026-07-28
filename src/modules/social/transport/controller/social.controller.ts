@@ -14,7 +14,16 @@ import {
   HttpStatus,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
-import { ApiTags, ApiOperation, ApiParam, ApiOkResponse, ApiQuery, ApiBody } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiParam,
+  ApiOkResponse,
+  ApiQuery,
+  ApiBody,
+  ApiNotFoundResponse,
+  ApiForbiddenResponse,
+} from '@nestjs/swagger';
 import { Public } from '@/common/decorators/public.decorator';
 import { Transactional } from '@/common/interceptors/transactional.interceptor';
 import { ApiAuthAction, ApiAuthActionNoContent } from '@/common/swagger/swagger-decorators';
@@ -197,7 +206,9 @@ export class SocialController {
   @ApiOperation({
     summary: 'Get user public activity timeline',
     description:
-      'Returns a paginated public activity timeline for the specified user, ordered by newest activity first.',
+      'Returns a paginated public activity timeline for the specified user, ordered by newest activity first. ' +
+      "Honours the target user's `showActivity` privacy flag (Phase 3 / F-13): a requester other than the owner " +
+      'receives 403 when the flag is `false`. Returns 404 when the target user does not exist.',
   })
   @ApiParam({
     name: 'userId',
@@ -208,6 +219,8 @@ export class SocialController {
   @ApiOkResourceList(UserActivityItemDto, 'cursor', {
     description: 'Paginated public user activity returned',
   })
+  @ApiNotFoundResponse({ description: 'Target user not found' })
+  @ApiForbiddenResponse({ description: 'Target user has disabled activity visibility' })
   async getUserActivity(
     @CurrentUser() user: JwtPayload,
     @Param('userId', new ParseUUIDPipe({ version: '7' })) targetUserId: string,

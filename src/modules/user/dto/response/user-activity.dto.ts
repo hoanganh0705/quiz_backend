@@ -30,12 +30,16 @@ export class UserActivityItemDto {
   createdAt!: string;
 
   @ApiProperty({
-    description: 'Event-specific metadata payload',
+    description:
+      'Event-specific metadata payload. `null` when the underlying JSONB ' +
+      "column contains a value that isn't an object (the row is logged and " +
+      'the activity timeline continues — see audit F-27).',
     type: 'object',
     additionalProperties: true,
+    nullable: true,
     example: { quizId: '660e8400-e29b-71d4-a716-446655440000', score: 88 },
   })
-  metadata!: Record<string, unknown>;
+  metadata!: Record<string, unknown> | null;
 }
 
 export class UserActivityPaginationDto {

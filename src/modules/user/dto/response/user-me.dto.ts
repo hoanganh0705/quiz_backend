@@ -38,7 +38,13 @@ export class UserMeResponseDto {
   })
   bio!: string | null;
 
-  @ApiProperty({ description: 'Total experience points earned', example: 15420 })
+  @ApiProperty({
+    description:
+      'Total experience points earned. A value of 0 means the user has no `user_ranking` ' +
+      'row yet (brand-new user). The row is created and this value is initialised the first ' +
+      'time the user reads `GET /users/me/ranking` (write-on-read upsert — see audit F-19).',
+    example: 15420,
+  })
   xpTotal!: number;
 
   @ApiProperty({ description: 'Current daily quiz streak', example: 7 })

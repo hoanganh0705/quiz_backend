@@ -109,6 +109,25 @@ export interface MyTournamentAnalyticsRow {
 export interface UserRepositoryPort {
   findMeById(userId: string): Promise<UserMeRow | null>;
   findUserProfileSettings(userId: string): Promise<{ isPublic: boolean } | null>;
+  /**
+   * Phase 3 (F-7): Read every granular privacy flag for the target user.
+   * Returns `null` when no `user_profile_settings` row exists; callers
+   * should treat `null` as "all flags at their schema defaults" (all
+   * `true` per `user_profile_settings` column defaults). Used by
+   * `UserDomainService.assertPrivacyFlag` to gate
+   * `showStatistics` / `showAchievements` / `showActivity` /
+   * `showTournamentActivity` per-endpoint, and by the social module
+   * (F-13) to gate `GET /social/users/:userId/activity` via
+   * `showActivity`.
+   */
+  findUserPrivacyFlags(userId: string): Promise<{
+    isPublic: boolean;
+    showStatistics: boolean;
+    showAchievements: boolean;
+    showActivity: boolean;
+    showRankImprovement: boolean;
+    showTournamentActivity: boolean;
+  } | null>;
   listUserBadges(params: {
     userId: string;
     limit: number;
@@ -143,9 +162,42 @@ export interface UserRepositoryPort {
     },
     nowIso: string,
   ): Promise<UserMeRow | null>;
-  updateSettings(
+  /**
+   * Phase 3 (F-6): Write free-form preferences to `users.settings`.
+   * `settings === undefined` means "leave the existing value alone"
+   * (no-op). When `settings` is a non-null object it REPLACES the
+   * stored blob (whole-object replace, matching the previous
+   * `updateSettings` semantics).
+   */
+  updatePreferences(
     userId: string,
-    settings: Record<string, unknown>,
+    settings: Record<string, unknown> | undefined,
+    nowIso: string,
+  ): Promise<UserMeRow | null>;
+
+  /**
+   * Phase 3 (F-6 + F-7): Write one or more granular privacy flags to
+   * `user_profile_settings`. `flags === undefined` is a no-op. When
+   * `flags` is provided, every key present in `flags` overrides the
+   * stored column; keys absent are left untouched.
+   *
+   * Behaviour mirrors `updateProfile` (Phase 1 / F-2): distinguish
+   * "key absent" from "key present with explicit value". The caller
+   * supplies `undefined` for "don't touch this column" by omitting
+   * the key from the object.
+   */
+  updatePrivacy(
+    userId: string,
+    flags:
+      | {
+          isPublic?: boolean;
+          showStatistics?: boolean;
+          showAchievements?: boolean;
+          showActivity?: boolean;
+          showRankImprovement?: boolean;
+          showTournamentActivity?: boolean;
+        }
+      | undefined,
     nowIso: string,
   ): Promise<UserMeRow | null>;
 
@@ -158,15 +210,18 @@ export interface UserRepositoryPort {
    * (see §3.5.1), and short-circuits when no cache column would
    * change.
    *
-   * `tx` MUST be supplied so the streak update commits atomically with
+   * `tx` SHOULD be supplied so the streak update commits atomically with
    * the calling transaction (typically the attempt-completion
    * transaction in `AttemptRepository.completeAttemptAndSideEffects`).
-   * Returns `null` for soft-deleted users (FROM subselect empty).
+   * When omitted, the implementation falls back to its own connection —
+   * used by the `StreakService` listener path (F-5) that runs outside
+   * of any attempt transaction. Returns `null` for soft-deleted users
+   * (FROM subselect empty).
    */
   updateStreakCache(
     userId: string,
     finishedAt: Date,
-    tx: DrizzleDB,
+    tx?: DrizzleDB,
   ): Promise<StreakCacheUpdateResult | null>;
 
   findByUsernames(usernames: string[]): Promise<UserPublicRow[]>;
