@@ -16,7 +16,6 @@ import {
   ReviewListResponseDto,
   CreateReviewResponseDto,
   UpdateReviewResponseDto,
-  DeleteReviewResponseDto,
   MyReviewsResponseDto,
   ReviewDetailResponseDto,
   ReviewStatsResponseDto,
@@ -222,20 +221,8 @@ export class ReviewApplicationService {
     return { message: selectHelpfulMessage(payload.helpful, result) };
   }
 
-  async removeHelpfulVote(reviewId: string, user: JwtPayload): Promise<HelpfulReviewResponseDto> {
+  async removeHelpfulVote(reviewId: string, user: JwtPayload): Promise<void> {
     await this.reviewService.removeHelpfulVote(reviewId, user.sub);
-    // Phase 5 / Issue #5 — DELETE is idempotent. The previous
-    // shape surfaced "Helpful vote removed" on the first call and
-    // "No helpful vote to remove" on the second call. Both
-    // endpoints (DELETE /reviews/:id/helpful and POST
-    // /reviews/:id/helpful with `{helpful:false}`) ended up in the
-    // same path; a retry after a network hiccup saw a different
-    // response payload and confused clients. RFC 7231: DELETE on
-    // an already-deleted resource is idempotent — the same effect
-    // on the long-term state. We collapse both outcomes into a
-    // single, stable response so a retrying client sees no
-    // difference.
-    return { message: 'Helpful vote removed' };
   }
 
   async reportReview(
@@ -323,10 +310,8 @@ export class ReviewApplicationService {
     return this.reviewResponseMapper.toUpdateReviewResponse(review);
   }
 
-  async deleteReview(quizId: string, user: JwtPayload): Promise<DeleteReviewResponseDto> {
+  async deleteReview(quizId: string, user: JwtPayload): Promise<void> {
     await this.reviewService.deleteReview(quizId, user);
-
-    return { message: 'Review deleted successfully' };
   }
 
   async listPlatformReports(params: {
@@ -361,9 +346,8 @@ export class ReviewApplicationService {
    * Authorization is enforced by the `REVIEW_MODERATE` route guard;
    * the actor is captured into the audit log by `ReviewAdminService`.
    */
-  async adminDeleteReview(reviewId: string, actor: JwtPayload): Promise<DeleteReviewResponseDto> {
+  async adminDeleteReview(reviewId: string, actor: JwtPayload): Promise<void> {
     await this.reviewAdminService.adminDeleteReview(reviewId, actor.sub);
-    return { message: 'Review deleted by moderator' };
   }
 
   private toPlatformReportItem(row: PlatformReportItem): PlatformReportItemDto {
