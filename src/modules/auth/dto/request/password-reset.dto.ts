@@ -1,5 +1,13 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { IsEmail, IsString, MinLength, MaxLength, Matches } from 'class-validator';
+import {
+  NEW_PASSWORD_MAX,
+  NEW_PASSWORD_MAX_MESSAGE,
+  NEW_PASSWORD_MESSAGE,
+  NEW_PASSWORD_MIN,
+  NEW_PASSWORD_MIN_MESSAGE,
+  NEW_PASSWORD_REGEX,
+} from './new-password.dto';
 
 export class ForgotPasswordDto {
   @ApiProperty({
@@ -24,18 +32,15 @@ export class ResetPasswordDto {
   token!: string;
 
   @ApiProperty({
-    description: 'New password',
-    minLength: 8,
-    maxLength: 128,
-    example: 'NewSecurePassword123!',
+    description: 'New password (shared policy: see RegisterDto for full requirements)',
+    minLength: NEW_PASSWORD_MIN,
+    maxLength: NEW_PASSWORD_MAX,
+    example: 'NewSecurePassword123',
   })
   @IsString()
-  @MinLength(8, { message: 'Password must be at least 8 characters long' })
-  @MaxLength(128, { message: 'Password must not exceed 128 characters' })
-  @Matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/, {
-    message:
-      'Password must contain at least one uppercase letter, one lowercase letter, and one number',
-  })
+  @MinLength(NEW_PASSWORD_MIN, { message: NEW_PASSWORD_MIN_MESSAGE })
+  @MaxLength(NEW_PASSWORD_MAX, { message: NEW_PASSWORD_MAX_MESSAGE })
+  @Matches(NEW_PASSWORD_REGEX, { message: NEW_PASSWORD_MESSAGE })
   newPassword!: string;
 }
 
@@ -51,17 +56,14 @@ export class ChangePasswordDto {
   currentPassword!: string;
 
   @ApiProperty({
-    description: 'New password',
-    minLength: 8,
-    maxLength: 128,
-    example: 'NewSecurePassword123!',
+    description: 'New password (shared policy: see RegisterDto for full requirements)',
+    minLength: NEW_PASSWORD_MIN,
+    maxLength: NEW_PASSWORD_MAX,
+    example: 'NewSecurePassword123',
   })
   @IsString()
-  @MinLength(8, { message: 'Password must be at least 8 characters long' })
-  @MaxLength(128, { message: 'Password must not exceed 128 characters' })
-  @Matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/, {
-    message:
-      'Password must contain at least one uppercase letter, one lowercase letter, and one number',
-  })
+  @MinLength(NEW_PASSWORD_MIN, { message: NEW_PASSWORD_MIN_MESSAGE })
+  @MaxLength(NEW_PASSWORD_MAX, { message: NEW_PASSWORD_MAX_MESSAGE })
+  @Matches(NEW_PASSWORD_REGEX, { message: NEW_PASSWORD_MESSAGE })
   newPassword!: string;
 }

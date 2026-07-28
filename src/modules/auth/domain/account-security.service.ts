@@ -10,6 +10,24 @@ export type AccountSecurityMetadata = {
   activeSessionCount: number;
 };
 
+/**
+ * Aggregates the data backing `GET /auth/security/dashboard`.
+ *
+ * The dashboard is a security snapshot for the authenticated user, composed of
+ * fields that originate in two distinct domain concerns:
+ *
+ * - **User-domain fields** (from `userRepository.getSecurityMetadata`):
+ *   `emailVerified`, `lastPasswordChangedAt`, `lastLoginAt`.
+ *
+ * - **Session-domain field** (from the same repository call, which joins the
+ *   `users` and `user_sessions` tables): `activeSessionCount`.
+ *
+ * The aggregation intentionally returns a flat snapshot rather than nested
+ * domain objects — the controller layer composes the final `AccountSecurityDto`
+ * (including derived fields like `passwordAgeDays`) so the service layer
+ * stays focused on data lineage and the controller layer stays focused on
+ * response shaping.
+ */
 @Injectable()
 export class AccountSecurityService {
   constructor(
@@ -31,6 +49,11 @@ export class AccountSecurityService {
     };
   }
 
+  /**
+   * Returns the raw data needed by the security dashboard. The application
+   * service is responsible for deriving presentation-layer fields (e.g.
+   * `passwordAgeDays`) from the timestamps returned here.
+   */
   async getAccountSecurity(userId: string): Promise<AccountSecurityMetadata> {
     const metadata = await this.userRepository.getSecurityMetadata(userId);
     if (!metadata) {
