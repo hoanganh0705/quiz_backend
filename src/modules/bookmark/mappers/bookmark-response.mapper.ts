@@ -5,6 +5,10 @@ import {
   CreateCollectionResponseDto,
   AddBookmarkResponseDto,
   UpdateCollectionResponseDto,
+  UpdateBookmarkResponseDto,
+  BulkAddBookmarksResponseDto,
+  BulkRemoveBookmarksResponseDto,
+  MessageResponseDto,
 } from '../dto/response';
 
 import type {
@@ -70,5 +74,27 @@ export class BookmarkResponseMapper {
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
     };
+  }
+
+  toUpdateBookmarkResponse(row: BookmarkedQuizRow): UpdateBookmarkResponseDto {
+    return {
+      bookmarkId: row.bookmarkId,
+      collectionId: row.collectionId,
+      quizId: row.quizId,
+      notes: row.notes,
+      updatedAt: row.updatedAt,
+    };
+  }
+
+  toMoveBookmarkResponse(): MessageResponseDto {
+    return { message: 'Bookmark moved successfully' };
+  }
+
+  toBulkAddResponse(addedCount: number): BulkAddBookmarksResponseDto {
+    return { addedCount };
+  }
+
+  toBulkRemoveResponse(removedCount: number): BulkRemoveBookmarksResponseDto {
+    return { removedCount };
   }
 }

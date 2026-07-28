@@ -23,10 +23,8 @@ import {
   BulkRemoveBookmarksResponseDto,
   BookmarkListResponseDto,
   SearchBookmarksResponseDto,
-  RemoveBookmarkResponseDto,
-  MoveBookmarkResponseDto,
+  MessageResponseDto,
   UpdateCollectionResponseDto,
-  DeleteCollectionResponseDto,
   BookmarkStatsResponseDto,
   RecentBookmarksResponseDto,
   BookmarkCollectionAnalyticsResponseDto,
@@ -166,11 +164,8 @@ export class BookmarkApplicationService {
       collectionId,
       count: quizIds.length,
     });
-    return {
-      addedCount: Number(
-        await this.bookmarkCommandService.addBookmarksBulk(userId, collectionId, quizIds),
-      ),
-    };
+    const addedCount = await this.bookmarkCommandService.addBookmarksBulk(userId, collectionId, quizIds);
+    return this.bookmarkResponseMapper.toBulkAddResponse(Number(addedCount));
   }
 
   async removeBookmarksBulk(
@@ -184,22 +179,21 @@ export class BookmarkApplicationService {
       collectionId,
       count: quizIds.length,
     });
-    return {
-      removedCount: Number(
-        await this.bookmarkCommandService.removeBookmarksBulk(userId, collectionId, quizIds),
-      ),
-    };
+    const removedCount = await this.bookmarkCommandService.removeBookmarksBulk(
+      userId,
+      collectionId,
+      quizIds,
+    );
+    return this.bookmarkResponseMapper.toBulkRemoveResponse(Number(removedCount));
   }
 
   async removeBookmark(
     collectionId: string,
     quizId: string,
     user: JwtPayload,
-  ): Promise<RemoveBookmarkResponseDto> {
+  ): Promise<void> {
     this.logger.debug({ event: 'app_remove_bookmark', userId: user.sub, collectionId, quizId });
     await this.bookmarkCommandService.removeBookmark(collectionId, quizId, user);
-
-    return { message: 'Bookmark removed successfully' };
   }
 
   async updateBookmark(
@@ -216,13 +210,7 @@ export class BookmarkApplicationService {
       user,
     );
 
-    return {
-      bookmarkId: updated.bookmarkId,
-      collectionId: updated.collectionId,
-      quizId: updated.quizId,
-      notes: updated.notes,
-      updatedAt: updated.updatedAt,
-    };
+    return this.bookmarkResponseMapper.toUpdateBookmarkResponse(updated);
   }
 
   async listBookmarksInCollection(
@@ -254,7 +242,7 @@ export class BookmarkApplicationService {
     userId: string,
     sourceCollectionId: string,
     payload: { quizId: string; targetCollectionId: string },
-  ): Promise<MoveBookmarkResponseDto> {
+  ): Promise<MessageResponseDto> {
     const { targetCollectionId, quizId } = payload;
     this.logger.debug({
       event: 'app_move_bookmark',
@@ -271,7 +259,7 @@ export class BookmarkApplicationService {
       quizId,
     );
 
-    return { message: 'Bookmark moved successfully' };
+    return this.bookmarkResponseMapper.toMoveBookmarkResponse();
   }
 
   async updateCollection(
@@ -293,11 +281,9 @@ export class BookmarkApplicationService {
   async deleteCollection(
     collectionId: string,
     user: JwtPayload,
-  ): Promise<DeleteCollectionResponseDto> {
+  ): Promise<void> {
     this.logger.debug({ event: 'app_delete_collection', userId: user.sub, collectionId });
     await this.bookmarkCommandService.deleteCollection(collectionId, user);
-
-    return { message: 'Collection deleted successfully' };
   }
 
   async getMyBookmarkStats(user: JwtPayload): Promise<BookmarkStatsResponseDto> {

@@ -1,11 +1,19 @@
 import { ApiProperty } from '@nestjs/swagger';
 
-export class RemoveBookmarkResponseDto {
-  @ApiProperty({ description: 'Removal confirmation', example: 'Bookmark removed successfully' })
+/**
+ * Generic message response DTO for action endpoints that return confirmation messages.
+ */
+export class MessageResponseDto {
+  @ApiProperty({ description: 'Operation result message', example: 'Operation completed successfully' })
   message!: string;
 }
 
-export class MoveBookmarkResponseDto {
-  @ApiProperty({ description: 'Move confirmation', example: 'Bookmark moved successfully' })
-  message!: string;
+/**
+ * @deprecated Use MessageResponseDto instead.
+ */
+export class MoveBookmarkResponseDto extends MessageResponseDto {
+  constructor() {
+    super();
+    this.message = 'Bookmark moved successfully';
+  }
 }
