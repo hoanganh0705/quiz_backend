@@ -5,7 +5,6 @@
  *  - the `Comment` aggregate and its read-projection shapes,
  *  - the `AuthorView` value object,
  *  - the `VoteValue` and `ReportStatus` enums,
- *  - the `CommentSortField` enum (recency and popularity),
  *  - the command and query parameter shapes consumed by the
  *    domain service and repository port,
  *  - the cursor shapes used by the list endpoints.
@@ -15,21 +14,20 @@
  * domain / service / repository code) and at runtime (for DTO
  * validation and Swagger). This is the project's "single source of
  * truth" convention.
+ *
+ * Note: CommentSortField, COMMENT_SORT_FIELD, and CommentVotesCursor
+ * were removed in Phase 2 audit as dead code. The `votes_count` sort
+ * option was defined but never connected to query parameters. These
+ * can be re-added when popularity sorting is implemented.
  */
 
 // ─── Enums ──────────────────────────────────────────────────────────────────
 
 export type VoteValue = 'upvote' | 'downvote';
 export type ReportStatus = 'open' | 'reviewed' | 'dismissed' | 'actioned';
-export type CommentSortField = 'created_at' | 'votes_count';
-export type SortOrder = 'asc' | 'desc';
 
 export const VOTE_VALUE = ['upvote', 'downvote'] as const;
 export const REPORT_STATUS = ['open', 'reviewed', 'dismissed', 'actioned'] as const;
-// `comment_created` defaults to `desc`; `comment_votes` defaults to `desc`.
-// The `default` is the recommended sort for the Quiz comment surface.
-export const COMMENT_SORT_FIELD = ['created_at', 'votes_count'] as const;
-export const SORT_ORDER = ['asc', 'desc'] as const;
 
 // Subset of REPORT_STATUS — only valid statuses when reviewing a report.
 export const REVIEW_REPORT_STATUS = ['reviewed', 'dismissed', 'actioned'] as const;
@@ -120,6 +118,16 @@ export interface ReportView {
   updatedAt: string;
 }
 
+/**
+ * Result of a moderation action (hide/restore).
+ * Returned so the application layer can construct the API response.
+ */
+export interface ModerationResult {
+  commentId: string;
+  isHidden: boolean;
+  changed: boolean;
+}
+
 // ─── Command parameters ─────────────────────────────────────────────────────
 
 export interface CreateCommentParams {
@@ -204,15 +212,6 @@ export interface GetCommentParams {
 export interface CommentCursor {
   createdAt: string;
   id: string;
-}
-
-/**
- * Cursor for the `votes_count` sort. `votesCount` is the primary sort
- * and `commentId` is the tiebreaker.
- */
-export interface CommentVotesCursor {
-  votesCount: number;
-  commentId: string;
 }
 
 export interface ReportCursor {

@@ -65,17 +65,23 @@ export class QuizNotFoundError extends CommentError {
  * Thrown when a reply references a parent comment that does not exist
  * or has been hidden / soft-deleted. 404 Not Found.
  *
- * Distinct from `CommentNotFoundError`: this is the *parent* lookup
- * that fails before the reply itself can be created. The wire shape is
- * identical (404) but the `code` is unique so clients dispatching on
- * `extensions.code` can give a precise error message.
+ * Note: This error class was removed in the Phase 1 production audit
+ * because it was never thrown - the domain service uses
+ * `CommentNotFoundError` for missing parent comments instead.
+ * Kept here as a marker for future reference.
+ *
+ * @deprecated - Use CommentNotFoundError for missing parent comments.
+ *               This class remains as a placeholder in case the
+ *               business requirement changes to distinguish parent-specific
+ *               lookup failures from general comment lookups.
  */
-export class ParentCommentNotFoundError extends CommentError {
-  readonly code = 'COMMENT_PARENT_COMMENT_NOT_FOUND';
-  constructor(parentCommentId: string) {
-    super(`Parent comment not found: ${parentCommentId}`);
-  }
-}
+// @deprecated - Removed in Phase 1 production audit
+// export class ParentCommentNotFoundError extends CommentError {
+//   readonly code = 'COMMENT_PARENT_COMMENT_NOT_FOUND';
+//   constructor(parentCommentId: string) {
+//     super(`Parent comment not found: ${parentCommentId}`);
+//   }
+// }
 
 /**
  * Thrown when a reply's parent comment lives on a different quiz than

@@ -23,6 +23,7 @@ import type {
   CommentWithRepliesView,
   CreateCommentParams,
   EditCommentParams,
+  ModerationResult,
   MyCommentView,
   ReportCommentParams,
   ReportStatus,
@@ -233,8 +234,8 @@ export class CommentApplicationService {
 
   // ─── Moderation ───────────────────────────────────────────────────────────
 
-  async hideComment(moderator: JwtPayload, commentId: string): Promise<void> {
-    await this.commentService.hideComment({ commentId, moderatorId: moderator.sub }, moderator);
+  async hideComment(moderator: JwtPayload, commentId: string): Promise<ModerationResult> {
+    const result = await this.commentService.hideComment({ commentId, moderatorId: moderator.sub }, moderator);
     await this.moderatorAudit.log({
       actorId: moderator.sub,
       actorRole: moderator.role,
@@ -242,10 +243,11 @@ export class CommentApplicationService {
       targetType: 'comment',
       targetId: commentId,
     });
+    return result;
   }
 
-  async restoreComment(moderator: JwtPayload, commentId: string): Promise<void> {
-    await this.commentService.restoreComment({ commentId, moderatorId: moderator.sub }, moderator);
+  async restoreComment(moderator: JwtPayload, commentId: string): Promise<ModerationResult> {
+    const result = await this.commentService.restoreComment({ commentId, moderatorId: moderator.sub }, moderator);
     await this.moderatorAudit.log({
       actorId: moderator.sub,
       actorRole: moderator.role,
@@ -253,6 +255,7 @@ export class CommentApplicationService {
       targetType: 'comment',
       targetId: commentId,
     });
+    return result;
   }
 }
 

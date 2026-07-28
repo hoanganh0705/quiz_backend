@@ -638,8 +638,10 @@ describe('CommentService', () => {
     });
 
     it('restoreComment accepts moderators and emits comment_restored', async () => {
-      repo.getCommentByIdForUpdate.mockResolvedValueOnce(mockCommentView);
-      repo.getCommentById.mockResolvedValueOnce(mockCommentView);
+      // Mock comment as hidden so setHiddenState gets called
+      const hiddenComment = { ...mockCommentView, isHidden: true };
+      repo.getCommentByIdForUpdate.mockResolvedValueOnce(hiddenComment);
+      repo.getCommentById.mockResolvedValueOnce({ ...mockCommentView, isHidden: false });
 
       await service.restoreComment(
         { commentId: COMMENT_ID, moderatorId: MODERATOR_ID },

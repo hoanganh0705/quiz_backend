@@ -46,6 +46,21 @@ export class ApiResponse {
   }
 
   /**
+   * Wrap a single-resource payload for creation endpoints (201 Created).
+   * Use this when the handler is decorated with `@HttpCode(HttpStatus.CREATED)`
+   * to keep the response factory aligned with the HTTP status.
+   *
+   * @example
+   *   return ApiResponse.created({ reportId: 'uuid' });
+   */
+  static created<T>(data: T): ApiResponseEnvelope<T> {
+    return {
+      data: normalizeTemporalFields(data) as T,
+      meta: { timestamp: new Date().toISOString() },
+    };
+  }
+
+  /**
    * Wrap a paginated list. The second argument is a discriminated union:
    * pass either `CursorPagination` or `OffsetPagination` (see `pagination.ts`).
    *

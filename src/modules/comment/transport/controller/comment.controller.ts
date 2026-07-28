@@ -103,7 +103,7 @@ export class CommentController {
   @Throttle({ default: { limit: 20, ttl: 60_000 } })
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiVoteCommentResponses()
-  async vote(
+  async castVote(
     @CurrentUser() user: JwtPayload,
     @Param('commentId', new ParseUUIDPipe({ version: '7' })) commentId: string,
     @Body() dto: VoteDto,
@@ -138,24 +138,26 @@ export class CommentController {
   @Post(':commentId/hide')
   @Permissions(Permission.COMMENT_MODERATE)
   @Throttle({ default: { limit: 30, ttl: 60_000 } })
-  @HttpCode(HttpStatus.NO_CONTENT)
+  @HttpCode(HttpStatus.OK)
   @ApiHideCommentResponses()
   async hideComment(
     @CurrentUser() moderator: JwtPayload,
     @Param('commentId', new ParseUUIDPipe({ version: '7' })) commentId: string,
-  ): Promise<void> {
-    await this.application.hideComment(moderator, commentId);
+  ) {
+    const result = await this.application.hideComment(moderator, commentId);
+    return this.presenter.hideComment(result);
   }
 
   @Post(':commentId/restore')
   @Permissions(Permission.COMMENT_MODERATE)
   @Throttle({ default: { limit: 30, ttl: 60_000 } })
-  @HttpCode(HttpStatus.NO_CONTENT)
+  @HttpCode(HttpStatus.OK)
   @ApiRestoreCommentResponses()
   async restoreComment(
     @CurrentUser() moderator: JwtPayload,
     @Param('commentId', new ParseUUIDPipe({ version: '7' })) commentId: string,
-  ): Promise<void> {
-    await this.application.restoreComment(moderator, commentId);
+  ) {
+    const result = await this.application.restoreComment(moderator, commentId);
+    return this.presenter.restoreComment(result);
   }
 }
