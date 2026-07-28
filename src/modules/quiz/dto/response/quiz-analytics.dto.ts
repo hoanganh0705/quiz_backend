@@ -211,7 +211,7 @@ export class CategorySummaryDto {
   totalAttempts!: number;
 
   @ApiProperty({ description: 'Unique players across all quizzes in this category', example: 3100 })
-  totalPlayers!: number;
+  uniquePlayers!: number;
 
   @ApiProperty({ description: 'Average score percent across the category (0–100)', example: 68.5 })
   averageScore!: number;
@@ -268,7 +268,7 @@ export class CreatorQuizAnalyticsDto {
   totalAttempts!: number;
 
   @ApiProperty({ description: 'Total unique players across all creator quizzes', example: 2900 })
-  totalPlayers!: number;
+  uniquePlayers!: number;
 
   @ApiProperty({ description: 'Average score across all creator quizzes (0–100)', example: 76.4 })
   averageScore!: number;

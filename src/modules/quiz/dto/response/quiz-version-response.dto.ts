@@ -41,10 +41,10 @@ export class QuizVersionDetailResponseDto {
   description!: string | null;
 
   @ApiProperty({ description: 'Passing score percent required to pass', example: 70 })
-  passingScore!: number;
+  passingScorePercent!: number;
 
   @ApiProperty({ description: 'Time limit in milliseconds', example: 600000 })
-  timeLimit!: number;
+  durationMs!: number;
 
   @ApiProperty({
     description:
@@ -106,7 +106,7 @@ export class QuizVersionResponseDto {
   rewardXp!: number;
 
   @ApiPropertyOptional({ description: 'Creator user identifier', type: String, nullable: true })
-  createdByUserId!: string | null;
+  creatorId!: string | null;
 
   @ApiProperty({
     description: 'Creation timestamp',

@@ -6,7 +6,7 @@ export class QuizStatsResponseMapper {
     return {
       quizId: stats.quizId,
       totalAttempts: stats.totalAttempts,
-      totalPlayers: stats.totalPlayers,
+      uniquePlayers: stats.uniquePlayers,
       averageScore: stats.averageScore,
       averageRating: stats.averageRating,
       bookmarkCount: stats.bookmarkCount,

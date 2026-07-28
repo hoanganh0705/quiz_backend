@@ -26,13 +26,12 @@ import { QuizPolicy } from '../policies/quiz.policy';
 import { QuizVersionPolicy } from '../policies/quiz-version.policy';
 import { QuizVersionCreatedEvent, QuizVersionPublishedEvent } from '../events/quiz-domain.events';
 import { QuizDomainEventBus } from '../events/quiz-domain.event-bus';
+import { applyCursorPagination, type CursorPaginationResult } from '@/common/utils/pagination.util';
 
-export type ListQuizVersionsResult = {
-  rows: QuizVersionRow[];
-  limit: number;
-  hasNextPage: boolean;
-  nextCursor: QuizVersionCursor | null;
-};
+export type ListQuizVersionsResult = CursorPaginationResult<
+  QuizVersionRow,
+  { createdAt: string; quizVersionId: string }
+>;
 
 @Injectable()
 export class QuizVersionService {
@@ -161,19 +160,11 @@ export class QuizVersionService {
       cursor: query.cursor,
     });
 
-    const hasNextPage = rows.length > query.limit;
-    const items = hasNextPage ? rows.slice(0, query.limit) : rows;
-    const lastItem = items.at(-1);
-
-    return {
-      rows: items,
-      limit: query.limit,
-      hasNextPage,
-      nextCursor:
-        hasNextPage && lastItem
-          ? { createdAt: lastItem.createdAt, quizVersionId: lastItem.quizVersionId }
-          : null,
-    };
+    return applyCursorPagination<QuizVersionRow, { createdAt: string; quizVersionId: string }>(
+      rows,
+      query.limit,
+      (row) => ({ createdAt: row.createdAt, quizVersionId: row.quizVersionId }),
+    );
   }
 
   async getQuizVersionDetail(

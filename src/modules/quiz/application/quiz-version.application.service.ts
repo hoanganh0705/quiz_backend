@@ -48,7 +48,7 @@ export class QuizVersionApplicationService {
     const result = await this.quizVersionService.listQuizVersions(quizId, user, query);
 
     return {
-      items: result.rows.map((row) => QuizVersionResponseMapper.toQuizVersionResponse(row)),
+      items: result.items.map((row) => QuizVersionResponseMapper.toQuizVersionResponse(row)),
       pagination: {
         limit: result.limit,
         nextCursor: result.nextCursor ? QuizVersionCursorMapper.serialize(result.nextCursor) : null,
