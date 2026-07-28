@@ -341,6 +341,7 @@ export class UserFollowRepository implements UserFollowRepositoryPort {
     const mutualFollowersQuery = sql<{
       userId: string;
       username: string;
+      displayName: string | null;
       avatarUrl: string | null;
     }>`
       WITH user_following AS (
@@ -384,6 +385,7 @@ export class UserFollowRepository implements UserFollowRepositoryPort {
       SELECT
         ${u.userId} AS "userId",
         ${u.username} AS username,
+        ${up.displayName} AS "displayName",
         ${up.avatarUrl} AS "avatarUrl"
       FROM shared_following sf
       INNER JOIN ${users} u ON ${u.userId} = sf.user_id
@@ -402,6 +404,7 @@ export class UserFollowRepository implements UserFollowRepositoryPort {
     const rows = rowsResult.rows as Array<{
       userId: string;
       username: string;
+      displayName: string | null;
       avatarUrl: string | null;
     }>;
 
@@ -417,6 +420,7 @@ export class UserFollowRepository implements UserFollowRepositoryPort {
       items: items.map((row) => ({
         userId: row.userId,
         username: row.username,
+        displayName: row.displayName,
         avatarUrl: row.avatarUrl,
       })),
       pagination: {

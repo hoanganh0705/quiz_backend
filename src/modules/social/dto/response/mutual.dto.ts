@@ -13,6 +13,13 @@ export class MutualFriendItemDto {
   username!: string;
 
   @ApiPropertyOptional({
+    description: 'Mutual friend display name',
+    example: 'Mike',
+    nullable: true,
+  })
+  displayName!: string | null;
+
+  @ApiPropertyOptional({
     description: 'Mutual friend avatar URL',
     format: 'uri',
     example: 'https://example.com/avatars/mike.jpg',
@@ -39,6 +46,13 @@ export class MutualFollowerItemDto {
 
   @ApiProperty({ description: 'Mutual follower username', example: 'user_b' })
   username!: string;
+
+  @ApiPropertyOptional({
+    description: 'Mutual follower display name',
+    example: 'User B',
+    nullable: true,
+  })
+  displayName!: string | null;
 
   @ApiPropertyOptional({
     description: 'Mutual follower avatar URL',
