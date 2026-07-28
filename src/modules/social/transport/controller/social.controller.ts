@@ -303,11 +303,15 @@ export class SocialController {
    * Any HTTP verb that lands here is intentionally rejected with 405 so
    * clients that cached the old URL surface the misroute instead of being
    * silently dropped to a 404.
+   *
+   * @deprecated Use POST /friend-requests/:userId instead
    */
   @All('friend-request')
   @ApiOperation({
-    summary: 'Deprecated singular friend-request path (always returns 405)',
+    summary: '[DEPRECATED] Singular friend-request path (always returns 405)',
     description:
+      '⚠️ DEPRECATED: This endpoint is deprecated and will be removed in a future version.\n\n' +
+      'Use POST /friend-requests/:userId instead.\n\n' +
       'Retained indefinitely for forward-compatibility with SDKs that cached ' +
       'the pre-consolidation path. Every method on this path returns ' +
       '`405 Method Not Allowed`. Migrate callers to `POST /friend-requests/:userId` ' +
@@ -478,7 +482,13 @@ export class SocialController {
   @Throttle({ default: { limit: 30, ttl: 60_000 } })
   @Transactional()
   @Post('follow/:userId')
-  @ApiOperation({ summary: 'Follow a user' })
+  @ApiOperation({
+    summary: 'Follow a user',
+    description:
+      'Creates a follow relationship with the target user. This operation is idempotent: ' +
+      'if the current user already follows the target user, the request succeeds with 204 No Content ' +
+      'and no duplicate follow record is created.',
+  })
   @ApiAuthActionNoContent('Now following user')
   @ApiParam({
     name: 'userId',
@@ -496,7 +506,12 @@ export class SocialController {
   @Throttle({ default: { limit: 30, ttl: 60_000 } })
   @Transactional()
   @Delete('follow/:userId')
-  @ApiOperation({ summary: 'Unfollow a user' })
+  @ApiOperation({
+    summary: 'Unfollow a user',
+    description:
+      'Removes the follow relationship with the target user. Returns 404 if the current user ' +
+      'is not following the target user.',
+  })
   @ApiAuthActionNoContent('Unfollowed user')
   @ApiParam({
     name: 'userId',

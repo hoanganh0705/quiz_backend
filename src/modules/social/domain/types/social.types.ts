@@ -116,6 +116,7 @@ export interface PaginatedMutualFriendsResult {
   items: Array<{
     userId: string;
     username: string;
+    displayName: string | null;
     avatarUrl: string | null;
   }>;
   pagination: {
@@ -130,6 +131,7 @@ export interface PaginatedMutualFollowersResult {
   items: Array<{
     userId: string;
     username: string;
+    displayName: string | null;
     avatarUrl: string | null;
   }>;
   pagination: {
