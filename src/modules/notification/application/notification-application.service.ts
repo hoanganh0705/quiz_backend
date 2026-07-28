@@ -144,7 +144,7 @@ export class NotificationApplicationService {
     }
 
     if (notification.userId !== user.sub) {
-      throw new NotificationForbiddenError();
+      throw new NotificationForbiddenError(notificationId);
     }
 
     await this.notificationRepository.markAsRead(notificationId, user.sub);
@@ -172,7 +172,7 @@ export class NotificationApplicationService {
     }
 
     if (notification.userId !== user.sub) {
-      throw new NotificationForbiddenError();
+      throw new NotificationForbiddenError(notificationId);
     }
 
     await this.notificationRepository.markAsUnread(notificationId, user.sub);
@@ -221,7 +221,7 @@ export class NotificationApplicationService {
     }
 
     if (notification.userId !== user.sub) {
-      throw new NotificationForbiddenError();
+      throw new NotificationForbiddenError(notificationId);
     }
 
     await this.notificationRepository.delete(notificationId, user.sub);

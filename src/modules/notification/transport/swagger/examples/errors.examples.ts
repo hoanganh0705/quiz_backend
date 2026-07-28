@@ -103,10 +103,11 @@ export const markAsReadNotFoundExample = withInstance(
   ErrorResponseExamples.notFound,
   `/api/v1/notifications/${SAMPLE_NOTIFICATION_ID}/read`,
 );
-export const markAsReadForbiddenExample = withInstance(
-  ErrorResponseExamples.forbidden,
-  `/api/v1/notifications/${SAMPLE_NOTIFICATION_ID}/read`,
-);
+export const markAsReadForbiddenExample = {
+  ...ErrorResponseExamples.forbidden,
+  detail: `You do not have permission to access notification ${SAMPLE_NOTIFICATION_ID}`,
+  instance: `/api/v1/notifications/${SAMPLE_NOTIFICATION_ID}/read`,
+};
 export const markAsReadUnauthorizedExample = withInstance(
   ErrorResponseExamples.unauthorized,
   `/api/v1/notifications/${SAMPLE_NOTIFICATION_ID}/read`,
@@ -118,10 +119,11 @@ export const markAsUnreadNotFoundExample = withInstance(
   ErrorResponseExamples.notFound,
   `/api/v1/notifications/${SAMPLE_NOTIFICATION_ID}/unread`,
 );
-export const markAsUnreadForbiddenExample = withInstance(
-  ErrorResponseExamples.forbidden,
-  `/api/v1/notifications/${SAMPLE_NOTIFICATION_ID}/unread`,
-);
+export const markAsUnreadForbiddenExample = {
+  ...ErrorResponseExamples.forbidden,
+  detail: `You do not have permission to access notification ${SAMPLE_NOTIFICATION_ID}`,
+  instance: `/api/v1/notifications/${SAMPLE_NOTIFICATION_ID}/unread`,
+};
 export const markAsUnreadUnauthorizedExample = withInstance(
   ErrorResponseExamples.unauthorized,
   `/api/v1/notifications/${SAMPLE_NOTIFICATION_ID}/unread`,
@@ -138,15 +140,18 @@ export const markAllAsReadInternalErrorExample = withInstance(
   '/api/v1/notifications/read-all',
 );
 
-// ─── DELETE /notifications/read ─────────────────────────────────────────
+// ─── DELETE /notifications/read-all ──────────────────────────────────────
 
+// Phase 6 (rev6.1): renamed from DELETE /notifications/read to /read-all
+// for route hierarchy consistency with POST /notifications/read-all.
+// Old path retained as comment for migration reference.
 export const deleteReadUnauthorizedExample = withInstance(
   ErrorResponseExamples.unauthorized,
-  '/api/v1/notifications/read',
+  '/api/v1/notifications/read-all',
 );
 export const deleteReadInternalErrorExample = withInstance(
   ErrorResponseExamples.internalServerError,
-  '/api/v1/notifications/read',
+  '/api/v1/notifications/read-all',
 );
 
 // ─── DELETE /notifications/:notificationId ───────────────────────────────
@@ -155,10 +160,11 @@ export const deleteNotificationNotFoundExample = withInstance(
   ErrorResponseExamples.notFound,
   `/api/v1/notifications/${SAMPLE_NOTIFICATION_ID}`,
 );
-export const deleteNotificationForbiddenExample = withInstance(
-  ErrorResponseExamples.forbidden,
-  `/api/v1/notifications/${SAMPLE_NOTIFICATION_ID}`,
-);
+export const deleteNotificationForbiddenExample = {
+  ...ErrorResponseExamples.forbidden,
+  detail: `You do not have permission to access notification ${SAMPLE_NOTIFICATION_ID}`,
+  instance: `/api/v1/notifications/${SAMPLE_NOTIFICATION_ID}`,
+};
 export const deleteNotificationUnauthorizedExample = withInstance(
   ErrorResponseExamples.unauthorized,
   `/api/v1/notifications/${SAMPLE_NOTIFICATION_ID}`,
