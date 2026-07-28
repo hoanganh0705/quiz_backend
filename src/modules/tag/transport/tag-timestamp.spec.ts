@@ -41,7 +41,12 @@ const FIXTURE_FOLLOWED_ITEM = {
   followedAt: PG_FOLLOWED_AT,
 };
 
-const PAGINATION = { limit: 20, hasNextPage: false, nextCursor: null as string | null };
+const PAGINATION = {
+  kind: 'cursor' as const,
+  limit: 20,
+  hasNextPage: false,
+  nextCursor: null as string | null,
+};
 
 describe('TagPresenter — timestamps normalized to ISO 8601 (Phase 1)', () => {
   const presenter = new TagPresenter();
@@ -217,33 +222,11 @@ describe('TagPresenter — timestamps normalized to ISO 8601 (Phase 1)', () => {
     });
   });
 
-  describe('followTag / unfollowTag (ApiResponse.ok)', () => {
-    it('followTag normalizes meta.timestamp', () => {
-      const result = presenter.followTag({ message: 'Tag followed successfully', changed: true });
-
-      expect(result.data.message).toBe('Tag followed successfully');
-      expect(result.data.changed).toBe(true);
-      expect(result.meta.timestamp).toMatch(ISO_8601_REGEX);
-    });
-
-    it('unfollowTag normalizes meta.timestamp', () => {
-      const result = presenter.unfollowTag({
-        message: 'Tag unfollowed successfully',
-        changed: true,
-      });
-
-      expect(result.data.message).toBe('Tag unfollowed successfully');
-      expect(result.data.changed).toBe(true);
-      expect(result.meta.timestamp).toMatch(ISO_8601_REGEX);
-    });
-  });
-
   describe('canoncial envelope shape', () => {
     it('every presenter method returns { data, meta: { timestamp, pagination? } }', () => {
       const results = [
         presenter.getTagBySlug(FIXTURE_TAG_RESPONSE),
         presenter.listTags({ items: [FIXTURE_TAG_RESPONSE], pagination: PAGINATION }),
-        presenter.followTag({ message: 'ok', changed: false }),
       ];
 
       for (const result of results) {

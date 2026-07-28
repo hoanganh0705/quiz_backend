@@ -5,6 +5,7 @@ import {
   ApiConflictResponse,
   ApiForbiddenResponse,
   ApiInternalServerErrorResponse,
+  ApiNoContentResponse,
   ApiNotFoundResponse,
   ApiParam,
   ApiTooManyRequestsResponse,
@@ -24,7 +25,6 @@ import { DeleteTagResponseDto } from '../../dto/response/delete-tag-response.dto
 import {
   RankedTagResponseDto,
   TagAnalyticsResponseDto,
-  TagFollowMessageResponseDto,
 } from '../../dto/response/parity-response.dto';
 import { TagResponseDto } from '../../dto/response/tag-response.dto';
 import { QuizListResponseDto } from '@/modules/quiz/dto/response/quiz-list-response.dto';
@@ -66,6 +66,8 @@ import {
   restoreUnauthorizedExample,
   tagBySlugInternalErrorExample,
   tagBySlugNotFoundExample,
+  tagByIdInternalErrorExample,
+  tagByIdNotFoundExample,
   tagQuizzesInternalErrorExample,
   tagQuizzesNotFoundExample,
   trendingBadRequestExample,
@@ -90,10 +92,8 @@ import {
   TAG_DELETE_MESSAGE_EXAMPLE,
   TAG_DETAIL_EXAMPLE,
   TAG_FOLLOWED_LIST_EXAMPLE,
-  TAG_FOLLOW_MESSAGE_EXAMPLE,
   TAG_LIST_EXAMPLE,
   TAG_RESTORED_EXAMPLE,
-  TAG_UNFOLLOW_MESSAGE_EXAMPLE,
   TAG_UPDATED_EXAMPLE,
 } from './examples';
 
@@ -214,11 +214,9 @@ export const ApiTagAnalyticsResponse = (): MethodDecorator =>
 export const ApiFollowTagResponse = (): MethodDecorator =>
   applyDecorators(
     ApiBearerAuth(AUTH_SECURITY_NAME),
-    resourceOk<typeof TagFollowMessageResponseDto>(
-      TagFollowMessageResponseDto as unknown as Type,
-      'Confirms the tag was followed.',
-      TAG_FOLLOW_MESSAGE_EXAMPLE,
-    ),
+    ApiNoContentResponse({
+      description: 'Tag followed successfully',
+    }),
     ApiBadRequestResponse(problem.badRequest(followBadRequestExample)),
     ApiUnauthorizedResponse(problem.unauthorized(followUnauthorizedExample)),
     ApiForbiddenResponse(problem.forbidden(followForbiddenExample)),
@@ -230,11 +228,9 @@ export const ApiFollowTagResponse = (): MethodDecorator =>
 export const ApiUnfollowTagResponse = (): MethodDecorator =>
   applyDecorators(
     ApiBearerAuth(AUTH_SECURITY_NAME),
-    resourceOk<typeof TagFollowMessageResponseDto>(
-      TagFollowMessageResponseDto as unknown as Type,
-      'Confirms the tag was unfollowed.',
-      TAG_UNFOLLOW_MESSAGE_EXAMPLE,
-    ),
+    ApiNoContentResponse({
+      description: 'Tag unfollowed successfully',
+    }),
     ApiBadRequestResponse(problem.badRequest(unfollowBadRequestExample)),
     ApiUnauthorizedResponse(problem.unauthorized(unfollowUnauthorizedExample)),
     ApiForbiddenResponse(problem.forbidden(unfollowForbiddenExample)),
@@ -279,6 +275,17 @@ export const ApiTagBySlugResponse = (): MethodDecorator =>
     ),
     ApiNotFoundResponse(problem.notFound(tagBySlugNotFoundExample)),
     ApiInternalServerErrorResponse(problem.internalError(tagBySlugInternalErrorExample)),
+  );
+
+export const ApiTagByIdResponse = (): MethodDecorator =>
+  applyDecorators(
+    resourceOk<typeof TagResponseDto>(
+      TagResponseDto as unknown as Type,
+      'Returns the requested tag.',
+      TAG_DETAIL_EXAMPLE,
+    ),
+    ApiNotFoundResponse(problem.notFound(tagByIdNotFoundExample)),
+    ApiInternalServerErrorResponse(problem.internalError(tagByIdInternalErrorExample)),
   );
 
 export const ApiCreateTagResponse = (): MethodDecorator =>
