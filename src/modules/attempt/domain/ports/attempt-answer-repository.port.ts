@@ -11,6 +11,15 @@ export interface AttemptAnswerRepositoryPort {
   getAttemptAnswersByAttemptId(attemptId: string): Promise<AttemptAnswerRow[]>;
 
   /**
+   * Returns a specific answer for an attempt and question, or null if not found.
+   * Used to verify an answer exists before withdrawal.
+   */
+  getAnswerByAttemptAndQuestion(
+    attemptId: string,
+    questionId: string,
+  ): Promise<AttemptAnswerRow | null>;
+
+  /**
    * Returns scoring-relevant answer data (total count and correct count) for an attempt.
    * Uses a targeted INNER JOIN - no deduplication needed since we count directly.
    */

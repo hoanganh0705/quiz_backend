@@ -358,30 +358,6 @@ export class AttemptRepository implements AttemptRepositoryPort {
     });
   }
 
-  async checkAnswerOptionBelongsToQuestion(
-    _questionId: string,
-    _optionId: string,
-  ): Promise<boolean> {
-    const [row] = await this.db
-      .select({ optionId: quizAttempts.attemptId })
-      .from(quizAttempts)
-      .where(sql`1=0`)
-      .limit(1);
-
-    return row !== undefined;
-  }
-
-  async countQuestionsByVersionId(_quizVersionId: string): Promise<number> {
-    return Promise.resolve(0);
-  }
-
-  async checkQuestionBelongsToVersion(
-    _questionId: string,
-    _quizVersionId: string,
-  ): Promise<boolean> {
-    return Promise.resolve(true);
-  }
-
   async completeAttemptAndSideEffects(params: {
     attemptId: string;
     scorePercent: string;
@@ -516,45 +492,6 @@ export class AttemptRepository implements AttemptRepositoryPort {
 
       return updated as AttemptRow;
     });
-  }
-
-  async createTournamentAttempt(params: {
-    userId: string;
-    quizVersionId: string;
-    tournamentId: string;
-    roundId: string;
-    nowIso: string;
-  }): Promise<AttemptRow> {
-    const [created] = await this.db
-      .insert(quizAttempts)
-      .values({
-        userId: params.userId,
-        quizVersionId: params.quizVersionId,
-        contextType: 'tournament',
-        contextRefId: params.tournamentId,
-        status: 'started',
-        startedAt: params.nowIso,
-        createdAt: params.nowIso,
-        updatedAt: params.nowIso,
-      })
-      .returning({
-        attemptId: quizAttempts.attemptId,
-        userId: quizAttempts.userId,
-        quizVersionId: quizAttempts.quizVersionId,
-        contextType: quizAttempts.contextType,
-        contextRefId: quizAttempts.contextRefId,
-        status: quizAttempts.status,
-        scorePercent: quizAttempts.scorePercent,
-        correctCount: quizAttempts.correctCount,
-        startedAt: quizAttempts.startedAt,
-        finishedAt: quizAttempts.finishedAt,
-        timeTakenMs: quizAttempts.timeTakenMs,
-        xpEarned: quizAttempts.xpEarned,
-        createdAt: quizAttempts.createdAt,
-        updatedAt: quizAttempts.updatedAt,
-      });
-
-    return created as AttemptRow;
   }
 
   async getAttemptAnalytics(attemptId: string): Promise<AttemptAnalyticsRow | null> {

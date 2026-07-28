@@ -35,6 +35,31 @@ export class AttemptAnswerRepository implements AttemptAnswerRepositoryPort {
     return rows as AttemptAnswerRow[];
   }
 
+  async getAnswerByAttemptAndQuestion(
+    attemptId: string,
+    questionId: string,
+  ): Promise<AttemptAnswerRow | null> {
+    const [row] = await this.db
+      .select({
+        attemptAnswerId: quizAttemptAnswers.attemptAnswerId,
+        attemptId: quizAttemptAnswers.attemptId,
+        questionId: quizAttemptAnswers.questionId,
+        selectedOptionId: quizAttemptAnswers.selectedOptionId,
+        answeredAt: quizAttemptAnswers.answeredAt,
+        timeTakenMs: quizAttemptAnswers.timeTakenMs,
+      })
+      .from(quizAttemptAnswers)
+      .where(
+        and(
+          eq(quizAttemptAnswers.attemptId, attemptId),
+          eq(quizAttemptAnswers.questionId, questionId),
+        ),
+      )
+      .limit(1);
+
+    return (row as AttemptAnswerRow | undefined) ?? null;
+  }
+
   async getAttemptAnswerScoringData(
     attemptId: string,
   ): Promise<{ totalAnswers: number; correctCount: number }> {
