@@ -20,7 +20,7 @@ import { REVIEW_DOMAIN_EVENT_BUS, ReviewDomainEventBus } from './domain/events';
 import { ReviewRepository } from './infrastructure/repositories/review.repository';
 import { ReviewReportRepository } from './infrastructure/repositories/review-report.repository';
 import { QuizModule } from '@/modules/quiz/quiz.module';
-import { quizReviewController } from './transport/controller/quiz-review.controller';
+import { QuizReviewController } from './transport/controller/quiz-review.controller';
 import { ReviewOutboxAdapter } from './infrastructure/outbox/review-outbox.adapter';
 import { ReviewOutboxProcessorService } from './infrastructure/outbox/review-outbox-processor.service';
 import { ReviewOutboxSchedulerService } from './infrastructure/outbox/review-outbox.scheduler';
@@ -66,7 +66,7 @@ import { ReviewOutboxSchedulerService } from './infrastructure/outbox/review-out
   ],
   controllers: [
     ReviewController,
-    quizReviewController,
+    QuizReviewController,
     UserReviewController,
     AdminReviewController,
   ],
