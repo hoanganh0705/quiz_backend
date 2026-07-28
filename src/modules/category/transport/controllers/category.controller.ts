@@ -3,6 +3,8 @@ import {
   Controller,
   Delete,
   Get,
+  HttpCode,
+  HttpStatus,
   Param,
   ParseUUIDPipe,
   Patch,
@@ -10,6 +12,7 @@ import {
   Query,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
+import { Transactional } from '@/common/interceptors/transactional.interceptor';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { Public } from '@/common/decorators/public.decorator';
 import { Permissions } from '@/common/authorization/decorators/permissions.decorator';
@@ -115,27 +118,29 @@ export class CategoryController {
   }
 
   @Post(':id/follow')
+  @Transactional()
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Follow a category' })
   @ApiFollowCategoryResponse()
   async followCategory(
     @Param('id', new ParseUUIDPipe({ version: '7' })) categoryId: string,
     @CurrentUser() user: JwtPayload,
-  ) {
-    const result = await this.categoryApplicationService.followCategory(user.sub, categoryId);
-    return this.categoryPresenter.followCategory(result);
+  ): Promise<void> {
+    await this.categoryApplicationService.followCategory(user.sub, categoryId);
   }
 
   @Delete(':id/follow')
+  @Transactional()
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Unfollow a category' })
   @ApiUnfollowCategoryResponse()
   async unfollowCategory(
     @Param('id', new ParseUUIDPipe({ version: '7' })) categoryId: string,
     @CurrentUser() user: JwtPayload,
-  ) {
-    const result = await this.categoryApplicationService.unfollowCategory(user.sub, categoryId);
-    return this.categoryPresenter.unfollowCategory(result);
+  ): Promise<void> {
+    await this.categoryApplicationService.unfollowCategory(user.sub, categoryId);
   }
 
   @Post(':id/restore')
