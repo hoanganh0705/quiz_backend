@@ -41,6 +41,11 @@ export interface HistoryQueryOptions {
   offset?: number;
 }
 
+export interface HistoryQueryResult {
+  entries: AchievementHistoryEntry[];
+  total: number;
+}
+
 export interface HistorySummary {
   totalBadges: number;
   activeBadges: number;
@@ -75,11 +80,14 @@ export class AchievementHistoryService {
   async getUserHistory(
     userId: string,
     options: Partial<HistoryQueryOptions> = {},
-  ): Promise<AchievementHistoryEntry[]> {
-    const { data: userBadges } = await this.achievementRepository.getUserBadgesWithDetails(userId);
+  ): Promise<HistoryQueryResult> {
+    const { data: userBadges, total } = await this.achievementRepository.getUserBadgesWithDetails(
+      userId,
+      { limit: options.limit, offset: options.offset },
+    );
 
     const now = new Date();
-    return userBadges
+    const filteredEntries = userBadges
       .filter((ub) => {
         if (!options.includeRevoked && ub.revokedAt) {
           return false;
@@ -99,6 +107,11 @@ export class AchievementHistoryService {
         return true;
       })
       .map((ub) => this.toHistoryEntry(ub, now));
+
+    return {
+      entries: filteredEntries,
+      total,
+    };
   }
 
   async getHistoryEntry(userBadgeId: string): Promise<AchievementHistoryEntry | null> {
@@ -250,14 +263,14 @@ export class AchievementHistoryService {
     startDate: Date,
     endDate: Date,
   ): Promise<Map<string, AchievementHistoryEntry[]>> {
-    const history = await this.getUserHistory(userId, {
+    const { entries } = await this.getUserHistory(userId, {
       startDate,
       endDate,
     });
 
     const timeline = new Map<string, AchievementHistoryEntry[]>();
 
-    for (const entry of history) {
+    for (const entry of entries) {
       const dateKey = entry.earnedAt.toISOString().split('T')[0];
       const existing = timeline.get(dateKey) ?? [];
       existing.push(entry);
@@ -268,8 +281,8 @@ export class AchievementHistoryService {
   }
 
   async calculateAchievementDensity(userId: string): Promise<number> {
+    const { entries: history } = await this.getUserHistory(userId);
     const summary = await this.getUserHistorySummary(userId);
-    const history = await this.getUserHistory(userId);
 
     if (history.length === 0) return 0;
 
@@ -289,14 +302,14 @@ export class AchievementHistoryService {
   }
 
   async getUserMilestones(userId: string): Promise<AchievementHistoryEntry[]> {
-    const history = await this.getUserHistory(userId, { includeRevoked: false });
+    const { entries: history } = await this.getUserHistory(userId, { includeRevoked: false });
 
     const milestones = [0, 9, 24, 49, 99, 199, 499, 999];
     return milestones.filter((idx) => idx < history.length).map((idx) => history[idx]);
   }
 
   async exportUserHistory(userId: string): Promise<Record<string, unknown>> {
-    const history = await this.getUserHistory(userId);
+    const { entries: history } = await this.getUserHistory(userId);
     const summary = await this.getUserHistorySummary(userId);
 
     return {

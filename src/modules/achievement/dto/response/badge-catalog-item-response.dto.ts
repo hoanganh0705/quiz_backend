@@ -18,6 +18,6 @@ export class BadgeCatalogItemResponseDto {
   @ApiProperty({ description: 'Badge rarity', example: 'epic' })
   rarity!: string;
 
-  @ApiProperty({ description: 'Number of users who earned this badge', example: 1243 })
+  @ApiProperty({ description: 'Total number of users who earned this badge', example: 1243 })
   earnedCount!: number;
 }

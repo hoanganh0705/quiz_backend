@@ -1,14 +1,12 @@
 import { Controller, Delete, Get, Param, ParseUUIDPipe, Query } from '@nestjs/common';
 import { ApiParam, ApiQuery, ApiTags, ApiOperation } from '@nestjs/swagger';
-import { ApiPropertyOptional } from '@nestjs/swagger';
-import { Type } from 'class-transformer';
-import { IsInt, IsOptional, Max, Min } from 'class-validator';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
 import { Public } from '@/common/decorators/public.decorator';
 import { Permissions } from '@/common/authorization/decorators/permissions.decorator';
 import { Permission } from '@/common/authorization/permissions';
 import { ApiForbidden, ApiAuth, ApiNotFound } from '@/common/swagger/swagger-decorators';
 import { ApiOkResource, ApiOkResourceList } from '@/common/swagger/api-ok';
+import { PaginationQueryDto } from '@/common/dto/pagination-query.dto';
 import { AchievementApplicationService } from '../../application/achievement.application.service';
 import { AchievementPresenter } from '../presenters/achievement.presenter';
 import { BadgeDetailsResponseDto } from '../../dto/response/badge-details-response.dto';
@@ -18,34 +16,6 @@ import { MyBadgeItemDto } from '../../dto/response/my-badges-response.dto';
 import { PublicAchievementProfileResponseDto } from '../../dto/response/public-achievement-profile-response.dto';
 import { UserBadgeAnalyticsResponseDto } from '../../dto/response/user-badge-analytics-response.dto';
 import { AchievementHistoryItemResponseDto } from '../../dto/response/achievement-history-item-response.dto';
-
-export class PaginationQueryDto {
-  @ApiPropertyOptional({
-    description: 'Maximum number of items to return (1–100)',
-    type: Number,
-    minimum: 1,
-    maximum: 100,
-    default: 20,
-  })
-  @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  @Min(1)
-  @Max(100)
-  limit?: number;
-
-  @ApiPropertyOptional({
-    description: 'Number of items to skip for offset-based pagination',
-    type: Number,
-    minimum: 0,
-    default: 0,
-  })
-  @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  @Min(0)
-  offset?: number;
-}
 
 // All 404/403/500 error responses (BadgeNotFoundError,
 // AchievementUserNotFoundError, UserBadgeOwnershipNotFoundError → 404;
@@ -65,7 +35,10 @@ export class AchievementController {
 
   @Get('badges')
   @Public()
-  @ApiOperation({ summary: 'List all available badges' })
+  @ApiOperation({
+    operationId: 'listBadgeCatalog',
+    summary: 'List all available badges',
+  })
   // Phase 7 (api-contract audit): the runtime emits an offset-paginated
   // payload (`{ data: T[], meta: { pagination: { kind: 'offset', ... } } }`),
   // so the OpenAPI schema must match — `ApiOkResourceList(..., 'offset')` is
@@ -92,7 +65,10 @@ export class AchievementController {
 
   @Get('me/badges')
   @ApiAuth()
-  @ApiOperation({ summary: 'List badges earned by the authenticated user' })
+  @ApiOperation({
+    operationId: 'listMyBadges',
+    summary: 'List badges earned by the authenticated user',
+  })
   // Phase 7 (api-contract audit): the runtime emits an offset-paginated
   // payload, so the OpenAPI schema must match — `ApiOkResourceList(..., 'offset')`
   // is the canonical decorator for offset-paginated lists.
@@ -116,7 +92,10 @@ export class AchievementController {
 
   @Get('badges/:badgeId')
   @Public()
-  @ApiOperation({ summary: 'Get badge details' })
+  @ApiOperation({
+    operationId: 'getBadgeDetails',
+    summary: 'Get badge details',
+  })
   @ApiParam({ name: 'badgeId', format: 'uuid' })
   @ApiOkResource(BadgeDetailsResponseDto, { description: 'Badge details returned' })
   @ApiNotFound('Badge not found')
@@ -127,7 +106,10 @@ export class AchievementController {
 
   @Delete('/users/:userId/badges/:badgeId')
   @Permissions(Permission.ACHIEVEMENT_REVOKE)
-  @ApiOperation({ summary: 'Revoke a badge from a user' })
+  @ApiOperation({
+    operationId: 'revokeUserBadge',
+    summary: 'Revoke a badge from a user',
+  })
   @ApiAuth()
   @ApiForbidden()
   @ApiParam({ name: 'userId', format: 'uuid' })
@@ -142,7 +124,10 @@ export class AchievementController {
 
   @Get('/users/:userId/achievements')
   @ApiAuth()
-  @ApiOperation({ summary: "Get a user's public achievement profile" })
+  @ApiOperation({
+    operationId: 'getPublicAchievementProfile',
+    summary: "Get a user's public achievement profile",
+  })
   @ApiParam({ name: 'userId', format: 'uuid' })
   @ApiOkResource(PublicAchievementProfileResponseDto, {
     description: 'Public achievement profile returned',
@@ -161,7 +146,10 @@ export class AchievementController {
 
   @Get('/users/me/badges/:badgeId/progress')
   @ApiAuth()
-  @ApiOperation({ summary: "Get the authenticated user's progress toward a badge" })
+  @ApiOperation({
+    operationId: 'getMyBadgeProgress',
+    summary: "Get the authenticated user's progress toward a badge",
+  })
   @ApiParam({ name: 'badgeId', format: 'uuid' })
   @ApiOkResource(BadgeProgressResponseDto, { description: 'Badge progress returned' })
   @ApiNotFound('Badge not found')
@@ -175,7 +163,10 @@ export class AchievementController {
 
   @Get('/users/me/achievements/history')
   @ApiAuth()
-  @ApiOperation({ summary: "Get the authenticated user's badge earning history" })
+  @ApiOperation({
+    operationId: 'getMyAchievementHistory',
+    summary: "Get the authenticated user's badge earning history",
+  })
   // Phase 7 (api-contract audit): the runtime emits an offset-paginated
   // payload, so the OpenAPI schema must match — `ApiOkResourceList(..., 'offset')`
   // is the canonical decorator for offset-paginated lists.
@@ -186,7 +177,7 @@ export class AchievementController {
     name: 'limit',
     required: false,
     description: 'Maximum number of items to return (1–100)',
-    schema: { type: 'integer', minimum: 1, maximum: 100, default: 50 },
+    schema: { type: 'integer', minimum: 1, maximum: 100, default: 20 },
   })
   @ApiQuery({
     name: 'offset',
@@ -204,7 +195,10 @@ export class AchievementController {
 
   @Get('/users/me/badges/analytics')
   @ApiAuth()
-  @ApiOperation({ summary: "Get the authenticated user's badge analytics" })
+  @ApiOperation({
+    operationId: 'getMyBadgeAnalytics',
+    summary: "Get the authenticated user's badge analytics",
+  })
   @ApiOkResource(UserBadgeAnalyticsResponseDto, {
     description: 'Badge analytics returned',
   })

@@ -69,6 +69,12 @@ export const REVOCATION_REASON_MESSAGES: Record<RevocationReasonCode, string> = 
   [RevocationReasonCode.MANUAL_CORRECTION]: 'Manual correction by administrator',
 };
 
+/** Batch size for fetching revoked badge records in statistics queries. */
+const REVOCATION_STATS_LIMIT = 100;
+
+/** Maximum number of recent revocations to include in stats response. */
+const RECENT_REVOCATIONS_LIMIT = 10;
+
 @Injectable()
 export class BadgeRevocationService {
   constructor(
@@ -145,6 +151,12 @@ export class BadgeRevocationService {
 
   /**
    * Reverse a revocation (in case of incorrect revocation).
+   *
+   * NOTE: This method is not yet fully implemented.
+   * - Does not emit the correct event (badge.revoked with "Reversed:" reason is wrong)
+   * - Should emit badge.restored or achievement.awarded instead
+   * - Original revokedBy is not stored in the revocation record
+   * TODO: Implement proper badge restoration event or remove this method if not needed
    */
   async reverseRevocation(
     userId: string,
@@ -194,7 +206,7 @@ export class BadgeRevocationService {
         badgeId,
         badgeSlug: revokedRecord.badge.slug,
         revokedAt: revokedRecord.revokedAt ?? new Date(),
-        revokedBy: revokedRecord.revocationReason ?? 'unknown',
+        revokedBy: 'admin', // Original revokedBy not stored in revocation record
         reason: 'Original revocation',
         reversedAt: new Date(),
         reversedBy: reversedByAdmin,
@@ -297,7 +309,7 @@ export class BadgeRevocationService {
       undefined,
       undefined,
       {
-        limit: 100,
+        limit: REVOCATION_STATS_LIMIT,
       },
     );
 
@@ -310,15 +322,17 @@ export class BadgeRevocationService {
       byReason[reason] = (byReason[reason] ?? 0) + 1;
     }
 
-    const recentRevocations: RevocationRecord[] = allRevokedRecords.slice(0, 10).map((record) => ({
-      userBadgeId: record.userBadgeId,
-      userId: record.userId,
-      badgeId: record.badgeId,
-      badgeSlug: record.badge.slug,
-      revokedAt: record.revokedAt ?? new Date(),
-      revokedBy: 'admin',
-      reason: record.revocationReason ?? 'Unknown',
-    }));
+    const recentRevocations: RevocationRecord[] = allRevokedRecords
+      .slice(0, RECENT_REVOCATIONS_LIMIT)
+      .map((record) => ({
+        userBadgeId: record.userBadgeId,
+        userId: record.userId,
+        badgeId: record.badgeId,
+        badgeSlug: record.badge.slug,
+        revokedAt: record.revokedAt ?? new Date(),
+        revokedBy: 'admin',
+        reason: record.revocationReason ?? 'Unknown',
+      }));
 
     return {
       totalRevocations,
