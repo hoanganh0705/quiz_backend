@@ -11,51 +11,51 @@ The auth module is mature and functionally complete. This plan catalogues **28 f
 
 ## Findings Index
 
-| # | Severity | Finding | Phase |
-|---|---|---|---|
-| 1 | High | Wrong response DTO type on `POST /auth/reset-password` | 1 |
-| 2 | High | `GET /auth/me` duplicates `GET /users/me` | 6 (doc-only) |
-| 3 | Medium | Password validation rules differ across 3 DTOs | 2 |
-| 4 | Medium | `DELETE /auth/account` should be `DELETE /users/me` | 6 (kept as-is) |
-| 5 | Medium | `POST /auth/logout` docs/code mismatch on cookie requirement | 3 |
-| 6 | Medium | `/auth/security/dashboard` overlaps with `/auth/me` and `/users/me` | 6 (service-layer fix) |
-| 7 | Low | `AccountSecurityDto` lives in wrong file | 7 |
-| 8 | Improvement | Class-level interceptor order needs a comment | 3 |
-| 9 | Low | `LoginResponseDto` mapper has dead `?? ''` fallback | 7 |
-| 10 | Improvement | `ResourceConflictError` exported but never thrown | 7 |
-| 11 | Low | `VerifyEmailResponseDto` reused for 2 endpoints; `ResetPasswordResponseDto` separate | 7 |
-| 12 | Low | `change-password` documents 409 with generic example | 5 |
-| 13 | Low | `logout-all` returns 201 for an action endpoint | 4 |
-| 14 | Low | `verify-email` returns 201 for an idempotent action | 4 |
-| 15 | Low | `verify-password` returns 200 + `{ valid: false }` instead of 401 | 5 |
-| 16 | Low | `forgot-password` returns 201 for a non-creation action | 4 |
-| 17 | Improvement | `@Throttle` constants duplicated between decorator and Redis | 7 |
-| 18 | Low | `revokeSession` audit log drops `ipAddress` | 5 |
-| 19 | Low | `findActiveByEmailWithPassword` needs timing-safety documentation | 8 |
-| 20 | — | Restated by #5 | — |
-| 21 | Low | `LogoutResponseDto` example doesn't match runtime output | 5 |
-| 22 | Improvement | Conflict / NotFound / BadRequest option constants duplicated | 7 |
-| 23 | Low | `check-email` / `check-username` should be `GET` not `POST` | 4 |
-| 24 | — | False alarm — `AuthCookieService` is in use | — |
-| 25 | Improvement | `TokenResponseDto` declared but never used (dead code) | 7 |
-| 26 | Improvement | `AccountDeletionResult` duplicates 4 other message-only types | 7 |
-| 27 | Low | `activeSessionCount` available from two endpoints | 8 |
-| 28 | Improvement | `findMeById` repository method is unused (dead code) | 7 |
+| #   | Severity    | Finding                                                                              | Phase                 |
+| --- | ----------- | ------------------------------------------------------------------------------------ | --------------------- |
+| 1   | High        | Wrong response DTO type on `POST /auth/reset-password`                               | 1                     |
+| 2   | High        | `GET /auth/me` duplicates `GET /users/me`                                            | 6 (doc-only)          |
+| 3   | Medium      | Password validation rules differ across 3 DTOs                                       | 2                     |
+| 4   | Medium      | `DELETE /auth/account` should be `DELETE /users/me`                                  | 6 (kept as-is)        |
+| 5   | Medium      | `POST /auth/logout` docs/code mismatch on cookie requirement                         | 3                     |
+| 6   | Medium      | `/auth/security/dashboard` overlaps with `/auth/me` and `/users/me`                  | 6 (service-layer fix) |
+| 7   | Low         | `AccountSecurityDto` lives in wrong file                                             | 7                     |
+| 8   | Improvement | Class-level interceptor order needs a comment                                        | 3                     |
+| 9   | Low         | `LoginResponseDto` mapper has dead `?? ''` fallback                                  | 7                     |
+| 10  | Improvement | `ResourceConflictError` exported but never thrown                                    | 7                     |
+| 11  | Low         | `VerifyEmailResponseDto` reused for 2 endpoints; `ResetPasswordResponseDto` separate | 7                     |
+| 12  | Low         | `change-password` documents 409 with generic example                                 | 5                     |
+| 13  | Low         | `logout-all` returns 201 for an action endpoint                                      | 4                     |
+| 14  | Low         | `verify-email` returns 201 for an idempotent action                                  | 4                     |
+| 15  | Low         | `verify-password` returns 200 + `{ valid: false }` instead of 401                    | 5                     |
+| 16  | Low         | `forgot-password` returns 201 for a non-creation action                              | 4                     |
+| 17  | Improvement | `@Throttle` constants duplicated between decorator and Redis                         | 7                     |
+| 18  | Low         | `revokeSession` audit log drops `ipAddress`                                          | 5                     |
+| 19  | Low         | `findActiveByEmailWithPassword` needs timing-safety documentation                    | 8                     |
+| 20  | —           | Restated by #5                                                                       | —                     |
+| 21  | Low         | `LogoutResponseDto` example doesn't match runtime output                             | 5                     |
+| 22  | Improvement | Conflict / NotFound / BadRequest option constants duplicated                         | 7                     |
+| 23  | Low         | `check-email` / `check-username` should be `GET` not `POST`                          | 4                     |
+| 24  | —           | False alarm — `AuthCookieService` is in use                                          | —                     |
+| 25  | Improvement | `TokenResponseDto` declared but never used (dead code)                               | 7                     |
+| 26  | Improvement | `AccountDeletionResult` duplicates 4 other message-only types                        | 7                     |
+| 27  | Low         | `activeSessionCount` available from two endpoints                                    | 8                     |
+| 28  | Improvement | `findMeById` repository method is unused (dead code)                                 | 7                     |
 
 ---
 
 ## Phase overview
 
-| Phase | Theme | Findings | Risk |
-|---|---|---|---|
-| 1 | Type-only OpenAPI fix | #1 | None (one-line) |
-| 2 | Unify password policy | #3 | Medium (tightens registration rule) |
-| 3 | Doc/code alignment for logout + interceptor pinning | #5, #8 | None / low |
-| 4 | HTTP verb + status-code hygiene | #13, #14, #16, #23 | Low–Medium |
-| 5 | Sensitive-operation correctness + audit completeness | #12, #15, #18, #21 | Medium (#15) |
-| 6 | Auth-module endpoint ownership review | #2, #4, #6 | None–Low (doc + derived field) |
-| 7 | Dead-code + naming cleanup | #7, #9, #10, #11, #17, #22, #25, #26, #28 | None |
-| 8 | Documentation + consistency polish | #19, #27 | None |
+| Phase | Theme                                                | Findings                                  | Risk                                |
+| ----- | ---------------------------------------------------- | ----------------------------------------- | ----------------------------------- |
+| 1     | Type-only OpenAPI fix                                | #1                                        | None (one-line)                     |
+| 2     | Unify password policy                                | #3                                        | Medium (tightens registration rule) |
+| 3     | Doc/code alignment for logout + interceptor pinning  | #5, #8                                    | None / low                          |
+| 4     | HTTP verb + status-code hygiene                      | #13, #14, #16, #23                        | Low–Medium                          |
+| 5     | Sensitive-operation correctness + audit completeness | #12, #15, #18, #21                        | Medium (#15)                        |
+| 6     | Auth-module endpoint ownership review                | #2, #4, #6                                | None–Low (doc + derived field)      |
+| 7     | Dead-code + naming cleanup                           | #7, #9, #10, #11, #17, #22, #25, #26, #28 | None                                |
+| 8     | Documentation + consistency polish                   | #19, #27                                  | None                                |
 
 ---
 
@@ -99,10 +99,10 @@ Add the type-only import at the top of the file (line 11 already imports the val
 
 The two password policies currently in use:
 
-| Site | minLength | Regex | Used by |
-|---|---|---|---|
-| Registration | 6 | `[A-Z]` + `\d` + `[^A-Za-z0-9]` | `RegisterDto.password` |
-| Change / Reset | 8 | `[a-z]` + `[A-Z]` + `\d` | `ChangePasswordDto.newPassword`, `ResetPasswordDto.newPassword` |
+| Site           | minLength | Regex                           | Used by                                                         |
+| -------------- | --------- | ------------------------------- | --------------------------------------------------------------- |
+| Registration   | 6         | `[A-Z]` + `\d` + `[^A-Za-z0-9]` | `RegisterDto.password`                                          |
+| Change / Reset | 8         | `[a-z]` + `[A-Z]` + `\d`        | `ChangePasswordDto.newPassword`, `ResetPasswordDto.newPassword` |
 
 Recommendation: **adopt the 8-char / lower+upper+digit rule everywhere.** It is the safer rule, already in use at 2 of 3 sites, and matches OWASP guidance.
 
@@ -136,8 +136,12 @@ Recommendation: **adopt the 8-char / lower+upper+digit rule everywhere.** It is 
        example: 'NewSecurePassword123',
      })
      @IsString()
-     @MinLength(NEW_PASSWORD_MIN, { message: `Password must be at least ${NEW_PASSWORD_MIN} characters long` })
-     @MaxLength(NEW_PASSWORD_MAX, { message: `Password must not exceed ${NEW_PASSWORD_MAX} characters` })
+     @MinLength(NEW_PASSWORD_MIN, {
+       message: `Password must be at least ${NEW_PASSWORD_MIN} characters long`,
+     })
+     @MaxLength(NEW_PASSWORD_MAX, {
+       message: `Password must not exceed ${NEW_PASSWORD_MAX} characters`,
+     })
      @Matches(NEW_PASSWORD_REGEX, { message: NEW_PASSWORD_MESSAGE })
      newPassword!: string;
    }
@@ -342,11 +346,11 @@ Two endpoints have legitimate architectural reasons to stay where they are. One 
 
 ### Per-finding verdict
 
-| # | Finding | Verdict | Reason |
-|---|---|---|---|
-| #2 | `GET /auth/me` duplicates `GET /users/me` | **Keep with modification** | Both endpoints exist with different response shapes. Each serves a different use case. The fix is to make the relationship explicit in OpenAPI, not to relocate one. |
-| #4 | `DELETE /auth/account` should be `DELETE /users/me` | **Keep as-is** | The endpoint requires credential verification, session revocation, cookie clearing, and audit logging — all auth-domain responsibilities. Relocation would create a cross-module dependency with no clear business value. |
-| #6 | `/auth/security/dashboard` overlaps with `/auth/me` and `/users/me` | **Keep with modification** | The URL is appropriate. The issue is that the response shape mixes user-domain and session-domain data via an anemic aggregation service. Fix the composition, not the URL. |
+| #   | Finding                                                             | Verdict                    | Reason                                                                                                                                                                                                                    |
+| --- | ------------------------------------------------------------------- | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| #2  | `GET /auth/me` duplicates `GET /users/me`                           | **Keep with modification** | Both endpoints exist with different response shapes. Each serves a different use case. The fix is to make the relationship explicit in OpenAPI, not to relocate one.                                                      |
+| #4  | `DELETE /auth/account` should be `DELETE /users/me`                 | **Keep as-is**             | The endpoint requires credential verification, session revocation, cookie clearing, and audit logging — all auth-domain responsibilities. Relocation would create a cross-module dependency with no clear business value. |
+| #6  | `/auth/security/dashboard` overlaps with `/auth/me` and `/users/me` | **Keep with modification** | The URL is appropriate. The issue is that the response shape mixes user-domain and session-domain data via an anemic aggregation service. Fix the composition, not the URL.                                               |
 
 ---
 
@@ -530,10 +534,10 @@ Single PR. Add the new field as additive — never remove `lastPasswordChangeAt`
 
 ### Summary
 
-| Finding | Verdict | Change type |
-|---|---|---|
-| #2 `/auth/me` | Keep with modification | OpenAPI doc enhancement only |
-| #4 `/auth/account` | Keep as-is | None |
+| Finding                       | Verdict                | Change type                                                    |
+| ----------------------------- | ---------------------- | -------------------------------------------------------------- |
+| #2 `/auth/me`                 | Keep with modification | OpenAPI doc enhancement only                                   |
+| #4 `/auth/account`            | Keep as-is             | None                                                           |
 | #6 `/auth/security/dashboard` | Keep with modification | Add derived `passwordAgeDays` field; enhance service docstring |
 
 No endpoint is relocated. No module boundary is crossed. No deprecation is introduced. No migration guide is required.
@@ -562,7 +566,6 @@ The three endpoints remain in the auth module because authentication-related wor
    `LoginResult.sessionId` is non-optional (`auth-result.types.ts:15`).
 
 3. **#10 — Delete `ResourceConflictError` and its `ProblemCodeMapping` entry.**
-
    - Delete `src/modules/auth/domain/errors/auth-domain.errors.ts` lines 107–112 (the class).
    - Delete `AUTH_RESOURCE_CONFLICT` from `src/common/errors/problem-code-mapping.ts` (lines 61–65).
    - Verify with `rg "ResourceConflictError" src/` that no throw sites reference it.
@@ -585,13 +588,27 @@ The three endpoints remain in the auth module because authentication-related wor
          private readonly config: AuthThrottleConfigType,
        ) {}
 
-       get register() { return this.config.register; }
-       get verifyEmail() { return this.config.verifyEmail; }
-       get resendVerificationEmail() { return this.config.resendVerificationEmail; }
-       get login() { return this.config.login; }
-       get googleLogin() { return this.config.googleLogin; }
-       get forgotPassword() { return this.config.forgotPassword; }
-       get checkAvailability() { return this.config.checkAvailability; }
+       get register() {
+         return this.config.register;
+       }
+       get verifyEmail() {
+         return this.config.verifyEmail;
+       }
+       get resendVerificationEmail() {
+         return this.config.resendVerificationEmail;
+       }
+       get login() {
+         return this.config.login;
+       }
+       get googleLogin() {
+         return this.config.googleLogin;
+       }
+       get forgotPassword() {
+         return this.config.forgotPassword;
+       }
+       get checkAvailability() {
+         return this.config.checkAvailability;
+       }
      }
      ```
 
@@ -602,7 +619,6 @@ The three endpoints remain in the auth module because authentication-related wor
 6. **#22 — Deduplicate error-response option constants.**
 
    `src/modules/auth/transport/controller/auth.controller.ts` (lines 99–133) duplicates `badRequestOptions`, `notFoundOptions`, etc. already defined in `src/common/swagger/swagger-decorators.ts`.
-
    - Option A: import the shared constants from `swagger-decorators.ts`.
    - Option B: use the helper decorators directly (`ApiBadRequest()`, `ApiUnauthorized()`, etc.) and drop the local constants.
 
@@ -613,11 +629,9 @@ The three endpoints remain in the auth module because authentication-related wor
    `src/modules/auth/dto/response/token-response.dto.ts` is unused. The file is one space of description different from `RefreshTokenResponseDto`. Delete.
 
 8. **#26 — Consolidate `AccountDeletionResult` with other message-only result types.**
-
    - Skip if #11 is skipped. Otherwise, introduce a shared `MessageResult` type in `auth-result.types.ts` and have all 5 message-only types alias it.
 
 9. **#28 — Delete `findMeById` from `user.repository.ts`.**
-
    - Verify with `rg "findMeById" src/` that no callers exist.
    - Delete lines 288–317.
 
@@ -679,27 +693,27 @@ Recommended PR sequence:
 
 ## Files touched (summary)
 
-| File | Phases |
-|---|---|
-| `src/modules/auth/transport/presenters/auth.presenter.ts` | 1 |
-| `src/modules/auth/dto/request/register.dto.ts` | 2 |
-| `src/modules/auth/dto/request/password-reset.dto.ts` | 2 |
-| `src/modules/auth/dto/request/new-password.dto.ts` (new) | 2 |
-| `src/modules/auth/transport/controller/auth.controller.ts` | 2, 3, 4, 5, 6 |
-| `src/modules/auth/domain/credential-verification.service.ts` | 5 |
-| `src/modules/auth/domain/account-security.service.ts` | 6 |
-| `src/modules/auth/dto/response/account-security.dto.ts` (new, after Phase 7 file move) | 6, 7 |
-| `src/modules/auth/dto/response/session-management.dto.ts` (slim down) | 7 |
-| `src/modules/auth/dto/response/logout-response.dto.ts` | 5 |
-| `src/modules/auth/dto/response/token-response.dto.ts` (delete) | 7 |
-| `src/modules/auth/dto/response/verify-email-response.dto.ts` | 7 |
-| `src/modules/auth/dto/response/password-reset.dto.ts` | 7 |
-| `src/modules/auth/domain/errors/auth-domain.errors.ts` | 7 |
-| `src/modules/auth/infrastructure/repositories/user.repository.ts` | 7 |
-| `src/modules/auth/infrastructure/repositories/user-session.repository.ts` | — (unchanged) |
-| `src/modules/auth/config/throttle.config.ts` (new) | 7 |
-| `src/core/config/auth-throttle.config.ts` (new) | 7 |
-| `src/common/errors/problem-code-mapping.ts` | 7 |
+| File                                                                                   | Phases        |
+| -------------------------------------------------------------------------------------- | ------------- |
+| `src/modules/auth/transport/presenters/auth.presenter.ts`                              | 1             |
+| `src/modules/auth/dto/request/register.dto.ts`                                         | 2             |
+| `src/modules/auth/dto/request/password-reset.dto.ts`                                   | 2             |
+| `src/modules/auth/dto/request/new-password.dto.ts` (new)                               | 2             |
+| `src/modules/auth/transport/controller/auth.controller.ts`                             | 2, 3, 4, 5, 6 |
+| `src/modules/auth/domain/credential-verification.service.ts`                           | 5             |
+| `src/modules/auth/domain/account-security.service.ts`                                  | 6             |
+| `src/modules/auth/dto/response/account-security.dto.ts` (new, after Phase 7 file move) | 6, 7          |
+| `src/modules/auth/dto/response/session-management.dto.ts` (slim down)                  | 7             |
+| `src/modules/auth/dto/response/logout-response.dto.ts`                                 | 5             |
+| `src/modules/auth/dto/response/token-response.dto.ts` (delete)                         | 7             |
+| `src/modules/auth/dto/response/verify-email-response.dto.ts`                           | 7             |
+| `src/modules/auth/dto/response/password-reset.dto.ts`                                  | 7             |
+| `src/modules/auth/domain/errors/auth-domain.errors.ts`                                 | 7             |
+| `src/modules/auth/infrastructure/repositories/user.repository.ts`                      | 7             |
+| `src/modules/auth/infrastructure/repositories/user-session.repository.ts`              | — (unchanged) |
+| `src/modules/auth/config/throttle.config.ts` (new)                                     | 7             |
+| `src/core/config/auth-throttle.config.ts` (new)                                        | 7             |
+| `src/common/errors/problem-code-mapping.ts`                                            | 7             |
 
 ---
 
