@@ -13,6 +13,7 @@ import { UpdateMeSettingsDto } from '../../dto/request/update-me-settings.dto';
 import { UserApplicationService } from '../../application/user.application.service';
 import { UserPresenter } from '../presenters/user.presenter';
 import { QUIZ_LISTING_PORT, type QuizListingPort } from '@/modules/quiz/domain/analytics';
+import { USER_DOMAIN_SERVICE, type UserDomainService } from '../../domain/user.service';
 import {
   ApiBadRequestAndInternal,
   ApiCreatorQuizAnalyticsResponse,
@@ -46,6 +47,8 @@ export class UserController {
     private readonly presenter: UserPresenter,
     @Inject(QUIZ_LISTING_PORT)
     private readonly quizListing: QuizListingPort,
+    @Inject(USER_DOMAIN_SERVICE)
+    private readonly userDomainService: UserDomainService,
   ) {}
 
   @Get('me/recommended-quizzes')
@@ -102,19 +105,22 @@ export class UserController {
   @ApiAuth()
   @ApiOperation({
     summary: 'List my activity events',
-    description: 'Returns a cursor-paginated list of activity events for the authenticated user.',
+    description:
+      'Returns a cursor-paginated list of activity events for the authenticated user. ' +
+      'Honours the `showActivity` privacy flag (403 when the flag is false and the requester ' +
+      'is not the owner).',
   })
   @ApiUserActivityResponse()
   @ApiBadRequestAndInternal()
-  async listUserActivity(
+  async listMyActivity(
     @CurrentUser('sub') userId: string,
     @Query() query: ListUserActivityQueryDto,
   ) {
-    const result = await this.userApplicationService.listUserActivity(userId, {
+    const result = await this.userApplicationService.listMyActivity(userId, {
       limit: query.limit,
       cursor: query.cursor,
     });
-    return this.presenter.listUserActivity(result);
+    return this.presenter.listMyActivity(result);
   }
 
   @Get('me/tournaments')
@@ -217,19 +223,43 @@ export class UserController {
     return this.presenter.updateMeSettings(result);
   }
 
-  // ─── Public :userId routes (registered last to avoid shadowing /me/* routes) ──
-  // NOTE: Global JwtGuard enforces authentication; @ApiAuth() documents this in OpenAPI.
+  // ─── Authenticated, privacy-gated :userId routes ──
+  // Phase 8 (F-25, F-31): these routes all live behind `@ApiAuth()` —
+  // every caller must be authenticated (the global `JwtGuard` enforces
+  // that at the framework level, `@ApiAuth()` documents it in OpenAPI).
+  // They are NOT public in the literal sense; the audit previously
+  // labelled them "Public :userId routes" which was misleading.
+  //
+  // Cross-user reads are also privacy-gated via
+  // `assertProfileVisible` (F-4) and `assertPrivacyFlag` (F-7); the
+  // `/me/*` literal routes above are matched first by Nest's
+  // registration-order routing, so this `:userId` block cannot
+  // accidentally swallow a self-request — there is no shadowing
+  // concern. Order within this block is otherwise immaterial: each
+  // route has a distinct sub-path.
 
   @Get(':userId/quizzes/analytics')
   @ApiUserIdParam()
   @ApiAuth()
   @ApiOperation({
     summary: 'Get creator analytics for a user',
-    description: 'Returns aggregate creator-side quiz analytics for the given user.',
+    description:
+      'Returns aggregate creator-side quiz analytics for the given user. ' +
+      'Restricted to the authenticated user — calling this endpoint for any other ' +
+      '`userId` returns 404. This is the same data exposed at `GET /users/me/analytics` ' +
+      'and `GET /users/me/tournament-analytics`, but scoped to a creator role.',
   })
   @ApiCreatorQuizAnalyticsResponse()
   @ApiNotFoundAndInternal()
-  async getUserQuizAnalytics(@Param('userId', new ParseUUIDPipe({ version: '7' })) userId: string) {
+  async getUserQuizAnalytics(
+    @Param('userId', new ParseUUIDPipe({ version: '7' })) userId: string,
+    @CurrentUser('sub') requesterId: string,
+  ) {
+    // Phase 1 (F-1): gate cross-user access. Only the target user themselves
+    // may read their own creator analytics — every other authenticated caller
+    // receives 404, identical to a missing user. This fixes the IDOR reported
+    // in `docs/audits/USER_MODULE_PRODUCTION_READINESS_AUDIT.md` (F-1).
+    this.userDomainService.assertCanReadCreatorAnalytics(requesterId, userId);
     const result = await this.quizListing.getMyQuizAnalytics(userId);
     return this.presenter.getUserQuizAnalytics(result);
   }
@@ -279,7 +309,9 @@ export class UserController {
   @ApiOperation({
     summary: 'Get public tournament history for a user',
     description:
-      'Returns a cursor-paginated list of completed tournaments for the specified user. Honours privacy settings.',
+      'Returns a cursor-paginated list of completed tournaments for the specified user. ' +
+      "Honours the target user's `showTournamentActivity` privacy flag (403 when the flag is " +
+      'false and the requester is not the owner).',
   })
   @ApiPublicTournamentHistoryResponse()
   @ApiNotFoundBadRequestForbiddenInternal()
@@ -288,7 +320,7 @@ export class UserController {
     @Query() query: GetMyTournamentHistoryQueryDto,
     @CurrentUser('sub') requesterId: string,
   ) {
-    const result = await this.userApplicationService.getMyTournamentHistory(
+    const result = await this.userApplicationService.getPublicTournamentHistory(
       userId,
       requesterId,
       query,
