@@ -336,19 +336,18 @@ export const ProblemCodeMapping: Readonly<Record<string, ProblemCodeInfo>> = {
   /**
    * Thrown when a user's ranking entry cannot be found. 404 Not Found.
    *
-   * NOTE: exported but never thrown in the current codebase. Preserved
-   * with a sensible 404 mapping (semantic analogue to `UserNotFoundError`).
+   * Phase 7 (F-18): the prior `USER_RANKING_NOT_FOUND` mapping was
+   * removed because the `UserRankingNotFoundError` class was deleted
+   * (the class was exported and mapped but never thrown). The mapping
+   * was unreachable dead code.
    */
-  USER_RANKING_NOT_FOUND: {
-    status: HttpStatus.NOT_FOUND,
-    title: 'NotFound',
-    typeUri: 'https://api.quiz.local/problems/user-ranking-not-found',
-  },
   /**
    * Thrown when a user's analytics entry cannot be found. 404 Not Found.
    *
-   * NOTE: exported but never thrown in the current codebase. Preserved
-   * with a sensible 404 mapping.
+   * Phase 7 (F-18): note this mapping is still reachable — the F-1
+   * IDOR fix in `user.service.ts:assertCanReadCreatorAnalytics`
+   * throws `UserAnalyticsNotFoundError` for cross-user reads of
+   * `GET /users/:userId/quizzes/analytics`.
    */
   USER_ANALYTICS_NOT_FOUND: {
     status: HttpStatus.NOT_FOUND,

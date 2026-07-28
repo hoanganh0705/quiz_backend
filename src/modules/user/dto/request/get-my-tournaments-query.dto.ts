@@ -1,6 +1,10 @@
 import { Type } from 'class-transformer';
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
+import { IsInt, IsOptional, IsString, Matches, Max, Min } from 'class-validator';
+import { USER_PAGINATION_DEFAULT_LIMIT } from '../../domain/constants/user.domain-constants';
+
+// Phase 7 (F-23): see `get-my-tournaments-query.dto.ts` for rationale.
+const BASE64_ALPHABET = /^[A-Za-z0-9+/=]+$/;
 
 export class GetMyTournamentsQueryDto {
   @ApiPropertyOptional({
@@ -10,18 +14,19 @@ export class GetMyTournamentsQueryDto {
   })
   @IsOptional()
   @IsString()
+  @Matches(BASE64_ALPHABET)
   cursor?: string;
 
   @ApiPropertyOptional({
     description: 'Maximum number of items to return (1-100)',
     minimum: 1,
     maximum: 100,
-    default: 20,
+    default: USER_PAGINATION_DEFAULT_LIMIT,
   })
   @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(1)
   @Max(100)
-  limit?: number;
+  limit?: number = USER_PAGINATION_DEFAULT_LIMIT;
 }

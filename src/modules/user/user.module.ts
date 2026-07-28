@@ -31,7 +31,13 @@ import { RankingXpStreakListenerAdapter } from './infrastructure/adapters/rankin
     UserSearchAdapter,
     UserDomainEventBus,
     UserActivityServiceImpl,
-    { provide: USER_REPOSITORY_PORT, useClass: UserRepository },
+    // Phase 2 (F-8): use `useExisting` instead of `useClass` — the global
+    // `DatabaseModule` already provides `UserRepository`. With `useClass`
+    // Nest would build a *second* instance for the `USER_REPOSITORY_PORT`
+    // token, so any consumer that injects the token would see a different
+    // instance than any consumer that injects the class directly (e.g.
+    // `StreakService` post-F-5, social listeners, etc.).
+    { provide: USER_REPOSITORY_PORT, useExisting: UserRepository },
     { provide: USER_DOMAIN_EVENT_BUS, useExisting: UserDomainEventBus },
     { provide: USER_SEARCH_PORT, useExisting: UserSearchAdapter },
     { provide: USER_ACTIVITY_SERVICE, useExisting: UserActivityServiceImpl },

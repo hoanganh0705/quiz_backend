@@ -2,13 +2,17 @@
  * Streak Service
  *
  * Calculates and updates user daily streak (currentStreak, longestStreak).
- * Emits `user.streak_updated` on UserDomainEventBus when streak changes.
+ * Persists the result via `UserRepository.updateStreakCache` and emits
+ * `user.streak_updated` on the in-process `UserDomainEventBus` once the
+ * persistence call returns.
  */
 
 import { Inject, Injectable } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { USER_DOMAIN_EVENT_BUS } from '../events/user-domain-event-bus.port';
 import type { UserDomainEventBusPort } from '../events/user-domain-event-bus.port';
+import { USER_REPOSITORY_PORT, type UserRepositoryPort } from '../ports/user-repository.port';
+import { UserStreakUpdatedEvent } from '../events/user-domain.events';
 
 export interface StreakResult {
   currentStreak: number;
@@ -22,74 +26,81 @@ export class StreakService {
   constructor(
     @Inject(USER_DOMAIN_EVENT_BUS)
     private readonly userEventBus: UserDomainEventBusPort,
+    @Inject(USER_REPOSITORY_PORT)
+    private readonly userRepository: UserRepositoryPort,
     @InjectPinoLogger(StreakService.name)
     private readonly logger: PinoLogger,
   ) {}
 
   /**
-   * Recalculate and persist the user's streak after an attempt.
-   * Returns the updated streak result.
+   * Phase 2 (F-5): Persist the post-attempt streak transition and emit
+   * `user.streak_updated`. Replaces the previous TODO stub that emitted
+   * the event with hard-coded values (`previousStreak = 0`,
+   * `lastAttemptDate = null`) and never wrote to the database, which
+   * meant `users.current_streak` / `longest_streak` / `last_streak_day`
+   * never moved and `UserMeResponseDto.currentStreak` stayed at 0.
    *
-   * The attempt completion timestamp is used to determine if the streak continues
-   * (same UTC day as last attempt) or resets.
+   * The persisted transition is delegated to
+   * `UserRepository.updateStreakCache`, which runs the canonical
+   * `docs/plans/user-streak-system.md` §3.1 SQL inside its own
+   * transaction (the attempt-completion path uses the same port method
+   * inside the `completeAttemptAndSideEffects` transaction; the
+   * listener path uses the default connection).
+   *
+   * We read the previous streak cache **before** the update to populate
+   * `previousStreak` in the emitted event. Soft-deleted users short
+   * circuit cleanly: the repository returns `null` and the service
+   * logs + returns zeros.
    */
-  // TODO: Implement actual streak calculation with database queries
-  // eslint-disable-next-line @typescript-eslint/require-await
   async recalculateStreak(userId: string, attemptTimestamp: Date): Promise<StreakResult> {
-    const lastAttemptDate = null; // TODO: fetch from user record or attempt history
-    const previousStreak = 0; // TODO: fetch from user record
-
-    const today = this.utcDateString(attemptTimestamp);
-    const yesterday = this.utcDateString(new Date(attemptTimestamp.getTime() - 86_400_000));
-
-    let currentStreak: number;
-    let longestStreak: number;
-    let isNewRecord = false;
-
-    if (lastAttemptDate === today) {
-      // Already played today — streak unchanged
-      currentStreak = previousStreak;
-      longestStreak = previousStreak;
-    } else if (lastAttemptDate === yesterday) {
-      // Continuing streak
-      currentStreak = previousStreak + 1;
-      longestStreak = Math.max(previousStreak + 1, previousStreak);
-    } else {
-      // Streak broken — start fresh
-      currentStreak = 1;
-      longestStreak = previousStreak;
+    const previous = await this.userRepository.findMeById(userId);
+    if (!previous) {
+      this.logger.warn({
+        event: 'user_streak_recalculate_skipped_user_not_found',
+        userId,
+      });
+      return { currentStreak: 0, longestStreak: 0, previousStreak: 0, isNewRecord: false };
     }
 
-    if (currentStreak > longestStreak) {
-      longestStreak = currentStreak;
-      isNewRecord = true;
+    const updated = await this.userRepository.updateStreakCache(userId, attemptTimestamp);
+    if (!updated) {
+      this.logger.warn({
+        event: 'user_streak_recalculate_skipped_soft_deleted',
+        userId,
+      });
+      return {
+        currentStreak: previous.currentStreak,
+        longestStreak: previous.longestStreak,
+        previousStreak: previous.currentStreak,
+        isNewRecord: false,
+      };
     }
 
-    const event = {
-      eventType: 'user.streak_updated' as const,
-      userId,
-      currentStreak,
-      longestStreak,
-      previousStreak,
-      isNewRecord,
-      timestamp: attemptTimestamp,
-    };
+    const previousStreak = previous.currentStreak;
+    const currentStreak = updated.currentStreak;
+    const longestStreak = updated.longestStreak;
+    const isNewRecord = currentStreak > longestStreak || longestStreak > previous.longestStreak;
 
-    this.userEventBus.emitStreakUpdated(event);
+    this.userEventBus.emitStreakUpdated(
+      new UserStreakUpdatedEvent(
+        userId,
+        currentStreak,
+        longestStreak,
+        previousStreak,
+        isNewRecord,
+        attemptTimestamp,
+      ),
+    );
 
     this.logger.info({
       event: 'user_streak_updated',
       userId,
+      previousStreak,
       currentStreak,
       longestStreak,
-      previousStreak,
       isNewRecord,
     });
 
     return { currentStreak, longestStreak, previousStreak, isNewRecord };
-  }
-
-  private utcDateString(date: Date): string {
-    return date.toISOString().substring(0, 10);
   }
 }

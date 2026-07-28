@@ -4,7 +4,7 @@
 // Owns the per-user profile, the privacy/visibility settings that govern
 // what the rest of the app can show, and the activity feed entries that
 // record what each user has done:
-//   - userProfiles           (display name, avatar, bio, tagline, pinned badges)
+//   - userProfiles           (display name, avatar, bio)
 //   - userProfileSettings    (per-user visibility toggles for the profile UI)
 //   - userActivityEvents     (append-only feed of user-visible activity)
 //
@@ -43,8 +43,14 @@ export const userProfiles = pgTable(
     displayName: text('display_name'),
     avatarUrl: text('avatar_url'),
     bio: text(),
-    tagline: text('tagline'),
-    pinnedBadgeIds: jsonb('pinned_badge_ids').default([]).notNull(),
+    // Phase 7 (F-17): `tagline` and `pinnedBadgeIds` were defined in
+    // the initial schema but never exposed by any DTO or consumed by
+    // any query. Removed to keep the schema aligned with the public
+    // contract; a downstream migration script is responsible for
+    // dropping the columns and the `user_profiles_tagline_len` /
+    // `user_profiles_pinned_badges_array` CHECK constraints from
+    // production databases. The Drizzle-side change is the source of
+    // truth for the application; the migration script will catch up.
     createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' })
       .defaultNow()
       .notNull(),
@@ -66,8 +72,9 @@ export const userProfiles = pgTable(
       'user_profiles_display_name_len',
       sql`(display_name IS NULL) OR (length(btrim(display_name)) >= 1 AND length(btrim(display_name)) <= 100)`,
     ),
-    check('user_profiles_tagline_len', sql`(tagline IS NULL) OR (length(btrim(tagline)) <= 160)`),
-    check('user_profiles_pinned_badges_array', sql`jsonb_typeof(pinned_badge_ids) = 'array'`),
+    // Phase 7 (F-17): `user_profiles_tagline_len` and
+    // `user_profiles_pinned_badges_array` CHECK constraints are
+    // dropped alongside the `tagline` / `pinnedBadgeIds` columns.
   ],
 );
 

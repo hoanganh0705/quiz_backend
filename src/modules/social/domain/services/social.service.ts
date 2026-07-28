@@ -20,6 +20,7 @@ import {
   USER_REPOSITORY_PORT,
   type UserRepositoryPort,
 } from '@/modules/user/domain/ports/user-repository.port';
+import { USER_DOMAIN_SERVICE, type UserDomainService } from '@/modules/user/domain/user.service';
 import type { UsernameSuggestion } from '@/modules/user/domain/ports/user-search.port';
 import type {
   FriendRequest,
@@ -81,6 +82,8 @@ export class SocialService {
     private readonly ranking: RankingPort,
     @Inject(USER_REPOSITORY_PORT)
     private readonly userRepository: UserRepositoryPort,
+    @Inject(USER_DOMAIN_SERVICE)
+    private readonly userDomainService: UserDomainService,
     private readonly auditLogService: AuditLogService,
     private readonly socialCacheService: SocialCacheService,
     @InjectPinoLogger(SocialService.name)
@@ -651,6 +654,14 @@ export class SocialService {
     if (relationship.isBlocked || relationship.isBlockedBy) {
       throw new BlockedUserError();
     }
+
+    // Phase 3 (F-13): gate the read on the target user's
+    // `showActivity` privacy flag. Self reads always succeed (the
+    // existence check + early-return inside `assertPrivacyFlag`).
+    // A 403 surfaces from `UserProfilePrivateError` → 403 when the
+    // flag is `false`. The endpoint is documented in
+    // `docs/audits/USER_MODULE_PRODUCTION_READINESS_AUDIT.md` (F-13).
+    await this.userDomainService.assertPrivacyFlag(targetUserId, requesterId, 'showActivity');
 
     this.logger.debug({
       event: 'social_user_activity_requested',
