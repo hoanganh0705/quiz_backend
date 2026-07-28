@@ -38,6 +38,9 @@ import {
   computeRarityString,
 } from '../../domain/constants/achievement.constants';
 
+/** Sentinel value for null rank comparison (MAX_INT32). */
+const NULL_RANK_SENTINEL = 2147483647;
+
 @Injectable()
 export class AchievementRepository implements AchievementRepositoryPort {
   constructor(
@@ -284,9 +287,9 @@ export class AchievementRepository implements AchievementRepositoryPort {
         totalBadges: sql<number>`COUNT(${userBadges.userBadgeId})::int`,
         highestRank: sql<number | null>`MIN(
           LEAST(
-            COALESCE(${userRanking.allTimeRank}, 2147483647),
-            COALESCE(${userRanking.weeklyRank}, 2147483647),
-            COALESCE(${userRanking.monthlyRank}, 2147483647)
+            COALESCE(${userRanking.allTimeRank}, ${NULL_RANK_SENTINEL}),
+            COALESCE(${userRanking.weeklyRank}, ${NULL_RANK_SENTINEL}),
+            COALESCE(${userRanking.monthlyRank}, ${NULL_RANK_SENTINEL})
           )
         )`,
       })
@@ -330,7 +333,7 @@ export class AchievementRepository implements AchievementRepositoryPort {
       highestRank:
         aggregate?.highestRank !== null &&
         aggregate?.highestRank !== undefined &&
-        aggregate.highestRank < 2147483647
+        aggregate.highestRank < NULL_RANK_SENTINEL
           ? aggregate.highestRank
           : null,
       featuredBadges,
@@ -556,7 +559,7 @@ export class AchievementRepository implements AchievementRepositoryPort {
         .insert(outboxEvents)
         .values({
           aggregateType: 'Achievement',
-          eventType: 'achievement.revoked',
+          eventType: 'badge.revoked',
           payload: {
             userId,
             badgeId,

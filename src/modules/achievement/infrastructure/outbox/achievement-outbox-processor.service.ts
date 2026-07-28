@@ -3,7 +3,7 @@
  *
  * Background job that reads unprocessed Achievement outbox rows
  * (`aggregate_type = 'Achievement'`, `event_type` in
- * `{'achievement.awarded', 'achievement.revoked'}`) and replays them
+ * `{'achievement.awarded', 'badge.revoked'}`) and replays them
  * to in-process subscribers via the AchievementDomainEventBus.
  *
  * Why a separate processor for Achievement when the events are already
@@ -140,7 +140,7 @@ export class AchievementOutboxProcessorService implements OnModuleInit {
   }
 
   private isSupportedEventType(eventType: string): boolean {
-    return eventType === 'achievement.awarded' || eventType === 'achievement.revoked';
+    return eventType === 'achievement.awarded' || eventType === 'badge.revoked';
   }
 
   private async handleFailure(event: OutboxEventRow, error: unknown): Promise<void> {
