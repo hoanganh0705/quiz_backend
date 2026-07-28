@@ -183,6 +183,14 @@ export class InstanceApplicationService {
    * (`status === 'countdown'` short-circuits to a 200) is the only
    * safety net, and this log line gives observability into clients
    * that want strict per-request dedup.
+   *
+   * TODO (Phase 8 / audit Finding 6): Replace this log-only implementation
+   * with a proper `IdempotencyService` integration. The service should:
+   *   1. Accept `{ idempotencyKey, instanceId, userId }` as input
+   *   2. Check if a record with this key already exists in the idempotency store
+   *   3. If exists, return the cached response (idempotent retry)
+   *   4. If not, execute the operation and store the response with TTL
+   * This method should become async and return the stored/cached result.
    */
   logCountdownIdempotencyKey(params: {
     instanceId: string;

@@ -1,7 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import type { QuizDifficulty } from '@/modules/quiz/types/quiz.types';
-import type { QuizInstanceStatus } from '../../types/instance.types';
-import { INSTANCE_STATUSES } from '../request/instance.dto';
+import { INSTANCE_STATUSES, type QuizInstanceStatus } from '../../types/instance.types';
 import { InstancePlayerResponseDto } from './instance-player-response.dto';
 
 export class InstanceDetailResponseDto {

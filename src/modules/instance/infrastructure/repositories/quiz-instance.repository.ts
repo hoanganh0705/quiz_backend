@@ -8,7 +8,10 @@ import {
   isPostgresUniqueViolation,
 } from '@/common/utils/db-error.util';
 import { QuizVersionNotFoundError } from '@/modules/quiz/domain/errors';
-import { InstanceOptimisticLockError } from '@/modules/instance/domain/errors';
+import {
+  InstanceOptimisticLockError,
+  InstanceFullCapacityError,
+} from '@/modules/instance/domain/errors';
 import {
   TransactionalContext,
   TRANSACTIONAL_CONTEXT,
@@ -68,31 +71,14 @@ export class QuizInstanceRepository implements QuizInstanceRepositoryPort {
     throw error;
   }
 
-  async createInstance(params: {
-    quizVersionId: string;
-    hostUserId: string;
-    maxPlayers: number | null;
-    nowIso: string;
-  }): Promise<{ instanceId: string }> {
-    try {
-      const [result] = await this.db
-        .insert(quizInstances)
-        .values({
-          quizVersionId: params.quizVersionId,
-          hostUserId: params.hostUserId,
-          maxPlayers: params.maxPlayers,
-          status: 'open',
-          createdAt: params.nowIso,
-          updatedAt: params.nowIso,
-        })
-        .returning({ instanceId: quizInstances.instanceId });
-
-      return { instanceId: result.instanceId };
-    } catch (error) {
-      this.mapCreateInstanceError(error);
-    }
-  }
-
+  /**
+   * Create a new quiz instance and add the host as a player atomically.
+   * Both operations are wrapped in a transaction to ensure consistency.
+   *
+   * Phase 7 (audit Finding 4): removed the unused `createInstance()` method
+   * (which only created the instance without adding the host player).
+   * Only `createInstanceWithHost()` is used, which handles both operations.
+   */
   async createInstanceWithHost(params: {
     quizVersionId: string;
     hostUserId: string;
@@ -437,7 +423,7 @@ export class QuizInstanceRepository implements QuizInstanceRepositoryPort {
           );
 
         if (currentCount >= params.maxPlayers) {
-          throw new Error('INSTANCE_FULL');
+          throw new InstanceFullCapacityError(params.maxPlayers);
         }
       }
 

@@ -1,3 +1,7 @@
+// Phase 7 (audit Finding 5): INSTANCE_STATUSES is defined in types/instance.types.ts.
+// This re-export ensures backwards compatibility for any existing imports from this file.
+export { INSTANCE_STATUSES } from './types/instance.types';
+
 export const INSTANCE_NOT_FOUND_MESSAGE = 'Quiz instance not found';
 export const INSTANCE_NOT_HOST_MESSAGE = 'Only the host can perform this action';
 export const INSTANCE_NOT_OPEN_MESSAGE = 'Instance is not open for joining';
