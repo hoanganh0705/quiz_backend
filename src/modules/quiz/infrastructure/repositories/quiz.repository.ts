@@ -3,7 +3,17 @@ import { and, asc, desc, eq, inArray, isNull, or, sql, type SQL } from 'drizzle-
 import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 import { DRIZZLE } from '@/core/database/drizzle.constants';
 import type { DrizzleDB } from '@/core/database/database.module';
-import { quizTags, quizVersions, quizzes, tags } from '@/core/database/schema';
+import {
+  categories,
+  quizQuestions,
+  quizStats,
+  quizTags,
+  quizVersions,
+  quizzes,
+  tags,
+  userProfiles,
+  users,
+} from '@/core/database/schema';
 import {
   isPostgresUniqueViolation,
   isPostgresForeignKeyViolation,
@@ -18,8 +28,11 @@ import {
   QUIZ_LINK_IDS_INVALID_MESSAGE,
 } from '@/modules/quiz/quiz.constants';
 import type {
+  AuthorSummaryRow,
+  CategorySummaryRow,
   CreateQuizPayload,
   FindRelatedQuizzesParams,
+  QuizAggregatesRow,
   QuizCursor,
   QuizListFilters,
   QuizRecordRow,
@@ -35,6 +48,7 @@ const QUIZ_COLUMNS = quizzes as unknown as {
   title: AnyPgColumn;
   description: AnyPgColumn;
   slug: AnyPgColumn;
+  quizSearchVector: AnyPgColumn;
   requirements: AnyPgColumn;
   imageUrl: AnyPgColumn;
   isFeatured: AnyPgColumn;
@@ -169,12 +183,139 @@ export class QuizRepository implements QuizRepositoryPort {
     return rows as QuizTagRow[];
   }
 
+  async getTagsForQuizIds(quizIds: string[]): Promise<Map<string, QuizTagRow[]>> {
+    if (quizIds.length === 0) return new Map();
+    const rows = await this.db
+      .select({
+        quizId: quizTags.quizId,
+        tagId: tags.tagId,
+        name: tags.name,
+        slug: tags.slug,
+      })
+      .from(quizTags)
+      .innerJoin(tags, eq(quizTags.tagId, tags.tagId))
+      .where(and(inArray(quizTags.quizId, quizIds), isNull(tags.deletedAt)))
+      .orderBy(asc(quizTags.quizId), asc(tags.name));
+
+    const out = new Map<string, QuizTagRow[]>();
+    for (const row of rows) {
+      const list = out.get(row.quizId) ?? [];
+      list.push({ tagId: row.tagId, name: row.name, slug: row.slug });
+      out.set(row.quizId, list);
+    }
+    return out;
+  }
+
+  async getAuthorSummaries(userIds: string[]): Promise<Map<string, AuthorSummaryRow>> {
+    if (userIds.length === 0) return new Map();
+    const rows = await this.db
+      .select({
+        userId: users.userId,
+        username: users.username,
+        displayName: userProfiles.displayName,
+        avatarUrl: userProfiles.avatarUrl,
+      })
+      .from(users)
+      .leftJoin(userProfiles, eq(users.userId, userProfiles.userId))
+      .where(and(inArray(users.userId, userIds), isNull(users.deletedAt)));
+
+    const out = new Map<string, AuthorSummaryRow>();
+    for (const row of rows) {
+      out.set(row.userId, {
+        userId: row.userId,
+        username: row.username,
+        displayName: row.displayName ?? null,
+        avatarUrl: row.avatarUrl ?? null,
+      });
+    }
+    return out;
+  }
+
+  async getCategorySummaries(categoryIds: string[]): Promise<Map<string, CategorySummaryRow>> {
+    if (categoryIds.length === 0) return new Map();
+    const rows = await this.db
+      .select({
+        categoryId: categories.categoryId,
+        name: categories.name,
+        slug: categories.slug,
+      })
+      .from(categories)
+      .where(and(inArray(categories.categoryId, categoryIds), isNull(categories.deletedAt)));
+
+    const out = new Map<string, CategorySummaryRow>();
+    for (const row of rows) {
+      out.set(row.categoryId, {
+        categoryId: row.categoryId,
+        name: row.name,
+        slug: row.slug,
+      });
+    }
+    return out;
+  }
+
+  /**
+   * Reads aggregate stats from the denormalised `quiz_stats`
+   * materialised view. Quizzes without a row return nulls and we
+   * surface that as `(0, 0, 0)` defaults at the mapper layer.
+   */
+  async getAggregatesForQuizzes(quizIds: string[]): Promise<Map<string, QuizAggregatesRow>> {
+    if (quizIds.length === 0) return new Map();
+    const rows = await this.db
+      .select({
+        quizId: quizStats.quizId,
+        averageRating: sql<number>`COALESCE(${quizStats.avgRating}, 0)`,
+        reviewCount: sql<number>`COALESCE(${quizStats.ratingCount}, 0)`,
+        attemptCount: sql<number>`COALESCE(${quizStats.totalAttempts}, 0)`,
+      })
+      .from(quizStats)
+      .where(inArray(quizStats.quizId, quizIds));
+
+    const out = new Map<string, QuizAggregatesRow>();
+    for (const row of rows) {
+      out.set(row.quizId, {
+        quizId: row.quizId,
+        averageRating: Number(row.averageRating ?? 0),
+        reviewCount: Number(row.reviewCount ?? 0),
+        attemptCount: Number(row.attemptCount ?? 0),
+      });
+    }
+    return out;
+  }
+
+  async getQuestionCountsForVersionIds(versionIds: string[]): Promise<Map<string, number>> {
+    if (versionIds.length === 0) return new Map();
+    const rows = await this.db
+      .select({
+        quizVersionId: quizQuestions.quizVersionId,
+        count: sql<number>`COUNT(*)::int`,
+      })
+      .from(quizQuestions)
+      .where(inArray(quizQuestions.quizVersionId, versionIds))
+      .groupBy(quizQuestions.quizVersionId);
+
+    const out = new Map<string, number>();
+    for (const row of rows) {
+      out.set(row.quizVersionId, Number(row.count));
+    }
+    return out;
+  }
+
   async listQuizzes(params: {
     limit: number;
     cursor?: QuizCursor | null;
     filters?: QuizListFilters;
   }): Promise<QuizWithPublishedVersionRow[]> {
-    const filters: SQL[] = [isNull(QUIZ_COLUMNS.deletedAt), eq(QUIZ_COLUMNS.isHidden, false)];
+    const filters: SQL[] = [isNull(QUIZ_COLUMNS.deletedAt)];
+
+    // Phase 2 (S-12): `isHidden` is admin-gated at the controller
+    // layer. When the caller has the privilege to read hidden
+    // quizzes we honour their boolean filter; otherwise we apply
+    // the public `isHidden = false` predicate.
+    if (params.filters?.isHidden !== undefined) {
+      filters.push(eq(QUIZ_COLUMNS.isHidden, params.filters.isHidden));
+    } else {
+      filters.push(eq(QUIZ_COLUMNS.isHidden, false));
+    }
 
     if (params.filters?.difficulty) {
       filters.push(
@@ -207,6 +348,29 @@ export class QuizRepository implements QuizRepositoryPort {
       filters.push(eq(QUIZ_COLUMNS.creatorId, params.filters.creatorId));
     }
 
+    if (params.filters?.q) {
+      // Phase 2 (S-12): Postgres full-text search. `quizzes`
+      // schema carries a `quiz_search_vector` GENERATED column so
+      // the query never has to maintain the index itself; we
+      // match the same `'simple'` config the search module uses.
+      const tsquery = sql<string>`websearch_to_tsquery('simple', ${params.filters.q})`;
+      filters.push(sql`${QUIZ_COLUMNS.quizSearchVector} @@ ${tsquery}`);
+    }
+
+    if (params.filters?.minRating !== undefined) {
+      // Phase 2 (S-12): join `quiz_stats` and apply the
+      // threshold. Soft-failing — quizzes without a stats row
+      // are simply filtered out (treated as "no rating data").
+      filters.push(
+        sql`exists (
+          select 1
+          from ${quizStats}
+          where ${quizStats.quizId} = ${QUIZ_COLUMNS.quizId}
+            and ${quizStats.avgRating} >= ${params.filters.minRating}
+        )`,
+      );
+    }
+
     if (params.cursor) {
       filters.push(
         or(
@@ -219,16 +383,55 @@ export class QuizRepository implements QuizRepositoryPort {
       );
     }
 
-    const rows = await this.db
+    // Phase 2 (S-12): server-side sort dispatch. `'newest'` is the
+    // default and was the only sort direction before Phase 2; the
+    // other three routes each JOIN `quiz_stats` and ORDER BY the
+    // appropriate denormalised column. The cursor always keys on
+    // `(created_at, quiz_id)` so changing sort does not invalidate
+    // the existing cursor format.
+    const sortKey =
+      params.filters?.sort ?? ('newest' as 'newest' | 'popular' | 'top_rated' | 'trending');
+
+    const orderBy: SQL[] =
+      sortKey === 'popular'
+        ? [
+            sql`coalesce(${sql.raw('qs.popularity_score')}, 0) desc`,
+            desc(QUIZ_COLUMNS.createdAt),
+            desc(QUIZ_COLUMNS.quizId),
+          ]
+        : sortKey === 'top_rated'
+          ? [
+              sql`coalesce(${sql.raw('qs.avg_rating')}, 0) desc`,
+              desc(QUIZ_COLUMNS.createdAt),
+              desc(QUIZ_COLUMNS.quizId),
+            ]
+          : sortKey === 'trending'
+            ? [
+                sql`coalesce(${sql.raw('qs.trending_score')}, 0) desc`,
+                desc(QUIZ_COLUMNS.createdAt),
+                desc(QUIZ_COLUMNS.quizId),
+              ]
+            : [desc(QUIZ_COLUMNS.createdAt), desc(QUIZ_COLUMNS.quizId)];
+
+    const baseFrom = this.db
       .select(QUIZ_WITH_VERSION_PROJECTION)
       .from(quizzes)
       .leftJoin(
         quizVersions,
         eq(QUIZ_COLUMNS.publishedVersionId, QUIZ_VERSION_COLUMNS.quizVersionId),
-      )
-      .where(and(...filters))
-      .orderBy(desc(QUIZ_COLUMNS.createdAt), desc(QUIZ_COLUMNS.quizId))
-      .limit(params.limit + 1);
+      );
+
+    const rows =
+      sortKey === 'popular' || sortKey === 'top_rated' || sortKey === 'trending'
+        ? await baseFrom
+            .leftJoin(sql`quiz_stats qs`, sql`qs.quiz_id = ${QUIZ_COLUMNS.quizId}`)
+            .where(and(...filters))
+            .orderBy(...orderBy)
+            .limit(params.limit + 1)
+        : await baseFrom
+            .where(and(...filters))
+            .orderBy(...orderBy)
+            .limit(params.limit + 1);
 
     return rows as QuizWithPublishedVersionRow[];
   }

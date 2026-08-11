@@ -233,10 +233,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
           causeChain: causeChain.length > 0 ? causeChain : undefined,
         });
       } else {
-        message =
-          causeChain.length > 0
-            ? `${exception.message}\nCause chain: ${JSON.stringify(causeChain)}`
-            : exception.message;
+        message = 'Internal server error';
         requestLogger.error({
           event: 'unhandled_exception',
           method: request.method,
@@ -256,7 +253,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       });
     }
 
-    if (isProduction && statusCode >= HttpStatus.INTERNAL_SERVER_ERROR) {
+    if (statusCode >= HttpStatus.INTERNAL_SERVER_ERROR) {
       message = 'Internal server error';
       errorName = 'InternalServerError';
     }
@@ -265,6 +262,19 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       resolvedDomainInfo !== undefined
         ? resolvedDomainInfo.typeUri
         : (RFC7807_TYPE_URIS[statusCode] ?? RFC7807_TYPE_URIS[500]);
+
+    // Phase 5 (S-27): promote per-field validation errors from the
+    // domain `QuizValidationFieldError` carrier into the wire
+    // `extensions.validationErrors` array so the editor can wire
+    // `react-hook-form`'s `setError(field, ...)` inline error UI.
+    const validationErrors =
+      exception instanceof BaseDomainException &&
+      'fieldErrors' in exception &&
+      Array.isArray((exception as { fieldErrors: unknown }).fieldErrors)
+        ? ((exception as unknown as {
+            fieldErrors: Array<{ field: string; message: string }>;
+          }).fieldErrors)
+        : undefined;
 
     const problem: ProblemDetail = {
       type: typeUri,
@@ -281,8 +291,26 @@ export class GlobalExceptionFilter implements ExceptionFilter {
         // response with server-side logs.
         timestamp: new Date().toISOString(),
         ...(domainCode !== undefined ? { code: domainCode } : {}),
+        ...(validationErrors !== undefined ? { validationErrors } : {}),
       },
     };
+
+    // Phase 5 (S-27): set `Retry-After` on 429 responses so HTTP
+    // cache-aware clients can back off correctly. The ThrottlerGuard
+    // surfaces `retryAfter` on the thrown `ThrottlerException`
+    // instance; we use it when present and fall back to the ttl/1000
+    // heuristic otherwise.
+    if (statusCode === HttpStatus.TOO_MANY_REQUESTS) {
+      const retryAfterSeconds =
+        exception instanceof HttpException &&
+        'retryAfter' in (exception as unknown as Record<string, unknown>)
+          ? Number((exception as unknown as { retryAfter?: number }).retryAfter ?? 60)
+          : 60;
+      response.setHeader('Retry-After', String(retryAfterSeconds));
+      if (problem.extensions) {
+        (problem.extensions as Record<string, unknown>).retryAfter = retryAfterSeconds;
+      }
+    }
 
     response.status(statusCode).json(problem);
   }

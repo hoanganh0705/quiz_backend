@@ -14,7 +14,7 @@ import type {
   CreateQuizQuestionCommand,
   CreateQuizQuestionsCommand,
 } from '../types/quiz-question.commands';
-import { QuizValidationError, QuizNotFoundError } from '../errors';
+import { QuizValidationError, QuizNotFoundError, QuizConflictError } from '../errors';
 import { QuizPolicy } from '../policies/quiz.policy';
 import { QuizVersionPolicy } from '../policies/quiz-version.policy';
 
@@ -132,59 +132,132 @@ export class QuizQuestionService {
     return rows;
   }
 
+  /**
+   * Phase 5 (S-28): bulk-create with per-row outcomes.
+   *
+   * Iterates over each requested question and attempts to insert it
+   * individually. A row-level failure (validation, conflict, etc.) is
+   * captured as a per-row outcome and the loop continues, so one bad
+   * row does not poison the rest of the batch. The caller receives a
+   * `BulkQuizQuestionsResponseDto`-shaped record (questions + results).
+   *
+   * Authorization is checked once up front via
+   * `assertCanCreateQuestions` (caller has edit rights + version is
+   * draft). Per-row authorization is not re-checked.
+   */
   async createQuizQuestions(
     quizId: string,
     quizVersionId: string,
     user: JwtPayload,
     command: CreateQuizQuestionsCommand,
-  ): Promise<QuizQuestionJoinRow[]> {
+  ): Promise<{
+    questions: QuizQuestionJoinRow[];
+    rowResults: Array<{
+      index: number;
+      status: number;
+      code: string;
+      message: string;
+      questionId: string | null;
+    }>;
+  }> {
     await this.assertCanCreateQuestions(quizId, quizVersionId, user);
+
+    // Pre-flight: positions must be unique within the batch — failing
+    // fast here gives the editor a clearer "your batch has dupes" error
+    // than running through and tagging N rows individually.
     this.assertUniqueQuestionPositions(command.questions);
 
     const nowIso = new Date().toISOString();
-    const questions = command.questions.map((question) => {
-      const normalizedAnswerOptions = question.answerOptions.map((option) => ({
-        ...option,
-        value: option.value.trim(),
-      }));
+    const createdQuestions: QuizQuestionJoinRow[] = [];
+    const rowResults: Array<{
+      index: number;
+      status: number;
+      code: string;
+      message: string;
+      questionId: string | null;
+    }> = [];
 
-      this.assertValidAnswerOptions(normalizedAnswerOptions);
-
-      return {
-        quizVersionId,
-        position: question.position,
-        questionText: question.questionText.trim(),
-        imageUrl: normalizeNullableText(question.imageUrl) ?? null,
-        createdAt: nowIso,
-        updatedAt: nowIso,
-        answerOptions: normalizedAnswerOptions.map((option) => ({
-          position: option.position,
+    for (let i = 0; i < command.questions.length; i++) {
+      const question = command.questions[i]!;
+      try {
+        // Per-row validation; a thrown error here is caught below and
+        // surfaced as a per-row failure without breaking the loop.
+        const normalizedAnswerOptions = question.answerOptions.map((option) => ({
+          ...option,
           value: option.value.trim(),
-          isCorrect: option.isCorrect,
+        }));
+        this.assertValidAnswerOptions(normalizedAnswerOptions);
+
+        const inserted = await this.quizQuestionRepository.createQuestionWithOptions({
+          quizVersionId,
+          position: question.position,
+          questionText: question.questionText.trim(),
+          imageUrl: normalizeNullableText(question.imageUrl) ?? null,
           createdAt: nowIso,
-        })),
-      };
-    });
+          updatedAt: nowIso,
+          answerOptions: normalizedAnswerOptions.map((option) => ({
+            position: option.position,
+            value: option.value.trim(),
+            isCorrect: option.isCorrect,
+            createdAt: nowIso,
+          })),
+        });
 
-    const result = await this.quizQuestionRepository.createQuestionsWithOptions(questions);
-
-    const rows = await this.quizQuestionRepository.getQuestionsByIds(result.questionIds);
-
-    if (rows.length === 0) {
-      this.logger.error({
-        event: 'quiz_questions_created_but_not_found',
-        questionIds: result.questionIds,
-      });
-      throw new QuizNotFoundError('Quiz questions not found');
+        const rows = await this.quizQuestionRepository.getQuestionById(
+          inserted.questionId,
+        );
+        if (rows.length === 0) {
+          throw new QuizNotFoundError('Quiz question not found after insert');
+        }
+        createdQuestions.push(rows[0]!);
+        rowResults.push({
+          index: i,
+          status: 201,
+          code: '',
+          message: '',
+          questionId: rows[0]!.questionId,
+        });
+      } catch (err) {
+        let code = 'GLOBAL_UNKNOWN';
+        let message = err instanceof Error ? err.message : 'Unknown error';
+        let status = 422;
+        if (err instanceof QuizValidationError) {
+          code = 'QUIZ_VALIDATION_FAILED';
+          status = 422;
+        } else if (err instanceof QuizConflictError) {
+          code = 'QUIZ_QUESTION_POSITION_CONFLICT';
+          status = 409;
+        } else if (err instanceof QuizNotFoundError) {
+          code = 'QUIZ_NOT_FOUND';
+          status = 404;
+        }
+        this.logger.warn({
+          event: 'quiz_question_bulk_row_failed',
+          index: i,
+          code,
+          message,
+          quizVersionId,
+          userId: user.sub,
+        });
+        rowResults.push({
+          index: i,
+          status,
+          code,
+          message,
+          questionId: null,
+        });
+      }
     }
 
     this.logger.info({
       event: 'quiz_questions_batch_created',
-      count: rows.length,
+      total: command.questions.length,
+      succeeded: createdQuestions.length,
+      failed: command.questions.length - createdQuestions.length,
       quizVersionId,
       userId: user.sub,
     });
 
-    return rows;
+    return { questions: createdQuestions, rowResults };
   }
 }

@@ -16,7 +16,7 @@ import type {
  * which carries the `isCorrect` flag on each option.
  */
 export class QuizVersionResponseMapper {
-  static toQuizVersionResponse(row: QuizVersionRow): QuizVersionResponseDto {
+  static toQuizVersionResponse(row: QuizVersionRow, questionCount = 0): QuizVersionResponseDto {
     return {
       quizVersionId: row.quizVersionId,
       quizId: row.quizId,
@@ -26,6 +26,7 @@ export class QuizVersionResponseMapper {
       durationMs: row.durationMs,
       passingScorePercent: row.passingScorePercent,
       rewardXp: row.rewardXp,
+      questionCount,
       creatorId: row.createdByUserId,
       createdAt: row.createdAt,
       publishedAt: row.publishedAt,

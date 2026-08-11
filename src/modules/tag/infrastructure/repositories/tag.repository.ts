@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, desc, eq, isNull, or, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNull, or, sql } from 'drizzle-orm';
 import { DRIZZLE } from '@/core/database/drizzle.constants';
 import type { DrizzleDB } from '@/core/database/database.module';
 import { tags } from '@/core/database/schema';
@@ -52,6 +52,16 @@ export class TagRepository implements TagRepositoryPort {
       .limit(1);
 
     return row ?? null;
+  }
+
+  async findBySlugs(slugs: string[]): Promise<TagRow[]> {
+    if (slugs.length === 0) return [];
+    const rows = await this.db
+      .select(TAG_COLUMNS)
+      .from(tags)
+      .where(and(inArray(tags.slug, slugs), isNull(tags.deletedAt)));
+
+    return rows;
   }
 
   async findMany(params: {

@@ -8,8 +8,7 @@ export const ATTEMPT_ALREADY_FINISHED_MESSAGE =
 export const ATTEMPT_OPTION_INVALID_MESSAGE = 'Selected option does not belong to this question';
 export const ATTEMPT_QUESTION_ALREADY_ANSWERED_MESSAGE =
   'This question has already been answered in this attempt';
-export const ATTEMPT_NOT_STARTED_OR_FINISHED_MESSAGE =
-  'Only started attempts can be abandoned';
+export const ATTEMPT_NOT_STARTED_OR_FINISHED_MESSAGE = 'Only started attempts can be abandoned';
 export const ATTEMPT_QUESTION_INVALID_MESSAGE = 'Question is invalid for this attempt';
 export const ATTEMPT_NOT_COMPLETED_MESSAGE = 'Analytics are only available for completed attempts';
 export const ATTEMPT_ANSWER_NOT_FOUND_MESSAGE = 'Answer to withdraw not found';

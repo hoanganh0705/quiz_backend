@@ -23,6 +23,7 @@ import type {
   StreakCacheUpdateResult,
   UserActivityRow,
   UserBadgeRow,
+  UserLookupRow,
   UserMeRow,
   UserPublicRow,
   UserRankingRow,
@@ -826,6 +827,40 @@ export class UserRepository implements UserRepositoryPort {
       displayName: r.displayName ?? null,
       avatarUrl: r.avatarUrl ?? null,
     }));
+  }
+
+  /**
+   * Phase 1 (S-1): single-row username lookup backing
+   * `GET /users/by-username/:username`. Returns `null` for
+   * non-existent / soft-deleted users so the controller can
+   * translate that into a 404 (`USER_NOT_FOUND`). The username
+   * match is case-sensitive because the column stores handles
+   * exactly as supplied at sign-up time.
+   */
+  async findByUsername(username: string): Promise<UserLookupRow | null> {
+    const rows = await this.db
+      .select({
+        userId: users.userId,
+        username: users.username,
+        displayName: userProfiles.displayName,
+        avatarUrl: userProfiles.avatarUrl,
+        isVerified: users.isVerified,
+      })
+      .from(users)
+      .leftJoin(userProfiles, eq(users.userId, userProfiles.userId))
+      .where(and(eq(users.username, username), isNull(users.deletedAt)))
+      .limit(1);
+
+    const r = rows[0];
+    if (!r) return null;
+
+    return {
+      userId: r.userId,
+      username: r.username,
+      displayName: r.displayName ?? null,
+      avatarUrl: r.avatarUrl ?? null,
+      isVerified: r.isVerified,
+    };
   }
 
   async findUsersByRole(roles: ModeratorRole[]): Promise<{ userId: string }[]> {

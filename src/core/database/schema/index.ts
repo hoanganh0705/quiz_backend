@@ -65,5 +65,8 @@ export * from './notification/relations';
 export * from './tournament/schema';
 export * from './tournament/relations';
 
+// Daily challenge (Phase 3 / S-14)
+export * from './daily-challenge/schema';
+
 // Outbox
 export * from './outbox/schema';

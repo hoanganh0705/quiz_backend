@@ -1245,9 +1245,10 @@ describe('RFC 7807 ProblemDetail (Phase 0 backstop)', () => {
       expect(body.status).toBe(500);
       expect(body.title).toBe('InternalServerError');
       // The fixture runs with `nodeEnv = 'development'` (the `serverConfig`
-      // default), so the developer-mode message is surfaced here. Production
-      // sanitization is covered by the unit test added in Phase 1.
-      expect(body.detail).toBe('boom');
+      // default), but 5xx `detail` is always sanitized to `'Internal server error'`
+      // regardless of environment — internal error details are logged server-side,
+      // not surfaced to clients.
+      expect(body.detail).toBe('Internal server error');
       expect(body.instance).toBe('/rfc7807-fixture/plain-error');
       expect(body.extensions).toBeDefined();
     });
@@ -2483,16 +2484,14 @@ describe('RFC 7807 ProblemDetail (Phase 0 backstop)', () => {
       // Wire-shape improvement: prior filter had NO branch for
       // `AchievementGrantError` — fell through to catch-all 500
       // with hardcoded `'Internal server error'`. Global filter
-      // resolves the code and preserves a generic message (internal
-      // details are not exposed to clients). Note: this exception is
-      // defined but currently not thrown by
-      // `achievement.application.service.ts`.
+      // resolves the code correctly. Internal details are never
+      // exposed to clients — 5xx `detail` is always sanitized.
       const res = await request(app.getHttpServer())
         .get('/rfc7807-fixture/achievement/grant-error')
         .expect(500);
       const body = res.body as ProblemWire;
       expect(body.title).toBe('InternalServerError');
-      expect(body.detail).toBe('Failed to grant achievement');
+      expect(body.detail).toBe('Internal server error');
       expect(body.extensions?.code).toBe('ACHIEVEMENT_GRANT_ERROR');
     });
 
@@ -2725,13 +2724,14 @@ describe('RFC 7807 ProblemDetail (Phase 0 backstop)', () => {
       // Wire-shape improvements:
       //   1. `extensions.code` is now `'RANKING_RANK_CALCULATION_ERROR'`
       //      (was `'INTERNAL_ERROR'` under the prior filter).
-      //   2. Internal details are not exposed to clients (message is sanitized).
+      //   2. Internal details are never exposed to clients — 5xx `detail`
+      //      is always sanitized to `'Internal server error'`.
       const res = await request(app.getHttpServer())
         .get('/rfc7807-fixture/ranking/rank-calculation-error')
         .expect(500);
       const body = res.body as ProblemWire;
       expect(body.title).toBe('InternalServerError');
-      expect(body.detail).toBe('Rank calculation failed');
+      expect(body.detail).toBe('Internal server error');
       expect(body.extensions?.code).toBe('RANKING_RANK_CALCULATION_ERROR');
     });
 
@@ -2739,13 +2739,14 @@ describe('RFC 7807 ProblemDetail (Phase 0 backstop)', () => {
       // Wire-shape improvements:
       //   1. `extensions.code` is now `'RANKING_PERIOD_RESET_ERROR'`
       //      (was `'INTERNAL_ERROR'` under the prior filter).
-      //   2. Internal details are not exposed to clients (message is sanitized).
+      //   2. Internal details are never exposed to clients — 5xx `detail`
+      //      is always sanitized to `'Internal server error'`.
       const res = await request(app.getHttpServer())
         .get('/rfc7807-fixture/ranking/period-reset-error')
         .expect(500);
       const body = res.body as ProblemWire;
       expect(body.title).toBe('InternalServerError');
-      expect(body.detail).toBe('Period reset failed');
+      expect(body.detail).toBe('Internal server error');
       expect(body.extensions?.code).toBe('RANKING_PERIOD_RESET_ERROR');
     });
 

@@ -495,7 +495,13 @@ export class QuizAnalyticsRepository implements QuizAnalyticsRepositoryPort {
       })
       .from(quizStats)
       .innerJoin(quizzes, eq(quizStats.quizId, quizzes.quizId))
-      .where(and(inArray(quizStats.quizId, tagQuizIds), isNull(quizzes.deletedAt), eq(quizzes.isHidden, false)))
+      .where(
+        and(
+          inArray(quizStats.quizId, tagQuizIds),
+          isNull(quizzes.deletedAt),
+          eq(quizzes.isHidden, false),
+        ),
+      )
       .orderBy(desc(quizStats.popularityScore))
       .limit(limit);
 

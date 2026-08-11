@@ -16,6 +16,10 @@ pnpm install
 
 Create a local `.env` file with the values required by `src/core/config/env.validation.ts`. At minimum the app expects database, Redis, JWT, token expiry, and refresh cookie settings.
 
+## Getting started
+
+> **Bootstrap the dev environment in 15 minutes** — full walkthrough from a fresh clone to "regenerated SDK exists" in [`docs/runbooks/local-bootstrap.md`](./docs/runbooks/local-bootstrap.md). Covers Postgres + Redis startup, migrations, backend boot, smoke checks, and SDK regeneration.
+
 ## Development
 
 ```bash

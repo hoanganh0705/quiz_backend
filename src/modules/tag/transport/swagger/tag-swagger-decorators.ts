@@ -146,6 +146,9 @@ const problem = {
 const resourceOk = <T extends Type>(model: T, description: string, example?: unknown) =>
   ApiOkResource(model, { description, example });
 
+const resourceOkArray = <T extends Type>(model: T, description: string) =>
+  ApiOkResourceArray(model, { description });
+
 const resourceCreated = <T extends Type>(model: T, description: string, example?: unknown) =>
   ApiCreatedResource(model, { description, example });
 
@@ -275,6 +278,21 @@ export const ApiTagBySlugResponse = (): MethodDecorator =>
     ),
     ApiNotFoundResponse(problem.notFound(tagBySlugNotFoundExample)),
     ApiInternalServerErrorResponse(problem.internalError(tagBySlugInternalErrorExample)),
+  );
+
+/**
+ * Phase 2 (S-13): decorator for the batched `/tags/by-slugs` route.
+ * Returns a bare array of tag records — the same shape as
+ * `/tags/popular` and `/tags/trending`.
+ */
+export const ApiTagBySlugsResponse = (): MethodDecorator =>
+  applyDecorators(
+    resourceOkArray<typeof TagResponseDto>(
+      TagResponseDto as unknown as Type,
+      'Returns the tags matching the supplied slugs. Missing slugs are silently omitted.',
+    ),
+    ApiBadRequestResponse(problem.badRequest(listTagsBadRequestExample)),
+    ApiInternalServerErrorResponse(problem.internalError(listTagsInternalErrorExample)),
   );
 
 export const ApiTagByIdResponse = (): MethodDecorator =>

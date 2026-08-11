@@ -58,6 +58,7 @@ import { GetNearbyRanksQueryHandler } from './application/get-nearby-ranks.query
 import { GetTopMoversQueryHandler } from './application/get-top-movers.query';
 import { GetUserRankingHistoryQueryHandler } from './application/get-user-ranking-history.query';
 import { RankingApplicationService } from './application/ranking.application.service';
+import { RecentWinnersService } from './application/recent-winners.service';
 
 // Transport
 import { RankingController } from './transport/controller/ranking.controller';
@@ -110,6 +111,7 @@ import { RankingPresenter } from './transport/presenters/ranking.presenter';
     GetTopMoversQueryHandler,
     GetUserRankingHistoryQueryHandler,
     RankingApplicationService,
+    RecentWinnersService,
 
     // Domain Events
     RankingEventHandler,
@@ -156,6 +158,7 @@ import { RankingPresenter } from './transport/presenters/ranking.presenter';
     GetTopMoversQueryHandler,
     GetUserRankingHistoryQueryHandler,
     RankingApplicationService,
+    RecentWinnersService,
   ],
 })
 export class RankingModule {}

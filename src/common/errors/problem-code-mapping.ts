@@ -665,6 +665,26 @@ export const ProblemCodeMapping: Readonly<Record<string, ProblemCodeInfo>> = {
   },
 
   // ===========================================================================
+  // DAILY-CHALLENGE module — src/modules/daily-challenge/domain/errors/daily-challenge.errors.ts
+  // ===========================================================================
+  /**
+   * Phase 3 (S-14) entries. 1 status code at the moment —
+   * 404 — covered by `DAILY_CHALLENGE_NOT_FOUND`.
+   * `DAILY_CHALLENGE_CONFLICT` is mapped to 409 and is the
+   * out-of-sync answer-submission guard.
+   */
+  DAILY_CHALLENGE_NOT_FOUND: {
+    status: HttpStatus.NOT_FOUND,
+    title: 'NotFound',
+    typeUri: 'https://api.quiz.local/problems/daily-challenge-not-found',
+  },
+  DAILY_CHALLENGE_CONFLICT: {
+    status: HttpStatus.CONFLICT,
+    title: 'Conflict',
+    typeUri: 'https://api.quiz.local/problems/daily-challenge-conflict',
+  },
+
+  // ===========================================================================
   // REVIEW module — src/modules/review/domain/errors/review-domain.errors.ts
   // ===========================================================================
   /** Fourth Phase-2 entry: legacy `{ statusCode, message, error }` → RFC 7807. */

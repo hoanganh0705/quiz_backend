@@ -10,4 +10,5 @@ export const REVIEW_REPORT_INVALID_TRANSITION_MESSAGE =
 export const REVIEW_QUIZ_NOT_FOUND_MESSAGE = 'Quiz not found';
 export const REVIEW_SELF_VOTE_MESSAGE = 'You cannot vote on your own review';
 export const REVIEW_SELF_REPORT_MESSAGE = 'You cannot report your own review';
-export const REVIEW_FORBIDDEN_ANALYTICS_MESSAGE = 'You do not have permission to view analytics for this quiz';
+export const REVIEW_FORBIDDEN_ANALYTICS_MESSAGE =
+  'You do not have permission to view analytics for this quiz';

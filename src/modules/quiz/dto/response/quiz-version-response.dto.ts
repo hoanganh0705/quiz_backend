@@ -105,6 +105,22 @@ export class QuizVersionResponseDto {
   @ApiProperty({ description: 'XP reward for passing', example: 100 })
   rewardXp!: number;
 
+  /**
+   * Phase 2 (S-8): total question count for the version.
+   *
+   * Aggregated from `quiz_questions.quiz_version_id` at fetch time.
+   * Always populated on the listing projections and the detail DTO
+   * (the frontend `toQuizListItem` mapper reads it directly from
+   * `dto.publishedVersion?.questionCount`, which was previously
+   * `undefined` because the field did not exist — this is the audit
+   * gap G-04 fix).
+   */
+  @ApiProperty({
+    description: 'Total question count for this version',
+    example: 12,
+  })
+  questionCount!: number;
+
   @ApiPropertyOptional({ description: 'Creator user identifier', type: String, nullable: true })
   creatorId!: string | null;
 

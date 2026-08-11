@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import type {
   QuizCreatedEvent,
   QuizUpdatedEvent,
@@ -24,6 +25,11 @@ import {
 export class QuizDomainEventBus implements QuizDomainEventBusPort {
   private handlers: QuizEventHandler[] = [];
 
+  constructor(
+    @InjectPinoLogger(QuizDomainEventBus.name)
+    private readonly logger: PinoLogger,
+  ) {}
+
   subscribe(handler: QuizEventHandler): () => void {
     this.handlers.push(handler);
     return () => {
@@ -39,7 +45,10 @@ export class QuizDomainEventBus implements QuizDomainEventBusPort {
       try {
         handler(event);
       } catch (error) {
-        console.error('[QuizDomainEventBus] Handler threw:', error);
+        this.logger.error({
+          event: 'quiz_domain_event_handler_failed',
+          message: error instanceof Error ? error.message : 'unknown',
+        });
       }
     }
   }

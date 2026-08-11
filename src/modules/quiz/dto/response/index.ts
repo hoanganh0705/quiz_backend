@@ -1,4 +1,6 @@
+export * from './author-summary.dto';
 export * from './bulk-quiz-questions-response.dto';
+export * from './quiz-aggregate-response.dto';
 export * from './quiz-analytics.dto';
 export * from './quiz-list-item.dto';
 export * from './quiz-stats-response.dto';

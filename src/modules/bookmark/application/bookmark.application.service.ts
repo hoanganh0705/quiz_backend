@@ -164,7 +164,11 @@ export class BookmarkApplicationService {
       collectionId,
       count: quizIds.length,
     });
-    const addedCount = await this.bookmarkCommandService.addBookmarksBulk(userId, collectionId, quizIds);
+    const addedCount = await this.bookmarkCommandService.addBookmarksBulk(
+      userId,
+      collectionId,
+      quizIds,
+    );
     return this.bookmarkResponseMapper.toBulkAddResponse(Number(addedCount));
   }
 
@@ -187,11 +191,7 @@ export class BookmarkApplicationService {
     return this.bookmarkResponseMapper.toBulkRemoveResponse(Number(removedCount));
   }
 
-  async removeBookmark(
-    collectionId: string,
-    quizId: string,
-    user: JwtPayload,
-  ): Promise<void> {
+  async removeBookmark(collectionId: string, quizId: string, user: JwtPayload): Promise<void> {
     this.logger.debug({ event: 'app_remove_bookmark', userId: user.sub, collectionId, quizId });
     await this.bookmarkCommandService.removeBookmark(collectionId, quizId, user);
   }
@@ -278,10 +278,7 @@ export class BookmarkApplicationService {
     return this.bookmarkResponseMapper.toUpdateCollectionResponse(collection);
   }
 
-  async deleteCollection(
-    collectionId: string,
-    user: JwtPayload,
-  ): Promise<void> {
+  async deleteCollection(collectionId: string, user: JwtPayload): Promise<void> {
     this.logger.debug({ event: 'app_delete_collection', userId: user.sub, collectionId });
     await this.bookmarkCommandService.deleteCollection(collectionId, user);
   }

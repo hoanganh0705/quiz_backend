@@ -4,7 +4,9 @@ import type { ApiResponseEnvelope } from '@/common/responses/api-response';
 import type { CreatorQuizAnalyticsDto } from '@/modules/quiz/dto/response/quiz-analytics.dto';
 import type { QuizListResponseDto } from '@/modules/quiz/dto/response/quiz-list-response.dto';
 import type { RelatedQuizzesResponseDto } from '@/modules/quiz/dto/response/related-quizzes-response.dto';
+import type { UserLookupResponseDto } from '../../dto/response/user-lookup.dto';
 import type { UserMeResponseDto } from '../../dto/response/user-me.dto';
+import type { UserSummaryResponseDto } from '../../dto/response/user-summary.dto';
 import type { UserAnalyticsResponseDto } from '../../dto/response/user-analytics.dto';
 import type { UserBadgesResponseDto } from '../../dto/response/user-badges.dto';
 import type { UserActivityResponseDto } from '../../dto/response/user-activity.dto';
@@ -14,6 +16,9 @@ import type { MyTournamentHistoryResponseDto } from '../../dto/response/my-tourn
 import type { PublicTournamentHistoryResponseDto } from '../../dto/response/public-tournament-history.dto';
 import type { MyTournamentsResponseDto } from '../../dto/response/my-tournaments.dto';
 import type { PublicTournamentProfileResponseDto } from '../../dto/response/public-tournament-profile.dto';
+import type { RecentlyPlayedQuizzesResponseDto } from '../../dto/response/recently-played-quizzes.dto';
+import type { UserProfileBundleResponseDto } from '../../dto/response/user-profile-bundle.dto';
+import type { CursorPagination } from '@/common/responses/pagination';
 
 /**
  * Wrap a `{ items: T[], pagination: { limit, hasNextPage, nextCursor } }`
@@ -69,11 +74,14 @@ type PaginatedFactory<D> = (data: {
 
 // Single-resource factories
 const me: EndpointFactory<UserMeResponseDto> = ok;
+const userLookup: EndpointFactory<UserLookupResponseDto> = ok;
+const userSummary: EndpointFactory<UserSummaryResponseDto> = ok;
 const ranking: EndpointFactory<UserRankingResponseDto> = ok;
 const analytics: EndpointFactory<UserAnalyticsResponseDto> = ok;
 const myTournamentAnalytics: EndpointFactory<MyTournamentAnalyticsResponseDto> = ok;
 const userQuizAnalytics: EndpointFactory<CreatorQuizAnalyticsDto> = ok;
 const publicTournamentProfile: EndpointFactory<PublicTournamentProfileResponseDto> = ok;
+const profileBundle: EndpointFactory<UserProfileBundleResponseDto> = ok;
 
 // Cursor-paginated factories
 const badges: PaginatedFactory<UserBadgesResponseDto['items'][number]> = wrapPaginatedDto;
@@ -118,6 +126,8 @@ export class UserPresenter {
   readonly getMe = me;
   readonly updateMe = me;
   readonly updateMeSettings = me;
+  readonly getUserByUsername = userLookup;
+  readonly getMySummary = userSummary;
   readonly getUserRanking = ranking;
   readonly getUserAnalytics = analytics;
   readonly getMyTournamentAnalytics = myTournamentAnalytics;
@@ -146,4 +156,18 @@ export class UserPresenter {
   // Bare-array endpoint — `{ items }` unwrapped to a flat list.
   readonly getRecommendedQuizzes = (dto: RelatedQuizzesResponseDto) =>
     ApiResponse.ok([...dto.items]);
+
+  /**
+   * Phase 3 (S-16): cursor-paginated recently-played quizzes.
+   */
+  readonly getRecentlyPlayedQuizzes = (payload: RecentlyPlayedQuizzesResponseDto) =>
+    ApiResponse.page(payload.items, payload.pagination);
+
+  /**
+   * Phase 4 (S-25 + S-26): my-profile + public-profile bundles.
+   * The `/me/profile` variant calls `getMyProfileBundle`; the
+   * `:userId/profile` variant calls `getUserProfileBundle`.
+   */
+  readonly getMyProfileBundle = profileBundle;
+  readonly getUserProfileBundle = profileBundle;
 }

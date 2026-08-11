@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { UserDomainService } from '../domain/user.service';
 import { UserResponseMapper } from '../mappers/user-response.mapper';
@@ -12,7 +12,9 @@ import { UpdateMeSettingsDto } from '../dto/request/update-me-settings.dto';
 import type { GetMyTournamentsQueryDto } from '../dto/request/get-my-tournaments-query.dto';
 import type { GetMyTournamentHistoryQueryDto } from '../dto/request/get-my-tournament-history-query.dto';
 import type { UserActivityResponseDto } from '../dto/response/user-activity.dto';
+import type { UserLookupResponseDto } from '../dto/response/user-lookup.dto';
 import type { UserMeResponseDto } from '../dto/response/user-me.dto';
+import type { UserSummaryResponseDto } from '../dto/response/user-summary.dto';
 import type { UserBadgesResponseDto } from '../dto/response/user-badges.dto';
 import type { UserRankingResponseDto } from '../dto/response/user-ranking.dto';
 import type { UserAnalyticsResponseDto } from '../dto/response/user-analytics.dto';
@@ -25,12 +27,18 @@ import type { ListUserBadgesQueryDto } from '../dto/request/list-user-badges-que
 import type { ListUserActivityQueryDto } from '../dto/request/list-user-activity-query.dto';
 import type { UpdateProfileCommand, UpdateSettingsCommand } from '../domain/types/user-commands';
 import type { UserActivityRow } from '../domain/ports/user-repository.port';
+import { projectLevel, resolveLevelTitleLabel } from '../domain/types/level.types';
 import { isObjectRecord } from '@/common/utils/object.util';
+import { QUIZ_LISTING_PORT, type QuizListingPort } from '@/modules/quiz/domain/analytics';
+import { SocialService } from '@/modules/social/domain/services/social.service';
 
 @Injectable()
 export class UserApplicationService {
   constructor(
     private readonly userDomainService: UserDomainService,
+    @Inject(QUIZ_LISTING_PORT)
+    private readonly quizListing: QuizListingPort,
+    private readonly socialService: SocialService,
     @InjectPinoLogger(UserApplicationService.name)
     private readonly logger: PinoLogger,
   ) {}
@@ -38,6 +46,95 @@ export class UserApplicationService {
   async getMe(userId: string): Promise<UserMeResponseDto> {
     const row = await this.userDomainService.getMe(userId);
     return UserResponseMapper.toUserMeResponse(row);
+  }
+
+  /**
+   * Phase 1 (S-1): public username → profile-summary lookup. Maps
+   * a `UserLookupRow` (DB projection) to a `UserLookupResponseDto`
+   * (wire shape). The endpoint is mounted with `@Public()`, so
+   * privacy flags are intentionally not enforced here — see
+   * `UserDomainService.getUserByUsername` for the rationale.
+   */
+  async getUserByUsername(username: string): Promise<UserLookupResponseDto> {
+    const row = await this.userDomainService.getUserByUsername(username);
+    return UserResponseMapper.toUserLookupResponse(row);
+  }
+
+  /**
+   * Phase 1 (S-2 + S-3): composite "profile page" payload for the
+   * authenticated user. Composes the slim identity on `/users/me`
+   * with the level projection (S-5), quiz creator counts (already
+   * available via `QUIZ_LISTING_PORT`), quiz-taken counts (already
+   * in `UserAnalyticsDto.summary`), and social follower/following/
+   * friends counts (`SocialService.getSocialCounts`).
+   *
+   * Concurrency: every dependency is independent, so the five
+   * downstream calls are dispatched in parallel. If any single
+   * dependency fails the whole summary fails — that is intentional:
+   * the page renders a single skeleton until every field resolves,
+   * and a partial response would force the UI to reconcile missing
+   * values that are not actually missing.
+   *
+   * Performance note: `getSocialCounts` is backed by Redis (see
+   * `SocialCacheService.getCountsWithCache`), so it is the cheap
+   * one in this fan-out. The expensive one is `getMyQuizAnalytics`,
+   * which scans `quiz_attempts` aggregated by creator. That cost
+   * is a known limitation documented in
+   * `docs/plans/denormalized-counters-audit.md` — Phase 6 plans
+   * to introduce a counter table; this endpoint inherits the
+   * cost until then.
+   */
+  async getMySummary(
+    userId: string,
+    acceptLanguage?: string,
+  ): Promise<UserSummaryResponseDto> {
+    const [me, quizAnalytics, userAnalytics, socialCounts] = await Promise.all([
+      this.userDomainService.getMe(userId),
+      this.quizListing.getMyQuizAnalytics(userId),
+      this.userDomainService.getUserAnalytics(userId, userId),
+      this.socialService.getSocialCounts(userId),
+    ]);
+
+    const level = projectLevel(me.xpTotal);
+
+    return {
+      userId: me.userId,
+      username: me.username,
+      displayName: me.displayName,
+      avatarUrl: me.avatarUrl,
+      bio: me.bio,
+      // Phase 1 (S-2): `country`, `countryCode`, and `bgImageUrl` are
+      // declared on the DTO because the frontend already reads them
+      // (see `use-my-profile-page.ts`). The `user_profiles` schema does
+      // not yet have these columns, so they always read as `null`.
+      // Adding the columns later is an additive change — the DTO
+      // contract stays the same and the mapper just starts surfacing
+      // real values.
+      country: null,
+      countryCode: null,
+      bgImageUrl: null,
+      createdAt: me.createdAt,
+      updatedAt: me.updatedAt,
+      xpTotal: me.xpTotal,
+      level: level.level,
+      currentLevelXP: level.currentLevelXP,
+      nextLevelXP: level.nextLevelXP,
+      xpProgressPercent: level.xpProgressPercent,
+      levelTitle: level.levelTitle,
+      // Phase 6: locale-aware title. The `Accept-Language` header is
+      // best-effort — when it is missing or unknown, the negotiator
+      // falls back to `en`. The lookup is in pure-function territory
+      // so it does not affect the surrounding fan-out.
+      levelTitleLocalised: resolveLevelTitleLabel(level.levelTitle, acceptLanguage),
+      currentStreak: me.currentStreak,
+      longestStreak: me.longestStreak,
+      quizzesCreated: quizAnalytics.totalQuizzes,
+      quizzesPublished: quizAnalytics.publishedQuizzes,
+      quizzesTaken: userAnalytics.summary.completedQuizzes,
+      followers: socialCounts.followerCount,
+      following: socialCounts.followingCount,
+      friends: socialCounts.friendCount,
+    };
   }
 
   async listUserBadges(
