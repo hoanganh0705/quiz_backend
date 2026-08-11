@@ -117,6 +117,7 @@ export class SocialRepository implements SocialRepositoryPort {
         sfa.payload AS payload
       FROM social_feed_activities sfa
       INNER JOIN users u ON u.user_id = sfa.user_id
+      LEFT JOIN user_profiles up ON up.user_id = u.user_id
       INNER JOIN user_network un ON un.user_id = sfa.user_id
       WHERE u.deleted_at IS NULL
         AND sfa.user_id NOT IN (SELECT user_id FROM blocked_ids)
@@ -131,6 +132,8 @@ export class SocialRepository implements SocialRepositoryPort {
       occurredAt: string;
       userId: string;
       username: string;
+      displayName: string | null;
+      avatarUrl: string | null;
       payload: Record<string, unknown>;
     }>;
 
@@ -153,6 +156,13 @@ export class SocialRepository implements SocialRepositoryPort {
         user: {
           userId: row.userId,
           username: row.username,
+        },
+        // Phase 3 (S-22): slim-actor projection.
+        actor: {
+          userId: row.userId,
+          username: row.username,
+          displayName: row.displayName ?? null,
+          avatarUrl: row.avatarUrl ?? null,
         },
         payload: row.payload,
       })),
@@ -188,9 +198,14 @@ export class SocialRepository implements SocialRepositoryPort {
         sfa.activity_id AS id,
         sfa.activity_type AS type,
         sfa.occurred_at AS "occurredAt",
+        u.user_id AS "userId",
+        u.username AS username,
+        up.display_name AS "displayName",
+        up.avatar_url AS "avatarUrl",
         sfa.payload AS payload
       FROM social_feed_activities sfa
       INNER JOIN users u ON u.user_id = sfa.user_id
+      LEFT JOIN user_profiles up ON up.user_id = u.user_id
       WHERE sfa.user_id = ${userId}::uuid
         AND u.deleted_at IS NULL
         ${sql.raw(cursorCondition ? ` ${cursorCondition}` : '')}
@@ -202,6 +217,10 @@ export class SocialRepository implements SocialRepositoryPort {
       id: string;
       type: SocialFeedActivityType;
       occurredAt: string;
+      userId: string;
+      username: string;
+      displayName: string | null;
+      avatarUrl: string | null;
       payload: Record<string, unknown>;
     }>;
 
@@ -221,6 +240,13 @@ export class SocialRepository implements SocialRepositoryPort {
         id: row.id,
         type: row.type,
         occurredAt: row.occurredAt,
+        // Phase 3 (S-22): slim-actor projection.
+        actor: {
+          userId: row.userId,
+          username: row.username,
+          displayName: row.displayName ?? null,
+          avatarUrl: row.avatarUrl ?? null,
+        },
         payload: row.payload,
       })),
       pagination: {

@@ -43,9 +43,14 @@ export class PasswordResetService {
     const user = await this.userRepository.findActiveVerificationStatusByEmail(normalizedEmail);
 
     if (!user) {
+      // Intentionally DO NOT log the submitted email — it is PII
+      // (paired with the request IP, this becomes a viable
+      // enumeration signal for an attacker probing the endpoint).
+      // The event name alone is sufficient for observability;
+      // operators can correlate against web-server access logs if
+      // they need the address.
       this.logger.info({
         event: 'auth_password_reset_requested_unknown_email',
-        email: normalizedEmail,
       });
       return { message: PasswordResetService.GENERIC_MESSAGE };
     }
@@ -56,18 +61,18 @@ export class PasswordResetService {
 
     await this.userRepository.createPasswordResetToken(user.userId, tokenHash, expiresAt);
 
+    // Single structured log for the successful request side. The
+    // previous version emitted TWO info-level log lines for the same
+    // event (one shaped for the auth audit-log adapter, one for the
+    // standard request log) — both had the same payload. Consolidate
+    // into one entry with `eventType` so any downstream audit-log
+    // consumer can still group by the canonical event name.
     this.logger.info({
-      event: 'auth_security_password_reset_requested',
+      event: 'auth.password_reset.requested',
       eventType: 'password_reset_requested',
       userId: user.userId,
-      timestamp: new Date().toISOString(),
       ipAddress,
-    });
-
-    this.logger.info({
-      event: 'auth_password_reset_requested',
-      userId: user.userId,
-      ipAddress,
+      resetRequestedAt: new Date().toISOString(),
     });
 
     try {
@@ -139,7 +144,7 @@ export class PasswordResetService {
       throw error;
     }
 
-    this.logger.info({ event: 'auth_password_reset_completed', userId });
+    this.logger.info({ event: 'auth.password_reset.completed', userId });
 
     return {
       message: PASSWORD_RESET_SUCCESS_MESSAGE,

@@ -8,6 +8,8 @@ import type {
 } from '../../dto/response/quiz-analytics.dto';
 import type { DeleteQuizResponseDto } from '../../dto/response/delete-quiz-response.dto';
 import type { QuizStatsResponseDto } from '../../dto/response/quiz-stats-response.dto';
+import type { QuizStatsHistoryResponseDto } from '../../dto/response/quiz-stats-history-response.dto';
+import type { QuizPreviewResponseDto } from '../../dto/response/quiz-preview-response.dto';
 import type { RelatedQuizzesResponseDto } from '../../dto/response/related-quizzes-response.dto';
 import type { QuizQuestionAuthorDto } from '../../dto/response/quiz-question-author.dto';
 import type {
@@ -16,6 +18,7 @@ import type {
 } from '../../dto/response/quiz-version-response.dto';
 import type { QuizResponseDto } from '../../dto/response/quiz-response.dto';
 import type { QuizListItemDto } from '../../dto/response/quiz-list-item.dto';
+import type { QuizAggregateResponseDto } from '../../dto/response/quiz-aggregate-response.dto';
 
 /**
  * Wrap a `{ items: T[], pagination: { limit, nextCursor, hasNextPage } }`
@@ -71,6 +74,13 @@ export class QuizPresenter {
   readonly getPopularQuizzes = (items: PopularQuizItemDto[]) => ApiResponse.ok([...items]);
   readonly getMyQuizAnalytics = QuizPresenter.ok<CreatorQuizAnalyticsDto>;
   readonly getQuizStats = QuizPresenter.ok<QuizStatsResponseDto>;
+  // Phase 2 (S-11): sparkline history endpoint.
+  readonly getQuizStatsHistory = QuizPresenter.ok<QuizStatsHistoryResponseDto>;
+  // Phase 2 (S-9): public preview endpoint.
+  readonly getQuizPreview = QuizPresenter.ok<QuizPreviewResponseDto>;
+
+  // Phase 4 (S-24): aggregate bundle for quiz detail page.
+  readonly getQuizAggregate = QuizPresenter.ok<QuizAggregateResponseDto>;
 
   // Related: items-only DTO unwrapped to bare array
   readonly getRelatedQuizzes = (dto: RelatedQuizzesResponseDto) => ApiResponse.ok([...dto.items]);

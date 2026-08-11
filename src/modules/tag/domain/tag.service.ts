@@ -113,6 +113,29 @@ export class TagDomainService {
     return tag;
   }
 
+  /**
+   * Phase 2 (S-13): batched lookup of tags by slug. Slugs are
+   * normalized at the boundary so the route can accept
+   * arbitrary casing / leading dashes. Returns whatever tags
+   * match; missing slugs are silently omitted (the frontend's
+   * resolver then surfaces "unknown tag" badges instead of
+   * failing the request).
+   */
+  async getTagsBySlugs(slugs: string[]): Promise<TagRow[]> {
+    const normalized = Array.from(
+      new Set(
+        slugs
+          .map((slug) => slug.trim())
+          .filter((slug) => slug.length > 0)
+          .map((slug) => this.normalizeSlug(slug)),
+      ),
+    );
+
+    if (normalized.length === 0) return [];
+
+    return this.tagRepository.findBySlugs(normalized);
+  }
+
   async getRelatedTags(slug: string, query: RelatedTagsQuery): Promise<TagRow[]> {
     const normalizedSlug = this.normalizeSlug(slug);
     const relatedTags = await this.tagRankingRepository.findRelatedBySlug({

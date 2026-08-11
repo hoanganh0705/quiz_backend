@@ -7,6 +7,7 @@ import {
   QuizResponseMapper,
   QuizQuestionPlayerResponseMapper,
   QuizStatsResponseMapper,
+  type QuizProjectionContext,
 } from '../mappers';
 import { CreatorQuizAnalyticsResponseMapper } from '../mappers/creator-quiz-analytics-response.mapper';
 import { QuizCursorMapper } from '../mappers/quiz-cursor.mapper';
@@ -15,9 +16,13 @@ import { UpdateQuizDto } from '../dto/request/update-quiz.dto';
 import { FeaturedQuizzesQueryDto } from '../dto/request/featured-quizzes-query.dto';
 import { RecommendedQuizzesQueryDto } from '../dto/request/recommended-quizzes-query.dto';
 import { ListQuizzesQueryDto } from '../dto/request/list-quizzes-query.dto';
+import { QuizStatsHistoryQueryDto } from '../dto/request/quiz-stats-history-query.dto';
 import type { QuizResponseDto } from '../dto/response/quiz-response.dto';
 import type { QuizListResponseDto } from '../dto/response/quiz-list-response.dto';
 import type { QuizStatsResponseDto } from '../dto/response/quiz-stats-response.dto';
+import type { QuizPreviewResponseDto } from '../dto/response/quiz-preview-response.dto';
+import type { QuizStatsHistoryResponseDto } from '../dto/response/quiz-stats-history-response.dto';
+import type { QuizAggregateResponseDto } from '../dto/response/quiz-aggregate-response.dto';
 import type { QuizListingPort } from '../domain/analytics/ports/quiz-listing.port';
 import type {
   CreatorQuizAnalyticsDto,
@@ -29,6 +34,15 @@ import type { DeleteQuizResponseDto } from '../dto/response/delete-quiz-response
 import type { CreateQuizCommand, RelatedQuizzesQuery, UpdateQuizCommand } from '../domain/types';
 import type { QuizDifficulty } from '../types/quiz.types';
 import { USER_DOMAIN_SERVICE, type UserDomainService } from '@/modules/user/domain/user.service';
+import {
+  QUIZ_REPOSITORY_PORT,
+  type QuizRepositoryPort,
+} from '../domain/ports/quiz-repository.port';
+import { commentRows } from '@/core/database/schema';
+import { and, eq, isNull, sql } from 'drizzle-orm';
+import { DRIZZLE } from '@/core/database/drizzle.constants';
+import type { DrizzleDB } from '@/core/database/database.module';
+import type { QuizStatsHistoryPointDto } from '../dto/response/quiz-stats-history-point.dto';
 
 @Injectable()
 export class QuizApplicationService implements QuizListingPort {
@@ -38,7 +52,62 @@ export class QuizApplicationService implements QuizListingPort {
     private readonly quizAnalyticsService: QuizAnalyticsService,
     @Inject(USER_DOMAIN_SERVICE)
     private readonly userDomainService: UserDomainService,
+    @Inject(QUIZ_REPOSITORY_PORT)
+    private readonly quizRepository: QuizRepositoryPort,
+    @Inject(DRIZZLE) private readonly db: DrizzleDB,
   ) {}
+
+  /**
+   * Phase 2 (S-6 / S-7 / S-8): build the batched projection context
+   * for a page of `QuizWithPublishedVersionRow`s. Five concurrent
+   * queries (creators / categories / tags / aggregates / question
+   * counts) keyed off the page. The mapper stitches the result
+   * onto each item, so a page of 20 quizzes resolves with one
+   * `list*` query plus five batched lookups — never 1 + 4×N.
+   */
+  private async buildProjectionContext(
+    rows: readonly {
+      quizId: string;
+      creatorId: string | null;
+      categoryId: string | null;
+      publishedVersionQuizVersionId: string | null;
+    }[],
+  ): Promise<QuizProjectionContext> {
+    const quizIds = rows.map((r) => r.quizId);
+    const creatorIds = Array.from(
+      new Set(rows.map((r) => r.creatorId).filter((v): v is string => v !== null)),
+    );
+    const categoryIds = Array.from(
+      new Set(rows.map((r) => r.categoryId).filter((v): v is string => v !== null)),
+    );
+    const versionIds = Array.from(
+      new Set(
+        rows.map((r) => r.publishedVersionQuizVersionId).filter((v): v is string => v !== null),
+      ),
+    );
+
+    const [
+      authorsByUserId,
+      categoriesById,
+      tagsByQuizId,
+      aggregatesByQuizId,
+      questionCountByVersionId,
+    ] = await Promise.all([
+      this.quizRepository.getAuthorSummaries(creatorIds),
+      this.quizRepository.getCategorySummaries(categoryIds),
+      this.quizRepository.getTagsForQuizIds(quizIds),
+      this.quizRepository.getAggregatesForQuizzes(quizIds),
+      this.quizRepository.getQuestionCountsForVersionIds(versionIds),
+    ]);
+
+    return {
+      authorsByUserId,
+      categoriesById,
+      tagsByQuizId,
+      aggregatesByQuizId,
+      questionCountByVersionId,
+    };
+  }
 
   async createQuiz(user: JwtPayload, dto: CreateQuizDto): Promise<QuizResponseDto> {
     const command: CreateQuizCommand = {
@@ -55,7 +124,8 @@ export class QuizApplicationService implements QuizListingPort {
       tagIds: dto.tagIds ?? [],
     };
     const { row, tags } = await this.quizCommandService.createQuiz(user, command);
-    return QuizResponseMapper.toQuizResponse(row, undefined, tags);
+    const context = await this.buildProjectionContext([row]);
+    return QuizResponseMapper.toQuizResponse(row, undefined, tags, context);
   }
 
   async listQuizzes(dto: ListQuizzesQueryDto): Promise<QuizListResponseDto> {
@@ -69,11 +139,16 @@ export class QuizApplicationService implements QuizListingPort {
         difficulty: dto.difficulty as QuizDifficulty,
         categoryId: dto.categoryId,
         tagIds: dto.tagIds,
+        q: dto.q,
+        sort: dto.sort,
+        isHidden: dto.isHidden,
+        minRating: dto.minRating,
       },
     });
 
+    const context = await this.buildProjectionContext(result.items);
     return {
-      items: result.items.map((row) => QuizResponseMapper.toListItem(row)),
+      items: result.items.map((row) => QuizResponseMapper.toListItem(row, context)),
       pagination: {
         limit: result.limit,
         nextCursor: result.nextCursor ? QuizCursorMapper.serialize(result.nextCursor) : null,
@@ -87,8 +162,9 @@ export class QuizApplicationService implements QuizListingPort {
       limit: query.limit ?? 10,
     });
 
+    const context = await this.buildProjectionContext(items);
     return {
-      items: items.map((item) => QuizResponseMapper.toListItem(item)),
+      items: items.map((item) => QuizResponseMapper.toListItem(item, context)),
     };
   }
 
@@ -100,32 +176,141 @@ export class QuizApplicationService implements QuizListingPort {
       limit: query.limit ?? 20,
     });
 
+    const context = await this.buildProjectionContext(items);
     return {
-      items: items.map((item) => QuizResponseMapper.toListItem(item)),
+      items: items.map((item) => QuizResponseMapper.toListItem(item, context)),
     };
   }
 
   async getQuizById(quizId: string): Promise<QuizResponseDto> {
     const { row, tags } = await this.quizQueryService.getQuizById(quizId);
-    return QuizResponseMapper.toQuizResponse(row, undefined, tags);
+    const context = await this.buildProjectionContext([row]);
+    return QuizResponseMapper.toQuizResponse(row, undefined, tags, context);
   }
 
   async getQuizBySlug(slug: string): Promise<QuizResponseDto> {
     const { row, questions, tags } = await this.quizQueryService.getQuizBySlug(slug);
-    // Player-facing endpoint (`GET /quizzes/:id` resolves to `getQuizBySlug` for
-    // slugs and is `@Public()`). Use the player mapper so the response does
-    // NOT include the `isCorrect` flag on each option. Correct answers are
-    // revealed to the player only via the post-attempt review endpoint after
-    // they finish a quiz.
+    const context = await this.buildProjectionContext([row]);
     const mappedQuestions = questions
       ? QuizQuestionPlayerResponseMapper.toPlayerQuestionResponses(questions)
       : undefined;
-    return QuizResponseMapper.toQuizResponse(row, mappedQuestions, tags);
+    return QuizResponseMapper.toQuizResponse(row, mappedQuestions, tags, context);
   }
 
   async getQuizStats(quizId: string | undefined, slug: string): Promise<QuizStatsResponseDto> {
     const stats = await this.quizQueryService.getQuizStats(quizId, slug);
-    return QuizStatsResponseMapper.toResponse(stats);
+    const [commentsCount, recentActivity] = await Promise.all([
+      this.countCommentsForQuiz(stats.quizId),
+      this.fetchRecentActivity(stats.quizId, 30),
+    ]);
+    return QuizStatsResponseMapper.toResponse(stats, { commentsCount, recentActivity });
+  }
+
+  /**
+   * Phase 2 (S-11): sparkline data for `GET /quizzes/:id/stats/history`.
+   * The route accepts `?range=7d|30d&bucket=day|hour`; the response is
+   * densified server-side so the client renders a continuous chart.
+   */
+  async getQuizStatsHistory(
+    quizId: string | undefined,
+    slug: string,
+    query: QuizStatsHistoryQueryDto,
+  ): Promise<QuizStatsHistoryResponseDto> {
+    const stats = await this.quizQueryService.getQuizStats(quizId, slug);
+    const points = await this.fetchHistoryPoints(
+      stats.quizId,
+      query.range ?? '30d',
+      query.bucket ?? 'day',
+    );
+    return {
+      quizId: stats.quizId,
+      range: query.range ?? '30d',
+      bucket: query.bucket ?? 'day',
+      points,
+    };
+  }
+
+  /**
+   * Phase 2 (S-9): public preview of a quiz. Returns the first
+   * `previewSize` questions of the published version with the
+   * `isCorrect` flag stripped. `@Public()` so deep-link previews
+   * from social/sharing surfaces work without a session.
+   */
+  async getQuizPreview(
+    quizIdOrSlug: string,
+    previewSize = PREVIEW_QUESTION_COUNT,
+  ): Promise<QuizPreviewResponseDto> {
+    const resolvedQuizId = isUuid(quizIdOrSlug) ? quizIdOrSlug : undefined;
+    const normalizedSlug = isUuid(quizIdOrSlug) ? undefined : quizIdOrSlug;
+
+    // Resolve the quiz through the same path as `getQuizStats` so
+    // we honour the UUID-or-slug contract end-to-end.
+    const result = normalizedSlug
+      ? await this.quizQueryService.getQuizBySlug(normalizedSlug)
+      : await this.quizQueryService.getQuizById(resolvedQuizId as string);
+
+    const { row, questions } = result;
+    const totalQuestions = row.publishedVersionQuizVersionId
+      ? ((
+          await this.quizRepository.getQuestionCountsForVersionIds([
+            row.publishedVersionQuizVersionId,
+          ])
+        ).get(row.publishedVersionQuizVersionId) ?? 0)
+      : 0;
+
+    if (!row.publishedVersionQuizVersionId || !questions || questions.length === 0) {
+      return {
+        quizId: row.quizId,
+        publishedVersionId: row.publishedVersionId,
+        questions: [],
+        totalQuestions,
+      };
+    }
+
+    const previewQuestions = QuizQuestionPlayerResponseMapper.toPlayerQuestionResponses(
+      questions.slice(0, previewSize),
+    );
+
+    return {
+      quizId: row.quizId,
+      publishedVersionId: row.publishedVersionId,
+      questions: previewQuestions,
+      totalQuestions,
+    };
+  }
+
+  /**
+   * Phase 4 (S-24): bundle for the quiz detail page. Replaces
+   * the 5+ sequential calls with a single parallelised fan-out.
+   *
+   * The bundle shape is `QuizAggregateResponseDto`:
+   *   - `quiz`             — full quiz record (with published version)
+   *   - `stats`            — quiz stats (cached counter snapshot)
+   *   - `statsHistory`     — bucketed stats timeline (sparkline)
+   *   - `previewQuestions` — first N questions (player-style)
+   */
+  async getQuizAggregate(
+    quizIdOrSlug: string,
+  ): Promise<QuizAggregateResponseDto> {
+    const isUuidValue = isUuid(quizIdOrSlug);
+    const quizId = isUuidValue ? quizIdOrSlug : undefined;
+    const slug = isUuidValue ? undefined : quizIdOrSlug;
+
+    const [quiz, stats, statsHistory, preview] = await Promise.all([
+      slug
+        ? this.getQuizBySlug(slug)
+        : this.getQuizById(quizId as string),
+      this.getQuizStats(quizId, quizIdOrSlug),
+      this.getQuizStatsHistory(quizId, quizIdOrSlug, {}),
+      this.getQuizPreview(quizIdOrSlug),
+    ]);
+
+    return {
+      quiz,
+      stats,
+      statsHistory,
+      previewQuestions: preview.questions,
+    };
   }
 
   async getRelatedQuizzes(
@@ -134,8 +319,9 @@ export class QuizApplicationService implements QuizListingPort {
   ): Promise<RelatedQuizzesResponseDto> {
     const items = await this.quizQueryService.getRelatedQuizzes(slug, query);
 
+    const context = await this.buildProjectionContext(items);
     return {
-      items: items.map((item) => QuizResponseMapper.toListItem(item)),
+      items: items.map((item) => QuizResponseMapper.toListItem(item, context)),
     };
   }
 
@@ -154,8 +340,9 @@ export class QuizApplicationService implements QuizListingPort {
       },
     });
 
+    const context = await this.buildProjectionContext(result.items);
     return {
-      items: result.items.map((row) => QuizResponseMapper.toListItem(row)),
+      items: result.items.map((row) => QuizResponseMapper.toListItem(row, context)),
       pagination: {
         limit: result.limit,
         nextCursor: result.nextCursor ? QuizCursorMapper.serialize(result.nextCursor) : null,
@@ -173,8 +360,9 @@ export class QuizApplicationService implements QuizListingPort {
       cursor,
     });
 
+    const context = await this.buildProjectionContext(result.items);
     return {
-      items: result.items.map((row) => QuizResponseMapper.toListItem(row)),
+      items: result.items.map((row) => QuizResponseMapper.toListItem(row, context)),
       pagination: {
         limit: result.limit,
         nextCursor: result.nextCursor ? QuizCursorMapper.serialize(result.nextCursor) : null,
@@ -192,8 +380,9 @@ export class QuizApplicationService implements QuizListingPort {
       cursor,
     });
 
+    const context = await this.buildProjectionContext(result.items);
     return {
-      items: result.items.map((row) => QuizResponseMapper.toListItem(row)),
+      items: result.items.map((row) => QuizResponseMapper.toListItem(row, context)),
       pagination: {
         limit: result.limit,
         nextCursor: result.nextCursor ? QuizCursorMapper.serialize(result.nextCursor) : null,
@@ -214,8 +403,9 @@ export class QuizApplicationService implements QuizListingPort {
       cursor,
     });
 
+    const context = await this.buildProjectionContext(result.items);
     return {
-      items: result.items.map((row) => QuizResponseMapper.toListItem(row)),
+      items: result.items.map((row) => QuizResponseMapper.toListItem(row, context)),
       pagination: {
         limit: result.limit,
         nextCursor: result.nextCursor ? QuizCursorMapper.serialize(result.nextCursor) : null,
@@ -281,7 +471,8 @@ export class QuizApplicationService implements QuizListingPort {
       tagIds: dto.tagIds,
     };
     const { row, tags } = await this.quizCommandService.updateQuiz(quizId, user, command);
-    return QuizResponseMapper.toQuizResponse(row, undefined, tags);
+    const context = await this.buildProjectionContext([row]);
+    return QuizResponseMapper.toQuizResponse(row, undefined, tags, context);
   }
 
   async deleteQuiz(quizId: string, user: JwtPayload): Promise<DeleteQuizResponseDto> {
@@ -294,4 +485,149 @@ export class QuizApplicationService implements QuizListingPort {
   }): Promise<QuizListResponseDto> {
     return this.listQuizzes({ ...params.dto, tagIds: params.tagIds });
   }
+
+  // ─── Phase 2 helpers ───────────────────────────────────────────────────
+
+  /**
+   * Phase 2 (S-10): counts non-deleted comments attached to the
+   * quiz. Counts both top-level comments and replies (the audit
+   * recommendation) so the stats panel's "Comments" counter stays
+   * in sync with what `/comments` paginated list would return.
+   */
+  private async countCommentsForQuiz(quizId: string): Promise<number> {
+    const [row] = await this.db
+      .select({ count: sql<number>`COUNT(*)::int` })
+      .from(commentRows)
+      .where(and(eq(commentRows.quizId, quizId), isNull(commentRows.deletedAt)));
+    return Number(row?.count ?? 0);
+  }
+
+  /**
+   * Phase 2 (S-10): 30-day attempt timeline for the stats panel
+   * sparkline. Bucketed by day; gaps are densified to zero so the
+   * client can render a continuous timeline without further math.
+   */
+  private async fetchRecentActivity(
+    quizId: string,
+    days: number,
+  ): Promise<QuizStatsHistoryPointDto[]> {
+    return this.fetchHistoryPoints(quizId, days === 7 ? '7d' : '30d', 'day');
+  }
+
+  /**
+   * Phase 2 (S-11): sparkline history endpoint backing store.
+   * Bucketed timeline with `range` and `bucket` parameters from
+   * the `QuizStatsHistoryQueryDto`. Gaps are densified to zero so
+   * the client renders a continuous chart.
+   *
+   * Note: this method runs two queries — the actual bucket reads
+   * and a `generate_series` densification. The latter runs against
+   * the system catalog (no real data), so it's cheap; the heavy
+   * work is the bucket read.
+   */
+  private async fetchHistoryPoints(
+    quizId: string,
+    range: '7d' | '30d',
+    bucket: 'day' | 'hour',
+  ): Promise<QuizStatsHistoryPointDto[]> {
+    const days = range === '7d' ? 7 : 30;
+    const bucketColumn = bucket === 'hour' ? 'hour' : 'day';
+
+    // 1. Pull attempts joined to this quiz's versions, bucketed by
+    //    `bucketColumn`. We use `started_at` for attempts and
+    //    `completed_at` for completions, treating NULLs with COALESCE.
+    const attempts = await this.db.execute(sql`
+      WITH version_ids AS (
+        SELECT quiz_version_id FROM quiz_versions WHERE quiz_id = ${quizId}
+      )
+      SELECT
+        date_trunc(${bucketColumn}, quiz_attempts.started_at) AS bucket_start,
+        COUNT(*)::int AS attempts,
+        COUNT(*) FILTER (WHERE quiz_attempts.status = 'completed')::int AS completions,
+        COUNT(DISTINCT quiz_attempts.user_id)::int AS unique_players
+      FROM quiz_attempts
+      WHERE quiz_attempts.quiz_version_id IN (SELECT quiz_version_id FROM version_ids)
+        AND quiz_attempts.started_at >= NOW() - (${days} || ' days')::interval
+      GROUP BY 1
+    `);
+
+    type BucketRow = {
+      bucket_start: Date | string;
+      attempts: number;
+      completions: number;
+      unique_players: number;
+    };
+
+    const rawRows = (attempts as unknown as { rows?: BucketRow[] }).rows ?? [];
+
+    const buckets = new Map<
+      string,
+      { attempts: number; completions: number; uniquePlayers: number }
+    >();
+    for (const r of rawRows) {
+      const key = formatBucketKey(new Date(r.bucket_start), bucket);
+      buckets.set(key, {
+        attempts: Number(r.attempts ?? 0),
+        completions: Number(r.completions ?? 0),
+        uniquePlayers: Number(r.unique_players ?? 0),
+      });
+    }
+
+    // 2. Densify: walk every bucket from `now` back to `now - days`,
+    //    filling missing keys with zero so the timeline is continuous.
+    const points: QuizStatsHistoryPointDto[] = [];
+    const now = new Date();
+    for (let i = days - 1; i >= 0; i--) {
+      const point = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
+      if (bucket === 'hour') {
+        for (let h = 0; h < 24; h++) {
+          const slot = new Date(point);
+          slot.setHours(h, 0, 0, 0);
+          if (slot.getTime() > now.getTime()) continue;
+          const key = formatBucketKey(slot, 'hour');
+          const v = buckets.get(key);
+          points.push({
+            date: key,
+            attempts: v?.attempts ?? 0,
+            completions: v?.completions ?? 0,
+            uniquePlayers: v?.uniquePlayers ?? 0,
+          });
+        }
+      } else {
+        const key = formatBucketKey(point, 'day');
+        const v = buckets.get(key);
+        points.push({
+          date: key,
+          attempts: v?.attempts ?? 0,
+          completions: v?.completions ?? 0,
+          uniquePlayers: v?.uniquePlayers ?? 0,
+        });
+      }
+    }
+
+    return points;
+  }
+}
+
+/**
+ * Phase 2 (S-9): preview limit. Hard-coded so a malicious client
+ * cannot bypass the `isCorrect` strip by requesting every question.
+ * The audit's recommendation was 2 — small enough to render as a
+ * teaser card, large enough to convey difficulty.
+ */
+const PREVIEW_QUESTION_COUNT = 2;
+
+function isUuid(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+}
+
+function formatBucketKey(date: Date, bucket: 'day' | 'hour'): string {
+  const yyyy = date.getUTCFullYear();
+  const mm = String(date.getUTCMonth() + 1).padStart(2, '0');
+  const dd = String(date.getUTCDate()).padStart(2, '0');
+  if (bucket === 'hour') {
+    const hh = String(date.getUTCHours()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}T${hh}:00:00Z`;
+  }
+  return `${yyyy}-${mm}-${dd}`;
 }

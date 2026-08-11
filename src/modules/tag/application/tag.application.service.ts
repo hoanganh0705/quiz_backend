@@ -60,6 +60,17 @@ export class TagApplicationService {
     return this.toTagResponse(row);
   }
 
+  /**
+   * Phase 2 (S-13): batched lookup by comma-separated slugs. The
+   * frontend's `useTagSlugsResolver` hook calls this to map a
+   * filter-chip list into tag IDs (for the URL state) and back
+   * (for chip labels).
+   */
+  async getTagsBySlugs(slugs: string[]): Promise<TagResponseDto[]> {
+    const rows = await this.tagDomainService.getTagsBySlugs(slugs);
+    return rows.map((row) => this.toTagResponse(row));
+  }
+
   async getTagById(tagId: string): Promise<TagResponseDto> {
     const row = await this.tagDomainService.getTagById(tagId);
     return this.toTagResponse(row);

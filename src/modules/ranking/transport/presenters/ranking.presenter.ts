@@ -19,6 +19,7 @@ import type {
   RankingMilestoneDto,
 } from '../../dto/response/leaderboard-history.dto';
 import type { TopMoverDto } from '../../dto/response/leaderboard-top-movers.dto';
+import type { RecentWinnersResponseDto } from '../../dto/response/recent-winners-response.dto';
 import type {
   RankingStatusResponseDto,
   RecalculateResponseDto,
@@ -92,4 +93,7 @@ export class RankingPresenter {
   readonly triggerRecalculation = RankingPresenter.ok<RecalculateResponseDto>;
   readonly triggerPeriodReset = RankingPresenter.ok<PeriodResetResponseDto>;
   readonly triggerConsistencyCheck = RankingPresenter.ok<ConsistencyReportResponseDto>;
+
+  // Phase 3 (S-15): live-winners carousel.
+  readonly getRecentWinners = RankingPresenter.ok<RecentWinnersResponseDto>;
 }

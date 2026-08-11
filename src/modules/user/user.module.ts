@@ -20,9 +20,21 @@ import { QuizApplicationService } from '@/modules/quiz/application/quiz.applicat
 import { StreakService } from './domain/services/streak.service';
 import { RankingModule } from '@/modules/ranking/ranking.module';
 import { RankingXpStreakListenerAdapter } from './infrastructure/adapters/ranking-xp-streak-listener.adapter';
+import { SocialModule } from '@/modules/social/social.module';
+import { RecentlyPlayedQuizzesService } from './application/recently-played-quizzes.service';
+import { UserProfileBundleService } from './application/user-profile-bundle.service';
+import { UserSummaryService } from './application/user-summary.service';
 
 @Module({
-  imports: [DatabaseModule, forwardRef(() => QuizModule), forwardRef(() => RankingModule)],
+  imports: [
+    DatabaseModule,
+    forwardRef(() => QuizModule),
+    forwardRef(() => RankingModule),
+    // Phase 1 (S-2): summary endpoint composes follower/following/friends
+    // counts from the social module. Social already imports UserModule
+    // directly, so we wrap our side in `forwardRef` to break the cycle.
+    forwardRef(() => SocialModule),
+  ],
   controllers: [UserController],
   providers: [
     UserApplicationService,
@@ -46,6 +58,9 @@ import { RankingXpStreakListenerAdapter } from './infrastructure/adapters/rankin
     StreakService,
     RankingXpStreakListenerAdapter,
     UserPresenter,
+    RecentlyPlayedQuizzesService,
+    UserProfileBundleService,
+    UserSummaryService,
   ],
   exports: [
     UserApplicationService,

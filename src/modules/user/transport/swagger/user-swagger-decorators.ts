@@ -9,6 +9,8 @@ import {
 import { ErrorResponseExamples, ProblemDetailDto } from '@/common/swagger/swagger-schemas';
 import { ApiOkResource, ApiOkResourceArray, ApiOkResourceList } from '@/common/swagger/api-ok';
 import { UserMeResponseDto } from '../../dto/response/user-me.dto';
+import { UserLookupResponseDto } from '../../dto/response/user-lookup.dto';
+import { UserSummaryResponseDto } from '../../dto/response/user-summary.dto';
 import { UserAnalyticsResponseDto } from '../../dto/response/user-analytics.dto';
 import { UserBadgeItemDto } from '../../dto/response/user-badges.dto';
 import { UserActivityItemDto } from '../../dto/response/user-activity.dto';
@@ -25,6 +27,8 @@ import {
   USER_ME_UPDATED_EXAMPLE,
   USER_ME_SETTINGS_UPDATED_EXAMPLE,
 } from './examples/me.examples';
+import { USER_LOOKUP_EXAMPLE } from './examples/lookup.examples';
+import { USER_ME_SUMMARY_EXAMPLE } from './examples/summary.examples';
 import { USER_BADGES_EXAMPLE, USER_ACTIVITY_EXAMPLE } from './examples/badges.examples';
 import {
   USER_RANKING_EXAMPLE,
@@ -91,6 +95,32 @@ export const ApiUserMeResponse = (): MethodDecorator =>
   ApiOkResource(UserMeResponseDto, {
     description: 'Returns profile.',
     example: USER_ME_EXAMPLE,
+  });
+
+/**
+ * Phase 1 (S-1): 200 response for `GET /users/by-username/:username`.
+ * Five-field identity projection; the route is mounted with
+ * `@Public()` so no auth envelope is required.
+ */
+export const ApiUserLookupResponse = (): MethodDecorator =>
+  ApiOkResource(UserLookupResponseDto, {
+    description: 'Returns the public identity projection for the requested username.',
+    example: USER_LOOKUP_EXAMPLE,
+  });
+
+/**
+ * Phase 1 (S-2): 200 response for `GET /users/me/summary`. Composes
+ * identity + level + activity + social counts into a single payload.
+ * Documented here so the OpenAPI spec shows the LevelTitle enum at
+ * the call site (the DTO references the enum via `enumName: 'LevelTitle'`).
+ */
+export const ApiUserSummaryResponse = (): MethodDecorator =>
+  ApiOkResource(UserSummaryResponseDto, {
+    description:
+      'Returns the composite profile summary for the authenticated user. ' +
+      'Composed from `/users/me`, the level projection, creator quiz analytics, ' +
+      'user analytics, and social counts.',
+    example: USER_ME_SUMMARY_EXAMPLE,
   });
 
 export const ApiUserMeUpdatedResponse = (): MethodDecorator =>

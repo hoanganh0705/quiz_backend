@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
 import { QuizVersionService } from '../domain/version/quiz-version.service';
 import { QuizVersionResponseMapper } from '../mappers/quiz-version-response.mapper';
@@ -15,10 +15,18 @@ import type { QuizVersionListResponseDto } from '../dto/response/quiz-version-li
 import type { CreateQuizVersionCommand } from '../domain/types/create-quiz-version.command';
 import type { UpdateQuizVersionCommand } from '../domain/types/quiz-version-commands';
 import type { ListQuizVersionsQuery } from '../domain/types/list-quiz-versions.query';
+import {
+  QUIZ_REPOSITORY_PORT,
+  type QuizRepositoryPort,
+} from '../domain/ports/quiz-repository.port';
 
 @Injectable()
 export class QuizVersionApplicationService {
-  constructor(private readonly quizVersionService: QuizVersionService) {}
+  constructor(
+    private readonly quizVersionService: QuizVersionService,
+    @Inject(QUIZ_REPOSITORY_PORT)
+    private readonly quizRepository: QuizRepositoryPort,
+  ) {}
 
   async createQuizVersion(
     quizId: string,
@@ -33,7 +41,11 @@ export class QuizVersionApplicationService {
       sourceVersionId: dto.sourceVersionId,
     };
     const result = await this.quizVersionService.createQuizVersion(quizId, user, command);
-    return QuizVersionResponseMapper.toQuizVersionResponse(result);
+    const questionCount =
+      (await this.quizRepository.getQuestionCountsForVersionIds([result.quizVersionId])).get(
+        result.quizVersionId,
+      ) ?? 0;
+    return QuizVersionResponseMapper.toQuizVersionResponse(result, questionCount);
   }
 
   async listQuizVersions(
@@ -47,8 +59,15 @@ export class QuizVersionApplicationService {
     };
     const result = await this.quizVersionService.listQuizVersions(quizId, user, query);
 
+    // Phase 2 (S-8): batch-fetch question counts so each item
+    // exposes its `questionCount` without per-row aggregation.
+    const versionIds = result.items.map((row) => row.quizVersionId);
+    const counts = await this.quizRepository.getQuestionCountsForVersionIds(versionIds);
+
     return {
-      items: result.items.map((row) => QuizVersionResponseMapper.toQuizVersionResponse(row)),
+      items: result.items.map((row) =>
+        QuizVersionResponseMapper.toQuizVersionResponse(row, counts.get(row.quizVersionId) ?? 0),
+      ),
       pagination: {
         limit: result.limit,
         nextCursor: result.nextCursor ? QuizVersionCursorMapper.serialize(result.nextCursor) : null,
@@ -92,7 +111,11 @@ export class QuizVersionApplicationService {
       user,
       command,
     );
-    return QuizVersionResponseMapper.toQuizVersionResponse(result);
+    const questionCount =
+      (await this.quizRepository.getQuestionCountsForVersionIds([result.quizVersionId])).get(
+        result.quizVersionId,
+      ) ?? 0;
+    return QuizVersionResponseMapper.toQuizVersionResponse(result, questionCount);
   }
 
   async publishQuizVersion(
@@ -101,6 +124,10 @@ export class QuizVersionApplicationService {
     user: JwtPayload,
   ): Promise<QuizVersionResponseDto> {
     const result = await this.quizVersionService.publishQuizVersion(quizId, quizVersionId, user);
-    return QuizVersionResponseMapper.toQuizVersionResponse(result);
+    const questionCount =
+      (await this.quizRepository.getQuestionCountsForVersionIds([result.quizVersionId])).get(
+        result.quizVersionId,
+      ) ?? 0;
+    return QuizVersionResponseMapper.toQuizVersionResponse(result, questionCount);
   }
 }

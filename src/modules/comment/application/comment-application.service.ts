@@ -235,7 +235,10 @@ export class CommentApplicationService {
   // ─── Moderation ───────────────────────────────────────────────────────────
 
   async hideComment(moderator: JwtPayload, commentId: string): Promise<ModerationResult> {
-    const result = await this.commentService.hideComment({ commentId, moderatorId: moderator.sub }, moderator);
+    const result = await this.commentService.hideComment(
+      { commentId, moderatorId: moderator.sub },
+      moderator,
+    );
     await this.moderatorAudit.log({
       actorId: moderator.sub,
       actorRole: moderator.role,
@@ -247,7 +250,10 @@ export class CommentApplicationService {
   }
 
   async restoreComment(moderator: JwtPayload, commentId: string): Promise<ModerationResult> {
-    const result = await this.commentService.restoreComment({ commentId, moderatorId: moderator.sub }, moderator);
+    const result = await this.commentService.restoreComment(
+      { commentId, moderatorId: moderator.sub },
+      moderator,
+    );
     await this.moderatorAudit.log({
       actorId: moderator.sub,
       actorRole: moderator.role,

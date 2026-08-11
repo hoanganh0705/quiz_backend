@@ -72,11 +72,10 @@ export class QuizQueryService {
     rows: QuizWithPublishedVersionRow[],
     limit: number,
   ): ListQuizzesResult {
-    return applyCursorPagination<QuizWithPublishedVersionRow, { createdAt: string; quizId: string }>(
-      rows,
-      limit,
-      (row) => ({ createdAt: row.createdAt, quizId: row.quizId }),
-    );
+    return applyCursorPagination<
+      QuizWithPublishedVersionRow,
+      { createdAt: string; quizId: string }
+    >(rows, limit, (row) => ({ createdAt: row.createdAt, quizId: row.quizId }));
   }
 
   async getActiveQuizRecordById(quizId: string): Promise<QuizRecordRow> {
@@ -91,6 +90,7 @@ export class QuizQueryService {
 
   async getQuizById(quizId: string): Promise<{
     row: QuizWithPublishedVersionRow;
+    questions: QuizQuestionJoinRow[] | null;
     tags: QuizTagRow[];
   }> {
     const row = await this.quizRepository.getQuizWithPublishedVersionById(quizId);
@@ -100,7 +100,15 @@ export class QuizQueryService {
     }
 
     const tags = await this.quizRepository.getTagsForQuiz(row.quizId);
-    return { row, tags };
+
+    if (!row.publishedVersionQuizVersionId) {
+      return { row, questions: null, tags };
+    }
+
+    const questions = await this.quizQuestionRepository.getQuestionsByVersionId(
+      row.publishedVersionQuizVersionId,
+    );
+    return { row, questions, tags };
   }
 
   async getQuizStats(quizId: string | undefined, slug: string): Promise<QuizStats> {

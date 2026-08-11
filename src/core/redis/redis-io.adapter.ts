@@ -54,10 +54,11 @@
  *   (see `src/modules/instance/domain/ports/socket-connection-registry.port.ts`).
  * - It does NOT introduce any new env vars.
  */
-import { INestApplicationContext, Logger } from '@nestjs/common';
+import { INestApplicationContext } from '@nestjs/common';
 import { IoAdapter } from '@nestjs/platform-socket.io';
 import { Server, ServerOptions } from 'socket.io';
 import { createAdapter } from '@socket.io/redis-adapter';
+import { Logger as PinoNestLogger } from 'nestjs-pino';
 import Redis from 'ioredis';
 
 export type RedisIoAdapterOptions = {
@@ -88,7 +89,7 @@ export type RedisIoAdapterOptions = {
 };
 
 export class RedisIoAdapter extends IoAdapter {
-  private readonly logger = new Logger(RedisIoAdapter.name);
+  private readonly logger: PinoNestLogger;
   private readonly adapterOptions: RedisIoAdapterOptions;
 
   /**
@@ -110,6 +111,52 @@ export class RedisIoAdapter extends IoAdapter {
   constructor(app: INestApplicationContext, options: RedisIoAdapterOptions = {}) {
     super(app);
     this.adapterOptions = options;
+    // `IoAdapter` is instantiated by the caller (`useWebSocketAdapter`)
+    // outside of Nest's DI container, so we cannot rely on the
+    // `@InjectPinoLogger` parameter decorator here.
+    //
+    // We pull the singleton `Logger` that `nestjs-pino` exposes
+    // globally through its root `LoggerModule`. `Logger` (note: this
+    // is `nestjs-pino`'s wrapper, NOT @nestjs/common's `Logger`)
+    // is a `Scope.DEFAULT` singleton and is therefore safe to fetch
+    // via `app.get()` from a non-DI caller.
+    //
+    // Internally, every call goes through `PinoLogger.call(...)`,
+    // which prepends the bound `context` field and writes to the
+    // SAME underlying Pino instance — including the redaction paths
+    // and serializers defined in `core/logger/pino.config.ts`. That
+    // matters because the Pino redact paths are the single source of
+    // truth for what may never reach a log file; routing the
+    // Socket.IO adapter through Pino guarantees Socket.IO logs are
+    // inspected by the same redaction logic as HTTP logs.
+    //
+    // We do NOT use `app.get(PinoLogger)` directly because
+    // `PinoLogger` is registered with `Scope.TRANSIENT`, which is
+    // incompatible with `app.get()` from a non-DI caller (Nest
+    // requires `resolve()` for transient / request-scoped providers).
+    //
+    // We also do NOT fall back to @nestjs/common's `console.*`
+    // `Logger`, because that would silently bypass our redaction
+    // paths.
+    //
+    // `Logger` (the `@nestjs/common` interface that `nestjs-pino`'s
+    // `Logger` implements) does NOT expose `setContext`. The
+    // `nestjs-pino` wrapper derives the context from the LAST
+    // argument passed to `log()/error()/warn()/...`, so we tag
+    // each call with `RedisIoAdapter.name` as the trailing context
+    // argument. Every log emitted through this adapter will
+    // therefore carry `context: "RedisIoAdapter"` in the JSON output.
+    const logger = app.get(PinoNestLogger, { strict: false });
+    if (!logger) {
+      throw new Error(
+        'nestjs-pino Logger is not available — CoreLoggerModule must be registered before useWebSocketAdapter()',
+      );
+    }
+    this.logger = logger;
+  }
+
+  private logContext(): string {
+    return RedisIoAdapter.name;
   }
 
   /**
@@ -131,10 +178,13 @@ export class RedisIoAdapter extends IoAdapter {
       }),
     );
 
-    this.logger.log({
-      event: 'redis_socket_adapter_attached',
-      port,
-    });
+    this.logger.log(
+      {
+        event: 'socket.adapter.attached',
+        port,
+      },
+      this.logContext(),
+    );
 
     return server;
   }
@@ -206,10 +256,13 @@ export class RedisIoAdapter extends IoAdapter {
   }
 
   private handleClientError(label: 'pubClient' | 'subClient', err: Error): void {
-    this.logger.error({
-      event: 'redis_socket_adapter_client_error',
-      client: label,
-      message: err.message,
-    });
+    this.logger.error(
+      {
+        event: 'socket.adapter.client_error',
+        client: label,
+        message: err.message,
+      },
+      this.logContext(),
+    );
   }
 }

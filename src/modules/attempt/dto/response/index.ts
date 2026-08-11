@@ -10,3 +10,4 @@ export * from './abandon-attempt-response.dto';
 export * from './complete-attempt-response.dto';
 export * from './withdraw-answer-response.dto';
 export * from './attempt-review-response.dto';
+export * from './quiz-history-response.dto';

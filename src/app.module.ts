@@ -6,7 +6,6 @@ import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { UserModule } from './modules/user/user.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { DatabaseModule } from './core/database/database.module';
-import { CoreLoggerModule } from './core/logger/logger.module';
 import { CommonModule } from './common/common.module';
 import { JwtGuard } from './common/guards/jwt.guard';
 import { GlobalExceptionFilter } from './common/filters/global-exception.filter';
@@ -24,6 +23,8 @@ import { RankingModule } from './modules/ranking/ranking.module';
 import { AchievementModule } from './modules/achievement/achievement.module';
 import { NotificationModule } from './modules/notification/notification.module';
 import { CommentModule } from './modules/comment/comment.module';
+import { DailyChallengeModule } from './modules/daily-challenge/daily-challenge.module';
+import { HomeModule } from './modules/home/home.module';
 import {
   validateEnv,
   appConfig,
@@ -43,10 +44,28 @@ import {
 } from './core/config';
 import { RedisModule } from './core/redis/redis.module';
 import { PermissionsGuard } from './common/authorization/guards/permissions.guard';
-import { LoggerModule } from 'nestjs-pino';
 import { SocialModule } from './modules/social/social.module';
 import { SearchModule } from './modules/search/search.module';
 import { HealthModule } from './modules/health/health.module';
+// `CoreLoggerModule` (imported last on purpose) wraps
+// `LoggerModule.forRootAsync(...)` and is declared `@Global()`, so the
+// `PinoLogger` provider and every `PinoLogger:<context>` provider
+// created by `createProvidersForDecorated()` are visible to every
+// feature module without each one having to import `LoggerModule`.
+//
+// Why LAST: `nestjs-pino`'s `@InjectPinoLogger(ContextName)` decorator
+// registers its context name into a module-level `Set` at IMPORT TIME
+// (when the file containing the decorator is first evaluated). The
+// `PinoLogger:<context>` providers are only created when
+// `LoggerModule.forRootAsync(...)` calls `createProvidersForDecorated()`.
+// If `CoreLoggerModule` were imported before any feature module, that
+// snapshot would be empty and every `@InjectPinoLogger` injection
+// (e.g. `PinoLogger:CategoryDomainService`) would fail DI resolution.
+//
+// Placing the `import` statement at the bottom of this file (after
+// every feature module import) guarantees all decorator files have
+// been evaluated before `forRootAsync(...)` runs.
+import { CoreLoggerModule } from './core/logger/logger.module';
 
 @Module({
   imports: [
@@ -87,8 +106,17 @@ import { HealthModule } from './modules/health/health.module';
       },
     }),
     ScheduleModule.forRoot(),
+    // `CoreLoggerModule` provides the ROOT Pino instance and the
+    // HTTP access-log middleware via `LoggerModule.forRootAsync(...)`
+    // with our redaction paths and serializers. It MUST be imported
+    // first in this `imports` array (so the global `PinoLogger`
+    // provider is wired before any feature module is instantiated) and
+    // LAST in the import statements at the top of this file (so its
+    // `forRootAsync(...)` snapshot of the `decoratedLoggers` Set
+    // already contains every `@InjectPinoLogger(ContextName)` context
+    // registered by feature-module decorators — see the comment next
+    // to the `import` statement above).
     CoreLoggerModule,
-    LoggerModule.forRoot(),
     RedisModule,
     DatabaseModule,
     UserModule,
@@ -109,6 +137,8 @@ import { HealthModule } from './modules/health/health.module';
     SocialModule,
     SearchModule,
     HealthModule,
+    DailyChallengeModule,
+    HomeModule,
   ],
   // providers is a list of global guards, interceptors, and filters that will be applied to all routes in the application. The order of providers matters: guards will execute in the order they are defined, then interceptors, and finally filters will catch exceptions thrown by guards or interceptors. Why do we have provider ? Because we want to apply these guards, interceptors, and filters globally across the entire application, so we use the APP_GUARD, APP_INTERCEPTOR, and APP_FILTER tokens to tell NestJS to use these classes as global providers for their respective types. This way, we don't have to manually apply these guards/interceptors/filters to each controller or route handler; they will automatically be applied to all of them. In normal modules, providers are typically used to define services that can be injected into controllers or other services. However, when we want to apply something globally across the entire application, we use these special tokens to register them as global providers.
   providers: [

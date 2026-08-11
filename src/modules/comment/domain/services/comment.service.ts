@@ -492,7 +492,10 @@ export class CommentService {
 
   // ─── Moderation ───────────────────────────────────────────────────────────
 
-  async hideComment(params: HideCommentParams, actor: Pick<JwtPayload, 'role'>): Promise<ModerationResult> {
+  async hideComment(
+    params: HideCommentParams,
+    actor: Pick<JwtPayload, 'role'>,
+  ): Promise<ModerationResult> {
     CommentAuthorizationPolicy.assertCanModerate({ sub: params.moderatorId, role: actor.role });
 
     let wasHidden = false;

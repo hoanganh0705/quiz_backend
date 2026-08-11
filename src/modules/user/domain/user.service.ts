@@ -7,6 +7,7 @@ import type {
   PublicTournamentProfileRow,
   UserActivityRow,
   UserBadgeRow,
+  UserLookupRow,
   UserMeRow,
   UserRankingRow,
 } from './ports/user-repository.port';
@@ -65,6 +66,29 @@ export class UserDomainService {
     }
 
     return user;
+  }
+
+  /**
+   * Phase 1 (S-1): resolve `username` to a `UserLookupRow` projection
+   * or throw `UserNotFoundError`. The lookup is intentionally cheap
+   * (indexed btree on `users.username`) and public — the controller
+   * mounts the route with `@Public()`. Privacy (`isPublic` /
+   * `showStatistics` / …) is NOT enforced here because the response
+   * only exposes fields a public profile page is allowed to render
+   * (avatar, display name, verified flag). The deeper
+   * privacy-gated reads (`/users/:userId/badges`, `/users/:userId/analytics`,
+   * …) still gate on `assertPrivacyFlag`.
+   */
+  async getUserByUsername(username: string): Promise<UserLookupRow> {
+    const row = await this.userRepository.findByUsername(username);
+    if (!row) {
+      this.logger.warn({
+        event: 'user_lookup_by_username_not_found',
+        username,
+      });
+      throw new UserNotFoundError();
+    }
+    return row;
   }
 
   async isUserProfilePublic(targetUserId: string): Promise<boolean> {

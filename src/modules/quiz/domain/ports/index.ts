@@ -1,7 +1,10 @@
 export {
   QUIZ_REPOSITORY_PORT,
+  type AuthorSummaryRow,
+  type CategorySummaryRow,
   type CreateQuizPayload,
   type FindRelatedQuizzesParams,
+  type QuizAggregatesRow,
   type QuizCursor,
   type QuizListFilters,
   type QuizRecordRow,
@@ -9,6 +12,7 @@ export {
   type QuizStatsRow,
   type QuizTagRow,
   type QuizWithPublishedVersionRow,
+  type VersionQuestionCountRow,
 } from './quiz-repository.port';
 export {
   QUIZ_VERSION_REPOSITORY_PORT,

@@ -45,12 +45,12 @@ import { BadgeAnalyticsService } from './application';
 @Module({
   imports: [
     DatabaseModule,
-    UserModule,
-    RankingModule,
+    forwardRef(() => UserModule),
+    forwardRef(() => RankingModule),
     forwardRef(() => NotificationModule),
-    AttemptModule,
-    InstanceModule,
-    TournamentModule,
+    forwardRef(() => AttemptModule),
+    forwardRef(() => InstanceModule),
+    forwardRef(() => TournamentModule),
   ],
   controllers: [AchievementController, AchievementAdminController],
   providers: [

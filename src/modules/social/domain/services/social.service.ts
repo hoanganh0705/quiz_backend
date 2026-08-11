@@ -532,14 +532,6 @@ export class SocialService {
       throw new BlockedUserError();
     }
 
-    this.logger.debug({
-      event: 'user_followers_requested',
-      requesterId,
-      targetUserId,
-      cursor,
-      limit,
-    });
-
     return this.userFollowRepository.getFollowersOfUser(targetUserId, cursor, limit);
   }
 
@@ -562,14 +554,6 @@ export class SocialService {
       throw new BlockedUserError();
     }
 
-    this.logger.debug({
-      event: 'user_following_requested',
-      requesterId,
-      targetUserId,
-      cursor,
-      limit,
-    });
-
     return this.userFollowRepository.getFollowingOfUser(targetUserId, cursor, limit);
   }
 
@@ -587,14 +571,6 @@ export class SocialService {
     if (relationship.isBlocked || relationship.isBlockedBy) {
       throw new BlockedUserError();
     }
-
-    this.logger.debug({
-      event: 'mutual_friends_requested',
-      requesterId,
-      targetUserId,
-      cursor,
-      limit,
-    });
 
     return this.friendshipRepository.getMutualFriends(requesterId, targetUserId, cursor, limit);
   }
@@ -614,14 +590,6 @@ export class SocialService {
       throw new BlockedUserError();
     }
 
-    this.logger.debug({
-      event: 'mutual_followers_requested',
-      requesterId,
-      targetUserId,
-      cursor,
-      limit,
-    });
-
     return this.userFollowRepository.getMutualFollowers(requesterId, targetUserId, cursor, limit);
   }
 
@@ -630,13 +598,6 @@ export class SocialService {
     cursor?: string | null,
     limit?: number,
   ): Promise<PaginatedSocialFeedResult> {
-    this.logger.debug({
-      event: 'social_feed_requested',
-      userId,
-      cursor,
-      limit,
-    });
-
     return await this.socialRepository.getFeed(userId, cursor, limit);
   }
 
@@ -663,14 +624,6 @@ export class SocialService {
     // `docs/audits/USER_MODULE_PRODUCTION_READINESS_AUDIT.md` (F-13).
     await this.userDomainService.assertPrivacyFlag(targetUserId, requesterId, 'showActivity');
 
-    this.logger.debug({
-      event: 'social_user_activity_requested',
-      requesterId,
-      targetUserId,
-      cursor,
-      limit,
-    });
-
     return this.socialRepository.findActivitiesByUserId(targetUserId, cursor, limit);
   }
 
@@ -680,13 +633,6 @@ export class SocialService {
     occurredAt: string;
     payload: Record<string, unknown>;
   }): Promise<void> {
-    this.logger.debug({
-      event: 'social_feed_activity_recorded',
-      userId: params.userId,
-      activityType: params.activityType,
-      occurredAt: params.occurredAt,
-    });
-
     await this.socialRepository.createFeedActivity(params);
   }
 
@@ -695,13 +641,6 @@ export class SocialService {
     cursor?: string | null,
     limit?: number,
   ): Promise<PaginatedSocialSuggestionsResult> {
-    this.logger.debug({
-      event: 'social_suggestions_requested',
-      userId,
-      cursor,
-      limit,
-    });
-
     return await this.socialRepository.getSuggestions(userId, cursor, limit);
   }
 
@@ -734,17 +673,10 @@ export class SocialService {
       throw new UserNotFoundError();
     }
 
-    this.logger.debug({ event: 'social_my_analytics_requested', userId });
-
     return await this.socialRepository.getSocialAnalytics(userId);
   }
 
   async getTrendingUsers(limit: number): Promise<TrendingUsersResult> {
-    this.logger.debug({
-      event: 'social_trending_users_requested',
-      limit,
-    });
-
     const result = await this.socialRepository.getTrendingUsers(limit);
 
     if (result.items.length === 0) {
@@ -792,12 +724,6 @@ export class SocialService {
   }
 
   async searchUsernameSuggestions(query: string, limit: number): Promise<UsernameSuggestion[]> {
-    this.logger.debug({
-      event: 'social_username_suggestions_requested',
-      query,
-      limit,
-    });
-
     return await this.userSearch.searchUsernameSuggestions(query, limit);
   }
 
@@ -814,13 +740,6 @@ export class SocialService {
     if (query.trim().length < 2) {
       throw new BadRequestException('Search query must be at least 2 characters');
     }
-
-    this.logger.debug({
-      event: 'user_search_initiated',
-      searcherId,
-      query,
-      limit,
-    });
 
     // Search users (excludes the searcher by default)
     const users = await this.userSearch.searchUsers(query.trim(), limit, searcherId);
@@ -857,13 +776,6 @@ export class SocialService {
     // Filter out blocked users
     const filteredUsers = searchableUsers.filter((u) => !u.isBlocked);
 
-    this.logger.debug({
-      event: 'user_search_completed',
-      searcherId,
-      query,
-      resultsCount: filteredUsers.length,
-    });
-
     return filteredUsers;
   }
 
@@ -881,13 +793,6 @@ export class SocialService {
     period: 'weekly' | 'monthly' | 'all_time',
     limit: number = 20,
   ): Promise<FriendLeaderboard> {
-    this.logger.debug({
-      event: 'friend_leaderboard_requested',
-      userId,
-      period,
-      limit,
-    });
-
     // Optimization: Fetch enough friends to get `limit` entries after XP filtering.
     // Use 3x multiplier as a balance between fetching too many and having enough candidates.
     // Minimum of 50 ensures we have enough candidates for small limits.
@@ -971,17 +876,6 @@ export class SocialService {
 
     // Apply limit
     const limitedEntries = entries.slice(0, limit);
-
-    this.logger.debug({
-      event: 'friend_leaderboard_completed',
-      userId,
-      period,
-      limit,
-      requestedLimit: limit,
-      friendFetchLimit,
-      totalFriends: friends.length,
-      rankedFriends: entries.length,
-    });
 
     return {
       period,

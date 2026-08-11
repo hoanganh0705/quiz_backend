@@ -30,6 +30,12 @@ import { SocialDomainEventBus } from './domain/events';
 import { RANKING_PORT } from './domain/ports/ranking.port';
 import { SOCIAL_DOMAIN_EVENT_BUS } from './domain/events/social-event-bus.port';
 // Other domain modules (needed for event bus tokens)
+// Phase 1 (S-2): UserModule now forward-refs SocialModule (so the
+// summary endpoint can inject SocialService). The reverse edge of
+// that cycle needs the same treatment here — Social already depends
+// on UserModule for its event-bus and token bindings, so we wrap
+// our side in `forwardRef` to break the import cycle. Nest resolves
+// the bidirectional forward refs at module-graph construction time.
 import { UserModule } from '@/modules/user/user.module';
 import { AchievementModule } from '@/modules/achievement/achievement.module';
 import { CommentModule } from '@/modules/comment/comment.module';
@@ -44,7 +50,7 @@ import { AttemptFeedListenerAdapter } from './infrastructure/adapters/attempt-fe
   imports: [
     DatabaseModule,
     RedisModule,
-    UserModule,
+    forwardRef(() => UserModule),
     AchievementModule,
     CommentModule,
     TournamentModule,

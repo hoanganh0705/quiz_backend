@@ -47,7 +47,8 @@
     "redis:stop": "docker stop quizredis",
     "redis:reset": "docker rm -f quizredis",
     "redis:cleanall": "docker exec -i quizredis redis-cli FLUSHALL",
-    "generate:openapi": "curl http://localhost:8080/api/v1/docs/openapi.json > docs/generated/openapi.json"
+    "generate:openapi": "curl http://localhost:8080/api/v1/docs/openapi.json > docs/generated/openapi.json",
+    "smoke:openapi": "bash scripts/smoke-openapi.sh"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.1",

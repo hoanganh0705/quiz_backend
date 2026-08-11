@@ -77,6 +77,8 @@ import { GetMyRankingMilestonesQueryHandler } from '../../application/get-my-ran
 import { GetNearbyRanksQueryHandler } from '../../application/get-nearby-ranks.query';
 import { GetTopMoversQueryHandler } from '../../application/get-top-movers.query';
 import { GetUserRankingHistoryQueryHandler } from '../../application/get-user-ranking-history.query';
+import { RecentWinnersService } from '../../application/recent-winners.service';
+import { RecentWinnersResponseDto } from '../../dto/response/recent-winners-response.dto';
 
 // ─── Local helper decorators ───────────────────────────────────────────────────
 //
@@ -151,6 +153,7 @@ export class RankingController {
     private readonly getNearbyRanksQueryHandler: GetNearbyRanksQueryHandler,
     private readonly getTopMoversQueryHandler: GetTopMoversQueryHandler,
     private readonly getUserRankingHistoryQueryHandler: GetUserRankingHistoryQueryHandler,
+    private readonly recentWinnersService: RecentWinnersService,
     private readonly presenter: RankingPresenter,
   ) {}
 
@@ -226,6 +229,27 @@ export class RankingController {
       limit: query.limit ?? 10,
     });
     return this.presenter.getTopMovers(result);
+  }
+
+  // ─── GET /leaderboard/recent-winners ──────────────────────────────────────
+  //
+  // Phase 3 (S-15): the live-winners carousel. Reads the
+  // `tournament_won` rows from `user_activity_events`, joins
+  // the user record for the avatar/display name, and returns
+  // the most-recent 10 winners.
+  @Get('recent-winners')
+  @Public()
+  @Throttle({ default: { limit: 30, ttl: 60_000 } })
+  @ApiOperation({
+    summary: 'Get recent tournament winners',
+    description:
+      'Returns the 10 most-recent tournament winners (the source rows are ' +
+      'the `tournament_won` entries in `user_activity_events`).',
+  })
+  @ApiOkResource(RecentWinnersResponseDto, { description: 'Recent winners returned' })
+  async getRecentWinners() {
+    const result = await this.recentWinnersService.getRecentWinners(10);
+    return this.presenter.getRecentWinners(result);
   }
 
   // ─── GET /leaderboard/me ──────────────────────────────────────────────────

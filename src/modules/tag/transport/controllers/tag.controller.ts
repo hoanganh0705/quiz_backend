@@ -13,7 +13,7 @@ import {
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { Transactional } from '@/common/interceptors/transactional.interceptor';
-import { ApiTags, ApiOperation } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiQuery } from '@nestjs/swagger';
 import { Public } from '@/common/decorators/public.decorator';
 import { Permissions } from '@/common/authorization/decorators/permissions.decorator';
 import { Permission } from '@/common/authorization/permissions';
@@ -24,6 +24,7 @@ import { ListTagsQueryDto } from '../../dto/request/list-tags-query.dto';
 import { UpdateTagDto } from '../../dto/request/update-tag.dto';
 import { TagRankingQueryDto } from '../../dto/request/tag-ranking-query.dto';
 import { RelatedTagsQueryDto } from '../../dto/request/related-tags-query.dto';
+import { TagSlugsQueryDto } from '../../dto/request/tag-slugs-query.dto';
 import { TagApplicationService } from '../../application/tag.application.service';
 import { TagCursorMapper } from '../../mappers/tag-cursor.mapper';
 import type { ListQuizzesQueryDto } from '@/modules/quiz/dto/request/list-quizzes-query.dto';
@@ -43,6 +44,7 @@ import {
   ApiRestoreTagResponse,
   ApiTagAnalyticsResponse,
   ApiTagByIdResponse,
+  ApiTagBySlugsResponse,
   ApiTagBySlugResponse,
   ApiTagIdParam,
   ApiTagQuizzesResponse,
@@ -77,10 +79,40 @@ export class TagController {
     return this.presenter.getTrendingTags(items);
   }
 
+  /**
+   * Phase 2 (S-13): batched lookup by slug list.
+   * The frontend's `useTagSlugsResolver` hook calls this to map a
+   * list of user-supplied slugs (e.g. from URL state) into
+   * full tag records.
+   *
+   * Missing slugs are silently omitted from the response so the
+   * client can render "unknown tag" chips without a 404.
+   */
+  @Get('by-slugs')
+  @Public()
+  @ApiOperation({ summary: 'Resolve a list of tag slugs into tag records' })
+  @ApiTagBySlugsResponse()
+  async getTagsBySlugs(@Query() query: TagSlugsQueryDto) {
+    const items = await this.tagApplicationService.getTagsBySlugs(query.slugs ?? []);
+    return this.presenter.getTagsBySlugs(items);
+  }
+
   @Get(':slug/quizzes')
   @Public()
   @ApiOperation({ summary: 'List quizzes in a tag' })
   @ApiTagQuizzesResponse()
+  @ApiQuery({
+    name: 'cursor',
+    required: false,
+    description: 'Opaque pagination cursor returned by the previous page',
+    schema: { type: 'string' },
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    description: 'Page size (1–100). Defaults to 20.',
+    schema: { type: 'integer', minimum: 1, maximum: 100, default: 20 },
+  })
   async getTagQuizzes(@Param('slug') slug: string, @Query() query: ListQuizzesQueryDto) {
     const result = await this.tagApplicationService.getTagQuizzesBySlug(slug, query);
     return this.presenter.getTagQuizzes(result);
