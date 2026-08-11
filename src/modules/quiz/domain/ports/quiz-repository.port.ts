@@ -33,6 +33,57 @@ export type QuizTagRow = {
   slug: string;
 };
 
+/**
+ * Phase 2 (S-6): batched creator-summary projection. Sourced from a
+ * single `users` + `user_profiles` LEFT JOIN keyed by the quiz's
+ * `creator_id`. The mapper projects this into the wire-side
+ * `AuthorSummaryDto` (slim — no email, no settings, no bio).
+ */
+export type AuthorSummaryRow = {
+  userId: string;
+  username: string;
+  displayName: string | null;
+  avatarUrl: string | null;
+};
+
+/**
+ * Phase 2 (S-6): batched category projection for the
+ * `categoryName` / `categorySlug` join on the list projection.
+ * Soft-deleted categories are filtered out at the query layer so
+ * a quiz whose category was deleted does not surface a dangling
+ * name in client-side rendering — both fields read as `null` and
+ * the card renders the placeholder "Uncategorized".
+ */
+export type CategorySummaryRow = {
+  categoryId: string;
+  name: string;
+  slug: string;
+};
+
+/**
+ * Phase 2 (S-6): aggregated stats row for a quiz. Joins onto the
+ * existing `quiz_stats` materialised view (see
+ * `docs/plans/denormalized-counters-audit.md`). The list endpoint
+ * uses these to populate `averageRating` / `reviewCount` /
+ * `attemptCount` without per-row aggregation in SQL.
+ */
+export type QuizAggregatesRow = {
+  quizId: string;
+  averageRating: number;
+  reviewCount: number;
+  attemptCount: number;
+};
+
+/**
+ * Phase 2 (S-8): per-version question count. Aggregated from
+ * `quiz_questions.quiz_version_id` once and indexed by
+ * `quizVersionId` so the mapper can attach it without round-trips.
+ */
+export type VersionQuestionCountRow = {
+  quizVersionId: string;
+  questionCount: number;
+};
+
 export type QuizWithPublishedVersionRow = {
   quizId: string;
   creatorId: string | null;
@@ -62,11 +113,20 @@ export type QuizWithPublishedVersionRow = {
   publishedVersionUpdatedAt: string | null;
 };
 
+/**
+ * Phase 2 (S-12) extended `QuizListFilters` with the new query
+ * dimensions. The repository picks up the new filters and the
+ * application service translates the request DTO into this shape.
+ */
 export type QuizListFilters = {
   difficulty?: QuizDifficulty;
   categoryId?: string;
   tagIds?: string[];
   creatorId?: string;
+  q?: string;
+  sort?: 'newest' | 'popular' | 'top_rated' | 'trending';
+  isHidden?: boolean;
+  minRating?: number;
 };
 
 export type FindRelatedQuizzesParams = {
@@ -133,6 +193,48 @@ export interface QuizRepositoryPort {
   getQuizWithPublishedVersionBySlug(slug: string): Promise<QuizWithPublishedVersionRow | null>;
 
   getTagsForQuiz(quizId: string): Promise<QuizTagRow[]>;
+
+  /**
+   * Phase 2 (S-6): batched tag projection keyed by `quizId`. The
+   * list endpoint uses this to populate `QuizListItemDto.tags`
+   * without an N+1 round-trip — one SQL query per page, not one
+   * per quiz. Tags are returned ordered by `tags.name` so the
+   * client renders a stable chip order across pages.
+   */
+  getTagsForQuizIds(quizIds: string[]): Promise<Map<string, QuizTagRow[]>>;
+
+  /**
+   * Phase 2 (S-6): batched creator summary keyed by userId. The
+   * list endpoint passes the distinct `creatorId`s from the page
+   * and stitches the result into the `creator` field. Soft-deleted
+   * users are filtered out at the query layer so their avatars do
+   * not appear on quiz cards.
+   */
+  getAuthorSummaries(userIds: string[]): Promise<Map<string, AuthorSummaryRow>>;
+
+  /**
+   * Phase 2 (S-6): batched category summary keyed by `categoryId`.
+   * Same JOIN-and-batch pattern as creator / tags — single query
+   * per page, not per quiz.
+   */
+  getCategorySummaries(categoryIds: string[]): Promise<Map<string, CategorySummaryRow>>;
+
+  /**
+   * Phase 2 (S-6 + S-8): batched aggregates for the list projection.
+   * Returns the denormalised `quiz_stats` rows joined to the input
+   * `quizIds`. Quizzes without a stats row (very fresh, never
+   * recomputed) are absent from the result map — callers must
+   * treat absence as "default values (0, 0, 0)".
+   */
+  getAggregatesForQuizzes(quizIds: string[]): Promise<Map<string, QuizAggregatesRow>>;
+
+  /**
+   * Phase 2 (S-8): per-version question count. Aggregated from
+   * `quiz_questions.quiz_version_id` once per page. Returned
+   * keyed by `quizVersionId` so the mapper can attach to the
+   * `publishedVersion` block directly.
+   */
+  getQuestionCountsForVersionIds(versionIds: string[]): Promise<Map<string, number>>;
 
   listQuizzes(params: {
     limit: number;

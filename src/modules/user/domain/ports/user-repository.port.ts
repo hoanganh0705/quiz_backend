@@ -24,6 +24,20 @@ export interface UserPublicRow {
   avatarUrl: string | null;
 }
 
+/**
+ * Phase 1 (S-1): public-keyed profile summary returned by
+ * `findByUsername`. Includes the boolean `isVerified` from
+ * `users.is_verified` so the lookup endpoint can produce the same
+ * shape that `/auth/me` returns for the slim identity payload.
+ */
+export interface UserLookupRow {
+  userId: string;
+  username: string;
+  displayName: string | null;
+  avatarUrl: string | null;
+  isVerified: boolean;
+}
+
 export type ModeratorRole = 'admin' | 'moderator';
 
 export interface UserBadgeRow {
@@ -225,6 +239,17 @@ export interface UserRepositoryPort {
   ): Promise<StreakCacheUpdateResult | null>;
 
   findByUsernames(usernames: string[]): Promise<UserPublicRow[]>;
+  /**
+   * Phase 1 (S-1): single-username lookup that resolves the route
+   * param (`GET /users/by-username/:username`) into a public profile
+   * summary. Mirrors `findByUsernames` but returns extra columns
+   * (currently just `isVerified`) — the bulk method is for search/
+   * suggestions where `isVerified` is not consumed.
+   *
+   * Returns `null` for unknown usernames and for soft-deleted users —
+   * both paths map to a 404 (`USER_NOT_FOUND`).
+   */
+  findByUsername(username: string): Promise<UserLookupRow | null>;
 
   findUsersByRole(roles: ModeratorRole[]): Promise<{ userId: string }[]>;
 }

@@ -49,4 +49,6 @@ export class TagPresenter {
   readonly getPopularTags = (items: RankedTagResponseDto[]) => ApiResponse.ok([...items]);
   readonly getTrendingTags = (items: RankedTagResponseDto[]) => ApiResponse.ok([...items]);
   readonly getRelatedTags = (items: TagResponseDto[]) => ApiResponse.ok([...items]);
+  // Phase 2 (S-13): batched lookup by slug list.
+  readonly getTagsBySlugs = (items: TagResponseDto[]) => ApiResponse.ok([...items]);
 }

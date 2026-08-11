@@ -1,14 +1,31 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { AuthorSummaryDto } from './author-summary.dto';
+import { QuizTagDto } from './quiz-tag.dto';
 import { QuizVersionResponseDto } from './quiz-version-response.dto';
 
 /**
- * Slim list-item shape used by listing endpoints.
+ * List-item shape used by listing endpoints.
  *
- * Identical to `QuizResponseDto` except it omits `tags`, because the only
- * UI consumer of tags today is the detail page. Listing endpoints (catalog,
- * category, tag, featured, trending, popular, related, recommendations)
- * stay slim — keeping payload small and avoiding the batched join that
- * would be needed to populate `tags` across a whole page.
+ * Phase 2 (S-6) enriched this DTO from a minimal projection to a
+ * self-contained card payload:
+ *   - `creator`       — embedded author summary (no second round-trip)
+ *   - `categoryName` / `categorySlug` — resolved via JOIN on the
+ *                       category so the card can render a category link
+ *   - `questionCount` — total question count for the published version
+ *                       (0 when no published version exists)
+ *   - `averageRating` — pre-computed by `quiz_stats` so the card does
+ *                       not have to fetch review aggregates separately
+ *   - `reviewCount`   — same source as `averageRating`
+ *   - `attemptCount`  — total `quiz_attempts` for this quiz, sourced
+ *                       from `quiz_stats.total_attempts`
+ *   - `tags`          — folded in from the detail-only path so the
+ *                       card can render tag chips without a separate
+ *                       fetch (the batched join was already batched
+ *                       behind a sub-select — see `getTagsForQuizIds`)
+ *
+ * The card payload stays slim by sourcing the aggregates from the
+ * denormalised `quiz_stats` table; no per-row aggregation runs at
+ * request time.
  */
 export class QuizListItemDto {
   @ApiProperty({
@@ -19,6 +36,13 @@ export class QuizListItemDto {
 
   @ApiPropertyOptional({ description: 'Creator user identifier', type: String, nullable: true })
   creatorId!: string | null;
+
+  @ApiProperty({
+    description: 'Embedded author summary',
+    type: () => AuthorSummaryDto,
+    nullable: true,
+  })
+  creator!: AuthorSummaryDto | null;
 
   @ApiProperty({ description: 'Quiz title', example: 'JavaScript Fundamentals' })
   title!: string;
@@ -49,6 +73,22 @@ export class QuizListItemDto {
     example: '550e8400-e29b-71d4-a716-446655440000',
   })
   categoryId!: string | null;
+
+  @ApiPropertyOptional({
+    description: 'Resolved category display name',
+    type: String,
+    nullable: true,
+    example: 'Web Development',
+  })
+  categoryName!: string | null;
+
+  @ApiPropertyOptional({
+    description: 'Resolved category URL-friendly slug',
+    type: String,
+    nullable: true,
+    example: 'web-development',
+  })
+  categorySlug!: string | null;
 
   @ApiProperty({ description: 'Whether the quiz is featured', example: true })
   isFeatured!: boolean;
@@ -84,4 +124,42 @@ export class QuizListItemDto {
     nullable: true,
   })
   publishedVersion!: QuizVersionResponseDto | null;
+
+  @ApiProperty({
+    description:
+      'Total question count for the published version. `0` when the quiz has no ' +
+      'published version. Sourced from `quiz_questions` aggregated by `quiz_version_id`.',
+    example: 12,
+  })
+  questionCount!: number;
+
+  @ApiProperty({
+    description:
+      'Average review rating (0–5). `0` when there are no reviews. ' +
+      'Sourced from the denormalised `quiz_stats.avg_rating` column.',
+    example: 4.3,
+  })
+  averageRating!: number;
+
+  @ApiProperty({
+    description: 'Number of submitted reviews. Sourced from `quiz_stats.rating_count`.',
+    example: 312,
+  })
+  reviewCount!: number;
+
+  @ApiProperty({
+    description:
+      'Total attempts across every version of this quiz. ' +
+      'Sourced from `quiz_stats.total_attempts`; counts both completed and in-flight attempts.',
+    example: 1240,
+  })
+  attemptCount!: number;
+
+  @ApiProperty({
+    description:
+      'Tags attached to the quiz. Phase 2 (S-6) folds the tag batch into the list ' +
+      'projection so cards can render tag chips without a second fetch.',
+    type: () => [QuizTagDto],
+  })
+  tags!: QuizTagDto[];
 }

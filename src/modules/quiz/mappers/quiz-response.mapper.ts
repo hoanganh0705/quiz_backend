@@ -1,8 +1,14 @@
-import type { QuizWithPublishedVersionRow } from '../domain/ports/quiz-repository.port';
+import type {
+  AuthorSummaryRow,
+  CategorySummaryRow,
+  QuizAggregatesRow,
+  QuizWithPublishedVersionRow,
+} from '../domain/ports/quiz-repository.port';
 import type { QuizQuestionAuthorDto } from '../dto/response/quiz-question-author.dto';
 import type { QuizQuestionPlayerDto } from '../dto/response/quiz-question-player.dto';
 import type { QuizTagDto } from '../dto/response/quiz-tag.dto';
 import type { QuizVersionResponseDto } from '../dto/response/quiz-version-response.dto';
+import type { AuthorSummaryDto } from '../dto/response/author-summary.dto';
 import type { QuizResponseDto } from '../dto/response/quiz-response.dto';
 import type { QuizListItemDto } from '../dto/response/quiz-list-item.dto';
 
@@ -10,10 +16,16 @@ import type { QuizListItemDto } from '../dto/response/quiz-list-item.dto';
  * Pure stateless mapper — no DI needed.
  * Translates QuizWithPublishedVersionRow database projections to QuizResponseDto.
  *
- * The optional `tags` argument is populated only on detail endpoints
- * (`getQuizById`, `getQuizBySlug`, `createQuiz`, `updateQuiz`). Listing
- * endpoints use `toListItem` instead, which produces a slim shape that
- * omits the `tags` field.
+ * Phase 2 (S-6 + S-7 + S-8) threading model:
+ * the list/detail path used to take just the row plus optional
+ * `publishedQuestions` / `tags`. It now takes an optional
+ * `QuizProjectionContext` carrying the four batched lookups
+ * (creators, categories, tags, aggregates, question counts). The
+ * mapper stitches them onto the projection purely defensively — if
+ * the context is missing (e.g. a code path that has not been
+ * migrated yet), every enriched field reads as the documented
+ * default (`null` for embedded objects, `0` for counts) so the
+ * wire shape stays valid.
  *
  * `publishedQuestions` accepts either player or author question DTOs.
  * The public `GET /quizzes/:id` endpoint passes player questions (no
@@ -21,11 +33,77 @@ import type { QuizListItemDto } from '../dto/response/quiz-list-item.dto';
  * the union keeps the mapper reusable if an author-only detail route is
  * added later.
  */
+export type QuizProjectionContext = {
+  /**
+   * Batched `users` + `user_profiles` LEFT JOIN keyed by `userId`.
+   * Drives `creator` on the response. Absent users are surfaced
+   * as `null` so the wire shape stays valid.
+   */
+  authorsByUserId?: Map<string, AuthorSummaryRow>;
+  /**
+   * Batched `categories` join keyed by `categoryId`. Drives
+   * `categoryName` / `categorySlug`. Absent categories read as
+   * `null` (the category was deleted or never set).
+   */
+  categoriesById?: Map<string, CategorySummaryRow>;
+  /**
+   * Batched `tags` join keyed by `quizId`. Drives `tags`. Quizzes
+   * without rows in the result map simply have an empty tag list.
+   */
+  tagsByQuizId?: Map<string, QuizTagDto[]>;
+  /**
+   * Batched `quiz_stats` aggregates keyed by `quizId`. Drives
+   * `averageRating` / `reviewCount` / `attemptCount`. Quizzes
+   * without rows read as zero counters.
+   */
+  aggregatesByQuizId?: Map<string, QuizAggregatesRow>;
+  /**
+   * Batched question counts keyed by `quizVersionId`. Drives
+   * `publishedVersion.questionCount`. Versions without a row read
+   * as zero.
+   */
+  questionCountByVersionId?: Map<string, number>;
+};
+
+const EMPTY_CONTEXT: QuizProjectionContext = Object.freeze({});
+
+function resolveAuthor(
+  row: QuizWithPublishedVersionRow,
+  context: QuizProjectionContext,
+): AuthorSummaryDto | null {
+  if (!row.creatorId) return null;
+  const found = context.authorsByUserId?.get(row.creatorId);
+  if (!found) return null;
+  return {
+    userId: found.userId,
+    username: found.username,
+    displayName: found.displayName,
+    avatarUrl: found.avatarUrl,
+  };
+}
+
+function resolveCategoryName(
+  context: QuizProjectionContext,
+  quiz: QuizWithPublishedVersionRow,
+): string | null {
+  if (!quiz.categoryId) return null;
+  return context.categoriesById?.get(quiz.categoryId)?.name ?? null;
+}
+
+function resolveCategorySlug(
+  context: QuizProjectionContext,
+  quiz: QuizWithPublishedVersionRow,
+): string | null {
+  if (!quiz.categoryId) return null;
+  return context.categoriesById?.get(quiz.categoryId)?.slug ?? null;
+}
+
 export class QuizResponseMapper {
   static toQuizResponse(
     row: QuizWithPublishedVersionRow,
     publishedQuestions?: (QuizQuestionPlayerDto | QuizQuestionAuthorDto)[],
     tags: QuizTagDto[] = [],
+    context: QuizProjectionContext = EMPTY_CONTEXT,
   ): QuizResponseDto {
     const hasPublishedVersion =
       row.publishedVersionQuizVersionId !== null &&
@@ -42,12 +120,15 @@ export class QuizResponseMapper {
       return {
         quizId: row.quizId,
         creatorId: row.creatorId,
+        creator: resolveAuthor(row, context),
         title: row.title,
         description: row.description,
         slug: row.slug,
         requirements: row.requirements,
         imageUrl: row.imageUrl,
         categoryId: row.categoryId,
+        categoryName: resolveCategoryName(context, row),
+        categorySlug: resolveCategorySlug(context, row),
         isFeatured: row.isFeatured,
         isHidden: row.isHidden,
         isVerified: row.isVerified,
@@ -59,6 +140,10 @@ export class QuizResponseMapper {
       };
     }
 
+    const questionCount = row.publishedVersionQuizVersionId
+      ? (context.questionCountByVersionId?.get(row.publishedVersionQuizVersionId) ?? 0)
+      : 0;
+
     const publishedVersion: QuizVersionResponseDto = {
       quizVersionId: row.publishedVersionQuizVersionId!,
       quizId: row.quizId,
@@ -68,6 +153,7 @@ export class QuizResponseMapper {
       durationMs: row.publishedVersionDurationMs!,
       passingScorePercent: row.publishedVersionPassingScorePercent!,
       rewardXp: row.publishedVersionRewardXp!,
+      questionCount,
       creatorId: row.publishedVersionCreatedByUserId,
       createdAt: row.publishedVersionCreatedAt!,
       publishedAt: row.publishedVersionPublishedAt,
@@ -87,12 +173,15 @@ export class QuizResponseMapper {
     return {
       quizId: row.quizId,
       creatorId: row.creatorId,
+      creator: resolveAuthor(row, context),
       title: row.title,
       description: row.description,
       slug: row.slug,
       requirements: row.requirements,
       imageUrl: row.imageUrl,
       categoryId: row.categoryId,
+      categoryName: resolveCategoryName(context, row),
+      categorySlug: resolveCategorySlug(context, row),
       isFeatured: row.isFeatured,
       isHidden: row.isHidden,
       isVerified: row.isVerified,
@@ -105,21 +194,39 @@ export class QuizResponseMapper {
   }
 
   /**
-   * Slim projection for listing endpoints. Produces a `QuizListItemDto`
-   * that omits `tags` — listing payloads stay small and avoid the batched
-   * join needed to populate tag data across a whole page.
+   * Slim projection for listing endpoints. Produces a `QuizListItemDto`.
+   *
+   * Phase 2 (S-6): tags are now folded in here (previously detail-only)
+   * via the `tagsByQuizId` batched map. The list also reads
+   * creator / category / aggregates / question-count fields off the
+   * same context object, so a page of 20 quizzes resolves with
+   * exactly five SQL queries (page + tags + authors + categories +
+   * stats) instead of 1 + 4×N.
    */
-  static toListItem(row: QuizWithPublishedVersionRow): QuizListItemDto {
-    const full = this.toQuizResponse(row);
+  static toListItem(
+    row: QuizWithPublishedVersionRow,
+    context: QuizProjectionContext = EMPTY_CONTEXT,
+  ): QuizListItemDto {
+    const full = this.toQuizResponse(
+      row,
+      undefined,
+      context.tagsByQuizId?.get(row.quizId) ?? [],
+      context,
+    );
+    const aggregates = context.aggregatesByQuizId?.get(row.quizId);
+
     return {
       quizId: full.quizId,
       creatorId: full.creatorId,
+      creator: full.creator,
       title: full.title,
       description: full.description,
       slug: full.slug,
       requirements: full.requirements,
       imageUrl: full.imageUrl,
       categoryId: full.categoryId,
+      categoryName: full.categoryName,
+      categorySlug: full.categorySlug,
       isFeatured: full.isFeatured,
       isHidden: full.isHidden,
       isVerified: full.isVerified,
@@ -127,6 +234,11 @@ export class QuizResponseMapper {
       createdAt: full.createdAt,
       updatedAt: full.updatedAt,
       publishedVersion: full.publishedVersion,
+      questionCount: full.publishedVersion?.questionCount ?? 0,
+      averageRating: aggregates?.averageRating ?? 0,
+      reviewCount: aggregates?.reviewCount ?? 0,
+      attemptCount: aggregates?.attemptCount ?? 0,
+      tags: full.tags,
     };
   }
 }

@@ -75,6 +75,14 @@ export class SearchApplicationService {
     )`;
   }
 
+  /**
+   * Phase 1 (S-4): the `commentss` → `comments` rename landed on
+   * the wire DTO in the same change. The previous spelling was a
+   * typo that survived from `GlobalSearchResult` (which itself
+   * inherited it from `SearchResponseDto`); the rename unifies
+   * the type, the application service, and the wire shape in a
+   * single breaking PR.
+   */
   async search(rawQuery: string, limit: number): Promise<GlobalSearchResult> {
     const query = rawQuery;
 
@@ -91,11 +99,18 @@ export class SearchApplicationService {
         this.searchTags(query, limit),
       ]);
 
+    // Phase 1 (S-4): search is cursor-less today (single fan-out
+    // per request), so the pagination metadata is constant. The
+    // fields are populated to match the wire DTO shape so the
+    // frontend can rely on them uniformly.
     return {
       query,
+      limit,
+      nextCursor: null,
+      hasNextPage: false,
       users: usersResult,
       quizzes: quizzesResult,
-      commentss: commentResults,
+      comments: commentResults,
       categories: categoriesResult,
       tags: tagsResult,
     };

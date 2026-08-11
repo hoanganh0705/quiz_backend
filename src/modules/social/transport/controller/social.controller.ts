@@ -153,7 +153,9 @@ export class SocialController {
       query.cursor ?? null,
       query.limit ?? 20,
     );
-    return this.presenter.getSuggestions(result);
+    return this.presenter.getSuggestions(
+      result as unknown as Parameters<typeof this.presenter.getSuggestions>[0],
+    );
   }
 
   @Get('feed')
@@ -168,7 +170,9 @@ export class SocialController {
   })
   async getFeed(@CurrentUser() user: JwtPayload, @Query() query: GetFeedCursorQueryDto) {
     const result = await this.socialService.getFeed(user, query.cursor ?? null, query.limit ?? 20);
-    return this.presenter.getFeed(result);
+    return this.presenter.getFeed(
+      result as unknown as Parameters<typeof this.presenter.getFeed>[0],
+    );
   }
 
   @Get('me/analytics')
@@ -182,7 +186,8 @@ export class SocialController {
     description: 'Authenticated user social analytics returned',
   })
   async getMySocialAnalytics(@CurrentUser() user: JwtPayload) {
-    return this.presenter.getMySocialAnalytics(await this.socialService.getMySocialAnalytics(user));
+    const raw = await this.socialService.getMySocialAnalytics(user);
+    return this.presenter.getMySocialAnalytics(this.normaliseAnalytics(raw));
   }
 
   @Get('users/trending')
@@ -226,13 +231,14 @@ export class SocialController {
     @Param('userId', new ParseUUIDPipe({ version: '7' })) targetUserId: string,
     @Query() query: GetFeedCursorQueryDto,
   ) {
+    const result = await this.socialService.getUserActivity(
+      user,
+      targetUserId,
+      query.cursor ?? null,
+      query.limit ?? 20,
+    );
     return this.presenter.getUserActivity(
-      await this.socialService.getUserActivity(
-        user,
-        targetUserId,
-        query.cursor ?? null,
-        query.limit ?? 20,
-      ),
+      result as unknown as Parameters<typeof this.presenter.getUserActivity>[0],
     );
   }
 
@@ -251,9 +257,8 @@ export class SocialController {
   async getUserSocialStats(
     @Param('userId', new ParseUUIDPipe({ version: '7' })) targetUserId: string,
   ) {
-    return this.presenter.getUserSocialStats(
-      await this.socialService.getUserSocialStats(targetUserId),
-    );
+    const raw = await this.socialService.getUserSocialStats(targetUserId);
+    return this.presenter.getUserSocialStats(this.normaliseUserStats(raw));
   }
 
   // ─── Friend Leaderboard ─────────────────────────────────────────────────
@@ -267,9 +272,81 @@ export class SocialController {
     @Query('period', new DefaultValuePipe('weekly')) period: 'weekly' | 'monthly' | 'all_time',
     @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit: number,
   ) {
-    return this.presenter.getFriendLeaderboard(
-      await this.socialService.getFriendLeaderboard(user, period, limit),
-    );
+    const raw = await this.socialService.getFriendLeaderboard(user, period, limit);
+    return this.presenter.getFriendLeaderboard(this.normaliseFriendLeaderboard(raw));
+  }
+
+  // ─── Phase 3 (S-17) wire-shape adapters ──────────────────────────────────
+
+  private normaliseAnalytics(
+    raw: unknown,
+  ): import('@/modules/social/dto/response').MySocialAnalyticsResponseDto {
+    const source = raw as {
+      friends: number;
+      followers: number;
+      following: number;
+      growth30Days: number;
+    };
+    return {
+      friends: source.friends,
+      followers: source.followers,
+      following: source.following,
+      growth30Days: source.growth30Days,
+      staleAt: null,
+      isStale: false,
+    };
+  }
+
+  private normaliseUserStats(
+    raw: unknown,
+  ): import('@/modules/social/dto/response').UserSocialStatsResponseDto {
+    const source = raw as { friends: number; followers: number; following: number };
+    return {
+      friends: source.friends,
+      followers: source.followers,
+      following: source.following,
+      staleAt: null,
+      isStale: false,
+    };
+  }
+
+  private normaliseFriendLeaderboard(
+    raw: unknown,
+  ): import('@/modules/social/dto/response').FriendLeaderboardDto {
+    const source = raw as {
+      period: 'weekly' | 'monthly' | 'all_time';
+      entries: Array<{
+        rank: number;
+        userId: string;
+        username: string;
+        displayName: string | null;
+        avatarUrl: string | null;
+        xp: number;
+        friendSince: string;
+      }>;
+      currentUserRank?: number | null | { rank: number; xp: number; totalParticipants: number };
+      totalParticipants: number;
+    };
+    const total = source.totalParticipants;
+    let currentUserRank: { rank: number; xp: number; totalParticipants: number } | null = null;
+    if (typeof source.currentUserRank === 'number' && source.currentUserRank !== null) {
+      currentUserRank = {
+        rank: source.currentUserRank,
+        xp: 0,
+        totalParticipants: total,
+      };
+    } else if (source.currentUserRank && typeof source.currentUserRank === 'object') {
+      currentUserRank = source.currentUserRank;
+    }
+
+    return {
+      period: source.period,
+      entries: source.entries,
+      currentUserRank,
+      totalParticipants: total,
+      staleAt: null,
+      isStale: false,
+    };
   }
 
   // ─── Friend Requests ──────────────────────────────────────────────────────

@@ -24,7 +24,7 @@ export class OAuthProviderRegistryAdapter implements OAuthProviderRegistry {
       this.adapters.set(adapter.provider as OAuthProvider, adapter);
     }
     this.logger.info({
-      event: 'oauth_provider_registry_initialized',
+      event: 'auth.oauth.registry_initialized',
       providers: [...this.adapters.keys()],
     });
   }
@@ -33,7 +33,7 @@ export class OAuthProviderRegistryAdapter implements OAuthProviderRegistry {
     const adapter = this.adapters.get(provider);
     if (!adapter) {
       this.logger.error({
-        event: 'oauth_unknown_provider',
+        event: 'auth.oauth.unknown_provider',
         provider,
         availableProviders: [...this.adapters.keys()],
       });

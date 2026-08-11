@@ -165,6 +165,18 @@ export interface SocialFeedActivity {
     userId: string;
     username: string;
   };
+  /**
+   * Phase 3 (S-22): slim-actor projection. Identical fields to
+   * `user`; the rename aligns with the wire contract without
+   * dropping the legacy field (kept for the social.service
+   * listeners that still emit it).
+   */
+  actor: {
+    userId: string;
+    username: string;
+    displayName: string | null;
+    avatarUrl: string | null;
+  } | null;
   payload: Record<string, unknown>;
 }
 
@@ -184,6 +196,15 @@ export interface PaginatedUserActivityResult {
     type: SocialFeedActivityType;
     occurredAt: string;
     payload: Record<string, unknown>;
+    /**
+     * Phase 3 (S-22): slim-actor projection for user-activity items.
+     */
+    actor: {
+      userId: string;
+      username: string;
+      displayName: string | null;
+      avatarUrl: string | null;
+    } | null;
   }>;
   pagination: {
     kind: 'cursor';

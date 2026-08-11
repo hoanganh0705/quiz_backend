@@ -60,9 +60,7 @@ export class AttemptResponseMapper {
       contextRefId: attempt.contextRefId,
       status: attempt.status as AttemptStatusEnum,
       scorePercent:
-        attempt.scorePercent !== null
-          ? Number(parseFloat(attempt.scorePercent).toFixed(2))
-          : null,
+        attempt.scorePercent !== null ? Number(parseFloat(attempt.scorePercent).toFixed(2)) : null,
       correctCount: attempt.correctCount,
       startedAt: attempt.startedAt,
       finishedAt: attempt.finishedAt,
@@ -91,9 +89,7 @@ export class AttemptResponseMapper {
       contextType: attempt.contextType as AttemptContextTypeEnum,
       status: attempt.status as AttemptStatusEnum,
       scorePercent:
-        attempt.scorePercent !== null
-          ? Number(parseFloat(attempt.scorePercent).toFixed(2))
-          : null,
+        attempt.scorePercent !== null ? Number(parseFloat(attempt.scorePercent).toFixed(2)) : null,
       correctCount: attempt.correctCount,
       startedAt: attempt.startedAt,
       finishedAt: attempt.finishedAt,

@@ -5,6 +5,7 @@ import { AttemptCommandService } from './domain/attempt-command.service';
 import { AttemptQueryService } from './domain/attempt-query.service';
 import { AttemptResponseMapper } from './mappers/attempt-response.mapper';
 import { AttemptController } from './transport/controller/attempt.controller';
+import { QuizHistoryController } from './transport/controller/quiz-history.controller';
 import { AttemptPresenter } from './transport/presenters/attempt.presenter';
 import { ATTEMPT_REPOSITORY_PORT } from './domain/ports';
 import { ATTEMPT_ANSWER_REPOSITORY_PORT } from './domain/ports/attempt-answer-repository.port';
@@ -46,7 +47,7 @@ import { QuizModule } from '@/modules/quiz/quiz.module';
     { provide: ATTEMPT_ANSWER_REPOSITORY_PORT, useExisting: AttemptAnswerRepository },
     { provide: ATTEMPT_DOMAIN_EVENT_BUS, useExisting: AttemptDomainEventBus },
   ],
-  controllers: [AttemptController],
+  controllers: [AttemptController, QuizHistoryController],
   exports: [
     AttemptApplicationService,
     ATTEMPT_REPOSITORY_PORT,

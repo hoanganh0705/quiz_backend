@@ -10,6 +10,7 @@ import {
   Query,
   DefaultValuePipe,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import {
   ApiTags,
   ApiQuery,
@@ -40,6 +41,10 @@ import { QuizVersionApplicationService } from '../../application/quiz-version.ap
 import { QuizQuestionApplicationService } from '../../application/quiz-question.application.service';
 import { CreateQuizDto } from '../../dto/request/create-quiz.dto';
 import { QuizResponseDto } from '../../dto/response/quiz-response.dto';
+import { QuizPreviewResponseDto } from '../../dto/response/quiz-preview-response.dto';
+import { QuizStatsHistoryResponseDto } from '../../dto/response/quiz-stats-history-response.dto';
+import { QuizAggregateResponseDto } from '../../dto/response/quiz-aggregate-response.dto';
+import { QuizStatsHistoryQueryDto } from '../../dto/request/quiz-stats-history-query.dto';
 import { QuizListItemDto } from '../../dto/response/quiz-list-item.dto';
 import {
   CreatorQuizAnalyticsDto,
@@ -384,6 +389,110 @@ export class QuizController {
   }
 
   /**
+   * Phase 2 (S-11): bucket-level attempt timeline. Used by the
+   * stats panel's longer-range chart. Supports `?range=7d|30d` and
+   * `?bucket=day|hour`. Defaults to `30d`/`day`.
+   */
+  @Get(':id/stats/history')
+  @Public()
+  @ApiOperation({
+    summary: 'Get quiz stats history (sparkline)',
+    description:
+      'Returns a densified attempt timeline for the quiz. Supports `?range=7d|30d` ' +
+      'and `?bucket=day|hour`. Gaps in the timeline are filled with zeros so the client ' +
+      'can render a continuous chart without further math.',
+  })
+  @ApiOkResource(QuizStatsHistoryResponseDto, {
+    description: 'Bucketed stats timeline returned',
+  })
+  @ApiBadRequestResponse({
+    description: 'Path param must be a UUID or a kebab-case slug',
+    example: quizStatsBadRequestExample,
+  })
+  @ApiNotFoundResponse({
+    description: 'Quiz not found',
+    example: quizStatsNotFoundExample,
+  })
+  @ApiInternalServerErrorResponse({ example: quizStatsInternalErrorExample })
+  async getQuizStatsHistory(
+    @Param('id', new ParseUUIDOrSlugPipe()) quizIdOrSlug: string,
+    @Query() query: QuizStatsHistoryQueryDto,
+  ) {
+    const result = await this.quizApplicationService.getQuizStatsHistory(
+      isUuid(quizIdOrSlug) ? quizIdOrSlug : undefined,
+      quizIdOrSlug,
+      query,
+    );
+    return this.presenter.getQuizStatsHistory(result);
+  }
+
+  /**
+   * Phase 2 (S-9): public preview of a quiz. Returns the first
+   * `previewSize` questions of the published version with the
+   * `isCorrect` flag stripped — players can scroll through a
+   * representative slice before deciding whether to start an
+   * attempt. The auth check on this route is `@Public()` so
+   * deep-link previews work from social / share surfaces.
+   *
+   * The number of questions is server-controlled; today it is
+   * hard-coded to 2 (see `PREVIEW_QUESTION_COUNT`).
+   */
+  @Get(':id/preview')
+  @Public()
+  @ApiOperation({
+    summary: 'Get a public preview of a quiz',
+    description:
+      'Returns the first `previewSize` questions of the published version with the ' +
+      '`isCorrect` flag stripped from each answer option. Use this for social / share ' +
+      'previews — players should not see correct answers before they start an attempt.',
+  })
+  @ApiOkResource(QuizPreviewResponseDto, { description: 'Quiz preview returned' })
+  @ApiBadRequestResponse({
+    description: 'Path param must be a UUID or a kebab-case slug',
+    example: quizByIdBadRequestExample,
+  })
+  @ApiNotFoundResponse({
+    description: 'Quiz not found',
+    example: quizByIdNotFoundExample,
+  })
+  @ApiInternalServerErrorResponse({ example: quizByIdInternalErrorExample })
+  async getQuizPreview(@Param('id', new ParseUUIDOrSlugPipe()) quizIdOrSlug: string) {
+    const result = await this.quizApplicationService.getQuizPreview(quizIdOrSlug);
+    return this.presenter.getQuizPreview(result);
+  }
+
+  /**
+   * Phase 4 (S-24): quiz aggregate bundle. Replaces the 5+ sequential
+   * calls the quiz detail page used to issue (quiz, stats, history,
+   * preview, etc.) with a single parallelised fan-out.
+   */
+  @Get(':id/aggregate')
+  @Public()
+  @ApiOperation({
+    summary: 'Get the quiz aggregate bundle',
+    description:
+      'Returns the bundled payload for the quiz detail page: quiz, stats, ' +
+      'stats history, and a player-style preview of the first N questions. ' +
+      'The endpoint is public (no auth required).',
+  })
+  @ApiOkResource(QuizAggregateResponseDto, {
+    description: 'Quiz aggregate bundle returned',
+  })
+  @ApiBadRequestResponse({
+    description: 'Path param must be a UUID or a kebab-case slug',
+    example: quizByIdBadRequestExample,
+  })
+  @ApiNotFoundResponse({
+    description: 'Quiz not found',
+    example: quizByIdNotFoundExample,
+  })
+  @ApiInternalServerErrorResponse({ example: quizByIdInternalErrorExample })
+  async getQuizAggregate(@Param('id', new ParseUUIDOrSlugPipe()) quizIdOrSlug: string) {
+    const result = await this.quizApplicationService.getQuizAggregate(quizIdOrSlug);
+    return this.presenter.getQuizAggregate(result);
+  }
+
+  /**
    * Get quizzes related to the specified quiz.
    *
    * The `:slug` path parameter accepts a kebab-case quiz slug (e.g., "javascript-fundamentals").
@@ -649,11 +758,21 @@ export class QuizController {
 
   @Post(':id/versions/:versionId/questions')
   @Permissions(Permission.QUIZ_VERSION_EDIT_OWN, Permission.QUIZ_VERSION_EDIT_ANY)
+  // Phase 5 (S-27): cap question creation at 30/min/user. Authors
+  // who legitimately need more should batch via the /bulk endpoint
+  // (which is itself capped at 50 questions per request).
+  @Throttle({ default: { limit: 30, ttl: 60_000 } })
   @ApiOperation({ summary: 'Add a question to a quiz version' })
   @ApiCreatedResource(QuizQuestionAuthorDto, { description: 'Question created' })
   @ApiBadRequestResponse({
     description: 'Path params must be UUIDs or request body failed validation',
     example: createQuizQuestionBadRequestExample,
+  })
+  @ApiUnprocessableEntityResponse({
+    description:
+      'Per-field validation failed; ProblemDetail `extensions.validationErrors` ' +
+      'carries the array of `{ field, message }` rows so the editor can surface ' +
+      'inline errors per input.',
   })
   @ApiNotFoundResponse({
     description: 'Quiz or version not found',
@@ -686,6 +805,10 @@ export class QuizController {
 
   @Post(':id/versions/:versionId/questions/bulk')
   @Permissions(Permission.QUIZ_VERSION_EDIT_OWN, Permission.QUIZ_VERSION_EDIT_ANY)
+  // Phase 5 (S-28): cap bulk calls at 10/min/user. Each call may
+  // carry up to 50 questions, so this effectively caps new questions
+  // at 500/min/user — well above any legitimate editor pace.
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @ApiOperation({ summary: 'Add multiple questions to a quiz version in bulk' })
   @ApiCreatedResource(BulkQuizQuestionsResponseDto, { description: 'Questions created' })
   @ApiBadRequestResponse({

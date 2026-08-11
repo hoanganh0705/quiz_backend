@@ -150,7 +150,8 @@ export const withdrawAnswerNotFoundExample = {
   title: 'Not Found',
   status: 404,
   detail: 'Answer to withdraw not found',
-  instance: '/attempts/550e8400-e29b-71d4-a716-446655440099/answers/550e8400-e29b-71d4-a716-446655440001',
+  instance:
+    '/attempts/550e8400-e29b-71d4-a716-446655440099/answers/550e8400-e29b-71d4-a716-446655440001',
   code: 'ATTEMPT_ANSWER_NOT_FOUND',
 };
 
