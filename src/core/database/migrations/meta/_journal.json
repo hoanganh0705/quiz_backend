@@ -1,1 +1,20 @@
-[]
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1786492921212,
+      "tag": "0000_initial_with_coins",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1786492921213,
+      "tag": "0001_coin_spend_side_tables",
+      "breakpoints": true
+    }
+  ]
+}

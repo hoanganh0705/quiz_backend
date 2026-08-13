@@ -1,0 +1,38 @@
+
+=== condition A: BullMQ (production code) — 5 single requests, throttled ===
+Waiting 65s for the per-route throttle window to reset...
+bullmq_run_1: total=0.034751s status=200
+bullmq_run_2: total=0.021679s status=200
+bullmq_run_3: total=0.008809s status=200
+bullmq_run_4: total=0.026013s status=200
+bullmq_run_5: total=0.018802s status=200
+
+=== patching service to call handler inline (sync) ===
+patched
+Patched snippet:
+
+Waiting 12s for nest --watch to recompile + restart...
+Verifying server is healthy after restart...
+  attempt 1: HTTP 200
+
+=== condition B: inline handler (sync) — 5 single requests, throttled ===
+Waiting 65s for throttle window...
+sync_run_1: total=0.308601s status=200
+sync_run_2: total=0.286035s status=200
+sync_run_3: total=0.272520s status=200
+sync_run_4: total=0.276540s status=200
+sync_run_5: total=0.274608s status=200
+
+=== restoring original service file ===
+restored
+79:      await this.emailService.enqueuePasswordResetEmail(normalizedEmail, token, user.userId);
+
+Waiting 12s for nest --watch to recompile + restart...
+  attempt 1: HTTP 200
+  bullmq (async): n=5 median=21.68ms min=8.81ms max=34.75ms status_codes={200}
+  sync (inline): n=5 median=276.54ms min=272.52ms max=308.60ms status_codes={200}
+
+  sync is 12.8x slower than bullmq (median)
+
+=== cleanup: removing test password reset tokens ===
+password_reset_tokens=0

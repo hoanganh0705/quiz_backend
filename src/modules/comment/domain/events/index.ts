@@ -9,16 +9,18 @@ export { COMMENT_DOMAIN_EVENT_BUS, type CommentDomainEventBusPort } from './comm
 
 export { CommentDomainEventBus } from './comment-event-bus';
 
-export type {
-  CommentCreatedEvent,
-  CommentDeletedEvent,
-  CommentDomainEvent,
-  CommentEditedEvent,
-  CommentHiddenEvent,
-  CommentMentionedEvent,
-  CommentReportedEvent,
-  CommentRestoredEvent,
-  ReportReviewedEvent,
-  VoteCastEvent,
-  VoteRemovedEvent,
+export {
+  createCommentSnapshot,
+  type CommentSnapshot,
+  type CommentCreatedEvent,
+  type CommentDeletedEvent,
+  type CommentDomainEvent,
+  type CommentEditedEvent,
+  type CommentHiddenEvent,
+  type CommentMentionedEvent,
+  type CommentReportedEvent,
+  type CommentRestoredEvent,
+  type ReportReviewedEvent,
+  type VoteCastEvent,
+  type VoteRemovedEvent,
 } from './comment.events';

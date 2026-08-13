@@ -22,6 +22,13 @@ import {
   DailyChallengeConflictError,
   DailyChallengeNotFoundError,
 } from '../domain/errors/daily-challenge.errors';
+import { DailyChallengeDomainEventBus } from '../domain/events/daily-challenge-domain.event-bus';
+import { DailyChallengeCompletedEvent } from '../domain/events/daily-challenge-domain.events';
+import {
+  EXTERNAL_EVENT_BUS_PRODUCER_PORT,
+  type ExternalEventBusProducerPort,
+} from '@/common/events';
+import { createCorrelationId } from '@/common/interceptors/correlation-id';
 
 /**
  * Phase 3 (S-14): orchestrates the four daily-challenge endpoints
@@ -40,6 +47,9 @@ export class DailyChallengeApplicationService {
     private readonly repository: DailyChallengeRepositoryPort,
     @Inject(QUIZ_QUESTION_REPOSITORY_PORT)
     private readonly quizQuestionRepository: QuizQuestionRepositoryPort,
+    private readonly eventBus: DailyChallengeDomainEventBus,
+    @Inject(EXTERNAL_EVENT_BUS_PRODUCER_PORT)
+    private readonly externalEventBus: ExternalEventBusProducerPort,
   ) {}
 
   /**
@@ -72,11 +82,28 @@ export class DailyChallengeApplicationService {
 
   /**
    * `GET /daily-challenge/history`. Cursor-paginated.
+   *
+   * `userId` is nullable: the route is `@Public()` so the global
+   * `JwtGuard` skips setting `request.user`, and the controller reaches
+   * us with `user?.sub ?? null`. When `userId` is `null` we return an
+   * empty page — there is no history to show for an anonymous viewer.
    */
   async getHistory(
-    userId: string,
+    userId: string | null,
     query: DailyChallengeHistoryQueryDto,
   ): Promise<DailyChallengeHistoryResponseDto> {
+    if (userId === null) {
+      return {
+        items: [],
+        pagination: {
+          kind: 'cursor' as const,
+          limit: query.limit ?? 5,
+          hasNextPage: false,
+          nextCursor: null,
+        },
+      };
+    }
+
     const limit = query.limit ?? 5;
     const cursor = query.cursor ? decodeCursor(query.cursor) : null;
 
@@ -203,6 +230,43 @@ export class DailyChallengeApplicationService {
       completedAt: completed ? new Date().toISOString() : null,
       nowIso: new Date().toISOString(),
     });
+
+    // Phase 3: emit the `DailyChallengeCompletedEvent` when the user
+    // reaches the terminal question index. Listeners:
+    //   - `DailyChallengeCoinListenerAdapter` grants the
+    //     `DAILY_CHALLENGE_REWARD` per §6 of the design doc.
+    //   - future activity-feed projector (Phase 5).
+    //
+    // The XP grant is also wired in the same change (per design doc §3
+    // "today the daily-challenge module does not emit an XP event on
+    // completion") — the existing `external.xp.earned` producer is
+    // already capable, only the call site was missing.
+    if (completed && scorePercent !== null) {
+      const completedAt = new Date().toISOString();
+      this.eventBus.emitCompleted(
+        new DailyChallengeCompletedEvent(
+          row.challengeId,
+          userId,
+          scorePercent,
+          this.countCorrectAnswers(allQuestions, nextAnswers),
+          totalQuestions,
+          completedAt,
+          row.rewardXp,
+        ),
+      );
+
+      if (row.rewardXp > 0) {
+        await this.externalEventBus.publishXpEarned({
+          eventType: 'external.xp.earned',
+          userId,
+          amount: row.rewardXp,
+          source: 'bonus',
+          timestamp: new Date(completedAt),
+          correlationId: createCorrelationId(),
+          idempotencyKey: `xp:${userId}:daily_challenge:${row.challengeId}`,
+        });
+      }
+    }
 
     return {
       correct,

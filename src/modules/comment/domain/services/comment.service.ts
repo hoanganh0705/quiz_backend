@@ -14,6 +14,7 @@ import {
 } from '../ports/comment-repository.port';
 import { COMMENT_DOMAIN_EVENT_BUS } from '../events';
 import type { CommentDomainEventBusPort } from '../events';
+import { createCommentSnapshot } from '../events/comment.events';
 import { MAX_REPLIES_PER_COMMENT } from '../constants';
 import { CommentAuthorizationPolicy } from '../policies/comment-authorization.policy';
 import {
@@ -205,6 +206,12 @@ export class CommentService {
         ? await this.resolveParentAuthorId(params.parentCommentId)
         : null;
 
+    // Create full comment view with author for the snapshot
+    const fullCommentView: CommentView = {
+      ...created,
+      author,
+    };
+
     this.eventBus.emitCommentCreated({
       eventType: 'comment_created',
       commentId: created.id,
@@ -215,6 +222,8 @@ export class CommentService {
       parentCommentAuthorId: parentAuthorId,
       isReply: created.parentCommentId !== null,
       timestamp: new Date(),
+      // Include snapshot for direct realtime application on clients
+      snapshot: createCommentSnapshot(fullCommentView),
     });
 
     await this.emitMentionEvents(params.body, created.quizId, created.id, author);
@@ -289,6 +298,15 @@ export class CommentService {
     }
 
     const updated = await this.repo.editComment(params);
+    // Get full author info for the snapshot
+    const author = await this.repo.getAuthorForComment(updated.id);
+    if (author === null) {
+      throw new CommentNotFoundError(updated.id);
+    }
+    const fullCommentView: CommentView = {
+      ...updated,
+      author,
+    };
 
     this.eventBus.emitCommentEdited({
       eventType: 'comment_edited',
@@ -296,6 +314,8 @@ export class CommentService {
       quizId: updated.quizId,
       authorId: updated.authorId,
       timestamp: new Date(),
+      // Include snapshot for direct realtime application on clients
+      snapshot: createCommentSnapshot(fullCommentView),
     });
 
     this.logger.info({ event: 'comment_edited', commentId: updated.id });
@@ -338,6 +358,8 @@ export class CommentService {
       quizId: result.quizId,
       authorId: params.authorId,
       timestamp: new Date(),
+      // Include parent ID so clients can update reply counts
+      parentCommentId: result.parentCommentId,
     });
 
     this.logger.info({ event: 'comment_deleted', commentId: params.commentId });
@@ -347,6 +369,11 @@ export class CommentService {
 
   async vote(params: VoteParams): Promise<void> {
     const { userId, commentId, value } = params;
+
+    let capturedQuizId: string | null = null;
+    let capturedVotesCount = 0;
+    let capturedUpvotesCount = 0;
+    let capturedDownvotesCount = 0;
 
     await this.repo.transactionally(async (tx) => {
       const comment = await this.repo.getCommentByIdForUpdate(commentId, tx);
@@ -359,6 +386,8 @@ export class CommentService {
       if (comment.authorId === userId) {
         throw new SelfVoteError();
       }
+
+      capturedQuizId = comment.quizId;
 
       const existing = await this.repo.getUserVoteForComment(userId, commentId, tx);
 
@@ -380,14 +409,54 @@ export class CommentService {
         const downDelta = value === 'downvote' ? 1 : 0;
         await this.repo.incrementVoteCount(commentId, upDelta, downDelta, tx);
       }
+
+      // Capture final vote counts after all updates
+      capturedVotesCount = comment.votesCount;
+      capturedUpvotesCount = comment.upvotesCount;
+      capturedDownvotesCount = comment.downvotesCount;
+
+      // Recalculate based on what we changed
+      if (existing === value) {
+        // Toggled off
+        if (value === 'upvote') {
+          capturedUpvotesCount--;
+          capturedVotesCount--;
+        } else {
+          capturedDownvotesCount--;
+          capturedVotesCount--;
+        }
+      } else if (existing !== null) {
+        // Flipping
+        if (value === 'upvote') {
+          capturedUpvotesCount++;
+          capturedDownvotesCount--;
+        } else {
+          capturedDownvotesCount++;
+          capturedUpvotesCount--;
+        }
+      } else {
+        // New vote
+        if (value === 'upvote') {
+          capturedUpvotesCount++;
+          capturedVotesCount++;
+        } else {
+          capturedDownvotesCount++;
+          capturedVotesCount++;
+        }
+      }
     });
 
     this.eventBus.emitVoteCast({
       eventType: 'vote_cast',
       commentId,
+      quizId: capturedQuizId!,
       voterId: userId,
       value,
       timestamp: new Date(),
+      // Include vote counts for direct realtime application
+      votesCount: capturedVotesCount,
+      upvotesCount: capturedUpvotesCount,
+      downvotesCount: capturedDownvotesCount,
     });
 
     this.logger.debug({ event: 'vote_cast', userId, commentId, value });
@@ -395,6 +464,11 @@ export class CommentService {
 
   async removeVote(params: { userId: string; commentId: string }): Promise<void> {
     const { userId, commentId } = params;
+
+    let capturedQuizId: string | null = null;
+    let capturedVotesCount = 0;
+    let capturedUpvotesCount = 0;
+    let capturedDownvotesCount = 0;
 
     await this.repo.transactionally(async (tx) => {
       const comment = await this.repo.getCommentByIdForUpdate(commentId, tx);
@@ -405,6 +479,11 @@ export class CommentService {
         throw new CommentNotFoundError(commentId);
       }
 
+      capturedQuizId = comment.quizId;
+      capturedVotesCount = comment.votesCount;
+      capturedUpvotesCount = comment.upvotesCount;
+      capturedDownvotesCount = comment.downvotesCount;
+
       const existing = await this.repo.getUserVoteForComment(userId, commentId, tx);
       if (existing === null) return;
 
@@ -413,13 +492,27 @@ export class CommentService {
 
       await this.repo.incrementVoteCount(commentId, deltaUp, deltaDown, tx);
       await this.repo.removeVote({ userId, commentId }, tx);
+
+      // Update captured counts
+      if (existing === 'upvote') {
+        capturedUpvotesCount--;
+        capturedVotesCount--;
+      } else {
+        capturedDownvotesCount--;
+        capturedVotesCount--;
+      }
     });
 
     this.eventBus.emitVoteRemoved({
       eventType: 'vote_removed',
       commentId,
+      quizId: capturedQuizId!,
       voterId: userId,
       timestamp: new Date(),
+      // Include vote counts for direct realtime application
+      votesCount: capturedVotesCount,
+      upvotesCount: capturedUpvotesCount,
+      downvotesCount: capturedDownvotesCount,
     });
 
     this.logger.debug({ event: 'vote_removed', userId, commentId });
@@ -523,12 +616,24 @@ export class CommentService {
       throw new CommentNotFoundError(params.commentId);
     }
 
+    // Get full author info for the snapshot
+    const author = await this.repo.getAuthorForComment(comment.id);
+    if (author === null) {
+      throw new CommentNotFoundError(comment.id);
+    }
+    const fullCommentView: CommentView = {
+      ...comment,
+      author,
+    };
+
     this.eventBus.emitCommentHidden({
       eventType: 'comment_hidden',
       commentId: params.commentId,
       quizId: comment.quizId,
       moderatorId: params.moderatorId,
       timestamp: new Date(),
+      // Include snapshot for direct realtime application
+      snapshot: createCommentSnapshot(fullCommentView),
     });
 
     this.logger.info({
@@ -574,12 +679,24 @@ export class CommentService {
       throw new CommentNotFoundError(params.commentId);
     }
 
+    // Get full author info for the snapshot
+    const author = await this.repo.getAuthorForComment(comment.id);
+    if (author === null) {
+      throw new CommentNotFoundError(comment.id);
+    }
+    const fullCommentView: CommentView = {
+      ...comment,
+      author,
+    };
+
     this.eventBus.emitCommentRestored({
       eventType: 'comment_restored',
       commentId: params.commentId,
       quizId: comment.quizId,
       moderatorId: params.moderatorId,
       timestamp: new Date(),
+      // Include snapshot for direct realtime application
+      snapshot: createCommentSnapshot(fullCommentView),
     });
 
     this.logger.info({

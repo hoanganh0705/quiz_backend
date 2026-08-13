@@ -8,7 +8,45 @@
  *
  * Naming convention: `<verb>_<noun>` (e.g. `comment_created`, `vote_cast`).
  * The `eventType` literal discriminates the union.
+ *
+ * ## Realtime Payload Strategy
+ *
+ * Events include full comment data (`CommentSnapshot`) when available so
+ * WebSocket clients can apply events directly to their local state without
+ * requiring a subsequent REST refetch. This enables truly-live updates where:
+ *   - New comments appear instantly
+ *   - Edits reflect immediately
+ *   - Vote counts update in real-time
+ *   - Delete/hide/restore transitions happen live
+ *
+ * Events that cannot provide a full snapshot (e.g., reported, reviewed) still
+ * include the minimum required fields for client-side reconciliation.
  */
+
+/**
+ * Full comment snapshot for realtime application.
+ * Included in events so clients can update their local state directly.
+ */
+export interface CommentSnapshot {
+  id: string;
+  quizId: string;
+  parentCommentId: string | null;
+  authorId: string;
+  authorUsername: string;
+  authorDisplayName: string | null;
+  authorAvatarUrl: string | null;
+  body: string;
+  isHidden: boolean;
+  votesCount: number;
+  upvotesCount: number;
+  downvotesCount: number;
+  repliesCount: number;
+  userVote: 'upvote' | 'downvote' | null;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt: string | null;
+  isReply: boolean;
+}
 
 export interface CommentCreatedEvent {
   readonly eventType: 'comment_created';
@@ -20,6 +58,8 @@ export interface CommentCreatedEvent {
   readonly parentCommentAuthorId: string | null;
   readonly isReply: boolean;
   readonly timestamp: Date;
+  /** Full comment snapshot for direct state application */
+  readonly snapshot?: CommentSnapshot;
 }
 
 export interface CommentEditedEvent {
@@ -28,6 +68,8 @@ export interface CommentEditedEvent {
   readonly quizId: string;
   readonly authorId: string;
   readonly timestamp: Date;
+  /** Full comment snapshot for direct state application */
+  readonly snapshot?: CommentSnapshot;
 }
 
 export interface CommentDeletedEvent {
@@ -36,6 +78,8 @@ export interface CommentDeletedEvent {
   readonly quizId: string;
   readonly authorId: string;
   readonly timestamp: Date;
+  /** Parent comment ID for thread updates */
+  readonly parentCommentId?: string | null;
 }
 
 export interface CommentHiddenEvent {
@@ -44,6 +88,8 @@ export interface CommentHiddenEvent {
   readonly quizId: string;
   readonly moderatorId: string;
   readonly timestamp: Date;
+  /** Full comment snapshot for direct state application */
+  readonly snapshot?: CommentSnapshot;
 }
 
 export interface CommentRestoredEvent {
@@ -52,6 +98,8 @@ export interface CommentRestoredEvent {
   readonly quizId: string;
   readonly moderatorId: string;
   readonly timestamp: Date;
+  /** Full comment snapshot for direct state application */
+  readonly snapshot?: CommentSnapshot;
 }
 
 export interface CommentMentionedEvent {
@@ -68,16 +116,28 @@ export interface CommentMentionedEvent {
 export interface VoteCastEvent {
   readonly eventType: 'vote_cast';
   readonly commentId: string;
+  /** Quiz the voted comment belongs to. */
+  readonly quizId: string;
   readonly voterId: string;
   readonly value: 'upvote' | 'downvote';
   readonly timestamp: Date;
+  /** Updated vote counts for direct state application */
+  readonly votesCount: number;
+  readonly upvotesCount: number;
+  readonly downvotesCount: number;
 }
 
 export interface VoteRemovedEvent {
   readonly eventType: 'vote_removed';
   readonly commentId: string;
+  /** Quiz the unvoted comment belongs to. */
+  readonly quizId: string;
   readonly voterId: string;
   readonly timestamp: Date;
+  /** Updated vote counts for direct state application */
+  readonly votesCount: number;
+  readonly upvotesCount: number;
+  readonly downvotesCount: number;
 }
 
 export interface CommentReportedEvent {
@@ -121,3 +181,37 @@ export type CommentDomainEvent =
   | VoteRemovedEvent
   | CommentReportedEvent
   | ReportReviewedEvent;
+
+// Re-export CommentView for use in createCommentSnapshot
+export type { CommentView } from '../types';
+import type { CommentView } from '../types';
+
+/**
+ * Create a CommentSnapshot from a CommentView for use in WebSocket events.
+ * The snapshot flattens the nested author object for easier client-side handling.
+ */
+export function createCommentSnapshot(
+  view: CommentView,
+  userVote: 'upvote' | 'downvote' | null = null,
+): CommentSnapshot {
+  return {
+    id: view.id,
+    quizId: view.quizId,
+    parentCommentId: view.parentCommentId,
+    authorId: view.author.userId,
+    authorUsername: view.author.username,
+    authorDisplayName: view.author.displayName,
+    authorAvatarUrl: view.author.avatarUrl,
+    body: view.body,
+    isHidden: view.isHidden,
+    votesCount: view.votesCount,
+    upvotesCount: view.upvotesCount,
+    downvotesCount: view.downvotesCount,
+    repliesCount: view.repliesCount,
+    userVote,
+    createdAt: view.createdAt,
+    updatedAt: view.updatedAt,
+    deletedAt: view.deletedAt,
+    isReply: view.parentCommentId !== null,
+  };
+}
