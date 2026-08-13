@@ -1,0 +1,60 @@
+=== seeding 100000 quizzes ===
+  existing quizbench users: 0
+  created 50 quizbench users
+  existing bench quizzes: 0
+  inserted 100000 quizzes
+  active quizzes: 100004
+
+=== offset pagination EXPLAIN ANALYZE at various depths ===
+     depth        ms  scan_type
+  ----------------------------------------
+         0     0.058 ms
+        10     0.099 ms
+       100     0.206 ms
+      1000     0.713 ms
+     10000     4.829 ms
+     50000     8.358 ms
+
+=== cursor pagination EXPLAIN ANALYZE at various depths ===
+      skip        ms  scan_type
+  ----------------------------------------
+         0     0.023 ms  ->  Index Scan Backward using quizzes_pkey on quizzes q  (cost=0.42..14618.72 rows=99503 width=93) (actual time=0.008..0.012 rows=20.00 loops=1)
+        10     0.021 ms  ->  Index Scan Backward using quizzes_pkey on quizzes q  (cost=0.42..14618.72 rows=99503 width=93) (actual time=0.005..0.007 rows=20.00 loops=1)
+       100     0.027 ms  ->  Index Scan Backward using quizzes_pkey on quizzes q  (cost=0.42..14618.72 rows=99503 width=93) (actual time=0.011..0.014 rows=20.00 loops=1)
+      1000     0.026 ms  ->  Index Scan Backward using quizzes_pkey on quizzes q  (cost=0.42..14618.72 rows=99503 width=93) (actual time=0.008..0.011 rows=20.00 loops=1)
+     10000     0.042 ms  ->  Index Scan Backward using quizzes_pkey on quizzes q  (cost=0.42..13150.72 rows=89503 width=93) (actual time=0.032..0.038 rows=20.00 loops=1)
+     50000     0.039 ms  ->  Index Scan Backward using quizzes_pkey on quizzes q  (cost=0.42..7424.18 rows=50501 width=93) (actual time=0.021..0.023 rows=20.00 loops=1)
+
+=== page-by-page simulation (pages 1-20) ===
+  page    offset   offset_ms   cursor_ms   ratio
+  --------------------------------------------------
+     1         0       0.048       0.083   0.58x
+     2        20       0.103       0.054   1.91x
+     3        40       0.040       0.059   0.68x
+     4        60       0.082       0.046   1.78x
+     5        80       0.035       0.028   1.25x
+     6       100       0.073       0.044   1.66x
+     7       120       0.122       0.092   1.33x
+     8       140       0.177       0.058   3.05x
+     9       160       0.147       0.069   2.13x
+    10       180       0.190       0.044   4.32x
+    11       200       0.215       0.074   2.91x
+    12       220       0.174       0.023   7.57x
+    13       240       0.230       0.102   2.25x
+    14       260       0.250       0.097   2.58x
+    15       280       0.277       0.117   2.37x
+    16       300       0.490       0.051   9.61x
+    17       320       0.126       0.104   1.21x
+    18       340       0.249       0.048   5.19x
+    19       360       0.315       0.121   2.60x
+    20       380       0.301       0.096   3.14x
+
+=== Summary ===
+  Offset: median=0.175ms  max=0.490ms (over 20 pages)
+  Cursor: median=0.064ms  max=0.121ms (over 20 pages)
+  Slowdown at depth: 4.0x at page 20
+  Median ratio (offset/cursor): 2.74x
+
+=== cleanup ===
+  quizzes: 4
+  users: 6

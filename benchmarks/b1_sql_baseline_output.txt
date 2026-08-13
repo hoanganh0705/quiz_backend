@@ -1,0 +1,8 @@
+=== seeding 50000 follows ===
+
+=== 10 sequential SQL timings of the 3 COUNT(*)s (the cache fetcher) ===
+  n=10 median=4.57ms min=3.71ms max=9.16ms
+
+=== cleanup ===
+users=6
+user_follows=0

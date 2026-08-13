@@ -33,6 +33,8 @@ export const USER_ME_SUMMARY_EXAMPLE = {
     followers: 450,
     following: 78,
     friends: 12,
+    // Phase 3 (S-coin): header pill reads from here.
+    coinBalance: 487,
   },
   meta: { timestamp: EXAMPLE_TIMESTAMP },
 } as const;

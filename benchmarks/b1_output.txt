@@ -1,0 +1,15 @@
+=== seeding 50000 synthetic users + 50000 follow rows ===
+users=50006  user_follows=50000
+cache key social:counts:019fa348-6ad0-719b-a10b-b2ce0d6bfa62 exists? 0
+
+=== condition A: cache WARM (20 sequential requests) ===
+=== condition B: cache COLD (20 requests, DEL key before each) ===
+    warm: n= 20 median=5.66ms min=1.65ms p90=7.13ms p99=7.86ms max=7.86ms
+    cold: n= 20 median=6.64ms min=4.17ms p90=13.03ms p99=15.48ms max=15.48ms
+
+  cold/warm ratio: 1.17x
+  abs saving per request (median): +0.99ms
+
+=== cleanup ===
+users=6
+user_follows=0

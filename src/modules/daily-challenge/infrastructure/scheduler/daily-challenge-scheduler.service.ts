@@ -95,7 +95,7 @@ export class DailyChallengeSchedulerService {
       INNER JOIN quiz_versions qv ON qv.quiz_id = q.quiz_id AND qv.status = 'published'
       WHERE q.is_hidden = false
         AND q.deleted_at IS NULL
-      ORDER BY q.is_featured DESC, q.published_at DESC NULLS LAST, q.created_at DESC
+      ORDER BY q.is_featured DESC, qv.published_at DESC NULLS LAST, q.created_at DESC
       LIMIT 1
     `);
 
@@ -106,7 +106,7 @@ export class DailyChallengeSchedulerService {
       question_count: number;
       reward_xp: number;
     };
-    const list = ((rows as unknown as { rows?: Row[] }).rows ?? []) as Row[];
+    const list = (rows as unknown as { rows?: Row[] }).rows ?? [];
     const row = list[0];
     if (!row) return null;
     return {

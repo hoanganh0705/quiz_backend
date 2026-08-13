@@ -1,0 +1,5 @@
+cold_run_1: total=0.002669s ttfb=0.002607s
+cold_run_2: total=0.001090s ttfb=0.001062s
+cold_run_3: total=0.001002s ttfb=0.000978s
+cold_run_4: total=0.001325s ttfb=0.001297s
+cold_run_5: total=0.001060s ttfb=0.001036s

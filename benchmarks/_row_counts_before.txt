@@ -1,0 +1,13 @@
+users|6
+quizzes|4
+user_ranking|5
+user_follows|3
+friendships|1
+badges|20
+badge_rules|60
+user_badges|6
+quiz_reviews|3
+quiz_versions|6
+quiz_questions|29
+categories|6
+tags|8
