@@ -1,7 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { DRIZZLE } from '@/core/database/drizzle.constants';
 import type { DrizzleDB } from '@/core/database/database.module';
-import { and, eq, ilike, isNull, or } from 'drizzle-orm';
+import { and, eq, ilike, isNull, ne, or } from 'drizzle-orm';
 import { userProfiles, users } from '@/core/database/schema';
 import type {
   UserSearchPort,
@@ -29,7 +29,7 @@ export class UserSearchAdapter implements UserSearchPort {
     ];
 
     const allConditions = excludeUserId
-      ? [...baseConditions, eq(users.userId, excludeUserId)]
+      ? [...baseConditions, ne(users.userId, excludeUserId)]
       : baseConditions;
 
     const rows = await this.db

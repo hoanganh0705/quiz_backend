@@ -1,0 +1,5 @@
+bullmq_run_1: total=0.034751s status=200
+bullmq_run_2: total=0.021679s status=200
+bullmq_run_3: total=0.008809s status=200
+bullmq_run_4: total=0.026013s status=200
+bullmq_run_5: total=0.018802s status=200

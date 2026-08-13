@@ -24,6 +24,9 @@ import { SocialModule } from '@/modules/social/social.module';
 import { RecentlyPlayedQuizzesService } from './application/recently-played-quizzes.service';
 import { UserProfileBundleService } from './application/user-profile-bundle.service';
 import { UserSummaryService } from './application/user-summary.service';
+import { COIN_REPOSITORY_PORT } from '@/modules/coins/domain/ports/coin-repository.port';
+import { CoinRepository } from '@/modules/coins/infrastructure/repositories/coin.repository';
+import { CoinModule } from '@/modules/coins/coin.module';
 
 @Module({
   imports: [
@@ -34,6 +37,11 @@ import { UserSummaryService } from './application/user-summary.service';
     // counts from the social module. Social already imports UserModule
     // directly, so we wrap our side in `forwardRef` to break the cycle.
     forwardRef(() => SocialModule),
+    // `UserApplicationService` injects `COIN_REPOSITORY_PORT` for the
+    // wallet-aware aggregate endpoints. `CoinModule` already imports
+    // `UserModule` (for the `UserDomainEventBus` listener adapters),
+    // so the cycle is broken with `forwardRef` on this side.
+    forwardRef(() => CoinModule),
   ],
   controllers: [UserController],
   providers: [
@@ -61,6 +69,12 @@ import { UserSummaryService } from './application/user-summary.service';
     RecentlyPlayedQuizzesService,
     UserProfileBundleService,
     UserSummaryService,
+    // Phase 4 (S-3): re-register `CoinRepository` here so the
+    // `COIN_REPOSITORY_PORT` token is resolvable when UserApplicationService
+    // builds. The provider instance lives in CoinModule; `useExisting`
+    // ensures both modules see the same singleton.
+    CoinRepository,
+    { provide: COIN_REPOSITORY_PORT, useExisting: CoinRepository },
   ],
   exports: [
     UserApplicationService,

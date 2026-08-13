@@ -1,0 +1,5 @@
+cold_run_1: reqs=47318 rps=4301.7 p50=  0.00ms p90=  0.00ms p99=  0.00ms 2xx=  100 errs=47218
+cold_run_2: reqs=47526 rps=4321.2 p50=  0.00ms p90=  0.00ms p99=  0.00ms 2xx=    0 errs=47526
+cold_run_3: reqs=47712 rps=4337.7 p50=  0.00ms p90=  0.00ms p99=  0.00ms 2xx=    0 errs=47712
+cold_run_4: reqs=47214 rps=4292.5 p50=  0.00ms p90=  0.00ms p99=  0.00ms 2xx=    0 errs=47214
+cold_run_5: reqs=48488 rps=4408.6 p50=  0.00ms p90=  0.00ms p99=  0.00ms 2xx=    0 errs=48488

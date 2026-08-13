@@ -181,4 +181,18 @@ export class UserSummaryResponseDto {
 
   @ApiProperty({ description: 'Number of mutual friends', example: 12 })
   friends!: number;
+
+  // ─── Coin economy ────────────────────────────────────────────────────────
+
+  /**
+   * Phase 3 (S-coin): cached coin balance. The header pill on the
+   * profile page reads from this single field; an uncached user
+   * returns 0. The full ledger is at `GET /me/coin-transactions`.
+   */
+  @ApiProperty({
+    description:
+      'Cached coin balance from `user_wallets.balance`. 0 when the user has never been credited.',
+    example: 487,
+  })
+  coinBalance!: number;
 }

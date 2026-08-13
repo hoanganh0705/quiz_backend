@@ -31,6 +31,10 @@ import { projectLevel, resolveLevelTitleLabel } from '../domain/types/level.type
 import { isObjectRecord } from '@/common/utils/object.util';
 import { QUIZ_LISTING_PORT, type QuizListingPort } from '@/modules/quiz/domain/analytics';
 import { SocialService } from '@/modules/social/domain/services/social.service';
+import {
+  COIN_REPOSITORY_PORT,
+  type CoinRepositoryPort,
+} from '@/modules/coins/domain/ports/coin-repository.port';
 
 @Injectable()
 export class UserApplicationService {
@@ -39,6 +43,8 @@ export class UserApplicationService {
     @Inject(QUIZ_LISTING_PORT)
     private readonly quizListing: QuizListingPort,
     private readonly socialService: SocialService,
+    @Inject(COIN_REPOSITORY_PORT)
+    private readonly coinRepository: CoinRepositoryPort,
     @InjectPinoLogger(UserApplicationService.name)
     private readonly logger: PinoLogger,
   ) {}
@@ -84,15 +90,17 @@ export class UserApplicationService {
    * to introduce a counter table; this endpoint inherits the
    * cost until then.
    */
-  async getMySummary(
-    userId: string,
-    acceptLanguage?: string,
-  ): Promise<UserSummaryResponseDto> {
-    const [me, quizAnalytics, userAnalytics, socialCounts] = await Promise.all([
+  async getMySummary(userId: string, acceptLanguage?: string): Promise<UserSummaryResponseDto> {
+    const [me, quizAnalytics, userAnalytics, socialCounts, wallet] = await Promise.all([
       this.userDomainService.getMe(userId),
       this.quizListing.getMyQuizAnalytics(userId),
       this.userDomainService.getUserAnalytics(userId, userId),
       this.socialService.getSocialCounts(userId),
+      // Phase 3 (S-coin): the coin balance is part of the profile
+      // bundle so the header pill reads from the same payload as the
+      // /me summary. A user who has never been credited returns 0
+      // (the wallet row is lazily upserted on the first grant).
+      this.coinRepository.getWallet(userId),
     ]);
 
     const level = projectLevel(me.xpTotal);
@@ -134,6 +142,9 @@ export class UserApplicationService {
       followers: socialCounts.followerCount,
       following: socialCounts.followingCount,
       friends: socialCounts.friendCount,
+      // Phase 3 (S-coin): the cached balance from `user_wallets`.
+      // Falls back to 0 when no wallet has been created yet.
+      coinBalance: wallet?.balance ?? 0,
     };
   }
 

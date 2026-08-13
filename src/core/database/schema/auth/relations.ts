@@ -40,6 +40,10 @@ import {
   notificationPreferences,
   categoryFollows,
   tagFollows,
+  userWallets,
+  coinTransactions,
+  userFlairSlots,
+  userQuizSuppressions,
 } from '..';
 
 export const usersRelations = relations(users, ({ many, one }) => ({
@@ -83,6 +87,11 @@ export const usersRelations = relations(users, ({ many, one }) => ({
   // Taxonomy domain
   categoryFollows: many(categoryFollows),
   tagFollows: many(tagFollows),
+  // Coins domain (Phase 1 wallet + ledger + Phase 6 side tables)
+  userWallet: one(userWallets),
+  coinTransactions: many(coinTransactions),
+  userFlairSlots: many(userFlairSlots),
+  userQuizSuppressions: many(userQuizSuppressions),
 }));
 
 export const userSessionsRelations = relations(userSessions, ({ one }) => ({

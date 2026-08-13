@@ -200,14 +200,43 @@ export class NotificationGateway implements OnGatewayConnection, OnGatewayDiscon
     const room = `${USER_ROOM_PREFIX}${event.userId}`;
     const payload = this.serializeEvent(event);
 
-    this.server.to(room).emit('notification', payload);
+    // Emit one Socket.IO event per domain event type. The frontend
+    // listens on `notification:sent` / `notification:read` /
+    // `notification:deleted` (see `lib/realtime/events.ts`); the
+    // single wrapper event `'notification'` was a long-standing mismatch
+    // that left every consumer — the bell badge, the popover list, the
+    // social router — silently dead after the initial REST fetch.
+    // The colon-separated event name is the single source of truth on
+    // the wire; consumers register a handler per event type.
+    const eventName = this.eventToWireName(event.eventType);
+    this.server.to(room).emit(eventName, payload);
 
     this.logger.debug({
       event: 'notification_pushed_to_user',
       eventType: event.eventType,
       userId: event.userId,
       room,
+      wireEventName: eventName,
     });
+  }
+
+  /**
+   * Map the in-process domain event type to the on-wire Socket.IO event
+   * name. The domain bus uses dot-paths (`notification.sent`); the wire
+   * uses colon-separated names (`notification:sent`) to align with the
+   * client's `lib/realtime/events.ts` constants.
+   */
+  private eventToWireName(eventType: NotificationDomainEvent['eventType']): string {
+    switch (eventType) {
+      case 'notification.sent':
+        return 'notification:sent';
+      case 'notification.read':
+        return 'notification:read';
+      case 'notification.unread':
+        return 'notification:unread';
+      case 'notification.deleted':
+        return 'notification:deleted';
+    }
   }
 
   private serializeEvent(event: NotificationDomainEvent): Record<string, unknown> {

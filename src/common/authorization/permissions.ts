@@ -82,6 +82,12 @@ export enum Permission {
   // Platform ops
   NOTIFICATION_ANALYTICS = 'NOTIFICATION_ANALYTICS',
   RANKING_ADMIN = 'RANKING_ADMIN',
+
+  // Coins — Phase 2 skeleton / Phase 4 implementation.
+  // Gates the `POST /admin/coins/adjust` endpoint. Mirrors
+  // `RANKING_ADMIN` / `NOTIFICATION_ANALYTICS`: admin-only, ledger
+  // itself is the audit trail.
+  COIN_ADMIN = 'COIN_ADMIN',
 }
 
 export const ROLE_PERMISSIONS: Record<UserRole, readonly Permission[]> = {
@@ -135,6 +141,10 @@ export const ROLE_PERMISSIONS: Record<UserRole, readonly Permission[]> = {
     // Platform ops
     Permission.NOTIFICATION_ANALYTICS,
     Permission.RANKING_ADMIN,
+    // Coins — admins get the `COIN_ADMIN` permission so the
+    // `POST /admin/coins/adjust` endpoint is reachable. The handler
+    // is a Phase 2 501 stub; Phase 4 wires the actual ledger write.
+    Permission.COIN_ADMIN,
   ],
   moderator: [
     // Quiz (moderation-grade)

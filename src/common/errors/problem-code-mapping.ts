@@ -1617,6 +1617,64 @@ export const ProblemCodeMapping: Readonly<Record<string, ProblemCodeInfo>> = {
     title: 'Forbidden',
     typeUri: 'https://api.quiz.local/problems/notification-forbidden',
   },
+
+  // ===========================================================================
+  // COIN module — src/modules/coins/domain/errors/coin-spend.errors.ts
+  // ===========================================================================
+  /**
+   * Phase 6 (S-coin-spend) entries. 8 concrete exceptions → 4 status codes:
+   *   409: INSUFFICIENT_COINS, COIN_SUPPRESS_ALREADY_ACTIVE
+   *   422: COIN_TIP_SELF_NOT_ALLOWED, COIN_FLAIR_BADGE_NOT_OWNED,
+   *        COIN_ADMIN_ADJUSTMENT_REASON_REQUIRED
+   *   429: COIN_TIP_DAILY_CAP_EXCEEDED
+   *   404: COIN_TIP_RECIPIENT_NOT_FOUND, COIN_SUPPRESS_QUIZ_NOT_FOUND
+   *
+   * The earn side (Phase 3) does not throw typed errors — every listener
+   * funnel produces either a wallet UPDATE or a unique-violation that the
+   * service translates into a success log line. Only the spend endpoints
+   * need typed failures (because the HTTP layer needs to render specific
+   * problem-detail responses per design §13).
+   */
+  INSUFFICIENT_COINS: {
+    status: HttpStatus.CONFLICT,
+    title: 'Conflict',
+    typeUri: 'https://api.quiz.local/problems/insufficient-coins',
+  },
+  COIN_TIP_DAILY_CAP_EXCEEDED: {
+    status: HttpStatus.TOO_MANY_REQUESTS,
+    title: 'TooManyRequests',
+    typeUri: 'https://api.quiz.local/problems/coin-tip-daily-cap-exceeded',
+  },
+  COIN_TIP_SELF_NOT_ALLOWED: {
+    status: HttpStatus.UNPROCESSABLE_ENTITY,
+    title: 'UnprocessableEntity',
+    typeUri: 'https://api.quiz.local/problems/coin-tip-self-not-allowed',
+  },
+  COIN_TIP_RECIPIENT_NOT_FOUND: {
+    status: HttpStatus.NOT_FOUND,
+    title: 'NotFound',
+    typeUri: 'https://api.quiz.local/problems/coin-tip-recipient-not-found',
+  },
+  COIN_FLAIR_BADGE_NOT_OWNED: {
+    status: HttpStatus.UNPROCESSABLE_ENTITY,
+    title: 'UnprocessableEntity',
+    typeUri: 'https://api.quiz.local/problems/coin-flair-badge-not-owned',
+  },
+  COIN_SUPPRESS_QUIZ_NOT_FOUND: {
+    status: HttpStatus.NOT_FOUND,
+    title: 'NotFound',
+    typeUri: 'https://api.quiz.local/problems/coin-suppress-quiz-not-found',
+  },
+  COIN_SUPPRESS_ALREADY_ACTIVE: {
+    status: HttpStatus.CONFLICT,
+    title: 'Conflict',
+    typeUri: 'https://api.quiz.local/problems/coin-suppress-already-active',
+  },
+  COIN_ADMIN_ADJUSTMENT_REASON_REQUIRED: {
+    status: HttpStatus.UNPROCESSABLE_ENTITY,
+    title: 'UnprocessableEntity',
+    typeUri: 'https://api.quiz.local/problems/coin-admin-adjustment-reason-required',
+  },
 };
 
 const DEFAULT_TYPE_URIS: Readonly<Record<number, string>> = {

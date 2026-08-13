@@ -1,0 +1,29 @@
+=== seeding 100000 synthetic users + 100000 user_ranking rows ===
+users after synth insert: 100006
+user_ranking count after seed: 100005
+
+=== condition A: WITH idx_user_ranking_all_time_rank (5 runs) ===
+  run_1: 0.114ms  plan=   ->  Index Scan using idx_user_ranking_all_time_rank on user_ranking  (cost=0.29..3889.38 rows=100005 width=24) (actual time=0.016..0.020 rows=20.00 loops=1)|
+  run_2: 0.070ms  plan=   ->  Index Scan using idx_user_ranking_all_time_rank on user_ranking  (cost=0.29..3889.38 rows=100005 width=24) (actual time=0.041..0.051 rows=20.00 loops=1)|
+  run_3: 0.201ms  plan=   ->  Index Scan using idx_user_ranking_all_time_rank on user_ranking  (cost=0.29..3889.38 rows=100005 width=24) (actual time=0.019..0.024 rows=20.00 loops=1)|
+  run_4: 0.064ms  plan=   ->  Index Scan using idx_user_ranking_all_time_rank on user_ranking  (cost=0.29..3889.38 rows=100005 width=24) (actual time=0.024..0.031 rows=20.00 loops=1)|
+  run_5: 0.097ms  plan=   ->  Index Scan using idx_user_ranking_all_time_rank on user_ranking  (cost=0.29..3889.38 rows=100005 width=24) (actual time=0.020..0.026 rows=20.00 loops=1)|
+
+=== condition B: WITHOUT idx_user_ranking_all_time_rank (DROP, 5 runs) ===
+DROP INDEX
+  run_1: 18.153ms  plan=               ->  Parallel Seq Scan on user_ranking  (cost=0.00..1620.26 rows=58826 width=24) (actual time=0.007..2.920 rows=50002.50 loops=2)|
+  run_2: 7.564ms  plan=               ->  Parallel Seq Scan on user_ranking  (cost=0.00..1620.26 rows=58826 width=24) (actual time=0.018..5.708 rows=50002.50 loops=2)|
+  run_3: 14.164ms  plan=               ->  Parallel Seq Scan on user_ranking  (cost=0.00..1620.26 rows=58826 width=24) (actual time=0.015..8.503 rows=50002.50 loops=2)|
+  run_4: 17.834ms  plan=               ->  Parallel Seq Scan on user_ranking  (cost=0.00..1620.26 rows=58826 width=24) (actual time=0.013..4.727 rows=50002.50 loops=2)|
+  run_5: 20.307ms  plan=               ->  Parallel Seq Scan on user_ranking  (cost=0.00..1620.26 rows=58826 width=24) (actual time=0.025..6.449 rows=50002.50 loops=2)|
+
+=== recreating index idx_user_ranking_all_time_rank ===
+CREATE INDEX
+  with_index: n=5 median=0.10ms min=0.06ms max=0.20ms samples=[0.114, 0.07, 0.201, 0.064, 0.097]
+    no_index: n=5 median=17.83ms min=7.56ms max=20.31ms samples=[18.153, 7.564, 14.164, 17.834, 20.307]
+
+  slowdown without index: 183.9x  (median 0.097ms -> 17.834ms)
+
+=== cleanup ===
+user_ranking=5
+users=6

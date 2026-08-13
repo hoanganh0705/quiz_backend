@@ -35,6 +35,8 @@ import { QuizCommentController } from './transport/controller/quiz-comment.contr
 import { UserCommentController } from './transport/controller/user-comment.controller';
 import { ReportController } from './transport/controller/report.controller';
 import { CommentPresenter } from './transport/presenters/comment.presenter';
+import { CommentGateway } from './transport/gateway/comment.gateway';
+import { CommentWebSocketListener } from './infrastructure/adapters/comment-websocket-listener.adapter';
 
 import { COMMENT_REPOSITORY_PORT, QUIZ_EXISTENCE_PORT, USER_EXISTENCE_PORT } from './domain/ports';
 import { COMMENT_DOMAIN_EVENT_BUS } from './domain/events';
@@ -79,6 +81,8 @@ import { UserModule } from '@/modules/user/user.module';
     },
     // Transport
     CommentPresenter,
+    CommentGateway,
+    CommentWebSocketListener,
   ],
   controllers: [CommentController, QuizCommentController, UserCommentController, ReportController],
   exports: [

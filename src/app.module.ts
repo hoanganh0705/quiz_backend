@@ -25,6 +25,7 @@ import { NotificationModule } from './modules/notification/notification.module';
 import { CommentModule } from './modules/comment/comment.module';
 import { DailyChallengeModule } from './modules/daily-challenge/daily-challenge.module';
 import { HomeModule } from './modules/home/home.module';
+import { CoinModule } from './modules/coins/coin.module';
 import {
   validateEnv,
   appConfig,
@@ -139,6 +140,9 @@ import { CoreLoggerModule } from './core/logger/logger.module';
     HealthModule,
     DailyChallengeModule,
     HomeModule,
+    // Phase 2 — file scaffold only; controllers return 501. See
+    // QUIZ_COIN_ECONOMY_DESIGN.md §16 for the implementation plan.
+    CoinModule,
   ],
   // providers is a list of global guards, interceptors, and filters that will be applied to all routes in the application. The order of providers matters: guards will execute in the order they are defined, then interceptors, and finally filters will catch exceptions thrown by guards or interceptors. Why do we have provider ? Because we want to apply these guards, interceptors, and filters globally across the entire application, so we use the APP_GUARD, APP_INTERCEPTOR, and APP_FILTER tokens to tell NestJS to use these classes as global providers for their respective types. This way, we don't have to manually apply these guards/interceptors/filters to each controller or route handler; they will automatically be applied to all of them. In normal modules, providers are typically used to define services that can be injected into controllers or other services. However, when we want to apply something globally across the entire application, we use these special tokens to register them as global providers.
   providers: [

@@ -174,3 +174,26 @@ export const notificationType = pgEnum('notification_type', [
 ]);
 
 export const notificationChannel = pgEnum('notification_channel', ['in_app', 'email', 'push']);
+
+// -- Coins -------------------------------------------------------------------
+//
+// Enumerates every business reason a `coin_transactions` row can be
+// recorded for. Kept narrow on purpose — see design doc §9.2 — so that
+// (a) the daily-cap SUM-by-reason query can rely on a fixed enum_ops
+// index, and (b) new producers cannot silently mint a new earning
+// surface without an enum change. Producers that need a new reason
+// MUST add it here AND to `COIN_REWARDS` / `COIN_SPEND_AMOUNTS` in
+// `src/modules/coins/coin.constants.ts`.
+export const coinReason = pgEnum('coin_reason', [
+  'QUIZ_COMPLETION_REWARD',
+  'QUIZ_PERFECT_BONUS',
+  'DAILY_CHALLENGE_REWARD',
+  'STREAK_MILESTONE_REWARD',
+  'BADGE_REWARD',
+  'TOURNAMENT_PLACEMENT_REWARD',
+  'TIP_SENT',
+  'FLAIR_PURCHASED',
+  'SUPPRESS_RECOMMENDED_PURCHASED',
+  'ADMIN_ADJUSTMENT',
+  'REFUND',
+]);

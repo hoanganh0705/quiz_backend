@@ -1,0 +1,5 @@
+warm_run_1: reqs=50369 rps=4579.4 p50=  1.00ms p90=  2.00ms p99=  4.00ms 2xx=   99 errs=50270
+warm_run_2: reqs=50746 rps=4613.6 p50=  1.00ms p90=  2.00ms p99=  4.00ms 2xx=    0 errs=50746
+warm_run_3: reqs=50448 rps=4587.1 p50=  1.00ms p90=  3.00ms p99=  4.00ms 2xx=    0 errs=50448
+warm_run_4: reqs=49669 rps=4516.3 p50=  1.00ms p90=  3.00ms p99=  4.00ms 2xx=    0 errs=49669
+warm_run_5: reqs=50833 rps=4621.6 p50=  1.00ms p90=  2.00ms p99=  4.00ms 2xx=    0 errs=50833

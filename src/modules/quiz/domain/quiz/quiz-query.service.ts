@@ -22,6 +22,7 @@ import type { ListQuizzesQuery } from '../types/list-quizzes.query';
 import type { QuizCursor } from '../ports/quiz-repository.port';
 import { QuizNotFoundError } from '../errors';
 import { normalizeQuizSlug } from '../slug/quiz-slug';
+import { isUuid } from '@/common/pipes/parse-uuid-or-slug.pipe';
 import type { QuizDifficulty } from '../../types/quiz.types';
 import type { QuizWithPublishedVersionRow } from '../ports';
 import type { ScoredQuizRow } from '../analytics/ports/quiz-recommendation.repository-port';
@@ -112,10 +113,20 @@ export class QuizQueryService {
   }
 
   async getQuizStats(quizId: string | undefined, slug: string): Promise<QuizStats> {
-    const result = await this.getQuizBySlug(slug);
-    const resolvedQuizId = result.row.quizId;
+    // Resolve the canonical quizId and slug once. The aggregate path
+    // accepts either a UUID or a kebab-case slug at the `:id` route
+    // param; the application service forwards `quizId` (the parsed
+    // UUID, if any) alongside the original `slug` arg. When the input
+    // is a UUID, looking it up via `getQuizBySlug` throws because the
+    // value does not satisfy the slug pattern, which propagates as a
+    // spurious 404 — even though `quizId` is already in hand.
+    //
+    // Resolution order:
+    //   1. If `quizId` is given (parsed UUID), trust it directly.
+    //   2. Otherwise, fall back to the slug lookup.
+    const { resolvedQuizId } = await this.resolveQuizLookup(quizId, slug);
 
-    const stats = await this.quizRepository.getQuizStats(quizId ?? resolvedQuizId);
+    const stats = await this.quizRepository.getQuizStats(resolvedQuizId);
 
     return {
       quizId: resolvedQuizId,
@@ -128,6 +139,33 @@ export class QuizQueryService {
       popularityScore: Number(stats?.popularityScore ?? 0),
       trendingScore: Number(stats?.trendingScore ?? 0),
     };
+  }
+
+  /**
+   * Resolve a quiz lookup key to its canonical `quizId`.
+   *
+   * Accepts either a UUID (preferred when supplied) or a kebab-case
+   * slug. Used by stats / stats-history / preview aggregations where
+   * both forms can be presented at the route boundary.
+   */
+  private async resolveQuizLookup(
+    quizId: string | undefined,
+    slug: string,
+  ): Promise<{ resolvedQuizId: string }> {
+    if (quizId && isUuid(quizId)) {
+      return { resolvedQuizId: quizId };
+    }
+    // Fall back to slug-based lookup. `normalizeQuizSlug` throws for
+    // non-slug inputs (e.g. a raw UUID was passed without a quizId);
+    // surface that as a not-found so callers see a stable 404 instead
+    // of a 500.
+    try {
+      const result = await this.getQuizBySlug(slug);
+      return { resolvedQuizId: result.row.quizId };
+    } catch (err) {
+      if (err instanceof QuizNotFoundError) throw err;
+      throw new QuizNotFoundError();
+    }
   }
 
   async getFeaturedQuizzes(query: FeaturedQuizzesQuery): Promise<QuizWithPublishedVersionRow[]> {
