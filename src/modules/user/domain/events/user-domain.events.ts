@@ -10,7 +10,9 @@ export class UserProfileUpdatedEvent {
   readonly eventType = 'user.profile.updated' as const;
   constructor(
     public readonly userId: string,
-    public readonly changedFields: ReadonlyArray<'displayName' | 'bio' | 'avatarUrl'>,
+    public readonly changedFields: ReadonlyArray<
+      'displayName' | 'bio' | 'avatarUrl' | 'avatarPublicId'
+    >,
     public readonly nowIso: string,
   ) {}
 }

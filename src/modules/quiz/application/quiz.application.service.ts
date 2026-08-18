@@ -1,4 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
+import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { QuizAnalyticsService } from '../domain/analytics';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
 import { QuizQueryService } from '../domain/quiz/quiz-query.service';
@@ -43,6 +44,9 @@ import { and, eq, isNull, sql } from 'drizzle-orm';
 import { DRIZZLE } from '@/core/database/drizzle.constants';
 import type { DrizzleDB } from '@/core/database/database.module';
 import type { QuizStatsHistoryPointDto } from '../dto/response/quiz-stats-history-point.dto';
+import { StorageApplicationService } from '@/core/storage/application/storage.application.service';
+import { StorageImageLifecycleService } from '@/core/storage/application/storage-image-lifecycle.service';
+import { BadRequestException, ForbiddenException } from '@nestjs/common';
 
 @Injectable()
 export class QuizApplicationService implements QuizListingPort {
@@ -55,6 +59,11 @@ export class QuizApplicationService implements QuizListingPort {
     @Inject(QUIZ_REPOSITORY_PORT)
     private readonly quizRepository: QuizRepositoryPort,
     @Inject(DRIZZLE) private readonly db: DrizzleDB,
+    private readonly storageOwnership: StorageApplicationService,
+    private readonly storageLifecycle: StorageImageLifecycleService,
+    private readonly quizMapper: QuizResponseMapper,
+    @InjectPinoLogger(QuizApplicationService.name)
+    private readonly logger: PinoLogger,
   ) {}
 
   /**
@@ -110,6 +119,21 @@ export class QuizApplicationService implements QuizListingPort {
   }
 
   async createQuiz(user: JwtPayload, dto: CreateQuizDto): Promise<QuizResponseDto> {
+    if (dto.imagePublicId !== undefined && dto.imagePublicId !== null) {
+      const owns = await this.storageOwnership.userOwnsAssetForPurpose({
+        publicId: dto.imagePublicId,
+        ownerId: user.sub,
+        purpose: 'quiz',
+      });
+      if (!owns) {
+        throw new ForbiddenException({
+          code: 'ASSET_NOT_OWNED',
+          message:
+            'The supplied cover image publicId is not owned by the authenticated user for the quiz cover purpose.',
+        });
+      }
+    }
+
     const command: CreateQuizCommand = {
       creatorId: user.sub,
       title: dto.title,
@@ -117,6 +141,7 @@ export class QuizApplicationService implements QuizListingPort {
       description: dto.description ?? null,
       requirements: dto.requirements ?? null,
       imageUrl: dto.imageUrl ?? null,
+      imagePublicId: dto.imagePublicId ?? null,
       isFeatured: dto.isFeatured ?? false,
       isHidden: dto.isHidden ?? false,
       initialVersion: dto.initialVersion,
@@ -125,7 +150,7 @@ export class QuizApplicationService implements QuizListingPort {
     };
     const { row, tags } = await this.quizCommandService.createQuiz(user, command);
     const context = await this.buildProjectionContext([row]);
-    return QuizResponseMapper.toQuizResponse(row, undefined, tags, context);
+    return this.quizMapper.toQuizResponse(row, undefined, tags, context);
   }
 
   async listQuizzes(dto: ListQuizzesQueryDto): Promise<QuizListResponseDto> {
@@ -148,7 +173,7 @@ export class QuizApplicationService implements QuizListingPort {
 
     const context = await this.buildProjectionContext(result.items);
     return {
-      items: result.items.map((row) => QuizResponseMapper.toListItem(row, context)),
+      items: result.items.map((row) => this.quizMapper.toListItem(row, context)),
       pagination: {
         limit: result.limit,
         nextCursor: result.nextCursor ? QuizCursorMapper.serialize(result.nextCursor) : null,
@@ -164,7 +189,7 @@ export class QuizApplicationService implements QuizListingPort {
 
     const context = await this.buildProjectionContext(items);
     return {
-      items: items.map((item) => QuizResponseMapper.toListItem(item, context)),
+      items: items.map((item) => this.quizMapper.toListItem(item, context)),
     };
   }
 
@@ -178,14 +203,17 @@ export class QuizApplicationService implements QuizListingPort {
 
     const context = await this.buildProjectionContext(items);
     return {
-      items: items.map((item) => QuizResponseMapper.toListItem(item, context)),
+      items: items.map((item) => this.quizMapper.toListItem(item, context)),
     };
   }
 
   async getQuizById(quizId: string): Promise<QuizResponseDto> {
-    const { row, tags } = await this.quizQueryService.getQuizById(quizId);
+    const { row, questions, tags } = await this.quizQueryService.getQuizById(quizId);
     const context = await this.buildProjectionContext([row]);
-    return QuizResponseMapper.toQuizResponse(row, undefined, tags, context);
+    const mappedQuestions = questions
+      ? QuizQuestionPlayerResponseMapper.toPlayerQuestionResponses(questions)
+      : undefined;
+    return this.quizMapper.toQuizResponse(row, mappedQuestions, tags, context);
   }
 
   async getQuizBySlug(slug: string): Promise<QuizResponseDto> {
@@ -194,7 +222,7 @@ export class QuizApplicationService implements QuizListingPort {
     const mappedQuestions = questions
       ? QuizQuestionPlayerResponseMapper.toPlayerQuestionResponses(questions)
       : undefined;
-    return QuizResponseMapper.toQuizResponse(row, mappedQuestions, tags, context);
+    return this.quizMapper.toQuizResponse(row, mappedQuestions, tags, context);
   }
 
   async getQuizStats(quizId: string | undefined, slug: string): Promise<QuizStatsResponseDto> {
@@ -289,17 +317,13 @@ export class QuizApplicationService implements QuizListingPort {
    *   - `statsHistory`     — bucketed stats timeline (sparkline)
    *   - `previewQuestions` — first N questions (player-style)
    */
-  async getQuizAggregate(
-    quizIdOrSlug: string,
-  ): Promise<QuizAggregateResponseDto> {
+  async getQuizAggregate(quizIdOrSlug: string): Promise<QuizAggregateResponseDto> {
     const isUuidValue = isUuid(quizIdOrSlug);
     const quizId = isUuidValue ? quizIdOrSlug : undefined;
     const slug = isUuidValue ? undefined : quizIdOrSlug;
 
     const [quiz, stats, statsHistory, preview] = await Promise.all([
-      slug
-        ? this.getQuizBySlug(slug)
-        : this.getQuizById(quizId as string),
+      slug ? this.getQuizBySlug(slug) : this.getQuizById(quizId as string),
       this.getQuizStats(quizId, quizIdOrSlug),
       this.getQuizStatsHistory(quizId, quizIdOrSlug, {}),
       this.getQuizPreview(quizIdOrSlug),
@@ -321,7 +345,7 @@ export class QuizApplicationService implements QuizListingPort {
 
     const context = await this.buildProjectionContext(items);
     return {
-      items: items.map((item) => QuizResponseMapper.toListItem(item, context)),
+      items: items.map((item) => this.quizMapper.toListItem(item, context)),
     };
   }
 
@@ -342,7 +366,7 @@ export class QuizApplicationService implements QuizListingPort {
 
     const context = await this.buildProjectionContext(result.items);
     return {
-      items: result.items.map((row) => QuizResponseMapper.toListItem(row, context)),
+      items: result.items.map((row) => this.quizMapper.toListItem(row, context)),
       pagination: {
         limit: result.limit,
         nextCursor: result.nextCursor ? QuizCursorMapper.serialize(result.nextCursor) : null,
@@ -362,7 +386,7 @@ export class QuizApplicationService implements QuizListingPort {
 
     const context = await this.buildProjectionContext(result.items);
     return {
-      items: result.items.map((row) => QuizResponseMapper.toListItem(row, context)),
+      items: result.items.map((row) => this.quizMapper.toListItem(row, context)),
       pagination: {
         limit: result.limit,
         nextCursor: result.nextCursor ? QuizCursorMapper.serialize(result.nextCursor) : null,
@@ -382,7 +406,7 @@ export class QuizApplicationService implements QuizListingPort {
 
     const context = await this.buildProjectionContext(result.items);
     return {
-      items: result.items.map((row) => QuizResponseMapper.toListItem(row, context)),
+      items: result.items.map((row) => this.quizMapper.toListItem(row, context)),
       pagination: {
         limit: result.limit,
         nextCursor: result.nextCursor ? QuizCursorMapper.serialize(result.nextCursor) : null,
@@ -405,7 +429,7 @@ export class QuizApplicationService implements QuizListingPort {
 
     const context = await this.buildProjectionContext(result.items);
     return {
-      items: result.items.map((row) => QuizResponseMapper.toListItem(row, context)),
+      items: result.items.map((row) => this.quizMapper.toListItem(row, context)),
       pagination: {
         limit: result.limit,
         nextCursor: result.nextCursor ? QuizCursorMapper.serialize(result.nextCursor) : null,
@@ -459,23 +483,64 @@ export class QuizApplicationService implements QuizListingPort {
   }
 
   async updateQuiz(quizId: string, user: JwtPayload, dto: UpdateQuizDto): Promise<QuizResponseDto> {
+    if (dto.imagePublicId !== undefined && dto.imagePublicId !== null) {
+      const owns = await this.storageOwnership.userOwnsAssetForPurpose({
+        publicId: dto.imagePublicId,
+        ownerId: user.sub,
+        purpose: 'quiz',
+      });
+      if (!owns) {
+        throw new ForbiddenException({
+          code: 'ASSET_NOT_OWNED',
+          message:
+            'The supplied cover image publicId is not owned by the authenticated user for the quiz cover purpose.',
+        });
+      }
+    }
+
     const command: UpdateQuizCommand = {
       title: dto.title,
       description: dto.description,
       slug: dto.slug,
       requirements: dto.requirements,
       imageUrl: dto.imageUrl,
+      imagePublicId: dto.imagePublicId,
       isFeatured: dto.isFeatured,
       isHidden: dto.isHidden,
       categoryId: dto.categoryId,
       tagIds: dto.tagIds,
     };
     const { row, tags } = await this.quizCommandService.updateQuiz(quizId, user, command);
+
+    const newPublicId = dto.imagePublicId !== undefined ? dto.imagePublicId : row.imagePublicId;
+    try {
+      await this.storageLifecycle.replaceQuizCover(quizId, newPublicId, (id) =>
+        this.quizRepository.findQuizCoverPublicIdById(id),
+      );
+    } catch (err) {
+      this.logger.warn({
+        event: 'storage_lifecycle_unexpected_error',
+        quizId,
+        err: err instanceof Error ? err.message : String(err),
+      });
+    }
+
     const context = await this.buildProjectionContext([row]);
-    return QuizResponseMapper.toQuizResponse(row, undefined, tags, context);
+    return this.quizMapper.toQuizResponse(row, undefined, tags, context);
   }
 
   async deleteQuiz(quizId: string, user: JwtPayload): Promise<DeleteQuizResponseDto> {
+    try {
+      await this.storageLifecycle.deleteQuizCover(quizId, (id) =>
+        this.quizRepository.findQuizCoverPublicIdById(id),
+      );
+    } catch (err) {
+      this.logger.warn({
+        event: 'storage_lifecycle_unexpected_error',
+        quizId,
+        err: err instanceof Error ? err.message : String(err),
+      });
+    }
     return this.quizCommandService.softDeleteQuizById(quizId, user);
   }
 

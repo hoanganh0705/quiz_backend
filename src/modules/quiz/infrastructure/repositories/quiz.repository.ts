@@ -51,6 +51,7 @@ const QUIZ_COLUMNS = quizzes as unknown as {
   quizSearchVector: AnyPgColumn;
   requirements: AnyPgColumn;
   imageUrl: AnyPgColumn;
+  imagePublicId: AnyPgColumn;
   isFeatured: AnyPgColumn;
   isHidden: AnyPgColumn;
   isVerified: AnyPgColumn;
@@ -95,6 +96,7 @@ const QUIZ_WITH_VERSION_PROJECTION = {
   slug: QUIZ_COLUMNS.slug,
   requirements: QUIZ_COLUMNS.requirements,
   imageUrl: QUIZ_COLUMNS.imageUrl,
+  imagePublicId: QUIZ_COLUMNS.imagePublicId,
   isFeatured: QUIZ_COLUMNS.isFeatured,
   isHidden: QUIZ_COLUMNS.isHidden,
   isVerified: QUIZ_COLUMNS.isVerified,
@@ -214,6 +216,7 @@ export class QuizRepository implements QuizRepositoryPort {
         username: users.username,
         displayName: userProfiles.displayName,
         avatarUrl: userProfiles.avatarUrl,
+        avatarPublicId: userProfiles.avatarPublicId,
       })
       .from(users)
       .leftJoin(userProfiles, eq(users.userId, userProfiles.userId))
@@ -226,6 +229,7 @@ export class QuizRepository implements QuizRepositoryPort {
         username: row.username,
         displayName: row.displayName ?? null,
         avatarUrl: row.avatarUrl ?? null,
+        avatarPublicId: row.avatarPublicId ?? null,
       });
     }
     return out;
@@ -712,6 +716,7 @@ export class QuizRepository implements QuizRepositoryPort {
             description: payload.description,
             requirements: payload.requirements,
             imageUrl: payload.imageUrl,
+            imagePublicId: payload.imagePublicId,
             isFeatured: payload.isFeatured,
             isHidden: payload.isHidden,
             isVerified: false,
@@ -771,6 +776,7 @@ export class QuizRepository implements QuizRepositoryPort {
       slug?: string;
       requirements?: string | null;
       imageUrl?: string | null;
+      imagePublicId?: string | null;
       isFeatured?: boolean;
       isHidden?: boolean;
     };
@@ -824,6 +830,16 @@ export class QuizRepository implements QuizRepositoryPort {
         updatedAt: nowIso,
       })
       .where(and(eq(QUIZ_COLUMNS.quizId, quizId), isNull(QUIZ_COLUMNS.deletedAt)));
+  }
+
+  async findQuizCoverPublicIdById(quizId: string): Promise<string | null> {
+    const [row] = await this.db
+      .select({ imagePublicId: QUIZ_COLUMNS.imagePublicId })
+      .from(quizzes)
+      .where(and(eq(QUIZ_COLUMNS.quizId, quizId), isNull(QUIZ_COLUMNS.deletedAt)))
+      .limit(1);
+
+    return (row?.imagePublicId as string | null | undefined) ?? null;
   }
 
   private mapCreateError(error: unknown): never {

@@ -84,7 +84,13 @@ export class FriendshipRepository implements FriendshipRepositoryPort {
         avatarUrl: userProfiles.avatarUrl,
       })
       .from(friendships)
-      .innerJoin(users, eq(friendships.requesterId, users.userId))
+      // The Sent list is "requests I sent to someone" — the row we
+      // want to show is the addressee (recipient). Join on
+      // `addresseeId` so `username`/`displayName`/`avatarUrl`
+      // resolve to the recipient's identity, not the current user.
+      // Mirrors `getPendingRequests` which joins on `requesterId`
+      // because the Incoming list shows the sender.
+      .innerJoin(users, eq(friendships.addresseeId, users.userId))
       .leftJoin(userProfiles, eq(users.userId, userProfiles.userId))
       .where(
         and(
@@ -99,6 +105,11 @@ export class FriendshipRepository implements FriendshipRepositoryPort {
       friendshipId: r.friendshipId,
       requesterId: r.requesterId,
       addresseeId: r.addresseeId,
+      // `requesterXxx` is the DTO field used by both the Sent and
+      // Incoming payloads. For the Sent list the recipient is the
+      // person the row should describe, so the addressee's profile
+      // is surfaced through these fields. (See `dto-adapters.ts#toFriendRequest`
+      // on the client.)
       requesterUsername: r.username,
       requesterDisplayName: r.displayName,
       requesterAvatarUrl: r.avatarUrl,
@@ -106,13 +117,22 @@ export class FriendshipRepository implements FriendshipRepositoryPort {
     }));
   }
 
+  /**
+   * Mark a pending friend request as accepted or rejected. Like
+   * `cancelFriendRequestById`, this filters on `status='pending'` AND
+   * `isNull(deletedAt)` so a tombstoned row (one that the requester
+   * cancelled concurrently) cannot be flipped out of the pending
+   * state. Returns the row count so the caller can detect the
+   * "already terminal" race and surface
+   * `SOCIAL_FRIEND_REQUEST_NOT_FOUND` rather than silently succeed.
+   */
   async respondToFriendRequest(
     params: RespondToFriendRequestParams,
     requesterId: string,
-  ): Promise<void> {
+  ): Promise<number> {
     const newStatus = params.accept ? 'accepted' : 'rejected';
 
-    await this.db
+    const result = await this.db
       .update(friendships)
       .set({
         status: newStatus,
@@ -123,8 +143,41 @@ export class FriendshipRepository implements FriendshipRepositoryPort {
           eq(friendships.friendshipId, params.friendshipId),
           eq(friendships.addresseeId, requesterId),
           eq(friendships.status, 'pending'),
+          isNull(friendships.deletedAt),
         ),
-      );
+      )
+      .returning({ friendshipId: friendships.friendshipId });
+
+    return result.length;
+  }
+
+  /**
+   * Soft-delete a pending friend request that the requester is
+   * cancelling. Unlike `removeFriend`, this targets the row by its
+   * `friendshipId` (so it cannot accidentally match an accepted
+   * friendship with the same pair of users) and is restricted to
+   * `status='pending'` so a no-longer-cancellable row is a no-op
+   * rather than a silent success.
+   *
+   * Returns the number of rows updated so the caller can detect the
+   * "already terminal" case (0) and surface `SOCIAL_FRIEND_REQUEST_NOT_FOUND`
+   * upstream, matching the audit-friendly semantics of `removeFriend`.
+   */
+  async cancelFriendRequestById(friendshipId: string): Promise<number> {
+    const now = new Date().toISOString();
+    const result = await this.db
+      .update(friendships)
+      .set({ deletedAt: now, updatedAt: now })
+      .where(
+        and(
+          eq(friendships.friendshipId, friendshipId),
+          eq(friendships.status, 'pending'),
+          isNull(friendships.deletedAt),
+        ),
+      )
+      .returning({ friendshipId: friendships.friendshipId });
+
+    return result.length;
   }
 
   async getFriends(userId: string, limit: number, cursor?: string): Promise<Friend[]> {

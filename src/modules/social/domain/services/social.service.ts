@@ -62,6 +62,7 @@ import { UserNotFoundError } from '@/modules/user/domain/errors';
 import { isPostgresUniqueViolation } from '@/common/utils/db-error.util';
 import { AuditLogService } from '@/common/audit/audit-log.service';
 import { SocialCacheService } from '../../infrastructure/cache/social-cache.service';
+import { STORAGE_PORT, type StoragePort } from '@/core/storage/storage.port';
 
 @Injectable()
 export class SocialService {
@@ -84,6 +85,8 @@ export class SocialService {
     private readonly userRepository: UserRepositoryPort,
     @Inject(USER_DOMAIN_SERVICE)
     private readonly userDomainService: UserDomainService,
+    @Inject(STORAGE_PORT)
+    private readonly storage: StoragePort,
     private readonly auditLogService: AuditLogService,
     private readonly socialCacheService: SocialCacheService,
     @InjectPinoLogger(SocialService.name)
@@ -135,13 +138,24 @@ export class SocialService {
       });
 
       // Emit domain event
+      // The listener forwards this event to `notifyFriendRequestReceived`,
+      // which builds the notification body as
+      // `${requesterUsername} sent you a friend request`. The previous
+      // version left both username fields as empty strings — there is no
+      // downstream handler that fills them in — so the addressee received
+      // a notification body that began with a space. Resolve both
+      // usernames here (mirrors `emitUserFollowed` which inlines
+      // `followerUsername`/`followingUsername`).
+      const { followerUsername, followingUsername } =
+        await this.userFollowRepository.getUsernamesForUsers(requesterId, addresseeId);
+
       this.eventBus.emitFriendRequestSent({
         eventType: 'friend_request_sent',
         friendshipId: friendship.friendshipId,
         requesterId,
-        requesterUsername: '', // Will be filled by event handler if needed
+        requesterUsername: followerUsername,
         addresseeId,
-        addresseeUsername: '', // Will be filled by event handler if needed
+        addresseeUsername: followingUsername,
         timestamp: new Date(),
       });
 
@@ -173,7 +187,19 @@ export class SocialService {
       throw new FriendRequestForbiddenError();
     }
 
-    await this.friendshipRepository.respondToFriendRequest({ friendshipId, accept }, userId);
+    const updatedCount = await this.friendshipRepository.respondToFriendRequest(
+      { friendshipId, accept },
+      userId,
+    );
+
+    if (updatedCount === 0) {
+      // Race: the requester cancelled (or another caller already
+      // responded) between our SELECT and UPDATE. The repository's
+      // `isNull(deletedAt)` + `status='pending'` filter excluded
+      // every row, so the UPDATE was a no-op. Surface as not-found
+      // to mirror `cancelFriendRequest`'s contract.
+      throw new FriendRequestNotFoundError(friendshipId);
+    }
 
     // Invalidate social counts cache for both users
     await this.socialCacheService.invalidateCountsBatch([userId, friendship.requesterId]);
@@ -186,7 +212,13 @@ export class SocialService {
 
     // Emit domain event
     if (accept) {
-      const { followerUsername } = await this.userFollowRepository.getUsernamesForUsers(
+      // `getUsernamesForUsers(a, b)` returns { followerUsername: a's username,
+      // followingUsername: b's username }. The notification is delivered to the
+      // requester (see social-notification-listener.adapter.ts) and the body
+      // reads "`<addressee>` accepted your friend request", so the value bound
+      // to `addresseeUsername` must be the addressee's username — i.e. the
+      // `followingUsername` half of the result.
+      const { followingUsername } = await this.userFollowRepository.getUsernamesForUsers(
         friendship.requesterId,
         friendship.addresseeId,
       );
@@ -196,7 +228,7 @@ export class SocialService {
         friendshipId,
         requesterId: friendship.requesterId,
         addresseeId: friendship.addresseeId,
-        addresseeUsername: followerUsername,
+        addresseeUsername: followingUsername,
         timestamp: new Date(),
       });
     } else {
@@ -221,8 +253,23 @@ export class SocialService {
       throw new FriendRequestForbiddenError();
     }
 
+    if (friendship.status !== 'pending') {
+      // The request has already been accepted, rejected, or otherwise
+      // moved to a terminal state — there is nothing left to cancel
+      // and we want the caller (and the addressee) to see the row
+      // disappear from the Sent list rather than silently succeed.
+      throw new FriendRequestNotFoundError(friendshipId);
+    }
+
     const addresseeId = friendship.addresseeId;
-    await this.friendshipRepository.removeFriend(requesterId, addresseeId);
+    const updatedCount = await this.friendshipRepository.cancelFriendRequestById(friendshipId);
+
+    if (updatedCount === 0) {
+      // The row was soft-deleted by another tab / race condition
+      // between the SELECT and the UPDATE. Surface the same error
+      // the frontend already knows how to render (already cancelled).
+      throw new FriendRequestNotFoundError(friendshipId);
+    }
 
     // Invalidate social counts cache for both users
     await this.socialCacheService.invalidateCountsBatch([requesterId, addresseeId]);
@@ -392,7 +439,22 @@ export class SocialService {
       throw new UserNotBlockedError(blockedId);
     }
 
-    await this.blockRepository.unblockUser(blockerId, blockedId);
+    const updatedCount = await this.blockRepository.unblockUser(blockerId, blockedId);
+
+    if (updatedCount === 0) {
+      // Race: another caller already unblocked between our
+      // `findActiveBlock` SELECT and this UPDATE. The repository's
+      // `isNull(deletedAt)` filter excluded every row. Treat as a
+      // no-op so the caller sees a consistent "already unblocked"
+      // state instead of a misleading success log line.
+      this.logger.info({
+        event: 'user_unblock_race_noop',
+        blockerId,
+        blockedId,
+        blockId: block.blockId,
+      });
+      return;
+    }
 
     // Invalidate social counts cache for both users
     await this.socialCacheService.invalidateCountsBatch([blockerId, blockedId]);
@@ -762,11 +824,15 @@ export class SocialService {
         isBlocked: false,
         isBlockedBy: false,
       };
+      const avatarUrl = user.avatarPublicId
+        ? this.storage.deriveUrl(user.avatarPublicId, 'avatar')
+        : user.avatarUrl;
       return {
         userId: user.userId,
         username: user.username,
         displayName: user.displayName,
-        avatarUrl: user.avatarUrl,
+        avatarUrl,
+        avatarPublicId: user.avatarPublicId,
         isFriend: status.isFriend,
         hasPendingRequest: status.hasPendingRequest,
         isBlocked: status.isBlocked,

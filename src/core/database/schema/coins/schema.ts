@@ -218,10 +218,7 @@ export const userFlairSlots = pgTable(
       'btree',
       table.coinTransactionId.asc().nullsLast().op('uuid_ops'),
     ),
-    check(
-      'user_flair_slots_slot_window',
-      sql`slot_end > slot_start`,
-    ),
+    check('user_flair_slots_slot_window', sql`slot_end > slot_start`),
   ],
 );
 

@@ -60,6 +60,7 @@ export class QuizCommandService {
     const description = normalizeNullableText(command.description) ?? null;
     const requirements = normalizeNullableText(command.requirements) ?? null;
     const imageUrl = normalizeNullableText(command.imageUrl) ?? null;
+    const imagePublicId = normalizeNullableText(command.imagePublicId) ?? null;
     const categoryId = command.categoryId ?? null;
     const tagIds = normalizeLinkIds(command.tagIds);
     const nowIso = new Date().toISOString();
@@ -71,6 +72,7 @@ export class QuizCommandService {
       description,
       requirements,
       imageUrl,
+      imagePublicId,
       isFeatured: command.isFeatured,
       isHidden: command.isHidden,
       initialVersion: command.initialVersion,
@@ -100,6 +102,7 @@ export class QuizCommandService {
       slug: string;
       requirements: string | null;
       imageUrl: string | null;
+      imagePublicId: string | null;
       isFeatured: boolean;
       isHidden: boolean;
     }> = {};
@@ -122,6 +125,10 @@ export class QuizCommandService {
 
     if (hasOwn(command, 'imageUrl')) {
       patch.imageUrl = normalizeNullableText(command.imageUrl);
+    }
+
+    if (hasOwn(command, 'imagePublicId')) {
+      patch.imagePublicId = normalizeNullableText(command.imagePublicId);
     }
 
     if (hasOwn(command, 'isFeatured') && command.isFeatured !== undefined) {

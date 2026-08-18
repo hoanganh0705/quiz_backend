@@ -69,6 +69,10 @@ export class UserRepository implements UserRepositoryPort {
         updatedAt: users.updatedAt,
         displayName: userProfiles.displayName,
         avatarUrl: userProfiles.avatarUrl,
+        // Phase 6: load the new Cloudinary `public_id` column. The
+        // read-path mapper (`UserResponseMapper.toUserMeResponse`)
+        // prefers this over `avatarUrl`.
+        avatarPublicId: userProfiles.avatarPublicId,
         bio: userProfiles.bio,
       })
       .from(users)
@@ -88,6 +92,22 @@ export class UserRepository implements UserRepositoryPort {
       .limit(1);
 
     return row ?? null;
+  }
+
+  /**
+   * Phase 6: lightweight read of just the avatar `public_id`. Used by
+   * the lifecycle service to decide whether there is a Cloudinary
+   * asset to clean up after a profile update. Implemented as a
+   * dedicated query (not via `findMeById`) so the lifecycle service
+   * does not pull the full profile row on every replace.
+   */
+  async findAvatarPublicIdByUserId(userId: string): Promise<string | null> {
+    const [row] = await this.db
+      .select({ avatarPublicId: userProfiles.avatarPublicId })
+      .from(userProfiles)
+      .where(eq(userProfiles.userId, userId))
+      .limit(1);
+    return row?.avatarPublicId ?? null;
   }
 
   /**
@@ -530,7 +550,12 @@ export class UserRepository implements UserRepositoryPort {
 
   async updateProfile(
     userId: string,
-    patch: { displayName?: string | null; bio?: string | null; avatarUrl?: string | null },
+    patch: {
+      displayName?: string | null;
+      bio?: string | null;
+      avatarPublicId?: string | null;
+      avatarUrl?: string | null;
+    },
     nowIso: string,
   ): Promise<UserMeRow | null> {
     return this.db.transaction(async (tx) => {
@@ -542,15 +567,22 @@ export class UserRepository implements UserRepositoryPort {
       // To distinguish "absent" from "explicit null" we have to look at key
       // presence, not just truthiness. Build a `set` object that only
       // contains keys the caller actually sent.
+      //
+      // Phase 6: `avatarPublicId` is the new write path. `avatarUrl` is
+      // kept as a deprecated escape hatch (e.g. admin scripts that
+      // migrate legacy rows) — when both keys are present in the same
+      // patch, `avatarPublicId` wins because it is the source of truth.
       const profileSet: {
         displayName?: string | null;
         bio?: string | null;
+        avatarPublicId?: string | null;
         avatarUrl?: string | null;
         updatedAt: string;
       } = { updatedAt: nowIso };
 
       if ('displayName' in patch) profileSet.displayName = patch.displayName;
       if ('bio' in patch) profileSet.bio = patch.bio;
+      if ('avatarPublicId' in patch) profileSet.avatarPublicId = patch.avatarPublicId;
       if ('avatarUrl' in patch) profileSet.avatarUrl = patch.avatarUrl;
 
       const existing = await tx
@@ -560,12 +592,13 @@ export class UserRepository implements UserRepositoryPort {
         .limit(1);
 
       if (existing.length === 0) {
-        // First-time profile creation: insert with all three columns. Fields
+        // First-time profile creation: insert with all four columns. Fields
         // absent from `patch` are stored as NULL — the user has no prior
         // value to preserve.
         await tx.insert(userProfiles).values({
           userId,
           displayName: patch.displayName ?? null,
+          avatarPublicId: patch.avatarPublicId ?? null,
           avatarUrl: patch.avatarUrl ?? null,
           bio: patch.bio ?? null,
           updatedAt: nowIso,
@@ -598,6 +631,7 @@ export class UserRepository implements UserRepositoryPort {
           updatedAt: users.updatedAt,
           displayName: userProfiles.displayName,
           avatarUrl: userProfiles.avatarUrl,
+          avatarPublicId: userProfiles.avatarPublicId,
           bio: userProfiles.bio,
         })
         .from(users)
@@ -746,6 +780,7 @@ export class UserRepository implements UserRepositoryPort {
         updatedAt: users.updatedAt,
         displayName: userProfiles.displayName,
         avatarUrl: userProfiles.avatarUrl,
+        avatarPublicId: userProfiles.avatarPublicId,
         bio: userProfiles.bio,
       })
       .from(users)
@@ -791,6 +826,7 @@ export class UserRepository implements UserRepositoryPort {
       .select({
         displayName: userProfiles.displayName,
         avatarUrl: userProfiles.avatarUrl,
+        avatarPublicId: userProfiles.avatarPublicId,
         bio: userProfiles.bio,
       })
       .from(userProfiles)
@@ -803,6 +839,7 @@ export class UserRepository implements UserRepositoryPort {
       settings: isObjectRecord(updated.settings) ? updated.settings : {},
       displayName: profile?.displayName ?? null,
       avatarUrl: profile?.avatarUrl ?? null,
+      avatarPublicId: profile?.avatarPublicId ?? null,
       bio: profile?.bio ?? null,
     };
   }
@@ -816,6 +853,7 @@ export class UserRepository implements UserRepositoryPort {
         username: users.username,
         displayName: userProfiles.displayName,
         avatarUrl: userProfiles.avatarUrl,
+        avatarPublicId: userProfiles.avatarPublicId,
       })
       .from(users)
       .leftJoin(userProfiles, eq(users.userId, userProfiles.userId))
@@ -826,6 +864,7 @@ export class UserRepository implements UserRepositoryPort {
       username: r.username,
       displayName: r.displayName ?? null,
       avatarUrl: r.avatarUrl ?? null,
+      avatarPublicId: r.avatarPublicId ?? null,
     }));
   }
 
@@ -844,6 +883,7 @@ export class UserRepository implements UserRepositoryPort {
         username: users.username,
         displayName: userProfiles.displayName,
         avatarUrl: userProfiles.avatarUrl,
+        avatarPublicId: userProfiles.avatarPublicId,
         isVerified: users.isVerified,
       })
       .from(users)
@@ -859,6 +899,7 @@ export class UserRepository implements UserRepositoryPort {
       username: r.username,
       displayName: r.displayName ?? null,
       avatarUrl: r.avatarUrl ?? null,
+      avatarPublicId: r.avatarPublicId ?? null,
       isVerified: r.isVerified,
     };
   }

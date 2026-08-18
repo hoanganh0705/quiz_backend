@@ -178,7 +178,7 @@ export class QuizQuestionService {
     }> = [];
 
     for (let i = 0; i < command.questions.length; i++) {
-      const question = command.questions[i]!;
+      const question = command.questions[i];
       try {
         // Per-row validation; a thrown error here is caught below and
         // surfaced as a per-row failure without breaking the loop.
@@ -203,23 +203,21 @@ export class QuizQuestionService {
           })),
         });
 
-        const rows = await this.quizQuestionRepository.getQuestionById(
-          inserted.questionId,
-        );
+        const rows = await this.quizQuestionRepository.getQuestionById(inserted.questionId);
         if (rows.length === 0) {
           throw new QuizNotFoundError('Quiz question not found after insert');
         }
-        createdQuestions.push(rows[0]!);
+        createdQuestions.push(rows[0]);
         rowResults.push({
           index: i,
           status: 201,
           code: '',
           message: '',
-          questionId: rows[0]!.questionId,
+          questionId: rows[0].questionId,
         });
       } catch (err) {
         let code = 'GLOBAL_UNKNOWN';
-        let message = err instanceof Error ? err.message : 'Unknown error';
+        const message = err instanceof Error ? err.message : 'Unknown error';
         let status = 422;
         if (err instanceof QuizValidationError) {
           code = 'QUIZ_VALIDATION_FAILED';

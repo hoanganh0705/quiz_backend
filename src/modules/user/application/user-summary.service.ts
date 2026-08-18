@@ -22,9 +22,7 @@ import { UserApplicationService } from './user.application.service';
  */
 @Injectable()
 export class UserSummaryService {
-  constructor(
-    private readonly userApplicationService: UserApplicationService,
-  ) {}
+  constructor(private readonly userApplicationService: UserApplicationService) {}
 
   async getSummary(
     targetUserId: string,
@@ -40,14 +38,8 @@ export class UserSummaryService {
     return this.userApplicationService.getMySummary(targetUserId, acceptLanguage);
   }
 
-  async getAnalytics(
-    targetUserId: string,
-    requesterId: string,
-  ): Promise<UserAnalyticsResponseDto> {
-    return this.userApplicationService.getUserAnalytics(
-      targetUserId,
-      requesterId,
-    );
+  async getAnalytics(targetUserId: string, requesterId: string): Promise<UserAnalyticsResponseDto> {
+    return this.userApplicationService.getUserAnalytics(targetUserId, requesterId);
   }
 
   async getRecentActivity(
@@ -57,10 +49,7 @@ export class UserSummaryService {
   ): Promise<UserActivityItemDto[]> {
     // The activity service exposes a cursor-paginated reader; for
     // the bundle we request the first page and strip the envelope.
-    const result = await this.userApplicationService.listMyActivity(
-      targetUserId,
-      { limit },
-    );
+    const result = await this.userApplicationService.listMyActivity(targetUserId, { limit });
     return result.items ?? [];
   }
 }
