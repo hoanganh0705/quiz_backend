@@ -44,6 +44,7 @@ export type AuthorSummaryRow = {
   username: string;
   displayName: string | null;
   avatarUrl: string | null;
+  avatarPublicId: string | null;
 };
 
 /**
@@ -92,6 +93,7 @@ export type QuizWithPublishedVersionRow = {
   slug: string;
   requirements: string | null;
   imageUrl: string | null;
+  imagePublicId: string | null;
   categoryId: string | null;
   isFeatured: boolean;
   isHidden: boolean;
@@ -146,6 +148,7 @@ export type CreateQuizPayload = {
   description: string | null;
   requirements: string | null;
   imageUrl: string | null;
+  imagePublicId: string | null;
   isFeatured: boolean;
   isHidden: boolean;
   initialVersion: {
@@ -165,6 +168,7 @@ export type UpdateQuizPatch = {
   slug?: string;
   requirements?: string | null;
   imageUrl?: string | null;
+  imagePublicId?: string | null;
   isFeatured?: boolean;
   isHidden?: boolean;
 };
@@ -282,6 +286,15 @@ export interface QuizRepositoryPort {
   }): Promise<void>;
 
   softDeleteQuiz(quizId: string, nowIso: string): Promise<void>;
+
+  /**
+   * Phase 6: read the current cover `publicId` for a quiz. Used by
+   * `StorageImageLifecycleService` to discover the previous
+   * Cloudinary asset before performing a best-effort delete on
+   * replace / remove / quiz-delete. Returns `null` when the quiz
+   * has no cover image or the quiz does not exist.
+   */
+  findQuizCoverPublicIdById(quizId: string): Promise<string | null>;
 }
 
 export const QUIZ_REPOSITORY_PORT = Symbol('QUIZ_REPOSITORY_PORT');

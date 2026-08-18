@@ -55,12 +55,27 @@ export class BlockRepository implements BlockRepositoryPort {
     return row as BlockedUser;
   }
 
-  async unblockUser(blockerId: string, blockedId: string): Promise<void> {
+  /**
+   * Soft-delete an active block. Mirrors `cancelFriendRequestById`:
+   * filters on `isNull(deletedAt)` so a tombstoned row is a true
+   * no-op on the UPDATE, and returns the row count so the caller
+   * can detect a tight concurrent-unblock race.
+   */
+  async unblockUser(blockerId: string, blockedId: string): Promise<number> {
     const now = new Date().toISOString();
-    await this.db
+    const result = await this.db
       .update(blockedUsers)
       .set({ deletedAt: now })
-      .where(and(eq(blockedUsers.blockerId, blockerId), eq(blockedUsers.blockedId, blockedId)));
+      .where(
+        and(
+          eq(blockedUsers.blockerId, blockerId),
+          eq(blockedUsers.blockedId, blockedId),
+          isNull(blockedUsers.deletedAt),
+        ),
+      )
+      .returning({ blockId: blockedUsers.blockId });
+
+    return result.length;
   }
 
   async findActiveBlock(blockerId: string, blockedId: string): Promise<BlockedUser | null> {

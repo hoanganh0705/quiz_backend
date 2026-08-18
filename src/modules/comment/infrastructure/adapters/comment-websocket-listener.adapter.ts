@@ -14,10 +14,7 @@
 
 import { Inject, Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
-import {
-  COMMENT_DOMAIN_EVENT_BUS,
-  type CommentDomainEvent,
-} from '@/modules/comment/domain/events';
+import { COMMENT_DOMAIN_EVENT_BUS, type CommentDomainEvent } from '@/modules/comment/domain/events';
 import type { CommentDomainEventBusPort } from '@/modules/comment/domain/events';
 import { CommentGateway } from '../../transport/gateway/comment.gateway';
 

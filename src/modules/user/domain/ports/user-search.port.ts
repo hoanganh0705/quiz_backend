@@ -3,6 +3,7 @@ export interface UserSearchResult {
   username: string;
   displayName: string | null;
   avatarUrl: string | null;
+  avatarPublicId: string | null;
 }
 
 export interface UsernameSuggestion {
@@ -10,6 +11,7 @@ export interface UsernameSuggestion {
   username: string;
   displayName: string | null;
   avatarUrl: string | null;
+  avatarPublicId: string | null;
 }
 
 export interface UserSearchPort {

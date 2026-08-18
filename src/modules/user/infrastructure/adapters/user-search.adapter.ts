@@ -38,6 +38,7 @@ export class UserSearchAdapter implements UserSearchPort {
         username: users.username,
         displayName: userProfiles.displayName,
         avatarUrl: userProfiles.avatarUrl,
+        avatarPublicId: userProfiles.avatarPublicId,
       })
       .from(users)
       .leftJoin(userProfiles, eq(users.userId, userProfiles.userId))
@@ -60,6 +61,7 @@ export class UserSearchAdapter implements UserSearchPort {
         username: users.username,
         displayName: userProfiles.displayName,
         avatarUrl: userProfiles.avatarUrl,
+        avatarPublicId: userProfiles.avatarPublicId,
       })
       .from(users)
       .leftJoin(userProfiles, eq(users.userId, userProfiles.userId))

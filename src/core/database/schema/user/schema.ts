@@ -42,6 +42,17 @@ export const userProfiles = pgTable(
     userId: uuid('user_id').notNull().unique(),
     displayName: text('display_name'),
     avatarUrl: text('avatar_url'),
+    /**
+     * Cloudinary `public_id` for the avatar. Set when the avatar is
+     * Cloudinary-hosted; null when the avatar is a legacy external URL
+     * (Unsplash etc.) or Base64 (during the migrate-on-write window).
+     * Read paths prefer this column; `avatar_url` is the fallback.
+     *
+     * Phase 4 (Cloudinary migration): column added; the application
+     * service still writes `avatar_url` for now. Phase 6 wires the
+     * Cloudinary write path and lifecycle.
+     */
+    avatarPublicId: text('avatar_public_id'),
     bio: text(),
     // Phase 7 (F-17): `tagline` and `pinnedBadgeIds` were defined in
     // the initial schema but never exposed by any DTO or consumed by

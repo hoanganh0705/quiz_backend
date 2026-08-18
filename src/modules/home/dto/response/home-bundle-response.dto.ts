@@ -1,7 +1,10 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { LeaderboardEntryDto } from '@/modules/ranking/dto/response/leaderboard-entry.dto';
 import { QuizListItemDto } from '@/modules/quiz/dto/response/quiz-list-item.dto';
-import { TrendingQuizItemDto, PopularQuizItemDto } from '@/modules/quiz/dto/response/quiz-analytics.dto';
+import {
+  TrendingQuizItemDto,
+  PopularQuizItemDto,
+} from '@/modules/quiz/dto/response/quiz-analytics.dto';
 import { CategoryResponseDto } from '@/modules/category/dto/response/category-response.dto';
 import { RecentWinnersResponseDto } from '@/modules/ranking/dto/response/recent-winners-response.dto';
 

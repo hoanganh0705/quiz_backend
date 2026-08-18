@@ -13,6 +13,7 @@ import { ReviewRepository } from '@/modules/review/infrastructure/repositories/r
 import { QuizRepository } from '@/modules/quiz/infrastructure/repositories/quiz.repository';
 import { QuizVersionRepository } from '@/modules/quiz/infrastructure/repositories/quiz-version.repository';
 import { QuizQuestionRepository } from '@/modules/quiz/infrastructure/repositories/quiz-question.repository';
+import { StorageAssetsRepository } from '@/core/storage/infrastructure/repositories/storage-assets.repository';
 
 const createDrizzleDb = (connectionString: string) => {
   const pool = new Pool({ connectionString });
@@ -38,6 +39,7 @@ export type DrizzleDB = ReturnType<typeof createDrizzleDb>;
     QuizRepository,
     QuizVersionRepository,
     QuizQuestionRepository,
+    StorageAssetsRepository,
   ],
   exports: [
     DRIZZLE,
@@ -48,6 +50,7 @@ export type DrizzleDB = ReturnType<typeof createDrizzleDb>;
     QuizRepository,
     QuizVersionRepository,
     QuizQuestionRepository,
+    StorageAssetsRepository,
   ],
 })
 export class DatabaseModule {}

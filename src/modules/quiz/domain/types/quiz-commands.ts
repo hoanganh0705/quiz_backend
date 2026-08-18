@@ -7,6 +7,7 @@ export type CreateQuizCommand = {
   description: string | null;
   requirements: string | null;
   imageUrl: string | null;
+  imagePublicId: string | null;
   isFeatured: boolean;
   isHidden: boolean;
   initialVersion: {
@@ -25,6 +26,7 @@ export type UpdateQuizCommand = {
   slug?: string;
   requirements?: string | null;
   imageUrl?: string | null;
+  imagePublicId?: string | null;
   isFeatured?: boolean;
   isHidden?: boolean;
   categoryId?: string | null;

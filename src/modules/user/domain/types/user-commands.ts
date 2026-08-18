@@ -3,6 +3,16 @@ import type { UserPrivacySettingsDto } from '../../dto/request/update-me-setting
 export type UpdateProfileCommand = {
   displayName?: string | null;
   bio?: string | null;
+  /**
+   * Phase 6: Cloudinary `public_id` for the avatar. The application
+   * service enforces the §11 ownership rule before this command is
+   * dispatched.
+   */
+  avatarPublicId?: string | null;
+  /**
+   * @deprecated Phase 6 — superseded by `avatarPublicId`. Kept for
+   * admin / migration callers.
+   */
   avatarUrl?: string | null;
 };
 

@@ -85,7 +85,8 @@ export class HomeApplicationService {
       categories: Array.isArray(
         (categoriesResult as { items?: readonly CategoryResponseDto[] })?.items,
       )
-        ? ((categoriesResult as { items: readonly CategoryResponseDto[] }).items as HomeBundleResponseDto['categories'])
+        ? ((categoriesResult as { items: readonly CategoryResponseDto[] })
+            .items as HomeBundleResponseDto['categories'])
         : [],
       recentWinners,
       topPlayers: topPlayersResult.entries,
