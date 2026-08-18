@@ -5,7 +5,16 @@ export const BLOCK_REPOSITORY_PORT = Symbol('BLOCK_REPOSITORY_PORT');
 export interface BlockRepositoryPort {
   blockUser(blockerId: string, blockedId: string, reason?: string): Promise<BlockedUser>;
 
-  unblockUser(blockerId: string, blockedId: string): Promise<void>;
+  /**
+   * Soft-delete an active block. Filters on `isNull(deletedAt)` so a
+   * tombstoned row cannot be re-stamped on a tight race. Returns
+   * the row count so the caller can distinguish a successful
+   * unblock from a no-op (the block was already removed by another
+   * tab). The service-layer `findActiveBlock` check still enforces
+   * the existence precondition for the happy path; this filter is
+   * the second line of defence against concurrent unblock clicks.
+   */
+  unblockUser(blockerId: string, blockedId: string): Promise<number>;
 
   /**
    * Find an active (non-soft-deleted) block between two users.

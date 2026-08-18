@@ -271,9 +271,11 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       exception instanceof BaseDomainException &&
       'fieldErrors' in exception &&
       Array.isArray((exception as { fieldErrors: unknown }).fieldErrors)
-        ? ((exception as unknown as {
-            fieldErrors: Array<{ field: string; message: string }>;
-          }).fieldErrors)
+        ? (
+            exception as unknown as {
+              fieldErrors: Array<{ field: string; message: string }>;
+            }
+          ).fieldErrors
         : undefined;
 
     const problem: ProblemDetail = {
@@ -308,7 +310,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
           : 60;
       response.setHeader('Retry-After', String(retryAfterSeconds));
       if (problem.extensions) {
-        (problem.extensions as Record<string, unknown>).retryAfter = retryAfterSeconds;
+        problem.extensions.retryAfter = retryAfterSeconds;
       }
     }
 

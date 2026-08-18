@@ -8,6 +8,14 @@ export interface UserMeRow {
   email: string;
   displayName: string | null;
   avatarUrl: string | null;
+  /**
+   * Cloudinary `public_id` for the avatar. Phase 6: the read-path
+   * mapper (`UserResponseMapper.toUserMeResponse`) prefers this
+   * column over `avatarUrl` and derives a CDN URL via
+   * `STORAGE_PORT.deriveUrl`. Legacy Base64 rows continue to surface
+   * through `avatarUrl` until Phase 7 migrate-on-write catches up.
+   */
+  avatarPublicId: string | null;
   bio: string | null;
   xpTotal: number;
   currentStreak: number;
@@ -22,6 +30,7 @@ export interface UserPublicRow {
   username: string;
   displayName: string | null;
   avatarUrl: string | null;
+  avatarPublicId: string | null;
 }
 
 /**
@@ -35,6 +44,7 @@ export interface UserLookupRow {
   username: string;
   displayName: string | null;
   avatarUrl: string | null;
+  avatarPublicId: string | null;
   isVerified: boolean;
 }
 
@@ -122,6 +132,13 @@ export interface MyTournamentAnalyticsRow {
 
 export interface UserRepositoryPort {
   findMeById(userId: string): Promise<UserMeRow | null>;
+  /**
+   * Phase 6: read just the avatar `public_id` for the lifecycle
+   * service. Returns `null` when the user has no profile row or the
+   * column is NULL — both cases are equivalent (no Cloudinary asset to
+   * clean up).
+   */
+  findAvatarPublicIdByUserId(userId: string): Promise<string | null>;
   findUserProfileSettings(userId: string): Promise<{ isPublic: boolean } | null>;
   /**
    * Phase 3 (F-7): Read every granular privacy flag for the target user.
@@ -172,6 +189,21 @@ export interface UserRepositoryPort {
     patch: {
       displayName?: string | null;
       bio?: string | null;
+      /**
+       * Phase 6: Cloudinary `public_id` for the avatar. When present
+       * (non-undefined), it overrides the legacy `avatarUrl` field for
+       * the write path — the legacy column is left untouched and the
+       * read-path mapper falls back to it for any row that has not yet
+       * migrated. `avatarPublicId: null` clears the avatar (and the
+       * lifecycle service deletes the underlying Cloudinary asset).
+       */
+      avatarPublicId?: string | null;
+      /**
+       * @deprecated Phase 6 — superseded by `avatarPublicId`. Kept for
+       * the read-path fallback for legacy Base64 rows that have not
+       * been migrated yet. New writes should send `avatarPublicId`
+       * only.
+       */
       avatarUrl?: string | null;
     },
     nowIso: string,

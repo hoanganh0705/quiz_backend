@@ -832,6 +832,10 @@ export class SocialRepository implements SocialRepositoryPort {
     return this.friendshipRepository.respondToFriendRequest(params, requesterId);
   }
 
+  async cancelFriendRequestById(friendshipId: string) {
+    return this.friendshipRepository.cancelFriendRequestById(friendshipId);
+  }
+
   // Friends
   async getFriends(userId: string, limit: number, cursor?: string | null) {
     return this.friendshipRepository.getFriends(userId, limit, cursor ?? undefined);

@@ -26,6 +26,8 @@ import { CommentModule } from './modules/comment/comment.module';
 import { DailyChallengeModule } from './modules/daily-challenge/daily-challenge.module';
 import { HomeModule } from './modules/home/home.module';
 import { CoinModule } from './modules/coins/coin.module';
+import { UploadModule } from './modules/upload/upload.module';
+import { StorageModule } from './core/storage';
 import {
   validateEnv,
   appConfig,
@@ -42,6 +44,7 @@ import {
   authThrottleConfig,
   googleOAuthConfig,
   swaggerConfig,
+  cloudinaryConfig,
 } from './core/config';
 import { RedisModule } from './core/redis/redis.module';
 import { PermissionsGuard } from './common/authorization/guards/permissions.guard';
@@ -90,6 +93,7 @@ import { CoreLoggerModule } from './core/logger/logger.module';
         authThrottleConfig,
         googleOAuthConfig,
         swaggerConfig,
+        cloudinaryConfig,
       ],
     }),
     ThrottlerModule.forRoot({
@@ -120,6 +124,13 @@ import { CoreLoggerModule } from './core/logger/logger.module';
     CoreLoggerModule,
     RedisModule,
     DatabaseModule,
+    // Phase 3 — Cloudinary abstraction (StorageModule.forRoot wires
+    // `STORAGE_PORT` to the cloudinary adapter in dev/prod and to the
+    // fake adapter in tests) plus the §11 ownership-rule application
+    // service that user/quiz modules consult before writing a
+    // `public_id` (Phase 6 will plug into that gate).
+    StorageModule.forRoot(),
+    UploadModule,
     UserModule,
     AuthModule,
     CommonModule,

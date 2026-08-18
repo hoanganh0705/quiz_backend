@@ -1,4 +1,14 @@
-import { Body, Controller, Get, Headers, Inject, Param, ParseUUIDPipe, Patch, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Headers,
+  Inject,
+  Param,
+  ParseUUIDPipe,
+  Patch,
+  Query,
+} from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import { CurrentUser, OptionalCurrentUser } from '@/common/decorators/current-user.decorator';
@@ -236,8 +246,10 @@ export class UserController {
     @CurrentUser('sub') userId: string,
     @Headers('accept-language') acceptLanguage?: string,
   ) {
-    const result =
-      await this.userProfileBundleService.getBundleForCurrentUser(userId, acceptLanguage);
+    const result = await this.userProfileBundleService.getBundleForCurrentUser(
+      userId,
+      acceptLanguage,
+    );
     return this.presenter.getMyProfileBundle(result);
   }
 

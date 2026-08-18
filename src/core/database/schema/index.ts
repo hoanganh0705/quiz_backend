@@ -74,3 +74,6 @@ export * from './outbox/schema';
 // Coins (Phase 1 — schema + relations; no application code yet)
 export * from './coins/schema';
 export * from './coins/relations';
+
+// Storage (Phase 4 — Cloudinary asset ownership binding)
+export * from './storage/schema';

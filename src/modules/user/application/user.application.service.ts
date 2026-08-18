@@ -1,4 +1,4 @@
-import { BadRequestException, Inject, Injectable } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Inject, Injectable } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { UserDomainService } from '../domain/user.service';
 import { UserResponseMapper } from '../mappers/user-response.mapper';
@@ -35,23 +35,34 @@ import {
   COIN_REPOSITORY_PORT,
   type CoinRepositoryPort,
 } from '@/modules/coins/domain/ports/coin-repository.port';
+import { StorageApplicationService } from '@/core/storage/application/storage.application.service';
+import { StorageImageLifecycleService } from '@/core/storage/application/storage-image-lifecycle.service';
+import {
+  USER_REPOSITORY_PORT,
+  type UserRepositoryPort,
+} from '../domain/ports/user-repository.port';
 
 @Injectable()
 export class UserApplicationService {
   constructor(
     private readonly userDomainService: UserDomainService,
+    private readonly mapper: UserResponseMapper,
     @Inject(QUIZ_LISTING_PORT)
     private readonly quizListing: QuizListingPort,
     private readonly socialService: SocialService,
     @Inject(COIN_REPOSITORY_PORT)
     private readonly coinRepository: CoinRepositoryPort,
+    private readonly storageOwnership: StorageApplicationService,
+    private readonly storageLifecycle: StorageImageLifecycleService,
+    @Inject(USER_REPOSITORY_PORT)
+    private readonly userRepository: UserRepositoryPort,
     @InjectPinoLogger(UserApplicationService.name)
     private readonly logger: PinoLogger,
   ) {}
 
   async getMe(userId: string): Promise<UserMeResponseDto> {
     const row = await this.userDomainService.getMe(userId);
-    return UserResponseMapper.toUserMeResponse(row);
+    return this.mapper.toUserMeResponse(row);
   }
 
   /**
@@ -63,7 +74,7 @@ export class UserApplicationService {
    */
   async getUserByUsername(username: string): Promise<UserLookupResponseDto> {
     const row = await this.userDomainService.getUserByUsername(username);
-    return UserResponseMapper.toUserLookupResponse(row);
+    return this.mapper.toUserLookupResponse(row);
   }
 
   /**
@@ -109,7 +120,7 @@ export class UserApplicationService {
       userId: me.userId,
       username: me.username,
       displayName: me.displayName,
-      avatarUrl: me.avatarUrl,
+      avatarUrl: this.mapper.resolveAvatarUrl(me.avatarPublicId, me.avatarUrl),
       bio: me.bio,
       // Phase 1 (S-2): `country`, `countryCode`, and `bgImageUrl` are
       // declared on the DTO because the frontend already reads them
@@ -175,13 +186,68 @@ export class UserApplicationService {
   }
 
   async updateProfile(userId: string, dto: UpdateMeDto): Promise<UserMeResponseDto> {
+    // Phase 6: the §11 ownership gate. When the client sends a
+    // non-null `avatarPublicId`, it must already be owned by this user
+    // (i.e. there must be a row in `storage_assets` with that
+    // `public_id`, `owner_id = userId`, and `purpose = 'avatar'`).
+    //
+    // We check BEFORE the DB write so the response can be a clean
+    // 403 — once the column has been updated, rolling back is
+    // expensive and ambiguous (the old value is no longer the column
+    // content). `null` is always allowed: it means "clear my avatar"
+    // and the lifecycle service handles the underlying asset.
+    //
+    // The DTO `@Matches` validator (Phase 4) catches malformed shapes
+    // upstream — this gate is the *authoritative* check on the
+    // (publicId, owner, purpose) triple.
+    if (dto.avatarPublicId !== undefined && dto.avatarPublicId !== null) {
+      const owns = await this.storageOwnership.userOwnsAssetForPurpose({
+        publicId: dto.avatarPublicId,
+        ownerId: userId,
+        purpose: 'avatar',
+      });
+      if (!owns) {
+        throw new ForbiddenException({
+          code: 'ASSET_NOT_OWNED',
+          message:
+            'The supplied avatar publicId is not owned by the authenticated user for the avatar purpose.',
+        });
+      }
+    }
+
     const command: UpdateProfileCommand = {
       displayName: dto.displayName,
       bio: dto.bio,
-      avatarUrl: dto.avatarUrl,
+      avatarPublicId: dto.avatarPublicId,
     };
     const row = await this.userDomainService.updateProfile(userId, command);
-    return UserResponseMapper.toUserMeResponse(row);
+    if (!row) {
+      throw new BadRequestException({
+        code: 'USER_NOT_FOUND',
+        message: 'The authenticated user could not be located.',
+      });
+    }
+
+    // Phase 6: lifecycle cleanup. We do this AFTER the DB write so
+    // that a Cloudinary delete failure cannot leave the user's
+    // avatar in a half-updated state. If the lifecycle service throws
+    // (it shouldn't — failures are swallowed internally) we still
+    // return the successful update to the caller; orphan cleanup is
+    // a Phase 8 background job's responsibility.
+    const newPublicId = dto.avatarPublicId !== undefined ? dto.avatarPublicId : row.avatarPublicId;
+    try {
+      await this.storageLifecycle.replaceAvatar(userId, newPublicId, (id) =>
+        this.userRepository.findAvatarPublicIdByUserId(id),
+      );
+    } catch (err) {
+      this.logger.warn({
+        event: 'storage_lifecycle_unexpected_error',
+        userId,
+        err: err instanceof Error ? err.message : String(err),
+      });
+    }
+
+    return this.mapper.toUserMeResponse(row);
   }
 
   async updateSettings(userId: string, dto: UpdateMeSettingsDto): Promise<UserMeResponseDto> {
@@ -200,7 +266,7 @@ export class UserApplicationService {
       privacy: dto.privacy,
     };
     const row = await this.userDomainService.updateSettings(userId, command);
-    return UserResponseMapper.toUserMeResponse(row);
+    return this.mapper.toUserMeResponse(row);
   }
 
   /**

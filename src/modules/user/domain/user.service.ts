@@ -256,6 +256,7 @@ export class UserDomainService {
     const patch: {
       displayName?: string | null;
       bio?: string | null;
+      avatarPublicId?: string | null;
       avatarUrl?: string | null;
     } = {};
 
@@ -267,6 +268,16 @@ export class UserDomainService {
       patch.bio = command.bio?.trim() ?? null;
     }
 
+    // Phase 6: `avatarPublicId` is the new write path. The application
+    // service has already verified the §11 ownership rule before
+    // reaching this domain method. `null` clears the column.
+    if ('avatarPublicId' in command) {
+      patch.avatarPublicId = command.avatarPublicId?.trim() ?? null;
+    }
+
+    // Legacy `avatarUrl` pass-through — kept for internal callers
+    // (admin scripts that migrate Base64 rows). The application
+    // service no longer surfaces this to clients.
     if ('avatarUrl' in command) {
       patch.avatarUrl = command.avatarUrl?.trim() ?? null;
     }
@@ -328,7 +339,7 @@ export class UserDomainService {
     this.eventBus.emitProfileUpdated(
       new UserProfileUpdatedEvent(
         userId,
-        Object.keys(patch) as ('displayName' | 'bio' | 'avatarUrl')[],
+        Object.keys(patch) as ('displayName' | 'bio' | 'avatarPublicId' | 'avatarUrl')[],
         nowIso,
       ),
     );

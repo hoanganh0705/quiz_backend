@@ -17,7 +17,24 @@ export interface FriendshipRepositoryPort {
 
   getSentRequests(requesterId: string): Promise<FriendRequest[]>;
 
-  respondToFriendRequest(params: RespondToFriendRequestParams, requesterId: string): Promise<void>;
+  /**
+   * Mark a pending friend request as accepted or rejected. Filters
+   * on `status='pending'` AND `isNull(deletedAt)` so a tombstoned
+   * row cannot be flipped. Returns the row count so the caller can
+   * detect the "already terminal" race.
+   */
+  respondToFriendRequest(
+    params: RespondToFriendRequestParams,
+    requesterId: string,
+  ): Promise<number>;
+
+  /**
+   * Soft-delete a pending friend request by its `friendshipId`.
+   * Returns the number of rows updated so the caller can distinguish
+   * a successful cancel from a no-op (the request was already
+   * accepted, rejected, or cancelled by another tab).
+   */
+  cancelFriendRequestById(friendshipId: string): Promise<number>;
 
   getFriends(userId: string, limit: number, cursor?: string | null): Promise<Friend[]>;
 

@@ -53,28 +53,29 @@ const SUPPORTED_LOCALES = ['en', 'vi'] as const;
 export type SupportedLocale = (typeof SUPPORTED_LOCALES)[number];
 export const DEFAULT_LOCALE: SupportedLocale = 'en';
 
-const LEVEL_TITLE_LOCALES: Readonly<Record<SupportedLocale, Readonly<Record<LevelTitle, string>>>> = {
-  en: {
-    [LevelTitle.Novice]: 'Novice',
-    [LevelTitle.Apprentice]: 'Apprentice',
-    [LevelTitle.Competitor]: 'Competitor',
-    [LevelTitle.Specialist]: 'Specialist',
-    [LevelTitle.Expert]: 'Expert',
-    [LevelTitle.Master]: 'Master',
-    [LevelTitle.Grandmaster]: 'Grandmaster',
-    [LevelTitle.Legend]: 'Legend',
-  },
-  vi: {
-    [LevelTitle.Novice]: 'Tân thủ',
-    [LevelTitle.Apprentice]: 'Học việc',
-    [LevelTitle.Competitor]: 'Đối thủ',
-    [LevelTitle.Specialist]: 'Chuyên gia',
-    [LevelTitle.Expert]: 'Cao thủ',
-    [LevelTitle.Master]: 'Bậc thầy',
-    [LevelTitle.Grandmaster]: 'Đại sư phụ',
-    [LevelTitle.Legend]: 'Huyền thoại',
-  },
-};
+const LEVEL_TITLE_LOCALES: Readonly<Record<SupportedLocale, Readonly<Record<LevelTitle, string>>>> =
+  {
+    en: {
+      [LevelTitle.Novice]: 'Novice',
+      [LevelTitle.Apprentice]: 'Apprentice',
+      [LevelTitle.Competitor]: 'Competitor',
+      [LevelTitle.Specialist]: 'Specialist',
+      [LevelTitle.Expert]: 'Expert',
+      [LevelTitle.Master]: 'Master',
+      [LevelTitle.Grandmaster]: 'Grandmaster',
+      [LevelTitle.Legend]: 'Legend',
+    },
+    vi: {
+      [LevelTitle.Novice]: 'Tân thủ',
+      [LevelTitle.Apprentice]: 'Học việc',
+      [LevelTitle.Competitor]: 'Đối thủ',
+      [LevelTitle.Specialist]: 'Chuyên gia',
+      [LevelTitle.Expert]: 'Cao thủ',
+      [LevelTitle.Master]: 'Bậc thầy',
+      [LevelTitle.Grandmaster]: 'Đại sư phụ',
+      [LevelTitle.Legend]: 'Huyền thoại',
+    },
+  };
 
 /**
  * Negotiation rules:

@@ -34,8 +34,7 @@ export class QuizHistoryEntryDto {
 
   @ApiProperty({
     description:
-      'Presentation-friendly status. Maps raw attempt status + score into ' +
-      'the editor UI enum.',
+      'Presentation-friendly status. Maps raw attempt status + score into ' + 'the editor UI enum.',
     enum: ['passed', 'failed', 'abandoned', 'in_progress'],
     example: 'passed',
   })
@@ -101,7 +100,8 @@ export class QuizHistoryPaginationDto {
     description: 'Cursor for the next page',
     type: String,
     nullable: true,
-    example: 'eyJzb3J0VmFsdWUiOiIyMDI1LTA2LTAxVDEyOjQ1OjAwLjAwMFoiLCJhdHRlbXB0SWQiOiI1NTBlODQwMC1lMjliLTQxZDQtYTcxNi00NDY2NTU0NDAwOTkifQ==',
+    example:
+      'eyJzb3J0VmFsdWUiOiIyMDI1LTA2LTAxVDEyOjQ1OjAwLjAwMFoiLCJhdHRlbXB0SWQiOiI1NTBlODQwMC1lMjliLTQxZDQtYTcxNi00NDY2NTU0NDAwOTkifQ==',
   })
   nextCursor!: string | null;
 

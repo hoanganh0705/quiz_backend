@@ -27,6 +27,7 @@ import { UserSummaryService } from './application/user-summary.service';
 import { COIN_REPOSITORY_PORT } from '@/modules/coins/domain/ports/coin-repository.port';
 import { CoinRepository } from '@/modules/coins/infrastructure/repositories/coin.repository';
 import { CoinModule } from '@/modules/coins/coin.module';
+import { UserResponseMapper } from './mappers/user-response.mapper';
 
 @Module({
   imports: [
@@ -69,6 +70,11 @@ import { CoinModule } from '@/modules/coins/coin.module';
     RecentlyPlayedQuizzesService,
     UserProfileBundleService,
     UserSummaryService,
+    // Phase 6: re-exported as a constructor-injected dependency of
+    // `UserApplicationService`. The mapper owns the
+    // "prefer-new-column, fall-back-to-legacy" read-path logic for
+    // `avatarUrl`.
+    UserResponseMapper,
     // Phase 4 (S-3): re-register `CoinRepository` here so the
     // `COIN_REPOSITORY_PORT` token is resolvable when UserApplicationService
     // builds. The provider instance lives in CoinModule; `useExisting`

@@ -1,18 +1,17 @@
 import { Controller, Get, Query, Res, StreamableFile } from '@nestjs/common';
-import { ApiOperation, ApiTags, ApiOkResponse, ApiInternalServerErrorResponse } from '@nestjs/swagger';
+import {
+  ApiOperation,
+  ApiTags,
+  ApiOkResponse,
+  ApiInternalServerErrorResponse,
+} from '@nestjs/swagger';
 import type { Response } from 'express';
 import { ApiAuth } from '@/common/swagger/swagger-decorators';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
 import { AttemptApplicationService } from '../../application/attempt.application.service';
-import {
-  QuizHistoryResponseDto,
-  UserAttemptStatsResponseDto,
-} from '../../dto/response';
-import {
-  ListMyQuizHistoryQueryDto,
-  QuizHistoryExportQueryDto,
-} from '../../dto/request';
+import { QuizHistoryResponseDto, UserAttemptStatsResponseDto } from '../../dto/response';
+import { ListMyQuizHistoryQueryDto, QuizHistoryExportQueryDto } from '../../dto/request';
 import { AttemptSummaryResponseDto } from '../../dto/response/attempt-summary-response.dto';
 
 /**
@@ -33,16 +32,14 @@ import { AttemptSummaryResponseDto } from '../../dto/response/attempt-summary-re
 @ApiTags('users')
 @Controller('users/me/quiz-history')
 export class QuizHistoryController {
-  constructor(
-    private readonly attemptApplicationService: AttemptApplicationService,
-  ) {}
+  constructor(private readonly attemptApplicationService: AttemptApplicationService) {}
 
   @Get()
   @ApiAuth()
   @ApiOperation({
     summary: 'List my quiz history',
     description:
-      'Returns a cursor-paginated list of the authenticated user\'s quiz ' +
+      "Returns a cursor-paginated list of the authenticated user's quiz " +
       'attempts, mapped to a presentation-friendly entry shape.',
   })
   @ApiOkResponse({
@@ -98,7 +95,7 @@ export class QuizHistoryController {
     summary: 'Export my quiz history',
     description:
       'Streams a downloadable CSV (default) or JSON file of the authenticated ' +
-      'user\'s quiz attempts. Honors the same `status`, `fromDate`, and `toDate` ' +
+      "user's quiz attempts. Honors the same `status`, `fromDate`, and `toDate` " +
       'filters as `GET /quiz-history`. The Content-Disposition header carries a ' +
       'date-stamped filename.',
   })
@@ -121,10 +118,7 @@ export class QuizHistoryController {
     const filename = `quiz-history-${date}.${format}`;
 
     res.setHeader('Content-Type', format === 'csv' ? 'text/csv' : 'application/json');
-    res.setHeader(
-      'Content-Disposition',
-      `attachment; filename="${filename}"`,
-    );
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     // Friendly default cache: never cache exports — they reflect the
     // current state of the user's data.
     res.setHeader('Cache-Control', 'no-store');
@@ -133,11 +127,7 @@ export class QuizHistoryController {
       const csv = toCsv(result.items.map(toQuizHistoryEntry));
       return new StreamableFile(Buffer.from(csv, 'utf8'));
     }
-    const json = JSON.stringify(
-      result.items.map(toQuizHistoryEntry),
-      null,
-      2,
-    );
+    const json = JSON.stringify(result.items.map(toQuizHistoryEntry), null, 2);
     return new StreamableFile(Buffer.from(json, 'utf8'));
   }
 }
