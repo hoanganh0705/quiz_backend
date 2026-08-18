@@ -17,12 +17,7 @@
 
 import { relations } from 'drizzle-orm/relations';
 
-import {
-  coinTransactions,
-  userFlairSlots,
-  userQuizSuppressions,
-  userWallets,
-} from './schema';
+import { coinTransactions, userFlairSlots, userQuizSuppressions, userWallets } from './schema';
 import { users } from '../auth/schema';
 import { badges, userBadges } from '../achievement/schema';
 import { quizzes } from '../quiz/schema';
@@ -61,16 +56,13 @@ export const userFlairSlotsRelations = relations(userFlairSlots, ({ one }) => ({
   }),
 }));
 
-export const userQuizSuppressionsRelations = relations(
-  userQuizSuppressions,
-  ({ one }) => ({
-    user: one(users, {
-      fields: [userQuizSuppressions.userId],
-      references: [users.userId],
-    }),
-    quiz: one(quizzes, {
-      fields: [userQuizSuppressions.quizId],
-      references: [quizzes.quizId],
-    }),
+export const userQuizSuppressionsRelations = relations(userQuizSuppressions, ({ one }) => ({
+  user: one(users, {
+    fields: [userQuizSuppressions.userId],
+    references: [users.userId],
   }),
-);
+  quiz: one(quizzes, {
+    fields: [userQuizSuppressions.quizId],
+    references: [quizzes.quizId],
+  }),
+}));

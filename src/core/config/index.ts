@@ -34,3 +34,4 @@ export { authSecurityConfig, type AuthSecurityConfig } from './auth-security.con
 export { authThrottleConfig, type AuthThrottleConfig } from './auth-throttle.config';
 export { googleOAuthConfig, type GoogleOAuthConfig } from './google-oauth.config';
 export { swaggerConfig, type SwaggerConfig } from './swagger.config';
+export { cloudinaryConfig, type CloudinaryConfig } from './cloudinary.config';

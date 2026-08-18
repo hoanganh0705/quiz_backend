@@ -29,7 +29,16 @@ export interface SocialRepositoryPort {
   getFriendRequest(friendshipId: string): Promise<Friendship | null>;
   getPendingRequests(addresseeId: string): Promise<FriendRequest[]>;
   getSentRequests(requesterId: string): Promise<FriendRequest[]>;
-  respondToFriendRequest(params: RespondToFriendRequestParams, requesterId: string): Promise<void>;
+  respondToFriendRequest(
+    params: RespondToFriendRequestParams,
+    requesterId: string,
+  ): Promise<number>;
+
+  /**
+   * Soft-delete a pending friend request by its `friendshipId`.
+   * Returns the number of rows updated.
+   */
+  cancelFriendRequestById(friendshipId: string): Promise<number>;
 
   // Friends
   getFriends(userId: string, limit: number, cursor?: string | null): Promise<Friend[]>;
@@ -39,7 +48,7 @@ export interface SocialRepositoryPort {
 
   // Blocking
   blockUser(blockerId: string, blockedId: string, reason?: string): Promise<BlockedUser>;
-  unblockUser(blockerId: string, blockedId: string): Promise<void>;
+  unblockUser(blockerId: string, blockedId: string): Promise<number>;
   isBlocked(blockerId: string, blockedId: string): Promise<boolean>;
   getBlockedUsers(blockerId: string): Promise<BlockedUser[]>;
   findActiveBlock(blockerId: string, blockedId: string): Promise<BlockedUser | null>;

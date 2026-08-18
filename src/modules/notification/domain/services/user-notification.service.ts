@@ -10,7 +10,7 @@ import { NotificationChannelService } from '../../infrastructure/adapters/notifi
 
 export interface UserProfileUpdatedParams {
   userId: string;
-  changedFields: ReadonlyArray<'displayName' | 'bio' | 'avatarUrl'>;
+  changedFields: ReadonlyArray<'displayName' | 'bio' | 'avatarUrl' | 'avatarPublicId'>;
 }
 
 @Injectable()

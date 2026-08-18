@@ -84,6 +84,16 @@ export const quizzes = pgTable(
     ),
     requirements: text(),
     imageUrl: text('image_url'),
+    /**
+     * Cloudinary `public_id` for the cover image. Set when the cover is
+     * Cloudinary-hosted; null otherwise. Read paths prefer this
+     * column; `image_url` is the fallback for seed/external URLs.
+     *
+     * Phase 4 (Cloudinary migration): column added; the application
+     * service still writes `image_url` for now. Phase 6 wires the
+     * Cloudinary write path and lifecycle.
+     */
+    imagePublicId: text('image_public_id'),
     isFeatured: boolean('is_featured').default(false).notNull(),
     isHidden: boolean('is_hidden').default(false).notNull(),
     isVerified: boolean('is_verified').default(false).notNull(),
@@ -213,6 +223,12 @@ export const quizQuestions = pgTable(
     position: integer().notNull(),
     questionText: text('question_text').notNull(),
     imageUrl: text('image_url'),
+    /**
+     * Reserved (out of scope for Phase 4). Added now so the future
+     * question-image feature can write to it without a schema
+     * migration. The application never writes to this column.
+     */
+    imagePublicId: text('image_public_id'),
     createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' })
       .defaultNow()
       .notNull(),

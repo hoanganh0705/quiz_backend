@@ -10,8 +10,7 @@ import { HomeBundleResponseDto } from '../../dto/response/home-bundle-response.d
  */
 @Injectable()
 export class HomePresenter {
-  private static readonly ok = <T>(payload: T): ApiResponseEnvelope<T> =>
-    ApiResponse.ok(payload);
+  private static readonly ok = <T>(payload: T): ApiResponseEnvelope<T> => ApiResponse.ok(payload);
 
   readonly getBundle = HomePresenter.ok<HomeBundleResponseDto>;
 }

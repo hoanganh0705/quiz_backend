@@ -40,6 +40,9 @@ import { QUIZ_DOMAIN_EVENT_BUS } from './domain/ports/quiz-domain-event-bus.port
 import { QuizController } from './transport/controller/quiz.controller';
 import { QuizPresenter } from './transport/presenters/quiz.presenter';
 
+// Mappers
+import { QuizResponseMapper } from './mappers/quiz-response.mapper';
+
 // Repository Ports
 import { QUIZ_REPOSITORY_PORT } from './domain/ports/quiz-repository.port';
 import { QUIZ_VERSION_REPOSITORY_PORT } from './domain/ports/quiz-version-repository.port';
@@ -93,6 +96,7 @@ import { UserModule } from '@/modules/user/user.module';
     ReviewEventListenerAdapter,
 
     QuizPresenter,
+    QuizResponseMapper,
 
     // Repository Implementations
     QuizRepository,

@@ -7,9 +7,7 @@ import { CreateQuizQuestionsDto } from '../dto/request/create-quiz-questions.dto
 import type { QuizQuestionAuthorDto } from '../dto/response/quiz-question-author.dto';
 import type { BulkQuizQuestionsResponseDto } from '../dto/response/bulk-quiz-questions-response.dto';
 import type { CreateQuizQuestionCommand, CreateQuizQuestionsCommand } from '../domain/types';
-import {
-  QuizValidationError,
-} from '../domain/errors/quiz-domain.errors';
+import { QuizValidationError } from '../domain/errors/quiz-domain.errors';
 import { QuizValidationFieldError } from '../domain/errors/quiz-validation-field.error';
 
 @Injectable()
@@ -47,7 +45,7 @@ export class QuizQuestionApplicationService {
         command,
       );
       const responses = QuizQuestionAuthorResponseMapper.toAuthorQuestionResponses(rows);
-      return responses[0]!;
+      return responses[0];
     } catch (err) {
       if (err instanceof QuizValidationError) {
         throw this.translateValidationError(err);

@@ -1,3 +1,6 @@
+import { Inject, Injectable } from '@nestjs/common';
+import { STORAGE_PORT, type StoragePort } from '@/core/storage/storage.port';
+import type { UploadPurpose } from '@/core/storage/storage.types';
 import type {
   AuthorSummaryRow,
   CategorySummaryRow,
@@ -70,15 +73,19 @@ const EMPTY_CONTEXT: QuizProjectionContext = Object.freeze({});
 function resolveAuthor(
   row: QuizWithPublishedVersionRow,
   context: QuizProjectionContext,
+  storage: StoragePort,
 ): AuthorSummaryDto | null {
   if (!row.creatorId) return null;
   const found = context.authorsByUserId?.get(row.creatorId);
   if (!found) return null;
+  const avatarUrl = found.avatarPublicId
+    ? storage.deriveUrl(found.avatarPublicId, 'avatar' as UploadPurpose)
+    : found.avatarUrl;
   return {
     userId: found.userId,
     username: found.username,
     displayName: found.displayName,
-    avatarUrl: found.avatarUrl,
+    avatarUrl,
   };
 }
 
@@ -98,13 +105,32 @@ function resolveCategorySlug(
   return context.categoriesById?.get(quiz.categoryId)?.slug ?? null;
 }
 
+@Injectable()
 export class QuizResponseMapper {
-  static toQuizResponse(
+  constructor(@Inject(STORAGE_PORT) private readonly storage: StoragePort) {}
+
+  /**
+   * Resolve the cover image URL for a quiz row, preferring
+   * `imagePublicId` (Cloudinary) and falling back to legacy
+   * `imageUrl` (raw seed/external URL). Returns `null` when neither
+   * is present.
+   */
+  private deriveImageUrl(
+    row: Pick<QuizWithPublishedVersionRow, 'imageUrl' | 'imagePublicId'>,
+  ): string | null {
+    if (row.imagePublicId) {
+      return this.storage.deriveUrl(row.imagePublicId, 'quiz' as UploadPurpose);
+    }
+    return row.imageUrl ?? null;
+  }
+
+  toQuizResponse(
     row: QuizWithPublishedVersionRow,
     publishedQuestions?: (QuizQuestionPlayerDto | QuizQuestionAuthorDto)[],
     tags: QuizTagDto[] = [],
     context: QuizProjectionContext = EMPTY_CONTEXT,
   ): QuizResponseDto {
+    const imageUrl = this.deriveImageUrl(row);
     const hasPublishedVersion =
       row.publishedVersionQuizVersionId !== null &&
       row.publishedVersionVersionNumber !== null &&
@@ -120,12 +146,12 @@ export class QuizResponseMapper {
       return {
         quizId: row.quizId,
         creatorId: row.creatorId,
-        creator: resolveAuthor(row, context),
+        creator: resolveAuthor(row, context, this.storage),
         title: row.title,
         description: row.description,
         slug: row.slug,
         requirements: row.requirements,
-        imageUrl: row.imageUrl,
+        imageUrl,
         categoryId: row.categoryId,
         categoryName: resolveCategoryName(context, row),
         categorySlug: resolveCategorySlug(context, row),
@@ -173,12 +199,12 @@ export class QuizResponseMapper {
     return {
       quizId: row.quizId,
       creatorId: row.creatorId,
-      creator: resolveAuthor(row, context),
+      creator: resolveAuthor(row, context, this.storage),
       title: row.title,
       description: row.description,
       slug: row.slug,
       requirements: row.requirements,
-      imageUrl: row.imageUrl,
+      imageUrl,
       categoryId: row.categoryId,
       categoryName: resolveCategoryName(context, row),
       categorySlug: resolveCategorySlug(context, row),
@@ -203,7 +229,7 @@ export class QuizResponseMapper {
    * exactly five SQL queries (page + tags + authors + categories +
    * stats) instead of 1 + 4×N.
    */
-  static toListItem(
+  toListItem(
     row: QuizWithPublishedVersionRow,
     context: QuizProjectionContext = EMPTY_CONTEXT,
   ): QuizListItemDto {

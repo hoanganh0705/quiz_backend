@@ -45,6 +45,29 @@ const parseRequiredString = (env: Record<string, unknown>, key: string): string 
 };
 
 /**
+ * Validates and parses a string with an optional fallback.
+ * Returns the fallback when the key is missing or empty.
+ * Trims whitespace when a value is present.
+ */
+const parseStringWithDefault = (
+  env: Record<string, unknown>,
+  key: string,
+  fallback: string,
+): string => {
+  const rawValue = env[key];
+
+  if (rawValue === undefined || rawValue === null || rawValue === '') {
+    return fallback;
+  }
+
+  if (typeof rawValue !== 'string') {
+    throw new Error(`${key} must be a string`);
+  }
+
+  return rawValue.trim();
+};
+
+/**
  * Validates and parses a positive integer with optional fallback.
  * Accepts numeric or string input.
  */
@@ -248,6 +271,12 @@ export const validateEnv = (env: Record<string, unknown>) => {
   const emailSendTimeoutMs = parsePositiveInteger(env, 'EMAIL_SEND_TIMEOUT_MS', 5_000);
   const emailQueueConcurrency = parsePositiveInteger(env, 'EMAIL_QUEUE_CONCURRENCY', 5);
 
+  // Cloudinary (backed by core/storage in Phase 1; values required from Phase 3 onward)
+  const cloudinaryCloudName = parseRequiredString(env, 'CLOUDINARY_CLOUD_NAME');
+  const cloudinaryApiKey = parseRequiredString(env, 'CLOUDINARY_API_KEY');
+  const cloudinaryApiSecret = parseRequiredString(env, 'CLOUDINARY_API_SECRET');
+  const cloudinaryFolder = parseStringWithDefault(env, 'CLOUDINARY_FOLDER', 'quiz-app-dev');
+
   // Server Configuration
   const port = parsePositiveInteger(env, 'PORT', 3000);
   const nodeEnv = parseEnum(env, 'NODE_ENV', NODE_ENVS, 'NODE_ENV');
@@ -286,6 +315,10 @@ export const validateEnv = (env: Record<string, unknown>) => {
     RESEND_API_KEY: resendApiKey,
     EMAIL_SEND_TIMEOUT_MS: emailSendTimeoutMs,
     EMAIL_QUEUE_CONCURRENCY: emailQueueConcurrency,
+    CLOUDINARY_CLOUD_NAME: cloudinaryCloudName,
+    CLOUDINARY_API_KEY: cloudinaryApiKey,
+    CLOUDINARY_API_SECRET: cloudinaryApiSecret,
+    CLOUDINARY_FOLDER: cloudinaryFolder,
     APP_NAME: appName,
     APP_VERSION: appVersion,
     APP_DESCRIPTION: appDescription,

@@ -15,6 +15,10 @@ import {
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { DEFAULT_SLUG_PATTERN } from '@/common/utils/slug.util';
 import {
+  STORAGE_PUBLIC_ID_INVALID_MESSAGE,
+  STORAGE_PUBLIC_ID_TAIL_PATTERN,
+} from '@/common/utils/storage-public-id.util';
+import {
   trimString,
   trimStringToLowerCase,
   trimStringToNullIfBlank,
@@ -91,6 +95,29 @@ export class UpdateQuizDto {
   @IsUrl({ require_tld: false })
   @MaxLength(2048)
   imageUrl?: string | null;
+
+  /**
+   * Phase 4 (Cloudinary migration): the Cloudinary `public_id` for
+   * the cover image. Phase 6 wires this into the application service;
+   * until then the value is accepted by the DTO and the shape is
+   * enforced here.
+   */
+  @ApiPropertyOptional({
+    description:
+      'Cloudinary public_id returned by `POST /api/v1/uploads`. ' +
+      "Ownership is verified against the caller's storage_assets row.",
+    type: String,
+    example:
+      'quiz-app/quizzes/0d8e3a45-7d7a-71f0-9e2a-9b0d9e2c7f3b/0190f6a5-d2c4-7b3e-a8e9-2b9f7e2b8b1a',
+    nullable: true,
+  })
+  @IsOptional()
+  @Transform(({ value }: { value: unknown }) => trimStringToNullIfBlank(value))
+  @IsString()
+  @Matches(STORAGE_PUBLIC_ID_TAIL_PATTERN, {
+    message: STORAGE_PUBLIC_ID_INVALID_MESSAGE,
+  })
+  imagePublicId?: string | null;
 
   @ApiPropertyOptional({
     description: 'Featured on home page',
