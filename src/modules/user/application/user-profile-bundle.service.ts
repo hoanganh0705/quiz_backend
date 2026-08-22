@@ -11,6 +11,8 @@ import {
   type CoinRepositoryPort,
 } from '@/modules/coins/domain/ports/coin-repository.port';
 import { COIN_ECONOMY_LIMITS } from '@/modules/coins/coin.constants';
+import { CACHE_PROVIDER, type CacheProvider } from '@/common/ports/cache.provider';
+import { stampedeProtectedGetOrSet } from '@/modules/quiz/application/quiz-cache.utils';
 
 /**
  * `UserProfileBundleService` — Phase 4 (S-25 + S-26) bundle
@@ -48,14 +50,38 @@ import { COIN_ECONOMY_LIMITS } from '@/modules/coins/coin.constants';
 @Injectable()
 export class UserProfileBundleService {
   private static readonly BUNDLE_TX_LIMIT = 20;
+  private static readonly CACHE_TTL_MS = 2 * 60_000;
+  private static readonly CACHE_NAMESPACE = 'user:profile-bundle:v1';
 
   constructor(
     private readonly userSummaryService: UserSummaryService,
     @Inject(COIN_REPOSITORY_PORT)
     private readonly coinRepository: CoinRepositoryPort,
+    @Inject(CACHE_PROVIDER)
+    private readonly cache: CacheProvider,
   ) {}
 
   async getBundleForCurrentUser(
+    userId: string,
+    acceptLanguage?: string,
+  ): Promise<UserProfileBundleResponseDto> {
+    // Phase 3 #3: cache the bundle per user. The cache key is
+    // namespaced by `userId`; the `acceptLanguage` is part of the
+    // resolved bundle (used for level-title localization) so we
+    // include a short hash of it in the key. Two different
+    // languages for the same user hash to different keys.
+    const localeHash = this.hashLocale(acceptLanguage);
+    const cacheKey = `${UserProfileBundleService.CACHE_NAMESPACE}:${userId}:${localeHash}`;
+
+    return stampedeProtectedGetOrSet(
+      this.cache,
+      cacheKey,
+      UserProfileBundleService.CACHE_TTL_MS,
+      () => this.computeBundleForCurrentUser(userId, acceptLanguage),
+    );
+  }
+
+  private async computeBundleForCurrentUser(
     userId: string,
     acceptLanguage?: string,
   ): Promise<UserProfileBundleResponseDto> {
@@ -97,6 +123,19 @@ export class UserProfileBundleService {
       wallet: this.toWalletDto(wallet, earnedToday),
       transactions: this.toTransactionsPage(transactions),
     };
+  }
+
+  private hashLocale(locale: string | undefined): string {
+    if (!locale) return 'default';
+    // First 8 chars of a 32-bit FNV-1a hash — good enough for a
+    // cache-key suffix and avoids pulling in crypto for a
+    // single-byte string.
+    let hash = 0x811c9dc5;
+    for (let i = 0; i < locale.length; i += 1) {
+      hash ^= locale.charCodeAt(i);
+      hash = Math.imul(hash, 0x01000193);
+    }
+    return (hash >>> 0).toString(16).padStart(8, '0');
   }
 
   async getBundleForUser(

@@ -39,6 +39,6 @@ import { EmailResilienceRunner } from './resilience/email-resilience.runner';
     EmailService,
     EmailProcessor,
   ],
-  exports: [EmailService],
+  exports: [EmailService, EMAIL_QUEUE_TOKENS.QUEUE, EMAIL_QUEUE_TOKENS.CONNECTION],
 })
 export class EmailModule {}

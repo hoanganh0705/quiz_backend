@@ -13,6 +13,7 @@ import { CloudinaryStorageAdapter } from './cloudinary.adapter';
 import {
   type CloudinarySDK,
   type DestroyResult,
+  type SignedUploadPayload,
   type UploadStreamCallback,
   type UploadStreamResult,
 } from './cloudinary.config';
@@ -45,13 +46,13 @@ function makeUploadStreamTransform(result: UploadStreamResult): Transform {
   }) as typeof t.end;
   // Capture the callback passed to upload_stream via a wrapper installed
   // by the test setup (see `upload_stream` mock below).
-  (t as Transform & { __capturedCb?: UploadStreamCallback }).__capturedCb = null;
+  (t as Transform & { __capturedCb?: UploadStreamCallback | null | undefined }).__capturedCb = undefined;
   Object.defineProperty(t, '__capturedCb', {
-    get() {
+    get(): UploadStreamCallback | null | undefined {
       return capturedCb;
     },
-    set(v: UploadStreamCallback | null) {
-      capturedCb = v;
+    set(v: UploadStreamCallback | null | undefined) {
+      capturedCb = v ?? null;
     },
   });
   return t;
@@ -61,6 +62,8 @@ function makeSdk(overrides: Partial<CloudinarySDK> = {}): CloudinarySDK & {
   _uploadStream: jest.Mock;
   _destroy: jest.Mock;
   _url: jest.Mock;
+  _ping: jest.Mock;
+  _signRequest: jest.Mock;
 } {
   const uploadStreamMock = jest.fn((opts: Record<string, unknown>, cb: UploadStreamCallback) => {
     const publicIdValue = opts['public_id'];
@@ -85,14 +88,30 @@ function makeSdk(overrides: Partial<CloudinarySDK> = {}): CloudinarySDK & {
   const urlMock = jest.fn((publicId: string, _opts: Record<string, unknown>): string => {
     return `https://res.cloudinary.com/demo/image/upload/${publicId}`;
   });
+  const pingMock = jest.fn((): Promise<void> => Promise.resolve());
+  const signRequestMock = jest.fn(
+    (params: Record<string, string | number>): Promise<SignedUploadPayload> => {
+      const timestamp = Number(params['timestamp'] ?? Math.floor(Date.now() / 1000));
+      return Promise.resolve({
+        signature: `sig-${String(params['public_id'] ?? '')}-${String(timestamp)}`,
+        timestamp,
+        apiKey: 'test-api-key',
+        cloudName: 'test-cloud',
+      });
+    },
+  );
 
   return {
     upload_stream: overrides.upload_stream ?? uploadStreamMock,
     destroy: overrides.destroy ?? destroyMock,
     url: overrides.url ?? urlMock,
+    ping: overrides.ping ?? pingMock,
+    signRequest: overrides.signRequest ?? signRequestMock,
     _uploadStream: uploadStreamMock,
     _destroy: destroyMock,
     _url: urlMock,
+    _ping: pingMock,
+    _signRequest: signRequestMock,
   };
 }
 
@@ -205,6 +224,96 @@ describe('CloudinaryStorageAdapter', () => {
         expect.objectContaining({ secure: true, transformation: expect.any(Array) }),
       );
       expect(url).toContain('quiz-app/avatars/owner/id');
+    });
+  });
+
+  describe('ping', () => {
+    it('delegates to sdk.ping', async () => {
+      const sdk = makeSdk();
+      const adapter = new CloudinaryStorageAdapter(sdk, makeLogger());
+
+      await adapter.ping();
+
+      expect(sdk._ping).toHaveBeenCalledTimes(1);
+    });
+
+    it('rethrows sdk.ping failures so the health probe sees the error', async () => {
+      const sdk = makeSdk({
+        ping: () => Promise.reject(new Error('cloudinary down')) as Promise<void>,
+      });
+      const adapter = new CloudinaryStorageAdapter(sdk, makeLogger());
+
+      await expect(adapter.ping()).rejects.toThrow('cloudinary down');
+    });
+  });
+
+  describe('createSignedUpload (Phase 7 #1)', () => {
+    it('issues a signed envelope with the per-purpose folder and owner in publicId', async () => {
+      const sdk = makeSdk();
+      const adapter = new CloudinaryStorageAdapter(sdk, makeLogger());
+
+      const signed = await adapter.createSignedUpload({
+        ownerId: OWNER,
+        purpose: 'avatar',
+        expiresInSeconds: 600,
+      });
+
+      // Sign was called once with `public_id` and `timestamp`.
+      expect(sdk._signRequest).toHaveBeenCalledTimes(1);
+      const [params] = sdk._signRequest.mock.calls[0]!;
+      expect(params['public_id']).toMatch(
+        new RegExp(`^${UPLOAD_POLICY.avatar.folder}/${OWNER}/[0-9a-f-]{36}$`),
+      );
+      expect(typeof params['timestamp']).toBe('number');
+
+      // Cloudinary upload endpoint shape.
+      expect(signed.uploadUrl).toBe('https://api.cloudinary.com/v1_1/test-cloud/image/upload');
+      expect(signed.publicId).toBe(params['public_id']);
+      expect(signed.folder).toBe(UPLOAD_POLICY.avatar.folder);
+      expect(signed.signature).toMatch(/^sig-/);
+      expect(signed.apiKey).toBe('test-api-key');
+      expect(signed.timestamp).toBe(params['timestamp']);
+      // ISO 8601.
+      expect(signed.expiresAt).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
+    });
+
+    it('clamps expiresInSeconds to the [60, 3600] window', async () => {
+      const sdk = makeSdk();
+      const adapter = new CloudinaryStorageAdapter(sdk, makeLogger());
+      const before = Math.floor(Date.now() / 1000);
+
+      // Below floor → clamp up.
+      await adapter.createSignedUpload({
+        ownerId: OWNER,
+        purpose: 'avatar',
+        expiresInSeconds: 5,
+      });
+      const smallTimestamp = sdk._signRequest.mock.calls[0]![0]['timestamp'] as number;
+      expect(smallTimestamp - before).toBeGreaterThanOrEqual(60);
+
+      // Above ceiling → clamp down.
+      await adapter.createSignedUpload({
+        ownerId: OWNER,
+        purpose: 'avatar',
+        expiresInSeconds: 9_000,
+      });
+      const largeTimestamp = sdk._signRequest.mock.calls[1]![0]['timestamp'] as number;
+      expect(largeTimestamp - before).toBeLessThanOrEqual(3600);
+    });
+
+    it('throws UPLOAD_SIGN_FAILED when signing rejects', async () => {
+      const sdk = makeSdk({
+        signRequest: () => Promise.reject(new Error('hmac fail')),
+      });
+      const adapter = new CloudinaryStorageAdapter(sdk, makeLogger());
+
+      await expect(
+        adapter.createSignedUpload({
+          ownerId: OWNER,
+          purpose: 'avatar',
+          expiresInSeconds: 600,
+        }),
+      ).rejects.toMatchObject({ response: { code: 'UPLOAD_SIGN_FAILED' } });
     });
   });
 });

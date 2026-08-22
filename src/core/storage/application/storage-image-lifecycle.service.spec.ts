@@ -22,6 +22,7 @@
 import { StorageImageLifecycleService } from './storage-image-lifecycle.service';
 import { StorageApplicationService } from './storage.application.service';
 import type { StoragePort } from '../storage.port';
+import type { SignedUpload, UploadPurpose } from '../storage.types';
 
 class InMemoryStorage implements StoragePort {
   readonly deleted: string[] = [];
@@ -44,6 +45,29 @@ class InMemoryStorage implements StoragePort {
 
   deriveUrl(publicId: string): string {
     return `https://cdn.test/${publicId}`;
+  }
+
+  ping(): Promise<void> {
+    return Promise.resolve();
+  }
+
+  createSignedUpload(input: {
+    ownerId: string;
+    purpose: UploadPurpose;
+    expiresInSeconds: number;
+  }): Promise<SignedUpload> {
+    const timestamp = Math.floor(Date.now() / 1000) + input.expiresInSeconds;
+    return Promise.resolve({
+      uploadUrl: 'https://fake.cloudinary.local/image/upload',
+      publicId: `quiz-app/${input.purpose === 'avatar' ? 'avatars' : 'quizzes'}/${
+        input.ownerId
+      }/signed-fake`,
+      expiresAt: new Date(timestamp * 1000).toISOString(),
+      apiKey: 'fake-key',
+      signature: 'fake-signature',
+      timestamp,
+      folder: input.purpose === 'avatar' ? 'quiz-app/avatars' : 'quiz-app/quizzes',
+    });
   }
 }
 

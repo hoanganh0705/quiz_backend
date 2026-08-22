@@ -56,6 +56,42 @@ export interface UserRepositoryPort {
     isVerified: boolean;
   }>;
 
+  /**
+   * Phase 0 #2: atomic account creation.
+   *
+   * Creates the user row AND seeds the initial `passwordHistory` entry in a
+   * single transaction. If either write fails the whole registration rolls
+   * back, so a user can never end up in the DB without their initial hash
+   * archived (which would silently disable the password-reuse policy for
+   * that user on the first change).
+   *
+   * Why this matters:
+   * - The previous `createUser` + (later) `changePassword` flow meant the
+   *   very first password was *never* archived into `password_history`,
+   *   because `changePassword` only archives the *previous* hash. A user
+   *   could register with `password`, then `changePassword(password)` to
+   *   the same value and reuse it indefinitely.
+   * - Splitting the writes also left a window where a user row existed but
+   *   had no password history, which is a corruption signal at best.
+   *
+   * @throws {InternalServerErrorException} on unique-constraint violation or
+   *   any other DB failure. Caller (registration service) maps this to the
+   *   generic 2xx + generic-message response to avoid email enumeration.
+   */
+  createUserWithPasswordHistory(params: {
+    email: string;
+    username: string;
+    passwordHash: string;
+    nowIso: string;
+  }): Promise<{
+    userId: string;
+    username: string;
+    email: string;
+    role: AuthIdentity['role'];
+    createdAt: string;
+    isVerified: boolean;
+  }>;
+
   setEmailVerificationToken(userId: string, tokenHash: string, expiresAtIso: string): Promise<void>;
 
   markEmailAsVerified(userId: string, nowIso: string): Promise<void>;

@@ -46,6 +46,7 @@ import { EmailService } from '@/modules/email/email.service';
 import { VerificationTokenService } from './domain/verification-token.service';
 import { OutboxAdapter } from './infrastructure/outbox/outbox.adapter';
 import { OutboxProcessorService } from './infrastructure/outbox/outbox-processor.service';
+import { OutboxNotifyListener } from './infrastructure/outbox/outbox-notify.listener';
 import { AuthAuditLogService } from './infrastructure/audit/auth-audit-log.service';
 import { AuthTransactionContext } from './infrastructure/transaction/auth-transaction.context';
 import { TransactionalInterceptor } from './infrastructure/transaction/transactional.interceptor';
@@ -135,6 +136,7 @@ import { AuthSecurityNotificationService } from '@/modules/notification/domain/s
     // OAuth infrastructure and services
     OutboxAdapter,
     OutboxProcessorService,
+    OutboxNotifyListener,
     AuthSecurityNotificationService,
     GoogleOAuthConfig,
     GoogleOAuthAdapter,

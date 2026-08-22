@@ -1,7 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { and, asc, desc, eq, inArray, isNull, or, sql, type SQL } from 'drizzle-orm';
 import type { AnyPgColumn } from 'drizzle-orm/pg-core';
-import { DRIZZLE } from '@/core/database/drizzle.constants';
+import { DRIZZLE, DRIZZLE_READ } from '@/core/database/drizzle.constants';
 import type { DrizzleDB } from '@/core/database/database.module';
 import {
   categories,
@@ -120,10 +120,19 @@ const QUIZ_WITH_VERSION_PROJECTION = {
 
 @Injectable()
 export class QuizRepository implements QuizRepositoryPort {
-  constructor(@Inject(DRIZZLE) private readonly db: DrizzleDB) {}
+  // Phase 7 #3 — separate primary and read-replica drizzle clients.
+  // Writes (create / update / soft-delete) flow through `db`. Reads
+  // flow through `dbRead`, which is bound to `DRIZZLE_READ` (the
+  // replica when configured, the primary otherwise). Tests that do
+  // not configure a replica will receive the same pool as the
+  // primary, so the route-through is invisible.
+  constructor(
+    @Inject(DRIZZLE) private readonly db: DrizzleDB,
+    @Inject(DRIZZLE_READ) private readonly dbRead: DrizzleDB,
+  ) {}
 
   async getActiveQuizRecordById(quizId: string): Promise<QuizRecordRow | null> {
-    const [quiz] = await this.db
+    const [quiz] = await this.dbRead
       .select(QUIZ_RECORD_PROJECTION)
       .from(quizzes)
       .where(and(eq(QUIZ_COLUMNS.quizId, quizId), isNull(QUIZ_COLUMNS.deletedAt)))
@@ -135,7 +144,7 @@ export class QuizRepository implements QuizRepositoryPort {
   async getQuizWithPublishedVersionById(
     quizId: string,
   ): Promise<QuizWithPublishedVersionRow | null> {
-    const [row] = await this.db
+    const [row] = await this.dbRead
       .select(QUIZ_WITH_VERSION_PROJECTION)
       .from(quizzes)
       .leftJoin(
@@ -151,7 +160,7 @@ export class QuizRepository implements QuizRepositoryPort {
   async getQuizWithPublishedVersionBySlug(
     slug: string,
   ): Promise<QuizWithPublishedVersionRow | null> {
-    const [row] = await this.db
+    const [row] = await this.dbRead
       .select(QUIZ_WITH_VERSION_PROJECTION)
       .from(quizzes)
       .leftJoin(
@@ -171,7 +180,7 @@ export class QuizRepository implements QuizRepositoryPort {
   }
 
   async getTagsForQuiz(quizId: string): Promise<QuizTagRow[]> {
-    const rows = await this.db
+    const rows = await this.dbRead
       .select({
         tagId: tags.tagId,
         name: tags.name,
@@ -187,7 +196,7 @@ export class QuizRepository implements QuizRepositoryPort {
 
   async getTagsForQuizIds(quizIds: string[]): Promise<Map<string, QuizTagRow[]>> {
     if (quizIds.length === 0) return new Map();
-    const rows = await this.db
+    const rows = await this.dbRead
       .select({
         quizId: quizTags.quizId,
         tagId: tags.tagId,
@@ -210,7 +219,7 @@ export class QuizRepository implements QuizRepositoryPort {
 
   async getAuthorSummaries(userIds: string[]): Promise<Map<string, AuthorSummaryRow>> {
     if (userIds.length === 0) return new Map();
-    const rows = await this.db
+    const rows = await this.dbRead
       .select({
         userId: users.userId,
         username: users.username,
@@ -237,7 +246,7 @@ export class QuizRepository implements QuizRepositoryPort {
 
   async getCategorySummaries(categoryIds: string[]): Promise<Map<string, CategorySummaryRow>> {
     if (categoryIds.length === 0) return new Map();
-    const rows = await this.db
+    const rows = await this.dbRead
       .select({
         categoryId: categories.categoryId,
         name: categories.name,
@@ -264,7 +273,7 @@ export class QuizRepository implements QuizRepositoryPort {
    */
   async getAggregatesForQuizzes(quizIds: string[]): Promise<Map<string, QuizAggregatesRow>> {
     if (quizIds.length === 0) return new Map();
-    const rows = await this.db
+    const rows = await this.dbRead
       .select({
         quizId: quizStats.quizId,
         averageRating: sql<number>`COALESCE(${quizStats.avgRating}, 0)`,
@@ -288,7 +297,7 @@ export class QuizRepository implements QuizRepositoryPort {
 
   async getQuestionCountsForVersionIds(versionIds: string[]): Promise<Map<string, number>> {
     if (versionIds.length === 0) return new Map();
-    const rows = await this.db
+    const rows = await this.dbRead
       .select({
         quizVersionId: quizQuestions.quizVersionId,
         count: sql<number>`COUNT(*)::int`,
@@ -417,7 +426,7 @@ export class QuizRepository implements QuizRepositoryPort {
               ]
             : [desc(QUIZ_COLUMNS.createdAt), desc(QUIZ_COLUMNS.quizId)];
 
-    const baseFrom = this.db
+    const baseFrom = this.dbRead
       .select(QUIZ_WITH_VERSION_PROJECTION)
       .from(quizzes)
       .leftJoin(
@@ -463,7 +472,7 @@ export class QuizRepository implements QuizRepositoryPort {
       );
     }
 
-    const rows = await this.db
+    const rows = await this.dbRead
       .select(QUIZ_WITH_VERSION_PROJECTION)
       .from(quizzes)
       .leftJoin(
@@ -501,7 +510,7 @@ export class QuizRepository implements QuizRepositoryPort {
       );
     }
 
-    const rows = await this.db
+    const rows = await this.dbRead
       .select(QUIZ_WITH_VERSION_PROJECTION)
       .from(quizzes)
       .leftJoin(
@@ -539,7 +548,7 @@ export class QuizRepository implements QuizRepositoryPort {
       );
     }
 
-    const rows = await this.db
+    const rows = await this.dbRead
       .select(QUIZ_WITH_VERSION_PROJECTION)
       .from(quizzes)
       .leftJoin(
@@ -554,7 +563,7 @@ export class QuizRepository implements QuizRepositoryPort {
   }
 
   async findFeaturedQuizzes(limit: number): Promise<QuizWithPublishedVersionRow[]> {
-    const rows = await this.db
+    const rows = await this.dbRead
       .select(QUIZ_WITH_VERSION_PROJECTION)
       .from(quizzes)
       .innerJoin(
@@ -577,7 +586,7 @@ export class QuizRepository implements QuizRepositoryPort {
   async findRelatedQuizzes(
     params: FindRelatedQuizzesParams,
   ): Promise<QuizWithPublishedVersionRow[]> {
-    const rows = await this.db
+    const rows = await this.dbRead
       .select({
         ...QUIZ_WITH_VERSION_PROJECTION,
         categoryMatchCount: sql<number>`(
@@ -678,7 +687,7 @@ export class QuizRepository implements QuizRepositoryPort {
   }
 
   async getQuizStats(quizId: string): Promise<QuizStatsRow | null> {
-    const [stats] = await this.db
+    const [stats] = await this.dbRead
       .select({
         quizId: QUIZ_COLUMNS.quizId,
         totalAttempts: sql<number>`COALESCE(${sql.raw('qs.total_attempts')}, 0)`,
@@ -702,7 +711,9 @@ export class QuizRepository implements QuizRepositoryPort {
     return (stats as QuizStatsRow | undefined) ?? null;
   }
 
-  async createQuizWithInitialVersion(payload: CreateQuizPayload): Promise<{ quizId: string }> {
+  async createQuizWithInitialVersion(
+    payload: CreateQuizPayload,
+  ): Promise<{ row: QuizWithPublishedVersionRow; tags: QuizTagRow[] }> {
     const { nowIso } = payload;
 
     try {
@@ -749,6 +760,7 @@ export class QuizRepository implements QuizRepositoryPort {
             .where(eq(QUIZ_COLUMNS.quizId, quizId));
         }
 
+        let tagRows: QuizTagRow[] = [];
         if (payload.tagIds.length > 0) {
           await tx.insert(quizTags).values(
             payload.tagIds.map((tagId) => ({
@@ -757,12 +769,64 @@ export class QuizRepository implements QuizRepositoryPort {
               createdAt: nowIso,
             })),
           );
+
+          // Phase 1 #2: read the tag rows in the same transaction so we can
+          // return the full `{ row, tags }` shape that the caller used to
+          // get from a follow-up SELECT. This is the round-trip we are
+          // eliminating — `payload.tagIds.length` is typically 0–5 so the
+          // IN-list query is cheap.
+          const resolvedTags = await tx
+            .select({
+              tagId: tags.tagId,
+              name: tags.name,
+              slug: tags.slug,
+            })
+            .from(quizTags)
+            .innerJoin(tags, eq(quizTags.tagId, tags.tagId))
+            .where(and(eq(quizTags.quizId, quizId), isNull(tags.deletedAt)))
+            .orderBy(asc(tags.name));
+
+          tagRows = resolvedTags as QuizTagRow[];
         }
 
-        return { quizId };
+        // Build the projection-shaped row so the mapper can consume it
+        // without modification. The published-version columns are `null`
+        // because no version has been promoted to "published" yet — the
+        // initial version is a draft.
+        const row: QuizWithPublishedVersionRow = {
+          quizId,
+          creatorId: payload.creatorId,
+          title: payload.title,
+          description: payload.description,
+          slug: payload.slug,
+          requirements: payload.requirements,
+          imageUrl: payload.imageUrl,
+          imagePublicId: payload.imagePublicId,
+          categoryId: payload.categoryId ?? null,
+          isFeatured: payload.isFeatured,
+          isHidden: payload.isHidden,
+          isVerified: false,
+          publishedVersionId: null,
+          createdAt: nowIso,
+          updatedAt: nowIso,
+          publishedVersionQuizVersionId: null,
+          publishedVersionVersionNumber: null,
+          publishedVersionStatus: null,
+          publishedVersionDifficulty: null,
+          publishedVersionDurationMs: null,
+          publishedVersionPassingScorePercent: null,
+          publishedVersionRewardXp: null,
+          publishedVersionCreatedByUserId: null,
+          publishedVersionCreatedAt: null,
+          publishedVersionPublishedAt: null,
+          publishedVersionArchivedAt: null,
+          publishedVersionUpdatedAt: null,
+        } as QuizWithPublishedVersionRow;
+
+        return { row, tags: tagRows };
       });
 
-      return { quizId: result.quizId };
+      return result;
     } catch (error) {
       this.mapCreateError(error);
     }
@@ -783,9 +847,9 @@ export class QuizRepository implements QuizRepositoryPort {
     categoryId: string | null;
     tagIds: string[] | null;
     nowIso: string;
-  }): Promise<void> {
+  }): Promise<{ row: QuizWithPublishedVersionRow; tags: QuizTagRow[] } | null> {
     try {
-      await this.db.transaction(async (tx) => {
+      const result = await this.db.transaction(async (tx) => {
         if (Object.keys(params.patch).length > 0) {
           await tx
             .update(quizzes)
@@ -816,7 +880,39 @@ export class QuizRepository implements QuizRepositoryPort {
             );
           }
         }
+
+        // Phase 1 #2: read the post-update row + tags in the same
+        // transaction. We re-use the same projection as the public read
+        // path so callers can drop the follow-up SELECT entirely.
+        const [row] = await tx
+          .select(QUIZ_WITH_VERSION_PROJECTION)
+          .from(quizzes)
+          .leftJoin(
+            quizVersions,
+            eq(QUIZ_COLUMNS.publishedVersionId, QUIZ_VERSION_COLUMNS.quizVersionId),
+          )
+          .where(and(eq(QUIZ_COLUMNS.quizId, params.quizId), isNull(QUIZ_COLUMNS.deletedAt)))
+          .limit(1);
+
+        if (!row) {
+          return null;
+        }
+
+        const tagRows = (await tx
+          .select({
+            tagId: tags.tagId,
+            name: tags.name,
+            slug: tags.slug,
+          })
+          .from(quizTags)
+          .innerJoin(tags, eq(quizTags.tagId, tags.tagId))
+          .where(and(eq(quizTags.quizId, params.quizId), isNull(tags.deletedAt)))
+          .orderBy(asc(tags.name))) as QuizTagRow[];
+
+        return { row: row as QuizWithPublishedVersionRow, tags: tagRows };
       });
+
+      return result;
     } catch (error) {
       this.mapUpdateError(error);
     }
@@ -833,7 +929,7 @@ export class QuizRepository implements QuizRepositoryPort {
   }
 
   async findQuizCoverPublicIdById(quizId: string): Promise<string | null> {
-    const [row] = await this.db
+    const [row] = await this.dbRead
       .select({ imagePublicId: QUIZ_COLUMNS.imagePublicId })
       .from(quizzes)
       .where(and(eq(QUIZ_COLUMNS.quizId, quizId), isNull(QUIZ_COLUMNS.deletedAt)))

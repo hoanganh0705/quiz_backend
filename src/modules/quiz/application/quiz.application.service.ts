@@ -46,6 +46,7 @@ import type { DrizzleDB } from '@/core/database/database.module';
 import type { QuizStatsHistoryPointDto } from '../dto/response/quiz-stats-history-point.dto';
 import { StorageApplicationService } from '@/core/storage/application/storage.application.service';
 import { StorageImageLifecycleService } from '@/core/storage/application/storage-image-lifecycle.service';
+import { QuizCacheService } from './quiz-cache.service';
 import { BadRequestException, ForbiddenException } from '@nestjs/common';
 
 @Injectable()
@@ -61,6 +62,7 @@ export class QuizApplicationService implements QuizListingPort {
     @Inject(DRIZZLE) private readonly db: DrizzleDB,
     private readonly storageOwnership: StorageApplicationService,
     private readonly storageLifecycle: StorageImageLifecycleService,
+    private readonly quizCache: QuizCacheService,
     private readonly quizMapper: QuizResponseMapper,
     @InjectPinoLogger(QuizApplicationService.name)
     private readonly logger: PinoLogger,
@@ -157,11 +159,14 @@ export class QuizApplicationService implements QuizListingPort {
     const limit = dto.limit ?? 20;
     const cursor = dto.cursor ? QuizCursorMapper.parse(dto.cursor) : null;
 
-    const result = await this.quizQueryService.listQuizzes({
-      limit,
-      cursor,
+    // Phase 3 #1: read-through cache for the public list page.
+    // The cache key is derived from the (filters, cursor, limit)
+    // tuple so every distinct page has its own entry. Invalidation
+    // is centralised in `invalidateListCacheHandler` and fired on
+    // every `QuizCreatedEvent` / `QuizUpdatedEvent` / `QuizDeletedEvent`.
+    const cacheKey = this.quizCache.buildListCacheKey({
       filters: {
-        difficulty: dto.difficulty as QuizDifficulty,
+        difficulty: dto.difficulty,
         categoryId: dto.categoryId,
         tagIds: dto.tagIds,
         q: dto.q,
@@ -169,7 +174,25 @@ export class QuizApplicationService implements QuizListingPort {
         isHidden: dto.isHidden,
         minRating: dto.minRating,
       },
+      cursor,
+      limit,
     });
+
+    const result = await this.quizCache.getOrSetList(cacheKey, () =>
+      this.quizQueryService.listQuizzes({
+        limit,
+        cursor,
+        filters: {
+          difficulty: dto.difficulty as QuizDifficulty,
+          categoryId: dto.categoryId,
+          tagIds: dto.tagIds,
+          q: dto.q,
+          sort: dto.sort,
+          isHidden: dto.isHidden,
+          minRating: dto.minRating,
+        },
+      }),
+    );
 
     const context = await this.buildProjectionContext(result.items);
     return {
@@ -226,12 +249,27 @@ export class QuizApplicationService implements QuizListingPort {
   }
 
   async getQuizStats(quizId: string | undefined, slug: string): Promise<QuizStatsResponseDto> {
-    const stats = await this.quizQueryService.getQuizStats(quizId, slug);
-    const [commentsCount, recentActivity] = await Promise.all([
-      this.countCommentsForQuiz(stats.quizId),
-      this.fetchRecentActivity(stats.quizId, 30),
-    ]);
-    return QuizStatsResponseMapper.toResponse(stats, { commentsCount, recentActivity });
+    // Phase 3 #2: cache the resolved stats per quizId. The slug
+    // lookup is wrapped in a closure so the cache stores the
+    // mapped DTO by quizId, not by slug. Two callers hitting
+    // `/quizzes/<slug>/stats` and `/quizzes/<uuid>/stats` end up
+    // pointing at the same cache entry.
+    const resolveQuizId = async (): Promise<string> => {
+      if (quizId) return quizId;
+      const resolved = await this.quizQueryService.getQuizStats(undefined, slug);
+      return resolved.quizId;
+    };
+
+    const resolvedQuizId = await resolveQuizId();
+
+    return this.quizCache.getOrSetStats(resolvedQuizId, async () => {
+      const stats = await this.quizQueryService.getQuizStats(quizId, slug);
+      const [commentsCount, recentActivity] = await Promise.all([
+        this.countCommentsForQuiz(stats.quizId),
+        this.fetchRecentActivity(stats.quizId, 30),
+      ]);
+      return QuizStatsResponseMapper.toResponse(stats, { commentsCount, recentActivity });
+    });
   }
 
   /**

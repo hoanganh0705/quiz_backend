@@ -26,6 +26,7 @@ import type { QuizAnalyticsService } from '../domain/analytics';
 import type { QuizRepositoryPort } from '../domain/ports/quiz-repository.port';
 import type { UserDomainService } from '@/modules/user/domain/user.service';
 import type { QuizResponseMapper } from '../mappers/quiz-response.mapper';
+import type { QuizCacheService } from './quiz-cache.service';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
 
 class FakeStorageOwnership {
@@ -128,6 +129,19 @@ function makeService() {
     {} as never,
     ownership as unknown as StorageApplicationService,
     lifecycle as unknown as StorageImageLifecycleService,
+    {
+      // Phase 3: read-through cache stubs. The spec only cares
+      // about the pass-through behaviour, so we delegate straight
+      // to the fetcher.
+      getOrSetList: <T>(_key: string, fetcher: () => Promise<T>) => fetcher(),
+      getOrSetStats: <T>(_id: string, fetcher: () => Promise<T>) => fetcher(),
+      getOrSetProfileBundle: <T>(_id: string, fetcher: () => Promise<T>) => fetcher(),
+      invalidateList: async () => undefined,
+      invalidateStats: async () => undefined,
+      invalidateProfileBundle: async () => undefined,
+      buildListCacheKey: ({ filters, cursor, limit }) =>
+        `quiz:list:v1:${JSON.stringify({ filters, cursor, limit })}`,
+    } as unknown as QuizCacheService,
     {
       toQuizResponse: (row: unknown) => row,
       toListItem: (row: unknown) => row,

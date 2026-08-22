@@ -88,6 +88,11 @@ export enum Permission {
   // `RANKING_ADMIN` / `NOTIFICATION_ANALYTICS`: admin-only, ledger
   // itself is the audit trail.
   COIN_ADMIN = 'COIN_ADMIN',
+
+  // Phase 5 #3 — audit log search.
+  // Gates `GET /admin/audit/search`. Mirrors `RANKING_ADMIN`:
+  // admin-only, sensitive trail of moderator / admin actions.
+  AUDIT_READ = 'AUDIT_READ',
 }
 
 export const ROLE_PERMISSIONS: Record<UserRole, readonly Permission[]> = {
@@ -129,6 +134,9 @@ export const ROLE_PERMISSIONS: Record<UserRole, readonly Permission[]> = {
     // Phase 5 / Issue #21 — admins always have analytics access
     // on every quiz, so they get the new permission.
     Permission.REVIEW_VIEW_QUIZ_ANALYTICS,
+
+    // Phase 5 #3 — audit log read access.
+    Permission.AUDIT_READ,
 
     // Taxonomy
     Permission.TAG_MANAGE,

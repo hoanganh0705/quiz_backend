@@ -64,15 +64,24 @@ export class AuthRegistrationService {
     // on the unique constraint with a 500 error. Instead, we rely on the unique
     // constraint as the single source of truth and convert DB constraint errors to
     // 409 Conflict responses (BLOCK-4 fix).
+    //
+    // Phase 0 #2: `createUserWithPasswordHistory` wraps the user-row INSERT
+    // AND the initial `password_history` INSERT in a single transaction. If
+    // either write fails (e.g. unique-constraint on `users.email`) the whole
+    // registration rolls back, so we never end up with a user row that has no
+    // history entry — which would silently disable the password-reuse
+    // policy for that user on their first change.
     const passwordHash = await this.passwordProvider.hash(registerCommand.password);
+    const nowIso = new Date().toISOString();
 
-    let createdUser: Awaited<ReturnType<UserRepositoryPort['createUser']>>;
+    let createdUser: Awaited<ReturnType<UserRepositoryPort['createUserWithPasswordHistory']>>;
     try {
-      createdUser = await this.userRepository.createUser(
-        normalizedEmail,
-        normalizedUsername,
+      createdUser = await this.userRepository.createUserWithPasswordHistory({
+        email: normalizedEmail,
+        username: normalizedUsername,
         passwordHash,
-      );
+        nowIso,
+      });
     } catch (error) {
       if (
         error instanceof InternalServerErrorException &&

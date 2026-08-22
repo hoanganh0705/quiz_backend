@@ -7,30 +7,32 @@ import { RedisService } from '@/core/redis/redis.service';
 import { Public } from '@/common/decorators/public.decorator';
 import { ApiOkResource } from '@/common/swagger/api-ok';
 import { sql } from 'drizzle-orm';
-import { HealthStatusDto, type HealthStatusValue } from './dto/health-status.dto';
+import { STORAGE_PORT } from '@/core/storage';
+import type { StoragePort } from '@/core/storage';
+import {
+  HealthStatusDto,
+  type HealthStatusValue,
+  type ProbeResultDto,
+} from './dto/health-status.dto';
 import { HealthPresenter } from './health.presenter';
+import { HealthQueueProbe } from './health-queue-probe';
 
 /**
  * Health check endpoint.
  *
- * - `status` is the *overall* status: `up` only when every
- *   probed dependency is reachable, `degraded` when the
- *   database is up but at least one secondary dependency
- *   (e.g. Redis) is down, and `down` when the database is
- *   down. The platform can serve some requests in `degraded`
- *   mode — read traffic still works, but anything that needs
- *   rate limiting, caching, or pub/sub will fail — so the
- *   orchestrator should not yank the pod but should page.
- * - Per-dependency status is broken out (`database`, `redis`)
- *   so the operator can see *which* dependency is failing
- *   without grepping the application logs.
+ * Phase 2 #3 — extended per-dependency health. The endpoint
+ * surfaces four sub-probes (`database`, `redis`, `storage`,
+ * `emailQueue`) plus the in-process Redis circuit-breaker state.
+ * The aggregate `status` is:
+ *   - `down` when the database is unreachable (no pod can serve).
+ *   - `degraded` when any non-critical dependency is failing.
+ *   - `up` otherwise.
  *
- * The DB check uses `SELECT 1` (round-trips a query through
- * Drizzle / pg). The Redis check uses `PING` (round-trips a
- * single command over the existing ioredis connection). Both
- * are bounded — there is no `await ping()` on a long-lived
- * socket, so a hung dependency surfaces as a connect-timeout
- * error from the driver, not an unbounded wait.
+ * HTTP status: 200 for `up` and `degraded`, 503 for `down`. The
+ * orchestrator should keep `degraded` pods in rotation — the
+ * fallback paths (rate-limit fail-open, LSITEN/NOTIFY outbox
+ * fallback poll, etc.) keep the API usable — but should page
+ * on-call.
  */
 @Public()
 @ApiTags('health')
@@ -39,60 +41,71 @@ export class HealthController {
   constructor(
     @Inject(DRIZZLE) private readonly db: DrizzleDB,
     private readonly redisService: RedisService,
+    @Inject(STORAGE_PORT) private readonly storage: StoragePort,
     private readonly presenter: HealthPresenter,
+    private readonly queueProbe: HealthQueueProbe,
   ) {}
 
   @Get()
   @ApiOperation({
     summary: 'Health check',
     description:
-      'Verifies database and Redis connectivity. Returns `up` when both are reachable, ' +
-      '`degraded` when the database is up but Redis is down, and `down` when the database ' +
-      'is down. The HTTP status code is `200` for `up` and `degraded`, and `503` for `down` ' +
-      'so the orchestrator can route traffic away from a fully-broken pod.',
+      'Verifies database, Redis, storage, and email-queue health. Returns `up` when every probe is healthy, `degraded` when any non-critical dependency is failing, and `down` when the database is unreachable. The HTTP status is `200` for `up`/`degraded` and `503` for `down`.',
   })
   @ApiOkResource(HealthStatusDto, {
-    description: 'Health status (database and/or Redis reachable)',
+    description: 'Health status (per-dependency breakdown)',
   })
   @ApiServiceUnavailableResponse({
     description: 'Database is down — the pod cannot serve any request safely',
     type: HealthStatusDto,
   })
   async check(@Res({ passthrough: true }) res: Response) {
-    // Probe DB and Redis concurrently. The two probes are
-    // independent — neither has to wait for the other, and
-    // neither depends on the response from the other — so
-    // Promise.all keeps the total wall-clock time at
-    // `max(db, redis)` rather than `db + redis`.
-    const [database, redis] = await Promise.all([this.probeDb(), this.probeRedis()]);
+    // Probe every dependency in parallel. None of the probes has
+    // a dependency on the others, so `Promise.all` keeps the
+    // total wall-clock time at `max(probes)` rather than
+    // `sum(probes)`. Each probe is bounded by a connection or
+    // HTTP timeout — none of them can hang indefinitely.
+    const [database, redis, storage, emailQueue, redisCircuit] = await Promise.all([
+      this.probeDb(),
+      this.probeRedis(),
+      this.probeStorage(),
+      this.queueProbe.probeEmailQueue(),
+      Promise.resolve(this.redisService.getCircuitMetrics()),
+    ]);
 
-    let status: HealthStatusValue;
-    let httpStatus: number;
-    if (database === 'down') {
-      // DB is the source of truth. If it's down, every write
-      // fails, and the auth outbox cannot record anything
-      // either. Treat this as a hard outage.
-      status = 'down';
-      httpStatus = HttpStatus.SERVICE_UNAVAILABLE;
-    } else if (redis === 'down') {
-      // DB up + Redis down: rate limiting, caching, and
-      // cross-instance pub/sub (session invalidation) are
-      // all degraded, but reads/writes still work. Surface
-      // this as `degraded` so the orchestrator keeps the pod
-      // in rotation while paging on-call.
-      status = 'degraded';
-      httpStatus = HttpStatus.OK;
-    } else {
-      status = 'up';
-      httpStatus = HttpStatus.OK;
-    }
-
-    // Set the HTTP status via the response object (passthrough
-    // so NestJS still serializes the return value as JSON).
+    const status = this.aggregateStatus({ database, redis, storage });
+    const httpStatus =
+      status === 'down' ? HttpStatus.SERVICE_UNAVAILABLE : HttpStatus.OK;
     res.status(httpStatus);
 
-    const payload: HealthStatusDto = { status, database, redis };
+    const payload: HealthStatusDto = {
+      status,
+      database,
+      redis,
+      storage,
+      emailQueue,
+      redisCircuit: {
+        state: redisCircuit.state,
+        consecutiveFailures: redisCircuit.consecutiveFailures,
+        shortCircuitedCount: redisCircuit.shortCircuitedCount,
+      },
+    };
     return this.presenter.check(payload);
+  }
+
+  /**
+   * Aggregate policy. The database is the single hard dependency
+   * — when it is down, every write fails. Everything else can
+   * degrade without taking the pod out of rotation.
+   */
+  private aggregateStatus(probes: {
+    database: 'up' | 'down';
+    redis: ProbeResultDto;
+    storage: ProbeResultDto;
+  }): HealthStatusValue {
+    if (probes.database === 'down') return 'down';
+    if (probes.redis.status !== 'up' || probes.storage.status !== 'up') return 'degraded';
+    return 'up';
   }
 
   private async probeDb(): Promise<'up' | 'down'> {
@@ -104,16 +117,29 @@ export class HealthController {
     }
   }
 
-  private async probeRedis(): Promise<'up' | 'down'> {
+  private async probeRedis(): Promise<ProbeResultDto> {
     try {
       const reply = await this.redisService.ping();
-      // ioredis returns the literal string `'PONG'` on success.
-      // We do not gate on the exact value — any non-error reply
-      // means the server is reachable and responding — but
-      // logging the value would be useful if it ever differed.
-      return reply === 'PONG' || typeof reply === 'string' ? 'up' : 'down';
-    } catch {
-      return 'down';
+      return reply === 'PONG' || typeof reply === 'string'
+        ? { status: 'up', detail: null }
+        : { status: 'degraded', detail: `unexpected reply: ${reply}` };
+    } catch (error) {
+      return {
+        status: 'down',
+        detail: error instanceof Error ? error.message : String(error),
+      };
+    }
+  }
+
+  private async probeStorage(): Promise<ProbeResultDto> {
+    try {
+      await this.storage.ping();
+      return { status: 'up', detail: null };
+    } catch (error) {
+      return {
+        status: 'down',
+        detail: error instanceof Error ? error.message : String(error),
+      };
     }
   }
 }

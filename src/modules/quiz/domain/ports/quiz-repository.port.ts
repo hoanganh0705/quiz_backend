@@ -275,7 +275,22 @@ export interface QuizRepositoryPort {
    * Creates a quiz with its initial version and category/tag links in a single atomic transaction.
    * If any step fails, the entire operation is rolled back.
    */
-  createQuizWithInitialVersion(payload: CreateQuizPayload): Promise<{ quizId: string }>;
+  /**
+   * Phase 0 #2: creates the quiz row, the initial draft version (v1), and
+   * the tag links atomically. The full quiz row is returned from the same
+   * transaction so the caller does NOT need a follow-up SELECT — the
+   * previous shape only returned `{ quizId }` and forced a `refetchQuiz`
+   * round-trip.
+   *
+   * The returned `QuizWithPublishedVersionRow` is shaped to match
+   * `getQuizWithPublishedVersionById` exactly so existing mappers keep
+   * working without changes. Because the quiz is brand new, every
+   * `publishedVersion*` field is `null` (no published version exists yet).
+   */
+  createQuizWithInitialVersion(payload: CreateQuizPayload): Promise<{
+    row: QuizWithPublishedVersionRow;
+    tags: QuizTagRow[];
+  }>;
 
   updateQuizWithLinks(params: {
     quizId: string;
@@ -283,7 +298,10 @@ export interface QuizRepositoryPort {
     categoryId: string | null;
     tagIds: string[] | null;
     nowIso: string;
-  }): Promise<void>;
+  }): Promise<{
+    row: QuizWithPublishedVersionRow;
+    tags: QuizTagRow[];
+  } | null>;
 
   softDeleteQuiz(quizId: string, nowIso: string): Promise<void>;
 
