@@ -9,6 +9,7 @@
 
 import { UserResponseMapper } from './user-response.mapper';
 import type { StoragePort } from '@/core/storage/storage.port';
+import type { SignedUpload, UploadPurpose } from '@/core/storage/storage.types';
 import type { UserMeRow, UserLookupRow } from '../domain/ports/user-repository.port';
 
 class FakeStorage implements StoragePort {
@@ -23,6 +24,27 @@ class FakeStorage implements StoragePort {
   deriveUrl(publicId: string, purpose: 'avatar' | 'quiz'): string {
     this.calls.push({ publicId, purpose });
     return `https://cdn.test/${purpose}/${publicId}`;
+  }
+
+  ping(): Promise<void> {
+    return Promise.resolve();
+  }
+
+  createSignedUpload(input: {
+    ownerId: string;
+    purpose: UploadPurpose;
+    expiresInSeconds: number;
+  }): Promise<SignedUpload> {
+    const timestamp = Math.floor(Date.now() / 1000) + input.expiresInSeconds;
+    return Promise.resolve({
+      uploadUrl: 'https://fake.cloudinary.local/image/upload',
+      publicId: `signed/${input.ownerId}`,
+      expiresAt: new Date(timestamp * 1000).toISOString(),
+      apiKey: 'fake-key',
+      signature: 'fake-signature',
+      timestamp,
+      folder: input.purpose === 'avatar' ? 'quiz-app/avatars' : 'quiz-app/quizzes',
+    });
   }
 }
 

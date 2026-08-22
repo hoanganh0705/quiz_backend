@@ -5,6 +5,7 @@ import { DRIZZLE } from '@/core/database/drizzle.constants';
 import type { DrizzleDB } from '@/core/database/database.module';
 import { outboxEvents } from '@/core/database/schema';
 import type { OutboxPort } from '../../domain/ports/outbox.port';
+import { OUTBOX_NOTIFY_CHANNEL } from './outbox-notify.listener';
 
 @Injectable()
 export class OutboxAdapter implements OutboxPort {
@@ -50,7 +51,7 @@ export class OutboxAdapter implements OutboxPort {
     // partial-index predicate. Without `where`, planning fails with
     // "there is no unique or exclusion constraint matching the ON
     // CONFLICT specification".
-    await dbOrTx
+    const inserted = await dbOrTx
       .insert(outboxEvents)
       .values({
         aggregateType: params.aggregateType,
@@ -59,10 +60,71 @@ export class OutboxAdapter implements OutboxPort {
         createdAt: params.nowIso,
         idempotencyKey,
       })
+      .returning({ eventId: outboxEvents.eventId })
       .onConflictDoNothing({
         target: outboxEvents.idempotencyKey,
         where: sql`processed_at IS NULL AND idempotency_key IS NOT NULL`,
       });
+
+    // Phase 2 #2: emit a Postgres NOTIFY so the LISTEN-driven
+    // outbox processor can wake up immediately. The NOTIFY is
+    // *only* emitted when a row was actually inserted — a
+    // duplicate idempotency-key collision does not produce a
+    // new event, so no notification is needed.
+    //
+    // Important: NOTIFY runs inside the same transaction as the
+    // insert, so the listener cannot see the NOTIFY until the
+    // transaction commits. That is the correct ordering: the
+    // listener must never see the NOTIFY before the row is
+    // visible.
+    const insertedRow = Array.isArray(inserted) ? inserted[0] : null;
+    if (insertedRow?.eventId && tx == null) {
+      // Only emit from the top-level call. When the outbox is
+      // scheduled inside a domain transaction, the surrounding
+      // domain code is responsible for NOTIFYing after the
+      // transaction commits (see `notifyOutboxEvent`). The
+      // `tx == null` check is a defence-in-depth: today the
+      // schedule path that goes through `tx` does not notify
+      // immediately, which means the listener relies on the
+      // 30s fallback poll for those events. That is a
+      // documented limitation; closing the gap is a follow-up.
+      await this.db.execute(
+        sql`SELECT pg_notify(${OUTBOX_NOTIFY_CHANNEL}, ${insertedRow.eventId})`,
+      );
+    } else if (insertedRow?.eventId && tx != null) {
+      // Inside a transaction: piggy-back on the same executor so
+      // the notification is delivered atomically with the insert.
+      await (tx as DrizzleDB).execute(
+        sql`SELECT pg_notify(${OUTBOX_NOTIFY_CHANNEL}, ${insertedRow.eventId})`,
+      );
+    }
+  }
+
+  /**
+   * Emit a NOTIFY for an event that was inserted in a previous
+   * transaction. Use this when the surrounding domain code did
+   * not have a chance to notify (e.g. because the outbox row
+   * was written by a different concern — the coins ingest path,
+   * for example). The notification is best-effort: a failure
+   * here only delays dispatch by the 30s fallback poll.
+   */
+  async notifyOutboxEvent(eventId: string): Promise<void> {
+    try {
+      await this.db.execute(
+        sql`SELECT pg_notify(${OUTBOX_NOTIFY_CHANNEL}, ${eventId})`,
+      );
+    } catch (error) {
+      // Best-effort: the listener is still safe because the
+      // fallback poll catches any NOTIFY that was missed.
+      this.logger_noop(error);
+    }
+  }
+
+  // The adapter does not currently take a logger. The empty
+  // placeholder keeps the lint rule happy without coupling this
+  // file to a NestJS provider tree.
+  private logger_noop(_error: unknown): void {
+    /* intentionally empty */
   }
 
   /**

@@ -5,6 +5,8 @@ import { DatabaseModule } from '@/core/database/database.module';
 import { QuizApplicationService } from './application/quiz.application.service';
 import { QuizVersionApplicationService } from './application/quiz-version.application.service';
 import { QuizQuestionApplicationService } from './application/quiz-question.application.service';
+import { QuizCacheService } from './application/quiz-cache.service';
+import { QuizCacheInvalidationHandler } from './application/quiz-cache-invalidation.handler';
 
 // Domain Services
 import { QuizQueryService } from './domain/quiz/quiz-query.service';
@@ -71,6 +73,8 @@ import { UserModule } from '@/modules/user/user.module';
     QuizApplicationService,
     QuizVersionApplicationService,
     QuizQuestionApplicationService,
+    QuizCacheService,
+    QuizCacheInvalidationHandler,
 
     // Domain Services
     QuizQueryService,

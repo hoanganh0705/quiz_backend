@@ -47,7 +47,9 @@ import { CurrentUser } from '@/common/decorators/current-user.decorator';
 import { type JwtPayload } from '@/common/guards/jwt.guard';
 
 import { UploadFileRequestDto } from '../../dto/request/upload-file.request.dto';
+import { SignUploadRequestDto } from '../../dto/request/sign-upload.request.dto';
 import { UploadFileResponseDto } from '../../dto/response/upload-file.response.dto';
+import { SignUploadResponseDto } from '../../dto/response/sign-upload.response.dto';
 import { UploadApplicationService } from '../../application/upload.application.service';
 
 const MAX_BYTES = 8 * 1024 * 1024;
@@ -184,6 +186,66 @@ export class UploadController {
       width: result.width,
       height: result.height,
       purpose: body.purpose,
+    };
+  }
+
+  /**
+   * Phase 7 #1 — issue a signed-upload envelope so the client can POST
+   * the file directly to Cloudinary. The server does not proxy the
+   * bytes; ownership is bound via a separate call after the client
+   * finishes the upload.
+   */
+  @Post('sign')
+  @HttpCode(HttpStatus.CREATED)
+  @Throttle({ default: { limit: 20, ttl: 60_000 } })
+  @ApiOperation({
+    summary: 'Issue a signed upload URL (Phase 7 — presigned uploads)',
+    description:
+      'Returns a Cloudinary-signed upload URL the client uses to POST the file directly ' +
+      'to Cloudinary. The bytes never traverse this application server, which removes ' +
+      'the upload as a scaling bottleneck and shrinks the request payload hitting the API. ' +
+      'After the client uploads the file, it MUST call the bind endpoint to attach the ' +
+      'returned `publicId` to its account — see `POST /uploads/:publicId/bind`.',
+  })
+  @ApiCreatedResponse({
+    description: 'Signed upload envelope issued.',
+    type: SignUploadResponseDto,
+  })
+  @ApiBadRequestResponse({
+    description: 'Invalid `purpose` value.',
+    examples: {
+      invalidPurpose: { summary: 'invalid purpose', value: invalidPurposeExample },
+    },
+  })
+  @ApiUnauthorizedResponse({ example: unauthorizedExample })
+  @ApiTooManyRequestsResponse({
+    description: 'Rate limit exceeded (20 req / 60 s / user).',
+    example: tooManyRequestsExample,
+  })
+  @ApiInternalServerErrorResponse({
+    description: 'Cloudinary rejected the signature request.',
+    example: {
+      code: 'UPLOAD_SIGN_FAILED',
+      message: 'Failed to issue a signed upload URL. Please retry.',
+    },
+  })
+  async signUpload(
+    @CurrentUser() user: JwtPayload,
+    @Body() body: SignUploadRequestDto,
+  ): Promise<SignUploadResponseDto> {
+    const signed = await this.uploadApplicationService.signUpload({
+      ownerId: user.sub,
+      purpose: body.purpose,
+      ...(body.expiresInSeconds !== undefined ? { expiresInSeconds: body.expiresInSeconds } : {}),
+    });
+    return {
+      uploadUrl: signed.uploadUrl,
+      publicId: signed.publicId,
+      expiresAt: signed.expiresAt,
+      apiKey: signed.apiKey,
+      signature: signed.signature,
+      timestamp: signed.timestamp,
+      folder: signed.folder,
     };
   }
 }

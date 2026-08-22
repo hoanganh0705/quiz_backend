@@ -21,6 +21,7 @@ import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { v7 as uuidv7 } from 'uuid';
 
 import {
+  type SignedUpload,
   type StoragePort,
   type UploadInput,
   type UploadPurpose,
@@ -118,5 +119,85 @@ export class CloudinaryStorageAdapter implements StoragePort {
       secure: true,
       transformation: [...UPLOAD_POLICY[purpose].transformation],
     });
+  }
+
+  /**
+   * Phase 2 #3 — health probe. Delegates to the wrapped SDK.
+   * The forwarder is a single async hop so the health endpoint
+   * can catch any underlying transport error and surface it as
+   * `degraded_storage`.
+   */
+  async ping(): Promise<void> {
+    try {
+      await this.sdk.ping();
+    } catch (error) {
+      this.logger.warn({
+        event: 'storage_ping_failed',
+        message: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Phase 7 #1 — generate a Cloudinary signed-upload envelope.
+   *
+   * The server composes the same `${folder}/${ownerId}/${uuidv7()}`
+   * public_id shape used by the server-upload path. The client POSTs a
+   * `multipart/form-data` request directly to Cloudinary's
+   * `https://api.cloudinary.com/v1_1/<cloud_name>/<resource_type>/upload`
+   * endpoint with `file`, `api_key`, `timestamp`, `signature`, and
+   * `public_id` form fields.
+   *
+   * Cloudinary enforces the signature window from `timestamp`
+   * (server-side default is one hour); we clamp `expiresInSeconds` to
+   * a sensible upper bound to avoid handing out very long-lived
+   * signatures.
+   */
+  async createSignedUpload(input: {
+    readonly ownerId: string;
+    readonly purpose: UploadPurpose;
+    readonly expiresInSeconds: number;
+  }): Promise<SignedUpload> {
+    const policy = UPLOAD_POLICY[input.purpose];
+    const publicId = `${policy.folder}/${input.ownerId}/${uuidv7()}`;
+    const expiresInSeconds = Math.min(Math.max(input.expiresInSeconds, 60), 3600);
+    const timestamp = Math.floor(Date.now() / 1000) + expiresInSeconds;
+
+    try {
+      const signed = await this.sdk.signRequest({
+        public_id: publicId,
+        timestamp,
+      });
+      const uploadUrl = `https://api.cloudinary.com/v1_1/${signed.cloudName}/image/upload`;
+      const expiresAt = new Date(timestamp * 1000).toISOString();
+
+      this.logger.info({
+        event: 'signed_upload_issued',
+        publicId,
+        purpose: input.purpose,
+        expiresAt,
+      });
+
+      return {
+        uploadUrl,
+        publicId,
+        expiresAt,
+        apiKey: signed.apiKey,
+        signature: signed.signature,
+        timestamp,
+        folder: policy.folder,
+      };
+    } catch (error) {
+      this.logger.warn({
+        event: 'signed_upload_sign_failed',
+        purpose: input.purpose,
+        message: error instanceof Error ? error.message : String(error),
+      });
+      throw new InternalServerErrorException({
+        code: 'UPLOAD_SIGN_FAILED',
+        message: 'Failed to issue a signed upload URL. Please retry.',
+      });
+    }
   }
 }

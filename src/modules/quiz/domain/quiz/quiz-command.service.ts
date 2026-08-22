@@ -65,7 +65,9 @@ export class QuizCommandService {
     const tagIds = normalizeLinkIds(command.tagIds);
     const nowIso = new Date().toISOString();
 
-    const { quizId } = await this.quizRepository.createQuizWithInitialVersion({
+    // Phase 1 #2: the repository now returns `{ row, tags }` directly
+    // from the create transaction, so we skip the `refetchQuiz` round-trip.
+    const { row, tags } = await this.quizRepository.createQuizWithInitialVersion({
       creatorId: command.creatorId,
       title,
       slug: normalizedSlug,
@@ -81,11 +83,13 @@ export class QuizCommandService {
       nowIso,
     });
 
+    const quizId = row.quizId;
+
     this.logger.info({ event: 'quiz_created', quizId, userId: user.sub });
 
     this.eventBus.emitQuizCreated(new QuizCreatedEvent(quizId, user.sub, normalizedSlug, nowIso));
 
-    return this.refetchQuiz(quizId);
+    return { row, tags };
   }
 
   async updateQuiz(
@@ -151,7 +155,11 @@ export class QuizCommandService {
 
     const nowIso = new Date().toISOString();
 
-    await this.quizRepository.updateQuizWithLinks({
+    // Phase 1 #2: the repository now returns the post-update row + tags
+    // directly from the transaction. Falls back to a refetch only when the
+    // row could not be located (soft-deleted between the policy check and
+    // the update — race that would have been silent before).
+    const result = await this.quizRepository.updateQuizWithLinks({
       quizId,
       patch,
       categoryId,
@@ -159,11 +167,15 @@ export class QuizCommandService {
       nowIso,
     });
 
+    if (!result) {
+      return this.refetchQuiz(quizId);
+    }
+
     this.logger.info({ event: 'quiz_updated', quizId, userId: user.sub });
 
     this.eventBus.emitQuizUpdated(new QuizUpdatedEvent(quizId, user.sub, nowIso));
 
-    return this.refetchQuiz(quizId);
+    return result;
   }
 
   async softDeleteQuizById(quizId: string, user: JwtPayload): Promise<{ message: string }> {

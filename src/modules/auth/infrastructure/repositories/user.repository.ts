@@ -203,6 +203,64 @@ export class UserRepository implements UserRepositoryPort {
     return createdUser as CreatedUserRow;
   }
 
+  /**
+   * Phase 0 #2: see port docstring for rationale. Creates the user row
+   * and seeds the initial password-history entry inside `db.transaction`
+   * so partial failures roll back atomically.
+   *
+   * Implementation notes:
+   * - We deliberately do *not* use the existing `createUser` helper here.
+   *   Each `tx.insert` shares the same transactional executor, so
+   *   re-implementing the insert inside the transaction is cheaper than
+   *   wiring a second callback path.
+   * - The unique-constraint handling stays identical to `createUser`:
+   *   surface `InternalServerErrorException` and let the registration
+   *   service translate it to the generic-message response.
+   */
+  async createUserWithPasswordHistory(params: {
+    email: string;
+    username: string;
+    passwordHash: string;
+    nowIso: string;
+  }): Promise<CreatedUserRow> {
+    const createdUser = await this.db.transaction(async (tx) => {
+      const [inserted] = await tx
+        .insert(users)
+        .values({
+          email: params.email,
+          username: params.username,
+          passwordHash: params.passwordHash,
+        })
+        .returning({
+          ...USER_IDENTITY_COLUMNS,
+          createdAt: users.createdAt,
+          isVerified: users.isVerified,
+        });
+
+      if (!inserted) {
+        throw new InternalServerErrorException('Failed to create user');
+      }
+
+      await tx.insert(passwordHistory).values({
+        userId: inserted.userId,
+        passwordHash: params.passwordHash,
+        createdAt: params.nowIso,
+      });
+
+      return inserted as CreatedUserRow;
+    }).catch((error: unknown) => {
+      // Preserve the generic surface so callers can match on it without
+      // caring whether the underlying error came from the unique
+      // constraint on `users` or some other DB-level failure.
+      if (error instanceof InternalServerErrorException) {
+        throw error;
+      }
+      throw new InternalServerErrorException('Failed to create user');
+    });
+
+    return createdUser;
+  }
+
   async findActiveByEmailWithPassword(email: string): Promise<UserWithPasswordRow | null> {
     const [foundUser] = await this.db
       .select({

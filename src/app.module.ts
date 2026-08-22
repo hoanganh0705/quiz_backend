@@ -11,6 +11,8 @@ import { JwtGuard } from './common/guards/jwt.guard';
 import { GlobalExceptionFilter } from './common/filters/global-exception.filter';
 import { ResponseFormatInterceptor } from './common/interceptors/response-format.interceptor';
 import { CorrelationInterceptor } from './common/interceptors/correlation.interceptor';
+import { ObservabilityModule } from './core/observability/observability.module';
+import { HttpTracingInterceptor } from './core/observability/http-tracing.interceptor';
 import { CategoryModule } from './modules/category/category.module';
 import { TagModule } from './modules/tag/tag.module';
 import { QuizModule } from './modules/quiz/quiz.module';
@@ -27,6 +29,7 @@ import { DailyChallengeModule } from './modules/daily-challenge/daily-challenge.
 import { HomeModule } from './modules/home/home.module';
 import { CoinModule } from './modules/coins/coin.module';
 import { UploadModule } from './modules/upload/upload.module';
+import { AdminModule } from './modules/admin/admin.module';
 import { StorageModule } from './core/storage';
 import {
   validateEnv,
@@ -151,6 +154,12 @@ import { CoreLoggerModule } from './core/logger/logger.module';
     HealthModule,
     DailyChallengeModule,
     HomeModule,
+    // Phase 5 #1 — observability module exposes `TracingProvider`
+    // globally so HTTP/Redis/BullMQ/Drizzle wrappers can inject it.
+    ObservabilityModule,
+    // Phase 5 #3 — admin module exposes admin-only endpoints
+    // (currently the audit log search).
+    AdminModule,
     // Phase 2 — file scaffold only; controllers return 501. See
     // QUIZ_COIN_ECONOMY_DESIGN.md §16 for the implementation plan.
     CoinModule,
@@ -179,6 +188,14 @@ import { CoreLoggerModule } from './core/logger/logger.module';
     {
       provide: APP_INTERCEPTOR,
       useClass: CorrelationInterceptor,
+    },
+    {
+      // Phase 5 #1 — HTTP tracing interceptor. Runs after
+      // `ResponseFormatInterceptor` so the span is closed
+      // around the full response (including envelope
+      // formatting) rather than just the inner handler.
+      provide: APP_INTERCEPTOR,
+      useClass: HttpTracingInterceptor,
     },
     {
       provide: APP_FILTER,

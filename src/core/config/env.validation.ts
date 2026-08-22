@@ -232,7 +232,55 @@ const parseTokenExpiresIn = (env: Record<string, unknown>, key: string): string 
 export const validateEnv = (env: Record<string, unknown>) => {
   // Database & Cache
   const databaseUrl = parseUrl(env, 'DATABASE_URL', DATABASE_PROTOCOLS, 'postgres/postgresql');
+  // Phase 1 #4 — database pool tuning. All four values are optional and
+  // default to conservative values; positive-integer validation mirrors
+  // the other numeric knobs.
+  const databasePoolMax = parsePositiveInteger(env, 'DATABASE_POOL_MAX', 10);
+  const databasePoolIdleTimeoutMs = parsePositiveInteger(
+    env,
+    'DATABASE_POOL_IDLE_TIMEOUT_MS',
+    30_000,
+  );
+  const databasePoolConnectionTimeoutMs = parsePositiveInteger(
+    env,
+    'DATABASE_POOL_CONNECTION_TIMEOUT_MS',
+    10_000,
+  );
+  const databasePoolStatementTimeoutMs = parsePositiveInteger(
+    env,
+    'DATABASE_POOL_STATEMENT_TIMEOUT_MS',
+    30_000,
+  );
   const redisUrl = parseUrl(env, 'REDIS_URL', REDIS_PROTOCOLS, 'redis/rediss');
+  // Phase 7 #3 — optional read-replica URL. When set, the read pool
+  // is bound to this URL; writes continue to use `DATABASE_URL`.
+  // Validation is skipped when the env var is absent so single-DB
+  // deployments are unaffected.
+  const databaseReadReplicaUrl =
+    typeof env.DATABASE_READ_REPLICA_URL === 'string' &&
+    env.DATABASE_READ_REPLICA_URL.trim().length > 0
+      ? env.DATABASE_READ_REPLICA_URL.trim()
+      : null;
+  if (databaseReadReplicaUrl !== null) {
+    try {
+      const replica = new URL(databaseReadReplicaUrl);
+      if (!DATABASE_PROTOCOLS.some((p) => replica.protocol === p)) {
+        throw new Error();
+      }
+    } catch {
+      throw new Error('DATABASE_READ_REPLICA_URL must use postgres/postgresql protocol');
+    }
+  }
+  const redisCircuitFailureThreshold = parsePositiveInteger(
+    env,
+    'REDIS_CIRCUIT_FAILURE_THRESHOLD',
+    5,
+  );
+  const redisCircuitResetTimeoutMs = parsePositiveInteger(
+    env,
+    'REDIS_CIRCUIT_RESET_TIMEOUT_MS',
+    30_000,
+  );
 
   // JWT Configuration
   const jwtAccessTokenSecret = parseRequiredString(env, 'JWT_ACCESS_TOKEN_SECRET');
@@ -289,10 +337,30 @@ export const validateEnv = (env: Record<string, unknown>) => {
   const appDescription = typeof env.APP_DESCRIPTION === 'string' ? env.APP_DESCRIPTION.trim() : '';
   const appUrl = typeof env.APP_URL === 'string' ? env.APP_URL.trim() : '';
 
+  // Phase 7 #4 — soft-delete retention window (clamped to [1, 365]).
+  const softDeleteRetentionDays = (() => {
+    const raw = env.SOFT_DELETE_RETENTION_DAYS;
+    if (typeof raw !== 'string' || raw.trim() === '') {
+      return 30;
+    }
+    const n = Number(raw.trim());
+    if (!Number.isInteger(n) || n < 1 || n > 365) {
+      throw new Error('SOFT_DELETE_RETENTION_DAYS must be an integer between 1 and 365');
+    }
+    return n;
+  })();
+
   // Return validated environment (flat structure for backward compatibility)
   return {
     DATABASE_URL: databaseUrl,
+    DATABASE_POOL_MAX: databasePoolMax,
+    DATABASE_POOL_IDLE_TIMEOUT_MS: databasePoolIdleTimeoutMs,
+    DATABASE_POOL_CONNECTION_TIMEOUT_MS: databasePoolConnectionTimeoutMs,
+    DATABASE_POOL_STATEMENT_TIMEOUT_MS: databasePoolStatementTimeoutMs,
+    DATABASE_READ_REPLICA_URL: databaseReadReplicaUrl,
     REDIS_URL: redisUrl,
+    REDIS_CIRCUIT_FAILURE_THRESHOLD: redisCircuitFailureThreshold,
+    REDIS_CIRCUIT_RESET_TIMEOUT_MS: redisCircuitResetTimeoutMs,
     JWT_ACCESS_TOKEN_SECRET: jwtAccessTokenSecret,
     JWT_REFRESH_TOKEN_SECRET: jwtRefreshTokenSecret,
     ACCESS_TOKEN_EXPIRES_IN: accessTokenExpiresIn,
@@ -323,6 +391,7 @@ export const validateEnv = (env: Record<string, unknown>) => {
     APP_VERSION: appVersion,
     APP_DESCRIPTION: appDescription,
     APP_URL: appUrl,
+    SOFT_DELETE_RETENTION_DAYS: softDeleteRetentionDays,
   };
 };
 

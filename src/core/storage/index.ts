@@ -14,7 +14,13 @@
 export { STORAGE_PORT } from './storage.port';
 export { UPLOAD_POLICY } from './domain/upload-policy';
 export type { UploadPolicy } from './domain/upload-policy';
-export type { StoragePort, UploadInput, UploadResult, UploadPurpose } from './storage.types';
+export type {
+  StoragePort,
+  UploadInput,
+  UploadResult,
+  UploadPurpose,
+  SignedUpload,
+} from './storage.types';
 
 export {
   STORAGE_ASSETS_REPOSITORY,

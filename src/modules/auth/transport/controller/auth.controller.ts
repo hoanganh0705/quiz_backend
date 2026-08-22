@@ -632,42 +632,33 @@ export class AuthController {
     summary: 'Check email availability',
     description:
       'Checks whether an email address is available for registration. ' +
-      'Does not reveal whether an account exists.',
+      'Returns the same response regardless of whether the email is registered ' +
+      'or not, to prevent account enumeration.',
   })
   @ApiOkResource(CheckEmailResponseDto, {
-    description: 'Email availability checked',
+    description:
+      'Email availability checked. The response is identical whether the email is registered or not, to prevent enumeration.',
+    examples: {
+      available: {
+        summary: 'Email is available',
+        value: {
+          data: { available: true, email: 'alice@example.com' },
+          meta: { timestamp: '2026-07-14T01:23:45.000Z' },
+        },
+      },
+      registered: {
+        summary: 'Email is already registered (response identical to available)',
+        value: {
+          data: { available: false, email: 'alice@example.com' },
+          meta: { timestamp: '2026-07-14T01:23:45.000Z' },
+        },
+      },
+    },
   })
   @ApiBadRequest()
   @ApiTooManyRequests()
   @ApiInternalError()
   async checkEmail(@Query() dto: CheckEmailDto) {
-    const result = await this.authApplicationService.checkEmailAvailability(dto.email);
-    return this.presenter.checkEmail(result);
-  }
-
-  /**
-   * Deprecated: prefer `GET /auth/check-email?email=...`. This POST alias is
-   * kept for one minor version to give frontend teams time to migrate. It
-   * forwards to the same service and returns the same response shape.
-   */
-  @Public()
-  @Throttle({ default: AUTH_THROTTLE.checkAvailability })
-  @Post('check-email')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({
-    summary: 'Check email availability (deprecated)',
-    deprecated: true,
-    description:
-      'Deprecated alias of `GET /auth/check-email?email=...`. Returns the same response. ' +
-      'Prefer the GET form; this POST route will be removed in the next minor version.',
-  })
-  @ApiOkResource(CheckEmailResponseDto, {
-    description: 'Email availability checked (deprecated POST alias)',
-  })
-  @ApiBadRequest()
-  @ApiTooManyRequests()
-  @ApiInternalError()
-  async checkEmailDeprecated(@Body() dto: CheckEmailDto) {
     const result = await this.authApplicationService.checkEmailAvailability(dto.email);
     return this.presenter.checkEmail(result);
   }
@@ -679,42 +670,33 @@ export class AuthController {
     summary: 'Check username availability',
     description:
       'Checks whether a username is available for registration. ' +
-      'Does not reveal whether an account exists.',
+      'Returns the same response regardless of whether the username is registered ' +
+      'or not, to prevent account enumeration.',
   })
   @ApiOkResource(CheckUsernameResponseDto, {
-    description: 'Username availability checked',
+    description:
+      'Username availability checked. The response is identical whether the username is registered or not, to prevent enumeration.',
+    examples: {
+      available: {
+        summary: 'Username is available',
+        value: {
+          data: { available: true, username: 'alice_wonder' },
+          meta: { timestamp: '2026-07-14T01:23:45.000Z' },
+        },
+      },
+      registered: {
+        summary: 'Username is already registered (response identical to available)',
+        value: {
+          data: { available: false, username: 'alice_wonder' },
+          meta: { timestamp: '2026-07-14T01:23:45.000Z' },
+        },
+      },
+    },
   })
   @ApiBadRequest()
   @ApiTooManyRequests()
   @ApiInternalError()
   async checkUsername(@Query() dto: CheckUsernameDto) {
-    const result = await this.authApplicationService.checkUsernameAvailability(dto.username);
-    return this.presenter.checkUsername(result);
-  }
-
-  /**
-   * Deprecated: prefer `GET /auth/check-username?username=...`. This POST alias
-   * is kept for one minor version to give frontend teams time to migrate. It
-   * forwards to the same service and returns the same response shape.
-   */
-  @Public()
-  @Throttle({ default: AUTH_THROTTLE.checkAvailability })
-  @Post('check-username')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({
-    summary: 'Check username availability (deprecated)',
-    deprecated: true,
-    description:
-      'Deprecated alias of `GET /auth/check-username?username=...`. Returns the same response. ' +
-      'Prefer the GET form; this POST route will be removed in the next minor version.',
-  })
-  @ApiOkResource(CheckUsernameResponseDto, {
-    description: 'Username availability checked (deprecated POST alias)',
-  })
-  @ApiBadRequest()
-  @ApiTooManyRequests()
-  @ApiInternalError()
-  async checkUsernameDeprecated(@Body() dto: CheckUsernameDto) {
     const result = await this.authApplicationService.checkUsernameAvailability(dto.username);
     return this.presenter.checkUsername(result);
   }

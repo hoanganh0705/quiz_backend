@@ -41,6 +41,7 @@ import {
   UPLOAD_POLICY,
   StorageApplicationService,
   StorageOwnershipBindFailedError,
+  type SignedUpload,
   type StoragePort,
   type UploadPurpose,
   type UploadResult,
@@ -185,5 +186,31 @@ export class UploadApplicationService {
     }
 
     return uploadResult;
+  }
+
+  /**
+   * Phase 7 #1 — issue a Cloudinary signed-upload envelope so the
+   * client can POST the file directly without proxying through the
+   * application server. The ownership bind to `storage_assets` is
+   * deferred to a follow-up call (the client must POST `file` to
+   * `uploadUrl` and then call `POST /uploads/:publicId/bind` to attach
+   * the resulting `publicId` to their account).
+   *
+   * The default expiry is 10 minutes (`600 s`), clamped to
+   * [60 s, 3600 s] by the adapter. We pick 10 minutes to give mobile
+   * clients room on a flaky network while still keeping the signed
+   * window narrow enough that a leaked signature is short-lived.
+   */
+  async signUpload(input: {
+    ownerId: string;
+    purpose: UploadPurposeLiteral;
+    expiresInSeconds?: number;
+  }): Promise<SignedUpload> {
+    const purpose = UPLOAD_PURPOSE_MAP[input.purpose];
+    return this.storage.createSignedUpload({
+      ownerId: input.ownerId,
+      purpose,
+      expiresInSeconds: input.expiresInSeconds ?? 600,
+    });
   }
 }

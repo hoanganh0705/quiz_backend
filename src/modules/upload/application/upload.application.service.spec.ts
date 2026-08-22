@@ -24,8 +24,10 @@ import {
 
 import {
   StorageOwnershipBindFailedError,
+  type SignedUpload,
   type StoragePort,
   type UploadInput,
+  type UploadPurpose,
   type UploadResult,
 } from '@/core/storage';
 
@@ -68,6 +70,29 @@ class FakeStoragePort implements StoragePort {
 
   deriveUrl(publicId: string, _purpose: 'avatar' | 'quiz'): string {
     return `https://fake.test/derived/${publicId}`;
+  }
+
+  ping(): Promise<void> {
+    return Promise.resolve();
+  }
+
+  createSignedUpload(input: {
+    ownerId: string;
+    purpose: UploadPurpose;
+    expiresInSeconds: number;
+  }): Promise<SignedUpload> {
+    const policy = UPLOAD_POLICY[input.purpose];
+    const publicId = `${policy.folder}/${input.ownerId}/signed-fake-uuid`;
+    const timestamp = Math.floor(Date.now() / 1000) + input.expiresInSeconds;
+    return Promise.resolve({
+      uploadUrl: `https://fake.test/${publicId}`,
+      publicId,
+      expiresAt: new Date(timestamp * 1000).toISOString(),
+      apiKey: 'fake-key',
+      signature: 'fake-signature',
+      timestamp,
+      folder: policy.folder,
+    });
   }
 
   clear(): void {
@@ -270,6 +295,40 @@ describe('UploadApplicationService', () => {
           file: makeFile(),
         }),
       ).rejects.toBeInstanceOf(StorageOwnershipBindFailedError);
+    });
+  });
+
+  describe('signUpload (Phase 7 #1 — presigned URL)', () => {
+    it('returns a signed envelope with the expected fields', async () => {
+      const { service } = makeService();
+      const signed = await service.signUpload({ ownerId: 'u1', purpose: 'avatar' });
+      expect(signed.publicId).toMatch(/^quiz-app\/avatars\/u1\//);
+      expect(signed.folder).toBe('quiz-app/avatars');
+      expect(signed.uploadUrl).toMatch(/^https?:\/\//);
+      expect(signed.signature).toBeTruthy();
+      expect(signed.timestamp).toBeGreaterThan(Math.floor(Date.now() / 1000));
+      // Default 10-minute expiry.
+      expect(signed.expiresAt).toMatch(/T/);
+    });
+
+    it('passes a custom expiresInSeconds through to the storage port', async () => {
+      const storage = new FakeStoragePort();
+      const ownership = new FakeOwnershipService();
+      const logger = { info: jest.fn(), warn: jest.fn(), error: jest.fn() };
+      const service = new UploadApplicationService(
+        storage,
+        ownership as unknown as StorageApplicationService,
+        logger as never,
+      );
+      const signed = await service.signUpload({
+        ownerId: 'u1',
+        purpose: 'quiz',
+        expiresInSeconds: 300,
+      });
+      expect(signed.folder).toBe('quiz-app/quizzes');
+      // 5 minutes × 1000 ms — within tolerance.
+      const expectedExpiry = Math.floor(Date.now() / 1000) + 300;
+      expect(Math.abs(signed.timestamp - expectedExpiry)).toBeLessThanOrEqual(5);
     });
   });
 });

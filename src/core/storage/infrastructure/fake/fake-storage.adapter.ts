@@ -15,6 +15,7 @@ import { Injectable } from '@nestjs/common';
 import { v7 as uuidv7 } from 'uuid';
 
 import {
+  type SignedUpload,
   type StoragePort,
   type UploadInput,
   type UploadPurpose,
@@ -79,5 +80,41 @@ export class FakeStorageAdapter implements StoragePort {
    */
   clear(): void {
     this.assets.clear();
+  }
+
+  /**
+   * Phase 2 #3 — health probe. Always resolves; the fake adapter
+   * has no downstream to probe.
+   */
+  async ping(): Promise<void> {
+    return Promise.resolve();
+  }
+
+  /**
+   * Phase 7 #1 — fake signed upload. Returns a deterministic,
+   * server-shaped envelope that mirrors the Cloudinary adapter. The
+   * `uploadUrl` resolves to `https://fake.cloudinary.local/...` so
+   * test code can verify its construction without any network call.
+   */
+  async createSignedUpload(input: {
+    readonly ownerId: string;
+    readonly purpose: UploadPurpose;
+    readonly expiresInSeconds: number;
+  }): Promise<SignedUpload> {
+    const policy = UPLOAD_POLICY[input.purpose];
+    const publicId = `${policy.folder}/${input.ownerId}/${uuidv7()}`;
+    const expiresInSeconds = Math.min(Math.max(input.expiresInSeconds, 60), 3600);
+    const timestamp = Math.floor(Date.now() / 1000) + expiresInSeconds;
+    const expiresAt = new Date(timestamp * 1000).toISOString();
+
+    return {
+      uploadUrl: `https://fake.cloudinary.local/image/upload`,
+      publicId,
+      expiresAt,
+      apiKey: 'fake-key',
+      signature: 'fake-signature',
+      timestamp,
+      folder: policy.folder,
+    };
   }
 }
