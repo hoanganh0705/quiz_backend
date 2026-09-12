@@ -29,9 +29,7 @@ const parseOptionalPositiveInt = (raw: string | undefined, fallback: number): nu
   }
   const parsed = Number(raw);
   if (!Number.isInteger(parsed) || parsed <= 0) {
-    throw new Error(
-      `Database pool value must be a positive integer, got '${raw}'`,
-    );
+    throw new Error(`Database pool value must be a positive integer, got '${raw}'`);
   }
   return parsed;
 };

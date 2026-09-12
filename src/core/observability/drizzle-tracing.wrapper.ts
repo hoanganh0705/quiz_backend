@@ -25,19 +25,9 @@
  */
 
 import { Inject, Injectable } from '@nestjs/common';
-import {
-  TRACING_PROVIDER,
-  type TracingProvider,
-} from '@/core/observability/tracing.provider';
+import { TRACING_PROVIDER, type TracingProvider } from '@/core/observability/tracing.provider';
 
-const TRACED_METHODS = [
-  'select',
-  'insert',
-  'update',
-  'delete',
-  'execute',
-  'transaction',
-] as const;
+const TRACED_METHODS = ['select', 'insert', 'update', 'delete', 'execute', 'transaction'] as const;
 type TracedMethod = (typeof TRACED_METHODS)[number];
 
 @Injectable()
@@ -50,10 +40,7 @@ export class DrizzleTracingWrapper {
   wrap<T extends object>(client: T): T {
     return new Proxy(client, {
       get: (target, prop, receiver) => {
-        if (
-          typeof prop !== 'string' ||
-          !TRACED_METHODS.includes(prop as TracedMethod)
-        ) {
+        if (typeof prop !== 'string' || !TRACED_METHODS.includes(prop as TracedMethod)) {
           return Reflect.get(target, prop, receiver);
         }
         const original = Reflect.get(target, prop, receiver) as unknown;

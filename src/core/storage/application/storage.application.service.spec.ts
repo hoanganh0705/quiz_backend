@@ -53,6 +53,12 @@ class InMemoryStorageAssetsRepository implements StorageAssetsRepositoryPort {
     }
     return Promise.resolve();
   }
+
+  findByPublicId(
+    publicId: string,
+  ): Promise<Array<{ publicId: string; ownerId: string; purpose: UploadPurpose }>> {
+    return Promise.resolve(this.rows.filter((r) => r.publicId === publicId));
+  }
 }
 
 describe('StorageApplicationService', () => {
@@ -169,6 +175,34 @@ describe('StorageApplicationService', () => {
 
     it('is idempotent (no error when the row does not exist)', async () => {
       await expect(service.unbindAsset('does-not-exist')).resolves.toBeUndefined();
+    });
+  });
+
+  describe('assetExists (Phase 3.1)', () => {
+    it('returns true when a row matches the publicId', async () => {
+      await service.bindAssetToOwner({
+        publicId: 'quiz-app/avatars/u/uuid',
+        ownerId: 'u',
+        purpose: 'avatar',
+      });
+      await expect(service.assetExists('quiz-app/avatars/u/uuid')).resolves.toBe(true);
+    });
+
+    it('returns false when no row matches the publicId', async () => {
+      await expect(service.assetExists('quiz-app/avatars/u/never')).resolves.toBe(false);
+    });
+
+    it('is independent of ownerId and purpose (existence only)', async () => {
+      // A row bound to user 'u' with purpose 'avatar' must still be
+      // considered "exists" for any other caller — the §11 ownership
+      // gate is enforced by `userOwnsAssetForPurpose`, not by this
+      // structural check.
+      await service.bindAssetToOwner({
+        publicId: 'quiz-app/avatars/u/uuid',
+        ownerId: 'u',
+        purpose: 'avatar',
+      });
+      await expect(service.assetExists('quiz-app/avatars/u/uuid')).resolves.toBe(true);
     });
   });
 });

@@ -10,6 +10,7 @@ import {
 import type { DailyChallengeResponseDto } from '../dto/response/daily-challenge-response.dto';
 import type {
   DailyChallengeAnswerResponseDto,
+  DailyChallengeCategoryBreakdownResponseDto,
   DailyChallengeHistoryResponseDto,
   DailyChallengeLeaderboardResponseDto,
 } from '../dto/response/daily-challenge-history-response.dto';
@@ -156,6 +157,36 @@ export class DailyChallengeApplicationService {
         displayName: row.displayName,
         avatarUrl: row.avatarUrl,
         scorePercent: row.scorePercent,
+      })),
+    };
+  }
+
+  /**
+   * `GET /daily-challenge/history/categories`.
+   *
+   * Phase 4 (F-2): per-category rollup of the viewer's completed
+   * daily-challenge attempts. Returns an empty `items` array when
+   * the viewer has not yet completed any attempt (or all attempts
+   * were against uncategorised quizzes). The route is `@Public()`
+   * so anonymous viewers get the empty array — there is no
+   * viewer-scoped data without `userId`.
+   */
+  async getCategoryBreakdown(
+    userId: string | null,
+  ): Promise<DailyChallengeCategoryBreakdownResponseDto> {
+    if (userId === null) {
+      return { items: [] };
+    }
+    const rows = await this.repository.getCategoryBreakdown(userId);
+    return {
+      items: rows.map((row) => ({
+        categoryId: row.categoryId,
+        categoryName: row.categoryName,
+        categorySlug: row.categorySlug,
+        attemptCount: row.attemptCount,
+        // Round to 2 decimal places so the JSON payload is stable
+        // and the frontend can render it without further math.
+        averageScorePercent: Math.round(row.averageScorePercent * 100) / 100,
       })),
     };
   }

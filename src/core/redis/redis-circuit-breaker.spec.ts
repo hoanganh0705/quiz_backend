@@ -127,12 +127,16 @@ describe('RedisCircuitBreaker', () => {
 
     // Two failures — under threshold.
     try {
-      await breaker.exec('fallback', async () => { throw new Error('one'); });
+      await breaker.exec('fallback', async () => {
+        throw new Error('one');
+      });
     } catch {
       // expected
     }
     try {
-      await breaker.exec('fallback', async () => { throw new Error('two'); });
+      await breaker.exec('fallback', async () => {
+        throw new Error('two');
+      });
     } catch {
       // expected
     }

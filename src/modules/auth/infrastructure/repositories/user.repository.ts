@@ -223,40 +223,42 @@ export class UserRepository implements UserRepositoryPort {
     passwordHash: string;
     nowIso: string;
   }): Promise<CreatedUserRow> {
-    const createdUser = await this.db.transaction(async (tx) => {
-      const [inserted] = await tx
-        .insert(users)
-        .values({
-          email: params.email,
-          username: params.username,
+    const createdUser = await this.db
+      .transaction(async (tx) => {
+        const [inserted] = await tx
+          .insert(users)
+          .values({
+            email: params.email,
+            username: params.username,
+            passwordHash: params.passwordHash,
+          })
+          .returning({
+            ...USER_IDENTITY_COLUMNS,
+            createdAt: users.createdAt,
+            isVerified: users.isVerified,
+          });
+
+        if (!inserted) {
+          throw new InternalServerErrorException('Failed to create user');
+        }
+
+        await tx.insert(passwordHistory).values({
+          userId: inserted.userId,
           passwordHash: params.passwordHash,
-        })
-        .returning({
-          ...USER_IDENTITY_COLUMNS,
-          createdAt: users.createdAt,
-          isVerified: users.isVerified,
+          createdAt: params.nowIso,
         });
 
-      if (!inserted) {
+        return inserted as CreatedUserRow;
+      })
+      .catch((error: unknown) => {
+        // Preserve the generic surface so callers can match on it without
+        // caring whether the underlying error came from the unique
+        // constraint on `users` or some other DB-level failure.
+        if (error instanceof InternalServerErrorException) {
+          throw error;
+        }
         throw new InternalServerErrorException('Failed to create user');
-      }
-
-      await tx.insert(passwordHistory).values({
-        userId: inserted.userId,
-        passwordHash: params.passwordHash,
-        createdAt: params.nowIso,
       });
-
-      return inserted as CreatedUserRow;
-    }).catch((error: unknown) => {
-      // Preserve the generic surface so callers can match on it without
-      // caring whether the underlying error came from the unique
-      // constraint on `users` or some other DB-level failure.
-      if (error instanceof InternalServerErrorException) {
-        throw error;
-      }
-      throw new InternalServerErrorException('Failed to create user');
-    });
 
     return createdUser;
   }

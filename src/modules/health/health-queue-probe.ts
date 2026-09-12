@@ -39,12 +39,7 @@ export class HealthQueueProbe {
     try {
       // `getJobCounts` returns `{ waiting, active, completed, failed,
       // delayed }`. We sum the three "in-flight" buckets.
-      const counts = await this.emailQueue.getJobCounts(
-        'waiting',
-        'active',
-        'delayed',
-        'failed',
-      );
+      const counts = await this.emailQueue.getJobCounts('waiting', 'active', 'delayed', 'failed');
       const waiting = Number(counts.waiting ?? 0);
       const active = Number(counts.active ?? 0);
       const delayed = Number(counts.delayed ?? 0);
@@ -55,9 +50,7 @@ export class HealthQueueProbe {
       // is `client.status` (the ioredis client state). Anything
       // other than `ready` is treated as "not connected".
       const workerConnected =
-        this.emailQueue.client !== undefined &&
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (this.emailQueue.client as any)?.status === 'ready';
+        this.emailQueue.client !== undefined && (this.emailQueue.client as any)?.status === 'ready';
 
       return {
         depth: waiting + active + delayed,

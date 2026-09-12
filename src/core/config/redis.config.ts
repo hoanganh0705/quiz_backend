@@ -27,14 +27,8 @@ const parsePositiveInt = (raw: string | undefined, fallback: number): number => 
 export const redisConfig = registerAs('redis', () => ({
   url: process.env.REDIS_URL ?? '',
   circuit: {
-    failureThreshold: parsePositiveInt(
-      process.env.REDIS_CIRCUIT_FAILURE_THRESHOLD,
-      5,
-    ),
-    resetTimeoutMs: parsePositiveInt(
-      process.env.REDIS_CIRCUIT_RESET_TIMEOUT_MS,
-      30_000,
-    ),
+    failureThreshold: parsePositiveInt(process.env.REDIS_CIRCUIT_FAILURE_THRESHOLD, 5),
+    resetTimeoutMs: parsePositiveInt(process.env.REDIS_CIRCUIT_RESET_TIMEOUT_MS, 30_000),
   },
 }));
 

@@ -30,6 +30,7 @@ import {
   BadRequestException,
   Inject,
   Injectable,
+  NotFoundException,
   PayloadTooLargeException,
   ServiceUnavailableException,
   UnsupportedMediaTypeException,
@@ -211,6 +212,52 @@ export class UploadApplicationService {
       ownerId: input.ownerId,
       purpose,
       expiresInSeconds: input.expiresInSeconds ?? 600,
+    });
+  }
+
+  /**
+   * Phase 3.1 — bind a previously uploaded asset to the authenticated
+   * user. The asset is assumed to already exist in Cloudinary (the
+   * client uploaded it directly via `signUpload` → `uploadUrl`); we
+   * only need to persist the `(publicId, ownerId, purpose)` ownership
+   * row in `storage_assets`.
+   *
+   * Two preconditions, both enforced here so the controller stays
+   * thin:
+   *
+   *   1. The asset row exists. A missing row means the client either
+   *      forged the publicId or never completed the upload — we
+   *      return `NotFoundException` (404) rather than bind a phantom
+   *      id and leave Cloudinary holding the bytes.
+   *   2. The asset row is not already bound to a different owner.
+   *      `storageAssets.insert` enforces UNIQUE on `public_id`, so
+   *      a collision surfaces as `StorageOwnershipBindFailedError`
+   *      (500). The client must treat that as a hard failure — they
+   *      do not own that id.
+   *
+   * The §11 ownership rule is intentionally NOT enforced here. This
+   * endpoint exists specifically to establish the rule for the first
+   * time; the §11 gate (`userOwnsAssetForPurpose`) is what later
+   * callers use to enforce it on writes.
+   */
+  async bindAsset(input: {
+    ownerId: string;
+    publicId: string;
+    purpose: UploadPurposeLiteral;
+  }): Promise<void> {
+    const exists = await this.ownership.assetExists(input.publicId);
+    if (!exists) {
+      throw new NotFoundException({
+        code: 'UPLOAD_ASSET_NOT_FOUND',
+        message: `No uploaded asset matches publicId "${input.publicId}". Complete the upload first or supply a publicId returned by the storage provider.`,
+      });
+    }
+
+    const purpose = UPLOAD_PURPOSE_MAP[input.purpose];
+    await this.ownership.bindAssetToOwner({
+      publicId: input.publicId,
+      ownerId: input.ownerId,
+      purpose,
     });
   }
 }

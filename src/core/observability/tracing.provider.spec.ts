@@ -51,11 +51,7 @@ describe('TracingProvider', () => {
 
   it('withSpan opens, runs, closes with ok on success', async () => {
     const { provider } = makeProvider();
-    const result = await provider.withSpan(
-      'test.span',
-      { kind: 'server' },
-      async () => 'value',
-    );
+    const result = await provider.withSpan('test.span', { kind: 'server' }, async () => 'value');
     expect(result).toBe('value');
   });
 
@@ -83,7 +79,9 @@ describe('TracingProvider', () => {
   it('child span inherits the parent trace id', () => {
     const { provider } = makeProvider();
     const parent = provider.startSpan('parent');
-    const child = provider.startSpan('child', { parent: { traceId: parent.traceId, spanId: parent.spanId } });
+    const child = provider.startSpan('child', {
+      parent: { traceId: parent.traceId, spanId: parent.spanId },
+    });
     expect(child.traceId).toBe(parent.traceId);
     expect(child.parentSpanId).toBe(parent.spanId);
   });

@@ -18,10 +18,7 @@ import { Controller, Get, Header, Inject, Res } from '@nestjs/common';
 import type { Response } from 'express';
 import { Public } from '@/common/decorators/public.decorator';
 import { ApiExcludeController } from '@nestjs/swagger';
-import {
-  METRICS_REGISTRY,
-  type MetricsRegistry,
-} from '@/core/observability/metrics.registry';
+import { METRICS_REGISTRY, type MetricsRegistry } from '@/core/observability/metrics.registry';
 import { RedisService } from '@/core/redis/redis.service';
 import { TracingProvider } from '@/core/observability/tracing.provider';
 import { TRACING_PROVIDER } from '@/core/observability/tracing.provider';

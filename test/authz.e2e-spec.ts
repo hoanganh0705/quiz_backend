@@ -88,10 +88,7 @@ const readRole = (req: RoleRequest): AuthRole => {
  * remains the source of truth; the helper is the only place the
  * policy lives.
  */
-const rolesRequired = (
-  req: RoleRequest,
-  allow: ReadonlyArray<Role>,
-): void => {
+const rolesRequired = (req: RoleRequest, allow: ReadonlyArray<Role>): void => {
   const role = readRole(req);
   if (allow.includes(role as Role)) return;
   if (role === 'public') {
@@ -115,7 +112,8 @@ class AuthzFixtureController {
     rolesRequired(req, ['public', 'user', 'admin']);
     return ApiResponse.ok({ quizId });
   }
-  @Post('quizzes') @HttpCode(201)
+  @Post('quizzes')
+  @HttpCode(201)
   createQuiz(@Req() req: RoleRequest) {
     rolesRequired(req, ['user', 'admin']);
     return ApiResponse.ok({ quizId: 'created' });
@@ -135,7 +133,8 @@ class AuthzFixtureController {
     rolesRequired(req, ['public', 'user', 'admin']);
     return ApiResponse.ok({ quizId });
   }
-  @Post('attempts') @HttpCode(201)
+  @Post('attempts')
+  @HttpCode(201)
   createAttempt(@Req() req: RoleRequest) {
     rolesRequired(req, ['user', 'admin']);
     return ApiResponse.ok({});
@@ -145,7 +144,8 @@ class AuthzFixtureController {
     rolesRequired(req, ['owner', 'admin']);
     return ApiResponse.ok({ attemptId });
   }
-  @Post('instances') @HttpCode(201)
+  @Post('instances')
+  @HttpCode(201)
   createInstance(@Req() req: RoleRequest) {
     rolesRequired(req, ['user', 'admin']);
     return ApiResponse.ok({});
@@ -161,7 +161,8 @@ class AuthzFixtureController {
     rolesRequired(req, ['public', 'user', 'admin']);
     return ApiResponse.ok({ instanceId });
   }
-  @Post('comments') @HttpCode(201)
+  @Post('comments')
+  @HttpCode(201)
   createComment(@Req() req: RoleRequest) {
     rolesRequired(req, ['user', 'admin']);
     return ApiResponse.ok({});
@@ -171,7 +172,8 @@ class AuthzFixtureController {
     rolesRequired(req, ['owner', 'admin']);
     return ApiResponse.ok({ commentId });
   }
-  @Post('reviews') @HttpCode(201)
+  @Post('reviews')
+  @HttpCode(201)
   createReview(@Req() req: RoleRequest) {
     rolesRequired(req, ['user', 'admin']);
     return ApiResponse.ok({});
@@ -211,27 +213,32 @@ class AuthzFixtureController {
     rolesRequired(req, ['owner', 'admin']);
     return ApiResponse.ok({ userId });
   }
-  @Post('uploads') @HttpCode(201)
+  @Post('uploads')
+  @HttpCode(201)
   upload(@Req() req: RoleRequest) {
     rolesRequired(req, ['user', 'admin']);
     return ApiResponse.ok({});
   }
-  @Post('auth/register') @HttpCode(201)
+  @Post('auth/register')
+  @HttpCode(201)
   register(@Req() req: RoleRequest) {
     rolesRequired(req, ['public']);
     return ApiResponse.ok({});
   }
-  @Post('auth/login') @HttpCode(200)
+  @Post('auth/login')
+  @HttpCode(200)
   login(@Req() req: RoleRequest) {
     rolesRequired(req, ['public']);
     return ApiResponse.ok({});
   }
-  @Post('auth/refresh') @HttpCode(200)
+  @Post('auth/refresh')
+  @HttpCode(200)
   refresh(@Req() req: RoleRequest) {
     rolesRequired(req, ['public']);
     return ApiResponse.ok({});
   }
-  @Post('auth/logout') @HttpCode(200)
+  @Post('auth/logout')
+  @HttpCode(200)
   logout(@Req() req: RoleRequest) {
     rolesRequired(req, ['user', 'admin']);
     return ApiResponse.ok({});
@@ -292,9 +299,9 @@ describe('Phase 4 #2 — authorization matrix', () => {
 
       it(`role=${role} → ${expectedStatus}`, async () => {
         const concrete = pathToFixturePath(path, role);
-        const res = await request(app.getHttpServer() as App)[method.toLowerCase()](
-          `/authz-fixture${concrete}`,
-        ).set('x-auth-role', role);
+        const res = await request(app.getHttpServer() as App)
+          [method.toLowerCase()](`/authz-fixture${concrete}`)
+          .set('x-auth-role', role);
 
         try {
           expect(res.status).toBe(expectedStatus);

@@ -110,9 +110,7 @@ export class OutboxAdapter implements OutboxPort {
    */
   async notifyOutboxEvent(eventId: string): Promise<void> {
     try {
-      await this.db.execute(
-        sql`SELECT pg_notify(${OUTBOX_NOTIFY_CHANNEL}, ${eventId})`,
-      );
+      await this.db.execute(sql`SELECT pg_notify(${OUTBOX_NOTIFY_CHANNEL}, ${eventId})`);
     } catch (error) {
       // Best-effort: the listener is still safe because the
       // fallback poll catches any NOTIFY that was missed.

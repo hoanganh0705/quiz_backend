@@ -10,6 +10,7 @@ import { ApiOkResource, ApiOkResourceList } from '@/common/swagger/api-ok';
 import { ProblemDetailDto } from '@/common/swagger/swagger-schemas';
 import {
   DailyChallengeAnswerResponseDto,
+  DailyChallengeCategoryBreakdownResponseDto,
   DailyChallengeHistoryResponseDto,
   DailyChallengeLeaderboardResponseDto,
 } from '../../dto/response/daily-challenge-history-response.dto';
@@ -126,5 +127,15 @@ export const ApiDailyChallengeAnswer = (): MethodDecorator =>
     ApiNotFoundResponse(problem.notFound(dailyChallengeNotFoundExample)),
     ApiConflictResponse(problem.conflict(dailyChallengeConflictExample)),
     ApiUnauthorizedResponse(problem.unauthorized(dailyChallengeUnauthorizedExample)),
+    ApiInternalServerErrorResponse(problem.internalError(dailyChallengeInternalErrorExample)),
+  );
+
+export const ApiDailyChallengeCategoryBreakdown = (): MethodDecorator =>
+  applyDecorators(
+    ApiOkResource(DailyChallengeCategoryBreakdownResponseDto as unknown as Type, {
+      description:
+        'Per-category rollup of the viewer’s completed daily-challenge attempts. ' +
+        'Returns an empty `items` array for viewers with no completed attempts.',
+    }),
     ApiInternalServerErrorResponse(problem.internalError(dailyChallengeInternalErrorExample)),
   );

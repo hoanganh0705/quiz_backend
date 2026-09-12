@@ -32,15 +32,7 @@
  */
 
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import {
-  IsInt,
-  IsISO8601,
-  IsOptional,
-  IsString,
-  IsUUID,
-  Max,
-  Min,
-} from 'class-validator';
+import { IsInt, IsISO8601, IsOptional, IsString, IsUUID, Max, Min } from 'class-validator';
 import { Type } from 'class-transformer';
 import type { AuditDomain } from '@/common/audit/audit-log.service';
 
