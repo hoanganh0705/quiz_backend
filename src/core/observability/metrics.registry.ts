@@ -56,12 +56,8 @@ export type HttpHistogramLabels = {
 
 export type DbHistogramLabels = { operation: string };
 
-const HTTP_BUCKETS_SECONDS = [
-  0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10,
-];
-const DB_BUCKETS_SECONDS = [
-  0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5,
-];
+const HTTP_BUCKETS_SECONDS = [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10];
+const DB_BUCKETS_SECONDS = [0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5];
 
 @Injectable()
 export class MetricsRegistry implements OnModuleInit {
@@ -216,35 +212,27 @@ const labelsKey = (labels: Record<string, string>): string =>
     .map(([k, v]) => `${k}=${v}`)
     .join('|');
 
-const formatMetricLine = (
-  name: string,
-  labelKey: string,
-  value: number,
-): string => {
+const formatMetricLine = (name: string, labelKey: string, value: number): string => {
   if (!labelKey) return `${name} ${value}`;
   // Prometheus label values must be quoted. Each pair in the
   // `labelKey` is already `k=v`; we emit `k="v"`.
-  const labels = labelKey.split('|').map((p) => {
-    const eq = p.indexOf('=');
-    if (eq < 0) return p;
-    return `${p.slice(0, eq)}="${p.slice(eq + 1)}"`;
-  }).join(',');
+  const labels = labelKey
+    .split('|')
+    .map((p) => {
+      const eq = p.indexOf('=');
+      if (eq < 0) return p;
+      return `${p.slice(0, eq)}="${p.slice(eq + 1)}"`;
+    })
+    .join(',');
   return `${name}{${labels}} ${value}`;
 };
 
-const incrementHistogram = (
-  metric: Metric,
-  labelKey: string,
-  observation: number,
-): void => {
+const incrementHistogram = (metric: Metric, labelKey: string, observation: number): void => {
   const buckets = metric.buckets ?? [];
   for (const upper of buckets) {
     const bucketKey = `${labelKey}|le=${upper}`;
     if (observation <= upper) {
-      metric.values.set(
-        bucketKey,
-        (metric.values.get(bucketKey) ?? 0) + 1,
-      );
+      metric.values.set(bucketKey, (metric.values.get(bucketKey) ?? 0) + 1);
     }
   }
   // `+Inf` bucket counts every observation.

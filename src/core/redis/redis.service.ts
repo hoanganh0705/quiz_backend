@@ -158,26 +158,23 @@ export class RedisService implements CacheProvider, PubSubProvider, OnModuleDest
     // would cascade into a 500 because not every caller knows what
     // to do with `null`. The breaker keeps emitting state-transition
     // logs so the outage is visible.
-    return this.circuitBreaker.exec(
-      undefined as unknown as T,
-      async () => {
-        const cached = await this.get(key);
-        if (cached !== null) {
-          try {
-            return JSON.parse(cached) as T;
-          } catch {
-            this.logger.warn({
-              event: 'redis_cache_parse_failed',
-              key,
-            });
-          }
+    return this.circuitBreaker.exec(undefined as unknown as T, async () => {
+      const cached = await this.get(key);
+      if (cached !== null) {
+        try {
+          return JSON.parse(cached) as T;
+        } catch {
+          this.logger.warn({
+            event: 'redis_cache_parse_failed',
+            key,
+          });
         }
+      }
 
-        const value = await fetcher();
-        await this.set(key, JSON.stringify(value), ttlMs);
-        return value;
-      },
-    );
+      const value = await fetcher();
+      await this.set(key, JSON.stringify(value), ttlMs);
+      return value;
+    });
   }
 
   /**

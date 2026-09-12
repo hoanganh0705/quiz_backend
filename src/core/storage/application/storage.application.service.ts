@@ -95,4 +95,17 @@ export class StorageApplicationService {
   async unbindAsset(publicId: string): Promise<void> {
     await this.storageAssets.deleteByPublicId(publicId);
   }
+
+  /**
+   * Phase 3.1 — does a `storage_assets` row with this `publicId`
+   * exist at all? Used by `UploadApplicationService.bindAsset` to
+   * reject forged or already-unbound ids before we attempt to bind a
+   * new row. Distinct from `userOwnsAssetForPurpose` (which gates the
+   * §11 ownership rule) — this is a structural existence check that
+   * ignores `ownerId` and `purpose`.
+   */
+  async assetExists(publicId: string): Promise<boolean> {
+    const rows = await this.storageAssets.findByPublicId(publicId);
+    return rows.length > 0;
+  }
 }

@@ -11,8 +11,8 @@ import { validateEnv } from './env.validation';
 type ValidatedEnv = ReturnType<typeof validateEnv>;
 
 const readReplica = (env: ValidatedEnv): string | null =>
-  (env as unknown as { DATABASE_READ_REPLICA_URL?: string | null })
-    .DATABASE_READ_REPLICA_URL ?? null;
+  (env as unknown as { DATABASE_READ_REPLICA_URL?: string | null }).DATABASE_READ_REPLICA_URL ??
+  null;
 
 describe('validateEnv — read-replica URL (Phase 7 #3)', () => {
   const baseEnv = (): Record<string, unknown> => ({

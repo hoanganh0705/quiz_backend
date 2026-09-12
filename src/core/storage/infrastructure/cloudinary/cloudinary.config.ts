@@ -113,10 +113,7 @@ export function buildCloudinarySDK(config: ConfigType<typeof cloudinaryConfig>):
       ping: () => Promise<{ status: string }>;
     };
     utils: {
-      api_sign_request: (
-        params: Record<string, string | number>,
-        apiSecret: string,
-      ) => string;
+      api_sign_request: (params: Record<string, string | number>, apiSecret: string) => string;
     };
   };
 

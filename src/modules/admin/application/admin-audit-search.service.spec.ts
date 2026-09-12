@@ -69,10 +69,7 @@ class FakeDrizzle {
     return this;
   }
   async thenDual(): Promise<[Row[], { total: number }[]]> {
-    return [
-      this.rows,
-      [{ total: this.totalRows }] as unknown as { total: number }[],
-    ];
+    return [this.rows, [{ total: this.totalRows }] as unknown as { total: number }[]];
   }
 }
 

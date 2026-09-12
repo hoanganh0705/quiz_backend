@@ -10,23 +10,13 @@
  *     itself — the controller calls probe methods, and we stub
  *     them with in-memory fakes that return deterministic values.
  */
-import {
-  Controller,
-  Get,
-  INestApplication,
-  Inject,
-  Injectable,
-  Module,
-} from '@nestjs/common';
+import { Controller, Get, INestApplication, Inject, Injectable, Module } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { LoggerModule } from 'nestjs-pino';
 import request from 'supertest';
 import { ApiResponse } from '@/common/responses/api-response';
 import { MetricsController } from '@/modules/health/metrics.controller';
-import {
-  MetricsRegistry,
-  METRICS_REGISTRY,
-} from '@/core/observability/metrics.registry';
+import { MetricsRegistry, METRICS_REGISTRY } from '@/core/observability/metrics.registry';
 import { TracingProvider } from '@/core/observability/tracing.provider';
 import { TRACING_PROVIDER } from '@/core/observability/tracing.provider';
 import { DRIZZLE, DRIZZLE_READ } from '@/core/database/drizzle.constants';

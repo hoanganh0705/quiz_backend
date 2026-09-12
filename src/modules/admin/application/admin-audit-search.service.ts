@@ -124,10 +124,7 @@ const buildConditions = (query: AdminAuditSearchQueryDto) => {
   return conditions;
 };
 
-const stringField = (
-  metadata: unknown,
-  key: string,
-): string | null => {
+const stringField = (metadata: unknown, key: string): string | null => {
   if (metadata === null || typeof metadata !== 'object') return null;
   const value = (metadata as Record<string, unknown>)[key];
   return typeof value === 'string' ? value : null;

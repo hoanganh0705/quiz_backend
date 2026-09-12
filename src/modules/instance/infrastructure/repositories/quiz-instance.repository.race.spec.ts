@@ -145,9 +145,7 @@ describe('Phase 4 #3 — concurrent joinInstance simulation', () => {
 
     expect(successes).toHaveLength(1);
     expect(failures).toHaveLength(1);
-    expect((failures[0] as PromiseRejectedResult).reason).toBeInstanceOf(
-      InstanceFullCapacityError,
-    );
+    expect(failures[0].reason).toBeInstanceOf(InstanceFullCapacityError);
     expect(exec.players).toHaveLength(1);
   });
 

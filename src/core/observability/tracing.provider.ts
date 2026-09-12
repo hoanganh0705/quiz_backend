@@ -178,9 +178,7 @@ export class TracingProvider implements OnModuleInit, OnModuleDestroy {
     const spans = this.completedSpans.splice(0, this.completedSpans.length);
     for (const span of spans) {
       const durationMs =
-        span.endTimeNs !== undefined
-          ? Number(span.endTimeNs - span.startTimeNs) / 1_000_000
-          : 0;
+        span.endTimeNs !== undefined ? Number(span.endTimeNs - span.startTimeNs) / 1_000_000 : 0;
       this.logger.info({
         event: 'trace_span',
         traceId: span.traceId,

@@ -19,7 +19,8 @@ export class SignUploadResponseDto {
   @ApiProperty({
     description:
       'Opaque `public_id` allocated server-side. The client echoes this back when patching the entity.',
-    example: 'quiz-app/avatars/019f5e13-1fca-798f-93cc-b5ef8699de25/019f5e4c-b6fa-72cd-a5a5-ffe59539701d',
+    example:
+      'quiz-app/avatars/019f5e13-1fca-798f-93cc-b5ef8699de25/019f5e4c-b6fa-72cd-a5a5-ffe59539701d',
   })
   publicId!: string;
 

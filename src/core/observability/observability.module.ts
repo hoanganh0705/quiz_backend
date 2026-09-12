@@ -26,11 +26,6 @@ import { MetricsRegistry, METRICS_REGISTRY } from './metrics.registry';
     { provide: METRICS_REGISTRY, useExisting: MetricsRegistry },
     { provide: TRACING_PROVIDER, useExisting: TracingProvider },
   ],
-  exports: [
-    TracingProvider,
-    MetricsRegistry,
-    METRICS_REGISTRY,
-    TRACING_PROVIDER,
-  ],
+  exports: [TracingProvider, MetricsRegistry, METRICS_REGISTRY, TRACING_PROVIDER],
 })
 export class ObservabilityModule {}

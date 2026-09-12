@@ -51,7 +51,7 @@ export class BullmqTracingWrapper {
           },
         },
         async (span) => {
-          const job = (await (originalAdd as (...a: unknown[]) => Promise<Job<T>>)(...args)) as Job<T>;
+          const job = await (originalAdd as (...a: unknown[]) => Promise<Job<T>>)(...args);
           span.attributes['messaging.message_id'] = job.id ?? '';
           // Embed the trace id in the job data so the consumer
           // can attach to the same trace.
@@ -80,8 +80,8 @@ export class BullmqTracingWrapper {
         typeof data[JOB_TRACE_ID_FIELD] === 'string' &&
         typeof data[JOB_TRACE_SPAN_FIELD] === 'string'
           ? {
-              traceId: data[JOB_TRACE_ID_FIELD] as string,
-              spanId: data[JOB_TRACE_SPAN_FIELD] as string,
+              traceId: data[JOB_TRACE_ID_FIELD],
+              spanId: data[JOB_TRACE_SPAN_FIELD],
             }
           : undefined;
 

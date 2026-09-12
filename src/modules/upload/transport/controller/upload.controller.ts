@@ -19,6 +19,7 @@ import {
   Controller,
   HttpCode,
   HttpStatus,
+  Param,
   ParseFilePipe,
   Post,
   UploadedFile,
@@ -34,7 +35,10 @@ import {
   ApiConsumes,
   ApiCreatedResponse,
   ApiInternalServerErrorResponse,
+  ApiNotFoundResponse,
+  ApiOkResponse,
   ApiOperation,
+  ApiParam,
   ApiPayloadTooLargeResponse,
   ApiServiceUnavailableResponse,
   ApiTags,
@@ -48,8 +52,10 @@ import { type JwtPayload } from '@/common/guards/jwt.guard';
 
 import { UploadFileRequestDto } from '../../dto/request/upload-file.request.dto';
 import { SignUploadRequestDto } from '../../dto/request/sign-upload.request.dto';
+import { BindUploadRequestDto } from '../../dto/request/bind-upload.request.dto';
 import { UploadFileResponseDto } from '../../dto/response/upload-file.response.dto';
 import { SignUploadResponseDto } from '../../dto/response/sign-upload.response.dto';
+import { BindUploadResponseDto } from '../../dto/response/bind-upload.response.dto';
 import { UploadApplicationService } from '../../application/upload.application.service';
 
 const MAX_BYTES = 8 * 1024 * 1024;
@@ -246,6 +252,89 @@ export class UploadController {
       signature: signed.signature,
       timestamp: signed.timestamp,
       folder: signed.folder,
+    };
+  }
+
+  /**
+   * Phase 3.1 — bind a previously uploaded asset (the client used
+   * the signed envelope from `POST /uploads/sign` to POST the file
+   * directly to Cloudinary) to the authenticated user. After this
+   * call the server holds a durable `(publicId, ownerId, purpose)`
+   * row in `storage_assets`; subsequent entity writes that reference
+   * this `publicId` will pass the §11 ownership gate.
+   *
+   * Errors:
+   *   - 404 `UPLOAD_ASSET_NOT_FOUND` — no row for that `publicId`
+   *     (forged id or upload never completed). The asset is *not*
+   *     bound; the client should not retry.
+   *   - 401 — no authenticated user.
+   *   - 400 — invalid `purpose`.
+   *   - 500 `UPLOAD_OWNERSHIP_BIND_FAILED` — the asset is already
+   *     bound to a different owner; the bind is rejected.
+   *   - 429 — rate limited.
+   */
+  @Post(':publicId/bind')
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 30, ttl: 60_000 } })
+  @ApiOperation({
+    summary: 'Bind a previously uploaded asset to the authenticated user',
+    description:
+      'Called by the client after it has uploaded a file directly to Cloudinary via ' +
+      'a signed envelope (returned by `POST /uploads/sign`). Persists the ownership ' +
+      'row so subsequent entity writes that reference this `publicId` pass the §11 ' +
+      'ownership gate. The `publicId` in the URL must already exist in the storage ' +
+      'backend — a missing row returns 404 rather than binding a phantom id.',
+  })
+  @ApiParam({
+    name: 'publicId',
+    description:
+      'The Cloudinary public_id returned by `POST /uploads/sign` and echoed back from ' +
+      'the client-side upload.',
+    example:
+      'quiz-app/avatars/0d8e3a45-7d7a-71f0-9e2a-9b0d9e2c7f3b/0190f6a5-d2c4-7b3e-a8e9-2b9f7e2b8b1a',
+  })
+  @ApiOkResponse({
+    description: 'Asset bound to the caller.',
+    type: BindUploadResponseDto,
+  })
+  @ApiBadRequestResponse({
+    description: 'Invalid `purpose` value.',
+    examples: {
+      invalidPurpose: { summary: 'invalid purpose', value: invalidPurposeExample },
+    },
+  })
+  @ApiUnauthorizedResponse({ example: unauthorizedExample })
+  @ApiNotFoundResponse({
+    description: 'No asset row matches the supplied `publicId`.',
+    example: {
+      code: 'UPLOAD_ASSET_NOT_FOUND',
+      message:
+        'No uploaded asset matches publicId "quiz-app/avatars/u/forged". Complete the upload first or supply a publicId returned by the storage provider.',
+    },
+  })
+  @ApiTooManyRequestsResponse({
+    description: 'Rate limit exceeded (30 req / 60 s / user).',
+    example: tooManyRequestsExample,
+  })
+  @ApiInternalServerErrorResponse({
+    description: 'The asset is already bound to a different owner.',
+    example: ownershipBindFailedExample,
+  })
+  async bindUpload(
+    @Param('publicId') publicId: string,
+    @Body() body: BindUploadRequestDto,
+    @CurrentUser() user: JwtPayload,
+  ): Promise<BindUploadResponseDto> {
+    await this.uploadApplicationService.bindAsset({
+      ownerId: user.sub,
+      publicId,
+      purpose: body.purpose,
+    });
+    return {
+      publicId,
+      bound: true,
+      purpose: body.purpose,
+      ownerId: user.sub,
     };
   }
 }

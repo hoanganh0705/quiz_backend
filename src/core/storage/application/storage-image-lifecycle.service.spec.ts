@@ -91,6 +91,10 @@ class InMemoryStorageAssetsRepository {
     if (idx >= 0) this.rows.splice(idx, 1);
     return Promise.resolve();
   }
+
+  findByPublicId(publicId: string) {
+    return Promise.resolve(this.rows.filter((r) => r.publicId === publicId));
+  }
 }
 
 const pinoLogger = {

@@ -61,9 +61,9 @@ describe('OutboxNotifyListener', () => {
     );
 
     await (listener as unknown as { handleNotify(p: string): Promise<void> }).handleNotify('');
-    await (listener as unknown as { handleNotify(p: string | undefined): Promise<void> }).handleNotify(
-      undefined,
-    );
+    await (
+      listener as unknown as { handleNotify(p: string | undefined): Promise<void> }
+    ).handleNotify(undefined);
 
     expect(processor.processPendingEvents).not.toHaveBeenCalled();
   });
@@ -138,9 +138,11 @@ describe('OutboxNotifyListener', () => {
       makeLogger() as never,
     );
 
-    const handleNotify = (listener as unknown as {
-      handleNotify(p: string): Promise<void>;
-    }).handleNotify.bind(listener);
+    const handleNotify = (
+      listener as unknown as {
+        handleNotify(p: string): Promise<void>;
+      }
+    ).handleNotify.bind(listener);
 
     const first = handleNotify('x');
     const second = handleNotify('y');

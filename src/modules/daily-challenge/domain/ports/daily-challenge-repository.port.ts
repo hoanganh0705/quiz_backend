@@ -110,4 +110,29 @@ export interface DailyChallengeRepositoryPort {
     completedAt: string | null;
     nowIso: string;
   }): Promise<DailyChallengeAttemptRow>;
+
+  /**
+   * Phase 4 (F-2): per-category rollup of the user's completed
+   * daily-challenge attempts. Returns one row per category the
+   * user has completed at least one attempt in, with the mean
+   * `score_percent` (0–100) and attempt count.
+   *
+   * Categories with zero attempts are NOT returned — the public
+   * pie chart renders an explicit empty state when the array is
+   * empty, which is friendlier than rendering a full ring of
+   * "no data" slices.
+   *
+   * Rows are ordered by `attempt_count DESC, average_score_percent
+   * DESC` so the largest contributors surface at the top of the
+   * pie (and in any list view downstream).
+   */
+  getCategoryBreakdown(userId: string): Promise<
+    Array<{
+      categoryId: string;
+      categoryName: string;
+      categorySlug: string;
+      attemptCount: number;
+      averageScorePercent: number;
+    }>
+  >;
 }

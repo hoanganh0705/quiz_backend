@@ -44,4 +44,17 @@ export interface StorageAssetsRepositoryPort {
    * with `not found`) to keep the DB consistent.
    */
   deleteByPublicId(publicId: string): Promise<void>;
+
+  /**
+   * Phase 3.1 — look up a single row by `publicId` regardless of
+   * `ownerId` or `purpose`. Returns the row (or rows; uniqueness is
+   * on `public_id` so this should be a single row in practice) so the
+   * caller can confirm the asset exists before issuing a bind. The
+   * application service exposes only a boolean (`assetExists`), but
+   * the port returns the rows so future callers (e.g. an admin
+   * reconcile tool) can reuse the lookup.
+   */
+  findByPublicId(
+    publicId: string,
+  ): Promise<Array<{ publicId: string; ownerId: string; purpose: UploadPurpose }>>;
 }
