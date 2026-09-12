@@ -46,7 +46,8 @@ function makeUploadStreamTransform(result: UploadStreamResult): Transform {
   }) as typeof t.end;
   // Capture the callback passed to upload_stream via a wrapper installed
   // by the test setup (see `upload_stream` mock below).
-  (t as Transform & { __capturedCb?: UploadStreamCallback | null | undefined }).__capturedCb = undefined;
+  (t as Transform & { __capturedCb?: UploadStreamCallback | null | undefined }).__capturedCb =
+    undefined;
   Object.defineProperty(t, '__capturedCb', {
     get(): UploadStreamCallback | null | undefined {
       return capturedCb;
@@ -239,7 +240,7 @@ describe('CloudinaryStorageAdapter', () => {
 
     it('rethrows sdk.ping failures so the health probe sees the error', async () => {
       const sdk = makeSdk({
-        ping: () => Promise.reject(new Error('cloudinary down')) as Promise<void>,
+        ping: () => Promise.reject(new Error('cloudinary down')),
       });
       const adapter = new CloudinaryStorageAdapter(sdk, makeLogger());
 

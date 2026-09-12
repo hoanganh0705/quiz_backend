@@ -50,11 +50,7 @@ const makeService = (cache: InMemoryCache) => {
     getDailyEarnCapSum: jest.fn().mockResolvedValue(0),
   };
 
-  const service = new UserProfileBundleService(
-    summary as never,
-    coin as never,
-    cache as never,
-  );
+  const service = new UserProfileBundleService(summary as never, coin as never, cache as never);
 
   return { service, summary, coin };
 };

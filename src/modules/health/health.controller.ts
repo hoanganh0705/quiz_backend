@@ -74,8 +74,7 @@ export class HealthController {
     ]);
 
     const status = this.aggregateStatus({ database, redis, storage });
-    const httpStatus =
-      status === 'down' ? HttpStatus.SERVICE_UNAVAILABLE : HttpStatus.OK;
+    const httpStatus = status === 'down' ? HttpStatus.SERVICE_UNAVAILABLE : HttpStatus.OK;
     res.status(httpStatus);
 
     const payload: HealthStatusDto = {

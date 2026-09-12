@@ -147,7 +147,9 @@ export class SoftDeletePurgeService {
       case 'quizzes':
         return this.db
           .delete(quizzes)
-          .where(sql`${quizzes.deletedAt} IS NOT NULL AND ${quizzes.deletedAt} < ${cutoff.toISOString()}`)
+          .where(
+            sql`${quizzes.deletedAt} IS NOT NULL AND ${quizzes.deletedAt} < ${cutoff.toISOString()}`,
+          )
           .then((r) => countRows(r));
       case 'quiz_reviews':
         return this.db
@@ -159,17 +161,23 @@ export class SoftDeletePurgeService {
       case 'comments':
         return this.db
           .delete(commentRows)
-          .where(sql`${commentRows.deletedAt} IS NOT NULL AND ${commentRows.deletedAt} < ${cutoff.toISOString()}`)
+          .where(
+            sql`${commentRows.deletedAt} IS NOT NULL AND ${commentRows.deletedAt} < ${cutoff.toISOString()}`,
+          )
           .then((r) => countRows(r));
       case 'notifications':
         return this.db
           .delete(notifications)
-          .where(sql`${notifications.deletedAt} IS NOT NULL AND ${notifications.deletedAt} < ${cutoff.toISOString()}`)
+          .where(
+            sql`${notifications.deletedAt} IS NOT NULL AND ${notifications.deletedAt} < ${cutoff.toISOString()}`,
+          )
           .then((r) => countRows(r));
       case 'tournaments':
         return this.db
           .delete(tournaments)
-          .where(sql`${tournaments.deletedAt} IS NOT NULL AND ${tournaments.deletedAt} < ${cutoff.toISOString()}`)
+          .where(
+            sql`${tournaments.deletedAt} IS NOT NULL AND ${tournaments.deletedAt} < ${cutoff.toISOString()}`,
+          )
           .then((r) => countRows(r));
       default:
         return 0;

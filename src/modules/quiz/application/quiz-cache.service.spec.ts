@@ -108,12 +108,15 @@ describe('QuizCacheService', () => {
 
   beforeEach(() => {
     cache = new InMemoryCache();
-    service = new QuizCacheService(cache as unknown as CacheProvider, {
-      warn: () => undefined,
-      info: () => undefined,
-      error: () => undefined,
-      debug: () => undefined,
-    } as never);
+    service = new QuizCacheService(
+      cache as unknown as CacheProvider,
+      {
+        warn: () => undefined,
+        info: () => undefined,
+        error: () => undefined,
+        debug: () => undefined,
+      } as never,
+    );
   });
 
   describe('list cache', () => {

@@ -81,23 +81,23 @@ describe('SoftDeletePurgeService', () => {
 
     for (const { value, expected } of baseRetentionDaysTests) {
       it(`clamps SOFT_DELETE_RETENTION_DAYS='${value ?? '(unset)'}' to ${expected}`, async () => {
-process.env.SOFT_DELETE_RETENTION_DAYS = value;
-      fakeDb.responses.set('quizzes', 0);
-      fakeDb.responses.set('quiz_reviews', 0);
-      fakeDb.responses.set('comments', 0);
-      fakeDb.responses.set('notifications', 0);
-      fakeDb.responses.set('tournaments', 0);
+        process.env.SOFT_DELETE_RETENTION_DAYS = value;
+        fakeDb.responses.set('quizzes', 0);
+        fakeDb.responses.set('quiz_reviews', 0);
+        fakeDb.responses.set('comments', 0);
+        fakeDb.responses.set('notifications', 0);
+        fakeDb.responses.set('tournaments', 0);
 
-      const service = new SoftDeletePurgeService(
+        const service = new SoftDeletePurgeService(
           fakeDb as unknown as DrizzleDB,
           logger as unknown as ConstructorParameters<typeof SoftDeletePurgeService>[1],
         );
-      await service.purgeOnce();
-      // Inspect the cron log: it should mention `retentionDays=${expected}`.
-      const started = (logger.info as jest.Mock).mock.calls.find(
-        ([ctx]) => (ctx as { event?: string })?.event === 'soft_delete_purge_manual_started',
-      );
-      expect(started?.[0].retentionDays).toBe(expected);
+        await service.purgeOnce();
+        // Inspect the cron log: it should mention `retentionDays=${expected}`.
+        const started = logger.info.mock.calls.find(
+          ([ctx]) => (ctx as { event?: string })?.event === 'soft_delete_purge_manual_started',
+        );
+        expect(started?.[0].retentionDays).toBe(expected);
       });
     }
   });
@@ -130,16 +130,16 @@ process.env.SOFT_DELETE_RETENTION_DAYS = value;
       fakeDb.responses.set('notifications', 0);
       fakeDb.responses.set('tournaments', 0);
       const service = new SoftDeletePurgeService(
-          fakeDb as unknown as DrizzleDB,
-          logger as unknown as ConstructorParameters<typeof SoftDeletePurgeService>[1],
-        );
+        fakeDb as unknown as DrizzleDB,
+        logger as unknown as ConstructorParameters<typeof SoftDeletePurgeService>[1],
+      );
       const results = await service.purgeOnce();
       const total = results.reduce((acc, r) => acc + r.deleted, 0);
       expect(total).toBe(9);
     });
   });
 
-describe('SQL fragment includes the cutoff', () => {
+  describe('SQL fragment includes the cutoff', () => {
     it('issues one DELETE per purgeable table', async () => {
       fakeDb.responses.set('quizzes', 0);
       fakeDb.responses.set('quiz_reviews', 0);

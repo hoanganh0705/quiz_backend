@@ -50,4 +50,28 @@ export class StorageAssetsRepository implements StorageAssetsRepositoryPort {
   async deleteByPublicId(publicId: string): Promise<void> {
     await this.db.delete(storageAssets).where(eq(storageAssets.publicId, publicId));
   }
+
+  async findByPublicId(
+    publicId: string,
+  ): Promise<Array<{ publicId: string; ownerId: string; purpose: UploadPurpose }>> {
+    const rows = await this.db
+      .select({
+        publicId: storageAssets.publicId,
+        ownerId: storageAssets.ownerId,
+        purpose: storageAssets.purpose,
+      })
+      .from(storageAssets)
+      .where(eq(storageAssets.publicId, publicId))
+      .limit(1);
+    // Drizzle types `purpose` as the raw column type (`string`); the
+    // schema constrains it to 'avatar' | 'quiz' at the DB layer, so a
+    // narrowing cast is safe here. The application service consumes
+    // only the boolean `assetExists(...)` shape so a bad row would not
+    // reach this cast in practice.
+    return rows.map((row) => ({
+      publicId: row.publicId,
+      ownerId: row.ownerId,
+      purpose: row.purpose as UploadPurpose,
+    }));
+  }
 }

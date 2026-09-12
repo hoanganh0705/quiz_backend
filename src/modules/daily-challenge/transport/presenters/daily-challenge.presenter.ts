@@ -5,6 +5,7 @@ import type { PaginationMeta } from '@/common/responses/pagination';
 import type { DailyChallengeResponseDto } from '../../dto/response/daily-challenge-response.dto';
 import type {
   DailyChallengeAnswerResponseDto,
+  DailyChallengeCategoryBreakdownResponseDto,
   DailyChallengeHistoryResponseDto,
   DailyChallengeLeaderboardResponseDto,
 } from '../../dto/response/daily-challenge-history-response.dto';
@@ -25,4 +26,6 @@ export class DailyChallengePresenter {
     ApiResponse.page(payload.items, payload.pagination as PaginationMeta);
   readonly getLeaderboard = DailyChallengePresenter.ok<DailyChallengeLeaderboardResponseDto>;
   readonly submitAnswer = DailyChallengePresenter.ok<DailyChallengeAnswerResponseDto>;
+  readonly getCategoryBreakdown =
+    DailyChallengePresenter.ok<DailyChallengeCategoryBreakdownResponseDto>;
 }

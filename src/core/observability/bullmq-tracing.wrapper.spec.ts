@@ -64,10 +64,7 @@ describe('BullmqTracingWrapper', () => {
 
   it('wrapWorkerProcess emits a consumer span with the producer as parent', async () => {
     const handler = jest.fn(async () => undefined);
-    const wrapped = wrapper.wrapWorkerProcess(
-      { name: 'email-queue' } as never,
-      handler,
-    );
+    const wrapped = wrapper.wrapWorkerProcess({ name: 'email-queue' } as never, handler);
 
     const traceId = '0af7651916cd43dd8448eb211c80319c';
     const spanId = 'b7ad6b7169203331';
@@ -91,10 +88,7 @@ describe('BullmqTracingWrapper', () => {
 
   it('wrapWorkerProcess works without a parent when job data lacks the trace id', async () => {
     const handler = jest.fn(async () => undefined);
-    const wrapped = wrapper.wrapWorkerProcess(
-      { name: 'email-queue' } as never,
-      handler,
-    );
+    const wrapped = wrapper.wrapWorkerProcess({ name: 'email-queue' } as never, handler);
 
     await wrapped({ id: 'job-1', name: 'send-welcome', data: { to: 'a@b.c' } } as never);
 

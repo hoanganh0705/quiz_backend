@@ -96,6 +96,9 @@ export class HealthStatusDto {
   @ApiProperty({ description: 'Email queue depth and worker state', type: EmailQueueProbeDto })
   emailQueue!: EmailQueueProbeDto;
 
-  @ApiProperty({ description: 'In-process Redis circuit-breaker state', type: RedisCircuitProbeDto })
+  @ApiProperty({
+    description: 'In-process Redis circuit-breaker state',
+    type: RedisCircuitProbeDto,
+  })
   redisCircuit!: RedisCircuitProbeDto;
 }

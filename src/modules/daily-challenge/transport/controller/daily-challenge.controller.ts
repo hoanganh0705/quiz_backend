@@ -13,6 +13,7 @@ import {
 } from '../../dto/request/daily-challenge-queries.dto';
 import {
   ApiDailyChallengeAnswer,
+  ApiDailyChallengeCategoryBreakdown,
   ApiDailyChallengeHistory,
   ApiDailyChallengeLeaderboard,
   ApiDailyChallengeToday,
@@ -84,6 +85,32 @@ export class DailyChallengeController {
   async getLeaderboard(@Query() query: DailyChallengeLeaderboardQueryDto) {
     const payload = await this.service.getLeaderboard(query);
     return this.presenter.getLeaderboard(payload);
+  }
+
+  /**
+   * `GET /daily-challenge/history/categories` — per-category rollup
+   * of the viewer's completed attempts.
+   *
+   * The route is `@Public()` so SSR / pre-render surfaces can fetch
+   * the payload without a session. Same caveat as `getToday` /
+   * `getHistory`: the global `JwtGuard` skips authentication on
+   * `@Public()` routes, so we read the user through
+   * `OptionalCurrentUser` and return an empty `items` array when
+   * the viewer is unauthenticated.
+   *
+   * Phase 4 (F-2): powers `<ChallengePieChart />` on the
+   * Daily Challenge page.
+   */
+  @Get('history/categories')
+  @Public()
+  @Throttle({ default: { limit: 30, ttl: 60_000 } })
+  @ApiOperation({
+    summary: "Per-category rollup of the viewer's completed daily-challenge attempts",
+  })
+  @ApiDailyChallengeCategoryBreakdown()
+  async getCategoryBreakdown(@OptionalCurrentUser() user: JwtPayload | undefined) {
+    const payload = await this.service.getCategoryBreakdown(user?.sub ?? null);
+    return this.presenter.getCategoryBreakdown(payload);
   }
 
   @Post('answer')

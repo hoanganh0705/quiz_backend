@@ -3,6 +3,7 @@ import { and, desc, eq, isNull, sql, type SQL } from 'drizzle-orm';
 import { DRIZZLE } from '@/core/database/drizzle.constants';
 import type { DrizzleDB } from '@/core/database/database.module';
 import { dailyChallenge, dailyChallengeAttempt, quizzes } from '@/core/database/schema';
+import { categories } from '@/core/database/schema/taxonomy/schema';
 import type {
   DailyChallengeAttemptRow,
   DailyChallengeHistoryCursor,
@@ -294,5 +295,71 @@ export class DailyChallengeRepository implements DailyChallengeRepositoryPort {
       .returning();
 
     return row as DailyChallengeAttemptRow;
+  }
+
+  /**
+   * Phase 4 (F-2): per-category rollup of the user's completed
+   * daily-challenge attempts.
+   *
+   * The query joins `dailyChallengeAttempt` to `dailyChallenge` (for
+   * the attempt's `quizId`), then to `quizzes` (so we can pick up
+   * the `category_id`), then to `categories` (so we can pick up the
+   * display `name` and `slug`). Only completed attempts with a
+   * non-null `score_percent` contribute — in-flight attempts (where
+   * `completed_at IS NULL`) are filtered out so the chart never
+   * counts a partial play.
+   *
+   * Quizzes with no category (`quizzes.category_id IS NULL`) are
+   * dropped from the result; they are intentionally not bucketed
+   * under an "Uncategorised" pseudo-category because the public
+   * chart does not want to render such a slice.
+   *
+   * SQL is a single round-trip: `GROUP BY categories.category_id`
+   * with `AVG(score_percent)` and `COUNT(*)`. Drizzle maps the
+   * numeric `score_percent::numeric` (precision 5, scale 2) to a
+   * string; we parse it back to a number on the way out.
+   */
+  async getCategoryBreakdown(userId: string): Promise<
+    Array<{
+      categoryId: string;
+      categoryName: string;
+      categorySlug: string;
+      attemptCount: number;
+      averageScorePercent: number;
+    }>
+  > {
+    const rows = await this.db
+      .select({
+        categoryId: categories.categoryId,
+        categoryName: categories.name,
+        categorySlug: categories.slug,
+        attemptCount: sql<number>`COUNT(*)::int`,
+        // Drizzle exposes `avg()` over `numeric` as `string | null`;
+        // we coerce it back to `number` on read.
+        averageScorePercent: sql<string>`AVG(${dailyChallengeAttempt.scorePercent})`,
+      })
+      .from(dailyChallengeAttempt)
+      .innerJoin(dailyChallenge, eq(dailyChallengeAttempt.challengeId, dailyChallenge.challengeId))
+      .innerJoin(quizzes, eq(dailyChallenge.quizId, quizzes.quizId))
+      .innerJoin(categories, eq(quizzes.categoryId, categories.categoryId))
+      .where(
+        and(
+          eq(dailyChallengeAttempt.userId, userId),
+          sql`${dailyChallengeAttempt.completedAt} IS NOT NULL`,
+          sql`${dailyChallengeAttempt.scorePercent} IS NOT NULL`,
+          isNull(quizzes.deletedAt),
+          isNull(categories.deletedAt),
+        ),
+      )
+      .groupBy(categories.categoryId, categories.name, categories.slug)
+      .orderBy(desc(sql`COUNT(*)`), desc(sql`AVG(${dailyChallengeAttempt.scorePercent})`));
+
+    return rows.map((row) => ({
+      categoryId: row.categoryId,
+      categoryName: row.categoryName,
+      categorySlug: row.categorySlug,
+      attemptCount: row.attemptCount,
+      averageScorePercent: Number(row.averageScorePercent ?? 0),
+    }));
   }
 }

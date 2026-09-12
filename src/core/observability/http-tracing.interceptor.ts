@@ -14,13 +14,7 @@
  * once the entire request has been handled. Middleware runs too
  * early to see exceptions from the validation pipe.
  */
-import {
-  CallHandler,
-  ExecutionContext,
-  Inject,
-  Injectable,
-  NestInterceptor,
-} from '@nestjs/common';
+import { CallHandler, ExecutionContext, Inject, Injectable, NestInterceptor } from '@nestjs/common';
 import { catchError, Observable, tap } from 'rxjs';
 import type { Request, Response } from 'express';
 import {
@@ -59,28 +53,21 @@ export class HttpTracingInterceptor implements NestInterceptor {
     const req = http.getRequest<Request & { route?: { path?: string } }>();
     const res = http.getResponse<Response>();
 
-    const parent = parseTraceparent(
-      req.headers[TRACEPARENT_HEADER] as string | undefined,
-    );
+    const parent = parseTraceparent(req.headers[TRACEPARENT_HEADER] as string | undefined);
 
     const routePath =
-      (req.route?.path as string | undefined) ??
-      (req.path as string | undefined) ??
-      'unknown';
+      (req.route?.path as string | undefined) ?? (req.path as string | undefined) ?? 'unknown';
 
-    const span = this.tracing.startSpan(
-      `HTTP ${req.method ?? 'UNKNOWN'} ${routePath}`,
-      {
-        kind: 'server',
-        parent: parent ?? undefined,
-        attributes: {
-          'http.method': String(req.method ?? 'UNKNOWN'),
-          'http.route': routePath,
-          'http.url': req.originalUrl ?? req.url ?? '',
-          'http.user_agent': String(req.headers['user-agent'] ?? ''),
-        },
+    const span = this.tracing.startSpan(`HTTP ${req.method ?? 'UNKNOWN'} ${routePath}`, {
+      kind: 'server',
+      parent: parent ?? undefined,
+      attributes: {
+        'http.method': String(req.method ?? 'UNKNOWN'),
+        'http.route': routePath,
+        'http.url': req.originalUrl ?? req.url ?? '',
+        'http.user_agent': String(req.headers['user-agent'] ?? ''),
       },
-    );
+    });
 
     return next.handle().pipe(
       tap(() => {

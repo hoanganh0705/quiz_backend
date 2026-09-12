@@ -39,12 +39,7 @@
  * UPDATE flow is identical.
  */
 
-import {
-  Inject,
-  Injectable,
-  OnModuleDestroy,
-  OnModuleInit,
-} from '@nestjs/common';
+import { Inject, Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { Cron } from '@nestjs/schedule';
 import { Pool } from 'pg';
@@ -87,7 +82,9 @@ export class OutboxNotifyListener implements OnModuleInit, OnModuleDestroy {
     const options = (pool as unknown as { options: { connectionString?: string } }).options;
     const url = options.connectionString;
     if (!url) {
-      throw new Error('OutboxNotifyListener: cannot resolve DB connection string from Drizzle pool');
+      throw new Error(
+        'OutboxNotifyListener: cannot resolve DB connection string from Drizzle pool',
+      );
     }
     return url;
   }

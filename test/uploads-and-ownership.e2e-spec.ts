@@ -48,10 +48,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import request from 'supertest';
 import type { App } from 'supertest/types';
 import { LoggerModule } from 'nestjs-pino';
-import type {
-  StorageAssetsRepositoryPort,
-  UploadPurpose,
-} from '@/core/storage';
+import type { StorageAssetsRepositoryPort, UploadPurpose } from '@/core/storage';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
 
@@ -104,6 +101,12 @@ class InMemoryStorageAssetsRepository implements StorageAssetsRepositoryPort {
     if (idx >= 0) this.rows.splice(idx, 1);
     return Promise.resolve();
   }
+
+  findByPublicId(
+    publicId: string,
+  ): Promise<Array<{ publicId: string; ownerId: string; purpose: UploadPurpose }>> {
+    return Promise.resolve(this.rows.filter((r) => r.publicId === publicId));
+  }
 }
 
 /**
@@ -126,9 +129,7 @@ class OwnershipFixtureController {
     if (body.avatarPublicId !== null && body.avatarPublicId !== undefined) {
       const owns = this.repo.rows.some(
         (r) =>
-          r.publicId === body.avatarPublicId &&
-          r.ownerId === user.sub &&
-          r.purpose === 'avatar',
+          r.publicId === body.avatarPublicId && r.ownerId === user.sub && r.purpose === 'avatar',
       );
       if (!owns) {
         throw new ForbiddenException({

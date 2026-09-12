@@ -148,3 +148,56 @@ export class DailyChallengeAnswerResponseDto {
   })
   scorePercent!: number | null;
 }
+
+/**
+ * Phase 4 (F-2): one row in the per-category distribution for the
+ * viewer's daily-challenge attempts.
+ *
+ * The shape is intentionally rollup-level — we surface the user's
+ * aggregate accuracy per category, NOT a per-question breakdown.
+ * The server already persists `dailyChallengeAttempt.scorePercent`
+ * (0–100, set on completion), so the breakdown is a single
+ * SQL aggregate (see `DailyChallengeRepository.getCategoryBreakdown`).
+ *
+ * `averageScorePercent` is the arithmetic mean of every completed
+ * attempt's `score_percent` for the category; for the public pie
+ * chart it can be rendered as a "share of total correct answers".
+ */
+export class DailyChallengeCategoryBreakdownItemDto {
+  @ApiProperty({
+    description: 'Category identifier (UUIDv7)',
+    format: 'uuid',
+    example: '550e8400-e29b-71d4-a716-446655440000',
+  })
+  categoryId!: string;
+
+  @ApiProperty({ description: 'Category display name', example: 'Science' })
+  categoryName!: string;
+
+  @ApiProperty({
+    description: 'Category slug (kebab-case, URL-safe)',
+    example: 'science',
+  })
+  categorySlug!: string;
+
+  @ApiProperty({
+    description: 'Number of completed daily-challenge attempts in this category',
+    example: 3,
+  })
+  attemptCount!: number;
+
+  @ApiProperty({
+    description:
+      'Mean of `scorePercent` across attempts in this category (0–100, rounded to 2 decimals)',
+    example: 78.33,
+  })
+  averageScorePercent!: number;
+}
+
+export class DailyChallengeCategoryBreakdownResponseDto {
+  @ApiProperty({
+    description: 'Per-category performance rollup, ordered by attempt count desc',
+    type: () => [DailyChallengeCategoryBreakdownItemDto],
+  })
+  items!: DailyChallengeCategoryBreakdownItemDto[];
+}

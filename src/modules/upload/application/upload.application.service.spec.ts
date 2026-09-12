@@ -17,6 +17,7 @@
 
 import {
   BadRequestException,
+  NotFoundException,
   PayloadTooLargeException,
   ServiceUnavailableException,
   UnsupportedMediaTypeException,
@@ -102,6 +103,13 @@ class FakeStoragePort implements StoragePort {
 
 class FakeOwnershipService {
   readonly binds: Array<{ publicId: string; ownerId: string; purpose: 'avatar' | 'quiz' }> = [];
+  /**
+   * Public ids considered to already exist in `storage_assets`. The
+   * upload service's `bindAsset` uses this set to decide whether to
+   * 404 (no row) vs. attempt a bind. Tests pre-populate it explicitly
+   * so the existence check is independent of the bind history.
+   */
+  readonly existingPublicIds = new Set<string>();
   /** If set, `bindAssetToOwner` throws this. */
   bindError: unknown = null;
 
@@ -114,11 +122,16 @@ class FakeOwnershipService {
       throw this.bindError;
     }
     this.binds.push(input);
+    this.existingPublicIds.add(input.publicId);
+  }
+
+  async assetExists(publicId: string): Promise<boolean> {
+    return this.existingPublicIds.has(publicId);
   }
 
   // The remaining two operations are not exercised here; the upload
-  // service only calls `bindAssetToOwner`. We provide stubs so the
-  // shape matches.
+  // service only calls `bindAssetToOwner` and `assetExists`. We
+  // provide stubs so the shape matches.
   async userOwnsAssetForPurpose(): Promise<boolean> {
     return true;
   }
@@ -329,6 +342,67 @@ describe('UploadApplicationService', () => {
       // 5 minutes × 1000 ms — within tolerance.
       const expectedExpiry = Math.floor(Date.now() / 1000) + 300;
       expect(Math.abs(signed.timestamp - expectedExpiry)).toBeLessThanOrEqual(5);
+    });
+  });
+
+  describe('bindAsset (Phase 3.1 — presigned-upload follow-up)', () => {
+    it('binds the (publicId, ownerId, purpose) row when the asset exists', async () => {
+      const { service, ownership } = makeService();
+      ownership.existingPublicIds.add('quiz-app/avatars/u1/some-uuid');
+      await service.bindAsset({
+        ownerId: 'u1',
+        publicId: 'quiz-app/avatars/u1/some-uuid',
+        purpose: 'avatar',
+      });
+      expect(ownership.binds).toEqual([
+        {
+          publicId: 'quiz-app/avatars/u1/some-uuid',
+          ownerId: 'u1',
+          purpose: 'avatar',
+        },
+      ]);
+    });
+
+    it('throws NotFoundException (UPLOAD_ASSET_NOT_FOUND) when no row matches', async () => {
+      const { service, ownership } = makeService();
+      // No publicId pre-registered — the existence check must fail.
+      const err = await service
+        .bindAsset({
+          ownerId: 'u1',
+          publicId: 'quiz-app/avatars/u1/forged',
+          purpose: 'avatar',
+        })
+        .catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(NotFoundException);
+      expect((err as NotFoundException).getResponse()).toMatchObject({
+        code: 'UPLOAD_ASSET_NOT_FOUND',
+      });
+      // Bind must NOT have been attempted.
+      expect(ownership.binds).toEqual([]);
+    });
+
+    it('propagates ownership-bind failures (e.g. UNIQUE collision)', async () => {
+      const { service, ownership } = makeService();
+      ownership.existingPublicIds.add('quiz-app/avatars/u1/some-uuid');
+      ownership.bindError = new StorageOwnershipBindFailedError('collision');
+      await expect(
+        service.bindAsset({
+          ownerId: 'u1',
+          publicId: 'quiz-app/avatars/u1/some-uuid',
+          purpose: 'avatar',
+        }),
+      ).rejects.toBeInstanceOf(StorageOwnershipBindFailedError);
+    });
+
+    it('maps the wire purpose literal through to the storage enum', async () => {
+      const { service, ownership } = makeService();
+      ownership.existingPublicIds.add('quiz-app/quizzes/u1/some-uuid');
+      await service.bindAsset({
+        ownerId: 'u1',
+        publicId: 'quiz-app/quizzes/u1/some-uuid',
+        purpose: 'quiz',
+      });
+      expect(ownership.binds[0].purpose).toBe('quiz');
     });
   });
 });

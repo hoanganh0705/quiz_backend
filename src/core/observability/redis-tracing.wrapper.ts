@@ -18,10 +18,7 @@
  */
 import { Inject, Injectable } from '@nestjs/common';
 import type { Redis } from 'ioredis';
-import {
-  TRACING_PROVIDER,
-  type TracingProvider,
-} from '@/core/observability/tracing.provider';
+import { TRACING_PROVIDER, type TracingProvider } from '@/core/observability/tracing.provider';
 
 @Injectable()
 export class RedisTracingWrapper {
@@ -52,7 +49,8 @@ export class RedisTracingWrapper {
               attributes: {
                 'db.system': 'redis',
                 'redis.command': String(prop),
-                'redis.key_count': typeof args[0] === 'string' ? 1 : Array.isArray(args[0]) ? args[0].length : 0,
+                'redis.key_count':
+                  typeof args[0] === 'string' ? 1 : Array.isArray(args[0]) ? args[0].length : 0,
               },
             },
             async () => original.apply(target, args),
@@ -73,10 +71,32 @@ export class RedisTracingWrapper {
  * represent a single Redis call.
  */
 const TRACED_COMMANDS = new Set<string>([
-  'get', 'set', 'del', 'eval', 'incr', 'incrby', 'decr', 'decrby',
-  'expire', 'ttl', 'lpush', 'rpush', 'lpop', 'rpop', 'hset', 'hget',
-  'hgetall', 'hdel', 'sadd', 'srem', 'smembers', 'zadd', 'zrange',
-  'zrangeByScore', 'publish', 'subscribe',
+  'get',
+  'set',
+  'del',
+  'eval',
+  'incr',
+  'incrby',
+  'decr',
+  'decrby',
+  'expire',
+  'ttl',
+  'lpush',
+  'rpush',
+  'lpop',
+  'rpop',
+  'hset',
+  'hget',
+  'hgetall',
+  'hdel',
+  'sadd',
+  'srem',
+  'smembers',
+  'zadd',
+  'zrange',
+  'zrangeByScore',
+  'publish',
+  'subscribe',
 ]);
 
 const isTracedRedisCommand = (prop: string | symbol): boolean => {

@@ -38,21 +38,13 @@ describe('MetricsRegistry', () => {
     registry.incRedisCircuitShortCircuits();
     registry.incRedisCircuitShortCircuits();
     const output = registry.render();
-    expect(output).toMatch(
-      /quiz_redis_circuit_short_circuited_total\{[^}]*\} 3/,
-    );
+    expect(output).toMatch(/quiz_redis_circuit_short_circuited_total\{[^}]*\} 3/);
   });
 
   it('records HTTP duration observations and emits bucket rows', () => {
     const registry = makeRegistry();
-    registry.observeHttpDuration(
-      { route: '/quizzes', method: 'GET', status: '200' },
-      0.02,
-    );
-    registry.observeHttpDuration(
-      { route: '/quizzes', method: 'GET', status: '200' },
-      0.5,
-    );
+    registry.observeHttpDuration({ route: '/quizzes', method: 'GET', status: '200' }, 0.02);
+    registry.observeHttpDuration({ route: '/quizzes', method: 'GET', status: '200' }, 0.5);
     const output = registry.render();
     expect(output).toMatch(/quiz_http_request_duration_seconds_bucket/);
     expect(output).toMatch(/quiz_http_request_duration_seconds_count\{[^}]*\} 2/);

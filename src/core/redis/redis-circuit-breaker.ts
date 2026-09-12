@@ -37,7 +37,11 @@
  */
 
 import { Injectable, Logger } from '@nestjs/common';
-import { CircuitBreaker, CircuitOpenError, type CircuitState } from '@/common/resilience/circuit-breaker';
+import {
+  CircuitBreaker,
+  CircuitOpenError,
+  type CircuitState,
+} from '@/common/resilience/circuit-breaker';
 
 export type RedisCircuitMetrics = {
   state: CircuitState;

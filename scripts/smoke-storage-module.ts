@@ -39,6 +39,13 @@ class NoopStorageAssetsRepository implements StorageAssetsRepositoryPort {
   async deleteByPublicId(): Promise<void> {
     /* no-op for the smoke */
   }
+
+  // eslint-disable-next-line @typescript-eslint/require-await
+  async findByPublicId(): Promise<
+    Array<{ publicId: string; ownerId: string; purpose: 'avatar' | 'quiz' }>
+  > {
+    return [];
+  }
 }
 
 async function runAs(adapter: 'fake' | 'cloudinary'): Promise<string> {
