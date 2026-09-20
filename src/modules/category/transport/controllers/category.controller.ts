@@ -160,6 +160,10 @@ export class CategoryController {
     const command: ListCategoriesQuery = {
       limit: query.limit,
       cursor: query.cursor ? CategoryCursorMapper.parse(query.cursor) : null,
+      sort: {
+        field: query.sort ?? 'createdAt',
+        direction: query.order ?? 'desc',
+      },
     };
 
     const result = await this.categoryQueryService.listCategories(command);

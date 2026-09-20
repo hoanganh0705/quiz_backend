@@ -43,7 +43,6 @@ import {
 import { sql } from 'drizzle-orm';
 
 import { commentVoteValue, commentReportStatus } from '../shared/enums';
-import { users } from '../auth/schema';
 
 // =============================================================================
 // comments

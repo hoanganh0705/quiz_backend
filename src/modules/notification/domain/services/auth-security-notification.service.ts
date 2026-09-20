@@ -1,10 +1,3 @@
-/**
- * Auth Security Notification Service
- *
- * Composes and sends notifications for sensitive security events (password changes,
- * account deletions, session revocations) to alert users of account activity.
- */
-
 import { Injectable } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { NotificationChannelService } from '../../infrastructure/adapters/notification-channel.service';

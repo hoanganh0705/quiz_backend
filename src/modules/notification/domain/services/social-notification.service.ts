@@ -1,15 +1,3 @@
-/**
- * Social Notification Service
- *
- * Composes and sends social-related notifications. This is the public surface
- * exposed via SOCIAL_NOTIFICATION_PORT for the Social module to consume
- * without reaching into Notification internals.
- *
- * Mirrors the 9 social events emitted by the Social domain. Each method takes
- * a flat parameter object so the Social listener can pass the event directly
- * without unpacking.
- */
-
 import { Injectable } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { NotificationChannelService } from '../../infrastructure/adapters/notification-channel.service';
@@ -68,11 +56,6 @@ export interface NotifyUserUnblockedParams {
   userId: string;
   blockerId: string;
 }
-
-/**
- * Port interface exposed to the Social module. The Notification module
- * provides the implementation via SOCIAL_NOTIFICATION_PORT.
- */
 export interface SocialNotificationPort {
   notifyFriendRequestReceived(params: NotifyFriendRequestReceivedParams): Promise<void>;
   notifyFriendRequestAccepted(params: NotifyFriendRequestAcceptedParams): Promise<void>;

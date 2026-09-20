@@ -1,11 +1,6 @@
 import { EXAMPLE_TIMESTAMP } from './_timestamp';
 import { LevelTitle } from '../../../domain/types/level.types';
 
-/**
- * Phase 1 (S-2): live example for `GET /users/me/summary`. Mirrors
- * the shape of `UserSummaryResponseDto` (with sensible defaults for
- * every field) and the canonical envelope wrapper.
- */
 export const USER_ME_SUMMARY_EXAMPLE = {
   data: {
     userId: '550e8400-e29b-71d4-a716-446655440000',
@@ -33,7 +28,6 @@ export const USER_ME_SUMMARY_EXAMPLE = {
     followers: 450,
     following: 78,
     friends: 12,
-    // Phase 3 (S-coin): header pill reads from here.
     coinBalance: 487,
   },
   meta: { timestamp: EXAMPLE_TIMESTAMP },

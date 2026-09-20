@@ -5,6 +5,7 @@ import {
   CATEGORY_DOMAIN_EVENT_BUS,
   type CategoryDomainEventBusPort,
 } from '@/modules/category/domain/ports';
+import type { CategoryDomainEvent } from '@/modules/category/domain/events/category-domain.events';
 
 /**
  * Wires CategoryDomainEventBus events to QuizAnalyticsService.
@@ -27,11 +28,11 @@ export class CategoryEventBootstrapService implements OnModuleInit {
 
   onModuleInit(): void {
     this.categoryEventBus.subscribe((event) => {
-      this.handleEvent(event as CategoryDomainEventPayload);
+      this.handleEvent(event as CategoryDomainEvent);
     });
   }
 
-  private handleEvent(event: CategoryDomainEventPayload): void {
+  private handleEvent(event: CategoryDomainEvent): void {
     const { type, categoryId } = event;
 
     try {
@@ -62,9 +63,3 @@ export class CategoryEventBootstrapService implements OnModuleInit {
     }
   }
 }
-
-type CategoryDomainEventPayload =
-  | { type: 'CategoryCreatedEvent'; categoryId: string; slug: string; nowIso: string }
-  | { type: 'CategoryUpdatedEvent'; categoryId: string; slug: string; nowIso: string }
-  | { type: 'CategoryDeletedEvent'; categoryId: string; slug: string; nowIso: string }
-  | { type: 'CategoryRestoredEvent'; categoryId: string; slug: string; nowIso: string };

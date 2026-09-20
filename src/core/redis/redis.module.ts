@@ -8,8 +8,6 @@ import { PUBSUB_PROVIDER } from '@/common/ports/pubsub.provider';
 @Global()
 @Module({
   providers: [
-    // Phase 2 #1: construct the breaker from the validated Redis config.
-    // The breaker is built once per process and shared by every Redis call.
     {
       provide: RedisCircuitBreaker,
       inject: [redisConfig.KEY],

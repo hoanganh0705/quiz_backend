@@ -18,6 +18,11 @@ import { RedisModule } from '@/core/redis/redis.module';
 
 // Infrastructure
 import { RankingRepository } from './infrastructure/repositories/ranking.repository';
+import { UserRankingRepository } from './infrastructure/repositories/aggregates/user-ranking.repository';
+import { LeaderboardRepository } from './infrastructure/repositories/aggregates/leaderboard.repository';
+import { RankHistoryRepository } from './infrastructure/repositories/aggregates/rank-history.repository';
+import { RankingMilestoneRepository } from './infrastructure/repositories/aggregates/ranking-milestone.repository';
+import { PeriodResetRepository } from './infrastructure/repositories/aggregates/period-reset.repository';
 import { RankingNotificationListenerAdapter } from './infrastructure/adapters/ranking-notification-listener.adapter';
 import { RankingConsistencySubscriber } from './infrastructure/adapters/ranking-consistency-subscriber.adapter';
 import { RankingOutboxProcessorService } from './infrastructure/outbox/ranking-outbox-processor.service';
@@ -70,6 +75,11 @@ import { RankingPresenter } from './transport/presenters/ranking.presenter';
   providers: [
     // Infrastructure
     RankingRepository,
+    UserRankingRepository,
+    LeaderboardRepository,
+    RankHistoryRepository,
+    RankingMilestoneRepository,
+    PeriodResetRepository,
     AttemptRankingListenerAdapter,
     RankingPeriodResetNotificationAdapter,
     RankingDomainEventBus,

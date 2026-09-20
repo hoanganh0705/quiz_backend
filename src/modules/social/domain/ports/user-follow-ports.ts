@@ -12,7 +12,7 @@ export const USER_FOLLOW_REPOSITORY_PORT = Symbol('USER_FOLLOW_REPOSITORY_PORT')
 export interface UserFollowRepositoryPort {
   followUser(followerId: string, followingId: string): Promise<UserFollow>;
 
-  unfollowUser(followerId: string, followingId: string): Promise<void>;
+  unfollowUser(followerId: string, followingId: string): Promise<number>;
 
   /**
    * Find an active (non-soft-deleted) follow relationship.

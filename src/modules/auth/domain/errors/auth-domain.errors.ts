@@ -96,13 +96,11 @@ export class RateLimitExceededError extends AuthDomainError {
 /**
  * Generic auth-domain conflict signal. 409 Conflict.
  *
- * NOTE: This exception is exported but never thrown anywhere in the
- * current codebase. It is preserved with a sensible 409 mapping because
- * (a) it has a clear semantic name, (b) the previous `AuthDomainErrorFilter`
- * had no `instanceof ResourceConflictError` branch so it silently fell
- * through to a 500 — the new mapping corrects that bug as a side effect.
- * If the export remains dead after the migration completes, delete it
- * in a follow-up cleanup PR.
+ * @deprecated No production code path throws this. Kept exported only so
+ * the RFC 7807 mapping test (`test/rfc7807.e2e-spec.ts`) can still
+ * resolve the symbol. Remove this class and the test entry in the same
+ * PR once the test surface is migrated to assert against a real
+ * domain error (e.g. `EmailAlreadyExistsError`).
  */
 export class ResourceConflictError extends AuthDomainError {
   readonly code = 'AUTH_RESOURCE_CONFLICT';

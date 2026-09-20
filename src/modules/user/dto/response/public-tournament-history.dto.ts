@@ -1,15 +1,4 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-
-/**
- * Phase 4 (F-10): Public-facing item shape for
- * `GET /users/:userId/tournament-history`. Distinct from
- * `MyTournamentHistoryItemDto` so the OpenAPI schema can document the
- * privacy-gating semantics that apply when the requester is *not* the
- * target user. Currently the wire shape is identical to the me-endpoint
- * (the target user controls the same fields in both cases) but the
- * privacy description differs and the two DTOs may diverge in the
- * future (e.g. hiding `participantCount` from non-friends).
- */
 export class PublicTournamentHistoryItemDto {
   @ApiProperty({
     description: 'Tournament identifier',
@@ -28,7 +17,7 @@ export class PublicTournamentHistoryItemDto {
       'Final rank achieved by the target user in this tournament. ' +
       "Visible to anyone who can read the user's tournament history " +
       '(i.e. the target user has `showTournamentActivity: true` per ' +
-      'Phase 3 / F-7).',
+      '.',
     type: Number,
     nullable: true,
     example: 12,
@@ -76,7 +65,6 @@ export class PublicTournamentHistoryResponseDto {
     description:
       'Public tournament history for the target user, newest first. ' +
       "Honours the target user's `showTournamentActivity` privacy flag " +
-      '(Phase 3 / F-7). When the flag is `false`, the entire response is ' +
       'replaced with HTTP 403 — a successful 200 always means the caller ' +
       'is the owner OR the target user has explicitly opted in to share.',
     type: () => [PublicTournamentHistoryItemDto],

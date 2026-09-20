@@ -1,14 +1,3 @@
-/**
- * Shared Achievement Event Bus Adapter
- *
- * Bridges the internal AchievementDomainEventBus to the shared achievement event
- * bus port. Re-exports Achievement domain events as SharedAchievementDomainEvent
- * types so that external consumers (notably Social's feed listener) receive
- * well-defined, stable types rather than depending on Achievement module internals.
- *
- * This adapter subscribes to the internal bus and re-emits events on the shared bus.
- */
-
 import { Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { AchievementDomainEventBus } from './achievement-domain.event-bus';
@@ -18,6 +7,7 @@ import {
   type SharedAchievementEventBusPort,
   type SharedAchievementDomainEvent,
   type SharedBadgeEarnedEvent,
+  type SharedBadgeRestoredEvent,
   type SharedBadgeRevokedEvent,
 } from '@/common/events/achievement-shared-events';
 
@@ -113,6 +103,18 @@ export class SharedAchievementEventBusAdapter
         return shared;
       }
 
+      case 'badge.restored': {
+        const shared: SharedBadgeRestoredEvent = {
+          eventType: 'badge.restored',
+          userId: event.userId,
+          badgeId: event.badgeId,
+          badgeType: event.badgeType,
+          restoredAt: event.restoredAt,
+          restoredBy: event.restoredBy,
+        };
+        return shared;
+      }
+
       case 'streak.milestone':
         return {
           eventType: 'streak.milestone',
@@ -127,6 +129,4 @@ export class SharedAchievementEventBusAdapter
   }
 }
 
-// Re-export the port symbol so the Achievement module can register the binding
-// without reaching back into the common barrel.
 export { SHARED_ACHIEVEMENT_EVENT_BUS };

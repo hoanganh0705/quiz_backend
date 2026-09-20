@@ -11,8 +11,10 @@ import {
   BadRequestException,
   HttpCode,
   HttpStatus,
+  UseGuards,
 } from '@nestjs/common';
 import { ApiTags, ApiParam, ApiNotFoundResponse, ApiForbiddenResponse } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import { ApiAuthAction, ApiAuthActionNoContent } from '@/common/swagger/swagger-decorators';
 import { ProblemDetailDto } from '@/common/swagger/swagger-schemas';
 import { Transactional } from '@/common/interceptors/transactional.interceptor';
@@ -25,11 +27,12 @@ import {
 } from '@/modules/notification/dto/response';
 import { NotificationPresenter } from '../presenters/notification.presenter';
 import { ApiOkResource, ApiOkResourceList } from '@/common/swagger/api-ok';
-import type { JwtPayload } from '@/common/guards/jwt.guard';
+import { JwtGuard, type JwtPayload } from '@/common/guards/jwt.guard';
 import { UpdatePreferencesDto, GetNotificationsQueryDto } from '@/modules/notification/dto/request';
 import { Permissions } from '@/common/authorization/decorators/permissions.decorator';
 import { Permission } from '@/common/authorization/permissions';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
+import { NOTIFICATION_THROTTLE_VALUES } from '@/core/config/notification-throttle.config';
 import {
   NOTIFICATION_ANALYTICS_EXAMPLE,
   NOTIFICATION_DETAIL_EXAMPLE,
@@ -50,8 +53,7 @@ import {
 
 @ApiTags('notifications')
 @Controller('notifications')
-// Phase 6 (rev6.1): replaced class-level @RequireAuth() with per-method @ApiAuthAction decorators
-// for consistency with the social module pattern. All endpoints require authentication.
+@UseGuards(JwtGuard)
 export class NotificationController {
   constructor(
     private readonly notificationService: NotificationApplicationService,
@@ -59,6 +61,7 @@ export class NotificationController {
   ) {}
 
   @Get()
+  @Throttle({ default: NOTIFICATION_THROTTLE_VALUES.listNotifications })
   @ApiAuthAction({
     summary: 'List notifications',
     description: 'Returns cursor-paginated notifications for the authenticated user.',
@@ -103,6 +106,7 @@ export class NotificationController {
   }
 
   @Get('unread-count')
+  @Throttle({ default: NOTIFICATION_THROTTLE_VALUES.getUnreadCount })
   @ApiAuthAction({
     summary: 'Get unread notification count',
     operationId: 'getUnreadCount',
@@ -118,6 +122,7 @@ export class NotificationController {
 
   @Get('analytics')
   @Permissions(Permission.NOTIFICATION_ANALYTICS)
+  @Throttle({ default: NOTIFICATION_THROTTLE_VALUES.getAnalytics })
   @ApiAuthAction({
     summary: 'Get notification analytics',
     description:
@@ -143,6 +148,7 @@ export class NotificationController {
   }
 
   @Get('preferences')
+  @Throttle({ default: NOTIFICATION_THROTTLE_VALUES.getPreferences })
   @ApiAuthAction({
     summary: 'Get notification preferences',
     operationId: 'getNotificationPreferences',
@@ -158,6 +164,7 @@ export class NotificationController {
 
   @Patch('preferences')
   @Transactional()
+  @Throttle({ default: NOTIFICATION_THROTTLE_VALUES.updatePreferences })
   @ApiAuthAction({
     summary: 'Update notification preferences',
     operationId: 'updateNotificationPreferences',
@@ -175,6 +182,7 @@ export class NotificationController {
   }
 
   @Get(':notificationId')
+  @Throttle({ default: NOTIFICATION_THROTTLE_VALUES.getNotificationDetail })
   @ApiAuthAction({
     summary: 'Get notification detail',
     operationId: 'getNotificationDetail',
@@ -189,19 +197,6 @@ export class NotificationController {
     description: 'Notification detail',
     example: NOTIFICATION_DETAIL_EXAMPLE,
   })
-  // Phase 5 (rev5.1): `notificationApplicationService.getNotificationDetail`
-  // throws `NotificationNotFoundError` if the notification does not
-  // exist (or was deleted). Pre-Phase-5 this error fell through the
-  // global filter's `instanceof Error` branch as a misleading 500
-  // (the message was preserved but the status was wrong). After Phase
-  // 5 the global filter resolves `NOTIFICATION_NOT_FOUND` → 404 via
-  // `ProblemCodeMapping`. Documented here so the OpenAPI spec is
-  // accurate. No `@ApiForbiddenResponse` because this endpoint
-  // doesn't check ownership (any authenticated user with the
-  // notificationId is allowed to read the detail — actually, the
-  // service DOES check ownership via the `user.sub` filter in the
-  // repository, but a missing notification surfaces as 404, not 403,
-  // because the lookup is filtered by userId).
   @ApiNotFoundResponse({
     description:
       'No notification exists with this `notificationId` for the authenticated user. ' +
@@ -221,6 +216,7 @@ export class NotificationController {
 
   @Post(':notificationId/read')
   @Transactional()
+  @Throttle({ default: NOTIFICATION_THROTTLE_VALUES.markAsRead })
   @ApiAuthActionNoContent('Notification marked as read')
   @ApiParam({
     name: 'notificationId',
@@ -229,12 +225,6 @@ export class NotificationController {
     description: 'Notification UUID',
   })
   @HttpCode(HttpStatus.NO_CONTENT)
-  // Phase 5 (rev5.1): `notificationApplicationService.markAsRead`
-  // throws `NotificationNotFoundError` (404) if the notification
-  // doesn't exist, and `NotificationForbiddenError` (403) if the
-  // notification belongs to a different user. Both were 500
-  // catch-alls pre-Phase-5; both are correctly resolved by the
-  // global filter post-Phase-5 via `ProblemCodeMapping`.
   @ApiNotFoundResponse({
     description:
       'No notification exists with this `notificationId`. ' +
@@ -262,6 +252,7 @@ export class NotificationController {
 
   @Post(':notificationId/unread')
   @Transactional()
+  @Throttle({ default: NOTIFICATION_THROTTLE_VALUES.markAsUnread })
   @ApiAuthActionNoContent('Notification marked as unread')
   @ApiParam({
     name: 'notificationId',
@@ -270,10 +261,6 @@ export class NotificationController {
     description: 'Notification UUID',
   })
   @HttpCode(HttpStatus.NO_CONTENT)
-  // Phase 5 (rev5.1): same 404 + 403 wiring as `markAsRead`. See
-  // the docblock there for rationale. Pre-Phase-5 both errors were
-  // 500 catch-alls; post-Phase-5 they resolve correctly via
-  // `ProblemCodeMapping`.
   @ApiNotFoundResponse({
     description:
       'No notification exists with this `notificationId`. ' +
@@ -301,6 +288,7 @@ export class NotificationController {
 
   @Post('read-all')
   @Transactional()
+  @Throttle({ default: NOTIFICATION_THROTTLE_VALUES.markAllAsRead })
   @ApiAuthActionNoContent('All notifications marked as read')
   async markAllAsRead(@CurrentUser() user: JwtPayload): Promise<void> {
     await this.notificationService.markAllAsRead(user);
@@ -308,6 +296,7 @@ export class NotificationController {
 
   @Delete('read-all')
   @Transactional()
+  @Throttle({ default: NOTIFICATION_THROTTLE_VALUES.deleteReadNotifications })
   @ApiAuthActionNoContent('Read notifications deleted')
   async deleteReadNotifications(@CurrentUser() user: JwtPayload): Promise<void> {
     await this.notificationService.deleteReadNotifications(user);
@@ -315,6 +304,7 @@ export class NotificationController {
 
   @Delete(':notificationId')
   @Transactional()
+  @Throttle({ default: NOTIFICATION_THROTTLE_VALUES.deleteNotification })
   @ApiAuthActionNoContent('Notification deleted')
   @ApiParam({
     name: 'notificationId',
@@ -323,10 +313,6 @@ export class NotificationController {
     description: 'Notification UUID',
   })
   @HttpCode(HttpStatus.NO_CONTENT)
-  // Phase 5 (rev5.1): same 404 + 403 wiring as `markAsRead`. See
-  // the docblock there for rationale. Pre-Phase-5 both errors were
-  // 500 catch-alls; post-Phase-5 they resolve correctly via
-  // `ProblemCodeMapping`.
   @ApiNotFoundResponse({
     description:
       'No notification exists with this `notificationId`. ' +

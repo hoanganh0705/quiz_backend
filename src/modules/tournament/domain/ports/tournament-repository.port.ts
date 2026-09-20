@@ -19,8 +19,7 @@ export type TournamentRow = {
   endAt: string;
   maxParticipants: number | null;
   categoryId: string | null;
-  // Phase 1 / Issue #2 — owner column added by migration 0017.
-  // Exposed on every read; `TournamentAuthorizationPolicy` consumes it.
+  // Owner column added by migration 0017. Exposed on every read; `TournamentAuthorizationPolicy` consumes it.
   ownerUserId: string;
   createdAt: string;
   updatedAt: string;
@@ -192,30 +191,10 @@ export interface TournamentRepositoryPort {
     endAt: string;
     maxParticipants: number | null;
     categoryId: string | null;
-    /**
-     * Phase 1 / Issue #2 — the user creating the tournament. Becomes
-     * `tournaments.owner_user_id`; required by the application-layer
-     * authorization policy for the new admin endpoints
-     * (`PATCH /:id`, `DELETE /:id`, `POST /:id/cancel`).
-     */
     ownerUserId: string;
     nowIso: string;
   }): Promise<{ tournamentId: string }>;
 
-  /**
-   * Phase 1 / Issue #1 — partial update for `PATCH /tournaments/:id`.
-   *
-   * Only the fields that are explicitly listed in `params` are
-   * touched; `undefined` means "leave alone". The service layer is
-   * the source of truth for which fields are editable in which
-   * tournament status — the repository treats `undefined` as a
-   * no-op.
-   *
-   * Returns the updated row. Returns `null` when the row no longer
-   * exists (it was soft-deleted between the caller's `SELECT` and
-   * the `UPDATE`) — the service maps `null` to
-   * `TournamentNotFoundError`.
-   */
   updateTournament(params: {
     tournamentId: string;
     title?: string;
@@ -229,34 +208,12 @@ export interface TournamentRepositoryPort {
     nowIso: string;
   }): Promise<TournamentRow | null>;
 
-  /**
-   * Phase 1 / Issue #1 — soft delete for `DELETE /tournaments/:id`.
-   *
-   * Writes `deleted_at = nowIso()` and `updated_at = nowIso()` only
-   * when the row is currently live (`deleted_at IS NULL`); rows that
-   * are already soft-deleted are returned unchanged so the second
-   * `DELETE` in a row is idempotent at the repository layer.
-   *
-   * Returns the post-mutation row, or `null` if the row does not
-   * exist.
-   */
   softDeleteTournament(params: {
     tournamentId: string;
     nowIso: string;
   }): Promise<TournamentRow | null>;
 
-  /**
-   * Phase 1 / Issue #1 — cancel transition for `POST /tournaments/:id/cancel`.
-   *
-   * Writes `status = 'cancelled'` and `updated_at = nowIso()` only
-   * when the row is currently in `upcoming` or `registration`. Rows
-   * already in `ongoing` / `finished` / `cancelled` are returned
-   * unchanged so callers can distinguish "the cancel was a no-op"
-   * (return value reflects unchanged `status`) from "the row is
-   * gone" (`null`).
-   *
-   * Returns the post-mutation row.
-   */
+  // Cancel transition for `POST /tournaments/:id/cancel`.
   cancelTournament(params: { tournamentId: string; nowIso: string }): Promise<TournamentRow | null>;
 
   getParticipant(participantId: string): Promise<TournamentParticipantRow | null>;
@@ -280,39 +237,6 @@ export interface TournamentRepositoryPort {
 
   reactivateParticipant(participantId: string, nowIso: string): Promise<TournamentParticipantRow>;
 
-  /**
-   * Phase 2 / Issues #3, #4 — atomic tournament registration.
-   *
-   * Replaces the read-then-write pattern in `registerForTournament`
-   * with a single transaction that:
-   *
-   *   1. Locks the tournament row with `SELECT … FOR UPDATE` to
-   *      prevent concurrent capacity-check races.
-   *   2. Counts active participants (now fully consistent inside the lock).
-   *   3. Upserts the participant row with `ON CONFLICT DO NOTHING` so
-   *      concurrent duplicate registrations resolve cleanly rather than
-   *      throwing a 500.
-   *   4. If nothing was inserted (user already registered / withdrawn),
-   *      re-reads and returns the existing row.
-   *
-   * The capacity check runs inside the row lock so two concurrent
-   * registrations when `count == max - 1` cannot both succeed — the
-   * second transaction blocks on the FOR UPDATE and sees the correct
-   * post-insert count.
-   *
-   * The `ON CONFLICT DO NOTHING` makes re-registration idempotent at
-   * the DB level; the return value disambiguates "inserted fresh"
-   * from "already active / withdrawn" for the service layer.
-   *
-   * Throws `TournamentFullError` (via the service) when the cap
-   * would be exceeded. Throws nothing when the user is already
-   * registered (service maps `null` return → `TournamentAlreadyRegisteredError`).
-   *
-   * Returns `{ participant, inserted }` where `inserted` is `true`
-   * when the participant row was freshly created, allowing the
-   * service to distinguish a first-time registration from an
-   * idempotent re-entry (for event publishing decisions).
-   */
   atomicRegister(params: {
     tournamentId: string;
     userId: string;
@@ -321,26 +245,7 @@ export interface TournamentRepositoryPort {
     tx?: unknown;
   }): Promise<{ participant: TournamentParticipantRow; inserted: boolean; reactivated: boolean }>;
 
-  /**
-   * Phase 2 / Issue #2 (part 2) — atomic tournament withdrawal.
-   *
-   * Replaces the read-then-write pattern in `unregisterFromTournament`
-   * with a single transaction that:
-   *
-   *   1. Locks the tournament row with `SELECT … FOR UPDATE`.
-   *   2. Conditionally updates the participant to `status='withdrawn'`
-   *      only when the participant exists and is currently `active`.
-   *
-   * This prevents the TOCTOU race where a concurrent re-registration
-   * arrives while a withdrawal is in-flight: the withdrawal blocks
-   * on the FOR UPDATE, sees the participant in `active` state, and
-   * updates it to `withdrawn`. The re-registration then sees the
-   * withdrawn row and re-activates it correctly.
-   *
-   * Returns the updated participant row, or `null` when no active
-   * participant exists for this (user, tournament) pair. The service
-   * maps `null` → `TournamentNotRegisteredError`.
-   */
+  // Atomic tournament withdrawal.
   atomicWithdraw(params: {
     tournamentId: string;
     userId: string;
@@ -397,6 +302,7 @@ export interface TournamentRepositoryPort {
   getParticipantStanding(params: {
     tournamentId: string;
     userId: string;
+    participantId?: string;
   }): Promise<TournamentStandingRow | null>;
 
   listUpcomingTournaments(params: {
@@ -516,19 +422,7 @@ export interface TournamentRepositoryPort {
     tx?: unknown;
   }): Promise<FinalizedTournamentParticipantRow[]>;
 
-  /**
-   * Phase 2 / Issues #6, #50 — atomic round-start with idempotency.
-   *
-   * Atomically inserts the round_participant row (with `ON CONFLICT DO NOTHING`
-   * for idempotency), then creates the quiz_attempt and links it back.
-   *
-   * The service layer performs the pre-Tx `tournamentId` cross-check and
-   * the pre-Tx `existingRoundParticipant?.attemptId` check; this method
-   * provides the idempotency guarantee inside the transaction.
-   *
-   * Returns `attemptId`, `roundParticipant` (with `attemptId` set), and
-   * `inserted` (whether the round_participant row was freshly inserted).
-   */
+  // Atomic round-start with idempotency.
   startRoundAttemptTx(params: {
     roundId: string;
     participantId: string;
@@ -542,18 +436,6 @@ export interface TournamentRepositoryPort {
     inserted: boolean;
   }>;
 
-  /**
-   * Phase 2 / Issues #6, #50 — atomic attempt creation with idempotency.
-   *
-   * Used when a round_participant row already exists but has no `attemptId`.
-   * The service calls this after confirming (via a pre-Tx read) that
-   * `existingRoundParticipant` has no attempt yet.
-   *
-   * Internally uses `FOR UPDATE` on the round_participant row to
-   * serialize concurrent callers. If the `attemptId` is already set
-   * (a concurrent `startRoundAttemptTx` beat us), returns the existing
-   * `attemptId` without creating a duplicate.
-   */
   createAttemptForRound(params: {
     userId: string;
     quizVersionId: string;
@@ -563,32 +445,10 @@ export interface TournamentRepositoryPort {
     nowIso: string;
   }): Promise<{ attemptId: string }>;
 
-  /**
-   * Recomputes `tournament_participants.total_score` and
-   * `tournament_participants.total_time_ms` from the matching rows in
-   * `tournament_round_participants` (SUM(round_score), SUM(round_time_ms))
-   * and writes the result back to the participant in a single UPDATE.
-   *
-   * Acts as the recompute primitive for Fix #1 of
-   * docs/plans/denormalized-counters-audit.md: it makes the denormalized
-   * columns a pure projection of their source of truth, idempotent and
-   * safe to call after every round-participant write or on a schedule.
-   *
-   * When `tx` is provided the recompute is executed inside that transaction
-   * (so callers can compose it with their own round-participant write).
-   * Otherwise the method runs in its own implicit transaction.
-   */
+  // Recomputes `tournament_participants.total_score` and `tournament_participants.total_time_ms` from the matching rows in `tournament_round_participants` (SUM(round_score), SUM(round_time_ms)) and writes the result back to the participant in a single UPDATE.
   recalculateParticipantTotals(participantId: string, tx?: unknown): Promise<void>;
 
-  /**
-   * Bulk variant of `recalculateParticipantTotals` that re-runs the same
-   * two-pass UPDATE as the 0008 migration, across every tournament
-   * participant. Intended for the daily cron on
-   * `TournamentSchedulerService` to repair drift that may have
-   * accumulated between scheduled recomputes.
-   *
-   * Returns the number of participant rows whose totals changed.
-   */
+  // Bulk variant of `recalculateParticipantTotals` that re-runs the same two-pass UPDATE as the 0008 migration, across every tournament participant. Intended for the daily cron on `TournamentSchedulerService` to repair drift that may have accumulated between scheduled recomputes.
   reconcileAllParticipantTotals(): Promise<{ updated: number }>;
 }
 

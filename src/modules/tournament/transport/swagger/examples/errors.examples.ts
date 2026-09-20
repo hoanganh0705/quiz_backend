@@ -1,14 +1,4 @@
-/**
- * Tournament module error-response examples.
- *
- * Each example is a ProblemDetail object (RFC 7807) that matches the
- * wire shape emitted by `GlobalExceptionFilter`. These are referenced
- * by `tournament-swagger-decorators.ts`.
- */
-
 import { RFC7807_TYPE_URIS } from '@/common/types/problem-detail.type';
-
-// ─── 400 Bad Request ────────────────────────────────────────────────────
 
 const BAD_REQUEST_DETAIL = 'Request validation failed';
 const REQUEST_ID = 'req_abc123';
@@ -92,8 +82,6 @@ export const tournamentWithdrawClosedExample = {
   },
 } as const;
 
-// ─── 401 Unauthorized ──────────────────────────────────────────────────
-
 export const tournamentUnauthorizedExample = {
   type: RFC7807_TYPE_URIS[401],
   title: 'Unauthorized',
@@ -102,8 +90,6 @@ export const tournamentUnauthorizedExample = {
   instance: '/api/v1/tournaments',
   extensions: { requestId: REQUEST_ID },
 } as const;
-
-// ─── 403 Forbidden ─────────────────────────────────────────────────────
 
 export const tournamentForbiddenExample = {
   type: RFC7807_TYPE_URIS[403],
@@ -122,8 +108,6 @@ export const tournamentParticipantForbiddenExample = {
   instance: '/api/v1/tournaments/660e8400-e29b-71d4-a716-446655440000/withdraw',
   extensions: { requestId: REQUEST_ID },
 } as const;
-
-// ─── 404 Not Found ─────────────────────────────────────────────────────
 
 export const tournamentNotFoundExample = {
   type: RFC7807_TYPE_URIS[404],
@@ -152,8 +136,6 @@ export const tournamentNotRegisteredExample = {
   instance: '/api/v1/tournaments/660e8400-e29b-71d4-a716-446655440000/register',
   extensions: { requestId: REQUEST_ID },
 } as const;
-
-// ─── 409 Conflict ─────────────────────────────────────────────────────
 
 export const tournamentAlreadyRegisteredExample = {
   type: RFC7807_TYPE_URIS[409],
@@ -191,8 +173,6 @@ export const tournamentAlreadyWithdrawnExample = {
   instance: '/api/v1/tournaments/660e8400-e29b-71d4-a716-446655440000/withdraw',
   extensions: { requestId: REQUEST_ID },
 } as const;
-
-// ─── Phase 1 / Issue #1 — admin endpoint error examples ──────────────────
 
 export const tournamentTerminalStateExample = {
   type: RFC7807_TYPE_URIS[409],

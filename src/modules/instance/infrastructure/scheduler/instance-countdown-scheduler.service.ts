@@ -4,57 +4,8 @@ import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { InstanceService } from '../../domain/instance.service';
 import { QUIZ_INSTANCE_REPOSITORY_PORT, type QuizInstanceRepositoryPort } from '../../domain/ports';
 
-/**
- * Phase 2 (Gameplay Lifecycle) — countdown scheduler.
- *
- * Scans `quiz_instances` for rows where `status = 'countdown'` AND
- * `countdown_started_at + COUNTDOWN_DURATION_MS <= now()` and asks
- * `InstanceService.completeCountdownByScheduler` to fire each one.
- *
- * Why a `@Cron` poll rather than a `setTimeout` per instance
- * ------------------------------------------------------------
- *
- * 1. The countdown state is persisted on the row (`countdownStartedAt`)
- *    so any replica can pick up the work after a restart or a Redis
- *    failover. A per-instance in-process timer would be lost on
- *    restart, leaving rows stuck in `countdown` until a manual
- *    intervention.
- * 2. The query hits the partial index `idx_quiz_instances_countdown_due`
- *    added by migration 0019, so the per-tick cost is O(due rows) —
- *    a handful per second even in heavy load.
- * 3. The cadence matches the codebase convention
- *    (`TournamentSchedulerService` polls per-minute or per-5-minutes
- *    using `@Cron`). One-second polling is novel here, but the cron
- *    expression (six fields, seconds-first) gives us one tick per
- *    second without breaking the rest of the project.
- *
- * Why no advisory lock here
- * -------------------------
- *
- * The work itself is idempotent and serialized by the optimistic-locking
- * `WHERE version = $expectedVersion` predicate on
- * `updateInstanceStatus`. Two replicas polling concurrently will both
- * list the same due row, but only one will win the `UPDATE`; the other
- * receives `InstanceOptimisticLockError` and folds it into the
- * `lost_lock` return shape. Adding a Redis lock would only delay the
- * losing replica — same correctness guarantee, lower availability.
- *
- * Operational scale
- * -----------------
- *
- * The tick is bounded by `TICK_BATCH_SIZE`. If the backlog exceeds the
- * batch we re-enter on the next tick; the cron runs every second, so
- * the worst-case lag is `(backlog / TICK_BATCH_SIZE)` seconds. With a
- * default batch of 50 that is 50 countdowns per second sustained, which
- * already dwarfs the realistic peak (a few hundred concurrent instances
- * is the project's stated capacity envelope).
- */
 @Injectable()
 export class InstanceCountdownSchedulerService {
-  /**
-   * Max rows processed per tick. Sized so the per-tick work stays
-   * well under the 1-second cron cadence even at peak.
-   */
   static readonly TICK_BATCH_SIZE = 50;
 
   constructor(
@@ -65,31 +16,8 @@ export class InstanceCountdownSchedulerService {
     private readonly logger: PinoLogger,
   ) {}
 
-  /**
-   * Cron: every second. The `@nestjs/schedule` adapter parses the
-   * expression as seconds-first, matching the per-second cadence the
-   * countdown state needs.
-   */
   @Cron(CronExpression.EVERY_SECOND)
   async handleDueCountdowns(): Promise<void> {
-    // Phase 2 — bug fix. The previous query was
-    // `countdown_started_at <= nowIso`, which matches every active
-    // countdown row regardless of whether the 5-second warmup window
-    // has elapsed. That caused the scheduler to fire
-    // `countdown → running` (or `countdown → open` for under-filled
-    // lobbies) within one second of `startCountdown`, leaving the
-    // host with no time to call `startInstance` or `cancelCountdown`.
-    //
-    // The intended behavior — documented in `InstanceService`
-    // (`countdown_started_at + COUNTDOWN_DURATION_MS <= nowIso`) —
-    // is to fire only for countdowns whose 5-second window has
-    // actually elapsed. We subtract `COUNTDOWN_DURATION_MS` from the
-    // current time and pass the cutoff as `nowIso` so the existing
-    // `countdown_started_at <= $cutoff` predicate selects only the
-    // expired rows. The partial index
-    // `idx_quiz_instances_countdown_due` already indexes
-    // `(countdown_started_at)` filtered by `status = 'countdown'`, so
-    // the new condition keeps the same scan shape.
     const cutoffIso = new Date(Date.now() - InstanceService.COUNTDOWN_DURATION_MS).toISOString();
 
     let due: ReadonlyArray<{

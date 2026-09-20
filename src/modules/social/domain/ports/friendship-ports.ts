@@ -6,10 +6,16 @@ import type {
   RespondToFriendRequestParams,
 } from '../../domain/types/social.types';
 
+export type FriendshipExecutor = {
+  execute<T = unknown>(query: unknown): Promise<{ rows: T[] }>;
+};
+
 export const FRIENDSHIP_REPOSITORY_PORT = Symbol('FRIENDSHIP_REPOSITORY_PORT');
 
 export interface FriendshipRepositoryPort {
   createFriendRequest(requesterId: string, addresseeId: string): Promise<Friendship>;
+
+  createFriendRequestWithJoin(requesterId: string, addresseeId: string): Promise<FriendRequest>;
 
   getFriendRequest(friendshipId: string): Promise<Friendship | null>;
 
@@ -36,11 +42,15 @@ export interface FriendshipRepositoryPort {
    */
   cancelFriendRequestById(friendshipId: string): Promise<number>;
 
+  getMostRecentPendingFriendshipId(requesterId: string, addresseeId: string): Promise<string>;
+
   getFriends(userId: string, limit: number, cursor?: string | null): Promise<Friend[]>;
 
   getFriendCount(userId: string): Promise<number>;
 
-  removeFriend(userId: string, friendId: string): Promise<void>;
+  removeFriend(userId: string, friendId: string): Promise<number>;
+
+  removeFriendInTx(tx: FriendshipExecutor, userId: string, friendId: string): Promise<number>;
 
   /**
    * Find an active (non-soft-deleted) accepted friendship between

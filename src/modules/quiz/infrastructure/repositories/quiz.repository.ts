@@ -1,6 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { and, asc, desc, eq, inArray, isNull, or, sql, type SQL } from 'drizzle-orm';
-import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 import { DRIZZLE, DRIZZLE_READ } from '@/core/database/drizzle.constants';
 import type { DrizzleDB } from '@/core/database/database.module';
 import {
@@ -14,19 +13,6 @@ import {
   userProfiles,
   users,
 } from '@/core/database/schema';
-import {
-  isPostgresUniqueViolation,
-  isPostgresForeignKeyViolation,
-} from '@/common/utils/db-error.util';
-import {
-  QuizSlugConflictError,
-  QuizValidationError,
-  QuizOperationFailedError,
-} from '@/modules/quiz/domain/errors';
-import {
-  QUIZ_SLUG_CONFLICT_MESSAGE,
-  QUIZ_LINK_IDS_INVALID_MESSAGE,
-} from '@/modules/quiz/quiz.constants';
 import type {
   AuthorSummaryRow,
   CategorySummaryRow,
@@ -41,91 +27,16 @@ import type {
   QuizTagRow,
   QuizWithPublishedVersionRow,
 } from '@/modules/quiz/domain/ports';
-
-const QUIZ_COLUMNS = quizzes as unknown as {
-  quizId: AnyPgColumn;
-  creatorId: AnyPgColumn;
-  title: AnyPgColumn;
-  description: AnyPgColumn;
-  slug: AnyPgColumn;
-  quizSearchVector: AnyPgColumn;
-  requirements: AnyPgColumn;
-  imageUrl: AnyPgColumn;
-  imagePublicId: AnyPgColumn;
-  isFeatured: AnyPgColumn;
-  isHidden: AnyPgColumn;
-  isVerified: AnyPgColumn;
-  publishedVersionId: AnyPgColumn;
-  categoryId: AnyPgColumn;
-  createdAt: AnyPgColumn;
-  updatedAt: AnyPgColumn;
-  deletedAt: AnyPgColumn;
-};
-
-const QUIZ_VERSION_COLUMNS = quizVersions as unknown as {
-  quizVersionId: AnyPgColumn;
-  versionNumber: AnyPgColumn;
-  status: AnyPgColumn;
-  difficulty: AnyPgColumn;
-  durationMs: AnyPgColumn;
-  passingScorePercent: AnyPgColumn;
-  rewardXp: AnyPgColumn;
-  createdByUserId: AnyPgColumn;
-  createdAt: AnyPgColumn;
-  publishedAt: AnyPgColumn;
-  archivedAt: AnyPgColumn;
-  updatedAt: AnyPgColumn;
-};
-
-const QUIZ_RECORD_PROJECTION = {
-  quizId: QUIZ_COLUMNS.quizId,
-  creatorId: QUIZ_COLUMNS.creatorId,
-  // Phase 1 / Issue #1 + #25 — these two columns are required by the
-  // review module to gate visibility on its public endpoints. We project
-  // them here so callers do not have to make a second round-trip to
-  // re-fetch the quiz with `getQuizWithPublishedVersionById`.
-  isHidden: QUIZ_COLUMNS.isHidden,
-  publishedVersionId: QUIZ_COLUMNS.publishedVersionId,
-};
-
-const QUIZ_WITH_VERSION_PROJECTION = {
-  quizId: QUIZ_COLUMNS.quizId,
-  creatorId: QUIZ_COLUMNS.creatorId,
-  title: QUIZ_COLUMNS.title,
-  description: QUIZ_COLUMNS.description,
-  slug: QUIZ_COLUMNS.slug,
-  requirements: QUIZ_COLUMNS.requirements,
-  imageUrl: QUIZ_COLUMNS.imageUrl,
-  imagePublicId: QUIZ_COLUMNS.imagePublicId,
-  isFeatured: QUIZ_COLUMNS.isFeatured,
-  isHidden: QUIZ_COLUMNS.isHidden,
-  isVerified: QUIZ_COLUMNS.isVerified,
-  publishedVersionId: QUIZ_COLUMNS.publishedVersionId,
-  categoryId: QUIZ_COLUMNS.categoryId,
-  createdAt: QUIZ_COLUMNS.createdAt,
-  updatedAt: QUIZ_COLUMNS.updatedAt,
-  publishedVersionQuizVersionId: QUIZ_VERSION_COLUMNS.quizVersionId,
-  publishedVersionVersionNumber: QUIZ_VERSION_COLUMNS.versionNumber,
-  publishedVersionStatus: QUIZ_VERSION_COLUMNS.status,
-  publishedVersionDifficulty: QUIZ_VERSION_COLUMNS.difficulty,
-  publishedVersionDurationMs: QUIZ_VERSION_COLUMNS.durationMs,
-  publishedVersionPassingScorePercent: QUIZ_VERSION_COLUMNS.passingScorePercent,
-  publishedVersionRewardXp: QUIZ_VERSION_COLUMNS.rewardXp,
-  publishedVersionCreatedByUserId: QUIZ_VERSION_COLUMNS.createdByUserId,
-  publishedVersionCreatedAt: QUIZ_VERSION_COLUMNS.createdAt,
-  publishedVersionPublishedAt: QUIZ_VERSION_COLUMNS.publishedAt,
-  publishedVersionArchivedAt: QUIZ_VERSION_COLUMNS.archivedAt,
-  publishedVersionUpdatedAt: QUIZ_VERSION_COLUMNS.updatedAt,
-};
+import { QUIZ_COLUMNS, QUIZ_VERSION_COLUMNS } from './quiz.repository.columns';
+import {
+  QUIZ_RECORD_PROJECTION,
+  QUIZ_WITH_VERSION_PROJECTION,
+} from './quiz.repository.projections';
+import { buildQuizListQuery } from './quiz.repository.list-query';
+import { mapQuizCreateError, mapQuizUpdateError } from './quiz.repository.errors';
 
 @Injectable()
 export class QuizRepository implements QuizRepositoryPort {
-  // Phase 7 #3 — separate primary and read-replica drizzle clients.
-  // Writes (create / update / soft-delete) flow through `db`. Reads
-  // flow through `dbRead`, which is bound to `DRIZZLE_READ` (the
-  // replica when configured, the primary otherwise). Tests that do
-  // not configure a replica will receive the same pool as the
-  // primary, so the route-through is invisible.
   constructor(
     @Inject(DRIZZLE) private readonly db: DrizzleDB,
     @Inject(DRIZZLE_READ) private readonly dbRead: DrizzleDB,
@@ -141,6 +52,16 @@ export class QuizRepository implements QuizRepositoryPort {
     return (quiz as QuizRecordRow | undefined) ?? null;
   }
 
+  /**
+   * Public read of a quiz by UUID.
+   *
+   * SECURITY: explicitly filters out hidden quizzes (`isHidden = false`).
+   * Hidden quizzes can only be reached through ownership-scoped endpoints
+   * (PATCH/DELETE/...); bypassing the filter would let unauthenticated
+   * callers enumerate every quiz UUID and read the body of `isHidden`
+   * quizzes that the owner intentionally hid from public listings.
+   * Mirrors the filter applied by `getQuizWithPublishedVersionBySlug`.
+   */
   async getQuizWithPublishedVersionById(
     quizId: string,
   ): Promise<QuizWithPublishedVersionRow | null> {
@@ -151,7 +72,13 @@ export class QuizRepository implements QuizRepositoryPort {
         quizVersions,
         eq(QUIZ_COLUMNS.publishedVersionId, QUIZ_VERSION_COLUMNS.quizVersionId),
       )
-      .where(and(eq(QUIZ_COLUMNS.quizId, quizId), isNull(QUIZ_COLUMNS.deletedAt)))
+      .where(
+        and(
+          eq(QUIZ_COLUMNS.quizId, quizId),
+          isNull(QUIZ_COLUMNS.deletedAt),
+          eq(QUIZ_COLUMNS.isHidden, false),
+        ),
+      )
       .limit(1);
 
     return (row as QuizWithPublishedVersionRow | undefined) ?? null;
@@ -318,113 +245,28 @@ export class QuizRepository implements QuizRepositoryPort {
     cursor?: QuizCursor | null;
     filters?: QuizListFilters;
   }): Promise<QuizWithPublishedVersionRow[]> {
-    const filters: SQL[] = [isNull(QUIZ_COLUMNS.deletedAt)];
+    return this.runListQuery(params.filters ?? null, params.cursor, params.limit);
+  }
 
-    // Phase 2 (S-12): `isHidden` is admin-gated at the controller
-    // layer. When the caller has the privilege to read hidden
-    // quizzes we honour their boolean filter; otherwise we apply
-    // the public `isHidden = false` predicate.
-    if (params.filters?.isHidden !== undefined) {
-      filters.push(eq(QUIZ_COLUMNS.isHidden, params.filters.isHidden));
-    } else {
-      filters.push(eq(QUIZ_COLUMNS.isHidden, false));
-    }
-
-    if (params.filters?.difficulty) {
-      filters.push(
-        sql`exists (
-          select 1
-          from ${quizVersions} qv_filter
-          where qv_filter.quiz_id = ${QUIZ_COLUMNS.quizId}
-            and qv_filter.quiz_version_id = ${QUIZ_COLUMNS.publishedVersionId}
-            and qv_filter.difficulty = ${params.filters.difficulty}
-        )`,
-      );
-    }
-
-    if (params.filters?.categoryId) {
-      filters.push(eq(QUIZ_COLUMNS.categoryId, params.filters.categoryId));
-    }
-
-    if (params.filters?.tagIds && params.filters.tagIds.length > 0) {
-      filters.push(
-        sql`exists (
-          select 1
-          from ${quizTags}
-          where ${quizTags.quizId} = ${QUIZ_COLUMNS.quizId}
-            and ${inArray(quizTags.tagId, params.filters.tagIds)}
-        )`,
-      );
-    }
-
-    if (params.filters?.creatorId) {
-      filters.push(eq(QUIZ_COLUMNS.creatorId, params.filters.creatorId));
-    }
-
-    if (params.filters?.q) {
-      // Phase 2 (S-12): Postgres full-text search. `quizzes`
-      // schema carries a `quiz_search_vector` GENERATED column so
-      // the query never has to maintain the index itself; we
-      // match the same `'simple'` config the search module uses.
-      const tsquery = sql<string>`websearch_to_tsquery('simple', ${params.filters.q})`;
-      filters.push(sql`${QUIZ_COLUMNS.quizSearchVector} @@ ${tsquery}`);
-    }
-
-    if (params.filters?.minRating !== undefined) {
-      // Phase 2 (S-12): join `quiz_stats` and apply the
-      // threshold. Soft-failing — quizzes without a stats row
-      // are simply filtered out (treated as "no rating data").
-      filters.push(
-        sql`exists (
-          select 1
-          from ${quizStats}
-          where ${quizStats.quizId} = ${QUIZ_COLUMNS.quizId}
-            and ${quizStats.avgRating} >= ${params.filters.minRating}
-        )`,
-      );
-    }
-
-    if (params.cursor) {
-      filters.push(
-        or(
-          sql`${QUIZ_COLUMNS.createdAt} < ${params.cursor.createdAt}`,
-          and(
-            eq(QUIZ_COLUMNS.createdAt, params.cursor.createdAt),
-            sql`${QUIZ_COLUMNS.quizId} < ${params.cursor.quizId}`,
-          ),
-        ) as SQL,
-      );
-    }
-
-    // Phase 2 (S-12): server-side sort dispatch. `'newest'` is the
-    // default and was the only sort direction before Phase 2; the
-    // other three routes each JOIN `quiz_stats` and ORDER BY the
-    // appropriate denormalised column. The cursor always keys on
-    // `(created_at, quiz_id)` so changing sort does not invalidate
-    // the existing cursor format.
-    const sortKey =
-      params.filters?.sort ?? ('newest' as 'newest' | 'popular' | 'top_rated' | 'trending');
-
-    const orderBy: SQL[] =
-      sortKey === 'popular'
-        ? [
-            sql`coalesce(${sql.raw('qs.popularity_score')}, 0) desc`,
-            desc(QUIZ_COLUMNS.createdAt),
-            desc(QUIZ_COLUMNS.quizId),
-          ]
-        : sortKey === 'top_rated'
-          ? [
-              sql`coalesce(${sql.raw('qs.avg_rating')}, 0) desc`,
-              desc(QUIZ_COLUMNS.createdAt),
-              desc(QUIZ_COLUMNS.quizId),
-            ]
-          : sortKey === 'trending'
-            ? [
-                sql`coalesce(${sql.raw('qs.trending_score')}, 0) desc`,
-                desc(QUIZ_COLUMNS.createdAt),
-                desc(QUIZ_COLUMNS.quizId),
-              ]
-            : [desc(QUIZ_COLUMNS.createdAt), desc(QUIZ_COLUMNS.quizId)];
+  /**
+   * Centralised list-endpoint executor. Builds the (filter, orderBy,
+   * sortKey) tuple via `buildQuizListQuery`, appends any caller-supplied
+   * `extraFilters` (e.g. the "has any draft version" predicate used by
+   * `listDraftsByCreatorId`), and executes against the read replica.
+   *
+   * Centralising keeps the four list methods (public, by-creator,
+   * drafts-by-creator, published-by-creator) consistent: any new
+   * filter added to the public surface is automatically available to
+   * the per-creator routes.
+   */
+  private async runListQuery(
+    filtersIn: QuizListFilters | null,
+    cursor: QuizCursor | null | undefined,
+    limit: number,
+    extraFilters: SQL[] = [],
+  ): Promise<QuizWithPublishedVersionRow[]> {
+    const { filters, orderBy, sortKey } = buildQuizListQuery(filtersIn ?? undefined, cursor);
+    filters.push(...extraFilters);
 
     const baseFrom = this.dbRead
       .select(QUIZ_WITH_VERSION_PROJECTION)
@@ -440,11 +282,11 @@ export class QuizRepository implements QuizRepositoryPort {
             .leftJoin(sql`quiz_stats qs`, sql`qs.quiz_id = ${QUIZ_COLUMNS.quizId}`)
             .where(and(...filters))
             .orderBy(...orderBy)
-            .limit(params.limit + 1)
+            .limit(limit + 1)
         : await baseFrom
             .where(and(...filters))
             .orderBy(...orderBy)
-            .limit(params.limit + 1);
+            .limit(limit + 1);
 
     return rows as QuizWithPublishedVersionRow[];
   }
@@ -453,113 +295,66 @@ export class QuizRepository implements QuizRepositoryPort {
     creatorId: string;
     limit: number;
     cursor?: QuizCursor | null;
+    filters?: QuizListFilters;
   }): Promise<QuizWithPublishedVersionRow[]> {
-    const filters: SQL[] = [
-      isNull(QUIZ_COLUMNS.deletedAt),
-      eq(QUIZ_COLUMNS.isHidden, false),
-      eq(QUIZ_COLUMNS.creatorId, params.creatorId),
-    ];
-
-    if (params.cursor) {
-      filters.push(
-        or(
-          sql`${QUIZ_COLUMNS.createdAt} < ${params.cursor.createdAt}`,
-          and(
-            eq(QUIZ_COLUMNS.createdAt, params.cursor.createdAt),
-            sql`${QUIZ_COLUMNS.quizId} < ${params.cursor.quizId}`,
-          ),
-        ) as SQL,
-      );
-    }
-
-    const rows = await this.dbRead
-      .select(QUIZ_WITH_VERSION_PROJECTION)
-      .from(quizzes)
-      .leftJoin(
-        quizVersions,
-        eq(QUIZ_COLUMNS.publishedVersionId, QUIZ_VERSION_COLUMNS.quizVersionId),
-      )
-      .where(and(...filters))
-      .orderBy(desc(QUIZ_COLUMNS.createdAt), desc(QUIZ_COLUMNS.quizId))
-      .limit(params.limit + 1);
-
-    return rows as QuizWithPublishedVersionRow[];
-  }
-
-  async listDraftsByCreatorId(params: {
-    creatorId: string;
-    limit: number;
-    cursor?: QuizCursor | null;
-  }): Promise<QuizWithPublishedVersionRow[]> {
-    const filters: SQL[] = [
-      isNull(QUIZ_COLUMNS.deletedAt),
-      eq(QUIZ_COLUMNS.isHidden, false),
-      eq(QUIZ_COLUMNS.creatorId, params.creatorId),
-      eq(QUIZ_VERSION_COLUMNS.status, 'draft'),
-    ];
-
-    if (params.cursor) {
-      filters.push(
-        or(
-          sql`${QUIZ_COLUMNS.createdAt} < ${params.cursor.createdAt}`,
-          and(
-            eq(QUIZ_COLUMNS.createdAt, params.cursor.createdAt),
-            sql`${QUIZ_COLUMNS.quizId} < ${params.cursor.quizId}`,
-          ),
-        ) as SQL,
-      );
-    }
-
-    const rows = await this.dbRead
-      .select(QUIZ_WITH_VERSION_PROJECTION)
-      .from(quizzes)
-      .leftJoin(
-        quizVersions,
-        eq(QUIZ_COLUMNS.publishedVersionId, QUIZ_VERSION_COLUMNS.quizVersionId),
-      )
-      .where(and(...filters))
-      .orderBy(desc(QUIZ_COLUMNS.createdAt), desc(QUIZ_COLUMNS.quizId))
-      .limit(params.limit + 1);
-
-    return rows as QuizWithPublishedVersionRow[];
+    // Delegate to `listQuizzes` so the creator-scoped routes inherit
+    // the same filter surface (difficulty / categoryId / tagIds / q /
+    // sort / minRating). The `creatorId` filter pins ownership; the
+    // public `isHidden = false` default is preserved unless the caller
+    // overrides it via `filters.isHidden`.
+    return this.listQuizzes({
+      limit: params.limit,
+      cursor: params.cursor,
+      filters: {
+        ...(params.filters ?? {}),
+        creatorId: params.creatorId,
+      },
+    });
   }
 
   async listPublishedByCreatorId(params: {
     creatorId: string;
     limit: number;
     cursor?: QuizCursor | null;
+    filters?: QuizListFilters;
   }): Promise<QuizWithPublishedVersionRow[]> {
-    const filters: SQL[] = [
-      isNull(QUIZ_COLUMNS.deletedAt),
-      eq(QUIZ_COLUMNS.isHidden, false),
-      eq(QUIZ_COLUMNS.creatorId, params.creatorId),
-      eq(QUIZ_VERSION_COLUMNS.status, 'published'),
-    ];
+    // "Published" here means "has a published version". The shared
+    // `listQuizzes` path already JOINs on `published_version_id`, so
+    // delegation gives us the right semantics for free.
+    return this.listByCreatorId(params);
+  }
 
-    if (params.cursor) {
-      filters.push(
-        or(
-          sql`${QUIZ_COLUMNS.createdAt} < ${params.cursor.createdAt}`,
-          and(
-            eq(QUIZ_COLUMNS.createdAt, params.cursor.createdAt),
-            sql`${QUIZ_COLUMNS.quizId} < ${params.cursor.quizId}`,
-          ),
-        ) as SQL,
-      );
-    }
-
-    const rows = await this.dbRead
-      .select(QUIZ_WITH_VERSION_PROJECTION)
-      .from(quizzes)
-      .leftJoin(
-        quizVersions,
-        eq(QUIZ_COLUMNS.publishedVersionId, QUIZ_VERSION_COLUMNS.quizVersionId),
-      )
-      .where(and(...filters))
-      .orderBy(desc(QUIZ_COLUMNS.createdAt), desc(QUIZ_COLUMNS.quizId))
-      .limit(params.limit + 1);
-
-    return rows as QuizWithPublishedVersionRow[];
+  async listDraftsByCreatorId(params: {
+    creatorId: string;
+    limit: number;
+    cursor?: QuizCursor | null;
+    filters?: QuizListFilters;
+  }): Promise<QuizWithPublishedVersionRow[]> {
+    // Pin the query to quizzes that have at least one draft version.
+    //
+    // The previous implementation filtered via `LEFT JOIN
+    // quiz_versions ON published_version_id = quiz_version_id` and
+    // added `quiz_versions.status = 'draft'`. That was incorrect —
+    // `published_version_id` references the *published* version (if
+    // any), so the status check would only match quizzes whose
+    // published version was somehow in 'draft' state (which the state
+    // machine prevents). The right predicate is `EXISTS (SELECT 1
+    // FROM quiz_versions WHERE quiz_id = q.quiz_id AND status =
+    // 'draft')`, expressed as an `extraFilters` clause on the shared
+    // runner so it composes with the rest of the filter surface.
+    return this.runListQuery(
+      { ...(params.filters ?? {}), creatorId: params.creatorId },
+      params.cursor,
+      params.limit,
+      [
+        sql`exists (
+          select 1
+          from ${quizVersions} qv_draft
+          where qv_draft.quiz_id = ${QUIZ_COLUMNS.quizId}
+            and qv_draft.status = 'draft'
+        )`,
+      ],
+    );
   }
 
   async findFeaturedQuizzes(limit: number): Promise<QuizWithPublishedVersionRow[]> {
@@ -586,98 +381,98 @@ export class QuizRepository implements QuizRepositoryPort {
   async findRelatedQuizzes(
     params: FindRelatedQuizzesParams,
   ): Promise<QuizWithPublishedVersionRow[]> {
+    // Step 1: resolve the source quiz (one row by slug) — a single
+    // index lookup, not correlated against every candidate row.
+    const [sourceRow] = await this.dbRead
+      .select({ quizId: QUIZ_COLUMNS.quizId, categoryId: QUIZ_COLUMNS.categoryId })
+      .from(quizzes)
+      .where(and(eq(QUIZ_COLUMNS.slug, params.slug), isNull(QUIZ_COLUMNS.deletedAt)))
+      .limit(1);
+
+    if (!sourceRow || !sourceRow.quizId) {
+      return [];
+    }
+
+    // Step 2: pull the source quiz's tag IDs in one indexed query.
+    const sourceTagRows = await this.dbRead
+      .select({ tagId: quizTags.tagId })
+      .from(quizTags)
+      .where(eq(quizTags.quizId, sourceRow.quizId as string));
+
+    const sourceTagIds = sourceTagRows.map((r) => r.tagId);
+    const sourceCategoryId = sourceRow.categoryId;
+    const hasSourceCategory = sourceCategoryId !== null && sourceCategoryId !== undefined;
+    const hasSourceTags = sourceTagIds.length > 0;
+
+    // No overlap possible when the source quiz has no category and no
+    // tags — short-circuit to an empty list.
+    if (!hasSourceCategory && !hasSourceTags) {
+      return [];
+    }
+
+    // Step 3: run the candidate scan with predicates expressed as
+    // concrete values rather than correlated subqueries against
+    // `quizzes.slug = $slug`. The category match becomes a simple
+    // equality predicate; the tag match becomes a `quiz_tags.tag_id IN
+    // ($sourceTagIds)` predicate against an indexed column.
+    const tagOverlapExistsFilter = hasSourceTags
+      ? hasSourceCategory
+        ? or(
+            eq(QUIZ_COLUMNS.categoryId, sourceCategoryId as string),
+            sql`exists (
+                select 1
+                from ${quizTags}
+                where ${quizTags.quizId} = ${QUIZ_COLUMNS.quizId}
+                  and ${inArray(quizTags.tagId, sourceTagIds)}
+              )`,
+          )
+        : sql`exists (
+              select 1
+              from ${quizTags}
+              where ${quizTags.quizId} = ${QUIZ_COLUMNS.quizId}
+                and ${inArray(quizTags.tagId, sourceTagIds)}
+            )`
+      : hasSourceCategory
+        ? eq(QUIZ_COLUMNS.categoryId, sourceCategoryId as string)
+        : sql`false`;
+
+    const categoryMatchOrder = sql<number>`CASE WHEN ${QUIZ_COLUMNS.categoryId} = ${sourceCategoryId ?? sql`NULL`} THEN 1 ELSE 0 END`;
+    const tagMatchOrder = hasSourceTags
+      ? sql<number>`(
+          SELECT COUNT(DISTINCT qt.tag_id)::int
+          FROM ${quizTags} qt
+          WHERE qt.quiz_id = ${QUIZ_COLUMNS.quizId}
+            AND qt.tag_id IN ${inArray(quizTags.tagId, sourceTagIds)}
+        )`
+      : sql<number>`0`;
+
     const rows = await this.dbRead
       .select({
         ...QUIZ_WITH_VERSION_PROJECTION,
-        categoryMatchCount: sql<number>`(
-          select 1
-          from ${quizzes} src_q
-          where src_q.slug = ${params.slug}
-            and src_q.deleted_at is null
-            and src_q.category_id = ${QUIZ_COLUMNS.categoryId}
-        )`,
-        tagMatchCount: sql<number>`(
-          select count(distinct qt.tag_id)
-          from ${quizTags} qt
-          where qt.quiz_id = ${QUIZ_COLUMNS.quizId}
-            and qt.tag_id in (
-              select src_qt.tag_id
-              from ${quizTags} src_qt
-              inner join ${quizzes} src_q on src_q.quiz_id = src_qt.quiz_id
-              where src_q.slug = ${params.slug}
-                and src_q.deleted_at is null
-            )
-        )`,
-        popularityScoreSort: sql<number>`coalesce((
-          select qs.popularity_score::numeric
-          from quiz_stats qs
-          where qs.quiz_id = ${QUIZ_COLUMNS.quizId}
-        ), 0)`,
+        categoryMatchCount: hasSourceCategory
+          ? sql<number>`CASE WHEN ${QUIZ_COLUMNS.categoryId} = ${sourceCategoryId} THEN 1 ELSE 0 END`
+          : sql<number>`0`,
+        tagMatchCount: tagMatchOrder,
+        popularityScoreSort: sql<number>`COALESCE(${sql.raw('qs.popularity_score')}, 0)`,
       })
       .from(quizzes)
       .leftJoin(
         quizVersions,
         eq(QUIZ_COLUMNS.publishedVersionId, QUIZ_VERSION_COLUMNS.quizVersionId),
       )
+      .leftJoin(sql`quiz_stats qs`, sql`qs.quiz_id = ${QUIZ_COLUMNS.quizId}`)
       .where(
         and(
           isNull(QUIZ_COLUMNS.deletedAt),
           eq(QUIZ_COLUMNS.isHidden, false),
-          sql`${QUIZ_COLUMNS.quizId} <> (
-            select src.quiz_id
-            from ${quizzes} src
-            where src.slug = ${params.slug}
-              and src.deleted_at is null
-            limit 1
-          )`,
-          sql`(
-            exists (
-              select 1
-              from ${quizzes} src_q
-              where src_q.slug = ${params.slug}
-                and src_q.deleted_at is null
-                and src_q.category_id = ${QUIZ_COLUMNS.categoryId}
-            )
-            or exists (
-              select 1
-              from ${quizTags} qt_match
-              where qt_match.quiz_id = ${QUIZ_COLUMNS.quizId}
-                and qt_match.tag_id in (
-                  select src_qt.tag_id
-                  from ${quizTags} src_qt
-                  inner join ${quizzes} src_q on src_q.quiz_id = src_qt.quiz_id
-                  where src_q.slug = ${params.slug}
-                    and src_q.deleted_at is null
-                )
-            )
-          )`,
+          sql`${QUIZ_COLUMNS.quizId} <> ${sourceRow.quizId}`,
+          tagOverlapExistsFilter,
         ),
       )
       .orderBy(
-        desc(sql`(
-          select 1
-          from ${quizzes} src_q
-          where src_q.slug = ${params.slug}
-            and src_q.deleted_at is null
-            and src_q.category_id = ${QUIZ_COLUMNS.categoryId}
-        )`),
-        desc(sql`(
-          select count(distinct qt.tag_id)
-          from ${quizTags} qt
-          where qt.quiz_id = ${QUIZ_COLUMNS.quizId}
-            and qt.tag_id in (
-              select src_qt.tag_id
-              from ${quizTags} src_qt
-              inner join ${quizzes} src_q on src_q.quiz_id = src_qt.quiz_id
-              where src_q.slug = ${params.slug}
-                and src_q.deleted_at is null
-            )
-        )`),
-        desc(sql`coalesce((
-          select qs.popularity_score::numeric
-          from quiz_stats qs
-          where qs.quiz_id = ${QUIZ_COLUMNS.quizId}
-        ), 0)`),
+        desc(categoryMatchOrder),
+        desc(tagMatchOrder),
+        desc(sql`COALESCE(${sql.raw('qs.popularity_score')}, 0)`),
         desc(QUIZ_COLUMNS.createdAt),
         desc(QUIZ_COLUMNS.quizId),
       )
@@ -731,6 +526,9 @@ export class QuizRepository implements QuizRepositoryPort {
             isFeatured: payload.isFeatured,
             isHidden: payload.isHidden,
             isVerified: false,
+            // Fold the categoryId into the initial INSERT instead of
+            // issuing a follow-up UPDATE; saves one round-trip per create.
+            categoryId: payload.categoryId ?? null,
             createdAt: nowIso,
             updatedAt: nowIso,
           })
@@ -753,13 +551,6 @@ export class QuizRepository implements QuizRepositoryPort {
           updatedAt: nowIso,
         });
 
-        if (payload.categoryId !== null && payload.categoryId !== undefined) {
-          await tx
-            .update(quizzes)
-            .set({ categoryId: payload.categoryId, updatedAt: nowIso })
-            .where(eq(QUIZ_COLUMNS.quizId, quizId));
-        }
-
         let tagRows: QuizTagRow[] = [];
         if (payload.tagIds.length > 0) {
           await tx.insert(quizTags).values(
@@ -770,11 +561,6 @@ export class QuizRepository implements QuizRepositoryPort {
             })),
           );
 
-          // Phase 1 #2: read the tag rows in the same transaction so we can
-          // return the full `{ row, tags }` shape that the caller used to
-          // get from a follow-up SELECT. This is the round-trip we are
-          // eliminating — `payload.tagIds.length` is typically 0–5 so the
-          // IN-list query is cheap.
           const resolvedTags = await tx
             .select({
               tagId: tags.tagId,
@@ -789,10 +575,6 @@ export class QuizRepository implements QuizRepositoryPort {
           tagRows = resolvedTags as QuizTagRow[];
         }
 
-        // Build the projection-shaped row so the mapper can consume it
-        // without modification. The published-version columns are `null`
-        // because no version has been promoted to "published" yet — the
-        // initial version is a draft.
         const row: QuizWithPublishedVersionRow = {
           quizId,
           creatorId: payload.creatorId,
@@ -828,7 +610,7 @@ export class QuizRepository implements QuizRepositoryPort {
 
       return result;
     } catch (error) {
-      this.mapCreateError(error);
+      mapQuizCreateError(error);
     }
   }
 
@@ -881,9 +663,6 @@ export class QuizRepository implements QuizRepositoryPort {
           }
         }
 
-        // Phase 1 #2: read the post-update row + tags in the same
-        // transaction. We re-use the same projection as the public read
-        // path so callers can drop the follow-up SELECT entirely.
         const [row] = await tx
           .select(QUIZ_WITH_VERSION_PROJECTION)
           .from(quizzes)
@@ -914,7 +693,7 @@ export class QuizRepository implements QuizRepositoryPort {
 
       return result;
     } catch (error) {
-      this.mapUpdateError(error);
+      mapQuizUpdateError(error);
     }
   }
 
@@ -936,29 +715,5 @@ export class QuizRepository implements QuizRepositoryPort {
       .limit(1);
 
     return (row?.imagePublicId as string | null | undefined) ?? null;
-  }
-
-  private mapCreateError(error: unknown): never {
-    if (isPostgresUniqueViolation(error)) {
-      throw new QuizSlugConflictError(QUIZ_SLUG_CONFLICT_MESSAGE);
-    }
-
-    if (isPostgresForeignKeyViolation(error)) {
-      throw new QuizValidationError(QUIZ_LINK_IDS_INVALID_MESSAGE);
-    }
-
-    throw new QuizOperationFailedError('Quiz operation failed');
-  }
-
-  private mapUpdateError(error: unknown): never {
-    if (isPostgresUniqueViolation(error)) {
-      throw new QuizSlugConflictError(QUIZ_SLUG_CONFLICT_MESSAGE);
-    }
-
-    if (isPostgresForeignKeyViolation(error)) {
-      throw new QuizValidationError(QUIZ_LINK_IDS_INVALID_MESSAGE);
-    }
-
-    throw new QuizOperationFailedError('Quiz operation failed');
   }
 }

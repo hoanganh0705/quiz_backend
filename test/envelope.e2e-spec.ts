@@ -1,6 +1,6 @@
 /// <reference types="jest" />
 /**
- * Phase 0 envelope smoke test.
+ * Envelope smoke test.
  *
  * Boots an isolated NestJS app with:
  *   - the global ResponseFormatInterceptor (matches production wiring)
@@ -13,7 +13,7 @@
  *
  * This test deliberately avoids `AppModule` (which boots Postgres + Redis) so
  * it can run as part of `pnpm test` without infrastructure. As each module
- * gains a presenter in Phase 1/2, real module e2e tests replace these stubs.
+ * gains a presenter, real module e2e tests replace these stubs.
  */
 import { Controller, Get, INestApplication, UseInterceptors } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
@@ -68,7 +68,7 @@ class EnvelopeFixtureController {
   }
 }
 
-describe('Response envelope (Phase 0 fixture)', () => {
+describe('Response envelope (fixture)', () => {
   let app: INestApplication<App>;
 
   beforeEach(async () => {

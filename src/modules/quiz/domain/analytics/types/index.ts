@@ -32,6 +32,7 @@ export interface QuizAnalytics {
 export interface TrendingQuiz {
   rank: number;
   quizId: string;
+  creatorId: string | null;
   title: string;
   slug: string;
   imageUrl: string | null;
@@ -43,6 +44,7 @@ export interface TrendingQuiz {
 export interface PopularQuiz {
   rank: number;
   quizId: string;
+  creatorId: string | null;
   title: string;
   slug: string;
   imageUrl: string | null;

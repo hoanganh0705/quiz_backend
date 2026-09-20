@@ -1,7 +1,7 @@
 import { Inject, Injectable, Optional } from '@nestjs/common';
 import { DRIZZLE } from '@/core/database/drizzle.constants';
 import type { DrizzleDB } from '@/core/database/database.module';
-import { eq } from 'drizzle-orm';
+import { eq, inArray, sql } from 'drizzle-orm';
 import { notificationPreferences } from '@/core/database/schema';
 import {
   TransactionalContext,
@@ -33,50 +33,76 @@ export class NotificationPreferencesRepository implements NotificationPreference
     return prefs ? this.mapToPreferences(prefs) : null;
   }
 
+  async getManyPreferences(userIds: string[]): Promise<Map<string, NotificationPreferencesRow>> {
+    const result = new Map<string, NotificationPreferencesRow>();
+    if (userIds.length === 0) {
+      return result;
+    }
+
+    const uniqueUserIds = Array.from(new Set(userIds));
+    const rows = await this.getDb()
+      .select()
+      .from(notificationPreferences)
+      .where(inArray(notificationPreferences.userId, uniqueUserIds));
+
+    for (const row of rows) {
+      result.set(row.userId, this.mapToPreferences(row));
+    }
+    return result;
+  }
+
   async upsertPreferences(
     userId: string,
     prefs: Partial<NotificationPreferencesRow>,
   ): Promise<NotificationPreferencesRow> {
-    const existing = await this.getPreferences(userId);
+    const nowIso = new Date().toISOString();
+    const insertValues = {
+      userId,
+      inAppEnabled: prefs.inAppEnabled ?? true,
+      emailEnabled: prefs.emailEnabled ?? true,
+      pushEnabled: prefs.pushEnabled ?? true,
+      achievementEnabled: prefs.achievementEnabled ?? true,
+      tournamentEnabled: prefs.tournamentEnabled ?? true,
+      rankEnabled: prefs.rankEnabled ?? true,
+      friendEnabled: prefs.friendEnabled ?? true,
+      commentEnabled: prefs.commentEnabled ?? true,
+      summaryEnabled: prefs.summaryEnabled ?? true,
+      marketingEnabled: prefs.marketingEnabled ?? false,
+      rankImprovementThreshold: prefs.rankImprovementThreshold ?? 5,
+      quietHoursStart: prefs.quietHoursStart ?? null,
+      quietHoursEnd: prefs.quietHoursEnd ?? null,
+    };
 
-    if (existing) {
-      const [updated] = await this.getDb()
-        .update(notificationPreferences)
-        .set({
-          ...this.stripPreferenceFields(prefs),
-          updatedAt: new Date().toISOString(),
-        })
-        .where(eq(notificationPreferences.userId, userId))
-        .returning();
+    const updateSet = {
+      inAppEnabled: prefs.inAppEnabled ?? sql`${notificationPreferences.inAppEnabled}`,
+      emailEnabled: prefs.emailEnabled ?? sql`${notificationPreferences.emailEnabled}`,
+      pushEnabled: prefs.pushEnabled ?? sql`${notificationPreferences.pushEnabled}`,
+      achievementEnabled:
+        prefs.achievementEnabled ?? sql`${notificationPreferences.achievementEnabled}`,
+      tournamentEnabled:
+        prefs.tournamentEnabled ?? sql`${notificationPreferences.tournamentEnabled}`,
+      rankEnabled: prefs.rankEnabled ?? sql`${notificationPreferences.rankEnabled}`,
+      friendEnabled: prefs.friendEnabled ?? sql`${notificationPreferences.friendEnabled}`,
+      commentEnabled: prefs.commentEnabled ?? sql`${notificationPreferences.commentEnabled}`,
+      summaryEnabled: prefs.summaryEnabled ?? sql`${notificationPreferences.summaryEnabled}`,
+      marketingEnabled: prefs.marketingEnabled ?? sql`${notificationPreferences.marketingEnabled}`,
+      rankImprovementThreshold:
+        prefs.rankImprovementThreshold ?? sql`${notificationPreferences.rankImprovementThreshold}`,
+      quietHoursStart: prefs.quietHoursStart ?? sql`${notificationPreferences.quietHoursStart}`,
+      quietHoursEnd: prefs.quietHoursEnd ?? sql`${notificationPreferences.quietHoursEnd}`,
+      updatedAt: nowIso,
+    };
 
-      return this.mapToPreferences(updated);
-    } else {
-      const defaults = {
-        inAppEnabled: prefs.inAppEnabled ?? true,
-        emailEnabled: prefs.emailEnabled ?? true,
-        pushEnabled: prefs.pushEnabled ?? true,
-        achievementEnabled: prefs.achievementEnabled ?? true,
-        tournamentEnabled: prefs.tournamentEnabled ?? true,
-        rankEnabled: prefs.rankEnabled ?? true,
-        friendEnabled: prefs.friendEnabled ?? true,
-        commentEnabled: prefs.commentEnabled ?? true,
-        summaryEnabled: prefs.summaryEnabled ?? true,
-        marketingEnabled: prefs.marketingEnabled ?? false,
-        rankImprovementThreshold: prefs.rankImprovementThreshold ?? 5,
-        quietHoursStart: prefs.quietHoursStart ?? null,
-        quietHoursEnd: prefs.quietHoursEnd ?? null,
-      };
+    const [row] = await this.getDb()
+      .insert(notificationPreferences)
+      .values(insertValues)
+      .onConflictDoUpdate({
+        target: notificationPreferences.userId,
+        set: updateSet,
+      })
+      .returning();
 
-      const [created] = await this.getDb()
-        .insert(notificationPreferences)
-        .values({
-          userId,
-          ...defaults,
-        })
-        .returning();
-
-      return this.mapToPreferences(created);
-    }
+    return this.mapToPreferences(row);
   }
 
   private mapToPreferences(
@@ -101,19 +127,5 @@ export class NotificationPreferencesRepository implements NotificationPreference
       updatedAt: row.updatedAt,
       createdAt: row.createdAt,
     };
-  }
-
-  private stripPreferenceFields(
-    prefs: Partial<NotificationPreferencesRow>,
-  ): Partial<typeof notificationPreferences.$inferInsert> {
-    const { preferencesId, userId, createdAt, updatedAt, ...rest } = prefs as Required<
-      Pick<NotificationPreferencesRow, 'preferencesId' | 'userId' | 'createdAt' | 'updatedAt'>
-    > &
-      Partial<NotificationPreferencesRow>;
-    void preferencesId;
-    void userId;
-    void createdAt;
-    void updatedAt;
-    return rest;
   }
 }

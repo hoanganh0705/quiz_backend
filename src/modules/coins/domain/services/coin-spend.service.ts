@@ -203,15 +203,6 @@ export class CoinSpendService implements CoinSpendPort {
     }
   }
 
-  /**
-   * Tiny adapter so the spend service does not have to import the
-   * full `achievement` module's repository port. Keeps the module
-   * dependency graph narrow (only the port is exposed); the
-   * `CoinSpendService` is constructed with the `AchievementRepositoryPort`
-   * via DI when this method is migrated to a port-based call in a
-   * future phase. For now the check is delegated to the database
-   * directly via a small query.
-   */
   private async userBadgeIsOwned(userId: string, userBadgeId: string): Promise<boolean> {
     const result = await this.db.execute<{ exists: boolean }>(sql`
       SELECT EXISTS(

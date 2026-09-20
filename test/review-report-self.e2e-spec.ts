@@ -1,45 +1,4 @@
 /// <reference types="jest" />
-/**
- * Self-report guard e2e tests.
- *
- * Phase 5 hardening — the previous shape inlined the self-report
- * guard as `review.userId === reporterId` inside
- * `ReviewService.reportReview`. It worked in unit tests but was
- * never exercised at the integration layer, so a future regression
- * (or a role-bypass the audit didn't anticipate) could let an admin
- * — or any role — file a self-report and pollute the moderation
- * queue. This suite:
- *
- *   1. Boots the full NestJS app against the live Postgres +
- *      Redis stack.
- *   2. Logs in as a seeded user (the author of a seeded review).
- *   3. Tries to file a report against their own review.
- *   4. Asserts the API returns 400 (or 422, depending on the
- *      envelope mapping) with the canonical
- *      "You cannot report your own review" message.
- *   5. Asserts the application guard fires BEFORE the row reaches
- *      the database (i.e. no `review_reports` row is created).
- *
- * Defense-in-depth is layered:
- *   - Application guard: `ReviewAuthorizationPolicy.canReport`
- *     (covers the unit spec in
- *     `review-authorization.policy.spec.ts`).
- *   - DB trigger: `trg_review_reports_reject_self_report` raised
- *     by migration `0016_review_reports_self_report_guard.sql`.
- *     The repository layer translates the `23514` error code into
- *     `ReviewValidationError`.
- *
- * This e2e proves the application-layer guard fires end-to-end
- * (no DB row is created, response is 400). A separate unit test
- * in `review-report.repository.spec.ts` covers the DB-error
- * translation path.
- *
- * Skips gracefully when the env is missing or the app cannot boot.
- * Run with:
- *
- *   pnpm db:start && pnpm db:seed:foundation && \
- *   pnpm test:e2e -- --testPathPatterns=review-report-self
- */
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 

@@ -1,12 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
-/**
- * Phase 3 (S-17): the `staleAt` / `isStale` pair on every social
- * eventually-consistent projection. `staleAt` is the timestamp at
- * which the cache entry is considered stale; `isStale` is the
- * derived truthy flag for consumers that want a boolean shortcut.
- */
-
 export class SocialCountsDto {
   @ApiProperty({ description: 'Number of mutual friends', example: 12 })
   friendCount!: number;
@@ -30,14 +23,14 @@ export class UserSocialStatsResponseDto {
 
   @ApiPropertyOptional({
     description:
-      'Phase 3 (S-17): timestamp at which the cached snapshot is considered stale (ISO 8601). Null when fresh.',
+      'Timestamp at which the cached snapshot is considered stale (ISO 8601). Null when fresh.',
     example: '2026-08-10T13:30:00.000Z',
     nullable: true,
   })
   staleAt!: string | null;
 
   @ApiProperty({
-    description: 'Phase 3 (S-17): whether the snapshot is stale (`staleAt` is in the past).',
+    description: 'Whether the snapshot is stale (`staleAt` is in the past).',
     example: false,
   })
   isStale!: boolean;
@@ -57,14 +50,14 @@ export class MySocialAnalyticsResponseDto {
   growth30Days!: number;
 
   @ApiPropertyOptional({
-    description: 'Phase 3 (S-17): timestamp at which the analytics snapshot is stale (ISO 8601).',
+    description: 'Timestamp at which the analytics snapshot is stale (ISO 8601).',
     example: '2026-08-10T13:30:00.000Z',
     nullable: true,
   })
   staleAt!: string | null;
 
   @ApiProperty({
-    description: 'Phase 3 (S-17): whether the analytics snapshot is stale.',
+    description: 'Whether the analytics snapshot is stale.',
     example: false,
   })
   isStale!: boolean;

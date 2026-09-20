@@ -11,7 +11,6 @@
 
 import { Injectable, NestInterceptor, ExecutionContext, CallHandler } from '@nestjs/common';
 import { Observable } from 'rxjs';
-import { tap } from 'rxjs/operators';
 import { randomUUID } from 'node:crypto';
 import { PinoLogger } from 'nestjs-pino';
 import { correlationIdStorage, getCorrelationId } from './correlation-id';
@@ -35,15 +34,7 @@ export class CorrelationInterceptor implements NestInterceptor {
 
     this.logger.assign({ correlationId });
 
-    return correlationIdStorage.run({ correlationId }, () => {
-      return next.handle().pipe(
-        tap({
-          finalize: () => {
-            // clean-up if needed
-          },
-        }),
-      );
-    });
+    return correlationIdStorage.run({ correlationId }, () => next.handle());
   }
 }
 

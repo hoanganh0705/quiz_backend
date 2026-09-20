@@ -134,6 +134,6 @@ export class TagFollowRepository implements TagFollowRepositoryPort {
       .orderBy(desc(tagFollows.createdAt), desc(tagFollows.followId))
       .limit(limit + 1);
 
-    return rows as FollowedTagRow[];
+    return rows;
   }
 }

@@ -52,7 +52,6 @@ import {
   TournamentForbiddenError,
   TournamentRoundNotFoundError,
   TournamentRoundNotOpenError,
-  TournamentAttemptAlreadyExistsError,
   TournamentNotRegisteredError,
   TournamentUnregisterClosedError,
   TournamentWithdrawClosedError,
@@ -71,7 +70,6 @@ import {
   TOURNAMENT_STANDING_WITHDRAWN_MESSAGE,
   TOURNAMENT_ROUND_NOT_FOUND_MESSAGE,
   TOURNAMENT_ROUND_NOT_OPEN_MESSAGE,
-  TOURNAMENT_ATTEMPT_ALREADY_EXISTS_MESSAGE,
   TOURNAMENT_NOT_REGISTERED_MESSAGE,
   TOURNAMENT_UNREGISTER_CLOSED_MESSAGE,
   TOURNAMENT_ALREADY_WITHDRAWN_MESSAGE,
@@ -82,19 +80,6 @@ import {
   type TournamentOwnershipTarget,
 } from './policies/tournament-authorization.policy';
 
-/**
- * Phase 1 / Issue #1 — adapter from `TournamentRow` (the
- * repository's read shape) to `TournamentOwnershipTarget`
- * (the authorization policy's input shape).
- *
- * Keeping the adapter inline (rather than a class method) avoids
- * having to widen `TournamentRow` to expose `deletedAt` and
- * `ownerUserId` for every consumer that does not care. Today
- * `TournamentRow` already carries both columns (see the
- * repository port change for Issue #2), but the helper centralizes
- * the projection so a future audit item can change the policy
- * surface without touching every call site.
- */
 const tournamentToPolicyTarget = (row: TournamentRow): TournamentOwnershipTarget => ({
   tournamentId: row.tournamentId,
   ownerUserId: row.ownerUserId,
@@ -149,10 +134,6 @@ export class TournamentService {
       endAt: payload.endAt,
       maxParticipants: payload.maxParticipants ?? null,
       categoryId: payload.categoryId ?? null,
-      // Phase 1 / Issue #2 — thread the caller's JWT subject into
-      // the new `owner_user_id` column. The migration backfilled
-      // historical rows to a system actor; new tournaments are
-      // always attributed to the creating user.
       ownerUserId: user.sub,
       nowIso,
     });
@@ -170,25 +151,6 @@ export class TournamentService {
     ) as Promise<TournamentRow>;
   }
 
-  /**
-   * Phase 1 / Issue #1 — `PATCH /tournaments/:id` service entry.
-   *
-   * Steps:
-   *
-   *   1. Load the tournament (and therefore `owner_user_id` and
-   *      `deleted_at`). 404 if missing.
-   *   2. Run the application-layer authorization policy
-   *      (`TournamentAuthorizationPolicy.canEdit`). 403 if denied.
-   *   3. Validate the payload (no empty bodies, monotonic
-   *      `startAt`/`endAt`, no shrinking `maxParticipants` while
-   *      in `registration`). 400 / 409 as appropriate.
-   *   4. Delegate to `tournamentRepository.updateTournament`.
-   *
-   * The state-aware fields (which columns are editable in which
-   * status) live in this method, NOT in the DTO or repository —
-   * putting them here lets a future audit item relax the rules
-   * without touching the wire shape.
-   */
   async updateTournament(
     tournamentId: string,
     user: JwtPayload,
@@ -298,19 +260,6 @@ export class TournamentService {
     return updated;
   }
 
-  /**
-   * Phase 1 / Issue #1 — `DELETE /tournaments/:id` (soft delete)
-   * service entry.
-   *
-   * Reuses the same authorization policy as `updateTournament` and
-   * adds the strict state guard: an `ongoing` / `finished` /
-   * `cancelled` tournament cannot be soft-deleted because the
-   * audit (Issue #10) reserves those lifecycle states for the
-   * finalization pipeline.
-   *
-   * Returns the post-mutation row so the controller can echo
-   * `deletedAt` back to the client.
-   */
   async softDeleteTournament(tournamentId: string, user: JwtPayload): Promise<TournamentRow> {
     const tournament = await this.getActiveTournamentOrThrow(tournamentId);
 
@@ -351,20 +300,6 @@ export class TournamentService {
     return deleted;
   }
 
-  /**
-   * Phase 1 / Issue #1 — `POST /tournaments/:id/cancel` service entry.
-   *
-   * Different authorization path from `updateTournament` /
-   * `softDeleteTournament`: cancellation requires the
-   * `TOURNAMENT_CANCEL` permission (admin-only today) and is
-   * limited to `upcoming` / `registration` tournaments.
-   *
-   * No `TournamentCancelledEvent` is emitted in Phase 1 — that is
-   * tracked under audit Issue #10 and lands when the notification
-   * fan-out from a cancelled tournament is designed. Cancel
-   * today means "the tournament transitions to `cancelled` so
-   * participants see it as closed".
-   */
   async cancelTournament(tournamentId: string, user: JwtPayload): Promise<TournamentRow> {
     const tournament = await this.getActiveTournamentOrThrow(tournamentId);
 
@@ -694,6 +629,7 @@ export class TournamentService {
     const standing = await this.tournamentRepository.getParticipantStanding({
       tournamentId: query.tournamentId,
       userId: query.userId,
+      participantId: participant.participantId,
     });
 
     if (!standing) {
@@ -739,39 +675,6 @@ export class TournamentService {
       throw new TournamentRegistrationClosedError(TOURNAMENT_REGISTRATION_CLOSED_MESSAGE);
     }
 
-    /**
-     * Phase 2 / Issues #3, #4 — atomic registration.
-     *
-     * The previous read-then-write pattern had two TOCTOU races:
-     *
-     *   (a) `getParticipantByUserAndTournament` + `registerParticipant` —
-     *       two concurrent requests both see no participant and both insert.
-     *       The DB unique constraint rejects the second, but it threw a 500.
-     *
-     *   (b) `countParticipants` + `registerParticipant` — two concurrent
-     *       requests both see count == max-1 and both insert, over-filling
-     *       the tournament.
-     *
-     *   (c) `reactivateParticipant` — when a withdrawn user re-registers,
-     *       the capacity check was never re-run, allowing the spot to be
-     *       re-taken even after new users filled the vacancy.
-     *
-     * The new `atomicRegister` method fixes all three by:
-     *
-     *   1. Acquiring `SELECT … FOR UPDATE` on the tournament row,
-     *      serializing all registrations for this tournament.
-     *   2. Recounting active participants inside the lock.
-     *   3. Using `INSERT … ON CONFLICT DO NOTHING` so concurrent
-     *      duplicates resolve to a re-read rather than a 500.
-     *
-     * The `inserted` flag tells us whether the participant row was
-     * freshly created (`true`) or already existed (`false`). We only
-     * schedule `TournamentJoinedEvent` to the outbox for fresh registrations.
-     *
-     * Phase 3 / Issue #5 — the event is now scheduled to the outbox INSIDE
-     * the same transaction as the participant insert, guaranteeing at-least-once
-     * delivery even if the process crashes between commit and publish.
-     */
     try {
       let isNewRegistration = false;
       let wasReactivated = false;
@@ -795,7 +698,6 @@ export class TournamentService {
 
         isNewRegistration = true;
 
-        // Phase 3 / Issue #5 — schedule event to outbox inside the same tx
         await this.tournamentOutbox.scheduleTournamentEvent(
           {
             eventType: 'tournament.joined',
@@ -861,28 +763,6 @@ export class TournamentService {
     if (tournament.status !== 'registration') {
       throw new TournamentUnregisterClosedError(TOURNAMENT_UNREGISTER_CLOSED_MESSAGE);
     }
-
-    /**
-     * Phase 2 / Issue #2 — atomic withdrawal.
-     *
-     * The previous read-then-write pattern had a TOCTOU race:
-     *
-     *   1. `getParticipantByUserAndTournament` — no lock
-     *   2. `withdrawParticipant` — unconditional update
-     *
-     * A concurrent re-registration arriving between steps 1 and 2
-     * could see the participant as `active` (the withdrawal hadn't
-     * committed yet) and re-activate it, only to have the subsequent
-     * `withdrawParticipant` overwrite it back to `withdrawn`.
-     *
-     * The new `atomicWithdraw` method serializes all actions for this
-     * tournament behind a `FOR UPDATE` lock and uses a conditional
-     * `WHERE status='active'` in the UPDATE so a concurrent
-     * re-activation cannot be immediately overwritten.
-     *
-     * Phase 3 / Issue #5 — the `TournamentParticipantWithdrawnEvent` is now
-     * scheduled to the outbox INSIDE the same transaction as the withdrawal.
-     */
     const withdrawn = await this.db.transaction(async (tx) => {
       const result = await this.tournamentRepository.atomicWithdraw({
         tournamentId,
@@ -895,7 +775,6 @@ export class TournamentService {
         throw new TournamentNotRegisteredError(TOURNAMENT_NOT_REGISTERED_MESSAGE);
       }
 
-      // Phase 3 / Issue #5 — schedule event to outbox inside the same tx
       await this.tournamentOutbox.scheduleTournamentEvent(
         {
           eventType: 'tournament.participant.withdrawn',
@@ -936,30 +815,31 @@ export class TournamentService {
       throw new TournamentWithdrawClosedError(TOURNAMENT_WITHDRAW_CLOSED_MESSAGE);
     }
 
-    const participant = await this.tournamentRepository.getParticipantByUserAndTournament(
-      command.userId,
-      command.tournamentId,
-    );
-
-    if (!participant) {
-      throw new TournamentForbiddenError(TOURNAMENT_FORBIDDEN_MESSAGE);
-    }
-
-    if (participant.status === 'withdrawn') {
-      throw new TournamentAlreadyWithdrawnError(TOURNAMENT_ALREADY_WITHDRAWN_MESSAGE);
-    }
-
-    if (participant.status === 'completed') {
-      throw new TournamentWithdrawClosedError(TOURNAMENT_WITHDRAW_CLOSED_MESSAGE);
-    }
-
-    // Phase 3 / Issue #5 — wrap withdrawal + event scheduling in a transaction
     const withdrawn = await this.db.transaction(async (tx) => {
-      const result = await this.tournamentRepository.withdrawParticipant(
-        participant.participantId,
+      const withdrawnRow = await this.tournamentRepository.atomicWithdraw({
+        tournamentId: command.tournamentId,
+        userId: command.userId,
         nowIso,
         tx,
-      );
+      });
+
+      if (!withdrawnRow) {
+        const existing = await this.tournamentRepository.getParticipantByUserAndTournament(
+          command.userId,
+          command.tournamentId,
+        );
+
+        if (!existing) {
+          throw new TournamentForbiddenError(TOURNAMENT_FORBIDDEN_MESSAGE);
+        }
+        if (existing.status === 'withdrawn') {
+          throw new TournamentAlreadyWithdrawnError(TOURNAMENT_ALREADY_WITHDRAWN_MESSAGE);
+        }
+        if (existing.status === 'completed') {
+          throw new TournamentWithdrawClosedError(TOURNAMENT_WITHDRAW_CLOSED_MESSAGE);
+        }
+        throw new TournamentForbiddenError(TOURNAMENT_FORBIDDEN_MESSAGE);
+      }
 
       await this.tournamentOutbox.scheduleTournamentEvent(
         {
@@ -977,21 +857,20 @@ export class TournamentService {
         nowIso,
       );
 
-      return result;
+      return withdrawnRow;
     });
 
     this.logger.info({
       event: 'tournament_participant_withdrawn',
       tournamentId: command.tournamentId,
       userId: command.userId,
-      participantId: participant.participantId,
+      participantId: withdrawn.participantId,
       withdrawnAt: nowIso,
     });
 
     return withdrawn;
   }
 
-  // Issue #28: Added pagination to prevent unbounded responses.
   async getLeaderboard(
     tournamentId: string,
     query: { limit: number; offset: number },
@@ -1018,24 +897,6 @@ export class TournamentService {
       throw new TournamentRoundNotFoundError(TOURNAMENT_ROUND_NOT_FOUND_MESSAGE);
     }
 
-    // Phase 1 / Issue #20 + #31 — cross-tournament attack surface fix.
-    //
-    // The previous shape accepted `:id` (the tournament) and `:roundId`
-    // as independent path parameters and only checked that each one
-    // existed in isolation. A malicious user registered for tournament
-    // A could submit `:id = A, :roundId = round-of-B` and the attempt
-    // would be created against A's participant / B's quiz version,
-    // silently inflating another user's leaderboard / leaking XP.
-    //
-    // The two new invariants here:
-    //
-    //   1. `round.tournamentId === tournamentId` — the round actually
-    //      belongs to the tournament the user said they wanted.
-    //   2. We surface the mismatch as `TournamentRoundNotFoundError`
-    //      (404) rather than `TournamentForbiddenError` (403) so we
-    //      do not leak whether the round id exists in some other
-    //      tournament — the previous shape effectively acted as an
-    //      enumeration oracle for cross-tournament round ids.
     if (round.tournamentId !== tournamentId) {
       throw new TournamentRoundNotFoundError(TOURNAMENT_ROUND_NOT_FOUND_MESSAGE);
     }
@@ -1057,66 +918,17 @@ export class TournamentService {
       throw new TournamentForbiddenError(TOURNAMENT_FORBIDDEN_MESSAGE);
     }
 
-    const existingRoundParticipant = await this.tournamentRepository.getRoundParticipant(
+    const result = await this.tournamentRepository.startRoundAttemptTx({
       roundId,
-      participant.participantId,
-    );
-
-    if (existingRoundParticipant?.attemptId) {
-      throw new TournamentAttemptAlreadyExistsError(TOURNAMENT_ATTEMPT_ALREADY_EXISTS_MESSAGE);
-    }
-
-    /**
-     * Phase 2 / Issues #6, #50 — atomic round-start with idempotency.
-     *
-     * Two paths:
-     *
-     *   (a) `!existingRoundParticipant` — no round participant row yet.
-     *       `startRoundAttemptTx` atomically inserts the round_participant,
-     *       creates the attempt, and links it. The `inserted` flag tells
-     *       us whether the round_participant was freshly inserted (true)
-     *       or already existed (false, meaning a concurrent request beat
-     *       us to the insert and already set up the attempt).
-     *
-     *   (b) `existingRoundParticipant` (no attemptId) — round participant
-     *       row exists but no attempt linked. `createAttemptForRound` takes
-     *       a FOR UPDATE lock on the row and creates the attempt. If a
-     *       concurrent `startRoundAttemptTx` beat us to the attempt creation,
-     *       it returns the existing `attemptId` without creating a duplicate.
-     *
-     * The pre-Tx `existingRoundParticipant?.attemptId` check above is the
-     * fast path for the 99% case (user has no existing attempt). The
-     * transaction-level idempotency inside both methods is the safety net
-     * for the race between the pre-Tx check and the transaction.
-     */
-    let attemptId: string;
-
-    if (!existingRoundParticipant) {
-      const result = await this.tournamentRepository.startRoundAttemptTx({
-        roundId,
-        participantId: participant.participantId,
-        userId: user.sub,
-        quizVersionId: roundDetail.quizVersionId,
-        tournamentId,
-        nowIso,
-      });
-
-      attemptId = result.attemptId;
-    } else {
-      const createdAttempt = await this.tournamentRepository.createAttemptForRound({
-        userId: user.sub,
-        quizVersionId: roundDetail.quizVersionId,
-        tournamentId,
-        roundId,
-        roundParticipantId: existingRoundParticipant.roundParticipantId,
-        nowIso,
-      });
-
-      attemptId = createdAttempt.attemptId;
-    }
+      participantId: participant.participantId,
+      userId: user.sub,
+      quizVersionId: roundDetail.quizVersionId,
+      tournamentId,
+      nowIso,
+    });
 
     return {
-      attemptId,
+      attemptId: result.attemptId,
       quizVersionId: roundDetail.quizVersionId,
       participantId: participant.participantId,
     };

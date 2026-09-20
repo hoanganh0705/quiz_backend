@@ -1,12 +1,15 @@
-import { Controller, Delete, Get, Param, ParseUUIDPipe, Query } from '@nestjs/common';
+import { Controller, Delete, Get, Param, ParseUUIDPipe, Query, UseGuards } from '@nestjs/common';
 import { ApiParam, ApiQuery, ApiTags, ApiOperation } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
 import { Public } from '@/common/decorators/public.decorator';
 import { Permissions } from '@/common/authorization/decorators/permissions.decorator';
 import { Permission } from '@/common/authorization/permissions';
+import { JwtGuard } from '@/common/guards/jwt.guard';
 import { ApiForbidden, ApiAuth, ApiNotFound } from '@/common/swagger/swagger-decorators';
 import { ApiOkResource, ApiOkResourceList } from '@/common/swagger/api-ok';
 import { PaginationQueryDto } from '@/common/dto/pagination-query.dto';
+import { ACHIEVEMENT_THROTTLE_VALUES } from '@/core/config/achievement-throttle.config';
 import { AchievementApplicationService } from '../../application/achievement.application.service';
 import { AchievementPresenter } from '../presenters/achievement.presenter';
 import { BadgeDetailsResponseDto } from '../../dto/response/badge-details-response.dto';
@@ -16,14 +19,6 @@ import { MyBadgeItemDto } from '../../dto/response/my-badges-response.dto';
 import { PublicAchievementProfileResponseDto } from '../../dto/response/public-achievement-profile-response.dto';
 import { UserBadgeAnalyticsResponseDto } from '../../dto/response/user-badge-analytics-response.dto';
 import { AchievementHistoryItemResponseDto } from '../../dto/response/achievement-history-item-response.dto';
-
-// All 404/403/500 error responses (BadgeNotFoundError,
-// AchievementUserNotFoundError, UserBadgeOwnershipNotFoundError → 404;
-// AchievementGrantError → 500; UserProfilePrivateError → 403 — handled
-// by the global filter via USER_PROFILE_PRIVATE mapping entry) flow
-// through `GlobalExceptionFilter` as RFC 7807 `ProblemDetailDto` after
-// Phase 2. The per-module `AchievementDomainExceptionFilter` and its
-// `@UseFilters(...)` decorator have been removed.
 
 @ApiTags('achievements')
 @Controller('achievements')
@@ -35,14 +30,11 @@ export class AchievementController {
 
   @Get('badges')
   @Public()
+  @Throttle({ default: ACHIEVEMENT_THROTTLE_VALUES.listBadgeCatalog })
   @ApiOperation({
     operationId: 'listBadgeCatalog',
     summary: 'List all available badges',
   })
-  // Phase 7 (api-contract audit): the runtime emits an offset-paginated
-  // payload (`{ data: T[], meta: { pagination: { kind: 'offset', ... } } }`),
-  // so the OpenAPI schema must match — `ApiOkResourceList(..., 'offset')` is
-  // the canonical decorator for offset-paginated lists.
   @ApiOkResourceList(BadgeCatalogItemResponseDto, 'offset', {
     description: 'Badge catalog returned',
   })
@@ -64,14 +56,13 @@ export class AchievementController {
   }
 
   @Get('me/badges')
+  @UseGuards(JwtGuard)
+  @Throttle({ default: ACHIEVEMENT_THROTTLE_VALUES.getMyBadges })
   @ApiAuth()
   @ApiOperation({
     operationId: 'listMyBadges',
     summary: 'List badges earned by the authenticated user',
   })
-  // Phase 7 (api-contract audit): the runtime emits an offset-paginated
-  // payload, so the OpenAPI schema must match — `ApiOkResourceList(..., 'offset')`
-  // is the canonical decorator for offset-paginated lists.
   @ApiOkResourceList(MyBadgeItemDto, 'offset', { description: 'User badges returned' })
   @ApiQuery({
     name: 'limit',
@@ -92,6 +83,7 @@ export class AchievementController {
 
   @Get('badges/:badgeId')
   @Public()
+  @Throttle({ default: ACHIEVEMENT_THROTTLE_VALUES.getBadgeDetails })
   @ApiOperation({
     operationId: 'getBadgeDetails',
     summary: 'Get badge details',
@@ -105,13 +97,15 @@ export class AchievementController {
   }
 
   @Delete('/users/:userId/badges/:badgeId')
+  @UseGuards(JwtGuard)
   @Permissions(Permission.ACHIEVEMENT_REVOKE)
+  @Throttle({ default: ACHIEVEMENT_THROTTLE_VALUES.revokeUserBadge })
+  @ApiAuth()
+  @ApiForbidden()
   @ApiOperation({
     operationId: 'revokeUserBadge',
     summary: 'Revoke a badge from a user',
   })
-  @ApiAuth()
-  @ApiForbidden()
   @ApiParam({ name: 'userId', format: 'uuid' })
   @ApiParam({ name: 'badgeId', format: 'uuid' })
   async revokeUserBadge(
@@ -123,6 +117,8 @@ export class AchievementController {
   }
 
   @Get('/users/:userId/achievements')
+  @UseGuards(JwtGuard)
+  @Throttle({ default: ACHIEVEMENT_THROTTLE_VALUES.getPublicAchievementProfile })
   @ApiAuth()
   @ApiOperation({
     operationId: 'getPublicAchievementProfile',
@@ -145,6 +141,8 @@ export class AchievementController {
   }
 
   @Get('/users/me/badges/:badgeId/progress')
+  @UseGuards(JwtGuard)
+  @Throttle({ default: ACHIEVEMENT_THROTTLE_VALUES.getMyBadgeProgress })
   @ApiAuth()
   @ApiOperation({
     operationId: 'getMyBadgeProgress',
@@ -162,14 +160,13 @@ export class AchievementController {
   }
 
   @Get('/users/me/achievements/history')
+  @UseGuards(JwtGuard)
+  @Throttle({ default: ACHIEVEMENT_THROTTLE_VALUES.getMyAchievementHistory })
   @ApiAuth()
   @ApiOperation({
     operationId: 'getMyAchievementHistory',
     summary: "Get the authenticated user's badge earning history",
   })
-  // Phase 7 (api-contract audit): the runtime emits an offset-paginated
-  // payload, so the OpenAPI schema must match — `ApiOkResourceList(..., 'offset')`
-  // is the canonical decorator for offset-paginated lists.
   @ApiOkResourceList(AchievementHistoryItemResponseDto, 'offset', {
     description: 'Achievement history returned',
   })
@@ -194,6 +191,8 @@ export class AchievementController {
   }
 
   @Get('/users/me/badges/analytics')
+  @UseGuards(JwtGuard)
+  @Throttle({ default: ACHIEVEMENT_THROTTLE_VALUES.getMyBadgeAnalytics })
   @ApiAuth()
   @ApiOperation({
     operationId: 'getMyBadgeAnalytics',

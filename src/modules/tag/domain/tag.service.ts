@@ -113,14 +113,6 @@ export class TagDomainService {
     return tag;
   }
 
-  /**
-   * Phase 2 (S-13): batched lookup of tags by slug. Slugs are
-   * normalized at the boundary so the route can accept
-   * arbitrary casing / leading dashes. Returns whatever tags
-   * match; missing slugs are silently omitted (the frontend's
-   * resolver then surfaces "unknown tag" badges instead of
-   * failing the request).
-   */
   async getTagsBySlugs(slugs: string[]): Promise<TagRow[]> {
     const normalized = Array.from(
       new Set(
@@ -271,20 +263,6 @@ export class TagDomainService {
     return restored;
   }
 
-  /**
-   * Follows a tag for the given user. Idempotent — calling this multiple times
-   * with the same user/tag pair has no additional effect after the first call.
-   *
-   * The repository implements three cases:
-   *   1. An active follow already exists → returns it with `isNew: false`.
-   *   2. A soft-deleted follow exists → restores it with `isNew: false`.
-   *   3. No follow exists → creates a new one with `isNew: true`.
-   *
-   * The `TagFollowedEvent` is only emitted when `isNew: true` to avoid
-   * cascading side effects (notifications, analytics) on idempotent calls.
-   *
-   * Throws `TagNotFoundError` if the tag does not exist or is soft-deleted.
-   */
   async followTag(userId: string, tagId: string): Promise<void> {
     await this.getTagById(tagId);
 
@@ -368,14 +346,27 @@ export class TagDomainService {
     return rows;
   }
 
+  /**
+   * Bump the cache version so future reads bypass any stale ranking entries
+   * stored under previous versions. The stored value is a monotonically
+   * increasing counter — missing keys are treated as 0 so the first
+   * invalidation writes 1, not the previous 1 (which would have caused
+   * version collisions on cold restart).
+   */
   private async invalidateRankingCache(): Promise<void> {
     const key = 'tag:ranking:version';
     const current = await this.cache.get(key);
-    await this.cache.set(key, String(Number(current ?? 0) + 1 || 1), 86_400_000);
+    const next = (Number(current ?? '0') || 0) + 1;
+    await this.cache.set(key, String(next), 86_400_000);
   }
 
+  /**
+   * Read the current ranking cache version, defaulting to 0 when no
+   * invalidation has happened yet. Callers build their cache keys as
+   * `:limit:v${version}` so a bump in this value forces a fresh fetch.
+   */
   private async getRankingVersion(): Promise<number> {
     const version = await this.cache.get('tag:ranking:version');
-    return Number(version ?? '1');
+    return Number(version ?? '0') || 0;
   }
 }

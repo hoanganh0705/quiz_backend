@@ -13,40 +13,6 @@ import {
 import { COIN_ECONOMY_LIMITS } from '@/modules/coins/coin.constants';
 import { CACHE_PROVIDER, type CacheProvider } from '@/common/ports/cache.provider';
 import { stampedeProtectedGetOrSet } from '@/modules/quiz/application/quiz-cache.utils';
-
-/**
- * `UserProfileBundleService` — Phase 4 (S-25 + S-26) bundle
- * returned by `GET /users/me/profile` and `GET /users/:userId/profile`.
- *
- * The my-profile page used to issue 8+ sequential calls (summary,
- * analytics, xp history, recent activity, social counts, …). The
- * bundle collapses the fan-out into a single round-trip by
- * parallelising the sub-queries. The wire shape is the union of
- * the existing per-endpoint DTOs so the frontend can drop the
- * bundle straight into the existing profile view with no
- * consumer-side projection.
- *
- * ## Phase 3 (S-coin) integration
- *
- * The `/me` variant includes the caller's wallet snapshot and the
- * first page of their transaction history (capped at 20). The
- * `:userId` variant **omits** both — privacy: a viewer should not
- * see another user's balance or ledger. The bundle is therefore the
- * single round-trip the my-profile page needs: header pill, recent
- * activity, transactions, XP history all read from this payload.
- *
- * ## Privacy contract (S-26)
- *
- * For the `:userId` variant, the bundle fetches the user's
- * privacy flags from `user_profiles` and:
- *   - `showActivity === false` → `recentActivity: []`
- *   - `showStats === false`     → `analytics` zeroed + `xpHistory`
- *                                 series replaced with an empty
- *                                 `points: []`
- *
- * The `/me` variant is unaffected (the viewer always sees their
- * own data).
- */
 @Injectable()
 export class UserProfileBundleService {
   private static readonly BUNDLE_TX_LIMIT = 20;
@@ -65,11 +31,6 @@ export class UserProfileBundleService {
     userId: string,
     acceptLanguage?: string,
   ): Promise<UserProfileBundleResponseDto> {
-    // Phase 3 #3: cache the bundle per user. The cache key is
-    // namespaced by `userId`; the `acceptLanguage` is part of the
-    // resolved bundle (used for level-title localization) so we
-    // include a short hash of it in the key. Two different
-    // languages for the same user hash to different keys.
     const localeHash = this.hashLocale(acceptLanguage);
     const cacheKey = `${UserProfileBundleService.CACHE_NAMESPACE}:${userId}:${localeHash}`;
 
@@ -93,8 +54,6 @@ export class UserProfileBundleService {
         this.userSummaryService.getSummary(userId, userId, acceptLanguage),
         this.userSummaryService.getAnalytics(userId, userId),
         this.userSummaryService.getRecentActivity(userId, userId, 20),
-        // Phase 3 (S-coin): bundle the wallet + first ledger page so
-        // the my-profile page doesn't have to issue extra round-trips.
         this.coinRepository.getWallet(userId),
         this.coinRepository.listTransactions({
           userId,
@@ -105,10 +64,6 @@ export class UserProfileBundleService {
         this.coinRepository.getDailyEarnCapSum(userId, todayMidnight),
       ]);
 
-    // The XP history is derived from the analytics payload — the
-    // per-day totals are not yet on a dedicated endpoint. The
-    // placeholder service returns an empty series; a follow-up
-    // wires the `daily_xp` snapshot table.
     const xpHistory: TimeSeriesDto = {
       bucket: 'day',
       unit: 'xp',
@@ -127,9 +82,6 @@ export class UserProfileBundleService {
 
   private hashLocale(locale: string | undefined): string {
     if (!locale) return 'default';
-    // First 8 chars of a 32-bit FNV-1a hash — good enough for a
-    // cache-key suffix and avoids pulling in crypto for a
-    // single-byte string.
     let hash = 0x811c9dc5;
     for (let i = 0; i < locale.length; i += 1) {
       hash ^= locale.charCodeAt(i);
@@ -149,10 +101,6 @@ export class UserProfileBundleService {
       acceptLanguage,
     );
 
-    // Honor privacy flags. The flags live on `user_profiles`; for
-    // now we treat the default as `true` (the bundle surfaces
-    // everything). The controller-layer privacy check refines the
-    // behaviour for the public variant in a follow-up.
     const showStats = true;
     const showActivity = true;
 
@@ -180,9 +128,6 @@ export class UserProfileBundleService {
       points: [],
     };
 
-    // Privacy: the public variant never exposes another user's
-    // coin balance or ledger. Both fields are explicit `null` so
-    // the frontend can short-circuit without a presence check.
     return {
       summary,
       analytics,
@@ -249,11 +194,6 @@ export class UserProfileBundleService {
         kind: 'cursor' as const,
         limit: UserProfileBundleService.BUNDLE_TX_LIMIT,
         hasNextPage,
-        // The bundle intentionally omits a `nextCursor` string —
-        // the frontend navigates to the dedicated endpoint for older
-        // entries rather than threading an opaque cursor back to
-        // the bundle endpoint. Returning `null` here keeps the
-        // shape compatible with the standalone transactions DTO.
         nextCursor: null,
       },
     };

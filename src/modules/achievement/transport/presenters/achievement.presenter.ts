@@ -21,18 +21,6 @@ export interface PaginatedAchievementItems<T> {
   offset?: number;
 }
 
-/**
- * Presenter for the achievement module. Wraps every application-service
- * response in the canonical `{ data, meta.timestamp }` envelope.
- *
- * One presenter method per endpoint keeps `git grep presenter.<name>` a
- * reliable index of which controllers have been migrated.
- *
- * Paginated endpoints use `ApiResponse.page()` with `OffsetPagination`:
- * - badge catalog
- * - my badges
- * - achievement history
- */
 @Injectable()
 export class AchievementPresenter {
   private static readonly ok = <T>(payload: T): ApiResponseEnvelope<T> => ApiResponse.ok(payload);
@@ -54,7 +42,6 @@ export class AchievementPresenter {
     return ApiResponse.page(payload.items, pagination);
   }
 
-  // Single-resource endpoints — wrap whole DTO as `data`.
   readonly getBadgeDetails = AchievementPresenter.ok<BadgeDetailsResponseDto>;
   readonly getPublicAchievementProfile =
     AchievementPresenter.ok<PublicAchievementProfileResponseDto>;
@@ -62,7 +49,6 @@ export class AchievementPresenter {
   readonly getMyBadgeAnalytics = AchievementPresenter.ok<UserBadgeAnalyticsResponseDto>;
   readonly reevaluateUser = AchievementPresenter.ok<ReevaluateUserResponseDto>;
 
-  // Paginated endpoints — use OffsetPagination for proper meta.pagination
   readonly getBadgeCatalog = (payload: PaginatedAchievementItems<BadgeCatalogItemResponseDto>) =>
     AchievementPresenter.offsetPaginate(payload, 20);
 

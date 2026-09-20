@@ -108,16 +108,6 @@ export class ReviewAttemptRequiredError extends ReviewDomainError {
   }
 }
 
-/**
- * Thrown when the user tries to report a review a second time. 409
- * Conflict.
- *
- * Wire-shape improvement: the prior per-module filter rewrote every
- * `ReviewAlreadyReportedError.message` to a hardcoded `'You have
- * already reported this review'`. The global filter now preserves
- * `exception.message` (which already happens to match the hardcoded
- * string by default, but custom overrides now surface verbatim).
- */
 export class ReviewAlreadyReportedError extends ReviewDomainError {
   readonly code = 'REVIEW_ALREADY_REPORTED';
   constructor(message = REVIEW_ALREADY_REPORTED_MESSAGE) {
@@ -125,10 +115,6 @@ export class ReviewAlreadyReportedError extends ReviewDomainError {
   }
 }
 
-/**
- * Phase 2 / Issue #38 — thrown when a moderator tries to change
- * the status of a report that does not exist. 404 Not Found.
- */
 export class ReviewReportNotFoundError extends ReviewDomainError {
   readonly code = 'REVIEW_REPORT_NOT_FOUND';
   constructor(message = REVIEW_REPORT_NOT_FOUND_MESSAGE) {
@@ -136,13 +122,6 @@ export class ReviewReportNotFoundError extends ReviewDomainError {
   }
 }
 
-/**
- * Phase 2 / Issue #38 — thrown when a moderator tries to change
- * the status of a report to a value the state machine does not
- * permit (e.g. `reviewed → open`, or any transition out of the
- * terminal `reviewed` / `dismissed` / `actioned` states). 409
- * Conflict.
- */
 export class ReviewReportInvalidTransitionError extends ReviewDomainError {
   readonly code = 'REVIEW_REPORT_INVALID_TRANSITION';
   constructor(message = REVIEW_REPORT_INVALID_TRANSITION_MESSAGE) {

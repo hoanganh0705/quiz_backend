@@ -1,6 +1,7 @@
 import { createHash } from 'crypto';
 import { Inject, Injectable } from '@nestjs/common';
 import { sql } from 'drizzle-orm';
+import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { DRIZZLE } from '@/core/database/drizzle.constants';
 import type { DrizzleDB } from '@/core/database/database.module';
 import { outboxEvents } from '@/core/database/schema';
@@ -9,7 +10,10 @@ import { OUTBOX_NOTIFY_CHANNEL } from './outbox-notify.listener';
 
 @Injectable()
 export class OutboxAdapter implements OutboxPort {
-  constructor(@Inject(DRIZZLE) private readonly db: DrizzleDB) {}
+  constructor(
+    @Inject(DRIZZLE) private readonly db: DrizzleDB,
+    @InjectPinoLogger(OutboxAdapter.name) private readonly logger: PinoLogger,
+  ) {}
 
   async scheduleEvent(
     params: {
@@ -66,17 +70,6 @@ export class OutboxAdapter implements OutboxPort {
         where: sql`processed_at IS NULL AND idempotency_key IS NOT NULL`,
       });
 
-    // Phase 2 #2: emit a Postgres NOTIFY so the LISTEN-driven
-    // outbox processor can wake up immediately. The NOTIFY is
-    // *only* emitted when a row was actually inserted — a
-    // duplicate idempotency-key collision does not produce a
-    // new event, so no notification is needed.
-    //
-    // Important: NOTIFY runs inside the same transaction as the
-    // insert, so the listener cannot see the NOTIFY until the
-    // transaction commits. That is the correct ordering: the
-    // listener must never see the NOTIFY before the row is
-    // visible.
     const insertedRow = Array.isArray(inserted) ? inserted[0] : null;
     if (insertedRow?.eventId && tx == null) {
       // Only emit from the top-level call. When the outbox is
@@ -111,18 +104,18 @@ export class OutboxAdapter implements OutboxPort {
   async notifyOutboxEvent(eventId: string): Promise<void> {
     try {
       await this.db.execute(sql`SELECT pg_notify(${OUTBOX_NOTIFY_CHANNEL}, ${eventId})`);
-    } catch (error) {
+    } catch (error: unknown) {
       // Best-effort: the listener is still safe because the
       // fallback poll catches any NOTIFY that was missed.
-      this.logger_noop(error);
+      // Logging here gives operators visibility into Redis/network
+      // regressions that would otherwise surface only as elevated
+      // dispatch latency (the 30s fallback poll).
+      this.logger.warn({
+        event: 'auth_outbox_notify_failed',
+        eventId,
+        message: error instanceof Error ? error.message : 'unknown',
+      });
     }
-  }
-
-  // The adapter does not currently take a logger. The empty
-  // placeholder keeps the lint rule happy without coupling this
-  // file to a NestJS provider tree.
-  private logger_noop(_error: unknown): void {
-    /* intentionally empty */
   }
 
   /**

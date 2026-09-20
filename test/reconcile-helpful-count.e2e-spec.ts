@@ -1,38 +1,8 @@
 /// <reference types="jest" />
-/**
- * Reconciliation e2e for the helpful-vote counter (Phase 4 of
- * docs/plans/helpful-vote-counter-reconciliation.md, §4 step 14).
- *
- * Verifies that the SQL in
- * `src/core/database/migrations/0007_reconcile_helpful_count.sql`
- * repairs drift between `quiz_reviews.helpful_count` and
- * `review_helpful_votes` for two review histories:
- *
- *   - Case A: review has 3 actual votes but helpful_count = 0
- *     (counter under-counted). After the migration, helpful_count = 3.
- *
- *   - Case B: review has 0 actual votes but helpful_count = 999
- *     (counter over-counted). After the migration, helpful_count = 0.
- *
- * The migration is also exercised in:
- *
- *   1. its own no-op mode against the live DB (when no drift exists),
- *      to confirm it never overwrites a correct counter.
- *   2. seeded-drift mode, to confirm it converges on the truth.
- *
- * Skips gracefully when Postgres is unreachable so this file can sit in
- * `pnpm test:e2e` without breaking CI for engineers without a local
- * DB. Run against a live stack with:
- *
- *   pnpm db:start && pnpm db:seed:foundation && \
- *   pnpm test:e2e --testPathPatterns=reconcile-helpful-count
- */
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
-// ---------------------------------------------------------------------------
-// Minimal `.env` loader (mirrors test/review.repository.e2e-spec.ts).
-// ---------------------------------------------------------------------------
+// Minimal `.env` loader.
 function loadDotEnv(): void {
   const envPath = path.resolve(__dirname, '..', '.env');
   if (!fs.existsSync(envPath)) return;
@@ -98,15 +68,15 @@ function readMigrationSql(): string {
   return fs.readFileSync(file, 'utf8');
 }
 
-describe('0007_reconcile_helpful_count — migration e2e (e2e)', () => {
+describe('Reconcile helpful count (e2e)', () => {
   const hasRequiredEnv = Boolean(process.env.DATABASE_URL);
 
   if (!hasRequiredEnv) {
-    console.warn('[reconcile-helpful-count] missing DATABASE_URL; skipping suite.');
+    console.warn('[reconcile-helpful-count] missing DATABASE_URL; skipping tests.');
   }
 
   const suite = hasRequiredEnv ? describe : describe.skip;
-  suite('reconcile-helpful-count', () => {
+  suite('Reconcile helpful count', () => {
     let pool: Pool;
     let db: ReturnType<typeof drizzle<typeof schema>>;
     let authorUserId: string;
@@ -123,7 +93,7 @@ describe('0007_reconcile_helpful_count — migration e2e (e2e)', () => {
         .from(schema.quizzes)
         .limit(1);
       if (!quizRow) {
-        throw new Error('[reconcile-helpful-count] no quiz in DB — run foundation seed');
+        throw new Error('[reconcile-helpful-count] no quiz in DB — run `pnpm db:seed:foundation`');
       }
       quizId = quizRow.quizId;
 

@@ -1,37 +1,3 @@
-/**
- * Coin Outbox Processor Service
- *
- * Cron-polled job that reads unprocessed coin events from
- * `outbox_events` and dispatches them onto the in-process
- * `CoinDomainEventBus`. The same retry / DLQ strategy as
- * `RankingOutboxProcessorService`:
- *
- *   delay = base_delay_seconds × 2^(attemptCount - 1)
- *   base = 30s → 30s → 60s → 2m → 4m → 8m → 16m → 32m → 64m
- *
- * After 8 attempts the event is moved to DLQ (`failed_at + dlq_reason`
- * set). Uniqueness conflicts on the outbox partial index are treated as
- * already-processed and the row is marked done (the same defensive
- * parser heuristic that `RankingOutboxProcessorService` uses).
- *
- * ## Event types
- *
- * Today only one event type is scheduled: `coin.added` — emitted by
- * `CoinIngestionService` after a wallet write commits. After the row is
- * fetched, the processor emits *two* in-process events for each
- * committed row:
- *
- *   - `coin.balance_changed` — carries the post-update balance.
- *   - `coin.transaction_recorded` — carries the full ledger row.
- *
- * (Both share the `CoinDomainEventBus` — split at the event-type
- * discriminator for future fan-out like social-feed activity.)
- *
- * The realtime gateway (Phase 5) subscribes to `coin.balance_changed`
- * and pushes `coin:balance_changed` over WebSocket; the activity
- * projector (also Phase 5) subscribes to `coin.transaction_recorded`.
- */
-
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { Inject, Injectable, OnModuleInit } from '@nestjs/common';
 import { and, asc, eq, isNull, lte } from 'drizzle-orm';
@@ -211,8 +177,6 @@ export class CoinOutboxProcessorService implements OnModuleInit {
     const referenceType = payload.referenceType ?? null;
     const reason = payload.reason as CoinReason;
 
-    // 1. `CoinBalanceChangedEvent` — slim payload for the realtime
-    //    gateway (Phase 5) and any other "what changed?" subscriber.
     this.eventBus.emitBalanceChanged({
       eventType: 'coin.balance_changed',
       userId: payload.userId,
@@ -241,12 +205,6 @@ export class CoinOutboxProcessorService implements OnModuleInit {
     });
   }
 
-  /**
-   * Mirror of `dispatchCoinAdded` for the spend side (Phase 6).
-   * Spends emit `coin.spent` with a negative `amount`; the
-   * `CoinBalanceChangedEvent.delta` is signed so consumers can
-   * branch on `delta < 0` (e.g. the toast hides itself).
-   */
   private dispatchCoinSpent(payload: CoinSpentPayload): void {
     const occurredAt = new Date(payload.occurredAt ?? payload.ledgerCreatedAt);
     const balanceAfter = Number(payload.balanceAfter ?? payload.newBalance);

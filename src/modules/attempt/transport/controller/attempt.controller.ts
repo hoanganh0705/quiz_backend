@@ -10,6 +10,7 @@ import {
   Post,
   Query,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import {
   ApiTags,
   ApiOperation,
@@ -41,6 +42,7 @@ import {
   UserAttemptStatsResponseDto,
   AttemptReviewResponseDto,
 } from '../../dto/response';
+import { ATTEMPT_THROTTLE } from './throttle.constants';
 import {
   startAttemptBadRequestExample,
   startAttemptConflictExample,
@@ -99,6 +101,7 @@ export class AttemptController {
   ) {}
 
   @Post('quizzes/:quizId/attempts')
+  @Throttle({ default: ATTEMPT_THROTTLE.startAttempt })
   @ApiAuth()
   @ApiOperation({
     summary: 'Start quiz attempt',
@@ -183,6 +186,7 @@ export class AttemptController {
   }
 
   @Post('attempts/:attemptId/answers')
+  @Throttle({ default: ATTEMPT_THROTTLE.submitAnswer })
   @HttpCode(HttpStatus.CREATED)
   @ApiAuth()
   @ApiOperation({
@@ -341,6 +345,7 @@ export class AttemptController {
   }
 
   @Post('attempts/:attemptId/complete')
+  @Throttle({ default: ATTEMPT_THROTTLE.completeAttempt })
   @ApiAuth()
   @ApiOperation({
     summary: 'Complete quiz attempt',

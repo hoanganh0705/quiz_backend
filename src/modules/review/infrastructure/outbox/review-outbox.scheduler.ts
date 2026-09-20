@@ -3,16 +3,6 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { ReviewOutboxProcessorService } from './review-outbox-processor.service';
 
-/**
- * Cron schedule for the review outbox processor.
- *
- * Phase 1 / Issue #3 — every 30 seconds the worker drains pending
- * `outbox_events` rows whose `aggregate_type = 'review'` and
- * forwards them to the quiz analytics handler. The interval is
- * tight enough that, in steady state, the latency from
- * "review committed" to "stats refreshed" is bounded by this cron
- * tick rather than by some external scheduler.
- */
 @Injectable()
 export class ReviewOutboxSchedulerService {
   constructor(

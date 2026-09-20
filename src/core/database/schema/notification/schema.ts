@@ -14,17 +14,6 @@ import { sql } from 'drizzle-orm';
 import { notificationType, notificationChannel } from '../shared';
 import { users } from '../auth/schema';
 
-// =============================================================================
-// Notification Domain Schema
-//
-// Tables: notifications, notificationPreferences
-// All FK references point to users (from auth domain).
-// =============================================================================
-
-// -----------------------------------------------------------------------------
-// notifications
-// -----------------------------------------------------------------------------
-
 export const notifications = pgTable(
   'notifications',
   {
@@ -71,8 +60,6 @@ export const notifications = pgTable(
     index('idx_notifications_expires_at')
       .using('btree', table.expiresAt.asc().nullsLast().op('timestamptz_ops'))
       .where(sql`expires_at IS NOT NULL`),
-    // Phase 5 (Performance Optimization) — GIN index for metadata queries
-    // Enables efficient lookups on JSONB fields like metadata->>'achievementId'
     index('idx_notifications_metadata').using('gin', sql`metadata`),
     foreignKey({
       columns: [table.userId],
@@ -82,10 +69,6 @@ export const notifications = pgTable(
     check('notifications_metadata_object', sql`jsonb_typeof(metadata) = 'object'::text`),
   ],
 );
-
-// -----------------------------------------------------------------------------
-// notificationPreferences
-// -----------------------------------------------------------------------------
 
 export const notificationPreferences = pgTable(
   'notification_preferences',

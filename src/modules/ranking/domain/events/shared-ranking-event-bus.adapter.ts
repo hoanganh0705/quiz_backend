@@ -94,6 +94,7 @@ export class SharedRankingEventBusAdapter
           period: event.period,
           previousPeakRank: event.previousPeakRank,
           newPeakRank: event.newPeakRank,
+          isInitialAchievement: event.isInitialAchievement,
           timestamp: event.timestamp,
         };
 

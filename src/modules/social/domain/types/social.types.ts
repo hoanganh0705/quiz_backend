@@ -1,5 +1,3 @@
-import type { UserSearchResult } from '@/modules/user/domain/ports/user-search.port';
-
 export interface Friendship {
   friendshipId: string;
   requesterId: string;
@@ -148,7 +146,6 @@ export type SocialFeedActivityType =
   | 'rank_milestone'
   | 'peak_rank_achieved'
   | 'tournament_joined'
-  | 'tournament_completed'
   | 'tournament_won'
   | 'comment_created'
   | 'quiz_completed'
@@ -165,12 +162,6 @@ export interface SocialFeedActivity {
     userId: string;
     username: string;
   };
-  /**
-   * Phase 3 (S-22): slim-actor projection. Identical fields to
-   * `user`; the rename aligns with the wire contract without
-   * dropping the legacy field (kept for the social.service
-   * listeners that still emit it).
-   */
   actor: {
     userId: string;
     username: string;
@@ -196,9 +187,6 @@ export interface PaginatedUserActivityResult {
     type: SocialFeedActivityType;
     occurredAt: string;
     payload: Record<string, unknown>;
-    /**
-     * Phase 3 (S-22): slim-actor projection for user-activity items.
-     */
     actor: {
       userId: string;
       username: string;
@@ -235,7 +223,6 @@ export interface MySocialAnalytics {
 
 export type TrendingReason = 'most_followed' | 'fastest_growing' | 'most_active' | 'rising_star';
 
-/** Rank trend summary for a single period (mirrors RankTrend from ranking.port). */
 export interface RankTrendInfo {
   period: 'weekly' | 'monthly' | 'all_time';
   currentRank: number | null;
@@ -253,9 +240,7 @@ export interface TrendingUser {
   followers: number;
   trendScore: number;
   trendReason: TrendingReason;
-  /** Current weekly rank trend from rank history snapshots */
   weeklyRankTrend: RankTrendInfo | null;
-  /** Current monthly rank trend from rank history snapshots */
   monthlyRankTrend: RankTrendInfo | null;
 }
 
@@ -287,11 +272,22 @@ export type { UserSearchResult } from '@/modules/user/domain/ports/user-search.p
 /**
  * Extend UserSearchResult with social relationship metadata.
  * Lives in SocialModule because it only makes sense in a social context.
+ *
+ * The internal storage ID `avatarPublicId` is intentionally NOT
+ * exposed on the wire (it would let an attacker probe the
+ * storage bucket layout). The service layer derives `avatarUrl`
+ * via `StoragePort.deriveUrl(avatarPublicId, ...)` and returns
+ * only the resolved URL.
  */
-export interface SearchableUser extends UserSearchResult {
+export interface SearchableUser {
+  userId: string;
+  username: string;
+  displayName: string | null;
+  avatarUrl: string | null;
   isFriend: boolean;
   hasPendingRequest: boolean;
   isBlocked: boolean;
+  isBlockedBy: boolean;
 }
 
 export interface FriendRankingEntry {
@@ -302,9 +298,7 @@ export interface FriendRankingEntry {
   avatarUrl: string | null;
   xp: number;
   friendSince: string;
-  /** Weekly rank trend from rank history snapshots */
   weeklyRankTrend: RankTrendInfo | null;
-  /** Monthly rank trend from rank history snapshots */
   monthlyRankTrend: RankTrendInfo | null;
 }
 
@@ -313,4 +307,25 @@ export interface FriendLeaderboard {
   entries: FriendRankingEntry[];
   currentUserRank: number | null;
   totalParticipants: number;
+}
+
+export interface FeedCursorPayload {
+  occurredAt: string;
+  activityId: string;
+}
+
+export interface FollowCursorPayload {
+  followedAt: string;
+  followId: string;
+}
+
+export interface MutualCursorPayload {
+  username: string;
+}
+
+export interface SuggestionCursorPayload {
+  score: number;
+  mutualFriends: number;
+  mutualFollowers: number;
+  username: string;
 }

@@ -8,15 +8,6 @@ import type {
   WinnerSummaryDto,
 } from '../dto/response/recent-winners-response.dto';
 
-/**
- * Phase 3 (S-15): read service for the live-winners carousel.
- *
- * Reads the `user_activity_events` table for the
- * `tournament_won` rows, joined to the user record for the
- * public-facing summary. The `amountWon` value is read from
- * the `metadata.prizeXps` column when present, falling back to
- * a static formatter.
- */
 @Injectable()
 export class RecentWinnersService {
   constructor(@Inject(DRIZZLE) private readonly db: DrizzleDB) {}
@@ -65,11 +56,6 @@ export class RecentWinnersService {
   }
 }
 
-/**
- * Tiny server-side time-ago renderer. Phase 3 keeps the wire
- * shape fixed at "N units ago" / "moments ago" — the frontend
- * always reads `timeAgo` verbatim.
- */
 function timeAgo(iso: string): string {
   const then = Date.parse(iso);
   if (Number.isNaN(then)) return 'moments ago';

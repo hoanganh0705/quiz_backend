@@ -13,39 +13,6 @@ import { ApiPropertyOptional } from '@nestjs/swagger';
 import { TOURNAMENT_DIFFICULTIES, type TournamentDifficulty } from '../../types/tournament.types';
 import { trimString, trimStringToNullIfBlank } from '@/common/utils/text.util';
 
-/**
- * Phase 1 / Issue #1 — request body for `PATCH /tournaments/:id`.
- *
- * Every field is optional. The application-layer service rejects the
- * request with `TournamentValidationError` if **no** field is provided
- * — a `PATCH` that ships an empty body would otherwise silently
- * succeed and bump `updated_at` without changing anything.
- *
- * State guards (the audit's `Issue #10`) live in the service layer,
- * not here: this DTO does not know what `status` the tournament is
- * currently in. The service compares each mutable field against the
- * current `tournament.status`:
- *
- *   - `status === 'upcoming'`         ⇒ every field is editable.
- *   - `status === 'registration'`     ⇒ `maxParticipants` may be
- *                                       **increased** only (the audit
- *                                       bans shrinking the cap once
- *                                       users have started registering
- *                                       — that would silently evict
- *                                       already-registered users).
- *   - `status === 'ongoing'`          ⇒ only `prize` is editable.
- *   - `status === 'finished' | 'cancelled'` ⇒ 409 Conflict.
- *
- * Non-blank invariant: every nullable string is normalized via
- * `trimStringToNullIfBlank` so `""`, `"   "`, and `null` all collapse
- * to `null`. That matches the column's nullable behavior and keeps the
- * wire shape unambiguous.
- *
- * Note: `startAt` / `endAt` order is enforced in the service layer
- * (`endAt > startAt`) — class-validator cannot compare two optional
- * ISO-8601 fields with custom semantics cleanly, and putting the check
- * in two places would risk a discrepancy.
- */
 export class UpdateTournamentDto {
   @ApiPropertyOptional({
     description: 'Tournament title',

@@ -1,30 +1,3 @@
-/**
- * Phase 5 #3 — admin audit log search application service.
- *
- * Wraps the Drizzle `auth_audit_logs` table behind a
- * structured-search API. The query layer supports filters by
- * domain/action/eventType/userId/actorId/from/to and uses
- * offset pagination with a server-side cap.
- *
- * Why offset pagination and not cursor?
- * -------------------------------------
- * The audit log is bounded by `expiresAt` (default 90 days,
- * up to 365 for moderation). A cursor-based API would buy
- * little stability here — the retention job removes old rows
- * in the middle of a user's pagination — and the dataset is
- * small enough that an offset query is fast. The hard cap on
- * `limit` (100) keeps the page size bounded.
- *
- * Why a separate service and not extending `AuditLogService`?
- * ----------------------------------------------------------
- * `AuditLogService` is the *write* path: it inserts rows,
- * normalises metadata, and runs the retention purge. Adding a
- * search method there would mix read and write responsibilities
- * and double the surface of an otherwise small service. The
- * `AdminAuditSearchService` reads from the same table via its
- * own Drizzle executor.
- */
-
 import { Inject, Injectable } from '@nestjs/common';
 import { and, desc, eq, gte, ilike, lte, sql } from 'drizzle-orm';
 import { DRIZZLE } from '@/core/database/drizzle.constants';

@@ -181,6 +181,8 @@ export interface RankingRepositoryPort {
 
   getDirtyUsers(limit: number): Promise<UserRankingRow[]>;
 
+  countDirtyUsers(): Promise<number>;
+
   clearDirtyFlags(userIds: string[]): Promise<void>;
 
   /**
@@ -301,7 +303,6 @@ export interface RankingRepositoryPort {
 
   findMissingRanks(): Promise<string[]>;
 
-  // Inactivity Support (Phase 4)
   getInactiveUsers(daysInactive: number, limit?: number): Promise<UserRankingRow[]>;
 
   getUserWithCreationDate(

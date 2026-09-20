@@ -170,31 +170,6 @@ export class CoinRepository implements CoinRepositoryPort {
 
     const nowIso = now.toISOString();
     const metadataJson = JSON.stringify(metadata ?? {});
-
-    // Path: upsert wallet → increment balance → insert ledger row.
-    //
-    // We avoid using Drizzle's typed builder for the upsert because the
-    // builder cannot atomically execute `INSERT … ON CONFLICT DO NOTHING`
-    // followed by a self-referencing `UPDATE` in one statement. The CTE
-    // below expresses the same three steps in a single round-trip:
-    //
-    //   1. `upsert` — `INSERT … ON CONFLICT DO NOTHING RETURNING *`. On
-    //      first credit this returns the freshly-inserted row. On any
-    //      subsequent credit the conflict is silently dropped.
-    //   2. `updated` — `UPDATE user_wallets SET balance = balance + :delta
-    //      WHERE user_id = :u`. Always runs (it covers both branches).
-    //      The `CHECK (balance >= 0)` constraint guards debits (Phase 4
-    //      spend-side path).
-    //   3. `ledger` — `INSERT INTO coin_transactions` carrying
-    //      `balance_after = updated.balance`. The full unique index on
-    //      `idempotency_key` provides the second line of defense against
-    //      concurrent retries (the first line is the partial unique
-    //      index on the outbox row).
-    //
-    // All three statements commit in the caller's transaction.
-    // The transactionId is captured so the outbox can emit a
-    // `CoinTransactionRecordedEvent` with the canonical row id (the
-    // gateway forwards this to the client without a follow-up SELECT).
     const result = await client.execute(sql<{
       userId: string;
       balance: number | string;
@@ -284,8 +259,6 @@ export class CoinRepository implements CoinRepositoryPort {
       createdAt: row.createdAt,
     };
   }
-
-  // ─── Phase 6 (S-coin-spend): spend-side writes ─────────────────────────────
 
   async applySpendInTx(
     tx: unknown,
@@ -534,33 +507,6 @@ export class CoinRepository implements CoinRepositoryPort {
     return result.rows[0]?.transactionId ?? null;
   }
 
-  // ─── Phase 7 (Reconciliation) ────────────────────────────────────────
-
-  /**
-   * Phase 7 — Reconciliation (§16).
-   *
-   * Compares `user_wallets.balance` against
-   * `SUM(coin_transactions.amount)` per user (the immutable ledger is
-   * the source of truth per design §9.6). The reconciler turns each
-   * drift row into a Pino error log + a Prometheus counter
-   * (`coin_wallet_balance_drift_total`).
-   *
-   * Three checks:
-   *   1. `stored < 0` — physically impossible; the
-   *      `user_wallets.balance >= 0` check constraint should already
-   *      prevent this, but the reconciler covers a future migration
-   *      that loosens it.
-   *   2. `stored <> SUM(amount)` — the cached balance drifted from
-   *      the ledger (typically a missed write, a rolled-back
-   *      transaction that committed one half, or a manual SQL fix).
-   *   3. `users` row missing or soft-deleted — skipped (the LEFT
-   *      JOIN only surfaces live users; soft-deleted users can have
-   *      a wallet but no recent activity).
-   *
-   * This mirrors `RankingRepository.findXpMismatches` but with one
-   * column (no period-vs-all-time check — coins are strictly
-   * cumulative).
-   */
   async findCoinMismatches(): Promise<
     {
       userId: string;

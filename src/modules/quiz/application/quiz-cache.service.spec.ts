@@ -93,8 +93,8 @@ class InMemoryCache implements CacheProvider {
     return null;
   }
 
-  async acquireAdvisoryLock(): Promise<boolean> {
-    return true;
+  async acquireAdvisoryLock(): Promise<string | null> {
+    return 'test-token';
   }
 
   async releaseAdvisoryLock(): Promise<boolean> {

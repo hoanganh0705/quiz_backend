@@ -77,7 +77,8 @@ export class RankingNotificationListenerAdapter implements OnModuleInit, OnModul
 
     const improvement = event.previousRank - event.newRank;
 
-    const prefs = await this.preferencesRepository.getPreferences(event.userId);
+    const prefsMap = await this.preferencesRepository.getManyPreferences([event.userId]);
+    const prefs = prefsMap.get(event.userId);
     const threshold = prefs?.rankImprovementThreshold ?? 5;
 
     if (improvement >= threshold) {

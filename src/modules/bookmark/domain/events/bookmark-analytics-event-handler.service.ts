@@ -1,4 +1,4 @@
-import { Inject, Injectable, OnModuleInit } from '@nestjs/common';
+import { Inject, Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { QUIZ_ANALYTICS_PORT } from '@/modules/quiz/domain/analytics';
 import type { QuizAnalyticsService } from '@/modules/quiz/domain/analytics';
@@ -15,7 +15,7 @@ import { BookmarkAddedEvent, BookmarkRemovedEvent } from './bookmark-domain.even
  * Registered in `BookmarkModule.onModuleInit`.
  */
 @Injectable()
-export class BookmarkAnalyticsEventHandler implements OnModuleInit {
+export class BookmarkAnalyticsEventHandler implements OnModuleInit, OnModuleDestroy {
   private unsubscribe: (() => void) | null = null;
 
   constructor(
@@ -33,6 +33,16 @@ export class BookmarkAnalyticsEventHandler implements OnModuleInit {
     this.logger.info({
       event: 'bookmark_analytics_event_handler_subscribed',
     });
+  }
+
+  onModuleDestroy(): void {
+    if (this.unsubscribe) {
+      this.unsubscribe();
+      this.unsubscribe = null;
+      this.logger.info({
+        event: 'bookmark_analytics_event_handler_unsubscribed',
+      });
+    }
   }
 
   private handleBookmarkEvent(event: unknown): void {

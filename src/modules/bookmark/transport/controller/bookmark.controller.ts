@@ -11,7 +11,9 @@ import {
   Post,
   Query,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
+import { BOOKMARK_THROTTLE } from './throttle.constants';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
 import { ApiAuth, ApiAuthCreate } from '@/common/swagger/swagger-decorators';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
@@ -51,14 +53,6 @@ import {
   ApiUpdateCollectionResponse,
 } from '../swagger/bookmark-swagger-decorators';
 
-/**
- * Bookmark module HTTP boundary.
- *
- * Per-endpoint Swagger metadata is composed in `bookmark-swagger-decorators.ts`.
- * Every response shape, error example, and security requirement lives there so
- * the spec can be regenerated deterministically (see `docs/audits/BOOKMARK_API_CONTRACT_AUDIT.md`
- * Phase 6, L1).
- */
 @ApiTags('bookmarks')
 @Controller('bookmarks')
 export class BookmarkController {
@@ -68,6 +62,7 @@ export class BookmarkController {
   ) {}
 
   @Get('search')
+  @Throttle({ default: BOOKMARK_THROTTLE.searchBookmarks })
   @ApiAuth()
   @ApiSearchBookmarksResponse()
   @ApiOperation({ summary: 'Search bookmarks' })
@@ -81,6 +76,7 @@ export class BookmarkController {
   }
 
   @Get('recent')
+  @Throttle({ default: BOOKMARK_THROTTLE.getRecentBookmarks })
   @ApiAuth()
   @ApiRecentBookmarksResponse()
   @ApiOperation({ summary: 'Get recent bookmarks' })
@@ -96,6 +92,7 @@ export class BookmarkController {
   }
 
   @Get('quizzes/:quizId/status')
+  @Throttle({ default: BOOKMARK_THROTTLE.getBookmarkStatus })
   @ApiAuth()
   @ApiBookmarkStatusResponse()
   @ApiStatusQuizIdParam()
@@ -109,6 +106,7 @@ export class BookmarkController {
   }
 
   @Get('collections')
+  @Throttle({ default: BOOKMARK_THROTTLE.listCollections })
   @ApiAuth()
   @ApiListCollectionsResponse()
   @ApiOperation({ summary: 'List bookmark collections' })
@@ -118,6 +116,7 @@ export class BookmarkController {
   }
 
   @Post('collections')
+  @Throttle({ default: BOOKMARK_THROTTLE.createCollection })
   @ApiAuthCreate({ description: 'Collection created', type: undefined })
   @ApiCreateCollectionResponse()
   @ApiOperation({ summary: 'Create bookmark collection' })
@@ -129,6 +128,7 @@ export class BookmarkController {
   // NOTE: GET /bookmarks/collections/{collectionId} returns the BOOKMARKED QUIZZES
   // inside the collection, NOT the collection itself.
   @Get('collections/:collectionId')
+  @Throttle({ default: BOOKMARK_THROTTLE.listBookmarksInCollection })
   @ApiAuth()
   @ApiListBookmarksInCollectionResponse()
   @ApiCollectionIdParam()
@@ -145,6 +145,7 @@ export class BookmarkController {
   }
 
   @Get('collections/:collectionId/analytics')
+  @Throttle({ default: BOOKMARK_THROTTLE.getCollectionAnalytics })
   @ApiAuth()
   @ApiCollectionAnalyticsResponse()
   @ApiCollectionIdParam()
@@ -158,6 +159,7 @@ export class BookmarkController {
   }
 
   @Post('collections/:collectionId/quizzes')
+  @Throttle({ default: BOOKMARK_THROTTLE.addBookmark })
   @ApiAuth()
   @ApiAddBookmarkResponse()
   @ApiCollectionIdParam()
@@ -173,6 +175,7 @@ export class BookmarkController {
 
   // Bulk add is idempotent: duplicates are silently skipped via onConflictDoNothing.
   @Post('collections/:collectionId/quizzes/bulk')
+  @Throttle({ default: BOOKMARK_THROTTLE.bulkAddBookmarks })
   @HttpCode(HttpStatus.OK)
   @ApiAuth()
   @ApiBulkAddBookmarksResponse()
@@ -190,7 +193,7 @@ export class BookmarkController {
     @Body() payload: BulkAddBookmarksDto,
   ) {
     const result = await this.bookmarkApplicationService.addBookmarksBulk(
-      user.sub,
+      user,
       collectionId,
       payload.quizIds,
     );
@@ -199,6 +202,7 @@ export class BookmarkController {
 
   // Bulk remove is idempotent: removing a pair that does not exist is a no-op.
   @Delete('collections/:collectionId/quizzes/bulk')
+  @Throttle({ default: BOOKMARK_THROTTLE.bulkRemoveBookmarks })
   @ApiAuth()
   @ApiBulkRemoveBookmarksResponse()
   @ApiCollectionIdParam()
@@ -215,7 +219,7 @@ export class BookmarkController {
     @Body() payload: BulkRemoveBookmarksDto,
   ) {
     const result = await this.bookmarkApplicationService.removeBookmarksBulk(
-      user.sub,
+      user,
       collectionId,
       payload.quizIds,
     );
@@ -223,6 +227,7 @@ export class BookmarkController {
   }
 
   @Delete('collections/:collectionId/quizzes/:quizId')
+  @Throttle({ default: BOOKMARK_THROTTLE.removeBookmark })
   @ApiAuth()
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiRemoveBookmarkResponse()
@@ -238,6 +243,7 @@ export class BookmarkController {
   }
 
   @Patch('collections/:collectionId/quizzes/:quizId')
+  @Throttle({ default: BOOKMARK_THROTTLE.updateBookmark })
   @ApiAuth()
   @ApiUpdateBookmarkResponse()
   @ApiCollectionIdParam()
@@ -262,6 +268,7 @@ export class BookmarkController {
   }
 
   @Post('collections/:collectionId/move')
+  @Throttle({ default: BOOKMARK_THROTTLE.moveBookmark })
   @ApiAuth()
   @ApiMoveBookmarkResponse()
   @ApiCollectionIdParam()
@@ -276,15 +283,12 @@ export class BookmarkController {
     @CurrentUser() user: JwtPayload,
     @Body() payload: MoveBookmarkDto,
   ) {
-    const result = await this.bookmarkApplicationService.moveBookmark(
-      user.sub,
-      collectionId,
-      payload,
-    );
+    const result = await this.bookmarkApplicationService.moveBookmark(user, collectionId, payload);
     return this.presenter.moveBookmark(result);
   }
 
   @Patch('collections/:collectionId')
+  @Throttle({ default: BOOKMARK_THROTTLE.updateCollection })
   @ApiAuth()
   @ApiUpdateCollectionResponse()
   @ApiCollectionIdParam()
@@ -306,6 +310,7 @@ export class BookmarkController {
   }
 
   @Get('me/stats')
+  @Throttle({ default: BOOKMARK_THROTTLE.getMyBookmarkStats })
   @ApiAuth()
   @ApiMyBookmarkStatsResponse()
   @ApiOperation({ summary: 'Get my bookmark statistics' })
@@ -315,6 +320,7 @@ export class BookmarkController {
   }
 
   @Delete('collections/:collectionId')
+  @Throttle({ default: BOOKMARK_THROTTLE.deleteCollection })
   @ApiAuth()
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiDeleteCollectionResponse()

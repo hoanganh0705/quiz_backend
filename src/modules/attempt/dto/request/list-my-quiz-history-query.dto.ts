@@ -2,14 +2,6 @@ import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import { IsIn, IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
 
-/**
- * Query DTO for `GET /users/me/quiz-history`.
- *
- * Phase 5 (S-29): friendly alias over `GET /users/me/attempts`. Same
- * filters, same shape; the only difference is the URL the frontend
- * hits. Kept deliberately aligned with `ListMyAttemptsQueryDto` so
- * swapping the route does not require a DTO swap.
- */
 export class ListMyQuizHistoryQueryDto {
   @ApiPropertyOptional({
     description: 'Cursor for cursor-based pagination',

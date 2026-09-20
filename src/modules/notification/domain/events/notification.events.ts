@@ -1,10 +1,3 @@
-/**
- * Notification Domain Events
- *
- * Published when significant notification state changes occur,
- * allowing other domains to react (e.g. WebSocket push, audit logs, analytics).
- */
-
 export interface NotificationSentEvent {
   readonly eventType: 'notification.sent';
   readonly notificationId: string;

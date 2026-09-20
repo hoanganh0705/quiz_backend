@@ -49,7 +49,6 @@ export const userRanking = pgTable(
     updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'string' })
       .defaultNow()
       .notNull(),
-    // Phase 1 enhancements
     lastWeeklyResetAt: timestamp('last_weekly_reset_at', { withTimezone: true, mode: 'string' }),
     lastMonthlyResetAt: timestamp('last_monthly_reset_at', { withTimezone: true, mode: 'string' }),
     lastDailyResetAt: timestamp('last_daily_reset_at', { withTimezone: true, mode: 'string' }),
@@ -193,6 +192,12 @@ export const rankHistory = pgTable(
       'btree',
       table.userId.asc().nullsLast().op('uuid_ops'),
       table.period.asc().nullsLast().op('text_ops'),
+    ),
+    index('idx_rank_history_user_period_recorded_desc').using(
+      'btree',
+      table.userId.asc().nullsLast().op('uuid_ops'),
+      table.period.asc().nullsLast().op('text_ops'),
+      table.recordedAt.desc().nullsLast().op('timestamptz_ops'),
     ),
     index('idx_rank_history_snapshot_date').using(
       'btree',

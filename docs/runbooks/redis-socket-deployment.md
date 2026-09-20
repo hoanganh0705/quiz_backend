@@ -10,13 +10,13 @@
 
 ## What this runbook covers
 
-Phase 3 of the Instance architecture review introduces two Redis-backed
+Instance architecture review introduces two Redis-backed
 collaborators:
 
-| Component | Purpose | Failure mode if Redis is down |
-|---|---|---|
-| `RedisIoAdapter` (`src/core/redis/redis-io.adapter.ts`) | Replaces the in-process Socket.IO adapter with the Redis pub/sub adapter so `server.to(room).emit(...)` reaches every replica the room spans. | App refuses to boot (the adapter throws on the first `createIOServer()` call). |
-| `RedisSocketConnectionRegistry` (`src/modules/instance/infrastructure/repositories/redis-socket-connection.registry.ts`) | Stores `{ instanceId, userId }` keyed by `socketId` so cross-instance disconnects can still emit `PlayerDisconnectedEvent`. | Socket joins and disconnects silently degrade to single-process semantics (the previous Map-based behavior). |
+| Component                                                                                                                | Purpose                                                                                                                                       | Failure mode if Redis is down                                                                                |
+| ------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `RedisIoAdapter` (`src/core/redis/redis-io.adapter.ts`)                                                                  | Replaces the in-process Socket.IO adapter with the Redis pub/sub adapter so `server.to(room).emit(...)` reaches every replica the room spans. | App refuses to boot (the adapter throws on the first `createIOServer()` call).                               |
+| `RedisSocketConnectionRegistry` (`src/modules/instance/infrastructure/repositories/redis-socket-connection.registry.ts`) | Stores `{ instanceId, userId }` keyed by `socketId` so cross-instance disconnects can still emit `PlayerDisconnectedEvent`.                   | Socket joins and disconnects silently degrade to single-process semantics (the previous Map-based behavior). |
 
 Both are gated on Redis availability at boot time. **Redis is a hard
 dependency for production**; this runbook explains how to develop without
@@ -26,10 +26,10 @@ it (single-process) and how to deploy with it (horizontally scaled).
 
 ## Configuration
 
-| Env var | Default | Purpose |
-|---|---|---|
-| `REDIS_URL` | required in production | `redis://host:port` URL passed to `RedisService` and to the Socket.IO Redis adapter. Validated at boot by `env.validation.ts` (`redis://` or `rediss://`). |
-| `DISABLE_REDIS_SOCKET_ADAPTER` | unset | When set to `true` the bootstrap skips `app.useWebSocketAdapter(new RedisIoAdapter(app))` — `main.ts` falls back to the in-process Socket.IO adapter. **Use only for single-process development and CI.** Never set this in any environment that runs more than one application replica. |
+| Env var                        | Default                | Purpose                                                                                                                                                                                                                                                                                  |
+| ------------------------------ | ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `REDIS_URL`                    | required in production | `redis://host:port` URL passed to `RedisService` and to the Socket.IO Redis adapter. Validated at boot by `env.validation.ts` (`redis://` or `rediss://`).                                                                                                                               |
+| `DISABLE_REDIS_SOCKET_ADAPTER` | unset                  | When set to `true` the bootstrap skips `app.useWebSocketAdapter(new RedisIoAdapter(app))` — `main.ts` falls back to the in-process Socket.IO adapter. **Use only for single-process development and CI.** Never set this in any environment that runs more than one application replica. |
 
 `RedisService` does not expose a separate config knob for the
 cross-instance socket metadata; the registry's TTL has a sensible default
@@ -89,14 +89,14 @@ When promoting the application to a horizontally-scaled environment:
    across the cluster.
 3. **Wire Redis monitoring** (memory, connected clients, pub/sub channel
    count). Three signals matter:
-    - `connected_clients` should be ≥ the number of application replicas
-      (each replica opens ~3 connections — 1 long-lived command
-      connection via `RedisService`, plus 2 for the Socket.IO adapter).
-      During a rolling deploy, brief spikes are normal.
-    - `used_memory` should trend with cluster size, not grow unbounded.
-    - `pubsub_patterns` / `pubsub_channels` count of `socket.io*`
-      channels gives you an upper bound on the cross-instance fan-out
-      rate.
+   - `connected_clients` should be ≥ the number of application replicas
+     (each replica opens ~3 connections — 1 long-lived command
+     connection via `RedisService`, plus 2 for the Socket.IO adapter).
+     During a rolling deploy, brief spikes are normal.
+   - `used_memory` should trend with cluster size, not grow unbounded.
+   - `pubsub_patterns` / `pubsub_channels` count of `socket.io*`
+     channels gives you an upper bound on the cross-instance fan-out
+     rate.
 4. **Don't share Redis with an unrelated workload** if that workload
    consumes large keyspaces. The Socket.IO adapter uses
    `socket.io#<nsp>#` channels plus a request/response pair; these are
@@ -145,6 +145,7 @@ broadcast regardless of which replica it attached to.
 ## CI
 
 `pnpm test:e2e` runs all `*.e2e-spec.ts` files. Phase 3 additions:
+
 - `test/socket-connection-registry.e2e-spec.ts` — gates on
   `REDIS_URL`; skipped when unset. Verifies the registry round-trips
   against a live `RedisService`.
@@ -161,13 +162,13 @@ provisioned should run the suite non-skipped.
 The application emits structured pino logs for every adapter and
 registry event. Operationally important signals:
 
-| Log event | When | Why it matters |
-|---|---|---|
-| `redis_socket_adapter_attached` | Once per process at boot (one per namespace actually, but practically once). | If this log line is **missing** on a replica, the adapter was disabled — investigate before scaling out. |
-| `redis_socket_adapter_client_error` | ioredis reports a connection error after boot. | Transient errors are normal during rolling deploys; persistent errors mean Redis is sick. |
-| `socket_connection_registry_record_failed` | `record(...)` against the registry threw. | Should be rare; spikes correlate with Redis instability or with clients joining during a Redis blip. |
-| `socket_connection_registry_consume_failed` | `consume(...)` threw. | Means `PlayerDisconnectedEvent` was not emitted for that socket. Correlate with `instance_phase3_disconnect_event_dropped_count` if you add one. |
-| `socket_connection_registry_get_failed` | `getMeta(...)` threw. | Read-side observability gap. The TTL ensures the entry eventually disappears, so this is non-fatal. |
+| Log event                                   | When                                                                         | Why it matters                                                                                                                                   |
+| ------------------------------------------- | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `redis_socket_adapter_attached`             | Once per process at boot (one per namespace actually, but practically once). | If this log line is **missing** on a replica, the adapter was disabled — investigate before scaling out.                                         |
+| `redis_socket_adapter_client_error`         | ioredis reports a connection error after boot.                               | Transient errors are normal during rolling deploys; persistent errors mean Redis is sick.                                                        |
+| `socket_connection_registry_record_failed`  | `record(...)` against the registry threw.                                    | Should be rare; spikes correlate with Redis instability or with clients joining during a Redis blip.                                             |
+| `socket_connection_registry_consume_failed` | `consume(...)` threw.                                                        | Means `PlayerDisconnectedEvent` was not emitted for that socket. Correlate with `instance_phase3_disconnect_event_dropped_count` if you add one. |
+| `socket_connection_registry_get_failed`     | `getMeta(...)` threw.                                                        | Read-side observability gap. The TTL ensures the entry eventually disappears, so this is non-fatal.                                              |
 
 If you add a custom log field (e.g. `connected_clients_count`,
 `replica_count`), thread it through the existing
@@ -184,6 +185,7 @@ Default: 60 seconds, set in
 `RedisSocketConnectionRegistry.DEFAULT_TTL_MS`.
 
 The TTL must be:
+
 - **Greater than the Socket.IO reconnection backoff**. Default
   Socket.IO reconnects at 1s ± jitter, doubling to 5s. 60 s covers
   that with a wide margin.
@@ -233,4 +235,4 @@ clusters' packets will interleave.
 - [`src/core/redis/redis-io.adapter.ts`](../src/core/redis/redis-io.adapter.ts) — the WebSocket adapter.
 - [`src/modules/instance/domain/ports/socket-connection-registry.port.ts`](../src/modules/instance/domain/ports/socket-connection-registry.port.ts) — the registry port.
 - [`src/modules/instance/infrastructure/repositories/redis-socket-connection.registry.ts`](../src/modules/instance/infrastructure/repositories/redis-socket-connection.registry.ts) — the registry implementation.
-- [`docs/instance-architecture-review.md`](../instance-architecture-review.md) §"Phase 3 — Production Deployment Readiness" — the design rationale.
+- [`docs/instance-architecture-review.md`](../instance-architecture-review.md) " Production Deployment Readiness" — the design rationale.

@@ -12,6 +12,7 @@ import {
   Query,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import { Public } from '@/common/decorators/public.decorator';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
 import { ApiAuth } from '@/common/swagger/swagger-decorators';
@@ -30,6 +31,7 @@ import {
   ApiQuizReviewStatsResponses,
   ApiUpdateReviewResponses,
 } from '../swagger/review-swagger-decorators';
+import { REVIEW_THROTTLE } from './throttle.constants';
 
 @ApiTags('quizzes')
 @Controller('quizzes')
@@ -41,6 +43,9 @@ export class QuizReviewController {
 
   @Post(':quizId/reviews')
   @ApiAuth()
+  @Throttle({
+    default: { limit: REVIEW_THROTTLE.createReview.limit, ttl: REVIEW_THROTTLE.createReview.ttl },
+  })
   @ApiOperation({ summary: 'Create a review for a quiz' })
   @ApiCreateReviewResponses()
   async createReview(
@@ -54,6 +59,9 @@ export class QuizReviewController {
 
   @Get(':quizId/reviews')
   @Public()
+  @Throttle({
+    default: { limit: REVIEW_THROTTLE.listReviews.limit, ttl: REVIEW_THROTTLE.listReviews.ttl },
+  })
   @ApiOperation({ summary: 'List reviews for a quiz' })
   @ApiListReviewsResponses()
   async listReviews(
@@ -61,10 +69,6 @@ export class QuizReviewController {
     @Query() query: ListReviewsQueryDto,
   ) {
     const limit = query.limit ?? 20;
-    // Phase 5 / Issue #11 — the cursor shape depends on the
-    // sort. The `helpful` sort uses a `{helpfulCount, reviewId}`
-    // cursor so the predicate matches the ORDER BY; other sorts
-    // use the original `{createdAt, reviewId}` cursor.
     const cursor = query.cursor
       ? query.sort === 'helpful'
         ? CursorMapper.parseHelpful(query.cursor)
@@ -82,6 +86,12 @@ export class QuizReviewController {
 
   @Get(':quizId/reviews/stats')
   @Public()
+  @Throttle({
+    default: {
+      limit: REVIEW_THROTTLE.getQuizReviewStats.limit,
+      ttl: REVIEW_THROTTLE.getQuizReviewStats.ttl,
+    },
+  })
   @ApiOperation({ summary: 'Get review statistics for a quiz' })
   @ApiQuizReviewStatsResponses()
   async getQuizReviewStats(@Param('quizId', new ParseUUIDPipe({ version: '7' })) quizId: string) {
@@ -91,15 +101,13 @@ export class QuizReviewController {
 
   @Get(':quizId/reviews/analytics')
   @ApiAuth()
-  // Phase 5 / Issue #21 — gate the creator-only analytics route
-  // at the boundary via `PermissionsGuard`. The previous shape
-  // was `@ApiAuth()` only: any authenticated user could reach the
-  // service-layer policy check, which is defense-in-depth but
-  // exposes the route to authenticated non-owners. The guard
-  // closes the route to non-permitted callers before the service
-  // runs. The service-layer `canViewAnalytics` check still runs
-  // for ownership / moderation decisions.
   @Permissions(Permission.REVIEW_VIEW_QUIZ_ANALYTICS)
+  @Throttle({
+    default: {
+      limit: REVIEW_THROTTLE.getCreatorQuizReviewAnalytics.limit,
+      ttl: REVIEW_THROTTLE.getCreatorQuizReviewAnalytics.ttl,
+    },
+  })
   @ApiOperation({ summary: 'Get review analytics for a quiz (creator or moderator)' })
   @ApiCreatorQuizReviewAnalyticsResponses()
   async getCreatorQuizReviewAnalytics(
@@ -112,6 +120,9 @@ export class QuizReviewController {
 
   @Patch(':quizId/reviews')
   @ApiAuth()
+  @Throttle({
+    default: { limit: REVIEW_THROTTLE.updateReview.limit, ttl: REVIEW_THROTTLE.updateReview.ttl },
+  })
   @ApiOperation({ summary: 'Update the authenticated user review for a quiz' })
   @ApiUpdateReviewResponses()
   async updateReview(
@@ -126,6 +137,9 @@ export class QuizReviewController {
   @Delete(':quizId/reviews')
   @ApiAuth()
   @HttpCode(HttpStatus.NO_CONTENT)
+  @Throttle({
+    default: { limit: REVIEW_THROTTLE.deleteReview.limit, ttl: REVIEW_THROTTLE.deleteReview.ttl },
+  })
   @ApiOperation({ summary: 'Delete the authenticated user review for a quiz' })
   @ApiDeleteReviewResponses()
   async deleteReview(

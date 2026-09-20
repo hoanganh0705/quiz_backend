@@ -392,7 +392,7 @@ export const ApiAdminDeleteReviewResponses = (): MethodDecorator =>
     ApiOperation({
       summary: 'Delete any review by id (moderator)',
       description:
-        'Phase 1 / Issue #22 — moderator route for removing any review, including ' +
+        'Moderator route for removing any review, including ' +
         'reviews authored by other users. The self-delete endpoint ' +
         '`DELETE /quizzes/:quizId/reviews` is keyed on `(quizId, user.sub)` ' +
         'and cannot reach another author. The action is recorded in the audit log.',

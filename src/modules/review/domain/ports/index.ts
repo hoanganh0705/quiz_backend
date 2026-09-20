@@ -26,5 +26,6 @@ export {
   type ReviewOutboxPort,
   type ReviewSubmittedOutboxPayload,
   type ReviewDeletedOutboxPayload,
+  type ReviewHelpfulChangedOutboxPayload,
   REVIEW_OUTBOX_PORT,
 } from './review-outbox.port';

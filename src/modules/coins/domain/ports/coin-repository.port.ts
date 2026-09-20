@@ -1,20 +1,3 @@
-/**
- * Coin Wallet Repository Port
- *
- * Data-access surface for the wallet + ledger pair. The implementation
- * (`CoinRepository`) uses raw SQL for the atomic wallet-upsert +
- * ledger-insert path because Drizzle's typed builders cannot express the
- * `INSERT … ON CONFLICT DO NOTHING; UPDATE … ; INSERT INTO
- * coin_transactions` sequence in one transaction.
- *
- * The spend-side methods (`applySpendInTx`, `getTipRecipientWallet` for
- * P2P tips) are exposed here too — they're placeholders for Phase 4 work
- * and will throw `NotImplementedException` (or surface as `never` in TS)
- * until then. Including them now lets the service layer treat the port
- * as the full capability surface and avoids having to widen the port
- * mid-sprint.
- */
-
 export type UserWalletRow = {
   userId: string;
   balance: number;
@@ -125,27 +108,6 @@ export interface CoinRepositoryPort {
     createdAt: string;
   }>;
 
-  /**
-   * Atomic spend-side write (Phase 6). Atomically:
-   *   1. `UPDATE user_wallets SET balance = balance - :cost` with a
-   *      `balance >= :cost` guard in the WHERE clause so the UPDATE
-   *      silently no-ops when the user is broke. Returns the row
-   *      count so the service can distinguish "success" from
-   *      "insufficient funds" without a second round-trip.
-   *   2. Inserts the ledger row with `balance_after = post-update
-   *      wallet balance`.
-   *
-   * The implementation MUST issue the UPDATE + INSERT inside a single
-   * transaction so the wallet row and the ledger row are committed
-   * together (or rolled back together). The idempotency-key partial
-   * unique index on `outbox_events` is the first line of defense
-   * against duplicate spends; the full unique index on
-   * `coin_transactions.idempotency_key` is the second.
-   *
-   * `expectedDelta` is what the caller asked for; `appliedDelta` is
-   * the negative delta that the SQL actually applied (for spends
-   * these are equal — a spend is all-or-nothing).
-   */
   applySpendInTx(
     tx: unknown,
     params: {
@@ -214,10 +176,6 @@ export interface CoinRepositoryPort {
     durationDays: number;
   }): Promise<void>;
 
-  /**
-   * Append a row to `user_quiz_suppressions` for a freshly-debited
-   * transaction. Same idempotency guarantee as `writeFlairSlot`.
-   */
   writeQuizSuppression(params: {
     userId: string;
     quizId: string;
@@ -225,33 +183,8 @@ export interface CoinRepositoryPort {
     durationDays: number;
   }): Promise<void>;
 
-  /**
-   * Resolve the ledger-row id for an idempotency key. Used by the
-   * admin-adjust path to surface the ledger row's UUID to the
-   * response after `CoinIngestionService.processCoinEvent` returns.
-   * Returns `null` on miss; the caller turns that into a 500.
-   */
   findTransactionIdByIdempotencyKey(idempotencyKey: string): Promise<string | null>;
 
-  /**
-   * Phase 7 — Reconciliation (§16).
-   *
-   * Return every user whose `user_wallets.balance` disagrees with
-   * `SUM(coin_transactions.amount)` (the immutable ledger is the
-   * source of truth per design §9.6). The reconciler turns the
-   * returned rows into a Pino error log + a Prometheus counter
-   * increment (`coin_wallet_balance_drift_total`); it does NOT
-   * auto-heal — a wallet write that drifts is a bug, not a routine
-   * state, so the on-call path is to inspect the drift manually.
-   *
-   * The shape mirrors `RankingRepository.findXpMismatches`. Unlike
-   * the XP path there is no period-vs-all-time check (coins are
-   * strictly cumulative), only the cached balance vs the ledger
-   * sum.
-   *
-   * Soft-deleted users are skipped — they may have a stale wallet
-   * row but no recent activity, and the join is harmless.
-   */
   findCoinMismatches(): Promise<
     {
       userId: string;

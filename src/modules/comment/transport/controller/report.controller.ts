@@ -30,6 +30,7 @@ import type { JwtPayload } from '@/common/guards/jwt.guard';
 import { CommentApplicationService } from '../../application/comment-application.service';
 import { CommentPresenter } from '../presenters/comment.presenter';
 import { ListReportsQueryDto, ReviewReportDto } from '../../dto/request';
+import { COMMENT_THROTTLE } from './throttle.constants';
 import {
   ApiListCommentReportsResponses,
   ApiReviewCommentReportResponses,
@@ -45,6 +46,12 @@ export class ReportController {
 
   @Get()
   @Permissions(Permission.COMMENT_MODERATE)
+  @Throttle({
+    default: {
+      limit: COMMENT_THROTTLE.listReports.limit,
+      ttl: COMMENT_THROTTLE.listReports.ttl,
+    },
+  })
   @ApiListCommentReportsResponses()
   async listReports(@CurrentUser() moderator: JwtPayload, @Query() query: ListReportsQueryDto) {
     const result = await this.application.listReports(moderator, query);
@@ -53,7 +60,12 @@ export class ReportController {
 
   @Post(':reportId/review')
   @Permissions(Permission.COMMENT_MODERATE)
-  @Throttle({ default: { limit: 20, ttl: 60_000 } })
+  @Throttle({
+    default: {
+      limit: COMMENT_THROTTLE.reviewReport.limit,
+      ttl: COMMENT_THROTTLE.reviewReport.ttl,
+    },
+  })
   @HttpCode(HttpStatus.OK)
   @ApiReviewCommentReportResponses()
   async reviewReport(

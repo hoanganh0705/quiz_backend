@@ -1,13 +1,3 @@
-/**
- * Notification WebSocket Listener
- *
- * Subscribes to NotificationDomainEventBus lifecycle events (sent, read, unread, deleted)
- * and pushes them to connected WebSocket clients via NotificationGateway.
- *
- * Registered in NotificationModule as an @Injectable, so it can receive
- * NotificationGateway as a constructor dependency and subscribe on init.
- */
-
 import { Inject, Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import {

@@ -1,4 +1,5 @@
 import type { QuizDifficulty } from '@/modules/quiz/types/quiz.types';
+import type { QuizInstanceStatus } from '../../types/instance.types';
 
 export type QuizInstanceRow = {
   instanceId: string;
@@ -10,19 +11,7 @@ export type QuizInstanceRow = {
   startedAt: string | null;
   closedAt: string | null;
   updatedAt: string;
-  /**
-   * Phase 1 (Foundational Correctness) — optimistic-locking version.
-   * Internal concurrency primitive; not exposed via any response DTO.
-   * Every state transition must read this value, then issue an UPDATE
-   * with `WHERE version = $prev`. A zero-row result signals a lost race.
-   */
   version: number;
-  /**
-   * Phase 2 (Gameplay Lifecycle) — wall-clock anchor the countdown
-   * scheduler scans to find due transitions. Set by `startCountdown`,
-   * cleared on completion or cancellation. Not exposed via any response
-   * DTO; internal primitive of the state machine.
-   */
   countdownStartedAt: string | null;
 };
 
@@ -65,10 +54,6 @@ export type InstanceLeaderboardEntry = {
   username: string;
   displayName: string | null;
   avatarUrl: string | null;
-  // Phase 5 (audit issue 8.7): the repository now casts
-  // `score_percent` to `double precision` so Drizzle returns a JS
-  // number instead of a numeric-string. The previous `parseFloat`
-  // workaround in `instance-response.mapper.ts` is no longer needed.
   scorePercent: number | null;
   correctCount: number | null;
   timeTakenMs: number | null;
@@ -97,7 +82,6 @@ export type LeaderboardCursorPayload = {
   instancePlayerId: string;
 };
 
-/** Minimal context fields needed from a quiz attempt to route instance events. */
 export type AttemptContextInfo = {
   contextType: string;
   contextRefId: string | null;
@@ -117,26 +101,11 @@ export interface QuizInstanceRepositoryPort {
 
   updateInstanceStatus(params: {
     instanceId: string;
-    status: string;
+    status: QuizInstanceStatus;
     nowIso: string;
     startedAt?: string;
     closedAt?: string;
-    /**
-     * Phase 2 (Gameplay Lifecycle) — wall-clock anchor the scheduler
-     * watches. The repository does NOT validate this against the
-     * `status`; the constraint is enforced by the database CHECK
-     * `quiz_instances_countdown_started_at_consistent`. The service
-     * layer threads a value here only on `status: 'countdown'`, and
-     * an explicit `null` here clears it on every other transition.
-     */
     countdownStartedAt?: string | null;
-    /**
-     * Phase 1 (Foundational Correctness) — the version observed by the
-     * caller before the transition. The UPDATE includes
-     * `WHERE version = $expectedVersion`. If zero rows match, the
-     * repository throws `InstanceOptimisticLockError` so the caller
-     * knows another writer won the race.
-     */
     expectedVersion: number;
   }): Promise<{ version: number }>;
 
@@ -190,11 +159,6 @@ export interface QuizInstanceRepositoryPort {
     };
   }): Promise<QuizInstanceListRow[]>;
 
-  /**
-   * Phase 2 (Gameplay Lifecycle) — find all `countdown` instances whose
-   * deadline has elapsed, so the scheduler can advance them. The query
-   * hits the partial index `idx_quiz_instances_countdown_due`.
-   */
   findDueCountdowns(params: { nowIso: string; limit: number }): Promise<
     Array<{
       instanceId: string;
@@ -209,13 +173,10 @@ export interface QuizInstanceRepositoryPort {
     cursor?: { joinedAt: string; instancePlayerId: string } | null;
   }): Promise<{ items: InstancePlayerWithProfile[]; hasNextPage: boolean }>;
 
-  /** Count the total number of instances hosted by a user. */
   countInstancesHostedByUser(userId: string): Promise<number>;
 
-  /** Count the number of instances the user has finished playing (status = 'finished'). */
   countFinishedInstancesByUser(userId: string): Promise<number>;
 
-  /** Fetch context fields (contextType, contextRefId) for a quiz attempt by its ID. */
   getAttemptContextInfo(attemptId: string): Promise<AttemptContextInfo | null>;
 }
 

@@ -1,16 +1,3 @@
-/**
- * In-memory `StoragePort` for tests and local development without a
- * real Cloudinary account.
- *
- * `upload` composes a `publicId` matching the real adapter's contract
- * (`${folder}/${ownerId}/${uuidv7()}`) and stores the buffer in a Map.
- * `deriveUrl` returns a deterministic fake URL so render paths can be
- * exercised in tests.
- *
- * This adapter is NOT registered globally by default — the test module
- * imports `StorageModule.forRoot({ adapter: 'fake' })` explicitly.
- */
-
 import { Injectable } from '@nestjs/common';
 import { v7 as uuidv7 } from 'uuid';
 
@@ -74,29 +61,15 @@ export class FakeStorageAdapter implements StoragePort {
     return `https://fake.cloudinary.local/${query ? `${query}/` : ''}image/upload/${publicId}`;
   }
 
-  /**
-   * Test helper. Wipes all stored assets between cases so tests do not
-   * bleed into each other. Not part of the `StoragePort` contract.
-   */
   clear(): void {
     this.assets.clear();
   }
 
-  /**
-   * Phase 2 #3 — health probe. Always resolves; the fake adapter
-   * has no downstream to probe.
-   */
   async ping(): Promise<void> {
     return Promise.resolve();
   }
 
-  /**
-   * Phase 7 #1 — fake signed upload. Returns a deterministic,
-   * server-shaped envelope that mirrors the Cloudinary adapter. The
-   * `uploadUrl` resolves to `https://fake.cloudinary.local/...` so
-   * test code can verify its construction without any network call.
-   */
-  async createSignedUpload(input: {
+  createSignedUpload(input: {
     readonly ownerId: string;
     readonly purpose: UploadPurpose;
     readonly expiresInSeconds: number;
@@ -107,7 +80,7 @@ export class FakeStorageAdapter implements StoragePort {
     const timestamp = Math.floor(Date.now() / 1000) + expiresInSeconds;
     const expiresAt = new Date(timestamp * 1000).toISOString();
 
-    return {
+    return Promise.resolve({
       uploadUrl: `https://fake.cloudinary.local/image/upload`,
       publicId,
       expiresAt,
@@ -115,6 +88,6 @@ export class FakeStorageAdapter implements StoragePort {
       signature: 'fake-signature',
       timestamp,
       folder: policy.folder,
-    };
+    });
   }
 }

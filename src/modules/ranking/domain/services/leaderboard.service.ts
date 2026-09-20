@@ -1,48 +1,6 @@
-/**
- * Leaderboard Service
- *
- * Handles leaderboard queries with caching.
- * Part of Phase 3 - Leaderboards & APIs.
- *
- * Caching model
- * -------------
- * The leaderboard cache is stored in Redis (via `CACHE_PROVIDER`)
- * rather than in-process, so all instances of the API see a
- * consistent view. A previous implementation kept a per-instance
- * `Map`, which meant a 3-instance deployment could return three
- * different leaderboards to the same user.
- *
- * The cache is read-through (`getOrSetWithStampedeProtection`) with
- * a short TTL. When a user's XP changes, the cached leaderboard
- * keys naturally expire within `LEADERBOARD_CACHE_TTL` seconds;
- * we deliberately do not delete the key from inside the local
- * process because that would only affect the instance that received
- * the XP event, not its peers. With a 30-second TTL, the worst-case
- * staleness across the cluster is bounded by that window.
- *
- * Cache Stampede Protection
- * --------------------------
- * The leaderboard and user position queries use
- * `getOrSetWithStampedeProtection` to prevent thundering herd
- * problems. When a cache expires, only one process computes the
- * new value while others wait. This is critical for expensive
- * leaderboard queries that aggregate across many users.
- *
- * If an immediate cross-instance invalidation is needed in the
- * future, wire up a Redis pub/sub channel: publish a `leaderboard:
- * invalidate` message on every `xp.added` and have each instance
- * subscribe to evict its local mirror. The current implementation
- * skips that complication because the audit accepts a 30-second
- * TTL as sufficient.
- */
-
-import { Inject, Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import type { RankingRepositoryPort, LeaderboardRow } from '../ports/ranking-repository.port';
-import {
-  RANKING_DOMAIN_EVENT_BUS,
-  type RankingDomainEventBusPort,
-} from '../ports/ranking-event-bus.port';
 import {
   RankingPeriod,
   RANKING_CONSTANTS,
@@ -63,40 +21,16 @@ import type {
 import { CACHE_PROVIDER, type CacheProvider } from '@/common/ports/cache.provider';
 
 @Injectable()
-export class LeaderboardService implements OnModuleInit, OnModuleDestroy {
-  private unsubscribe: (() => void) | null = null;
-
+export class LeaderboardService {
   constructor(
     @Inject(RANKING_REPOSITORY_PORT)
     private readonly rankingRepository: RankingRepositoryPort,
-    @Inject(RANKING_DOMAIN_EVENT_BUS)
-    private readonly eventBus: RankingDomainEventBusPort,
     @Inject(CACHE_PROVIDER)
     private readonly cache: CacheProvider,
     private readonly periodResetService: PeriodResetService,
     @InjectPinoLogger(LeaderboardService.name)
     private readonly logger: PinoLogger,
   ) {}
-
-  onModuleInit(): void {
-    this.unsubscribe = this.eventBus.subscribe((event) => {
-      if (event.eventType === 'xp.added') {
-        // No-op: the leaderboard cache uses Redis with a short TTL
-        // (see class docstring), so we do not need to invalidate
-        // keys locally. Logging the event keeps the audit trail
-        // visible in case operators want to correlate leaderboard
-        // staleness with a specific user.
-        this.logger.debug({
-          event: 'leaderboard_xp_added',
-          userId: event.userId,
-        });
-      }
-    });
-  }
-
-  onModuleDestroy(): void {
-    this.unsubscribe?.();
-  }
 
   /**
    * Get global leaderboard for a specific period.

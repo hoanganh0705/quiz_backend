@@ -19,7 +19,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { RankingPeriod, type ConsistencyReport } from '../domain/types/ranking.types';
-import { RankCalculationService } from '../domain/services';
+import { RankCalculationService, PeriodResetService } from '../domain/services';
 import {
   RANKING_REPOSITORY_PORT,
   type RankingRepositoryPort,
@@ -29,6 +29,7 @@ import {
 export class RankingApplicationService {
   constructor(
     private readonly rankCalculationService: RankCalculationService,
+    private readonly periodResetService: PeriodResetService,
     @Inject(RANKING_REPOSITORY_PORT)
     private readonly rankingRepository: RankingRepositoryPort,
     @InjectPinoLogger(RankingApplicationService.name)
@@ -58,13 +59,33 @@ export class RankingApplicationService {
   /**
    * Returns the current operational status of the ranking system.
    */
-  async getStatus(): Promise<{
+  async getStatus(now: Date = new Date()): Promise<{
     dirtyQueueSize: number;
+    schedulerRunning: boolean;
+    nextConsistencyCheck: string;
+    nextPeriodReset: {
+      weekly: string;
+      monthly: string;
+      daily: string;
+    };
   }> {
-    const dirtyUsers = await this.rankingRepository.getDirtyUsers(0);
+    const dirtyQueueSize = await this.rankingRepository.countDirtyUsers();
+
+    const nextConsistencyCheck = new Date(now.getTime() + 60 * 60 * 1000).toISOString();
+
+    const nextWeekly = this.periodResetService.getNextResetTime(RankingPeriod.WEEKLY, now);
+    const nextMonthly = this.periodResetService.getNextResetTime(RankingPeriod.MONTHLY, now);
+    const nextDaily = this.periodResetService.getNextResetTime(RankingPeriod.DAILY, now);
 
     return {
-      dirtyQueueSize: dirtyUsers.length,
+      dirtyQueueSize,
+      schedulerRunning: true,
+      nextConsistencyCheck,
+      nextPeriodReset: {
+        weekly: nextWeekly.toISOString(),
+        monthly: nextMonthly.toISOString(),
+        daily: nextDaily.toISOString(),
+      },
     };
   }
 

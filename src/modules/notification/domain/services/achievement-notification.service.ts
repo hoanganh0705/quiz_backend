@@ -25,11 +25,6 @@ export interface BadgeRevokedNotificationParams {
   reason: string;
   revokedBy: string;
 }
-
-/**
- * Port interface exposed to the Achievement module via ACHIEVEMENT_NOTIFICATION_PORT.
- * Consumers call these methods instead of reaching into the Notification module.
- */
 export interface AchievementNotificationPort {
   notifyAchievementEarned(params: AchievementNotificationParams): Promise<void>;
   notifyBadgeUnlocked(
@@ -46,10 +41,6 @@ export class AchievementNotificationService implements AchievementNotificationPo
     @InjectPinoLogger(AchievementNotificationService.name)
     private readonly logger: PinoLogger,
   ) {}
-
-  /**
-   * Send an achievement/badge earned notification.
-   */
   async notifyAchievementEarned(params: AchievementNotificationParams): Promise<void> {
     const title = 'Achievement Unlocked!';
     const body = `You earned the "${params.badgeName}" badge!`;
@@ -76,10 +67,6 @@ export class AchievementNotificationService implements AchievementNotificationPo
       badgeName: params.badgeName,
     });
   }
-
-  /**
-   * Send a badge unlocked notification (alias for achievement_earned).
-   */
   async notifyBadgeUnlocked(
     params: Omit<AchievementNotificationParams, 'achievementType'>,
   ): Promise<void> {
@@ -130,10 +117,6 @@ export class AchievementNotificationService implements AchievementNotificationPo
       badgeType: params.badgeType,
     });
   }
-
-  /**
-   * Send a streak milestone notification.
-   */
   async notifyStreakMilestone(params: StreakNotificationParams): Promise<void> {
     const title = 'Streak Milestone!';
     const body = `Amazing! You have maintained a ${params.streakDays}-day streak!`;

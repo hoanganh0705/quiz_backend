@@ -85,7 +85,7 @@ export class BookmarkCollectionRepository implements BookmarkCollectionRepositor
     name?: string;
     description?: string | null;
     nowIso: string;
-  }): Promise<BookmarkCollectionRow> {
+  }): Promise<BookmarkCollectionRow | null> {
     const setValues: Record<string, unknown> = { updatedAt: params.nowIso };
 
     if (params.name !== undefined) {
@@ -109,7 +109,7 @@ export class BookmarkCollectionRepository implements BookmarkCollectionRepositor
         updatedAt: bookmarkCollections.updatedAt,
       });
 
-    return updated as BookmarkCollectionRow;
+    return (updated as BookmarkCollectionRow | undefined) ?? null;
   }
 
   async deleteCollection(collectionId: string): Promise<void> {

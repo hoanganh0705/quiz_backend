@@ -1,29 +1,6 @@
-/**
- * Instance module Swagger decorators.
- *
- * Phase 4 of `docs/audits/INSTANCE_API_CONTRACT_AUDIT.md`.
- *
- * Provides:
- *   - `ApiInstanceIdParam()` — `:id` path parameter documented as
- *     `format: uuid` (matches runtime `ParseUUIDPipe` enforcement).
- *   - `InstanceErrorResponseExamples` — per-module RFC 7807 examples for
- *     every domain error class (replaces the generic
- *     `ErrorResponseExamples.notFound` / `.forbidden` shared entries that
- *     previously leaked unrelated `/quizzes/…` `instance` URIs).
- *
- * Type URIs are sourced from `ProblemCodeMapping`, ensuring the OpenAPI
- * examples stay in sync with the runtime type URI values (single source
- * of truth).
- */
 import { ApiParam } from '@nestjs/swagger';
 import { ProblemCodeMapping } from '@/common/errors/problem-code-mapping';
 
-/**
- * Documents the `:id` path parameter as `format: uuid` on every
- * instance-resource endpoint. Runtime `ParseUUIDPipe` enforces this at
- * the NestJS level; this decorator mirrors it in the OpenAPI spec so
- * generated SDK clients send UUIDs without custom regexes.
- */
 export const ApiInstanceIdParam = (): MethodDecorator =>
   ApiParam({
     name: 'id',
@@ -31,15 +8,6 @@ export const ApiInstanceIdParam = (): MethodDecorator =>
     format: 'uuid',
   });
 
-/**
- * Per-module RFC 7807 examples for instance domain errors.
- *
- * Phase 4 (audit issue 3.2) — replaces the shared `ErrorResponseExamples`
- * entries that previously surfaced generic `detail` strings
- * (`'The requested resource was not found'`) and unrelated
- * `instance` URIs (`/quizzes/...`). The runtime emits
- * `<INSTANCE_CODE>` ProblemDetail with these exact payloads.
- */
 export const InstanceErrorResponseExamples = {
   instanceNotFound: {
     type: ProblemCodeMapping.INSTANCE_NOT_FOUND.typeUri,

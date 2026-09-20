@@ -1,10 +1,3 @@
-/**
- * User Activity Listener Adapter
- *
- * Listens to Achievement domain events and records activity events for the user module.
- * This adapter bridges the Achievement domain to the User activity timeline.
- */
-
 import { Inject, Injectable, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { getCorrelationId, createCorrelationId } from '@/common/interceptors/correlation-id';
@@ -74,6 +67,7 @@ export class UserActivityListenerAdapter implements OnModuleInit, OnModuleDestro
     for (const eventType of eventTypes) {
       const subscription = this.achievementEventBus.subscribe(
         eventType as AchievementDomainEvent['eventType'],
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
         this.handleEvent.bind(this),
       );
       this.unsubscribes.push(() => subscription.unsubscribe());

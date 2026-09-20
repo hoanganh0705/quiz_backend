@@ -6,41 +6,53 @@ import { dailyChallenge, dailyChallengeAttempt, quizzes } from '@/core/database/
 import { categories } from '@/core/database/schema/taxonomy/schema';
 import type {
   DailyChallengeAttemptRow,
+  DailyChallengeCategoryBreakdownRow,
   DailyChallengeHistoryCursor,
+  DailyChallengeHistoryItem,
+  DailyChallengeLeaderboardEntry,
+  DailyChallengePeriod,
   DailyChallengeRepositoryPort,
   DailyChallengeRow,
+  DailyChallengeTx,
 } from '../../domain/ports/daily-challenge-repository.port';
 
-/**
- * Phase 3 (S-14): Drizzle implementation of the daily-challenge
- * repository port. The implementation is read-heavy; the only
- * write paths are the cron insertion and the per-attempt upsert.
- *
- * Batched reads (history list, leaderboard) use a single SQL
- * round-trip with `generate_series` densification on the period
- * side so the public DTOs render without further math.
- */
+export type { DailyChallengeTx };
+
+const DAILY_CHALLENGE_BASE_PROJECTION = {
+  challengeId: dailyChallenge.challengeId,
+  challengeDate: dailyChallenge.challengeDate,
+  quizId: dailyChallenge.quizId,
+  quizVersionId: dailyChallenge.quizVersionId,
+  rewardXp: dailyChallenge.rewardXp,
+  createdAt: dailyChallenge.createdAt,
+  expiresAt: dailyChallenge.expiresAt,
+  quizTitle: quizzes.title,
+  quizSlug: quizzes.slug,
+  difficulty: sql<'easy' | 'medium' | 'hard'>`(
+ SELECT qv.difficulty
+ FROM quiz_versions qv
+ WHERE qv.quiz_version_id = ${dailyChallenge.quizVersionId}
+ LIMIT 1
+ )`,
+  totalQuestions: sql<number>`(
+ SELECT COUNT(*)::int FROM quiz_questions
+ WHERE quiz_questions.quiz_version_id = ${dailyChallenge.quizVersionId}
+ )`,
+};
+
+const PERIOD_DAYS: Readonly<Record<DailyChallengePeriod, number>> = {
+  daily: 1,
+  weekly: 7,
+  monthly: 30,
+};
+
 @Injectable()
 export class DailyChallengeRepository implements DailyChallengeRepositoryPort {
   constructor(@Inject(DRIZZLE) private readonly db: DrizzleDB) {}
 
   async findByDate(date: string): Promise<DailyChallengeRow | null> {
     const [row] = await this.db
-      .select({
-        challengeId: dailyChallenge.challengeId,
-        challengeDate: dailyChallenge.challengeDate,
-        quizId: dailyChallenge.quizId,
-        quizVersionId: dailyChallenge.quizVersionId,
-        rewardXp: dailyChallenge.rewardXp,
-        createdAt: dailyChallenge.createdAt,
-        expiresAt: dailyChallenge.expiresAt,
-        quizTitle: quizzes.title,
-        quizSlug: quizzes.slug,
-        totalQuestions: sql<number>`(
-          SELECT COUNT(*)::int FROM quiz_questions
-          WHERE quiz_questions.quiz_version_id = ${dailyChallenge.quizVersionId}
-        )`,
-      })
+      .select(DAILY_CHALLENGE_BASE_PROJECTION)
       .from(dailyChallenge)
       .innerJoin(quizzes, eq(dailyChallenge.quizId, quizzes.quizId))
       .where(and(eq(dailyChallenge.challengeDate, date), isNull(quizzes.deletedAt)))
@@ -51,21 +63,7 @@ export class DailyChallengeRepository implements DailyChallengeRepositoryPort {
 
   async findMostRecentExpired(nowIso: string): Promise<DailyChallengeRow | null> {
     const [row] = await this.db
-      .select({
-        challengeId: dailyChallenge.challengeId,
-        challengeDate: dailyChallenge.challengeDate,
-        quizId: dailyChallenge.quizId,
-        quizVersionId: dailyChallenge.quizVersionId,
-        rewardXp: dailyChallenge.rewardXp,
-        createdAt: dailyChallenge.createdAt,
-        expiresAt: dailyChallenge.expiresAt,
-        quizTitle: quizzes.title,
-        quizSlug: quizzes.slug,
-        totalQuestions: sql<number>`(
-          SELECT COUNT(*)::int FROM quiz_questions
-          WHERE quiz_questions.quiz_version_id = ${dailyChallenge.quizVersionId}
-        )`,
-      })
+      .select(DAILY_CHALLENGE_BASE_PROJECTION)
       .from(dailyChallenge)
       .innerJoin(quizzes, eq(dailyChallenge.quizId, quizzes.quizId))
       .where(and(sql`${dailyChallenge.expiresAt} <= ${nowIso}`, isNull(quizzes.deletedAt)))
@@ -95,7 +93,7 @@ export class DailyChallengeRepository implements DailyChallengeRepositoryPort {
     cursor?: DailyChallengeHistoryCursor | null;
     limit: number;
   }): Promise<{
-    items: DailyChallengeRow[];
+    items: DailyChallengeHistoryItem[];
     hasNextPage: boolean;
   }> {
     const filters: SQL[] = [
@@ -114,12 +112,14 @@ export class DailyChallengeRepository implements DailyChallengeRepositoryPort {
         challengeId: dailyChallenge.challengeId,
         challengeDate: dailyChallenge.challengeDate,
         quizId: dailyChallenge.quizId,
-        quizVersionId: dailyChallenge.quizVersionId,
-        rewardXp: dailyChallenge.rewardXp,
-        createdAt: dailyChallenge.createdAt,
-        expiresAt: dailyChallenge.expiresAt,
         quizTitle: quizzes.title,
         quizSlug: quizzes.slug,
+        difficulty: sql<'easy' | 'medium' | 'hard' | null>`(
+ SELECT qv.difficulty
+ FROM quiz_versions qv
+ WHERE qv.quiz_version_id = ${dailyChallenge.quizVersionId}
+ LIMIT 1
+ )`,
         scorePercent: dailyChallengeAttempt.scorePercent,
         completedAt: dailyChallengeAttempt.completedAt,
       })
@@ -131,22 +131,15 @@ export class DailyChallengeRepository implements DailyChallengeRepositoryPort {
       .limit(params.limit + 1);
 
     const hasNextPage = rows.length > params.limit;
-    const items = (hasNextPage ? rows.slice(0, params.limit) : rows) as DailyChallengeRow[];
+    const items = (hasNextPage ? rows.slice(0, params.limit) : rows) as DailyChallengeHistoryItem[];
     return { items, hasNextPage };
   }
 
-  async getLeaderboard(params: { period: 'daily' | 'weekly' | 'monthly'; limit: number }): Promise<
-    Array<{
-      userId: string;
-      username: string;
-      displayName: string | null;
-      avatarUrl: string | null;
-      scorePercent: number;
-    }>
-  > {
-    const windowStart = sql<string>`date_trunc('day', NOW() - INTERVAL '${
-      params.period === 'daily' ? 1 : params.period === 'weekly' ? 7 : 30
-    } days')`;
+  async getLeaderboard(params: {
+    period: DailyChallengePeriod;
+    limit: number;
+  }): Promise<DailyChallengeLeaderboardEntry[]> {
+    const windowStart = sql<string>`date_trunc('day', NOW() - make_interval(days => ${PERIOD_DAYS[params.period]}))`;
 
     const rows = await this.db.execute(sql<{
       user_id: string;
@@ -155,33 +148,34 @@ export class DailyChallengeRepository implements DailyChallengeRepositoryPort {
       avatar_url: string | null;
       score_percent: string;
     }>`
-      WITH windowed AS (
-        SELECT
-          a.user_id,
-          a.score_percent,
-          ROW_NUMBER() OVER (
-            PARTITION BY a.user_id
-            ORDER BY a.score_percent DESC, a.completed_at ASC
-          ) AS rn
-        FROM daily_challenge_attempt a
-        INNER JOIN daily_challenge c ON c.challenge_id = a.challenge_id
-        WHERE a.completed_at IS NOT NULL
-          AND a.score_percent IS NOT NULL
-          AND c.created_at >= ${windowStart}
-      )
-      SELECT
-        w.user_id,
-        u.username,
-        up.display_name,
-        up.avatar_url,
-        w.score_percent::text
-      FROM windowed w
-      INNER JOIN users u ON u.user_id = w.user_id
-      LEFT JOIN user_profiles up ON up.user_id = u.user_id
-      WHERE w.rn = 1
-      ORDER BY w.score_percent DESC, MIN(w.score_percent) ASC
-      LIMIT ${params.limit}
-    `);
+ WITH windowed AS (
+ SELECT
+ a.user_id,
+ a.score_percent,
+ a.completed_at,
+ ROW_NUMBER() OVER (
+ PARTITION BY a.user_id
+ ORDER BY a.score_percent DESC, a.completed_at ASC
+ ) AS rn
+ FROM daily_challenge_attempt a
+ INNER JOIN daily_challenge c ON c.challenge_id = a.challenge_id
+ WHERE a.completed_at IS NOT NULL
+ AND a.score_percent IS NOT NULL
+ AND c.created_at >= ${windowStart}
+ )
+ SELECT
+ w.user_id,
+ u.username,
+ up.display_name,
+ up.avatar_url,
+ w.score_percent::text
+ FROM windowed w
+ INNER JOIN users u ON u.user_id = w.user_id
+ LEFT JOIN user_profiles up ON up.user_id = u.user_id
+ WHERE w.rn = 1
+ ORDER BY w.score_percent DESC, w.completed_at ASC
+ LIMIT ${params.limit}
+ `);
 
     type Row = {
       user_id: string;
@@ -202,31 +196,27 @@ export class DailyChallengeRepository implements DailyChallengeRepositoryPort {
 
   async getUserRank(params: {
     userId: string;
-    period: 'daily' | 'weekly' | 'monthly';
+    period: DailyChallengePeriod;
   }): Promise<number | null> {
-    // Single-query rank projection. Returns the user's 1-indexed
-    // rank in the period's leaderboard, or null when the user
-    // has no qualifying attempt.
-    const windowStart = sql<string>`date_trunc('day', NOW() - INTERVAL '${
-      params.period === 'daily' ? 1 : params.period === 'weekly' ? 7 : 30
-    } days')`;
+    const windowStart = sql<string>`date_trunc('day', NOW() - make_interval(days => ${PERIOD_DAYS[params.period]}))`;
 
     const [row] = await this.db.execute(sql<{ rank: number | null }>`
-      WITH windowed AS (
-        SELECT
-          a.user_id,
-          a.score_percent,
-          ROW_NUMBER() OVER (
-            ORDER BY a.score_percent DESC, a.completed_at ASC
-          ) AS rank
-        FROM daily_challenge_attempt a
-        INNER JOIN daily_challenge c ON c.challenge_id = a.challenge_id
-        WHERE a.completed_at IS NOT NULL
-          AND a.score_percent IS NOT NULL
-          AND c.created_at >= ${windowStart}
-      )
-      SELECT rank::int AS rank FROM windowed WHERE user_id = ${params.userId} LIMIT 1
-    `);
+ WITH windowed AS (
+ SELECT
+ a.user_id,
+ a.score_percent,
+ a.completed_at,
+ ROW_NUMBER() OVER (
+ ORDER BY a.score_percent DESC, a.completed_at ASC
+ ) AS rank
+ FROM daily_challenge_attempt a
+ INNER JOIN daily_challenge c ON c.challenge_id = a.challenge_id
+ WHERE a.completed_at IS NOT NULL
+ AND a.score_percent IS NOT NULL
+ AND c.created_at >= ${windowStart}
+ )
+ SELECT rank::int AS rank FROM windowed WHERE user_id = ${params.userId} LIMIT 1
+ `);
 
     const result = (row as unknown as { rank: number | null } | undefined) ?? null;
     return result?.rank ?? null;
@@ -258,84 +248,13 @@ export class DailyChallengeRepository implements DailyChallengeRepositoryPort {
     return { challengeId: row?.challengeId ?? '' };
   }
 
-  async upsertAttempt(params: {
-    challengeId: string;
-    userId: string;
-    answers: string[];
-    nextQuestionIndex: number;
-    totalQuestions: number | null;
-    scorePercent: string | null;
-    completedAt: string | null;
-    nowIso: string;
-  }): Promise<DailyChallengeAttemptRow> {
-    const [row] = await this.db
-      .insert(dailyChallengeAttempt)
-      .values({
-        challengeId: params.challengeId,
-        userId: params.userId,
-        answers: params.answers,
-        nextQuestionIndex: params.nextQuestionIndex,
-        totalQuestions: params.totalQuestions,
-        scorePercent: params.scorePercent,
-        completedAt: params.completedAt,
-        createdAt: params.nowIso,
-        updatedAt: params.nowIso,
-      })
-      .onConflictDoUpdate({
-        target: [dailyChallengeAttempt.challengeId, dailyChallengeAttempt.userId],
-        set: {
-          answers: params.answers,
-          nextQuestionIndex: params.nextQuestionIndex,
-          totalQuestions: params.totalQuestions,
-          scorePercent: params.scorePercent,
-          completedAt: params.completedAt,
-          updatedAt: params.nowIso,
-        },
-      })
-      .returning();
-
-    return row as DailyChallengeAttemptRow;
-  }
-
-  /**
-   * Phase 4 (F-2): per-category rollup of the user's completed
-   * daily-challenge attempts.
-   *
-   * The query joins `dailyChallengeAttempt` to `dailyChallenge` (for
-   * the attempt's `quizId`), then to `quizzes` (so we can pick up
-   * the `category_id`), then to `categories` (so we can pick up the
-   * display `name` and `slug`). Only completed attempts with a
-   * non-null `score_percent` contribute — in-flight attempts (where
-   * `completed_at IS NULL`) are filtered out so the chart never
-   * counts a partial play.
-   *
-   * Quizzes with no category (`quizzes.category_id IS NULL`) are
-   * dropped from the result; they are intentionally not bucketed
-   * under an "Uncategorised" pseudo-category because the public
-   * chart does not want to render such a slice.
-   *
-   * SQL is a single round-trip: `GROUP BY categories.category_id`
-   * with `AVG(score_percent)` and `COUNT(*)`. Drizzle maps the
-   * numeric `score_percent::numeric` (precision 5, scale 2) to a
-   * string; we parse it back to a number on the way out.
-   */
-  async getCategoryBreakdown(userId: string): Promise<
-    Array<{
-      categoryId: string;
-      categoryName: string;
-      categorySlug: string;
-      attemptCount: number;
-      averageScorePercent: number;
-    }>
-  > {
+  async getCategoryBreakdown(userId: string): Promise<DailyChallengeCategoryBreakdownRow[]> {
     const rows = await this.db
       .select({
         categoryId: categories.categoryId,
         categoryName: categories.name,
         categorySlug: categories.slug,
         attemptCount: sql<number>`COUNT(*)::int`,
-        // Drizzle exposes `avg()` over `numeric` as `string | null`;
-        // we coerce it back to `number` on read.
         averageScorePercent: sql<string>`AVG(${dailyChallengeAttempt.scorePercent})`,
       })
       .from(dailyChallengeAttempt)
@@ -361,5 +280,87 @@ export class DailyChallengeRepository implements DailyChallengeRepositoryPort {
       attemptCount: row.attemptCount,
       averageScorePercent: Number(row.averageScorePercent ?? 0),
     }));
+  }
+
+  async runInTransaction<T>(
+    work: (
+      tx: DailyChallengeTx,
+      helpers: {
+        lockAttemptForUpdate(params: {
+          challengeId: string;
+          userId: string;
+        }): Promise<DailyChallengeAttemptRow | null>;
+        upsertAttempt(params: {
+          challengeId: string;
+          userId: string;
+          answers: string[];
+          nextQuestionIndex: number;
+          totalQuestions: number | null;
+          scorePercent: string | null;
+          completedAt: string | null;
+          nowIso: string;
+        }): Promise<DailyChallengeAttemptRow>;
+      },
+    ) => Promise<T>,
+  ): Promise<T> {
+    return this.db.transaction(async (tx) => {
+      const helpers = {
+        lockAttemptForUpdate: async (params: {
+          challengeId: string;
+          userId: string;
+        }): Promise<DailyChallengeAttemptRow | null> => {
+          const [row] = await tx
+            .select()
+            .from(dailyChallengeAttempt)
+            .where(
+              and(
+                eq(dailyChallengeAttempt.challengeId, params.challengeId),
+                eq(dailyChallengeAttempt.userId, params.userId),
+              ),
+            )
+            .for('update')
+            .limit(1);
+          return (row as DailyChallengeAttemptRow | undefined) ?? null;
+        },
+        upsertAttempt: async (params: {
+          challengeId: string;
+          userId: string;
+          answers: string[];
+          nextQuestionIndex: number;
+          totalQuestions: number | null;
+          scorePercent: string | null;
+          completedAt: string | null;
+          nowIso: string;
+        }): Promise<DailyChallengeAttemptRow> => {
+          const [row] = await tx
+            .insert(dailyChallengeAttempt)
+            .values({
+              challengeId: params.challengeId,
+              userId: params.userId,
+              answers: params.answers,
+              nextQuestionIndex: params.nextQuestionIndex,
+              totalQuestions: params.totalQuestions,
+              scorePercent: params.scorePercent,
+              completedAt: params.completedAt,
+              createdAt: params.nowIso,
+              updatedAt: params.nowIso,
+            })
+            .onConflictDoUpdate({
+              target: [dailyChallengeAttempt.challengeId, dailyChallengeAttempt.userId],
+              set: {
+                answers: params.answers,
+                nextQuestionIndex: params.nextQuestionIndex,
+                totalQuestions: params.totalQuestions,
+                scorePercent: params.scorePercent,
+                completedAt: params.completedAt,
+                updatedAt: params.nowIso,
+              },
+            })
+            .returning();
+          return row as DailyChallengeAttemptRow;
+        },
+      };
+      return work(tx as unknown as DailyChallengeTx, helpers);
+    });
   }
 }

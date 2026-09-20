@@ -3,30 +3,6 @@ import { AuthorSummaryDto } from './author-summary.dto';
 import { QuizTagDto } from './quiz-tag.dto';
 import { QuizVersionResponseDto } from './quiz-version-response.dto';
 
-/**
- * List-item shape used by listing endpoints.
- *
- * Phase 2 (S-6) enriched this DTO from a minimal projection to a
- * self-contained card payload:
- *   - `creator`       — embedded author summary (no second round-trip)
- *   - `categoryName` / `categorySlug` — resolved via JOIN on the
- *                       category so the card can render a category link
- *   - `questionCount` — total question count for the published version
- *                       (0 when no published version exists)
- *   - `averageRating` — pre-computed by `quiz_stats` so the card does
- *                       not have to fetch review aggregates separately
- *   - `reviewCount`   — same source as `averageRating`
- *   - `attemptCount`  — total `quiz_attempts` for this quiz, sourced
- *                       from `quiz_stats.total_attempts`
- *   - `tags`          — folded in from the detail-only path so the
- *                       card can render tag chips without a separate
- *                       fetch (the batched join was already batched
- *                       behind a sub-select — see `getTagsForQuizIds`)
- *
- * The card payload stays slim by sourcing the aggregates from the
- * denormalised `quiz_stats` table; no per-row aggregation runs at
- * request time.
- */
 export class QuizListItemDto {
   @ApiProperty({
     description: 'Unique quiz identifier',
@@ -157,7 +133,7 @@ export class QuizListItemDto {
 
   @ApiProperty({
     description:
-      'Tags attached to the quiz. Phase 2 (S-6) folds the tag batch into the list ' +
+      'Tags attached to the quiz. folds the tag batch into the list ' +
       'projection so cards can render tag chips without a second fetch.',
     type: () => [QuizTagDto],
   })

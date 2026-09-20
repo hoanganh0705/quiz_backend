@@ -1,18 +1,10 @@
-/**
- * Notification Channel Service
- *
- * Infrastructure adapter that handles notification delivery across channels
- * (in-app, email, push). Applies user preferences and quiet-hours rules
- * before creating and dispatching notifications. User preferences are cached
- * in Redis for 5 minutes to avoid repeated DB fetches.
- */
-
 import { Inject, Injectable, Optional } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import type {
   NotificationType,
   NotificationChannel,
   NotificationPreferencesRow,
+  Notification as DomainNotification,
 } from '../../domain/types/notification.types';
 import {
   NOTIFICATION_REPOSITORY_PORT,
@@ -25,8 +17,13 @@ import {
 } from '../../domain/ports';
 import type { NotificationSentEvent } from '../../domain/events/notification.events';
 import { CACHE_PROVIDER, type CacheProvider } from '@/common/ports/cache.provider';
+import {
+  NOTIFICATION_TYPE_CATEGORY,
+  NOTIFICATION_CHANNEL_GATE,
+  type NotificationPreferenceCategory,
+} from '../../domain/notification-preference-category';
 
-const NOTIF_PREFS_TTL_MS = 5 * 60 * 1000; // 5 minutes
+const NOTIF_PREFS_TTL_MS = 5 * 60 * 1000;
 
 @Injectable()
 export class NotificationChannelService implements NotificationChannelServiceInstance {
@@ -48,12 +45,9 @@ export class NotificationChannelService implements NotificationChannelServiceIns
     private readonly logger?: PinoLogger,
   ) {}
 
-  /**
-   * Invalidate the cached preferences for a user. Call this after updating preferences.
-   */
   async invalidatePreferencesCache(userId: string): Promise<void> {
     if (!this.cache) return;
-    await this.cache.set(this.cacheKeyPrefix + userId, '', 1);
+    await this.cache.del(this.cacheKeyPrefix + userId);
   }
 
   async send(params: {
@@ -75,15 +69,6 @@ export class NotificationChannelService implements NotificationChannelServiceIns
     }
   }
 
-  /**
-   * Phase 5 (Performance Optimization) — Batch send notifications to multiple users.
-   * Optimizes fan-out scenarios where the same notification is sent to many users
-   * (e.g., instance started, tournament announcement).
-   *
-   * @param params Notification parameters (without userId)
-   * @param userIds Array of user IDs to notify
-   * @param channels Notification channels (defaults to ['in_app'])
-   */
   async sendBatch(
     params: {
       type: NotificationType;
@@ -100,9 +85,14 @@ export class NotificationChannelService implements NotificationChannelServiceIns
     let sent = 0;
     let skipped = 0;
 
+    const cachedPrefs = new Map<string, NotificationPreferencesRow | null>();
     for (const userId of userIds) {
-      const prefs = await this.getPreferences(userId);
+      if (!cachedPrefs.has(userId)) {
+        cachedPrefs.set(userId, await this.getPreferences(userId));
+      }
+    }
 
+    for (const [userId, prefs] of cachedPrefs) {
       for (const channel of channels) {
         const shouldSend = this.shouldSendNotification(userId, params.type, channel, prefs);
         if (shouldSend) {
@@ -144,9 +134,6 @@ export class NotificationChannelService implements NotificationChannelServiceIns
     if (this.cache) {
       const cached = await this.cache.get(this.cacheKeyPrefix + userId);
       if (cached !== null) {
-        if (cached === '') {
-          return null;
-        }
         try {
           return JSON.parse(cached) as NotificationPreferencesRow;
         } catch {
@@ -189,14 +176,26 @@ export class NotificationChannelService implements NotificationChannelServiceIns
       return;
     }
 
-    const notification = await this.notificationRepository.create({
-      userId: params.userId,
-      type: params.type,
-      title: params.title,
-      message: params.body,
-      metadata: params.metadata,
-      channel,
-    });
+    let notification: DomainNotification;
+    try {
+      notification = await this.notificationRepository.create({
+        userId: params.userId,
+        type: params.type,
+        title: params.title,
+        message: params.body,
+        metadata: params.metadata,
+        channel,
+      });
+    } catch (error) {
+      this.logger?.error({
+        event: 'notification_create_failed',
+        userId: params.userId,
+        type: params.type,
+        channel,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
+    }
 
     const sentEvent: NotificationSentEvent = {
       eventType: 'notification.sent',
@@ -231,56 +230,14 @@ export class NotificationChannelService implements NotificationChannelServiceIns
       return true;
     }
 
-    switch (channel) {
-      case 'in_app':
-        if (!prefs.inAppEnabled) return false;
-        break;
-      case 'email':
-        if (!prefs.emailEnabled) return false;
-        break;
-      case 'push':
-        if (!prefs.pushEnabled) return false;
-        break;
+    const channelField = NOTIFICATION_CHANNEL_GATE[channel];
+    if (!prefs[channelField]) {
+      return false;
     }
 
-    switch (type) {
-      case 'achievement_earned':
-      case 'badge_unlocked':
-      case 'badge_earned':
-      case 'badge_revoked':
-      case 'streak_milestone':
-        if (!prefs.achievementEnabled) return false;
-        break;
-      case 'rank_achievement':
-      case 'rank_improvement':
-      case 'period_winner':
-      case 'rank_improved':
-      case 'rank_milestone':
-        if (!prefs.rankEnabled) return false;
-        break;
-      case 'tournament_invite':
-      case 'tournament_starting':
-      case 'tournament_completed':
-      case 'tournament_won':
-      case 'tournament_started':
-      case 'tournament_reminder':
-        if (!prefs.tournamentEnabled) return false;
-        break;
-      case 'friend_request':
-      case 'friend_accepted':
-      case 'followed':
-        if (!prefs.friendEnabled) return false;
-        break;
-      case 'comment_reply':
-      case 'comment_mention':
-        if (!prefs.commentEnabled) return false;
-        break;
-      case 'weekly_summary':
-        if (!prefs.summaryEnabled) return false;
-        break;
-      case 'system_announcement':
-      case 'quiz_review_received':
-        break;
+    const category: NotificationPreferenceCategory = NOTIFICATION_TYPE_CATEGORY[type];
+    if (this.isCategoryDisabled(prefs, category)) {
+      return false;
     }
 
     if (this.isInQuietHours(prefs)) {
@@ -294,6 +251,29 @@ export class NotificationChannelService implements NotificationChannelServiceIns
     }
 
     return true;
+  }
+
+  private isCategoryDisabled(
+    prefs: NotificationPreferencesRow,
+    category: NotificationPreferenceCategory,
+  ): boolean {
+    switch (category) {
+      case 'achievement':
+        return !prefs.achievementEnabled;
+      case 'tournament':
+        return !prefs.tournamentEnabled;
+      case 'rank':
+        return !prefs.rankEnabled;
+      case 'friend':
+        return !prefs.friendEnabled;
+      case 'comment':
+        return !prefs.commentEnabled;
+      case 'summary':
+        return !prefs.summaryEnabled;
+      case 'security':
+      case 'system':
+        return false;
+    }
   }
 
   private isInQuietHours(prefs: NotificationPreferencesRow): boolean {

@@ -311,7 +311,7 @@ describe('UploadApplicationService', () => {
     });
   });
 
-  describe('signUpload (Phase 7 #1 — presigned URL)', () => {
+  describe('signUpload', () => {
     it('returns a signed envelope with the expected fields', async () => {
       const { service } = makeService();
       const signed = await service.signUpload({ ownerId: 'u1', purpose: 'avatar' });
@@ -320,7 +320,6 @@ describe('UploadApplicationService', () => {
       expect(signed.uploadUrl).toMatch(/^https?:\/\//);
       expect(signed.signature).toBeTruthy();
       expect(signed.timestamp).toBeGreaterThan(Math.floor(Date.now() / 1000));
-      // Default 10-minute expiry.
       expect(signed.expiresAt).toMatch(/T/);
     });
 
@@ -339,13 +338,12 @@ describe('UploadApplicationService', () => {
         expiresInSeconds: 300,
       });
       expect(signed.folder).toBe('quiz-app/quizzes');
-      // 5 minutes × 1000 ms — within tolerance.
       const expectedExpiry = Math.floor(Date.now() / 1000) + 300;
       expect(Math.abs(signed.timestamp - expectedExpiry)).toBeLessThanOrEqual(5);
     });
   });
 
-  describe('bindAsset (Phase 3.1 — presigned-upload follow-up)', () => {
+  describe('bindAsset', () => {
     it('binds the (publicId, ownerId, purpose) row when the asset exists', async () => {
       const { service, ownership } = makeService();
       ownership.existingPublicIds.add('quiz-app/avatars/u1/some-uuid');
@@ -365,7 +363,6 @@ describe('UploadApplicationService', () => {
 
     it('throws NotFoundException (UPLOAD_ASSET_NOT_FOUND) when no row matches', async () => {
       const { service, ownership } = makeService();
-      // No publicId pre-registered — the existence check must fail.
       const err = await service
         .bindAsset({
           ownerId: 'u1',
@@ -377,7 +374,6 @@ describe('UploadApplicationService', () => {
       expect((err as NotFoundException).getResponse()).toMatchObject({
         code: 'UPLOAD_ASSET_NOT_FOUND',
       });
-      // Bind must NOT have been attempted.
       expect(ownership.binds).toEqual([]);
     });
 

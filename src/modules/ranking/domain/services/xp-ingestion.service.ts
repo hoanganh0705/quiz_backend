@@ -180,10 +180,8 @@ export class XpIngestionService {
  * 4. `{userId}:{source}:{timestamp}` — generic fallback
  */
 function deriveIdempotencyKey(event: ExternalXpEarnedEvent): string {
-  const raw = event as unknown as Record<string, unknown>;
-
-  if (typeof raw.idempotencyKey === 'string') {
-    return raw.idempotencyKey;
+  if (event.idempotencyKey) {
+    return event.idempotencyKey;
   }
 
   if (event.source === 'quiz_attempt' && event.attemptId) {
@@ -191,14 +189,16 @@ function deriveIdempotencyKey(event: ExternalXpEarnedEvent): string {
   }
 
   if (event.source === 'tournament' && event.tournamentId) {
-    return `xp:${event.userId}:tournament:${event.tournamentId}`;
+    const rankPart = event.rank !== undefined ? `:rank:${event.rank}` : '';
+    return `xp:${event.userId}:tournament:${event.tournamentId}${rankPart}`;
   }
 
-  if (event.source === 'achievement') {
-    const achievementId = raw.achievementId as string | undefined;
-    if (achievementId) {
-      return `xp:${event.userId}:achievement:${achievementId}`;
-    }
+  if (event.source === 'achievement' && event.achievementId) {
+    return `xp:${event.userId}:achievement:${event.achievementId}`;
+  }
+
+  if (event.source === 'bonus' && event.bonusId) {
+    return `xp:${event.userId}:bonus:${event.bonusId}`;
   }
 
   return `xp:${event.userId}:${event.source}:${event.timestamp.toISOString()}`;

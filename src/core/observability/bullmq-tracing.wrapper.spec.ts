@@ -1,14 +1,3 @@
-/**
- * Phase 5 #1 — BullMQ tracing wrapper unit tests.
- *
- * Verifies:
- *   - `wrapQueueAdd` emits a producer span with the destination
- *     and operation attributes.
- *   - The producer span's trace id is written to the job data.
- *   - `wrapWorkerProcess` emits a consumer span with the producer
- *     span as parent (when present).
- */
-
 import { TracingProvider, type Span } from './tracing.provider';
 import {
   BullmqTracingWrapper,

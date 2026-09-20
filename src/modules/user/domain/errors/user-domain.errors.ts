@@ -32,25 +32,6 @@ export class UserNotFoundError extends UserDomainError {
   }
 }
 
-/**
- * Thrown when a user's ranking entry cannot be found. 404 Not Found.
- *
- * Phase 7 (F-18): the prior `UserRankingNotFoundError` class has been
- * removed — it was exported and mapped but never thrown anywhere in the
- * codebase. The mapping entry that lived alongside it in
- * `problem-code-mapping.ts` has been removed too. The code below is
- * kept (the F-1 IDOR fix uses it) so the test suite that asserts every
- * declared USER_* code resolves in `ProblemCodeMapping` continues to
- * pass.
- */
-
-/**
- * Thrown when a user's analytics entry cannot be found. 404 Not Found.
- *
- * NOTE: exported but never thrown in the current codebase. Preserved with a
- * sensible 404 mapping. If it remains dead after the migration completes,
- * delete it in a follow-up cleanup PR.
- */
 export class UserAnalyticsNotFoundError extends UserDomainError {
   readonly code = 'USER_ANALYTICS_NOT_FOUND';
   constructor(message = 'User analytics not found') {

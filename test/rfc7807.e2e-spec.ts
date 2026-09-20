@@ -1,29 +1,5 @@
 /// <reference types="jest" />
-/**
- * Phase 0 RFC 7807 e2e backstop.
- *
- * Boots an isolated NestJS app with:
- *   - `GlobalExceptionFilter` registered globally (matches production wiring)
- *   - stub `PinoLogger` + stub `ServerConfig` (no Postgres / Redis / pino
- *     transport needed — runs as part of `pnpm test:e2e` without infra)
- *   - a fixture controller that throws one error per code path:
- *       * a concrete `BaseDomainException`
- *       * native `NotFoundException` (HttpException, status-based)
- *       * native `BadRequestException` with a string-array message
- *         (the shape produced by NestJS `ValidationPipe`)
- *       * plain `Error` (uncaught → 500 in production, surfaced in dev)
- *       * a non-`Error` throwable (string) — sanity check
- *
- * The test asserts the **canonical ProblemDetail wire shape** for each
- * path: Content-Type, top-level fields, `extensions.requestId`, and the
- * `instance` URI derived from the request URL.
- *
- * As RFC 7807 standardization progresses through Phases 1-4, this file is
- * amended per-phase to cover new code paths (per-module `code` synthesis,
- * mapping lookup, native-validation `code`, etc.). Until Phase 1 ships,
- * only the global filter's existing behavior is covered — which is
- * intentional: Phase 0 must not depend on per-module changes.
- */
+
 import {
   BadRequestException,
   Controller,
@@ -206,11 +182,6 @@ class Rfc7807FixtureController {
     throw new FixtureNotFoundError('abc-123');
   }
 
-  // Auth-module endpoints — Phase 1 live-mapping coverage.
-  // Each endpoint throws a real auth exception. If `ProblemCodeMapping`
-  // or the auth classes drift, the e2e tests in the auth describe-block
-  // below fail.
-
   @Get('auth/invalid-credentials')
   authInvalidCredentials(): never {
     throw new InvalidCredentialsError();
@@ -275,11 +246,6 @@ class Rfc7807FixtureController {
   authOAuthInvalidToken(): never {
     throw new InvalidOAuthTokenError();
   }
-
-  // Quiz-module endpoints — Phase 1 live-mapping coverage.
-  // Each endpoint throws a real quiz exception. If `ProblemCodeMapping`
-  // or the quiz classes drift, the e2e tests in the quiz describe-block
-  // below fail.
 
   @Get('quiz/not-found')
   quizNotFound(): never {
@@ -346,11 +312,6 @@ class Rfc7807FixtureController {
     throw new AnalyticsCalculationError('divide by zero');
   }
 
-  // Attempt-module endpoints — Phase 1 live-mapping coverage.
-  // Each endpoint throws a real attempt exception. If `ProblemCodeMapping`
-  // or the attempt classes drift, the e2e tests in the attempt
-  // describe-block below fail.
-
   @Get('attempt/not-found')
   attemptNotFound(): never {
     throw new AttemptNotFoundError();
@@ -405,11 +366,6 @@ class Rfc7807FixtureController {
     throw new AttemptAnswerNotFoundError();
   }
 
-  // User-module endpoints — Phase 1 live-mapping coverage.
-  // Each endpoint throws a real user exception. If `ProblemCodeMapping`
-  // or the user classes drift, the e2e tests in the user describe-block
-  // below fail.
-
   @Get('user/not-found')
   userNotFound(): never {
     throw new UserModuleNotFoundError();
@@ -434,13 +390,6 @@ class Rfc7807FixtureController {
   userProfilePrivate(): never {
     throw new UserProfilePrivateError('user-abc');
   }
-
-  // Category-module endpoints — Phase 2 live-mapping coverage (first Phase 2
-  // module migrated). The category module previously emitted the legacy
-  // `{ statusCode, message, error }` envelope; after Phase 2 it emits the
-  // canonical ProblemDetail shape. Each endpoint throws a real category
-  // exception; if `ProblemCodeMapping` or the category classes drift, the
-  // e2e tests in the category describe-block below fail.
 
   @Get('category/not-found')
   categoryNotFound(): never {
@@ -467,12 +416,6 @@ class Rfc7807FixtureController {
     throw new CategoryRestoreInvariantError();
   }
 
-  // Tag-module endpoints — Phase 2 live-mapping coverage. Structurally
-  // identical to category (same 5-class shape, same 404/404/409/409/500
-  // status mapping). Each endpoint throws a real tag exception; if
-  // `ProblemCodeMapping` or the tag classes drift, the e2e tests in the
-  // tag describe-block below fail.
-
   @Get('tag/not-found')
   tagNotFound(): never {
     throw new TagNotFoundError();
@@ -497,12 +440,6 @@ class Rfc7807FixtureController {
   tagRestoreInvariant(): never {
     throw new TagRestoreInvariantError();
   }
-
-  // Tournament-module endpoints — Phase 2 live-mapping coverage. Largest
-  // Phase-2 module by class count (15 exceptions). Each endpoint throws
-  // a real tournament exception; if `ProblemCodeMapping` or the
-  // tournament classes drift, the e2e tests in the tournament
-  // describe-block below fail.
 
   @Get('tournament/not-found')
   tournamentNotFound(): never {
@@ -548,10 +485,6 @@ class Rfc7807FixtureController {
 
   @Get('tournament/already-withdrawn')
   tournamentAlreadyWithdrawn(): never {
-    // Wire-shape fix (not a regression): the prior per-module filter
-    // did NOT include this exception in `mapToHttp`, so it fell
-    // through to the default `INTERNAL_SERVER_ERROR` with a generic
-    // `'Internal server error'` message. Phase 2 routes it to 409.
     throw new TournamentAlreadyWithdrawnError();
   }
 
@@ -585,17 +518,8 @@ class Rfc7807FixtureController {
     throw new TournamentWithdrawClosedError();
   }
 
-  // Review-module endpoints — Phase 2 live-mapping coverage. 6 concrete
-  // exceptions → 4 status codes (400/403/404/409). Each endpoint throws
-  // a real review exception; if `ProblemCodeMapping` or the review
-  // classes drift, the e2e tests in the review describe-block below
-  // fail.
-
   @Get('review/not-found')
   reviewNotFound(): never {
-    // Verify wire-shape improvement: 3 throw sites pass `'Quiz not
-    // found'`. The prior filter rewrote them to `'Review not found'`.
-    // The global filter preserves the thrown message.
     throw new ReviewNotFoundError('Quiz not found');
   }
 
@@ -639,12 +563,6 @@ class Rfc7807FixtureController {
     // by default).
     throw new ReviewAlreadyReportedError();
   }
-
-  // Bookmark-module endpoints — Phase 2 live-mapping coverage. 7
-  // concrete exceptions → 4 status codes (400/403/404/409). Each
-  // endpoint throws a real bookmark exception; if
-  // `ProblemCodeMapping` or the bookmark classes drift, the e2e tests
-  // in the bookmark describe-block below fail.
 
   @Get('bookmark/not-found')
   bookmarkNotFound(): never {
@@ -704,18 +622,6 @@ class Rfc7807FixtureController {
     throw new BookmarkValidationError('Bookmark validation failed');
   }
 
-  // Instance-module endpoints — Phase 2 live-mapping coverage. 7
-  // concrete exceptions → 4 status codes (400/403/404/409). Each
-  // endpoint throws a real instance exception; if
-  // `ProblemCodeMapping` or the instance classes drift, the e2e tests
-  // in the instance describe-block below fail.
-  //
-  // Special note: the instance module has TWO exception filters —
-  // `InstanceDomainExceptionFilter` (HTTP, controller-scoped, deleted
-  // in Phase 2) and `WsExceptionFilter` (WS gateway, KEPT — handles
-  // only auth/generic, not domain errors). The HTTP endpoint block
-  // here only exercises the HTTP path.
-
   @Get('instance/not-found')
   instanceNotFound(): never {
     // Verify wire-shape improvement: prior filter rewrote all to
@@ -773,12 +679,6 @@ class Rfc7807FixtureController {
     // `PlayerAlreadyJoinedError`.
     throw new PlayerAlreadyJoinedError();
   }
-
-  // Social-module endpoints — Phase 2 live-mapping coverage. 8
-  // concrete exceptions → 4 status codes (400/403/404/409). Each
-  // endpoint throws a real social exception; if
-  // `ProblemCodeMapping` or the social classes drift, the e2e tests
-  // in the social describe-block below fail.
 
   @Get('social/friend-request-not-found')
   socialFriendRequestNotFound(): never {
@@ -839,21 +739,6 @@ class Rfc7807FixtureController {
     throw new PendingRequestExistsError();
   }
 
-  // Achievement-module endpoints — Phase 2 live-mapping coverage. 4
-  // concrete exceptions → 2 status codes (404 + 500). Each
-  // endpoint throws a real achievement exception; if
-  // `ProblemCodeMapping` or the achievement classes drift, the e2e
-  // tests in the achievement describe-block below fail.
-  //
-  // Special note: the prior per-module filter
-  // `@Catch(AchievementDomainError, UserProfilePrivateError)` also
-  // caught the cross-module `UserProfilePrivateError` from the user
-  // module. After Phase 2 the achievement filter is removed; the
-  // global filter handles both via their mapping entries. We exercise
-  // the `UserProfilePrivateError` resolution through an
-  // achievement-named endpoint so a regression test verifies the
-  // cross-module throwing path still routes correctly.
-
   @Get('achievement/badge-not-found')
   achievementBadgeNotFound(): never {
     // Verify wire-shape improvement: prior filter rewrote all to
@@ -891,30 +776,8 @@ class Rfc7807FixtureController {
 
   @Get('achievement/profile-private')
   achievementProfilePrivate(): never {
-    // Cross-module regression test: the prior per-module filter also
-    // caught `UserProfilePrivateError` from the user module via
-    // `@Catch(AchievementDomainError, UserProfilePrivateError)`. After
-    // Phase 2 the achievement filter is removed; the global filter
-    // handles `UserProfilePrivateError` via its Phase-1 mapping entry
-    // (`USER_PROFILE_PRIVATE` → 403). This endpoint verifies that the
-    // cross-module throwing path still routes correctly without the
-    // achievement filter.
     throw new UserProfilePrivateError('user-target-1');
   }
-
-  // comment-module endpoints — Phase 3.x live-mapping coverage.
-  // 11 concrete exceptions → 4 status codes (400/403/404/409). Each
-  // endpoint throws a real comment exception; if
-  // `ProblemCodeMapping` or the comment classes drift, the e2e
-  // tests in the comment describe-block below fail.
-  //
-  // Special note: the prior per-module filter
-  // `CommentDomainExceptionFilter` used `exception.name` as a
-  // lookup key into `STATUS_MAP` and `COMMENT_PROBLEM_URIS`. After
-  // Phase 3.1 the lookup tables are replaced with `ProblemCodeMapping`
-  // entries keyed by `code`. `title` changes from the class name
-  // (e.g. `'CommentNotFoundError'`) to the standard RFC 7807 title
-  // (e.g. `'NotFound'`). This is verified per-row below.
 
   @Get('comment/parent-comment-not-found')
   commentParentCommentNotFound(): never {
@@ -933,10 +796,6 @@ class Rfc7807FixtureController {
 
   @Get('comment/parent-comment-cross-thread')
   commentParentCommentCrossThread(): never {
-    // Plan §8.4.1 risk note: 400 (non-obvious — one might expect 409
-    // Conflict for a cross-resource mismatch). The migration test
-    // captures it. `title` here is the standard `'BadRequest'` not
-    // the class name.
     throw new ParentCommentCrossThreadError();
   }
 
@@ -971,35 +830,11 @@ class Rfc7807FixtureController {
 
   @Get('comment/moderator-required')
   commentModeratorRequired(): never {
-    // Plan §8.4.1 risk note: 403 (non-obvious — the class name
-    // suggests 401 or 403 for "auth required", but the actual
-    // semantic is "you're authenticated but lack the moderator
-    // role"). The migration test captures this.
     throw new ModeratorRequiredError();
   }
 
-  // Ranking-module endpoints — Phase 3.2 live-mapping coverage.
-  // 3 concrete exceptions → 2 status codes (422 + 500). Each
-  // endpoint throws a real ranking exception; if
-  // `ProblemCodeMapping` or the ranking classes drift, the e2e
-  // tests in the ranking describe-block below fail.
-  //
-  // Special note: this is the highest-risk Phase-3 conversion
-  // because the prior per-module filter was a `@Catch()` catch-all
-  // that shadows `GlobalExceptionFilter`. After Phase 3.2 the
-  // catch-all is removed; the global filter handles all errors via
-  // `ProblemCodeMapping` (the 3 concrete exceptions) or via its
-  // standard `HttpException` / uncaught `Error` paths. The
-  // uncaught-error regression test below verifies that an artificial
-  // `throw new Error('boom')` inside a ranking controller produces
-  // a 500 with the standard RFC 7807 shape (a plan §8.4.2 completion
-  // criterion).
-
   @Get('ranking/invalid-xp-event')
   rankingInvalidXpEvent(): never {
-    // Status upgrade 500 → 422 (semantic correction): rejected XP
-    // event input is unprocessable, not an internal server
-    // failure.
     throw new InvalidXpEventError({ userId: 'u-1', amount: -5 }, 'Amount must be positive');
   }
 
@@ -1020,13 +855,6 @@ class Rfc7807FixtureController {
 
   @Get('ranking/uncaught-error')
   rankingUncaughtError(): never {
-    // Plan §8.4.2 completion criterion: "an artificial `throw new
-    // Error('boom')` inside a ranking controller produces a 500
-    // with the standard shape." Before Phase 3.2 this error was
-    // caught by `RankingDomainExceptionFilter`'s `@Catch()` and
-    // emitted as `{ statusCode: 500, message: 'boom', code:
-    // 'INTERNAL_ERROR', timestamp: '...' }`. After Phase 3.2 the
-    // global filter handles it as canonical RFC 7807.
     throw new Error('boom');
   }
 
@@ -1041,33 +869,13 @@ class Rfc7807FixtureController {
     throw new BadRequestException(['title must be a string', 'title must not be empty']);
   }
 
-  // Notification-module endpoints — Phase 5 (rev5.1) missed-module
-  // coverage. The notification module was inadvertently skipped in
-  // Phases 1-3 because it had no per-module filter (no
-  // `NotificationDomainExceptionFilter` to delete). Its errors
-  // extended `Error` directly, so the global filter caught them via
-  // its `instanceof Error` branch and returned 500 with `title:
-  // 'InternalServerError'` — masking a legitimate 404 as a generic
-  // 500. Phase 5 (rev5.1) converts them to `BaseDomainException`
-  // subclasses; the global filter now resolves the correct status +
-  // `extensions.code` for both. 2 concrete exceptions → 2 status
-  // codes (404 + 403).
   @Get('notification/not-found')
   notificationNotFound(): never {
-    // Status correction 500 → 404. Wire-shape improvement: prior
-    // behavior emitted a misleading 500 (the thrown message was
-    // preserved but the status was wrong — the global filter's
-    // `instanceof Error` branch routed to 500 regardless of the
-    // exception's intent). After Phase 5 (rev5.1) the global filter
-    // resolves `NOTIFICATION_NOT_FOUND` → 404 via `ProblemCodeMapping`.
     throw new NotificationNotFoundError('notif-1');
   }
 
   @Get('notification/forbidden')
   notificationForbidden(): never {
-    // Status correction 500 → 403. Same rationale as above. The
-    // throw-site is post-authentication (the caller IS logged in,
-    // they just don't own this notification), so 403 is correct.
     throw new NotificationForbiddenError();
   }
 
@@ -1078,22 +886,16 @@ class Rfc7807FixtureController {
 
   @Get('non-error-throw')
   nonErrorThrow(): never {
-    // The global filter must not crash on non-Error throwables (e.g. a
-    // promise rejection with a string). This path is intentionally a
-    // language-level violation — see the e2e test description above.
-    // eslint-disable-next-line @typescript-eslint/only-throw-error
     throw 'a non-error throwable';
   }
 
-  // Sanity: a path that returns 200 so the backstop can be sure it is
-  // exercising the filter (and not just a 404 from an unrouted path).
   @Get('ok')
   ok(): { ok: true } {
     return { ok: true };
   }
 }
 
-describe('RFC 7807 ProblemDetail (Phase 0 backstop)', () => {
+describe('RFC 7807 ProblemDetail', () => {
   let app: INestApplication<App>;
 
   beforeEach(async () => {
@@ -1150,24 +952,7 @@ describe('RFC 7807 ProblemDetail (Phase 0 backstop)', () => {
   });
 
   describe('BaseDomainException (mapping-lookup path)', () => {
-    it('renders the canonical ProblemDetail shape; status resolution lands in Phase 1', async () => {
-      // Phase 0 acceptance (per plan §8.1 completion criteria):
-      //   - Files exist on `main`
-      //   - Build passes
-      //   - All existing tests pass
-      //   - `test/e2e/rfc7807.spec.ts` runs against the current code
-      //
-      // At Phase 0, the global filter does NOT yet perform
-      // `code → status` mapping; that lands in Phase 1 alongside the
-      // `ProblemCodeMapping` table. So a concrete `BaseDomainException`
-      // falls through the filter's `instanceof Error` branch and surfaces
-      // as a 500 with the class name as the title. The fixture pins
-      // exactly that current behavior so the backstop is green from day 1.
-      //
-      // What Phase 0 IS asserting (per §4.3, property 1 — single `catch` site):
-      //   - Every domain exception flows through the global filter.
-      //   - The wire shape is the canonical ProblemDetail.
-      //   - `extensions.requestId` is unconditional (key always present).
+    it('renders the canonical ProblemDetail shape;', async () => {
       const res = await request(app.getHttpServer())
         .get('/rfc7807-fixture/domain-not-found')
         .expect(500);
@@ -1175,23 +960,11 @@ describe('RFC 7807 ProblemDetail (Phase 0 backstop)', () => {
       const body = res.body as ProblemWire;
 
       expect(body.type).toBe('https://api.quiz.local/problems/internal-server-error');
-      // The current global filter (Phase 0, pre-mapping) treats a
-      // `BaseDomainException` as a plain `Error` and surfaces a fixed
-      // `'InternalServerError'` title. Phase 1 swaps this for
-      // `ProblemCodeMapping[exception.code].title` once the table exists.
       expect(body.title).toBe('InternalServerError');
       expect(body.status).toBe(500);
       expect(body.detail).toBe("Fixture 'abc-123' was not found.");
       expect(body.instance).toBe('/rfc7807-fixture/domain-not-found');
 
-      // extensions.requestId is unconditional (per plan §4.3).
-      // In this fixture there is no CorrelationInterceptor, so `request.id`
-      // is `undefined` and JSON serialization drops the key from the wire
-      // (a standard `JSON.stringify` quirk: `{ x: undefined }` → `{}`).
-      // The unit test added in Phase 1 asserts the *source object* contains
-      // the `requestId` key regardless. Here we just assert `extensions` is
-      // an object — the source contract is that the key is *always present
-      // before serialization*, which is what the Phase 1 unit test pins.
       expect(body.extensions).toBeDefined();
       expect(typeof body.extensions).toBe('object');
     });
@@ -1270,22 +1043,7 @@ describe('RFC 7807 ProblemDetail (Phase 0 backstop)', () => {
     });
   });
 
-  describe('Auth-module exceptions (Phase 1 — live mapping through the global filter)', () => {
-    // Phase 0's `FixtureNotFoundError` uses a code NOT in `ProblemCodeMapping`
-    // and exercises the loud-failure branch. This block exercises the
-    // *resolved* path: a real auth exception whose `code` resolves in
-    // the mapping table and produces the canonical ProblemDetail wire shape.
-    //
-    // Each test asserts:
-    //   - status code matches the mapping
-    //   - title matches the mapping
-    //   - typeUri matches the mapping (the per-module, not the generic URI)
-    //   - extensions.code matches the class's `code` field
-    //
-    // If any of these fail, the migration is broken: either the exception's
-    // `code` field drifted, or `ProblemCodeMapping` drifted, or the global
-    // filter's resolution path drifted.
-
+  describe('Auth-module exceptions (Live mapping through the global filter)', () => {
     it('InvalidCredentialsError → 401 AUTH_INVALID_CREDENTIALS', async () => {
       const res = await request(app.getHttpServer())
         .get('/rfc7807-fixture/auth/invalid-credentials')
@@ -1338,7 +1096,7 @@ describe('RFC 7807 ProblemDetail (Phase 0 backstop)', () => {
       expect(body.extensions?.code).toBe('AUTH_RATE_LIMITED');
     });
 
-    it('ResourceConflictError → 409 AUTH_RESOURCE_CONFLICT (was a 500 fall-through before Phase 1)', async () => {
+    it('ResourceConflictError → 409 AUTH_RESOURCE_CONFLICT', async () => {
       const res = await request(app.getHttpServer())
         .get('/rfc7807-fixture/auth/resource-conflict')
         .expect(409);
@@ -1404,12 +1162,7 @@ describe('RFC 7807 ProblemDetail (Phase 0 backstop)', () => {
     });
   });
 
-  describe('Quiz-module exceptions (Phase 1 — live mapping through the global filter)', () => {
-    // Phase 0 covers the global filter's behavior with synthetic exceptions;
-    // this block exercises the *resolved* path: real quiz exceptions
-    // whose `code` resolves in `ProblemCodeMapping`. Each test pins the
-    // full wire shape (status, title, typeUri, extensions.code).
-
+  describe('Quiz-module exceptions (Live mapping through the global filter)', () => {
     it('QuizNotFoundError → 404 QUIZ_NOT_FOUND', async () => {
       const res = await request(app.getHttpServer())
         .get('/rfc7807-fixture/quiz/not-found')
@@ -1462,11 +1215,6 @@ describe('RFC 7807 ProblemDetail (Phase 0 backstop)', () => {
       const body = res.body as ProblemWire;
       expect(body.type).toBe('https://api.quiz.local/problems/quiz-version-immutable');
       expect(body.extensions?.code).toBe('QUIZ_VERSION_IMMUTABLE');
-      // Wire-shape improvement: the prior per-module filter hardcoded
-      // `detail: 'This quiz version cannot be modified'`. The new global
-      // filter preserves `exception.message`, so a default-constructed
-      // exception still surfaces that default string (the state-machine
-      // callsites override with their own specific message).
       expect(body.detail).toBe('This quiz version cannot be modified');
     });
 
@@ -1514,12 +1262,7 @@ describe('RFC 7807 ProblemDetail (Phase 0 backstop)', () => {
       expect(body.extensions?.code).toBe('QUIZ_OPERATION_FAILED');
     });
 
-    it('QuizAnalyticsNotFoundError → 404 QUIZ_ANALYTICS_NOT_FOUND (was a 500 fall-through before Phase 1)', async () => {
-      // Wire-shape improvement: prior setup had no `@Catch(QuizAnalyticsError)`
-      // filter, so analytics errors fell through to GlobalExceptionFilter's
-      // plain-Error branch and surfaced as 500. The comment in
-      // `quiz-review.controller.ts` documented the *intended* behavior as
-      // 404. After Phase 1 the wire shape matches the intent.
+    it('QuizAnalyticsNotFoundError → 404 QUIZ_ANALYTICS_NOT_FOUND', async () => {
       const res = await request(app.getHttpServer())
         .get('/rfc7807-fixture/quiz/analytics-not-found')
         .expect(404);
@@ -1540,7 +1283,7 @@ describe('RFC 7807 ProblemDetail (Phase 0 backstop)', () => {
     });
   });
 
-  describe('Attempt-module exceptions (Phase 1 — live mapping through the global filter)', () => {
+  describe('Attempt-module exceptions (Live mapping through the global filter)', () => {
     // Each test pins the wire shape (status, title, typeUri,
     // extensions.code) for a real attempt exception flowing through the
     // global filter. The mapping table is the single source of truth for
@@ -1566,12 +1309,6 @@ describe('RFC 7807 ProblemDetail (Phase 0 backstop)', () => {
     });
 
     it('AttemptValidationError → 400 ATTEMPT_VALIDATION_FAILED (standalone class, no children)', async () => {
-      // After Phase 1, `AttemptValidationError` is a concrete standalone
-      // class — its former 3 children (`QuizNotPublishedError`,
-      // `AttemptQuestionInvalidError`, `AttemptNotCompletedError`) extend
-      // `AttemptDomainError` directly and have their own codes. The
-      // 400 BadRequest mapping is reserved for the one direct throw site
-      // in `attempt-command.service.ts` (option-related validation).
       const res = await request(app.getHttpServer())
         .get('/rfc7807-fixture/attempt/validation-failed')
         .expect(400);
@@ -1607,13 +1344,7 @@ describe('RFC 7807 ProblemDetail (Phase 0 backstop)', () => {
       expect(body.extensions?.code).toBe('ATTEMPT_QUESTION_ALREADY_ANSWERED');
     });
 
-    it('QuizNotPublishedError (attempt variant) → 422 ATTEMPT_QUIZ_NOT_PUBLISHED (was a 400 fall-through before Phase 1)', async () => {
-      // Wire-shape upgrade: in the prior module structure,
-      // `QuizNotPublishedError` extended `AttemptValidationError` and
-      // inherited its 400 mapping. After Phase 1 it extends
-      // `AttemptDomainError` directly and resolves to 422 — a deliberate
-      // upgrade because the request is syntactically valid; only the
-      // resource state (unpublished) forbids the action.
+    it('QuizNotPublishedError (attempt variant) → 422 ATTEMPT_QUIZ_NOT_PUBLISHED', async () => {
       const res = await request(app.getHttpServer())
         .get('/rfc7807-fixture/attempt/quiz-not-published')
         .expect(422);
@@ -1623,7 +1354,7 @@ describe('RFC 7807 ProblemDetail (Phase 0 backstop)', () => {
       expect(body.extensions?.code).toBe('ATTEMPT_QUIZ_NOT_PUBLISHED');
     });
 
-    it('AttemptQuestionInvalidError → 422 ATTEMPT_QUESTION_INVALID (was a 400 fall-through before Phase 1)', async () => {
+    it('AttemptQuestionInvalidError → 422 ATTEMPT_QUESTION_INVALID', async () => {
       // Same wire-shape upgrade rationale as QuizNotPublishedError.
       const res = await request(app.getHttpServer())
         .get('/rfc7807-fixture/attempt/question-invalid')
@@ -1633,7 +1364,7 @@ describe('RFC 7807 ProblemDetail (Phase 0 backstop)', () => {
       expect(body.extensions?.code).toBe('ATTEMPT_QUESTION_INVALID');
     });
 
-    it('AttemptNotCompletedError → 422 ATTEMPT_NOT_COMPLETED (was a 400 fall-through before Phase 1)', async () => {
+    it('AttemptNotCompletedError → 422 ATTEMPT_NOT_COMPLETED', async () => {
       // Same wire-shape upgrade rationale as QuizNotPublishedError.
       const res = await request(app.getHttpServer())
         .get('/rfc7807-fixture/attempt/not-completed')
@@ -1658,7 +1389,7 @@ describe('RFC 7807 ProblemDetail (Phase 0 backstop)', () => {
     });
   });
 
-  describe('User-module exceptions (Phase 1 — live mapping through the global filter)', () => {
+  describe('User-module exceptions (Live mapping through the global filter)', () => {
     // Each test pins the wire shape (status, title, typeUri,
     // extensions.code) for a real user exception flowing through the
     // global filter. The mapping table is the single source of truth
@@ -1695,17 +1426,7 @@ describe('RFC 7807 ProblemDetail (Phase 0 backstop)', () => {
       expect(body.extensions?.code).toBe('USER_NOT_FOUND');
     });
 
-    // Phase 7 (F-18): `UserRankingNotFoundError` was removed because it
-    // was exported and mapped but never thrown. The mapping entry was
-    // also deleted (see `problem-code-mapping.ts`). The fixture
-    // controller method that exercised this code path is gone too.
-    // A test that the *removed* code 404-maps correctly has nothing to
-    // assert anymore — the global filter now falls back to the unknown
-    // code branch and the route no longer exists.
-
-    it('UserAnalyticsNotFoundError → 404 USER_ANALYTICS_NOT_FOUND (dead-code class with sensible mapping)', async () => {
-      // Dead-code class — exported but never thrown. Preserved with a
-      // sensible 404 mapping.
+    it('UserAnalyticsNotFoundError → 404 USER_ANALYTICS_NOT_FOUND', async () => {
       const res = await request(app.getHttpServer())
         .get('/rfc7807-fixture/user/analytics-not-found')
         .expect(404);
@@ -1714,7 +1435,7 @@ describe('RFC 7807 ProblemDetail (Phase 0 backstop)', () => {
       expect(body.extensions?.code).toBe('USER_ANALYTICS_NOT_FOUND');
     });
 
-    it('UserProfilePrivateError → 403 USER_PROFILE_PRIVATE (message built from targetUserId)', async () => {
+    it('UserProfilePrivateError → 403 USER_PROFILE_PRIVATE', async () => {
       const res = await request(app.getHttpServer())
         .get('/rfc7807-fixture/user/profile-private')
         .expect(403);
@@ -1722,31 +1443,11 @@ describe('RFC 7807 ProblemDetail (Phase 0 backstop)', () => {
       expect(body.title).toBe('Forbidden');
       expect(body.type).toBe('https://api.quiz.local/problems/user-profile-private');
       expect(body.extensions?.code).toBe('USER_PROFILE_PRIVATE');
-      // `UserProfilePrivateError` builds its message from the
-      // `targetUserId` arg: `Profile of user <id> is not public`.
       expect(body.detail).toBe('Profile of user user-abc is not public');
     });
   });
 
-  describe('Category-module exceptions (Phase 2 — first legacy → RFC 7807 conversion)', () => {
-    // Phase 1 covered modules that already emitted RFC 7807 (just gained
-    // `extensions.code`). Phase 2 covers modules that *previously* emitted
-    // the legacy `{ statusCode, message, error }` envelope. The category
-    // module is the first Phase-2 module migrated.
-    //
-    // These tests pin the full wire shape (status, title, typeUri,
-    // extensions.code) for each migrated category exception. The previous
-    // envelope shape (`{ statusCode: 404, message: 'Category not found',
-    // error: 'Not Found' }`) is gone entirely — clients reading
-    // `err.response.data.statusCode` will break; clients reading
-    // `err.response.data.status` (or `extensions.code`) continue to work
-    // with a richer payload. The `LEGACY_COMPAT` shim is deferred to a
-    // separate PR per plan §8.3.
-    //
-    // Same shape as the Phase-1 module tests, but every wire field listed
-    // below is NEW (no envelope continuity with the prior per-module
-    // filter).
-
+  describe('Category-module exceptions (Live mapping through the global filter)', () => {
     it('CategoryNotFoundError → 404 CATEGORY_NOT_FOUND', async () => {
       const res = await request(app.getHttpServer())
         .get('/rfc7807-fixture/category/not-found')
@@ -1785,13 +1486,7 @@ describe('RFC 7807 ProblemDetail (Phase 0 backstop)', () => {
       expect(body.extensions?.code).toBe('CATEGORY_ALREADY_ACTIVE');
     });
 
-    it('CategoryRestoreInvariantError → 500 CATEGORY_RESTORE_INVARIANT (wire-shape improvement)', async () => {
-      // Wire-shape improvement: the prior per-module filter returned
-      // `{ statusCode: 500, message: 'Internal server error', error: 'Internal Server Error' }`.
-      // The global filter now surfaces the concrete message:
-      // `'Category restore invariant violated'`. The status code is
-      // unchanged (500). Clients switching on `extensions.code` get a
-      // precise classification that was previously absent.
+    it('CategoryRestoreInvariantError → 500 CATEGORY_RESTORE_INVARIANT', async () => {
       const res = await request(app.getHttpServer())
         .get('/rfc7807-fixture/category/restore-invariant')
         .expect(500);
@@ -1803,12 +1498,8 @@ describe('RFC 7807 ProblemDetail (Phase 0 backstop)', () => {
     });
   });
 
-  describe('Tag-module exceptions (Phase 2 — second legacy → RFC 7807 conversion)', () => {
+  describe('Tag-module exceptions (Live mapping through the global filter)', () => {
     // Structurally identical to the category describe-block above. The
-    // same wire-shape-change caveats apply (envelope replacement,
-    // `LEGACY_COMPAT` shim deferred). Kept as a separate describe block
-    // so failure signals from the two modules don't interleave.
-
     it('TagNotFoundError → 404 TAG_NOT_FOUND', async () => {
       const res = await request(app.getHttpServer())
         .get('/rfc7807-fixture/tag/not-found')
@@ -1847,11 +1538,7 @@ describe('RFC 7807 ProblemDetail (Phase 0 backstop)', () => {
       expect(body.extensions?.code).toBe('TAG_ALREADY_ACTIVE');
     });
 
-    it('TagRestoreInvariantError → 500 TAG_RESTORE_INVARIANT (wire-shape improvement)', async () => {
-      // Wire-shape improvement: the prior per-module filter returned
-      // `{ statusCode: 500, message: 'Internal server error', error: 'Internal Server Error' }`.
-      // The global filter now surfaces the concrete message:
-      // `'Tag restore invariant violated'`. Status code unchanged (500).
+    it('TagRestoreInvariantError → 500 TAG_RESTORE_INVARIANT', async () => {
       const res = await request(app.getHttpServer())
         .get('/rfc7807-fixture/tag/restore-invariant')
         .expect(500);
@@ -1863,21 +1550,7 @@ describe('RFC 7807 ProblemDetail (Phase 0 backstop)', () => {
     });
   });
 
-  describe('Tournament-module exceptions (Phase 2 — third legacy → RFC 7807 conversion)', () => {
-    // Largest Phase-2 module by class count. 15 exceptions → 4 status
-    // codes (400/403/404/409). One of the 15
-    // (TournamentAlreadyWithdrawnError) was previously mapped to 500
-    // via the filter's default branch — Phase 2 fixes that to 409.
-    //
-    // The first module in Phase 2 with an existing `*DomainErrorDto`
-    // Swagger DTO to delete (per §8.3 completion criteria).
-    //
-    // The per-module `tournamentForbiddenResponse` helper documents
-    // 403s using the RFC 7807 ProblemDetailDto type — verified by the
-    // `TOURNAMENT_FORBIDDEN` assertion below. The `oneOf` references
-    // (4 inline + 1 in `tournamentForbiddenResponse`) are all
-    // simplified to `ProblemDetailDto` alone.
-
+  describe('Tournament-module exceptions (Live mapping through the global filter)', () => {
     it('TournamentNotFoundError → 404 TOURNAMENT_NOT_FOUND', async () => {
       const res = await request(app.getHttpServer())
         .get('/rfc7807-fixture/tournament/not-found')
@@ -1903,14 +1576,7 @@ describe('RFC 7807 ProblemDetail (Phase 0 backstop)', () => {
       expect(body.extensions?.code).toBe('TOURNAMENT_NOT_REGISTERED');
     });
 
-    it('TournamentForbiddenError → 403 TOURNAMENT_FORBIDDEN (wire-shape improvement)', async () => {
-      // Wire-shape improvement: the prior per-module filter rewrote
-      // every `TournamentForbiddenError.message` to the generic
-      // `'You do not have permission to perform this action'`, ignoring
-      // the thrown message. The global filter now preserves
-      // `exception.message`, so the thrown
-      // `'You do not have permission to manage this tournament'`
-      // surfaces on the wire.
+    it('TournamentForbiddenError → 403 TOURNAMENT_FORBIDDEN', async () => {
       const res = await request(app.getHttpServer())
         .get('/rfc7807-fixture/tournament/forbidden')
         .expect(403);
@@ -1953,10 +1619,7 @@ describe('RFC 7807 ProblemDetail (Phase 0 backstop)', () => {
       expect(body.extensions?.code).toBe('TOURNAMENT_PARTICIPANT_STATE');
     });
 
-    it('TournamentAlreadyWithdrawnError → 409 TOURNAMENT_ALREADY_WITHDRAWN (was 500 in the prior filter)', async () => {
-      // Wire-shape fix: prior filter fell through to 500 default for
-      // this exception class. Phase 2 routes it to 409 (semantic
-      // state conflict).
+    it('TournamentAlreadyWithdrawnError → 409 TOURNAMENT_ALREADY_WITHDRAWN', async () => {
       const res = await request(app.getHttpServer())
         .get('/rfc7807-fixture/tournament/already-withdrawn')
         .expect(409);
@@ -2015,19 +1678,8 @@ describe('RFC 7807 ProblemDetail (Phase 0 backstop)', () => {
     });
   });
 
-  describe('Review-module exceptions (Phase 2 — fourth legacy → RFC 7807 conversion)', () => {
-    // 6 concrete exceptions → 4 status codes (400/403/404/409). Second
-    // module in Phase 2 with an existing `*DomainErrorDto` Swagger DTO
-    // to delete (the last is instance — see v4.5). The prior
-    // per-module filter rewrote almost every exception's message to
-    // a hardcoded generic. After Phase 2 the thrown message survives
-    // — verified per-row below.
-
-    it('ReviewNotFoundError → 404 REVIEW_NOT_FOUND (wire-shape improvement)', async () => {
-      // Wire-shape improvement: 3 throw sites in `review.service.ts`
-      // pass `'Quiz not found'`. The prior filter rewrote them to
-      // `'Review not found'`. The global filter preserves the thrown
-      // message.
+  describe('Review-module exceptions (Live mapping through the global filter)', () => {
+    it('ReviewNotFoundError → 404 REVIEW_NOT_FOUND', async () => {
       const res = await request(app.getHttpServer())
         .get('/rfc7807-fixture/review/not-found')
         .expect(404);
@@ -2037,10 +1689,7 @@ describe('RFC 7807 ProblemDetail (Phase 0 backstop)', () => {
       expect(body.extensions?.code).toBe('REVIEW_NOT_FOUND');
     });
 
-    it('ReviewForbiddenError → 403 REVIEW_FORBIDDEN (wire-shape improvement)', async () => {
-      // Wire-shape improvement: prior filter rewrote all to `'You do
-      // not have permission to perform this action'`. Global filter
-      // preserves thrown message.
+    it('ReviewForbiddenError → 403 REVIEW_FORBIDDEN', async () => {
       const res = await request(app.getHttpServer())
         .get('/rfc7807-fixture/review/forbidden')
         .expect(403);
@@ -2050,7 +1699,7 @@ describe('RFC 7807 ProblemDetail (Phase 0 backstop)', () => {
       expect(body.extensions?.code).toBe('REVIEW_FORBIDDEN');
     });
 
-    it('ReviewConflictError → 409 REVIEW_CONFLICT (wire-shape improvement)', async () => {
+    it('ReviewConflictError → 409 REVIEW_CONFLICT', async () => {
       // Wire-shape improvement: prior filter rewrote all to
       // `'Resource already exists'`. Global filter preserves thrown
       // message.
@@ -2103,18 +1752,8 @@ describe('RFC 7807 ProblemDetail (Phase 0 backstop)', () => {
     });
   });
 
-  describe('Bookmark-module exceptions (Phase 2 — fifth legacy → RFC 7807 conversion)', () => {
-    // 7 concrete exceptions → 4 status codes (400/403/404/409). Third
-    // module with an existing `*DomainErrorDto` Swagger DTO to delete
-    // (the last is instance — see v4.5+). The prior per-module filter
-    // rewrote almost every exception's message to a hardcoded
-    // generic. After Phase 2 the thrown message survives — verified
-    // per-row below.
-
-    it('BookmarkNotFoundError → 404 BOOKMARK_NOT_FOUND (wire-shape improvement)', async () => {
-      // Wire-shape improvement: prior filter rewrote all to
-      // `'Resource not found'`. Global filter preserves thrown
-      // message.
+  describe('Bookmark-module exceptions ', () => {
+    it('BookmarkNotFoundError → 404 BOOKMARK_NOT_FOUND', async () => {
       const res = await request(app.getHttpServer())
         .get('/rfc7807-fixture/bookmark/not-found')
         .expect(404);
@@ -2124,11 +1763,7 @@ describe('RFC 7807 ProblemDetail (Phase 0 backstop)', () => {
       expect(body.extensions?.code).toBe('BOOKMARK_NOT_FOUND');
     });
 
-    it('CollectionNotFoundError → 404 COLLECTION_NOT_FOUND (wire-shape improvement)', async () => {
-      // Wire-shape improvement: prior filter rewrote all to
-      // `'Resource not found'`. Global filter preserves thrown
-      // message. One call site (`bookmark-command.service.ts:161`)
-      // passes `'Quiz not found'` — verified here.
+    it('CollectionNotFoundError → 404 COLLECTION_NOT_FOUND', async () => {
       const res = await request(app.getHttpServer())
         .get('/rfc7807-fixture/bookmark/collection-not-found')
         .expect(404);
@@ -2207,19 +1842,7 @@ describe('RFC 7807 ProblemDetail (Phase 0 backstop)', () => {
     });
   });
 
-  describe('Instance-module exceptions (Phase 2 — sixth legacy → RFC 7807 conversion)', () => {
-    // 7 concrete exceptions → 4 status codes (400/403/404/409). Fourth
-    // module with an existing `*DomainErrorDto` Swagger DTO to delete
-    // (completing §8.3's "No *DomainErrorDto files remain" criterion).
-    // Most complex Phase-2 conversion so far: TWO filters in the module
-    // (HTTP + WS), `oneOf` schema simplification in the controller, and
-    // one exception (`PlayerAlreadyJoinedError`) defined but not
-    // currently thrown.
-    //
-    // The prior per-module HTTP filter rewrote almost every
-    // exception's message to a hardcoded generic. After Phase 2 the
-    // thrown message survives — verified per-row below.
-
+  describe('Instance-module exceptions ', () => {
     it('InstanceNotFoundError → 404 INSTANCE_NOT_FOUND (wire-shape improvement)', async () => {
       // Wire-shape improvement: prior filter rewrote all to
       // `'Resource not found'`. Global filter preserves thrown
@@ -2312,18 +1935,7 @@ describe('RFC 7807 ProblemDetail (Phase 0 backstop)', () => {
     });
   });
 
-  describe('Social-module exceptions (Phase 2 — seventh legacy → RFC 7807 conversion)', () => {
-    // 8 concrete exceptions → 4 status codes (400/403/404/409). No
-    // `*DomainErrorDto` Swagger DTO exists in this module (verified by
-    // grep — social never had one). The single controller already
-    // uses `ApiAuthAction` / `ApiAuthActionNoContent` shorthand
-    // decorators that cover all 4 error responses — so the controller
-    // migration is the simplest possible: just remove `@UseFilters`.
-    //
-    // The prior per-module HTTP filter preserved most thrown messages
-    // verbatim — the two notable exceptions are documented per-row
-    // below.
-
+  describe('Social-module exceptions ', () => {
     it('FriendRequestNotFoundError → 404 SOCIAL_FRIEND_REQUEST_NOT_FOUND (wire-shape improvement)', async () => {
       // Wire-shape improvement: prior filter dropped the request ID
       // and rewrote all to `'Friend request not found'`. Global
@@ -2424,27 +2036,8 @@ describe('RFC 7807 ProblemDetail (Phase 0 backstop)', () => {
     });
   });
 
-  describe('Achievement-module exceptions (Phase 2 — eighth and final legacy → RFC 7807 conversion)', () => {
-    // 4 concrete exceptions → 2 status codes (404 + 500). Distinct
-    // from prior Phase-2 modules (most have 4 status codes) because
-    // `AchievementGrantError` is a 500-class rule-engine grant failure.
-    // The cross-module `@Catch` (AchievementDomainError,
-    // UserProfilePrivateError) → `UserProfilePrivateError` (Phase 1)
-    // regression test verifies that the global filter handles
-    // achievement-route-thrown `UserProfilePrivateError` correctly.
-    //
-    // The prior per-module HTTP filter:
-    //   - rewrote `BadgeNotFoundError('Badge not found: <id>')` → `'Badge not found'`,
-    //   - rewrote `AchievementUserNotFoundError('User not found: <id>')` → `'User not found'`,
-    //   - rewrote `UserBadgeOwnershipNotFoundError('Badge <id> not owned by user <id>')` → `'User badge not found'`,
-    //   - had NO branch for `AchievementGrantError` → 500 catch-all with `'Internal server error'`.
-    // After Phase 2 the thrown message survives — verified per-row
-    // below.
-
-    it('BadgeNotFoundError → 404 BADGE_NOT_FOUND (wire-shape improvement)', async () => {
-      // Wire-shape improvement: prior filter rewrote all to
-      // `'Badge not found'`. Global filter preserves thrown
-      // message including the interpolated badge ID.
+  describe('Achievement-module exceptions ', () => {
+    it('BadgeNotFoundError → 404 BADGE_NOT_FOUND', async () => {
       const res = await request(app.getHttpServer())
         .get('/rfc7807-fixture/achievement/badge-not-found')
         .expect(404);
@@ -2454,10 +2047,7 @@ describe('RFC 7807 ProblemDetail (Phase 0 backstop)', () => {
       expect(body.extensions?.code).toBe('BADGE_NOT_FOUND');
     });
 
-    it('AchievementUserNotFoundError → 404 ACHIEVEMENT_USER_NOT_FOUND (wire-shape improvement)', async () => {
-      // Wire-shape improvement: prior filter rewrote all to
-      // `'User not found'`. Global filter preserves thrown
-      // message including the interpolated user ID.
+    it('AchievementUserNotFoundError → 404 ACHIEVEMENT_USER_NOT_FOUND', async () => {
       const res = await request(app.getHttpServer())
         .get('/rfc7807-fixture/achievement/user-not-found')
         .expect(404);
@@ -2467,10 +2057,7 @@ describe('RFC 7807 ProblemDetail (Phase 0 backstop)', () => {
       expect(body.extensions?.code).toBe('ACHIEVEMENT_USER_NOT_FOUND');
     });
 
-    it('UserBadgeOwnershipNotFoundError → 404 USER_BADGE_OWNERSHIP_NOT_FOUND (wire-shape improvement)', async () => {
-      // Wire-shape improvement: prior filter rewrote all to
-      // `'User badge not found'`. Global filter preserves thrown
-      // message including both interpolated IDs.
+    it('UserBadgeOwnershipNotFoundError → 404 USER_BADGE_OWNERSHIP_NOT_FOUND', async () => {
       const res = await request(app.getHttpServer())
         .get('/rfc7807-fixture/achievement/user-badge-ownership-not-found')
         .expect(404);
@@ -2480,12 +2067,7 @@ describe('RFC 7807 ProblemDetail (Phase 0 backstop)', () => {
       expect(body.extensions?.code).toBe('USER_BADGE_OWNERSHIP_NOT_FOUND');
     });
 
-    it('AchievementGrantError → 500 ACHIEVEMENT_GRANT_ERROR (wire-shape improvement)', async () => {
-      // Wire-shape improvement: prior filter had NO branch for
-      // `AchievementGrantError` — fell through to catch-all 500
-      // with hardcoded `'Internal server error'`. Global filter
-      // resolves the code correctly. Internal details are never
-      // exposed to clients — 5xx `detail` is always sanitized.
+    it('AchievementGrantError → 500 ACHIEVEMENT_GRANT_ERROR', async () => {
       const res = await request(app.getHttpServer())
         .get('/rfc7807-fixture/achievement/grant-error')
         .expect(500);
@@ -2495,15 +2077,7 @@ describe('RFC 7807 ProblemDetail (Phase 0 backstop)', () => {
       expect(body.extensions?.code).toBe('ACHIEVEMENT_GRANT_ERROR');
     });
 
-    it('UserProfilePrivateError (cross-module) → 403 USER_PROFILE_PRIVATE (regression)', async () => {
-      // Cross-module regression test: the prior per-module filter
-      // also caught `UserProfilePrivateError` from the user module
-      // via `@Catch(AchievementDomainError, UserProfilePrivateError)`.
-      // After Phase 2 the achievement filter is removed; the global
-      // filter handles `UserProfilePrivateError` via its Phase-1
-      // mapping entry (`USER_PROFILE_PRIVATE` → 403). This endpoint
-      // verifies that the cross-module throwing path still routes
-      // correctly without the achievement filter.
+    it('UserProfilePrivateError (cross-module) → 403 USER_PROFILE_PRIVATE', async () => {
       const res = await request(app.getHttpServer())
         .get('/rfc7807-fixture/achievement/profile-private')
         .expect(403);
@@ -2514,26 +2088,7 @@ describe('RFC 7807 ProblemDetail (Phase 0 backstop)', () => {
     });
   });
 
-  describe('comment-module exceptions (Phase 3.1 — first Phase-3 conversion; name-based lookup → ProblemCodeMapping)', () => {
-    // 12 concrete exceptions → 4 status codes (400/403/404/409). The
-    // 13th class (UserNotFoundError) is owned by the user module,
-    // not by the comment module — its mapping entry was declared
-    // in Phase 1 and is reused.
-    //
-    // Phase 3.1 wire-shape changes (verified per-row below):
-    //   1. `title` is now the standard RFC 7807 title (e.g.
-    //      `'NotFound'`) instead of the class name (e.g.
-    //      `'CommentNotFoundError'`).
-    //   2. `extensions.timestamp` is now present (Phase 3.1
-    //      deliverable per §8.4.1).
-    //
-    // Plan §8.4.1 risk notes (regression-guarded):
-    //   - ParentCommentCrossThreadError → 400 (one might expect 409
-    //     Conflict for a cross-resource mismatch).
-    //   - ModeratorRequiredError → 403 (the class name suggests
-    //     auth required, but the semantic is "you're authenticated
-    //     but lack the moderator role").
-
+  describe('comment-module exceptions ', () => {
     it('ParentCommentNotFoundError → 404 COMMENT_PARENT_COMMENT_NOT_FOUND', async () => {
       const res = await request(app.getHttpServer())
         .get('/rfc7807-fixture/comment/parent-comment-not-found')
@@ -2545,7 +2100,7 @@ describe('RFC 7807 ProblemDetail (Phase 0 backstop)', () => {
       expect(typeof body.extensions?.timestamp).toBe('string');
     });
 
-    it('CommentNotFoundError → 404 COMMENT_NOT_FOUND (title now standardized)', async () => {
+    it('CommentNotFoundError → 404 COMMENT_NOT_FOUND', async () => {
       const res = await request(app.getHttpServer())
         .get('/rfc7807-fixture/comment/comment-not-found')
         .expect(404);
@@ -2556,7 +2111,7 @@ describe('RFC 7807 ProblemDetail (Phase 0 backstop)', () => {
       expect(typeof body.extensions?.timestamp).toBe('string');
     });
 
-    it('ParentCommentCrossThreadError → 400 COMMENT_PARENT_COMMENT_CROSS_THREAD (non-obvious 400 per §8.4.1)', async () => {
+    it('ParentCommentCrossThreadError → 400 COMMENT_PARENT_COMMENT_CROSS_THREAD', async () => {
       const res = await request(app.getHttpServer())
         .get('/rfc7807-fixture/comment/parent-comment-cross-thread')
         .expect(400);
@@ -2643,11 +2198,7 @@ describe('RFC 7807 ProblemDetail (Phase 0 backstop)', () => {
       expect(body.extensions?.code).toBe('COMMENT_QUIZ_NOT_FOUND');
     });
 
-    it('ModeratorRequiredError → 403 COMMENT_MODERATOR_REQUIRED (non-obvious 403 per §8.4.1)', async () => {
-      // Plan §8.4.1 risk note: this is a non-obvious 403 (the class
-      // name suggests auth required, but the semantic is "you're
-      // authenticated but lack the moderator role"). The migration
-      // test captures it.
+    it('ModeratorRequiredError → 403 COMMENT_MODERATOR_REQUIRED', async () => {
       const res = await request(app.getHttpServer())
         .get('/rfc7807-fixture/comment/moderator-required')
         .expect(403);
@@ -2657,60 +2208,20 @@ describe('RFC 7807 ProblemDetail (Phase 0 backstop)', () => {
       expect(body.extensions?.code).toBe('COMMENT_MODERATOR_REQUIRED');
     });
 
-    it('every Phase 3.1 response carries `extensions.timestamp` (Phase 3.1 deliverable per §8.4.1)', async () => {
-      // §8.4.1: "Add `extensions.requestId` and `extensions.timestamp`
-      // to the response body." `extensions.requestId` was added in
-      // Phase 1; `extensions.timestamp` is added in Phase 3.1 via the
-      // global filter. This test exercises one comment response
-      // and verifies the timestamp field is present.
-      //
-      // Note: in this e2e fixture there is no `CorrelationInterceptor`,
-      // so `request.id` is `undefined` and JSON serialization drops the
-      // `extensions.requestId` key from the wire. That's a JSON-level
-      // quirk (not a filter bug). Phase 3.1 only commits to adding
-      // `extensions.timestamp`, so we do not assert `requestId` here.
+    it('every response carries `extensions.timestamp`', async () => {
       const res = await request(app.getHttpServer())
         .get('/rfc7807-fixture/comment/comment-not-found')
         .expect(404);
       const body = res.body as ProblemWire;
       expect(typeof body.extensions?.timestamp).toBe('string');
-      // Verify the timestamp is ISO 8601 (regex sanity-check; the
-      // filter uses `new Date().toISOString()` so this is always
-      // true unless the filter implementation drifts).
       expect(body.extensions?.timestamp as string).toMatch(
         /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/,
       );
     });
   });
 
-  describe('Ranking-module exceptions (Phase 3.2 — eighth and final legacy → RFC 7807 conversion)', () => {
-    // 3 concrete exceptions → 2 status codes (422 + 500). Highest-risk
-    // Phase-3 conversion because the prior per-module filter was a
-    // `@Catch()` catch-all that shadowed `GlobalExceptionFilter`.
-    //
-    // Phase 3.2 wire-shape changes (verified per-row below):
-    //   1. The catch-all envelope `{ statusCode, message, code,
-    //      timestamp }` is gone. Every error response is canonical
-    //      RFC 7807 `ProblemDetailDto`.
-    //   2. `extensions.code` is now set for the 3 ranking domain
-    //      exceptions (was `'INTERNAL_ERROR'` for all under the prior
-    //      filter).
-    //   3. `RANKING_INVALID_XP_EVENT` is upgraded from 500 (catch-all)
-    //      to 422 (semantic correction — rejected XP event input).
-    //   4. The thrown message is preserved for all 3 domain exceptions
-    //      (was discarded under the prior filter).
-    //
-    // Plan §8.4.2 completion criterion: "an artificial `throw new
-    // Error('boom')` inside a ranking controller produces a 500 with
-    // the standard shape" — verified by the uncaught-error test below.
-
+  describe('Ranking-module exceptions ', () => {
     it('InvalidXpEventError → 422 RANKING_INVALID_XP_EVENT (semantic upgrade from 500)', async () => {
-      // Wire-shape improvements:
-      //   1. Status upgrade 500 → 422 (rejected input, not internal
-      //      server failure).
-      //   2. `extensions.code` is now `'RANKING_INVALID_XP_EVENT'`
-      //      (was `'INTERNAL_ERROR'` under the prior filter).
-      //   3. Thrown message preserved (was `'Internal server error'`).
       const res = await request(app.getHttpServer())
         .get('/rfc7807-fixture/ranking/invalid-xp-event')
         .expect(422);
@@ -2720,12 +2231,7 @@ describe('RFC 7807 ProblemDetail (Phase 0 backstop)', () => {
       expect(body.extensions?.code).toBe('RANKING_INVALID_XP_EVENT');
     });
 
-    it('RankCalculationError → 500 RANKING_RANK_CALCULATION_ERROR (message preserved)', async () => {
-      // Wire-shape improvements:
-      //   1. `extensions.code` is now `'RANKING_RANK_CALCULATION_ERROR'`
-      //      (was `'INTERNAL_ERROR'` under the prior filter).
-      //   2. Internal details are never exposed to clients — 5xx `detail`
-      //      is always sanitized to `'Internal server error'`.
+    it('RankCalculationError → 500 RANKING_RANK_CALCULATION_ERROR', async () => {
       const res = await request(app.getHttpServer())
         .get('/rfc7807-fixture/ranking/rank-calculation-error')
         .expect(500);
@@ -2735,12 +2241,7 @@ describe('RFC 7807 ProblemDetail (Phase 0 backstop)', () => {
       expect(body.extensions?.code).toBe('RANKING_RANK_CALCULATION_ERROR');
     });
 
-    it('PeriodResetError → 500 RANKING_PERIOD_RESET_ERROR (message preserved)', async () => {
-      // Wire-shape improvements:
-      //   1. `extensions.code` is now `'RANKING_PERIOD_RESET_ERROR'`
-      //      (was `'INTERNAL_ERROR'` under the prior filter).
-      //   2. Internal details are never exposed to clients — 5xx `detail`
-      //      is always sanitized to `'Internal server error'`.
+    it('PeriodResetError → 500 RANKING_PERIOD_RESET_ERROR', async () => {
       const res = await request(app.getHttpServer())
         .get('/rfc7807-fixture/ranking/period-reset-error')
         .expect(500);
@@ -2750,67 +2251,22 @@ describe('RFC 7807 ProblemDetail (Phase 0 backstop)', () => {
       expect(body.extensions?.code).toBe('RANKING_PERIOD_RESET_ERROR');
     });
 
-    it("uncaught `Error('boom')` inside a ranking controller → 500 standard RFC 7807 shape (Plan §8.4.2 completion criterion)", async () => {
-      // Plan §8.4.2 completion criterion: "For ranking: an artificial
-      // `throw new Error('boom')` inside a ranking controller produces
-      // a 500 with the standard shape, **and** the existing
-      // `requestLogger.error({ event: 'unhandled_exception', ... })`
-      // log line still appears."
-      //
-      // Before Phase 3.2 this error was caught by
-      // `RankingDomainExceptionFilter`'s `@Catch()` and emitted as the
-      // legacy `{ statusCode, message, code, timestamp }` envelope
-      // with `code: 'INTERNAL_ERROR'`. After Phase 3.2 the catch-all
-      // is removed; the global filter handles it as canonical RFC 7807
-      // and logs `event: 'unhandled_exception'`.
-      //
-      // Note: the test environment sets `NODE_ENV=production` for the
-      // app (per `app.useGlobalPipes` / `app.enableShutdownHooks` /
-      // similar setup in the e2e bootstrap), so the global filter
-      // returns `detail: 'Internal server error'` (not the raw
-      // exception message) — this is the standard production-mode
-      // sanitization. The thrown message is still logged via
-      // `event: 'unhandled_exception'`.
+    it("uncaught `Error('boom')` inside a ranking controller → 500 standard RFC 7807 shape", async () => {
       const res = await request(app.getHttpServer())
         .get('/rfc7807-fixture/ranking/uncaught-error')
         .expect(500);
       const body = res.body as ProblemWire;
-      // RFC 7807 standard shape (NOT the legacy ranking envelope).
       expect(body.type).toBe('https://api.quiz.local/problems/internal-server-error');
       expect(body.title).toBe('InternalServerError');
       expect(body.status).toBe(500);
       expect(typeof body.instance).toBe('string');
       expect(typeof body.extensions?.timestamp).toBe('string');
-      // Phase 4 (§6.3 + §8.5): every 5xx carries `extensions.code =
-      // 'GLOBAL_INTERNAL_ERROR'`. This is the uniform value across
-      // uncaught Errors, 5xx `HttpException` instances, and any
-      // 5xx status that falls through the table. Previously (Phase
-      // 3.2 only) this field was `undefined` for the uncaught-Error
-      // path; Phase 4 makes it uniform with the rest of the wire
-      // shape.
       expect(body.extensions?.code).toBe('GLOBAL_INTERNAL_ERROR');
     });
   });
 
-  describe('Notification-module exceptions (Phase 5 rev5.1 — missed-module cleanup)', () => {
-    // Phase 5 (rev5.1) coverage: notification was inadvertently
-    // skipped in Phases 1-3 because it had no per-module filter.
-    // Its errors extended `Error` directly, so the global filter
-    // caught them via its `instanceof Error` branch and returned
-    // 500 with `title: 'InternalServerError'` — masking a legitimate
-    // 404 (notification not found) as a generic 500 and masking a
-    // legitimate 403 (user lacks permission for this specific
-    // notification) the same way. Phase 5 (rev5.1) converts them to
-    // `BaseDomainException` subclasses; the global filter now
-    // resolves the correct status + `extensions.code` for both.
-    // 2 concrete exceptions → 2 status codes (404 + 403).
-
-    it('NotificationNotFoundError → 404 NOTIFICATION_NOT_FOUND (status correction 500 → 404)', async () => {
-      // Wire-shape improvement: pre-Phase-5 this was a 500
-      // catch-all (the global filter's `instanceof Error` branch
-      // routes plain `Error` subclasses to 500 regardless of intent).
-      // After Phase 5 (rev5.1) the global filter resolves the new
-      // code `NOTIFICATION_NOT_FOUND` → 404 via `ProblemCodeMapping`.
+  describe('Notification-module exceptions ', () => {
+    it('NotificationNotFoundError → 404 NOTIFICATION_NOT_FOUND', async () => {
       const res = await request(app.getHttpServer())
         .get('/rfc7807-fixture/notification/not-found')
         .expect(404);
@@ -2821,15 +2277,7 @@ describe('RFC 7807 ProblemDetail (Phase 0 backstop)', () => {
       expect(body.extensions?.code).toBe('NOTIFICATION_NOT_FOUND');
     });
 
-    it('NotificationForbiddenError → 403 NOTIFICATION_FORBIDDEN (status correction 500 → 403)', async () => {
-      // Wire-shape improvement: pre-Phase-5 this was a 500
-      // catch-all. After Phase 5 (rev5.1) the global filter resolves
-      // the new code `NOTIFICATION_FORBIDDEN` → 403 via
-      // `ProblemCodeMapping`. Note on 401 vs 403: the throw-site is
-      // post-authentication (the caller IS logged in; the check is
-      // `notification.userId !== user.sub`), so 403 is correct (you
-      // are who you say you are, you just don't own this
-      // notification).
+    it('NotificationForbiddenError → 403 NOTIFICATION_FORBIDDEN', async () => {
       const res = await request(app.getHttpServer())
         .get('/rfc7807-fixture/notification/forbidden')
         .expect(403);
@@ -2840,19 +2288,8 @@ describe('RFC 7807 ProblemDetail (Phase 0 backstop)', () => {
     });
   });
 
-  describe('native HttpException (Phase 4 — synthesized `extensions.code`)', () => {
-    // Plan §6.3 + §8.5: the global filter now synthesizes
-    // `extensions.code` for non-domain `HttpException` paths so
-    // clients can switch on `code` uniformly. The table lives in
-    // the global filter itself (no separate registry). Status 400
-    // from `ValidationPipe` (string[] of errors) emits the special
-    // `GLOBAL_VALIDATION_FAILED`; all other 400s default to
-    // `GLOBAL_BAD_REQUEST`.
-
-    it('NotFoundException → 404 GLOBAL_NOT_FOUND (plan §8.5 completion criterion)', async () => {
-      // Phase 4: a 404 from a missing route now carries
-      // `extensions.code = 'GLOBAL_NOT_FOUND'`. Pre-Phase-4 the field
-      // was `undefined`; clients had to switch on `status` alone.
+  describe('native HttpException ', () => {
+    it('NotFoundException → 404 GLOBAL_NOT_FOUND', async () => {
       const res = await request(app.getHttpServer())
         .get('/rfc7807-fixture/http-not-found')
         .expect(404);
@@ -2862,22 +2299,11 @@ describe('RFC 7807 ProblemDetail (Phase 0 backstop)', () => {
     });
 
     it('BadRequestException with `string[]` message (ValidationPipe shape) → 400 GLOBAL_VALIDATION_FAILED', async () => {
-      // Phase 4 (§6.3 override): a 400 carrying a `string[]` message
-      // (the shape NestJS `ValidationPipe` produces for failed
-      // class-validator checks) emits `GLOBAL_VALIDATION_FAILED`
-      // instead of the default `GLOBAL_BAD_REQUEST`. Clients
-      // rendering per-field UI use this code to skip the
-      // `detail: '...; ...; ...'` joined-string render and instead
-      // inspect `extensions.validationErrors` (Phase 5+; not yet
-      // implemented).
       const res = await request(app.getHttpServer())
         .get('/rfc7807-fixture/http-bad-request-validation')
         .expect(400);
       const body = res.body as ProblemWire;
       expect(body.title).toBe('Bad Request');
-      // ValidationPipe joins field errors with `; ` per the global
-      // filter's existing logic — Phase 4 does not change `detail`
-      // formatting, only the `code` synthesis.
       expect(body.detail).toBe('title must be a string; title must not be empty');
       expect(body.extensions?.code).toBe('GLOBAL_VALIDATION_FAILED');
     });

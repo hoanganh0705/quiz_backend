@@ -34,7 +34,7 @@ import type Redis from 'ioredis';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import type { PubSubProvider } from '@/common/ports/pubsub.provider';
 import { PUBSUB_PROVIDER } from '@/common/ports/pubsub.provider';
-import { sessionsConfig } from '@/core/config';
+import { sessionsConfig, type SessionsConfig } from '@/core/config';
 
 /**
  * How long a single in-process deny-list entry lives. Must be long
@@ -98,7 +98,7 @@ export class SessionInvalidationBus implements OnModuleInit, OnModuleDestroy {
     @Inject(PUBSUB_PROVIDER)
     private readonly pubSub: PubSubProvider,
     @Inject(sessionsConfig.KEY)
-    private readonly sessions,
+    private readonly sessions: SessionsConfig,
     @InjectPinoLogger(SessionInvalidationBus.name)
     private readonly logger: PinoLogger,
   ) {

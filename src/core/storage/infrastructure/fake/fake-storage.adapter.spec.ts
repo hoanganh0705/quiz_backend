@@ -1,17 +1,3 @@
-/**
- * Unit tests for `FakeStorageAdapter`.
- *
- * Locks the public contract that the rest of `core/storage` and Phase 3's
- * `UploadApplicationService` rely on:
- *   - `upload` returns the expected `UploadResult` shape.
- *   - `publicId` matches `folder/<ownerId>/<uuidv7>`.
- *   - Two uploads produce two distinct `publicId`s.
- *   - `delete` is idempotent (absent `publicId` is a no-op).
- *   - `deriveUrl` is pure (same input → same output) and reflects the
- *     per-purpose transformation.
- *   - `clear()` is the test boundary.
- */
-
 import { FakeStorageAdapter } from './fake-storage.adapter';
 import { UPLOAD_POLICY } from '../../domain/upload-policy';
 import type { UploadInput } from '../../storage.types';

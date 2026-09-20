@@ -1,14 +1,3 @@
-// =============================================================================
-// Review bounded context — relations
-//
-// The review tables (reviewHelpfulVotes, reviewReports) are co-located with
-// the quiz domain in Phase 3 of the refactoring plan — they live in
-// `../quiz/schema`. The reverse relations for `users` (who voted/reported)
-// are also declared in `../auth/relations`, since `users` is the central
-// identity hub. This file only declares the relations rooted at the two
-// review tables themselves.
-// =============================================================================
-
 import { relations } from 'drizzle-orm/relations';
 
 import { reviewHelpfulVotes, reviewReports } from '../quiz/schema';

@@ -306,18 +306,12 @@ export const CREATE_TOURNAMENT_EXAMPLE = {
     endAt: '2026-07-20T12:00:00.000Z',
     maxParticipants: 100,
     categoryId: '770e8400-e29b-71d4-a716-446655440001',
-    // Phase 1 / Issue #2 — the response now echoes the
-    // authenticated user's UUID as the tournament's owner.
     ownerUserId: '550e8400-e29b-41d4-a716-446655440099',
     createdAt: EXAMPLE_TIMESTAMP,
     updatedAt: EXAMPLE_TIMESTAMP,
   },
   meta: { timestamp: EXAMPLE_TIMESTAMP },
 } as const;
-
-// ===========================================================================
-// Phase 1 / Issue #1 — admin endpoint examples.
-// ===========================================================================
 
 export const UPDATE_TOURNAMENT_SUCCESS_EXAMPLE = {
   data: {

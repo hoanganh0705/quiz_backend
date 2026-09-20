@@ -1,5 +1,9 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsInt, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
+import { IsInt, IsOptional, IsString, Matches, Max, MaxLength, Min } from 'class-validator';
+import {
+  IDEMPOTENCY_KEY_MAX_LENGTH,
+  IDEMPOTENCY_KEY_PATTERN,
+} from '../../domain/policies/review-report-status.policy';
 
 export class CreateReviewDto {
   @ApiProperty({
@@ -35,6 +39,7 @@ export class CreateReviewDto {
   })
   @IsOptional()
   @IsString()
-  @MaxLength(255)
+  @MaxLength(IDEMPOTENCY_KEY_MAX_LENGTH)
+  @Matches(IDEMPOTENCY_KEY_PATTERN)
   idempotencyKey?: string;
 }

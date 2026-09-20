@@ -7,14 +7,19 @@ import type {
   RecentlyPlayedQuizzesResponseDto,
   RecentlyPlayedQuizItemDto,
 } from '../dto/response/recently-played-quizzes.dto';
+import { RecentlyPlayedCursorMapper } from '../mappers/recently-played-cursor.mapper';
 
-/**
- * Phase 3 (S-16): read service for the recently-played-quizzes
- * endpoint. Reads `quiz_attempts` for the viewer and joins the
- * quiz (via `quiz_versions.quiz_id`) so the row is self-
- * contained. Status filter is `status = 'completed'` so
- * in-progress attempts do not pollute the list.
- */
+interface RecentlyPlayedRow {
+  attemptId: string;
+  quizId: string;
+  quizTitle: string;
+  slug: string;
+  difficulty: 'easy' | 'medium' | 'hard' | null;
+  imageUrl: string | null;
+  playedAt: string;
+  scorePercent: string | number | null;
+}
+
 @Injectable()
 export class RecentlyPlayedQuizzesService {
   constructor(@Inject(DRIZZLE) private readonly db: DrizzleDB) {}
@@ -38,7 +43,7 @@ export class RecentlyPlayedQuizzesService {
       );
     }
 
-    const rows = await this.db
+    const rows = (await this.db
       .select({
         attemptId: quizAttempts.attemptId,
         quizId: quizzes.quizId,
@@ -57,28 +62,14 @@ export class RecentlyPlayedQuizzesService {
         desc(sql`COALESCE(${quizAttempts.finishedAt}, ${quizAttempts.createdAt})`),
         desc(quizAttempts.attemptId),
       )
-      .limit(params.limit + 1);
+      .limit(params.limit + 1)) as RecentlyPlayedRow[];
 
     const hasNextPage = rows.length > params.limit;
-    const items = (hasNextPage ? rows.slice(0, params.limit) : rows) as Array<{
-      attemptId: string;
-      quizId: string;
-      quizTitle: string;
-      slug: string;
-      difficulty: 'easy' | 'medium' | 'hard' | null;
-      imageUrl: string | null;
-      playedAt: string;
-      scorePercent: string | number | null;
-    }>;
+    const items = hasNextPage ? rows.slice(0, params.limit) : rows;
 
     const lastItem = items.at(-1);
     const nextCursor =
-      hasNextPage && lastItem
-        ? Buffer.from(
-            JSON.stringify({ playedAt: lastItem.playedAt, attemptId: lastItem.attemptId }),
-            'utf8',
-          ).toString('base64url')
-        : null;
+      hasNextPage && lastItem ? RecentlyPlayedCursorMapper.serialize(lastItem) : null;
 
     const dtoItems: RecentlyPlayedQuizItemDto[] = items.map((row) => ({
       quizId: row.quizId,

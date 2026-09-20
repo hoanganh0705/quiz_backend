@@ -1,7 +1,3 @@
-/**
- * Achievement Domain Events
- */
-
 export interface AchievementAwardedEvent {
   readonly eventType: 'achievement.awarded';
   readonly userId: string;
@@ -15,7 +11,7 @@ export interface AchievementAwardedEvent {
 export interface BadgeEarnedEvent {
   readonly eventType: 'badge.earned';
   readonly userId: string;
-  readonly badgeType: 'rising_star' | 'veteran' | 'newcomer' | 'top10' | 'top100' | 'top1000';
+  readonly badgeType: string;
   readonly awardedAt: Date;
 }
 
@@ -29,6 +25,15 @@ export interface BadgeRevokedEvent {
   readonly revokedBy: string;
 }
 
+export interface BadgeRestoredEvent {
+  readonly eventType: 'badge.restored';
+  readonly userId: string;
+  readonly badgeId: string;
+  readonly badgeType: string;
+  readonly restoredAt: Date;
+  readonly restoredBy: string;
+}
+
 export interface StreakMilestoneEvent {
   readonly eventType: 'streak.milestone';
   readonly userId: string;
@@ -40,4 +45,5 @@ export type AchievementDomainEvent =
   | AchievementAwardedEvent
   | BadgeEarnedEvent
   | BadgeRevokedEvent
+  | BadgeRestoredEvent
   | StreakMilestoneEvent;

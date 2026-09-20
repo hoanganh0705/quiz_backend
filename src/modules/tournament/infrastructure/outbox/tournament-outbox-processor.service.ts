@@ -10,7 +10,9 @@
  *
  * For `tournament.won` events, this processor also publishes an
  * `ExternalXpEarnedEvent` to the external XP event bus so the ranking
- * module can credit the user's XP ledger.
+ * module can credit the user's XP ledger. This is the canonical XP path
+ * for tournament wins — the BullMQ worker is intentionally NOT a
+ * publisher of XP (Issue #dual-xp-publication).
  *
  * Retry strategy:
  *   delay = base_delay_seconds × 2^(attemptCount - 1)
@@ -59,6 +61,7 @@ import {
   type TournamentDomainEvent,
 } from '../../domain/events';
 import { correlationIdStorage, createCorrelationId } from '@/common/interceptors/correlation-id';
+import { computeTournamentXp } from '../../tournament.constants';
 
 const TOURNAMENT_OUTBOX_MAX_RETRIES = 8;
 const TOURNAMENT_OUTBOX_BASE_DELAY_SECONDS = 30;
@@ -73,15 +76,6 @@ type OutboxEventRow = {
   idempotencyKey: string | null;
   correlationId: string | null;
 };
-
-function computeTournamentXp(rank: number): number {
-  if (rank === 1) return 1000;
-  if (rank <= 3) return 500;
-  if (rank <= 10) return 200;
-  if (rank <= 25) return 100;
-  if (rank <= 50) return 50;
-  return 20;
-}
 
 @Injectable()
 export class TournamentOutboxProcessorService implements OnModuleInit {
@@ -208,8 +202,11 @@ export class TournamentOutboxProcessorService implements OnModuleInit {
         this.sharedEventBus.publish(sharedEvent);
       }
 
-      // Dispatch #3: External XP bus for tournament.won events
-      // Issue #9 — idempotent XP grant via idempotencyKey on ExternalXpEarnedEvent
+      // Dispatch #3: External XP bus for tournament.won events.
+      // Canonical tournament-XP publisher: emits an ExternalXpEarnedEvent
+      // with a deterministic idempotencyKey so the ranking consumer can
+      // dedupe. Awaited so a transport failure surfaces as an outbox retry
+      // rather than a silently dropped XP grant.
       if (domainEvent.eventType === 'tournament.won') {
         const won = domainEvent;
         const xp = computeTournamentXp(won.rank);
@@ -225,15 +222,28 @@ export class TournamentOutboxProcessorService implements OnModuleInit {
             correlationId,
             timestamp: won.timestamp,
           };
-          void this.externalEventBus.publishXpEarned(xpEvent);
-          this.logger.debug({
-            event: 'tournament_xp_dispatched',
-            userId: won.userId,
-            tournamentId: won.tournamentId,
-            rank: won.rank,
-            xp,
-            idempotencyKey: xpEvent.idempotencyKey,
-          });
+          this.externalEventBus
+            .publishXpEarned(xpEvent)
+            .then(() => {
+              this.logger.debug({
+                event: 'tournament_xp_dispatched',
+                userId: won.userId,
+                tournamentId: won.tournamentId,
+                rank: won.rank,
+                xp,
+                idempotencyKey: xpEvent.idempotencyKey,
+              });
+            })
+            .catch((error: unknown) => {
+              this.logger.error({
+                event: 'tournament_xp_dispatch_failed',
+                userId: won.userId,
+                tournamentId: won.tournamentId,
+                rank: won.rank,
+                idempotencyKey: xpEvent.idempotencyKey,
+                error: error instanceof Error ? error.message : String(error),
+              });
+            });
         }
       }
     });

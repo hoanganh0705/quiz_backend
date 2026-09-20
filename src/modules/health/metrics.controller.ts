@@ -1,19 +1,3 @@
-/**
- * Phase 5 #2 — Prometheus `/metrics` endpoint.
- *
- * Exposes the in-process `MetricsRegistry` in the Prometheus
- * text exposition format. The endpoint is `@Public()` so an
- * unauthenticated Prometheus scrape can reach it without
- * needing a JWT — the standard Prometheus deployment pattern
- * is to filter by network policy, not by auth.
- *
- * The metrics endpoint also updates the *gauge* series
- * (`quiz_redis_circuit_state`, `quiz_bullmq_queue_depth`,
- * `quiz_tracing_active_spans`, `quiz_outbox_lag_seconds`)
- * from the latest probe results so a Prometheus scrape sees
- * point-in-time data, not stale cache.
- */
-
 import { Controller, Get, Header, Inject, Res } from '@nestjs/common';
 import type { Response } from 'express';
 import { Public } from '@/common/decorators/public.decorator';
@@ -46,19 +30,23 @@ export class MetricsController {
   @Get()
   @Header('Content-Type', METRICS_CONTENT_TYPE)
   async scrape(@Res({ passthrough: true }) res: Response): Promise<string> {
-    // Refresh the gauges in parallel. Each is independent.
-    await Promise.all([
-      this.refreshCircuitGauge(),
-      this.refreshQueueDepthGauge(),
-      this.refreshTracingGauge(),
-      this.refreshOutboxLagGauge(),
-    ]);
+    // Refresh the gauges. `refreshTracingGauge` is synchronous (the
+    // active-spans count is kept in-process), so it can't participate
+    // in a `Promise.all` with the async probes — mixing them would
+    // require forcing the sync helper into an `async` signature, which
+    // would silently wrap its `void` return into `Promise<void>` and
+    // trip `@typescript-eslint/await-thenable`. Sequencing keeps the
+    // call sites readable.
+    this.refreshCircuitGauge();
+    await this.refreshQueueDepthGauge();
+    this.refreshTracingGauge();
+    await this.refreshOutboxLagGauge();
 
     res.status(200);
     return this.metrics.render();
   }
 
-  private async refreshCircuitGauge(): Promise<void> {
+  private refreshCircuitGauge(): void {
     const m = this.redisService.getCircuitMetrics();
     // `CircuitState` is `'closed' | 'open' | 'half_open'`. The
     // `MetricsRegistry` accepts the same vocabulary, so no

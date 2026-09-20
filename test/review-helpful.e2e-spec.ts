@@ -1,43 +1,7 @@
 /// <reference types="jest" />
-/**
- * `POST /reviews/:reviewId/helpful` and `DELETE /reviews/:reviewId/helpful`
- * controller-level integration tests — Phase 4 of the
- * `helpful-vote-counter-reconciliation` plan.
- *
- * Verifies the §4.5 message matrix and the §4.8 transaction-invariant
- * end-to-end against a live Postgres + Redis stack:
- *
- *   | Endpoint             | Repository result | Message                              |
- *   |----------------------|-------------------|--------------------------------------|
- *   | POST helpful:true 1st| true              | Review marked as helpful             |
- *   | POST helpful:true 2nd| false             | Review was already marked as helpful |
- *   | POST helpful:false 1st (had vote) | true   | Helpful vote removed                 |
- *   | POST helpful:false 2nd (no vote)  | false  | No helpful vote to remove            |
- *   | DELETE 1st (had vote)            | true   | Helpful vote removed                 |
- *   | DELETE 2nd (no vote)             | false  | No helpful vote to remove            |
- *   | DELETE without prior POST        | false  | No helpful vote to remove            |
- *
- * Plus:
- *   - 404 when the review does not exist.
- *   - 400 when the actor is the review's author.
- *   - Idempotency-key path: same body returned on replay; counter not
- *     double-incremented.
- *   - Diagnostic SQL at the end of the suite confirms
- *     `helpful_count = COUNT(*) FROM review_helpful_votes`.
- *
- * Skips gracefully when Postgres or env is unreachable so this file can
- * sit in `pnpm test:e2e` without breaking CI for engineers without a
- * local DB. Run against a live stack with:
- *
- *   pnpm db:start && pnpm db:seed:foundation && \
- *   pnpm test:e2e -- --testPathPatterns=review-helpful
- */
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
-// ---------------------------------------------------------------------------
-// Minimal `.env` loader (mirrors test/ranking-phase1.e2e-spec.ts).
-// ---------------------------------------------------------------------------
 function loadDotEnv(): void {
   const envPath = path.resolve(__dirname, '..', '.env');
   if (!fs.existsSync(envPath)) return;
