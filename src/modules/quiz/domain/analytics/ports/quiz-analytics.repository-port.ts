@@ -40,4 +40,12 @@ export interface QuizAnalyticsRepositoryPort {
   getTagAnalytics(tagId: string): Promise<TagAnalytics | null>;
 
   getRecentAttemptsByQuiz(quizId: string, hours: number): Promise<number>;
+
+  /**
+   * Bulk variant of {@link getRecentAttemptsByQuiz}. Counts attempts in
+   * the last `hours` window across every quiz in `quizIds` in a single
+   * GROUP BY query. Used by the trending list to avoid N sequential
+   * round-trips per candidate quiz.
+   */
+  getRecentAttemptsByQuizIds(quizIds: string[], hours: number): Promise<Map<string, number>>;
 }

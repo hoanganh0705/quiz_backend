@@ -181,12 +181,10 @@ export const ApiTrendingTagsResponse = (): MethodDecorator =>
 
 export const ApiTagQuizzesResponse = (): MethodDecorator =>
   applyDecorators(
-    resourceList<typeof QuizListResponseDto>(
-      QuizListResponseDto as unknown as Type,
-      'cursor',
-      'Returns the quizzes in the tag.',
-      TAG_QUIZZES_EXAMPLE,
-    ),
+    ApiOkResourceList(QuizListResponseDto, 'cursor', {
+      description: 'Returns the quizzes in the tag.',
+      example: TAG_QUIZZES_EXAMPLE,
+    }),
     ApiNotFoundResponse(problem.notFound(tagQuizzesNotFoundExample)),
     ApiInternalServerErrorResponse(problem.internalError(tagQuizzesInternalErrorExample)),
   );
@@ -280,11 +278,6 @@ export const ApiTagBySlugResponse = (): MethodDecorator =>
     ApiInternalServerErrorResponse(problem.internalError(tagBySlugInternalErrorExample)),
   );
 
-/**
- * Phase 2 (S-13): decorator for the batched `/tags/by-slugs` route.
- * Returns a bare array of tag records — the same shape as
- * `/tags/popular` and `/tags/trending`.
- */
 export const ApiTagBySlugsResponse = (): MethodDecorator =>
   applyDecorators(
     resourceOkArray<typeof TagResponseDto>(
@@ -366,17 +359,6 @@ export const ApiFollowedTagsResponse = (): MethodDecorator =>
     ApiInternalServerErrorResponse(problem.internalError(followedTagsInternalErrorExample)),
   );
 
-/**
- * Documents the `:id` path parameter as a UUID, mirroring the runtime
- * `ParseUUIDPipe` enforcement on every admin/mutation tag endpoint.
- *
- * Without this decorator the OpenAPI generator renders the parameter as a
- * plain `{ type: 'string' }` with no format hint — generated SDKs (Orval,
- * OpenAPI Generator) would emit `string` instead of `UUID`, dropping the
- * type safety that `ParseUUIDPipe` provides at runtime.
- *
- * Phase 3 of `docs/api-contract-audit-tag.md`.
- */
 export const ApiTagIdParam = (): MethodDecorator =>
   ApiParam({
     name: 'id',

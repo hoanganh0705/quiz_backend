@@ -12,14 +12,23 @@ export class AuthSessionCleanupService {
 
   @Cron('0 * * * *')
   async cleanupExpiredSessions(): Promise<void> {
-    const nowIso = new Date().toISOString();
+    try {
+      const nowIso = new Date().toISOString();
+      const revokedRows = await this.userSessionRepository.revokeExpiredSessions(nowIso);
 
-    const revokedRows = await this.userSessionRepository.revokeExpiredSessions(nowIso);
-
-    this.logger.info({
-      event: 'auth_session_cleanup_completed',
-      affectedSessionsCount: revokedRows.length,
-      cleanedAt: nowIso,
-    });
+      this.logger.info({
+        event: 'auth_session_cleanup_completed',
+        affectedSessionsCount: revokedRows.length,
+        cleanedAt: nowIso,
+      });
+    } catch (error: unknown) {
+      // The cron tick will retry on the next hour, but emit a warn so
+      // operators see a sustained cleanup failure even if the upstream
+      // dependency (DB) keeps returning errors.
+      this.logger.error({
+        event: 'auth_session_cleanup_failed',
+        message: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
   }
 }

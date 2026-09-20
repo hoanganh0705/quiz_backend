@@ -1,7 +1,3 @@
-/**
- * Achievement Services
- */
-
 export * from './rank-achievement.service';
 export {
   RuleEngineService,

@@ -4,14 +4,7 @@ import {
   TAG_DOMAIN_EVENT_BUS,
   type TagDomainEventBusPort,
 } from './domain/events/tag-domain-event-bus.port';
-import type {
-  TagCreatedEvent,
-  TagUpdatedEvent,
-  TagDeletedEvent,
-  TagRestoredEvent,
-  TagFollowedEvent,
-  TagUnfollowedEvent,
-} from './domain/events/tag-domain.events';
+import type { TagDomainEvent } from './domain/events/tag-domain.events';
 
 /**
  * Wires TagDomainEventBus events to observability sinks.
@@ -51,104 +44,57 @@ export class TagEventBootstrapService implements OnModuleInit, OnModuleDestroy {
   }
 
   private handleEvent(event: unknown): void {
-    if (this.isTagCreatedEvent(event)) {
-      this.logger.info({
-        event: 'tag_event_bootstrap_created',
-        tagId: event.tagId,
-        slug: event.slug,
-      });
-      return;
-    }
-    if (this.isTagUpdatedEvent(event)) {
-      this.logger.info({
-        event: 'tag_event_bootstrap_updated',
-        tagId: event.tagId,
-      });
-      return;
-    }
-    if (this.isTagDeletedEvent(event)) {
-      this.logger.info({
-        event: 'tag_event_bootstrap_deleted',
-        tagId: event.tagId,
-      });
-      return;
-    }
-    if (this.isTagRestoredEvent(event)) {
-      this.logger.info({
-        event: 'tag_event_bootstrap_restored',
-        tagId: event.tagId,
-      });
-      return;
-    }
-    if (this.isTagFollowedEvent(event)) {
-      this.logger.info({
-        event: 'tag_event_bootstrap_followed',
-        tagId: event.tagId,
-        userId: event.userId,
-      });
-      return;
-    }
-    if (this.isTagUnfollowedEvent(event)) {
-      this.logger.info({
-        event: 'tag_event_bootstrap_unfollowed',
-        tagId: event.tagId,
-        userId: event.userId,
-      });
-      return;
+    if (!this.isTagDomainEvent(event)) return;
+
+    switch (event.eventType) {
+      case 'tag.created':
+        this.logger.info({
+          event: 'tag_event_bootstrap_created',
+          tagId: event.tagId,
+          slug: event.slug,
+        });
+        return;
+      case 'tag.updated':
+        this.logger.info({
+          event: 'tag_event_bootstrap_updated',
+          tagId: event.tagId,
+        });
+        return;
+      case 'tag.deleted':
+        this.logger.info({
+          event: 'tag_event_bootstrap_deleted',
+          tagId: event.tagId,
+        });
+        return;
+      case 'tag.restored':
+        this.logger.info({
+          event: 'tag_event_bootstrap_restored',
+          tagId: event.tagId,
+        });
+        return;
+      case 'tag.followed':
+        this.logger.info({
+          event: 'tag_event_bootstrap_followed',
+          tagId: event.tagId,
+          userId: event.userId,
+        });
+        return;
+      case 'tag.unfollowed':
+        this.logger.info({
+          event: 'tag_event_bootstrap_unfollowed',
+          tagId: event.tagId,
+          userId: event.userId,
+        });
+        return;
     }
   }
 
-  private isTagCreatedEvent(event: unknown): event is TagCreatedEvent {
+  private isTagDomainEvent(event: unknown): event is TagDomainEvent {
     return (
       typeof event === 'object' &&
       event !== null &&
       'eventType' in event &&
-      (event as { eventType: unknown }).eventType === 'tag.created'
-    );
-  }
-
-  private isTagUpdatedEvent(event: unknown): event is TagUpdatedEvent {
-    return (
-      typeof event === 'object' &&
-      event !== null &&
-      'eventType' in event &&
-      (event as { eventType: unknown }).eventType === 'tag.updated'
-    );
-  }
-
-  private isTagDeletedEvent(event: unknown): event is TagDeletedEvent {
-    return (
-      typeof event === 'object' &&
-      event !== null &&
-      'eventType' in event &&
-      (event as { eventType: unknown }).eventType === 'tag.deleted'
-    );
-  }
-
-  private isTagRestoredEvent(event: unknown): event is TagRestoredEvent {
-    return (
-      typeof event === 'object' &&
-      event !== null &&
-      'eventType' in event &&
-      (event as { eventType: unknown }).eventType === 'tag.restored'
-    );
-  }
-
-  private isTagFollowedEvent(event: unknown): event is TagFollowedEvent {
-    return (
-      typeof event === 'object' &&
-      event !== null &&
-      'eventType' in event &&
-      (event as { eventType: unknown }).eventType === 'tag.followed'
-    );
-  }
-
-  private isTagUnfollowedEvent(event: unknown): event is TagUnfollowedEvent {
-    return (
-      typeof event === 'object' &&
-      event !== null &&
-      'eventType' in event &&
-      (event as { eventType: unknown }).eventType === 'tag.unfollowed'
+      typeof (event as { eventType: unknown }).eventType === 'string'
     );
   }
 }

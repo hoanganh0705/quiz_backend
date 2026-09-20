@@ -71,14 +71,6 @@ export class QuizInstanceRepository implements QuizInstanceRepositoryPort {
     throw error;
   }
 
-  /**
-   * Create a new quiz instance and add the host as a player atomically.
-   * Both operations are wrapped in a transaction to ensure consistency.
-   *
-   * Phase 7 (audit Finding 4): removed the unused `createInstance()` method
-   * (which only created the instance without adding the host player).
-   * Only `createInstanceWithHost()` is used, which handles both operations.
-   */
   async createInstanceWithHost(params: {
     quizVersionId: string;
     hostUserId: string;
@@ -198,19 +190,13 @@ export class QuizInstanceRepository implements QuizInstanceRepositoryPort {
 
   async updateInstanceStatus(params: {
     instanceId: string;
-    status: string;
+    status: 'open' | 'countdown' | 'running' | 'closed' | 'finished';
     nowIso: string;
     startedAt?: string;
     closedAt?: string;
     countdownStartedAt?: string | null;
     expectedVersion: number;
   }): Promise<{ version: number }> {
-    // Phase 1 (Foundational Correctness) — optimistic locking.
-    // The UPDATE is conditional on `version = $expectedVersion`; the
-    // version is then incremented atomically (`version = version + 1`)
-    // inside the same statement. A zero-row result means another writer
-    // won the race; we translate it into a domain error so the caller
-    // can decide whether to retry or surface a 409.
     const update: Record<string, unknown> = {
       status: params.status,
       updatedAt: params.nowIso,
@@ -218,8 +204,6 @@ export class QuizInstanceRepository implements QuizInstanceRepositoryPort {
     };
     if (params.startedAt) update.startedAt = params.startedAt;
     if (params.closedAt) update.closedAt = params.closedAt;
-    // Phase 2 — explicit `null` clears the countdown anchor; `undefined`
-    // leaves it untouched (used by `start`/`close` which don't touch it).
     if (params.countdownStartedAt !== undefined) {
       update.countdownStartedAt = params.countdownStartedAt;
     }
@@ -243,18 +227,6 @@ export class QuizInstanceRepository implements QuizInstanceRepositoryPort {
 
     return { version: row.version };
   }
-
-  /**
-   * Phase 2 (Gameplay Lifecycle) — finds all countdown instances whose
-   * deadline has elapsed. The scheduler calls this on each tick and
-   * transitions the returned rows into `running`.
-   *
-   * The query hits the partial index `idx_quiz_instances_countdown_due`
-   * defined alongside the column. Each row carries the optimistic-lock
-   * `version`, which the scheduler passes back into
-   * `updateInstanceStatus` so concurrent host-driven transitions still
-   * surface as a clean 409 instead of a silent overwrite.
-   */
   async findDueCountdowns(params: { nowIso: string; limit: number }): Promise<
     Array<{
       instanceId: string;
@@ -378,20 +350,6 @@ export class QuizInstanceRepository implements QuizInstanceRepositoryPort {
     }> => {
       const db = tx as DrizzleDB;
 
-      // Phase 1 (Foundational Correctness) — row-level locking.
-      // Take an exclusive lock on the instance row for the duration of
-      // this transaction. Two concurrent `joinInstance` calls against
-      // the same instance now serialize: the second one waits for the
-      // first to commit, then re-reads the (now-incremented) player
-      // count and rejects at capacity.
-      //
-      // Without this lock, the count-then-insert pattern below could
-      // see `count = maxPlayers - 1` and let the second writer through,
-      // producing `maxPlayers + 1` rows on capacity exhaustion.
-      //
-      // `FOR UPDATE` matches Postgres' default `READ COMMITTED`
-      // isolation: it acquires a row-level write lock that other
-      // transactions block on until commit/rollback.
       await db.execute(
         sql`SELECT 1 FROM ${quizInstances} WHERE ${quizInstances.instanceId} = ${params.instanceId} FOR UPDATE`,
       );
@@ -502,12 +460,6 @@ export class QuizInstanceRepository implements QuizInstanceRepositoryPort {
             order by ${quizAttempts.scorePercent} desc nulls last,
                      ${quizAttempts.timeTakenMs} asc nulls last,
                      ${quizInstances.instanceId} asc,
-                     /* Phase 2 (issue 8.4): stable tiebreaker. When every
-                        sort key above is NULL or tied (e.g. no attempt
-                        submitted yet), Postgres previously returned an
-                        implementation-defined order across requests. Use
-                        joinedAt ASC so the leaderboard is deterministic
-                        even for players who have not finished their attempt. */
                      ${quizInstancePlayers.joinedAt} asc
           )::int`.as('row_rank'),
         })

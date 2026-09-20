@@ -61,17 +61,16 @@ import {
   GetFeedCursorQueryDto,
   GetFollowCursorQueryDto,
   GetTrendingUsersQueryDto,
+  GetUsersSearchQueryDto,
   RespondFriendRequestDto,
   BlockUserDto,
 } from '@/modules/social/dto/request';
+import { SOCIAL_THROTTLE } from './throttle.constants';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
 
-// All error responses (401 / 400 / 403 / 404 / 409 / 500) are covered by
-// the `ApiAuthAction` / `ApiAuthActionNoContent` decorators below. After
-// Phase 2 the global exception filter emits RFC 7807 `ProblemDetailDto`
-// for every social-domain error; the per-module filter has been
-// removed.
+const throttle = (bucket: keyof typeof SOCIAL_THROTTLE): MethodDecorator =>
+  Throttle({ default: SOCIAL_THROTTLE[bucket] });
 
 @ApiTags('social')
 @Controller('social')
@@ -83,6 +82,7 @@ export class SocialController {
 
   // ─── Search ────────────────────────────────────────────────────────────────
 
+  @throttle('searchUsernameSuggestions')
   @Get('search/suggestions')
   @Public()
   @ApiOperation({ summary: 'Get username search suggestions' })
@@ -111,6 +111,7 @@ export class SocialController {
     return this.presenter.searchUsernameSuggestions(suggestions);
   }
 
+  @throttle('searchUsers')
   @Get('users/search')
   @ApiAuthAction()
   @ApiOperation({ summary: 'Search users by username' })
@@ -122,18 +123,15 @@ export class SocialController {
     required: false,
     schema: { type: 'integer', minimum: 1, maximum: 100, default: 20 },
   })
-  searchUsers(
-    @CurrentUser() user: JwtPayload,
-    @Query('q') query: string,
-    @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit: number,
-  ) {
+  searchUsers(@CurrentUser() user: JwtPayload, @Query() dto: GetUsersSearchQueryDto) {
     return this.socialService
-      .searchUsers(user, query, limit)
+      .searchUsers(user, dto.q, dto.limit)
       .then((result) => this.presenter.searchUsers(result));
   }
 
   // ─── Suggestions & Feed ──────────────────────────────────────────────────
 
+  @throttle('getSuggestions')
   @Get('suggestions')
   @ApiAuthAction()
   @ApiOperation({
@@ -158,6 +156,7 @@ export class SocialController {
     );
   }
 
+  @throttle('getFeed')
   @Get('feed')
   @ApiAuthAction()
   @ApiOperation({
@@ -175,6 +174,7 @@ export class SocialController {
     );
   }
 
+  @throttle('getMySocialAnalytics')
   @Get('me/analytics')
   @ApiAuthAction()
   @ApiOperation({
@@ -190,13 +190,10 @@ export class SocialController {
     return this.presenter.getMySocialAnalytics(this.normaliseAnalytics(raw));
   }
 
+  @throttle('getTrendingUsers')
   @Get('users/trending')
   @Public()
   @ApiOperation({ summary: 'List trending users' })
-  // Phase 7 (api-contract audit): the runtime emits a non-paginated
-  // bare array (bounded by `limit`), so the OpenAPI schema must match —
-  // `ApiOkResourceArray` is the canonical decorator for non-paginated
-  // bare arrays. The endpoint does not implement cursor pagination.
   @ApiOkResourceArray(TrendingUserResponseDto, {
     description: 'Trending users returned',
   })
@@ -206,13 +203,14 @@ export class SocialController {
     );
   }
 
+  @throttle('getUserActivity')
   @Get('users/:userId/activity')
   @ApiAuthAction()
   @ApiOperation({
     summary: 'Get user public activity timeline',
     description:
       'Returns a paginated public activity timeline for the specified user, ordered by newest activity first. ' +
-      "Honours the target user's `showActivity` privacy flag (Phase 3 / F-13): a requester other than the owner " +
+      "Honours the target user's `showActivity` privacy flag : a requester other than the owner " +
       'receives 403 when the flag is `false`. Returns 404 when the target user does not exist.',
   })
   @ApiParam({
@@ -242,6 +240,7 @@ export class SocialController {
     );
   }
 
+  @throttle('getUserSocialStats')
   @Get('users/:userId/stats')
   @Public()
   @ApiOperation({ summary: "Get a user's public social statistics" })
@@ -261,8 +260,7 @@ export class SocialController {
     return this.presenter.getUserSocialStats(this.normaliseUserStats(raw));
   }
 
-  // ─── Friend Leaderboard ─────────────────────────────────────────────────
-
+  @throttle('getFriendLeaderboard')
   @Get('friends/leaderboard')
   @ApiAuthAction()
   @ApiOperation({ summary: 'Get friend leaderboard' })
@@ -275,8 +273,6 @@ export class SocialController {
     const raw = await this.socialService.getFriendLeaderboard(user, period, limit);
     return this.presenter.getFriendLeaderboard(this.normaliseFriendLeaderboard(raw));
   }
-
-  // ─── Phase 3 (S-17) wire-shape adapters ──────────────────────────────────
 
   private normaliseAnalytics(
     raw: unknown,
@@ -359,7 +355,7 @@ export class SocialController {
   // cached the old URL fail loudly instead of silently misrouting.
   // The stub is intentionally kept forever — see docs/standards/api.md.
 
-  @Throttle({ default: { limit: 20, ttl: 60_000 } })
+  @throttle('sendFriendRequest')
   @Transactional()
   @Post('friend-requests/:userId')
   @ApiOperation({ summary: 'Send a friend request' })
@@ -395,9 +391,6 @@ export class SocialController {
       'or the matching plural route.',
   })
   @ApiOkResponse({ description: 'Stub — never returns 200' })
-  // 405 is intentionally not in `ApiOkResource` etc.; declare it explicitly.
-  // The RuntimeException is caught by `GlobalExceptionFilter` and emitted as
-  // an RFC 7807 ProblemDetail with `extensions.code = 'GLOBAL_METHOD_NOT_ALLOWED'`.
   deprecatedFriendRequestPath(): never {
     throw new HttpException(
       {
@@ -411,12 +404,10 @@ export class SocialController {
     );
   }
 
+  @throttle('getPendingRequests')
   @Get('friend-requests/incoming')
   @ApiAuthAction()
   @ApiOperation({ summary: 'Get incoming friend requests' })
-  // Phase 7 (api-contract audit): the runtime emits a non-paginated
-  // bare array, so the OpenAPI schema must match — `ApiOkResourceArray`
-  // is the canonical decorator for non-paginated bare arrays.
   @ApiOkResourceArray(FriendRequestDto, {
     description: 'Incoming friend requests returned',
   })
@@ -424,12 +415,10 @@ export class SocialController {
     return this.presenter.getPendingRequests(await this.socialService.getPendingRequests(user));
   }
 
+  @throttle('getSentRequests')
   @Get('friend-requests/outgoing')
   @ApiAuthAction()
   @ApiOperation({ summary: 'Get outgoing friend requests' })
-  // Phase 7 (api-contract audit): the runtime emits a non-paginated
-  // bare array, so the OpenAPI schema must match — `ApiOkResourceArray`
-  // is the canonical decorator for non-paginated bare arrays.
   @ApiOkResourceArray(FriendRequestDto, {
     description: 'Outgoing friend requests returned',
   })
@@ -437,7 +426,7 @@ export class SocialController {
     return this.presenter.getSentRequests(await this.socialService.getSentRequests(user));
   }
 
-  @Throttle({ default: { limit: 20, ttl: 60_000 } })
+  @throttle('respondFriendRequest')
   @Transactional()
   @Post('friend-requests/:friendshipId/respond')
   @ApiOperation({ summary: 'Accept or decline a friend request' })
@@ -451,6 +440,7 @@ export class SocialController {
     await this.socialService.respondToFriendRequest(user, friendshipId, dto.accept);
   }
 
+  @throttle('cancelFriendRequest')
   @Transactional()
   @Delete('friend-requests/:friendshipId')
   @ApiOperation({ summary: 'Cancel a sent friend request' })
@@ -464,6 +454,7 @@ export class SocialController {
 
   // ─── Friends ─────────────────────────────────────────────────────────────
 
+  @throttle('getFriendsOfUser')
   @Get('friends/:userId')
   @ApiAuthAction()
   @ApiOperation({ summary: "Get another user's friends" })
@@ -485,6 +476,7 @@ export class SocialController {
     );
   }
 
+  @throttle('removeFriend')
   @Transactional()
   @Delete('friends/:userId')
   @ApiOperation({ summary: 'Remove a friend' })
@@ -504,7 +496,7 @@ export class SocialController {
 
   // ─── Blocking ────────────────────────────────────────────────────────────
 
-  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @throttle('blockUser')
   @Transactional()
   @Post('block/:userId')
   @ApiOperation({ summary: 'Block a user' })
@@ -526,6 +518,7 @@ export class SocialController {
     return this.presenter.blockUser({ message: 'User blocked' });
   }
 
+  @throttle('unblockUser')
   @Transactional()
   @Delete('block/:userId')
   @ApiOperation({ summary: 'Unblock a user' })
@@ -543,20 +536,16 @@ export class SocialController {
     await this.socialService.unblockUser(user, blockedId);
   }
 
+  @throttle('getBlockedUsers')
   @Get('blocked')
   @ApiAuthAction()
   @ApiOperation({ summary: 'Get blocked users' })
-  // Phase 7 (api-contract audit): the runtime emits a non-paginated
-  // bare array, so the OpenAPI schema must match — `ApiOkResourceArray`
-  // is the canonical decorator for non-paginated bare arrays.
   @ApiOkResourceArray(BlockedUserDto, { description: 'Blocked users returned' })
   async getBlockedUsers(@CurrentUser() user: JwtPayload) {
     return this.presenter.getBlockedUsers(await this.socialService.getBlockedUsers(user));
   }
 
-  // ─── Following ────────────────────────────────────────────────────────────
-
-  @Throttle({ default: { limit: 30, ttl: 60_000 } })
+  @throttle('followUser')
   @Transactional()
   @Post('follow/:userId')
   @ApiOperation({
@@ -580,7 +569,7 @@ export class SocialController {
     await this.socialService.followUser(user, followingId);
   }
 
-  @Throttle({ default: { limit: 30, ttl: 60_000 } })
+  @throttle('unfollowUser')
   @Transactional()
   @Delete('follow/:userId')
   @ApiOperation({
@@ -603,6 +592,7 @@ export class SocialController {
     await this.socialService.unfollowUser(user, followingId);
   }
 
+  @throttle('getUserFollowers')
   @Get('users/:userId/followers')
   @ApiAuthAction()
   @ApiOperation({
@@ -634,6 +624,7 @@ export class SocialController {
     );
   }
 
+  @throttle('getMutualFriends')
   @Get('users/:userId/mutual-friends')
   @ApiAuthAction()
   @ApiOperation({
@@ -665,6 +656,7 @@ export class SocialController {
     );
   }
 
+  @throttle('getMutualFollowers')
   @Get('users/:userId/mutual-followers')
   @ApiAuthAction()
   @ApiOperation({
@@ -696,6 +688,7 @@ export class SocialController {
     );
   }
 
+  @throttle('getUserFollowing')
   @Get('users/:userId/following')
   @ApiAuthAction()
   @ApiOperation({
@@ -729,6 +722,7 @@ export class SocialController {
 
   // ─── Relationship ───────────────────────────────────────────────────────
 
+  @throttle('getRelationshipStatus')
   @Get('relationship/:userId')
   @ApiAuthAction()
   @ApiOperation({ summary: 'Get relationship status with a user' })
@@ -748,6 +742,7 @@ export class SocialController {
     );
   }
 
+  @throttle('getSocialCounts')
   @Get('counts')
   @ApiAuthAction()
   @ApiOperation({ summary: 'Get social counts for the authenticated user' })

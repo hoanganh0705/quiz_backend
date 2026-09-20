@@ -1,14 +1,3 @@
-/**
- * Achievement Notification Listener
- *
- * Subscribes to Achievement domain events and dispatches notifications via
- * ACHIEVEMENT_NOTIFICATION_PORT. The Notification module owns the implementation
- * (AchievementNotificationService) and exports it through the port token, so
- * Achievement does not reach into Notification internals.
- *
- * Hosted in AchievementModule to avoid cross-module import cycles.
- */
-
 import { Inject, Injectable, OnModuleInit, OnModuleDestroy, forwardRef } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { getCorrelationId, createCorrelationId } from '@/common/interceptors/correlation-id';

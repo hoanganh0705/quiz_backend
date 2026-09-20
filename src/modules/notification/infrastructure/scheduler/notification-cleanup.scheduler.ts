@@ -1,13 +1,3 @@
-/**
- * Notification Cleanup Scheduler
- *
- * Implements the cleanup strategy for expired notifications.
- * Runs hourly to remove notifications that have passed their expiresAt timestamp.
- *
- * Architecture: Per project patterns, schedulers live in infrastructure/scheduler/
- * rather than in the application layer.
- */
-
 import { Inject, Injectable, OnModuleDestroy } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
@@ -28,14 +18,6 @@ export class NotificationCleanupScheduler implements OnModuleDestroy {
     this.isShuttingDown = true;
     this.logger.info({ event: 'notification_cleanup_scheduler_shutdown' });
   }
-
-  /**
-   * Permanently removes expired notifications.
-   * Runs once per hour to clean up notifications that have passed their expiresAt timestamp.
-   *
-   * Uses soft delete in the repository, but this cleanup job performs hard delete
-   * on notifications that have already been soft-deleted (deletedAt is set).
-   */
   @Cron('0 * * * *')
   async handleExpiredNotifications(): Promise<void> {
     if (this.isShuttingDown) {
@@ -61,11 +43,6 @@ export class NotificationCleanupScheduler implements OnModuleDestroy {
       });
     }
   }
-
-  /**
-   * Manual trigger for notification cleanup.
-   * Useful for running cleanup on-demand or after migrations.
-   */
   async triggerCleanup(): Promise<number> {
     this.logger.info({ event: 'notification_cleanup_manual_trigger' });
 

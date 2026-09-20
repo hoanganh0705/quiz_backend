@@ -8,13 +8,6 @@ export interface UserMeRow {
   email: string;
   displayName: string | null;
   avatarUrl: string | null;
-  /**
-   * Cloudinary `public_id` for the avatar. Phase 6: the read-path
-   * mapper (`UserResponseMapper.toUserMeResponse`) prefers this
-   * column over `avatarUrl` and derives a CDN URL via
-   * `STORAGE_PORT.deriveUrl`. Legacy Base64 rows continue to surface
-   * through `avatarUrl` until Phase 7 migrate-on-write catches up.
-   */
   avatarPublicId: string | null;
   bio: string | null;
   xpTotal: number;
@@ -33,12 +26,6 @@ export interface UserPublicRow {
   avatarPublicId: string | null;
 }
 
-/**
- * Phase 1 (S-1): public-keyed profile summary returned by
- * `findByUsername`. Includes the boolean `isVerified` from
- * `users.is_verified` so the lookup endpoint can produce the same
- * shape that `/auth/me` returns for the slim identity payload.
- */
 export interface UserLookupRow {
   userId: string;
   username: string;
@@ -65,14 +52,6 @@ export interface UserRankingRow {
   updatedAt: string;
 }
 
-/**
- * Result of `updateStreakCache` — the new streak cache state after the
- * atomic UPDATE in `docs/plans/user-streak-system.md` §3.1.
- *
- * `lastStreakDay` is the most recent UTC calendar day on which the user
- * has a completed `quiz_attempts` row. Returns `null` for soft-deleted
- * users (the FROM subselect is empty and the UPDATE affects 0 rows).
- */
 export interface StreakCacheUpdateResult {
   currentStreak: number;
   longestStreak: number;
@@ -132,25 +111,8 @@ export interface MyTournamentAnalyticsRow {
 
 export interface UserRepositoryPort {
   findMeById(userId: string): Promise<UserMeRow | null>;
-  /**
-   * Phase 6: read just the avatar `public_id` for the lifecycle
-   * service. Returns `null` when the user has no profile row or the
-   * column is NULL — both cases are equivalent (no Cloudinary asset to
-   * clean up).
-   */
   findAvatarPublicIdByUserId(userId: string): Promise<string | null>;
   findUserProfileSettings(userId: string): Promise<{ isPublic: boolean } | null>;
-  /**
-   * Phase 3 (F-7): Read every granular privacy flag for the target user.
-   * Returns `null` when no `user_profile_settings` row exists; callers
-   * should treat `null` as "all flags at their schema defaults" (all
-   * `true` per `user_profile_settings` column defaults). Used by
-   * `UserDomainService.assertPrivacyFlag` to gate
-   * `showStatistics` / `showAchievements` / `showActivity` /
-   * `showTournamentActivity` per-endpoint, and by the social module
-   * (F-13) to gate `GET /social/users/:userId/activity` via
-   * `showActivity`.
-   */
   findUserPrivacyFlags(userId: string): Promise<{
     isPublic: boolean;
     showStatistics: boolean;
@@ -189,81 +151,30 @@ export interface UserRepositoryPort {
     patch: {
       displayName?: string | null;
       bio?: string | null;
-      /**
-       * Phase 6: Cloudinary `public_id` for the avatar. When present
-       * (non-undefined), it overrides the legacy `avatarUrl` field for
-       * the write path — the legacy column is left untouched and the
-       * read-path mapper falls back to it for any row that has not yet
-       * migrated. `avatarPublicId: null` clears the avatar (and the
-       * lifecycle service deletes the underlying Cloudinary asset).
-       */
       avatarPublicId?: string | null;
-      /**
-       * @deprecated Phase 6 — superseded by `avatarPublicId`. Kept for
-       * the read-path fallback for legacy Base64 rows that have not
-       * been migrated yet. New writes should send `avatarPublicId`
-       * only.
-       */
       avatarUrl?: string | null;
     },
     nowIso: string,
   ): Promise<UserMeRow | null>;
-  /**
-   * Phase 3 (F-6): Write free-form preferences to `users.settings`.
-   * `settings === undefined` means "leave the existing value alone"
-   * (no-op). When `settings` is a non-null object it REPLACES the
-   * stored blob (whole-object replace, matching the previous
-   * `updateSettings` semantics).
-   */
   updatePreferences(
     userId: string,
-    settings: Record<string, unknown> | undefined,
+    settings: Record<string, unknown>,
     nowIso: string,
   ): Promise<UserMeRow | null>;
 
-  /**
-   * Phase 3 (F-6 + F-7): Write one or more granular privacy flags to
-   * `user_profile_settings`. `flags === undefined` is a no-op. When
-   * `flags` is provided, every key present in `flags` overrides the
-   * stored column; keys absent are left untouched.
-   *
-   * Behaviour mirrors `updateProfile` (Phase 1 / F-2): distinguish
-   * "key absent" from "key present with explicit value". The caller
-   * supplies `undefined` for "don't touch this column" by omitting
-   * the key from the object.
-   */
   updatePrivacy(
     userId: string,
-    flags:
-      | {
-          isPublic?: boolean;
-          showStatistics?: boolean;
-          showAchievements?: boolean;
-          showActivity?: boolean;
-          showRankImprovement?: boolean;
-          showTournamentActivity?: boolean;
-        }
-      | undefined,
+    flags: {
+      isPublic?: boolean;
+      showStatistics?: boolean;
+      showAchievements?: boolean;
+      showActivity?: boolean;
+      showRankImprovement?: boolean;
+      showTournamentActivity?: boolean;
+    },
     nowIso: string,
   ): Promise<UserMeRow | null>;
 
-  /**
-   * Atomic streak-cache transition driven by a single completed
-   * `quiz_attempts.finished_at`. Implements the §3.1 SQL in
-   * `docs/plans/user-streak-system.md`: reads `last_streak_day` from the
-   * `users` row, applies the §1.3 gap rule, clamps `last_streak_day`
-   * to `GREATEST(prev, $day)` to defend against out-of-order commits
-   * (see §3.5.1), and short-circuits when no cache column would
-   * change.
-   *
-   * `tx` SHOULD be supplied so the streak update commits atomically with
-   * the calling transaction (typically the attempt-completion
-   * transaction in `AttemptRepository.completeAttemptAndSideEffects`).
-   * When omitted, the implementation falls back to its own connection —
-   * used by the `StreakService` listener path (F-5) that runs outside
-   * of any attempt transaction. Returns `null` for soft-deleted users
-   * (FROM subselect empty).
-   */
   updateStreakCache(
     userId: string,
     finishedAt: Date,
@@ -271,16 +182,6 @@ export interface UserRepositoryPort {
   ): Promise<StreakCacheUpdateResult | null>;
 
   findByUsernames(usernames: string[]): Promise<UserPublicRow[]>;
-  /**
-   * Phase 1 (S-1): single-username lookup that resolves the route
-   * param (`GET /users/by-username/:username`) into a public profile
-   * summary. Mirrors `findByUsernames` but returns extra columns
-   * (currently just `isVerified`) — the bulk method is for search/
-   * suggestions where `isVerified` is not consumed.
-   *
-   * Returns `null` for unknown usernames and for soft-deleted users —
-   * both paths map to a 404 (`USER_NOT_FOUND`).
-   */
   findByUsername(username: string): Promise<UserLookupRow | null>;
 
   findUsersByRole(roles: ModeratorRole[]): Promise<{ userId: string }[]>;

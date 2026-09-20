@@ -13,6 +13,8 @@ import type {
   AttemptAnswerRow,
   AttemptAnswerRepositoryPort,
 } from '../../domain/ports/attempt-answer-repository.port';
+import { AttemptNotActiveError } from '../../domain/errors/attempt-domain.errors';
+import { ATTEMPT_NOT_STARTED_OR_FINISHED_MESSAGE } from '../../attempt.constants';
 
 @Injectable()
 export class AttemptAnswerRepository implements AttemptAnswerRepositoryPort {
@@ -63,20 +65,31 @@ export class AttemptAnswerRepository implements AttemptAnswerRepositoryPort {
   async getAttemptAnswerScoringData(
     attemptId: string,
   ): Promise<{ totalAnswers: number; correctCount: number }> {
-    const answers = await this.db
-      .select({
-        attemptAnswerId: quizAttemptAnswers.attemptAnswerId,
-        isCorrect: quizAnswerOptions.isCorrect,
-      })
-      .from(quizAttemptAnswers)
-      .innerJoin(
-        quizAnswerOptions,
-        eq(quizAttemptAnswers.selectedOptionId, quizAnswerOptions.optionId),
-      )
-      .where(eq(quizAttemptAnswers.attemptId, attemptId));
+    // Push counting to PostgreSQL instead of fetching all rows and filtering in
+    // memory. SUM/CASE is a single aggregation pass — no JavaScript iteration.
+    const result = await this.db.execute<{ total: number | string; correct: number | string }>(
+      sql`
+        SELECT
+          COUNT(*)::int AS total,
+          COALESCE(
+            SUM(CASE WHEN qao.is_correct THEN 1 ELSE 0 END),
+            0
+          )::int AS correct
+        FROM quiz_attempt_answers qaa
+        INNER JOIN quiz_answer_options qao
+          ON qaa.selected_option_id = qao.option_id
+        WHERE qaa.attempt_id = ${attemptId}::uuid
+      `,
+    );
 
-    const correctCount = answers.filter((a) => a.isCorrect === true).length;
-    return { totalAnswers: answers.length, correctCount };
+    // Drizzle raw SQL returns untyped rows
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+    const row = result.rows[0] as { total: number | string; correct: number | string } | undefined;
+
+    return {
+      totalAnswers: Number(row?.total ?? 0),
+      correctCount: Number(row?.correct ?? 0),
+    };
   }
 
   async submitAnswer(params: {
@@ -94,7 +107,7 @@ export class AttemptAnswerRepository implements AttemptAnswerRepositoryPort {
         .limit(1);
 
       if (!locked || locked.status !== 'started') {
-        throw new Error('Attempt not active or not found');
+        throw new AttemptNotActiveError(ATTEMPT_NOT_STARTED_OR_FINISHED_MESSAGE);
       }
 
       const [created] = await tx

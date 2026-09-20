@@ -17,23 +17,6 @@ import {
 import { HealthPresenter } from './health.presenter';
 import { HealthQueueProbe } from './health-queue-probe';
 
-/**
- * Health check endpoint.
- *
- * Phase 2 #3 — extended per-dependency health. The endpoint
- * surfaces four sub-probes (`database`, `redis`, `storage`,
- * `emailQueue`) plus the in-process Redis circuit-breaker state.
- * The aggregate `status` is:
- *   - `down` when the database is unreachable (no pod can serve).
- *   - `degraded` when any non-critical dependency is failing.
- *   - `up` otherwise.
- *
- * HTTP status: 200 for `up` and `degraded`, 503 for `down`. The
- * orchestrator should keep `degraded` pods in rotation — the
- * fallback paths (rate-limit fail-open, LSITEN/NOTIFY outbox
- * fallback poll, etc.) keep the API usable — but should page
- * on-call.
- */
 @Public()
 @ApiTags('health')
 @Controller('health')
@@ -121,7 +104,7 @@ export class HealthController {
       const reply = await this.redisService.ping();
       return reply === 'PONG' || typeof reply === 'string'
         ? { status: 'up', detail: null }
-        : { status: 'degraded', detail: `unexpected reply: ${reply}` };
+        : { status: 'degraded', detail: `unexpected reply: ${reply as string}` };
     } catch (error) {
       return {
         status: 'down',

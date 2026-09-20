@@ -1,15 +1,3 @@
-/**
- * Ranking Admin Controller
- *
- * Admin-only endpoints for ranking system management.
- * All endpoints require the 'admin' role via PermissionsGuard.
- *
- * Error shape: All error responses (RFC 7807 `ProblemDetailDto`) are
- * produced by `GlobalExceptionFilter` after Phase 3.2. The prior
- * `RankingDomainExceptionFilter` (a `@Catch()` catch-all) has been
- * removed; `RankingDomainErrorDto` is also gone.
- */
-
 import {
   Controller,
   Get,
@@ -45,13 +33,6 @@ import {
 } from '../../dto/response/ranking-admin-response.dto';
 import { RankingPresenter } from '../presenters/ranking.presenter';
 import { ApiOkResource } from '@/common/swagger/api-ok';
-
-// ─── Local helper decorators ───────────────────────────────────────────────────
-//
-// All error responses (401 from JwtGuard, 403 from PermissionsGuard,
-// 422 from `InvalidXpEventError`, 500 from `RankCalculationError` /
-// `PeriodResetError`) are routed through `GlobalExceptionFilter` as
-// RFC 7807 `ProblemDetailDto` after Phase 3.2.
 
 function rankingAdminUnauthorizedResponse(): MethodDecorator {
   return applyDecorators(
@@ -107,14 +88,10 @@ export class RankingAdminController {
   async getStatus() {
     const status = await this.rankingAppService.getStatus();
     const result: RankingStatusResponseDto = {
-      schedulerRunning: true, // Scheduler is managed by NestJS lifecycle
+      schedulerRunning: status.schedulerRunning,
       dirtyQueueSize: status.dirtyQueueSize,
-      nextConsistencyCheck: null, // Scheduler runs hourly, managed by NestJS
-      nextPeriodReset: {
-        weekly: null, // Scheduler checks every 30s, managed by NestJS
-        monthly: null,
-        daily: null,
-      },
+      nextConsistencyCheck: status.nextConsistencyCheck,
+      nextPeriodReset: status.nextPeriodReset,
     };
     return this.presenter.getStatus(result);
   }

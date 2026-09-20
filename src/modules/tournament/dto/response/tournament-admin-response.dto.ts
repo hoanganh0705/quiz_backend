@@ -1,16 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { TOURNAMENT_STATUSES } from '../../types/tournament.types';
 
-/**
- * Phase 1 / Issue #1 — response shape for `POST /tournaments/:id/cancel`.
- *
- * Returns the canonical `{ data, meta }` envelope (the response interceptor
- * handles wrapping). The `status` field confirms the tournament moved to
- * the terminal `cancelled` state; `cancelledAt` is the timestamp recorded
- * on the row (today the column is the generic `updated_at` — there is no
- * dedicated `cancelled_at` column yet, see audit Issue #10 for the
- * future work).
- */
 export class CancelTournamentResponseDto {
   @ApiProperty({
     description: 'Tournament identifier',
@@ -32,15 +22,6 @@ export class CancelTournamentResponseDto {
   cancelledAt!: string;
 }
 
-/**
- * Phase 1 / Issue #1 — response shape for `DELETE /tournaments/:id`
- * (soft delete).
- *
- * Mirrors the `ReviewPresenter.deleteReview` shape used in the
- * reviewer module so the two admin modules follow the same envelope
- * conventions: the response carries the deleted entity's ID plus the
- * `deletedAt` timestamp the soft-delete column was set to.
- */
 export class SoftDeleteTournamentResponseDto {
   @ApiProperty({
     description: 'Tournament identifier',

@@ -1,23 +1,9 @@
-/**
- * Comment Application Service
- *
- * Wraps the domain service with:
- *   - JWT subject resolution for write paths
- *   - Per-viewer vote enrichment for read paths
- *   - Cursor (de)serialization at the transport boundary
- *   - Audit log writes for moderator actions
- *
- * The application service is the only collaborator the controllers
- * (and the presenter) import. The domain service is not exported
- * from the module, per the plan §8.4.
- */
-
 import { Injectable } from '@nestjs/common';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
 import { CommentService } from '../domain/services/comment.service';
-import { CommentModeratorAuditService } from '../infrastructure/audit/comment-moderator-audit.service';
 import { parseCommentCursor, serializeCommentCursor } from '../mappers/comment-cursor.mapper';
 import { parseReportCursor, serializeReportCursor } from '../mappers/report-cursor.mapper';
+import { sliceWithCursor } from './pagination.helper';
 import type {
   CommentView,
   CommentWithRepliesView,
@@ -36,18 +22,13 @@ import type {
 
 @Injectable()
 export class CommentApplicationService {
-  constructor(
-    private readonly commentService: CommentService,
-    private readonly moderatorAudit: CommentModeratorAuditService,
-  ) {}
-
-  // ─── Reads ────────────────────────────────────────────────────────────────
+  constructor(private readonly commentService: CommentService) {}
 
   async getComment(
     _viewer: JwtPayload | undefined,
     commentId: string,
   ): Promise<CommentView | null> {
-    return this.commentService.getComment({ commentId });
+    return this.commentService.getComment({ commentId, viewerId: _viewer?.sub ?? null });
   }
 
   async listQuizComments(
@@ -58,10 +39,11 @@ export class CommentApplicationService {
     items: CommentWithRepliesView[];
     pagination: { limit: number; hasNextPage: boolean; nextCursor: string | null };
   }> {
+    const limit = query.limit ?? 20;
     const cursor = query.cursor ? parseCommentCursor(query.cursor) : null;
     const result = await this.commentService.listComments({
       quizId,
-      limit: query.limit ?? 20,
+      limit,
       cursor,
       viewerId: viewer?.sub ?? null,
     });
@@ -69,7 +51,7 @@ export class CommentApplicationService {
     return {
       items: result.items,
       pagination: {
-        limit: query.limit ?? 20,
+        limit,
         hasNextPage: result.hasNextPage,
         nextCursor: serializeCommentCursor(result.nextCursor),
       },
@@ -132,24 +114,34 @@ export class CommentApplicationService {
     items: ReportView[];
     pagination: { limit: number; hasNextPage: boolean; nextCursor: string | null };
   }> {
+    const limit = filters.limit ?? 20;
     const cursor = filters.cursor ? parseReportCursor(filters.cursor) : null;
     const result = await this.commentService.listReports({
       status: filters.status,
-      limit: filters.limit ?? 20,
+      limit,
       cursor,
     });
+    const sliced = sliceWithCursor(result.items, limit, (row) => ({
+      createdAt: row.createdAt,
+      id: row.reportId,
+    }));
 
     return {
-      items: result.items,
+      items: sliced.items,
       pagination: {
-        limit: filters.limit ?? 20,
-        hasNextPage: result.hasNextPage,
-        nextCursor: serializeReportCursor(result.nextCursor),
+        limit,
+        hasNextPage: sliced.hasNextPage,
+        nextCursor: serializeReportCursor(
+          sliced.nextCursor
+            ? {
+                createdAt: sliced.nextCursor.createdAt,
+                id: sliced.nextCursor.id,
+              }
+            : null,
+        ),
       },
     };
   }
-
-  // ─── Writes ───────────────────────────────────────────────────────────────
 
   async createComment(
     user: JwtPayload,
@@ -168,12 +160,13 @@ export class CommentApplicationService {
   async editComment(
     user: JwtPayload,
     commentId: string,
-    dto: { body: string },
+    dto: { body: string; expectedUpdatedAt?: string },
   ): Promise<CommentView> {
     const params: EditCommentParams = {
       commentId,
       authorId: user.sub,
       body: dto.body,
+      expectedUpdatedAt: dto.expectedUpdatedAt,
     };
     return this.commentService.editComment(params);
   }
@@ -181,8 +174,6 @@ export class CommentApplicationService {
   async deleteComment(user: JwtPayload, commentId: string): Promise<void> {
     return this.commentService.deleteComment({ commentId, authorId: user.sub });
   }
-
-  // ─── Votes ────────────────────────────────────────────────────────────────
 
   async vote(user: JwtPayload, commentId: string, value: VoteValue): Promise<void> {
     const params: VoteParams = { userId: user.sub, commentId, value };
@@ -193,12 +184,10 @@ export class CommentApplicationService {
     return this.commentService.removeVote({ userId: user.sub, commentId });
   }
 
-  // ─── Reports ──────────────────────────────────────────────────────────────
-
   async reportComment(
     user: JwtPayload,
     commentId: string,
-    dto: { reason: string; details?: string | null },
+    dto: { reason: string; details?: string | null; idempotencyKey?: string },
   ): Promise<ReportView> {
     const params: ReportCommentParams = {
       reporterId: user.sub,
@@ -220,50 +209,17 @@ export class CommentApplicationService {
       status: dto.status,
       actionTaken: dto.actionTaken ?? false,
     };
-    const updated = await this.commentService.reviewReport(params);
-    await this.moderatorAudit.log({
-      actorId: moderator.sub,
-      actorRole: moderator.role,
-      action: 'review_report',
-      targetType: 'comment',
-      targetId: updated.commentId,
-      result: dto.status,
-    });
+    const { updated } = await this.commentService.reviewReport(params);
     return updated;
   }
 
-  // ─── Moderation ───────────────────────────────────────────────────────────
-
   async hideComment(moderator: JwtPayload, commentId: string): Promise<ModerationResult> {
-    const result = await this.commentService.hideComment(
-      { commentId, moderatorId: moderator.sub },
-      moderator,
-    );
-    await this.moderatorAudit.log({
-      actorId: moderator.sub,
-      actorRole: moderator.role,
-      action: 'hide_comment',
-      targetType: 'comment',
-      targetId: commentId,
-    });
-    return result;
+    return this.commentService.hideComment({ commentId, moderatorId: moderator.sub }, moderator);
   }
 
   async restoreComment(moderator: JwtPayload, commentId: string): Promise<ModerationResult> {
-    const result = await this.commentService.restoreComment(
-      { commentId, moderatorId: moderator.sub },
-      moderator,
-    );
-    await this.moderatorAudit.log({
-      actorId: moderator.sub,
-      actorRole: moderator.role,
-      action: 'restore_comment',
-      targetType: 'comment',
-      targetId: commentId,
-    });
-    return result;
+    return this.commentService.restoreComment({ commentId, moderatorId: moderator.sub }, moderator);
   }
 }
 
-// Re-export the `VoteValue` type so the controller imports stay clean.
 export type { VoteValue };

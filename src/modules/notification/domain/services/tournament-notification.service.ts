@@ -1,9 +1,3 @@
-/**
- * Tournament Notification Service
- *
- * Composes and sends tournament-related notifications.
- */
-
 import { Injectable } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { NotificationChannelService } from '../../infrastructure/adapters/notification-channel.service';
@@ -43,10 +37,6 @@ export interface TournamentWonParams {
   tournamentTitle: string;
   prize?: string;
 }
-
-/**
- * Port interface exposed to the Tournament module via TOURNAMENT_NOTIFICATION_PORT.
- */
 export interface TournamentNotificationPort {
   notifyTournamentInvite(params: TournamentInviteParams): Promise<void>;
   notifyTournamentJoined(params: TournamentJoinedParams): Promise<void>;
@@ -62,10 +52,6 @@ export class TournamentNotificationService implements TournamentNotificationPort
     @InjectPinoLogger(TournamentNotificationService.name)
     private readonly logger: PinoLogger,
   ) {}
-
-  /**
-   * Send a tournament invite notification.
-   */
   async notifyTournamentInvite(params: TournamentInviteParams): Promise<void> {
     const title = 'Tournament Invitation';
     const body = `${params.inviterName} invited you to join "${params.tournamentTitle}"`;
@@ -89,10 +75,6 @@ export class TournamentNotificationService implements TournamentNotificationPort
       tournamentId: params.tournamentId,
     });
   }
-
-  /**
-   * Send a tournament joined confirmation notification.
-   */
   async notifyTournamentJoined(params: TournamentJoinedParams): Promise<void> {
     const title = 'Joined Tournament';
     const body = `You've successfully joined "${params.tournamentTitle}". Good luck!`;
@@ -114,10 +96,6 @@ export class TournamentNotificationService implements TournamentNotificationPort
       tournamentId: params.tournamentId,
     });
   }
-
-  /**
-   * Send a tournament starting notification.
-   */
   async notifyTournamentStarting(params: TournamentStartingParams): Promise<void> {
     const title = 'Tournament Starting Soon!';
     const body = `"${params.tournamentTitle}" is about to begin. Get ready!`;
@@ -140,10 +118,6 @@ export class TournamentNotificationService implements TournamentNotificationPort
       tournamentId: params.tournamentId,
     });
   }
-
-  /**
-   * Send a tournament completed notification.
-   */
   async notifyTournamentCompleted(params: TournamentCompletedParams): Promise<void> {
     const title = 'Tournament Completed';
     const body = `You finished #${params.rank} of ${params.totalParticipants} in "${params.tournamentTitle}"`;
@@ -168,10 +142,6 @@ export class TournamentNotificationService implements TournamentNotificationPort
       rank: params.rank,
     });
   }
-
-  /**
-   * Send a tournament won notification.
-   */
   async notifyTournamentWon(params: TournamentWonParams): Promise<void> {
     const title = 'Tournament Champion!';
     const body = params.prize

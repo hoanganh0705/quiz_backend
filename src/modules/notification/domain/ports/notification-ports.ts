@@ -2,6 +2,8 @@ import type {
   Notification,
   CreateNotificationParams,
   NotificationListParams,
+  NotificationType,
+  NotificationChannel,
 } from '../types/notification.types';
 
 export const NOTIFICATION_REPOSITORY_PORT = Symbol('NOTIFICATION_REPOSITORY_PORT');
@@ -9,7 +11,6 @@ export const NOTIFICATION_CHANNEL_SERVICE = Symbol('NOTIFICATION_CHANNEL_SERVICE
 export const NOTIFICATION_CHANNEL_SERVICE_INSTANCE = Symbol(
   'NOTIFICATION_CHANNEL_SERVICE_INSTANCE',
 );
-// NOTIFICATION_DOMAIN_EVENT_BUS is re-exported below from the event bus module
 
 export const SOCIAL_NOTIFICATION_PORT = Symbol('SOCIAL_NOTIFICATION_PORT');
 export const ACHIEVEMENT_NOTIFICATION_PORT = Symbol('ACHIEVEMENT_NOTIFICATION_PORT');
@@ -28,16 +29,11 @@ export interface NotificationRepositoryPort {
   deleteReadNotifications(userId: string): Promise<number>;
   delete(notificationId: string, userId: string): Promise<void>;
   softDelete(notificationId: string, userId: string): Promise<void>;
+  listUnreadIds(userId: string, limit?: number): Promise<string[]>;
+  listReadIds(userId: string, limit?: number): Promise<string[]>;
 
-  /**
-   * Permanently deletes all expired notifications (expiresAt < now).
-   * Returns the number of notifications deleted.
-   */
   deleteExpired(): Promise<number>;
 
-  /**
-   * Returns aggregated notification statistics for the admin dashboard.
-   */
   getAnalytics(): Promise<{
     total: number;
     unread: number;
@@ -47,23 +43,32 @@ export interface NotificationRepositoryPort {
     last7d: number;
   }>;
 
-  /**
-   * Check if a notification with the given idempotency key already exists.
-   * Returns the existing notification if found, null otherwise.
-   * Used to prevent duplicate notifications in fan-out scenarios.
-   */
+  invalidateAnalyticsCache(): Promise<void>;
+
   findByIdempotencyKey(idempotencyKey: string, userId: string): Promise<Notification | null>;
 }
 
 export interface NotificationSenderPort {
   send(params: {
     userId: string;
-    type: string;
+    type: NotificationType;
     title: string;
     body: string;
     metadata?: Record<string, unknown>;
-    channels?: string[];
+    channels?: NotificationChannel[];
+    recipientEmail?: string;
+    pushToken?: string;
   }): Promise<void>;
+  sendBatch(
+    params: {
+      type: NotificationType;
+      title: string;
+      body: string;
+      metadata?: Record<string, unknown>;
+      channels?: NotificationChannel[];
+    },
+    userIds: string[],
+  ): Promise<{ sent: number; skipped: number }>;
 }
 
 export interface NotificationChannelServiceInstance {
@@ -72,15 +77,12 @@ export interface NotificationChannelServiceInstance {
 
 export type NotificationChannelServicePort = NotificationSenderPort;
 
-// Re-export the per-module notification port types so consumers can import them
-// from the ports barrel without reaching into the services folder.
 export type { SocialNotificationPort } from '../services/social-notification.service';
 export type { AchievementNotificationPort } from '../services/achievement-notification.service';
 export type { TournamentNotificationPort } from '../services/tournament-notification.service';
 export type { InstanceNotificationPort } from '../services/instance-notification.service';
 export type { RankNotificationPort } from '../services/rank-notification.service';
 
-// Re-export event bus for consumers who only import from ports
 export {
   NotificationDomainEventBus,
   NOTIFICATION_DOMAIN_EVENT_BUS,

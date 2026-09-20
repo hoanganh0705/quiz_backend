@@ -1,21 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { QuizQuestionPlayerDto } from './quiz-question-player.dto';
 
-/**
- * Phase 2 (S-9): public preview endpoint response.
- *
- * `GET /quizzes/:id/preview` returns the first `previewSize`
- * questions of the published version with the `isCorrect` flag
- * stripped — players can scroll through a representative slice
- * before deciding whether to start an attempt. The auth check on
- * the route is `@Public()`; previews deliberately do not require a
- * session so deep-link previews work from social/share surfaces.
- *
- * `previewSize` is server-controlled; the DTO does not echo a
- * client-supplied value. Today the limit is hard-coded to 2 — the
- * audit's recommendation — and lives on the controller as
- * `PREVIEW_QUESTION_COUNT`.
- */
 export class QuizPreviewResponseDto {
   @ApiProperty({
     description: 'Quiz identifier the preview belongs to',

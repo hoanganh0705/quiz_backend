@@ -1,7 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { BadgeType } from '../types/achievement.types';
-import { RankAchievementParams } from '../types/achievement.types';
+import type { RankAchievementParams } from '../types/achievement.types';
 import { ACHIEVEMENT_REPOSITORY_PORT } from '../../infrastructure/repositories/achievement.repository';
 import type { AchievementRepositoryPort } from '../../infrastructure/repositories/achievement.repository';
 import { RuleEngineService } from './rule-engine.service';
@@ -19,9 +19,6 @@ export class RankAchievementService {
     private readonly logger: PinoLogger,
   ) {}
 
-  /**
-   * Check and award rank-based achievements.
-   */
   async checkRankAchievements(params: RankAchievementParams): Promise<void> {
     const eligible = await this.getEligibleRankBadges({
       userId: params.userId,
@@ -29,8 +26,8 @@ export class RankAchievementService {
       previousRank: params.previousRank,
     });
 
-    for (const badgeType of eligible) {
-      await this.awardRankBadge(params.userId, badgeType, {
+    for (const slug of eligible) {
+      await this.awardRankBadge(params.userId, slug, {
         period: params.period,
         rank: params.currentRank,
       });
@@ -50,8 +47,8 @@ export class RankAchievementService {
     userId: string;
     currentRank: number;
     previousRank: number | null;
-  }): Promise<BadgeType[]> {
-    const eligible: BadgeType[] = [];
+  }): Promise<string[]> {
+    const eligible: string[] = [];
 
     if (params.currentRank === BADGE_THRESHOLDS.RANK.RANK_1) {
       if (!(await this.ruleEngineService.hasBadge(params.userId, BadgeType.RANK_1))) {
@@ -82,15 +79,15 @@ export class RankAchievementService {
 
   private async awardRankBadge(
     userId: string,
-    badgeType: BadgeType,
+    badgeSlug: string,
     metadata?: Record<string, unknown>,
   ): Promise<void> {
-    const badge = await this.achievementRepository.getBadgeById(badgeType);
+    const badge = await this.achievementRepository.getBadgeBySlug(badgeSlug);
     if (!badge) return;
 
     await this.achievementRepository.awardBadge({
       userId,
-      badgeId: badgeType,
+      badgeId: badge.badgeId,
       earnedAt: new Date(),
       metadata,
     });
@@ -111,7 +108,7 @@ export class RankAchievementService {
     this.logger.info({
       event: 'badge_awarded',
       userId,
-      badgeType,
+      badgeSlug,
       metadata,
     });
   }

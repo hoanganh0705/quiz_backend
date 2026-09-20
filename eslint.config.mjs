@@ -42,6 +42,18 @@ export default tseslint.config(
           caughtErrorsIgnorePattern: '^_',
         },
       ],
+      // S-1 (code quality): enforce the 500/800 LOC budget that
+      // `common-coding-style.mdc` documents. The rule warns at 500
+      // (the typical cap) and errors at 800 (the hard cap). Both
+      // thresholds match the rule's published rationale ("Many small
+      // files > few large files; 200–400 lines typical, 800 max").
+      // Skip comments + blank lines so the limit reflects real code.
+      // The base ESLint rule covers `.ts` source; `@typescript-eslint`
+      // 8.x no longer ships a `max-lines` rule of its own.
+      'max-lines': [
+        'warn',
+        { max: 800, skipComments: true, skipBlankLines: true },
+      ],
       'prettier/prettier': ['error', { endOfLine: 'auto' }],
     },
   },

@@ -1,14 +1,3 @@
-/**
- * Phase 5 #1 — Redis tracing wrapper unit tests.
- *
- * Verifies:
- *   - Only traced commands emit spans.
- *   - Non-traced methods (e.g. `status`) pass through unchanged.
- *   - Spans capture the command name as an attribute.
- *   - Exceptions propagate to the caller while still being
- *     recorded on the span.
- */
-
 import { TracingProvider, type Span } from './tracing.provider';
 import { RedisTracingWrapper } from './redis-tracing.wrapper';
 

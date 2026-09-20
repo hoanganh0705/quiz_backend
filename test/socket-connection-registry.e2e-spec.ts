@@ -1,31 +1,3 @@
-/**
- * Phase 3 (Production Deployment Readiness) — end-to-end test for
- * `RedisSocketConnectionRegistry` against a live Redis.
- *
- * The unit tests in
- * `redis-socket-connection.registry.spec.ts` exercise the wrapper
- * against a Jest mock of `CacheProvider`. This suite proves the
- * wrapper integrates with the REAL `RedisService` — same one the
- * application uses — and confirms the contract end to end:
- *
- *   - `record` writes a JSON blob with TTL.
- *   - `consume` returns the meta once, atomically, and removes
- *     the key (verified by a second consume returning `null`).
- *   - After the TTL elapses, `getMeta` returns `null`.
- *
- * Gating
- * ------
- * The suite is skipped when `process.env.REDIS_URL` is unset,
- * matching the project-wide pattern (`review-helpful.e2e-spec.ts`,
- * `ranking-phase1.e2e-spec.ts`). Engineers without local Redis
- * can still run `pnpm test:e2e`.
- *
- * To run locally:
- *   pnpm redis:start
- *   REDIS_URL=redis://localhost:6379 \
- *   pnpm test:e2e --testPathPattern='socket-connection-registry'
- */
-
 import { RedisSocketConnectionRegistry } from '@/modules/instance/infrastructure/repositories/redis-socket-connection.registry';
 import { RedisService } from '@/core/redis/redis.service';
 import { redisConfig } from '@/core/config';
@@ -77,7 +49,7 @@ const cleanupKeys = async (redis: RedisService, label: string) => {
   void label;
 };
 
-suite('RedisSocketConnectionRegistry — Phase 3 live Redis integration', () => {
+suite('RedisSocketConnectionRegistry', () => {
   let redis: RedisService | null = null;
 
   beforeAll(() => {
@@ -166,10 +138,6 @@ suite('RedisSocketConnectionRegistry — Phase 3 live Redis integration', () => 
 
     // Hygiene
     await registry.consume(socketId);
-
-    // Reference the CACHE_PROVIDER symbol to confirm the import is
-    // not unused (this guards against accidental future refactors
-    // that drop the dependency-graph tie-in).
     expect(CACHE_PROVIDER.toString()).toMatch(/Symbol/);
   }, 15_000);
 });

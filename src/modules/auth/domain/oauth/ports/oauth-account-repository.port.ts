@@ -22,8 +22,6 @@ export interface OAuthAccountRepositoryPort {
    * both the `users` and `oauth_accounts` rows.
    *
    * Writes `oauth_account_created` to the outbox inside the same transaction.
-   *
-   * @throws {OAuthAccountAlreadyExistsError} if the provider+providerUserId link already exists
    */
   createOAuthUserWithLink(params: {
     provider: OAuthProvider;
@@ -45,8 +43,6 @@ export interface OAuthAccountRepositoryPort {
    * The domain service is responsible for enforcing this precondition.
    *
    * Writes `oauth_account_linked` to the outbox inside the same transaction.
-   *
-   * @throws {OAuthAccountAlreadyExistsError} if the provider+providerUserId link already exists
    */
   linkOAuthAccountToExistingUser(params: {
     userId: string;

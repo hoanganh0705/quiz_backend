@@ -1,12 +1,3 @@
-/**
- * Domain event types for the Instance aggregate.
- *
- * These events are emitted after successful state transitions in the Instance domain.
- * They are in-process events — listeners are invoked synchronously within the same request.
- *
- * Use the InstanceDomainEventBus to subscribe to these events.
- */
-
 export class InstanceCreatedEvent {
   constructor(
     public readonly instanceId: string,
@@ -42,11 +33,6 @@ export class PlayerJoinedEvent {
   }
 }
 
-/**
- * Emitted when a player starts a quiz attempt inside an instance.
- * Carries the attemptId so listeners (e.g. InstanceAttemptEventBootstrapService)
- * can atomically link the attempt to the player row and transition status → 'ready'.
- */
 export class PlayerAttemptStartedEvent {
   constructor(
     public readonly instanceId: string,
@@ -65,10 +51,6 @@ export class PlayerAttemptStartedEvent {
   }
 }
 
-/**
- * Emitted when all players have finished (ready→playing→finished transition complete).
- * Used by listeners to finalize the instance state.
- */
 export class PlayerFinishedEvent {
   constructor(
     public readonly instanceId: string,
@@ -85,9 +67,6 @@ export class PlayerFinishedEvent {
   }
 }
 
-/**
- * Emitted when a player's socket disconnects while the instance is running.
- */
 export class PlayerDisconnectedEvent {
   constructor(
     public readonly instanceId: string,
@@ -98,6 +77,27 @@ export class PlayerDisconnectedEvent {
 
   get eventType(): 'instance.player_disconnected' {
     return 'instance.player_disconnected';
+  }
+
+  get timestamp(): Date {
+    return new Date(this.nowIso);
+  }
+}
+
+export class PlayerAnsweredEvent {
+  constructor(
+    public readonly instanceId: string,
+    public readonly userId: string,
+    public readonly attemptId: string,
+    public readonly questionId: string,
+    public readonly selectedOptionId: string | null,
+    public readonly timeTakenMs: number,
+    public readonly isCorrect: boolean | null,
+    public readonly nowIso: string,
+  ) {}
+
+  get eventType(): 'instance.player_answered' {
+    return 'instance.player_answered';
   }
 
   get timestamp(): Date {
@@ -137,13 +137,6 @@ export class InstanceClosedEvent {
   }
 }
 
-/**
- * Phase 2 (Gameplay Lifecycle) — emitted on the host-driven transition
- * `open → countdown`. The application service forwards this as the
- * `countdown_started` WebSocket event so clients can render the warmup
- * timer. `countdownStartedAt` and `countdownEndsAt` are the same
- * timestamp from two perspectives (anchor vs. deadline).
- */
 export class CountdownStartedEvent {
   constructor(
     public readonly instanceId: string,
@@ -162,13 +155,6 @@ export class CountdownStartedEvent {
   }
 }
 
-/**
- * Phase 2 (Gameplay Lifecycle) — emitted on `cancelCountdown`, the
- * `countdown → open` transition. Clients should drop their warmup UI
- * and return to the lobby. Cancellation does not delete the
- * `countdownStartedAt` until the optimistic-locking UPDATE clears it
- * alongside the status.
- */
 export class CountdownCancelledEvent {
   constructor(
     public readonly instanceId: string,
@@ -186,13 +172,6 @@ export class CountdownCancelledEvent {
   }
 }
 
-/**
- * Phase 2 (Gameplay Lifecycle) — emitted by the scheduler when a
- * `countdown → running` transition fires after the deadline elapses.
- * Distinct from `InstanceStartedEvent` so clients and downstream
- * listeners can differentiate "the host pressed Start" from
- * "the countdown timer fired automatically".
- */
 export class CountdownCompletedEvent {
   constructor(
     public readonly instanceId: string,
@@ -209,10 +188,6 @@ export class CountdownCompletedEvent {
   }
 }
 
-/**
- * Emitted when a player's attempt earns XP and the ranking has been updated.
- * Carries the XP delta so Socket.IO can push a live XP gain notification to the client.
- */
 export class PlayerXpEarnedEvent {
   constructor(
     public readonly instanceId: string,
@@ -238,6 +213,7 @@ export type InstanceDomainEvent =
   | PlayerXpEarnedEvent
   | PlayerFinishedEvent
   | PlayerDisconnectedEvent
+  | PlayerAnsweredEvent
   | InstanceStartedEvent
   | InstanceClosedEvent
   | CountdownStartedEvent

@@ -1,9 +1,20 @@
 import type { BlockedUser } from '../../domain/types/social.types';
 
+export type BlockExecutor = {
+  execute<T = unknown>(query: unknown): Promise<{ rows: T[] }>;
+};
+
 export const BLOCK_REPOSITORY_PORT = Symbol('BLOCK_REPOSITORY_PORT');
 
 export interface BlockRepositoryPort {
   blockUser(blockerId: string, blockedId: string, reason?: string): Promise<BlockedUser>;
+
+  blockUserInTx(
+    tx: BlockExecutor,
+    blockerId: string,
+    blockedId: string,
+    reason?: string,
+  ): Promise<BlockedUser>;
 
   /**
    * Soft-delete an active block. Filters on `isNull(deletedAt)` so a
@@ -15,6 +26,8 @@ export interface BlockRepositoryPort {
    * the second line of defence against concurrent unblock clicks.
    */
   unblockUser(blockerId: string, blockedId: string): Promise<number>;
+
+  unblockUserInTx(tx: BlockExecutor, blockerId: string, blockedId: string): Promise<number>;
 
   /**
    * Find an active (non-soft-deleted) block between two users.

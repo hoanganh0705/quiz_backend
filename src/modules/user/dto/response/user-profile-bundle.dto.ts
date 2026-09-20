@@ -10,28 +10,6 @@ import {
   CoinTransactionsPaginationDto,
 } from '@/modules/coins/dto/response/coin-transactions.dto';
 
-/**
- * `UserProfileBundleResponseDto` — Phase 4 (S-25) bundle returned
- * by `GET /users/me/profile` and `GET /users/:userId/profile`.
- *
- * The my-profile page used to issue 8+ sequential calls (summary,
- * analytics, xp history, recent activity, social counts, …). The
- * bundle collapses the fan-out into a single round-trip by
- * parallelising the sub-queries. The wire shape is the union of
- * the existing per-endpoint DTOs so the frontend can drop the
- * bundle straight into the existing profile view with no
- * consumer-side projection.
- *
- * ## Stability
- *
- * The endpoint is `Public()` only for `:userId`; the `/me`
- * variant requires auth. The bundle shape is identical for both
- * endpoints so the frontend reuses the same shape under either
- * path. For the public variant, the `summary.displayName`,
- * `summary.bio`, `summary.avatarUrl` and the activity timeline
- * may be omitted per the user's `showActivity` / `showStats`
- * privacy flags.
- */
 export class UserProfileBundleResponseDto {
   @ApiProperty({
     description: 'User summary (identity + level + counts)',
@@ -56,8 +34,6 @@ export class UserProfileBundleResponseDto {
     type: () => [UserActivityItemDto],
   })
   recentActivity!: UserActivityItemDto[];
-
-  // ─── Phase 3 (S-coin): coin-economy surfaces ──────────────────────────
 
   @ApiPropertyOptional({
     description:

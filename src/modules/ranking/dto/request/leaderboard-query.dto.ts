@@ -15,12 +15,12 @@ export enum RankingPeriodEnum {
  * `/leaderboard/distribution`, `/leaderboard/me/rank`, `/leaderboard/:userId/rank`,
  * `/leaderboard/me/nearby`).
  *
- * Note: `daily` is intentionally **not** exposed here. The `user_ranking`
- * snapshot only tracks `weekly` / `monthly` / `all_time` XP — daily XP is
- * captured separately and the repository's `getXpColumn` rejects
- * `RankingPeriod.DAILY`. Keeping this enum in sync with what the repository
- * can serve means invalid `period` values are rejected at the controller
- * boundary (400) instead of crashing inside the SQL layer (500).
+ * Note: `daily` is intentionally **not** exposed here. The daily XP field
+ * is computed from `last_daily_reset_at` and is used for short-lived
+ * dashboards rather than the persistent leaderboard surface. Keeping this
+ * enum in sync with the public leaderboard contract means invalid `period`
+ * values are rejected at the controller boundary (400) instead of being
+ * silently treated as a distinct leaderboard.
  *
  * Admin endpoints (`/admin/ranking/recalculate`, `/admin/ranking/reset`)
  * continue to use the full `RankingPeriodEnum` because they *write* to

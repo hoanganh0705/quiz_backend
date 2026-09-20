@@ -1,9 +1,3 @@
-/**
- * Achievement History Service
- *
- * Manages immutable achievement history records.
- */
-
 import { Inject, Injectable } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { ACHIEVEMENT_REPOSITORY_PORT } from '../infrastructure/repositories/achievement.repository';
@@ -226,18 +220,10 @@ export class AchievementHistoryService {
       limit,
     });
 
-    const recentAwards = await this.achievementRepository.getRecentAwards(limit);
+    const recentAwards = await this.achievementRepository.getRecentAwardsWithDetails(limit);
     const now = new Date();
 
-    const entries: AchievementHistoryEntry[] = [];
-    for (const award of recentAwards) {
-      const fullRecord = await this.achievementRepository.getUserBadgeById(award.badgeId);
-      if (fullRecord) {
-        entries.push(this.toHistoryEntry(fullRecord, now));
-      }
-    }
-
-    return entries;
+    return recentAwards.map((award) => this.toHistoryEntry(award, now));
   }
 
   async getAwardsByCategory(

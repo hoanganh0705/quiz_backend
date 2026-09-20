@@ -1,21 +1,3 @@
-/**
- * Quiz cache invalidation handler.
- *
- * Wires the `QuizDomainEventBus` to the `QuizCacheService`. Every
- * `QuizCreatedEvent` / `QuizUpdatedEvent` / `QuizDeletedEvent`
- * triggers a single `invalidateList()` call so the next
- * `GET /quizzes` call sees fresh data.
- *
- * The handler is registered in `QuizModule` and subscribes in
- * `OnModuleInit`. The subscription is kept in a private field so
- * the unsubscribe function can be called in `OnModuleDestroy` —
- * this matters for the test harness which re-creates the module
- * between cases.
- *
- * Phase 3 #1 of the resilience roadmap (see `BACKEND_AUDIT_REPORT.md`
- * §23 Phase 3).
- */
-
 import { Inject, Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import {
   QUIZ_DOMAIN_EVENT_BUS,

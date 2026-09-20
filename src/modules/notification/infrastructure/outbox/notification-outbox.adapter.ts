@@ -1,21 +1,3 @@
-/**
- * Notification Outbox Adapter
- *
- * Phase 4 (Reliability Enhancement) — Implements the transactional outbox pattern
- * to ensure notification events survive process restarts.
- *
- * How it works:
- * 1. When a notification is created, the event is written to the outbox table
- *    atomically with the notification insert (same transaction).
- * 2. A background processor polls for unprocessed events and dispatches them.
- * 3. If dispatch succeeds, the event is marked as processed.
- * 4. If dispatch fails, the event is retried with exponential backoff.
- * 5. After max retries, the event moves to the DLQ (Dead Letter Queue).
- *
- * This ensures at-least-once delivery: events are never lost even if the
- * process crashes between notification creation and WebSocket push.
- */
-
 import { Inject, Injectable, Optional } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
@@ -24,8 +6,16 @@ import type { DrizzleDB } from '@/core/database/database.module';
 import { outboxEvents } from '@/core/database/schema';
 import { eq, and, isNull, sql, asc } from 'drizzle-orm';
 import { CACHE_PROVIDER, type CacheProvider } from '@/common/ports/cache.provider';
+import {
+  NOTIFICATION_DOMAIN_EVENT_BUS,
+  type NotificationDomainEventBus,
+} from '@/modules/notification/domain/events/notification-domain.event-bus';
+import {
+  TransactionalContext,
+  TRANSACTIONAL_CONTEXT,
+} from '@/common/interceptors/transactional-context';
 
-interface NotificationOutboxEvent {
+export interface NotificationOutboxEvent {
   notificationId: string;
   userId: string;
   type: string;
@@ -44,6 +34,12 @@ export class NotificationOutboxAdapter {
   constructor(
     @Inject(DRIZZLE) private readonly db: DrizzleDB,
     @Optional()
+    @Inject(TRANSACTIONAL_CONTEXT)
+    private readonly transactionalContext?: TransactionalContext,
+    @Optional()
+    @Inject(NOTIFICATION_DOMAIN_EVENT_BUS)
+    private readonly eventBus?: NotificationDomainEventBus,
+    @Optional()
     @Inject(CACHE_PROVIDER)
     private readonly cache?: CacheProvider,
     @Optional()
@@ -56,19 +52,14 @@ export class NotificationOutboxAdapter {
     this.logger?.info({ event: 'notification_outbox_shutdown' });
   }
 
-  /**
-   * Write a notification event to the outbox atomically.
-   * Call this within the same transaction as the notification insert.
-   *
-   * @param tx   Transaction client from @Transactional()
-   * @param event The notification event to persist
-   * @param idempotencyKey Optional key to prevent duplicate events
-   */
-  async writeEvent(
-    tx: DrizzleDB,
-    event: NotificationOutboxEvent,
-    idempotencyKey?: string,
-  ): Promise<void> {
+  async writeEvent(event: NotificationOutboxEvent, idempotencyKey?: string): Promise<void> {
+    const tx = this.transactionalContext?.getDbClient() as DrizzleDB | null;
+    if (!tx) {
+      throw new Error(
+        'NotificationOutboxAdapter.writeEvent must be called within a @Transactional() context to guarantee atomicity with the notification insert',
+      );
+    }
+
     await tx.insert(outboxEvents).values({
       aggregateType: 'notification',
       eventType: 'notification.sent',
@@ -85,25 +76,32 @@ export class NotificationOutboxAdapter {
     });
   }
 
-  /**
-   * Process pending outbox events.
-   * Runs on a schedule to dispatch events that haven't been processed yet.
-   */
-  @Cron('*/5 * * * * *') // Every 5 seconds
+  @Cron('*/5 * * * * *')
   async processOutbox(): Promise<void> {
     if (this.isShuttingDown) {
       return;
     }
 
     const lockKey = 'notification:outbox:processor';
-    const lockToken = crypto.randomUUID();
 
     if (this.cache) {
-      const acquired = await this.cache.acquireAdvisoryLock(lockKey, LOCK_TTL_MS);
-      if (!acquired) {
+      const lockToken = await this.cache.acquireAdvisoryLock(lockKey, LOCK_TTL_MS);
+      if (lockToken === null) {
         this.logger?.debug({ event: 'notification_outbox_skipped_lock_held' });
         return;
       }
+
+      try {
+        await this.processBatch();
+      } catch (error) {
+        this.logger?.error({
+          event: 'notification_outbox_process_failed',
+          error: error instanceof Error ? error.message : String(error),
+        });
+      } finally {
+        await this.cache.releaseAdvisoryLock(lockKey, lockToken);
+      }
+      return;
     }
 
     try {
@@ -113,10 +111,6 @@ export class NotificationOutboxAdapter {
         event: 'notification_outbox_process_failed',
         error: error instanceof Error ? error.message : String(error),
       });
-    } finally {
-      if (this.cache) {
-        await this.cache.releaseAdvisoryLock(lockKey, lockToken);
-      }
     }
   }
 
@@ -143,9 +137,7 @@ export class NotificationOutboxAdapter {
       eventCount: events.length,
     });
 
-    for (const event of events) {
-      await this.processEvent(event);
-    }
+    await Promise.all(events.map((event) => this.processEvent(event)));
   }
 
   private async processEvent(event: typeof outboxEvents.$inferSelect): Promise<void> {
@@ -209,43 +201,60 @@ export class NotificationOutboxAdapter {
   }
 
   private async dispatchEvent(event: NotificationOutboxEvent): Promise<void> {
+    await Promise.resolve();
+
     this.logger?.debug({
       event: 'notification_outbox_dispatch',
       notificationId: event.notificationId,
       userId: event.userId,
     });
 
-    await new Promise((resolve) => setTimeout(resolve, 10));
+    if (!this.eventBus) {
+      throw new Error('NotificationDomainEventBus is not available for outbox dispatch');
+    }
+
+    this.eventBus.emit({
+      eventType: 'notification.sent',
+      notificationId: event.notificationId,
+      userId: event.userId,
+      type: event.type,
+      channel: event.channel,
+      timestamp: new Date(),
+    });
   }
 
   private calculateBackoff(attemptCount: number): number {
     return Math.min(INITIAL_RETRY_DELAY_MS * Math.pow(2, attemptCount - 1), 60 * 1000);
   }
 
-  /**
-   * Manually trigger outbox processing.
-   * Useful for testing or on-demand processing.
-   */
   async triggerProcessing(): Promise<{ processed: number; failed: number }> {
     this.logger?.info({ event: 'notification_outbox_manual_trigger' });
 
-    const beforeCount = await this.db
+    const beforeCounts = await this.db
       .select({ count: sql<number>`count(*)::int` })
       .from(outboxEvents)
       .where(and(isNull(outboxEvents.processedAt), isNull(outboxEvents.failedAt)));
+
+    const failedBefore = await this.db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(outboxEvents)
+      .where(and(isNull(outboxEvents.processedAt), sql`failed_at IS NOT NULL`));
 
     await this.processBatch();
 
-    const afterCount = await this.db
+    const afterCounts = await this.db
       .select({ count: sql<number>`count(*)::int` })
       .from(outboxEvents)
       .where(and(isNull(outboxEvents.processedAt), isNull(outboxEvents.failedAt)));
 
-    const processed = Number(beforeCount[0]?.count ?? 0) - Number(afterCount[0]?.count ?? 0);
+    const failedAfter = await this.db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(outboxEvents)
+      .where(and(isNull(outboxEvents.processedAt), sql`failed_at IS NOT NULL`));
 
-    return {
-      processed,
-      failed: 0,
-    };
+    const processed = Number(beforeCounts[0]?.count ?? 0) - Number(afterCounts[0]?.count ?? 0);
+    const failed = Number(failedAfter[0]?.count ?? 0) - Number(failedBefore[0]?.count ?? 0);
+
+    return { processed, failed };
   }
 }

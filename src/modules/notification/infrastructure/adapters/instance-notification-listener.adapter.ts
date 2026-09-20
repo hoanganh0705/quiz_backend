@@ -1,12 +1,3 @@
-/**
- * Instance Notification Listener
- *
- * Subscribes to Instance domain events and dispatches notifications via InstanceNotificationService.
- * Handles: player joined, instance started, player XP earned, instance closed, player disconnected.
- *
- * Registered in NotificationModule.onModuleInit and unsubscribed on destroy.
- */
-
 import { Inject, Injectable, OnModuleDestroy, OnModuleInit, forwardRef } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import {
@@ -73,6 +64,9 @@ export class InstanceNotificationListener implements OnModuleInit, OnModuleDestr
 
       case 'instance.player_disconnected':
         await this.handlePlayerDisconnected(event);
+        break;
+
+      case 'instance.player_answered':
         break;
     }
   }
@@ -208,9 +202,6 @@ export class InstanceNotificationListener implements OnModuleInit, OnModuleDestr
   private async getInstancePlayerIds(instanceId: string): Promise<{ playerIds: string[] } | null> {
     const { items: players } = await this.instanceRepository.listPlayersWithProfile({
       instanceId,
-      // Host notifications read the full players list. Instance capacity
-      // is capped at 100 by `CreateInstanceDto.maxPlayers`, so a single
-      // over-sized page is safe.
       limit: 100,
     });
     if (players.length === 0) {

@@ -58,7 +58,7 @@ export class TagRankingRepository implements TagRankingRepositoryPort {
       .orderBy(desc(sql<number>`COUNT(DISTINCT ${quizTags.quizId})`), asc(tags.name))
       .limit(limit);
 
-    return rows as TagRow[];
+    return rows;
   }
 
   async getPopularTags(limit: number): Promise<RankedTagRow[]> {
@@ -115,6 +115,6 @@ export class TagRankingRepository implements TagRankingRepositoryPort {
       rank: index + 1,
       totalScore: row.totalScore ?? '0',
       totalAttempts: row.totalAttempts ?? '0',
-    })) as RankedTagRow[];
+    }));
   }
 }

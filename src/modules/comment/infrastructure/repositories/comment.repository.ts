@@ -150,34 +150,51 @@ export class CommentRepository implements CommentRepositoryPort {
   }
 
   async editComment(params: import('../../domain/types').EditCommentParams): Promise<CommentView> {
+    const where = [
+      eq(commentRows.commentId, params.commentId),
+      eq(commentRows.authorId, params.authorId),
+      isNull(commentRows.deletedAt),
+    ];
+    if (params.expectedUpdatedAt !== undefined) {
+      where.push(eq(commentRows.updatedAt, params.expectedUpdatedAt));
+    }
+
     const [updated] = await this.db
       .update(commentRows)
       .set({ body: params.body, updatedAt: new Date().toISOString() })
-      .where(
-        and(
-          eq(commentRows.commentId, params.commentId),
-          eq(commentRows.authorId, params.authorId),
-          isNull(commentRows.deletedAt),
-        ),
-      )
+      .where(and(...where))
       .returning();
 
     if (!updated) {
+      const exists = await this.db
+        .select({ authorId: commentRows.authorId })
+        .from(commentRows)
+        .where(and(eq(commentRows.commentId, params.commentId), isNull(commentRows.deletedAt)))
+        .limit(1);
+      if (exists.length === 0) {
+        throw new Error('Comment not found');
+      }
       throw new Error('Comment not found or not authorized');
     }
     const author = await this.getAuthorById(updated.authorId);
     return commentAuthorForView({ row: updated, author });
   }
 
-  async softDeleteComment(params: { commentId: string; authorId: string }, tx?: Db): Promise<void> {
+  async softDeleteComment(
+    params: { commentId: string; authorId: string },
+    tx?: Db,
+  ): Promise<{ deleted: boolean; deletedAt: string | null }> {
     const client = this.asDrizzle(tx);
     const now = new Date().toISOString();
-    await client
+    const [row] = await client
       .update(commentRows)
       .set({ deletedAt: now, updatedAt: now })
       .where(
         and(eq(commentRows.commentId, params.commentId), eq(commentRows.authorId, params.authorId)),
-      );
+      )
+      .returning({ deletedAt: commentRows.deletedAt });
+
+    return { deleted: row !== undefined, deletedAt: row?.deletedAt ?? null };
   }
 
   async setHiddenState(
@@ -204,18 +221,34 @@ export class CommentRepository implements CommentRepositoryPort {
     deltaUpvotes: number,
     deltaDownvotes: number,
     tx: Db,
-  ): Promise<void> {
+  ): Promise<{
+    votesCount: number;
+    upvotesCount: number;
+    downvotesCount: number;
+  }> {
     const client = this.asDrizzle(tx);
+    const now = new Date().toISOString();
     const totalDelta = deltaUpvotes + deltaDownvotes;
-    await client
+    const [row] = await client
       .update(commentRows)
       .set({
-        upvotesCount: sql`${commentRows.upvotesCount} + ${deltaUpvotes}`,
-        downvotesCount: sql`${commentRows.downvotesCount} + ${deltaDownvotes}`,
-        votesCount: sql`${commentRows.votesCount} + ${totalDelta}`,
-        updatedAt: new Date().toISOString(),
+        upvotesCount: sql`GREATEST(0, ${commentRows.upvotesCount} + ${deltaUpvotes})`,
+        downvotesCount: sql`GREATEST(0, ${commentRows.downvotesCount} + ${deltaDownvotes})`,
+        votesCount: sql`GREATEST(0, ${commentRows.votesCount} + ${totalDelta})`,
+        updatedAt: now,
       })
-      .where(eq(commentRows.commentId, commentId));
+      .where(eq(commentRows.commentId, commentId))
+      .returning({
+        votesCount: commentRows.votesCount,
+        upvotesCount: commentRows.upvotesCount,
+        downvotesCount: commentRows.downvotesCount,
+      });
+
+    return {
+      votesCount: row?.votesCount ?? 0,
+      upvotesCount: row?.upvotesCount ?? 0,
+      downvotesCount: row?.downvotesCount ?? 0,
+    };
   }
 
   async incrementRepliesCount(commentId: string, delta: number, tx: Db): Promise<void> {
@@ -298,12 +331,13 @@ export class CommentRepository implements CommentRepositoryPort {
   }
 
   async listReports(params: ListReportsParams): Promise<ReportView[]> {
-    const { items, hasNextPage } = await reportScan(this.db, params);
-    return hasNextPage ? items.slice(0, params.limit ?? 20) : items;
+    const { items } = await reportScan(this.db, params);
+    return items;
   }
 
-  async reviewReport(params: ReviewReportParams): Promise<ReportView> {
-    const [updated] = await this.db
+  async reviewReport(params: ReviewReportParams, tx?: Db): Promise<ReportView> {
+    const client = this.asDrizzle(tx);
+    const [updated] = await client
       .update(commentReports)
       .set({
         status: params.status,
@@ -321,11 +355,22 @@ export class CommentRepository implements CommentRepositoryPort {
     return updated as unknown as ReportView;
   }
 
+  async getReportByIdForUpdate(reportId: string, tx: Db): Promise<ReportView | null> {
+    const client = this.asDrizzle(tx);
+    const [row] = await client
+      .select()
+      .from(commentReports)
+      .where(eq(commentReports.reportId, reportId))
+      .for('update')
+      .limit(1);
+    return (row as unknown as ReportView) ?? null;
+  }
+
   // ─── Counter reconciler ──────────────────────────────────────────────────
 
   async reconcileCounters(): Promise<{ comments: number; replies: number }> {
     const result = await this.db.transaction(async (tx) => {
-      const replies = await tx.execute(sql`
+      const repliesResult = await tx.execute(sql`
         UPDATE comments AS c
         SET replies_count = counts.cnt,
             updated_at    = NOW()
@@ -341,12 +386,12 @@ export class CommentRepository implements CommentRepositoryPort {
         RETURNING 1
       `);
 
+      const repliesRows = (repliesResult as unknown as { rows?: { length?: number } }).rows;
+      const replies = typeof repliesRows?.length === 'number' ? repliesRows.length : 0;
+
       return {
-        // The comment module has no separate thread table. The aggregator
-        // is just replies_count on comments. Return both keys for the
-        // schedulers that still log them.
         comments: 0,
-        replies: (replies.rows ?? []).length,
+        replies,
       };
     });
 

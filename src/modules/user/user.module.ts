@@ -3,6 +3,14 @@ import { UserController } from './transport/controller/user.controller';
 import { UserApplicationService } from './application/user.application.service';
 import { UserDomainService, USER_DOMAIN_SERVICE } from './domain/user.service';
 import { UserRepository } from './infrastructure/repositories/user.repository';
+import { UserAccountRepository } from './infrastructure/repositories/aggregates/user-account.repository';
+import { UserProfileRepository } from './infrastructure/repositories/aggregates/user-profile.repository';
+import { UserSettingsRepository } from './infrastructure/repositories/aggregates/user-settings.repository';
+import { UserBadgeRepository } from './infrastructure/repositories/aggregates/user-badge.repository';
+import { UserRankingRepository } from './infrastructure/repositories/aggregates/user-ranking.repository';
+import { UserActivityRepository } from './infrastructure/repositories/aggregates/user-activity.repository';
+import { UserTournamentRepository } from './infrastructure/repositories/aggregates/user-tournament.repository';
+import { UserAnalyticsRepository } from './infrastructure/repositories/aggregates/user-analytics.repository';
 import { UserSearchAdapter } from './infrastructure/adapters/user-search.adapter';
 import { UserDomainEventBus } from './domain/events/user-domain.event-bus';
 import { DatabaseModule } from '@/core/database/database.module';
@@ -34,14 +42,7 @@ import { UserResponseMapper } from './mappers/user-response.mapper';
     DatabaseModule,
     forwardRef(() => QuizModule),
     forwardRef(() => RankingModule),
-    // Phase 1 (S-2): summary endpoint composes follower/following/friends
-    // counts from the social module. Social already imports UserModule
-    // directly, so we wrap our side in `forwardRef` to break the cycle.
     forwardRef(() => SocialModule),
-    // `UserApplicationService` injects `COIN_REPOSITORY_PORT` for the
-    // wallet-aware aggregate endpoints. `CoinModule` already imports
-    // `UserModule` (for the `UserDomainEventBus` listener adapters),
-    // so the cycle is broken with `forwardRef` on this side.
     forwardRef(() => CoinModule),
   ],
   controllers: [UserController],
@@ -52,12 +53,14 @@ import { UserResponseMapper } from './mappers/user-response.mapper';
     UserSearchAdapter,
     UserDomainEventBus,
     UserActivityServiceImpl,
-    // Phase 2 (F-8): use `useExisting` instead of `useClass` — the global
-    // `DatabaseModule` already provides `UserRepository`. With `useClass`
-    // Nest would build a *second* instance for the `USER_REPOSITORY_PORT`
-    // token, so any consumer that injects the token would see a different
-    // instance than any consumer that injects the class directly (e.g.
-    // `StreakService` post-F-5, social listeners, etc.).
+    UserAccountRepository,
+    UserProfileRepository,
+    UserSettingsRepository,
+    UserBadgeRepository,
+    UserRankingRepository,
+    UserActivityRepository,
+    UserTournamentRepository,
+    UserAnalyticsRepository,
     { provide: USER_REPOSITORY_PORT, useExisting: UserRepository },
     { provide: USER_DOMAIN_EVENT_BUS, useExisting: UserDomainEventBus },
     { provide: USER_SEARCH_PORT, useExisting: UserSearchAdapter },
@@ -70,15 +73,7 @@ import { UserResponseMapper } from './mappers/user-response.mapper';
     RecentlyPlayedQuizzesService,
     UserProfileBundleService,
     UserSummaryService,
-    // Phase 6: re-exported as a constructor-injected dependency of
-    // `UserApplicationService`. The mapper owns the
-    // "prefer-new-column, fall-back-to-legacy" read-path logic for
-    // `avatarUrl`.
     UserResponseMapper,
-    // Phase 4 (S-3): re-register `CoinRepository` here so the
-    // `COIN_REPOSITORY_PORT` token is resolvable when UserApplicationService
-    // builds. The provider instance lives in CoinModule; `useExisting`
-    // ensures both modules see the same singleton.
     CoinRepository,
     { provide: COIN_REPOSITORY_PORT, useExisting: CoinRepository },
   ],

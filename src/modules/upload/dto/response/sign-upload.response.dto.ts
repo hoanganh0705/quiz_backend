@@ -1,12 +1,3 @@
-/**
- * Phase 7 #1 — response for `POST /api/v1/uploads/sign`.
- *
- * The client POSTs the file directly to `uploadUrl` as a multipart
- * form with the fields enumerated below. `publicId` is the value the
- * client should later echo back when patching the entity (e.g. when
- * updating `user.avatarPublicId`).
- */
-
 import { ApiProperty } from '@nestjs/swagger';
 
 export class SignUploadResponseDto {

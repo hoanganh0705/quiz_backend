@@ -12,6 +12,7 @@ import {
   PlayerXpEarnedEvent,
   PlayerFinishedEvent,
   PlayerDisconnectedEvent,
+  PlayerAnsweredEvent,
   InstanceStartedEvent,
   InstanceClosedEvent,
   CountdownStartedEvent,
@@ -118,6 +119,17 @@ export class InstanceDomainEventBus implements InstanceDomainEventBusPort {
       instanceId: event.instanceId,
       userId: event.userId,
       socketId: event.socketId,
+    });
+    this.emit(event);
+  }
+
+  emitPlayerAnswered(event: PlayerAnsweredEvent): void {
+    this.logger.debug({
+      event: 'instance_event_emitted',
+      eventType: 'instance.player_answered',
+      instanceId: event.instanceId,
+      userId: event.userId,
+      questionId: event.questionId,
     });
     this.emit(event);
   }

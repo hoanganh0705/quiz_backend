@@ -1,41 +1,9 @@
 /// <reference types="jest" />
-/**
- * `ReviewRepository` integration tests — Phase 4 of the
- * `helpful-vote-counter-reconciliation` plan.
- *
- * Exercises the two new repository methods end-to-end against a real
- * Postgres + Redis stack:
- *
- *   - `addHelpfulVote`     — idempotent insert + counter bump, atomic.
- *   - `removeHelpfulVote`  — idempotent delete + counter decrement, atomic.
- *
- * Coverage matrix (from the plan §4 step 10):
- *   - single add: returns `true`, counter +1, vote row created.
- *   - double add (same user, same review): second call returns `false`.
- *     Counter is exactly 1.
- *   - single remove: returns `true`, counter -1, vote row deleted.
- *   - double remove: second call returns `false`. Counter unchanged.
- *   - five alternations: final counter matches final vote count.
- *   - concurrent adds from the same user: exactly one `true`, one `false`.
- *   - concurrent removes from the same user: exactly one `true`, one `false`.
- *   - mixed concurrent add+remove: counter matches final vote count.
- *   - transaction atomicity: a forced error after the vote mutation but
- *     before the counter update leaves neither write committed.
- *   - when called inside an existing transaction, no new transaction is
- *     opened; both writes ride the outer client.
- *
- * Skips gracefully when Postgres or env is unreachable so this file can
- * sit in `pnpm test:e2e` without breaking CI for engineers without a
- * local DB. Run against a live stack with:
- *
- *   pnpm db:start && pnpm test:e2e -- --testPathPatterns=review.repository
- */
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
 // ---------------------------------------------------------------------------
-// Minimal `.env` loader (mirrors test/ranking-phase1.e2e-spec.ts so this
-// file is self-contained).
+// Minimal `.env` loader.
 // ---------------------------------------------------------------------------
 function loadDotEnv(): void {
   const envPath = path.resolve(__dirname, '..', '.env');
@@ -87,16 +55,16 @@ import { TransactionalContext } from '@/common/interceptors/transactional-contex
 
 const UUID_RE = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
 
-describe('ReviewRepository — helpful-vote contract (e2e)', () => {
+describe('ReviewRepository (e2e)', () => {
   const hasRequiredEnv = Boolean(process.env.DATABASE_URL);
 
   if (!hasRequiredEnv) {
-    console.warn('[review.repository] missing DATABASE_URL; skipping suite.');
+    console.warn('[review.repository] missing DATABASE_URL; skipping tests.');
   }
 
   const suite = hasRequiredEnv ? describe : describe.skip;
 
-  suite('addHelpfulVote / removeHelpfulVote', () => {
+  suite('helpful-vote contract', () => {
     let pool: Pool;
     let db: DrizzleDB;
     let transactionalContext: TransactionalContext;
@@ -323,8 +291,8 @@ describe('ReviewRepository — helpful-vote contract (e2e)', () => {
         repo.addHelpfulVote({ reviewId, userId: reviewerUserId, nowIso }),
       ]);
 
-      const trues = [a, b].filter((x) => x === true).length;
-      const falses = [a, b].filter((x) => x === false).length;
+      const trues = [a, b].filter((x) => x.inserted === true).length;
+      const falses = [a, b].filter((x) => x.inserted === false).length;
       expect(trues).toBe(1);
       expect(falses).toBe(1);
       expect(await readCounter(reviewId)).toBe(1);
@@ -342,8 +310,8 @@ describe('ReviewRepository — helpful-vote contract (e2e)', () => {
         repo.removeHelpfulVote({ reviewId, userId: reviewerUserId, nowIso }),
       ]);
 
-      const trues = [a, b].filter((x) => x === true).length;
-      const falses = [a, b].filter((x) => x === false).length;
+      const trues = [a, b].filter((x) => x.removed === true).length;
+      const falses = [a, b].filter((x) => x.removed === false).length;
       expect(trues).toBe(1);
       expect(falses).toBe(1);
       // Counter was 1, the winning remove decremented it to 0. The losing

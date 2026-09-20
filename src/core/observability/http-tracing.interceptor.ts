@@ -1,19 +1,3 @@
-/**
- * Phase 5 #1 — HTTP tracing interceptor.
- *
- * Opens a `server` span on every incoming HTTP request, attaches
- * standard attributes (`http.method`, `http.route`,
- * `http.status_code`), and ends the span when the response
- * completes. The span is associated with a parent if the caller
- * passed a `traceparent` header (W3C trace context).
- *
- * Why an interceptor and not middleware?
- * -------------------------------------
- * Interceptors in NestJS run *after* the validation pipe and the
- * global exception filter, which means the span is closed only
- * once the entire request has been handled. Middleware runs too
- * early to see exceptions from the validation pipe.
- */
 import { CallHandler, ExecutionContext, Inject, Injectable, NestInterceptor } from '@nestjs/common';
 import { catchError, Observable, tap } from 'rxjs';
 import type { Request, Response } from 'express';
@@ -25,12 +9,7 @@ import {
 } from '@/core/observability/tracing.provider';
 
 const TRACEPARENT_HEADER = 'traceparent';
-/**
- * Parses `traceparent` per the W3C Trace Context spec.
- * Format: `00-<trace_id 32 hex>-<span_id 16 hex>-<flags 2 hex>`.
- * Returns null on any parse failure so an unparseable header
- * falls back to a fresh trace rather than crashing the request.
- */
+
 const parseTraceparent = (header: string | undefined): SpanContext | null => {
   if (!header) return null;
   const parts = header.split('-');

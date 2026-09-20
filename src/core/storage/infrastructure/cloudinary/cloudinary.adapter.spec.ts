@@ -1,12 +1,3 @@
-/**
- * Unit tests for `CloudinaryStorageAdapter`.
- *
- * The adapter is the only piece of `core/storage` that talks to a
- * concrete third-party SDK. These tests inject a hand-rolled mock of
- * the narrow `CloudinarySDK` interface so we never need a network
- * round-trip in unit tests.
- */
-
 import { Transform, type TransformCallback } from 'node:stream';
 
 import { CloudinaryStorageAdapter } from './cloudinary.adapter';
@@ -22,11 +13,6 @@ import type { UploadInput } from '../../storage.types';
 
 const OWNER = '0190b1c2-7f3a-7aaa-bbbb-cccccccccccc';
 
-/**
- * Build a fake `Transform` that calls `cb` once the consumer `.end()`s
- * it. Mirrors how Cloudinary's `UploadStream` behaves: write buffers,
- * end the stream, then the callback fires with the parsed response.
- */
 function makeUploadStreamTransform(result: UploadStreamResult): Transform {
   let capturedCb: UploadStreamCallback | null = null;
   const t = new Transform({
@@ -248,7 +234,7 @@ describe('CloudinaryStorageAdapter', () => {
     });
   });
 
-  describe('createSignedUpload (Phase 7 #1)', () => {
+  describe('createSignedUpload', () => {
     it('issues a signed envelope with the per-purpose folder and owner in publicId', async () => {
       const sdk = makeSdk();
       const adapter = new CloudinaryStorageAdapter(sdk, makeLogger());
@@ -259,7 +245,6 @@ describe('CloudinaryStorageAdapter', () => {
         expiresInSeconds: 600,
       });
 
-      // Sign was called once with `public_id` and `timestamp`.
       expect(sdk._signRequest).toHaveBeenCalledTimes(1);
       const [params] = sdk._signRequest.mock.calls[0]!;
       expect(params['public_id']).toMatch(
@@ -267,14 +252,12 @@ describe('CloudinaryStorageAdapter', () => {
       );
       expect(typeof params['timestamp']).toBe('number');
 
-      // Cloudinary upload endpoint shape.
       expect(signed.uploadUrl).toBe('https://api.cloudinary.com/v1_1/test-cloud/image/upload');
       expect(signed.publicId).toBe(params['public_id']);
       expect(signed.folder).toBe(UPLOAD_POLICY.avatar.folder);
       expect(signed.signature).toMatch(/^sig-/);
       expect(signed.apiKey).toBe('test-api-key');
       expect(signed.timestamp).toBe(params['timestamp']);
-      // ISO 8601.
       expect(signed.expiresAt).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
     });
 
@@ -283,7 +266,6 @@ describe('CloudinaryStorageAdapter', () => {
       const adapter = new CloudinaryStorageAdapter(sdk, makeLogger());
       const before = Math.floor(Date.now() / 1000);
 
-      // Below floor → clamp up.
       await adapter.createSignedUpload({
         ownerId: OWNER,
         purpose: 'avatar',
@@ -292,7 +274,6 @@ describe('CloudinaryStorageAdapter', () => {
       const smallTimestamp = sdk._signRequest.mock.calls[0]![0]['timestamp'] as number;
       expect(smallTimestamp - before).toBeGreaterThanOrEqual(60);
 
-      // Above ceiling → clamp down.
       await adapter.createSignedUpload({
         ownerId: OWNER,
         purpose: 'avatar',

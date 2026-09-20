@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable } from '@nestjs/common';
 import { DRIZZLE } from '@/core/database/drizzle.constants';
 import type { DrizzleDB } from '@/core/database/database.module';
 import {
@@ -20,6 +20,8 @@ import type {
   TrendingUsersResult,
   RelationshipStatus,
   PaginatedSocialSuggestionsResult,
+  RespondToFriendRequestParams,
+  SuggestionCursorPayload,
 } from '../../domain/types/social.types';
 import { eq, and, count, isNull, sql, lte, or, aliasedTable } from 'drizzle-orm';
 import {
@@ -31,6 +33,8 @@ import {
   type UserFollowRepositoryPort,
 } from '../../domain/ports/user-follow-ports';
 import { BLOCK_REPOSITORY_PORT, type BlockRepositoryPort } from '../../domain/ports/block-ports';
+import { sliceWithCursor, encodeBase64JsonCursor } from './social-cursor.util';
+import { decodeBase64JsonCursor, isIsoDateString } from '@/common/utils/cursor.util';
 
 const MUTUAL_FRIENDS_REASON_FALLBACK = 'Suggested based on mutual connections';
 const MUTUAL_FOLLOWERS_REASON_FALLBACK = 'Suggested based on mutual followers';
@@ -69,24 +73,19 @@ export class SocialRepository implements SocialRepositoryPort {
   ): Promise<PaginatedSocialFeedResult> {
     const effectiveLimit = limit ?? 20;
 
-    // Decode cursor if provided
-    let cursorCondition = '';
-    if (cursor) {
-      try {
-        const decoded = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8'));
-        cursorCondition = `AND (sfa.occurred_at < '${decoded.occurredAt}' OR (sfa.occurred_at = '${decoded.occurredAt}' AND sfa.activity_id < '${decoded.activityId}'::uuid))`;
-      } catch {
-        cursorCondition = '';
-      }
-    }
+    const cursorCondition = decodeFeedCursorCondition(cursor);
 
-    // Build a query that filters activities to only show:
-    // - Friends of the user (accepted friendships where user is either requester or addressee)
-    // - Users the user follows
-    // - Exclude blocked users (in both directions)
-    const rows = await this.db.execute(sql`
+    const rows = await this.db.execute(sql<{
+      id: string;
+      type: SocialFeedActivityType;
+      occurredAt: string;
+      userId: string;
+      username: string;
+      displayName: string | null;
+      avatarUrl: string | null;
+      payload: Record<string, unknown>;
+    }>`
       WITH user_network AS (
-        -- Friends (accepted friendships)
         SELECT
           CASE
             WHEN f.requester_id = ${userId}::uuid THEN f.addressee_id
@@ -97,7 +96,6 @@ export class SocialRepository implements SocialRepositoryPort {
           AND f.status = 'accepted'
           AND f.deleted_at IS NULL
         UNION
-        -- Users being followed
         SELECT uf.following_id AS user_id
         FROM user_follows uf
         WHERE uf.follower_id = ${userId}::uuid
@@ -114,6 +112,8 @@ export class SocialRepository implements SocialRepositoryPort {
         sfa.occurred_at AS "occurredAt",
         sfa.user_id AS "userId",
         u.username AS username,
+        up.display_name AS "displayName",
+        up.avatar_url AS "avatarUrl",
         sfa.payload AS payload
       FROM social_feed_activities sfa
       INNER JOIN users u ON u.user_id = sfa.user_id
@@ -121,12 +121,12 @@ export class SocialRepository implements SocialRepositoryPort {
       INNER JOIN user_network un ON un.user_id = sfa.user_id
       WHERE u.deleted_at IS NULL
         AND sfa.user_id NOT IN (SELECT user_id FROM blocked_ids)
-        ${sql.raw(cursorCondition ? ` ${cursorCondition}` : '')}
+        ${cursorCondition}
       ORDER BY sfa.occurred_at DESC, sfa.activity_id DESC
       LIMIT ${effectiveLimit + 1}
     `);
 
-    const feedRows = rows.rows as Array<{
+    const typedRows = rows.rows as Array<{
       id: string;
       type: SocialFeedActivityType;
       occurredAt: string;
@@ -136,20 +136,12 @@ export class SocialRepository implements SocialRepositoryPort {
       avatarUrl: string | null;
       payload: Record<string, unknown>;
     }>;
-
-    const hasNextPage = feedRows.length > effectiveLimit;
-    const items = hasNextPage ? feedRows.slice(0, effectiveLimit) : feedRows;
-    const lastItem = items[items.length - 1];
-    const nextCursor =
-      hasNextPage && lastItem
-        ? Buffer.from(
-            JSON.stringify({ occurredAt: lastItem.occurredAt, activityId: lastItem.id }),
-            'utf8',
-          ).toString('base64url')
-        : null;
+    const page = sliceWithCursor(typedRows, effectiveLimit, (last) =>
+      encodeBase64JsonCursor({ occurredAt: last.occurredAt, activityId: last.id }),
+    );
 
     return {
-      items: items.map((row) => ({
+      items: page.items.map((row) => ({
         id: row.id,
         type: row.type,
         occurredAt: row.occurredAt,
@@ -157,7 +149,6 @@ export class SocialRepository implements SocialRepositoryPort {
           userId: row.userId,
           username: row.username,
         },
-        // Phase 3 (S-22): slim-actor projection.
         actor: {
           userId: row.userId,
           username: row.username,
@@ -169,8 +160,8 @@ export class SocialRepository implements SocialRepositoryPort {
       pagination: {
         kind: 'cursor',
         limit: effectiveLimit,
-        hasNextPage,
-        nextCursor,
+        hasNextPage: page.hasNextPage,
+        nextCursor: page.nextCursor,
       },
     };
   }
@@ -182,18 +173,18 @@ export class SocialRepository implements SocialRepositoryPort {
   ): Promise<PaginatedUserActivityResult> {
     const effectiveLimit = limit ?? 20;
 
-    // Decode cursor if provided
-    let cursorCondition = '';
-    if (cursor) {
-      try {
-        const decoded = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8'));
-        cursorCondition = `AND (sfa.occurred_at < '${decoded.occurredAt}' OR (sfa.occurred_at = '${decoded.occurredAt}' AND sfa.activity_id < '${decoded.activityId}'::uuid))`;
-      } catch {
-        cursorCondition = '';
-      }
-    }
+    const cursorCondition = decodeFeedCursorCondition(cursor);
 
-    const rows = await this.db.execute(sql`
+    const rows = await this.db.execute(sql<{
+      id: string;
+      type: SocialFeedActivityType;
+      occurredAt: string;
+      userId: string;
+      username: string;
+      displayName: string | null;
+      avatarUrl: string | null;
+      payload: Record<string, unknown>;
+    }>`
       SELECT
         sfa.activity_id AS id,
         sfa.activity_type AS type,
@@ -208,12 +199,12 @@ export class SocialRepository implements SocialRepositoryPort {
       LEFT JOIN user_profiles up ON up.user_id = u.user_id
       WHERE sfa.user_id = ${userId}::uuid
         AND u.deleted_at IS NULL
-        ${sql.raw(cursorCondition ? ` ${cursorCondition}` : '')}
+        ${cursorCondition}
       ORDER BY sfa.occurred_at DESC, sfa.activity_id DESC
       LIMIT ${effectiveLimit + 1}
     `);
 
-    const activityRows = rows.rows as Array<{
+    const typedRows = rows.rows as Array<{
       id: string;
       type: SocialFeedActivityType;
       occurredAt: string;
@@ -223,24 +214,15 @@ export class SocialRepository implements SocialRepositoryPort {
       avatarUrl: string | null;
       payload: Record<string, unknown>;
     }>;
-
-    const hasNextPage = activityRows.length > effectiveLimit;
-    const items = hasNextPage ? activityRows.slice(0, effectiveLimit) : activityRows;
-    const lastItem = items[items.length - 1];
-    const nextCursor =
-      hasNextPage && lastItem
-        ? Buffer.from(
-            JSON.stringify({ occurredAt: lastItem.occurredAt, activityId: lastItem.id }),
-            'utf8',
-          ).toString('base64url')
-        : null;
+    const page = sliceWithCursor(typedRows, effectiveLimit, (last) =>
+      encodeBase64JsonCursor({ occurredAt: last.occurredAt, activityId: last.id }),
+    );
 
     return {
-      items: items.map((row) => ({
+      items: page.items.map((row) => ({
         id: row.id,
         type: row.type,
         occurredAt: row.occurredAt,
-        // Phase 3 (S-22): slim-actor projection.
         actor: {
           userId: row.userId,
           username: row.username,
@@ -252,8 +234,8 @@ export class SocialRepository implements SocialRepositoryPort {
       pagination: {
         kind: 'cursor',
         limit: effectiveLimit,
-        hasNextPage,
-        nextCursor,
+        hasNextPage: page.hasNextPage,
+        nextCursor: page.nextCursor,
       },
     };
   }
@@ -324,16 +306,7 @@ export class SocialRepository implements SocialRepositoryPort {
   ): Promise<PaginatedSocialSuggestionsResult> {
     const effectiveLimit = limit ?? 20;
 
-    // Decode cursor if provided
-    let cursorCondition = '';
-    if (cursor) {
-      try {
-        const decoded = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8'));
-        cursorCondition = `AND (ranked.score < ${decoded.score} OR (ranked.score = ${decoded.score} AND ranked."mutualFriends" < ${decoded.mutualFriends}) OR (ranked.score = ${decoded.score} AND ranked."mutualFriends" = ${decoded.mutualFriends} AND ranked."mutualFollowers" < ${decoded.mutualFollowers}) OR (ranked.score = ${decoded.score} AND ranked."mutualFriends" = ${decoded.mutualFriends} AND ranked."mutualFollowers" = ${decoded.mutualFollowers} AND ranked.username > '${decoded.username}'))`;
-      } catch {
-        cursorCondition = '';
-      }
-    }
+    const cursorCondition = decodeSuggestionCursorCondition(cursor);
 
     const u = aliasedTable(users, 'u');
     const up = aliasedTable(userProfiles, 'up');
@@ -448,15 +421,22 @@ export class SocialRepository implements SocialRepositoryPort {
       FROM ranked_candidates
     `;
 
-    const rowsResult = await this.db.execute(sql`
+    const rowsResult = await this.db.execute(sql<{
+      userId: string;
+      username: string;
+      avatarUrl: string | null;
+      mutualFriends: number;
+      mutualFollowers: number;
+      score: number;
+    }>`
       SELECT *
       FROM (${candidates}) ranked
-      WHERE 1=1 ${sql.raw(cursorCondition ? ` ${cursorCondition}` : '')}
+      WHERE 1=1 ${cursorCondition}
       ORDER BY ranked.score DESC, ranked."mutualFriends" DESC, ranked."mutualFollowers" DESC, ranked.username ASC
       LIMIT ${effectiveLimit + 1}
     `);
 
-    const rows = rowsResult.rows as Array<{
+    const typedSuggestionRows = rowsResult.rows as Array<{
       userId: string;
       username: string;
       avatarUrl: string | null;
@@ -464,25 +444,17 @@ export class SocialRepository implements SocialRepositoryPort {
       mutualFollowers: number;
       score: number;
     }>;
-
-    const hasNextPage = rows.length > effectiveLimit;
-    const items = hasNextPage ? rows.slice(0, effectiveLimit) : rows;
-    const lastItem = items[items.length - 1];
-    const nextCursor =
-      hasNextPage && lastItem
-        ? Buffer.from(
-            JSON.stringify({
-              score: lastItem.score,
-              mutualFriends: lastItem.mutualFriends,
-              mutualFollowers: lastItem.mutualFollowers,
-              username: lastItem.username,
-            }),
-            'utf8',
-          ).toString('base64url')
-        : null;
+    const page = sliceWithCursor(typedSuggestionRows, effectiveLimit, (last) =>
+      encodeBase64JsonCursor({
+        score: last.score,
+        mutualFriends: last.mutualFriends,
+        mutualFollowers: last.mutualFollowers,
+        username: last.username,
+      }),
+    );
 
     return {
-      items: items.map((row) => ({
+      items: page.items.map((row) => ({
         userId: row.userId,
         username: row.username,
         avatarUrl: row.avatarUrl,
@@ -500,8 +472,8 @@ export class SocialRepository implements SocialRepositoryPort {
       pagination: {
         kind: 'cursor',
         limit: effectiveLimit,
-        hasNextPage,
-        nextCursor,
+        hasNextPage: page.hasNextPage,
+        nextCursor: page.nextCursor,
       },
     };
   }
@@ -828,7 +800,7 @@ export class SocialRepository implements SocialRepositoryPort {
     return this.friendshipRepository.getSentRequests(requesterId);
   }
 
-  async respondToFriendRequest(params: any, requesterId: string) {
+  async respondToFriendRequest(params: RespondToFriendRequestParams, requesterId: string) {
     return this.friendshipRepository.respondToFriendRequest(params, requesterId);
   }
 
@@ -932,4 +904,27 @@ export class SocialRepository implements SocialRepositoryPort {
   async getBlockedUsers(blockerId: string) {
     return this.blockRepository.getBlockedUsers(blockerId);
   }
+}
+
+function decodeFeedCursorCondition(cursor: string | null | undefined) {
+  if (!cursor) return sql``;
+  const decoded = decodeBase64JsonCursor<{ occurredAt?: unknown; activityId?: unknown }>(cursor);
+  if (!isIsoDateString(decoded.occurredAt) || typeof decoded.activityId !== 'string') {
+    throw new BadRequestException('Invalid cursor');
+  }
+  return sql`AND (sfa.occurred_at < ${decoded.occurredAt}::timestamptz OR (sfa.occurred_at = ${decoded.occurredAt}::timestamptz AND sfa.activity_id < ${decoded.activityId}::uuid))`;
+}
+
+function decodeSuggestionCursorCondition(cursor: string | null | undefined) {
+  if (!cursor) return sql``;
+  const decoded = decodeBase64JsonCursor<SuggestionCursorPayload>(cursor);
+  if (
+    typeof decoded.score !== 'number' ||
+    typeof decoded.mutualFriends !== 'number' ||
+    typeof decoded.mutualFollowers !== 'number' ||
+    typeof decoded.username !== 'string'
+  ) {
+    throw new BadRequestException('Invalid cursor');
+  }
+  return sql`AND (ranked.score < ${decoded.score} OR (ranked.score = ${decoded.score} AND ranked."mutualFriends" < ${decoded.mutualFriends}) OR (ranked.score = ${decoded.score} AND ranked."mutualFriends" = ${decoded.mutualFriends} AND ranked."mutualFollowers" < ${decoded.mutualFollowers}) OR (ranked.score = ${decoded.score} AND ranked."mutualFriends" = ${decoded.mutualFriends} AND ranked."mutualFollowers" = ${decoded.mutualFollowers} AND ranked.username > ${decoded.username}))`;
 }

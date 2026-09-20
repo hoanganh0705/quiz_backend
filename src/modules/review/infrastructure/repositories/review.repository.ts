@@ -1,5 +1,5 @@
 import { Inject, Injectable, Optional } from '@nestjs/common';
-import { and, asc, desc, eq, isNotNull, isNull, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, isNotNull, isNull, or, sql } from 'drizzle-orm';
 import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 import { DRIZZLE } from '@/core/database/drizzle.constants';
 import type { DrizzleDB } from '@/core/database/database.module';
@@ -33,6 +33,8 @@ import type {
   ReviewSort,
 } from '@/modules/review/domain/ports';
 
+type DbClient = DrizzleDB;
+
 const QUIZ_VERSION_COLUMNS = quizVersions as unknown as {
   quizVersionId: AnyPgColumn;
   quizId: AnyPgColumn;
@@ -55,13 +57,6 @@ export class ReviewRepository implements ReviewRepositoryPort {
     private readonly transactionalContext?: TransactionalContext,
   ) {}
 
-  /**
-   * Phase 5 / Issue #17 — "active review" predicate. Every
-   * public read path appends `quiz_reviews.deleted_at IS NULL`
-   * so soft-deleted reviews stay invisible to clients while
-   * remaining in the table for vote-history preservation,
-   * moderation audit, and reconciliation jobs.
-   */
   private static readonly ACTIVE_REVIEW_PREDICATE = isNull(quizReviews.deletedAt);
 
   async getReviewByQuizAndUser(quizId: string, userId: string): Promise<ReviewRow | null> {
@@ -160,10 +155,6 @@ export class ReviewRepository implements ReviewRepositoryPort {
   async listReviewsByQuiz(params: {
     quizId: string;
     limit: number;
-    // Phase 5 / Issue #11 — the cursor type now depends on the
-    // sort. The repository branches on `params.sort` and validates
-    // the cursor shape implicitly. The controller-layer mapper
-    // serializes/deserializes the right shape per sort.
     cursor?: ReviewListCursor | null;
     rating?: number;
     sort?: ReviewSort;
@@ -191,12 +182,6 @@ export class ReviewRepository implements ReviewRepositoryPort {
     };
 
     if (params.sort === 'helpful') {
-      // Phase 5 / Issue #11 — the helpful-sort cursor carries
-      // `{ helpfulCount, reviewId }` so the predicate matches
-      // the ORDER BY columns exactly. The previous shape
-      // reused the `createdAt` cursor and let pages skip /
-      // duplicate rows because the cursor predicate and the
-      // sort key were on different columns.
       const cursor = params.cursor as ReviewHelpfulCursor | null | undefined;
       const cursorCondition = cursor
         ? or(
@@ -220,8 +205,6 @@ export class ReviewRepository implements ReviewRepositoryPort {
       return rows as unknown as ReviewDetailRow[];
     }
 
-    // For the other sorts, the cursor is the original
-    // `{ createdAt, reviewId }` shape.
     const cursor = params.cursor as ReviewCursor | null | undefined;
     const cursorCondition = cursor
       ? or(
@@ -286,30 +269,11 @@ export class ReviewRepository implements ReviewRepositoryPort {
         )
       : undefined;
 
-    // Phase 5 / Issue #15 — visibility predicate for the
-    // `listUserReviews` query. The query joins `quizzes` and
-    // exposes `quizzes.title` to the response. The previous shape
-    // INNER-JOINed every row regardless of the parent quiz's
-    // visibility, so:
-    //
-    //   - `GET /users/me/reviews` (authenticated, self-only)
-    //     leaked the title of a quiz the author later hid.
-    //   - `GET /users/:userId/reviews` (public!) leaked hidden
-    //     quiz titles to any attacker guessing reviewer UUIDs —
-    //     the canonical "hidden quiz IDOR" pattern.
-    //
-    // The predicate mirrors `isVisibleToReviewers`:
-    // `is_hidden = false AND published_version_id IS NOT NULL`.
     const visibilityPredicate = and(
       eq(quizzes.isHidden, false),
       isNotNull(quizzes.publishedVersionId),
     );
 
-    // Phase 5 / Issue #17 — exclude soft-deleted reviews from
-    // the user's review history. A review the author (or a
-    // moderator) soft-deleted should not appear on
-    // `GET /users/me/reviews` or the public
-    // `GET /users/:userId/reviews` listing.
     const visibilityAndActive = and(visibilityPredicate, ReviewRepository.ACTIVE_REVIEW_PREDICATE);
 
     const rows = await this.db
@@ -355,35 +319,15 @@ export class ReviewRepository implements ReviewRepositoryPort {
   }
 
   async getUserReviewDashboard(userId: string): Promise<ReviewDashboardRow> {
-    const [summaryRow] = await this.db
-      .select({
-        totalReviews: sql<number>`COUNT(${quizReviews.reviewId})`.as('total_reviews'),
-        averageRatingGiven:
-          sql<number>`COALESCE(ROUND(AVG(${quizReviews.rating})::numeric, 1), 0)`.as(
-            'average_rating_given',
-          ),
-        // Phase 5 / Issue #30 — when a user has no reviews, the
-        // previous `COALESCE(MAX(updated_at)::text, NOW()::text)`
-        // surfaced the wall-clock DB time as "dashboard last
-        // updated at <now>", which is misleading. Return `null`
-        // when there are no rows; the service layer translates
-        // that to `null` in the response.
-        lastUpdated: sql<string | null>`MAX(${quizReviews.updatedAt})::text`.as('last_updated'),
-      })
-      .from(quizReviews)
-      .where(and(eq(quizReviews.userId, userId), ReviewRepository.ACTIVE_REVIEW_PREDICATE));
+    const summarySelect = {
+      totalReviews: sql<number>`COUNT(${quizReviews.reviewId})`.as('total_reviews'),
+      averageRatingGiven:
+        sql<number>`COALESCE(ROUND(AVG(${quizReviews.rating})::numeric, 1), 0)`.as(
+          'average_rating_given',
+        ),
+      lastUpdated: sql<string | null>`MAX(${quizReviews.updatedAt})::text`.as('last_updated'),
+    };
 
-    // Phase 3 / Issue #26 — exclude reviews on hidden or
-    // unpublished quizzes from the `favoriteCategory` /
-    // `favoriteTag` aggregates. Otherwise a user whose activity
-    // includes test quizzes that were later hidden still surfaces
-    // those categories/tags in their dashboard, which leaks
-    // categories the user has nominally interacted with but which
-    // are no longer canonical. The same predicate is used in the
-    // review-visibility policy (`isVisibleToReviewers`) and the
-    // public listing paths.
-    //
-    // Phase 5 / Issue #17 — also exclude soft-deleted reviews.
     const visibleQuizWhere = and(
       eq(quizReviews.userId, userId),
       eq(quizzes.isHidden, false),
@@ -391,7 +335,12 @@ export class ReviewRepository implements ReviewRepositoryPort {
       ReviewRepository.ACTIVE_REVIEW_PREDICATE,
     );
 
-    const [favoriteCategory] = await this.db
+    const summaryQuery = this.db
+      .select(summarySelect)
+      .from(quizReviews)
+      .where(and(eq(quizReviews.userId, userId), ReviewRepository.ACTIVE_REVIEW_PREDICATE));
+
+    const favoriteCategoryQuery = this.db
       .select({
         categoryId: categories.categoryId,
         name: categories.name,
@@ -404,7 +353,7 @@ export class ReviewRepository implements ReviewRepositoryPort {
       .orderBy(sql`COUNT(*) DESC`, categories.name)
       .limit(1);
 
-    const [favoriteTag] = await this.db
+    const favoriteTagQuery = this.db
       .select({
         tagId: tags.tagId,
         name: tags.name,
@@ -418,46 +367,33 @@ export class ReviewRepository implements ReviewRepositoryPort {
       .orderBy(sql`COUNT(*) DESC`, tags.name)
       .limit(1);
 
+    const [summaryRow, favoriteCategory, favoriteTag] = await Promise.all([
+      summaryQuery,
+      favoriteCategoryQuery,
+      favoriteTagQuery,
+    ]);
+
+    const [summaryFirst] = summaryRow;
+
     return {
-      totalReviews: Number(summaryRow?.totalReviews ?? 0),
-      averageRatingGiven: Number(summaryRow?.averageRatingGiven ?? 0),
-      favoriteCategory: favoriteCategory ?? null,
-      favoriteTag: favoriteTag ?? null,
-      // Phase 5 / Issue #30 — propagate the repository's `null`
-      // (no reviews) through to the response. The service layer
-      // must no longer fall back to `new Date().toISOString()`,
-      // which is what produced the misleading "dashboard last
-      // updated at <now>" output for users with no reviews.
-      lastUpdated: summaryRow?.lastUpdated ?? null,
+      totalReviews: Number(summaryFirst?.totalReviews ?? 0),
+      averageRatingGiven: Number(summaryFirst?.averageRatingGiven ?? 0),
+      favoriteCategory: favoriteCategory[0] ?? null,
+      favoriteTag: favoriteTag[0] ?? null,
+      lastUpdated: summaryFirst?.lastUpdated ?? null,
     };
   }
 
-  /**
-   * Atomically insert a helpful vote for `(reviewId, userId)` and bump
-   * `quiz_reviews.helpful_count` by 1 in the same transaction.
-   *
-   * Idempotent at the database level: the unique constraint on
-   * `review_helpful_votes (review_id, user_id)` makes a duplicate insert a
-   * no-op (no row returned from the `ON CONFLICT DO NOTHING RETURNING`),
-   * and the counter is left untouched in that case.
-   *
-   * Returns `true` when the vote was actually inserted, `false` when the
-   * vote already existed.
-   *
-   * Joins the active outer transaction if one is open (via the shared
-   * `TransactionalContext`); otherwise opens its own transaction so the
-   * insert and the counter bump commit or roll back together.
-   */
   async addHelpfulVote(params: {
     reviewId: string;
     userId: string;
     nowIso: string;
-  }): Promise<boolean> {
+  }): Promise<{ inserted: boolean; quizId: string | null }> {
     const { reviewId, userId, nowIso } = params;
 
-    const executeAdd = async (tx: unknown): Promise<boolean> => {
-      const db = tx as DrizzleDB;
-
+    const executeAdd = async (
+      db: DbClient,
+    ): Promise<{ inserted: boolean; quizId: string | null }> => {
       const inserted = await db
         .insert(reviewHelpfulVotes)
         .values({ reviewId, userId, createdAt: nowIso })
@@ -467,45 +403,41 @@ export class ReviewRepository implements ReviewRepositoryPort {
         .returning({ voteId: reviewHelpfulVotes.voteId });
 
       if (inserted.length === 0) {
-        return false;
+        const [existing] = await db
+          .select({ quizId: quizReviews.quizId })
+          .from(quizReviews)
+          .where(eq(quizReviews.reviewId, reviewId))
+          .limit(1);
+        return { inserted: false, quizId: existing?.quizId ?? null };
       }
 
-      await db
+      const [updated] = await db
         .update(quizReviews)
         .set({ helpfulCount: sql`helpful_count + 1` })
-        .where(eq(quizReviews.reviewId, reviewId));
+        .where(eq(quizReviews.reviewId, reviewId))
+        .returning({ quizId: quizReviews.quizId });
 
-      return true;
+      return { inserted: true, quizId: updated?.quizId ?? null };
     };
 
-    const existingTx = this.transactionalContext?.getDbClient() as DrizzleDB | null;
+    const existingTx = this.transactionalContext?.getDbClient() as DbClient | null;
     if (existingTx) {
       return executeAdd(existingTx);
     }
 
-    return this.db.transaction(async (tx) => executeAdd(tx));
+    return this.db.transaction(async (tx) => executeAdd(tx as unknown as DbClient));
   }
 
-  /**
-   * Atomically delete a helpful vote for `(reviewId, userId)` and decrement
-   * `quiz_reviews.helpful_count` by 1 in the same transaction.
-   *
-   * Returns `true` when a row was actually deleted, `false` when there was
-   * no vote to remove.
-   *
-   * Joins the active outer transaction if one is open; otherwise opens
-   * its own transaction.
-   */
   async removeHelpfulVote(params: {
     reviewId: string;
     userId: string;
     nowIso: string;
-  }): Promise<boolean> {
+  }): Promise<{ removed: boolean; quizId: string | null }> {
     const { reviewId, userId } = params;
 
-    const executeRemove = async (tx: unknown): Promise<boolean> => {
-      const db = tx as DrizzleDB;
-
+    const executeRemove = async (
+      db: DbClient,
+    ): Promise<{ removed: boolean; quizId: string | null }> => {
       const deleted = await db
         .delete(reviewHelpfulVotes)
         .where(
@@ -514,23 +446,32 @@ export class ReviewRepository implements ReviewRepositoryPort {
         .returning({ voteId: reviewHelpfulVotes.voteId });
 
       if (deleted.length === 0) {
-        return false;
+        const [existing] = await db
+          .select({ quizId: quizReviews.quizId })
+          .from(quizReviews)
+          .where(eq(quizReviews.reviewId, reviewId))
+          .limit(1);
+        return { removed: false, quizId: existing?.quizId ?? null };
       }
 
-      await db
+      const [updated] = await db
         .update(quizReviews)
         .set({ helpfulCount: sql`helpful_count - 1` })
-        .where(eq(quizReviews.reviewId, reviewId));
+        .where(and(eq(quizReviews.reviewId, reviewId), gt(quizReviews.helpfulCount, 0)))
+        .returning({ quizId: quizReviews.quizId });
 
-      return true;
+      return {
+        removed: true,
+        quizId: updated?.quizId ?? null,
+      };
     };
 
-    const existingTx = this.transactionalContext?.getDbClient() as DrizzleDB | null;
+    const existingTx = this.transactionalContext?.getDbClient() as DbClient | null;
     if (existingTx) {
       return executeRemove(existingTx);
     }
 
-    return this.db.transaction(async (tx) => executeRemove(tx));
+    return this.db.transaction(async (tx) => executeRemove(tx as unknown as DbClient));
   }
 
   async createReview(params: {
@@ -566,18 +507,10 @@ export class ReviewRepository implements ReviewRepositoryPort {
   async updateReview(params: {
     reviewId: string;
     rating: number;
-    // Phase 5 / Issue #24 — `comment` is an explicit
-    // `{ set: string | null }` carrier so the repository can
-    // distinguish "field absent in the PATCH payload" (no write)
-    // from "field present and set to null" (clear the comment).
-    // The previous `comment: string | null` parameter silently
-    // nulled the comment whenever the client omitted the field.
     comment?: { set: string | null };
+    expectedUpdatedAt?: string;
     nowIso: string;
-  }): Promise<ReviewRow> {
-    // Build the SET clause incrementally. Rating is always
-    // required (the DTO enforces it), so it is always present.
-    // `comment` is the only optional PATCH field today.
+  }): Promise<ReviewRow | null> {
     const setClause: { rating: number; updatedAt: string; comment?: string | null } = {
       rating: params.rating,
       updatedAt: params.nowIso,
@@ -586,10 +519,15 @@ export class ReviewRepository implements ReviewRepositoryPort {
       setClause.comment = params.comment.set;
     }
 
+    const whereClauses = [eq(quizReviews.reviewId, params.reviewId)];
+    if (params.expectedUpdatedAt !== undefined) {
+      whereClauses.push(eq(quizReviews.updatedAt, params.expectedUpdatedAt));
+    }
+
     const [updated] = await this.db
       .update(quizReviews)
       .set(setClause)
-      .where(eq(quizReviews.reviewId, params.reviewId))
+      .where(and(...whereClauses))
       .returning({
         reviewId: quizReviews.reviewId,
         quizId: quizReviews.quizId,
@@ -600,18 +538,9 @@ export class ReviewRepository implements ReviewRepositoryPort {
         updatedAt: quizReviews.updatedAt,
       });
 
-    return updated as ReviewRow;
+    return (updated as ReviewRow | undefined) ?? null;
   }
 
-  /**
-   * Phase 5 / Issue #17 — slim existence check that ignores the
-   * `deleted_at` filter. Used by the helpful-vote withdrawal
-   * path: a user with an existing vote on a now-soft-deleted
-   * review should still be able to withdraw that vote
-   * (otherwise their vote row would survive forever). The
-   * `addHelpfulVote` path does NOT use this helper — adding a
-   * fresh vote on a soft-deleted review still surfaces a 404.
-   */
   async reviewExistsIncludingDeleted(reviewId: string): Promise<boolean> {
     const [row] = await this.db
       .select({ reviewId: quizReviews.reviewId })
@@ -622,16 +551,8 @@ export class ReviewRepository implements ReviewRepositoryPort {
     return row !== undefined;
   }
 
-  /**
-   * Phase 5 / Issue #39 — fetch the `quiz_id` for a review
-   * (active OR soft-deleted) inside the caller's transaction.
-   * Used by the admin actioned-status transition to populate
-   * the analytics-refresh outbox event payload. Returns `null`
-   * when the review id does not exist at all.
-   */
-  async getQuizIdByReviewIdInTx(reviewId: string, tx: unknown): Promise<string | null> {
-    const executor = tx as DrizzleDB;
-    const [row] = await executor
+  async getQuizIdByReviewIdInTx(reviewId: string, tx: DbClient): Promise<string | null> {
+    const [row] = await tx
       .select({ quizId: quizReviews.quizId })
       .from(quizReviews)
       .where(eq(quizReviews.reviewId, reviewId))
@@ -640,21 +561,8 @@ export class ReviewRepository implements ReviewRepositoryPort {
     return row?.quizId ?? null;
   }
 
-  /**
-   * Phase 5 / Issue #39 — tx-aware soft-delete. The admin service
-   * uses this inside the actioned-status transition so the
-   * soft-delete, status UPDATE, audit row, and analytics outbox
-   * event all commit atomically. The non-tx `softDeleteReview`
-   * variant remains for the public self-delete path.
-   *
-   * Returns `true` when a row was updated (i.e. the review
-   * existed and was not already soft-deleted), `false`
-   * otherwise. The actioned-status path treats `false` as a
-   * no-op (the review was already taken down).
-   */
-  async softDeleteReviewInTx(reviewId: string, nowIso: string, tx: unknown): Promise<boolean> {
-    const executor = tx as DrizzleDB;
-    const updated = await executor
+  async softDeleteReviewInTx(reviewId: string, nowIso: string, tx: DbClient): Promise<boolean> {
+    const updated = await tx
       .update(quizReviews)
       .set({ deletedAt: nowIso })
       .where(and(eq(quizReviews.reviewId, reviewId), ReviewRepository.ACTIVE_REVIEW_PREDICATE))
@@ -663,24 +571,10 @@ export class ReviewRepository implements ReviewRepositoryPort {
     return updated.length > 0;
   }
 
-  /**
-   * Phase 5 / Issue #17 — soft-delete a review. The previous
-   * shape issued `DELETE FROM quiz_reviews` and let the FK
-   * `ON DELETE CASCADE` on `review_helpful_votes` erase every
-   * vote against this review, with no UI signal for the
-   * voters. Soft-delete writes `deleted_at = now` instead, the
-   * repository filters every public read by `deleted_at IS NULL`
-   * so the row is invisible everywhere, and the helpful-vote
-   * rows survive the soft-delete so the voter can withdraw
-   * their vote through `removeHelpfulVote`.
-   *
-   * Returns `true` when a row was updated (i.e. the review
-   * existed and was not already soft-deleted), `false`
-   * otherwise. The service layer is responsible for acting on
-   * the boolean and emitting analytics / events accordingly.
-   */
   async softDeleteReview(reviewId: string, nowIso: string): Promise<boolean> {
-    return this.softDeleteReviewInTx(reviewId, nowIso, this.db);
+    return this.db.transaction(async (tx) =>
+      this.softDeleteReviewInTx(reviewId, nowIso, tx as unknown as DbClient),
+    );
   }
 
   async hasCompletedAttempt(quizId: string, userId: string): Promise<boolean> {

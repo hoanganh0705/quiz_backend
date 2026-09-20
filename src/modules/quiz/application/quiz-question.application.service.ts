@@ -7,8 +7,27 @@ import { CreateQuizQuestionsDto } from '../dto/request/create-quiz-questions.dto
 import type { QuizQuestionAuthorDto } from '../dto/response/quiz-question-author.dto';
 import type { BulkQuizQuestionsResponseDto } from '../dto/response/bulk-quiz-questions-response.dto';
 import type { CreateQuizQuestionCommand, CreateQuizQuestionsCommand } from '../domain/types';
-import { QuizValidationError } from '../domain/errors/quiz-domain.errors';
+import {
+  QuizValidationError,
+  type QuizValidationErrorCode,
+} from '../domain/errors/quiz-domain.errors';
 import { QuizValidationFieldError } from '../domain/errors/quiz-validation-field.error';
+
+/**
+ * Map from a domain validation code to the request DTO field the client
+ * should highlight in an inline error.
+ *
+ * Decoupling this from the thrown `message` means the wire shape is
+ * stable across message-string refactors; clients switch on
+ * `extensions.code`, never on the message text.
+ */
+const CODE_TO_FIELD: Record<QuizValidationErrorCode, string> = {
+  QUIZ_VALIDATION_FAILED: 'questionText',
+  QUIZ_QUESTION_DUPLICATE_POSITION: 'position',
+  QUIZ_QUESTION_OPTION_DUPLICATE_POSITION: 'answerOptions',
+  QUIZ_QUESTION_OPTION_INCORRECT_COUNT: 'answerOptions',
+  QUIZ_INVALID_QUIZ_VERSION: 'versionId',
+};
 
 @Injectable()
 export class QuizQuestionApplicationService {
@@ -20,10 +39,6 @@ export class QuizQuestionApplicationService {
     user: JwtPayload,
     dto: CreateQuizQuestionDto,
   ): Promise<QuizQuestionAuthorDto> {
-    // Phase 5 (S-27): surface per-field validation errors via
-    // `extensions.validationErrors` on 422 so the editor can wire
-    // `setError(field.path, { message })` directly. We translate
-    // domain validation here so the wire shape stays consistent.
     this.assertValidPayload(dto);
 
     const command: CreateQuizQuestionCommand = {
@@ -85,13 +100,6 @@ export class QuizQuestionApplicationService {
     };
   }
 
-  // ─── Per-field validation helpers ────────────────────────────────────────
-
-  /**
-   * Lightweight pre-flight validation that mirrors the rules in
-   * `QuizQuestionService.assertValidAnswerOptions` but produces per-field
-   * error rows so the editor can highlight individual inputs.
-   */
   private assertValidPayload(dto: CreateQuizQuestionDto): void {
     const fieldErrors: Array<{ field: string; message: string }> = [];
 
@@ -140,21 +148,12 @@ export class QuizQuestionApplicationService {
     }
   }
 
-  /**
-   * Map a thrown `QuizValidationError` to a `QuizValidationFieldError`
-   * carrying a synthesised field-error row. We do not currently parse
-   * the message text to extract a specific field — callers should rely
-   * on the pre-flight check above for structured errors; this fallback
-   * preserves a 422 + validationErrors extension shape for any deeper
-   * domain validation that surfaces later.
-   */
   private translateValidationError(err: QuizValidationError): QuizValidationFieldError {
-    const message = err.message;
-    let field = 'questionText';
-    const lower = message.toLowerCase();
-    if (lower.includes('position')) field = 'position';
-    else if (lower.includes('answer option')) field = 'answerOptions';
-    else if (lower.includes('correct')) field = 'answerOptions';
-    return new QuizValidationFieldError(message, [{ field, message }]);
+    // Look up the field by the typed `code` discriminator rather than
+    // substring-matching the human-readable `message`. New validation
+    // codes MUST be added to `CODE_TO_FIELD` above; the catch-all
+    // default covers the `QUIZ_VALIDATION_FAILED` fallback code.
+    const field = CODE_TO_FIELD[err.code] ?? 'questionText';
+    return new QuizValidationFieldError(err.message, [{ field, message: err.message }]);
   }
 }

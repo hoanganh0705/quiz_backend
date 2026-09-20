@@ -13,6 +13,11 @@ import { TournamentController } from './transport/controller/tournament.controll
 import { TournamentPresenter } from './transport/presenters/tournament.presenter';
 import { TOURNAMENT_REPOSITORY_PORT, TOURNAMENT_OUTBOX_PORT } from './domain/ports';
 import { TournamentRepository } from './infrastructure/repositories/tournament.repository';
+import { TournamentCrudRepository } from './infrastructure/repositories/aggregates/tournament-crud.repository';
+import { TournamentParticipantRepository } from './infrastructure/repositories/aggregates/tournament-participant.repository';
+import { TournamentRoundRepository } from './infrastructure/repositories/aggregates/tournament-round.repository';
+import { TournamentRoundParticipantRepository } from './infrastructure/repositories/aggregates/tournament-round-participant.repository';
+import { TournamentStatsRepository } from './infrastructure/repositories/aggregates/tournament-stats.repository';
 import {
   TOURNAMENT_DOMAIN_EVENT_BUS,
   TOURNAMENT_QUEUE_NAME,
@@ -36,6 +41,13 @@ import type { RedisConfig } from '@/core/config';
     TournamentApplicationService,
     TournamentService,
     TournamentLifecycleService,
+    // Aggregate repositories (injected by the façade)
+    TournamentCrudRepository,
+    TournamentParticipantRepository,
+    TournamentRoundRepository,
+    TournamentRoundParticipantRepository,
+    TournamentStatsRepository,
+    // Façade — bound to the port so consumers are unchanged
     TournamentRepository,
     BullmqTournamentEventBusService,
     TournamentEventProcessor,
@@ -44,7 +56,6 @@ import type { RedisConfig } from '@/core/config';
     TournamentPresenter,
     { provide: TOURNAMENT_REPOSITORY_PORT, useExisting: TournamentRepository },
     { provide: TOURNAMENT_DOMAIN_EVENT_BUS, useExisting: BullmqTournamentEventBusService },
-    // Phase 3 / Issue #5 — transactional outbox for tournament events
     TournamentOutboxAdapter,
     { provide: TOURNAMENT_OUTBOX_PORT, useExisting: TournamentOutboxAdapter },
     TournamentOutboxProcessorService,

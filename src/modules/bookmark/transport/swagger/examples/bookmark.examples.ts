@@ -1,19 +1,5 @@
 import { EXAMPLE_TIMESTAMP } from './_timestamp';
 
-/**
- * Bookmark module success-response examples.
- *
- * Each constant is named `<endpoint>Example` and matches the runtime
- * envelope shape produced by `BookmarkPresenter` (Phase 1 of the bookmark
- * API contract audit). Examples are referenced by `bookmark-swagger-decorators.ts`.
- *
- * The DTO contract is documented in `src/modules/bookmark/dto/response/`;
- * the JSON values below mirror those DTOs exactly so OpenAPI consumers can
- * see the wire format without leaving the docs.
- */
-
-// ─── GET /bookmarks/search ────────────────────────────────────────────────────
-
 export const BOOKMARK_SEARCH_EXAMPLE = {
   data: [
     {

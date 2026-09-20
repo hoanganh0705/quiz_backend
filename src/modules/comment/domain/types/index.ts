@@ -1,28 +1,3 @@
-/**
- * Comment module — domain types.
- *
- * Single source of truth for the comment-only domain:
- *  - the `Comment` aggregate and its read-projection shapes,
- *  - the `AuthorView` value object,
- *  - the `VoteValue` and `ReportStatus` enums,
- *  - the command and query parameter shapes consumed by the
- *    domain service and repository port,
- *  - the cursor shapes used by the list endpoints.
- *
- * Each `type` alias is paired with a `const` tuple of the same name so
- * that the same source of truth can be used at compile time (for
- * domain / service / repository code) and at runtime (for DTO
- * validation and Swagger). This is the project's "single source of
- * truth" convention.
- *
- * Note: CommentSortField, COMMENT_SORT_FIELD, and CommentVotesCursor
- * were removed in Phase 2 audit as dead code. The `votes_count` sort
- * option was defined but never connected to query parameters. These
- * can be re-added when popularity sorting is implemented.
- */
-
-// ─── Enums ──────────────────────────────────────────────────────────────────
-
 export type VoteValue = 'upvote' | 'downvote';
 export type ReportStatus = 'open' | 'reviewed' | 'dismissed' | 'actioned';
 
@@ -42,15 +17,6 @@ export interface AuthorView {
   avatarUrl: string | null;
 }
 
-// ─── Aggregate ──────────────────────────────────────────────────────────────
-
-/**
- * Canonical comment shape used by the domain service, the repository
- * port, and the application service. The `id` field is the comment
- * identifier. The `isHidden` boolean replaces the prior
- * `CommentContentStatus` enum: there are exactly two moderation
- * states.
- */
 export interface Comment {
   id: string;
   quizId: string;
@@ -141,6 +107,7 @@ export interface EditCommentParams {
   commentId: string;
   authorId: string;
   body: string;
+  expectedUpdatedAt?: string;
 }
 
 export interface DeleteCommentParams {

@@ -1,11 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
 
-/**
- * Phase 3 (S-15): one row in the live-winners carousel. The
- * `timeAgo` field is a pre-computed, server-rendered relative
- * timestamp ("3 minutes ago") so the frontend does not need a
- * second render after mount — the wire shape is final.
- */
 export class WinnerSummaryDto {
   @ApiProperty({
     description: 'User identifier of the winner',

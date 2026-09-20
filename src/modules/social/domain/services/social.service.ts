@@ -1,5 +1,7 @@
-import { BadRequestException, Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
+import { DRIZZLE } from '@/core/database/drizzle.constants';
+import type { DrizzleDB } from '@/core/database/database.module';
 import {
   SOCIAL_REPOSITORY_PORT,
   FRIENDSHIP_REPOSITORY_PORT,
@@ -57,6 +59,7 @@ import {
   FriendshipNotFoundError,
   UserNotBlockedError,
   FollowNotFoundError,
+  SocialConsistencyError,
 } from '../errors/social.errors';
 import { UserNotFoundError } from '@/modules/user/domain/errors';
 import { isPostgresUniqueViolation } from '@/common/utils/db-error.util';
@@ -66,7 +69,12 @@ import { STORAGE_PORT, type StoragePort } from '@/core/storage/storage.port';
 
 @Injectable()
 export class SocialService {
+  private static readonly FEED_ACTIVITY_PER_USER_LIMIT = 30;
+  private static readonly FEED_ACTIVITY_PER_USER_WINDOW_MS = 60_000;
+  private static readonly FEED_ACTIVITY_BUCKETS = new Map<string, Map<string, number[]>>();
+
   constructor(
+    @Inject(DRIZZLE) private readonly db: DrizzleDB,
     @Inject(FRIENDSHIP_REPOSITORY_PORT)
     private readonly friendshipRepository: FriendshipRepositoryPort,
     @Inject(USER_FOLLOW_REPOSITORY_PORT)
@@ -125,33 +133,25 @@ export class SocialService {
     }
 
     try {
-      const friendship = await this.friendshipRepository.createFriendRequest(
-        requesterId,
-        addresseeId,
-      );
+      await this.friendshipRepository.createFriendRequest(requesterId, addresseeId);
 
       this.logger.info({
         event: 'friend_request_sent',
-        friendshipId: friendship.friendshipId,
         requesterId,
         addresseeId,
       });
 
-      // Emit domain event
-      // The listener forwards this event to `notifyFriendRequestReceived`,
-      // which builds the notification body as
-      // `${requesterUsername} sent you a friend request`. The previous
-      // version left both username fields as empty strings — there is no
-      // downstream handler that fills them in — so the addressee received
-      // a notification body that began with a space. Resolve both
-      // usernames here (mirrors `emitUserFollowed` which inlines
-      // `followerUsername`/`followingUsername`).
       const { followerUsername, followingUsername } =
         await this.userFollowRepository.getUsernamesForUsers(requesterId, addresseeId);
 
+      const friendshipId = await this.friendshipRepository.getMostRecentPendingFriendshipId(
+        requesterId,
+        addresseeId,
+      );
+
       this.eventBus.emitFriendRequestSent({
         eventType: 'friend_request_sent',
-        friendshipId: friendship.friendshipId,
+        friendshipId,
         requesterId,
         requesterUsername: followerUsername,
         addresseeId,
@@ -159,11 +159,9 @@ export class SocialService {
         timestamp: new Date(),
       });
 
-      // Invalidate social counts cache for both users
       await this.socialCacheService.invalidateCountsBatch([requesterId, addresseeId]);
 
-      const requests = await this.friendshipRepository.getSentRequests(requesterId);
-      return requests[0];
+      return this.friendshipRepository.createFriendRequestWithJoin(requesterId, addresseeId);
     } catch (error) {
       if (isPostgresUniqueViolation(error)) {
         throw new PendingRequestExistsError();
@@ -354,9 +352,11 @@ export class SocialService {
       throw new FriendshipNotFoundError(friendId);
     }
 
-    await this.friendshipRepository.removeFriend(userId, friendId);
+    const affected = await this.friendshipRepository.removeFriend(userId, friendId);
+    if (affected === 0) {
+      throw new SocialConsistencyError('removing friend', friendId);
+    }
 
-    // Invalidate social counts cache for both users
     await this.socialCacheService.invalidateCountsBatch([userId, friendId]);
 
     this.logger.info({
@@ -379,26 +379,21 @@ export class SocialService {
       throw new SelfFriendRequestError();
     }
 
-    await this.blockRepository.blockUser(blockerId, blockedId, reason);
+    await this.db.transaction(async (tx) => {
+      await this.blockRepository.blockUserInTx(
+        tx as unknown as Parameters<typeof this.blockRepository.blockUserInTx>[0],
+        blockerId,
+        blockedId,
+        reason,
+      );
 
-    // Invalidate social counts cache for both users
-    await this.socialCacheService.invalidateCountsBatch([blockerId, blockedId]);
+      await this.friendshipRepository.removeFriendInTx(
+        tx as unknown as Parameters<typeof this.friendshipRepository.removeFriendInTx>[0],
+        blockerId,
+        blockedId,
+      );
 
-    this.logger.info({
-      event: 'user_blocked',
-      blockerId,
-      blockedId,
-      reason,
-    });
-
-    // Audit: blocking is a sensitive action. The previous
-    // implementation only logged the event, which is not a
-    // durable record and cannot be queried later. The
-    // cross-domain audit log captures who blocked whom so
-    // the platform can answer "who has user X blocked?" and
-    // the user can challenge an unjustified block.
-    try {
-      await this.auditLogService.record({
+      await this.auditLogService.recordWithExecutor(tx, {
         eventType: 'social.user.blocked',
         domain: 'social',
         action: 'user.blocked',
@@ -408,16 +403,17 @@ export class SocialService {
           reason: reason ?? null,
         },
       });
-    } catch (error) {
-      this.logger.error({
-        event: 'social_block_audit_write_failed',
-        blockerId,
-        blockedId,
-        message: error instanceof Error ? error.message : 'unknown',
-      });
-    }
+    });
 
-    // Emit domain event
+    await this.socialCacheService.invalidateCountsBatch([blockerId, blockedId]);
+
+    this.logger.info({
+      event: 'user_blocked',
+      blockerId,
+      blockedId,
+      reason,
+    });
+
     this.eventBus.emitUserBlocked({
       eventType: 'user_blocked',
       blockerId,
@@ -425,8 +421,6 @@ export class SocialService {
       reason: reason ?? null,
       timestamp: new Date(),
     });
-
-    await this.friendshipRepository.removeFriend(blockerId, blockedId);
   }
 
   async unblockUser(blockerId: string, blockedId: string): Promise<void> {
@@ -439,14 +433,29 @@ export class SocialService {
       throw new UserNotBlockedError(blockedId);
     }
 
-    const updatedCount = await this.blockRepository.unblockUser(blockerId, blockedId);
+    const updatedCount = await this.db.transaction(async (tx) => {
+      const count = await this.blockRepository.unblockUserInTx(
+        tx as unknown as Parameters<typeof this.blockRepository.unblockUserInTx>[0],
+        blockerId,
+        blockedId,
+      );
+
+      if (count === 0) {
+        return 0;
+      }
+
+      await this.auditLogService.recordWithExecutor(tx, {
+        eventType: 'social.user.unblocked',
+        domain: 'social',
+        action: 'user.unblocked',
+        actorId: blockerId,
+        subjectUserId: blockedId,
+      });
+
+      return count;
+    });
 
     if (updatedCount === 0) {
-      // Race: another caller already unblocked between our
-      // `findActiveBlock` SELECT and this UPDATE. The repository's
-      // `isNull(deletedAt)` filter excluded every row. Treat as a
-      // no-op so the caller sees a consistent "already unblocked"
-      // state instead of a misleading success log line.
       this.logger.info({
         event: 'user_unblock_race_noop',
         blockerId,
@@ -456,7 +465,6 @@ export class SocialService {
       return;
     }
 
-    // Invalidate social counts cache for both users
     await this.socialCacheService.invalidateCountsBatch([blockerId, blockedId]);
 
     this.logger.info({
@@ -465,28 +473,6 @@ export class SocialService {
       blockedId,
     });
 
-    // Audit: unblocking mirrors blocking. Captures who unblocked
-    // whom so the social module can answer "is there a history
-    // of X repeatedly blocking and unblocking Y as harassment?"
-    // without a log grep.
-    try {
-      await this.auditLogService.record({
-        eventType: 'social.user.unblocked',
-        domain: 'social',
-        action: 'user.unblocked',
-        actorId: blockerId,
-        subjectUserId: blockedId,
-      });
-    } catch (error) {
-      this.logger.error({
-        event: 'social_unblock_audit_write_failed',
-        blockerId,
-        blockedId,
-        message: error instanceof Error ? error.message : 'unknown',
-      });
-    }
-
-    // Emit domain event
     this.eventBus.emitUserUnblocked({
       eventType: 'user_unblocked',
       blockerId,
@@ -513,34 +499,25 @@ export class SocialService {
       throw new BlockedUserError();
     }
 
-    try {
-      const follow = await this.userFollowRepository.followUser(followerId, followingId);
+    const follow = await this.userFollowRepository.followUser(followerId, followingId);
 
-      // Invalidate social counts cache for both users
-      await this.socialCacheService.invalidateCountsBatch([followerId, followingId]);
+    await this.socialCacheService.invalidateCountsBatch([followerId, followingId]);
 
-      this.logger.info({
-        event: 'user_followed',
-        followerId,
-        followingId,
-      });
+    this.logger.info({
+      event: 'user_followed',
+      followerId,
+      followingId,
+    });
 
-      // Emit domain event
-      this.eventBus.emitUserFollowed({
-        eventType: 'user_followed',
-        followId: follow.followId,
-        followerId,
-        followerUsername: follow.followerUsername,
-        followingId,
-        followingUsername: follow.followingUsername,
-        timestamp: new Date(),
-      });
-    } catch (error) {
-      if (isPostgresUniqueViolation(error)) {
-        return;
-      }
-      throw error;
-    }
+    this.eventBus.emitUserFollowed({
+      eventType: 'user_followed',
+      followId: follow.followId,
+      followerId,
+      followerUsername: follow.followerUsername,
+      followingId,
+      followingUsername: follow.followingUsername,
+      timestamp: new Date(),
+    });
   }
 
   async unfollowUser(followerId: string, followingId: string): Promise<void> {
@@ -553,9 +530,11 @@ export class SocialService {
       throw new FollowNotFoundError(followingId);
     }
 
-    await this.userFollowRepository.unfollowUser(followerId, followingId);
+    const affected = await this.userFollowRepository.unfollowUser(followerId, followingId);
+    if (affected === 0) {
+      throw new SocialConsistencyError('unfollowing user', followingId);
+    }
 
-    // Invalidate social counts cache for both users
     await this.socialCacheService.invalidateCountsBatch([followerId, followingId]);
 
     this.logger.info({
@@ -677,13 +656,6 @@ export class SocialService {
     if (relationship.isBlocked || relationship.isBlockedBy) {
       throw new BlockedUserError();
     }
-
-    // Phase 3 (F-13): gate the read on the target user's
-    // `showActivity` privacy flag. Self reads always succeed (the
-    // existence check + early-return inside `assertPrivacyFlag`).
-    // A 403 surfaces from `UserProfilePrivateError` → 403 when the
-    // flag is `false`. The endpoint is documented in
-    // `docs/audits/USER_MODULE_PRODUCTION_READINESS_AUDIT.md` (F-13).
     await this.userDomainService.assertPrivacyFlag(targetUserId, requesterId, 'showActivity');
 
     return this.socialRepository.findActivitiesByUserId(targetUserId, cursor, limit);
@@ -695,7 +667,32 @@ export class SocialService {
     occurredAt: string;
     payload: Record<string, unknown>;
   }): Promise<void> {
+    this.assertUnderFeedActivityThrottle(params.userId, params.activityType);
     await this.socialRepository.createFeedActivity(params);
+  }
+
+  private assertUnderFeedActivityThrottle(userId: string, activityType: SocialFeedActivityType) {
+    const now = Date.now();
+    let perType = SocialService.FEED_ACTIVITY_BUCKETS.get(userId);
+    if (!perType) {
+      perType = new Map();
+      SocialService.FEED_ACTIVITY_BUCKETS.set(userId, perType);
+    }
+    const bucketKey = activityType;
+    const cutoff = now - SocialService.FEED_ACTIVITY_PER_USER_WINDOW_MS;
+    const timestamps = (perType.get(bucketKey) ?? []).filter((t) => t > cutoff);
+    if (timestamps.length >= SocialService.FEED_ACTIVITY_PER_USER_LIMIT) {
+      this.logger.warn({
+        event: 'social_feed_activity_throttled',
+        userId,
+        activityType,
+        windowMs: SocialService.FEED_ACTIVITY_PER_USER_WINDOW_MS,
+        limit: SocialService.FEED_ACTIVITY_PER_USER_LIMIT,
+      });
+      return;
+    }
+    timestamps.push(now);
+    perType.set(bucketKey, timestamps);
   }
 
   async getSuggestions(
@@ -791,31 +788,25 @@ export class SocialService {
 
   /**
    * Search users for adding as friends.
-   * Excludes blocked users and the current user.
-   * Returns users with their relationship status to the searcher.
+   * Excludes the searcher, users the searcher has blocked, and
+   * users who have blocked the searcher (the latter is a
+   * privacy-preserving no-op: if B blocked A, A cannot see B
+   * in search results). Returns users with their relationship
+   * status to the searcher.
    */
-  async searchUsers(
-    searcherId: string,
-    query: string,
-    limit: number = 20,
-  ): Promise<SearchableUser[]> {
-    if (query.trim().length < 2) {
-      throw new BadRequestException('Search query must be at least 2 characters');
-    }
+  async searchUsers(searcherId: string, query: string, limit: number): Promise<SearchableUser[]> {
+    const trimmed = query.trim();
 
-    // Search users (excludes the searcher by default)
-    const users = await this.userSearch.searchUsers(query.trim(), limit, searcherId);
+    const users = await this.userSearch.searchUsers(trimmed, limit, searcherId);
 
     if (users.length === 0) {
       return [];
     }
 
-    // Batch fetch relationship statuses for all searched users (fixes N+1)
     const userIds = users.map((u) => u.userId);
     const statusMap = await this.socialRepository.getRelationshipStatusesBatch(searcherId, userIds);
 
-    // Build searchable users with relationship status
-    const searchableUsers: SearchableUser[] = users.map((user) => {
+    const searchableUsers: SearchableUser[] = users.flatMap((user) => {
       const status = statusMap.get(user.userId) ?? {
         isFriend: false,
         hasPendingRequest: false,
@@ -824,25 +815,27 @@ export class SocialService {
         isBlocked: false,
         isBlockedBy: false,
       };
+      if (status.isBlocked || status.isBlockedBy) {
+        return [];
+      }
       const avatarUrl = user.avatarPublicId
         ? this.storage.deriveUrl(user.avatarPublicId, 'avatar')
         : user.avatarUrl;
-      return {
-        userId: user.userId,
-        username: user.username,
-        displayName: user.displayName,
-        avatarUrl,
-        avatarPublicId: user.avatarPublicId,
-        isFriend: status.isFriend,
-        hasPendingRequest: status.hasPendingRequest,
-        isBlocked: status.isBlocked,
-      };
+      return [
+        {
+          userId: user.userId,
+          username: user.username,
+          displayName: user.displayName,
+          avatarUrl,
+          isFriend: status.isFriend,
+          hasPendingRequest: status.hasPendingRequest,
+          isBlocked: status.isBlocked,
+          isBlockedBy: status.isBlockedBy,
+        },
+      ];
     });
 
-    // Filter out blocked users
-    const filteredUsers = searchableUsers.filter((u) => !u.isBlocked);
-
-    return filteredUsers;
+    return searchableUsers;
   }
 
   /**

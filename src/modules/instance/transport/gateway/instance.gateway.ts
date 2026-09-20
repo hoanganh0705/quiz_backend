@@ -15,33 +15,6 @@ import { WsCurrentUser } from '@/common/decorators/ws-current-user.decorator';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
 import { WsExceptionFilter } from '../filters/ws-exception.filter';
 import { InstanceApplicationService } from '../../application/instance.application.service';
-
-/**
- * WebSocket error contract (Phase 7 — audit Finding 10)
- * =======================================================
- *
- * The Socket.IO error format differs from the REST API's RFC 7807 format:
- *
- *   REST API errors:  RFC 7807 ProblemDetail
- *     { type, title, status, detail, instance, extensions: { code } }
- *
- *   WebSocket errors: Simple { code, message }
- *     { code: 'NOT_HOST' | 'FORBIDDEN' | 'INTERNAL_ERROR', message: string }
- *
- * This is intentional because:
- *   1. Socket.IO acknowledgements are synchronous by design
- *   2. The `{ code, message }` format is lightweight and sufficient for WS
- *   3. Frontend clients can differentiate based on the `event: 'error'` response
- *
- * Error codes used:
- *   - `NOT_HOST`: Caller is not the host of the instance
- *   - `FORBIDDEN`: Generic permission denied
- *   - `INTERNAL_ERROR`: Unexpected server error (never exposed directly)
- *
- * Frontend clients should check `data.event === 'error'` and inspect
- * `data.code` for error handling. All error responses use the same
- * `event: 'error'` envelope.
- */
 const ERR_NOT_HOST = { code: 'NOT_HOST', message: 'Only the host can perform this action' };
 const ERR_FORBIDDEN = { code: 'FORBIDDEN', message: 'You do not have permission for this action' };
 
@@ -49,7 +22,7 @@ const ERR_FORBIDDEN = { code: 'FORBIDDEN', message: 'You do not have permission 
   namespace: '/instances',
   cors: {
     origin: '*',
-    credentials: true,
+    credentials: false,
   },
 })
 @UseFilters(WsExceptionFilter)
@@ -77,13 +50,6 @@ export class InstanceGateway implements OnGatewayConnection, OnGatewayDisconnect
     const rooms = Array.from(client.rooms).filter((r) => r !== client.id);
     for (const roomId of rooms) {
       void client.leave(roomId);
-      // Phase 3: `handlePlayerLeftSocket` is now async and reads
-      // the cross-instance socket-connection registry atomically.
-      // Multiple room iterations on the same socket id resolve to
-      // a single `consume()` (subsequent calls return `null`), so
-      // emitting `PlayerDisconnectedEvent` exactly once per
-      // disconnect — even when Socket.IO fires `disconnect` twice
-      // for an aborted transport.
       void this.instanceAppService.handlePlayerLeftSocket({
         socketId: client.id,
         instanceId: roomId,
@@ -149,13 +115,6 @@ export class InstanceGateway implements OnGatewayConnection, OnGatewayDisconnect
     return { event: 'ack', data: result };
   }
 
-  /**
-   * Phase 2 (Gameplay Lifecycle) — host-driven `open → countdown`
-   * transition over Socket.IO. The `countdown_started` event is
-   * broadcast back to the room by the application service's domain
-   * event subscriber; this handler's only job is to acknowledge the
-   * host's call.
-   */
   @UseGuards(WsJwtGuard)
   @SubscribeMessage('start_countdown')
   async handleStartCountdown(
@@ -184,10 +143,6 @@ export class InstanceGateway implements OnGatewayConnection, OnGatewayDisconnect
     };
   }
 
-  /**
-   * Phase 2 (Gameplay Lifecycle) — host-driven `countdown → open`
-   * transition over Socket.IO.
-   */
   @UseGuards(WsJwtGuard)
   @SubscribeMessage('cancel_countdown')
   async handleCancelCountdown(
@@ -218,16 +173,38 @@ export class InstanceGateway implements OnGatewayConnection, OnGatewayDisconnect
 
   @UseGuards(WsJwtGuard)
   @SubscribeMessage('answer_submitted')
-  handleAnswerSubmitted(
+  async handleAnswerSubmitted(
     @ConnectedSocket() client: Socket,
     @MessageBody()
-    data: { instanceId: string; questionId: string; selectedOptionId: string; timeTakenMs: number },
+    data: {
+      instanceId: string;
+      questionId: string;
+      selectedOptionId: string | null;
+      timeTakenMs: number;
+    },
     @WsCurrentUser() user: JwtPayload,
-  ): { event: string; data: Record<string, unknown> } {
+  ): Promise<{ event: string; data: Record<string, unknown> }> {
+    const result = await this.instanceAppService.handleAnswerSubmittedSocket(data, user);
+
+    if (!result.accepted) {
+      this.logger.warn({
+        event: 'ws_answer_rejected',
+        instanceId: data.instanceId,
+        userId: user.sub,
+        reason: result.reason,
+        questionId: data.questionId,
+      });
+      return {
+        event: 'error',
+        data: { code: result.reason ?? 'REJECTED', message: 'Answer not accepted' },
+      };
+    }
+
     this.logger.info({
       event: 'ws_answer_submitted',
       instanceId: data.instanceId,
       userId: user.sub,
+      attemptId: result.attemptId,
       questionId: data.questionId,
     });
 
@@ -235,6 +212,7 @@ export class InstanceGateway implements OnGatewayConnection, OnGatewayDisconnect
       event: 'ack',
       data: {
         questionId: data.questionId,
+        attemptId: result.attemptId,
         received: true,
       },
     };

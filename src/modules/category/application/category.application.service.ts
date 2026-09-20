@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { CategoryDomainService } from '../domain/category.service';
+import { CategoryResponseMapper } from '../mappers/category-response.mapper';
 import type { CategoryResponseDto } from '../dto/response/category-response.dto';
 import type { MessageResponseDto } from '@/common/swagger/swagger-schemas';
 import type {
@@ -19,15 +20,7 @@ export class CategoryApplicationService {
 
   async createCategory(payload: CreateCategoryCommand): Promise<CategoryResponseDto> {
     const row = await this.categoryDomainService.createCategory(payload);
-    return {
-      categoryId: row.categoryId,
-      name: row.name,
-      description: row.description,
-      slug: row.slug,
-      imageUrl: row.imageUrl,
-      createdAt: row.createdAt,
-      updatedAt: row.updatedAt,
-    };
+    return CategoryResponseMapper.toResponse(row);
   }
 
   async updateCategory(
@@ -35,33 +28,17 @@ export class CategoryApplicationService {
     payload: UpdateCategoryCommand,
   ): Promise<CategoryResponseDto> {
     const row = await this.categoryDomainService.updateCategory(categoryId, payload);
-    return {
-      categoryId: row.categoryId,
-      name: row.name,
-      description: row.description,
-      slug: row.slug,
-      imageUrl: row.imageUrl,
-      createdAt: row.createdAt,
-      updatedAt: row.updatedAt,
-    };
+    return CategoryResponseMapper.toResponse(row);
   }
 
-  async deleteCategory(_categoryId: string): Promise<MessageResponseDto> {
-    await this.categoryDomainService.deleteCategory(_categoryId);
+  async deleteCategory(categoryId: string): Promise<MessageResponseDto> {
+    await this.categoryDomainService.deleteCategory(categoryId);
     return { message: 'Category deleted successfully' };
   }
 
   async restoreCategory(categoryId: string): Promise<CategoryResponseDto> {
     const row = await this.categoryDomainService.restoreCategory(categoryId);
-    return {
-      categoryId: row.categoryId,
-      name: row.name,
-      description: row.description,
-      slug: row.slug,
-      imageUrl: row.imageUrl,
-      createdAt: row.createdAt,
-      updatedAt: row.updatedAt,
-    };
+    return CategoryResponseMapper.toResponse(row);
   }
 
   async followCategory(userId: string, categoryId: string): Promise<MessageResponseDto> {

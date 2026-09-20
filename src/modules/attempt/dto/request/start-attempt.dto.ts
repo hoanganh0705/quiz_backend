@@ -1,4 +1,5 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
+import { Transform } from 'class-transformer';
 import { IsEnum, IsOptional, IsUUID } from 'class-validator';
 import { ATTEMPT_CONTEXT_TYPES, type AttemptContextType } from '../../types/attempt.types';
 
@@ -19,11 +20,13 @@ export class StartAttemptDto {
     type: String,
     enum: ATTEMPT_CONTEXT_TYPES,
     example: 'solo',
+    default: 'solo',
     nullable: true,
   })
   @IsOptional()
   @IsEnum(ATTEMPT_CONTEXT_TYPES, {
     message: `contextType must be one of: ${ATTEMPT_CONTEXT_TYPES.join(', ')}`,
   })
+  @Transform(({ value }) => (value === undefined ? 'solo' : value))
   contextType?: AttemptContextType;
 }

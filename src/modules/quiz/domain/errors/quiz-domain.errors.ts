@@ -102,11 +102,29 @@ export class QuizConflictError extends QuizDomainError {
  * Thrown when a quiz/quiz-version/quiz-question input fails business
  * validation that `class-validator` doesn't already cover. 400 Bad
  * Request.
+ *
+ * Carries a typed `code` discriminator so callers (e.g. the question
+ * application service's `translateValidationError`) can map a thrown
+ * exception back to the offending request field without resorting to
+ * substring-matching the human-readable `message`. New throw sites MUST
+ * pick a value from {@link QuizValidationErrorCode}; the fallback
+ * `'QUIZ_VALIDATION_FAILED'` is reserved for the catch-all path.
  */
+export type QuizValidationErrorCode =
+  | 'QUIZ_VALIDATION_FAILED'
+  | 'QUIZ_QUESTION_DUPLICATE_POSITION'
+  | 'QUIZ_QUESTION_OPTION_DUPLICATE_POSITION'
+  | 'QUIZ_QUESTION_OPTION_INCORRECT_COUNT'
+  | 'QUIZ_INVALID_QUIZ_VERSION';
+
 export class QuizValidationError extends QuizDomainError {
-  readonly code = 'QUIZ_VALIDATION_FAILED';
-  constructor(message = 'Validation failed') {
+  readonly code: QuizValidationErrorCode;
+  constructor(
+    message = 'Validation failed',
+    code: QuizValidationErrorCode = 'QUIZ_VALIDATION_FAILED',
+  ) {
     super(message);
+    this.code = code;
   }
 }
 

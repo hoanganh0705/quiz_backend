@@ -35,12 +35,14 @@ Example: `QuizCompletedEvent` with quiz results sent to an external analytics sy
 ## Consequences
 
 **Advantages**
+
 - Three distinct patterns address distinct reliability requirements — fire-and-forget for non-critical, at-most-once for coordination, at-least-once for critical events.
 - The outbox pattern guarantees at-least-once delivery without distributed transactions (2-phase commit).
 - Domain events keep domain logic decoupled from infrastructure (handlers are registered via DI).
 - `AsyncLocalStorage` propagates correlation IDs across all three layers without explicit passing.
 
 **Trade-offs**
+
 - Redis pub/sub has no persistence — a subscriber that is down during publish misses the event. For Layer 2, this is acceptable (tournament cache is eventually consistent). For Layer 3, the outbox provides durability.
 - The outbox cron introduces a delivery delay (typically seconds) vs. synchronous publishing.
 - Duplicate event delivery is possible in the outbox pattern (at-least-once, not exactly-once). Consumers must be idempotent.

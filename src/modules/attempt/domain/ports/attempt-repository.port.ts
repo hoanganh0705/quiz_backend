@@ -122,6 +122,10 @@ export interface AttemptRepositoryPort {
    * @transactional
    * Completes an attempt and all its side effects (quiz stats, XP) in a single atomic transaction.
    * All writes commit together or rollback together.
+   *
+   * Returns the completed attempt row alongside `preCompletionCount` — the number of
+   * completed attempts the user had BEFORE this completion — so callers can atomically
+   * determine whether a quiz-milestone threshold was crossed without a separate query.
    */
   completeAttemptAndSideEffects(params: {
     attemptId: string;
@@ -132,7 +136,7 @@ export interface AttemptRepositoryPort {
     nowIso: string;
     quizId: string;
     userId: string;
-  }): Promise<AttemptRow>;
+  }): Promise<{ completed: AttemptRow; preCompletionCount: number }>;
 
   /**
    * Returns analytics for a single completed attempt, including a percentile rank

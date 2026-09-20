@@ -1,24 +1,5 @@
 import { registerDecorator, ValidationArguments, ValidationOptions } from 'class-validator';
 
-/**
- * Phase 7 (F-14): validates the shape of the `preferences` JSON blob
- * written to `users.settings`. The DB column is JSONB and accepts any
- * tree, but the application contract is tighter:
- *
- *   - top-level keys: capped via `@MaxKeys` (separate validator).
- *   - key strings:    capped via `@MaxKeyStringLength` (separate).
- *   - value depth:    at most {@link PREFERENCES_MAX_DEPTH} (this check).
- *   - string values:  at most {@link PREFERENCES_MAX_STRING_LENGTH} chars
- *                     (this check; the DB column has no length cap).
- *   - no binary blobs: `Buffer` instances are rejected (this check).
- *
- * The audit recommends a dedicated validator rather than reusing
- * `@IsObject` + nested decorators because the constraints are
- * shape-based and class-validator has no first-class support for
- * recursive depth / string-length caps. The recursive walk is bounded
- * by `depth <= PREFERENCES_MAX_DEPTH` so a hostile payload cannot
- * blow the stack.
- */
 export const PREFERENCES_MAX_DEPTH = 3;
 export const PREFERENCES_MAX_STRING_LENGTH = 1000;
 
@@ -39,10 +20,6 @@ function isBufferLike(value: unknown): boolean {
   return false;
 }
 
-/**
- * Recursive shape check. Returns the path of the first violation, or
- * `null` if the payload is acceptable.
- */
 function findPreferencesViolation(
   value: unknown,
   depth: number,
@@ -87,7 +64,6 @@ function findPreferencesViolation(
     return null;
   }
 
-  // Numbers, booleans are fine.
   return null;
 }
 

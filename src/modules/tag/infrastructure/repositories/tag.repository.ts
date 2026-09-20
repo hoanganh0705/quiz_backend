@@ -86,7 +86,7 @@ export class TagRepository implements TagRepositoryPort {
       .orderBy(desc(tags.createdAt), desc(tags.tagId))
       .limit(limit + 1);
 
-    return rows as TagRow[];
+    return rows;
   }
 
   async create(params: { name: string; slug: string; nowIso: string }): Promise<TagRow> {
@@ -101,7 +101,7 @@ export class TagRepository implements TagRepositoryPort {
         })
         .returning(TAG_COLUMNS);
 
-      return row as TagRow;
+      return row;
     } catch (error: unknown) {
       const pg = error as { code?: string };
       if (pg.code === '23505') {
@@ -123,7 +123,7 @@ export class TagRepository implements TagRepositoryPort {
         .where(and(eq(tags.tagId, params.tagId), isNull(tags.deletedAt)))
         .returning(TAG_COLUMNS);
 
-      return (row as TagRow | undefined) ?? null;
+      return row ?? null;
     } catch (error: unknown) {
       const pg = error as { code?: string };
       if (pg.code === '23505') {
@@ -151,7 +151,7 @@ export class TagRepository implements TagRepositoryPort {
         .where(and(eq(tags.tagId, tagId), sql`${tags.deletedAt} IS NOT NULL`))
         .returning(TAG_COLUMNS);
 
-      return (row as TagRow | undefined) ?? null;
+      return row ?? null;
     } catch (error: unknown) {
       const pg = error as { code?: string };
       if (pg.code === '23505') {

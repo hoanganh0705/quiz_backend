@@ -66,17 +66,6 @@ export class TagAlreadyActiveError extends TagDomainError {
   }
 }
 
-/**
- * Thrown by `TagDomainService` when the restore state machine reaches
- * an invariant violation that shouldn't be reachable in normal flow
- * (corrupted state). 500 Internal Server Error.
- *
- * Wire-shape improvement (Phase 2): the prior per-module filter mapped
- * this to 500 with a generic `message: 'Internal server error'`. After
- * Phase 2 the detail field surfaces the concrete message
- * (`'Tag restore invariant violated'`) — same improvement as
- * `CATEGORY_RESTORE_INVARIANT`.
- */
 export class TagRestoreInvariantError extends TagDomainError {
   readonly code = 'TAG_RESTORE_INVARIANT';
   constructor(message = 'Tag restore invariant violated') {

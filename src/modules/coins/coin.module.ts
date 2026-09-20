@@ -45,18 +45,7 @@ import { USER_DOMAIN_EVENT_BUS } from '@/modules/user/domain/events/user-domain-
 /**
  * CoinModule
  *
- * Phase 3 + 4 + 5 + 6 wiring. Five cross-module subscriptions are
- * registered here:
- *
- *   - Attempt    → AttemptDomainEventBus           (AttemptModule)
- *   - Streak     → UserDomainEventBus              (UserModule)
- *   - Badge      → AchievementDomainEventBus       (AchievementModule)
- *   - Daily      → DailyChallengeDomainEventBus    (DailyChallengeModule)
- *   - Tournament → CommonExternalEventBus          (global via CommonModule)
- *
- * Phase 5 wires the realtime side (`CoinGateway` + `CoinWebSocketListener`).
- * Phase 6 wires the spend side (`CoinSpendService` + the four POST
- * endpoints + the side-table writes).
+
  */
 @Module({
   imports: [
@@ -64,10 +53,7 @@ import { USER_DOMAIN_EVENT_BUS } from '@/modules/user/domain/events/user-domain-
     RedisModule,
     AttemptModule,
     AchievementModule,
-    // DailyChallengeModule → imports CoinModule in a future phase
-    // (e.g. when the daily-challenge scheduler wants to grant streak
-    // bonuses). Wrap in `forwardRef` so the cycle does not break the
-    // DI graph.
+
     nestForwardRef(() => DailyChallengeModule),
     nestForwardRef(() => UserModule),
   ],
@@ -84,7 +70,6 @@ import { USER_DOMAIN_EVENT_BUS } from '@/modules/user/domain/events/user-domain-
       provide: COIN_SPEND_PORT,
       useExisting: CoinSpendService,
     },
-    // Phase 7 — observability (log-based metrics service).
     CoinMetricsService,
 
     // Domain event bus
@@ -106,7 +91,6 @@ import { USER_DOMAIN_EVENT_BUS } from '@/modules/user/domain/events/user-domain-
       useExisting: CoinOutboxAdapter,
     },
     CoinOutboxProcessorService,
-    // Phase 7 — nightly reconciliation cron (advisory-locked).
     CoinReconciliationSchedulerService,
 
     // Cross-module listeners (earn side)
@@ -116,7 +100,6 @@ import { USER_DOMAIN_EVENT_BUS } from '@/modules/user/domain/events/user-domain-
     AchievementCoinListenerAdapter,
     TournamentCoinListenerAdapter,
 
-    // Realtime (Phase 5)
     CoinGateway,
     CoinWebSocketListener,
 

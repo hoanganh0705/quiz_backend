@@ -9,13 +9,6 @@ import { isSwaggerEnabled, setupSwagger, buildSwaggerConfig } from './core/swagg
 import { serverConfig, appConfig, swaggerConfig } from './core/config';
 import { RedisIoAdapter } from './core/redis/redis-io.adapter';
 
-/**
- * Toggle the Socket.IO Redis adapter on/off. The adapter is a Phase 3
- * production deployment concern: in single-instance mode it is still
- * wired up (it's harmless and lets dev match prod), but the operator
- * can opt out via `DISABLE_REDIS_SOCKET_ADAPTER=true` for environments
- * where Redis is unavailable (CI, local debugging without Redis).
- */
 const isRedisSocketAdapterEnabled = process.env.DISABLE_REDIS_SOCKET_ADAPTER !== 'true';
 
 async function bootstrap() {
@@ -40,16 +33,6 @@ async function bootstrap() {
   );
   app.use(cookieParser());
 
-  /**
-   * Phase 3 — explicit JSON body limit.
-   *
-   * Now that uploads go through `multipart/form-data` (per-route,
-   * `FileInterceptor` capped at 8 MB), the JSON body parser only has
-   * to carry control fields (`avatarPublicId`, etc.). 1 MB is a
-   * generous ceiling that still fails loud on accidentally-base64'd
-   * payloads. Multipart bodies bypass this limit and are governed by
-   * the per-purpose cap in `UPLOAD_POLICY`.
-   */
   app.use(express.json({ limit: '1mb' }));
   app.use(express.urlencoded({ extended: true, limit: '1mb' }));
   app.set('trust proxy', server.trustProxy); // set up trust proxy so that app can correctly identify client IP and protocol when behind a proxy, which is important for security and logging purposes
@@ -76,22 +59,6 @@ async function bootstrap() {
     }),
   );
 
-  /**
-   * Phase 3: Socket.IO Redis adapter.
-   *
-   * When REDIS is reachable and the operator has not explicitly
-   * disabled the adapter via `DISABLE_REDIS_SOCKET_ADAPTER=true`,
-   * `RedisIoAdapter` replaces the default in-process Socket.IO
-   * adapter with the Redis-backed one. This is what makes
-   * `server.to(room).emit(...)` actually cross-instance; without it,
-   * horizontally-scaled deployments silently drop events for clients
-   * not on the originating replica.
-   *
-   * The adapter throws on the first `createIOServer()` call if Redis
-   * is unreachable, which surfaces the misconfiguration at boot time
-   * rather than mid-request. See the operational runbook for
-   * guidance on sizing / monitoring the Redis instance.
-   */
   if (isRedisSocketAdapterEnabled) {
     app.useWebSocketAdapter(new RedisIoAdapter(app));
   }

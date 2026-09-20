@@ -55,6 +55,7 @@ export class RankingFeedListenerAdapter implements OnModuleInit, OnModuleDestroy
           period: event.period,
           previousPeakRank: event.previousPeakRank,
           newPeakRank: event.newPeakRank,
+          isInitialAchievement: event.isInitialAchievement,
         },
       });
     }

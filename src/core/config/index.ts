@@ -32,6 +32,19 @@ export { sessionsConfig, type SessionsConfig } from './sessions.config';
 export { passwordResetConfig, type PasswordResetConfig } from './password-reset.config';
 export { authSecurityConfig, type AuthSecurityConfig } from './auth-security.config';
 export { authThrottleConfig, type AuthThrottleConfig } from './auth-throttle.config';
+export { ATTEMPT_THROTTLE_VALUES, type AttemptThrottleConfig } from './attempt-throttle.config';
+export { BOOKMARK_THROTTLE_VALUES, type BookmarkThrottleConfig } from './bookmark-throttle.config';
+export { REVIEW_THROTTLE_VALUES, type ReviewThrottleConfig } from './review-throttle.config';
+export { COMMENT_THROTTLE_VALUES, type CommentThrottleConfig } from './comment-throttle.config';
+export { SOCIAL_THROTTLE_VALUES, type SocialThrottleConfig } from './social-throttle.config';
+export {
+  TOURNAMENT_THROTTLE_VALUES,
+  type TournamentThrottleConfig,
+} from './tournament-throttle.config';
+export {
+  ACHIEVEMENT_THROTTLE_VALUES,
+  type AchievementThrottleConfig,
+} from './achievement-throttle.config';
 export { googleOAuthConfig, type GoogleOAuthConfig } from './google-oauth.config';
 export { swaggerConfig, type SwaggerConfig } from './swagger.config';
 export { cloudinaryConfig, type CloudinaryConfig } from './cloudinary.config';

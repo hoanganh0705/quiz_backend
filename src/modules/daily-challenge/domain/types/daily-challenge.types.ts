@@ -1,20 +1,11 @@
-/**
- * Phase 3 (S-14): domain types for the daily-challenge module.
- *
- * `DailyChallengeStatus` mirrors the public DTO's discriminator
- * (see `daily-challenge-response.dto.ts`). The two enums together
- * (status + difficulty) cover all branching surfaces.
- */
 export type DailyChallengeStatus = 'pending' | 'completed' | 'expired';
 
 export type DailyChallengeDifficulty = 'easy' | 'medium' | 'hard';
 
-/**
- * Internal row shape for `dailyChallenge`. The `totalQuestions`
- * field is denormalised at write time (the cron copies the
- * published version's question count) so the public DTO does
- * not need a per-row aggregation at read time.
- */
+export type DailyChallengePeriod = 'daily' | 'weekly' | 'monthly';
+
+export const SKIPPED_ANSWER_SENTINEL = '__skipped__';
+
 export type DailyChallengeRow = {
   challengeId: string;
   challengeDate: string;
@@ -27,6 +18,9 @@ export type DailyChallengeRow = {
   quizTitle?: string;
   quizSlug?: string;
   difficulty?: DailyChallengeDifficulty;
+  scorePercent?: string | null;
+  completedAt?: string | null;
+  rank?: number | null;
 };
 
 export type DailyChallengeAttemptRow = {
@@ -42,12 +36,34 @@ export type DailyChallengeAttemptRow = {
   updatedAt: string;
 };
 
-/**
- * History cursor shape — opaque to clients. The application
- * service encodes/decodes via `Base64Url(JSON.stringify(...))`
- * so the cursor survives round-trips through query strings.
- */
 export type DailyChallengeHistoryCursor = {
   challengeDate: string;
   challengeId: string;
+};
+
+export type DailyChallengeHistoryItem = {
+  challengeId: string;
+  challengeDate: string;
+  quizId: string;
+  quizTitle: string | null;
+  quizSlug: string | null;
+  difficulty: DailyChallengeDifficulty | null;
+  scorePercent: string | null;
+  completedAt: string | null;
+};
+
+export type DailyChallengeCategoryBreakdownRow = {
+  categoryId: string;
+  categoryName: string;
+  categorySlug: string;
+  attemptCount: number;
+  averageScorePercent: number;
+};
+
+export type DailyChallengeLeaderboardEntry = {
+  userId: string;
+  username: string;
+  displayName: string | null;
+  avatarUrl: string | null;
+  scorePercent: number;
 };

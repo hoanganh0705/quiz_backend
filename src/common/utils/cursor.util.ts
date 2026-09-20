@@ -18,20 +18,6 @@ export const isIsoDateString = (value: unknown): value is string =>
 export const isStringMatchingPattern = (value: unknown, pattern: RegExp): value is string =>
   typeof value === 'string' && pattern.test(value);
 
-/**
- * Phase 2 (audit issue 2.4): strict cursor parser for the
- * `GET /api/v1/instances` list endpoint.
- *
- * The cursor is a base64url-encoded JSON `{ createdAt: string, instanceId: string }`.
- * Any missing/typed-wrong key surfaces as `400 BadRequestException` so a
- * tampered cursor can't feed `undefined` into the SQL cursor comparison.
- *
- * Phase 4 (audit issue 2.9): the list cursor is now base64url-encoded
- * (aligned with the rest of the codebase). For backward compatibility
- * the decoder accepts both `base64` and `base64url` — base64url is a
- * subset of base64, so Node's permissive `'base64'` decoder handles
- * both. Existing clients keep working.
- */
 export function decodeInstanceCursor(cursor: string): { createdAt: string; instanceId: string } {
   let decoded: unknown;
   try {
@@ -55,11 +41,6 @@ export function decodeInstanceCursor(cursor: string): { createdAt: string; insta
   return { createdAt: record.createdAt, instanceId: record.instanceId };
 }
 
-/**
- * Phase 2 (audit issue 2.4 — leaderboard variant): strict cursor parser for
- * `GET /api/v1/instances/{id}/leaderboard`. The cursor is a base64url-encoded
- * JSON `{ rank: number, instancePlayerId: string }`.
- */
 export function decodeLeaderboardCursor(cursor: string): {
   rank: number;
   instancePlayerId: string;
@@ -83,13 +64,6 @@ export function decodeLeaderboardCursor(cursor: string): {
   return { rank: record.rank, instancePlayerId: record.instancePlayerId };
 }
 
-/**
- * Phase 6 (api-contract audit — `GET /instances/{id}/players`): strict cursor
- * parser for the players endpoint. The cursor is a base64url-encoded JSON
- * `{ joinedAt: string, instancePlayerId: string }`. The sort key for the
- * players list is `(joinedAt ASC, instancePlayerId ASC)` (matches the leaderboard
- * tiebreaker convention).
- */
 export function decodeInstancePlayerCursor(cursor: string): {
   joinedAt: string;
   instancePlayerId: string;

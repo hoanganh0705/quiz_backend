@@ -1,9 +1,3 @@
-/**
- * Review Notification Service
- *
- * Composes and sends notifications related to quiz reviews.
- */
-
 import { Injectable } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { NotificationChannelService } from '../../infrastructure/adapters/notification-channel.service';
@@ -33,10 +27,6 @@ export class ReviewNotificationService {
     @InjectPinoLogger(ReviewNotificationService.name)
     private readonly logger: PinoLogger,
   ) {}
-
-  /**
-   * Notify the quiz creator when their quiz receives a new review.
-   */
   async notifyReviewSubmitted(params: ReviewSubmittedParams): Promise<void> {
     if (params.quizCreatorId === params.reviewerId) {
       this.logger.debug({
@@ -73,10 +63,6 @@ export class ReviewNotificationService {
       rating: params.rating,
     });
   }
-
-  /**
-   * Optionally notify the quiz creator when a review is deleted.
-   */
   async notifyReviewDeleted(params: ReviewDeletedParams): Promise<void> {
     const body = `A review on your quiz "${params.quizTitle}" was deleted`;
 

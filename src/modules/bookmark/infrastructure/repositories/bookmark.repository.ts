@@ -23,6 +23,12 @@ import type {
   BulkBookmarkMutationRow,
 } from '@/modules/bookmark/domain/ports';
 import type { BookmarkCollectionAnalytics } from '@/modules/bookmark/domain/types/bookmark-collection-analytics';
+import { BookmarkNotFoundError } from '@/modules/bookmark/domain/errors';
+import { BOOKMARK_NOT_FOUND_MESSAGE } from '@/modules/bookmark/bookmark.constants';
+import {
+  buildBookmarkCursorCondition,
+  buildSafeSearchPattern,
+} from '@/modules/bookmark/domain/bookmark-cursor-pagination';
 
 const QUIZ_COLUMNS = quizzes as unknown as {
   quizId: AnyPgColumn;
@@ -98,7 +104,8 @@ export class BookmarkRepository implements BookmarkRepositoryPort {
           isNull(quizzes.deletedAt),
         ),
       )
-      .orderBy(bookmarkCollections.name);
+      .orderBy(bookmarkCollections.name)
+      .limit(100);
 
     return {
       bookmarked: collections.length > 0,
@@ -111,19 +118,7 @@ export class BookmarkRepository implements BookmarkRepositoryPort {
     limit: number;
     cursor?: { bookmarkedAt: string; bookmarkId: string } | null;
   }): Promise<RecentBookmarkRow[]> {
-    const cursorCondition = params.cursor
-      ? and(
-          sql`${bookmarkedQuizzes.bookmarkedAt} <= ${params.cursor.bookmarkedAt}`,
-          sql`(
-            ${bookmarkedQuizzes.bookmarkedAt} < ${params.cursor.bookmarkedAt}
-            OR (
-              ${bookmarkedQuizzes.bookmarkedAt} = ${params.cursor.bookmarkedAt}
-              AND ${bookmarkedQuizzes.bookmarkId} < ${params.cursor.bookmarkId}
-            )
-          )`,
-        )
-      : undefined;
-
+    const cursorCondition = buildBookmarkCursorCondition(params.cursor);
     const baseCondition = eq(bookmarkCollections.userId, params.userId);
     const whereClause = cursorCondition ? and(baseCondition, cursorCondition) : baseCondition;
 
@@ -157,23 +152,12 @@ export class BookmarkRepository implements BookmarkRepositoryPort {
     limit: number;
     cursor?: { bookmarkedAt: string; bookmarkId: string } | null;
   }): Promise<SearchBookmarkRow[]> {
-    const cursorCondition = params.cursor
-      ? and(
-          sql`${bookmarkedQuizzes.bookmarkedAt} <= ${params.cursor.bookmarkedAt}`,
-          sql`(
-            ${bookmarkedQuizzes.bookmarkedAt} < ${params.cursor.bookmarkedAt}
-            OR (
-              ${bookmarkedQuizzes.bookmarkedAt} = ${params.cursor.bookmarkedAt}
-              AND ${bookmarkedQuizzes.bookmarkId} < ${params.cursor.bookmarkId}
-            )
-          )`,
-        )
-      : undefined;
+    const cursorCondition = buildBookmarkCursorCondition(params.cursor);
 
-    const searchPattern = `%${params.query}%`;
+    const searchPattern = buildSafeSearchPattern(params.query);
     const searchCondition = sql`(
-      ${quizzes.title} ILIKE ${searchPattern}
-      OR ${quizzes.slug} ILIKE ${searchPattern}
+      ${quizzes.title} ILIKE ${searchPattern} ESCAPE '\\'
+      OR ${quizzes.slug} ILIKE ${searchPattern} ESCAPE '\\'
     )`;
     const ownershipCondition = eq(bookmarkCollections.userId, params.userId);
 
@@ -310,7 +294,7 @@ export class BookmarkRepository implements BookmarkRepositoryPort {
           .limit(1);
 
         if (!existing) {
-          throw new Error('Bookmark not found in source collection');
+          throw new BookmarkNotFoundError(BOOKMARK_NOT_FOUND_MESSAGE);
         }
       }
 
@@ -393,158 +377,196 @@ export class BookmarkRepository implements BookmarkRepositoryPort {
         .leftJoin(quizReviews, eq(quizzes.quizId, quizReviews.quizId))
         .leftJoin(quizTags, eq(quizzes.quizId, quizTags.quizId))
         .where(and(eq(bookmarkCollections.collectionId, collectionId), isNull(quizzes.deletedAt))),
-      this.db
-        .select({
-          categoryId: categories.categoryId,
-          name: categories.name,
-          slug: categories.slug,
-          bookmarkCount: sql<number>`COUNT(${bookmarkedQuizzes.bookmarkId})::int`,
-        })
-        .from(bookmarkedQuizzes)
-        .innerJoin(
-          bookmarkCollections,
-          eq(bookmarkedQuizzes.collectionId, bookmarkCollections.collectionId),
-        )
-        .innerJoin(quizzes, eq(bookmarkedQuizzes.quizId, quizzes.quizId))
-        .innerJoin(categories, eq(quizzes.categoryId, categories.categoryId))
-        .where(
-          and(
-            eq(bookmarkCollections.collectionId, collectionId),
-            isNull(quizzes.deletedAt),
-            isNull(categories.deletedAt),
-          ),
-        )
-        .groupBy(categories.categoryId, categories.name, categories.slug)
-        .orderBy(desc(sql`COUNT(${bookmarkedQuizzes.bookmarkId})`), categories.name),
-      this.db
-        .select({
-          tagId: tags.tagId,
-          name: tags.name,
-          slug: tags.slug,
-          bookmarkCount: sql<number>`COUNT(${bookmarkedQuizzes.bookmarkId})::int`,
-        })
-        .from(bookmarkedQuizzes)
-        .innerJoin(
-          bookmarkCollections,
-          eq(bookmarkedQuizzes.collectionId, bookmarkCollections.collectionId),
-        )
-        .innerJoin(quizzes, eq(bookmarkedQuizzes.quizId, quizzes.quizId))
-        .innerJoin(quizTags, eq(quizzes.quizId, quizTags.quizId))
-        .innerJoin(tags, eq(quizTags.tagId, tags.tagId))
-        .where(
-          and(
-            eq(bookmarkCollections.collectionId, collectionId),
-            isNull(quizzes.deletedAt),
-            isNull(tags.deletedAt),
-          ),
-        )
-        .groupBy(tags.tagId, tags.name, tags.slug)
-        .orderBy(desc(sql`COUNT(${bookmarkedQuizzes.bookmarkId})`), tags.name),
+      this.db.execute<{
+        category_id: string;
+        name: string;
+        slug: string;
+        bookmark_count: number | string;
+      }>(sql`
+        SELECT category_id, name, slug, bookmark_count
+        FROM (
+          SELECT
+            ${categories.categoryId} AS category_id,
+            ${categories.name} AS name,
+            ${categories.slug} AS slug,
+            COUNT(${bookmarkedQuizzes.bookmarkId})::int AS bookmark_count
+          FROM ${bookmarkedQuizzes}
+          INNER JOIN ${bookmarkCollections}
+            ON ${bookmarkedQuizzes.collectionId} = ${bookmarkCollections.collectionId}
+          INNER JOIN ${quizzes}
+            ON ${bookmarkedQuizzes.quizId} = ${quizzes.quizId}
+          INNER JOIN ${categories}
+            ON ${quizzes.categoryId} = ${categories.categoryId}
+          WHERE ${bookmarkCollections.collectionId} = ${collectionId}::uuid
+            AND ${quizzes.deletedAt} IS NULL
+            AND ${categories.deletedAt} IS NULL
+          GROUP BY ${categories.categoryId}, ${categories.name}, ${categories.slug}
+        ) ranked
+        ORDER BY bookmark_count DESC, name ASC
+        LIMIT 20
+      `),
+      this.db.execute<{
+        tag_id: string;
+        name: string;
+        slug: string;
+        bookmark_count: number | string;
+      }>(sql`
+        SELECT tag_id, name, slug, bookmark_count
+        FROM (
+          SELECT
+            ${tags.tagId} AS tag_id,
+            ${tags.name} AS name,
+            ${tags.slug} AS slug,
+            COUNT(${bookmarkedQuizzes.bookmarkId})::int AS bookmark_count
+          FROM ${bookmarkedQuizzes}
+          INNER JOIN ${bookmarkCollections}
+            ON ${bookmarkedQuizzes.collectionId} = ${bookmarkCollections.collectionId}
+          INNER JOIN ${quizzes}
+            ON ${bookmarkedQuizzes.quizId} = ${quizzes.quizId}
+          INNER JOIN ${quizTags}
+            ON ${quizzes.quizId} = ${quizTags.quizId}
+          INNER JOIN ${tags}
+            ON ${quizTags.tagId} = ${tags.tagId}
+          WHERE ${bookmarkCollections.collectionId} = ${collectionId}::uuid
+            AND ${quizzes.deletedAt} IS NULL
+            AND ${tags.deletedAt} IS NULL
+          GROUP BY ${tags.tagId}, ${tags.name}, ${tags.slug}
+        ) ranked
+        ORDER BY bookmark_count DESC, name ASC
+        LIMIT 20
+      `),
     ]);
+
+    type TopCategoryRow = {
+      category_id: string;
+      name: string;
+      slug: string;
+      bookmark_count: number | string;
+    };
+    type TopTagRow = {
+      tag_id: string;
+      name: string;
+      slug: string;
+      bookmark_count: number | string;
+    };
+    type SummaryRow = {
+      totalBookmarks: number | null;
+      totalQuizzes: number | null;
+      averageQuizRating: number | null;
+      uniqueCategories: number | null;
+      uniqueTags: number | null;
+    };
+    const topCategoryRows = (topCategories as unknown as { rows: TopCategoryRow[] }).rows ?? [];
+    const topTagRows = (topTags as unknown as { rows: TopTagRow[] }).rows ?? [];
+    const summaryRow = (summary as SummaryRow[])[0];
 
     return {
       collectionId: collection.collectionId,
       collectionName: collection.collectionName,
       summary: {
-        totalBookmarks: Number(summary[0]?.totalBookmarks ?? 0),
-        totalQuizzes: Number(summary[0]?.totalQuizzes ?? 0),
-        averageQuizRating: Number(summary[0]?.averageQuizRating ?? 0),
-        uniqueCategories: Number(summary[0]?.uniqueCategories ?? 0),
-        uniqueTags: Number(summary[0]?.uniqueTags ?? 0),
+        totalBookmarks: Number(summaryRow?.totalBookmarks ?? 0),
+        totalQuizzes: Number(summaryRow?.totalQuizzes ?? 0),
+        averageQuizRating: Number(summaryRow?.averageQuizRating ?? 0),
+        uniqueCategories: Number(summaryRow?.uniqueCategories ?? 0),
+        uniqueTags: Number(summaryRow?.uniqueTags ?? 0),
       },
-      topCategories: topCategories.map((category) => ({
-        categoryId: category.categoryId,
+      topCategories: topCategoryRows.map((category) => ({
+        categoryId: category.category_id,
         name: category.name,
         slug: category.slug,
-        bookmarkCount: Number(category.bookmarkCount),
+        bookmarkCount: Number(category.bookmark_count),
       })),
-      topTags: topTags.map((tag) => ({
-        tagId: tag.tagId,
+      topTags: topTagRows.map((tag) => ({
+        tagId: tag.tag_id,
         name: tag.name,
         slug: tag.slug,
-        bookmarkCount: Number(tag.bookmarkCount),
+        bookmarkCount: Number(tag.bookmark_count),
       })),
       lastUpdated: collection.updatedAt,
     };
   }
 
   async getUserBookmarkStats(userId: string): Promise<UserBookmarkStatsRow> {
-    const [summary] = await this.db
-      .select({
-        totalCollections: sql<number>`COUNT(DISTINCT ${bookmarkCollections.collectionId})::int`,
-        totalBookmarks: count(bookmarkedQuizzes.bookmarkId),
-      })
-      .from(bookmarkCollections)
-      .leftJoin(
-        bookmarkedQuizzes,
-        eq(bookmarkCollections.collectionId, bookmarkedQuizzes.collectionId),
-      )
-      .where(eq(bookmarkCollections.userId, userId));
+    const [summary, favoriteCategory, favoriteTag] = await Promise.all([
+      this.db
+        .select({
+          totalCollections: sql<number>`COUNT(DISTINCT ${bookmarkCollections.collectionId})::int`,
+          totalBookmarks: count(bookmarkedQuizzes.bookmarkId),
+        })
+        .from(bookmarkCollections)
+        .leftJoin(
+          bookmarkedQuizzes,
+          eq(bookmarkCollections.collectionId, bookmarkedQuizzes.collectionId),
+        )
+        .where(eq(bookmarkCollections.userId, userId)),
+      this.db
+        .select({
+          categoryId: categories.categoryId,
+          name: categories.name,
+          slug: categories.slug,
+        })
+        .from(bookmarkCollections)
+        .innerJoin(
+          bookmarkedQuizzes,
+          eq(bookmarkCollections.collectionId, bookmarkedQuizzes.collectionId),
+        )
+        .innerJoin(quizzes, eq(bookmarkedQuizzes.quizId, quizzes.quizId))
+        .innerJoin(categories, eq(quizzes.categoryId, categories.categoryId))
+        .where(
+          and(
+            eq(bookmarkCollections.userId, userId),
+            isNull(quizzes.deletedAt),
+            isNull(categories.deletedAt),
+          ),
+        )
+        .groupBy(categories.categoryId, categories.name, categories.slug)
+        .orderBy(desc(count()), categories.name)
+        .limit(1),
+      this.db
+        .select({
+          tagId: tags.tagId,
+          name: tags.name,
+          slug: tags.slug,
+        })
+        .from(bookmarkCollections)
+        .innerJoin(
+          bookmarkedQuizzes,
+          eq(bookmarkCollections.collectionId, bookmarkedQuizzes.collectionId),
+        )
+        .innerJoin(quizzes, eq(bookmarkedQuizzes.quizId, quizzes.quizId))
+        .innerJoin(quizTags, eq(quizzes.quizId, quizTags.quizId))
+        .innerJoin(tags, eq(quizTags.tagId, tags.tagId))
+        .where(
+          and(
+            eq(bookmarkCollections.userId, userId),
+            isNull(quizzes.deletedAt),
+            isNull(tags.deletedAt),
+          ),
+        )
+        .groupBy(tags.tagId, tags.name, tags.slug)
+        .orderBy(desc(count()), tags.name)
+        .limit(1),
+    ]);
 
-    const [favoriteCategory] = await this.db
-      .select({
-        categoryId: categories.categoryId,
-        name: categories.name,
-        slug: categories.slug,
-      })
-      .from(bookmarkCollections)
-      .innerJoin(
-        bookmarkedQuizzes,
-        eq(bookmarkCollections.collectionId, bookmarkedQuizzes.collectionId),
-      )
-      .innerJoin(quizzes, eq(bookmarkedQuizzes.quizId, quizzes.quizId))
-      .innerJoin(categories, eq(quizzes.categoryId, categories.categoryId))
-      .where(
-        and(
-          eq(bookmarkCollections.userId, userId),
-          isNull(quizzes.deletedAt),
-          isNull(categories.deletedAt),
-        ),
-      )
-      .groupBy(categories.categoryId, categories.name, categories.slug)
-      .orderBy(desc(count()), categories.name)
-      .limit(1);
-
-    const [favoriteTag] = await this.db
-      .select({
-        tagId: tags.tagId,
-        name: tags.name,
-        slug: tags.slug,
-      })
-      .from(bookmarkCollections)
-      .innerJoin(
-        bookmarkedQuizzes,
-        eq(bookmarkCollections.collectionId, bookmarkedQuizzes.collectionId),
-      )
-      .innerJoin(quizzes, eq(bookmarkedQuizzes.quizId, quizzes.quizId))
-      .innerJoin(quizTags, eq(quizzes.quizId, quizTags.quizId))
-      .innerJoin(tags, eq(quizTags.tagId, tags.tagId))
-      .where(
-        and(
-          eq(bookmarkCollections.userId, userId),
-          isNull(quizzes.deletedAt),
-          isNull(tags.deletedAt),
-        ),
-      )
-      .groupBy(tags.tagId, tags.name, tags.slug)
-      .orderBy(desc(count()), tags.name)
-      .limit(1);
+    const summaryRow = summary[0];
+    const categoryRow = favoriteCategory[0];
+    const tagRow = favoriteTag[0];
 
     return {
-      totalCollections: Number(summary?.totalCollections ?? 0),
-      totalBookmarks: Number(summary?.totalBookmarks ?? 0),
-      favoriteCategory: favoriteCategory
+      totalCollections: Number(summaryRow?.totalCollections ?? 0),
+      totalBookmarks: Number(summaryRow?.totalBookmarks ?? 0),
+      favoriteCategory: categoryRow
         ? {
-            categoryId: favoriteCategory.categoryId,
-            name: favoriteCategory.name,
-            slug: favoriteCategory.slug,
+            categoryId: categoryRow.categoryId,
+            name: categoryRow.name,
+            slug: categoryRow.slug,
           }
         : null,
-      favoriteTag: favoriteTag
+      favoriteTag: tagRow
         ? {
-            tagId: favoriteTag.tagId,
-            name: favoriteTag.name,
-            slug: favoriteTag.slug,
+            tagId: tagRow.tagId,
+            name: tagRow.name,
+            slug: tagRow.slug,
           }
         : null,
     };

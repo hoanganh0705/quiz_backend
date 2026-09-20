@@ -248,7 +248,6 @@ export class CommentGateway implements OnGatewayConnection, OnGatewayDisconnect 
           authorId: event.authorId,
           authorUsername: event.authorUsername,
           isReply: event.isReply,
-          // Include full snapshot for direct state application
           snapshot: event.snapshot,
         };
 
@@ -258,7 +257,6 @@ export class CommentGateway implements OnGatewayConnection, OnGatewayDisconnect 
           commentId: event.commentId,
           quizId: event.quizId,
           authorId: event.authorId,
-          // Include full snapshot for direct state application
           snapshot: event.snapshot,
         };
 
@@ -277,7 +275,6 @@ export class CommentGateway implements OnGatewayConnection, OnGatewayDisconnect 
           commentId: event.commentId,
           quizId: event.quizId,
           moderatorId: event.moderatorId,
-          // Include full snapshot for direct state application
           snapshot: event.snapshot,
         };
 
@@ -287,8 +284,18 @@ export class CommentGateway implements OnGatewayConnection, OnGatewayDisconnect 
           commentId: event.commentId,
           quizId: event.quizId,
           moderatorId: event.moderatorId,
-          // Include full snapshot for direct state application
           snapshot: event.snapshot,
+        };
+
+      case 'comment_mentioned':
+        return {
+          ...base,
+          commentId: event.commentId,
+          quizId: event.quizId,
+          mentionedUserId: event.mentionedUserId,
+          mentionedUsername: event.mentionedUsername,
+          authorId: event.authorId,
+          authorUsername: event.authorUsername,
         };
 
       case 'vote_cast':
@@ -298,7 +305,6 @@ export class CommentGateway implements OnGatewayConnection, OnGatewayDisconnect 
           quizId: event.quizId,
           voterId: event.voterId,
           value: event.value,
-          // Include updated vote counts for direct state application
           votesCount: event.votesCount,
           upvotesCount: event.upvotesCount,
           downvotesCount: event.downvotesCount,
@@ -310,10 +316,29 @@ export class CommentGateway implements OnGatewayConnection, OnGatewayDisconnect 
           commentId: event.commentId,
           quizId: event.quizId,
           voterId: event.voterId,
-          // Include updated vote counts for direct state application
           votesCount: event.votesCount,
           upvotesCount: event.upvotesCount,
           downvotesCount: event.downvotesCount,
+        };
+
+      case 'comment_reported':
+        return {
+          ...base,
+          reportId: event.reportId,
+          commentId: event.commentId,
+          quizId: event.quizId,
+          commentExcerpt: event.commentExcerpt,
+          reporterId: event.reporterId,
+          reason: event.reason,
+        };
+
+      case 'report_reviewed':
+        return {
+          ...base,
+          reportId: event.reportId,
+          reviewerId: event.reviewerId,
+          status: event.status,
+          actionTaken: event.actionTaken,
         };
 
       default:

@@ -1,14 +1,3 @@
-/**
- * Scheduled Evaluation Service
- *
- * Handles periodic evaluation of badges that cannot be evaluated in real-time:
- * - Progress-based badges requiring aggregation
- * - Multi-step achievements
- * - Streak validation
- * - Time-bounded achievements
- * - Batch badge awards
- */
-
 import { Inject, Injectable, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { Cron, CronExpression, SchedulerRegistry } from '@nestjs/schedule';
@@ -76,10 +65,6 @@ export class ScheduledEvaluationService implements OnModuleInit, OnModuleDestroy
     });
   }
 
-  /**
-   * Run scheduled evaluation for deferred badges.
-   * This is called by the cron job.
-   */
   @Cron(CronExpression.EVERY_HOUR)
   async runScheduledEvaluation(): Promise<BatchEvaluationResult> {
     if (!this.evaluationConfig.enabled || this.isRunning) {
@@ -130,10 +115,6 @@ export class ScheduledEvaluationService implements OnModuleInit, OnModuleDestroy
     }
   }
 
-  /**
-   * Evaluate all deferred badges.
-   * Deferred badges have evaluationMode = 'deferred' or 'both'.
-   */
   async evaluateDeferredBadges(): Promise<BatchEvaluationResult> {
     const deferredBadges = await this.getDeferredBadges();
     const results: EvaluationResult[] = [];
@@ -172,9 +153,6 @@ export class ScheduledEvaluationService implements OnModuleInit, OnModuleDestroy
     };
   }
 
-  /**
-   * Get all badges that need deferred evaluation.
-   */
   private async getDeferredBadges(): Promise<BadgeDefinitionRow[]> {
     const allBadges = await this.achievementRepository.getAllActiveBadges();
     return allBadges.filter(
@@ -182,58 +160,82 @@ export class ScheduledEvaluationService implements OnModuleInit, OnModuleDestroy
     );
   }
 
-  /**
-   * Evaluate a single badge for all eligible users.
-   */
   private async evaluateBadge(badge: BadgeDefinitionRow): Promise<EvaluationResult[]> {
     const rules = await this.achievementRepository.getBadgeRules(badge.badgeId);
     const results: EvaluationResult[] = [];
+    const batchSize = this.evaluationConfig.batchSize;
+    let offset = 0;
 
     for (const rule of rules) {
-      const eligibleUsers = await this.resolveEligibleUsers(rule, badge.badgeId);
+      let hasMore = true;
 
-      this.logger.debug({
-        event: 'eligible_users_resolved',
-        ruleId: rule.ruleId,
-        badgeId: badge.badgeId,
-        eligibleCount: eligibleUsers.length,
-      });
+      while (hasMore) {
+        const eligibleUsers = await this.resolveEligibleUsers(
+          rule,
+          badge.badgeId,
+          batchSize,
+          offset,
+        );
 
-      for (const userInfo of eligibleUsers) {
-        const userId = String(userInfo.userId);
-        const hasBadge = await this.achievementRepository.hasBadge(userId, badge.badgeId);
+        this.logger.debug({
+          event: 'eligible_users_resolved',
+          ruleId: rule.ruleId,
+          badgeId: badge.badgeId,
+          eligibleCount: eligibleUsers.length,
+          offset,
+        });
 
-        if (!hasBadge) {
-          try {
-            await this.ruleEngineService.awardBadge(userId, badge.badgeId, {
-              evaluationType: 'scheduled',
-              ruleId: rule.ruleId,
-              ...userInfo,
-            });
+        if (eligibleUsers.length === 0) {
+          hasMore = false;
+          break;
+        }
 
-            results.push({
-              badgeId: badge.badgeId,
-              slug: badge.slug,
-              userId,
-              awarded: true,
-            });
+        if (eligibleUsers.length < batchSize) {
+          hasMore = false;
+        }
 
-            this.logger.info({
-              event: 'scheduled_badge_awarded',
-              userId,
-              badgeId: badge.badgeId,
-              slug: badge.slug,
-              ruleId: rule.ruleId,
-            });
-          } catch (error) {
-            results.push({
-              badgeId: badge.badgeId,
-              slug: badge.slug,
-              userId,
-              awarded: false,
-              error: error instanceof Error ? error.message : 'Unknown error',
-            });
+        for (const userInfo of eligibleUsers) {
+          const userId = String(userInfo.userId);
+          const hasBadge = await this.achievementRepository.hasBadge(userId, badge.badgeId);
+
+          if (!hasBadge) {
+            try {
+              await this.ruleEngineService.awardBadge(userId, badge.badgeId, {
+                evaluationType: 'scheduled',
+                ruleId: rule.ruleId,
+                ...userInfo,
+              });
+
+              results.push({
+                badgeId: badge.badgeId,
+                slug: badge.slug,
+                userId,
+                awarded: true,
+              });
+
+              this.logger.info({
+                event: 'scheduled_badge_awarded',
+                userId,
+                badgeId: badge.badgeId,
+                slug: badge.slug,
+                ruleId: rule.ruleId,
+              });
+            } catch (error) {
+              results.push({
+                badgeId: badge.badgeId,
+                slug: badge.slug,
+                userId,
+                awarded: false,
+                error: error instanceof Error ? error.message : 'Unknown error',
+              });
+            }
           }
+        }
+
+        offset += batchSize;
+
+        if (this.evaluationConfig.staggerDelayMs > 0) {
+          await this.delay(this.evaluationConfig.staggerDelayMs);
         }
       }
     }
@@ -241,12 +243,11 @@ export class ScheduledEvaluationService implements OnModuleInit, OnModuleDestroy
     return results;
   }
 
-  /**
-   * Resolve eligible users for a badge rule based on the rule type.
-   */
   private async resolveEligibleUsers(
     rule: BadgeRuleRow,
     badgeId: string,
+    limit: number,
+    offset: number,
   ): Promise<Array<Record<string, unknown>>> {
     const config = rule.config;
     const ruleType: string = rule.ruleType;
@@ -257,6 +258,8 @@ export class ScheduledEvaluationService implements OnModuleInit, OnModuleDestroy
         const users = await this.achievementRepository.getUsersEligibleForStreakBadge(
           threshold,
           badgeId,
+          limit,
+          offset,
         );
         return users.map((u) => ({ userId: u.userId, streakDays: u.currentStreak }));
       }
@@ -269,28 +272,30 @@ export class ScheduledEvaluationService implements OnModuleInit, OnModuleDestroy
           maxRank,
           period,
           badgeId,
+          limit,
+          offset,
         );
         return users.map((u) => ({ userId: u.userId, rank: u.currentRank, period }));
       }
 
       case 'count': {
-        // For count-based badges (e.g., "complete 10 quizzes"), we need to evaluate
-        // all active users. This is expensive but necessary for count-based rules.
-        // We batch process to avoid overwhelming the database.
         const users = await this.achievementRepository.getUsersEligibleForStreakBadge(
-          1, // Any active user
+          1,
           badgeId,
+          limit,
+          offset,
         );
-        // Filter users who don't yet have the badge - the actual count evaluation
-        // happens in the rule engine when triggered
         return users.map((u) => ({ userId: u.userId }));
       }
 
       case 'xp_total': {
-        // XP-based badges require querying users by XP threshold
         const minXp = typeof config.threshold === 'number' ? config.threshold : 1000;
-        const users = await this.achievementRepository.getUsersEligibleForStreakBadge(1, badgeId);
-        // TODO: Add getUsersEligibleForXpBadge when XP-based eligibility is needed
+        const users = await this.achievementRepository.getUsersEligibleForStreakBadge(
+          1,
+          badgeId,
+          limit,
+          offset,
+        );
         return users.map((u) => ({ userId: u.userId, xpTotal: minXp }));
       }
 
@@ -304,9 +309,6 @@ export class ScheduledEvaluationService implements OnModuleInit, OnModuleDestroy
     }
   }
 
-  /**
-   * Validate streak achievements for users.
-   */
   async validateStreakAchievements(): Promise<BatchEvaluationResult> {
     this.logger.info({
       event: 'validating_streak_achievements',
@@ -314,7 +316,6 @@ export class ScheduledEvaluationService implements OnModuleInit, OnModuleDestroy
 
     const streakRules = await this.achievementRepository.getRulesByType('streak');
     const results: EvaluationResult[] = [];
-    const awardedBadges = 0;
 
     for (const rule of streakRules) {
       const config = rule.config;
@@ -329,15 +330,12 @@ export class ScheduledEvaluationService implements OnModuleInit, OnModuleDestroy
 
     return {
       processedUsers: results.length,
-      awardedBadges,
+      awardedBadges: 0,
       errors: 0,
       results,
     };
   }
 
-  /**
-   * Validate time-bounded achievements.
-   */
   async validateTimeBoundedAchievements(): Promise<BatchEvaluationResult> {
     this.logger.info({
       event: 'validating_time_bounded_achievements',
@@ -371,9 +369,6 @@ export class ScheduledEvaluationService implements OnModuleInit, OnModuleDestroy
     };
   }
 
-  /**
-   * Re-evaluate badges for a specific user.
-   */
   async reevaluateUserBadges(userId: string): Promise<EvaluationResult[]> {
     this.logger.info({
       event: 'reevaluating_user_badges',

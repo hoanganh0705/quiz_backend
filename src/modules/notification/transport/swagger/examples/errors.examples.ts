@@ -1,21 +1,11 @@
 import { ErrorResponseExamples } from '@/common/swagger/swagger-schemas';
 
-/**
- * Notification module error examples with endpoint-correct `instance` paths.
- *
- * Each notification endpoint's documented 4xx/5xx responses should use the example
- * returned by the matching factory below, so the spec mirrors the URL the
- * client actually requested.
- */
-
 const withInstance = (
   base: (typeof ErrorResponseExamples)[keyof typeof ErrorResponseExamples],
   instance: string,
 ): Record<string, unknown> => ({ ...base, instance });
 
 const SAMPLE_NOTIFICATION_ID = '550e8400-e29b-71d4-a716-446655440000';
-
-// ─── GET /notifications ──────────────────────────────────────────────────
 
 export const listNotificationsBadRequestExample = withInstance(
   ErrorResponseExamples.badRequest,
@@ -30,8 +20,6 @@ export const listNotificationsInternalErrorExample = withInstance(
   '/api/v1/notifications',
 );
 
-// ─── GET /notifications/unread-count ────────────────────────────────────
-
 export const unreadCountUnauthorizedExample = withInstance(
   ErrorResponseExamples.unauthorized,
   '/api/v1/notifications/unread-count',
@@ -40,8 +28,6 @@ export const unreadCountInternalErrorExample = withInstance(
   ErrorResponseExamples.internalServerError,
   '/api/v1/notifications/unread-count',
 );
-
-// ─── GET /notifications/analytics ──────────────────────────────────────
 
 export const analyticsUnauthorizedExample = withInstance(
   ErrorResponseExamples.unauthorized,
@@ -56,8 +42,6 @@ export const analyticsInternalErrorExample = withInstance(
   '/api/v1/notifications/analytics',
 );
 
-// ─── GET /notifications/preferences ────────────────────────────────────
-
 export const preferencesUnauthorizedExample = withInstance(
   ErrorResponseExamples.unauthorized,
   '/api/v1/notifications/preferences',
@@ -66,8 +50,6 @@ export const preferencesInternalErrorExample = withInstance(
   ErrorResponseExamples.internalServerError,
   '/api/v1/notifications/preferences',
 );
-
-// ─── PATCH /notifications/preferences ──────────────────────────────────
 
 export const updatePreferencesBadRequestExample = withInstance(
   ErrorResponseExamples.badRequest,
@@ -82,8 +64,6 @@ export const updatePreferencesInternalErrorExample = withInstance(
   '/api/v1/notifications/preferences',
 );
 
-// ─── GET /notifications/:notificationId ────────────────────────────────
-
 export const getNotificationNotFoundExample = withInstance(
   ErrorResponseExamples.notFound,
   `/api/v1/notifications/${SAMPLE_NOTIFICATION_ID}`,
@@ -96,8 +76,6 @@ export const getNotificationInternalErrorExample = withInstance(
   ErrorResponseExamples.internalServerError,
   `/api/v1/notifications/${SAMPLE_NOTIFICATION_ID}`,
 );
-
-// ─── POST /notifications/:notificationId/read ───────────────────────────
 
 export const markAsReadNotFoundExample = withInstance(
   ErrorResponseExamples.notFound,
@@ -113,8 +91,6 @@ export const markAsReadUnauthorizedExample = withInstance(
   `/api/v1/notifications/${SAMPLE_NOTIFICATION_ID}/read`,
 );
 
-// ─── POST /notifications/:notificationId/unread ───────────────────────────
-
 export const markAsUnreadNotFoundExample = withInstance(
   ErrorResponseExamples.notFound,
   `/api/v1/notifications/${SAMPLE_NOTIFICATION_ID}/unread`,
@@ -129,8 +105,6 @@ export const markAsUnreadUnauthorizedExample = withInstance(
   `/api/v1/notifications/${SAMPLE_NOTIFICATION_ID}/unread`,
 );
 
-// ─── POST /notifications/read-all ────────────────────────────────────────
-
 export const markAllAsReadUnauthorizedExample = withInstance(
   ErrorResponseExamples.unauthorized,
   '/api/v1/notifications/read-all',
@@ -140,11 +114,6 @@ export const markAllAsReadInternalErrorExample = withInstance(
   '/api/v1/notifications/read-all',
 );
 
-// ─── DELETE /notifications/read-all ──────────────────────────────────────
-
-// Phase 6 (rev6.1): renamed from DELETE /notifications/read to /read-all
-// for route hierarchy consistency with POST /notifications/read-all.
-// Old path retained as comment for migration reference.
 export const deleteReadUnauthorizedExample = withInstance(
   ErrorResponseExamples.unauthorized,
   '/api/v1/notifications/read-all',
@@ -153,8 +122,6 @@ export const deleteReadInternalErrorExample = withInstance(
   ErrorResponseExamples.internalServerError,
   '/api/v1/notifications/read-all',
 );
-
-// ─── DELETE /notifications/:notificationId ───────────────────────────────
 
 export const deleteNotificationNotFoundExample = withInstance(
   ErrorResponseExamples.notFound,

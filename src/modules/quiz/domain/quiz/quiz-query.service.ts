@@ -19,7 +19,6 @@ import type { QuizRecordRow } from '../ports/quiz-repository.port';
 import type { QuizTagRow } from '../ports/quiz-repository.port';
 import type { QuizQuestionJoinRow } from '../ports/quiz-question-repository.port';
 import type { ListQuizzesQuery } from '../types/list-quizzes.query';
-import type { QuizCursor } from '../ports/quiz-repository.port';
 import { QuizNotFoundError } from '../errors';
 import { normalizeQuizSlug } from '../slug/quiz-slug';
 import { isUuid } from '@/common/pipes/parse-uuid-or-slug.pipe';
@@ -213,6 +212,12 @@ export class QuizQueryService {
       creatorId: userId,
       limit: query.limit,
       cursor: query.cursor,
+      filters: query.filters
+        ? {
+            ...query.filters,
+            difficulty: query.filters.difficulty as QuizDifficulty | undefined,
+          }
+        : undefined,
     });
 
     return this.buildPaginatedResult(rows, query.limit);
@@ -223,6 +228,12 @@ export class QuizQueryService {
       creatorId: userId,
       limit: query.limit,
       cursor: query.cursor,
+      filters: query.filters
+        ? {
+            ...query.filters,
+            difficulty: query.filters.difficulty as QuizDifficulty | undefined,
+          }
+        : undefined,
     });
 
     return this.buildPaginatedResult(rows, query.limit);
@@ -233,6 +244,12 @@ export class QuizQueryService {
       creatorId: userId,
       limit: query.limit,
       cursor: query.cursor,
+      filters: query.filters
+        ? {
+            ...query.filters,
+            difficulty: query.filters.difficulty as QuizDifficulty | undefined,
+          }
+        : undefined,
     });
 
     return this.buildPaginatedResult(rows, query.limit);

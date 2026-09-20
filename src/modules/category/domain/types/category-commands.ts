@@ -1,4 +1,5 @@
 import type { CategoryCursorPayload } from '../../types/category.types';
+import type { CategorySortField, SortDirection } from '../ports/category-repository.port';
 
 export type CategoryPatch = {
   name?: string;
@@ -21,9 +22,15 @@ export type UpdateCategoryCommand = {
   imageUrl?: string | null;
 };
 
+export type CategorySort = {
+  field: CategorySortField;
+  direction: SortDirection;
+};
+
 export type ListCategoriesQuery = {
   cursor?: CategoryCursorPayload | null;
   limit?: number;
+  sort?: CategorySort;
 };
 
 export type ListFollowedCategoriesQuery = {

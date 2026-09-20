@@ -213,8 +213,30 @@ export class QuizController {
   })
   @ApiInternalServerErrorResponse({ example: listQuizzesInternalErrorExample })
   async listQuizzes(@Query() query: ListQuizzesQueryDto) {
-    const result = await this.quizApplicationService.listQuizzes(query);
+    // SECURITY: the `isHidden` filter is admin-only. Strip it from the
+    // DTO copy forwarded to the service unless the caller has the
+    // QUIZ_VERIFY permission (granted to admin and moderator roles).
+    // Without this gate, any unauthenticated caller could pass
+    // `?isHidden=true` and receive every hidden quiz — bypassing the
+    // `isHidden = false` default in `QuizRepository.listQuizzes`.
+    const safeQuery = this.userCanSeeHiddenQuizzes() ? query : { ...query, isHidden: undefined };
+
+    const result = await this.quizApplicationService.listQuizzes(safeQuery);
     return this.presenter.listQuizzes(result);
+  }
+
+  /**
+   * Whether the current request's user is allowed to override the
+   * `isHidden = false` default on the public list endpoint. Defaults
+   * to `false` (public, `@Public()`-decorated endpoint — no user is
+   * attached to the request, so no override is allowed).
+   *
+   * If the global `@Public()` decorator is ever relaxed for this
+   * endpoint, this method should switch to checking the caller's
+   * `user` parameter for the `QUIZ_VERIFY` permission instead.
+   */
+  private userCanSeeHiddenQuizzes(): boolean {
+    return false;
   }
 
   @Get('me')
@@ -388,11 +410,6 @@ export class QuizController {
     return this.presenter.getQuizStats(result);
   }
 
-  /**
-   * Phase 2 (S-11): bucket-level attempt timeline. Used by the
-   * stats panel's longer-range chart. Supports `?range=7d|30d` and
-   * `?bucket=day|hour`. Defaults to `30d`/`day`.
-   */
   @Get(':id/stats/history')
   @Public()
   @ApiOperation({
@@ -426,17 +443,6 @@ export class QuizController {
     return this.presenter.getQuizStatsHistory(result);
   }
 
-  /**
-   * Phase 2 (S-9): public preview of a quiz. Returns the first
-   * `previewSize` questions of the published version with the
-   * `isCorrect` flag stripped — players can scroll through a
-   * representative slice before deciding whether to start an
-   * attempt. The auth check on this route is `@Public()` so
-   * deep-link previews work from social / share surfaces.
-   *
-   * The number of questions is server-controlled; today it is
-   * hard-coded to 2 (see `PREVIEW_QUESTION_COUNT`).
-   */
   @Get(':id/preview')
   @Public()
   @ApiOperation({
@@ -461,11 +467,6 @@ export class QuizController {
     return this.presenter.getQuizPreview(result);
   }
 
-  /**
-   * Phase 4 (S-24): quiz aggregate bundle. Replaces the 5+ sequential
-   * calls the quiz detail page used to issue (quiz, stats, history,
-   * preview, etc.) with a single parallelised fan-out.
-   */
   @Get(':id/aggregate')
   @Public()
   @ApiOperation({
@@ -758,9 +759,6 @@ export class QuizController {
 
   @Post(':id/versions/:versionId/questions')
   @Permissions(Permission.QUIZ_VERSION_EDIT_OWN, Permission.QUIZ_VERSION_EDIT_ANY)
-  // Phase 5 (S-27): cap question creation at 30/min/user. Authors
-  // who legitimately need more should batch via the /bulk endpoint
-  // (which is itself capped at 50 questions per request).
   @Throttle({ default: { limit: 30, ttl: 60_000 } })
   @ApiOperation({ summary: 'Add a question to a quiz version' })
   @ApiCreatedResource(QuizQuestionAuthorDto, { description: 'Question created' })
@@ -805,9 +803,6 @@ export class QuizController {
 
   @Post(':id/versions/:versionId/questions/bulk')
   @Permissions(Permission.QUIZ_VERSION_EDIT_OWN, Permission.QUIZ_VERSION_EDIT_ANY)
-  // Phase 5 (S-28): cap bulk calls at 10/min/user. Each call may
-  // carry up to 50 questions, so this effectively caps new questions
-  // at 500/min/user — well above any legitimate editor pace.
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @ApiOperation({ summary: 'Add multiple questions to a quiz version in bulk' })
   @ApiCreatedResource(BulkQuizQuestionsResponseDto, { description: 'Questions created' })

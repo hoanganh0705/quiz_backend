@@ -182,6 +182,7 @@ export class QuizAnalyticsRepository implements QuizAnalyticsRepositoryPort {
     const results = await this.db
       .select({
         quizId: quizStats.quizId,
+        creatorId: quizzes.creatorId,
         title: quizzes.title,
         slug: quizzes.slug,
         imageUrl: quizzes.imageUrl,
@@ -190,53 +191,42 @@ export class QuizAnalyticsRepository implements QuizAnalyticsRepositoryPort {
       })
       .from(quizStats)
       .innerJoin(quizzes, eq(quizStats.quizId, quizzes.quizId))
-      .where(and(isNull(quizzes.deletedAt), eq(quizzes.isHidden, false)))
+      .where(
+        and(
+          isNull(quizzes.deletedAt),
+          eq(quizzes.isHidden, false),
+          categoryId ? eq(quizzes.categoryId, categoryId) : undefined,
+        ),
+      )
       .orderBy(desc(quizStats.trendingScore))
       .limit(limit);
 
-    // Filter by category in application layer (avoids complex join + re-ranking)
-    let filtered: Array<{
-      quizId: string;
-      title: string;
-      slug: string;
-      imageUrl: string | null;
-      trendingScore: unknown;
-      totalAttempts: unknown;
-    }> = results;
-    if (categoryId) {
-      const categoryQuizIds = await this.db
-        .select({ quizId: quizzes.quizId })
-        .from(quizzes)
-        .where(eq(quizzes.categoryId, categoryId));
+    // Single GROUP BY for `recentAttempts` instead of N sequential
+    // round-trips: one query for the candidate set, one query for the
+    // last-7d attempt counts joined by `quiz_id`.
+    const recentAttemptsByQuizId = await this.getRecentAttemptsByQuizIds(
+      results.map((r) => r.quizId),
+      168,
+    );
 
-      const categoryQuizIdSet = new Set(categoryQuizIds.map((c) => c.quizId));
-      filtered = results.filter((r) => categoryQuizIdSet.has(r.quizId)).slice(0, limit);
-    }
-
-    // Fetch recentAttempts sequentially to avoid N parallel DB hammers on large lists
-    const trendingQuizzes: TrendingQuiz[] = [];
-    for (let i = 0; i < filtered.length; i++) {
-      const row = filtered[i];
-      const recentAttempts = await this.getRecentAttemptsByQuiz(row.quizId, 168);
-      trendingQuizzes.push({
-        rank: i + 1,
-        quizId: row.quizId,
-        title: row.title,
-        slug: row.slug,
-        imageUrl: row.imageUrl,
-        trendingScore: Number(row.trendingScore),
-        totalAttempts: Number(row.totalAttempts),
-        recentAttempts,
-      });
-    }
-
-    return trendingQuizzes;
+    return results.map((row, i) => ({
+      rank: i + 1,
+      quizId: row.quizId,
+      creatorId: row.creatorId,
+      title: row.title,
+      slug: row.slug,
+      imageUrl: row.imageUrl,
+      trendingScore: Number(row.trendingScore),
+      totalAttempts: Number(row.totalAttempts),
+      recentAttempts: recentAttemptsByQuizId.get(row.quizId) ?? 0,
+    }));
   }
 
   async getPopularQuizzes(limit: number, categoryId?: string): Promise<PopularQuiz[]> {
     const results = await this.db
       .select({
         quizId: quizStats.quizId,
+        creatorId: quizzes.creatorId,
         title: quizzes.title,
         slug: quizzes.slug,
         imageUrl: quizzes.imageUrl,
@@ -247,33 +237,20 @@ export class QuizAnalyticsRepository implements QuizAnalyticsRepositoryPort {
       })
       .from(quizStats)
       .innerJoin(quizzes, eq(quizStats.quizId, quizzes.quizId))
-      .where(and(isNull(quizzes.deletedAt), eq(quizzes.isHidden, false)))
+      .where(
+        and(
+          isNull(quizzes.deletedAt),
+          eq(quizzes.isHidden, false),
+          categoryId ? eq(quizzes.categoryId, categoryId) : undefined,
+        ),
+      )
       .orderBy(desc(quizStats.popularityScore))
       .limit(limit);
 
-    let filtered: Array<{
-      quizId: string;
-      title: string;
-      slug: string;
-      imageUrl: string | null;
-      popularityScore: unknown;
-      totalAttempts: unknown;
-      avgRating: unknown;
-      bookmarkCount: unknown;
-    }> = results;
-    if (categoryId) {
-      const categoryQuizIds = await this.db
-        .select({ quizId: quizzes.quizId })
-        .from(quizzes)
-        .where(eq(quizzes.categoryId, categoryId));
-
-      const categoryQuizIdSet = new Set(categoryQuizIds.map((c) => c.quizId));
-      filtered = results.filter((r) => categoryQuizIdSet.has(r.quizId)).slice(0, limit);
-    }
-
-    return filtered.map((row, i) => ({
+    return results.map((row, i) => ({
       rank: i + 1,
       quizId: row.quizId,
+      creatorId: row.creatorId,
       title: row.title,
       slug: row.slug,
       imageUrl: row.imageUrl,
@@ -537,5 +514,39 @@ export class QuizAnalyticsRepository implements QuizAnalyticsRepositoryPort {
       );
 
     return Number(result?.count ?? 0);
+  }
+
+  /**
+   * Counts attempts in the last `hours` window across every quiz in
+   * `quizIds` in a single round-trip:
+   *
+   *   SELECT v.quiz_id, COUNT(*)
+   *   FROM quiz_versions v JOIN quiz_attempts a ON a.quiz_version_id = v.quiz_version_id
+   *   WHERE v.quiz_id = ANY($quizIds) AND a.created_at >= NOW() - $hours
+   *   GROUP BY v.quiz_id
+   *
+   * Replaces the previous N-sequential `getRecentAttemptsByQuiz` loop
+   * that scaled O(N) round-trips on a public endpoint.
+   */
+  async getRecentAttemptsByQuizIds(quizIds: string[], hours: number): Promise<Map<string, number>> {
+    const out = new Map<string, number>();
+    if (quizIds.length === 0) return out;
+
+    const since = new Date(Date.now() - hours * 60 * 60 * 1000).toISOString();
+
+    const rows = await this.db
+      .select({
+        quizId: quizVersions.quizId,
+        count: sql<number>`COUNT(*)::int`,
+      })
+      .from(quizAttempts)
+      .innerJoin(quizVersions, eq(quizAttempts.quizVersionId, quizVersions.quizVersionId))
+      .where(and(inArray(quizVersions.quizId, quizIds), gte(quizAttempts.createdAt, since)))
+      .groupBy(quizVersions.quizId);
+
+    for (const row of rows) {
+      out.set(row.quizId, Number(row.count ?? 0));
+    }
+    return out;
   }
 }

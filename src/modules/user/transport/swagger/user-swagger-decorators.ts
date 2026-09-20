@@ -46,18 +46,12 @@ import {
   USER_MY_TOURNAMENTS_EXAMPLE,
 } from './examples/tournaments.examples';
 
-// ─── Standard error response options ─────────────────────────────────────────────
-
 export const badRequestOptions = {
   description: 'Request body, query, or params failed validation',
   type: ProblemDetailDto,
   example: ErrorResponseExamples.badRequest,
 };
 
-/**
- * Phase 2.5 (H7): Instance path uses `/users/{userId}/...` instead of the
- * misleading `/quizzes/...` from the global error examples.
- */
 export const notFoundOptions = {
   description: 'The requested user or resource does not exist',
   type: ProblemDetailDto,
@@ -67,10 +61,6 @@ export const notFoundOptions = {
   },
 };
 
-/**
- * Phase 2.5 (H7): Instance path uses `/users/{userId}/...` instead of the
- * misleading `/quizzes/...` from the global global error examples.
- */
 export const forbiddenOptions = {
   description: 'The profile is private and cannot be accessed',
   type: ProblemDetailDto,
@@ -86,10 +76,14 @@ export const internalErrorOptions = {
   example: ErrorResponseExamples.internalServerError,
 };
 
-// ─── 200 OK response decorators ──────────────────────────────────────────────────
-//
-// Phase 4.4 (L4): All decorators now pass `example` through ApiResourceOptions
-// to generate a live example in the Swagger UI and the generated OpenAPI spec.
+/**
+ * Composes one or more `@nestjs/swagger` `@ApiXxxResponse` decorators
+ * into a single `MethodDecorator`. Replaces the repeated
+ * `applyDecorators(ApiA…, ApiB…, ApiC…)` boilerplate that was inline
+ * in every `Api*AndInternal` helper.
+ */
+const combineResponses = (...decorators: MethodDecorator[]): MethodDecorator =>
+  applyDecorators(...decorators);
 
 export const ApiUserMeResponse = (): MethodDecorator =>
   ApiOkResource(UserMeResponseDto, {
@@ -97,23 +91,12 @@ export const ApiUserMeResponse = (): MethodDecorator =>
     example: USER_ME_EXAMPLE,
   });
 
-/**
- * Phase 1 (S-1): 200 response for `GET /users/by-username/:username`.
- * Five-field identity projection; the route is mounted with
- * `@Public()` so no auth envelope is required.
- */
 export const ApiUserLookupResponse = (): MethodDecorator =>
   ApiOkResource(UserLookupResponseDto, {
     description: 'Returns the public identity projection for the requested username.',
     example: USER_LOOKUP_EXAMPLE,
   });
 
-/**
- * Phase 1 (S-2): 200 response for `GET /users/me/summary`. Composes
- * identity + level + activity + social counts into a single payload.
- * Documented here so the OpenAPI spec shows the LevelTitle enum at
- * the call site (the DTO references the enum via `enumName: 'LevelTitle'`).
- */
 export const ApiUserSummaryResponse = (): MethodDecorator =>
   ApiOkResource(UserSummaryResponseDto, {
     description:
@@ -135,24 +118,12 @@ export const ApiUserSettingsUpdatedResponse = (): MethodDecorator =>
     example: USER_ME_SETTINGS_UPDATED_EXAMPLE,
   });
 
-/**
- * Phase 2.1 (H1): Use the item DTOs for the list item type.
- * Before: `ApiOkResourceList(UserBadgesResponseDto, ...)` generated
- *   `data: UserBadgesResponseDto[]`  ← wrong (it's the wrapper, not the item)
- * After:  `ApiOkResourceList(UserBadgeItemDto, ...)` generates
- *   `data: UserBadgeItemDto[]`      ← matches the wire shape
- */
 export const ApiUserBadgesResponse = (): MethodDecorator =>
   ApiOkResourceList(UserBadgeItemDto, 'cursor', {
     description: 'Returns badges.',
     example: USER_BADGES_EXAMPLE,
   });
 
-/**
- * Phase 2.1 (H1): Use the item DTO for activity list items.
- *
- * Phase 4 (F-29): description expanded to document the privacy gate.
- */
 export const ApiUserActivityResponse = (): MethodDecorator =>
   ApiOkResourceList(UserActivityItemDto, 'cursor', {
     description:
@@ -161,9 +132,6 @@ export const ApiUserActivityResponse = (): MethodDecorator =>
     example: USER_ACTIVITY_EXAMPLE,
   });
 
-/**
- * Phase 4.1 (L1): Documents the write-on-read upsert side effect.
- */
 export const ApiUserRankingResponse = (): MethodDecorator =>
   ApiOkResource(UserRankingResponseDto, {
     description:
@@ -177,37 +145,18 @@ export const ApiUserAnalyticsResponse = (): MethodDecorator =>
     example: USER_ANALYTICS_EXAMPLE,
   });
 
-/**
- * Phase 4 (F-11): Use the item DTO (`MyTournamentItemDto`) instead of
- * the wrapper `MyTournamentsResponseDto`. Before: `data` was typed as
- * `MyTournamentsResponseDto[]` which leaked the `pagination` field as
- * if every list item carried its own meta block. After: `data` is
- * `MyTournamentItemDto[]` matching the wire shape.
- */
 export const ApiMyTournamentsResponse = (): MethodDecorator =>
   ApiOkResourceList(MyTournamentItemDto, 'cursor', {
     description: 'Returns my tournaments.',
     example: USER_MY_TOURNAMENTS_EXAMPLE,
   });
 
-/**
- * Phase 4 (F-11): Use the item DTO (`MyTournamentHistoryItemDto`)
- * instead of the wrapper `MyTournamentHistoryResponseDto`. Mirrors the
- * badges/activity pattern (Phase 2.1 / H1).
- */
 export const ApiMyTournamentHistoryResponse = (): MethodDecorator =>
   ApiOkResourceList(MyTournamentHistoryItemDto, 'cursor', {
     description: "Returns the authenticated user's tournament completion history, newest first.",
     example: USER_TOURNAMENT_HISTORY_EXAMPLE,
   });
 
-/**
- * Phase 4 (F-10, F-11): Use the *public* item DTO
- * (`PublicTournamentHistoryItemDto`) so the OpenAPI schema for the
- * cross-user route can document the privacy-gating behaviour
- * independently of the me-route (see the public DTO for the
- * description). Also fixes the wrapper-DTO leak (F-11).
- */
 export const ApiPublicTournamentHistoryResponse = (): MethodDecorator =>
   ApiOkResourceList(PublicTournamentHistoryItemDto, 'cursor', {
     description:
@@ -229,10 +178,6 @@ export const ApiPublicTournamentProfileResponse = (): MethodDecorator =>
     example: USER_TOURNAMENT_PROFILE_EXAMPLE,
   });
 
-/**
- * Phase 4 (F-11): Use the item DTO (`QuizListItemDto`) instead of the
- * wrapper `QuizListResponseDto`. Mirrors the badges/activity pattern.
- */
 export const ApiUserQuizListResponse = (): MethodDecorator =>
   ApiOkResourceList(QuizListItemDto, 'cursor', {
     description: 'Returns quizzes.',
@@ -245,75 +190,49 @@ export const ApiCreatorQuizAnalyticsResponse = (): MethodDecorator =>
     example: USER_CREATOR_QUIZ_ANALYTICS_EXAMPLE,
   });
 
-/**
- * Phase 2.2 (H2): Runtime returns a bare array (`{ data: QuizListItemDto[], meta: { timestamp } }`),
- * not `WrappedPaginatedDto`. Switch from `ApiOkResourceList` to `ApiOkResourceArray`.
- *
- * Wire shape verified in `user.presenter.ts:84`:
- *   `ApiResponse.ok([...dto.items])`  ← bare array, no pagination meta
- */
 export const ApiRecommendedQuizzesResponse = (): MethodDecorator =>
   ApiOkResourceArray(QuizListItemDto, {
     description: 'Returns recommended quizzes.',
     example: USER_RECOMMENDED_QUIZZES_EXAMPLE,
   });
 
-// ─── Composed error response decorators ───────────────────────────────────────────
-//
-// Each decorator bundles the error responses that always travel together.
-// Names describe the HTTP status codes, not specific endpoints.
-
-/** 500 only — internal error for authenticated endpoints. */
 export const ApiInternalError = (): MethodDecorator =>
   ApiInternalServerErrorResponse(internalErrorOptions);
 
-/** 400 + 500 — validation + internal error for endpoints that accept validated input. */
 export const ApiBadRequestAndInternal = (): MethodDecorator =>
-  applyDecorators(
+  combineResponses(
     ApiBadRequestResponse(badRequestOptions),
     ApiInternalServerErrorResponse(internalErrorOptions),
   );
 
-/** 404 + 500 — resource not found + internal error. */
 export const ApiNotFoundAndInternal = (): MethodDecorator =>
-  applyDecorators(
+  combineResponses(
     ApiNotFoundResponse(notFoundOptions),
     ApiInternalServerErrorResponse(internalErrorOptions),
   );
 
-/** 404 + 400 + 500 — not found + validation + internal error. */
 export const ApiNotFoundBadRequestInternal = (): MethodDecorator =>
-  applyDecorators(
+  combineResponses(
     ApiNotFoundResponse(notFoundOptions),
     ApiBadRequestResponse(badRequestOptions),
     ApiInternalServerErrorResponse(internalErrorOptions),
   );
 
-/** 404 + 403 + 500 — not found + privacy-forbidden + internal error. */
 export const ApiNotFoundForbiddenInternal = (): MethodDecorator =>
-  applyDecorators(
+  combineResponses(
     ApiNotFoundResponse(notFoundOptions),
     ApiForbiddenResponse(forbiddenOptions),
     ApiInternalServerErrorResponse(internalErrorOptions),
   );
 
-/** 404 + 400 + 403 + 500 — not found + validation + privacy-forbidden + internal error. */
 export const ApiNotFoundBadRequestForbiddenInternal = (): MethodDecorator =>
-  applyDecorators(
+  combineResponses(
     ApiNotFoundResponse(notFoundOptions),
     ApiBadRequestResponse(badRequestOptions),
     ApiForbiddenResponse(forbiddenOptions),
     ApiInternalServerErrorResponse(internalErrorOptions),
   );
 
-// ─── Parameter decorators ───────────────────────────────────────────────────────
-
-// ─── Parameter decorators ───────────────────────────────────────────────────────
-
-/**
- * Phase 3.4 (M5): Documents `userId` path parameter as `format: uuid` in OpenAPI.
- * Runtime UUID enforcement is already handled by `ParseUUIDPipe` in the controller.
- */
 export const ApiUserIdParam = () =>
   ApiParam({
     name: 'userId',

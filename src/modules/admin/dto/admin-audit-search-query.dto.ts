@@ -1,36 +1,3 @@
-/**
- * Phase 5 #3 — admin audit log search DTO.
- *
- * Query string for `GET /admin/audit/search`. Filters compose
- * with logical AND: a row must match every filter to be
- * returned. Pagination is offset-based (the audit log is a
- * closed set with a finite retention window, so cursor-based
- * pagination is not needed).
- *
- * Filtering options
- * -----------------
- *   - `eventType` — substring match on the free-form event
- *     identifier (`password_changed`, `account_deleted`, …).
- *     For backward compatibility, callers can also filter by
- *     the structured `domain` + `action` pair below.
- *   - `domain` — exact match on the structured `domain` field
- *     (`auth`, `user`, `achievement`, `review`, `social`,
- *     `quiz`, `comment`).
- *   - `action` — exact match on the structured `action` field
- *     (`badge.revoked`, `review.report.status_changed`, …).
- *   - `userId` — exact match on the indexed `user_id` column
- *     (subject user).
- *   - `actorId` — exact match on the structured `actorId`
- *     field (the user/admin who performed the action).
- *   - `from` / `to` — inclusive ISO 8601 timestamp range on
- *     `createdAt`.
- *
- * Pagination
- * ----------
- *   - `limit` — capped at 100 to keep the payload bounded.
- *   - `page` — 1-indexed. `1` is the default.
- */
-
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { IsInt, IsISO8601, IsOptional, IsString, IsUUID, Max, Min } from 'class-validator';
 import { Type } from 'class-transformer';

@@ -1,27 +1,10 @@
-/**
- * Phase 7 #4 — soft-delete purge service tests.
- *
- * The service is the only piece of business logic that hard-deletes
- * soft-deleted rows; ADR-0011 makes that explicit. The unit tests
- * here verify the *control plane*: per-table failures don't abort the
- * run, the retention window is clamped, and the manual entry point
- * returns the same shape as the cron.
- *
- * The actual SQL is exercised against a real Postgres in the
- * integration suite; here we use a fake Drizzle client that records
- * the SQL fragments and returns deterministic counts.
- */
-
-import { DRIZZLE } from '@/core/database/drizzle.constants';
 import type { DrizzleDB } from '@/core/database/database.module';
 
 import { SoftDeletePurgeService, type PurgeResult } from './soft-delete-purge.service';
 
 class FakeDrizzle {
   readonly calls: Array<{ sql: string; params: unknown[] }> = [];
-  /** Map of "table" → { rowCount }; mutated to simulate behaviour. */
   readonly responses = new Map<string, number>();
-  /** When set, `delete` returns this for any table. Overrides per-table responses. */
   throwOnTables: ReadonlySet<string> = new Set();
 
   delete(table: unknown): any {

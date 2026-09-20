@@ -94,6 +94,5 @@ export class RankingPresenter {
   readonly triggerPeriodReset = RankingPresenter.ok<PeriodResetResponseDto>;
   readonly triggerConsistencyCheck = RankingPresenter.ok<ConsistencyReportResponseDto>;
 
-  // Phase 3 (S-15): live-winners carousel.
   readonly getRecentWinners = RankingPresenter.ok<RecentWinnersResponseDto>;
 }

@@ -11,9 +11,9 @@
  * single source of truth here makes the SQL auditable in one place.
  */
 
-import { and, desc, eq, inArray, isNull, sql, asc } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNull, sql, asc, type SQL } from 'drizzle-orm';
 import type { DrizzleDB } from '@/core/database/database.module';
-import { commentRows, commentReports, userProfiles, users } from '@/core/database/schema';
+import { commentRows, commentReports, quizzes, userProfiles, users } from '@/core/database/schema';
 import type {
   AuthorView,
   CommentCursor,
@@ -226,24 +226,28 @@ export async function multiReplyScan(
     .where(and(inArray(commentRows.parentCommentId, topLevelIds), isNull(commentRows.deletedAt)))
     .orderBy(asc(commentRows.createdAt));
 
+  if (rows.length === 0) return [];
+
   const result: CommentView[] = [];
   const countByParent = new Map<string, number>();
   const authorIds = new Set<string>();
 
   for (const row of rows) {
-    const parentId = row.parentCommentId!;
+    const parentId = row.parentCommentId ?? null;
+    if (parentId === null) continue;
     const count = countByParent.get(parentId) ?? 0;
     if (count >= limitPerParent) continue;
-    authorIds.add(row.authorId);
     countByParent.set(parentId, count + 1);
+    authorIds.add(row.authorId);
   }
 
   const authorMap = await joinAuthorsByIds(db, [...authorIds]);
 
   for (const row of rows) {
-    const parentId = row.parentCommentId!;
-    const count = countByParent.get(parentId) ?? 0;
-    if (count >= limitPerParent) continue;
+    const parentId = row.parentCommentId ?? null;
+    if (parentId === null) continue;
+    const consumed = countByParent.get(parentId) ?? 0;
+    if (consumed <= 0) continue;
     result.push(
       commentAuthorForView({
         row,
@@ -255,7 +259,7 @@ export async function multiReplyScan(
         },
       }),
     );
-    countByParent.set(parentId, count + 1);
+    countByParent.set(parentId, consumed - 1);
   }
 
   return result;
@@ -279,6 +283,8 @@ export async function paginatedCommentScan(
     .select({
       commentId: commentRows.commentId,
       quizId: commentRows.quizId,
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+      quizTitle: quizzes.title,
       body: commentRows.body,
       votesCount: commentRows.votesCount,
       repliesCount: commentRows.repliesCount,
@@ -286,21 +292,20 @@ export async function paginatedCommentScan(
       updatedAt: commentRows.updatedAt,
     })
     .from(commentRows)
+    .leftJoin(quizzes, eq(commentRows.quizId, quizzes.quizId))
     .where(
       and(eq(commentRows.authorId, params.userId), isNull(commentRows.deletedAt), cursorCondition),
     )
     .orderBy(desc(commentRows.createdAt), desc(commentRows.commentId))
     .limit(limit + 1);
 
-  // Pagination follows the limit+1 probe convention. The caller
-  // slices the last item off and uses it to compute the next cursor.
   const hasNextPage = rows.length > limit;
   const trimmed = hasNextPage ? rows.slice(0, limit) : rows;
 
   return trimmed.map((row) => ({
     commentId: row.commentId,
     quizId: row.quizId,
-    quizTitle: '', // populated by the application layer if needed
+    quizTitle: row.quizTitle ?? '',
     body: row.body,
     votesCount: row.votesCount,
     repliesCount: row.repliesCount,
@@ -325,8 +330,7 @@ export async function reportScan(
   hasNextPage: boolean;
 }> {
   const limit = options.limit ?? 20;
-  const conditions = [isNull(commentRows.deletedAt)];
-  // The `reportId` cursor is the chronological tiebreaker on `createdAt`.
+  const conditions: SQL[] = [];
   if (options.status) {
     conditions.push(eq(commentReports.status, options.status));
   }
@@ -345,34 +349,14 @@ export async function reportScan(
   const rows = await db
     .select()
     .from(commentReports)
-    .innerJoin(commentRows, eq(commentReports.commentId, commentRows.commentId))
-    .where(and(...conditions))
+    .where(conditions.length > 0 ? and(...conditions) : undefined)
     .orderBy(desc(commentReports.createdAt), desc(commentReports.reportId))
     .limit(limit + 1);
 
   const hasNextPage = rows.length > limit;
   const trimmed = hasNextPage ? rows.slice(0, limit) : rows;
 
-  type JoinedRow = (typeof rows)[number];
-  const items: import('../../domain/types').ReportView[] = trimmed.map((row: JoinedRow) => {
-    const report = (row as unknown as { comment_reports: typeof commentReports.$inferSelect })
-      .comment_reports;
-    return {
-      reportId: report.reportId,
-      reporterId: report.reporterId,
-      commentId: report.commentId,
-      reason: report.reason,
-      details: report.details,
-      status: report.status,
-      reviewedByUserId: report.reviewedByUserId,
-      reviewedAt: report.reviewedAt,
-      actionTaken: report.actionTaken,
-      createdAt: report.createdAt,
-      updatedAt: report.updatedAt,
-    };
-  });
-
-  return { items, hasNextPage };
+  return { items: trimmed, hasNextPage };
 }
 
 // `rowToCommentView` is reserved for the per-single-row read path

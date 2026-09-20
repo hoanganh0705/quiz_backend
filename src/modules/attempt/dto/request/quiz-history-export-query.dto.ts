@@ -1,13 +1,6 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { IsIn, IsOptional, IsString } from 'class-validator';
 
-/**
- * Query DTO for `GET /users/me/quiz-history/export`.
- *
- * Phase 5 (S-30): streams a CSV or JSON file of the authenticated
- * user's quiz history. Streams Content-Type so the browser triggers
- * a file download with the right extension.
- */
 export class QuizHistoryExportQueryDto {
   @ApiPropertyOptional({
     description: 'File format to export',

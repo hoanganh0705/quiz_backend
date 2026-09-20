@@ -1,8 +1,11 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable } from '@nestjs/common';
 import { DRIZZLE } from '@/core/database/drizzle.constants';
 import type { DrizzleDB } from '@/core/database/database.module';
 import { friendships, users, userProfiles, blockedUsers } from '@/core/database/schema';
-import type { FriendshipRepositoryPort } from '../../domain/ports/friendship-ports';
+import type {
+  FriendshipExecutor,
+  FriendshipRepositoryPort,
+} from '../../domain/ports/friendship-ports';
 import type {
   Friendship,
   FriendRequest,
@@ -11,6 +14,8 @@ import type {
   RespondToFriendRequestParams,
 } from '../../domain/types/social.types';
 import { eq, and, or, sql, desc, count, lte, isNull, aliasedTable } from 'drizzle-orm';
+import { sliceWithCursor, encodeUsernameCursor } from './social-cursor.util';
+import { decodeBase64JsonCursor } from '@/common/utils/cursor.util';
 
 @Injectable()
 export class FriendshipRepository implements FriendshipRepositoryPort {
@@ -27,6 +32,37 @@ export class FriendshipRepository implements FriendshipRepositoryPort {
       .returning();
 
     return friendship as Friendship;
+  }
+
+  async createFriendRequestWithJoin(
+    requesterId: string,
+    addresseeId: string,
+  ): Promise<FriendRequest> {
+    const rows = await this.db
+      .select({
+        friendshipId: friendships.friendshipId,
+        requesterId: friendships.requesterId,
+        addresseeId: friendships.addresseeId,
+        requesterUsername: users.username,
+        requesterDisplayName: userProfiles.displayName,
+        requesterAvatarUrl: userProfiles.avatarUrl,
+        createdAt: friendships.createdAt,
+      })
+      .from(friendships)
+      .innerJoin(users, eq(users.userId, friendships.requesterId))
+      .leftJoin(userProfiles, eq(userProfiles.userId, friendships.requesterId))
+      .where(
+        and(
+          eq(friendships.requesterId, requesterId),
+          eq(friendships.addresseeId, addresseeId),
+          eq(friendships.status, 'pending'),
+          isNull(friendships.deletedAt),
+        ),
+      )
+      .orderBy(desc(friendships.createdAt))
+      .limit(1);
+
+    return rows[0] as FriendRequest;
   }
 
   async getFriendRequest(friendshipId: string): Promise<Friendship> {
@@ -70,6 +106,32 @@ export class FriendshipRepository implements FriendshipRepositoryPort {
       requesterAvatarUrl: r.avatarUrl,
       createdAt: r.createdAt,
     }));
+  }
+
+  async getMostRecentPendingFriendshipId(
+    requesterId: string,
+    addresseeId: string,
+  ): Promise<string> {
+    const [row] = await this.db
+      .select({ friendshipId: friendships.friendshipId })
+      .from(friendships)
+      .where(
+        and(
+          eq(friendships.requesterId, requesterId),
+          eq(friendships.addresseeId, addresseeId),
+          eq(friendships.status, 'pending'),
+          isNull(friendships.deletedAt),
+        ),
+      )
+      .orderBy(desc(friendships.createdAt))
+      .limit(1);
+
+    if (!row) {
+      throw new Error(
+        `getMostRecentPendingFriendshipId: no pending request from ${requesterId} to ${addresseeId}`,
+      );
+    }
+    return row.friendshipId;
   }
 
   async getSentRequests(requesterId: string): Promise<FriendRequest[]> {
@@ -241,20 +303,30 @@ export class FriendshipRepository implements FriendshipRepositoryPort {
     return Number(result[0]?.count ?? 0);
   }
 
-  async removeFriend(userId: string, friendId: string): Promise<void> {
+  async removeFriend(userId: string, friendId: string): Promise<number> {
+    return this.removeFriendInTx(this.db as unknown as FriendshipExecutor, userId, friendId);
+  }
+
+  async removeFriendInTx(
+    tx: FriendshipExecutor,
+    userId: string,
+    friendId: string,
+  ): Promise<number> {
     const now = new Date().toISOString();
-    await this.db
-      .update(friendships)
-      .set({ deletedAt: now, updatedAt: now })
-      .where(
-        and(
-          or(
-            and(eq(friendships.requesterId, userId), eq(friendships.addresseeId, friendId)),
-            and(eq(friendships.requesterId, friendId), eq(friendships.addresseeId, userId)),
-          ),
-          eq(friendships.status, 'accepted'),
-        ),
-      );
+    const result = await tx.execute<{ friendshipId: string }>(sql`
+      UPDATE friendships
+      SET deleted_at = ${now}::timestamptz,
+          updated_at = ${now}::timestamptz
+      WHERE status = 'accepted'
+        AND deleted_at IS NULL
+        AND (
+          (requester_id = ${userId}::uuid AND addressee_id = ${friendId}::uuid)
+          OR (requester_id = ${friendId}::uuid AND addressee_id = ${userId}::uuid)
+        )
+      RETURNING friendship_id AS "friendshipId"
+    `);
+
+    return result.rows.length;
   }
 
   async findAcceptedFriendship(userId: string, friendId: string): Promise<Friendship | null> {
@@ -271,6 +343,7 @@ export class FriendshipRepository implements FriendshipRepositoryPort {
           isNull(friendships.deletedAt),
         ),
       )
+      .orderBy(desc(friendships.createdAt), desc(friendships.friendshipId))
       .limit(1);
 
     return (row as Friendship | undefined) ?? null;
@@ -284,16 +357,7 @@ export class FriendshipRepository implements FriendshipRepositoryPort {
   ): Promise<PaginatedMutualFriendsResult> {
     const effectiveLimit = limit ?? 20;
 
-    // Decode cursor if provided (for username-based cursor)
-    let cursorCondition = '';
-    if (cursor) {
-      try {
-        const decoded = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8'));
-        cursorCondition = `AND mutual_friends.username > '${decoded.username}'`;
-      } catch {
-        cursorCondition = '';
-      }
-    }
+    const cursorCondition = decodeMutualFriendsCursorCondition(cursor);
 
     const u = aliasedTable(users, 'u');
     const up = aliasedTable(userProfiles, 'up');
@@ -361,31 +425,31 @@ export class FriendshipRepository implements FriendshipRepositoryPort {
       WHERE ${u.deletedAt} IS NULL
     `;
 
-    const rowsResult = await this.db.execute(sql`
+    const rowsResult = await this.db.execute(sql<{
+      userId: string;
+      username: string;
+      displayName: string | null;
+      avatarUrl: string | null;
+    }>`
       SELECT *
       FROM (${mutualFriendsQuery}) mutual_friends
-      WHERE 1=1 ${sql.raw(cursorCondition ? ` ${cursorCondition}` : '')}
+      WHERE 1=1 ${cursorCondition}
       ORDER BY mutual_friends.username ASC
       LIMIT ${effectiveLimit + 1}
     `);
 
-    const rows = rowsResult.rows as Array<{
+    const typedMutualFriendRows = rowsResult.rows as Array<{
       userId: string;
       username: string;
       displayName: string | null;
       avatarUrl: string | null;
     }>;
-
-    const hasNextPage = rows.length > effectiveLimit;
-    const items = hasNextPage ? rows.slice(0, effectiveLimit) : rows;
-    const lastItem = items[items.length - 1];
-    const nextCursor =
-      hasNextPage && lastItem
-        ? Buffer.from(JSON.stringify({ username: lastItem.username }), 'utf8').toString('base64url')
-        : null;
+    const page = sliceWithCursor(typedMutualFriendRows, effectiveLimit, (last) =>
+      encodeUsernameCursor({ username: last.username }),
+    );
 
     return {
-      items: items.map((row) => ({
+      items: page.items.map((row) => ({
         userId: row.userId,
         username: row.username,
         displayName: row.displayName,
@@ -394,9 +458,18 @@ export class FriendshipRepository implements FriendshipRepositoryPort {
       pagination: {
         kind: 'cursor',
         limit: effectiveLimit,
-        hasNextPage,
-        nextCursor,
+        hasNextPage: page.hasNextPage,
+        nextCursor: page.nextCursor,
       },
     };
   }
+}
+
+function decodeMutualFriendsCursorCondition(cursor: string | null | undefined) {
+  if (!cursor) return sql``;
+  const decoded = decodeBase64JsonCursor<{ username?: unknown }>(cursor);
+  if (typeof decoded.username !== 'string') {
+    throw new BadRequestException('Invalid cursor');
+  }
+  return sql`AND mutual_friends.username > ${decoded.username}`;
 }

@@ -2,19 +2,6 @@ import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
 import { IsIn, IsOptional } from 'class-validator';
 
-/**
- * Phase 2 (S-11): query params for `GET /quizzes/:id/stats/history`.
- *
- *   - `range`  — temporal window. `7d` (default) returns a 7-bucket
- *                hourly timeline when `bucket=hour`, otherwise
- *                daily. `30d` returns a 30-day daily timeline.
- *   - `bucket` — granular size. `day` (default) is one entry per
- *                calendar day. `hour` is one entry per hour.
- *
- * The defaults match the values the audit recommended for the home
- * page stats widget: a 30-day daily timeline with hour-grained
- * zoom-in reserved for a future drill-down view.
- */
 export class QuizStatsHistoryQueryDto {
   @ApiPropertyOptional({
     description: 'Window length',

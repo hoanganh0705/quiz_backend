@@ -1,13 +1,3 @@
-/**
- * `POST /coins/tip` request body.
- *
- * Phase 6 / S-coin-spend. Caller picks the recipient and the quiz
- * that inspired the tip; the server resolves the rest. The `amount`
- * is an enum because the MVP design locks the tip amount to a single
- * product value (25 coins, see §7). Future expansion: allow an
- * arbitrary amount, but the enum keeps the open-ended-spam attack
- * surface closed today.
- */
 import { ApiProperty } from '@nestjs/swagger';
 import { IsEnum, IsOptional, IsString, IsUUID, MaxLength } from 'class-validator';
 

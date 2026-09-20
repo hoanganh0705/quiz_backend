@@ -20,6 +20,7 @@ import { GetMyTournamentsQueryDto } from '../../dto/request/get-my-tournaments-q
 import { GetMyTournamentHistoryQueryDto } from '../../dto/request/get-my-tournament-history-query.dto';
 import { RecentlyPlayedQuizzesService } from '../../application/recently-played-quizzes.service';
 import { RecentlyPlayedQuizzesResponseDto } from '../../dto/response/recently-played-quizzes.dto';
+import { RecentlyPlayedCursorMapper } from '../../mappers/recently-played-cursor.mapper';
 import { UserProfileBundleService } from '../../application/user-profile-bundle.service';
 import { UserProfileBundleResponseDto } from '../../dto/response/user-profile-bundle.dto';
 import { UserSummaryService } from '../../application/user-summary.service';
@@ -90,12 +91,6 @@ export class UserController {
     const result = await this.quizListing.getRecommendedQuizzes(userId, query);
     return this.presenter.getRecommendedQuizzes(result);
   }
-
-  /**
-   * Phase 3 (S-16): the user's recently-played-quizzes list.
-   * Replaces the legacy `useLocalStorage('recently_played_quizzes_v1')`
-   * workaround so the home page can render the section server-side.
-   */
   @Get('me/recently-played-quizzes')
   @ApiAuth()
   @ApiOperation({
@@ -111,25 +106,20 @@ export class UserController {
     @CurrentUser('sub') userId: string,
     @Query() query: ListQuizzesQueryDto,
   ) {
-    const cursor = query.cursor ? this.decodeCursor(query.cursor) : null;
+    let cursor: { playedAt: string; attemptId: string } | null = null;
+    if (query.cursor) {
+      try {
+        cursor = RecentlyPlayedCursorMapper.parse(query.cursor);
+      } catch {
+        cursor = null;
+      }
+    }
     const limit = query.limit ?? 8;
     const result = await this.recentlyPlayedQuizzesService.getRecentlyPlayed(userId, {
       cursor,
       limit,
     });
     return this.presenter.getRecentlyPlayedQuizzes(result);
-  }
-
-  private decodeCursor(cursor: string): { playedAt: string; attemptId: string } | null {
-    try {
-      const parsed = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8'));
-      if (typeof parsed.playedAt === 'string' && typeof parsed.attemptId === 'string') {
-        return parsed;
-      }
-      return null;
-    } catch {
-      return null;
-    }
   }
 
   @Get('me')
@@ -149,30 +139,6 @@ export class UserController {
     return this.presenter.getMe(result);
   }
 
-  /**
-   * Phase 1 (S-1): public username → profile-summary lookup. Resolves
-   * `/profile/[name]` route params into the `userId` other user
-   * endpoints expect.
-   *
-   * Implementation notes:
-   * - `@Public()` because the route is a deliberate, read-only
-   *   identity projection that the frontend profile page hits
-   *   before any auth-aware call can run.
-   * - `@Throttle({ default: { limit: 30, ttl: 60_000 } })` aligns
-   *   with the audit risk note in `IMPLEMENTATION_PLAN.md:152` —
-   *   usernames are easy to enumerate and the route returns
-   *   enough info to enumerate valid accounts, so we cap at
-   *   30 req/min/IP.
-   * - The path is `/users/by-username/:username` rather than the
-   *   colliding `/users/:userId` so the existing UUIDv7 parse-pipe
-   *   for cross-user routes does not need to special-case the
-   *   string-vs-UUID distinction.
-   * - 404 maps to `USER_NOT_FOUND` (handled by `UserNotFoundError`
-   *   in the global exception filter); see `assertProfileVisible`
-   *   for the cross-user 403 contract used by `/users/:userId/...`
-   *   routes (this one intentionally returns 404 instead of 403
-   *   to avoid leaking existence under heavy enumeration pressure).
-   */
   @Get('by-username/:username')
   @Public()
   @Throttle({ default: { limit: 30, ttl: 60_000 } })
@@ -190,18 +156,6 @@ export class UserController {
     return this.presenter.getUserByUsername(result);
   }
 
-  /**
-   * Phase 1 (S-2): composite profile summary for the authenticated
-   * user. The slim identity on `/users/me` stays as the bootstrap
-   * payload (see S-3 — `auth/me` is the JWT-shape identity and
-   * `/users/me` is the slim database shape). Every profile page that
-   * needs more than the slim shape reads from `/users/me/summary`.
-   *
-   * Concurrency: the application service fans out five independent
-   * downstream calls (see `UserApplicationService.getMySummary`).
-   * The route intentionally does not stream or paginate — it is
-   * the one-shot payload every consumer agrees on.
-   */
   @Get('me/summary')
   @ApiAuth()
   @ApiOperation({
@@ -224,12 +178,6 @@ export class UserController {
     return this.presenter.getMySummary(result);
   }
 
-  /**
-   * Phase 4 (S-25): my-profile bundle. Replaces the 8+ sequential
-   * calls the my-profile page used to issue (summary, analytics,
-   * xp history, recent activity, social counts, …) with a single
-   * parallelised fan-out.
-   */
   @Get('me/profile')
   @ApiAuth()
   @ApiOperation({
@@ -390,25 +338,10 @@ export class UserController {
     const result = await this.userApplicationService.updateSettings(userId, payload);
     return this.presenter.updateMeSettings(result);
   }
-
-  // ─── Authenticated, privacy-gated :userId routes ──
-  // Phase 8 (F-25, F-31): these routes all live behind `@ApiAuth()` —
-  // every caller must be authenticated (the global `JwtGuard` enforces
-  // that at the framework level, `@ApiAuth()` documents it in OpenAPI).
-  // They are NOT public in the literal sense; the audit previously
-  // labelled them "Public :userId routes" which was misleading.
-  //
-  // Cross-user reads are also privacy-gated via
-  // `assertProfileVisible` (F-4) and `assertPrivacyFlag` (F-7); the
-  // `/me/*` literal routes above are matched first by Nest's
-  // registration-order routing, so this `:userId` block cannot
-  // accidentally swallow a self-request — there is no shadowing
-  // concern. Order within this block is otherwise immaterial: each
-  // route has a distinct sub-path.
-
   @Get(':userId/quizzes/analytics')
   @ApiUserIdParam()
   @ApiAuth()
+  @Throttle({ default: { limit: 60, ttl: 60_000 } })
   @ApiOperation({
     summary: 'Get creator analytics for a user',
     description:
@@ -423,10 +356,6 @@ export class UserController {
     @Param('userId', new ParseUUIDPipe({ version: '7' })) userId: string,
     @CurrentUser('sub') requesterId: string,
   ) {
-    // Phase 1 (F-1): gate cross-user access. Only the target user themselves
-    // may read their own creator analytics — every other authenticated caller
-    // receives 404, identical to a missing user. This fixes the IDOR reported
-    // in `docs/audits/USER_MODULE_PRODUCTION_READINESS_AUDIT.md` (F-1).
     this.userDomainService.assertCanReadCreatorAnalytics(requesterId, userId);
     const result = await this.quizListing.getMyQuizAnalytics(userId);
     return this.presenter.getUserQuizAnalytics(result);
@@ -435,6 +364,7 @@ export class UserController {
   @Get(':userId/quizzes')
   @ApiUserIdParam()
   @ApiAuth()
+  @Throttle({ default: { limit: 60, ttl: 60_000 } })
   @ApiOperation({
     summary: 'List quizzes created by a user',
     description: 'Returns a cursor-paginated list of quizzes created by the specified user.',
@@ -449,11 +379,6 @@ export class UserController {
     return this.presenter.listUserQuizzes(result);
   }
 
-  /**
-   * Phase 4 (S-26): public-profile bundle. The `:userId/profile`
-   * variant honors the target's `showActivity` / `showStats`
-   * privacy flags (the bundle service filters accordingly).
-   */
   @Get(':userId/profile')
   @Public()
   @ApiOperation({

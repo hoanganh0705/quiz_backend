@@ -1,13 +1,3 @@
-/**
- * Progress Tracking Service
- *
- * Handles tracking progress toward achievements with support for:
- * - Visible progress: User can see exact progress (e.g., 7/10)
- * - Hidden progress: User cannot see progress until partial completion
- * - Conditional progress: Progress visible only after meeting conditions
- * - Incremental milestones: Progress increments toward next milestone
- */
-
 import { Inject, Injectable } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { BadgeType } from '../domain/types/achievement.types';
@@ -18,14 +8,6 @@ import type {
 } from '../infrastructure/repositories/achievement.repository';
 import { BADGE_THRESHOLDS, PROGRESS_MILESTONES } from '../domain/constants/achievement.constants';
 
-/**
- * Visibility levels for badge progress.
- *
- * NOTE: This enum is used internally by `getBadgeProgress()` and `getUserProgress()`.
- * The current public API exposes progress via `getBadgeProgressSnapshot()` which returns
- * `BadgeProgressSnapshot` (without visibility). If visibility should be exposed to clients
- * in the future, update BadgeProgressResponseDto to include this field.
- */
 export enum ProgressVisibility {
   VISIBLE = 'visible',
   HIDDEN = 'hidden',
@@ -54,6 +36,12 @@ export interface BadgeProgressSnapshot {
   target: number;
   percent: number;
 }
+
+const STREAK_BADGE_TARGETS: ReadonlyArray<{ type: string; days: number }> = [
+  { type: BadgeType.STREAK_7, days: 7 },
+  { type: BadgeType.STREAK_30, days: 30 },
+  { type: BadgeType.STREAK_100, days: 100 },
+];
 
 @Injectable()
 export class ProgressTrackingService {
@@ -286,14 +274,19 @@ export class ProgressTrackingService {
       }
     }
 
-    const percentage = target > 0 ? Math.max(0, Math.round(100 - (currentRank / target) * 100)) : 0;
+    const isComplete = currentRank <= target;
+    const percentage = isComplete
+      ? 100
+      : target > 0
+        ? Math.max(0, Math.round(100 - (currentRank / target) * 100))
+        : 0;
 
     return Promise.resolve({
       current: currentRank,
       target,
       percentage,
       lastUpdated: new Date(),
-      isComplete: currentRank <= target,
+      isComplete,
     });
   }
 
@@ -329,9 +322,16 @@ export class ProgressTrackingService {
     }
 
     const metric = typeof config?.metric === 'string' ? config.metric : null;
+    const badge = await this.achievementRepository.getBadgeById(badgeId);
+    const badgeTypeSlug = badge?.slug ?? null;
 
-    if (metric === 'streak_days' || metric === 'current_streak' || metric === 'longest_streak') {
-      return this.inferStreakCurrent(badgeId);
+    if (
+      metric === 'streak_days' ||
+      metric === 'current_streak' ||
+      metric === 'longest_streak' ||
+      (badgeTypeSlug !== null && STREAK_BADGE_TARGETS.some((entry) => entry.type === badgeTypeSlug))
+    ) {
+      return this.inferStreakCurrent(userId, badgeId, badgeTypeSlug);
     }
 
     if (metric === 'current_rank' || metric === 'period_rank' || metric === 'all_time_rank') {
@@ -356,7 +356,7 @@ export class ProgressTrackingService {
   }
 
   private inferBadgeTarget(badgeId: string): number {
-    switch (badgeId) {
+    switch (badgeId as BadgeType) {
       case BadgeType.RANK_1:
         return BADGE_THRESHOLDS.RANK.RANK_1;
       case BadgeType.TOP_10:
@@ -376,9 +376,29 @@ export class ProgressTrackingService {
     }
   }
 
-  private inferStreakCurrent(badgeId: string): number {
-    const target = this.inferBadgeTarget(badgeId);
-    return target === 1 ? 0 : 0;
+  private async inferStreakCurrent(
+    userId: string,
+    _badgeId: string,
+    badgeTypeSlug: string | null,
+  ): Promise<number> {
+    if (badgeTypeSlug === null) {
+      return 0;
+    }
+
+    const targetEntry = STREAK_BADGE_TARGETS.find((entry) => entry.type === badgeTypeSlug);
+    if (!targetEntry) {
+      return 0;
+    }
+
+    const storedProgress = await this.achievementRepository.getBadgeProgress(userId, badgeTypeSlug);
+    const storedDays =
+      this.getNumericValue(storedProgress?.longestStreak) ??
+      this.getNumericValue(storedProgress?.currentStreak);
+    if (storedDays !== null) {
+      return Math.min(storedDays, targetEntry.days);
+    }
+
+    return 0;
   }
 
   private calculatePercent(current: number, target: number): number {

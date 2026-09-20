@@ -1,10 +1,3 @@
-/**
- * Achievement Admin Controller
- *
- * Admin-only endpoints for achievement system management.
- * All endpoints require the ACHIEVEMENT_ADMIN permission.
- */
-
 import {
   Controller,
   Get,
@@ -14,13 +7,17 @@ import {
   HttpCode,
   HttpStatus,
   ParseUUIDPipe,
+  UseGuards,
 } from '@nestjs/common';
 import { ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import { Permissions } from '@/common/authorization/decorators/permissions.decorator';
 import { Permission } from '@/common/authorization/permissions';
+import { JwtGuard } from '@/common/guards/jwt.guard';
 import { ApiForbidden, ApiAuth } from '@/common/swagger/swagger-decorators';
 import { ApiOkResource, ApiOkResourceList } from '@/common/swagger/api-ok';
 import { PaginationQueryDto } from '@/common/dto/pagination-query.dto';
+import { ACHIEVEMENT_THROTTLE_VALUES } from '@/core/config/achievement-throttle.config';
 import { AchievementApplicationService } from '../../application/achievement.application.service';
 import { AchievementPresenter } from '../presenters/achievement.presenter';
 import {
@@ -30,6 +27,7 @@ import {
 
 @ApiTags('achievements')
 @Controller('admin/achievements')
+@UseGuards(JwtGuard)
 @ApiAuth()
 export class AchievementAdminController {
   constructor(
@@ -39,6 +37,7 @@ export class AchievementAdminController {
 
   @Post('reevaluate/:userId')
   @Permissions(Permission.ACHIEVEMENT_ADMIN)
+  @Throttle({ default: ACHIEVEMENT_THROTTLE_VALUES.reevaluateUser })
   @ApiForbidden()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
@@ -58,15 +57,13 @@ export class AchievementAdminController {
 
   @Get('reevaluate/:userId/history')
   @Permissions(Permission.ACHIEVEMENT_ADMIN)
+  @Throttle({ default: ACHIEVEMENT_THROTTLE_VALUES.getUserHistory })
   @ApiForbidden()
   @ApiOperation({
     operationId: 'getUserAchievementHistory',
     summary: 'Get achievement history for a user (admin)',
   })
   @ApiParam({ name: 'userId', format: 'uuid' })
-  // Phase 7 (api-contract audit): the runtime emits an offset-paginated
-  // payload, so the OpenAPI schema must match — `ApiOkResourceList(..., 'offset')`
-  // is the canonical decorator for offset-paginated lists.
   @ApiOkResourceList(AdminAchievementHistoryItemDto, 'offset', {
     description: 'Achievement history returned',
   })

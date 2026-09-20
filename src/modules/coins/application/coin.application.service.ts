@@ -1,24 +1,3 @@
-/**
- * Coin Application Service
- *
- * Phase 4 read-side orchestration:
- *
- *   - `getMyWallet(userId)`        — returns the cached balance + today's
- *                                    daily-cap usage. Fast read for the
- *                                    header pill and the wallet page.
- *   - `listMyTransactions(userId)` — cursor-paginated ledger read.
- *
- * The presenter (`coin.presenter.ts`) wraps these into the canonical
- * `{ data, meta }` envelope. The application service deliberately
- * emits a `{ items, pagination }` shape so the presenter can wrap it
- * uniformly with other paginated endpoints.
- *
- * Writes (tip / flair / suppress / admin adjust) remain 501 stubs in
- * Phase 4 — they are scheduled for a future deliverable per the design
- * doc's phased rollout. The controller keeps the route mounted so the
- * OpenAPI stays stable.
- */
-
 import { Inject, Injectable } from '@nestjs/common';
 import {
   COIN_REPOSITORY_PORT,
@@ -149,13 +128,6 @@ export class CoinApplicationService {
     };
   }
 
-  // ─── Phase 6 (S-coin-spend): spend-side orchestration ─────────────────
-
-  /**
-   * Tip a quiz author. Delegates to `CoinSpendService`; this method
-   * builds the `idempotencyKey` and `metadata` payload and returns a
-   * `{ transactionId, balance, createdAt }` envelope.
-   */
   async tipUser(
     callerUserId: string,
     body: CoinTipRequestDto,

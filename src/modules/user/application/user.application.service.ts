@@ -65,52 +65,17 @@ export class UserApplicationService {
     return this.mapper.toUserMeResponse(row);
   }
 
-  /**
-   * Phase 1 (S-1): public username → profile-summary lookup. Maps
-   * a `UserLookupRow` (DB projection) to a `UserLookupResponseDto`
-   * (wire shape). The endpoint is mounted with `@Public()`, so
-   * privacy flags are intentionally not enforced here — see
-   * `UserDomainService.getUserByUsername` for the rationale.
-   */
   async getUserByUsername(username: string): Promise<UserLookupResponseDto> {
     const row = await this.userDomainService.getUserByUsername(username);
     return this.mapper.toUserLookupResponse(row);
   }
 
-  /**
-   * Phase 1 (S-2 + S-3): composite "profile page" payload for the
-   * authenticated user. Composes the slim identity on `/users/me`
-   * with the level projection (S-5), quiz creator counts (already
-   * available via `QUIZ_LISTING_PORT`), quiz-taken counts (already
-   * in `UserAnalyticsDto.summary`), and social follower/following/
-   * friends counts (`SocialService.getSocialCounts`).
-   *
-   * Concurrency: every dependency is independent, so the five
-   * downstream calls are dispatched in parallel. If any single
-   * dependency fails the whole summary fails — that is intentional:
-   * the page renders a single skeleton until every field resolves,
-   * and a partial response would force the UI to reconcile missing
-   * values that are not actually missing.
-   *
-   * Performance note: `getSocialCounts` is backed by Redis (see
-   * `SocialCacheService.getCountsWithCache`), so it is the cheap
-   * one in this fan-out. The expensive one is `getMyQuizAnalytics`,
-   * which scans `quiz_attempts` aggregated by creator. That cost
-   * is a known limitation documented in
-   * `docs/plans/denormalized-counters-audit.md` — Phase 6 plans
-   * to introduce a counter table; this endpoint inherits the
-   * cost until then.
-   */
   async getMySummary(userId: string, acceptLanguage?: string): Promise<UserSummaryResponseDto> {
     const [me, quizAnalytics, userAnalytics, socialCounts, wallet] = await Promise.all([
       this.userDomainService.getMe(userId),
       this.quizListing.getMyQuizAnalytics(userId),
       this.userDomainService.getUserAnalytics(userId, userId),
       this.socialService.getSocialCounts(userId),
-      // Phase 3 (S-coin): the coin balance is part of the profile
-      // bundle so the header pill reads from the same payload as the
-      // /me summary. A user who has never been credited returns 0
-      // (the wallet row is lazily upserted on the first grant).
       this.coinRepository.getWallet(userId),
     ]);
 
@@ -122,13 +87,6 @@ export class UserApplicationService {
       displayName: me.displayName,
       avatarUrl: this.mapper.resolveAvatarUrl(me.avatarPublicId, me.avatarUrl),
       bio: me.bio,
-      // Phase 1 (S-2): `country`, `countryCode`, and `bgImageUrl` are
-      // declared on the DTO because the frontend already reads them
-      // (see `use-my-profile-page.ts`). The `user_profiles` schema does
-      // not yet have these columns, so they always read as `null`.
-      // Adding the columns later is an additive change — the DTO
-      // contract stays the same and the mapper just starts surfacing
-      // real values.
       country: null,
       countryCode: null,
       bgImageUrl: null,
@@ -140,10 +98,6 @@ export class UserApplicationService {
       nextLevelXP: level.nextLevelXP,
       xpProgressPercent: level.xpProgressPercent,
       levelTitle: level.levelTitle,
-      // Phase 6: locale-aware title. The `Accept-Language` header is
-      // best-effort — when it is missing or unknown, the negotiator
-      // falls back to `en`. The lookup is in pure-function territory
-      // so it does not affect the surrounding fan-out.
       levelTitleLocalised: resolveLevelTitleLabel(level.levelTitle, acceptLanguage),
       currentStreak: me.currentStreak,
       longestStreak: me.longestStreak,
@@ -153,8 +107,6 @@ export class UserApplicationService {
       followers: socialCounts.followerCount,
       following: socialCounts.followingCount,
       friends: socialCounts.friendCount,
-      // Phase 3 (S-coin): the cached balance from `user_wallets`.
-      // Falls back to 0 when no wallet has been created yet.
       coinBalance: wallet?.balance ?? 0,
     };
   }
@@ -186,20 +138,6 @@ export class UserApplicationService {
   }
 
   async updateProfile(userId: string, dto: UpdateMeDto): Promise<UserMeResponseDto> {
-    // Phase 6: the §11 ownership gate. When the client sends a
-    // non-null `avatarPublicId`, it must already be owned by this user
-    // (i.e. there must be a row in `storage_assets` with that
-    // `public_id`, `owner_id = userId`, and `purpose = 'avatar'`).
-    //
-    // We check BEFORE the DB write so the response can be a clean
-    // 403 — once the column has been updated, rolling back is
-    // expensive and ambiguous (the old value is no longer the column
-    // content). `null` is always allowed: it means "clear my avatar"
-    // and the lifecycle service handles the underlying asset.
-    //
-    // The DTO `@Matches` validator (Phase 4) catches malformed shapes
-    // upstream — this gate is the *authoritative* check on the
-    // (publicId, owner, purpose) triple.
     if (dto.avatarPublicId !== undefined && dto.avatarPublicId !== null) {
       const owns = await this.storageOwnership.userOwnsAssetForPurpose({
         publicId: dto.avatarPublicId,
@@ -228,13 +166,11 @@ export class UserApplicationService {
       });
     }
 
-    // Phase 6: lifecycle cleanup. We do this AFTER the DB write so
-    // that a Cloudinary delete failure cannot leave the user's
-    // avatar in a half-updated state. If the lifecycle service throws
-    // (it shouldn't — failures are swallowed internally) we still
-    // return the successful update to the caller; orphan cleanup is
-    // a Phase 8 background job's responsibility.
     const newPublicId = dto.avatarPublicId !== undefined ? dto.avatarPublicId : row.avatarPublicId;
+    // Fail open: the profile update has already succeeded. The avatar
+    // (if any) is auxiliary metadata and the lifecycle service is best
+    // effort — surface failures as a warn log rather than failing the
+    // whole PATCH. See issue `user_profile_update_lifecycle_fail_open`.
     try {
       await this.storageLifecycle.replaceAvatar(userId, newPublicId, (id) =>
         this.userRepository.findAvatarPublicIdByUserId(id),
@@ -251,11 +187,6 @@ export class UserApplicationService {
   }
 
   async updateSettings(userId: string, dto: UpdateMeSettingsDto): Promise<UserMeResponseDto> {
-    // Phase 3 (F-6): the DTO is now two optional sub-objects
-    // (`preferences`, `privacy`). Reject the request if the client
-    // sent neither — the previous whole-object replace semantics
-    // turned an empty body into a successful "no-op", which is
-    // confusing for clients and wasteful for the database.
     if (dto.preferences === undefined && dto.privacy === undefined) {
       throw new BadRequestException(
         'UpdateMeSettings requires at least one of `preferences` or `privacy`',
@@ -269,11 +200,6 @@ export class UserApplicationService {
     return this.mapper.toUserMeResponse(row);
   }
 
-  /**
-   * Phase 4 (F-29): Renamed from `listUserActivity` to match the
-   * `/users/me/activity` route. The underlying domain / repository method
-   * keeps its name (it's an internal boundary).
-   */
   async listMyActivity(
     userId: string,
     query: ListUserActivityQueryDto,
@@ -296,14 +222,6 @@ export class UserApplicationService {
     requesterId: string,
     query: GetMyTournamentsQueryDto,
   ): Promise<MyTournamentsResponseDto> {
-    // Phase 3 (F-12): `userId` and `requesterId` are always the same value
-    // for this endpoint — the controller only calls this method from the
-    // `/users/me/tournaments` route. The cross-user variant lives in
-    // `getPublicTournamentProfile`. The `assertPrivacyFlag` check below
-    // short-circuits for self so the requesterId is functionally
-    // documentation, not enforcement. Kept in the signature for symmetry
-    // with `getMyTournamentHistory` (which is called from both `/me/*`
-    // and `/users/:userId/*`).
     const cursor = query.cursor ? MyTournamentCursorMapper.parse(query.cursor) : null;
 
     const { items, limit, hasNextPage, nextCursor } = await this.userDomainService.getMyTournaments(
@@ -361,14 +279,6 @@ export class UserApplicationService {
     };
   }
 
-  /**
-   * Phase 4 (F-10): public counterpart of `getMyTournamentHistory`,
-   * called from `GET /users/:userId/tournament-history`. Returns a
-   * `PublicTournamentHistoryResponseDto` (privacy-aware) rather than the
-   * me-shaped DTO so OpenAPI can document the privacy-gating behaviour
-   * separately. The wire shape is currently identical to the me
-   * endpoint; the two DTOs may diverge in the future.
-   */
   async getPublicTournamentHistory(
     userId: string,
     requesterId: string,
@@ -458,20 +368,6 @@ export class UserApplicationService {
   }
 }
 
-/**
- * Phase 8 (F-24): shared `toPagination` helper. Each cursor-paginated
- * list endpoint previously inlined the same `{ limit, hasNextPage,
- * nextCursor }` construction with the cursor serializer passed as an
- * arrow function — five copies of the same template. The helper
- * collapses that into a single call site. `serialize` is generic
- * over the cursor payload type so each mapper keeps its own type.
- *
- * Module-level (not a class method) so callers do not need `this`,
- * and so the `@typescript-eslint/unbound-method` rule does not flag
- * passing the cursor mappers' static `serialize` references as the
- * callback. The mapper `serialize` methods are explicitly annotated
- * `this: void` so the rule recognises them as pure functions.
- */
 const toPagination = <Cursor>(
   limit: number,
   hasNextPage: boolean,
@@ -487,18 +383,6 @@ const toPagination = <Cursor>(
   nextCursor: nextCursor ? serialize(nextCursor) : null,
 });
 
-/**
- * Phase 6 (F-27): `user_activity_events.metadata` is JSONB and is not
- * validated at write time, so a row may contain `null`, an array,
- * a string, or a scalar — anything the JSONB column accepted. The
- * DTO contract (`metadata: Record<string, unknown>`) requires an
- * object. The audit recommends "log and continue" because the
- * activity timeline is best-effort and individual corrupted rows
- * should not fail the whole page. We log a warning with the
- * `eventId` so corrupted rows can be identified in monitoring, and
- * map the offending row to `metadata: null`. The DTO field is now
- * nullable (see `UserActivityItemDto.metadata`).
- */
 const toUserActivityItem = (
   logger: PinoLogger,
   item: UserActivityRow,

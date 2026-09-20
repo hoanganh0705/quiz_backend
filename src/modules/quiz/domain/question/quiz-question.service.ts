@@ -34,7 +34,10 @@ export class QuizQuestionService {
 
     for (const option of options) {
       if (positions.has(option.position)) {
-        throw new QuizValidationError('Duplicate answer option positions are not allowed');
+        throw new QuizValidationError(
+          'Duplicate answer option positions are not allowed',
+          'QUIZ_QUESTION_OPTION_DUPLICATE_POSITION',
+        );
       }
 
       positions.add(option.position);
@@ -45,7 +48,10 @@ export class QuizQuestionService {
     }
 
     if (correctCount !== 1) {
-      throw new QuizValidationError(QUIZ_QUESTION_CORRECT_OPTION_MESSAGE);
+      throw new QuizValidationError(
+        QUIZ_QUESTION_CORRECT_OPTION_MESSAGE,
+        'QUIZ_QUESTION_OPTION_INCORRECT_COUNT',
+      );
     }
   }
 
@@ -54,7 +60,10 @@ export class QuizQuestionService {
 
     for (const question of questions) {
       if (positions.has(question.position)) {
-        throw new QuizValidationError('Duplicate question positions are not allowed');
+        throw new QuizValidationError(
+          'Duplicate question positions are not allowed',
+          'QUIZ_QUESTION_DUPLICATE_POSITION',
+        );
       }
 
       positions.add(question.position);
@@ -73,12 +82,11 @@ export class QuizQuestionService {
     }
 
     if (version.quizId !== quizId) {
-      throw new QuizValidationError('Invalid quiz version');
+      throw new QuizValidationError('Invalid quiz version', 'QUIZ_INVALID_QUIZ_VERSION');
     }
 
     const isOwner = QuizPolicy.isOwner(version.quizCreatorId, user);
 
-    // Throws QuizValidationError if not draft, QuizForbiddenError if no permission
     QuizVersionPolicy.assertCanAddQuestions(version.status, isOwner, user);
   }
 
@@ -132,19 +140,6 @@ export class QuizQuestionService {
     return rows;
   }
 
-  /**
-   * Phase 5 (S-28): bulk-create with per-row outcomes.
-   *
-   * Iterates over each requested question and attempts to insert it
-   * individually. A row-level failure (validation, conflict, etc.) is
-   * captured as a per-row outcome and the loop continues, so one bad
-   * row does not poison the rest of the batch. The caller receives a
-   * `BulkQuizQuestionsResponseDto`-shaped record (questions + results).
-   *
-   * Authorization is checked once up front via
-   * `assertCanCreateQuestions` (caller has edit rights + version is
-   * draft). Per-row authorization is not re-checked.
-   */
   async createQuizQuestions(
     quizId: string,
     quizVersionId: string,
@@ -162,9 +157,6 @@ export class QuizQuestionService {
   }> {
     await this.assertCanCreateQuestions(quizId, quizVersionId, user);
 
-    // Pre-flight: positions must be unique within the batch — failing
-    // fast here gives the editor a clearer "your batch has dupes" error
-    // than running through and tagging N rows individually.
     this.assertUniqueQuestionPositions(command.questions);
 
     const nowIso = new Date().toISOString();
@@ -180,8 +172,6 @@ export class QuizQuestionService {
     for (let i = 0; i < command.questions.length; i++) {
       const question = command.questions[i];
       try {
-        // Per-row validation; a thrown error here is caught below and
-        // surfaced as a per-row failure without breaking the loop.
         const normalizedAnswerOptions = question.answerOptions.map((option) => ({
           ...option,
           value: option.value.trim(),

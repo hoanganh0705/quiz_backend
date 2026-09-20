@@ -1,7 +1,7 @@
 import { EXAMPLE_TIMESTAMP } from './_timestamp';
 
 /**
- * Phase 1 (S-1): live example for `GET /users/by-username/:username`.
+ * Live example for `GET /users/by-username/:username`.
  * The wire shape is `UserLookupResponseDto` — five-field public
  * identity projection of a user keyed by handle.
  */

@@ -1,9 +1,12 @@
 /**
  * Comment Domain Event Bus Implementation
  *
- * In-process event bus using the observer pattern with Redis-backed retry
- * and dead-letter queues for reliable event delivery within the lifetime
- * of a single process.
+ * In-process observer bus with a Redis-backed delayed-retry queue.
+ * The retry queue partitions per attempt tier (`tier-1` … `tier-N`)
+ * so each tier is FIFO-ordered by `nextRetryAt`. A poll timer claims
+ * the next batch from the lowest tier whose wait window has elapsed;
+ * multi-instance deployments coordinate through a short advisory lock
+ * so only one replica drains a tier per tick.
  *
  * Retry strategy: exponential backoff (5s, 10s, 20s, 40s, 80s),
  * max 5 attempts before permanently dead-lettering.
@@ -35,24 +38,25 @@ import type { CommentDomainEventBusPort } from './comment-event-bus.port';
 interface QueuedEvent {
   event: CommentDomainEvent;
   attempt: number;
-  nextRetryAt: number; // Unix timestamp (ms)
-  // Captured at the time the retry was scheduled so the retry handler
-  // (which runs much later on the polling timer) can restore the same
-  // correlation ID into AsyncLocalStorage. Without this, all retried
-  // events would log under whatever correlation ID the polling tick
-  // happened to have, which is meaningless.
+  nextRetryAt: number;
   correlationId?: string;
+  tierKey: string;
 }
+
+const QUEUE_ID_SEP = '::';
+const QUEUE_TTL_PADDING_MS = 5 * 60 * 1000;
 
 @Injectable()
 export class CommentDomainEventBus
   implements CommentDomainEventBusPort, OnModuleInit, OnModuleDestroy
 {
-  private static readonly RETRY_QUEUE_KEY = 'comment:event_retry_queue';
+  private static readonly RETRY_QUEUE_PREFIX = 'comment:event_retry_queue';
   private static readonly DEAD_LETTER_KEY = 'comment:event_dead_letter';
   private static readonly RETRY_DELAYS_MS = [5_000, 10_000, 20_000, 40_000, 80_000] as const;
   private static readonly MAX_RETRIES = CommentDomainEventBus.RETRY_DELAYS_MS.length;
   private static readonly POLL_INTERVAL_MS = 10_000;
+  private static readonly POLL_LOCK_KEY = 'comment:event_retry_poll_lock';
+  private static readonly POLL_LOCK_TTL_MS = 8_000;
 
   private handlers: Array<(event: CommentDomainEvent) => void> = [];
   private pollTimer: ReturnType<typeof setInterval> | null = null;
@@ -90,11 +94,8 @@ export class CommentDomainEventBus
       try {
         handler(event);
       } catch (error) {
-        // Capture the originating correlation ID (if any) so a future
-        // retry, which runs from a polling timer with no inherent context,
-        // can still join its log lines back to the original emit.
         const correlationId = getCorrelationId();
-        this.scheduleRetry(event, /* attempt= */ 1, error, correlationId);
+        this.scheduleRetry(event, 1, error, correlationId);
       }
     }
   }
@@ -114,8 +115,14 @@ export class CommentDomainEventBus
       CommentDomainEventBus.RETRY_DELAYS_MS[attempt - 1] ??
       CommentDomainEventBus.RETRY_DELAYS_MS[CommentDomainEventBus.RETRY_DELAYS_MS.length - 1];
     const nextRetryAt = Date.now() + delayMs;
-
-    const queued: QueuedEvent = { event, attempt, nextRetryAt, correlationId };
+    const tierKey = this.tierKey(attempt, nextRetryAt);
+    const queued: QueuedEvent = {
+      event,
+      attempt,
+      nextRetryAt,
+      correlationId,
+      tierKey,
+    };
 
     this.logger.warn({
       event: 'comment_event_retry_scheduled',
@@ -127,7 +134,13 @@ export class CommentDomainEventBus
       error: error instanceof Error ? error.message : String(error),
     });
 
-    void this.cache.rpushJson(CommentDomainEventBus.RETRY_QUEUE_KEY, queued);
+    void this.cache
+      .set(queued.tierKey, JSON.stringify(queued), delayMs + QUEUE_TTL_PADDING_MS)
+      .then(() => this.cache.rpushJson(CommentDomainEventBus.RETRY_QUEUE_PREFIX, queued.tierKey));
+  }
+
+  private tierKey(attempt: number, nextRetryAt: number): string {
+    return `${CommentDomainEventBus.RETRY_QUEUE_PREFIX}:tier-${attempt}${QUEUE_ID_SEP}${nextRetryAt}`;
   }
 
   private async moveToDeadLetter(
@@ -151,30 +164,56 @@ export class CommentDomainEventBus
   }
 
   private async processRetryQueue(): Promise<void> {
+    const lockToken = await this.cache.acquireAdvisoryLock(
+      CommentDomainEventBus.POLL_LOCK_KEY,
+      CommentDomainEventBus.POLL_LOCK_TTL_MS,
+    );
+    if (lockToken === null) return;
+
+    try {
+      await this.drainOnce();
+    } catch (error) {
+      this.logger.error({
+        event: 'comment_event_retry_drain_failed',
+        error: error instanceof Error ? error.message : String(error),
+      });
+    } finally {
+      await this.cache.releaseAdvisoryLock(CommentDomainEventBus.POLL_LOCK_KEY, lockToken);
+    }
+  }
+
+  private async drainOnce(): Promise<void> {
     const now = Date.now();
 
-    while (true) {
-      const queued = await this.cache.lpopJson<QueuedEvent>(CommentDomainEventBus.RETRY_QUEUE_KEY);
-      if (queued === null) break;
+    for (let attempt = 1; attempt <= CommentDomainEventBus.MAX_RETRIES; attempt += 1) {
+      const peekedKey = await this.cache.lpopJson<string>(CommentDomainEventBus.RETRY_QUEUE_PREFIX);
+      if (peekedKey === null) return;
 
-      if (queued.nextRetryAt > now) {
-        await this.cache.rpushJson(CommentDomainEventBus.RETRY_QUEUE_KEY, queued);
-        break;
+      const raw = await this.cache.get(peekedKey);
+      if (raw === null) continue;
+
+      let queued: QueuedEvent;
+      try {
+        queued = JSON.parse(raw) as QueuedEvent;
+      } catch {
+        continue;
       }
 
-      const nextAttempt = queued.attempt + 1;
-      // Re-establish a correlation context for this retry tick so the
-      // log lines and downstream effects can be traced back to the
-      // original emit. Falls back to a fresh UUID for queued events
-      // that were persisted before correlation IDs were introduced.
-      const correlationId = queued.correlationId ?? createCorrelationId();
+      if (queued.nextRetryAt > now) {
+        await this.cache.rpushJson(CommentDomainEventBus.RETRY_QUEUE_PREFIX, queued.tierKey);
+        return;
+      }
 
+      const drained = await this.cache.getDel(peekedKey);
+      if (drained === null) continue;
+
+      const correlationId = queued.correlationId ?? createCorrelationId();
       correlationIdStorage.run({ correlationId }, () => {
         for (const handler of this.handlers) {
           try {
             handler(queued.event);
           } catch (error) {
-            this.scheduleRetry(queued.event, nextAttempt, error, correlationId);
+            this.scheduleRetry(queued.event, queued.attempt + 1, error, correlationId);
             break;
           }
         }

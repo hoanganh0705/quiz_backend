@@ -189,19 +189,6 @@ export class UploadApplicationService {
     return uploadResult;
   }
 
-  /**
-   * Phase 7 #1 — issue a Cloudinary signed-upload envelope so the
-   * client can POST the file directly without proxying through the
-   * application server. The ownership bind to `storage_assets` is
-   * deferred to a follow-up call (the client must POST `file` to
-   * `uploadUrl` and then call `POST /uploads/:publicId/bind` to attach
-   * the resulting `publicId` to their account).
-   *
-   * The default expiry is 10 minutes (`600 s`), clamped to
-   * [60 s, 3600 s] by the adapter. We pick 10 minutes to give mobile
-   * clients room on a flaky network while still keeping the signed
-   * window narrow enough that a leaked signature is short-lived.
-   */
   async signUpload(input: {
     ownerId: string;
     purpose: UploadPurposeLiteral;
@@ -215,31 +202,6 @@ export class UploadApplicationService {
     });
   }
 
-  /**
-   * Phase 3.1 — bind a previously uploaded asset to the authenticated
-   * user. The asset is assumed to already exist in Cloudinary (the
-   * client uploaded it directly via `signUpload` → `uploadUrl`); we
-   * only need to persist the `(publicId, ownerId, purpose)` ownership
-   * row in `storage_assets`.
-   *
-   * Two preconditions, both enforced here so the controller stays
-   * thin:
-   *
-   *   1. The asset row exists. A missing row means the client either
-   *      forged the publicId or never completed the upload — we
-   *      return `NotFoundException` (404) rather than bind a phantom
-   *      id and leave Cloudinary holding the bytes.
-   *   2. The asset row is not already bound to a different owner.
-   *      `storageAssets.insert` enforces UNIQUE on `public_id`, so
-   *      a collision surfaces as `StorageOwnershipBindFailedError`
-   *      (500). The client must treat that as a hard failure — they
-   *      do not own that id.
-   *
-   * The §11 ownership rule is intentionally NOT enforced here. This
-   * endpoint exists specifically to establish the rule for the first
-   * time; the §11 gate (`userOwnsAssetForPurpose`) is what later
-   * callers use to enforce it on writes.
-   */
   async bindAsset(input: {
     ownerId: string;
     publicId: string;

@@ -70,16 +70,6 @@ export class UpdateMeDto {
   })
   @MaxLength(PROFILE_AVATAR_URL_MAX_LENGTH)
   avatarUrl?: string | null;
-
-  /**
-   * Phase 4 (Cloudinary migration): the Cloudinary `public_id` for the
-   * avatar. Phase 6 wires this into the application service; until
-   * then the value is accepted by the DTO and the shape is enforced
-   * here so the wire contract is locked in.
-   *
-   * Ownership is enforced server-side by the §11 rule — a malformed
-   * value is rejected with 400 ASSET_PUBLIC_ID_INVALID.
-   */
   @ApiPropertyOptional({
     description:
       'Cloudinary public_id returned by `POST /api/v1/uploads`. ' +

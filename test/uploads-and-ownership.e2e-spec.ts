@@ -1,36 +1,4 @@
 /// <reference types="jest" />
-/**
- * `POST /api/v1/uploads` + §11 ownership gate — Phase 8 e2e coverage.
- *
- * Goals (excerpt from `docs/architecture-reviews/cloudinary-migration-plan.md`
- * §14):
- *
- *   - Exercise the real `UploadController`, `UploadApplicationService`,
- *     `StorageApplicationService`, and `FakeStorageAdapter` stack.
- *   - Verify the integration matrix:
- *       * happy path → 201, shape correct, ownership binding inserted
- *   - Verify the §11 ownership gate end-to-end:
- *       * cross-user publicId theft → 403 ASSET_NOT_OWNED, no write
- *       * cross-purpose reuse → 403 ASSET_NOT_OWNED
- *       * forged publicId → 403 ASSET_NOT_OWNED
- *       * owner with own publicId → 200
- *       * null publicId → 200 (clear)
- *
- * Infrastructure-free: the test uses the in-memory `FakeStorageAdapter`
- * and an in-memory `StorageAssetsRepository`, so no Postgres / Redis /
- * Cloudinary account is required.
- *
- * Authentication: a custom `TestAuthGuard` reads the user from
- * `X-Test-User` + `X-Test-Role` headers so the JWT plumbing is not
- * pulled in. This is functionally equivalent to "user is authenticated
- * with subject X" — the §11 gate only depends on the subject.
- *
- * The invalid-payload cases (oversize, wrong MIME, invalid purpose)
- * are covered exhaustively in `modules/upload/application/upload.application.service.spec.ts`
- * at the unit tier. This file deliberately focuses on the
- * end-to-end "happy path + ownership gate" surface so it stays
- * readable.
- */
 import {
   Controller,
   Patch,
@@ -122,10 +90,10 @@ class OwnershipFixtureController {
   constructor(private readonly repo: InMemoryStorageAssetsRepository) {}
 
   @Patch()
-  async patch(
+  patch(
     @CurrentUser() user: JwtPayload,
     @Body() body: { avatarPublicId: string | null },
-  ): Promise<{ avatarPublicId: string | null }> {
+  ): { avatarPublicId: string | null } {
     if (body.avatarPublicId !== null && body.avatarPublicId !== undefined) {
       const owns = this.repo.rows.some(
         (r) =>
@@ -143,7 +111,7 @@ class OwnershipFixtureController {
   }
 }
 
-describe('§11 ownership gate (Phase 8 §14 security)', () => {
+describe('§11 ownership gate', () => {
   let app: INestApplication<App>;
   let repo: InMemoryStorageAssetsRepository;
   const OWNER_A = '0190b1c2-7f3a-7aaa-bbbb-aaaaaaaaaaaa';

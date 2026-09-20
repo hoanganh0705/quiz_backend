@@ -62,10 +62,6 @@ export class NotificationRepository implements NotificationRepositoryPort {
     return this.mapToNotification(notification);
   }
 
-  /**
-   * Check if a notification with the given idempotency key already exists.
-   * Returns the existing notification if found, null otherwise.
-   */
   async findByIdempotencyKey(
     idempotencyKey: string,
     userId: string,
@@ -85,7 +81,7 @@ export class NotificationRepository implements NotificationRepositoryPort {
   }
 
   async findById(id: string): Promise<DomainNotification | null> {
-    const [notification] = await this.db
+    const [notification] = await this.getDb()
       .select()
       .from(notifications)
       .where(and(eq(notifications.notificationId, id), isNull(notifications.deletedAt)));
@@ -142,7 +138,7 @@ export class NotificationRepository implements NotificationRepositoryPort {
   }
 
   async countUnread(userId: string): Promise<number> {
-    const [result] = await this.db
+    const [result] = await this.getDb()
       .select({ count: sql<number>`count(*)::int` })
       .from(notifications)
       .where(
@@ -154,6 +150,40 @@ export class NotificationRepository implements NotificationRepositoryPort {
       );
 
     return Number(result?.count ?? 0);
+  }
+
+  async listUnreadIds(userId: string, limit = 1000): Promise<string[]> {
+    const rows = await this.db
+      .select({ notificationId: notifications.notificationId })
+      .from(notifications)
+      .where(
+        and(
+          eq(notifications.userId, userId),
+          eq(notifications.isRead, false),
+          isNull(notifications.deletedAt),
+        ),
+      )
+      .orderBy(desc(notifications.createdAt))
+      .limit(limit);
+
+    return rows.map((row) => row.notificationId);
+  }
+
+  async listReadIds(userId: string, limit = 1000): Promise<string[]> {
+    const rows = await this.db
+      .select({ notificationId: notifications.notificationId })
+      .from(notifications)
+      .where(
+        and(
+          eq(notifications.userId, userId),
+          eq(notifications.isRead, true),
+          isNull(notifications.deletedAt),
+        ),
+      )
+      .orderBy(desc(notifications.createdAt))
+      .limit(limit);
+
+    return rows.map((row) => row.notificationId);
   }
 
   async markAsRead(notificationId: string, userId: string): Promise<void> {
@@ -184,7 +214,7 @@ export class NotificationRepository implements NotificationRepositoryPort {
 
   async markAllAsRead(userId: string): Promise<number> {
     const now = new Date().toISOString();
-    const result = await this.getDb()
+    const result = (await this.getDb()
       .update(notifications)
       .set({ isRead: true, readAt: now })
       .where(
@@ -193,14 +223,13 @@ export class NotificationRepository implements NotificationRepositoryPort {
           eq(notifications.isRead, false),
           isNull(notifications.deletedAt),
         ),
-      );
-
-    return Number(result.rowCount ?? 0);
+      )) as { rowCount?: unknown };
+    return typeof result.rowCount === 'number' ? result.rowCount : 0;
   }
 
   async deleteReadNotifications(userId: string): Promise<number> {
     const deletedAt = new Date().toISOString();
-    const result = await this.getDb()
+    const result = (await this.getDb()
       .update(notifications)
       .set({ deletedAt })
       .where(
@@ -209,29 +238,14 @@ export class NotificationRepository implements NotificationRepositoryPort {
           eq(notifications.isRead, true),
           isNull(notifications.deletedAt),
         ),
-      );
-
-    return Number(result.rowCount ?? 0);
+      )) as { rowCount?: unknown };
+    return typeof result.rowCount === 'number' ? result.rowCount : 0;
   }
 
-  /**
-   * Alias for softDelete to satisfy the repository interface contract.
-   * All deletes in this module are soft deletes; hard deletes only occur
-   * via `deleteExpired()` for records past their expiresAt.
-   *
-   * Phase 6 (rev6.1): added this clarifying comment. The delegation
-   * from `delete()` to `softDelete()` is intentional — the interface
-   * declares `delete()` but the implementation always performs a soft delete.
-   */
   async delete(notificationId: string, userId: string): Promise<void> {
     await this.softDelete(notificationId, userId);
   }
 
-  /**
-   * Performs a soft delete by setting `deletedAt` to the current timestamp.
-   * The record remains in the database but is excluded from normal queries
-   * via the `isNull(deletedAt)` filter applied in all read operations.
-   */
   async softDelete(notificationId: string, userId: string): Promise<void> {
     await this.getDb()
       .update(notifications)
@@ -247,11 +261,14 @@ export class NotificationRepository implements NotificationRepositoryPort {
 
   async deleteExpired(): Promise<number> {
     const now = new Date().toISOString();
-    const result = await this.db
+    const result = (await this.db
       .delete(notifications)
-      .where(sql`${notifications.expiresAt} IS NOT NULL AND ${notifications.expiresAt} < ${now}`);
-
-    return Number(result.rowCount ?? 0);
+      .where(
+        sql`${notifications.expiresAt} IS NOT NULL AND ${notifications.expiresAt} < ${now}`,
+      )) as {
+      rowCount?: unknown;
+    };
+    return typeof result.rowCount === 'number' ? result.rowCount : 0;
   }
 
   async getAnalytics(): Promise<{
@@ -283,10 +300,6 @@ export class NotificationRepository implements NotificationRepositoryPort {
     return result;
   }
 
-  /**
-   * Invalidate the analytics cache.
-   * Call this after significant notification activity.
-   */
   async invalidateAnalyticsCache(): Promise<void> {
     if (this.cache) {
       await this.cache.del(ANALYTICS_CACHE_KEY);

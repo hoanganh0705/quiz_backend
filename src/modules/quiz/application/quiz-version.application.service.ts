@@ -59,8 +59,6 @@ export class QuizVersionApplicationService {
     };
     const result = await this.quizVersionService.listQuizVersions(quizId, user, query);
 
-    // Phase 2 (S-8): batch-fetch question counts so each item
-    // exposes its `questionCount` without per-row aggregation.
     const versionIds = result.items.map((row) => row.quizVersionId);
     const counts = await this.quizRepository.getQuestionCountsForVersionIds(versionIds);
 

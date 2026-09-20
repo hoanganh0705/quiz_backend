@@ -30,17 +30,16 @@ import {
   type ExternalEventBusProducerPort,
 } from '@/common/events';
 import { createCorrelationId } from '@/common/interceptors/correlation-id';
+import {
+  SKIPPED_ANSWER_SENTINEL,
+  type DailyChallengeDifficulty,
+  type DailyChallengeHistoryItem,
+  type DailyChallengePeriod,
+} from '../domain/types/daily-challenge.types';
 
-/**
- * Phase 3 (S-14): orchestrates the four daily-challenge endpoints
- * (`today`, `history`, `leaderboard`, `answer`).
- *
- * The application service is the only place that reads the
- * repository row and renders the public DTO. The controller +
- * presenter layers above stay thin — the application service
- * owns the `status: pending | completed | expired` discriminator
- * and the cursor decode.
- */
+const HISTORY_DEFAULT_LIMIT = 5;
+const LEADERBOARD_LIMIT = 50;
+
 @Injectable()
 export class DailyChallengeApplicationService {
   constructor(
@@ -53,26 +52,17 @@ export class DailyChallengeApplicationService {
     private readonly externalEventBus: ExternalEventBusProducerPort,
   ) {}
 
-  /**
-   * `GET /daily-challenge/today`. Returns the day's snapshot
-   * for the viewer; status is computed from the user's attempt
-   * row (if any) and the current time.
-   */
   async getToday(userId: string | null): Promise<DailyChallengeResponseDto> {
     const today = this.todayUtcDate();
     const nowIso = new Date().toISOString();
 
     const row = await this.repository.findByDate(today);
     if (!row) {
-      // Render an "expired" snapshot using the most-recent
-      // challenge whose window has closed. This handles the
-      // post-rotation window where the cron has not yet inserted
-      // the next day.
       const expired = await this.repository.findMostRecentExpired(nowIso);
       if (expired) {
         return this.buildResponseDto(expired, userId, 'expired');
       }
-      throw new DailyChallengeNotFoundError('No active daily challenge for today.');
+      throw new DailyChallengeNotFoundError();
     }
 
     const attempt = userId ? await this.repository.findAttempt(row.challengeId, userId) : null;
@@ -81,33 +71,25 @@ export class DailyChallengeApplicationService {
     return this.buildResponseDto(row, userId, status);
   }
 
-  /**
-   * `GET /daily-challenge/history`. Cursor-paginated.
-   *
-   * `userId` is nullable: the route is `@Public()` so the global
-   * `JwtGuard` skips setting `request.user`, and the controller reaches
-   * us with `user?.sub ?? null`. When `userId` is `null` we return an
-   * empty page — there is no history to show for an anonymous viewer.
-   */
   async getHistory(
     userId: string | null,
     query: DailyChallengeHistoryQueryDto,
   ): Promise<DailyChallengeHistoryResponseDto> {
+    const limit = query.limit ?? HISTORY_DEFAULT_LIMIT;
+
     if (userId === null) {
       return {
         items: [],
         pagination: {
           kind: 'cursor' as const,
-          limit: query.limit ?? 5,
+          limit,
           hasNextPage: false,
           nextCursor: null,
         },
       };
     }
 
-    const limit = query.limit ?? 5;
     const cursor = query.cursor ? decodeCursor(query.cursor) : null;
-
     const result = await this.repository.listUserHistory({
       userId,
       cursor,
@@ -121,15 +103,7 @@ export class DailyChallengeApplicationService {
         : null;
 
     return {
-      items: result.items.map((row) => ({
-        date: row.challengeDate,
-        quizId: row.quizId,
-        quizTitle: row.quizTitle ?? 'Untitled quiz',
-        slug: row.quizSlug ?? '',
-        difficulty: 'medium' as const,
-        score: 0,
-        rank: 0,
-      })),
+      items: result.items.map((row) => this.toHistoryItem(row)),
       pagination: {
         kind: 'cursor' as const,
         limit,
@@ -139,14 +113,11 @@ export class DailyChallengeApplicationService {
     };
   }
 
-  /**
-   * `GET /daily-challenge/leaderboard`.
-   */
   async getLeaderboard(
     query: DailyChallengeLeaderboardQueryDto,
   ): Promise<DailyChallengeLeaderboardResponseDto> {
-    const period = query.period ?? 'daily';
-    const rows = await this.repository.getLeaderboard({ period, limit: 50 });
+    const period = (query.period ?? 'daily') as DailyChallengePeriod;
+    const rows = await this.repository.getLeaderboard({ period, limit: LEADERBOARD_LIMIT });
 
     return {
       period,
@@ -161,16 +132,6 @@ export class DailyChallengeApplicationService {
     };
   }
 
-  /**
-   * `GET /daily-challenge/history/categories`.
-   *
-   * Phase 4 (F-2): per-category rollup of the viewer's completed
-   * daily-challenge attempts. Returns an empty `items` array when
-   * the viewer has not yet completed any attempt (or all attempts
-   * were against uncategorised quizzes). The route is `@Public()`
-   * so anonymous viewers get the empty array — there is no
-   * viewer-scoped data without `userId`.
-   */
   async getCategoryBreakdown(
     userId: string | null,
   ): Promise<DailyChallengeCategoryBreakdownResponseDto> {
@@ -184,19 +145,11 @@ export class DailyChallengeApplicationService {
         categoryName: row.categoryName,
         categorySlug: row.categorySlug,
         attemptCount: row.attemptCount,
-        // Round to 2 decimal places so the JSON payload is stable
-        // and the frontend can render it without further math.
         averageScorePercent: Math.round(row.averageScorePercent * 100) / 100,
       })),
     };
   }
 
-  /**
-   * `POST /daily-challenge/answer`. The endpoint is stateful —
-   * the server tracks the in-flight attempt and only resolves
-   * `correct` against the question at `questionIndex`. Out-of-sync
-   * submissions return 409.
-   */
   async submitAnswer(
     userId: string,
     payload: DailyChallengeAnswerDto,
@@ -204,131 +157,157 @@ export class DailyChallengeApplicationService {
     const today = this.todayUtcDate();
     const row = await this.repository.findByDate(today);
     if (!row) {
-      throw new DailyChallengeNotFoundError('No active daily challenge for today.');
+      throw new DailyChallengeNotFoundError();
     }
 
-    const attempt = await this.repository.findAttempt(row.challengeId, userId);
-    const nextIndex = attempt?.nextQuestionIndex ?? 0;
+    return this.repository.runInTransaction(async (_tx, helpers) => {
+      const attempt = await helpers.lockAttemptForUpdate({
+        challengeId: row.challengeId,
+        userId,
+      });
+      const nextIndex = attempt?.nextQuestionIndex ?? 0;
 
-    if (payload.questionIndex !== nextIndex) {
-      throw new DailyChallengeConflictError(
-        'Daily challenge attempt is out of sync with the next question index.',
-      );
-    }
-
-    // Pull the version's questions (the question repo joins
-    // options in one round-trip). We select exactly one
-    // question at `nextIndex` from the list.
-    const allQuestions = await this.quizQuestionRepository.getQuestionsByVersionId(
-      row.quizVersionId,
-    );
-    const totalQuestions = allQuestions.length;
-    const currentQuestion = allQuestions.find((q) => q.position === nextIndex);
-
-    if (!currentQuestion) {
-      throw new DailyChallengeNotFoundError(
-        'Daily challenge question at the requested index could not be located.',
-      );
-    }
-
-    const answer = payload.selectedOptionId ?? null;
-    const correct =
-      answer !== null &&
-      currentQuestion.optionId === answer &&
-      currentQuestion.optionIsCorrect === true;
-
-    const nextAnswers: string[] = [...(attempt?.answers ?? [])];
-    // Pad if necessary so the positional log stays consistent.
-    while (nextAnswers.length <= nextIndex) nextAnswers.push('__skipped__');
-    nextAnswers[nextIndex] = answer ?? '__skipped__';
-    const nextQuestionIndex = nextIndex + 1;
-    const completed = nextQuestionIndex >= totalQuestions;
-
-    let scorePercent: string | null = null;
-    if (completed) {
-      const correctCount = this.countCorrectAnswers(allQuestions, nextAnswers);
-      scorePercent =
-        totalQuestions > 0 ? ((correctCount / totalQuestions) * 100).toFixed(2) : '0.00';
-    }
-
-    await this.repository.upsertAttempt({
-      challengeId: row.challengeId,
-      userId,
-      answers: nextAnswers,
-      nextQuestionIndex: completed ? nextQuestionIndex : nextQuestionIndex,
-      totalQuestions,
-      scorePercent,
-      completedAt: completed ? new Date().toISOString() : null,
-      nowIso: new Date().toISOString(),
-    });
-
-    // Phase 3: emit the `DailyChallengeCompletedEvent` when the user
-    // reaches the terminal question index. Listeners:
-    //   - `DailyChallengeCoinListenerAdapter` grants the
-    //     `DAILY_CHALLENGE_REWARD` per §6 of the design doc.
-    //   - future activity-feed projector (Phase 5).
-    //
-    // The XP grant is also wired in the same change (per design doc §3
-    // "today the daily-challenge module does not emit an XP event on
-    // completion") — the existing `external.xp.earned` producer is
-    // already capable, only the call site was missing.
-    if (completed && scorePercent !== null) {
-      const completedAt = new Date().toISOString();
-      this.eventBus.emitCompleted(
-        new DailyChallengeCompletedEvent(
-          row.challengeId,
-          userId,
-          scorePercent,
-          this.countCorrectAnswers(allQuestions, nextAnswers),
-          totalQuestions,
-          completedAt,
-          row.rewardXp,
-        ),
-      );
-
-      if (row.rewardXp > 0) {
-        await this.externalEventBus.publishXpEarned({
-          eventType: 'external.xp.earned',
-          userId,
-          amount: row.rewardXp,
-          source: 'bonus',
-          timestamp: new Date(completedAt),
-          correlationId: createCorrelationId(),
-          idempotencyKey: `xp:${userId}:daily_challenge:${row.challengeId}`,
-        });
+      if (payload.questionIndex !== nextIndex) {
+        throw new DailyChallengeConflictError();
       }
-    }
 
+      const allQuestions = await this.quizQuestionRepository.getQuestionsByVersionId(
+        row.quizVersionId,
+      );
+      const totalQuestions = allQuestions.length;
+      const currentQuestion = allQuestions.find((q) => q.position === nextIndex);
+
+      if (!currentQuestion) {
+        throw new DailyChallengeNotFoundError(
+          'Daily challenge question at the requested index could not be located.',
+        );
+      }
+
+      const answer = payload.selectedOptionId ?? null;
+      const correct =
+        answer !== null &&
+        currentQuestion.optionId === answer &&
+        currentQuestion.optionIsCorrect === true;
+
+      const nextAnswers = this.buildNextAnswers(attempt?.answers ?? [], nextIndex, answer);
+      const nextQuestionIndex = nextIndex + 1;
+      const completed = nextQuestionIndex >= totalQuestions;
+
+      const scorePercent = completed
+        ? totalQuestions > 0
+          ? this.computeScorePercent(allQuestions, nextAnswers).toFixed(2)
+          : '0.00'
+        : null;
+
+      const nowIso = new Date().toISOString();
+
+      await helpers.upsertAttempt({
+        challengeId: row.challengeId,
+        userId,
+        answers: nextAnswers,
+        nextQuestionIndex,
+        totalQuestions,
+        scorePercent,
+        completedAt: completed ? nowIso : null,
+        nowIso,
+      });
+
+      if (completed && scorePercent !== null) {
+        const correctCount = this.computeCorrectCount(allQuestions, nextAnswers);
+        this.eventBus.emitCompleted(
+          new DailyChallengeCompletedEvent(
+            row.challengeId,
+            userId,
+            scorePercent,
+            correctCount,
+            totalQuestions,
+            nowIso,
+            row.rewardXp,
+          ),
+        );
+
+        if (row.rewardXp > 0) {
+          await this.externalEventBus.publishXpEarned({
+            eventType: 'external.xp.earned',
+            userId,
+            amount: row.rewardXp,
+            source: 'bonus',
+            timestamp: new Date(nowIso),
+            correlationId: createCorrelationId(),
+            idempotencyKey: `xp:${userId}:daily_challenge:${row.challengeId}`,
+          });
+        }
+      }
+
+      return {
+        correct,
+        nextQuestionIndex,
+        totalQuestions,
+        completed,
+        scorePercent: scorePercent !== null ? Number(scorePercent) : null,
+      };
+    });
+  }
+
+  private buildNextAnswers(
+    previousAnswers: readonly string[],
+    nextIndex: number,
+    answer: string | null,
+  ): string[] {
+    const padded =
+      previousAnswers.length <= nextIndex
+        ? [
+            ...previousAnswers,
+            ...Array(nextIndex - previousAnswers.length).fill(SKIPPED_ANSWER_SENTINEL),
+          ]
+        : previousAnswers;
+    const value = answer ?? SKIPPED_ANSWER_SENTINEL;
+    return [...padded.slice(0, nextIndex), value, ...padded.slice(nextIndex + 1)];
+  }
+
+  private toHistoryItem(row: DailyChallengeHistoryItem) {
     return {
-      correct,
-      nextQuestionIndex: completed ? nextQuestionIndex : nextQuestionIndex,
-      totalQuestions,
-      completed,
-      scorePercent: scorePercent !== null ? Number(scorePercent) : null,
+      date: row.challengeDate,
+      quizId: row.quizId,
+      quizTitle: row.quizTitle ?? 'Untitled quiz',
+      slug: row.quizSlug ?? '',
+      difficulty: row.difficulty ?? ('medium' as const),
+      score: row.scorePercent !== null ? Number(row.scorePercent) : 0,
+      rank: 0,
     };
   }
 
-  // ─── Helpers ──────────────────────────────────────────────────────────
-
-  private countCorrectAnswers(
-    allQuestions: Array<{
+  private computeScorePercent(
+    allQuestions: ReadonlyArray<{
       questionId: string;
       optionId: string | null;
       optionIsCorrect: boolean | null;
     }>,
-    answers: string[],
+    answers: readonly string[],
   ): number {
-    // Build a per-question correct-option map.
-    let correct = 0;
+    const correct = this.computeCorrectCount(allQuestions, answers);
+    return allQuestions.length > 0 ? (correct / allQuestions.length) * 100 : 0;
+  }
+
+  private computeCorrectCount(
+    allQuestions: ReadonlyArray<{
+      questionId: string;
+      optionId: string | null;
+      optionIsCorrect: boolean | null;
+    }>,
+    answers: readonly string[],
+  ): number {
     const posToCorrectOption = new Map<string, string>();
     for (const q of allQuestions) {
       if (q.optionId !== null && q.optionIsCorrect === true) {
         posToCorrectOption.set(q.questionId, q.optionId);
       }
     }
+
+    let correct = 0;
     for (let i = 0; i < answers.length; i += 1) {
       const answer = answers[i];
-      if (!answer || answer === '__skipped__') continue;
+      if (!answer || answer === SKIPPED_ANSWER_SENTINEL) continue;
       const q = allQuestions[i];
       if (!q) continue;
       if (posToCorrectOption.get(q.questionId) === answer) correct += 1;
@@ -346,7 +325,7 @@ export class DailyChallengeApplicationService {
       expiresAt: string;
       quizTitle?: string;
       quizSlug?: string;
-      difficulty?: 'easy' | 'medium' | 'hard';
+      difficulty?: DailyChallengeDifficulty;
       totalQuestions?: number;
     },
     _userId: string | null,
@@ -378,9 +357,15 @@ function encodeCursor(cursor: { challengeDate: string; challengeId: string }): s
 
 function decodeCursor(cursor: string): { challengeDate: string; challengeId: string } | null {
   try {
-    const parsed = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf-8'));
-    if (typeof parsed.challengeDate === 'string' && typeof parsed.challengeId === 'string') {
-      return parsed;
+    const parsed = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf-8')) as unknown;
+    if (
+      typeof parsed === 'object' &&
+      parsed !== null &&
+      typeof (parsed as Record<string, unknown>).challengeDate === 'string' &&
+      typeof (parsed as Record<string, unknown>).challengeId === 'string'
+    ) {
+      const obj = parsed as { challengeDate: string; challengeId: string };
+      return { challengeDate: obj.challengeDate, challengeId: obj.challengeId };
     }
     return null;
   } catch {

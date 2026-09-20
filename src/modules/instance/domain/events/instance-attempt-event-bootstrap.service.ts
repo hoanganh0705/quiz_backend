@@ -43,11 +43,9 @@ export class InstanceAttemptEventBootstrapService implements OnModuleInit, OnMod
 
   onModuleInit(): void {
     this.unsubscribeAttemptStarted = this.attemptEventBus.subscribe(
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
       this.handleAttemptStarted.bind(this),
     );
     this.unsubscribeAttemptCompleted = this.attemptEventBus.subscribe(
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
       this.handleAttemptCompleted.bind(this),
     );
 

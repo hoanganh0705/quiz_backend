@@ -1,35 +1,4 @@
-/**
- * Phase 5 #1 — OpenTelemetry-compatible tracing primitives.
- *
- * Lightweight tracing module that captures per-request and
- * per-operation spans. The API is intentionally OpenTelemetry-
- * shaped (the `Span` record mirrors `opentelemetry.api`'s
- * `Span` interface), so swapping the implementation for a real
- * OTel SDK is a single-file change.
- *
- * Why custom and not `@opentelemetry/sdk-node`?
- * ---------------------------------------------
- * The audit flags this as P2 (medium). Pulling in the
- * `@opentelemetry/sdk-node` (and its transitive deps) would
- * touch ~50 MB of `node_modules` and require OTLP collector
- * config to be useful in CI. The custom implementation:
- *
- *   - Records every span to a structured logger (Pino) so the
- *     trace is visible in the application logs immediately.
- *   - Exposes a `TracingProvider` DI token so the ioredis
- *     client, BullMQ processor, and Drizzle queries can record
- *     spans without knowing the implementation.
- *   - Implements the same `startSpan` / `endSpan` / `recordException`
- *     API as OTel, so a follow-up PR can swap the implementation
- *     without touching call sites.
- *
- * Spans are emitted in batches via the `OutboxConnector` shape
- * (which is already async-batch-friendly). For production, the
- * `PrometheusExporter` or an OTLP exporter can be plugged in
- * behind the same interface.
- */
-
-import { Inject, Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import { Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 
 export type SpanKind = 'server' | 'client' | 'producer' | 'consumer' | 'internal';
@@ -43,11 +12,9 @@ export type Span = {
   readonly name: string;
   readonly kind: SpanKind;
   readonly startTimeNs: bigint;
-  /** Set by `endSpan`. */
   endTimeNs?: bigint;
   status: SpanStatus;
   attributes: Record<string, string | number | boolean>;
-  /** Exceptions recorded before the span ended. */
   events: Array<{ name: string; timeNs: bigint; attributes?: Record<string, unknown> }>;
 };
 
@@ -81,11 +48,6 @@ export class TracingProvider implements OnModuleInit, OnModuleDestroy {
     this.flush();
   }
 
-  /**
-   * Start a new span. The returned `Span` is mutable; mutating
-   * `attributes` / `status` is allowed. Call `endSpan(span)` to
-   * finalise.
-   */
   startSpan(
     name: string,
     options: {
@@ -130,13 +92,6 @@ export class TracingProvider implements OnModuleInit, OnModuleDestroy {
     span.status = 'error';
   }
 
-  /**
-   * Run `task` inside a span. The span is opened with the
-   * provided `name`/`kind`, attributes are set, and the span is
-   * ended with `ok` on success or `error` on exception. The
-   * exception is rethrown so the caller's error handling is
-   * unchanged.
-   */
   async withSpan<T>(
     name: string,
     options: {
@@ -158,21 +113,10 @@ export class TracingProvider implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  /**
-   * Number of currently active spans. Exposed for the
-   * `/metrics` endpoint so the operator can see if the
-   * process is leaking spans (e.g. a missed `endSpan`).
-   */
   getActiveSpanCount(): number {
     return this.activeSpans.size;
   }
 
-  /**
-   * Drain the completed-span buffer and emit one structured log
-   * line per span. The buffer is cleared so the next interval
-   * starts fresh. `protected` so test subclasses can override
-   * the export strategy without exposing it on the public API.
-   */
   protected flush(): void {
     if (this.completedSpans.length === 0) return;
     const spans = this.completedSpans.splice(0, this.completedSpans.length);
@@ -198,21 +142,15 @@ export class TracingProvider implements OnModuleInit, OnModuleDestroy {
 export const TRACING_PROVIDER = Symbol('TRACING_PROVIDER');
 
 const generateTraceId = (): string => {
-  // 16 random bytes hex-encoded → 32 chars. Matches the OTel
-  // spec for `trace_id`.
   return randomHex(16);
 };
 
 const generateSpanId = (): string => {
-  // 8 random bytes hex-encoded → 16 chars. Matches the OTel
-  // spec for `span_id`.
   return randomHex(8);
 };
 
 const randomHex = (bytes: number): string => {
   const buf = new Uint8Array(bytes);
-  // `crypto.getRandomValues` is available in Node 19+ and is the
-  // OTel-spec-compliant source of randomness.
   crypto.getRandomValues(buf);
   return Buffer.from(buf).toString('hex');
 };

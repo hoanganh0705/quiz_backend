@@ -1,7 +1,11 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import { IsEnum, IsIn, IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
-import { REVIEW_REPORT_PLATFORM_STATUS_VALUES } from '../../domain/policies/review-report-status.policy';
+import {
+  REPORT_REPORT_WRITABLE_STATUSES,
+  REVIEW_REPORT_PLATFORM_STATUS_VALUES,
+  type ReviewReportWritableStatus,
+} from '../../domain/policies/review-report-status.policy';
 
 export class ListPlatformReportsQueryDto {
   @ApiPropertyOptional({
@@ -27,10 +31,6 @@ export class ListPlatformReportsQueryDto {
   @Max(100)
   limit?: number = 20;
 
-  // Phase 4 / Issue #36 — moderator queue default is `open`. The
-  // previous shape returned ALL reports in newest-first order, so
-  // old-but-still-open reports fell off the bottom of the queue.
-  // Pass `all` to bypass the default and see every status.
   @ApiPropertyOptional({
     description:
       'Filter by report status. Defaults to `open` so the moderation queue surfaces only unhandled reports; pass `all` to see every status.',
@@ -45,9 +45,9 @@ export class ListPlatformReportsQueryDto {
 export class UpdateReportStatusDto {
   @ApiProperty({
     description: 'New status for the report',
-    enum: ['reviewed', 'dismissed', 'actioned'],
+    enum: REPORT_REPORT_WRITABLE_STATUSES,
     example: 'actioned',
   })
-  @IsEnum(['reviewed', 'dismissed', 'actioned'])
-  status!: 'reviewed' | 'dismissed' | 'actioned';
+  @IsEnum(REPORT_REPORT_WRITABLE_STATUSES)
+  status!: ReviewReportWritableStatus;
 }

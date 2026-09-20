@@ -8,16 +8,6 @@ import { HomePresenter } from '../presenter/home.presenter';
 import { HomeBundleResponseDto } from '../../dto/response/home-bundle-response.dto';
 import { HomeSwaggerDecorators } from '../swagger/home-swagger-decorators';
 
-/**
- * `HomeController` — Phase 4 (S-23) home page bundle endpoint.
- *
- * `GET /api/v1/home` returns the bundled payload (featured +
- * trending + popular + categories + recent winners + top players).
- * The endpoint is `Public()` because the home page is reachable
- * without auth; the rails that require viewer identity (e.g.
- * recently-played) keep their `GET /users/me/recently-played-quizzes`
- * surface.
- */
 @ApiTags('Home')
 @ApiExtraModels(HomeBundleResponseDto)
 @Controller('home')

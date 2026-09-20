@@ -16,12 +16,6 @@ const NOTIFICATION_ITEM = {
   createdAt: '2025-06-01T10:00:00.000Z',
   expiresAt: '2025-07-01T10:00:00.000Z',
 };
-
-/**
- * `GET /api/v1/notifications` — cursor-paginated list.
- * The `nextCursor` decodes to `{ createdAt, notificationId }` matching the
- * runtime cursor format in `notification-application.service.ts`.
- */
 export const NOTIFICATION_LIST_EXAMPLE = {
   data: [NOTIFICATION_ITEM],
   meta: {
@@ -35,18 +29,10 @@ export const NOTIFICATION_LIST_EXAMPLE = {
     },
   },
 } as const;
-
-/**
- * `GET /api/v1/notifications/unread-count` — single-resource DTO.
- */
 export const NOTIFICATION_UNREAD_COUNT_EXAMPLE = {
   data: { count: 5 },
   meta: { timestamp: EXAMPLE_TIMESTAMP },
 } as const;
-
-/**
- * `GET /api/v1/notifications/analytics` — single-resource DTO.
- */
 export const NOTIFICATION_ANALYTICS_EXAMPLE = {
   data: {
     total: 1248,
@@ -81,36 +67,18 @@ const NOTIFICATION_PREFERENCES = {
   quietHoursStart: '22:00',
   quietHoursEnd: '08:00',
 };
-
-/**
- * `GET /api/v1/notifications/preferences` — single-resource DTO.
- */
 export const NOTIFICATION_PREFERENCES_EXAMPLE = {
   data: NOTIFICATION_PREFERENCES,
   meta: { timestamp: EXAMPLE_TIMESTAMP },
 } as const;
-
-/**
- * `PATCH /api/v1/notifications/preferences` — request and response share the
- * same canonical envelope.
- */
 export const NOTIFICATION_PREFERENCES_UPDATE_EXAMPLE = {
   data: NOTIFICATION_PREFERENCES,
   meta: { timestamp: EXAMPLE_TIMESTAMP },
 } as const;
-
-/**
- * `GET /api/v1/notifications/{notificationId}` — single-resource DTO.
- */
 export const NOTIFICATION_DETAIL_EXAMPLE = {
   data: NOTIFICATION_ITEM,
   meta: { timestamp: EXAMPLE_TIMESTAMP },
 } as const;
-
-/**
- * `DELETE /api/v1/notifications/read` — body confirms how many read
- * notifications were deleted.
- */
 export const NOTIFICATION_DELETED_READ_EXAMPLE = {
   data: { deletedCount: 3 },
   meta: { timestamp: EXAMPLE_TIMESTAMP },

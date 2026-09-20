@@ -46,7 +46,7 @@ export class OAuthIdentityResolver {
     let claims: OAuthUserInfo;
     try {
       claims = await adapter.authenticate(authentication);
-    } catch (error: any) {
+    } catch (error: unknown) {
       if (error instanceof InvalidOAuthTokenError) {
         this.logger.warn({
           event: 'oauth_authentication_failed',
@@ -61,10 +61,14 @@ export class OAuthIdentityResolver {
 
     // Enforce email verification — security gate
     if (!claims.emailVerified) {
+      // Log only the email domain to avoid PII leakage during enumeration
+      // probes (full email addresses paired with source IP become a viable
+      // account-discovery signal against this endpoint).
+      const emailDomain = claims.email.split('@')[1] ?? null;
       this.logger.warn({
         event: 'oauth_unverified_email_rejected',
         provider,
-        email: claims.email,
+        emailDomain,
       });
       this.metrics.recordAuthenticationFailed(provider, 'unverified_email');
       throw new InvalidOAuthTokenError('OAuth email is not verified');

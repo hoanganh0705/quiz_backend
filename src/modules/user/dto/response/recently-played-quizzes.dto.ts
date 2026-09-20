@@ -1,11 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { CursorPagination } from '@/common/responses/pagination';
 
-/**
- * Phase 3 (S-16): one row in the user's recently-played-quizzes
- * list. `playedAt` is the attempt-finish timestamp (latest when
- * the user replays); `scorePercent` is the final score 0–100.
- */
 export class RecentlyPlayedQuizItemDto {
   @ApiProperty({
     description: 'Quiz identifier',

@@ -1,31 +1,3 @@
-/**
- * Tournament Outbox Port
- *
- * Phase 3 / Issue #5 — Guarantee at-least-once delivery for tournament events.
- *
- * Events are dispatched via an in-memory bus and enqueued to BullMQ after
- * the transaction commits. If the application crashes between the commit and
- * the BullMQ enqueue, the event is lost forever.
- *
- * The fix is the canonical Transactional Outbox: write the event payload
- * into the existing `outbox_events` table inside the same transaction that
- * mutates tournament data, and let a worker drain the table and dispatch
- * to both the internal bus (for notification handlers) and the external bus
- * (for cross-module consumers like achievements/social).
- *
- * Producer-side idempotency: the outbox_events table has a partial unique
- * index `uq_outbox_events_idempotency_unprocessed` on idempotency_key WHERE
- * processed_at IS NULL. Tournament events carry explicit idempotency keys
- * (e.g. `tournament:joined:{tournamentId}:{userId}`). The insert uses
- * `ON CONFLICT DO NOTHING` so a duplicated event in the same transaction
- * does not raise a unique violation.
- *
- * For `tournament.won` events, the idempotency key is
- * `${tournamentId}:${userId}:${rank}` — the same key used in
- * `ExternalXpEarnedEvent.idempotencyKey` — so the XP consumer can dedupe
- * both the outbox event and the downstream XP grant.
- */
-
 export const TOURNAMENT_OUTBOX_PORT = Symbol('TOURNAMENT_OUTBOX_PORT');
 
 export type TournamentOutboxEventType =
@@ -39,19 +11,25 @@ export interface TournamentOutboxPayload {
   eventType: TournamentOutboxEventType;
   tournamentId: string;
   userId: string;
-  // Event-specific fields
   tournamentTitle?: string;
   rank?: number;
   totalParticipants?: number;
   prize?: string;
   startedAt?: string;
   timestamp: string;
-  [key: string]: unknown; // Index signature for Record<string, unknown> compatibility
+  [key: string]: unknown;
+}
+
+export interface TournamentOutboxScheduleParams {
+  eventType: TournamentOutboxEventType;
+  payload: TournamentOutboxPayload;
+  idempotencyKey: string;
+  correlationId?: string;
 }
 
 export interface TournamentOutboxPort {
   /**
-   * Schedule a tournament domain event to be processed by the outbox worker.
+   * Schedule a single tournament domain event for the outbox worker.
    *
    * The implementation MUST insert the row inside the supplied transaction
    * (`tx`) so the outbox write is atomic with the originating tournament
@@ -63,14 +41,30 @@ export interface TournamentOutboxPort {
    * @param nowIso - the current timestamp (ISO string) for the `created_at` column
    */
   scheduleTournamentEvent(
-    params: {
-      eventType: TournamentOutboxEventType;
-      payload: TournamentOutboxPayload;
-      /** Deterministic key for duplicate detection, e.g. `tournament:joined:{tournamentId}:{userId}` */
-      idempotencyKey: string;
-      /** Correlation ID from the originating HTTP request for distributed tracing */
-      correlationId?: string;
-    },
+    params: TournamentOutboxScheduleParams,
+    tx: unknown,
+    nowIso: string,
+  ): Promise<void>;
+
+  /**
+   * Schedule a batch of tournament domain events in a single multi-row insert.
+   *
+   * Used by bulk producers (e.g. `dispatchStartingSoonNotifications` fanning
+   * out a notification to every participant of a tournament) to avoid the
+   * N+1 round-trip cost of calling `scheduleTournamentEvent` per recipient.
+   *
+   * Semantics are identical to `scheduleTournamentEvent`: each row carries
+   * its own idempotency key and the insert is `ON CONFLICT DO NOTHING` so
+   * duplicate keys within the batch are silently dropped. The insert runs
+   * inside the supplied transaction so the entire batch is atomic with the
+   * caller's mutation.
+   *
+   * @param events - the list of events to schedule
+   * @param tx - the active Drizzle transaction client
+   * @param nowIso - the current timestamp (ISO string) for `created_at`
+   */
+  scheduleTournamentEventsBatch(
+    events: ReadonlyArray<TournamentOutboxScheduleParams>,
     tx: unknown,
     nowIso: string,
   ): Promise<void>;

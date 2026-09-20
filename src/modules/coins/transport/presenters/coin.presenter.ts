@@ -45,11 +45,6 @@ export class CoinPresenter {
   readonly getMyCoinTransactions = (payload: CoinTransactionsResponseDto) =>
     CoinPresenter.paginated<CoinTransactionsResponseDto['items'][number]>(payload);
 
-  /**
-   * `POST /coins/{tip,flair,suppress-recommended}` and
-   * `POST /admin/coins/adjust` — return the post-spend balance
-   * snapshot. Phase 6 (S-coin-spend) addition.
-   */
   readonly spendResult = (payload: CoinSpendResponseDto) =>
     CoinPresenter.ok<CoinSpendResponseDto>(payload);
 }

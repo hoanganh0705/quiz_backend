@@ -1,22 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
 
-/**
- * Response payload for `GET /auth/security/dashboard`.
- *
- * A snapshot of the authenticated user's security posture. The fields are
- * composed from two distinct domain concerns (see
- * `account-security.service.ts` for the data lineage):
- *
- * - **User-domain fields** — `emailVerified`, `lastPasswordChangeAt`,
- *   `lastSuccessfulLoginAt`.
- * - **Session-domain field** — `activeSessionCount`.
- * - **Derived field** — `passwordAgeDays` is computed at the application
- *   service layer from `lastPasswordChangeAt`; it is never persisted.
- *
- * @see docs/audits/AUTH_MODULE_PRODUCTION_READINESS_AUDIT.md §Phase 6 #6
- *      for the `passwordAgeDays` addition and §Phase 8 #27 for the snapshot
- *      semantic on `activeSessionCount`.
- */
 export class AccountSecurityDto {
   @ApiProperty({ description: 'Whether the account email is verified' })
   emailVerified!: boolean;

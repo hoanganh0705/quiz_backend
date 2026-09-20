@@ -1,6 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { ArrayMaxSize, IsArray, IsUUID } from 'class-validator';
+import { ArrayMaxSize, ArrayMinSize, IsArray, IsUUID } from 'class-validator';
 
 export class BulkRemoveBookmarksDto {
   @ApiProperty({
@@ -11,11 +11,13 @@ export class BulkRemoveBookmarksDto {
       format: 'uuid',
       example: '660e8400-e29b-71d4-a716-446655440000',
     },
+    minItems: 1,
     maxItems: 100,
     example: ['660e8400-e29b-71d4-a716-446655440000', '660e8400-e29b-71d4-a716-446655440001'],
   })
   @Type(() => String)
   @IsArray()
+  @ArrayMinSize(1)
   @ArrayMaxSize(100)
   @IsUUID('7', { each: true })
   quizIds!: string[];

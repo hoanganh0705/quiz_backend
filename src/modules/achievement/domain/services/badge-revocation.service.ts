@@ -1,19 +1,3 @@
-/**
- * Badge Revocation Service
- *
- * Handles revocation of incorrectly awarded badges:
- * - Only for error correction, not punitive measures
- * - All revocations are logged with reasons
- * - History is preserved (soft delete)
- * - Re-award is prevented until revocation is cleared
- *
- * Design principles:
- * - Revocation is rare and requires explicit action
- * - Every revocation requires a reason
- * - Audit trail is immutable
- * - Can be reversed if correction was wrong
- */
-
 import { Inject, Injectable } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { ACHIEVEMENT_REPOSITORY_PORT } from '../../infrastructure/repositories/achievement.repository';
@@ -27,8 +11,8 @@ export interface RevocationRequest {
   userId: string;
   badgeId: string;
   reason: string;
-  revokedBy: string; // Admin user ID
-  evidence?: string; // Optional evidence or reference
+  revokedBy: string;
+  evidence?: string;
 }
 
 export interface RevocationRecord {
@@ -69,11 +53,10 @@ export const REVOCATION_REASON_MESSAGES: Record<RevocationReasonCode, string> = 
   [RevocationReasonCode.MANUAL_CORRECTION]: 'Manual correction by administrator',
 };
 
-/** Batch size for fetching revoked badge records in statistics queries. */
 const REVOCATION_STATS_LIMIT = 100;
-
-/** Maximum number of recent revocations to include in stats response. */
 const RECENT_REVOCATIONS_LIMIT = 10;
+const MIN_REASON_LENGTH = 10;
+const DEFAULT_REVOKED_BY = 'unknown';
 
 @Injectable()
 export class BadgeRevocationService {
@@ -85,10 +68,6 @@ export class BadgeRevocationService {
     private readonly logger: PinoLogger,
   ) {}
 
-  /**
-   * Revoke a badge from a user.
-   * This is a soft delete - the record remains in history.
-   */
   async revokeBadge(request: RevocationRequest): Promise<RevocationResult> {
     const validationError = this.validateRequest(request);
     if (validationError) {
@@ -101,12 +80,12 @@ export class BadgeRevocationService {
       return { success: false, error: validationError };
     }
 
-    const hasBadge = await this.achievementRepository.hasBadge(request.userId, request.badgeId);
-    if (!hasBadge) {
-      return { success: false, error: 'Badge not found or already revoked' };
-    }
-
     try {
+      const hasBadge = await this.achievementRepository.hasBadge(request.userId, request.badgeId);
+      if (!hasBadge) {
+        return { success: false, error: 'Badge not found or already revoked' };
+      }
+
       const revokedBadge = await this.achievementRepository.revokeBadge(
         request.userId,
         request.badgeId,
@@ -117,7 +96,7 @@ export class BadgeRevocationService {
         return { success: false, error: 'Badge not found or already revoked' };
       }
 
-      const revocation = this.toRevocationRecord(revokedBadge, request);
+      const enrichedRevocation = this.enrichWithRevoker(revokedBadge, request.revokedBy);
 
       this.logger.info({
         event: 'badge_revoked',
@@ -136,7 +115,7 @@ export class BadgeRevocationService {
         revokedBy: request.revokedBy,
       });
 
-      return { success: true, revocation };
+      return { success: true, revocation: enrichedRevocation };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       this.logger.error({
@@ -149,66 +128,54 @@ export class BadgeRevocationService {
     }
   }
 
-  /**
-   * Reverse a revocation (in case of incorrect revocation).
-   *
-   * NOTE: This method is not yet fully implemented.
-   * - Does not emit the correct event (badge.revoked with "Reversed:" reason is wrong)
-   * - Should emit badge.restored or achievement.awarded instead
-   * - Original revokedBy is not stored in the revocation record
-   * TODO: Implement proper badge restoration event or remove this method if not needed
-   */
+  private enrichWithRevoker(
+    revokedBadge: RevokedBadgeRecord,
+    fallbackRevokedBy: string,
+  ): RevocationRecord {
+    return {
+      userBadgeId: revokedBadge.userBadgeId,
+      userId: revokedBadge.userId,
+      badgeId: revokedBadge.badgeId,
+      badgeSlug: revokedBadge.badgeSlug,
+      revokedAt: revokedBadge.revokedAt,
+      revokedBy: fallbackRevokedBy,
+      reason: revokedBadge.revocationReason,
+    };
+  }
+
   async reverseRevocation(
     userId: string,
     badgeId: string,
     reversedByAdmin: string,
     reason: string,
   ): Promise<RevocationResult> {
-    // Verify the badge was revoked
     const hasBadge = await this.achievementRepository.hasBadge(userId, badgeId);
     if (hasBadge) {
       return { success: false, error: 'Badge is not revoked' };
     }
 
     try {
-      // Find the revoked record
-      const { data: revokedRecords } = await this.achievementRepository.getRevokedUserBadges(
+      const restoredRecord = await this.achievementRepository.restoreBadge(
         userId,
         badgeId,
-        {
-          limit: 1,
-        },
+        reversedByAdmin,
       );
 
-      const revokedRecord = revokedRecords[0];
-      if (!revokedRecord) {
+      if (!restoredRecord) {
         return { success: false, error: 'No revoked record found' };
       }
 
-      // Re-award the badge (this clears the revokedAt and revocationReason via the unique constraint)
-      const reAwarded = await this.achievementRepository.awardBadge({
-        userId,
-        badgeId,
-        badgeVersion: revokedRecord.badgeVersion,
-        earnedAt: new Date(),
-        progress: revokedRecord.progress,
-        metadata: revokedRecord.metadata,
-        expiresAt: revokedRecord.expiresAt ?? undefined,
-      });
-
-      if (!reAwarded) {
-        return { success: false, error: 'Failed to re-award badge' };
-      }
+      const restoredAt = new Date();
 
       const revocation: RevocationRecord = {
-        userBadgeId: revokedRecord.userBadgeId,
+        userBadgeId: restoredRecord.userBadgeId,
         userId,
         badgeId,
-        badgeSlug: revokedRecord.badge.slug,
-        revokedAt: revokedRecord.revokedAt ?? new Date(),
-        revokedBy: 'admin', // Original revokedBy not stored in revocation record
+        badgeSlug: restoredRecord.badgeSlug,
+        revokedAt: restoredRecord.revokedAt,
+        revokedBy: DEFAULT_REVOKED_BY,
         reason: 'Original revocation',
-        reversedAt: new Date(),
+        reversedAt: restoredAt,
         reversedBy: reversedByAdmin,
         reversedReason: reason,
       };
@@ -221,16 +188,12 @@ export class BadgeRevocationService {
         reason,
       });
 
-      const revokedAt = revokedRecord.revokedAt ?? new Date();
-      const badgeSlug = revokedRecord.badge.slug;
-
-      this.achievementDomainEventBus.emitBadgeRevoked({
+      this.achievementDomainEventBus.emitBadgeRestored({
         userId,
         badgeId,
-        badgeSlug,
-        revokedAt,
-        reason: `Reversed: ${reason}`,
-        revokedBy: reversedByAdmin,
+        badgeSlug: restoredRecord.badgeSlug,
+        restoredAt,
+        restoredBy: reversedByAdmin,
       });
 
       return { success: true, revocation };
@@ -246,9 +209,6 @@ export class BadgeRevocationService {
     }
   }
 
-  /**
-   * Get revocation history for a badge.
-   */
   async getBadgeRevocationHistory(badgeId: string): Promise<RevocationRecord[]> {
     this.logger.debug({
       event: 'get_badge_revocation_history',
@@ -266,14 +226,11 @@ export class BadgeRevocationService {
       badgeId: record.badgeId,
       badgeSlug: record.badge.slug,
       revokedAt: record.revokedAt ?? new Date(),
-      revokedBy: 'admin',
+      revokedBy: this.resolveRevokedBy(record.revocationReason),
       reason: record.revocationReason ?? 'Unknown',
     }));
   }
 
-  /**
-   * Get revocation history for a user.
-   */
   async getUserRevocationHistory(userId: string): Promise<RevocationRecord[]> {
     this.logger.debug({
       event: 'get_user_revocation_history',
@@ -288,14 +245,11 @@ export class BadgeRevocationService {
       badgeId: record.badgeId,
       badgeSlug: record.badge.slug,
       revokedAt: record.revokedAt ?? new Date(),
-      revokedBy: 'admin',
+      revokedBy: this.resolveRevokedBy(record.revocationReason),
       reason: record.revocationReason ?? 'Unknown',
     }));
   }
 
-  /**
-   * Get revocation statistics.
-   */
   async getRevocationStats(): Promise<{
     totalRevocations: number;
     byReason: Record<string, number>;
@@ -330,7 +284,7 @@ export class BadgeRevocationService {
         badgeId: record.badgeId,
         badgeSlug: record.badge.slug,
         revokedAt: record.revokedAt ?? new Date(),
-        revokedBy: 'admin',
+        revokedBy: this.resolveRevokedBy(record.revocationReason),
         reason: record.revocationReason ?? 'Unknown',
       }));
 
@@ -341,25 +295,10 @@ export class BadgeRevocationService {
     };
   }
 
-  private toRevocationRecord(
-    revokedBadge: RevokedBadgeRecord,
-    request: RevocationRequest,
-  ): RevocationRecord {
-    return {
-      userBadgeId: revokedBadge.userBadgeId,
-      userId: revokedBadge.userId,
-      badgeId: revokedBadge.badgeId,
-      badgeSlug: revokedBadge.badgeSlug,
-      revokedAt: revokedBadge.revokedAt,
-      revokedBy: request.revokedBy,
-      reason: request.reason,
-      evidence: request.evidence,
-    };
+  private resolveRevokedBy(revocationReason: string | null): string {
+    return revocationReason ?? DEFAULT_REVOKED_BY;
   }
 
-  /**
-   * Validate a revocation request.
-   */
   private validateRequest(request: RevocationRequest): string | null {
     if (!request.userId) {
       return 'userId is required';
@@ -369,12 +308,13 @@ export class BadgeRevocationService {
       return 'badgeId is required';
     }
 
-    if (!request.reason || request.reason.trim().length === 0) {
+    const trimmedReason = request.reason?.trim() ?? '';
+    if (trimmedReason.length === 0) {
       return 'reason is required';
     }
 
-    if (request.reason.length < 10) {
-      return 'reason must be at least 10 characters';
+    if (trimmedReason.length < MIN_REASON_LENGTH) {
+      return `reason must be at least ${MIN_REASON_LENGTH} characters`;
     }
 
     if (!request.revokedBy) {
@@ -384,18 +324,11 @@ export class BadgeRevocationService {
     return null;
   }
 
-  /**
-   * Check if a badge can be re-awarded to a user.
-   * A badge can be re-awarded if it was never awarded, or if a previous revocation was reversed.
-   */
   async canReawardBadge(userId: string, badgeId: string): Promise<boolean> {
     const hasBadge = await this.achievementRepository.hasBadge(userId, badgeId);
     return !hasBadge;
   }
 
-  /**
-   * Get revocation reason code from a message.
-   */
   static getReasonCode(message: string): RevocationReasonCode | null {
     for (const [code, msg] of Object.entries(REVOCATION_REASON_MESSAGES)) {
       if (msg === message) {
@@ -405,9 +338,6 @@ export class BadgeRevocationService {
     return null;
   }
 
-  /**
-   * Create a revocation request with a standard reason code.
-   */
   static createRevocationRequest(
     userId: string,
     badgeId: string,

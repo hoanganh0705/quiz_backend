@@ -15,10 +15,19 @@ import {
 } from './ports/bookmark-collection-repository.port';
 import type { BookmarkCollectionAnalytics } from './types/bookmark-collection-analytics';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
-import { BookmarkCollectionNotFoundError, CollectionForbiddenError } from './errors';
+import {
+  BookmarkCollectionNotFoundError,
+  BookmarkValidationError,
+  CollectionForbiddenError,
+} from './errors';
 import { ANALYTICS_CACHE_TTL_MS, COLLECTION_FORBIDDEN_MESSAGE } from '../bookmark.constants';
 import { CACHE_PROVIDER } from '@/common/ports/cache.provider';
 import type { CacheProvider } from '@/common/ports/cache.provider';
+import {
+  sliceWithCursor,
+  SEARCH_MAX_LENGTH,
+  SEARCH_MIN_LENGTH,
+} from './bookmark-cursor-pagination';
 
 /**
  * BookmarkQueryService — Read operations for the Bookmark aggregate.
@@ -54,31 +63,35 @@ export class BookmarkQueryService {
     userId: string,
     query: { query: string; limit?: number; cursor?: RecentBookmarkCursor | null },
   ): Promise<BookmarkSearchResult> {
+    const trimmed = query.query.trim();
+    if (trimmed.length < SEARCH_MIN_LENGTH) {
+      throw new BookmarkValidationError(
+        `Search query must be at least ${SEARCH_MIN_LENGTH} characters`,
+      );
+    }
+    if (trimmed.length > SEARCH_MAX_LENGTH) {
+      throw new BookmarkValidationError(
+        `Search query must be at most ${SEARCH_MAX_LENGTH} characters`,
+      );
+    }
+
     const limit = query.limit ?? 10;
     const cursor = query.cursor ?? null;
 
     const rows = await this.bookmarkRepository.searchBookmarks({
       userId,
-      query: query.query,
+      query: trimmed,
       limit,
       cursor,
     });
 
-    const hasNextPage = rows.length > limit;
-    const items = hasNextPage ? rows.slice(0, limit) : rows;
-    const lastItem = items.at(-1);
+    const { items, hasNextPage, nextCursor } = sliceWithCursor(rows, limit);
 
     return {
       items,
       limit,
       hasNextPage,
-      nextCursor:
-        hasNextPage && lastItem
-          ? {
-              bookmarkedAt: lastItem.bookmarkedAt,
-              bookmarkId: lastItem.bookmarkId,
-            }
-          : null,
+      nextCursor,
     };
   }
 
@@ -105,21 +118,13 @@ export class BookmarkQueryService {
       cursor,
     });
 
-    const hasNextPage = rows.length > limit;
-    const items = hasNextPage ? rows.slice(0, limit) : rows;
-    const lastItem = items.at(-1);
+    const { items, hasNextPage, nextCursor } = sliceWithCursor(rows, limit);
 
     return {
       items,
       limit,
       hasNextPage,
-      nextCursor:
-        hasNextPage && lastItem
-          ? {
-              bookmarkedAt: lastItem.bookmarkedAt,
-              bookmarkId: lastItem.bookmarkId,
-            }
-          : null,
+      nextCursor,
     };
   }
 
@@ -129,7 +134,7 @@ export class BookmarkQueryService {
   ): Promise<BookmarkCollectionAnalytics> {
     await this.verifyCollectionOwnership(collectionId, user);
 
-    const cacheKey = `bookmark:collection:${collectionId}:analytics`;
+    const cacheKey = this.buildAnalyticsCacheKey(collectionId, user);
 
     try {
       const cached = await this.cache.get(cacheKey);
@@ -137,8 +142,12 @@ export class BookmarkQueryService {
         this.logger.debug({ event: 'analytics_cache_hit', collectionId });
         return JSON.parse(cached) as BookmarkCollectionAnalytics;
       }
-    } catch {
-      // Cache errors are non-fatal — fall through to DB
+    } catch (error) {
+      this.logger.warn({
+        event: 'analytics_cache_read_failed',
+        collectionId,
+        error: error instanceof Error ? error.message : String(error),
+      });
     }
 
     this.logger.debug({ event: 'analytics_cache_miss', collectionId });
@@ -150,15 +159,24 @@ export class BookmarkQueryService {
 
     try {
       await this.cache.set(cacheKey, JSON.stringify(analytics), ANALYTICS_CACHE_TTL_MS);
-    } catch {
-      // Cache write errors are non-fatal
+    } catch (error) {
+      this.logger.warn({
+        event: 'analytics_cache_write_failed',
+        collectionId,
+        error: error instanceof Error ? error.message : String(error),
+      });
     }
 
     return analytics;
   }
 
-  async getMyBookmarkStats(userId: string): Promise<UserBookmarkStatsRow> {
-    return this.bookmarkRepository.getUserBookmarkStats(userId);
+  private buildAnalyticsCacheKey(collectionId: string, user: JwtPayload): string {
+    const tenant = user.role === 'admin' ? `admin:${user.sub}` : `user:${user.sub}`;
+    return `bookmark:collection:${collectionId}:analytics:${tenant}`;
+  }
+
+  async getMyBookmarkStats(user: JwtPayload): Promise<UserBookmarkStatsRow> {
+    return this.bookmarkRepository.getUserBookmarkStats(user.sub);
   }
 
   private async verifyCollectionOwnership(collectionId: string, user: JwtPayload): Promise<void> {

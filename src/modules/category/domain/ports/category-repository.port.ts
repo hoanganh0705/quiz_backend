@@ -1,5 +1,13 @@
 import type { CategoryRow, CategoryRowWithDeleted } from './category-repository.types';
 
+export type CategorySortField = 'name' | 'createdAt';
+export type SortDirection = 'asc' | 'desc';
+
+export type CategorySortSpec = {
+  field: CategorySortField;
+  direction: SortDirection;
+};
+
 export interface CategoryRepositoryPort {
   findById(categoryId: string): Promise<CategoryRow | null>;
   findByIdIncludingDeleted(categoryId: string): Promise<CategoryRowWithDeleted | null>;
@@ -7,6 +15,7 @@ export interface CategoryRepositoryPort {
   findMany(params: {
     limit: number;
     cursor?: { createdAt: string; categoryId: string } | null;
+    sort?: CategorySortSpec;
   }): Promise<CategoryRow[]>;
   create(params: {
     name: string;

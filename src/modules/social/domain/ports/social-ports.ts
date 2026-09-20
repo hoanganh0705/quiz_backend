@@ -43,7 +43,7 @@ export interface SocialRepositoryPort {
   // Friends
   getFriends(userId: string, limit: number, cursor?: string | null): Promise<Friend[]>;
   getFriendCount(userId: string): Promise<number>;
-  removeFriend(userId: string, friendId: string): Promise<void>;
+  removeFriend(userId: string, friendId: string): Promise<number>;
   findAcceptedFriendship(userId: string, friendId: string): Promise<Friendship | null>;
 
   // Blocking
@@ -55,7 +55,7 @@ export interface SocialRepositoryPort {
 
   // Following
   followUser(followerId: string, followingId: string): Promise<UserFollow>;
-  unfollowUser(followerId: string, followingId: string): Promise<void>;
+  unfollowUser(followerId: string, followingId: string): Promise<number>;
   findActiveFollow(followerId: string, followingId: string): Promise<UserFollow | null>;
   getFollowers(userId: string, limit: number, cursor?: string | null): Promise<Follower[]>;
   getFollowersOfUser(

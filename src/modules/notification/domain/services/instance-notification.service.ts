@@ -1,9 +1,3 @@
-/**
- * Instance Notification Service
- *
- * Composes and sends instance-related notifications for real-time multiplayer quiz sessions.
- */
-
 import { Injectable } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { NotificationChannelService } from '../../infrastructure/adapters/notification-channel.service';
@@ -40,21 +34,12 @@ export interface InstancePlayerDisconnectedParams {
   instanceId: string;
   socketId: string;
 }
-
-/**
- * Port interface exposed to the Instance module via INSTANCE_NOTIFICATION_PORT.
- */
 export interface InstanceNotificationPort {
   notifyPlayerJoined(params: InstancePlayerJoinedParams): Promise<void>;
   notifyInstanceStarted(params: InstanceStartedParams): Promise<void>;
   notifyPlayerXpEarned(params: InstancePlayerXpEarnedParams): Promise<void>;
   notifyInstanceClosed(params: InstanceClosedParams): Promise<void>;
   notifyPlayerDisconnected(params: InstancePlayerDisconnectedParams): Promise<void>;
-  /**
-   * Generic host-side system announcement. Used by the Instance service for
-   * low-level system messages (e.g. host re-engagement) that do not have a
-   * dedicated event type.
-   */
   notifyHostSystemAnnouncement(params: {
     userId: string;
     title: string;
@@ -70,10 +55,6 @@ export class InstanceNotificationService implements InstanceNotificationPort {
     @InjectPinoLogger(InstanceNotificationService.name)
     private readonly logger: PinoLogger,
   ) {}
-
-  /**
-   * Notify the host when a player joins the instance.
-   */
   async notifyPlayerJoined(params: InstancePlayerJoinedParams): Promise<void> {
     const title = 'Player Joined';
     const body = `${params.playerName} joined your quiz session (${params.totalPlayers} players)`;
@@ -98,10 +79,6 @@ export class InstanceNotificationService implements InstanceNotificationPort {
       instanceId: params.instanceId,
     });
   }
-
-  /**
-   * Notify all players when the instance starts.
-   */
   async notifyInstanceStarted(params: InstanceStartedParams): Promise<void> {
     const body = 'The quiz session has started!';
 
@@ -126,10 +103,6 @@ export class InstanceNotificationService implements InstanceNotificationPort {
       playerCount: params.playerIds.length,
     });
   }
-
-  /**
-   * Notify a player of their XP earned during the instance (real-time popup).
-   */
   async notifyPlayerXpEarned(params: InstancePlayerXpEarnedParams): Promise<void> {
     const title = '+XP Earned!';
     const body = `You earned ${params.xpEarned} XP! Total: ${params.newAllTimeXp}`;
@@ -153,10 +126,6 @@ export class InstanceNotificationService implements InstanceNotificationPort {
       instanceId: params.instanceId,
     });
   }
-
-  /**
-   * Notify all players when the instance is closed.
-   */
   async notifyInstanceClosed(params: InstanceClosedParams): Promise<void> {
     const body = 'The quiz session has ended.';
 
@@ -181,10 +150,6 @@ export class InstanceNotificationService implements InstanceNotificationPort {
       playerCount: params.playerIds.length,
     });
   }
-
-  /**
-   * Notify a player when they disconnect from a running instance.
-   */
   async notifyPlayerDisconnected(params: InstancePlayerDisconnectedParams): Promise<void> {
     const title = 'Connection Lost';
     const body = 'You have been disconnected from the quiz session. Please reconnect.';
@@ -206,11 +171,6 @@ export class InstanceNotificationService implements InstanceNotificationPort {
       instanceId: params.instanceId,
     });
   }
-
-  /**
-   * Generic host-side system announcement (in-app only). Keeps low-level
-   * system messages inside the Notification module's surface area.
-   */
   async notifyHostSystemAnnouncement(params: {
     userId: string;
     title: string;

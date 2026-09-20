@@ -5,6 +5,10 @@ import type {
   RefreshTokenResult,
   ForgotPasswordResult,
   ResetPasswordResult,
+  LoginApplicationResult,
+  RefreshTokenApplicationResult,
+  SessionResponse,
+  ActiveSessionResult,
 } from '../types/auth-result.types';
 import { AuthLoginService } from '../domain/auth-login.service';
 import { AuthRefreshService } from '../domain/auth-refresh.service';
@@ -26,8 +30,6 @@ import type {
   ChangePasswordCommand,
 } from '../domain/types/auth-commands';
 import { OAuthLoginService as OAuthLoginServiceClass } from '../domain/oauth/oauth-login.service';
-import { LoginResponseDto } from '../dto/response/login-response.dto';
-import { RefreshTokenResponseDto } from '../dto/response/refresh-token-response.dto';
 import { LogoutResponseDto } from '../dto/response/logout-response.dto';
 import { ChangePasswordResponseDto } from '../dto/response/change-password-response.dto';
 import { RegisterResponseDto } from '../dto/response/register-response.dto';
@@ -47,23 +49,6 @@ import { CheckEmailResponseDto } from '../dto/response/check-email-response.dto'
 import { CheckUsernameResponseDto } from '../dto/response/check-username-response.dto';
 import { DeleteAccountResponseDto } from '../dto/response/delete-account-response.dto';
 import { AuthResponseMapper } from '../mappers/auth-response.mapper';
-
-type LoginApplicationResult = {
-  response: LoginResponseDto;
-  refreshToken: string;
-  sessionId: string;
-};
-
-type RefreshTokenApplicationResult = {
-  response: RefreshTokenResponseDto;
-  refreshToken: string;
-};
-
-type SessionResponse = SessionListResponseDto['sessions'][number];
-
-type ActiveSessionResult = Awaited<
-  ReturnType<SessionManagementService['getActiveSessions']>
->[number];
 
 @Injectable()
 export class AuthApplicationService {

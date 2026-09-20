@@ -1,20 +1,3 @@
-// =============================================================================
-// Coins bounded context — relations
-//
-// Forward (FK-holding) relations only. The reverse side — `users` →
-// `userWallet` (one) and `users` → `coinTransactions` (many) — is declared
-// in `../auth/relations.ts`, mirroring how every other bounded context in
-// this project wires the `users` reverse mappings.
-//
-// Phase 6 (S-coin-spend) adds the relations for `userFlairSlots` and
-// `userQuizSuppressions` so the Drizzle query builder can `with: { ... }`
-// them. The reverse side (a `users` user → many `userFlairSlots` /
-// `userQuizSuppressions`) is declared in `../auth/relations.ts`.
-//
-// The schema migration is independent of the relations; Phase 1 only
-// shipped the forward side.
-// =============================================================================
-
 import { relations } from 'drizzle-orm/relations';
 
 import { coinTransactions, userFlairSlots, userQuizSuppressions, userWallets } from './schema';

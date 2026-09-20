@@ -96,12 +96,6 @@ export class UpdateQuizDto {
   @MaxLength(2048)
   imageUrl?: string | null;
 
-  /**
-   * Phase 4 (Cloudinary migration): the Cloudinary `public_id` for
-   * the cover image. Phase 6 wires this into the application service;
-   * until then the value is accepted by the DTO and the shape is
-   * enforced here.
-   */
   @ApiPropertyOptional({
     description:
       'Cloudinary public_id returned by `POST /api/v1/uploads`. ' +

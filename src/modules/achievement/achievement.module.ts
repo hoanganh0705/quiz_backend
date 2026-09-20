@@ -14,6 +14,11 @@ import { SHARED_ACHIEVEMENT_EVENT_BUS } from '@/common/events/achievement-shared
 
 import { AchievementRepository } from './infrastructure/repositories/achievement.repository.impl';
 import { ACHIEVEMENT_REPOSITORY_PORT } from './infrastructure/repositories/achievement.repository';
+import {
+  AchievementDefinitionRepository,
+  UserAchievementRepository,
+  AchievementLeaderboardRepository,
+} from './infrastructure/repositories/aggregates';
 import { ScheduledEvaluationService } from './infrastructure/scheduled/scheduled-evaluation.service';
 import { AchievementOutboxProcessorService } from './infrastructure/outbox/achievement-outbox-processor.service';
 import { AchievementCacheService } from './infrastructure/cache/achievement-cache.service';
@@ -74,6 +79,10 @@ import { BadgeAnalyticsService } from './application';
       provide: ACHIEVEMENT_REPOSITORY_PORT,
       useExisting: AchievementRepository,
     },
+
+    AchievementDefinitionRepository,
+    UserAchievementRepository,
+    AchievementLeaderboardRepository,
 
     AchievementCacheService,
 

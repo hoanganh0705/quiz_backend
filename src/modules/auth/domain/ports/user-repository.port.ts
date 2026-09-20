@@ -56,28 +56,6 @@ export interface UserRepositoryPort {
     isVerified: boolean;
   }>;
 
-  /**
-   * Phase 0 #2: atomic account creation.
-   *
-   * Creates the user row AND seeds the initial `passwordHistory` entry in a
-   * single transaction. If either write fails the whole registration rolls
-   * back, so a user can never end up in the DB without their initial hash
-   * archived (which would silently disable the password-reuse policy for
-   * that user on the first change).
-   *
-   * Why this matters:
-   * - The previous `createUser` + (later) `changePassword` flow meant the
-   *   very first password was *never* archived into `password_history`,
-   *   because `changePassword` only archives the *previous* hash. A user
-   *   could register with `password`, then `changePassword(password)` to
-   *   the same value and reuse it indefinitely.
-   * - Splitting the writes also left a window where a user row existed but
-   *   had no password history, which is a corruption signal at best.
-   *
-   * @throws {InternalServerErrorException} on unique-constraint violation or
-   *   any other DB failure. Caller (registration service) maps this to the
-   *   generic 2xx + generic-message response to avoid email enumeration.
-   */
   createUserWithPasswordHistory(params: {
     email: string;
     username: string;
@@ -125,6 +103,17 @@ export interface UserRepositoryPort {
 
   createPasswordResetToken(userId: string, tokenHash: string, expiresAt: string): Promise<void>;
 
+  /**
+   * Lightweight pre-check used by `PasswordResetService.resetPassword` BEFORE
+   * invoking `consumePasswordResetTokenAndResetPassword`.
+   *
+   * The pre-check is an idempotency guard: if the token has already been
+   * consumed, we can fail fast without spending a bcrypt round on the new
+   * password. The repository then re-validates the token inside the
+   * transaction, so this call is purely an optimisation — both queries
+   * always run for the non-replay path. Keep the WHERE clause in sync with
+   * `consumePasswordResetTokenAndResetPassword`'s lock-time re-check.
+   */
   findActivePasswordResetTokenByHash(
     tokenHash: string,
     nowIso: string,

@@ -13,12 +13,23 @@ import {
 } from '../infrastructure/session/session-invalidation.bus';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 
+/**
+ * Discriminant-keyed identifier for the unified deny-list. Carrying the
+ * `kind` tag inside the key avoids the historical "four parallel maps"
+ * layout and makes lookups self-documenting at every call site.
+ */
+export type DeniedIdentifier =
+  | { kind: 'user'; value: string }
+  | { kind: 'session_id'; value: string }
+  | { kind: 'jti'; value: string }
+  | { kind: 'refresh_token_hash'; value: string };
+
 @Injectable()
 export class SessionService implements OnModuleInit, OnModuleDestroy {
-  private readonly deniedSessionIds = new Map<string, number>();
-  private readonly deniedJtis = new Map<string, number>();
-  private readonly deniedRefreshTokenHashes = new Map<string, number>();
-  private readonly deniedUsers = new Map<string, number>();
+  // Single deny-list keyed by a discriminant-typed identifier. Each
+  // entry carries its absolute expiry timestamp so the read path can
+  // self-prune on lookup without iterating the whole map.
+  private readonly denied = new Map<DeniedIdentifier, number>();
   private unsubscribeBus: (() => void) | null = null;
   private denyListSweepInterval: NodeJS.Timeout | null = null;
 
@@ -66,10 +77,7 @@ export class SessionService implements OnModuleInit, OnModuleDestroy {
       clearInterval(this.denyListSweepInterval);
       this.denyListSweepInterval = null;
     }
-    this.deniedSessionIds.clear();
-    this.deniedJtis.clear();
-    this.deniedRefreshTokenHashes.clear();
-    this.deniedUsers.clear();
+    this.denied.clear();
   }
 
   private getRefreshTokenExpiresAtIso(): string {
@@ -98,72 +106,52 @@ export class SessionService implements OnModuleInit, OnModuleDestroy {
     }
 
     if (event.sessionId) {
-      this.deniedSessionIds.set(event.sessionId, expiresAtMs);
+      this.denied.set({ kind: 'session_id', value: event.sessionId }, expiresAtMs);
     }
     if (event.jti) {
-      this.deniedJtis.set(event.jti, expiresAtMs);
+      this.denied.set({ kind: 'jti', value: event.jti }, expiresAtMs);
     }
     if (event.refreshTokenHash) {
-      this.deniedRefreshTokenHashes.set(event.refreshTokenHash, expiresAtMs);
+      this.denied.set({ kind: 'refresh_token_hash', value: event.refreshTokenHash }, expiresAtMs);
     }
     if (event.kind === 'all_for_user' && event.identifier) {
-      this.deniedUsers.set(event.identifier, expiresAtMs);
+      this.denied.set({ kind: 'user', value: event.identifier }, expiresAtMs);
     }
   }
 
   private sweepDenyList(): void {
     const now = Date.now();
-    const prune = (map: Map<string, number>): void => {
-      for (const [key, expiresAt] of map) {
-        if (expiresAt <= now) {
-          map.delete(key);
-        }
+    for (const [key, expiresAt] of this.denied) {
+      if (expiresAt <= now) {
+        this.denied.delete(key);
       }
-    };
-    prune(this.deniedSessionIds);
-    prune(this.deniedJtis);
-    prune(this.deniedRefreshTokenHashes);
-    prune(this.deniedUsers);
+    }
+  }
+
+  private isDenied(key: DeniedIdentifier): boolean {
+    const expiresAt = this.denied.get(key);
+    if (expiresAt === undefined) return false;
+    if (expiresAt <= Date.now()) {
+      this.denied.delete(key);
+      return false;
+    }
+    return true;
   }
 
   private isDeniedUser(userId: string): boolean {
-    const expiresAt = this.deniedUsers.get(userId);
-    if (expiresAt === undefined) return false;
-    if (expiresAt <= Date.now()) {
-      this.deniedUsers.delete(userId);
-      return false;
-    }
-    return true;
+    return this.isDenied({ kind: 'user', value: userId });
   }
 
   private isDeniedSessionId(sessionId: string): boolean {
-    const expiresAt = this.deniedSessionIds.get(sessionId);
-    if (expiresAt === undefined) return false;
-    if (expiresAt <= Date.now()) {
-      this.deniedSessionIds.delete(sessionId);
-      return false;
-    }
-    return true;
+    return this.isDenied({ kind: 'session_id', value: sessionId });
   }
 
   private isDeniedJti(jti: string): boolean {
-    const expiresAt = this.deniedJtis.get(jti);
-    if (expiresAt === undefined) return false;
-    if (expiresAt <= Date.now()) {
-      this.deniedJtis.delete(jti);
-      return false;
-    }
-    return true;
+    return this.isDenied({ kind: 'jti', value: jti });
   }
 
   private isDeniedRefreshTokenHash(hash: string): boolean {
-    const expiresAt = this.deniedRefreshTokenHashes.get(hash);
-    if (expiresAt === undefined) return false;
-    if (expiresAt <= Date.now()) {
-      this.deniedRefreshTokenHashes.delete(hash);
-      return false;
-    }
-    return true;
+    return this.isDenied({ kind: 'refresh_token_hash', value: hash });
   }
 
   async createSession(

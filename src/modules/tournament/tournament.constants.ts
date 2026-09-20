@@ -20,7 +20,9 @@ export const TOURNAMENT_WITHDRAW_CLOSED_MESSAGE =
 
 /**
  * XP awarded to tournament winners by final rank.
- * Used by TournamentEventProcessor to dispatch XP to CommonExternalEventBus.
+ * Single source of truth for tournament reward XP. Consumed by both the
+ * outbox processor (canonical publisher) and any other module that needs
+ * to compute tournament reward XP deterministically.
  */
 export const TOURNAMENT_RANKING_XP_TABLE: Record<number, number> = {
   1: 500,
@@ -74,3 +76,10 @@ export const TOURNAMENT_RANKING_XP_TABLE: Record<number, number> = {
   49: 25,
   50: 25,
 };
+
+export function computeTournamentXp(rank: number): number {
+  if (!Number.isInteger(rank) || rank < 1) {
+    return 0;
+  }
+  return TOURNAMENT_RANKING_XP_TABLE[rank] ?? 0;
+}

@@ -1,11 +1,6 @@
 import { ApiExtraModels, ApiProperty, ApiPropertyOptional, getSchemaPath } from '@nestjs/swagger';
 import { RFC7807_TYPE_URIS } from '@/common/types/problem-detail.type';
 
-/**
- * RFC 7807 Problem Details for HTTP APIs.
- *
- * @see https://tools.ietf.org/html/rfc7807
- */
 export class ProblemDetailDto {
   @ApiProperty({
     description: 'URI reference that identifies the problem type',
@@ -44,10 +39,6 @@ export class ProblemDetailDto {
   extensions?: Record<string, unknown>;
 }
 
-/**
- * Response schemas for common RFC 7807 error types with realistic examples.
- * These are used with @ApiBadRequestResponse, @ApiUnauthorizedResponse, etc.
- */
 export const ErrorResponseExamples = {
   badRequest: {
     type: RFC7807_TYPE_URIS[400],
@@ -110,14 +101,6 @@ export const ErrorResponseExamples = {
   },
 } as const;
 
-/**
- * Pagination metadata for cursor-based pagination.
- *
- * The `kind: 'cursor'` discriminator is required starting with the response
- * envelope migration (see docs/migrations/RESPONSE_ENVELOPE_MIGRATION.md).
- * Existing consumers continue to receive `limit`, `nextCursor`, `hasNextPage`
- * as before — the new field is additive on the wire only after Phase 4 ships.
- */
 export class PaginationMetaDto {
   @ApiProperty({
     description: 'Discriminator field. Always "cursor" for cursor pagination.',
@@ -131,13 +114,6 @@ export class PaginationMetaDto {
   @ApiProperty({
     description:
       'Opaque cursor string for fetching the next page. `null` when there is no next page.',
-    // Phase 4 (audit issue 3.3): explicit `type: 'string'` was missing
-    // — when `@ApiPropertyOptional({ nullable: true })` is paired with
-    // `string | null`, the swagger plugin emits `{ type: 'object' }`
-    // (or worse, `{ type: 'object', nullable: true }`) in the
-    // generated `openapi.json`, which breaks generated SDKs that try
-    // to type the cursor as a JS string. Forcing `type: 'string'`
-    // here aligns the OpenAPI artifact with the runtime wire shape.
     type: 'string',
     example: 'eyJjcmVhdGVkQXQiOiIyMDI1LTAxLTAxVDAwOjAwOjAwKzAwOjAwIn0',
     nullable: true,
@@ -148,13 +124,6 @@ export class PaginationMetaDto {
   hasNextPage!: boolean;
 }
 
-/**
- * Pagination metadata for offset-based pagination. Used by leaderboards,
- * tournaments, ranking tables, and any endpoint that requires random-access
- * page jumps (`?page=5`) or total counts.
- *
- * Counterpart of {@link PaginationMetaDto}; disambiguated at runtime via `kind`.
- */
 export class OffsetPaginationMetaDto {
   @ApiProperty({
     description: 'Discriminator field. Always "offset" for offset pagination.',
@@ -175,20 +144,6 @@ export class OffsetPaginationMetaDto {
   hasMore!: boolean;
 }
 
-/**
- * Concrete paginated response wrapper for cursor-based pagination.
- * Use this when the item type is known at compile time.
- *
- * @example
- * // For QuizListResponseDto:
- * class QuizListResponseDto {
- *   @ApiProperty({ type: () => [QuizResponseDto] })
- *   items!: QuizResponseDto[];
- *
- *   @ApiProperty({ type: () => PaginationMetaDto })
- *   pagination!: PaginationMetaDto;
- * }
- */
 export class PaginatedResponseDto {
   @ApiProperty({ description: 'Items for the current page', type: () => [Object] })
   items!: object[];
@@ -197,9 +152,6 @@ export class PaginatedResponseDto {
   pagination!: PaginationMetaDto;
 }
 
-/**
- * Query parameters for cursor-based pagination.
- */
 export class CursorQueryDto {
   @ApiPropertyOptional({
     description: 'Opaque cursor string from a previous response for cursor-based pagination',
@@ -210,9 +162,6 @@ export class CursorQueryDto {
   cursor?: string | null;
 }
 
-/**
- * Query parameters for page size limit.
- */
 export class LimitQueryDto {
   @ApiPropertyOptional({
     description: 'Maximum number of items to return per page',
@@ -224,12 +173,6 @@ export class LimitQueryDto {
   limit?: number | null;
 }
 
-/**
- * Simple success response with a message.
- *
- * Use this DTO for simple action confirmation responses (e.g., "Category followed successfully").
- * This is the canonical shared MessageResponseDto — do not create module-specific duplicates.
- */
 export class MessageResponseDto {
   @ApiProperty({
     description: 'Human-readable confirmation message',
@@ -238,32 +181,10 @@ export class MessageResponseDto {
   message!: string;
 }
 
-/**
- * @deprecated Use {@link MessageResponseDto} instead. Kept for backward compatibility.
- */
 export class SuccessResponseDto {
   @ApiProperty({ description: 'Confirmation message', example: 'Operation completed successfully' })
   message!: string;
 }
-
-// ─── Response envelope wrappers ─────────────────────────────────────────────────
-//
-// All HTTP responses are wrapped by ResponseFormatInterceptor as:
-//   { data: <actual_response>, meta: { timestamp, ...pagination } }
-//
-// These DTOs document the envelope so that every @ApiOkResponse / @ApiCreatedResponse
-// reference can use the `type: () => WrappedDto<T>()` pattern.
-//
-// Usage in controllers:
-//   @ApiOkResponse({ type: () => WrappedSuccessDto() })
-//   @ApiCreatedResponse({ type: () => WrappedLoginDto() })
-//
-// Non-paginated plain-object responses use WrappedDto<T>.
-// Paginated responses (items + pagination at root) use WrappedPaginatedDto<T>.
-
-/**
- * Meta field added by ResponseFormatInterceptor to every non-paginated response.
- */
 export class ResponseMetaDto {
   @ApiProperty({
     description: 'ISO 8601 timestamp of when the response was generated',
@@ -273,16 +194,6 @@ export class ResponseMetaDto {
   timestamp!: string;
 }
 
-/**
- * Paginated response meta — includes timestamp plus pagination fields.
- *
- * Phase 4 (audit issue 3.3): the `pagination` field previously had
- * `type: 'object'` and no schema reference, which caused SDK generators
- * to emit a generic `Record<string, unknown>`. It is now typed as a
- * oneOf of the two canonical pagination metas (`PaginationMetaDto` for
- * cursor, `OffsetPaginationMetaDto` for offset) so generated clients
- * can switch on the `kind` discriminator.
- */
 export class PaginatedResponseMetaDto extends ResponseMetaDto {
   @ApiExtraModels(PaginationMetaDto, OffsetPaginationMetaDto)
   @ApiPropertyOptional({
@@ -295,14 +206,6 @@ export class PaginatedResponseMetaDto extends ResponseMetaDto {
   pagination?: PaginationMetaDto | OffsetPaginationMetaDto;
 }
 
-/**
- * Generic non-paginated response envelope.
- *
- * @example
- * // For a simple message response:
- * WrappedDto<{ message: string }>
- * // Runtime shape: { data: { message: string }, meta: { timestamp: string } }
- */
 export class WrappedDto<T extends object> {
   @ApiProperty({ description: 'The actual response payload for this endpoint' })
   data!: T;
@@ -311,13 +214,6 @@ export class WrappedDto<T extends object> {
   meta!: ResponseMetaDto;
 }
 
-/**
- * Generic paginated response envelope.
- *
- * @example
- * WrappedPaginatedDto<QuizResponseDto>
- * // Runtime shape: { data: QuizResponseDto[], meta: { timestamp: string, pagination: {...} } }
- */
 export class WrappedPaginatedDto<T extends object> {
   @ApiProperty({
     description: 'Items for the current page',
@@ -330,22 +226,10 @@ export class WrappedPaginatedDto<T extends object> {
   meta!: PaginatedResponseMetaDto;
 }
 
-/**
- * Convenience wrapper for simple `{ message: string }` responses.
- */
 export class WrappedSuccessDto extends WrappedDto<{ message: string }> {}
 
-/**
- * Convenience wrapper for `{ available: boolean }` responses.
- */
 export class WrappedBooleanDto extends WrappedDto<{ available: boolean }> {}
 
-/**
- * Convenience wrapper for `{ valid: boolean }` responses.
- */
 export class WrappedValidDto extends WrappedDto<{ valid: boolean }> {}
 
-/**
- * Convenience wrapper for `{ accessToken: string }` responses.
- */
 export class WrappedAccessTokenDto extends WrappedDto<{ accessToken: string }> {}

@@ -10,7 +10,7 @@ import type {
   ReportCursor,
   ReviewReportRepositoryPort,
 } from '../../domain/ports/review-report-repository.port';
-import { ReviewAlreadyReportedError, ReviewValidationError } from '../../domain/errors';
+import { ReviewAlreadyReportedError } from '../../domain/errors';
 
 @Injectable()
 export class ReviewReportRepository implements ReviewReportRepositoryPort {
@@ -42,12 +42,6 @@ export class ReviewReportRepository implements ReviewReportRepositoryPort {
         )
       : undefined;
 
-    // Phase 3 / Issue #7 — apply the optional status filter at the
-    // repository boundary so the SQL query stays a single round-trip
-    // and an empty filter passes through unchanged. Building the
-    // predicate incrementally keeps the SQL planner happy: an
-    // optional `eq(reviewReports.status, ...)` is the same query
-    // shape with or without the filter.
     const filterConditions: Array<ReturnType<typeof eq>> = [];
     filterConditions.push(eq(reviewReports.reporterId, params.reporterId));
     if (params.status) {
@@ -59,17 +53,6 @@ export class ReviewReportRepository implements ReviewReportRepositoryPort {
     const whereCondition =
       filterConditions.length === 1 ? filterConditions[0] : and(...filterConditions);
 
-    // Phase 4 / Issue #35 — switch the joins against `quiz_reviews`,
-    // `quizzes`, and `users` from INNER to LEFT so the user's
-    // "my reported reviews" list survives deletion of the underlying
-    // review. The previous INNER-JOIN shape silently dropped every
-    // report whose target review had been cascade-deleted, which left
-    // users wondering whether their report was lost. Today the FK is
-    // `ON DELETE CASCADE`, so the review row is gone and the
-    // user-visible columns (`quizTitle`, `rating`, `comment`,
-    // `reviewerUsername`) are null — the response DTOs already mark
-    // them nullable. The report itself (`status`, `reason`,
-    // `details`, timestamps) is the source of truth and is preserved.
     const rows = await this.db
       .select({
         reportId: reviewReports.reportId,
@@ -93,9 +76,6 @@ export class ReviewReportRepository implements ReviewReportRepositoryPort {
       .orderBy(desc(reviewReports.createdAt), desc(reviewReports.reportId))
       .limit(params.limit + 1);
 
-    // Phase 5 / Issue #18 — narrow `reason` from `text` to
-    // the closed-set tag. Cast happens once here; downstream
-    // consumers carry the structured tag.
     return rows as unknown as ReportedReviewRow[];
   }
 
@@ -129,41 +109,12 @@ export class ReviewReportRepository implements ReviewReportRepositoryPort {
           updatedAt: reviewReports.updatedAt,
         });
 
-      // Phase 5 / Issue #18 — the DTO layer validates the
-      // closed set of reason tags, so the value stored by
-      // `createReport` always satisfies `ReviewReportReason`.
-      // The `as unknown as` is a deliberate single boundary
-      // cast; downstream consumers carry the structured tag.
       return report as unknown as ReviewReportRow;
     } catch (error) {
-      // Phase 2 / Issue #6 — concurrent duplicate reports race past
-      // `hasUserReportedReview` and both call `createReport`. The
-      // unique index `uq_review_reports_review_reporter` catches the
-      // second insert. Translate the Postgres 23505 into the
-      // application-level `ReviewAlreadyReportedError` so the caller
-      // sees a clean 409 instead of a 500.
-      const pgError = error as { code?: string; constraint?: string; message?: string };
+      const pgError = error as { code?: string; constraint?: string };
 
       if (pgError.code === '23505' && pgError.constraint === 'uq_review_reports_review_reporter') {
         throw new ReviewAlreadyReportedError();
-      }
-
-      // Defense-in-depth / migration 0016 — the BEFORE INSERT
-      // trigger `trg_review_reports_reject_self_report` raises
-      // `23514` with message `review_reports_self_report_forbidden`
-      // when the reporter is the review's author. The application-
-      // layer guard in `ReviewService.reportReview` catches the
-      // same case before this code path is hit, but a future
-      // regression that bypasses the guard (or a direct DBA INSERT)
-      // must surface the same user-facing 400. Translate the
-      // `23514` into `ReviewValidationError` so the controller
-      // layer can map it to the standard error envelope.
-      if (
-        pgError.code === '23514' &&
-        typeof pgError.message === 'string' &&
-        pgError.message.includes('review_reports_self_report_forbidden')
-      ) {
-        throw new ReviewValidationError('You cannot report your own review');
       }
 
       throw error;
@@ -244,19 +195,6 @@ export class ReviewReportRepository implements ReviewReportRepositoryPort {
     nowIso: string;
     tx?: unknown;
   }): Promise<boolean> {
-    // Phase 2 / Issue #38 — atomic compare-and-set on the status
-    // column. The WHERE clause pins both the report id AND the
-    // current status, so a concurrent moderator cannot flip the row
-    // through a different transition while this UPDATE is in flight.
-    // Returns true iff a row was updated (i.e. the precondition held
-    // at the moment the UPDATE ran). The admin service maps a `false`
-    // return to either a not-found or an invalid-transition response
-    // based on a follow-up `getReportStatus` call.
-    //
-    // Phase 5 / Issue #37 — when `params.tx` is provided, the
-    // UPDATE runs inside the caller's open transaction so the
-    // audit-row INSERT (in `AuditLogService.recordWithExecutor`)
-    // and the status UPDATE commit atomically.
     const executor = (params.tx as typeof this.db | undefined) ?? this.db;
     const updated = await executor
       .update(reviewReports)
@@ -271,16 +209,6 @@ export class ReviewReportRepository implements ReviewReportRepositoryPort {
     return updated.length > 0;
   }
 
-  /**
-   * Phase 5 / Issue #39 — fetch the review id associated with a
-   * report. The admin service uses this inside the actioned-status
-   * transition so the soft-delete runs against the same row the
-   * status UPDATE just modified, and against the same `tx` the
-   * caller already opened (so all three writes — the status flip,
-   * the soft-delete, and the audit row — commit atomically).
-   *
-   * Returns `null` when the report id does not exist.
-   */
   async getReportReviewId(reportId: string, tx?: unknown): Promise<string | null> {
     const executor = (tx as typeof this.db | undefined) ?? this.db;
     const [row] = await executor

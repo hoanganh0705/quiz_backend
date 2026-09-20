@@ -36,10 +36,6 @@ import { sql } from 'drizzle-orm';
 
 import { users } from '../auth/schema';
 
-// =============================================================================
-// categories
-// =============================================================================
-
 export const categories = pgTable(
   'categories',
   {
@@ -51,11 +47,6 @@ export const categories = pgTable(
     description: text(),
     slug: text().notNull(),
     imageUrl: text('image_url'),
-    /**
-     * Reserved (out of scope for Phase 4). Added now so the future
-     * category-image feature can write to it without a schema
-     * migration. The application never writes to this column.
-     */
     imagePublicId: text('image_public_id'),
     createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' })
       .defaultNow()
@@ -82,10 +73,6 @@ export const categories = pgTable(
     ),
   ],
 );
-
-// =============================================================================
-// tags
-// =============================================================================
 
 export const tags = pgTable(
   'tags',
@@ -121,10 +108,6 @@ export const tags = pgTable(
     ),
   ],
 );
-
-// =============================================================================
-// categoryFollows
-// =============================================================================
 
 export const categoryFollows = pgTable(
   'category_follows',
@@ -173,10 +156,6 @@ export const categoryFollows = pgTable(
     }).onDelete('cascade'),
   ],
 );
-
-// =============================================================================
-// tagFollows
-// =============================================================================
 
 export const tagFollows = pgTable(
   'tag_follows',

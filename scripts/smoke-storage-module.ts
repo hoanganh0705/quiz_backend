@@ -1,20 +1,3 @@
-/**
- * scripts/smoke-storage-module.ts
- *
- * CI smoke: verify that StorageModule.forRoot() resolves STORAGE_PORT to
- *   - FakeStorageAdapter when adapter: 'fake'
- *   - CloudinaryStorageAdapter when adapter: 'cloudinary'
- *
- * Exits 0 on success, non-zero on failure.
- *
- * Phase 4 note: the module now also exports `StorageAssetsRepository`
- * (which needs `DRIZZLE` from `DatabaseModule`) and
- * `StorageApplicationService`. The smoke here is intentionally narrow —
- * it only asserts that `STORAGE_PORT` resolves to the expected
- * adapter, so we stub out the repository with a hand-rolled fake.
- * The full DI graph is exercised by the e2e suites.
- */
-
 import 'reflect-metadata';
 import { Test, type TestingModule } from '@nestjs/testing';
 import { ConfigModule } from '@nestjs/config';

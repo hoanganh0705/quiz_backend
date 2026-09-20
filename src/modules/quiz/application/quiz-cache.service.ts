@@ -1,38 +1,3 @@
-/**
- * Quiz read-through cache.
- *
- * Phase 3 of the resilience roadmap (see `BACKEND_AUDIT_REPORT.md`
- * §23 Phase 3).
- *
- * Three cache surfaces:
- *   1. `getOrSetList(dto, fetcher)` — the `GET /quizzes` list page.
- *      Key:
-
- `quiz:list:v1:<sha256(filters+cursor+limit)>`.
- *      TTL 60s. Invalidation: full purge on `QuizCreatedEvent` /
- *      `QuizUpdatedEvent` / `QuizDeletedEvent`.
- *   2. `getOrSetStats(quizId, fetcher)` — `GET /quizzes/:id/stats`.
- *      Key: `quiz:stats:v1:<quizId>`. TTL 5 min. Invalidation:
- *      per-key delete on `AttemptCompletedEvent` (which we currently
- *      route through the analytics scheduler).
- *   3. `getProfileBundle(userId, fetcher)` — composite "my profile"
- *      payload. Key: `user:profile-bundle:v1:<userId>`. TTL 2 min.
- *      Invalidation: per-key delete on `UserProfileUpdatedEvent`
- *      (currently surfaced via the user summary service).
- *
- * All three use `getOrSetWithStampedeProtection` so the cold-cache
- * thundering herd is bounded to a single database query per key.
- *
- * Why a separate service?
- * -----------------------
- * The application service must stay focused on the business flow
- * (filter parsing, projection context, mapping). The cache key
- * derivation, invalidation, and stampede protection are
- * orthogonal concerns. Pulling them into a dedicated service keeps
- * the application service diffable and lets the cache be swapped
- * (e.g. for a multi-level cache) without touching the read path.
- */
-
 import { Inject, Injectable } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { createHash } from 'crypto';

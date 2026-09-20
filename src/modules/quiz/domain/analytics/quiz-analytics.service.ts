@@ -415,32 +415,6 @@ export class QuizAnalyticsService implements QuizAnalyticsPort {
     };
   }
 
-  /**
-   * Phase 1 / Issue #9 — daily reconciliation of `quiz_stats.avg_rating`
-   * and `rating_count`.
-   *
-   * The denormalized review counters are normally refreshed in
-   * `refreshReviewMetrics` whenever a review is created or deleted.
-   * That path runs through the transactional outbox (see
-   * `ReviewOutboxProcessorService`), so it is durable. However, it
-   * only handles events the application observed. Drift can still
-   * happen when:
-   *
-   *   - a manual SQL fix in production re-computes a counter to the
-   *     wrong value,
-   *   - a future schema change touches `quiz_reviews` (e.g. a bulk
-   *     backfill) without firing the outbox,
-   *   - an outbox row is moved to the DLQ and never retried.
-   *
-   * The daily sweep re-reads every quiz's reviews and writes the
-   * correct `avg_rating` / `rating_count` back into `quiz_stats`,
-   * healing whatever drift accumulated since the last sweep.
-   *
-   * This mirrors `reconcileAllQuizMetrics` which already reconciles
-   * `total_attempts` / `avg_score_percent`. The two methods share the
-   * same iteration strategy (`getAllActiveQuizIds` + per-quiz refresh)
-   * so they can be invoked independently.
-   */
   async reconcileAllReviewMetrics(): Promise<{
     quizzesEvaluated: number;
     quizzesRefreshed: number;

@@ -15,56 +15,11 @@ import type { AuthorSummaryDto } from '../dto/response/author-summary.dto';
 import type { QuizResponseDto } from '../dto/response/quiz-response.dto';
 import type { QuizListItemDto } from '../dto/response/quiz-list-item.dto';
 
-/**
- * Pure stateless mapper — no DI needed.
- * Translates QuizWithPublishedVersionRow database projections to QuizResponseDto.
- *
- * Phase 2 (S-6 + S-7 + S-8) threading model:
- * the list/detail path used to take just the row plus optional
- * `publishedQuestions` / `tags`. It now takes an optional
- * `QuizProjectionContext` carrying the four batched lookups
- * (creators, categories, tags, aggregates, question counts). The
- * mapper stitches them onto the projection purely defensively — if
- * the context is missing (e.g. a code path that has not been
- * migrated yet), every enriched field reads as the documented
- * default (`null` for embedded objects, `0` for counts) so the
- * wire shape stays valid.
- *
- * `publishedQuestions` accepts either player or author question DTOs.
- * The public `GET /quizzes/:id` endpoint passes player questions (no
- * `isCorrect`); no current code path passes author questions here, but
- * the union keeps the mapper reusable if an author-only detail route is
- * added later.
- */
 export type QuizProjectionContext = {
-  /**
-   * Batched `users` + `user_profiles` LEFT JOIN keyed by `userId`.
-   * Drives `creator` on the response. Absent users are surfaced
-   * as `null` so the wire shape stays valid.
-   */
   authorsByUserId?: Map<string, AuthorSummaryRow>;
-  /**
-   * Batched `categories` join keyed by `categoryId`. Drives
-   * `categoryName` / `categorySlug`. Absent categories read as
-   * `null` (the category was deleted or never set).
-   */
   categoriesById?: Map<string, CategorySummaryRow>;
-  /**
-   * Batched `tags` join keyed by `quizId`. Drives `tags`. Quizzes
-   * without rows in the result map simply have an empty tag list.
-   */
   tagsByQuizId?: Map<string, QuizTagDto[]>;
-  /**
-   * Batched `quiz_stats` aggregates keyed by `quizId`. Drives
-   * `averageRating` / `reviewCount` / `attemptCount`. Quizzes
-   * without rows read as zero counters.
-   */
   aggregatesByQuizId?: Map<string, QuizAggregatesRow>;
-  /**
-   * Batched question counts keyed by `quizVersionId`. Drives
-   * `publishedVersion.questionCount`. Versions without a row read
-   * as zero.
-   */
   questionCountByVersionId?: Map<string, number>;
 };
 
@@ -109,12 +64,6 @@ function resolveCategorySlug(
 export class QuizResponseMapper {
   constructor(@Inject(STORAGE_PORT) private readonly storage: StoragePort) {}
 
-  /**
-   * Resolve the cover image URL for a quiz row, preferring
-   * `imagePublicId` (Cloudinary) and falling back to legacy
-   * `imageUrl` (raw seed/external URL). Returns `null` when neither
-   * is present.
-   */
   private deriveImageUrl(
     row: Pick<QuizWithPublishedVersionRow, 'imageUrl' | 'imagePublicId'>,
   ): string | null {
@@ -219,16 +168,6 @@ export class QuizResponseMapper {
     };
   }
 
-  /**
-   * Slim projection for listing endpoints. Produces a `QuizListItemDto`.
-   *
-   * Phase 2 (S-6): tags are now folded in here (previously detail-only)
-   * via the `tagsByQuizId` batched map. The list also reads
-   * creator / category / aggregates / question-count fields off the
-   * same context object, so a page of 20 quizzes resolves with
-   * exactly five SQL queries (page + tags + authors + categories +
-   * stats) instead of 1 + 4×N.
-   */
   toListItem(
     row: QuizWithPublishedVersionRow,
     context: QuizProjectionContext = EMPTY_CONTEXT,

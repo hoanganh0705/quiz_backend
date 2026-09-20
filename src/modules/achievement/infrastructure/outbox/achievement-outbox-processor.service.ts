@@ -1,36 +1,3 @@
-/**
- * Achievement Outbox Processor Service
- *
- * Background job that reads unprocessed Achievement outbox rows
- * (`aggregate_type = 'Achievement'`, `event_type` in
- * `{'achievement.awarded', 'badge.revoked'}`) and replays them
- * to in-process subscribers via the AchievementDomainEventBus.
- *
- * Why a separate processor for Achievement when the events are already
- * published synchronously via the in-process bus?
- *
- * 1. Atomicity: `awardBadge` and `revokeBadge` insert into `outbox_events`
- *    inside the same transaction as the badge write. If the request crashes
- *    after the DB commit but before the synchronous event reaches every
- *    listener (notification, social feed, etc.), the outbox row is a durable
- *    record that this event was committed but not fully delivered.
- *
- * 2. Cross-process delivery: in a multi-instance deployment, listeners in
- *    process B do not see events emitted in process A. The outbox processor
- *    on each instance polls the shared outbox table and replays events
- *    locally so listeners on every instance observe the same event stream.
- *
- * Retry strategy: mirrors `RankingOutboxProcessorService`:
- *   delay = base_delay_seconds × 2^(attemptCount - 1)
- *   With base=30s: 30s → 60s → 2m → 4m → 8m → 16m → 32m → 64m
- *   After 8 attempts the event is moved to DLQ (failed_at + dlq_reason set).
- *
- * Correlation ID propagation: outbox rows may carry a correlationId in their
- * metadata. Before dispatching, the ID is set in AsyncLocalStorage so
- * downstream handlers (notifications, social feed) can read it via
- * getCorrelationId() instead of generating a new one.
- */
-
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { Inject, Injectable, OnModuleInit } from '@nestjs/common';
 import { and, asc, eq, isNull, lte } from 'drizzle-orm';
@@ -126,21 +93,23 @@ export class AchievementOutboxProcessorService implements OnModuleInit {
   // eslint-disable-next-line @typescript-eslint/require-await
   private async dispatch(event: OutboxEventRow): Promise<void> {
     if (!this.isSupportedEventType(event.eventType)) {
-      // Unknown event type — fail permanently so it doesn't loop forever.
       throw new Error(`Unsupported achievement outbox event type: ${event.eventType}`);
     }
 
     const domainEvent = event.payload as unknown as AchievementDomainEvent;
     const correlationId = event.correlationId ?? createCorrelationId();
 
-    // EventBus.emit is synchronous; intentionally not awaited
     void correlationIdStorage.run({ correlationId }, () => {
       this.eventBus.emit(domainEvent);
     });
   }
 
   private isSupportedEventType(eventType: string): boolean {
-    return eventType === 'achievement.awarded' || eventType === 'badge.revoked';
+    return (
+      eventType === 'achievement.awarded' ||
+      eventType === 'badge.revoked' ||
+      eventType === 'badge.restored'
+    );
   }
 
   private async handleFailure(event: OutboxEventRow, error: unknown): Promise<void> {

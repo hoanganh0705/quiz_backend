@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import UAParserImport from 'ua-parser-js';
 import type { IResult } from 'ua-parser-js';
 import type { SessionDeviceType } from '../../types/auth-context.types';
@@ -15,6 +16,8 @@ type UAParserCtor = new (ua?: string) => {
 
 @Injectable()
 export class DeviceParserService {
+  constructor(@InjectPinoLogger(DeviceParserService.name) private readonly logger: PinoLogger) {}
+
   parseUserAgent(userAgent: string | null): ParsedDeviceInfo {
     if (!userAgent || userAgent.trim().length === 0) {
       return {
@@ -46,6 +49,16 @@ export class DeviceParserService {
     } else if (!result.device?.type) {
       deviceType = 'desktop';
     } else {
+      // ua-parser-js occasionally returns device types the SessionDeviceType
+      // union does not enumerate (e.g. 'wearable', 'embedded', 'xr', 'console').
+      // Downgrade to 'unknown' so downstream session-binding logic treats the
+      // session as "cannot compare" (see SecurityService.isSameSessionContext),
+      // and emit a debug-level breadcrumb so a future contribution can decide
+      // whether to widen the union.
+      this.logger.debug({
+        event: 'auth_device_parser_unknown_device_type',
+        deviceType: result.device.type,
+      });
       deviceType = 'unknown';
     }
 

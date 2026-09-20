@@ -18,20 +18,6 @@ import type { SessionManagementResultDto } from '../../dto/response/session-mana
 import type { VerifyEmailResponseDto } from '../../dto/response/verify-email-response.dto';
 import type { VerifyPasswordResponseDto } from '../../dto/response/verify-password-response.dto';
 
-/**
- * Presenter for the auth module. Wraps every application-service response in
- * the canonical `{ data, meta.timestamp }` envelope.
- *
- * Currently a thin pass-through to {@link ApiResponse.ok}. The layer exists
- * separately from the controller so future module-specific shaping (sensitive
- * field redaction, conditional fields, additional meta) has a stable seam.
- *
- * Only the four endpoints migrated in Phase 1 (register, login, getCurrentUser,
- * changePassword) actually invoke these methods today. The full set is
- * declared up front so a grep for `presenter.<name>` always reveals what's
- * available — making future migrations (Phase 1.5 / Phase 2) easier to
- * stage.
- */
 @Injectable()
 export class AuthPresenter {
   // Free-standing arrow function (not a class method) so we don't trip the

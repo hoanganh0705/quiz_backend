@@ -75,7 +75,7 @@ export class TournamentResponseDto {
 
   @ApiProperty({
     description:
-      'Phase 1 / Issue #2 — UUID of the user who created the tournament. ' +
+      'UUID of the user who created the tournament. ' +
       'Used by the authorization layer for `PATCH /tournaments/:id`, ' +
       '`DELETE /tournaments/:id`, and `POST /tournaments/:id/cancel`. ' +
       'The application-layer policy compares this against the JWT subject ' +

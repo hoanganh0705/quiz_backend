@@ -1,9 +1,3 @@
-/**
- * Achievement Repository Port
- *
- * Defines the interface for achievement data access.
- */
-
 import type { badgeRuleType, badgeCategory, badgeType } from '@/core/database/schema';
 
 export interface RevokedBadgeRecord {
@@ -88,23 +82,10 @@ export type BadgeRuleRow = {
 };
 
 export interface AchievementRepositoryPort {
-  /**
-   * Check if user already has a specific badge (active, not revoked).
-   */
   hasBadge(userId: string, badgeId: string): Promise<boolean>;
 
-  /**
-   * Check badge ownership for multiple badges in a single query (avoids N+1).
-   * Returns a map of badgeId -> true/false.
-   */
   hasBadges(userId: string, badgeIds: string[]): Promise<Record<string, boolean>>;
 
-  /**
-   * Award a badge to a user.
-   * Idempotent: returns null if the user already has this badge (unique constraint violation).
-   * The caller should guard with hasBadge() for the normal fast path; this handles the race case
-   * where two concurrent requests both pass the guard and hit the DB simultaneously.
-   */
   awardBadge(params: {
     userId: string;
     badgeId: string;
@@ -115,14 +96,8 @@ export interface AchievementRepositoryPort {
     expiresAt?: Date;
   }): Promise<UserBadgeRow | null>;
 
-  /**
-   * Get all active badges for a user.
-   */
   getUserBadges(userId: string): Promise<UserBadgeRow[]>;
 
-  /**
-   * Get all active badges for a user, with badge details (paginated).
-   */
   getUserBadgesWithDetails(
     userId: string,
     params?: { limit?: number; offset?: number },
@@ -131,146 +106,77 @@ export interface AchievementRepositoryPort {
     total: number;
   }>;
 
-  /**
-   * Get the public badge catalog (paginated).
-   */
   getBadgeCatalog(params?: { limit?: number; offset?: number; category?: string }): Promise<{
     data: BadgeCatalogRow[];
     total: number;
   }>;
 
-  /**
-   * Get public achievement profile for a user.
-   */
   getPublicAchievementProfile(userId: string): Promise<PublicAchievementProfileRow | null>;
 
-  /**
-   * Get badge details by ID with earners count.
-   */
   getBadgeDetailsById(badgeId: string): Promise<BadgeDetailsRow | null>;
 
-  /**
-   * Get badge definition by ID.
-   */
   getBadgeById(badgeId: string): Promise<BadgeDefinitionRow | null>;
 
-  /**
-   * Get badge definition by slug.
-   */
   getBadgeBySlug(slug: string): Promise<BadgeDefinitionRow | null>;
 
-  /**
-   * Get badge definitions by IDs in a single query (avoids N+1).
-   */
   getBadgesByIds(badgeIds: string[]): Promise<BadgeDefinitionRow[]>;
 
-  /**
-   * Get all active badge definitions.
-   */
   getAllActiveBadges(): Promise<BadgeDefinitionRow[]>;
 
-  /**
-   * Get badge rules for a specific badge.
-   */
   getBadgeRules(badgeId: string): Promise<BadgeRuleRow[]>;
 
-  /**
-   * Get all active badge rules.
-   */
   getAllActiveRules(): Promise<BadgeRuleRow[]>;
 
-  /**
-   * Get rules by type (for event-based evaluation).
-   */
   getRulesByType(ruleType: (typeof badgeRuleType.enumValues)[number]): Promise<BadgeRuleRow[]>;
 
-  /**
-   * Get badges by category.
-   */
   getBadgesByCategory(
     category: (typeof badgeCategory.enumValues)[number],
   ): Promise<BadgeDefinitionRow[]>;
 
-  /**
-   * Update badge progress for a user.
-   */
   updateBadgeProgress(
     userId: string,
     badgeId: string,
     progress: Record<string, unknown>,
   ): Promise<void>;
 
-  /**
-   * Get badge progress for a user.
-   */
   getBadgeProgress(userId: string, badgeId: string): Promise<Record<string, unknown> | null>;
 
-  /**
-   * Get badge progress for multiple badges in a single query (avoids N+1).
-   * Returns a map of badgeId -> progress record (or null if none).
-   */
   getBadgeProgressBatch(
     userId: string,
     badgeIds: string[],
   ): Promise<Record<string, Record<string, unknown> | null>>;
 
-  /**
-   * Revoke a badge and return the audit record.
-   */
   revokeBadge(userId: string, badgeId: string, reason: string): Promise<RevokedBadgeRecord | null>;
 
-  /**
-   * Check if badge is currently valid (not expired, within validFrom/validUntil).
-   */
+  restoreBadge(
+    userId: string,
+    badgeId: string,
+    restoredBy: string,
+  ): Promise<RevokedBadgeRecord | null>;
+
   isBadgeValid(badge: BadgeDefinitionRow): boolean;
 
-  /**
-   * Get recently awarded badges for a user (for notifications).
-   */
   getRecentUserBadges(userId: string, limit?: number): Promise<UserBadgeRow[]>;
 
-  /**
-   * Count total badges for a user.
-   */
   countUserBadges(userId: string): Promise<number>;
 
-  /**
-   * Count badges by type for a user.
-   */
   countUserBadgesByType(
     userId: string,
     type: (typeof badgeType.enumValues)[number],
   ): Promise<number>;
 
-  /**
-   * Get badge earners count.
-   */
   getBadgeEarnersCount(badgeId: string): Promise<number>;
 
-  /**
-   * Get earner counts for multiple badges in a single query (avoids N+1).
-   */
   getBadgeEarnersCounts(badgeIds: string[]): Promise<Record<string, number>>;
 
-  /**
-   * Get time-windowed earner counts for a badge (last 24h, 7d, 30d) in a single query.
-   */
   getBadgeEarnersCountTimeline(badgeId: string): Promise<{
     last24Hours: number;
     last7Days: number;
     last30Days: number;
   }>;
 
-  /**
-   * Get all distinct user IDs who have earned at least one badge.
-   * Used for platform analytics to calculate unique earners.
-   */
   getDistinctBadgeEarners(): Promise<string[]>;
 
-  /**
-   * Get users eligible for streak-based badges.
-   * Returns users whose current streak meets or exceeds the threshold.
-   */
   getUsersEligibleForStreakBadge(
     minStreakDays: number,
     excludeBadgeId: string,
@@ -278,10 +184,6 @@ export interface AchievementRepositoryPort {
     offset?: number,
   ): Promise<{ userId: string; currentStreak: number }[]>;
 
-  /**
-   * Get users eligible for rank-based badges.
-   * Returns users whose rank meets or exceeds the threshold.
-   */
   getUsersEligibleForRankBadge(
     maxRank: number,
     period: string,
@@ -290,54 +192,40 @@ export interface AchievementRepositoryPort {
     offset?: number,
   ): Promise<{ userId: string; currentRank: number }[]>;
 
-  /**
-   * Get a specific user badge by its ID.
-   */
   getUserBadgeById(
     userBadgeId: string,
   ): Promise<(UserBadgeRow & { badge: BadgeDefinitionRow }) | null>;
 
-  /**
-   * Get revoked user badges (optionally filtered by badge).
-   */
   getRevokedUserBadges(
     userId?: string,
     badgeId?: string,
     options?: { limit?: number; offset?: number },
   ): Promise<{ data: (UserBadgeRow & { badge: BadgeDefinitionRow })[]; total: number }>;
 
-  /**
-   * Get recent badge awards ordered by earnedAt DESC.
-   */
-  getRecentAwards(limit?: number): Promise<{ userId: string; badgeId: string; earnedAt: Date }[]>;
+  getRecentAwards(
+    userId?: string,
+    limit?: number,
+  ): Promise<{ userId: string; badgeId: string; earnedAt: Date }[]>;
 
-  /**
-   * Get badge awards filtered by category.
-   */
+  getRecentAwardsWithDetails(
+    limit?: number,
+  ): Promise<(UserBadgeRow & { badge: BadgeDefinitionRow })[]>;
+
   getAwardsByCategory(
     category: string,
     options?: { limit?: number; offset?: number },
   ): Promise<{ data: (UserBadgeRow & { badge: BadgeDefinitionRow })[]; total: number }>;
 
-  /**
-   * Get all awards for a specific badge (with optional pagination).
-   */
   getBadgeAwards(
     badgeId: string,
     options?: { limit?: number; offset?: number; includeRevoked?: boolean },
   ): Promise<{ data: (UserBadgeRow & { badge: BadgeDefinitionRow })[]; total: number }>;
 
-  /**
-   * Get top earners for a specific badge.
-   */
   getBadgeTopEarners(
     badgeId: string,
     limit?: number,
   ): Promise<{ userId: string; earnedAt: Date }[]>;
 
-  /**
-   * Get award counts per day for trend analysis.
-   */
   getAwardTrendData(
     badgeIds: string[],
     days: number,

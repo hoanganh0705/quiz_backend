@@ -1,29 +1,3 @@
-/**
- * Notification Gateway
- *
- * Real-time WebSocket gateway for delivering notification lifecycle events
- * (sent, read, unread, deleted) to connected clients.
- *
- * Clients connect with a JWT token via handshake auth or Authorization header.
- * On connect, the client joins a user-scoped room `user:{userId}`.
- * When notification events are published via NotificationDomainEventBus,
- * this gateway broadcasts them to all connected sockets for that user.
- *
- * Phase 3 (Production Deployment Readiness) — emit path updated to
- * `server.to(userRoom).emit(...)` so the Redis-backed Socket.IO
- * adapter (configured in `main.ts`) actually fans the event out to
- * every replica the user is connected to. Pre-Phase-3 the gateway
- * iterated a process-local `userSockets` Map and emitted to each
- * socket directly; that pattern silently dropped notifications
- * delivered to any replica other than the originator.
- *
- * The local `userSockets` Map is retained to back the `ping`
- * handler's reply on the local replica (a "yes, I'm connected to
- * *this* instance" check). Cross-instance counts are answered via
- * the Socket.IO adapter's `fetchSockets` so a client that has a
- * socket on instance B gets a positive answer from instance A.
- */
-
 import {
   WebSocketGateway,
   WebSocketServer,
@@ -41,16 +15,6 @@ import type { JwtPayload } from '@/common/guards/jwt.guard';
 import { WsExceptionFilter } from '@/modules/instance/transport/filters/ws-exception.filter';
 import type { NotificationDomainEvent } from '@/modules/notification/domain/events';
 
-/**
- * CORS origins for the WebSocket gateway, sourced from the same CORS_ORIGINS
- * environment variable used by the HTTP layer (server.config.ts).
- *
- * Phase 6 (rev6.1): changed from `origin: '*'` to explicit origins for
- * improved security posture. The previous wildcard configuration was
- * technically rejected by browsers when `credentials: true` is set (browsers
- * don't allow `*` with credentials), but the explicit configuration makes
- * the intent clear and aligns with the HTTP layer's CORS policy.
- */
 const getCorsOrigins = (): string | string[] => {
   const origins = (process.env.CORS_ORIGINS ?? '')
     .split(',')
@@ -74,13 +38,6 @@ const USER_ROOM_PREFIX = 'user:';
 export class NotificationGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
   server!: Server;
-
-  /**
-   * Local per-replica mirror of `server.rooms`. Used only for the
-   * `ping` handler's local-replica count, NOT for fan-out (which
-   * goes through `server.to(room).emit` so the Redis adapter can
-   * reach every replica the target user is connected to).
-   */
   private readonly userSockets = new Map<string, Set<string>>();
 
   constructor(
@@ -131,14 +88,6 @@ export class NotificationGateway implements OnGatewayConnection, OnGatewayDiscon
     });
   }
 
-  /**
-   * Client explicitly requests the count of currently connected sockets for their user.
-   *
-   * Phase 3 — this now resolves through the Socket.IO adapter so a
-   * client connected to instance B that pings instance A still
-   * observes the correct cross-instance count. The local Map is
-   * kept for observability but is no longer the source of truth.
-   */
   @SubscribeMessage('ping')
   async handlePing(@WsCurrentUser() user: JwtPayload): Promise<{
     ok: boolean;
@@ -153,11 +102,6 @@ export class NotificationGateway implements OnGatewayConnection, OnGatewayDiscon
         .fetchSockets()) as RemoteSocket<Record<string, never>, unknown>[];
       connectedCount = remoteSockets.length;
     } catch (error) {
-      // `fetchSockets` requires the client to be in the namespace,
-      // which it always is here. A failure indicates a configuration
-      // problem (e.g. the Redis adapter was disabled mid-flight) —
-      // surface it in the logs and return the local count as a
-      // conservative fallback rather than throwing.
       this.logger.warn({
         event: 'notification_ping_fetch_sockets_failed',
         userId: user.sub,
@@ -168,9 +112,6 @@ export class NotificationGateway implements OnGatewayConnection, OnGatewayDiscon
     return { ok: true, connectedCount, localCount };
   }
 
-  /**
-   * Client confirms subscription — logs the subscription.
-   */
   @SubscribeMessage('subscribe')
   handleSubscribe(
     @ConnectedSocket() client: Socket,
@@ -185,29 +126,10 @@ export class NotificationGateway implements OnGatewayConnection, OnGatewayDiscon
     return { event: 'subscribed', userId: user.sub };
   }
 
-  /**
-   * Push a notification domain event to all connected sockets of
-   * the target user. Called by NotificationWebSocketListener after
-   * subscribing to NotificationDomainEventBus.
-   *
-   * Phase 3 — emit is now addressed to the user-scoped room, so
-   * the Redis-backed Socket.IO adapter handles cross-instance
-   * fan-out. The previous local-Map iteration would silently drop
-   * notifications for clients connected to any replica other than
-   * the originator; that bug is fixed here.
-   */
   pushToUser(event: NotificationDomainEvent): void {
     const room = `${USER_ROOM_PREFIX}${event.userId}`;
     const payload = this.serializeEvent(event);
 
-    // Emit one Socket.IO event per domain event type. The frontend
-    // listens on `notification:sent` / `notification:read` /
-    // `notification:deleted` (see `lib/realtime/events.ts`); the
-    // single wrapper event `'notification'` was a long-standing mismatch
-    // that left every consumer — the bell badge, the popover list, the
-    // social router — silently dead after the initial REST fetch.
-    // The colon-separated event name is the single source of truth on
-    // the wire; consumers register a handler per event type.
     const eventName = this.eventToWireName(event.eventType);
     this.server.to(room).emit(eventName, payload);
 
@@ -220,12 +142,6 @@ export class NotificationGateway implements OnGatewayConnection, OnGatewayDiscon
     });
   }
 
-  /**
-   * Map the in-process domain event type to the on-wire Socket.IO event
-   * name. The domain bus uses dot-paths (`notification.sent`); the wire
-   * uses colon-separated names (`notification:sent`) to align with the
-   * client's `lib/realtime/events.ts` constants.
-   */
   private eventToWireName(eventType: NotificationDomainEvent['eventType']): string {
     switch (eventType) {
       case 'notification.sent':

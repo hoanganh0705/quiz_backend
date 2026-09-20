@@ -1,12 +1,3 @@
-/**
- * Review Notification Listener
- *
- * Subscribes to Review domain events and dispatches notifications to quiz creators
- * via ReviewNotificationService.
- *
- * Registered in NotificationModule.onModuleInit and unsubscribed on destroy.
- */
-
 import { Inject, Injectable, OnModuleDestroy, OnModuleInit, forwardRef } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import {

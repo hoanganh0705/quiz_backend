@@ -464,14 +464,6 @@ export class TournamentApplicationService {
     };
   }
 
-  /**
-   * Phase 1 / Issue #1 — `PATCH /tournaments/:id` application entry.
-   *
-   * Thin wrapper around the domain service. The domain service
-   * enforces ownership and state guards; the application service
-   * only maps the resulting `TournamentRow` into a
-   * `TournamentResponseDto` for the response envelope.
-   */
   async updateTournament(
     tournamentId: string,
     user: JwtPayload,
@@ -488,12 +480,6 @@ export class TournamentApplicationService {
     return this.mapper.toTournamentResponse(updated);
   }
 
-  /**
-   * Phase 1 / Issue #1 — `DELETE /tournaments/:id` (soft delete)
-   * application entry. Maps the post-mutation row to a
-   * `SoftDeleteTournamentResponseDto` (so the controller can echo
-   * `deletedAt` back to the client).
-   */
   async softDeleteTournament(
     tournamentId: string,
     user: JwtPayload,
@@ -512,12 +498,6 @@ export class TournamentApplicationService {
     };
   }
 
-  /**
-   * Phase 1 / Issue #1 — `POST /tournaments/:id/cancel` application
-   * entry. The domain service returns the post-mutation row so we
-   * can surface `status` and `updated_at` (today there is no
-   * dedicated `cancelled_at` column).
-   */
   async cancelTournament(
     tournamentId: string,
     user: JwtPayload,

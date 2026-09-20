@@ -8,8 +8,11 @@
 
 import { Inject, Injectable } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
-import { RANKING_REPOSITORY_PORT } from '@/modules/ranking/domain/ports/ranking-repository.port';
-import type { RankingRepositoryPort } from '@/modules/ranking/domain/ports/ranking-repository.port';
+import {
+  RANKING_REPOSITORY_PORT,
+  type RankingRepositoryPort,
+  type RankSnapshotPairRow,
+} from '@/modules/ranking/domain/ports/ranking-repository.port';
 import { RankingPeriod } from '@/modules/ranking/domain/types/ranking.types';
 import {
   RankingEntry,
@@ -84,58 +87,65 @@ export class RankingAdapter implements RankingPort {
 
     const results = new Map<string, RankTrend[]>();
 
-    // Fetch current ranks and snapshots in parallel
-    const rankPromises = userIds.map(async (userId) => {
-      const trends = await Promise.all(
-        periods.map(async (period) => {
-          const rankingPeriod = this.mapToRankingPeriod(period);
-          const currentRank = await this.rankingRepository.getUserRank(userId, rankingPeriod);
-          const currentRanking = await this.rankingRepository.getRankingsForUsers([userId]);
-          const currentXp = currentRanking[0]
-            ? this.getXpForPeriod(currentRanking[0], rankingPeriod)
-            : 0;
+    const currentRankings = await this.rankingRepository.getRankingsForUsers(userIds);
+    const currentRankingsByUser = new Map(currentRankings.map((r) => [r.userId, r]));
 
+    const uniquePeriods = Array.from(new Set(periods));
+    const snapshotsByUserPeriod = new Map<string, RankSnapshotPairRow>();
+    await Promise.all(
+      userIds.flatMap((userId) =>
+        uniquePeriods.map(async (period) => {
+          const rankingPeriod = this.mapToRankingPeriod(period);
           const snapshots = await this.rankingRepository.getLatestRankSnapshots({
             userId,
             period: rankingPeriod,
           });
-
-          const previousRank = snapshots.previous?.rank ?? null;
-          const previousXp = snapshots.previous?.xp ?? null;
-
-          const change =
-            previousRank !== null && currentRank !== null
-              ? previousRank - currentRank // positive = moved up
-              : 0;
-
-          const direction: RankTrendDirection =
-            previousRank === null && currentRank !== null
-              ? 'new'
-              : currentRank === null
-                ? 'stable'
-                : change > 0
-                  ? 'up'
-                  : change < 0
-                    ? 'down'
-                    : 'stable';
-
-          return {
-            period,
-            currentRank,
-            previousRank,
-            change,
-            direction,
-            currentXp,
-            previousXp,
-          } satisfies RankTrend;
+          snapshotsByUserPeriod.set(`${userId}:${period}`, snapshots);
         }),
-      );
-      return { userId, trends };
-    });
+      ),
+    );
 
-    const rankResults = await Promise.all(rankPromises);
+    for (const userId of userIds) {
+      const currentRanking = currentRankingsByUser.get(userId);
+      const trends = uniquePeriods.map((period) => {
+        const rankingPeriod = this.mapToRankingPeriod(period);
+        const currentXp = currentRanking ? this.getXpForPeriod(currentRanking, rankingPeriod) : 0;
+        const rankField =
+          rankingPeriod === RankingPeriod.WEEKLY
+            ? currentRanking?.weeklyRank
+            : rankingPeriod === RankingPeriod.MONTHLY
+              ? currentRanking?.monthlyRank
+              : currentRanking?.allTimeRank;
+        const currentRank = rankField ?? null;
 
-    for (const { userId, trends } of rankResults) {
+        const snapshots = snapshotsByUserPeriod.get(`${userId}:${period}`) ?? null;
+        const previousRank = snapshots?.previous?.rank ?? null;
+        const previousXp = snapshots?.previous?.xp ?? null;
+
+        const change =
+          previousRank !== null && currentRank !== null ? previousRank - currentRank : 0;
+
+        const direction: RankTrendDirection =
+          previousRank === null && currentRank !== null
+            ? 'new'
+            : currentRank === null
+              ? 'stable'
+              : change > 0
+                ? 'up'
+                : change < 0
+                  ? 'down'
+                  : 'stable';
+
+        return {
+          period,
+          currentRank,
+          previousRank,
+          change,
+          direction,
+          currentXp,
+          previousXp,
+        } satisfies RankTrend;
+      });
       results.set(userId, trends);
     }
 

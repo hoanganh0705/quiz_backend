@@ -153,11 +153,6 @@ export class TournamentPresenter {
   readonly startRoundAttempt = TournamentPresenter.ok<StartTournamentAttemptResponseDto>;
   readonly unregisterFromTournament = TournamentPresenter.ok<UnregisterTournamentResponseDto>;
   readonly withdrawFromTournament = TournamentPresenter.ok<WithdrawTournamentResponseDto>;
-
-  // Phase 1 / Issue #1 — admin endpoints (PATCH / DELETE / cancel).
-  // PATCH returns the updated `TournamentResponseDto`; the rest use
-  // dedicated envelope-friendly DTOs (`CancelTournamentResponseDto`,
-  // `SoftDeleteTournamentResponseDto`).
   readonly updateTournament = TournamentPresenter.ok<TournamentResponseDto>;
   readonly cancelTournament = TournamentPresenter.ok<CancelTournamentResponseDto>;
   readonly softDeleteTournament = TournamentPresenter.ok<SoftDeleteTournamentResponseDto>;

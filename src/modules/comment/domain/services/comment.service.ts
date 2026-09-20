@@ -18,6 +18,7 @@ import { createCommentSnapshot } from '../events/comment.events';
 import { MAX_REPLIES_PER_COMMENT } from '../constants';
 import { CommentAuthorizationPolicy } from '../policies/comment-authorization.policy';
 import {
+  CommentConflictError,
   CommentNotFoundError,
   CommentForbiddenError,
   ParentCommentCrossThreadError,
@@ -26,10 +27,10 @@ import {
   DuplicateReportError,
   QuizNotFoundError,
   ReplyLimitExceededError,
+  ReportNotFoundError,
 } from '../errors';
 import { isPostgresUniqueViolation } from '@/common/utils/db-error.util';
 import type {
-  AuthorView,
   CommentCursor,
   CommentView,
   CommentWithRepliesView,
@@ -50,6 +51,7 @@ import type {
   ReviewReportParams,
   VoteParams,
 } from '../types';
+import type { ModerationAuditTx, ModerationAuditPort } from '../ports/moderation-audit.port';
 
 @Injectable()
 export class CommentService {
@@ -62,11 +64,11 @@ export class CommentService {
     private readonly userExistence: UserExistencePort,
     @Inject(COMMENT_DOMAIN_EVENT_BUS)
     private readonly eventBus: CommentDomainEventBusPort,
+    @Inject('COMMENT_MODERATION_AUDIT_PORT')
+    private readonly moderationAudit: ModerationAuditPort,
     @InjectPinoLogger(CommentService.name)
     private readonly logger: PinoLogger,
   ) {}
-
-  // ─── Reads ────────────────────────────────────────────────────────────────
 
   async getComment(params: GetCommentParams): Promise<CommentView | null> {
     return this.repo.getCommentById(params.commentId);
@@ -81,18 +83,17 @@ export class CommentService {
     const repoCursor = params.cursor
       ? { createdAt: params.cursor.createdAt, commentId: params.cursor.id }
       : null;
-    const rows = await this.repo.listComments({
+    const items = await this.repo.listComments({
       quizId: params.quizId,
       limit: limit + 1,
       cursor: repoCursor,
       viewerId: params.viewerId ?? undefined,
     });
-    const hasNextPage = rows.length > limit;
-    const items = hasNextPage ? rows.slice(0, limit) : rows;
-    const lastItem = items.at(-1);
-
+    const hasNextPage = items.length > limit;
+    const pageItems = hasNextPage ? items.slice(0, limit) : items;
+    const lastItem = pageItems.at(-1);
     return {
-      items,
+      items: pageItems,
       hasNextPage,
       nextCursor:
         hasNextPage && lastItem ? { createdAt: lastItem.createdAt, id: lastItem.id } : null,
@@ -137,19 +138,13 @@ export class CommentService {
     };
   }
 
-  // ─── Writes ───────────────────────────────────────────────────────────────
-
   async createComment(params: CreateCommentParams): Promise<CommentView> {
     const quizExists = await this.quizExistence.exists(params.quizId);
     if (!quizExists) {
       throw new QuizNotFoundError(params.quizId);
     }
 
-    // One transaction owns the parent-validation read (`FOR UPDATE`),
-    // the insert, and the replies-count increment. The read-then-write
-    // pattern outside a transaction would leave a TOCTOU window where a
-    // concurrent delete or hide on the parent could race the increment.
-    const created = await this.repo.transactionally(async (tx) => {
+    const txResult = await this.repo.transactionally(async (tx) => {
       let parent: CommentView | null = null;
 
       if (params.parentCommentId !== null) {
@@ -161,12 +156,9 @@ export class CommentService {
           throw new ParentCommentCrossThreadError();
         }
         if (parent.parentCommentId !== null) {
-          // Two-level rule: the parent itself must be a top-level comment.
-          // Replying to a reply is not allowed.
           throw new ParentCommentCrossThreadError();
         }
         if (parent.isHidden || parent.deletedAt !== null) {
-          // The parent is no longer accepting replies.
           throw new CommentNotFoundError(params.parentCommentId);
         }
 
@@ -182,99 +174,75 @@ export class CommentService {
         await this.repo.incrementRepliesCount(params.parentCommentId, 1, tx);
       }
 
-      return comment;
+      const author = await this.repo.getAuthorForComment(comment.id, tx);
+      if (author === null) {
+        throw new CommentNotFoundError(comment.id);
+      }
+
+      const parsedMentions = this.parseMentionUsernames(params.body);
+      let mentionedUsers: UserPublicInfo[] = [];
+      if (parsedMentions.length > 0) {
+        mentionedUsers = await this.userExistence.findByUsernames(parsedMentions);
+      }
+
+      return {
+        comment,
+        author,
+        parentAuthorId: parent?.authorId ?? null,
+        mentionedUsers,
+      };
     });
+
+    const { comment, author, parentAuthorId, mentionedUsers } = txResult;
 
     this.logger.debug({
       event: 'comment_created',
-      commentId: created.id,
-      quizId: created.quizId,
-      parentCommentId: created.parentCommentId,
+      commentId: comment.id,
+      quizId: comment.quizId,
+      parentCommentId: comment.parentCommentId,
     });
 
-    const author = await this.repo.getAuthorForComment(created.id);
-    if (author === null) {
-      // The author should always be resolvable for a just-created comment.
-      // Treat it as a developer-time invariant violation rather than a
-      // silent skip — the create path would otherwise surface to callers
-      // as a missing author on the read projection.
-      throw new CommentNotFoundError(created.id);
-    }
-
-    const parentAuthorId =
-      params.parentCommentId !== null
-        ? await this.resolveParentAuthorId(params.parentCommentId)
-        : null;
-
-    // Create full comment view with author for the snapshot
     const fullCommentView: CommentView = {
-      ...created,
+      ...comment,
       author,
     };
 
     this.eventBus.emitCommentCreated({
       eventType: 'comment_created',
-      commentId: created.id,
-      quizId: created.quizId,
-      parentCommentId: created.parentCommentId,
-      authorId: created.authorId,
+      commentId: comment.id,
+      quizId: comment.quizId,
+      parentCommentId: comment.parentCommentId,
+      authorId: comment.authorId,
       authorUsername: author.username,
       parentCommentAuthorId: parentAuthorId,
-      isReply: created.parentCommentId !== null,
+      isReply: comment.parentCommentId !== null,
       timestamp: new Date(),
-      // Include snapshot for direct realtime application on clients
       snapshot: createCommentSnapshot(fullCommentView),
     });
 
-    await this.emitMentionEvents(params.body, created.quizId, created.id, author);
-
-    return created;
-  }
-
-  private async resolveParentAuthorId(parentCommentId: string): Promise<string | null> {
-    const parent = await this.repo.getCommentById(parentCommentId);
-    return parent?.authorId ?? null;
-  }
-
-  /**
-   * Resolves `@username` mentions in a comment body and emits a
-   * `comment_mentioned` event for each known recipient other than the
-   * author. The author never receives a mention event for themselves.
-   */
-  private async emitMentionEvents(
-    body: string,
-    quizId: string,
-    commentId: string,
-    author: AuthorView,
-  ): Promise<void> {
-    const usernames = this.parseMentionUsernames(body);
-    if (usernames.length === 0) return;
-
-    const mentionedUsers = await this.userExistence.findByUsernames(usernames);
-
-    for (const user of mentionedUsers) {
-      if (user.userId === author.userId) continue;
-
-      this.eventBus.emitCommentMentioned({
-        eventType: 'comment_mentioned',
-        commentId,
-        quizId,
-        mentionedUserId: user.userId,
-        mentionedUsername: user.username,
-        authorId: author.userId,
-        authorUsername: author.username,
-        timestamp: new Date(),
-      });
-    }
-
     if (mentionedUsers.length > 0) {
+      for (const user of mentionedUsers) {
+        if (user.userId === author.userId) continue;
+        this.eventBus.emitCommentMentioned({
+          eventType: 'comment_mentioned',
+          commentId: comment.id,
+          quizId: comment.quizId,
+          mentionedUserId: user.userId,
+          mentionedUsername: user.username,
+          authorId: author.userId,
+          authorUsername: author.username,
+          timestamp: new Date(),
+        });
+      }
       this.logger.info({
         event: 'comment_mentions_parsed',
-        commentId,
-        quizId,
+        commentId: comment.id,
+        quizId: comment.quizId,
         mentionedUsernames: mentionedUsers.map((u) => u.username),
       });
     }
+
+    return comment;
   }
 
   private parseMentionUsernames(content: string): string[] {
@@ -286,45 +254,51 @@ export class CommentService {
   }
 
   async editComment(params: EditCommentParams): Promise<CommentView> {
-    const existing = await this.repo.getCommentById(params.commentId);
-    if (!existing) {
-      throw new CommentNotFoundError(params.commentId);
-    }
-    if (existing.authorId !== params.authorId) {
-      throw new CommentForbiddenError();
-    }
-    if (existing.isHidden || existing.deletedAt !== null) {
-      throw new CommentNotFoundError(params.commentId);
-    }
+    return this.repo.transactionally(async (tx) => {
+      const existing = await this.repo.getCommentByIdForUpdate(params.commentId, tx);
+      if (!existing) {
+        throw new CommentNotFoundError(params.commentId);
+      }
+      if (existing.authorId !== params.authorId) {
+        throw new CommentForbiddenError();
+      }
+      if (existing.isHidden || existing.deletedAt !== null) {
+        throw new CommentNotFoundError(params.commentId);
+      }
+      if (
+        params.expectedUpdatedAt !== undefined &&
+        existing.updatedAt !== params.expectedUpdatedAt
+      ) {
+        throw new CommentConflictError(
+          'Comment was modified concurrently; please refetch and retry',
+        );
+      }
 
-    const updated = await this.repo.editComment(params);
-    // Get full author info for the snapshot
-    const author = await this.repo.getAuthorForComment(updated.id);
-    if (author === null) {
-      throw new CommentNotFoundError(updated.id);
-    }
-    const fullCommentView: CommentView = {
-      ...updated,
-      author,
-    };
+      const updated = await this.repo.editComment(params);
+      const author = await this.repo.getAuthorForComment(updated.id, tx);
+      if (author === null) {
+        throw new CommentNotFoundError(updated.id);
+      }
+      const fullCommentView: CommentView = {
+        ...updated,
+        author,
+      };
 
-    this.eventBus.emitCommentEdited({
-      eventType: 'comment_edited',
-      commentId: updated.id,
-      quizId: updated.quizId,
-      authorId: updated.authorId,
-      timestamp: new Date(),
-      // Include snapshot for direct realtime application on clients
-      snapshot: createCommentSnapshot(fullCommentView),
+      this.eventBus.emitCommentEdited({
+        eventType: 'comment_edited',
+        commentId: updated.id,
+        quizId: updated.quizId,
+        authorId: updated.authorId,
+        timestamp: new Date(),
+        snapshot: createCommentSnapshot(fullCommentView),
+      });
+
+      this.logger.info({ event: 'comment_edited', commentId: updated.id });
+      return updated;
     });
-
-    this.logger.info({ event: 'comment_edited', commentId: updated.id });
-    return updated;
   }
 
   async deleteComment(params: DeleteCommentParams): Promise<void> {
-    // Lock the row for the read so a concurrent delete cannot race the
-    // replies-count decrement on the parent.
     const result = await this.repo.transactionally(async (tx) => {
       const comment = await this.repo.getCommentByIdForUpdate(params.commentId, tx);
       if (!comment) {
@@ -334,14 +308,16 @@ export class CommentService {
         throw new CommentForbiddenError();
       }
       if (comment.deletedAt !== null) {
-        // Already deleted; idempotent no-op so callers can retry safely.
         return null;
       }
 
-      await this.repo.softDeleteComment(
+      const { deleted } = await this.repo.softDeleteComment(
         { commentId: params.commentId, authorId: params.authorId },
         tx,
       );
+      if (!deleted) {
+        throw new CommentNotFoundError(params.commentId);
+      }
 
       if (comment.parentCommentId !== null) {
         await this.repo.incrementRepliesCount(comment.parentCommentId, -1, tx);
@@ -358,24 +334,16 @@ export class CommentService {
       quizId: result.quizId,
       authorId: params.authorId,
       timestamp: new Date(),
-      // Include parent ID so clients can update reply counts
       parentCommentId: result.parentCommentId,
     });
 
     this.logger.info({ event: 'comment_deleted', commentId: params.commentId });
   }
 
-  // ─── Votes ────────────────────────────────────────────────────────────────
-
   async vote(params: VoteParams): Promise<void> {
     const { userId, commentId, value } = params;
 
-    let capturedQuizId: string | null = null;
-    let capturedVotesCount = 0;
-    let capturedUpvotesCount = 0;
-    let capturedDownvotesCount = 0;
-
-    await this.repo.transactionally(async (tx) => {
+    const txResult = await this.repo.transactionally(async (tx) => {
       const comment = await this.repo.getCommentByIdForUpdate(commentId, tx);
       if (!comment) {
         throw new CommentNotFoundError(commentId);
@@ -387,76 +355,51 @@ export class CommentService {
         throw new SelfVoteError();
       }
 
-      capturedQuizId = comment.quizId;
-
       const existing = await this.repo.getUserVoteForComment(userId, commentId, tx);
 
+      let counts: { votesCount: number; upvotesCount: number; downvotesCount: number };
+
       if (existing === value) {
-        // Same value re-applied → toggle off.
         await this.repo.removeVote({ userId, commentId }, tx);
-        const deltaUp = value === 'upvote' ? -1 : 0;
-        const deltaDown = value === 'downvote' ? -1 : 0;
-        await this.repo.incrementVoteCount(commentId, deltaUp, deltaDown, tx);
+        counts = await this.repo.incrementVoteCount(
+          commentId,
+          value === 'upvote' ? -1 : 0,
+          value === 'downvote' ? -1 : 0,
+          tx,
+        );
       } else if (existing !== null) {
-        // Flipping vote: subtract from the old bucket, add to the new.
         await this.repo.upsertVote({ userId, commentId, value }, tx);
         const flipUp = value === 'upvote' ? 1 : -1;
         const flipDown = value === 'upvote' ? -1 : 1;
-        await this.repo.incrementVoteCount(commentId, flipUp, flipDown, tx);
+        counts = await this.repo.incrementVoteCount(commentId, flipUp, flipDown, tx);
       } else {
         await this.repo.upsertVote({ userId, commentId, value }, tx);
-        const upDelta = value === 'upvote' ? 1 : 0;
-        const downDelta = value === 'downvote' ? 1 : 0;
-        await this.repo.incrementVoteCount(commentId, upDelta, downDelta, tx);
+        counts = await this.repo.incrementVoteCount(
+          commentId,
+          value === 'upvote' ? 1 : 0,
+          value === 'downvote' ? 1 : 0,
+          tx,
+        );
       }
 
-      // Capture final vote counts after all updates
-      capturedVotesCount = comment.votesCount;
-      capturedUpvotesCount = comment.upvotesCount;
-      capturedDownvotesCount = comment.downvotesCount;
-
-      // Recalculate based on what we changed
-      if (existing === value) {
-        // Toggled off
-        if (value === 'upvote') {
-          capturedUpvotesCount--;
-          capturedVotesCount--;
-        } else {
-          capturedDownvotesCount--;
-          capturedVotesCount--;
-        }
-      } else if (existing !== null) {
-        // Flipping
-        if (value === 'upvote') {
-          capturedUpvotesCount++;
-          capturedDownvotesCount--;
-        } else {
-          capturedDownvotesCount++;
-          capturedUpvotesCount--;
-        }
-      } else {
-        // New vote
-        if (value === 'upvote') {
-          capturedUpvotesCount++;
-          capturedVotesCount++;
-        } else {
-          capturedDownvotesCount++;
-          capturedVotesCount++;
-        }
-      }
+      return {
+        quizId: comment.quizId,
+        counts,
+      };
     });
+
+    const votesCount = txResult.counts.votesCount;
 
     this.eventBus.emitVoteCast({
       eventType: 'vote_cast',
       commentId,
-      quizId: capturedQuizId!,
+      quizId: txResult.quizId,
       voterId: userId,
       value,
       timestamp: new Date(),
-      // Include vote counts for direct realtime application
-      votesCount: capturedVotesCount,
-      upvotesCount: capturedUpvotesCount,
-      downvotesCount: capturedDownvotesCount,
+      votesCount,
+      upvotesCount: txResult.counts.upvotesCount,
+      downvotesCount: txResult.counts.downvotesCount,
     });
 
     this.logger.debug({ event: 'vote_cast', userId, commentId, value });
@@ -465,12 +408,7 @@ export class CommentService {
   async removeVote(params: { userId: string; commentId: string }): Promise<void> {
     const { userId, commentId } = params;
 
-    let capturedQuizId: string | null = null;
-    let capturedVotesCount = 0;
-    let capturedUpvotesCount = 0;
-    let capturedDownvotesCount = 0;
-
-    await this.repo.transactionally(async (tx) => {
+    const removed = await this.repo.transactionally(async (tx) => {
       const comment = await this.repo.getCommentByIdForUpdate(commentId, tx);
       if (!comment) {
         throw new CommentNotFoundError(commentId);
@@ -479,46 +417,42 @@ export class CommentService {
         throw new CommentNotFoundError(commentId);
       }
 
-      capturedQuizId = comment.quizId;
-      capturedVotesCount = comment.votesCount;
-      capturedUpvotesCount = comment.upvotesCount;
-      capturedDownvotesCount = comment.downvotesCount;
-
       const existing = await this.repo.getUserVoteForComment(userId, commentId, tx);
-      if (existing === null) return;
+      if (existing === null) {
+        return null;
+      }
 
       const deltaUp = existing === 'upvote' ? -1 : 0;
       const deltaDown = existing === 'downvote' ? -1 : 0;
 
-      await this.repo.incrementVoteCount(commentId, deltaUp, deltaDown, tx);
+      const counts = await this.repo.incrementVoteCount(commentId, deltaUp, deltaDown, tx);
       await this.repo.removeVote({ userId, commentId }, tx);
 
-      // Update captured counts
-      if (existing === 'upvote') {
-        capturedUpvotesCount--;
-        capturedVotesCount--;
-      } else {
-        capturedDownvotesCount--;
-        capturedVotesCount--;
-      }
+      return {
+        quizId: comment.quizId,
+        votesCount: counts.votesCount,
+        upvotesCount: counts.upvotesCount,
+        downvotesCount: counts.downvotesCount,
+      };
     });
+
+    if (removed === null) {
+      return;
+    }
 
     this.eventBus.emitVoteRemoved({
       eventType: 'vote_removed',
       commentId,
-      quizId: capturedQuizId!,
+      quizId: removed.quizId,
       voterId: userId,
       timestamp: new Date(),
-      // Include vote counts for direct realtime application
-      votesCount: capturedVotesCount,
-      upvotesCount: capturedUpvotesCount,
-      downvotesCount: capturedDownvotesCount,
+      votesCount: removed.votesCount,
+      upvotesCount: removed.upvotesCount,
+      downvotesCount: removed.downvotesCount,
     });
 
     this.logger.debug({ event: 'vote_removed', userId, commentId });
   }
-
-  // ─── Reports ──────────────────────────────────────────────────────────────
 
   async reportComment(params: ReportCommentParams): Promise<ReportView> {
     const comment = await this.repo.getCommentById(params.commentId);
@@ -561,8 +495,25 @@ export class CommentService {
     }
   }
 
-  async reviewReport(params: ReviewReportParams): Promise<ReportView> {
-    const updated = await this.repo.reviewReport(params);
+  async reviewReport(
+    params: ReviewReportParams,
+  ): Promise<{ updated: ReportView; previousStatus: ReportView['status'] | null }> {
+    const txResult = await this.repo.transactionally(async (tx) => {
+      const previous = await this.repo.getReportByIdForUpdate(params.reportId, tx);
+      if (previous === null) {
+        throw new ReportNotFoundError(params.reportId);
+      }
+
+      const updated = await this.repo.reviewReport(params, tx);
+      await this.moderationAudit.logInsideTx(tx as unknown as ModerationAuditTx, {
+        actorId: params.reviewerId,
+        action: 'review_report',
+        targetType: 'comment',
+        targetId: updated.commentId,
+        result: params.status,
+      });
+      return { updated, previousStatus: previous.status };
+    });
 
     this.eventBus.emitReportReviewed({
       eventType: 'report_reviewed',
@@ -580,10 +531,8 @@ export class CommentService {
       status: params.status,
     });
 
-    return updated;
+    return txResult;
   }
-
-  // ─── Moderation ───────────────────────────────────────────────────────────
 
   async hideComment(
     params: HideCommentParams,
@@ -608,6 +557,12 @@ export class CommentService {
           { commentId: params.commentId, hidden: true, moderatorId: params.moderatorId },
           tx,
         );
+        await this.moderationAudit.logInsideTx(tx as unknown as ModerationAuditTx, {
+          actorId: params.moderatorId,
+          action: 'hide_comment',
+          targetType: 'comment',
+          targetId: params.commentId,
+        });
       }
     });
 
@@ -616,7 +571,6 @@ export class CommentService {
       throw new CommentNotFoundError(params.commentId);
     }
 
-    // Get full author info for the snapshot
     const author = await this.repo.getAuthorForComment(comment.id);
     if (author === null) {
       throw new CommentNotFoundError(comment.id);
@@ -632,7 +586,6 @@ export class CommentService {
       quizId: comment.quizId,
       moderatorId: params.moderatorId,
       timestamp: new Date(),
-      // Include snapshot for direct realtime application
       snapshot: createCommentSnapshot(fullCommentView),
     });
 
@@ -672,6 +625,12 @@ export class CommentService {
         { commentId: params.commentId, hidden: false, moderatorId: params.moderatorId },
         tx,
       );
+      await this.moderationAudit.logInsideTx(tx as unknown as ModerationAuditTx, {
+        actorId: params.moderatorId,
+        action: 'restore_comment',
+        targetType: 'comment',
+        targetId: params.commentId,
+      });
     });
 
     const comment = await this.repo.getCommentById(params.commentId);
@@ -679,7 +638,6 @@ export class CommentService {
       throw new CommentNotFoundError(params.commentId);
     }
 
-    // Get full author info for the snapshot
     const author = await this.repo.getAuthorForComment(comment.id);
     if (author === null) {
       throw new CommentNotFoundError(comment.id);
@@ -695,7 +653,6 @@ export class CommentService {
       quizId: comment.quizId,
       moderatorId: params.moderatorId,
       timestamp: new Date(),
-      // Include snapshot for direct realtime application
       snapshot: createCommentSnapshot(fullCommentView),
     });
 
@@ -713,7 +670,4 @@ export class CommentService {
   }
 }
 
-// Re-export the `UserPublicInfo` so existing callers that imported the
-// type from the service file keep compiling until Phase 9.7 retires
-// the cross-module listener re-exports.
 export type { UserPublicInfo };

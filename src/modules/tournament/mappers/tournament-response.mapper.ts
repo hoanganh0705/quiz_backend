@@ -26,9 +26,7 @@ export class TournamentResponseMapper {
       endAt: row.endAt,
       maxParticipants: row.maxParticipants,
       categoryId: row.categoryId,
-      // Phase 1 / Issue #2 — expose the ownership column on every
-      // response so clients can render "you own this tournament"
-      // affordances without an extra round-trip.
+      // Expose the ownership column on every response so clients can render "you own this tournament" affordances without an extra round-trip.
       ownerUserId: row.ownerUserId,
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,

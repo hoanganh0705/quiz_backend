@@ -195,17 +195,11 @@ export class UploadController {
     };
   }
 
-  /**
-   * Phase 7 #1 — issue a signed-upload envelope so the client can POST
-   * the file directly to Cloudinary. The server does not proxy the
-   * bytes; ownership is bound via a separate call after the client
-   * finishes the upload.
-   */
   @Post('sign')
   @HttpCode(HttpStatus.CREATED)
   @Throttle({ default: { limit: 20, ttl: 60_000 } })
   @ApiOperation({
-    summary: 'Issue a signed upload URL (Phase 7 — presigned uploads)',
+    summary: 'Issue a signed upload URL',
     description:
       'Returns a Cloudinary-signed upload URL the client uses to POST the file directly ' +
       'to Cloudinary. The bytes never traverse this application server, which removes ' +
@@ -255,24 +249,6 @@ export class UploadController {
     };
   }
 
-  /**
-   * Phase 3.1 — bind a previously uploaded asset (the client used
-   * the signed envelope from `POST /uploads/sign` to POST the file
-   * directly to Cloudinary) to the authenticated user. After this
-   * call the server holds a durable `(publicId, ownerId, purpose)`
-   * row in `storage_assets`; subsequent entity writes that reference
-   * this `publicId` will pass the §11 ownership gate.
-   *
-   * Errors:
-   *   - 404 `UPLOAD_ASSET_NOT_FOUND` — no row for that `publicId`
-   *     (forged id or upload never completed). The asset is *not*
-   *     bound; the client should not retry.
-   *   - 401 — no authenticated user.
-   *   - 400 — invalid `purpose`.
-   *   - 500 `UPLOAD_OWNERSHIP_BIND_FAILED` — the asset is already
-   *     bound to a different owner; the bind is rejected.
-   *   - 429 — rate limited.
-   */
   @Post(':publicId/bind')
   @HttpCode(HttpStatus.OK)
   @Throttle({ default: { limit: 30, ttl: 60_000 } })

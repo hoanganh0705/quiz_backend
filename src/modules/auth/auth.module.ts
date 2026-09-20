@@ -41,6 +41,12 @@ import { AUTH_USER_REPOSITORY_PORT } from './domain/ports/user-repository.port';
 import { SESSION_REPOSITORY_PORT } from './domain/ports/session-repository.port';
 import { EMAIL_PROVIDER } from './domain/ports/email.provider';
 import { UserRepository } from './infrastructure/repositories/user.repository';
+import { UserIdentityRepository } from './infrastructure/repositories/aggregates/user-identity.repository';
+import { UserRegistrationRepository } from './infrastructure/repositories/aggregates/user-registration.repository';
+import { EmailVerificationRepository } from './infrastructure/repositories/aggregates/email-verification.repository';
+import { PasswordResetTokensRepository } from './infrastructure/repositories/aggregates/password-reset-tokens.repository';
+import { PasswordChangeRepository } from './infrastructure/repositories/aggregates/password-change.repository';
+import { AccountLifecycleRepository } from './infrastructure/repositories/aggregates/account-lifecycle.repository';
 import { UserSessionRepository } from './infrastructure/repositories/user-session.repository';
 import { EmailService } from '@/modules/email/email.service';
 import { VerificationTokenService } from './domain/verification-token.service';
@@ -107,6 +113,12 @@ import { AuthSecurityNotificationService } from '@/modules/notification/domain/s
     RequestContextInterceptor,
     RefreshTokenInterceptor,
     UserRepository,
+    UserIdentityRepository,
+    UserRegistrationRepository,
+    EmailVerificationRepository,
+    PasswordResetTokensRepository,
+    PasswordChangeRepository,
+    AccountLifecycleRepository,
     UserSessionRepository,
     AuthAuditLogService,
     AuthTransactionContext,
@@ -121,13 +133,18 @@ import { AuthSecurityNotificationService } from '@/modules/notification/domain/s
     { provide: EMAIL_PROVIDER, useExisting: EmailService },
     { provide: OUTBOX_PORT, useExisting: OutboxAdapter },
     { provide: OAUTH_ACCOUNT_REPOSITORY_PORT, useExisting: OAuthAccountRepository },
-    // OAuth multi-provider: each provider adapter is registered as a multi-provider token.
-    // OAuthProviderRegistryAdapter collects all of them via @Inject(OAUTH_PROVIDER_PORT).
-    // Adding new providers (GitHub, Apple, Microsoft) requires only adding them here.
+    // OAuth multi-provider: each provider adapter is registered as a
+    // multi-provider token. `OAuthProviderRegistryAdapter` collects every
+    // provider that advertises itself as an `OAUTH_PROVIDER_PORT` and
+    // resolves them by `provider` discriminator at runtime.
+    //
+    // Today only Google is wired. Adding GitHub / Apple / Microsoft requires
+    // a single new adapter and a second `{ provide: OAUTH_PROVIDER_PORT,
+    // useExisting: <NewAdapter> }` entry below — no other code path needs
+    // to change.
     {
       provide: OAUTH_PROVIDER_PORT,
-      useFactory: (adapter: GoogleOAuthAdapter) => adapter,
-      inject: [GoogleOAuthAdapter],
+      useExisting: GoogleOAuthAdapter,
     },
     // OAuth domain event publisher
     { provide: OAUTH_DOMAIN_EVENT_PUBLISHER, useExisting: OAuthDomainEventPublisher },

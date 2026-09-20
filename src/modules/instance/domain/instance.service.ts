@@ -71,16 +71,6 @@ export class InstanceService {
     user: JwtPayload;
     maxPlayers: number | null;
   }): Promise<{ instanceId: string; hostUserId: string }> {
-    // Phase 1 (Foundational Correctness) — `quizId` → published
-    // version resolution. We accept `quizId` on the wire (the public
-    // identity for a quiz) and resolve it server-side to the
-    // currently published version, so the wire shape never leaks the
-    // internal `quizVersionId`/`versionNumber` pair.
-    //
-    // If the quiz is missing, surface a 404 `QUIZ_NOT_FOUND`. If the
-    // quiz exists but has no published version (e.g. it's a draft),
-    // surface a 404 `QUIZ_VERSION_NOT_FOUND` — there's nothing to
-    // host in either case.
     if (!this.quizRepository) {
       throw new Error('QuizRepositoryPort is not configured for instance creation');
     }
@@ -154,11 +144,6 @@ export class InstanceService {
         nowIso,
       });
 
-      // Phase 2 (issue 5.1): distinguish duplicate join from capacity-full.
-      // Before Phase 2 both were conflated under `INSTANCE_FULL` (400), which
-      // misled clients into thinking the instance was at capacity when the
-      // user was actually already a member. `PlayerAlreadyJoinedError` is
-      // mapped to 409 `PLAYER_ALREADY_JOINED` via ProblemCodeMapping.
       if (!result.joined) {
         throw new PlayerAlreadyJoinedError();
       }
@@ -169,16 +154,12 @@ export class InstanceService {
         userId: user.sub,
       });
 
+      const totalPlayers = await this.instanceRepository.countPlayers(instanceId);
+
       this.eventBus.emitPlayerJoined(
-        new PlayerJoinedEvent(
-          instanceId,
-          user.sub,
-          await this.instanceRepository.countPlayers(instanceId),
-          nowIso,
-        ),
+        new PlayerJoinedEvent(instanceId, user.sub, totalPlayers, nowIso),
       );
 
-      const totalPlayers = await this.instanceRepository.countPlayers(instanceId);
       void this.notifyHostPlayerJoined({
         instanceId,
         hostUserId: instance.hostUserId,
@@ -188,12 +169,9 @@ export class InstanceService {
 
       return { message: 'Joined the instance successfully' };
     } catch (error) {
-      // Phase 7 (audit Finding 3): catch the typed error class instead of
-      // relying on string comparison. This is robust against future message changes.
       if (error instanceof InstanceFullCapacityError) {
         throw new InstanceFullError(INSTANCE_FULL_MESSAGE);
       }
-      // Rethrow domain errors (PlayerAlreadyJoinedError, etc.) untouched.
       throw error;
     }
   }
@@ -211,18 +189,6 @@ export class InstanceService {
       throw new InstanceNotHostError(INSTANCE_NOT_HOST_MESSAGE);
     }
 
-    // Phase 2 (Gameplay Lifecycle) — the state machine is now:
-    //   open → countdown → running → closed/finished.
-    //
-    // The Phase 1 contract was `open → running`. The host now
-    // transitions `open → countdown` via `startCountdown`, and
-    // `startInstance` represents the `countdown → running` step.
-    // This matches the review's countdown-as-explicit-state deliverable.
-    //
-    //   - `open`      → never call startInstance without going through countdown
-    //   - `countdown` → the supported entry point
-    //   - `running`   → already started
-    //   - `closed` / `finished` → already terminal
     if (instance.status === 'open') {
       throw new InstanceNotInCountdownError(INSTANCE_NOT_IN_COUNTDOWN_MESSAGE);
     }
@@ -233,39 +199,22 @@ export class InstanceService {
       throw new InstanceAlreadyClosedError(INSTANCE_ALREADY_CLOSED_MESSAGE);
     }
 
-    // Phase 2 (Required Fix) — minimum player validation. The instance
-    // is a multiplayer-only room; a one-player game is not a valid
-    // game per the review's foundational correctness fix. The check
-    // fires *before* the optimistic-locking UPDATE so the host sees
-    // a 422 `MIN_PLAYERS_NOT_MET` rather than a 409.
     const totalPlayers = await this.instanceRepository.countPlayers(instanceId);
     if (totalPlayers < InstanceService.MIN_PLAYERS_PER_INSTANCE) {
       throw new MinPlayersNotMetError(MIN_PLAYERS_NOT_MET_MESSAGE);
     }
 
-    // Phase 1 (Foundational Correctness) — the optimistic-lock guard.
-    // `instance.version` is the version observed by this read. The
-    // repository issues `UPDATE … WHERE version = $instance.version`
-    // and increments it in the same statement. A concurrent
-    // `startInstance` that read the same version would now see a
-    // zero-row UPDATE and throw `InstanceOptimisticLockError`; the
-    // remaining caller is the only one that wins.
     try {
       await this.instanceRepository.updateInstanceStatus({
         instanceId,
         status: 'running',
         startedAt: nowIso,
-        // Phase 2 — running instances must not carry a countdown anchor.
         countdownStartedAt: null,
         nowIso,
         expectedVersion: instance.version,
       });
     } catch (error) {
       if (error instanceof InstanceOptimisticLockError) {
-        // Re-read to translate the conflict into the precise state-machine
-        // error: if the row is now `running`, the other caller won the
-        // start, so we surface `InstanceAlreadyStartedError`. Otherwise
-        // the row was closed/finished first.
         const latest = await this.instanceRepository.getInstanceById(instanceId);
         if (latest?.status === 'running') {
           throw new InstanceAlreadyStartedError(INSTANCE_ALREADY_STARTED_MESSAGE);
@@ -301,14 +250,6 @@ export class InstanceService {
       throw new InstanceNotHostError(INSTANCE_NOT_HOST_MESSAGE);
     }
 
-    // Phase 3 (issue 7.1): differentiate state-machine paths. The audit
-    // documented three states (`open → running → closed`) but the DB
-    // includes a fourth (`finished`) for terminal/soft-archive use.
-    //   - `closed`   → user-closed     → `InstanceAlreadyClosedError`
-    //   - `finished` → terminal archive → `InstanceAlreadyFinishedError`
-    // Previously both paths conflated under `INSTANCE_ALREADY_CLOSED`,
-    // making the wire shape ambiguous for callers inspecting
-    // `extensions.code`.
     if (instance.status === 'closed') {
       throw new InstanceAlreadyClosedError(INSTANCE_ALREADY_CLOSED_MESSAGE);
     }
@@ -316,17 +257,11 @@ export class InstanceService {
       throw new InstanceAlreadyFinishedError(INSTANCE_ALREADY_FINISHED_MESSAGE);
     }
 
-    // Phase 1 (Foundational Correctness) — optimistic-lock guard, see
-    // the symmetric note in `startInstance` above.
     try {
       await this.instanceRepository.updateInstanceStatus({
         instanceId,
         status: 'closed',
         closedAt: nowIso,
-        // Phase 2 — clear the countdown anchor so a closed instance
-        // never carries a stale `countdownStartedAt`. The DB CHECK
-        // `quiz_instances_countdown_started_at_consistent` requires
-        // this. The explicit `null` matches `instance_statuses_closed`.
         countdownStartedAt: null,
         nowIso,
         expectedVersion: instance.version,
@@ -352,9 +287,6 @@ export class InstanceService {
 
     this.eventBus.emitInstanceClosed(new InstanceClosedEvent(instanceId, user.sub, nowIso));
 
-    // Phase 2 — if the instance was in `countdown` at the moment of
-    // closing, surface the cancellation so connected clients can drop
-    // their warmup UI before the room tears down.
     if (instance.status === 'countdown') {
       this.eventBus.emitCountdownCancelled(
         new CountdownCancelledEvent(instanceId, user.sub, 'instance_closed', nowIso),
@@ -364,39 +296,8 @@ export class InstanceService {
     return { message: 'Instance closed' };
   }
 
-  /**
-   * Phase 2 (Gameplay Lifecycle) — minimum players required to start a
-   * countdown or auto-start a countdown-elapsed game. The instance is a
-   * multiplayer-only room; one-player games are not a valid game per
-   * the review's foundational correctness fix.
-   *
-   * Encoded as a constant rather than a constructor parameter so the
-   * "Required Fix" (instance = multiplayer room, minimum 2) stays a
-   * single source of truth.
-   */
   static readonly MIN_PLAYERS_PER_INSTANCE = 2;
 
-  /**
-   * Phase 2 (Gameplay Lifecycle) — host-driven transition `open →
-   * countdown`. Persists `countdownStartedAt = now`, validates the
-   * state precondition (`open`), and emits `CountdownStartedEvent`
-   * which the WebSocket layer forwards as `countdown_started`.
-   *
-   * Idempotency: a second call against an already-countdown instance
-   * throws `InstanceCountdownAlreadyStartedError`; the controller
-   * catches it and returns the existing `countdownStartedAt` so the
-   * client sees a no-op retry as success.
-   *
-   * Why not require ≥2 players here
-   * --------------------------------
-   * The review lists "minimum player validation in `startInstance`"
-   * as the deliverable. While in `countdown` the lobby can still
-   * receive late joiners; the gate fires on the actual
-   * `countdown → running` transition. We do, however, persist
-   * `countdownStartedAt` here and let `startInstance` (and the
-   * scheduler) reject the running transition if the count has
-   * dropped.
-   */
   async startCountdown(
     instanceId: string,
     user: JwtPayload,
@@ -417,13 +318,9 @@ export class InstanceService {
     }
 
     if (instance.status === 'countdown') {
-      // Idempotent retry — surface as a domain error so the
-      // controller can fold it into a 200 response carrying the
-      // existing anchor.
       throw new InstanceCountdownAlreadyStartedError(INSTANCE_COUNTDOWN_ALREADY_STARTED_MESSAGE);
     }
     if (instance.status !== 'open') {
-      // `running` / `closed` / `finished` all reject.
       throw new InstanceNotOpenError(INSTANCE_NOT_OPEN_MESSAGE);
     }
 
@@ -473,25 +370,6 @@ export class InstanceService {
     return { instanceId, status: 'countdown', countdownStartedAt, countdownEndsAt };
   }
 
-  /**
-   * Phase 2 (Gameplay Lifecycle) — host-driven transition
-   * `countdown → open`. Clears `countdownStartedAt` and emits
-   * `CountdownCancelledEvent`.
-   *
-   * Cancellation semantics
-   * ----------------------
-   *
-   *   - Host cancellation: explicit, idempotent.
-   *   - Host disconnect during countdown: the existing socket
-   *     disconnect path (`handlePlayerLeftSocket`) becomes a
-   *     countdown-cancellation trigger in Phase 3 (Host Transfer).
-   *     For Phase 2 we expose this method as the only path so the
-   *     surface is small and reviewable.
-   *   - Instance close while in countdown: `closeInstance` already
-   *     emits `CountdownCancelledEvent` with `reason =
-   *     'instance_closed'` — see the dual-emit at the bottom of
-   *     `closeInstance`.
-   */
   async cancelCountdown(
     instanceId: string,
     user: JwtPayload,
@@ -515,9 +393,6 @@ export class InstanceService {
       await this.instanceRepository.updateInstanceStatus({
         instanceId,
         status: 'open',
-        // Phase 2 — clear the countdown anchor so a non-countdown row
-        // never carries a stale `countdownStartedAt`. Required by the
-        // DB CHECK `quiz_instances_countdown_started_at_consistent`.
         countdownStartedAt: null,
         nowIso,
         expectedVersion: instance.version,
@@ -545,22 +420,6 @@ export class InstanceService {
 
     return { message: 'Countdown cancelled' };
   }
-
-  /**
-   * Phase 2 (Gameplay Lifecycle) — scheduler-driven `countdown →
-   * running` transition. Invoked by `InstanceCountdownSchedulerService`
-   * once per second to find and complete due countdowns.
-   *
-   * Phase 3 (Host Transfer) will call this from a `host_disconnected`
-   * path as well. For Phase 2 the scheduler is the only caller.
-   *
-   * The minimum-player check is enforced here — the scheduler MUST
-   * refuse to start a one-player countdown. The instance is back to
-   * `open` (with `countdownStartedAt` cleared) so the host can
-   * re-attempt once more players join. The cancellation event carries
-   * the `host_disconnected`-style reason so clients can render the
-   * "awaiting more players" UI consistently.
-   */
   async completeCountdownByScheduler(params: {
     instanceId: string;
     expectedVersion: number;
@@ -577,9 +436,6 @@ export class InstanceService {
 
     const totalPlayers = await this.instanceRepository.countPlayers(params.instanceId);
     if (totalPlayers < InstanceService.MIN_PLAYERS_PER_INSTANCE) {
-      // The scheduler fires the cancellation instead of letting the
-      // instance sit forever in `countdown`. The state goes back to
-      // `open` so the host can re-arm once enough players have joined.
       try {
         await this.instanceRepository.updateInstanceStatus({
           instanceId: params.instanceId,
@@ -614,17 +470,11 @@ export class InstanceService {
       return { completed: false, reason: 'min_players_not_met' };
     }
 
-    // Phase 1 — optimistic-lock guard. The scheduler passes the
-    // version it observed when listing due rows; if the host has
-    // cancelled since then, the UPDATE matches zero rows and we
-    // surface `lost_lock` so the scheduler can move on.
     try {
       await this.instanceRepository.updateInstanceStatus({
         instanceId: params.instanceId,
         status: 'running',
         startedAt: nowIso,
-        // Phase 2 — running instances must not carry a countdown
-        // anchor; clear it on the transition.
         countdownStartedAt: null,
         nowIso,
         expectedVersion: params.expectedVersion,
@@ -652,21 +502,6 @@ export class InstanceService {
     return { completed: true, status: 'running', startedAt: nowIso };
   }
 
-  /**
-   * Phase 2 (Gameplay Lifecycle) — countdown duration. Persisted in
-   * the column `countdown_started_at` and exposed as
-   * `countdownEndsAt` on the WebSocket event. The scheduler fires
-   * the `countdown → running` transition when `countdown_started_at +
-   * COUNTDOWN_DURATION_MS <= now()`.
-   *
-   * 5 seconds matches the multiplayer-room feel used in the
-   * reference architecture. Tunable via env in a later phase.
-   *
-   * TODO (Phase 8 — audit Finding 11): Consider exposing this via environment
-   * configuration (e.g. `INSTANCE_COUNTDOWN_DURATION_MS`). This would allow
-   * tuning the countdown duration without a code deployment. The env var
-   * could default to 5000ms if not set.
-   */
   static readonly COUNTDOWN_DURATION_MS = 5_000;
 
   async getLeaderboard(params: {
@@ -698,6 +533,17 @@ export class InstanceService {
     return player !== null;
   }
 
+  async countPlayers(instanceId: string): Promise<number> {
+    return this.instanceRepository.countPlayers(instanceId);
+  }
+
+  async getPlayerByUserAndInstance(params: {
+    instanceId: string;
+    userId: string;
+  }): Promise<import('./ports').QuizInstancePlayerRow | null> {
+    return this.instanceRepository.getPlayerByUserAndInstance(params);
+  }
+
   async isHost(instanceId: string, userId: string): Promise<boolean> {
     const instance = await this.instanceRepository.getInstanceById(instanceId);
     return instance?.hostUserId === userId;
@@ -721,8 +567,15 @@ export class InstanceService {
     const limit = params.limit ?? 20;
     const cursorValue = typeof params.cursor === 'string' ? params.cursor : undefined;
 
-    // Phase 2 (issue 2.4): validate the cursor shape so a tampered or
-    // malformed payload can't reach the SQL layer as `undefined`.
+    if (params.filters?.status) {
+      const validStatuses = ['open', 'countdown', 'running', 'closed', 'finished'] as const;
+      if (!validStatuses.includes(params.filters.status as (typeof validStatuses)[number])) {
+        throw new Error(
+          `Invalid status filter: '${params.filters.status}'. Valid values: ${validStatuses.join(', ')}`,
+        );
+      }
+    }
+
     const cursor: InstanceCursorPayload | null = cursorValue
       ? decodeInstanceCursor(cursorValue)
       : null;
@@ -750,16 +603,7 @@ export class InstanceService {
       hasNextPage,
       nextCursor:
         hasNextPage && lastItem
-          ? // Phase 2 (issue 2.5): normalize `createdAt` to ISO 8601 so
-            //   the cursor round-trips through any client that decodes
-            //   it without encountering PG-formatted timestamps.
-            // Phase 4 (audit issue 2.9): switched to base64url to align
-            //   with the rest of the codebase (the leaderboard cursor
-            //   already used base64url). base64url is a strict subset
-            //   of base64 — Node's `Buffer.from(s, 'base64')` decoder
-            //   accepts both encodings, so existing clients keep
-            //   working.
-            Buffer.from(
+          ? Buffer.from(
               JSON.stringify({
                 createdAt: new Date(lastItem.createdAt).toISOString(),
                 instanceId: lastItem.instanceId,
@@ -821,6 +665,7 @@ export class InstanceService {
         instanceId: params.instanceId,
         joiningUserId: params.joiningUserId,
         event: 'player_joined',
+        errorCode: 'PLAYER_JOINED',
       },
     });
   }
@@ -839,6 +684,7 @@ export class InstanceService {
         instanceId: params.instanceId,
         leavingUserId: params.leavingUserId,
         event: 'player_disconnected',
+        errorCode: 'PLAYER_DISCONNECTED',
       },
     });
   }

@@ -19,7 +19,6 @@ import {
   QUIZ_INSUFFICIENT_QUESTIONS_MESSAGE,
 } from '../../quiz.constants';
 import { QuizQueryService } from '../quiz/quiz-query.service';
-import type { QuizVersionCursor } from '../ports';
 import { QuizNotFoundError, QuizForbiddenError, QuizInsufficientQuestionsError } from '../errors';
 import { assertCanEditOrDraftFrom, isAlreadyPublished } from './quiz-version-state-machine';
 import { QuizPolicy } from '../policies/quiz.policy';

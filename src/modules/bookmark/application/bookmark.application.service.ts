@@ -154,18 +154,18 @@ export class BookmarkApplicationService {
   }
 
   async addBookmarksBulk(
-    userId: string,
+    user: JwtPayload,
     collectionId: string,
     quizIds: string[],
   ): Promise<BulkAddBookmarksResponseDto> {
     this.logger.debug({
       event: 'app_add_bookmarks_bulk',
-      userId,
+      userId: user.sub,
       collectionId,
       count: quizIds.length,
     });
     const addedCount = await this.bookmarkCommandService.addBookmarksBulk(
-      userId,
+      user.sub,
       collectionId,
       quizIds,
     );
@@ -173,18 +173,18 @@ export class BookmarkApplicationService {
   }
 
   async removeBookmarksBulk(
-    userId: string,
+    user: JwtPayload,
     collectionId: string,
     quizIds: string[],
   ): Promise<BulkRemoveBookmarksResponseDto> {
     this.logger.debug({
       event: 'app_remove_bookmarks_bulk',
-      userId,
+      userId: user.sub,
       collectionId,
       count: quizIds.length,
     });
     const removedCount = await this.bookmarkCommandService.removeBookmarksBulk(
-      userId,
+      user.sub,
       collectionId,
       quizIds,
     );
@@ -239,21 +239,21 @@ export class BookmarkApplicationService {
   }
 
   async moveBookmark(
-    userId: string,
+    user: JwtPayload,
     sourceCollectionId: string,
     payload: { quizId: string; targetCollectionId: string },
   ): Promise<MessageResponseDto> {
     const { targetCollectionId, quizId } = payload;
     this.logger.debug({
       event: 'app_move_bookmark',
-      userId,
+      userId: user.sub,
       sourceCollectionId,
       targetCollectionId,
       quizId,
     });
 
     await this.bookmarkCommandService.moveBookmark(
-      userId,
+      user.sub,
       sourceCollectionId,
       targetCollectionId,
       quizId,
@@ -279,13 +279,22 @@ export class BookmarkApplicationService {
   }
 
   async deleteCollection(collectionId: string, user: JwtPayload): Promise<void> {
-    this.logger.debug({ event: 'app_delete_collection', userId: user.sub, collectionId });
+    this.logger.info({
+      event: 'app_delete_collection',
+      userId: user.sub,
+      collectionId,
+    });
     await this.bookmarkCommandService.deleteCollection(collectionId, user);
+    this.logger.info({
+      event: 'app_delete_collection_completed',
+      userId: user.sub,
+      collectionId,
+    });
   }
 
   async getMyBookmarkStats(user: JwtPayload): Promise<BookmarkStatsResponseDto> {
     this.logger.debug({ event: 'app_get_my_bookmark_stats', userId: user.sub });
-    const stats = await this.bookmarkQueryService.getMyBookmarkStats(user.sub);
+    const stats = await this.bookmarkQueryService.getMyBookmarkStats(user);
     return this.bookmarkStatsResponseMapper.toResponse(stats);
   }
 }

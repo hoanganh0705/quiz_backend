@@ -1,11 +1,3 @@
-/**
- * Phase 5 #3 — admin audit log row DTO.
- *
- * Wire shape for a single row in the audit search response.
- * Mirrors the `auth_audit_logs` table columns and the
- * structured `metadata` JSON the writer pre-populates with
- * `domain`, `action`, `actorId`, and `subjectUserId`.
- */
 import { ApiProperty } from '@nestjs/swagger';
 
 export class AdminAuditRowDto {

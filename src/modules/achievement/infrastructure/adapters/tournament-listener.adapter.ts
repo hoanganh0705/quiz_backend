@@ -1,14 +1,3 @@
-/**
- * Tournament Event Listener Adapter
- *
- * Listens to Tournament domain events and triggers achievement evaluation.
- * This adapter bridges the Tournament domain to the Achievement domain.
- *
- * Subscribes to SHARED_TOURNAMENT_EVENT_BUS (the cross-module shared kernel
- * for tournament events) rather than the internal Tournament bus, so
- * Achievement doesn't depend on Tournament internals.
- */
-
 import { Inject, Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { getCorrelationId, createCorrelationId } from '@/common/interceptors/correlation-id';

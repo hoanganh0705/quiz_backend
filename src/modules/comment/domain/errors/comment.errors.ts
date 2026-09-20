@@ -60,38 +60,6 @@ export class QuizNotFoundError extends CommentError {
     super(`Quiz not found: ${quizId}`);
   }
 }
-
-/**
- * Thrown when a reply references a parent comment that does not exist
- * or has been hidden / soft-deleted. 404 Not Found.
- *
- * Note: This error class was removed in the Phase 1 production audit
- * because it was never thrown - the domain service uses
- * `CommentNotFoundError` for missing parent comments instead.
- * Kept here as a marker for future reference.
- *
- * @deprecated - Use CommentNotFoundError for missing parent comments.
- *               This class remains as a placeholder in case the
- *               business requirement changes to distinguish parent-specific
- *               lookup failures from general comment lookups.
- */
-// @deprecated - Removed in Phase 1 production audit
-// export class ParentCommentNotFoundError extends CommentError {
-//   readonly code = 'COMMENT_PARENT_COMMENT_NOT_FOUND';
-//   constructor(parentCommentId: string) {
-//     super(`Parent comment not found: ${parentCommentId}`);
-//   }
-// }
-
-/**
- * Thrown when a reply's parent comment lives on a different quiz than
- * the one the reply is being posted under, or when the parent comment
- * is itself a reply (violating the two-level rule). 400 Bad Request.
- *
- * Plan §8.4.1 risk note: this class's 400 status is non-obvious from
- * the class name (one might expect 409 Conflict for a cross-resource
- * mismatch); the migration test captures it.
- */
 export class ParentCommentCrossThreadError extends CommentError {
   readonly code = 'COMMENT_PARENT_COMMENT_CROSS_THREAD';
   constructor() {
@@ -140,6 +108,19 @@ export class DuplicateReportError extends CommentError {
   readonly code = 'COMMENT_DUPLICATE_REPORT';
   constructor() {
     super('You have already reported this comment');
+  }
+}
+
+/**
+ * Thrown when a write loses an optimistic-concurrency race
+ * (`expectedUpdatedAt` mismatch on `UPDATE … WHERE updated_at = ?`,
+ * or `setHiddenState` racing a concurrent `softDeleteComment`).
+ * 409 Conflict.
+ */
+export class CommentConflictError extends CommentError {
+  readonly code = 'COMMENT_CONFLICT';
+  constructor(message = 'Comment state changed concurrently; please retry') {
+    super(message);
   }
 }
 

@@ -1,34 +1,3 @@
-/**
- * Phase 4 — Rank History Cleanup Service
- *
- * Implements an archival strategy for the `rank_history` table to bound
- * its growth over time.
- *
- * Archival Policy
- * ---------------
- * The table stores ranking snapshots for trend calculation. As time
- * passes, older snapshots become less useful for trend analysis.
- *
- * Retention rules:
- *   - Daily snapshots: keep 90 days (sufficient for weekly trend analysis)
- *   - Weekly snapshots: keep 365 days (sufficient for monthly/yearly trend analysis)
- *   - Monthly snapshots: keep 730 days (2 years for long-term trend analysis)
- *   - All-time snapshots: keep 90 days (all-time is stable, daily snapshots suffice)
- *
- * Implementation Notes
- * -------------------
- * - Uses batch deletion to avoid long-running transactions
- * - Runs as a scheduled job (weekly) to minimize impact
- * - Logs deletion counts for monitoring
- * - Archived data can be recovered from a backup if needed
- *
- * Alternative strategies considered:
- *   - PostgreSQL table partitioning by month: adds complexity, better for
- *     very large tables (>100M rows). Current approach with archival is simpler.
- *   - Archival to cold storage (S3): requires infrastructure changes,
- *     good for very long retention. Currently not implemented.
- */
-
 import { Inject, Injectable } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
@@ -72,10 +41,9 @@ export class RankHistoryCleanupService {
   @Cron('0 3 * * 0')
   async handleRankHistoryCleanup(): Promise<void> {
     const lockKey = 'ranking:cron:history-cleanup';
-    const lockToken = crypto.randomUUID();
-    const acquired = await this.cache.acquireAdvisoryLock(lockKey, CLEANUP_LOCK_TTL_MS);
+    const lockToken = await this.cache.acquireAdvisoryLock(lockKey, CLEANUP_LOCK_TTL_MS);
 
-    if (!acquired) {
+    if (lockToken === null) {
       this.logger.debug({
         event: 'rank_history_cleanup_skipped_lock_held',
       });

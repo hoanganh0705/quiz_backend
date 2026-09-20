@@ -28,7 +28,7 @@ export interface BookmarkCollectionRepositoryPort {
     name?: string;
     description?: string | null;
     nowIso: string;
-  }): Promise<BookmarkCollectionRow>;
+  }): Promise<BookmarkCollectionRow | null>;
 
   deleteCollection(collectionId: string): Promise<void>;
 }

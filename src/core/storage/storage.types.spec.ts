@@ -1,12 +1,3 @@
-/**
- * Compile-time sanity check for `storage.types.ts` and `UPLOAD_POLICY`.
- *
- * `UPLOAD_POLICY` is read by every consumer (adapters, DTO validator in
- * Phase 3, the lifecycle service in Phase 6). This spec is intentionally
- * minimal — it pins the shape and asserts the documented constants stay
- * stable across refactors.
- */
-
 import { UPLOAD_POLICY } from './domain/upload-policy';
 
 describe('UPLOAD_POLICY', () => {

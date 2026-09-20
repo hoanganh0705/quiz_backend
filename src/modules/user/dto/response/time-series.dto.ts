@@ -1,11 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
 
-/**
- * `TimeSeriesPointDto` — a single (timestamp, value) point in a
- * time-series bundle. The series is sorted chronologically
- * (oldest first) and gaps are densified to zero so the client can
- * render a continuous chart without further math.
- */
 export class TimeSeriesPointDto {
   @ApiProperty({
     description: 'Point timestamp in ISO 8601 format',
@@ -20,12 +14,6 @@ export class TimeSeriesPointDto {
   value!: number;
 }
 
-/**
- * `TimeSeriesDto` — a generic time-series bundle for the user
- * profile page (Phase 4 / S-25). Used for `xpHistory` on the
- * my-profile bundle; additional series (rank history, streak
- * history) can reuse the same shape.
- */
 export class TimeSeriesDto {
   @ApiProperty({
     description: 'Series bucket (day|week|month)',

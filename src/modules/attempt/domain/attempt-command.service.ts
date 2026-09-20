@@ -323,16 +323,17 @@ export class AttemptCommandService {
       attemptDetail.rewardXp,
     );
 
-    const completed = await this.attemptRepository.completeAttemptAndSideEffects({
-      attemptId,
-      scorePercent,
-      correctCount: scoringData.correctCount,
-      timeTakenMs,
-      xpEarned,
-      nowIso,
-      quizId: attemptDetail.quizId,
-      userId: attemptDetail.userId,
-    });
+    const { completed, preCompletionCount } =
+      await this.attemptRepository.completeAttemptAndSideEffects({
+        attemptId,
+        scorePercent,
+        correctCount: scoringData.correctCount,
+        timeTakenMs,
+        xpEarned,
+        nowIso,
+        quizId: attemptDetail.quizId,
+        userId: attemptDetail.userId,
+      });
 
     this.logger.info({
       event: 'attempt_completed',
@@ -362,15 +363,28 @@ export class AttemptCommandService {
     );
 
     if (xpEarned > 0) {
-      this.externalEventBus.publishXpEarned({
-        eventType: 'external.xp.earned',
-        userId: attemptDetail.userId,
-        amount: xpEarned,
-        source: 'quiz_attempt',
-        attemptId,
-        timestamp: new Date(nowIso),
-        correlationId: createCorrelationId(),
-      });
+      // `externalEventBus.publishXpEarned` returns a Promise; the
+      // fire-and-forget nature here is intentional (XP attribution
+      // is best-effort and must not block the attempt commit), but
+      // an unhandled rejection would crash the process. Catch and
+      // log explicitly so a downstream failure surfaces without
+      // breaking the user-visible "submit attempt" flow.
+      this.externalEventBus
+        .publishXpEarned({
+          eventType: 'external.xp.earned',
+          userId: attemptDetail.userId,
+          amount: xpEarned,
+          source: 'quiz_attempt',
+          attemptId,
+          timestamp: new Date(nowIso),
+          correlationId: createCorrelationId(),
+        })
+        .catch((err) => {
+          this.logger.error(
+            { err, attemptId, userId: attemptDetail.userId, xpEarned },
+            'failed to publish external.xp.earned event',
+          );
+        });
 
       this.logger.debug({
         event: 'external_xp_earned_published',
@@ -380,24 +394,26 @@ export class AttemptCommandService {
       });
     }
 
-    const completedCount = await this.attemptRepository.countCompletedAttempts(
-      attemptDetail.userId,
-    );
-    const crossedMilestone = QUIZ_COMPLETION_MILESTONES.find((m) => completedCount === m);
+    // Derive milestone crossing from the pre-completion count returned inside
+    // the same transaction as the attempt completion. This avoids a race where
+    // a concurrent completion could increment the count between the commit and
+    // a separate count query.
+    const newCompletedCount = preCompletionCount + 1;
+    const crossedMilestone = QUIZ_COMPLETION_MILESTONES.find((m) => newCompletedCount === m);
     if (crossedMilestone !== undefined) {
       this.eventBus.emitQuizMilestone(
-        new QuizMilestoneEvent(attemptDetail.userId, completedCount, crossedMilestone, nowIso),
+        new QuizMilestoneEvent(attemptDetail.userId, newCompletedCount, crossedMilestone, nowIso),
       );
 
       this.logger.debug({
         event: 'quiz_milestone_event_emitted',
         userId: attemptDetail.userId,
-        completedCount,
+        completedCount: newCompletedCount,
         milestone: crossedMilestone,
       });
     }
 
-    return { ...completed, quizId: attemptDetail.quizId };
+    return { completed: { ...completed, quizId: attemptDetail.quizId }, preCompletionCount };
   }
 
   /**

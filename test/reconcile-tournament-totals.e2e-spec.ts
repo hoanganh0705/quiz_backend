@@ -1,41 +1,8 @@
 /// <reference types="jest" />
-/**
- * Reconciliation e2e for the tournament participant totals counter
- * (Phase 4 of `docs/plans/denormalized-counters-audit.md` — Fix #1).
- *
- * Verifies that the SQL in
- * `src/core/database/migrations/0008_reconcile_tournament_participant_totals.sql`
- * repairs drift between `tournament_participants.total_score` /
- * `total_score_ms` and the SUM of `tournament_round_participants.round_score`
- * / `round_time_ms` for two participant histories:
- *
- *   - Case A: participant has 2 round participants with scores 80 + 70 but
- *     total_score = 0 (counter under-counted). After the migration,
- *     total_score = 150 and total_time_ms = sum of round times.
- *
- *   - Case B: participant has 0 round participants but total_score = 9999 and
- *     total_time_ms = 12345 (counter over-counted). After the migration,
- *     both are reset to 0.
- *
- * The migration is also exercised in:
- *
- *   1. its own no-op mode against the live DB (when no drift exists),
- *      to confirm it never overwrites a correct counter.
- *   2. seeded-drift mode, to confirm it converges on the truth.
- *
- * Skips gracefully when Postgres is unreachable so this file can sit in
- * `pnpm test:e2e` without breaking CI for engineers without a local
- * DB. Run against a live stack with:
- *
- *   pnpm db:start && pnpm db:seed:foundation && \
- *   pnpm test:e2e --testPathPatterns=reconcile-tournament-totals
- */
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
-// ---------------------------------------------------------------------------
-// Minimal `.env` loader (mirrors test/reconcile-helpful-count.e2e-spec.ts).
-// ---------------------------------------------------------------------------
+// Minimal `.env` loader.
 function loadDotEnv(): void {
   const envPath = path.resolve(__dirname, '..', '.env');
   if (!fs.existsSync(envPath)) return;
@@ -107,15 +74,15 @@ function readMigrationSql(): string {
   return fs.readFileSync(file, 'utf8');
 }
 
-describe('0008_reconcile_tournament_participant_totals — migration e2e (e2e)', () => {
+describe('Reconcile tournament participant totals (e2e)', () => {
   const hasRequiredEnv = Boolean(process.env.DATABASE_URL);
 
   if (!hasRequiredEnv) {
-    console.warn('[reconcile-tournament-totals] missing DATABASE_URL; skipping suite.');
+    console.warn('[reconcile-tournament-totals] missing DATABASE_URL; skipping tests.');
   }
 
   const suite = hasRequiredEnv ? describe : describe.skip;
-  suite('reconcile-tournament-totals', () => {
+  suite('Reconcile tournament participant totals', () => {
     let pool: Pool;
     let db: ReturnType<typeof drizzle<typeof schema>>;
     let userIdA: string;
@@ -197,13 +164,6 @@ describe('0008_reconcile_tournament_participant_totals — migration e2e (e2e)',
           startAt: nowIso,
           endAt: nowIso,
           maxParticipants: 10,
-          // Phase 1 / Issue #2 — `owner_user_id` is `NOT NULL` on the
-          // tournaments table. Attribute the fixture to the first
-          // seeded user (`userIdA`) so the hard-delete teardown can
-          // still cascade the row away via the participant FKs (the
-          // `users` delete cascades into `tournament_participants`,
-          // leaving the orphaned tournament to be hard-deleted by
-          // the `afterEach`).
           ownerUserId: userIdA,
         })
         .returning({ tournamentId: tournaments.tournamentId });

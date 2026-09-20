@@ -23,6 +23,7 @@ import {
   ApiOperation,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import { Permission } from '@/common/authorization/permissions';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
 import { Permissions } from '@/common/authorization/decorators/permissions.decorator';
@@ -63,6 +64,7 @@ import {
   CompletedTournamentItemDto,
 } from '../../dto/response';
 import { TournamentPresenter } from '../presenters/tournament.presenter';
+import { TOURNAMENT_THROTTLE } from './throttle.constants';
 import { AUTH_SECURITY_NAME } from '@/core/swagger/swagger.config';
 import { ProblemDetailDto, ErrorResponseExamples } from '@/common/swagger/swagger-schemas';
 import {
@@ -102,19 +104,6 @@ import {
   tournamentTerminalStateExample,
   tournamentCapacityReductionExample,
 } from '../swagger/examples/errors.examples';
-
-// Local helpers — every tournament error response is now emitted by
-// GlobalExceptionFilter as RFC 7807 ProblemDetail (the per-module filter
-// was deleted in Phase 2). 401s were always emitted by GlobalExceptionFilter;
-// 400/403/404/409 from tournament domain errors are too now. All helpers
-// reference `ProblemDetailDto` and an example from `ErrorResponseExamples`.
-//
-// NOTE: Multiple @Api* decorators targeting the same status code collapse
-// to a single schema (the LAST one wins). When an endpoint can produce more
-// than one error reason for the same status code, prefer a single decorator
-// with a description that enumerates them — the `oneOf` pattern from the
-// pre-Phase-2 era is no longer needed because every response is now a
-// single canonical shape.
 
 const tournamentNotFoundResponse = (description: string = 'Tournament not found') =>
   ApiNotFoundResponse({
@@ -162,11 +151,9 @@ export class TournamentController {
     private readonly presenter: TournamentPresenter,
   ) {}
 
-  // createTournament throws TournamentValidationError (400) when endAt <= startAt,
-  // or CategoryNotFoundError (400) when the supplied categoryId does not exist.
-  // 400 can also be a class-validator body validation failure — also RFC 7807.
   @Post()
   @Permissions(Permission.TOURNAMENT_CREATE)
+  @Throttle({ default: TOURNAMENT_THROTTLE.createTournament })
   @ApiOperation({
     summary: 'Create tournament',
     description:
@@ -192,12 +179,9 @@ export class TournamentController {
       .then((result) => this.presenter.createTournament(result));
   }
 
-  // createTournamentRound can throw:
-  //   - TournamentNotFoundError (404)          — tournament missing
-  //   - TournamentValidationError (400)        — terminal tournament state, or startAt/endAt out of bounds
-  //   - 400 from class-validator                — request body validation failure
   @Post(':id/rounds')
   @Permissions(Permission.TOURNAMENT_CREATE)
+  @Throttle({ default: TOURNAMENT_THROTTLE.createRound })
   @ApiOperation({
     summary: 'Create tournament round',
     description:
@@ -229,11 +213,9 @@ export class TournamentController {
       .then((result) => this.presenter.createTournamentRound(result));
   }
 
-  // listTournaments is a public cursor-paginated listing that does not throw
-  // any tournament domain errors. 400 comes from class-validator (query
-  // parameters). 500 from unhandled errors.
   @Get()
   @Public()
+  @Throttle({ default: TOURNAMENT_THROTTLE.listTournaments })
   @ApiOperation({
     summary: 'List tournaments',
     description: 'Returns a cursor-paginated list of tournaments filtered by optional criteria.',
@@ -253,9 +235,9 @@ export class TournamentController {
       .then((result) => this.presenter.listTournaments(result));
   }
 
-  // getUpcomingTournaments is a public offset-paginated listing of upcoming tournaments.
   @Get('upcoming')
   @Public()
+  @Throttle({ default: TOURNAMENT_THROTTLE.getUpcomingTournaments })
   @ApiOperation({
     summary: 'List upcoming tournaments',
     description:
@@ -277,9 +259,9 @@ export class TournamentController {
       .then((result) => this.presenter.getUpcomingTournaments(result));
   }
 
-  // getActiveTournaments is a public offset-paginated listing of active tournaments.
   @Get('active')
   @Public()
+  @Throttle({ default: TOURNAMENT_THROTTLE.getActiveTournaments })
   @ApiOperation({
     summary: 'List active tournaments',
     description:
@@ -301,9 +283,9 @@ export class TournamentController {
       .then((result) => this.presenter.getActiveTournaments(result));
   }
 
-  // getCompletedTournaments is a public offset-paginated listing of completed tournaments.
   @Get('completed')
   @Public()
+  @Throttle({ default: TOURNAMENT_THROTTLE.getCompletedTournaments })
   @ApiOperation({
     summary: 'List completed tournaments',
     description:
@@ -325,10 +307,9 @@ export class TournamentController {
       .then((result) => this.presenter.getCompletedTournaments(result));
   }
 
-  // getRelatedTournaments throws TournamentNotFoundError (404) when the
-  // source tournament does not exist.
   @Get(':id/related')
   @Public()
+  @Throttle({ default: TOURNAMENT_THROTTLE.getRelatedTournaments })
   @ApiOperation({
     summary: 'List related tournaments',
     description:
@@ -337,10 +318,6 @@ export class TournamentController {
       'The list is bounded by `limit` (default 5) and is returned as a non-paginated bare array.',
   })
   @ApiTournamentIdParam()
-  // Phase 7 (api-contract audit): the runtime emits a bare array
-  // (`{ data: T[], meta }` without `pagination`), so the OpenAPI
-  // schema must match — `ApiOkResourceArray` is the canonical
-  // decorator for non-paginated bare arrays.
   @ApiOkResourceArray(RelatedTournamentItemDto, {
     description: 'Related tournaments returned',
     example: RELATED_TOURNAMENTS_EXAMPLE,
@@ -360,10 +337,9 @@ export class TournamentController {
       .then((result) => this.presenter.getRelatedTournaments(result));
   }
 
-  // getTournamentStats throws TournamentNotFoundError (404) when the
-  // tournament does not exist.
   @Get(':id/stats')
   @Public()
+  @Throttle({ default: TOURNAMENT_THROTTLE.getTournamentStats })
   @ApiOperation({
     summary: 'Get tournament stats',
     description: 'Returns aggregate statistics for the given tournament.',
@@ -385,10 +361,9 @@ export class TournamentController {
       .then((result) => this.presenter.getTournamentStats(result));
   }
 
-  // getTournamentWinners throws TournamentNotFoundError (404) when the
-  // tournament does not exist.
   @Get(':id/winners')
   @Public()
+  @Throttle({ default: TOURNAMENT_THROTTLE.getTournamentWinners })
   @ApiOperation({
     summary: 'Get tournament winners',
     description:
@@ -397,10 +372,6 @@ export class TournamentController {
       'The list is bounded by `limit` and is returned as a non-paginated bare array.',
   })
   @ApiTournamentIdParam()
-  // Phase 7 (api-contract audit): the runtime emits a bare array
-  // (`{ data: T[], meta }` without `pagination`), so the OpenAPI
-  // schema must match — `ApiOkResourceArray` is the canonical
-  // decorator for non-paginated bare arrays.
   @ApiOkResourceArray(TournamentWinnerDto, {
     description: 'Tournament winners returned',
     example: TOURNAMENT_WINNERS_EXAMPLE,
@@ -420,10 +391,9 @@ export class TournamentController {
       .then((result) => this.presenter.getTournamentWinners(result));
   }
 
-  // getTournamentById throws TournamentNotFoundError (404) when the
-  // tournament does not exist.
   @Get(':id')
   @Public()
+  @Throttle({ default: TOURNAMENT_THROTTLE.getTournamentById })
   @ApiOperation({
     summary: 'Get tournament by ID',
     description:
@@ -450,6 +420,7 @@ export class TournamentController {
   // tournament does not exist.
   @Get(':id/participants')
   @Public()
+  @Throttle({ default: TOURNAMENT_THROTTLE.getTournamentParticipants })
   @ApiOperation({
     summary: 'List tournament participants',
     description:
@@ -476,41 +447,14 @@ export class TournamentController {
       .then((result) => this.presenter.getTournamentParticipants(result));
   }
 
-  // Phase 1 / Issue #1 — admin endpoints (PATCH / DELETE / cancel).
-  //
-  // The three endpoints below were the canonical "Phase 1 fix":
-  //
-  //   * `PATCH /:id` — partial update of an existing tournament.
-  //   * `DELETE /:id` — soft delete (sets `deleted_at`, leaves the row
-  //     in place for audit).
-  //   * `POST /:id/cancel` — transition to the `cancelled` status.
-  //
-  // Authorization is layered:
-  //
-  //   1. Coarse-grained via `@Permissions(...)` so the JWT must
-  //      carry `TOURNAMENT_EDIT_OWN` or `TOURNAMENT_EDIT_ANY`
-  //      (for `PATCH` / `DELETE`), or `TOURNAMENT_CANCEL` (for
-  //      cancel).
-  //   2. Fine-grained at the service / policy layer — the
-  //      `TournamentAuthorizationPolicy` compares the JWT subject
-  //      against `tournaments.owner_user_id` before allowing the
-  //      mutation. The role check alone is not sufficient.
-  //
-  //   - 400 / 409 errors map to the corresponding RFC 7807 examples
-  //     declared in `errors.examples.ts`. Each documented in the
-  //     `@ApiBadRequestResponse` / `@ApiConflictResponse` blocks
-  //     below.
-  //   - 401 + 403 come from the global exception filter; both are
-  //     declared uniformly across the controller's existing endpoints
-  //     via `tournamentUnauthorizedResponse()` /
-  //     `tournamentForbiddenResponse()`.
   @Patch(':id')
   @Permissions(Permission.TOURNAMENT_EDIT_OWN)
+  @Throttle({ default: TOURNAMENT_THROTTLE.updateTournament })
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Update tournament',
     description:
-      'Phase 1 / Issue #1 — partially updates a tournament. Callers must hold `TOURNAMENT_EDIT_OWN` ' +
+      'Partially updates a tournament. Callers must hold `TOURNAMENT_EDIT_OWN` ' +
       'and own the tournament, or hold `TOURNAMENT_EDIT_ANY`. Body is optional-only: every omitted field is ' +
       'left untouched. Editing is only allowed while the tournament is in `upcoming`, `registration`, or `ongoing`; ' +
       'while `ongoing`, only `prize` is editable. Reducing `maxParticipants` after registration has started is ' +
@@ -555,15 +499,15 @@ export class TournamentController {
 
   @Delete(':id')
   @Permissions(Permission.TOURNAMENT_EDIT_OWN)
+  @Throttle({ default: TOURNAMENT_THROTTLE.softDeleteTournament })
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Soft-delete tournament',
     description:
-      'Phase 1 / Issue #1 — soft-deletes a tournament by setting `deleted_at = now()`. The row remains ' +
+      'Soft-deletes a tournament by setting `deleted_at = now()`. The row remains ' +
       'in the database for audit, but every read endpoint filters `deleted_at IS NULL` so the row is ' +
       'invisible to clients. The two precondition checks: (1) the caller must own the tournament or hold ' +
-      '`TOURNAMENT_EDIT_ANY`; (2) the tournament must be in `upcoming` or `registration` (a tournament ' +
-      'with participants who have submitted attempts cannot be soft-deleted without breaking the audit trail).',
+      '`TOURNAMENT_EDIT_ANY`; (2) the tournament must be in `upcoming` or `registration`.',
   })
   @tournamentUnauthorizedResponse()
   @ApiTournamentIdParam()
@@ -593,16 +537,15 @@ export class TournamentController {
 
   @Post(':id/cancel')
   @Permissions(Permission.TOURNAMENT_CANCEL)
+  @Throttle({ default: TOURNAMENT_THROTTLE.cancelTournament })
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Cancel tournament',
     description:
-      'Phase 1 / Issue #1 — transitions a tournament to the `cancelled` lifecycle status. Requires the ' +
-      '`TOURNAMENT_CANCEL` permission (admin-only in Phase 1). Cancelling is only allowed while the ' +
+      'Transitions a tournament to the `cancelled` lifecycle status. Requires the ' +
+      '`TOURNAMENT_CANCEL` permission. Cancelling is only allowed while the ' +
       'tournament is in `upcoming` or `registration`; an `ongoing`/`finished` tournament is protected ' +
-      'because the audit reserves those states for the finalization pipeline. A re-cancel of an already-`cancelled` ' +
-      'tournament is idempotent at the repository layer — the controller will surface it as 409 if the row was ' +
-      'mutated by a concurrent finalize cron between the SELECT and the UPDATE.',
+      'because the audit reserves those states for the finalization pipeline.',
   })
   @tournamentUnauthorizedResponse()
   @ApiTournamentIdParam()
@@ -642,6 +585,7 @@ export class TournamentController {
   // 400 can also be a path-validation failure (ParseUUIDPipe) — RFC 7807 ProblemDetail.
   @Post(':id/register')
   @Permissions(Permission.TOURNAMENT_REGISTER)
+  @Throttle({ default: TOURNAMENT_THROTTLE.registerForTournament })
   @ApiOperation({
     summary: 'Register for tournament',
     description:
@@ -651,8 +595,6 @@ export class TournamentController {
   })
   @tournamentUnauthorizedResponse()
   @ApiTournamentIdParam()
-  // Issue #70: Use ApiCreatedResource (201) instead of ApiOkResource (200)
-  // since this endpoint creates a participant resource.
   @ApiCreatedResource(RegisterTournamentResponseDto, {
     description: 'Registered successfully (201 Created)',
     example: REGISTER_SUCCESS_EXAMPLE,
@@ -680,6 +622,7 @@ export class TournamentController {
   // tournament does not exist.
   @Get(':id/leaderboard')
   @Public()
+  @Throttle({ default: TOURNAMENT_THROTTLE.getTournamentLeaderboard })
   @ApiOperation({
     summary: 'Get tournament leaderboard',
     description:
@@ -687,10 +630,6 @@ export class TournamentController {
       'Results are paginated with `limit` (default 50) and `offset` (default 0).',
   })
   @ApiTournamentIdParam()
-  // Phase 7 (api-contract audit): the runtime emits an offset-paginated
-  // payload (`{ data: T[], meta: { pagination: { kind: 'offset', ... } } }`),
-  // so the OpenAPI schema must match — `ApiOkResourceList(..., 'offset')` is
-  // the canonical decorator for offset-paginated lists.
   @ApiOkResourceList(TournamentLeaderboardEntryDto, 'offset', {
     description: 'Leaderboard returned',
     example: TOURNAMENT_LEADERBOARD_EXAMPLE,
@@ -715,6 +654,7 @@ export class TournamentController {
   //   - TournamentNotRegisteredError (404)    — user not registered
   //   - TournamentForbiddenError (403)        — user is withdrawn or no standing
   @Get(':id/my-standing')
+  @Throttle({ default: TOURNAMENT_THROTTLE.getMyTournamentStanding })
   @ApiOperation({
     summary: 'Get my tournament standing',
     description:
@@ -752,6 +692,7 @@ export class TournamentController {
   // 400 can also be a path-validation failure (ParseUUIDPipe) — RFC 7807 ProblemDetail.
   @Post(':id/rounds/:roundId/attempts')
   @Permissions(Permission.TOURNAMENT_ATTEMPT)
+  @Throttle({ default: TOURNAMENT_THROTTLE.startRoundAttempt })
   @ApiOperation({
     summary: 'Start round attempt',
     description:
@@ -762,8 +703,6 @@ export class TournamentController {
   @tournamentUnauthorizedResponse()
   @ApiTournamentIdParam()
   @ApiTournamentRoundIdParam()
-  // Issue #71: Use ApiCreatedResource (201) instead of ApiOkResource (200)
-  // since this endpoint creates an attempt resource.
   @ApiCreatedResource(StartTournamentAttemptResponseDto, {
     description: 'Attempt started (201 Created)',
     example: START_ATTEMPT_SUCCESS_EXAMPLE,
@@ -797,6 +736,7 @@ export class TournamentController {
   // 400 can also be a path-validation failure (ParseUUIDPipe) — RFC 7807 ProblemDetail.
   @Delete(':id/register')
   @Permissions(Permission.TOURNAMENT_REGISTER)
+  @Throttle({ default: TOURNAMENT_THROTTLE.unregisterFromTournament })
   @ApiOperation({
     summary: 'Unregister from tournament',
     description:
@@ -839,6 +779,7 @@ export class TournamentController {
   // 400 can also be a path-validation failure (ParseUUIDPipe) — RFC 7807 ProblemDetail.
   @Post(':id/withdraw')
   @Permissions(Permission.TOURNAMENT_REGISTER)
+  @Throttle({ default: TOURNAMENT_THROTTLE.withdrawFromTournament })
   @ApiOperation({
     summary: 'Withdraw from ongoing tournament',
     description:

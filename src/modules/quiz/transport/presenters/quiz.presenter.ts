@@ -74,12 +74,9 @@ export class QuizPresenter {
   readonly getPopularQuizzes = (items: PopularQuizItemDto[]) => ApiResponse.ok([...items]);
   readonly getMyQuizAnalytics = QuizPresenter.ok<CreatorQuizAnalyticsDto>;
   readonly getQuizStats = QuizPresenter.ok<QuizStatsResponseDto>;
-  // Phase 2 (S-11): sparkline history endpoint.
   readonly getQuizStatsHistory = QuizPresenter.ok<QuizStatsHistoryResponseDto>;
-  // Phase 2 (S-9): public preview endpoint.
   readonly getQuizPreview = QuizPresenter.ok<QuizPreviewResponseDto>;
 
-  // Phase 4 (S-24): aggregate bundle for quiz detail page.
   readonly getQuizAggregate = QuizPresenter.ok<QuizAggregateResponseDto>;
 
   // Related: items-only DTO unwrapped to bare array

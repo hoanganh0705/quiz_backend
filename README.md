@@ -13,23 +13,23 @@ This is **not** a CRUD tutorial. It is a portfolio piece that
 demonstrates the engineering decisions you would expect of a
 mid-senior backend engineer:
 
-| | Decision | Where |
-| --- | --- | --- |
-| ◉ | **Hexagonal / Ports-and-Adapters** — domain depends on ports, not on `pg` or `ioredis` | [`docs/adr/0018-ports-and-adapters.md`](docs/adr/0018-ports-and-adapters.md) |
-| ◉ | **Transactional Outbox** — domain mutations and their events commit atomically; LISTEN/NOTIFY for sub-second dispatch | [`docs/adr/0019-transactional-outbox.md`](docs/adr/0019-transactional-outbox.md) |
-| ◉ | **Optimistic Locking** — quiz-instance state machine uses a `version` column, surfacing conflicts as `409` | [`docs/adr/0020-optimistic-locking.md`](docs/adr/0020-optimistic-locking.md) |
-| ◉ | **UUIDv7 primary keys** — time-ordered, RFC 9562, B-tree-friendly | [`docs/adr/0021-uuidv7-primary-keys.md`](docs/adr/0021-uuidv7-primary-keys.md) |
-| ◉ | **Stampede-protected read-through cache** — Redis-coordinated `SET NX PX` locks prevent cache-stampedes | [`docs/adr/0022-stampede-protection.md`](docs/adr/0022-stampede-protection.md) |
-| ◉ | **Fail-open Redis circuit breaker** — five consecutive failures and Redis calls short-circuit to a safe fallback | [`docs/adr/0023-redis-circuit-breaker.md`](docs/adr/0023-redis-circuit-breaker.md) |
-| ◉ | **RFC 7807 problem-detail errors** with a mapped, loud failure on any unmapped code | [`docs/adr/0003-error-response.md`](docs/adr/0003-error-response.md) |
-| ◉ | **Cursor pagination** by default; offset pagination reserved for endpoints without a stable sort key | [`docs/adr/0004-pagination-strategy.md`](docs/adr/0004-pagination-strategy.md) |
-| ◉ | **JWT access + refresh rotation with reuse detection** that revokes the entire token family on replay | [`docs/adr/0012-authentication.md`](docs/adr/0012-authentication.md) |
-| ◉ | **Three-layer authorization** — `JwtGuard` → `PermissionsGuard` → domain ownership checks | [`docs/adr/0013-authorization.md`](docs/adr/0013-authorization.md) |
-| ◉ | **Custom OpenTelemetry-compatible tracing** for HTTP, Redis, Drizzle, and BullMQ — with W3C `traceparent` propagation | `src/core/observability/` |
-| ◉ | **Prometheus-compatible `/metrics`** with histograms, gauges, and dynamic-scraping for circuit state, queue depth, outbox lag | `src/modules/health/metrics.controller.ts` |
-| ◉ | **Multi-stage Dockerfile**, non-root user, all secrets via env | `Dockerfile` |
-| ◉ | **Authorization test matrix** — every (role, route) is enforced by `test/authz.e2e-spec.ts` driven from a single fixture table | [`test/fixtures/authz-matrix.ts`](test/fixtures/authz-matrix.ts) |
-| ◉ | **Race-condition test** for `joinInstanceAtomic` that demonstrates the `FOR UPDATE` semantics under concurrency | `src/modules/instance/infrastructure/repositories/quiz-instance.repository.race.spec.ts` |
+|     | Decision                                                                                                                       | Where                                                                                    |
+| --- | ------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------- |
+| ◉   | **Hexagonal / Ports-and-Adapters** — domain depends on ports, not on `pg` or `ioredis`                                         | [`docs/adr/0018-ports-and-adapters.md`](docs/adr/0018-ports-and-adapters.md)             |
+| ◉   | **Transactional Outbox** — domain mutations and their events commit atomically; LISTEN/NOTIFY for sub-second dispatch          | [`docs/adr/0019-transactional-outbox.md`](docs/adr/0019-transactional-outbox.md)         |
+| ◉   | **Optimistic Locking** — quiz-instance state machine uses a `version` column, surfacing conflicts as `409`                     | [`docs/adr/0020-optimistic-locking.md`](docs/adr/0020-optimistic-locking.md)             |
+| ◉   | **UUIDv7 primary keys** — time-ordered, RFC 9562, B-tree-friendly                                                              | [`docs/adr/0021-uuidv7-primary-keys.md`](docs/adr/0021-uuidv7-primary-keys.md)           |
+| ◉   | **Stampede-protected read-through cache** — Redis-coordinated `SET NX PX` locks prevent cache-stampedes                        | [`docs/adr/0022-stampede-protection.md`](docs/adr/0022-stampede-protection.md)           |
+| ◉   | **Fail-open Redis circuit breaker** — five consecutive failures and Redis calls short-circuit to a safe fallback               | [`docs/adr/0023-redis-circuit-breaker.md`](docs/adr/0023-redis-circuit-breaker.md)       |
+| ◉   | **RFC 7807 problem-detail errors** with a mapped, loud failure on any unmapped code                                            | [`docs/adr/0003-error-response.md`](docs/adr/0003-error-response.md)                     |
+| ◉   | **Cursor pagination** by default; offset pagination reserved for endpoints without a stable sort key                           | [`docs/adr/0004-pagination-strategy.md`](docs/adr/0004-pagination-strategy.md)           |
+| ◉   | **JWT access + refresh rotation with reuse detection** that revokes the entire token family on replay                          | [`docs/adr/0012-authentication.md`](docs/adr/0012-authentication.md)                     |
+| ◉   | **Three-layer authorization** — `JwtGuard` → `PermissionsGuard` → domain ownership checks                                      | [`docs/adr/0013-authorization.md`](docs/adr/0013-authorization.md)                       |
+| ◉   | **Custom OpenTelemetry-compatible tracing** for HTTP, Redis, Drizzle, and BullMQ — with W3C `traceparent` propagation          | `src/core/observability/`                                                                |
+| ◉   | **Prometheus-compatible `/metrics`** with histograms, gauges, and dynamic-scraping for circuit state, queue depth, outbox lag  | `src/modules/health/metrics.controller.ts`                                               |
+| ◉   | **Multi-stage Dockerfile**, non-root user, all secrets via env                                                                 | `Dockerfile`                                                                             |
+| ◉   | **Authorization test matrix** — every (role, route) is enforced by `test/authz.e2e-spec.ts` driven from a single fixture table | [`test/fixtures/authz-matrix.ts`](test/fixtures/authz-matrix.ts)                         |
+| ◉   | **Race-condition test** for `joinInstanceAtomic` that demonstrates the `FOR UPDATE` semantics under concurrency                | `src/modules/instance/infrastructure/repositories/quiz-instance.repository.race.spec.ts` |
 
 ## Architecture
 
@@ -110,13 +110,13 @@ pnpm start:dev
 
 The API is served under the global prefix `/api/v1`.
 
-| Endpoint | Purpose |
-| --- | --- |
-| `GET /api/v1/health` | Liveness + dependency health (Postgres, Redis, Storage, Email queue, Redis circuit) |
-| `GET /api/v1/health/live` | Process liveness only |
-| `GET /api/v1/metrics` | Prometheus-format metrics |
-| `GET /api/v1/docs` | Swagger UI (disabled in production by default) |
-| `GET /api/v1/docs/openapi.json` | OpenAPI 3.0 document — used by the frontend SDK generator |
+| Endpoint                        | Purpose                                                                             |
+| ------------------------------- | ----------------------------------------------------------------------------------- |
+| `GET /api/v1/health`            | Liveness + dependency health (Postgres, Redis, Storage, Email queue, Redis circuit) |
+| `GET /api/v1/health/live`       | Process liveness only                                                               |
+| `GET /api/v1/metrics`           | Prometheus-format metrics                                                           |
+| `GET /api/v1/docs`              | Swagger UI (disabled in production by default)                                      |
+| `GET /api/v1/docs/openapi.json` | OpenAPI 3.0 document — used by the frontend SDK generator                           |
 
 Use **Authorize** in Swagger UI with a Bearer access token for
 protected routes.
@@ -136,14 +136,14 @@ src/
     logger/                    Pino structured logging
     observability/             Tracing, metrics, tracing wrappers
     redis/                     Redis client + circuit breaker (ADR-0023)
-    storage/                   Cloudinary + storage port (Phase 7)
+    storage/                   Cloudinary + storage port
   modules/
     auth/                      Auth, RBAC, sessions, refresh tokens
     user/                      Profile bundles (cache + i18n)
     quiz/                      Quiz CRUD, cache, invalidation handlers
     instance/                  Real-time game rooms (optimistic locking)
     attempt/                   Quiz attempt flow
-    upload/                    Media upload (→ presigned URLs in Phase 7)
+    upload/                    Media upload (→ presigned URLs)
     admin/                     Admin operations (audit log search)
     health/                    Health + metrics endpoints
     email/                     BullMQ queue + email workers
@@ -201,18 +201,18 @@ pnpm smoke:openapi      # Verify Swagger is reachable
 
 ## ADRs (Architecture Decision Records)
 
-New engineers: start with these to understand the *why* behind the
+New engineers: start with these to understand the _why_ behind the
 code. The full list is in
 [`docs/adr/README.md`](docs/adr/README.md).
 
-| | ADR | |
-| --- | --- | --- |
-| 0018 | [Ports and Adapters](docs/adr/0018-ports-and-adapters.md) | Hexagonal architecture; domain depends on port interfaces |
-| 0019 | [Transactional Outbox](docs/adr/0019-transactional-outbox.md) | Domain mutations + events commit atomically |
-| 0020 | [Optimistic Locking](docs/adr/0020-optimistic-locking.md) | `version` column on quiz instances |
-| 0021 | [UUIDv7](docs/adr/0021-uuidv7-primary-keys.md) | All primary keys, RFC 9562 |
-| 0022 | [Stampede Protection](docs/adr/0022-stampede-protection.md) | Redis-coordinated cache locks |
-| 0023 | [Redis Circuit Breaker](docs/adr/0023-redis-circuit-breaker.md) | Fail-open on Redis outages |
+|      | ADR                                                             |                                                           |
+| ---- | --------------------------------------------------------------- | --------------------------------------------------------- |
+| 0018 | [Ports and Adapters](docs/adr/0018-ports-and-adapters.md)       | Hexagonal architecture; domain depends on port interfaces |
+| 0019 | [Transactional Outbox](docs/adr/0019-transactional-outbox.md)   | Domain mutations + events commit atomically               |
+| 0020 | [Optimistic Locking](docs/adr/0020-optimistic-locking.md)       | `version` column on quiz instances                        |
+| 0021 | [UUIDv7](docs/adr/0021-uuidv7-primary-keys.md)                  | All primary keys, RFC 9562                                |
+| 0022 | [Stampede Protection](docs/adr/0022-stampede-protection.md)     | Redis-coordinated cache locks                             |
+| 0023 | [Redis Circuit Breaker](docs/adr/0023-redis-circuit-breaker.md) | Fail-open on Redis outages                                |
 
 ## Operations
 

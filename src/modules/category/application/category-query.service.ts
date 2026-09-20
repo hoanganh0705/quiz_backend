@@ -25,11 +25,6 @@ import type { QuizListItemDto } from '@/modules/quiz/dto/response/quiz-list-item
 import type { FollowedCategoryRow } from '../domain/ports';
 import { CategoryAnalyticsNotFoundError } from '../domain/errors/category-domain.errors';
 
-/**
- * Adapter: project the quiz module's `{ items, pagination: { limit, hasNextPage,
- * nextCursor } }` DTO into a domain-level {@link PaginatedResult}, attaching
- * the `kind: 'cursor'` discriminator that Phase 4 made mandatory.
- */
 const cursorResultFromQuizDto = (
   payload: Awaited<ReturnType<QuizApplicationService['listQuizzes']>>,
 ): PaginatedResult<QuizListItemDto> => {
@@ -42,18 +37,6 @@ const cursorResultFromQuizDto = (
   return paginated<QuizListItemDto>(payload.items, pagination);
 };
 
-/**
- * Read side of the Category bounded context.
- *
- * CQRS: this service is responsible exclusively for query (read) operations.
- * It has no side effects and does not emit domain events.
- *
- * Layering contract: this service returns raw DTOs (`CategoryResponseDto`,
- * `FollowedCategoryItemDto`, `RankedCategoryResponseDto`, …) and domain-level
- * {@link PaginatedResult} values. It never returns HTTP envelopes; the
- * `transport/presenters/category.presenter.ts` performs wrapping via
- * `ApiResponse.ok(...)` / `ApiResponse.page(...)`.
- */
 @Injectable()
 export class CategoryQueryService {
   constructor(

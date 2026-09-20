@@ -1,53 +1,5 @@
 /// <reference types="jest" />
-/**
- * Instance-module E2E scaffold (Phases 1–3 of
- * `docs/audits/INSTANCE_API_CONTRACT_AUDIT.md`).
- *
- * Phase 1 fixes three classes of regression:
- *   - 2.1 (Critical): `ListInstancesQueryDto.status` / `.difficulty`
- *     must reject values outside their respective enums with a 400
- *     instead of leaking PG enum-violation 500s.
- *   - 1.1 (Critical): non-existent `quizVersionId` on
- *     `POST /api/v1/instances` must return 404 with code
- *     `QUIZ_VERSION_NOT_FOUND`, not a 500 with raw SQL in `detail`.
- *   - 8.1 / 8.2 / 8.3 (Critical): leaderboard cursor pagination must
- *     not crash with `column "row_rank" does not exist`, and
- *     `data[*].rank` must be a `number`, not a string.
- *
- * Phase 2 covers wire-shape / runtime correctness:
- *   - 2.2 (Critical): `wrapPaginatedDto` must run
- *     `normalizeTemporalFields` so list/leaderboard items share the
- *     canonical ISO 8601 timestamp shape with the rest of the API.
- *   - 2.4 (High) / 2.4-leaderboard (High): strict cursor parsers
- *     (issue 2.4 surface) reject malformed shapes with `400` instead
- *     of silently producing `undefined`.
- *   - 2.5 (High): the list `nextCursor` encodes `createdAt` in ISO 8601.
- *   - 5.1 (Critical): duplicate join returns 409 with code
- *     `PLAYER_ALREADY_JOINED`, not 400 `INSTANCE_FULL`.
- *   - 8.4 (High): leaderboard has a stable tiebreaker on `joinedAt`
- *     so two players with identical scores have a deterministic rank.
- *
- * Phase 3 covers authorization / state-machine precision:
- *   - 6.1 (Medium): `POST /{id}/start` distinguishes
- *     `closed`/`finished` (→ `INSTANCE_ALREADY_CLOSED`) from
- *     `running` (→ `INSTANCE_ALREADY_STARTED`).
- *   - 7.1 (Medium): `POST /{id}/close` distinguishes `finished`
- *     (→ `INSTANCE_ALREADY_FINISHED`) from `closed`
- *     (→ `INSTANCE_ALREADY_CLOSED`).
- *
- * This file follows the same shape as `bookmark.e2e-spec.ts`:
- *
- *   1. A lightweight Nest `TestingModule` boots a `InstanceFixtureController`
- *      that mirrors the real controller's request/response shapes and
- *      delegates the validation/routing concerns that the audit affects.
- *   2. The fixture deliberately avoids Postgres / Redis so it runs as
- *      part of `pnpm test:e2e` without docker.
- *   3. Issues that require a real database cursor test, a real
- *      FK-translation test, or a real lifecycle state machine are
- *      marked `it.skip(...)` with a pointer to the follow-up that adds
- *      the integration version when a Postgres fixture is wired in the
- *      test harness.
- */
+
 import {
   Controller,
   Get,
@@ -76,25 +28,11 @@ interface EnvelopeWire {
     readonly pagination?: Record<string, unknown>;
   };
 }
-
-/**
- * Lightweight controller that mirrors the real `InstanceController`'s
- * query-handling surface for the Phase 1 critical paths, and the
- * Phase 2 wire-shape assertions.
- *
- * The response shapes model exactly what the production
- * `InstancePresenter` and `InstanceResponseMapper` emit on the wire for
- * the leaderboard and the list, so envelope-shape regressions surface
- * here as well as in the real integration tests added later.
- */
 @Controller('instances-fixture')
 @UseInterceptors(ResponseFormatInterceptor)
 class InstanceFixtureController {
   @Get()
   listInstances(@Query() query: Record<string, string>) {
-    // Echo whatever the controller validated, omitting the cursor.
-    // The actual implementation lives in `InstanceService.listInstances`,
-    // which is exercised by the real e2e test below.
     void query;
     return ApiResponse.ok({
       items: [
@@ -114,22 +52,12 @@ class InstanceFixtureController {
           maxPlayers: 10,
           status: 'open',
           playerCount: 1,
-          // Phase 2 (issue 2.2): include a non-ISO 8601 timestamp so we can
-          // assert that `normalizeTemporalFields` runs through the
-          // paginated-envelope path and normalizes it on the wire.
           createdAt: '2026-06-25 10:30:00+00',
         },
       ],
     });
   }
 
-  /**
-   * Phase 2 (issue 2.5): fixture endpoint that encodes a list `nextCursor`
-   * from a PG-style `createdAt` string and round-trips it through
-   * `decodeInstanceCursor` — the production code path applies
-   * `new Date(...).toISOString()` so the encoded `createdAt` is always
-   * canonical on the wire.
-   */
   @Get('cursor/list')
   listCursorRoundTrip(@Query('createdAt') createdAt: string) {
     const cursor = Buffer.from(
@@ -139,23 +67,15 @@ class InstanceFixtureController {
       }),
     ).toString('base64');
 
-    // Also expose the decoded form so the test can assert round-trip.
     const decoded = decodeInstanceCursor(cursor);
     return ApiResponse.ok({ cursor, decoded });
   }
 
-  /**
-   * Phase 2 (issue 2.4): fixture endpoint that mirrors the real
-   * controller's strict cursor parse. Throws 400 on malformed shape
-   * — the production controller emits this through `GlobalExceptionFilter`.
-   */
   @Get(':id/leaderboard')
   getLeaderboard(@Param('id') id: string, @Query('cursor') cursor?: string) {
     void id;
     let decodedCursor: ReturnType<typeof decodeLeaderboardCursor> | null = null;
     if (cursor) {
-      // This is the exact call site from the real controller — bad shape
-      // → 400.
       decodedCursor = decodeLeaderboardCursor(cursor);
     }
     return ApiResponse.page(
@@ -197,14 +117,6 @@ class InstanceFixtureController {
       },
     );
   }
-
-  /**
-   * Phase 3 (issues 6.1, 7.1): fixture endpoint that mirrors the
-   * start/close state-machine error mapping. The real service throws a
-   * distinct domain error per state; this fixture surfaces 400 with a
-   * status-specific error code so the contract is observable without a
-   * database.
-   */
   @Post(':id/_start')
   startFixture(
     @Param('id') id: string,
@@ -230,16 +142,13 @@ class InstanceFixtureController {
       throw new HttpException({ message: 'Instance is already closed' }, HttpStatus.BAD_REQUEST);
     }
     if (status === 'finished') {
-      // Phase 3 (issue 7.1): the terminal `finished` state surfaces as a
-      // distinct wire-shape code (`INSTANCE_ALREADY_FINISHED`) — different
-      // detail string from the `closed` case.
       throw new HttpException({ message: 'Instance is finished' }, HttpStatus.BAD_REQUEST);
     }
     return ApiResponse.ok({ message: 'Instance closed' });
   }
 }
 
-describe('Instance module — Phase 1 E2E scaffold', () => {
+describe('Instance module ', () => {
   let app: INestApplication;
 
   beforeAll(async () => {
@@ -266,7 +175,7 @@ describe('Instance module — Phase 1 E2E scaffold', () => {
       expect(body.meta.timestamp).toMatch(ISO_8601);
     });
 
-    it.skip('Issue 2.1 (Phase 1): real DB e2e — `?status=invalid` must return 400 ProblemDetail, not 500', () => {
+    it.skip('`?status=invalid` must return 400 ProblemDetail, not 500', () => {
       // TODO(integration PR): boot AppModule against a test Postgres,
       // then:
       //   const res = await request(app).get('/api/v1/instances?status=invalid').set('Authorization', `Bearer ${jwt}`);
@@ -276,11 +185,11 @@ describe('Instance module — Phase 1 E2E scaffold', () => {
       //   expect(body.detail).not.toContain('invalid input value for enum');
     });
 
-    it.skip('Issue 2.1 (Phase 1): real DB e2e — `?difficulty=invalid` must return 400, not 500', () => {
+    it.skip('`?difficulty=invalid` must return 400, not 500', () => {
       // TODO(integration PR): same setup as above with `?difficulty=invalid`.
     });
 
-    it.skip('Issue 2.1 (Phase 1): real DB e2e — `?status=open&difficulty=easy` returns 200 with filtered rows', () => {
+    it.skip('`?status=open&difficulty=easy` returns 200 with filtered rows', () => {
       // TODO(integration PR): seed at least one matching instance.
     });
   });
@@ -302,7 +211,7 @@ describe('Instance module — Phase 1 E2E scaffold', () => {
       });
     });
 
-    it('Issue 8.2: `data[*].rank` is a number (not a string) on the wire', async () => {
+    it('`data[*].rank` is a number (not a string) on the wire', async () => {
       const res = await request(app.getHttpServer() as App).get(
         '/instances-fixture/660e8400-e29b-41d4-a716-446655440001/leaderboard',
       );
@@ -316,7 +225,7 @@ describe('Instance module — Phase 1 E2E scaffold', () => {
       expect(items[1].rank).toBe(2);
     });
 
-    it.skip('Issue 8.1 (Phase 1): real DB e2e — leaderboard cursor pagination does not return 500', () => {
+    it.skip('leaderboard cursor pagination does not return 500', () => {
       // The CTE fix means the second page via `?cursor=…&limit=…` returns 200,
       // not 500 with `column "row_rank" does not exist` in `detail`.
       //   const res = await request(app)
@@ -333,7 +242,7 @@ describe('Instance module — Phase 1 E2E scaffold', () => {
       //   expect((page2.body.data as unknown[]).length).toBe(1);
     });
 
-    it.skip('Issue 8.2 (Phase 1): real DB e2e — `data[*].rank` is a number returned from PG', () => {
+    it.skip('`data[*].rank` is a number returned from PG', () => {
       // The CTE now casts `row_number() over (...)::int` so the wire type
       // matches the DTO (`rank: number`). Asserted directly against the
       // runtime here:
@@ -342,7 +251,7 @@ describe('Instance module — Phase 1 E2E scaffold', () => {
   });
 
   describe('POST /api/v1/instances', () => {
-    it.skip('Issue 1.1 (Phase 1): real DB e2e — non-existent quizVersionId returns 404 QUIZ_VERSION_NOT_FOUND, not 500', () => {
+    it.skip('non-existent quizVersionId returns 404 QUIZ_VERSION_NOT_FOUND, not 500', () => {
       // TODO(integration PR): boot AppModule against a test Postgres.
       //   const fakeQuizVersionId = '00000000-0000-0000-0000-000000000000';
       //   const res = await request(app)
@@ -357,7 +266,7 @@ describe('Instance module — Phase 1 E2E scaffold', () => {
   });
 });
 
-describe('Instance module — Phase 2 wire-shape correctness', () => {
+describe('Instance module — wire-shape correctness', () => {
   let app: INestApplication;
 
   beforeAll(async () => {
@@ -374,12 +283,8 @@ describe('Instance module — Phase 2 wire-shape correctness', () => {
     await app.close();
   });
 
-  describe('Issue 2.2: temporal-field normalization through the list envelope', () => {
+  describe('temporal-field normalization through the list envelope', () => {
     it('normalizes non-ISO 8601 `createdAt` on `data[*]` to ISO 8601', async () => {
-      // The fixture payload intentionally includes the Postgres-style
-      // "2026-06-25 10:30:00+00" — after Phase 2's `wrapPaginatedDto`
-      // refactor (which now delegates to `ApiResponse.page`), this should
-      // arrive on the wire as canonical ISO 8601.
       const res = await request(app.getHttpServer() as App).get('/instances-fixture');
 
       expect(res.status).toBe(200);
@@ -389,7 +294,7 @@ describe('Instance module — Phase 2 wire-shape correctness', () => {
     });
   });
 
-  describe('Issue 2.5: list `nextCursor.createdAt` round-trips as ISO 8601', () => {
+  describe('list `nextCursor.createdAt` round-trips as ISO 8601', () => {
     it('encodes `createdAt` as ISO 8601 even when the input is PG-format', async () => {
       const input = '2026-06-25 10:30:00+00';
       const res = await request(app.getHttpServer() as App)
@@ -505,7 +410,7 @@ describe('Instance module — Phase 2 wire-shape correctness', () => {
   });
 });
 
-describe('Instance module — Phase 3 state-machine precision', () => {
+describe('Instance module', () => {
   let app: INestApplication;
 
   beforeAll(async () => {

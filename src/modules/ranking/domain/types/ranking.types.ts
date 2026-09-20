@@ -32,11 +32,6 @@ export enum RankTrend {
   NEW = 'new',
 }
 
-export enum UserRankingStatus {
-  ACTIVE = 'active',
-  INACTIVE = 'inactive',
-}
-
 // ============================================
 // BASE TYPES
 // ============================================
@@ -81,33 +76,6 @@ export interface RankingMilestoneRecord {
 // ============================================
 // EVENT TYPES
 // ============================================
-
-export interface XpEarnedEvent {
-  userId: string;
-  amount: number;
-  source: 'quiz' | 'tournament' | 'bonus';
-  attemptId?: string;
-  categoryId?: string;
-  timestamp: Date;
-}
-
-export interface RankUpdatedEvent {
-  userId: string;
-  period: RankingPeriod;
-  previousRank: number | null;
-  newRank: number;
-  xp: number;
-  timestamp: Date;
-}
-
-export interface RankMilestoneEvent {
-  userId: string;
-  period: RankingPeriod;
-  milestone: RankingMilestone;
-  rank: number;
-  percentile: number;
-  timestamp: Date;
-}
 
 // ============================================
 // LEADERBOARD TYPES
@@ -214,33 +182,6 @@ export interface PeriodResetResult {
 }
 
 // ============================================
-// INACTIVITY TYPES (Phase 4)
-// ============================================
-
-export enum InactivityStatus {
-  ACTIVE = 'active',
-  WARNING = 'warning', // 30-90 days inactive
-  DORMANT = 'dormant', // 90+ days inactive
-}
-
-export interface InactivityInfo {
-  status: InactivityStatus;
-  daysSinceLastActivity: number;
-  canAppearInWeeklyMonthly: boolean;
-  canAppearInAllTime: boolean;
-}
-
-export interface ReturningUserInfo {
-  isReturning: boolean;
-  wasInactive: boolean;
-  daysSinceLastActivity: number;
-  welcomeBackMessage: boolean;
-  lastRankBeforeInactivity: number | null;
-}
-
-// ============================================
-// NOTIFICATION TYPES (Phase 4)
-// ============================================
 
 export enum RankNotificationType {
   TOP_10_ACHIEVED = 'rank.milestone.top10',
@@ -253,67 +194,30 @@ export enum RankNotificationType {
   NEW_PERSONAL_BEST = 'rank.personal.best',
 }
 
-export interface RankNotification {
-  id: string;
-  userId: string;
-  type: RankNotificationType;
-  title: string;
-  body: string;
-  period: RankingPeriod;
-  rank: number;
-  previousRank?: number;
-  metadata?: Record<string, unknown>;
-  createdAt: Date;
-  readAt?: Date;
-}
-
-// ============================================
-// BADGE TYPES (Phase 4)
-// ============================================
-
-export interface UserRankingBadges {
-  isNew: boolean; // < 7 days
-  isRisingStar: boolean; // Top weekly gainer
-  isActive: boolean; // Activity in last 7 days
-  isReturning: boolean; // Returning from inactivity
-  isVeteran: boolean; // > 1 year active
-}
-
 // ============================================
 // CONSTANTS
 // ============================================
 
 export const RANKING_CONSTANTS = {
-  // Cache TTLs in seconds. Leaderboard cache uses a 30-second TTL
-  // (per the production-readiness audit) so that a 3-instance
-  // deployment has at most 30 seconds of cross-instance staleness
-  // after an XP event. The user-rank TTL is shorter because the
-  // user is most likely looking at their own rank, and rank changes
-  // should reflect quickly.
   LEADERBOARD_CACHE_TTL: 30,
   USER_RANK_CACHE_TTL: 10,
   TOTAL_USERS_CACHE_TTL: 300,
 
-  // Batch sizes
   INCREMENTAL_BATCH_SIZE: 100,
   MAX_LEADERBOARD_LIMIT: 500,
   DEFAULT_LEADERBOARD_LIMIT: 100,
 
-  // Grace periods in days
   NEW_USER_GRACE_DAYS: 7,
   INACTIVITY_WARNING_DAYS: 30,
   INACTIVITY_CUTOFF_DAYS: 90,
   VETERAN_THRESHOLD_DAYS: 365,
 
-  // Rank thresholds for milestones
   TOP_10_THRESHOLD: 10,
   TOP_100_THRESHOLD: 100,
   TOP_1000_THRESHOLD: 1000,
 
-  // Notification thresholds
   MIN_RANK_IMPROVEMENT_FOR_NOTIFICATION: 5,
 
-  // Percentile labels
   PERCENTILE_LABELS: {
     100: 'Top 1%',
     95: 'Top 5%',
@@ -323,14 +227,11 @@ export const RANKING_CONSTANTS = {
     0: 'Keep Climbing!',
   } as Record<number, string>,
 
-  // Inactivity thresholds (in days)
   INACTIVITY_STATUS: {
-    ACTIVE_MAX: 7, // Active: within 7 days
-    WARNING_MAX: 90, // Warning: 8-90 days
-    // Dormant: 90+ days
+    ACTIVE_MAX: 7,
+    WARNING_MAX: 90,
   },
 
-  // Notification templates
   NOTIFICATION_TITLES: {
     top10: "You're in the Top 10!",
     top100: 'New Personal Best!',
@@ -364,7 +265,16 @@ export function calculatePercentile(rank: number, totalUsers: number): number {
 
 /** Convert a RankingPeriodEnum (controller layer) to a RankingPeriod (domain). */
 export function enumToPeriod(periodEnum: RankingPeriodEnum | LeaderboardPeriodEnum): RankingPeriod {
-  return periodEnum as unknown as RankingPeriod;
+  if (periodEnum === RankingPeriodEnum.DAILY) return RankingPeriod.DAILY;
+  if (periodEnum === RankingPeriodEnum.WEEKLY) return RankingPeriod.WEEKLY;
+  if (periodEnum === RankingPeriodEnum.MONTHLY) return RankingPeriod.MONTHLY;
+  if (periodEnum === RankingPeriodEnum.ALL_TIME) return RankingPeriod.ALL_TIME;
+
+  if (periodEnum === LeaderboardPeriodEnum.WEEKLY) return RankingPeriod.WEEKLY;
+  if (periodEnum === LeaderboardPeriodEnum.MONTHLY) return RankingPeriod.MONTHLY;
+  if (periodEnum === LeaderboardPeriodEnum.ALL_TIME) return RankingPeriod.ALL_TIME;
+
+  throw new Error(`Unknown period enum: ${String(periodEnum)}`);
 }
 
 export function getXpColumn(period: RankingPeriod): string {

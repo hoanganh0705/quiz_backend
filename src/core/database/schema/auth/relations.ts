@@ -1,16 +1,3 @@
-// =============================================================================
-// Auth bounded context — relations
-//
-// `usersRelations` exposes the symmetric reverse-relations of the many FKs
-// that other domains declare against `users`. Because those FKs are declared
-// in the FK-holding domain (e.g. quiz/relations.ts, ranking/relations.ts,
-// etc.), this file only needs to declare the reverse side here. The other
-// domains import `users` from this directory.
-//
-// `userSessionsRelations` is a self-contained one-to-many: `userSessions`
-// belongs to exactly one `users` row.
-// =============================================================================
-
 import { relations } from 'drizzle-orm/relations';
 
 import { users, userSessions, oauthAccounts } from './schema';
@@ -77,7 +64,6 @@ export const usersRelations = relations(users, ({ many, one }) => ({
   blockedByUsers: many(blockedUsers, { relationName: 'blocked' }),
   followers: many(userFollows, { relationName: 'follower' }),
   following: many(userFollows, { relationName: 'following' }),
-  // Comment domain (replaces the legacy comments domain as of Phase 9.6 (post-Q&A rename))
   commentRows: many(commentRows),
   commentVotes: many(commentVotes),
   commentReports: many(commentReports),
@@ -87,7 +73,6 @@ export const usersRelations = relations(users, ({ many, one }) => ({
   // Taxonomy domain
   categoryFollows: many(categoryFollows),
   tagFollows: many(tagFollows),
-  // Coins domain (Phase 1 wallet + ledger + Phase 6 side tables)
   userWallet: one(userWallets),
   coinTransactions: many(coinTransactions),
   userFlairSlots: many(userFlairSlots),

@@ -1,13 +1,3 @@
-/**
- * Rule Engine Service
- *
- * Evaluates badge rules and triggers awards based on user activity.
- * This is the core evaluation engine that drives the Achievement Domain.
- *
- * Uses distributed Redis cache for badge definitions and rules to ensure
- * consistency across multiple instances.
- */
-
 import { Inject, Injectable } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { ACHIEVEMENT_REPOSITORY_PORT } from '../../infrastructure/repositories/achievement.repository';
@@ -54,14 +44,19 @@ export class RuleEngineService {
     private readonly logger: PinoLogger,
   ) {}
 
-  /**
-   * Evaluate all applicable badges for an event.
-   */
   async evaluateEvent(context: EvaluationContext): Promise<EvaluationResult[]> {
     const [badges, rulesByType] = await Promise.all([
       this.cacheService.getBadges(),
       this.getRulesByType(context.eventType),
     ]);
+
+    const candidateBadges = rulesByType
+      .map((rule) => badges[rule.badgeId])
+      .filter((badge): badge is BadgeCacheEntry =>
+        Boolean(badge && badge.isValid && badge.isActive),
+      );
+
+    const ownershipMap = await this.batchOwnershipLookup(context.userId, candidateBadges);
 
     const results: EvaluationResult[] = [];
 
@@ -71,16 +66,13 @@ export class RuleEngineService {
         continue;
       }
 
-      const result = await this.evaluateRule(rule, badge, context);
+      const result = await this.evaluateRule(rule, badge, context, ownershipMap);
       results.push(result);
     }
 
     return results;
   }
 
-  /**
-   * Evaluate badges for a specific category.
-   */
   async evaluateByCategory(
     context: EvaluationContext,
     category: string,
@@ -90,6 +82,14 @@ export class RuleEngineService {
       this.getRulesByType(context.eventType),
     ]);
 
+    const candidateBadges = rulesByType
+      .map((rule) => badges[rule.badgeId])
+      .filter((badge): badge is BadgeCacheEntry =>
+        Boolean(badge && badge.isValid && badge.isActive && badge.category === category),
+      );
+
+    const ownershipMap = await this.batchOwnershipLookup(context.userId, candidateBadges);
+
     const results: EvaluationResult[] = [];
 
     for (const rule of rulesByType) {
@@ -98,39 +98,44 @@ export class RuleEngineService {
         continue;
       }
 
-      const result = await this.evaluateRule(rule, badge, context);
+      const result = await this.evaluateRule(rule, badge, context, ownershipMap);
       results.push(result);
     }
 
     return results;
   }
 
-  /**
-   * Get progress for a user's badge.
-   */
   async getBadgeProgress(userId: string, badgeId: string): Promise<Record<string, unknown> | null> {
     return this.achievementRepository.getBadgeProgress(userId, badgeId);
   }
 
-  /**
-   * Check if a user already has a specific badge.
-   */
-  hasBadge(userId: string, badgeId: string): Promise<boolean> {
-    return this.achievementRepository.hasBadge(userId, badgeId);
+  hasBadge(userId: string, badgeIdOrSlug: string): Promise<boolean> {
+    return this.lookupBadgeId(badgeIdOrSlug).then((resolvedId) => {
+      if (!resolvedId) return false;
+      return this.achievementRepository.hasBadge(userId, resolvedId);
+    });
   }
 
-  /**
-   * Get all badges a user has earned.
-   */
+  private async lookupBadgeId(badgeIdOrSlug: string): Promise<string | null> {
+    if (this.looksLikeUuid(badgeIdOrSlug)) {
+      const badge = await this.achievementRepository.getBadgeById(badgeIdOrSlug);
+      return badge?.badgeId ?? null;
+    }
+
+    const badge = await this.achievementRepository.getBadgeBySlug(badgeIdOrSlug);
+    return badge?.badgeId ?? null;
+  }
+
+  private looksLikeUuid(value: string): boolean {
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+  }
+
   async getUserBadges(
     userId: string,
   ): Promise<{ data: (UserBadgeRow & { badge: BadgeDefinitionRow })[]; total: number }> {
     return this.achievementRepository.getUserBadgesWithDetails(userId);
   }
 
-  /**
-   * Award a badge to a user.
-   */
   async awardBadge(
     userId: string,
     badgeId: string,
@@ -156,9 +161,6 @@ export class RuleEngineService {
     });
   }
 
-  /**
-   * Invalidate caches. Call after badge/rule mutations.
-   */
   async invalidateCaches(): Promise<void> {
     await this.cacheService.invalidateAllCaches();
     this.logger.info({
@@ -166,11 +168,20 @@ export class RuleEngineService {
     });
   }
 
-  /**
-   * Force cache refresh (for testing or manual invalidation).
-   */
   async forceCacheRefresh(): Promise<void> {
     await this.cacheService.forceRefresh();
+  }
+
+  private async batchOwnershipLookup(
+    userId: string,
+    candidateBadges: BadgeCacheEntry[],
+  ): Promise<Record<string, boolean>> {
+    if (candidateBadges.length === 0) {
+      return {};
+    }
+
+    const uniqueBadgeIds = Array.from(new Set(candidateBadges.map((badge) => badge.badgeId)));
+    return this.achievementRepository.hasBadges(userId, uniqueBadgeIds);
   }
 
   private async getRulesByType(eventType: string): Promise<RuleCacheEntry[]> {
@@ -181,17 +192,19 @@ export class RuleEngineService {
     rule: RuleCacheEntry,
     badge: BadgeCacheEntry,
     context: EvaluationContext,
+    ownershipMap: Record<string, boolean>,
   ): Promise<EvaluationResult> {
     try {
       const conditionMet = this.checkCondition(rule.ruleType, rule.config, context);
 
       if (conditionMet) {
-        const alreadyHas = await this.achievementRepository.hasBadge(context.userId, rule.badgeId);
+        const alreadyHas = ownershipMap[rule.badgeId] ?? false;
         if (!alreadyHas) {
           await this.awardBadge(context.userId, rule.badgeId, {
             triggeredBy: context.eventType,
             ruleId: rule.ruleId,
           });
+          ownershipMap[rule.badgeId] = true;
         }
 
         return {

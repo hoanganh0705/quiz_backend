@@ -4,3 +4,4 @@ export * from './user-response.mapper';
 export * from './user-analytics-response.mapper';
 export * from './my-tournament-cursor.mapper';
 export * from './my-tournament-history-cursor.mapper';
+export * from './recently-played-cursor.mapper';

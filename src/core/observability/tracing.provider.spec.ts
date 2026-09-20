@@ -1,19 +1,3 @@
-/**
- * Phase 5 #1 — tracing provider unit tests.
- *
- * Covers the API contract:
- *   - `startSpan` returns a span with valid trace/span ids.
- *   - `endSpan` records `endTimeNs` and removes the span from
- *     the active set.
- *   - `withSpan` opens a span, runs the task, closes the span
- *     with `ok` on success and `error` on exception.
- *   - The exception is rethrown so caller's error handling is
- *     unchanged.
- *   - `recordException` flips the status to `error` and pushes
- *     an `exception` event.
- *   - The completed-span buffer is bounded (max 10 000).
- */
-
 import { TracingProvider } from './tracing.provider';
 
 class TestLogger {
@@ -49,17 +33,19 @@ describe('TracingProvider', () => {
     expect(provider.getActiveSpanCount()).toBe(0);
   });
 
-  it('withSpan opens, runs, closes with ok on success', async () => {
+  it('withSpan opens, runs, closes with ok on success', () => {
     const { provider } = makeProvider();
-    const result = await provider.withSpan('test.span', { kind: 'server' }, async () => 'value');
+    const result = provider.withSpan('test.span', { kind: 'server' }, () =>
+      Promise.resolve('value'),
+    );
     expect(result).toBe('value');
   });
 
-  it('withSpan records the exception and rethrows on failure', async () => {
+  it('withSpan records the exception and rethrows on failure', () => {
     const { provider } = makeProvider();
     const err = new Error('boom');
-    await expect(
-      provider.withSpan('test.span', {}, async () => {
+    expect(
+      provider.withSpan('test.span', {}, () => {
         throw err;
       }),
     ).rejects.toBe(err);
@@ -86,12 +72,12 @@ describe('TracingProvider', () => {
     expect(child.parentSpanId).toBe(parent.spanId);
   });
 
-  it('flush emits one log per completed span', async () => {
+  it('flush emits one log per completed span', () => {
     const { provider, logger } = makeProvider();
-    await provider.withSpan('a', {}, async () => undefined);
-    await provider.withSpan('b', {}, async () => undefined);
+    provider.withSpan('a', {}, () => Promise.resolve(undefined));
+    provider.withSpan('b', {}, () => Promise.resolve(undefined));
     // Manually invoke flush via the onModuleDestroy lifecycle.
-    await provider.onModuleDestroy();
+    provider.onModuleDestroy();
     expect(logger.info).toHaveBeenCalledTimes(2);
     const first = logger.info.mock.calls[0][0];
     expect(first.event).toBe('trace_span');

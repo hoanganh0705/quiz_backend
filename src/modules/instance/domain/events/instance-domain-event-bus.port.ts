@@ -5,6 +5,7 @@ import type {
   PlayerXpEarnedEvent,
   PlayerFinishedEvent,
   PlayerDisconnectedEvent,
+  PlayerAnsweredEvent,
   InstanceStartedEvent,
   InstanceClosedEvent,
   CountdownStartedEvent,
@@ -25,6 +26,7 @@ export interface InstanceDomainEventBusPort {
   emitPlayerXpEarned(event: PlayerXpEarnedEvent): void;
   emitPlayerFinished(event: PlayerFinishedEvent): void;
   emitPlayerDisconnected(event: PlayerDisconnectedEvent): void;
+  emitPlayerAnswered(event: PlayerAnsweredEvent): void;
   emitInstanceStarted(event: InstanceStartedEvent): void;
   emitInstanceClosed(event: InstanceClosedEvent): void;
   emitCountdownStarted(event: CountdownStartedEvent): void;

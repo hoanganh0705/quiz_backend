@@ -1,13 +1,3 @@
-/**
- * Achievement Cache Service
- *
- * Provides Redis-backed caching for badge definitions and rules with:
- * - TTL-based cache expiration
- * - Distributed lock for cache refresh (stampede protection)
- * - Cache invalidation on badge/rule mutations
- * - Multi-instance consistency
- */
-
 import { Inject, Injectable } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { CACHE_PROVIDER } from '@/common/ports/cache.provider';
@@ -59,10 +49,6 @@ export class AchievementCacheService {
     private readonly logger: PinoLogger,
   ) {}
 
-  /**
-   * Get all active badge definitions from cache or database.
-   * Uses stampede protection to prevent cache stampedes.
-   */
   async getBadges(): Promise<Record<string, BadgeCacheEntry>> {
     const cached = await this.getCachedBadges();
 
@@ -77,10 +63,6 @@ export class AchievementCacheService {
     return this.refreshBadgeCacheWithLock();
   }
 
-  /**
-   * Get all active rules from cache or database.
-   * Uses stampede protection to prevent cache stampedes.
-   */
   async getRules(): Promise<Record<string, RuleCacheEntry[]>> {
     const cached = await this.getCachedRules();
 
@@ -95,9 +77,6 @@ export class AchievementCacheService {
     return this.refreshRulesCacheWithLock();
   }
 
-  /**
-   * Get rules by event type (grouped by ruleType).
-   */
   async getRulesByEventType(eventType: string): Promise<RuleCacheEntry[]> {
     const rulesByType = await this.getRules();
     const ruleTypes = this.getRuleTypesForEvent(eventType);
@@ -111,9 +90,6 @@ export class AchievementCacheService {
     return rules.sort((a, b) => b.priority - a.priority);
   }
 
-  /**
-   * Invalidate badge cache. Call this when badges are created, updated, or deleted.
-   */
   async invalidateBadgeCache(): Promise<void> {
     await this.cache.del(AchievementCacheService.BADGE_CACHE_KEY);
     this.logger.info({
@@ -121,9 +97,6 @@ export class AchievementCacheService {
     });
   }
 
-  /**
-   * Invalidate rules cache. Call this when rules are created, updated, or deleted.
-   */
   async invalidateRulesCache(): Promise<void> {
     await this.cache.del(AchievementCacheService.RULES_CACHE_KEY);
     this.logger.info({
@@ -131,9 +104,6 @@ export class AchievementCacheService {
     });
   }
 
-  /**
-   * Invalidate all achievement caches.
-   */
   async invalidateAllCaches(): Promise<void> {
     await Promise.all([this.invalidateBadgeCache(), this.invalidateRulesCache()]);
     this.logger.info({
@@ -141,9 +111,6 @@ export class AchievementCacheService {
     });
   }
 
-  /**
-   * Refresh badges cache with distributed lock to prevent stampedes.
-   */
   async refreshBadgeCacheWithLock(): Promise<Record<string, BadgeCacheEntry>> {
     const cached = await this.getCachedBadges();
     if (cached) {
@@ -151,25 +118,22 @@ export class AchievementCacheService {
     }
 
     const lockKey = `${AchievementCacheService.BADGE_CACHE_KEY}:lock`;
-    const lockAcquired = await this.cache.acquireAdvisoryLock(
+    const lockToken = await this.cache.acquireAdvisoryLock(
       lockKey,
       AchievementCacheService.LOCK_TTL_MS,
     );
 
-    if (lockAcquired) {
+    if (lockToken !== null) {
       try {
         return await this.refreshBadgeCache();
       } finally {
-        await this.cache.releaseAdvisoryLock(lockKey, '1');
+        await this.cache.releaseAdvisoryLock(lockKey, lockToken);
       }
     }
 
     return this.waitForCacheRefresh(AchievementCacheService.BADGE_CACHE_KEY);
   }
 
-  /**
-   * Refresh rules cache with distributed lock to prevent stampedes.
-   */
   async refreshRulesCacheWithLock(): Promise<Record<string, RuleCacheEntry[]>> {
     const cached = await this.getCachedRules();
     if (cached) {
@@ -177,25 +141,22 @@ export class AchievementCacheService {
     }
 
     const lockKey = `${AchievementCacheService.RULES_CACHE_KEY}:lock`;
-    const lockAcquired = await this.cache.acquireAdvisoryLock(
+    const lockToken = await this.cache.acquireAdvisoryLock(
       lockKey,
       AchievementCacheService.LOCK_TTL_MS,
     );
 
-    if (lockAcquired) {
+    if (lockToken !== null) {
       try {
         return await this.refreshRulesCache();
       } finally {
-        await this.cache.releaseAdvisoryLock(lockKey, '1');
+        await this.cache.releaseAdvisoryLock(lockKey, lockToken);
       }
     }
 
     return this.waitForCacheRefresh(AchievementCacheService.RULES_CACHE_KEY);
   }
 
-  /**
-   * Force refresh all caches. Use after bulk operations.
-   */
   async forceRefresh(): Promise<void> {
     await this.invalidateAllCaches();
     await Promise.all([this.refreshBadgeCache(), this.refreshRulesCache()]);
@@ -315,7 +276,6 @@ export class AchievementCacheService {
       }
     }
 
-    // Fallback: compute directly (should rarely happen)
     this.logger.warn({
       event: 'cache_refresh_timeout_fallback',
       cacheKey,

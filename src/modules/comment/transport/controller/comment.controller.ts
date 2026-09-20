@@ -1,23 +1,3 @@
-/**
- * Comment Controller
- *
- * Routes for single-comment operations:
- *   - `GET    /comments/:commentId`  — read a single comment
- *   - `PATCH  /comments/:commentId`  — edit own comment
- *   - `DELETE /comments/:commentId`  — soft-delete own comment
- *   - `PUT    /comments/:commentId/vote`     — cast / flip / toggle vote
- *   - `DELETE /comments/:commentId/vote`     — remove vote
- *   - `POST   /comments/:commentId/reports`  — open a report
- *   - `POST   /comments/:commentId/hide`     — moderator hide
- *   - `POST   /comments/:commentId/restore`  — moderator restore
- *
- * Quiz-anchored reads (`GET /quizzes/:quizId/comments`) and creates
- * (`POST /quizzes/:quizId/comments`) live in
- * `quiz-comment.controller.ts`. User-anchored lists
- * (`GET /users/me/comments`, `GET /users/:userId/comments`) live in
- * `user-comment.controller.ts`.
- */
-
 import {
   Controller,
   Get,
@@ -42,6 +22,7 @@ import { CommentApplicationService } from '../../application/comment-application
 import { CommentPresenter } from '../presenters/comment.presenter';
 import { CommentNotFoundError } from '../../domain/errors';
 import { EditCommentDto, VoteDto, ReportCommentDto } from '../../dto/request';
+import { COMMENT_THROTTLE } from './throttle.constants';
 import {
   ApiDeleteCommentResponses,
   ApiEditCommentResponses,
@@ -63,6 +44,12 @@ export class CommentController {
 
   @Get(':commentId')
   @Public()
+  @Throttle({
+    default: {
+      limit: COMMENT_THROTTLE.getCommentById.limit,
+      ttl: COMMENT_THROTTLE.getCommentById.ttl,
+    },
+  })
   @ApiGetCommentResponses()
   async getComment(
     @OptionalCurrentUser() viewer: JwtPayload | undefined,
@@ -76,7 +63,12 @@ export class CommentController {
   }
 
   @Patch(':commentId')
-  @Throttle({ default: { limit: 20, ttl: 60_000 } })
+  @Throttle({
+    default: {
+      limit: COMMENT_THROTTLE.editComment.limit,
+      ttl: COMMENT_THROTTLE.editComment.ttl,
+    },
+  })
   @HttpCode(HttpStatus.OK)
   @ApiEditCommentResponses()
   async editComment(
@@ -89,7 +81,12 @@ export class CommentController {
   }
 
   @Delete(':commentId')
-  @Throttle({ default: { limit: 30, ttl: 60_000 } })
+  @Throttle({
+    default: {
+      limit: COMMENT_THROTTLE.deleteComment.limit,
+      ttl: COMMENT_THROTTLE.deleteComment.ttl,
+    },
+  })
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiDeleteCommentResponses()
   async deleteComment(
@@ -100,7 +97,9 @@ export class CommentController {
   }
 
   @Put(':commentId/vote')
-  @Throttle({ default: { limit: 20, ttl: 60_000 } })
+  @Throttle({
+    default: { limit: COMMENT_THROTTLE.vote.limit, ttl: COMMENT_THROTTLE.vote.ttl },
+  })
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiVoteCommentResponses()
   async castVote(
@@ -112,7 +111,9 @@ export class CommentController {
   }
 
   @Delete(':commentId/vote')
-  @Throttle({ default: { limit: 20, ttl: 60_000 } })
+  @Throttle({
+    default: { limit: COMMENT_THROTTLE.removeVote.limit, ttl: COMMENT_THROTTLE.removeVote.ttl },
+  })
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiRemoveVoteResponses()
   async removeVote(
@@ -123,7 +124,12 @@ export class CommentController {
   }
 
   @Post(':commentId/reports')
-  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @Throttle({
+    default: {
+      limit: COMMENT_THROTTLE.reportComment.limit,
+      ttl: COMMENT_THROTTLE.reportComment.ttl,
+    },
+  })
   @HttpCode(HttpStatus.CREATED)
   @ApiReportCommentResponses()
   async reportComment(
@@ -137,7 +143,12 @@ export class CommentController {
 
   @Post(':commentId/hide')
   @Permissions(Permission.COMMENT_MODERATE)
-  @Throttle({ default: { limit: 30, ttl: 60_000 } })
+  @Throttle({
+    default: {
+      limit: COMMENT_THROTTLE.hideComment.limit,
+      ttl: COMMENT_THROTTLE.hideComment.ttl,
+    },
+  })
   @HttpCode(HttpStatus.OK)
   @ApiHideCommentResponses()
   async hideComment(
@@ -150,7 +161,12 @@ export class CommentController {
 
   @Post(':commentId/restore')
   @Permissions(Permission.COMMENT_MODERATE)
-  @Throttle({ default: { limit: 30, ttl: 60_000 } })
+  @Throttle({
+    default: {
+      limit: COMMENT_THROTTLE.restoreComment.limit,
+      ttl: COMMENT_THROTTLE.restoreComment.ttl,
+    },
+  })
   @HttpCode(HttpStatus.OK)
   @ApiRestoreCommentResponses()
   async restoreComment(

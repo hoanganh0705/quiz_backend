@@ -1,17 +1,3 @@
-// =============================================================================
-// User bounded context — schema
-//
-// Owns the per-user profile, the privacy/visibility settings that govern
-// what the rest of the app can show, and the activity feed entries that
-// record what each user has done:
-//   - userProfiles           (display name, avatar, bio)
-//   - userProfileSettings    (per-user visibility toggles for the profile UI)
-//   - userActivityEvents     (append-only feed of user-visible activity)
-//
-// Cross-domain FKs
-//   - users (auth)           — every table anchors to a single userId
-// =============================================================================
-
 import {
   pgTable,
   index,
@@ -28,10 +14,6 @@ import { sql } from 'drizzle-orm';
 import { activityEventType } from '../shared';
 import { users } from '../auth/schema';
 
-// =============================================================================
-// userProfiles
-// =============================================================================
-
 export const userProfiles = pgTable(
   'user_profiles',
   {
@@ -42,26 +24,8 @@ export const userProfiles = pgTable(
     userId: uuid('user_id').notNull().unique(),
     displayName: text('display_name'),
     avatarUrl: text('avatar_url'),
-    /**
-     * Cloudinary `public_id` for the avatar. Set when the avatar is
-     * Cloudinary-hosted; null when the avatar is a legacy external URL
-     * (Unsplash etc.) or Base64 (during the migrate-on-write window).
-     * Read paths prefer this column; `avatar_url` is the fallback.
-     *
-     * Phase 4 (Cloudinary migration): column added; the application
-     * service still writes `avatar_url` for now. Phase 6 wires the
-     * Cloudinary write path and lifecycle.
-     */
     avatarPublicId: text('avatar_public_id'),
     bio: text(),
-    // Phase 7 (F-17): `tagline` and `pinnedBadgeIds` were defined in
-    // the initial schema but never exposed by any DTO or consumed by
-    // any query. Removed to keep the schema aligned with the public
-    // contract; a downstream migration script is responsible for
-    // dropping the columns and the `user_profiles_tagline_len` /
-    // `user_profiles_pinned_badges_array` CHECK constraints from
-    // production databases. The Drizzle-side change is the source of
-    // truth for the application; the migration script will catch up.
     createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' })
       .defaultNow()
       .notNull(),
@@ -83,15 +47,8 @@ export const userProfiles = pgTable(
       'user_profiles_display_name_len',
       sql`(display_name IS NULL) OR (length(btrim(display_name)) >= 1 AND length(btrim(display_name)) <= 100)`,
     ),
-    // Phase 7 (F-17): `user_profiles_tagline_len` and
-    // `user_profiles_pinned_badges_array` CHECK constraints are
-    // dropped alongside the `tagline` / `pinnedBadgeIds` columns.
   ],
 );
-
-// =============================================================================
-// userProfileSettings
-// =============================================================================
 
 export const userProfileSettings = pgTable(
   'user_profile_settings',
@@ -126,10 +83,6 @@ export const userProfileSettings = pgTable(
     }).onDelete('cascade'),
   ],
 );
-
-// =============================================================================
-// userActivityEvents
-// =============================================================================
 
 export const userActivityEvents = pgTable(
   'user_activity_events',

@@ -42,7 +42,6 @@ import {
   InstanceLeaderboardResponseDto,
   InstanceListResponseDto,
   InstancePlayerResponseDto,
-  InstancePlayersResponseDto,
   JoinInstanceResponseDto,
   StartCountdownResponseDto,
   StartInstanceResponseDto,
@@ -60,25 +59,6 @@ import {
   InstanceErrorResponseExamples,
 } from '../swagger/instance-swagger-decorators';
 
-// ─── Local helper decorators ───────────────────────────────────────────────────
-//
-// After Phase 2: every error response is emitted by GlobalExceptionFilter as
-// RFC 7807 `ProblemDetailDto` — there is no longer a domain-filtered
-// `{ statusCode, message, error }` envelope. So:
-//   - 401 / 400 (validator) / 400 (ParseUUIDPipe) → ProblemDetailDto
-//   - 400 / 403 / 404 / 409 (domain)                → ProblemDetailDto
-//
-// The previous `schema.oneOf([ProblemDetailDto, InstanceDomainErrorDto])`
-// for the dual-400 helper is no longer needed: every error response is
-// uniform RFC 7807 now.
-//
-// Phase 4 (audit issue 3.2): all error examples now point to the
-// per-module `InstanceErrorResponseExamples` payloads so the wire shape
-// in the OpenAPI artifact matches the runtime RFC 7807 detail (no more
-// generic "The requested resource was not found" / `/quizzes/…`
-// `instance` URIs leaking from the shared examples).
-
-/** 404 from `InstanceNotFoundError` (domain) → GlobalExceptionFilter. */
 function instanceNotFoundResponse(): MethodDecorator {
   return applyDecorators(
     ApiNotFoundResponse({
@@ -91,7 +71,6 @@ function instanceNotFoundResponse(): MethodDecorator {
   );
 }
 
-/** 403 from `InstanceNotHostError` (domain) → GlobalExceptionFilter. */
 function instanceForbiddenResponse(): MethodDecorator {
   return applyDecorators(
     ApiForbiddenResponse({
@@ -99,23 +78,10 @@ function instanceForbiddenResponse(): MethodDecorator {
         'Caller is not the host of the instance. Returned as an RFC 7807 ProblemDetail. ' +
         'Detail: "Only the host can perform this action".',
       type: ProblemDetailDto,
-      // Phase 4 (audit issue 6.3): 403 example now matches the
-      // `INSTANCE_NOT_HOST` runtime detail (was the generic "You do
-      // not have permission..." string in the shared example).
       example: InstanceErrorResponseExamples.instanceNotHost,
     }),
   );
 }
-
-/**
- * 400 that can be either class-validator / ParseUUIDPipe validation or a
- * domain-level precondition failure (InstanceNotOpenError, InstanceFullError,
- * InstanceAlreadyStartedError, InstanceAlreadyClosedError). All are emitted
- * as RFC 7807 ProblemDetail by GlobalExceptionFilter after Phase 2.
- *
- * The example payload uses `INSTANCE_NOT_OPEN` since that is the most
- * common 400 domain path on `POST /instances/{id}/join`.
- */
 function instanceBadRequestResponse(): MethodDecorator {
   return applyDecorators(
     ApiBadRequestResponse({
@@ -151,10 +117,6 @@ function instanceStartBadRequestResponse(): MethodDecorator {
 function instanceUnauthorizedResponse(): MethodDecorator {
   return applyDecorators(
     ApiBearerAuth(AUTH_SECURITY_NAME),
-    // Phase 4 (audit issue 1.4): the JwtGuard's runtime `detail`
-    // matches the shared `unauthorized` example verbatim, so we keep
-    // the shared example but document the equivalence in the
-    // description. See `swagger-schemas.ts` for the canonical entry.
     ApiUnauthorizedResponse({
       description:
         'Missing or invalid JWT bearer token. Returned by the global JwtGuard as an RFC 7807 ProblemDetail. ' +
@@ -165,7 +127,6 @@ function instanceUnauthorizedResponse(): MethodDecorator {
   );
 }
 
-/** 409 from `PlayerAlreadyJoinedError` (Phase 2 — duplicate join). */
 function instanceConflictResponse(): MethodDecorator {
   return applyDecorators(
     ApiConflictResponse({
@@ -178,7 +139,6 @@ function instanceConflictResponse(): MethodDecorator {
   );
 }
 
-/** 422 from `MinPlayersNotMetError` (Phase 2 — multiplayer-only guard). */
 function instanceUnprocessableEntityResponse(): MethodDecorator {
   return applyDecorators(
     ApiUnprocessableEntityResponse({
@@ -192,11 +152,6 @@ function instanceUnprocessableEntityResponse(): MethodDecorator {
   );
 }
 
-/**
- * 409 variant for countdown-only operations
- * (`cancelCountdown`, `startInstance` while still in `open`). Both
- * share the `INSTANCE_NOT_IN_COUNTDOWN` problem type.
- */
 function instanceNotInCountdownResponse(): MethodDecorator {
   return applyDecorators(
     ApiConflictResponse({
@@ -217,11 +172,6 @@ export class InstanceController {
     private readonly presenter: InstancePresenter,
   ) {}
 
-  // ─── POST /instances ────────────────────────────────────────────────────────
-  //
-  // `instanceService.createInstance` only inserts a row — it never throws any
-  // `InstanceDomainError`. The only 400 path is class-validator on the body
-  // (handled by GlobalExceptionFilter → ProblemDetailDto).
   @Post()
   @Transactional()
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
@@ -253,16 +203,6 @@ export class InstanceController {
     return this.presenter.createInstance(result);
   }
 
-  // ─── GET /instances ─────────────────────────────────────────────────────────
-  //
-  // Global JwtGuard enforces authentication even though the endpoint is public
-  // by design. 404 cannot occur (list endpoint).
-  //
-  // Phase 4 (audit issue 2.3): the `limit` default is documented in
-  // `ListInstancesQueryDto` via `@ApiPropertyOptional({ default: 20 })`.
-  // Phase 4 (audit issue 2.9): the cursor payload is base64- (not
-  // base64url-) encoded; the DTO docstring above the `cursor` field
-  // spells that out so generated SDKs decode correctly.
   @Get()
   @instanceUnauthorizedResponse()
   @ApiOkResourceList(InstanceListResponseDto, 'cursor', { description: 'Instance list returned' })
@@ -278,10 +218,6 @@ export class InstanceController {
   })
   @instanceBadRequestResponse()
   async listInstances(@Query() query: ListInstancesQueryDto) {
-    // Phase 7 (audit Finding 12): The default value for `limit` is defined in the DTO
-    // (`limit?: number = 20`) for API documentation purposes. The controller
-    // provides a runtime fallback to ensure consistency even if the DTO
-    // default doesn't get applied at runtime.
     const result = await this.applicationService.listInstancesForController({
       limit: query.limit ?? 20,
       cursor: query.cursor,
@@ -295,18 +231,6 @@ export class InstanceController {
     return this.presenter.listInstances(result);
   }
 
-  // ─── GET /instances/{id}/players ────────────────────────────────────────────
-  //
-  // `InstanceService.listInstancePlayers` throws `InstanceNotFoundError` when
-  // the instance does not exist → GlobalExceptionFilter → 404.
-  //
-  // Phase 6 (api-contract audit): the players endpoint now uses the
-  // canonical cursor-paginated envelope — `data` is the raw player array
-  // and `meta.pagination` carries the discriminator (`kind: 'cursor'`).
-  // The legacy `{ data: { instanceId, items, total } }` wrapper was
-  // removed because (a) `total` is an offset-pagination field that the
-  // project standard reserves for ranking/leaderboard use, and (b)
-  // `instanceId` was redundant with the path parameter.
   @Get(':id/players')
   @instanceUnauthorizedResponse()
   @ApiOkResourceList(InstancePlayerResponseDto, 'cursor', { description: 'Players returned' })
@@ -338,10 +262,6 @@ export class InstanceController {
     return this.presenter.listInstancePlayers(result);
   }
 
-  // ─── GET /instances/{id} ────────────────────────────────────────────────────
-  //
-  // `InstanceService.getInstanceById` throws `InstanceNotFoundError` on miss
-  // → 404 via `GlobalExceptionFilter`.
   @Get(':id')
   @instanceUnauthorizedResponse()
   @ApiOkResource(InstanceDetailResponseDto, { description: 'Instance found' })
@@ -361,20 +281,10 @@ export class InstanceController {
     return this.presenter.getInstanceById(result);
   }
 
-  // ─── POST /instances/{id}/join ─────────────────────────────────────────────
-  //
-  // `InstanceService.joinInstance` throws:
-  //   - `InstanceNotFoundError`     → 404 ProblemDetail
-  //   - `InstanceNotOpenError`      → 400 ProblemDetail
-  //   - `InstanceFullError`         → 400 ProblemDetail (instance at capacity)
-  //   - `PlayerAlreadyJoinedError` → 409 ProblemDetail (duplicate join — Phase 2)
-  // Note: 403 (host check) is NEVER thrown here.
-  // 400 can also come from class-validator / ParseUUIDPipe → ProblemDetail.
   @Post(':id/join')
   @Transactional()
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @instanceUnauthorizedResponse()
-  // Phase 7 (audit Finding 2): 201 Created for resource creation (player record created).
   @ApiCreatedResource(JoinInstanceResponseDto, { description: 'Joined successfully' })
   @instanceConflictResponse()
   @ApiOperation({
@@ -397,26 +307,8 @@ export class InstanceController {
     return this.presenter.joinInstance(result);
   }
 
-  // ─── POST /instances/{id}/start ─────────────────────────────────────────────
-  //
-  // Phase 2 (Gameplay Lifecycle) — host-driven `countdown → running`
-  // transition. The host must call `startCountdown` first; calling
-  // `start` on an open instance now yields `INSTANCE_NOT_IN_COUNTDOWN`.
-  // Minimum-player validation runs here too — see `MinPlayersNotMetError`.
-  //
-  // `InstanceService.startInstance` throws:
-  //   - `InstanceNotFoundError`        → 404 ProblemDetail
-  //   - `InstanceNotHostError`         → 403 ProblemDetail
-  //   - `InstanceNotInCountdownError`  → 409 ProblemDetail  (status = 'open')
-  //   - `InstanceAlreadyStartedError`   → 400 ProblemDetail  (status = 'running')
-  //   - `InstanceAlreadyClosedError`   → 400 ProblemDetail  (status = 'closed'/'finished')
-  //   - `MinPlayersNotMetError`       → 422 ProblemDetail  (< 2 players)
-  //
-  // Phase 7 (audit Finding 1): Returns 202 Accepted because the operation
-  // triggers asynchronous side effects (WebSocket broadcasts, scheduler updates).
   @Post(':id/start')
   @instanceUnauthorizedResponse()
-  // Phase 7 (audit Finding 1): 202 Accepted for state transitions with async side effects.
   @ApiAcceptedResource(StartInstanceResponseDto, { description: 'Instance started' })
   @ApiOperation({
     summary: 'Start instance',
@@ -444,20 +336,8 @@ export class InstanceController {
     return this.presenter.startInstance(result);
   }
 
-  // ─── POST /instances/{id}/close ────────────────────────────────────────────
-  //
-  // `InstanceService.closeInstance` throws (Phase 3 — issue 7.1):
-  //   - `InstanceNotFoundError`        → 404 ProblemDetail
-  //   - `InstanceNotHostError`         → 403 ProblemDetail
-  //   - `InstanceAlreadyClosedError`   → 400 ProblemDetail  (status = 'closed')
-  //   - `InstanceAlreadyFinishedError` → 400 ProblemDetail  (status = 'finished')
-  // 409 is NEVER thrown here.
-  //
-  // Phase 7 (audit Finding 1): Returns 202 Accepted because the operation
-  // triggers asynchronous side effects (WebSocket broadcasts).
   @Post(':id/close')
   @instanceUnauthorizedResponse()
-  // Phase 7 (audit Finding 1): 202 Accepted for state transitions with async side effects.
   @ApiAcceptedResource(CloseInstanceResponseDto, { description: 'Instance closed' })
   @ApiOperation({
     summary: 'Close instance',
@@ -481,26 +361,6 @@ export class InstanceController {
     return this.presenter.closeInstance(result);
   }
 
-  // ─── POST /instances/{id}/countdown ────────────────────────────────────────
-  //
-  // Phase 2 (Gameplay Lifecycle) — host-driven `open → countdown`
-  // transition. Emits the `countdown_started` WebSocket event clients
-  // use to render the warmup timer.
-  //
-  // Idempotency
-  // -----------
-  // The application service folds
-  // `InstanceCountdownAlreadyStartedError` into a 200 carrying the
-  // existing anchor, so a host double-click is a no-op on the wire.
-  // Clients that want strict per-request dedup can also pass
-  // `idempotencyKey` in the body — see `StartCountdownDto` for the
-  // semantics.
-  //
-  // Throws (handled by GlobalExceptionFilter → RFC 7807 ProblemDetail):
-  //   - 400 `INSTANCE_NOT_OPEN`         → instance is `running`/`closed`/`finished`
-  //   - 403 `INSTANCE_NOT_HOST`         → caller is not the host
-  //   - 404 `INSTANCE_NOT_FOUND`        → no such instance
-  //   - 422 (unused here — startInstance owns min-player enforcement)
   @Post(':id/countdown')
   @Transactional()
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
@@ -525,10 +385,6 @@ export class InstanceController {
     @CurrentUser() user: JwtPayload,
     @Body() payload: StartCountdownDto,
   ) {
-    // The idempotency key is honored as a structured-log breadcrumb in
-    // Phase 2; the durable dedup row is added in a follow-up so this
-    // controller does not yet depend on the review module's
-    // `IdempotencyService`.
     if (payload.idempotencyKey) {
       this.applicationService.logCountdownIdempotencyKey({
         instanceId,
@@ -540,19 +396,10 @@ export class InstanceController {
     return this.presenter.startCountdown(result);
   }
 
-  // ─── POST /instances/{id}/countdown/cancel ─────────────────────────────────
-  //
-  // Phase 2 (Gameplay Lifecycle) — host-driven `countdown → open`
-  // transition. Emits the `countdown_cancelled` WebSocket event so
-  // clients drop their warmup UI.
-  //
-  // Phase 7 (audit Finding 1): Returns 202 Accepted because the operation
-  // triggers asynchronous side effects (WebSocket broadcasts).
   @Post(':id/countdown/cancel')
   @Transactional()
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @instanceUnauthorizedResponse()
-  // Phase 7 (audit Finding 1): 202 Accepted for state transitions with async side effects.
   @ApiAcceptedResource(CancelCountdownResponseDto, { description: 'Countdown cancelled' })
   @ApiOperation({
     summary: 'Cancel countdown',
@@ -575,17 +422,6 @@ export class InstanceController {
     return this.presenter.cancelCountdown(result);
   }
 
-  // ─── GET /instances/{id}/leaderboard ───────────────────────────────────────
-  //
-  // `InstanceService.getLeaderboard` throws `InstanceNotFoundError` on miss → 404.
-  // The application service projects the leaderboard into the canonical cursor
-  // pagination shape `{ items, pagination: { limit, hasNextPage, nextCursor } }`,
-  // so the envelope contains a `pagination` block — the legacy "D-variant"
-  // (where `pagination` was hoisted up to `data`) is no longer used.
-  //
-  // Phase 4 (audit issue 2.9): the leaderboard cursor is base64url-encoded
-  // (unified with the rest of the codebase). The DTO docstring above the
-  // `cursor` field spells that out.
   @Get(':id/leaderboard')
   @instanceUnauthorizedResponse()
   @ApiOkResourceList(InstanceLeaderboardResponseDto, 'cursor', {
@@ -609,9 +445,6 @@ export class InstanceController {
     @Query() query: GetLeaderboardQueryDto,
   ) {
     const limit = query.limit ?? 20;
-    // Phase 2 (issue 2.4 — leaderboard variant): strict cursor parser
-    // throws `400 BadRequestException` on malformed shape, so the
-    // application service never sees `undefined` cursors.
     const cursor: LeaderboardCursorPayload | undefined = query.cursor
       ? decodeLeaderboardCursor(query.cursor)
       : undefined;

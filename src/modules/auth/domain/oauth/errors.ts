@@ -15,16 +15,11 @@ export class InvalidOAuthTokenError extends AuthDomainError {
 }
 
 /**
- * Thrown when a user attempts to link an OAuth provider that is already
- * linked to another account in the system.
- *
- * 409 Conflict.
- *
- * NOTE: exported but never thrown in the current codebase. The previous
+ * @deprecated No production code path throws this. The previous
  * `AuthDomainExceptionFilter` had no `instanceof OAuthAccountAlreadyExistsError`
  * branch so it silently fell through to a 500 — the new mapping corrects
- * that bug as a side effect. If it remains dead after the migration,
- * delete in a follow-up cleanup PR.
+ * that bug as a side effect. Kept exported only for the RFC 7807 mapping
+ * test surface. Remove in the same PR as the test entry.
  */
 export class OAuthAccountAlreadyExistsError extends AuthDomainError {
   readonly code = 'AUTH_OAUTH_ACCOUNT_ALREADY_EXISTS';

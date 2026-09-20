@@ -8,23 +8,15 @@ import {
 } from '../../domain/ports/tournament-repository.port';
 import { CACHE_PROVIDER, type CacheProvider } from '@/common/ports/cache.provider';
 
-/**
- * Phase 2 / Issues #8, #38 — advisory lock TTL constants.
- *
- * These values are conservative upper bounds on how long each job
- * can reasonably take. The lock auto-releases at TTL expiry, so
- * a crashed replica can never hold a lock indefinitely. Set TTL
- * to 2–3× the expected maximum job duration.
- */
 const LOCK_TTL_MS = Object.freeze({
   /** 5-minute TTL — `handleRegistrationOpen` and `handleTournamentStart` run every 5 min */
   REGISTRATION_OPEN: 5 * 60 * 1000,
   TOURNAMENT_START: 5 * 60 * 1000,
   /** 15-minute TTL — `handleTournamentFinalize` runs every 15 min */
   TOURNAMENT_FINALIZE: 15 * 60 * 1000,
-  /** 5-minute TTL — round lifecycle jobs run every minute; 5x headroom for batched drain */
-  ROUND_OPEN: 5 * 60 * 1000,
-  ROUND_CLOSE: 5 * 60 * 1000,
+  /** 10-minute TTL — round lifecycle jobs run every minute; 10x headroom for batched drain */
+  ROUND_OPEN: 10 * 60 * 1000,
+  ROUND_CLOSE: 10 * 60 * 1000,
   /** 60-minute TTL — `handleParticipantTotalsReconcile` runs daily at 4:30 AM */
   TOTALS_RECONCILE: 60 * 60 * 1000,
 });
@@ -41,19 +33,11 @@ export class TournamentSchedulerService {
     private readonly logger: PinoLogger,
   ) {}
 
-  /**
-   * Opens registration for tournaments that have reached their start window.
-   * Runs every 5 minutes to catch tournaments transitioning from upcoming → registration.
-   *
-   * Phase 2 / Issue #8, #38: Protected by a Redis advisory lock so that only
-   * one replica processes this job at a time. Other replicas skip immediately.
-   */
   @Cron('*/5 * * * *')
   async handleRegistrationOpen(): Promise<void> {
     const lockKey = 'tournament:cron:registration-open';
-    const lockToken = crypto.randomUUID();
-    const acquired = await this.cache.acquireAdvisoryLock(lockKey, LOCK_TTL_MS.REGISTRATION_OPEN);
-    if (!acquired) {
+    const lockToken = await this.cache.acquireAdvisoryLock(lockKey, LOCK_TTL_MS.REGISTRATION_OPEN);
+    if (lockToken === null) {
       this.logger.info({
         event: 'tournament_scheduler_skipped_lock_held',
         job: 'handleRegistrationOpen',
@@ -92,18 +76,11 @@ export class TournamentSchedulerService {
     }
   }
 
-  /**
-   * Activates tournaments that have passed their startAt time.
-   * Runs every 5 minutes to transition registration → ongoing.
-   *
-   * Phase 2 / Issue #8, #38: Protected by a Redis advisory lock.
-   */
   @Cron('*/5 * * * *')
   async handleTournamentStart(): Promise<void> {
     const lockKey = 'tournament:cron:tournament-start';
-    const lockToken = crypto.randomUUID();
-    const acquired = await this.cache.acquireAdvisoryLock(lockKey, LOCK_TTL_MS.TOURNAMENT_START);
-    if (!acquired) {
+    const lockToken = await this.cache.acquireAdvisoryLock(lockKey, LOCK_TTL_MS.TOURNAMENT_START);
+    if (lockToken === null) {
       this.logger.info({
         event: 'tournament_scheduler_skipped_lock_held',
         job: 'handleTournamentStart',
@@ -137,18 +114,14 @@ export class TournamentSchedulerService {
     }
   }
 
-  /**
-   * Finalizes tournaments that have passed their endAt time.
-   * Runs every 15 minutes to transition ongoing → finished and assign final ranks.
-   *
-   * Phase 2 / Issue #8, #38: Protected by a Redis advisory lock.
-   */
   @Cron('*/15 * * * *')
   async handleTournamentFinalize(): Promise<void> {
     const lockKey = 'tournament:cron:tournament-finalize';
-    const lockToken = crypto.randomUUID();
-    const acquired = await this.cache.acquireAdvisoryLock(lockKey, LOCK_TTL_MS.TOURNAMENT_FINALIZE);
-    if (!acquired) {
+    const lockToken = await this.cache.acquireAdvisoryLock(
+      lockKey,
+      LOCK_TTL_MS.TOURNAMENT_FINALIZE,
+    );
+    if (lockToken === null) {
       this.logger.info({
         event: 'tournament_scheduler_skipped_lock_held',
         job: 'handleTournamentFinalize',
@@ -181,22 +154,11 @@ export class TournamentSchedulerService {
       });
     }
   }
-
-  /**
-   * Daily reconciliation of denormalized tournament participant totals.
-   *
-   * Scheduled at 4:30 AM — after the analytics scheduler's 3 AM full
-   * rebuild and 2 AM daily validation, but before the next day's traffic,
-   * so it can never race with the analytics path on the same cache rows.
-   *
-   * Phase 2 / Issue #8, #38: Protected by a Redis advisory lock.
-   */
   @Cron('30 4 * * *')
   async handleParticipantTotalsReconcile(): Promise<void> {
     const lockKey = 'tournament:cron:totals-reconcile';
-    const lockToken = crypto.randomUUID();
-    const acquired = await this.cache.acquireAdvisoryLock(lockKey, LOCK_TTL_MS.TOTALS_RECONCILE);
-    if (!acquired) {
+    const lockToken = await this.cache.acquireAdvisoryLock(lockKey, LOCK_TTL_MS.TOTALS_RECONCILE);
+    if (lockToken === null) {
       this.logger.info({
         event: 'tournament_scheduler_skipped_lock_held',
         job: 'handleParticipantTotalsReconcile',
@@ -244,9 +206,8 @@ export class TournamentSchedulerService {
   @Cron('* * * * *')
   async handleOpenDueRounds(): Promise<void> {
     const lockKey = 'tournament:cron:round-open';
-    const lockToken = crypto.randomUUID();
-    const acquired = await this.cache.acquireAdvisoryLock(lockKey, LOCK_TTL_MS.ROUND_OPEN);
-    if (!acquired) {
+    const lockToken = await this.cache.acquireAdvisoryLock(lockKey, LOCK_TTL_MS.ROUND_OPEN);
+    if (lockToken === null) {
       this.logger.info({
         event: 'tournament_scheduler_skipped_lock_held',
         job: 'handleOpenDueRounds',
@@ -289,9 +250,8 @@ export class TournamentSchedulerService {
   @Cron('* * * * *')
   async handleCloseDueRounds(): Promise<void> {
     const lockKey = 'tournament:cron:round-close';
-    const lockToken = crypto.randomUUID();
-    const acquired = await this.cache.acquireAdvisoryLock(lockKey, LOCK_TTL_MS.ROUND_CLOSE);
-    if (!acquired) {
+    const lockToken = await this.cache.acquireAdvisoryLock(lockKey, LOCK_TTL_MS.ROUND_CLOSE);
+    if (lockToken === null) {
       this.logger.info({
         event: 'tournament_scheduler_skipped_lock_held',
         job: 'handleCloseDueRounds',

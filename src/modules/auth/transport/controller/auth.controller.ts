@@ -334,6 +334,7 @@ export class AuthController {
   }
 
   @Public()
+  @Throttle({ default: AUTH_THROTTLE.refreshToken })
   @ApiCookieParam('refreshToken', {
     required: true,
     description: 'HttpOnly refresh token cookie. Must be present for token rotation.',
@@ -534,6 +535,7 @@ export class AuthController {
   }
 
   @Public()
+  @Throttle({ default: AUTH_THROTTLE.resetPassword })
   @Post('reset-password')
   @ApiOperation({
     summary: 'Reset password',

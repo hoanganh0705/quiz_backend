@@ -16,7 +16,7 @@ import {
   UserAttemptStatsResponseDto,
   AttemptReviewResponseDto,
 } from '../dto/response';
-import { AttemptStatusEnum, AttemptContextTypeEnum } from '../types/attempt.types';
+import { AttemptStatusEnum } from '../types/attempt.types';
 
 @Injectable()
 export class AttemptApplicationService {
@@ -34,7 +34,7 @@ export class AttemptApplicationService {
     const attempt = await this.attemptCommandService.startAttempt(
       quizId,
       user,
-      payload.contextType ?? AttemptContextTypeEnum.Solo,
+      payload.contextType,
       payload.contextRefId ?? null,
     );
 
@@ -136,18 +136,20 @@ export class AttemptApplicationService {
   }
 
   async completeAttempt(attemptId: string, user: JwtPayload): Promise<CompleteAttemptResponseDto> {
-    const result = await this.attemptCommandService.completeAttempt(attemptId, user);
+    const { completed } = await this.attemptCommandService.completeAttempt(attemptId, user);
 
     return {
-      attemptId: result.attemptId,
-      quizId: result.quizId,
-      status: result.status as AttemptStatusEnum,
+      attemptId: completed.attemptId,
+      quizId: completed.quizId,
+      status: completed.status as AttemptStatusEnum,
       scorePercent:
-        result.scorePercent !== null ? Number(parseFloat(result.scorePercent).toFixed(2)) : null,
-      correctCount: result.correctCount,
-      timeTakenMs: result.timeTakenMs,
-      xpEarned: result.xpEarned,
-      finishedAt: result.finishedAt ?? new Date().toISOString(),
+        completed.scorePercent !== null
+          ? Number(parseFloat(completed.scorePercent).toFixed(2))
+          : null,
+      correctCount: completed.correctCount,
+      timeTakenMs: completed.timeTakenMs,
+      xpEarned: completed.xpEarned,
+      finishedAt: completed.finishedAt ?? new Date().toISOString(),
     };
   }
 

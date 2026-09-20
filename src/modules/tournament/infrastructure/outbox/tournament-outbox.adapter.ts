@@ -18,7 +18,7 @@ import type { DrizzleDB } from '@/core/database/database.module';
 import { outboxEvents } from '@/core/database/schema';
 import type {
   TournamentOutboxPort,
-  TournamentOutboxPayload,
+  TournamentOutboxScheduleParams,
 } from '../../domain/ports/tournament-outbox.port';
 
 @Injectable()
@@ -26,35 +26,44 @@ export class TournamentOutboxAdapter implements TournamentOutboxPort {
   constructor(@Inject(DRIZZLE) private readonly db: DrizzleDB) {}
 
   async scheduleTournamentEvent(
-    params: {
-      eventType: string;
-      payload: TournamentOutboxPayload;
-      idempotencyKey: string;
-      correlationId?: string;
-    },
+    params: TournamentOutboxScheduleParams,
     tx: unknown,
     nowIso: string,
   ): Promise<void> {
     const dbOrTx = tx != null ? (tx as DrizzleDB) : this.db;
 
-    // Tournament events always carry an explicit idempotency key derived from
-    // the event data (e.g. `tournament:joined:{tournamentId}:{userId}`).
-    // The partial unique index only applies when the key is NOT NULL, so
-    // duplicate inserts within the same transaction are silently dropped.
-    //
-    // The `where` clause on the conflict target must match the partial-index
-    // predicate `WHERE processed_at IS NULL AND idempotency_key IS NOT NULL`
-    // verbatim — otherwise Postgres cannot infer the index and planning fails.
+    await this.insertRows(dbOrTx, [params], nowIso);
+  }
+
+  async scheduleTournamentEventsBatch(
+    events: ReadonlyArray<TournamentOutboxScheduleParams>,
+    tx: unknown,
+    nowIso: string,
+  ): Promise<void> {
+    if (events.length === 0) {
+      return;
+    }
+    const dbOrTx = tx != null ? (tx as DrizzleDB) : this.db;
+    await this.insertRows(dbOrTx, events, nowIso);
+  }
+
+  private async insertRows(
+    dbOrTx: DrizzleDB,
+    events: ReadonlyArray<TournamentOutboxScheduleParams>,
+    nowIso: string,
+  ): Promise<void> {
+    const values = events.map((e) => ({
+      aggregateType: 'tournament',
+      eventType: e.eventType,
+      payload: e.payload as Record<string, unknown>,
+      createdAt: nowIso,
+      idempotencyKey: e.idempotencyKey,
+      correlationId: e.correlationId,
+    }));
+
     await dbOrTx
       .insert(outboxEvents)
-      .values({
-        aggregateType: 'tournament',
-        eventType: params.eventType,
-        payload: params.payload as Record<string, unknown>,
-        createdAt: nowIso,
-        idempotencyKey: params.idempotencyKey,
-        correlationId: params.correlationId,
-      })
+      .values(values)
       .onConflictDoNothing({
         target: outboxEvents.idempotencyKey,
         where: sql`processed_at IS NULL AND idempotency_key IS NOT NULL`,
