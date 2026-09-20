@@ -7,6 +7,8 @@ import { QuizVersionApplicationService } from './application/quiz-version.applic
 import { QuizQuestionApplicationService } from './application/quiz-question.application.service';
 import { QuizCacheService } from './application/quiz-cache.service';
 import { QuizCacheInvalidationHandler } from './application/quiz-cache-invalidation.handler';
+import { QuizStatsHistoryService } from './application/quiz-stats-history.service';
+import { QuizAssetOwnershipGuard } from './application/quiz-asset-ownership.guard';
 
 // Domain Services
 import { QuizQueryService } from './domain/quiz/quiz-query.service';
@@ -75,6 +77,8 @@ import { UserModule } from '@/modules/user/user.module';
     QuizQuestionApplicationService,
     QuizCacheService,
     QuizCacheInvalidationHandler,
+    QuizStatsHistoryService,
+    QuizAssetOwnershipGuard,
 
     // Domain Services
     QuizQueryService,

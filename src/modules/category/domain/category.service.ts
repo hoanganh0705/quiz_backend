@@ -62,8 +62,9 @@ export class CategoryDomainService {
   }> {
     const limit = query.limit ?? 20;
     const cursor = query.cursor ?? null;
+    const sort = query.sort ?? { field: 'createdAt', direction: 'desc' };
 
-    const rows = await this.categoryRepository.findMany({ limit, cursor });
+    const rows = await this.categoryRepository.findMany({ limit, cursor, sort });
 
     const hasNextPage = rows.length > limit;
     const items = hasNextPage ? rows.slice(0, limit) : rows;

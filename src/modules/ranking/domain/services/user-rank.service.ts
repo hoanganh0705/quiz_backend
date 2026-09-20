@@ -1,13 +1,3 @@
-/**
- * User Rank Service
- *
- * Handles user-specific rank queries and profiles.
- * Part of Phase 3 - Leaderboards & APIs.
- *
- * Architecture Note: This service contains core ranking read logic.
- * Badge calculations are delegated to Achievement domain via ACHIEVEMENT_PORT.
- */
-
 import { Inject, Injectable } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import {

@@ -1,9 +1,6 @@
 /**
  * Authorization matrix for the Quiz backend.
  *
- * Phase 4 #1 of the resilience roadmap (see `BACKEND_AUDIT_REPORT.md`
- * §23 Phase 4).
- *
  * Encodes the expected allow/deny outcome for every authz-sensitive
  * (role, resource, action) triple the API exposes. The matrix is a
  * `const` literal so it can be:
@@ -53,6 +50,31 @@ export type AuthzResource =
   | 'instance'
   | 'comment'
   | 'review'
+  | 'social.friend-request'
+  | 'social.friendship'
+  | 'social.block'
+  | 'social.follow'
+  | 'social.feed'
+  | 'social.suggestions'
+  | 'social.search'
+  | 'social.counts'
+  | 'social.activity'
+  | 'social.leaderboard'
+  | 'social.trending'
+  | 'social.stats'
+  | 'social.relationship'
+  | 'ranking.leaderboard'
+  | 'ranking.user-rank'
+  | 'ranking.history'
+  | 'ranking.recent-winners'
+  | 'ranking.top-movers'
+  | 'ranking.distribution'
+  | 'ranking.milestones'
+  | 'ranking.peak-ranks'
+  | 'ranking.admin.status'
+  | 'ranking.admin.recalculate'
+  | 'ranking.admin.reset'
+  | 'ranking.admin.consistency'
   | 'user.me'
   | 'user.other'
   | 'user.profile-bundle'
@@ -185,11 +207,107 @@ export const AUTHZ_MATRIX: ReadonlyArray<AuthzExpectation> = [
     successStatus: 201,
   },
   {
+    method: 'PATCH',
+    path: '/comments/:commentId',
+    resource: 'comment',
+    action: 'update',
+    allow: ['owner', 'admin'],
+    successStatus: 200,
+  },
+  {
     method: 'DELETE',
     path: '/comments/:commentId',
     resource: 'comment',
     action: 'delete',
     allow: ['owner', 'admin'],
+    successStatus: 200,
+  },
+  {
+    method: 'PUT',
+    path: '/comments/:commentId/vote',
+    resource: 'comment',
+    action: 'update',
+    allow: ['user', 'admin'],
+    successStatus: 200,
+  },
+  {
+    method: 'DELETE',
+    path: '/comments/:commentId/vote',
+    resource: 'comment',
+    action: 'delete',
+    allow: ['user', 'admin'],
+    successStatus: 200,
+  },
+  {
+    method: 'POST',
+    path: '/comments/:commentId/reports',
+    resource: 'comment',
+    action: 'create',
+    allow: ['user', 'admin'],
+    successStatus: 201,
+  },
+  {
+    method: 'POST',
+    path: '/comments/:commentId/hide',
+    resource: 'comment',
+    action: 'update',
+    allow: ['admin'],
+    successStatus: 200,
+  },
+  {
+    method: 'POST',
+    path: '/comments/:commentId/restore',
+    resource: 'comment',
+    action: 'update',
+    allow: ['admin'],
+    successStatus: 200,
+  },
+  {
+    method: 'GET',
+    path: '/comments/reports',
+    resource: 'comment',
+    action: 'read',
+    allow: ['admin'],
+    successStatus: 200,
+  },
+  {
+    method: 'POST',
+    path: '/comments/reports/:reportId/review',
+    resource: 'comment',
+    action: 'update',
+    allow: ['admin'],
+    successStatus: 200,
+  },
+  {
+    method: 'POST',
+    path: '/quizzes/:quizId/comments',
+    resource: 'comment',
+    action: 'create',
+    allow: ['user', 'admin'],
+    successStatus: 201,
+  },
+  {
+    method: 'GET',
+    path: '/quizzes/:quizId/comments',
+    resource: 'comment',
+    action: 'read',
+    allow: ['public', 'user', 'admin'],
+    successStatus: 200,
+  },
+  {
+    method: 'GET',
+    path: '/users/me/comments',
+    resource: 'comment',
+    action: 'read',
+    allow: ['user', 'admin'],
+    successStatus: 200,
+  },
+  {
+    method: 'GET',
+    path: '/users/:userId/comments',
+    resource: 'comment',
+    action: 'read',
+    allow: ['public', 'user', 'admin'],
     successStatus: 200,
   },
 
@@ -338,6 +456,362 @@ export const AUTHZ_MATRIX: ReadonlyArray<AuthzExpectation> = [
     resource: 'metrics',
     action: 'read',
     allow: ['public', 'user', 'admin'],
+    successStatus: 200,
+  },
+
+  // ─── Social module ───────────────────────────────────────────────────
+  {
+    method: 'POST',
+    path: '/social/friend-requests/:userId',
+    resource: 'social.friend-request',
+    action: 'create',
+    allow: ['user', 'admin'],
+    successStatus: 201,
+  },
+  {
+    method: 'GET',
+    path: '/social/friend-requests/incoming',
+    resource: 'social.friend-request',
+    action: 'read',
+    allow: ['user', 'admin'],
+    successStatus: 200,
+  },
+  {
+    method: 'GET',
+    path: '/social/friend-requests/outgoing',
+    resource: 'social.friend-request',
+    action: 'read',
+    allow: ['user', 'admin'],
+    successStatus: 200,
+  },
+  {
+    method: 'POST',
+    path: '/social/friend-requests/:friendshipId/respond',
+    resource: 'social.friend-request',
+    action: 'update',
+    allow: ['owner', 'admin'],
+    successStatus: 200,
+  },
+  {
+    method: 'DELETE',
+    path: '/social/friend-requests/:friendshipId',
+    resource: 'social.friend-request',
+    action: 'delete',
+    allow: ['user', 'admin'],
+    successStatus: 200,
+  },
+  {
+    method: 'GET',
+    path: '/social/friends/:userId',
+    resource: 'social.friendship',
+    action: 'read',
+    allow: ['public', 'user', 'admin'],
+    successStatus: 200,
+  },
+  {
+    method: 'DELETE',
+    path: '/social/friends/:userId',
+    resource: 'social.friendship',
+    action: 'delete',
+    allow: ['user', 'admin'],
+    successStatus: 200,
+  },
+  {
+    method: 'GET',
+    path: '/social/feed',
+    resource: 'social.feed',
+    action: 'read',
+    allow: ['user', 'admin'],
+    successStatus: 200,
+  },
+  {
+    method: 'GET',
+    path: '/social/suggestions',
+    resource: 'social.suggestions',
+    action: 'read',
+    allow: ['user', 'admin'],
+    successStatus: 200,
+  },
+  {
+    method: 'GET',
+    path: '/social/users/search',
+    resource: 'social.search',
+    action: 'read',
+    allow: ['user', 'admin'],
+    successStatus: 200,
+  },
+  {
+    method: 'GET',
+    path: '/social/search/suggestions',
+    resource: 'social.search',
+    action: 'read',
+    allow: ['public', 'user', 'admin'],
+    successStatus: 200,
+  },
+  {
+    method: 'GET',
+    path: '/social/users/trending',
+    resource: 'social.trending',
+    action: 'read',
+    allow: ['public', 'user', 'admin'],
+    successStatus: 200,
+  },
+  {
+    method: 'GET',
+    path: '/social/users/:userId/stats',
+    resource: 'social.stats',
+    action: 'read',
+    allow: ['public', 'user', 'admin'],
+    successStatus: 200,
+  },
+  {
+    method: 'GET',
+    path: '/social/users/:userId/activity',
+    resource: 'social.activity',
+    action: 'read',
+    allow: ['public', 'user', 'admin'],
+    successStatus: 200,
+  },
+  {
+    method: 'GET',
+    path: '/social/me/analytics',
+    resource: 'social.activity',
+    action: 'read',
+    allow: ['user', 'admin'],
+    successStatus: 200,
+  },
+  {
+    method: 'GET',
+    path: '/social/friends/leaderboard',
+    resource: 'social.leaderboard',
+    action: 'read',
+    allow: ['user', 'admin'],
+    successStatus: 200,
+  },
+  {
+    method: 'GET',
+    path: '/social/counts',
+    resource: 'social.counts',
+    action: 'read',
+    allow: ['user', 'admin'],
+    successStatus: 200,
+  },
+  {
+    method: 'GET',
+    path: '/social/users/:userId/followers',
+    resource: 'social.follow',
+    action: 'read',
+    allow: ['public', 'user', 'admin'],
+    successStatus: 200,
+  },
+  {
+    method: 'GET',
+    path: '/social/users/:userId/following',
+    resource: 'social.follow',
+    action: 'read',
+    allow: ['public', 'user', 'admin'],
+    successStatus: 200,
+  },
+  {
+    method: 'GET',
+    path: '/social/users/:userId/mutual-friends',
+    resource: 'social.friendship',
+    action: 'read',
+    allow: ['public', 'user', 'admin'],
+    successStatus: 200,
+  },
+  {
+    method: 'GET',
+    path: '/social/users/:userId/mutual-followers',
+    resource: 'social.follow',
+    action: 'read',
+    allow: ['public', 'user', 'admin'],
+    successStatus: 200,
+  },
+  {
+    method: 'POST',
+    path: '/social/follow/:userId',
+    resource: 'social.follow',
+    action: 'create',
+    allow: ['user', 'admin'],
+    successStatus: 200,
+  },
+  {
+    method: 'DELETE',
+    path: '/social/follow/:userId',
+    resource: 'social.follow',
+    action: 'delete',
+    allow: ['user', 'admin'],
+    successStatus: 200,
+  },
+  {
+    method: 'POST',
+    path: '/social/block/:userId',
+    resource: 'social.block',
+    action: 'create',
+    allow: ['user', 'admin'],
+    successStatus: 200,
+  },
+  {
+    method: 'DELETE',
+    path: '/social/block/:userId',
+    resource: 'social.block',
+    action: 'delete',
+    allow: ['user', 'admin'],
+    successStatus: 200,
+  },
+  {
+    method: 'GET',
+    path: '/social/blocked',
+    resource: 'social.block',
+    action: 'read',
+    allow: ['user', 'admin'],
+    successStatus: 200,
+  },
+  {
+    method: 'GET',
+    path: '/social/relationship/:userId',
+    resource: 'social.relationship',
+    action: 'read',
+    allow: ['user', 'admin'],
+    successStatus: 200,
+  },
+
+  // ─── Ranking module ──────────────────────────────────────────────────
+  {
+    method: 'GET',
+    path: '/leaderboard',
+    resource: 'ranking.leaderboard',
+    action: 'read',
+    allow: ['public', 'user', 'admin'],
+    successStatus: 200,
+  },
+  {
+    method: 'GET',
+    path: '/leaderboard/distribution',
+    resource: 'ranking.distribution',
+    action: 'read',
+    allow: ['public', 'user', 'admin'],
+    successStatus: 200,
+  },
+  {
+    method: 'GET',
+    path: '/leaderboard/me/rank',
+    resource: 'ranking.user-rank',
+    action: 'read',
+    allow: ['user', 'admin'],
+    successStatus: 200,
+  },
+  {
+    method: 'GET',
+    path: '/leaderboard/:userId/rank',
+    resource: 'ranking.user-rank',
+    action: 'read',
+    allow: ['public', 'user', 'admin'],
+    successStatus: 200,
+  },
+  {
+    method: 'GET',
+    path: '/leaderboard/me/history',
+    resource: 'ranking.history',
+    action: 'read',
+    allow: ['user', 'admin'],
+    successStatus: 200,
+  },
+  {
+    method: 'GET',
+    path: '/leaderboard/:userId/history',
+    resource: 'ranking.history',
+    action: 'read',
+    allow: ['public', 'user', 'admin'],
+    successStatus: 200,
+  },
+  {
+    method: 'GET',
+    path: '/leaderboard/me/nearby',
+    resource: 'ranking.user-rank',
+    action: 'read',
+    allow: ['user', 'admin'],
+    successStatus: 200,
+  },
+  {
+    method: 'GET',
+    path: '/leaderboard/recent-winners',
+    resource: 'ranking.recent-winners',
+    action: 'read',
+    allow: ['public', 'user', 'admin'],
+    successStatus: 200,
+  },
+  {
+    method: 'GET',
+    path: '/leaderboard/top-movers',
+    resource: 'ranking.top-movers',
+    action: 'read',
+    allow: ['public', 'user', 'admin'],
+    successStatus: 200,
+  },
+  {
+    method: 'GET',
+    path: '/leaderboard/me/movement',
+    resource: 'ranking.user-rank',
+    action: 'read',
+    allow: ['user', 'admin'],
+    successStatus: 200,
+  },
+  {
+    method: 'GET',
+    path: '/leaderboard/me/percentile',
+    resource: 'ranking.user-rank',
+    action: 'read',
+    allow: ['user', 'admin'],
+    successStatus: 200,
+  },
+  {
+    method: 'GET',
+    path: '/leaderboard/me/peak-ranks',
+    resource: 'ranking.peak-ranks',
+    action: 'read',
+    allow: ['user', 'admin'],
+    successStatus: 200,
+  },
+  {
+    method: 'GET',
+    path: '/leaderboard/me/milestones',
+    resource: 'ranking.milestones',
+    action: 'read',
+    allow: ['user', 'admin'],
+    successStatus: 200,
+  },
+  {
+    method: 'GET',
+    path: '/admin/ranking/status',
+    resource: 'ranking.admin.status',
+    action: 'read',
+    allow: ['admin'],
+    successStatus: 200,
+  },
+  {
+    method: 'POST',
+    path: '/admin/ranking/recalculate',
+    resource: 'ranking.admin.recalculate',
+    action: 'update',
+    allow: ['admin'],
+    successStatus: 200,
+  },
+  {
+    method: 'POST',
+    path: '/admin/ranking/reset',
+    resource: 'ranking.admin.reset',
+    action: 'update',
+    allow: ['admin'],
+    successStatus: 200,
+  },
+  {
+    method: 'POST',
+    path: '/admin/ranking/consistency-check',
+    resource: 'ranking.admin.consistency',
+    action: 'update',
+    allow: ['admin'],
     successStatus: 200,
   },
 ];

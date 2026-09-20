@@ -1,7 +1,3 @@
-/**
- * Admin Achievement Response DTOs
- */
-
 import { ApiProperty } from '@nestjs/swagger';
 
 export class ReevaluateUserResponseDto {

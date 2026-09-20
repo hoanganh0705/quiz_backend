@@ -1,4 +1,4 @@
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { ApiProperty } from '@nestjs/swagger';
 
 const REPORT_STATUS_VALUES = ['open', 'reviewed', 'dismissed', 'actioned'] as const;
 

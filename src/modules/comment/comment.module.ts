@@ -40,6 +40,7 @@ import { CommentWebSocketListener } from './infrastructure/adapters/comment-webs
 
 import { COMMENT_REPOSITORY_PORT, QUIZ_EXISTENCE_PORT, USER_EXISTENCE_PORT } from './domain/ports';
 import { COMMENT_DOMAIN_EVENT_BUS } from './domain/events';
+import { COMMENT_MODERATION_AUDIT_PORT } from './domain/ports/moderation-audit.port';
 import { QuizModule } from '@/modules/quiz/quiz.module';
 import { UserModule } from '@/modules/user/user.module';
 
@@ -68,6 +69,10 @@ import { UserModule } from '@/modules/user/user.module';
       useExisting: CommentRepository,
     },
     CommentModeratorAuditService,
+    {
+      provide: COMMENT_MODERATION_AUDIT_PORT,
+      useExisting: CommentModeratorAuditService,
+    },
     CommentCounterReconcilerService,
     QuizExistenceAdapter,
     {

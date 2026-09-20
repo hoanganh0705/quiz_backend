@@ -1,11 +1,7 @@
 import { db, type SeedContext, recorder } from '../infrastructure';
 import type { SeedSummary } from '../infrastructure/types';
 import { SeedLookup } from '../shared/seed-lookup';
-import {
-  rankHistory,
-  rankingMilestones,
-  userRanking,
-} from '@/core/database/schema';
+import { rankHistory, rankingMilestones, userRanking } from '@/core/database/schema';
 import { logger } from '../infrastructure/seed-logger';
 
 type RankingPeriodSeed = 'daily' | 'weekly' | 'monthly' | 'all_time';
@@ -53,14 +49,6 @@ type UserRankingSeed = {
   milestones: RankingMilestoneRowSeed[];
 };
 
-// Per Phase 10 audit: `user_ranking` is ✅ REQUIRED SEED because
-// GET /users/me/ranking and GET /leaderboard/me return null gracefully but
-// cannot be exercised end-to-end without a per-user row. Every seed user
-// gets one (active users get real XP/rank values; admin and moderator get
-// rank entries with 0 XP). `rank_history` and `ranking_milestones` are
-// ⚠ OPTIONAL — only seeded for the active users.
-// See `PHASE_10_EVIDENCE_REPORT.md` → "Ranking domain" for the full
-// classification rationale.
 const USER_RANKING_SEEDS: UserRankingSeed[] = [
   {
     username: 'power_user',
@@ -209,7 +197,6 @@ const USER_RANKING_SEEDS: UserRankingSeed[] = [
       },
     ],
   },
-  // Admin account — no quiz activity, seeded so ranking endpoints are testable
   {
     username: 'admin_master',
     allTimeXp: 0,
@@ -229,7 +216,6 @@ const USER_RANKING_SEEDS: UserRankingSeed[] = [
     history: [],
     milestones: [],
   },
-  // Moderator account — no quiz activity, seeded so ranking endpoints are testable
   {
     username: 'community_moderator',
     allTimeXp: 0,
@@ -361,7 +347,9 @@ export const runRankingSeed = async (): Promise<SeedSummary[]> => {
         milestonesInserted += inserted.length;
       }
 
-      logger.info(`Ranking seeded for ${seed.username}: allTimeRank=${seed.allTimeRank} xp=${seed.allTimeXp}`);
+      logger.info(
+        `Ranking seeded for ${seed.username}: allTimeRank=${seed.allTimeRank} xp=${seed.allTimeXp}`,
+      );
 
       const rankingDetails: Record<string, unknown> = {
         userId,

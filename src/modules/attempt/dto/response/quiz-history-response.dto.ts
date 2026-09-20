@@ -1,16 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
 
-/**
- * Per-attempt row shape used by `GET /users/me/quiz-history` and
- * `GET /users/me/quiz-history/export`.
- *
- * Phase 5 (S-29): friendly alias over the raw `AttemptSummaryResponseDto`
- * with a `status` value that matches the frontend `QuizHistoryEntry`
- * shape (`passed | failed | abandoned | in_progress`). The mapping is
- * intentionally simple — score < 60 = failed, score >= 60 = passed,
- * status=abandoned → abandoned, status=started → in_progress — and the
- * editor treats `status` as a presentation enum.
- */
 export class QuizHistoryEntryDto {
   @ApiProperty({
     description: 'Attempt identifier (UUID)',
@@ -57,10 +46,14 @@ export class QuizHistoryEntryDto {
   correctAnswers!: number | null;
 
   @ApiProperty({
-    description: 'Total number of questions in the quiz version',
+    description:
+      'Total number of questions in the quiz version. Reserved for future use; ' +
+      'the underlying listing query does not currently populate this field, so ' +
+      'it is `null` on every entry today.',
     example: 20,
+    nullable: true,
   })
-  totalQuestions!: number;
+  totalQuestions!: number | null;
 
   @ApiProperty({
     description: 'Total time taken in seconds (rounded). Null while in progress.',

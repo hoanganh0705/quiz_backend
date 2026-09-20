@@ -1,10 +1,3 @@
-/**
- * Achievement Domain Event Bus
- *
- * Publishes and subscribes to achievement domain events.
- * Other domains can subscribe to these events for notifications and integration.
- */
-
 import { Injectable } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import type { AchievementDomainEvent } from '../events/achievement.events';
@@ -28,9 +21,6 @@ export class AchievementDomainEventBus {
     private readonly logger: PinoLogger,
   ) {}
 
-  /**
-   * Subscribe to a specific event type.
-   */
   subscribe<T extends AchievementDomainEvent>(
     eventType: T['eventType'],
     handler: EventHandler<T>,
@@ -58,9 +48,6 @@ export class AchievementDomainEventBus {
     };
   }
 
-  /**
-   * Subscribe to all achievement events.
-   */
   subscribeAll(handler: EventHandler): EventSubscription {
     this.globalHandlers.add(handler);
 
@@ -78,9 +65,6 @@ export class AchievementDomainEventBus {
     };
   }
 
-  /**
-   * Publish an achievement awarded event.
-   */
   emitAchievementAwarded(params: {
     userId: string;
     badgeId: string;
@@ -100,29 +84,17 @@ export class AchievementDomainEventBus {
     this.publish(event);
   }
 
-  /**
-   * Publish a badge earned event.
-   */
   emitBadgeEarned(params: { userId: string; badgeSlug: string; badgeName: string }): void {
     const event = {
       eventType: 'badge.earned' as const,
       userId: params.userId,
-      badgeType: params.badgeSlug as
-        | 'rising_star'
-        | 'veteran'
-        | 'newcomer'
-        | 'top10'
-        | 'top100'
-        | 'top1000',
+      badgeType: params.badgeSlug,
       awardedAt: new Date(),
     };
 
     this.publish(event);
   }
 
-  /**
-   * Publish a badge revoked event.
-   */
   emitBadgeRevoked(params: {
     userId: string;
     badgeId: string;
@@ -144,9 +116,25 @@ export class AchievementDomainEventBus {
     this.publish(event);
   }
 
-  /**
-   * Publish a streak milestone event.
-   */
+  emitBadgeRestored(params: {
+    userId: string;
+    badgeId: string;
+    badgeSlug: string;
+    restoredAt: Date;
+    restoredBy: string;
+  }): void {
+    const event = {
+      eventType: 'badge.restored' as const,
+      userId: params.userId,
+      badgeId: params.badgeId,
+      badgeType: params.badgeSlug,
+      restoredAt: params.restoredAt,
+      restoredBy: params.restoredBy,
+    };
+
+    this.publish(event);
+  }
+
   emitStreakMilestone(params: { userId: string; streakDays: number }): void {
     const event = {
       eventType: 'streak.milestone' as const,
@@ -158,16 +146,10 @@ export class AchievementDomainEventBus {
     this.publish(event);
   }
 
-  /**
-   * Publish a generic achievement event.
-   */
   emit(event: AchievementDomainEvent): void {
     this.publish(event);
   }
 
-  /**
-   * Internal publish method.
-   */
   private publish(event: AchievementDomainEvent): void {
     this.logger.info({
       event: 'achievement_event_published',
@@ -175,7 +157,6 @@ export class AchievementDomainEventBus {
       userId: event.userId,
     });
 
-    // Notify global handlers
     for (const handler of this.globalHandlers) {
       try {
         const result = handler(event);
@@ -199,7 +180,6 @@ export class AchievementDomainEventBus {
       }
     }
 
-    // Notify type-specific handlers
     const typeHandlers = this.handlers.get(event.eventType);
     if (typeHandlers) {
       for (const handler of typeHandlers) {
@@ -227,9 +207,6 @@ export class AchievementDomainEventBus {
     }
   }
 
-  /**
-   * Remove all subscriptions.
-   */
   clear(): void {
     this.handlers.clear();
     this.globalHandlers.clear();

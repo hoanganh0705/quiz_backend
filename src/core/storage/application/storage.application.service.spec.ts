@@ -1,18 +1,3 @@
-/**
- * Unit tests for `StorageApplicationService`.
- *
- * Coverage:
- *   - `bindAssetToOwner` is a single insert; throws
- *     `StorageOwnershipBindFailedError` on a repository throw.
- *   - `userOwnsAssetForPurpose` returns true only when
- *     (publicId, ownerId, purpose) matches; returns false for missing
- *     rows, wrong owners, and wrong purposes.
- *   - `unbindAsset` is idempotent and forwards to the repository.
- *
- * Repository is a hand-rolled mock — the production port is small
- * enough that a hand mock is clearer than `jest.fn()` ceremony.
- */
-
 import {
   StorageApplicationService,
   StorageOwnershipBindFailedError,
@@ -178,7 +163,7 @@ describe('StorageApplicationService', () => {
     });
   });
 
-  describe('assetExists (Phase 3.1)', () => {
+  describe('assetExists', () => {
     it('returns true when a row matches the publicId', async () => {
       await service.bindAssetToOwner({
         publicId: 'quiz-app/avatars/u/uuid',
@@ -193,10 +178,6 @@ describe('StorageApplicationService', () => {
     });
 
     it('is independent of ownerId and purpose (existence only)', async () => {
-      // A row bound to user 'u' with purpose 'avatar' must still be
-      // considered "exists" for any other caller — the §11 ownership
-      // gate is enforced by `userOwnsAssetForPurpose`, not by this
-      // structural check.
       await service.bindAssetToOwner({
         publicId: 'quiz-app/avatars/u/uuid',
         ownerId: 'u',

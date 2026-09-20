@@ -25,11 +25,6 @@ import { ConfigService } from '@nestjs/config';
     DatabaseModule,
     forwardRef(() => AttemptModule),
     forwardRef(() => NotificationModule),
-    // Phase 1 (Foundational Correctness) — `createInstance` now
-    // resolves `quizId` → published version via `QuizRepositoryPort`.
-    // Importing `QuizModule` exports the provider; the
-    // `forwardRef` indirection keeps a future two-way dependency
-    // (e.g. quiz hydration pulling instance metrics) cycle-safe.
     forwardRef(() => QuizModule),
     JwtModule.registerAsync({
       inject: [ConfigService],
@@ -54,7 +49,6 @@ import { ConfigService } from '@nestjs/config';
     // Event Bus
     InstanceDomainEventBus,
 
-    // Event Bootstrap (subscribes to AttemptStartedEvent, AttemptCompletedEvent)
     InstanceAttemptEventBootstrapService,
 
     // Gateway
@@ -66,22 +60,13 @@ import { ConfigService } from '@nestjs/config';
     // Presenter
     InstancePresenter,
 
-    // Exception filter (Phase 2: HTTP filter removed — global filter handles
-    // InstanceDomainError. WS filter kept — handles auth/generic only).
     WsExceptionFilter,
 
     // Repository
     QuizInstanceRepository,
 
-    // Phase 2 — countdown scheduler. Registered alongside the rest of
-    // the domain/application providers so its `@Cron` is picked up by
-    // the global `ScheduleModule` imported in `AppModule`.
     InstanceCountdownSchedulerService,
 
-    // Phase 3 — cross-instance socketId → {instanceId, userId}
-    // registry. Backed by Redis via the application's shared
-    // `CacheProvider`, behind the `SocketConnectionRegistryPort`
-    // port to keep the application service testable.
     RedisSocketConnectionRegistry,
 
     // Port bindings

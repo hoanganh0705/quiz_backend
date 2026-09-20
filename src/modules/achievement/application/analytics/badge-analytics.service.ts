@@ -1,16 +1,3 @@
-/**
- * Badge Analytics Service
- *
- * Provides analytics and statistics for achievements:
- * - Platform-wide achievement metrics
- * - User achievement analytics
- * - Badge popularity and earning trends
- * - Achievement completion rates
- *
- * All methods that need earner counts for multiple badges use
- * getBadgeEarnersCounts() to avoid N+1 query patterns.
- */
-
 import { Inject, Injectable } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { ACHIEVEMENT_REPOSITORY_PORT } from '../../infrastructure/repositories/achievement.repository';
@@ -20,6 +7,7 @@ import {
   ACHIEVEMENT_MILESTONES,
   computeRarityString,
 } from '../../domain/constants/achievement.constants';
+import type { badgeCategory } from '@/core/database/schema';
 
 export interface PlatformAchievementStats {
   totalBadges: number;
@@ -158,12 +146,10 @@ export class BadgeAnalyticsService {
       totalAwards += count;
     }
 
-    // Calculate unique earners by querying distinct user IDs who have earned any badge
     const uniqueEarnersList = await this.achievementRepository.getDistinctBadgeEarners();
     const uniqueEarners = uniqueEarnersList.length;
     const averageBadgesPerUser = uniqueEarners > 0 ? totalAwards / uniqueEarners : 0;
 
-    // Calculate time-windowed awards
     const awardTimeline = await this.calculatePlatformAwardTimeline(badges);
 
     return {
@@ -179,9 +165,6 @@ export class BadgeAnalyticsService {
     };
   }
 
-  /**
-   * Calculate platform-wide award counts for different time windows.
-   */
   private async calculatePlatformAwardTimeline(
     badges: { badgeId: string }[],
   ): Promise<{ last24Hours: number; last7Days: number; last30Days: number }> {
@@ -191,7 +174,6 @@ export class BadgeAnalyticsService {
 
     const badgeIds = badges.map((b) => b.badgeId);
 
-    // Get earners timeline for all badges and aggregate
     const timelinePromises = badgeIds.map((badgeId) =>
       this.achievementRepository.getBadgeEarnersCountTimeline(badgeId),
     );
@@ -457,7 +439,9 @@ export class BadgeAnalyticsService {
   }
 
   async getCategoryCompletionRate(category: string, totalUsers: number): Promise<number> {
-    const badges = await this.achievementRepository.getBadgesByCategory(category as never);
+    const badges = await this.achievementRepository.getBadgesByCategory(
+      category as (typeof badgeCategory.enumValues)[number],
+    );
 
     if (badges.length === 0 || totalUsers === 0) return 0;
 

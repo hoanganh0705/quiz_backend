@@ -1,10 +1,3 @@
-/**
- * Attempt Event Listener Adapter
- *
- * Listens to Attempt domain events and triggers achievement evaluation.
- * This adapter bridges the Attempt domain to the Achievement domain.
- */
-
 import { Inject, Injectable, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { getCorrelationId, createCorrelationId } from '@/common/interceptors/correlation-id';
@@ -39,9 +32,15 @@ export class AchievementAttemptEventListenerAdapter implements OnModuleInit, OnM
   private subscribe(): void {
     this.unsubscribe = this.attemptEventBus.subscribe((event: unknown) => {
       if (this.isAttemptCompletedEvent(event)) {
-        this.handleAttemptCompleted(event);
+        const evt = event;
+        this.handleAttemptCompleted(evt).catch((err: unknown) => {
+          this.logger.error({ err, event: evt }, 'attempt listener handler failed');
+        });
       } else if (this.isQuizMilestoneEvent(event)) {
-        this.handleQuizMilestone(event);
+        const evt = event;
+        this.handleQuizMilestone(evt).catch((err: unknown) => {
+          this.logger.error({ err, event: evt }, 'quiz-milestone listener handler failed');
+        });
       }
     });
 

@@ -1,49 +1,3 @@
-/**
- * Coin Reconciliation Scheduler (Phase 7 — §16).
- *
- * Nightly job that scans `user_wallets.balance` against
- * `SUM(coin_transactions.amount)` for every active user. A drift row
- * is logged at `error` level (with the full payload — `userId`,
- * `storedBalance`, `expectedBalance`) and increments the
- * `coin_wallet_balance_drift_total` Prometheus counter via
- * `CoinMetricsService`.
- *
- * ## Scheduling
- *
- *   `@Cron('0 2 * * *')` — 02:00 UTC nightly. Picked the 02:00 slot
- *   to keep it 90 minutes after the comment reconciler (03:30 — see
- *   `CommentCounterReconcilerService`) so the two jobs cannot race
- *   on shared rows, and 90 minutes before the ranking consistency
- *   check (03:30) so the on-call path has the coin drift summary
- *   available when the XP drift summary arrives.
- *
- * ## Distributed lock
- *
- * `coin:cron:reconcile` — Redis advisory lock with a 5-minute TTL.
- * In a multi-replica deployment only one instance runs the job per
- * night; the others log `coin_reconciliation_skipped_lock_held` at
- * `debug` and exit.
- *
- * ## Why "log + counter" and not auto-heal
- *
- * The ledger is the source of truth (design §9.6) — a drifted
- * `user_wallets.balance` is a *bug*, not a routine state, and the
- * fix path is non-trivial:
- *
- *   - Was the credit correct and the wallet update lost? Refund the
- *     user, investigate the write path.
- *   - Was the debit correct and the wallet over-deducted? Refill
- *     the user, investigate the write path.
- *   - Is the ledger row a duplicate from a retry? Reverse the
- *     duplicate.
- *
- * None of those are safe to automate. The on-call path reads the
- * `error`-level log lines, reconciles in a transaction with
- * `SELECT … FOR UPDATE`, and ships a fix PR with the audit trail.
- *
- * Mirrors `RankingSchedulerService.handleConsistencyCheck`.
- */
-
 import { Inject, Injectable } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
@@ -77,13 +31,12 @@ export class CoinReconciliationSchedulerService {
    */
   @Cron('0 2 * * *')
   async reconcileWallets(): Promise<void> {
-    const lockToken = crypto.randomUUID();
-    const acquired = await this.cache.acquireAdvisoryLock(
+    const lockToken = await this.cache.acquireAdvisoryLock(
       RECONCILE_LOCK_KEY,
       RECONCILE_LOCK_TTL_MS,
     );
 
-    if (!acquired) {
+    if (lockToken === null) {
       this.logger.debug({
         event: 'coin_reconciliation_skipped_lock_held',
         job: 'reconcileWallets',

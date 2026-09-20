@@ -1,22 +1,3 @@
-/**
- * Tournament Lifecycle Service
- *
- * Phase 3 / Issue #5 — events are now scheduled to the transactional outbox
- * (via `TournamentOutboxPort`) INSIDE the same transaction as the business
- * write, guaranteeing at-least-once delivery even if the process crashes
- * between commit and publish.
- *
- * Phase 3 / Issue #40 — `finalizeDueTournaments` now wraps both
- * `markTournamentStatus` and `finalizeTournament` inside one DB transaction,
- * so either both succeed or neither does — eliminating the race where a second
- * replica could attempt to finalize an already-finished tournament.
- *
- * The internal event bus (`TOURNAMENT_DOMAIN_EVENT_BUS`) is no longer used
- * directly for event dispatch. It remains injected for compatibility with
- * `TournamentAttemptEventListenerAdapter` (which listens to in-process attempt
- * events, not tournament lifecycle events).
- */
-
 import { Inject, Injectable } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import {
@@ -48,6 +29,8 @@ export class TournamentLifecycleService {
   }): Promise<number> {
     const tournaments = await this.tournamentRepository.listTournamentsStartingSoon(params);
     const timestamp = new Date();
+    const timestampIso = timestamp.toISOString();
+    const correlationId = getCorrelationId();
     let scheduled = 0;
 
     for (const tournament of tournaments) {
@@ -72,26 +55,23 @@ export class TournamentLifecycleService {
         limit: participantCount,
       });
 
-      for (const participant of participants.items) {
-        await this.tournamentOutbox.scheduleTournamentEvent(
-          {
-            eventType: 'tournament.starting_soon',
-            payload: {
-              eventType: 'tournament.starting_soon',
-              tournamentId: tournament.tournamentId,
-              userId: participant.userId,
-              tournamentTitle: tournament.title,
-              startedAt: tournament.startAt,
-              timestamp: timestamp.toISOString(),
-            },
-            idempotencyKey: `tournament:starting_soon:${tournament.tournamentId}:${participant.userId}`,
-            correlationId: getCorrelationId(),
-          },
-          this.db,
-          timestamp.toISOString(),
-        );
-        scheduled += 1;
-      }
+      const events = participants.items.map((participant) => ({
+        eventType: 'tournament.starting_soon' as const,
+        payload: {
+          eventType: 'tournament.starting_soon' as const,
+          tournamentId: tournament.tournamentId,
+          userId: participant.userId,
+          tournamentTitle: tournament.title,
+          startedAt: tournament.startAt,
+          timestamp: timestampIso,
+        },
+        idempotencyKey: `tournament:starting_soon:${tournament.tournamentId}:${participant.userId}`,
+        correlationId: correlationId ?? undefined,
+      }));
+
+      await this.tournamentOutbox.scheduleTournamentEventsBatch(events, this.db, timestampIso);
+
+      scheduled += events.length;
     }
 
     this.logger.info({
@@ -130,16 +110,7 @@ export class TournamentLifecycleService {
   }
 
   /**
-   * Round lifecycle / Issue #round-lifecycle — open rounds whose
-   * `start_at` is at or before `nowIso` AND whose parent tournament is
-   * `ongoing`. Mirrors `finalizeDueTournaments` for pagination: a
-   * bounded outer loop with `PAGE_SIZE = 100` so a single tick can
-   * drain arbitrarily many due rows without unbounded runtime. The
-   * guard in `markRoundStatus` (`WHERE status = fromStatus`) makes
-   * each transition concurrency-safe across replicas.
-   *
-   * Returns the total number of rounds transitioned to `open` so the
-   * scheduler can log it.
+   * Open rounds whose `start_at` is at or before `nowIso` AND whose parent tournament is `ongoing`.
    */
   async openDueRounds(nowIso: string): Promise<number> {
     const PAGE_SIZE = 100;
@@ -186,12 +157,7 @@ export class TournamentLifecycleService {
   }
 
   /**
-   * Round lifecycle / Issue #round-lifecycle — close rounds whose
-   * `end_at` is at or before `nowIso`. Symmetric to `openDueRounds`:
-   * same pagination shape, same per-row guarded UPDATE. The parent
-   * tournament's status is intentionally not constrained — a round
-   * whose tournament transitioned `ongoing → finished` mid-round
-   * still closes on its own `end_at`.
+   * Close rounds whose `end_at` is at or before `nowIso`.
    */
   async closeDueRounds(nowIso: string): Promise<number> {
     const PAGE_SIZE = 100;
@@ -237,15 +203,6 @@ export class TournamentLifecycleService {
     return closed;
   }
 
-  /**
-   * Phase 3 / Issue #40 — wraps markTournamentStatus + finalizeTournament in one
-   * transaction so both succeed or neither does. Events are scheduled to the outbox
-   * inside the same transaction.
-   *
-   * Issue #94: Added pagination loop to process ALL due tournaments, not just the first 100.
-   * Previously, if more than 100 tournaments were due for finalization, the rest
-   * would be deferred to the next cron tick.
-   */
   async finalizeDueTournaments(nowIso: string): Promise<number> {
     const PAGE_SIZE = 100;
     let page = 1;
@@ -253,7 +210,6 @@ export class TournamentLifecycleService {
     const timestamp = new Date(nowIso);
     const correlationId = getCorrelationId() ?? 'system';
 
-    // Loop through all pages of completed tournaments until no more items.
     while (true) {
       const completed = await this.tournamentRepository.listCompletedTournaments({
         page,
@@ -278,7 +234,6 @@ export class TournamentLifecycleService {
         }
       }
 
-      // If we got fewer items than the page size, we've reached the last page.
       if (completed.items.length < PAGE_SIZE) {
         break;
       }
@@ -301,9 +256,6 @@ export class TournamentLifecycleService {
     correlationId: string,
   ): Promise<boolean> {
     return this.db.transaction(async (tx) => {
-      // Phase 3 / Issue #40 — atomic: markTournamentStatus + finalizeTournament
-      // inside the same transaction. If the second replica attempts this tournament
-      // before the first commits, markTournamentStatus returns null and we skip.
       const tournament = await this.tournamentRepository.markTournamentStatus({
         tournamentId,
         fromStatus: 'ongoing',
@@ -322,8 +274,6 @@ export class TournamentLifecycleService {
         tx,
       });
 
-      // Schedule tournament.completed and tournament.won events to the outbox
-      // INSIDE this transaction so they're atomic with the finalize.
       for (const standing of standings) {
         await this.tournamentOutbox.scheduleTournamentEvent(
           {
@@ -357,7 +307,6 @@ export class TournamentLifecycleService {
                 prize: tournament.prize ?? undefined,
                 timestamp: timestampIso,
               },
-              // Issue #9: idempotency key matches ExternalXpEarnedEvent.idempotencyKey
               idempotencyKey: `${tournamentId}:${standing.userId}:${standing.rank}`,
               correlationId,
             },

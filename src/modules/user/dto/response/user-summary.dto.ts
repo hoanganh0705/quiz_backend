@@ -1,25 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { LevelTitle } from '../../domain/types/level.types';
 
-/**
- * Phase 1 (S-2 + S-3 + S-5): composite "what to show on my profile page"
- * projection returned by `GET /users/me/summary`.
- *
- * The route is the canonical target for every profile UI that needs
- * more than the slim identity payload on `/users/me`. The fields are
- * stable; downstream pages (`/profile/[name]`, the public profile
- * fallback in Phase 3, and the dashboard) read from this shape so
- * adding a new field should be additive — only opt for a new endpoint
- * when the field is genuinely uncorrelated (e.g. social feed).
- *
- * Composition map (kept here so reviewers can audit the boundary):
- *   - identity         ← `users` + `user_profiles`
- *   - level projection ← `user_ranking.all_time_xp` (LevelService)
- *   - streak           ← `users.current_streak` / `users.longest_streak`
- *   - counts           ← `social.counts` (followers/following/friends)
- *   - creator counts   ← `CreatorQuizAnalyticsDto` (quizzes created/published)
- *   - taken count      ← `UserAnalyticsDto.summary.completedQuizzes`
- */
 export class UserSummaryResponseDto {
   // ─── Identity ─────────────────────────────────────────────────────────────
 
@@ -131,14 +112,6 @@ export class UserSummaryResponseDto {
   })
   levelTitle!: LevelTitle;
 
-  /**
-   * Phase 6: locale-aware human-readable title for `levelTitle`.
-   * The `Accept-Language` request header negotiates between
-   * the supported locales (`en`, `vi`); unknown languages fall
-   * back to `en`. The field is the label the UI renders next to
-   * the level chip; `levelTitle` remains the machine-readable
-   * enum for branching logic.
-   */
   @ApiProperty({
     description:
       'Locale-aware label for `levelTitle`. Negotiated from the `Accept-Language` header; falls back to `en`.',
@@ -184,11 +157,6 @@ export class UserSummaryResponseDto {
 
   // ─── Coin economy ────────────────────────────────────────────────────────
 
-  /**
-   * Phase 3 (S-coin): cached coin balance. The header pill on the
-   * profile page reads from this single field; an uncached user
-   * returns 0. The full ledger is at `GET /me/coin-transactions`.
-   */
   @ApiProperty({
     description:
       'Cached coin balance from `user_wallets.balance`. 0 when the user has never been credited.',

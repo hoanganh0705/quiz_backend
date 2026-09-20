@@ -1,9 +1,3 @@
-/**
- * Rank Notification Service
- *
- * Composes and sends rank-related notifications.
- */
-
 import { Injectable } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import {
@@ -24,9 +18,6 @@ export class RankNotificationService implements RankNotificationPort {
     private readonly logger: PinoLogger,
   ) {}
 
-  /**
-   * Send a rank achievement notification.
-   */
   async notifyRankAchievement(params: RankNotificationParams): Promise<void> {
     const title = RANK_NOTIFICATION_TITLES[params.milestone] ?? 'Rank Milestone!';
     const body = RANK_NOTIFICATION_BODIES[params.milestone] ?? 'You have achieved a new rank!';
@@ -52,9 +43,6 @@ export class RankNotificationService implements RankNotificationPort {
     });
   }
 
-  /**
-   * Send a rank improvement notification.
-   */
   async notifyRankImprovement(params: RankImprovementParams): Promise<void> {
     const title = '+' + params.improvement + ' positions!';
     const body = `You moved from rank #${params.previousRank} to rank #${params.newRank}.`;
@@ -79,9 +67,6 @@ export class RankNotificationService implements RankNotificationPort {
     });
   }
 
-  /**
-   * Send a period winner notification.
-   */
   async notifyPeriodWinner(params: PeriodWinnerParams): Promise<void> {
     const periodLabel = params.isWeekly ? 'Weekly' : 'Monthly';
     const title = periodLabel + ' Winner!';
@@ -123,9 +108,6 @@ export class RankNotificationService implements RankNotificationPort {
   }
 }
 
-/**
- * Port interface exposed to the Ranking module via RANK_NOTIFICATION_PORT.
- */
 export interface RankNotificationPort {
   notifyRankAchievement(params: RankNotificationParams): Promise<void>;
   notifyRankImprovement(params: RankImprovementParams): Promise<void>;

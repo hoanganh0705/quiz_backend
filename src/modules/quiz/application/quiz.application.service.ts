@@ -39,15 +39,11 @@ import {
   QUIZ_REPOSITORY_PORT,
   type QuizRepositoryPort,
 } from '../domain/ports/quiz-repository.port';
-import { commentRows } from '@/core/database/schema';
-import { and, eq, isNull, sql } from 'drizzle-orm';
-import { DRIZZLE } from '@/core/database/drizzle.constants';
-import type { DrizzleDB } from '@/core/database/database.module';
-import type { QuizStatsHistoryPointDto } from '../dto/response/quiz-stats-history-point.dto';
 import { StorageApplicationService } from '@/core/storage/application/storage.application.service';
 import { StorageImageLifecycleService } from '@/core/storage/application/storage-image-lifecycle.service';
 import { QuizCacheService } from './quiz-cache.service';
-import { BadRequestException, ForbiddenException } from '@nestjs/common';
+import { QuizStatsHistoryService } from './quiz-stats-history.service';
+import { QuizAssetOwnershipGuard } from './quiz-asset-ownership.guard';
 
 @Injectable()
 export class QuizApplicationService implements QuizListingPort {
@@ -59,23 +55,16 @@ export class QuizApplicationService implements QuizListingPort {
     private readonly userDomainService: UserDomainService,
     @Inject(QUIZ_REPOSITORY_PORT)
     private readonly quizRepository: QuizRepositoryPort,
-    @Inject(DRIZZLE) private readonly db: DrizzleDB,
     private readonly storageOwnership: StorageApplicationService,
     private readonly storageLifecycle: StorageImageLifecycleService,
     private readonly quizCache: QuizCacheService,
+    private readonly quizStatsHistory: QuizStatsHistoryService,
+    private readonly assetOwnership: QuizAssetOwnershipGuard,
     private readonly quizMapper: QuizResponseMapper,
     @InjectPinoLogger(QuizApplicationService.name)
     private readonly logger: PinoLogger,
   ) {}
 
-  /**
-   * Phase 2 (S-6 / S-7 / S-8): build the batched projection context
-   * for a page of `QuizWithPublishedVersionRow`s. Five concurrent
-   * queries (creators / categories / tags / aggregates / question
-   * counts) keyed off the page. The mapper stitches the result
-   * onto each item, so a page of 20 quizzes resolves with one
-   * `list*` query plus five batched lookups — never 1 + 4×N.
-   */
   private async buildProjectionContext(
     rows: readonly {
       quizId: string;
@@ -121,20 +110,7 @@ export class QuizApplicationService implements QuizListingPort {
   }
 
   async createQuiz(user: JwtPayload, dto: CreateQuizDto): Promise<QuizResponseDto> {
-    if (dto.imagePublicId !== undefined && dto.imagePublicId !== null) {
-      const owns = await this.storageOwnership.userOwnsAssetForPurpose({
-        publicId: dto.imagePublicId,
-        ownerId: user.sub,
-        purpose: 'quiz',
-      });
-      if (!owns) {
-        throw new ForbiddenException({
-          code: 'ASSET_NOT_OWNED',
-          message:
-            'The supplied cover image publicId is not owned by the authenticated user for the quiz cover purpose.',
-        });
-      }
-    }
+    await this.assetOwnership.assertCallerOwnsQuizImage(dto.imagePublicId, user);
 
     const command: CreateQuizCommand = {
       creatorId: user.sub,
@@ -159,11 +135,6 @@ export class QuizApplicationService implements QuizListingPort {
     const limit = dto.limit ?? 20;
     const cursor = dto.cursor ? QuizCursorMapper.parse(dto.cursor) : null;
 
-    // Phase 3 #1: read-through cache for the public list page.
-    // The cache key is derived from the (filters, cursor, limit)
-    // tuple so every distinct page has its own entry. Invalidation
-    // is centralised in `invalidateListCacheHandler` and fired on
-    // every `QuizCreatedEvent` / `QuizUpdatedEvent` / `QuizDeletedEvent`.
     const cacheKey = this.quizCache.buildListCacheKey({
       filters: {
         difficulty: dto.difficulty,
@@ -249,11 +220,6 @@ export class QuizApplicationService implements QuizListingPort {
   }
 
   async getQuizStats(quizId: string | undefined, slug: string): Promise<QuizStatsResponseDto> {
-    // Phase 3 #2: cache the resolved stats per quizId. The slug
-    // lookup is wrapped in a closure so the cache stores the
-    // mapped DTO by quizId, not by slug. Two callers hitting
-    // `/quizzes/<slug>/stats` and `/quizzes/<uuid>/stats` end up
-    // pointing at the same cache entry.
     const resolveQuizId = async (): Promise<string> => {
       if (quizId) return quizId;
       const resolved = await this.quizQueryService.getQuizStats(undefined, slug);
@@ -265,25 +231,20 @@ export class QuizApplicationService implements QuizListingPort {
     return this.quizCache.getOrSetStats(resolvedQuizId, async () => {
       const stats = await this.quizQueryService.getQuizStats(quizId, slug);
       const [commentsCount, recentActivity] = await Promise.all([
-        this.countCommentsForQuiz(stats.quizId),
-        this.fetchRecentActivity(stats.quizId, 30),
+        this.quizStatsHistory.countCommentsForQuiz(stats.quizId),
+        this.quizStatsHistory.fetchRecentActivity(stats.quizId, 30),
       ]);
       return QuizStatsResponseMapper.toResponse(stats, { commentsCount, recentActivity });
     });
   }
 
-  /**
-   * Phase 2 (S-11): sparkline data for `GET /quizzes/:id/stats/history`.
-   * The route accepts `?range=7d|30d&bucket=day|hour`; the response is
-   * densified server-side so the client renders a continuous chart.
-   */
   async getQuizStatsHistory(
     quizId: string | undefined,
     slug: string,
     query: QuizStatsHistoryQueryDto,
   ): Promise<QuizStatsHistoryResponseDto> {
     const stats = await this.quizQueryService.getQuizStats(quizId, slug);
-    const points = await this.fetchHistoryPoints(
+    const points = await this.quizStatsHistory.fetchHistoryPoints(
       stats.quizId,
       query.range ?? '30d',
       query.bucket ?? 'day',
@@ -296,12 +257,6 @@ export class QuizApplicationService implements QuizListingPort {
     };
   }
 
-  /**
-   * Phase 2 (S-9): public preview of a quiz. Returns the first
-   * `previewSize` questions of the published version with the
-   * `isCorrect` flag stripped. `@Public()` so deep-link previews
-   * from social/sharing surfaces work without a session.
-   */
   async getQuizPreview(
     quizIdOrSlug: string,
     previewSize = PREVIEW_QUESTION_COUNT,
@@ -345,16 +300,6 @@ export class QuizApplicationService implements QuizListingPort {
     };
   }
 
-  /**
-   * Phase 4 (S-24): bundle for the quiz detail page. Replaces
-   * the 5+ sequential calls with a single parallelised fan-out.
-   *
-   * The bundle shape is `QuizAggregateResponseDto`:
-   *   - `quiz`             — full quiz record (with published version)
-   *   - `stats`            — quiz stats (cached counter snapshot)
-   *   - `statsHistory`     — bucketed stats timeline (sparkline)
-   *   - `previewQuestions` — first N questions (player-style)
-   */
   async getQuizAggregate(quizIdOrSlug: string): Promise<QuizAggregateResponseDto> {
     const isUuidValue = isUuid(quizIdOrSlug);
     const quizId = isUuidValue ? quizIdOrSlug : undefined;
@@ -420,6 +365,14 @@ export class QuizApplicationService implements QuizListingPort {
     const result = await this.quizQueryService.listUserQuizzes(userId, {
       limit,
       cursor,
+      filters: {
+        difficulty: dto.difficulty as QuizDifficulty,
+        categoryId: dto.categoryId,
+        tagIds: dto.tagIds,
+        q: dto.q,
+        sort: dto.sort,
+        minRating: dto.minRating,
+      },
     });
 
     const context = await this.buildProjectionContext(result.items);
@@ -440,6 +393,14 @@ export class QuizApplicationService implements QuizListingPort {
     const result = await this.quizQueryService.listDraftQuizzes(userId, {
       limit,
       cursor,
+      filters: {
+        difficulty: dto.difficulty as QuizDifficulty,
+        categoryId: dto.categoryId,
+        tagIds: dto.tagIds,
+        q: dto.q,
+        sort: dto.sort,
+        minRating: dto.minRating,
+      },
     });
 
     const context = await this.buildProjectionContext(result.items);
@@ -463,6 +424,14 @@ export class QuizApplicationService implements QuizListingPort {
     const result = await this.quizQueryService.listPublishedQuizzes(userId, {
       limit,
       cursor,
+      filters: {
+        difficulty: dto.difficulty as QuizDifficulty,
+        categoryId: dto.categoryId,
+        tagIds: dto.tagIds,
+        q: dto.q,
+        sort: dto.sort,
+        minRating: dto.minRating,
+      },
     });
 
     const context = await this.buildProjectionContext(result.items);
@@ -482,7 +451,7 @@ export class QuizApplicationService implements QuizListingPort {
     return quizzes.map((q) => ({
       rank: q.rank,
       quizId: q.quizId,
-      creatorId: null, // TODO: Populate when analytics queries include creatorId
+      creatorId: q.creatorId,
       title: q.title,
       slug: q.slug,
       imageUrl: q.imageUrl,
@@ -498,7 +467,7 @@ export class QuizApplicationService implements QuizListingPort {
     return quizzes.map((q) => ({
       rank: q.rank,
       quizId: q.quizId,
-      creatorId: null, // TODO: Populate when analytics queries include creatorId
+      creatorId: q.creatorId,
       title: q.title,
       slug: q.slug,
       imageUrl: q.imageUrl,
@@ -509,11 +478,6 @@ export class QuizApplicationService implements QuizListingPort {
     }));
   }
 
-  /**
-   * Phase 2.3 (H3): Asserts the user exists before returning analytics.
-   * `userDomainService.getMe` throws `UserNotFoundError` → 404 if the user
-   * does not exist, restoring the documented contract for this endpoint.
-   */
   async getMyQuizAnalytics(userId: string): Promise<CreatorQuizAnalyticsDto> {
     await this.userDomainService.getMe(userId);
     const analytics = await this.quizQueryService.getCreatorAnalytics(userId);
@@ -521,20 +485,7 @@ export class QuizApplicationService implements QuizListingPort {
   }
 
   async updateQuiz(quizId: string, user: JwtPayload, dto: UpdateQuizDto): Promise<QuizResponseDto> {
-    if (dto.imagePublicId !== undefined && dto.imagePublicId !== null) {
-      const owns = await this.storageOwnership.userOwnsAssetForPurpose({
-        publicId: dto.imagePublicId,
-        ownerId: user.sub,
-        purpose: 'quiz',
-      });
-      if (!owns) {
-        throw new ForbiddenException({
-          code: 'ASSET_NOT_OWNED',
-          message:
-            'The supplied cover image publicId is not owned by the authenticated user for the quiz cover purpose.',
-        });
-      }
-    }
+    await this.assetOwnership.assertCallerOwnsQuizImage(dto.imagePublicId, user);
 
     const command: UpdateQuizCommand = {
       title: dto.title,
@@ -568,18 +519,42 @@ export class QuizApplicationService implements QuizListingPort {
   }
 
   async deleteQuiz(quizId: string, user: JwtPayload): Promise<DeleteQuizResponseDto> {
-    try {
-      await this.storageLifecycle.deleteQuizCover(quizId, (id) =>
-        this.quizRepository.findQuizCoverPublicIdById(id),
-      );
-    } catch (err) {
-      this.logger.warn({
-        event: 'storage_lifecycle_unexpected_error',
-        quizId,
-        err: err instanceof Error ? err.message : String(err),
-      });
+    // Order of operations matters:
+    //   1. Snapshot the current cover `imagePublicId` while the quiz
+    //      row is still visible (so the cover-delete callback can find
+    //      it).
+    //   2. Soft-delete the quiz row. If this fails, we never deleted
+    //      the cover — the quiz remains live and intact.
+    //   3. Best-effort cover delete. If this fails, the quiz is
+    //      already marked deleted, so a future sweep can re-collect the
+    //      orphan cover from Cloudinary.
+    //
+    // The previous order (cover-delete → soft-delete) inverted this:
+    // a cover-delete success followed by a soft-delete failure would
+    // leave a live quiz with no cover image — visible to readers as a
+    // broken `<img>`.
+    const coverPublicId = await this.quizRepository.findQuizCoverPublicIdById(quizId);
+    const result = await this.quizCommandService.softDeleteQuizById(quizId, user);
+
+    if (coverPublicId) {
+      try {
+        // The callback only needs to return the previously-snapshotted
+        // publicId — the lifecycle service uses it as the asset to
+        // delete. Wrap in an `async` so the signature
+        // `(quizId: string) => Promise<string | null>` is honoured.
+        await this.storageLifecycle.deleteQuizCover(quizId, async () =>
+          Promise.resolve(coverPublicId),
+        );
+      } catch (err) {
+        this.logger.warn({
+          event: 'storage_lifecycle_unexpected_error',
+          quizId,
+          err: err instanceof Error ? err.message : String(err),
+        });
+      }
     }
-    return this.quizCommandService.softDeleteQuizById(quizId, user);
+
+    return result;
   }
 
   async listQuizzesByTag(params: {
@@ -588,149 +563,10 @@ export class QuizApplicationService implements QuizListingPort {
   }): Promise<QuizListResponseDto> {
     return this.listQuizzes({ ...params.dto, tagIds: params.tagIds });
   }
-
-  // ─── Phase 2 helpers ───────────────────────────────────────────────────
-
-  /**
-   * Phase 2 (S-10): counts non-deleted comments attached to the
-   * quiz. Counts both top-level comments and replies (the audit
-   * recommendation) so the stats panel's "Comments" counter stays
-   * in sync with what `/comments` paginated list would return.
-   */
-  private async countCommentsForQuiz(quizId: string): Promise<number> {
-    const [row] = await this.db
-      .select({ count: sql<number>`COUNT(*)::int` })
-      .from(commentRows)
-      .where(and(eq(commentRows.quizId, quizId), isNull(commentRows.deletedAt)));
-    return Number(row?.count ?? 0);
-  }
-
-  /**
-   * Phase 2 (S-10): 30-day attempt timeline for the stats panel
-   * sparkline. Bucketed by day; gaps are densified to zero so the
-   * client can render a continuous timeline without further math.
-   */
-  private async fetchRecentActivity(
-    quizId: string,
-    days: number,
-  ): Promise<QuizStatsHistoryPointDto[]> {
-    return this.fetchHistoryPoints(quizId, days === 7 ? '7d' : '30d', 'day');
-  }
-
-  /**
-   * Phase 2 (S-11): sparkline history endpoint backing store.
-   * Bucketed timeline with `range` and `bucket` parameters from
-   * the `QuizStatsHistoryQueryDto`. Gaps are densified to zero so
-   * the client renders a continuous chart.
-   *
-   * Note: this method runs two queries — the actual bucket reads
-   * and a `generate_series` densification. The latter runs against
-   * the system catalog (no real data), so it's cheap; the heavy
-   * work is the bucket read.
-   */
-  private async fetchHistoryPoints(
-    quizId: string,
-    range: '7d' | '30d',
-    bucket: 'day' | 'hour',
-  ): Promise<QuizStatsHistoryPointDto[]> {
-    const days = range === '7d' ? 7 : 30;
-    const bucketColumn = bucket === 'hour' ? 'hour' : 'day';
-
-    // 1. Pull attempts joined to this quiz's versions, bucketed by
-    //    `bucketColumn`. We use `started_at` for attempts and
-    //    `completed_at` for completions, treating NULLs with COALESCE.
-    const attempts = await this.db.execute(sql`
-      WITH version_ids AS (
-        SELECT quiz_version_id FROM quiz_versions WHERE quiz_id = ${quizId}
-      )
-      SELECT
-        date_trunc(${bucketColumn}, quiz_attempts.started_at) AS bucket_start,
-        COUNT(*)::int AS attempts,
-        COUNT(*) FILTER (WHERE quiz_attempts.status = 'completed')::int AS completions,
-        COUNT(DISTINCT quiz_attempts.user_id)::int AS unique_players
-      FROM quiz_attempts
-      WHERE quiz_attempts.quiz_version_id IN (SELECT quiz_version_id FROM version_ids)
-        AND quiz_attempts.started_at >= NOW() - (${days} || ' days')::interval
-      GROUP BY 1
-    `);
-
-    type BucketRow = {
-      bucket_start: Date | string;
-      attempts: number;
-      completions: number;
-      unique_players: number;
-    };
-
-    const rawRows = (attempts as unknown as { rows?: BucketRow[] }).rows ?? [];
-
-    const buckets = new Map<
-      string,
-      { attempts: number; completions: number; uniquePlayers: number }
-    >();
-    for (const r of rawRows) {
-      const key = formatBucketKey(new Date(r.bucket_start), bucket);
-      buckets.set(key, {
-        attempts: Number(r.attempts ?? 0),
-        completions: Number(r.completions ?? 0),
-        uniquePlayers: Number(r.unique_players ?? 0),
-      });
-    }
-
-    // 2. Densify: walk every bucket from `now` back to `now - days`,
-    //    filling missing keys with zero so the timeline is continuous.
-    const points: QuizStatsHistoryPointDto[] = [];
-    const now = new Date();
-    for (let i = days - 1; i >= 0; i--) {
-      const point = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
-      if (bucket === 'hour') {
-        for (let h = 0; h < 24; h++) {
-          const slot = new Date(point);
-          slot.setHours(h, 0, 0, 0);
-          if (slot.getTime() > now.getTime()) continue;
-          const key = formatBucketKey(slot, 'hour');
-          const v = buckets.get(key);
-          points.push({
-            date: key,
-            attempts: v?.attempts ?? 0,
-            completions: v?.completions ?? 0,
-            uniquePlayers: v?.uniquePlayers ?? 0,
-          });
-        }
-      } else {
-        const key = formatBucketKey(point, 'day');
-        const v = buckets.get(key);
-        points.push({
-          date: key,
-          attempts: v?.attempts ?? 0,
-          completions: v?.completions ?? 0,
-          uniquePlayers: v?.uniquePlayers ?? 0,
-        });
-      }
-    }
-
-    return points;
-  }
 }
 
-/**
- * Phase 2 (S-9): preview limit. Hard-coded so a malicious client
- * cannot bypass the `isCorrect` strip by requesting every question.
- * The audit's recommendation was 2 — small enough to render as a
- * teaser card, large enough to convey difficulty.
- */
 const PREVIEW_QUESTION_COUNT = 2;
 
 function isUuid(value: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
-}
-
-function formatBucketKey(date: Date, bucket: 'day' | 'hour'): string {
-  const yyyy = date.getUTCFullYear();
-  const mm = String(date.getUTCMonth() + 1).padStart(2, '0');
-  const dd = String(date.getUTCDate()).padStart(2, '0');
-  if (bucket === 'hour') {
-    const hh = String(date.getUTCHours()).padStart(2, '0');
-    return `${yyyy}-${mm}-${dd}T${hh}:00:00Z`;
-  }
-  return `${yyyy}-${mm}-${dd}`;
 }

@@ -1,9 +1,3 @@
-// `user_badges` is ⚠ OPTIONAL SEED per the Phase 10 audit — rows can be
-// earned naturally by completing attempts. We seed a handful so the badge
-// list / revoke / re-evaluate endpoints have data immediately.
-// See `PHASE_10_EVIDENCE_REPORT.md` → "Achievement domain" for the
-// classification rationale.
-
 import { db, type SeedContext, recorder } from '../infrastructure';
 import type { SeedSummary } from '../infrastructure/types';
 import { SeedLookup } from '../shared/seed-lookup';
@@ -50,7 +44,10 @@ const USER_BADGE_SEEDS: UserBadgeSeed[] = [
     badgeSlug: 'perfect-score',
     earnedAt: '2026-06-30T10:00:00.000Z',
     progress: { perfectScores: 1, threshold: 1 },
-    metadata: { source: 'direct_seed', note: 'Seeded directly to exercise badge list / revoke endpoints' },
+    metadata: {
+      source: 'direct_seed',
+      note: 'Seeded directly to exercise badge list / revoke endpoints',
+    },
   },
   {
     userBadgeId: '52222222-2222-7222-8222-222222222223',
@@ -84,7 +81,9 @@ export const runUserBadgeSeed = async (): Promise<SeedSummary[]> => {
       const badgeId = await lookup.badgeIdBySlug(seed.badgeSlug);
 
       if (!badgeId) {
-        logger.warn(`User badge seed: badge "${seed.badgeSlug}" not found for ${seed.username}, skipping`);
+        logger.warn(
+          `User badge seed: badge "${seed.badgeSlug}" not found for ${seed.username}, skipping`,
+        );
         skipped++;
         continue;
       }

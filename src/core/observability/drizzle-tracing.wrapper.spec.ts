@@ -1,13 +1,3 @@
-/**
- * Phase 5 #1 — Drizzle tracing wrapper unit tests.
- *
- * Verifies:
- *   - `select`, `insert`, `update`, `delete`, `execute`,
- *     `transaction` all emit `client` spans with `db.operation`.
- *   - Non-traced methods pass through unchanged.
- *   - Spans carry the `db.system=postgresql` attribute.
- */
-
 import { TracingProvider, type Span } from './tracing.provider';
 import { DrizzleTracingWrapper } from './drizzle-tracing.wrapper';
 

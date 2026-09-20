@@ -1,32 +1,25 @@
-/**
- * Daily-challenge domain event bus.
- *
- * Mirrors the other module-local buses (Attempt, User) — simple
- * observer pattern, in-process, no Redis. Until Phase 3 there was no
- * event surface on this module, so this bus is brand-new and the
- * only consumer today is `DailyChallengeCoinListenerAdapter`.
- *
- * Capacity for future consumers: a real-time "today's results"
- * ticker, an "I did today's challenge" notification, etc.
- */
-
 import { Injectable, OnModuleDestroy } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import type { DailyChallengeDomainEvent } from './daily-challenge-domain.events';
 
 type Handler = (event: DailyChallengeDomainEvent) => void | Promise<void>;
+type PendingPromise = Promise<void>;
 
 @Injectable()
 export class DailyChallengeDomainEventBus implements OnModuleDestroy {
   private handlers: Handler[] = [];
+  private pending: Set<PendingPromise> = new Set();
 
   constructor(
     @InjectPinoLogger(DailyChallengeDomainEventBus.name)
     private readonly logger: PinoLogger,
   ) {}
 
-  onModuleDestroy(): void {
+  async onModuleDestroy(): Promise<void> {
     this.handlers = [];
+    if (this.pending.size === 0) return;
+    await Promise.allSettled(Array.from(this.pending));
+    this.pending.clear();
   }
 
   subscribe(handler: Handler): () => void {
@@ -52,13 +45,18 @@ export class DailyChallengeDomainEventBus implements OnModuleDestroy {
       try {
         const result = handler(event);
         if (result instanceof Promise) {
-          result.catch((error) => {
-            this.logger.error({
-              event: 'daily_challenge_event_handler_error',
-              eventType: event.eventType,
-              error: error instanceof Error ? error.message : String(error),
+          this.pending.add(result);
+          result
+            .catch((error) => {
+              this.logger.error({
+                event: 'daily_challenge_event_handler_error',
+                eventType: event.eventType,
+                error: error instanceof Error ? error.message : String(error),
+              });
+            })
+            .finally(() => {
+              this.pending.delete(result);
             });
-          });
         }
       } catch (error) {
         this.logger.error({

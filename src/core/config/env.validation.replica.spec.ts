@@ -1,11 +1,3 @@
-/**
- * Phase 7 #3 — env validation tests for `DATABASE_READ_REPLICA_URL`.
- *
- * The variable is OPTIONAL — single-DB deployments must continue to
- * boot when the variable is absent. When set, the value must be a
- * `postgres://` or `postgresql://` URL.
- */
-
 import { validateEnv } from './env.validation';
 
 type ValidatedEnv = ReturnType<typeof validateEnv>;
@@ -14,7 +6,7 @@ const readReplica = (env: ValidatedEnv): string | null =>
   (env as unknown as { DATABASE_READ_REPLICA_URL?: string | null }).DATABASE_READ_REPLICA_URL ??
   null;
 
-describe('validateEnv — read-replica URL (Phase 7 #3)', () => {
+describe('validateEnv — read-replica URL', () => {
   const baseEnv = (): Record<string, unknown> => ({
     DATABASE_URL: 'postgres://app:pw@localhost:5432/quizdb',
     REDIS_URL: 'redis://localhost:6379',

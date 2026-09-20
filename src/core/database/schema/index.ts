@@ -1,25 +1,3 @@
-// =============================================================================
-// Database Schema - Pure Barrel Re-export
-//
-// This file is the single entry point for the database schema. All tables,
-// enums, and relations are re-exported from their respective domain modules.
-//
-// Domain structure:
-// - shared:     Enums and types shared across domains
-// - auth:       User authentication and sessions
-// - quiz:       Quiz content management (includes review tables)
-// - taxonomy:   Categories and tags
-// - ranking:    User rankings and history
-// - achievement: Badges and user achievements
-// - user:       User profiles and settings
-// - comment:    Per-quiz comment section (replaces the legacy comments
-//               module: no threads, no subscriptions, no saved-threads)
-// - social:     Social features (friends, follows, feed)
-// - notification: User notifications
-// - tournament: Tournament management
-// - outbox:     Event outbox and idempotency
-// =============================================================================
-
 // Shared
 export * from './shared/enums';
 export * from './shared/types';
@@ -48,8 +26,6 @@ export * from './achievement/relations';
 export * from './user/schema';
 export * from './user/relations';
 
-// Comment (replaces the legacy comment module as of Phase 9.6;
-// the old comments/ re-export has been removed in the same change.)
 export * from './comment/schema';
 export * from './comment/relations';
 
@@ -65,15 +41,12 @@ export * from './notification/relations';
 export * from './tournament/schema';
 export * from './tournament/relations';
 
-// Daily challenge (Phase 3 / S-14)
 export * from './daily-challenge/schema';
 
 // Outbox
 export * from './outbox/schema';
 
-// Coins (Phase 1 — schema + relations; no application code yet)
 export * from './coins/schema';
 export * from './coins/relations';
 
-// Storage (Phase 4 — Cloudinary asset ownership binding)
 export * from './storage/schema';

@@ -1,39 +1,12 @@
-/**
- * Environment validation module.
- * Provides type-safe validation for all environment variables with fail-fast startup behavior.
- *
- * Key design decisions:
- * - Uses `as const` tuples for enum validation to avoid string literal duplication
- * - URL validation ensures protocol correctness (postgres:// for DB, redis:// for cache)
- * - All helper functions are module-private; only validateEnv is exported
- * - Return shape MUST match the original to preserve backward compatibility
- */
-
 export type NodeEnv = 'development' | 'test' | 'production';
-
-// ============================================
-// Enum Value Sets (using as const for type safety)
-// ============================================
 
 const NODE_ENVS = ['development', 'test', 'production'] as const;
 const EMAIL_PROVIDERS = ['resend'] as const;
 const DATABASE_PROTOCOLS = ['postgres:', 'postgresql:'] as const;
 const REDIS_PROTOCOLS = ['redis:', 'rediss:'] as const;
 
-// ============================================
-// Token Expiration Pattern
-// ============================================
-
 const TOKEN_EXPIRES_IN_PATTERN = /^(\d+)([smhd])?$/;
 
-// ============================================
-// Helper Functions
-// ============================================
-
-/**
- * Validates and parses a required non-empty string.
- * Trims whitespace before validation.
- */
 const parseRequiredString = (env: Record<string, unknown>, key: string): string => {
   const value = env[key];
 
@@ -44,11 +17,6 @@ const parseRequiredString = (env: Record<string, unknown>, key: string): string 
   return value.trim();
 };
 
-/**
- * Validates and parses a string with an optional fallback.
- * Returns the fallback when the key is missing or empty.
- * Trims whitespace when a value is present.
- */
 const parseStringWithDefault = (
   env: Record<string, unknown>,
   key: string,
@@ -67,10 +35,6 @@ const parseStringWithDefault = (
   return rawValue.trim();
 };
 
-/**
- * Validates and parses a positive integer with optional fallback.
- * Accepts numeric or string input.
- */
 const parsePositiveInteger = (
   env: Record<string, unknown>,
   key: string,
@@ -105,11 +69,6 @@ const parsePositiveInteger = (
   return parsed;
 };
 
-/**
- * Validates and parses a boolean value.
- * Accepts: true/false, 1/0, yes/no (case-insensitive).
- * Returns fallback for undefined/null/empty values.
- */
 const parseBoolean = (env: Record<string, unknown>, key: string, fallback: boolean): boolean => {
   const rawValue = env[key];
 
@@ -232,9 +191,6 @@ const parseTokenExpiresIn = (env: Record<string, unknown>, key: string): string 
 export const validateEnv = (env: Record<string, unknown>) => {
   // Database & Cache
   const databaseUrl = parseUrl(env, 'DATABASE_URL', DATABASE_PROTOCOLS, 'postgres/postgresql');
-  // Phase 1 #4 — database pool tuning. All four values are optional and
-  // default to conservative values; positive-integer validation mirrors
-  // the other numeric knobs.
   const databasePoolMax = parsePositiveInteger(env, 'DATABASE_POOL_MAX', 10);
   const databasePoolIdleTimeoutMs = parsePositiveInteger(
     env,
@@ -252,10 +208,6 @@ export const validateEnv = (env: Record<string, unknown>) => {
     30_000,
   );
   const redisUrl = parseUrl(env, 'REDIS_URL', REDIS_PROTOCOLS, 'redis/rediss');
-  // Phase 7 #3 — optional read-replica URL. When set, the read pool
-  // is bound to this URL; writes continue to use `DATABASE_URL`.
-  // Validation is skipped when the env var is absent so single-DB
-  // deployments are unaffected.
   const databaseReadReplicaUrl =
     typeof env.DATABASE_READ_REPLICA_URL === 'string' &&
     env.DATABASE_READ_REPLICA_URL.trim().length > 0
@@ -319,25 +271,21 @@ export const validateEnv = (env: Record<string, unknown>) => {
   const emailSendTimeoutMs = parsePositiveInteger(env, 'EMAIL_SEND_TIMEOUT_MS', 5_000);
   const emailQueueConcurrency = parsePositiveInteger(env, 'EMAIL_QUEUE_CONCURRENCY', 5);
 
-  // Cloudinary (backed by core/storage in Phase 1; values required from Phase 3 onward)
   const cloudinaryCloudName = parseRequiredString(env, 'CLOUDINARY_CLOUD_NAME');
   const cloudinaryApiKey = parseRequiredString(env, 'CLOUDINARY_API_KEY');
   const cloudinaryApiSecret = parseRequiredString(env, 'CLOUDINARY_API_SECRET');
   const cloudinaryFolder = parseStringWithDefault(env, 'CLOUDINARY_FOLDER', 'quiz-app-dev');
 
-  // Server Configuration
   const port = parsePositiveInteger(env, 'PORT', 3000);
   const nodeEnv = parseEnum(env, 'NODE_ENV', NODE_ENVS, 'NODE_ENV');
   const corsOrigins = typeof env.CORS_ORIGINS === 'string' ? env.CORS_ORIGINS : '';
   const trustProxy = parseBoolean(env, 'TRUST_PROXY', false);
 
-  // Application Metadata (optional, with sensible defaults)
   const appName = typeof env.APP_NAME === 'string' ? env.APP_NAME.trim() : 'Quiz API';
   const appVersion = typeof env.APP_VERSION === 'string' ? env.APP_VERSION.trim() : '1.0';
   const appDescription = typeof env.APP_DESCRIPTION === 'string' ? env.APP_DESCRIPTION.trim() : '';
   const appUrl = typeof env.APP_URL === 'string' ? env.APP_URL.trim() : '';
 
-  // Phase 7 #4 — soft-delete retention window (clamped to [1, 365]).
   const softDeleteRetentionDays = (() => {
     const raw = env.SOFT_DELETE_RETENTION_DAYS;
     if (typeof raw !== 'string' || raw.trim() === '') {
@@ -350,7 +298,6 @@ export const validateEnv = (env: Record<string, unknown>) => {
     return n;
   })();
 
-  // Return validated environment (flat structure for backward compatibility)
   return {
     DATABASE_URL: databaseUrl,
     DATABASE_POOL_MAX: databasePoolMax,
@@ -394,9 +341,5 @@ export const validateEnv = (env: Record<string, unknown>) => {
     SOFT_DELETE_RETENTION_DAYS: softDeleteRetentionDays,
   };
 };
-
-// ============================================
-// Type Exports (for consumers who want them)
-// ============================================
 
 export type EmailProvider = (typeof EMAIL_PROVIDERS)[number];

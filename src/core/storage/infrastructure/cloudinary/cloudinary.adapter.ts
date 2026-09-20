@@ -1,21 +1,3 @@
-/**
- * `StoragePort` implementation backed by Cloudinary.
- *
- * The adapter:
- *   - composes `public_id = folder/<ownerId>/<uuidv7()>` from
- *     `UPLOAD_POLICY[input.purpose].folder` and the caller-supplied
- *     `ownerId`. `ownerId` is sourced from the application service
- *     (authenticated user), never from the request body.
- *   - uploads via `sdk.upload_stream` so the bytes never touch disk
- *     (Multer `memoryStorage`).
- *   - maps Cloudinary's response into our `UploadResult`.
- *   - treats `destroy(...).result === 'not found'` as a successful
- *     delete (idempotent lifecycle — see migration plan §10).
- *
- * The SDK is injected through the narrow `CloudinarySDK` interface, so
- * this adapter is unit-testable without ever importing `cloudinary`.
- */
-
 import { Inject, Injectable, InternalServerErrorException } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { v7 as uuidv7 } from 'uuid';
@@ -92,7 +74,6 @@ export class CloudinaryStorageAdapter implements StoragePort {
     try {
       const result = await this.sdk.destroy(publicId);
       if (result.result === 'not found') {
-        // Already gone — idempotent success.
         return;
       }
       if (result.result !== 'ok') {
@@ -108,9 +89,6 @@ export class CloudinaryStorageAdapter implements StoragePort {
         publicId,
         error: err instanceof Error ? err.message : String(err),
       });
-      // Swallow per migration plan §10: lifecycle deletes are
-      // best-effort. The orphan row in `storage_assets` (Phase 4) does
-      // not affect correctness, only storage accounting.
     }
   }
 
@@ -121,12 +99,6 @@ export class CloudinaryStorageAdapter implements StoragePort {
     });
   }
 
-  /**
-   * Phase 2 #3 — health probe. Delegates to the wrapped SDK.
-   * The forwarder is a single async hop so the health endpoint
-   * can catch any underlying transport error and surface it as
-   * `degraded_storage`.
-   */
   async ping(): Promise<void> {
     try {
       await this.sdk.ping();
@@ -139,21 +111,6 @@ export class CloudinaryStorageAdapter implements StoragePort {
     }
   }
 
-  /**
-   * Phase 7 #1 — generate a Cloudinary signed-upload envelope.
-   *
-   * The server composes the same `${folder}/${ownerId}/${uuidv7()}`
-   * public_id shape used by the server-upload path. The client POSTs a
-   * `multipart/form-data` request directly to Cloudinary's
-   * `https://api.cloudinary.com/v1_1/<cloud_name>/<resource_type>/upload`
-   * endpoint with `file`, `api_key`, `timestamp`, `signature`, and
-   * `public_id` form fields.
-   *
-   * Cloudinary enforces the signature window from `timestamp`
-   * (server-side default is one hour); we clamp `expiresInSeconds` to
-   * a sensible upper bound to avoid handing out very long-lived
-   * signatures.
-   */
   async createSignedUpload(input: {
     readonly ownerId: string;
     readonly purpose: UploadPurpose;

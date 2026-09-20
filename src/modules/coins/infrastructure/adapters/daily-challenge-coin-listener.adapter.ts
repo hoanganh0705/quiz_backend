@@ -1,21 +1,3 @@
-/**
- * DailyChallenge → Coin Listener Adapter
- *
- * Subscribes to `DailyChallengeCompletedEvent` (the new in-process
- * bus on the daily-challenge module, introduced in this phase) and
- * grants `DAILY_CHALLENGE_REWARD` (15 coins) per completion.
- *
- * Idempotency key per §9.5: `coin:{userId}:daily:{challengeId}`.
- * The challenge row has a unique `challenge_id` per (UTC date,
- * challenge) so the same physical completion cannot trigger two
- * grants, even on a retry of the same `DailyChallengeCompletedEvent`.
- *
- * Daily cap: bypassed by product design — daily challenges are
- * once-per-day by construction so a cap would never trigger anyway,
- * but the flag is explicit for symmetry with the other once-per-
- * milestone adapters.
- */
-
 import { Inject, Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import {

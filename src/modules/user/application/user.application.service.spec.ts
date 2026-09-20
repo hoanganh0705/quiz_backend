@@ -1,19 +1,3 @@
-/* eslint-disable @typescript-eslint/require-await */
-/**
- * Unit tests for the Phase 6 ownership-rule + lifecycle wiring in
- * `UserApplicationService.updateProfile`.
- *
- * Coverage:
- *   - `ASSET_NOT_OWNED` rejection when the avatar publicId is owned by
- *     a different user (or missing from `storage_assets`).
- *   - Same-supply happy path: when the publicId is owned by the
- *     caller, the update proceeds and lifecycle cleanup runs.
- *   - Lifecycle is called with the *new* publicId (override) and the
- *     reader callback resolves to the previously stored publicId.
- *   - Lifecycle error is logged but does not break the response.
- *   - Same publicId replaced with itself is a no-op for the lifecycle.
- */
-
 import { BadRequestException, ForbiddenException } from '@nestjs/common';
 
 import { UserApplicationService } from './user.application.service';

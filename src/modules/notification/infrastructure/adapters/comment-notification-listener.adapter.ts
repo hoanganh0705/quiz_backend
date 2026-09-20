@@ -1,31 +1,3 @@
-/**
- * Comment Notification Listener
- *
- * Subscribes to Comment domain events and dispatches notifications.
- * Hosted in NotificationModule — CommentModule no longer imports
- * NotificationModule. All event payloads are self-contained: this
- * listener does not import the comment repository, the comment
- * service, or any other comment-side adapter, so the dependency
- * graph between the two modules stays a one-way arrow
- * (Notification → Comment for the bus token only).
- *
- * Handled events:
- *   - `comment_created`  → notify the parent comment's author when
- *     the new comment is a reply. Top-level comments do not generate
- *     a notification because there is no "thread author" to ping
- *     (threads were removed in the comment-only refactor).
- *   - `comment_mentioned` → notify the mentioned user.
- *   - `comment_reported` → fan out a moderator alert to every user
- *     with the `admin` or `moderator` role, using the existing
- *     `system_announcement` channel.
- *
- * Every other comment event (`vote_cast`, `vote_removed`,
- * `comment_edited`, `comment_deleted`, `comment_hidden`,
- * `comment_restored`, `report_reviewed`) is intentionally ignored.
- * Those either have no user-facing notification today or the
- * notification is fired by the application service directly.
- */
-
 import { Inject, Injectable, OnModuleDestroy, OnModuleInit, forwardRef } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import {
@@ -166,31 +138,30 @@ export class CommentNotificationListener implements OnModuleInit, OnModuleDestro
 
       const body = `Comment reported: ${event.reason}`;
       const excerpt = event.commentExcerpt;
+      const moderatorIds = moderators.map((m) => m.userId);
 
-      await Promise.allSettled(
-        moderators.map((m) =>
-          this.channelService.send({
-            userId: m.userId,
-            type: 'system_announcement',
-            title: 'New comment report',
-            body,
-            metadata: {
-              reportId: event.reportId,
-              commentId: event.commentId,
-              quizId: event.quizId,
-              reporterId: event.reporterId,
-              reason: event.reason,
-              excerpt,
-            },
-          }),
-        ),
+      await this.channelService.sendBatch(
+        {
+          type: 'system_announcement',
+          title: 'New comment report',
+          body,
+          metadata: {
+            reportId: event.reportId,
+            commentId: event.commentId,
+            quizId: event.quizId,
+            reporterId: event.reporterId,
+            reason: event.reason,
+            excerpt,
+          },
+        },
+        moderatorIds,
       );
 
       this.logger.info({
         event: 'comment_reported_moderator_notifications_sent',
         reportId: event.reportId,
         commentId: event.commentId,
-        moderatorCount: moderators.length,
+        moderatorCount: moderatorIds.length,
       });
     } catch (error) {
       this.logger.error({

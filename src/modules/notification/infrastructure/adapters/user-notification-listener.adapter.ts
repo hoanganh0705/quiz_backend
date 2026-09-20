@@ -1,11 +1,3 @@
-/**
- * User Notification Listener
- *
- * Subscribes to User domain events and dispatches notifications via UserNotificationService.
- *
- * Registered in NotificationModule.onModuleInit and unsubscribed on destroy.
- */
-
 import { Inject, Injectable, OnModuleDestroy, OnModuleInit, forwardRef } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import {

@@ -39,8 +39,8 @@ export class ListCategoriesQueryDto {
   @ApiPropertyOptional({
     description: 'Sort categories by name or creation date',
     enum: CATEGORY_SORT_OPTIONS,
-    default: 'name',
-    example: 'name',
+    default: 'createdAt',
+    example: 'createdAt',
     nullable: true,
   })
   @IsOptional()
@@ -50,8 +50,8 @@ export class ListCategoriesQueryDto {
   @ApiPropertyOptional({
     description: 'Sort direction (ascending or descending)',
     enum: SORT_ORDER,
-    default: 'asc',
-    example: 'asc',
+    default: 'desc',
+    example: 'desc',
     nullable: true,
   })
   @IsOptional()

@@ -1,20 +1,3 @@
-/**
- * Rank Calculation Service
- *
- * Handles rank computation using DENSE_RANK() and RANK() for proper tie handling.
- * Part of Phase 2 - Core Features.
- *
- * Tie Handling Strategy:
- * - RANK() is used for display purposes (ordinal positions with gaps for ties)
- * - DENSE_RANK() is used for percentile calculations and internal logic
- *
- * Example with ties:
- *   Scores: [100, 90, 90, 80]
- *
- *   RANK():       [1, 2, 2, 4]  <- Gaps after ties (next is 4, not 3)
- *   DENSE_RANK(): [1, 2, 2, 3]  <- No gaps (next is 3)
- */
-
 import { Inject, Injectable } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { DRIZZLE } from '@/core/database/drizzle.constants';
@@ -323,6 +306,7 @@ export class RankCalculationService {
           period,
           previousPeakRank: peakResult.previousPeakRank,
           newPeakRank: result.rank,
+          isInitialAchievement: peakResult.previousPeakRank === null,
           timestamp: new Date(),
         });
       }
@@ -342,44 +326,61 @@ export class RankCalculationService {
     period: RankingPeriod,
   ): Promise<void> {
     for (const row of ranked) {
-      const previousRank = await this.rankingRepository.updateRank({
-        userId: row.userId,
-        period,
-        rank: row.rank,
-      });
-
-      if (previousRank !== null && previousRank !== row.rank) {
-        this.eventBus.emitRankChanged({
-          eventType: 'rank.changed',
+      try {
+        await this.processRankUpdate(row, period);
+      } catch (error) {
+        this.logger.error({
+          event: 'ranking_batch_user_update_failed',
           userId: row.userId,
           period,
-          previousRank,
-          newRank: row.rank,
-          previousXp: 0,
-          newXp: row.xp,
-          timestamp: new Date(),
+          error: error instanceof Error ? error.message : 'Unknown error',
         });
       }
-
-      const peakResult = await this.rankingRepository.updatePeakRank({
-        userId: row.userId,
-        period,
-        rank: row.rank,
-      });
-
-      if (peakResult.updated) {
-        this.eventBus.emitPeakRankAchieved({
-          eventType: 'peak.rank.achieved',
-          userId: row.userId,
-          period,
-          previousPeakRank: peakResult.previousPeakRank,
-          newPeakRank: row.rank,
-          timestamp: new Date(),
-        });
-      }
-
-      await this.checkAndPersistMilestones(row.userId, period, row.rank, row.denseRank);
     }
+  }
+
+  private async processRankUpdate(
+    row: { userId: string; xp: number; rank: number; denseRank: number },
+    period: RankingPeriod,
+  ): Promise<void> {
+    const previousRank = await this.rankingRepository.updateRank({
+      userId: row.userId,
+      period,
+      rank: row.rank,
+    });
+
+    if (previousRank !== null && previousRank !== row.rank) {
+      this.eventBus.emitRankChanged({
+        eventType: 'rank.changed',
+        userId: row.userId,
+        period,
+        previousRank,
+        newRank: row.rank,
+        previousXp: 0,
+        newXp: row.xp,
+        timestamp: new Date(),
+      });
+    }
+
+    const peakResult = await this.rankingRepository.updatePeakRank({
+      userId: row.userId,
+      period,
+      rank: row.rank,
+    });
+
+    if (peakResult.updated) {
+      this.eventBus.emitPeakRankAchieved({
+        eventType: 'peak.rank.achieved',
+        userId: row.userId,
+        period,
+        previousPeakRank: peakResult.previousPeakRank,
+        newPeakRank: row.rank,
+        isInitialAchievement: peakResult.previousPeakRank === null,
+        timestamp: new Date(),
+      });
+    }
+
+    await this.checkAndPersistMilestones(row.userId, period, row.rank, row.denseRank);
   }
 
   private async checkAndPersistMilestones(

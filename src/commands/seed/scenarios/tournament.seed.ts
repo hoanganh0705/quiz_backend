@@ -19,7 +19,7 @@ const TOURNAMENT_SEEDS: TournamentSeed[] = [
     status: 'registration',
     prize: '500 XP + Champion Badge',
     startAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), // 1 week from now
-    endAt: new Date(Date.now() + 8 * 24 * 60 * 60 * 1000).toISOString(),   // 1 week + 1 day
+    endAt: new Date(Date.now() + 8 * 24 * 60 * 60 * 1000).toISOString(), // 1 week + 1 day
     maxParticipants: 50,
     categorySlug: 'technology',
     quizSlugs: ['algorithms-advanced'],
@@ -33,7 +33,7 @@ const TOURNAMENT_SEEDS: TournamentSeed[] = [
     status: 'ongoing',
     prize: '1000 XP + Expert Badge',
     startAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(), // 5 days ago
-    endAt: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString(),   // 2 days from now
+    endAt: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString(), // 2 days from now
     maxParticipants: 100,
     categorySlug: 'technology',
     quizSlugs: ['javascript-fundamentals'],
@@ -47,7 +47,7 @@ const TOURNAMENT_SEEDS: TournamentSeed[] = [
     status: 'finished',
     prize: '2000 XP + Champion Badge',
     startAt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(), // 30 days ago
-    endAt: new Date(Date.now() - 23 * 24 * 60 * 60 * 1000).toISOString(),   // 23 days ago
+    endAt: new Date(Date.now() - 23 * 24 * 60 * 60 * 1000).toISOString(), // 23 days ago
     maxParticipants: 200,
     categorySlug: 'technology',
     quizSlugs: ['system-design-v2'],
@@ -112,11 +112,6 @@ export const runTournamentSeed = async (): Promise<SeedSummary[]> => {
             },
           });
         } else {
-          // Phase 1 / Issue #2 — every tournament must have an
-          // owner. Seed tournaments are attributed to the platform
-          // admin so the owner-based authorization policy has a
-          // real human UUID to compare against when editing seed
-          // data through the new admin endpoints.
           const ownerUserId = await lookup.userIdByUsername('admin_master');
 
           const [created] = await tx
@@ -199,9 +194,12 @@ export const runTournamentSeed = async (): Promise<SeedSummary[]> => {
                 name: `Round ${roundNumber}: ${quizSlug}`,
                 description: `Quiz: ${quizSlug}`,
                 quizVersionId,
-                status: tournament.status === 'finished' ? 'finished'
-                  : tournament.status === 'ongoing' ? 'open'
-                  : 'pending',
+                status:
+                  tournament.status === 'finished'
+                    ? 'finished'
+                    : tournament.status === 'ongoing'
+                      ? 'open'
+                      : 'pending',
                 isElimination: false,
                 participantLimit: null,
                 createdAt: ctx.nowIso,
@@ -224,9 +222,12 @@ export const runTournamentSeed = async (): Promise<SeedSummary[]> => {
               round: String(roundNumber),
               name: `Round ${roundNumber}: ${quizSlug}`,
               quizSlug,
-              status: tournament.status === 'finished' ? 'finished'
-                : tournament.status === 'ongoing' ? 'open'
-                : 'pending',
+              status:
+                tournament.status === 'finished'
+                  ? 'finished'
+                  : tournament.status === 'ongoing'
+                    ? 'open'
+                    : 'pending',
             },
             details: {
               roundId,
@@ -235,9 +236,12 @@ export const runTournamentSeed = async (): Promise<SeedSummary[]> => {
               name: `Round ${roundNumber}: ${quizSlug}`,
               description: `Quiz: ${quizSlug}`,
               quizVersionId,
-              status: tournament.status === 'finished' ? 'finished'
-                : tournament.status === 'ongoing' ? 'open'
-                : 'pending',
+              status:
+                tournament.status === 'finished'
+                  ? 'finished'
+                  : tournament.status === 'ongoing'
+                    ? 'open'
+                    : 'pending',
               isElimination: false,
               participantLimit: null,
               createdAt: ctx.nowIso,
@@ -298,7 +302,9 @@ export const runTournamentSeed = async (): Promise<SeedSummary[]> => {
               participantId = createdParticipant.participantId;
             }
 
-            logger.info(`Leaderboard: ${entry.username} score=${entry.score} rank=${leaderboardData.indexOf(entry) + 1}`);
+            logger.info(
+              `Leaderboard: ${entry.username} score=${entry.score} rank=${leaderboardData.indexOf(entry) + 1}`,
+            );
 
             recorder.record({
               kind: 'Tournament Participants',
@@ -328,7 +334,12 @@ export const runTournamentSeed = async (): Promise<SeedSummary[]> => {
         }
       });
 
-      summaries.push({ domain: `tournament:${tournament.title}`, inserted: 1, updated: 0, skipped: 0 });
+      summaries.push({
+        domain: `tournament:${tournament.title}`,
+        inserted: 1,
+        updated: 0,
+        skipped: 0,
+      });
     }
   });
 

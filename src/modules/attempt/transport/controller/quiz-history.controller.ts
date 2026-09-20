@@ -14,21 +14,6 @@ import { QuizHistoryResponseDto, UserAttemptStatsResponseDto } from '../../dto/r
 import { ListMyQuizHistoryQueryDto, QuizHistoryExportQueryDto } from '../../dto/request';
 import { AttemptSummaryResponseDto } from '../../dto/response/attempt-summary-response.dto';
 
-/**
- * Quiz History controller.
- *
- * Phase 5 (S-29, S-30): friendly aliases over `/users/me/attempts*` that
- * match the URL shape and contract the editor expects:
- *
- * - `GET /users/me/quiz-history`         → friendly `QuizHistoryResponseDto`
- * - `GET /users/me/quiz-history/stats`    → `UserAttemptStatsResponseDto`
- * - `GET /users/me/quiz-history/export`   → streams CSV or JSON file
- *
- * The friendly entries expose a presentation `status` enum
- * (`passed | failed | abandoned | in_progress`) so the editor can
- * render the timeline without re-deriving it from raw attempt status
- * + score.
- */
 @ApiTags('users')
 @Controller('users/me/quiz-history')
 export class QuizHistoryController {
@@ -157,7 +142,7 @@ function toQuizHistoryEntry(item: AttemptSummaryResponseDto) {
     status,
     score,
     correctAnswers: item.correctCount,
-    totalQuestions: 0, // Resolved below if available
+    totalQuestions: null,
     timeTaken: null,
     xpEarned: item.xpEarned,
     completedAt: item.finishedAt ?? item.startedAt,
@@ -182,11 +167,24 @@ function toCsv(entries: ReturnType<typeof toQuizHistoryEntry>[]): string {
   ];
   const escape = (value: unknown): string => {
     if (value === null || value === undefined) return '';
-    const s = String(value);
-    if (s.includes(',') || s.includes('"') || s.includes('\n')) {
-      return `"${s.replace(/"/g, '""')}"`;
+    // JSON-serialise objects/arrays so we don't fall back to
+    // `[object Object]`. Primitives (string/number/boolean/bigint)
+    // are coerced directly with `String(...)` to keep CSV cells
+    // human-readable. The `String(value)` call below is intentional
+    // and safe — `value` cannot be an object here because we've
+    // already exhausted `typeof value === 'object' || === 'function'`
+    // in the boolean above, but the `no-base-to-string` lint rule
+    // does not narrow `unknown` across that branch, hence the disable.
+
+    const raw =
+      typeof value === 'object' || typeof value === 'function'
+        ? (JSON.stringify(value) ?? '')
+        : // eslint-disable-next-line @typescript-eslint/no-base-to-string
+          String(value);
+    if (raw.includes(',') || raw.includes('"') || raw.includes('\n')) {
+      return `"${raw.replace(/"/g, '""')}"`;
     }
-    return s;
+    return raw;
   };
   const rows = entries.map((e) =>
     header.map((h) => escape((e as unknown as Record<string, unknown>)[h])).join(','),

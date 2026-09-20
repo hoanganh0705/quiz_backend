@@ -1,24 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { InstancePlayerResponseDto } from './instance-player-response.dto';
 
-/**
- * Phase 6 (api-contract audit) — the players endpoint now uses the
- * canonical cursor-paginated envelope. The response DTO is the wrapper
- * shape `{ items, pagination }` that the presenter converts to the
- * envelope `{ data: ItemDto[], meta: { timestamp, pagination } }` via
- * `ApiResponse.page(...)`. The legacy `{ instanceId, items, total }`
- * shape was removed because:
- *
- *   - `total` is an offset-pagination field; the project standard
- *     (`docs/standards/api.md`) reserves offset pagination for endpoints
- *     without a stable natural sort key, and the players list is sorted
- *     by `(joinedAt ASC, instancePlayerId ASC)` — a stable sort key.
- *   - `instanceId` was redundant: clients already know the parent
- *     instance id (it is the path parameter).
- *
- * The `pagination` block is the same `kind: 'cursor'` discriminated
- * shape used by `/instances` and `/instances/{id}/leaderboard`.
- */
 export class InstancePlayersPaginationDto {
   @ApiProperty({ description: 'Items per page', example: 20 })
   limit!: number;

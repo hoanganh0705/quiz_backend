@@ -20,11 +20,6 @@ import { cloudinaryConfig } from '@/core/config';
 
 export const CLOUDINARY_SDK = Symbol('CLOUDINARY_SDK');
 
-/**
- * The shape of one `upload_stream` callback. Cloudinary's typings
- * declare it as `(err: any, result: UploadApiResponse) => void`. We
- * narrow the error type for our wrapper.
- */
 export type UploadStreamCallback = (
   err: Error | null | undefined,
   result: UploadStreamResult | undefined,
@@ -40,59 +35,24 @@ export interface UploadStreamResult {
 }
 
 export interface DestroyResult {
-  /** Cloudinary's documented values are 'ok' or 'not found'; other strings are possible but opaque. */
   result: string;
 }
 
-/**
- * Phase 7 #1 — signed upload payload. Cloudinary's `utils.api_sign_request`
- * computes an HMAC-SHA1 signature over the request params; the caller
- * POSTs the file to a fixed `https://api.cloudinary.com/v1_1/<cloud>/auto/upload`
- * endpoint with `file`, `api_key`, `timestamp`, `signature`, and `public_id`
- * form fields.
- */
 export interface SignedUploadPayload {
-  /** Signature value (hex-encoded SHA-1). */
   readonly signature: string;
-  /** Unix timestamp (seconds) when the signature was generated. */
   readonly timestamp: number;
-  /** Server-side `api_key` the client must include. */
   readonly apiKey: string;
-  /** Cloudinary cloud name (already part of the upload URL). */
   readonly cloudName: string;
 }
 
-/**
- * The narrow Cloudinary surface the adapter is allowed to use. Other
- * SDK methods are intentionally not exported.
- */
 export interface CloudinarySDK {
   upload_stream(opts: Record<string, unknown>, cb: UploadStreamCallback): Transform;
   destroy(publicId: string): Promise<DestroyResult>;
   url(publicId: string, opts: Record<string, unknown>): string;
-  /**
-   * Phase 2 #3 — health probe. Calls Cloudinary's admin API
-   * `ping` endpoint. Resolves on success, rejects on any error.
-   */
   ping(): Promise<void>;
-  /**
-   * Phase 7 #1 — sign an upload request. Returns the `api_key`,
-   * `timestamp`, and `signature` Cloudinary expects in the upload
-   * form data. The caller constructs the full `public_id` (so the
-   * server-side folder/owner shape is preserved) and passes the
-   * params to `signRequest` together with whatever other form
-   * fields should be locked by the signature.
-   */
   signRequest(params: Record<string, string | number>): Promise<SignedUploadPayload>;
 }
 
-/**
- * Factory that creates the SDK wrapper. Called once per process.
- *
- * The actual `useFactory` lives in `cloudinary.module.ts` so this file
- * stays free of Nest module plumbing and is straightforward to unit-test
- * (the factory is a pure function over its inputs).
- */
 export function buildCloudinarySDK(config: ConfigType<typeof cloudinaryConfig>): CloudinarySDK {
   const logger = new Logger('CloudinarySDK');
 
@@ -122,24 +82,20 @@ export function buildCloudinarySDK(config: ConfigType<typeof cloudinaryConfig>):
     destroy: (publicId) => sdk.uploader.destroy(publicId),
     url: (publicId, opts) => cloudinaryV2.url(publicId, opts),
     ping: async () => {
-      // Cloudinary's `api.ping()` returns `{ status: 'ok' }` on success.
-      // Any other response (or thrown error) is treated as a probe failure.
       const result = await sdk.api.ping();
       if (!result || result.status !== 'ok') {
         throw new Error(`Cloudinary ping returned unexpected status: ${String(result?.status)}`);
       }
     },
-    signRequest: async (params) => {
-      // The signature is HMAC-SHA1 of `key1=value1&key2=value2&...` joined
-      // alphabetically, with the apiSecret as the HMAC key.
+    signRequest: (params) => {
       const signature = sdk.utils.api_sign_request(params, config.apiSecret);
       const timestamp = params.timestamp as number;
-      return {
+      return Promise.resolve({
         signature,
         timestamp,
         apiKey: config.apiKey,
         cloudName: config.cloudName,
-      };
+      });
     },
   };
 }

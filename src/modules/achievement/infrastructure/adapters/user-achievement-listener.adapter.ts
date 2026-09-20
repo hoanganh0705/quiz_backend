@@ -1,13 +1,3 @@
-/**
- * User Achievement Listener Adapter
- *
- * Subscribes to User domain events and triggers achievement evaluation via
- * the rule engine. Closes the gap where `user.streak_updated` was emitted by
- * `StreakService` but had no consumer in the Achievement module.
- *
- * Hosted in AchievementModule to avoid cross-module import cycles.
- */
-
 import { Inject, Injectable, OnModuleDestroy, OnModuleInit, forwardRef } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { getCorrelationId, createCorrelationId } from '@/common/interceptors/correlation-id';

@@ -1,20 +1,3 @@
-/**
- * Period Reset Service
- *
- * Handles weekly and monthly period resets for rankings.
- * Part of Phase 2 - Core Features.
- *
- * Reset Schedule:
- * - Weekly: Every Monday at 00:00:00 UTC
- * - Monthly: 1st of each month at 00:00:00 UTC
- *
- * Reset Process:
- * 1. Archive current period rankings to rank_history
- * 2. Reset XP counters for the period
- * 3. Clear rank values for the period
- * 4. Emit reset events
- */
-
 import { Inject, Injectable } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import {

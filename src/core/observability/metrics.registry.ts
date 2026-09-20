@@ -1,30 +1,4 @@
-/**
- * Phase 5 #2 — Prometheus metrics registry and counters.
- *
- * A small, dependency-free Prometheus-compatible metrics module
- * (no `prom-client` required for the in-process counters; the
- * exporter serialises them in the Prometheus text exposition
- * format). Each metric follows the standard naming convention:
- *
- *   - `quiz_http_request_duration_seconds_bucket{route,method,status}`
- *   - `quiz_db_query_duration_seconds_bucket{operation}`
- *   - `quiz_redis_circuit_state{state}`
- *   - `quiz_outbox_lag_seconds`
- *   - `quiz_bullmq_queue_depth{queue}`
- *
- * Why a custom registry and not `prom-client`?
- * --------------------------------------------
- * `prom-client` is great for production but adds 200kB of
- * dependencies, and the audit flags this as P2 (medium).
- * The custom registry exposes the same text format so a
- * follow-up PR can swap it for `prom-client` (or attach the
- * OTLP exporter from Phase 5 #1) without changing call sites.
- *
- * The in-process counters are process-global; concurrent
- * increments are safe (Node.js is single-threaded).
- */
-
-import { Inject, Injectable, OnModuleInit } from '@nestjs/common';
+import { Injectable, OnModuleInit } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 
 export type MetricType = 'counter' | 'gauge' | 'histogram';
@@ -34,16 +8,7 @@ export type Metric = {
   readonly type: MetricType;
   readonly help: string;
   readonly labelKeys: ReadonlyArray<string>;
-  /**
-   * For counters and gauges: a single value per label set.
-   * For histograms: bucket counts keyed by `le`, plus `count`
-   * and `sum`.
-   */
   values: Map<string, number>;
-  /**
-   * For histograms only: bucket upper bounds (ascending, last
-   * entry is `+Inf`).
-   */
   buckets?: ReadonlyArray<number>;
   sum?: number;
 };
@@ -133,19 +98,11 @@ export class MetricsRegistry implements OnModuleInit {
   }
 
   onModuleInit(): void {
-    // Seed counters so the metrics endpoint is non-empty on the
-    // first scrape (Prometheus best practice). Keys are stored
-    // as `labelKey=value` so `formatMetricLine` quotes them
-    // correctly.
     this.redisCircuitState.values.set('state=closed', 1);
     this.redisCircuitState.values.set('state=open', 0);
     this.redisCircuitState.values.set('state=half_open', 0);
   }
 
-  /**
-   * Observe an HTTP request duration. Updates the histogram's
-   * buckets, count, and sum.
-   */
   observeHttpDuration(labels: HttpHistogramLabels, durationSeconds: number): void {
     const labelKey = labelsKey(labels);
     incrementHistogram(this.httpDuration, labelKey, durationSeconds);
@@ -157,7 +114,6 @@ export class MetricsRegistry implements OnModuleInit {
   }
 
   setRedisCircuitState(state: 'closed' | 'open' | 'half_open'): void {
-    // Reset all three values, then set the active one to 1.
     this.redisCircuitState.values.set('state=closed', 0);
     this.redisCircuitState.values.set('state=open', 0);
     this.redisCircuitState.values.set('state=half_open', 0);
@@ -183,12 +139,6 @@ export class MetricsRegistry implements OnModuleInit {
     this.tracingSpans.values.set('series=active', count);
   }
 
-  /**
-   * Render the registry in the Prometheus text exposition format.
-   * Histograms expand into N+3 series (`_bucket`, `_count`,
-   * `_sum`); counters and gauges are a single series per label
-   * set.
-   */
   render(): string {
     const lines: string[] = [];
     for (const metric of this.allMetrics) {
@@ -214,8 +164,6 @@ const labelsKey = (labels: Record<string, string>): string =>
 
 const formatMetricLine = (name: string, labelKey: string, value: number): string => {
   if (!labelKey) return `${name} ${value}`;
-  // Prometheus label values must be quoted. Each pair in the
-  // `labelKey` is already `k=v`; we emit `k="v"`.
   const labels = labelKey
     .split('|')
     .map((p) => {
@@ -235,7 +183,6 @@ const incrementHistogram = (metric: Metric, labelKey: string, observation: numbe
       metric.values.set(bucketKey, (metric.values.get(bucketKey) ?? 0) + 1);
     }
   }
-  // `+Inf` bucket counts every observation.
   const infKey = `${labelKey}|le=+Inf`;
   metric.values.set(infKey, (metric.values.get(infKey) ?? 0) + 1);
   metric.sum = (metric.sum ?? 0) + observation;
@@ -245,10 +192,6 @@ const incrementHistogram = (metric: Metric, labelKey: string, observation: numbe
 const renderHistogram = (metric: Metric): string[] => {
   const lines: string[] = [];
 
-  // Group by label set (sans `le`). Each group corresponds to
-  // one labelled histogram; its `_count` is the total number of
-  // observations across all `le` buckets, which equals the
-  // `+Inf` bucket count.
   const grouped = new Map<string, Array<{ le: string; count: number }>>();
   for (const [key, value] of metric.values) {
     const [labelPart, lePart] = key.split('|le=');
@@ -260,7 +203,6 @@ const renderHistogram = (metric: Metric): string[] => {
 
   for (const [baseKey, buckets] of grouped) {
     const labels = parseLabels(baseKey);
-    // Each bucket row first.
     for (const bucket of buckets) {
       const leLabel = bucket.le === '+Inf' ? '+Inf' : bucket.le;
       const allLabels = { ...labels, le: leLabel };
@@ -270,7 +212,6 @@ const renderHistogram = (metric: Metric): string[] => {
         .join(',');
       lines.push(`${metric.name}_bucket{${renderedLabels}} ${bucket.count}`);
     }
-    // The total observation count is the `+Inf` bucket.
     const infBucket = buckets.find((b) => b.le === '+Inf');
     const totalCount = infBucket ? infBucket.count : buckets[buckets.length - 1].count;
 

@@ -74,14 +74,6 @@ export class SearchResponseDto {
   @ApiProperty({ description: 'The query string echoed back as performed', example: 'nestjs' })
   query!: string;
 
-  /**
-   * Phase 1 (S-4): per-section `limit` echo. Mirrors the input
-   * `limit` query param (default `10`, max `20`) so the client can
-   * confirm how many rows it received in each section without
-   * looking at the request side. Currently the limit is shared
-   * across all five sections (`users`, `quizzes`, `comments`,
-   * `categories`, `tags`).
-   */
   @ApiProperty({
     description:
       'Per-section result cap applied to this response. ' +
@@ -92,14 +84,6 @@ export class SearchResponseDto {
   })
   limit!: number;
 
-  /**
-   * Phase 1 (S-4): pagination cursor for follow-up queries. The
-   * search endpoint is currently cursor-less (one-shot fan-out),
-   * so this is always `null` today. The field is reserved for
-   * future expansion — when the audit moves search to a paginated
-   * surface, clients already read this shape today (see the
-   * frontend `SearchResponseDto.cursor` typed surface).
-   */
   @ApiProperty({
     description:
       'Opaque pagination cursor. `null` means the response is the ' +
@@ -110,13 +94,6 @@ export class SearchResponseDto {
   })
   nextCursor!: string | null;
 
-  /**
-   * Phase 1 (S-4): indicates whether the backend had more results
-   * than `limit` could surface. Mirrors the `hasNextPage` boolean
-   * on every other cursor-paginated endpoint so the field can be
-   * used uniformly. Always `false` until the search endpoint
-   * gains cursor support.
-   */
   @ApiProperty({
     description: '`true` when there are more results beyond this page.',
     example: false,
@@ -135,13 +112,6 @@ export class SearchResponseDto {
   })
   quizzes!: SearchQuizResultDto[];
 
-  /**
-   * Phase 1 (S-4): rename `commentss` → `comments`. The previous
-   * spelling was a copy-paste typo in `SearchResponseDto`. The
-   * downstream search-application service and types have already
-   * been updated to match; the rename here is the breaking change
-   * that lands the corrected spelling on the wire.
-   */
   @ApiProperty({
     description: 'Matching comments, ordered by relevance',
     type: () => [SearchCommentResultDto],

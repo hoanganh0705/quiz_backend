@@ -31,6 +31,12 @@ export class SearchableUserDto {
   })
   hasPendingRequest!: boolean;
 
-  @ApiProperty({ description: 'Whether this user is blocked', example: false })
+  @ApiProperty({ description: 'Whether the searcher has blocked this user', example: false })
   isBlocked!: boolean;
+
+  @ApiProperty({
+    description: 'Whether this user has blocked the searcher',
+    example: false,
+  })
+  isBlockedBy!: boolean;
 }

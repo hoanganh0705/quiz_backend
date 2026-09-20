@@ -1,10 +1,3 @@
-/**
- * Notification Domain Event Bus
- *
- * Publishes and subscribes to notification domain events.
- * Other domains can subscribe for WebSocket push, audit logging, etc.
- */
-
 import { Injectable } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import type { NotificationDomainEvent } from './notification.events';
@@ -25,10 +18,6 @@ export class NotificationDomainEventBus {
     @InjectPinoLogger(NotificationDomainEventBus.name)
     private readonly logger: PinoLogger,
   ) {}
-
-  /**
-   * Subscribe to a specific notification event type.
-   */
   subscribe<T extends NotificationDomainEvent>(
     eventType: T['eventType'],
     handler: NotificationEventHandler<T>,
@@ -55,10 +44,6 @@ export class NotificationDomainEventBus {
       },
     };
   }
-
-  /**
-   * Subscribe to all notification events.
-   */
   subscribeAll(handler: NotificationEventHandler): NotificationEventSubscription {
     this.globalHandlers.add(handler);
 
@@ -75,17 +60,9 @@ export class NotificationDomainEventBus {
       },
     };
   }
-
-  /**
-   * Publish a generic notification event.
-   */
   emit(event: NotificationDomainEvent): void {
     this.publish(event);
   }
-
-  /**
-   * Internal publish method.
-   */
   private publish(event: NotificationDomainEvent): void {
     this.logger.info({
       event: 'notification_event_published',
@@ -94,7 +71,6 @@ export class NotificationDomainEventBus {
       userId: event.userId,
     });
 
-    // Notify global handlers
     for (const handler of this.globalHandlers) {
       try {
         const result = handler(event);
@@ -118,7 +94,6 @@ export class NotificationDomainEventBus {
       }
     }
 
-    // Notify type-specific handlers
     const typeHandlers = this.handlers.get(event.eventType);
     if (typeHandlers) {
       for (const handler of typeHandlers) {
@@ -145,10 +120,6 @@ export class NotificationDomainEventBus {
       }
     }
   }
-
-  /**
-   * Remove all subscriptions.
-   */
   clear(): void {
     this.handlers.clear();
     this.globalHandlers.clear();

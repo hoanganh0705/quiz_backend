@@ -75,9 +75,15 @@ export interface CacheProvider {
   /**
    * Acquire a Redis advisory lock (distributed mutex).
    *
-   * Uses `SET key value NX PX ttlMs` under the hood. Returns `true`
-   * when the lock was acquired by this call; returns `false` when
+   * Uses `SET key value NX PX ttlMs` under the hood. Returns the lock
+   * token when the lock was acquired by this call; returns `null` when
    * the key already exists (another replica holds the lock).
+   *
+   * The returned token MUST be passed to {@link releaseAdvisoryLock} so
+   * the lock can only be released by the holder. This prevents a stale
+   * replica that acquired the lock, had it expire (TTL), and then
+   * resumed from inside the critical section from accidentally deleting
+   * another replica's lock.
    *
    * @param key   Lock identifier (e.g. `tournament:cron:registration-open`).
    * @param ttlMs Lock auto-release time. Must be longer than the expected
@@ -85,7 +91,7 @@ export interface CacheProvider {
    *              a crashed replica from holding the lock indefinitely.
    *              Recommended: 2–5× the expected job duration.
    */
-  acquireAdvisoryLock(key: string, ttlMs: number): Promise<boolean>;
+  acquireAdvisoryLock(key: string, ttlMs: number): Promise<string | null>;
 
   /**
    * Release a Redis advisory lock previously acquired by `acquireAdvisoryLock`.

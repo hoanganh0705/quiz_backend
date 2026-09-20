@@ -120,20 +120,6 @@ export class TournamentParticipantStateError extends TournamentDomainError {
   }
 }
 
-/**
- * Thrown when the user tries to withdraw a second time. 409 Conflict.
- *
- * Wire-shape fix (not a regression): the prior per-module filter did
- * NOT include this exception in `mapToHttp`, so it fell through to the
- * default `INTERNAL_SERVER_ERROR` with a generic
- * `'Internal server error'` message — an implicit bug. Phase 2 routes
- * it to 409 (semantic state conflict).
- *
- * Audit: this exception is currently only used by
- * `tournament-withdraw.spec.ts` (the unit test asserts `instanceof
- * TournamentAlreadyWithdrawnError`). It is preserved with a sensible
- * 409 mapping so the spec continues to pass.
- */
 export class TournamentAlreadyWithdrawnError extends TournamentDomainError {
   readonly code = 'TOURNAMENT_ALREADY_WITHDRAWN';
   constructor(message = 'You have already withdrawn from this tournament') {
@@ -209,16 +195,6 @@ export class TournamentWithdrawClosedError extends TournamentDomainError {
   }
 }
 
-/**
- * Phase 1 / Issue #1 — thrown when an admin-only mutation
- * (update / soft-delete / cancel) is attempted against a tournament
- * that lives in a terminal lifecycle state (`finished` or
- * `cancelled`). 409 Conflict.
- *
- * The wire-message is intentionally generic — the controller
- * surfaces the exact `currentStatus` through the `extensions`
- * bag returned by `GlobalExceptionFilter`.
- */
 export class TournamentTerminalStateError extends TournamentDomainError {
   readonly code = 'TOURNAMENT_TERMINAL_STATE';
   constructor(message: string) {
@@ -226,13 +202,6 @@ export class TournamentTerminalStateError extends TournamentDomainError {
   }
 }
 
-/**
- * Phase 1 / Issue #1 — thrown when a `PATCH /tournaments/:id`
- * attempts to *shrink* `maxParticipants` while the tournament is in
- * `registration`. Shrinking the cap would silently evict already-
- * registered users; the only legal change in `registration` is to
- * raise the cap. 409 Conflict.
- */
 export class TournamentCapacityReductionError extends TournamentDomainError {
   readonly code = 'TOURNAMENT_CAPACITY_REDUCTION';
   constructor(message: string) {
@@ -240,12 +209,6 @@ export class TournamentCapacityReductionError extends TournamentDomainError {
   }
 }
 
-/**
- * Phase 1 / Issue #1 — thrown when a `PATCH /tournaments/:id`
- * ships an empty body (no field provided). The route must always
- * touch at least one column or the operation is meaningless.
- * 400 Bad Request.
- */
 export class TournamentEmptyUpdateError extends TournamentDomainError {
   readonly code = 'TOURNAMENT_EMPTY_UPDATE';
   constructor(message = 'At least one field must be provided to update a tournament') {

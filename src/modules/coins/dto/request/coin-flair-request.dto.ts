@@ -1,10 +1,3 @@
-/**
- * `POST /coins/flair` request body.
- *
- * Phase 6 / S-coin-spend. Caller pins one of their owned badges to
- * their profile for 7 days. The `userBadgeId` must point to a row in
- * `user_badges` that the caller owns (and is not revoked).
- */
 import { ApiProperty } from '@nestjs/swagger';
 import { IsUUID } from 'class-validator';
 

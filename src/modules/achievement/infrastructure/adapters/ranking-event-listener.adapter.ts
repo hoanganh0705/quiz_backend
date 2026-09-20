@@ -1,10 +1,3 @@
-/**
- * Ranking Event Achievement Listener Adapter
- *
- * Listens to Ranking domain events and triggers achievement evaluation.
- * Subscribes to SHARED_RANKING_EVENT_BUS for cross-module events.
- */
-
 import { Inject, Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { getCorrelationId, createCorrelationId } from '@/common/interceptors/correlation-id';
@@ -60,7 +53,7 @@ export class RankingEventAchievementListenerAdapter implements OnModuleInit, OnM
         break;
 
       case 'ranking.milestone':
-        this.handleRankingMilestone(event, correlationId);
+        await this.handleRankingMilestone(event, correlationId);
         break;
     }
   }
@@ -135,7 +128,6 @@ export class RankingEventAchievementListenerAdapter implements OnModuleInit, OnM
     correlationId: string,
   ): Promise<void> {
     try {
-      // Evaluate rank badges through the rank service first (top-10/top-100/top-1000 style).
       await this.rankAchievementService.checkRankAchievements({
         userId: event.userId,
         period: event.period,
@@ -144,9 +136,6 @@ export class RankingEventAchievementListenerAdapter implements OnModuleInit, OnM
         xp: 0,
       });
 
-      // Then evaluate rule-engine badges keyed off `ranking.milestone` so any custom
-      // rules tied to this trigger can fire (e.g. "reached top-100 in your first
-      // active week").
       const results = await this.ruleEngineService.evaluateEvent({
         userId: event.userId,
         eventType: 'ranking.milestone',

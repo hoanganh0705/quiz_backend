@@ -1,32 +1,3 @@
-/**
- * Coin controller — earn-side reads + spend-side writes.
- *
- * Phase 4 wired the two earn-side reads; Phase 6 wires the three
- * spend-side POST endpoints (tip / flair / suppress) plus the
- * realtime cookie on Phase 5 (Phase 5 itself does not add HTTP
- * routes — the gateway is its own surface). The admin adjustment
- * endpoint lives in `coin-admin.controller.ts` so it can carry the
- * `COIN_ADMIN` permission gate at the controller level.
- *
- * ## URL surface
- *
- *   GET    /users/me/wallet
- *   GET    /users/me/coin-transactions
- *   POST   /coins/tip
- *   POST   /coins/flair
- *   POST   /coins/suppress-recommended
- *
- * The `/coins/*` prefix is consistent with design doc §13. The
- * `/me/*` reads piggyback on the user route prefix because that is
- * the established convention for `me/*` reads.
- *
- * ## Throttling
- *
- * The `/coins/tip` route carries a 30-req/min throttler (design §13).
- * The other two spend endpoints are intentionally un-throttled at
- * the controller layer — the spend service's daily-tip cap is the
- * meaningful guard there.
- */
 import { Controller, Get, Post, Query, Body, Headers, HttpCode, HttpStatus } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { ApiTags } from '@nestjs/swagger';
@@ -85,8 +56,6 @@ export class CoinController {
     );
     return this.presenter.getMyCoinTransactions(page);
   }
-
-  // ─── Spend-side writes (Phase 6) ───────────────────────────────────
 
   @Post('coins/tip')
   @Throttle({ default: { limit: 30, ttl: 60_000 } })

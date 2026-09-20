@@ -1,10 +1,3 @@
-/**
- * Achievement Application Service
- *
- * Orchestrates achievement-related use cases and serves as the primary
- * entry point for the achievement feature.
- */
-
 import { Inject, Injectable } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { BadgeRevocationService } from '../domain/services';
@@ -198,12 +191,6 @@ export class AchievementApplicationService {
       revokedBy,
     });
 
-    // Audit: badge revocation by an admin is a sensitive
-    // action — the previous code only logged it, which is not
-    // a durable record. The cross-domain audit log captures
-    // who revoked whose badge so the user can challenge the
-    // action later and so the platform can answer "which
-    // badges did admin X revoke last month?".
     try {
       await this.auditLogService.record({
         eventType: 'badge.revoked',

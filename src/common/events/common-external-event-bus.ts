@@ -85,6 +85,10 @@ export interface ExternalXpEarnedEvent {
   readonly categoryId?: string;
   /** Tournament finish rank — used as part of the idempotency key for tournament XP. */
   readonly rank?: number;
+  /** Achievement identifier — used as part of the idempotency key for achievement XP. */
+  readonly achievementId?: string;
+  /** Bonus identifier — used as part of the idempotency key for bonus XP. */
+  readonly bonusId?: string;
   readonly timestamp: Date;
   readonly correlationId?: string;
   /**
@@ -107,6 +111,8 @@ interface SerializedExternalEvent {
   tournamentId?: string;
   categoryId?: string;
   rank?: number;
+  achievementId?: string;
+  bonusId?: string;
   timestamp: string;
   correlationId?: string;
   idempotencyKey?: string;

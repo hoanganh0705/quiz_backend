@@ -197,3 +197,25 @@ export class FollowNotFoundError extends SocialError {
     super(`You are not following user ${followingId}`);
   }
 }
+
+/**
+ * Thrown when a write succeeded against an existence precondition
+ * but the post-write row count disagrees (e.g. unfollow returned 0
+ * rows after `findActiveFollow` returned a row — a different request
+ * mutated the same row in between). 409 Conflict.
+ *
+ * Distinct from `FollowNotFoundError`/`FriendshipNotFoundError`/
+ * `UserNotBlockedError`: those mean the resource was absent at the
+ * initial SELECT. This one means the resource existed at SELECT but
+ * was mutated between SELECT and UPDATE by another writer. Returning
+ * 409 lets the caller retry instead of receiving a misleading 404.
+ */
+export class SocialConsistencyError extends SocialError {
+  readonly code = 'SOCIAL_CONSISTENCY_CONFLICT';
+  constructor(operation: string, entityId: string) {
+    super(
+      `Concurrent modification detected while ${operation} ${entityId}; ` +
+        'please retry the request.',
+    );
+  }
+}

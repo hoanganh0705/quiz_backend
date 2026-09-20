@@ -10,13 +10,3 @@ export class MessageResponseDto {
   })
   message!: string;
 }
-
-/**
- * @deprecated Use MessageResponseDto instead.
- */
-export class MoveBookmarkResponseDto extends MessageResponseDto {
-  constructor() {
-    super();
-    this.message = 'Bookmark moved successfully';
-  }
-}

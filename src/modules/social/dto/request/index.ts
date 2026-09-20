@@ -1,6 +1,7 @@
 export * from './get-user-followers-query.dto';
 export * from './get-social-suggestions-query.dto';
 export * from './get-social-suggestions-cursor.dto';
+export * from './get-users-search-query.dto';
 export * from './get-feed-cursor-query.dto';
 export * from './get-follow-cursor-query.dto';
 export * from './get-search-suggestions-query.dto';

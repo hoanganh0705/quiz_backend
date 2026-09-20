@@ -1,18 +1,3 @@
-/* eslint-disable @typescript-eslint/require-await */
-/**
- * Unit tests for the Phase 6 ownership-rule + lifecycle wiring in
- * `QuizApplicationService.createQuiz` / `updateQuiz` / `deleteQuiz`.
- *
- * Coverage:
- *   - `ASSET_NOT_OWNED` rejection when the cover publicId is owned by
- *     a different user / missing from `storage_assets`.
- *   - Same-supply happy path: the publicId is owned by the caller,
- *     so the operation proceeds and lifecycle cleanup runs.
- *   - createQuiz does not call lifecycle (nothing to replace).
- *   - updateQuiz runs lifecycle.replaceQuizCover with the new publicId.
- *   - deleteQuiz runs lifecycle.deleteQuizCover regardless of success.
- */
-
 import { ForbiddenException } from '@nestjs/common';
 
 import { QuizApplicationService } from './quiz.application.service';
@@ -27,6 +12,8 @@ import type { QuizRepositoryPort } from '../domain/ports/quiz-repository.port';
 import type { UserDomainService } from '@/modules/user/domain/user.service';
 import type { QuizResponseMapper } from '../mappers/quiz-response.mapper';
 import type { QuizCacheService } from './quiz-cache.service';
+import type { QuizStatsHistoryService } from './quiz-stats-history.service';
+import type { QuizAssetOwnershipGuard } from './quiz-asset-ownership.guard';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
 
 class FakeStorageOwnership {
@@ -52,6 +39,11 @@ class FakeLifecycleService {
   }
   async deleteQuizCover(quizId: string): Promise<void> {
     this.deleteCalls.push(quizId);
+  }
+
+  reset(): void {
+    this.replaceCalls.length = 0;
+    this.deleteCalls.length = 0;
   }
 }
 
@@ -87,13 +79,13 @@ class FakeCommandService {
     publishedVersionArchivedAt: null,
     publishedVersionUpdatedAt: null,
   };
-  tags: {}[] = [];
+  tags: object[] = [];
 
-  async createQuiz(_user: JwtPayload, command: unknown) {
+  async createQuiz(_user: JwtPayload, command: object) {
     this.createdWith.push(command);
     return { row: this.createdRow, tags: this.tags };
   }
-  async updateQuiz(_quizId: string, _user: JwtPayload, command: unknown) {
+  async updateQuiz(_quizId: string, _user: JwtPayload, command: object) {
     this.updatedWith.push(command);
     return { row: this.createdRow, tags: this.tags };
   }
@@ -126,13 +118,9 @@ function makeService() {
       getAggregatesForQuizzes: async () => new Map(),
       getQuestionCountsForVersionIds: async () => new Map(),
     } as unknown as QuizRepositoryPort,
-    {} as never,
     ownership as unknown as StorageApplicationService,
     lifecycle as unknown as StorageImageLifecycleService,
     {
-      // Phase 3: read-through cache stubs. The spec only cares
-      // about the pass-through behaviour, so we delegate straight
-      // to the fetcher.
       getOrSetList: <T>(_key: string, fetcher: () => Promise<T>) => fetcher(),
       getOrSetStats: <T>(_id: string, fetcher: () => Promise<T>) => fetcher(),
       getOrSetProfileBundle: <T>(_id: string, fetcher: () => Promise<T>) => fetcher(),
@@ -143,8 +131,29 @@ function makeService() {
         `quiz:list:v1:${JSON.stringify({ filters, cursor, limit })}`,
     } as unknown as QuizCacheService,
     {
-      toQuizResponse: (row: unknown) => row,
-      toListItem: (row: unknown) => row,
+      countCommentsForQuiz: async () => 0,
+      fetchRecentActivity: async () => [],
+      fetchHistoryPoints: async () => [],
+    } as unknown as QuizStatsHistoryService,
+    {
+      assertCallerOwnsQuizImage: async (publicId: string | null | undefined) => {
+        if (publicId === undefined || publicId === null) return;
+        const owns = await ownership.userOwnsAssetForPurpose({
+          publicId,
+          ownerId: user.sub,
+          purpose: 'quiz',
+        });
+        if (!owns) {
+          throw new ForbiddenException({
+            code: 'ASSET_NOT_OWNED',
+            message: 'not owned',
+          });
+        }
+      },
+    } as unknown as QuizAssetOwnershipGuard,
+    {
+      toQuizResponse: (row: object) => row,
+      toListItem: (row: object) => row,
     } as unknown as QuizResponseMapper,
     {
       warn: () => undefined,
@@ -254,7 +263,7 @@ describe('QuizApplicationService — ownership + lifecycle', () => {
   describe('deleteQuiz', () => {
     it('runs lifecycle.deleteQuizCover before soft-deleting the row', async () => {
       const { service, lifecycle, commandService } = makeService();
-      lifecycle.deleteCalls = [];
+      lifecycle.reset();
       const before = commandService.createdWith.length;
 
       await service.deleteQuiz('q1', { sub: 'u1' } as JwtPayload);

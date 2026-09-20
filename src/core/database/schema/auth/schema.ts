@@ -1,26 +1,3 @@
-// =============================================================================
-// Auth bounded context — schema
-//
-// Owns the user account and credential lifecycle:
-//   - users                         (the central identity table; FK target
-//                                    for nearly every domain in the system)
-//   - userSessions                  (refresh tokens / device sessions)
-//   - passwordResetTokens           (one-time password reset grants)
-//   - sentVerificationTokens        (idempotency ledger for outbound emails)
-//   - passwordHistory               (recent hashes for reuse prevention)
-//   - authAuditLogs                 (security-relevant event history)
-//
-// Notes
-//   - All other domains FK to `users`. They import this table from here.
-//   - `oauthAccounts` is in the auth domain (lives in this file with the
-//     other credential-tables) even though it is placed in the lower half
-//     of the historical `index.ts`. The Phase 2 move brings it together
-//     with the rest of the auth domain.
-//   - `usersRelations` is declared in `./relations.ts` and exposes reverse
-//     relations to many other domains (quizzes, ranking, etc.). The
-//     forward FKs from those domains point at `users` from this file.
-// =============================================================================
-
 import {
   pgTable,
   index,

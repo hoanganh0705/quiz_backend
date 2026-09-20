@@ -1,15 +1,3 @@
-/**
- * Phase 5 #3 — admin audit log search controller.
- *
- * `GET /admin/audit/search`
- *
- * Query parameters: see `AdminAuditSearchQueryDto`. The
- * endpoint is restricted to administrators via the
- * `AUDIT_READ` permission.
- *
- * Wire shape: the standard `ApiResponse.page` envelope so
- * clients can use the existing pagination helpers.
- */
 import { Controller, Get, Query } from '@nestjs/common';
 import { ApiOkResourceList } from '@/common/swagger/api-ok';
 import { ApiTags } from '@nestjs/swagger';

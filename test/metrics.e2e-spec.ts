@@ -1,16 +1,5 @@
 /// <reference types="jest" />
-/**
- * Phase 5 #2 — `/metrics` endpoint E2E test (no DB / Redis).
- *
- * Boots a lightweight module with stub probes and asserts:
- *   - `GET /metrics` returns 200 with `text/plain; version=0.0.4`.
- *   - The body contains the canonical `# HELP` and `# TYPE` lines.
- *   - Gauges are refreshed on every scrape.
- *   - No DB / Redis / BullMQ dependency is required for the test
- *     itself — the controller calls probe methods, and we stub
- *     them with in-memory fakes that return deterministic values.
- */
-import { Controller, Get, INestApplication, Inject, Injectable, Module } from '@nestjs/common';
+import { Controller, Get, INestApplication, Module } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { LoggerModule } from 'nestjs-pino';
 import request from 'supertest';
@@ -64,7 +53,7 @@ class StubHealthController {
 })
 class StubAppModule {}
 
-describe('Phase 5 #2 — /metrics endpoint', () => {
+describe('Metrics endpoint (e2e)', () => {
   let app: INestApplication;
 
   beforeAll(async () => {

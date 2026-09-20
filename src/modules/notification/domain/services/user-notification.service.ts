@@ -1,9 +1,3 @@
-/**
- * User Notification Service
- *
- * Composes and sends notifications related to user profile and settings changes.
- */
-
 import { Injectable } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { NotificationChannelService } from '../../infrastructure/adapters/notification-channel.service';
@@ -20,11 +14,6 @@ export class UserNotificationService {
     @InjectPinoLogger(UserNotificationService.name)
     private readonly logger: PinoLogger,
   ) {}
-
-  /**
-   * Notify the user that their profile was updated (e.g., from another session or admin action).
-   * This is a confirmation/audit notification for the user.
-   */
   async notifyProfileUpdated(params: UserProfileUpdatedParams): Promise<void> {
     const fieldLabels: Record<string, string> = {
       displayName: 'display name',
@@ -52,10 +41,6 @@ export class UserNotificationService {
       changedFields: params.changedFields,
     });
   }
-
-  /**
-   * Notify the user that their settings were updated.
-   */
   async notifySettingsUpdated(params: { userId: string }): Promise<void> {
     const body = 'Your account settings have been updated';
 

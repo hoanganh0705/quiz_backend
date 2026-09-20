@@ -14,41 +14,6 @@ import {
   type RankingDomainEventBusPort,
 } from '../../domain/ports/ranking-event-bus.port';
 
-/**
- * Phase 3 — Ranking Scheduler
- *
- * Moves scheduling logic from `RankingApplicationService` to the
- * infrastructure layer following the project conventions established
- * by `TournamentSchedulerService`.
- *
- * Why the infrastructure layer?
- * ---------------------------
- * 1. Application services orchestrate use cases. Scheduling is an
- *    infrastructure concern — when to run a job, not what the job does.
- * 2. Having scheduler code in the application layer couples the
- *    application logic to the NestJS lifecycle (`OnModuleInit`), making
- *    testing harder and the application service harder to reuse.
- * 3. Moving scheduler logic to infrastructure/scheduler/ makes the
- *    boundaries cleaner and follows the existing pattern in the codebase.
- *
- * Distributed Lock Strategy
- * ------------------------
- * Uses Redis advisory locks via `CacheProvider.acquireAdvisoryLock()` to
- * ensure only one replica processes each scheduled job at a time. This
- * prevents redundant work when multiple instances of the API are deployed.
- *
- * Lock TTLs are conservative (2–3× expected job duration) to ensure
- * locks auto-release if a replica crashes mid-job.
- *
- * Lock Keys
- * ---------
- *   ranking:cron:dirty-rankings  — Incremental rank recalculation (every 30s)
- *   ranking:cron:period-reset    — Weekly/monthly reset check (every 30s)
- *   ranking:cron:snapshot         — Historical rank snapshots (hourly)
- *   ranking:cron:consistency      — Consistency check (hourly)
- */
-
-/** Lock TTL constants — conservative upper bounds on job duration. */
 const LOCK_TTL_MS = Object.freeze({
   /** 1-minute TTL — dirty rankings processing should complete in seconds */
   DIRTY_RANKINGS: 1 * 60 * 1000,
@@ -87,10 +52,9 @@ export class RankingSchedulerService {
   @Cron('*/30 * * * * *')
   async handleDirtyRankings(): Promise<void> {
     const lockKey = 'ranking:cron:dirty-rankings';
-    const lockToken = crypto.randomUUID();
-    const acquired = await this.cache.acquireAdvisoryLock(lockKey, LOCK_TTL_MS.DIRTY_RANKINGS);
+    const lockToken = await this.cache.acquireAdvisoryLock(lockKey, LOCK_TTL_MS.DIRTY_RANKINGS);
 
-    if (!acquired) {
+    if (lockToken === null) {
       this.logger.debug({
         event: 'ranking_scheduler_skipped_lock_held',
         job: 'handleDirtyRankings',
@@ -131,10 +95,9 @@ export class RankingSchedulerService {
   @Cron('*/30 * * * * *')
   async handlePeriodResets(): Promise<void> {
     const lockKey = 'ranking:cron:period-reset';
-    const lockToken = crypto.randomUUID();
-    const acquired = await this.cache.acquireAdvisoryLock(lockKey, LOCK_TTL_MS.PERIOD_RESET);
+    const lockToken = await this.cache.acquireAdvisoryLock(lockKey, LOCK_TTL_MS.PERIOD_RESET);
 
-    if (!acquired) {
+    if (lockToken === null) {
       this.logger.debug({
         event: 'ranking_scheduler_skipped_lock_held',
         job: 'handlePeriodResets',
@@ -183,10 +146,9 @@ export class RankingSchedulerService {
   @Cron('0 * * * *')
   async handleRankSnapshots(): Promise<void> {
     const lockKey = 'ranking:cron:snapshot';
-    const lockToken = crypto.randomUUID();
-    const acquired = await this.cache.acquireAdvisoryLock(lockKey, LOCK_TTL_MS.SNAPSHOT);
+    const lockToken = await this.cache.acquireAdvisoryLock(lockKey, LOCK_TTL_MS.SNAPSHOT);
 
-    if (!acquired) {
+    if (lockToken === null) {
       this.logger.debug({
         event: 'ranking_scheduler_skipped_lock_held',
         job: 'handleRankSnapshots',
@@ -197,10 +159,12 @@ export class RankingSchedulerService {
     try {
       const snapshotTime = new Date();
 
-      await this.capturePeriodSnapshot(RankingPeriod.ALL_TIME, snapshotTime);
-      await this.capturePeriodSnapshot(RankingPeriod.WEEKLY, snapshotTime);
-      await this.capturePeriodSnapshot(RankingPeriod.MONTHLY, snapshotTime);
-      await this.capturePeriodSnapshot(RankingPeriod.DAILY, snapshotTime);
+      await Promise.all([
+        this.capturePeriodSnapshot(RankingPeriod.ALL_TIME, snapshotTime),
+        this.capturePeriodSnapshot(RankingPeriod.WEEKLY, snapshotTime),
+        this.capturePeriodSnapshot(RankingPeriod.MONTHLY, snapshotTime),
+        this.capturePeriodSnapshot(RankingPeriod.DAILY, snapshotTime),
+      ]);
 
       this.logger.info({
         event: 'ranking_scheduler_snapshots_completed',
@@ -228,10 +192,9 @@ export class RankingSchedulerService {
   @Cron('30 * * * *')
   async handleConsistencyCheck(): Promise<void> {
     const lockKey = 'ranking:cron:consistency';
-    const lockToken = crypto.randomUUID();
-    const acquired = await this.cache.acquireAdvisoryLock(lockKey, LOCK_TTL_MS.CONSISTENCY);
+    const lockToken = await this.cache.acquireAdvisoryLock(lockKey, LOCK_TTL_MS.CONSISTENCY);
 
-    if (!acquired) {
+    if (lockToken === null) {
       this.logger.debug({
         event: 'ranking_scheduler_skipped_lock_held',
         job: 'handleConsistencyCheck',
@@ -275,28 +238,52 @@ export class RankingSchedulerService {
 
   /**
    * Captures rank history snapshots for a specific period.
+   *
+   * Paginates the leaderboard in chunks of 1000 up to SNAPSHOT_MAX_ENTRIES
+   * (10k) so users beyond the top 1000 still get periodic history rows.
+   * Each chunk's createRankHistory calls run in parallel.
    */
   private async capturePeriodSnapshot(period: RankingPeriod, snapshotTime: Date): Promise<void> {
-    const leaderboard = await this.rankingRepository.getLeaderboard({
-      period,
-      limit: 1000,
-      offset: 0,
-    });
-
     const snapshotDate = this.getSnapshotDate(period, snapshotTime);
+    const pageSize = 1000;
+    const maxEntries = 10_000;
+    let offset = 0;
+    let totalCaptured = 0;
 
-    await Promise.all(
-      leaderboard.map((entry) =>
-        this.rankingRepository.createRankHistory({
-          userId: entry.userId,
-          period,
-          snapshotDate,
-          rank: entry.rank,
-          xp: entry.xp,
-          recordedAt: snapshotTime,
-        }),
-      ),
-    );
+    while (totalCaptured < maxEntries) {
+      const remaining = maxEntries - totalCaptured;
+      const limit = Math.min(pageSize, remaining);
+
+      const page = await this.rankingRepository.getLeaderboard({
+        period,
+        limit,
+        offset,
+      });
+
+      if (page.length === 0) {
+        break;
+      }
+
+      await Promise.all(
+        page.map((entry) =>
+          this.rankingRepository.createRankHistory({
+            userId: entry.userId,
+            period,
+            snapshotDate,
+            rank: entry.rank,
+            xp: entry.xp,
+            recordedAt: snapshotTime,
+          }),
+        ),
+      );
+
+      totalCaptured += page.length;
+      offset += page.length;
+
+      if (page.length < limit) {
+        break;
+      }
+    }
   }
 
   private getSnapshotDate(period: RankingPeriod, date: Date): Date {

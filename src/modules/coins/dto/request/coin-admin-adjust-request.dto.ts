@@ -1,17 +1,3 @@
-/**
- * `POST /admin/coins/adjust` request body.
- *
- * Phase 6 / S-coin-spend. Admin-only endpoint that writes a signed
- * `ADMIN_ADJUSTMENT` ledger row. The ledger IS the audit trail; the
- * `reason` field is REQUIRED and persisted into `metadata.reason`.
- *
- *   amount > 0  → credit
- *   amount < 0  → clawback
- *
- * `idempotencyKey` is caller-supplied (or derived from
- * `adminAdjustmentId` if provided); a retry returns the same ledger
- * row instead of double-crediting.
- */
 import { ApiProperty } from '@nestjs/swagger';
 import {
   IsInt,

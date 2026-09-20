@@ -79,15 +79,6 @@ export class TagController {
     return this.presenter.getTrendingTags(items);
   }
 
-  /**
-   * Phase 2 (S-13): batched lookup by slug list.
-   * The frontend's `useTagSlugsResolver` hook calls this to map a
-   * list of user-supplied slugs (e.g. from URL state) into
-   * full tag records.
-   *
-   * Missing slugs are silently omitted from the response so the
-   * client can render "unknown tag" chips without a 404.
-   */
   @Get('by-slugs')
   @Public()
   @ApiOperation({ summary: 'Resolve a list of tag slugs into tag records' })

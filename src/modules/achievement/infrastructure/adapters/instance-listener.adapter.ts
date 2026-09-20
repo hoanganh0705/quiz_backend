@@ -1,10 +1,3 @@
-/**
- * Instance Event Listener Adapter
- *
- * Listens to Instance domain events and triggers achievement evaluation.
- * This adapter bridges the Instance domain to the Achievement domain.
- */
-
 import { Inject, Injectable, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { getCorrelationId, createCorrelationId } from '@/common/interceptors/correlation-id';
@@ -39,9 +32,15 @@ export class AchievementInstanceEventListenerAdapter implements OnModuleInit, On
   private subscribe(): void {
     this.unsubscribe = this.instanceEventBus.subscribe((event: unknown) => {
       if (this.isInstanceCreatedEvent(event)) {
-        this.handleInstanceCreated(event);
+        const evt = event;
+        this.handleInstanceCreated(evt).catch((err: unknown) => {
+          this.logger.error({ err, event: evt }, 'instance listener handler failed');
+        });
       } else if (this.isPlayerFinishedEvent(event)) {
-        this.handlePlayerFinished(event);
+        const evt = event;
+        this.handlePlayerFinished(evt).catch((err: unknown) => {
+          this.logger.error({ err, event: evt }, 'player-finished listener handler failed');
+        });
       }
     });
 

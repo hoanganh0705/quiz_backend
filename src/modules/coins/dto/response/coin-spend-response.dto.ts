@@ -1,12 +1,3 @@
-/**
- * `POST /coins/{tip,flair,suppress-recommended}` and
- * `POST /admin/coins/adjust` response body.
- *
- * Phase 6 / S-coin-spend. Every successful spend returns the
- * post-spend balance snapshot so the client can render the pill
- * without a follow-up `GET /users/me/wallet`. The shape mirrors
- * the earn side: `{ transactionId, balance, createdAt }`.
- */
 import { ApiProperty } from '@nestjs/swagger';
 
 export class CoinSpendResponseDto {

@@ -65,8 +65,6 @@ export class QuizCommandService {
     const tagIds = normalizeLinkIds(command.tagIds);
     const nowIso = new Date().toISOString();
 
-    // Phase 1 #2: the repository now returns `{ row, tags }` directly
-    // from the create transaction, so we skip the `refetchQuiz` round-trip.
     const { row, tags } = await this.quizRepository.createQuizWithInitialVersion({
       creatorId: command.creatorId,
       title,
@@ -155,10 +153,6 @@ export class QuizCommandService {
 
     const nowIso = new Date().toISOString();
 
-    // Phase 1 #2: the repository now returns the post-update row + tags
-    // directly from the transaction. Falls back to a refetch only when the
-    // row could not be located (soft-deleted between the policy check and
-    // the update — race that would have been silent before).
     const result = await this.quizRepository.updateQuizWithLinks({
       quizId,
       patch,
@@ -188,13 +182,6 @@ export class QuizCommandService {
 
     this.logger.info({ event: 'quiz_deleted', quizId, userId: user.sub });
 
-    // Audit: quiz deletion is destructive. The previous
-    // implementation only logged the event; the cross-domain
-    // audit log captures who deleted which quiz so the
-    // platform can answer "did creator X delete their own
-    // quiz or did an admin do it?" and so the analytics
-    // module can attribute the loss of attempts to a known
-    // user action.
     try {
       await this.auditLogService.record({
         eventType: 'quiz.deleted',

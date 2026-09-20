@@ -1,7 +1,3 @@
-/**
- * Achievement Domain Types
- */
-
 export enum BadgeType {
   RANK_1 = 'rank1',
   TOP_10 = 'top10',

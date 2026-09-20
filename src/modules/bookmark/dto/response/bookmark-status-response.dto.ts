@@ -12,17 +12,6 @@ export class BookmarkStatusCollectionDto {
 }
 
 export class BookmarkStatusResponseDto {
-  /**
-   * `true` when the authenticated user has the quiz bookmarked in at least
-   * one of their collections.
-   *
-   * **Runtime behavior (Phase 7 H7 of the bookmark API contract audit):**
-   * this field is `false` (and `collections` is `[]`) both when the user has
-   * not bookmarked the quiz **and** when the quiz itself does not exist.
-   * `GET /bookmarks/quizzes/:quizId/status` never returns 404 — it always
-   * answers 200 with a `{ bookmarked, collections }` shape. Clients should
-   * rely on `bookmarked === false` rather than absence / 404 to drive UX.
-   */
   @ApiProperty({
     description:
       'Whether the authenticated user has bookmarked the quiz in any collection. ' +

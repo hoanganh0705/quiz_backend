@@ -192,17 +192,45 @@ export class NotificationApplicationService {
     });
   }
 
-  async markAllAsRead(user: JwtPayload): Promise<void> {
-    await this.notificationRepository.markAllAsRead(user.sub);
+  async markAllAsRead(user: JwtPayload): Promise<number> {
+    const unreadIds = await this.notificationRepository.listUnreadIds(user.sub);
+    const marked = await this.notificationRepository.markAllAsRead(user.sub);
+
+    const timestamp = new Date();
+    for (const notificationId of unreadIds) {
+      const readEvent: NotificationReadEvent = {
+        eventType: 'notification.read',
+        notificationId,
+        userId: user.sub,
+        timestamp,
+      };
+      this.eventBus.emit(readEvent);
+    }
 
     this.logger?.info({
       event: 'all_notifications_marked_read',
       userId: user.sub,
+      count: marked,
     });
+
+    return marked;
   }
 
   async deleteReadNotifications(user: JwtPayload): Promise<number> {
+    const readIds = await this.notificationRepository.listReadIds(user.sub);
     const deletedCount = await this.notificationRepository.deleteReadNotifications(user.sub);
+    await this.notificationRepository.invalidateAnalyticsCache();
+
+    const timestamp = new Date();
+    for (const notificationId of readIds) {
+      const deletedEvent: NotificationDeletedEvent = {
+        eventType: 'notification.deleted',
+        notificationId,
+        userId: user.sub,
+        timestamp,
+      };
+      this.eventBus.emit(deletedEvent);
+    }
 
     this.logger?.info({
       event: 'read_notifications_deleted',
@@ -266,11 +294,7 @@ export class NotificationApplicationService {
   }
 
   async getOrCreatePreferences(user: JwtPayload): Promise<NotificationPreferencesResponseDto> {
-    const existing = await this.preferencesRepository.getPreferences(user.sub);
-    if (existing) {
-      return toPreferencesDto(existing);
-    }
-    const created = await this.preferencesRepository.upsertPreferences(user.sub, {});
-    return toPreferencesDto(created);
+    const result = await this.preferencesRepository.upsertPreferences(user.sub, {});
+    return toPreferencesDto(result);
   }
 }

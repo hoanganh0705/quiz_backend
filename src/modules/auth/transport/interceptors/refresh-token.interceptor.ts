@@ -13,11 +13,15 @@ export class RefreshTokenInterceptor implements NestInterceptor {
   constructor(private readonly authCookieService: AuthCookieService) {}
 
   intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-    const response = context.switchToHttp().getResponse();
+    const response = context.switchToHttp().getResponse<Response>();
     const request = context.switchToHttp().getRequest<RequestWithAuthContext>();
 
-    // need to explain why use finalize over tap here
+    // We use `finalize` (not `tap`) so the cookie write happens after
+    // the controller completes — including after exception filters
+    // resolve. If we used `tap`, a thrown controller exception would
+    // short-circuit the cookie write and the caller would see an
+    // unrotated refresh token even though the underlying session was
+    // already revoked by the domain layer.
     return next.handle().pipe(
       finalize(() => {
         const authContext = request.authContext;

@@ -1,15 +1,3 @@
-/**
- * Unit tests for `UserProfileBundleService` with the Phase 3 #3
- * Redis cache wired in.
- *
- * The cache contract we test:
- *   - First call runs the fetcher and stores the result.
- *   - Second call with the same (userId, locale) returns the
- *     cached value WITHOUT calling the fetcher.
- *   - Different locales for the same user hash to different keys.
- *   - Different users hash to different keys.
- */
-
 import { UserProfileBundleService } from './user-profile-bundle.service';
 
 class InMemoryCache {

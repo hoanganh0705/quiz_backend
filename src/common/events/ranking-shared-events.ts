@@ -35,6 +35,7 @@ export interface SharedPeakRankAchievedEvent {
   readonly period: RankingPeriod;
   readonly previousPeakRank: number | null;
   readonly newPeakRank: number;
+  readonly isInitialAchievement: boolean;
   readonly timestamp: Date;
 }
 

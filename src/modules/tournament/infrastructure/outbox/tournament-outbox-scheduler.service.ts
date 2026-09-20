@@ -1,17 +1,3 @@
-/**
- * Tournament Outbox Scheduler Service
- *
- * Drives the tournament outbox processor on a fixed cadence. Wraps each
- * drain call in a Redis advisory lock so only one replica processes the
- * outbox at a time in a multi-instance deployment.
- *
- * Phase 3 / Issue #5 — the outbox scheduler replaces the previous pattern
- * where events were dispatched directly from the service layer after the
- * transaction committed. Now events are durably persisted in the outbox
- * table inside the same transaction as the business write, and this
- * scheduler is the only path that reads and dispatches them.
- */
-
 import { Cron } from '@nestjs/schedule';
 import { Inject, Injectable } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
@@ -23,8 +9,6 @@ const OUTBOX_LOCK_TTL_MS = 60_000; // 1 minute — longer than expected drain ti
 
 @Injectable()
 export class TournamentOutboxSchedulerService {
-  private readonly lockToken: string = crypto.randomUUID();
-
   constructor(
     private readonly tournamentOutboxProcessor: TournamentOutboxProcessorService,
     @Inject(CACHE_PROVIDER) private readonly cache: CacheProvider,
@@ -41,9 +25,9 @@ export class TournamentOutboxSchedulerService {
    */
   @Cron('*/15 * * * * *') // Every 15 seconds
   async handleOutboxTick(): Promise<void> {
-    const lockAcquired = await this.cache.acquireAdvisoryLock(OUTBOX_LOCK_KEY, OUTBOX_LOCK_TTL_MS);
+    const lockToken = await this.cache.acquireAdvisoryLock(OUTBOX_LOCK_KEY, OUTBOX_LOCK_TTL_MS);
 
-    if (!lockAcquired) {
+    if (lockToken === null) {
       this.logger.debug({
         event: 'tournament_outbox_skipped_lock_not_acquired',
       });
@@ -64,7 +48,7 @@ export class TournamentOutboxSchedulerService {
         message: error instanceof Error ? error.message : 'Unknown error',
       });
     } finally {
-      await this.cache.releaseAdvisoryLock(OUTBOX_LOCK_KEY, this.lockToken);
+      await this.cache.releaseAdvisoryLock(OUTBOX_LOCK_KEY, lockToken);
     }
   }
 }

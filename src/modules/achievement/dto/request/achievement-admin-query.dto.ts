@@ -1,7 +1,3 @@
-/**
- * Admin Achievement Request DTOs
- */
-
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { IsOptional, IsUUID } from 'class-validator';
 

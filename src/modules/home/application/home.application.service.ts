@@ -9,41 +9,6 @@ import type { CategoryResponseDto } from '@/modules/category/dto/response/catego
 
 import { HomeBundleResponseDto } from '../dto/response/home-bundle-response.dto';
 
-/**
- * `HomeApplicationService` — orchestrates the home-page bundle
- * returned by `GET /home` (Phase 4 / S-23).
- *
- * The issuer-page used to fan out 6+ sequential calls
- * (`featured`, `trending`, `popular`, `categories`, `recent-winners`,
- * top weekly leaderboard). The bundle collapses the fan-out into a
- * single round-trip by parallelising the sub-queries with
- * `Promise.all`. The sub-services are the existing per-domain
- * services — the bundle never reaches into repositories directly.
- *
- * ## Layout (matches `HomeBundleResponseDto`)
- *
- *   - `featured`        ← `QuizApplicationService.getFeaturedQuizzes()` (limit 12)
- *   - `trending`        ← `QuizApplicationService.getTrendingQuizzes()` (limit 10)
- *   - `popular`         ← `QuizApplicationService.getPopularQuizzes()`  (limit 10)
- *   - `categories`      ← `CategoryQueryService.listCategories()`      (limit 20)
- *   - `recentWinners`   ← `RecentWinnersService.getRecentWinners()`     (last 10)
- *   - `topPlayers`      ← `LeaderboardService.getGlobalLeaderboard()`   (limit 5, week)
- *
- * ## Caching
- *
- * The bundle is intended to be cached under
- * `home:bundle:v1` (60s TTL + jittered stale window). The
- * `CacheService` integration is wired in a follow-up; the
- * service-level fan-out below is the prerequisite — calling 6
- * services in parallel is the actual perf win.
- *
- * ## Error handling
- *
- * The endpoint is `Public()` and the bundle is best-effort:
- * any sub-query failure rejects the whole bundle with a
- * `GlobalInternalError`. The frontend renders the rails
- * individually when the bundle fetch fails.
- */
 @Injectable()
 export class HomeApplicationService {
   constructor(

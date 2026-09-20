@@ -75,9 +75,15 @@ export class GoogleOAuthAdapter implements OAuthProviderPort {
   }
 
   private normalizePayload(payload: TokenPayload): OAuthUserInfo {
+    if (!payload.email) {
+      // Google normally sets `email` on the ID token, but the contract does
+      // not guarantee it. Treat its absence as an invalid token so callers
+      // see the standard 401 instead of a runtime crash on `!.toLowerCase()`.
+      throw new InvalidOAuthTokenError('Google token is missing the email claim');
+    }
     return {
       providerUserId: payload.sub,
-      email: payload.email!.toLowerCase(),
+      email: payload.email.toLowerCase(),
       emailVerified: payload.email_verified ?? false,
       displayName: payload.name ?? undefined,
       avatarUrl: payload.picture ?? undefined,

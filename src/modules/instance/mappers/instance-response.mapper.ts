@@ -21,12 +21,6 @@ export class InstanceResponseMapper {
   ): InstanceDetailResponseDto {
     return {
       instanceId: row.instanceId,
-      // Phase 1 (Foundational Correctness) — drop quizVersionId &
-      // versionNumber from the wire. They are internal implementation
-      // details: the published version is resolved from the parent
-      // quiz and may change as the quiz author publishes new versions,
-      // so leaking it to clients would make stale versions hard to
-      // reason about.
       hostUserId: row.hostUserId,
       hostUsername: row.hostUsername,
       hostDisplayName: row.hostDisplayName,
@@ -50,8 +44,6 @@ export class InstanceResponseMapper {
   toInstanceListItemResponse(row: QuizInstanceListRow): InstanceListItemDto {
     return {
       instanceId: row.instanceId,
-      // Phase 1 (Foundational Correctness) — drop quizVersionId from
-      // the list wire shape (see `toInstanceDetailResponse`).
       hostUserId: row.hostUserId,
       hostUsername: row.hostUsername,
       hostDisplayName: row.hostDisplayName,

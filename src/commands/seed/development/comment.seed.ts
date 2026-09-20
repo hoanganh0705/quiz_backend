@@ -1,31 +1,8 @@
-// =============================================================================
-// Comment seed (Phase 9.x — replaces the legacy Q/A thread comments seed)
-//
-// Seeds the per-quiz comment section: top-level comments + one-level replies,
-// per-user votes, and moderator reports. The Q/A-era concepts (threads,
-// subscriptions, saved threads, solve marking) no longer exist, so the seed
-// writes only what the post-refactor schema models.
-//
-// Order of writes inside the transaction:
-//   1. top-level comments (parentCommentId = null)
-//   2. replies (parentCommentId = <a top-level commentId>)
-//   3. votes (one per (user, comment))
-//   4. reports (one per (reporter, comment))
-//
-// Subscriptions, saved-threads, and "thread-level" votes were removed by
-// the comment refactor; if they ever need to come back, they belong in
-// their own bounded context, not in this seed.
-// =============================================================================
-
 import { eq } from 'drizzle-orm';
 import { db, type SeedContext, recorder } from '../infrastructure';
 import type { SeedSummary } from '../infrastructure/types';
 import { SeedLookup } from '../shared/seed-lookup';
-import {
-  commentRows,
-  commentVotes,
-  commentReports,
-} from '@/core/database/schema';
+import { commentRows, commentVotes, commentReports } from '@/core/database/schema';
 import { logger } from '../infrastructure/seed-logger';
 
 type CommentVoteSeed = {
@@ -69,7 +46,11 @@ const COMMENT_SEEDS: CommentSeed[] = [
     upvotesCount: 1,
     downvotesCount: 0,
     votes: [
-      { userUsername: 'learner_user', commentId: '11111111-1111-7111-8111-111111111112', value: 'upvote' },
+      {
+        userUsername: 'learner_user',
+        commentId: '11111111-1111-7111-8111-111111111112',
+        value: 'upvote',
+      },
     ],
     reports: [],
   },
@@ -97,7 +78,11 @@ const COMMENT_SEEDS: CommentSeed[] = [
     upvotesCount: 1,
     downvotesCount: 0,
     votes: [
-      { userUsername: 'learner_user', commentId: '22222222-2222-7222-8222-222222222223', value: 'upvote' },
+      {
+        userUsername: 'learner_user',
+        commentId: '22222222-2222-7222-8222-222222222223',
+        value: 'upvote',
+      },
     ],
     reports: [
       {

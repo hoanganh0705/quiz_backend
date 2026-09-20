@@ -3,7 +3,6 @@ import { ApiPropertyOptional } from '@nestjs/swagger';
 import { IsInt, IsOptional, IsString, Matches, Max, Min } from 'class-validator';
 import { USER_PAGINATION_DEFAULT_LIMIT } from '../../domain/constants/user.domain-constants';
 
-// Phase 7 (F-23): see `get-my-tournaments-query.dto.ts` for rationale.
 const BASE64_ALPHABET = /^[A-Za-z0-9+/=]+$/;
 
 export class GetMyTournamentsQueryDto {

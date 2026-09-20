@@ -1,22 +1,4 @@
 import { ApiProperty } from '@nestjs/swagger';
-
-/**
- * Health module runtime DTO.
- *
- * Phase 2 #3 — extended per-dependency health. The original DTO
- * only exposed `database` and `redis`. The new shape adds:
- *   - `redis`: same as before, but always present (replaces the
- *     previous boolean with a structured `ProbeResultDto`).
- *   - `storage`: per-adapter reachability (Cloudinary `api.ping`).
- *   - `emailQueue`: BullMQ queue depth + whether the worker is
- *     draining.
- *   - `redisCircuit`: the in-process circuit breaker state, so
- *     operators can see exactly *why* a request was short-circuited.
- *
- * Status of the overall response is downgraded to `degraded` (vs.
- * `up`) when any non-critical dependency is failing. The aggregator
- * in `HealthController` decides the policy.
- */
 export type HealthStatusValue = 'up' | 'down' | 'degraded';
 
 export type DependencyStatus = 'up' | 'down' | 'degraded';

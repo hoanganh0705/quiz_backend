@@ -1,26 +1,3 @@
-/**
- * Unit tests for the Phase 0 #2 transactional account-creation flow.
- *
- * The production code path that this guards is:
- *
- *   AuthRegistrationService.register
- *     → UserRepository.createUserWithPasswordHistory
- *         → tx.insert(users)              [must rollback on later failure]
- *         → tx.insert(passwordHistory)    [if this throws, users must rollback]
- *
- * Without the transaction wrapper, a unique-constraint failure on
- * `password_history` (extremely unlikely but still a possibility) would
- * leave an orphan user row that has no password-history entry. That
- * orphan would silently disable the password-reuse policy on the user's
- * first `changePassword` call — a real bug we closed by adding the
- * transaction.
- *
- * We test the *contract* (atomicity) with a hand-rolled in-memory
- * transaction executor: anything thrown inside the callback rolls back
- * both inserts. The real Drizzle `db.transaction` is verified end-to-end
- * by the E2E suite (see Phase 4 of the audit).
- */
-
 import { InternalServerErrorException } from '@nestjs/common';
 
 type UserRow = {
@@ -41,10 +18,6 @@ class InMemoryUserRepository {
   readonly users: UserRow[] = [];
   readonly history: PasswordHistoryRow[] = [];
 
-  /**
-   * Minimal Drizzle-like `transaction` that rolls back writes when the
-   * callback throws. Only the operations this spec needs are supported.
-   */
   async transaction<T>(callback: (tx: Tx) => Promise<T>): Promise<T> {
     const tx = new Tx(this);
     try {
@@ -86,16 +59,9 @@ class Tx {
     this.parent.history.push(...this.pendingHistory);
   }
 
-  rollback(): void {
-    // Pending buffers are simply dropped.
-  }
+  rollback(): void {}
 }
 
-/**
- * The method under test, re-implemented inline so the test exercises the
- * same transactional contract without booting Drizzle. If the production
- * implementation diverges from this shape the test will fail to type-check.
- */
 async function createUserWithPasswordHistory(
   repo: InMemoryUserRepository,
   params: { email: string; username: string; passwordHash: string; nowIso: string },
@@ -117,7 +83,7 @@ async function createUserWithPasswordHistory(
         passwordHash: params.passwordHash,
         createdAt: params.nowIso,
       });
-      // Force a failure to prove rollback.
+      await Promise.resolve();
       throw new InternalServerErrorException('Failed to create user');
     });
     return created as unknown as UserRow;
@@ -129,7 +95,7 @@ async function createUserWithPasswordHistory(
   }
 }
 
-describe('createUserWithPasswordHistory (Phase 0 #2)', () => {
+describe('createUserWithPasswordHistoryddddddddddddddddddddddddddddd', () => {
   const params = {
     email: 'alice@example.com',
     username: 'alice',

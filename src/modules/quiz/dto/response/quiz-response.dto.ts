@@ -3,28 +3,6 @@ import { AuthorSummaryDto } from './author-summary.dto';
 import { QuizTagDto } from './quiz-tag.dto';
 import { QuizVersionResponseDto } from './quiz-version-response.dto';
 
-/**
- * Detail DTO returned by `GET /quizzes/:id`, `GET /quizzes/:slug`,
- * `POST /quizzes`, and `PATCH /quizzes/:id`.
- *
- * Phase 2 (S-7) adds:
- *   - `creator`       — embedded author summary (same shape as the
- *                       list projection, so the byline reads from a
- *                       single field on both endpoints)
- *   - `categoryName` / `categorySlug` — same JOIN as the list
- *                       projection; the detail page renders a
- *                       "Category: …" link that needs the slug
- *
- * The aggregate fields on the list projection (`questionCount`,
- * `averageRating`, `reviewCount`, `attemptCount`) deliberately do
- * NOT live here — they are sourced from `quiz_stats` and are
- * surfaced through the dedicated `/quizzes/:id/stats` endpoint
- * (see `QuizStatsResponseDto`, enriched in S-10). Keeping the
- * detail DTO focused on `QuizVersionResponseDto`-style content
- * means a future version-control refactor (e.g. separate "author
- * view" vs "player view") does not have to reconcile a stats
- * shadow field.
- */
 export class QuizResponseDto {
   @ApiProperty({
     description: 'Unique quiz identifier',

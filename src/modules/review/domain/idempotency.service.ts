@@ -68,9 +68,11 @@ export class IdempotencyService {
           .where(and(eq(idempotencyKeys.key, key), eq(idempotencyKeys.userId, userId)))
           .limit(1);
 
-        if (recheck) {
+        if (recheck?.response) {
           return { isNew: false, response: recheck.response as T };
         }
+
+        return { isNew: true, response };
       }
       throw error;
     }

@@ -1,14 +1,3 @@
-/**
- * Phase 5 #2 — Metrics registry unit tests.
- *
- * Covers the Prometheus text-format export contract:
- *   - Counter increments produce a `_total` series.
- *   - Gauges emit one row per label set.
- *   - Histograms expand into `_bucket`, `_count`, `_sum`.
- *   - `render()` returns the canonical Prometheus format with
- *     `# HELP` and `# TYPE` comments.
- */
-
 import { MetricsRegistry } from './metrics.registry';
 
 class TestLogger {

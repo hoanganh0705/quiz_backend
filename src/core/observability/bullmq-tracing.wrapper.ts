@@ -1,20 +1,3 @@
-/**
- * Phase 5 #1 — BullMQ job tracing.
- *
- * Wraps the email-queue worker so each processed job emits a
- * `consumer` span and each enqueued job emits a `producer` span.
- * The trace is linked via the `x-trace-id` job data field — the
- * `producer` span writes the `traceId` to the job data, and the
- * `consumer` reads it back so the spans share a trace id.
- *
- * Why link via job data instead of `traceparent`?
- * -----------------------------------------------
- * BullMQ serialises job data through Redis, so a header-style
- * `traceparent` would have to be re-injected at job boundaries.
- * Embedding the `traceId` directly in job data is simpler and
- * survives the Redis round-trip without further coordination.
- */
-
 import { Inject, Injectable } from '@nestjs/common';
 import { Job, Queue, Worker } from 'bullmq';
 import {
@@ -32,11 +15,6 @@ export class BullmqTracingWrapper {
     private readonly tracing: TracingProvider,
   ) {}
 
-  /**
-   * Wrap a Queue's `add` so the producer span's `traceId` is
-   * written into the job data and used by the worker span on the
-   * consumer side.
-   */
   wrapQueueAdd<T>(queue: Queue<T>, name: string): (...args: unknown[]) => Promise<Job<T>> {
     const originalAdd = queue.add.bind(queue) as Queue<T>['add'];
     return async (...args: Parameters<Queue<T>['add']>) => {
@@ -66,10 +44,6 @@ export class BullmqTracingWrapper {
     };
   }
 
-  /**
-   * Wrap a Worker's `process` so the consumer span is opened
-   * with the producer's trace id as parent (when present).
-   */
   wrapWorkerProcess<T>(
     worker: Worker<T>,
     handler: (job: Job<T>) => Promise<unknown>,

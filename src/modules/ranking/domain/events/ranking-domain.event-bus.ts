@@ -41,7 +41,7 @@ type RankingDomainEvent =
 
 @Injectable()
 export class RankingDomainEventBus implements RankingDomainEventBusPort {
-  private handlers: Array<(event: RankingDomainEvent) => void> = [];
+  private handlers: Set<(event: RankingDomainEvent) => void> = new Set();
 
   constructor(
     @InjectPinoLogger(RankingDomainEventBus.name)
@@ -49,21 +49,24 @@ export class RankingDomainEventBus implements RankingDomainEventBusPort {
   ) {}
 
   subscribe(handler: (event: RankingDomainEvent) => void): () => void {
-    this.handlers.push(handler);
+    this.handlers.add(handler);
     return () => {
-      const index = this.handlers.indexOf(handler);
-      if (index !== -1) {
-        this.handlers.splice(index, 1);
-      }
+      this.handlers.delete(handler);
     };
   }
 
   /**
    * Dispatch to in-memory subscribers only.
    * Called by the outbox processor to replay persisted events.
+   *
+   * Iterates over a snapshot of the handler set so that handler
+   * additions/removals during dispatch (e.g. listeners unsubscribing
+   * themselves in response to an event) do not mutate the iteration
+   * target mid-loop.
    */
   dispatchToSubscribers(event: RankingDomainEvent): void {
-    for (const handler of this.handlers) {
+    const snapshot = Array.from(this.handlers);
+    for (const handler of snapshot) {
       try {
         handler(event);
       } catch (error) {

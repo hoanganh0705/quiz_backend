@@ -1,5 +1,10 @@
 import type { BookmarkCollectionAnalytics } from '../types/bookmark-collection-analytics';
 
+export type RecentBookmarkCursor = {
+  bookmarkedAt: string;
+  bookmarkId: string;
+};
+
 export type BookmarkedQuizRow = {
   bookmarkId: string;
   collectionId: string;
@@ -137,11 +142,6 @@ export type UserBookmarkStatsRow = {
     name: string;
     slug: string;
   } | null;
-};
-
-export type RecentBookmarkCursor = {
-  bookmarkedAt: string;
-  bookmarkId: string;
 };
 
 export const BOOKMARK_REPOSITORY_PORT = Symbol('BOOKMARK_REPOSITORY_PORT');

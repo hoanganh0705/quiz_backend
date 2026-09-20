@@ -175,7 +175,7 @@ export class RankingOutboxProcessorService implements OnModuleInit {
         processedAt: nowIso,
         lastAttemptAt: nowIso,
       })
-      .where(eq(outboxEvents.eventId, eventId));
+      .where(and(eq(outboxEvents.eventId, eventId), isNull(outboxEvents.processedAt)));
   }
 
   private isIdempotencyConflict(error: unknown): boolean {

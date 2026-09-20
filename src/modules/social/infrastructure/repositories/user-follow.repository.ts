@@ -12,6 +12,9 @@ import type {
   PaginatedMutualFollowersResult,
 } from '../../domain/types/social.types';
 import { eq, and, sql, desc, count, lte, isNull, aliasedTable } from 'drizzle-orm';
+import { sliceWithCursor, encodeFollowCursor, encodeUsernameCursor } from './social-cursor.util';
+import { decodeBase64JsonCursor, isIsoDateString } from '@/common/utils/cursor.util';
+import { BadRequestException } from '@nestjs/common';
 
 @Injectable()
 export class UserFollowRepository implements UserFollowRepositoryPort {
@@ -88,12 +91,21 @@ export class UserFollowRepository implements UserFollowRepositoryPort {
     };
   }
 
-  async unfollowUser(followerId: string, followingId: string): Promise<void> {
+  async unfollowUser(followerId: string, followingId: string): Promise<number> {
     const now = new Date().toISOString();
-    await this.db
+    const result = await this.db
       .update(userFollows)
       .set({ deletedAt: now })
-      .where(and(eq(userFollows.followerId, followerId), eq(userFollows.followingId, followingId)));
+      .where(
+        and(
+          eq(userFollows.followerId, followerId),
+          eq(userFollows.followingId, followingId),
+          isNull(userFollows.deletedAt),
+        ),
+      )
+      .returning({ followId: userFollows.followId });
+
+    return result.length;
   }
 
   async findActiveFollow(followerId: string, followingId: string): Promise<UserFollow | null> {
@@ -187,53 +199,44 @@ export class UserFollowRepository implements UserFollowRepositoryPort {
   ): Promise<PaginatedFollowersResult> {
     const effectiveLimit = limit ?? 20;
 
-    // Decode cursor if provided
-    let cursorCondition = '';
-    if (cursor) {
-      try {
-        const decoded = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8'));
-        cursorCondition = `AND (uf.created_at < '${decoded.followedAt}' OR (uf.created_at = '${decoded.followedAt}' AND uf.follow_id < '${decoded.followId}'::uuid))`;
-      } catch {
-        cursorCondition = '';
-      }
-    }
+    const cursorCondition = decodeFollowCursorCondition(cursor);
 
-    const rows = await this.db.execute(sql`
+    const rows = await this.db.execute(sql<{
+      userId: string;
+      username: string;
+      avatarUrl: string | null;
+      followedAt: string;
+      followId: string;
+    }>`
       SELECT
         uf.follower_id AS "userId",
         u.username AS username,
         up.avatar_url AS "avatarUrl",
-        uf.created_at AS "followedAt"
+        uf.created_at AS "followedAt",
+        uf.follow_id AS "followId"
       FROM user_follows uf
       INNER JOIN users u ON u.user_id = uf.follower_id
       LEFT JOIN user_profiles up ON up.user_id = u.user_id
       WHERE uf.following_id = ${userId}::uuid
         AND uf.deleted_at IS NULL
-        ${sql.raw(cursorCondition ? ` ${cursorCondition}` : '')}
+        ${cursorCondition}
       ORDER BY uf.created_at DESC, uf.follow_id DESC
       LIMIT ${effectiveLimit + 1}
     `);
 
-    const followerRows = rows.rows as Array<{
+    const typedFollowerRows = rows.rows as Array<{
       userId: string;
       username: string;
       avatarUrl: string | null;
       followedAt: string;
+      followId: string;
     }>;
-
-    const hasNextPage = followerRows.length > effectiveLimit;
-    const items = hasNextPage ? followerRows.slice(0, effectiveLimit) : followerRows;
-    const lastItem = items[items.length - 1];
-    const nextCursor =
-      hasNextPage && lastItem
-        ? Buffer.from(
-            JSON.stringify({ followedAt: lastItem.followedAt, followId: lastItem.userId }),
-            'utf8',
-          ).toString('base64url')
-        : null;
+    const page = sliceWithCursor(typedFollowerRows, effectiveLimit, (last) =>
+      encodeFollowCursor({ followedAt: last.followedAt, followId: last.followId }),
+    );
 
     return {
-      items: items.map((row) => ({
+      items: page.items.map((row) => ({
         userId: row.userId,
         username: row.username,
         avatarUrl: row.avatarUrl,
@@ -242,8 +245,8 @@ export class UserFollowRepository implements UserFollowRepositoryPort {
       pagination: {
         kind: 'cursor',
         limit: effectiveLimit,
-        hasNextPage,
-        nextCursor,
+        hasNextPage: page.hasNextPage,
+        nextCursor: page.nextCursor,
       },
     };
   }
@@ -255,53 +258,44 @@ export class UserFollowRepository implements UserFollowRepositoryPort {
   ): Promise<PaginatedFollowingResult> {
     const effectiveLimit = limit ?? 20;
 
-    // Decode cursor if provided
-    let cursorCondition = '';
-    if (cursor) {
-      try {
-        const decoded = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8'));
-        cursorCondition = `AND (uf.created_at < '${decoded.followedAt}' OR (uf.created_at = '${decoded.followedAt}' AND uf.follow_id < '${decoded.followId}'::uuid))`;
-      } catch {
-        cursorCondition = '';
-      }
-    }
+    const cursorCondition = decodeFollowCursorCondition(cursor);
 
-    const rows = await this.db.execute(sql`
+    const rows = await this.db.execute(sql<{
+      userId: string;
+      username: string;
+      avatarUrl: string | null;
+      followedAt: string;
+      followId: string;
+    }>`
       SELECT
         uf.following_id AS "userId",
         u.username AS username,
         up.avatar_url AS "avatarUrl",
-        uf.created_at AS "followedAt"
+        uf.created_at AS "followedAt",
+        uf.follow_id AS "followId"
       FROM user_follows uf
       INNER JOIN users u ON u.user_id = uf.following_id
       LEFT JOIN user_profiles up ON up.user_id = u.user_id
       WHERE uf.follower_id = ${userId}::uuid
         AND uf.deleted_at IS NULL
-        ${sql.raw(cursorCondition ? ` ${cursorCondition}` : '')}
+        ${cursorCondition}
       ORDER BY uf.created_at DESC, uf.follow_id DESC
       LIMIT ${effectiveLimit + 1}
     `);
 
-    const followingRows = rows.rows as Array<{
+    const typedFollowingRows = rows.rows as Array<{
       userId: string;
       username: string;
       avatarUrl: string | null;
       followedAt: string;
+      followId: string;
     }>;
-
-    const hasNextPage = followingRows.length > effectiveLimit;
-    const items = hasNextPage ? followingRows.slice(0, effectiveLimit) : followingRows;
-    const lastItem = items[items.length - 1];
-    const nextCursor =
-      hasNextPage && lastItem
-        ? Buffer.from(
-            JSON.stringify({ followedAt: lastItem.followedAt, followId: lastItem.userId }),
-            'utf8',
-          ).toString('base64url')
-        : null;
+    const page = sliceWithCursor(typedFollowingRows, effectiveLimit, (last) =>
+      encodeFollowCursor({ followedAt: last.followedAt, followId: last.followId }),
+    );
 
     return {
-      items: items.map((row) => ({
+      items: page.items.map((row) => ({
         userId: row.userId,
         username: row.username,
         avatarUrl: row.avatarUrl,
@@ -310,8 +304,8 @@ export class UserFollowRepository implements UserFollowRepositoryPort {
       pagination: {
         kind: 'cursor',
         limit: effectiveLimit,
-        hasNextPage,
-        nextCursor,
+        hasNextPage: page.hasNextPage,
+        nextCursor: page.nextCursor,
       },
     };
   }
@@ -324,16 +318,7 @@ export class UserFollowRepository implements UserFollowRepositoryPort {
   ): Promise<PaginatedMutualFollowersResult> {
     const effectiveLimit = limit ?? 20;
 
-    // Decode cursor if provided (for username-based cursor)
-    let cursorCondition = '';
-    if (cursor) {
-      try {
-        const decoded = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8'));
-        cursorCondition = `AND shared_following.username > '${decoded.username}'`;
-      } catch {
-        cursorCondition = '';
-      }
-    }
+    const cursorCondition = decodeUsernameCursorCondition(cursor);
 
     const u = aliasedTable(users, 'u');
     const up = aliasedTable(userProfiles, 'up');
@@ -393,31 +378,31 @@ export class UserFollowRepository implements UserFollowRepositoryPort {
       WHERE ${u.deletedAt} IS NULL
     `;
 
-    const rowsResult = await this.db.execute(sql`
+    const rowsResult = await this.db.execute(sql<{
+      userId: string;
+      username: string;
+      displayName: string | null;
+      avatarUrl: string | null;
+    }>`
       SELECT *
       FROM (${mutualFollowersQuery}) shared_following
-      WHERE 1=1 ${sql.raw(cursorCondition ? ` ${cursorCondition}` : '')}
+      WHERE 1=1 ${cursorCondition}
       ORDER BY shared_following.username ASC
       LIMIT ${effectiveLimit + 1}
     `);
 
-    const rows = rowsResult.rows as Array<{
+    const typedMutualRows = rowsResult.rows as Array<{
       userId: string;
       username: string;
       displayName: string | null;
       avatarUrl: string | null;
     }>;
-
-    const hasNextPage = rows.length > effectiveLimit;
-    const items = hasNextPage ? rows.slice(0, effectiveLimit) : rows;
-    const lastItem = items[items.length - 1];
-    const nextCursor =
-      hasNextPage && lastItem
-        ? Buffer.from(JSON.stringify({ username: lastItem.username }), 'utf8').toString('base64url')
-        : null;
+    const page = sliceWithCursor(typedMutualRows, effectiveLimit, (last) =>
+      encodeUsernameCursor({ username: last.username }),
+    );
 
     return {
-      items: items.map((row) => ({
+      items: page.items.map((row) => ({
         userId: row.userId,
         username: row.username,
         displayName: row.displayName,
@@ -426,8 +411,8 @@ export class UserFollowRepository implements UserFollowRepositoryPort {
       pagination: {
         kind: 'cursor',
         limit: effectiveLimit,
-        hasNextPage,
-        nextCursor,
+        hasNextPage: page.hasNextPage,
+        nextCursor: page.nextCursor,
       },
     };
   }
@@ -479,4 +464,22 @@ export class UserFollowRepository implements UserFollowRepositoryPort {
       followingUsername: followingRow[0]?.username ?? '',
     };
   }
+}
+
+function decodeFollowCursorCondition(cursor: string | null | undefined) {
+  if (!cursor) return sql``;
+  const decoded = decodeBase64JsonCursor<{ followedAt?: unknown; followId?: unknown }>(cursor);
+  if (!isIsoDateString(decoded.followedAt) || typeof decoded.followId !== 'string') {
+    throw new BadRequestException('Invalid cursor');
+  }
+  return sql`AND (uf.created_at < ${decoded.followedAt}::timestamptz OR (uf.created_at = ${decoded.followedAt}::timestamptz AND uf.follow_id < ${decoded.followId}::uuid))`;
+}
+
+function decodeUsernameCursorCondition(cursor: string | null | undefined) {
+  if (!cursor) return sql``;
+  const decoded = decodeBase64JsonCursor<{ username?: unknown }>(cursor);
+  if (typeof decoded.username !== 'string') {
+    throw new BadRequestException('Invalid cursor');
+  }
+  return sql`AND shared_following.username > ${decoded.username}`;
 }

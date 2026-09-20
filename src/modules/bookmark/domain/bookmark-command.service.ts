@@ -19,13 +19,15 @@ import {
   CollectionConflictError,
   BookmarkNotFoundError,
   BookmarkConflictError,
+  BookmarkValidationError,
 } from './errors';
 import {
+  BOOKMARK_NOT_FOUND_MESSAGE,
+  BOOKMARK_QUIZ_ALREADY_EXISTS_MESSAGE,
+  BOOKMARK_MOVE_SAME_COLLECTION_MESSAGE,
   COLLECTION_NOT_FOUND_MESSAGE,
   COLLECTION_FORBIDDEN_MESSAGE,
   COLLECTION_NAME_CONFLICT_MESSAGE,
-  BOOKMARK_NOT_FOUND_MESSAGE,
-  BOOKMARK_QUIZ_ALREADY_EXISTS_MESSAGE,
 } from '../bookmark.constants';
 import {
   BOOKMARK_DOMAIN_EVENT_BUS,
@@ -77,6 +79,21 @@ export class BookmarkCommandService {
     return collection;
   }
 
+  private assertBulkInputValid(quizIds: unknown, op: string): asserts quizIds is string[] {
+    if (!Array.isArray(quizIds)) {
+      throw new BookmarkValidationError(`${op} requires an array of quizIds`);
+    }
+    if (quizIds.length === 0) {
+      throw new BookmarkValidationError(`${op} requires at least one quizId`);
+    }
+    if (quizIds.length > 100) {
+      throw new BookmarkValidationError(`${op} cannot process more than 100 quizIds per request`);
+    }
+    if (!quizIds.every((id) => typeof id === 'string' && id.length > 0)) {
+      throw new BookmarkValidationError(`${op} received empty or non-string quizIds`);
+    }
+  }
+
   async createCollection(user: JwtPayload, name: string, description: string | null | undefined) {
     const nowIso = new Date().toISOString();
 
@@ -123,6 +140,10 @@ export class BookmarkCommandService {
         nowIso,
       });
 
+      if (!updated) {
+        throw new BookmarkCollectionNotFoundError(COLLECTION_NOT_FOUND_MESSAGE);
+      }
+
       this.logger.info({
         event: 'collection_updated',
         collectionId,
@@ -131,6 +152,9 @@ export class BookmarkCommandService {
 
       return updated;
     } catch (error) {
+      if (error instanceof BookmarkCollectionNotFoundError) {
+        throw error;
+      }
       const pgError = resolvePgError(error);
       if (pgError.code === '23505' && pgError.constraint === 'uq_bookmark_collections_user_name') {
         this.logger.warn({ event: 'collection_update_name_conflict', userId: user.sub, name });
@@ -188,6 +212,17 @@ export class BookmarkCommandService {
 
       return bookmark;
     } catch (error) {
+      if (isPostgresForeignKeyViolation(error)) {
+        this.logger.warn({
+          event: 'add_bookmark_collection_deleted',
+          collectionId,
+          quizId,
+          userId: user.sub,
+        });
+        throw new BookmarkCollectionNotFoundError(
+          'Collection was deleted while processing this request. Please retry.',
+        );
+      }
       const pgError = resolvePgError(error);
       if (pgError.code === '23505' && pgError.constraint === 'uq_bookmarked_quizzes_pair') {
         this.logger.warn({
@@ -203,8 +238,9 @@ export class BookmarkCommandService {
   }
 
   async addBookmarksBulk(userId: string, collectionId: string, quizIds: string[]): Promise<number> {
-    const user = { sub: userId, role: 'user' } as JwtPayload;
-    await this.getOwnedCollectionOrThrow(collectionId, user);
+    this.assertBulkInputValid(quizIds, 'addBookmarksBulk');
+
+    await this.getOwnedCollectionOrThrow(collectionId, { sub: userId, role: 'user' });
 
     const uniqueQuizIds = [...new Set(quizIds)];
     if (uniqueQuizIds.length === 0) {
@@ -259,8 +295,9 @@ export class BookmarkCommandService {
     collectionId: string,
     quizIds: string[],
   ): Promise<number> {
-    const user = { sub: userId, role: 'user' } as JwtPayload;
-    await this.getOwnedCollectionOrThrow(collectionId, user);
+    this.assertBulkInputValid(quizIds, 'removeBookmarksBulk');
+
+    await this.getOwnedCollectionOrThrow(collectionId, { sub: userId, role: 'user' });
 
     const uniqueQuizIds = [...new Set(quizIds)];
     if (uniqueQuizIds.length === 0) {
@@ -322,6 +359,16 @@ export class BookmarkCommandService {
     targetCollectionId: string,
     quizId: string,
   ): Promise<void> {
+    if (sourceCollectionId === targetCollectionId) {
+      this.logger.warn({
+        event: 'bookmark_move_same_collection',
+        userId,
+        collectionId: sourceCollectionId,
+        quizId,
+      });
+      throw new BookmarkConflictError(BOOKMARK_MOVE_SAME_COLLECTION_MESSAGE);
+    }
+
     const sourceCollection = await this.collectionRepository.getCollectionById(sourceCollectionId);
     if (!sourceCollection) {
       throw new BookmarkCollectionNotFoundError(COLLECTION_NOT_FOUND_MESSAGE);

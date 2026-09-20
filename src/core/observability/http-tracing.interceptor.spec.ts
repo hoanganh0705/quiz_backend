@@ -1,16 +1,3 @@
-/**
- * Phase 5 #1 — HTTP tracing interceptor unit tests.
- *
- * Covers:
- *   - The interceptor opens a `server` span on every request.
- *   - Standard `http.method` / `http.route` attributes are set.
- *   - The `http.status_class` attribute reflects the response
- *     status code.
- *   - W3C `traceparent` is parsed and propagated.
- *   - The span is closed when the response completes or the
- *     controller throws.
- */
-
 import { Injectable, Controller, Get, Post, HttpCode, BadRequestException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication } from '@nestjs/common';

@@ -1,35 +1,3 @@
-/**
- * The §11 ownership rule, exposed as an injectable service.
- *
- *   "A publicId may only be associated with an entity if the
- *    authenticated user is the owner recorded in storage_assets for
- *    that publicId and the recorded purpose matches the target entity."
- *
- * Three operations:
- *
- *   bindAssetToOwner       — called once, server-side, immediately
- *                            after `STORAGE_PORT.upload` succeeds.
- *                            The upload application service is the
- *                            *only* caller; on bind failure it
- *                            best-effort deletes the Cloudinary asset
- *                            and surfaces UPLOAD_OWNERSHIP_BIND_FAILED.
- *
- *   userOwnsAssetForPurpose — the §11 gate. Called by user/quiz
- *                            application services *before* writing
- *                            `avatar_public_id` / `image_public_id`.
- *                            `false` → caller returns 403
- *                            ASSET_NOT_OWNED (or 400 if the input
- *                            shape is wrong — caught by the DTO
- *                            validator).
- *
- *   unbindAsset             — called by the lifecycle service after
- *                            a Cloudinary delete. Idempotent.
- *
- * The actual row lookup lives in `StorageAssetsRepository`. This
- * service is a thin orchestrator + a single, easy-to-mock seam for
- * tests (and the future admin "purge orphans" endpoint).
- */
-
 import { Inject, Injectable } from '@nestjs/common';
 
 import {
@@ -56,11 +24,6 @@ export class StorageApplicationService {
     private readonly storageAssets: StorageAssetsRepositoryPort,
   ) {}
 
-  /**
-   * Insert the (publicId, ownerId, purpose) binding. Throws on collision
-   * — the upload application service catches and best-effort deletes
-   * the Cloudinary asset before returning UPLOAD_OWNERSHIP_BIND_FAILED.
-   */
   async bindAssetToOwner(input: {
     publicId: string;
     ownerId: string;
@@ -75,11 +38,6 @@ export class StorageApplicationService {
     }
   }
 
-  /**
-   * The §11 gate. `true` only when (publicId, ownerId, purpose) matches
-   * an existing row in `storage_assets`. Missing row, wrong owner, and
-   * wrong purpose all return `false` — same response, no oracle.
-   */
   async userOwnsAssetForPurpose(input: {
     publicId: string;
     ownerId: string;
@@ -88,22 +46,10 @@ export class StorageApplicationService {
     return this.storageAssets.existsByPublicIdOwnerAndPurpose(input);
   }
 
-  /**
-   * Idempotent. A missing row is not an error — the asset may have been
-   * deleted earlier, or it may have never existed (a forged id).
-   */
   async unbindAsset(publicId: string): Promise<void> {
     await this.storageAssets.deleteByPublicId(publicId);
   }
 
-  /**
-   * Phase 3.1 — does a `storage_assets` row with this `publicId`
-   * exist at all? Used by `UploadApplicationService.bindAsset` to
-   * reject forged or already-unbound ids before we attempt to bind a
-   * new row. Distinct from `userOwnsAssetForPurpose` (which gates the
-   * §11 ownership rule) — this is a structural existence check that
-   * ignores `ownerId` and `purpose`.
-   */
   async assetExists(publicId: string): Promise<boolean> {
     const rows = await this.storageAssets.findByPublicId(publicId);
     return rows.length > 0;

@@ -13,6 +13,7 @@ import {
   PlayerXpEarnedEvent,
   PlayerFinishedEvent,
   PlayerDisconnectedEvent,
+  PlayerAnsweredEvent,
   InstanceStartedEvent,
   InstanceClosedEvent,
   CountdownStartedEvent,
@@ -23,6 +24,7 @@ import { InstanceCountdownAlreadyStartedError } from '../domain/errors';
 import type { Server } from 'socket.io';
 import { InstanceResponseMapper } from '../mappers/instance-response.mapper';
 import type { LeaderboardCursorPayload } from '../domain/ports';
+import { AttemptApplicationService } from '@/modules/attempt/application/attempt.application.service';
 import {
   CloseInstanceResponseDto,
   CreateInstanceResponseDto,
@@ -35,27 +37,6 @@ import {
   StartInstanceResponseDto,
 } from '../dto/response';
 
-/**
- * Orchestrates Instance domain operations and Socket.IO real-time event emission.
- *
- * This service sits between the WebSocket gateway and the domain layer.
- * The gateway delegates all business logic here and emits Socket.IO events
- * based on domain events emitted by InstanceService.
- *
- * Architecture:
- *   Gateway → InstanceApplicationService → InstanceService (domain)
- *                                         ↘ InstanceDomainEventBus → InstanceApplicationService (event subscription)
- *                                                               ↘ Socket.IO server (cross-instance via RedisIoAdapter)
- *
- * Phase 3 (Production Deployment Readiness) — added:
- *   - SocketConnectionRegistryPort dependency for cross-instance
- *     socketId → {instanceId, userId} tracking. The previous
- *     process-local Map only worked in single-process deployments;
- *     under horizontal scaling a socket that disconnects on
- *     instance B is no longer visible to the in-process map on
- *     instance A, so `PlayerDisconnectedEvent` was being silently
- *     dropped. The Redis-backed registry fixes that.
- */
 @Injectable()
 export class InstanceApplicationService {
   private server: Server | null = null;
@@ -69,6 +50,7 @@ export class InstanceApplicationService {
     private readonly socketConnectionRegistry: SocketConnectionRegistryPort,
     @InjectPinoLogger(InstanceApplicationService.name)
     private readonly logger: PinoLogger,
+    private readonly attemptApplicationService: AttemptApplicationService,
   ) {
     this.subscribeToDomainEvents();
   }
@@ -91,6 +73,8 @@ export class InstanceApplicationService {
         this.onPlayerFinished(event);
       } else if (event instanceof PlayerDisconnectedEvent) {
         this.onPlayerDisconnected(event);
+      } else if (event instanceof PlayerAnsweredEvent) {
+        this.onPlayerAnswered(event);
       } else if (event instanceof InstanceStartedEvent) {
         this.onInstanceStarted(event);
       } else if (event instanceof InstanceClosedEvent) {
@@ -121,18 +105,6 @@ export class InstanceApplicationService {
     return this.instanceService.startInstance(instanceId, user);
   }
 
-  /**
-   * Phase 2 (Gameplay Lifecycle) — controller-facing wrapper for
-   * `InstanceService.startCountdown`. Translates the
-   * `InstanceCountdownAlreadyStartedError` into a 200 idempotent
-   * response: when the host double-clicks, the controller surfaces
-   * the existing countdown anchor rather than a 409.
-   *
-   * Idempotency keys are honored at the controller layer (see
-   * `InstanceController.startCountdown`). The application service is
-   * intentionally simple: it either transitions the row or folds a
-   * `COUNTDOWN_ALREADY_STARTED` error into the existing anchor.
-   */
   async startCountdownForController(
     instanceId: string,
     user: JwtPayload,
@@ -172,26 +144,6 @@ export class InstanceApplicationService {
   ): Promise<{ message: string }> {
     return this.instanceService.cancelCountdown(instanceId, user, 'host_cancelled');
   }
-
-  /**
-   * Phase 2 (Gameplay Lifecycle) — controller-facing breadcrumb for the
-   * optional `idempotencyKey` field on `POST /instances/:id/countdown`.
-   *
-   * The key is honored as a structured log entry; the durable dedup
-   * claim is added in a follow-up that depends on the review module's
-   * `IdempotencyService`. Until then the natural idempotency
-   * (`status === 'countdown'` short-circuits to a 200) is the only
-   * safety net, and this log line gives observability into clients
-   * that want strict per-request dedup.
-   *
-   * TODO (Phase 8 / audit Finding 6): Replace this log-only implementation
-   * with a proper `IdempotencyService` integration. The service should:
-   *   1. Accept `{ idempotencyKey, instanceId, userId }` as input
-   *   2. Check if a record with this key already exists in the idempotency store
-   *   3. If exists, return the cached response (idempotent retry)
-   *   4. If not, execute the operation and store the response with TTL
-   * This method should become async and return the stored/cached result.
-   */
   logCountdownIdempotencyKey(params: {
     instanceId: string;
     userId: string;
@@ -204,12 +156,6 @@ export class InstanceApplicationService {
       keyPrefix: params.idempotencyKey.slice(0, 12),
     });
   }
-
-  // ─── HTTP-shaped methods (used by the REST controller) ────────────────────
-  //
-  // These return the response DTOs that the controller previously constructed
-  // inline. Moving the projection here lets the controller stay thin and the
-  // presenter emit the canonical `{ data, meta }` envelope.
 
   async createInstanceForController(params: {
     quizId: string;
@@ -330,19 +276,6 @@ export class InstanceApplicationService {
     };
   }
 
-  /**
-   * Called by the gateway when a player joins an instance.
-   * Registers the socket in the cross-instance
-   * `SocketConnectionRegistry` so that the disconnect hot path on
-   * any replica can still resolve `{ instanceId, userId }` from the
-   * socket id.
-   *
-   * Phase 3: previously held a process-local Map; under
-   * horizontal scaling that Map only saw sockets that joined on
-   * the current replica, so cross-instance disconnects silently
-   * dropped `PlayerDisconnectedEvent`. The Redis-backed registry
-   * fixes that without changing the call surface.
-   */
   handlePlayerJoinedSocket(params: {
     socketId: string;
     instanceId: string;
@@ -364,18 +297,19 @@ export class InstanceApplicationService {
     });
   }
 
-  /**
-   * Called by the gateway on disconnect.
-   *
-   * Atomically reads-and-deletes the metadata for the given socket
-   * id from the cross-instance registry. If a prior replica, a
-   * dropped TCP segment, or a stale `disconnect` event already
-   * consumed the entry, the call returns `null` and we emit no
-   * event — that is correct: the same disconnect must not surface
-   * twice.
-   */
   async handlePlayerLeftSocket(params: { socketId: string; instanceId: string }): Promise<void> {
-    const meta = await this.socketConnectionRegistry.consume(params.socketId);
+    let meta: { instanceId: string; userId: string } | null = null;
+    try {
+      meta = await this.socketConnectionRegistry.consume(params.socketId);
+    } catch (error) {
+      this.logger.error({
+        event: 'socket_consume_failed',
+        socketId: params.socketId,
+        instanceId: params.instanceId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return;
+    }
     if (!meta) return;
 
     const nowIso = new Date().toISOString();
@@ -392,15 +326,19 @@ export class InstanceApplicationService {
   ): Promise<void> {
     try {
       const instance = await this.instanceService.getInstanceById(instanceId);
-      const totalPlayers = await this.instanceService.getInstancePlayers(instanceId);
+      const totalPlayers = await this.instanceService.countPlayers(instanceId);
       await this.instanceService.notifyHostPlayerDisconnected({
         instanceId,
         hostUserId: instance.hostUserId,
         leavingUserId,
-        totalPlayers: totalPlayers.length,
+        totalPlayers,
       });
     } catch {
-      // Non-fatal: host notification failure must not affect the disconnect flow
+      void this.logger.debug({
+        event: 'instance_host_disconnect_notify_failed',
+        instanceId,
+        leavingUserId,
+      });
     }
   }
 
@@ -429,6 +367,65 @@ export class InstanceApplicationService {
 
   async handleEndGameSocket(instanceId: string, user: JwtPayload): Promise<boolean> {
     return this.instanceService.isHost(instanceId, user.sub);
+  }
+
+  async handleAnswerSubmittedSocket(
+    data: {
+      instanceId: string;
+      questionId: string;
+      selectedOptionId: string | null;
+      timeTakenMs: number;
+    },
+    user: JwtPayload,
+  ): Promise<{
+    accepted: boolean;
+    reason?: string;
+    attemptId: string;
+  }> {
+    const player = await this.instanceService.getPlayerByUserAndInstance({
+      instanceId: data.instanceId,
+      userId: user.sub,
+    });
+
+    if (!player) {
+      return { accepted: false, reason: 'NOT_IN_INSTANCE', attemptId: '' };
+    }
+
+    if (!player.attemptId) {
+      return { accepted: false, reason: 'ATTEMPT_NOT_READY', attemptId: '' };
+    }
+
+    const instance = await this.instanceService.getInstanceById(data.instanceId);
+    if (instance.status !== 'running') {
+      return { accepted: false, reason: 'INSTANCE_NOT_RUNNING', attemptId: player.attemptId };
+    }
+
+    await this.attemptApplicationService.submitAnswer(
+      player.attemptId,
+      data.questionId,
+      data.selectedOptionId,
+      data.timeTakenMs,
+      user,
+    );
+
+    const nowIso = new Date().toISOString();
+    this.eventBus.emitPlayerAnswered(
+      new PlayerAnsweredEvent(
+        data.instanceId,
+        user.sub,
+        player.attemptId,
+        data.questionId,
+        data.selectedOptionId,
+        data.timeTakenMs,
+        null,
+        nowIso,
+      ),
+    );
+
+    return {
+      accepted: true,
+      attemptId: player.attemptId,
+    };
   }
 
   private emitToRoom(room: string, event: string, data: Record<string, unknown>): void {
@@ -478,6 +475,15 @@ export class InstanceApplicationService {
     this.emitToRoom(event.instanceId, 'player_left', {
       socketId: event.socketId,
       userId: event.userId,
+      timestamp: event.timestamp.toISOString(),
+    });
+  }
+
+  private onPlayerAnswered(event: PlayerAnsweredEvent): void {
+    this.emitToRoom(event.instanceId, 'player_answered', {
+      userId: event.userId,
+      attemptId: event.attemptId,
+      questionId: event.questionId,
       timestamp: event.timestamp.toISOString(),
     });
   }

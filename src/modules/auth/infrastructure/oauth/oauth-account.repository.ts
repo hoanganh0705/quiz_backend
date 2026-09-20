@@ -112,7 +112,7 @@ export class OAuthAccountRepository implements OAuthAccountRepositoryPort {
   }): Promise<OAuthAccountRecord> {
     const nowIso = new Date().toISOString();
 
-    const result = await this.db.transaction(async (tx) => {
+    const [result] = await this.db.transaction(async (tx) => {
       const record = await tx
         .insert(oauthAccounts)
         .values({
@@ -145,6 +145,19 @@ export class OAuthAccountRepository implements OAuthAccountRepositoryPort {
       return record;
     });
 
-    return result as unknown as OAuthAccountRecord;
+    // `provider` is `text` in the schema and `OAuthProvider` (literal
+    // union) in the port. Narrow with a runtime check on the value
+    // returned by Postgres so we do not need a structural cast.
+    if (!result || (result.provider !== 'google' && result.provider !== params.provider)) {
+      throw new Error('OAuth account link returned an unexpected provider');
+    }
+
+    return {
+      oauthAccountId: result.oauthAccountId,
+      userId: result.userId,
+      provider: result.provider,
+      providerUserId: result.providerUserId,
+      createdAt: result.createdAt,
+    };
   }
 }

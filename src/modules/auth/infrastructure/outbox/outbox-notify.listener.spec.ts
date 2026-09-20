@@ -42,11 +42,20 @@ describe('OutboxNotifyListener', () => {
       makeLogger() as never,
     );
 
-    await (listener as unknown as { handleNotify(p: string): Promise<void> }).handleNotify(
-      'event-id-1',
-    );
+    const handleNotify = (
+      listener as unknown as {
+        handleNotify(this: void, p: string): Promise<void>;
+      }
+    ).handleNotify;
 
-    expect(processor.processPendingEvents).toHaveBeenCalledTimes(1);
+    await handleNotify.call(listener as unknown as void, 'event-id-1');
+
+    const processPendingEvents = (
+      processor as unknown as {
+        processPendingEvents(this: void): Promise<unknown>;
+      }
+    ).processPendingEvents;
+    expect(processPendingEvents).toHaveBeenCalledTimes(1);
   });
 
   it('ignores notifications with an empty payload', async () => {
@@ -60,12 +69,21 @@ describe('OutboxNotifyListener', () => {
       makeLogger() as never,
     );
 
-    await (listener as unknown as { handleNotify(p: string): Promise<void> }).handleNotify('');
-    await (
-      listener as unknown as { handleNotify(p: string | undefined): Promise<void> }
-    ).handleNotify(undefined);
+    const handleNotify = (
+      listener as unknown as {
+        handleNotify(this: void, p: string | undefined): Promise<void>;
+      }
+    ).handleNotify;
 
-    expect(processor.processPendingEvents).not.toHaveBeenCalled();
+    await handleNotify.call(listener as unknown as void, '');
+    await handleNotify.call(listener as unknown as void, undefined);
+
+    const processPendingEvents = (
+      processor as unknown as {
+        processPendingEvents(this: void): Promise<unknown>;
+      }
+    ).processPendingEvents;
+    expect(processPendingEvents).not.toHaveBeenCalled();
   });
 
   it('runs the fallback poll on demand', async () => {
@@ -79,8 +97,20 @@ describe('OutboxNotifyListener', () => {
       makeLogger() as never,
     );
 
-    await (listener as unknown as { fallbackPoll(): Promise<void> }).fallbackPoll();
-    expect(processor.processPendingEvents).toHaveBeenCalledTimes(1);
+    const fallbackPoll = (
+      listener as unknown as {
+        fallbackPoll(this: void): Promise<void>;
+      }
+    ).fallbackPoll;
+
+    await fallbackPoll.call(listener as unknown as void);
+
+    const processPendingEvents = (
+      processor as unknown as {
+        processPendingEvents(this: void): Promise<unknown>;
+      }
+    ).processPendingEvents;
+    expect(processPendingEvents).toHaveBeenCalledTimes(1);
   });
 
   it('lets handleNotify errors propagate (they are caught at the pg listener wrapper)', async () => {
@@ -94,13 +124,19 @@ describe('OutboxNotifyListener', () => {
       makeLogger() as never,
     );
 
+    const handleNotify = (
+      listener as unknown as {
+        handleNotify(this: void, p: string): Promise<void>;
+      }
+    ).handleNotify;
+
     // The `pg.Client` `notification` listener attaches a
     // `.catch()` to swallow errors. `handleNotify` itself is
     // allowed to reject — the wrapper around it is the
     // responsibility boundary.
-    await expect(
-      (listener as unknown as { handleNotify(p: string): Promise<void> }).handleNotify('x'),
-    ).rejects.toThrow('processor down');
+    await expect(handleNotify.call(listener as unknown as void, 'x')).rejects.toThrow(
+      'processor down',
+    );
   });
 
   it('swallows processor errors from the cron-triggered fallback poll', async () => {
@@ -114,11 +150,15 @@ describe('OutboxNotifyListener', () => {
       makeLogger() as never,
     );
 
+    const fallbackPoll = (
+      listener as unknown as {
+        fallbackPoll(this: void): Promise<void>;
+      }
+    ).fallbackPoll;
+
     // The fallback poll wraps the dispatch in try/catch so a
     // single failure does not stop subsequent ticks.
-    await expect(
-      (listener as unknown as { fallbackPoll(): Promise<void> }).fallbackPoll(),
-    ).resolves.toBeUndefined();
+    await expect(fallbackPoll.call(listener as unknown as void)).resolves.toBeUndefined();
   });
 
   it('is single-flight: a second notification while one is in flight is skipped', async () => {
@@ -140,15 +180,24 @@ describe('OutboxNotifyListener', () => {
 
     const handleNotify = (
       listener as unknown as {
-        handleNotify(p: string): Promise<void>;
+        handleNotify(this: void, p: string): Promise<void>;
       }
-    ).handleNotify.bind(listener);
+    ).handleNotify;
 
-    const first = handleNotify('x');
-    const second = handleNotify('y');
+    // `Function.prototype.call` types `thisArg` as `any`, so the
+    // return is widened to `any`. Wrap in an explicit cast to the
+    // real Promise shape so the lint rule does not see the unsafe
+    // intermediate value.
+    const first = handleNotify.call(listener, 'x') as Promise<void>;
+    const second = handleNotify.call(listener, 'y') as Promise<void>;
     resolveProcessor();
     await Promise.all([first, second]);
 
-    expect(processor.processPendingEvents).toHaveBeenCalledTimes(1);
+    const processPendingEvents = (
+      processor as unknown as {
+        processPendingEvents(this: void): Promise<unknown>;
+      }
+    ).processPendingEvents;
+    expect(processPendingEvents).toHaveBeenCalledTimes(1);
   });
 });

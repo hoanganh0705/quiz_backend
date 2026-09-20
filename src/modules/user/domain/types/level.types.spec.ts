@@ -6,12 +6,6 @@ import {
   resolveLevelTitleLabel,
 } from './level.types';
 
-/**
- * Phase 6 (Accept-Language): pure-function unit tests for the
- * locale negotiator and the level-title localiser. The locale
- * machinery is exported as standalone functions so the helpers
- * can be tested without a DB / module / Nest boot.
- */
 describe('negotiateLocale', () => {
   it('returns the default locale when the header is empty', () => {
     expect(negotiateLocale(undefined)).toBe(DEFAULT_LOCALE);
@@ -47,7 +41,6 @@ describe('negotiateLocale', () => {
   });
 
   it('uses the first occurrence on a tie (sorted by q then insertion order)', () => {
-    // Both have q=1.0; the first listed is preferred.
     expect(negotiateLocale('en, vi')).toBe('en');
   });
 });

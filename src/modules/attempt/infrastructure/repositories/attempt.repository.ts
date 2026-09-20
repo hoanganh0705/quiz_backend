@@ -18,6 +18,14 @@ import type {
   UserAttemptStatsRow,
   AttemptRepositoryPort,
 } from '@/modules/attempt/domain/ports';
+import {
+  AttemptNotFoundError,
+  AttemptNotActiveError,
+} from '@/modules/attempt/domain/errors/attempt-domain.errors';
+import {
+  ATTEMPT_NOT_FOUND_MESSAGE,
+  ATTEMPT_NOT_STARTED_OR_FINISHED_MESSAGE,
+} from '@/modules/attempt/attempt.constants';
 
 const QUIZ_COLUMNS = quizzes as unknown as {
   quizId: AnyPgColumn;
@@ -343,7 +351,7 @@ export class AttemptRepository implements AttemptRepositoryPort {
         });
 
       if (!updated) {
-        throw new Error('Failed to abandon attempt — record not found or not active');
+        throw new AttemptNotFoundError(ATTEMPT_NOT_FOUND_MESSAGE);
       }
 
       await tx.insert(quizAttemptEvents).values({
@@ -367,8 +375,18 @@ export class AttemptRepository implements AttemptRepositoryPort {
     nowIso: string;
     quizId: string;
     userId: string;
-  }): Promise<AttemptRow> {
+  }): Promise<{ completed: AttemptRow; preCompletionCount: number }> {
     return this.db.transaction(async (tx) => {
+      // Count BEFORE updating so we can atomically determine the milestone
+      // inside the same transaction. This avoids a race where a concurrent
+      // completion could increment the count between the commit and a
+      // separate count query.
+      const [countRow] = await tx
+        .select({ count: sql<number>`count(*)::int` })
+        .from(quizAttempts)
+        .where(and(eq(quizAttempts.userId, params.userId), eq(quizAttempts.status, 'completed')));
+      const preCompletionCount = countRow?.count ?? 0;
+
       const [updated] = await tx
         .update(quizAttempts)
         .set({
@@ -401,7 +419,7 @@ export class AttemptRepository implements AttemptRepositoryPort {
         });
 
       if (!updated) {
-        throw new Error('Failed to complete attempt - record not found or already completed');
+        throw new AttemptNotActiveError(ATTEMPT_NOT_STARTED_OR_FINISHED_MESSAGE);
       }
 
       await tx.execute(sql`
@@ -443,16 +461,6 @@ export class AttemptRepository implements AttemptRepositoryPort {
         },
       });
 
-      // Streak-cache transition (Fix #4 — `docs/plans/user-streak-system.md`
-      // §3.1 + §4.3). The SQL is inlined here rather than routed via
-      // `UserRepository.updateStreakCache` to avoid creating a new
-      // Attempt ↔ User ↔ Ranking DI cycle that conflicts with the
-      // existing ranking/attempt cycle. `UserRepository.updateStreakCache`
-      // remains the canonical entry point for any caller that is not
-      // inside `completeAttemptAndSideEffects` (e.g. the Phase B
-      // backfill script). The `$day::date` cast happens in Postgres so
-      // the application server's timezone never leaks into the
-      // streak-day comparison.
       const finishedAtIso = params.nowIso;
       await tx.execute(sql`
         UPDATE users u
@@ -490,7 +498,7 @@ export class AttemptRepository implements AttemptRepositoryPort {
             OR u.last_streak_day IS DISTINCT FROM GREATEST(u.last_streak_day, ${finishedAtIso}::date))
       `);
 
-      return updated as AttemptRow;
+      return { completed: updated as AttemptRow, preCompletionCount };
     });
   }
 

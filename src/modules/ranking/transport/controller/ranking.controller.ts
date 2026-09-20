@@ -1,17 +1,3 @@
-/**
- * Ranking Controller
- *
- * API endpoints for leaderboards and user ranks.
- * Part of Phase 3 - Leaderboards & APIs.
- *
- * Error shape: All error responses (RFC 7807 `ProblemDetailDto`) are
- * produced by `GlobalExceptionFilter` after Phase 3.2. The prior
- * `RankingDomainExceptionFilter` (a `@Catch()` catch-all that
- * shadowed the global filter) has been removed. The
- * `RankingDomainErrorDto` is also gone — see the plan §8.4.2
- * completion criterion.
- */
-
 import {
   Controller,
   Get,
@@ -80,15 +66,6 @@ import { GetUserRankingHistoryQueryHandler } from '../../application/get-user-ra
 import { RecentWinnersService } from '../../application/recent-winners.service';
 import { RecentWinnersResponseDto } from '../../dto/response/recent-winners-response.dto';
 
-// ─── Local helper decorators ───────────────────────────────────────────────────
-//
-// All error responses (401 from JwtGuard, 400 from class-validator /
-// date-range validation, 404 from cross-module UserNotFoundError, 500
-// from `InvalidXpEventError`/`RankCalculationError`/`PeriodResetError`)
-// are routed through `GlobalExceptionFilter` as RFC 7807
-// `ProblemDetailDto` after Phase 3.2.
-
-/** 401 — JwtGuard blocks unauthenticated requests. */
 function rankingUnauthorizedResponse(): MethodDecorator {
   return applyDecorators(
     ApiBearerAuth(AUTH_SECURITY_NAME),
@@ -104,7 +81,6 @@ function rankingUnauthorizedResponse(): MethodDecorator {
   );
 }
 
-/** 400 — validation errors (class-validator, date range checks). */
 function rankingBadRequestResponse(): MethodDecorator {
   return applyDecorators(
     ApiBadRequestResponse({
@@ -118,15 +94,6 @@ function rankingBadRequestResponse(): MethodDecorator {
   );
 }
 
-/**
- * Documents a UUID path parameter and feeds it through `ParseUUIDPipe`.
- *
- * Without this, a value like `/leaderboard/not-a-uuid` reached the SQL layer
- * and produced a 500 (`invalid input syntax for type uuid`). The pipe turns
- * it into a 400 at the boundary, and the `@ApiParam` annotation teaches
- * generated SDKs / Swagger UI to render `format: uuid` on the parameter
- * (see audit L-02).
- */
 function rankingUserIdParam(): MethodDecorator {
   return applyDecorators(
     ApiParam({
@@ -157,11 +124,6 @@ export class RankingController {
     private readonly presenter: RankingPresenter,
   ) {}
 
-  // ─── GET /leaderboard ─────────────────────────────────────────────────────
-  //
-  // Public endpoint — @Public() skips JwtGuard, so no 401 possible.
-  // Only 400 (validation) and 500 (server errors) can occur.
-  // No domain errors are thrown — this is a read-only cached leaderboard query.
   @Get()
   @Public()
   @Throttle({ default: { limit: 30, ttl: 60_000 } })
@@ -169,7 +131,7 @@ export class RankingController {
     summary: 'Get global leaderboard',
     description:
       'Returns the global leaderboard with optional period filter. ' +
-      'Supports offset-based pagination via `limit` (1–500, default 100) and `offset`. ' +
+      'Supports offset-based pagination via `limit` (1–500, default 100) and `off set`. ' +
       'No 404 or 403 is possible on this endpoint. ' +
       'Note: `userPosition` is always `null` on this public variant.',
   })
@@ -231,12 +193,6 @@ export class RankingController {
     return this.presenter.getTopMovers(result);
   }
 
-  // ─── GET /leaderboard/recent-winners ──────────────────────────────────────
-  //
-  // Phase 3 (S-15): the live-winners carousel. Reads the
-  // `tournament_won` rows from `user_activity_events`, joins
-  // the user record for the avatar/display name, and returns
-  // the most-recent 10 winners.
   @Get('recent-winners')
   @Public()
   @Throttle({ default: { limit: 30, ttl: 60_000 } })

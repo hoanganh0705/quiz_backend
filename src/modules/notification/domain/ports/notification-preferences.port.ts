@@ -7,6 +7,8 @@ export const NOTIFICATION_PREFERENCES_REPOSITORY_PORT = Symbol(
 export interface NotificationPreferencesRepositoryPort {
   getPreferences(userId: string): Promise<NotificationPreferencesRow | null>;
 
+  getManyPreferences(userIds: string[]): Promise<Map<string, NotificationPreferencesRow>>;
+
   upsertPreferences(
     userId: string,
     prefs: Partial<NotificationPreferencesRow>,

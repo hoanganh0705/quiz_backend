@@ -8,15 +8,6 @@ type UserActivityCursorPayload = {
 };
 
 export class UserActivityCursorMapper {
-  // Phase 7 (F-26): the local `isUuid` + UUID regex have been removed
-  // in favour of the shared `isUuidV7Strict` from
-  // `@/common/utils/id-generator`. The shared helper is the single
-  // source of truth for the UUIDv7 shape (version=7 nibble + variant
-  // bits) across the codebase. Future bug-fixes / version bumps now
-  // only have to touch one place — the local copy here was a duplicate
-  // of the same regex used by `report-cursor.mapper.ts`,
-  // `review-cursor.mapper.ts`, and the tournament-history mapper.
-
   static parse(cursor: string): UserActivityCursorPayload {
     const parsed = decodeBase64JsonCursor<UserActivityCursorPayload>(cursor);
 

@@ -29,6 +29,7 @@ import type { JwtPayload } from '@/common/guards/jwt.guard';
 import { CommentApplicationService } from '../../application/comment-application.service';
 import { CommentPresenter } from '../presenters/comment.presenter';
 import { CreateCommentDto, ListCommentsQueryDto } from '../../dto/request';
+import { COMMENT_THROTTLE } from './throttle.constants';
 import {
   ApiCreateCommentResponses,
   ApiListQuizCommentsResponses,
@@ -44,6 +45,12 @@ export class QuizCommentController {
 
   @Get(':quizId/comments')
   @Public()
+  @Throttle({
+    default: {
+      limit: COMMENT_THROTTLE.listQuizComments.limit,
+      ttl: COMMENT_THROTTLE.listQuizComments.ttl,
+    },
+  })
   @ApiListQuizCommentsResponses()
   async listQuizComments(
     @OptionalCurrentUser() viewer: JwtPayload | undefined,
@@ -55,7 +62,12 @@ export class QuizCommentController {
   }
 
   @Post(':quizId/comments')
-  @Throttle({ default: { limit: 20, ttl: 60_000 } })
+  @Throttle({
+    default: {
+      limit: COMMENT_THROTTLE.createComment.limit,
+      ttl: COMMENT_THROTTLE.createComment.ttl,
+    },
+  })
   @HttpCode(HttpStatus.CREATED)
   @ApiCreateCommentResponses()
   async createComment(

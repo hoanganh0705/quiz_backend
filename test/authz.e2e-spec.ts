@@ -1,43 +1,4 @@
 /// <reference types="jest" />
-/**
- * Phase 4 #2 — Authorization matrix E2E tests.
- *
- * Loops every row in `AUTHZ_MATRIX` and asserts that calling an
- * endpoint with a given role returns the documented outcome:
- *
- *   - "allow" role → success status (e.g. `200`, `201`).
- *   - `public` role on a protected endpoint → `401`.
- *   - authenticated non-admin/non-owner role on a protected
- *     endpoint → `403`.
- *
- * Why a fixture controller instead of booting AppModule?
- * ------------------------------------------------------
- * Two reasons:
- *
- *   1. The full AppModule requires Postgres + Redis. We want these
- *      authz tests to run as part of `pnpm test:e2e` without
- *      docker. The shape — request → controller → response — is
- *      identical to the production controller path; what the
- *      fixture abstracts is the database layer.
- *
- *   2. Authz regressions are authorization-specific, not data-
- *      specific. A row in the matrix says "POST /attempts must
- *      require `user` role"; the database contents of `attempts`
- *      are irrelevant to that assertion. So we test with
- *      deterministic placeholder UUIDs and let a header
- *      (`x-auth-role`) drive the role decision — mirroring how
- *      the production `JwtGuard` extracts the role from the
- *      `Authorization` header.
- *
- * What a regression looks like
- * ----------------------------
- * Imagine someone deletes the `@Roles('user')` decorator from
- * `AttemptsController.create`. The matrix row for `POST
- * /attempts` requires `allow: ['user', 'admin']`. The
- * `public`-role assertion would still see `200` (the controller
- * would happily serve any caller), so the matrix assertion
- * `expect(401).toBe(401)` for that role would fail.
- */
 import {
   BadRequestException,
   Controller,
@@ -49,6 +10,7 @@ import {
   Param,
   Patch,
   Post,
+  Put,
   Query,
   Req,
   UnauthorizedException,
@@ -167,10 +129,73 @@ class AuthzFixtureController {
     rolesRequired(req, ['user', 'admin']);
     return ApiResponse.ok({});
   }
+  @Patch('comments/:commentId')
+  @HttpCode(200)
+  updateComment(@Req() req: RoleRequest, @Param('commentId') commentId: string) {
+    rolesRequired(req, ['owner', 'admin']);
+    return ApiResponse.ok({ commentId });
+  }
   @Delete('comments/:commentId')
   deleteComment(@Req() req: RoleRequest, @Param('commentId') commentId: string) {
     rolesRequired(req, ['owner', 'admin']);
     return ApiResponse.ok({ commentId });
+  }
+  @Put('comments/:commentId/vote')
+  castVote(@Req() req: RoleRequest, @Param('commentId') commentId: string) {
+    rolesRequired(req, ['user', 'admin']);
+    return ApiResponse.ok({ commentId });
+  }
+  @Delete('comments/:commentId/vote')
+  removeVote(@Req() req: RoleRequest, @Param('commentId') commentId: string) {
+    rolesRequired(req, ['user', 'admin']);
+    return ApiResponse.ok({ commentId });
+  }
+  @Post('comments/:commentId/reports')
+  @HttpCode(201)
+  openReport(@Req() req: RoleRequest, @Param('commentId') commentId: string) {
+    rolesRequired(req, ['user', 'admin']);
+    return ApiResponse.ok({ commentId });
+  }
+  @Post('comments/:commentId/hide')
+  hideComment(@Req() req: RoleRequest, @Param('commentId') commentId: string) {
+    rolesRequired(req, ['admin']);
+    return ApiResponse.ok({ commentId });
+  }
+  @Post('comments/:commentId/restore')
+  restoreComment(@Req() req: RoleRequest, @Param('commentId') commentId: string) {
+    rolesRequired(req, ['admin']);
+    return ApiResponse.ok({ commentId });
+  }
+  @Get('comments/reports')
+  listReports(@Req() req: RoleRequest) {
+    rolesRequired(req, ['admin']);
+    return ApiResponse.ok({ items: [] });
+  }
+  @Post('comments/reports/:reportId/review')
+  reviewReport(@Req() req: RoleRequest, @Param('reportId') reportId: string) {
+    rolesRequired(req, ['admin']);
+    return ApiResponse.ok({ reportId });
+  }
+  @Post('quizzes/:quizId/comments')
+  @HttpCode(201)
+  createQuizComment(@Req() req: RoleRequest, @Param('quizId') quizId: string) {
+    rolesRequired(req, ['user', 'admin']);
+    return ApiResponse.ok({ quizId });
+  }
+  @Get('quizzes/:quizId/comments')
+  listQuizComments(@Req() req: RoleRequest, @Param('quizId') quizId: string) {
+    rolesRequired(req, ['public', 'user', 'admin']);
+    return ApiResponse.ok({ items: [], quizId });
+  }
+  @Get('users/me/comments')
+  listMyComments(@Req() req: RoleRequest) {
+    rolesRequired(req, ['user', 'admin']);
+    return ApiResponse.ok({ items: [] });
+  }
+  @Get('users/:userId/comments')
+  listUserComments(@Req() req: RoleRequest, @Param('userId') userId: string) {
+    rolesRequired(req, ['public', 'user', 'admin']);
+    return ApiResponse.ok({ items: [], userId });
   }
   @Post('reviews')
   @HttpCode(201)
@@ -265,7 +290,7 @@ class AuthzFixtureController {
   }
 }
 
-describe('Phase 4 #2 — authorization matrix', () => {
+describe('Authorization matrix (e2e)', () => {
   let app: INestApplication;
 
   beforeAll(async () => {

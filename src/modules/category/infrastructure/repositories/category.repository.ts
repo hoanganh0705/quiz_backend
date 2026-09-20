@@ -1,10 +1,11 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, desc, eq, isNull, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, isNull, or, sql } from 'drizzle-orm';
 import { DRIZZLE } from '@/core/database/drizzle.constants';
 import type { DrizzleDB } from '@/core/database/database.module';
 import { categories } from '@/core/database/schema';
 import { CategorySlugConflictError } from '../../domain/errors';
 import type { CategoryRepositoryPort } from '../../domain/ports/category-repository.port';
+import type { CategorySortField, SortDirection } from '../../domain/ports/category-repository.port';
 import type {
   CategoryRow,
   CategoryRowWithDeleted,
@@ -62,8 +63,10 @@ export class CategoryRepository implements CategoryRepositoryPort {
   async findMany(params: {
     limit: number;
     cursor?: { createdAt: string; categoryId: string } | null;
+    sort?: { field: CategorySortField; direction: SortDirection };
   }): Promise<CategoryRow[]> {
     const { limit, cursor } = params;
+    const sortSpec = params.sort ?? { field: 'createdAt', direction: 'desc' };
 
     const cursorCondition = cursor
       ? or(
@@ -75,6 +78,9 @@ export class CategoryRepository implements CategoryRepositoryPort {
         )
       : undefined;
 
+    const primaryColumn = sortSpec.field === 'name' ? categories.name : categories.createdAt;
+    const primaryOrder = sortSpec.direction === 'asc' ? asc(primaryColumn) : desc(primaryColumn);
+
     const rows = await this.db
       .select(CATEGORY_COLUMNS)
       .from(categories)
@@ -83,7 +89,7 @@ export class CategoryRepository implements CategoryRepositoryPort {
           ? and(isNull(categories.deletedAt), cursorCondition)
           : isNull(categories.deletedAt),
       )
-      .orderBy(desc(categories.createdAt), desc(categories.categoryId))
+      .orderBy(primaryOrder, desc(categories.categoryId))
       .limit(limit + 1);
 
     return rows;

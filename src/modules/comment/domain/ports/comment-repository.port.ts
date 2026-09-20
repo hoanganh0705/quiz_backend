@@ -36,13 +36,22 @@ import type { AuthorView } from '../types';
 
 export const COMMENT_REPOSITORY_PORT = Symbol('COMMENT_REPOSITORY_PORT');
 
+import type { NodePgQueryResultHKT } from 'drizzle-orm/node-postgres';
+import type { PgTransaction } from 'drizzle-orm/pg-core';
+
+export type CommentTx = PgTransaction<
+  NodePgQueryResultHKT,
+  Record<string, never>,
+  Record<string, never>
+>;
+
 /**
  * Opaque database client. The full Drizzle type leaks into the
  * implementation but is collapsed to a brand-typed alias here so
  * call-sites do not need to import drizzle-orm.
  */
-export type Db = unknown & {
-  // Brand field keeps the type nominal so `unknown` callers cannot
+export type Db = {
+  // Brand field keeps the type nominal so callers cannot
   // accidentally pass a non-Drizzle value as `tx`.
   readonly __brand: 'Db';
 };
@@ -81,7 +90,10 @@ export interface CommentRepositoryPort {
   listMyComments(params: ListMyCommentsParams): Promise<MyCommentView[]>;
 
   editComment(params: EditCommentParams): Promise<CommentView>;
-  softDeleteComment(params: { commentId: string; authorId: string }, tx?: Db): Promise<void>;
+  softDeleteComment(
+    params: { commentId: string; authorId: string },
+    tx?: Db,
+  ): Promise<{ deleted: boolean; deletedAt: string | null }>;
   setHiddenState(
     params: { commentId: string; hidden: boolean; moderatorId: string },
     tx?: Db,
@@ -93,7 +105,11 @@ export interface CommentRepositoryPort {
     deltaUpvotes: number,
     deltaDownvotes: number,
     tx: Db,
-  ): Promise<void>;
+  ): Promise<{
+    votesCount: number;
+    upvotesCount: number;
+    downvotesCount: number;
+  }>;
   incrementRepliesCount(commentId: string, delta: number, tx: Db): Promise<void>;
   countReplies(parentCommentId: string): Promise<number>;
 
@@ -119,7 +135,14 @@ export interface CommentRepositoryPort {
     details: string | null;
   }): Promise<ReportView>;
   listReports(params: ListReportsParams): Promise<ReportView[]>;
-  reviewReport(params: ReviewReportParams): Promise<ReportView>;
+  reviewReport(params: ReviewReportParams, tx: Db): Promise<ReportView>;
+
+  /**
+   * Read a single report row inside a transaction so callers can
+   * capture the previous status (used for state-transition guards
+   * and audit breadcrumbs).
+   */
+  getReportByIdForUpdate(reportId: string, tx: Db): Promise<ReportView | null>;
 
   // ─── Counter reconciler ──────────────────────────────────────────────────
   /**

@@ -14,15 +14,6 @@ export class ReportedReviewItemDto {
   })
   reviewId!: string;
 
-  // Phase 4 / Issue #35 — the four fields below are nullable
-  // because the underlying review row may have been hard-deleted
-  // (the FK is `ON DELETE CASCADE`). The report itself still
-  // exists and the user needs to see it, but the joined context
-  // fields are gone. A `null` here is the contract signal that the
-  // review no longer exists; clients should render a
-  // "[deleted review]" placeholder rather than treat the absence
-  // as data corruption.
-
   @ApiProperty({
     description: 'Quiz identifier',
     example: '660e8400-e29b-71d4-a716-446655440000',
