@@ -1,10 +1,15 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Cron } from '@nestjs/schedule';
+import { Inject, Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
-import { and, asc, eq, isNull, lte, sql } from 'drizzle-orm';
+import { and, asc, eq, isNotNull, isNull, lte, sql } from 'drizzle-orm';
 import { DRIZZLE } from '@/core/database/drizzle.constants';
 import type { DrizzleDB } from '@/core/database/database.module';
 import { outboxEvents } from '@/core/database/schema';
-import { QuizAnalyticsService } from '@/modules/quiz/domain/analytics';
+import {
+  REVIEW_DOMAIN_EVENT_BUS,
+  ReviewSubmittedEvent,
+  type ReviewDomainEventBusPort,
+} from '@/modules/review/domain/events';
 
 const POISON_THRESHOLD = 10;
 const BASE_BACKOFF_MS = 30_000;
@@ -18,15 +23,18 @@ export class ReviewOutboxPayloadError extends Error {
 }
 
 @Injectable()
-export class ReviewOutboxProcessorService {
+export class ReviewOutboxProcessorService implements OnModuleDestroy {
   private static readonly BATCH_SIZE = 100;
 
   constructor(
     @Inject(DRIZZLE) private readonly db: DrizzleDB,
-    private readonly quizAnalyticsService: QuizAnalyticsService,
+    @Inject(REVIEW_DOMAIN_EVENT_BUS)
+    private readonly reviewEventBus: ReviewDomainEventBusPort,
     @InjectPinoLogger(ReviewOutboxProcessorService.name)
     private readonly logger: PinoLogger,
   ) {}
+
+  onModuleDestroy(): void {}
 
   async processPendingEvents(): Promise<{ processed: number; failed: number }> {
     const nowIso = new Date().toISOString();
@@ -47,7 +55,8 @@ export class ReviewOutboxProcessorService {
         ),
       )
       .orderBy(asc(outboxEvents.createdAt))
-      .limit(ReviewOutboxProcessorService.BATCH_SIZE);
+      .limit(ReviewOutboxProcessorService.BATCH_SIZE)
+      .for('update', { skipLocked: true });
 
     if (events.length === 0) {
       return { processed: 0, failed: 0 };
@@ -81,13 +90,14 @@ export class ReviewOutboxProcessorService {
               lastError: message,
               lastAttemptAt: nowIso,
               nextAttemptAt: sql`NULL`,
-              processedAt: nowIso,
+              failedAt: nowIso,
+              dlqReason: `poison_threshold_exceeded:${message}`,
               attemptCount,
             })
             .where(eq(outboxEvents.eventId, event.eventId));
 
           this.logger.error({
-            event: 'review_outbox_poison',
+            event: 'review_outbox_dlq',
             eventType: event.eventType,
             eventId: event.eventId,
             attemptCount,
@@ -129,7 +139,54 @@ export class ReviewOutboxProcessorService {
     if (!quizId) {
       throw new ReviewOutboxPayloadError('payload missing quizId');
     }
-    await this.quizAnalyticsService.refreshReviewMetrics(quizId);
+
+    const payload = (event.payload ?? {}) as Record<string, unknown>;
+    this.reviewEventBus.dispatchToSubscribers(
+      new ReviewSubmittedEvent({
+        quizId,
+
+        quizTitle: typeof payload['quizTitle'] === 'string' ? payload['quizTitle'] : '',
+        quizCreatorId: typeof payload['quizCreatorId'] === 'string' ? payload['quizCreatorId'] : '',
+
+        reviewId: '',
+        userId: '',
+        rating: 0,
+      }),
+    );
+  }
+
+  @Cron('*/5 * * * *')
+  async monitorDeadLetterQueue(): Promise<void> {
+    const rows = await this.db
+      .select({
+        eventId: outboxEvents.eventId,
+        aggregateType: outboxEvents.aggregateType,
+        eventType: outboxEvents.eventType,
+        attemptCount: outboxEvents.attemptCount,
+        failedAt: outboxEvents.failedAt,
+        dlqReason: outboxEvents.dlqReason,
+        lastError: outboxEvents.lastError,
+      })
+      .from(outboxEvents)
+      .where(
+        and(
+          eq(outboxEvents.aggregateType, 'review'),
+          isNull(outboxEvents.processedAt),
+          isNotNull(outboxEvents.failedAt),
+          isNotNull(outboxEvents.dlqReason),
+        ),
+      )
+      .limit(1000);
+
+    if (rows.length === 0) {
+      return;
+    }
+
+    this.logger.error({
+      event: 'review_outbox_dlq_alert',
+      totalDlqEvents: rows.length,
+      sampleEventIds: rows.slice(0, 5).map((e) => e.eventId),
+    });
   }
 }
 

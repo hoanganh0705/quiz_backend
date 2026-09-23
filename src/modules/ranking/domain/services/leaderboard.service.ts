@@ -47,7 +47,6 @@ export class LeaderboardService {
     const cacheKey = `lb:${period}:${limit}:${offset}`;
     const ttlMs = RANKING_CONSTANTS.LEADERBOARD_CACHE_TTL * 1000;
 
-    // Use stampede protection for expensive leaderboard queries
     const cachedPayload = await this.cache.getOrSetWithStampedeProtection<{
       entries: LeaderboardEntryDto[];
       totalParticipants: number;
@@ -84,6 +83,66 @@ export class LeaderboardService {
         limit,
         offset,
         hasMore: offset + cachedPayload.entries.length < cachedPayload.totalParticipants,
+      },
+    };
+  }
+
+  async getGlobalLeaderboardCursor(params: {
+    period: RankingPeriodEnum | LeaderboardPeriodEnum;
+    limit: number;
+    cursorXp?: number | null;
+    cursorCreatedAt?: string | null;
+    cursorUserId?: string | null;
+    currentUserId?: string;
+  }): Promise<LeaderboardResponseDto> {
+    const { period: periodEnum, limit, currentUserId } = params;
+    const period = enumToPeriod(periodEnum);
+
+    const hasCursor =
+      params.cursorXp !== null &&
+      params.cursorXp !== undefined &&
+      params.cursorCreatedAt !== null &&
+      params.cursorCreatedAt !== undefined &&
+      params.cursorUserId !== null &&
+      params.cursorUserId !== undefined;
+
+    const entries = hasCursor
+      ? await this.rankingRepository.getLeaderboardKeyset({
+          period,
+          limit,
+          cursorXp: params.cursorXp ?? null,
+          cursorCreatedAt: params.cursorCreatedAt ?? null,
+          cursorUserId: params.cursorUserId ?? null,
+        })
+      : await this.rankingRepository.getLeaderboardCursorFirstPage({ period, limit });
+
+    let userPosition: UserRankPositionDto | null = null;
+    if (currentUserId) {
+      userPosition = (await this.getUserPosition(currentUserId, periodEnum)) ?? null;
+    }
+
+    const lastEntry = entries[entries.length - 1];
+    const nextCursor =
+      entries.length === limit && lastEntry
+        ? {
+            xp: Number(lastEntry.xp),
+            createdAt:
+              (lastEntry as LeaderboardRow & { createdAt?: string }).createdAt ??
+              new Date().toISOString(),
+            userId: lastEntry.userId,
+          }
+        : null;
+
+    return {
+      entries: this.transformLeaderboardEntries(entries, 0),
+      totalParticipants: await this.getCachedTotalParticipants(period),
+      userPosition,
+      period: this.buildPeriodInfo(period),
+      pagination: {
+        limit,
+        offset: 0,
+        hasMore: nextCursor !== null,
+        cursor: nextCursor ?? undefined,
       },
     };
   }

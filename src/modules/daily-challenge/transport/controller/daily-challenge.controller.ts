@@ -98,8 +98,7 @@ export class DailyChallengeController {
    * `OptionalCurrentUser` and return an empty `items` array when
    * the viewer is unauthenticated.
    *
-   * Phase 4 (F-2): powers `<ChallengePieChart />` on the
-   * Daily Challenge page.
+   * Powers `<ChallengePieChart />` on the Daily Challenge page.
    */
   @Get('history/categories')
   @Public()

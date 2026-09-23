@@ -12,7 +12,7 @@
  * `ExternalXpEarnedEvent` to the external XP event bus so the ranking
  * module can credit the user's XP ledger. This is the canonical XP path
  * for tournament wins — the BullMQ worker is intentionally NOT a
- * publisher of XP (Issue #dual-xp-publication).
+ * publisher of XP.
  *
  * Retry strategy:
  *   delay = base_delay_seconds × 2^(attemptCount - 1)
@@ -20,22 +20,23 @@
  *
  * After 8 attempts the event is moved to DLQ (failed_at + dlq_reason set).
  *
- * Issue #5 (Events Lost After Commit) — the transactional outbox guarantees
- * at-least-once delivery by persisting events in the same DB transaction as
- * the business write. The processor drains the outbox reliably.
+ * The transactional outbox guarantees at-least-once delivery by persisting
+ * events in the same DB transaction as the business write. The processor
+ * drains the outbox reliably.
  *
- * Issue #41 (Dual Delivery) — the processor dispatches to both the internal
- * bus and shared bus. In-process handlers (`TournamentListenerAdapter`) are
- * moved to subscribe to the outbox processor's direct dispatch instead of the
- * BullMQ bus, eliminating the duplicate delivery from the previous architecture.
+ * The processor dispatches to both the internal bus and shared bus.
+ * In-process handlers (`TournamentListenerAdapter`) subscribe to the outbox
+ * processor's direct dispatch instead of the BullMQ bus, eliminating the
+ * duplicate delivery from the previous architecture.
  *
- * Issue #9 (XP Idempotency) — the `ExternalXpEarnedEvent` published by this
- * processor carries `idempotencyKey: ${tournamentId}:${userId}:${rank}`, which
- * the XP consumer uses for at-most-once deduplication.
+ * The `ExternalXpEarnedEvent` published by this processor carries
+ * `idempotencyKey: ${tournamentId}:${userId}:${rank}`, which the XP consumer
+ * uses for at-most-once deduplication.
  */
 
 import { Inject, Injectable, OnModuleInit } from '@nestjs/common';
-import { and, asc, eq, isNull, lte } from 'drizzle-orm';
+import { Cron } from '@nestjs/schedule';
+import { and, asc, eq, isNotNull, isNull, lte } from 'drizzle-orm';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { DRIZZLE } from '@/core/database/drizzle.constants';
 import type { DrizzleDB } from '@/core/database/database.module';
@@ -119,7 +120,8 @@ export class TournamentOutboxProcessorService implements OnModuleInit {
         ),
       )
       .orderBy(asc(outboxEvents.createdAt))
-      .limit(this.BATCH_SIZE);
+      .limit(this.BATCH_SIZE)
+      .for('update', { skipLocked: true });
 
     if (events.length === 0) {
       return { processed: 0, failed: 0 };
@@ -178,7 +180,6 @@ export class TournamentOutboxProcessorService implements OnModuleInit {
     return { processed, failed };
   }
 
-  // eslint-disable-next-line @typescript-eslint/require-await
   private async dispatchEvent(event: OutboxEventRow): Promise<void> {
     const domainEvent = this.deserializePayload(event);
     if (!domainEvent) {
@@ -189,8 +190,9 @@ export class TournamentOutboxProcessorService implements OnModuleInit {
 
     // Restore correlation ID to AsyncLocalStorage so downstream handlers
     // can read it via getCorrelationId() without generating new ones.
-    // correlationIdStorage.run is synchronous; intentionally not awaited.
-    void correlationIdStorage.run({ correlationId }, () => {
+    // correlationIdStorage.run is synchronous; the XP publish below runs
+    // AFTER the storage scope closes to keep the await chain linear.
+    correlationIdStorage.run({ correlationId }, () => {
       // Dispatch #1: Internal bus → notification handlers
       // (TournamentListenerAdapter, TournamentAttemptEventListenerAdapter)
       this.internalEventBus.publish(domainEvent);
@@ -201,52 +203,51 @@ export class TournamentOutboxProcessorService implements OnModuleInit {
       if (sharedEvent) {
         this.sharedEventBus.publish(sharedEvent);
       }
+    });
 
-      // Dispatch #3: External XP bus for tournament.won events.
-      // Canonical tournament-XP publisher: emits an ExternalXpEarnedEvent
-      // with a deterministic idempotencyKey so the ranking consumer can
-      // dedupe. Awaited so a transport failure surfaces as an outbox retry
-      // rather than a silently dropped XP grant.
-      if (domainEvent.eventType === 'tournament.won') {
-        const won = domainEvent;
-        const xp = computeTournamentXp(won.rank);
-        if (xp > 0) {
-          const xpEvent: ExternalXpEarnedEvent = {
-            eventType: 'external.xp.earned',
+    // Dispatch #3: External XP bus for tournament.won events.
+    // Canonical tournament-XP publisher: emits an ExternalXpEarnedEvent
+    // with a deterministic idempotencyKey so the ranking consumer can
+    // dedupe. Awaited so a transport failure surfaces as an outbox retry
+    // rather than a silently dropped XP grant.
+    if (domainEvent.eventType === 'tournament.won') {
+      const won = domainEvent;
+      const xp = computeTournamentXp(won.rank);
+      if (xp > 0) {
+        const xpEvent: ExternalXpEarnedEvent = {
+          eventType: 'external.xp.earned',
+          userId: won.userId,
+          amount: xp,
+          source: 'tournament',
+          tournamentId: won.tournamentId,
+          idempotencyKey: `${won.tournamentId}:${won.userId}:${won.rank}`,
+          rank: won.rank,
+          correlationId,
+          timestamp: won.timestamp,
+        };
+        try {
+          await this.externalEventBus.publishXpEarned(xpEvent);
+          this.logger.debug({
+            event: 'tournament_xp_dispatched',
             userId: won.userId,
-            amount: xp,
-            source: 'tournament',
             tournamentId: won.tournamentId,
-            idempotencyKey: `${won.tournamentId}:${won.userId}:${won.rank}`,
             rank: won.rank,
-            correlationId,
-            timestamp: won.timestamp,
-          };
-          this.externalEventBus
-            .publishXpEarned(xpEvent)
-            .then(() => {
-              this.logger.debug({
-                event: 'tournament_xp_dispatched',
-                userId: won.userId,
-                tournamentId: won.tournamentId,
-                rank: won.rank,
-                xp,
-                idempotencyKey: xpEvent.idempotencyKey,
-              });
-            })
-            .catch((error: unknown) => {
-              this.logger.error({
-                event: 'tournament_xp_dispatch_failed',
-                userId: won.userId,
-                tournamentId: won.tournamentId,
-                rank: won.rank,
-                idempotencyKey: xpEvent.idempotencyKey,
-                error: error instanceof Error ? error.message : String(error),
-              });
-            });
+            xp,
+            idempotencyKey: xpEvent.idempotencyKey,
+          });
+        } catch (error) {
+          this.logger.error({
+            event: 'tournament_xp_dispatch_failed',
+            userId: won.userId,
+            tournamentId: won.tournamentId,
+            rank: won.rank,
+            idempotencyKey: xpEvent.idempotencyKey,
+            error: error instanceof Error ? error.message : String(error),
+          });
+          throw error;
         }
       }
-    });
+    }
   }
 
   private deserializePayload(event: OutboxEventRow): TournamentDomainEvent | null {
@@ -257,6 +258,7 @@ export class TournamentOutboxProcessorService implements OnModuleInit {
           p['tournamentId'] as string,
           p['userId'] as string,
           p['tournamentTitle'] as string,
+          (p['categoryTitle'] as string | null) ?? null,
           new Date(p['timestamp'] as string),
         );
       case 'tournament.participant.withdrawn':
@@ -270,6 +272,7 @@ export class TournamentOutboxProcessorService implements OnModuleInit {
           p['userId'] as string,
           p['tournamentId'] as string,
           p['tournamentTitle'] as string,
+          (p['categoryTitle'] as string | null) ?? null,
           p['startsAt'] as string,
           new Date(p['timestamp'] as string),
         );
@@ -278,6 +281,7 @@ export class TournamentOutboxProcessorService implements OnModuleInit {
           p['userId'] as string,
           p['tournamentId'] as string,
           p['tournamentTitle'] as string,
+          (p['categoryTitle'] as string | null) ?? null,
           p['rank'] as number,
           p['totalParticipants'] as number,
           new Date(p['timestamp'] as string),
@@ -287,6 +291,7 @@ export class TournamentOutboxProcessorService implements OnModuleInit {
           p['userId'] as string,
           p['tournamentId'] as string,
           p['tournamentTitle'] as string,
+          (p['categoryTitle'] as string | null) ?? null,
           p['rank'] as number,
           p['prize'] as string | undefined,
           new Date(p['timestamp'] as string),
@@ -305,6 +310,7 @@ export class TournamentOutboxProcessorService implements OnModuleInit {
           tournamentId: e.tournamentId,
           userId: e.userId,
           tournamentTitle: e.tournamentTitle,
+          categoryTitle: e.categoryTitle,
           timestamp: e.occurredAt,
         };
       }
@@ -324,6 +330,7 @@ export class TournamentOutboxProcessorService implements OnModuleInit {
           tournamentId: e.tournamentId,
           userId: e.userId,
           tournamentTitle: e.tournamentTitle,
+          categoryTitle: e.categoryTitle,
           rank: e.rank,
           timestamp: e.timestamp,
         };
@@ -401,6 +408,40 @@ export class TournamentOutboxProcessorService implements OnModuleInit {
       );
     }
     return false;
+  }
+
+  @Cron('*/5 * * * *')
+  async monitorDeadLetterQueue(): Promise<void> {
+    const rows = await this.db
+      .select({
+        eventId: outboxEvents.eventId,
+        aggregateType: outboxEvents.aggregateType,
+        eventType: outboxEvents.eventType,
+        attemptCount: outboxEvents.attemptCount,
+        failedAt: outboxEvents.failedAt,
+        dlqReason: outboxEvents.dlqReason,
+        lastError: outboxEvents.lastError,
+      })
+      .from(outboxEvents)
+      .where(
+        and(
+          eq(outboxEvents.aggregateType, 'tournament'),
+          isNull(outboxEvents.processedAt),
+          isNotNull(outboxEvents.failedAt),
+          isNotNull(outboxEvents.dlqReason),
+        ),
+      )
+      .limit(1000);
+
+    if (rows.length === 0) {
+      return;
+    }
+
+    this.logger.error({
+      event: 'tournament_outbox_dlq_alert',
+      totalDlqEvents: rows.length,
+      sampleEventIds: rows.slice(0, 5).map((e) => e.eventId),
+    });
   }
 }
 

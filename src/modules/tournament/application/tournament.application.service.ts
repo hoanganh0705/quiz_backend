@@ -378,7 +378,7 @@ export class TournamentApplicationService {
     };
   }
 
-  // Issue #28: Added pagination support to leaderboard endpoint.
+  // Pagination support for leaderboard endpoint.
   async getLeaderboard(
     tournamentId: string,
     query: { limit: number; offset: number },

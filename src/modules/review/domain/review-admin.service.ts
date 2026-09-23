@@ -19,6 +19,7 @@ import { REVIEW_NOT_FOUND_MESSAGE } from '../review.constants';
 import { AuditLogService } from '@/common/audit/audit-log.service';
 import { ReviewReportStatusPolicy } from './policies/review-report-status.policy';
 import { sliceWithCursor } from '../application/cursor-pagination.helper';
+import { QUIZ_REPOSITORY_PORT } from '@/modules/quiz/domain/ports';
 
 export type PlatformReportItem = {
   reportId: string;
@@ -49,10 +50,28 @@ export class ReviewAdminService {
     private readonly reviewEventBus: ReviewDomainEventBusPort,
     @Inject(REVIEW_OUTBOX_PORT)
     private readonly reviewOutbox: ReviewOutboxPort,
+    @Inject(QUIZ_REPOSITORY_PORT)
+    private readonly quizRepository: {
+      getQuizWithPublishedVersionById: (quizId: string) => Promise<{
+        quizId: string;
+        title: string;
+        creatorId: string | null;
+      } | null>;
+    },
     private readonly auditLogService: AuditLogService,
     @InjectPinoLogger(ReviewAdminService.name)
     private readonly logger: PinoLogger,
   ) {}
+
+  private async snapshotQuizMetadata(
+    quizId: string,
+  ): Promise<{ quizTitle: string; quizCreatorId: string }> {
+    const quiz = await this.quizRepository.getQuizWithPublishedVersionById(quizId);
+    return {
+      quizTitle: quiz?.title ?? '',
+      quizCreatorId: quiz?.creatorId ?? '',
+    };
+  }
 
   async listPlatformReports(params: {
     limit: number;
@@ -137,27 +156,20 @@ export class ReviewAdminService {
         if (actionedReviewId) {
           await this.reviewRepository.softDeleteReviewInTx(actionedReviewId, nowIso, tx);
 
-          // Fetch the actioned review's quiz id so the
-          // outbox event carries the right `quizId` for the
-          // analytics refresh job. We could carry just the
-          // `reviewId` and have the worker JOIN the soft-
-          // deleted row, but `quiz_reviews` filters out
-          // soft-deleted rows in the active predicate. The
-          // outbox payload therefore needs `quizId`
-          // captured at action time.
           const quizId = await this.reviewRepository.getQuizIdByReviewIdInTx(actionedReviewId, tx);
 
           actionedQuizId = quizId;
 
           if (quizId) {
-            // Issue #3 — schedule analytics refresh so the
-            // denormalized counters drop the actioned
-            // review's contribution. Without this, the
-            // dashboard would continue to show stale
-            // `helpful_count` / average rating until the
-            // next reconciliation cron tick.
+            const snapshot = await this.snapshotQuizMetadata(quizId);
+
             await this.reviewOutbox.scheduleReviewDeleted(
-              { quizId, reviewId: actionedReviewId },
+              {
+                quizId,
+                quizTitle: snapshot.quizTitle,
+                quizCreatorId: snapshot.quizCreatorId,
+                reviewId: actionedReviewId,
+              },
               tx,
               nowIso,
             );
@@ -204,8 +216,14 @@ export class ReviewAdminService {
     this.logger.info({ event: 'review_admin_report_status_updated', reportId, status, actorId });
 
     if (status === 'actioned' && actionedReviewId && actionedQuizId) {
+      const snapshot = await this.snapshotQuizMetadata(actionedQuizId);
       this.reviewEventBus.dispatchToSubscribers(
-        new ReviewDeletedEvent({ quizId: actionedQuizId, reviewId: actionedReviewId }),
+        new ReviewDeletedEvent({
+          quizId: actionedQuizId,
+          quizTitle: snapshot.quizTitle,
+          quizCreatorId: snapshot.quizCreatorId,
+          reviewId: actionedReviewId,
+        }),
       );
     }
   }
@@ -230,8 +248,15 @@ export class ReviewAdminService {
         throw new ReviewNotFoundError(REVIEW_NOT_FOUND_MESSAGE);
       }
 
+      const snapshot = await this.snapshotQuizMetadata(existing.quizId);
+
       await this.reviewOutbox.scheduleReviewDeleted(
-        { quizId: existing.quizId, reviewId },
+        {
+          quizId: existing.quizId,
+          quizTitle: snapshot.quizTitle,
+          quizCreatorId: snapshot.quizCreatorId,
+          reviewId,
+        },
         tx,
         nowIso,
       );
@@ -257,8 +282,14 @@ export class ReviewAdminService {
       actorId,
     });
 
+    const snapshot = await this.snapshotQuizMetadata(existing.quizId);
     this.reviewEventBus.dispatchToSubscribers(
-      new ReviewDeletedEvent({ quizId: existing.quizId, reviewId }),
+      new ReviewDeletedEvent({
+        quizId: existing.quizId,
+        quizTitle: snapshot.quizTitle,
+        quizCreatorId: snapshot.quizCreatorId,
+        reviewId,
+      }),
     );
   }
 }

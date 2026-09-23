@@ -3,7 +3,7 @@ import { Transform, Type } from 'class-transformer';
 import { IsIn, IsInt, IsOptional, IsString, MaxLength, Min } from 'class-validator';
 
 /**
- * Phase 3 (S-14): cursor + limit for `GET /daily-challenge/history`.
+ * Cursor + limit for `GET /daily-challenge/history`.
  */
 export class DailyChallengeHistoryQueryDto {
   @ApiPropertyOptional({
@@ -33,7 +33,7 @@ export class DailyChallengeHistoryQueryDto {
 }
 
 /**
- * Phase 3 (S-14): period discriminator for `GET /daily-challenge/leaderboard`.
+ * Period discriminator for `GET /daily-challenge/leaderboard`.
  */
 export class DailyChallengeLeaderboardQueryDto {
   @ApiPropertyOptional({
@@ -49,7 +49,7 @@ export class DailyChallengeLeaderboardQueryDto {
 }
 
 /**
- * Phase 3 (S-14): body for `POST /daily-challenge/answer`.
+ * Body for `POST /daily-challenge/answer`.
  *
  * The endpoint is stateful — the server tracks the in-flight
  * attempt and only resolves `correct` against the question at

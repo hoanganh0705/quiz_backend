@@ -9,6 +9,7 @@ export {
   QuizNotFoundError,
   ReplyLimitExceededError,
   ReportNotFoundError,
+  SelfParentError,
   SelfReportError,
   SelfVoteError,
 } from './comment.errors';

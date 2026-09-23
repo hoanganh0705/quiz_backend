@@ -72,6 +72,8 @@ export interface CacheProvider {
 
   lpopJson<T>(key: string): Promise<T | null>;
 
+  lrangeJson<T>(key: string, start: number, stop: number): Promise<T[]>;
+
   /**
    * Acquire a Redis advisory lock (distributed mutex).
    *

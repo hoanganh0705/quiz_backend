@@ -91,6 +91,48 @@ export class QuizAnalyticsService implements QuizAnalyticsPort {
     });
   }
 
+  async recomputeCompletionRate(quizId: string): Promise<void> {
+    const nowIso = new Date().toISOString();
+    const completionRate = await this.metricsRepository.calculateCompletionRate(quizId);
+
+    await this.analyticsRepository.upsertQuizStats(quizId, {
+      completionRate: String(completionRate.toFixed(2)),
+      lastCalculatedAt: nowIso,
+    });
+
+    this.logger.info({
+      event: 'quiz_completion_rate_recomputed',
+      quizId,
+      completionRate,
+    });
+  }
+
+  async recomputeAllCompletionRates(): Promise<{
+    quizzesEvaluated: number;
+    quizzesRefreshed: number;
+    errorCount: number;
+  }> {
+    const quizIds = await this.analyticsRepository.getAllActiveQuizIds();
+    let quizzesRefreshed = 0;
+    let errorCount = 0;
+
+    for (const quizId of quizIds) {
+      try {
+        await this.recomputeCompletionRate(quizId);
+        quizzesRefreshed += 1;
+      } catch (error) {
+        errorCount += 1;
+        this.logger.error({
+          event: 'completion_rate_recompute_quiz_failed',
+          quizId,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+
+    return { quizzesEvaluated: quizIds.length, quizzesRefreshed, errorCount };
+  }
+
   async refreshReviewMetrics(quizId: string): Promise<void> {
     const nowIso = new Date().toISOString();
 
@@ -113,6 +155,54 @@ export class QuizAnalyticsService implements QuizAnalyticsPort {
     });
   }
 
+  async recomputeQuizRatingStats(quizId: string): Promise<void> {
+    const nowIso = new Date().toISOString();
+
+    const [averageRating, ratingCount] = await Promise.all([
+      this.metricsRepository.calculateAverageRating(quizId),
+      this.metricsRepository.calculateRatingCount(quizId),
+    ]);
+
+    await this.analyticsRepository.upsertQuizStats(quizId, {
+      avgRating: String(averageRating.toFixed(2)),
+      ratingCount,
+      lastCalculatedAt: nowIso,
+    });
+
+    this.logger.info({
+      event: 'quiz_rating_stats_recomputed',
+      quizId,
+      averageRating,
+      ratingCount,
+    });
+  }
+
+  async recomputeAllQuizRatingStats(): Promise<{
+    quizzesEvaluated: number;
+    quizzesRefreshed: number;
+    errorCount: number;
+  }> {
+    const quizIds = await this.analyticsRepository.getAllActiveQuizIds();
+    let quizzesRefreshed = 0;
+    let errorCount = 0;
+
+    for (const quizId of quizIds) {
+      try {
+        await this.recomputeQuizRatingStats(quizId);
+        quizzesRefreshed += 1;
+      } catch (error) {
+        errorCount += 1;
+        this.logger.error({
+          event: 'rating_stats_recompute_quiz_failed',
+          quizId,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+
+    return { quizzesEvaluated: quizIds.length, quizzesRefreshed, errorCount };
+  }
+
   /**
    * Port-side entry point for `review.submitted` notifications from the Review module.
    * Delegates to {@link refreshReviewMetrics} but isolates the failure to the port
@@ -120,7 +210,7 @@ export class QuizAnalyticsService implements QuizAnalyticsPort {
    */
   async onReviewSubmitted(quizId: string): Promise<void> {
     try {
-      await this.refreshReviewMetrics(quizId);
+      await this.recomputeQuizRatingStats(quizId);
       this.logger.debug({
         event: 'analytics_review_submitted',
         quizId,
@@ -140,7 +230,7 @@ export class QuizAnalyticsService implements QuizAnalyticsPort {
    */
   async onReviewDeleted(quizId: string): Promise<void> {
     try {
-      await this.refreshReviewMetrics(quizId);
+      await this.recomputeQuizRatingStats(quizId);
       this.logger.debug({
         event: 'analytics_review_deleted',
         quizId,
@@ -169,6 +259,49 @@ export class QuizAnalyticsService implements QuizAnalyticsPort {
       quizId,
       bookmarkCount,
     });
+  }
+
+  async recomputeBookmarkCount(quizId: string): Promise<void> {
+    const nowIso = new Date().toISOString();
+
+    const bookmarkCount = await this.metricsRepository.calculateBookmarkCount(quizId);
+
+    await this.analyticsRepository.upsertQuizStats(quizId, {
+      bookmarkCount,
+      lastCalculatedAt: nowIso,
+    });
+
+    this.logger.info({
+      event: 'bookmark_count_recomputed',
+      quizId,
+      bookmarkCount,
+    });
+  }
+
+  async recomputeAllBookmarkCounts(): Promise<{
+    quizzesEvaluated: number;
+    quizzesRefreshed: number;
+    errorCount: number;
+  }> {
+    const quizIds = await this.analyticsRepository.getAllActiveQuizIds();
+    let quizzesRefreshed = 0;
+    let errorCount = 0;
+
+    for (const quizId of quizIds) {
+      try {
+        await this.recomputeBookmarkCount(quizId);
+        quizzesRefreshed += 1;
+      } catch (error) {
+        errorCount += 1;
+        this.logger.error({
+          event: 'bookmark_count_recompute_quiz_failed',
+          quizId,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+
+    return { quizzesEvaluated: quizIds.length, quizzesRefreshed, errorCount };
   }
 
   async refreshAllBookmarkMetrics(): Promise<{

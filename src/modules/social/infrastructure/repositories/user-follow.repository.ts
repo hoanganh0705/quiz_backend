@@ -12,6 +12,7 @@ import type {
   PaginatedMutualFollowersResult,
 } from '../../domain/types/social.types';
 import { eq, and, sql, desc, count, lte, isNull, aliasedTable } from 'drizzle-orm';
+import { notDeleted } from '@/common/database/soft-delete.helper';
 import { sliceWithCursor, encodeFollowCursor, encodeUsernameCursor } from './social-cursor.util';
 import { decodeBase64JsonCursor, isIsoDateString } from '@/common/utils/cursor.util';
 import { BadRequestException } from '@nestjs/common';
@@ -65,7 +66,7 @@ export class UserFollowRepository implements UserFollowRepositoryPort {
           and(
             eq(userFollows.followerId, followerId),
             eq(userFollows.followingId, followingId),
-            isNull(userFollows.deletedAt),
+            notDeleted(userFollows.deletedAt),
           ),
         )
         .limit(1);
@@ -100,7 +101,7 @@ export class UserFollowRepository implements UserFollowRepositoryPort {
         and(
           eq(userFollows.followerId, followerId),
           eq(userFollows.followingId, followingId),
-          isNull(userFollows.deletedAt),
+          notDeleted(userFollows.deletedAt),
         ),
       )
       .returning({ followId: userFollows.followId });
@@ -116,7 +117,7 @@ export class UserFollowRepository implements UserFollowRepositoryPort {
         and(
           eq(userFollows.followerId, followerId),
           eq(userFollows.followingId, followingId),
-          isNull(userFollows.deletedAt),
+          notDeleted(userFollows.deletedAt),
         ),
       )
       .limit(1);
@@ -129,8 +130,8 @@ export class UserFollowRepository implements UserFollowRepositoryPort {
     const cursorCondition = cursor ? lte(userFollows.createdAt, cursor) : undefined;
 
     const whereClause = cursor
-      ? and(baseCondition, isNull(userFollows.deletedAt), cursorCondition)
-      : and(baseCondition, isNull(userFollows.deletedAt));
+      ? and(baseCondition, notDeleted(userFollows.deletedAt), cursorCondition)
+      : and(baseCondition, notDeleted(userFollows.deletedAt));
 
     const rows = await this.db
       .select({
@@ -163,8 +164,8 @@ export class UserFollowRepository implements UserFollowRepositoryPort {
     const cursorCondition = cursor ? lte(userFollows.createdAt, cursor) : undefined;
 
     const whereClause = cursor
-      ? and(baseCondition, isNull(userFollows.deletedAt), cursorCondition)
-      : and(baseCondition, isNull(userFollows.deletedAt));
+      ? and(baseCondition, notDeleted(userFollows.deletedAt), cursorCondition)
+      : and(baseCondition, notDeleted(userFollows.deletedAt));
 
     const rows = await this.db
       .select({
@@ -421,7 +422,7 @@ export class UserFollowRepository implements UserFollowRepositoryPort {
     const result = await this.db
       .select({ count: count() })
       .from(userFollows)
-      .where(and(eq(userFollows.followingId, userId), isNull(userFollows.deletedAt)));
+      .where(and(eq(userFollows.followingId, userId), notDeleted(userFollows.deletedAt)));
 
     return Number(result[0]?.count ?? 0);
   }
@@ -430,7 +431,7 @@ export class UserFollowRepository implements UserFollowRepositoryPort {
     const result = await this.db
       .select({ count: count() })
       .from(userFollows)
-      .where(and(eq(userFollows.followerId, userId), isNull(userFollows.deletedAt)));
+      .where(and(eq(userFollows.followerId, userId), notDeleted(userFollows.deletedAt)));
 
     return Number(result[0]?.count ?? 0);
   }
@@ -443,7 +444,7 @@ export class UserFollowRepository implements UserFollowRepositoryPort {
         and(
           eq(userFollows.followerId, followerId),
           eq(userFollows.followingId, followingId),
-          isNull(userFollows.deletedAt),
+          notDeleted(userFollows.deletedAt),
         ),
       );
 

@@ -1,5 +1,6 @@
 import { Controller, Post, Body, Headers, HttpCode, HttpStatus } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
+import type { ApiResponseEnvelope } from '@/common/responses/api-response';
 
 import { ApiAuthAction } from '@/common/swagger/swagger-decorators';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
@@ -9,6 +10,7 @@ import type { JwtPayload } from '@/common/guards/jwt.guard';
 import { CoinApplicationService } from '../../application/coin.application.service';
 import { CoinPresenter } from '../presenters/coin.presenter';
 import { CoinAdminAdjustRequestDto } from '../../dto/request/coin-admin-adjust-request.dto';
+import type { CoinSpendResponseDto } from '../../dto/response/coin-spend-response.dto';
 
 const IDEMPOTENCY_HEADER = 'idempotency-key' as const;
 
@@ -33,7 +35,7 @@ export class CoinAdminController {
     @CurrentUser() admin: JwtPayload,
     @Body() body: CoinAdminAdjustRequestDto,
     @Headers(IDEMPOTENCY_HEADER) idempotencyHeader?: string,
-  ): Promise<unknown> {
+  ): Promise<ApiResponseEnvelope<CoinSpendResponseDto>> {
     const merged: CoinAdminAdjustRequestDto = {
       ...body,
       idempotencyKey: body.idempotencyKey ?? idempotencyHeader ?? undefined,

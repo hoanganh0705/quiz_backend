@@ -93,8 +93,8 @@ export class UserPrivacySettingsDto {
  * `preferences` is bounded identically to the previous whole-object
  * replace shape (≤50 top-level keys, ≤200-char key strings).
  *
- * See `docs/audits/USER_MODULE_PRODUCTION_READINESS_AUDIT.md` (F-6)
- * for the design rationale.
+ * See `docs/audits/USER_MODULE_PRODUCTION_READINESS_AUDIT.md` for the
+ * design rationale.
  */
 export class UpdateMeSettingsDto {
   @ApiPropertyOptional({

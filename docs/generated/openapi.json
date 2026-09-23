@@ -9037,7 +9037,7 @@
     },
     "/api/v1/admin/reviews/{reviewId}": {
       "delete": {
-        "description": "Phase 1 / Issue #22 — moderator route for removing any review, including reviews authored by other users. The self-delete endpoint `DELETE /quizzes/:quizId/reviews` is keyed on `(quizId, user.sub)` and cannot reach another author. The action is recorded in the audit log.",
+        "description": "moderator route for removing any review, including reviews authored by other users. The self-delete endpoint `DELETE /quizzes/:quizId/reviews` is keyed on `(quizId, user.sub)` and cannot reach another author. The action is recorded in the audit log.",
         "operationId": "AdminReviewController_adminDeleteReview",
         "parameters": [
           {
@@ -14400,7 +14400,7 @@
     },
     "/api/v1/social/users/{userId}/activity": {
       "get": {
-        "description": "Returns a paginated public activity timeline for the specified user, ordered by newest activity first. Honours the target user's `showActivity` privacy flag (Phase 3 / F-13): a requester other than the owner receives 403 when the flag is `false`. Returns 404 when the target user does not exist.",
+        "description": "Returns a paginated public activity timeline for the specified user, ordered by newest activity first. Honours the target user's `showActivity` privacy flag (a requester other than the owner receives 403 when the flag is `false`. Returns 404 when the target user does not exist.",
         "operationId": "SocialController_getUserActivity",
         "parameters": [
           {
@@ -20832,7 +20832,7 @@
         "tags": ["tournaments"]
       },
       "patch": {
-        "description": "Phase 1 / Issue #1 — partially updates a tournament. Callers must hold `TOURNAMENT_EDIT_OWN` and own the tournament, or hold `TOURNAMENT_EDIT_ANY`. Body is optional-only: every omitted field is left untouched. Editing is only allowed while the tournament is in `upcoming`, `registration`, or `ongoing`; while `ongoing`, only `prize` is editable. Reducing `maxParticipants` after registration has started is rejected to protect already-registered participants. A 400 is returned when `categoryId` references a non-existent category.",
+        "description": "partially updates a tournament. Callers must hold `TOURNAMENT_EDIT_OWN` and own the tournament, or hold `TOURNAMENT_EDIT_ANY`. Body is optional-only: every omitted field is left untouched. Editing is only allowed while the tournament is in `upcoming`, `registration`, or `ongoing`; while `ongoing`, only `prize` is editable. Reducing `maxParticipants` after registration has started is rejected to protect already-registered participants. A 400 is returned when `categoryId` references a non-existent category.",
         "operationId": "TournamentController_updateTournament",
         "parameters": [
           {
@@ -20971,7 +20971,7 @@
         "tags": ["tournaments"]
       },
       "delete": {
-        "description": "Phase 1 / Issue #1 — soft-deletes a tournament by setting `deleted_at = now()`. The row remains in the database for audit, but every read endpoint filters `deleted_at IS NULL` so the row is invisible to clients. The two precondition checks: (1) the caller must own the tournament or hold `TOURNAMENT_EDIT_ANY`; (2) the tournament must be in `upcoming` or `registration` (a tournament with participants who have submitted attempts cannot be soft-deleted without breaking the audit trail).",
+        "description": "soft-deletes a tournament by setting `deleted_at = now()`. The row remains in the database for audit, but every read endpoint filters `deleted_at IS NULL` so the row is invisible to clients. The two precondition checks: (1) the caller must own the tournament or hold `TOURNAMENT_EDIT_ANY`; (2) the tournament must be in `upcoming` or `registration` (a tournament with participants who have submitted attempts cannot be soft-deleted without breaking the audit trail).",
         "operationId": "TournamentController_softDeleteTournament",
         "parameters": [
           {
@@ -21218,7 +21218,7 @@
     },
     "/api/v1/tournaments/{id}/cancel": {
       "post": {
-        "description": "Phase 1 / Issue #1 — transitions a tournament to the `cancelled` lifecycle status. Requires the `TOURNAMENT_CANCEL` permission (admin-only in Phase 1). Cancelling is only allowed while the tournament is in `upcoming` or `registration`; an `ongoing`/`finished` tournament is protected because the audit reserves those states for the finalization pipeline. A re-cancel of an already-`cancelled` tournament is idempotent at the repository layer — the controller will surface it as 409 if the row was mutated by a concurrent finalize cron between the SELECT and the UPDATE.",
+        "description": "transitions a tournament to the `cancelled` lifecycle status. Requires the `TOURNAMENT_CANCEL` permission (admin-only in Cancelling is only allowed while the tournament is in `upcoming` or `registration`; an `ongoing`/`finished` tournament is protected because the audit reserves those states for the finalization pipeline. A re-cancel of an already-`cancelled` tournament is idempotent at the repository layer — the controller will surface it as 409 if the row was mutated by a concurrent finalize cron between the SELECT and the UPDATE.",
         "operationId": "TournamentController_cancelTournament",
         "parameters": [
           {
@@ -30488,7 +30488,7 @@
             "example": 1240
           },
           "tags": {
-            "description": "Tags attached to the quiz. Phase 2 (S-6) folds the tag batch into the list projection so cards can render tag chips without a second fetch.",
+            "description": "Tags attached to the quiz. folds the tag batch into the list projection so cards can render tag chips without a second fetch.",
             "type": "array",
             "items": { "$ref": "#/components/schemas/QuizTagDto" }
           }
@@ -31124,7 +31124,7 @@
           },
           "at": {
             "type": "string",
-            "description": "Timestamp when the activity occurred (ISO 8601). Renamed from `occurredAt` to `at` in Phase 3 (S-21).",
+            "description": "Timestamp when the activity occurred (ISO 8601). Renamed from occurredAt to at.",
             "example": "2026-06-08T12:00:00.000Z"
           },
           "actor": {
@@ -31610,7 +31610,7 @@
           },
           "rank": {
             "type": "number",
-            "description": "Final rank achieved by the target user in this tournament. Visible to anyone who can read the user's tournament history (i.e. the target user has `showTournamentActivity: true` per Phase 3 / F-7).",
+            "description": "Final rank achieved by the target user in this tournament. Visible to anyone who can read the user's tournament history (i.e. the target user has `showTournamentActivity: true` per .",
             "nullable": true,
             "example": 12
           },
@@ -36013,7 +36013,7 @@
           },
           "reason": {
             "type": "string",
-            "description": "Phase 3 (S-18): discriminator for the suggestion reason.",
+            "description": "discriminator for the suggestion reason.",
             "enum": ["mutual_friends", "shared_tags", "shared_activity", "popular"],
             "example": "mutual_friends"
           },
@@ -36107,7 +36107,7 @@
           },
           "at": {
             "type": "string",
-            "description": "Timestamp when the activity occurred (ISO 8601). Renamed from `occurredAt` to `at` in Phase 3 (S-21).",
+            "description": "Timestamp when the activity occurred (ISO 8601). Renamed from occurredAt to at.",
             "example": "2026-06-09T10:00:00.000Z"
           },
           "user": {
@@ -36154,13 +36154,13 @@
           },
           "staleAt": {
             "type": "object",
-            "description": "Phase 3 (S-17): timestamp at which the analytics snapshot is stale (ISO 8601).",
+            "description": "timestamp at which the analytics snapshot is stale (ISO 8601).",
             "example": "2026-08-10T13:30:00.000Z",
             "nullable": true
           },
           "isStale": {
             "type": "boolean",
-            "description": "Phase 3 (S-17): whether the analytics snapshot is stale.",
+            "description": "whether the analytics snapshot is stale.",
             "example": false
           }
         },
@@ -36218,13 +36218,13 @@
           },
           "staleAt": {
             "type": "object",
-            "description": "Phase 3 (S-17): timestamp at which the cached snapshot is considered stale (ISO 8601). Null when fresh.",
+            "description": "timestamp at which the cached snapshot is considered stale (ISO 8601). Null when fresh.",
             "example": "2026-08-10T13:30:00.000Z",
             "nullable": true
           },
           "isStale": {
             "type": "boolean",
-            "description": "Phase 3 (S-17): whether the snapshot is stale (`staleAt` is in the past).",
+            "description": "whether the snapshot is stale (`staleAt` is in the past).",
             "example": false
           }
         },
@@ -36311,13 +36311,13 @@
           },
           "staleAt": {
             "type": "object",
-            "description": "Phase 3 (S-17): timestamp at which the cached projection is stale (ISO 8601). Null when fresh.",
+            "description": "timestamp at which the cached projection is stale (ISO 8601). Null when fresh.",
             "example": "2026-08-10T13:30:00.000Z",
             "nullable": true
           },
           "isStale": {
             "type": "boolean",
-            "description": "Phase 3 (S-17): whether the leaderboard projection is stale.",
+            "description": "whether the leaderboard projection is stale.",
             "example": false
           }
         },
@@ -37535,7 +37535,7 @@
           },
           "ownerUserId": {
             "type": "string",
-            "description": "Phase 1 / Issue #2 — UUID of the user who created the tournament. Used by the authorization layer for `PATCH /tournaments/:id`, `DELETE /tournaments/:id`, and `POST /tournaments/:id/cancel`. The application-layer policy compares this against the JWT subject to decide whether the caller can mutate the tournament.",
+            "description": "UUID of the user who created the tournament. Used by the authorization layer for `PATCH /tournaments/:id`, `DELETE /tournaments/:id`, and `POST /tournaments/:id/cancel`. The application-layer policy compares this against the JWT subject to decide whether the caller can mutate the tournament.",
             "format": "uuid",
             "example": "550e8400-e29b-71d4-a716-446655440000"
           },
@@ -38022,7 +38022,7 @@
           },
           "ownerUserId": {
             "type": "string",
-            "description": "Phase 1 / Issue #2 — UUID of the user who created the tournament. Used by the authorization layer for `PATCH /tournaments/:id`, `DELETE /tournaments/:id`, and `POST /tournaments/:id/cancel`. The application-layer policy compares this against the JWT subject to decide whether the caller can mutate the tournament.",
+            "description": "UUID of the user who created the tournament. Used by the authorization layer for `PATCH /tournaments/:id`, `DELETE /tournaments/:id`, and `POST /tournaments/:id/cancel`. The application-layer policy compares this against the JWT subject to decide whether the caller can mutate the tournament.",
             "format": "uuid",
             "example": "550e8400-e29b-71d4-a716-446655440000"
           },

@@ -1,7 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 /**
- * Phase 3 (S-14): the day's daily-challenge snapshot.
+ * The day's daily-challenge snapshot.
  *
  * This is the public-facing DTO returned by
  * `GET /daily-challenge/today`. The `status` discriminator carries

@@ -3,6 +3,7 @@ export interface SharedTournamentJoinedEvent {
   readonly tournamentId: string;
   readonly userId: string;
   readonly tournamentTitle: string;
+  readonly categoryTitle: string | null;
   readonly timestamp: Date;
 }
 
@@ -21,6 +22,7 @@ export interface SharedTournamentWonEvent {
   readonly tournamentId: string;
   readonly userId: string;
   readonly tournamentTitle: string;
+  readonly categoryTitle: string | null;
   readonly rank: number;
   readonly timestamp: Date;
 }

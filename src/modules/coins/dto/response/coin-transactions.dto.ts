@@ -1,13 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
-/**
- * `GET /me/coin-transactions` page — newest-first ledger entries.
- *
- * `amount` is signed (positive for earnings, negative for spends). The
- * `balanceAfter` field is the wallet balance *after* this row was
- * applied, so a UI can render the running balance without
- * re-aggregating.
- */
 export class CoinTransactionDto {
   @ApiProperty({
     description: 'Opaque ledger row identifier (UUIDv7)',

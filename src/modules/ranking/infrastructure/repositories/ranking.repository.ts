@@ -209,6 +209,23 @@ export class RankingRepository implements RankingRepositoryPort {
     return this.leaderboard.getLeaderboard(params);
   }
 
+  async getLeaderboardKeyset(params: {
+    period: RankingPeriod;
+    limit: number;
+    cursorXp?: number | null;
+    cursorCreatedAt?: string | null;
+    cursorUserId?: string | null;
+  }): Promise<LeaderboardRow[]> {
+    return this.leaderboard.getLeaderboardKeyset(params);
+  }
+
+  async getLeaderboardCursorFirstPage(params: {
+    period: RankingPeriod;
+    limit: number;
+  }): Promise<LeaderboardRow[]> {
+    return this.leaderboard.getLeaderboardCursorFirstPage(params);
+  }
+
   async getTotalParticipants(period: RankingPeriod): Promise<number> {
     return this.leaderboard.getTotalParticipants(period);
   }

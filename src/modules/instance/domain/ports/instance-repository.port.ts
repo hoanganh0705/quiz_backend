@@ -99,6 +99,8 @@ export interface QuizInstanceRepositoryPort {
 
   getInstanceDetailById(instanceId: string): Promise<QuizInstanceDetailRow | null>;
 
+  instanceExists(instanceId: string): Promise<boolean>;
+
   updateInstanceStatus(params: {
     instanceId: string;
     status: QuizInstanceStatus;
@@ -138,10 +140,14 @@ export interface QuizInstanceRepositoryPort {
     instanceId: string;
     userId: string;
     attemptId: string;
-    status: string;
+    status: 'joined' | 'ready' | 'playing' | 'disconnected' | 'finished';
   }): Promise<void>;
 
-  updatePlayerStatus(params: { instanceId: string; userId: string; status: string }): Promise<void>;
+  updatePlayerStatus(params: {
+    instanceId: string;
+    userId: string;
+    status: 'joined' | 'ready' | 'playing' | 'disconnected' | 'finished';
+  }): Promise<void>;
 
   getPlayerByUserAndInstance(params: {
     instanceId: string;

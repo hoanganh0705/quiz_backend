@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
+import { BaseDomainEventBus } from '@/common/events/base-domain-event-bus';
 import {
   type BookmarkDomainEventBusPort,
   type BookmarkEventHandler,
@@ -7,44 +8,22 @@ import {
 } from './bookmark-domain-event-bus.port';
 import { BookmarkAddedEvent, BookmarkRemovedEvent } from './bookmark-domain.events';
 
-/**
- * Simple domain event bus for Bookmark aggregate events.
- *
- * This is a lightweight in-process event bus using the observer pattern.
- * Events are dispatched synchronously within the same request lifecycle.
- *
- * Use `emit()` to dispatch events and `subscribe()` to register handlers.
- */
-@Injectable()
-export class BookmarkDomainEventBus implements BookmarkDomainEventBusPort {
-  private handlers: BookmarkEventHandler[] = [];
+export type BookmarkDomainEvent = BookmarkAddedEvent | BookmarkRemovedEvent;
 
+@Injectable()
+export class BookmarkDomainEventBus
+  extends BaseDomainEventBus<unknown>
+  implements BookmarkDomainEventBusPort
+{
   constructor(
     @InjectPinoLogger(BookmarkDomainEventBus.name)
-    private readonly logger: PinoLogger,
-  ) {}
-
-  subscribe(handler: BookmarkEventHandler): () => void {
-    this.handlers.push(handler);
-    return () => {
-      const index = this.handlers.indexOf(handler);
-      if (index !== -1) {
-        this.handlers.splice(index, 1);
-      }
-    };
+    logger: PinoLogger,
+  ) {
+    super(logger, { logEventName: 'bookmark_event' });
   }
 
-  private emit(event: unknown): void {
-    for (const handler of this.handlers) {
-      try {
-        handler(event);
-      } catch (error) {
-        this.logger.error({
-          event: 'bookmark_event_handler_error',
-          error: error instanceof Error ? error.message : String(error),
-        });
-      }
-    }
+  subscribe(handler: BookmarkEventHandler): () => void {
+    return super.subscribe(handler as never);
   }
 
   emitBookmarkAdded(event: BookmarkAddedEvent): void {
@@ -56,7 +35,7 @@ export class BookmarkDomainEventBus implements BookmarkDomainEventBusPort {
       quizId: event.quizId,
       userId: event.userId,
     });
-    this.emit(event);
+    this.dispatch(event);
   }
 
   emitBookmarkRemoved(event: BookmarkRemovedEvent): void {
@@ -68,7 +47,7 @@ export class BookmarkDomainEventBus implements BookmarkDomainEventBusPort {
       quizId: event.quizId,
       userId: event.userId,
     });
-    this.emit(event);
+    this.dispatch(event);
   }
 }
 

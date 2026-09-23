@@ -136,6 +136,16 @@ export interface AttemptRepositoryPort {
     nowIso: string;
     quizId: string;
     userId: string;
+    /**
+     * When present, the same DB transaction also inserts an
+     * `outbox_events` row for `attempt.xp_to_publish`, so the XP dispatch to
+     * the ranking module is durable across Redis outages. The repo
+     * propagates the supplied `idempotencyKey` verbatim.
+     */
+    xpOutbox?: {
+      idempotencyKey: string;
+      correlationId?: string;
+    };
   }): Promise<{ completed: AttemptRow; preCompletionCount: number }>;
 
   /**

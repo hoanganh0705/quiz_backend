@@ -34,10 +34,9 @@ export interface BlockRepositoryPort {
    * Returns `null` when no such block exists.
    *
    * Used by `SocialService.unblockUser` to enforce the existence
-   * precondition before mutating (audit issue: silent-success
-   * DELETE). The match is direction-specific: `blockerId` must
-   * match the caller's id (you cannot unblock a user that someone
-   * else blocked).
+   * precondition before mutating. The match is direction-specific:
+   * `blockerId` must match the caller's id (you cannot unblock a
+   * user that someone else blocked).
    */
   findActiveBlock(blockerId: string, blockedId: string): Promise<BlockedUser | null>;
 

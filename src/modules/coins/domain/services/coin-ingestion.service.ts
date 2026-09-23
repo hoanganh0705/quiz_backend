@@ -1,21 +1,3 @@
-/**
- * Coin Ingestion Service
- *
- * The single earn-side entry point. Every listener adapter (Attempt,
- * DailyChallenge, Streak, Achievement, Tournament) reaches this service
- * through the `COIN_INGESTION_PORT` to move a user's wallet. The service
- * is the only piece of code that knows about:
- *
- *   - the daily 200-coin cap (§9.4)
- *   - the idempotency-key derivation rules (§9.5)
- *   - the outbox schedule (so the ledger write and the async event
- *     dispatch commit atomically)
- *
- * It mirrors the shape of `XpIngestionService` — the design doc says
- * so explicitly — but is structurally simpler because there is no
- * rank-recalculation side-effect and no period reset.
- */
-
 import { Inject, Injectable } from '@nestjs/common';
 import { DRIZZLE } from '@/core/database/drizzle.constants';
 import type { DrizzleDB } from '@/core/database/database.module';
@@ -26,7 +8,11 @@ import { COIN_REPOSITORY_PORT, type CoinRepositoryPort } from '../ports/coin-rep
 import type { CoinEventInput } from '../ports/coin-ingestion.port';
 import { DAILY_CAP_REASONS, type CoinReason } from '../types/coin.types';
 import { COIN_ECONOMY_LIMITS } from '../../coin.constants';
+import { CoinEventValidationError } from '../errors/coin-spend.errors';
+import { startOfUtcDay } from '../utils/utc-day';
 import { CoinMetricsService } from './coin-metrics.service';
+import { ReferentialValidatorService } from '@/common/database/referential-validator.service';
+import { asReferencedEntity, type ReferencedEntity } from '@/common/database/references.types';
 
 @Injectable()
 export class CoinIngestionService {
@@ -37,27 +23,11 @@ export class CoinIngestionService {
     @Inject(COIN_OUTBOX_PORT)
     private readonly outbox: CoinOutboxPort,
     private readonly metrics: CoinMetricsService,
+    private readonly referentialValidator: ReferentialValidatorService,
     @InjectPinoLogger(CoinIngestionService.name)
     private readonly logger: PinoLogger,
   ) {}
 
-  /**
-   * Atomically:
-   *   1. Validates the event.
-   *   2. Derives (or honors) the idempotency key.
-   *   3. Reads the user's daily-cap sum (if the event is cap-eligible).
-   *   4. Computes the effective delta — possibly downgraded.
-   *   5. Schedules the outbox row.
-   *   6. Writes the ledger row + wallet update via the repository.
-   *
-   * The full `db.transaction` wraps steps 3-6. A duplicate request with
-   * the same idempotency key returns the cached newBalance (we read
-   * post-commit, so retries are safe) without throwing. A genuinely
-   * invalid event (negative delta, unknown reason) throws.
-   *
-   * Returns the post-update wallet. Listeners must not assume the
-   * delta equals the requested amount — it can be smaller.
-   */
   async processCoinEvent(
     event: CoinEventInput,
     now: Date = new Date(),
@@ -67,6 +37,11 @@ export class CoinIngestionService {
     } catch (error) {
       this.metrics.recordEventRejectedValidation(String(event.reason ?? 'unknown'));
       throw error;
+    }
+
+    const referenceEntity = this.buildReferenceEntity(event);
+    if (referenceEntity) {
+      await this.referentialValidator.assertExists(referenceEntity);
     }
 
     const idempotencyKey = event.idempotencyKey ?? deriveIdempotencyKey(event);
@@ -84,9 +59,6 @@ export class CoinIngestionService {
     const appliedDelta = await this.computeAppliedDelta(event, now);
 
     if (appliedDelta === 0) {
-      // Daily cap fully exhausted — no ledger write, no outbox row. The
-      // caller still gets a consistent `newBalance` so it can log/surface
-      // the truncated grant.
       const wallet = await this.coinRepository.getWallet(event.userId);
       this.logger.info({
         event: 'coin_daily_cap_truncated',
@@ -106,12 +78,6 @@ export class CoinIngestionService {
     const referenceType = mapReferenceType(event.source);
 
     const { wallet, transactionId } = await this.db.transaction(async (tx) => {
-      // Wallet write first — the SQL CTE upserts the wallet row,
-      // adds the delta, and writes the ledger row in a single
-      // round-trip (all atomic against each other). Once that
-      // succeeds we know the post-update balance and transactionId,
-      // which we then stamp onto the outbox payload so the
-      // processor does not have to re-read either row.
       const result = await this.coinRepository.applyDeltaInTx(tx, {
         userId: event.userId,
         delta: appliedDelta,
@@ -171,8 +137,6 @@ export class CoinIngestionService {
     };
   }
 
-  // ─── Cap + validation ─────────────────────────────────────────────────
-
   private validateEvent(event: CoinEventInput): void {
     if (!event.userId || typeof event.userId !== 'string') {
       throw new CoinEventValidationError('userId is required');
@@ -190,11 +154,6 @@ export class CoinIngestionService {
     }
   }
 
-  /**
-   * Computes the delta the wallet will actually receive after the
-   * daily-cap pass. Returns 0 when the cap is fully exhausted (no
-   * ledger write happens at all).
-   */
   private async computeAppliedDelta(event: CoinEventInput, now: Date): Promise<number> {
     const applyCap = event.applyDailyCap ?? DAILY_CAP_REASONS.has(event.reason);
     if (!applyCap) return event.amount;
@@ -206,15 +165,17 @@ export class CoinIngestionService {
     const remaining = Math.max(0, cap - earnedSoFar);
     return Math.min(event.amount, remaining);
   }
-}
 
-// ─── Helpers ─────────────────────────────────────────────────────────────
-
-class CoinEventValidationError extends Error {
-  readonly code = 'COIN_EVENT_INVALID';
-  constructor(message: string) {
-    super(message);
-    this.name = 'CoinEventValidationError';
+  private buildReferenceEntity(event: CoinEventInput): ReferencedEntity | null {
+    if (!event.referenceId) return null;
+    try {
+      return (
+        sourceToReferencedEntity(event.source, event.referenceId) ??
+        asReferencedEntity({ kind: 'attempt', id: event.referenceId })
+      );
+    } catch {
+      return null;
+    }
   }
 }
 
@@ -239,27 +200,24 @@ function isValidCoinReason(reason: string): reason is CoinReason {
   return (schema.coinReason.enumValues as readonly string[]).includes(reason);
 }
 
-function startOfUtcDay(now: Date): Date {
-  const d = new Date(now);
-  d.setUTCHours(0, 0, 0, 0);
-  return d;
-}
-
-/**
- * Derive the idempotency key from an incoming coin event. Mirrors the
- * shape in §9.5. Source-mapped priority:
- *
- *   - `attempt`    → `coin:{userId}:attempt:{referenceId}`
- *   - `daily`      → `coin:{userId}:daily:{referenceId}`
- *   - `streak`     → `coin:{userId}:streak:{referenceId}`
- *   - `badge`      → `coin:{userId}:badge:{referenceId}`
- *   - `tournament` → `coin:{userId}:tournament:{referenceId}`
- *
- * (Tournament keys in production carry an extra `:rank` suffix when
- * the same tournament grants multiple rewards; the listener adapter is
- * responsible for joining those before constructing the event, so
- * `referenceId` already encodes the unique per-grant tuple.)
- */
 function deriveIdempotencyKey(event: CoinEventInput): string {
   return `coin:${event.userId}:${event.source}:${event.referenceId}`;
+}
+
+function sourceToReferencedEntity(
+  source: CoinEventInput['source'],
+  id: string,
+): ReferencedEntity | null {
+  switch (source) {
+    case 'attempt':
+      return { kind: 'attempt', id };
+    case 'daily':
+      return { kind: 'daily_challenge', id };
+    case 'streak':
+      return { kind: 'streak', id };
+    case 'badge':
+      return { kind: 'badge', id };
+    case 'tournament':
+      return { kind: 'tournament', id };
+  }
 }

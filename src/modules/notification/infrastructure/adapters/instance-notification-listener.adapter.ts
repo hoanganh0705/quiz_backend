@@ -1,4 +1,4 @@
-import { Inject, Injectable, OnModuleDestroy, OnModuleInit, forwardRef } from '@nestjs/common';
+import { Inject, Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import {
   INSTANCE_DOMAIN_EVENT_BUS,
@@ -16,10 +16,10 @@ export class InstanceNotificationListener implements OnModuleInit, OnModuleDestr
   private unsubscribe: (() => void) | null = null;
 
   constructor(
-    @Inject(forwardRef(() => INSTANCE_DOMAIN_EVENT_BUS))
+    @Inject(INSTANCE_DOMAIN_EVENT_BUS)
     private readonly instanceEventBus: InstanceDomainEventBusPort,
     private readonly instanceNotificationService: InstanceNotificationService,
-    @Inject(forwardRef(() => QUIZ_INSTANCE_REPOSITORY_PORT))
+    @Inject(QUIZ_INSTANCE_REPOSITORY_PORT)
     private readonly instanceRepository: QuizInstanceRepositoryPort,
     @InjectPinoLogger(InstanceNotificationListener.name)
     private readonly logger: PinoLogger,

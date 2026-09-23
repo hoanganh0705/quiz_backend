@@ -284,7 +284,7 @@ export interface TournamentRepositoryPort {
     nowIso: string;
   }): Promise<TournamentRoundParticipantRow>;
 
-  // Issue #28: Added pagination to prevent unbounded responses.
+  // Pagination to prevent unbounded responses.
   getLeaderboard(params: {
     tournamentId: string;
     limit: number;

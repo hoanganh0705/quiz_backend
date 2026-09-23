@@ -13,7 +13,12 @@ import {
   check,
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
-import { quizDifficulty, tournamentStatus, tournamentRoundStatus } from '../shared';
+import {
+  quizDifficulty,
+  tournamentStatus,
+  tournamentRoundStatus,
+  tournamentParticipantStatus,
+} from '../shared';
 import { quizVersions, quizAttempts } from '../quiz/schema';
 import { categories } from '../taxonomy/schema';
 import { users } from '../auth/schema';
@@ -155,7 +160,7 @@ export const tournamentParticipants = pgTable(
     totalScore: integer('total_score').default(0).notNull(),
     totalTimeMs: integer('total_time_ms').default(0).notNull(),
     rankFinal: smallint('rank_final'),
-    status: text().default('active').notNull(),
+    status: tournamentParticipantStatus().default('active').notNull(),
     withdrawnAt: timestamp('withdrawn_at', { withTimezone: true, mode: 'string' }),
     updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'string' })
       .defaultNow()

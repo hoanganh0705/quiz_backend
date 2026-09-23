@@ -55,7 +55,7 @@ export class UserSessionRepository implements SessionRepositoryPort {
 
     await this.db
       .transaction(async (tx) => {
-        await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${data.userId}))`);
+        await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${data.userId}, 0))`);
 
         const sessionIdToUse = explicitSessionId ?? this.idGenerator.generate();
 
@@ -212,7 +212,7 @@ export class UserSessionRepository implements SessionRepositoryPort {
       // Serializes concurrent refresh-token rotations for the same sessionId.
       // Two concurrent rotations without the lock: both read session, both write,
       // second write overwrites the first → first token becomes permanently invalid.
-      await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${sessionId}))`);
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${sessionId}, 0))`);
 
       await tx.update(userSessions).set(data).where(eq(userSessions.sessionId, sessionId));
     });

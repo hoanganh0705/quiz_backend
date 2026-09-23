@@ -5,6 +5,7 @@ import { blockedUsers } from '@/core/database/schema';
 import type { BlockExecutor, BlockRepositoryPort } from '../../domain/ports/block-ports';
 import type { BlockedUser } from '../../domain/types/social.types';
 import { eq, and, desc, count, sql, isNull } from 'drizzle-orm';
+import { notDeleted } from '@/common/database/soft-delete.helper';
 
 @Injectable()
 export class BlockRepository implements BlockRepositoryPort {
@@ -137,7 +138,7 @@ export class BlockRepository implements BlockRepositoryPort {
         and(
           eq(blockedUsers.blockerId, blockerId),
           eq(blockedUsers.blockedId, blockedId),
-          isNull(blockedUsers.deletedAt),
+          notDeleted(blockedUsers.deletedAt),
         ),
       )
       .limit(1);
@@ -153,7 +154,7 @@ export class BlockRepository implements BlockRepositoryPort {
         and(
           eq(blockedUsers.blockerId, blockerId),
           eq(blockedUsers.blockedId, blockedId),
-          isNull(blockedUsers.deletedAt),
+          notDeleted(blockedUsers.deletedAt),
         ),
       );
 
@@ -164,7 +165,7 @@ export class BlockRepository implements BlockRepositoryPort {
     const rows = await this.db
       .select()
       .from(blockedUsers)
-      .where(and(eq(blockedUsers.blockerId, blockerId), isNull(blockedUsers.deletedAt)))
+      .where(and(eq(blockedUsers.blockerId, blockerId), notDeleted(blockedUsers.deletedAt)))
       .orderBy(desc(blockedUsers.createdAt));
 
     return rows as BlockedUser[];

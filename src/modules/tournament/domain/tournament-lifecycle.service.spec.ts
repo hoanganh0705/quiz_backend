@@ -3,6 +3,7 @@ import type { PinoLogger } from 'nestjs-pino';
 import { TournamentLifecycleService } from './tournament-lifecycle.service';
 import type { TournamentRepositoryPort } from './ports';
 import type { TournamentOutboxPort } from './ports/tournament-outbox.port';
+import type { CategoryRepositoryPort } from '@/modules/category/domain/ports';
 import type { DrizzleDB } from '@/core/database/database.module';
 
 function makeLogger(): PinoLogger {
@@ -20,6 +21,7 @@ describe('TournamentLifecycleService', () => {
   let service: TournamentLifecycleService;
   let tournamentRepository: jest.Mocked<TournamentRepositoryPort>;
   let tournamentOutbox: jest.Mocked<TournamentOutboxPort>;
+  let categoryRepository: jest.Mocked<CategoryRepositoryPort>;
   let db: DrizzleDB;
 
   beforeEach(() => {
@@ -41,11 +43,16 @@ describe('TournamentLifecycleService', () => {
       scheduleTournamentEventsBatch: jest.fn(),
     } as unknown as jest.Mocked<TournamentOutboxPort>;
 
+    categoryRepository = {
+      findById: jest.fn().mockResolvedValue({ name: 'Trivia' } as never),
+    } as unknown as jest.Mocked<CategoryRepositoryPort>;
+
     db = {} as DrizzleDB;
 
     service = new TournamentLifecycleService(
       tournamentRepository,
       tournamentOutbox,
+      categoryRepository,
       db,
       makeLogger(),
     );

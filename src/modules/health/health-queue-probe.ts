@@ -1,7 +1,11 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { Queue } from 'bullmq';
+import type { Queue } from 'bullmq';
 import { EMAIL_QUEUE_TOKENS } from '@/modules/email/email.constants';
 import type { EmailQueueProbeDto } from './dto/health-status.dto';
+
+interface BullmqClientLike {
+  status?: string;
+}
 
 @Injectable()
 export class HealthQueueProbe {
@@ -16,8 +20,8 @@ export class HealthQueueProbe {
       const active = Number(counts.active ?? 0);
       const delayed = Number(counts.delayed ?? 0);
 
-      const workerConnected =
-        this.emailQueue.client !== undefined && (this.emailQueue.client as any)?.status === 'ready';
+      const client = this.emailQueue.client as BullmqClientLike | undefined;
+      const workerConnected = client !== undefined && client.status === 'ready';
 
       return {
         depth: waiting + active + delayed,

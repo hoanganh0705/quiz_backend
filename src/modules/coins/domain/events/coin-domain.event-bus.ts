@@ -1,44 +1,60 @@
-/**
- * Coin Domain Event Bus
- *
- * Lightweight in-process pub/sub. Same observer-pattern shape as the
- * `RankingDomainEventBus` — handlers are push-down, errors are caught
- * and logged per-handler so one misbehaving subscriber cannot starve the
- * rest.
- *
- * Lifetime is bound to the application lifecycle: subscribers registered
- * in `OnModuleInit` are torn down implicitly when the process exits.
- * Long-running adapters store their unsubscribe handle in a private
- * field and call it in `OnModuleDestroy` to be tidy.
- */
-
-import { Injectable, OnModuleDestroy } from '@nestjs/common';
+import { Inject, Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
-import type { CoinBalanceChangedEvent, CoinTransactionRecordedEvent } from './coin-domain.events';
-import type { CoinDomainEventBusPort } from './coin-domain-event-bus.port';
+import { CACHE_PROVIDER, type CacheProvider } from '@/common/ports/cache.provider';
+import { RetryQueue } from '@/common/events/retry-queue';
+import type {
+  CoinBalanceChangedEvent,
+  CoinRefundedEvent,
+  CoinTransactionRecordedEvent,
+} from './coin-domain.events';
+import { COIN_DOMAIN_EVENT_BUS, type CoinDomainEventBusPort } from './coin-domain-event-bus.port';
 import type { CoinDomainEvent } from './coin-domain.events';
+
+export { COIN_DOMAIN_EVENT_BUS };
 
 type CoinEventHandler = (event: CoinDomainEvent) => void;
 
 @Injectable()
-export class CoinDomainEventBus implements CoinDomainEventBusPort, OnModuleDestroy {
-  private handlers: CoinEventHandler[] = [];
+export class CoinDomainEventBus implements CoinDomainEventBusPort, OnModuleInit, OnModuleDestroy {
+  private readonly retryQueue: RetryQueue<CoinDomainEvent>;
 
   constructor(
+    @Inject(CACHE_PROVIDER) cache: CacheProvider,
     @InjectPinoLogger(CoinDomainEventBus.name)
     private readonly logger: PinoLogger,
-  ) {}
+  ) {
+    this.retryQueue = new RetryQueue<CoinDomainEvent>(cache, logger, {
+      retryQueuePrefix: 'coin:event_retry_queue',
+      deadLetterKey: 'coin:event_dead_letter',
+      retryDelaysMs: [5_000, 10_000, 20_000, 40_000, 80_000] as const,
+      pollIntervalMs: 10_000,
+      pollLockKey: 'coin:event_retry_poll_lock',
+      pollLockTtlMs: 8_000,
+      loggerName: CoinDomainEventBus.name,
+    });
+  }
+
+  onModuleInit(): void {
+    this.retryQueue.start();
+  }
 
   onModuleDestroy(): void {
-    this.handlers = [];
+    this.retryQueue.stop();
   }
 
   subscribe(handler: CoinEventHandler): () => void {
-    this.handlers.push(handler);
-    return () => {
-      const idx = this.handlers.indexOf(handler);
-      if (idx !== -1) this.handlers.splice(idx, 1);
-    };
+    return this.retryQueue.subscribe((event: CoinDomainEvent) => {
+      try {
+        handler(event);
+      } catch (error) {
+        this.logger.error({
+          event: 'coin_event_handler_error',
+          eventType: event.eventType,
+          error: error instanceof Error ? error.message : String(error),
+        });
+        throw error;
+      }
+    });
   }
 
   emitBalanceChanged(event: CoinBalanceChangedEvent): void {
@@ -49,7 +65,7 @@ export class CoinDomainEventBus implements CoinDomainEventBusPort, OnModuleDestr
       delta: event.delta,
       reason: event.reason,
     });
-    this.dispatch(event);
+    this.retryQueue.dispatch(event);
   }
 
   emitTransactionRecorded(event: CoinTransactionRecordedEvent): void {
@@ -59,22 +75,17 @@ export class CoinDomainEventBus implements CoinDomainEventBusPort, OnModuleDestr
       userId: event.userId,
       reason: event.reason,
     });
-    this.dispatch(event);
+    this.retryQueue.dispatch(event);
   }
 
-  private dispatch(event: CoinDomainEvent): void {
-    for (const handler of this.handlers) {
-      try {
-        handler(event);
-      } catch (error) {
-        this.logger.error({
-          event: 'coin_event_handler_error',
-          eventType: event.eventType,
-          error: error instanceof Error ? error.message : String(error),
-        });
-      }
-    }
+  emitRefunded(event: CoinRefundedEvent): void {
+    this.logger.debug({
+      event: 'coin_event_emitted',
+      eventType: 'coin.refunded',
+      userId: event.userId,
+      refundAmount: event.refundAmount,
+      refundReason: event.refundReason,
+    });
+    this.retryQueue.dispatch(event);
   }
 }
-
-export const COIN_DOMAIN_EVENT_BUS = Symbol('COIN_DOMAIN_EVENT_BUS');

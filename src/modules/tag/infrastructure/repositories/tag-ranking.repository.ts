@@ -1,5 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { and, asc, desc, eq, isNull, ne, sql } from 'drizzle-orm';
+import { notDeleted } from '@/common/database/soft-delete.helper';
 import { DRIZZLE } from '@/core/database/drizzle.constants';
 import type { DrizzleDB } from '@/core/database/database.module';
 import { quizzes, tags, quizTags, quizStats } from '@/core/database/schema';
@@ -26,7 +27,7 @@ export class TagRankingRepository implements TagRankingRepositoryPort {
       this.db
         .select({ tagId: tags.tagId })
         .from(tags)
-        .where(and(eq(tags.slug, slug), isNull(tags.deletedAt)))
+        .where(and(eq(tags.slug, slug), notDeleted(tags.deletedAt)))
         .limit(1),
     );
 
@@ -48,9 +49,9 @@ export class TagRankingRepository implements TagRankingRepositoryPort {
       .innerJoin(quizzes, eq((quizzes as { quizId: AnyPgColumn }).quizId, quizTags.quizId))
       .where(
         and(
-          isNull(tags.deletedAt),
+          notDeleted(tags.deletedAt),
           ne(tags.slug, slug),
-          isNull((quizzes as { deletedAt: AnyPgColumn }).deletedAt),
+          notDeleted((quizzes as { deletedAt: AnyPgColumn }).deletedAt),
           eq((quizzes as { isHidden: AnyPgColumn }).isHidden, false),
         ),
       )
@@ -92,12 +93,12 @@ export class TagRankingRepository implements TagRankingRepositoryPort {
         quizzes,
         and(
           eq((quizzes as { quizId: AnyPgColumn }).quizId, quizTags.quizId),
-          isNull((quizzes as { deletedAt: AnyPgColumn }).deletedAt),
+          notDeleted((quizzes as { deletedAt: AnyPgColumn }).deletedAt),
           eq((quizzes as { isHidden: AnyPgColumn }).isHidden, false),
         ),
       )
       .innerJoin(quizStats, eq(quizStats.quizId, (quizzes as { quizId: AnyPgColumn }).quizId))
-      .where(isNull(tags.deletedAt))
+      .where(notDeleted(tags.deletedAt))
       .groupBy(tags.tagId, tags.name, tags.slug, tags.createdAt, tags.updatedAt)
       .orderBy(
         desc(sql`SUM(${scoreCol})`),

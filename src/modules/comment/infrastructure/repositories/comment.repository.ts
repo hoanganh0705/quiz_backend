@@ -32,7 +32,8 @@ import type {
   ReviewReportParams,
   VoteValue,
 } from '../../domain/types';
-import { and, eq, inArray, isNull, sql, count } from 'drizzle-orm';
+import { and, eq, inArray, sql, count } from 'drizzle-orm';
+import { notDeleted } from '@/common/database/soft-delete.helper';
 
 @Injectable()
 export class CommentRepository implements CommentRepositoryPort {
@@ -67,7 +68,7 @@ export class CommentRepository implements CommentRepositoryPort {
     const [row] = await this.db
       .select()
       .from(commentRows)
-      .where(and(eq(commentRows.commentId, commentId), isNull(commentRows.deletedAt)))
+      .where(and(eq(commentRows.commentId, commentId), notDeleted(commentRows.deletedAt)))
       .limit(1);
 
     if (!row) return null;
@@ -153,7 +154,7 @@ export class CommentRepository implements CommentRepositoryPort {
     const where = [
       eq(commentRows.commentId, params.commentId),
       eq(commentRows.authorId, params.authorId),
-      isNull(commentRows.deletedAt),
+      notDeleted(commentRows.deletedAt),
     ];
     if (params.expectedUpdatedAt !== undefined) {
       where.push(eq(commentRows.updatedAt, params.expectedUpdatedAt));
@@ -169,7 +170,7 @@ export class CommentRepository implements CommentRepositoryPort {
       const exists = await this.db
         .select({ authorId: commentRows.authorId })
         .from(commentRows)
-        .where(and(eq(commentRows.commentId, params.commentId), isNull(commentRows.deletedAt)))
+        .where(and(eq(commentRows.commentId, params.commentId), notDeleted(commentRows.deletedAt)))
         .limit(1);
       if (exists.length === 0) {
         throw new Error('Comment not found');
@@ -266,7 +267,9 @@ export class CommentRepository implements CommentRepositoryPort {
     const [result] = await this.db
       .select({ count: count() })
       .from(commentRows)
-      .where(and(eq(commentRows.parentCommentId, parentCommentId), isNull(commentRows.deletedAt)));
+      .where(
+        and(eq(commentRows.parentCommentId, parentCommentId), notDeleted(commentRows.deletedAt)),
+      );
     return result?.count ?? 0;
   }
 

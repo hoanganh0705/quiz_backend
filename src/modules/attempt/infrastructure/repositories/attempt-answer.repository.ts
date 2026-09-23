@@ -130,7 +130,7 @@ export class AttemptAnswerRepository implements AttemptAnswerRepositoryPort {
 
       await tx.insert(quizAttemptEvents).values({
         attemptId: params.attemptId,
-        eventType: 'answer.submitted',
+        eventType: 'attempt.answer_submitted',
         questionId: params.questionId,
         selectedOptionId: params.selectedOptionId,
         payload: {

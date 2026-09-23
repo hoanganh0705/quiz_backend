@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/unbound-method */
 import type { PinoLogger } from 'nestjs-pino';
 import { InstanceNotificationListener } from './instance-notification-listener.adapter';
 import type { InstanceDomainEventBusPort } from '@/modules/instance/domain/events';
@@ -24,6 +23,18 @@ function makeService() {
       handlers.push(handler);
       return unsubscribe;
     }),
+    emitInstanceCreated: jest.fn(),
+    emitPlayerJoined: jest.fn(),
+    emitPlayerAttemptStarted: jest.fn(),
+    emitPlayerXpEarned: jest.fn(),
+    emitPlayerFinished: jest.fn(),
+    emitPlayerDisconnected: jest.fn(),
+    emitPlayerAnswered: jest.fn(),
+    emitInstanceStarted: jest.fn(),
+    emitInstanceClosed: jest.fn(),
+    emitCountdownStarted: jest.fn(),
+    emitCountdownCancelled: jest.fn(),
+    emitCountdownCompleted: jest.fn(),
   };
   const instanceNotificationService = {
     notifyPlayerJoined: jest.fn().mockResolvedValue(undefined),

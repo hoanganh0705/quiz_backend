@@ -39,6 +39,19 @@ Applies to schema migrations under `src/core/database/migrations/`, DTO/endpoint
 - A migration that creates or alters an index on a populated table MUST be reviewed for lock impact (PostgreSQL `CREATE INDEX CONCURRENTLY` is preferred for production; Drizzle's default is non-concurrent and is acceptable only in dev).
 - Schema files (`core/database/schema/`) MUST be updated in the same PR as the migration they introduce.
 
+### What code authors MUST NOT do
+
+The following patterns are prohibited in application code and schema definitions:
+
+- **Do not hard-delete from a soft-deletable table.** Use `softDelete(id)` instead of `db.delete(table).where(...)`. Hard delete is reserved for outbox/audit cleanup tooling only.
+- **Do not query a soft-deletable table without `notDeleted(table)`** in the `where()` clause. Omitting the filter returns deleted rows to callers. The lint rule `no-soft-delete-leak` enforces this on `*.repository.ts` files.
+- **Do not use `eq(col, null)` or `ne(col, null)` for null checks.** PostgreSQL treats these as equality comparisons, not null checks. Use `isNull(col)` and `isNotNull(col)`.
+- **Do not bypass `BaseOutboxProcessor`** when adding a new outbox processor. Extending the base class ensures `FOR UPDATE SKIP LOCKED`, idempotency detection, retry backoff, and DLQ routing are implemented correctly.
+- **Do not call `db.transaction(...)` directly** in application code. Use `@Transactional()` on the controller or application service method.
+- **Do not select `count(*)` for cursor-paginated lists.** Use `encodeCursor`/`decodeCursor` from `src/common/utils/cursor.util.ts` instead.
+- **Do not write an idempotent-key column value that is not unique per event.** The idempotency key is the contract for at-least-once delivery; duplicates must be detected and skipped, not retried.
+- **Do not import Drizzle schema tables across module boundaries without going through the module's repository.** Queries MUST NOT bypass repositories to access raw schema columns.
+
 ### Endpoints
 
 - New endpoints MUST have updated examples and a module-level OpenAPI test added in the same PR.
@@ -46,17 +59,9 @@ Applies to schema migrations under `src/core/database/migrations/`, DTO/endpoint
 
 ### Deprecation lifecycle (response shapes)
 
-- Phase 1 — Mark as deprecated:
-  - Add `@deprecated` JSDoc to the response DTO field and an `x-quiz-deprecated-reason` extension in the corresponding Swagger field (the convention here is JSDoc `@deprecated` plus a comment in the changelog).
-  - Update the contract test to acknowledge deprecated fields (`tag-openapi.spec.ts` pattern).
-  - Add a `DeprecatedAt`/`SunsetAt` ADR if the field or endpoint is removed in a future version.
-- Phase 2 — Communicate:
-  - Document the deprecation in the generated OpenAPI's `description` and in any changelog file under `docs/`.
-  - Add structured logging on inbound requests to count usage (the codebase already has `PinoLogger`; this is operational and not part of the test gate).
-- Phase 3 — Remove:
-  - Removal requires the deprecation window to have elapsed (default 90 days unless a longer compliance need exists).
-  - Removal MUST happen in a major version commit (URL prefix bump — see `api.md`).
-  - Removal MUST be accompanied by an updated test (asserts absence) in the e2e suite.
+- **Mark as deprecated**: Add `@deprecated` JSDoc to the response DTO field and an `x-quiz-deprecated-reason` extension in the corresponding Swagger field (the convention here is JSDoc `@deprecated` plus a comment in the changelog). Update the contract test to acknowledge deprecated fields (`tag-openapi.spec.ts` pattern). Add a `DeprecatedAt`/`SunsetAt` ADR if the field or endpoint is removed in a future version.
+- **Communicate**: Document the deprecation in the generated OpenAPI's `description` and in any changelog file under `docs/`. Add structured logging on inbound requests to count usage (the codebase already has `PinoLogger`; this is operational and not part of the test gate).
+- **Remove**: Removal requires the deprecation window to have elapsed (default 90 days unless a longer compliance need exists). Removal MUST happen in a major version commit (URL prefix bump — see `api.md`). Removal MUST be accompanied by an updated test (asserts absence) in the e2e suite.
 
 ### Operational tooling
 
@@ -87,7 +92,7 @@ Applies to schema migrations under `src/core/database/migrations/`, DTO/endpoint
 
 ## Examples
 
-### Phase 1 deprecation of a response field
+### Example: deprecation of a response field
 
 ```typescript
 // before

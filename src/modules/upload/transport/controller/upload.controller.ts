@@ -1,19 +1,3 @@
-/**
- * `POST /api/v1/uploads` — single endpoint for avatar + quiz cover.
- *
- * Wiring:
- *   - `@UseInterceptors(FileInterceptor('file', { ...memoryStorage() }))`
- *     so the bytes never touch disk.
- *   - `@Throttle({ default: { limit: 20, ttl: 60_000 } })` for the
- *     20 req/min/user budget (see migration plan §11).
- *   - `ParseFilePipe` runs `FileTypeValidator` (against the *declared*
- *     MIME) and `MaxFileSizeValidator` (8 MB ceiling — covers the
- *     larger quiz purpose). The application service does the per-
- *     purpose size check.
- *   - The multipart body is otherwise empty — the only field is
- *     `purpose`, which is JSON-encoded by Multer's default parser.
- */
-
 import {
   Body,
   Controller,

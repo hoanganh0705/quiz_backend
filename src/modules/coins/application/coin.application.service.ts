@@ -14,7 +14,11 @@ import {
   type CoinIngestionPort,
   type CoinEventInput,
 } from '../domain/ports/coin-ingestion.port';
-import { COIN_SPEND_AMOUNTS, COIN_ECONOMY_LIMITS } from '../coin.constants';
+import {
+  COIN_SPEND_AMOUNTS,
+  COIN_SPEND_DURATIONS_DAYS,
+  COIN_ECONOMY_LIMITS,
+} from '../coin.constants';
 import { CoinAdminAdjustmentReasonRequiredError } from '../domain/errors/coin-spend.errors';
 import type { CoinSpendResponseDto } from '../dto/response/coin-spend-response.dto';
 import type { CoinTransactionsResponseDto } from '../dto/response/coin-transactions.dto';
@@ -24,6 +28,7 @@ import type { CoinFlairRequestDto } from '../dto/request/coin-flair-request.dto'
 import type { CoinSuppressRequestDto } from '../dto/request/coin-suppress-request.dto';
 import type { CoinAdminAdjustRequestDto } from '../dto/request/coin-admin-adjust-request.dto';
 import type { CoinReason } from '../domain/types/coin.types';
+import { startOfUtcDay } from '../domain/utils/utc-day';
 
 const DEFAULT_TRANSACTIONS_LIMIT = 20;
 const MAX_TRANSACTIONS_LIMIT = 50;
@@ -44,14 +49,6 @@ export class CoinApplicationService {
     private readonly coinIngestion: CoinIngestionPort,
   ) {}
 
-  /**
-   * Returns the wallet + today's daily-cap usage.
-   *
-   * Lazy creation: a user who has never been credited does not have a
-   * `user_wallets` row. We return a synthetic zero-balance shape
-   * (`createdAt`/`updatedAt` = request time, `lastTransactionAt` =
-   * null) so the UI never has to render a "missing wallet" state.
-   */
   async getMyWallet(userId: string): Promise<CoinWalletResponseDto> {
     const wallet = await this.coinRepository.getWallet(userId);
     const todayMidnight = startOfUtcDay(new Date());
@@ -79,10 +76,6 @@ export class CoinApplicationService {
     };
   }
 
-  /**
-   * Cursor-paginated ledger read. The cursor is opaque base64url;
-   * any malformed cursor surfaces as `null` (start from latest).
-   */
   async listMyTransactions(
     userId: string,
     cursor: string | undefined,
@@ -95,7 +88,7 @@ export class CoinApplicationService {
       userId,
       cursorCreatedAt: decoded?.createdAt ?? null,
       cursorTransactionId: decoded?.transactionId ?? null,
-      limit: effectiveLimit + 1, // +1 to detect next page
+      limit: effectiveLimit + 1,
     });
 
     const hasNextPage = rows.length > effectiveLimit;
@@ -133,7 +126,7 @@ export class CoinApplicationService {
     body: CoinTipRequestDto,
     idempotencyKey: string,
   ): Promise<CoinSpendResponseDto> {
-    const amount = body.amount; // enum value
+    const amount = body.amount;
     const result = await this.spend({
       userId: callerUserId,
       category: 'tip',
@@ -150,13 +143,6 @@ export class CoinApplicationService {
     return this.toSpendResponseDto(result);
   }
 
-  /**
-   * Pin one of the caller's owned badges to their profile for 7 days.
-   * Writes a row to `user_flair_slots` AFTER the ledger row commits so
-   * the slot cannot exist without a corresponding spend (the unique
-   * index on `user_flair_slots.coin_transaction_id` enforces the
-   * 1:1 relationship in the same transaction).
-   */
   async purchaseFlair(
     callerUserId: string,
     body: CoinFlairRequestDto,
@@ -172,18 +158,12 @@ export class CoinApplicationService {
       idempotencyKey,
       metadata: {
         userBadgeId: body.userBadgeId,
-        durationDays: 7,
+        durationDays: COIN_SPEND_DURATIONS_DAYS.PROFILE_FLAIR_SLOT,
       },
     });
-    await this.writeFlairSlotRow(callerUserId, body.userBadgeId, result.transactionId, 7);
     return this.toSpendResponseDto(result);
   }
 
-  /**
-   * Hide a quiz from the caller's Recommended rail for 30 days.
-   * Writes a row to `user_quiz_suppressions` in the same way as the
-   * flair flow.
-   */
   async suppressRecommendedQuiz(
     callerUserId: string,
     body: CoinSuppressRequestDto,
@@ -199,26 +179,12 @@ export class CoinApplicationService {
       idempotencyKey,
       metadata: {
         quizId: body.quizId,
-        durationDays: 30,
+        durationDays: COIN_SPEND_DURATIONS_DAYS.SUPPRESS_RECOMMENDED,
       },
     });
-    await this.writeSuppressionRow(callerUserId, body.quizId, result.transactionId, 30);
     return this.toSpendResponseDto(result);
   }
 
-  /**
-   * Admin credit / clawback. The amount is signed; positive credits,
-   * negative debits. The `reason` field is REQUIRED and persisted to
-   * `metadata.reason` so the ledger is the audit trail.
-   *
-   * Implementation note: the admin path does not flow through
-   * `CoinSpendService.processSpend` because that service treats
-   * amounts as positive costs and flips the sign. For admin
-   * adjustments the caller is trusted with the sign itself; we hand
-   * the signed amount to `CoinIngestionService` (for positive) or to
-   * the spend-side repository helper (for negative) so the wallet
-   * row count guard still applies on the clawback case.
-   */
   async adminAdjust(
     adminUserId: string,
     body: CoinAdminAdjustRequestDto,
@@ -239,7 +205,7 @@ export class CoinApplicationService {
     if (body.amount > 0) {
       const event: CoinEventInput = {
         userId: body.userId,
-        source: 'attempt', // re-using the source enum for admin grants
+        source: 'attempt',
         amount: body.amount,
         reason: 'ADMIN_ADJUSTMENT' as CoinReason,
         referenceId: adminUserId,
@@ -275,43 +241,6 @@ export class CoinApplicationService {
     };
   }
 
-  // ─── Spend side-table writers ────────────────────────────────────────
-
-  /**
-   * Append a row to `user_flair_slots` for the freshly-debited
-   * transaction. The unique index on
-   * `user_flair_slots.coin_transaction_id` guarantees idempotency: a
-   * retry of the same spend call will conflict and this insert will
-   * short-circuit.
-   */
-  private async writeFlairSlotRow(
-    userId: string,
-    userBadgeId: string,
-    coinTransactionId: string,
-    durationDays: number,
-  ): Promise<void> {
-    await this.coinRepository.writeFlairSlot({
-      userId,
-      userBadgeId,
-      coinTransactionId,
-      durationDays,
-    });
-  }
-
-  private async writeSuppressionRow(
-    userId: string,
-    quizId: string,
-    coinTransactionId: string,
-    durationDays: number,
-  ): Promise<void> {
-    await this.coinRepository.writeQuizSuppression({
-      userId,
-      quizId,
-      coinTransactionId,
-      durationDays,
-    });
-  }
-
   private async spend(input: CoinSpendInput): Promise<CoinSpendResult> {
     return this.coinSpend.processSpend(input);
   }
@@ -325,13 +254,6 @@ export class CoinApplicationService {
     };
   }
 
-  /**
-   * After `CoinIngestionService.processCoinEvent` runs we need the
-   * `transaction_id` it produced (the ingestion service returns the
-   * new balance but not the ledger-row id). The admin-adjust path
-   * uses the deterministic idempotency key as the lookup so we don't
-   * need a new port method.
-   */
   private async lookupTransactionId(idempotencyKey: string): Promise<string> {
     const txId = await this.coinRepository.findTransactionIdByIdempotencyKey(idempotencyKey);
     if (!txId) {
@@ -341,15 +263,9 @@ export class CoinApplicationService {
   }
 }
 
-// ─── Helpers ─────────────────────────────────────────────────────────────
-
 function cryptoRandomUuid(): string {
-  // Use the global crypto API; the project does not have `uuid` in the
-  // spend path's dependency tree.
   return (
     (globalThis as { crypto?: { randomUUID?: () => string } }).crypto?.randomUUID?.() ??
-    // Fallback: 32 hex chars (uuidv4-shaped). Should never hit in
-    // Node.js 18+ where `crypto.randomUUID` is always available.
     Array.from({ length: 32 }, () => Math.floor(Math.random() * 16).toString(16)).join('')
   );
 }
@@ -361,30 +277,27 @@ function clampLimit(limit: number | undefined): number {
   return Math.floor(limit);
 }
 
-function encodeCursor(payload: CursorPayload): string {
+type CursorPayloadType = CursorPayload;
+
+function encodeCursor(payload: CursorPayloadType): string {
   return Buffer.from(JSON.stringify(payload), 'utf-8').toString('base64url');
 }
 
-function decodeCursor(raw: string | undefined): CursorPayload | null {
+function decodeCursor(raw: string | undefined): CursorPayloadType | null {
   if (!raw) return null;
   try {
-    const parsed = JSON.parse(Buffer.from(raw, 'base64url').toString('utf-8'));
+    const parsed: unknown = JSON.parse(Buffer.from(raw, 'base64url').toString('utf-8'));
     if (
       typeof parsed === 'object' &&
       parsed !== null &&
-      typeof parsed.createdAt === 'string' &&
-      typeof parsed.transactionId === 'string'
+      typeof (parsed as Record<string, unknown>)['createdAt'] === 'string' &&
+      typeof (parsed as Record<string, unknown>)['transactionId'] === 'string'
     ) {
-      return parsed as CursorPayload;
+      const p = parsed as Record<string, string>;
+      return { createdAt: p['createdAt'], transactionId: p['transactionId'] };
     }
     return null;
   } catch {
     return null;
   }
-}
-
-function startOfUtcDay(now: Date): Date {
-  const d = new Date(now);
-  d.setUTCHours(0, 0, 0, 0);
-  return d;
 }

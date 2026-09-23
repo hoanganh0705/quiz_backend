@@ -4,7 +4,7 @@ import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { DRIZZLE } from '@/core/database/drizzle.constants';
 import type { DrizzleDB } from '@/core/database/database.module';
 import { outboxEvents } from '@/core/database/schema';
-import { eq, and, isNull, sql, asc } from 'drizzle-orm';
+import { eq, and, isNull, isNotNull, sql, asc } from 'drizzle-orm';
 import { CACHE_PROVIDER, type CacheProvider } from '@/common/ports/cache.provider';
 import {
   NOTIFICATION_DOMAIN_EVENT_BUS,
@@ -60,13 +60,19 @@ export class NotificationOutboxAdapter {
       );
     }
 
-    await tx.insert(outboxEvents).values({
-      aggregateType: 'notification',
-      eventType: 'notification.sent',
-      payload: event as unknown as Record<string, unknown>,
-      idempotencyKey,
-      nextAttemptAt: new Date().toISOString(),
-    });
+    await tx
+      .insert(outboxEvents)
+      .values({
+        aggregateType: 'notification',
+        eventType: 'notification.sent',
+        payload: event as unknown as Record<string, unknown>,
+        idempotencyKey,
+        nextAttemptAt: new Date().toISOString(),
+      })
+      .onConflictDoNothing({
+        target: outboxEvents.idempotencyKey,
+        where: sql`processed_at IS NULL AND idempotency_key IS NOT NULL`,
+      });
 
     this.logger?.debug({
       event: 'notification_outbox_event_written',
@@ -137,7 +143,9 @@ export class NotificationOutboxAdapter {
       eventCount: events.length,
     });
 
-    await Promise.all(events.map((event) => this.processEvent(event)));
+    for (const event of events) {
+      await this.processEvent(event);
+    }
   }
 
   private async processEvent(event: typeof outboxEvents.$inferSelect): Promise<void> {
@@ -256,5 +264,38 @@ export class NotificationOutboxAdapter {
     const failed = Number(failedAfter[0]?.count ?? 0) - Number(failedBefore[0]?.count ?? 0);
 
     return { processed, failed };
+  }
+
+  @Cron('*/5 * * * *')
+  async monitorDeadLetterQueue(): Promise<void> {
+    const rows = await this.db
+      .select({
+        eventId: outboxEvents.eventId,
+        aggregateType: outboxEvents.aggregateType,
+        eventType: outboxEvents.eventType,
+        attemptCount: outboxEvents.attemptCount,
+        failedAt: outboxEvents.failedAt,
+        dlqReason: outboxEvents.dlqReason,
+        lastError: outboxEvents.lastError,
+      })
+      .from(outboxEvents)
+      .where(
+        and(
+          isNull(outboxEvents.processedAt),
+          isNotNull(outboxEvents.failedAt),
+          isNotNull(outboxEvents.dlqReason),
+        ),
+      )
+      .limit(1000);
+
+    if (rows.length === 0) {
+      return;
+    }
+
+    this.logger?.error({
+      event: 'notification_outbox_dlq_alert',
+      totalDlqEvents: rows.length,
+      sampleEventIds: rows.slice(0, 5).map((e) => e.eventId),
+    });
   }
 }

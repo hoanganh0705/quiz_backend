@@ -11,16 +11,13 @@ import {
   DAILY_CHALLENGE_DOMAIN_EVENT_BUS,
   DailyChallengeDomainEventBus,
 } from './domain/events/daily-challenge-domain.event-bus';
+import {
+  DailyChallengeOutboxAdapter,
+  DAILY_CHALLENGE_OUTBOX_PORT,
+} from './infrastructure/outbox/daily-challenge-xp-outbox.adapter';
+import { DailyChallengeXpOutboxProcessorService } from './infrastructure/outbox/daily-challenge-xp-outbox-processor.service';
+import { DailyChallengeXpOutboxSchedulerService } from './infrastructure/outbox/daily-challenge-xp-outbox.scheduler';
 
-/**
- * DailyChallengeModule
- *
- * Phase 3 (S-14): the four daily-challenge endpoints + the cron
- * scheduler that rotates the challenge at UTC midnight. Phase 3 also
- * adds the domain event bus so that downstream listeners (today:
- * `DailyChallengeCoinListenerAdapter` in the coins module) can
- * observe challenge completion without coupling to this module.
- */
 @Module({
   imports: [DatabaseModule, QuizModule],
   controllers: [DailyChallengeController],
@@ -38,15 +35,23 @@ import {
       provide: DAILY_CHALLENGE_DOMAIN_EVENT_BUS,
       useExisting: DailyChallengeDomainEventBus,
     },
+
+    DailyChallengeOutboxAdapter,
+    {
+      provide: DAILY_CHALLENGE_OUTBOX_PORT,
+      useExisting: DailyChallengeOutboxAdapter,
+    },
+    DailyChallengeXpOutboxProcessorService,
+    DailyChallengeXpOutboxSchedulerService,
   ],
-  // The event bus is exported (both the class and the symbol token)
-  // so the CoinModule can subscribe to it when its
-  // `forwardRef(() => DailyChallengeModule)` import is resolved.
+
   exports: [
     DailyChallengeApplicationService,
     DAILY_CHALLENGE_REPOSITORY_PORT,
     DailyChallengeDomainEventBus,
     DAILY_CHALLENGE_DOMAIN_EVENT_BUS,
+
+    DAILY_CHALLENGE_OUTBOX_PORT,
   ],
 })
 export class DailyChallengeModule {}

@@ -9,6 +9,16 @@ import type { CategoryResponseDto } from '@/modules/category/dto/response/catego
 
 import { HomeBundleResponseDto } from '../dto/response/home-bundle-response.dto';
 
+function unwrapCategories(value: unknown): CategoryResponseDto[] {
+  if (value && typeof value === 'object' && 'items' in value) {
+    const items = (value as { items?: unknown }).items;
+    if (Array.isArray(items)) {
+      return items as CategoryResponseDto[];
+    }
+  }
+  return [];
+}
+
 @Injectable()
 export class HomeApplicationService {
   constructor(
@@ -45,14 +55,7 @@ export class HomeApplicationService {
       featured: featuredResult.items ?? [],
       trending: trendingResult,
       popular: popularResult,
-      // The category service returns a paginated envelope; the
-      // bundle needs a flat array.
-      categories: Array.isArray(
-        (categoriesResult as { items?: readonly CategoryResponseDto[] })?.items,
-      )
-        ? ((categoriesResult as { items: readonly CategoryResponseDto[] })
-            .items as HomeBundleResponseDto['categories'])
-        : [],
+      categories: unwrapCategories(categoriesResult),
       recentWinners,
       topPlayers: topPlayersResult.entries,
     };

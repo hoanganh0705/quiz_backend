@@ -47,22 +47,22 @@ export class BookmarkAnalyticsEventHandler implements OnModuleInit, OnModuleDest
 
   private handleBookmarkEvent(event: unknown): void {
     if (event instanceof BookmarkAddedEvent) {
-      void this.refreshBookmarkMetrics(event.quizId);
+      void this.recomputeBookmarkCount(event.quizId);
     } else if (event instanceof BookmarkRemovedEvent) {
-      void this.refreshBookmarkMetrics(event.quizId);
+      void this.recomputeBookmarkCount(event.quizId);
     }
   }
 
-  private async refreshBookmarkMetrics(quizId: string): Promise<void> {
+  private async recomputeBookmarkCount(quizId: string): Promise<void> {
     try {
-      await this.quizAnalyticsService.refreshBookmarkMetrics(quizId);
+      await this.quizAnalyticsService.recomputeBookmarkCount(quizId);
       this.logger.debug({
-        event: 'bookmark_analytics_refreshed',
+        event: 'bookmark_count_recomputed',
         quizId,
       });
     } catch (error) {
       this.logger.error({
-        event: 'bookmark_analytics_refresh_failed',
+        event: 'bookmark_count_recompute_failed',
         quizId,
         error: error instanceof Error ? error.message : String(error),
       });

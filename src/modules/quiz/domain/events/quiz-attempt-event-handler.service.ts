@@ -43,7 +43,7 @@ export class QuizAttemptEventHandler implements OnModuleInit {
 
   private async refreshAnalytics(event: AttemptCompletedEvent): Promise<void> {
     try {
-      await this.quizAnalyticsService.refreshQuizMetrics(event.quizId);
+      await this.quizAnalyticsService.recomputeCompletionRate(event.quizId);
 
       this.logger.debug({
         event: 'analytics_attempt_completed',

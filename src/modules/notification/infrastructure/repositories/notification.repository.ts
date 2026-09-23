@@ -4,7 +4,8 @@ import { DRIZZLE } from '@/core/database/drizzle.constants';
 import type { DrizzleDB } from '@/core/database/database.module';
 import { notifications } from '@/core/database/schema';
 
-import { eq, and, desc, sql, isNull, or, count, gt } from 'drizzle-orm';
+import { eq, and, desc, sql, or, count, gt } from 'drizzle-orm';
+import { notDeleted } from '@/common/database/soft-delete.helper';
 import { NotificationRepositoryPort } from '../../domain/ports';
 import type { Notification as DomainNotification } from '../../domain/types';
 import { CreateNotificationParams, NotificationListParams } from '../../domain/types';
@@ -73,7 +74,7 @@ export class NotificationRepository implements NotificationRepositoryPort {
         and(
           sql`metadata->>'idempotencyKey' = ${idempotencyKey}`,
           eq(notifications.userId, userId),
-          isNull(notifications.deletedAt),
+          notDeleted(notifications.deletedAt),
         ),
       );
 
@@ -84,7 +85,7 @@ export class NotificationRepository implements NotificationRepositoryPort {
     const [notification] = await this.getDb()
       .select()
       .from(notifications)
-      .where(and(eq(notifications.notificationId, id), isNull(notifications.deletedAt)));
+      .where(and(eq(notifications.notificationId, id), notDeleted(notifications.deletedAt)));
 
     return notification ? this.mapToNotification(notification) : null;
   }
@@ -95,7 +96,7 @@ export class NotificationRepository implements NotificationRepositoryPort {
     const conditions = [eq(notifications.userId, params.userId)];
 
     if (!params.includeArchived) {
-      conditions.push(isNull(notifications.deletedAt));
+      conditions.push(notDeleted(notifications.deletedAt));
     }
 
     if (params.cursor) {
@@ -145,7 +146,7 @@ export class NotificationRepository implements NotificationRepositoryPort {
         and(
           eq(notifications.userId, userId),
           eq(notifications.isRead, false),
-          isNull(notifications.deletedAt),
+          notDeleted(notifications.deletedAt),
         ),
       );
 
@@ -160,7 +161,7 @@ export class NotificationRepository implements NotificationRepositoryPort {
         and(
           eq(notifications.userId, userId),
           eq(notifications.isRead, false),
-          isNull(notifications.deletedAt),
+          notDeleted(notifications.deletedAt),
         ),
       )
       .orderBy(desc(notifications.createdAt))
@@ -177,7 +178,7 @@ export class NotificationRepository implements NotificationRepositoryPort {
         and(
           eq(notifications.userId, userId),
           eq(notifications.isRead, true),
-          isNull(notifications.deletedAt),
+          notDeleted(notifications.deletedAt),
         ),
       )
       .orderBy(desc(notifications.createdAt))
@@ -194,7 +195,7 @@ export class NotificationRepository implements NotificationRepositoryPort {
         and(
           eq(notifications.notificationId, notificationId),
           eq(notifications.userId, userId),
-          isNull(notifications.deletedAt),
+          notDeleted(notifications.deletedAt),
         ),
       );
   }
@@ -207,7 +208,7 @@ export class NotificationRepository implements NotificationRepositoryPort {
         and(
           eq(notifications.notificationId, notificationId),
           eq(notifications.userId, userId),
-          isNull(notifications.deletedAt),
+          notDeleted(notifications.deletedAt),
         ),
       );
   }
@@ -221,7 +222,7 @@ export class NotificationRepository implements NotificationRepositoryPort {
         and(
           eq(notifications.userId, userId),
           eq(notifications.isRead, false),
-          isNull(notifications.deletedAt),
+          notDeleted(notifications.deletedAt),
         ),
       )) as { rowCount?: unknown };
     return typeof result.rowCount === 'number' ? result.rowCount : 0;
@@ -236,7 +237,7 @@ export class NotificationRepository implements NotificationRepositoryPort {
         and(
           eq(notifications.userId, userId),
           eq(notifications.isRead, true),
-          isNull(notifications.deletedAt),
+          notDeleted(notifications.deletedAt),
         ),
       )) as { rowCount?: unknown };
     return typeof result.rowCount === 'number' ? result.rowCount : 0;
@@ -254,7 +255,7 @@ export class NotificationRepository implements NotificationRepositoryPort {
         and(
           eq(notifications.notificationId, notificationId),
           eq(notifications.userId, userId),
-          isNull(notifications.deletedAt),
+          notDeleted(notifications.deletedAt),
         ),
       );
   }
@@ -327,29 +328,32 @@ export class NotificationRepository implements NotificationRepositoryPort {
       [last24hResult],
       [last7dResult],
     ] = await Promise.all([
-      this.db.select({ value: count() }).from(notifications).where(isNull(notifications.deletedAt)),
       this.db
         .select({ value: count() })
         .from(notifications)
-        .where(and(eq(notifications.isRead, false), isNull(notifications.deletedAt))),
+        .where(notDeleted(notifications.deletedAt)),
+      this.db
+        .select({ value: count() })
+        .from(notifications)
+        .where(and(eq(notifications.isRead, false), notDeleted(notifications.deletedAt))),
       this.db
         .select({ type: notifications.type, value: count() })
         .from(notifications)
-        .where(isNull(notifications.deletedAt))
+        .where(notDeleted(notifications.deletedAt))
         .groupBy(notifications.type),
       this.db
         .select({ channel: notifications.channel, value: count() })
         .from(notifications)
-        .where(isNull(notifications.deletedAt))
+        .where(notDeleted(notifications.deletedAt))
         .groupBy(notifications.channel),
       this.db
         .select({ value: count() })
         .from(notifications)
-        .where(and(gt(notifications.createdAt, dayAgo), isNull(notifications.deletedAt))),
+        .where(and(gt(notifications.createdAt, dayAgo), notDeleted(notifications.deletedAt))),
       this.db
         .select({ value: count() })
         .from(notifications)
-        .where(and(gt(notifications.createdAt, weekAgo), isNull(notifications.deletedAt))),
+        .where(and(gt(notifications.createdAt, weekAgo), notDeleted(notifications.deletedAt))),
     ]);
 
     const byType: Record<string, number> = {};

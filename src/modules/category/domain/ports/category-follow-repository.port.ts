@@ -12,9 +12,8 @@ export interface CategoryFollowRepositoryPort {
    * Returns `null` when no such follow exists.
    *
    * Used by `CategoryDomainService.unfollowCategory` to enforce the
-   * existence precondition before mutating (audit issue:
-   * silent-success DELETE). Mirrors the social module's
-   * `findAcceptedFriendship` / `findActiveFollow` finders.
+   * existence precondition before mutating. Mirrors the social
+   * module's `findAcceptedFriendship` / `findActiveFollow` finders.
    */
   findActiveFollow(params: {
     userId: string;
