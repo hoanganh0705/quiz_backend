@@ -37,19 +37,14 @@ import {
 import { MIN_QUESTIONS_TO_PUBLISH } from '@/modules/quiz/quiz.constants';
 import { AttemptQueryService } from './attempt-query.service';
 import { AttemptScoringService } from './attempt-scoring.service';
+import { assertAttemptTransition } from './attempt-transitions';
 import { ATTEMPT_DOMAIN_EVENT_BUS } from './events/attempt-domain-event-bus.port';
 import type { AttemptDomainEventBusPort } from './events/attempt-domain-event-bus.port';
-import {
-  AttemptStartedEvent,
-  AttemptAnswerSubmittedEvent,
-  AttemptAbandonedEvent,
-  AttemptCompletedEvent,
-  QuizMilestoneEvent,
-} from './events/attempt-domain.events';
-import { EXTERNAL_EVENT_BUS_PRODUCER_PORT } from '@/common/events';
-import type { ExternalEventBusProducerPort } from '@/common/events/common-external-event-bus';
+import { AttemptCompletedEvent, QuizMilestoneEvent } from './events/attempt-domain.events';
 import { QUIZ_REPOSITORY_PORT } from '@/modules/quiz/domain/ports';
 import { createCorrelationId } from '@/common/interceptors/correlation-id';
+import { ReferentialValidatorService } from '@/common/database/referential-validator.service';
+import { type QuizAttemptContextReference } from '@/common/database/references.types';
 
 /**
  * AttemptCommandService — Mutation operations for the Attempt aggregate.
@@ -70,8 +65,6 @@ export class AttemptCommandService {
     private readonly attemptQueryService: AttemptQueryService,
     @Inject(ATTEMPT_DOMAIN_EVENT_BUS)
     private readonly eventBus: AttemptDomainEventBusPort,
-    @Inject(EXTERNAL_EVENT_BUS_PRODUCER_PORT)
-    private readonly externalEventBus: ExternalEventBusProducerPort,
     @Inject(QUIZ_REPOSITORY_PORT)
     private readonly quizRepository: {
       getQuizWithPublishedVersionById: (quizId: string) => Promise<{
@@ -80,6 +73,7 @@ export class AttemptCommandService {
         slug: string;
       } | null>;
     },
+    private readonly referentialValidator: ReferentialValidatorService,
     @InjectPinoLogger(AttemptCommandService.name)
     private readonly logger: PinoLogger,
   ) {}
@@ -135,6 +129,11 @@ export class AttemptCommandService {
       throw new AttemptAlreadyStartedError(ATTEMPT_ALREADY_STARTED_MESSAGE);
     }
 
+    const referenceEntity = mapAttemptContextReference(contextType, contextRefId);
+    if (referenceEntity) {
+      await this.referentialValidator.assertExists(referenceEntity);
+    }
+
     const attempt = await this.attemptRepository.createAttempt({
       userId: user.sub,
       quizVersionId: quiz.publishedVersionId,
@@ -150,18 +149,6 @@ export class AttemptCommandService {
       quizId,
       quizVersionId: quiz.publishedVersionId,
     });
-
-    this.eventBus.emitAttemptStarted(
-      new AttemptStartedEvent(
-        attempt.attemptId,
-        user.sub,
-        quizId,
-        quiz.publishedVersionId,
-        contextType,
-        contextRefId,
-        nowIso,
-      ),
-    );
 
     return attempt;
   }
@@ -238,10 +225,6 @@ export class AttemptCommandService {
         answeredAt: answer.answeredAt,
       });
 
-      this.eventBus.emitAttemptAnswerSubmitted(
-        new AttemptAnswerSubmittedEvent(attemptId, user.sub, questionId, selectedOptionId, nowIso),
-      );
-
       return answer;
     } catch (error) {
       if (isPostgresUniqueViolation(error)) {
@@ -270,9 +253,7 @@ export class AttemptCommandService {
       throw new AttemptForbiddenError(ATTEMPT_FORBIDDEN_MESSAGE);
     }
 
-    if (attemptDetail.status !== 'started') {
-      throw new AttemptNotActiveError(ATTEMPT_NOT_STARTED_OR_FINISHED_MESSAGE);
-    }
+    assertAttemptTransition(attemptDetail.status, 'abandoned');
 
     const abandoned = await this.attemptRepository.abandonAttempt({
       attemptId,
@@ -285,10 +266,6 @@ export class AttemptCommandService {
       attemptId,
       userId: user.sub,
     });
-
-    this.eventBus.emitAttemptAbandoned(
-      new AttemptAbandonedEvent(attemptId, user.sub, attemptDetail.quizId, nowIso),
-    );
 
     return abandoned;
   }
@@ -306,9 +283,7 @@ export class AttemptCommandService {
       throw new AttemptForbiddenError(ATTEMPT_FORBIDDEN_MESSAGE);
     }
 
-    if (attemptDetail.status !== 'started') {
-      throw new AttemptNotActiveError(ATTEMPT_NOT_STARTED_OR_FINISHED_MESSAGE);
-    }
+    assertAttemptTransition(attemptDetail.status, 'completed');
 
     const scoringData = await this.attemptAnswerRepository.getAttemptAnswerScoringData(attemptId);
 
@@ -323,6 +298,8 @@ export class AttemptCommandService {
       attemptDetail.rewardXp,
     );
 
+    const xpIdempotencyKey = `xp:${attemptDetail.userId}:attempt:${attemptId}`;
+
     const { completed, preCompletionCount } =
       await this.attemptRepository.completeAttemptAndSideEffects({
         attemptId,
@@ -333,6 +310,10 @@ export class AttemptCommandService {
         nowIso,
         quizId: attemptDetail.quizId,
         userId: attemptDetail.userId,
+        xpOutbox:
+          xpEarned > 0
+            ? { idempotencyKey: xpIdempotencyKey, correlationId: createCorrelationId() }
+            : undefined,
       });
 
     this.logger.info({
@@ -363,34 +344,12 @@ export class AttemptCommandService {
     );
 
     if (xpEarned > 0) {
-      // `externalEventBus.publishXpEarned` returns a Promise; the
-      // fire-and-forget nature here is intentional (XP attribution
-      // is best-effort and must not block the attempt commit), but
-      // an unhandled rejection would crash the process. Catch and
-      // log explicitly so a downstream failure surfaces without
-      // breaking the user-visible "submit attempt" flow.
-      this.externalEventBus
-        .publishXpEarned({
-          eventType: 'external.xp.earned',
-          userId: attemptDetail.userId,
-          amount: xpEarned,
-          source: 'quiz_attempt',
-          attemptId,
-          timestamp: new Date(nowIso),
-          correlationId: createCorrelationId(),
-        })
-        .catch((err) => {
-          this.logger.error(
-            { err, attemptId, userId: attemptDetail.userId, xpEarned },
-            'failed to publish external.xp.earned event',
-          );
-        });
-
       this.logger.debug({
-        event: 'external_xp_earned_published',
+        event: 'external_xp_earned_outboxed',
         userId: attemptDetail.userId,
         amount: xpEarned,
         attemptId,
+        idempotencyKey: xpIdempotencyKey,
       });
     }
 
@@ -455,5 +414,18 @@ export class AttemptCommandService {
       questionId,
       userId: attempt.userId,
     });
+  }
+}
+
+function mapAttemptContextReference(
+  contextType: AttemptContextType,
+  contextRefId: string | null,
+): QuizAttemptContextReference | null {
+  if (!contextRefId) return null;
+  switch (contextType) {
+    case 'tournament':
+      return { kind: 'tournament', id: contextRefId };
+    case 'solo':
+      return null;
   }
 }

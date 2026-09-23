@@ -1,5 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, asc, desc, eq, inArray, isNull, or, sql, type SQL } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, or, sql, type SQL } from 'drizzle-orm';
+import { notDeleted } from '@/common/database/soft-delete.helper';
 import { DRIZZLE, DRIZZLE_READ } from '@/core/database/drizzle.constants';
 import type { DrizzleDB } from '@/core/database/database.module';
 import {
@@ -46,7 +47,7 @@ export class QuizRepository implements QuizRepositoryPort {
     const [quiz] = await this.dbRead
       .select(QUIZ_RECORD_PROJECTION)
       .from(quizzes)
-      .where(and(eq(QUIZ_COLUMNS.quizId, quizId), isNull(QUIZ_COLUMNS.deletedAt)))
+      .where(and(eq(QUIZ_COLUMNS.quizId, quizId), notDeleted(QUIZ_COLUMNS.deletedAt)))
       .limit(1);
 
     return (quiz as QuizRecordRow | undefined) ?? null;
@@ -75,7 +76,7 @@ export class QuizRepository implements QuizRepositoryPort {
       .where(
         and(
           eq(QUIZ_COLUMNS.quizId, quizId),
-          isNull(QUIZ_COLUMNS.deletedAt),
+          notDeleted(QUIZ_COLUMNS.deletedAt),
           eq(QUIZ_COLUMNS.isHidden, false),
         ),
       )
@@ -97,7 +98,7 @@ export class QuizRepository implements QuizRepositoryPort {
       .where(
         and(
           eq(QUIZ_COLUMNS.slug, slug),
-          isNull(QUIZ_COLUMNS.deletedAt),
+          notDeleted(QUIZ_COLUMNS.deletedAt),
           eq(QUIZ_COLUMNS.isHidden, false),
         ),
       )
@@ -115,7 +116,7 @@ export class QuizRepository implements QuizRepositoryPort {
       })
       .from(quizTags)
       .innerJoin(tags, eq(quizTags.tagId, tags.tagId))
-      .where(and(eq(quizTags.quizId, quizId), isNull(tags.deletedAt)))
+      .where(and(eq(quizTags.quizId, quizId), notDeleted(tags.deletedAt)))
       .orderBy(asc(tags.name));
 
     return rows as QuizTagRow[];
@@ -132,7 +133,7 @@ export class QuizRepository implements QuizRepositoryPort {
       })
       .from(quizTags)
       .innerJoin(tags, eq(quizTags.tagId, tags.tagId))
-      .where(and(inArray(quizTags.quizId, quizIds), isNull(tags.deletedAt)))
+      .where(and(inArray(quizTags.quizId, quizIds), notDeleted(tags.deletedAt)))
       .orderBy(asc(quizTags.quizId), asc(tags.name));
 
     const out = new Map<string, QuizTagRow[]>();
@@ -156,7 +157,7 @@ export class QuizRepository implements QuizRepositoryPort {
       })
       .from(users)
       .leftJoin(userProfiles, eq(users.userId, userProfiles.userId))
-      .where(and(inArray(users.userId, userIds), isNull(users.deletedAt)));
+      .where(and(inArray(users.userId, userIds), notDeleted(users.deletedAt)));
 
     const out = new Map<string, AuthorSummaryRow>();
     for (const row of rows) {
@@ -180,7 +181,7 @@ export class QuizRepository implements QuizRepositoryPort {
         slug: categories.slug,
       })
       .from(categories)
-      .where(and(inArray(categories.categoryId, categoryIds), isNull(categories.deletedAt)));
+      .where(and(inArray(categories.categoryId, categoryIds), notDeleted(categories.deletedAt)));
 
     const out = new Map<string, CategorySummaryRow>();
     for (const row of rows) {
@@ -367,7 +368,7 @@ export class QuizRepository implements QuizRepositoryPort {
       )
       .where(
         and(
-          isNull(QUIZ_COLUMNS.deletedAt),
+          notDeleted(QUIZ_COLUMNS.deletedAt),
           eq(QUIZ_COLUMNS.isHidden, false),
           eq(QUIZ_COLUMNS.isFeatured, true),
         ),
@@ -386,7 +387,7 @@ export class QuizRepository implements QuizRepositoryPort {
     const [sourceRow] = await this.dbRead
       .select({ quizId: QUIZ_COLUMNS.quizId, categoryId: QUIZ_COLUMNS.categoryId })
       .from(quizzes)
-      .where(and(eq(QUIZ_COLUMNS.slug, params.slug), isNull(QUIZ_COLUMNS.deletedAt)))
+      .where(and(eq(QUIZ_COLUMNS.slug, params.slug), notDeleted(QUIZ_COLUMNS.deletedAt)))
       .limit(1);
 
     if (!sourceRow || !sourceRow.quizId) {
@@ -463,7 +464,7 @@ export class QuizRepository implements QuizRepositoryPort {
       .leftJoin(sql`quiz_stats qs`, sql`qs.quiz_id = ${QUIZ_COLUMNS.quizId}`)
       .where(
         and(
-          isNull(QUIZ_COLUMNS.deletedAt),
+          notDeleted(QUIZ_COLUMNS.deletedAt),
           eq(QUIZ_COLUMNS.isHidden, false),
           sql`${QUIZ_COLUMNS.quizId} <> ${sourceRow.quizId}`,
           tagOverlapExistsFilter,
@@ -500,7 +501,7 @@ export class QuizRepository implements QuizRepositoryPort {
       })
       .from(quizzes)
       .leftJoin(sql`quiz_stats qs`, sql`qs.quiz_id = ${QUIZ_COLUMNS.quizId}`)
-      .where(and(eq(QUIZ_COLUMNS.quizId, quizId), isNull(QUIZ_COLUMNS.deletedAt)))
+      .where(and(eq(QUIZ_COLUMNS.quizId, quizId), notDeleted(QUIZ_COLUMNS.deletedAt)))
       .limit(1);
 
     return (stats as QuizStatsRow | undefined) ?? null;
@@ -569,7 +570,7 @@ export class QuizRepository implements QuizRepositoryPort {
             })
             .from(quizTags)
             .innerJoin(tags, eq(quizTags.tagId, tags.tagId))
-            .where(and(eq(quizTags.quizId, quizId), isNull(tags.deletedAt)))
+            .where(and(eq(quizTags.quizId, quizId), notDeleted(tags.deletedAt)))
             .orderBy(asc(tags.name));
 
           tagRows = resolvedTags as QuizTagRow[];
@@ -639,14 +640,14 @@ export class QuizRepository implements QuizRepositoryPort {
               ...params.patch,
               updatedAt: params.nowIso,
             })
-            .where(and(eq(QUIZ_COLUMNS.quizId, params.quizId), isNull(QUIZ_COLUMNS.deletedAt)));
+            .where(and(eq(QUIZ_COLUMNS.quizId, params.quizId), notDeleted(QUIZ_COLUMNS.deletedAt)));
         }
 
         if (params.categoryId !== undefined) {
           await tx
             .update(quizzes)
             .set({ categoryId: params.categoryId, updatedAt: params.nowIso })
-            .where(and(eq(QUIZ_COLUMNS.quizId, params.quizId), isNull(QUIZ_COLUMNS.deletedAt)));
+            .where(and(eq(QUIZ_COLUMNS.quizId, params.quizId), notDeleted(QUIZ_COLUMNS.deletedAt)));
         }
 
         if (params.tagIds) {
@@ -670,7 +671,7 @@ export class QuizRepository implements QuizRepositoryPort {
             quizVersions,
             eq(QUIZ_COLUMNS.publishedVersionId, QUIZ_VERSION_COLUMNS.quizVersionId),
           )
-          .where(and(eq(QUIZ_COLUMNS.quizId, params.quizId), isNull(QUIZ_COLUMNS.deletedAt)))
+          .where(and(eq(QUIZ_COLUMNS.quizId, params.quizId), notDeleted(QUIZ_COLUMNS.deletedAt)))
           .limit(1);
 
         if (!row) {
@@ -685,7 +686,7 @@ export class QuizRepository implements QuizRepositoryPort {
           })
           .from(quizTags)
           .innerJoin(tags, eq(quizTags.tagId, tags.tagId))
-          .where(and(eq(quizTags.quizId, params.quizId), isNull(tags.deletedAt)))
+          .where(and(eq(quizTags.quizId, params.quizId), notDeleted(tags.deletedAt)))
           .orderBy(asc(tags.name))) as QuizTagRow[];
 
         return { row: row as QuizWithPublishedVersionRow, tags: tagRows };
@@ -704,14 +705,14 @@ export class QuizRepository implements QuizRepositoryPort {
         deletedAt: nowIso,
         updatedAt: nowIso,
       })
-      .where(and(eq(QUIZ_COLUMNS.quizId, quizId), isNull(QUIZ_COLUMNS.deletedAt)));
+      .where(and(eq(QUIZ_COLUMNS.quizId, quizId), notDeleted(QUIZ_COLUMNS.deletedAt)));
   }
 
   async findQuizCoverPublicIdById(quizId: string): Promise<string | null> {
     const [row] = await this.dbRead
       .select({ imagePublicId: QUIZ_COLUMNS.imagePublicId })
       .from(quizzes)
-      .where(and(eq(QUIZ_COLUMNS.quizId, quizId), isNull(QUIZ_COLUMNS.deletedAt)))
+      .where(and(eq(QUIZ_COLUMNS.quizId, quizId), notDeleted(QUIZ_COLUMNS.deletedAt)))
       .limit(1);
 
     return (row?.imagePublicId as string | null | undefined) ?? null;

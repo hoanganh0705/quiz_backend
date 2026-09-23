@@ -1,34 +1,3 @@
-/**
- * Tournament → Coin Listener Adapter
- *
- * Subscribes to the shared `external.xp.earned` event and grants
- * `TOURNAMENT_PLACEMENT_REWARD` for the top-3 finish of a tournament.
- *
- * Coin rewards (per `COIN_REWARDS.TOURNAMENT_PLACEMENT_REWARD`):
- *   - 1st place → 100 coins
- *   - 2nd place → 60 coins
- *   - 3rd place → 30 coins
- *
- * The listener is **strictly earn-side** — it only fires on
- * `source: 'tournament'` events with a positive `rank` in {1, 2, 3}.
- * All other tournament XP events (4th-and-below) get XP from the
- * existing ranking path but no coin grant.
- *
- * ## Idempotency
- *
- * Per §9.5 the idempotency key is
- * `coin:{userId}:tournament:{tournamentId}:{rank}` — a tournament
- * awards each placement at most once, so the (tournament, rank) pair
- * uniquely identifies the grant. The shared outbox partial unique
- * index guarantees at-most-once delivery even if the same
- * `external.xp.earned` is replayed by Redis pub/sub.
- *
- * ## Daily cap
- *
- * Tournament rewards bypass the cap by product design — a tournament
- * is at most a few times per month.
- */
-
 import { Inject, Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import {
@@ -92,18 +61,12 @@ export class TournamentCoinListenerAdapter implements OnModuleInit, OnModuleDest
         source: 'tournament',
         amount: reward,
         reason: 'TOURNAMENT_PLACEMENT_REWARD',
-        // The reference is the (tournament, rank) tuple encoded with a
-        // colon so the idempotency key shape matches §9.5
-        // (`coin:{userId}:tournament:{tournamentId}:{rank}`). The
-        // ingestion service appends `:rank` to the userId/source/referenceId
-        // triple, so we put `tournamentId:rank` here.
         referenceId: `${event.tournamentId}:${placement}`,
         metadata: {
           tournamentId: event.tournamentId,
           rank: placement,
           xpAmount: event.amount,
         },
-        // Tournaments bypass the daily cap.
         applyDailyCap: false,
       });
 

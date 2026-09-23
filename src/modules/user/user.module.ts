@@ -33,9 +33,9 @@ import { RecentlyPlayedQuizzesService } from './application/recently-played-quiz
 import { UserProfileBundleService } from './application/user-profile-bundle.service';
 import { UserSummaryService } from './application/user-summary.service';
 import { COIN_REPOSITORY_PORT } from '@/modules/coins/domain/ports/coin-repository.port';
-import { CoinRepository } from '@/modules/coins/infrastructure/repositories/coin.repository';
 import { CoinModule } from '@/modules/coins/coin.module';
 import { UserResponseMapper } from './mappers/user-response.mapper';
+import { UserActivityCleanupScheduler } from './infrastructure/scheduler/user-activity-cleanup.scheduler';
 
 @Module({
   imports: [
@@ -43,6 +43,7 @@ import { UserResponseMapper } from './mappers/user-response.mapper';
     forwardRef(() => QuizModule),
     forwardRef(() => RankingModule),
     forwardRef(() => SocialModule),
+
     forwardRef(() => CoinModule),
   ],
   controllers: [UserController],
@@ -74,8 +75,7 @@ import { UserResponseMapper } from './mappers/user-response.mapper';
     UserProfileBundleService,
     UserSummaryService,
     UserResponseMapper,
-    CoinRepository,
-    { provide: COIN_REPOSITORY_PORT, useExisting: CoinRepository },
+    UserActivityCleanupScheduler,
   ],
   exports: [
     UserApplicationService,

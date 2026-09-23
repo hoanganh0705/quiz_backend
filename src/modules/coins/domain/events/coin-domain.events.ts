@@ -17,7 +17,6 @@ export interface CoinBalanceChangedEvent {
     | 'suppress'
     | 'admin'
     | null;
-  /** Opaque ID of the source row (attempt_id, challenge_id, …). */
   readonly referenceId: string | null;
   readonly timestamp: Date;
 }
@@ -44,7 +43,31 @@ export interface CoinTransactionRecordedEvent {
   readonly timestamp: Date;
 }
 
-/**
- * Union of all events emitted by the coin domain bus.
- */
-export type CoinDomainEvent = CoinBalanceChangedEvent | CoinTransactionRecordedEvent;
+export interface CoinRefundedEvent {
+  readonly eventType: 'coin.refunded';
+  readonly refundId: string;
+  readonly userId: string;
+  readonly originalTransactionId: string;
+  readonly originalReason: CoinReason;
+  readonly refundAmount: number;
+  readonly balanceAfter: number;
+  readonly refundReason: string;
+  readonly referenceType:
+    | 'attempt'
+    | 'daily_challenge'
+    | 'streak'
+    | 'badge'
+    | 'tournament'
+    | 'tip'
+    | 'flair'
+    | 'suppress'
+    | 'admin'
+    | null;
+  readonly referenceId: string | null;
+  readonly timestamp: Date;
+}
+
+export type CoinDomainEvent =
+  | CoinBalanceChangedEvent
+  | CoinTransactionRecordedEvent
+  | CoinRefundedEvent;

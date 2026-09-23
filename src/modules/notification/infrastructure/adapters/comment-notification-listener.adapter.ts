@@ -1,4 +1,4 @@
-import { Inject, Injectable, OnModuleDestroy, OnModuleInit, forwardRef } from '@nestjs/common';
+import { Inject, Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import {
   COMMENT_DOMAIN_EVENT_BUS,
@@ -26,7 +26,7 @@ export class CommentNotificationListener implements OnModuleInit, OnModuleDestro
     private readonly commentEventBus: CommentDomainEventBusPort,
     @Inject(NOTIFICATION_CHANNEL_SERVICE)
     private readonly channelService: NotificationChannelServicePort,
-    @Inject(forwardRef(() => USER_REPOSITORY_PORT))
+    @Inject(USER_REPOSITORY_PORT)
     private readonly userRepository: UserRepositoryPort,
     @InjectPinoLogger(CommentNotificationListener.name)
     private readonly logger: PinoLogger,

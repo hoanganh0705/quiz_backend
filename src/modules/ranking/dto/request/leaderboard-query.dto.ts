@@ -179,6 +179,52 @@ export class LeaderboardDistributionQueryDto {
   period?: LeaderboardPeriodEnum = LeaderboardPeriodEnum.ALL_TIME;
 }
 
+export class LeaderboardCursorQueryDto {
+  @ApiPropertyOptional({
+    description: 'Ranking period',
+    enum: LeaderboardPeriodEnum,
+    default: LeaderboardPeriodEnum.ALL_TIME,
+  })
+  @IsEnum(LeaderboardPeriodEnum)
+  @IsOptional()
+  period?: LeaderboardPeriodEnum = LeaderboardPeriodEnum.ALL_TIME;
+
+  @ApiPropertyOptional({
+    description: 'Number of items to return',
+    default: 100,
+    minimum: 1,
+    maximum: 500,
+  })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(500)
+  @IsOptional()
+  limit?: number = 100;
+
+  @ApiPropertyOptional({
+    description: 'Cursor: XP value of the last row from the previous page',
+  })
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  @IsOptional()
+  cursorXp?: number;
+
+  @ApiPropertyOptional({
+    description: 'Cursor: created-at of the last row from the previous page (ISO timestamp)',
+  })
+  @IsDateString()
+  @IsOptional()
+  cursorCreatedAt?: string;
+
+  @ApiPropertyOptional({
+    description: 'Cursor: user ID of the last row from the previous page',
+  })
+  @IsOptional()
+  cursorUserId?: string;
+}
+
 /** Map TopMoversPeriodEnum to domain RankingPeriod. */
 export function mapTopMoversPeriodEnumToDomain(
   period: TopMoversPeriodEnum | undefined,

@@ -77,6 +77,7 @@ export class TournamentListenerAdapter implements OnModuleInit, OnModuleDestroy 
         userId: event.userId,
         tournamentId: event.tournamentId,
         tournamentTitle: event.tournamentTitle,
+        categoryTitle: event.categoryTitle,
       });
 
       this.logger.info({
@@ -100,6 +101,7 @@ export class TournamentListenerAdapter implements OnModuleInit, OnModuleDestroy 
         userId: event.userId,
         tournamentId: event.tournamentId,
         tournamentTitle: event.tournamentTitle,
+        categoryTitle: event.categoryTitle,
         prize: event.prize,
       });
 
@@ -125,6 +127,7 @@ export class TournamentListenerAdapter implements OnModuleInit, OnModuleDestroy 
         userId: event.userId,
         tournamentId: event.tournamentId,
         tournamentTitle: event.tournamentTitle,
+        categoryTitle: event.categoryTitle,
         rank: event.rank,
         totalParticipants: event.totalParticipants,
       });
@@ -151,6 +154,7 @@ export class TournamentListenerAdapter implements OnModuleInit, OnModuleDestroy 
         userId: event.userId,
         tournamentId: event.tournamentId,
         tournamentTitle: event.tournamentTitle,
+        categoryTitle: event.categoryTitle,
         startsAt: event.startsAt,
       });
 

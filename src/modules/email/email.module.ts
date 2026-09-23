@@ -30,9 +30,6 @@ import { EmailResilienceRunner } from './resilience/email-resilience.runner';
         return new Queue(EMAIL_QUEUE_NAME, { connection });
       },
     },
-    // One runner per process — the circuit-breaker listener is
-    // registered in its constructor and must fire exactly once per
-    // process. Handlers below consume the same instance via DI.
     EmailResilienceRunner,
     VerificationEmailHandler,
     PasswordResetEmailHandler,

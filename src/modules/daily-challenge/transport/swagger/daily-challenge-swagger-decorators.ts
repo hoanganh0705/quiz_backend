@@ -17,9 +17,9 @@ import {
 import { DailyChallengeResponseDto } from '../../dto/response/daily-challenge-response.dto';
 
 /**
- * Phase 3 (S-14): Swagger decorator factory for the daily-challenge
- * endpoints. Each endpoint gets a single `200` / `400` / `404`
- * / `500` decorator stack with the appropriate response schema.
+ * Swagger decorator factory for the daily-challenge endpoints. Each endpoint
+ * gets a single `200` / `400` / `404` / `500` decorator stack with the
+ * appropriate response schema.
  */
 
 const problem = {

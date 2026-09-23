@@ -48,3 +48,4 @@ export {
 export { googleOAuthConfig, type GoogleOAuthConfig } from './google-oauth.config';
 export { swaggerConfig, type SwaggerConfig } from './swagger.config';
 export { cloudinaryConfig, type CloudinaryConfig } from './cloudinary.config';
+export { tournamentFlagsConfig, type TournamentFlagsConfig } from './tournament-flags.config';

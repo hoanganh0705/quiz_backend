@@ -22,7 +22,12 @@ import {
   quizDifficulty,
   quizInstanceStatus,
   quizVersionStatus,
+  quizAttemptStatus,
+  quizContextType,
+  quizAttemptEventType,
+  quizInstancePlayerStatus,
   reviewReportStatus,
+  reviewReportReason,
   tsvector,
 } from '../shared';
 import { users } from '../auth/schema';
@@ -355,9 +360,9 @@ export const quizAttempts = pgTable(
       .notNull(),
     userId: uuid('user_id').notNull(),
     quizVersionId: uuid('quiz_version_id').notNull(),
-    contextType: text('context_type').default('solo').notNull(),
+    contextType: quizContextType('context_type').default('solo').notNull(),
     contextRefId: uuid('context_ref_id'),
-    status: text().default('started').notNull(),
+    status: quizAttemptStatus().default('started').notNull(),
     scorePercent: numeric('score_percent', { precision: 5, scale: 2 }),
     correctCount: integer('correct_count'),
     startedAt: timestamp('started_at', { withTimezone: true, mode: 'string' })
@@ -386,7 +391,7 @@ export const quizAttempts = pgTable(
     index('idx_quiz_attempts_user_status').using(
       'btree',
       table.userId.asc().nullsLast().op('uuid_ops'),
-      table.status.asc().nullsLast().op('text_ops'),
+      table.status.asc().nullsLast().op('enum_ops'),
     ),
     index('idx_quiz_attempts_user_version_started')
       .using(
@@ -483,10 +488,10 @@ export const quizAttemptEvents = pgTable(
       increment: 1,
       minValue: 1,
       maxValue: '9223372036854775807',
-      cache: 1,
+      cache: 32,
     }),
     attemptId: uuid('attempt_id').notNull(),
-    eventType: text('event_type').notNull(),
+    eventType: quizAttemptEventType('event_type').notNull(),
     questionId: uuid('question_id'),
     selectedOptionId: uuid('selected_option_id'),
     payload: jsonb().default({}).notNull(),
@@ -744,7 +749,7 @@ export const quizInstancePlayers = pgTable(
     instanceId: uuid('instance_id').notNull(),
     userId: uuid('user_id').notNull(),
     attemptId: uuid('attempt_id'),
-    status: text().default('joined').notNull(),
+    status: quizInstancePlayerStatus().default('joined').notNull(),
     joinedAt: timestamp('joined_at', { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
     leftAt: timestamp('left_at', { withTimezone: true, mode: 'string' }),
   },
@@ -762,7 +767,7 @@ export const quizInstancePlayers = pgTable(
     index('idx_quiz_instance_players_instance_status').using(
       'btree',
       table.instanceId.asc().nullsLast().op('uuid_ops'),
-      table.status.asc().nullsLast().op('text_ops'),
+      table.status.asc().nullsLast().op('enum_ops'),
     ),
 
     foreignKey({
@@ -784,19 +789,6 @@ export const quizInstancePlayers = pgTable(
     }).onDelete('restrict'),
 
     unique('uq_quiz_instance_players_instance_user').on(table.instanceId, table.userId),
-
-    check(
-      'quiz_instance_players_status_check',
-      sql`status = ANY (
-        ARRAY[
-          'joined'::text,
-          'ready'::text,
-          'playing'::text,
-          'disconnected'::text,
-          'finished'::text
-        ]
-      )`,
-    ),
   ],
 );
 
@@ -849,7 +841,7 @@ export const reviewReports = pgTable(
       .notNull(),
     reviewId: uuid('review_id').notNull(),
     reporterId: uuid('reporter_id').notNull(),
-    reason: text().notNull(),
+    reason: reviewReportReason().notNull(),
     details: text('details'),
     status: reviewReportStatus('status').default('open').notNull(),
     createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' })
@@ -902,9 +894,5 @@ export const reviewReports = pgTable(
       name: 'review_reports_reporter_id_fkey',
     }).onDelete('cascade'),
     check('review_reports_reason_nonblank', sql`length(btrim(reason)) > 0`),
-    check(
-      'review_reports_reason_enum',
-      sql`reason IN ('spam', 'harassment', 'inappropriate_content', 'misinformation', 'other')`,
-    ),
   ],
 );

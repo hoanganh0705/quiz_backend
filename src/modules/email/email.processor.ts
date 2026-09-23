@@ -8,23 +8,7 @@ import { correlationIdStorage, createCorrelationId } from '@/common/interceptors
 import type { EmailJobHandler } from './handlers/email-job.handler';
 import { PasswordResetEmailHandler } from './handlers/password-reset.handler';
 import { VerificationEmailHandler } from './handlers/verification.handler';
-import { EmailResilienceRunner } from './resilience/email-resilience.runner';
 
-/**
- * BullMQ worker dispatcher for the email queue.
- *
- * Lifecycle (startup/shutdown, retry log events, correlation ID
- * plumbing) lives here. Per-job-type logic — what the email
- * actually does, what to dedupe, what template to use — lives in
- * `EmailJobHandler` implementations under `./handlers/`.
- *
- * Adding a new email type is a 3-step change with no edits to this
- * file beyond the constructor's handler list:
- *   1. Add a `FooHandler` implementing `EmailJobHandler`.
- *   2. Register it in `EmailModule.providers`.
- *   3. Add `private readonly foo: FooEmailHandler` to the
- *      constructor and append it to `this.handlers` below.
- */
 @Injectable()
 export class EmailProcessor implements OnModuleInit, OnModuleDestroy {
   private readonly handlers: EmailJobHandler<unknown>[];
@@ -37,11 +21,6 @@ export class EmailProcessor implements OnModuleInit, OnModuleDestroy {
     @Inject(emailConfig.KEY) private readonly email: EmailConfig,
     verificationHandler: VerificationEmailHandler,
     passwordResetHandler: PasswordResetEmailHandler,
-    // The runner is owned by this class only for the side-effect of
-    // constructing it once per process (so the circuit breaker state
-    // listener is registered exactly once). Handlers also receive it
-    // via DI and use it directly; the dispatcher does not invoke it.
-    _resilience: EmailResilienceRunner,
     @InjectPinoLogger(EmailProcessor.name) private readonly logger: PinoLogger,
   ) {
     this.concurrency = this.email.queueConcurrency;
@@ -55,12 +34,6 @@ export class EmailProcessor implements OnModuleInit, OnModuleDestroy {
     this.worker = new Worker(
       EMAIL_QUEUE_NAME,
       async (job: Job) => {
-        // BullMQ workers run outside any HTTP request context, so we
-        // must restore the correlation ID the enqueue site captured
-        // in `correlationIdStorage`. If the job data is missing one
-        // (only possible if someone hand-published to Redis without
-        // going through `EmailService`), mint a fresh UUID so log
-        // lines stay joinable on a single ID per processing attempt.
         const dataWithCorrelation = job.data as { correlationId?: string };
         const correlationId = dataWithCorrelation.correlationId ?? createCorrelationId();
 
@@ -122,8 +95,6 @@ export class EmailProcessor implements OnModuleInit, OnModuleDestroy {
     });
   }
 
-  // Gracefully shut down the worker when the module is destroyed.
-  // In-flight jobs are allowed to finish; Redis sockets are closed.
   async onModuleDestroy(): Promise<void> {
     if (this.worker) {
       await this.worker.close();
@@ -132,7 +103,4 @@ export class EmailProcessor implements OnModuleInit, OnModuleDestroy {
   }
 }
 
-// Re-export so callers that previously imported from
-// `./email.processor` keep working — there were none outside the
-// module, but this keeps the surface stable during the refactor.
 export type { SendPasswordResetEmailJobData, SendVerificationEmailJobData };

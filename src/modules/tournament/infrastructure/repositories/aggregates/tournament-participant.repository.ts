@@ -1,5 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { and, asc, count, eq, isNull, or, sql } from 'drizzle-orm';
+import { notDeleted } from '@/common/database/soft-delete.helper';
 import { DRIZZLE } from '@/core/database/drizzle.constants';
 import type { DrizzleDB } from '@/core/database/database.module';
 import { tournaments, tournamentParticipants, users, userProfiles } from '@/core/database/schema';
@@ -186,7 +187,7 @@ export class TournamentParticipantRepository {
         })
         .from(tournaments)
         .where(
-          and(eq(tournaments.tournamentId, params.tournamentId), isNull(tournaments.deletedAt)),
+          and(eq(tournaments.tournamentId, params.tournamentId), notDeleted(tournaments.deletedAt)),
         )
         .limit(1)
         .for('update');
@@ -327,7 +328,7 @@ export class TournamentParticipantRepository {
         .select({ tournamentId: tournaments.tournamentId })
         .from(tournaments)
         .where(
-          and(eq(tournaments.tournamentId, params.tournamentId), isNull(tournaments.deletedAt)),
+          and(eq(tournaments.tournamentId, params.tournamentId), notDeleted(tournaments.deletedAt)),
         )
         .limit(1)
         .for('update');
@@ -390,7 +391,7 @@ export class TournamentParticipantRepository {
     const conditions = and(
       eq(tournamentParticipants.tournamentId, params.tournamentId),
       eq(tournamentParticipants.status, 'active'),
-      isNull(users.deletedAt),
+      notDeleted(users.deletedAt),
     );
 
     const [totalRow] = await this.db
@@ -488,8 +489,8 @@ export class TournamentParticipantRepository {
     };
   }
 
-  // Issue #28: Added pagination to prevent unbounded responses for tournaments with many participants.
-  // Issue #29: Use RANK() instead of in-memory index assignment so tied participants share ranks.
+  // Pagination to prevent unbounded responses for tournaments with many participants.
+  // Use RANK() instead of in-memory index assignment so tied participants share ranks.
   async getLeaderboard(params: {
     tournamentId: string;
     limit: number;
@@ -573,7 +574,7 @@ export class TournamentParticipantRepository {
         and(
           eq(tournamentParticipants.tournamentId, params.tournamentId),
           sql`${tournamentParticipants.rankFinal} is not null`,
-          isNull(users.deletedAt),
+          notDeleted(users.deletedAt),
         ),
       )
       .orderBy(asc(tournamentParticipants.rankFinal), asc(tournamentParticipants.userId))

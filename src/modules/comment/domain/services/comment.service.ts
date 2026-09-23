@@ -24,6 +24,7 @@ import {
   ParentCommentCrossThreadError,
   SelfVoteError,
   SelfReportError,
+  SelfParentError,
   DuplicateReportError,
   QuizNotFoundError,
   ReplyLimitExceededError,
@@ -160,6 +161,9 @@ export class CommentService {
         }
         if (parent.isHidden || parent.deletedAt !== null) {
           throw new CommentNotFoundError(params.parentCommentId);
+        }
+        if (parent.authorId === params.authorId) {
+          throw new SelfParentError();
         }
 
         const replyCount = await this.repo.countReplies(params.parentCommentId);

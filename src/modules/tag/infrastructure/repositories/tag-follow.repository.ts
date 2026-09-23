@@ -1,5 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { and, desc, eq, isNull, or, sql } from 'drizzle-orm';
+import { notDeleted } from '@/common/database/soft-delete.helper';
 import { DRIZZLE } from '@/core/database/drizzle.constants';
 import type { DrizzleDB } from '@/core/database/database.module';
 import { tags, tagFollows } from '@/core/database/schema';
@@ -28,7 +29,7 @@ export class TagFollowRepository implements TagFollowRepositoryPort {
         and(
           eq(tagFollows.userId, userId),
           eq(tagFollows.tagId, tagId),
-          isNull(tagFollows.deletedAt),
+          notDeleted(tagFollows.deletedAt),
         ),
       )
       .limit(1);
@@ -85,7 +86,7 @@ export class TagFollowRepository implements TagFollowRepositoryPort {
         and(
           eq(tagFollows.userId, userId),
           eq(tagFollows.tagId, tagId),
-          isNull(tagFollows.deletedAt),
+          notDeleted(tagFollows.deletedAt),
         ),
       )
       .returning({ followId: tagFollows.followId });
@@ -112,8 +113,8 @@ export class TagFollowRepository implements TagFollowRepositoryPort {
 
     const baseCondition = and(
       eq(tagFollows.userId, userId),
-      isNull(tagFollows.deletedAt),
-      isNull(tags.deletedAt),
+      notDeleted(tagFollows.deletedAt),
+      notDeleted(tags.deletedAt),
     );
 
     const whereClause = cursorCondition ? and(baseCondition, cursorCondition) : baseCondition;

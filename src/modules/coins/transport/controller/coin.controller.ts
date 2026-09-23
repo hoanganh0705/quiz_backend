@@ -11,8 +11,10 @@ import { CoinTransactionsQueryDto } from '../../dto/request/coin-transactions-qu
 import { CoinTipRequestDto } from '../../dto/request/coin-tip-request.dto';
 import { CoinFlairRequestDto } from '../../dto/request/coin-flair-request.dto';
 import { CoinSuppressRequestDto } from '../../dto/request/coin-suppress-request.dto';
+import { IDEMPOTENCY_KEY_MAX_LENGTH } from '../../coin.constants';
 
 const IDEMPOTENCY_HEADER = 'idempotency-key' as const;
+const SPEND_THROTTLE = { default: { limit: 30, ttl: 60_000 } } as const;
 
 @ApiTags('coins')
 @Controller()
@@ -21,8 +23,6 @@ export class CoinController {
     private readonly applicationService: CoinApplicationService,
     private readonly presenter: CoinPresenter,
   ) {}
-
-  // ─── Earn-side reads ───────────────────────────────────────────────
 
   @Get('users/me/wallet')
   @ApiAuthAction({
@@ -58,7 +58,7 @@ export class CoinController {
   }
 
   @Post('coins/tip')
-  @Throttle({ default: { limit: 30, ttl: 60_000 } })
+  @Throttle(SPEND_THROTTLE)
   @ApiAuthAction({
     summary: 'Tip a quiz author',
     description:
@@ -77,6 +77,7 @@ export class CoinController {
   }
 
   @Post('coins/flair')
+  @Throttle(SPEND_THROTTLE)
   @ApiAuthAction({
     summary: 'Purchase a profile flair slot',
     description:
@@ -95,6 +96,7 @@ export class CoinController {
   }
 
   @Post('coins/suppress-recommended')
+  @Throttle(SPEND_THROTTLE)
   @ApiAuthAction({
     summary: 'Suppress a quiz from my Recommended rail',
     description:
@@ -112,35 +114,21 @@ export class CoinController {
     return this.presenter.spendResult(result);
   }
 
-  // ─── Helpers ────────────────────────────────────────────────────────
-
-  /**
-   * Resolve the idempotency key for a spend request. If the caller
-   * supplied the `Idempotency-Key` header we use it verbatim (the
-   * RFC allows arbitrary string tokens; we just sanity-cap the
-   * length). Otherwise we mint a deterministic key so that two
-   * callers hitting the same endpoint with the same payload but no
-   * header still don't double-spend — the key is hashed from the
-   * userId + category + referenceId + body, which is what the
-   * design §9.5 "fallback" expects.
-   */
   private resolveIdempotencyKey(
     supplied: string | undefined,
     userId: string,
     category: 'tip' | 'flair' | 'suppress',
   ): string {
-    if (supplied && supplied.length > 0 && supplied.length <= 200) {
+    if (supplied && supplied.length > 0 && supplied.length <= IDEMPOTENCY_KEY_MAX_LENGTH) {
       return `coin:${userId}:${category}:${supplied}`;
     }
-    // Deterministic fallback; for a truly fresh spend the caller is
-    // expected to supply a header. Falling back to `randomUUID` would
-    // defeat the idempotency property.
-    return `coin:${userId}:${category}:auto:${Date.now()}:${randomSuffix()}`;
+    return `coin:${userId}:${category}:auto:${cryptoRandomUuid()}`;
   }
 }
 
-function randomSuffix(): string {
-  // 12 hex chars — collision-safe for the typical "one request per
-  // millisecond" rate the throttle enforces.
-  return Math.floor(Math.random() * 0xfffffffffff).toString(16);
+function cryptoRandomUuid(): string {
+  return (
+    (globalThis as { crypto?: { randomUUID?: () => string } }).crypto?.randomUUID?.() ??
+    Array.from({ length: 32 }, () => Math.floor(Math.random() * 16).toString(16)).join('')
+  );
 }

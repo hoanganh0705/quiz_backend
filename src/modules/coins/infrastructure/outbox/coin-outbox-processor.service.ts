@@ -1,26 +1,20 @@
 import { Cron, CronExpression } from '@nestjs/schedule';
-import { Inject, Injectable, OnModuleInit } from '@nestjs/common';
-import { and, asc, eq, isNull, lte } from 'drizzle-orm';
+import { Inject, Injectable } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { DRIZZLE } from '@/core/database/drizzle.constants';
 import type { DrizzleDB } from '@/core/database/database.module';
 import { outboxEvents } from '@/core/database/schema';
+import { BaseOutboxProcessor, type BaseOutboxRow } from '@/common/outbox/base-outbox-processor';
 import { CoinDomainEventBus } from '../../domain/events/coin-domain.event-bus';
 import type { CoinReason } from '../../domain/types/coin.types';
 import { correlationIdStorage, createCorrelationId } from '@/common/interceptors/correlation-id';
 
 const COIN_OUTBOX_MAX_RETRIES = 8;
 const COIN_OUTBOX_BASE_DELAY_SECONDS = 30;
+const COIN_OUTBOX_BATCH_SIZE = 100;
 
-type OutboxEventRow = {
-  eventId: string;
-  aggregateType: string;
-  eventType: string;
-  payload: Record<string, unknown>;
-  createdAt: string;
-  attemptCount: number;
-  idempotencyKey: string | null;
-  correlationId: string | null;
+type CoinOutboxRow = BaseOutboxRow & {
+  eventType: 'coin.added' | 'coin.spent';
 };
 
 type CoinAddedPayload = {
@@ -75,99 +69,102 @@ type CoinSpentPayload = {
 };
 
 @Injectable()
-export class CoinOutboxProcessorService implements OnModuleInit {
-  private readonly BATCH_SIZE = 100;
+export class CoinOutboxProcessorService extends BaseOutboxProcessor<CoinOutboxRow> {
+  protected readonly batchSize = COIN_OUTBOX_BATCH_SIZE;
+  protected readonly maxRetries = COIN_OUTBOX_MAX_RETRIES;
+  protected readonly baseDelaySeconds = COIN_OUTBOX_BASE_DELAY_SECONDS;
+  protected readonly aggregateType = 'coin';
+  protected readonly logPrefix = 'coin';
+
+  private isRunning = false;
 
   constructor(
     @Inject(DRIZZLE) private readonly db: DrizzleDB,
     private readonly eventBus: CoinDomainEventBus,
     @InjectPinoLogger(CoinOutboxProcessorService.name)
     private readonly logger: PinoLogger,
-  ) {}
-
-  onModuleInit(): void {
-    this.logger.info({ event: 'coin_outbox_processor_started' });
+  ) {
+    super();
   }
 
   @Cron(CronExpression.EVERY_MINUTE)
   async processPendingEvents(): Promise<void> {
-    const nowIso = new Date().toISOString();
-
-    const events = await this.db
-      .select()
-      .from(outboxEvents)
-      .where(
-        and(
-          eq(outboxEvents.aggregateType, 'coin'),
-          isNull(outboxEvents.processedAt),
-          isNull(outboxEvents.failedAt),
-          lte(outboxEvents.nextAttemptAt, nowIso),
-        ),
-      )
-      .orderBy(asc(outboxEvents.createdAt))
-      .limit(this.BATCH_SIZE);
-
-    if (events.length === 0) return;
-
-    let processedCount = 0;
-
-    for (const event of events as OutboxEventRow[]) {
-      try {
-        this.dispatch(event);
-        await this.markProcessed(event.eventId);
-        processedCount++;
-      } catch (error) {
-        if (this.isIdempotencyConflict(error)) {
-          await this.markProcessed(event.eventId);
-          processedCount++;
-          this.logger.debug({
-            event: 'coin_outbox_event_skipped_idempotent',
-            outboxEventId: event.eventId,
-            eventType: event.eventType,
-          });
-          continue;
-        }
-
-        await this.handleFailure(event, error);
-      }
+    if (this.isRunning) {
+      this.logger.debug({ event: 'coin_outbox_processor_skipped_already_running' });
+      return;
     }
+    this.isRunning = true;
+    try {
+      const result = await this.runProcessPendingEvents(this.db);
+      if (result.processed > 0) {
+        this.logger.info({
+          event: 'coin_outbox_processor_completed',
+          processedCount: result.processed,
+          idempotencyConflicts: result.idempotencyConflicts,
+          movedToDlq: result.movedToDlq,
+          scannedCount: result.scanned,
+        });
+      }
+      if (result.failed > 0) {
+        this.logger.error({
+          event: 'coin_outbox_processor_failed',
+          failed: result.failed,
+          retried: result.retried,
+          movedToDlq: result.movedToDlq,
+        });
+      }
+    } catch (error) {
+      this.logger.error({
+        event: 'coin_outbox_processor_failed',
+        error: error instanceof Error ? error.message : String(error),
+      });
+    } finally {
+      this.isRunning = false;
+    }
+  }
 
-    if (processedCount > 0) {
-      this.logger.info({
-        event: 'coin_outbox_processor_completed',
-        processedCount,
-        scannedCount: events.length,
+  @Cron('*/5 * * * *')
+  async monitorDeadLetterQueue(): Promise<void> {
+    const count = await this.runMonitorDeadLetterQueue(this.db);
+    if (count > 0) {
+      this.logger.error({
+        event: 'coin_outbox_dlq_alert',
+        totalDlqEvents: count,
       });
     }
   }
 
-  private dispatch(event: OutboxEventRow): void {
-    if (!this.isSupportedEventType(event.eventType)) {
-      // Unknown event type — throw so the DLQ machinery catches it
-      // on retry exhaustion (mirrors `AchievementOutboxProcessorService`'s
-      // behaviour — see its `isSupportedEventType` guard). A "log and
-      // skip" alternative would silently drop the row, hiding a
-      // payload-shape or wire-contract regression; the DLQ row +
-      // `error` log are the loud signal the on-call path needs.
-      throw new Error(`Unsupported coin outbox event type: ${event.eventType}`);
+  protected dispatch(row: CoinOutboxRow): Promise<void> {
+    if (row.eventType === 'coin.added') {
+      return this.dispatchInStorage(row, () =>
+        this.dispatchCoinAdded(row.payload as unknown as CoinAddedPayload),
+      );
     }
-
-    const correlationId = event.correlationId ?? createCorrelationId();
-
-    void correlationIdStorage.run({ correlationId }, () => {
-      if (event.eventType === 'coin.added') {
-        this.dispatchCoinAdded(event.payload as unknown as CoinAddedPayload);
-        return;
-      }
-      if (event.eventType === 'coin.spent') {
-        this.dispatchCoinSpent(event.payload as unknown as CoinSpentPayload);
-        return;
-      }
-    });
+    if (row.eventType === 'coin.spent') {
+      return this.dispatchInStorage(row, () =>
+        this.dispatchCoinSpent(row.payload as unknown as CoinSpentPayload),
+      );
+    }
+    return Promise.reject(
+      new Error(`Unsupported coin outbox event type: ${String(row.eventType)}`),
+    );
   }
 
-  private isSupportedEventType(eventType: string): boolean {
-    return eventType === 'coin.added' || eventType === 'coin.spent';
+  private dispatchInStorage(row: CoinOutboxRow, fn: () => void): Promise<void> {
+    const correlationId = row.correlationId ?? createCorrelationId();
+    let captured: unknown;
+    correlationIdStorage.run({ correlationId }, () => {
+      try {
+        fn();
+      } catch (err) {
+        captured = err;
+      }
+    });
+    if (captured !== undefined) {
+      const reason = captured instanceof Error ? captured.message : JSON.stringify(captured);
+      return Promise.reject(new Error(reason));
+    }
+    return Promise.resolve();
   }
 
   private dispatchCoinAdded(payload: CoinAddedPayload): void {
@@ -188,10 +185,6 @@ export class CoinOutboxProcessorService implements OnModuleInit {
       timestamp: occurredAt,
     });
 
-    // 2. `CoinTransactionRecordedEvent` — the full ledger row for the
-    //    activity feed / history page. The transactionId and
-    //    reference pair are the durable handle the consumer can
-    //    dedup against.
     this.eventBus.emitTransactionRecorded({
       eventType: 'coin.transaction_recorded',
       transactionId: payload.transactionId,
@@ -236,79 +229,34 @@ export class CoinOutboxProcessorService implements OnModuleInit {
     });
   }
 
-  private async handleFailure(event: OutboxEventRow, error: unknown): Promise<void> {
-    const nextAttemptCount = event.attemptCount + 1;
-    const nowIso = new Date().toISOString();
-    const nextAttemptAt = computeNextAttemptIso(nextAttemptCount, nowIso);
-    const lastError = error instanceof Error ? error.message : String(error);
-
-    const isDlq = nextAttemptCount > COIN_OUTBOX_MAX_RETRIES;
-
-    const updateValues: Record<string, unknown> = {
-      attemptCount: nextAttemptCount,
-      lastAttemptAt: nowIso,
-      nextAttemptAt,
-      lastError,
-    };
-
-    if (isDlq) {
-      updateValues.failedAt = nowIso;
-      updateValues.dlqReason = `exhausted_retries:${lastError}`;
-
-      this.logger.error({
-        event: 'coin_outbox_event_dlq',
-        outboxEventId: event.eventId,
-        eventType: event.eventType,
-        attemptCount: nextAttemptCount,
-        maxRetries: COIN_OUTBOX_MAX_RETRIES,
-        message: lastError,
-      });
-    } else {
-      this.logger.warn({
-        event: 'coin_outbox_event_retry_scheduled',
-        outboxEventId: event.eventId,
-        eventType: event.eventType,
-        attemptCount: nextAttemptCount,
-        nextAttemptAt,
-        message: lastError,
-      });
-    }
-
-    await this.db
-      .update(outboxEvents)
-      .set(updateValues)
-      .where(and(eq(outboxEvents.eventId, event.eventId), isNull(outboxEvents.processedAt)));
+  protected override onIdempotencyConflict(row: CoinOutboxRow): void {
+    this.logger.debug({
+      event: 'coin_outbox_event_skipped_idempotent',
+      outboxEventId: row.eventId,
+      eventType: row.eventType,
+    });
   }
 
-  private async markProcessed(eventId: string): Promise<void> {
-    const nowIso = new Date().toISOString();
-    await this.db
-      .update(outboxEvents)
-      .set({
-        processedAt: nowIso,
-        lastAttemptAt: nowIso,
-      })
-      .where(eq(outboxEvents.eventId, eventId));
-  }
-
-  private isIdempotencyConflict(error: unknown): boolean {
+  protected override isIdempotencyConflict(error: unknown): boolean {
     if (error instanceof Error) {
       const msg = error.message.toLowerCase();
       return (
         msg.includes('duplicate') ||
-        msg.includes('unique') ||
         msg.includes('23505') ||
-        msg.includes('idempotency')
+        msg.includes('unique constraint') ||
+        msg.includes('unique violation')
       );
     }
     return false;
   }
-}
 
-function computeNextAttemptIso(attemptCount: number, nowIso: string): string {
-  const exponent = Math.max(0, attemptCount - 1);
-  const delaySeconds = COIN_OUTBOX_BASE_DELAY_SECONDS * 2 ** exponent;
-  const next = new Date(nowIso);
-  next.setUTCSeconds(next.getUTCSeconds() + delaySeconds);
-  return next.toISOString();
+  /** @internal exposed for spec */
+  public __dbForTests(): DrizzleDB {
+    return this.db;
+  }
+
+  /** @internal exposed for spec */
+  public __outboxEventsTableForTests(): typeof outboxEvents {
+    return outboxEvents;
+  }
 }

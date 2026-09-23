@@ -68,12 +68,13 @@ export interface ExternalEventBusPort
  * call `getCorrelationId()` and read the same ID without having to thread
  * it through their own bookkeeping.
  *
- * **Idempotency.** Callers that produce XP events MUST set an
- * `idempotencyKey` that is unique per logical XP grant (e.g.
- * `${tournamentId}:${userId}:${rank}` for tournament XP). Downstream
- * consumers (`XpIngestionService`) use this key to deduplicate retry
- * deliveries. When `idempotencyKey` is absent, the consumer falls back
- * to a heuristic based on `source` + `attemptId` / `tournamentId`.
+ * **Idempotency.** Every published XP event MUST carry a deterministic
+ * `idempotencyKey` (e.g. `${tournamentId}:${userId}:${rank}` for tournament
+ * XP, `xp:${userId}:attempt:${attemptId}` for attempt XP). Downstream
+ * consumers (`XpIngestionService`) trust this key verbatim and must not
+ * derive their own. Producers that omit the key cause `publishXpEarned` to
+ * throw, surfacing the bug at integration time rather than letting it pass
+ * through to a duplicate XP grant on retry.
  */
 export interface ExternalXpEarnedEvent {
   readonly eventType: 'external.xp.earned';
@@ -92,10 +93,11 @@ export interface ExternalXpEarnedEvent {
   readonly timestamp: Date;
   readonly correlationId?: string;
   /**
-   * Deterministic key for deduplication. When present, downstream consumers
-   * MUST use this value verbatim rather than deriving their own key.
+   * Deterministic key for deduplication. Every producer must supply a stable
+   * per-event value. Consumers trust this verbatim and do not derive their
+   * own fallback.
    */
-  readonly idempotencyKey?: string;
+  readonly idempotencyKey: string;
 }
 
 export type ExternalEvent = ExternalXpEarnedEvent;
@@ -122,6 +124,9 @@ interface SerializedExternalEvent {
 export class CommonExternalEventBus implements ExternalEventBusPort, OnModuleInit, OnModuleDestroy {
   private readonly handlers: Map<string, Set<ExternalEventHandler>> = new Map();
   private subscriber: Redis | null = null;
+  private reconnectAttempts = 0;
+  private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  private stopped = false;
 
   constructor(
     @Inject(PUBSUB_PROVIDER)
@@ -135,29 +140,15 @@ export class CommonExternalEventBus implements ExternalEventBusPort, OnModuleIni
   // ---------------------------------------------------------------------------
 
   async onModuleInit(): Promise<void> {
-    const subscriber = this.pubSub.createSubscriber();
-    this.subscriber = subscriber;
-
-    subscriber.on('error', (error) => {
-      this.logger.error({
-        event: 'external_event_bus_subscriber_error',
-        message: error.message,
-      });
-    });
-
-    await subscriber.subscribe(REDIS_CHANNEL);
-    subscriber.on('message', (channel, raw) => {
-      if (channel !== REDIS_CHANNEL) return;
-      this.handleRedisMessage(raw);
-    });
-
-    this.logger.info({
-      event: 'external_event_bus_subscribed',
-      channel: REDIS_CHANNEL,
-    });
+    await this.connect();
   }
 
   async onModuleDestroy(): Promise<void> {
+    this.stopped = true;
+    if (this.reconnectTimer !== null) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
     if (this.subscriber) {
       try {
         await this.subscriber.unsubscribe(REDIS_CHANNEL);
@@ -171,6 +162,62 @@ export class CommonExternalEventBus implements ExternalEventBusPort, OnModuleIni
       }
       this.subscriber = null;
     }
+  }
+
+  private async connect(): Promise<void> {
+    if (this.stopped) return;
+
+    try {
+      const subscriber = this.pubSub.createSubscriber();
+      this.subscriber = subscriber;
+
+      subscriber.on('error', (error) => {
+        this.logger.error({
+          event: 'external_event_bus_subscriber_error',
+          message: error.message,
+        });
+        void this.scheduleReconnect();
+      });
+
+      subscriber.on('end', () => {
+        void this.scheduleReconnect();
+      });
+
+      await subscriber.subscribe(REDIS_CHANNEL);
+      subscriber.on('message', (channel, raw) => {
+        if (channel !== REDIS_CHANNEL) return;
+        this.handleRedisMessage(raw);
+      });
+
+      this.reconnectAttempts = 0;
+      this.logger.info({
+        event: 'external_event_bus_subscribed',
+        channel: REDIS_CHANNEL,
+      });
+    } catch (error) {
+      this.logger.error({
+        event: 'external_event_bus_subscribe_failed',
+        message: error instanceof Error ? error.message : 'unknown',
+      });
+      void this.scheduleReconnect();
+    }
+  }
+
+  private scheduleReconnect(): void {
+    if (this.stopped) return;
+    if (this.reconnectTimer !== null) return;
+    this.reconnectAttempts += 1;
+    const delaySeconds = Math.min(60, 2 ** Math.min(this.reconnectAttempts - 1, 5));
+    const delayMs = delaySeconds * 1000;
+    this.logger.warn({
+      event: 'external_event_bus_reconnect_scheduled',
+      delayMs,
+      attempt: this.reconnectAttempts,
+    });
+    this.reconnectTimer = setTimeout(() => {
+      this.reconnectTimer = null;
+      void this.connect();
+    }, delayMs);
   }
 
   // ---------------------------------------------------------------------------
@@ -213,8 +260,15 @@ export class CommonExternalEventBus implements ExternalEventBusPort, OnModuleIni
    * Publish an external XP earned event.
    *
    * @throws Error when the Redis publish fails — callers must handle rejections.
+   * @throws Error when the event is missing a non-empty `idempotencyKey`. This
+   *   surfaces the producer bug at integration time rather than silently
+   *   emitting events that the ranking consumer cannot deduplicate.
    */
   async publishXpEarned(event: ExternalXpEarnedEvent): Promise<void> {
+    if (typeof event.idempotencyKey !== 'string' || event.idempotencyKey.length === 0) {
+      throw new Error('publishXpEarned: idempotencyKey is required');
+    }
+
     const payload: SerializedExternalEvent = {
       ...event,
       timestamp: event.timestamp.toISOString(),
@@ -326,7 +380,7 @@ export class CommonExternalEventBus implements ExternalEventBusPort, OnModuleIni
       rank: parsed.rank,
       timestamp,
       correlationId: parsed.correlationId,
-      idempotencyKey: parsed.idempotencyKey,
+      idempotencyKey: parsed.idempotencyKey ?? '',
     });
   }
 

@@ -24,6 +24,7 @@ import type {
   SuggestionCursorPayload,
 } from '../../domain/types/social.types';
 import { eq, and, count, isNull, sql, lte, or, aliasedTable } from 'drizzle-orm';
+import { notDeleted } from '@/common/database/soft-delete.helper';
 import {
   FRIENDSHIP_REPOSITORY_PORT,
   type FriendshipRepositoryPort,
@@ -283,7 +284,7 @@ export class SocialRepository implements SocialRepositoryPort {
           and(
             eq(userFollows.followingId, userId),
             lte(userFollows.createdAt, thirtyDaysAgo),
-            or(isNull(userFollows.deletedAt), lte(userFollows.deletedAt, thirtyDaysAgo)),
+            or(notDeleted(userFollows.deletedAt), lte(userFollows.deletedAt, thirtyDaysAgo)),
           ),
         ),
     ]);
@@ -609,7 +610,7 @@ export class SocialRepository implements SocialRepositoryPort {
               and(eq(friendships.requesterId, targetId), eq(friendships.addresseeId, userId)),
             ),
             eq(friendships.status, 'accepted'),
-            isNull(friendships.deletedAt),
+            notDeleted(friendships.deletedAt),
           ),
         ),
 
@@ -621,7 +622,7 @@ export class SocialRepository implements SocialRepositoryPort {
             eq(friendships.requesterId, userId),
             eq(friendships.addresseeId, targetId),
             eq(friendships.status, 'pending'),
-            isNull(friendships.deletedAt),
+            notDeleted(friendships.deletedAt),
           ),
         ),
 
@@ -632,7 +633,7 @@ export class SocialRepository implements SocialRepositoryPort {
           and(
             eq(userFollows.followerId, targetId),
             eq(userFollows.followingId, userId),
-            isNull(userFollows.deletedAt),
+            notDeleted(userFollows.deletedAt),
           ),
         ),
 
@@ -643,7 +644,7 @@ export class SocialRepository implements SocialRepositoryPort {
           and(
             eq(userFollows.followerId, userId),
             eq(userFollows.followingId, targetId),
-            isNull(userFollows.deletedAt),
+            notDeleted(userFollows.deletedAt),
           ),
         ),
 

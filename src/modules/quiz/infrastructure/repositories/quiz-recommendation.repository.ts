@@ -1,5 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { and, desc, eq, isNull, sql } from 'drizzle-orm';
+import { notDeleted } from '@/common/database/soft-delete.helper';
 import { DRIZZLE } from '@/core/database/drizzle.constants';
 import type { DrizzleDB } from '@/core/database/database.module';
 import { quizAttempts, quizStats, quizTags, quizVersions, quizzes } from '@/core/database/schema';
@@ -141,7 +142,7 @@ export class QuizRecommendationRepository implements QuizRecommendationRepositor
       .leftJoin(quizStats, eq(QUIZ_COLUMNS.quizId, quizStats.quizId))
       .where(
         and(
-          isNull(QUIZ_COLUMNS.deletedAt),
+          notDeleted(QUIZ_COLUMNS.deletedAt),
           eq(QUIZ_COLUMNS.isHidden, false),
           sql`${QUIZ_COLUMNS.quizId} NOT IN (
             select distinct qv_rec.quiz_id

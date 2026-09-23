@@ -1,7 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { DRIZZLE } from '@/core/database/drizzle.constants';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
-import { and, eq, desc, isNull, count, inArray, gt, sql } from 'drizzle-orm';
+import { and, asc, count, desc, eq, gt, inArray, isNull, sql } from 'drizzle-orm';
 import { isPostgresUniqueViolation } from '@/common/utils/db-error.util';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import type * as schema from '@/core/database/schema';

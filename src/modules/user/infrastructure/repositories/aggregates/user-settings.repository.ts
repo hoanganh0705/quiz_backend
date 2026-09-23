@@ -2,7 +2,8 @@ import { Inject, Injectable } from '@nestjs/common';
 import { DRIZZLE } from '@/core/database/drizzle.constants';
 import type { DrizzleDB } from '@/core/database/database.module';
 import { userProfileSettings, users } from '@/core/database/schema';
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
+import { notDeleted } from '@/common/database/soft-delete.helper';
 import type { UserMeRow } from '../../../domain/ports/user-repository.port';
 import type { UserMeRowAssembler } from './user.types';
 
@@ -69,7 +70,7 @@ export class UserSettingsRepository {
           settings,
           updatedAt: nowIso,
         })
-        .where(and(eq(users.userId, userId), isNull(users.deletedAt)))
+        .where(and(eq(users.userId, userId), notDeleted(users.deletedAt)))
         .returning({
           userId: users.userId,
           username: users.username,
@@ -151,7 +152,7 @@ export class UserSettingsRepository {
           updatedAt: users.updatedAt,
         })
         .from(users)
-        .where(and(eq(users.userId, userId), isNull(users.deletedAt)))
+        .where(and(eq(users.userId, userId), notDeleted(users.deletedAt)))
         .limit(1);
 
       if (!updated) return null;

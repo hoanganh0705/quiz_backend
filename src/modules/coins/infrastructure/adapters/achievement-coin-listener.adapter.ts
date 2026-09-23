@@ -1,22 +1,3 @@
-/**
- * Achievement → Coin Listener Adapter
- *
- * Subscribes to `BadgeEarnedEvent` and grants `BADGE_REWARD` (20
- * coins) per badge earned. The badge type is stamped onto the ledger
- * `metadata` jsonb so the wallet history UI can render the icon
- * inline without a follow-up join.
- *
- * Idempotency: the derived key (`coin:{userId}:badge:{badgeType}`)
- * is unique per (user, badgeType). If the same badge is somehow
- * re-emitted (e.g. a re-grant path), the second event hits the outbox
- * partial unique index and is silently dropped at the producer
- * boundary. This means even if the achievement module accidentally
- * fires the event twice for the same badge the user is paid once.
- *
- * Daily cap: badges bypass the cap by product design (a milestone,
- * not a per-attempt reward).
- */
-
 import { Inject, Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import {
@@ -68,7 +49,6 @@ export class AchievementCoinListenerAdapter implements OnModuleInit, OnModuleDes
           badgeType: event.badgeType,
           awardedAt: event.awardedAt.toISOString(),
         },
-        // Badges bypass the daily cap by product design.
         applyDailyCap: false,
       });
 

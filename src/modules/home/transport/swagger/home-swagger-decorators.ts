@@ -1,7 +1,5 @@
 import { ApiOperation } from '@nestjs/swagger';
 
-import { HomeBundleResponseDto } from '../../dto/response/home-bundle-response.dto';
-
 export const HomeSwaggerDecorators = {
   GetBundle: (): MethodDecorator => {
     return ApiOperation({
@@ -13,5 +11,4 @@ export const HomeSwaggerDecorators = {
         'intended to be cached client-side + CDN for 60s.',
     });
   },
-  _ResponseType: HomeBundleResponseDto,
 };

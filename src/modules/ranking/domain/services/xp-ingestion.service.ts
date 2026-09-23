@@ -48,24 +48,21 @@ export class XpIngestionService {
   /**
    * Process an XP earned event from another domain.
    *
-   * Idempotency: Duplicate submissions are safely skipped via the idempotency key
-   * (unique constraint on the outbox table). Events are written atomically: the XP
-   * update and the outbox row are committed in the same DB transaction.
-   * If the process crashes before the outbox processor runs, the event is recovered
-   * on next startup.
-   *
-   * The idempotency key is derived from `attemptId`, `tournamentId`, or a fallback
-   * of `{userId}:{source}:{timestamp}`. Callers that need stronger guarantees
-   * should pass an explicit `idempotencyKey` field on the event.
+   * `idempotencyKey` is required and trusted verbatim. Duplicate submissions
+   * are skipped via the partial unique index on
+   * `outbox_events(idempotency_key)` for unprocessed rows.
    */
   async processXpEvent(event: ExternalXpEarnedEvent): Promise<void> {
     if (!event.userId || !event.amount || event.amount <= 0) {
       throw new InvalidXpEventError(event, 'Invalid event structure');
     }
+    if (typeof event.idempotencyKey !== 'string' || event.idempotencyKey.length === 0) {
+      throw new InvalidXpEventError(event, 'idempotencyKey is required');
+    }
 
     const now = new Date();
     const nowIso = now.toISOString();
-    const idempotencyKey = deriveIdempotencyKey(event);
+    const idempotencyKey = event.idempotencyKey;
 
     this.logger.info({
       event: 'xp_event_received',
@@ -132,6 +129,7 @@ export class XpIngestionService {
       userId,
       amount,
       source: 'bonus',
+      idempotencyKey: `xp:${userId}:manual:${now.toISOString()}`,
       timestamp: now,
     };
 
@@ -167,39 +165,4 @@ export class XpIngestionService {
 
     return results;
   }
-}
-
-/**
- * Derives a deterministic idempotency key from the XP event.
- * Keys are based on natural event identity to prevent double-processing on retries.
- *
- * Priority:
- * 1. `event.idempotencyKey` — caller-provided key (preferred)
- * 2. `attemptId` — unique per quiz attempt
- * 3. `tournamentId` — unique per tournament participation
- * 4. `{userId}:{source}:{timestamp}` — generic fallback
- */
-function deriveIdempotencyKey(event: ExternalXpEarnedEvent): string {
-  if (event.idempotencyKey) {
-    return event.idempotencyKey;
-  }
-
-  if (event.source === 'quiz_attempt' && event.attemptId) {
-    return `xp:${event.userId}:attempt:${event.attemptId}`;
-  }
-
-  if (event.source === 'tournament' && event.tournamentId) {
-    const rankPart = event.rank !== undefined ? `:rank:${event.rank}` : '';
-    return `xp:${event.userId}:tournament:${event.tournamentId}${rankPart}`;
-  }
-
-  if (event.source === 'achievement' && event.achievementId) {
-    return `xp:${event.userId}:achievement:${event.achievementId}`;
-  }
-
-  if (event.source === 'bonus' && event.bonusId) {
-    return `xp:${event.userId}:bonus:${event.bonusId}`;
-  }
-
-  return `xp:${event.userId}:${event.source}:${event.timestamp.toISOString()}`;
 }

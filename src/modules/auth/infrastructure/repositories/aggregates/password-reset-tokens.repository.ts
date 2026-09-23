@@ -6,6 +6,7 @@ import { users, passwordResetTokens, userSessions } from '@/core/database/schema
 import { OUTBOX_PORT } from '@/modules/auth/domain/ports/outbox.port';
 import type { OutboxPort } from '@/modules/auth/domain/ports/outbox.port';
 import { InvalidTokenError } from '@/modules/auth/domain/errors';
+import { notDeleted } from '@/common/database/soft-delete.helper';
 
 @Injectable()
 export class PasswordResetTokensRepository {
@@ -69,7 +70,7 @@ export class PasswordResetTokensRepository {
           sql`${passwordResetTokens.expiresAt} > ${nowIso}`,
           isNull(passwordResetTokens.usedAt),
           isNull(passwordResetTokens.revokedAt),
-          isNull(users.deletedAt),
+          notDeleted(users.deletedAt),
         ),
       )
       .limit(1)
@@ -132,7 +133,7 @@ export class PasswordResetTokensRepository {
           sql`${passwordResetTokens.expiresAt} > ${nowIso}`,
           isNull(passwordResetTokens.usedAt),
           isNull(passwordResetTokens.revokedAt),
-          isNull(users.deletedAt),
+          notDeleted(users.deletedAt),
         ),
       )
       .limit(1)
@@ -150,7 +151,7 @@ export class PasswordResetTokensRepository {
     // pg_advisory_xact_lock is transaction-scoped — automatically released on commit/rollback.
     // Concurrent requests for the SAME user serialize here; requests for different users proceed in parallel.
     await this.db.transaction(async (tx) => {
-      await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${userId}))`);
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${userId}, 0))`);
 
       // Re-validate the token inside the lock in case it was consumed by a concurrent request.
       const [tokenRecord] = await tx
@@ -173,7 +174,7 @@ export class PasswordResetTokensRepository {
       await tx
         .update(users)
         .set({ passwordHash, passwordChangedAt: nowIso, updatedAt: nowIso })
-        .where(and(eq(users.userId, userId), isNull(users.deletedAt)));
+        .where(and(eq(users.userId, userId), notDeleted(users.deletedAt)));
 
       await tx
         .update(passwordResetTokens)

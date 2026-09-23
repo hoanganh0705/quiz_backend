@@ -14,6 +14,7 @@ import type {
   RespondToFriendRequestParams,
 } from '../../domain/types/social.types';
 import { eq, and, or, sql, desc, count, lte, isNull, aliasedTable } from 'drizzle-orm';
+import { notDeleted } from '@/common/database/soft-delete.helper';
 import { sliceWithCursor, encodeUsernameCursor } from './social-cursor.util';
 import { decodeBase64JsonCursor } from '@/common/utils/cursor.util';
 
@@ -56,7 +57,7 @@ export class FriendshipRepository implements FriendshipRepositoryPort {
           eq(friendships.requesterId, requesterId),
           eq(friendships.addresseeId, addresseeId),
           eq(friendships.status, 'pending'),
-          isNull(friendships.deletedAt),
+          notDeleted(friendships.deletedAt),
         ),
       )
       .orderBy(desc(friendships.createdAt))
@@ -92,7 +93,7 @@ export class FriendshipRepository implements FriendshipRepositoryPort {
         and(
           eq(friendships.addresseeId, addresseeId),
           eq(friendships.status, 'pending'),
-          isNull(friendships.deletedAt),
+          notDeleted(friendships.deletedAt),
         ),
       )
       .orderBy(desc(friendships.createdAt));
@@ -120,7 +121,7 @@ export class FriendshipRepository implements FriendshipRepositoryPort {
           eq(friendships.requesterId, requesterId),
           eq(friendships.addresseeId, addresseeId),
           eq(friendships.status, 'pending'),
-          isNull(friendships.deletedAt),
+          notDeleted(friendships.deletedAt),
         ),
       )
       .orderBy(desc(friendships.createdAt))
@@ -158,7 +159,7 @@ export class FriendshipRepository implements FriendshipRepositoryPort {
         and(
           eq(friendships.requesterId, requesterId),
           eq(friendships.status, 'pending'),
-          isNull(friendships.deletedAt),
+          notDeleted(friendships.deletedAt),
         ),
       )
       .orderBy(desc(friendships.createdAt));
@@ -205,7 +206,7 @@ export class FriendshipRepository implements FriendshipRepositoryPort {
           eq(friendships.friendshipId, params.friendshipId),
           eq(friendships.addresseeId, requesterId),
           eq(friendships.status, 'pending'),
-          isNull(friendships.deletedAt),
+          notDeleted(friendships.deletedAt),
         ),
       )
       .returning({ friendshipId: friendships.friendshipId });
@@ -234,7 +235,7 @@ export class FriendshipRepository implements FriendshipRepositoryPort {
         and(
           eq(friendships.friendshipId, friendshipId),
           eq(friendships.status, 'pending'),
-          isNull(friendships.deletedAt),
+          notDeleted(friendships.deletedAt),
         ),
       )
       .returning({ friendshipId: friendships.friendshipId });
@@ -254,10 +255,10 @@ export class FriendshipRepository implements FriendshipRepositoryPort {
       ? and(
           baseCondition,
           eq(friendships.status, 'accepted'),
-          isNull(friendships.deletedAt),
+          notDeleted(friendships.deletedAt),
           cursorCondition,
         )
-      : and(baseCondition, eq(friendships.status, 'accepted'), isNull(friendships.deletedAt));
+      : and(baseCondition, eq(friendships.status, 'accepted'), notDeleted(friendships.deletedAt));
 
     const rows = await this.db
       .select({
@@ -296,7 +297,7 @@ export class FriendshipRepository implements FriendshipRepositoryPort {
         and(
           or(eq(friendships.requesterId, userId), eq(friendships.addresseeId, userId)),
           eq(friendships.status, 'accepted'),
-          isNull(friendships.deletedAt),
+          notDeleted(friendships.deletedAt),
         ),
       );
 
@@ -340,7 +341,7 @@ export class FriendshipRepository implements FriendshipRepositoryPort {
             and(eq(friendships.requesterId, friendId), eq(friendships.addresseeId, userId)),
           ),
           eq(friendships.status, 'accepted'),
-          isNull(friendships.deletedAt),
+          notDeleted(friendships.deletedAt),
         ),
       )
       .orderBy(desc(friendships.createdAt), desc(friendships.friendshipId))

@@ -18,6 +18,33 @@ export const TOURNAMENT_NOTIFICATION_PORT = Symbol('TOURNAMENT_NOTIFICATION_PORT
 export const INSTANCE_NOTIFICATION_PORT = Symbol('INSTANCE_NOTIFICATION_PORT');
 export const RANK_NOTIFICATION_PORT = Symbol('RANK_NOTIFICATION_PORT');
 
+export const AUTH_SECURITY_NOTIFICATION_PORT = Symbol('AUTH_SECURITY_NOTIFICATION_PORT');
+
+export interface AuthSecurityNotificationPort {
+  notifyPasswordChanged(params: { userId: string; ipAddress?: string | null }): Promise<void>;
+  notifyPasswordResetRequested(params: {
+    userId: string;
+    ipAddress?: string | null;
+  }): Promise<void>;
+  notifyPasswordResetCompleted(params: {
+    userId: string;
+    ipAddress?: string | null;
+  }): Promise<void>;
+  notifyAccountDeleted(params: { userId: string; ipAddress?: string | null }): Promise<void>;
+  notifySessionRevoked(params: {
+    userId: string;
+    sessionId: string;
+    ipAddress?: string | null;
+  }): Promise<void>;
+  notifyAllSessionsRevoked(params: {
+    userId: string;
+    revokedSessionCount: number;
+    ipAddress?: string | null;
+  }): Promise<void>;
+  notifyOAuthLinked(params: { userId: string; provider: string }): Promise<void>;
+  notifyOAuthUnlinked(params: { userId: string; provider: string }): Promise<void>;
+}
+
 export interface NotificationRepositoryPort {
   create(params: CreateNotificationParams): Promise<Notification>;
   findById(id: string): Promise<Notification | null>;

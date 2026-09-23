@@ -254,6 +254,26 @@ export class RedisService implements CacheProvider, PubSubProvider, OnModuleDest
     }
   }
 
+  async lrangeJson<T>(key: string, start: number, stop: number): Promise<T[]> {
+    const raws = await this.circuitBreaker.exec([] as string[], async () =>
+      this.client.lrange(key, start, stop),
+    );
+    const items: T[] = [];
+    for (const raw of raws) {
+      try {
+        items.push(JSON.parse(raw) as T);
+      } catch {
+        this.logger.warn({
+          event: 'redis_json_parse_failed',
+          key,
+          payloadLength: raw.length,
+          message: 'Failed to parse JSON from Redis list (lrange)',
+        });
+      }
+    }
+    return items;
+  }
+
   /**
    * Publish a JSON-serialized message on a Redis pub/sub channel.
    * Returns the number of subscribers that received the message

@@ -11,7 +11,7 @@ import {
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 
-import { activityEventType } from '../shared';
+import { activityEventType, activityVisibility } from '../shared';
 import { users } from '../auth/schema';
 
 export const userProfiles = pgTable(
@@ -94,7 +94,7 @@ export const userActivityEvents = pgTable(
     userId: uuid('user_id').notNull(),
     eventType: activityEventType().notNull(),
     metadata: jsonb('metadata').default({}).notNull(),
-    visibility: text('visibility').default('public').notNull(),
+    visibility: activityVisibility('visibility').default('public').notNull(),
     occurredAt: timestamp('occurred_at', { withTimezone: true, mode: 'string' })
       .defaultNow()
       .notNull(),
@@ -115,7 +115,7 @@ export const userActivityEvents = pgTable(
     ),
     index('idx_user_activity_events_visibility').using(
       'btree',
-      table.visibility.asc().nullsLast().op('text_ops'),
+      table.visibility.asc().nullsLast().op('enum_ops'),
       table.occurredAt.desc().nullsLast().op('timestamptz_ops'),
     ),
     index('idx_user_activity_events_user_created').using(
@@ -134,10 +134,6 @@ export const userActivityEvents = pgTable(
       foreignColumns: [users.userId],
       name: 'user_activity_events_user_id_fkey',
     }).onDelete('cascade'),
-    check(
-      'user_activity_events_visibility_check',
-      sql`visibility = ANY (ARRAY['public'::text, 'private'::text])`,
-    ),
     check('user_activity_events_metadata_object', sql`jsonb_typeof(metadata) = 'object'::text`),
     check('user_activity_events_metadata_not_empty', sql`metadata <> '{}'::jsonb`),
   ],

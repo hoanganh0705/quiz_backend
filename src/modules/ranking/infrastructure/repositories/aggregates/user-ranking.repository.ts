@@ -203,10 +203,6 @@ export class UserRankingRepository {
     const { userId, amount, now } = params;
     const nowIso = now.toISOString();
 
-    const prevWeekStart = getWeekStart(new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000));
-    const prevMonthStart = getMonthStart(new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000));
-    const prevDayStart = this.getDayStart(new Date(now.getTime() - 24 * 60 * 60 * 1000));
-
     const inserted = await tx
       .insert(userRanking)
       .values({
@@ -215,12 +211,12 @@ export class UserRankingRepository {
         weeklyXp: 0,
         monthlyXp: 0,
         dailyXp: 0,
-        lastWeeklyResetAt: prevWeekStart.toISOString(),
-        lastMonthlyResetAt: prevMonthStart.toISOString(),
-        lastDailyResetAt: prevDayStart.toISOString(),
+        lastWeeklyResetAt: sql`date_trunc('week', NOW() AT TIME ZONE 'UTC')`,
+        lastMonthlyResetAt: sql`date_trunc('month', NOW() AT TIME ZONE 'UTC')`,
+        lastDailyResetAt: sql`date_trunc('day', NOW() AT TIME ZONE 'UTC')`,
         lastActivityAt: nowIso,
         isDirty: false,
-      } as typeof userRanking.$inferInsert)
+      } as unknown as typeof userRanking.$inferInsert)
       .onConflictDoNothing({ target: userRanking.userId })
       .returning();
 
@@ -234,24 +230,42 @@ export class UserRankingRepository {
       throw new Error('Failed to upsert user ranking record');
     }
 
-    const weeklyResetNeeded = this.shouldResetWeekly(now, row.lastWeeklyResetAt);
-    const monthlyResetNeeded = this.shouldResetMonthly(now, row.lastMonthlyResetAt);
-    const dailyResetNeeded = this.shouldResetDaily(now, row.lastDailyResetAt);
-
     const updated = await tx
       .update(userRanking)
       .set({
         allTimeXp: sql`${userRanking.allTimeXp} + ${amount}`,
-        weeklyXp:
-          weeklyResetNeeded || monthlyResetNeeded
-            ? sql`0`
-            : sql`${userRanking.weeklyXp} + ${amount}`,
-        monthlyXp: monthlyResetNeeded ? sql`0` : sql`${userRanking.monthlyXp} + ${amount}`,
-        dailyXp: dailyResetNeeded ? sql`0` : sql`${userRanking.dailyXp} + ${amount}`,
-        lastWeeklyResetAt:
-          weeklyResetNeeded || monthlyResetNeeded ? nowIso : sql`${userRanking.lastWeeklyResetAt}`,
-        lastMonthlyResetAt: monthlyResetNeeded ? nowIso : sql`${userRanking.lastMonthlyResetAt}`,
-        lastDailyResetAt: dailyResetNeeded ? nowIso : sql`${userRanking.lastDailyResetAt}`,
+        weeklyXp: sql`CASE
+          WHEN ${userRanking.lastWeeklyResetAt} < date_trunc('week', NOW() AT TIME ZONE 'UTC')
+            OR ${userRanking.lastMonthlyResetAt} < date_trunc('month', NOW() AT TIME ZONE 'UTC')
+          THEN 0
+          ELSE ${userRanking.weeklyXp} + ${amount}
+        END`,
+        monthlyXp: sql`CASE
+          WHEN ${userRanking.lastMonthlyResetAt} < date_trunc('month', NOW() AT TIME ZONE 'UTC')
+          THEN 0
+          ELSE ${userRanking.monthlyXp} + ${amount}
+        END`,
+        dailyXp: sql`CASE
+          WHEN ${userRanking.lastDailyResetAt} < date_trunc('day', NOW() AT TIME ZONE 'UTC')
+          THEN 0
+          ELSE ${userRanking.dailyXp} + ${amount}
+        END`,
+        lastWeeklyResetAt: sql`CASE
+          WHEN ${userRanking.lastWeeklyResetAt} < date_trunc('week', NOW() AT TIME ZONE 'UTC')
+            OR ${userRanking.lastMonthlyResetAt} < date_trunc('month', NOW() AT TIME ZONE 'UTC')
+          THEN date_trunc('week', NOW() AT TIME ZONE 'UTC')
+          ELSE ${userRanking.lastWeeklyResetAt}
+        END`,
+        lastMonthlyResetAt: sql`CASE
+          WHEN ${userRanking.lastMonthlyResetAt} < date_trunc('month', NOW() AT TIME ZONE 'UTC')
+          THEN date_trunc('month', NOW() AT TIME ZONE 'UTC')
+          ELSE ${userRanking.lastMonthlyResetAt}
+        END`,
+        lastDailyResetAt: sql`CASE
+          WHEN ${userRanking.lastDailyResetAt} < date_trunc('day', NOW() AT TIME ZONE 'UTC')
+          THEN date_trunc('day', NOW() AT TIME ZONE 'UTC')
+          ELSE ${userRanking.lastDailyResetAt}
+        END`,
         lastActivityAt: nowIso,
         updatedAt: nowIso,
         isDirty: true,
@@ -487,26 +501,65 @@ export class UserRankingRepository {
   }): Promise<{ updated: boolean; previousPeakRank: number | null }> {
     const { userId, period, rank } = params;
 
-    const peakRankColumn = this.getPeakRankColumn(period);
-    const current = await this.getUserRanking(userId);
+    const peakRankColumn = this.getPeakRankColumnSnakeCase(period);
+    const peakAchievedAtColumn = this.getPeakAchievedAtColumnSnakeCase(period);
 
-    if (!current) return { updated: false, previousPeakRank: null };
+    const result = await this.executeRaw<{
+      previousPeakRank: number | null;
+      newPeakRank: number | null;
+    }>(sql`
+      UPDATE user_ranking
+      SET ${sql.raw(peakRankColumn)} = ${rank},
+          ${sql.raw(peakAchievedAtColumn)} = NOW()
+      WHERE user_id = ${userId}::uuid
+        AND (${sql.raw(peakRankColumn)} IS NULL OR ${sql.raw(peakRankColumn)} > ${rank})
+      RETURNING
+        ${sql.raw(peakRankColumn)} AS "newPeakRank"
+    `);
 
-    const currentPeakRank = current[peakRankColumn];
-
-    if (currentPeakRank === null || rank < currentPeakRank) {
-      await this.db
-        .update(userRanking)
-        .set({
-          [peakRankColumn]: rank,
-          [this.getPeakAchievedAtColumn(period)]: new Date().toISOString(),
-        })
-        .where(eq(userRanking.userId, userId));
-
-      return { updated: true, previousPeakRank: currentPeakRank };
+    if (result.rows.length === 0) {
+      const current = await this.getUserRanking(userId);
+      return {
+        updated: false,
+        previousPeakRank: current ? (current[peakRankColumn as PeakRankField] ?? null) : null,
+      };
     }
 
-    return { updated: false, previousPeakRank: currentPeakRank };
+    const current = await this.getUserRanking(userId);
+    return {
+      updated: true,
+      previousPeakRank: current?.[peakRankColumn as PeakRankField] ?? null,
+    };
+  }
+
+  private getPeakRankColumnSnakeCase(period: RankingPeriod): string {
+    switch (period) {
+      case RankingPeriod.DAILY:
+        return 'peak_daily_rank';
+      case RankingPeriod.WEEKLY:
+        return 'peak_weekly_rank';
+      case RankingPeriod.MONTHLY:
+        return 'peak_monthly_rank';
+      case RankingPeriod.ALL_TIME:
+        return 'peak_all_time_rank';
+      default:
+        throw new Error(`Unknown period: ${String(period)}`);
+    }
+  }
+
+  private getPeakAchievedAtColumnSnakeCase(period: RankingPeriod): string {
+    switch (period) {
+      case RankingPeriod.DAILY:
+        return 'peak_daily_rank_achieved_at';
+      case RankingPeriod.WEEKLY:
+        return 'peak_weekly_rank_achieved_at';
+      case RankingPeriod.MONTHLY:
+        return 'peak_monthly_rank_achieved_at';
+      case RankingPeriod.ALL_TIME:
+        return 'peak_all_time_rank_achieved_at';
+      default:
+        throw new Error(`Unknown period: ${String(period)}`);
+    }
   }
 
   async getPeakRanks(userId: string): Promise<PeakRanksRow> {

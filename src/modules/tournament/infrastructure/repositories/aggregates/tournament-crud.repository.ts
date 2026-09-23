@@ -1,5 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { and, asc, count, desc, eq, isNull, ne, or, sql } from 'drizzle-orm';
+import { notDeleted } from '@/common/database/soft-delete.helper';
 import { DRIZZLE } from '@/core/database/drizzle.constants';
 import type { DrizzleDB } from '@/core/database/database.module';
 import { tournaments, tournamentParticipants, categories } from '@/core/database/schema';
@@ -46,7 +47,7 @@ export class TournamentCrudRepository {
         deletedAt: tournaments.deletedAt,
       })
       .from(tournaments)
-      .where(and(eq(tournaments.tournamentId, tournamentId), isNull(tournaments.deletedAt)))
+      .where(and(eq(tournaments.tournamentId, tournamentId), notDeleted(tournaments.deletedAt)))
       .limit(1);
 
     return (row as TournamentRow | undefined) ?? null;
@@ -82,7 +83,7 @@ export class TournamentCrudRepository {
         tournamentParticipants,
         eq(tournaments.tournamentId, tournamentParticipants.tournamentId),
       )
-      .where(and(eq(tournaments.tournamentId, tournamentId), isNull(tournaments.deletedAt)))
+      .where(and(eq(tournaments.tournamentId, tournamentId), notDeleted(tournaments.deletedAt)))
       .limit(1);
 
     if (!row) return null;
@@ -108,7 +109,7 @@ export class TournamentCrudRepository {
     cursor?: TournamentCursorPayload | null;
     filters?: TournamentListFilters;
   }): Promise<TournamentRow[]> {
-    const filters: ReturnType<typeof sql<unknown>>[] = [isNull(tournaments.deletedAt)];
+    const filters: ReturnType<typeof sql<unknown>>[] = [notDeleted(tournaments.deletedAt)];
 
     if (params.filters?.status) {
       filters.push(eq(tournaments.status, params.filters.status));
@@ -167,7 +168,7 @@ export class TournamentCrudRepository {
   }): Promise<{ items: UpcomingTournamentRow[]; total: number }> {
     const offset = (params.page - 1) * params.limit;
     const conditions = and(
-      isNull(tournaments.deletedAt),
+      notDeleted(tournaments.deletedAt),
       eq(tournaments.status, 'upcoming'),
       sql`${tournaments.startAt} > ${params.nowIso}`,
     );
@@ -221,7 +222,7 @@ export class TournamentCrudRepository {
   }): Promise<{ items: ActiveTournamentRow[]; total: number }> {
     const offset = (params.page - 1) * params.limit;
     const conditions = and(
-      isNull(tournaments.deletedAt),
+      notDeleted(tournaments.deletedAt),
       or(eq(tournaments.status, 'registration'), eq(tournaments.status, 'ongoing')),
       sql`${tournaments.startAt} <= ${params.nowIso}`,
       sql`${tournaments.endAt} >= ${params.nowIso}`,
@@ -266,7 +267,7 @@ export class TournamentCrudRepository {
   }): Promise<{ items: CompletedTournamentRow[]; total: number }> {
     const offset = (params.page - 1) * params.limit;
     const conditions = and(
-      isNull(tournaments.deletedAt),
+      notDeleted(tournaments.deletedAt),
       eq(tournaments.status, 'finished'),
       sql`${tournaments.endAt} < ${params.nowIso}`,
     );
@@ -328,7 +329,7 @@ export class TournamentCrudRepository {
       )
       .where(
         and(
-          isNull(tournaments.deletedAt),
+          notDeleted(tournaments.deletedAt),
           ne(tournaments.status, 'cancelled'),
           sql`${tournaments.tournamentId} != ${params.tournamentId}`,
         ),
@@ -436,7 +437,9 @@ export class TournamentCrudRepository {
     const [row] = await this.db
       .update(tournaments)
       .set(set)
-      .where(and(eq(tournaments.tournamentId, params.tournamentId), isNull(tournaments.deletedAt)))
+      .where(
+        and(eq(tournaments.tournamentId, params.tournamentId), notDeleted(tournaments.deletedAt)),
+      )
       .returning({
         tournamentId: tournaments.tournamentId,
         title: tournaments.title,
@@ -467,7 +470,9 @@ export class TournamentCrudRepository {
         deletedAt: params.nowIso,
         updatedAt: params.nowIso,
       })
-      .where(and(eq(tournaments.tournamentId, params.tournamentId), isNull(tournaments.deletedAt)))
+      .where(
+        and(eq(tournaments.tournamentId, params.tournamentId), notDeleted(tournaments.deletedAt)),
+      )
       .returning({
         tournamentId: tournaments.tournamentId,
         title: tournaments.title,
@@ -510,7 +515,9 @@ export class TournamentCrudRepository {
         deletedAt: tournaments.deletedAt,
       })
       .from(tournaments)
-      .where(and(eq(tournaments.tournamentId, params.tournamentId), isNull(tournaments.deletedAt)))
+      .where(
+        and(eq(tournaments.tournamentId, params.tournamentId), notDeleted(tournaments.deletedAt)),
+      )
       .limit(1);
 
     if (!existing) {
@@ -531,7 +538,9 @@ export class TournamentCrudRepository {
         status: 'cancelled',
         updatedAt: params.nowIso,
       })
-      .where(and(eq(tournaments.tournamentId, params.tournamentId), isNull(tournaments.deletedAt)))
+      .where(
+        and(eq(tournaments.tournamentId, params.tournamentId), notDeleted(tournaments.deletedAt)),
+      )
       .returning({
         tournamentId: tournaments.tournamentId,
         title: tournaments.title,
@@ -570,7 +579,7 @@ export class TournamentCrudRepository {
         and(
           eq(tournaments.tournamentId, params.tournamentId),
           eq(tournaments.status, params.fromStatus),
-          isNull(tournaments.deletedAt),
+          notDeleted(tournaments.deletedAt),
         ),
       )
       .returning({
@@ -615,7 +624,7 @@ export class TournamentCrudRepository {
       .from(tournaments)
       .where(
         and(
-          isNull(tournaments.deletedAt),
+          notDeleted(tournaments.deletedAt),
           eq(tournaments.status, 'upcoming' as TournamentStatus),
           sql`${tournaments.startAt} >= ${params.windowStartIso}`,
           sql`${tournaments.startAt} <= ${params.windowEndIso}`,
@@ -647,7 +656,7 @@ export class TournamentCrudRepository {
       .from(tournaments)
       .where(
         and(
-          isNull(tournaments.deletedAt),
+          notDeleted(tournaments.deletedAt),
           eq(tournaments.status, 'registration' as TournamentStatus),
           sql`${tournaments.startAt} <= ${params.nowIso}`,
         ),

@@ -1,33 +1,43 @@
 import { Injectable, OnModuleDestroy } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
+import { BaseDomainEventBus } from '@/common/events/base-domain-event-bus';
 import type { DailyChallengeDomainEvent } from './daily-challenge-domain.events';
 
-type Handler = (event: DailyChallengeDomainEvent) => void | Promise<void>;
 type PendingPromise = Promise<void>;
 
 @Injectable()
-export class DailyChallengeDomainEventBus implements OnModuleDestroy {
-  private handlers: Handler[] = [];
+export class DailyChallengeDomainEventBus
+  extends BaseDomainEventBus<DailyChallengeDomainEvent>
+  implements OnModuleDestroy
+{
   private pending: Set<PendingPromise> = new Set();
 
   constructor(
     @InjectPinoLogger(DailyChallengeDomainEventBus.name)
-    private readonly logger: PinoLogger,
-  ) {}
+    logger: PinoLogger,
+  ) {
+    super(logger, { logEventName: 'daily_challenge_event' });
+  }
 
   async onModuleDestroy(): Promise<void> {
-    this.handlers = [];
+    this.clear();
     if (this.pending.size === 0) return;
     await Promise.allSettled(Array.from(this.pending));
     this.pending.clear();
   }
 
-  subscribe(handler: Handler): () => void {
-    this.handlers.push(handler);
-    return () => {
-      const idx = this.handlers.indexOf(handler);
-      if (idx !== -1) this.handlers.splice(idx, 1);
-    };
+  subscribe(handler: (event: DailyChallengeDomainEvent) => void | Promise<void>): () => void {
+    return super.subscribe(async (event) => {
+      const result = handler(event);
+      if (result instanceof Promise) {
+        this.pending.add(result);
+        try {
+          await result;
+        } finally {
+          this.pending.delete(result);
+        }
+      }
+    });
   }
 
   emitCompleted(event: DailyChallengeDomainEvent): void {
@@ -38,34 +48,6 @@ export class DailyChallengeDomainEventBus implements OnModuleDestroy {
       userId: event.userId,
     });
     this.dispatch(event);
-  }
-
-  private dispatch(event: DailyChallengeDomainEvent): void {
-    for (const handler of this.handlers) {
-      try {
-        const result = handler(event);
-        if (result instanceof Promise) {
-          this.pending.add(result);
-          result
-            .catch((error) => {
-              this.logger.error({
-                event: 'daily_challenge_event_handler_error',
-                eventType: event.eventType,
-                error: error instanceof Error ? error.message : String(error),
-              });
-            })
-            .finally(() => {
-              this.pending.delete(result);
-            });
-        }
-      } catch (error) {
-        this.logger.error({
-          event: 'daily_challenge_event_handler_error',
-          eventType: event.eventType,
-          error: error instanceof Error ? error.message : String(error),
-        });
-      }
-    }
   }
 }
 

@@ -10,6 +10,7 @@ import type {
   ReportCursor,
   ReviewReportRepositoryPort,
 } from '../../domain/ports/review-report-repository.port';
+import type { ReviewReportReason } from '../../domain/policies/review-report-status.policy';
 import { ReviewAlreadyReportedError } from '../../domain/errors';
 
 @Injectable()
@@ -82,7 +83,7 @@ export class ReviewReportRepository implements ReviewReportRepositoryPort {
   async createReport(params: {
     reviewId: string;
     reporterId: string;
-    reason: string;
+    reason: ReviewReportReason;
     details: string | null;
     nowIso: string;
   }): Promise<ReviewReportRow> {

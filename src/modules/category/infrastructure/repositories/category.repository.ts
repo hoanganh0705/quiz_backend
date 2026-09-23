@@ -1,5 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { and, asc, desc, eq, isNull, or, sql } from 'drizzle-orm';
+import { notDeleted } from '@/common/database/soft-delete.helper';
 import { DRIZZLE } from '@/core/database/drizzle.constants';
 import type { DrizzleDB } from '@/core/database/database.module';
 import { categories } from '@/core/database/schema';
@@ -34,7 +35,7 @@ export class CategoryRepository implements CategoryRepositoryPort {
     const [row] = await this.db
       .select(CATEGORY_COLUMNS)
       .from(categories)
-      .where(and(eq(categories.categoryId, categoryId), isNull(categories.deletedAt)))
+      .where(and(eq(categories.categoryId, categoryId), notDeleted(categories.deletedAt)))
       .limit(1);
 
     return row ?? null;
@@ -54,7 +55,7 @@ export class CategoryRepository implements CategoryRepositoryPort {
     const [row] = await this.db
       .select(CATEGORY_COLUMNS)
       .from(categories)
-      .where(and(eq(categories.slug, slug), isNull(categories.deletedAt)))
+      .where(and(eq(categories.slug, slug), notDeleted(categories.deletedAt)))
       .limit(1);
 
     return row ?? null;
@@ -86,8 +87,8 @@ export class CategoryRepository implements CategoryRepositoryPort {
       .from(categories)
       .where(
         cursorCondition
-          ? and(isNull(categories.deletedAt), cursorCondition)
-          : isNull(categories.deletedAt),
+          ? and(notDeleted(categories.deletedAt), cursorCondition)
+          : notDeleted(categories.deletedAt),
       )
       .orderBy(primaryOrder, desc(categories.categoryId))
       .limit(limit + 1);
@@ -139,7 +140,7 @@ export class CategoryRepository implements CategoryRepositoryPort {
       const [row] = await this.db
         .update(categories)
         .set({ ...params.patch, updatedAt: params.nowIso })
-        .where(and(eq(categories.categoryId, params.categoryId), isNull(categories.deletedAt)))
+        .where(and(eq(categories.categoryId, params.categoryId), notDeleted(categories.deletedAt)))
         .returning(CATEGORY_COLUMNS);
 
       return row ?? null;
@@ -156,7 +157,7 @@ export class CategoryRepository implements CategoryRepositoryPort {
     const [row] = await this.db
       .update(categories)
       .set({ deletedAt: nowIso, updatedAt: nowIso })
-      .where(and(eq(categories.categoryId, categoryId), isNull(categories.deletedAt)))
+      .where(and(eq(categories.categoryId, categoryId), notDeleted(categories.deletedAt)))
       .returning({ categoryId: categories.categoryId });
 
     return Boolean(row);

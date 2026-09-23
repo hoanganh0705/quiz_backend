@@ -11,6 +11,7 @@ import {
   TournamentWonEvent,
 } from '../../domain/events';
 import { getCorrelationId } from '@/common/interceptors/correlation-id';
+import { tournamentFlagsConfig, type TournamentFlagsConfig } from '@/core/config';
 
 @Injectable()
 export class BullmqTournamentEventBusService
@@ -21,6 +22,8 @@ export class BullmqTournamentEventBusService
   constructor(
     @Inject(TOURNAMENT_QUEUE_TOKENS.QUEUE)
     private readonly eventQueue: Queue<TournamentEventJobData>,
+    @Inject(tournamentFlagsConfig.KEY)
+    private readonly flags: TournamentFlagsConfig,
     @InjectPinoLogger(BullmqTournamentEventBusService.name)
     private readonly logger: PinoLogger,
   ) {}
@@ -50,6 +53,15 @@ export class BullmqTournamentEventBusService
           error: error instanceof Error ? error.message : 'Unknown error',
         });
       }
+    }
+
+    if (this.flags.tournamentBullMqDisable) {
+      this.logger.debug({
+        event: 'tournament_event_bullmq_publish_skipped',
+        eventType: event.eventType,
+        reason: 'TOURNAMENT_BULLMQ_DISABLE=true',
+      });
+      return;
     }
 
     try {
@@ -136,6 +148,7 @@ export function deserializeEvent(data: TournamentEventJobData): TournamentDomain
         data.tournamentId,
         data.userId,
         (data as { tournamentTitle: string }).tournamentTitle,
+        (data as { categoryTitle?: string | null }).categoryTitle ?? null,
         new Date(data.occurredAt),
       );
     case 'tournament.participant.withdrawn':
@@ -149,6 +162,7 @@ export function deserializeEvent(data: TournamentEventJobData): TournamentDomain
         data.userId,
         data.tournamentId,
         data.tournamentTitle,
+        data.categoryTitle ?? null,
         data.startsAt,
         new Date(data.timestamp),
       );
@@ -157,6 +171,7 @@ export function deserializeEvent(data: TournamentEventJobData): TournamentDomain
         data.userId,
         data.tournamentId,
         data.tournamentTitle,
+        data.categoryTitle ?? null,
         data.rank,
         data.totalParticipants,
         new Date(data.timestamp),
@@ -166,6 +181,7 @@ export function deserializeEvent(data: TournamentEventJobData): TournamentDomain
         data.userId,
         data.tournamentId,
         data.tournamentTitle,
+        data.categoryTitle ?? null,
         data.rank,
         data.prize,
         new Date(data.timestamp),
@@ -180,6 +196,7 @@ export type TournamentEventJobData =
       tournamentId: string;
       userId: string;
       tournamentTitle: string;
+      categoryTitle?: string | null;
       occurredAt: string;
       correlationId?: string;
     }
@@ -195,6 +212,7 @@ export type TournamentEventJobData =
       userId: string;
       tournamentId: string;
       tournamentTitle: string;
+      categoryTitle?: string | null;
       startsAt: string;
       timestamp: string;
       correlationId?: string;
@@ -204,6 +222,7 @@ export type TournamentEventJobData =
       userId: string;
       tournamentId: string;
       tournamentTitle: string;
+      categoryTitle?: string | null;
       rank: number;
       totalParticipants: number;
       timestamp: string;
@@ -214,6 +233,7 @@ export type TournamentEventJobData =
       userId: string;
       tournamentId: string;
       tournamentTitle: string;
+      categoryTitle?: string | null;
       rank: number;
       prize?: string;
       timestamp: string;

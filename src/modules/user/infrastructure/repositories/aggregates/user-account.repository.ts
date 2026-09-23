@@ -2,7 +2,8 @@ import { Inject, Injectable } from '@nestjs/common';
 import { DRIZZLE } from '@/core/database/drizzle.constants';
 import type { DrizzleDB } from '@/core/database/database.module';
 import { users, userProfiles, userRanking } from '@/core/database/schema';
-import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
+import { notDeleted } from '@/common/database/soft-delete.helper';
 import type {
   UserMeRow,
   UserPublicRow,
@@ -40,7 +41,7 @@ export class UserAccountRepository {
       .from(users)
       .leftJoin(userProfiles, eq(users.userId, userProfiles.userId))
       .leftJoin(userRanking, eq(users.userId, userRanking.userId))
-      .where(and(eq(users.userId, userId), isNull(users.deletedAt)))
+      .where(and(eq(users.userId, userId), notDeleted(users.deletedAt)))
       .limit(1);
 
     return (user as UserMeRow | undefined) ?? null;
@@ -59,7 +60,7 @@ export class UserAccountRepository {
       })
       .from(users)
       .leftJoin(userProfiles, eq(users.userId, userProfiles.userId))
-      .where(and(inArray(users.username, usernames), isNull(users.deletedAt)));
+      .where(and(inArray(users.username, usernames), notDeleted(users.deletedAt)));
 
     return rows.map((r) => ({
       userId: r.userId,
@@ -82,7 +83,7 @@ export class UserAccountRepository {
       })
       .from(users)
       .leftJoin(userProfiles, eq(users.userId, userProfiles.userId))
-      .where(and(eq(users.username, username), isNull(users.deletedAt)))
+      .where(and(eq(users.username, username), notDeleted(users.deletedAt)))
       .limit(1);
 
     const r = rows[0];
@@ -104,7 +105,7 @@ export class UserAccountRepository {
     const rows = await this.db
       .select({ userId: users.userId })
       .from(users)
-      .where(and(inArray(users.role, roles), isNull(users.deletedAt)));
+      .where(and(inArray(users.role, roles), notDeleted(users.deletedAt)));
 
     return rows.map((r) => ({ userId: r.userId }));
   }

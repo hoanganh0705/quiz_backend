@@ -1,13 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
-/**
- * `GET /me/wallet` response — the cached wallet state.
- *
- * The wire shape mirrors `user_wallets` plus a denormalised
- * `lastTransactionAt` (NULL when the wallet has never been credited).
- * Frontends render the balance in the header pill and the history
- * page reads the same value as the source of truth.
- */
 export class CoinWalletResponseDto {
   @ApiProperty({
     description: "User's current coin balance (cached, hot read)",

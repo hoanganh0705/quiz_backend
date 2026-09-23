@@ -1,166 +1,76 @@
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { Inject, Injectable } from '@nestjs/common';
-import { and, asc, eq, isNotNull, isNull, lte } from 'drizzle-orm';
+import { and, eq, isNull, lte } from 'drizzle-orm';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { DRIZZLE } from '@/core/database/drizzle.constants';
 import type { DrizzleDB } from '@/core/database/database.module';
 import { outboxEvents } from '@/core/database/schema';
+import { BaseOutboxProcessor, type BaseOutboxRow } from '@/common/outbox/base-outbox-processor';
 import { AuthAuditLogService } from '../audit/auth-audit-log.service';
 import { correlationIdStorage, createCorrelationId } from '@/common/interceptors/correlation-id';
-import { AuthSecurityNotificationService } from '@/modules/notification/domain/services/auth-security-notification.service';
+import {
+  AUTH_SECURITY_NOTIFICATION_PORT,
+  type AuthSecurityNotificationPort,
+} from '@/modules/notification/domain/ports/notification-ports';
 
-type OutboxEventRow = {
-  eventId: string;
-  aggregateType: string;
-  eventType: string;
-  payload: Record<string, unknown>;
-  createdAt: string;
-  attemptCount: number;
-  correlationId: string | null;
+const AUTH_OUTBOX_BATCH_SIZE = 100;
+
+type OutboxEventRow = BaseOutboxRow & {
+  userId?: string | null;
+  ipAddress?: string | null;
+  revokedByIp?: string | null;
+  revokedSessionCount?: number;
+  provider?: string;
+  sessionId?: string;
 };
-
 @Injectable()
-export class OutboxProcessorService {
-  private static readonly BATCH_SIZE = 100;
+export class OutboxProcessorService extends BaseOutboxProcessor<OutboxEventRow> {
+  protected readonly batchSize = AUTH_OUTBOX_BATCH_SIZE;
+  protected readonly logPrefix = 'auth';
+
+  protected get maxRetries(): number {
+    return this.authAuditLogService.maxOutboxRetries;
+  }
+  protected get baseDelaySeconds(): number {
+    return this.authAuditLogService['securityConfig'].outboxBaseDelaySeconds;
+  }
+
+  protected readonly aggregateType = 'auth';
 
   constructor(
     @Inject(DRIZZLE) private readonly db: DrizzleDB,
     private readonly authAuditLogService: AuthAuditLogService,
-    private readonly authSecurityNotificationService: AuthSecurityNotificationService,
+    @Inject(AUTH_SECURITY_NOTIFICATION_PORT)
+    private readonly authSecurityNotificationService: AuthSecurityNotificationPort,
     @InjectPinoLogger(OutboxProcessorService.name) private readonly logger: PinoLogger,
-  ) {}
+  ) {
+    super();
+  }
+
+  protected override buildPendingWhere(nowIso: string) {
+    return and(
+      isNull(outboxEvents.processedAt),
+      isNull(outboxEvents.failedAt),
+      lte(outboxEvents.nextAttemptAt, nowIso),
+    )!;
+  }
 
   @Cron('*/30 * * * * *')
   async processPendingEvents(): Promise<void> {
-    const nowIso = new Date().toISOString();
-
-    const events = await this.db
-      .select({
-        eventId: outboxEvents.eventId,
-        aggregateType: outboxEvents.aggregateType,
-        eventType: outboxEvents.eventType,
-        payload: outboxEvents.payload,
-        createdAt: outboxEvents.createdAt,
-        attemptCount: outboxEvents.attemptCount,
-        correlationId: outboxEvents.correlationId,
-      })
-      .from(outboxEvents)
-      .where(
-        and(
-          isNull(outboxEvents.processedAt),
-          // Exclude events that have already been moved to the DLQ.
-          // Without this filter, a poisoned event that exhausted its
-          // retries would be re-selected on every cron tick and
-          // re-thrown, creating an infinite retry loop.
-          isNull(outboxEvents.failedAt),
-          lte(outboxEvents.nextAttemptAt, nowIso),
-        ),
-      )
-      .orderBy(asc(outboxEvents.createdAt))
-      .limit(OutboxProcessorService.BATCH_SIZE);
-
-    if (events.length === 0) {
-      return;
-    }
-
-    let processedCount = 0;
-    let failedCount = 0;
-
-    for (const event of events as OutboxEventRow[]) {
-      try {
-        await this.dispatch(event, nowIso);
-
-        await this.db
-          .update(outboxEvents)
-          .set({
-            processedAt: nowIso,
-            lastAttemptAt: nowIso,
-            attemptCount: event.attemptCount + 1,
-            lastError: null,
-          })
-          .where(and(eq(outboxEvents.eventId, event.eventId), isNull(outboxEvents.processedAt)));
-
-        processedCount += 1;
-      } catch (error) {
-        failedCount += 1;
-
-        const nextAttemptCount = event.attemptCount + 1;
-        const lastError = error instanceof Error ? error.message : 'Unknown error';
-        const retriesExhausted = nextAttemptCount >= this.authAuditLogService.maxOutboxRetries;
-
-        // If retries are exhausted, mark the event as DLQ'd in the
-        // SAME update so the next cron tick (which now filters on
-        // `failedAt IS NULL`) skips it. Without `failedAt` being
-        // set, the row would be re-selected forever and re-thrown
-        // on every tick.
-        const updateValues: {
-          attemptCount: number;
-          lastAttemptAt: string;
-          nextAttemptAt: string;
-          lastError: string;
-          failedAt?: string;
-          dlqReason?: string;
-        } = retriesExhausted
-          ? {
-              attemptCount: nextAttemptCount,
-              lastAttemptAt: nowIso,
-              // The exact nextAttemptAt value no longer matters once
-              // the event is in the DLQ, but we still need a valid
-              // timestamp so the row satisfies the column's NOT NULL
-              // constraint. Use `nowIso` to mark "no further attempts".
-              nextAttemptAt: nowIso,
-              lastError,
-              failedAt: nowIso,
-              dlqReason: `exhausted_retries:${lastError}`,
-            }
-          : {
-              attemptCount: nextAttemptCount,
-              lastAttemptAt: nowIso,
-              nextAttemptAt: this.authAuditLogService.buildNextAttemptIso(nextAttemptCount, nowIso),
-              lastError,
-            };
-
-        await this.db
-          .update(outboxEvents)
-          .set(updateValues)
-          .where(and(eq(outboxEvents.eventId, event.eventId), isNull(outboxEvents.processedAt)));
-
-        if (retriesExhausted) {
-          this.logger.error({
-            event: 'auth_outbox_event_exhausted_retries',
-            outboxEventId: event.eventId,
-            aggregateType: event.aggregateType,
-            eventType: event.eventType,
-            attemptCount: nextAttemptCount,
-            dlqReason: updateValues.dlqReason,
-            message: lastError,
-          });
-        } else {
-          this.logger.warn({
-            event: 'auth_outbox_event_retry_scheduled',
-            outboxEventId: event.eventId,
-            aggregateType: event.aggregateType,
-            eventType: event.eventType,
-            attemptCount: nextAttemptCount,
-            nextAttemptAt: updateValues.nextAttemptAt,
-            message: lastError,
-          });
-        }
-      }
-    }
-
+    const result = await this.runProcessPendingEvents(this.db);
     this.logger.info({
       event: 'auth_outbox_processor_completed',
-      processedCount,
-      failedCount,
-      scannedCount: events.length,
+      processedCount: result.processed,
+      failedCount: result.failed,
+      idempotencyConflicts: result.idempotencyConflicts,
+      movedToDlq: result.movedToDlq,
+      scannedCount: result.scanned,
     });
   }
 
   @Cron(CronExpression.EVERY_DAY_AT_3AM)
   async purgeExpiredAuditLogs(): Promise<void> {
     const purgedCount = await this.authAuditLogService.purgeExpired();
-
     if (purgedCount > 0) {
       this.logger.info({
         event: 'auth_audit_logs_purged',
@@ -176,82 +86,135 @@ export class OutboxProcessorService {
    * a poisoned event that slips past the cron filter is surfaced
    * within a few minutes of being marked, well before it can
    * accumulate and start filling the outbox.
-   *
-   * The query is bounded (`limit 1000`) so a backlog of DLQ rows
-   * cannot make this monitor itself a hot path. The alert includes
-   * per-aggregate counts so an operator can quickly identify the
-   * source of the failure without having to query the DB.
    */
   @Cron('*/5 * * * *')
   async monitorDeadLetterQueue(): Promise<void> {
-    const rows = await this.db
-      .select({
-        eventId: outboxEvents.eventId,
-        aggregateType: outboxEvents.aggregateType,
-        eventType: outboxEvents.eventType,
-        attemptCount: outboxEvents.attemptCount,
-        failedAt: outboxEvents.failedAt,
-        dlqReason: outboxEvents.dlqReason,
-        lastError: outboxEvents.lastError,
-      })
-      .from(outboxEvents)
-      .where(
-        and(
-          isNull(outboxEvents.processedAt),
-          isNotNull(outboxEvents.failedAt),
-          isNotNull(outboxEvents.dlqReason),
-        ),
-      )
-      .limit(1000);
-
-    if (rows.length === 0) {
-      return;
+    const count = await this.runMonitorDeadLetterQueue(this.db);
+    if (count > 0) {
+      this.logger.error({
+        event: 'auth_outbox_dlq_alert',
+        totalDlqEvents: count,
+      });
     }
-
-    this.logger.error({
-      event: 'auth_outbox_dlq_alert',
-      totalDlqEvents: rows.length,
-      sampleEventIds: rows.slice(0, 5).map((e) => e.eventId),
-    });
   }
 
-  private async dispatch(event: OutboxEventRow, nowIso: string): Promise<void> {
-    const userId = this.readString(event.payload.userId);
-    const ipAddress =
-      this.readOptionalString(event.payload.ipAddress) ??
-      this.readOptionalString(event.payload.revokedByIp);
-    const correlationId = event.correlationId ?? createCorrelationId();
+  protected override async handleFailure(
+    _db: DrizzleDB,
+    row: OutboxEventRow,
+    error: unknown,
+    nowIso: string,
+  ): Promise<'retried' | 'dlq'> {
+    const nextAttemptCount = (row.attemptCount ?? 0) + 1;
+    const lastError = error instanceof Error ? error.message : 'Unknown error';
+    const retriesExhausted = nextAttemptCount >= this.authAuditLogService.maxOutboxRetries;
 
-    await correlationIdStorage.run({ correlationId }, async () => {
-      switch (`${event.aggregateType}:${event.eventType}`) {
-        case 'password_reset:password_reset_completed':
-        case 'password_reset:password_reset_requested':
-        case 'account:account_deleted':
-        case 'account:password_changed':
-        case 'session:session_revoked':
-        case 'session:all_other_sessions_revoked':
-        case 'oauth_account:oauth_account_created':
-        case 'oauth_account:oauth_account_linked':
-        case 'oauth_login:oauth_login':
-        case 'oauth_login:oauth_login_failed': {
-          await this.authAuditLogService.record({
-            eventType: event.eventType,
-            userId: userId ?? undefined,
-            ipAddress,
-            metadata: {
-              aggregateType: event.aggregateType,
-              ...event.payload,
-            },
-            createdAt: nowIso,
-          });
-          await this.sendSecurityNotification(event, userId, ipAddress);
-          return;
+    const updateValues: Record<string, unknown> = retriesExhausted
+      ? {
+          attemptCount: nextAttemptCount,
+          lastAttemptAt: nowIso,
+          nextAttemptAt: nowIso,
+          lastError,
+          failedAt: nowIso,
+          dlqReason: `exhausted_retries:${lastError}`,
         }
-        default:
-          throw new Error(
-            `Unsupported outbox event dispatcher key: ${event.aggregateType}:${event.eventType}`,
-          );
-      }
+      : {
+          attemptCount: nextAttemptCount,
+          lastAttemptAt: nowIso,
+          nextAttemptAt: this.authAuditLogService.buildNextAttemptIso(nextAttemptCount, nowIso),
+          lastError,
+        };
+
+    await _db
+      .update(outboxEvents)
+      .set(updateValues)
+      .where(and(eq(outboxEvents.eventId, row.eventId), isNull(outboxEvents.processedAt)));
+
+    if (retriesExhausted) {
+      this.logger.error({
+        event: 'auth_outbox_event_exhausted_retries',
+        outboxEventId: row.eventId,
+        aggregateType: row.aggregateType,
+        eventType: row.eventType,
+        attemptCount: nextAttemptCount,
+        dlqReason: updateValues['dlqReason'] as string,
+        message: lastError,
+      });
+    } else {
+      this.logger.warn({
+        event: 'auth_outbox_event_retry_scheduled',
+        outboxEventId: row.eventId,
+        aggregateType: row.aggregateType,
+        eventType: row.eventType,
+        attemptCount: nextAttemptCount,
+        nextAttemptAt: updateValues['nextAttemptAt'] as string,
+        message: lastError,
+      });
+    }
+
+    return retriesExhausted ? 'dlq' : 'retried';
+  }
+
+  protected async dispatch(row: OutboxEventRow): Promise<void> {
+    const userId = this.readString(row.payload['userId']);
+    const ipAddress =
+      this.readOptionalString(row.payload['ipAddress']) ??
+      this.readOptionalString(row.payload['revokedByIp']);
+    const correlationId = row.correlationId ?? createCorrelationId();
+
+    let captured: unknown;
+    await new Promise<void>((resolve) => {
+      correlationIdStorage.run({ correlationId }, async () => {
+        try {
+          switch (`${row.aggregateType}:${row.eventType}`) {
+            case 'password_reset:password_reset_completed':
+            case 'password_reset:password_reset_requested':
+            case 'account:account_deleted':
+            case 'account:password_changed':
+            case 'session:session_revoked':
+            case 'session:all_other_sessions_revoked':
+            case 'oauth_account:oauth_account_created':
+            case 'oauth_account:oauth_account_linked':
+            case 'oauth_login:oauth_login':
+            case 'oauth_login:oauth_login_failed': {
+              await this.authAuditLogService.record({
+                eventType: row.eventType,
+                userId: userId ?? undefined,
+                ipAddress,
+                metadata: {
+                  aggregateType: row.aggregateType,
+                  ...row.payload,
+                },
+                createdAt: new Date().toISOString(),
+              });
+              await this.sendSecurityNotification(row, userId, ipAddress);
+              resolve();
+              return;
+            }
+            default:
+              captured = new Error(
+                `Unsupported outbox event dispatcher key: ${row.aggregateType}:${row.eventType}`,
+              );
+              resolve();
+              return;
+          }
+        } catch (err) {
+          captured = err;
+          resolve();
+        }
+      });
+    });
+    if (captured !== undefined) {
+      const reason = captured instanceof Error ? captured.message : JSON.stringify(captured);
+      throw new Error(reason);
+    }
+  }
+
+  protected override onIdempotencyConflict(row: OutboxEventRow): void {
+    this.logger.debug({
+      event: 'auth_outbox_event_skipped_idempotent',
+      outboxEventId: row.eventId,
+      aggregateType: row.aggregateType,
+      eventType: row.eventType,
     });
   }
 
@@ -295,7 +258,7 @@ export class OutboxProcessorService {
           break;
 
         case 'session:session_revoked': {
-          const sessionId = this.readString(event.payload.sessionId) ?? 'unknown';
+          const sessionId = this.readString(event.payload['sessionId']) ?? 'unknown';
           await this.authSecurityNotificationService.notifySessionRevoked({
             userId,
             sessionId,
@@ -306,8 +269,8 @@ export class OutboxProcessorService {
 
         case 'session:all_other_sessions_revoked': {
           const count =
-            typeof event.payload.revokedSessionCount === 'number'
-              ? event.payload.revokedSessionCount
+            typeof event.payload['revokedSessionCount'] === 'number'
+              ? event.payload['revokedSessionCount']
               : 0;
           await this.authSecurityNotificationService.notifyAllSessionsRevoked({
             userId,
@@ -318,13 +281,13 @@ export class OutboxProcessorService {
         }
 
         case 'oauth_account:oauth_account_linked': {
-          const provider = this.readString(event.payload.provider) ?? 'unknown';
+          const provider = this.readString(event.payload['provider']) ?? 'unknown';
           await this.authSecurityNotificationService.notifyOAuthLinked({ userId, provider });
           break;
         }
 
         case 'oauth_account:oauth_account_created': {
-          const provider = this.readString(event.payload.provider) ?? 'unknown';
+          const provider = this.readString(event.payload['provider']) ?? 'unknown';
           await this.authSecurityNotificationService.notifyOAuthLinked({ userId, provider });
           break;
         }

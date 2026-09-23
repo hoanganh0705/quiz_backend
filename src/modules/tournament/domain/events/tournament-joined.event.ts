@@ -5,6 +5,7 @@ export class TournamentJoinedEvent {
     public readonly tournamentId: string,
     public readonly userId: string,
     public readonly tournamentTitle: string,
+    public readonly categoryTitle: string | null,
     public readonly occurredAt: Date,
   ) {}
 }
@@ -16,6 +17,7 @@ export class TournamentStartingSoonEvent {
     public readonly userId: string,
     public readonly tournamentId: string,
     public readonly tournamentTitle: string,
+    public readonly categoryTitle: string | null,
     public readonly startsAt: string,
     public readonly timestamp: Date,
   ) {}
@@ -28,6 +30,7 @@ export class TournamentCompletedEvent {
     public readonly userId: string,
     public readonly tournamentId: string,
     public readonly tournamentTitle: string,
+    public readonly categoryTitle: string | null,
     public readonly rank: number,
     public readonly totalParticipants: number,
     public readonly timestamp: Date,
@@ -41,6 +44,7 @@ export class TournamentWonEvent {
     public readonly userId: string,
     public readonly tournamentId: string,
     public readonly tournamentTitle: string,
+    public readonly categoryTitle: string | null,
     public readonly rank: number,
     public readonly prize: string | undefined,
     public readonly timestamp: Date,
