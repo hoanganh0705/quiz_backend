@@ -69,6 +69,84 @@ export class LeaderboardRepository {
     return results.rows;
   }
 
+  async getLeaderboardKeyset(params: {
+    period: RankingPeriod;
+    limit: number;
+    cursorXp?: number | null;
+    cursorCreatedAt?: string | null;
+    cursorUserId?: string | null;
+  }): Promise<LeaderboardRow[]> {
+    const { period, limit, cursorXp, cursorCreatedAt, cursorUserId } = params;
+    const xpColumn = getXpColumn(period);
+
+    const hasCursor =
+      cursorXp !== null &&
+      cursorXp !== undefined &&
+      cursorCreatedAt !== null &&
+      cursorCreatedAt !== undefined &&
+      cursorUserId !== null &&
+      cursorUserId !== undefined;
+
+    const cursorPredicate = hasCursor
+      ? sql`(
+          ur.${sql.raw(xpColumn)} < ${cursorXp}
+          OR (ur.${sql.raw(xpColumn)} = ${cursorXp} AND u.created_at > ${cursorCreatedAt}::timestamptz)
+          OR (
+            ur.${sql.raw(xpColumn)} = ${cursorXp}
+            AND u.created_at = ${cursorCreatedAt}::timestamptz
+            AND u.user_id > ${cursorUserId}::uuid
+          )
+        )`
+      : sql`TRUE`;
+
+    const results = await this.executeRaw<LeaderboardRow>(sql`
+      SELECT
+        u.user_id as "userId",
+        up.display_name as "displayName",
+        u.username as "username",
+        up.avatar_url as "avatarUrl",
+        ur.${sql.raw(xpColumn)} as xp,
+        u.created_at as "createdAt",
+        RANK() OVER (
+          ORDER BY ur.${sql.raw(xpColumn)} DESC, u.created_at ASC
+        ) as rank,
+        DENSE_RANK() OVER (
+          ORDER BY ur.${sql.raw(xpColumn)} DESC, u.created_at ASC
+        ) as "denseRank"
+      FROM user_ranking ur
+      INNER JOIN users u ON u.user_id = ur.user_id
+      LEFT JOIN user_profiles up ON up.user_id = u.user_id
+      WHERE ur.${sql.raw(xpColumn)} > 0
+        AND u.deleted_at IS NULL
+        AND ${cursorPredicate}
+      ORDER BY ur.${sql.raw(xpColumn)} DESC, u.created_at ASC, u.user_id ASC
+      LIMIT ${limit}
+    `);
+
+    return results.rows.map((row) => ({
+      userId: row.userId,
+      displayName: row.displayName,
+      username: row.username,
+      avatarUrl: row.avatarUrl,
+      xp: row.xp,
+      rank: row.rank,
+      denseRank: row.denseRank,
+    }));
+  }
+
+  async getLeaderboardCursorFirstPage(params: {
+    period: RankingPeriod;
+    limit: number;
+  }): Promise<LeaderboardRow[]> {
+    return this.getLeaderboardKeyset({
+      period: params.period,
+      limit: params.limit,
+      cursorXp: null,
+      cursorCreatedAt: null,
+      cursorUserId: null,
+    });
+  }
+
   async getTotalParticipants(period: RankingPeriod): Promise<number> {
     const xpColumn = getXpColumn(period);
 

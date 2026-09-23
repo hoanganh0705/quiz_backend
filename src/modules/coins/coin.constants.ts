@@ -20,6 +20,11 @@ export const COIN_SPEND_AMOUNTS = Object.freeze({
   SUPPRESS_RECOMMENDED_30D: 50,
 } as const);
 
+export const COIN_SPEND_DURATIONS_DAYS = Object.freeze({
+  PROFILE_FLAIR_SLOT: 7,
+  SUPPRESS_RECOMMENDED: 30,
+} as const);
+
 export const COIN_ECONOMY_LIMITS = Object.freeze({
   DAILY_QUIZ_EARNINGS_CAP: 200,
   WALLET_BALANCE_MAX: 1_000_000,
@@ -37,6 +42,8 @@ export const COIN_IDEMPOTENCY_KEY_PREFIXES = Object.freeze({
   SUPPRESS_DEBIT: 'coin:suppress',
   ADMIN_ADJUSTMENT: 'coin:admin',
 } as const);
+
+export const IDEMPOTENCY_KEY_MAX_LENGTH = 200 as const;
 
 export type CoinRewardKey = keyof typeof COIN_REWARDS;
 export type CoinSpendKey = keyof typeof COIN_SPEND_AMOUNTS;

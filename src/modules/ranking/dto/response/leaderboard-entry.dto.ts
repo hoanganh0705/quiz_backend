@@ -74,6 +74,20 @@ export class PeriodInfoDto {
   resetInSeconds!: number;
 }
 
+export class LeaderboardCursorDto {
+  @ApiProperty({ description: 'XP value of the last row on this page', example: 1500 })
+  xp!: number;
+
+  @ApiProperty({
+    description: 'Created-at timestamp of the last row on this page',
+    example: '2026-05-25T00:00:00.000Z',
+  })
+  createdAt!: string;
+
+  @ApiUuidProperty({ description: 'User ID of the last row on this page' })
+  userId!: string;
+}
+
 export class PaginationDto {
   @ApiProperty({ description: 'Number of items per page', example: 100 })
   limit!: number;
@@ -83,6 +97,13 @@ export class PaginationDto {
 
   @ApiProperty({ description: 'Whether there are more items', example: true })
   hasMore!: boolean;
+
+  @ApiPropertyOptional({
+    description: 'Cursor for the next page (keyset pagination)',
+    type: () => LeaderboardCursorDto,
+    nullable: true,
+  })
+  cursor?: LeaderboardCursorDto | null;
 }
 
 export class UserRankPositionDto {

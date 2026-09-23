@@ -1,11 +1,9 @@
-import { Inject, Injectable, OnModuleDestroy, OnModuleInit, forwardRef } from '@nestjs/common';
+import { Inject, Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import {
   REVIEW_DOMAIN_EVENT_BUS,
   type PublishedReviewDomainEvent,
 } from '@/modules/review/domain/events';
-import { QUIZ_REPOSITORY_PORT } from '@/modules/quiz/domain/ports/quiz-repository.port';
-import type { QuizRepositoryPort } from '@/modules/quiz/domain/ports/quiz-repository.port';
 import { ReviewNotificationService } from '../../domain/services/review-notification.service';
 
 @Injectable()
@@ -13,12 +11,10 @@ export class ReviewNotificationListener implements OnModuleInit, OnModuleDestroy
   private unsubscribe: (() => void) | null = null;
 
   constructor(
-    @Inject(forwardRef(() => REVIEW_DOMAIN_EVENT_BUS))
+    @Inject(REVIEW_DOMAIN_EVENT_BUS)
     private readonly reviewEventBus: {
       subscribe(handler: (event: PublishedReviewDomainEvent) => void): () => void;
     },
-    @Inject(forwardRef(() => QUIZ_REPOSITORY_PORT))
-    private readonly quizRepository: QuizRepositoryPort,
     private readonly reviewNotificationService: ReviewNotificationService,
     @InjectPinoLogger(ReviewNotificationListener.name)
     private readonly logger: PinoLogger,
@@ -59,8 +55,7 @@ export class ReviewNotificationListener implements OnModuleInit, OnModuleDestroy
     event: Extract<PublishedReviewDomainEvent, { eventType: 'review.submitted' }>,
   ): Promise<void> {
     try {
-      const quiz = await this.quizRepository.getQuizWithPublishedVersionById(event.payload.quizId);
-      if (!quiz || !quiz.creatorId) {
+      if (!event.payload.quizCreatorId) {
         this.logger.warn({
           event: 'review_notification_no_quiz_creator',
           quizId: event.payload.quizId,
@@ -69,8 +64,8 @@ export class ReviewNotificationListener implements OnModuleInit, OnModuleDestroy
       }
 
       await this.reviewNotificationService.notifyReviewSubmitted({
-        quizCreatorId: quiz.creatorId,
-        quizTitle: quiz.title,
+        quizCreatorId: event.payload.quizCreatorId,
+        quizTitle: event.payload.quizTitle,
         quizId: event.payload.quizId,
         reviewerId: event.payload.userId,
         reviewerUsername: 'Anonymous',
@@ -91,8 +86,7 @@ export class ReviewNotificationListener implements OnModuleInit, OnModuleDestroy
     event: Extract<PublishedReviewDomainEvent, { eventType: 'review.deleted' }>,
   ): Promise<void> {
     try {
-      const quiz = await this.quizRepository.getQuizWithPublishedVersionById(event.payload.quizId);
-      if (!quiz || !quiz.creatorId) {
+      if (!event.payload.quizCreatorId) {
         this.logger.warn({
           event: 'review_deleted_notification_no_quiz_creator',
           quizId: event.payload.quizId,
@@ -101,8 +95,8 @@ export class ReviewNotificationListener implements OnModuleInit, OnModuleDestroy
       }
 
       await this.reviewNotificationService.notifyReviewDeleted({
-        quizCreatorId: quiz.creatorId,
-        quizTitle: quiz.title,
+        quizCreatorId: event.payload.quizCreatorId,
+        quizTitle: event.payload.quizTitle,
         quizId: event.payload.quizId,
       });
     } catch (error) {

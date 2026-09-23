@@ -2,6 +2,9 @@ export const REVIEW_OUTBOX_PORT = Symbol('REVIEW_OUTBOX_PORT');
 
 export type ReviewSubmittedOutboxPayload = {
   quizId: string;
+
+  quizTitle: string;
+  quizCreatorId: string;
   reviewId: string;
   userId: string;
   rating: number;
@@ -9,6 +12,8 @@ export type ReviewSubmittedOutboxPayload = {
 
 export type ReviewDeletedOutboxPayload = {
   quizId: string;
+  quizTitle: string;
+  quizCreatorId: string;
   reviewId: string;
 };
 

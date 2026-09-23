@@ -65,6 +65,13 @@ export class MetricsRegistry implements OnModuleInit {
     labelKeys: [],
     values: new Map(),
   };
+  readonly outboxDlqCount: Metric = {
+    name: 'quiz_outbox_dlq_total',
+    type: 'gauge',
+    help: 'Number of outbox events in the dead-letter queue, broken down by aggregate_type',
+    labelKeys: ['aggregate_type'],
+    values: new Map(),
+  };
   readonly bullmqQueueDepth: Metric = {
     name: 'quiz_bullmq_queue_depth',
     type: 'gauge',
@@ -92,6 +99,7 @@ export class MetricsRegistry implements OnModuleInit {
       this.redisCircuitState,
       this.redisCircuitShortCircuits,
       this.outboxLag,
+      this.outboxDlqCount,
       this.bullmqQueueDepth,
       this.tracingSpans,
     ];
@@ -137,6 +145,15 @@ export class MetricsRegistry implements OnModuleInit {
 
   setTracingActiveSpans(count: number): void {
     this.tracingSpans.values.set('series=active', count);
+  }
+
+  /**
+   * Set DLQ event count per aggregate type.
+   * Called by MetricsController on every scrape so Prometheus alerting
+   * can fire when any count is non-zero.
+   */
+  setOutboxDlqCount(aggregateType: string, count: number): void {
+    this.outboxDlqCount.values.set(`aggregate_type=${aggregateType}`, count);
   }
 
   render(): string {

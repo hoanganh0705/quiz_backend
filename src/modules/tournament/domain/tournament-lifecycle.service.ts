@@ -7,6 +7,10 @@ import {
   TOURNAMENT_OUTBOX_PORT,
   type TournamentOutboxPort,
 } from './ports';
+import {
+  CATEGORY_REPOSITORY_PORT,
+  type CategoryRepositoryPort,
+} from '@/modules/category/domain/ports';
 import { DRIZZLE } from '@/core/database/drizzle.constants';
 import type { DrizzleDB } from '@/core/database/database.module';
 import { getCorrelationId } from '@/common/interceptors/correlation-id';
@@ -18,6 +22,8 @@ export class TournamentLifecycleService {
     private readonly tournamentRepository: TournamentRepositoryPort,
     @Inject(TOURNAMENT_OUTBOX_PORT)
     private readonly tournamentOutbox: TournamentOutboxPort,
+    @Inject(CATEGORY_REPOSITORY_PORT)
+    private readonly categoryRepository: CategoryRepositoryPort,
     @Inject(DRIZZLE) private readonly db: DrizzleDB,
     @InjectPinoLogger(TournamentLifecycleService.name)
     private readonly logger: PinoLogger,
@@ -55,19 +61,22 @@ export class TournamentLifecycleService {
         limit: participantCount,
       });
 
-      const events = participants.items.map((participant) => ({
-        eventType: 'tournament.starting_soon' as const,
-        payload: {
+      const events = await Promise.all(
+        participants.items.map(async (participant) => ({
           eventType: 'tournament.starting_soon' as const,
-          tournamentId: tournament.tournamentId,
-          userId: participant.userId,
-          tournamentTitle: tournament.title,
-          startedAt: tournament.startAt,
-          timestamp: timestampIso,
-        },
-        idempotencyKey: `tournament:starting_soon:${tournament.tournamentId}:${participant.userId}`,
-        correlationId: correlationId ?? undefined,
-      }));
+          payload: {
+            eventType: 'tournament.starting_soon' as const,
+            tournamentId: tournament.tournamentId,
+            userId: participant.userId,
+            tournamentTitle: tournament.title,
+            categoryTitle: await this.resolveCategoryTitle(tournament.categoryId),
+            startedAt: tournament.startAt,
+            timestamp: timestampIso,
+          },
+          idempotencyKey: `tournament:starting_soon:${tournament.tournamentId}:${participant.userId}`,
+          correlationId: correlationId ?? undefined,
+        })),
+      );
 
       await this.tournamentOutbox.scheduleTournamentEventsBatch(events, this.db, timestampIso);
 
@@ -274,6 +283,8 @@ export class TournamentLifecycleService {
         tx,
       });
 
+      const categoryTitle = await this.resolveCategoryTitle(tournament.categoryId);
+
       for (const standing of standings) {
         await this.tournamentOutbox.scheduleTournamentEvent(
           {
@@ -283,6 +294,7 @@ export class TournamentLifecycleService {
               tournamentId,
               userId: standing.userId,
               tournamentTitle: tournament.title,
+              categoryTitle,
               rank: standing.rank,
               totalParticipants: standing.totalParticipants,
               timestamp: timestampIso,
@@ -303,6 +315,7 @@ export class TournamentLifecycleService {
                 tournamentId,
                 userId: standing.userId,
                 tournamentTitle: tournament.title,
+                categoryTitle,
                 rank: standing.rank,
                 prize: tournament.prize ?? undefined,
                 timestamp: timestampIso,
@@ -318,6 +331,12 @@ export class TournamentLifecycleService {
 
       return true;
     });
+  }
+
+  private async resolveCategoryTitle(categoryId: string | null): Promise<string | null> {
+    if (categoryId === null) return null;
+    const category = await this.categoryRepository.findById(categoryId);
+    return category?.name ?? null;
   }
 
   private async advanceTournamentToRegistration(

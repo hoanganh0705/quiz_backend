@@ -1,31 +1,3 @@
-/**
- * `UploadApplicationService` — the upload flow's orchestrator.
- *
- * The §11 invariant: every uploaded `publicId` MUST be bound to its
- * owner in `storage_assets` before the API returns success. This
- * service performs both halves and is the ONLY place that writes the
- * binding on the upload side.
- *
- *   1. Read the per-purpose policy from `UPLOAD_POLICY` and re-check
- *      the file's MIME and byte count (after `ParseFilePipe` already
- *      did its pass). Defence in depth — the application service is
- *      the last trusted layer.
- *   2. Call `STORAGE_PORT.upload(...)`. On 4xx (unsupported media type)
- *      or 5xx (provider unavailable) we map to typed HTTP exceptions
- *      and surface the documented error codes.
- *   3. On success, call `StorageApplicationService.bindAssetToOwner(...)`
- *      so the durable ownership row exists.
- *   4. If the bind throws, best-effort delete the Cloudinary asset
- *      (so we do not orphan a publicId with no DB row). Then throw
- *      `UPLOAD_OWNERSHIP_BIND_FAILED` — the controller maps this to
- *      a 500 with the documented error code.
- *
- * Why the bind happens *after* the upload rather than inside the
- * adapter: the adapter must remain storage-only (no DB dependency).
- * Splitting the orchestration keeps the hexagonal boundary clean and
- * makes both halves independently testable.
- */
-
 import {
   BadRequestException,
   Inject,
@@ -64,26 +36,6 @@ export class UploadApplicationService {
     private readonly logger: PinoLogger,
   ) {}
 
-  /**
-   * Upload one image, bind ownership to `ownerId` (= `currentUser.sub`).
-   *
-   * `file` is the Multer `Express.Multer.File` (memory storage).
-   * `purpose` is the validated wire literal.
-   *
-   * Throws:
-   *   - `UnsupportedMediaTypeException` (400) — declared MIME is not in
-   *     `UPLOAD_POLICY[purpose].allowedMime`. Echoed by the controller
-   *     as `UPLOAD_UNSUPPORTED_MEDIA_TYPE`.
-   *   - `PayloadTooLargeException` (400) — byte count exceeds
-   *     `UPLOAD_POLICY[purpose].maxBytes`. Echoed as
-   *     `UPLOAD_FILE_TOO_LARGE`.
-   *   - `BadRequestException` (400) — empty/missing file. Echoed as
-   *     `UPLOAD_NO_FILE`.
-   *   - `ServiceUnavailableException` (502) — Cloudinary 5xx. Echoed
-   *     as `UPLOAD_PROVIDER_UNAVAILABLE`.
-   *   - `StorageOwnershipBindFailedError` (500) — bind step failed.
-   *     Echoed as `UPLOAD_OWNERSHIP_BIND_FAILED`.
-   */
   async uploadAvatarOrQuizCover(input: {
     ownerId: string;
     purpose: UploadPurposeLiteral;

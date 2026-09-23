@@ -1,12 +1,3 @@
-/**
- * Response DTO for `POST /api/v1/uploads`.
- *
- * Mirrors the `UploadResult` shape from `core/storage/storage.types.ts`
- * (so the controller does not have to know the storage layer's
- * internal field names). The frontend treats `publicId` as opaque and
- * echoes it back when patching the entity.
- */
-
 import { ApiProperty } from '@nestjs/swagger';
 import { UPLOAD_PURPOSES, type UploadPurposeLiteral } from '../request/upload-file.request.dto';
 

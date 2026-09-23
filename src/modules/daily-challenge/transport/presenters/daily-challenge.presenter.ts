@@ -11,11 +11,11 @@ import type {
 } from '../../dto/response/daily-challenge-history-response.dto';
 
 /**
- * Phase 3 (S-14): presenter for the daily-challenge module.
- * Mirrors the pattern of `TagPresenter` — every controller
- * method calls exactly one presenter method, and the only thing
- * the presenter does is wrap the application-service payload in
- * the canonical `{ data, meta.timestamp }` envelope.
+ * Presenter for the daily-challenge module. Mirrors the pattern of
+ * `TagPresenter` — every controller method calls exactly one presenter
+ * method, and the only thing the presenter does is wrap the
+ * application-service payload in the canonical `{ data, meta.timestamp }`
+ * envelope.
  */
 @Injectable()
 export class DailyChallengePresenter {

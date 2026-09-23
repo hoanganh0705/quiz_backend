@@ -19,9 +19,8 @@ export interface UserFollowRepositoryPort {
    * Returns `null` when no such follow exists.
    *
    * Used by `SocialService.unfollowUser` to enforce the existence
-   * precondition before mutating (audit issue: silent-success
-   * DELETE). The match is direction-specific: `followerId` must
-   * match the caller's id.
+   * precondition before mutating. The match is direction-specific:
+   * `followerId` must match the caller's id.
    */
   findActiveFollow(followerId: string, followingId: string): Promise<UserFollow | null>;
 

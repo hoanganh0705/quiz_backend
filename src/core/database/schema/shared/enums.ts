@@ -71,6 +71,29 @@ export const quizInstanceStatus = pgEnum('quiz_instance_status', [
 
 export const quizVersionStatus = pgEnum('quiz_version_status', ['draft', 'published', 'archived']);
 
+export const quizAttemptStatus = pgEnum('quiz_attempt_status', [
+  'started',
+  'completed',
+  'abandoned',
+]);
+
+export const quizContextType = pgEnum('quiz_context_type', ['solo', 'tournament']);
+
+export const quizAttemptEventType = pgEnum('quiz_attempt_event_type', [
+  'attempt.answer_submitted',
+  'attempt.abandoned',
+  'attempt.completed',
+  'attempt.xp_to_publish',
+]);
+
+export const quizInstancePlayerStatus = pgEnum('quiz_instance_player_status', [
+  'joined',
+  'ready',
+  'playing',
+  'disconnected',
+  'finished',
+]);
+
 // -- Tournament ---------------------------------------------------------------
 
 export const tournamentRoundStatus = pgEnum('tournament_round_status', [
@@ -86,6 +109,12 @@ export const tournamentStatus = pgEnum('tournament_status', [
   'ongoing',
   'finished',
   'cancelled',
+]);
+
+export const tournamentParticipantStatus = pgEnum('tournament_participant_status', [
+  'active',
+  'withdrawn',
+  'completed',
 ]);
 
 // -- User / Auth --------------------------------------------------------------
@@ -127,6 +156,16 @@ export const friendshipStatus = pgEnum('friendship_status', [
   'rejected',
   'blocked',
 ]);
+
+export const reviewReportReason = pgEnum('review_report_reason', [
+  'spam',
+  'harassment',
+  'inappropriate_content',
+  'misinformation',
+  'other',
+]);
+
+export const activityVisibility = pgEnum('activity_visibility', ['public', 'private']);
 
 // -- Notification -------------------------------------------------------------
 

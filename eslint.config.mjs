@@ -3,10 +3,11 @@ import eslint from '@eslint/js';
 import eslintPluginPrettierRecommended from 'eslint-plugin-prettier/recommended';
 import globals from 'globals';
 import tseslint from 'typescript-eslint';
+import localPlugin from './tools/eslint-plugins/index.js';
 
 export default tseslint.config(
   {
-    ignores: ['eslint.config.mjs', 'src/commands/**'],
+    ignores: ['eslint.config.mjs', 'src/commands/**', 'tools/eslint-plugins/**'],
   },
   eslint.configs.recommended,
   ...tseslint.configs.recommendedTypeChecked,
@@ -67,6 +68,15 @@ export default tseslint.config(
       '@typescript-eslint/no-unsafe-argument': 'off',
       '@typescript-eslint/no-unsafe-enum-comparison': 'off',
       '@typescript-eslint/no-unsafe-return': 'off',
+    },
+  },
+  {
+    files: ['src/**/*.repository.ts'],
+    plugins: {
+      local: localPlugin,
+    },
+    rules: {
+      'local/no-soft-delete-leak': 'error',
     },
   },
 );

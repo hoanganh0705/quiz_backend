@@ -14,7 +14,7 @@ import type {
 } from '../domain/ports/daily-challenge-repository.port';
 import type { QuizQuestionRepositoryPort } from '@/modules/quiz/domain/ports/quiz-question-repository.port';
 import type { DailyChallengeDomainEventBus } from '../domain/events/daily-challenge-domain.event-bus';
-import type { ExternalEventBusProducerPort } from '@/common/events';
+import type { DailyChallengeOutboxPort } from '../infrastructure/outbox/daily-challenge-xp-outbox.adapter';
 import {
   DailyChallengeConflictError,
   DailyChallengeNotFoundError,
@@ -30,20 +30,17 @@ class FakeRepository implements DailyChallengeRepositoryPort {
   callLog: string[] = [];
   insertCalls: Array<{ answers: string[]; nextQuestionIndex: number }> = [];
 
-  // eslint-disable-next-line @typescript-eslint/require-await
   async findByDate(_date: string): Promise<DailyChallengeRow | null> {
     this.callLog.push('findByDate');
     const today = this.rows.find((r) => r.challengeDate === '2099-01-01') ?? this.rows[0];
     return today ?? null;
   }
 
-  // eslint-disable-next-line @typescript-eslint/require-await
   async findMostRecentExpired(_nowIso: string): Promise<DailyChallengeRow | null> {
     this.callLog.push('findMostRecentExpired');
     return this.rows[0] ?? null;
   }
 
-  // eslint-disable-next-line @typescript-eslint/require-await
   async findAttempt(
     _challengeId: string,
     _userId: string,
@@ -80,7 +77,7 @@ class FakeRepository implements DailyChallengeRepositoryPort {
       hasNextPage,
     };
   }
-  // eslint-disable-next-line @typescript-eslint/require-await
+
   async getLeaderboard(params: {
     period: DailyChallengePeriod;
     limit: number;
@@ -89,7 +86,6 @@ class FakeRepository implements DailyChallengeRepositoryPort {
     return this.leaderboard;
   }
 
-  // eslint-disable-next-line @typescript-eslint/require-await
   async getUserRank(_params: {
     userId: string;
     period: DailyChallengePeriod;
@@ -97,7 +93,6 @@ class FakeRepository implements DailyChallengeRepositoryPort {
     return null;
   }
 
-  // eslint-disable-next-line @typescript-eslint/require-await
   async insertDailyChallenge(_params: {
     challengeDate: string;
     quizId: string;
@@ -111,7 +106,6 @@ class FakeRepository implements DailyChallengeRepositoryPort {
     return { challengeId: 'inserted' };
   }
 
-  // eslint-disable-next-line @typescript-eslint/require-await
   async getCategoryBreakdown(userId: string): Promise<DailyChallengeCategoryBreakdownRow[]> {
     this.callLog.push(userId);
     return this.breakdown;
@@ -139,7 +133,6 @@ class FakeRepository implements DailyChallengeRepositoryPort {
     ) => Promise<T>,
   ): Promise<T> {
     const helpers = {
-      // eslint-disable-next-line @typescript-eslint/require-await
       lockAttemptForUpdate: async (_params: {
         challengeId: string;
         userId: string;
@@ -147,7 +140,7 @@ class FakeRepository implements DailyChallengeRepositoryPort {
         this.callLog.push('lockAttemptForUpdate');
         return null;
       },
-      // eslint-disable-next-line @typescript-eslint/require-await
+
       upsertAttempt: async (params: {
         challengeId: string;
         userId: string;
@@ -188,14 +181,13 @@ const eventBus = {
   emitCompleted: jest.Mock;
 };
 
-const externalBus = {
-  publishXpEarned: jest.fn().mockResolvedValue(undefined),
-} as unknown as ExternalEventBusProducerPort & {
-  publishXpEarned: jest.Mock;
+const xpOutbox = {
+  scheduleXpOutbox: jest.fn().mockResolvedValue(undefined),
+} as unknown as DailyChallengeOutboxPort & {
+  scheduleXpOutbox: jest.Mock;
 };
 
 const quizQuestions: QuizQuestionRepositoryPort = {
-  // eslint-disable-next-line @typescript-eslint/require-await
   async getQuestionsByVersionId(): Promise<never[]> {
     return [];
   },
@@ -208,7 +200,7 @@ function makeService(
   service: DailyChallengeApplicationService;
   repo: FakeRepository;
 } {
-  const service = new DailyChallengeApplicationService(repo, questionRepo, eventBus, externalBus);
+  const service = new DailyChallengeApplicationService(repo, questionRepo, eventBus, xpOutbox);
   return { service, repo };
 }
 
@@ -231,7 +223,7 @@ const baseRow: Row = {
 describe('DailyChallengeApplicationService', () => {
   beforeEach(() => {
     eventBus.emitCompleted.mockClear();
-    externalBus.publishXpEarned.mockClear();
+    xpOutbox.scheduleXpOutbox.mockClear();
   });
 
   describe('getCategoryBreakdown', () => {
@@ -378,9 +370,9 @@ describe('DailyChallengeApplicationService', () => {
     it('returns expired snapshot when today has no row but a previous expired row exists', async () => {
       const repo = new FakeRepository();
       repo.rows = [{ ...baseRow, challengeDate: '2099-01-01' }];
-      // eslint-disable-next-line @typescript-eslint/require-await
+
       repo.findByDate = async (): Promise<DailyChallengeRow | null> => null;
-      // eslint-disable-next-line @typescript-eslint/require-await
+
       repo.findMostRecentExpired = async (): Promise<DailyChallengeRow | null> =>
         repo.rows[0] ?? null;
       const { service } = makeService(repo);
@@ -415,7 +407,7 @@ describe('DailyChallengeApplicationService', () => {
       });
       const findAttemptSpy = jest
         .spyOn(repo, 'findAttempt')
-        // eslint-disable-next-line @typescript-eslint/require-await
+
         .mockImplementation(async () => repo.attempts.get('user-1') ?? null);
       const { service } = makeService(repo);
       const result = await service.getToday('user-1');
@@ -623,7 +615,6 @@ describe('DailyChallengeApplicationService', () => {
         ) => Promise<T>,
       ): Promise<T> => {
         const helpers = {
-          // eslint-disable-next-line @typescript-eslint/require-await
           lockAttemptForUpdate: async (): Promise<DailyChallengeAttemptRow | null> => ({
             attemptId: 'a1',
             challengeId: 'c1',
@@ -685,7 +676,6 @@ describe('DailyChallengeApplicationService', () => {
         ) => Promise<T>,
       ): Promise<T> => {
         const helpers = {
-          // eslint-disable-next-line @typescript-eslint/require-await
           lockAttemptForUpdate: async (): Promise<DailyChallengeAttemptRow | null> => ({
             attemptId: 'a1',
             challengeId: 'c1',
@@ -698,7 +688,7 @@ describe('DailyChallengeApplicationService', () => {
             createdAt: '2099-01-01T00:00:00.000Z',
             updatedAt: '2099-01-01T00:00:00.000Z',
           }),
-          // eslint-disable-next-line @typescript-eslint/require-await
+
           upsertAttempt: async (params: {
             challengeId: string;
             userId: string;
@@ -743,14 +733,15 @@ describe('DailyChallengeApplicationService', () => {
       expect(emitted).toBeInstanceOf(DailyChallengeCompletedEvent);
       expect(emitted?.correctCount).toBe(3);
       expect(emitted?.totalQuestions).toBe(3);
-      expect(externalBus.publishXpEarned).toHaveBeenCalledWith(
+      expect(xpOutbox.scheduleXpOutbox).toHaveBeenCalledWith(
         expect.objectContaining({
-          eventType: 'external.xp.earned',
           userId: 'user-1',
           amount: 100,
-          source: 'bonus',
+          challengeId: 'c1',
           idempotencyKey: 'xp:user-1:daily_challenge:c1',
         }),
+        expect.anything(),
+        expect.any(String),
       );
     });
 
@@ -762,7 +753,7 @@ describe('DailyChallengeApplicationService', () => {
         questionIndex: 0,
         selectedOptionId: 'correct-opt-1',
       });
-      expect(externalBus.publishXpEarned).not.toHaveBeenCalled();
+      expect(xpOutbox.scheduleXpOutbox).not.toHaveBeenCalled();
     });
 
     it('pads prior answers with the skip sentinel when attempt is shorter', async () => {
@@ -789,9 +780,8 @@ describe('DailyChallengeApplicationService', () => {
         ) => Promise<T>,
       ): Promise<T> => {
         const helpers = {
-          // eslint-disable-next-line @typescript-eslint/require-await
           lockAttemptForUpdate: async (): Promise<DailyChallengeAttemptRow | null> => null,
-          // eslint-disable-next-line @typescript-eslint/require-await
+
           upsertAttempt: async (params: {
             challengeId: string;
             userId: string;

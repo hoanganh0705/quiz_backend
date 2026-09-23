@@ -1,5 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { and, desc, eq, isNull, or, sql } from 'drizzle-orm';
+import { notDeleted } from '@/common/database/soft-delete.helper';
 import { DRIZZLE } from '@/core/database/drizzle.constants';
 import type { DrizzleDB } from '@/core/database/database.module';
 import { categories, categoryFollows } from '@/core/database/schema';
@@ -66,7 +67,7 @@ export class CategoryFollowRepository implements CategoryFollowRepositoryPort {
         and(
           eq(categoryFollows.userId, userId),
           eq(categoryFollows.categoryId, categoryId),
-          isNull(categoryFollows.deletedAt),
+          notDeleted(categoryFollows.deletedAt),
         ),
       );
   }
@@ -82,7 +83,7 @@ export class CategoryFollowRepository implements CategoryFollowRepositoryPort {
         and(
           eq(categoryFollows.userId, params.userId),
           eq(categoryFollows.categoryId, params.categoryId),
-          isNull(categoryFollows.deletedAt),
+          notDeleted(categoryFollows.deletedAt),
         ),
       )
       .limit(1);
@@ -109,8 +110,8 @@ export class CategoryFollowRepository implements CategoryFollowRepositoryPort {
 
     const baseCondition = and(
       eq(categoryFollows.userId, userId),
-      isNull(categoryFollows.deletedAt),
-      isNull(categories.deletedAt),
+      notDeleted(categoryFollows.deletedAt),
+      notDeleted(categories.deletedAt),
     );
 
     const whereClause = cursorCondition ? and(baseCondition, cursorCondition) : baseCondition;

@@ -57,7 +57,7 @@ export class TournamentLeaderboardEntryDto {
   status!: string;
 }
 
-// Issue #28: Added pagination metadata to leaderboard response.
+// Pagination metadata for leaderboard response.
 export class TournamentLeaderboardResponseDto {
   @ApiProperty({
     description: 'Leaderboard entries sorted by rank',

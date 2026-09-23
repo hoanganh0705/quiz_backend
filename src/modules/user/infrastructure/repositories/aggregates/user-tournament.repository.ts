@@ -2,7 +2,8 @@ import { Inject, Injectable } from '@nestjs/common';
 import { DRIZZLE } from '@/core/database/drizzle.constants';
 import type { DrizzleDB } from '@/core/database/database.module';
 import { tournamentParticipants, tournaments, users } from '@/core/database/schema';
-import { and, desc, eq, isNull, or, sql } from 'drizzle-orm';
+import { and, desc, eq, or, sql } from 'drizzle-orm';
+import { notDeleted } from '@/common/database/soft-delete.helper';
 import type {
   MyTournamentRow,
   MyTournamentHistoryRow,
@@ -33,8 +34,8 @@ export class UserTournamentRepository {
 
     const baseConditions = and(
       eq(tournamentParticipants.userId, userId),
-      isNull(users.deletedAt),
-      isNull(tournaments.deletedAt),
+      notDeleted(users.deletedAt),
+      notDeleted(tournaments.deletedAt),
     );
 
     const whereClause = cursorCondition ? and(baseConditions, cursorCondition) : baseConditions;
@@ -89,8 +90,8 @@ export class UserTournamentRepository {
       eq(tournamentParticipants.userId, userId),
       eq(tournaments.status, 'finished'),
       sql`${tournamentParticipants.rankFinal} IS NOT NULL`,
-      isNull(users.deletedAt),
-      isNull(tournaments.deletedAt),
+      notDeleted(users.deletedAt),
+      notDeleted(tournaments.deletedAt),
     );
 
     const whereClause = cursorCondition ? and(baseConditions, cursorCondition) : baseConditions;
@@ -152,10 +153,10 @@ export class UserTournamentRepository {
         and(
           eq(tournamentParticipants.tournamentId, tournaments.tournamentId),
           eq(tournaments.status, 'finished'),
-          isNull(tournaments.deletedAt),
+          notDeleted(tournaments.deletedAt),
         ),
       )
-      .where(and(eq(users.userId, userId), isNull(users.deletedAt)))
+      .where(and(eq(users.userId, userId), notDeleted(users.deletedAt)))
       .groupBy(users.userId)
       .limit(1);
 
@@ -194,11 +195,11 @@ export class UserTournamentRepository {
         and(
           eq(tournamentParticipants.tournamentId, tournaments.tournamentId),
           eq(tournaments.status, 'finished'),
-          isNull(tournaments.deletedAt),
+          notDeleted(tournaments.deletedAt),
           sql`${tournamentParticipants.rankFinal} IS NOT NULL`,
         ),
       )
-      .where(and(eq(users.userId, userId), isNull(users.deletedAt)))
+      .where(and(eq(users.userId, userId), notDeleted(users.deletedAt)))
       .groupBy(users.userId)
       .limit(1);
 

@@ -2,10 +2,10 @@ import { ApiProperty } from '@nestjs/swagger';
 import { CursorPagination } from '@/common/responses/pagination';
 
 /**
- * Phase 3 (S-14): a single row in the daily-challenge history.
- * Mirrors the public DTO with `score` (best-score percentage) and
- * `rank` (1-indexed global rank) instead of the lifecycle status
- * (the history is always finalised — every row has been scored).
+ * A single row in the daily-challenge history. Mirrors the public DTO with
+ * `score` (best-score percentage) and `rank` (1-indexed global rank) instead
+ * of the lifecycle status (the history is always finalised — every row has
+ * been scored).
  */
 export class DailyChallengeHistoryItemDto {
   @ApiProperty({
@@ -65,9 +65,8 @@ export class DailyChallengeHistoryResponseDto {
 }
 
 /**
- * Phase 3 (S-14): one row in the day's leaderboard. The leaderboard
- * is anonymous outside the user's own row — names of other players
- * are not exposed in this Phase 3 scope.
+ * One row in the day's leaderboard. The leaderboard is anonymous outside
+ * the user's own row — names of other players are not exposed.
  */
 export class DailyChallengeLeaderboardEntryDto {
   @ApiProperty({
@@ -119,11 +118,10 @@ export class DailyChallengeLeaderboardResponseDto {
 }
 
 /**
- * Phase 3 (S-14): response for `POST /daily-challenge/answer`. The
- * caller submits one answer at a time and the server returns the
- * correctness signal, the next question index, and a `completed`
- * flag — the client drives the playthrough by calling this endpoint
- * once per question.
+ * Response for `POST /daily-challenge/answer`. The caller submits one
+ * answer at a time and the server returns the correctness signal, the
+ * next question index, and a `completed` flag — the client drives the
+ * playthrough by calling this endpoint once per question.
  */
 export class DailyChallengeAnswerResponseDto {
   @ApiProperty({ description: 'Whether the submitted answer is correct', example: true })
@@ -150,8 +148,8 @@ export class DailyChallengeAnswerResponseDto {
 }
 
 /**
- * Phase 4 (F-2): one row in the per-category distribution for the
- * viewer's daily-challenge attempts.
+ * One row in the per-category distribution for the viewer's
+ * daily-challenge attempts.
  *
  * The shape is intentionally rollup-level — we surface the user's
  * aggregate accuracy per category, NOT a per-question breakdown.

@@ -661,7 +661,7 @@ export class TournamentService {
     }
 
     /**
-     * Issue #45 — also reject if the tournament has already started.
+     * Reject if the tournament has already started.
      *
      * The scheduler transitions `registration → ongoing` every 5 minutes.
      * If the scheduler is down for >5 minutes and `startAt` has passed,
@@ -698,6 +698,10 @@ export class TournamentService {
 
         isNewRegistration = true;
 
+        const categoryTitle = tournament.categoryId
+          ? ((await this.categoryRepository.findById(tournament.categoryId))?.name ?? null)
+          : null;
+
         await this.tournamentOutbox.scheduleTournamentEvent(
           {
             eventType: 'tournament.joined',
@@ -706,6 +710,7 @@ export class TournamentService {
               tournamentId,
               userId: user.sub,
               tournamentTitle: tournament.title,
+              categoryTitle,
               timestamp: nowIso,
             },
             idempotencyKey: `tournament:joined:${tournamentId}:${user.sub}`,

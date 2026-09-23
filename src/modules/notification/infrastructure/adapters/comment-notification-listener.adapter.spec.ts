@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/unbound-method */
 import type { PinoLogger } from 'nestjs-pino';
 import { CommentNotificationListener } from './comment-notification-listener.adapter';
 import type { CommentDomainEventBusPort } from '@/modules/comment/domain/events';
@@ -24,6 +23,16 @@ function makeService() {
       handlers.push(handler);
       return unsubscribe;
     }),
+    emitCommentCreated: jest.fn(),
+    emitCommentEdited: jest.fn(),
+    emitCommentDeleted: jest.fn(),
+    emitCommentHidden: jest.fn(),
+    emitCommentRestored: jest.fn(),
+    emitCommentMentioned: jest.fn(),
+    emitVoteCast: jest.fn(),
+    emitVoteRemoved: jest.fn(),
+    emitCommentReported: jest.fn(),
+    emitReportReviewed: jest.fn(),
   };
   const send = jest.fn().mockResolvedValue(undefined);
   const sendBatch = jest.fn().mockResolvedValue({ sent: 2, skipped: 0 });

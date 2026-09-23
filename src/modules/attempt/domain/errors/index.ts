@@ -10,4 +10,5 @@ export {
   AttemptQuestionInvalidError,
   AttemptNotCompletedError,
   AttemptAnswerNotFoundError,
+  InvalidContextRefError,
 } from './attempt-domain.errors';

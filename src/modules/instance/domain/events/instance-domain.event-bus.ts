@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
+import { BaseDomainEventBus } from '@/common/events/base-domain-event-bus';
 import {
   type InstanceDomainEventBusPort,
   type InstanceEventHandler,
@@ -20,44 +21,20 @@ import {
   CountdownCompletedEvent,
 } from './instance-domain.events';
 
-/**
- * Simple domain event bus for Instance aggregate events.
- *
- * This is a lightweight in-process event bus using the observer pattern.
- * Events are dispatched synchronously within the same request lifecycle.
- *
- * Use `emit()` to dispatch events and `subscribe()` to register handlers.
- */
 @Injectable()
-export class InstanceDomainEventBus implements InstanceDomainEventBusPort {
-  private handlers: InstanceEventHandler[] = [];
-
+export class InstanceDomainEventBus
+  extends BaseDomainEventBus<unknown>
+  implements InstanceDomainEventBusPort
+{
   constructor(
     @InjectPinoLogger(InstanceDomainEventBus.name)
-    private readonly logger: PinoLogger,
-  ) {}
-
-  subscribe(handler: InstanceEventHandler): () => void {
-    this.handlers.push(handler);
-    return () => {
-      const index = this.handlers.indexOf(handler);
-      if (index !== -1) {
-        this.handlers.splice(index, 1);
-      }
-    };
+    logger: PinoLogger,
+  ) {
+    super(logger, { logEventName: 'instance_event' });
   }
 
-  private emit(event: unknown): void {
-    for (const handler of this.handlers) {
-      try {
-        handler(event);
-      } catch (error) {
-        this.logger.error({
-          event: 'instance_event_handler_error',
-          error: error instanceof Error ? error.message : String(error),
-        });
-      }
-    }
+  subscribe(handler: InstanceEventHandler): () => void {
+    return super.subscribe(handler as never);
   }
 
   emitInstanceCreated(event: InstanceCreatedEvent): void {
@@ -67,7 +44,7 @@ export class InstanceDomainEventBus implements InstanceDomainEventBusPort {
       instanceId: event.instanceId,
       hostUserId: event.hostUserId,
     });
-    this.emit(event);
+    this.dispatch(event);
   }
 
   emitPlayerJoined(event: PlayerJoinedEvent): void {
@@ -77,7 +54,7 @@ export class InstanceDomainEventBus implements InstanceDomainEventBusPort {
       instanceId: event.instanceId,
       userId: event.userId,
     });
-    this.emit(event);
+    this.dispatch(event);
   }
 
   emitPlayerAttemptStarted(event: PlayerAttemptStartedEvent): void {
@@ -88,7 +65,7 @@ export class InstanceDomainEventBus implements InstanceDomainEventBusPort {
       userId: event.userId,
       attemptId: event.attemptId,
     });
-    this.emit(event);
+    this.dispatch(event);
   }
 
   emitPlayerXpEarned(event: PlayerXpEarnedEvent): void {
@@ -99,7 +76,7 @@ export class InstanceDomainEventBus implements InstanceDomainEventBusPort {
       userId: event.userId,
       xpEarned: event.xpEarned,
     });
-    this.emit(event);
+    this.dispatch(event);
   }
 
   emitPlayerFinished(event: PlayerFinishedEvent): void {
@@ -109,7 +86,7 @@ export class InstanceDomainEventBus implements InstanceDomainEventBusPort {
       instanceId: event.instanceId,
       userId: event.userId,
     });
-    this.emit(event);
+    this.dispatch(event);
   }
 
   emitPlayerDisconnected(event: PlayerDisconnectedEvent): void {
@@ -120,7 +97,7 @@ export class InstanceDomainEventBus implements InstanceDomainEventBusPort {
       userId: event.userId,
       socketId: event.socketId,
     });
-    this.emit(event);
+    this.dispatch(event);
   }
 
   emitPlayerAnswered(event: PlayerAnsweredEvent): void {
@@ -131,7 +108,7 @@ export class InstanceDomainEventBus implements InstanceDomainEventBusPort {
       userId: event.userId,
       questionId: event.questionId,
     });
-    this.emit(event);
+    this.dispatch(event);
   }
 
   emitInstanceStarted(event: InstanceStartedEvent): void {
@@ -141,7 +118,7 @@ export class InstanceDomainEventBus implements InstanceDomainEventBusPort {
       instanceId: event.instanceId,
       hostUserId: event.hostUserId,
     });
-    this.emit(event);
+    this.dispatch(event);
   }
 
   emitInstanceClosed(event: InstanceClosedEvent): void {
@@ -151,7 +128,7 @@ export class InstanceDomainEventBus implements InstanceDomainEventBusPort {
       instanceId: event.instanceId,
       hostUserId: event.hostUserId,
     });
-    this.emit(event);
+    this.dispatch(event);
   }
 
   emitCountdownStarted(event: CountdownStartedEvent): void {
@@ -163,7 +140,7 @@ export class InstanceDomainEventBus implements InstanceDomainEventBusPort {
       countdownStartedAt: event.countdownStartedAt,
       countdownEndsAt: event.countdownEndsAt,
     });
-    this.emit(event);
+    this.dispatch(event);
   }
 
   emitCountdownCancelled(event: CountdownCancelledEvent): void {
@@ -174,17 +151,16 @@ export class InstanceDomainEventBus implements InstanceDomainEventBusPort {
       hostUserId: event.hostUserId,
       reason: event.reason,
     });
-    this.emit(event);
+    this.dispatch(event);
   }
 
   emitCountdownCompleted(event: CountdownCompletedEvent): void {
     this.logger.debug({
       event: 'instance_event_emitted',
       eventType: 'instance.countdown_completed',
-      instanceId: event.instanceId,
       startedAt: event.startedAt,
     });
-    this.emit(event);
+    this.dispatch(event);
   }
 }
 

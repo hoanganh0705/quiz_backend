@@ -3,6 +3,7 @@ import { and, asc, count, eq, isNull, sql } from 'drizzle-orm';
 import { DRIZZLE } from '@/core/database/drizzle.constants';
 import type { DrizzleDB } from '@/core/database/database.module';
 import { tournaments, tournamentRounds, quizVersions } from '@/core/database/schema';
+import { notDeleted } from '@/common/database/soft-delete.helper';
 import type {
   TournamentRoundStatus,
   TournamentStatus,
@@ -234,7 +235,7 @@ export class TournamentRoundRepository {
       sql`${tournamentRounds.startAt} IS NOT NULL`,
       sql`${tournamentRounds.startAt} <= ${params.nowIso}`,
       eq(tournaments.status, 'ongoing' as TournamentStatus),
-      isNull(tournaments.deletedAt),
+      notDeleted(tournaments.deletedAt),
     );
 
     const [totalRow] = await this.db

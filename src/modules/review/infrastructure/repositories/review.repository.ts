@@ -1,5 +1,6 @@
 import { Inject, Injectable, Optional } from '@nestjs/common';
-import { and, asc, desc, eq, gt, isNotNull, isNull, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, isNotNull, or, sql } from 'drizzle-orm';
+import { notDeleted } from '@/common/database/soft-delete.helper';
 import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 import { DRIZZLE } from '@/core/database/drizzle.constants';
 import type { DrizzleDB } from '@/core/database/database.module';
@@ -57,7 +58,7 @@ export class ReviewRepository implements ReviewRepositoryPort {
     private readonly transactionalContext?: TransactionalContext,
   ) {}
 
-  private static readonly ACTIVE_REVIEW_PREDICATE = isNull(quizReviews.deletedAt);
+  private static readonly ACTIVE_REVIEW_PREDICATE = notDeleted(quizReviews.deletedAt);
 
   async getReviewByQuizAndUser(quizId: string, userId: string): Promise<ReviewRow | null> {
     const [row] = await this.db
@@ -472,6 +473,30 @@ export class ReviewRepository implements ReviewRepositoryPort {
     }
 
     return this.db.transaction(async (tx) => executeRemove(tx as unknown as DbClient));
+  }
+
+  async getHelpfulVoteCount(reviewId: string): Promise<number> {
+    const [row] = await this.db
+      .select({ count: sql<number>`COUNT(*)::int` })
+      .from(reviewHelpfulVotes)
+      .where(eq(reviewHelpfulVotes.reviewId, reviewId));
+    return Number(row?.count ?? 0);
+  }
+
+  async reconcileHelpfulCountForReview(reviewId: string): Promise<number> {
+    const [row] = await this.db
+      .select({ count: sql<number>`COUNT(*)::int` })
+      .from(reviewHelpfulVotes)
+      .where(eq(reviewHelpfulVotes.reviewId, reviewId));
+
+    const target = Number(row?.count ?? 0);
+
+    await this.db
+      .update(quizReviews)
+      .set({ helpfulCount: target })
+      .where(eq(quizReviews.reviewId, reviewId));
+
+    return target;
   }
 
   async createReview(params: {

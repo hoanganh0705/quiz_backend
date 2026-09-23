@@ -1,5 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, desc, eq, isNull, or, sql } from 'drizzle-orm';
+import { and, desc, eq, or, sql } from 'drizzle-orm';
+import { notDeleted } from '@/common/database/soft-delete.helper';
 import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 import { DRIZZLE } from '@/core/database/drizzle.constants';
 import type { DrizzleDB } from '@/core/database/database.module';
@@ -89,7 +90,10 @@ export class QuizVersionRepository implements QuizVersionRepositoryPort {
       .from(quizVersions)
       .innerJoin(quizzes, eq(QUIZ_VERSION_COLUMNS.quizId, QUIZ_COLUMNS.quizId))
       .where(
-        and(eq(QUIZ_VERSION_COLUMNS.quizVersionId, quizVersionId), isNull(QUIZ_COLUMNS.deletedAt)),
+        and(
+          eq(QUIZ_VERSION_COLUMNS.quizVersionId, quizVersionId),
+          notDeleted(QUIZ_COLUMNS.deletedAt),
+        ),
       )
       .limit(1);
 
@@ -127,7 +131,7 @@ export class QuizVersionRepository implements QuizVersionRepositoryPort {
         and(
           eq(QUIZ_VERSION_COLUMNS.quizVersionId, params.quizVersionId),
           eq(QUIZ_VERSION_COLUMNS.quizId, params.quizId),
-          isNull(QUIZ_COLUMNS.deletedAt),
+          notDeleted(QUIZ_COLUMNS.deletedAt),
         ),
       )
       .limit(1);

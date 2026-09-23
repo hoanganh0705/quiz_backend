@@ -12,6 +12,10 @@ import {
 import type { InstanceDomainEventBusPort } from '../../domain/events';
 import { QUIZ_INSTANCE_REPOSITORY_PORT } from '../ports';
 import type { QuizInstanceRepositoryPort } from '../ports';
+import {
+  assertInstancePlayerTransition,
+  assertPlayerFinishedHasAttempt,
+} from '../instance-transitions';
 
 /**
  * Subscribes to Attempt domain events to keep instance player state in sync.
@@ -104,6 +108,7 @@ export class InstanceAttemptEventBootstrapService implements OnModuleInit, OnMod
     const instanceId = event.contextRefId;
 
     try {
+      assertInstancePlayerTransition('joined', 'ready');
       await this.instanceRepository.linkAttemptToPlayer({
         instanceId,
         userId: event.userId,
@@ -111,6 +116,7 @@ export class InstanceAttemptEventBootstrapService implements OnModuleInit, OnMod
         status: 'ready',
       });
 
+      assertInstancePlayerTransition('ready', 'playing');
       await this.instanceRepository.updatePlayerStatus({
         instanceId,
         userId: event.userId,
@@ -157,6 +163,9 @@ export class InstanceAttemptEventBootstrapService implements OnModuleInit, OnMod
     const nowIso = new Date().toISOString();
 
     try {
+      const player = await this.instanceRepository.getPlayer(instanceId, event.userId);
+      assertPlayerFinishedHasAttempt(player?.attemptId ?? null, event.userId, instanceId);
+      assertInstancePlayerTransition('playing', 'finished');
       await this.instanceRepository.updatePlayerStatus({
         instanceId,
         userId: event.userId,

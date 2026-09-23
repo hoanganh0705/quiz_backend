@@ -23,12 +23,6 @@ export class CoinReconciliationSchedulerService {
     private readonly logger: PinoLogger,
   ) {}
 
-  /**
-   * Runs at 02:00 UTC every night. Acquires the global reconcile
-   * lock, scans for drift rows, logs + counts each one. Never throws
-   * — failures are caught and logged at `error` so a transient DB
-   * hiccup doesn't take down the cron loop.
-   */
   @Cron('0 2 * * *')
   async reconcileWallets(): Promise<void> {
     const lockToken = await this.cache.acquireAdvisoryLock(
@@ -49,10 +43,6 @@ export class CoinReconciliationSchedulerService {
       const mismatches = await this.coinRepository.findCoinMismatches();
 
       for (const row of mismatches) {
-        // One error log + one counter increment per drift row. The
-        // log carries the full payload so the on-call has both the
-        // aggregate count (Prometheus) and the per-row diagnostic
-        // (Loki / grep).
         this.logger.error({
           event: 'coin_wallet_balance_drift',
           userId: row.userId,

@@ -1,11 +1,3 @@
-/**
- * Response DTO for `POST /api/v1/uploads/:publicId/bind`.
- *
- * Confirms the (publicId, ownerId, purpose) row was persisted. The
- * client treats this as the signal that it is safe to reference the
- * `publicId` from a subsequent entity write (e.g. avatar patch).
- */
-
 import { ApiProperty } from '@nestjs/swagger';
 
 import { UPLOAD_PURPOSES, type UploadPurposeLiteral } from '../request/upload-file.request.dto';

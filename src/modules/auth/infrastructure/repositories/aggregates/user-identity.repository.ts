@@ -1,5 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { and, eq, isNull, max, sql } from 'drizzle-orm';
+import { notDeleted } from '@/common/database/soft-delete.helper';
 import { DRIZZLE } from '@/core/database/drizzle.constants';
 import type { DrizzleDB } from '@/core/database/database.module';
 import { users, userProfiles, userRanking, userSessions } from '@/core/database/schema';
@@ -30,7 +31,7 @@ export class UserIdentityRepository {
         role: users.role,
       })
       .from(users)
-      .where(and(isNull(users.deletedAt), eq(users.email, email.toLowerCase())))
+      .where(and(notDeleted(users.deletedAt), eq(users.email, email.toLowerCase())))
       .limit(1);
 
     return (
@@ -62,7 +63,7 @@ export class UserIdentityRepository {
         isVerified: users.isVerified,
       })
       .from(users)
-      .where(and(eq(users.userId, userId), isNull(users.deletedAt)))
+      .where(and(eq(users.userId, userId), notDeleted(users.deletedAt)))
       .limit(1);
 
     return (
@@ -90,7 +91,7 @@ export class UserIdentityRepository {
         passwordHash: users.passwordHash,
       })
       .from(users)
-      .where(and(eq(users.userId, userId), isNull(users.deletedAt)))
+      .where(and(eq(users.userId, userId), notDeleted(users.deletedAt)))
       .limit(1);
 
     return (user as { userId: string; email: string; passwordHash: string } | undefined) ?? null;
@@ -104,7 +105,7 @@ export class UserIdentityRepository {
         isVerified: users.isVerified,
       })
       .from(users)
-      .where(and(isNull(users.deletedAt), eq(users.email, email)))
+      .where(and(notDeleted(users.deletedAt), eq(users.email, email)))
       .limit(1);
 
     return (foundUser as UserWithPasswordRow | undefined) ?? null;
@@ -114,7 +115,7 @@ export class UserIdentityRepository {
     const [user] = await this.db
       .select(USER_IDENTITY_COLUMNS)
       .from(users)
-      .where(and(eq(users.userId, userId), isNull(users.deletedAt)))
+      .where(and(eq(users.userId, userId), notDeleted(users.deletedAt)))
       .limit(1);
 
     return (user as UserIdentityRow | undefined) ?? null;
@@ -139,7 +140,7 @@ export class UserIdentityRepository {
       .from(users)
       .leftJoin(userProfiles, eq(users.userId, userProfiles.userId))
       .leftJoin(userRanking, eq(users.userId, userRanking.userId))
-      .where(and(eq(users.userId, userId), isNull(users.deletedAt)))
+      .where(and(eq(users.userId, userId), notDeleted(users.deletedAt)))
       .limit(1);
 
     return (user as UserMeRow | undefined) ?? null;
@@ -149,7 +150,7 @@ export class UserIdentityRepository {
     const result = await this.db
       .select({ userId: users.userId })
       .from(users)
-      .where(and(isNull(users.deletedAt), eq(users.email, email)))
+      .where(and(notDeleted(users.deletedAt), eq(users.email, email)))
       .limit(1);
 
     return (result?.length ?? 0) === 0;
@@ -159,7 +160,7 @@ export class UserIdentityRepository {
     const result = await this.db
       .select({ userId: users.userId })
       .from(users)
-      .where(and(isNull(users.deletedAt), eq(users.username, username)))
+      .where(and(notDeleted(users.deletedAt), eq(users.username, username)))
       .limit(1);
 
     return (result?.length ?? 0) === 0;
@@ -189,7 +190,7 @@ export class UserIdentityRepository {
           sql`${userSessions.expiresAt} > ${nowIso}`,
         ),
       )
-      .where(and(eq(users.userId, userId), isNull(users.deletedAt)))
+      .where(and(eq(users.userId, userId), notDeleted(users.deletedAt)))
       .groupBy(users.userId, users.isVerified, users.passwordChangedAt)
       .limit(1);
 

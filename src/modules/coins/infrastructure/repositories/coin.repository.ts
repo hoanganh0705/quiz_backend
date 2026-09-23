@@ -1,41 +1,16 @@
-/**
- * Coin Repository Implementation
- *
- * Implements `CoinRepositoryPort` using Drizzle ORM. The earn-side write
- * (`applyDeltaInTx`) runs inside the caller's transaction — the ingestion
- * service owns the transaction boundary because it also schedules the
- * outbox row, and the two must commit together.
- *
- * ## Atomic wallet delta + ledger write
- *
- * The hot path is `applyDeltaInTx`. It runs three steps in this exact
- * order inside the caller's transaction:
- *
- *   1. `INSERT INTO user_wallets (user_id, balance, …) VALUES (:u, :d, …)
- *      ON CONFLICT (user_id) DO NOTHING` — upserts the wallet row on
- *      first credit.
- *   2. `UPDATE user_wallets SET balance = balance + :appliedDelta,
- *      updated_at = :now WHERE user_id = :u` — adds the delta.
- *   3. `INSERT INTO coin_transactions (transaction_id, user_id, reason,
- *      amount, balance_after, reference_type, reference_id,
- *      idempotency_key, metadata, created_at) VALUES (uuidv7(), :u,
- *      :reason, :delta, (SELECT balance FROM user_wallets WHERE user_id
- *      = :u), …)` — append the ledger row with the post-update balance.
- *
- * The `appliedDelta` is what the daily-cap pass allowed (may be lower
- * than the caller's `expectedDelta`); the function returns both so the
- * caller can log / surface the truncation.
- */
-
 import { Inject, Injectable } from '@nestjs/common';
-import { DRIZZLE } from '@/core/database/drizzle.constants';
-import type { DrizzleDB } from '@/core/database/database.module';
 import { sql, and, eq, desc } from 'drizzle-orm';
 import { coinTransactions } from '@/core/database/schema';
+import { DRIZZLE } from '@/core/database/drizzle.constants';
+import type { DrizzleDB } from '@/core/database/database.module';
 import type {
   CoinRepositoryPort,
   UserWalletRow,
   CoinTransactionRow,
+  CoinTx,
+  ApplyDeltaParams,
+  ApplySpendParams,
+  ApplyDeltaResult,
 } from '../../domain/ports/coin-repository.port';
 
 type RawQueryResult<T> = {
@@ -43,26 +18,21 @@ type RawQueryResult<T> = {
   rowCount?: number | null;
 };
 
-type ApplyDeltaResult = {
+type ApplyDeltaRawRow = {
   userId: string;
   balance: number | string;
   createdAt: string;
   updatedAt: string;
+  appliedDelta: number | string;
+  transactionId: string;
 };
 
 @Injectable()
 export class CoinRepository implements CoinRepositoryPort {
   constructor(@Inject(DRIZZLE) private readonly db: DrizzleDB) {}
 
-  // ─── Reads (non-tx) ────────────────────────────────────────────────────
-
   async getWallet(userId: string): Promise<UserWalletRow | null> {
-    const result = await this.db.execute<{
-      userId: string;
-      balance: number | string;
-      createdAt: string;
-      updatedAt: string;
-    }>(sql`
+    const result = await this.db.execute<ApplyDeltaRawRow>(sql`
       SELECT
         user_id   AS "userId",
         balance   AS "balance",
@@ -113,10 +83,6 @@ export class CoinRepository implements CoinRepositoryPort {
   }): Promise<CoinTransactionRow[]> {
     const { userId, cursorCreatedAt, cursorTransactionId, limit } = params;
 
-    // Keyset pagination on (createdAt DESC, transactionId DESC). The
-    // composite predicate (createdAt, transactionId) < (cursorCreatedAt,
-    // cursorTransactionId) tuple-compares efficiently — see
-    // `idx_coin_transactions_user_cursor`.
     const conditions = [eq(coinTransactions.userId, userId)];
     if (cursorCreatedAt !== null && cursorTransactionId !== null) {
       conditions.push(
@@ -134,59 +100,22 @@ export class CoinRepository implements CoinRepositoryPort {
     return rows as CoinTransactionRow[];
   }
 
-  // ─── In-transaction write ──────────────────────────────────────────────
-
-  async applyDeltaInTx(
-    tx: unknown,
-    params: {
-      userId: string;
-      delta: number;
-      reason: string;
-      referenceType:
-        | 'attempt'
-        | 'daily_challenge'
-        | 'streak'
-        | 'badge'
-        | 'tournament'
-        | 'tip'
-        | 'flair'
-        | 'suppress'
-        | 'admin';
-      referenceId: string | null;
-      idempotencyKey: string;
-      now: Date;
-      expectedDelta: number;
-      metadata: Record<string, unknown>;
-    },
-  ): Promise<{
-    wallet: UserWalletRow;
-    appliedDelta: number;
-    transactionId: string;
-    createdAt: string;
-  }> {
-    const client = tx as DrizzleDB;
+  async applyDeltaInTx(tx: CoinTx, params: ApplyDeltaParams): Promise<ApplyDeltaResult> {
     const { userId, delta, reason, referenceType, referenceId, idempotencyKey, now, metadata } =
       params;
 
     const nowIso = now.toISOString();
     const metadataJson = JSON.stringify(metadata ?? {});
-    const result = await client.execute(sql<{
-      userId: string;
-      balance: number | string;
-      createdAt: string;
-      updatedAt: string;
-      appliedDelta: number | string;
-      transactionId: string;
-    }>`
+    const result = await tx.execute(sql<ApplyDeltaRawRow>`
       WITH upsert AS (
         INSERT INTO user_wallets (user_id, balance, created_at, updated_at)
-        VALUES (${userId}::uuid, ${delta}, ${nowIso}::timestamptz, ${nowIso}::timestamptz)
+        VALUES (${userId}::uuid, GREATEST(0, LEAST(1000000, ${delta})), ${nowIso}::timestamptz, ${nowIso}::timestamptz)
         ON CONFLICT (user_id) DO NOTHING
         RETURNING user_id, balance, created_at, updated_at
       ),
       updated AS (
         UPDATE user_wallets
-        SET balance = user_wallets.balance + ${delta},
+        SET balance = LEAST(1000000, GREATEST(0, user_wallets.balance + ${delta})),
             updated_at = ${nowIso}::timestamptz
         WHERE user_wallets.user_id = ${userId}::uuid
         RETURNING user_id, balance, created_at, updated_at
@@ -222,6 +151,7 @@ export class CoinRepository implements CoinRepositoryPort {
           ${metadataJson}::jsonb,
           ${nowIso}::timestamptz
         FROM wallet_after
+        ON CONFLICT (idempotency_key) DO NOTHING
         RETURNING transaction_id, amount, created_at
       )
       SELECT
@@ -235,12 +165,7 @@ export class CoinRepository implements CoinRepositoryPort {
       CROSS JOIN ledger
     `);
 
-    const row = result.rows[0] as
-      | (ApplyDeltaResult & {
-          appliedDelta: number | string;
-          transactionId: string;
-        })
-      | undefined;
+    const row = result.rows[0];
     if (!row) {
       throw new Error(
         `CoinRepository.applyDeltaInTx: no row returned for user ${userId} (delta=${delta}, key=${idempotencyKey})`,
@@ -260,34 +185,7 @@ export class CoinRepository implements CoinRepositoryPort {
     };
   }
 
-  async applySpendInTx(
-    tx: unknown,
-    params: {
-      userId: string;
-      cost: number;
-      reason: string;
-      referenceType:
-        | 'attempt'
-        | 'daily_challenge'
-        | 'streak'
-        | 'badge'
-        | 'tournament'
-        | 'tip'
-        | 'flair'
-        | 'suppress'
-        | 'admin';
-      referenceId: string | null;
-      idempotencyKey: string;
-      now: Date;
-      metadata: Record<string, unknown>;
-    },
-  ): Promise<{
-    wallet: UserWalletRow;
-    appliedDelta: number;
-    transactionId: string;
-    createdAt: string;
-  } | null> {
-    const client = tx as DrizzleDB;
+  async applySpendInTx(tx: CoinTx, params: ApplySpendParams): Promise<ApplyDeltaResult | null> {
     const { userId, cost, reason, referenceType, referenceId, idempotencyKey, now, metadata } =
       params;
     if (!Number.isInteger(cost) || cost <= 0) {
@@ -300,25 +198,10 @@ export class CoinRepository implements CoinRepositoryPort {
     const metadataJson = JSON.stringify(metadata ?? {});
     const delta = -cost;
 
-    // Atomic guarded debit:
-    //   1. UPDATE … WHERE balance >= :cost and RETURNING the post-update row.
-    //   2. INSERT INTO coin_transactions … balance_after = :balance.
-    //
-    // If the user has insufficient balance the UPDATE matches zero rows; the
-    // INSERT is wrapped in a CTE that requires at least one row from the
-    // UPDATE so the whole statement returns zero rows. The function then
-    // returns `null` and the caller surfaces `InsufficientCoinsError`.
-    const result = await client.execute(sql<{
-      userId: string;
-      balance: number | string;
-      createdAt: string;
-      updatedAt: string;
-      appliedDelta: number | string;
-      transactionId: string;
-    }>`
+    const result = await tx.execute(sql<ApplyDeltaRawRow>`
       WITH debit AS (
         UPDATE user_wallets
-        SET balance = balance - ${cost},
+        SET balance = GREATEST(0, balance - ${cost}),
             updated_at = ${nowIso}::timestamptz
         WHERE user_id = ${userId}::uuid
           AND balance >= ${cost}
@@ -342,6 +225,7 @@ export class CoinRepository implements CoinRepositoryPort {
           ${metadataJson}::jsonb,
           ${nowIso}::timestamptz
         FROM debit
+        ON CONFLICT (idempotency_key) DO NOTHING
         RETURNING transaction_id, amount, created_at
       )
       SELECT
@@ -355,16 +239,8 @@ export class CoinRepository implements CoinRepositoryPort {
       CROSS JOIN ledger
     `);
 
-    const row = result.rows[0] as
-      | (ApplyDeltaResult & {
-          appliedDelta: number | string;
-          transactionId: string;
-        })
-      | undefined;
-    if (!row) {
-      // Insufficient balance — caller turns this into InsufficientCoinsError.
-      return null;
-    }
+    const row = result.rows[0];
+    if (!row) return null;
 
     return {
       wallet: {
@@ -432,41 +308,65 @@ export class CoinRepository implements CoinRepositoryPort {
     return { suppressionId: row.suppressionId, expiresAt: row.expiresAt };
   }
 
-  async writeFlairSlot(params: {
-    userId: string;
-    userBadgeId: string;
-    coinTransactionId: string;
-    durationDays: number;
-  }): Promise<void> {
+  async writeFlairSlotInTx(
+    tx: CoinTx,
+    params: {
+      userId: string;
+      userBadgeId: string;
+      coinTransactionId: string;
+      durationDays: number;
+    },
+  ): Promise<void> {
     const { userId, userBadgeId, coinTransactionId, durationDays } = params;
     const nowIso = new Date().toISOString();
     const slotEnd = new Date(Date.now() + durationDays * 24 * 60 * 60 * 1000).toISOString();
-    // Look up the `badgeId` from the user-badge row so the slot's
-    // badge_id column stays consistent (used by the profile header
-    // renderer to fetch the badge catalog row in one query).
-    const lookup = await this.db.execute<{ badgeId: string }>(sql`
-      SELECT badge_id AS "badgeId"
-      FROM user_badges
-      WHERE user_badge_id = ${userBadgeId}::uuid
-        AND user_id = ${userId}::uuid
-        AND revoked_at IS NULL
+
+    const lookupRaw = await tx.execute(sql<{
+      badgeId: string;
+      badgeName: string;
+      badgeIconUrl: string | null;
+      badgeColor: string | null;
+    }>`
+      SELECT
+        ub.badge_id    AS "badgeId",
+        b.name         AS "badgeName",
+        b.icon_url     AS "badgeIconUrl",
+        b.color        AS "badgeColor"
+      FROM user_badges ub
+      INNER JOIN badges b ON b.badge_id = ub.badge_id
+      WHERE ub.user_badge_id = ${userBadgeId}::uuid
+        AND ub.user_id = ${userId}::uuid
+        AND ub.revoked_at IS NULL
+      FOR UPDATE
     `);
-    const badgeId = lookup.rows[0]?.badgeId;
-    if (!badgeId) {
+    const lookup = lookupRaw as {
+      rows: Array<{
+        badgeId: string;
+        badgeName: string;
+        badgeIconUrl: string | null;
+        badgeColor: string | null;
+      }>;
+    };
+    const badge = lookup.rows[0];
+    if (!badge) {
       throw new Error(
-        `CoinRepository.writeFlairSlot: userBadgeId ${userBadgeId} not owned by ${userId}`,
+        `CoinRepository.writeFlairSlotInTx: userBadgeId ${userBadgeId} not owned by ${userId}`,
       );
     }
 
-    await this.db.execute(sql`
+    await tx.execute(sql`
       INSERT INTO user_flair_slots (
         user_id, user_badge_id, badge_id,
+        badge_name, badge_icon_url, badge_color,
         slot_start, slot_end, coin_transaction_id
       )
       VALUES (
         ${userId}::uuid,
         ${userBadgeId}::uuid,
-        ${badgeId}::uuid,
+        ${badge.badgeId}::uuid,
+        ${badge.badgeName},
+        ${badge.badgeIconUrl ?? ''},
+        ${badge.badgeColor},
         ${nowIso}::timestamptz,
         ${slotEnd}::timestamptz,
         ${coinTransactionId}::uuid
@@ -475,15 +375,18 @@ export class CoinRepository implements CoinRepositoryPort {
     `);
   }
 
-  async writeQuizSuppression(params: {
-    userId: string;
-    quizId: string;
-    coinTransactionId: string;
-    durationDays: number;
-  }): Promise<void> {
+  async writeQuizSuppressionInTx(
+    tx: CoinTx,
+    params: {
+      userId: string;
+      quizId: string;
+      coinTransactionId: string;
+      durationDays: number;
+    },
+  ): Promise<void> {
     const { userId, quizId, coinTransactionId, durationDays } = params;
     const expiresAt = new Date(Date.now() + durationDays * 24 * 60 * 60 * 1000).toISOString();
-    await this.db.execute(sql`
+    await tx.execute(sql`
       INSERT INTO user_quiz_suppressions (
         user_id, quiz_id, expires_at, coin_transaction_id
       )
@@ -543,9 +446,52 @@ export class CoinRepository implements CoinRepositoryPort {
     }));
   }
 
-  // ─── Helpers ───────────────────────────────────────────────────────────
+  async runInTransaction<T>(
+    work: (
+      tx: CoinTx,
+      helpers: {
+        applyDeltaInTx(params: ApplyDeltaParams): Promise<ApplyDeltaResult>;
+        applySpendInTx(params: ApplySpendParams): Promise<ApplyDeltaResult | null>;
+        writeFlairSlotInTx(params: {
+          userId: string;
+          userBadgeId: string;
+          coinTransactionId: string;
+          durationDays: number;
+        }): Promise<void>;
+        writeQuizSuppressionInTx(params: {
+          userId: string;
+          quizId: string;
+          coinTransactionId: string;
+          durationDays: number;
+        }): Promise<void>;
+      },
+    ) => Promise<T>,
+  ): Promise<T> {
+    return this.db.transaction(async (tx) => {
+      const helpers = {
+        applyDeltaInTx: (params: ApplyDeltaParams): Promise<ApplyDeltaResult> =>
+          this.applyDeltaInTx(tx, params),
+        applySpendInTx: (params: ApplySpendParams): Promise<ApplyDeltaResult | null> =>
+          this.applySpendInTx(tx, params),
+        writeFlairSlotInTx: (params: {
+          userId: string;
+          userBadgeId: string;
+          coinTransactionId: string;
+          durationDays: number;
+        }): Promise<void> => this.writeFlairSlotInTx(tx, params),
+        writeQuizSuppressionInTx: (params: {
+          userId: string;
+          quizId: string;
+          coinTransactionId: string;
+          durationDays: number;
+        }): Promise<void> => this.writeQuizSuppressionInTx(tx, params),
+      };
+      return work(tx, helpers);
+    });
+  }
 
   private async executeRaw<T>(query: ReturnType<typeof sql>): Promise<RawQueryResult<T>> {
-    return (await this.db.execute(query)) as unknown as RawQueryResult<T>;
+    const result = await this.db.execute(query);
+    return result as unknown as RawQueryResult<T>;
   }
 }

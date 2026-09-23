@@ -1,19 +1,4 @@
-/**
- * Unit tests for `UploadApplicationService`.
- *
- * Coverage:
- *   - happy path: returns `UploadResult` and binds the owner.
- *   - per-purpose size cap is enforced (5 MB avatar / 8 MB quiz).
- *   - per-purpose MIME allowlist is enforced.
- *   - missing file → UPLOAD_NO_FILE.
- *   - storage adapter throw → UPLOAD_PROVIDER_UNAVAILABLE (502).
- *   - bind failure → best-effort adapter.delete + StorageOwnershipBindFailedError.
- *
- * Both the storage adapter and the ownership service are replaced
- * with hand-rolled fakes — the production `StoragePort` and
- * `StorageApplicationService` have small surfaces, so a hand mock
- * beats `jest.fn()` ceremony here.
- */
+/* eslint-disable @typescript-eslint/prefer-promise-reject-errors, @typescript-eslint/require-await, @typescript-eslint/only-throw-error */
 
 import {
   BadRequestException,

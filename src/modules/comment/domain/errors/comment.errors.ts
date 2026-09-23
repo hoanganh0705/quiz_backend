@@ -101,6 +101,17 @@ export class SelfReportError extends CommentError {
 }
 
 /**
+ * Thrown when the user attempts to reply to their own comment.
+ * 403 Forbidden.
+ */
+export class SelfParentError extends CommentError {
+  readonly code = 'COMMENT_SELF_PARENT';
+  constructor() {
+    super('You cannot reply to your own comment');
+  }
+}
+
+/**
  * Thrown when the user attempts to report a comment that they have
  * already reported and the prior report is still `'open'`. 409 Conflict.
  */

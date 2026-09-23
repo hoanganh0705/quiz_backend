@@ -130,3 +130,17 @@ export class InstanceNotRunningError extends InstanceDomainError {
     super(message);
   }
 }
+
+export class PlayerTransitionError extends InstanceDomainError {
+  readonly code = 'PLAYER_ILLEGAL_TRANSITION';
+  constructor(from: string, to: string) {
+    super(`Illegal instance player status transition: ${from} -> ${to}`);
+  }
+}
+
+export class PlayerMissingAttemptError extends InstanceDomainError {
+  readonly code = 'PLAYER_MISSING_ATTEMPT';
+  constructor(playerId: string, instanceId: string) {
+    super(`Player ${playerId} cannot finish instance ${instanceId} without an associated attempt`);
+  }
+}

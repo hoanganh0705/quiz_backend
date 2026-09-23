@@ -1,16 +1,3 @@
-/**
- * Coin WebSocket Listener
- *
- * Subscribes to `CoinDomainEventBus` and pushes every domain event to
- * connected WebSocket clients via `CoinGateway`. Mirrors the
- * `NotificationWebSocketListener` shape so the realtime delivery
- * pattern is reviewable as a single mental model (see design §10.3).
- *
- * Lifetime: subscriptions are bound to this adapter; `onModuleDestroy`
- * tears them down explicitly so the bus handler set stays clean
- * during hot-reload.
- */
-
 import { Inject, Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import {

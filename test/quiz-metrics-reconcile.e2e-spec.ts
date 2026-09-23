@@ -129,7 +129,7 @@ describe('Quiz attempt/avg-score counter reconciliation (Fix #7 e2e)', () => {
           ].map(({ quizId, userId, score, minutesAgo }) => ({
             userId,
             quizVersionId: versionIds[quizIds.indexOf(quizId)],
-            contextType: 'solo',
+            contextType: 'solo' as const,
             status: score === null ? ('started' as const) : ('completed' as const),
             scorePercent: score,
             correctCount: score === null ? null : Math.round(parseFloat(score)),

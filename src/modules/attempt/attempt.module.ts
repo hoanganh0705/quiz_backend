@@ -15,6 +15,10 @@ import { AttemptDomainEventBus } from './domain/events/attempt-domain.event-bus'
 import { ATTEMPT_DOMAIN_EVENT_BUS } from './domain/events/attempt-domain-event-bus.port';
 import { AttemptDomainEventBootstrapService } from './domain/events/attempt-domain-event-bootstrap.service';
 import { QuizModule } from '@/modules/quiz/quiz.module';
+import { AttemptOutboxAdapter } from './infrastructure/outbox/attempt-outbox.adapter';
+import { AttemptXpOutboxProcessorService } from './infrastructure/outbox/attempt-xp-outbox-processor.service';
+import { AttemptXpOutboxSchedulerService } from './infrastructure/outbox/attempt-xp-outbox.scheduler';
+import { AttemptEventsCleanupScheduler } from './infrastructure/scheduler/attempt-events-cleanup.scheduler';
 
 @Module({
   imports: [DatabaseModule, forwardRef(() => QuizModule)],
@@ -41,6 +45,11 @@ import { QuizModule } from '@/modules/quiz/quiz.module';
     // Repository Implementations
     AttemptRepository,
     AttemptAnswerRepository,
+
+    AttemptOutboxAdapter,
+    AttemptXpOutboxProcessorService,
+    AttemptXpOutboxSchedulerService,
+    AttemptEventsCleanupScheduler,
 
     // Port bindings
     { provide: ATTEMPT_REPOSITORY_PORT, useExisting: AttemptRepository },

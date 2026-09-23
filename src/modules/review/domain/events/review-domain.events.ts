@@ -4,6 +4,8 @@ export interface ReviewDomainEvent {
 
 export interface ReviewSubmittedPayload {
   quizId: string;
+  quizTitle: string;
+  quizCreatorId: string;
   reviewId: string;
   userId: string;
   rating: number;
@@ -22,6 +24,8 @@ export class ReviewSubmittedEvent implements ReviewDomainEvent {
 
 export interface ReviewDeletedPayload {
   quizId: string;
+  quizTitle: string;
+  quizCreatorId: string;
   reviewId: string;
 }
 

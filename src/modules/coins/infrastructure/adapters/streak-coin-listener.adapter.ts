@@ -1,28 +1,3 @@
-/**
- * Streak → Coin Listener Adapter
- *
- * Subscribes to `UserStreakUpdatedEvent` and grants a milestone
- * reward when the streak crosses one of the milestone thresholds
- * defined in `COIN_REWARDS`:
- *
- *   - 3 days  → 25 coins (`STREAK_MILESTONE_3_DAYS`)
- *   - 5 days  → 50 coins (`STREAK_MILESTONE_5_DAYS`)
- *   - 7 days  → 75 coins (`STREAK_MILESTONE_7_DAYS`)
- *   - 14 days → 150 coins (`STREAK_MILESTONE_14_DAYS`)
- *
- * Per the design doc the listener fires **only** when
- * `previousStreak + 1 === currentStreak === milestoneDays` — i.e. the
- * moment the streak crosses the threshold — to guarantee the milestone
- * grant is paid exactly once per crossing. Subsequent events with
- * `currentStreak > milestoneDays` are ignored because the next event
- * is `previousStreak + 1 === nextMilestone`, and the daily-cap pass is
- * skipped (streak rewards are once-per-milestone by design).
- *
- * Idempotency: the derived key (`coin:{userId}:streak:{streakDays}`)
- * is stable per milestone crossing. A retry of the same event hits the
- * outbox partial unique index and is silently skipped.
- */
-
 import { Inject, Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import {
@@ -85,7 +60,6 @@ export class StreakCoinListenerAdapter implements OnModuleInit, OnModuleDestroy 
           longestStreak: event.longestStreak,
           isNewRecord: event.isNewRecord,
         },
-        // Streak milestones bypass the daily cap by product design.
         applyDailyCap: false,
       });
 
@@ -105,13 +79,6 @@ export class StreakCoinListenerAdapter implements OnModuleInit, OnModuleDestroy 
     }
   }
 
-  /**
-   * Crossing rule (per design doc §9.4): the streak moved from N to
-   * N+1, and N+1 is a milestone day. Built-in milestones are
-   * { 3, 5, 7, 14 }. With `previousStreak = 2`, `currentStreak = 3`
-   * is a crossing; with `previousStreak = 4`, `currentStreak = 5` is
-   * a crossing; etc.
-   */
   private isMilestoneCrossing(event: UserStreakUpdatedEvent): boolean {
     const days = event.currentStreak;
     if (!(days in STREAK_MILESTONES)) return false;
