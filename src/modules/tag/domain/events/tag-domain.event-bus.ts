@@ -1,4 +1,7 @@
 import { Injectable } from '@nestjs/common';
+import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
+import type { BaseEventHandler } from '@/common/events/base-domain-event-bus';
+import { BaseDomainEventBus } from '@/common/events/base-domain-event-bus';
 import type {
   TagCreatedEvent,
   TagUpdatedEvent,
@@ -9,47 +12,51 @@ import type {
 } from './tag-domain.events';
 import type { TagDomainEventBusPort } from './tag-domain-event-bus.port';
 
+export type TagDomainEvent =
+  | TagCreatedEvent
+  | TagUpdatedEvent
+  | TagDeletedEvent
+  | TagRestoredEvent
+  | TagFollowedEvent
+  | TagUnfollowedEvent;
+
 @Injectable()
-export class TagDomainEventBus implements TagDomainEventBusPort {
-  private handlers: Array<(event: unknown) => void> = [];
-
-  subscribe(handler: (event: unknown) => void): () => void {
-    this.handlers.push(handler);
-    return () => {
-      const index = this.handlers.indexOf(handler);
-      if (index !== -1) {
-        this.handlers.splice(index, 1);
-      }
-    };
-  }
-
-  private emit(event: unknown): void {
-    for (const handler of this.handlers) {
-      handler(event);
-    }
+export class TagDomainEventBus
+  extends BaseDomainEventBus<TagDomainEvent>
+  implements TagDomainEventBusPort
+{
+  constructor(
+    @InjectPinoLogger(TagDomainEventBus.name)
+    logger: PinoLogger,
+  ) {
+    super(logger, { logEventName: 'tag_event' });
   }
 
   emitTagCreated(event: TagCreatedEvent): void {
-    this.emit(event);
+    this.dispatch(event);
   }
 
   emitTagUpdated(event: TagUpdatedEvent): void {
-    this.emit(event);
+    this.dispatch(event);
   }
 
   emitTagDeleted(event: TagDeletedEvent): void {
-    this.emit(event);
+    this.dispatch(event);
   }
 
   emitTagRestored(event: TagRestoredEvent): void {
-    this.emit(event);
+    this.dispatch(event);
   }
 
   emitTagFollowed(event: TagFollowedEvent): void {
-    this.emit(event);
+    this.dispatch(event);
   }
 
   emitTagUnfollowed(event: TagUnfollowedEvent): void {
-    this.emit(event);
+    this.dispatch(event);
+  }
+
+  override subscribe(handler: BaseEventHandler<TagDomainEvent>): () => void {
+    return super.subscribe(handler);
   }
 }

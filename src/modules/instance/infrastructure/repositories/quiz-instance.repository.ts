@@ -19,6 +19,7 @@ import {
 import {
   quizInstances,
   quizInstancePlayers,
+  quizInstancePlayerStatus,
   quizVersions,
   quizzes,
   users,
@@ -186,6 +187,15 @@ export class QuizInstanceRepository implements QuizInstanceRepositoryPort {
     return (
       (row as import('@/modules/instance/domain/ports').QuizInstanceDetailRow | undefined) ?? null
     );
+  }
+
+  async instanceExists(instanceId: string): Promise<boolean> {
+    const [row] = await this.db
+      .select({ instanceId: quizInstances.instanceId })
+      .from(quizInstances)
+      .where(eq(quizInstances.instanceId, instanceId))
+      .limit(1);
+    return row !== undefined;
   }
 
   async updateInstanceStatus(params: {
@@ -550,7 +560,7 @@ export class QuizInstanceRepository implements QuizInstanceRepositoryPort {
     instanceId: string;
     userId: string;
     attemptId: string;
-    status: string;
+    status: (typeof quizInstancePlayerStatus.enumValues)[number];
   }): Promise<void> {
     await this.db
       .update(quizInstancePlayers)
@@ -569,7 +579,7 @@ export class QuizInstanceRepository implements QuizInstanceRepositoryPort {
   async updatePlayerStatus(params: {
     instanceId: string;
     userId: string;
-    status: string;
+    status: (typeof quizInstancePlayerStatus.enumValues)[number];
   }): Promise<void> {
     await this.db
       .update(quizInstancePlayers)
@@ -624,6 +634,16 @@ export class QuizInstanceRepository implements QuizInstanceRepositoryPort {
       );
     }
 
+    const playerCounts = this.db
+      .select({
+        instanceId: quizInstancePlayers.instanceId,
+        joinedCount: sql<number>`COUNT(*)::int`.as('joined_count'),
+      })
+      .from(quizInstancePlayers)
+      .where(eq(quizInstancePlayers.status, 'joined'))
+      .groupBy(quizInstancePlayers.instanceId)
+      .as('player_counts');
+
     const rows = await this.db
       .select({
         instanceId: quizInstances.instanceId,
@@ -646,11 +666,7 @@ export class QuizInstanceRepository implements QuizInstanceRepositoryPort {
         quizCreatorId: QUIZ_COLUMNS.creatorId,
         hostUsername: users.username,
         hostDisplayName: userProfiles.displayName,
-        playerCount: sql<number>`COALESCE((
-          SELECT count(*)::int
-          FROM quiz_instance_players p
-          WHERE p.instance_id = ${quizInstances.instanceId} AND p.status = 'joined'
-        ), 0)`,
+        playerCount: sql<number>`COALESCE(${playerCounts.joinedCount}, 0)`,
       })
       .from(quizInstances)
       .innerJoin(
@@ -660,6 +676,7 @@ export class QuizInstanceRepository implements QuizInstanceRepositoryPort {
       .innerJoin(quizzes, eq(QUIZ_VERSION_COLUMNS.quizId, QUIZ_COLUMNS.quizId))
       .innerJoin(users, eq(QUIZ_INSTANCE_COLUMNS.hostUserId, users.userId))
       .leftJoin(userProfiles, eq(users.userId, userProfiles.userId))
+      .leftJoin(playerCounts, eq(playerCounts.instanceId, quizInstances.instanceId))
       .where(conditions.length > 0 ? and(...conditions) : undefined)
       .orderBy(desc(quizInstances.createdAt), desc(quizInstances.instanceId))
       .limit(params.limit + 1);

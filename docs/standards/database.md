@@ -17,6 +17,8 @@ Applies to `src/core/database/schema/`, `src/core/database/migrations/`, `src/co
 - `src/core/database/migrations/0000_*.sql` — generated migrations.
 - `src/core/database/drizzle.constants.ts` — Symbol tokens and provider keys.
 - `src/core/database/database.module.ts` — Drizzle client wiring.
+- `src/common/database/soft-delete.helper.ts` — `notDeleted()` helper.
+- `src/common/outbox/base-outbox-processor.ts` — shared outbox processor base class.
 - `src/modules/tag/infrastructure/repositories/tag.repository.ts` — full reference (Drizzle queries, constraint translation, soft delete).
 - `package.json` — `db:generate`, `db:migrate`, `db:studio`, `db:seed`.
 - `drizzle.config.ts` — schema/migration locations.
@@ -42,7 +44,7 @@ Applies to `src/core/database/schema/`, `src/core/database/migrations/`, `src/co
 ### Soft delete
 
 - Soft-deleted rows MUST be retained for the retention window defined by `SecurityConfig.authAuditRetentionDays` or a per-domain equivalent.
-- Every query against a soft-delete-aware table MUST filter `WHERE deleted_at IS NULL` (reference: `src/modules/tag/infrastructure/repositories/tag.repository.ts#softDeleteFilter`). The `isNull(deletedAt)` helper MUST be defined in the repository's `soft-delete.ts` (or equivalent) and reused.
+- Every query against a soft-delete-aware table MUST filter `WHERE deleted_at IS NULL`. Use the `notDeleted(table)` helper from `src/common/database/soft-delete.helper.ts` — it returns the correct `SQL` expression and is the single source of truth for the soft-delete predicate. The lint rule `no-soft-delete-leak` (see `tools/eslint-plugins/`) enforces this on `*.repository.ts` files.
 - A unique constraint on a soft-deletable column MUST be partial: `WHERE deleted_at IS NULL`. This lets a re-using entity reclaim its slug after deletion.
 - The repository MUST expose `softDelete(id)` returning the updated row, not the row's raw fields. Hard delete is reserved for outbox/audit cleanup tooling and MUST NOT appear in feature paths.
 
@@ -101,7 +103,7 @@ Schema evolution, deprecation, and rollout are governed by `migration.md`. This 
 ### Data integrity
 
 - A change that creates or alters a constraint MUST include a backfill migration when existing data would otherwise fail (e.g. new `NOT NULL` with default via Drizzle).
-- Outbox events MUST be written in the same transaction as the domain write that produced them (`src/common/outbox/` patterns).
+- Outbox processors MUST extend `BaseOutboxProcessor` (`src/common/outbox/base-outbox-processor.ts`) which provides `FOR UPDATE SKIP LOCKED` row selection, idempotency-conflict detection, exponential backoff retry, and DLQ routing.
 - A delete that implies a downstream effect (audit log, soft-purged foreign keys) MUST go through a dedicated event listener (the `<module>-event-bootstrap.service.ts` pattern) — application code MUST NOT call cleanup inline.
 
 ## Examples
@@ -126,7 +128,9 @@ export const tags = pgTable('tags', (t) => ({
 
 ```typescript
 // src/modules/tag/infrastructure/repositories/tag.repository.ts
-.and(isNull(tags.deletedAt))
+import { notDeleted } from '../../../../common/database/soft-delete.helper';
+
+.and(notDeleted(tags))
 ```
 
 ### Constraint to domain error

@@ -1,26 +1,3 @@
-/**
- * Coin Spend Service
- *
- * Spend-side counterpart to `CoinIngestionService`. Provides a single
- * `processSpend(...)` entry point that:
- *
- *   1. Validates the input (positive amount, known category, …).
- *   2. Runs category-specific guards (self-tip, daily tip cap, …).
- *   3. Calls `CoinRepository.applySpendInTx(...)` inside a
- *      transaction with the flipped-sign delta and the
- *      category-specific idempotency key.
- *   4. Schedules a `coin.spent` outbox event in the same
- *      transaction so the realtime fan-out stays in lock-step
- *      with the ledger.
- *
- * The earn side and the spend side share the same atomic guarantee:
- * `wallet.credit + ledger.insert + outbox.schedule` happen in one
- * transaction or none of them do. The two services are
- * deliberately separate (not a single `processCoinEvent` with a
- * signed delta) because the validation + guard rules differ enough
- * that bundling them would muddy each side's invariants.
- */
-
 import { Inject, Injectable } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { sql } from 'drizzle-orm';
@@ -38,12 +15,19 @@ import {
   InsufficientCoinsError,
   CoinFlairBadgeNotOwnedError,
   CoinSuppressAlreadyActiveError,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   CoinSuppressQuizNotFoundError,
   CoinTipDailyCapExceededError,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   CoinTipRecipientNotFoundError,
   CoinTipSelfNotAllowedError,
+  CoinSpendValidationError,
+  InsufficientCoinsDeferredError,
 } from '../errors/coin-spend.errors';
 import { CoinMetricsService } from './coin-metrics.service';
+import { COIN_ECONOMY_LIMITS, COIN_SPEND_DURATIONS_DAYS } from '../../coin.constants';
+import { startOfUtcDay } from '../utils/utc-day';
+import { ReferentialValidatorService } from '@/common/database/referential-validator.service';
 
 @Injectable()
 export class CoinSpendService implements CoinSpendPort {
@@ -54,6 +38,7 @@ export class CoinSpendService implements CoinSpendPort {
     @Inject(COIN_OUTBOX_PORT)
     private readonly outbox: CoinOutboxPort,
     private readonly metrics: CoinMetricsService,
+    private readonly referentialValidator: ReferentialValidatorService,
     @InjectPinoLogger(CoinSpendService.name)
     private readonly logger: PinoLogger,
   ) {}
@@ -84,11 +69,6 @@ export class CoinSpendService implements CoinSpendPort {
         });
 
         if (outcome === null) {
-          // The wallet row count was zero (insufficient balance). The
-          // atomic debit + ledger insert returned no rows; we throw so
-          // the transaction rolls back. We surface the user-friendly
-          // 409 *outside* the transaction (the rollback is already
-          // implicit).
           throw new InsufficientCoinsDeferredError(input.userId, input.amount);
         }
 
@@ -115,6 +95,28 @@ export class CoinSpendService implements CoinSpendPort {
           },
           tx,
         );
+
+        if (input.category === 'flair') {
+          const userBadgeId =
+            typeof input.metadata?.['userBadgeId'] === 'string'
+              ? input.metadata['userBadgeId']
+              : input.referenceId;
+          await this.coinRepository.writeFlairSlotInTx(tx, {
+            userId: input.userId,
+            userBadgeId,
+            coinTransactionId: outcome.transactionId,
+            durationDays: COIN_SPEND_DURATIONS_DAYS.PROFILE_FLAIR_SLOT,
+          });
+        }
+
+        if (input.category === 'suppress') {
+          await this.coinRepository.writeQuizSuppressionInTx(tx, {
+            userId: input.userId,
+            quizId: input.referenceId,
+            coinTransactionId: outcome.transactionId,
+            durationDays: COIN_SPEND_DURATIONS_DAYS.SUPPRESS_RECOMMENDED,
+          });
+        }
 
         return outcome;
       });
@@ -146,40 +148,22 @@ export class CoinSpendService implements CoinSpendPort {
     };
   }
 
-  // ─── Pre-transaction guards ───────────────────────────────────────────
-
-  /**
-   * Category-specific guards that run BEFORE the wallet is debited.
-   * These checks are intentionally read-only (no wallet writes); they
-   * exist so we don't even *attempt* a debit when the request is
-   * structurally invalid (self-tip, missing recipient, etc.).
-   */
   private async runPreTransactionGuards(input: CoinSpendInput, now: Date): Promise<void> {
     if (input.category === 'tip') {
       if (input.referenceId === input.userId) {
         throw new CoinTipSelfNotAllowedError(input.userId);
       }
-      const recipientExists = await this.coinRepository.recipientExists(input.referenceId);
-      if (!recipientExists) {
-        throw new CoinTipRecipientNotFoundError(input.referenceId);
-      }
-      // Daily tip-count cap.
+      await this.referentialValidator.assertExists({ kind: 'tip', id: input.referenceId });
       const todayMidnight = startOfUtcDay(now);
       const tipCountToday = await this.coinRepository.getDailyTipCount(input.userId, todayMidnight);
-      // `DAILY_TIP_COUNT_CAP` is the soft cap from coin.constants.ts.
-      // The +1 represents the tip the caller is about to send; we
-      // refuse if that would push them over the cap.
-      const cap = 3; // mirrors COIN_ECONOMY_LIMITS.DAILY_TIP_COUNT_CAP
+      const cap = COIN_ECONOMY_LIMITS.DAILY_TIP_COUNT_CAP;
       if (tipCountToday + 1 > cap) {
         throw new CoinTipDailyCapExceededError(input.userId, tipCountToday, cap);
       }
     }
 
     if (input.category === 'suppress') {
-      const quizExists = await this.coinRepository.quizExists(input.referenceId);
-      if (!quizExists) {
-        throw new CoinSuppressQuizNotFoundError(input.referenceId);
-      }
+      await this.referentialValidator.assertExists({ kind: 'suppress', id: input.referenceId });
       const active = await this.coinRepository.getActiveSuppression(
         input.userId,
         input.referenceId,
@@ -191,11 +175,11 @@ export class CoinSpendService implements CoinSpendPort {
     }
 
     if (input.category === 'flair') {
-      // The flair slot's `userBadgeId` is stored in `metadata.userBadgeId`.
       const userBadgeId =
         typeof input.metadata?.['userBadgeId'] === 'string'
           ? input.metadata['userBadgeId']
           : input.referenceId;
+      await this.referentialValidator.assertExists({ kind: 'flair', id: userBadgeId });
       const owns = await this.userBadgeIsOwned(input.userId, userBadgeId);
       if (!owns) {
         throw new CoinFlairBadgeNotOwnedError(input.userId, userBadgeId);
@@ -217,18 +201,20 @@ export class CoinSpendService implements CoinSpendPort {
 
   private validateInput(input: CoinSpendInput): void {
     if (!input.userId) {
-      throw new Error('CoinSpendService.processSpend: userId is required');
+      throw new CoinSpendValidationError('CoinSpendService.processSpend: userId is required');
     }
     if (!Number.isInteger(input.amount) || input.amount <= 0) {
-      throw new Error(
+      throw new CoinSpendValidationError(
         `CoinSpendService.processSpend: amount must be a positive integer (got ${input.amount})`,
       );
     }
     if (!input.idempotencyKey) {
-      throw new Error('CoinSpendService.processSpend: idempotencyKey is required');
+      throw new CoinSpendValidationError(
+        'CoinSpendService.processSpend: idempotencyKey is required',
+      );
     }
     if (!input.referenceId) {
-      throw new Error('CoinSpendService.processSpend: referenceId is required');
+      throw new CoinSpendValidationError('CoinSpendService.processSpend: referenceId is required');
     }
   }
 }
@@ -237,32 +223,4 @@ function mapReferenceType(
   category: CoinSpendInput['category'],
 ): 'tip' | 'flair' | 'suppress' | 'admin' {
   return category;
-}
-
-function startOfUtcDay(now: Date): Date {
-  const start = new Date(now);
-  start.setUTCHours(0, 0, 0, 0);
-  return start;
-}
-
-/**
- * Internal helper — raised INSIDE the transaction so the rollback
- * fires before we ever hit the network. Translated to a typed
- * `InsufficientCoinsError` outside the transaction by the
- * catch-block in `processSpend`.
- *
- * Why an internal type?  We need the *current* balance for the
- * 409 detail message; reading it inside the rolled-back txn would
- * see the pre-debit value (which is fine, but it's a redundant read).
- * Reading it after the rollback is also fine — and avoids a race
- * with concurrent writes.
- */
-class InsufficientCoinsDeferredError extends Error {
-  readonly code = 'INSUFFICIENT_COINS_DEFERRED';
-  constructor(
-    public readonly userId: string,
-    public readonly required: number,
-  ) {
-    super('INSUFFICIENT_COINS_DEFERRED');
-  }
 }

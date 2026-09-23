@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, count, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
+import { and, count, desc, eq, inArray, sql } from 'drizzle-orm';
 import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 import { DRIZZLE } from '@/core/database/drizzle.constants';
 import type { DrizzleDB } from '@/core/database/database.module';
@@ -12,6 +12,7 @@ import {
   quizTags,
   tags,
 } from '@/core/database/schema';
+import { notDeleted } from '@/common/database/soft-delete.helper';
 import type {
   BookmarkedQuizRow,
   BookmarkedQuizDetailRow,
@@ -79,7 +80,7 @@ export class BookmarkRepository implements BookmarkRepositoryPort {
       })
       .from(bookmarkedQuizzes)
       .innerJoin(quizzes, eq(bookmarkedQuizzes.quizId, QUIZ_COLUMNS.quizId))
-      .where(and(eq(bookmarkedQuizzes.collectionId, collectionId), isNull(quizzes.deletedAt)))
+      .where(and(eq(bookmarkedQuizzes.collectionId, collectionId), notDeleted(quizzes.deletedAt)))
       .orderBy(bookmarkedQuizzes.bookmarkedAt);
 
     return rows as BookmarkedQuizDetailRow[];
@@ -101,7 +102,7 @@ export class BookmarkRepository implements BookmarkRepositoryPort {
         and(
           eq(bookmarkCollections.userId, userId),
           eq(bookmarkedQuizzes.quizId, quizId),
-          isNull(quizzes.deletedAt),
+          notDeleted(quizzes.deletedAt),
         ),
       )
       .orderBy(bookmarkCollections.name)
@@ -139,7 +140,7 @@ export class BookmarkRepository implements BookmarkRepositoryPort {
         eq(bookmarkedQuizzes.collectionId, bookmarkCollections.collectionId),
       )
       .innerJoin(quizzes, eq(bookmarkedQuizzes.quizId, quizzes.quizId))
-      .where(and(whereClause, isNull(quizzes.deletedAt)))
+      .where(and(whereClause, notDeleted(quizzes.deletedAt)))
       .orderBy(desc(bookmarkedQuizzes.bookmarkedAt), desc(bookmarkedQuizzes.bookmarkId))
       .limit(params.limit + 1);
 
@@ -182,7 +183,7 @@ export class BookmarkRepository implements BookmarkRepositoryPort {
         eq(bookmarkedQuizzes.collectionId, bookmarkCollections.collectionId),
       )
       .innerJoin(quizzes, eq(bookmarkedQuizzes.quizId, quizzes.quizId))
-      .where(and(whereClause, isNull(quizzes.deletedAt)))
+      .where(and(whereClause, notDeleted(quizzes.deletedAt)))
       .orderBy(desc(bookmarkedQuizzes.bookmarkedAt), desc(bookmarkedQuizzes.bookmarkId))
       .limit(params.limit + 1);
 
@@ -376,7 +377,9 @@ export class BookmarkRepository implements BookmarkRepositoryPort {
         .leftJoin(quizzes, eq(bookmarkedQuizzes.quizId, quizzes.quizId))
         .leftJoin(quizReviews, eq(quizzes.quizId, quizReviews.quizId))
         .leftJoin(quizTags, eq(quizzes.quizId, quizTags.quizId))
-        .where(and(eq(bookmarkCollections.collectionId, collectionId), isNull(quizzes.deletedAt))),
+        .where(
+          and(eq(bookmarkCollections.collectionId, collectionId), notDeleted(quizzes.deletedAt)),
+        ),
       this.db.execute<{
         category_id: string;
         name: string;
@@ -515,8 +518,8 @@ export class BookmarkRepository implements BookmarkRepositoryPort {
         .where(
           and(
             eq(bookmarkCollections.userId, userId),
-            isNull(quizzes.deletedAt),
-            isNull(categories.deletedAt),
+            notDeleted(quizzes.deletedAt),
+            notDeleted(categories.deletedAt),
           ),
         )
         .groupBy(categories.categoryId, categories.name, categories.slug)
@@ -539,8 +542,8 @@ export class BookmarkRepository implements BookmarkRepositoryPort {
         .where(
           and(
             eq(bookmarkCollections.userId, userId),
-            isNull(quizzes.deletedAt),
-            isNull(tags.deletedAt),
+            notDeleted(quizzes.deletedAt),
+            notDeleted(tags.deletedAt),
           ),
         )
         .groupBy(tags.tagId, tags.name, tags.slug)

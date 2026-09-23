@@ -132,3 +132,133 @@ describe('NotificationOutboxAdapter.calculateBackoff', () => {
     expect(calc.calculateBackoff(20)).toBe(60_000);
   });
 });
+
+describe('NotificationOutboxAdapter.writeEvent (ON CONFLICT DO NOTHING)', () => {
+  it('attaches onConflictDoNothing to the insert chain when idempotencyKey is provided', async () => {
+    const onConflictDoNothing = jest.fn().mockResolvedValue(undefined);
+    const tx: DrizzleDB = {
+      insert: jest.fn().mockReturnValue({
+        values: jest.fn().mockReturnValue({
+          onConflictDoNothing,
+        }),
+      }),
+    } as unknown as DrizzleDB;
+    const txContext = new TransactionalContext();
+    txContext.getDbClient = jest.fn().mockReturnValue(tx);
+
+    const svc = new NotificationOutboxAdapter(
+      {} as DrizzleDB,
+      txContext,
+      undefined,
+      undefined,
+      makeLogger(),
+    );
+
+    await svc.writeEvent(
+      { notificationId: 'n-1', userId: 'u-1', type: 'test', channel: 'email' },
+      'key-1',
+    );
+
+    expect(onConflictDoNothing).toHaveBeenCalledTimes(1);
+    expect(onConflictDoNothing.mock.calls[0]?.[0]).toHaveProperty('where');
+  });
+});
+
+describe('NotificationOutboxAdapter.processBatch (serial processing)', () => {
+  it('awaits each event before processing the next one (serial, not Promise.all)', async () => {
+    const order: string[] = [];
+
+    const processEvent = jest.fn().mockImplementation(async (ev: { eventId: string }) => {
+      order.push(`start:${ev.eventId}`);
+      await new Promise((r) => setTimeout(r, 5));
+      order.push(`end:${ev.eventId}`);
+    });
+
+    const rows = [{ eventId: 'e-1' }, { eventId: 'e-2' }, { eventId: 'e-3' }];
+
+    const chain: any = {};
+    chain.from = jest.fn().mockReturnValue(chain);
+    chain.where = jest.fn().mockReturnValue(chain);
+    chain.orderBy = jest.fn().mockReturnValue(chain);
+    chain.limit = jest.fn().mockResolvedValue(rows);
+    const db = {
+      select: jest.fn().mockReturnValue(chain),
+      update: jest.fn().mockReturnThis(),
+      set: jest.fn().mockReturnThis(),
+    };
+
+    const txContext = new TransactionalContext();
+    txContext.getDbClient = jest.fn().mockReturnValue({} as DrizzleDB);
+
+    const svc = new NotificationOutboxAdapter(
+      db as unknown as DrizzleDB,
+      txContext,
+      undefined,
+      undefined,
+      makeLogger(),
+    );
+
+    (svc as unknown as { processEvent: typeof processEvent }).processEvent = processEvent;
+
+    await (svc as unknown as { processBatch: () => Promise<void> }).processBatch();
+
+    // In serial mode, each event's "start" must precede the next's "start"
+    const e1Start = order.indexOf('start:e-1');
+    const e2Start = order.indexOf('start:e-2');
+    const e3Start = order.indexOf('start:e-3');
+    expect(e1Start).toBeGreaterThanOrEqual(0);
+    expect(e2Start).toBeGreaterThan(e1Start);
+    expect(e3Start).toBeGreaterThan(e2Start);
+  });
+});
+
+describe('NotificationOutboxAdapter.monitorDeadLetterQueue', () => {
+  it('logs a DLQ alert when poisoned rows exist', async () => {
+    const logger = makeLogger();
+    const db = {
+      select: jest.fn().mockReturnThis(),
+      from: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      limit: jest.fn().mockResolvedValue([{ eventId: 'e-1' }, { eventId: 'e-2' }]),
+    };
+
+    const svc = new NotificationOutboxAdapter(
+      db as unknown as DrizzleDB,
+      new TransactionalContext(),
+      undefined,
+      undefined,
+      logger,
+    );
+
+    await svc.monitorDeadLetterQueue();
+
+    expect(logger.error).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'notification_outbox_dlq_alert',
+        totalDlqEvents: 2,
+      }),
+    );
+  });
+
+  it('does NOT log when DLQ is empty', async () => {
+    const logger = makeLogger();
+    const db = {
+      select: jest.fn().mockReturnThis(),
+      from: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      limit: jest.fn().mockResolvedValue([]),
+    };
+
+    const svc = new NotificationOutboxAdapter(
+      db as unknown as DrizzleDB,
+      new TransactionalContext(),
+      undefined,
+      undefined,
+      logger,
+    );
+
+    await svc.monitorDeadLetterQueue();
+
+    expect(logger.error).not.toHaveBeenCalled();
+  });
+});

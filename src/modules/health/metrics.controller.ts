@@ -13,6 +13,9 @@ import { sql } from 'drizzle-orm';
 
 const METRICS_CONTENT_TYPE = 'text/plain; version=0.0.4; charset=utf-8';
 
+type OutboxLagRow = { lag: string };
+type OutboxLagResult = { rows: OutboxLagRow[] };
+
 @Public()
 @ApiExcludeController()
 @Controller('metrics')
@@ -30,17 +33,11 @@ export class MetricsController {
   @Get()
   @Header('Content-Type', METRICS_CONTENT_TYPE)
   async scrape(@Res({ passthrough: true }) res: Response): Promise<string> {
-    // Refresh the gauges. `refreshTracingGauge` is synchronous (the
-    // active-spans count is kept in-process), so it can't participate
-    // in a `Promise.all` with the async probes — mixing them would
-    // require forcing the sync helper into an `async` signature, which
-    // would silently wrap its `void` return into `Promise<void>` and
-    // trip `@typescript-eslint/await-thenable`. Sequencing keeps the
-    // call sites readable.
     this.refreshCircuitGauge();
     await this.refreshQueueDepthGauge();
     this.refreshTracingGauge();
     await this.refreshOutboxLagGauge();
+    await this.refreshOutboxDlqGauge();
 
     res.status(200);
     return this.metrics.render();
@@ -48,9 +45,6 @@ export class MetricsController {
 
   private refreshCircuitGauge(): void {
     const m = this.redisService.getCircuitMetrics();
-    // `CircuitState` is `'closed' | 'open' | 'half_open'`. The
-    // `MetricsRegistry` accepts the same vocabulary, so no
-    // mapping is needed.
     const state = m.state as 'closed' | 'open' | 'half_open';
     this.metrics.setRedisCircuitState(state);
     if (m.shortCircuitedCount > 0) {
@@ -73,17 +67,33 @@ export class MetricsController {
 
   private async refreshOutboxLagGauge(): Promise<void> {
     try {
-      const result = await this.db.execute<{ lag: string }>(sql`
+      const result = (await this.db.execute(sql`
         SELECT EXTRACT(EPOCH FROM (now() - MIN(created_at)))::text AS lag
         FROM outbox_events
         WHERE processed_at IS NULL
-      `);
-      const lagSeconds = parseFloat(String(result?.[0]?.lag ?? '0'));
+      `)) as unknown as OutboxLagResult;
+      const lagSeconds = parseFloat(String(result.rows[0]?.lag ?? '0'));
       this.metrics.setOutboxLag(Number.isFinite(lagSeconds) ? lagSeconds : 0);
     } catch {
-      // Outbox table may not exist in test environments; report
-      // zero lag so the metrics endpoint remains operational.
       this.metrics.setOutboxLag(0);
+    }
+  }
+
+  private async refreshOutboxDlqGauge(): Promise<void> {
+    try {
+      const result = (await this.db.execute(sql`
+        SELECT aggregate_type, COUNT(*)::int AS count
+        FROM outbox_events
+        WHERE processed_at IS NULL
+          AND failed_at IS NOT NULL
+          AND dlq_reason IS NOT NULL
+        GROUP BY aggregate_type
+      `)) as unknown as { rows: Array<{ aggregate_type: string; count: number }> };
+      for (const row of result.rows) {
+        this.metrics.setOutboxDlqCount(row.aggregate_type, row.count);
+      }
+    } catch {
+      // best-effort — non-zero DLQ counts will just be absent from the scrape
     }
   }
 }

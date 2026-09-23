@@ -54,12 +54,9 @@ import { OutboxAdapter } from './infrastructure/outbox/outbox.adapter';
 import { OutboxProcessorService } from './infrastructure/outbox/outbox-processor.service';
 import { OutboxNotifyListener } from './infrastructure/outbox/outbox-notify.listener';
 import { AuthAuditLogService } from './infrastructure/audit/auth-audit-log.service';
-import { AuthTransactionContext } from './infrastructure/transaction/auth-transaction.context';
-import { TransactionalInterceptor } from './infrastructure/transaction/transactional.interceptor';
 import { OUTBOX_PORT } from './domain/ports/outbox.port';
 import { SessionInvalidationBus } from './infrastructure/session/session-invalidation.bus';
 
-// OAuth domain
 import { OAuthLoginService } from './domain/oauth/oauth-login.service';
 import { OAuthAccountRepository } from './infrastructure/oauth/oauth-account.repository';
 import { GoogleOAuthAdapter } from './infrastructure/oauth/google-oauth.adapter';
@@ -75,17 +72,18 @@ import { OAuthAccountLinker } from './domain/oauth/oauth-account-linker';
 import { OAuthSessionIssuer } from './domain/oauth/oauth-session-issuer';
 import { OAuthEventService } from './domain/oauth/oauth-event.service';
 import { NotificationModule } from '@/modules/notification/notification.module';
-import { AuthSecurityNotificationService } from '@/modules/notification/domain/services/auth-security-notification.service';
+import { IdempotencyCleanupScheduler } from './infrastructure/scheduler/idempotency-cleanup.scheduler';
+import { SessionCleanupScheduler } from './infrastructure/scheduler/session-cleanup.scheduler';
+import { OutboxCleanupScheduler } from '@/modules/outbox/infrastructure/scheduler/outbox-cleanup.scheduler';
 @Module({
   imports: [CommonModule, DatabaseModule, RedisModule, EmailModule, NotificationModule],
   controllers: [AuthController],
   providers: [
-    // Application
     AuthApplicationService,
     AuthResponseMapper,
-    // Presentation
+
     AuthPresenter,
-    // Domain services
+
     AuthRegistrationService,
     AuthLoginService,
     AuthRefreshService,
@@ -99,13 +97,13 @@ import { AuthSecurityNotificationService } from '@/modules/notification/domain/s
     CredentialVerificationService,
     AccountDeletionService,
     RegistrationAvailabilityService,
-    // Config classes
+
     TokenConfig,
     SessionConfig,
     EmailVerificationConfig,
     PasswordResetConfig,
     SecurityConfig,
-    // Infrastructure
+
     AuthCookieService,
     AuthSessionCleanupService,
     AuthRequestContextService,
@@ -121,40 +119,29 @@ import { AuthSecurityNotificationService } from '@/modules/notification/domain/s
     AccountLifecycleRepository,
     UserSessionRepository,
     AuthAuditLogService,
-    AuthTransactionContext,
-    TransactionalInterceptor,
-    // Port adapters
+
     { provide: TOKEN_PROVIDER, useClass: JwtTokenAdapter },
     { provide: CRYPTO_PROVIDER, useClass: CryptoAdapter },
     { provide: PASSWORD_PROVIDER, useClass: PasswordAdapter },
-    // Port bindings
+
     { provide: AUTH_USER_REPOSITORY_PORT, useExisting: UserRepository },
     { provide: SESSION_REPOSITORY_PORT, useExisting: UserSessionRepository },
     { provide: EMAIL_PROVIDER, useExisting: EmailService },
     { provide: OUTBOX_PORT, useExisting: OutboxAdapter },
     { provide: OAUTH_ACCOUNT_REPOSITORY_PORT, useExisting: OAuthAccountRepository },
-    // OAuth multi-provider: each provider adapter is registered as a
-    // multi-provider token. `OAuthProviderRegistryAdapter` collects every
-    // provider that advertises itself as an `OAUTH_PROVIDER_PORT` and
-    // resolves them by `provider` discriminator at runtime.
-    //
-    // Today only Google is wired. Adding GitHub / Apple / Microsoft requires
-    // a single new adapter and a second `{ provide: OAUTH_PROVIDER_PORT,
-    // useExisting: <NewAdapter> }` entry below — no other code path needs
-    // to change.
+
     {
       provide: OAUTH_PROVIDER_PORT,
       useExisting: GoogleOAuthAdapter,
     },
-    // OAuth domain event publisher
+
     { provide: OAUTH_DOMAIN_EVENT_PUBLISHER, useExisting: OAuthDomainEventPublisher },
-    // OAuth provider registry
+
     { provide: OAUTH_PROVIDER_REGISTRY, useExisting: OAuthProviderRegistryAdapter },
-    // OAuth infrastructure and services
+
     OutboxAdapter,
     OutboxProcessorService,
     OutboxNotifyListener,
-    AuthSecurityNotificationService,
     GoogleOAuthConfig,
     GoogleOAuthAdapter,
     OAuthAccountRepository,
@@ -166,8 +153,12 @@ import { AuthSecurityNotificationService } from '@/modules/notification/domain/s
     OAuthSessionIssuer,
     OAuthEventService,
     OAuthLoginService,
-    // Cross-instance session invalidation
+
     SessionInvalidationBus,
+
+    IdempotencyCleanupScheduler,
+    SessionCleanupScheduler,
+    OutboxCleanupScheduler,
   ],
   exports: [AuthApplicationService],
 })

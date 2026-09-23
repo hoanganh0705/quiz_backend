@@ -7,6 +7,7 @@ import { UserModule } from './modules/user/user.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { DatabaseModule } from './core/database/database.module';
 import { CommonModule } from './common/common.module';
+import { DatabaseCommonModule } from './common/database/database.module';
 import { JwtGuard } from './common/guards/jwt.guard';
 import { GlobalExceptionFilter } from './common/filters/global-exception.filter';
 import { ResponseFormatInterceptor } from './common/interceptors/response-format.interceptor';
@@ -48,6 +49,7 @@ import {
   googleOAuthConfig,
   swaggerConfig,
   cloudinaryConfig,
+  tournamentFlagsConfig,
 } from './core/config';
 import { RedisModule } from './core/redis/redis.module';
 import { PermissionsGuard } from './common/authorization/guards/permissions.guard';
@@ -78,6 +80,7 @@ import { CoreLoggerModule } from './core/logger/logger.module';
         googleOAuthConfig,
         swaggerConfig,
         cloudinaryConfig,
+        tournamentFlagsConfig,
       ],
     }),
     ThrottlerModule.forRoot({
@@ -98,6 +101,7 @@ import { CoreLoggerModule } from './core/logger/logger.module';
     CoreLoggerModule,
     RedisModule,
     DatabaseModule,
+    DatabaseCommonModule,
     StorageModule.forRoot(),
     UploadModule,
     UserModule,

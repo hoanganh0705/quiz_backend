@@ -71,3 +71,12 @@ export class AttemptNotCompletedError extends AttemptDomainError {
     super(message);
   }
 }
+
+export class InvalidContextRefError extends AttemptDomainError {
+  readonly code = 'ATTEMPT_INVALID_CONTEXT_REF';
+  constructor(contextType: string, contextRefId: string) {
+    super(
+      `contextType '${contextType}' requires a valid ${contextType} reference (${contextRefId} not found)`,
+    );
+  }
+}

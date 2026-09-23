@@ -230,11 +230,22 @@ export class InstanceGateway implements OnGatewayConnection, OnGatewayDisconnect
       return { event: 'error', data: ERR_NOT_HOST };
     }
 
-    this.server.to(data.instanceId).emit('question_revealed', {
-      questionNumber: data.questionNumber,
-      totalQuestions: data.totalQuestions,
-      timestamp: new Date().toISOString(),
-    });
+    this.server.to(data.instanceId).emit(
+      'question_revealed',
+      {
+        questionNumber: data.questionNumber,
+        totalQuestions: data.totalQuestions,
+        timestamp: new Date().toISOString(),
+      },
+      (ack: unknown) => {
+        if (ack === undefined) return;
+        this.logger.debug({
+          event: 'ws_question_revealed_acked',
+          instanceId: data.instanceId,
+          socketId: client.id,
+        });
+      },
+    );
 
     return { event: 'ack', data: { received: true } };
   }

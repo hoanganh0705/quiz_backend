@@ -183,13 +183,14 @@ export class RankingSchedulerService {
   /**
    * Performs consistency checks on ranking data.
    *
-   * Runs hourly. Protected by Redis advisory lock.
+   * Runs daily at 04:00. Protected by Redis advisory lock so only one
+   * replica executes the sweep.
    *
    * Detects and fixes:
    * - Users with XP but no rank assigned
    * - XP mismatches between computed and stored values
    */
-  @Cron('30 * * * *')
+  @Cron('0 4 * * *')
   async handleConsistencyCheck(): Promise<void> {
     const lockKey = 'ranking:cron:consistency';
     const lockToken = await this.cache.acquireAdvisoryLock(lockKey, LOCK_TTL_MS.CONSISTENCY);

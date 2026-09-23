@@ -223,6 +223,19 @@ export interface RankingRepositoryPort {
     offset: number;
   }): Promise<LeaderboardRow[]>;
 
+  getLeaderboardKeyset(params: {
+    period: RankingPeriod;
+    limit: number;
+    cursorXp?: number | null;
+    cursorCreatedAt?: string | null;
+    cursorUserId?: string | null;
+  }): Promise<LeaderboardRow[]>;
+
+  getLeaderboardCursorFirstPage(params: {
+    period: RankingPeriod;
+    limit: number;
+  }): Promise<LeaderboardRow[]>;
+
   getTotalParticipants(period: RankingPeriod): Promise<number>;
 
   getUserRank(userId: string, period: RankingPeriod): Promise<number | null>;

@@ -1,26 +1,3 @@
-/**
- * Attempt → Coin Listener Adapter
- *
- * Subscribes to `AttemptCompletedEvent` and grants coins via the
- * coin ingestion port:
- *
- *   - `QUIZ_COMPLETION_REWARD` (5 coins) — only when
- *     `scorePercent >= passingScore` (i.e. the user passed the quiz).
- *   - `QUIZ_PERFECT_BONUS` (10 coins) — only when
- *     `scorePercent === '100.00'`.
- *
- * Both rewards go through the daily-cap pass (200 coins/day,
- * implementation in `CoinIngestionService`).
- *
- * Event ordering: the adapter listens on the *in-process*
- * `AttemptDomainEventBus`. It fires synchronously after
- * `AttemptCommandService.completeAttempt` returns, which means the
- * attempt ledger row in `quiz_attempts` is already committed by the
- * time we get here. The order is intentional: the ingest path does
- * not depend on the coin path, but the coin path correctly sees the
- * post-write `scorePercent` (not a stale re-read).
- */
-
 import { Inject, Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import {
@@ -72,7 +49,6 @@ export class AttemptCoinListenerAdapter implements OnModuleInit, OnModuleDestroy
           amount: COIN_REWARDS.QUIZ_COMPLETION_REWARD,
           reason: 'QUIZ_COMPLETION_REWARD',
           referenceId: event.attemptId,
-          // Cap-eligible — defaults from DAILY_CAP_REASONS apply.
         });
       }
 
@@ -103,13 +79,6 @@ export class AttemptCoinListenerAdapter implements OnModuleInit, OnModuleDestroy
     }
   }
 
-  /**
-   * The passing score is defined on the quiz version and surfaced on the
-   * event as `scorePercent`. We treat any completed attempt that
-   * earned XP (`xpEarned > 0`) as a pass — the scoring service only
-   * sets `xpEarned > 0` when the score meets the per-quiz passing
-   * threshold.
-   */
   private isPassingScore(scorePercent: string): boolean {
     const numeric = Number(scorePercent);
     return Number.isFinite(numeric) && numeric > 0;

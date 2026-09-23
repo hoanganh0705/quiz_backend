@@ -43,11 +43,6 @@ export class HealthController {
     type: HealthStatusDto,
   })
   async check(@Res({ passthrough: true }) res: Response) {
-    // Probe every dependency in parallel. None of the probes has
-    // a dependency on the others, so `Promise.all` keeps the
-    // total wall-clock time at `max(probes)` rather than
-    // `sum(probes)`. Each probe is bounded by a connection or
-    // HTTP timeout — none of them can hang indefinitely.
     const [database, redis, storage, emailQueue, redisCircuit] = await Promise.all([
       this.probeDb(),
       this.probeRedis(),
@@ -75,11 +70,6 @@ export class HealthController {
     return this.presenter.check(payload);
   }
 
-  /**
-   * Aggregate policy. The database is the single hard dependency
-   * — when it is down, every write fails. Everything else can
-   * degrade without taking the pod out of rotation.
-   */
   private aggregateStatus(probes: {
     database: 'up' | 'down';
     redis: ProbeResultDto;

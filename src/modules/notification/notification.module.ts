@@ -17,6 +17,7 @@ import {
   TOURNAMENT_NOTIFICATION_PORT,
   INSTANCE_NOTIFICATION_PORT,
   RANK_NOTIFICATION_PORT,
+  AUTH_SECURITY_NOTIFICATION_PORT,
 } from './domain/ports';
 import { NotificationChannelService } from './infrastructure/adapters';
 import { RankNotificationService } from './domain/services/rank-notification.service';
@@ -27,16 +28,13 @@ import {
   UserNotificationService,
   SocialNotificationService,
   AchievementNotificationService,
+  AuthSecurityNotificationService,
 } from './domain/services';
 import { NotificationDomainEventBus } from './domain/events/notification-domain.event-bus';
-import { CommentModule } from '@/modules/comment/comment.module';
 import { CommentNotificationListener } from './infrastructure/adapters/comment-notification-listener.adapter';
 import { InstanceModule } from '@/modules/instance/instance.module';
 import { InstanceNotificationListener } from './infrastructure/adapters/instance-notification-listener.adapter';
-import { ReviewModule } from '@/modules/review/review.module';
 import { ReviewNotificationListener } from './infrastructure/adapters/review-notification-listener.adapter';
-import { QuizModule } from '@/modules/quiz/quiz.module';
-import { UserModule } from '@/modules/user/user.module';
 import { UserNotificationListener } from './infrastructure/adapters/user-notification-listener.adapter';
 import { NotificationGateway } from './transport/gateway/notification.gateway';
 import { NotificationWebSocketListener } from './infrastructure/adapters/notification-websocket-listener.adapter';
@@ -44,15 +42,7 @@ import { NotificationPresenter } from './transport/presenters/notification.prese
 import { NotificationCleanupScheduler } from './infrastructure/scheduler/notification-cleanup.scheduler';
 
 @Module({
-  imports: [
-    DatabaseModule,
-    JwtModule,
-    forwardRef(() => CommentModule),
-    forwardRef(() => InstanceModule),
-    forwardRef(() => ReviewModule),
-    forwardRef(() => QuizModule),
-    forwardRef(() => UserModule),
-  ],
+  imports: [DatabaseModule, JwtModule, forwardRef(() => InstanceModule)],
   providers: [
     NotificationRepository,
     NotificationPreferencesRepository,
@@ -112,6 +102,12 @@ import { NotificationCleanupScheduler } from './infrastructure/scheduler/notific
       provide: ACHIEVEMENT_NOTIFICATION_PORT,
       useExisting: AchievementNotificationService,
     },
+
+    AuthSecurityNotificationService,
+    {
+      provide: AUTH_SECURITY_NOTIFICATION_PORT,
+      useExisting: AuthSecurityNotificationService,
+    },
     NotificationGateway,
     NotificationWebSocketListener,
     NotificationPresenter,
@@ -138,6 +134,9 @@ import { NotificationCleanupScheduler } from './infrastructure/scheduler/notific
     SOCIAL_NOTIFICATION_PORT,
     AchievementNotificationService,
     ACHIEVEMENT_NOTIFICATION_PORT,
+
+    AuthSecurityNotificationService,
+    AUTH_SECURITY_NOTIFICATION_PORT,
   ],
 })
 export class NotificationModule {}

@@ -1,49 +1,43 @@
 import { Injectable } from '@nestjs/common';
+import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
+import { BaseDomainEventBus } from '@/common/events/base-domain-event-bus';
 import {
   type CategoryDomainEventBusPort,
   CATEGORY_DOMAIN_EVENT_BUS,
 } from '../ports/category-domain-event-bus.port';
 
-/**
- * Simple domain event bus for Category aggregate events.
- *
- * This is a lightweight in-process event bus using the observer pattern.
- * Events are dispatched synchronously within the same request lifecycle.
- */
+export interface CategoryDomainEvent {
+  categoryId: string;
+  slug: string;
+  nowIso: string;
+}
+
 @Injectable()
-export class CategoryDomainEventBus implements CategoryDomainEventBusPort {
-  private handlers: Array<(event: unknown) => void> = [];
-
-  subscribe(handler: (event: unknown) => void): () => void {
-    this.handlers.push(handler);
-    return () => {
-      const index = this.handlers.indexOf(handler);
-      if (index !== -1) {
-        this.handlers.splice(index, 1);
-      }
-    };
+export class CategoryDomainEventBus
+  extends BaseDomainEventBus<CategoryDomainEvent>
+  implements CategoryDomainEventBusPort
+{
+  constructor(
+    @InjectPinoLogger(CategoryDomainEventBus.name)
+    logger: PinoLogger,
+  ) {
+    super(logger, { logEventName: 'category_event' });
   }
 
-  private emit(event: unknown): void {
-    for (const handler of this.handlers) {
-      handler(event);
-    }
+  emitCategoryCreated(event: CategoryDomainEvent): void {
+    this.dispatch(event);
   }
 
-  emitCategoryCreated(event: { categoryId: string; slug: string; nowIso: string }): void {
-    this.emit(event);
+  emitCategoryUpdated(event: CategoryDomainEvent): void {
+    this.dispatch(event);
   }
 
-  emitCategoryUpdated(event: { categoryId: string; slug: string; nowIso: string }): void {
-    this.emit(event);
+  emitCategoryDeleted(event: CategoryDomainEvent): void {
+    this.dispatch(event);
   }
 
-  emitCategoryDeleted(event: { categoryId: string; slug: string; nowIso: string }): void {
-    this.emit(event);
-  }
-
-  emitCategoryRestored(event: { categoryId: string; slug: string; nowIso: string }): void {
-    this.emit(event);
+  emitCategoryRestored(event: CategoryDomainEvent): void {
+    this.dispatch(event);
   }
 }
 

@@ -34,6 +34,7 @@ import type Redis from 'ioredis';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import type { PubSubProvider } from '@/common/ports/pubsub.provider';
 import { PUBSUB_PROVIDER } from '@/common/ports/pubsub.provider';
+import { CACHE_PROVIDER, type CacheProvider } from '@/common/ports/cache.provider';
 import { sessionsConfig, type SessionsConfig } from '@/core/config';
 
 /**
@@ -91,67 +92,54 @@ export type SessionInvalidationHandler = (event: SessionInvalidationEvent) => vo
 @Injectable()
 export class SessionInvalidationBus implements OnModuleInit, OnModuleDestroy {
   private readonly channel: string;
+  private readonly replayKey: string;
   private subscriber: Redis | null = null;
   private readonly handlers = new Set<SessionInvalidationHandler>();
+  private reconnectAttempts = 0;
+  private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  private stopped = false;
 
   constructor(
     @Inject(PUBSUB_PROVIDER)
     private readonly pubSub: PubSubProvider,
+    @Inject(CACHE_PROVIDER)
+    private readonly cache: CacheProvider,
     @Inject(sessionsConfig.KEY)
     private readonly sessions: SessionsConfig,
     @InjectPinoLogger(SessionInvalidationBus.name)
     private readonly logger: PinoLogger,
   ) {
     this.channel = this.sessions.authSessionInvalidationChannel;
+    this.replayKey = `${this.channel}:replay`;
+  }
+
+  async replayRecent(limit = 100): Promise<SessionInvalidationEvent[]> {
+    try {
+      const items = await this.cache.lrangeJson<SessionInvalidationEvent>(
+        this.replayKey,
+        -limit,
+        -1,
+      );
+      return items;
+    } catch (error) {
+      this.logger.warn({
+        event: 'session_invalidation_replay_read_failed',
+        message: error instanceof Error ? error.message : 'unknown',
+      });
+      return [];
+    }
   }
 
   async onModuleInit(): Promise<void> {
-    // `createSubscriber` returns a dedicated ioredis client because
-    // pub/sub subscribers cannot share a connection with normal
-    // commands — once a connection is in subscribe mode it can
-    // only run subscribe/unsubscribe/ping.
-    const subscriber = this.pubSub.createSubscriber();
-    this.subscriber = subscriber;
-
-    subscriber.on('error', (error) => {
-      this.logger.error({
-        event: 'session_invalidation_subscriber_error',
-        message: error.message,
-      });
-    });
-
-    await subscriber.subscribe(this.channel);
-    subscriber.on('message', (channel, raw) => {
-      if (channel !== this.channel) return;
-      let parsed: SessionInvalidationEvent | null = null;
-      try {
-        parsed = JSON.parse(raw) as SessionInvalidationEvent;
-      } catch (error) {
-        this.logger.warn({
-          event: 'session_invalidation_malformed_message',
-          message: error instanceof Error ? error.message : 'unknown',
-        });
-        return;
-      }
-      for (const handler of this.handlers) {
-        try {
-          handler(parsed);
-        } catch (error) {
-          this.logger.error({
-            event: 'session_invalidation_handler_error',
-            message: error instanceof Error ? error.message : 'unknown',
-          });
-        }
-      }
-    });
-
-    this.logger.info({
-      event: 'session_invalidation_bus_subscribed',
-      channel: this.channel,
-    });
+    await this.connect();
   }
 
   async onModuleDestroy(): Promise<void> {
+    this.stopped = true;
+    if (this.reconnectTimer !== null) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
     if (this.subscriber) {
       try {
         await this.subscriber.unsubscribe(this.channel);
@@ -164,6 +152,102 @@ export class SessionInvalidationBus implements OnModuleInit, OnModuleDestroy {
         // best-effort
       }
       this.subscriber = null;
+    }
+  }
+
+  private async connect(): Promise<void> {
+    if (this.stopped) return;
+
+    try {
+      const subscriber = this.pubSub.createSubscriber();
+      this.subscriber = subscriber;
+
+      subscriber.on('error', (error) => {
+        this.logger.error({
+          event: 'session_invalidation_subscriber_error',
+          message: error.message,
+        });
+        void this.scheduleReconnect();
+      });
+
+      subscriber.on('end', () => {
+        void this.scheduleReconnect();
+      });
+
+      await subscriber.subscribe(this.channel);
+      subscriber.on('message', (channel, raw) => {
+        if (channel !== this.channel) return;
+        this.handleMessage(raw).catch((error: unknown) => {
+          this.logger.warn({
+            event: 'session_invalidation_handle_message_failed',
+            message: error instanceof Error ? error.message : 'unknown',
+          });
+        });
+      });
+
+      this.reconnectAttempts = 0;
+      this.logger.info({
+        event: 'session_invalidation_bus_subscribed',
+        channel: this.channel,
+      });
+    } catch (error) {
+      this.logger.error({
+        event: 'session_invalidation_bus_subscribe_failed',
+        message: error instanceof Error ? error.message : 'unknown',
+      });
+      void this.scheduleReconnect();
+    }
+  }
+
+  private scheduleReconnect(): void {
+    if (this.stopped) return;
+    if (this.reconnectTimer !== null) return;
+    this.reconnectAttempts += 1;
+    const delaySeconds = Math.min(60, 2 ** Math.min(this.reconnectAttempts - 1, 5));
+    const delayMs = delaySeconds * 1000;
+    this.logger.warn({
+      event: 'session_invalidation_bus_reconnect_scheduled',
+      delayMs,
+      attempt: this.reconnectAttempts,
+    });
+    this.reconnectTimer = setTimeout(() => {
+      this.reconnectTimer = null;
+      void this.connect();
+    }, delayMs);
+  }
+
+  private async handleMessage(raw: string): Promise<void> {
+    let parsed: SessionInvalidationEvent | null = null;
+    try {
+      parsed = JSON.parse(raw) as SessionInvalidationEvent;
+    } catch (error) {
+      this.logger.warn({
+        event: 'session_invalidation_malformed_message',
+        message: error instanceof Error ? error.message : 'unknown',
+      });
+      return;
+    }
+
+    if (parsed === null) return;
+
+    try {
+      await this.cache.rpushJson(this.replayKey, parsed);
+    } catch (error) {
+      this.logger.warn({
+        event: 'session_invalidation_replay_write_failed',
+        message: error instanceof Error ? error.message : 'unknown',
+      });
+    }
+
+    for (const handler of this.handlers) {
+      try {
+        handler(parsed);
+      } catch (error) {
+        this.logger.error({
+          event: 'session_invalidation_handler_error',
+          message: error instanceof Error ? error.message : 'unknown',
+        });
+      }
     }
   }
 

@@ -1,9 +1,10 @@
 import { Inject, Injectable, InternalServerErrorException } from '@nestjs/common';
-import { and, eq, gt, isNull } from 'drizzle-orm';
+import { and, eq, gt } from 'drizzle-orm';
 import { DRIZZLE } from '@/core/database/drizzle.constants';
 import type { DrizzleDB } from '@/core/database/database.module';
 import { users } from '@/core/database/schema';
 import type { UserVerificationRow, UserVerificationStatusRow } from './user.types';
+import { notDeleted } from '@/common/database/soft-delete.helper';
 
 @Injectable()
 export class EmailVerificationRepository {
@@ -20,7 +21,7 @@ export class EmailVerificationRepository {
         emailVerificationTokenHash: tokenHash,
         emailVerificationExpiresAt: expiresAtIso,
       })
-      .where(and(eq(users.userId, userId), isNull(users.deletedAt)))
+      .where(and(eq(users.userId, userId), notDeleted(users.deletedAt)))
       .catch(() => {
         throw new InternalServerErrorException('Failed to save email verification token');
       });
@@ -36,7 +37,7 @@ export class EmailVerificationRepository {
         isVerified: users.isVerified,
       })
       .from(users)
-      .where(and(isNull(users.deletedAt), eq(users.email, email)))
+      .where(and(notDeleted(users.deletedAt), eq(users.email, email)))
       .limit(1);
 
     return (user as UserVerificationStatusRow | undefined) ?? null;
@@ -56,7 +57,7 @@ export class EmailVerificationRepository {
       .from(users)
       .where(
         and(
-          isNull(users.deletedAt),
+          notDeleted(users.deletedAt),
           eq(users.isVerified, false),
           eq(users.emailVerificationTokenHash, tokenHash),
           gt(users.emailVerificationExpiresAt, nowIso),
@@ -76,7 +77,7 @@ export class EmailVerificationRepository {
         emailVerificationTokenHash: null,
         emailVerificationExpiresAt: null,
       })
-      .where(and(eq(users.userId, userId), isNull(users.deletedAt)))
+      .where(and(eq(users.userId, userId), notDeleted(users.deletedAt)))
       .catch(() => {
         throw new InternalServerErrorException('Failed to mark email as verified');
       });

@@ -25,10 +25,6 @@ import {
 } from '../domain/errors/daily-challenge.errors';
 import { DailyChallengeDomainEventBus } from '../domain/events/daily-challenge-domain.event-bus';
 import { DailyChallengeCompletedEvent } from '../domain/events/daily-challenge-domain.events';
-import {
-  EXTERNAL_EVENT_BUS_PRODUCER_PORT,
-  type ExternalEventBusProducerPort,
-} from '@/common/events';
 import { createCorrelationId } from '@/common/interceptors/correlation-id';
 import {
   SKIPPED_ANSWER_SENTINEL,
@@ -36,6 +32,10 @@ import {
   type DailyChallengeHistoryItem,
   type DailyChallengePeriod,
 } from '../domain/types/daily-challenge.types';
+import {
+  DAILY_CHALLENGE_OUTBOX_PORT,
+  type DailyChallengeOutboxPort,
+} from '../infrastructure/outbox/daily-challenge-xp-outbox.adapter';
 
 const HISTORY_DEFAULT_LIMIT = 5;
 const LEADERBOARD_LIMIT = 50;
@@ -48,8 +48,8 @@ export class DailyChallengeApplicationService {
     @Inject(QUIZ_QUESTION_REPOSITORY_PORT)
     private readonly quizQuestionRepository: QuizQuestionRepositoryPort,
     private readonly eventBus: DailyChallengeDomainEventBus,
-    @Inject(EXTERNAL_EVENT_BUS_PRODUCER_PORT)
-    private readonly externalEventBus: ExternalEventBusProducerPort,
+    @Inject(DAILY_CHALLENGE_OUTBOX_PORT)
+    private readonly xpOutbox: DailyChallengeOutboxPort,
   ) {}
 
   async getToday(userId: string | null): Promise<DailyChallengeResponseDto> {
@@ -160,7 +160,7 @@ export class DailyChallengeApplicationService {
       throw new DailyChallengeNotFoundError();
     }
 
-    return this.repository.runInTransaction(async (_tx, helpers) => {
+    return this.repository.runInTransaction(async (tx, helpers) => {
       const attempt = await helpers.lockAttemptForUpdate({
         challengeId: row.challengeId,
         userId,
@@ -227,15 +227,18 @@ export class DailyChallengeApplicationService {
         );
 
         if (row.rewardXp > 0) {
-          await this.externalEventBus.publishXpEarned({
-            eventType: 'external.xp.earned',
-            userId,
-            amount: row.rewardXp,
-            source: 'bonus',
-            timestamp: new Date(nowIso),
-            correlationId: createCorrelationId(),
-            idempotencyKey: `xp:${userId}:daily_challenge:${row.challengeId}`,
-          });
+          await this.xpOutbox.scheduleXpOutbox(
+            {
+              userId,
+              challengeId: row.challengeId,
+              amount: row.rewardXp,
+              idempotencyKey: `xp:${userId}:daily_challenge:${row.challengeId}`,
+              correlationId: createCorrelationId(),
+              timestamp: nowIso,
+            },
+            tx,
+            nowIso,
+          );
         }
       }
 

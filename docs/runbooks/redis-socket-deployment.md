@@ -1,6 +1,6 @@
 # Redis-Backed Socket.IO Deployment Runbook
 
-> Operational guide for the Phase 3 horizontal-scaling infrastructure
+> Operational guide for the horizontal-scaling infrastructure
 > (`RedisIoAdapter` + `RedisSocketConnectionRegistry`). Aim: keep the
 > application runnable in single-instance development and CI, while
 > making horizontal scaling a deployment-time concern that does not
@@ -144,7 +144,7 @@ broadcast regardless of which replica it attached to.
 
 ## CI
 
-`pnpm test:e2e` runs all `*.e2e-spec.ts` files. Phase 3 additions:
+`pnpm test:e2e` runs all `*.e2e-spec.ts` files. Notable suites:
 
 - `test/socket-connection-registry.e2e-spec.ts` — gates on
   `REDIS_URL`; skipped when unset. Verifies the registry round-trips
@@ -167,7 +167,7 @@ registry event. Operationally important signals:
 | `redis_socket_adapter_attached`             | Once per process at boot (one per namespace actually, but practically once). | If this log line is **missing** on a replica, the adapter was disabled — investigate before scaling out.                                         |
 | `redis_socket_adapter_client_error`         | ioredis reports a connection error after boot.                               | Transient errors are normal during rolling deploys; persistent errors mean Redis is sick.                                                        |
 | `socket_connection_registry_record_failed`  | `record(...)` against the registry threw.                                    | Should be rare; spikes correlate with Redis instability or with clients joining during a Redis blip.                                             |
-| `socket_connection_registry_consume_failed` | `consume(...)` threw.                                                        | Means `PlayerDisconnectedEvent` was not emitted for that socket. Correlate with `instance_phase3_disconnect_event_dropped_count` if you add one. |
+| `socket_connection_registry_consume_failed` | `consume(...)` threw.                                                        | Means `PlayerDisconnectedEvent` was not emitted for that socket. Correlate with the disconnect-event-dropped counter if you add one. |
 | `socket_connection_registry_get_failed`     | `getMeta(...)` threw.                                                        | Read-side observability gap. The TTL ensures the entry eventually disappears, so this is non-fatal.                                              |
 
 If you add a custom log field (e.g. `connected_clients_count`,
@@ -214,15 +214,15 @@ clusters' packets will interleave.
 
 ## What this runbook deliberately does NOT cover
 
-- **Sharded Redis pub/sub**. Phase 3 uses the standard
+- **Sharded Redis pub/sub**. The current setup uses the standard
   `createAdapter(pubClient, subClient)` API. Moving to
   `createShardedAdapter(...)` is a single-file change to
-  `redis-io.adapter.ts` and is on the post-Phase-3 roadmap if
+  `redis-io.adapter.ts` and is on the roadmap if
   `PUBSUB_CHANNELS` ever becomes a bottleneck.
 - **Failover between two Redis primaries**. The `RedisService` is
   configured against a single URL; failover orchestration is the
   operator's responsibility (sentinel, managed-Redis HA, etc.).
-- **Socket-side retry budget**. Phase 3's idempotency contract (the
+- **Socket-side retry budget**. The idempotency contract (the
   registry's `consume`-via-`GETDEL`) covers the disconnect hot path;
   the join hot path uses optimistic connection-state-restoration and
   is not affected by Redis blips at the cost of a missed

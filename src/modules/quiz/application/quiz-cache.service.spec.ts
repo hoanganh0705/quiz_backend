@@ -93,6 +93,10 @@ class InMemoryCache implements CacheProvider {
     return null;
   }
 
+  async lrangeJson<T>(): Promise<T[]> {
+    return [];
+  }
+
   async acquireAdvisoryLock(): Promise<string | null> {
     return 'test-token';
   }

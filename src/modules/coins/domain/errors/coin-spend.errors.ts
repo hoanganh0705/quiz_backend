@@ -1,26 +1,7 @@
-/**
- * Coin Spend Domain Errors
- *
- * Typed exceptions raised by `CoinSpendService`. The HTTP layer maps these
- * to RFC 7807 problem-detail responses (see `errors.coins` enum in the
- * design doc §13).
- *
- * Why a separate file
- *   - Keeps `coin-domain.errors.ts` as the single import surface for
- *     callers; future spends (purchase gift card, donate to charity, …)
- *     add their own typed error class without touching the existing
- *     earn-side exceptions.
- *   - Each error extends `BaseDomainException` so the global exception
- *     filter recognises them and surfaces the right status code / code
- *     slug via the `ProblemCodeMapping`.
- */
-
 import { BaseDomainException } from '@/common/errors/base-domain.exception';
 
-/**
- * The caller tried to spend more coins than they have. Maps to HTTP 409
- * with code `INSUFFICIENT_COINS` (design §13).
- */
+export abstract class CoinDomainError extends BaseDomainException {}
+
 export class InsufficientCoinsError extends BaseDomainException {
   readonly code = 'INSUFFICIENT_COINS';
   constructor(
@@ -32,11 +13,6 @@ export class InsufficientCoinsError extends BaseDomainException {
   }
 }
 
-/**
- * The sender already tipped `>= COIN_ECONOMY_LIMITS.DAILY_TIP_COUNT_CAP`
- * distinct authors today. Maps to HTTP 429 with code
- * `COIN_TIP_DAILY_CAP_EXCEEDED`.
- */
 export class CoinTipDailyCapExceededError extends BaseDomainException {
   readonly code = 'COIN_TIP_DAILY_CAP_EXCEEDED';
   constructor(
@@ -50,10 +26,6 @@ export class CoinTipDailyCapExceededError extends BaseDomainException {
   }
 }
 
-/**
- * The sender tried to tip themselves. Maps to HTTP 422 with code
- * `COIN_TIP_SELF_NOT_ALLOWED`.
- */
 export class CoinTipSelfNotAllowedError extends BaseDomainException {
   readonly code = 'COIN_TIP_SELF_NOT_ALLOWED';
   constructor(public readonly userId: string) {
@@ -61,10 +33,6 @@ export class CoinTipSelfNotAllowedError extends BaseDomainException {
   }
 }
 
-/**
- * The recipient user does not exist (or is not visible to the caller).
- * Maps to HTTP 404 with code `COIN_TIP_RECIPIENT_NOT_FOUND`.
- */
 export class CoinTipRecipientNotFoundError extends BaseDomainException {
   readonly code = 'COIN_TIP_RECIPIENT_NOT_FOUND';
   constructor(public readonly recipientUserId: string) {
@@ -72,11 +40,6 @@ export class CoinTipRecipientNotFoundError extends BaseDomainException {
   }
 }
 
-/**
- * The flair slot was requested against a `userBadgeId` the caller does
- * not own (or the badge has been revoked). Maps to HTTP 422 with code
- * `COIN_FLAIR_BADGE_NOT_OWNED`.
- */
 export class CoinFlairBadgeNotOwnedError extends BaseDomainException {
   readonly code = 'COIN_FLAIR_BADGE_NOT_OWNED';
   constructor(
@@ -87,11 +50,6 @@ export class CoinFlairBadgeNotOwnedError extends BaseDomainException {
   }
 }
 
-/**
- * The suppression was requested against a `quizId` that does not exist
- * or is not visible to the caller. Maps to HTTP 404 with code
- * `COIN_SUPPRESS_QUIZ_NOT_FOUND`.
- */
 export class CoinSuppressQuizNotFoundError extends BaseDomainException {
   readonly code = 'COIN_SUPPRESS_QUIZ_NOT_FOUND';
   constructor(public readonly quizId: string) {
@@ -99,10 +57,6 @@ export class CoinSuppressQuizNotFoundError extends BaseDomainException {
   }
 }
 
-/**
- * The user already has an active suppression for the requested quiz.
- * Maps to HTTP 409 with code `COIN_SUPPRESS_ALREADY_ACTIVE`.
- */
 export class CoinSuppressAlreadyActiveError extends BaseDomainException {
   readonly code = 'COIN_SUPPRESS_ALREADY_ACTIVE';
   constructor(
@@ -116,17 +70,42 @@ export class CoinSuppressAlreadyActiveError extends BaseDomainException {
   }
 }
 
-/**
- * The admin adjustment was submitted without a `reason`. The ledger is
- * the audit trail; a reason is required so a future investigator can
- * reconstruct intent. Maps to HTTP 422 with code
- * `COIN_ADMIN_ADJUSTMENT_REASON_REQUIRED`.
- */
 export class CoinAdminAdjustmentReasonRequiredError extends BaseDomainException {
   readonly code = 'COIN_ADMIN_ADJUSTMENT_REASON_REQUIRED';
   constructor(public readonly adminUserId: string) {
     super(
       `COIN_ADMIN_ADJUSTMENT_REASON_REQUIRED: admin ${adminUserId} must supply a non-empty reason`,
     );
+  }
+}
+
+export class CoinSpendValidationError extends BaseDomainException {
+  readonly code = 'COIN_SPEND_INVALID';
+  constructor(message: string) {
+    super(message);
+  }
+}
+
+export class CoinEventValidationError extends BaseDomainException {
+  readonly code = 'COIN_EVENT_INVALID';
+  constructor(message: string) {
+    super(message);
+  }
+}
+
+export class InsufficientCoinsDeferredError extends BaseDomainException {
+  readonly code = 'INSUFFICIENT_COINS_DEFERRED';
+  constructor(
+    public readonly userId: string,
+    public readonly required: number,
+  ) {
+    super('INSUFFICIENT_COINS_DEFERRED');
+  }
+}
+
+export class CoinTransactionNotFoundError extends BaseDomainException {
+  readonly code = 'COIN_TRANSACTION_NOT_FOUND';
+  constructor(public readonly transactionId: string) {
+    super(`COIN_TRANSACTION_NOT_FOUND: transaction ${transactionId} does not exist`);
   }
 }

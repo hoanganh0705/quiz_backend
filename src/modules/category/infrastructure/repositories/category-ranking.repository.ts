@@ -1,5 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { and, asc, desc, eq, isNull, ne, sql } from 'drizzle-orm';
+import { notDeleted } from '@/common/database/soft-delete.helper';
 import { DRIZZLE } from '@/core/database/drizzle.constants';
 import type { DrizzleDB } from '@/core/database/database.module';
 import { quizzes, categories, quizStats } from '@/core/database/schema';
@@ -28,7 +29,7 @@ export class CategoryRankingRepository implements CategoryRankingRepositoryPort 
       this.db
         .select({ categoryId: categories.categoryId })
         .from(categories)
-        .where(and(eq(categories.slug, slug), isNull(categories.deletedAt)))
+        .where(and(eq(categories.slug, slug), notDeleted(categories.deletedAt)))
         .limit(1),
     );
 
@@ -49,9 +50,9 @@ export class CategoryRankingRepository implements CategoryRankingRepositoryPort 
       .innerJoin(sourceQuizIds, eq(sourceQuizIds.quizId, quizzes.quizId))
       .where(
         and(
-          isNull(categories.deletedAt),
+          notDeleted(categories.deletedAt),
           ne(categories.slug, slug),
-          isNull((quizzes as { deletedAt: AnyPgColumn }).deletedAt),
+          notDeleted((quizzes as { deletedAt: AnyPgColumn }).deletedAt),
           eq((quizzes as { isHidden: AnyPgColumn }).isHidden, false),
         ),
       )
@@ -102,12 +103,12 @@ export class CategoryRankingRepository implements CategoryRankingRepositoryPort 
         quizzes,
         and(
           eq(quizzes.categoryId, categories.categoryId),
-          isNull((quizzes as { deletedAt: AnyPgColumn }).deletedAt),
+          notDeleted((quizzes as { deletedAt: AnyPgColumn }).deletedAt),
           eq((quizzes as { isHidden: AnyPgColumn }).isHidden, false),
         ),
       )
       .innerJoin(quizStats, eq(quizStats.quizId, (quizzes as { quizId: AnyPgColumn }).quizId))
-      .where(isNull(categories.deletedAt))
+      .where(notDeleted(categories.deletedAt))
       .groupBy(
         categories.categoryId,
         categories.name,

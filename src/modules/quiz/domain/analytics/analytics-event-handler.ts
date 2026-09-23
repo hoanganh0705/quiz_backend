@@ -28,7 +28,7 @@ export class AnalyticsEventHandler {
 
   async onReviewSubmitted(quizId: string): Promise<void> {
     try {
-      await this.quizAnalyticsService.refreshReviewMetrics(quizId);
+      await this.quizAnalyticsService.recomputeQuizRatingStats(quizId);
       this.logger.debug({
         event: 'analytics_review_submitted',
         quizId,
@@ -44,7 +44,7 @@ export class AnalyticsEventHandler {
 
   async onReviewDeleted(quizId: string): Promise<void> {
     try {
-      await this.quizAnalyticsService.refreshReviewMetrics(quizId);
+      await this.quizAnalyticsService.recomputeQuizRatingStats(quizId);
       this.logger.debug({
         event: 'analytics_review_deleted',
         quizId,
@@ -60,7 +60,7 @@ export class AnalyticsEventHandler {
 
   async onBookmarkAdded(quizId: string): Promise<void> {
     try {
-      await this.quizAnalyticsService.refreshBookmarkMetrics(quizId);
+      await this.quizAnalyticsService.recomputeBookmarkCount(quizId);
       this.logger.debug({
         event: 'analytics_bookmark_added',
         quizId,
@@ -76,7 +76,7 @@ export class AnalyticsEventHandler {
 
   async onBookmarkRemoved(quizId: string): Promise<void> {
     try {
-      await this.quizAnalyticsService.refreshBookmarkMetrics(quizId);
+      await this.quizAnalyticsService.recomputeBookmarkCount(quizId);
       this.logger.debug({
         event: 'analytics_bookmark_removed',
         quizId,

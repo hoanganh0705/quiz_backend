@@ -26,6 +26,7 @@ import { UserRankService } from '../../domain/services/user-rank.service';
 import {
   LeaderboardPeriodEnum,
   LeaderboardQueryDto,
+  LeaderboardCursorQueryDto,
   LeaderboardDistributionQueryDto,
   MyRankingHistoryQueryDto,
   NearbyRanksQueryDto,
@@ -142,6 +143,30 @@ export class RankingController {
       period: query.period ?? RankingPeriodEnum.ALL_TIME,
       limit: query.limit ?? 100,
       offset: query.offset ?? 0,
+    });
+    return this.presenter.getGlobalLeaderboard(result);
+  }
+
+  @Get('cursor')
+  @Public()
+  @Throttle({ default: { limit: 30, ttl: 60_000 } })
+  @ApiOperation({
+    summary: 'Get global leaderboard with keyset pagination',
+    description:
+      'Returns the global leaderboard with optional period filter using keyset pagination. ' +
+      'Pass `cursorXp`, `cursorCreatedAt`, and `cursorUserId` from the previous page response to ' +
+      'fetch the next page. Omit cursor fields to fetch the first page. ' +
+      'Stable across concurrent inserts because the cursor is keyed on (xp, created_at, user_id).',
+  })
+  @ApiOkResource(LeaderboardResponseDto, { description: 'Leaderboard returned' })
+  @rankingBadRequestResponse()
+  async getGlobalLeaderboardCursor(@Query() query: LeaderboardCursorQueryDto) {
+    const result = await this.leaderboardService.getGlobalLeaderboardCursor({
+      period: query.period ?? LeaderboardPeriodEnum.ALL_TIME,
+      limit: query.limit ?? 100,
+      cursorXp: query.cursorXp ?? null,
+      cursorCreatedAt: query.cursorCreatedAt ?? null,
+      cursorUserId: query.cursorUserId ?? null,
     });
     return this.presenter.getGlobalLeaderboard(result);
   }

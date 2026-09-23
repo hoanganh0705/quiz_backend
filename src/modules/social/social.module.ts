@@ -38,6 +38,7 @@ import { RankingModule } from '@/modules/ranking/ranking.module';
 import { AttemptModule } from '@/modules/attempt/attempt.module';
 import { InstanceModule } from '@/modules/instance/instance.module';
 import { AttemptFeedListenerAdapter } from './infrastructure/adapters/attempt-feed-listener.adapter';
+import { SocialFeedCleanupScheduler } from './infrastructure/scheduler/social-feed-cleanup.scheduler';
 
 @Module({
   imports: [
@@ -77,6 +78,8 @@ import { AttemptFeedListenerAdapter } from './infrastructure/adapters/attempt-fe
     { provide: USER_FOLLOW_REPOSITORY_PORT, useExisting: UserFollowRepository },
     { provide: BLOCK_REPOSITORY_PORT, useExisting: BlockRepository },
     { provide: RANKING_PORT, useExisting: RankingAdapter },
+
+    SocialFeedCleanupScheduler,
   ],
   controllers: [SocialController],
   exports: [

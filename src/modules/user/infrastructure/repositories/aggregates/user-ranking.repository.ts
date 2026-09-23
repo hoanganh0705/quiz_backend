@@ -2,7 +2,8 @@ import { Inject, Injectable } from '@nestjs/common';
 import { DRIZZLE } from '@/core/database/drizzle.constants';
 import type { DrizzleDB } from '@/core/database/database.module';
 import { userRanking, users } from '@/core/database/schema';
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
+import { notDeleted } from '@/common/database/soft-delete.helper';
 import type { UserRankingRow } from '../../../domain/ports/user-repository.port';
 
 export const USER_RANKING_COLUMNS = {
@@ -21,7 +22,7 @@ export class UserRankingRepository {
       .select(USER_RANKING_COLUMNS)
       .from(userRanking)
       .innerJoin(users, eq(userRanking.userId, users.userId))
-      .where(and(eq(userRanking.userId, userId), isNull(users.deletedAt)))
+      .where(and(eq(userRanking.userId, userId), notDeleted(users.deletedAt)))
       .limit(1);
 
     return ranking ?? null;

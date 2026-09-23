@@ -62,6 +62,14 @@ export class ReviewService {
         creatorId: string | null;
         isHidden: boolean;
         publishedVersionId: string | null;
+        title?: string;
+      } | null>;
+      getQuizWithPublishedVersionById: (quizId: string) => Promise<{
+        quizId: string;
+        creatorId: string | null;
+        title: string;
+        isHidden: boolean;
+        publishedVersionId: string | null;
       } | null>;
     },
     @Inject(QuizAnalyticsService)
@@ -82,10 +90,14 @@ export class ReviewService {
   ) {
     const nowIso = new Date().toISOString();
 
-    const quiz = await this.quizRepository.getActiveQuizRecordById(quizId);
+    const quiz = await this.quizRepository.getQuizWithPublishedVersionById(quizId);
     if (!quiz || !ReviewAuthorizationPolicy.isVisibleToReviewers(quiz)) {
       throw new ReviewNotFoundError(REVIEW_QUIZ_NOT_FOUND_MESSAGE);
     }
+    if (!quiz.creatorId) {
+      throw new ReviewNotFoundError(REVIEW_QUIZ_NOT_FOUND_MESSAGE);
+    }
+    const quizSnapshot = { quizTitle: quiz.title, quizCreatorId: quiz.creatorId };
 
     const hasAttempt = await this.reviewRepository.hasCompletedAttempt(quizId, user.sub);
     if (!hasAttempt) {
@@ -100,7 +112,7 @@ export class ReviewService {
     try {
       const review = await this.db.transaction(async (tx) => {
         await tx.execute(
-          sql`SELECT pg_advisory_xact_lock(hashtext(${quizId}) # hashtext(${user.sub}))`,
+          sql`SELECT pg_advisory_xact_lock(hashtextextended(${quizId}, 0) # hashtextextended(${user.sub}, 0))`,
         );
 
         const existingInsideLock = await this.reviewRepository.getReviewByQuizAndUser(
@@ -140,6 +152,8 @@ export class ReviewService {
         await this.reviewOutbox.scheduleReviewSubmitted(
           {
             quizId,
+            quizTitle: quizSnapshot.quizTitle,
+            quizCreatorId: quizSnapshot.quizCreatorId,
             reviewId: created.reviewId,
             userId: created.userId,
             rating: created.rating,
@@ -160,7 +174,14 @@ export class ReviewService {
       });
 
       this.reviewEventBus.dispatchToSubscribers(
-        new ReviewSubmittedEvent({ quizId, reviewId: review.reviewId, userId: user.sub, rating }),
+        new ReviewSubmittedEvent({
+          quizId,
+          quizTitle: quizSnapshot.quizTitle,
+          quizCreatorId: quizSnapshot.quizCreatorId,
+          reviewId: review.reviewId,
+          userId: user.sub,
+          rating,
+        }),
       );
 
       return review;
@@ -433,6 +454,16 @@ export class ReviewService {
 
     const existing = await this.assertCanModify(quizId, user);
 
+    const activeQuiz = await this.quizRepository.getActiveQuizRecordById(quizId);
+    const activeQuizTitle =
+      activeQuiz !== null && typeof (activeQuiz as { title?: unknown }).title === 'string'
+        ? (activeQuiz as unknown as { title: string }).title
+        : '';
+    const updateSnapshot = {
+      quizTitle: activeQuizTitle,
+      quizCreatorId: activeQuiz?.creatorId ?? user.sub,
+    };
+
     const updated = await this.reviewRepository.updateReview({
       reviewId: existing.reviewId,
       rating,
@@ -459,7 +490,14 @@ export class ReviewService {
     });
 
     this.reviewEventBus.dispatchToSubscribers(
-      new ReviewSubmittedEvent({ quizId, reviewId: existing.reviewId, userId: user.sub, rating }),
+      new ReviewSubmittedEvent({
+        quizId,
+        quizTitle: updateSnapshot.quizTitle,
+        quizCreatorId: updateSnapshot.quizCreatorId,
+        reviewId: existing.reviewId,
+        userId: user.sub,
+        rating,
+      }),
     );
 
     return updated;
@@ -470,6 +508,16 @@ export class ReviewService {
 
     const nowIso = new Date().toISOString();
     let didSoftDelete = false;
+
+    const activeQuiz = await this.quizRepository.getActiveQuizRecordById(quizId);
+    const activeQuizTitle =
+      activeQuiz !== null && typeof (activeQuiz as { title?: unknown }).title === 'string'
+        ? (activeQuiz as unknown as { title: string }).title
+        : '';
+    const deleteSnapshot = {
+      quizTitle: activeQuizTitle,
+      quizCreatorId: activeQuiz?.creatorId ?? user.sub,
+    };
 
     await this.db.transaction(async (tx) => {
       didSoftDelete = await this.reviewRepository.softDeleteReviewInTx(
@@ -483,7 +531,12 @@ export class ReviewService {
       }
 
       await this.reviewOutbox.scheduleReviewDeleted(
-        { quizId, reviewId: existing.reviewId },
+        {
+          quizId,
+          quizTitle: deleteSnapshot.quizTitle,
+          quizCreatorId: deleteSnapshot.quizCreatorId,
+          reviewId: existing.reviewId,
+        },
         tx,
         nowIso,
       );
@@ -496,7 +549,12 @@ export class ReviewService {
     });
 
     this.reviewEventBus.dispatchToSubscribers(
-      new ReviewDeletedEvent({ quizId, reviewId: existing.reviewId }),
+      new ReviewDeletedEvent({
+        quizId,
+        quizTitle: deleteSnapshot.quizTitle,
+        quizCreatorId: deleteSnapshot.quizCreatorId,
+        reviewId: existing.reviewId,
+      }),
     );
   }
 

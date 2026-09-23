@@ -80,6 +80,7 @@ export class AttemptRankingListenerAdapter implements OnModuleInit, OnModuleDest
         amount: event.xpEarned,
         source: 'quiz_attempt',
         attemptId: event.attemptId,
+        idempotencyKey: `xp:${event.userId}:attempt:${event.attemptId}`,
         timestamp: event.timestamp,
       });
 

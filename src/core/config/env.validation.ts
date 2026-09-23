@@ -127,6 +127,31 @@ const parseUrl = (
   return url;
 };
 
+const parseOptionalUrl = (env: Record<string, unknown>, key: string, fallback: string): string => {
+  const rawValue = env[key];
+
+  if (rawValue === undefined || rawValue === null || rawValue === '') {
+    return fallback;
+  }
+
+  if (typeof rawValue !== 'string') {
+    throw new Error(`${key} must be a string`);
+  }
+
+  const trimmed = rawValue.trim();
+  if (trimmed.length === 0) {
+    return fallback;
+  }
+
+  try {
+    new URL(trimmed);
+  } catch {
+    throw new Error(`${key} must be a valid URL. Got: ${trimmed}`);
+  }
+
+  return trimmed;
+};
+
 /**
  * Validates a value against a set of allowed enum values.
  * @param env - Environment record
@@ -258,10 +283,18 @@ export const validateEnv = (env: Record<string, unknown>) => {
     'EMAIL_VERIFICATION_TOKEN_TTL_SECONDS',
     1_800,
   );
-  const emailVerificationBaseUrl =
-    typeof env.EMAIL_VERIFICATION_BASE_URL === 'string'
-      ? env.EMAIL_VERIFICATION_BASE_URL.trim()
-      : '';
+  const emailVerificationBaseUrl = parseOptionalUrl(env, 'EMAIL_VERIFICATION_BASE_URL', '');
+
+  const passwordResetTokenTtlSeconds = parsePositiveInteger(
+    env,
+    'PASSWORD_RESET_TOKEN_TTL_SECONDS',
+    3_600,
+  );
+  const passwordResetBaseUrl = parseOptionalUrl(
+    env,
+    'PASSWORD_RESET_BASE_URL',
+    'http://localhost:3000/reset-password',
+  );
 
   // Email Provider
   const emailProvider = parseEnum(env, 'EMAIL_PROVIDER', EMAIL_PROVIDERS, 'email provider');
@@ -270,6 +303,8 @@ export const validateEnv = (env: Record<string, unknown>) => {
   const resendApiKey = parseRequiredString(env, 'RESEND_API_KEY');
   const emailSendTimeoutMs = parsePositiveInteger(env, 'EMAIL_SEND_TIMEOUT_MS', 5_000);
   const emailQueueConcurrency = parsePositiveInteger(env, 'EMAIL_QUEUE_CONCURRENCY', 5);
+  const emailCircuitFailureThreshold = parsePositiveInteger(env, 'EMAIL_CB_FAILURE_THRESHOLD', 5);
+  const emailCircuitResetTimeoutMs = parsePositiveInteger(env, 'EMAIL_CB_RESET_TIMEOUT_MS', 30_000);
 
   const cloudinaryCloudName = parseRequiredString(env, 'CLOUDINARY_CLOUD_NAME');
   const cloudinaryApiKey = parseRequiredString(env, 'CLOUDINARY_API_KEY');
@@ -324,12 +359,16 @@ export const validateEnv = (env: Record<string, unknown>) => {
     NODE_ENV: nodeEnv,
     CORS_ORIGINS: corsOrigins,
     EMAIL_VERIFICATION_BASE_URL: emailVerificationBaseUrl,
+    PASSWORD_RESET_TOKEN_TTL_SECONDS: passwordResetTokenTtlSeconds,
+    PASSWORD_RESET_BASE_URL: passwordResetBaseUrl,
     EMAIL_PROVIDER: emailProvider,
     EMAIL_FROM_ADDRESS: emailFromAddress,
     EMAIL_FROM_NAME: emailFromName,
     RESEND_API_KEY: resendApiKey,
     EMAIL_SEND_TIMEOUT_MS: emailSendTimeoutMs,
     EMAIL_QUEUE_CONCURRENCY: emailQueueConcurrency,
+    EMAIL_CB_FAILURE_THRESHOLD: emailCircuitFailureThreshold,
+    EMAIL_CB_RESET_TIMEOUT_MS: emailCircuitResetTimeoutMs,
     CLOUDINARY_CLOUD_NAME: cloudinaryCloudName,
     CLOUDINARY_API_KEY: cloudinaryApiKey,
     CLOUDINARY_API_SECRET: cloudinaryApiSecret,

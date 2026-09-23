@@ -1,6 +1,6 @@
 # Comment Module
 
-> **Status (Phase 9.x):** This module owns the **per-quiz comment section**. It is intentionally narrow — exactly the surface area of the YouTube-style comments area below each quiz. Threads, subscriptions, bookmarks, solve marking, trending feeds, and saved-comment history have been removed; see [`docs/migrations/comment-module-refactor.md`](../migrations/comment-module-refactor.md) for the rationale.
+> **Status:** This module owns the **per-quiz comment section**. It is intentionally narrow — exactly the surface area of the YouTube-style comments area below each quiz. Threads, subscriptions, bookmarks, solve marking, trending feeds, and saved-comment history have been removed; see [`docs/migrations/comment-module-refactor.md`](../migrations/comment-module-refactor.md) for the rationale.
 
 ## Purpose
 

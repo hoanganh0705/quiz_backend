@@ -1,10 +1,17 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, desc, eq, isNull, or, sql } from 'drizzle-orm';
+import { and, desc, eq, or, sql } from 'drizzle-orm';
 import type { SQL } from 'drizzle-orm';
 import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 import { DRIZZLE } from '@/core/database/drizzle.constants';
 import type { DrizzleDB } from '@/core/database/database.module';
-import { quizAttempts, quizVersions, quizzes, quizAttemptEvents } from '@/core/database/schema';
+import {
+  quizAttempts,
+  quizVersions,
+  quizzes,
+  quizAttemptEvents,
+  outboxEvents,
+} from '@/core/database/schema';
+import { notDeleted } from '@/common/database/soft-delete.helper';
 import type { AttemptContextType } from '@/modules/attempt/types/attempt.types';
 import type {
   AttemptListCursorPayload,
@@ -118,7 +125,7 @@ export class AttemptRepository implements AttemptRepositoryPort {
         eq(QUIZ_ATTEMPT_COLUMNS.quizVersionId, QUIZ_VERSION_COLUMNS.quizVersionId),
       )
       .innerJoin(quizzes, eq(QUIZ_VERSION_COLUMNS.quizId, QUIZ_COLUMNS.quizId))
-      .where(and(eq(QUIZ_ATTEMPT_COLUMNS.attemptId, attemptId), isNull(QUIZ_COLUMNS.deletedAt)))
+      .where(and(eq(QUIZ_ATTEMPT_COLUMNS.attemptId, attemptId), notDeleted(QUIZ_COLUMNS.deletedAt)))
       .limit(1);
 
     return (row as AttemptDetailRow | undefined) ?? null;
@@ -199,7 +206,10 @@ export class AttemptRepository implements AttemptRepositoryPort {
             )
       : undefined;
 
-    const filters: SQL[] = [eq(quizAttempts.userId, params.userId), isNull(QUIZ_COLUMNS.deletedAt)];
+    const filters: SQL[] = [
+      eq(quizAttempts.userId, params.userId),
+      notDeleted(QUIZ_COLUMNS.deletedAt),
+    ];
 
     if (params.status) {
       filters.push(eq(quizAttempts.status, params.status));
@@ -375,6 +385,10 @@ export class AttemptRepository implements AttemptRepositoryPort {
     nowIso: string;
     quizId: string;
     userId: string;
+    xpOutbox?: {
+      idempotencyKey: string;
+      correlationId?: string;
+    };
   }): Promise<{ completed: AttemptRow; preCompletionCount: number }> {
     return this.db.transaction(async (tx) => {
       // Count BEFORE updating so we can atomically determine the milestone
@@ -460,6 +474,30 @@ export class AttemptRepository implements AttemptRepositoryPort {
           completedAt: params.nowIso,
         },
       });
+
+      if (params.xpEarned > 0 && params.xpOutbox) {
+        await tx
+          .insert(outboxEvents)
+          .values({
+            aggregateType: 'attempt',
+            eventType: 'attempt.xp_to_publish',
+            payload: {
+              userId: params.userId,
+              attemptId: params.attemptId,
+              amount: params.xpEarned,
+              idempotencyKey: params.xpOutbox.idempotencyKey,
+              correlationId: params.xpOutbox.correlationId,
+              timestamp: params.nowIso,
+            },
+            createdAt: params.nowIso,
+            idempotencyKey: params.xpOutbox.idempotencyKey,
+            correlationId: params.xpOutbox.correlationId,
+          })
+          .onConflictDoNothing({
+            target: outboxEvents.idempotencyKey,
+            where: sql`processed_at IS NULL AND idempotency_key IS NOT NULL`,
+          });
+      }
 
       const finishedAtIso = params.nowIso;
       await tx.execute(sql`

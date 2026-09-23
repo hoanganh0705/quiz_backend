@@ -14,7 +14,6 @@ import { sql } from 'drizzle-orm';
 
 import { coinReason } from '../shared/enums';
 import { users } from '../auth/schema';
-import { userBadges, badges } from '../achievement/schema';
 
 import { quizzes } from '../quiz/schema';
 
@@ -106,6 +105,10 @@ export const userFlairSlots = pgTable(
     userId: uuid('user_id').notNull(),
     userBadgeId: uuid('user_badge_id').notNull(),
     badgeId: uuid('badge_id').notNull(),
+
+    badgeName: text('badge_name').notNull(),
+    badgeIconUrl: text('badge_icon_url').notNull(),
+    badgeColor: text('badge_color'),
     slotStart: timestamp('slot_start', { withTimezone: true, mode: 'string' })
       .defaultNow()
       .notNull(),
@@ -126,16 +129,7 @@ export const userFlairSlots = pgTable(
       foreignColumns: [users.userId],
       name: 'user_flair_slots_user_id_fkey',
     }).onDelete('cascade'),
-    foreignKey({
-      columns: [table.userBadgeId],
-      foreignColumns: [userBadges.userBadgeId],
-      name: 'user_flair_slots_user_badge_id_fkey',
-    }).onDelete('restrict'),
-    foreignKey({
-      columns: [table.badgeId],
-      foreignColumns: [badges.badgeId],
-      name: 'user_flair_slots_badge_id_fkey',
-    }).onDelete('restrict'),
+
     uniqueIndex('uq_user_flair_slots_coin_transaction_id').using(
       'btree',
       table.coinTransactionId.asc().nullsLast().op('uuid_ops'),

@@ -61,6 +61,11 @@ import { QuizQuestionRepository } from './infrastructure/repositories/quiz-quest
 import { AttemptModule } from '@/modules/attempt/attempt.module';
 import { ReviewModule } from '@/modules/review/review.module';
 import { ReviewEventListenerAdapter } from './domain/events/review-event-listener.adapter';
+import { ReviewEventCacheInvalidator } from './domain/events/review-event-cache-invalidator';
+import { BookmarkEventCacheInvalidator } from './domain/events/bookmark-event-cache-invalidator';
+import { QuizCommentCountUpdater } from './domain/events/quiz-comment-count-updater';
+import { BookmarkModule } from '@/modules/bookmark/bookmark.module';
+import { CommentModule } from '@/modules/comment/comment.module';
 import { UserModule } from '@/modules/user/user.module';
 
 @Module({
@@ -68,6 +73,8 @@ import { UserModule } from '@/modules/user/user.module';
     DatabaseModule,
     forwardRef(() => AttemptModule),
     forwardRef(() => ReviewModule),
+    forwardRef(() => BookmarkModule),
+    forwardRef(() => CommentModule),
     forwardRef(() => UserModule),
   ],
   providers: [
@@ -102,6 +109,9 @@ import { UserModule } from '@/modules/user/user.module';
     QuizAttemptEventHandler,
     QuizAttemptEventBootstrapService,
     ReviewEventListenerAdapter,
+    ReviewEventCacheInvalidator,
+    BookmarkEventCacheInvalidator,
+    QuizCommentCountUpdater,
 
     QuizPresenter,
     QuizResponseMapper,

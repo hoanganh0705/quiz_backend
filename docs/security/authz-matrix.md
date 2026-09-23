@@ -222,7 +222,7 @@ allow anonymous reads so unauthenticated browsing of leaderboards still works.
 
 ---
 
-## Phase 0 #3 Audit Results
+## Audit Results
 
 | Endpoint                 | Field reviewed                            | Verdict                                                            |
 | ------------------------ | ----------------------------------------- | ------------------------------------------------------------------ |

@@ -1,5 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { and, desc, eq, isNull, sql, type SQL } from 'drizzle-orm';
+import { notDeleted } from '@/common/database/soft-delete.helper';
 import { DRIZZLE } from '@/core/database/drizzle.constants';
 import type { DrizzleDB } from '@/core/database/database.module';
 import { dailyChallenge, dailyChallengeAttempt, quizzes } from '@/core/database/schema';
@@ -55,7 +56,7 @@ export class DailyChallengeRepository implements DailyChallengeRepositoryPort {
       .select(DAILY_CHALLENGE_BASE_PROJECTION)
       .from(dailyChallenge)
       .innerJoin(quizzes, eq(dailyChallenge.quizId, quizzes.quizId))
-      .where(and(eq(dailyChallenge.challengeDate, date), isNull(quizzes.deletedAt)))
+      .where(and(eq(dailyChallenge.challengeDate, date), notDeleted(quizzes.deletedAt)))
       .limit(1);
 
     return (row as DailyChallengeRow | undefined) ?? null;
@@ -66,7 +67,7 @@ export class DailyChallengeRepository implements DailyChallengeRepositoryPort {
       .select(DAILY_CHALLENGE_BASE_PROJECTION)
       .from(dailyChallenge)
       .innerJoin(quizzes, eq(dailyChallenge.quizId, quizzes.quizId))
-      .where(and(sql`${dailyChallenge.expiresAt} <= ${nowIso}`, isNull(quizzes.deletedAt)))
+      .where(and(sql`${dailyChallenge.expiresAt} <= ${nowIso}`, notDeleted(quizzes.deletedAt)))
       .orderBy(desc(dailyChallenge.challengeDate))
       .limit(1);
 
@@ -266,8 +267,8 @@ export class DailyChallengeRepository implements DailyChallengeRepositoryPort {
           eq(dailyChallengeAttempt.userId, userId),
           sql`${dailyChallengeAttempt.completedAt} IS NOT NULL`,
           sql`${dailyChallengeAttempt.scorePercent} IS NOT NULL`,
-          isNull(quizzes.deletedAt),
-          isNull(categories.deletedAt),
+          notDeleted(quizzes.deletedAt),
+          notDeleted(categories.deletedAt),
         ),
       )
       .groupBy(categories.categoryId, categories.name, categories.slug)

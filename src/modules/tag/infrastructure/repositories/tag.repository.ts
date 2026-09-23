@@ -1,5 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { and, desc, eq, inArray, isNull, or, sql } from 'drizzle-orm';
+import { notDeleted } from '@/common/database/soft-delete.helper';
 import { DRIZZLE } from '@/core/database/drizzle.constants';
 import type { DrizzleDB } from '@/core/database/database.module';
 import { tags } from '@/core/database/schema';
@@ -28,7 +29,7 @@ export class TagRepository implements TagRepositoryPort {
     const [row] = await this.db
       .select(TAG_COLUMNS)
       .from(tags)
-      .where(and(eq(tags.tagId, tagId), isNull(tags.deletedAt)))
+      .where(and(eq(tags.tagId, tagId), notDeleted(tags.deletedAt)))
       .limit(1);
 
     return row ?? null;
@@ -48,7 +49,7 @@ export class TagRepository implements TagRepositoryPort {
     const [row] = await this.db
       .select(TAG_COLUMNS)
       .from(tags)
-      .where(and(eq(tags.slug, slug), isNull(tags.deletedAt)))
+      .where(and(eq(tags.slug, slug), notDeleted(tags.deletedAt)))
       .limit(1);
 
     return row ?? null;
@@ -59,7 +60,7 @@ export class TagRepository implements TagRepositoryPort {
     const rows = await this.db
       .select(TAG_COLUMNS)
       .from(tags)
-      .where(and(inArray(tags.slug, slugs), isNull(tags.deletedAt)));
+      .where(and(inArray(tags.slug, slugs), notDeleted(tags.deletedAt)));
 
     return rows;
   }
@@ -81,7 +82,9 @@ export class TagRepository implements TagRepositoryPort {
       .select(TAG_COLUMNS)
       .from(tags)
       .where(
-        cursorCondition ? and(isNull(tags.deletedAt), cursorCondition) : isNull(tags.deletedAt),
+        cursorCondition
+          ? and(notDeleted(tags.deletedAt), cursorCondition)
+          : notDeleted(tags.deletedAt),
       )
       .orderBy(desc(tags.createdAt), desc(tags.tagId))
       .limit(limit + 1);
@@ -120,7 +123,7 @@ export class TagRepository implements TagRepositoryPort {
       const [row] = await this.db
         .update(tags)
         .set({ ...params.patch, updatedAt: params.nowIso })
-        .where(and(eq(tags.tagId, params.tagId), isNull(tags.deletedAt)))
+        .where(and(eq(tags.tagId, params.tagId), notDeleted(tags.deletedAt)))
         .returning(TAG_COLUMNS);
 
       return row ?? null;
@@ -137,7 +140,7 @@ export class TagRepository implements TagRepositoryPort {
     const [row] = await this.db
       .update(tags)
       .set({ deletedAt: nowIso, updatedAt: nowIso })
-      .where(and(eq(tags.tagId, tagId), isNull(tags.deletedAt)))
+      .where(and(eq(tags.tagId, tagId), notDeleted(tags.deletedAt)))
       .returning({ tagId: tags.tagId });
 
     return Boolean(row);

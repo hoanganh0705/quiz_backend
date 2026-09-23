@@ -1,5 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { and, eq, isNull, sql } from 'drizzle-orm';
+import { notDeleted } from '@/common/database/soft-delete.helper';
 import { DRIZZLE } from '@/core/database/drizzle.constants';
 import type { DrizzleDB } from '@/core/database/database.module';
 import { tournaments, tournamentParticipants, tournamentStats } from '@/core/database/schema';
@@ -33,7 +34,7 @@ export class TournamentStatsRepository {
       })
       .from(tournamentStats)
       .innerJoin(tournaments, eq(tournamentStats.tournamentId, tournaments.tournamentId))
-      .where(and(eq(tournamentStats.tournamentId, tournamentId), isNull(tournaments.deletedAt)))
+      .where(and(eq(tournamentStats.tournamentId, tournamentId), notDeleted(tournaments.deletedAt)))
       .limit(1);
 
     if (stats) {
@@ -74,7 +75,7 @@ export class TournamentStatsRepository {
         tournamentParticipants,
         eq(tournaments.tournamentId, tournamentParticipants.tournamentId),
       )
-      .where(and(eq(tournaments.tournamentId, tournamentId), isNull(tournaments.deletedAt)))
+      .where(and(eq(tournaments.tournamentId, tournamentId), notDeleted(tournaments.deletedAt)))
       .groupBy(tournaments.tournamentId, tournaments.startAt, tournaments.endAt)
       .limit(1);
 

@@ -14,6 +14,7 @@ import {
   quizTags,
 } from '@/core/database/schema';
 import { eq, sql, desc, and, isNull, gte, count, inArray } from 'drizzle-orm';
+import { notDeleted } from '@/common/database/soft-delete.helper';
 import type {
   AttemptAggregation,
   ReviewAggregation,
@@ -108,7 +109,7 @@ export class QuizAnalyticsRepository implements QuizAnalyticsRepositoryPort {
     const rows = await this.db
       .select({ quizId: quizzes.quizId })
       .from(quizzes)
-      .where(isNull(quizzes.deletedAt))
+      .where(notDeleted(quizzes.deletedAt))
       .orderBy(quizzes.quizId);
     return rows.map((row) => row.quizId);
   }
@@ -193,7 +194,7 @@ export class QuizAnalyticsRepository implements QuizAnalyticsRepositoryPort {
       .innerJoin(quizzes, eq(quizStats.quizId, quizzes.quizId))
       .where(
         and(
-          isNull(quizzes.deletedAt),
+          notDeleted(quizzes.deletedAt),
           eq(quizzes.isHidden, false),
           categoryId ? eq(quizzes.categoryId, categoryId) : undefined,
         ),
@@ -239,7 +240,7 @@ export class QuizAnalyticsRepository implements QuizAnalyticsRepositoryPort {
       .innerJoin(quizzes, eq(quizStats.quizId, quizzes.quizId))
       .where(
         and(
-          isNull(quizzes.deletedAt),
+          notDeleted(quizzes.deletedAt),
           eq(quizzes.isHidden, false),
           categoryId ? eq(quizzes.categoryId, categoryId) : undefined,
         ),
@@ -354,7 +355,7 @@ export class QuizAnalyticsRepository implements QuizAnalyticsRepositoryPort {
       .from(quizzes)
       .leftJoin(quizVersions, eq(quizzes.publishedVersionId, quizVersions.quizVersionId))
       .leftJoin(quizStats, eq(quizStats.quizId, quizzes.quizId))
-      .where(and(eq(quizzes.creatorId, userId), isNull(quizzes.deletedAt)));
+      .where(and(eq(quizzes.creatorId, userId), notDeleted(quizzes.deletedAt)));
 
     return {
       userId,
@@ -475,7 +476,7 @@ export class QuizAnalyticsRepository implements QuizAnalyticsRepositoryPort {
       .where(
         and(
           inArray(quizStats.quizId, tagQuizIds),
-          isNull(quizzes.deletedAt),
+          notDeleted(quizzes.deletedAt),
           eq(quizzes.isHidden, false),
         ),
       )

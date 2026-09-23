@@ -6,6 +6,7 @@ import { users, passwordHistory, userSessions } from '@/core/database/schema';
 import { OUTBOX_PORT } from '@/modules/auth/domain/ports/outbox.port';
 import type { OutboxPort } from '@/modules/auth/domain/ports/outbox.port';
 import { UserNotFoundError } from '@/modules/auth/domain/errors';
+import { notDeleted } from '@/common/database/soft-delete.helper';
 
 @Injectable()
 export class PasswordChangeRepository {
@@ -58,7 +59,7 @@ export class PasswordChangeRepository {
     const [user] = await this.db
       .select({ userId: users.userId })
       .from(users)
-      .where(and(eq(users.userId, userId), isNull(users.deletedAt)))
+      .where(and(eq(users.userId, userId), notDeleted(users.deletedAt)))
       .limit(1)
       .catch(() => {
         throw new InternalServerErrorException('Failed to validate user before password change');
@@ -69,7 +70,7 @@ export class PasswordChangeRepository {
     }
 
     await this.db.transaction(async (tx) => {
-      await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${userId}))`);
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${userId}, 0))`);
 
       if (previousPasswordHash !== null) {
         await tx.insert(passwordHistory).values({
@@ -93,7 +94,7 @@ export class PasswordChangeRepository {
       await tx
         .update(users)
         .set({ passwordHash, passwordChangedAt: nowIso, updatedAt: nowIso })
-        .where(and(eq(users.userId, userId), isNull(users.deletedAt)));
+        .where(and(eq(users.userId, userId), notDeleted(users.deletedAt)));
 
       await tx
         .update(userSessions)

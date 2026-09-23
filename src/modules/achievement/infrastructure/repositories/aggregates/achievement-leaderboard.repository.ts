@@ -7,6 +7,7 @@ import type * as schema from '@/core/database/schema';
 import { badges, userBadges, userRanking, users } from '@/core/database/schema';
 import type { PublicAchievementProfileRow, FeaturedBadgeRow } from '../achievement.repository';
 import { computeRarityString } from '../../../domain/constants/achievement.constants';
+import { notDeleted } from '@/common/database/soft-delete.helper';
 
 const NULL_RANK_SENTINEL = 2147483647;
 
@@ -23,7 +24,7 @@ export class AchievementLeaderboardRepository {
     const userRows = await this.db
       .select({ userId: users.userId })
       .from(users)
-      .where(and(eq(users.userId, userId), isNull(users.deletedAt)))
+      .where(and(eq(users.userId, userId), notDeleted(users.deletedAt)))
       .limit(1);
 
     if (userRows.length === 0) {
@@ -44,7 +45,7 @@ export class AchievementLeaderboardRepository {
       .from(users)
       .leftJoin(userBadges, and(eq(userBadges.userId, users.userId), isNull(userBadges.revokedAt)))
       .leftJoin(userRanking, eq(userRanking.userId, users.userId))
-      .where(and(eq(users.userId, userId), isNull(users.deletedAt)))
+      .where(and(eq(users.userId, userId), notDeleted(users.deletedAt)))
       .groupBy(users.userId)
       .limit(1);
 

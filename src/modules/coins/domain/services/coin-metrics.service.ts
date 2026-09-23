@@ -25,6 +25,11 @@ type CoinMetricEvent =
       event: 'coin_insufficient_error';
       metric: 'coin_insufficient_errors_total';
       category: CoinSpendCategory;
+    }
+  | {
+      event: 'coin_refund_processed' | 'coin_refund_replay';
+      metric: 'coin_refunds_total';
+      outcome: 'processed' | 'idempotent_replay';
     };
 
 @Injectable()
@@ -34,88 +39,65 @@ export class CoinMetricsService {
     private readonly logger: PinoLogger,
   ) {}
 
-  /**
-   * Increments `coin_events_processed_total{reason, outcome='committed'}`.
-   * Called from `CoinIngestionService` after the wallet write + outbox
-   * schedule commit successfully.
-   */
   recordEventProcessed(reason: CoinReason): void {
-    this.logMetric('info', {
-      event: 'coin_event_processed',
+    this.logger.info({
       metric: 'coin_events_processed_total',
+      metricType: 'counter',
+      increment: 1,
+      event: 'coin_event_processed',
       reason,
       outcome: 'committed',
     });
   }
 
-  /**
-   * Increments `coin_events_processed_total{reason, outcome='truncated_by_cap'}`.
-   * Called when the daily 200-coin cap zeroes out the requested delta
-   * (no ledger row written, no outbox row scheduled).
-   */
   recordEventTruncatedByCap(reason: CoinReason): void {
-    this.logMetric('warn', {
-      event: 'coin_event_truncated_by_cap',
+    this.logger.warn({
       metric: 'coin_events_processed_total',
+      metricType: 'counter',
+      increment: 1,
+      event: 'coin_event_truncated_by_cap',
       reason,
       outcome: 'truncated_by_cap',
     });
   }
 
-  /**
-   * Increments `coin_events_processed_total{reason, outcome='rejected_validation'}`.
-   * Called when `validateEvent` throws — invalid amount, unknown
-   * reason, missing `referenceId`, etc. This is a developer-error
-   * counter, not a user-facing one.
-   */
   recordEventRejectedValidation(reason: string): void {
-    this.logMetric('warn', {
-      event: 'coin_event_rejected_validation',
+    this.logger.warn({
       metric: 'coin_events_processed_total',
+      metricType: 'counter',
+      increment: 1,
+      event: 'coin_event_rejected_validation',
       reason,
       outcome: 'rejected_validation',
     });
   }
 
-  /**
-   * Increments `coin_wallet_balance_drift_total`. Called once per
-   * drift row by the nightly reconciler (in addition to the per-row
-   * `error` Pino log).
-   */
   recordWalletBalanceDrift(): void {
-    this.logMetric('error', {
-      event: 'coin_wallet_balance_drift_detected',
+    this.logger.error({
       metric: 'coin_wallet_balance_drift_total',
+      metricType: 'counter',
+      increment: 1,
+      event: 'coin_wallet_balance_drift_detected',
     });
   }
 
-  /**
-   * Increments `coin_insufficient_errors_total{category}`.
-   * Called from `CoinSpendService` right before throwing
-   * `InsufficientCoinsError` so dashboards can plot spend refusals
-   * by category.
-   */
   recordInsufficientCoins(category: CoinSpendCategory): void {
-    this.logMetric('warn', {
-      event: 'coin_insufficient_error',
+    this.logger.warn({
       metric: 'coin_insufficient_errors_total',
+      metricType: 'counter',
+      increment: 1,
+      event: 'coin_insufficient_error',
       category,
     });
   }
 
-  private logMetric(level: 'info' | 'warn' | 'error', event: CoinMetricEvent): void {
-    // The Pino API requires a single object argument; we forward
-    // every label the dashboard needs (`reason`, `outcome`,
-    // `category`) as first-class fields so Promtail / Loki can
-    // index them without parsing the message.
-    this.logger[level]({
-      metric: event.metric,
+  recordRefund(outcome: 'processed' | 'idempotent_replay'): void {
+    this.logger.info({
+      metric: 'coin_refunds_total',
       metricType: 'counter',
       increment: 1,
-      event: event.event,
-      ...('reason' in event ? { reason: event.reason } : {}),
-      ...('outcome' in event ? { outcome: event.outcome } : {}),
-      ...('category' in event ? { category: event.category } : {}),
+      event: outcome === 'processed' ? 'coin_refund_processed' : 'coin_refund_replay',
+      outcome,
     });
   }
 }

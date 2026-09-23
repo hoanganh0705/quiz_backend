@@ -57,9 +57,8 @@ export interface FriendshipRepositoryPort {
    * two users. Returns `null` when no such friendship exists.
    *
    * Used by `SocialService.removeFriend` to enforce the existence
-   * precondition before mutating (audit issue: silent-success
-   * DELETE). The match is direction-agnostic — either side may
-   * appear as `requesterId` or `addresseeId`.
+   * precondition before mutating. The match is direction-agnostic —
+   * either side may appear as `requesterId` or `addresseeId`.
    */
   findAcceptedFriendship(userId: string, friendId: string): Promise<Friendship | null>;
 
