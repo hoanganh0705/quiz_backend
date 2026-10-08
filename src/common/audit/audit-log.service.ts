@@ -5,13 +5,7 @@ import type { DrizzleDB } from '@/core/database/database.module';
 import { authAuditLogs } from '@/core/database/schema';
 
 export type AuditDomain =
-  | 'auth'
-  | 'user'
-  | 'achievement'
-  | 'review'
-  | 'social'
-  | 'quiz'
-  | 'comment';
+  'auth' | 'user' | 'achievement' | 'review' | 'social' | 'quiz' | 'comment';
 
 export type AuditRecordInput = {
   eventType: string;

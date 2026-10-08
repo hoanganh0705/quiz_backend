@@ -21,48 +21,47 @@ export class AchievementLeaderboardRepository {
   ) {}
 
   async getPublicAchievementProfile(userId: string): Promise<PublicAchievementProfileRow | null> {
-    const userRows = await this.db
-      .select({ userId: users.userId })
-      .from(users)
-      .where(and(eq(users.userId, userId), notDeleted(users.deletedAt)))
-      .limit(1);
+    const [aggregateRows, featuredRows] = await Promise.all([
+      this.db
+        .select({
+          totalBadges: sql<number>`COUNT(${userBadges.userBadgeId})::int`,
+          highestRank: sql<number | null>`MIN(
+            LEAST(
+              COALESCE(${userRanking.allTimeRank}, ${NULL_RANK_SENTINEL}),
+              COALESCE(${userRanking.weeklyRank}, ${NULL_RANK_SENTINEL}),
+              COALESCE(${userRanking.monthlyRank}, ${NULL_RANK_SENTINEL})
+            )
+          )`,
+        })
+        .from(users)
+        .leftJoin(
+          userBadges,
+          and(eq(userBadges.userId, users.userId), isNull(userBadges.revokedAt)),
+        )
+        .leftJoin(userRanking, eq(userRanking.userId, users.userId))
+        .where(and(eq(users.userId, userId), notDeleted(users.deletedAt)))
+        .groupBy(users.userId)
+        .limit(1),
 
-    if (userRows.length === 0) {
+      this.db
+        .select({
+          badgeId: badges.badgeId,
+          badgeName: badges.name,
+          earnedCount: sql<number>`COUNT(${userBadges.userBadgeId}) OVER (PARTITION BY ${badges.badgeId})::int`,
+        })
+        .from(userBadges)
+        .innerJoin(badges, eq(userBadges.badgeId, badges.badgeId))
+        .where(and(eq(userBadges.userId, userId), isNull(userBadges.revokedAt)))
+        .orderBy(
+          asc(sql`COUNT(${userBadges.userBadgeId}) OVER (PARTITION BY ${badges.badgeId})`),
+          desc(userBadges.earnedAt),
+        )
+        .limit(5),
+    ]);
+
+    if (aggregateRows.length === 0) {
       return null;
     }
-
-    const aggregateRows = await this.db
-      .select({
-        totalBadges: sql<number>`COUNT(${userBadges.userBadgeId})::int`,
-        highestRank: sql<number | null>`MIN(
-          LEAST(
-            COALESCE(${userRanking.allTimeRank}, ${NULL_RANK_SENTINEL}),
-            COALESCE(${userRanking.weeklyRank}, ${NULL_RANK_SENTINEL}),
-            COALESCE(${userRanking.monthlyRank}, ${NULL_RANK_SENTINEL})
-          )
-        )`,
-      })
-      .from(users)
-      .leftJoin(userBadges, and(eq(userBadges.userId, users.userId), isNull(userBadges.revokedAt)))
-      .leftJoin(userRanking, eq(userRanking.userId, users.userId))
-      .where(and(eq(users.userId, userId), notDeleted(users.deletedAt)))
-      .groupBy(users.userId)
-      .limit(1);
-
-    const featuredRows = await this.db
-      .select({
-        badgeId: badges.badgeId,
-        badgeName: badges.name,
-        earnedCount: sql<number>`COUNT(${userBadges.userBadgeId}) OVER (PARTITION BY ${badges.badgeId})::int`,
-      })
-      .from(userBadges)
-      .innerJoin(badges, eq(userBadges.badgeId, badges.badgeId))
-      .where(and(eq(userBadges.userId, userId), isNull(userBadges.revokedAt)))
-      .orderBy(
-        asc(sql`COUNT(${userBadges.userBadgeId}) OVER (PARTITION BY ${badges.badgeId})`),
-        desc(userBadges.earnedAt),
-      )
-      .limit(5);
 
     const featuredBadges: FeaturedBadgeRow[] = featuredRows.map((row) => ({
       badgeId: row.badgeId,

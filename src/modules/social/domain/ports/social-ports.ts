@@ -99,7 +99,7 @@ export interface SocialRepositoryPort {
   }): Promise<void>;
   getUserSocialStats(userId: string): Promise<UserSocialStats>;
   getSocialAnalytics(userId: string): Promise<MySocialAnalytics>;
-  getTrendingUsers(limit: number): Promise<TrendingUsersResult>;
+  getTrendingUsers(limit: number, cursor?: string | null): Promise<TrendingUsersResult>;
   getSuggestions(
     userId: string,
     cursor?: string | null,

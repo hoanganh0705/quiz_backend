@@ -33,7 +33,7 @@ export class SharedRankingEventBusAdapter
 
   onModuleInit(): void {
     this.unsubscribe = this.internalBus.subscribe((event) => {
-      void this.forwardToSharedBus(event as PublishedRankingDomainEvent);
+      void this.forwardToSharedBus(event);
     });
 
     this.logger.info({

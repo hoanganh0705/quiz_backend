@@ -37,8 +37,8 @@ export class SocialApplicationService {
     return suggestions.map((s) => s.username);
   }
 
-  async getTrendingUsers(limit: number): Promise<TrendingUsersResult> {
-    return this.socialService.getTrendingUsers(limit);
+  async getTrendingUsers(limit: number, cursor?: string | null): Promise<TrendingUsersResult> {
+    return this.socialService.getTrendingUsers(limit, cursor);
   }
 
   async getFriendLeaderboard(

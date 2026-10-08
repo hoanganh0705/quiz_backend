@@ -1,5 +1,4 @@
 export * from './friend.dto';
-export * from './follower-following.dto';
 export * from './paginated.dto';
 export * from './suggestion.dto';
 export * from './mutual.dto';

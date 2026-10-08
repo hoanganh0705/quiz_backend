@@ -66,29 +66,112 @@ export class CommentRepository implements CommentRepositoryPort {
 
   async getCommentById(commentId: string): Promise<CommentView | null> {
     const [row] = await this.db
-      .select()
+      .select({
+        id: commentRows.commentId,
+        quizId: commentRows.quizId,
+        authorId: commentRows.authorId,
+        parentCommentId: commentRows.parentCommentId,
+        body: commentRows.body,
+        isHidden: commentRows.isHidden,
+        hiddenById: commentRows.hiddenById,
+        hiddenAt: commentRows.hiddenAt,
+        votesCount: commentRows.votesCount,
+        upvotesCount: commentRows.upvotesCount,
+        downvotesCount: commentRows.downvotesCount,
+        repliesCount: commentRows.repliesCount,
+        createdAt: commentRows.createdAt,
+        updatedAt: commentRows.updatedAt,
+        deletedAt: commentRows.deletedAt,
+        username: users.username,
+        displayName: userProfiles.displayName,
+        avatarUrl: userProfiles.avatarUrl,
+      })
       .from(commentRows)
+      .leftJoin(users, eq(commentRows.authorId, users.userId))
+      .leftJoin(userProfiles, eq(commentRows.authorId, userProfiles.userId))
       .where(and(eq(commentRows.commentId, commentId), notDeleted(commentRows.deletedAt)))
       .limit(1);
 
     if (!row) return null;
-    const author = await this.getAuthorById(row.authorId);
-    return commentAuthorForView({ row, author });
+    return {
+      id: row.id,
+      quizId: row.quizId,
+      authorId: row.authorId,
+      author: {
+        userId: row.authorId,
+        username: row.username ?? '',
+        displayName: row.displayName,
+        avatarUrl: row.avatarUrl,
+      },
+      parentCommentId: row.parentCommentId,
+      body: row.body,
+      isHidden: row.isHidden,
+      hiddenById: row.hiddenById,
+      hiddenAt: row.hiddenAt,
+      votesCount: row.votesCount,
+      upvotesCount: row.upvotesCount,
+      downvotesCount: row.downvotesCount,
+      repliesCount: row.repliesCount,
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+      deletedAt: row.deletedAt,
+    };
   }
 
   async getCommentByIdForUpdate(commentId: string, tx: Db): Promise<CommentView | null> {
     const client = this.asDrizzle(tx);
-    const rows = await client
-      .select()
+    const [row] = await client
+      .select({
+        id: commentRows.commentId,
+        quizId: commentRows.quizId,
+        authorId: commentRows.authorId,
+        parentCommentId: commentRows.parentCommentId,
+        body: commentRows.body,
+        isHidden: commentRows.isHidden,
+        hiddenById: commentRows.hiddenById,
+        hiddenAt: commentRows.hiddenAt,
+        votesCount: commentRows.votesCount,
+        upvotesCount: commentRows.upvotesCount,
+        downvotesCount: commentRows.downvotesCount,
+        repliesCount: commentRows.repliesCount,
+        createdAt: commentRows.createdAt,
+        updatedAt: commentRows.updatedAt,
+        deletedAt: commentRows.deletedAt,
+        username: users.username,
+        displayName: userProfiles.displayName,
+        avatarUrl: userProfiles.avatarUrl,
+      })
       .from(commentRows)
+      .leftJoin(users, eq(commentRows.authorId, users.userId))
+      .leftJoin(userProfiles, eq(commentRows.authorId, userProfiles.userId))
       .where(eq(commentRows.commentId, commentId))
       .for('update')
       .limit(1);
 
-    const row = rows[0];
     if (!row) return null;
-    const author = await this.getAuthorById(row.authorId, tx);
-    return commentAuthorForView({ row, author });
+    return {
+      id: row.id,
+      quizId: row.quizId,
+      authorId: row.authorId,
+      author: {
+        userId: row.authorId,
+        username: row.username ?? '',
+        displayName: row.displayName,
+        avatarUrl: row.avatarUrl,
+      },
+      parentCommentId: row.parentCommentId,
+      body: row.body,
+      isHidden: row.isHidden,
+      hiddenById: row.hiddenById,
+      hiddenAt: row.hiddenAt,
+      votesCount: row.votesCount,
+      upvotesCount: row.upvotesCount,
+      downvotesCount: row.downvotesCount,
+      repliesCount: row.repliesCount,
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+      deletedAt: row.deletedAt,
+    };
   }
 
   async listComments(params: ListCommentsParamsForPort): Promise<CommentWithRepliesView[]> {
@@ -102,16 +185,31 @@ export class CommentRepository implements CommentRepositoryPort {
       cursor: scanCursor,
     });
 
-    // The scan helper already trims the `+1` probe row, so the result
-    // is exactly `limit` items max. Re-derive the trim here defensively.
     const trimmedTopLevel = hasNextPage ? topLevel.slice(0, limit) : topLevel;
     if (trimmedTopLevel.length === 0) return [];
 
     const topLevelIds = trimmedTopLevel.map((c) => c.id);
-    const replies = await multiReplyScan(this.db, topLevelIds, MAX_REPLIES_PER_COMMENT);
+
+    const [repliesResult, topLevelVotes] = await Promise.all([
+      multiReplyScan(this.db, topLevelIds, MAX_REPLIES_PER_COMMENT),
+      params.viewerId
+        ? this.db
+            .select({
+              commentId: commentVotes.commentId,
+              value: commentVotes.value,
+            })
+            .from(commentVotes)
+            .where(
+              and(
+                eq(commentVotes.userId, params.viewerId),
+                inArray(commentVotes.commentId, topLevelIds),
+              ),
+            )
+        : Promise.resolve([]),
+    ]);
 
     const repliesByParent = new Map<string, CommentView[]>();
-    for (const reply of replies) {
+    for (const reply of repliesResult) {
       const parentId = reply.parentCommentId;
       if (parentId === null) continue;
       if (!repliesByParent.has(parentId)) repliesByParent.set(parentId, []);
@@ -119,18 +217,22 @@ export class CommentRepository implements CommentRepositoryPort {
     }
 
     const userVotes = new Map<string, VoteValue>();
-    if (params.viewerId) {
-      const allIds = [...topLevelIds, ...replies.map((r) => r.id)];
-      const voteRows = await this.db
+    for (const v of topLevelVotes) {
+      userVotes.set(v.commentId, v.value);
+    }
+
+    if (params.viewerId && repliesResult.length > 0) {
+      const replyIds = repliesResult.map((r) => r.id);
+      const replyVoteRows = await this.db
         .select({
           commentId: commentVotes.commentId,
           value: commentVotes.value,
         })
         .from(commentVotes)
         .where(
-          and(eq(commentVotes.userId, params.viewerId), inArray(commentVotes.commentId, allIds)),
+          and(eq(commentVotes.userId, params.viewerId), inArray(commentVotes.commentId, replyIds)),
         );
-      for (const v of voteRows) {
+      for (const v of replyVoteRows) {
         userVotes.set(v.commentId, v.value);
       }
     }
@@ -329,8 +431,20 @@ export class CommentRepository implements CommentRepositoryPort {
         reason: params.reason,
         details: params.details,
       })
-      .returning();
-    return report as unknown as ReportView;
+      .returning({
+        reportId: commentReports.reportId,
+        reporterId: commentReports.reporterId,
+        commentId: commentReports.commentId,
+        reason: commentReports.reason,
+        details: commentReports.details,
+        status: commentReports.status,
+        reviewedByUserId: commentReports.reviewedByUserId,
+        reviewedAt: commentReports.reviewedAt,
+        actionTaken: commentReports.actionTaken,
+        createdAt: commentReports.createdAt,
+        updatedAt: commentReports.updatedAt,
+      });
+    return report;
   }
 
   async listReports(params: ListReportsParams): Promise<ReportView[]> {
@@ -350,23 +464,47 @@ export class CommentRepository implements CommentRepositoryPort {
         updatedAt: new Date().toISOString(),
       })
       .where(eq(commentReports.reportId, params.reportId))
-      .returning();
+      .returning({
+        reportId: commentReports.reportId,
+        reporterId: commentReports.reporterId,
+        commentId: commentReports.commentId,
+        reason: commentReports.reason,
+        details: commentReports.details,
+        status: commentReports.status,
+        reviewedByUserId: commentReports.reviewedByUserId,
+        reviewedAt: commentReports.reviewedAt,
+        actionTaken: commentReports.actionTaken,
+        createdAt: commentReports.createdAt,
+        updatedAt: commentReports.updatedAt,
+      });
 
     if (!updated) {
       throw new Error('Report not found');
     }
-    return updated as unknown as ReportView;
+    return updated;
   }
 
   async getReportByIdForUpdate(reportId: string, tx: Db): Promise<ReportView | null> {
     const client = this.asDrizzle(tx);
     const [row] = await client
-      .select()
+      .select({
+        reportId: commentReports.reportId,
+        reporterId: commentReports.reporterId,
+        commentId: commentReports.commentId,
+        reason: commentReports.reason,
+        details: commentReports.details,
+        status: commentReports.status,
+        reviewedByUserId: commentReports.reviewedByUserId,
+        reviewedAt: commentReports.reviewedAt,
+        actionTaken: commentReports.actionTaken,
+        createdAt: commentReports.createdAt,
+        updatedAt: commentReports.updatedAt,
+      })
       .from(commentReports)
       .where(eq(commentReports.reportId, reportId))
       .for('update')
       .limit(1);
-    return (row as unknown as ReportView) ?? null;
+    return row ?? null;
   }
 
   // ─── Counter reconciler ──────────────────────────────────────────────────
@@ -421,7 +559,7 @@ export class CommentRepository implements CommentRepositoryPort {
     const [row] = await this.db
       .select({ username: users.username })
       .from(users)
-      .where(eq(users.userId, userId))
+      .where(and(eq(users.userId, userId), notDeleted(users.deletedAt)))
       .limit(1);
     return row?.username ?? null;
   }
@@ -431,7 +569,7 @@ export class CommentRepository implements CommentRepositoryPort {
     const rows = await this.db
       .select({ userId: users.userId, username: users.username })
       .from(users)
-      .where(inArray(users.userId, userIds));
+      .where(and(inArray(users.userId, userIds), notDeleted(users.deletedAt)));
     return new Map(rows.map((r) => [r.userId, r.username]));
   }
 
@@ -458,7 +596,7 @@ export class CommentRepository implements CommentRepositoryPort {
       })
       .from(users)
       .leftJoin(userProfiles, eq(users.userId, userProfiles.userId))
-      .where(eq(users.userId, userId))
+      .where(and(eq(users.userId, userId), notDeleted(users.deletedAt)))
       .limit(1);
 
     return {

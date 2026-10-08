@@ -89,6 +89,10 @@ class FakeCommandService {
     this.updatedWith.push(command);
     return { row: this.createdRow, tags: this.tags };
   }
+  async adminUpdatePrivilegedFields(_quizId: string, command: object) {
+    this.updatedWith.push(command);
+    return { row: this.createdRow, tags: this.tags };
+  }
   async softDeleteQuizById() {
     return { message: 'deleted' };
   }
@@ -123,10 +127,8 @@ function makeService() {
     {
       getOrSetList: <T>(_key: string, fetcher: () => Promise<T>) => fetcher(),
       getOrSetStats: <T>(_id: string, fetcher: () => Promise<T>) => fetcher(),
-      getOrSetProfileBundle: <T>(_id: string, fetcher: () => Promise<T>) => fetcher(),
       invalidateList: async () => undefined,
       invalidateStats: async () => undefined,
-      invalidateProfileBundle: async () => undefined,
       buildListCacheKey: ({ filters, cursor, limit }) =>
         `quiz:list:v1:${JSON.stringify({ filters, cursor, limit })}`,
     } as unknown as QuizCacheService,

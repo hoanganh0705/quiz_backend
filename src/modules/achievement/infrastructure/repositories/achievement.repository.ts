@@ -121,7 +121,7 @@ export interface AchievementRepositoryPort {
 
   getBadgesByIds(badgeIds: string[]): Promise<BadgeDefinitionRow[]>;
 
-  getAllActiveBadges(): Promise<BadgeDefinitionRow[]>;
+  getAllActiveBadges(opts?: { includeHidden?: boolean }): Promise<BadgeDefinitionRow[]>;
 
   getBadgeRules(badgeId: string): Promise<BadgeRuleRow[]>;
 

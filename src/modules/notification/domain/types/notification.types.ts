@@ -1,9 +1,4 @@
-import {
-  notificationType,
-  notificationChannel,
-  type notifications,
-  type notificationPreferences,
-} from '@/core/database/schema';
+import { notificationType, notificationChannel } from '@/core/database/schema';
 
 export type NotificationType = (typeof notificationType.enumValues)[number];
 export type NotificationChannel = (typeof notificationChannel.enumValues)[number];
@@ -118,6 +113,3 @@ export const RANK_NOTIFICATION_BODIES: Record<string, string> = {
 export const NOTIFICATION_TYPE_VALUES = notificationType.enumValues;
 export const NOTIFICATION_CHANNEL_VALUES = notificationChannel.enumValues;
 export type NotificationCategory = 'badge' | 'comment' | 'social' | 'ranking' | 'tournament';
-
-export type NotificationRow = typeof notifications.$inferSelect;
-export type NotificationPreferencesDbRow = typeof notificationPreferences.$inferSelect;

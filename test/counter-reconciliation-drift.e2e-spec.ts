@@ -66,7 +66,7 @@ describe('Counter reconciliation drift canary (Fix #8 / ADR-0017)', () => {
 
     beforeAll(async () => {
       pool = new Pool({ connectionString: process.env.DATABASE_URL });
-      db = drizzle(pool, { schema }) as unknown as DrizzleDB;
+      db = drizzle(pool, { schema });
 
       const metricsRepository = new MetricsRepository(db, createLogger(MetricsRepository.name));
       const analyticsRepository = new QuizAnalyticsRepository(db);

@@ -38,6 +38,4 @@ export class UserStreakUpdatedEvent {
 }
 
 export type UserDomainEvent =
-  | UserProfileUpdatedEvent
-  | UserSettingsUpdatedEvent
-  | UserStreakUpdatedEvent;
+  UserProfileUpdatedEvent | UserSettingsUpdatedEvent | UserStreakUpdatedEvent;

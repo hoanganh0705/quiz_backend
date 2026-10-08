@@ -63,6 +63,7 @@ export class TagController {
 
   @Get('popular')
   @Public()
+  @Throttle({ default: { limit: 60, ttl: 60_000 } })
   @ApiOperation({ summary: 'List popular tags' })
   @ApiPopularTagsResponse()
   async getPopularTags(@Query() query: TagRankingQueryDto) {
@@ -72,6 +73,7 @@ export class TagController {
 
   @Get('trending')
   @Public()
+  @Throttle({ default: { limit: 60, ttl: 60_000 } })
   @ApiOperation({ summary: 'List trending tags' })
   @ApiTrendingTagsResponse()
   async getTrendingTags(@Query() query: TagRankingQueryDto) {

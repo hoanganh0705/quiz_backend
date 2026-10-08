@@ -289,7 +289,7 @@ export class UserDomainService {
   async updateSettings(userId: string, command: UpdateSettingsCommand): Promise<UserMeRow> {
     const nowIso = new Date().toISOString();
 
-    let updated: UserMeRow | null = null;
+    let updated: UserMeRow | null;
 
     if (command.preferences !== undefined) {
       updated = await this.userRepository.updatePreferences(userId, command.preferences, nowIso);

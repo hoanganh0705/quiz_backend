@@ -50,13 +50,18 @@ import {
   swaggerConfig,
   cloudinaryConfig,
   tournamentFlagsConfig,
+  coinAdminConfig,
 } from './core/config';
 import { RedisModule } from './core/redis/redis.module';
+import { THROTTLER_CACHE_PORT, type ThrottlerCachePort } from './common/ports/throttler-cache.port';
+import { RedisThrottlerStorage } from './core/throttler/redis-throttler.storage';
 import { PermissionsGuard } from './common/authorization/guards/permissions.guard';
 import { SocialModule } from './modules/social/social.module';
 import { SearchModule } from './modules/search/search.module';
 import { HealthModule } from './modules/health/health.module';
 import { CoreLoggerModule } from './core/logger/logger.module';
+import { GraphQLModule } from './core/graphql/graphql.module';
+import { graphqlConfig } from './core/config';
 
 @Module({
   imports: [
@@ -73,6 +78,7 @@ import { CoreLoggerModule } from './core/logger/logger.module';
         emailVerificationConfig,
         securityConfig,
         serverConfig,
+        graphqlConfig,
         sessionsConfig,
         passwordResetConfig,
         authSecurityConfig,
@@ -81,24 +87,33 @@ import { CoreLoggerModule } from './core/logger/logger.module';
         swaggerConfig,
         cloudinaryConfig,
         tournamentFlagsConfig,
+        coinAdminConfig,
       ],
     }),
-    ThrottlerModule.forRoot({
-      throttlers: [
-        {
-          name: 'default',
-          limit: 100,
-          ttl: 60_000,
+    ThrottlerModule.forRootAsync({
+      inject: [THROTTLER_CACHE_PORT],
+      useFactory: (cache: ThrottlerCachePort) => ({
+        throttlers: [
+          {
+            name: 'default',
+            limit: 100,
+            ttl: 60_000,
+          },
+        ],
+        storage: new RedisThrottlerStorage(cache),
+        skipIf: (context) => {
+          const request = context.switchToHttp().getRequest<{
+            path?: string;
+            url?: string;
+          }>();
+          const path = request.path ?? request.url ?? '';
+          return path.startsWith('/internal');
         },
-      ],
-      skipIf: (context) => {
-        const request = context.switchToHttp().getRequest<{ path?: string; url?: string }>();
-        const path = request.path ?? request.url ?? '';
-        return path.startsWith('/internal');
-      },
+      }),
     }),
     ScheduleModule.forRoot(),
     CoreLoggerModule,
+    GraphQLModule,
     RedisModule,
     DatabaseModule,
     DatabaseCommonModule,

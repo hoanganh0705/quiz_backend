@@ -33,9 +33,9 @@ describe('TracingProvider', () => {
     expect(provider.getActiveSpanCount()).toBe(0);
   });
 
-  it('withSpan opens, runs, closes with ok on success', () => {
+  it('withSpan opens, runs, closes with ok on success', async () => {
     const { provider } = makeProvider();
-    const result = provider.withSpan('test.span', { kind: 'server' }, () =>
+    const result = await provider.withSpan('test.span', { kind: 'server' }, () =>
       Promise.resolve('value'),
     );
     expect(result).toBe('value');
@@ -72,10 +72,10 @@ describe('TracingProvider', () => {
     expect(child.parentSpanId).toBe(parent.spanId);
   });
 
-  it('flush emits one log per completed span', () => {
+  it('flush emits one log per completed span', async () => {
     const { provider, logger } = makeProvider();
-    provider.withSpan('a', {}, () => Promise.resolve(undefined));
-    provider.withSpan('b', {}, () => Promise.resolve(undefined));
+    await provider.withSpan('a', {}, () => Promise.resolve(undefined));
+    await provider.withSpan('b', {}, () => Promise.resolve(undefined));
     // Manually invoke flush via the onModuleDestroy lifecycle.
     provider.onModuleDestroy();
     expect(logger.info).toHaveBeenCalledTimes(2);
@@ -84,5 +84,30 @@ describe('TracingProvider', () => {
     expect(first.name).toBe('a');
     const second = logger.info.mock.calls[1][0];
     expect(second.name).toBe('b');
+  });
+});
+
+describe('TracingProvider.assertSpan', () => {
+  it('resolves with the matched span once the predicate holds', async () => {
+    const { provider } = makeProvider();
+    const promise = provider.withSpan(
+      'xp.ingest',
+      { attributes: { 'xp.idempotencyKey': 'xp:1:attempt:1', 'xp.source': 'in_proc' } },
+      () => Promise.resolve(undefined),
+    );
+    await promise;
+    const span = await provider.assertSpan(
+      'xp.ingest',
+      (attrs) => attrs['xp.idempotencyKey'] === 'xp:1:attempt:1',
+    );
+    expect(span).toBeDefined();
+    expect(span?.name).toBe('xp.ingest');
+    expect(span?.status).toBe('ok');
+  });
+
+  it('returns undefined when no span matches before the timeout', async () => {
+    const { provider } = makeProvider();
+    const span = await provider.assertSpan('never-emitted', () => true, 50);
+    expect(span).toBeUndefined();
   });
 });

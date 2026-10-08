@@ -54,7 +54,7 @@ export class AchievementInstanceEventListenerAdapter implements OnModuleInit, On
       typeof event === 'object' &&
       event !== null &&
       'eventType' in event &&
-      (event as { eventType: unknown }).eventType === 'instance.created'
+      event.eventType === 'instance.created'
     );
   }
 
@@ -63,7 +63,7 @@ export class AchievementInstanceEventListenerAdapter implements OnModuleInit, On
       typeof event === 'object' &&
       event !== null &&
       'eventType' in event &&
-      (event as { eventType: unknown }).eventType === 'instance.player_finished'
+      event.eventType === 'instance.player_finished'
     );
   }
 

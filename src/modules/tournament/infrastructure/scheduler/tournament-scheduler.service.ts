@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { TournamentLifecycleService } from '../../domain/tournament-lifecycle.service';
@@ -7,6 +7,9 @@ import {
   type TournamentRepositoryPort,
 } from '../../domain/ports/tournament-repository.port';
 import { CACHE_PROVIDER, type CacheProvider } from '@/common/ports/cache.provider';
+import { REDIS_CIRCUIT_PORT, type RedisCircuitPort } from '@/common/ports/redis-circuit.port';
+import { acquireSchedulerLockOrRecordSkip } from '@/core/redis/scheduler-lock.helper';
+import { MetricsRegistry } from '@/core/observability/metrics.registry';
 
 const LOCK_TTL_MS = Object.freeze({
   /** 5-minute TTL — `handleRegistrationOpen` and `handleTournamentStart` run every 5 min */
@@ -29,6 +32,10 @@ export class TournamentSchedulerService {
     private readonly tournamentRepository: TournamentRepositoryPort,
     @Inject(CACHE_PROVIDER)
     private readonly cache: CacheProvider,
+    @Inject(REDIS_CIRCUIT_PORT)
+    private readonly redisCircuit: RedisCircuitPort,
+    @Optional()
+    private readonly metrics: MetricsRegistry,
     @InjectPinoLogger(TournamentSchedulerService.name)
     private readonly logger: PinoLogger,
   ) {}
@@ -36,15 +43,24 @@ export class TournamentSchedulerService {
   @Cron('*/5 * * * *')
   async handleRegistrationOpen(): Promise<void> {
     const lockKey = 'tournament:cron:registration-open';
-    const lockToken = await this.cache.acquireAdvisoryLock(lockKey, LOCK_TTL_MS.REGISTRATION_OPEN);
-    if (lockToken === null) {
+    const result = await acquireSchedulerLockOrRecordSkip({
+      cache: this.cache,
+      circuit: this.redisCircuit,
+      metrics: this.metrics,
+      lockKey,
+      lockTtlMs: LOCK_TTL_MS.REGISTRATION_OPEN,
+      job: 'tournament-registration-open',
+    });
+    if (!result.acquired) {
       this.logger.info({
         event: 'tournament_scheduler_skipped_lock_held',
         job: 'handleRegistrationOpen',
+        reason: result.reason,
       });
       return;
     }
 
+    const lockToken = result.token;
     try {
       await this.runRegistrationOpen();
     } finally {
@@ -79,15 +95,24 @@ export class TournamentSchedulerService {
   @Cron('*/5 * * * *')
   async handleTournamentStart(): Promise<void> {
     const lockKey = 'tournament:cron:tournament-start';
-    const lockToken = await this.cache.acquireAdvisoryLock(lockKey, LOCK_TTL_MS.TOURNAMENT_START);
-    if (lockToken === null) {
+    const result = await acquireSchedulerLockOrRecordSkip({
+      cache: this.cache,
+      circuit: this.redisCircuit,
+      metrics: this.metrics,
+      lockKey,
+      lockTtlMs: LOCK_TTL_MS.TOURNAMENT_START,
+      job: 'tournament-start',
+    });
+    if (!result.acquired) {
       this.logger.info({
         event: 'tournament_scheduler_skipped_lock_held',
         job: 'handleTournamentStart',
+        reason: result.reason,
       });
       return;
     }
 
+    const lockToken = result.token;
     try {
       await this.runTournamentStart();
     } finally {
@@ -117,18 +142,24 @@ export class TournamentSchedulerService {
   @Cron('*/15 * * * *')
   async handleTournamentFinalize(): Promise<void> {
     const lockKey = 'tournament:cron:tournament-finalize';
-    const lockToken = await this.cache.acquireAdvisoryLock(
+    const result = await acquireSchedulerLockOrRecordSkip({
+      cache: this.cache,
+      circuit: this.redisCircuit,
+      metrics: this.metrics,
       lockKey,
-      LOCK_TTL_MS.TOURNAMENT_FINALIZE,
-    );
-    if (lockToken === null) {
+      lockTtlMs: LOCK_TTL_MS.TOURNAMENT_FINALIZE,
+      job: 'tournament-finalize',
+    });
+    if (!result.acquired) {
       this.logger.info({
         event: 'tournament_scheduler_skipped_lock_held',
         job: 'handleTournamentFinalize',
+        reason: result.reason,
       });
       return;
     }
 
+    const lockToken = result.token;
     try {
       await this.runTournamentFinalize();
     } finally {
@@ -157,15 +188,24 @@ export class TournamentSchedulerService {
   @Cron('30 4 * * *')
   async handleParticipantTotalsReconcile(): Promise<void> {
     const lockKey = 'tournament:cron:totals-reconcile';
-    const lockToken = await this.cache.acquireAdvisoryLock(lockKey, LOCK_TTL_MS.TOTALS_RECONCILE);
-    if (lockToken === null) {
+    const result = await acquireSchedulerLockOrRecordSkip({
+      cache: this.cache,
+      circuit: this.redisCircuit,
+      metrics: this.metrics,
+      lockKey,
+      lockTtlMs: LOCK_TTL_MS.TOTALS_RECONCILE,
+      job: 'tournament-totals-reconcile',
+    });
+    if (!result.acquired) {
       this.logger.info({
         event: 'tournament_scheduler_skipped_lock_held',
         job: 'handleParticipantTotalsReconcile',
+        reason: result.reason,
       });
       return;
     }
 
+    const lockToken = result.token;
     try {
       await this.runParticipantTotalsReconcile();
     } finally {
@@ -206,15 +246,24 @@ export class TournamentSchedulerService {
   @Cron('* * * * *')
   async handleOpenDueRounds(): Promise<void> {
     const lockKey = 'tournament:cron:round-open';
-    const lockToken = await this.cache.acquireAdvisoryLock(lockKey, LOCK_TTL_MS.ROUND_OPEN);
-    if (lockToken === null) {
+    const result = await acquireSchedulerLockOrRecordSkip({
+      cache: this.cache,
+      circuit: this.redisCircuit,
+      metrics: this.metrics,
+      lockKey,
+      lockTtlMs: LOCK_TTL_MS.ROUND_OPEN,
+      job: 'tournament-round-open',
+    });
+    if (!result.acquired) {
       this.logger.info({
         event: 'tournament_scheduler_skipped_lock_held',
         job: 'handleOpenDueRounds',
+        reason: result.reason,
       });
       return;
     }
 
+    const lockToken = result.token;
     try {
       await this.runOpenDueRounds();
     } finally {
@@ -250,15 +299,24 @@ export class TournamentSchedulerService {
   @Cron('* * * * *')
   async handleCloseDueRounds(): Promise<void> {
     const lockKey = 'tournament:cron:round-close';
-    const lockToken = await this.cache.acquireAdvisoryLock(lockKey, LOCK_TTL_MS.ROUND_CLOSE);
-    if (lockToken === null) {
+    const result = await acquireSchedulerLockOrRecordSkip({
+      cache: this.cache,
+      circuit: this.redisCircuit,
+      metrics: this.metrics,
+      lockKey,
+      lockTtlMs: LOCK_TTL_MS.ROUND_CLOSE,
+      job: 'tournament-round-close',
+    });
+    if (!result.acquired) {
       this.logger.info({
         event: 'tournament_scheduler_skipped_lock_held',
         job: 'handleCloseDueRounds',
+        reason: result.reason,
       });
       return;
     }
 
+    const lockToken = result.token;
     try {
       await this.runCloseDueRounds();
     } finally {

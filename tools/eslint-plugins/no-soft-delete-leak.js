@@ -24,8 +24,6 @@ const SOFT_DELETABLE_TABLES = {
   tournaments: 'deleted_at',
   accounts: 'deleted_at',
   reviews: 'deleted_at',
-  reviewHelpfulVotes: 'review_helpful_votes',
-  reviewReports: 'review_reports',
 };
 
 /**

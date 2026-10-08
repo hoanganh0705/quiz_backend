@@ -81,7 +81,7 @@ export class ReviewRepository implements ReviewRepositoryPort {
       )
       .limit(1);
 
-    return (row as ReviewRow | undefined) ?? null;
+    return row ?? null;
   }
 
   async getMyQuizReview(quizId: string, userId: string): Promise<ReviewDetailByIdRow | null> {
@@ -109,7 +109,7 @@ export class ReviewRepository implements ReviewRepositoryPort {
       )
       .limit(1);
 
-    return (row as ReviewDetailByIdRow | undefined) ?? null;
+    return row ?? null;
   }
 
   async getReviewById(reviewId: string): Promise<ReviewRow | null> {
@@ -127,7 +127,7 @@ export class ReviewRepository implements ReviewRepositoryPort {
       .where(and(eq(quizReviews.reviewId, reviewId), ReviewRepository.ACTIVE_REVIEW_PREDICATE))
       .limit(1);
 
-    return (row as ReviewRow | undefined) ?? null;
+    return row ?? null;
   }
 
   async findReviewById(reviewId: string): Promise<ReviewDetailByIdRow | null> {
@@ -150,7 +150,7 @@ export class ReviewRepository implements ReviewRepositoryPort {
       .where(and(eq(quizReviews.reviewId, reviewId), ReviewRepository.ACTIVE_REVIEW_PREDICATE))
       .limit(1);
 
-    return (row as ReviewDetailByIdRow | undefined) ?? null;
+    return row ?? null;
   }
 
   async listReviewsByQuiz(params: {
@@ -203,7 +203,7 @@ export class ReviewRepository implements ReviewRepositoryPort {
         .orderBy(desc(quizReviews.helpfulCount), desc(quizReviews.reviewId))
         .limit(params.limit + 1);
 
-      return rows as unknown as ReviewDetailRow[];
+      return rows;
     }
 
     const cursor = params.cursor as ReviewCursor | null | undefined;
@@ -227,7 +227,7 @@ export class ReviewRepository implements ReviewRepositoryPort {
         .orderBy(desc(quizReviews.rating), desc(quizReviews.reviewId))
         .limit(params.limit + 1);
 
-      return rows as ReviewDetailRow[];
+      return rows;
     }
 
     if (params.sort === 'lowest_rating') {
@@ -240,7 +240,7 @@ export class ReviewRepository implements ReviewRepositoryPort {
         .orderBy(asc(quizReviews.rating), desc(quizReviews.reviewId))
         .limit(params.limit + 1);
 
-      return rows as ReviewDetailRow[];
+      return rows;
     }
 
     const rows = await this.db
@@ -252,7 +252,7 @@ export class ReviewRepository implements ReviewRepositoryPort {
       .orderBy(desc(quizReviews.createdAt), desc(quizReviews.reviewId))
       .limit(params.limit + 1);
 
-    return rows as ReviewDetailRow[];
+    return rows;
   }
 
   async listUserReviews(params: {
@@ -291,13 +291,22 @@ export class ReviewRepository implements ReviewRepositoryPort {
       .innerJoin(quizzes, eq(quizReviews.quizId, quizzes.quizId))
       .where(
         params.cursor
-          ? and(eq(quizReviews.userId, params.userId), visibilityAndActive, cursorCondition)
-          : and(eq(quizReviews.userId, params.userId), visibilityAndActive),
+          ? and(
+              eq(quizReviews.userId, params.userId),
+              visibilityAndActive,
+              cursorCondition,
+              notDeleted(quizReviews.deletedAt),
+            )
+          : and(
+              eq(quizReviews.userId, params.userId),
+              visibilityAndActive,
+              notDeleted(quizReviews.deletedAt),
+            ),
       )
       .orderBy(desc(quizReviews.createdAt), desc(quizReviews.reviewId))
       .limit(params.limit + 1);
 
-    return rows as MyReviewRow[];
+    return rows;
   }
 
   async getQuizReviewStats(quizId: string): Promise<ReviewStatsRow | null> {
@@ -316,7 +325,7 @@ export class ReviewRepository implements ReviewRepositoryPort {
       .from(quizReviews)
       .where(and(eq(quizReviews.quizId, quizId), ReviewRepository.ACTIVE_REVIEW_PREDICATE));
 
-    return (row as ReviewStatsRow | undefined) ?? null;
+    return row ?? null;
   }
 
   async getUserReviewDashboard(userId: string): Promise<ReviewDashboardRow> {
@@ -395,30 +404,44 @@ export class ReviewRepository implements ReviewRepositoryPort {
     const executeAdd = async (
       db: DbClient,
     ): Promise<{ inserted: boolean; quizId: string | null }> => {
-      const inserted = await db
-        .insert(reviewHelpfulVotes)
-        .values({ reviewId, userId, createdAt: nowIso })
-        .onConflictDoNothing({
-          target: [reviewHelpfulVotes.reviewId, reviewHelpfulVotes.userId],
-        })
-        .returning({ voteId: reviewHelpfulVotes.voteId });
+      const result = await db.execute(sql`
+        WITH inserted AS (
+          INSERT INTO review_helpful_votes (review_id, user_id, created_at)
+          VALUES (${reviewId}, ${userId}, ${nowIso}::timestamptz)
+          ON CONFLICT (review_id, user_id) DO NOTHING
+          RETURNING review_id
+        ),
+        bumped AS (
+          UPDATE quiz_reviews
+          SET helpful_count = helpful_count + 1
+          WHERE review_id = ${reviewId}
+            AND EXISTS (SELECT 1 FROM inserted)
+          RETURNING quiz_id
+        )
+        SELECT
+          EXISTS (SELECT 1 FROM inserted) AS "inserted",
+          (SELECT quiz_id FROM bumped) AS "quizId"
+      `);
 
-      if (inserted.length === 0) {
+      const row = (
+        result as unknown as {
+          rows?: { inserted?: boolean; quizId?: string | null }[];
+        }
+      ).rows?.[0];
+
+      const inserted = Boolean(row?.inserted);
+      let quizId = row?.quizId ?? null;
+
+      if (!inserted) {
         const [existing] = await db
           .select({ quizId: quizReviews.quizId })
           .from(quizReviews)
-          .where(eq(quizReviews.reviewId, reviewId))
+          .where(and(eq(quizReviews.reviewId, reviewId), notDeleted(quizReviews.deletedAt)))
           .limit(1);
-        return { inserted: false, quizId: existing?.quizId ?? null };
+        quizId = existing?.quizId ?? null;
       }
 
-      const [updated] = await db
-        .update(quizReviews)
-        .set({ helpfulCount: sql`helpful_count + 1` })
-        .where(eq(quizReviews.reviewId, reviewId))
-        .returning({ quizId: quizReviews.quizId });
-
-      return { inserted: true, quizId: updated?.quizId ?? null };
+      return { inserted, quizId };
     };
 
     const existingTx = this.transactionalContext?.getDbClient() as DbClient | null;
@@ -450,7 +473,7 @@ export class ReviewRepository implements ReviewRepositoryPort {
         const [existing] = await db
           .select({ quizId: quizReviews.quizId })
           .from(quizReviews)
-          .where(eq(quizReviews.reviewId, reviewId))
+          .where(and(eq(quizReviews.reviewId, reviewId), notDeleted(quizReviews.deletedAt)))
           .limit(1);
         return { removed: false, quizId: existing?.quizId ?? null };
       }
@@ -458,7 +481,13 @@ export class ReviewRepository implements ReviewRepositoryPort {
       const [updated] = await db
         .update(quizReviews)
         .set({ helpfulCount: sql`helpful_count - 1` })
-        .where(and(eq(quizReviews.reviewId, reviewId), gt(quizReviews.helpfulCount, 0)))
+        .where(
+          and(
+            eq(quizReviews.reviewId, reviewId),
+            gt(quizReviews.helpfulCount, 0),
+            notDeleted(quizReviews.deletedAt),
+          ),
+        )
         .returning({ quizId: quizReviews.quizId });
 
       return {
@@ -484,19 +513,19 @@ export class ReviewRepository implements ReviewRepositoryPort {
   }
 
   async reconcileHelpfulCountForReview(reviewId: string): Promise<number> {
-    const [row] = await this.db
-      .select({ count: sql<number>`COUNT(*)::int` })
-      .from(reviewHelpfulVotes)
-      .where(eq(reviewHelpfulVotes.reviewId, reviewId));
+    const result = await this.db.execute(sql`
+      UPDATE quiz_reviews
+      SET helpful_count = (
+        SELECT COUNT(*)::int
+        FROM review_helpful_votes
+        WHERE review_id = ${reviewId}
+      )
+      WHERE review_id = ${reviewId}
+      RETURNING helpful_count
+    `);
 
-    const target = Number(row?.count ?? 0);
-
-    await this.db
-      .update(quizReviews)
-      .set({ helpfulCount: target })
-      .where(eq(quizReviews.reviewId, reviewId));
-
-    return target;
+    const row = (result as unknown as { rows?: { helpful_count?: number | string }[] }).rows?.[0];
+    return Number(row?.helpful_count ?? 0);
   }
 
   async createReview(params: {
@@ -526,7 +555,7 @@ export class ReviewRepository implements ReviewRepositoryPort {
         updatedAt: quizReviews.updatedAt,
       });
 
-    return created as ReviewRow;
+    return created;
   }
 
   async updateReview(params: {
@@ -563,7 +592,7 @@ export class ReviewRepository implements ReviewRepositoryPort {
         updatedAt: quizReviews.updatedAt,
       });
 
-    return (updated as ReviewRow | undefined) ?? null;
+    return updated ?? null;
   }
 
   async reviewExistsIncludingDeleted(reviewId: string): Promise<boolean> {
@@ -580,7 +609,7 @@ export class ReviewRepository implements ReviewRepositoryPort {
     const [row] = await tx
       .select({ quizId: quizReviews.quizId })
       .from(quizReviews)
-      .where(eq(quizReviews.reviewId, reviewId))
+      .where(and(eq(quizReviews.reviewId, reviewId), notDeleted(quizReviews.deletedAt)))
       .limit(1);
 
     return row?.quizId ?? null;

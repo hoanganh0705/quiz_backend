@@ -3,6 +3,8 @@ import { DatabaseModule } from '@/core/database/database.module';
 
 // Application Services
 import { QuizApplicationService } from './application/quiz.application.service';
+import { QuizzesBundleService } from './application/quizzes-bundle.service';
+import { QuizGraphqlResolver } from './graphql/quiz.graphql-resolver';
 import { QuizVersionApplicationService } from './application/quiz-version.application.service';
 import { QuizQuestionApplicationService } from './application/quiz-question.application.service';
 import { QuizCacheService } from './application/quiz-cache.service';
@@ -42,6 +44,7 @@ import { QUIZ_DOMAIN_EVENT_BUS } from './domain/ports/quiz-domain-event-bus.port
 
 // Transport
 import { QuizController } from './transport/controller/quiz.controller';
+import { QuizAdminController } from './transport/controller/quiz-admin.controller';
 import { QuizPresenter } from './transport/presenters/quiz.presenter';
 
 // Mappers
@@ -67,6 +70,8 @@ import { QuizCommentCountUpdater } from './domain/events/quiz-comment-count-upda
 import { BookmarkModule } from '@/modules/bookmark/bookmark.module';
 import { CommentModule } from '@/modules/comment/comment.module';
 import { UserModule } from '@/modules/user/user.module';
+import { CategoryModule } from '@/modules/category/category.module';
+import { TagModule } from '@/modules/tag/tag.module';
 
 @Module({
   imports: [
@@ -76,10 +81,15 @@ import { UserModule } from '@/modules/user/user.module';
     forwardRef(() => BookmarkModule),
     forwardRef(() => CommentModule),
     forwardRef(() => UserModule),
+    // TagModule consumes the quiz analytics port, so the pair is mutually
+    // dependent and has to resolve through forward references.
+    forwardRef(() => CategoryModule),
+    forwardRef(() => TagModule),
   ],
   providers: [
     // Application Services
     QuizApplicationService,
+    QuizzesBundleService,
     QuizVersionApplicationService,
     QuizQuestionApplicationService,
     QuizCacheService,
@@ -135,8 +145,11 @@ import { UserModule } from '@/modules/user/user.module';
 
     // Domain Event Bus
     QuizDomainEventBus,
+
+    // GraphQL Resolvers
+    QuizGraphqlResolver,
   ],
-  controllers: [QuizController],
+  controllers: [QuizController, QuizAdminController],
   exports: [
     QUIZ_REPOSITORY_PORT,
     QUIZ_QUESTION_REPOSITORY_PORT,
@@ -144,6 +157,7 @@ import { UserModule } from '@/modules/user/user.module';
     QUIZ_ANALYTICS_PORT,
     QUIZ_LISTING_PORT,
     QuizApplicationService,
+    QuizzesBundleService,
     QuizAnalyticsService,
     AnalyticsEventHandler,
     QUIZ_RECOMMENDATION_REPOSITORY_PORT,

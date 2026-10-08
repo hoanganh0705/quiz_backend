@@ -33,7 +33,7 @@ export class RankHistoryRepository {
   ) {}
 
   private async executeRaw<T>(query: ReturnType<typeof sql>): Promise<RawQueryResult<T>> {
-    return (await this.db.execute(query)) as unknown as RawQueryResult<T>;
+    return await this.db.execute(query);
   }
 
   async createRankHistory(params: {
@@ -117,6 +117,92 @@ export class RankHistoryRepository {
       current: (snapshots[0] as RankHistoryRow | undefined) ?? null,
       previous: (snapshots[1] as RankHistoryRow | undefined) ?? null,
     };
+  }
+
+  async getBatchedLatestRankSnapshots(params: {
+    tuples: ReadonlyArray<{ userId: string; period: RankingPeriod }>;
+  }): Promise<Map<string, Map<RankingPeriod, RankSnapshotPairRow>>> {
+    const result: Map<string, Map<RankingPeriod, RankSnapshotPairRow>> = new Map();
+
+    if (params.tuples.length === 0) {
+      return result;
+    }
+
+    const tupleChunks: ReturnType<typeof sql>[] = params.tuples.map((t) => {
+      return sql`(${t.userId}::text, ${t.period}::text)`;
+    });
+    const valuePlaceholders = sql.join(tupleChunks, sql`, `);
+
+    const statement = sql`
+      WITH latest AS (
+        SELECT user_id, period, MAX(snapshot_date) AS max_date
+          FROM ${rankHistory}
+         WHERE (user_id, period) IN (${valuePlaceholders})
+         GROUP BY user_id, period
+      )
+      SELECT rh.user_id        AS "userId",
+             rh.period         AS "period",
+             rh.rank           AS "rank",
+             rh.xp             AS "xp",
+             rh.snapshot_date  AS "snapshotDate"
+        FROM ${rankHistory} rh
+        JOIN latest l
+          ON l.user_id = rh.user_id
+         AND l.period  = rh.period
+         AND l.max_date = rh.snapshot_date
+    `;
+
+    const rows = (await this.db.execute(statement)) as unknown as {
+      rows: Array<{
+        userId: string;
+        period: string;
+        rank: number;
+        xp: number;
+        snapshotDate: string;
+      }>;
+    };
+
+    for (const row of rows.rows) {
+      if (!this.isRankingPeriod(row.period)) {
+        continue;
+      }
+      const period = row.period;
+
+      let byUser = result.get(row.userId);
+      if (!byUser) {
+        byUser = new Map();
+        result.set(row.userId, byUser);
+      }
+
+      let pair = byUser.get(period);
+      if (!pair) {
+        pair = { current: null, previous: null };
+        byUser.set(period, pair);
+      }
+
+      const snapshot: RankHistoryRow = {
+        historyId: '',
+        userId: row.userId,
+        period,
+        snapshotDate: row.snapshotDate,
+        rank: row.rank,
+        xp: row.xp,
+        recordedAt: row.snapshotDate,
+      };
+
+      if (pair.current === null || row.snapshotDate >= pair.current.snapshotDate) {
+        pair.previous = pair.current;
+        pair.current = snapshot;
+      } else if (pair.previous === null || row.snapshotDate >= pair.previous.snapshotDate) {
+        pair.previous = snapshot;
+      }
+    }
+
+    return result;
+  }
+
+  private isRankingPeriod(value: string): value is RankingPeriod {
+    return value === 'daily' || value === 'weekly' || value === 'monthly' || value === 'all_time';
   }
 
   async getTopMovers(params: { period: RankingPeriod; limit: number }): Promise<TopMoverRow[]> {

@@ -44,7 +44,7 @@ export class QuizQuestionRepository implements QuizQuestionRepositoryPort {
       .where(eq(quizQuestions.quizVersionId, quizVersionId))
       .orderBy(quizQuestions.position, quizAnswerOptions.position);
 
-    return rows as QuizQuestionJoinRow[];
+    return rows;
   }
 
   async getQuestionById(questionId: string): Promise<QuizQuestionJoinRow[]> {
@@ -55,7 +55,22 @@ export class QuizQuestionRepository implements QuizQuestionRepositoryPort {
       .where(eq(quizQuestions.questionId, questionId))
       .orderBy(quizQuestions.position, quizAnswerOptions.position);
 
-    return rows as QuizQuestionJoinRow[];
+    return rows;
+  }
+
+  async getQuestionByPosition(
+    quizVersionId: string,
+    position: number,
+  ): Promise<QuizQuestionJoinRow | null> {
+    const rows = await this.db
+      .select(QUIZ_QUESTION_JOIN_PROJECTION)
+      .from(quizQuestions)
+      .leftJoin(quizAnswerOptions, eq(quizQuestions.questionId, quizAnswerOptions.questionId))
+      .where(eq(quizQuestions.quizVersionId, quizVersionId))
+      .orderBy(quizQuestions.position, quizAnswerOptions.position);
+
+    const matched = rows.find((r) => r.position === position);
+    return matched ?? null;
   }
 
   async getQuestionsByIds(questionIds: string[]): Promise<QuizQuestionJoinRow[]> {
@@ -70,7 +85,7 @@ export class QuizQuestionRepository implements QuizQuestionRepositoryPort {
       .where(inArray(quizQuestions.questionId, questionIds))
       .orderBy(quizQuestions.position, quizAnswerOptions.position);
 
-    return rows as QuizQuestionJoinRow[];
+    return rows;
   }
 
   async createQuestionWithOptions(params: {
@@ -140,37 +155,35 @@ export class QuizQuestionRepository implements QuizQuestionRepositoryPort {
   ): Promise<{ questionIds: string[] }> {
     try {
       const questionIds = await this.db.transaction(async (tx) => {
-        const createdQuestionIds: string[] = [];
+        const allQuestions = params.map((q) => ({
+          quizVersionId: q.quizVersionId,
+          position: q.position,
+          questionText: q.questionText,
+          imageUrl: q.imageUrl,
+          createdAt: q.createdAt,
+          updatedAt: q.updatedAt,
+        }));
 
-        for (const question of params) {
-          const [createdQuestion] = await tx
-            .insert(quizQuestions)
-            .values({
-              quizVersionId: question.quizVersionId,
-              position: question.position,
-              questionText: question.questionText,
-              imageUrl: question.imageUrl,
-              createdAt: question.createdAt,
-              updatedAt: question.updatedAt,
-            })
-            .returning({
-              questionId: quizQuestions.questionId,
-            });
+        const insertedQuestions = await tx
+          .insert(quizQuestions)
+          .values(allQuestions)
+          .returning({ questionId: quizQuestions.questionId });
 
-          createdQuestionIds.push(createdQuestion.questionId);
+        const allOptions = insertedQuestions.flatMap((q, i) =>
+          params[i].answerOptions.map((o) => ({
+            questionId: q.questionId,
+            position: o.position,
+            value: o.value,
+            isCorrect: o.isCorrect,
+            createdAt: o.createdAt,
+          })),
+        );
 
-          await tx.insert(quizAnswerOptions).values(
-            question.answerOptions.map((option) => ({
-              questionId: createdQuestion.questionId,
-              position: option.position,
-              value: option.value,
-              isCorrect: option.isCorrect,
-              createdAt: option.createdAt,
-            })),
-          );
+        if (allOptions.length > 0) {
+          await tx.insert(quizAnswerOptions).values(allOptions);
         }
 
-        return createdQuestionIds;
+        return insertedQuestions.map((q) => q.questionId);
       });
 
       return { questionIds };

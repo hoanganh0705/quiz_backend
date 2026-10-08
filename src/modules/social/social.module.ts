@@ -11,6 +11,7 @@ import {
   BlockRepository,
 } from './infrastructure/repositories';
 import { SocialCacheService } from './infrastructure/cache';
+import { SocialFeedCache } from './infrastructure/cache/social-feed-cache.service';
 import { RankingAdapter } from './infrastructure/adapters/ranking.adapter';
 import { AchievementFeedListenerAdapter } from './infrastructure/adapters/achievement-feed-listener.adapter';
 import { RankingFeedListenerAdapter } from './infrastructure/adapters/ranking-feed-listener.adapter';
@@ -62,6 +63,7 @@ import { SocialFeedCleanupScheduler } from './infrastructure/scheduler/social-fe
     UserFollowRepository,
     BlockRepository,
     SocialCacheService,
+    SocialFeedCache,
     SocialPresenter,
     RankingAdapter,
     AchievementFeedListenerAdapter,
@@ -90,6 +92,7 @@ import { SocialFeedCleanupScheduler } from './infrastructure/scheduler/social-fe
     FRIENDSHIP_REPOSITORY_PORT,
     USER_FOLLOW_REPOSITORY_PORT,
     BLOCK_REPOSITORY_PORT,
+    SocialFeedCache,
   ],
 })
 export class SocialModule {}

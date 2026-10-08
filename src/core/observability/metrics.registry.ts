@@ -72,6 +72,20 @@ export class MetricsRegistry implements OnModuleInit {
     labelKeys: ['aggregate_type'],
     values: new Map(),
   };
+  readonly outboxHandlerFailed: Metric = {
+    name: 'quiz_outbox_handler_failed_total',
+    type: 'counter',
+    help: 'Number of outbox handler invocations that rejected after dispatch',
+    labelKeys: ['aggregate_type'],
+    values: new Map(),
+  };
+  readonly xpIngestDuplicateSkipped: Metric = {
+    name: 'quiz_xp_ingest_duplicate_skipped_total',
+    type: 'counter',
+    help: 'Number of XP ingestion calls skipped because the dedupe key was already claimed',
+    labelKeys: ['source'],
+    values: new Map(),
+  };
   readonly bullmqQueueDepth: Metric = {
     name: 'quiz_bullmq_queue_depth',
     type: 'gauge',
@@ -84,6 +98,62 @@ export class MetricsRegistry implements OnModuleInit {
     type: 'gauge',
     help: 'Number of currently active tracing spans',
     labelKeys: [],
+    values: new Map(),
+  };
+  readonly authRateLimiterFailOpen: Metric = {
+    name: 'quiz_auth_rate_limiter_fail_open_total',
+    type: 'counter',
+    help: 'Number of auth rate-limit checks that fell open because the Redis circuit was open',
+    labelKeys: ['bucket'],
+    values: new Map(),
+  };
+  readonly schedulerSkipped: Metric = {
+    name: 'quiz_scheduler_skipped_total',
+    type: 'counter',
+    help: 'Number of cron-job skips caused by the Redis circuit being open',
+    labelKeys: ['job'],
+    values: new Map(),
+  };
+  readonly cacheInvalidationFailed: Metric = {
+    name: 'quiz_cache_invalidation_failed_total',
+    type: 'counter',
+    help: 'Number of cache invalidation attempts that failed (best-effort)',
+    labelKeys: ['cache'],
+    values: new Map(),
+  };
+  readonly cacheHit: Metric = {
+    name: 'quiz_cache_hit_total',
+    type: 'counter',
+    help: 'Number of cache reads that returned a value',
+    labelKeys: ['cache'],
+    values: new Map(),
+  };
+  readonly retryQueueDlqSize: Metric = {
+    name: 'quiz_retry_queue_dlq_size',
+    type: 'gauge',
+    help: 'Number of events currently sitting in the in-process retry-queue dead-letter list, per tier',
+    labelKeys: ['tier'],
+    values: new Map(),
+  };
+  readonly cacheMiss: Metric = {
+    name: 'quiz_cache_miss_total',
+    type: 'counter',
+    help: 'Number of cache reads that returned no value',
+    labelKeys: ['cache'],
+    values: new Map(),
+  };
+  readonly wsThrottlerRejections: Metric = {
+    name: 'quiz_ws_throttler_rejections_total',
+    type: 'counter',
+    help: 'Number of WebSocket messages rejected by the per-user throttler',
+    labelKeys: ['namespace', 'handler'],
+    values: new Map(),
+  };
+  readonly httpLogVolume: Metric = {
+    name: 'quiz_http_log_volume_total',
+    type: 'counter',
+    help: 'Per-path HTTP request volume observed by the request logger (independent of pino autoLogging.ignore, so operators can decide future filtering)',
+    labelKeys: ['path', 'method', 'status'],
     values: new Map(),
   };
 
@@ -100,8 +170,18 @@ export class MetricsRegistry implements OnModuleInit {
       this.redisCircuitShortCircuits,
       this.outboxLag,
       this.outboxDlqCount,
+      this.outboxHandlerFailed,
+      this.xpIngestDuplicateSkipped,
       this.bullmqQueueDepth,
       this.tracingSpans,
+      this.authRateLimiterFailOpen,
+      this.schedulerSkipped,
+      this.retryQueueDlqSize,
+      this.cacheInvalidationFailed,
+      this.cacheHit,
+      this.cacheMiss,
+      this.wsThrottlerRejections,
+      this.httpLogVolume,
     ];
   }
 
@@ -154,6 +234,74 @@ export class MetricsRegistry implements OnModuleInit {
    */
   setOutboxDlqCount(aggregateType: string, count: number): void {
     this.outboxDlqCount.values.set(`aggregate_type=${aggregateType}`, count);
+  }
+
+  incOutboxHandlerFailed(aggregateType: string): void {
+    const labelKey = `aggregate_type=${aggregateType}`;
+    this.outboxHandlerFailed.values.set(
+      labelKey,
+      (this.outboxHandlerFailed.values.get(labelKey) ?? 0) + 1,
+    );
+  }
+
+  incXpIngestDuplicateSkipped(source: 'in_proc' | 'outbox' | 'manual'): void {
+    const labelKey = `source=${source}`;
+    this.xpIngestDuplicateSkipped.values.set(
+      labelKey,
+      (this.xpIngestDuplicateSkipped.values.get(labelKey) ?? 0) + 1,
+    );
+  }
+
+  incAuthRateLimiterFailOpen(bucket: string): void {
+    const labelKey = `bucket=${bucket}`;
+    this.authRateLimiterFailOpen.values.set(
+      labelKey,
+      (this.authRateLimiterFailOpen.values.get(labelKey) ?? 0) + 1,
+    );
+  }
+
+  incSchedulerSkipped(job: string): void {
+    const labelKey = `job=${job}`;
+    this.schedulerSkipped.values.set(
+      labelKey,
+      (this.schedulerSkipped.values.get(labelKey) ?? 0) + 1,
+    );
+  }
+
+  incCacheInvalidationFailed(cache: string): void {
+    const labelKey = `cache=${cache}`;
+    this.cacheInvalidationFailed.values.set(
+      labelKey,
+      (this.cacheInvalidationFailed.values.get(labelKey) ?? 0) + 1,
+    );
+  }
+
+  incCacheHit(cache: string): void {
+    const labelKey = `cache=${cache}`;
+    this.cacheHit.values.set(labelKey, (this.cacheHit.values.get(labelKey) ?? 0) + 1);
+  }
+
+  incCacheMiss(cache: string): void {
+    const labelKey = `cache=${cache}`;
+    this.cacheMiss.values.set(labelKey, (this.cacheMiss.values.get(labelKey) ?? 0) + 1);
+  }
+
+  incWsThrottlerRejected(namespace: string, handler: string): void {
+    const labelKey = `namespace=${namespace},handler=${handler}`;
+    this.wsThrottlerRejections.values.set(
+      labelKey,
+      (this.wsThrottlerRejections.values.get(labelKey) ?? 0) + 1,
+    );
+  }
+
+  incHttpLogVolume(path: string, method: string, status: string): void {
+    const labelKey = labelsKey({ path, method, status });
+    this.httpLogVolume.values.set(labelKey, (this.httpLogVolume.values.get(labelKey) ?? 0) + 1);
+  }
+
+  setRetryQueueDlqSize(tier: string, size: number): void {
+    const labelKey = `tier=${tier}`;
+    this.retryQueueDlqSize.values.set(labelKey, size);
   }
 
   render(): string {

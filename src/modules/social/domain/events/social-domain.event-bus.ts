@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional, Inject } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { BaseDomainEventBus } from '@/common/events/base-domain-event-bus';
 import type { SocialDomainEventBusPort, SocialDomainEvent } from './social-event-bus.port';
@@ -13,6 +13,7 @@ import type {
   UserFollowedEvent,
   UserUnfollowedEvent,
 } from './social-domain.events';
+import { TracingProvider } from '@/core/observability/tracing.provider';
 
 @Injectable()
 export class SocialDomainEventBus
@@ -22,8 +23,11 @@ export class SocialDomainEventBus
   constructor(
     @InjectPinoLogger(SocialDomainEventBus.name)
     logger: PinoLogger,
+    @Optional()
+    @Inject(TracingProvider)
+    tracing?: TracingProvider,
   ) {
-    super(logger, { logEventName: 'social_event', propagateCorrelationId: true });
+    super(logger, { logEventName: 'social_event', propagateCorrelationId: true }, tracing);
   }
 
   subscribe(handler: (event: SocialDomainEvent) => void): () => void {

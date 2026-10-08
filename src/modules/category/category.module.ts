@@ -9,7 +9,9 @@ import { CategoryRepository } from './infrastructure/repositories/category.repos
 import { CategoryFollowRepository } from './infrastructure/repositories/category-follow.repository';
 import { CategoryRankingRepository } from './infrastructure/repositories/category-ranking.repository';
 import { CategoryDomainEventBus } from './domain/events/category-domain.event-bus';
+import { CategoryRankingCache } from './infrastructure/cache/category-ranking-cache.service';
 import { DatabaseModule } from '@/core/database/database.module';
+import { RedisModule } from '@/core/redis/redis.module';
 import { QuizModule } from '@/modules/quiz/quiz.module';
 import {
   CATEGORY_REPOSITORY_PORT,
@@ -20,7 +22,7 @@ import {
 import { CategoryEventBootstrapService } from './category-event-bootstrap.service';
 
 @Module({
-  imports: [DatabaseModule, QuizModule],
+  imports: [DatabaseModule, RedisModule, QuizModule],
   controllers: [CategoryController, UserCategoryController],
   providers: [
     CategoryApplicationService,
@@ -31,6 +33,7 @@ import { CategoryEventBootstrapService } from './category-event-bootstrap.servic
     CategoryFollowRepository,
     CategoryRankingRepository,
     CategoryDomainEventBus,
+    CategoryRankingCache,
     CategoryEventBootstrapService,
     { provide: CATEGORY_REPOSITORY_PORT, useClass: CategoryRepository },
     { provide: CATEGORY_FOLLOW_REPOSITORY_PORT, useClass: CategoryFollowRepository },
@@ -44,6 +47,7 @@ import { CategoryEventBootstrapService } from './category-event-bootstrap.servic
     CATEGORY_FOLLOW_REPOSITORY_PORT,
     CATEGORY_RANKING_REPOSITORY_PORT,
     CATEGORY_DOMAIN_EVENT_BUS,
+    CategoryRankingCache,
   ],
 })
 export class CategoryModule {}

@@ -116,26 +116,20 @@ const resourceOk = <T>(
   description: string,
   example?: unknown,
 ): MethodDecorator =>
-  ApiOkResource(
-    model as new () => unknown as Parameters<typeof ApiOkResource>[0],
-    {
-      description,
-      example,
-    } as ApiResponseOptions,
-  );
+  ApiOkResource(model as new () => unknown as Parameters<typeof ApiOkResource>[0], {
+    description,
+    example,
+  });
 
 const resourceCreated = <T>(
   model: new () => T,
   description: string,
   example?: unknown,
 ): MethodDecorator =>
-  ApiCreatedResource(
-    model as new () => unknown as Parameters<typeof ApiCreatedResource>[0],
-    {
-      description,
-      example,
-    } as ApiResponseOptions,
-  );
+  ApiCreatedResource(model as new () => unknown as Parameters<typeof ApiCreatedResource>[0], {
+    description,
+    example,
+  });
 
 const resourceList = <T>(
   model: new () => T,
@@ -146,7 +140,7 @@ const resourceList = <T>(
   ApiOkResourceList(model as new () => unknown as Parameters<typeof ApiOkResourceList>[0], kind, {
     description,
     example,
-  } as ApiResponseOptions);
+  });
 
 // ─── GET /reviews/me ─────────────────────────────────────────────────
 

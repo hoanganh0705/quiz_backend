@@ -3,6 +3,7 @@ import { and, desc, eq, or, sql } from 'drizzle-orm';
 import { DRIZZLE } from '@/core/database/drizzle.constants';
 import type { DrizzleDB } from '@/core/database/database.module';
 import { quizReviews, users, quizzes, reviewReports } from '@/core/database/schema';
+import { notDeleted } from '@/common/database/soft-delete.helper';
 import type {
   ReviewReportRow,
   ReportedReviewRow,
@@ -77,7 +78,7 @@ export class ReviewReportRepository implements ReviewReportRepositoryPort {
       .orderBy(desc(reviewReports.createdAt), desc(reviewReports.reportId))
       .limit(params.limit + 1);
 
-    return rows as unknown as ReportedReviewRow[];
+    return rows;
   }
 
   async createReport(params: {
@@ -110,7 +111,7 @@ export class ReviewReportRepository implements ReviewReportRepositoryPort {
           updatedAt: reviewReports.updatedAt,
         });
 
-      return report as unknown as ReviewReportRow;
+      return report;
     } catch (error) {
       const pgError = error as { code?: string; constraint?: string };
 
@@ -159,14 +160,20 @@ export class ReviewReportRepository implements ReviewReportRepositoryPort {
         updatedAt: reviewReports.updatedAt,
       })
       .from(reviewReports)
-      .innerJoin(quizReviews, eq(reviewReports.reviewId, quizReviews.reviewId))
-      .innerJoin(quizzes, eq(quizReviews.quizId, quizzes.quizId))
-      .innerJoin(users, eq(quizReviews.userId, users.userId))
+      .innerJoin(
+        quizReviews,
+        and(eq(reviewReports.reviewId, quizReviews.reviewId), notDeleted(quizReviews.deletedAt)),
+      )
+      .innerJoin(
+        quizzes,
+        and(eq(quizReviews.quizId, quizzes.quizId), notDeleted(quizzes.deletedAt)),
+      )
+      .innerJoin(users, and(eq(quizReviews.userId, users.userId), notDeleted(users.deletedAt)))
       .where(whereClauses.length > 0 ? and(...whereClauses) : undefined)
       .orderBy(desc(reviewReports.createdAt), desc(reviewReports.reportId))
       .limit(params.limit + 1);
 
-    return rows as unknown as PlatformReportRow[];
+    return rows;
   }
 
   async updateReportStatus(params: {
@@ -186,7 +193,7 @@ export class ReviewReportRepository implements ReviewReportRepositoryPort {
       .from(reviewReports)
       .where(eq(reviewReports.reportId, reportId))
       .limit(1);
-    return (row?.status ?? null) as ReviewReportRow['status'] | null;
+    return row?.status ?? null;
   }
 
   async updateReportStatusIfCurrent(params: {

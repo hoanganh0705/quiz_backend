@@ -38,16 +38,7 @@ function makeService() {
   const sendBatch = jest.fn().mockResolvedValue({ sent: 2, skipped: 0 });
   const channelService: NotificationChannelServicePort = { send, sendBatch };
   const userRepository: UserRepositoryPort = {
-    findUsersByRole: jest
-      .fn()
-      .mockResolvedValue([
-        { userId: 'mod-1' } as unknown as Awaited<
-          ReturnType<UserRepositoryPort['findUsersByRole']>
-        >[number],
-        { userId: 'mod-2' } as unknown as Awaited<
-          ReturnType<UserRepositoryPort['findUsersByRole']>
-        >[number],
-      ]),
+    findUsersByRole: jest.fn().mockResolvedValue([{ userId: 'mod-1' }, { userId: 'mod-2' }]),
   } as unknown as UserRepositoryPort;
 
   const listener = new CommentNotificationListener(

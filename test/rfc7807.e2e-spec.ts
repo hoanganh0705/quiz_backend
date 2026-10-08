@@ -886,6 +886,11 @@ class Rfc7807FixtureController {
 
   @Get('non-error-throw')
   nonErrorThrow(): never {
+    // Throwing a non-Error value is intentional: this fixture
+    // exercises the exception filter's coercion of arbitrary
+    // throwables into a 500 problem document. Disable
+    // `only-throw-error` for this single fixture.
+    // eslint-disable-next-line @typescript-eslint/only-throw-error
     throw 'a non-error throwable';
   }
 

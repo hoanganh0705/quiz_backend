@@ -188,7 +188,7 @@ describe('NotificationOutboxAdapter.processBatch (serial processing)', () => {
     };
 
     const txContext = new TransactionalContext();
-    txContext.getDbClient = jest.fn().mockReturnValue({} as DrizzleDB);
+    txContext.getDbClient = jest.fn().mockReturnValue({});
 
     const svc = new NotificationOutboxAdapter(
       db as unknown as DrizzleDB,
@@ -202,7 +202,6 @@ describe('NotificationOutboxAdapter.processBatch (serial processing)', () => {
 
     await (svc as unknown as { processBatch: () => Promise<void> }).processBatch();
 
-    // In serial mode, each event's "start" must precede the next's "start"
     const e1Start = order.indexOf('start:e-1');
     const e2Start = order.indexOf('start:e-2');
     const e3Start = order.indexOf('start:e-3');
@@ -210,20 +209,81 @@ describe('NotificationOutboxAdapter.processBatch (serial processing)', () => {
     expect(e2Start).toBeGreaterThan(e1Start);
     expect(e3Start).toBeGreaterThan(e2Start);
   });
-});
 
-describe('NotificationOutboxAdapter.monitorDeadLetterQueue', () => {
-  it('logs a DLQ alert when poisoned rows exist', async () => {
-    const logger = makeLogger();
+  it('processes rows in chunks of bounded concurrency', async () => {
+    const order: string[] = [];
+
+    const processEvent = jest.fn().mockImplementation(async (ev: { eventId: string }) => {
+      order.push(`start:${ev.eventId}`);
+      await new Promise((r) => setTimeout(r, 5));
+      order.push(`end:${ev.eventId}`);
+    });
+
+    const rows = [
+      { eventId: 'c-1' },
+      { eventId: 'c-2' },
+      { eventId: 'c-3' },
+      { eventId: 'c-4' },
+      { eventId: 'c-5' },
+      { eventId: 'c-6' },
+    ];
+
+    const chain: any = {};
+    chain.from = jest.fn().mockReturnValue(chain);
+    chain.where = jest.fn().mockReturnValue(chain);
+    chain.orderBy = jest.fn().mockReturnValue(chain);
+    chain.limit = jest.fn().mockResolvedValue(rows);
     const db = {
-      select: jest.fn().mockReturnThis(),
-      from: jest.fn().mockReturnThis(),
-      where: jest.fn().mockReturnThis(),
-      limit: jest.fn().mockResolvedValue([{ eventId: 'e-1' }, { eventId: 'e-2' }]),
+      select: jest.fn().mockReturnValue(chain),
+      update: jest.fn().mockReturnThis(),
+      set: jest.fn().mockReturnThis(),
     };
+
+    const txContext = new TransactionalContext();
+    txContext.getDbClient = jest.fn().mockReturnValue({});
 
     const svc = new NotificationOutboxAdapter(
       db as unknown as DrizzleDB,
+      txContext,
+      undefined,
+      undefined,
+      makeLogger(),
+    );
+
+    (svc as unknown as { processEvent: typeof processEvent }).processEvent = processEvent;
+
+    const start = Date.now();
+    await (svc as unknown as { processBatch: () => Promise<void> }).processBatch();
+    const elapsed = Date.now() - start;
+
+    expect(processEvent).toHaveBeenCalledTimes(6);
+    expect(elapsed).toBeLessThan(6 * 5);
+  });
+});
+
+describe('NotificationOutboxAdapter.monitorDeadLetterQueue', () => {
+  it('logs a DLQ alert when poisoned rows exist with total and sample counts', async () => {
+    const logger = makeLogger();
+    let callCount = 0;
+
+    const countChain: any = {};
+    countChain.from = jest.fn().mockReturnValue(countChain);
+    countChain.where = jest.fn().mockResolvedValue([{ count: 42 }]);
+
+    const sampleChain: any = {};
+    sampleChain.from = jest.fn().mockReturnValue(sampleChain);
+    sampleChain.where = jest.fn().mockReturnValue(sampleChain);
+    sampleChain.limit = jest.fn().mockResolvedValue([{ eventId: 'e-1' }, { eventId: 'e-2' }]);
+
+    const db = {
+      select: jest.fn().mockImplementation(() => {
+        callCount += 1;
+        return callCount === 1 ? countChain : sampleChain;
+      }),
+    } as unknown as DrizzleDB;
+
+    const svc = new NotificationOutboxAdapter(
+      db,
       new TransactionalContext(),
       undefined,
       undefined,
@@ -235,22 +295,25 @@ describe('NotificationOutboxAdapter.monitorDeadLetterQueue', () => {
     expect(logger.error).toHaveBeenCalledWith(
       expect.objectContaining({
         event: 'notification_outbox_dlq_alert',
-        totalDlqEvents: 2,
+        totalDlqEvents: 42,
+        sampleDlqEvents: 2,
       }),
     );
   });
 
   it('does NOT log when DLQ is empty', async () => {
     const logger = makeLogger();
+
+    const countChain: any = {};
+    countChain.from = jest.fn().mockReturnValue(countChain);
+    countChain.where = jest.fn().mockResolvedValue([{ count: 0 }]);
+
     const db = {
-      select: jest.fn().mockReturnThis(),
-      from: jest.fn().mockReturnThis(),
-      where: jest.fn().mockReturnThis(),
-      limit: jest.fn().mockResolvedValue([]),
-    };
+      select: jest.fn().mockReturnValue(countChain),
+    } as unknown as DrizzleDB;
 
     const svc = new NotificationOutboxAdapter(
-      db as unknown as DrizzleDB,
+      db,
       new TransactionalContext(),
       undefined,
       undefined,

@@ -75,6 +75,18 @@ export class CoinRepository implements CoinRepositoryPort {
     return Number(result.rows[0]?.sum ?? 0);
   }
 
+  async getAdminDailyAdjustmentSum(adminUserId: string, todayUtcMidnight: Date): Promise<number> {
+    const cutoffIso = todayUtcMidnight.toISOString();
+    const result = await this.executeRaw<{ sum: number | string | null }>(sql`
+      SELECT COALESCE(SUM(ABS(amount)), 0) AS sum
+      FROM coin_transactions
+      WHERE reason = 'ADMIN_ADJUSTMENT'
+        AND metadata->>'adminUserId' = ${adminUserId}
+        AND created_at >= ${cutoffIso}::timestamptz
+    `);
+    return Number(result.rows[0]?.sum ?? 0);
+  }
+
   async listTransactions(params: {
     userId: string;
     cursorCreatedAt: string | null;
@@ -106,7 +118,7 @@ export class CoinRepository implements CoinRepositoryPort {
 
     const nowIso = now.toISOString();
     const metadataJson = JSON.stringify(metadata ?? {});
-    const result = await tx.execute(sql<ApplyDeltaRawRow>`
+    const result = (await tx.execute(sql<ApplyDeltaRawRow>`
       WITH upsert AS (
         INSERT INTO user_wallets (user_id, balance, created_at, updated_at)
         VALUES (${userId}::uuid, GREATEST(0, LEAST(1000000, ${delta})), ${nowIso}::timestamptz, ${nowIso}::timestamptz)
@@ -121,9 +133,9 @@ export class CoinRepository implements CoinRepositoryPort {
         RETURNING user_id, balance, created_at, updated_at
       ),
       effective AS (
-        SELECT * FROM upsert
+        SELECT user_id, balance, created_at, updated_at FROM upsert
         UNION ALL
-        SELECT * FROM updated
+        SELECT user_id, balance, created_at, updated_at FROM updated
       ),
       wallet_after AS (
         SELECT DISTINCT ON (user_id) user_id, balance, created_at, updated_at
@@ -163,7 +175,7 @@ export class CoinRepository implements CoinRepositoryPort {
         ledger.transaction_id      AS "transactionId"
       FROM wallet_after
       CROSS JOIN ledger
-    `);
+    `)) as RawQueryResult<ApplyDeltaRawRow>;
 
     const row = result.rows[0];
     if (!row) {
@@ -198,7 +210,7 @@ export class CoinRepository implements CoinRepositoryPort {
     const metadataJson = JSON.stringify(metadata ?? {});
     const delta = -cost;
 
-    const result = await tx.execute(sql<ApplyDeltaRawRow>`
+    const result = (await tx.execute(sql<ApplyDeltaRawRow>`
       WITH debit AS (
         UPDATE user_wallets
         SET balance = GREATEST(0, balance - ${cost}),
@@ -237,7 +249,7 @@ export class CoinRepository implements CoinRepositoryPort {
         ledger.transaction_id AS "transactionId"
       FROM debit
       CROSS JOIN ledger
-    `);
+    `)) as RawQueryResult<ApplyDeltaRawRow>;
 
     const row = result.rows[0];
     if (!row) return null;
@@ -437,6 +449,7 @@ export class CoinRepository implements CoinRepositoryPort {
       GROUP BY w.user_id, w.balance
       HAVING w.balance < 0
           OR w.balance <> COALESCE(SUM(ct.amount), 0)
+      LIMIT 10000
     `);
 
     return result.rows.map((row) => ({
@@ -492,6 +505,6 @@ export class CoinRepository implements CoinRepositoryPort {
 
   private async executeRaw<T>(query: ReturnType<typeof sql>): Promise<RawQueryResult<T>> {
     const result = await this.db.execute(query);
-    return result as unknown as RawQueryResult<T>;
+    return result;
   }
 }

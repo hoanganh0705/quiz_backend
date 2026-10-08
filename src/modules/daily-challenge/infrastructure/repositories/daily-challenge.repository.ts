@@ -1,10 +1,15 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, desc, eq, isNull, sql, type SQL } from 'drizzle-orm';
+import { and, desc, eq, sql, type SQL } from 'drizzle-orm';
 import { notDeleted } from '@/common/database/soft-delete.helper';
 import { DRIZZLE } from '@/core/database/drizzle.constants';
 import type { DrizzleDB } from '@/core/database/database.module';
-import { dailyChallenge, dailyChallengeAttempt, quizzes } from '@/core/database/schema';
-import { categories } from '@/core/database/schema/taxonomy/schema';
+import {
+  dailyChallenge,
+  dailyChallengeAttempt,
+  quizzes,
+  quizVersions,
+  categories,
+} from '@/core/database/schema';
 import type {
   DailyChallengeAttemptRow,
   DailyChallengeCategoryBreakdownRow,
@@ -29,16 +34,8 @@ const DAILY_CHALLENGE_BASE_PROJECTION = {
   expiresAt: dailyChallenge.expiresAt,
   quizTitle: quizzes.title,
   quizSlug: quizzes.slug,
-  difficulty: sql<'easy' | 'medium' | 'hard'>`(
- SELECT qv.difficulty
- FROM quiz_versions qv
- WHERE qv.quiz_version_id = ${dailyChallenge.quizVersionId}
- LIMIT 1
- )`,
-  totalQuestions: sql<number>`(
- SELECT COUNT(*)::int FROM quiz_questions
- WHERE quiz_questions.quiz_version_id = ${dailyChallenge.quizVersionId}
- )`,
+  difficulty: quizVersions.difficulty,
+  totalQuestions: dailyChallenge.totalQuestions,
 };
 
 const PERIOD_DAYS: Readonly<Record<DailyChallengePeriod, number>> = {
@@ -56,10 +53,11 @@ export class DailyChallengeRepository implements DailyChallengeRepositoryPort {
       .select(DAILY_CHALLENGE_BASE_PROJECTION)
       .from(dailyChallenge)
       .innerJoin(quizzes, eq(dailyChallenge.quizId, quizzes.quizId))
+      .innerJoin(quizVersions, eq(dailyChallenge.quizVersionId, quizVersions.quizVersionId))
       .where(and(eq(dailyChallenge.challengeDate, date), notDeleted(quizzes.deletedAt)))
       .limit(1);
 
-    return (row as DailyChallengeRow | undefined) ?? null;
+    return row ?? null;
   }
 
   async findMostRecentExpired(nowIso: string): Promise<DailyChallengeRow | null> {
@@ -67,11 +65,12 @@ export class DailyChallengeRepository implements DailyChallengeRepositoryPort {
       .select(DAILY_CHALLENGE_BASE_PROJECTION)
       .from(dailyChallenge)
       .innerJoin(quizzes, eq(dailyChallenge.quizId, quizzes.quizId))
+      .innerJoin(quizVersions, eq(dailyChallenge.quizVersionId, quizVersions.quizVersionId))
       .where(and(sql`${dailyChallenge.expiresAt} <= ${nowIso}`, notDeleted(quizzes.deletedAt)))
       .orderBy(desc(dailyChallenge.challengeDate))
       .limit(1);
 
-    return (row as DailyChallengeRow | undefined) ?? null;
+    return row ?? null;
   }
 
   async findAttempt(challengeId: string, userId: string): Promise<DailyChallengeAttemptRow | null> {
@@ -86,7 +85,7 @@ export class DailyChallengeRepository implements DailyChallengeRepositoryPort {
       )
       .limit(1);
 
-    return (row as DailyChallengeAttemptRow | undefined) ?? null;
+    return row ?? null;
   }
 
   async listUserHistory(params: {
@@ -240,6 +239,7 @@ export class DailyChallengeRepository implements DailyChallengeRepositoryPort {
         quizId: params.quizId,
         quizVersionId: params.quizVersionId,
         rewardXp: params.rewardXp,
+        totalQuestions: params.questionCount,
         createdAt: params.createdAt,
         expiresAt: params.expiresAt,
       })
@@ -272,7 +272,8 @@ export class DailyChallengeRepository implements DailyChallengeRepositoryPort {
         ),
       )
       .groupBy(categories.categoryId, categories.name, categories.slug)
-      .orderBy(desc(sql`COUNT(*)`), desc(sql`AVG(${dailyChallengeAttempt.scorePercent})`));
+      .orderBy(desc(sql`COUNT(*)`), desc(sql`AVG(${dailyChallengeAttempt.scorePercent})`))
+      .limit(50);
 
     return rows.map((row) => ({
       categoryId: row.categoryId,
@@ -321,7 +322,7 @@ export class DailyChallengeRepository implements DailyChallengeRepositoryPort {
             )
             .for('update')
             .limit(1);
-          return (row as DailyChallengeAttemptRow | undefined) ?? null;
+          return row ?? null;
         },
         upsertAttempt: async (params: {
           challengeId: string;
@@ -358,10 +359,10 @@ export class DailyChallengeRepository implements DailyChallengeRepositoryPort {
               },
             })
             .returning();
-          return row as DailyChallengeAttemptRow;
+          return row;
         },
       };
-      return work(tx as unknown as DailyChallengeTx, helpers);
+      return work(tx, helpers);
     });
   }
 }

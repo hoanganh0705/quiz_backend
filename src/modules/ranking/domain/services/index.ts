@@ -9,3 +9,4 @@ export * from './rank-calculation.service';
 export * from './leaderboard.service';
 export * from './user-rank.service';
 export * from './period-reset.service';
+export * from './ranking-cache-version.service';

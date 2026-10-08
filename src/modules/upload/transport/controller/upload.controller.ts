@@ -1,8 +1,11 @@
 import {
   Body,
   Controller,
+  FileTypeValidator,
+  Header,
   HttpCode,
   HttpStatus,
+  MaxFileSizeValidator,
   Param,
   ParseFilePipe,
   Post,
@@ -10,9 +13,11 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { memoryStorage } from 'multer';
-import { FileTypeValidator, MaxFileSizeValidator } from '@nestjs/common/pipes';
+import { diskStorage } from 'multer';
+import * as os from 'node:os';
+import * as path from 'node:path';
 import { Throttle } from '@nestjs/throttler';
+import { CleanupTempFileInterceptor } from '@/common/interceptors/cleanup-temp-file.interceptor';
 import {
   ApiBadRequestResponse,
   ApiBody,
@@ -45,7 +50,14 @@ import { UploadApplicationService } from '../../application/upload.application.s
 const MAX_BYTES = 8 * 1024 * 1024;
 
 const fileInterceptorOptions = {
-  storage: memoryStorage(),
+  storage: diskStorage({
+    destination: os.tmpdir(),
+    filename: (_req, file, cb) => {
+      const unique = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+      const ext = path.extname(file.originalname) || '';
+      cb(null, `${unique}${ext}`);
+    },
+  }),
   limits: { fileSize: MAX_BYTES, files: 1 },
 } as const;
 
@@ -100,7 +112,8 @@ export class UploadController {
   @Post()
   @HttpCode(HttpStatus.CREATED)
   @Throttle({ default: { limit: 20, ttl: 60_000 } })
-  @UseInterceptors(FileInterceptor('file', fileInterceptorOptions))
+  @Header('Max-Upload-Size', '1')
+  @UseInterceptors(FileInterceptor('file', fileInterceptorOptions), CleanupTempFileInterceptor)
   @ApiOperation({
     summary: 'Upload an image (avatar or quiz cover)',
     description:

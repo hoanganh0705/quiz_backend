@@ -5,10 +5,6 @@ import { UserAnalyticsResponseDto } from './user-analytics.dto';
 import { TimeSeriesDto } from './time-series.dto';
 import { UserActivityItemDto } from './user-activity.dto';
 import { CoinWalletResponseDto } from '@/modules/coins/dto/response/coin-wallet.dto';
-import {
-  CoinTransactionDto,
-  CoinTransactionsPaginationDto,
-} from '@/modules/coins/dto/response/coin-transactions.dto';
 
 export class UserProfileBundleResponseDto {
   @ApiProperty({
@@ -37,17 +33,9 @@ export class UserProfileBundleResponseDto {
 
   @ApiPropertyOptional({
     description:
-      "Coin wallet snapshot. Present only on the `/me` variant (privacy: another user's balance is not exposed).",
+      "Coin wallet snapshot. Present only on the `/me` variant (privacy: another user's balance is not exposed). Fetch via `GET /me/wallet`.",
     type: () => CoinWalletResponseDto,
     nullable: true,
   })
   wallet!: CoinWalletResponseDto | null;
-
-  @ApiPropertyOptional({
-    description:
-      "First page of the caller's coin ledger (newest first). Capped at 20 items; the wallet page calls `GET /me/coin-transactions` for older entries.",
-    type: () => CoinTransactionsPaginationDto,
-    nullable: true,
-  })
-  transactions!: { items: CoinTransactionDto[]; pagination: CoinTransactionsPaginationDto } | null;
 }

@@ -60,7 +60,7 @@ function makeDbHandle(
 
 function makeProcessor(opts: {
   rows: ReadonlyArray<Record<string, unknown>>;
-  reviewEventBus: { dispatchToSubscribers: jest.Mock };
+  reviewEventBus: { dispatchStrict: jest.Mock };
 }): ReviewOutboxProcessorService {
   const db = makeDbHandle(opts.rows);
   return new ReviewOutboxProcessorService(
@@ -72,7 +72,7 @@ function makeProcessor(opts: {
 
 describe('ReviewOutboxProcessorService (bus-driven dispatch)', () => {
   it('publishes a ReviewSubmittedEvent to the in-process bus instead of calling QuizAnalyticsService directly', async () => {
-    const dispatch = jest.fn();
+    const dispatchStrict = jest.fn().mockResolvedValue(undefined);
     const processor = makeProcessor({
       rows: [
         {
@@ -82,19 +82,19 @@ describe('ReviewOutboxProcessorService (bus-driven dispatch)', () => {
           attemptCount: 0,
         },
       ],
-      reviewEventBus: { dispatchToSubscribers: dispatch },
+      reviewEventBus: { dispatchStrict },
     });
 
     await processor.processPendingEvents();
 
-    expect(dispatch).toHaveBeenCalledTimes(1);
-    const event = dispatch.mock.calls[0]?.[0];
+    expect(dispatchStrict).toHaveBeenCalledTimes(1);
+    const event = dispatchStrict.mock.calls[0]?.[0];
     expect(event.eventType).toBe('review.submitted');
     expect(event.payload.quizId).toBe('q-1');
   });
 
   it('marks the row as failed when payload is missing quizId', async () => {
-    const dispatch = jest.fn();
+    const dispatchStrict = jest.fn().mockResolvedValue(undefined);
     const processor = makeProcessor({
       rows: [
         {
@@ -104,25 +104,52 @@ describe('ReviewOutboxProcessorService (bus-driven dispatch)', () => {
           attemptCount: 0,
         },
       ],
-      reviewEventBus: { dispatchToSubscribers: dispatch },
+      reviewEventBus: { dispatchStrict },
     });
 
     const result = await processor.processPendingEvents();
 
     expect(result.failed).toBe(1);
-    expect(dispatch).not.toHaveBeenCalled();
+    expect(dispatchStrict).not.toHaveBeenCalled();
+  });
+
+  it('continues draining the next row when a subscriber handler rejects (Promise.allSettled semantics)', async () => {
+    const dispatchStrict = jest.fn().mockResolvedValue(undefined);
+    const processor = makeProcessor({
+      rows: [
+        {
+          eventId: 'ev-1',
+          eventType: 'review.metrics.refreshed',
+          payload: { quizId: 'q-1' },
+          attemptCount: 0,
+        },
+        {
+          eventId: 'ev-2',
+          eventType: 'review.metrics.refreshed',
+          payload: { quizId: 'q-2' },
+          attemptCount: 0,
+        },
+      ],
+      reviewEventBus: { dispatchStrict },
+    });
+
+    const result = await processor.processPendingEvents();
+
+    expect(result.processed).toBe(2);
+    expect(result.failed).toBe(0);
+    expect(dispatchStrict).toHaveBeenCalledTimes(2);
   });
 });
 
 describe('ReviewOutboxProcessorService (failed_at not processed_at on poison)', () => {
   it('sets failed_at + dlq_reason (not processed_at) when poison threshold is reached', async () => {
-    const dispatch = jest.fn();
+    const dispatchStrict = jest.fn().mockResolvedValue(undefined);
     const db = makeDbHandle([
       { eventId: 'ev-1', eventType: 'review.metrics.refreshed', payload: {}, attemptCount: 9 },
     ]);
     const processor = new ReviewOutboxProcessorService(
       db,
-      { dispatchToSubscribers: dispatch } as unknown as ReviewDomainEventBusPort,
+      { dispatchStrict } as unknown as ReviewDomainEventBusPort,
       makeLogger(),
     );
 
@@ -138,7 +165,7 @@ describe('ReviewOutboxProcessorService (failed_at not processed_at on poison)', 
   });
 
   it('sets failed_at + dlq_reason when ReviewOutboxPayloadError is thrown', async () => {
-    const dispatch = jest.fn().mockImplementation(() => {
+    const dispatchStrict = jest.fn().mockImplementation(() => {
       throw new ReviewOutboxPayloadError('payload bad');
     });
     const db = makeDbHandle([
@@ -151,7 +178,7 @@ describe('ReviewOutboxProcessorService (failed_at not processed_at on poison)', 
     ]);
     const processor = new ReviewOutboxProcessorService(
       db,
-      { dispatchToSubscribers: dispatch } as unknown as ReviewDomainEventBusPort,
+      { dispatchStrict } as unknown as ReviewDomainEventBusPort,
       makeLogger(),
     );
 
@@ -178,7 +205,7 @@ describe('ReviewOutboxProcessorService (DLQ monitor)', () => {
     const logger = makeLogger();
     const processor = new ReviewOutboxProcessorService(
       db,
-      { dispatchToSubscribers: jest.fn() } as unknown as ReviewDomainEventBusPort,
+      { dispatchStrict: jest.fn() } as unknown as ReviewDomainEventBusPort,
       logger,
     );
 
@@ -197,7 +224,7 @@ describe('ReviewOutboxProcessorService (DLQ monitor)', () => {
     const logger = makeLogger();
     const processor = new ReviewOutboxProcessorService(
       db,
-      { dispatchToSubscribers: jest.fn() } as unknown as ReviewDomainEventBusPort,
+      { dispatchStrict: jest.fn() } as unknown as ReviewDomainEventBusPort,
       logger,
     );
 

@@ -25,7 +25,7 @@ export class ReviewOutboxAdapter implements ReviewOutboxPort {
       .values({
         aggregateType: 'review',
         eventType: 'review.submitted',
-        payload: payload as unknown as Record<string, unknown>,
+        payload: payload,
         createdAt: nowIso,
         idempotencyKey: `review:submitted:${payload.quizId}:${payload.reviewId}`,
       })
@@ -46,7 +46,7 @@ export class ReviewOutboxAdapter implements ReviewOutboxPort {
       .values({
         aggregateType: 'review',
         eventType: 'review.deleted',
-        payload: payload as unknown as Record<string, unknown>,
+        payload: payload,
         createdAt: nowIso,
         idempotencyKey: `review:deleted:${payload.quizId}:${payload.reviewId}`,
       })
@@ -67,7 +67,7 @@ export class ReviewOutboxAdapter implements ReviewOutboxPort {
       .values({
         aggregateType: 'review',
         eventType: 'review.helpful_changed',
-        payload: payload as unknown as Record<string, unknown>,
+        payload: payload,
         createdAt: nowIso,
         idempotencyKey: `review:helpful_changed:${payload.quizId}:${payload.reviewId}:${payload.delta}`,
       })

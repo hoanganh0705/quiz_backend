@@ -203,7 +203,7 @@ export const ApiRelatedTagsResponse = (): MethodDecorator =>
 export const ApiTagAnalyticsResponse = (): MethodDecorator =>
   applyDecorators(
     resourceOk<typeof TagAnalyticsResponseDto>(
-      TagAnalyticsResponseDto as unknown as Type,
+      TagAnalyticsResponseDto,
       'Returns the tag analytics.',
       TAG_ANALYTICS_EXAMPLE,
     ),
@@ -244,7 +244,7 @@ export const ApiRestoreTagResponse = (): MethodDecorator =>
   applyDecorators(
     ApiBearerAuth(AUTH_SECURITY_NAME),
     resourceOk<typeof TagResponseDto>(
-      TagResponseDto as unknown as Type,
+      TagResponseDto,
       'Returns the restored tag.',
       TAG_RESTORED_EXAMPLE,
     ),
@@ -258,7 +258,7 @@ export const ApiRestoreTagResponse = (): MethodDecorator =>
 export const ApiListTagsResponse = (): MethodDecorator =>
   applyDecorators(
     resourceList<typeof TagResponseDto>(
-      TagResponseDto as unknown as Type,
+      TagResponseDto,
       'cursor',
       'Returns the requested tags.',
       TAG_LIST_EXAMPLE,
@@ -270,7 +270,7 @@ export const ApiListTagsResponse = (): MethodDecorator =>
 export const ApiTagBySlugResponse = (): MethodDecorator =>
   applyDecorators(
     resourceOk<typeof TagResponseDto>(
-      TagResponseDto as unknown as Type,
+      TagResponseDto,
       'Returns the requested tag.',
       TAG_DETAIL_EXAMPLE,
     ),
@@ -281,7 +281,7 @@ export const ApiTagBySlugResponse = (): MethodDecorator =>
 export const ApiTagBySlugsResponse = (): MethodDecorator =>
   applyDecorators(
     resourceOkArray<typeof TagResponseDto>(
-      TagResponseDto as unknown as Type,
+      TagResponseDto,
       'Returns the tags matching the supplied slugs. Missing slugs are silently omitted.',
     ),
     ApiBadRequestResponse(problem.badRequest(listTagsBadRequestExample)),
@@ -291,7 +291,7 @@ export const ApiTagBySlugsResponse = (): MethodDecorator =>
 export const ApiTagByIdResponse = (): MethodDecorator =>
   applyDecorators(
     resourceOk<typeof TagResponseDto>(
-      TagResponseDto as unknown as Type,
+      TagResponseDto,
       'Returns the requested tag.',
       TAG_DETAIL_EXAMPLE,
     ),
@@ -303,7 +303,7 @@ export const ApiCreateTagResponse = (): MethodDecorator =>
   applyDecorators(
     ApiBearerAuth(AUTH_SECURITY_NAME),
     resourceCreated<typeof TagResponseDto>(
-      TagResponseDto as unknown as Type,
+      TagResponseDto,
       'Returns the created tag.',
       TAG_CREATED_EXAMPLE,
     ),
@@ -318,7 +318,7 @@ export const ApiUpdateTagResponse = (): MethodDecorator =>
   applyDecorators(
     ApiBearerAuth(AUTH_SECURITY_NAME),
     resourceOk<typeof TagResponseDto>(
-      TagResponseDto as unknown as Type,
+      TagResponseDto,
       'Returns the updated tag.',
       TAG_UPDATED_EXAMPLE,
     ),
@@ -334,7 +334,7 @@ export const ApiDeleteTagResponse = (): MethodDecorator =>
   applyDecorators(
     ApiBearerAuth(AUTH_SECURITY_NAME),
     resourceOk<typeof DeleteTagResponseDto>(
-      DeleteTagResponseDto as unknown as Type,
+      DeleteTagResponseDto,
       'Confirms the tag was deleted.',
       TAG_DELETE_MESSAGE_EXAMPLE,
     ),
@@ -348,7 +348,7 @@ export const ApiFollowedTagsResponse = (): MethodDecorator =>
   applyDecorators(
     ApiBearerAuth(AUTH_SECURITY_NAME),
     resourceList<typeof FollowedTagItemDto>(
-      FollowedTagItemDto as unknown as Type,
+      FollowedTagItemDto,
       'cursor',
       'Returns the followed tags.',
       TAG_FOLLOWED_LIST_EXAMPLE,

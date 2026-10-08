@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-argument, @typescript-eslint/require-await, @typescript-eslint/unbound-method */
+/* eslint-disable @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-argument */
 import { CoinIngestionService } from './coin-ingestion.service';
 import { ReferentialValidatorService } from '@/common/database/referential-validator.service';
 import { ReferencedEntityNotFoundError } from '@/common/database/references.types';
@@ -80,7 +80,7 @@ function makeDb(): DrizzleDB {
       ]),
     }),
   });
-  return txChain as unknown as DrizzleDB;
+  return txChain;
 }
 
 function makeRepoWithApply(): CoinRepositoryPort {

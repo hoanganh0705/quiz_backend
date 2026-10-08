@@ -4,7 +4,28 @@
   "testEnvironment": "node",
   "testRegex": ".e2e-spec.ts$",
   "transform": {
-    "^.+\\.(t|j)s$": "ts-jest"
+    "^.+\\.(t|j)s$": [
+      "@swc/jest",
+      {
+        "sourceMaps": true,
+        "module": {
+          "type": "commonjs"
+        },
+        "jsc": {
+          "target": "es2022",
+          "keepClassNames": true,
+          "parser": {
+            "syntax": "typescript",
+            "decorators": true,
+            "dynamicImport": true
+          },
+          "transform": {
+            "legacyDecorator": true,
+            "decoratorMetadata": true
+          }
+        }
+      }
+    ]
   },
   "moduleNameMapper": {
     "^@/(.*)$": "<rootDir>/../src/$1"

@@ -138,7 +138,10 @@ export class UserSettingsRepository {
 
       if (!inserted.length) return null;
 
-      await tx.update(users).set({ updatedAt: nowIso }).where(eq(users.userId, userId));
+      await tx
+        .update(users)
+        .set({ updatedAt: nowIso })
+        .where(and(eq(users.userId, userId), notDeleted(users.deletedAt)));
 
       const [updated] = await tx
         .select({

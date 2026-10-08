@@ -142,6 +142,30 @@ export class ListQuizzesQueryDto {
   tagIds?: string[];
 
   @ApiPropertyOptional({
+    description:
+      'Filter by tag slugs (OR semantics). Transport-agnostic alias of `tagIds`: the listing filters on identifiers, so slugs are translated before the query runs. Ignored when `tagIds` is supplied.',
+    type: String,
+    isArray: true,
+    maxItems: 50,
+    example: ['javascript', 'typescript'],
+    nullable: true,
+  })
+  @IsOptional()
+  @Transform(({ value }: { value: unknown }) => {
+    if (value === undefined || value === null) return value;
+    if (Array.isArray(value)) return value as string[];
+    if (typeof value === 'string') return [value];
+    return value;
+  })
+  @IsArray()
+  @ArrayMaxSize(50)
+  @ArrayMinSize(1)
+  @ArrayUnique()
+  @IsString({ each: true })
+  @MaxLength(64, { each: true })
+  tagSlugs?: string[];
+
+  @ApiPropertyOptional({
     description: 'Filter by creator/owner UUID',
     format: 'uuid',
     example: '550e8400-e29b-71d4-a716-446655440000',

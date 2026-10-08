@@ -30,7 +30,7 @@ function makeProcessor(
     makeDbHandle(dlqRows),
     { publish: jest.fn() } as any,
     { publish: jest.fn() } as any,
-    { publishXpEarned: jest.fn() } as any,
+    { publishXpEarned: jest.fn() },
     makeLogger(),
   );
 }

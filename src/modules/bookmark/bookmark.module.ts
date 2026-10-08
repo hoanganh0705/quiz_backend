@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { DatabaseModule } from '@/core/database/database.module';
 import { BookmarkApplicationService } from './application/bookmark.application.service';
 import { BookmarkQueryService } from './domain/bookmark-query.service';
@@ -19,7 +19,7 @@ import {
 import { BookmarkAnalyticsEventHandler } from './domain/events/bookmark-analytics-event-handler.service';
 
 @Module({
-  imports: [DatabaseModule, QuizModule],
+  imports: [DatabaseModule, forwardRef(() => QuizModule)],
   providers: [
     // Application
     BookmarkApplicationService,

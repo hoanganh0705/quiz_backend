@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional, Inject } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { BaseDomainEventBus } from '@/common/events/base-domain-event-bus';
 import {
@@ -20,6 +20,7 @@ import {
   CountdownCancelledEvent,
   CountdownCompletedEvent,
 } from './instance-domain.events';
+import { TracingProvider } from '@/core/observability/tracing.provider';
 
 @Injectable()
 export class InstanceDomainEventBus
@@ -29,12 +30,15 @@ export class InstanceDomainEventBus
   constructor(
     @InjectPinoLogger(InstanceDomainEventBus.name)
     logger: PinoLogger,
+    @Optional()
+    @Inject(TracingProvider)
+    tracing?: TracingProvider,
   ) {
-    super(logger, { logEventName: 'instance_event' });
+    super(logger, { logEventName: 'instance_event' }, tracing);
   }
 
   subscribe(handler: InstanceEventHandler): () => void {
-    return super.subscribe(handler as never);
+    return super.subscribe(handler);
   }
 
   emitInstanceCreated(event: InstanceCreatedEvent): void {

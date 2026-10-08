@@ -21,6 +21,9 @@ import type {
   UserRankSummaryDto,
 } from '../../dto';
 import { PeriodResetService } from './period-reset.service';
+import { CACHE_PROVIDER, type CacheProvider } from '@/common/ports/cache.provider';
+
+const USER_RANK_CACHE_TTL_MS = 60 * 60 * 1000;
 
 @Injectable()
 export class UserRankService {
@@ -28,6 +31,8 @@ export class UserRankService {
     @Inject(RANKING_REPOSITORY_PORT)
     private readonly rankingRepository: RankingRepositoryPort,
     private readonly periodResetService: PeriodResetService,
+    @Inject(CACHE_PROVIDER)
+    private readonly cache: CacheProvider,
     @InjectPinoLogger(UserRankService.name)
     private readonly logger: PinoLogger,
   ) {}
@@ -83,7 +88,18 @@ export class UserRankService {
     periodEnum: RankingPeriodEnum | LeaderboardPeriodEnum,
   ): Promise<UserRankSummaryDto | undefined> {
     const period = enumToPeriod(periodEnum);
+    const cacheKey = `user-rank:${userId}:${period}`;
+    return this.cache.getOrSet<UserRankSummaryDto | undefined>(
+      cacheKey,
+      USER_RANK_CACHE_TTL_MS,
+      async () => this.computeUserRankForPeriod(userId, period),
+    );
+  }
 
+  private async computeUserRankForPeriod(
+    userId: string,
+    period: RankingPeriod,
+  ): Promise<UserRankSummaryDto | undefined> {
     const ranking = await this.rankingRepository.getUserRanking(userId);
     if (!ranking) return undefined;
 

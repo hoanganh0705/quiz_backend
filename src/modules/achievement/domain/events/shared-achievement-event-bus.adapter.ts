@@ -1,4 +1,4 @@
-import { Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import { Inject, Injectable, OnModuleDestroy, OnModuleInit, Optional } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { AchievementDomainEventBus } from './achievement-domain.event-bus';
 import type { AchievementDomainEvent } from './achievement.events';
@@ -10,6 +10,9 @@ import {
   type SharedBadgeRestoredEvent,
   type SharedBadgeRevokedEvent,
 } from '@/common/events/achievement-shared-events';
+import { CACHE_PROVIDER, type CacheProvider } from '@/common/ports/cache.provider';
+
+const SHARED_ACHIEVEMENT_FANOUT_TTL_SECONDS = 30;
 
 @Injectable()
 export class SharedAchievementEventBusAdapter
@@ -22,6 +25,9 @@ export class SharedAchievementEventBusAdapter
     private readonly internalBus: AchievementDomainEventBus,
     @InjectPinoLogger(SharedAchievementEventBusAdapter.name)
     private readonly logger: PinoLogger,
+    @Optional()
+    @Inject(CACHE_PROVIDER)
+    private readonly cache: CacheProvider | null,
   ) {}
 
   onModuleInit(): void {
@@ -50,17 +56,48 @@ export class SharedAchievementEventBusAdapter
     };
   }
 
-  private forwardToSharedBus(event: AchievementDomainEvent): void {
+  private async forwardToSharedBus(event: AchievementDomainEvent): Promise<void> {
     const sharedEvent = this.toSharedEvent(event);
     if (!sharedEvent) return;
 
+    const fanoutKey = buildAchievementFanoutKey(sharedEvent);
+    if (fanoutKey && this.cache) {
+      let claimed: boolean;
+      try {
+        claimed = await this.cache.setIfNotExistsWithTtlSeconds(
+          fanoutKey,
+          '1',
+          SHARED_ACHIEVEMENT_FANOUT_TTL_SECONDS,
+        );
+      } catch (error) {
+        this.logger.warn({
+          event: 'shared_achievement_fanout_dedupe_unavailable',
+          eventType: sharedEvent.eventType,
+          message: error instanceof Error ? error.message : String(error),
+        });
+        claimed = true;
+      }
+      if (!claimed) {
+        this.logger.debug({
+          event: 'shared_achievement_fanout_skipped_duplicate',
+          eventType: sharedEvent.eventType,
+          fanoutKey,
+        });
+        return;
+      }
+    }
+
+    this.dispatchToHandlers(sharedEvent);
+  }
+
+  private dispatchToHandlers(event: SharedAchievementDomainEvent): void {
     for (const handler of this.sharedHandlers) {
       try {
-        handler(sharedEvent);
+        handler(event);
       } catch (error) {
         this.logger.error({
           event: 'shared_achievement_handler_error',
-          eventType: sharedEvent.eventType,
+          eventType: event.eventType,
           error: error instanceof Error ? error.message : String(error),
         });
       }
@@ -127,6 +164,13 @@ export class SharedAchievementEventBusAdapter
         return null;
     }
   }
+}
+
+function buildAchievementFanoutKey(event: SharedAchievementDomainEvent): string | null {
+  if (typeof event.userId !== 'string') {
+    return null;
+  }
+  return `shared:achievement:fanout:${event.eventType}:${event.userId}`;
 }
 
 export { SHARED_ACHIEVEMENT_EVENT_BUS };

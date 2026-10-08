@@ -8,6 +8,7 @@ import {
   UnsupportedMediaTypeException,
 } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
+import { promises as fs } from 'node:fs';
 
 import {
   STORAGE_PORT,
@@ -19,6 +20,8 @@ import {
   type UploadPurpose,
   type UploadResult,
 } from '@/core/storage';
+
+import { detectImageMimeFromBuffer } from '@/common/utils/mime-sniffer.util';
 
 import type { UploadPurposeLiteral } from '../dto/request/upload-file.request.dto';
 
@@ -59,6 +62,21 @@ export class UploadApplicationService {
       });
     }
 
+    const fileBytes = input.file.buffer
+      ? input.file.buffer
+      : await this.readTempFile(input.file.path);
+    const sniffedMime = detectImageMimeFromBuffer(fileBytes);
+    if (sniffedMime === null || sniffedMime !== input.file.mimetype) {
+      throw new UnsupportedMediaTypeException({
+        code: 'UPLOAD_UNSUPPORTED_FILE_TYPE',
+        message:
+          sniffedMime === null
+            ? `Uploaded bytes do not match any supported image format for purpose "${purpose}".`
+            : `Uploaded bytes declare MIME "${sniffedMime}" but the request declared "${input.file.mimetype}".`,
+        allowed: Array.from(policy.allowedMime),
+      });
+    }
+
     if (input.file.size > policy.maxBytes) {
       throw new PayloadTooLargeException({
         code: 'UPLOAD_FILE_TOO_LARGE',
@@ -71,7 +89,7 @@ export class UploadApplicationService {
     let uploadResult: UploadResult;
     try {
       uploadResult = await this.storage.upload({
-        buffer: input.file.buffer,
+        buffer: fileBytes,
         mime: input.file.mimetype,
         bytes: input.file.size,
         purpose,
@@ -83,7 +101,6 @@ export class UploadApplicationService {
       // non-retryable client error (e.g. magic-byte mismatch).
       this.logger.warn(
         {
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
           err,
           purpose,
           ownerId: input.ownerId,
@@ -110,7 +127,6 @@ export class UploadApplicationService {
       // re-raise the bind failure; an admin sweep can reconcile later.
       this.logger.error(
         {
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
           err,
           publicId: uploadResult.publicId,
           ownerId: input.ownerId,
@@ -123,7 +139,6 @@ export class UploadApplicationService {
       } catch (cleanupErr) {
         this.logger.error(
           {
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
             err: cleanupErr,
             publicId: uploadResult.publicId,
           },
@@ -139,6 +154,16 @@ export class UploadApplicationService {
     }
 
     return uploadResult;
+  }
+
+  private async readTempFile(path: string | undefined): Promise<Buffer> {
+    if (!path) {
+      throw new BadRequestException({
+        code: 'UPLOAD_NO_FILE',
+        message: 'Multipart field "file" is required.',
+      });
+    }
+    return fs.readFile(path);
   }
 
   async signUpload(input: {

@@ -1,6 +1,7 @@
 import { DailyChallengeApplicationService } from './daily-challenge.application.service';
 import { DailyChallengeCompletedEvent } from '../domain/events/daily-challenge-domain.events';
 import { SKIPPED_ANSWER_SENTINEL } from '../domain/types/daily-challenge.types';
+import { OutboxPayloadValidationError } from '@/common/outbox/payload-schema';
 import type {
   DailyChallengeAttemptRow,
   DailyChallengeCategoryBreakdownRow,
@@ -73,7 +74,7 @@ class FakeRepository implements DailyChallengeRepositoryPort {
     const slice = sorted.slice(begin, begin + params.limit + 1);
     const hasNextPage = slice.length > params.limit;
     return {
-      items: (hasNextPage ? slice.slice(0, params.limit) : slice) as DailyChallengeHistoryItem[],
+      items: hasNextPage ? slice.slice(0, params.limit) : slice,
       hasNextPage,
     };
   }
@@ -191,16 +192,20 @@ const quizQuestions: QuizQuestionRepositoryPort = {
   async getQuestionsByVersionId(): Promise<never[]> {
     return [];
   },
+  async getQuestionByPosition(): Promise<null> {
+    return null;
+  },
 } as unknown as QuizQuestionRepositoryPort;
 
 function makeService(
   repo: FakeRepository,
   questionRepo: QuizQuestionRepositoryPort = quizQuestions,
+  outbox: DailyChallengeOutboxPort = xpOutbox,
 ): {
   service: DailyChallengeApplicationService;
   repo: FakeRepository;
 } {
-  const service = new DailyChallengeApplicationService(repo, questionRepo, eventBus, xpOutbox);
+  const service = new DailyChallengeApplicationService(repo, questionRepo, eventBus, outbox);
   return { service, repo };
 }
 
@@ -579,6 +584,12 @@ describe('DailyChallengeApplicationService', () => {
             position: 2,
           },
         ]),
+        getQuestionByPosition: jest.fn().mockResolvedValue({
+          questionId: 'q3',
+          optionId: 'correct-opt-3',
+          optionIsCorrect: true,
+          position: 2,
+        }),
       } as unknown as QuizQuestionRepositoryPort & { getQuestionsByVersionId: jest.Mock };
       return { repo, quizQuestions: quiz };
     };
@@ -649,7 +660,7 @@ describe('DailyChallengeApplicationService', () => {
       expect(result.nextQuestionIndex).toBe(1);
       expect(result.scorePercent).toBeNull();
       expect(eventBus.emitCompleted).not.toHaveBeenCalled();
-      expect(quizQuestions.getQuestionsByVersionId).toHaveBeenCalledWith('qv1');
+      expect(quizQuestions.getQuestionByPosition).toHaveBeenCalledWith('qv1', 0);
     });
 
     it('returns correct=true for a correct answer and emits completion + xp on the final question', async () => {
@@ -754,6 +765,85 @@ describe('DailyChallengeApplicationService', () => {
         selectedOptionId: 'correct-opt-1',
       });
       expect(xpOutbox.scheduleXpOutbox).not.toHaveBeenCalled();
+    });
+
+    it('surfaces a malformed XP payload from the outbox adapter as a typed validation error', async () => {
+      const { repo, quizQuestions } = repoWithTodayAndQuestions();
+      repo.runInTransaction = async <T>(
+        work: (
+          _tx: DailyChallengeTx,
+          helpers: {
+            lockAttemptForUpdate: (params: {
+              challengeId: string;
+              userId: string;
+            }) => Promise<DailyChallengeAttemptRow | null>;
+            upsertAttempt: (params: {
+              challengeId: string;
+              userId: string;
+              answers: string[];
+              nextQuestionIndex: number;
+              totalQuestions: number | null;
+              scorePercent: string | null;
+              completedAt: string | null;
+              nowIso: string;
+            }) => Promise<DailyChallengeAttemptRow>;
+          },
+        ) => Promise<T>,
+      ): Promise<T> => {
+        const helpers = {
+          lockAttemptForUpdate: (): Promise<DailyChallengeAttemptRow | null> =>
+            Promise.resolve({
+              attemptId: 'a1',
+              challengeId: 'c1',
+              userId: 'user-1',
+              answers: ['correct-opt-1', 'correct-opt-2'],
+              nextQuestionIndex: 2,
+              totalQuestions: 3,
+              scorePercent: null,
+              completedAt: null,
+              createdAt: '2099-01-01T00:00:00.000Z',
+              updatedAt: '2099-01-01T00:00:00.000Z',
+            }),
+          upsertAttempt: (params: {
+            challengeId: string;
+            userId: string;
+            answers: string[];
+            nextQuestionIndex: number;
+            totalQuestions: number | null;
+            scorePercent: string | null;
+            completedAt: string | null;
+            nowIso: string;
+          }): Promise<DailyChallengeAttemptRow> =>
+            Promise.resolve({
+              attemptId: 'a1',
+              challengeId: params.challengeId,
+              userId: params.userId,
+              answers: params.answers,
+              nextQuestionIndex: params.nextQuestionIndex,
+              totalQuestions: params.totalQuestions,
+              scorePercent: params.scorePercent,
+              completedAt: params.completedAt,
+              createdAt: params.nowIso,
+              updatedAt: params.nowIso,
+            }),
+        };
+        return work({} as DailyChallengeTx, helpers);
+      };
+      const malformedPort = {
+        scheduleXpOutbox: jest.fn((): Promise<never> =>
+          Promise.reject(
+            new OutboxPayloadValidationError('amount', 'expected finite number, got string'),
+          ),
+        ),
+      } as unknown as DailyChallengeOutboxPort;
+      const { service } = makeService(repo, quizQuestions, malformedPort);
+
+      await expect(
+        service.submitAnswer('user-1', {
+          questionIndex: 2,
+          selectedOptionId: 'correct-opt-3',
+        }),
+      ).rejects.toThrow(/outbox payload invalid at amount/);
     });
 
     it('pads prior answers with the skip sentinel when attempt is shorter', async () => {

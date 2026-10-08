@@ -2,14 +2,7 @@ import type { NotificationType, NotificationChannel } from './types/notification
 import type { NotificationPreferencesRow } from './types/notification.types';
 
 export type NotificationPreferenceCategory =
-  | 'achievement'
-  | 'tournament'
-  | 'rank'
-  | 'friend'
-  | 'comment'
-  | 'summary'
-  | 'security'
-  | 'system';
+  'achievement' | 'tournament' | 'rank' | 'friend' | 'comment' | 'summary' | 'security' | 'system';
 
 export const NOTIFICATION_TYPE_CATEGORY: Record<NotificationType, NotificationPreferenceCategory> =
   {

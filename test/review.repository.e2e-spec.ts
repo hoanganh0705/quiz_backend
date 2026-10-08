@@ -79,7 +79,7 @@ describe('ReviewRepository (e2e)', () => {
 
     beforeAll(async () => {
       pool = new Pool({ connectionString: process.env.DATABASE_URL });
-      db = drizzle(pool, { schema }) as unknown as DrizzleDB;
+      db = drizzle(pool, { schema });
       transactionalContext = new TransactionalContext();
       repo = new ReviewRepository(db, transactionalContext);
 
