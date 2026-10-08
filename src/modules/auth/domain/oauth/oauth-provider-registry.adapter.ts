@@ -21,7 +21,7 @@ export class OAuthProviderRegistryAdapter implements OAuthProviderRegistry {
     const adapters = Array.isArray(allAdapters) ? allAdapters : [allAdapters];
 
     for (const adapter of adapters) {
-      this.adapters.set(adapter.provider as OAuthProvider, adapter);
+      this.adapters.set(adapter.provider, adapter);
     }
     this.logger.info({
       event: 'auth.oauth.registry_initialized',

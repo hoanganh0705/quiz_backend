@@ -57,9 +57,7 @@ export interface SharedRankingMilestoneEvent {
  * Internal-only events (xp.added, period resets, consistency checks) are excluded.
  */
 export type SharedRankingDomainEvent =
-  | SharedRankChangedEvent
-  | SharedPeakRankAchievedEvent
-  | SharedRankingMilestoneEvent;
+  SharedRankChangedEvent | SharedPeakRankAchievedEvent | SharedRankingMilestoneEvent;
 
 /**
  * Event bus port for cross-module Ranking events.

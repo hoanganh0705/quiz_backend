@@ -9,7 +9,7 @@ Defines how PostgreSQL tables are defined with Drizzle ORM, how IDs and timestam
 
 ## Scope
 
-Applies to `src/core/database/schema/`, `src/core/database/migrations/`, `src/core/database/database.module.ts`, and every module's `infrastructure/repositories/` directory. Out of scope: cache key conventions (no project-wide convention found in the codebase — `REDIS_CACHE_KEY_PREFIX` is per-module) and read/write splitting.
+Applies to `src/core/database/schema/`, `src/core/database/migrations/`, `src/core/database/database.module.ts`, and every module's `infrastructure/repositories/` directory. Out of scope: Redis cache key conventions — see [ADR-0028](../adr/0028-redis-cache-invalidation.md) and the [Redis cache audit runbook](../runbooks/redis-cache-audit.md) (`REDIS_KEY_PREFIX` is an environment-level convention applied at the client layer).
 
 ## Source of Truth
 

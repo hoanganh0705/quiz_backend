@@ -52,15 +52,14 @@ const readRole = (req: RoleRequest): AuthRole => {
  */
 const rolesRequired = (req: RoleRequest, allow: ReadonlyArray<Role>): void => {
   const role = readRole(req);
-  if (allow.includes(role as Role)) return;
+  if (allow.includes(role)) return;
   if (role === 'public') {
     throw new UnauthorizedException('Authentication required');
   }
   throw new ForbiddenException(`Role ${role} cannot perform this action`);
 };
 
-const isAllowed = (role: AuthRole, allow: ReadonlyArray<Role>): boolean =>
-  allow.includes(role as Role);
+const isAllowed = (role: AuthRole, allow: ReadonlyArray<Role>): boolean => allow.includes(role);
 
 @Controller('authz-fixture')
 class AuthzFixtureController {

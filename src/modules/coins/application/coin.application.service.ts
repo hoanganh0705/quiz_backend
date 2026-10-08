@@ -1,4 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import {
   COIN_REPOSITORY_PORT,
   type CoinRepositoryPort,
@@ -19,7 +20,11 @@ import {
   COIN_SPEND_DURATIONS_DAYS,
   COIN_ECONOMY_LIMITS,
 } from '../coin.constants';
-import { CoinAdminAdjustmentReasonRequiredError } from '../domain/errors/coin-spend.errors';
+import {
+  CoinAdminAdjustmentReasonRequiredError,
+  CoinAdminSelfAdjustmentError,
+  CoinAdminDailyCapExceededError,
+} from '../domain/errors/coin-spend.errors';
 import type { CoinSpendResponseDto } from '../dto/response/coin-spend-response.dto';
 import type { CoinTransactionsResponseDto } from '../dto/response/coin-transactions.dto';
 import type { CoinWalletResponseDto } from '../dto/response/coin-wallet.dto';
@@ -27,8 +32,8 @@ import type { CoinTipRequestDto } from '../dto/request/coin-tip-request.dto';
 import type { CoinFlairRequestDto } from '../dto/request/coin-flair-request.dto';
 import type { CoinSuppressRequestDto } from '../dto/request/coin-suppress-request.dto';
 import type { CoinAdminAdjustRequestDto } from '../dto/request/coin-admin-adjust-request.dto';
-import type { CoinReason } from '../domain/types/coin.types';
 import { startOfUtcDay } from '../domain/utils/utc-day';
+import { CoinMetricsService } from '../domain/services/coin-metrics.service';
 
 const DEFAULT_TRANSACTIONS_LIMIT = 20;
 const MAX_TRANSACTIONS_LIMIT = 50;
@@ -47,12 +52,16 @@ export class CoinApplicationService {
     private readonly coinSpend: CoinSpendPort,
     @Inject(COIN_INGESTION_PORT)
     private readonly coinIngestion: CoinIngestionPort,
+    private readonly configService: ConfigService,
+    private readonly metrics: CoinMetricsService,
   ) {}
 
   async getMyWallet(userId: string): Promise<CoinWalletResponseDto> {
-    const wallet = await this.coinRepository.getWallet(userId);
     const todayMidnight = startOfUtcDay(new Date());
-    const earnedToday = await this.coinRepository.getDailyEarnCapSum(userId, todayMidnight);
+    const [wallet, earnedToday] = await Promise.all([
+      this.coinRepository.getWallet(userId),
+      this.coinRepository.getDailyEarnCapSum(userId, todayMidnight),
+    ]);
 
     if (wallet) {
       return {
@@ -130,7 +139,7 @@ export class CoinApplicationService {
     const result = await this.spend({
       userId: callerUserId,
       category: 'tip',
-      reason: 'TIP_SENT' as CoinReason,
+      reason: 'TIP_SENT',
       amount,
       referenceId: body.recipientUserId,
       idempotencyKey,
@@ -152,7 +161,7 @@ export class CoinApplicationService {
     const result = await this.spend({
       userId: callerUserId,
       category: 'flair',
-      reason: 'FLAIR_PURCHASED' as CoinReason,
+      reason: 'FLAIR_PURCHASED',
       amount,
       referenceId: body.userBadgeId,
       idempotencyKey,
@@ -173,7 +182,7 @@ export class CoinApplicationService {
     const result = await this.spend({
       userId: callerUserId,
       category: 'suppress',
-      reason: 'SUPPRESS_RECOMMENDED_PURCHASED' as CoinReason,
+      reason: 'SUPPRESS_RECOMMENDED_PURCHASED',
       amount,
       referenceId: body.quizId,
       idempotencyKey,
@@ -192,6 +201,26 @@ export class CoinApplicationService {
     if (!body.reason || body.reason.trim().length === 0) {
       throw new CoinAdminAdjustmentReasonRequiredError(adminUserId);
     }
+
+    if (body.userId === adminUserId) {
+      this.metrics.recordAdminAdjustmentRefused();
+      throw new CoinAdminSelfAdjustmentError(adminUserId);
+    }
+
+    const dailyCap = this.configService.get<number>('coinAdmin.dailyCapPerAdmin') ?? 10_000_000;
+
+    if (body.amount > 0) {
+      const todayMidnight = startOfUtcDay(new Date());
+      const dailySum = await this.coinRepository.getAdminDailyAdjustmentSum(
+        adminUserId,
+        todayMidnight,
+      );
+      if (dailySum + body.amount > dailyCap) {
+        this.metrics.recordAdminAdjustmentRefused();
+        throw new CoinAdminDailyCapExceededError(adminUserId, dailySum, body.amount, dailyCap);
+      }
+    }
+
     const idempotencyKey = body.idempotencyKey ?? cryptoRandomUuid();
     const metadata = {
       adminUserId,
@@ -207,7 +236,7 @@ export class CoinApplicationService {
         userId: body.userId,
         source: 'attempt',
         amount: body.amount,
-        reason: 'ADMIN_ADJUSTMENT' as CoinReason,
+        reason: 'ADMIN_ADJUSTMENT',
         referenceId: adminUserId,
         idempotencyKey,
         metadata,
@@ -215,12 +244,12 @@ export class CoinApplicationService {
       };
       const result = await this.coinIngestion.processCoinEvent(event);
       newBalance = result.newBalance;
-      transactionId = await this.lookupTransactionId(idempotencyKey);
+      transactionId = result.transactionId ?? (await this.lookupTransactionId(idempotencyKey));
     } else if (body.amount < 0) {
       const input: CoinSpendInput = {
         userId: body.userId,
         category: 'admin',
-        reason: 'ADMIN_ADJUSTMENT' as CoinReason,
+        reason: 'ADMIN_ADJUSTMENT',
         amount: -body.amount,
         referenceId: adminUserId,
         idempotencyKey,
@@ -232,6 +261,8 @@ export class CoinApplicationService {
     } else {
       throw new CoinAdminAdjustmentReasonRequiredError(adminUserId);
     }
+
+    this.metrics.recordAdminAdjustmentOk();
 
     return {
       transactionId,

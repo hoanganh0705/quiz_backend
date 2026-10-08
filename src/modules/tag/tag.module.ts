@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { forwardRef, Module } from '@nestjs/common';
 import { TagController } from './transport/controllers/tag.controller';
 import { UserTagController } from './transport/controllers/user-tag.controller';
 import { TagPresenter } from './transport/presenters/tag.presenter';
@@ -22,7 +22,13 @@ import { QUIZ_LISTING_PORT } from '@/modules/quiz/domain/analytics';
 import { QuizApplicationService } from '@/modules/quiz/application/quiz.application.service';
 
 @Module({
-  imports: [DatabaseModule, RedisModule, QuizModule],
+  imports: [
+    DatabaseModule,
+    RedisModule,
+    // QuizModule consumes tag data for the directory bundle, so the two
+    // modules are mutually dependent.
+    forwardRef(() => QuizModule),
+  ],
   controllers: [TagController, UserTagController],
   providers: [
     TagApplicationService,

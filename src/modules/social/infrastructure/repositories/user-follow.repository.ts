@@ -11,7 +11,7 @@ import type {
   PaginatedFollowingResult,
   PaginatedMutualFollowersResult,
 } from '../../domain/types/social.types';
-import { eq, and, sql, desc, count, lte, isNull, aliasedTable } from 'drizzle-orm';
+import { eq, and, sql, desc, count, lte, aliasedTable } from 'drizzle-orm';
 import { notDeleted } from '@/common/database/soft-delete.helper';
 import { sliceWithCursor, encodeFollowCursor, encodeUsernameCursor } from './social-cursor.util';
 import { decodeBase64JsonCursor, isIsoDateString } from '@/common/utils/cursor.util';
@@ -78,8 +78,14 @@ export class UserFollowRepository implements UserFollowRepositoryPort {
     }
 
     const [followerRow, followingRow] = await Promise.all([
-      this.db.select({ username: users.username }).from(users).where(eq(users.userId, followerId)),
-      this.db.select({ username: users.username }).from(users).where(eq(users.userId, followingId)),
+      this.db
+        .select({ username: users.username })
+        .from(users)
+        .where(and(eq(users.userId, followerId), notDeleted(users.deletedAt))),
+      this.db
+        .select({ username: users.username })
+        .from(users)
+        .where(and(eq(users.userId, followingId), notDeleted(users.deletedAt))),
     ]);
 
     return {
@@ -385,7 +391,11 @@ export class UserFollowRepository implements UserFollowRepositoryPort {
       displayName: string | null;
       avatarUrl: string | null;
     }>`
-      SELECT *
+      SELECT
+        "userId",
+        username,
+        "displayName",
+        "avatarUrl"
       FROM (${mutualFollowersQuery}) shared_following
       WHERE 1=1 ${cursorCondition}
       ORDER BY shared_following.username ASC
@@ -456,8 +466,14 @@ export class UserFollowRepository implements UserFollowRepositoryPort {
     followingId: string,
   ): Promise<{ followerUsername: string; followingUsername: string }> {
     const [followerRow, followingRow] = await Promise.all([
-      this.db.select({ username: users.username }).from(users).where(eq(users.userId, followerId)),
-      this.db.select({ username: users.username }).from(users).where(eq(users.userId, followingId)),
+      this.db
+        .select({ username: users.username })
+        .from(users)
+        .where(and(eq(users.userId, followerId), notDeleted(users.deletedAt))),
+      this.db
+        .select({ username: users.username })
+        .from(users)
+        .where(and(eq(users.userId, followingId), notDeleted(users.deletedAt))),
     ]);
 
     return {

@@ -15,16 +15,50 @@
  * Extensible: add more cross-domain event types here as needed.
  */
 
-import { Inject, Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import { Inject, Injectable, OnModuleDestroy, OnModuleInit, Optional } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import type Redis from 'ioredis';
 import type { PubSubProvider } from '@/common/ports/pubsub.provider';
 import { PUBSUB_PROVIDER } from '@/common/ports/pubsub.provider';
+import { CACHE_PROVIDER, type CacheProvider } from '@/common/ports/cache.provider';
 import { correlationIdStorage } from '@/common/interceptors/correlation-id';
 
 export const EXTERNAL_EVENT_BUS = Symbol('EXTERNAL_EVENT_BUS');
 
+const DEFAULT_REPLAY_WINDOW_SECONDS = 60;
+const DEFAULT_REPLAY_BUCKET_SECONDS = 1;
+
+function resolveReplayConfig(): {
+  prefix: string;
+  bucketSeconds: number;
+  windowSeconds: number;
+  bucketCount: number;
+} {
+  const parsePositiveInt = (value: string | undefined, fallback: number): number => {
+    const parsed = value === undefined ? NaN : Number(value);
+    return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
+  };
+  const windowSeconds = parsePositiveInt(
+    process.env['EXTERNAL_EVENT_BUS_REPLAY_TTL_SECONDS'],
+    DEFAULT_REPLAY_WINDOW_SECONDS,
+  );
+  const bucketSeconds = parsePositiveInt(
+    process.env['EXTERNAL_EVENT_BUS_REPLAY_BUCKET_SECONDS'],
+    DEFAULT_REPLAY_BUCKET_SECONDS,
+  );
+  return {
+    prefix: 'external:xp:replay',
+    bucketSeconds,
+    windowSeconds,
+    bucketCount: Math.max(1, Math.ceil(windowSeconds / bucketSeconds)),
+  };
+}
+
 const REDIS_CHANNEL = 'external:events';
+const REPLAY_BUCKET_PREFIX = resolveReplayConfig().prefix;
+const REPLAY_BUCKET_SECONDS = resolveReplayConfig().bucketSeconds;
+const REPLAY_WINDOW_SECONDS = resolveReplayConfig().windowSeconds;
+const REPLAY_BUCKET_COUNT = resolveReplayConfig().bucketCount;
 
 /**
  * Port interface for the external event bus.
@@ -131,6 +165,9 @@ export class CommonExternalEventBus implements ExternalEventBusPort, OnModuleIni
   constructor(
     @Inject(PUBSUB_PROVIDER)
     private readonly pubSub: PubSubProvider,
+    @Optional()
+    @Inject(CACHE_PROVIDER)
+    private readonly cache: CacheProvider | undefined,
     @InjectPinoLogger(CommonExternalEventBus.name)
     private readonly logger: PinoLogger,
   ) {}
@@ -194,6 +231,11 @@ export class CommonExternalEventBus implements ExternalEventBusPort, OnModuleIni
         event: 'external_event_bus_subscribed',
         channel: REDIS_CHANNEL,
       });
+
+      // Catch up on events emitted while the connection was down.
+      // The replay list is bounded by REPLAY_LIMIT and trimmed on
+      // every push, so a stale window is bounded.
+      await this.replayAndDispatch();
     } catch (error) {
       this.logger.error({
         event: 'external_event_bus_subscribe_failed',
@@ -291,7 +333,7 @@ export class CommonExternalEventBus implements ExternalEventBusPort, OnModuleIni
         correlationId: event.correlationId,
         error: message,
       });
-      throw new Error(`Failed to publish external event: ${message}`);
+      throw new Error(`Failed to publish external event: ${message}`, { cause: error });
     }
   }
 
@@ -306,7 +348,86 @@ export class CommonExternalEventBus implements ExternalEventBusPort, OnModuleIni
     const event = this.parseExternalXpEarnedEvent(parsed);
     if (event === null) return;
 
+    this.appendToReplayWindow(event).catch((error: unknown) => {
+      this.logger.warn({
+        event: 'external_event_replay_write_failed',
+        message: error instanceof Error ? error.message : 'unknown',
+      });
+    });
+
     this.invokeHandlers(event);
+  }
+
+  private async appendToReplayWindow(event: ExternalEvent): Promise<void> {
+    if (!this.cache) return;
+    const bucketKey = this.buildReplayBucketKey(event.timestamp);
+    await this.cache.rpushJson(bucketKey, event);
+    await this.cache.expire(bucketKey, REPLAY_WINDOW_SECONDS);
+  }
+
+  private buildReplayBucketKey(timestamp: Date): string {
+    const bucket =
+      Math.floor(timestamp.getTime() / 1000 / REPLAY_BUCKET_SECONDS) * REPLAY_BUCKET_SECONDS;
+    return `${REPLAY_BUCKET_PREFIX}:${bucket}`;
+  }
+
+  /**
+   * Read the sliding-window replay buckets and dispatch each event
+   * through the registered handlers exactly as if it had arrived
+   * live on the Redis channel.
+   *
+   * Used during `connect()` so that a freshly-subscribed instance
+   * catches up on events it missed while the connection was down.
+   * Each per-second bucket is keyed by `external:xp:replay:{unix}`
+   * with a TTL of `REPLAY_WINDOW_SECONDS`, so older buckets age out
+   * automatically without explicit trim work.
+   */
+  async replayAndDispatch(): Promise<void> {
+    if (!this.cache) return;
+
+    const now = Math.floor(Date.now() / 1000 / REPLAY_BUCKET_SECONDS);
+    const oldest = now - REPLAY_BUCKET_COUNT + 1;
+
+    const bucketKeys = Array.from(
+      { length: REPLAY_BUCKET_COUNT },
+      (_, i) => `${REPLAY_BUCKET_PREFIX}:${(oldest + i) * REPLAY_BUCKET_SECONDS}`,
+    );
+
+    const bucketsResults = await Promise.allSettled(
+      bucketKeys.map((bucketKey) => this.cache!.lrangeJson<ExternalEvent>(bucketKey, 0, -1)),
+    );
+
+    const eventsByBucket = bucketsResults
+      .map((result) => (result.status === 'fulfilled' ? result.value : []))
+      .flat();
+
+    const errorsByBucket = bucketsResults
+      .map((result, i) =>
+        result.status === 'rejected' ? { bucketKey: bucketKeys[i], error: result.reason } : null,
+      )
+      .filter((e): e is NonNullable<typeof e> => e !== null);
+
+    for (const { bucketKey, error } of errorsByBucket) {
+      this.logger.warn({
+        event: 'external_event_replay_read_failed',
+        bucketKey,
+        message: error instanceof Error ? error.message : 'unknown',
+      });
+    }
+
+    const _eventsWithBoundedConcurrency: ExternalEvent[] = [];
+    const DISPATCH_BATCH_SIZE = 100;
+    for (let i = 0; i < eventsByBucket.length; i += DISPATCH_BATCH_SIZE) {
+      const batch = eventsByBucket.slice(i, i + DISPATCH_BATCH_SIZE);
+      await Promise.all(batch.map((event) => this.invokeHandlersAsync(event)));
+    }
+  }
+
+  private invokeHandlersAsync(event: ExternalEvent): Promise<void> {
+    return new Promise((resolve) => {
+      this.invokeHandlers(event);
+      resolve();
+    });
   }
 
   private parseRawMessage(raw: string): SerializedExternalEvent | null {

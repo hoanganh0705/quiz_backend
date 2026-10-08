@@ -8,6 +8,7 @@ import { RankingPeriodEnum } from '@/modules/ranking/dto/request/leaderboard-que
 import type { CategoryResponseDto } from '@/modules/category/dto/response/category-response.dto';
 
 import { HomeBundleResponseDto } from '../dto/response/home-bundle-response.dto';
+import { HomeCacheService } from './home-cache.service';
 
 function unwrapCategories(value: unknown): CategoryResponseDto[] {
   if (value && typeof value === 'object' && 'items' in value) {
@@ -26,9 +27,14 @@ export class HomeApplicationService {
     private readonly categoryQueryService: CategoryQueryService,
     private readonly recentWinnersService: RecentWinnersService,
     private readonly leaderboardService: LeaderboardService,
+    private readonly homeCache: HomeCacheService,
   ) {}
 
   async getBundle(): Promise<HomeBundleResponseDto> {
+    return this.homeCache.getOrSetBundle(async () => this.fetchBundle());
+  }
+
+  private async fetchBundle(): Promise<HomeBundleResponseDto> {
     const [
       featuredResult,
       trendingResult,

@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/require-await */
 import { CircuitBreaker, CircuitOpenError } from './circuit-breaker';
 
 describe('CircuitBreaker', () => {

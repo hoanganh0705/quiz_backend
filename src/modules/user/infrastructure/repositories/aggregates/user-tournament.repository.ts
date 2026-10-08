@@ -64,7 +64,7 @@ export class UserTournamentRepository {
     const items = hasNextPage ? rows.slice(0, limit) : rows;
 
     return {
-      items: items as MyTournamentRow[],
+      items: items,
       hasNextPage,
     };
   }
@@ -121,7 +121,7 @@ export class UserTournamentRepository {
     const items = hasNextPage ? rows.slice(0, limit) : rows;
 
     return {
-      items: items as MyTournamentHistoryRow[],
+      items: items,
       hasNextPage,
     };
   }

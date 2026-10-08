@@ -144,7 +144,7 @@ export class QuizInstanceRepository implements QuizInstanceRepositoryPort {
       .where(eq(quizInstances.instanceId, instanceId))
       .limit(1);
 
-    return (row as import('@/modules/instance/domain/ports').QuizInstanceRow | undefined) ?? null;
+    return row ?? null;
   }
 
   async getInstanceDetailById(
@@ -290,9 +290,7 @@ export class QuizInstanceRepository implements QuizInstanceRepositoryPort {
       )
       .limit(1);
 
-    return (
-      (row as import('@/modules/instance/domain/ports').QuizInstancePlayerRow | undefined) ?? null
-    );
+    return row ?? null;
   }
 
   async listPlayers(
@@ -312,7 +310,7 @@ export class QuizInstanceRepository implements QuizInstanceRepositoryPort {
       .where(eq(quizInstancePlayers.instanceId, instanceId))
       .orderBy(quizInstancePlayers.joinedAt);
 
-    return rows as import('@/modules/instance/domain/ports').QuizInstancePlayerRow[];
+    return rows;
   }
 
   async addPlayer(params: {
@@ -338,7 +336,7 @@ export class QuizInstanceRepository implements QuizInstanceRepositoryPort {
         leftAt: quizInstancePlayers.leftAt,
       });
 
-    return row as import('@/modules/instance/domain/ports').QuizInstancePlayerRow;
+    return row;
   }
 
   async joinInstanceAtomic(params: {
@@ -416,7 +414,7 @@ export class QuizInstanceRepository implements QuizInstanceRepositoryPort {
 
         return {
           joined: true,
-          player: player as import('@/modules/instance/domain/ports').QuizInstancePlayerRow,
+          player: player,
         };
       } catch (error) {
         if (isPostgresUniqueViolation(error)) {
@@ -427,7 +425,7 @@ export class QuizInstanceRepository implements QuizInstanceRepositoryPort {
     };
 
     if (existingTx) {
-      return executeJoin(existingTx as unknown as DrizzleDB);
+      return executeJoin(existingTx);
     }
 
     return this.db.transaction(async (tx) => executeJoin(tx));
@@ -537,7 +535,7 @@ export class QuizInstanceRepository implements QuizInstanceRepositoryPort {
         correctCount: row.correctCount,
         timeTakenMs: row.timeTakenMs,
         rank: row.rowRank,
-      })) as import('@/modules/instance/domain/ports').InstanceLeaderboardEntry[],
+      })),
       hasNextPage,
     };
   }

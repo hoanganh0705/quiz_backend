@@ -19,6 +19,7 @@ export interface CoinIngestionPort {
     userId: string;
     appliedDelta: number;
     newBalance: number;
+    transactionId?: string;
   }>;
 }
 

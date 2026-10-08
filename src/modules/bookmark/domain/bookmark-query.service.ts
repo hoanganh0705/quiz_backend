@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, OnModuleDestroy, OnModuleInit, Optional } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import {
   BOOKMARK_REPOSITORY_PORT,
@@ -24,6 +24,11 @@ import { ANALYTICS_CACHE_TTL_MS, COLLECTION_FORBIDDEN_MESSAGE } from '../bookmar
 import { CACHE_PROVIDER } from '@/common/ports/cache.provider';
 import type { CacheProvider } from '@/common/ports/cache.provider';
 import {
+  BOOKMARK_DOMAIN_EVENT_BUS,
+  type BookmarkDomainEventBusPort,
+} from './events/bookmark-domain-event-bus.port';
+import { BookmarkAddedEvent, BookmarkRemovedEvent } from './events/bookmark-domain.events';
+import {
   sliceWithCursor,
   SEARCH_MAX_LENGTH,
   SEARCH_MIN_LENGTH,
@@ -39,7 +44,11 @@ import {
  *  - Fetch collection analytics
  */
 @Injectable()
-export class BookmarkQueryService {
+export class BookmarkQueryService implements OnModuleInit, OnModuleDestroy {
+  private static readonly ANALYTICS_CACHE_PREFIX = 'bookmark:collection:';
+
+  private unsubscribe?: () => void;
+
   constructor(
     @Inject(BOOKMARK_REPOSITORY_PORT)
     private readonly bookmarkRepository: BookmarkRepositoryPort,
@@ -49,7 +58,45 @@ export class BookmarkQueryService {
     private readonly cache: CacheProvider,
     @InjectPinoLogger(BookmarkQueryService.name)
     private readonly logger: PinoLogger,
+    @Optional()
+    @Inject(BOOKMARK_DOMAIN_EVENT_BUS)
+    private readonly eventBus?: BookmarkDomainEventBusPort,
   ) {}
+
+  onModuleInit(): void {
+    if (!this.eventBus) return;
+
+    this.unsubscribe = this.eventBus.subscribe((event) => {
+      if (event instanceof BookmarkAddedEvent || event instanceof BookmarkRemovedEvent) {
+        this.invalidateAnalyticsForCollection(event.collectionId).catch((error) => {
+          this.logger.warn({
+            event: 'bookmark_analytics_invalidation_failed',
+            collectionId: event.collectionId,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        });
+      }
+    });
+  }
+
+  onModuleDestroy(): void {
+    try {
+      this.unsubscribe?.();
+    } catch {
+      // Ignore unsubscribe errors during shutdown.
+    }
+    this.unsubscribe = undefined;
+  }
+
+  private async invalidateAnalyticsForCollection(collectionId: string): Promise<void> {
+    const pattern = `${BookmarkQueryService.ANALYTICS_CACHE_PREFIX}${collectionId}:analytics:*`;
+    await this.cache.unlinkByPattern(pattern);
+    this.logger.debug({
+      event: 'bookmark_analytics_cache_invalidated',
+      collectionId,
+      pattern,
+    });
+  }
 
   async listCollections(user: JwtPayload) {
     return this.collectionRepository.listCollectionsByUser(user.sub);
@@ -172,7 +219,7 @@ export class BookmarkQueryService {
 
   private buildAnalyticsCacheKey(collectionId: string, user: JwtPayload): string {
     const tenant = user.role === 'admin' ? `admin:${user.sub}` : `user:${user.sub}`;
-    return `bookmark:collection:${collectionId}:analytics:${tenant}`;
+    return `${BookmarkQueryService.ANALYTICS_CACHE_PREFIX}${collectionId}:analytics:${tenant}`;
   }
 
   async getMyBookmarkStats(user: JwtPayload): Promise<UserBookmarkStatsRow> {

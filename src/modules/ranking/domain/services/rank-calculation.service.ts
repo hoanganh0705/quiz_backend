@@ -2,6 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { DRIZZLE } from '@/core/database/drizzle.constants';
 import type { DrizzleDB } from '@/core/database/database.module';
+import { sql } from 'drizzle-orm';
 import {
   RANKING_REPOSITORY_PORT,
   type RankingRepositoryPort,
@@ -16,6 +17,7 @@ import {
   RankingPeriod,
   calculatePercentile,
   getXpField,
+  getRankFieldName,
 } from '../types/ranking.types';
 import type {
   RankCalculationResult,
@@ -23,6 +25,7 @@ import type {
   RankingIssue,
 } from '../types/ranking.types';
 import { RankCalculationError } from '../errors/ranking-domain.errors';
+import { RankingCacheVersionService } from './ranking-cache-version.service';
 
 @Injectable()
 export class RankCalculationService {
@@ -32,6 +35,7 @@ export class RankCalculationService {
     @Inject(RANKING_DOMAIN_EVENT_BUS)
     private readonly eventBus: RankingDomainEventBusPort,
     @Inject(DRIZZLE) private readonly db: DrizzleDB,
+    private readonly cacheVersionService: RankingCacheVersionService,
     @InjectPinoLogger(RankCalculationService.name)
     private readonly logger: PinoLogger,
   ) {}
@@ -213,6 +217,10 @@ export class RankCalculationService {
       usersAffected: usersWithWork.length,
     });
 
+    if (workItems.length > 0) {
+      await this.cacheVersionService.bumpAllPeriods();
+    }
+
     return workItems.length;
   }
 
@@ -230,17 +238,22 @@ export class RankCalculationService {
         severity: 'medium',
       });
 
-      for (const userId of missingRanks) {
-        for (const period of [
-          RankingPeriod.DAILY,
-          RankingPeriod.WEEKLY,
-          RankingPeriod.MONTHLY,
-          RankingPeriod.ALL_TIME,
-        ]) {
-          const rank = await this.calculateUserRank(userId, period);
-          if (rank !== null) {
-            await this.rankingRepository.updateRank({ userId, period, rank });
-          }
+      const allPeriods = [
+        RankingPeriod.DAILY,
+        RankingPeriod.WEEKLY,
+        RankingPeriod.MONTHLY,
+        RankingPeriod.ALL_TIME,
+      ];
+      const now = new Date();
+
+      for (const period of allPeriods) {
+        const ranked = await this.rankingRepository.calculateAllRanksForUsers({
+          userIds: missingRanks,
+          period,
+        });
+        if (ranked.length > 0) {
+          const updates = ranked.map((r) => ({ userId: r.userId, period, rank: r.rank }));
+          await this.rankingRepository.batchUpdateRanks({ updates, now });
         }
       }
     }
@@ -273,45 +286,77 @@ export class RankCalculationService {
     results: RankCalculationResult[],
     period: RankingPeriod,
   ): Promise<void> {
-    for (const result of results) {
-      const previousRank = await this.rankingRepository.updateRank({
-        userId: result.userId,
-        period,
-        rank: result.rank,
-      });
+    if (results.length === 0) return;
 
-      if (previousRank !== null && previousRank !== result.rank) {
+    const now = new Date();
+
+    const rankUpdates = results.map((r) => ({ userId: r.userId, period, rank: r.rank }));
+
+    const previousRanks = new Map<string, number | null>();
+    for (const r of results) {
+      const existing = await this.rankingRepository.getRankingsForUsers([r.userId]);
+      const row = existing[0];
+      const field = getRankFieldName(period);
+      previousRanks.set(r.userId, (row as any)?.[field] ?? null);
+    }
+
+    const peakResults = await this.rankingRepository.batchUpdatePeakRanks({
+      updates: rankUpdates,
+      now,
+    });
+
+    const peakResultsMap = new Map(peakResults.map((p) => [p.userId, p]));
+
+    const milestoneTriples: Array<{
+      userId: string;
+      milestone: RankingMilestone;
+      rank: number;
+      achievedAt: Date;
+    }> = [];
+
+    for (const result of results) {
+      const prevRank = previousRanks.get(result.userId) ?? null;
+      if (prevRank !== null && prevRank !== result.rank) {
         this.eventBus.emitRankChanged({
           eventType: 'rank.changed',
           userId: result.userId,
           period,
-          previousRank,
+          previousRank: prevRank,
           newRank: result.rank,
           previousXp: 0,
           newXp: result.xp,
-          timestamp: new Date(),
+          timestamp: now,
         });
       }
 
-      const peakResult = await this.rankingRepository.updatePeakRank({
-        userId: result.userId,
-        period,
-        rank: result.rank,
-      });
-
-      if (peakResult.updated) {
+      const peak = peakResultsMap.get(result.userId);
+      if (peak && peak.previousPeakRank !== undefined) {
         this.eventBus.emitPeakRankAchieved({
           eventType: 'peak.rank.achieved',
           userId: result.userId,
           period,
-          previousPeakRank: peakResult.previousPeakRank,
+          previousPeakRank: peak.previousPeakRank,
           newPeakRank: result.rank,
-          isInitialAchievement: peakResult.previousPeakRank === null,
-          timestamp: new Date(),
+          isInitialAchievement: peak.previousPeakRank === null,
+          timestamp: now,
         });
       }
 
-      await this.checkAndPersistMilestones(result.userId, period, result.rank, result.denseRank);
+      const milestones = this.getMilestonesForRank(result.rank);
+      for (const milestone of milestones) {
+        milestoneTriples.push({
+          userId: result.userId,
+          milestone,
+          rank: result.rank,
+          achievedAt: now,
+        });
+      }
+    }
+
+    await this.rankingRepository.batchUpdateRanks({ updates: rankUpdates, now });
+
+    if (milestoneTriples.length > 0) {
+      await this.checkAndPersistMilestonesForBatch(milestoneTriples, results, period);
     }
 
     this.logger.debug({
@@ -325,24 +370,20 @@ export class RankCalculationService {
     ranked: { userId: string; xp: number; rank: number; denseRank: number }[],
     period: RankingPeriod,
   ): Promise<void> {
-    for (const row of ranked) {
-      try {
-        await this.processRankUpdate(row, period);
-      } catch (error) {
-        this.logger.error({
-          event: 'ranking_batch_user_update_failed',
-          userId: row.userId,
-          period,
-          error: error instanceof Error ? error.message : 'Unknown error',
-        });
-      }
-    }
+    if (ranked.length === 0) return;
+
+    const results: RankCalculationResult[] = ranked.map((r) => ({
+      ...r,
+      period,
+    }));
+    await this.batchUpdateRanks(results, period);
   }
 
   private async processRankUpdate(
     row: { userId: string; xp: number; rank: number; denseRank: number },
     period: RankingPeriod,
   ): Promise<void> {
+    const now = new Date();
     const previousRank = await this.rankingRepository.updateRank({
       userId: row.userId,
       period,
@@ -358,7 +399,7 @@ export class RankCalculationService {
         newRank: row.rank,
         previousXp: 0,
         newXp: row.xp,
-        timestamp: new Date(),
+        timestamp: now,
       });
     }
 
@@ -376,11 +417,70 @@ export class RankCalculationService {
         previousPeakRank: peakResult.previousPeakRank,
         newPeakRank: row.rank,
         isInitialAchievement: peakResult.previousPeakRank === null,
-        timestamp: new Date(),
+        timestamp: now,
       });
     }
 
     await this.checkAndPersistMilestones(row.userId, period, row.rank, row.denseRank);
+  }
+
+  private async checkAndPersistMilestonesForBatch(
+    milestoneTriples: Array<{
+      userId: string;
+      milestone: RankingMilestone;
+      rank: number;
+      achievedAt: Date;
+    }>,
+    results: RankCalculationResult[],
+    period: RankingPeriod,
+  ): Promise<void> {
+    if (milestoneTriples.length === 0) return;
+
+    const totalParticipants = await this.rankingRepository.getTotalParticipants(period);
+
+    const existingResult = await this.db.execute(sql`
+      SELECT user_id, milestone
+      FROM ranking_milestones
+      WHERE (user_id, milestone) IN (
+        VALUES ${sql.join(
+          milestoneTriples.map((t) => sql`(${t.userId}::uuid, ${t.milestone})`),
+          sql`, `,
+        )}
+      )
+    `);
+
+    const existingSet = new Set(
+      ((existingResult as any).rows ?? []).map(
+        (r: { user_id: string; milestone: string }) => `${r.user_id}::${r.milestone}`,
+      ),
+    );
+
+    const absentTriples = milestoneTriples.filter(
+      (t) => !existingSet.has(`${t.userId}::${t.milestone}`),
+    );
+
+    if (absentTriples.length > 0) {
+      await this.rankingRepository.persistMilestones({ triples: absentTriples });
+    }
+
+    const resultsMap = new Map(results.map((r) => [r.userId, r]));
+    const newlyPersistedSet = new Set(absentTriples.map((t) => `${t.userId}::${t.milestone}`));
+
+    for (const triple of milestoneTriples) {
+      if (!newlyPersistedSet.has(`${triple.userId}::${triple.milestone}`)) continue;
+      const result = resultsMap.get(triple.userId);
+      const denseRank = result?.denseRank ?? triple.rank;
+      const percentile = calculatePercentile(denseRank, totalParticipants);
+      this.eventBus.emitRankingMilestone({
+        eventType: 'ranking.milestone',
+        userId: triple.userId,
+        period,
+        milestoneType: triple.milestone,
+        rank: triple.rank,
+        percentile,
+        timestamp: triple.achievedAt,
+      });
+    }
   }
 
   private async checkAndPersistMilestones(

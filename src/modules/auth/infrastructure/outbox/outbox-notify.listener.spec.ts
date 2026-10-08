@@ -48,7 +48,7 @@ describe('OutboxNotifyListener', () => {
       }
     ).handleNotify;
 
-    await handleNotify.call(listener as unknown as void, 'event-id-1');
+    await handleNotify.call(listener, 'event-id-1');
 
     const processPendingEvents = (
       processor as unknown as {
@@ -75,8 +75,8 @@ describe('OutboxNotifyListener', () => {
       }
     ).handleNotify;
 
-    await handleNotify.call(listener as unknown as void, '');
-    await handleNotify.call(listener as unknown as void, undefined);
+    await handleNotify.call(listener, '');
+    await handleNotify.call(listener, undefined);
 
     const processPendingEvents = (
       processor as unknown as {
@@ -103,7 +103,7 @@ describe('OutboxNotifyListener', () => {
       }
     ).fallbackPoll;
 
-    await fallbackPoll.call(listener as unknown as void);
+    await fallbackPoll.call(listener);
 
     const processPendingEvents = (
       processor as unknown as {
@@ -192,6 +192,47 @@ describe('OutboxNotifyListener', () => {
     const second = handleNotify.call(listener, 'y') as Promise<void>;
     resolveProcessor();
     await Promise.all([first, second]);
+
+    const processPendingEvents = (
+      processor as unknown as {
+        processPendingEvents(this: void): Promise<unknown>;
+      }
+    ).processPendingEvents;
+    expect(processPendingEvents).toHaveBeenCalledTimes(1);
+  });
+
+  it('concurrent notify + fallback drains do not both reach the processor', async () => {
+    const pendingResolvers: Array<() => void> = [];
+    const processor = {
+      processPendingEvents: jest.fn().mockImplementation(
+        () =>
+          new Promise<void>((resolve) => {
+            pendingResolvers.push(resolve);
+          }),
+      ),
+    } as unknown as OutboxProcessorService;
+
+    const listener = new OutboxNotifyListener(
+      makeDrizzleStub() as never,
+      processor,
+      makeLogger() as never,
+    );
+
+    const handleNotify = (
+      listener as unknown as {
+        handleNotify(this: void, p: string): Promise<void>;
+      }
+    ).handleNotify;
+    const fallbackPoll = (
+      listener as unknown as {
+        fallbackPoll(this: void): Promise<void>;
+      }
+    ).fallbackPoll;
+
+    const drainPromise = handleNotify.call(listener, 'event-id-1') as Promise<void>;
+    const fallbackPromise = fallbackPoll.call(listener) as Promise<void>;
+    for (const resolve of pendingResolvers) resolve();
+    await Promise.all([drainPromise, fallbackPromise]);
 
     const processPendingEvents = (
       processor as unknown as {

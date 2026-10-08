@@ -5,7 +5,6 @@ export * from './review-stats-response.dto';
 export * from './review-dashboard-response.dto';
 export * from './create-review-response.dto';
 export * from './update-review-response.dto';
-export * from './delete-review-response.dto';
 export * from './helpful-review-response.dto';
 export * from './report-review-response.dto';
 export * from './my-review-response.dto';

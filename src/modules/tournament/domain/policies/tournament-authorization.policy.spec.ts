@@ -3,12 +3,11 @@ import {
   type TournamentActor,
   type TournamentOwnershipTarget,
 } from './tournament-authorization.policy';
-import type { UserRole } from '@/common/authorization/permissions';
 
-const admin: TournamentActor = { sub: 'admin-1', role: 'admin' as UserRole };
-const moderator: TournamentActor = { sub: 'mod-1', role: 'moderator' as UserRole };
-const user: TournamentActor = { sub: 'user-1', role: 'user' as UserRole };
-const otherUser: TournamentActor = { sub: 'user-2', role: 'user' as UserRole };
+const admin: TournamentActor = { sub: 'admin-1', role: 'admin' };
+const moderator: TournamentActor = { sub: 'mod-1', role: 'moderator' };
+const user: TournamentActor = { sub: 'user-1', role: 'user' };
+const otherUser: TournamentActor = { sub: 'user-2', role: 'user' };
 
 const upcomingOwnedByUser: TournamentOwnershipTarget = {
   tournamentId: 't-1',

@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional, Inject } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { BaseDomainEventBus } from '@/common/events/base-domain-event-bus';
 import type {
@@ -12,6 +12,7 @@ import type {
   RankingDomainEvent,
 } from './ranking-domain.events';
 import { RankingDomainEventBusPort } from '../ports';
+import { TracingProvider } from '@/core/observability/tracing.provider';
 
 @Injectable()
 export class RankingDomainEventBus
@@ -21,8 +22,11 @@ export class RankingDomainEventBus
   constructor(
     @InjectPinoLogger(RankingDomainEventBus.name)
     logger: PinoLogger,
+    @Optional()
+    @Inject(TracingProvider)
+    tracing?: TracingProvider,
   ) {
-    super(logger, { logEventName: 'ranking_event' });
+    super(logger, { logEventName: 'ranking_event' }, tracing);
   }
 
   subscribe(handler: (event: RankingDomainEvent) => void): () => void {

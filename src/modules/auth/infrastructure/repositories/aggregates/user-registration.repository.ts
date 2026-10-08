@@ -25,7 +25,7 @@ export class UserRegistrationRepository {
         throw new InternalServerErrorException('Failed to create user');
       });
 
-    return createdUser as CreatedUserRow;
+    return createdUser;
   }
 
   async createUserWithPasswordHistory(params: {
@@ -59,7 +59,7 @@ export class UserRegistrationRepository {
           createdAt: params.nowIso,
         });
 
-        return inserted as CreatedUserRow;
+        return inserted;
       })
       .catch((error: unknown) => {
         if (error instanceof InternalServerErrorException) {

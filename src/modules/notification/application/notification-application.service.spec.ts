@@ -70,14 +70,14 @@ function makeService(
     invalidateAnalyticsCache: jest.fn().mockResolvedValue(undefined),
     findByIdempotencyKey: jest.fn(),
     ...opts.notificationRepository,
-  } as NotificationRepositoryPort;
+  };
 
   const preferencesRepository: NotificationPreferencesRepositoryPort = {
     getPreferences: jest.fn(),
     getManyPreferences: jest.fn(),
     upsertPreferences: jest.fn(),
     ...opts.preferencesRepository,
-  } as unknown as NotificationPreferencesRepositoryPort;
+  };
 
   const notificationService = {
     getNotifications: jest.fn(),
@@ -89,7 +89,7 @@ function makeService(
   const channelService: NotificationChannelServiceInstance = {
     invalidatePreferencesCache: jest.fn().mockResolvedValue(undefined),
     ...opts.channelService,
-  } as NotificationChannelServiceInstance;
+  };
 
   const eventBus = {
     emit: jest.fn(),
@@ -148,9 +148,9 @@ describe('NotificationApplicationService.markAsRead', () => {
       notificationService: { getNotification: jest.fn().mockResolvedValue(notification) },
     });
     await service.markAsRead('n-1', makeJwtPayload('user-1'));
-    // eslint-disable-next-line @typescript-eslint/unbound-method
+
     expect(notificationRepository.markAsRead).toHaveBeenCalledWith('n-1', 'user-1');
-    // eslint-disable-next-line @typescript-eslint/unbound-method
+
     expect(eventBus.emit).toHaveBeenCalledWith(
       expect.objectContaining({
         eventType: 'notification.read',
@@ -191,9 +191,9 @@ describe('NotificationApplicationService.markAsUnread', () => {
       notificationService: { getNotification: jest.fn().mockResolvedValue(notification) },
     });
     await service.markAsUnread('n-1', makeJwtPayload('user-1'));
-    // eslint-disable-next-line @typescript-eslint/unbound-method
+
     expect(notificationRepository.markAsUnread).toHaveBeenCalledWith('n-1', 'user-1');
-    // eslint-disable-next-line @typescript-eslint/unbound-method
+
     expect(eventBus.emit).toHaveBeenCalledWith(
       expect.objectContaining({ eventType: 'notification.unread', notificationId: 'n-1' }),
     );
@@ -229,9 +229,9 @@ describe('NotificationApplicationService.markAllAsRead', () => {
     });
     const count = await service.markAllAsRead(makeJwtPayload('user-1'));
     expect(count).toBe(3);
-    // eslint-disable-next-line @typescript-eslint/unbound-method
+
     expect(eventBus.emit).toHaveBeenCalledTimes(3);
-    // eslint-disable-next-line @typescript-eslint/unbound-method
+
     expect(eventBus.emit).toHaveBeenCalledWith(
       expect.objectContaining({
         eventType: 'notification.read',
@@ -249,7 +249,7 @@ describe('NotificationApplicationService.markAllAsRead', () => {
       },
     });
     await service.markAllAsRead(makeJwtPayload('user-1'));
-    // eslint-disable-next-line @typescript-eslint/unbound-method
+
     expect(eventBus.emit).not.toHaveBeenCalled();
   });
 });
@@ -261,9 +261,9 @@ describe('NotificationApplicationService.deleteNotification', () => {
       notificationService: { getNotification: jest.fn().mockResolvedValue(notification) },
     });
     await service.deleteNotification('n-1', makeJwtPayload('user-1'));
-    // eslint-disable-next-line @typescript-eslint/unbound-method
+
     expect(notificationRepository.delete).toHaveBeenCalledWith('n-1', 'user-1');
-    // eslint-disable-next-line @typescript-eslint/unbound-method
+
     expect(eventBus.emit).toHaveBeenCalledWith(
       expect.objectContaining({ eventType: 'notification.deleted', notificationId: 'n-1' }),
     );
@@ -299,9 +299,9 @@ describe('NotificationApplicationService.deleteReadNotifications', () => {
     });
     const count = await service.deleteReadNotifications(makeJwtPayload('user-1'));
     expect(count).toBe(2);
-    // eslint-disable-next-line @typescript-eslint/unbound-method
+
     expect(eventBus.emit).toHaveBeenCalledTimes(2);
-    // eslint-disable-next-line @typescript-eslint/unbound-method
+
     expect(notificationRepository.invalidateAnalyticsCache).toHaveBeenCalled();
   });
 
@@ -313,7 +313,7 @@ describe('NotificationApplicationService.deleteReadNotifications', () => {
       },
     });
     await service.deleteReadNotifications(makeJwtPayload('user-1'));
-    // eslint-disable-next-line @typescript-eslint/unbound-method
+
     expect(eventBus.emit).not.toHaveBeenCalled();
   });
 });
@@ -338,7 +338,7 @@ describe('NotificationApplicationService.getOrCreatePreferences', () => {
       quietHoursEnd: null,
       updatedAt: '2025-06-01T10:00:00.000Z',
       createdAt: '2025-06-01T10:00:00.000Z',
-    } as NotificationPreferencesRow);
+    });
     const { service } = makeService({
       preferencesRepository: { upsertPreferences },
     });
@@ -372,13 +372,13 @@ describe('NotificationApplicationService.updatePreferences', () => {
       quietHoursEnd: null,
       updatedAt: '2025-06-01T10:00:00.000Z',
       createdAt: '2025-06-01T10:00:00.000Z',
-    } as NotificationPreferencesRow);
+    });
     const { service, channelService } = makeService({
       preferencesRepository: { upsertPreferences },
     });
     const dto = await service.updatePreferences(makeJwtPayload('user-1'), prefs);
     expect(upsertPreferences).toHaveBeenCalledWith('user-1', prefs);
-    // eslint-disable-next-line @typescript-eslint/unbound-method
+
     expect(channelService.invalidatePreferencesCache).toHaveBeenCalledWith('user-1');
     expect(dto.inAppEnabled).toBe(false);
     expect(dto.rankEnabled).toBe(false);

@@ -22,36 +22,31 @@ import {
   ConnectedSocket,
   MessageBody,
 } from '@nestjs/websockets';
-import { Server, Socket, RemoteSocket } from 'socket.io';
+import { Server, Socket } from 'socket.io';
 import { UseFilters, UseGuards } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { WsJwtGuard, type AuthenticatedSocket } from '@/common/guards/ws-jwt.guard';
+import { WsThrottlerGuard } from '@/common/guards/ws-throttler.guard';
+import { WsThrottlePublic } from '@/common/decorators/ws-throttle.decorator';
 import { WsCurrentUser } from '@/common/decorators/ws-current-user.decorator';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
 import { WsExceptionFilter } from '@/modules/instance/transport/filters/ws-exception.filter';
+import { resolveWsCorsOrigins } from '@/common/utils/ws-cors.util';
 import type { CommentDomainEvent } from '@/modules/comment/domain/events';
 
 const NAMESPACE = '/comments';
 const USER_ROOM_PREFIX = 'user:';
 const QUIZ_ROOM_PREFIX = 'quiz:';
 
-const getCorsOrigins = (): string | string[] => {
-  const origins = (process.env.CORS_ORIGINS ?? '')
-    .split(',')
-    .map((origin) => origin.trim())
-    .filter((origin) => origin.length > 0);
-  return origins.length > 0 ? origins : '*';
-};
-
 @WebSocketGateway({
   namespace: NAMESPACE,
   cors: {
-    origin: getCorsOrigins(),
+    origin: resolveWsCorsOrigins(),
     credentials: true,
   },
 })
 @UseFilters(WsExceptionFilter)
-@UseGuards(WsJwtGuard)
+@UseGuards(WsJwtGuard, WsThrottlerGuard)
 export class CommentGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
   server!: Server;
@@ -66,7 +61,14 @@ export class CommentGateway implements OnGatewayConnection, OnGatewayDisconnect 
   handleConnection(client: Socket): void {
     const authClient = client as AuthenticatedSocket;
     const user = authClient.user;
-    if (!user?.sub) return;
+    if (!user?.sub) {
+      this.logger.info({
+        event: 'ws_unauth_disconnect',
+        socketId: client.id,
+      });
+      client.disconnect(true);
+      return;
+    }
 
     const userId = user.sub;
     void client.join(`${USER_ROOM_PREFIX}${userId}`);
@@ -111,6 +113,7 @@ export class CommentGateway implements OnGatewayConnection, OnGatewayDisconnect 
    * The client joins the quiz-scoped room to receive all comment events
    * for that quiz.
    */
+  @WsThrottlePublic()
   @SubscribeMessage('subscribe_quiz')
   handleSubscribeQuiz(
     @ConnectedSocket() client: Socket,
@@ -141,6 +144,7 @@ export class CommentGateway implements OnGatewayConnection, OnGatewayDisconnect 
   /**
    * Unsubscribe from a quiz's comment stream.
    */
+  @WsThrottlePublic()
   @SubscribeMessage('unsubscribe_quiz')
   handleUnsubscribeQuiz(
     @ConnectedSocket() client: Socket,
@@ -166,28 +170,15 @@ export class CommentGateway implements OnGatewayConnection, OnGatewayDisconnect 
   /**
    * Ping handler — returns connection status for the authenticated user.
    */
+  @WsThrottlePublic()
   @SubscribeMessage('ping')
-  async handlePing(@WsCurrentUser() user: JwtPayload): Promise<{
+  handlePing(@WsCurrentUser() user: JwtPayload): Promise<{
     ok: boolean;
     connectedCount: number;
     localCount: number;
   }> {
     const localCount = this.userSockets.get(user.sub)?.size ?? 0;
-    let connectedCount = localCount;
-    try {
-      const remoteSockets = (await this.server
-        .in(`${USER_ROOM_PREFIX}${user.sub}`)
-        .fetchSockets()) as RemoteSocket<Record<string, never>, unknown>[];
-      connectedCount = remoteSockets.length;
-    } catch (error) {
-      this.logger.warn({
-        event: 'comment_ping_fetch_sockets_failed',
-        userId: user.sub,
-        message: error instanceof Error ? error.message : 'unknown',
-      });
-    }
-
-    return { ok: true, connectedCount, localCount };
+    return Promise.resolve({ ok: true, connectedCount: localCount, localCount });
   }
 
   /**
@@ -328,7 +319,6 @@ export class CommentGateway implements OnGatewayConnection, OnGatewayDisconnect 
           commentId: event.commentId,
           quizId: event.quizId,
           commentExcerpt: event.commentExcerpt,
-          reporterId: event.reporterId,
           reason: event.reason,
         };
 

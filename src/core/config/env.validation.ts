@@ -17,6 +17,28 @@ const parseRequiredString = (env: Record<string, unknown>, key: string): string 
   return value.trim();
 };
 
+const MIN_SECRET_LENGTH = 32;
+const MIN_SECRET_UNIQUE_CHARS = 16;
+
+const parseHighEntropyString = (env: Record<string, unknown>, key: string): string => {
+  const value = parseRequiredString(env, key);
+
+  if (value.length < MIN_SECRET_LENGTH) {
+    throw new Error(
+      `${key} must be at least ${MIN_SECRET_LENGTH} characters long (got ${value.length}). Generate with: openssl rand -base64 32`,
+    );
+  }
+
+  const unique = new Set(value).size;
+  if (unique < MIN_SECRET_UNIQUE_CHARS) {
+    throw new Error(
+      `${key} must contain at least ${MIN_SECRET_UNIQUE_CHARS} distinct characters (got ${unique}). A repeating pattern is not secure.`,
+    );
+  }
+
+  return value;
+};
+
 const parseStringWithDefault = (
   env: Record<string, unknown>,
   key: string,
@@ -50,7 +72,7 @@ const parsePositiveInteger = (
     throw new Error(`${key} must be defined`);
   }
 
-  let normalizedValue = '';
+  let normalizedValue: string;
 
   if (typeof rawValue === 'number') {
     normalizedValue = String(rawValue);
@@ -150,6 +172,60 @@ const parseOptionalUrl = (env: Record<string, unknown>, key: string, fallback: s
   }
 
   return trimmed;
+};
+
+const parseCloudinaryFolder = (env: Record<string, unknown>): string => {
+  const nodeEnvRaw = env.NODE_ENV;
+  const nodeEnv = typeof nodeEnvRaw === 'string' ? nodeEnvRaw.trim().toLowerCase() : 'development';
+  const isProduction = nodeEnv === 'production';
+
+  const value = parseStringWithDefault(env, 'CLOUDINARY_FOLDER', 'quiz-app-dev');
+
+  if (isProduction && value === 'quiz-app-dev') {
+    throw new Error(
+      'CLOUDINARY_FOLDER must not be "quiz-app-dev" in production; set it to a non-development folder name.',
+    );
+  }
+
+  return value;
+};
+
+/**
+ * Resolve the Redis key prefix.
+ *
+ * Production deployments MUST set `REDIS_KEY_PREFIX` — an empty
+ * value (or whitespace) fails boot because the consequence of an
+ * unprefixed prod is silent key collisions across environments
+ * sharing a Redis instance.
+ *
+ * Development and test environments default to `dev:` and `test:`
+ * respectively when the variable is unset, so a developer that
+ * forgets to set one never accidentally shares keys with another
+ * environment.
+ */
+const parseRedisKeyPrefix = (env: Record<string, unknown>): string => {
+  const nodeEnvRaw = env.NODE_ENV;
+  const nodeEnv = typeof nodeEnvRaw === 'string' ? nodeEnvRaw.trim().toLowerCase() : '';
+
+  const isProduction = nodeEnv === 'production';
+  const isTest = nodeEnv === 'test';
+  const fallback = isTest ? 'test:' : 'dev:';
+
+  const raw = env.REDIS_KEY_PREFIX;
+  const value = typeof raw === 'string' ? raw.trim() : '';
+
+  if (value.length === 0) {
+    if (isProduction) {
+      throw new Error('REDIS_KEY_PREFIX must be a non-empty string in production');
+    }
+    return fallback;
+  }
+
+  if (/\s/.test(value)) {
+    throw new Error('REDIS_KEY_PREFIX must not contain whitespace');
+  }
+
+  return value;
 };
 
 /**
@@ -258,10 +334,11 @@ export const validateEnv = (env: Record<string, unknown>) => {
     'REDIS_CIRCUIT_RESET_TIMEOUT_MS',
     30_000,
   );
+  const redisKeyPrefix = parseRedisKeyPrefix(env);
 
   // JWT Configuration
-  const jwtAccessTokenSecret = parseRequiredString(env, 'JWT_ACCESS_TOKEN_SECRET');
-  const jwtRefreshTokenSecret = parseRequiredString(env, 'JWT_REFRESH_TOKEN_SECRET');
+  const jwtAccessTokenSecret = parseHighEntropyString(env, 'JWT_ACCESS_TOKEN_SECRET');
+  const jwtRefreshTokenSecret = parseHighEntropyString(env, 'JWT_REFRESH_TOKEN_SECRET');
   const accessTokenExpiresIn = parseTokenExpiresIn(env, 'ACCESS_TOKEN_EXPIRES_IN');
   const refreshTokenExpiresIn = parseTokenExpiresIn(env, 'REFRESH_TOKEN_EXPIRES_IN');
   const jwtAccessTokenIssuer = parseRequiredString(env, 'JWT_ACCESS_TOKEN_ISSUER');
@@ -309,17 +386,101 @@ export const validateEnv = (env: Record<string, unknown>) => {
   const cloudinaryCloudName = parseRequiredString(env, 'CLOUDINARY_CLOUD_NAME');
   const cloudinaryApiKey = parseRequiredString(env, 'CLOUDINARY_API_KEY');
   const cloudinaryApiSecret = parseRequiredString(env, 'CLOUDINARY_API_SECRET');
-  const cloudinaryFolder = parseStringWithDefault(env, 'CLOUDINARY_FOLDER', 'quiz-app-dev');
+  const cloudinaryFolder = parseCloudinaryFolder(env);
 
   const port = parsePositiveInteger(env, 'PORT', 3000);
   const nodeEnv = parseEnum(env, 'NODE_ENV', NODE_ENVS, 'NODE_ENV');
   const corsOrigins = typeof env.CORS_ORIGINS === 'string' ? env.CORS_ORIGINS : '';
+
+  const normalisedCorsOrigins = corsOrigins
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter((origin) => origin.length > 0);
+
+  if (nodeEnv === 'production' && normalisedCorsOrigins.length === 0) {
+    throw new Error(
+      'CORS_ORIGINS must be set in production (got empty list). ' +
+        'Add comma-separated allowed origins to the environment.',
+    );
+  }
+
+  const prometheusScrapeTokenRaw = env.PROMETHEUS_SCRAPE_TOKEN;
+  const prometheusScrapeToken =
+    typeof prometheusScrapeTokenRaw === 'string' && prometheusScrapeTokenRaw.trim().length > 0
+      ? prometheusScrapeTokenRaw.trim()
+      : null;
+  if (nodeEnv === 'production' && prometheusScrapeToken === null) {
+    throw new Error(
+      'PROMETHEUS_SCRAPE_TOKEN must be set in production so the /metrics endpoint can authenticate Prometheus scrapes.',
+    );
+  }
+
   const trustProxy = parseBoolean(env, 'TRUST_PROXY', false);
 
   const appName = typeof env.APP_NAME === 'string' ? env.APP_NAME.trim() : 'Quiz API';
   const appVersion = typeof env.APP_VERSION === 'string' ? env.APP_VERSION.trim() : '1.0';
   const appDescription = typeof env.APP_DESCRIPTION === 'string' ? env.APP_DESCRIPTION.trim() : '';
   const appUrl = typeof env.APP_URL === 'string' ? env.APP_URL.trim() : '';
+
+  const allowProdSeed = parseBoolean(env, 'ALLOW_PROD_SEED', false);
+  if (nodeEnv === 'production' && allowProdSeed) {
+    throw new Error(
+      'ALLOW_PROD_SEED must not be true in production; this is an emergency escape hatch only.',
+    );
+  }
+
+  // Auth security knobs (defaulted; rejected in production when nonsensical)
+  const passwordHistorySize = parsePositiveInteger(env, 'PASSWORD_HISTORY_SIZE', 5);
+  const authAuditRetentionDays = parsePositiveInteger(env, 'AUTH_AUDIT_RETENTION_DAYS', 365);
+  const authOutboxMaxRetries = parsePositiveInteger(env, 'AUTH_OUTBOX_MAX_RETRIES', 8);
+  const authOutboxBaseDelaySeconds = parsePositiveInteger(
+    env,
+    'AUTH_OUTBOX_BASE_DELAY_SECONDS',
+    30,
+  );
+  const authSessionInvalidationChannel = parseStringWithDefault(
+    env,
+    'AUTH_SESSION_INVALIDATION_CHANNEL',
+    'auth:session:invalidate',
+  );
+
+  // Google OAuth (boot safety: missing GOOGLE_CLIENT_ID is allowed only in dev/test)
+  const googleClientId = parseStringWithDefault(env, 'GOOGLE_CLIENT_ID', '');
+  if (nodeEnv === 'production' && googleClientId.trim().length === 0) {
+    throw new Error('GOOGLE_CLIENT_ID must be set in production for OAuth sign-in.');
+  }
+  const googleHostedDomain = parseStringWithDefault(env, 'GOOGLE_HOSTED_DOMAIN', '');
+
+  // Coin admin guardrails
+  const coinAdminDailyCapPerAdmin = parsePositiveInteger(
+    env,
+    'COIN_ADMIN_DAILY_CAP_PER_ADMIN',
+    10_000_000,
+  );
+
+  // Runtime feature toggles
+  const disableRedisSocketAdapter = parseBoolean(env, 'DISABLE_REDIS_SOCKET_ADAPTER', false);
+  const swaggerEnabled = parseBoolean(env, 'SWAGGER_ENABLED', false);
+
+  // Tournament queue concurrency (BullMQ consumer pool)
+  const tournamentQueueConcurrency = parsePositiveInteger(env, 'TOURNAMENT_QUEUE_CONCURRENCY', 5);
+
+  // Retry queue DLQ key prefixes (per tier)
+  const retryQueueDlqAttemptKey = parseStringWithDefault(
+    env,
+    'RETRY_QUEUE_DLQ_ATTEMPT_KEY',
+    'tier:attempt:dlq',
+  );
+  const retryQueueDlqCoinKey = parseStringWithDefault(
+    env,
+    'RETRY_QUEUE_DLQ_COIN_KEY',
+    'tier:coin:dlq',
+  );
+  const retryQueueDlqCommentKey = parseStringWithDefault(
+    env,
+    'RETRY_QUEUE_DLQ_COMMENT_KEY',
+    'tier:comment:dlq',
+  );
 
   const softDeleteRetentionDays = (() => {
     const raw = env.SOFT_DELETE_RETENTION_DAYS;
@@ -343,6 +504,7 @@ export const validateEnv = (env: Record<string, unknown>) => {
     REDIS_URL: redisUrl,
     REDIS_CIRCUIT_FAILURE_THRESHOLD: redisCircuitFailureThreshold,
     REDIS_CIRCUIT_RESET_TIMEOUT_MS: redisCircuitResetTimeoutMs,
+    REDIS_KEY_PREFIX: redisKeyPrefix,
     JWT_ACCESS_TOKEN_SECRET: jwtAccessTokenSecret,
     JWT_REFRESH_TOKEN_SECRET: jwtRefreshTokenSecret,
     ACCESS_TOKEN_EXPIRES_IN: accessTokenExpiresIn,
@@ -361,6 +523,7 @@ export const validateEnv = (env: Record<string, unknown>) => {
     EMAIL_VERIFICATION_BASE_URL: emailVerificationBaseUrl,
     PASSWORD_RESET_TOKEN_TTL_SECONDS: passwordResetTokenTtlSeconds,
     PASSWORD_RESET_BASE_URL: passwordResetBaseUrl,
+    PROMETHEUS_SCRAPE_TOKEN: prometheusScrapeToken,
     EMAIL_PROVIDER: emailProvider,
     EMAIL_FROM_ADDRESS: emailFromAddress,
     EMAIL_FROM_NAME: emailFromName,
@@ -378,6 +541,21 @@ export const validateEnv = (env: Record<string, unknown>) => {
     APP_DESCRIPTION: appDescription,
     APP_URL: appUrl,
     SOFT_DELETE_RETENTION_DAYS: softDeleteRetentionDays,
+    ALLOW_PROD_SEED: allowProdSeed,
+    PASSWORD_HISTORY_SIZE: passwordHistorySize,
+    AUTH_AUDIT_RETENTION_DAYS: authAuditRetentionDays,
+    AUTH_OUTBOX_MAX_RETRIES: authOutboxMaxRetries,
+    AUTH_OUTBOX_BASE_DELAY_SECONDS: authOutboxBaseDelaySeconds,
+    AUTH_SESSION_INVALIDATION_CHANNEL: authSessionInvalidationChannel,
+    GOOGLE_CLIENT_ID: googleClientId,
+    GOOGLE_HOSTED_DOMAIN: googleHostedDomain,
+    COIN_ADMIN_DAILY_CAP_PER_ADMIN: coinAdminDailyCapPerAdmin,
+    DISABLE_REDIS_SOCKET_ADAPTER: disableRedisSocketAdapter,
+    SWAGGER_ENABLED: swaggerEnabled,
+    TOURNAMENT_QUEUE_CONCURRENCY: tournamentQueueConcurrency,
+    RETRY_QUEUE_DLQ_ATTEMPT_KEY: retryQueueDlqAttemptKey,
+    RETRY_QUEUE_DLQ_COIN_KEY: retryQueueDlqCoinKey,
+    RETRY_QUEUE_DLQ_COMMENT_KEY: retryQueueDlqCommentKey,
   };
 };
 

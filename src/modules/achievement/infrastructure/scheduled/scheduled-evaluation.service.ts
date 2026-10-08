@@ -1,4 +1,4 @@
-import { Inject, Injectable, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
+import { Inject, Injectable, OnModuleInit, OnModuleDestroy, Optional } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { Cron, CronExpression, SchedulerRegistry } from '@nestjs/schedule';
 import { ACHIEVEMENT_REPOSITORY_PORT } from '../repositories/achievement.repository';
@@ -9,6 +9,14 @@ import type {
 } from '../repositories/achievement.repository';
 import { RuleEngineService } from '../../domain/services/rule-engine.service';
 import { SCHEDULED_EVALUATION } from '../../domain/constants/achievement.constants';
+import { CACHE_PROVIDER, type CacheProvider } from '@/common/ports/cache.provider';
+import { REDIS_CIRCUIT_PORT, type RedisCircuitPort } from '@/common/ports/redis-circuit.port';
+import { acquireSchedulerLockOrRecordSkip } from '@/core/redis/scheduler-lock.helper';
+import { MetricsRegistry } from '@/core/observability/metrics.registry';
+
+const SCHEDULED_EVALUATION_LOCK_KEY = 'achievement:cron:scheduled_evaluation';
+const SCHEDULED_EVALUATION_LOCK_TTL_MS = 30 * 60 * 1000;
+const SCHEDULED_EVALUATION_JOB = 'achievement-scheduled-evaluation';
 
 export interface ScheduledEvaluationConfig {
   enabled: boolean;
@@ -50,6 +58,12 @@ export class ScheduledEvaluationService implements OnModuleInit, OnModuleDestroy
     @InjectPinoLogger(ScheduledEvaluationService.name)
     private readonly logger: PinoLogger,
     private readonly schedulerRegistry: SchedulerRegistry,
+    @Inject(CACHE_PROVIDER)
+    private readonly cache: CacheProvider,
+    @Inject(REDIS_CIRCUIT_PORT)
+    private readonly redisCircuit: RedisCircuitPort,
+    @Optional()
+    private readonly metrics: MetricsRegistry | undefined,
   ) {}
 
   onModuleInit(): void {
@@ -71,6 +85,27 @@ export class ScheduledEvaluationService implements OnModuleInit, OnModuleDestroy
       this.logger.debug({
         event: 'scheduled_evaluation_skipped',
         reason: this.isRunning ? 'already_running' : 'disabled',
+      });
+      return {
+        processedUsers: 0,
+        awardedBadges: 0,
+        errors: 0,
+        results: [],
+      };
+    }
+
+    const lock = await acquireSchedulerLockOrRecordSkip({
+      cache: this.cache,
+      circuit: this.redisCircuit,
+      metrics: this.metrics,
+      lockKey: SCHEDULED_EVALUATION_LOCK_KEY,
+      lockTtlMs: SCHEDULED_EVALUATION_LOCK_TTL_MS,
+      job: SCHEDULED_EVALUATION_JOB,
+    });
+    if (!lock.acquired) {
+      this.logger.debug({
+        event: 'scheduled_evaluation_skipped_lock',
+        reason: lock.reason,
       });
       return {
         processedUsers: 0,
@@ -112,6 +147,7 @@ export class ScheduledEvaluationService implements OnModuleInit, OnModuleDestroy
       };
     } finally {
       this.isRunning = false;
+      await this.cache.releaseAdvisoryLock(SCHEDULED_EVALUATION_LOCK_KEY, lock.token);
     }
   }
 
@@ -186,7 +222,6 @@ export class ScheduledEvaluationService implements OnModuleInit, OnModuleDestroy
         });
 
         if (eligibleUsers.length === 0) {
-          hasMore = false;
           break;
         }
 

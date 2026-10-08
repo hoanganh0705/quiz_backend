@@ -126,7 +126,7 @@ export class UserSessionRepository implements SessionRepositoryPort {
         throw new InternalServerErrorException('Failed to fetch user session');
       });
 
-    return (session as SessionRecord | undefined) ?? null;
+    return session ?? null;
   }
 
   async findLatestActiveSessionByUserId(
@@ -149,7 +149,7 @@ export class UserSessionRepository implements SessionRepositoryPort {
         throw new InternalServerErrorException('Failed to fetch latest active user session');
       });
 
-    return (latestSession as SessionRecord | undefined) ?? null;
+    return latestSession ?? null;
   }
 
   async findActiveSessionsByUserId(userId: string, nowIso: string): Promise<SessionRecord[]> {
@@ -168,7 +168,7 @@ export class UserSessionRepository implements SessionRepositoryPort {
         throw new InternalServerErrorException('Failed to fetch active user sessions');
       });
 
-    return sessions as SessionRecord[];
+    return sessions;
   }
 
   async findSessionByIdAndUserId(
@@ -192,7 +192,7 @@ export class UserSessionRepository implements SessionRepositoryPort {
         throw new InternalServerErrorException('Failed to fetch user session by id');
       });
 
-    return (session as SessionRecord | undefined) ?? null;
+    return session ?? null;
   }
 
   async rotateSessionWithLock(

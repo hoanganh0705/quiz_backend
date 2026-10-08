@@ -7,12 +7,6 @@ import { DRIZZLE, DRIZZLE_READ } from './drizzle.constants';
 import { databaseConfig } from '@/core/config';
 import type { DatabaseConfig } from '@/core/config';
 import { UserSessionRepository } from '@/modules/auth/infrastructure/repositories/user-session.repository';
-import { UserRepository } from '@/modules/user/infrastructure/repositories/user.repository';
-import { AttemptRepository } from '@/modules/attempt/infrastructure/repositories/attempt.repository';
-import { ReviewRepository } from '@/modules/review/infrastructure/repositories/review.repository';
-import { QuizRepository } from '@/modules/quiz/infrastructure/repositories/quiz.repository';
-import { QuizVersionRepository } from '@/modules/quiz/infrastructure/repositories/quiz-version.repository';
-import { QuizQuestionRepository } from '@/modules/quiz/infrastructure/repositories/quiz-question.repository';
 import { StorageAssetsRepository } from '@/core/storage/infrastructure/repositories/storage-assets.repository';
 
 const createDrizzleDb = (config: DatabaseConfig, connectionString: string) => {
@@ -54,25 +48,8 @@ export type DrizzleDB = ReturnType<typeof createDrizzleDb>;
       },
     },
     UserSessionRepository,
-    UserRepository,
-    AttemptRepository,
-    ReviewRepository,
-    QuizRepository,
-    QuizVersionRepository,
-    QuizQuestionRepository,
     StorageAssetsRepository,
   ],
-  exports: [
-    DRIZZLE,
-    DRIZZLE_READ,
-    UserSessionRepository,
-    UserRepository,
-    AttemptRepository,
-    ReviewRepository,
-    QuizRepository,
-    QuizVersionRepository,
-    QuizQuestionRepository,
-    StorageAssetsRepository,
-  ],
+  exports: [DRIZZLE, DRIZZLE_READ, UserSessionRepository, StorageAssetsRepository],
 })
 export class DatabaseModule {}

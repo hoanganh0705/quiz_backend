@@ -45,7 +45,7 @@ export class UserSearchAdapter implements UserSearchPort {
       .where(and(...allConditions))
       .limit(limit);
 
-    return rows as UserSearchResult[];
+    return rows;
   }
 
   async searchUsernameSuggestions(query: string, limit: number): Promise<UsernameSuggestion[]> {
@@ -68,6 +68,6 @@ export class UserSearchAdapter implements UserSearchPort {
       .where(and(isNull(users.deletedAt), ilike(users.username, searchPattern)))
       .limit(limit);
 
-    return rows as UsernameSuggestion[];
+    return rows;
   }
 }

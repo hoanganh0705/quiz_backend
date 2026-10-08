@@ -53,6 +53,7 @@ import type {
   VoteParams,
 } from '../types';
 import type { ModerationAuditTx, ModerationAuditPort } from '../ports/moderation-audit.port';
+import { COMMENT_MODERATION_AUDIT_PORT } from '../ports/moderation-audit.port';
 
 @Injectable()
 export class CommentService {
@@ -65,7 +66,7 @@ export class CommentService {
     private readonly userExistence: UserExistencePort,
     @Inject(COMMENT_DOMAIN_EVENT_BUS)
     private readonly eventBus: CommentDomainEventBusPort,
-    @Inject('COMMENT_MODERATION_AUDIT_PORT')
+    @Inject(COMMENT_MODERATION_AUDIT_PORT)
     private readonly moderationAudit: ModerationAuditPort,
     @InjectPinoLogger(CommentService.name)
     private readonly logger: PinoLogger,

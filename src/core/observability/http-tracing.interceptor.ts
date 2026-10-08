@@ -34,8 +34,7 @@ export class HttpTracingInterceptor implements NestInterceptor {
 
     const parent = parseTraceparent(req.headers[TRACEPARENT_HEADER] as string | undefined);
 
-    const routePath =
-      (req.route?.path as string | undefined) ?? (req.path as string | undefined) ?? 'unknown';
+    const routePath = (req.route?.path as string | undefined) ?? req.path ?? 'unknown';
 
     const span = this.tracing.startSpan(`HTTP ${req.method ?? 'UNKNOWN'} ${routePath}`, {
       kind: 'server',

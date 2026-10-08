@@ -13,7 +13,7 @@ import {
   tags,
   quizTags,
 } from '@/core/database/schema';
-import { eq, sql, desc, and, isNull, gte, count, inArray } from 'drizzle-orm';
+import { eq, sql, desc, and, gte, count, inArray } from 'drizzle-orm';
 import { notDeleted } from '@/common/database/soft-delete.helper';
 import type {
   AttemptAggregation,
@@ -101,7 +101,7 @@ export class QuizAnalyticsRepository implements QuizAnalyticsRepositoryPort {
     const rows = await this.db
       .select({ quizId: quizzes.quizId })
       .from(quizzes)
-      .where(eq(quizzes.categoryId, categoryId));
+      .where(and(eq(quizzes.categoryId, categoryId), notDeleted(quizzes.deletedAt)));
     return rows.map((r) => r.quizId);
   }
 
@@ -156,7 +156,7 @@ export class QuizAnalyticsRepository implements QuizAnalyticsRepositoryPort {
         ratingCount: count(),
       })
       .from(quizReviews)
-      .where(eq(quizReviews.quizId, quizId));
+      .where(and(eq(quizReviews.quizId, quizId), notDeleted(quizReviews.deletedAt)));
 
     return {
       averageRating: Number(stats?.averageRating ?? 0),
@@ -268,7 +268,7 @@ export class QuizAnalyticsRepository implements QuizAnalyticsRepositoryPort {
     const [category] = await this.db
       .select({ categoryId: categories.categoryId, name: categories.name })
       .from(categories)
-      .where(eq(categories.categoryId, categoryId))
+      .where(and(eq(categories.categoryId, categoryId), notDeleted(categories.deletedAt)))
       .limit(1);
 
     if (!category) return null;
@@ -276,7 +276,13 @@ export class QuizAnalyticsRepository implements QuizAnalyticsRepositoryPort {
     const categoryQuizIds = await this.db
       .select({ quizId: quizzes.quizId })
       .from(quizzes)
-      .where(and(eq(quizzes.categoryId, categoryId), eq(quizzes.isHidden, false)));
+      .where(
+        and(
+          eq(quizzes.categoryId, categoryId),
+          eq(quizzes.isHidden, false),
+          notDeleted(quizzes.deletedAt),
+        ),
+      );
 
     const quizIdList = categoryQuizIds.map((c) => c.quizId);
 
@@ -384,7 +390,7 @@ export class QuizAnalyticsRepository implements QuizAnalyticsRepositoryPort {
     const [tag] = await this.db
       .select({ tagId: tags.tagId, name: tags.name })
       .from(tags)
-      .where(eq(tags.tagId, tagId))
+      .where(and(eq(tags.tagId, tagId), notDeleted(tags.deletedAt)))
       .limit(1);
 
     if (!tag) return null;

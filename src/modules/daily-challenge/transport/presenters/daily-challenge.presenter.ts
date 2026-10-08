@@ -1,7 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { ApiResponse } from '@/common/responses/api-response';
 import type { ApiResponseEnvelope } from '@/common/responses/api-response';
-import type { PaginationMeta } from '@/common/responses/pagination';
 import type { DailyChallengeResponseDto } from '../../dto/response/daily-challenge-response.dto';
 import type {
   DailyChallengeAnswerResponseDto,
@@ -23,7 +22,7 @@ export class DailyChallengePresenter {
 
   readonly getToday = DailyChallengePresenter.ok<DailyChallengeResponseDto>;
   readonly getHistory = (payload: DailyChallengeHistoryResponseDto) =>
-    ApiResponse.page(payload.items, payload.pagination as PaginationMeta);
+    ApiResponse.page(payload.items, payload.pagination);
   readonly getLeaderboard = DailyChallengePresenter.ok<DailyChallengeLeaderboardResponseDto>;
   readonly submitAnswer = DailyChallengePresenter.ok<DailyChallengeAnswerResponseDto>;
   readonly getCategoryBreakdown =

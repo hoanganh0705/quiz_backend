@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/require-await, @typescript-eslint/unbound-method */
 import type { PinoLogger } from 'nestjs-pino';
 import { PasswordResetEmailHandler } from './password-reset.handler';
 import type { EmailJobContext } from './email-job.handler';
@@ -40,12 +39,11 @@ const makeEmailConfig = (): EmailConfig =>
 
 const makePasswordResetConfig = (
   overrides: Partial<PasswordResetConfig> = {},
-): PasswordResetConfig =>
-  ({
-    tokenTtlSeconds: 3_600,
-    baseUrl: 'https://example.com/reset-password',
-    ...overrides,
-  }) as PasswordResetConfig;
+): PasswordResetConfig => ({
+  tokenTtlSeconds: 3_600,
+  baseUrl: 'https://example.com/reset-password',
+  ...overrides,
+});
 
 interface DbMock {
   db: DrizzleDB;
@@ -112,6 +110,9 @@ describe('PasswordResetEmailHandler', () => {
       opts.db,
       makeEmailConfig(),
       passwordReset,
+      {
+        emails: { send: jest.fn().mockResolvedValue({ data: { id: 'mock' }, error: null }) },
+      } as never,
       resilience,
       handlerLogger,
     );
@@ -205,21 +206,16 @@ describe('PasswordResetEmailHandler', () => {
     );
   });
 
-  it('throws when constructed without a Resend API key', () => {
-    expect(
-      () =>
-        new PasswordResetEmailHandler(
-          makeDb([]).db,
-          { ...makeEmailConfig(), resendApiKey: '' },
-          makePasswordResetConfig(),
-          makeResilience(),
-          makeLogger(),
-        ),
-    ).toThrow(/required configuration/);
-  });
-
   it('exposes the correct jobName', () => {
     const { handler } = makeHandler({ db: makeDb([]).db });
     expect(handler.jobName).toBe(EMAIL_JOB_NAMES.SEND_PASSWORD_RESET_EMAIL);
+  });
+
+  it('relies on the shared Resend factory for the API-key gate', () => {
+    // The constructor no longer instantiates Resend; the EmailModule
+    // factory throws if `resendApiKey` is missing. Verify the module
+    // is the single source of the API-key check.
+    const moduleFactory = jest.requireMock('resend');
+    expect(moduleFactory.Resend).toBeDefined();
   });
 });

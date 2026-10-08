@@ -4,7 +4,7 @@ import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import type { CoinReason } from '../types/coin.types';
 import type { CoinSpendCategory } from '../ports/coin-spend.port';
 
-type CoinMetricEvent =
+type _CoinMetricEvent =
   | {
       event: 'coin_event_processed' | 'coin_event_truncated_by_cap';
       metric: 'coin_events_processed_total';
@@ -30,6 +30,16 @@ type CoinMetricEvent =
       event: 'coin_refund_processed' | 'coin_refund_replay';
       metric: 'coin_refunds_total';
       outcome: 'processed' | 'idempotent_replay';
+    }
+  | {
+      event: 'coin_admin_adjustment_ok';
+      metric: 'coin_admin_adjustments_total';
+      outcome: 'ok';
+    }
+  | {
+      event: 'coin_admin_adjustment_refused';
+      metric: 'coin_admin_adjustments_total';
+      outcome: 'refused';
     };
 
 @Injectable()
@@ -98,6 +108,26 @@ export class CoinMetricsService {
       increment: 1,
       event: outcome === 'processed' ? 'coin_refund_processed' : 'coin_refund_replay',
       outcome,
+    });
+  }
+
+  recordAdminAdjustmentOk(): void {
+    this.logger.info({
+      metric: 'coin_admin_adjustments_total',
+      metricType: 'counter',
+      increment: 1,
+      event: 'coin_admin_adjustment_ok',
+      outcome: 'ok',
+    });
+  }
+
+  recordAdminAdjustmentRefused(): void {
+    this.logger.warn({
+      metric: 'coin_admin_adjustments_total',
+      metricType: 'counter',
+      increment: 1,
+      event: 'coin_admin_adjustment_refused',
+      outcome: 'refused',
     });
   }
 }

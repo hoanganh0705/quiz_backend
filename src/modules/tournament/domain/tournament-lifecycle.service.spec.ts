@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/unbound-method */
 import type { PinoLogger } from 'nestjs-pino';
 import { TournamentLifecycleService } from './tournament-lifecycle.service';
 import type { TournamentRepositoryPort } from './ports';
@@ -41,10 +40,10 @@ describe('TournamentLifecycleService', () => {
     tournamentOutbox = {
       scheduleTournamentEvent: jest.fn(),
       scheduleTournamentEventsBatch: jest.fn(),
-    } as unknown as jest.Mocked<TournamentOutboxPort>;
+    };
 
     categoryRepository = {
-      findById: jest.fn().mockResolvedValue({ name: 'Trivia' } as never),
+      findById: jest.fn().mockResolvedValue({ name: 'Trivia' }),
     } as unknown as jest.Mocked<CategoryRepositoryPort>;
 
     db = {} as DrizzleDB;

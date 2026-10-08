@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/require-await, @typescript-eslint/unbound-method */
 import type { PinoLogger } from 'nestjs-pino';
 import { EmailResilienceRunner } from './email-resilience.runner';
 import type { EmailConfig } from '@/core/config';

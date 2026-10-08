@@ -5,12 +5,20 @@
  * - TTL-based cache expiration
  * - Cache invalidation on social graph mutations
  * - Stampede protection for high-traffic endpoints
+ * - Domain-event subscription as a defense-in-depth invalidation
+ *   path so out-of-band writers (admin tools, data fixers) cannot
+ *   leave the counts cache stale.
  */
 
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, OnModuleDestroy, OnModuleInit, Optional } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { CACHE_PROVIDER } from '@/common/ports/cache.provider';
 import type { CacheProvider } from '@/common/ports/cache.provider';
+import {
+  SOCIAL_DOMAIN_EVENT_BUS,
+  type SocialDomainEventBusPort,
+  type SocialDomainEvent,
+} from '../../domain/events/social-event-bus.port';
 import type { SocialCounts } from '../../domain/types/social.types';
 
 export interface CachedSocialCounts {
@@ -21,17 +29,71 @@ export interface CachedSocialCounts {
 }
 
 @Injectable()
-export class SocialCacheService {
+export class SocialCacheService implements OnModuleInit, OnModuleDestroy {
   private static readonly CACHE_KEY_PREFIX = 'social:counts';
-  private static readonly CACHE_TTL_MS = 30_000; // 30 seconds
+  private static readonly CACHE_TTL_MS = 120_000; // 120 seconds
   private static readonly LOCK_TTL_MS = 5_000; // 5 seconds
+
+  private static readonly AFFECTED_USER_ID_KEYS = [
+    'requesterId',
+    'addresseeId',
+    'userId',
+    'friendId',
+    'blockerId',
+    'blockedId',
+    'followerId',
+    'followingId',
+  ] as const;
+
+  private unsubscribe?: () => void;
 
   constructor(
     @Inject(CACHE_PROVIDER)
     private readonly cache: CacheProvider,
     @InjectPinoLogger(SocialCacheService.name)
     private readonly logger: PinoLogger,
+    @Optional()
+    @Inject(SOCIAL_DOMAIN_EVENT_BUS)
+    private readonly eventBus?: SocialDomainEventBusPort,
   ) {}
+
+  onModuleInit(): void {
+    if (!this.eventBus) return;
+
+    this.unsubscribe = this.eventBus.subscribe((event) => {
+      const userIds = this.userIdsFromEvent(event);
+      if (userIds.length === 0) return;
+
+      this.invalidateCountsBatch(userIds).catch((error) => {
+        this.logger.warn({
+          event: 'social_counts_cache_invalidation_failed',
+          source: 'domain_event',
+          eventType: event.eventType,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      });
+    });
+  }
+
+  onModuleDestroy(): void {
+    try {
+      this.unsubscribe?.();
+    } catch {
+      // Ignore unsubscribe errors during shutdown.
+    }
+    this.unsubscribe = undefined;
+  }
+
+  private userIdsFromEvent(event: SocialDomainEvent): string[] {
+    const seen = new Set<string>();
+    for (const key of SocialCacheService.AFFECTED_USER_ID_KEYS) {
+      const candidate = (event as unknown as Record<string, unknown>)[key];
+      if (typeof candidate === 'string' && candidate.length > 0) {
+        seen.add(candidate);
+      }
+    }
+    return Array.from(seen);
+  }
 
   /**
    * Get cache key for a user's social counts.

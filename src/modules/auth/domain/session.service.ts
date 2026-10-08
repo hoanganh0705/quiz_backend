@@ -246,27 +246,14 @@ export class SessionService implements OnModuleInit, OnModuleDestroy {
     const revoked = await this.userSessionRepository.revokeSessionsByUserId(userId, nowIso);
     if (revoked.length === 0) return;
 
-    // The `all_for_user` event lets every instance short-circuit
-    // any lookup for this user, regardless of sessionId/jti/hash.
-    // The per-session events below back that up so the read path
-    // can also deny by a specific identifier (e.g. when a
-    // refresh request arrives with a known JTI for a session
-    // belonging to this user).
+    // The `all_for_user` event is the single signal that every
+    // session for the user is now invalid. Subscribers react once per
+    // user instead of once per revoked session.
     await this.invalidationBus.publish({
       kind: 'all_for_user',
       identifier: userId,
       reason: 'revoke_all_active_sessions',
     });
-    for (const session of revoked) {
-      await this.invalidationBus.publish({
-        kind: 'session',
-        identifier: session.sessionId,
-        sessionId: session.sessionId,
-        jti: session.jti,
-        refreshTokenHash: session.refreshTokenHash,
-        reason: 'revoke_all_active_sessions',
-      });
-    }
   }
 
   async revokeOtherActiveSessions(userId: string, sessionId: string): Promise<void> {
@@ -278,25 +265,15 @@ export class SessionService implements OnModuleInit, OnModuleDestroy {
     );
     if (revoked.length === 0) return;
 
-    // Same `all_for_user` + per-session dual publish as above.
-    // The `all_for_user` is the primary signal: any session for
-    // this user other than the protected one is now invalid.
+    // The `all_for_user` event is the single signal that every other
+    // session for the user is now invalid. Subscribers react once per
+    // user instead of once per revoked session.
     await this.invalidationBus.publish({
       kind: 'all_for_user',
       identifier: userId,
       sessionId,
       reason: 'revoke_other_active_sessions',
     });
-    for (const session of revoked) {
-      await this.invalidationBus.publish({
-        kind: 'session',
-        identifier: session.sessionId,
-        sessionId: session.sessionId,
-        jti: session.jti,
-        refreshTokenHash: session.refreshTokenHash,
-        reason: 'revoke_other_active_sessions',
-      });
-    }
   }
 
   async revokeOtherActiveSessionsAndReturnCount(
@@ -320,16 +297,6 @@ export class SessionService implements OnModuleInit, OnModuleDestroy {
         sessionId: currentSessionId,
         reason: 'revoke_other_active_sessions_with_count',
       });
-      for (const session of otherSessions) {
-        await this.invalidationBus.publish({
-          kind: 'session',
-          identifier: session.sessionId,
-          sessionId: session.sessionId,
-          jti: session.jti,
-          refreshTokenHash: session.refreshTokenHash,
-          reason: 'revoke_other_active_sessions_with_count',
-        });
-      }
     }
 
     return revokedCount;

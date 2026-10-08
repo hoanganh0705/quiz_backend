@@ -10,6 +10,7 @@ import {
   bookmarkCollections,
 } from '@/core/database/schema';
 import { count, eq, and, sql, gte } from 'drizzle-orm';
+import { notDeleted } from '@/common/database/soft-delete.helper';
 import type { MetricsRepositoryPort } from '../../domain/analytics/ports/metrics-repository.port';
 
 @Injectable()
@@ -97,7 +98,7 @@ export class MetricsRepository implements MetricsRepositoryPort {
         avg: sql<number>`COALESCE(AVG(${quizReviews.rating}::numeric), 0)`,
       })
       .from(quizReviews)
-      .where(eq(quizReviews.quizId, quizId));
+      .where(and(eq(quizReviews.quizId, quizId), notDeleted(quizReviews.deletedAt)));
 
     return Number(result[0]?.avg ?? 0);
   }
@@ -106,7 +107,7 @@ export class MetricsRepository implements MetricsRepositoryPort {
     const result = await this.db
       .select({ count: count() })
       .from(quizReviews)
-      .where(eq(quizReviews.quizId, quizId));
+      .where(and(eq(quizReviews.quizId, quizId), notDeleted(quizReviews.deletedAt)));
 
     return Number(result[0]?.count ?? 0);
   }
@@ -191,7 +192,13 @@ export class MetricsRepository implements MetricsRepositoryPort {
     const reviews = await this.db
       .select({ createdAt: quizReviews.createdAt })
       .from(quizReviews)
-      .where(and(eq(quizReviews.quizId, quizId), gte(quizReviews.createdAt, since.toISOString())));
+      .where(
+        and(
+          eq(quizReviews.quizId, quizId),
+          notDeleted(quizReviews.deletedAt),
+          gte(quizReviews.createdAt, since.toISOString()),
+        ),
+      );
 
     return this.applyTimeDecay(
       reviews.map((r) => r.createdAt),

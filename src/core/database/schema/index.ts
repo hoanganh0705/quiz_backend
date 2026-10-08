@@ -46,6 +46,9 @@ export * from './daily-challenge/schema';
 // Outbox
 export * from './outbox/schema';
 
+// Dead-letter
+export * from './dead-letter/schema';
+
 export * from './coins/schema';
 export * from './coins/relations';
 

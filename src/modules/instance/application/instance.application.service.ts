@@ -193,17 +193,13 @@ export class InstanceApplicationService {
   }
 
   async getInstanceByIdForController(instanceId: string): Promise<InstanceDetailResponseDto> {
-    const row = await this.instanceService.getInstanceById(instanceId);
-    // The detail view embeds the full players list. Instance capacity
-    // is capped at 100 by `CreateInstanceDto.maxPlayers`, so a single
-    // over-sized page is safe. If the cap changes, switch to paginated
-    // assembly here.
-    const { items: players } = await this.instanceService.listInstancePlayers(instanceId, {
-      limit: 100,
-    });
+    const [row, playersPage] = await Promise.all([
+      this.instanceService.getInstanceById(instanceId),
+      this.instanceService.listInstancePlayers(instanceId, { limit: 100 }),
+    ]);
     return this.mapper.toInstanceDetailResponse(
       row,
-      players.map((p) => this.mapper.toInstancePlayerResponse(p)),
+      playersPage.items.map((p) => this.mapper.toInstancePlayerResponse(p)),
     );
   }
 
@@ -325,8 +321,10 @@ export class InstanceApplicationService {
     leavingUserId: string,
   ): Promise<void> {
     try {
-      const instance = await this.instanceService.getInstanceById(instanceId);
-      const totalPlayers = await this.instanceService.countPlayers(instanceId);
+      const [instance, totalPlayers] = await Promise.all([
+        this.instanceService.getInstanceById(instanceId),
+        this.instanceService.countPlayers(instanceId),
+      ]);
       await this.instanceService.notifyHostPlayerDisconnected({
         instanceId,
         hostUserId: instance.hostUserId,

@@ -18,7 +18,6 @@
  *   - Injected `readCurrent` callback is honoured.
  */
 
-/* eslint-disable @typescript-eslint/require-await */
 import { StorageImageLifecycleService } from './storage-image-lifecycle.service';
 import { StorageApplicationService } from './storage.application.service';
 import type { StoragePort } from '../storage.port';

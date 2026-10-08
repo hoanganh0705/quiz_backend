@@ -12,7 +12,7 @@ import {
   type EmailConfig,
   type EmailVerificationConfig,
 } from '@/core/config';
-import { EMAIL_JOB_NAMES } from '../email.constants';
+import { EMAIL_JOB_NAMES, EMAIL_QUEUE_TOKENS } from '../email.constants';
 import type { SendVerificationEmailJobData } from '../email.types';
 import { EmailResilienceRunner } from '../resilience/email-resilience.runner';
 import { renderVerificationEmail } from '../templates/verification.template';
@@ -29,22 +29,16 @@ export class VerificationEmailHandler implements EmailJobHandler<SendVerificatio
   private readonly fromName: string;
   private readonly verificationBaseUrl: string;
   private readonly tokenTtlSeconds: number;
-  private readonly resend: Resend;
 
   constructor(
     @Inject(DRIZZLE) private readonly db: DrizzleDB,
     @Inject(emailConfig.KEY) private readonly email: EmailConfig,
     @Inject(emailVerificationConfig.KEY)
     private readonly emailVerification: EmailVerificationConfig,
+    @Inject(EMAIL_QUEUE_TOKENS.RESEND_CLIENT) private readonly resend: Resend,
     private readonly resilience: EmailResilienceRunner,
     @InjectPinoLogger(VerificationEmailHandler.name) private readonly logger: PinoLogger,
   ) {
-    if (!this.email.resendApiKey) {
-      throw new Error(
-        'Email service is missing required configuration. Check server environment variables.',
-      );
-    }
-    this.resend = new Resend(this.email.resendApiKey);
     this.provider = this.email.provider;
     this.fromAddress = this.email.fromAddress;
     this.fromName = this.email.fromName;

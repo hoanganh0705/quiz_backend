@@ -78,7 +78,7 @@ export class PasswordResetTokensRepository {
         throw new InternalServerErrorException('Failed to find password reset token');
       });
 
-    return (record as { userId: string; passwordResetTokenId: string } | undefined) ?? null;
+    return record ?? null;
   }
 
   async revokeAllActivePasswordResetTokensForUser(userId: string, nowIso: string): Promise<void> {

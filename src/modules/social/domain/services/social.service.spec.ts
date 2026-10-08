@@ -16,10 +16,11 @@
  *  - `searchUsers` excludes users blocked by either direction and
  *    drops the internal `avatarPublicId` from the wire shape.
  */
-/* eslint-disable @typescript-eslint/unbound-method */
+
 import type { DrizzleDB } from '@/core/database/database.module';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
 import { SocialService } from '@/modules/social/domain/services/social.service';
+import type { CacheProvider } from '@/common/ports/cache.provider';
 import type {
   SocialRepositoryPort,
   SocialDomainEventBusPort,
@@ -36,6 +37,7 @@ import type { UserFollowRepositoryPort } from '@/modules/social/domain/ports/use
 import type { BlockRepositoryPort, BlockExecutor } from '@/modules/social/domain/ports/block-ports';
 import type { AuditExecutor, AuditLogService } from '@/common/audit/audit-log.service';
 import type { SocialCacheService } from '@/modules/social/infrastructure/cache/social-cache.service';
+import type { SocialFeedCache } from '@/modules/social/infrastructure/cache/social-feed-cache.service';
 import type { StoragePort } from '@/core/storage/storage.port';
 import { SocialConsistencyError, UserNotBlockedError } from '@/modules/social/domain/errors';
 
@@ -98,7 +100,7 @@ function makeFollowRepo(): jest.Mocked<UserFollowRepositoryPort> {
     getFollowingCount: jest.fn(),
     isFollowing: jest.fn(),
     getUsernamesForUsers: jest.fn(),
-  } as unknown as jest.Mocked<UserFollowRepositoryPort>;
+  };
 }
 
 function makeBlockRepo(): jest.Mocked<BlockRepositoryPort> {
@@ -110,7 +112,7 @@ function makeBlockRepo(): jest.Mocked<BlockRepositoryPort> {
     findActiveBlock: jest.fn(),
     isBlocked: jest.fn(),
     getBlockedUsers: jest.fn(),
-  } as unknown as jest.Mocked<BlockRepositoryPort>;
+  };
 }
 
 function makeSocialRepo(): jest.Mocked<SocialRepositoryPort> {
@@ -164,6 +166,14 @@ function makeCache(): jest.Mocked<SocialCacheService> {
   } as unknown as jest.Mocked<SocialCacheService>;
 }
 
+function makeSocialFeedCache(): jest.Mocked<SocialFeedCache> {
+  return {
+    getOrSetFeed: jest.fn(async (_userId, _versionHash, fetcher) => fetcher()),
+    invalidateFeed: jest.fn(),
+    invalidateAll: jest.fn(),
+  } as unknown as jest.Mocked<SocialFeedCache>;
+}
+
 function makeStorage(): jest.Mocked<StoragePort> {
   return {
     deriveUrl: jest.fn((id: string) => `https://cdn.example.com/${id}`),
@@ -178,14 +188,14 @@ function makeRanking(): jest.Mocked<RankingPort> {
     getTotalParticipants: jest.fn(),
     getUserRank: jest.fn(),
     getRankTrendsForUsers: jest.fn(),
-  } as unknown as jest.Mocked<RankingPort>;
+  };
 }
 
 function makeUserSearch(): jest.Mocked<UserSearchPort> {
   return {
     searchUsers: jest.fn(),
     searchUsernameSuggestions: jest.fn(),
-  } as unknown as jest.Mocked<UserSearchPort>;
+  };
 }
 
 function makeUserRepo(): jest.Mocked<UserRepositoryPort> {
@@ -196,6 +206,40 @@ function makeUserDomainService(): jest.Mocked<UserDomainService> {
   return {} as unknown as jest.Mocked<UserDomainService>;
 }
 
+function makeCacheProvider(): jest.Mocked<CacheProvider> {
+  const counterStore = new Map<string, number>();
+  return {
+    incrementWindowCounter: jest.fn(async (key: string) => {
+      const next = (counterStore.get(key) ?? 0) + 1;
+      counterStore.set(key, next);
+      return next;
+    }),
+    setIfNotExistsWithTtlSeconds: jest.fn().mockResolvedValue(true),
+    incrementCounterWithInitialTtlSeconds: jest.fn(async (key: string) => {
+      const next = (counterStore.get(key) ?? 0) + 1;
+      counterStore.set(key, next);
+      return next;
+    }),
+    get: jest.fn(async (_key: string) => null),
+    set: jest.fn(),
+    del: jest.fn().mockResolvedValue(false),
+    getDel: jest.fn().mockResolvedValue(null),
+    unlinkByPattern: jest.fn().mockResolvedValue(0),
+    getOrSet: jest.fn(),
+    getOrSetWithStampedeProtection: jest.fn(),
+    rpushJson: jest.fn().mockResolvedValue(0),
+    lpopJson: jest.fn().mockResolvedValue(null),
+    lrangeJson: jest.fn().mockResolvedValue([]),
+    trimList: jest.fn().mockResolvedValue(0),
+    expire: jest.fn().mockResolvedValue(true),
+    zaddByScore: jest.fn().mockResolvedValue(1),
+    zrangeByScore: jest.fn().mockResolvedValue([]),
+    zrem: jest.fn().mockResolvedValue(false),
+    acquireAdvisoryLock: jest.fn().mockResolvedValue(null),
+    releaseAdvisoryLock: jest.fn().mockResolvedValue(false),
+  } as unknown as jest.Mocked<CacheProvider>;
+}
+
 function makeDb(): jest.Mocked<DrizzleDB> {
   const txMock = makeTxMock();
   return {
@@ -203,20 +247,29 @@ function makeDb(): jest.Mocked<DrizzleDB> {
   } as unknown as jest.Mocked<DrizzleDB>;
 }
 
-function makeService() {
+function makeService(
+  overrides: {
+    cacheProvider?: jest.Mocked<CacheProvider>;
+    logger?: Record<'debug' | 'info' | 'warn' | 'error' | 'fatal' | 'trace', jest.Mock>;
+    socialRepo?: jest.Mocked<SocialRepositoryPort>;
+  } = {},
+) {
   const db = makeDb();
   const friendshipRepo = makeFriendshipRepo();
   const followRepo = makeFollowRepo();
   const blockRepo = makeBlockRepo();
-  const socialRepo = makeSocialRepo();
+  const socialRepo = overrides.socialRepo ?? makeSocialRepo();
   const eventBus = makeBus();
   const auditLogService = makeAuditLogService();
   const cache = makeCache();
+  const socialFeedCache = makeSocialFeedCache();
   const storage = makeStorage();
   const ranking = makeRanking();
   const userSearch = makeUserSearch();
   const userRepository = makeUserRepo();
   const userDomainService = makeUserDomainService();
+  const cacheProvider = overrides.cacheProvider ?? makeCacheProvider();
+  const injectedLogger = overrides.logger ?? logger;
 
   const service = new SocialService(
     db,
@@ -232,7 +285,9 @@ function makeService() {
     storage,
     auditLogService,
     cache,
-    logger as never,
+    socialFeedCache,
+    cacheProvider,
+    injectedLogger as never,
   );
 
   return {
@@ -245,9 +300,12 @@ function makeService() {
     eventBus,
     auditLogService,
     cache,
+    socialFeedCache,
     storage,
     ranking,
     userSearch,
+    cacheProvider,
+    logger: injectedLogger,
   };
 }
 
@@ -353,7 +411,7 @@ describe('SocialService.unfollowUser', () => {
       followerUsername: 'u',
       followingUsername: 't',
       createdAt: '2026-01-01T00:00:00.000Z',
-    } as never);
+    });
     followRepo.unfollowUser.mockResolvedValue(0);
 
     await expect(service.unfollowUser('user-1', 'user-2')).rejects.toBeInstanceOf(
@@ -434,5 +492,90 @@ describe('SocialService.searchUsers', () => {
     expect(result[0].userId).toBe('user-3');
     expect(result[0]).not.toHaveProperty('avatarPublicId');
     expect(storage.deriveUrl).not.toHaveBeenCalled();
+  });
+});
+
+describe('SocialService.recordFeedActivity (fleet-wide throttle)', () => {
+  const recordParams = {
+    userId: 'user-1',
+    activityType: 'quiz_completed' as const,
+    occurredAt: new Date().toISOString(),
+    payload: {},
+  };
+
+  it('increments a Redis counter keyed by userId + activityType', async () => {
+    const { service, socialRepo, cacheProvider } = makeService();
+    cacheProvider.incrementCounterWithInitialTtlSeconds.mockResolvedValue(1);
+
+    await service.recordFeedActivity(recordParams);
+
+    expect(cacheProvider.incrementCounterWithInitialTtlSeconds).toHaveBeenCalledTimes(1);
+    const key = (
+      cacheProvider.incrementCounterWithInitialTtlSeconds.mock.calls[0] as unknown as string[]
+    )[0];
+    expect(key).toBe('social:feed_activity:user-1:quiz_completed');
+    const ttl = (
+      cacheProvider.incrementCounterWithInitialTtlSeconds.mock.calls[0] as unknown as number[]
+    )[1];
+    expect(ttl).toBe(60);
+    expect(socialRepo.createFeedActivity).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not write a feed activity when the counter exceeds the per-window limit', async () => {
+    const { service, socialRepo, cacheProvider, logger } = makeService();
+    cacheProvider.incrementCounterWithInitialTtlSeconds.mockResolvedValue(31);
+
+    await service.recordFeedActivity(recordParams);
+
+    expect(socialRepo.createFeedActivity).not.toHaveBeenCalled();
+    expect(logger.warn).toHaveBeenCalled();
+  });
+
+  it('counts activities from two simulated instances against the same Redis bucket', async () => {
+    const sharedCounters = new Map<string, number>();
+    let writesAcrossBothInstances = 0;
+    const sharedCache: jest.Mocked<CacheProvider> = {
+      ...makeCacheProvider(),
+      incrementCounterWithInitialTtlSeconds: jest.fn(async (key: string) => {
+        const next = (sharedCounters.get(key) ?? 0) + 1;
+        sharedCounters.set(key, next);
+        return next;
+      }),
+    } as unknown as jest.Mocked<CacheProvider>;
+    const sharedSocialRepo: jest.Mocked<SocialRepositoryPort> = {
+      ...makeSocialRepo(),
+      createFeedActivity: jest.fn(async () => {
+        writesAcrossBothInstances += 1;
+      }),
+    } as unknown as jest.Mocked<SocialRepositoryPort>;
+
+    const instanceA = makeService({
+      cacheProvider: sharedCache,
+      socialRepo: sharedSocialRepo,
+    }).service;
+    const instanceB = makeService({
+      cacheProvider: sharedCache,
+      socialRepo: sharedSocialRepo,
+    }).service;
+
+    for (let i = 0; i < 60; i++) {
+      const caller = i % 2 === 0 ? instanceA : instanceB;
+      await caller.recordFeedActivity(recordParams);
+    }
+
+    const counterKey = 'social:feed_activity:user-1:quiz_completed';
+    expect(sharedCounters.get(counterKey)).toBe(60);
+    expect(writesAcrossBothInstances).toBe(30);
+  });
+
+  it('falls back to writing the activity when Redis throws on the throttle check', async () => {
+    const { service, socialRepo, cacheProvider } = makeService();
+    cacheProvider.incrementCounterWithInitialTtlSeconds.mockRejectedValue(
+      new Error('circuit open'),
+    );
+
+    await service.recordFeedActivity(recordParams);
+
+    expect(socialRepo.createFeedActivity).toHaveBeenCalledTimes(1);
   });
 });

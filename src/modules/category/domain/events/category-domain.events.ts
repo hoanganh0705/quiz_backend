@@ -38,7 +38,4 @@ export type CategoryRestoredEvent = {
 };
 
 export type CategoryDomainEvent =
-  | CategoryCreatedEvent
-  | CategoryUpdatedEvent
-  | CategoryDeletedEvent
-  | CategoryRestoredEvent;
+  CategoryCreatedEvent | CategoryUpdatedEvent | CategoryDeletedEvent | CategoryRestoredEvent;

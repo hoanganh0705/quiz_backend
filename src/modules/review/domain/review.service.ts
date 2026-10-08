@@ -523,7 +523,7 @@ export class ReviewService {
       didSoftDelete = await this.reviewRepository.softDeleteReviewInTx(
         existing.reviewId,
         nowIso,
-        tx as unknown,
+        tx,
       );
 
       if (!didSoftDelete) {

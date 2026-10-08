@@ -86,7 +86,7 @@ async function createUserWithPasswordHistory(
       await Promise.resolve();
       throw new InternalServerErrorException('Failed to create user');
     });
-    return created as unknown as UserRow;
+    return created;
   } catch (error) {
     if (error instanceof InternalServerErrorException) {
       throw error;

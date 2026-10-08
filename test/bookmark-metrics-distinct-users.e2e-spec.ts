@@ -44,7 +44,7 @@ describe('Bookmark metric distinct-user semantics (e2e)', () => {
 
     beforeAll(async () => {
       pool = new Pool({ connectionString: process.env.DATABASE_URL });
-      db = drizzle(pool, { schema }) as unknown as DrizzleDB;
+      db = drizzle(pool, { schema });
 
       metricsRepository = new MetricsRepository(db, createLogger(MetricsRepository.name));
       analyticsRepository = new QuizAnalyticsRepository(db);

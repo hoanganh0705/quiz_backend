@@ -62,7 +62,10 @@ export class UserProfileRepository {
         await tx.update(userProfiles).set(profileSet).where(eq(userProfiles.userId, userId));
       }
 
-      await tx.update(users).set({ updatedAt: nowIso }).where(eq(users.userId, userId));
+      await tx
+        .update(users)
+        .set({ updatedAt: nowIso })
+        .where(and(eq(users.userId, userId), notDeleted(users.deletedAt)));
 
       const [user] = await tx
         .select({

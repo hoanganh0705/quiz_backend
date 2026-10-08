@@ -32,10 +32,10 @@ import { SocialModule } from '@/modules/social/social.module';
 import { RecentlyPlayedQuizzesService } from './application/recently-played-quizzes.service';
 import { UserProfileBundleService } from './application/user-profile-bundle.service';
 import { UserSummaryService } from './application/user-summary.service';
-import { COIN_REPOSITORY_PORT } from '@/modules/coins/domain/ports/coin-repository.port';
 import { CoinModule } from '@/modules/coins/coin.module';
 import { UserResponseMapper } from './mappers/user-response.mapper';
 import { UserActivityCleanupScheduler } from './infrastructure/scheduler/user-activity-cleanup.scheduler';
+import { UserGraphqlResolver } from './graphql/user.graphql-resolver';
 
 @Module({
   imports: [
@@ -76,6 +76,7 @@ import { UserActivityCleanupScheduler } from './infrastructure/scheduler/user-ac
     UserSummaryService,
     UserResponseMapper,
     UserActivityCleanupScheduler,
+    UserGraphqlResolver,
   ],
   exports: [
     UserApplicationService,
@@ -88,6 +89,7 @@ import { UserActivityCleanupScheduler } from './infrastructure/scheduler/user-ac
     UserDomainEventBus,
     UserActivityServiceImpl,
     StreakService,
+    UserProfileBundleService,
   ],
 })
 export class UserModule {}

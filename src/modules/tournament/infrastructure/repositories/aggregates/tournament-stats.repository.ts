@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, eq, isNull, sql } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { notDeleted } from '@/common/database/soft-delete.helper';
 import { DRIZZLE } from '@/core/database/drizzle.constants';
 import type { DrizzleDB } from '@/core/database/database.module';
@@ -161,53 +161,84 @@ export class TournamentStatsRepository {
         (totalResult.rows[0] as { total?: unknown } | undefined)?.total ?? 0,
       );
 
+      const roundTotalsResult = await tx.execute(
+        sql<{
+          participant_id: string;
+          total_score: number | string;
+          total_time_ms: number | string;
+        }>`
+          SELECT
+            trp.participant_id,
+            SUM(trp.round_score)::int   AS total_score,
+            SUM(trp.round_time_ms)::int AS total_time_ms
+          FROM tournament_round_participants trp
+          WHERE trp.participant_id IN (
+            SELECT tp.participant_id
+            FROM tournament_participants tp
+            INNER JOIN users u ON u.user_id = tp.user_id
+            WHERE tp.tournament_id = ${params.tournamentId}::uuid
+              AND tp.withdrawn_at IS NULL
+              AND u.deleted_at IS NULL
+          )
+          GROUP BY trp.participant_id
+        `,
+      );
+
+      const roundTotals = new Map<string, { total_score: number; total_time_ms: number }>();
+      for (const row of roundTotalsResult.rows) {
+        roundTotals.set(row.participant_id, {
+          total_score: Number(row.total_score),
+          total_time_ms: Number(row.total_time_ms),
+        });
+      }
+
+      const rankedResult = await tx.execute(
+        sql<{ participant_id: string; user_id: string; rank: number | string }>`
+          SELECT
+            tp.participant_id,
+            tp.user_id,
+            ROW_NUMBER() OVER (
+              ORDER BY
+                COALESCE(rt.total_score,   0) DESC,
+                COALESCE(rt.total_time_ms, 0) ASC,
+                tp.participant_id ASC
+            )::int AS rank
+          FROM tournament_participants tp
+          INNER JOIN users u ON u.user_id = tp.user_id
+          LEFT JOIN (
+            SELECT
+              trp.participant_id,
+              SUM(trp.round_score)::int   AS total_score,
+              SUM(trp.round_time_ms)::int AS total_time_ms
+            FROM tournament_round_participants trp
+            WHERE trp.participant_id IN (
+              SELECT tp2.participant_id
+              FROM tournament_participants tp2
+              INNER JOIN users u2 ON u2.user_id = tp2.user_id
+              WHERE tp2.tournament_id = ${params.tournamentId}::uuid
+                AND tp2.withdrawn_at IS NULL
+                AND u2.deleted_at IS NULL
+            )
+            GROUP BY trp.participant_id
+          ) rt ON rt.participant_id = tp.participant_id
+          WHERE tp.tournament_id = ${params.tournamentId}::uuid
+            AND tp.withdrawn_at IS NULL
+            AND u.deleted_at IS NULL
+          ORDER BY rank
+        `,
+      );
+
+      const ranked = rankedResult.rows as Array<{
+        participant_id: string;
+        user_id: string;
+        rank: number | string;
+      }>;
+
       const BATCH_SIZE = 1000;
-      let offset = 0;
-
-      while (true) {
-        const batch = await tx.execute(
-          sql<{ participantId: string; userId: string; rank: number | string }>`
-              WITH round_totals AS (
-                SELECT
-                  trp.participant_id,
-                  SUM(trp.round_score)::int   AS total_score,
-                  SUM(trp.round_time_ms)::int AS total_time_ms
-                FROM tournament_round_participants trp
-                GROUP BY trp.participant_id
-              ),
-              ranked AS (
-                SELECT
-                  tp.participant_id as "participantId",
-                  tp.user_id as "userId",
-                  ROW_NUMBER() OVER (
-                    ORDER BY
-                      COALESCE(rt.total_score,   0) DESC,
-                      COALESCE(rt.total_time_ms, 0) ASC,
-                      tp.participant_id ASC
-                  )::int as rank
-                FROM tournament_participants tp
-                INNER JOIN users u ON u.user_id = tp.user_id
-                LEFT JOIN round_totals rt ON rt.participant_id = tp.participant_id
-                WHERE tp.tournament_id = ${params.tournamentId}::uuid
-                  AND tp.withdrawn_at IS NULL
-                  AND u.deleted_at IS NULL
-              )
-              SELECT "participantId", "userId", rank
-              FROM ranked
-              ORDER BY rank
-              LIMIT ${BATCH_SIZE} OFFSET ${offset}
-            `,
-        );
-
-        const rows = batch.rows as Array<{
-          participantId: string;
-          userId: string;
-          rank: number | string;
-        }>;
-        if (rows.length === 0) break;
-
+      for (let i = 0; i < ranked.length; i += BATCH_SIZE) {
+        const batch = ranked.slice(i, i + BATCH_SIZE);
         const valuesSql = sql.join(
-          rows.map((r) => sql`(${r.participantId}::uuid, ${Number(r.rank)}::int)`),
+          batch.map((r) => sql`(${r.participant_id}::uuid, ${Number(r.rank)}::int)`),
           sql`, `,
         );
 
@@ -220,52 +251,17 @@ export class TournamentStatsRepository {
             FROM (VALUES ${valuesSql}) AS v(participant_id, rank)
             WHERE tp.participant_id = v.participant_id
           `);
-
-        if (rows.length < BATCH_SIZE) break;
-        offset += BATCH_SIZE;
       }
 
       await this.refreshTournamentStats(params.tournamentId, tx);
 
-      const finalStandings = await tx.execute(
-        sql<{ userId: string; rank: number | string }>`
-            WITH round_totals AS (
-              SELECT
-                trp.participant_id,
-                SUM(trp.round_score)::int   AS total_score,
-                SUM(trp.round_time_ms)::int AS total_time_ms
-              FROM tournament_round_participants trp
-              GROUP BY trp.participant_id
-            ),
-            ranked AS (
-              SELECT
-                tp.user_id as "userId",
-                ROW_NUMBER() OVER (
-                  ORDER BY
-                    COALESCE(rt.total_score,   0) DESC,
-                    COALESCE(rt.total_time_ms, 0) ASC,
-                    tp.participant_id ASC
-                )::int as rank
-              FROM tournament_participants tp
-              INNER JOIN users u ON u.user_id = tp.user_id
-              LEFT JOIN round_totals rt ON rt.participant_id = tp.participant_id
-              WHERE tp.tournament_id = ${params.tournamentId}::uuid
-                AND tp.withdrawn_at IS NULL
-                AND u.deleted_at IS NULL
-            )
-            SELECT "userId", rank
-            FROM ranked
-            ORDER BY rank
-          `,
-      );
+      const finalStandings = ranked.map((row) => ({
+        userId: row.user_id,
+        rank: Number(row.rank),
+        totalParticipants,
+      }));
 
-      return (finalStandings.rows as Array<{ userId: string; rank: number | string }>).map(
-        (row) => ({
-          userId: row.userId,
-          rank: Number(row.rank),
-          totalParticipants,
-        }),
-      );
+      return finalStandings;
     });
   }
 }

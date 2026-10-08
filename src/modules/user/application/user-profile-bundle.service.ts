@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, OnModuleDestroy, OnModuleInit, Optional } from '@nestjs/common';
 
 import { UserAnalyticsResponseDto } from '../dto/response/user-analytics.dto';
 import { TimeSeriesDto } from '../dto/response/time-series.dto';
@@ -13,11 +13,20 @@ import {
 import { COIN_ECONOMY_LIMITS } from '@/modules/coins/coin.constants';
 import { CACHE_PROVIDER, type CacheProvider } from '@/common/ports/cache.provider';
 import { stampedeProtectedGetOrSet } from '@/modules/quiz/application/quiz-cache.utils';
+import { MetricsRegistry } from '@/core/observability/metrics.registry';
+import {
+  USER_DOMAIN_EVENT_BUS,
+  type UserDomainEventBusPort,
+} from '../domain/events/user-domain-event-bus.port';
+
 @Injectable()
-export class UserProfileBundleService {
-  private static readonly BUNDLE_TX_LIMIT = 20;
-  private static readonly CACHE_TTL_MS = 2 * 60_000;
-  private static readonly CACHE_NAMESPACE = 'user:profile-bundle:v1';
+export class UserProfileBundleService implements OnModuleInit, OnModuleDestroy {
+  private static readonly RECENT_ACTIVITY_LIMIT = 10;
+  private static readonly CACHE_TTL_MS = 5 * 60_000;
+  static readonly CACHE_NAMESPACE = 'user:profile-bundle:v1';
+  private readonly cacheName = 'user-profile-bundle';
+
+  private unsubscribe: (() => void) | null = null;
 
   constructor(
     private readonly userSummaryService: UserSummaryService,
@@ -25,14 +34,50 @@ export class UserProfileBundleService {
     private readonly coinRepository: CoinRepositoryPort,
     @Inject(CACHE_PROVIDER)
     private readonly cache: CacheProvider,
+    @Optional()
+    @Inject(USER_DOMAIN_EVENT_BUS)
+    private readonly userEventBus?: UserDomainEventBusPort,
+    @Optional()
+    @Inject(MetricsRegistry)
+    private readonly metrics?: MetricsRegistry,
   ) {}
+
+  onModuleInit(): void {
+    if (!this.userEventBus) return;
+    this.unsubscribe = this.userEventBus.subscribe((event) => {
+      const candidate = event as { userId?: unknown };
+      if (!candidate || typeof candidate.userId !== 'string') return;
+      void this.invalidateForUser(candidate.userId);
+    });
+  }
+
+  onModuleDestroy(): void {
+    if (this.unsubscribe) {
+      this.unsubscribe();
+      this.unsubscribe = null;
+    }
+  }
+
+  private profileBundleKey(userId: string, localeHash: string): string {
+    return `${UserProfileBundleService.CACHE_NAMESPACE}:${userId}:${localeHash}`;
+  }
+
+  async invalidateForUser(userId: string): Promise<void> {
+    if (!userId) return;
+    try {
+      await this.cache.unlinkByPattern(`${UserProfileBundleService.CACHE_NAMESPACE}:${userId}:*`);
+    } catch {
+      // Best-effort invalidation. The TTL bounds staleness at 2 minutes
+      // even when Redis is unreachable.
+    }
+  }
 
   async getBundleForCurrentUser(
     userId: string,
     acceptLanguage?: string,
   ): Promise<UserProfileBundleResponseDto> {
     const localeHash = this.hashLocale(acceptLanguage);
-    const cacheKey = `${UserProfileBundleService.CACHE_NAMESPACE}:${userId}:${localeHash}`;
+    const cacheKey = this.profileBundleKey(userId, localeHash);
 
     return stampedeProtectedGetOrSet(
       this.cache,
@@ -49,20 +94,17 @@ export class UserProfileBundleService {
     const todayMidnight = new Date();
     todayMidnight.setUTCHours(0, 0, 0, 0);
 
-    const [summary, analytics, recentActivity, wallet, transactions, earnedToday] =
-      await Promise.all([
-        this.userSummaryService.getSummary(userId, userId, acceptLanguage),
-        this.userSummaryService.getAnalytics(userId, userId),
-        this.userSummaryService.getRecentActivity(userId, userId, 20),
-        this.coinRepository.getWallet(userId),
-        this.coinRepository.listTransactions({
-          userId,
-          cursorCreatedAt: null,
-          cursorTransactionId: null,
-          limit: UserProfileBundleService.BUNDLE_TX_LIMIT + 1, // +1 to detect next page
-        }),
-        this.coinRepository.getDailyEarnCapSum(userId, todayMidnight),
-      ]);
+    const [summary, analytics, recentActivity, wallet, earnedToday] = await Promise.all([
+      this.userSummaryService.getSummary(userId, userId, acceptLanguage),
+      this.userSummaryService.getAnalytics(userId, userId),
+      this.userSummaryService.getRecentActivity(
+        userId,
+        userId,
+        UserProfileBundleService.RECENT_ACTIVITY_LIMIT,
+      ),
+      this.coinRepository.getWallet(userId),
+      this.coinRepository.getDailyEarnCapSum(userId, todayMidnight),
+    ]);
 
     const xpHistory: TimeSeriesDto = {
       bucket: 'day',
@@ -76,7 +118,6 @@ export class UserProfileBundleService {
       xpHistory,
       recentActivity,
       wallet: this.toWalletDto(wallet, earnedToday),
-      transactions: this.toTransactionsPage(transactions),
     };
   }
 
@@ -119,7 +160,11 @@ export class UserProfileBundleService {
         };
 
     const recentActivity: UserActivityItemDto[] = showActivity
-      ? await this.userSummaryService.getRecentActivity(targetUserId, requesterId, 20)
+      ? await this.userSummaryService.getRecentActivity(
+          targetUserId,
+          requesterId,
+          UserProfileBundleService.RECENT_ACTIVITY_LIMIT,
+        )
       : [];
 
     const xpHistory: TimeSeriesDto = {
@@ -134,7 +179,6 @@ export class UserProfileBundleService {
       xpHistory,
       recentActivity,
       wallet: null,
-      transactions: null,
     };
   }
 
@@ -161,41 +205,6 @@ export class UserProfileBundleService {
       lastTransactionAt: wallet.updatedAt,
       earnedToday,
       dailyEarnCap: COIN_ECONOMY_LIMITS.DAILY_QUIZ_EARNINGS_CAP,
-    };
-  }
-
-  private toTransactionsPage(
-    rows: Array<{
-      transactionId: string;
-      amount: number;
-      balanceAfter: number;
-      reason: string;
-      referenceType: string | null;
-      referenceId: string | null;
-      metadata: Record<string, unknown>;
-      createdAt: string;
-    }>,
-  ) {
-    const hasNextPage = rows.length > UserProfileBundleService.BUNDLE_TX_LIMIT;
-    const pageRows = hasNextPage ? rows.slice(0, UserProfileBundleService.BUNDLE_TX_LIMIT) : rows;
-
-    return {
-      items: pageRows.map((row) => ({
-        transactionId: row.transactionId,
-        amount: row.amount,
-        balanceAfter: row.balanceAfter,
-        reason: row.reason,
-        referenceType: row.referenceType,
-        referenceId: row.referenceId,
-        metadata: row.metadata,
-        createdAt: row.createdAt,
-      })),
-      pagination: {
-        kind: 'cursor' as const,
-        limit: UserProfileBundleService.BUNDLE_TX_LIMIT,
-        hasNextPage,
-        nextCursor: null,
-      },
     };
   }
 }

@@ -51,12 +51,16 @@ export class CommentDomainEventBus
   implements CommentDomainEventBusPort, OnModuleInit, OnModuleDestroy
 {
   private static readonly RETRY_QUEUE_PREFIX = 'comment:event_retry_queue';
+  private static readonly RETRY_INDEX_KEY = 'comment:event_retry_queue:index';
   private static readonly DEAD_LETTER_KEY = 'comment:event_dead_letter';
   private static readonly RETRY_DELAYS_MS = [5_000, 10_000, 20_000, 40_000, 80_000] as const;
   private static readonly MAX_RETRIES = CommentDomainEventBus.RETRY_DELAYS_MS.length;
   private static readonly POLL_INTERVAL_MS = 10_000;
   private static readonly POLL_LOCK_KEY = 'comment:event_retry_poll_lock';
   private static readonly POLL_LOCK_TTL_MS = 8_000;
+  private static readonly DEAD_LETTER_LIMIT = 1000;
+  private static readonly DEAD_LETTER_TTL_SECONDS = 7 * 24 * 60 * 60;
+  private static readonly DRAIN_BATCH = 64;
 
   private handlers: Array<(event: CommentDomainEvent) => void> = [];
   private pollTimer: ReturnType<typeof setInterval> | null = null;
@@ -136,7 +140,16 @@ export class CommentDomainEventBus
 
     void this.cache
       .set(queued.tierKey, JSON.stringify(queued), delayMs + QUEUE_TTL_PADDING_MS)
-      .then(() => this.cache.rpushJson(CommentDomainEventBus.RETRY_QUEUE_PREFIX, queued.tierKey));
+      .then(() =>
+        this.cache.zaddByScore(CommentDomainEventBus.RETRY_INDEX_KEY, nextRetryAt, queued.tierKey),
+      )
+      .catch((error: unknown) => {
+        this.logger.warn({
+          event: 'comment_event_retry_index_write_failed',
+          tierKey: queued.tierKey,
+          message: error instanceof Error ? error.message : 'unknown',
+        });
+      });
   }
 
   private tierKey(attempt: number, nextRetryAt: number): string {
@@ -155,12 +168,28 @@ export class CommentDomainEventBus
       error: error instanceof Error ? error.message : String(error),
     });
 
-    await this.cache.rpushJson(CommentDomainEventBus.DEAD_LETTER_KEY, {
-      event,
-      failedAt: new Date().toISOString(),
-      lastAttempt: attempt,
-      lastError: error instanceof Error ? error.message : String(error),
-    });
+    try {
+      await this.cache.rpushJson(CommentDomainEventBus.DEAD_LETTER_KEY, {
+        event,
+        failedAt: new Date().toISOString(),
+        lastAttempt: attempt,
+        lastError: error instanceof Error ? error.message : String(error),
+      });
+      await this.cache.trimList(
+        CommentDomainEventBus.DEAD_LETTER_KEY,
+        -CommentDomainEventBus.DEAD_LETTER_LIMIT,
+        -1,
+      );
+      await this.cache.expire(
+        CommentDomainEventBus.DEAD_LETTER_KEY,
+        CommentDomainEventBus.DEAD_LETTER_TTL_SECONDS,
+      );
+    } catch (error) {
+      this.logger.warn({
+        event: 'comment_event_dead_letter_write_failed',
+        message: error instanceof Error ? error.message : 'unknown',
+      });
+    }
   }
 
   private async processRetryQueue(): Promise<void> {
@@ -185,11 +214,22 @@ export class CommentDomainEventBus
   private async drainOnce(): Promise<void> {
     const now = Date.now();
 
-    for (let attempt = 1; attempt <= CommentDomainEventBus.MAX_RETRIES; attempt += 1) {
-      const peekedKey = await this.cache.lpopJson<string>(CommentDomainEventBus.RETRY_QUEUE_PREFIX);
-      if (peekedKey === null) return;
+    const due = await this.cache.zrangeByScore(
+      CommentDomainEventBus.RETRY_INDEX_KEY,
+      '-inf',
+      now,
+      CommentDomainEventBus.DRAIN_BATCH,
+      true,
+    );
+    if (due.length === 0) return;
 
-      const raw = await this.cache.get(peekedKey);
+    for (const { member: tierKey, score } of due) {
+      if (score > now) return;
+
+      const removed = await this.cache.zrem(CommentDomainEventBus.RETRY_INDEX_KEY, tierKey);
+      if (!removed) continue;
+
+      const raw = await this.cache.getDel(tierKey);
       if (raw === null) continue;
 
       let queued: QueuedEvent;
@@ -200,12 +240,13 @@ export class CommentDomainEventBus
       }
 
       if (queued.nextRetryAt > now) {
-        await this.cache.rpushJson(CommentDomainEventBus.RETRY_QUEUE_PREFIX, queued.tierKey);
+        await this.cache.zaddByScore(
+          CommentDomainEventBus.RETRY_INDEX_KEY,
+          queued.nextRetryAt,
+          tierKey,
+        );
         return;
       }
-
-      const drained = await this.cache.getDel(peekedKey);
-      if (drained === null) continue;
 
       const correlationId = queued.correlationId ?? createCorrelationId();
       correlationIdStorage.run({ correlationId }, () => {

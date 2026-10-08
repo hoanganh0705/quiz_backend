@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { SessionConfig } from '../config/session.config';
 import { TokenConfig } from '../config/token.config';
@@ -7,8 +7,13 @@ import { CACHE_PROVIDER, type CacheProvider } from './ports/cache.provider';
 import { SessionService } from './session.service';
 import { type SessionRecord } from './ports/session-repository.port';
 import { RateLimitExceededError, TokenReuseDetectedError } from './errors';
+import { CircuitOpenError } from '@/common/resilience/circuit-breaker';
+import { MetricsRegistry } from '@/core/observability/metrics.registry';
 
 type RateLimitBucket = 'login_ip' | 'login_user' | 'refresh_ip' | 'refresh_user';
+
+const FAIL_OPEN_BUCKETS: ReadonlySet<RateLimitBucket> = new Set(['login_ip', 'refresh_ip']);
+const FAIL_CLOSED_BUCKETS: ReadonlySet<RateLimitBucket> = new Set(['login_user', 'refresh_user']);
 
 @Injectable()
 export class SecurityService {
@@ -20,7 +25,9 @@ export class SecurityService {
     @Inject(CACHE_PROVIDER)
     private readonly cacheProvider: CacheProvider,
     private readonly sessionService: SessionService,
-    @InjectPinoLogger(SecurityService.name) private readonly logger: PinoLogger,
+    @Optional()
+    private readonly metricsRegistry?: MetricsRegistry,
+    @InjectPinoLogger(SecurityService.name) private readonly logger?: PinoLogger,
   ) {}
 
   private getRateLimitConfig(bucket: RateLimitBucket): { limit: number; windowMs: number } {
@@ -42,10 +49,36 @@ export class SecurityService {
   private async enforceRateLimit(bucket: RateLimitBucket, key: string): Promise<void> {
     const { limit, windowMs } = this.getRateLimitConfig(bucket);
     const rateKey = `auth:rate_limit:${bucket}:${key}`;
-    const count = await this.cacheProvider.incrementWindowCounter(rateKey, windowMs);
+    let count: number;
+    try {
+      count = await this.cacheProvider.incrementWindowCounter(rateKey, windowMs);
+    } catch (error) {
+      if (error instanceof CircuitOpenError) {
+        if (FAIL_CLOSED_BUCKETS.has(bucket)) {
+          this.logger?.warn({
+            event: 'auth_rate_limit_fail_closed',
+            bucket,
+            key,
+            circuitState: error.state,
+          });
+          throw new RateLimitExceededError();
+        }
+        if (FAIL_OPEN_BUCKETS.has(bucket)) {
+          this.logger?.warn({
+            event: 'auth_rate_limit_fail_open',
+            bucket,
+            key,
+            circuitState: error.state,
+          });
+          this.metricsRegistry?.incAuthRateLimiterFailOpen(bucket);
+          return;
+        }
+      }
+      throw error;
+    }
 
     if (count > limit) {
-      this.logger.warn({
+      this.logger?.warn({
         event: 'auth_rate_limit_exceeded',
         bucket,
         key,
@@ -81,7 +114,7 @@ export class SecurityService {
         SecurityService.LOGIN_UNVERIFIED_VERIFICATION_EMAIL_COOLDOWN_SECONDS,
       );
     } catch (error) {
-      this.logger.error({
+      this.logger?.error({
         event: 'auth_login_unverified_verification_email_cooldown_failed',
         userId,
         message: error instanceof Error ? error.message : 'Unknown redis error',
@@ -171,7 +204,7 @@ export class SecurityService {
       return { shouldReject: false };
     }
 
-    this.logger.warn({
+    this.logger?.warn({
       event: 'auth_refresh_session_binding_changed',
       userId: session.userId,
       hasStoredIpAddress: hasSessionIp,
@@ -221,7 +254,7 @@ export class SecurityService {
     );
 
     if (nextReuseCount > 1) {
-      this.logger.warn({
+      this.logger?.warn({
         event: 'auth_refresh_reuse_grace_window_abuse_detected',
         userId: payload.sub,
         jti: payload.jti,
@@ -233,7 +266,7 @@ export class SecurityService {
       throw new TokenReuseDetectedError();
     }
 
-    this.logger.info({
+    this.logger?.info({
       event: 'auth_refresh_reuse_within_grace_window',
       userId: payload.sub,
       sessionId: session.sessionId,

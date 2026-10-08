@@ -117,6 +117,37 @@ export class TracingProvider implements OnModuleInit, OnModuleDestroy {
     return this.activeSpans.size;
   }
 
+  /**
+   * Wait until a span with the supplied `name` and matching `attributes`
+   * predicate has been emitted via `flush()`. Designed for tests that want
+   * to assert that a code path produced a trace span without coupling to
+   * the async flush cadence. Returns the matched span (or `undefined` if
+   * nothing matched within `timeoutMs`).
+   */
+  async assertSpan(
+    name: string,
+    predicate: (attributes: Record<string, string | number | boolean>) => boolean = () => true,
+    timeoutMs = 1_000,
+  ): Promise<Span | undefined> {
+    const matched = (span: Span): boolean => {
+      if (span.name !== name) return false;
+      return predicate(span.attributes);
+    };
+
+    for (const span of this.completedSpans) {
+      if (matched(span)) return span;
+    }
+
+    const start = Date.now();
+    while (Date.now() - start < timeoutMs) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      for (const span of this.completedSpans) {
+        if (matched(span)) return span;
+      }
+    }
+    return undefined;
+  }
+
   protected flush(): void {
     if (this.completedSpans.length === 0) return;
     const spans = this.completedSpans.splice(0, this.completedSpans.length);

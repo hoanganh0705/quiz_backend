@@ -5,6 +5,12 @@ import { DRIZZLE } from '@/core/database/drizzle.constants';
 import type { DrizzleDB } from '@/core/database/database.module';
 import { outboxEvents } from '@/core/database/schema';
 import { BaseOutboxProcessor, type BaseOutboxRow } from '@/common/outbox/base-outbox-processor';
+import { CACHE_PROVIDER, type CacheProvider } from '@/common/ports/cache.provider';
+import { REDIS_CIRCUIT_PORT, type RedisCircuitPort } from '@/common/ports/redis-circuit.port';
+import {
+  acquireSchedulerLockOrRecordSkip,
+  type SchedulerLockResult,
+} from '@/core/redis/scheduler-lock.helper';
 import { CoinDomainEventBus } from '../../domain/events/coin-domain.event-bus';
 import type { CoinReason } from '../../domain/types/coin.types';
 import { correlationIdStorage, createCorrelationId } from '@/common/interceptors/correlation-id';
@@ -12,6 +18,8 @@ import { correlationIdStorage, createCorrelationId } from '@/common/interceptors
 const COIN_OUTBOX_MAX_RETRIES = 8;
 const COIN_OUTBOX_BASE_DELAY_SECONDS = 30;
 const COIN_OUTBOX_BATCH_SIZE = 100;
+const COIN_OUTBOX_LOCK_KEY = 'coin-outbox-processor:lock';
+const COIN_OUTBOX_LOCK_TTL_MS = 55_000;
 
 type CoinOutboxRow = BaseOutboxRow & {
   eventType: 'coin.added' | 'coin.spent';
@@ -62,7 +70,7 @@ type CoinSpentPayload = {
     | 'admin'
     | null;
   referenceId: string | null;
-  category: 'tip' | 'flair' | 'suppress' | 'admin';
+  category: 'tip' | 'flair' | 'suppress' | 'admin' | 'tournament';
   metadata: Record<string, unknown>;
   ledgerCreatedAt: string;
   occurredAt: string;
@@ -76,11 +84,11 @@ export class CoinOutboxProcessorService extends BaseOutboxProcessor<CoinOutboxRo
   protected readonly aggregateType = 'coin';
   protected readonly logPrefix = 'coin';
 
-  private isRunning = false;
-
   constructor(
     @Inject(DRIZZLE) private readonly db: DrizzleDB,
     private readonly eventBus: CoinDomainEventBus,
+    @Inject(CACHE_PROVIDER) private readonly cache: CacheProvider,
+    @Inject(REDIS_CIRCUIT_PORT) private readonly circuit: RedisCircuitPort,
     @InjectPinoLogger(CoinOutboxProcessorService.name)
     private readonly logger: PinoLogger,
   ) {
@@ -89,11 +97,23 @@ export class CoinOutboxProcessorService extends BaseOutboxProcessor<CoinOutboxRo
 
   @Cron(CronExpression.EVERY_MINUTE)
   async processPendingEvents(): Promise<void> {
-    if (this.isRunning) {
-      this.logger.debug({ event: 'coin_outbox_processor_skipped_already_running' });
+    const lockResult: SchedulerLockResult<never> = await acquireSchedulerLockOrRecordSkip({
+      cache: this.cache,
+      circuit: this.circuit,
+      metrics: undefined,
+      lockKey: COIN_OUTBOX_LOCK_KEY,
+      lockTtlMs: COIN_OUTBOX_LOCK_TTL_MS,
+      job: 'coin_outbox_processor',
+    });
+
+    if (!lockResult.acquired) {
+      this.logger.debug({
+        event: 'coin_outbox_processor_skipped_lock',
+        reason: lockResult.reason,
+      });
       return;
     }
-    this.isRunning = true;
+
     try {
       const result = await this.runProcessPendingEvents(this.db);
       if (result.processed > 0) {
@@ -119,7 +139,12 @@ export class CoinOutboxProcessorService extends BaseOutboxProcessor<CoinOutboxRo
         error: error instanceof Error ? error.message : String(error),
       });
     } finally {
-      this.isRunning = false;
+      await this.cache.releaseAdvisoryLock(COIN_OUTBOX_LOCK_KEY, lockResult.token).catch((err) => {
+        this.logger.warn({
+          event: 'coin_outbox_processor_lock_release_failed',
+          error: err instanceof Error ? err.message : String(err),
+        });
+      });
     }
   }
 
@@ -150,12 +175,13 @@ export class CoinOutboxProcessorService extends BaseOutboxProcessor<CoinOutboxRo
     );
   }
 
-  private dispatchInStorage(row: CoinOutboxRow, fn: () => void): Promise<void> {
+  private dispatchInStorage(row: CoinOutboxRow, fn: () => Promise<void>): Promise<void> {
     const correlationId = row.correlationId ?? createCorrelationId();
     let captured: unknown;
+    let pending: Promise<void> | null = null;
     correlationIdStorage.run({ correlationId }, () => {
       try {
-        fn();
+        pending = Promise.resolve(fn());
       } catch (err) {
         captured = err;
       }
@@ -164,26 +190,36 @@ export class CoinOutboxProcessorService extends BaseOutboxProcessor<CoinOutboxRo
       const reason = captured instanceof Error ? captured.message : JSON.stringify(captured);
       return Promise.reject(new Error(reason));
     }
+    return pending ?? Promise.resolve();
+  }
+
+  private dispatchCoinAdded(payload: CoinAddedPayload): Promise<void> {
+    const occurredAt = new Date(payload.occurredAt ?? payload.ledgerCreatedAt);
+    const balanceAfter = Number(payload.balanceAfter ?? payload.newBalance);
+    const amount = Number(payload.amount);
+    const referenceType = payload.referenceType ?? null;
+    const reason = payload.reason as CoinReason;
+
+    this.eventBus.emitTransactionRecorded({
+      eventType: 'coin.transaction_recorded',
+      transactionId: payload.transactionId,
+      userId: payload.userId,
+      reason,
+      amount,
+      balanceAfter,
+      referenceType,
+      referenceId: payload.referenceId,
+      timestamp: occurredAt,
+    });
     return Promise.resolve();
   }
 
-  private dispatchCoinAdded(payload: CoinAddedPayload): void {
+  private dispatchCoinSpent(payload: CoinSpentPayload): Promise<void> {
     const occurredAt = new Date(payload.occurredAt ?? payload.ledgerCreatedAt);
     const balanceAfter = Number(payload.balanceAfter ?? payload.newBalance);
     const amount = Number(payload.amount);
     const referenceType = payload.referenceType ?? null;
     const reason = payload.reason as CoinReason;
-
-    this.eventBus.emitBalanceChanged({
-      eventType: 'coin.balance_changed',
-      userId: payload.userId,
-      delta: amount,
-      reason,
-      newBalance: balanceAfter,
-      referenceType,
-      referenceId: payload.referenceId,
-      timestamp: occurredAt,
-    });
 
     this.eventBus.emitTransactionRecorded({
       eventType: 'coin.transaction_recorded',
@@ -196,37 +232,7 @@ export class CoinOutboxProcessorService extends BaseOutboxProcessor<CoinOutboxRo
       referenceId: payload.referenceId,
       timestamp: occurredAt,
     });
-  }
-
-  private dispatchCoinSpent(payload: CoinSpentPayload): void {
-    const occurredAt = new Date(payload.occurredAt ?? payload.ledgerCreatedAt);
-    const balanceAfter = Number(payload.balanceAfter ?? payload.newBalance);
-    const amount = Number(payload.amount);
-    const referenceType = payload.referenceType ?? null;
-    const reason = payload.reason as CoinReason;
-
-    this.eventBus.emitBalanceChanged({
-      eventType: 'coin.balance_changed',
-      userId: payload.userId,
-      delta: amount,
-      reason,
-      newBalance: balanceAfter,
-      referenceType,
-      referenceId: payload.referenceId,
-      timestamp: occurredAt,
-    });
-
-    this.eventBus.emitTransactionRecorded({
-      eventType: 'coin.transaction_recorded',
-      transactionId: payload.transactionId,
-      userId: payload.userId,
-      reason,
-      amount,
-      balanceAfter,
-      referenceType,
-      referenceId: payload.referenceId,
-      timestamp: occurredAt,
-    });
+    return Promise.resolve();
   }
 
   protected override onIdempotencyConflict(row: CoinOutboxRow): void {

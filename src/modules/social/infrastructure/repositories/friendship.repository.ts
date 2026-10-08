@@ -13,7 +13,7 @@ import type {
   PaginatedMutualFriendsResult,
   RespondToFriendRequestParams,
 } from '../../domain/types/social.types';
-import { eq, and, or, sql, desc, count, lte, isNull, aliasedTable } from 'drizzle-orm';
+import { eq, and, or, sql, desc, count, lte, aliasedTable } from 'drizzle-orm';
 import { notDeleted } from '@/common/database/soft-delete.helper';
 import { sliceWithCursor, encodeUsernameCursor } from './social-cursor.util';
 import { decodeBase64JsonCursor } from '@/common/utils/cursor.util';
@@ -32,7 +32,66 @@ export class FriendshipRepository implements FriendshipRepositoryPort {
       })
       .returning();
 
-    return friendship as Friendship;
+    return friendship;
+  }
+
+  async createFriendRequestFull(
+    requesterId: string,
+    addresseeId: string,
+  ): Promise<{
+    friendship: Friendship;
+    friendRequest: FriendRequest;
+    requesterUsername: string;
+    addresseeUsername: string;
+  }> {
+    return this.db.transaction(async (tx) => {
+      const [friendship] = await tx
+        .insert(friendships)
+        .values({
+          requesterId,
+          addresseeId,
+          status: 'pending',
+        })
+        .returning();
+
+      const rows = await tx
+        .select({
+          friendshipId: friendships.friendshipId,
+          requesterId: friendships.requesterId,
+          addresseeId: friendships.addresseeId,
+          requesterUsername: users.username,
+          requesterDisplayName: userProfiles.displayName,
+          requesterAvatarUrl: userProfiles.avatarUrl,
+          createdAt: friendships.createdAt,
+        })
+        .from(friendships)
+        .innerJoin(users, eq(users.userId, friendships.requesterId))
+        .leftJoin(userProfiles, eq(userProfiles.userId, friendships.requesterId))
+        .where(
+          and(
+            eq(friendships.requesterId, requesterId),
+            eq(friendships.addresseeId, addresseeId),
+            eq(friendships.status, 'pending'),
+            notDeleted(friendships.deletedAt),
+          ),
+        )
+        .orderBy(desc(friendships.createdAt))
+        .limit(1);
+
+      // eslint-disable-next-line local/no-soft-delete-leak
+      const addresseeRows = await tx
+        .select({ username: users.username })
+        .from(users)
+        .where(eq(users.userId, addresseeId))
+        .limit(1);
+
+      return {
+        friendship: friendship,
+        friendRequest: rows[0],
+        requesterUsername: rows[0]?.requesterUsername ?? '',
+        addresseeUsername: addresseeRows[0]?.username ?? '',
+      };
+    });
   }
 
   async createFriendRequestWithJoin(
@@ -63,16 +122,17 @@ export class FriendshipRepository implements FriendshipRepositoryPort {
       .orderBy(desc(friendships.createdAt))
       .limit(1);
 
-    return rows[0] as FriendRequest;
+    return rows[0];
   }
 
   async getFriendRequest(friendshipId: string): Promise<Friendship> {
+    // eslint-disable-next-line local/no-soft-delete-leak
     const [friendship] = await this.db
       .select()
       .from(friendships)
       .where(eq(friendships.friendshipId, friendshipId));
 
-    return (friendship as Friendship) ?? null;
+    return friendship ?? null;
   }
 
   async getPendingRequests(addresseeId: string): Promise<FriendRequest[]> {
@@ -305,7 +365,7 @@ export class FriendshipRepository implements FriendshipRepositoryPort {
   }
 
   async removeFriend(userId: string, friendId: string): Promise<number> {
-    return this.removeFriendInTx(this.db as unknown as FriendshipExecutor, userId, friendId);
+    return this.removeFriendInTx(this.db, userId, friendId);
   }
 
   async removeFriendInTx(
@@ -347,7 +407,7 @@ export class FriendshipRepository implements FriendshipRepositoryPort {
       .orderBy(desc(friendships.createdAt), desc(friendships.friendshipId))
       .limit(1);
 
-    return (row as Friendship | undefined) ?? null;
+    return row ?? null;
   }
 
   async getMutualFriends(

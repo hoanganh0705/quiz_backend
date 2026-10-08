@@ -40,22 +40,21 @@ class HomeFixtureController extends HomeController {}
 class HealthFixtureController extends HealthController {}
 
 class FakeStoragePort implements StoragePort {
-  // eslint-disable-next-line @typescript-eslint/require-await
   async ping(): Promise<void> {
     return;
   }
-  // eslint-disable-next-line @typescript-eslint/require-await
+
   async upload(): Promise<never> {
     throw new Error('unused');
   }
-  // eslint-disable-next-line @typescript-eslint/require-await
+
   async delete(): Promise<void> {
     return;
   }
   deriveUrl(publicId: string): string {
     return `https://fake.test/${publicId}`;
   }
-  // eslint-disable-next-line @typescript-eslint/require-await
+
   async createSignedUpload(): Promise<never> {
     throw new Error('unused');
   }
@@ -68,7 +67,6 @@ describe('search/home/health controllers (E2E)', () => {
 
     beforeEach(async () => {
       db = {
-        // eslint-disable-next-line @typescript-eslint/require-await
         execute: jest.fn(async () => ({ rows: [] })),
       };
 
@@ -127,7 +125,6 @@ describe('search/home/health controllers (E2E)', () => {
   describe('GET /home', () => {
     let app: INestApplication;
 
-    // eslint-disable-next-line @typescript-eslint/require-await
     const bundle = async () => ({
       featured: [],
       trending: [],
@@ -188,12 +185,10 @@ describe('search/home/health controllers (E2E)', () => {
   describe('GET /health', () => {
     let app: INestApplication;
 
-    // eslint-disable-next-line @typescript-eslint/require-await
     const probeQueue = async () => ({ depth: 0, workerConnected: true });
 
     beforeEach(async () => {
       const redis: RedisHandle = {
-        // eslint-disable-next-line @typescript-eslint/require-await
         ping: jest.fn(async () => 'PONG'),
         getCircuitMetrics: jest.fn(() => ({
           state: 'closed',
@@ -202,7 +197,6 @@ describe('search/home/health controllers (E2E)', () => {
         })),
       };
       const db: DbHandle = {
-        // eslint-disable-next-line @typescript-eslint/require-await
         execute: jest.fn(async () => undefined),
       };
 
@@ -254,13 +248,11 @@ describe('search/home/health controllers (E2E)', () => {
 
     it('reports down + 503 when the database probe throws', async () => {
       const db: DbHandle = {
-        // eslint-disable-next-line @typescript-eslint/require-await
         execute: jest.fn(async () => {
           throw new Error('db gone');
         }),
       };
       const redis: RedisHandle = {
-        // eslint-disable-next-line @typescript-eslint/require-await
         ping: jest.fn(async () => 'PONG'),
         getCircuitMetrics: jest.fn(() => ({
           state: 'closed',

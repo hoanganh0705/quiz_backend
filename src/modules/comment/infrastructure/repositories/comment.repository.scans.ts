@@ -26,6 +26,38 @@ import type {
 
 type CommentRow = typeof commentRows.$inferSelect;
 
+const commentScanSelection = {
+  commentId: commentRows.commentId,
+  quizId: commentRows.quizId,
+  authorId: commentRows.authorId,
+  parentCommentId: commentRows.parentCommentId,
+  body: commentRows.body,
+  isHidden: commentRows.isHidden,
+  hiddenById: commentRows.hiddenById,
+  hiddenAt: commentRows.hiddenAt,
+  votesCount: commentRows.votesCount,
+  upvotesCount: commentRows.upvotesCount,
+  downvotesCount: commentRows.downvotesCount,
+  repliesCount: commentRows.repliesCount,
+  createdAt: commentRows.createdAt,
+  updatedAt: commentRows.updatedAt,
+  deletedAt: commentRows.deletedAt,
+} as const;
+
+const commentReportScanSelection = {
+  reportId: commentReports.reportId,
+  reporterId: commentReports.reporterId,
+  commentId: commentReports.commentId,
+  reason: commentReports.reason,
+  details: commentReports.details,
+  status: commentReports.status,
+  reviewedByUserId: commentReports.reviewedByUserId,
+  reviewedAt: commentReports.reviewedAt,
+  actionTaken: commentReports.actionTaken,
+  createdAt: commentReports.createdAt,
+  updatedAt: commentReports.updatedAt,
+} as const;
+
 // ─── Author join (single-row) ───────────────────────────────────────────────
 
 async function joinAuthorById(db: DrizzleDB, userId: string): Promise<AuthorView | null> {
@@ -118,6 +150,34 @@ export function commentAuthorForView(input: CommentAuthorForViewInput): CommentV
   };
 }
 
+type ScanCommentRow = {
+  commentId: string;
+  quizId: string;
+  authorId: string;
+  parentCommentId: string | null;
+  body: string;
+  isHidden: boolean;
+  hiddenById: string | null;
+  hiddenAt: string | null;
+  votesCount: number;
+  upvotesCount: number;
+  downvotesCount: number;
+  repliesCount: number;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt: string | null;
+};
+
+interface ScanCommentAuthorForViewInput {
+  row: ScanCommentRow;
+  author: AuthorView;
+}
+
+function scanCommentAuthorForView(input: ScanCommentAuthorForViewInput): CommentView {
+  const { row, author } = input;
+  return commentAuthorForView({ row: row, author });
+}
+
 async function rowToCommentView(db: DrizzleDB, row: CommentRow): Promise<CommentView> {
   const author = await joinAuthorById(db, row.authorId);
   if (!author) {
@@ -169,7 +229,7 @@ export async function topLevelCommentScan(
 ): Promise<{ items: CommentView[]; hasNextPage: boolean }> {
   const cursorCondition = cursorDesc(options.cursor);
   const rows = await db
-    .select()
+    .select(commentScanSelection)
     .from(commentRows)
     .where(
       and(
@@ -188,7 +248,7 @@ export async function topLevelCommentScan(
   const authorMap = await joinAuthorsByIds(db, authorIds);
 
   const items = trimmed.map((row) =>
-    commentAuthorForView({
+    scanCommentAuthorForView({
       row,
       author: authorMap.get(row.authorId) ?? {
         userId: row.authorId,
@@ -221,7 +281,7 @@ export async function multiReplyScan(
   if (topLevelIds.length === 0) return [];
 
   const rows = await db
-    .select()
+    .select(commentScanSelection)
     .from(commentRows)
     .where(and(inArray(commentRows.parentCommentId, topLevelIds), isNull(commentRows.deletedAt)))
     .orderBy(asc(commentRows.createdAt));
@@ -249,7 +309,7 @@ export async function multiReplyScan(
     const consumed = countByParent.get(parentId) ?? 0;
     if (consumed <= 0) continue;
     result.push(
-      commentAuthorForView({
+      scanCommentAuthorForView({
         row,
         author: authorMap.get(row.authorId) ?? {
           userId: row.authorId,
@@ -347,7 +407,7 @@ export async function reportScan(
   }
 
   const rows = await db
-    .select()
+    .select(commentReportScanSelection)
     .from(commentReports)
     .where(conditions.length > 0 ? and(...conditions) : undefined)
     .orderBy(desc(commentReports.createdAt), desc(commentReports.reportId))
@@ -356,7 +416,7 @@ export async function reportScan(
   const hasNextPage = rows.length > limit;
   const trimmed = hasNextPage ? rows.slice(0, limit) : rows;
 
-  return { items: trimmed, hasNextPage };
+  return { items: trimmed as unknown as ReportView[], hasNextPage };
 }
 
 // `rowToCommentView` is reserved for the per-single-row read path

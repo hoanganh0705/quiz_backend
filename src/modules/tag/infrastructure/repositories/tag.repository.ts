@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, desc, eq, inArray, isNull, or, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, or, sql } from 'drizzle-orm';
 import { notDeleted } from '@/common/database/soft-delete.helper';
 import { DRIZZLE } from '@/core/database/drizzle.constants';
 import type { DrizzleDB } from '@/core/database/database.module';
@@ -148,6 +148,7 @@ export class TagRepository implements TagRepositoryPort {
 
   async restore(tagId: string, nowIso: string): Promise<TagRow | null> {
     try {
+      // eslint-disable-next-line local/no-soft-delete-leak
       const [row] = await this.db
         .update(tags)
         .set({ deletedAt: null, updatedAt: nowIso })

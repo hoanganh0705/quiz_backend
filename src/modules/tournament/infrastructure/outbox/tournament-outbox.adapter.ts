@@ -55,7 +55,7 @@ export class TournamentOutboxAdapter implements TournamentOutboxPort {
     const values = events.map((e) => ({
       aggregateType: 'tournament',
       eventType: e.eventType,
-      payload: e.payload as Record<string, unknown>,
+      payload: e.payload,
       createdAt: nowIso,
       idempotencyKey: e.idempotencyKey,
       correlationId: e.correlationId,

@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, asc, desc, eq, isNull, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, or, sql } from 'drizzle-orm';
 import { notDeleted } from '@/common/database/soft-delete.helper';
 import { DRIZZLE } from '@/core/database/drizzle.constants';
 import type { DrizzleDB } from '@/core/database/database.module';
@@ -164,6 +164,7 @@ export class CategoryRepository implements CategoryRepositoryPort {
   }
 
   async restore(categoryId: string, nowIso: string): Promise<CategoryRow | null> {
+    // eslint-disable-next-line local/no-soft-delete-leak
     const [row] = await this.db
       .update(categories)
       .set({ deletedAt: null, updatedAt: nowIso })

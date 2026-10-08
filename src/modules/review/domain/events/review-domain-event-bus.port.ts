@@ -25,6 +25,14 @@ export interface ReviewDomainEventBusPort {
    * Called by ReviewService to publish events.
    */
   dispatchToSubscribers(event: PublishedReviewDomainEvent): void;
+
+  /**
+   * Await every subscriber's handler before resolving. Handler rejections
+   * are logged but never propagate to the caller (Promise.allSettled semantics).
+   * Use from outbox processors where the caller must not break iteration on
+   * a single handler failure.
+   */
+  dispatchStrict(event: PublishedReviewDomainEvent): Promise<void>;
 }
 
 /**

@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/unbound-method */
 import type { PinoLogger } from 'nestjs-pino';
 import { RankingDomainEventBus } from './ranking-domain.event-bus';
 import type { RankingDomainEventBusPort } from '../ports';

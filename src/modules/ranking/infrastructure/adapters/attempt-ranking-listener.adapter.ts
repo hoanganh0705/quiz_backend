@@ -74,15 +74,18 @@ export class AttemptRankingListenerAdapter implements OnModuleInit, OnModuleDest
     }
 
     try {
-      await this.xpIngestionService.processXpEvent({
-        eventType: 'external.xp.earned',
-        userId: event.userId,
-        amount: event.xpEarned,
-        source: 'quiz_attempt',
-        attemptId: event.attemptId,
-        idempotencyKey: `xp:${event.userId}:attempt:${event.attemptId}`,
-        timestamp: event.timestamp,
-      });
+      await this.xpIngestionService.processXpEvent(
+        {
+          eventType: 'external.xp.earned',
+          userId: event.userId,
+          amount: event.xpEarned,
+          source: 'quiz_attempt',
+          attemptId: event.attemptId,
+          idempotencyKey: `xp:${event.userId}:attempt:${event.attemptId}`,
+          timestamp: event.timestamp,
+        },
+        'in_proc',
+      );
 
       this.logger.info({
         event: 'attempt_ranking_xp_processed',

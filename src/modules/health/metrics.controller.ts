@@ -1,5 +1,6 @@
-import { Controller, Get, Header, Inject, Res } from '@nestjs/common';
-import type { Response } from 'express';
+import { Controller, Get, Header, Inject, Req, Res, UnauthorizedException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import type { Request, Response } from 'express';
 import { Public } from '@/common/decorators/public.decorator';
 import { ApiExcludeController } from '@nestjs/swagger';
 import { METRICS_REGISTRY, type MetricsRegistry } from '@/core/observability/metrics.registry';
@@ -12,9 +13,26 @@ import type { DrizzleDB } from '@/core/database/database.module';
 import { sql } from 'drizzle-orm';
 
 const METRICS_CONTENT_TYPE = 'text/plain; version=0.0.4; charset=utf-8';
+const PROMETHEUS_TOKEN_HEADER = 'x-prometheus-token';
 
 type OutboxLagRow = { lag: string };
 type OutboxLagResult = { rows: OutboxLagRow[] };
+
+const constantTimeEquals = (a: string, b: string): boolean => {
+  if (a.length !== b.length) return false;
+  let mismatch = 0;
+  for (let i = 0; i < a.length; i++) {
+    mismatch |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  }
+  return mismatch === 0;
+};
+
+const readPrometheusToken = (req: Request): string | undefined => {
+  const raw = req.headers[PROMETHEUS_TOKEN_HEADER];
+  if (typeof raw === 'string') return raw;
+  if (Array.isArray(raw) && typeof raw[0] === 'string') return raw[0];
+  return undefined;
+};
 
 @Public()
 @ApiExcludeController()
@@ -28,11 +46,22 @@ export class MetricsController {
     private readonly tracing: TracingProvider,
     private readonly queueProbe: HealthQueueProbe,
     @Inject(DRIZZLE_READ) private readonly db: DrizzleDB,
+    private readonly configService: ConfigService,
   ) {}
 
   @Get()
   @Header('Content-Type', METRICS_CONTENT_TYPE)
-  async scrape(@Res({ passthrough: true }) res: Response): Promise<string> {
+  async scrape(@Req() req: Request, @Res({ passthrough: true }) res: Response): Promise<string> {
+    const nodeEnv = this.configService.get<string>('NODE_ENV');
+    const configuredToken = this.configService.get<string | null>('PROMETHEUS_SCRAPE_TOKEN');
+
+    if (nodeEnv === 'production' && configuredToken) {
+      const headerToken = readPrometheusToken(req);
+      if (!headerToken || !constantTimeEquals(headerToken, configuredToken)) {
+        throw new UnauthorizedException('Prometheus scrape token is missing or invalid');
+      }
+    }
+
     this.refreshCircuitGauge();
     await this.refreshQueueDepthGauge();
     this.refreshTracingGauge();

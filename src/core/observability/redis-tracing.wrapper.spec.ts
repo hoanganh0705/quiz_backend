@@ -29,7 +29,7 @@ describe('RedisTracingWrapper', () => {
   beforeEach(() => {
     spansSeen.length = 0;
     tracing = new CaptureTracing();
-    wrapper = new RedisTracingWrapper(tracing as never);
+    wrapper = new RedisTracingWrapper(tracing);
   });
 
   it('wraps GET in a span with redis.command attribute', async () => {

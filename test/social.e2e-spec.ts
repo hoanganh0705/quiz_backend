@@ -40,15 +40,10 @@ import { ThrottlerModule } from '@nestjs/throttler';
 import { SocialModule } from '@/modules/social/social.module';
 import { ConfigModule } from '@nestjs/config';
 
-interface EnvelopeWire<T = unknown> {
-  readonly data: T;
-  readonly meta: { readonly timestamp: string };
-}
+const _ROLES = ['public', 'user', 'owner', 'admin'] as const;
+type Role = (typeof _ROLES)[number];
 
-const ROLES = ['public', 'user', 'owner', 'admin'] as const;
-type Role = (typeof ROLES)[number];
-
-interface CallOptions {
+interface _CallOptions {
   readonly role?: Role;
   readonly body?: Record<string, unknown>;
   readonly query?: Record<string, string>;

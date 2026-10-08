@@ -40,12 +40,42 @@ export class RedisCircuitProbeDto {
   shortCircuitedCount!: number;
 }
 
-export class EmailQueueProbeDto {
+export class QueueProbeDto {
   @ApiProperty({
-    description: 'Current BullMQ queue depth (waiting + active + delayed)',
+    description: 'Total BullMQ queue depth (waiting + active + delayed)',
     example: 0,
   })
   depth!: number;
+
+  @ApiProperty({
+    description: 'Number of jobs currently in the active state',
+    example: 0,
+  })
+  active!: number;
+
+  @ApiProperty({
+    description: 'Number of jobs currently in the waiting state',
+    example: 0,
+  })
+  waiting!: number;
+
+  @ApiProperty({
+    description: 'Number of jobs currently in the delayed state',
+    example: 0,
+  })
+  delayed!: number;
+
+  @ApiProperty({
+    description: 'Number of jobs in the failed state',
+    example: 0,
+  })
+  failed!: number;
+
+  @ApiProperty({
+    description: 'Number of jobs that BullMQ considers stalled (workers not making progress)',
+    example: 0,
+  })
+  stalled!: number;
 
   @ApiProperty({
     description: 'Whether the worker is connected to the queue',
@@ -53,6 +83,10 @@ export class EmailQueueProbeDto {
   })
   workerConnected!: boolean;
 }
+
+export class EmailQueueProbeDto extends QueueProbeDto {}
+
+export class TournamentQueueProbeDto extends QueueProbeDto {}
 
 export class HealthStatusDto {
   @ApiProperty({
@@ -75,8 +109,17 @@ export class HealthStatusDto {
   @ApiProperty({ description: 'Cloud storage reachability', type: ProbeResultDto })
   storage!: ProbeResultDto;
 
-  @ApiProperty({ description: 'Email queue depth and worker state', type: EmailQueueProbeDto })
+  @ApiProperty({
+    description: 'Email queue depth, stalled jobs, and worker state',
+    type: EmailQueueProbeDto,
+  })
   emailQueue!: EmailQueueProbeDto;
+
+  @ApiProperty({
+    description: 'Tournament-events queue depth, stalled jobs, and worker state',
+    type: TournamentQueueProbeDto,
+  })
+  tournamentEventsQueue!: TournamentQueueProbeDto;
 
   @ApiProperty({
     description: 'In-process Redis circuit-breaker state',

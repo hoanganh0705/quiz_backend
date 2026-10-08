@@ -3,15 +3,12 @@ import { sql } from 'drizzle-orm';
 import { DRIZZLE } from '@/core/database/drizzle.constants';
 import type { DrizzleDB } from '@/core/database/database.module';
 import { outboxEvents } from '@/core/database/schema';
+import {
+  type DailyChallengeXpOutboxPayload as ValidatedDailyChallengeXpOutboxPayload,
+  parseDailyChallengeXpOutboxPayload,
+} from '@/common/outbox/payload-schema';
 
-export interface DailyChallengeXpOutboxPayload {
-  readonly userId: string;
-  readonly challengeId: string;
-  readonly amount: number;
-  readonly idempotencyKey: string;
-  readonly correlationId?: string;
-  readonly timestamp: string;
-}
+export type DailyChallengeXpOutboxPayload = ValidatedDailyChallengeXpOutboxPayload;
 
 export const DAILY_CHALLENGE_OUTBOX_PORT = Symbol('DAILY_CHALLENGE_OUTBOX_PORT');
 
@@ -32,6 +29,7 @@ export class DailyChallengeOutboxAdapter implements DailyChallengeOutboxPort {
     tx: unknown,
     nowIso: string,
   ): Promise<void> {
+    const validated = parseDailyChallengeXpOutboxPayload(payload);
     const dbOrTx = tx != null ? (tx as DrizzleDB) : this.db;
 
     await dbOrTx
@@ -39,10 +37,10 @@ export class DailyChallengeOutboxAdapter implements DailyChallengeOutboxPort {
       .values({
         aggregateType: 'daily_challenge',
         eventType: 'daily_challenge.xp_to_publish',
-        payload: payload as unknown as Record<string, unknown>,
+        payload: validated,
         createdAt: nowIso,
-        idempotencyKey: payload.idempotencyKey,
-        correlationId: payload.correlationId,
+        idempotencyKey: validated.idempotencyKey,
+        correlationId: validated.correlationId,
       })
       .onConflictDoNothing({
         target: outboxEvents.idempotencyKey,

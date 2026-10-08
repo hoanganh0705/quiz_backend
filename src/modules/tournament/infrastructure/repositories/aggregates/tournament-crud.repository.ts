@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, asc, count, desc, eq, isNull, ne, or, sql } from 'drizzle-orm';
+import { and, asc, count, desc, eq, ne, or, sql } from 'drizzle-orm';
 import { notDeleted } from '@/common/database/soft-delete.helper';
 import { DRIZZLE } from '@/core/database/drizzle.constants';
 import type { DrizzleDB } from '@/core/database/database.module';
@@ -50,7 +50,7 @@ export class TournamentCrudRepository {
       .where(and(eq(tournaments.tournamentId, tournamentId), notDeleted(tournaments.deletedAt)))
       .limit(1);
 
-    return (row as TournamentRow | undefined) ?? null;
+    return row ?? null;
   }
 
   async getTournamentDetailById(tournamentId: string): Promise<TournamentDetailRow | null> {
@@ -101,7 +101,7 @@ export class TournamentCrudRepository {
     return {
       ...(row as Omit<TournamentDetailRow, 'totalParticipants'>),
       totalParticipants: countRow?.total ?? 0,
-    } as TournamentDetailRow;
+    };
   }
 
   async listTournaments(params: {
@@ -157,7 +157,7 @@ export class TournamentCrudRepository {
       .orderBy(desc(tournaments.createdAt), desc(tournaments.tournamentId))
       .limit(params.limit + 1);
 
-    return rows as TournamentRow[];
+    return rows;
   }
 
   async listUpcomingTournaments(params: {
@@ -210,7 +210,7 @@ export class TournamentCrudRepository {
       .offset(offset);
 
     return {
-      items: items as UpcomingTournamentRow[],
+      items: items,
       total: totalRow?.count ?? 0,
     };
   }
@@ -255,7 +255,7 @@ export class TournamentCrudRepository {
       .offset(offset);
 
     return {
-      items: items as ActiveTournamentRow[],
+      items: items,
       total: totalRow?.count ?? 0,
     };
   }
@@ -299,7 +299,7 @@ export class TournamentCrudRepository {
       .offset(offset);
 
     return {
-      items: items as CompletedTournamentRow[],
+      items: items,
       total: totalRow?.count ?? 0,
     };
   }
@@ -376,7 +376,7 @@ export class TournamentCrudRepository {
       .sort((a, b) => b.score - a.score || (a.startAt > b.startAt ? -1 : 1))
       .slice(0, params.limit);
 
-    return scored as RelatedTournamentRow[];
+    return scored;
   }
 
   async createTournament(params: {
@@ -457,7 +457,7 @@ export class TournamentCrudRepository {
         deletedAt: tournaments.deletedAt,
       });
 
-    return (row as TournamentRow | undefined) ?? null;
+    return row ?? null;
   }
 
   async softDeleteTournament(params: {
@@ -490,7 +490,7 @@ export class TournamentCrudRepository {
         deletedAt: tournaments.deletedAt,
       });
 
-    return (row as TournamentRow | undefined) ?? null;
+    return row ?? null;
   }
 
   async cancelTournament(params: {
@@ -525,7 +525,7 @@ export class TournamentCrudRepository {
     }
 
     if (existing.status === 'cancelled') {
-      return existing as TournamentRow;
+      return existing;
     }
 
     if (existing.status === 'finished') {
@@ -558,7 +558,7 @@ export class TournamentCrudRepository {
         deletedAt: tournaments.deletedAt,
       });
 
-    return (row as TournamentRow | undefined) ?? null;
+    return row ?? null;
   }
 
   async markTournamentStatus(params: {
@@ -599,7 +599,7 @@ export class TournamentCrudRepository {
         deletedAt: tournaments.deletedAt,
       });
 
-    return (row as TournamentRow | undefined) ?? null;
+    return row ?? null;
   }
 
   async listTournamentsStartingSoon(params: {
@@ -663,6 +663,6 @@ export class TournamentCrudRepository {
       )
       .orderBy(asc(tournaments.startAt), asc(tournaments.tournamentId));
 
-    return rows as TournamentRow[];
+    return rows;
   }
 }

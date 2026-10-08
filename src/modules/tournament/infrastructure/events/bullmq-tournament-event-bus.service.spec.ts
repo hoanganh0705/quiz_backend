@@ -2,11 +2,12 @@
 import { BullmqTournamentEventBusService } from './bullmq-tournament-event-bus.service';
 import { TournamentWonEvent } from '../../domain/events';
 import type { TournamentFlagsConfig } from '@/core/config';
+import { DEFAULT_BULLMQ_JOB_OPTIONS } from '@/core/queues/bullmq.config';
 
 type AnyQueue = { add: jest.Mock };
 
 function makeFlags(tournamentBullMqDisable: boolean): TournamentFlagsConfig {
-  return { tournamentBullMqDisable } as TournamentFlagsConfig;
+  return { tournamentBullMqDisable };
 }
 
 function makeLogger(): any {
@@ -90,5 +91,55 @@ describe('BullmqTournamentEventBusService (flag-gated publish)', () => {
     expect(handler).toHaveBeenCalledTimes(1);
     expect(handler).toHaveBeenCalledWith(event);
     expect(queue.add).not.toHaveBeenCalled();
+  });
+
+  it('does NOT dispatch to in-process handlers when BullMQ is enabled', async () => {
+    const queue: AnyQueue = { add: jest.fn().mockResolvedValue(undefined) };
+    const service = new BullmqTournamentEventBusService(
+      queue as any,
+      makeFlags(false),
+      makeLogger(),
+    );
+    const handler = jest.fn();
+    service.subscribe(handler);
+
+    const event = new TournamentWonEvent(
+      'u-1',
+      't-1',
+      'Weekly Cup',
+      'Trivia',
+      1,
+      'badge',
+      new Date(),
+    );
+    await service.publish(event);
+
+    expect(handler).not.toHaveBeenCalled();
+    expect(queue.add).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('BullmqTournamentEventBusService (shared BullMQ job options)', () => {
+  it('passes the centralized DEFAULT_BULLMQ_JOB_OPTIONS as the third argument to add', async () => {
+    const queue: AnyQueue = { add: jest.fn().mockResolvedValue(undefined) };
+    const service = new BullmqTournamentEventBusService(
+      queue as any,
+      makeFlags(false),
+      makeLogger(),
+    );
+
+    const event = new TournamentWonEvent(
+      'u-1',
+      't-1',
+      'Weekly Cup',
+      'Trivia',
+      1,
+      'badge',
+      new Date(),
+    );
+    await service.publish(event);
+
+    expect(queue.add).toHaveBeenCalledTimes(1);
+    expect(queue.add.mock.calls[0]?.[2]).toEqual(DEFAULT_BULLMQ_JOB_OPTIONS);
   });
 });

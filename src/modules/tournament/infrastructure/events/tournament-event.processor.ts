@@ -10,15 +10,30 @@ import { correlationIdStorage, createCorrelationId } from '@/common/interceptors
 import { sessionsConfig, tournamentFlagsConfig, type TournamentFlagsConfig } from '@/core/config';
 
 /**
- * BullMQ Worker that processes tournament domain events from the shared Redis queue.
+ * BullMQ Worker that re-dispatches tournament domain events from the shared
+ * Redis queue into the in-process subscriber list registered against
+ * `BullmqTournamentEventBusService.subscribe`.
  *
- * Re-dispatches events that have already been persisted to the outbox through
- * the local in-process subscribers. Intentionally does NOT publish XP — the
- * canonical tournament XP path is `TournamentOutboxProcessorService`, which
- * uses the outbox's idempotency-key dedupe to guarantee at-most-once delivery.
- * Publishing XP here would race with the outbox path and produce
- * non-deterministic XP amounts because the BullMQ replay could publish
- * before the outbox drained (or vice versa).
+ * Role: log-and-relay only. The worker is intentionally a thin proxy that
+ * hands each event to the same in-process handlers already registered for
+ * the synchronous path. It owns **no domain state** and **must not**
+ * introduce its own side effects — any such side effect would race with the
+ * `TournamentOutboxProcessorService` XP path and produce non-deterministic
+ * XP amounts because BullMQ replay and the outbox drain can interleave in
+ * either order.
+ *
+ * Prohibited inside this worker:
+ *   1. Writing to the `outbox_events` table. The outbox is the single
+ *      source of truth for tournament XP; the worker must not compete.
+ *   2. Calling `XpIngestionService.ingest` (or any wrapper of it) directly.
+ *      XP must reach ranking only via the outbox + idempotency-key dedupe.
+ *   3. Calling `UserProfileService.applyMutation` or any other side-effecting
+ *      domain service. The worker may only log the event and call registered
+ *      notification handlers, never mutate the read model.
+ *
+ * Failure modes: `failed` jobs are surfaced through the BullMQ failure event
+ * and do not bypass the outbox. Retries are governed by the shared
+ * `DEFAULT_RETRY_POLICY` so behaviour matches every other BullMQ producer.
  */
 @Injectable()
 export class TournamentEventProcessor implements OnModuleInit, OnModuleDestroy {

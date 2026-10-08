@@ -1,5 +1,5 @@
 import { Cron } from '@nestjs/schedule';
-import { Inject, Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import { Inject, Injectable, OnModuleDestroy } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { and, asc, eq, isNotNull, isNull, lte, sql } from 'drizzle-orm';
 import { DRIZZLE } from '@/core/database/drizzle.constants';
@@ -141,7 +141,7 @@ export class ReviewOutboxProcessorService implements OnModuleDestroy {
     }
 
     const payload = (event.payload ?? {}) as Record<string, unknown>;
-    this.reviewEventBus.dispatchToSubscribers(
+    await this.reviewEventBus.dispatchStrict(
       new ReviewSubmittedEvent({
         quizId,
 

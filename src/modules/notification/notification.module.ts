@@ -41,8 +41,19 @@ import { NotificationWebSocketListener } from './infrastructure/adapters/notific
 import { NotificationPresenter } from './transport/presenters/notification.presenter';
 import { NotificationCleanupScheduler } from './infrastructure/scheduler/notification-cleanup.scheduler';
 
+import { CommentModule } from '@/modules/comment/comment.module';
+import { UserModule } from '@/modules/user/user.module';
+import { ReviewModule } from '@/modules/review/review.module';
+
 @Module({
-  imports: [DatabaseModule, JwtModule, forwardRef(() => InstanceModule)],
+  imports: [
+    DatabaseModule,
+    JwtModule,
+    forwardRef(() => InstanceModule),
+    CommentModule,
+    ReviewModule,
+    forwardRef(() => UserModule),
+  ],
   providers: [
     NotificationRepository,
     NotificationPreferencesRepository,
