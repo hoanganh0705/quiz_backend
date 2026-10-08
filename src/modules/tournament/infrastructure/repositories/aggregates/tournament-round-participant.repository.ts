@@ -40,7 +40,7 @@ export class TournamentRoundParticipantRepository {
       )
       .limit(1);
 
-    return (row as TournamentRoundParticipantRow | undefined) ?? null;
+    return row ?? null;
   }
 
   async createRoundParticipant(params: {
@@ -72,7 +72,7 @@ export class TournamentRoundParticipantRepository {
         updatedAt: tournamentRoundParticipants.updatedAt,
       });
 
-    return row as TournamentRoundParticipantRow;
+    return row;
   }
 
   // Atomically inserts the round_participant row (with `ON CONFLICT DO NOTHING` for idempotency), then creates the quiz_attempt and links it back.
@@ -160,7 +160,7 @@ export class TournamentRoundParticipantRepository {
       if (rp.attemptId) {
         return {
           attemptId: rp.attemptId,
-          roundParticipant: rp as TournamentRoundParticipantRow,
+          roundParticipant: rp,
           inserted: false,
         };
       }
@@ -203,7 +203,7 @@ export class TournamentRoundParticipantRepository {
 
       return {
         attemptId: createdAttempt.attemptId,
-        roundParticipant: updatedRp as TournamentRoundParticipantRow,
+        roundParticipant: updatedRp,
         inserted: insertedRp.length > 0,
       };
     });

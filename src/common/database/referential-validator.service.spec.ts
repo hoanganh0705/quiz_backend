@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-return, @typescript-eslint/unbound-method */
+/* eslint-disable @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-return */
 import { ReferentialValidatorService } from './referential-validator.service';
 import type { DrizzleDB } from '@/core/database/database.module';
 import type { CacheProvider } from '@/common/ports/cache.provider';
@@ -50,11 +50,20 @@ function makeCache(values: Record<string, string | null> = {}): {
     getOrSet: jest.fn(),
     getOrSetWithStampedeProtection: jest.fn(),
     getDel: jest.fn(),
+    unlinkByPattern: jest.fn(),
     rpushJson: jest.fn(),
     lpopJson: jest.fn(),
     lrangeJson: jest.fn(),
+    trimList: jest.fn(),
+    expire: jest.fn(),
+    zaddByScore: jest.fn(),
+    zrangeByScore: jest.fn(),
+    zrem: jest.fn(),
     acquireAdvisoryLock: jest.fn(),
     releaseAdvisoryLock: jest.fn(),
+    listLength: jest.fn(),
+    pipelineDeadLetterPush: jest.fn(),
+    multiExec: jest.fn(),
   };
   return { cache, store, setCalls, delCalls };
 }

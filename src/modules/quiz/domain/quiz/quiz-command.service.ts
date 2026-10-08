@@ -172,6 +172,52 @@ export class QuizCommandService {
     return result;
   }
 
+  async adminUpdatePrivilegedFields(
+    quizIdOrSlug: string,
+    command: UpdateQuizCommand,
+  ): Promise<{ row: QuizWithPublishedVersionRow; tags: QuizTagRow[] }> {
+    const isUuid = /^[0-9a-f-]{36}$/i.test(quizIdOrSlug);
+    const quiz = isUuid
+      ? await this.quizQueryService.getActiveQuizRecordById(quizIdOrSlug)
+      : (await this.quizQueryService.getQuizBySlug(quizIdOrSlug)).row;
+    const quizId = quiz.quizId;
+
+    const patch: Partial<{
+      isFeatured: boolean;
+      isHidden: boolean;
+    }> = {};
+
+    if (hasOwn(command, 'isFeatured') && command.isFeatured !== undefined) {
+      patch.isFeatured = command.isFeatured;
+    }
+    if (hasOwn(command, 'isHidden') && command.isHidden !== undefined) {
+      patch.isHidden = command.isHidden;
+    }
+
+    if (Object.keys(patch).length === 0) {
+      return this.refetchQuiz(quizId);
+    }
+
+    const nowIso = new Date().toISOString();
+
+    const result = await this.quizRepository.updateQuizWithLinks({
+      quizId,
+      patch,
+      categoryId: null,
+      tagIds: null,
+      nowIso,
+    });
+
+    if (!result) {
+      return this.refetchQuiz(quizId);
+    }
+
+    this.logger.info({ event: 'quiz_admin_privileged_fields_updated', quizId });
+    this.eventBus.emitQuizUpdated(new QuizUpdatedEvent(quizId, 'admin', nowIso));
+
+    return result;
+  }
+
   async softDeleteQuizById(quizId: string, user: JwtPayload): Promise<{ message: string }> {
     const quiz = await this.quizQueryService.getActiveQuizRecordById(quizId);
     QuizPolicy.assertCanDelete(quiz.creatorId, user);

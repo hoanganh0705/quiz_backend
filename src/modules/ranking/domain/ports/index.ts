@@ -6,3 +6,5 @@
 
 export * from './ranking-repository.port';
 export * from './ranking-event-bus.port';
+export * from './ranking-outbox.port';
+export * from './ranking-dedupe.port';

@@ -10,10 +10,14 @@ import {
 import { Server, Socket } from 'socket.io';
 import { UseFilters, UseGuards } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
-import { WsJwtGuard } from '@/common/guards/ws-jwt.guard';
+import { WsJwtGuard, type AuthenticatedSocket } from '@/common/guards/ws-jwt.guard';
+import { WsThrottlerGuard } from '@/common/guards/ws-throttler.guard';
+import { WsThrottle } from '@/common/decorators/ws-throttle.decorator';
+import { WS_RATE_LIMITS } from '@/common/ws/ws-rate-limits';
 import { WsCurrentUser } from '@/common/decorators/ws-current-user.decorator';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
 import { WsExceptionFilter } from '../filters/ws-exception.filter';
+import { resolveWsCorsOrigins } from '@/common/utils/ws-cors.util';
 import { InstanceApplicationService } from '../../application/instance.application.service';
 const ERR_NOT_HOST = { code: 'NOT_HOST', message: 'Only the host can perform this action' };
 const ERR_FORBIDDEN = { code: 'FORBIDDEN', message: 'You do not have permission for this action' };
@@ -21,11 +25,12 @@ const ERR_FORBIDDEN = { code: 'FORBIDDEN', message: 'You do not have permission 
 @WebSocketGateway({
   namespace: '/instances',
   cors: {
-    origin: '*',
+    origin: resolveWsCorsOrigins(),
     credentials: false,
   },
 })
 @UseFilters(WsExceptionFilter)
+@UseGuards(WsJwtGuard, WsThrottlerGuard)
 export class InstanceGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
   server!: Server;
@@ -40,24 +45,66 @@ export class InstanceGateway implements OnGatewayConnection, OnGatewayDisconnect
     this.instanceAppService.setServer(this.server);
   }
 
+  private async isHostCached(
+    client: Socket,
+    instanceId: string,
+    user: JwtPayload,
+  ): Promise<boolean> {
+    const cached = (client.data.hostInstances ?? {})[instanceId];
+    if (typeof cached === 'boolean') return cached;
+    const fresh = await this.instanceAppService.handleStartGameSocket(instanceId, user);
+    client.data.hostInstances = {
+      ...(client.data.hostInstances ?? {}),
+      [instanceId]: fresh,
+    };
+    return fresh;
+  }
+
   handleConnection(client: Socket): void {
-    this.logger.info({ event: 'client_connected', socketId: client.id });
+    const authClient = client as AuthenticatedSocket;
+    const user = authClient.user;
+    if (!user?.sub) {
+      this.logger.info({
+        event: 'ws_unauth_disconnect',
+        socketId: client.id,
+      });
+      client.disconnect(true);
+      return;
+    }
+
+    this.logger.info({ event: 'client_connected', socketId: client.id, userId: user.sub });
   }
 
   handleDisconnect(client: Socket): void {
     this.logger.info({ event: 'client_disconnected', socketId: client.id });
 
     const rooms = Array.from(client.rooms).filter((r) => r !== client.id);
-    for (const roomId of rooms) {
-      void client.leave(roomId);
-      void this.instanceAppService.handlePlayerLeftSocket({
-        socketId: client.id,
-        instanceId: roomId,
-      });
-    }
+    void Promise.allSettled(
+      rooms.map((roomId) =>
+        Promise.allSettled([
+          client.leave(roomId),
+          this.instanceAppService.handlePlayerLeftSocket({
+            socketId: client.id,
+            instanceId: roomId,
+          }),
+        ]),
+      ),
+    ).then((settled) => {
+      const rejected = settled.flatMap((entry) =>
+        entry.status === 'rejected' ? [entry.reason] : [],
+      );
+      if (rejected.length > 0) {
+        this.logger.warn({
+          event: 'instance_disconnect_cleanup_partial_failure',
+          socketId: client.id,
+          failed: rejected.length,
+          error: rejected.map((r) => (r instanceof Error ? r.message : String(r))).join('; '),
+        });
+      }
+    });
   }
 
-  @UseGuards(WsJwtGuard)
+  @WsThrottle(WS_RATE_LIMITS.instanceJoin)
   @SubscribeMessage('join_instance')
   async handleJoinInstance(
     @ConnectedSocket() client: Socket,
@@ -72,6 +119,11 @@ export class InstanceGateway implements OnGatewayConnection, OnGatewayDisconnect
     await this.instanceAppService.joinInstance(instanceId, user);
 
     const result = await this.instanceAppService.handleJoinInstanceSocket(instanceId, user);
+    const isHost = await this.instanceAppService.handleStartGameSocket(instanceId, user);
+    client.data.hostInstances = {
+      ...(client.data.hostInstances ?? {}),
+      [instanceId]: isHost,
+    };
 
     this.logger.info({
       event: 'ws_player_joined',
@@ -90,7 +142,7 @@ export class InstanceGateway implements OnGatewayConnection, OnGatewayDisconnect
     };
   }
 
-  @UseGuards(WsJwtGuard)
+  @WsThrottle(WS_RATE_LIMITS.instanceStartGame)
   @SubscribeMessage('start_game')
   async handleStartGame(
     @ConnectedSocket() client: Socket,
@@ -99,7 +151,7 @@ export class InstanceGateway implements OnGatewayConnection, OnGatewayDisconnect
   ): Promise<{ event: string; data: Record<string, unknown> }> {
     const { instanceId } = data;
 
-    const isHost = await this.instanceAppService.handleStartGameSocket(instanceId, user);
+    const isHost = await this.isHostCached(client, instanceId, user);
     if (!isHost) {
       return { event: 'error', data: ERR_FORBIDDEN };
     }
@@ -115,7 +167,7 @@ export class InstanceGateway implements OnGatewayConnection, OnGatewayDisconnect
     return { event: 'ack', data: result };
   }
 
-  @UseGuards(WsJwtGuard)
+  @WsThrottle(WS_RATE_LIMITS.instanceStartCountdown)
   @SubscribeMessage('start_countdown')
   async handleStartCountdown(
     @ConnectedSocket() client: Socket,
@@ -124,7 +176,7 @@ export class InstanceGateway implements OnGatewayConnection, OnGatewayDisconnect
   ): Promise<{ event: string; data: Record<string, unknown> }> {
     const { instanceId } = data;
 
-    const isHost = await this.instanceAppService.handleStartGameSocket(instanceId, user);
+    const isHost = await this.isHostCached(client, instanceId, user);
     if (!isHost) {
       return { event: 'error', data: ERR_FORBIDDEN };
     }
@@ -143,7 +195,7 @@ export class InstanceGateway implements OnGatewayConnection, OnGatewayDisconnect
     };
   }
 
-  @UseGuards(WsJwtGuard)
+  @WsThrottle(WS_RATE_LIMITS.instanceCancelCountdown)
   @SubscribeMessage('cancel_countdown')
   async handleCancelCountdown(
     @ConnectedSocket() client: Socket,
@@ -152,7 +204,7 @@ export class InstanceGateway implements OnGatewayConnection, OnGatewayDisconnect
   ): Promise<{ event: string; data: Record<string, unknown> }> {
     const { instanceId } = data;
 
-    const isHost = await this.instanceAppService.handleStartGameSocket(instanceId, user);
+    const isHost = await this.isHostCached(client, instanceId, user);
     if (!isHost) {
       return { event: 'error', data: ERR_FORBIDDEN };
     }
@@ -171,7 +223,7 @@ export class InstanceGateway implements OnGatewayConnection, OnGatewayDisconnect
     };
   }
 
-  @UseGuards(WsJwtGuard)
+  @WsThrottle(WS_RATE_LIMITS.instanceAnswerSubmitted)
   @SubscribeMessage('answer_submitted')
   async handleAnswerSubmitted(
     @ConnectedSocket() client: Socket,
@@ -218,14 +270,14 @@ export class InstanceGateway implements OnGatewayConnection, OnGatewayDisconnect
     };
   }
 
-  @UseGuards(WsJwtGuard)
+  @WsThrottle(WS_RATE_LIMITS.instanceQuestionRevealed)
   @SubscribeMessage('question_revealed')
   async handleQuestionRevealed(
     @ConnectedSocket() client: Socket,
     @MessageBody() data: { instanceId: string; questionNumber: number; totalQuestions: number },
     @WsCurrentUser() user: JwtPayload,
   ): Promise<{ event: string; data: Record<string, unknown> }> {
-    const isHost = await this.instanceAppService.handleQuestionRevealedSocket(data, user);
+    const isHost = await this.isHostCached(client, data.instanceId, user);
     if (!isHost) {
       return { event: 'error', data: ERR_NOT_HOST };
     }
@@ -250,17 +302,14 @@ export class InstanceGateway implements OnGatewayConnection, OnGatewayDisconnect
     return { event: 'ack', data: { received: true } };
   }
 
-  @UseGuards(WsJwtGuard)
+  @WsThrottle(WS_RATE_LIMITS.instanceUpdateLeaderboard)
   @SubscribeMessage('update_leaderboard')
   async handleUpdateLeaderboard(
     @ConnectedSocket() client: Socket,
     @MessageBody() data: { instanceId: string },
     @WsCurrentUser() user: JwtPayload,
   ): Promise<{ event: string; data: Record<string, unknown> }> {
-    const isHost = await this.instanceAppService.handleUpdateLeaderboardSocket(
-      data.instanceId,
-      user,
-    );
+    const isHost = await this.isHostCached(client, data.instanceId, user);
     if (!isHost) {
       return { event: 'error', data: ERR_NOT_HOST };
     }
@@ -268,14 +317,14 @@ export class InstanceGateway implements OnGatewayConnection, OnGatewayDisconnect
     return { event: 'ack', data: { received: true } };
   }
 
-  @UseGuards(WsJwtGuard)
+  @WsThrottle(WS_RATE_LIMITS.instanceEndGame)
   @SubscribeMessage('end_game')
   async handleEndGame(
     @ConnectedSocket() client: Socket,
     @MessageBody() data: { instanceId: string },
     @WsCurrentUser() user: JwtPayload,
   ): Promise<{ event: string; data: Record<string, unknown> }> {
-    const isHost = await this.instanceAppService.handleEndGameSocket(data.instanceId, user);
+    const isHost = await this.isHostCached(client, data.instanceId, user);
     if (!isHost) {
       return { event: 'error', data: ERR_NOT_HOST };
     }

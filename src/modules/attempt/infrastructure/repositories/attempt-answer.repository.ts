@@ -34,7 +34,7 @@ export class AttemptAnswerRepository implements AttemptAnswerRepositoryPort {
       .where(eq(quizAttemptAnswers.attemptId, attemptId))
       .orderBy(quizAttemptAnswers.answeredAt);
 
-    return rows as AttemptAnswerRow[];
+    return rows;
   }
 
   async getAnswerByAttemptAndQuestion(
@@ -59,7 +59,7 @@ export class AttemptAnswerRepository implements AttemptAnswerRepositoryPort {
       )
       .limit(1);
 
-    return (row as AttemptAnswerRow | undefined) ?? null;
+    return row ?? null;
   }
 
   async getAttemptAnswerScoringData(
@@ -139,7 +139,7 @@ export class AttemptAnswerRepository implements AttemptAnswerRepositoryPort {
         },
       });
 
-      return created as AttemptAnswerRow;
+      return created;
     });
   }
 

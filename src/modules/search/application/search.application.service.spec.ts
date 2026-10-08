@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/require-await */
 import { BadRequestException } from '@nestjs/common';
 import { SearchApplicationService } from './search.application.service';
 
@@ -93,12 +92,12 @@ describe('SearchApplicationService', () => {
 
   it('maps comment rows preserving comment + quiz ids', async () => {
     const { service } = buildService(async (_src, idx) =>
-      idx === 2 ? { rows: [{ commentId: 'c1', quizId: 'q9' }] } : { rows: [] },
+      idx === 2 ? { rows: [{ commentId: 'c1', quizId: 'q9', body: null }] } : { rows: [] },
     );
 
     const result = await service.search('hello', 10);
 
-    expect(result.comments).toEqual([{ commentId: 'c1', quizId: 'q9' }]);
+    expect(result.comments).toEqual([{ commentId: 'c1', quizId: 'q9', excerpt: null }]);
   });
 
   it('maps category rows including nullable slugs', async () => {

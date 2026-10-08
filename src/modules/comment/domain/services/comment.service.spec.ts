@@ -176,7 +176,7 @@ function makeModerationAuditSpy(): jest.Mocked<ModerationAuditPort> {
   return {
     logInsideTx: jest.fn(),
     log: jest.fn(),
-  } as unknown as jest.Mocked<ModerationAuditPort>;
+  };
 }
 
 function buildService(): {
@@ -199,7 +199,7 @@ function buildService(): {
   const moderationAudit = makeModerationAuditSpy();
 
   const service = new CommentService(
-    repo as unknown as CommentRepositoryPort,
+    repo,
     quizExistence,
     userExistence,
     bus,
@@ -230,7 +230,7 @@ describe('CommentService — event payload contract', () => {
       const author = makeAuthor();
 
       repo.transactionally.mockImplementation(async (fn) => {
-        await fn({} as Db);
+        await fn({});
         return {
           comment: createdView,
           author,
@@ -238,6 +238,8 @@ describe('CommentService — event payload contract', () => {
           mentionedUsers: [],
         };
       });
+      repo.getAuthorForComment.mockResolvedValue(author);
+      repo.createComment.mockResolvedValue(createdView);
       userExistence.findByUsernames.mockResolvedValue([]);
 
       const params: CreateCommentParams = {
@@ -294,7 +296,7 @@ describe('CommentService — event payload contract', () => {
       });
 
       repo.transactionally.mockImplementation(async (fn) => {
-        await fn({} as Db);
+        await fn({});
         return {
           comment: reply,
           author: makeAuthor(),
@@ -302,6 +304,17 @@ describe('CommentService — event payload contract', () => {
           mentionedUsers: [],
         };
       });
+      repo.getCommentByIdForUpdate.mockResolvedValue(
+        makeCommentView({
+          id: 'parent-1',
+          quizId: 'quiz-1',
+          parentCommentId: null,
+          authorId: 'author-2',
+        }),
+      );
+      repo.getAuthorForComment.mockResolvedValue(makeAuthor());
+      repo.createComment.mockResolvedValue(reply);
+      repo.countReplies.mockResolvedValue(0);
       userExistence.findByUsernames.mockResolvedValue([]);
 
       await service.createComment({
@@ -356,7 +369,7 @@ describe('CommentService — event payload contract', () => {
       });
 
       repo.transactionally.mockImplementation(async (fn) => {
-        await fn({} as Db);
+        await fn({});
         return updated;
       });
       repo.getCommentByIdForUpdate.mockResolvedValue(existing);
@@ -392,7 +405,7 @@ describe('CommentService — event payload contract', () => {
       const { service, bus, repo } = buildService();
       repo.getCommentByIdForUpdate.mockResolvedValue(makeCommentView({ authorId: 'author-1' }));
       repo.transactionally.mockImplementation(async (fn) => {
-        await fn({} as Db);
+        await fn({});
         throw new CommentForbiddenError();
       });
 
@@ -411,7 +424,7 @@ describe('CommentService — event payload contract', () => {
       const { service, bus, repo } = buildService();
       repo.getCommentByIdForUpdate.mockResolvedValue(null);
       repo.transactionally.mockImplementation(async (fn) => {
-        await fn({} as Db);
+        await fn({});
         throw new CommentNotFoundError('comment-missing');
       });
 
@@ -441,7 +454,7 @@ describe('CommentService — event payload contract', () => {
 
       repo.getCommentByIdForUpdate.mockResolvedValue(reply);
       repo.transactionally.mockImplementation(async (fn) => {
-        await fn({} as Db);
+        await fn({});
         return reply;
       });
       repo.softDeleteComment.mockResolvedValue({
@@ -473,8 +486,12 @@ describe('CommentService — event payload contract', () => {
       });
 
       repo.getCommentByIdForUpdate.mockResolvedValue(top);
+      repo.softDeleteComment.mockResolvedValue({
+        deleted: true,
+        deletedAt: '2026-08-11T10:00:00.000Z',
+      });
       repo.transactionally.mockImplementation(async (fn) => {
-        await fn({} as Db);
+        await fn({});
         return top;
       });
 
@@ -489,7 +506,7 @@ describe('CommentService — event payload contract', () => {
       const alreadyDeleted = makeCommentView({ deletedAt: '2026-08-10T00:00:00.000Z' });
       repo.getCommentByIdForUpdate.mockResolvedValue(alreadyDeleted);
       repo.transactionally.mockImplementation(async (fn) => {
-        await fn({} as Db);
+        await fn({});
         return null;
       });
 
@@ -503,7 +520,7 @@ describe('CommentService — event payload contract', () => {
       const top = makeCommentView({ id: 'comment-1', authorId: 'author-1' });
       repo.getCommentByIdForUpdate.mockResolvedValue(top);
       repo.transactionally.mockImplementation(async (fn) => {
-        await fn({} as Db);
+        await fn({});
         throw new CommentForbiddenError();
       });
 
@@ -529,7 +546,7 @@ describe('CommentService — event payload contract', () => {
         downvotesCount: 1,
       });
       repo.transactionally.mockImplementation(async (fn) => {
-        await fn({} as Db);
+        await fn({});
         return {
           quizId: comment.quizId,
           counts: { votesCount: 5, upvotesCount: 6, downvotesCount: 1 },
@@ -569,7 +586,7 @@ describe('CommentService — event payload contract', () => {
       const { service, bus, repo } = buildService();
 
       repo.transactionally.mockImplementation(async (fn) => {
-        await fn({} as Db);
+        await fn({});
         return {
           quizId: 'quiz-1',
           counts: { votesCount: 5, upvotesCount: 4, downvotesCount: 1 },
@@ -602,7 +619,7 @@ describe('CommentService — event payload contract', () => {
       const { service, bus, repo } = buildService();
 
       repo.transactionally.mockImplementation(async (fn) => {
-        await fn({} as Db);
+        await fn({});
         return {
           quizId: 'quiz-1',
           counts: { votesCount: 4, upvotesCount: 4, downvotesCount: 0 },
@@ -639,7 +656,7 @@ describe('CommentService — event payload contract', () => {
       const { service, bus, repo } = buildService();
 
       repo.transactionally.mockImplementation(async (fn) => {
-        await fn({} as Db);
+        await fn({});
         return {
           quizId: 'quiz-1',
           votesCount: 4,
@@ -675,7 +692,7 @@ describe('CommentService — event payload contract', () => {
       const { service, bus, repo } = buildService();
 
       repo.transactionally.mockImplementation(async (fn) => {
-        await fn({} as Db);
+        await fn({});
         return {
           quizId: 'quiz-1',
           votesCount: 2,
@@ -706,7 +723,7 @@ describe('CommentService — event payload contract', () => {
       const { service, bus, repo } = buildService();
 
       repo.transactionally.mockImplementation(async (fn) => {
-        await fn({} as Db);
+        await fn({});
         return null;
       });
       repo.getCommentByIdForUpdate.mockResolvedValue(
@@ -733,7 +750,7 @@ describe('CommentService — event payload contract', () => {
         hiddenAt: '2026-08-11T12:00:00.000Z',
       });
       repo.transactionally.mockImplementation(async (fn) => {
-        await fn({} as Db);
+        await fn({});
         return undefined;
       });
       repo.getCommentByIdForUpdate.mockResolvedValue({ ...comment, isHidden: false });
@@ -780,7 +797,7 @@ describe('CommentService — event payload contract', () => {
 
       const restored = makeCommentView({ id: 'comment-1', isHidden: false });
       repo.transactionally.mockImplementation(async (fn) => {
-        await fn({} as Db);
+        await fn({});
         return undefined;
       });
       repo.getCommentByIdForUpdate.mockResolvedValue({ ...restored, isHidden: true });

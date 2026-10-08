@@ -16,6 +16,10 @@ export type QuizQuestionJoinRow = {
 export interface QuizQuestionRepositoryPort {
   getQuestionsByVersionId(quizVersionId: string): Promise<QuizQuestionJoinRow[]>;
   getQuestionById(questionId: string): Promise<QuizQuestionJoinRow[]>;
+  getQuestionByPosition(
+    quizVersionId: string,
+    position: number,
+  ): Promise<QuizQuestionJoinRow | null>;
   getQuestionsByIds(questionIds: string[]): Promise<QuizQuestionJoinRow[]>;
   /**
    * @transactional

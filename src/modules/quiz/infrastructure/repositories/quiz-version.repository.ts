@@ -146,7 +146,7 @@ export class QuizVersionRepository implements QuizVersionRepositoryPort {
       .where(eq(quizVersions.quizVersionId, quizVersionId))
       .limit(1);
 
-    return (row as QuizVersionRow | undefined) ?? null;
+    return row ?? null;
   }
 
   async listQuizVersions(params: {
@@ -175,7 +175,7 @@ export class QuizVersionRepository implements QuizVersionRepositoryPort {
       .orderBy(desc(quizVersions.createdAt), desc(quizVersions.quizVersionId))
       .limit(params.limit + 1);
 
-    return rows as QuizVersionRow[];
+    return rows;
   }
 
   async createQuizVersion(params: {
@@ -205,7 +205,7 @@ export class QuizVersionRepository implements QuizVersionRepositoryPort {
         })
         .returning(QUIZ_VERSION_PROJECTION);
 
-      return createdVersion as QuizVersionRow;
+      return createdVersion;
     } catch (error) {
       this.mapInsertError(error);
     }
@@ -237,7 +237,7 @@ export class QuizVersionRepository implements QuizVersionRepositoryPort {
         })
         .returning(QUIZ_VERSION_PROJECTION);
 
-      return createdVersion as QuizVersionRow;
+      return createdVersion;
     } catch (error) {
       this.mapInsertError(error);
     }
@@ -350,7 +350,7 @@ export class QuizVersionRepository implements QuizVersionRepositoryPort {
           })
           .where(eq(QUIZ_COLUMNS.quizId, params.quizId));
 
-        return publishedVersion as QuizVersionRow;
+        return publishedVersion;
       });
     } catch (error) {
       this.mapInsertError(error);

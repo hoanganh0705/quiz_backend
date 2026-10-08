@@ -7,12 +7,30 @@ import type {
   RecentWinnersResponseDto,
   WinnerSummaryDto,
 } from '../dto/response/recent-winners-response.dto';
+import { CACHE_PROVIDER, type CacheProvider } from '@/common/ports/cache.provider';
+
+const RECENT_WINNERS_CACHE_TTL_MS = 60_000;
 
 @Injectable()
 export class RecentWinnersService {
-  constructor(@Inject(DRIZZLE) private readonly db: DrizzleDB) {}
+  constructor(
+    @Inject(DRIZZLE) private readonly db: DrizzleDB,
+    @Inject(CACHE_PROVIDER) private readonly cache: CacheProvider,
+  ) {}
 
   async getRecentWinners(limit = 10): Promise<RecentWinnersResponseDto> {
+    const cacheKey = `leaderboard:recent-winners:${limit}`;
+    return this.cache.getOrSetWithStampedeProtection<RecentWinnersResponseDto>(
+      cacheKey,
+      RECENT_WINNERS_CACHE_TTL_MS,
+      async () => this.fetchRecentWinners(limit),
+      5_000,
+      50,
+      10,
+    );
+  }
+
+  private async fetchRecentWinners(limit: number): Promise<RecentWinnersResponseDto> {
     const rows = await this.db
       .select({
         eventId: userActivityEvents.eventId,

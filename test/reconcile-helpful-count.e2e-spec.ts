@@ -85,7 +85,7 @@ describe('Reconcile helpful count (e2e)', () => {
 
     beforeAll(async () => {
       pool = new Pool({ connectionString: process.env.DATABASE_URL });
-      db = drizzle(pool, { schema }) as unknown as DrizzleDB;
+      db = drizzle(pool, { schema });
 
       // Pull any existing seeded quiz for FK.
       const [quizRow] = await db

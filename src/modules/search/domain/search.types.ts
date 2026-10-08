@@ -13,6 +13,7 @@ export type SearchQuizResult = {
 export type SearchCommentResult = {
   commentId: string;
   quizId: string;
+  excerpt: string | null;
 };
 
 export type SearchCategoryResult = {

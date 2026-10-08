@@ -10,6 +10,7 @@ export type RedisIoAdapterOptions = {
   redisOptions?: {
     maxRetriesPerRequest?: number;
     retryStrategy?: (times: number) => number | null;
+    keyPrefix?: string;
   };
 
   redisUrl?: string;

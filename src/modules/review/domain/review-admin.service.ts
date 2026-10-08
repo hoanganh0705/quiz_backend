@@ -238,11 +238,7 @@ export class ReviewAdminService {
     let didSoftDelete = false;
 
     await this.db.transaction(async (tx) => {
-      didSoftDelete = await this.reviewRepository.softDeleteReviewInTx(
-        reviewId,
-        nowIso,
-        tx as unknown,
-      );
+      didSoftDelete = await this.reviewRepository.softDeleteReviewInTx(reviewId, nowIso, tx);
 
       if (!didSoftDelete) {
         throw new ReviewNotFoundError(REVIEW_NOT_FOUND_MESSAGE);

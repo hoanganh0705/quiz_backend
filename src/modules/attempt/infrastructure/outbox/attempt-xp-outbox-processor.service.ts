@@ -27,6 +27,7 @@ import {
   type ExternalEventBusProducerPort,
   type ExternalXpEarnedEvent,
 } from '@/common/events/common-external-event-bus';
+import { parseAttemptXpOutboxPayload } from '@/common/outbox/payload-schema';
 
 const ATTEMPT_OUTBOX_MAX_RETRIES = 8;
 const ATTEMPT_OUTBOX_BASE_DELAY_SECONDS = 30;
@@ -75,22 +76,17 @@ export class AttemptXpOutboxProcessorService extends BaseOutboxProcessor<Attempt
   }
 
   protected async dispatch(row: AttemptOutboxRow): Promise<void> {
-    const payload = row.payload;
+    const validated = parseAttemptXpOutboxPayload(row.payload);
     const xpEvent: ExternalXpEarnedEvent = {
       eventType: 'external.xp.earned',
-      userId: readString(payload, 'userId'),
-      amount: readNumber(payload, 'amount'),
+      userId: validated.userId,
+      amount: validated.amount,
       source: 'quiz_attempt',
-      attemptId: readString(payload, 'attemptId'),
-      categoryId: readOptionalString(payload, 'categoryId'),
-      idempotencyKey: readString(payload, 'idempotencyKey'),
-      timestamp: readDate(payload, 'timestamp'),
-      correlationId: row.correlationId ?? undefined,
+      attemptId: validated.attemptId,
+      idempotencyKey: validated.idempotencyKey,
+      timestamp: new Date(validated.timestamp),
+      correlationId: row.correlationId ?? validated.correlationId,
     };
-
-    if (!xpEvent.userId || !xpEvent.attemptId || xpEvent.amount <= 0 || !xpEvent.idempotencyKey) {
-      throw new Error(`attempt_xp_outbox_invalid_payload: ${JSON.stringify(payload)}`);
-    }
 
     await this.externalEventBus.publishXpEarned(xpEvent);
 
@@ -110,38 +106,4 @@ export class AttemptXpOutboxProcessorService extends BaseOutboxProcessor<Attempt
       eventType: row.eventType,
     });
   }
-}
-
-function readString(payload: Readonly<Record<string, unknown>>, key: string): string {
-  const value = payload[key];
-  if (typeof value === 'string') return value;
-  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
-  return '';
-}
-
-function readOptionalString(
-  payload: Readonly<Record<string, unknown>>,
-  key: string,
-): string | undefined {
-  const value = payload[key];
-  if (typeof value === 'string') return value;
-  if (value === null || value === undefined) return undefined;
-  return undefined;
-}
-
-function readNumber(payload: Readonly<Record<string, unknown>>, key: string): number {
-  const value = payload[key];
-  if (typeof value === 'number' && Number.isFinite(value)) return value;
-  if (typeof value === 'string') {
-    const parsed = Number(value);
-    if (Number.isFinite(parsed)) return parsed;
-  }
-  return 0;
-}
-
-function readDate(payload: Readonly<Record<string, unknown>>, key: string): Date {
-  const value = payload[key];
-  if (value instanceof Date) return value;
-  if (typeof value === 'string') return new Date(value);
-  return new Date();
 }

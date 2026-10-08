@@ -266,6 +266,14 @@ export interface RankingRepositoryPort {
     period: RankingPeriod;
   }): Promise<RankSnapshotPairRow>;
 
+  /**
+   * Batch fetch latest rank snapshots for multiple (userId, period) tuples.
+   * Returns a map keyed by userId, then by period.
+   */
+  getBatchedLatestRankSnapshots(params: {
+    tuples: ReadonlyArray<{ userId: string; period: RankingPeriod }>;
+  }): Promise<Map<string, Map<RankingPeriod, RankSnapshotPairRow>>>;
+
   getTopMovers(params: { period: RankingPeriod; limit: number }): Promise<TopMoverRow[]>;
 
   getNearbyRanks(params: { userId: string; period: RankingPeriod; radius: number }): Promise<{
@@ -302,6 +310,55 @@ export interface RankingRepositoryPort {
       denseRank: number;
     }[]
   >;
+
+  /**
+   * Batch-persist rank values for multiple (userId, period) pairs using a
+   * single `UPDATE … FROM (VALUES …)` statement. Returns nothing; callers
+   * derive events from the input data only.
+   */
+  batchUpdateRanks(params: {
+    updates: ReadonlyArray<{ userId: string; period: RankingPeriod; rank: number }>;
+    now: Date;
+  }): Promise<void>;
+
+  /**
+   * Batch-persist peak-rank promotions for multiple (userId, period) pairs.
+   * Conditionally updates peak rank only when the new rank is better (lower).
+   * Returns the list of users whose peak was actually improved.
+   */
+  batchUpdatePeakRanks(params: {
+    updates: ReadonlyArray<{ userId: string; period: RankingPeriod; rank: number }>;
+    now: Date;
+  }): Promise<Array<{ userId: string; period: RankingPeriod; previousPeakRank: number | null }>>;
+
+  /**
+   * Compute all missing period ranks for every dirty user in a single
+   * window-function query. Returns a two-level map keyed by userId then
+   * period, with computed rank values.
+   */
+  findDirtyUsersMissingRanks(): Promise<Map<string, Map<RankingPeriod, number>>>;
+
+  /**
+   * Bulk-insert ranking milestones, skipping any (userId, milestone) pair
+   * that already exists. All triples are inserted in one `INSERT … ON
+   * CONFLICT DO NOTHING` call.
+   */
+  persistMilestones(params: {
+    triples: ReadonlyArray<{
+      userId: string;
+      milestone: RankingMilestone;
+      rank: number;
+      achievedAt: Date;
+    }>;
+  }): Promise<void>;
+
+  /**
+   * Process all XP events in one transaction with a bulk UPDATE using
+   * UNNEST arrays — one round-trip instead of N individual updates.
+   */
+  processXpEventsBatch(params: {
+    events: ReadonlyArray<{ userId: string; amount: number; now: Date }>;
+  }): Promise<void>;
 
   // Count how many users have strictly more XP (used for single-user rank lookup)
   countRankAbove(xp: number, period: RankingPeriod): Promise<number>;

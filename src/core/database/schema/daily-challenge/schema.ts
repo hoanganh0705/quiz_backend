@@ -67,6 +67,17 @@ export const dailyChallenge = pgTable(
       .defaultNow()
       .notNull(),
     expiresAt: timestamp('expires_at', { withTimezone: true, mode: 'string' }).notNull(),
+    /**
+     * Question count for the day's challenge. Denormalised from
+     * `quiz_questions` at insert time so the daily-challenge list
+     * query (`daily_challenge_list`) avoids a correlated subquery
+     * against the questions table. See
+     * `docs/standards/denormalization.md` for the sync contract:
+     * the rotation cron writes the value once when it inserts the
+     * day's row, and the value is immutable thereafter because the
+     * version the daily challenge points at never changes.
+     */
+    totalQuestions: integer('total_questions').notNull(),
   },
   (table) => [
     // One challenge per UTC date — the cron relies on this constraint.
@@ -89,6 +100,7 @@ export const dailyChallenge = pgTable(
       name: 'daily_challenge_quiz_version_id_fkey',
     }).onDelete('cascade'),
     check('daily_challenge_reward_xp_nonneg', sql`${table.rewardXp} >= 0`),
+    check('daily_challenge_total_questions_nonneg', sql`${table.totalQuestions} >= 0`),
   ],
 );
 

@@ -14,10 +14,7 @@ const makeRegistry = (redis: RedisService, ttlMs?: number) => {
     error: jest.fn(),
     debug: jest.fn(),
   } as unknown as ConstructorParameters<typeof RedisSocketConnectionRegistry>[1];
-  const registry = new RedisSocketConnectionRegistry(
-    redis as unknown as ConstructorParameters<typeof RedisSocketConnectionRegistry>[0],
-    logger,
-  );
+  const registry = new RedisSocketConnectionRegistry(redis, logger);
   if (ttlMs !== undefined) registry.setTtlMs(ttlMs);
   return registry;
 };

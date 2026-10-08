@@ -246,6 +246,7 @@ export interface TrendingUser {
 
 export interface TrendingUsersResult {
   items: TrendingUser[];
+  nextCursor: string | null;
 }
 
 export interface RelationshipStatus {

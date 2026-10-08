@@ -1,14 +1,14 @@
 import { Inject, Injectable, OnModuleDestroy } from '@nestjs/common';
 import { Queue } from 'bullmq';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
-import { EMAIL_JOB_NAMES, EMAIL_JOB_RETRY_POLICY, EMAIL_QUEUE_TOKENS } from './email.constants';
+import { EMAIL_JOB_NAMES, EMAIL_QUEUE_TOKENS } from './email.constants';
 import type { SendVerificationEmailJobData, SendPasswordResetEmailJobData } from './email.types';
 import type { EmailProvider } from '@/common/ports/email.provider';
+import { DEFAULT_BULLMQ_JOB_OPTIONS } from '@/core/queues/bullmq.config';
 import { createCorrelationId, getCorrelationId } from '@/common/interceptors/correlation-id';
 
 type EmailJobName =
-  | typeof EMAIL_JOB_NAMES.SEND_VERIFICATION_EMAIL
-  | typeof EMAIL_JOB_NAMES.SEND_PASSWORD_RESET_EMAIL;
+  typeof EMAIL_JOB_NAMES.SEND_VERIFICATION_EMAIL | typeof EMAIL_JOB_NAMES.SEND_PASSWORD_RESET_EMAIL;
 
 type EmailJobData = SendVerificationEmailJobData | SendPasswordResetEmailJobData;
 
@@ -45,7 +45,7 @@ export class EmailService implements EmailProvider, OnModuleDestroy {
     const data = { ...payload, correlationId } as EmailJobData;
 
     try {
-      const job = await this.emailQueue.add(jobName, data, EMAIL_JOB_RETRY_POLICY);
+      const job = await this.emailQueue.add(jobName, data, DEFAULT_BULLMQ_JOB_OPTIONS);
       this.logger.info({
         event: 'email_job_enqueued',
         jobId: job.id,
@@ -64,6 +64,7 @@ export class EmailService implements EmailProvider, OnModuleDestroy {
         jobName === EMAIL_JOB_NAMES.SEND_PASSWORD_RESET_EMAIL
           ? 'Unable to queue password reset email'
           : 'Unable to queue verification email',
+        { cause: error },
       );
     }
   }

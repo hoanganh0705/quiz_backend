@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, asc, count, eq, isNull, or, sql } from 'drizzle-orm';
+import { and, asc, count, eq, or, sql } from 'drizzle-orm';
 import { notDeleted } from '@/common/database/soft-delete.helper';
 import { DRIZZLE } from '@/core/database/drizzle.constants';
 import type { DrizzleDB } from '@/core/database/database.module';
@@ -28,7 +28,7 @@ export class TournamentParticipantRepository {
   constructor(@Inject(DRIZZLE) private readonly db: DrizzleDB) {}
 
   private async executeRaw<T>(query: ReturnType<typeof sql>): Promise<RawQueryResult<T>> {
-    return (await this.db.execute(query)) as unknown as RawQueryResult<T>;
+    return await this.db.execute(query);
   }
 
   async getParticipant(participantId: string): Promise<TournamentParticipantRow | null> {
@@ -49,7 +49,7 @@ export class TournamentParticipantRepository {
       .where(eq(tournamentParticipants.participantId, participantId))
       .limit(1);
 
-    return (row as TournamentParticipantRow | undefined) ?? null;
+    return row ?? null;
   }
 
   async getParticipantByUserAndTournament(
@@ -78,7 +78,7 @@ export class TournamentParticipantRepository {
       )
       .limit(1);
 
-    return (row as TournamentParticipantRow | undefined) ?? null;
+    return row ?? null;
   }
 
   async registerParticipant(params: {
@@ -110,7 +110,7 @@ export class TournamentParticipantRepository {
         updatedAt: tournamentParticipants.updatedAt,
       });
 
-    return row as TournamentParticipantRow;
+    return row;
   }
 
   async withdrawParticipant(
@@ -122,7 +122,7 @@ export class TournamentParticipantRepository {
     const [row] = await client
       .update(tournamentParticipants)
       .set({
-        status: 'withdrawn' as TournamentParticipantStatus,
+        status: 'withdrawn',
         withdrawnAt: nowIso,
         updatedAt: nowIso,
       })
@@ -140,7 +140,7 @@ export class TournamentParticipantRepository {
         updatedAt: tournamentParticipants.updatedAt,
       });
 
-    return row as TournamentParticipantRow;
+    return row;
   }
 
   async reactivateParticipant(
@@ -150,7 +150,7 @@ export class TournamentParticipantRepository {
     const [row] = await this.db
       .update(tournamentParticipants)
       .set({
-        status: 'active' as TournamentParticipantStatus,
+        status: 'active',
         withdrawnAt: null,
         updatedAt: nowIso,
       })
@@ -168,7 +168,7 @@ export class TournamentParticipantRepository {
         updatedAt: tournamentParticipants.updatedAt,
       });
 
-    return row as TournamentParticipantRow;
+    return row;
   }
 
   // Wraps the full read-check-insert sequence inside a single transaction with a row-level lock on the tournament so the capacity check is always consistent. Uses `INSERT … ON CONFLICT DO NOTHING` to safely handle the case where two concurrent requests both find no existing participant and both try to insert — the second receives zero rows back and the method falls through to a re-read.
@@ -243,7 +243,7 @@ export class TournamentParticipantRepository {
 
       if (inserted.length > 0) {
         return {
-          participant: inserted[0] as TournamentParticipantRow,
+          participant: inserted[0],
           inserted: true,
           reactivated: false,
         };
@@ -283,7 +283,7 @@ export class TournamentParticipantRepository {
         const [reactivated] = await tx
           .update(tournamentParticipants)
           .set({
-            status: 'active' as TournamentParticipantStatus,
+            status: 'active',
             withdrawnAt: null,
             updatedAt: params.nowIso,
           })
@@ -302,14 +302,14 @@ export class TournamentParticipantRepository {
           });
 
         return {
-          participant: reactivated as TournamentParticipantRow,
+          participant: reactivated,
           inserted: false,
           reactivated: true,
         };
       }
 
       return {
-        participant: existing as TournamentParticipantRow,
+        participant: existing,
         inserted: false,
         reactivated: false,
       };
@@ -340,7 +340,7 @@ export class TournamentParticipantRepository {
       const [withdrawn] = await tx
         .update(tournamentParticipants)
         .set({
-          status: 'withdrawn' as TournamentParticipantStatus,
+          status: 'withdrawn',
           withdrawnAt: params.nowIso,
           updatedAt: params.nowIso,
         })
@@ -364,7 +364,7 @@ export class TournamentParticipantRepository {
           updatedAt: tournamentParticipants.updatedAt,
         });
 
-      return (withdrawn as TournamentParticipantRow | undefined) ?? null;
+      return withdrawn ?? null;
     });
   }
 
@@ -417,7 +417,7 @@ export class TournamentParticipantRepository {
       .offset(offset);
 
     return {
-      items: items as TournamentParticipantListItemRow[],
+      items: items,
       total: totalRow?.count ?? 0,
     };
   }
@@ -550,7 +550,7 @@ export class TournamentParticipantRepository {
       .offset(params.offset);
 
     return {
-      items: rows as TournamentLeaderboardEntry[],
+      items: rows,
       total,
     };
   }

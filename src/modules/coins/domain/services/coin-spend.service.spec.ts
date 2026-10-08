@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-argument, @typescript-eslint/require-await, @typescript-eslint/unbound-method */
+/* eslint-disable @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-argument */
 import { CoinSpendService } from './coin-spend.service';
 import { ReferentialValidatorService } from '@/common/database/referential-validator.service';
 import { ReferencedEntityNotFoundError } from '@/common/database/references.types';
@@ -80,7 +80,7 @@ function makeDb(): DrizzleDB {
   const txChain: any = {};
   txChain.transaction = jest.fn(async (work: any) => work(txChain));
   txChain.execute = jest.fn().mockResolvedValue({ rows: [{ exists: true }] });
-  return txChain as unknown as DrizzleDB;
+  return txChain;
 }
 
 describe('CoinSpendService — referential validation', () => {

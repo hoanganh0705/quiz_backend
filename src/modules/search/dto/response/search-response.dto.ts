@@ -39,6 +39,13 @@ export class SearchCommentResultDto {
     example: '880e8400-e29b-71d4-a716-446655440000',
   })
   quizId!: string;
+
+  @ApiProperty({
+    description: 'Up-to-160-character excerpt of the comment body for inline display.',
+    example: 'A short summary of the comment, capped at 160 characters.',
+    nullable: true,
+  })
+  excerpt!: string | null;
 }
 
 export class SearchCategoryResultDto {

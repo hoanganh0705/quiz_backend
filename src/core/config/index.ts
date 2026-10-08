@@ -28,6 +28,7 @@ export { emailConfig, type EmailConfig } from './email.config';
 export { emailVerificationConfig, type EmailVerificationConfig } from './email-verification.config';
 export { securityConfig, type SecurityConfig } from './security.config';
 export { serverConfig, type ServerConfig } from './server.config';
+export { graphqlConfig, type GraphqlConfig } from './graphql.config';
 export { sessionsConfig, type SessionsConfig } from './sessions.config';
 export { passwordResetConfig, type PasswordResetConfig } from './password-reset.config';
 export { authSecurityConfig, type AuthSecurityConfig } from './auth-security.config';
@@ -49,3 +50,4 @@ export { googleOAuthConfig, type GoogleOAuthConfig } from './google-oauth.config
 export { swaggerConfig, type SwaggerConfig } from './swagger.config';
 export { cloudinaryConfig, type CloudinaryConfig } from './cloudinary.config';
 export { tournamentFlagsConfig, type TournamentFlagsConfig } from './tournament-flags.config';
+export { coinAdminConfig, type CoinAdminConfig } from './coin-admin.config';

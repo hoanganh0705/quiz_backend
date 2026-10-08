@@ -46,9 +46,7 @@ export class DeviceParserService {
       deviceType = 'mobile';
     } else if (result.device?.type === 'tablet') {
       deviceType = 'tablet';
-    } else if (!result.device?.type) {
-      deviceType = 'desktop';
-    } else {
+    } else if (result.device?.type) {
       // ua-parser-js occasionally returns device types the SessionDeviceType
       // union does not enumerate (e.g. 'wearable', 'embedded', 'xr', 'console').
       // Downgrade to 'unknown' so downstream session-binding logic treats the

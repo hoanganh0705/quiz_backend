@@ -11,7 +11,6 @@ import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import {
   RANKING_REPOSITORY_PORT,
   type RankingRepositoryPort,
-  type RankSnapshotPairRow,
 } from '@/modules/ranking/domain/ports/ranking-repository.port';
 import { RankingPeriod } from '@/modules/ranking/domain/types/ranking.types';
 import {
@@ -91,19 +90,15 @@ export class RankingAdapter implements RankingPort {
     const currentRankingsByUser = new Map(currentRankings.map((r) => [r.userId, r]));
 
     const uniquePeriods = Array.from(new Set(periods));
-    const snapshotsByUserPeriod = new Map<string, RankSnapshotPairRow>();
-    await Promise.all(
-      userIds.flatMap((userId) =>
-        uniquePeriods.map(async (period) => {
-          const rankingPeriod = this.mapToRankingPeriod(period);
-          const snapshots = await this.rankingRepository.getLatestRankSnapshots({
-            userId,
-            period: rankingPeriod,
-          });
-          snapshotsByUserPeriod.set(`${userId}:${period}`, snapshots);
-        }),
-      ),
+
+    const tuples: ReadonlyArray<{ userId: string; period: RankingPeriod }> = userIds.flatMap(
+      (userId) =>
+        uniquePeriods.map((period) => ({
+          userId,
+          period: this.mapToRankingPeriod(period),
+        })),
     );
+    const snapshotsMap = await this.rankingRepository.getBatchedLatestRankSnapshots({ tuples });
 
     for (const userId of userIds) {
       const currentRanking = currentRankingsByUser.get(userId);
@@ -118,7 +113,8 @@ export class RankingAdapter implements RankingPort {
               : currentRanking?.allTimeRank;
         const currentRank = rankField ?? null;
 
-        const snapshots = snapshotsByUserPeriod.get(`${userId}:${period}`) ?? null;
+        const byUser = snapshotsMap.get(userId);
+        const snapshots = byUser?.get(rankingPeriod) ?? null;
         const previousRank = snapshots?.previous?.rank ?? null;
         const previousXp = snapshots?.previous?.xp ?? null;
 

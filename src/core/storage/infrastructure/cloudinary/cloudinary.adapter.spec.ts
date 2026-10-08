@@ -69,8 +69,8 @@ function makeSdk(overrides: Partial<CloudinarySDK> = {}): CloudinarySDK & {
     });
     return stream;
   });
-  const destroyMock = jest.fn(
-    (_publicId: string): Promise<DestroyResult> => Promise.resolve({ result: 'ok' }),
+  const destroyMock = jest.fn((_publicId: string): Promise<DestroyResult> =>
+    Promise.resolve({ result: 'ok' }),
   );
   const urlMock = jest.fn((publicId: string, _opts: Record<string, unknown>): string => {
     return `https://res.cloudinary.com/demo/image/upload/${publicId}`;

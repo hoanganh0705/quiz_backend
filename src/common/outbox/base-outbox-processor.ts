@@ -1,6 +1,28 @@
 import { and, asc, eq, isNotNull, isNull, lte, type SQL } from 'drizzle-orm';
 import { outboxEvents } from '@/core/database/schema';
 import type { DrizzleDB } from '@/core/database/database.module';
+import { OutboxPayloadValidationError } from './payload-schema';
+import { TracingProvider } from '@/core/observability/tracing.provider';
+
+/**
+ * Run async tasks with a concurrency cap using chunks + Promise.all.
+ */
+export async function runWithConcurrency<T, R>(
+  items: T[],
+  limit: number,
+  fn: (item: T) => Promise<R>,
+): Promise<R[]> {
+  if (items.length === 0) return [];
+  const results: R[] = new Array(items.length);
+  for (let i = 0; i < items.length; i += limit) {
+    const chunk = items.slice(i, i + limit);
+    const chunkResults = await Promise.all(chunk.map((item) => fn(item)));
+    for (let j = 0; j < chunkResults.length; j += 1) {
+      results[i + j] = chunkResults[j];
+    }
+  }
+  return results;
+}
 
 /**
  * Shape of the row every outbox processor operates on. The base
@@ -44,6 +66,12 @@ export abstract class BaseOutboxProcessor<T extends BaseOutboxRow = BaseOutboxRo
 
   /** Logger event-name prefix (e.g. `coin`, `attempt_xp`). */
   protected abstract readonly logPrefix: string;
+
+  /**
+   * Optional tracing dependency. Subclasses inject via the base constructor
+   * to enable structured spans around the drain loop and dispatch path.
+   */
+  protected tracing: TracingProvider | undefined;
 
   /**
    * Translate the row into a domain side-effect. Throw on
@@ -102,6 +130,12 @@ export abstract class BaseOutboxProcessor<T extends BaseOutboxRow = BaseOutboxRo
    * Select pending rows with `FOR UPDATE SKIP LOCKED` and apply
    * exponential backoff / DLQ discipline. Returns counters so
    * subclasses can log completion metrics.
+   *
+   * Note: this method runs inside a transaction when called by auth's
+   * `processPendingEvents` (which uses `db.transaction(...)`). The
+   * transaction holds the row-level `FOR UPDATE SKIP LOCKED` until
+   * the commit, preventing parallel processors from claiming the same
+   * rows during the dispatch phase.
    */
   async runProcessPendingEvents(db: DrizzleDB): Promise<{
     processed: number;
@@ -113,58 +147,94 @@ export abstract class BaseOutboxProcessor<T extends BaseOutboxRow = BaseOutboxRo
   }> {
     const nowIso = new Date().toISOString();
 
-    const rows = (await db
-      .select({
-        eventId: outboxEvents.eventId,
-        aggregateType: outboxEvents.aggregateType,
-        eventType: outboxEvents.eventType,
-        payload: outboxEvents.payload,
-        createdAt: outboxEvents.createdAt,
-        attemptCount: outboxEvents.attemptCount,
-        idempotencyKey: outboxEvents.idempotencyKey,
-        correlationId: outboxEvents.correlationId,
-      })
-      .from(outboxEvents)
-      .where(this.buildPendingWhere(nowIso))
-      .orderBy(asc(outboxEvents.createdAt))
-      .limit(this.batchSize)
-      .for('update', { skipLocked: true })) as T[];
+    const dispatchLoop = async (spanAttrs: Record<string, string | number | boolean>) => {
+      const rows = (await db
+        .select({
+          eventId: outboxEvents.eventId,
+          aggregateType: outboxEvents.aggregateType,
+          eventType: outboxEvents.eventType,
+          payload: outboxEvents.payload,
+          createdAt: outboxEvents.createdAt,
+          attemptCount: outboxEvents.attemptCount,
+          idempotencyKey: outboxEvents.idempotencyKey,
+          correlationId: outboxEvents.correlationId,
+        })
+        .from(outboxEvents)
+        .where(this.buildPendingWhere(nowIso))
+        .orderBy(asc(outboxEvents.createdAt))
+        .limit(this.batchSize)
+        .for('update', { skipLocked: true })) as T[];
 
-    let processed = 0;
-    let failed = 0;
-    let retried = 0;
-    let movedToDlq = 0;
-    let idempotencyConflicts = 0;
+      let processed = 0;
+      let failed = 0;
+      let retried = 0;
+      let movedToDlq = 0;
+      let idempotencyConflicts = 0;
 
-    for (const row of rows) {
-      try {
-        await this.dispatch(row);
-        await this.markProcessed(db, row.eventId, nowIso);
-        processed += 1;
-      } catch (error) {
-        if (this.isIdempotencyConflict(error)) {
+      const dispatchResults = await runWithConcurrency(rows, 10, async (row) => {
+        try {
+          await this.dispatch(row);
           await this.markProcessed(db, row.eventId, nowIso);
+          return { ok: true, processed: true, idempotencyConflict: false };
+        } catch (error) {
+          if (this.isIdempotencyConflict(error)) {
+            await this.markProcessed(db, row.eventId, nowIso);
+            return { ok: true, processed: false, idempotencyConflict: true };
+          }
+          return { ok: false, processed: false, idempotencyConflict: false, error };
+        }
+      });
+
+      for (let i = 0; i < rows.length; i += 1) {
+        const result = dispatchResults[i];
+        if (!result) continue;
+        if (result.idempotencyConflict) {
           processed += 1;
           idempotencyConflicts += 1;
-          this.onIdempotencyConflict(row);
-          continue;
+          this.onIdempotencyConflict(rows[i]);
+        } else if (result.ok) {
+          processed += 1;
+        } else {
+          const outcome = await this.handleFailure(db, rows[i], result.error, nowIso);
+          failed += 1;
+          if (outcome === 'retried') retried += 1;
+          if (outcome === 'dlq') movedToDlq += 1;
         }
-
-        const outcome = await this.handleFailure(db, row, error, nowIso);
-        failed += 1;
-        if (outcome === 'retried') retried += 1;
-        if (outcome === 'dlq') movedToDlq += 1;
       }
+
+      spanAttrs['outbox.scanned'] = rows.length;
+      spanAttrs['outbox.processed'] = processed;
+      spanAttrs['outbox.failed'] = failed;
+      spanAttrs['outbox.retried'] = retried;
+      spanAttrs['outbox.movedToDlq'] = movedToDlq;
+      spanAttrs['outbox.idempotencyConflicts'] = idempotencyConflicts;
+
+      return {
+        processed,
+        failed,
+        retried,
+        movedToDlq,
+        idempotencyConflicts,
+        scanned: rows.length,
+      };
+    };
+
+    if (!this.tracing) {
+      return dispatchLoop({});
     }
 
-    return {
-      processed,
-      failed,
-      retried,
-      movedToDlq,
-      idempotencyConflicts,
-      scanned: rows.length,
-    };
+    return this.tracing.withSpan(
+      `outbox.drain.${this.aggregateType}`,
+      { kind: 'internal', attributes: { 'outbox.aggregate': this.aggregateType } },
+      async (span) => {
+        const captured: Record<string, string | number | boolean> = {};
+        const result = await dispatchLoop(captured);
+        for (const [key, value] of Object.entries(captured)) {
+          span.attributes[key] = value;
+        }
+        return result;
+      },
+    );
   }
 
   /**
@@ -221,6 +291,21 @@ export abstract class BaseOutboxProcessor<T extends BaseOutboxRow = BaseOutboxRo
   }
 
   /**
+   * Detect a payload-shape error thrown by a producer-side
+   * validator. Deterministic failures of this kind are not worth
+   * retrying — the next attempt would fail identically — so the
+   * base class moves the row straight to DLQ and logs the
+   * validation reason as the DLQ reason.
+   *
+   * Subclasses can override to broaden the matcher (e.g. to also
+   * catch domain-side validation errors that should not be
+   * retried).
+   */
+  protected isDeterministicFailure(error: unknown): boolean {
+    return error instanceof OutboxPayloadValidationError;
+  }
+
+  /**
    * Optional hook for subclasses to log the skipped row at debug
    * level. Default no-op.
    */
@@ -244,7 +329,8 @@ export abstract class BaseOutboxProcessor<T extends BaseOutboxRow = BaseOutboxRo
   ): Promise<'retried' | 'dlq'> {
     const nextAttemptCount = (row.attemptCount ?? 0) + 1;
     const lastError = error instanceof Error ? error.message : String(error);
-    const isDlq = nextAttemptCount > this.maxRetries;
+    const isDeterministic = this.isDeterministicFailure(error);
+    const isDlq = isDeterministic || nextAttemptCount > this.maxRetries;
 
     const updateValues: Record<string, unknown> = {
       attemptCount: nextAttemptCount,
@@ -254,7 +340,9 @@ export abstract class BaseOutboxProcessor<T extends BaseOutboxRow = BaseOutboxRo
 
     if (isDlq) {
       updateValues['failedAt'] = nowIso;
-      updateValues['dlqReason'] = `exhausted_retries:${lastError}`;
+      updateValues['dlqReason'] = isDeterministic
+        ? `deterministic_failure:${lastError}`
+        : `exhausted_retries:${lastError}`;
       updateValues['nextAttemptAt'] = nowIso;
     } else {
       updateValues['nextAttemptAt'] = computeNextAttemptIso(

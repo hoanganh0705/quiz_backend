@@ -197,6 +197,41 @@ export class RankingRepository implements RankingRepositoryPort {
     return this.userRanking.getPeakRanks(userId);
   }
 
+  async batchUpdateRanks(params: {
+    updates: ReadonlyArray<{ userId: string; period: RankingPeriod; rank: number }>;
+    now: Date;
+  }): Promise<void> {
+    return this.userRanking.batchUpdateRanks(params);
+  }
+
+  async batchUpdatePeakRanks(params: {
+    updates: ReadonlyArray<{ userId: string; period: RankingPeriod; rank: number }>;
+    now: Date;
+  }): Promise<Array<{ userId: string; period: RankingPeriod; previousPeakRank: number | null }>> {
+    return this.userRanking.batchUpdatePeakRanks(params);
+  }
+
+  async findDirtyUsersMissingRanks(): Promise<Map<string, Map<RankingPeriod, number>>> {
+    return this.userRanking.findDirtyUsersMissingRanks();
+  }
+
+  async persistMilestones(params: {
+    triples: ReadonlyArray<{
+      userId: string;
+      milestone: RankingMilestone;
+      rank: number;
+      achievedAt: Date;
+    }>;
+  }): Promise<void> {
+    return this.userRanking.persistMilestones(params);
+  }
+
+  async processXpEventsBatch(params: {
+    events: ReadonlyArray<{ userId: string; amount: number; now: Date }>;
+  }): Promise<void> {
+    return this.userRanking.processXpEventsBatch(params);
+  }
+
   // ============================================
   // Leaderboard Operations
   // ============================================
@@ -305,6 +340,12 @@ export class RankingRepository implements RankingRepositoryPort {
     period: RankingPeriod;
   }): Promise<RankSnapshotPairRow> {
     return this.rankHistory.getLatestRankSnapshots(params);
+  }
+
+  async getBatchedLatestRankSnapshots(params: {
+    tuples: ReadonlyArray<{ userId: string; period: RankingPeriod }>;
+  }): Promise<Map<string, Map<RankingPeriod, RankSnapshotPairRow>>> {
+    return this.rankHistory.getBatchedLatestRankSnapshots(params);
   }
 
   async getTopMovers(params: { period: RankingPeriod; limit: number }): Promise<TopMoverRow[]> {

@@ -34,17 +34,7 @@ export class UserIdentityRepository {
       .where(and(notDeleted(users.deletedAt), eq(users.email, email.toLowerCase())))
       .limit(1);
 
-    return (
-      (user as
-        | {
-            userId: string;
-            username: string;
-            email: string;
-            isVerified: boolean;
-            role: 'admin' | 'moderator' | 'user';
-          }
-        | undefined) ?? null
-    );
+    return user ?? null;
   }
 
   async findActiveUserProfile(userId: string): Promise<{
@@ -66,17 +56,7 @@ export class UserIdentityRepository {
       .where(and(eq(users.userId, userId), notDeleted(users.deletedAt)))
       .limit(1);
 
-    return (
-      (user as
-        | {
-            userId: string;
-            username: string;
-            email: string;
-            role: 'admin' | 'moderator' | 'user';
-            isVerified: boolean;
-          }
-        | undefined) ?? null
-    );
+    return user ?? null;
   }
 
   async findActiveUserCredentialsById(userId: string): Promise<{
@@ -94,7 +74,7 @@ export class UserIdentityRepository {
       .where(and(eq(users.userId, userId), notDeleted(users.deletedAt)))
       .limit(1);
 
-    return (user as { userId: string; email: string; passwordHash: string } | undefined) ?? null;
+    return user ?? null;
   }
 
   async findActiveByEmailWithPassword(email: string): Promise<UserWithPasswordRow | null> {
@@ -108,7 +88,7 @@ export class UserIdentityRepository {
       .where(and(notDeleted(users.deletedAt), eq(users.email, email)))
       .limit(1);
 
-    return (foundUser as UserWithPasswordRow | undefined) ?? null;
+    return foundUser ?? null;
   }
 
   async findActiveIdentityById(userId: string): Promise<UserIdentityRow | null> {
@@ -118,7 +98,7 @@ export class UserIdentityRepository {
       .where(and(eq(users.userId, userId), notDeleted(users.deletedAt)))
       .limit(1);
 
-    return (user as UserIdentityRow | undefined) ?? null;
+    return user ?? null;
   }
 
   async findMeById(userId: string): Promise<UserMeRow | null> {

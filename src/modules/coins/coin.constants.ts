@@ -31,19 +31,4 @@ export const COIN_ECONOMY_LIMITS = Object.freeze({
   DAILY_TIP_COUNT_CAP: 3,
 } as const);
 
-export const COIN_IDEMPOTENCY_KEY_PREFIXES = Object.freeze({
-  ATTEMPT_REWARD: 'coin:attempt',
-  DAILY_CHALLENGE_REWARD: 'coin:daily',
-  STREAK_MILESTONE: 'coin:streak',
-  BADGE_REWARD: 'coin:badge',
-  TOURNAMENT_PLACEMENT: 'coin:tournament',
-  TIP_DEBIT: 'coin:tip',
-  FLAIR_DEBIT: 'coin:flair',
-  SUPPRESS_DEBIT: 'coin:suppress',
-  ADMIN_ADJUSTMENT: 'coin:admin',
-} as const);
-
 export const IDEMPOTENCY_KEY_MAX_LENGTH = 200 as const;
-
-export type CoinRewardKey = keyof typeof COIN_REWARDS;
-export type CoinSpendKey = keyof typeof COIN_SPEND_AMOUNTS;

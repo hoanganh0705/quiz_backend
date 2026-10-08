@@ -2,6 +2,7 @@ import { Global, Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { APP_INTERCEPTOR } from '@nestjs/core';
 import { JwtGuard } from './guards/jwt.guard';
+import { WsThrottlerGuard } from './guards/ws-throttler.guard';
 import {
   CommonExternalEventBus,
   EXTERNAL_EVENT_BUS,
@@ -12,12 +13,14 @@ import { TransactionalContext, TRANSACTIONAL_CONTEXT } from './interceptors/tran
 import { TransactionalInterceptor } from './interceptors/transactional.interceptor';
 import { AuditLogService } from './audit/audit-log.service';
 import { ID_GENERATOR, IdGenerator, IdGeneratorModule } from './utils/id-generator';
+import { RetryQueueDrainScheduler } from './events/retry-queue-drain.scheduler';
 
 @Global()
 @Module({
   imports: [JwtModule.register({}), IdGeneratorModule],
   providers: [
     JwtGuard,
+    WsThrottlerGuard,
     { provide: EXTERNAL_EVENT_BUS, useExisting: CommonExternalEventBus },
     { provide: EXTERNAL_EVENT_BUS_PRODUCER_PORT, useExisting: CommonExternalEventBus },
     { provide: EXTERNAL_EVENT_BUS_CONSUMER_PORT, useExisting: CommonExternalEventBus },
@@ -27,13 +30,16 @@ import { ID_GENERATOR, IdGenerator, IdGeneratorModule } from './utils/id-generat
     AuditLogService,
     IdGenerator,
     { provide: ID_GENERATOR, useExisting: IdGenerator },
-    // Global interceptor: registered via APP_INTERCEPTOR so it applies to all
-    // modules automatically (no need to add it to every module's providers).
-    { provide: APP_INTERCEPTOR, useClass: TransactionalInterceptor },
+    RetryQueueDrainScheduler,
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: TransactionalInterceptor,
+    },
   ],
   exports: [
     JwtModule,
     JwtGuard,
+    WsThrottlerGuard,
     EXTERNAL_EVENT_BUS,
     EXTERNAL_EVENT_BUS_PRODUCER_PORT,
     EXTERNAL_EVENT_BUS_CONSUMER_PORT,
@@ -43,6 +49,7 @@ import { ID_GENERATOR, IdGenerator, IdGeneratorModule } from './utils/id-generat
     AuditLogService,
     IdGenerator,
     ID_GENERATOR,
+    RetryQueueDrainScheduler,
   ],
 })
 export class CommonModule {}

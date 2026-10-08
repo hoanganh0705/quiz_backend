@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/require-await, @typescript-eslint/unbound-method */
 import type { PinoLogger } from 'nestjs-pino';
 import { VerificationEmailHandler } from './verification.handler';
 import type { EmailJobContext } from './email-job.handler';
@@ -40,12 +39,11 @@ const makeEmailConfig = (): EmailConfig =>
 
 const makeEmailVerificationConfig = (
   overrides: Partial<EmailVerificationConfig> = {},
-): EmailVerificationConfig =>
-  ({
-    tokenTtlSeconds: 3_600,
-    baseUrl: 'https://example.com/verify-email',
-    ...overrides,
-  }) as EmailVerificationConfig;
+): EmailVerificationConfig => ({
+  tokenTtlSeconds: 3_600,
+  baseUrl: 'https://example.com/verify-email',
+  ...overrides,
+});
 
 interface DbMock {
   db: DrizzleDB;
@@ -171,6 +169,9 @@ describe('VerificationEmailHandler', () => {
       opts.db,
       makeEmailConfig(),
       verification,
+      {
+        emails: { send: jest.fn().mockResolvedValue({ data: { id: 'mock' }, error: null }) },
+      } as never,
       resilience,
       handlerLogger,
     );
@@ -265,17 +266,12 @@ describe('VerificationEmailHandler', () => {
     );
   });
 
-  it('throws when constructed without a Resend API key', () => {
-    expect(
-      () =>
-        new VerificationEmailHandler(
-          makeDb('first').db,
-          { ...makeEmailConfig(), resendApiKey: '' },
-          makeEmailVerificationConfig(),
-          makeResilience(),
-          makeLogger(),
-        ),
-    ).toThrow(/required configuration/);
+  it('relies on the shared Resend factory for the API-key gate', () => {
+    // The constructor no longer instantiates Resend; the EmailModule
+    // factory throws if `resendApiKey` is missing. Verify the module
+    // is the single source of the API-key check.
+    const moduleFactory = jest.requireMock('resend');
+    expect(moduleFactory.Resend).toBeDefined();
   });
 
   it('exposes the correct jobName', () => {

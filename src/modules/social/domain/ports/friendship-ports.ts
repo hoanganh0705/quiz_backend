@@ -15,6 +15,20 @@ export const FRIENDSHIP_REPOSITORY_PORT = Symbol('FRIENDSHIP_REPOSITORY_PORT');
 export interface FriendshipRepositoryPort {
   createFriendRequest(requesterId: string, addresseeId: string): Promise<Friendship>;
 
+  /**
+   * Create a friend request and return it with usernames in a single transaction.
+   * Combines INSERT + SELECT to avoid N+1 round-trips.
+   */
+  createFriendRequestFull(
+    requesterId: string,
+    addresseeId: string,
+  ): Promise<{
+    friendship: Friendship;
+    friendRequest: FriendRequest;
+    requesterUsername: string;
+    addresseeUsername: string;
+  }>;
+
   createFriendRequestWithJoin(requesterId: string, addresseeId: string): Promise<FriendRequest>;
 
   getFriendRequest(friendshipId: string): Promise<Friendship | null>;

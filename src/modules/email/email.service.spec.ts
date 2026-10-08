@@ -1,10 +1,10 @@
-/* eslint-disable @typescript-eslint/require-await, @typescript-eslint/unbound-method */
 import type { Queue } from 'bullmq';
 import type { PinoLogger } from 'nestjs-pino';
 import { EmailService } from './email.service';
-import { EMAIL_JOB_NAMES, EMAIL_JOB_RETRY_POLICY } from './email.constants';
+import { EMAIL_JOB_NAMES } from './email.constants';
 import type { SendPasswordResetEmailJobData, SendVerificationEmailJobData } from './email.types';
 import { correlationIdStorage, createCorrelationId } from '@/common/interceptors/correlation-id';
+import { DEFAULT_BULLMQ_JOB_OPTIONS } from '@/core/queues/bullmq.config';
 
 const makeLogger = (): PinoLogger =>
   ({
@@ -145,7 +145,7 @@ describe('EmailService', () => {
   });
 
   describe('retry policy', () => {
-    it('uses the shared EMAIL_JOB_RETRY_POLICY for every job', async () => {
+    it('uses the centralized DEFAULT_BULLMQ_JOB_OPTIONS for every job', async () => {
       const { queue } = makeQueue();
       const addSpy = queue.add as unknown as jest.Mock;
       const service = new EmailService(queue, makeLogger());
@@ -153,8 +153,8 @@ describe('EmailService', () => {
       await service.enqueueVerificationEmail('a@b.c', 't', 'u-1');
       await service.enqueuePasswordResetEmail('a@b.c', 't', 'u-1');
 
-      expect(addSpy.mock.calls[0][2]).toEqual(EMAIL_JOB_RETRY_POLICY);
-      expect(addSpy.mock.calls[1][2]).toEqual(EMAIL_JOB_RETRY_POLICY);
+      expect(addSpy.mock.calls[0][2]).toEqual(DEFAULT_BULLMQ_JOB_OPTIONS);
+      expect(addSpy.mock.calls[1][2]).toEqual(DEFAULT_BULLMQ_JOB_OPTIONS);
     });
   });
 

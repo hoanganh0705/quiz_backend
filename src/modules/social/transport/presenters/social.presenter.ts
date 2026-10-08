@@ -23,7 +23,6 @@ import type {
 } from '../../dto/response/stats.dto';
 import type { RelationshipStatusDto } from '../../dto/response/relationship.dto';
 import type { FriendLeaderboardDto } from '../../dto/response/leaderboard.dto';
-import type { SearchableUserDto } from '../../dto/response/search.dto';
 import type {
   Friend,
   Follower,
@@ -65,8 +64,7 @@ export class SocialPresenter {
 
   // Search
   readonly searchUsernameSuggestions = (payload: string[]) => ApiResponse.ok(payload);
-  readonly searchUsers = (payload: SearchableUser[]) =>
-    ApiResponse.ok(payload as SearchableUserDto[]);
+  readonly searchUsers = (payload: SearchableUser[]) => ApiResponse.ok(payload);
 
   // Suggestions & feed (cursor paginated)
   readonly getSuggestions = (
@@ -79,8 +77,9 @@ export class SocialPresenter {
   readonly getMySocialAnalytics = SocialPresenter.ok<MySocialAnalyticsResponseDto>;
   readonly getUserSocialStats = SocialPresenter.ok<UserSocialStatsResponseDto>;
 
-  // Trending (no pagination meta — items-only DTO unwrapped to bare array)
-  readonly getTrendingUsers = (dto: TrendingUsersListResponseDto) => ApiResponse.ok([...dto.items]);
+  // Trending
+  readonly getTrendingUsers = (dto: TrendingUsersListResponseDto) =>
+    ApiResponse.ok({ items: dto.items, nextCursor: dto.nextCursor });
 
   // User activity (cursor paginated)
   readonly getUserActivity = (payload: PaginatedResult<UserActivityResponseDto['items'][number]>) =>
@@ -91,10 +90,8 @@ export class SocialPresenter {
 
   // Friend requests
   readonly sendFriendRequest = SocialPresenter.ok<FriendRequestDto>;
-  readonly getPendingRequests = (payload: FriendRequest[]) =>
-    ApiResponse.ok(payload as FriendRequestDto[]);
-  readonly getSentRequests = (payload: FriendRequest[]) =>
-    ApiResponse.ok(payload as FriendRequestDto[]);
+  readonly getPendingRequests = (payload: FriendRequest[]) => ApiResponse.ok(payload);
+  readonly getSentRequests = (payload: FriendRequest[]) => ApiResponse.ok(payload);
 
   // Friends (cursor paginated)
   readonly getFriends = (payload: PaginatedResult<Friend>) =>

@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, asc, count, eq, isNull, sql } from 'drizzle-orm';
+import { and, asc, count, eq, sql } from 'drizzle-orm';
 import { DRIZZLE } from '@/core/database/drizzle.constants';
 import type { DrizzleDB } from '@/core/database/database.module';
 import { tournaments, tournamentRounds, quizVersions } from '@/core/database/schema';
@@ -62,7 +62,9 @@ export class TournamentRoundRepository {
       const [tournament] = await tx
         .select({ tournamentId: tournaments.tournamentId })
         .from(tournaments)
-        .where(eq(tournaments.tournamentId, params.tournamentId))
+        .where(
+          and(eq(tournaments.tournamentId, params.tournamentId), notDeleted(tournaments.deletedAt)),
+        )
         .limit(1)
         .for('update');
 

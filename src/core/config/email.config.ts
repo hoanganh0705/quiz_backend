@@ -17,7 +17,8 @@ export const emailConfig = registerAs('email', () => ({
   fromName: process.env.EMAIL_FROM_NAME ?? '',
   resendApiKey: process.env.RESEND_API_KEY ?? '',
   sendTimeoutMs: parsePositiveInt(process.env.EMAIL_SEND_TIMEOUT_MS, 5_000),
-  queueConcurrency: parsePositiveInt(process.env.EMAIL_QUEUE_CONCURRENCY, 5),
+  queueConcurrency: parsePositiveInt(process.env.EMAIL_QUEUE_CONCURRENCY, 10),
+  nodeEnv: process.env.NODE_ENV ?? 'development',
   circuitBreaker: {
     failureThreshold: parsePositiveInt(process.env.EMAIL_CB_FAILURE_THRESHOLD, 5),
     resetTimeoutMs: parsePositiveInt(process.env.EMAIL_CB_RESET_TIMEOUT_MS, 30_000),

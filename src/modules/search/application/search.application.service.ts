@@ -163,10 +163,15 @@ export class SearchApplicationService {
   }
 
   private async searchComments(query: string, limit: number): Promise<SearchCommentResult[]> {
-    const rows = await this.executeTypedQuery<{ commentId: string; quizId: string }>(sql`
+    const rows = await this.executeTypedQuery<{
+      commentId: string;
+      quizId: string;
+      body: string;
+    }>(sql`
       SELECT
         c.comment_id AS "commentId",
-        c.quiz_id AS "quizId"
+        c.quiz_id AS "quizId",
+        c.body AS "body"
       FROM comments c
       WHERE c.deleted_at IS NULL
         AND c.body ILIKE '%' || ${query} || '%'
@@ -174,7 +179,11 @@ export class SearchApplicationService {
       LIMIT ${limit}
     `);
 
-    return rows.map(({ commentId, quizId }) => ({ commentId, quizId }));
+    return rows.map(({ commentId, quizId, body }) => ({
+      commentId,
+      quizId,
+      excerpt: this.buildExcerpt(body, query),
+    }));
   }
 
   private async searchCategories(query: string, limit: number): Promise<SearchCategoryResult[]> {
@@ -222,5 +231,30 @@ export class SearchApplicationService {
     `);
 
     return rows.map(({ tagId, name }) => ({ tagId, name }));
+  }
+
+  private buildExcerpt(body: string, query: string, maxLength = 160): string | null {
+    if (!body) return null;
+
+    const normalizedQuery = query.trim();
+    if (normalizedQuery.length === 0) {
+      return body.length > maxLength ? `${body.slice(0, maxLength).trimEnd()}…` : body;
+    }
+
+    const lowerBody = body.toLowerCase();
+    const lowerQuery = normalizedQuery.toLowerCase();
+    const matchIndex = lowerBody.indexOf(lowerQuery);
+
+    if (matchIndex === -1) {
+      return body.length > maxLength ? `${body.slice(0, maxLength).trimEnd()}…` : body;
+    }
+
+    const halfWindow = Math.floor(maxLength / 2);
+    const start = Math.max(0, matchIndex - halfWindow);
+    const end = Math.min(body.length, start + maxLength);
+    const prefix = start > 0 ? '…' : '';
+    const suffix = end < body.length ? '…' : '';
+
+    return `${prefix}${body.slice(start, end).trim()}${suffix}`;
   }
 }

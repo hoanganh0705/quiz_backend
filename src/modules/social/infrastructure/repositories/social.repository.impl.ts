@@ -23,7 +23,7 @@ import type {
   RespondToFriendRequestParams,
   SuggestionCursorPayload,
 } from '../../domain/types/social.types';
-import { eq, and, count, isNull, sql, lte, or, aliasedTable } from 'drizzle-orm';
+import { eq, and, count, sql, lte, or, aliasedTable } from 'drizzle-orm';
 import { notDeleted } from '@/common/database/soft-delete.helper';
 import {
   FRIENDSHIP_REPOSITORY_PORT,
@@ -257,16 +257,11 @@ export class SocialRepository implements SocialRepositoryPort {
   }
 
   async getUserSocialStats(userId: string): Promise<UserSocialStats> {
-    const [friends, followers, following] = await Promise.all([
-      this.friendshipRepository.getFriendCount(userId),
-      this.userFollowRepository.getFollowerCount(userId),
-      this.userFollowRepository.getFollowingCount(userId),
-    ]);
-
+    const counts = await this.getSocialCounts(userId);
     return {
-      friends,
-      followers,
-      following,
+      friends: counts.friendCount,
+      followers: counts.followerCount,
+      following: counts.followingCount,
     };
   }
 
@@ -430,7 +425,13 @@ export class SocialRepository implements SocialRepositoryPort {
       mutualFollowers: number;
       score: number;
     }>`
-      SELECT *
+      SELECT
+        "userId",
+        username,
+        "avatarUrl",
+        "mutualFriends",
+        "mutualFollowers",
+        score
       FROM (${candidates}) ranked
       WHERE 1=1 ${cursorCondition}
       ORDER BY ranked.score DESC, ranked."mutualFriends" DESC, ranked."mutualFollowers" DESC, ranked.username ASC
@@ -479,8 +480,33 @@ export class SocialRepository implements SocialRepositoryPort {
     };
   }
 
-  async getTrendingUsers(limit: number): Promise<TrendingUsersResult> {
+  async getTrendingUsers(limit: number, cursor?: string | null): Promise<TrendingUsersResult> {
     const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+    const decoded = cursor
+      ? decodeBase64JsonCursor<{
+          trendScore?: unknown;
+          followers?: unknown;
+          username?: unknown;
+        }>(cursor)
+      : {};
+    const cursorScore =
+      typeof decoded.trendScore === 'number' && Number.isFinite(decoded.trendScore)
+        ? decoded.trendScore
+        : null;
+    const cursorFollowers =
+      typeof decoded.followers === 'number' && Number.isFinite(decoded.followers)
+        ? decoded.followers
+        : null;
+    const cursorUsername = typeof decoded.username === 'string' ? decoded.username : null;
+
+    const cursorCondition =
+      cursorScore !== null && cursorFollowers !== null && cursorUsername !== null
+        ? sql`(
+              "trendScore" < ${cursorScore}
+              OR ("trendScore" = ${cursorScore} AND followers < ${cursorFollowers})
+              OR ("trendScore" = ${cursorScore} AND followers = ${cursorFollowers} AND username > ${cursorUsername})
+            )`
+        : sql``;
 
     const rows = await this.db.execute(sql`
       WITH follower_totals AS (
@@ -581,82 +607,76 @@ export class SocialRepository implements SocialRepositoryPort {
         END AS "trendReason"
       FROM scored_users
       WHERE "trendScore" > 0
+        ${cursorCondition}
       ORDER BY "trendScore" DESC, followers DESC, username ASC
-      LIMIT ${limit}
+      LIMIT ${limit + 1}
     `);
 
+    const typedRows = rows.rows as TrendingUsersResult['items'];
+    const page = sliceWithCursor(typedRows, limit, (last) =>
+      encodeBase64JsonCursor({
+        trendScore: last.trendScore,
+        followers: last.followers,
+        username: last.username,
+      }),
+    );
+
     return {
-      items: rows.rows as TrendingUsersResult['items'],
+      items: page.items,
+      nextCursor: page.nextCursor,
     };
   }
 
   // Cross-domain methods
   async getRelationshipStatus(userId: string, targetId: string): Promise<RelationshipStatus> {
-    const [
-      friendResult,
-      pendingResult,
-      followerResult,
-      followingResult,
-      blockedResult,
-      blockedByResult,
-    ] = await Promise.all([
-      this.db
-        .select({ count: count() })
-        .from(friendships)
-        .where(
-          and(
-            or(
-              and(eq(friendships.requesterId, userId), eq(friendships.addresseeId, targetId)),
-              and(eq(friendships.requesterId, targetId), eq(friendships.addresseeId, userId)),
-            ),
-            eq(friendships.status, 'accepted'),
-            notDeleted(friendships.deletedAt),
-          ),
-        ),
+    const [[friendResult], [pendingResult], [followerResult], [followingResult]] =
+      await Promise.all([
+        this.db.execute(sql<{ is_friend: boolean }>`
+        SELECT EXISTS(
+          SELECT 1 FROM friendships f
+          WHERE ((f.requester_id = ${userId}::uuid AND f.addressee_id = ${targetId}::uuid)
+              OR (f.requester_id = ${targetId}::uuid AND f.addressee_id = ${userId}::uuid))
+            AND f.status = 'accepted'
+            AND f.deleted_at IS NULL
+        ) AS is_friend
+      `),
+        this.db.execute(sql<{ has_pending: boolean }>`
+        SELECT EXISTS(
+          SELECT 1 FROM friendships
+          WHERE requester_id = ${userId}::uuid
+            AND addressee_id = ${targetId}::uuid
+            AND status = 'pending'
+            AND deleted_at IS NULL
+        ) AS has_pending
+      `),
+        this.db.execute(sql<{ is_follower: boolean }>`
+        SELECT EXISTS(
+          SELECT 1 FROM user_follows
+          WHERE follower_id = ${targetId}::uuid
+            AND following_id = ${userId}::uuid
+            AND deleted_at IS NULL
+        ) AS is_follower
+      `),
+        this.db.execute(sql<{ is_following: boolean }>`
+        SELECT EXISTS(
+          SELECT 1 FROM user_follows
+          WHERE follower_id = ${userId}::uuid
+            AND following_id = ${targetId}::uuid
+            AND deleted_at IS NULL
+        ) AS is_following
+      `),
+      ]);
 
-      this.db
-        .select({ count: count() })
-        .from(friendships)
-        .where(
-          and(
-            eq(friendships.requesterId, userId),
-            eq(friendships.addresseeId, targetId),
-            eq(friendships.status, 'pending'),
-            notDeleted(friendships.deletedAt),
-          ),
-        ),
-
-      this.db
-        .select({ count: count() })
-        .from(userFollows)
-        .where(
-          and(
-            eq(userFollows.followerId, targetId),
-            eq(userFollows.followingId, userId),
-            notDeleted(userFollows.deletedAt),
-          ),
-        ),
-
-      this.db
-        .select({ count: count() })
-        .from(userFollows)
-        .where(
-          and(
-            eq(userFollows.followerId, userId),
-            eq(userFollows.followingId, targetId),
-            notDeleted(userFollows.deletedAt),
-          ),
-        ),
-
+    const [blockedResult, blockedByResult] = await Promise.all([
       this.blockRepository.isBlocked(userId, targetId),
       this.blockRepository.isBlocked(targetId, userId),
     ]);
 
     return {
-      isFriend: Number(friendResult[0]?.count ?? 0) > 0,
-      hasPendingRequest: Number(pendingResult[0]?.count ?? 0) > 0,
-      isFollower: Number(followerResult[0]?.count ?? 0) > 0,
-      isFollowing: Number(followingResult[0]?.count ?? 0) > 0,
+      isFriend: friendResult?.is_friend ?? false,
+      hasPendingRequest: pendingResult?.has_pending ?? false,
+      isFollower: followerResult?.is_follower ?? false,
+      isFollowing: followingResult?.is_following ?? false,
       isBlocked: blockedResult,
       isBlockedBy: blockedByResult,
     };
@@ -664,7 +684,7 @@ export class SocialRepository implements SocialRepositoryPort {
 
   /**
    * Batch fetch relationship statuses for multiple target users.
-   * Optimizes N+1 queries in search results.
+   * Optimizes N+1 queries by using a single raw SQL query with CTEs.
    */
   async getRelationshipStatusesBatch(
     userId: string,
@@ -674,102 +694,116 @@ export class SocialRepository implements SocialRepositoryPort {
       return new Map();
     }
 
-    // Batch query friendships
-    const friendRows = await this.db.execute(sql`
-      SELECT
-        CASE
-          WHEN f.requester_id = ${userId}::uuid THEN f.addressee_id
-          ELSE f.requester_id
-        END AS friend_id,
-        'accepted' AS status
-      FROM friendships f
-      WHERE (f.requester_id = ${userId}::uuid OR f.addressee_id = ${userId}::uuid)
-        AND f.status = 'accepted'
-        AND f.deleted_at IS NULL
+    const targetSet = new Set(targetIds);
+
+    const rows = await this.db.execute(sql<{
+      target_id: string;
+      relationship_type: string;
+    }>`
+      WITH
+        friendships_cte AS (
+          SELECT
+            CASE WHEN f.requester_id = ${userId}::uuid THEN f.addressee_id ELSE f.requester_id END AS target_id,
+            'friend' AS relationship_type
+          FROM friendships f
+          WHERE (f.requester_id = ${userId}::uuid OR f.addressee_id = ${userId}::uuid)
+            AND f.status = 'accepted'
+            AND f.deleted_at IS NULL
+        ),
+        pending_sent_cte AS (
+          SELECT addressee_id AS target_id, 'pending_sent' AS relationship_type
+          FROM friendships
+          WHERE requester_id = ${userId}::uuid
+            AND status = 'pending'
+            AND deleted_at IS NULL
+        ),
+        pending_received_cte AS (
+          SELECT requester_id AS target_id, 'pending_received' AS relationship_type
+          FROM friendships
+          WHERE addressee_id = ${userId}::uuid
+            AND status = 'pending'
+            AND deleted_at IS NULL
+        ),
+        followers_cte AS (
+          SELECT follower_id AS target_id, 'follower' AS relationship_type
+          FROM user_follows
+          WHERE following_id = ${userId}::uuid
+            AND deleted_at IS NULL
+        ),
+        following_cte AS (
+          SELECT following_id AS target_id, 'following' AS relationship_type
+          FROM user_follows
+          WHERE follower_id = ${userId}::uuid
+            AND deleted_at IS NULL
+        ),
+        blocked_cte AS (
+          SELECT blocked_id AS target_id, 'blocked' AS relationship_type
+          FROM blocked_users
+          WHERE blocker_id = ${userId}::uuid
+            AND deleted_at IS NULL
+        ),
+        blocked_by_cte AS (
+          SELECT blocker_id AS target_id, 'blocked_by' AS relationship_type
+          FROM blocked_users
+          WHERE blocked_id = ${userId}::uuid
+            AND deleted_at IS NULL
+        ),
+        all_relationships AS (
+          SELECT target_id, relationship_type FROM friendships_cte
+          UNION ALL SELECT target_id, relationship_type FROM pending_sent_cte
+          UNION ALL SELECT target_id, relationship_type FROM pending_received_cte
+          UNION ALL SELECT target_id, relationship_type FROM followers_cte
+          UNION ALL SELECT target_id, relationship_type FROM following_cte
+          UNION ALL SELECT target_id, relationship_type FROM blocked_cte
+          UNION ALL SELECT target_id, relationship_type FROM blocked_by_cte
+        )
+      SELECT target_id, relationship_type FROM all_relationships
     `);
 
-    // Batch query pending requests (sent by user)
-    const pendingSentRows = await this.db.execute(sql`
-      SELECT addressee_id AS target_id
-      FROM friendships
-      WHERE requester_id = ${userId}::uuid
-        AND status = 'pending'
-        AND deleted_at IS NULL
-    `);
+    const isFriend = new Set<string>();
+    const hasPendingSent = new Set<string>();
+    const hasPendingReceived = new Set<string>();
+    const isFollower = new Set<string>();
+    const isFollowing = new Set<string>();
+    const isBlocked = new Set<string>();
+    const isBlockedBy = new Set<string>();
 
-    // Batch query pending requests (received by user)
-    const pendingReceivedRows = await this.db.execute(sql`
-      SELECT requester_id AS target_id
-      FROM friendships
-      WHERE addressee_id = ${userId}::uuid
-        AND status = 'pending'
-        AND deleted_at IS NULL
-    `);
+    for (const row of rows.rows as Array<{ target_id: string; relationship_type: string }>) {
+      if (!targetSet.has(row.target_id)) continue;
+      switch (row.relationship_type) {
+        case 'friend':
+          isFriend.add(row.target_id);
+          break;
+        case 'pending_sent':
+          hasPendingSent.add(row.target_id);
+          break;
+        case 'pending_received':
+          hasPendingReceived.add(row.target_id);
+          break;
+        case 'follower':
+          isFollower.add(row.target_id);
+          break;
+        case 'following':
+          isFollowing.add(row.target_id);
+          break;
+        case 'blocked':
+          isBlocked.add(row.target_id);
+          break;
+        case 'blocked_by':
+          isBlockedBy.add(row.target_id);
+          break;
+      }
+    }
 
-    // Batch query followers (who follows the user)
-    const followerRows = await this.db.execute(sql`
-      SELECT follower_id AS target_id
-      FROM user_follows
-      WHERE following_id = ${userId}::uuid
-        AND deleted_at IS NULL
-    `);
-
-    // Batch query following (who the user follows)
-    const followingRows = await this.db.execute(sql`
-      SELECT following_id AS target_id
-      FROM user_follows
-      WHERE follower_id = ${userId}::uuid
-        AND deleted_at IS NULL
-    `);
-
-    // Batch query blocks
-    const blockedRows = await this.db.execute(sql`
-      SELECT blocked_id AS target_id
-      FROM blocked_users
-      WHERE blocker_id = ${userId}::uuid
-        AND deleted_at IS NULL
-    `);
-
-    const blockedByRows = await this.db.execute(sql`
-      SELECT blocker_id AS target_id
-      FROM blocked_users
-      WHERE blocked_id = ${userId}::uuid
-        AND deleted_at IS NULL
-    `);
-
-    // Build sets for O(1) lookups
-    const friendsSet = new Set(
-      (friendRows.rows as Array<{ friend_id: string }>).map((r) => r.friend_id),
-    );
-    const pendingSentSet = new Set(
-      (pendingSentRows.rows as Array<{ target_id: string }>).map((r) => r.target_id),
-    );
-    const pendingReceivedSet = new Set(
-      (pendingReceivedRows.rows as Array<{ target_id: string }>).map((r) => r.target_id),
-    );
-    const followersSet = new Set(
-      (followerRows.rows as Array<{ target_id: string }>).map((r) => r.target_id),
-    );
-    const followingSet = new Set(
-      (followingRows.rows as Array<{ target_id: string }>).map((r) => r.target_id),
-    );
-    const blockedSet = new Set(
-      (blockedRows.rows as Array<{ target_id: string }>).map((r) => r.target_id),
-    );
-    const blockedBySet = new Set(
-      (blockedByRows.rows as Array<{ target_id: string }>).map((r) => r.target_id),
-    );
-
-    // Build result map
     const result = new Map<string, RelationshipStatus>();
     for (const targetId of targetIds) {
       result.set(targetId, {
-        isFriend: friendsSet.has(targetId),
-        hasPendingRequest: pendingSentSet.has(targetId) || pendingReceivedSet.has(targetId),
-        isFollower: followersSet.has(targetId),
-        isFollowing: followingSet.has(targetId),
-        isBlocked: blockedSet.has(targetId),
-        isBlockedBy: blockedBySet.has(targetId),
+        isFriend: isFriend.has(targetId),
+        hasPendingRequest: hasPendingSent.has(targetId) || hasPendingReceived.has(targetId),
+        isFollower: isFollower.has(targetId),
+        isFollowing: isFollowing.has(targetId),
+        isBlocked: isBlocked.has(targetId),
+        isBlockedBy: isBlockedBy.has(targetId),
       });
     }
 

@@ -1,6 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { STORAGE_PORT, type StoragePort } from '@/core/storage/storage.port';
-import type { UploadPurpose } from '@/core/storage/storage.types';
 import type {
   AuthorSummaryRow,
   CategorySummaryRow,
@@ -34,7 +33,7 @@ function resolveAuthor(
   const found = context.authorsByUserId?.get(row.creatorId);
   if (!found) return null;
   const avatarUrl = found.avatarPublicId
-    ? storage.deriveUrl(found.avatarPublicId, 'avatar' as UploadPurpose)
+    ? storage.deriveUrl(found.avatarPublicId, 'avatar')
     : found.avatarUrl;
   return {
     userId: found.userId,
@@ -68,7 +67,7 @@ export class QuizResponseMapper {
     row: Pick<QuizWithPublishedVersionRow, 'imageUrl' | 'imagePublicId'>,
   ): string | null {
     if (row.imagePublicId) {
-      return this.storage.deriveUrl(row.imagePublicId, 'quiz' as UploadPurpose);
+      return this.storage.deriveUrl(row.imagePublicId, 'quiz');
     }
     return row.imageUrl ?? null;
   }

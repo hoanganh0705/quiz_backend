@@ -11,11 +11,9 @@
 
 import { Injectable, NestInterceptor, ExecutionContext, CallHandler } from '@nestjs/common';
 import { Observable } from 'rxjs';
-import { randomUUID } from 'node:crypto';
 import { PinoLogger } from 'nestjs-pino';
 import { correlationIdStorage, getCorrelationId } from './correlation-id';
-
-const CORRELATION_ID_HEADER = 'x-correlation-id';
+import { CORRELATION_ID_HEADER, sanitizeCorrelationId } from './correlation-id-validator';
 
 @Injectable()
 export class CorrelationInterceptor implements NestInterceptor {
@@ -24,8 +22,7 @@ export class CorrelationInterceptor implements NestInterceptor {
   intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
     const request = context.switchToHttp().getRequest<Request>();
     const incoming = request.headers[CORRELATION_ID_HEADER] as string | undefined;
-    const correlationId: string =
-      incoming && incoming.length > 0 && incoming.length <= 64 ? incoming : randomUUID();
+    const correlationId = sanitizeCorrelationId(incoming);
 
     const response = context
       .switchToHttp()

@@ -94,7 +94,7 @@ export class TagEventBootstrapService implements OnModuleInit, OnModuleDestroy {
       typeof event === 'object' &&
       event !== null &&
       'eventType' in event &&
-      typeof (event as { eventType: unknown }).eventType === 'string'
+      typeof event.eventType === 'string'
     );
   }
 }

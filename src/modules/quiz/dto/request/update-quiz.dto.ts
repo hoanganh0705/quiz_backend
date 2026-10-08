@@ -3,7 +3,6 @@ import {
   ArrayMaxSize,
   ArrayUnique,
   IsArray,
-  IsBoolean,
   IsOptional,
   IsString,
   IsUrl,
@@ -112,24 +111,6 @@ export class UpdateQuizDto {
     message: STORAGE_PUBLIC_ID_INVALID_MESSAGE,
   })
   imagePublicId?: string | null;
-
-  @ApiPropertyOptional({
-    description: 'Featured on home page',
-    example: true,
-    nullable: true,
-  })
-  @IsOptional()
-  @IsBoolean()
-  isFeatured?: boolean;
-
-  @ApiPropertyOptional({
-    description: 'Hidden from public listings',
-    example: false,
-    nullable: true,
-  })
-  @IsOptional()
-  @IsBoolean()
-  isHidden?: boolean;
 
   @ApiPropertyOptional({
     description: 'Associated category UUID',

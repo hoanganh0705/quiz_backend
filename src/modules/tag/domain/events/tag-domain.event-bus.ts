@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional, Inject } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import type { BaseEventHandler } from '@/common/events/base-domain-event-bus';
 import { BaseDomainEventBus } from '@/common/events/base-domain-event-bus';
@@ -11,6 +11,7 @@ import type {
   TagUnfollowedEvent,
 } from './tag-domain.events';
 import type { TagDomainEventBusPort } from './tag-domain-event-bus.port';
+import { TracingProvider } from '@/core/observability/tracing.provider';
 
 export type TagDomainEvent =
   | TagCreatedEvent
@@ -28,8 +29,11 @@ export class TagDomainEventBus
   constructor(
     @InjectPinoLogger(TagDomainEventBus.name)
     logger: PinoLogger,
+    @Optional()
+    @Inject(TracingProvider)
+    tracing?: TracingProvider,
   ) {
-    super(logger, { logEventName: 'tag_event' });
+    super(logger, { logEventName: 'tag_event' }, tracing);
   }
 
   emitTagCreated(event: TagCreatedEvent): void {

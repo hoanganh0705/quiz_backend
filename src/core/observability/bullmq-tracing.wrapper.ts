@@ -34,7 +34,7 @@ export class BullmqTracingWrapper {
           // Embed the trace id in the job data so the consumer
           // can attach to the same trace.
           await job.updateData({
-            ...((job.data as Record<string, unknown> | undefined) ?? {}),
+            ...(job.data ?? {}),
             [JOB_TRACE_ID_FIELD]: span.traceId,
             [JOB_TRACE_SPAN_FIELD]: span.spanId,
           } as unknown as Parameters<Job<T>['updateData']>[0]);

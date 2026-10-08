@@ -70,6 +70,22 @@ export const outboxEvents = pgTable(
       'btree',
       table.idempotencyKey.asc().nullsLast().op('text_ops'),
     ),
+    // Partial composite index that matches the polling query in
+    // `BaseOutboxProcessor.buildPendingWhere`:
+    //   aggregate_type = ? AND processed_at IS NULL AND failed_at IS NULL
+    //   AND next_attempt_at <= now
+    // The leading `aggregate_type` column lets the planner seek directly to
+    // a single aggregate partition; the partial predicate trims the index
+    // to the unprocessed queue only.
+    index('idx_outbox_events_pending_processor')
+      .using(
+        'btree',
+        table.aggregateType.asc().nullsLast().op('text_ops'),
+        table.processedAt.asc().nullsLast().op('timestamptz_ops'),
+        table.failedAt.asc().nullsLast().op('timestamptz_ops'),
+        table.nextAttemptAt.asc().nullsLast().op('timestamptz_ops'),
+      )
+      .where(sql`processed_at IS NULL`),
     // Partial unique index on the idempotency key for unprocessed events.
     // Once an event is processed, its row is preserved for audit (and a
     // future event with the same key — e.g. a manual resend — should still

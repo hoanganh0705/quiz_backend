@@ -19,7 +19,7 @@ describe('DrizzleTracingWrapper', () => {
   beforeEach(() => {
     spansSeen.length = 0;
     tracing = new CaptureTracing();
-    wrapper = new DrizzleTracingWrapper(tracing as never);
+    wrapper = new DrizzleTracingWrapper(tracing);
   });
 
   const makeFakeClient = () => ({

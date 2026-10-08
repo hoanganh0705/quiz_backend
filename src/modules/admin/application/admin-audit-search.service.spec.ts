@@ -1,6 +1,5 @@
 import { AdminAuditSearchService } from './admin-audit-search.service';
 import type { DrizzleDB } from '@/core/database/database.module';
-import type { AdminAuditSearchQueryDto } from '../dto/admin-audit-search-query.dto';
 
 describe('AdminAuditSearchService', () => {
   it('clamps the limit to 100', async () => {
@@ -23,7 +22,7 @@ describe('AdminAuditSearchService', () => {
     } as unknown as DrizzleDB;
 
     const service = new AdminAuditSearchService(fake);
-    const result = await service.search({ limit: 999 } as AdminAuditSearchQueryDto);
+    const result = await service.search({ limit: 999 });
     expect(result.limit).toBe(100);
   });
 
@@ -53,7 +52,7 @@ describe('AdminAuditSearchService', () => {
     } as unknown as DrizzleDB;
 
     const service = new AdminAuditSearchService(fake);
-    const result = await service.search({} as AdminAuditSearchQueryDto);
+    const result = await service.search({});
     expect(result.page).toBe(1);
     expect(fake['capturedOffset']).toBe(0);
   });
@@ -96,7 +95,7 @@ describe('AdminAuditSearchService', () => {
     } as unknown as DrizzleDB;
 
     const service = new AdminAuditSearchService(fake);
-    const result = await service.search({} as AdminAuditSearchQueryDto);
+    const result = await service.search({});
     expect(result.items[0]).toMatchObject({
       domain: 'achievement',
       action: 'badge.revoked',

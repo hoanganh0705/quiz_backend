@@ -73,7 +73,7 @@ export class CoinRefundService {
       };
     }
 
-    const nowIso = now.toISOString();
+    const _nowIso = now.toISOString();
 
     const result = await this.db.transaction(async (tx) => {
       const original = await this.findTransactionForRefund(tx, params.originalTransactionId);

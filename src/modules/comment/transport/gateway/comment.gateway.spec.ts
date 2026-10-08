@@ -22,6 +22,7 @@ import type {
   CommentEditedEvent,
   CommentHiddenEvent,
   CommentMentionedEvent,
+  CommentReportedEvent,
   CommentRestoredEvent,
   CommentSnapshot,
   ReportReviewedEvent,
@@ -364,5 +365,54 @@ describe('CommentGateway.serializeEvent (via pushToQuiz/pushToUser)', () => {
     gateway.pushToQuiz(event);
 
     expect(toRoom).not.toHaveBeenCalled();
+  });
+
+  it('omits reporterId from the comment_reported wire payload sent to quiz subscribers', () => {
+    const { gateway, toRoom } = makeGateway();
+
+    const event: CommentReportedEvent = {
+      eventType: 'comment_reported',
+      reportId: 'report-1',
+      commentId: 'comment-1',
+      quizId: 'quiz-1',
+      commentExcerpt: 'Excerpt text',
+      reporterId: 'reporter-42',
+      reason: 'spam',
+      timestamp: new Date('2026-08-11T19:00:00.000Z'),
+    };
+
+    gateway.pushToQuiz(event);
+
+    const { payload } = captureEmit(toRoom);
+    expect(payload).toMatchObject({
+      eventType: 'comment_reported',
+      reportId: 'report-1',
+      commentId: 'comment-1',
+      quizId: 'quiz-1',
+      commentExcerpt: 'Excerpt text',
+      reason: 'spam',
+    });
+    expect(payload).not.toHaveProperty('reporterId');
+  });
+
+  it('also omits reporterId when comment_reported is delivered to the reporter\u2019s own user room via pushToUser', () => {
+    const { gateway, toRoom } = makeGateway();
+
+    const event: CommentReportedEvent = {
+      eventType: 'comment_reported',
+      reportId: 'report-2',
+      commentId: 'comment-2',
+      quizId: 'quiz-2',
+      commentExcerpt: 'Excerpt text',
+      reporterId: 'reporter-42',
+      reason: 'harassment',
+      timestamp: new Date('2026-08-11T20:00:00.000Z'),
+    };
+
+    gateway.pushToUser('reporter-42', event);
+
+    const { payload } = captureEmit(toRoom);
+    expect(payload.eventType).toBe('comment_reported');
+    expect(payload).not.toHaveProperty('reporterId');
   });
 });

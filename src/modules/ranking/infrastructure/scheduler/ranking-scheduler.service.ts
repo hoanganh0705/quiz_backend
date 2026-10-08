@@ -1,7 +1,10 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { CACHE_PROVIDER, type CacheProvider } from '@/common/ports/cache.provider';
+import { REDIS_CIRCUIT_PORT, type RedisCircuitPort } from '@/common/ports/redis-circuit.port';
+import { acquireSchedulerLockOrRecordSkip } from '@/core/redis/scheduler-lock.helper';
+import { MetricsRegistry } from '@/core/observability/metrics.registry';
 import { RankCalculationService } from '../../domain/services/rank-calculation.service';
 import { PeriodResetService } from '../../domain/services/period-reset.service';
 import { RankingPeriod } from '../../domain/types/ranking.types';
@@ -36,6 +39,10 @@ export class RankingSchedulerService {
     private readonly eventBus: RankingDomainEventBusPort,
     @Inject(CACHE_PROVIDER)
     private readonly cache: CacheProvider,
+    @Inject(REDIS_CIRCUIT_PORT)
+    private readonly redisCircuit: RedisCircuitPort,
+    @Optional()
+    private readonly metrics: MetricsRegistry,
     @InjectPinoLogger(RankingSchedulerService.name)
     private readonly logger: PinoLogger,
   ) {}
@@ -52,16 +59,24 @@ export class RankingSchedulerService {
   @Cron('*/30 * * * * *')
   async handleDirtyRankings(): Promise<void> {
     const lockKey = 'ranking:cron:dirty-rankings';
-    const lockToken = await this.cache.acquireAdvisoryLock(lockKey, LOCK_TTL_MS.DIRTY_RANKINGS);
-
-    if (lockToken === null) {
+    const result = await acquireSchedulerLockOrRecordSkip({
+      cache: this.cache,
+      circuit: this.redisCircuit,
+      metrics: this.metrics,
+      lockKey,
+      lockTtlMs: LOCK_TTL_MS.DIRTY_RANKINGS,
+      job: 'ranking-dirty-rankings',
+    });
+    if (!result.acquired) {
       this.logger.debug({
         event: 'ranking_scheduler_skipped_lock_held',
         job: 'handleDirtyRankings',
+        reason: result.reason,
       });
       return;
     }
 
+    const lockToken = result.token;
     try {
       const startTime = Date.now();
       const processed = await this.rankCalculationService.processDirtyRankings();
@@ -95,16 +110,24 @@ export class RankingSchedulerService {
   @Cron('*/30 * * * * *')
   async handlePeriodResets(): Promise<void> {
     const lockKey = 'ranking:cron:period-reset';
-    const lockToken = await this.cache.acquireAdvisoryLock(lockKey, LOCK_TTL_MS.PERIOD_RESET);
-
-    if (lockToken === null) {
+    const result = await acquireSchedulerLockOrRecordSkip({
+      cache: this.cache,
+      circuit: this.redisCircuit,
+      metrics: this.metrics,
+      lockKey,
+      lockTtlMs: LOCK_TTL_MS.PERIOD_RESET,
+      job: 'ranking-period-reset',
+    });
+    if (!result.acquired) {
       this.logger.debug({
         event: 'ranking_scheduler_skipped_lock_held',
         job: 'handlePeriodResets',
+        reason: result.reason,
       });
       return;
     }
 
+    const lockToken = result.token;
     try {
       const startTime = Date.now();
 
@@ -146,16 +169,24 @@ export class RankingSchedulerService {
   @Cron('0 * * * *')
   async handleRankSnapshots(): Promise<void> {
     const lockKey = 'ranking:cron:snapshot';
-    const lockToken = await this.cache.acquireAdvisoryLock(lockKey, LOCK_TTL_MS.SNAPSHOT);
-
-    if (lockToken === null) {
+    const result = await acquireSchedulerLockOrRecordSkip({
+      cache: this.cache,
+      circuit: this.redisCircuit,
+      metrics: this.metrics,
+      lockKey,
+      lockTtlMs: LOCK_TTL_MS.SNAPSHOT,
+      job: 'ranking-rank-snapshots',
+    });
+    if (!result.acquired) {
       this.logger.debug({
         event: 'ranking_scheduler_skipped_lock_held',
         job: 'handleRankSnapshots',
+        reason: result.reason,
       });
       return;
     }
 
+    const lockToken = result.token;
     try {
       const snapshotTime = new Date();
 
@@ -193,16 +224,24 @@ export class RankingSchedulerService {
   @Cron('0 4 * * *')
   async handleConsistencyCheck(): Promise<void> {
     const lockKey = 'ranking:cron:consistency';
-    const lockToken = await this.cache.acquireAdvisoryLock(lockKey, LOCK_TTL_MS.CONSISTENCY);
-
-    if (lockToken === null) {
+    const result = await acquireSchedulerLockOrRecordSkip({
+      cache: this.cache,
+      circuit: this.redisCircuit,
+      metrics: this.metrics,
+      lockKey,
+      lockTtlMs: LOCK_TTL_MS.CONSISTENCY,
+      job: 'ranking-consistency-check',
+    });
+    if (!result.acquired) {
       this.logger.debug({
         event: 'ranking_scheduler_skipped_lock_held',
         job: 'handleConsistencyCheck',
+        reason: result.reason,
       });
       return;
     }
 
+    const lockToken = result.token;
     try {
       const startTime = Date.now();
       const report = await this.rankCalculationService.performConsistencyCheck();

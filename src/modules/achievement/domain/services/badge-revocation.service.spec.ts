@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/unbound-method */
 import { BadgeRevocationService } from './badge-revocation.service';
 import type { AchievementRepositoryPort } from '../../infrastructure/repositories/achievement.repository';
 import type { AchievementDomainEventBus } from '../events/achievement-domain.event-bus';
@@ -37,11 +36,7 @@ describe('BadgeRevocationService', () => {
   beforeEach(() => {
     repo = buildRepositoryMock();
     eventBus = buildEventBusMock();
-    service = new BadgeRevocationService(
-      repo as never,
-      eventBus as never,
-      createFakeLogger() as never,
-    );
+    service = new BadgeRevocationService(repo, eventBus, createFakeLogger() as never);
   });
 
   describe('validateRequest', () => {

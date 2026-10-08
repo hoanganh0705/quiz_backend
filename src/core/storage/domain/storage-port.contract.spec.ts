@@ -12,12 +12,11 @@
  */
 import { FakeStorageAdapter } from '../infrastructure/fake/fake-storage.adapter';
 import type { StoragePort, UploadInput } from '../storage.types';
-import { UPLOAD_POLICY } from './upload-policy';
 
 const UUID_V7 = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 
 const OWNER_A = '0190b1c2-7f3a-7aaa-bbbb-aaaaaaaaaaaa';
-const OWNER_B = '0190b1c2-7f3a-7aaa-bbbb-bbbbbbbbbbbb';
+const _OWNER_B = '0190b1c2-7f3a-7aaa-bbbb-bbbbbbbbbbbb';
 
 function makeInput(ownerId: string, purpose: 'avatar' | 'quiz'): UploadInput {
   return {

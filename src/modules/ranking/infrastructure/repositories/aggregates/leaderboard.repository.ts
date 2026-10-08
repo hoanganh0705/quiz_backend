@@ -32,7 +32,7 @@ export class LeaderboardRepository {
   ) {}
 
   private async executeRaw<T>(query: ReturnType<typeof sql>): Promise<RawQueryResult<T>> {
-    return (await this.db.execute(query)) as unknown as RawQueryResult<T>;
+    return await this.db.execute(query);
   }
 
   async getLeaderboard(params: {

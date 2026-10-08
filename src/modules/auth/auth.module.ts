@@ -74,7 +74,7 @@ import { OAuthEventService } from './domain/oauth/oauth-event.service';
 import { NotificationModule } from '@/modules/notification/notification.module';
 import { IdempotencyCleanupScheduler } from './infrastructure/scheduler/idempotency-cleanup.scheduler';
 import { SessionCleanupScheduler } from './infrastructure/scheduler/session-cleanup.scheduler';
-import { OutboxCleanupScheduler } from '@/modules/outbox/infrastructure/scheduler/outbox-cleanup.scheduler';
+import { OutboxCleanupScheduler } from './infrastructure/scheduler/outbox-cleanup.scheduler';
 @Module({
   imports: [CommonModule, DatabaseModule, RedisModule, EmailModule, NotificationModule],
   controllers: [AuthController],

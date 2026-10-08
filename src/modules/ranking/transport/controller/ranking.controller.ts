@@ -4,13 +4,16 @@ import {
   Param,
   ParseUUIDPipe,
   Query,
+  Res,
   UseGuards,
   applyDecorators,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import { Throttle } from '@nestjs/throttler';
 import {
   ApiBadRequestResponse,
   ApiBearerAuth,
+  ApiHeader,
   ApiOperation,
   ApiParam,
   ApiTags,
@@ -135,15 +138,36 @@ export class RankingController {
       'Supports offset-based pagination via `limit` (1–500, default 100) and `off set`. ' +
       'No 404 or 403 is possible on this endpoint. ' +
       'Note: `userPosition` is always `null` on this public variant.',
+    deprecated: true,
   })
   @ApiOkResource(LeaderboardResponseDto, { description: 'Leaderboard returned' })
   @rankingBadRequestResponse()
-  async getGlobalLeaderboard(@Query() query: LeaderboardQueryDto) {
+  @ApiHeader({
+    name: 'Deprecation',
+    description: 'Always `true` to signal this endpoint will be removed.',
+  })
+  @ApiHeader({
+    name: 'Sunset',
+    description: 'RFC 7231 sunset date (30 days from generation).',
+  })
+  @ApiHeader({
+    name: 'Link',
+    description: 'Successor endpoint: `</leaderboard/cursor>; rel="successor-version"`.',
+  })
+  async getGlobalLeaderboard(
+    @Query() query: LeaderboardQueryDto,
+    @Res({ passthrough: true }) res: Response,
+  ) {
     const result = await this.leaderboardService.getGlobalLeaderboard({
       period: query.period ?? RankingPeriodEnum.ALL_TIME,
       limit: query.limit ?? 100,
       offset: query.offset ?? 0,
     });
+    const sunset = new Date();
+    sunset.setUTCDate(sunset.getUTCDate() + 30);
+    res.setHeader('Deprecation', 'true');
+    res.setHeader('Sunset', sunset.toUTCString());
+    res.setHeader('Link', '</leaderboard/cursor>; rel="successor-version"');
     return this.presenter.getGlobalLeaderboard(result);
   }
 

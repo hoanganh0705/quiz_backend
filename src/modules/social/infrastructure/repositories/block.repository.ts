@@ -4,7 +4,7 @@ import type { DrizzleDB } from '@/core/database/database.module';
 import { blockedUsers } from '@/core/database/schema';
 import type { BlockExecutor, BlockRepositoryPort } from '../../domain/ports/block-ports';
 import type { BlockedUser } from '../../domain/types/social.types';
-import { eq, and, desc, count, sql, isNull } from 'drizzle-orm';
+import { eq, and, desc, count, sql } from 'drizzle-orm';
 import { notDeleted } from '@/common/database/soft-delete.helper';
 
 @Injectable()
@@ -53,7 +53,7 @@ export class BlockRepository implements BlockRepositoryPort {
       throw new Error('blockUser: UPSERT returned no row');
     }
 
-    return row as BlockedUser;
+    return row;
   }
 
   async blockUserInTx(
@@ -103,7 +103,7 @@ export class BlockRepository implements BlockRepositoryPort {
       throw new Error('blockUserInTx: UPSERT returned no row');
     }
 
-    return row as BlockedUser;
+    return row;
   }
 
   /**
@@ -113,7 +113,7 @@ export class BlockRepository implements BlockRepositoryPort {
    * can detect a tight concurrent-unblock race.
    */
   async unblockUser(blockerId: string, blockedId: string): Promise<number> {
-    return this.unblockUserInTx(this.db as unknown as BlockExecutor, blockerId, blockedId);
+    return this.unblockUserInTx(this.db, blockerId, blockedId);
   }
 
   async unblockUserInTx(tx: BlockExecutor, blockerId: string, blockedId: string): Promise<number> {
@@ -143,7 +143,7 @@ export class BlockRepository implements BlockRepositoryPort {
       )
       .limit(1);
 
-    return (row as BlockedUser | undefined) ?? null;
+    return row ?? null;
   }
 
   async isBlocked(blockerId: string, blockedId: string): Promise<boolean> {
@@ -168,6 +168,6 @@ export class BlockRepository implements BlockRepositoryPort {
       .where(and(eq(blockedUsers.blockerId, blockerId), notDeleted(blockedUsers.deletedAt)))
       .orderBy(desc(blockedUsers.createdAt));
 
-    return rows as BlockedUser[];
+    return rows;
   }
 }

@@ -51,7 +51,7 @@ export class IdempotencyService {
           key,
           userId,
           operation,
-          response: response as Record<string, unknown>,
+          response: response,
           createdAt: nowIso,
           expiresAt,
         })

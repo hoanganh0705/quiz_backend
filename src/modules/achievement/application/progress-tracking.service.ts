@@ -56,13 +56,16 @@ export class ProgressTrackingService {
     userId: string,
     badgeId: string,
   ): Promise<BadgeProgressSnapshot | null> {
-    const badge = await this.achievementRepository.getBadgeById(badgeId);
+    const [badge, rules] = await Promise.all([
+      this.achievementRepository.getBadgeById(badgeId),
+      this.achievementRepository.getBadgeRules(badgeId),
+    ]);
+
     if (!badge) {
       this.logger.debug({ event: 'badge_progress_badge_not_found', userId, badgeId });
       return null;
     }
 
-    const rules = await this.achievementRepository.getBadgeRules(badgeId);
     const primaryRule = rules[0] ?? null;
 
     const target = this.resolveTarget(primaryRule?.config ?? null, badgeId);
@@ -120,8 +123,9 @@ export class ProgressTrackingService {
   }
 
   async getUserProgress(userId: string): Promise<ProgressResponse[]> {
-    const badges = await this.achievementRepository.getAllActiveBadges();
-    const visibleBadges = badges.filter((b) => !b.isHidden);
+    const visibleBadges = await this.achievementRepository.getAllActiveBadges({
+      includeHidden: false,
+    });
 
     if (visibleBadges.length === 0) return [];
 

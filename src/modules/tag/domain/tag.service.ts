@@ -43,7 +43,10 @@ import {
 } from './events/tag-domain.events';
 import { RedisService } from '@/core/redis/redis.service';
 
-const RANKING_CACHE_TTL_MS = 60_000;
+const RANKING_CACHE_TTL_MS = 10 * 60 * 1000;
+const STAMPEDE_LOCK_TTL_MS = 5_000;
+const STAMPEDE_RETRY_DELAY_MS = 50;
+const STAMPEDE_MAX_RETRIES = 10;
 
 @Injectable()
 export class TagDomainService {
@@ -166,6 +169,7 @@ export class TagDomainService {
 
     this.logger.info({ event: 'tag_created', tagId: tag.tagId, slug });
     this.eventBus.emitTagCreated(new TagCreatedEvent(tag.tagId, name, slug, nowIso));
+    await this.invalidateRankingCache();
 
     return tag;
   }
@@ -209,6 +213,7 @@ export class TagDomainService {
 
     this.logger.info({ event: 'tag_updated', tagId });
     this.eventBus.emitTagUpdated(new TagUpdatedEvent(tagId, nowIso));
+    await this.invalidateRankingCache();
 
     return updated;
   }
@@ -322,28 +327,30 @@ export class TagDomainService {
 
   async getPopularTags(query: TagRankingQuery): Promise<RankedTagRow[]> {
     const limit = query.limit ?? 10;
-    const version = await this.getRankingVersion();
-    const cacheKey = `tag:ranking:popular:${limit}:v${version}`;
-    const cached = await this.cache.get(cacheKey);
-    if (cached !== null) {
-      return JSON.parse(cached) as RankedTagRow[];
-    }
-    const rows = await this.tagRankingRepository.getPopularTags(limit);
-    await this.cache.set(cacheKey, JSON.stringify(rows), RANKING_CACHE_TTL_MS);
-    return rows;
+    const cacheKey = await this.buildRankingCacheKey('tag:ranking:popular', limit);
+
+    return this.cache.getOrSetWithStampedeProtection<RankedTagRow[]>(
+      cacheKey,
+      RANKING_CACHE_TTL_MS,
+      () => this.tagRankingRepository.getPopularTags(limit),
+      STAMPEDE_LOCK_TTL_MS,
+      STAMPEDE_RETRY_DELAY_MS,
+      STAMPEDE_MAX_RETRIES,
+    );
   }
 
   async getTrendingTags(query: TagRankingQuery): Promise<RankedTagRow[]> {
     const limit = query.limit ?? 10;
-    const version = await this.getRankingVersion();
-    const cacheKey = `tag:ranking:trending:${limit}:v${version}`;
-    const cached = await this.cache.get(cacheKey);
-    if (cached !== null) {
-      return JSON.parse(cached) as RankedTagRow[];
-    }
-    const rows = await this.tagRankingRepository.getTrendingTags(limit);
-    await this.cache.set(cacheKey, JSON.stringify(rows), RANKING_CACHE_TTL_MS);
-    return rows;
+    const cacheKey = await this.buildRankingCacheKey('tag:ranking:trending', limit);
+
+    return this.cache.getOrSetWithStampedeProtection<RankedTagRow[]>(
+      cacheKey,
+      RANKING_CACHE_TTL_MS,
+      () => this.tagRankingRepository.getTrendingTags(limit),
+      STAMPEDE_LOCK_TTL_MS,
+      STAMPEDE_RETRY_DELAY_MS,
+      STAMPEDE_MAX_RETRIES,
+    );
   }
 
   /**
@@ -354,10 +361,12 @@ export class TagDomainService {
    * version collisions on cold restart).
    */
   private async invalidateRankingCache(): Promise<void> {
-    const key = 'tag:ranking:version';
-    const current = await this.cache.get(key);
-    const next = (Number(current ?? '0') || 0) + 1;
-    await this.cache.set(key, String(next), 86_400_000);
+    await this.cache.incrementCounterWithInitialTtlSeconds('tag:ranking:version', 86_400);
+  }
+
+  private async buildRankingCacheKey(namespace: string, limit: number): Promise<string> {
+    const version = await this.getRankingVersion();
+    return `${namespace}:${limit}:v${version}`;
   }
 
   /**

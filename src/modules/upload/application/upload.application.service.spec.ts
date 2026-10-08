@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/prefer-promise-reject-errors, @typescript-eslint/require-await, @typescript-eslint/only-throw-error */
+/* eslint-disable @typescript-eslint/prefer-promise-reject-errors, @typescript-eslint/only-throw-error */
 
 import {
   BadRequestException,
@@ -126,13 +126,16 @@ class FakeOwnershipService {
 }
 
 function makeFile(overrides: Partial<Express.Multer.File> = {}): Express.Multer.File {
+  const defaultBuffer = Buffer.from([
+    0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d,
+  ]);
   return {
     fieldname: 'file',
     originalname: 'avatar.png',
     encoding: '7bit',
     mimetype: 'image/png',
     size: 1024,
-    buffer: Buffer.from('fake-png-bytes'),
+    buffer: defaultBuffer,
     destination: '',
     filename: '',
     path: '',
@@ -182,7 +185,8 @@ describe('UploadApplicationService', () => {
 
     it('uses the quiz folder when purpose is quiz', async () => {
       const { service, storage, ownership } = makeService();
-      const file = makeFile({ size: 2 * 1024 * 1024, mimetype: 'image/jpeg' });
+      const jpegBytes = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46]);
+      const file = makeFile({ size: 2 * 1024 * 1024, mimetype: 'image/jpeg', buffer: jpegBytes });
       const result = await service.uploadAvatarOrQuizCover({
         ownerId: 'u1',
         purpose: 'quiz',
@@ -231,10 +235,46 @@ describe('UploadApplicationService', () => {
 
     it('rejects an oversized quiz cover (8 MB + 1 byte)', async () => {
       const { service } = makeService();
-      const file = makeFile({ size: 8 * 1024 * 1024 + 1, mimetype: 'image/jpeg' });
+      const jpegBytes = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46]);
+      const file = makeFile({
+        size: 8 * 1024 * 1024 + 1,
+        mimetype: 'image/jpeg',
+        buffer: jpegBytes,
+      });
       await expect(
         service.uploadAvatarOrQuizCover({ ownerId: 'u1', purpose: 'quiz', file }),
       ).rejects.toBeInstanceOf(PayloadTooLargeException);
+    });
+
+    it('rejects a buffer whose magic bytes do not match the declared MIME', async () => {
+      const { service, storage } = makeService();
+      const file = makeFile({
+        mimetype: 'image/png',
+        buffer: Buffer.from([0x7f, 0x45, 0x4c, 0x46, 0x02, 0x01, 0x01, 0x00]),
+      });
+      await expect(
+        service.uploadAvatarOrQuizCover({ ownerId: 'u1', purpose: 'avatar', file }),
+      ).rejects.toBeInstanceOf(UnsupportedMediaTypeException);
+      expect(storage.uploaded).toHaveLength(0);
+    });
+
+    it('accepts a real JPEG whose magic bytes match the declared MIME', async () => {
+      const { service, storage } = makeService();
+      const jpegBytes = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46]);
+      const file = makeFile({ mimetype: 'image/jpeg', buffer: jpegBytes });
+      await service.uploadAvatarOrQuizCover({ ownerId: 'u1', purpose: 'avatar', file });
+      expect(storage.uploaded).toHaveLength(1);
+    });
+
+    it('accepts a real WebP whose magic bytes match the declared MIME', async () => {
+      const { service, storage } = makeService();
+      const riff = Buffer.from('RIFF', 'ascii');
+      const size = Buffer.from([0x1a, 0x00, 0x00, 0x00]);
+      const webp = Buffer.from('WEBP', 'ascii');
+      const webpBytes = Buffer.concat([riff, size, webp]);
+      const file = makeFile({ mimetype: 'image/webp', buffer: webpBytes });
+      await service.uploadAvatarOrQuizCover({ ownerId: 'u1', purpose: 'avatar', file });
+      expect(storage.uploaded).toHaveLength(1);
     });
   });
 

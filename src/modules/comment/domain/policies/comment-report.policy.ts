@@ -1,9 +1,5 @@
 export type CommentReportReason =
-  | 'spam'
-  | 'harassment'
-  | 'inappropriate_content'
-  | 'misinformation'
-  | 'other';
+  'spam' | 'harassment' | 'inappropriate_content' | 'misinformation' | 'other';
 
 export const COMMENT_REPORT_REASON_VALUES = [
   'spam',

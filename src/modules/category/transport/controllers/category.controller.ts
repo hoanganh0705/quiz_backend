@@ -62,6 +62,7 @@ export class CategoryController {
 
   @Get('popular')
   @Public()
+  @Throttle({ default: { limit: 60, ttl: 60_000 } })
   @ApiOperation({ summary: 'List popular categories' })
   @ApiPopularCategoriesResponse()
   async getPopularCategories(@Query() query: CategoryRankingQueryDto) {
@@ -73,6 +74,7 @@ export class CategoryController {
 
   @Get('trending')
   @Public()
+  @Throttle({ default: { limit: 60, ttl: 60_000 } })
   @ApiOperation({ summary: 'List trending categories' })
   @ApiTrendingCategoriesResponse()
   async getTrendingCategories(@Query() query: CategoryRankingQueryDto) {

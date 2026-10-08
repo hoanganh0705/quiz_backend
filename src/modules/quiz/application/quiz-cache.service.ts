@@ -3,13 +3,20 @@ import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { createHash } from 'crypto';
 import { CACHE_PROVIDER, type CacheProvider } from '@/common/ports/cache.provider';
 
-export const QUIZ_LIST_CACHE_TTL_MS = 60_000;
+export const QUIZ_LIST_CACHE_TTL_MS = 10 * 60_000;
 export const QUIZ_STATS_CACHE_TTL_MS = 5 * 60_000;
-export const USER_PROFILE_BUNDLE_CACHE_TTL_MS = 2 * 60_000;
+export const QUIZ_SINGLE_CACHE_TTL_MS = 15 * 60_000;
+export const QUIZ_TRENDING_CACHE_TTL_MS = 10 * 60_000;
+export const QUIZ_POPULAR_CACHE_TTL_MS = 10 * 60_000;
+export const QUIZ_FEATURED_CACHE_TTL_MS = 30 * 60_000;
 
 export const QUIZ_LIST_CACHE_NAMESPACE = 'quiz:list:v1';
 export const QUIZ_STATS_CACHE_NAMESPACE = 'quiz:stats:v1';
-export const USER_PROFILE_BUNDLE_CACHE_NAMESPACE = 'user:profile-bundle:v1';
+export const QUIZ_SINGLE_CACHE_NAMESPACE = 'quiz';
+export const QUIZ_TRENDING_CACHE_KEY = 'quiz:trending:v1';
+export const QUIZ_POPULAR_CACHE_KEY = 'quiz:popular:v1';
+export const QUIZ_FEATURED_CACHE_KEY = 'quiz:featured:v1';
+export const QUIZ_AGGREGATE_CACHE_TTL_MS = 5 * 60_000;
 
 const STAMPEDE_LOCK_TTL_MS = 5_000;
 const STAMPEDE_RETRY_DELAY_MS = 50;
@@ -69,27 +76,19 @@ export class QuizCacheService {
   }
 
   /**
-   * Invalidate every list-cache entry. Called on
+   * Wipe every list-cache entry under `quiz:list:v1:*`. Called on
    * `QuizCreatedEvent` / `QuizUpdatedEvent` / `QuizDeletedEvent`.
-   * The catalog is small enough that a `KEYS` scan + delete is
-   * acceptable; the keys are namespace-prefixed so the scan is
-   * bounded.
    *
-   * For very large catalogs a `scan` + `unlink` is preferred over
-   * `keys` to avoid blocking Redis. Today's cache surface is
-   * 60s × ~100 unique pages = ~600 keys max, well below the
-   * threshold where `keys` becomes a problem.
+   * The catalog is small enough that a `SCAN` + `UNLINK` sweep is
+   * acceptable; the keys are namespace-prefixed so the scan is
+   * bounded. `UNLINK` is used over `DEL` so memory reclaim happens
+   * off the Redis main thread, and `SCAN` is used over `KEYS` for
+   * the same reason — `KEYS` blocks the server until the scan
+   * completes.
    */
   async invalidateList(): Promise<void> {
-    const keys = await this.cache.get(`${QUIZ_LIST_CACHE_NAMESPACE}:sentinel`);
-    // The cache provider exposes `get`/`set`/`del` but not `keys`.
-    // Instead of adding a `keys` helper, we delete the
-    // namespace sentinel that the next list read will rewrite —
-    // callers always run the fetcher on a fresh cache miss.
-    if (keys !== null) {
-      await this.cache.del(`${QUIZ_LIST_CACHE_NAMESPACE}:sentinel`);
-    }
-    this.logger.info({ event: 'quiz_list_cache_invalidated' });
+    const removed = await this.cache.unlinkByPattern(`${QUIZ_LIST_CACHE_NAMESPACE}:*`);
+    this.logger.info({ event: 'quiz_list_cache_invalidated', removed });
   }
 
   // ─── Stats cache ───────────────────────────────────────────────────────
@@ -113,12 +112,16 @@ export class QuizCacheService {
     return `${QUIZ_STATS_CACHE_NAMESPACE}:${quizId}`;
   }
 
-  // ─── Profile bundle cache ─────────────────────────────────────────────
+  // ─── Single quiz cache ─────────────────────────────────────────────────
 
-  async getOrSetProfileBundle<T>(userId: string, fetcher: () => Promise<T>): Promise<T> {
+  async getOrSetQuiz<T>(
+    quizId: string,
+    versionHash: string,
+    fetcher: () => Promise<T>,
+  ): Promise<T> {
     return this.cache.getOrSetWithStampedeProtection<T>(
-      this.profileBundleKey(userId),
-      USER_PROFILE_BUNDLE_CACHE_TTL_MS,
+      this.singleQuizKey(quizId, versionHash),
+      QUIZ_SINGLE_CACHE_TTL_MS,
       fetcher,
       STAMPEDE_LOCK_TTL_MS,
       STAMPEDE_RETRY_DELAY_MS,
@@ -126,13 +129,101 @@ export class QuizCacheService {
     );
   }
 
-  async invalidateProfileBundle(userId: string): Promise<void> {
-    await this.cache.del(this.profileBundleKey(userId));
+  async invalidateQuiz(quizId: string): Promise<void> {
+    await this.cache.unlinkByPattern(`${QUIZ_SINGLE_CACHE_NAMESPACE}:${quizId}:v:*`);
+    this.logger.debug({ event: 'quiz_cache_invalidated', quizId });
   }
 
-  private profileBundleKey(userId: string): string {
-    return `${USER_PROFILE_BUNDLE_CACHE_NAMESPACE}:${userId}`;
+  private singleQuizKey(quizId: string, versionHash: string): string {
+    return `${QUIZ_SINGLE_CACHE_NAMESPACE}:${quizId}:v:${versionHash}`;
   }
+
+  // ─── Trending cache ───────────────────────────────────────────────────
+
+  async getOrSetTrending<T>(fetcher: () => Promise<T>): Promise<T> {
+    return this.cache.getOrSetWithStampedeProtection<T>(
+      QUIZ_TRENDING_CACHE_KEY,
+      QUIZ_TRENDING_CACHE_TTL_MS,
+      fetcher,
+      STAMPEDE_LOCK_TTL_MS,
+      STAMPEDE_RETRY_DELAY_MS,
+      STAMPEDE_MAX_RETRIES,
+    );
+  }
+
+  async invalidateTrending(): Promise<void> {
+    await this.cache.del(QUIZ_TRENDING_CACHE_KEY);
+    this.logger.debug({ event: 'quiz_trending_cache_invalidated' });
+  }
+
+  // ─── Popular cache ─────────────────────────────────────────────────────
+
+  async getOrSetPopular<T>(fetcher: () => Promise<T>): Promise<T> {
+    return this.cache.getOrSetWithStampedeProtection<T>(
+      QUIZ_POPULAR_CACHE_KEY,
+      QUIZ_POPULAR_CACHE_TTL_MS,
+      fetcher,
+      STAMPEDE_LOCK_TTL_MS,
+      STAMPEDE_RETRY_DELAY_MS,
+      STAMPEDE_MAX_RETRIES,
+    );
+  }
+
+  async invalidatePopular(): Promise<void> {
+    await this.cache.del(QUIZ_POPULAR_CACHE_KEY);
+    this.logger.debug({ event: 'quiz_popular_cache_invalidated' });
+  }
+
+  // ─── Featured cache ─────────────────────────────────────────────────────
+
+  async getOrSetFeatured<T>(fetcher: () => Promise<T>): Promise<T> {
+    return this.cache.getOrSetWithStampedeProtection<T>(
+      QUIZ_FEATURED_CACHE_KEY,
+      QUIZ_FEATURED_CACHE_TTL_MS,
+      fetcher,
+      STAMPEDE_LOCK_TTL_MS,
+      STAMPEDE_RETRY_DELAY_MS,
+      STAMPEDE_MAX_RETRIES,
+    );
+  }
+
+  async invalidateFeatured(): Promise<void> {
+    await this.cache.del(QUIZ_FEATURED_CACHE_KEY);
+    this.logger.debug({ event: 'quiz_featured_cache_invalidated' });
+  }
+
+  // ─── Aggregate cache ─────────────────────────────────────────────────────
+
+  async getOrSetAggregate<T>(
+    quizId: string,
+    versionHash: string,
+    fetcher: () => Promise<T>,
+  ): Promise<T> {
+    return this.cache.getOrSetWithStampedeProtection<T>(
+      this.aggregateKey(quizId, versionHash),
+      QUIZ_AGGREGATE_CACHE_TTL_MS,
+      fetcher,
+      STAMPEDE_LOCK_TTL_MS,
+      STAMPEDE_RETRY_DELAY_MS,
+      STAMPEDE_MAX_RETRIES,
+    );
+  }
+
+  async invalidateAggregate(quizId: string): Promise<void> {
+    await this.cache.unlinkByPattern(`quiz:aggregate:${quizId}:v:*`);
+    this.logger.debug({ event: 'quiz_aggregate_cache_invalidated', quizId });
+  }
+
+  private aggregateKey(quizId: string, versionHash: string): string {
+    return `quiz:aggregate:${quizId}:v:${versionHash}`;
+  }
+
+  // ─── Profile bundle cache ─────────────────────────────────────────────
+  //
+  // The `user:profile-bundle:v1:*` keys are owned by
+  // `UserProfileBundleService`. This service only knows about list /
+  // stats; the user module is responsible for invalidating the
+  // profile bundle on profile / settings / streak updates.
 
   // ─── Helpers ───────────────────────────────────────────────────────────
 

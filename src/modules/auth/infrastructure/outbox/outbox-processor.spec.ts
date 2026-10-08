@@ -28,10 +28,14 @@ function makeUpdateChain() {
 function makeDb(pending: unknown[]) {
   const selectChain = makeSelectChain(pending);
   const updateChain = makeUpdateChain();
+  const rawDb = {
+    select: jest.fn().mockReturnValue(selectChain),
+    update: jest.fn().mockReturnValue(updateChain),
+  };
   return {
     db: {
-      select: jest.fn().mockReturnValue(selectChain),
-      update: jest.fn().mockReturnValue(updateChain),
+      ...rawDb,
+      transaction: jest.fn(async (cb: (tx: typeof rawDb) => Promise<unknown>) => cb(rawDb)),
     },
   };
 }
@@ -159,5 +163,20 @@ describe('OutboxProcessorService (auth) — DLQ monitor', () => {
         totalDlqEvents: 2,
       }),
     );
+  });
+});
+
+describe('OutboxProcessorService (auth) — transaction per-row', () => {
+  it('does not wrap runProcessPendingEvents in a transaction', async () => {
+    const db = makeDb([baseRow]).db;
+    const transactionSpy = jest.spyOn(db, 'transaction');
+
+    const processor = makeProcessor({ pending: [baseRow] });
+    // @ts-expect-error — access private field for test
+    processor['db'] = db;
+
+    await processor.processPendingEvents();
+
+    expect(transactionSpy).not.toHaveBeenCalled();
   });
 });

@@ -79,6 +79,29 @@ export class CoinAdminAdjustmentReasonRequiredError extends BaseDomainException 
   }
 }
 
+export class CoinAdminSelfAdjustmentError extends BaseDomainException {
+  readonly code = 'COIN_ADMIN_SELF_ADJUSTMENT_NOT_ALLOWED';
+  constructor(public readonly adminUserId: string) {
+    super(
+      `COIN_ADMIN_SELF_ADJUSTMENT_NOT_ALLOWED: admin ${adminUserId} cannot adjust their own balance`,
+    );
+  }
+}
+
+export class CoinAdminDailyCapExceededError extends BaseDomainException {
+  readonly code = 'COIN_ADMIN_DAILY_CAP_EXCEEDED';
+  constructor(
+    public readonly adminUserId: string,
+    public readonly dailySum: number,
+    public readonly requested: number,
+    public readonly cap: number,
+  ) {
+    super(
+      `COIN_ADMIN_DAILY_CAP_EXCEEDED: admin ${adminUserId} has already adjusted ${dailySum} coins today; adding ${requested} would exceed the cap of ${cap}`,
+    );
+  }
+}
+
 export class CoinSpendValidationError extends BaseDomainException {
   readonly code = 'COIN_SPEND_INVALID';
   constructor(message: string) {

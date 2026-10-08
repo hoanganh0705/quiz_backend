@@ -56,20 +56,22 @@ import {
  * Tuned against the Socket.IO default reconnection backoff:
  *   - Default reconnect: 1s ± jitter, doubles up to 5s.
  *   - Default `reconnectionAttempts`: Infinity.
- * In other words, a healthy client reconnects within a few
- * seconds of a transient drop. The metadata entry only needs to
- * outlive the typical reconnect window.
+ * A healthy client reconnects within a few seconds of a transient
+ * drop. We extend the metadata TTL to five minutes so that the
+ * registry still has the socket mapping when a healthy client
+ * reconnects after a longer outage (mobile network flap, proxy
+ * reconnect, instance-side crash, etc.). The previous 60s default
+ * was too tight for any of those scenarios.
  *
- * 60 seconds is a deliberately conservative value: it covers
- * realistic transport hiccups (mobile network flap, proxy
- * reconnect) with a wide safety margin, while still bounded
+ * Five minutes is a deliberately generous value: it covers realistic
+ * transport hiccups with a wide safety margin, while still bounded
  * enough that a truly abandoned socket's metadata doesn't linger
  * forever.
  *
- * Operators that want a different window can call `setTtlMs(...)`
- * or pass a different default through the constructor.
+ * Operators that want a different window can call `setTtlMs(...)` or
+ * pass a different default through the constructor.
  */
-const DEFAULT_TTL_MS = 60 * 1000;
+const DEFAULT_TTL_MS = 5 * 60 * 1000;
 
 const KEY_PREFIX = 'socket-connection:';
 

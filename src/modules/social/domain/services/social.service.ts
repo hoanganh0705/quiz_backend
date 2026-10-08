@@ -2,6 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { DRIZZLE } from '@/core/database/drizzle.constants';
 import type { DrizzleDB } from '@/core/database/database.module';
+import { CACHE_PROVIDER, type CacheProvider } from '@/common/ports/cache.provider';
 import {
   SOCIAL_REPOSITORY_PORT,
   FRIENDSHIP_REPOSITORY_PORT,
@@ -65,13 +66,17 @@ import { UserNotFoundError } from '@/modules/user/domain/errors';
 import { isPostgresUniqueViolation } from '@/common/utils/db-error.util';
 import { AuditLogService } from '@/common/audit/audit-log.service';
 import { SocialCacheService } from '../../infrastructure/cache/social-cache.service';
+import { SocialFeedCache } from '../../infrastructure/cache/social-feed-cache.service';
 import { STORAGE_PORT, type StoragePort } from '@/core/storage/storage.port';
 
 @Injectable()
 export class SocialService {
   private static readonly FEED_ACTIVITY_PER_USER_LIMIT = 30;
   private static readonly FEED_ACTIVITY_PER_USER_WINDOW_MS = 60_000;
-  private static readonly FEED_ACTIVITY_BUCKETS = new Map<string, Map<string, number[]>>();
+  private static readonly FEED_ACTIVITY_BUCKET_KEY_PREFIX = 'social:feed_activity';
+  private static readonly FEED_ACTIVITY_BUCKET_TTL_SECONDS = Math.ceil(
+    SocialService.FEED_ACTIVITY_PER_USER_WINDOW_MS / 1000,
+  );
 
   constructor(
     @Inject(DRIZZLE) private readonly db: DrizzleDB,
@@ -97,6 +102,9 @@ export class SocialService {
     private readonly storage: StoragePort,
     private readonly auditLogService: AuditLogService,
     private readonly socialCacheService: SocialCacheService,
+    private readonly socialFeedCache: SocialFeedCache,
+    @Inject(CACHE_PROVIDER)
+    private readonly cacheProvider: CacheProvider,
     @InjectPinoLogger(SocialService.name)
     private readonly logger: PinoLogger,
   ) {}
@@ -133,7 +141,8 @@ export class SocialService {
     }
 
     try {
-      await this.friendshipRepository.createFriendRequest(requesterId, addresseeId);
+      const { friendship, friendRequest, addresseeUsername } =
+        await this.friendshipRepository.createFriendRequestFull(requesterId, addresseeId);
 
       this.logger.info({
         event: 'friend_request_sent',
@@ -141,27 +150,19 @@ export class SocialService {
         addresseeId,
       });
 
-      const { followerUsername, followingUsername } =
-        await this.userFollowRepository.getUsernamesForUsers(requesterId, addresseeId);
-
-      const friendshipId = await this.friendshipRepository.getMostRecentPendingFriendshipId(
-        requesterId,
-        addresseeId,
-      );
-
       this.eventBus.emitFriendRequestSent({
         eventType: 'friend_request_sent',
-        friendshipId,
+        friendshipId: friendship.friendshipId,
         requesterId,
-        requesterUsername: followerUsername,
+        requesterUsername: friendRequest.requesterUsername,
         addresseeId,
-        addresseeUsername: followingUsername,
+        addresseeUsername,
         timestamp: new Date(),
       });
 
       await this.socialCacheService.invalidateCountsBatch([requesterId, addresseeId]);
 
-      return this.friendshipRepository.createFriendRequestWithJoin(requesterId, addresseeId);
+      return friendRequest;
     } catch (error) {
       if (isPostgresUniqueViolation(error)) {
         throw new PendingRequestExistsError();
@@ -380,18 +381,9 @@ export class SocialService {
     }
 
     await this.db.transaction(async (tx) => {
-      await this.blockRepository.blockUserInTx(
-        tx as unknown as Parameters<typeof this.blockRepository.blockUserInTx>[0],
-        blockerId,
-        blockedId,
-        reason,
-      );
+      await this.blockRepository.blockUserInTx(tx, blockerId, blockedId, reason);
 
-      await this.friendshipRepository.removeFriendInTx(
-        tx as unknown as Parameters<typeof this.friendshipRepository.removeFriendInTx>[0],
-        blockerId,
-        blockedId,
-      );
+      await this.friendshipRepository.removeFriendInTx(tx, blockerId, blockedId);
 
       await this.auditLogService.recordWithExecutor(tx, {
         eventType: 'social.user.blocked',
@@ -434,11 +426,7 @@ export class SocialService {
     }
 
     const updatedCount = await this.db.transaction(async (tx) => {
-      const count = await this.blockRepository.unblockUserInTx(
-        tx as unknown as Parameters<typeof this.blockRepository.unblockUserInTx>[0],
-        blockerId,
-        blockedId,
-      );
+      const count = await this.blockRepository.unblockUserInTx(tx, blockerId, blockedId);
 
       if (count === 0) {
         return 0;
@@ -639,7 +627,9 @@ export class SocialService {
     cursor?: string | null,
     limit?: number,
   ): Promise<PaginatedSocialFeedResult> {
-    return await this.socialRepository.getFeed(userId, cursor, limit);
+    return this.socialFeedCache.getOrSetFeed(userId, '1', () =>
+      this.socialRepository.getFeed(userId, cursor, limit),
+    );
   }
 
   async getUserActivity(
@@ -667,32 +657,48 @@ export class SocialService {
     occurredAt: string;
     payload: Record<string, unknown>;
   }): Promise<void> {
-    this.assertUnderFeedActivityThrottle(params.userId, params.activityType);
+    const allowed = await this.assertUnderFeedActivityThrottle(params.userId, params.activityType);
+    if (!allowed) {
+      return;
+    }
     await this.socialRepository.createFeedActivity(params);
   }
 
-  private assertUnderFeedActivityThrottle(userId: string, activityType: SocialFeedActivityType) {
-    const now = Date.now();
-    let perType = SocialService.FEED_ACTIVITY_BUCKETS.get(userId);
-    if (!perType) {
-      perType = new Map();
-      SocialService.FEED_ACTIVITY_BUCKETS.set(userId, perType);
+  private async assertUnderFeedActivityThrottle(
+    userId: string,
+    activityType: SocialFeedActivityType,
+  ): Promise<boolean> {
+    const bucketKey = `${SocialService.FEED_ACTIVITY_BUCKET_KEY_PREFIX}:${userId}:${activityType}`;
+
+    let count: number;
+    try {
+      count = await this.cacheProvider.incrementCounterWithInitialTtlSeconds(
+        bucketKey,
+        SocialService.FEED_ACTIVITY_BUCKET_TTL_SECONDS,
+      );
+    } catch (error) {
+      this.logger.warn({
+        event: 'social_feed_activity_throttle_unavailable',
+        userId,
+        activityType,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+      return true;
     }
-    const bucketKey = activityType;
-    const cutoff = now - SocialService.FEED_ACTIVITY_PER_USER_WINDOW_MS;
-    const timestamps = (perType.get(bucketKey) ?? []).filter((t) => t > cutoff);
-    if (timestamps.length >= SocialService.FEED_ACTIVITY_PER_USER_LIMIT) {
+
+    if (count > SocialService.FEED_ACTIVITY_PER_USER_LIMIT) {
       this.logger.warn({
         event: 'social_feed_activity_throttled',
         userId,
         activityType,
         windowMs: SocialService.FEED_ACTIVITY_PER_USER_WINDOW_MS,
         limit: SocialService.FEED_ACTIVITY_PER_USER_LIMIT,
+        count,
       });
-      return;
+      return false;
     }
-    timestamps.push(now);
-    perType.set(bucketKey, timestamps);
+
+    return true;
   }
 
   async getSuggestions(
@@ -735,8 +741,8 @@ export class SocialService {
     return await this.socialRepository.getSocialAnalytics(userId);
   }
 
-  async getTrendingUsers(limit: number): Promise<TrendingUsersResult> {
-    const result = await this.socialRepository.getTrendingUsers(limit);
+  async getTrendingUsers(limit: number, cursor?: string | null): Promise<TrendingUsersResult> {
+    const result = await this.socialRepository.getTrendingUsers(limit, cursor);
 
     if (result.items.length === 0) {
       return result;
@@ -744,10 +750,8 @@ export class SocialService {
 
     const userIds = result.items.map((u) => u.userId);
 
-    // Fetch rank trends for all trending users
     const trends = await this.ranking.getRankTrendsForUsers(userIds, ['weekly', 'monthly']);
 
-    // Enrich each trending user with rank trend data
     const enrichedItems = result.items.map((user) => {
       const userTrends = trends.get(user.userId) ?? [];
       const weeklyTrend = userTrends.find((t) => t.period === 'weekly') ?? null;
@@ -779,7 +783,7 @@ export class SocialService {
       };
     });
 
-    return { items: enrichedItems };
+    return { items: enrichedItems, nextCursor: result.nextCursor };
   }
 
   async searchUsernameSuggestions(query: string, limit: number): Promise<UsernameSuggestion[]> {

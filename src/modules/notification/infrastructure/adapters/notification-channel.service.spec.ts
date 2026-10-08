@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/unbound-method */
 import type { PinoLogger } from 'nestjs-pino';
 import type { CacheProvider } from '@/common/ports/cache.provider';
 import { NotificationChannelService } from './notification-channel.service';
@@ -60,6 +59,11 @@ function makePrefs(
 function makeService(
   opts: {
     cache?: CacheProvider;
+    metrics?: Partial<{
+      incCacheHit: jest.Mock;
+      incCacheMiss: jest.Mock;
+      incCacheInvalidationFailed: jest.Mock;
+    }>;
     preferences?: Partial<NotificationPreferencesRepositoryPort>;
     notificationRepository?: Partial<NotificationRepositoryPort>;
   } = {},
@@ -79,7 +83,7 @@ function makeService(
     getManyPreferences: jest.fn(),
     upsertPreferences: jest.fn(),
     ...opts.preferences,
-  } as unknown as NotificationPreferencesRepositoryPort;
+  };
 
   const eventBus = {
     emit: jest.fn(),
@@ -88,15 +92,23 @@ function makeService(
     clear: jest.fn(),
   } as unknown as NotificationDomainEventBus;
 
+  const metrics = {
+    incCacheHit: jest.fn(),
+    incCacheMiss: jest.fn(),
+    incCacheInvalidationFailed: jest.fn(),
+    ...opts.metrics,
+  } as never;
+
   const service = new NotificationChannelService(
     notificationRepository,
     preferencesRepository,
     eventBus,
     opts.cache ?? makeCache(),
+    metrics,
     makeLogger(),
   );
 
-  return { service, notificationRepository, preferencesRepository, eventBus };
+  return { service, notificationRepository, preferencesRepository, eventBus, metrics };
 }
 
 describe('NotificationChannelService.invalidatePreferencesCache', () => {
@@ -190,6 +202,69 @@ describe('NotificationChannelService.sendBatch', () => {
     expect(result.sent).toBe(1);
     expect(result.skipped).toBe(1);
     expect(notificationRepository.create).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('NotificationChannelService.getPreferences (null caching)', () => {
+  it('caches "null" sentinel for missing prefs so subsequent reads skip the DB', async () => {
+    const store = new Map<string, string>();
+    const cache: CacheProvider = {
+      get: jest.fn(async (key: string) => store.get(key) ?? null),
+      set: jest.fn(async (key: string, value: string) => {
+        store.set(key, value);
+      }),
+      del: jest.fn(),
+      acquireAdvisoryLock: jest.fn(),
+      releaseAdvisoryLock: jest.fn(),
+    } as unknown as CacheProvider;
+    const getPreferences = jest.fn().mockResolvedValue(null);
+    const { service } = makeService({
+      cache,
+      preferences: { getPreferences },
+    });
+
+    await service.send({
+      userId: 'user-1',
+      type: 'achievement_earned',
+      title: 'Hi',
+      body: 'World',
+    });
+    expect(getPreferences).toHaveBeenCalledTimes(1);
+    expect(cache.set).toHaveBeenCalledWith('notif:prefs:user-1', 'null', 5 * 60 * 1000);
+
+    await service.send({
+      userId: 'user-1',
+      type: 'achievement_earned',
+      title: 'Hi',
+      body: 'World',
+    });
+    expect(getPreferences).toHaveBeenCalledTimes(1);
+  });
+
+  it('reads "null" sentinel and returns null without hitting the repository', async () => {
+    const cache: CacheProvider = {
+      get: jest.fn().mockResolvedValue('null'),
+      set: jest.fn(),
+      del: jest.fn(),
+      acquireAdvisoryLock: jest.fn(),
+      releaseAdvisoryLock: jest.fn(),
+    } as unknown as CacheProvider;
+    const getPreferences = jest.fn().mockResolvedValue(makePrefs());
+    const { service, notificationRepository } = makeService({
+      cache,
+      preferences: { getPreferences },
+    });
+
+    await service.send({
+      userId: 'user-1',
+      type: 'achievement_earned',
+      title: 'Hi',
+      body: 'World',
+    });
+
+    expect(cache.get).toHaveBeenCalledWith('notif:prefs:user-1');
+    expect(getPreferences).not.toHaveBeenCalled();
+    expect(notificationRepository.create).toHaveBeenCalled();
   });
 });
 

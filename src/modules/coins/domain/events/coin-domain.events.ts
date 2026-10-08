@@ -68,6 +68,4 @@ export interface CoinRefundedEvent {
 }
 
 export type CoinDomainEvent =
-  | CoinBalanceChangedEvent
-  | CoinTransactionRecordedEvent
-  | CoinRefundedEvent;
+  CoinBalanceChangedEvent | CoinTransactionRecordedEvent | CoinRefundedEvent;

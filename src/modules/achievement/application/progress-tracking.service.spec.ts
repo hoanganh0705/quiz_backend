@@ -48,7 +48,7 @@ describe('ProgressTrackingService', () => {
 
   beforeEach(() => {
     repo = buildRepoMock();
-    service = new ProgressTrackingService(repo as never, createFakeLogger() as never);
+    service = new ProgressTrackingService(repo, createFakeLogger() as never);
   });
 
   describe('getBadgeProgressSnapshot', () => {
@@ -83,7 +83,7 @@ describe('ProgressTrackingService', () => {
       ]);
       repo.hasBadge.mockResolvedValue(false);
 
-      repo.getBadgeProgress.mockResolvedValue({ current: 3, target: 5 } as any);
+      repo.getBadgeProgress.mockResolvedValue({ current: 3, target: 5 });
 
       const result = await service.getBadgeProgressSnapshot('user-1', 'badge-1');
       expect(result?.current).toBe(3);

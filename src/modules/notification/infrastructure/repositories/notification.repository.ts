@@ -17,6 +17,7 @@ import { CACHE_PROVIDER, type CacheProvider } from '@/common/ports/cache.provide
 
 const ANALYTICS_CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
 const ANALYTICS_CACHE_KEY = 'notif:analytics:platform';
+const ANALYTICS_INVALIDATE_DEBOUNCE_MS = 5_000;
 
 export function generateNotificationIdempotencyKey(
   type: string,
@@ -28,6 +29,8 @@ export function generateNotificationIdempotencyKey(
 
 @Injectable()
 export class NotificationRepository implements NotificationRepositoryPort {
+  private analyticsInvalidateTimer: NodeJS.Timeout | null = null;
+
   constructor(
     @Inject(DRIZZLE) private readonly db: DrizzleDB,
     @Optional()
@@ -40,6 +43,13 @@ export class NotificationRepository implements NotificationRepositoryPort {
     @InjectPinoLogger(NotificationRepository.name)
     private readonly logger?: PinoLogger,
   ) {}
+
+  onModuleDestroy(): void {
+    if (this.analyticsInvalidateTimer !== null) {
+      clearTimeout(this.analyticsInvalidateTimer);
+      this.analyticsInvalidateTimer = null;
+    }
+  }
 
   private getDb(): DrizzleDB {
     const tx = this.transactionalContext?.getDbClient() as DrizzleDB | null;
@@ -59,6 +69,8 @@ export class NotificationRepository implements NotificationRepositoryPort {
         expiresAt: params.expiresAt ?? null,
       })
       .returning();
+
+    await this.invalidateAnalyticsCache();
 
     return this.mapToNotification(notification);
   }
@@ -225,7 +237,11 @@ export class NotificationRepository implements NotificationRepositoryPort {
           notDeleted(notifications.deletedAt),
         ),
       )) as { rowCount?: unknown };
-    return typeof result.rowCount === 'number' ? result.rowCount : 0;
+    const updated = typeof result.rowCount === 'number' ? result.rowCount : 0;
+    if (updated > 0) {
+      await this.invalidateAnalyticsCache();
+    }
+    return updated;
   }
 
   async deleteReadNotifications(userId: string): Promise<number> {
@@ -240,11 +256,16 @@ export class NotificationRepository implements NotificationRepositoryPort {
           notDeleted(notifications.deletedAt),
         ),
       )) as { rowCount?: unknown };
-    return typeof result.rowCount === 'number' ? result.rowCount : 0;
+    const removed = typeof result.rowCount === 'number' ? result.rowCount : 0;
+    if (removed > 0) {
+      await this.invalidateAnalyticsCache();
+    }
+    return removed;
   }
 
   async delete(notificationId: string, userId: string): Promise<void> {
     await this.softDelete(notificationId, userId);
+    await this.invalidateAnalyticsCache();
   }
 
   async softDelete(notificationId: string, userId: string): Promise<void> {
@@ -258,6 +279,7 @@ export class NotificationRepository implements NotificationRepositoryPort {
           notDeleted(notifications.deletedAt),
         ),
       );
+    await this.invalidateAnalyticsCache();
   }
 
   async deleteExpired(): Promise<number> {
@@ -269,7 +291,11 @@ export class NotificationRepository implements NotificationRepositoryPort {
       )) as {
       rowCount?: unknown;
     };
-    return typeof result.rowCount === 'number' ? result.rowCount : 0;
+    const removed = typeof result.rowCount === 'number' ? result.rowCount : 0;
+    if (removed > 0) {
+      await this.invalidateAnalyticsCache();
+    }
+    return removed;
   }
 
   async getAnalytics(): Promise<{
@@ -301,11 +327,28 @@ export class NotificationRepository implements NotificationRepositoryPort {
     return result;
   }
 
-  async invalidateAnalyticsCache(): Promise<void> {
-    if (this.cache) {
-      await this.cache.del(ANALYTICS_CACHE_KEY);
-      this.logger?.info({ event: 'analytics_cache_invalidated' });
+  invalidateAnalyticsCache(): Promise<void> {
+    if (!this.cache) return Promise.resolve();
+
+    if (this.analyticsInvalidateTimer !== null) {
+      clearTimeout(this.analyticsInvalidateTimer);
     }
+    this.analyticsInvalidateTimer = setTimeout(() => {
+      this.analyticsInvalidateTimer = null;
+      this.cache
+        ?.del(ANALYTICS_CACHE_KEY)
+        .then(() => this.logger?.info({ event: 'analytics_cache_invalidated' }))
+        .catch((err: unknown) =>
+          this.logger?.warn({
+            event: 'analytics_cache_invalidate_failed',
+            error: err instanceof Error ? err.message : String(err),
+          }),
+        );
+    }, ANALYTICS_INVALIDATE_DEBOUNCE_MS);
+    if (typeof this.analyticsInvalidateTimer.unref === 'function') {
+      this.analyticsInvalidateTimer.unref();
+    }
+    return Promise.resolve();
   }
 
   private async getAnalyticsUncached(): Promise<{

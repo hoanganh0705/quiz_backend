@@ -15,12 +15,18 @@ import {
   TransactionalContext,
   TRANSACTIONAL_CONTEXT,
 } from '@/common/interceptors/transactional-context';
+import { batchUpdateWithValues } from '@/common/database/batch-update';
 import type {
   UserRankingRow,
   UserRankingWithUserRow,
   PeakRanksRow,
 } from '../../../domain/ports/ranking-repository.port';
-import { RankingPeriod, getWeekStart, getMonthStart } from '../../../domain/types/ranking.types';
+import {
+  RankingPeriod,
+  RankingMilestone,
+  getWeekStart,
+  getMonthStart,
+} from '../../../domain/types/ranking.types';
 
 type RawQueryResult<T> = {
   rows: T[];
@@ -47,7 +53,33 @@ export class UserRankingRepository {
   ) {}
 
   private async executeRaw<T>(query: ReturnType<typeof sql>): Promise<RawQueryResult<T>> {
-    return (await this.db.execute(query)) as unknown as RawQueryResult<T>;
+    return await this.db.execute(query);
+  }
+
+  private getRankColumnName(period: RankingPeriod): string {
+    switch (period) {
+      case RankingPeriod.DAILY:
+        return 'daily_rank';
+      case RankingPeriod.WEEKLY:
+        return 'weekly_rank';
+      case RankingPeriod.MONTHLY:
+        return 'monthly_rank';
+      case RankingPeriod.ALL_TIME:
+        return 'all_time_rank';
+    }
+  }
+
+  private getRankColumn(period: RankingPeriod): keyof typeof userRanking.$inferSelect {
+    switch (period) {
+      case RankingPeriod.DAILY:
+        return 'dailyRank';
+      case RankingPeriod.WEEKLY:
+        return 'weeklyRank';
+      case RankingPeriod.MONTHLY:
+        return 'monthlyRank';
+      case RankingPeriod.ALL_TIME:
+        return 'allTimeRank';
+    }
   }
 
   private getDayStart(date: Date): Date {
@@ -156,7 +188,7 @@ export class UserRankingRepository {
       where: inArray(userRanking.userId, userIds),
     });
 
-    return results as UserRankingRow[];
+    return results;
   }
 
   async createUserRanking(userId: string): Promise<UserRankingRow> {
@@ -181,7 +213,7 @@ export class UserRankingRepository {
       } as any)
       .returning();
 
-    return result as UserRankingRow;
+    return result;
   }
 
   async updateXp(params: { userId: string; amount: number; now: Date }): Promise<UserRankingRow> {
@@ -278,7 +310,7 @@ export class UserRankingRepository {
       throw new Error('Failed to update user ranking row');
     }
 
-    return result as UserRankingRow;
+    return result;
   }
 
   async markDirty(userIds: string[]): Promise<void> {
@@ -347,7 +379,7 @@ export class UserRankingRepository {
       .orderBy(asc(rankRecalculationWorkItems.enqueuedAt))
       .limit(limit);
 
-    return rows as Array<{ workItemId: string; userId: string; period: string }>;
+    return rows;
   }
 
   async completeRecalculationWorkItems(workItemIds: string[]): Promise<void> {
@@ -373,7 +405,7 @@ export class UserRankingRepository {
       limit,
     });
 
-    return results as UserRankingRow[];
+    return results;
   }
 
   async countDirtyUsers(): Promise<number> {
@@ -466,32 +498,276 @@ export class UserRankingRepository {
     rank: number;
   }): Promise<number | null> {
     const { userId, period, rank } = params;
+    const rankCol = this.getRankColumnName(period);
+    const nowIso = new Date().toISOString();
 
-    const rankFieldName = this.getRankColumn(period);
-    const current = await this.getUserRanking(userId);
-    const previousRank = current?.[rankFieldName] ?? null;
+    const result = await this.executeRaw<{ previous_rank: number | null }>(sql`
+      WITH prev AS (
+        SELECT ${sql.raw(rankCol)} AS previous_rank
+        FROM user_ranking
+        WHERE user_id = ${userId}::uuid
+      )
+      UPDATE user_ranking
+      SET ${sql.raw(rankCol)} = ${rank},
+          updated_at = ${nowIso}
+      WHERE user_id = ${userId}::uuid
+      RETURNING ${sql.raw(rankCol)} AS previous_rank
+    `);
 
-    await this.db
-      .update(userRanking)
-      .set({ [rankFieldName]: rank })
-      .where(eq(userRanking.userId, userId));
-
+    if (result.rows.length === 0) return null;
+    const previousRank = result.rows[0].previous_rank;
     return previousRank;
   }
 
-  private getRankColumn(period: RankingPeriod): string {
-    switch (period) {
-      case RankingPeriod.DAILY:
-        return 'dailyRank';
-      case RankingPeriod.WEEKLY:
-        return 'weeklyRank';
-      case RankingPeriod.MONTHLY:
-        return 'monthlyRank';
-      case RankingPeriod.ALL_TIME:
-        return 'allTimeRank';
-      default:
-        throw new Error(`Unknown period: ${String(period)}`);
+  async batchUpdateRanks(params: {
+    updates: ReadonlyArray<{ userId: string; period: RankingPeriod; rank: number }>;
+    now: Date;
+  }): Promise<void> {
+    if (params.updates.length === 0) return;
+    await batchUpdateWithValues(
+      this.db as never,
+      'user_ranking',
+      'user_id',
+      params.updates.map((u) => ({
+        key: u.userId,
+        columns: { [this.getRankColumnName(u.period)]: u.rank, updatedAt: params.now },
+      })),
+    );
+  }
+
+  async batchUpdatePeakRanks(params: {
+    updates: ReadonlyArray<{ userId: string; period: RankingPeriod; rank: number }>;
+    now: Date;
+  }): Promise<Array<{ userId: string; period: RankingPeriod; previousPeakRank: number | null }>> {
+    if (params.updates.length === 0) return [];
+    const nowIso = params.now.toISOString();
+
+    const userIdArray = sql.raw(
+      `ARRAY[${params.updates.map((u) => `'${u.userId.replace(/'/g, "''")}'::uuid`).join(',')}]`,
+    );
+    const periodArray = sql.raw(
+      `ARRAY[${params.updates.map((u) => `'${u.period}'::text`).join(',')}]`,
+    );
+    const rankArray = sql.raw(`ARRAY[${params.updates.map((u) => `${u.rank}`).join(',')}]`);
+
+    const _result = await this.executeRaw<{
+      user_id: string;
+      period: string;
+      prev_peak: number | null;
+    }>(sql`
+      WITH existing AS (
+        SELECT
+          ur.user_id,
+          CASE
+            WHEN ${sql.raw(
+              `ARRAY['all_time', 'weekly', 'monthly', 'daily'][1]`,
+            )} = ANY(${periodArray})
+            THEN (
+              SELECT peak_all_time_rank FROM user_ranking WHERE user_id = ur.user_id
+            )
+            ELSE NULL
+          END AS prev_peak_all_time,
+          CASE
+            WHEN ${sql.raw(`ARRAY['weekly'][1]`)} = ANY(${periodArray})
+            THEN (
+              SELECT peak_weekly_rank FROM user_ranking WHERE user_id = ur.user_id
+            )
+            ELSE NULL
+          END AS prev_peak_weekly,
+          CASE
+            WHEN ${sql.raw(`ARRAY['monthly'][1]`)} = ANY(${periodArray})
+            THEN (
+              SELECT peak_monthly_rank FROM user_ranking WHERE user_id = ur.user_id
+            )
+            ELSE NULL
+          END AS prev_peak_monthly,
+          CASE
+            WHEN ${sql.raw(`ARRAY['daily'][1]`)} = ANY(${periodArray})
+            THEN (
+              SELECT peak_daily_rank FROM user_ranking WHERE user_id = ur.user_id
+            )
+            ELSE NULL
+          END AS prev_peak_daily
+        FROM unnest(${userIdArray}) AS ur(user_id)
+      ),
+      updates AS (
+        SELECT
+          u.user_id,
+          u.period_idx,
+          CASE u.period_idx
+            WHEN 1 THEN 'all_time'
+            WHEN 2 THEN 'weekly'
+            WHEN 3 THEN 'monthly'
+            WHEN 4 THEN 'daily'
+          END AS period_name,
+          CASE u.period_idx
+            WHEN 1 THEN e.prev_peak_all_time
+            WHEN 2 THEN e.prev_peak_weekly
+            WHEN 3 THEN e.prev_peak_monthly
+            WHEN 4 THEN e.prev_peak_daily
+          END AS prev_peak,
+          CASE u.period_idx
+            WHEN 1 THEN
+              CASE WHEN e.prev_peak_all_time IS NULL OR e.prev_peak_all_time > u.rank
+                   THEN u.rank ELSE e.prev_peak_all_time END
+            WHEN 2 THEN
+              CASE WHEN e.prev_peak_weekly IS NULL OR e.prev_peak_weekly > u.rank
+                   THEN u.rank ELSE e.prev_peak_weekly END
+            WHEN 3 THEN
+              CASE WHEN e.prev_peak_monthly IS NULL OR e.prev_peak_monthly > u.rank
+                   THEN u.rank ELSE e.prev_peak_monthly END
+            WHEN 4 THEN
+              CASE WHEN e.prev_peak_daily IS NULL OR e.prev_peak_daily > u.rank
+                   THEN u.rank ELSE e.prev_peak_daily END
+          END AS new_peak
+        FROM (
+          SELECT user_id, rank,
+            generate_series(1, array_length(${rankArray}, 1)) AS period_idx
+          FROM unnest(${userIdArray}, ${rankArray}) AS t(user_id, rank)
+        ) u
+        JOIN existing e ON e.user_id = u.user_id
+      )
+      UPDATE user_ranking AS ur
+      SET
+        peak_all_time_rank = CASE WHEN u.period_name = 'all_time' THEN u.new_peak ELSE ur.peak_all_time_rank END,
+        peak_all_time_rank_achieved_at = CASE WHEN u.period_name = 'all_time' AND u.new_peak IS DISTINCT FROM ur.peak_all_time_rank THEN ${nowIso} ELSE ur.peak_all_time_rank_achieved_at END,
+        peak_weekly_rank = CASE WHEN u.period_name = 'weekly' THEN u.new_peak ELSE ur.peak_weekly_rank END,
+        peak_weekly_rank_achieved_at = CASE WHEN u.period_name = 'weekly' AND u.new_peak IS DISTINCT FROM ur.peak_weekly_rank THEN ${nowIso} ELSE ur.peak_weekly_rank_achieved_at END,
+        peak_monthly_rank = CASE WHEN u.period_name = 'monthly' THEN u.new_peak ELSE ur.peak_monthly_rank END,
+        peak_monthly_rank_achieved_at = CASE WHEN u.period_name = 'monthly' AND u.new_peak IS DISTINCT FROM ur.peak_monthly_rank THEN ${nowIso} ELSE ur.peak_monthly_rank_achieved_at END,
+        peak_daily_rank = CASE WHEN u.period_name = 'daily' THEN u.new_peak ELSE ur.peak_daily_rank END,
+        peak_daily_rank_achieved_at = CASE WHEN u.period_name = 'daily' AND u.new_peak IS DISTINCT FROM ur.peak_daily_rank THEN ${nowIso} ELSE ur.peak_daily_rank_achieved_at END
+      FROM updates u
+      WHERE ur.user_id = u.user_id
+        AND (u.new_peak IS DISTINCT FROM u.prev_peak)
+    `);
+
+    return params.updates.map((u) => ({
+      userId: u.userId,
+      period: u.period,
+      previousPeakRank: null,
+    }));
+  }
+
+  async findDirtyUsersMissingRanks(): Promise<Map<string, Map<RankingPeriod, number>>> {
+    const allPeriods: RankingPeriod[] = [
+      RankingPeriod.DAILY,
+      RankingPeriod.WEEKLY,
+      RankingPeriod.MONTHLY,
+      RankingPeriod.ALL_TIME,
+    ];
+    const result = new Map<string, Map<RankingPeriod, number>>();
+
+    const rankedResult = await this.executeRaw<{
+      user_id: string;
+      period: string;
+      rank: number;
+    }>(sql`
+      SELECT
+        ur.user_id,
+        CASE
+          WHEN ur.daily_rank IS NULL AND u.deleted_at IS NULL AND ur.all_time_xp > 0
+               AND EXISTS (SELECT 1 FROM user_ranking WHERE user_id = ur.user_id AND is_dirty = true)
+          THEN 'daily'
+          WHEN ur.weekly_rank IS NULL AND u.deleted_at IS NULL AND ur.all_time_xp > 0
+               AND EXISTS (SELECT 1 FROM user_ranking WHERE user_id = ur.user_id AND is_dirty = true)
+          THEN 'weekly'
+          WHEN ur.monthly_rank IS NULL AND u.deleted_at IS NULL AND ur.all_time_xp > 0
+               AND EXISTS (SELECT 1 FROM user_ranking WHERE user_id = ur.user_id AND is_dirty = true)
+          THEN 'monthly'
+          WHEN ur.all_time_rank IS NULL AND u.deleted_at IS NULL AND ur.all_time_xp > 0
+               AND EXISTS (SELECT 1 FROM user_ranking WHERE user_id = ur.user_id AND is_dirty = true)
+          THEN 'all_time'
+        END AS period,
+        RANK() OVER (PARTITION BY
+          CASE
+            WHEN ur.daily_rank IS NULL THEN 'daily'
+            WHEN ur.weekly_rank IS NULL THEN 'weekly'
+            WHEN ur.monthly_rank IS NULL THEN 'monthly'
+            WHEN ur.all_time_rank IS NULL THEN 'all_time'
+          END
+          ORDER BY ur.all_time_xp DESC, ur.user_id ASC
+        ) AS rank
+      FROM user_ranking ur
+      INNER JOIN users u ON u.user_id = ur.user_id
+      WHERE u.deleted_at IS NULL
+        AND ur.is_dirty = true
+    `);
+
+    for (const row of rankedResult.rows) {
+      if (!row.period || !row.user_id || row.rank == null) continue;
+      const period = row.period as RankingPeriod;
+      if (!allPeriods.includes(period)) continue;
+      const userId = row.user_id;
+      if (!result.has(userId)) result.set(userId, new Map());
+      const inner = result.get(userId)!;
+      if (!inner.has(period)) inner.set(period, Number(row.rank));
     }
+
+    return result;
+  }
+
+  async persistMilestones(params: {
+    triples: ReadonlyArray<{
+      userId: string;
+      milestone: RankingMilestone;
+      rank: number;
+      achievedAt: Date;
+    }>;
+  }): Promise<void> {
+    if (params.triples.length === 0) return;
+
+    const values = sql.join(
+      params.triples.map(
+        (t) => sql`(${t.userId}::uuid, ${t.milestone}, ${t.rank}, ${t.achievedAt.toISOString()})`,
+      ),
+      sql`, `,
+    );
+
+    await this.db.execute(sql`
+      INSERT INTO ranking_milestones (user_id, milestone, rank, achieved_at)
+      VALUES ${values}
+      ON CONFLICT (user_id, milestone) DO NOTHING
+    `);
+  }
+
+  async processXpEventsBatch(params: {
+    events: ReadonlyArray<{ userId: string; amount: number; now: Date }>;
+  }): Promise<void> {
+    if (params.events.length === 0) return;
+
+    const userIds = sql.raw(
+      `ARRAY[${params.events.map((e) => `'${e.userId.replace(/'/g, "''")}'::uuid`).join(',')}]`,
+    );
+    const amounts = sql.raw(`ARRAY[${params.events.map((e) => `${e.amount}`).join(',')}]`);
+    const nowIso = params.events[0].now.toISOString();
+
+    await this.db.execute(sql`
+      UPDATE user_ranking
+      SET
+        all_time_xp = all_time_xp + amounts.idx,
+        weekly_xp = CASE
+          WHEN last_weekly_reset_at < date_trunc('week', NOW() AT TIME ZONE 'UTC')
+               OR last_monthly_reset_at < date_trunc('month', NOW() AT TIME ZONE 'UTC')
+          THEN amounts.idx
+          ELSE weekly_xp + amounts.idx
+        END,
+        monthly_xp = CASE
+          WHEN last_monthly_reset_at < date_trunc('month', NOW() AT TIME ZONE 'UTC')
+          THEN amounts.idx
+          ELSE monthly_xp + amounts.idx
+        END,
+        daily_xp = CASE
+          WHEN last_daily_reset_at < date_trunc('day', NOW() AT TIME ZONE 'UTC')
+          THEN amounts.idx
+          ELSE daily_xp + amounts.idx
+        END,
+        last_activity_at = ${nowIso},
+        updated_at = ${nowIso},
+        is_dirty = true
+      FROM unnest(${userIds}, ${amounts}) AS amounts(user_id, idx)
+      WHERE user_ranking.user_id = amounts.user_id
+    `);
   }
 
   async updatePeakRank(params: {
@@ -677,7 +953,7 @@ export class UserRankingRepository {
       limit,
     });
 
-    return results as UserRankingRow[];
+    return results;
   }
 
   async getUserWithCreationDate(userId: string): Promise<{
@@ -709,7 +985,7 @@ export class UserRankingRepository {
       limit,
     });
 
-    return results as UserRankingRow[];
+    return results;
   }
 
   async getTopWeeklyGainers(limit = 100): Promise<{ userId: string; weeklyXp: number }[]> {

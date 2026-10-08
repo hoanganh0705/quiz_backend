@@ -17,6 +17,8 @@ import {
 } from '../../domain/ports';
 import type { NotificationSentEvent } from '../../domain/events/notification.events';
 import { CACHE_PROVIDER, type CacheProvider } from '@/common/ports/cache.provider';
+import { instrumentedGet } from '@/core/redis/cache-instrument';
+import { MetricsRegistry } from '@/core/observability/metrics.registry';
 import {
   NOTIFICATION_TYPE_CATEGORY,
   NOTIFICATION_CHANNEL_GATE,
@@ -24,10 +26,12 @@ import {
 } from '../../domain/notification-preference-category';
 
 const NOTIF_PREFS_TTL_MS = 5 * 60 * 1000;
+const NOTIF_PREFS_NULL_SENTINEL = 'null';
 
 @Injectable()
 export class NotificationChannelService implements NotificationChannelServiceInstance {
   private readonly cacheKeyPrefix = 'notif:prefs:';
+  private readonly cacheName = 'notification-preferences';
 
   constructor(
     @Inject(NOTIFICATION_REPOSITORY_PORT)
@@ -40,6 +44,9 @@ export class NotificationChannelService implements NotificationChannelServiceIns
     @Optional()
     @Inject(CACHE_PROVIDER)
     private readonly cache?: CacheProvider,
+    @Optional()
+    @Inject(MetricsRegistry)
+    private readonly metrics?: MetricsRegistry,
     @Optional()
     @InjectPinoLogger(NotificationChannelService.name)
     private readonly logger?: PinoLogger,
@@ -132,7 +139,15 @@ export class NotificationChannelService implements NotificationChannelServiceIns
 
   private async getPreferences(userId: string): Promise<NotificationPreferencesRow | null> {
     if (this.cache) {
-      const cached = await this.cache.get(this.cacheKeyPrefix + userId);
+      const cached = await instrumentedGet(
+        this.cache,
+        this.metrics,
+        this.cacheKeyPrefix + userId,
+        this.cacheName,
+      );
+      if (cached === NOTIF_PREFS_NULL_SENTINEL) {
+        return null;
+      }
       if (cached !== null) {
         try {
           return JSON.parse(cached) as NotificationPreferencesRow;
@@ -145,7 +160,7 @@ export class NotificationChannelService implements NotificationChannelServiceIns
     const prefs = await this.preferencesRepository.getPreferences(userId);
 
     if (this.cache) {
-      const cacheValue = prefs ? JSON.stringify(prefs) : '';
+      const cacheValue = prefs ? JSON.stringify(prefs) : NOTIF_PREFS_NULL_SENTINEL;
       await this.cache.set(this.cacheKeyPrefix + userId, cacheValue, NOTIF_PREFS_TTL_MS);
     }
 

@@ -157,14 +157,18 @@ export class AchievementDomainEventBus {
       userId: event.userId,
     });
 
-    for (const handler of this.globalHandlers) {
+    const uniqueHandlers = Array.from(
+      new Set([...this.globalHandlers, ...(this.handlers.get(event.eventType) ?? [])]),
+    );
+
+    for (const handler of uniqueHandlers) {
       try {
         const result = handler(event);
         if (result instanceof Promise) {
           result.catch((error) => {
             this.logger.error({
               event: 'event_handler_error',
-              handler: 'global',
+              handler: event.eventType,
               eventType: event.eventType,
               error: error instanceof Error ? error.message : 'Unknown error',
             });
@@ -173,36 +177,10 @@ export class AchievementDomainEventBus {
       } catch (error) {
         this.logger.error({
           event: 'event_handler_error',
-          handler: 'global',
+          handler: event.eventType,
           eventType: event.eventType,
           error: error instanceof Error ? error.message : 'Unknown error',
         });
-      }
-    }
-
-    const typeHandlers = this.handlers.get(event.eventType);
-    if (typeHandlers) {
-      for (const handler of typeHandlers) {
-        try {
-          const result = handler(event);
-          if (result instanceof Promise) {
-            result.catch((error) => {
-              this.logger.error({
-                event: 'event_handler_error',
-                handler: event.eventType,
-                eventType: event.eventType,
-                error: error instanceof Error ? error.message : 'Unknown error',
-              });
-            });
-          }
-        } catch (error) {
-          this.logger.error({
-            event: 'event_handler_error',
-            handler: event.eventType,
-            eventType: event.eventType,
-            error: error instanceof Error ? error.message : 'Unknown error',
-          });
-        }
       }
     }
   }

@@ -36,6 +36,18 @@ const STATUS_TO_GLOBAL_CODE: Readonly<Record<number, string>> = {
   [HttpStatus.TOO_MANY_REQUESTS]: 'GLOBAL_RATE_LIMITED',
 };
 
+const MESSAGE_LOG_CAP = 1024;
+const TRUNCATION_MARKER = '…[truncated]';
+
+const truncateForLog = (message: string | string[], cap: number): string | string[] => {
+  if (Array.isArray(message)) {
+    return message.map((entry) => truncateForLog(entry, cap)) as string[];
+  }
+  if (message.length <= cap) return message;
+  const headroom = Math.max(0, cap - TRUNCATION_MARKER.length);
+  return `${message.slice(0, headroom)}${TRUNCATION_MARKER}`;
+};
+
 @Catch()
 export class GlobalExceptionFilter implements ExceptionFilter {
   constructor(
@@ -86,7 +98,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
             statusCode,
             code: domainCode,
             error: errorName,
-            details: message,
+            details: isProduction ? truncateForLog(message, MESSAGE_LOG_CAP) : message,
           });
         } else {
           requestLogger.warn({
@@ -96,7 +108,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
             statusCode,
             code: domainCode,
             error: errorName,
-            details: message,
+            details: isProduction ? truncateForLog(message, MESSAGE_LOG_CAP) : message,
           });
         }
       }
@@ -136,7 +148,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
           statusCode,
           code: domainCode,
           error: errorName,
-          details: message,
+          details: isProduction ? truncateForLog(message, MESSAGE_LOG_CAP) : message,
         });
       } else {
         requestLogger.warn({
@@ -146,7 +158,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
           statusCode,
           code: domainCode,
           error: errorName,
-          details: message,
+          details: isProduction ? truncateForLog(message, MESSAGE_LOG_CAP) : message,
         });
       }
     } else if (exception instanceof Error) {

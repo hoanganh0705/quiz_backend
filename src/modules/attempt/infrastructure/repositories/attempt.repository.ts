@@ -12,6 +12,7 @@ import {
   outboxEvents,
 } from '@/core/database/schema';
 import { notDeleted } from '@/common/database/soft-delete.helper';
+import { parseAttemptXpOutboxPayload } from '@/common/outbox/payload-schema';
 import type { AttemptContextType } from '@/modules/attempt/types/attempt.types';
 import type {
   AttemptListCursorPayload,
@@ -89,7 +90,7 @@ export class AttemptRepository implements AttemptRepositoryPort {
       .where(eq(quizAttempts.attemptId, attemptId))
       .limit(1);
 
-    return (row as AttemptRow | undefined) ?? null;
+    return row ?? null;
   }
 
   async getAttemptDetailById(attemptId: string): Promise<AttemptDetailRow | null> {
@@ -162,7 +163,7 @@ export class AttemptRepository implements AttemptRepositoryPort {
       )
       .limit(1);
 
-    return (row as AttemptRow | undefined) ?? null;
+    return row ?? null;
   }
 
   async listAttemptsByUser(params: {
@@ -320,7 +321,7 @@ export class AttemptRepository implements AttemptRepositoryPort {
         updatedAt: quizAttempts.updatedAt,
       });
 
-    return created as AttemptRow;
+    return created;
   }
 
   async abandonAttempt(params: {
@@ -372,7 +373,7 @@ export class AttemptRepository implements AttemptRepositoryPort {
         },
       });
 
-      return updated as AttemptRow;
+      return updated;
     });
   }
 
@@ -476,22 +477,24 @@ export class AttemptRepository implements AttemptRepositoryPort {
       });
 
       if (params.xpEarned > 0 && params.xpOutbox) {
+        const xpPayload = parseAttemptXpOutboxPayload({
+          userId: params.userId,
+          attemptId: params.attemptId,
+          amount: params.xpEarned,
+          idempotencyKey: params.xpOutbox.idempotencyKey,
+          correlationId: params.xpOutbox.correlationId,
+          timestamp: params.nowIso,
+        });
+
         await tx
           .insert(outboxEvents)
           .values({
             aggregateType: 'attempt',
             eventType: 'attempt.xp_to_publish',
-            payload: {
-              userId: params.userId,
-              attemptId: params.attemptId,
-              amount: params.xpEarned,
-              idempotencyKey: params.xpOutbox.idempotencyKey,
-              correlationId: params.xpOutbox.correlationId,
-              timestamp: params.nowIso,
-            },
+            payload: xpPayload,
             createdAt: params.nowIso,
-            idempotencyKey: params.xpOutbox.idempotencyKey,
-            correlationId: params.xpOutbox.correlationId,
+            idempotencyKey: xpPayload.idempotencyKey,
+            correlationId: xpPayload.correlationId,
           })
           .onConflictDoNothing({
             target: outboxEvents.idempotencyKey,
@@ -536,7 +539,7 @@ export class AttemptRepository implements AttemptRepositoryPort {
             OR u.last_streak_day IS DISTINCT FROM GREATEST(u.last_streak_day, ${finishedAtIso}::date))
       `);
 
-      return { completed: updated as AttemptRow, preCompletionCount };
+      return { completed: updated, preCompletionCount };
     });
   }
 

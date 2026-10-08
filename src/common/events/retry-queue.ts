@@ -1,11 +1,36 @@
-import { Inject } from '@nestjs/common';
-import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
-import { CACHE_PROVIDER, type CacheProvider } from '@/common/ports/cache.provider';
+/**
+ * Delayed-retry queue for in-process event handlers.
+ *
+ * Ordering model
+ * --------------
+ * Each retryable item is recorded as a pair:
+ *   - a payload key (`<prefix>:tier-N::<nextRetryAt>`) holding the JSON
+ *     of `{ event, attempt, nextRetryAt, correlationId, tierKey }` with
+ *     a TTL slightly larger than the wait so an unclaimed item does
+ *     not linger forever
+ *   - an index entry (`<prefix>:index`) in a Redis sorted set, scored
+ *     by `nextRetryAt`. The poll loop scans the index for entries with
+ *     score `<= now`, claims each one (atomic `ZREM` + `GETDEL`), and
+ *     hands the payload to the handler.
+ *
+ * Not-yet-due items stay in the index untouched. The poll stops at the
+ * first item with a future score and resumes on the next tick, so the
+ * ordering of items enqueued later is preserved.
+ *
+ * Dead letters
+ * ------------
+ * Items that exhaust `retryDelaysMs.length` are pushed to a JSON list
+ * with `LTRIM` bounding the list to the last 1000 entries and a 7-day
+ * TTL refreshed on every push — neither of which can grow unbounded.
+ */
+
 import {
   correlationIdStorage,
   createCorrelationId,
   getCorrelationId,
 } from '@/common/interceptors/correlation-id';
+import { PinoLogger } from 'nestjs-pino';
+import { CacheProvider } from '../ports/cache.provider';
 
 export interface RetryableHandler<T> {
   (event: T): void | Promise<void>;
@@ -32,6 +57,9 @@ interface QueuedItem<T> {
 
 export class RetryQueue<T> {
   private static readonly QUEUE_TTL_PADDING_MS = 5 * 60 * 1000;
+  private static readonly DEAD_LETTER_LIMIT = 1000;
+  private static readonly DEAD_LETTER_TTL_SECONDS = 7 * 24 * 60 * 60;
+  private static readonly DRAIN_BATCH = 64;
 
   private readonly handlers: Array<RetryableHandler<T>> = [];
   private pollTimer: ReturnType<typeof setInterval> | null = null;
@@ -117,12 +145,32 @@ export class RetryQueue<T> {
     });
 
     void this.cache
-      .set(queued.tierKey, JSON.stringify(queued), delayMs + RetryQueue.QUEUE_TTL_PADDING_MS)
-      .then(() => this.cache.rpushJson(`${this.config.retryQueuePrefix}:keys`, queued.tierKey));
+      .multiExec([
+        [
+          'set',
+          queued.tierKey,
+          JSON.stringify(queued),
+          'PX',
+          delayMs + RetryQueue.QUEUE_TTL_PADDING_MS,
+        ],
+        ['zadd', `${this.config.retryQueuePrefix}:index`, nextRetryAt.toString(), queued.tierKey],
+      ])
+      .catch((error: unknown) => {
+        this.logger.warn({
+          event: 'retry_index_write_failed',
+          loggerName: this.config.loggerName,
+          tierKey: queued.tierKey,
+          message: error instanceof Error ? error.message : 'unknown',
+        });
+      });
   }
 
   private tierKey(attempt: number, nextRetryAt: number): string {
     return `${this.config.retryQueuePrefix}:tier-${attempt}${this.tierSeparator}${nextRetryAt}`;
+  }
+
+  private indexKey(): string {
+    return `${this.config.retryQueuePrefix}:index`;
   }
 
   private async moveToDeadLetter(event: T, attempt: number, error: unknown): Promise<void> {
@@ -133,12 +181,25 @@ export class RetryQueue<T> {
       error: error instanceof Error ? error.message : String(error),
     });
 
-    await this.cache.rpushJson(this.config.deadLetterKey, {
-      event,
-      failedAt: new Date().toISOString(),
-      lastAttempt: attempt,
-      lastError: error instanceof Error ? error.message : String(error),
-    });
+    try {
+      await this.cache.pipelineDeadLetterPush(
+        this.config.deadLetterKey,
+        {
+          event,
+          failedAt: new Date().toISOString(),
+          lastAttempt: attempt,
+          lastError: error instanceof Error ? error.message : String(error),
+        },
+        RetryQueue.DEAD_LETTER_LIMIT,
+        RetryQueue.DEAD_LETTER_TTL_SECONDS,
+      );
+    } catch (error) {
+      this.logger.warn({
+        event: 'retry_dead_letter_write_failed',
+        loggerName: this.config.loggerName,
+        message: error instanceof Error ? error.message : 'unknown',
+      });
+    }
   }
 
   private async processRetryQueue(): Promise<void> {
@@ -164,11 +225,22 @@ export class RetryQueue<T> {
   private async drainOnce(): Promise<void> {
     const now = Date.now();
 
-    for (let attempt = 1; attempt <= this.maxRetries; attempt += 1) {
-      const peekedKey = await this.cache.lpopJson<string>(`${this.config.retryQueuePrefix}:keys`);
-      if (peekedKey === null) return;
+    const due = await this.cache.zrangeByScore(
+      this.indexKey(),
+      '-inf',
+      now,
+      RetryQueue.DRAIN_BATCH,
+      true,
+    );
+    if (due.length === 0) return;
 
-      const raw = await this.cache.get(peekedKey);
+    for (const { member: tierKey, score } of due) {
+      if (score > now) continue;
+
+      const removed = await this.cache.zrem(this.indexKey(), tierKey);
+      if (!removed) continue;
+
+      const raw = await this.cache.getDel(tierKey);
       if (raw === null) continue;
 
       let queued: QueuedItem<T>;
@@ -179,12 +251,9 @@ export class RetryQueue<T> {
       }
 
       if (queued.nextRetryAt > now) {
-        await this.cache.rpushJson(`${this.config.retryQueuePrefix}:keys`, queued.tierKey);
+        await this.cache.zaddByScore(this.indexKey(), queued.nextRetryAt, tierKey);
         return;
       }
-
-      const drained = await this.cache.getDel(peekedKey);
-      if (drained === null) continue;
 
       const correlationId = queued.correlationId ?? createCorrelationId();
       correlationIdStorage.run({ correlationId }, () => {
