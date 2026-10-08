@@ -30,7 +30,6 @@ import {
   SKIPPED_ANSWER_SENTINEL,
   type DailyChallengeDifficulty,
   type DailyChallengeHistoryItem,
-  type DailyChallengePeriod,
 } from '../domain/types/daily-challenge.types';
 import {
   DAILY_CHALLENGE_OUTBOX_PORT,
@@ -116,7 +115,7 @@ export class DailyChallengeApplicationService {
   async getLeaderboard(
     query: DailyChallengeLeaderboardQueryDto,
   ): Promise<DailyChallengeLeaderboardResponseDto> {
-    const period = (query.period ?? 'daily') as DailyChallengePeriod;
+    const period = query.period ?? 'daily';
     const rows = await this.repository.getLeaderboard({ period, limit: LEADERBOARD_LIMIT });
 
     return {
@@ -171,11 +170,10 @@ export class DailyChallengeApplicationService {
         throw new DailyChallengeConflictError();
       }
 
-      const allQuestions = await this.quizQuestionRepository.getQuestionsByVersionId(
+      const currentQuestion = await this.quizQuestionRepository.getQuestionByPosition(
         row.quizVersionId,
+        nextIndex,
       );
-      const totalQuestions = allQuestions.length;
-      const currentQuestion = allQuestions.find((q) => q.position === nextIndex);
 
       if (!currentQuestion) {
         throw new DailyChallengeNotFoundError(
@@ -183,6 +181,7 @@ export class DailyChallengeApplicationService {
         );
       }
 
+      const totalQuestions = row.totalQuestions ?? 0;
       const answer = payload.selectedOptionId ?? null;
       const correct =
         answer !== null &&
@@ -193,11 +192,7 @@ export class DailyChallengeApplicationService {
       const nextQuestionIndex = nextIndex + 1;
       const completed = nextQuestionIndex >= totalQuestions;
 
-      const scorePercent = completed
-        ? totalQuestions > 0
-          ? this.computeScorePercent(allQuestions, nextAnswers).toFixed(2)
-          : '0.00'
-        : null;
+      let scorePercent: string | null = null;
 
       const nowIso = new Date().toISOString();
 
@@ -212,13 +207,20 @@ export class DailyChallengeApplicationService {
         nowIso,
       });
 
-      if (completed && scorePercent !== null) {
+      if (completed) {
+        const allQuestions = await this.quizQuestionRepository.getQuestionsByVersionId(
+          row.quizVersionId,
+        );
+        const finalScorePercent =
+          totalQuestions > 0
+            ? this.computeScorePercent(allQuestions, nextAnswers).toFixed(2)
+            : '0.00';
         const correctCount = this.computeCorrectCount(allQuestions, nextAnswers);
         this.eventBus.emitCompleted(
           new DailyChallengeCompletedEvent(
             row.challengeId,
             userId,
-            scorePercent,
+            finalScorePercent,
             correctCount,
             totalQuestions,
             nowIso,
@@ -240,6 +242,8 @@ export class DailyChallengeApplicationService {
             nowIso,
           );
         }
+
+        scorePercent = finalScorePercent;
       }
 
       return {

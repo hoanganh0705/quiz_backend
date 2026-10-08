@@ -40,7 +40,7 @@ export class EmailVerificationRepository {
       .where(and(notDeleted(users.deletedAt), eq(users.email, email)))
       .limit(1);
 
-    return (user as UserVerificationStatusRow | undefined) ?? null;
+    return user ?? null;
   }
 
   async findUserByActiveVerificationToken(
@@ -65,7 +65,7 @@ export class EmailVerificationRepository {
       )
       .limit(1);
 
-    return (user as UserVerificationRow | undefined) ?? null;
+    return user ?? null;
   }
 
   async markEmailAsVerified(userId: string, nowIso: string): Promise<void> {

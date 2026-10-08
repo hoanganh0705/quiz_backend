@@ -4,6 +4,7 @@ import {
   OutboxIdempotencyConflictError,
   computeNextAttemptIso,
 } from './base-outbox-processor';
+import { OutboxPayloadValidationError } from './payload-schema';
 import type { DrizzleDB } from '@/core/database/database.module';
 import type { BaseOutboxRow } from './base-outbox-processor';
 
@@ -226,6 +227,28 @@ describe('BaseOutboxProcessor — DLQ discipline', () => {
     expect(updateChain.calls[0]?.setValues['failedAt']).toBeUndefined();
     expect(updateChain.calls[0]?.setValues['dlqReason']).toBeUndefined();
   });
+
+  it('moves a malformed-payload row straight to DLQ without retrying', async () => {
+    const processor = new TestProcessor();
+    processor.failWith = new OutboxPayloadValidationError(
+      'amount',
+      'expected finite number, got string',
+    );
+    const rows = [{ ...baseRow, eventId: 'malformed', attemptCount: 0 }];
+    const { db, updateChain } = makeDb(rows);
+
+    const result = await processor.runProcessPendingEvents(db);
+
+    expect(result.failed).toBe(1);
+    expect(result.movedToDlq).toBe(1);
+    expect(result.retried).toBe(0);
+    expect(updateChain.calls[0]?.setValues).toMatchObject({
+      attemptCount: 1,
+      failedAt: expect.any(String),
+      dlqReason: expect.stringContaining('deterministic_failure:'),
+      nextAttemptAt: expect.any(String),
+    });
+  });
 });
 
 describe('BaseOutboxProcessor — DLQ monitor', () => {
@@ -273,5 +296,131 @@ describe('computeNextAttemptIso', () => {
     expect(aMs).toBe(30_000);
     expect(bMs).toBe(60_000);
     expect(cMs).toBe(120_000);
+  });
+});
+
+describe('BaseOutboxProcessor — parallel processing', () => {
+  it('processes rows with bounded concurrency and completes all dispatches', async () => {
+    const processor = new (class extends BaseOutboxProcessor {
+      protected readonly batchSize = 100;
+      protected readonly maxRetries = 3;
+      protected readonly baseDelaySeconds = 30;
+      protected readonly aggregateType = 'test';
+      protected readonly logPrefix = 'test';
+      public dispatchCalls: string[] = [];
+      public dispatchDelay = 10;
+
+      protected async dispatch(row: BaseOutboxRow): Promise<void> {
+        this.dispatchCalls.push(row.eventId);
+        await new Promise((r) => setTimeout(r, this.dispatchDelay));
+      }
+    })();
+
+    const rows = Array.from({ length: 20 }, (_, i) => ({
+      ...baseRow,
+      eventId: `row-${i}`,
+    }));
+    const { db } = makeDb(rows);
+
+    const start = Date.now();
+    const result = await processor.runProcessPendingEvents(db);
+    const elapsed = Date.now() - start;
+
+    expect(result.processed).toBe(20);
+    expect(processor.dispatchCalls).toHaveLength(20);
+    expect(elapsed).toBeLessThan(20 * processor.dispatchDelay);
+  });
+
+  it('marks processed per-row even when rows are dispatched in parallel', async () => {
+    const processor = new (class extends BaseOutboxProcessor {
+      protected readonly batchSize = 100;
+      protected readonly maxRetries = 3;
+      protected readonly baseDelaySeconds = 30;
+      protected readonly aggregateType = 'test';
+      protected readonly logPrefix = 'test';
+      public dispatchCalls: string[] = [];
+      public dispatchDelay = 5;
+
+      protected async dispatch(row: BaseOutboxRow): Promise<void> {
+        this.dispatchCalls.push(row.eventId);
+        await new Promise((r) => setTimeout(r, this.dispatchDelay));
+      }
+    })();
+
+    const rows = [
+      { ...baseRow, eventId: 'parallel-a' },
+      { ...baseRow, eventId: 'parallel-b' },
+      { ...baseRow, eventId: 'parallel-c' },
+    ];
+    const { db, updateChain } = makeDb(rows);
+
+    const result = await processor.runProcessPendingEvents(db);
+
+    expect(result.processed).toBe(3);
+    expect(updateChain.calls).toHaveLength(3);
+    expect(updateChain.calls.map((c) => c.setValues.processedAt)).toBeDefined();
+  });
+
+  it('counts each failure separately even when rows are dispatched in parallel', async () => {
+    const processor = new (class extends BaseOutboxProcessor {
+      protected readonly batchSize = 100;
+      protected readonly maxRetries = 3;
+      protected readonly baseDelaySeconds = 30;
+      protected readonly aggregateType = 'test';
+      protected readonly logPrefix = 'test';
+      public dispatchDelay = 5;
+
+      protected async dispatch(_row: BaseOutboxRow): Promise<void> {
+        throw new Error('simulated failure');
+      }
+    })();
+
+    const rows = [
+      { ...baseRow, eventId: 'fail-a', attemptCount: 0 },
+      { ...baseRow, eventId: 'fail-b', attemptCount: 0 },
+    ];
+    const { db, updateChain } = makeDb(rows);
+
+    const result = await processor.runProcessPendingEvents(db);
+
+    expect(result.failed).toBe(2);
+    expect(result.retried).toBe(2);
+    expect(updateChain.calls).toHaveLength(2);
+  });
+
+  it('idempotency conflict skips processing without duplicate side-effects', async () => {
+    const processor = new (class extends BaseOutboxProcessor {
+      protected readonly batchSize = 100;
+      protected readonly maxRetries = 3;
+      protected readonly baseDelaySeconds = 30;
+      protected readonly aggregateType = 'test';
+      protected readonly logPrefix = 'test';
+      public dispatchCalls: string[] = [];
+      public dispatchDelay = 5;
+      public conflictCalls: BaseOutboxRow[] = [];
+
+      protected async dispatch(row: BaseOutboxRow): Promise<void> {
+        this.dispatchCalls.push(row.eventId);
+        throw new Error('duplicate key value violates unique constraint 23505');
+      }
+
+      protected onIdempotencyConflict(row: BaseOutboxRow): void {
+        this.conflictCalls.push(row);
+      }
+    })();
+
+    const rows = [
+      { ...baseRow, eventId: 'idemp-a' },
+      { ...baseRow, eventId: 'idemp-b' },
+    ];
+    const { db, updateChain } = makeDb(rows);
+
+    const result = await processor.runProcessPendingEvents(db);
+
+    expect(result.processed).toBe(2);
+    expect(result.idempotencyConflicts).toBe(2);
+    expect(result.failed).toBe(0);
+    expect(processor.conflictCalls.map((r) => r.eventId)).toEqual(['idemp-a', 'idemp-b']);
+    expect(updateChain.calls).toHaveLength(2);
   });
 });

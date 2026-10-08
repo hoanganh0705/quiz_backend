@@ -43,6 +43,7 @@ import {
 import { sql } from 'drizzle-orm';
 
 import { commentVoteValue, commentReportStatus } from '../shared/enums';
+import { users } from '../auth/schema';
 
 // =============================================================================
 // comments
@@ -111,12 +112,23 @@ export const commentRows = pgTable(
         table.createdAt.asc().nullsLast().op('timestamptz_ops'),
       )
       .where(sql`deleted_at IS NULL`),
+    // Index supporting moderation queries that filter by the moderating user.
+    // Partial predicate matches the application-side filter:
+    //   `WHERE hidden_by_id IS NOT NULL` (the moderation history query).
+    index('idx_comments_hidden_by_id')
+      .using('btree', table.hiddenById.asc().nullsLast().op('uuid_ops'))
+      .where(sql`hidden_by_id IS NOT NULL`),
     check('comments_body_nonblank', sql`length(btrim(body)) > 0`),
     foreignKey({
       columns: [table.parentCommentId],
       foreignColumns: [table.commentId],
       name: 'comments_parent_comment_id_fkey',
     }).onDelete('cascade'),
+    foreignKey({
+      columns: [table.hiddenById],
+      foreignColumns: [users.userId],
+      name: 'comments_hidden_by_id_fkey',
+    }).onDelete('set null'),
   ],
 );
 

@@ -1,5 +1,6 @@
 import { Controller, Get, Query } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import { Public } from '@/common/decorators/public.decorator';
 import { ApiOkResource } from '@/common/swagger/api-ok';
 import { SearchApplicationService } from '../application/search.application.service';
@@ -16,6 +17,7 @@ export class SearchController {
 
   @Get()
   @Public()
+  @Throttle({ default: { limit: 60, ttl: 60_000 } })
   @ApiOkResource(SearchResponseDto, {
     description:
       'Aggregated full-text search results across users, quizzes, comments, categories, and tags',

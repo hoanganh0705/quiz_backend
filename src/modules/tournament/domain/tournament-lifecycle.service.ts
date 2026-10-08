@@ -61,22 +61,21 @@ export class TournamentLifecycleService {
         limit: participantCount,
       });
 
-      const events = await Promise.all(
-        participants.items.map(async (participant) => ({
+      const categoryTitle = await this.resolveCategoryTitle(tournament.categoryId);
+      const events = participants.items.map((participant) => ({
+        eventType: 'tournament.starting_soon' as const,
+        payload: {
           eventType: 'tournament.starting_soon' as const,
-          payload: {
-            eventType: 'tournament.starting_soon' as const,
-            tournamentId: tournament.tournamentId,
-            userId: participant.userId,
-            tournamentTitle: tournament.title,
-            categoryTitle: await this.resolveCategoryTitle(tournament.categoryId),
-            startedAt: tournament.startAt,
-            timestamp: timestampIso,
-          },
-          idempotencyKey: `tournament:starting_soon:${tournament.tournamentId}:${participant.userId}`,
-          correlationId: correlationId ?? undefined,
-        })),
-      );
+          tournamentId: tournament.tournamentId,
+          userId: participant.userId,
+          tournamentTitle: tournament.title,
+          categoryTitle,
+          startedAt: tournament.startAt,
+          timestamp: timestampIso,
+        },
+        idempotencyKey: `tournament:starting_soon:${tournament.tournamentId}:${participant.userId}`,
+        correlationId: correlationId ?? undefined,
+      }));
 
       await this.tournamentOutbox.scheduleTournamentEventsBatch(events, this.db, timestampIso);
 

@@ -2,7 +2,10 @@ import { Injectable } from '@nestjs/common';
 import type { ApiResponseEnvelope } from '@/common/responses/api-response';
 import { ApiResponse } from '@/common/responses/api-response';
 import type { CoinSpendResponseDto } from '../../dto/response/coin-spend-response.dto';
-import type { CoinTransactionsResponseDto } from '../../dto/response/coin-transactions.dto';
+import type {
+  CoinTransactionDto,
+  CoinTransactionsResponseDto,
+} from '../../dto/response/coin-transactions.dto';
 import type { CoinWalletResponseDto } from '../../dto/response/coin-wallet.dto';
 
 const okEnvelope = <T>(payload: T): ApiResponseEnvelope<T> => ApiResponse.ok(payload);
@@ -31,8 +34,7 @@ export class CoinPresenter {
 
   readonly getMyCoinTransactions = (
     payload: CoinTransactionsResponseDto,
-  ): ApiResponseEnvelope<CoinTransactionsResponseDto['items'][number]> =>
-    paginatedEnvelope(payload);
+  ): ApiResponseEnvelope<CoinTransactionDto[]> => paginatedEnvelope(payload);
 
   readonly spendResult = (
     payload: CoinSpendResponseDto,

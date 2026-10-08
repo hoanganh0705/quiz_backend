@@ -91,7 +91,7 @@ describe('Reconcile tournament participant totals (e2e)', () => {
 
     beforeAll(async () => {
       pool = new Pool({ connectionString: process.env.DATABASE_URL });
-      db = drizzle(pool, { schema }) as unknown as DrizzleDB;
+      db = drizzle(pool, { schema });
 
       // One-off users per suite — soft-deleted in afterAll. Two users so we
       // can exercise two participants in a single tournament.

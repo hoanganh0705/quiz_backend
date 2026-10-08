@@ -32,6 +32,7 @@ import type {
   RelatedCategoriesQuery,
   UpdateCategoryCommand,
 } from './types/category-commands';
+import { CategoryRankingCache } from '../infrastructure/cache/category-ranking-cache.service';
 
 @Injectable()
 export class CategoryDomainService {
@@ -44,6 +45,7 @@ export class CategoryDomainService {
     private readonly categoryRankingRepository: CategoryRankingRepositoryPort,
     @Inject(CATEGORY_DOMAIN_EVENT_BUS)
     private readonly eventBus: CategoryDomainEventBusPort,
+    private readonly categoryRankingCache: CategoryRankingCache,
     @InjectPinoLogger(CategoryDomainService.name) private readonly logger: PinoLogger,
   ) {}
 
@@ -316,10 +318,14 @@ export class CategoryDomainService {
   }
 
   async getPopularCategories(query: CategoryRankingQuery): Promise<RankedCategoryRow[]> {
-    return this.categoryRankingRepository.getPopularCategories(query.limit);
+    return this.categoryRankingCache.getOrSetPopular(async () =>
+      this.categoryRankingRepository.getPopularCategories(query.limit),
+    );
   }
 
   async getTrendingCategories(query: CategoryRankingQuery): Promise<RankedCategoryRow[]> {
-    return this.categoryRankingRepository.getTrendingCategories(query.limit);
+    return this.categoryRankingCache.getOrSetTrending(async () =>
+      this.categoryRankingRepository.getTrendingCategories(query.limit),
+    );
   }
 }

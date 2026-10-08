@@ -9,6 +9,8 @@ import type { EmailJobHandler } from './handlers/email-job.handler';
 import { PasswordResetEmailHandler } from './handlers/password-reset.handler';
 import { VerificationEmailHandler } from './handlers/verification.handler';
 
+const EMAIL_JOB_NAME_PATTERN = /^[A-Za-z0-9_:.]+$/;
+
 @Injectable()
 export class EmailProcessor implements OnModuleInit, OnModuleDestroy {
   private readonly handlers: EmailJobHandler<unknown>[];
@@ -24,10 +26,7 @@ export class EmailProcessor implements OnModuleInit, OnModuleDestroy {
     @InjectPinoLogger(EmailProcessor.name) private readonly logger: PinoLogger,
   ) {
     this.concurrency = this.email.queueConcurrency;
-    this.handlers = [
-      verificationHandler as EmailJobHandler<unknown>,
-      passwordResetHandler as EmailJobHandler<unknown>,
-    ];
+    this.handlers = [verificationHandler, passwordResetHandler];
   }
 
   onModuleInit(): void {
@@ -38,12 +37,18 @@ export class EmailProcessor implements OnModuleInit, OnModuleDestroy {
         const correlationId = dataWithCorrelation.correlationId ?? createCorrelationId();
 
         await correlationIdStorage.run({ correlationId }, async () => {
-          const handler = this.handlers.find((h) => h.jobName === job.name);
+          const jobName = job.name ?? '';
+          const jobNameValid = EMAIL_JOB_NAME_PATTERN.test(jobName);
+          const handler = jobNameValid
+            ? this.handlers.find((h) => h.jobName === jobName)
+            : undefined;
           if (!handler) {
             this.logger.warn({
               event: 'email_job_unknown_type',
               jobId: job.id,
-              jobName: job.name,
+              jobName,
+              handlerResolved: false,
+              reason: jobNameValid ? 'unknown_name' : 'invalid_chars',
               correlationId,
             });
             return;
@@ -67,14 +72,14 @@ export class EmailProcessor implements OnModuleInit, OnModuleDestroy {
         event: 'email_job_completed',
         jobId: job.id,
         jobName: job.name,
+        handlerResolved: true,
         correlationId: dataWithCorrelation.correlationId,
       });
     });
 
     this.worker.on('failed', (job: Job | undefined, error: Error) => {
       const dataWithCorrelation = job?.data as
-        | { userId?: string; correlationId?: string }
-        | undefined;
+        { userId?: string; correlationId?: string } | undefined;
       const attemptsMade = job?.attemptsMade ?? 0;
       const configuredAttempts =
         typeof job?.opts?.attempts === 'number' && job.opts.attempts > 0 ? job.opts.attempts : 1;
@@ -90,7 +95,7 @@ export class EmailProcessor implements OnModuleInit, OnModuleDestroy {
         isFinalAttempt: attemptsMade >= configuredAttempts,
         correlationId,
         message: error.message,
-        stack: error.stack,
+        ...(this.email.nodeEnv === 'production' ? {} : { stack: error.stack }),
       });
     });
   }

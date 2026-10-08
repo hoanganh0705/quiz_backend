@@ -42,6 +42,8 @@ import { SHARED_RANKING_EVENT_BUS } from '@/common/events/ranking-shared-events'
 import { RANKING_REPOSITORY_PORT } from './domain/ports/ranking-repository.port';
 import { RANKING_DOMAIN_EVENT_BUS } from './domain/ports/ranking-event-bus.port';
 import { RANKING_OUTBOX_PORT } from './domain/ports/ranking-outbox.port';
+import { RANKING_DEDUPE_PORT } from './domain/ports/ranking-dedupe.port';
+import { RedisRankingDedupeAdapter } from './infrastructure/adapters/redis-ranking-dedupe.adapter';
 
 // Domain Services
 import {
@@ -50,6 +52,7 @@ import {
   LeaderboardService,
   UserRankService,
   PeriodResetService,
+  RankingCacheVersionService,
 } from './domain/services';
 
 // Application Services
@@ -102,6 +105,11 @@ import { RankingPresenter } from './transport/presenters/ranking.presenter';
       provide: RANKING_OUTBOX_PORT,
       useClass: RankingOutboxAdapter,
     },
+    {
+      provide: RANKING_DEDUPE_PORT,
+      useClass: RedisRankingDedupeAdapter,
+    },
+    RedisRankingDedupeAdapter,
 
     // Domain Services
     XpIngestionService,
@@ -109,6 +117,7 @@ import { RankingPresenter } from './transport/presenters/ranking.presenter';
     LeaderboardService,
     UserRankService,
     PeriodResetService,
+    RankingCacheVersionService,
 
     // Application Services
     GetLeaderboardDistributionQueryHandler,
@@ -156,6 +165,7 @@ import { RankingPresenter } from './transport/presenters/ranking.presenter';
     LeaderboardService,
     UserRankService,
     PeriodResetService,
+    RankingCacheVersionService,
 
     // Application Services
     GetLeaderboardDistributionQueryHandler,

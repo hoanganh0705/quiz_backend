@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional, Inject } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { BaseDomainEventBus } from '@/common/events/base-domain-event-bus';
 import type {
@@ -13,6 +13,7 @@ import {
   type QuizEventHandler,
   QUIZ_DOMAIN_EVENT_BUS,
 } from '../ports/quiz-domain-event-bus.port';
+import { TracingProvider } from '@/core/observability/tracing.provider';
 
 export type QuizDomainEvent =
   | QuizCreatedEvent
@@ -29,12 +30,15 @@ export class QuizDomainEventBus
   constructor(
     @InjectPinoLogger(QuizDomainEventBus.name)
     logger: PinoLogger,
+    @Optional()
+    @Inject(TracingProvider)
+    tracing?: TracingProvider,
   ) {
-    super(logger, { logEventName: 'quiz_domain_event' });
+    super(logger, { logEventName: 'quiz_domain_event' }, tracing);
   }
 
   subscribe(handler: QuizEventHandler): () => void {
-    return super.subscribe(handler as never);
+    return super.subscribe(handler);
   }
 
   emit(event: unknown): void {

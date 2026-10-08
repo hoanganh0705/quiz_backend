@@ -62,7 +62,7 @@ describe('Bulk bookmark events refresh quiz_stats (e2e)', () => {
 
     beforeAll(async () => {
       pool = new Pool({ connectionString: process.env.DATABASE_URL });
-      db = drizzle(pool, { schema }) as unknown as DrizzleDB;
+      db = drizzle(pool, { schema });
 
       const stamp = `${Date.now()}-${Math.floor(Math.random() * 1_000_000)}`;
 

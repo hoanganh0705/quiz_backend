@@ -119,7 +119,7 @@ export class QuizRepository implements QuizRepositoryPort {
       .where(and(eq(quizTags.quizId, quizId), notDeleted(tags.deletedAt)))
       .orderBy(asc(tags.name));
 
-    return rows as QuizTagRow[];
+    return rows;
   }
 
   async getTagsForQuizIds(quizIds: string[]): Promise<Map<string, QuizTagRow[]>> {
@@ -573,7 +573,7 @@ export class QuizRepository implements QuizRepositoryPort {
             .where(and(eq(quizTags.quizId, quizId), notDeleted(tags.deletedAt)))
             .orderBy(asc(tags.name));
 
-          tagRows = resolvedTags as QuizTagRow[];
+          tagRows = resolvedTags;
         }
 
         const row: QuizWithPublishedVersionRow = {
@@ -604,7 +604,7 @@ export class QuizRepository implements QuizRepositoryPort {
           publishedVersionPublishedAt: null,
           publishedVersionArchivedAt: null,
           publishedVersionUpdatedAt: null,
-        } as QuizWithPublishedVersionRow;
+        };
 
         return { row, tags: tagRows };
       });

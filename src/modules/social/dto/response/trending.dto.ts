@@ -43,4 +43,10 @@ export class TrendingUserResponseDto {
 export class TrendingUsersListResponseDto {
   @ApiProperty({ description: 'Trending users', type: () => [TrendingUserResponseDto] })
   items!: TrendingUserResponseDto[];
+
+  @ApiPropertyOptional({
+    description: 'Cursor for the next page (omit on the last page).',
+    nullable: true,
+  })
+  nextCursor!: string | null;
 }

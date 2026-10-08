@@ -31,7 +31,4 @@ export interface OAuthLoginFailedEvent {
 }
 
 export type OAuthSecurityEvent =
-  | OAuthAccountCreatedEvent
-  | OAuthAccountLinkedEvent
-  | OAuthLoginEvent
-  | OAuthLoginFailedEvent;
+  OAuthAccountCreatedEvent | OAuthAccountLinkedEvent | OAuthLoginEvent | OAuthLoginFailedEvent;

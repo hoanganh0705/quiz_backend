@@ -66,15 +66,13 @@ export class AttemptResponseMapper {
       finishedAt: attempt.finishedAt,
       timeTakenMs: attempt.timeTakenMs,
       xpEarned: attempt.xpEarned,
-      answers: answers.map(
-        (a): AttemptAnswerResponseDto => ({
-          attemptAnswerId: a.attemptAnswerId,
-          questionId: a.questionId,
-          selectedOptionId: a.selectedOptionId,
-          answeredAt: a.answeredAt,
-          timeTakenMs: a.timeTakenMs,
-        }),
-      ),
+      answers: answers.map((a): AttemptAnswerResponseDto => ({
+        attemptAnswerId: a.attemptAnswerId,
+        questionId: a.questionId,
+        selectedOptionId: a.selectedOptionId,
+        answeredAt: a.answeredAt,
+        timeTakenMs: a.timeTakenMs,
+      })),
     };
   }
 
@@ -124,13 +122,11 @@ export class AttemptResponseMapper {
   ): AttemptAnswersResponseDto {
     return {
       attemptId,
-      answers: answers.map(
-        (a): AttemptAnswerItemDto => ({
-          questionId: a.questionId,
-          selectedOptionId: a.selectedOptionId,
-          submittedAt: a.answeredAt,
-        }),
-      ),
+      answers: answers.map((a): AttemptAnswerItemDto => ({
+        questionId: a.questionId,
+        selectedOptionId: a.selectedOptionId,
+        submittedAt: a.answeredAt,
+      })),
     };
   }
 

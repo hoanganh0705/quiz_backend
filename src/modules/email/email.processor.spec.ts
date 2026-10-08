@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/require-await, @typescript-eslint/unbound-method */
 import type { PinoLogger } from 'nestjs-pino';
 import { EmailProcessor } from './email.processor';
 import type { ConnectionOptions } from 'bullmq';
@@ -71,18 +70,19 @@ const makeLogger = (): PinoLogger =>
     fatal: jest.fn(),
   }) as unknown as PinoLogger;
 
-const makeEmailConfig = (): EmailConfig =>
-  ({
-    provider: 'resend',
-    fromAddress: 'noreply@example.com',
-    fromName: 'Acme',
-    resendApiKey: 're_test_key',
-    sendTimeoutMs: 5_000,
-    queueConcurrency: 5,
-    circuitBreaker: { failureThreshold: 3, resetTimeoutMs: 30_000 },
-  }) as EmailConfig;
+const makeEmailConfig = (overrides: Partial<EmailConfig> = {}): EmailConfig => ({
+  provider: 'resend',
+  fromAddress: 'noreply@example.com',
+  fromName: 'Acme',
+  resendApiKey: 're_test_key',
+  sendTimeoutMs: 5_000,
+  queueConcurrency: 5,
+  nodeEnv: 'development',
+  circuitBreaker: { failureThreshold: 3, resetTimeoutMs: 30_000 },
+  ...overrides,
+});
 
-const buildProcessor = () => {
+const buildProcessor = (overrides: Partial<EmailConfig> = {}) => {
   const logger = makeLogger();
   const verificationHandler = {
     jobName: 'sendVerificationEmail',
@@ -94,8 +94,8 @@ const buildProcessor = () => {
   } as unknown as PasswordResetEmailHandler;
 
   const processor = new EmailProcessor(
-    { url: 'redis://localhost:6379' } as ConnectionOptions,
-    makeEmailConfig(),
+    { url: 'redis://localhost:6379' },
+    makeEmailConfig(overrides),
     verificationHandler,
     passwordResetHandler,
     logger,
@@ -139,7 +139,7 @@ describe('EmailProcessor', () => {
     const correlationId = createCorrelationId();
     verificationHandler.process = jest.fn(async (_data, ctx) => {
       observedCorrelationIds.push(ctx.correlationId);
-    }) as unknown as VerificationEmailHandler['process'];
+    });
 
     await worker!.processOne({
       id: 'job-1',
@@ -168,7 +168,7 @@ describe('EmailProcessor', () => {
 
     verificationHandler.process = jest.fn(async (_data, ctx) => {
       expect(ctx.correlationId).toMatch(/^[0-9a-f-]{36}$/);
-    }) as unknown as VerificationEmailHandler['process'];
+    });
 
     await worker!.processOne({
       id: 'job-1',
@@ -220,7 +220,7 @@ describe('EmailProcessor', () => {
 
     verificationHandler.process = jest.fn(async () => {
       throw new Error('boom');
-    }) as unknown as VerificationEmailHandler['process'];
+    });
 
     await expect(
       worker!.processOne({
@@ -251,6 +251,142 @@ describe('EmailProcessor', () => {
     expect(worker).toBeNull();
   });
 
+  it('does not include stack when nodeEnv is production', async () => {
+    const { processor, logger, verificationHandler } = buildProcessor({ nodeEnv: 'production' });
+    processor.onModuleInit();
+    const worker = (
+      processor as unknown as {
+        worker: {
+          processOne: (j: {
+            id: string;
+            name: string;
+            data: Record<string, unknown>;
+          }) => Promise<void>;
+        } | null;
+      }
+    ).worker;
+
+    verificationHandler.process = jest.fn(async () => {
+      const error = new Error('boom');
+      error.stack = 'Error: boom\n    at /app/internal/secret.ts:1:1';
+      throw error;
+    });
+
+    await expect(
+      worker!.processOne({
+        id: 'job-1',
+        name: 'sendVerificationEmail',
+        data: { email: 'a@b.c', token: 't', userId: 'u-1' },
+        opts: { attempts: 1 },
+        attemptsMade: 1,
+      } as unknown as { id: string; name: string; data: Record<string, unknown> }),
+    ).rejects.toThrow('boom');
+
+    const lastCallArg = (logger.error as jest.Mock).mock.calls.at(-1)?.[0] as
+      Record<string, unknown> | undefined;
+    expect(lastCallArg).toBeDefined();
+    expect(lastCallArg).not.toHaveProperty('stack');
+  });
+
+  it('includes stack when nodeEnv is development', async () => {
+    const { processor, logger, verificationHandler } = buildProcessor({ nodeEnv: 'development' });
+    processor.onModuleInit();
+    const worker = (
+      processor as unknown as {
+        worker: {
+          processOne: (j: {
+            id: string;
+            name: string;
+            data: Record<string, unknown>;
+          }) => Promise<void>;
+        } | null;
+      }
+    ).worker;
+
+    verificationHandler.process = jest.fn(async () => {
+      throw new Error('boom');
+    });
+
+    await expect(
+      worker!.processOne({
+        id: 'job-1',
+        name: 'sendVerificationEmail',
+        data: { email: 'a@b.c', token: 't', userId: 'u-1' },
+        opts: { attempts: 1 },
+        attemptsMade: 1,
+      } as unknown as { id: string; name: string; data: Record<string, unknown> }),
+    ).rejects.toThrow('boom');
+
+    expect(logger.error).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'email_job_failed',
+      }),
+    );
+    const lastCallArg = (logger.error as jest.Mock).mock.calls.at(-1)?.[0] as
+      Record<string, unknown> | undefined;
+    expect(lastCallArg?.stack).toBeDefined();
+  });
+
+  it('logs an unknown-job warning when jobName contains disallowed characters', async () => {
+    const { processor, logger } = buildProcessor();
+    processor.onModuleInit();
+    const worker = (
+      processor as unknown as {
+        worker: {
+          processOne: (j: {
+            id: string;
+            name: string;
+            data: Record<string, unknown>;
+          }) => Promise<void>;
+        } | null;
+      }
+    ).worker;
+
+    await worker!.processOne({
+      id: 'job-1',
+      name: 'sendVerificationEmail; DROP TABLE users;',
+      data: {},
+    });
+
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'email_job_unknown_type',
+        reason: 'invalid_chars',
+        jobName: 'sendVerificationEmail; DROP TABLE users;',
+      }),
+    );
+    expect(logger.error).not.toHaveBeenCalled();
+  });
+
+  it('logs an unknown-job warning when jobName uses only valid characters but no handler is registered', async () => {
+    const { processor, logger } = buildProcessor();
+    processor.onModuleInit();
+    const worker = (
+      processor as unknown as {
+        worker: {
+          processOne: (j: {
+            id: string;
+            name: string;
+            data: Record<string, unknown>;
+          }) => Promise<void>;
+        } | null;
+      }
+    ).worker;
+
+    await worker!.processOne({
+      id: 'job-1',
+      name: 'sendWelcomeEmail',
+      data: {},
+    });
+
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'email_job_unknown_type',
+        reason: 'unknown_name',
+      }),
+    );
+  });
+
   it('correlation ID storage is active during handler execution', async () => {
     const { processor, verificationHandler } = buildProcessor();
     processor.onModuleInit();
@@ -270,7 +406,7 @@ describe('EmailProcessor', () => {
     let insideCorrelationId: string | undefined;
     verificationHandler.process = jest.fn(async () => {
       insideCorrelationId = correlationIdStorage.getStore()?.correlationId;
-    }) as unknown as VerificationEmailHandler['process'];
+    });
 
     await worker!.processOne({
       id: 'job-1',

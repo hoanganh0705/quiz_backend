@@ -40,8 +40,7 @@ export class OutboxNotifyListener implements OnModuleInit, OnModuleDestroy {
   private readonly reconnectDelaysMs = [100, 500, 1_000, 5_000, 10_000];
   private listenerClient: ListenerClient | null = null;
   private reconnectTimer: NodeJS.Timeout | null = null;
-  private fallbackInFlight = false;
-  private notifyInFlight = false;
+  private drainInFlight = false;
 
   constructor(
     @Inject(DRIZZLE) private readonly db: DrizzleDB,
@@ -172,12 +171,12 @@ export class OutboxNotifyListener implements OnModuleInit, OnModuleDestroy {
    */
   private async handleNotify(payload: string | undefined): Promise<void> {
     if (!payload) return;
-    if (this.notifyInFlight) return;
-    this.notifyInFlight = true;
+    if (this.drainInFlight) return;
+    this.drainInFlight = true;
     try {
       await this.processor.processPendingEvents();
     } finally {
-      this.notifyInFlight = false;
+      this.drainInFlight = false;
     }
   }
 
@@ -192,8 +191,8 @@ export class OutboxNotifyListener implements OnModuleInit, OnModuleDestroy {
    */
   @Cron('*/30 * * * * *')
   async fallbackPoll(): Promise<void> {
-    if (this.fallbackInFlight) return;
-    this.fallbackInFlight = true;
+    if (this.drainInFlight) return;
+    this.drainInFlight = true;
     try {
       await this.processor.processPendingEvents();
     } catch (error) {
@@ -202,7 +201,7 @@ export class OutboxNotifyListener implements OnModuleInit, OnModuleDestroy {
         message: error instanceof Error ? error.message : String(error),
       });
     } finally {
-      this.fallbackInFlight = false;
+      this.drainInFlight = false;
     }
   }
 }

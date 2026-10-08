@@ -67,7 +67,11 @@ import type { RedisConfig } from '@/core/config';
         if (!redis.url) {
           throw new Error('REDIS_URL is not defined in environment variables');
         }
-        return { url: redis.url };
+        const connection: ConnectionOptions = { url: redis.url };
+        if (redis.keyPrefix && redis.keyPrefix.length > 0) {
+          connection.keyPrefix = redis.keyPrefix;
+        }
+        return connection;
       },
     },
     {

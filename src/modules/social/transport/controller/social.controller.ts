@@ -52,7 +52,7 @@ import {
   UserActivityItemDto,
   UserSocialStatsResponseDto,
   MySocialAnalyticsResponseDto,
-  TrendingUserResponseDto,
+  TrendingUsersListResponseDto,
   MessageResponseDto,
 } from '@/modules/social/dto/response';
 import {
@@ -194,13 +194,18 @@ export class SocialController {
   @Get('users/trending')
   @Public()
   @ApiOperation({ summary: 'List trending users' })
-  @ApiOkResourceArray(TrendingUserResponseDto, {
+  @ApiOkResource(TrendingUsersListResponseDto, {
     description: 'Trending users returned',
   })
   async getTrendingUsers(@Query() query: GetTrendingUsersQueryDto) {
-    return this.presenter.getTrendingUsers(
-      await this.socialService.getTrendingUsers(query.limit ?? 20),
+    const result = await this.socialService.getTrendingUsers(
+      query.limit ?? 20,
+      query.cursor ?? null,
     );
+    return this.presenter.getTrendingUsers({
+      items: result.items,
+      nextCursor: result.nextCursor,
+    });
   }
 
   @throttle('getUserActivity')

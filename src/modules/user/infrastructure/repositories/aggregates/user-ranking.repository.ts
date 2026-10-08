@@ -34,6 +34,6 @@ export class UserRankingRepository {
       .values({ userId })
       .returning(USER_RANKING_COLUMNS);
 
-    return result as UserRankingRow;
+    return result;
   }
 }

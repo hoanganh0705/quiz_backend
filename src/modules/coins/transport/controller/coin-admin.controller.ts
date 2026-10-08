@@ -12,8 +12,6 @@ import { CoinPresenter } from '../presenters/coin.presenter';
 import { CoinAdminAdjustRequestDto } from '../../dto/request/coin-admin-adjust-request.dto';
 import type { CoinSpendResponseDto } from '../../dto/response/coin-spend-response.dto';
 
-const IDEMPOTENCY_HEADER = 'idempotency-key' as const;
-
 @ApiTags('admin-coins')
 @Controller('admin/coins')
 @Permissions(Permission.COIN_ADMIN)
@@ -34,7 +32,7 @@ export class CoinAdminController {
   async adminAdjustCoins(
     @CurrentUser() admin: JwtPayload,
     @Body() body: CoinAdminAdjustRequestDto,
-    @Headers(IDEMPOTENCY_HEADER) idempotencyHeader?: string,
+    @Headers('idempotency-key') idempotencyHeader?: string,
   ): Promise<ApiResponseEnvelope<CoinSpendResponseDto>> {
     const merged: CoinAdminAdjustRequestDto = {
       ...body,

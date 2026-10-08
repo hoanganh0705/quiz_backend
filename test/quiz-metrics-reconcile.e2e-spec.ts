@@ -54,14 +54,14 @@ describe('Quiz attempt/avg-score counter reconciliation (Fix #7 e2e)', () => {
     let userIds: string[] = [];
     let quizIds: string[] = [];
     let versionIds: string[] = [];
-    let attemptIds: string[] = [];
+    const _attemptIds: string[] = [];
     let metricsRepository: MetricsRepository;
     let analyticsRepository: QuizAnalyticsRepository;
     let analyticsService: QuizAnalyticsService;
 
     beforeAll(async () => {
       pool = new Pool({ connectionString: process.env.DATABASE_URL });
-      db = drizzle(pool, { schema }) as unknown as DrizzleDB;
+      db = drizzle(pool, { schema });
 
       metricsRepository = new MetricsRepository(db, createLogger(MetricsRepository.name));
       analyticsRepository = new QuizAnalyticsRepository(db);

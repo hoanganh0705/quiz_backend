@@ -31,7 +31,12 @@ export class CoinIngestionService {
   async processCoinEvent(
     event: CoinEventInput,
     now: Date = new Date(),
-  ): Promise<{ userId: string; appliedDelta: number; newBalance: number }> {
+  ): Promise<{
+    userId: string;
+    appliedDelta: number;
+    newBalance: number;
+    transactionId?: string;
+  }> {
     try {
       this.validateEvent(event);
     } catch (error) {
@@ -134,6 +139,7 @@ export class CoinIngestionService {
       userId: event.userId,
       appliedDelta,
       newBalance: wallet.balance,
+      transactionId,
     };
   }
 

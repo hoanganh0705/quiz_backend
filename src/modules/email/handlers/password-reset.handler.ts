@@ -12,7 +12,7 @@ import {
   type EmailConfig,
   type PasswordResetConfig,
 } from '@/core/config';
-import { EMAIL_JOB_NAMES } from '../email.constants';
+import { EMAIL_JOB_NAMES, EMAIL_QUEUE_TOKENS } from '../email.constants';
 import type { SendPasswordResetEmailJobData } from '../email.types';
 import { EmailResilienceRunner } from '../resilience/email-resilience.runner';
 import { renderPasswordResetEmail } from '../templates/password-reset.template';
@@ -28,21 +28,15 @@ export class PasswordResetEmailHandler implements EmailJobHandler<SendPasswordRe
   private readonly fromAddress: string;
   private readonly fromName: string;
   private readonly passwordResetBaseUrl: string;
-  private readonly resend: Resend;
 
   constructor(
     @Inject(DRIZZLE) private readonly db: DrizzleDB,
     @Inject(emailConfig.KEY) private readonly email: EmailConfig,
     @Inject(passwordResetConfig.KEY) private readonly passwordReset: PasswordResetConfig,
+    @Inject(EMAIL_QUEUE_TOKENS.RESEND_CLIENT) private readonly resend: Resend,
     private readonly resilience: EmailResilienceRunner,
     @InjectPinoLogger(PasswordResetEmailHandler.name) private readonly logger: PinoLogger,
   ) {
-    if (!this.email.resendApiKey) {
-      throw new Error(
-        'Email service is missing required configuration. Check server environment variables.',
-      );
-    }
-    this.resend = new Resend(this.email.resendApiKey);
     this.provider = this.email.provider;
     this.fromAddress = this.email.fromAddress;
     this.fromName = this.email.fromName;

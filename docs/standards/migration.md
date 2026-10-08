@@ -122,6 +122,65 @@ pnpm ts-node src/commands/outbox.ts discard --id <id>
 ALLOW_PROD_OUTBOX_OPERATIONS=true pnpm ts-node src/commands/outbox.ts discard --id <id>
 ```
 
+## Cache invalidation hand-off (informational)
+
+The Redis cache audit runbook
+(`docs/runbooks/redis-cache-audit.md`) and
+[ADR-0028](../adr/0028-redis-cache-invalidation.md) cover the three
+canonical cache-invalidation patterns (event-driven, version-bump,
+TTL-only). Schema changes that introduce a cache layer MUST pick a
+pattern in the same PR and reference it in the cache key namespace
+table on `RedisService`. This is informational — migrations do not
+need to encode cache concerns directly.
+
+## Security invariants at boot
+
+Production deploys MUST satisfy the following invariants before the
+HTTP server opens its listening socket. They are enforced by
+`src/core/config/env.validation.ts` and re-checked by
+`jwtConfig()` so the boot-time contract is a single source of truth.
+
+| Invariant | Source of truth | Failure mode |
+| --- | --- | --- |
+| `JWT_ACCESS_TOKEN_SECRET` and `JWT_REFRESH_TOKEN_SECRET` are non-empty strings, at least 32 characters, with at least 16 distinct characters. The two secrets MUST differ. | `parseHighEntropyString` in `env.validation.ts` and the re-validation in `core/config/jwt.config.ts`. | Boot fails with `JWT_ACCESS_TOKEN_SECRET must be at least 32 characters long ...`. |
+| `CORS_ORIGINS` is non-empty in production. Empty strings, comma-only, and whitespace-only lists are rejected. | `validateEnv` in `env.validation.ts`. | Boot fails with `CORS_ORIGINS must be set in production ...`. |
+| `PROMETHEUS_SCRAPE_TOKEN` is non-empty in production when `/metrics` is exposed. | `validateEnv` in `env.validation.ts`. | Boot fails with `PROMETHEUS_SCRAPE_TOKEN must be set in production ...`. |
+| `CLOUDINARY_FOLDER` is not the dev default (`quiz-app-dev`) in production. | `parseCloudinaryFolder` in `env.validation.ts`. | Boot fails with `CLOUDINARY_FOLDER must not be "quiz-app-dev" in production ...`. |
+| `DATABASE_URL` is a non-empty `postgres://` or `postgresql://` URL with a non-placeholder credential. | `parseUrl` in `env.validation.ts`; placeholder hygiene enforced by the runbook check `security-boot-checks.md`. | Boot fails with `DATABASE_URL must use postgres/postgresql protocol`. |
+
+A complete operator checklist lives at
+[`docs/runbooks/security-boot-checks.md`](../runbooks/security-boot-checks.md).
+
+### Financial operation permission split
+
+Coin ledger mutations are split into three permissions and a daily
+cap; see [ADR-0033](../adr/0033-financial-ops-permission-split.md).
+
+- `COIN_GRANT` is required to mutate a user's balance upward.
+- `COIN_CLAWBACK` is required to mutate a user's balance downward.
+- `COIN_READ_LEDGER` is required to read the coin transaction
+  history; not required for grant or clawback.
+- A single admin cannot grant more than
+  `COIN_ADMIN_DAILY_CAP` coins per UTC day. The default is
+  10,000,000 coins.
+- An admin cannot grant or clawback coins to or from their own
+  userId.
+
+### Admin-only DTO and privileged fields
+
+Privileged booleans (`isFeatured`, `isHidden`, …) live in their own
+DTO and their own route; see
+[ADR-0034](../adr/0034-admin-only-dtos.md).
+
+- The user-facing `*-request.dto.ts` MUST NOT contain a privileged
+  field.
+- The admin-facing `*-admin-request.dto.ts` is the only place the
+  privileged field is declared.
+- The admin route is gated by `@Permissions(<matching admin
+  permission>)`. The service layer re-checks the permission.
+- New resources that introduce privileged fields MUST follow this
+  pattern in the same PR that introduces the field.
+
 ## Non-goals
 
 - Documenting infrastructure-as-code (Terraform, Helm) — not present in the repo.

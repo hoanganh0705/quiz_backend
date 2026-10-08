@@ -42,4 +42,14 @@ export const CoinProblemCodeMapping = {
     title: 'UnprocessableEntity',
     typeUri: 'https://api.quiz.local/problems/coin-admin-adjustment-reason-required',
   },
+  COIN_ADMIN_SELF_ADJUSTMENT_NOT_ALLOWED: {
+    status: HttpStatus.UNPROCESSABLE_ENTITY,
+    title: 'UnprocessableEntity',
+    typeUri: 'https://api.quiz.local/problems/coin-admin-self-adjustment-not-allowed',
+  },
+  COIN_ADMIN_DAILY_CAP_EXCEEDED: {
+    status: HttpStatus.UNPROCESSABLE_ENTITY,
+    title: 'UnprocessableEntity',
+    typeUri: 'https://api.quiz.local/problems/coin-admin-daily-cap-exceeded',
+  },
 } as const satisfies Readonly<Record<string, ProblemCodeInfo>>;

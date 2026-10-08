@@ -60,7 +60,7 @@ export class BookmarkRepository implements BookmarkRepositoryPort {
       )
       .limit(1);
 
-    return (row as BookmarkedQuizRow | undefined) ?? null;
+    return row ?? null;
   }
 
   async listBookmarksInCollection(collectionId: string): Promise<BookmarkedQuizDetailRow[]> {
@@ -83,7 +83,7 @@ export class BookmarkRepository implements BookmarkRepositoryPort {
       .where(and(eq(bookmarkedQuizzes.collectionId, collectionId), notDeleted(quizzes.deletedAt)))
       .orderBy(bookmarkedQuizzes.bookmarkedAt);
 
-    return rows as BookmarkedQuizDetailRow[];
+    return rows;
   }
 
   async getBookmarkStatus(userId: string, quizId: string): Promise<BookmarkStatusRow> {
@@ -214,7 +214,7 @@ export class BookmarkRepository implements BookmarkRepositoryPort {
         updatedAt: bookmarkedQuizzes.updatedAt,
       });
 
-    return created as BookmarkedQuizRow;
+    return created;
   }
 
   async addBookmarksBulk(params: {
@@ -342,7 +342,7 @@ export class BookmarkRepository implements BookmarkRepositoryPort {
       )
       .returning();
 
-    return updated as BookmarkedQuizRow;
+    return updated;
   }
 
   async getCollectionAnalytics(collectionId: string): Promise<BookmarkCollectionAnalytics | null> {

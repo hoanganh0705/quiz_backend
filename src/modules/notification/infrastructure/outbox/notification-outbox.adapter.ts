@@ -26,6 +26,7 @@ const MAX_RETRY_ATTEMPTS = 5;
 const INITIAL_RETRY_DELAY_MS = 1000;
 const BATCH_SIZE = 100;
 const LOCK_TTL_MS = 60 * 1000;
+const PARALLELISM = 10;
 
 @Injectable()
 export class NotificationOutboxAdapter {
@@ -65,7 +66,7 @@ export class NotificationOutboxAdapter {
       .values({
         aggregateType: 'notification',
         eventType: 'notification.sent',
-        payload: event as unknown as Record<string, unknown>,
+        payload: event,
         idempotencyKey,
         nextAttemptAt: new Date().toISOString(),
       })
@@ -143,8 +144,9 @@ export class NotificationOutboxAdapter {
       eventCount: events.length,
     });
 
-    for (const event of events) {
-      await this.processEvent(event);
+    for (let i = 0; i < events.length; i += PARALLELISM) {
+      const chunk = events.slice(i, i + PARALLELISM);
+      await Promise.all(chunk.map((event) => this.processEvent(event)));
     }
   }
 
@@ -238,36 +240,45 @@ export class NotificationOutboxAdapter {
   async triggerProcessing(): Promise<{ processed: number; failed: number }> {
     this.logger?.info({ event: 'notification_outbox_manual_trigger' });
 
-    const beforeCounts = await this.db
-      .select({ count: sql<number>`count(*)::int` })
-      .from(outboxEvents)
-      .where(and(isNull(outboxEvents.processedAt), isNull(outboxEvents.failedAt)));
+    const [[beforeCounts], [failedBefore]] = await Promise.all([
+      this.db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(outboxEvents)
+        .where(and(isNull(outboxEvents.processedAt), isNull(outboxEvents.failedAt))),
 
-    const failedBefore = await this.db
-      .select({ count: sql<number>`count(*)::int` })
-      .from(outboxEvents)
-      .where(and(isNull(outboxEvents.processedAt), sql`failed_at IS NOT NULL`));
+      this.db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(outboxEvents)
+        .where(and(isNull(outboxEvents.processedAt), sql`failed_at IS NOT NULL`)),
+    ]);
 
     await this.processBatch();
 
-    const afterCounts = await this.db
-      .select({ count: sql<number>`count(*)::int` })
-      .from(outboxEvents)
-      .where(and(isNull(outboxEvents.processedAt), isNull(outboxEvents.failedAt)));
+    const [[afterCounts], [failedAfter]] = await Promise.all([
+      this.db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(outboxEvents)
+        .where(and(isNull(outboxEvents.processedAt), isNull(outboxEvents.failedAt))),
 
-    const failedAfter = await this.db
-      .select({ count: sql<number>`count(*)::int` })
-      .from(outboxEvents)
-      .where(and(isNull(outboxEvents.processedAt), sql`failed_at IS NOT NULL`));
+      this.db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(outboxEvents)
+        .where(and(isNull(outboxEvents.processedAt), sql`failed_at IS NOT NULL`)),
+    ]);
 
-    const processed = Number(beforeCounts[0]?.count ?? 0) - Number(afterCounts[0]?.count ?? 0);
-    const failed = Number(failedAfter[0]?.count ?? 0) - Number(failedBefore[0]?.count ?? 0);
+    const processed = Number(beforeCounts?.count ?? 0) - Number(afterCounts?.count ?? 0);
+    const failed = Number(failedAfter?.count ?? 0) - Number(failedBefore?.count ?? 0);
 
     return { processed, failed };
   }
 
   @Cron('*/5 * * * *')
   async monitorDeadLetterQueue(): Promise<void> {
+    const totalCount = await this.getDlqTotalCount();
+    if (totalCount === 0) {
+      return;
+    }
+
     const rows = await this.db
       .select({
         eventId: outboxEvents.eventId,
@@ -286,7 +297,7 @@ export class NotificationOutboxAdapter {
           isNotNull(outboxEvents.dlqReason),
         ),
       )
-      .limit(1000);
+      .limit(100);
 
     if (rows.length === 0) {
       return;
@@ -294,8 +305,23 @@ export class NotificationOutboxAdapter {
 
     this.logger?.error({
       event: 'notification_outbox_dlq_alert',
-      totalDlqEvents: rows.length,
+      totalDlqEvents: totalCount,
+      sampleDlqEvents: rows.length,
       sampleEventIds: rows.slice(0, 5).map((e) => e.eventId),
     });
+  }
+
+  private async getDlqTotalCount(): Promise<number> {
+    const result = await this.db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(outboxEvents)
+      .where(
+        and(
+          isNull(outboxEvents.processedAt),
+          isNotNull(outboxEvents.failedAt),
+          isNotNull(outboxEvents.dlqReason),
+        ),
+      );
+    return Number(result[0]?.count ?? 0);
   }
 }

@@ -54,10 +54,13 @@ export class RankingEventHandler implements OnModuleInit {
     });
 
     try {
-      await this.xpIngestionService.processXpEvent({
-        eventType: 'external.xp.earned',
-        ...event,
-      });
+      await this.xpIngestionService.processXpEvent(
+        {
+          eventType: 'external.xp.earned',
+          ...event,
+        },
+        'outbox',
+      );
 
       this.logger.info({
         event: 'xp_event_processed',

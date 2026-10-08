@@ -3,7 +3,6 @@ import {
   ArrayMaxSize,
   ArrayUnique,
   IsArray,
-  IsBoolean,
   IsIn,
   IsInt,
   IsOptional,
@@ -147,26 +146,6 @@ export class CreateQuizDto {
     message: STORAGE_PUBLIC_ID_INVALID_MESSAGE,
   })
   imagePublicId?: string | null;
-
-  @ApiPropertyOptional({
-    description: 'Whether the quiz is featured on the home page',
-    default: false,
-    example: false,
-    nullable: true,
-  })
-  @IsOptional()
-  @IsBoolean()
-  isFeatured?: boolean;
-
-  @ApiPropertyOptional({
-    description: 'Whether the quiz is hidden from public listings',
-    default: false,
-    example: false,
-    nullable: true,
-  })
-  @IsOptional()
-  @IsBoolean()
-  isHidden?: boolean;
 
   @ApiPropertyOptional({
     description: 'UUID of the associated category',

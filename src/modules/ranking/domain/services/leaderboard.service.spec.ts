@@ -5,6 +5,7 @@ import { LeaderboardPeriodEnum } from '../../dto/request/leaderboard-query.dto';
 import type { RankingRepositoryPort, LeaderboardRow } from '../ports/ranking-repository.port';
 import type { CacheProvider } from '@/common/ports/cache.provider';
 import type { PeriodResetService } from './period-reset.service';
+import type { RankingCacheVersionService } from './ranking-cache-version.service';
 
 function makeLogger(): PinoLogger {
   return {
@@ -24,6 +25,21 @@ function makeCache(): CacheProvider {
     del: jest.fn().mockResolvedValue(undefined),
     getOrSet: jest.fn().mockImplementation((_key, _ttl, fn) => fn()),
     getOrSetWithStampedeProtection: jest.fn().mockImplementation((_key, _ttl, fn) => fn()),
+    rpushJson: jest.fn(),
+    lpopJson: jest.fn(),
+    lrangeJson: jest.fn(),
+    trimList: jest.fn(),
+    expire: jest.fn(),
+    zaddByScore: jest.fn(),
+    zrangeByScore: jest.fn(),
+    zrem: jest.fn(),
+    unlinkByPattern: jest.fn(),
+    getDel: jest.fn(),
+    acquireAdvisoryLock: jest.fn(),
+    releaseAdvisoryLock: jest.fn(),
+    incrementWindowCounter: jest.fn(),
+    incrementCounterWithInitialTtlSeconds: jest.fn(),
+    setIfNotExistsWithTtlSeconds: jest.fn(),
   } as unknown as CacheProvider;
 }
 
@@ -31,6 +47,15 @@ function makePeriodReset(): PeriodResetService {
   return {
     getNextResetTime: jest.fn().mockReturnValue(new Date('2030-01-01T00:00:00.000Z')),
   } as unknown as PeriodResetService;
+}
+
+function makeVersionService(): RankingCacheVersionService {
+  return {
+    getVersion: jest.fn().mockResolvedValue(0),
+    bumpVersion: jest.fn().mockResolvedValue(undefined),
+    bumpAllPeriods: jest.fn().mockResolvedValue(undefined),
+    versionKeyFor: jest.fn().mockReturnValue('ranking:version:all_time'),
+  } as unknown as RankingCacheVersionService;
 }
 
 describe('LeaderboardService.getGlobalLeaderboardCursor', () => {
@@ -60,6 +85,7 @@ describe('LeaderboardService.getGlobalLeaderboardCursor', () => {
       repository as RankingRepositoryPort,
       makeCache(),
       makePeriodReset(),
+      makeVersionService(),
       makeLogger(),
     );
 
@@ -117,6 +143,7 @@ describe('LeaderboardService.getGlobalLeaderboardCursor', () => {
       repository as RankingRepositoryPort,
       makeCache(),
       makePeriodReset(),
+      makeVersionService(),
       makeLogger(),
     );
 
@@ -170,6 +197,7 @@ describe('LeaderboardService.getGlobalLeaderboardCursor', () => {
       repository as RankingRepositoryPort,
       makeCache(),
       makePeriodReset(),
+      makeVersionService(),
       makeLogger(),
     );
 
@@ -220,6 +248,7 @@ describe('LeaderboardService.getGlobalLeaderboardCursor', () => {
       repository as RankingRepositoryPort,
       makeCache(),
       makePeriodReset(),
+      makeVersionService(),
       makeLogger(),
     );
 

@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional, Inject } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { BaseDomainEventBus } from '@/common/events/base-domain-event-bus';
 import type {
@@ -7,11 +7,10 @@ import type {
   UserStreakUpdatedEvent,
 } from './user-domain.events';
 import type { UserDomainEventBusPort } from './user-domain-event-bus.port';
+import { TracingProvider } from '@/core/observability/tracing.provider';
 
 export type UserDomainEvent =
-  | UserProfileUpdatedEvent
-  | UserSettingsUpdatedEvent
-  | UserStreakUpdatedEvent;
+  UserProfileUpdatedEvent | UserSettingsUpdatedEvent | UserStreakUpdatedEvent;
 
 @Injectable()
 export class UserDomainEventBus
@@ -21,8 +20,11 @@ export class UserDomainEventBus
   constructor(
     @InjectPinoLogger(UserDomainEventBus.name)
     logger: PinoLogger,
+    @Optional()
+    @Inject(TracingProvider)
+    tracing?: TracingProvider,
   ) {
-    super(logger, { logEventName: 'user_event' });
+    super(logger, { logEventName: 'user_event' }, tracing);
   }
 
   emitProfileUpdated(event: UserProfileUpdatedEvent): void {

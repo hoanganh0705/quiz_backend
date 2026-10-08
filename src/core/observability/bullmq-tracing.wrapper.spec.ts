@@ -23,7 +23,7 @@ describe('BullmqTracingWrapper', () => {
   beforeEach(() => {
     spansSeen.length = 0;
     tracing = new CaptureTracing();
-    wrapper = new BullmqTracingWrapper(tracing as never);
+    wrapper = new BullmqTracingWrapper(tracing);
   });
 
   it('wrapQueueAdd emits a producer span and writes the trace id to the job data', async () => {

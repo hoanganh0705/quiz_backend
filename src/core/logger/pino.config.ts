@@ -31,7 +31,7 @@ import type { SerializedError, SerializedRequest, SerializedResponse } from 'pin
  *                                      `nestjs-pino` attaches to
  *                                      the response object's log
  */
-const REDACT_PATHS = [
+export const REDACT_PATHS = [
   'req.headers.authorization',
   'req.headers.cookie',
   'req.headers["set-cookie"]',
@@ -56,10 +56,23 @@ const REDACT_PATHS = [
   'responseTime.req.headers.cookie',
   'responseTime.req.rawHeaders',
   'responseTime.req.cookies.*',
+  // nestjs-pino nests the request mirror inside `responseTime.res.req`
+  // on the lifecycle payload — cover that path too.
+  'responseTime.res.req.headers.authorization',
+  'responseTime.res.req.headers.cookie',
+  'responseTime.res.req.rawHeaders',
+  'responseTime.res.req.cookies.*',
 ] as const;
 
-export const createPinoHttpConfig = (configService: ConfigService): Params => {
-  const nodeEnv = configService.get<string>('NODE_ENV', 'development'); // default to development if NODE_ENV is not set
+export type PinoHttpLogVolumeMetric = {
+  labelKeys: ReadonlyArray<string>;
+};
+
+export const createPinoHttpConfig = (
+  configService: ConfigService,
+  options?: { httpLogVolume?: PinoHttpLogVolumeMetric },
+): Params => {
+  const nodeEnv = configService.get<string>('NODE_ENV', 'development');
   const isProduction = nodeEnv === 'production';
   const isTest = nodeEnv === 'test';
 
@@ -97,12 +110,23 @@ export const createPinoHttpConfig = (configService: ConfigService): Params => {
       },
       autoLogging: {
         ignore: (req) => {
-          const url = req.url ?? '';
-          return (
-            url.startsWith('/health') || url.startsWith('/ready') || url.startsWith('/metrics')
-          );
+          if (!isProduction) {
+            return false;
+          }
+          const url = (req as { url?: string }).url ?? '';
+          const statusCode = (req as { statusCode?: number }).statusCode;
+          if (url.startsWith('/health') || url.startsWith('/ready')) {
+            return true;
+          }
+          if (url.startsWith('/metrics') && statusCode === 401) {
+            return true;
+          }
+          return false;
         },
       },
+      // Forwarded to the metrics registry at bootstrap so operators can
+      // observe per-path log volume before deciding future ignore rules.
+      ...(options?.httpLogVolume ? { httpLogVolume: options.httpLogVolume } : {}),
       serializers: {
         req: (req: SerializedRequest) => ({
           id: req.id,

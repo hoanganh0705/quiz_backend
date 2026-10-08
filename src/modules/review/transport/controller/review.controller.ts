@@ -109,10 +109,7 @@ export class ReviewController {
   })
   @ApiOperation({ summary: 'Get a review by ID' })
   @ApiGetReviewByIdResponses()
-  async getReviewById(
-    @Param('reviewId', new ParseUUIDPipe({ version: '7' })) reviewId: string,
-    @CurrentUser() _user: JwtPayload,
-  ) {
+  async getReviewById(@Param('reviewId', new ParseUUIDPipe({ version: '7' })) reviewId: string) {
     const result = await this.reviewApplicationService.getReviewById(reviewId);
     return this.presenter.getReviewById(result);
   }

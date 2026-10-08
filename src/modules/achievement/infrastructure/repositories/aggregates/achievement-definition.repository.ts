@@ -1,7 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { DRIZZLE } from '@/core/database/drizzle.constants';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
-import { and, eq, desc, inArray, count, sql, asc } from 'drizzle-orm';
+import { and, eq, desc, inArray, count, sql, asc, type SQL } from 'drizzle-orm';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import type * as schema from '@/core/database/schema';
 import { badges, badgeRules, userBadges } from '@/core/database/schema';
@@ -129,10 +129,17 @@ export class AchievementDefinitionRepository {
     return results.map((row) => this.mapBadgeRow(row));
   }
 
-  async getAllActiveBadges(): Promise<BadgeDefinitionRow[]> {
-    const results = await this.db.select().from(badges).where(eq(badges.isActive, true));
+  async getAllActiveBadges(opts: { includeHidden?: boolean } = {}): Promise<BadgeDefinitionRow[]> {
+    const conditions = [eq(badges.isActive, true), this.badgeValiditySql()];
+    if (!opts.includeHidden) {
+      conditions.push(eq(badges.isHidden, false));
+    }
+    const results = await this.db
+      .select()
+      .from(badges)
+      .where(and(...conditions));
 
-    return results.filter((row) => this.isBadgeValid(row)).map((row) => this.mapBadgeRow(row));
+    return results.map((row) => this.mapBadgeRow(row));
   }
 
   async getBadgeRules(badgeId: string): Promise<BadgeRuleRow[]> {
@@ -181,9 +188,11 @@ export class AchievementDefinitionRepository {
     const results = await this.db
       .select()
       .from(badges)
-      .where(and(eq(badges.category, category), eq(badges.isActive, true)));
+      .where(
+        and(eq(badges.category, category), eq(badges.isActive, true), this.badgeValiditySql()),
+      );
 
-    return results.filter((row) => this.isBadgeValid(row)).map((row) => this.mapBadgeRow(row));
+    return results.map((row) => this.mapBadgeRow(row));
   }
 
   isBadgeValid(badge: {
@@ -198,6 +207,18 @@ export class AchievementDefinitionRepository {
     if (validFrom && now < validFrom) return false;
     if (validUntil && now > validUntil) return false;
     return true;
+  }
+
+  /**
+   * SQL predicate equivalent of `isBadgeValid`: a badge is currently
+   * valid when both `validFrom` and `validUntil` are either NULL or
+   * straddle the current database time. The check is performed in
+   * SQL so the caller doesn't have to post-filter the result set
+   * in application code.
+   */
+  private badgeValiditySql(): SQL {
+    return sql`(${badges.validFrom} IS NULL OR ${badges.validFrom} <= NOW())
+      AND (${badges.validUntil} IS NULL OR ${badges.validUntil} > NOW())`;
   }
 
   private toDate(value: string | Date | null): Date | null {

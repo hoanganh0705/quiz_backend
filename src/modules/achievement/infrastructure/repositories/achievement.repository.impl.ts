@@ -152,8 +152,8 @@ export class AchievementRepository implements AchievementRepositoryPort {
     return this.definition.getBadgesByIds(badgeIds);
   }
 
-  getAllActiveBadges(): Promise<BadgeDefinitionRow[]> {
-    return this.definition.getAllActiveBadges();
+  getAllActiveBadges(opts?: { includeHidden?: boolean }): Promise<BadgeDefinitionRow[]> {
+    return this.definition.getAllActiveBadges(opts);
   }
 
   getBadgesByCategory(

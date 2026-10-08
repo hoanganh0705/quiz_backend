@@ -36,11 +36,6 @@ import { ThrottlerModule } from '@nestjs/throttler';
 import { CommentModule } from '@/modules/comment/comment.module';
 import { ConfigModule } from '@nestjs/config';
 
-interface EnvelopeWire<T = unknown> {
-  readonly data: T;
-  readonly meta: { readonly timestamp: string };
-}
-
 const ROLES = ['public', 'user', 'owner', 'admin'] as const;
 type Role = (typeof ROLES)[number];
 

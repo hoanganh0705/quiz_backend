@@ -120,8 +120,8 @@ export class QuizApplicationService implements QuizListingPort {
       requirements: dto.requirements ?? null,
       imageUrl: dto.imageUrl ?? null,
       imagePublicId: dto.imagePublicId ?? null,
-      isFeatured: dto.isFeatured ?? false,
-      isHidden: dto.isHidden ?? false,
+      isFeatured: false,
+      isHidden: false,
       initialVersion: dto.initialVersion,
       categoryId: dto.categoryId ?? null,
       tagIds: dto.tagIds ?? [],
@@ -177,14 +177,14 @@ export class QuizApplicationService implements QuizListingPort {
   }
 
   async getFeaturedQuizzes(query: FeaturedQuizzesQueryDto): Promise<RelatedQuizzesResponseDto> {
-    const items = await this.quizQueryService.getFeaturedQuizzes({
-      limit: query.limit ?? 10,
+    const limit = query.limit ?? 10;
+    return this.quizCache.getOrSetFeatured(async () => {
+      const items = await this.quizQueryService.getFeaturedQuizzes({ limit });
+      const context = await this.buildProjectionContext(items);
+      return {
+        items: items.map((item) => this.quizMapper.toListItem(item, context)),
+      };
     });
-
-    const context = await this.buildProjectionContext(items);
-    return {
-      items: items.map((item) => this.quizMapper.toListItem(item, context)),
-    };
   }
 
   async getRecommendedQuizzes(
@@ -305,19 +305,29 @@ export class QuizApplicationService implements QuizListingPort {
     const quizId = isUuidValue ? quizIdOrSlug : undefined;
     const slug = isUuidValue ? undefined : quizIdOrSlug;
 
-    const [quiz, stats, statsHistory, preview] = await Promise.all([
-      slug ? this.getQuizBySlug(slug) : this.getQuizById(quizId as string),
-      this.getQuizStats(quizId, quizIdOrSlug),
-      this.getQuizStatsHistory(quizId, quizIdOrSlug, {}),
-      this.getQuizPreview(quizIdOrSlug),
-    ]);
+    return this.quizCache.getOrSetAggregate(
+      quizId ?? slug ?? '',
+      this.computeAggregateVersionHash(),
+      async () => {
+        const [quiz, stats, statsHistory, preview] = await Promise.all([
+          slug ? this.getQuizBySlug(slug) : this.getQuizById(quizId as string),
+          this.getQuizStats(quizId, quizIdOrSlug),
+          this.getQuizStatsHistory(quizId, quizIdOrSlug, {}),
+          this.getQuizPreview(quizIdOrSlug),
+        ]);
 
-    return {
-      quiz,
-      stats,
-      statsHistory,
-      previewQuestions: preview.questions,
-    };
+        return {
+          quiz,
+          stats,
+          statsHistory,
+          previewQuestions: preview.questions,
+        };
+      },
+    );
+  }
+
+  private computeAggregateVersionHash(): string {
+    return '1';
   }
 
   async getRelatedQuizzes(
@@ -446,36 +456,40 @@ export class QuizApplicationService implements QuizListingPort {
   }
 
   async getTrendingQuizzes(limit: number, categoryId?: string): Promise<TrendingQuizItemDto[]> {
-    const quizzes = await this.quizAnalyticsService.getTrendingQuizzes(limit, categoryId);
+    return this.quizCache.getOrSetTrending(async () => {
+      const quizzes = await this.quizAnalyticsService.getTrendingQuizzes(limit, categoryId);
 
-    return quizzes.map((q) => ({
-      rank: q.rank,
-      quizId: q.quizId,
-      creatorId: q.creatorId,
-      title: q.title,
-      slug: q.slug,
-      imageUrl: q.imageUrl,
-      trendingScore: q.trendingScore,
-      totalAttempts: q.totalAttempts,
-      recentAttempts: q.recentAttempts,
-    }));
+      return quizzes.map((q) => ({
+        rank: q.rank,
+        quizId: q.quizId,
+        creatorId: q.creatorId,
+        title: q.title,
+        slug: q.slug,
+        imageUrl: q.imageUrl,
+        trendingScore: q.trendingScore,
+        totalAttempts: q.totalAttempts,
+        recentAttempts: q.recentAttempts,
+      }));
+    });
   }
 
   async getPopularQuizzes(limit: number, categoryId?: string): Promise<PopularQuizItemDto[]> {
-    const quizzes = await this.quizAnalyticsService.getPopularQuizzes(limit, categoryId);
+    return this.quizCache.getOrSetPopular(async () => {
+      const quizzes = await this.quizAnalyticsService.getPopularQuizzes(limit, categoryId);
 
-    return quizzes.map((q) => ({
-      rank: q.rank,
-      quizId: q.quizId,
-      creatorId: q.creatorId,
-      title: q.title,
-      slug: q.slug,
-      imageUrl: q.imageUrl,
-      popularityScore: q.popularityScore,
-      totalAttempts: q.totalAttempts,
-      averageRating: q.averageRating,
-      bookmarkCount: q.bookmarkCount,
-    }));
+      return quizzes.map((q) => ({
+        rank: q.rank,
+        quizId: q.quizId,
+        creatorId: q.creatorId,
+        title: q.title,
+        slug: q.slug,
+        imageUrl: q.imageUrl,
+        popularityScore: q.popularityScore,
+        totalAttempts: q.totalAttempts,
+        averageRating: q.averageRating,
+        bookmarkCount: q.bookmarkCount,
+      }));
+    });
   }
 
   async getMyQuizAnalytics(userId: string): Promise<CreatorQuizAnalyticsDto> {
@@ -494,13 +508,10 @@ export class QuizApplicationService implements QuizListingPort {
       requirements: dto.requirements,
       imageUrl: dto.imageUrl,
       imagePublicId: dto.imagePublicId,
-      isFeatured: dto.isFeatured,
-      isHidden: dto.isHidden,
       categoryId: dto.categoryId,
       tagIds: dto.tagIds,
     };
     const { row, tags } = await this.quizCommandService.updateQuiz(quizId, user, command);
-
     const newPublicId = dto.imagePublicId !== undefined ? dto.imagePublicId : row.imagePublicId;
     try {
       await this.storageLifecycle.replaceQuizCover(quizId, newPublicId, (id) =>
@@ -514,6 +525,24 @@ export class QuizApplicationService implements QuizListingPort {
       });
     }
 
+    const context = await this.buildProjectionContext([row]);
+    return this.quizMapper.toQuizResponse(row, undefined, tags, context);
+  }
+
+  async adminUpdatePrivilegedFields(input: {
+    actor: JwtPayload;
+    quizIdOrSlug: string;
+    isFeatured?: boolean;
+    isHidden?: boolean;
+  }): Promise<QuizResponseDto> {
+    const command: UpdateQuizCommand = {
+      isFeatured: input.isFeatured,
+      isHidden: input.isHidden,
+    };
+    const { row, tags } = await this.quizCommandService.adminUpdatePrivilegedFields(
+      input.quizIdOrSlug,
+      command,
+    );
     const context = await this.buildProjectionContext([row]);
     return this.quizMapper.toQuizResponse(row, undefined, tags, context);
   }

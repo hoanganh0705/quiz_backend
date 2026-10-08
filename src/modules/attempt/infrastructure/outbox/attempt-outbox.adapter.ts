@@ -17,15 +17,12 @@ import { sql } from 'drizzle-orm';
 import { DRIZZLE } from '@/core/database/drizzle.constants';
 import type { DrizzleDB } from '@/core/database/database.module';
 import { outboxEvents } from '@/core/database/schema';
+import {
+  type AttemptXpOutboxPayload as ValidatedAttemptXpOutboxPayload,
+  parseAttemptXpOutboxPayload,
+} from '@/common/outbox/payload-schema';
 
-export interface AttemptXpOutboxPayload {
-  readonly userId: string;
-  readonly attemptId: string;
-  readonly amount: number;
-  readonly idempotencyKey: string;
-  readonly correlationId?: string;
-  readonly timestamp: string;
-}
+export type AttemptXpOutboxPayload = ValidatedAttemptXpOutboxPayload;
 
 export const ATTEMPT_OUTBOX_PORT = Symbol('ATTEMPT_OUTBOX_PORT');
 
@@ -42,6 +39,7 @@ export class AttemptOutboxAdapter implements AttemptOutboxPort {
     tx: unknown,
     nowIso: string,
   ): Promise<void> {
+    const validated = parseAttemptXpOutboxPayload(payload);
     const dbOrTx = tx != null ? (tx as DrizzleDB) : this.db;
 
     await dbOrTx
@@ -49,10 +47,10 @@ export class AttemptOutboxAdapter implements AttemptOutboxPort {
       .values({
         aggregateType: 'attempt',
         eventType: 'attempt.xp_to_publish',
-        payload: payload as unknown as Record<string, unknown>,
+        payload: validated,
         createdAt: nowIso,
-        idempotencyKey: payload.idempotencyKey,
-        correlationId: payload.correlationId,
+        idempotencyKey: validated.idempotencyKey,
+        correlationId: validated.correlationId,
       })
       .onConflictDoNothing({
         target: outboxEvents.idempotencyKey,

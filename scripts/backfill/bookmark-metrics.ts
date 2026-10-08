@@ -3,7 +3,6 @@ import { drizzle } from 'drizzle-orm/node-postgres';
 import { Pool } from 'pg';
 import { PinoLogger } from 'nestjs-pino';
 import * as schema from '@/core/database/schema';
-import type { DrizzleDB } from '@/core/database/database.module';
 import { QuizAnalyticsRepository } from '@/modules/quiz/domain/analytics/quiz-analytics.repository';
 import { QuizAnalyticsService } from '@/modules/quiz/domain/analytics/quiz-analytics.service';
 import { PopularityService } from '@/modules/quiz/domain/analytics/popularity.service';
@@ -76,7 +75,7 @@ async function main(): Promise<void> {
   refuseInProduction();
 
   const pool = new Pool({ connectionString: requireDatabaseUrl() });
-  const db = drizzle(pool, { schema }) as unknown as DrizzleDB;
+  const db = drizzle(pool, { schema });
 
   try {
     const metricsRepository = new MetricsRepository(db, createLogger(MetricsRepository.name));

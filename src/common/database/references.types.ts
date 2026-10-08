@@ -82,8 +82,7 @@ export class ReferencedEntityNotFoundError extends Error {
  */
 export class ReferencedEntityInvalidError extends Error {
   public readonly entity:
-    | ReferencedEntity
-    | { kind: ReferencedEntity['kind']; id: '' | null | undefined };
+    ReferencedEntity | { kind: ReferencedEntity['kind']; id: '' | null | undefined };
 
   constructor(
     entity: ReferencedEntity | { kind: ReferencedEntity['kind']; id: '' | null | undefined },

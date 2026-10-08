@@ -1,12 +1,12 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
-import { ValidationPipe } from '@nestjs/common';
+import { ValidationPipe, RequestMethod } from '@nestjs/common';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import cookieParser from 'cookie-parser'; // cookie-parser is a middleware that parses cookies attached to the client request object. It populates req.cookies with an object keyed by the cookie names. This is useful for handling authentication tokens, session IDs, and other data stored in cookies. By using cookie-parser, we can easily access and manage cookies in our NestJS application, especially when dealing with cross-origin requests where cookies are often used for maintaining user sessions.
 import helmet from 'helmet'; // Helmet is a collection of middleware functions that help secure Express apps by setting various HTTP headers. It can help protect against common web vulnerabilities such as XSS, clickjacking, and MIME-sniffing attacks.
 import express from 'express';
 import { isSwaggerEnabled, setupSwagger, buildSwaggerConfig } from './core/swagger/swagger.config';
-import { serverConfig, appConfig, swaggerConfig } from './core/config';
+import { serverConfig, appConfig, swaggerConfig, redisConfig, graphqlConfig } from './core/config';
 import { RedisIoAdapter } from './core/redis/redis-io.adapter';
 
 const isRedisSocketAdapterEnabled = process.env.DISABLE_REDIS_SOCKET_ADAPTER !== 'true';
@@ -16,6 +16,7 @@ async function bootstrap() {
   const server = serverConfig();
   const appCfg = appConfig();
   const swagger = swaggerConfig();
+  const graphql = graphqlConfig();
   const isProduction = server.nodeEnv === 'production';
 
   app.enableCors({
@@ -36,7 +37,14 @@ async function bootstrap() {
   app.use(express.json({ limit: '1mb' }));
   app.use(express.urlencoded({ extended: true, limit: '1mb' }));
   app.set('trust proxy', server.trustProxy); // set up trust proxy so that app can correctly identify client IP and protocol when behind a proxy, which is important for security and logging purposes
-  app.setGlobalPrefix('api/v1');
+  // GraphQL is its own contract surface rather than a versioned REST resource,
+  // so it stays at the server root instead of under the REST version prefix.
+  app.setGlobalPrefix('api/v1', {
+    exclude: [
+      { path: graphql.path, method: RequestMethod.POST },
+      { path: graphql.path, method: RequestMethod.GET },
+    ],
+  });
 
   if (swaggerEnabled) {
     setupSwagger(
@@ -60,7 +68,13 @@ async function bootstrap() {
   );
 
   if (isRedisSocketAdapterEnabled) {
-    app.useWebSocketAdapter(new RedisIoAdapter(app));
+    const redisConfigService = app.get(redisConfig.KEY);
+    app.useWebSocketAdapter(
+      new RedisIoAdapter(app, {
+        redisUrl: redisConfigService.url,
+        redisOptions: { keyPrefix: redisConfigService.keyPrefix },
+      }),
+    );
   }
 
   await app.listen(server.port);

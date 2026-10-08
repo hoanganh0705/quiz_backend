@@ -43,13 +43,15 @@ export class HealthController {
     type: HealthStatusDto,
   })
   async check(@Res({ passthrough: true }) res: Response) {
-    const [database, redis, storage, emailQueue, redisCircuit] = await Promise.all([
-      this.probeDb(),
-      this.probeRedis(),
-      this.probeStorage(),
-      this.queueProbe.probeEmailQueue(),
-      Promise.resolve(this.redisService.getCircuitMetrics()),
-    ]);
+    const [database, redis, storage, emailQueue, tournamentEventsQueue, redisCircuit] =
+      await Promise.all([
+        this.probeDb(),
+        this.probeRedis(),
+        this.probeStorage(),
+        this.queueProbe.probeEmailQueue(),
+        this.queueProbe.probeTournamentQueue(),
+        Promise.resolve(this.redisService.getCircuitMetrics()),
+      ]);
 
     const status = this.aggregateStatus({ database, redis, storage });
     const httpStatus = status === 'down' ? HttpStatus.SERVICE_UNAVAILABLE : HttpStatus.OK;
@@ -61,6 +63,7 @@ export class HealthController {
       redis,
       storage,
       emailQueue,
+      tournamentEventsQueue,
       redisCircuit: {
         state: redisCircuit.state,
         consecutiveFailures: redisCircuit.consecutiveFailures,

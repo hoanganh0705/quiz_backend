@@ -118,4 +118,29 @@ describe('AchievementDomainEventBus', () => {
     bus.emitStreakMilestone({ userId: 'user-1', streakDays: 7 });
     expect(handler).toHaveBeenCalledTimes(1);
   });
+
+  it('deduplicates handlers when the same function is registered as both global and type-specific', () => {
+    const handler = jest.fn();
+    bus.subscribe('badge.earned', handler);
+    bus.subscribeAll(handler);
+
+    bus.emitBadgeEarned({ userId: 'user-1', badgeSlug: 'rank1', badgeName: 'Rank 1' });
+
+    expect(handler).toHaveBeenCalledTimes(1);
+  });
+
+  it('deduplicates across multiple subscriptions of the same handler function', () => {
+    const handler = jest.fn();
+    bus.subscribe('achievement.awarded', handler);
+    bus.subscribe('achievement.awarded', handler);
+    bus.subscribe('achievement.awarded', handler);
+
+    bus.emitAchievementAwarded({
+      userId: 'user-1',
+      badgeId: 'badge-1',
+      badge: buildBadge(),
+    });
+
+    expect(handler).toHaveBeenCalledTimes(1);
+  });
 });

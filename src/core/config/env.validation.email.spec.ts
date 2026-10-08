@@ -4,8 +4,9 @@ describe('validateEnv — email configuration', () => {
   const baseEnv = (): Record<string, unknown> => ({
     DATABASE_URL: 'postgres://app:pw@localhost:5432/quizdb',
     REDIS_URL: 'redis://localhost:6379',
-    JWT_ACCESS_TOKEN_SECRET: 'a'.repeat(64),
-    JWT_REFRESH_TOKEN_SECRET: 'b'.repeat(64),
+    REDIS_KEY_PREFIX: 'test',
+    JWT_ACCESS_TOKEN_SECRET: 'AaBbCcDdEeFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz01',
+    JWT_REFRESH_TOKEN_SECRET: 'AaBbCcDdEeFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz10',
     JWT_ACCESS_TOKEN_ISSUER: 'quiz-backend',
     JWT_ACCESS_TOKEN_AUDIENCE: 'quiz-client',
     ACCESS_TOKEN_EXPIRES_IN: '15m',
@@ -18,8 +19,12 @@ describe('validateEnv — email configuration', () => {
     CLOUDINARY_CLOUD_NAME: 'demo',
     CLOUDINARY_API_KEY: 'key',
     CLOUDINARY_API_SECRET: 'secret',
+    CLOUDINARY_FOLDER: 'quiz-app-prod',
     NODE_ENV: 'production',
     PORT: '3000',
+    CORS_ORIGINS: 'https://app.example.com',
+    PROMETHEUS_SCRAPE_TOKEN: 'test-prometheus-token',
+    GOOGLE_CLIENT_ID: 'test-client-id.apps.googleusercontent.com',
   });
 
   describe('EMAIL_VERIFICATION_BASE_URL', () => {

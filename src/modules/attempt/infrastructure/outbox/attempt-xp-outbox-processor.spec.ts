@@ -1,6 +1,5 @@
 /* eslint-disable @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment */
 import { AttemptXpOutboxProcessorService } from './attempt-xp-outbox-processor.service';
-import type { ExternalEventBusProducerPort } from '@/common/events/common-external-event-bus';
 import type { DrizzleDB } from '@/core/database/database.module';
 
 function makeLogger(): any {
@@ -43,7 +42,7 @@ function makeProcessor(opts: {
   const { db } = makeDb([...opts.rows]);
   return new AttemptXpOutboxProcessorService(
     db as unknown as DrizzleDB,
-    { publishXpEarned: opts.publishXp } as ExternalEventBusProducerPort,
+    { publishXpEarned: opts.publishXp },
     makeLogger(),
   );
 }

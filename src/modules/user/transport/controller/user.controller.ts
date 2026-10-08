@@ -141,7 +141,7 @@ export class UserController {
 
   @Get('by-username/:username')
   @Public()
-  @Throttle({ default: { limit: 30, ttl: 60_000 } })
+  @Throttle({ default: { limit: 60, ttl: 60_000 } })
   @ApiOperation({
     summary: 'Resolve a username to a public user identity',
     description:

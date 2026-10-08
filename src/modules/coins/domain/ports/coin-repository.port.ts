@@ -76,6 +76,8 @@ export interface CoinRepositoryPort {
 
   getDailyEarnCapSum(userId: string, todayUtcMidnight: Date): Promise<number>;
 
+  getAdminDailyAdjustmentSum(adminUserId: string, todayUtcMidnight: Date): Promise<number>;
+
   listTransactions(params: {
     userId: string;
     cursorCreatedAt: string | null;

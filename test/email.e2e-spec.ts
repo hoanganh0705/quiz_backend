@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/require-await */
 /// <reference types="jest" />
 import { Controller, Get, INestApplication, Inject, Post } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';

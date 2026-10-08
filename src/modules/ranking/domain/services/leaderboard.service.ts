@@ -19,6 +19,7 @@ import type {
   UserRankPositionDto,
 } from '../../dto';
 import { CACHE_PROVIDER, type CacheProvider } from '@/common/ports/cache.provider';
+import { RankingCacheVersionService } from './ranking-cache-version.service';
 
 @Injectable()
 export class LeaderboardService {
@@ -28,6 +29,7 @@ export class LeaderboardService {
     @Inject(CACHE_PROVIDER)
     private readonly cache: CacheProvider,
     private readonly periodResetService: PeriodResetService,
+    private readonly versionService: RankingCacheVersionService,
     @InjectPinoLogger(LeaderboardService.name)
     private readonly logger: PinoLogger,
   ) {}
@@ -44,7 +46,7 @@ export class LeaderboardService {
     const { period: periodEnum, limit, offset, currentUserId } = params;
     const period = enumToPeriod(periodEnum);
 
-    const cacheKey = `lb:${period}:${limit}:${offset}`;
+    const cacheKey = await this.buildLeaderboardCacheKey(period, limit, offset);
     const ttlMs = RANKING_CONSTANTS.LEADERBOARD_CACHE_TTL * 1000;
 
     const cachedPayload = await this.cache.getOrSetWithStampedeProtection<{
@@ -150,18 +152,20 @@ export class LeaderboardService {
   /**
    * Get user position for a specific period.
    */
-  getUserPosition(
+  async getUserPosition(
     userId: string,
     periodEnum: RankingPeriodEnum | LeaderboardPeriodEnum,
   ): Promise<UserRankPositionDto | undefined> {
     const period = enumToPeriod(periodEnum);
 
-    const cacheKey = `pos:${userId}:${period}`;
+    const cacheKey = await this.buildUserPositionCacheKey(userId, period);
     const ttlMs = RANKING_CONSTANTS.USER_RANK_CACHE_TTL * 1000;
 
     // Use stampede protection for user position queries
-    return this.cache
-      .getOrSetWithStampedeProtection<UserRankPositionDto | null>(cacheKey, ttlMs, async () => {
+    const value = await this.cache.getOrSetWithStampedeProtection<UserRankPositionDto | null>(
+      cacheKey,
+      ttlMs,
+      async () => {
         this.logger.debug({ event: 'get_user_position', userId, period });
         const ranking = await this.rankingRepository.getUserRanking(userId);
         if (!ranking) return null;
@@ -174,15 +178,16 @@ export class LeaderboardService {
         const rank = await this.rankingRepository.getUserRank(userId, period);
         if (rank === null) return null;
 
-        // Fetch rank history for trend calculation
-        const snapshots = await this.rankingRepository.getLatestRankSnapshots({
-          userId,
-          period: RankingPeriod.ALL_TIME,
-        });
+        const [snapshots, totalParticipants, nextRankXp] = await Promise.all([
+          this.rankingRepository.getLatestRankSnapshots({
+            userId,
+            period: RankingPeriod.ALL_TIME,
+          }),
+          this.getCachedTotalParticipants(period),
+          this.getCachedNextRankXp(period, rank),
+        ]);
 
-        const totalParticipants = await this.getCachedTotalParticipants(period);
         const percentile = calculatePercentile(rank, totalParticipants);
-        const nextRankXp = await this.rankingRepository.getNextRankXp(period, rank);
         const xpToNextRank = nextRankXp !== null ? nextRankXp - xp : null;
         const trend = this.determineTrendWithSnapshots(rank, snapshots);
         const trendAmount = this.calculateTrendAmount(rank, snapshots);
@@ -198,8 +203,10 @@ export class LeaderboardService {
           trend,
           trendAmount,
         };
-      })
-      .then((value) => value ?? undefined);
+      },
+    );
+
+    return value ?? undefined;
   }
 
   /**
@@ -242,7 +249,7 @@ export class LeaderboardService {
     const resetInSeconds = Math.max(0, Math.floor((nextReset.getTime() - now.getTime()) / 1000));
 
     let start: Date;
-    let end: Date | null = null;
+    let end: Date | null;
 
     switch (period) {
       case RankingPeriod.DAILY: {
@@ -273,7 +280,7 @@ export class LeaderboardService {
     }
 
     return {
-      type: period as 'daily' | 'weekly' | 'monthly' | 'all_time',
+      type: period,
       start: start.toISOString(),
       end: end?.toISOString() ?? null,
       resetInSeconds,
@@ -325,14 +332,44 @@ export class LeaderboardService {
     return previousSnapshot.rank - currentRank;
   }
 
-  private getCachedTotalParticipants(period: RankingPeriod): Promise<number> {
-    const cacheKey = `total:${period}`;
+  private async getCachedTotalParticipants(period: RankingPeriod): Promise<number> {
+    const cacheKey = await this.buildTotalParticipantsCacheKey(period);
     const ttlMs = RANKING_CONSTANTS.TOTAL_USERS_CACHE_TTL * 1000;
 
-    // Use stampede protection for total participants count
     return this.cache.getOrSetWithStampedeProtection<number>(cacheKey, ttlMs, async () => {
       this.logger.debug({ event: 'get_total_participants', period });
       return this.rankingRepository.getTotalParticipants(period);
     });
+  }
+
+  private static readonly NEXT_RANK_XP_CACHE_TTL_SECONDS = 3600; // 1 hour
+
+  private async getCachedNextRankXp(period: RankingPeriod, rank: number): Promise<number | null> {
+    const cacheKey = `nxp:${period}:${rank}`;
+    const ttlMs = LeaderboardService.NEXT_RANK_XP_CACHE_TTL_SECONDS * 1000;
+
+    return this.cache.getOrSetWithStampedeProtection<number | null>(cacheKey, ttlMs, async () => {
+      this.logger.debug({ event: 'get_next_rank_xp', period, rank });
+      return this.rankingRepository.getNextRankXp(period, rank);
+    });
+  }
+
+  private async buildLeaderboardCacheKey(
+    period: RankingPeriod,
+    limit: number,
+    offset: number,
+  ): Promise<string> {
+    const version = await this.versionService.getVersion(period);
+    return `lb:${period}:${limit}:${offset}:v${version}`;
+  }
+
+  private async buildUserPositionCacheKey(userId: string, period: RankingPeriod): Promise<string> {
+    const version = await this.versionService.getVersion(period);
+    return `pos:${userId}:${period}:v${version}`;
+  }
+
+  private async buildTotalParticipantsCacheKey(period: RankingPeriod): Promise<string> {
+    const version = await this.versionService.getVersion(period);
+    return `total:${period}:v${version}`;
   }
 }

@@ -27,7 +27,7 @@ export class BookmarkCollectionRepository implements BookmarkCollectionRepositor
       .where(eq(bookmarkCollections.collectionId, collectionId))
       .limit(1);
 
-    return (row as BookmarkCollectionRow | undefined) ?? null;
+    return row ?? null;
   }
 
   async listCollectionsByUser(userId: string): Promise<BookmarkCollectionWithCountRow[]> {
@@ -50,7 +50,7 @@ export class BookmarkCollectionRepository implements BookmarkCollectionRepositor
       .groupBy(bookmarkCollections.collectionId)
       .orderBy(bookmarkCollections.createdAt);
 
-    return rows as BookmarkCollectionWithCountRow[];
+    return rows;
   }
 
   async createCollection(params: {
@@ -77,7 +77,7 @@ export class BookmarkCollectionRepository implements BookmarkCollectionRepositor
         updatedAt: bookmarkCollections.updatedAt,
       });
 
-    return created as BookmarkCollectionRow;
+    return created;
   }
 
   async updateCollection(params: {
@@ -109,7 +109,7 @@ export class BookmarkCollectionRepository implements BookmarkCollectionRepositor
         updatedAt: bookmarkCollections.updatedAt,
       });
 
-    return (updated as BookmarkCollectionRow | undefined) ?? null;
+    return updated ?? null;
   }
 
   async deleteCollection(collectionId: string): Promise<void> {

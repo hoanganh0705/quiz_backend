@@ -54,7 +54,7 @@ export class AchievementAttemptEventListenerAdapter implements OnModuleInit, OnM
       typeof event === 'object' &&
       event !== null &&
       'eventType' in event &&
-      (event as { eventType: unknown }).eventType === 'attempt.completed'
+      event.eventType === 'attempt.completed'
     );
   }
 
@@ -63,7 +63,7 @@ export class AchievementAttemptEventListenerAdapter implements OnModuleInit, OnM
       typeof event === 'object' &&
       event !== null &&
       'eventType' in event &&
-      (event as { eventType: unknown }).eventType === 'quiz.milestone'
+      event.eventType === 'quiz.milestone'
     );
   }
 

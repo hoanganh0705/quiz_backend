@@ -323,6 +323,16 @@ export const quizStats = pgTable(
       'btree',
       table.trendingScore.desc().nullsFirst().op('numeric_ops'),
     ),
+    // Partial composite index supporting cross-quiz "top rated" listings.
+    // The `rating_count > 0` predicate excludes empty-rating rows so the
+    // descending index scan can satisfy the ORDER BY without a filter step.
+    index('idx_quiz_stats_avg_rating_desc')
+      .using(
+        'btree',
+        table.avgRating.desc().nullsLast().op('numeric_ops'),
+        table.quizId.asc().nullsLast().op('uuid_ops'),
+      )
+      .where(sql`rating_count > 0`),
     foreignKey({
       columns: [table.quizId],
       foreignColumns: [(quizzes as { quizId: AnyPgColumn }).quizId],
@@ -406,6 +416,18 @@ export const quizAttempts = pgTable(
       table.status.asc().nullsLast().op('text_ops'),
       table.createdAt.desc().nullsFirst().op('timestamptz_ops'),
     ),
+    // Partial composite index supporting the recently-played cursor
+    // (`RecentlyPlayedQuizzesService`). The `finished_at IS NOT NULL`
+    // predicate trims the index to completed attempts so the planner
+    // can serve the cursor with a single descending index scan.
+    index('idx_quiz_attempts_user_finished_desc')
+      .using(
+        'btree',
+        table.userId.asc().nullsLast().op('uuid_ops'),
+        table.finishedAt.desc().nullsLast().op('timestamptz_ops'),
+        table.attemptId.desc().nullsLast().op('uuid_ops'),
+      )
+      .where(sql`finished_at IS NOT NULL`),
     foreignKey({
       columns: [table.quizVersionId],
       foreignColumns: [(quizVersions as { quizVersionId: AnyPgColumn }).quizVersionId],

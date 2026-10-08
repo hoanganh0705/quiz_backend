@@ -1,7 +1,8 @@
-import { Injectable, OnModuleDestroy } from '@nestjs/common';
+import { Injectable, OnModuleDestroy, Optional, Inject } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { BaseDomainEventBus } from '@/common/events/base-domain-event-bus';
 import type { DailyChallengeDomainEvent } from './daily-challenge-domain.events';
+import { TracingProvider } from '@/core/observability/tracing.provider';
 
 type PendingPromise = Promise<void>;
 
@@ -15,8 +16,11 @@ export class DailyChallengeDomainEventBus
   constructor(
     @InjectPinoLogger(DailyChallengeDomainEventBus.name)
     logger: PinoLogger,
+    @Optional()
+    @Inject(TracingProvider)
+    tracing?: TracingProvider,
   ) {
-    super(logger, { logEventName: 'daily_challenge_event' });
+    super(logger, { logEventName: 'daily_challenge_event' }, tracing);
   }
 
   async onModuleDestroy(): Promise<void> {

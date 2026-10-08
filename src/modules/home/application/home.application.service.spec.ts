@@ -1,5 +1,5 @@
-/* eslint-disable @typescript-eslint/unbound-method */
 import { HomeApplicationService } from './home.application.service';
+import type { HomeCacheService } from './home-cache.service';
 import type { QuizApplicationService } from '@/modules/quiz/application/quiz.application.service';
 import type { CategoryQueryService } from '@/modules/category/application/category-query.service';
 import type { RecentWinnersService } from '@/modules/ranking/application/recent-winners.service';
@@ -12,6 +12,11 @@ import type {
   TrendingQuizItemDto,
   PopularQuizItemDto,
 } from '@/modules/quiz/dto/response/quiz-analytics.dto';
+import type { HomeBundleResponseDto } from '../dto/response/home-bundle-response.dto';
+
+interface FakeHomeCache {
+  getOrSetBundle: unknown;
+}
 
 interface FakeQuizApp {
   getFeaturedQuizzes: unknown;
@@ -44,6 +49,15 @@ function buildDeps() {
   const recentWinners = { winners: [{ userId: 'u1' }] } as RecentWinnersResponseDto;
   const topPlayers: LeaderboardEntryDto[] = [{ userId: 'u1', rank: 1 } as LeaderboardEntryDto];
 
+  const bundle: HomeBundleResponseDto = {
+    featured: featured.items,
+    trending,
+    popular,
+    categories,
+    recentWinners,
+    topPlayers,
+  };
+
   const quizApplicationService: FakeQuizApp = {
     getFeaturedQuizzes: jest.fn().mockResolvedValue(featured),
     getTrendingQuizzes: jest.fn().mockResolvedValue(trending),
@@ -59,12 +73,19 @@ function buildDeps() {
     getGlobalLeaderboard: jest.fn().mockResolvedValue({ entries: topPlayers }),
   };
 
+  const homeCache: FakeHomeCache = {
+    getOrSetBundle: jest
+      .fn()
+      .mockImplementation(async (fetcher: () => Promise<HomeBundleResponseDto>) => fetcher()),
+  };
+
   return {
     quizApplicationService: quizApplicationService as unknown as QuizApplicationService,
     categoryQueryService: categoryQueryService as unknown as CategoryQueryService,
     recentWinnersService: recentWinnersService as unknown as RecentWinnersService,
     leaderboardService: leaderboardService as unknown as LeaderboardService,
-    expected: { featured, trending, popular, categories, recentWinners, topPlayers },
+    homeCache: homeCache as unknown as HomeCacheService,
+    expected: { featured, trending, popular, categories, recentWinners, topPlayers, bundle },
   };
 }
 
@@ -76,6 +97,7 @@ describe('HomeApplicationService', () => {
       deps.categoryQueryService,
       deps.recentWinnersService,
       deps.leaderboardService,
+      deps.homeCache,
     );
 
     const result = await service.getBundle();
@@ -95,6 +117,7 @@ describe('HomeApplicationService', () => {
       deps.categoryQueryService,
       deps.recentWinnersService,
       deps.leaderboardService,
+      deps.homeCache,
     );
 
     await service.getBundle();
@@ -123,6 +146,7 @@ describe('HomeApplicationService', () => {
       deps.categoryQueryService,
       deps.recentWinnersService,
       deps.leaderboardService,
+      deps.homeCache,
     );
 
     const result = await service.getBundle();
@@ -142,6 +166,7 @@ describe('HomeApplicationService', () => {
       deps.categoryQueryService,
       deps.recentWinnersService,
       deps.leaderboardService,
+      deps.homeCache,
     );
 
     const result = await service.getBundle();
@@ -158,6 +183,7 @@ describe('HomeApplicationService', () => {
       deps.categoryQueryService,
       deps.recentWinnersService,
       deps.leaderboardService,
+      deps.homeCache,
     );
 
     const result = await service.getBundle();
@@ -204,10 +230,26 @@ describe('HomeApplicationService', () => {
       deps.categoryQueryService,
       deps.recentWinnersService,
       deps.leaderboardService,
+      deps.homeCache,
     );
 
     await service.getBundle();
 
     expect(order.sort()).toEqual(['c', 'f', 'l', 'p', 'r', 't']);
+  });
+
+  it('wraps bundle fetch with cache', async () => {
+    const deps = buildDeps();
+    const service = new HomeApplicationService(
+      deps.quizApplicationService,
+      deps.categoryQueryService,
+      deps.recentWinnersService,
+      deps.leaderboardService,
+      deps.homeCache,
+    );
+
+    await service.getBundle();
+
+    expect(deps.homeCache.getOrSetBundle).toHaveBeenCalled();
   });
 });

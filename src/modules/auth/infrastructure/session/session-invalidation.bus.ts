@@ -46,6 +46,8 @@ import { sessionsConfig, type SessionsConfig } from '@/core/config';
  * of truth past that point.
  */
 const SESSION_INVALIDATION_TTL_MS = 5 * 60 * 1000;
+const SESSION_INVALIDATION_TTL_SECONDS = Math.ceil(SESSION_INVALIDATION_TTL_MS / 1000);
+const SESSION_INVALIDATION_REPLAY_LIMIT = 100;
 
 export type SessionInvalidationKind = 'session' | 'jti' | 'refresh_token_hash' | 'all_for_user';
 
@@ -113,11 +115,14 @@ export class SessionInvalidationBus implements OnModuleInit, OnModuleDestroy {
     this.replayKey = `${this.channel}:replay`;
   }
 
-  async replayRecent(limit = 100): Promise<SessionInvalidationEvent[]> {
+  async replayRecent(
+    limit = SESSION_INVALIDATION_REPLAY_LIMIT,
+  ): Promise<SessionInvalidationEvent[]> {
+    const clampedLimit = Math.max(1, Math.min(limit, SESSION_INVALIDATION_REPLAY_LIMIT));
     try {
       const items = await this.cache.lrangeJson<SessionInvalidationEvent>(
         this.replayKey,
-        -limit,
+        -clampedLimit,
         -1,
       );
       return items;
@@ -127,6 +132,34 @@ export class SessionInvalidationBus implements OnModuleInit, OnModuleDestroy {
         message: error instanceof Error ? error.message : 'unknown',
       });
       return [];
+    }
+  }
+
+  /**
+   * Read the bounded replay list and dispatch each event through the
+   * registered handlers exactly as if it had arrived live on the
+   * Redis channel.
+   *
+   * Used during `connect()` so that a freshly-subscribed instance
+   * catches up on events it missed while the connection was down.
+   *
+   * We deliberately skip the RPUSH/LTRIM side effect that
+   * `handleMessage` performs — replaying the replay would double the
+   * replay list length and break the bounded-size invariant.
+   */
+  async replayAndDispatch(limit = SESSION_INVALIDATION_REPLAY_LIMIT): Promise<void> {
+    const events = await this.replayRecent(limit);
+    for (const event of events) {
+      for (const handler of this.handlers) {
+        try {
+          handler(event);
+        } catch (error) {
+          this.logger.error({
+            event: 'session_invalidation_replay_handler_error',
+            message: error instanceof Error ? error.message : 'unknown',
+          });
+        }
+      }
     }
   }
 
@@ -190,6 +223,11 @@ export class SessionInvalidationBus implements OnModuleInit, OnModuleDestroy {
         event: 'session_invalidation_bus_subscribed',
         channel: this.channel,
       });
+
+      // Catch up on events emitted while the connection was down.
+      // The replay list is bounded by SESSION_INVALIDATION_REPLAY_LIMIT
+      // and trimmed on every push, so a stale window is bounded.
+      await this.replayAndDispatch();
     } catch (error) {
       this.logger.error({
         event: 'session_invalidation_bus_subscribe_failed',
@@ -217,7 +255,7 @@ export class SessionInvalidationBus implements OnModuleInit, OnModuleDestroy {
   }
 
   private async handleMessage(raw: string): Promise<void> {
-    let parsed: SessionInvalidationEvent | null = null;
+    let parsed: SessionInvalidationEvent;
     try {
       parsed = JSON.parse(raw) as SessionInvalidationEvent;
     } catch (error) {
@@ -228,10 +266,10 @@ export class SessionInvalidationBus implements OnModuleInit, OnModuleDestroy {
       return;
     }
 
-    if (parsed === null) return;
-
     try {
       await this.cache.rpushJson(this.replayKey, parsed);
+      await this.cache.trimList(this.replayKey, -SESSION_INVALIDATION_REPLAY_LIMIT, -1);
+      await this.cache.expire(this.replayKey, SESSION_INVALIDATION_TTL_SECONDS);
     } catch (error) {
       this.logger.warn({
         event: 'session_invalidation_replay_write_failed',

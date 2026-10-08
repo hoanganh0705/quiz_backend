@@ -51,7 +51,7 @@ function makeDb(pending: unknown[]): {
     select: jest.fn().mockReturnValue(selectChain),
     update: jest.fn().mockReturnValue(updateChain),
   } as unknown as DrizzleDB & { select: jest.Mock; update: jest.Mock };
-  return { db: dbMock as unknown as DrizzleDB };
+  return { db: dbMock };
 }
 
 function makeService(pending: unknown[]) {
@@ -60,11 +60,7 @@ function makeService(pending: unknown[]) {
     publishXpEarned: jest.fn().mockResolvedValue(undefined),
   } as unknown as ExternalEventBusProducerPort & { publishXpEarned: jest.Mock };
   const logger = makeLogger();
-  const processor = new DailyChallengeXpOutboxProcessorService(
-    db,
-    externalBus,
-    logger as unknown as PinoLogger,
-  );
+  const processor = new DailyChallengeXpOutboxProcessorService(db, externalBus, logger);
   return { processor, db, externalBus, logger };
 }
 
@@ -150,7 +146,7 @@ describe('DailyChallengeXpOutboxProcessorService DLQ monitor', () => {
     const processor = new DailyChallengeXpOutboxProcessorService(
       stubDb,
       stubExternalBus,
-      stubLogger as unknown as PinoLogger,
+      stubLogger,
     );
 
     const dlqChain = makePlainChain([{ eventId: 'poison-1' }]);
@@ -174,7 +170,7 @@ describe('DailyChallengeXpOutboxProcessorService DLQ monitor', () => {
     const processor = new DailyChallengeXpOutboxProcessorService(
       stubDb,
       stubExternalBus,
-      stubLogger as unknown as PinoLogger,
+      stubLogger,
     );
 
     const emptyChain = makePlainChain([]);
