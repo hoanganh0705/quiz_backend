@@ -61,3 +61,4 @@ report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 
 # Auto-generated GraphQL schema — regenerated on every NestJS boot.
 src/core/graphql/schema.gql
+.pnpm-store/
