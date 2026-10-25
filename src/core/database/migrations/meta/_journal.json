@@ -8,6 +8,13 @@
       "when": 1790348805798,
       "tag": "0000_broad_wallop",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1792918079818,
+      "tag": "0001_many_apocalypse",
+      "breakpoints": true
     }
   ]
 }
