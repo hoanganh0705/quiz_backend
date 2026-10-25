@@ -413,7 +413,7 @@ export const quizAttempts = pgTable(
     index('idx_quiz_attempts_version_status_created').using(
       'btree',
       table.quizVersionId.asc().nullsLast().op('uuid_ops'),
-      table.status.asc().nullsLast().op('text_ops'),
+      table.status.asc().nullsLast().op('enum_ops'),
       table.createdAt.desc().nullsFirst().op('timestamptz_ops'),
     ),
     // Partial composite index supporting the recently-played cursor
@@ -440,7 +440,7 @@ export const quizAttempts = pgTable(
     }).onDelete('restrict'),
     check(
       'quiz_attempts_status_check',
-      sql`status = ANY (ARRAY['started'::text, 'completed'::text, 'abandoned'::text])`,
+      sql`status::text = ANY (ARRAY['started'::text, 'completed'::text, 'abandoned'::text])`,
     ),
     check(
       'quiz_attempts_score_percent_range',
@@ -915,6 +915,6 @@ export const reviewReports = pgTable(
       foreignColumns: [users.userId],
       name: 'review_reports_reporter_id_fkey',
     }).onDelete('cascade'),
-    check('review_reports_reason_nonblank', sql`length(btrim(reason)) > 0`),
+    check('review_reports_reason_nonblank', sql`length(btrim(reason::text)) > 0`),
   ],
 );
