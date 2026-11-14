@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { CategoryController } from './transport/controllers/category.controller';
 import { UserCategoryController } from './transport/controllers/user-category.controller';
 import { CategoryApplicationService } from './application/category.application.service';
@@ -22,7 +22,7 @@ import {
 import { CategoryEventBootstrapService } from './category-event-bootstrap.service';
 
 @Module({
-  imports: [DatabaseModule, RedisModule, QuizModule],
+  imports: [DatabaseModule, RedisModule, forwardRef(() => QuizModule)],
   controllers: [CategoryController, UserCategoryController],
   providers: [
     CategoryApplicationService,

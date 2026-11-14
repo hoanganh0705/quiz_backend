@@ -8,6 +8,20 @@
       "when": 1790348805798,
       "tag": "0000_broad_wallop",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1793452580887,
+      "tag": "0001_stormy_frank_castle",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1793453503695,
+      "tag": "0002_mysterious_hydra",
+      "breakpoints": true
     }
   ]
 }

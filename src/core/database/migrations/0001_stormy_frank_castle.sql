@@ -1,0 +1,7 @@
+ALTER TABLE "daily_challenge" ADD COLUMN "total_questions" integer NOT NULL;--> statement-breakpoint
+ALTER TABLE "comments" ADD CONSTRAINT "comments_hidden_by_id_fkey" FOREIGN KEY ("hidden_by_id") REFERENCES "public"."users"("user_id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+CREATE INDEX "idx_quiz_attempts_user_finished_desc" ON "quiz_attempts" USING btree ("user_id" uuid_ops,"finished_at" timestamptz_ops,"attempt_id" uuid_ops) WHERE finished_at IS NOT NULL;--> statement-breakpoint
+CREATE INDEX "idx_quiz_stats_avg_rating_desc" ON "quiz_stats" USING btree ("avg_rating" numeric_ops,"quiz_id" uuid_ops) WHERE rating_count > 0;--> statement-breakpoint
+CREATE INDEX "idx_comments_hidden_by_id" ON "comments" USING btree ("hidden_by_id" uuid_ops) WHERE hidden_by_id IS NOT NULL;--> statement-breakpoint
+CREATE INDEX "idx_outbox_events_pending_processor" ON "outbox_events" USING btree ("aggregate_type" text_ops,"processed_at" timestamptz_ops,"failed_at" timestamptz_ops,"next_attempt_at" timestamptz_ops) WHERE processed_at IS NULL;--> statement-breakpoint
+ALTER TABLE "daily_challenge" ADD CONSTRAINT "daily_challenge_total_questions_nonneg" CHECK ("daily_challenge"."total_questions" >= 0);

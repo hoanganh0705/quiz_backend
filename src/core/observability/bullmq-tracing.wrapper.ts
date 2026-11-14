@@ -15,9 +15,9 @@ export class BullmqTracingWrapper {
     private readonly tracing: TracingProvider,
   ) {}
 
-  wrapQueueAdd<T>(queue: Queue<T>, name: string): (...args: unknown[]) => Promise<Job<T>> {
+  wrapQueueAdd<T>(queue: Queue<T>, name: string): (...args: any[]) => Promise<Job<T>> {
     const originalAdd = queue.add.bind(queue) as Queue<T>['add'];
-    return async (...args: Parameters<Queue<T>['add']>) => {
+    return async (...args: any[]) => {
       return this.tracing.withSpan(
         `bullmq.add ${queue.name}.${name}`,
         {

@@ -36,6 +36,7 @@ const DAILY_CHALLENGE_BASE_PROJECTION = {
   quizSlug: quizzes.slug,
   difficulty: quizVersions.difficulty,
   totalQuestions: dailyChallenge.totalQuestions,
+  categoryName: categories.name,
 };
 
 const PERIOD_DAYS: Readonly<Record<DailyChallengePeriod, number>> = {
@@ -54,6 +55,7 @@ export class DailyChallengeRepository implements DailyChallengeRepositoryPort {
       .from(dailyChallenge)
       .innerJoin(quizzes, eq(dailyChallenge.quizId, quizzes.quizId))
       .innerJoin(quizVersions, eq(dailyChallenge.quizVersionId, quizVersions.quizVersionId))
+      .leftJoin(categories, eq(quizzes.categoryId, categories.categoryId))
       .where(and(eq(dailyChallenge.challengeDate, date), notDeleted(quizzes.deletedAt)))
       .limit(1);
 
@@ -66,6 +68,7 @@ export class DailyChallengeRepository implements DailyChallengeRepositoryPort {
       .from(dailyChallenge)
       .innerJoin(quizzes, eq(dailyChallenge.quizId, quizzes.quizId))
       .innerJoin(quizVersions, eq(dailyChallenge.quizVersionId, quizVersions.quizVersionId))
+      .leftJoin(categories, eq(quizzes.categoryId, categories.categoryId))
       .where(and(sql`${dailyChallenge.expiresAt} <= ${nowIso}`, notDeleted(quizzes.deletedAt)))
       .orderBy(desc(dailyChallenge.challengeDate))
       .limit(1);

@@ -456,8 +456,24 @@ export class QuizApplicationService implements QuizListingPort {
   }
 
   async getTrendingQuizzes(limit: number, categoryId?: string): Promise<TrendingQuizItemDto[]> {
-    return this.quizCache.getOrSetTrending(async () => {
+    if (categoryId) {
       const quizzes = await this.quizAnalyticsService.getTrendingQuizzes(limit, categoryId);
+
+      return quizzes.map((q) => ({
+        rank: q.rank,
+        quizId: q.quizId,
+        creatorId: q.creatorId,
+        title: q.title,
+        slug: q.slug,
+        imageUrl: q.imageUrl,
+        trendingScore: q.trendingScore,
+        totalAttempts: q.totalAttempts,
+        recentAttempts: q.recentAttempts,
+      }));
+    }
+
+    return this.quizCache.getOrSetTrending(async () => {
+      const quizzes = await this.quizAnalyticsService.getTrendingQuizzes(limit);
 
       return quizzes.map((q) => ({
         rank: q.rank,
@@ -474,8 +490,25 @@ export class QuizApplicationService implements QuizListingPort {
   }
 
   async getPopularQuizzes(limit: number, categoryId?: string): Promise<PopularQuizItemDto[]> {
-    return this.quizCache.getOrSetPopular(async () => {
+    if (categoryId) {
       const quizzes = await this.quizAnalyticsService.getPopularQuizzes(limit, categoryId);
+
+      return quizzes.map((q) => ({
+        rank: q.rank,
+        quizId: q.quizId,
+        creatorId: q.creatorId,
+        title: q.title,
+        slug: q.slug,
+        imageUrl: q.imageUrl,
+        popularityScore: q.popularityScore,
+        totalAttempts: q.totalAttempts,
+        averageRating: q.averageRating,
+        bookmarkCount: q.bookmarkCount,
+      }));
+    }
+
+    return this.quizCache.getOrSetPopular(async () => {
+      const quizzes = await this.quizAnalyticsService.getPopularQuizzes(limit);
 
       return quizzes.map((q) => ({
         rank: q.rank,

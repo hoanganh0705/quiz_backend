@@ -1,6 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import {
   DAILY_CHALLENGE_REPOSITORY_PORT,
+  type DailyChallengeAttemptRow,
   type DailyChallengeRepositoryPort,
 } from '../domain/ports/daily-challenge-repository.port';
 import {
@@ -67,7 +68,7 @@ export class DailyChallengeApplicationService {
     const attempt = userId ? await this.repository.findAttempt(row.challengeId, userId) : null;
     const status = attempt?.completedAt ? 'completed' : 'pending';
 
-    return this.buildResponseDto(row, userId, status);
+    return this.buildResponseDto(row, userId, status, attempt);
   }
 
   async getHistory(
@@ -193,19 +194,7 @@ export class DailyChallengeApplicationService {
       const completed = nextQuestionIndex >= totalQuestions;
 
       let scorePercent: string | null = null;
-
       const nowIso = new Date().toISOString();
-
-      await helpers.upsertAttempt({
-        challengeId: row.challengeId,
-        userId,
-        answers: nextAnswers,
-        nextQuestionIndex,
-        totalQuestions,
-        scorePercent,
-        completedAt: completed ? nowIso : null,
-        nowIso,
-      });
 
       if (completed) {
         const allQuestions = await this.quizQuestionRepository.getQuestionsByVersionId(
@@ -213,9 +202,11 @@ export class DailyChallengeApplicationService {
         );
         const finalScorePercent =
           totalQuestions > 0
-            ? this.computeScorePercent(allQuestions, nextAnswers).toFixed(2)
+            ? this.computeScorePercent(allQuestions, nextAnswers, totalQuestions).toFixed(2)
             : '0.00';
         const correctCount = this.computeCorrectCount(allQuestions, nextAnswers);
+        scorePercent = finalScorePercent;
+
         this.eventBus.emitCompleted(
           new DailyChallengeCompletedEvent(
             row.challengeId,
@@ -242,9 +233,18 @@ export class DailyChallengeApplicationService {
             nowIso,
           );
         }
-
-        scorePercent = finalScorePercent;
       }
+
+      await helpers.upsertAttempt({
+        challengeId: row.challengeId,
+        userId,
+        answers: nextAnswers,
+        nextQuestionIndex,
+        totalQuestions,
+        scorePercent,
+        completedAt: completed ? nowIso : null,
+        nowIso,
+      });
 
       return {
         correct,
@@ -291,9 +291,14 @@ export class DailyChallengeApplicationService {
       optionIsCorrect: boolean | null;
     }>,
     answers: readonly string[],
+    totalQuestions?: number,
   ): number {
     const correct = this.computeCorrectCount(allQuestions, answers);
-    return allQuestions.length > 0 ? (correct / allQuestions.length) * 100 : 0;
+    const count =
+      totalQuestions && totalQuestions > 0
+        ? totalQuestions
+        : new Set(allQuestions.map((q) => q.questionId)).size;
+    return count > 0 ? (correct / count) * 100 : 0;
   }
 
   private computeCorrectCount(
@@ -304,10 +309,14 @@ export class DailyChallengeApplicationService {
     }>,
     answers: readonly string[],
   ): number {
-    const posToCorrectOption = new Map<string, string>();
+    const distinctQuestionIds: string[] = [];
+    const questionCorrectOption = new Map<string, string>();
     for (const q of allQuestions) {
+      if (!distinctQuestionIds.includes(q.questionId)) {
+        distinctQuestionIds.push(q.questionId);
+      }
       if (q.optionId !== null && q.optionIsCorrect === true) {
-        posToCorrectOption.set(q.questionId, q.optionId);
+        questionCorrectOption.set(q.questionId, q.optionId);
       }
     }
 
@@ -315,9 +324,9 @@ export class DailyChallengeApplicationService {
     for (let i = 0; i < answers.length; i += 1) {
       const answer = answers[i];
       if (!answer || answer === SKIPPED_ANSWER_SENTINEL) continue;
-      const q = allQuestions[i];
-      if (!q) continue;
-      if (posToCorrectOption.get(q.questionId) === answer) correct += 1;
+      const qId = distinctQuestionIds[i];
+      if (!qId) continue;
+      if (questionCorrectOption.get(qId) === answer) correct += 1;
     }
     return correct;
   }
@@ -334,9 +343,11 @@ export class DailyChallengeApplicationService {
       quizSlug?: string;
       difficulty?: DailyChallengeDifficulty;
       totalQuestions?: number;
+      categoryName?: string | null;
     },
     _userId: string | null,
     status: 'pending' | 'completed' | 'expired',
+    attempt?: DailyChallengeAttemptRow | null,
   ): DailyChallengeResponseDto {
     return {
       date: row.challengeDate,
@@ -348,8 +359,12 @@ export class DailyChallengeApplicationService {
       rewardXp: row.rewardXp,
       expiresAt: row.expiresAt,
       status,
-      scorePercent: null,
+      scorePercent:
+        attempt?.scorePercent !== null && attempt?.scorePercent !== undefined
+          ? Number(attempt.scorePercent)
+          : null,
       rank: null,
+      categoryName: row.categoryName ?? null,
     };
   }
 

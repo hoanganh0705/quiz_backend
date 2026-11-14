@@ -145,8 +145,13 @@ yarn.lock
 pnpm-workspace.yaml
 
 # ---------------------------------------------
-# Miscellaneous Build Artifacts
+# Miscellaneous Build Artifacts & Redundant Dirs
 # ---------------------------------------------
 *.bak
 *.md
 *.txt
+benchmarks/
+.pnpm-store/
+.cursor/
+.agents/
+SEED_RECORD.md
