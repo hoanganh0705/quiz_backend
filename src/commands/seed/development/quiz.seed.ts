@@ -432,6 +432,298 @@ const QUIZ_SEEDS: QuizSeed[] = [
       },
     ],
   },
+  // ── Published history quiz ────────────────────────────────────────────────
+  {
+    slug: 'world-history-chronicles',
+    title: 'World History Chronicles',
+    description: 'Test your knowledge of major world civilizations, revolutions, and historic leaders.',
+    creatorUsername: 'content_author',
+    isFeatured: true,
+    isHidden: false,
+    categorySlug: 'history',
+    tagSlugs: ['world-history', 'general-knowledge'],
+    versions: [
+      {
+        versionNumber: 1,
+        status: 'published',
+        difficulty: 'medium',
+        durationMs: 900_000,
+        passingScorePercent: 60,
+        rewardXp: 200,
+        questions: [
+          {
+            position: 1,
+            questionText: 'In which year did the French Revolution begin with the storming of the Bastille?',
+            answerOptions: [
+              { position: 1, value: '1776', isCorrect: false },
+              { position: 2, value: '1789', isCorrect: true },
+              { position: 3, value: '1804', isCorrect: false },
+              { position: 4, value: '1815', isCorrect: false },
+            ],
+          },
+          {
+            position: 2,
+            questionText: 'Who was the first Emperor of a unified China?',
+            answerOptions: [
+              { position: 1, value: 'Qin Shi Huang', isCorrect: true },
+              { position: 2, value: 'Kublai Khan', isCorrect: false },
+              { position: 3, value: 'Sun Yat-sen', isCorrect: false },
+              { position: 4, value: 'Emperor Wu of Han', isCorrect: false },
+            ],
+          },
+          {
+            position: 3,
+            questionText: 'The ancient city of Alexandria was founded by which historical leader?',
+            answerOptions: [
+              { position: 1, value: 'Julius Caesar', isCorrect: false },
+              { position: 2, value: 'Alexander the Great', isCorrect: true },
+              { position: 3, value: 'Ptolemy I', isCorrect: false },
+              { position: 4, value: 'Pericles', isCorrect: false },
+            ],
+          },
+          {
+            position: 4,
+            questionText: 'Which civilization built the ancient citadel of Machu Picchu?',
+            answerOptions: [
+              { position: 1, value: 'Aztec', isCorrect: false },
+              { position: 2, value: 'Maya', isCorrect: false },
+              { position: 3, value: 'Inca', isCorrect: true },
+              { position: 4, value: 'Olmec', isCorrect: false },
+            ],
+          },
+          {
+            position: 5,
+            questionText: 'The Magna Carta was signed in England in what year?',
+            answerOptions: [
+              { position: 1, value: '1066', isCorrect: false },
+              { position: 2, value: '1215', isCorrect: true },
+              { position: 3, value: '1492', isCorrect: false },
+              { position: 4, value: '1688', isCorrect: false },
+            ],
+          },
+        ],
+      },
+    ],
+  },
+  // ── Published geography quiz ──────────────────────────────────────────────
+  {
+    slug: 'world-geography-explorer',
+    title: 'World Geography Explorer',
+    description: 'Explore world capitals, highest mountain peaks, and iconic rivers.',
+    creatorUsername: 'content_author',
+    isFeatured: true,
+    isHidden: false,
+    categorySlug: 'geography',
+    tagSlugs: ['general-knowledge'],
+    versions: [
+      {
+        versionNumber: 1,
+        status: 'published',
+        difficulty: 'easy',
+        durationMs: 600_000,
+        passingScorePercent: 60,
+        rewardXp: 120,
+        questions: [
+          {
+            position: 1,
+            questionText: 'What is the capital city of Australia?',
+            answerOptions: [
+              { position: 1, value: 'Sydney', isCorrect: false },
+              { position: 2, value: 'Melbourne', isCorrect: false },
+              { position: 3, value: 'Canberra', isCorrect: true },
+              { position: 4, value: 'Brisbane', isCorrect: false },
+            ],
+          },
+          {
+            position: 2,
+            questionText: 'Which is the longest river in the world?',
+            answerOptions: [
+              { position: 1, value: 'Amazon River', isCorrect: false },
+              { position: 2, value: 'Nile River', isCorrect: true },
+              { position: 3, value: 'Yangtze River', isCorrect: false },
+              { position: 4, value: 'Mississippi River', isCorrect: false },
+            ],
+          },
+          {
+            position: 3,
+            questionText: 'Mount Everest is located in which mountain range?',
+            answerOptions: [
+              { position: 1, value: 'The Andes', isCorrect: false },
+              { position: 2, value: 'The Rockies', isCorrect: false },
+              { position: 3, value: 'The Himalayas', isCorrect: true },
+              { position: 4, value: 'The Alps', isCorrect: false },
+            ],
+          },
+          {
+            position: 4,
+            questionText: 'Which country has the most natural lakes in the world?',
+            answerOptions: [
+              { position: 1, value: 'Canada', isCorrect: true },
+              { position: 2, value: 'Russia', isCorrect: false },
+              { position: 3, value: 'United States', isCorrect: false },
+              { position: 4, value: 'Finland', isCorrect: false },
+            ],
+          },
+          {
+            position: 5,
+            questionText: 'Which strait separates Spain and Morocco?',
+            answerOptions: [
+              { position: 1, value: 'Strait of Malacca', isCorrect: false },
+              { position: 2, value: 'Strait of Gibraltar', isCorrect: true },
+              { position: 3, value: 'Bosphorus Strait', isCorrect: false },
+              { position: 4, value: 'Bering Strait', isCorrect: false },
+            ],
+          },
+        ],
+      },
+    ],
+  },
+  // ── Published science quiz ────────────────────────────────────────────────
+  {
+    slug: 'modern-science-wonders',
+    title: 'Wonders of Modern Science',
+    description: 'Discover the laws of physics, chemical elements, and mysteries of the cosmos.',
+    creatorUsername: 'content_author',
+    isFeatured: true,
+    isHidden: false,
+    categorySlug: 'science',
+    tagSlugs: ['physics', 'chemistry', 'biology'],
+    versions: [
+      {
+        versionNumber: 1,
+        status: 'published',
+        difficulty: 'medium',
+        durationMs: 720_000,
+        passingScorePercent: 60,
+        rewardXp: 180,
+        questions: [
+          {
+            position: 1,
+            questionText: 'What is the most abundant chemical element in the observable universe?',
+            answerOptions: [
+              { position: 1, value: 'Helium', isCorrect: false },
+              { position: 2, value: 'Oxygen', isCorrect: false },
+              { position: 3, value: 'Hydrogen', isCorrect: true },
+              { position: 4, value: 'Carbon', isCorrect: false },
+            ],
+          },
+          {
+            position: 2,
+            questionText: 'What is the speed of light in a vacuum approximately?',
+            answerOptions: [
+              { position: 1, value: '150,000 km/s', isCorrect: false },
+              { position: 2, value: '300,000 km/s', isCorrect: true },
+              { position: 3, value: '450,000 km/s', isCorrect: false },
+              { position: 4, value: '1,000,000 km/s', isCorrect: false },
+            ],
+          },
+          {
+            position: 3,
+            questionText: 'Which organelle is known as the powerhouse of the eukaryotic cell?',
+            answerOptions: [
+              { position: 1, value: 'Ribosome', isCorrect: false },
+              { position: 2, value: 'Mitochondrion', isCorrect: true },
+              { position: 3, value: 'Endoplasmic reticulum', isCorrect: false },
+              { position: 4, value: 'Golgi apparatus', isCorrect: false },
+            ],
+          },
+          {
+            position: 4,
+            questionText: 'What is the chemical symbol for gold on the periodic table?',
+            answerOptions: [
+              { position: 1, value: 'Ag', isCorrect: false },
+              { position: 2, value: 'Au', isCorrect: true },
+              { position: 3, value: 'Fe', isCorrect: false },
+              { position: 4, value: 'Gd', isCorrect: false },
+            ],
+          },
+          {
+            position: 5,
+            questionText: 'Which subatomic particle carries a negative electric charge?',
+            answerOptions: [
+              { position: 1, value: 'Proton', isCorrect: false },
+              { position: 2, value: 'Neutron', isCorrect: false },
+              { position: 3, value: 'Electron', isCorrect: true },
+              { position: 4, value: 'Positron', isCorrect: false },
+            ],
+          },
+        ],
+      },
+    ],
+  },
+  // ── Published sports quiz ─────────────────────────────────────────────────
+  {
+    slug: 'global-sports-trivia',
+    title: 'Global Sports & Athletic Trivia',
+    description: 'Test your knowledge of the Olympics, world soccer, basketball records, and rules.',
+    creatorUsername: 'content_author',
+    isFeatured: true,
+    isHidden: false,
+    categorySlug: 'sports',
+    tagSlugs: ['general-knowledge'],
+    versions: [
+      {
+        versionNumber: 1,
+        status: 'published',
+        difficulty: 'easy',
+        durationMs: 600_000,
+        passingScorePercent: 60,
+        rewardXp: 120,
+        questions: [
+          {
+            position: 1,
+            questionText: 'How many players are on the court for one basketball team during play?',
+            answerOptions: [
+              { position: 1, value: '4', isCorrect: false },
+              { position: 2, value: '5', isCorrect: true },
+              { position: 3, value: '6', isCorrect: false },
+              { position: 4, value: '7', isCorrect: false },
+            ],
+          },
+          {
+            position: 2,
+            questionText: 'Which country won the inaugural FIFA World Cup in 1930?',
+            answerOptions: [
+              { position: 1, value: 'Brazil', isCorrect: false },
+              { position: 2, value: 'Argentina', isCorrect: false },
+              { position: 3, value: 'Uruguay', isCorrect: true },
+              { position: 4, value: 'Italy', isCorrect: false },
+            ],
+          },
+          {
+            position: 3,
+            questionText: 'How long is an official Olympic swimming pool in meters?',
+            answerOptions: [
+              { position: 1, value: '25 meters', isCorrect: false },
+              { position: 2, value: '50 meters', isCorrect: true },
+              { position: 3, value: '75 meters', isCorrect: false },
+              { position: 4, value: '100 meters', isCorrect: false },
+            ],
+          },
+          {
+            position: 4,
+            questionText: 'In tennis, what term denotes a score of zero?',
+            answerOptions: [
+              { position: 1, value: 'Null', isCorrect: false },
+              { position: 2, value: 'Blank', isCorrect: false },
+              { position: 3, value: 'Love', isCorrect: true },
+              { position: 4, value: 'Fault', isCorrect: false },
+            ],
+          },
+          {
+            position: 5,
+            questionText: 'The ancient Olympic Games originated in which country?',
+            answerOptions: [
+              { position: 1, value: 'Rome', isCorrect: false },
+              { position: 2, value: 'Greece', isCorrect: true },
+              { position: 3, value: 'Egypt', isCorrect: false },
+              { position: 4, value: 'Persia', isCorrect: false },
+            ],
+          },
+        ],
+      },
+    ],
+  },
 ];
 
 export { QUIZ_SEEDS };

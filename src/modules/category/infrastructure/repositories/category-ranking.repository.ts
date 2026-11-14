@@ -95,11 +95,11 @@ export class CategoryRankingRepository implements CategoryRankingRepositoryPort 
         imageUrl: categories.imageUrl,
         createdAt: categories.createdAt,
         updatedAt: categories.updatedAt,
-        totalScore: sql<string>`SUM(${scoreCol})`,
-        totalAttempts: sql<string>`SUM(${quizStats.totalAttempts})`,
+        totalScore: sql<string>`COALESCE(SUM(${scoreCol}), 0)`,
+        totalAttempts: sql<string>`COALESCE(SUM(${quizStats.totalAttempts}), 0)`,
       })
       .from(categories)
-      .innerJoin(
+      .leftJoin(
         quizzes,
         and(
           eq(quizzes.categoryId, categories.categoryId),
@@ -107,7 +107,7 @@ export class CategoryRankingRepository implements CategoryRankingRepositoryPort 
           eq((quizzes as { isHidden: AnyPgColumn }).isHidden, false),
         ),
       )
-      .innerJoin(quizStats, eq(quizStats.quizId, (quizzes as { quizId: AnyPgColumn }).quizId))
+      .leftJoin(quizStats, eq(quizStats.quizId, (quizzes as { quizId: AnyPgColumn }).quizId))
       .where(notDeleted(categories.deletedAt))
       .groupBy(
         categories.categoryId,
@@ -119,8 +119,9 @@ export class CategoryRankingRepository implements CategoryRankingRepositoryPort 
         categories.updatedAt,
       )
       .orderBy(
-        desc(sql`SUM(${scoreCol})`),
-        desc(sql`SUM(${quizStats.totalAttempts})`),
+        desc(sql`COALESCE(SUM(${scoreCol}), 0)`),
+        desc(sql`COALESCE(SUM(${quizStats.totalAttempts}), 0)`),
+        asc(categories.name),
         asc(categories.categoryId),
       )
       .limit(limit);

@@ -1,28 +1,75 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, OnModuleInit, Optional } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { DRIZZLE } from '@/core/database/drizzle.constants';
 import type { DrizzleDB } from '@/core/database/database.module';
 import { sql } from 'drizzle-orm';
+import { CACHE_PROVIDER, type CacheProvider } from '@/common/ports/cache.provider';
+import { REDIS_CIRCUIT_PORT, type RedisCircuitPort } from '@/common/ports/redis-circuit.port';
+import { MetricsRegistry } from '@/core/observability/metrics.registry';
+import { acquireSchedulerLockOrRecordSkip } from '@/core/redis/scheduler-lock.helper';
 import {
   DAILY_CHALLENGE_REPOSITORY_PORT,
   type DailyChallengeRepositoryPort,
 } from '../../domain/ports/daily-challenge-repository.port';
 
+const ROTATION_LOCK_KEY = 'daily-challenge:rotation:lock';
+const ROTATION_LOCK_TTL_MS = 60_000;
+const ROTATION_JOB = 'daily-challenge-rotation';
+
 @Injectable()
-export class DailyChallengeSchedulerService {
+export class DailyChallengeSchedulerService implements OnModuleInit {
   private isRunning = false;
 
   constructor(
     @Inject(DAILY_CHALLENGE_REPOSITORY_PORT)
     private readonly repository: DailyChallengeRepositoryPort,
     @Inject(DRIZZLE) private readonly db: DrizzleDB,
+    @Inject(CACHE_PROVIDER) private readonly cache: CacheProvider,
+    @Inject(REDIS_CIRCUIT_PORT) private readonly redisCircuit: RedisCircuitPort,
+    @Optional() private readonly metrics: MetricsRegistry | undefined,
     @InjectPinoLogger(DailyChallengeSchedulerService.name)
     private readonly logger: PinoLogger,
   ) {}
 
+  async onModuleInit(): Promise<void> {
+    const today = new Date().toISOString().slice(0, 10);
+    const existing = await this.repository.findByDate(today);
+    if (!existing) {
+      this.logger.info({
+        event: 'daily_challenge_bootstrap_rotation_triggered',
+        challengeDate: today,
+      });
+      await this.rotate();
+    }
+  }
+
   @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT, { timeZone: 'UTC' })
   async rotate(): Promise<void> {
+    const lockResult = await acquireSchedulerLockOrRecordSkip({
+      cache: this.cache,
+      circuit: this.redisCircuit,
+      metrics: this.metrics,
+      lockKey: ROTATION_LOCK_KEY,
+      lockTtlMs: ROTATION_LOCK_TTL_MS,
+      job: ROTATION_JOB,
+    });
+    if (!lockResult.acquired) {
+      this.logger.debug({
+        event: 'daily_challenge_rotation_skipped_lock_held',
+        reason: lockResult.reason,
+      });
+      return;
+    }
+
+    try {
+      await this.runRotation();
+    } finally {
+      await this.cache.releaseAdvisoryLock(ROTATION_LOCK_KEY, lockResult.token);
+    }
+  }
+
+  private async runRotation(): Promise<void> {
     if (this.isRunning) {
       this.logger.warn({
         event: 'daily_challenge_rotation_skipped',

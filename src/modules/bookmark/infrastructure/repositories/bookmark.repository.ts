@@ -1,6 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { and, count, desc, eq, inArray, sql } from 'drizzle-orm';
-import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 import { DRIZZLE } from '@/core/database/drizzle.constants';
 import type { DrizzleDB } from '@/core/database/database.module';
 import {
@@ -30,15 +29,6 @@ import {
   buildBookmarkCursorCondition,
   buildSafeSearchPattern,
 } from '@/modules/bookmark/domain/bookmark-cursor-pagination';
-
-const QUIZ_COLUMNS = quizzes as unknown as {
-  quizId: AnyPgColumn;
-  title: AnyPgColumn;
-  slug: AnyPgColumn;
-  imageUrl: AnyPgColumn;
-  isFeatured: AnyPgColumn;
-  publishedVersionId: AnyPgColumn;
-};
 
 @Injectable()
 export class BookmarkRepository implements BookmarkRepositoryPort {
@@ -72,14 +62,14 @@ export class BookmarkRepository implements BookmarkRepositoryPort {
         notes: bookmarkedQuizzes.notes,
         bookmarkedAt: bookmarkedQuizzes.bookmarkedAt,
         updatedAt: bookmarkedQuizzes.updatedAt,
-        quizTitle: QUIZ_COLUMNS.title,
-        quizSlug: QUIZ_COLUMNS.slug,
-        quizImageUrl: QUIZ_COLUMNS.imageUrl,
-        quizIsFeatured: QUIZ_COLUMNS.isFeatured,
-        quizPublishedVersionId: QUIZ_COLUMNS.publishedVersionId,
+        quizTitle: quizzes.title,
+        quizSlug: quizzes.slug,
+        quizImageUrl: quizzes.imageUrl,
+        quizIsFeatured: quizzes.isFeatured,
+        quizPublishedVersionId: quizzes.publishedVersionId,
       })
       .from(bookmarkedQuizzes)
-      .innerJoin(quizzes, eq(bookmarkedQuizzes.quizId, QUIZ_COLUMNS.quizId))
+      .innerJoin(quizzes, eq(bookmarkedQuizzes.quizId, quizzes.quizId))
       .where(and(eq(bookmarkedQuizzes.collectionId, collectionId), notDeleted(quizzes.deletedAt)))
       .orderBy(bookmarkedQuizzes.bookmarkedAt);
 

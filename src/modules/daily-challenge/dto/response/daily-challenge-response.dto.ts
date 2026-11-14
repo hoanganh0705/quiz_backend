@@ -91,4 +91,12 @@ export class DailyChallengeResponseDto {
     nullable: true,
   })
   rank!: number | null;
+
+  @ApiPropertyOptional({
+    description: 'Category name of the daily challenge quiz',
+    example: 'Sports',
+    nullable: true,
+  })
+  categoryName?: string | null;
 }
+

@@ -17,7 +17,7 @@ export type RedisIoAdapterOptions = {
 };
 
 export class RedisIoAdapter extends IoAdapter {
-  private readonly logger: PinoNestLogger;
+  private readonly adapterLogger: PinoNestLogger;
   private readonly adapterOptions: RedisIoAdapterOptions;
 
   private pubClient: Redis | null = null;
@@ -33,7 +33,7 @@ export class RedisIoAdapter extends IoAdapter {
         'nestjs-pino Logger is not available — CoreLoggerModule must be registered before useWebSocketAdapter()',
       );
     }
-    this.logger = logger;
+    this.adapterLogger = logger;
   }
 
   private logContext(): string {
@@ -50,7 +50,7 @@ export class RedisIoAdapter extends IoAdapter {
       }),
     );
 
-    this.logger.log(
+    this.adapterLogger.log(
       {
         event: 'socket.adapter.attached',
         port,
@@ -111,7 +111,7 @@ export class RedisIoAdapter extends IoAdapter {
   }
 
   private handleClientError(label: 'pubClient' | 'subClient', err: Error): void {
-    this.logger.error(
+    this.adapterLogger.error(
       {
         event: 'socket.adapter.client_error',
         client: label,

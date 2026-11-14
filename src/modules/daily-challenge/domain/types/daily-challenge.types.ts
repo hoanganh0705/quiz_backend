@@ -18,6 +18,7 @@ export type DailyChallengeRow = {
   quizTitle?: string;
   quizSlug?: string;
   difficulty?: DailyChallengeDifficulty;
+  categoryName?: string | null;
   scorePercent?: string | null;
   completedAt?: string | null;
   rank?: number | null;

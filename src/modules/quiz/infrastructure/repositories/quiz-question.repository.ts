@@ -69,8 +69,28 @@ export class QuizQuestionRepository implements QuizQuestionRepositoryPort {
       .where(eq(quizQuestions.quizVersionId, quizVersionId))
       .orderBy(quizQuestions.position, quizAnswerOptions.position);
 
-    const matched = rows.find((r) => r.position === position);
-    return matched ?? null;
+    if (rows.length === 0) {
+      return null;
+    }
+
+    const distinctQuestionIds: string[] = [];
+    for (const r of rows) {
+      if (!distinctQuestionIds.includes(r.questionId)) {
+        distinctQuestionIds.push(r.questionId);
+      }
+    }
+
+    const targetQuestionId =
+      distinctQuestionIds[position] ??
+      rows.find((r) => r.position === position || r.position === position + 1)?.questionId;
+
+    if (!targetQuestionId) {
+      return null;
+    }
+
+    const questionRows = rows.filter((r) => r.questionId === targetQuestionId);
+    const correctRow = questionRows.find((r) => r.optionIsCorrect === true);
+    return correctRow ?? questionRows[0] ?? null;
   }
 
   async getQuestionsByIds(questionIds: string[]): Promise<QuizQuestionJoinRow[]> {

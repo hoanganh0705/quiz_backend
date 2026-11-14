@@ -43,12 +43,30 @@ export class JwtGuard implements CanActivate {
       context.getClass(),
     ]);
 
+    const request = context.switchToHttp().getRequest<AuthenticatedRequest>();
+    const authHeader = request?.headers?.authorization;
+
     if (isPublic) {
+      if (authHeader) {
+        try {
+          const [scheme, token] = authHeader.trim().split(/\s+/);
+          if (scheme === 'Bearer' && token) {
+            const payload = await this.jwtService.verifyAsync<JwtPayload>(token, {
+              secret: this.jwt.accessSecret,
+              issuer: this.jwt.issuer,
+              audience: this.jwt.audience,
+            });
+
+            if (payload?.sub && isUserRole(payload.role)) {
+              request.user = payload;
+            }
+          }
+        } catch {
+          // Public endpoint: proceed without authenticated user on token error
+        }
+      }
       return true;
     }
-
-    const request = context.switchToHttp().getRequest<AuthenticatedRequest>();
-    const authHeader = request.headers.authorization;
 
     if (!authHeader) {
       throw new UnauthorizedException('Authorization header is missing');

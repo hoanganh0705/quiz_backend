@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform, Type } from 'class-transformer';
-import { IsIn, IsInt, IsOptional, IsString, MaxLength, Min } from 'class-validator';
+import { IsIn, IsInt, IsOptional, IsString, MaxLength, Min, ValidateIf } from 'class-validator';
 
 /**
  * Cursor + limit for `GET /daily-challenge/history`.
@@ -62,6 +62,9 @@ export class DailyChallengeAnswerDto {
     description: '0-indexed position of the question being answered',
     example: 0,
   })
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
   questionIndex!: number;
 
   @ApiPropertyOptional({
@@ -72,6 +75,8 @@ export class DailyChallengeAnswerDto {
   })
   @IsOptional()
   @Transform(({ value }: { value: unknown }) => (value === '' ? null : value))
+  @ValidateIf((_obj, value) => value !== null && value !== undefined)
+  @IsString()
   selectedOptionId?: string | null;
 }
 

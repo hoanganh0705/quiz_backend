@@ -756,6 +756,123 @@ describe('DailyChallengeApplicationService', () => {
       );
     });
 
+    it('correctly calculates partial score when questions have multiple options join rows', async () => {
+      const { repo } = repoWithTodayAndQuestions();
+      repo.rows = [{ ...baseRow, totalQuestions: 5 }];
+
+      const multiOptionQuestionRows = [
+        { questionId: 'q1', optionId: 'opt-1-a', optionIsCorrect: false, position: 1 },
+        { questionId: 'q1', optionId: 'opt-1-b', optionIsCorrect: true, position: 1 },
+        { questionId: 'q1', optionId: 'opt-1-c', optionIsCorrect: false, position: 1 },
+        { questionId: 'q1', optionId: 'opt-1-d', optionIsCorrect: false, position: 1 },
+        { questionId: 'q2', optionId: 'opt-2-a', optionIsCorrect: false, position: 2 },
+        { questionId: 'q2', optionId: 'opt-2-b', optionIsCorrect: false, position: 2 },
+        { questionId: 'q2', optionId: 'opt-2-c', optionIsCorrect: true, position: 2 },
+        { questionId: 'q2', optionId: 'opt-2-d', optionIsCorrect: false, position: 2 },
+        { questionId: 'q3', optionId: 'opt-3-a', optionIsCorrect: true, position: 3 },
+        { questionId: 'q3', optionId: 'opt-3-b', optionIsCorrect: false, position: 3 },
+        { questionId: 'q3', optionId: 'opt-3-c', optionIsCorrect: false, position: 3 },
+        { questionId: 'q3', optionId: 'opt-3-d', optionIsCorrect: false, position: 3 },
+        { questionId: 'q4', optionId: 'opt-4-a', optionIsCorrect: false, position: 4 },
+        { questionId: 'q4', optionId: 'opt-4-b', optionIsCorrect: false, position: 4 },
+        { questionId: 'q4', optionId: 'opt-4-c', optionIsCorrect: false, position: 4 },
+        { questionId: 'q4', optionId: 'opt-4-d', optionIsCorrect: true, position: 4 },
+        { questionId: 'q5', optionId: 'opt-5-a', optionIsCorrect: false, position: 5 },
+        { questionId: 'q5', optionId: 'opt-5-b', optionIsCorrect: true, position: 5 },
+        { questionId: 'q5', optionId: 'opt-5-c', optionIsCorrect: false, position: 5 },
+        { questionId: 'q5', optionId: 'opt-5-d', optionIsCorrect: false, position: 5 },
+      ];
+
+      const quizQuestions = {
+        getQuestionsByVersionId: jest.fn().mockResolvedValue(multiOptionQuestionRows),
+        getQuestionByPosition: jest.fn().mockResolvedValue({
+          questionId: 'q5',
+          optionId: 'opt-5-b',
+          optionIsCorrect: true,
+          position: 5,
+        }),
+      } as unknown as QuizQuestionRepositoryPort & { getQuestionsByVersionId: jest.Mock };
+
+      let savedScorePercent: string | null = null;
+      repo.runInTransaction = async <T>(
+        work: (
+          _tx: DailyChallengeTx,
+          helpers: {
+            lockAttemptForUpdate: (params: {
+              challengeId: string;
+              userId: string;
+            }) => Promise<DailyChallengeAttemptRow | null>;
+            upsertAttempt: (params: {
+              challengeId: string;
+              userId: string;
+              answers: string[];
+              nextQuestionIndex: number;
+              totalQuestions: number | null;
+              scorePercent: string | null;
+              completedAt: string | null;
+              nowIso: string;
+            }) => Promise<DailyChallengeAttemptRow>;
+          },
+        ) => Promise<T>,
+      ): Promise<T> => {
+        const helpers = {
+          lockAttemptForUpdate: async (): Promise<DailyChallengeAttemptRow | null> => ({
+            attemptId: 'a1',
+            challengeId: 'c1',
+            userId: 'user-1',
+            answers: ['opt-1-a', 'opt-2-c', 'opt-3-b', 'opt-4-a'],
+            nextQuestionIndex: 4,
+            totalQuestions: 5,
+            scorePercent: null,
+            completedAt: null,
+            createdAt: '2099-01-01T00:00:00.000Z',
+            updatedAt: '2099-01-01T00:00:00.000Z',
+          }),
+
+          upsertAttempt: async (params: {
+            challengeId: string;
+            userId: string;
+            answers: string[];
+            nextQuestionIndex: number;
+            totalQuestions: number | null;
+            scorePercent: string | null;
+            completedAt: string | null;
+            nowIso: string;
+          }): Promise<DailyChallengeAttemptRow> => {
+            savedScorePercent = params.scorePercent;
+            return {
+              attemptId: 'a1',
+              challengeId: params.challengeId,
+              userId: params.userId,
+              answers: params.answers,
+              nextQuestionIndex: params.nextQuestionIndex,
+              totalQuestions: params.totalQuestions,
+              scorePercent: params.scorePercent,
+              completedAt: params.completedAt,
+              createdAt: params.nowIso,
+              updatedAt: params.nowIso,
+            };
+          },
+        };
+        return work({} as DailyChallengeTx, helpers);
+      };
+
+      const { service } = makeService(repo, quizQuestions);
+      const result = await service.submitAnswer('user-1', {
+        questionIndex: 4,
+        selectedOptionId: 'opt-5-c',
+      });
+
+      expect(result.correct).toBe(false);
+      expect(result.completed).toBe(true);
+      expect(result.scorePercent).toBe(20);
+      expect(savedScorePercent).toBe('20.00');
+      const emitted = eventBus.emitCompleted.mock.calls.at(-1)?.[0] as DailyChallengeCompletedEvent;
+      expect(emitted.correctCount).toBe(1);
+      expect(emitted.totalQuestions).toBe(5);
+      expect(emitted.scorePercent).toBe('20.00');
+    });
+
     it('skips xp publish when rewardXp is zero', async () => {
       const { repo, quizQuestions } = repoWithTodayAndQuestions();
       repo.rows = [{ ...baseRow, rewardXp: 0 }];

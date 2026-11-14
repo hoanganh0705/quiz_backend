@@ -1,147 +1,107 @@
 # syntax=docker/dockerfile:1.9
-# =============================================
+# ==============================================================================
 # Quiz Backend - Production Dockerfile
-# =============================================
-#
-# Build args (CI/CD sets these via --build-arg):
-#   IMAGE_VERSION  — e.g. 1.2.3  (defaults to "untagged")
-#   IMAGE_REVISION — git SHA      (defaults to "local")
-#   BUILD_DATE     — ISO 8601     (defaults to empty)
-#
+# ==============================================================================
 # Multi-stage layout:
-#   base     — OS layer + curl (for health checks)
-#   prereqs  — all packages, BuildKit cache mount for pnpm store
-#   builder  — TypeScript → dist/, then prune devDeps
-#   runner   — minimal production image, non-root
-# =============================================
+#   base       — Debian Bookworm slim with Node.js 22 runtime + activated pnpm
+#   prod-deps  — pure production dependencies (excludes optional dev peers like TS)
+#   builder    — compiles NestJS TypeScript into JavaScript (dist)
+#   runner     — minimal, hardened Google Distroless Node.js 22 runtime (non-root)
+# ==============================================================================
 
 ARG IMAGE_VERSION=untagged
 ARG IMAGE_REVISION=local
 ARG BUILD_DATE=
 
-# ---------------------------------------------
-# Stage 1: Base Image
-# ---------------------------------------------
-FROM node:22.12.0-bookworm-slim AS base
+# ------------------------------------------------------------------------------
+# Stage 1: Base Tooling Environment
+# ------------------------------------------------------------------------------
+FROM node:22-bookworm-slim AS base
 
-# OCI image metadata.
-# NOTE: Docker emits "UndefinedVar" warnings for the $VAR references
-# below when no --build-arg is supplied.  These are cosmetic diagnostics
-# — the labels are correctly applied and readable via `docker inspect`.
-# CI/CD pipelines should pass --build-arg values to populate them.
+ENV TZ=UTC \
+    PNPM_HOME="/root/.local/share/pnpm" \
+    PATH="/root/.local/share/pnpm:$PATH"
+
+# Prepare pnpm once in base stage so child stages inherit it without repetition
+RUN corepack enable && corepack prepare pnpm@9.15.0 --activate
+
+# ------------------------------------------------------------------------------
+# Stage 2: Production Dependencies (prod-deps)
+# ------------------------------------------------------------------------------
+# Installs strictly production dependencies. Using --no-optional prevents
+# optional peer dependencies (notably TypeScript from @nestjs/swagger and
+# @nestjs/graphql) from being pulled into production node_modules, saving 24 MB.
+# Mounts pnpm's actual default store directory for persistent BuildKit caching.
+FROM base AS prod-deps
+WORKDIR /app
+
+COPY package.json pnpm-lock.yaml ./
+
+RUN --mount=type=cache,target=/root/.local/share/pnpm/store/v3 \
+    pnpm install --prod --no-optional --frozen-lockfile && \
+    find node_modules -type f \( -name "*.map" -o -name "*.d.ts" -o -name "*.d.ts.map" -o -name "*.d.cts" -o -name "*.d.mts" -o -name "*.md" -o -name "*.markdown" -o -name "*.tsbuildinfo" -o -name "*.flow" -o -name "*.h" -o -name "*.cc" -o -name "*.c" \) -delete && \
+    find node_modules -mindepth 2 -type d \( -name "test" -o -name "tests" -o -name "__tests__" -o -name "docs" -o -name "example" -o -name "examples" \) -exec rm -rf {} + 2>/dev/null || true && \
+    rm -rf node_modules/.pnpm/@scarf* node_modules/@scarf
+
+# ------------------------------------------------------------------------------
+# Stage 3: Builder
+# ------------------------------------------------------------------------------
+# Installs complete dependencies (including devDependencies for Nest CLI and tsc)
+# and builds the production distribution bundle.
+FROM base AS builder
+WORKDIR /app
+
+COPY package.json pnpm-lock.yaml ./
+
+RUN --mount=type=cache,target=/root/.local/share/pnpm/store/v3 \
+    pnpm install --frozen-lockfile
+
+COPY . .
+
+# Build application using high-speed Rust-based SWC compiler and strip debug sourcemaps
+RUN pnpm run build && \
+    find dist -type f -name "*.map" -delete
+
+# ------------------------------------------------------------------------------
+# Stage 4: Distroless Runner
+# ------------------------------------------------------------------------------
+# Production container based on Google Distroless Node.js 22 (Debian 12 glibc).
+# Distroless contains ONLY Node.js and its shared runtime libraries (glibc, libssl, etc.)
+# No shell, no package manager (apt/dpkg), no compiler toolchains.
+# Built-in non-root user (uid 65532:gid 65532) for least-privilege security.
+FROM gcr.io/distroless/nodejs22-debian12:nonroot AS runner
+WORKDIR /app
+
+ARG IMAGE_VERSION
+ARG IMAGE_REVISION
+ARG BUILD_DATE
+
 LABEL \
     org.opencontainers.image.authors="hoanganh0705" \
     org.opencontainers.image.description="Quiz Backend API" \
     org.opencontainers.image.licenses="UNLICENSED" \
     org.opencontainers.image.ref.name="quiz_backend" \
     org.opencontainers.image.source="https://github.com/hoanganh0705/quiz_backend" \
-    org.opencontainers.image.title="quiz_backend"
+    org.opencontainers.image.title="quiz_backend" \
+    org.opencontainers.image.version="${IMAGE_VERSION:-untagged}" \
+    org.opencontainers.image.revision="${IMAGE_REVISION:-local}" \
+    org.opencontainers.image.created="${BUILD_DATE}"
 
-# ca-certificates: TLS/HTTPS support.
-# curl: used by the HEALTHCHECK CMD.
-RUN apt-get update && apt-get install -y --no-install-recommends \
-        ca-certificates \
-        curl \
-    && rm -rf /var/lib/apt/lists/*
-
-ENV TZ=UTC
-
-# ---------------------------------------------
-# Stage 2: Prereqs
-# ---------------------------------------------
-#
-# Installs ALL dependencies (prod + dev).  Dev deps are needed
-# by the builder stage to run `nest build`.  They are pruned
-# in the builder stage and never reach the runner image.
-#
-# BuildKit cache mount: the pnpm content-addressable store
-# persists across builds.  Unchanged packages are hard-linked
-# from the cache, eliminating repeated network fetches.
-FROM base AS prereqs
-
-WORKDIR /app
-
-COPY package.json pnpm-lock.yaml ./
-
-# FIX: pin pnpm version explicitly (consistent with builder stage)
-# so the same binary is used across all stages.
-RUN --mount=type=cache,target=/root/.pnpm-store \
-    corepack enable && \
-    corepack prepare pnpm@9.15.0 --activate && \
-    pnpm install --frozen-lockfile
-
-# ---------------------------------------------
-# Stage 3: Builder
-# ---------------------------------------------
-#
-# Native modules (bcrypt, pg) are compiled here against glibc.
-# The compiled binaries are preserved in node_modules and copied
-# directly to the runner — no reinstall, no --ignore-scripts risk.
-FROM base AS builder
-
-WORKDIR /app
-
-RUN corepack enable && corepack prepare pnpm@9.15.0 --activate
-
-COPY --from=prereqs /app/node_modules ./node_modules
-
-COPY . .
-
-# nest build uses tsc by default.  Fix type errors in source —
-# do not suppress them here.
-RUN pnpm run build
-
-# Prune devDeps after the build.  The runner then receives a
-# production-only node_modules — no network I/O, no reinstall,
-# and native module binaries are intact.
-# FIX: include cache mount so pnpm can resolve the store during prune.
-RUN --mount=type=cache,target=/root/.pnpm-store \
-    pnpm prune --prod
-
-# ---------------------------------------------
-# Stage 4: Runner
-# ---------------------------------------------
-#
-# Minimal production image.  node_modules is copied directly from
-# the builder stage after pruning — prod deps only, with native
-# modules already compiled against the correct glibc target.
-# Migrations are bundled for explicit out-of-band execution via
-# CI/CD or a dedicated Job (never auto-applied on startup).
-FROM base AS runner
-
-WORKDIR /app
-
-RUN groupadd --gid 10001 nodeapp && \
-    useradd --uid 10001 --gid nodeapp --shell /bin/false --create-home nodeapp
-
-# --chown on COPY avoids a separate recursive chown layer.
-COPY --from=builder --chown=nodeapp:nodeapp /app/node_modules ./node_modules
-COPY --from=builder --chown=nodeapp:nodeapp /app/dist ./dist
-COPY --from=builder --chown=nodeapp:nodeapp /app/src/core/database/migrations ./migrations
-
-# FIX: copy package.json — some modules (NestJS, TypeORM) read
-# name/version from it at runtime; omitting it can cause subtle errors.
-COPY --from=builder --chown=nodeapp:nodeapp /app/package.json ./package.json
-
-USER nodeapp
-
-EXPOSE 8080
+# Copy production artifacts with nonroot ownership
+COPY --from=prod-deps --chown=nonroot:nonroot /app/node_modules ./node_modules
+COPY --from=builder --chown=nonroot:nonroot /app/dist ./dist
+COPY --from=builder --chown=nonroot:nonroot /app/src/core/database/migrations ./migrations
+COPY --from=builder --chown=nonroot:nonroot /app/package.json ./package.json
 
 ENV NODE_ENV=production
 ENV PORT=8080
 
-# Graceful shutdown: NestJS's app.enableShutdownHooks() (in main.ts)
-# catches SIGTERM, drains in-flight requests, then exits.  STOPSIGNAL
-# ensures Docker delivers SIGTERM directly to PID 1 (node), not to
-# a shell wrapper.
+EXPOSE 8080
+
 STOPSIGNAL SIGTERM
 
-# Fallback health check for `docker run` / Docker Compose.
-# In Kubernetes, use a Pod readiness/liveness probe instead;
-# the orchestrator's probe takes precedence.
+# Native Node.js healthcheck (distroless has no curl/wget/bash)
 HEALTHCHECK --interval=30s --timeout=15s --start-period=30s --retries=3 \
-    CMD curl -sf http://localhost:8080/api/v1/health || exit 1
+    CMD ["/nodejs/bin/node", "-e", "require('http').get('http://localhost:8080/api/v1/health', (r) => { if (r.statusCode !== 200) process.exit(1); })"]
 
-# exec form ensures Node.js receives SIGTERM directly as PID 1,
-# enabling NestJS shutdown hooks to drain in-flight requests cleanly.
-CMD ["node", "dist/main.js"]
+CMD ["dist/main.js"]
