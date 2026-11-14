@@ -1,0 +1,25 @@
+---
+description: Module dependency rules — every NestJS module must import other modules directly. `forwardRef` is reserved for unavoidable circular dependencies only and must be audited.
+---
+
+# Module Dependency Policy
+
+## Direct imports only
+
+Every `*.module.ts` file must import other feature modules with a plain `imports: [OtherModule]`. Cross-module dependencies should be expressed through domain event buses or repository ports, not direct module imports.
+
+## `forwardRef` is an escape hatch, not a design tool
+
+`forwardRef(() => OtherModule)` is only acceptable when there is a genuine circular dependency between two modules that cannot be broken by:
+
+- Extracting the shared dependency into a leaf module (e.g., a `CoreModule`).
+- Inverting the dependency through a port (e.g., `REPOSITORY_PORT` injected by the consumer side).
+- Replacing direct calls with domain event publication.
+
+## Review checklist
+
+When reviewing a PR that adds a `forwardRef`:
+
+- Document why the circular dependency exists.
+- Show that the three remediation patterns above are not viable.
+- Confirm the per-module count stays bounded.

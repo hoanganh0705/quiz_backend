@@ -181,7 +181,7 @@ CREATE TABLE "quiz_attempts" (
 	"xp_earned" integer DEFAULT 0 NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
-	CONSTRAINT "quiz_attempts_status_check" CHECK (status = ANY (ARRAY['started'::text, 'completed'::text, 'abandoned'::text])),
+	CONSTRAINT "quiz_attempts_status_check" CHECK (status::text = ANY (ARRAY['started'::text, 'completed'::text, 'abandoned'::text])),
 	CONSTRAINT "quiz_attempts_score_percent_range" CHECK (score_percent IS NULL OR (score_percent >= 0 AND score_percent <= 100)),
 	CONSTRAINT "quiz_attempts_correct_count_nonneg" CHECK (correct_count IS NULL OR correct_count >= 0)
 );
@@ -335,7 +335,7 @@ CREATE TABLE "review_reports" (
 	"status" "review_report_status" DEFAULT 'open' NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
-	CONSTRAINT "review_reports_reason_nonblank" CHECK (length(btrim(reason)) > 0)
+	CONSTRAINT "review_reports_reason_nonblank" CHECK (length(btrim(reason::text)) > 0)
 );
 --> statement-breakpoint
 CREATE TABLE "categories" (
@@ -976,7 +976,7 @@ CREATE INDEX "idx_quiz_attempts_quiz_version_id" ON "quiz_attempts" USING btree 
 CREATE INDEX "idx_quiz_attempts_user_started_at_desc" ON "quiz_attempts" USING btree ("user_id" uuid_ops,"started_at" timestamptz_ops);--> statement-breakpoint
 CREATE INDEX "idx_quiz_attempts_user_status" ON "quiz_attempts" USING btree ("user_id" uuid_ops,"status" enum_ops);--> statement-breakpoint
 CREATE INDEX "idx_quiz_attempts_user_version_started" ON "quiz_attempts" USING btree ("user_id" uuid_ops,"quiz_version_id" uuid_ops) WHERE status = 'started';--> statement-breakpoint
-CREATE INDEX "idx_quiz_attempts_version_status_created" ON "quiz_attempts" USING btree ("quiz_version_id" uuid_ops,"status" text_ops,"created_at" timestamptz_ops);--> statement-breakpoint
+CREATE INDEX "idx_quiz_attempts_version_status_created" ON "quiz_attempts" USING btree ("quiz_version_id" uuid_ops,"status" enum_ops,"created_at" timestamptz_ops);--> statement-breakpoint
 CREATE INDEX "idx_quiz_instance_players_attempt_id" ON "quiz_instance_players" USING btree ("attempt_id" uuid_ops);--> statement-breakpoint
 CREATE INDEX "idx_quiz_instance_players_user_id" ON "quiz_instance_players" USING btree ("user_id" uuid_ops);--> statement-breakpoint
 CREATE INDEX "idx_quiz_instance_players_instance_status" ON "quiz_instance_players" USING btree ("instance_id" uuid_ops,"status" enum_ops);--> statement-breakpoint

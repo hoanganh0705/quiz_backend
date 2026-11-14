@@ -440,7 +440,7 @@ export const quizAttempts = pgTable(
     }).onDelete('restrict'),
     check(
       'quiz_attempts_status_check',
-      sql`status = ANY (ARRAY['started'::text, 'completed'::text, 'abandoned'::text])`,
+      sql`status::text = ANY (ARRAY['started'::text, 'completed'::text, 'abandoned'::text])`,
     ),
     check(
       'quiz_attempts_score_percent_range',
