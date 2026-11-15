@@ -48,6 +48,11 @@ export enum Permission {
   COIN_ADMIN = 'COIN_ADMIN',
 
   AUDIT_READ = 'AUDIT_READ',
+
+  // User management
+  USER_MANAGE = 'USER_MANAGE',
+  USER_GRANT_ROLE = 'USER_GRANT_ROLE',
+  USER_REVOKE_ROLE = 'USER_REVOKE_ROLE',
 }
 
 export const ROLE_PERMISSIONS: Record<UserRole, readonly Permission[]> = {
@@ -94,6 +99,11 @@ export const ROLE_PERMISSIONS: Record<UserRole, readonly Permission[]> = {
     Permission.NOTIFICATION_ANALYTICS,
     Permission.RANKING_ADMIN,
     Permission.COIN_ADMIN,
+
+    // User management
+    Permission.USER_MANAGE,
+    Permission.USER_GRANT_ROLE,
+    Permission.USER_REVOKE_ROLE,
   ],
   moderator: [
     Permission.QUIZ_VERSION_VIEW_ANY,
