@@ -38,7 +38,7 @@ class FakeStorage implements StoragePort {
   }): Promise<SignedUpload> {
     const timestamp = Math.floor(Date.now() / 1000) + input.expiresInSeconds;
     return Promise.resolve({
-      uploadUrl: 'https://fake.cloudinary.local/image/upload',
+      uploadUrl: 'https://fake.storage.local/upload',
       publicId: `signed/${input.ownerId}`,
       expiresAt: new Date(timestamp * 1000).toISOString(),
       apiKey: 'fake-key',
@@ -86,7 +86,7 @@ function makeRow(
 
 describe('QuizResponseMapper — URL derivation', () => {
   describe('imageUrl', () => {
-    it('prefers imagePublicId (Cloudinary) when set', () => {
+    it('prefers imagePublicId (Storage) when set', () => {
       const storage = new FakeStorage();
       const mapper = new QuizResponseMapper(storage);
       const row = makeRow({

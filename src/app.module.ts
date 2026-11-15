@@ -48,7 +48,7 @@ import {
   authThrottleConfig,
   googleOAuthConfig,
   swaggerConfig,
-  cloudinaryConfig,
+  r2Config,
   tournamentFlagsConfig,
   coinAdminConfig,
 } from './core/config';
@@ -85,7 +85,7 @@ import { graphqlConfig } from './core/config';
         authThrottleConfig,
         googleOAuthConfig,
         swaggerConfig,
-        cloudinaryConfig,
+        r2Config,
         tournamentFlagsConfig,
         coinAdminConfig,
       ],

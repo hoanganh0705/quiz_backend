@@ -3,7 +3,7 @@
  *
  * Coverage:
  *   - `replaceAvatar` reads the current `publicId`, deletes the old
- *     Cloudinary asset, and unbinds the `storage_assets` row.
+ *     storage asset, and unbinds the `storage_assets` row.
  *   - `replaceAvatar` is a no-op when the column is unchanged
  *     (`current === new`).
  *   - `replaceAvatar` is a no-op when there is no current asset.
@@ -12,7 +12,7 @@
  *   - `removeQuizCover` mirrors `removeAvatar` for quiz covers.
  *   - `deleteQuizCover` is the soft-delete path: even if the cover
  *     would otherwise be replaced, this clears it.
- *   - Cloudinary delete failure is retried; unbind happens regardless.
+ *   - Storage delete failure is retried; unbind happens regardless.
  *   - Unbind failure is swallowed (so retries with the same `publicId`
  *     will not deadlock on the UNIQUE constraint).
  *   - Injected `readCurrent` callback is honoured.
@@ -57,7 +57,7 @@ class InMemoryStorage implements StoragePort {
   }): Promise<SignedUpload> {
     const timestamp = Math.floor(Date.now() / 1000) + input.expiresInSeconds;
     return Promise.resolve({
-      uploadUrl: 'https://fake.cloudinary.local/image/upload',
+      uploadUrl: 'https://fake.storage.local/upload',
       publicId: `quiz-app/${input.purpose === 'avatar' ? 'avatars' : 'quizzes'}/${
         input.ownerId
       }/signed-fake`,
@@ -250,7 +250,7 @@ describe('StorageImageLifecycleService', () => {
   });
 
   describe('error handling', () => {
-    it('retries Cloudinary delete on a transient failure', async () => {
+    it('retries storage delete on a transient failure', async () => {
       storage.failures.push({
         publicId: 'quiz-app/avatars/u1/old',
         error: new Error('transient'),

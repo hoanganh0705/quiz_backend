@@ -2,8 +2,8 @@ import { ApiProperty } from '@nestjs/swagger';
 
 export class SignUploadResponseDto {
   @ApiProperty({
-    description: 'Cloudinary endpoint the client should POST the file to.',
-    example: 'https://api.cloudinary.com/v1_1/my-cloud/image/upload',
+    description: 'Signed endpoint the client should upload the file to.',
+    example: 'https://images.example.com/quiz-app/avatars/upload',
   })
   uploadUrl!: string;
 
@@ -22,14 +22,14 @@ export class SignUploadResponseDto {
   expiresAt!: string;
 
   @ApiProperty({
-    description: 'Cloudinary `api_key` the client must include alongside the upload.',
+    description: 'Access key identifier for signed uploads.',
     example: '123456789012345',
   })
   apiKey!: string;
 
   @ApiProperty({
     description:
-      'Hex-encoded SHA-1 signature the client must include in the form data, paired with `timestamp` and `public_id`.',
+      'Signature the client must include in the request, paired with `timestamp` and `public_id`.',
     example: 'b9f0a3b9aa0b39de9d2de0a4f29f1c81a1f8b3b1',
   })
   signature!: string;
@@ -41,7 +41,7 @@ export class SignUploadResponseDto {
   timestamp!: number;
 
   @ApiProperty({
-    description: 'Cloudinary folder the upload will land in.',
+    description: 'Storage folder the upload will land in.',
     example: 'quiz-app/avatars',
   })
   folder!: string;

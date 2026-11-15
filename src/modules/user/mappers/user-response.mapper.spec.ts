@@ -37,7 +37,7 @@ class FakeStorage implements StoragePort {
   }): Promise<SignedUpload> {
     const timestamp = Math.floor(Date.now() / 1000) + input.expiresInSeconds;
     return Promise.resolve({
-      uploadUrl: 'https://fake.cloudinary.local/image/upload',
+      uploadUrl: 'https://fake.storage.local/upload',
       publicId: `signed/${input.ownerId}`,
       expiresAt: new Date(timestamp * 1000).toISOString(),
       apiKey: 'fake-key',
@@ -80,7 +80,7 @@ function makeLookupRow(overrides: Partial<UserLookupRow> = {}): UserLookupRow {
 }
 
 describe('UserResponseMapper — URL derivation', () => {
-  it('prefers avatarPublicId (Cloudinary) when set', () => {
+  it('prefers avatarPublicId (Storage) when set', () => {
     const storage = new FakeStorage();
     const mapper = new UserResponseMapper(storage);
     const row = makeMeRow({

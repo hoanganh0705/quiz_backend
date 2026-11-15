@@ -1,10 +1,10 @@
 // =============================================================================
 // Storage bounded context — schema
 //
-// The single new table that records the binding between a Cloudinary
+// The single table that records the binding between a storage
 // `public_id` and its owner. This is the authoritative source the
 // application consults before accepting any `avatarPublicId` /
-// `imagePublicId` on a PATCH (see migration plan §6, §11).
+// `imagePublicId` on a PATCH.
 //
 // Why a dedicated table (and not piggy-backing on
 // `user_profiles.avatar_public_id`):
@@ -21,8 +21,7 @@
 // carries a UNIQUE constraint (and an implicit UNIQUE BTREE index).
 //
 // `purpose` is a CHECK-constrained text column rather than an enum
-// because (a) Cloudinary already enforces the value set elsewhere, and
-// (b) extending the allowlist later is a single-line schema change
+// because extending the allowlist later is a single-line schema change
 // without a destructive enum migration.
 // =============================================================================
 
@@ -39,8 +38,8 @@ export const storageAssets = pgTable(
       .primaryKey()
       .notNull(),
     /**
-     * The Cloudinary `public_id`, server-generated as
-     * `${CLOUDINARY_FOLDER}/${purposeFolder}/${ownerId}/${uuidv7()}`.
+     * The storage `public_id`, server-generated as
+     * `${R2_FOLDER}/${purposeFolder}/${ownerId}/${uuidv7()}`.
      * UNIQUE — a collision implies either a duplicate upload (which we
      * treat as a bug) or a forged id (which we reject at the lookup).
      */

@@ -295,7 +295,7 @@ describe('UploadApplicationService', () => {
   });
 
   describe('ownership bind failure', () => {
-    it('best-effort deletes the Cloudinary asset and throws StorageOwnershipBindFailedError', async () => {
+    it('best-effort deletes the storage asset and throws StorageOwnershipBindFailedError', async () => {
       const { service, storage, ownership } = makeService();
       ownership.bindError = new StorageOwnershipBindFailedError('collision');
       const file = makeFile();
@@ -313,7 +313,7 @@ describe('UploadApplicationService', () => {
     it('still throws when the cleanup itself fails (orphan remains, admin must sweep)', async () => {
       const { service, storage, ownership } = makeService();
       ownership.bindError = new StorageOwnershipBindFailedError('collision');
-      storage.deleteError = new Error('Cloudinary 503');
+      storage.deleteError = new Error('Storage 503');
       await expect(
         service.uploadAvatarOrQuizCover({
           ownerId: 'u1',

@@ -117,7 +117,7 @@ export class UploadController {
   @ApiOperation({
     summary: 'Upload an image (avatar or quiz cover)',
     description:
-      'Returns the Cloudinary public_id the client should echo back when patching the entity.',
+      'Returns the storage public_id the client should echo back when patching the entity.',
   })
   @ApiConsumes('multipart/form-data')
   @ApiBody({
@@ -155,7 +155,7 @@ export class UploadController {
     example: tooManyRequestsExample,
   })
   @ApiServiceUnavailableResponse({
-    description: 'Cloudinary rejected the upload after retries.',
+    description: 'Storage provider rejected the upload after retries.',
     example: providerUnavailableExample,
   })
   @ApiInternalServerErrorResponse({
@@ -198,8 +198,8 @@ export class UploadController {
   @ApiOperation({
     summary: 'Issue a signed upload URL',
     description:
-      'Returns a Cloudinary-signed upload URL the client uses to POST the file directly ' +
-      'to Cloudinary. The bytes never traverse this application server, which removes ' +
+      'Returns a signed upload URL the client uses to upload the file directly ' +
+      'to storage. The bytes never traverse this application server, which removes ' +
       'the upload as a scaling bottleneck and shrinks the request payload hitting the API. ' +
       'After the client uploads the file, it MUST call the bind endpoint to attach the ' +
       'returned `publicId` to its account — see `POST /uploads/:publicId/bind`.',
@@ -220,7 +220,7 @@ export class UploadController {
     example: tooManyRequestsExample,
   })
   @ApiInternalServerErrorResponse({
-    description: 'Cloudinary rejected the signature request.',
+    description: 'Storage provider rejected the signature request.',
     example: {
       code: 'UPLOAD_SIGN_FAILED',
       message: 'Failed to issue a signed upload URL. Please retry.',
@@ -252,7 +252,7 @@ export class UploadController {
   @ApiOperation({
     summary: 'Bind a previously uploaded asset to the authenticated user',
     description:
-      'Called by the client after it has uploaded a file directly to Cloudinary via ' +
+      'Called by the client after it has uploaded a file directly to storage via ' +
       'a signed envelope (returned by `POST /uploads/sign`). Persists the ownership ' +
       'row so subsequent entity writes that reference this `publicId` pass the §11 ' +
       'ownership gate. The `publicId` in the URL must already exist in the storage ' +
@@ -261,7 +261,7 @@ export class UploadController {
   @ApiParam({
     name: 'publicId',
     description:
-      'The Cloudinary public_id returned by `POST /uploads/sign` and echoed back from ' +
+      'The storage public_id returned by `POST /uploads/sign` and echoed back from ' +
       'the client-side upload.',
     example:
       'quiz-app/avatars/0d8e3a45-7d7a-71f0-9e2a-9b0d9e2c7f3b/0190f6a5-d2c4-7b3e-a8e9-2b9f7e2b8b1a',

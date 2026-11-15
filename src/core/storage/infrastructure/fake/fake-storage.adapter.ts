@@ -58,7 +58,7 @@ export class FakeStorageAdapter implements StoragePort {
     const query = Object.entries(params)
       .map(([k, v]) => `${k}_${String(v).replace(/_/g, ':')}`)
       .join(',');
-    return `https://fake.cloudinary.local/${query ? `${query}/` : ''}image/upload/${publicId}`;
+    return `https://storage.fake.local/${query ? `${query}/` : ''}${publicId}`;
   }
 
   clear(): void {
@@ -81,7 +81,7 @@ export class FakeStorageAdapter implements StoragePort {
     const expiresAt = new Date(timestamp * 1000).toISOString();
 
     return Promise.resolve({
-      uploadUrl: `https://fake.cloudinary.local/image/upload`,
+      uploadUrl: `https://storage.fake.local/upload/${publicId}`,
       publicId,
       expiresAt,
       apiKey: 'fake-key',

@@ -2,7 +2,7 @@
  * Snapshot test for the upload policy table.
  *
  * The `UPLOAD_POLICY` constant is the single source of truth for per-
- * purpose limits. Cloudinary transformations, MIME allowlists, and
+ * purpose limits. Storage parameters, MIME allowlists, and
  * byte caps are read by the upload application service, the upload
  * controller's `ParseFilePipe`, and the concrete adapters. Any drift
  * between layers surfaces here as a snapshot diff.

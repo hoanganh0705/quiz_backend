@@ -3,8 +3,13 @@ import { Test, type TestingModule } from '@nestjs/testing';
 import { ConfigModule } from '@nestjs/config';
 import { LoggerModule } from 'nestjs-pino';
 
-import { STORAGE_PORT, StorageModule, FakeStorageAdapter } from '../src/core/storage';
-import { cloudinaryConfig } from '../src/core/config';
+import {
+  STORAGE_PORT,
+  StorageModule,
+  FakeStorageAdapter,
+  R2StorageAdapter,
+} from '../src/core/storage';
+import { r2Config } from '../src/core/config';
 import {
   STORAGE_ASSETS_REPOSITORY,
   type StorageAssetsRepositoryPort,
@@ -31,12 +36,12 @@ class NoopStorageAssetsRepository implements StorageAssetsRepositoryPort {
   }
 }
 
-async function runAs(adapter: 'fake' | 'cloudinary'): Promise<string> {
+async function runAs(adapter: 'fake' | 'r2'): Promise<string> {
   const moduleRef: TestingModule = await Test.createTestingModule({
     imports: [
       ConfigModule.forRoot({
         isGlobal: true,
-        load: [cloudinaryConfig],
+        load: [r2Config],
       }),
       LoggerModule.forRoot({ pinoHttp: { level: 'silent' } }),
       StorageModule.forRoot({ adapter }),
@@ -60,18 +65,14 @@ async function main(): Promise<void> {
   }
   console.log(`[smoke:storage] OK: adapter='fake' → STORAGE_PORT = ${fakeResolved}`);
 
-  // The cloudinary adapter requires the four CLOUDINARY_* env vars to
-  // be set. .env.example provides them via the local .env, so we
-  // delegate loading to ConfigModule + dotenv (ConfigModule reads
-  // process.env automatically).
-  const cloudinaryResolved = await runAs('cloudinary');
-  if (cloudinaryResolved === FakeStorageAdapter.name || cloudinaryResolved === 'undefined') {
+  const r2Resolved = await runAs('r2');
+  if (r2Resolved !== R2StorageAdapter.name) {
     console.error(
-      `[smoke:storage] FAIL: 'cloudinary' resolved to ${cloudinaryResolved}, expected CloudinaryStorageAdapter`,
+      `[smoke:storage] FAIL: 'r2' resolved to ${r2Resolved}, expected ${R2StorageAdapter.name}`,
     );
     process.exit(1);
   }
-  console.log(`[smoke:storage] OK: adapter='cloudinary' → STORAGE_PORT = ${cloudinaryResolved}`);
+  console.log(`[smoke:storage] OK: adapter='r2' → STORAGE_PORT = ${r2Resolved}`);
 }
 
 main().catch((err) => {

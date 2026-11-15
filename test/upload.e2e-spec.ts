@@ -16,7 +16,6 @@ import {
 import { Test, TestingModule } from '@nestjs/testing';
 import { LoggerModule } from 'nestjs-pino';
 import request from 'supertest';
-import type { App } from 'supertest';
 import type { Request } from 'express';
 import type { StorageAssetsRepositoryPort, UploadPurpose } from '@/core/storage';
 import {
@@ -198,7 +197,7 @@ const makeFile = (overrides: Partial<Express.Multer.File> = {}): Express.Multer.
   encoding: '7bit',
   mimetype: 'image/png',
   size: 1024,
-  buffer: Buffer.from('fake-png-bytes'),
+  buffer: Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00]),
   destination: '',
   filename: '',
   path: '',
@@ -236,7 +235,7 @@ describe('Upload controller endpoints — e2e', () => {
     }
   });
 
-  const http = () => request(app.getHttpServer() as App);
+  const http = () => request(app.getHttpServer());
 
   describe('POST /upload-fixture (uploadAvatarOrQuizCover)', () => {
     it('returns 201 and binds owner on happy path', async () => {

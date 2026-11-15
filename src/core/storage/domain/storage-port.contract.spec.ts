@@ -2,12 +2,12 @@
  * Contract test for the `StoragePort` interface.
  *
  * The hexagonal architecture's whole point is that domain modules
- * depend on `StoragePort`, not on Cloudinary. These tests exercise
+ * depend on `StoragePort`, not on a specific provider. These tests exercise
  * the in-memory `FakeStorageAdapter` against the contract to lock the
  * shape that ANY adapter must satisfy.
  *
- * Concrete adapters (Cloudinary) must pass the same matrix via
- * `cloudinary.adapter.spec.ts`; this file documents the canonical
+ * Concrete adapters (R2) must pass the same matrix via
+ * `r2.adapter.spec.ts`; this file documents the canonical
  * behaviour that any new adapter must reproduce.
  */
 import { FakeStorageAdapter } from '../infrastructure/fake/fake-storage.adapter';

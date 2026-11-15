@@ -589,7 +589,7 @@ export class QuizApplicationService implements QuizListingPort {
     //      the cover — the quiz remains live and intact.
     //   3. Best-effort cover delete. If this fails, the quiz is
     //      already marked deleted, so a future sweep can re-collect the
-    //      orphan cover from Cloudinary.
+    //      orphan cover from storage.
     //
     // The previous order (cover-delete → soft-delete) inverted this:
     // a cover-delete success followed by a soft-delete failure would

@@ -57,7 +57,7 @@ mid-senior backend engineer:
 │  └──────────────┬───────────────────────────────────────────┘ │
 │  ┌──────────────▼───────────────────────────────────────────┐ │
 │  │  Infrastructure Adapters                                   │ │
-│  │  ─ Drizzle (Postgres), ioredis, BullMQ, Cloudinary, …     │ │
+│  │  ─ Drizzle (Postgres), ioredis, BullMQ, Cloudflare R2, … │ │
 │  └───────────────────────────────────────────────────────────┘ │
 └────────────────────────────────────────────────────────────────┘
                   │                       │
@@ -70,7 +70,7 @@ mid-senior backend engineer:
                                 └────────────────────┘
                                         │
                                 ┌───────▼────────┐
-                                │ Cloudinary     │
+                                │ Cloudflare R2  │
                                 │ Resend (email) │
                                 └────────────────┘
 ```
@@ -136,7 +136,7 @@ src/
     logger/                    Pino structured logging
     observability/             Tracing, metrics, tracing wrappers
     redis/                     Redis client + circuit breaker (ADR-0023)
-    storage/                   Cloudinary + storage port
+    storage/                   Cloudflare R2 + storage port
   modules/
     auth/                      Auth, RBAC, sessions, refresh tokens
     user/                      Profile bundles (cache + i18n)

@@ -85,7 +85,7 @@ describe('UploadController', () => {
     it('forwards ownerId, purpose, and passes through expiresInSeconds when present', async () => {
       const appService = makeUploadAppService();
       (appService.signUpload as jest.Mock).mockResolvedValue({
-        uploadUrl: 'https://api.cloudinary.com/v1_1/demo/image/upload',
+        uploadUrl: 'https://images.example.com/quiz-app/avatars/upload',
         publicId: 'quiz-app/avatars/u1/signed',
         expiresAt: '2026-01-01T00:00:00.000Z',
         apiKey: 'k',

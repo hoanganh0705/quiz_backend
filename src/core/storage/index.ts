@@ -5,7 +5,7 @@
  *
  *   import { STORAGE_PORT, StorageModule, type StoragePort } from '@/core/storage';
  *
- * The two adapters (`FakeStorageAdapter`, `CloudinaryStorageAdapter`) are
+ * The two adapters (`FakeStorageAdapter`, `R2StorageAdapter`) are
  * also exported so tests can reach `clear()` on the fake and so future
  * modules can take a direct dependency on a specific adapter if they
  * have to (none do today).
@@ -32,10 +32,7 @@ export type { StorageAdapterKind, StorageModuleOptions } from './storage.module'
 
 export { StorageAssetsRepository } from './infrastructure/repositories/storage-assets.repository';
 export { FakeStorageAdapter } from './infrastructure/fake/fake-storage.adapter';
-export {
-  CloudinaryModule,
-  CloudinaryStorageAdapter,
-} from './infrastructure/cloudinary/cloudinary.module';
+export { R2StorageModule, R2StorageAdapter } from './infrastructure/r2/r2.module';
 
 export {
   StorageApplicationService,

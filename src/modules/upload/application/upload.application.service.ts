@@ -62,9 +62,16 @@ export class UploadApplicationService {
       });
     }
 
-    const fileBytes = input.file.buffer
+    const rawBuffer = input.file.buffer
       ? input.file.buffer
       : await this.readTempFile(input.file.path);
+    const fileBytes = Buffer.isBuffer(rawBuffer)
+      ? rawBuffer
+      : Buffer.from(
+          Array.isArray((rawBuffer as { data?: number[] })?.data)
+            ? (rawBuffer as { data: number[] }).data
+            : (rawBuffer as unknown as Uint8Array),
+        );
     const sniffedMime = detectImageMimeFromBuffer(fileBytes);
     if (sniffedMime === null || sniffedMime !== input.file.mimetype) {
       throw new UnsupportedMediaTypeException({
@@ -106,7 +113,7 @@ export class UploadApplicationService {
           ownerId: input.ownerId,
           mime: input.file.mimetype,
         },
-        'Cloudinary upload failed; mapping to UPLOAD_PROVIDER_UNAVAILABLE',
+        'Storage upload failed; mapping to UPLOAD_PROVIDER_UNAVAILABLE',
       );
       throw new ServiceUnavailableException({
         code: 'UPLOAD_PROVIDER_UNAVAILABLE',
@@ -122,7 +129,7 @@ export class UploadApplicationService {
       });
     } catch (err) {
       // Bind failed (most commonly: UNIQUE collision on public_id — a
-      // race or a forged id). Best-effort delete so the Cloudinary
+      // race or a forged id). Best-effort delete so the storage
       // asset is not orphaned. If the delete itself fails, we log and
       // re-raise the bind failure; an admin sweep can reconcile later.
       this.logger.error(
@@ -132,7 +139,7 @@ export class UploadApplicationService {
           ownerId: input.ownerId,
           purpose,
         },
-        'Ownership bind failed after upload; best-effort deleting Cloudinary asset',
+        'Ownership bind failed after upload; best-effort deleting storage asset',
       );
       try {
         await this.storage.delete(uploadResult.publicId);
@@ -142,7 +149,7 @@ export class UploadApplicationService {
             err: cleanupErr,
             publicId: uploadResult.publicId,
           },
-          'Best-effort cleanup of Cloudinary asset also failed; an orphan remains',
+          'Best-effort cleanup of storage asset also failed; an orphan remains',
         );
       }
       if (err instanceof StorageOwnershipBindFailedError) {
