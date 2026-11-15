@@ -1,7 +1,7 @@
 /**
  * Repository port for the `storage_assets` table.
  *
- * The single durable record of "who owns this Cloudinary asset". Used by
+ * The single durable record of "who owns this storage asset". Used by
  * `StorageApplicationService` to answer the §11 ownership rule:
  *
  *   "A publicId may only be associated with an entity if the

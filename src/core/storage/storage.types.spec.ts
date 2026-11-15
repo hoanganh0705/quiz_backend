@@ -5,7 +5,7 @@ describe('UPLOAD_POLICY', () => {
     expect(Object.keys(UPLOAD_POLICY).sort()).toEqual(['avatar', 'quiz']);
   });
 
-  it('uses the documented Cloudinary folders', () => {
+  it('uses the documented storage folders', () => {
     expect(UPLOAD_POLICY.avatar.folder).toBe('quiz-app/avatars');
     expect(UPLOAD_POLICY.quiz.folder).toBe('quiz-app/quizzes');
   });

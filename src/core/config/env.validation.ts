@@ -174,22 +174,6 @@ const parseOptionalUrl = (env: Record<string, unknown>, key: string, fallback: s
   return trimmed;
 };
 
-const parseCloudinaryFolder = (env: Record<string, unknown>): string => {
-  const nodeEnvRaw = env.NODE_ENV;
-  const nodeEnv = typeof nodeEnvRaw === 'string' ? nodeEnvRaw.trim().toLowerCase() : 'development';
-  const isProduction = nodeEnv === 'production';
-
-  const value = parseStringWithDefault(env, 'CLOUDINARY_FOLDER', 'quiz-app-dev');
-
-  if (isProduction && value === 'quiz-app-dev') {
-    throw new Error(
-      'CLOUDINARY_FOLDER must not be "quiz-app-dev" in production; set it to a non-development folder name.',
-    );
-  }
-
-  return value;
-};
-
 /**
  * Resolve the Redis key prefix.
  *
@@ -383,13 +367,38 @@ export const validateEnv = (env: Record<string, unknown>) => {
   const emailCircuitFailureThreshold = parsePositiveInteger(env, 'EMAIL_CB_FAILURE_THRESHOLD', 5);
   const emailCircuitResetTimeoutMs = parsePositiveInteger(env, 'EMAIL_CB_RESET_TIMEOUT_MS', 30_000);
 
-  const cloudinaryCloudName = parseRequiredString(env, 'CLOUDINARY_CLOUD_NAME');
-  const cloudinaryApiKey = parseRequiredString(env, 'CLOUDINARY_API_KEY');
-  const cloudinaryApiSecret = parseRequiredString(env, 'CLOUDINARY_API_SECRET');
-  const cloudinaryFolder = parseCloudinaryFolder(env);
+  const storageAdapter = parseStringWithDefault(env, 'STORAGE_ADAPTER', 'r2');
+
+  const r2AccountId = typeof env.R2_ACCOUNT_ID === 'string' ? env.R2_ACCOUNT_ID.trim() : '';
+  const r2AccessKeyId = typeof env.R2_ACCESS_KEY_ID === 'string' ? env.R2_ACCESS_KEY_ID.trim() : '';
+  const r2SecretAccessKey =
+    typeof env.R2_SECRET_ACCESS_KEY === 'string' ? env.R2_SECRET_ACCESS_KEY.trim() : '';
+  const r2BucketName = parseStringWithDefault(env, 'R2_BUCKET_NAME', 'quiz-app-assets');
+  const r2PublicUrl = typeof env.R2_PUBLIC_URL === 'string' ? env.R2_PUBLIC_URL.trim() : '';
+  const r2Endpoint = typeof env.R2_ENDPOINT === 'string' ? env.R2_ENDPOINT.trim() : '';
+  const r2Folder = parseStringWithDefault(env, 'R2_FOLDER', 'quiz-app');
 
   const port = parsePositiveInteger(env, 'PORT', 3000);
   const nodeEnv = parseEnum(env, 'NODE_ENV', NODE_ENVS, 'NODE_ENV');
+  const isProduction = nodeEnv === 'production';
+
+  if (isProduction && storageAdapter === 'r2') {
+    if (!r2AccountId && !r2Endpoint) {
+      throw new Error(
+        'R2_ACCOUNT_ID or R2_ENDPOINT must be defined in production when STORAGE_ADAPTER is "r2"',
+      );
+    }
+    if (!r2AccessKeyId) {
+      throw new Error(
+        'R2_ACCESS_KEY_ID must be defined in production when STORAGE_ADAPTER is "r2"',
+      );
+    }
+    if (!r2SecretAccessKey) {
+      throw new Error(
+        'R2_SECRET_ACCESS_KEY must be defined in production when STORAGE_ADAPTER is "r2"',
+      );
+    }
+  }
   const corsOrigins = typeof env.CORS_ORIGINS === 'string' ? env.CORS_ORIGINS : '';
 
   const normalisedCorsOrigins = corsOrigins
@@ -532,10 +541,14 @@ export const validateEnv = (env: Record<string, unknown>) => {
     EMAIL_QUEUE_CONCURRENCY: emailQueueConcurrency,
     EMAIL_CB_FAILURE_THRESHOLD: emailCircuitFailureThreshold,
     EMAIL_CB_RESET_TIMEOUT_MS: emailCircuitResetTimeoutMs,
-    CLOUDINARY_CLOUD_NAME: cloudinaryCloudName,
-    CLOUDINARY_API_KEY: cloudinaryApiKey,
-    CLOUDINARY_API_SECRET: cloudinaryApiSecret,
-    CLOUDINARY_FOLDER: cloudinaryFolder,
+    STORAGE_ADAPTER: storageAdapter,
+    R2_ACCOUNT_ID: r2AccountId,
+    R2_ACCESS_KEY_ID: r2AccessKeyId,
+    R2_SECRET_ACCESS_KEY: r2SecretAccessKey,
+    R2_BUCKET_NAME: r2BucketName,
+    R2_PUBLIC_URL: r2PublicUrl,
+    R2_ENDPOINT: r2Endpoint,
+    R2_FOLDER: r2Folder,
     APP_NAME: appName,
     APP_VERSION: appVersion,
     APP_DESCRIPTION: appDescription,

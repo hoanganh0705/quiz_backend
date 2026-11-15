@@ -48,6 +48,6 @@ export {
 } from './achievement-throttle.config';
 export { googleOAuthConfig, type GoogleOAuthConfig } from './google-oauth.config';
 export { swaggerConfig, type SwaggerConfig } from './swagger.config';
-export { cloudinaryConfig, type CloudinaryConfig } from './cloudinary.config';
+export { r2Config, type R2Config } from './r2.config';
 export { tournamentFlagsConfig, type TournamentFlagsConfig } from './tournament-flags.config';
 export { coinAdminConfig, type CoinAdminConfig } from './coin-admin.config';

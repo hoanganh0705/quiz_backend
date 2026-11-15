@@ -3,22 +3,26 @@ import { type DynamicModule, Module, type Provider } from '@nestjs/common';
 import { StorageApplicationService } from './application/storage.application.service';
 import { StorageImageLifecycleService } from './application/storage-image-lifecycle.service';
 import { StorageAssetsRepository } from './infrastructure/repositories/storage-assets.repository';
-import {
-  CloudinaryModule,
-  CloudinaryStorageAdapter,
-} from './infrastructure/cloudinary/cloudinary.module';
+import { R2StorageModule, R2StorageAdapter } from './infrastructure/r2/r2.module';
 import { FakeStorageAdapter } from './infrastructure/fake/fake-storage.adapter';
 import { STORAGE_ASSETS_REPOSITORY } from './domain/ports/storage-assets-repository.port';
 import { STORAGE_PORT } from './storage.port';
 
-export type StorageAdapterKind = 'fake' | 'cloudinary';
+export type StorageAdapterKind = 'fake' | 'r2';
 
 export interface StorageModuleOptions {
   readonly adapter?: StorageAdapterKind;
 }
 
 function defaultAdapterFromEnv(): StorageAdapterKind {
-  return process.env.NODE_ENV === 'test' ? 'fake' : 'cloudinary';
+  if (process.env.NODE_ENV === 'test') {
+    return 'fake';
+  }
+  const configured = (process.env.STORAGE_ADAPTER ?? '').trim().toLowerCase();
+  if (configured === 'fake') {
+    return 'fake';
+  }
+  return 'r2';
 }
 
 @Module({})
@@ -52,18 +56,19 @@ export class StorageModule {
       };
     }
 
+    const providers: Provider[] = [
+      ...sharedProviders,
+      R2StorageAdapter,
+      { provide: STORAGE_PORT, useExisting: R2StorageAdapter },
+    ];
     return {
       module: StorageModule,
       global: true,
-      imports: [CloudinaryModule],
-      providers: [
-        ...sharedProviders,
-        CloudinaryStorageAdapter,
-        { provide: STORAGE_PORT, useExisting: CloudinaryStorageAdapter },
-      ],
+      imports: [R2StorageModule],
+      providers,
       exports: [
         STORAGE_PORT,
-        CloudinaryStorageAdapter,
+        R2StorageAdapter,
         StorageApplicationService,
         StorageImageLifecycleService,
         STORAGE_ASSETS_REPOSITORY,

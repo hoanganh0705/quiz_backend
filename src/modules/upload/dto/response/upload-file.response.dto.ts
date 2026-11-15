@@ -4,7 +4,7 @@ import { UPLOAD_PURPOSES, type UploadPurposeLiteral } from '../request/upload-fi
 export class UploadFileResponseDto {
   @ApiProperty({
     description:
-      'Server-generated Cloudinary public_id. ' +
+      'Server-generated storage public_id. ' +
       'Treat as opaque; echo back unchanged when patching the entity.',
     example:
       'quiz-app/avatars/0d8e3a45-7d7a-71f0-9e2a-9b0d9e2c7f3b/0190f6a5-d2c4-7b3e-a8e9-2b9f7e2b8b1a',
@@ -13,7 +13,7 @@ export class UploadFileResponseDto {
 
   @ApiProperty({
     description: 'A pre-derived render URL the client may use for immediate preview.',
-    example: 'https://res.cloudinary.com/demo/image/upload/w_512,h_512,c_fill/...',
+    example: 'https://images.example.com/quiz-app/avatars/preview.webp',
     format: 'uri',
   })
   url!: string;

@@ -72,7 +72,7 @@ export class UpdateMeDto {
   avatarUrl?: string | null;
   @ApiPropertyOptional({
     description:
-      'Cloudinary public_id returned by `POST /api/v1/uploads`. ' +
+      'Storage public_id returned by `POST /api/v1/uploads`. ' +
       'Send `null` to clear. ' +
       "Ownership is verified against the caller's storage_assets row.",
     type: String,

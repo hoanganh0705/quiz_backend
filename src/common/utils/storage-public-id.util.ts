@@ -1,10 +1,9 @@
 /**
- * Cloudinary `public_id` shape validation.
+ * Storage `public_id` shape validation.
  *
- * Server-generated public_ids follow a strict shape — see migration
- * plan §4 / §11:
+ * Server-generated public_ids follow a strict shape:
  *
- *   ${CLOUDINARY_FOLDER}/${purposeFolder}/${ownerId}/${uuidv7()}
+ *   ${R2_FOLDER}/${purposeFolder}/${ownerId}/${uuidv7()}
  *
  * with the document defaults being `quiz-app/{avatars|quizzes}/<uuid>/<uuid>`.
  * Validating the shape at the DTO boundary is a defence-in-depth
@@ -49,4 +48,4 @@ export const STORAGE_PUBLIC_ID_TAIL_PATTERN = new RegExp(
 );
 
 export const STORAGE_PUBLIC_ID_INVALID_MESSAGE =
-  'publicId must match the Cloudinary-assigned shape: quiz-app/<purpose>/<uuidv7>/<uuidv7>';
+  'publicId must match the expected shape: quiz-app/<purpose>/<uuidv7>/<uuidv7>';
