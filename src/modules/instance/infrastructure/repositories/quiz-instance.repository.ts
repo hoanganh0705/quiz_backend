@@ -1,5 +1,5 @@
 import { Inject, Injectable, Optional } from '@nestjs/common';
-import { and, count, desc, eq, isNotNull, lte, sql } from 'drizzle-orm';
+import { and, count, desc, eq, inArray, isNotNull, lte, notExists, sql } from 'drizzle-orm';
 import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 import { DRIZZLE } from '@/core/database/drizzle.constants';
 import type { DrizzleDB } from '@/core/database/database.module';
@@ -268,6 +268,41 @@ export class QuizInstanceRepository implements QuizInstanceRepositoryPort {
         version: r.version,
         countdownStartedAt: r.countdownStartedAt,
       }));
+  }
+
+  async findAbandonedInstances(params: { cutoffIso: string; limit: number }): Promise<
+    Array<{
+      instanceId: string;
+      version: number;
+    }>
+  > {
+    const activePlayerSubquery = this.db
+      .select({ one: sql`1` })
+      .from(quizInstancePlayers)
+      .where(
+        and(
+          eq(quizInstancePlayers.instanceId, quizInstances.instanceId),
+          eq(quizInstancePlayers.status, 'joined'),
+        ),
+      );
+
+    const rows = await this.db
+      .select({
+        instanceId: quizInstances.instanceId,
+        version: quizInstances.version,
+      })
+      .from(quizInstances)
+      .where(
+        and(
+          inArray(quizInstances.status, ['open', 'countdown', 'running']),
+          lte(quizInstances.updatedAt, params.cutoffIso),
+          notExists(activePlayerSubquery),
+        ),
+      )
+      .orderBy(quizInstances.updatedAt)
+      .limit(params.limit);
+
+    return rows;
   }
 
   async getPlayer(
@@ -579,15 +614,28 @@ export class QuizInstanceRepository implements QuizInstanceRepositoryPort {
     userId: string;
     status: (typeof quizInstancePlayerStatus.enumValues)[number];
   }): Promise<void> {
+    const nowIso = new Date().toISOString();
+    const updateData: Record<string, unknown> = { status: params.status };
+    if (params.status === 'disconnected') {
+      updateData.leftAt = nowIso;
+    }
+
     await this.db
       .update(quizInstancePlayers)
-      .set({ status: params.status })
+      .set(updateData)
       .where(
         and(
           eq(quizInstancePlayers.instanceId, params.instanceId),
           eq(quizInstancePlayers.userId, params.userId),
         ),
       );
+
+    if (params.status === 'disconnected') {
+      await this.db
+        .update(quizInstances)
+        .set({ updatedAt: nowIso })
+        .where(eq(quizInstances.instanceId, params.instanceId));
+    }
   }
 
   async getPlayerByUserAndInstance(params: {
