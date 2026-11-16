@@ -173,6 +173,13 @@ export interface QuizInstanceRepositoryPort {
     }>
   >;
 
+  findAbandonedInstances(params: { cutoffIso: string; limit: number }): Promise<
+    Array<{
+      instanceId: string;
+      version: number;
+    }>
+  >;
+
   listPlayersWithProfile(params: {
     instanceId: string;
     limit: number;

@@ -502,6 +502,67 @@ export class InstanceService {
     return { completed: true, status: 'running', startedAt: nowIso };
   }
 
+  async abandonInstanceByScheduler(params: {
+    instanceId: string;
+    expectedVersion: number;
+  }): Promise<
+    | { abandoned: true; status: 'closed'; closedAt: string }
+    | { abandoned: false; reason: 'not_found' | 'already_closed' | 'players_joined' | 'lost_lock' }
+  > {
+    const nowIso = new Date().toISOString();
+    const instance = await this.instanceRepository.getInstanceById(params.instanceId);
+
+    if (!instance) {
+      return { abandoned: false, reason: 'not_found' };
+    }
+
+    if (instance.status === 'closed' || instance.status === 'finished') {
+      return { abandoned: false, reason: 'already_closed' };
+    }
+
+    const activePlayers = await this.instanceRepository.countPlayers(params.instanceId);
+    if (activePlayers > 0) {
+      return { abandoned: false, reason: 'players_joined' };
+    }
+
+    try {
+      await this.instanceRepository.updateInstanceStatus({
+        instanceId: params.instanceId,
+        status: 'closed',
+        closedAt: nowIso,
+        countdownStartedAt: null,
+        nowIso,
+        expectedVersion: params.expectedVersion,
+      });
+    } catch (error) {
+      if (error instanceof InstanceOptimisticLockError) {
+        return { abandoned: false, reason: 'lost_lock' };
+      }
+      throw error;
+    }
+
+    this.logger.info({
+      event: 'instance_abandoned_auto_closed',
+      instanceId: params.instanceId,
+      hostUserId: instance.hostUserId,
+      closedAt: nowIso,
+    });
+
+    this.eventBus.emitInstanceClosed(
+      new InstanceClosedEvent(params.instanceId, instance.hostUserId, nowIso),
+    );
+
+    return { abandoned: true, status: 'closed', closedAt: nowIso };
+  }
+
+  async leaveInstancePlayer(params: { instanceId: string; userId: string }): Promise<void> {
+    await this.instanceRepository.updatePlayerStatus({
+      instanceId: params.instanceId,
+      userId: params.userId,
+      status: 'disconnected',
+    });
+  }
+
   static readonly COUNTDOWN_DURATION_MS = 5_000;
 
   async getLeaderboard(params: {

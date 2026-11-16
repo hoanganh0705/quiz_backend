@@ -294,7 +294,7 @@ export class InstanceApplicationService {
   }
 
   async handlePlayerLeftSocket(params: { socketId: string; instanceId: string }): Promise<void> {
-    let meta: { instanceId: string; userId: string } | null = null;
+    let meta: { instanceId: string; userId: string } | null;
     try {
       meta = await this.socketConnectionRegistry.consume(params.socketId);
     } catch (error) {
@@ -309,6 +309,21 @@ export class InstanceApplicationService {
     if (!meta) return;
 
     const nowIso = new Date().toISOString();
+
+    try {
+      await this.instanceService.leaveInstancePlayer({
+        instanceId: meta.instanceId,
+        userId: meta.userId,
+      });
+    } catch (err) {
+      this.logger.warn({
+        event: 'instance_player_disconnect_db_update_failed',
+        instanceId: meta.instanceId,
+        userId: meta.userId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+
     this.eventBus.emitPlayerDisconnected(
       new PlayerDisconnectedEvent(meta.instanceId, meta.userId, params.socketId, nowIso),
     );
@@ -496,6 +511,10 @@ export class InstanceApplicationService {
 
   private onInstanceClosed(event: InstanceClosedEvent): void {
     this.emitToRoom(event.instanceId, 'game_finished', {
+      instanceId: event.instanceId,
+      timestamp: event.timestamp.toISOString(),
+    });
+    this.emitToRoom(event.instanceId, 'instance:closed', {
       instanceId: event.instanceId,
       timestamp: event.timestamp.toISOString(),
     });

@@ -13,16 +13,25 @@ describe('InstanceApplicationService', () => {
   let mockEventBus: Partial<InstanceDomainEventBusPort>;
   let mockSocketRegistry: Partial<SocketConnectionRegistryPort>;
   let mockAttemptAppService: Partial<AttemptApplicationService>;
-  let mockLogger: PinoLogger;
+  let mockLogger: {
+    debug: jest.Mock;
+    info: jest.Mock;
+    warn: jest.Mock;
+    error: jest.Mock;
+  };
 
   beforeEach(() => {
     mockInstanceService = {
       getPlayerByUserAndInstance: jest.fn(),
       getInstanceById: jest.fn(),
+      countPlayers: jest.fn().mockResolvedValue(0),
+      notifyHostPlayerDisconnected: jest.fn().mockResolvedValue(undefined),
+      leaveInstancePlayer: jest.fn().mockResolvedValue(undefined),
     };
     mockMapper = {};
     mockEventBus = {
       emitPlayerAnswered: jest.fn(),
+      emitPlayerDisconnected: jest.fn(),
       subscribe: jest.fn().mockReturnValue(jest.fn()),
     };
     mockSocketRegistry = { consume: jest.fn() };
@@ -32,14 +41,14 @@ describe('InstanceApplicationService', () => {
       info: jest.fn(),
       warn: jest.fn(),
       error: jest.fn(),
-    } as unknown as PinoLogger;
+    };
 
     service = new InstanceApplicationService(
       mockInstanceService as InstanceService,
       mockMapper as InstanceResponseMapper,
       mockEventBus as InstanceDomainEventBusPort,
       mockSocketRegistry as SocketConnectionRegistryPort,
-      mockLogger,
+      mockLogger as unknown as PinoLogger,
       mockAttemptAppService as AttemptApplicationService,
     );
   });
@@ -149,6 +158,23 @@ describe('InstanceApplicationService', () => {
       await service.handlePlayerLeftSocket({ socketId: 'sock-1', instanceId: 'inst-1' });
 
       expect(mockEventBus.emitPlayerAnswered).not.toHaveBeenCalled();
+    });
+
+    it('marks player as disconnected and notifies host when meta is found', async () => {
+      (mockSocketRegistry.consume as jest.Mock).mockResolvedValue({
+        instanceId: 'inst-1',
+        userId: 'user-1',
+      });
+      (mockInstanceService.getInstanceById as jest.Mock).mockResolvedValue({
+        hostUserId: 'host-1',
+      });
+
+      await service.handlePlayerLeftSocket({ socketId: 'sock-1', instanceId: 'inst-1' });
+
+      expect(mockInstanceService.leaveInstancePlayer).toHaveBeenCalledWith({
+        instanceId: 'inst-1',
+        userId: 'user-1',
+      });
     });
   });
 });

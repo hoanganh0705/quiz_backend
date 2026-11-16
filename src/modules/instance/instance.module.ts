@@ -17,6 +17,7 @@ import { INSTANCE_DOMAIN_EVENT_BUS } from './domain/events/instance-domain-event
 import { InstanceAttemptEventBootstrapService } from './domain/events/instance-attempt-event-bootstrap.service';
 import { InstanceApplicationService } from './application/instance.application.service';
 import { InstanceCountdownSchedulerService } from './infrastructure/scheduler/instance-countdown-scheduler.service';
+import { InstanceAbandonmentSchedulerService } from './infrastructure/scheduler/instance-abandonment-scheduler.service';
 import { JwtModule } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 
@@ -66,6 +67,7 @@ import { ConfigService } from '@nestjs/config';
     QuizInstanceRepository,
 
     InstanceCountdownSchedulerService,
+    InstanceAbandonmentSchedulerService,
 
     RedisSocketConnectionRegistry,
 

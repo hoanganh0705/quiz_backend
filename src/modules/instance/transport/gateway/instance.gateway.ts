@@ -142,6 +142,34 @@ export class InstanceGateway implements OnGatewayConnection, OnGatewayDisconnect
     };
   }
 
+  @WsThrottle(WS_RATE_LIMITS.instanceJoin)
+  @SubscribeMessage('leave_instance')
+  async handleLeaveInstance(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: { instanceId: string },
+    @WsCurrentUser() user: JwtPayload,
+  ): Promise<{ event: string; data: Record<string, unknown> }> {
+    const { instanceId } = data;
+
+    await client.leave(instanceId);
+    await this.instanceAppService.handlePlayerLeftSocket({
+      socketId: client.id,
+      instanceId,
+    });
+
+    this.logger.info({
+      event: 'ws_player_left',
+      instanceId,
+      userId: user.sub,
+      socketId: client.id,
+    });
+
+    return {
+      event: 'left',
+      data: { instanceId },
+    };
+  }
+
   @WsThrottle(WS_RATE_LIMITS.instanceStartGame)
   @SubscribeMessage('start_game')
   async handleStartGame(
