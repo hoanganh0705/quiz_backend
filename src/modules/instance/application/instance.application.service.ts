@@ -20,7 +20,10 @@ import {
   CountdownCancelledEvent,
   CountdownCompletedEvent,
 } from '../domain/events';
-import { InstanceCountdownAlreadyStartedError } from '../domain/errors';
+import {
+  InstanceCountdownAlreadyStartedError,
+  InstanceAlreadyStartedError,
+} from '../domain/errors';
 import type { Server } from 'socket.io';
 import { InstanceResponseMapper } from '../mappers/instance-response.mapper';
 import type { LeaderboardCursorPayload } from '../domain/ports';
@@ -181,8 +184,15 @@ export class InstanceApplicationService {
     instanceId: string,
     user: JwtPayload,
   ): Promise<StartInstanceResponseDto> {
-    const result = await this.instanceService.startInstance(instanceId, user);
-    return result;
+    try {
+      const result = await this.instanceService.startInstance(instanceId, user);
+      return result;
+    } catch (error) {
+      if (error instanceof InstanceAlreadyStartedError) {
+        return { message: 'Instance already started' };
+      }
+      throw error;
+    }
   }
 
   async closeInstanceForController(
@@ -215,7 +225,19 @@ export class InstanceApplicationService {
   }): Promise<InstanceListResponseDto> {
     const result = await this.instanceService.listInstances(params);
     return {
-      items: result.rows.map((row) => this.mapper.toInstanceListItemResponse(row)),
+      items: result.rows.map((row) => {
+        let activeCount: number | undefined;
+        if (this.server) {
+          const instanceNamespace =
+            typeof this.server.of === 'function' ? this.server.of('/instances') : null;
+          const adapter = instanceNamespace?.adapter ?? this.server.sockets?.adapter;
+          if (adapter?.rooms) {
+            const room = adapter.rooms.get(row.instanceId);
+            activeCount = room ? room.size : 0;
+          }
+        }
+        return this.mapper.toInstanceListItemResponse(row, activeCount);
+      }),
       pagination: {
         limit: result.limit,
         hasNextPage: result.hasNextPage,
@@ -293,8 +315,12 @@ export class InstanceApplicationService {
     });
   }
 
-  async handlePlayerLeftSocket(params: { socketId: string; instanceId: string }): Promise<void> {
-    let meta: { instanceId: string; userId: string } | null;
+  async handlePlayerLeftSocket(params: {
+    socketId: string;
+    instanceId: string;
+    userId?: string;
+  }): Promise<void> {
+    let meta: { instanceId: string; userId: string } | null = null;
     try {
       meta = await this.socketConnectionRegistry.consume(params.socketId);
     } catch (error) {
@@ -304,31 +330,33 @@ export class InstanceApplicationService {
         instanceId: params.instanceId,
         error: error instanceof Error ? error.message : String(error),
       });
-      return;
     }
-    if (!meta) return;
+
+    const effectiveInstanceId = meta?.instanceId || params.instanceId;
+    const effectiveUserId = meta?.userId || params.userId;
+    if (!effectiveInstanceId || !effectiveUserId) return;
 
     const nowIso = new Date().toISOString();
 
     try {
       await this.instanceService.leaveInstancePlayer({
-        instanceId: meta.instanceId,
-        userId: meta.userId,
+        instanceId: effectiveInstanceId,
+        userId: effectiveUserId,
       });
     } catch (err) {
       this.logger.warn({
         event: 'instance_player_disconnect_db_update_failed',
-        instanceId: meta.instanceId,
-        userId: meta.userId,
+        instanceId: effectiveInstanceId,
+        userId: effectiveUserId,
         error: err instanceof Error ? err.message : String(err),
       });
     }
 
     this.eventBus.emitPlayerDisconnected(
-      new PlayerDisconnectedEvent(meta.instanceId, meta.userId, params.socketId, nowIso),
+      new PlayerDisconnectedEvent(effectiveInstanceId, effectiveUserId, params.socketId, nowIso),
     );
 
-    void this.notifyHostPlayerDisconnected(meta.instanceId, meta.userId);
+    void this.notifyHostPlayerDisconnected(effectiveInstanceId, effectiveUserId);
   }
 
   private async notifyHostPlayerDisconnected(
@@ -485,65 +513,105 @@ export class InstanceApplicationService {
   }
 
   private onPlayerDisconnected(event: PlayerDisconnectedEvent): void {
+    const at = event.timestamp.toISOString();
     this.emitToRoom(event.instanceId, 'player_left', {
+      instanceId: event.instanceId,
       socketId: event.socketId,
       userId: event.userId,
-      timestamp: event.timestamp.toISOString(),
+      playerId: event.userId,
+      eventSequence: Date.now(),
+      timestamp: at,
+      at,
     });
   }
 
   private onPlayerAnswered(event: PlayerAnsweredEvent): void {
+    const at = event.timestamp.toISOString();
     this.emitToRoom(event.instanceId, 'player_answered', {
+      instanceId: event.instanceId,
       userId: event.userId,
       attemptId: event.attemptId,
       questionId: event.questionId,
-      timestamp: event.timestamp.toISOString(),
+      eventSequence: Date.now(),
+      timestamp: at,
+      at,
     });
   }
 
   private onInstanceStarted(event: InstanceStartedEvent): void {
-    this.emitToRoom(event.instanceId, 'game_started', {
+    const at = event.timestamp.toISOString();
+    const payload = {
       instanceId: event.instanceId,
       startedBy: event.hostUserId,
-      timestamp: event.timestamp.toISOString(),
-    });
+      eventSequence: Date.now(),
+      timestamp: at,
+      at,
+      status: 'running',
+    };
+    this.emitToRoom(event.instanceId, 'game_started', payload);
+    this.emitToRoom(event.instanceId, 'instance:started', payload);
+    this.emitToRoom(event.instanceId, 'instance_started', payload);
   }
 
   private onInstanceClosed(event: InstanceClosedEvent): void {
-    this.emitToRoom(event.instanceId, 'game_finished', {
+    const at = event.timestamp.toISOString();
+    const payload = {
       instanceId: event.instanceId,
-      timestamp: event.timestamp.toISOString(),
-    });
-    this.emitToRoom(event.instanceId, 'instance:closed', {
-      instanceId: event.instanceId,
-      timestamp: event.timestamp.toISOString(),
-    });
+      eventSequence: Date.now(),
+      timestamp: at,
+      at,
+      status: 'closed',
+    };
+    this.emitToRoom(event.instanceId, 'game_finished', payload);
+    this.emitToRoom(event.instanceId, 'instance:closed', payload);
+    this.emitToRoom(event.instanceId, 'instance_closed', payload);
   }
 
   private onCountdownStarted(event: CountdownStartedEvent): void {
-    this.emitToRoom(event.instanceId, 'countdown_started', {
+    const at = event.timestamp.toISOString();
+    const payload = {
       instanceId: event.instanceId,
       startedBy: event.hostUserId,
       countdownStartedAt: event.countdownStartedAt,
       countdownEndsAt: event.countdownEndsAt,
-      timestamp: event.timestamp.toISOString(),
-    });
+      eventSequence: Date.now(),
+      timestamp: at,
+      at,
+      status: 'countdown',
+    };
+    this.emitToRoom(event.instanceId, 'countdown_started', payload);
+    this.emitToRoom(event.instanceId, 'countdown:started', payload);
   }
 
   private onCountdownCancelled(event: CountdownCancelledEvent): void {
-    this.emitToRoom(event.instanceId, 'countdown_cancelled', {
+    const at = event.timestamp.toISOString();
+    const payload = {
       instanceId: event.instanceId,
       cancelledBy: event.hostUserId,
       reason: event.reason,
-      timestamp: event.timestamp.toISOString(),
-    });
+      eventSequence: Date.now(),
+      timestamp: at,
+      at,
+      status: 'open',
+    };
+    this.emitToRoom(event.instanceId, 'countdown_cancelled', payload);
+    this.emitToRoom(event.instanceId, 'countdown:cancelled', payload);
   }
 
   private onCountdownCompleted(event: CountdownCompletedEvent): void {
-    this.emitToRoom(event.instanceId, 'countdown_completed', {
+    const at = event.timestamp.toISOString();
+    const payload = {
       instanceId: event.instanceId,
       startedAt: event.startedAt,
-      timestamp: event.timestamp.toISOString(),
-    });
+      eventSequence: Date.now(),
+      timestamp: at,
+      at,
+      status: 'running',
+    };
+    this.emitToRoom(event.instanceId, 'countdown_completed', payload);
+    this.emitToRoom(event.instanceId, 'countdown:completed', payload);
+    this.emitToRoom(event.instanceId, 'instance:started', payload);
+    this.emitToRoom(event.instanceId, 'game_started', payload);
+    this.emitToRoom(event.instanceId, 'instance_started', payload);
   }
 }

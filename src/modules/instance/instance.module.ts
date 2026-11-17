@@ -18,6 +18,7 @@ import { InstanceAttemptEventBootstrapService } from './domain/events/instance-a
 import { InstanceApplicationService } from './application/instance.application.service';
 import { InstanceCountdownSchedulerService } from './infrastructure/scheduler/instance-countdown-scheduler.service';
 import { InstanceAbandonmentSchedulerService } from './infrastructure/scheduler/instance-abandonment-scheduler.service';
+import { WsJwtGuard } from '@/common/guards/ws-jwt.guard';
 import { JwtModule } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 
@@ -62,6 +63,7 @@ import { ConfigService } from '@nestjs/config';
     InstancePresenter,
 
     WsExceptionFilter,
+    WsJwtGuard,
 
     // Repository
     QuizInstanceRepository,

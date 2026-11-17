@@ -19,6 +19,7 @@ import type { JwtPayload } from '@/common/guards/jwt.guard';
 import { WsExceptionFilter } from '../filters/ws-exception.filter';
 import { resolveWsCorsOrigins } from '@/common/utils/ws-cors.util';
 import { InstanceApplicationService } from '../../application/instance.application.service';
+import { PlayerAlreadyJoinedError } from '../../domain/errors';
 const ERR_NOT_HOST = { code: 'NOT_HOST', message: 'Only the host can perform this action' };
 const ERR_FORBIDDEN = { code: 'FORBIDDEN', message: 'You do not have permission for this action' };
 
@@ -37,12 +38,26 @@ export class InstanceGateway implements OnGatewayConnection, OnGatewayDisconnect
 
   constructor(
     private readonly instanceAppService: InstanceApplicationService,
+    private readonly wsJwtGuard: WsJwtGuard,
     @InjectPinoLogger(InstanceGateway.name)
     private readonly logger: PinoLogger,
   ) {}
 
   afterInit(): void {
     this.instanceAppService.setServer(this.server);
+    this.server.use(async (socket, next) => {
+      try {
+        const user = await this.wsJwtGuard.authenticate(socket);
+        if (user?.sub) {
+          (socket as AuthenticatedSocket).user = user;
+          next();
+        } else {
+          next(new Error('Unauthorized'));
+        }
+      } catch (err) {
+        next(err instanceof Error ? err : new Error('Unauthorized'));
+      }
+    });
   }
 
   private async isHostCached(
@@ -60,8 +75,15 @@ export class InstanceGateway implements OnGatewayConnection, OnGatewayDisconnect
     return fresh;
   }
 
-  handleConnection(client: Socket): void {
+  async handleConnection(client: Socket): Promise<void> {
     const authClient = client as AuthenticatedSocket;
+    if (!authClient.user?.sub) {
+      const authenticatedUser = await this.wsJwtGuard.authenticate(client);
+      if (authenticatedUser) {
+        authClient.user = authenticatedUser;
+      }
+    }
+
     const user = authClient.user;
     if (!user?.sub) {
       this.logger.info({
@@ -78,18 +100,19 @@ export class InstanceGateway implements OnGatewayConnection, OnGatewayDisconnect
   handleDisconnect(client: Socket): void {
     this.logger.info({ event: 'client_disconnected', socketId: client.id });
 
+    const authClient = client as AuthenticatedSocket;
     const rooms = Array.from(client.rooms).filter((r) => r !== client.id);
-    void Promise.allSettled(
-      rooms.map((roomId) =>
-        Promise.allSettled([
-          client.leave(roomId),
-          this.instanceAppService.handlePlayerLeftSocket({
-            socketId: client.id,
-            instanceId: roomId,
-          }),
-        ]),
-      ),
-    ).then((settled) => {
+    const instanceId = client.data.instanceId ?? (rooms.length > 0 ? rooms[0] : '');
+    const userId = authClient.user?.sub;
+
+    void Promise.allSettled([
+      ...rooms.map((roomId) => client.leave(roomId)),
+      this.instanceAppService.handlePlayerLeftSocket({
+        socketId: client.id,
+        instanceId,
+        userId,
+      }),
+    ]).then((settled) => {
       const rejected = settled.flatMap((entry) =>
         entry.status === 'rejected' ? [entry.reason] : [],
       );
@@ -114,9 +137,21 @@ export class InstanceGateway implements OnGatewayConnection, OnGatewayDisconnect
     const { instanceId } = data;
 
     await client.join(instanceId);
+    client.data.instanceId = instanceId;
     this.instanceAppService.handlePlayerJoinedSocket({ socketId: client.id, instanceId, user });
 
-    await this.instanceAppService.joinInstance(instanceId, user);
+    try {
+      await this.instanceAppService.joinInstance(instanceId, user);
+    } catch (err) {
+      if (!(err instanceof PlayerAlreadyJoinedError)) {
+        this.logger.warn({
+          event: 'ws_join_instance_warning',
+          instanceId,
+          userId: user.sub,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
 
     const result = await this.instanceAppService.handleJoinInstanceSocket(instanceId, user);
     const isHost = await this.instanceAppService.handleStartGameSocket(instanceId, user);
@@ -152,9 +187,13 @@ export class InstanceGateway implements OnGatewayConnection, OnGatewayDisconnect
     const { instanceId } = data;
 
     await client.leave(instanceId);
+    if (client.data.instanceId === instanceId) {
+      delete client.data.instanceId;
+    }
     await this.instanceAppService.handlePlayerLeftSocket({
       socketId: client.id,
       instanceId,
+      userId: user.sub,
     });
 
     this.logger.info({

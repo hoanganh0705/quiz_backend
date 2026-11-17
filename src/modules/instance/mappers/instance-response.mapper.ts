@@ -35,13 +35,17 @@ export class InstanceResponseMapper {
       quizSlug: row.quizSlug,
       createdAt: row.createdAt,
       startedAt: row.startedAt,
+      countdownStartedAt: row.countdownStartedAt ?? null,
       closedAt: row.closedAt,
       updatedAt: row.updatedAt,
       players,
     };
   }
 
-  toInstanceListItemResponse(row: QuizInstanceListRow): InstanceListItemDto {
+  toInstanceListItemResponse(
+    row: QuizInstanceListRow,
+    realTimeCount?: number,
+  ): InstanceListItemDto {
     return {
       instanceId: row.instanceId,
       hostUserId: row.hostUserId,
@@ -54,7 +58,7 @@ export class InstanceResponseMapper {
       quizId: row.quizId,
       quizTitle: row.quizTitle,
       quizSlug: row.quizSlug,
-      playerCount: row.playerCount,
+      playerCount: typeof realTimeCount === 'number' ? realTimeCount : row.playerCount,
       createdAt: row.createdAt,
     };
   }
