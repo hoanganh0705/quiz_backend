@@ -24,11 +24,22 @@ export class WsJwtGuard implements CanActivate {
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const client: AuthenticatedSocket = context.switchToWs().getClient();
-    const token = this.extractToken(client);
-
-    if (!token) {
-      throw new UnauthorizedException('WebSocket authentication token is missing');
+    if (client.user?.sub && isUserRole(client.user.role)) {
+      return true;
     }
+
+    const payload = await this.authenticate(client);
+    if (!payload) {
+      throw new UnauthorizedException('WebSocket authentication token is missing or invalid');
+    }
+
+    client.user = payload;
+    return true;
+  }
+
+  async authenticate(client: Socket): Promise<JwtPayload | null> {
+    const token = this.extractToken(client);
+    if (!token) return null;
 
     try {
       const payload = await this.jwtService.verifyAsync<JwtPayload>(token, {
@@ -38,13 +49,12 @@ export class WsJwtGuard implements CanActivate {
       });
 
       if (!payload?.sub || !isUserRole(payload.role)) {
-        throw new UnauthorizedException('Invalid access token payload');
+        return null;
       }
 
-      client.user = payload;
-      return true;
+      return payload;
     } catch {
-      throw new UnauthorizedException('Invalid or expired access token');
+      return null;
     }
   }
 
@@ -56,6 +66,12 @@ export class WsJwtGuard implements CanActivate {
     if (authHeader) {
       const [scheme, token] = authHeader.trim().split(/\s+/);
       if (scheme === 'Bearer' && token) return token;
+    }
+
+    const cookieHeader = client.handshake.headers.cookie;
+    if (cookieHeader) {
+      const match = cookieHeader.match(/(?:^|;\s*)auth_token=([^;]*)/);
+      if (match) return decodeURIComponent(match[1]);
     }
 
     return null;

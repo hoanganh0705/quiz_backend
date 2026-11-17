@@ -85,6 +85,14 @@ export class InstanceDetailResponseDto {
   startedAt!: string | null;
 
   @ApiPropertyOptional({
+    description: 'Countdown start timestamp (ISO 8601)',
+    type: String,
+    example: '2025-06-01T12:05:00.000Z',
+    nullable: true,
+  })
+  countdownStartedAt!: string | null;
+
+  @ApiPropertyOptional({
     description: 'Close timestamp (ISO 8601)',
     type: String,
     example: '2025-06-01T12:30:00.000Z',

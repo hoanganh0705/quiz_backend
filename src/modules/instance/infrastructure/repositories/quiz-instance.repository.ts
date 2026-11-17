@@ -398,7 +398,10 @@ export class QuizInstanceRepository implements QuizInstanceRepositoryPort {
       );
 
       const [existing] = await db
-        .select({ instancePlayerId: quizInstancePlayers.instancePlayerId })
+        .select({
+          instancePlayerId: quizInstancePlayers.instancePlayerId,
+          status: quizInstancePlayers.status,
+        })
         .from(quizInstancePlayers)
         .where(
           and(
@@ -409,6 +412,30 @@ export class QuizInstanceRepository implements QuizInstanceRepositoryPort {
         .limit(1);
 
       if (existing) {
+        if (existing.status === 'disconnected') {
+          const [rejoined] = await db
+            .update(quizInstancePlayers)
+            .set({
+              status: 'joined',
+              joinedAt: params.nowIso,
+              leftAt: null,
+            })
+            .where(eq(quizInstancePlayers.instancePlayerId, existing.instancePlayerId))
+            .returning({
+              instancePlayerId: quizInstancePlayers.instancePlayerId,
+              instanceId: quizInstancePlayers.instanceId,
+              userId: quizInstancePlayers.userId,
+              attemptId: quizInstancePlayers.attemptId,
+              status: quizInstancePlayers.status,
+              joinedAt: quizInstancePlayers.joinedAt,
+              leftAt: quizInstancePlayers.leftAt,
+            });
+          return {
+            joined: true,
+            player:
+              rejoined as unknown as import('@/modules/instance/domain/ports').QuizInstancePlayerRow,
+          };
+        }
         return { joined: false };
       }
 
@@ -740,7 +767,10 @@ export class QuizInstanceRepository implements QuizInstanceRepositoryPort {
     items: import('@/modules/instance/domain/ports').InstancePlayerWithProfile[];
     hasNextPage: boolean;
   }> {
-    const conditions = [eq(quizInstancePlayers.instanceId, params.instanceId)];
+    const conditions = [
+      eq(quizInstancePlayers.instanceId, params.instanceId),
+      eq(quizInstancePlayers.status, 'joined'),
+    ];
 
     if (params.cursor) {
       // Cursor = last `(joinedAt, instancePlayerId)` of the previous page.

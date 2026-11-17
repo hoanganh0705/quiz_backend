@@ -36,6 +36,7 @@ import {
   InstanceNotInCountdownError,
   InstanceCountdownAlreadyStartedError,
 } from './errors';
+export { PlayerAlreadyJoinedError } from './errors';
 import {
   InstanceCreatedEvent,
   PlayerJoinedEvent,
@@ -296,7 +297,16 @@ export class InstanceService {
     return { message: 'Instance closed' };
   }
 
-  static readonly MIN_PLAYERS_PER_INSTANCE = 2;
+  static get MIN_PLAYERS_PER_INSTANCE(): number {
+    const override = process.env['INSTANCE_MIN_PLAYERS']?.trim();
+    if (override) {
+      const parsed = parseInt(override, 10);
+      if (!Number.isNaN(parsed) && parsed > 0) {
+        return parsed;
+      }
+    }
+    return process.env['NODE_ENV'] === 'production' ? 2 : 1;
+  }
 
   async startCountdown(
     instanceId: string,
