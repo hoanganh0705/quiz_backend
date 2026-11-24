@@ -89,7 +89,7 @@ import { UserModule } from '@/modules/user/user.module';
     CommentGateway,
     CommentWebSocketListener,
   ],
-  controllers: [CommentController, QuizCommentController, UserCommentController, ReportController],
+  controllers: [ReportController, CommentController, QuizCommentController, UserCommentController],
   exports: [
     CommentApplicationService,
     COMMENT_DOMAIN_EVENT_BUS,

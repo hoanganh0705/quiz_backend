@@ -85,12 +85,14 @@ export class AuthLoginService {
     const sessionId = this.idGenerator.generate();
     const tokens = await this.tokenService.issueTokens(identity, sessionId);
 
+    const rememberMe = Boolean(loginCommand.rememberMe);
     await this.sessionService.createSession(
       identity.userId,
       tokens.refreshToken,
       tokens.refreshTokenJti,
       context,
       sessionId,
+      rememberMe,
     );
 
     return {
@@ -100,6 +102,7 @@ export class AuthLoginService {
       accessToken: tokens.accessToken,
       refreshToken: tokens.refreshToken,
       sessionId,
+      rememberMe,
     };
   }
 }

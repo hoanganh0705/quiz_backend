@@ -161,4 +161,68 @@ describe('InstanceAbandonmentSchedulerService — 5-minute TTL and abandonment e
       }),
     );
   });
+
+  it('disconnects ghost players when instanceAppService reports 0 active sockets', async () => {
+    const repo = {
+      findAbandonedInstances: jest.fn().mockResolvedValue([{ instanceId: 'inst-ghost', version: 1 }]),
+      disconnectPlayersByInstance: jest.fn().mockResolvedValue(undefined),
+    } as unknown as QuizInstanceRepositoryPort;
+    const instanceService = {
+      abandonInstanceByScheduler: jest.fn().mockResolvedValue({
+        abandoned: true,
+        status: 'closed',
+        closedAt: new Date().toISOString(),
+      }),
+    };
+    const mockAppService = {
+      getActiveRoomSocketCount: jest.fn().mockReturnValue(0),
+    };
+    const logger = {
+      info: jest.fn(),
+      debug: jest.fn(),
+      warn: jest.fn(),
+      error: jest.fn(),
+    };
+
+    const svc = new InstanceAbandonmentSchedulerService(
+      instanceService as any,
+      repo,
+      logger as any,
+      mockAppService as any,
+    );
+
+    await svc.handleAbandonedInstances();
+
+    expect(mockAppService.getActiveRoomSocketCount).toHaveBeenCalledWith('inst-ghost');
+    expect(repo.disconnectPlayersByInstance).toHaveBeenCalledWith('inst-ghost');
+    expect(instanceService.abandonInstanceByScheduler).toHaveBeenCalledWith({
+      instanceId: 'inst-ghost',
+      expectedVersion: 1,
+    });
+  });
+
+  it('runs handleAbandonedInstances on onModuleInit', async () => {
+    const repo = {
+      findAbandonedInstances: jest.fn().mockResolvedValue([]),
+    } as unknown as QuizInstanceRepositoryPort;
+    const instanceService = {
+      abandonInstanceByScheduler: jest.fn(),
+    };
+    const logger = {
+      info: jest.fn(),
+      debug: jest.fn(),
+      warn: jest.fn(),
+      error: jest.fn(),
+    };
+
+    const svc = new InstanceAbandonmentSchedulerService(
+      instanceService as any,
+      repo,
+      logger as any,
+    );
+
+    await svc.onModuleInit();
+
+    expect(repo.findAbandonedInstances).toHaveBeenCalled();
+  });
 });

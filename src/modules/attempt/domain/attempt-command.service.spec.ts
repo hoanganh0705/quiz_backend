@@ -47,7 +47,7 @@ function makeAttemptRepository(completeImpl: () => Promise<unknown>): AttemptRep
 
 function makeAnswerRepository(): AttemptAnswerRepositoryPort {
   return {
-    countQuestionsByVersionId: jest.fn(),
+    countQuestionsByVersionId: jest.fn().mockResolvedValue(5),
     getAttemptAnswerScoringData: jest.fn().mockResolvedValue(baseScoringData),
     submitAnswer: jest.fn(),
     checkQuestionBelongsToVersion: jest.fn(),

@@ -285,12 +285,20 @@ export class AttemptCommandService {
 
     assertAttemptTransition(attemptDetail.status, 'completed');
 
-    const scoringData = await this.attemptAnswerRepository.getAttemptAnswerScoringData(attemptId);
+    const [scoringData, questionCount] = await Promise.all([
+      this.attemptAnswerRepository.getAttemptAnswerScoringData(attemptId),
+      this.attemptAnswerRepository.countQuestionsByVersionId(attemptDetail.quizVersionId),
+    ]);
+
+    const totalQuestions =
+      typeof questionCount === 'number' && questionCount > 0
+        ? questionCount
+        : scoringData.totalAnswers;
 
     const timeTakenMs = AttemptScoringService.calculateTimeTakenMs(attemptDetail.startedAt, nowIso);
     const scorePercent = AttemptScoringService.calculateScorePercent(
       scoringData.correctCount,
-      scoringData.totalAnswers,
+      totalQuestions,
     );
     const xpEarned = AttemptScoringService.calculateXpEarned(
       scorePercent,
@@ -322,7 +330,7 @@ export class AttemptCommandService {
       userId: attemptDetail.userId,
       quizId: attemptDetail.quizId,
       correctCount: scoringData.correctCount,
-      totalQuestions: scoringData.totalAnswers,
+      totalQuestions,
       scorePercent,
       xpEarned,
       passed: xpEarned > 0,
@@ -336,7 +344,7 @@ export class AttemptCommandService {
         attemptDetail.quizVersionId,
         scorePercent,
         scoringData.correctCount,
-        scoringData.totalAnswers,
+        totalQuestions,
         timeTakenMs,
         xpEarned,
         nowIso,

@@ -48,5 +48,5 @@ Database operations that span multiple repositories or involve both writes and e
 - `src/modules/notification/transport/controller/notification.controller.ts` — multiple `@Transactional()` on write handlers.
 - `src/modules/auth/infrastructure/transaction/transactional.interceptor.ts` — auth-specific `TransactionalInterceptor` bound in `AuthModule`.
 - `src/modules/category/infrastructure/repositories/category.repository.ts` — `softDelete` calls `TransactionalContext.withTransaction(tx, ...)` for cascade operations.
-- `docs/PROJECT_CONSTITUTION.md` §5.5 — explicit `@Transactional()` boundary policy.
+- `docs/standards/database.md` — explicit `@Transactional()` boundary policy.
 - `docs/architecture/persistence-flow.md` — `@Transactional()` + `AsyncLocalStorage` transaction management diagram.

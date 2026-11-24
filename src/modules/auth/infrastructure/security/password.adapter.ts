@@ -6,7 +6,7 @@ const DUMMY_PASSWORD = 'unused-placeholder-for-timing-attack-mitigation';
 
 @Injectable()
 export class PasswordAdapter implements PasswordProvider {
-  private static readonly BCRYPT_ROUNDS = 12;
+  private static readonly BCRYPT_ROUNDS = Number(process.env.BCRYPT_ROUNDS) || 12;
   private dummyHashCache: { value: string } | null = null;
 
   async hash(password: string): Promise<string> {

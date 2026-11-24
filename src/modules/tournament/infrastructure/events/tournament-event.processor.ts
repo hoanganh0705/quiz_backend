@@ -7,7 +7,7 @@ import {
 } from './bullmq-tournament-event-bus.service';
 import { TOURNAMENT_QUEUE_TOKENS } from '../../domain/ports';
 import { correlationIdStorage, createCorrelationId } from '@/common/interceptors/correlation-id';
-import { sessionsConfig, tournamentFlagsConfig, type TournamentFlagsConfig } from '@/core/config';
+import { sessionsConfig } from '@/core/config';
 
 /**
  * BullMQ Worker that re-dispatches tournament domain events from the shared
@@ -45,8 +45,6 @@ export class TournamentEventProcessor implements OnModuleInit, OnModuleDestroy {
     @Inject(TOURNAMENT_QUEUE_TOKENS.CONNECTION)
     private readonly connection: ConnectionOptions | undefined,
     @Inject(sessionsConfig.KEY) private readonly sessions,
-    @Inject(tournamentFlagsConfig.KEY)
-    private readonly flags: TournamentFlagsConfig,
     @InjectPinoLogger(TournamentEventProcessor.name)
     private readonly logger: PinoLogger,
   ) {
@@ -54,14 +52,6 @@ export class TournamentEventProcessor implements OnModuleInit, OnModuleDestroy {
   }
 
   onModuleInit(): void {
-    if (this.flags.tournamentBullMqDisable) {
-      this.logger.info({
-        event: 'tournament_event_processor_disabled',
-        reason: 'TOURNAMENT_BULLMQ_DISABLE=true',
-      });
-      return;
-    }
-
     if (!this.connection) {
       this.logger.info({
         event: 'tournament_event_processor_skipped',

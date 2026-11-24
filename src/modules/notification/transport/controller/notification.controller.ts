@@ -302,6 +302,24 @@ export class NotificationController {
     await this.notificationService.deleteReadNotifications(user);
   }
 
+  @Delete('all')
+  @Transactional()
+  @Throttle({ default: NOTIFICATION_THROTTLE_VALUES.deleteReadNotifications })
+  @ApiAuthActionNoContent('All notifications deleted')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async deleteAllNotificationsPath(@CurrentUser() user: JwtPayload): Promise<void> {
+    await this.notificationService.deleteAllNotifications(user);
+  }
+
+  @Delete()
+  @Transactional()
+  @Throttle({ default: NOTIFICATION_THROTTLE_VALUES.deleteReadNotifications })
+  @ApiAuthActionNoContent('All notifications deleted')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async deleteAllNotifications(@CurrentUser() user: JwtPayload): Promise<void> {
+    await this.notificationService.deleteAllNotifications(user);
+  }
+
   @Delete(':notificationId')
   @Transactional()
   @Throttle({ default: NOTIFICATION_THROTTLE_VALUES.deleteNotification })

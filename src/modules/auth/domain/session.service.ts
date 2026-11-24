@@ -80,8 +80,11 @@ export class SessionService implements OnModuleInit, OnModuleDestroy {
     this.denied.clear();
   }
 
-  private getRefreshTokenExpiresAtIso(): string {
-    return new Date(Date.now() + this.sessionConfig.refreshSessionTtlMs).toISOString();
+  private getRefreshTokenExpiresAtIso(rememberMe: boolean = false): string {
+    const ttlMs = rememberMe
+      ? 30 * 24 * 60 * 60 * 1000 // 30 days
+      : 24 * 60 * 60 * 1000; // 1 day
+    return new Date(Date.now() + ttlMs).toISOString();
   }
 
   private getNowIso(): string {
@@ -160,9 +163,10 @@ export class SessionService implements OnModuleInit, OnModuleDestroy {
     refreshTokenJti: string,
     context: SessionRequestContext,
     explicitSessionId?: string,
+    rememberMe: boolean = false,
   ): Promise<string> {
     const refreshTokenHash = this.cryptoService.hashSha256(refreshToken);
-    const expiresAt = this.getRefreshTokenExpiresAtIso();
+    const expiresAt = this.getRefreshTokenExpiresAtIso(rememberMe);
     const nowIso = this.getNowIso();
 
     return this.userSessionRepository.createSessionWithActiveLimit(
@@ -222,9 +226,10 @@ export class SessionService implements OnModuleInit, OnModuleDestroy {
     tokens: AuthTokens,
     context: SessionRequestContext,
     nowIso: string,
+    rememberMe: boolean = false,
   ): Promise<void> {
     const nextRefreshTokenHash = this.cryptoService.hashSha256(tokens.refreshToken);
-    const expiresAt = this.getRefreshTokenExpiresAtIso();
+    const expiresAt = this.getRefreshTokenExpiresAtIso(rememberMe);
 
     // Uses rotateSessionWithLock which holds pg_advisory_xact_lock(hashtext(sessionId))
     // for the duration of the transaction — preventing concurrent refresh requests for

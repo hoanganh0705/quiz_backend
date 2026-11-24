@@ -12,7 +12,7 @@ ADR-0004 established cursor pagination as the default for list endpoints. It des
 
 2. **Pagination hygiene.** Offset-based queries (`OFFSET n`) were observed leaking into new endpoints despite the ADR rule. The root cause was ambiguity: the rule said "cursor pagination is the default" but did not name a single utility that endpoints must call, leaving authors to reach for the familiar `skip`/`take` pattern.
 
-We need to tighten the rule to name the exact utility to use, specify that composite cursors must encode all sort columns, and add a lint rule (ADR-0028) to enforce the default.
+We need to tighten the rule to name the exact utility to use, specify that composite cursors must encode all sort columns, and enforce cursor pagination through architecture standards and lint rules.
 
 ## Decision
 

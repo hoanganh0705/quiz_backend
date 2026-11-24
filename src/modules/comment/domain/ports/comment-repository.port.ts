@@ -20,6 +20,10 @@
  * scheduler entry point.
  */
 
+import type { NodePgQueryResultHKT } from 'drizzle-orm/node-postgres';
+import type { PgTransaction } from 'drizzle-orm/pg-core';
+
+import type { AuthorView } from '../types';
 import type {
   CommentView,
   CommentWithRepliesView,
@@ -32,12 +36,8 @@ import type {
   ReviewReportParams,
   VoteValue,
 } from '../types';
-import type { AuthorView } from '../types';
 
 export const COMMENT_REPOSITORY_PORT = Symbol('COMMENT_REPOSITORY_PORT');
-
-import type { NodePgQueryResultHKT } from 'drizzle-orm/node-postgres';
-import type { PgTransaction } from 'drizzle-orm/pg-core';
 
 export type CommentTx = PgTransaction<
   NodePgQueryResultHKT,

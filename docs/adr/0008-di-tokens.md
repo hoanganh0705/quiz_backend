@@ -53,4 +53,4 @@ constructor(
 - `src/modules/tag/domain/ports/tag-domain-event.port.ts` — `TAG_DOMAIN_EVENT_BUS = Symbol('TAG_DOMAIN_EVENT_BUS')`.
 - `src/modules/auth/domain/ports/user-repository.port.ts` — `USER_REPOSITORY = Symbol('USER_REPOSITORY')`.
 - `src/modules/tag/tag.module.ts` — binding pattern `{ provide: TAG_REPOSITORY, useClass: TagRepositoryImpl }`.
-- `docs/PROJECT_CONSTITUTION.md` §1.1 (Explicit over implicit) — Named Symbol tokens for port interfaces; §2.1 (Dependency direction).
+- `docs/standards/architecture.md` — Named Symbol tokens for port interfaces and dependency direction.

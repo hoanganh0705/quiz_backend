@@ -4,10 +4,20 @@ import { logger } from './infrastructure/seed-logger';
 import { recorder, writeSeedRecord } from './infrastructure/seed-recorder';
 import type { SeedSummary } from './infrastructure/types';
 
-import { runUsersSeed, runCategoriesSeed, runTagsSeed, runBadgesSeed } from './foundation';
+import {
+  runUsersSeed,
+  runUserProfilesSeed,
+  runCategoriesSeed,
+  runTagsSeed,
+  runBadgesSeed,
+} from './foundation';
 
 import {
   runQuizSeed,
+  runAttemptSeed,
+  runWalletSeed,
+  runSocialSeed,
+  runDailyChallengeSeed,
   runBookmarkSeed,
   runReviewSeed,
   runCommentSeed,
@@ -32,9 +42,10 @@ const runFoundation = async (): Promise<void> => {
   let summaries: SeedSummary[] = [];
   await logger.group('Foundation seeds', async () => {
     const results: SeedSummary[] = [];
-    // Order: badges (no FK deps) → users (needed by quiz/attempt seeds) → categories/tags
+    // Order: badges (no FK deps) → users (needed by quiz/attempt seeds) → user profiles → categories/tags
     results.push(await runBadgesSeed());
     results.push(await runUsersSeed());
+    results.push(await runUserProfilesSeed());
     results.push(await runCategoriesSeed());
     results.push(await runTagsSeed());
     summaries = results;
@@ -51,8 +62,12 @@ const runDevelopment = async (): Promise<void> => {
   let summaries: SeedSummary[] = [];
   await logger.group('Development seeds', async () => {
     const results: SeedSummary[] = [];
-    // Order: quizzes (base) → ranking (sets xp on user_ranking) → earned badges → notifications → reviews/comments/bookmarks
+    // Order: quizzes (base) → attempts → wallets → social → daily challenge → ranking → earned badges → notifications → reviews/comments/bookmarks
     results.push(...(await runQuizSeed()));
+    results.push(...(await runAttemptSeed()));
+    results.push(...(await runWalletSeed()));
+    results.push(...(await runSocialSeed()));
+    results.push(...(await runDailyChallengeSeed()));
     results.push(...(await runRankingSeed()));
     results.push(...(await runUserBadgeSeed()));
     results.push(...(await runNotificationSeed()));

@@ -5,16 +5,16 @@
 
 ## Purpose
 
-Defines what reviewers MUST expect from a PR, what MUST block a merge, and the reviewer-side expectations so that changes stay aligned with `PROJECT_CONSTITUTION.md` and the engineering standards under `docs/standards/`.
+Defines what reviewers MUST expect from a PR, what MUST block a merge, and the reviewer-side expectations so that changes stay aligned with the architecture standards and ADRs under `docs/`.
 
 ## Scope
 
-Applies to any PR that touches `src/`, `test/`, `docs/standards/`, `docs/PROJECT_CONSTITUTION.md`, `docs/generated/openapi.json`, or `src/core/database/migrations/`.
+Applies to any PR that touches `src/`, `test/`, `docs/standards/`, `docs/adr/`, `docs/generated/openapi.json`, or `src/core/database/migrations/`.
 
 ## Source of Truth
 
-- `docs/PROJECT_CONSTITUTION.md`
 - `docs/standards/*.md`
+- `docs/adr/*.md`
 - `package.json` scripts (`lint`, `test`, `test:e2e`, `db:generate`, `generate:openapi`)
 - `src/app.module.ts`, `src/main.ts`, `src/core/`, `src/common/`, representative module `src/modules/tag/`
 - `src/commands/outbox.ts`
@@ -44,7 +44,7 @@ Applies to any PR that touches `src/`, `test/`, `docs/standards/`, `docs/PROJECT
 
 ### Prohibited changes
 
-These MUST block a PR. See `docs/PROJECT_CONSTITUTION.md` §8.7 for the full list. Highlights:
+These MUST block a PR. See `docs/standards/architecture.md` § "What MUST NOT be introduced" for details. Highlights:
 
 - Reaching across module boundaries to call another module's `domain/`, `infrastructure/`, or `transport/` directly.
 - Bypassing the global `GlobalExceptionFilter` to return a custom error envelope.
@@ -102,7 +102,6 @@ These MUST block a PR. See `docs/PROJECT_CONSTITUTION.md` §8.7 for the full lis
 
 ### Documentation
 
-- A PR that modifies `PROJECT_CONSTITUTION.md` MUST be approved by a project maintainer (the constitution is the top of the standards hierarchy).
 - A PR that adds a new standard under `docs/standards/` MUST follow the section template (Purpose, Scope, Source of Truth, Rules, Examples, Non-goals, Future considerations).
 - A PR that adds a new rule to an existing standard MUST keep the rule normative (`MUST`/`SHOULD`/`MUST NOT`) and MUST cite the source of evidence in the rule itself or in the `Examples` block.
 
@@ -110,7 +109,7 @@ These MUST block a PR. See `docs/PROJECT_CONSTITUTION.md` §8.7 for the full lis
 
 A reviewer SHOULD use this checklist before merging:
 
-1. Constitution and standards followed.
+1. Architecture and engineering standards followed.
 2. `pnpm lint`, `pnpm test`, `pnpm test:e2e` green.
 3. `pnpm generate:openapi` re-run, artifact committed (when applicable).
 4. Drizzle schema and migration both updated (when applicable).
@@ -147,7 +146,7 @@ Title: feat(tag): add user-followed-tags controller
 
 - Style nits that ESLint/Prettier can automate — defer to tooling.
 - Personal preference disputes that have no bearing on the constitution or standards.
-- Reviewing documentation outside `docs/standards/` and `docs/PROJECT_CONSTITUTION.md` unless the PR explicitly touches them.
+- Reviewing documentation outside `docs/standards/` and `docs/adr/` unless the PR explicitly touches them.
 
 ## Future considerations
 

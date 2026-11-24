@@ -1,3 +1,5 @@
+import { TournamentStatsRepository } from './tournament-stats.repository';
+
 type CapturedStmt = { text: string };
 
 function makeMockDb() {
@@ -36,8 +38,6 @@ function makeMockDb() {
   };
   return { db: db as unknown as object, statements, txStatements };
 }
-
-import { TournamentStatsRepository } from './tournament-stats.repository';
 
 function makeRepo(db: object) {
   return new TournamentStatsRepository(db as never);

@@ -1,3 +1,8 @@
+import type { SessionManagementService } from '../domain/session-management.service';
+import type { LoginResponseDto } from '../dto/response/login-response.dto';
+import type { RefreshTokenResponseDto } from '../dto/response/refresh-token-response.dto';
+import type { SessionListResponseDto } from '../dto/response/session-management.dto';
+
 export type RegisterResult = {
   message: string;
 };
@@ -13,11 +18,13 @@ export type LoginResult = {
   accessToken: string;
   refreshToken: string;
   sessionId: string;
+  rememberMe?: boolean;
 };
 
 export type RefreshTokenResult = {
   accessToken: string;
   refreshToken: string;
+  rememberMe?: boolean;
 };
 
 export type ForgotPasswordResult = {
@@ -73,20 +80,17 @@ export type CurrentUserResult = {
 // the application file does not need to be the import source for every
 // consumer of its return shape.
 
-import type { LoginResponseDto } from '../dto/response/login-response.dto';
-import type { RefreshTokenResponseDto } from '../dto/response/refresh-token-response.dto';
-import type { SessionListResponseDto } from '../dto/response/session-management.dto';
-import type { SessionManagementService } from '../domain/session-management.service';
-
 export type LoginApplicationResult = {
   response: LoginResponseDto;
   refreshToken: string;
   sessionId: string;
+  rememberMe?: boolean;
 };
 
 export type RefreshTokenApplicationResult = {
   response: RefreshTokenResponseDto;
   refreshToken: string;
+  rememberMe?: boolean;
 };
 
 export type SessionResponse = SessionListResponseDto['sessions'][number];

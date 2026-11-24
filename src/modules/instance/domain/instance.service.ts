@@ -36,7 +36,6 @@ import {
   InstanceNotInCountdownError,
   InstanceCountdownAlreadyStartedError,
 } from './errors';
-export { PlayerAlreadyJoinedError } from './errors';
 import {
   InstanceCreatedEvent,
   PlayerJoinedEvent,
@@ -50,6 +49,8 @@ import {
   INSTANCE_NOTIFICATION_PORT,
   type InstanceNotificationPort,
 } from '@/modules/notification/domain/ports';
+
+export { PlayerAlreadyJoinedError } from './errors';
 
 @Injectable()
 export class InstanceService {
@@ -135,6 +136,12 @@ export class InstanceService {
 
     if (instance.status !== 'open') {
       throw new InstanceNotOpenError(INSTANCE_NOT_OPEN_MESSAGE);
+    }
+
+    const hostPlayer = await this.instanceRepository.getPlayer(instanceId, instance.hostUserId);
+    if (!hostPlayer || hostPlayer.status === 'disconnected') {
+      await this.eliminateInstance(instanceId, instance.hostUserId);
+      throw new InstanceAlreadyClosedError('The host has left this room');
     }
 
     try {
@@ -573,6 +580,10 @@ export class InstanceService {
     });
   }
 
+  async disconnectPlayersByInstance(instanceId: string): Promise<void> {
+    await this.instanceRepository.disconnectPlayersByInstance(instanceId);
+  }
+
   static readonly COUNTDOWN_DURATION_MS = 5_000;
 
   async getLeaderboard(params: {
@@ -618,6 +629,51 @@ export class InstanceService {
   async isHost(instanceId: string, userId: string): Promise<boolean> {
     const instance = await this.instanceRepository.getInstanceById(instanceId);
     return instance?.hostUserId === userId;
+  }
+
+  async getPlayerWithProfile(
+    instanceId: string,
+    userId: string,
+  ): Promise<import('./ports').InstancePlayerWithProfile | null> {
+    return this.instanceRepository.getPlayerWithProfile(instanceId, userId);
+  }
+
+  async eliminateInstance(instanceId: string, hostUserId: string): Promise<void> {
+    const nowIso = new Date().toISOString();
+    const instance = await this.instanceRepository.getInstanceById(instanceId);
+    if (!instance || instance.status === 'closed' || instance.status === 'finished') {
+      return;
+    }
+    await this.instanceRepository.disconnectPlayersByInstance(instanceId);
+    try {
+      await this.instanceRepository.updateInstanceStatus({
+        instanceId,
+        status: 'closed',
+        closedAt: nowIso,
+        countdownStartedAt: null,
+        nowIso,
+        expectedVersion: instance.version,
+      });
+    } catch (error) {
+      if (error instanceof InstanceOptimisticLockError) {
+        return;
+      }
+      throw error;
+    }
+
+    this.logger.info({
+      event: 'instance_eliminated_host_left',
+      instanceId,
+      hostUserId,
+    });
+
+    this.eventBus.emitInstanceClosed(new InstanceClosedEvent(instanceId, hostUserId, nowIso));
+
+    if (instance.status === 'countdown') {
+      this.eventBus.emitCountdownCancelled(
+        new CountdownCancelledEvent(instanceId, hostUserId, 'host_disconnected', nowIso),
+      );
+    }
   }
 
   async listInstances(params: {

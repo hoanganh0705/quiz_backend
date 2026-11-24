@@ -58,7 +58,12 @@ export class InstanceResponseMapper {
       quizId: row.quizId,
       quizTitle: row.quizTitle,
       quizSlug: row.quizSlug,
-      playerCount: typeof realTimeCount === 'number' ? realTimeCount : row.playerCount,
+      playerCount:
+        row.status === 'closed' || row.status === 'finished'
+          ? 0
+          : typeof realTimeCount === 'number' && realTimeCount > 0
+            ? realTimeCount
+            : (row.playerCount ?? 0),
       createdAt: row.createdAt,
     };
   }

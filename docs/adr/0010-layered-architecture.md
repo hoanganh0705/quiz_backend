@@ -46,5 +46,5 @@ Each module follows a four-layer structure:
 - `src/modules/auth/domain/ports/user-repository.port.ts` — port interface in `domain/`, implementation in `infrastructure/repositories/`.
 - `src/modules/category/domain/ports/category-repository.port.ts` — port in `domain/`, impl in `infrastructure/`.
 - `src/modules/category/infrastructure/repositories/category.repository.ts` — implements `CategoryRepositoryPort`.
-- `docs/PROJECT_CONSTITUTION.md` §2 (Architecture Principles) — defines the dependency direction and layer responsibilities.
+- `docs/standards/architecture.md` — defines the dependency direction and layer responsibilities.
 - `docs/architecture/overview.md` — layered diagram with `transport → application → domain/infrastructure`.

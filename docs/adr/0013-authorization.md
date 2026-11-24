@@ -51,4 +51,4 @@ The system must control who can perform which operations on which resources. Aut
 - `src/modules/tag/transport/controllers/tag.controller.ts` — `@Permissions(Permission.TAG_CREATE)` on create.
 - `src/modules/auth/domain/errors/auth-domain.errors.ts` — `AUTH_INSUFFICIENT_PERMISSIONS`.
 - `docs/architecture/authorization-flow.md` — three-layer authorization diagram and `PermissionsGuard` flow.
-- `docs/PROJECT_CONSTITUTION.md` §3.4 (Choices already made) — RBAC + permissions listed as a locked decision.
+- `docs/standards/security.md` — RBAC + permissions listed as a standard decision.

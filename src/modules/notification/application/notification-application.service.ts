@@ -241,6 +241,31 @@ export class NotificationApplicationService {
     return deletedCount;
   }
 
+  async deleteAllNotifications(user: JwtPayload): Promise<number> {
+    const activeIds = await this.notificationRepository.listAllActiveIds(user.sub);
+    const deletedCount = await this.notificationRepository.deleteAllNotifications(user.sub);
+    await this.notificationRepository.invalidateAnalyticsCache();
+
+    const timestamp = new Date();
+    for (const notificationId of activeIds) {
+      const deletedEvent: NotificationDeletedEvent = {
+        eventType: 'notification.deleted',
+        notificationId,
+        userId: user.sub,
+        timestamp,
+      };
+      this.eventBus.emit(deletedEvent);
+    }
+
+    this.logger?.info({
+      event: 'all_notifications_deleted',
+      userId: user.sub,
+      deletedCount,
+    });
+
+    return deletedCount;
+  }
+
   async deleteNotification(notificationId: string, user: JwtPayload): Promise<void> {
     const notification = await this.notificationService.getNotification(notificationId, user.sub);
 

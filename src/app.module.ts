@@ -28,6 +28,7 @@ import { NotificationModule } from './modules/notification/notification.module';
 import { CommentModule } from './modules/comment/comment.module';
 import { DailyChallengeModule } from './modules/daily-challenge/daily-challenge.module';
 import { HomeModule } from './modules/home/home.module';
+import { SupportModule } from './modules/support/support.module';
 import { CoinModule } from './modules/coins/coin.module';
 import { UploadModule } from './modules/upload/upload.module';
 import { AdminModule } from './modules/admin/admin.module';
@@ -49,7 +50,6 @@ import {
   googleOAuthConfig,
   swaggerConfig,
   r2Config,
-  tournamentFlagsConfig,
   coinAdminConfig,
 } from './core/config';
 import { RedisModule } from './core/redis/redis.module';
@@ -86,7 +86,6 @@ import { graphqlConfig } from './core/config';
         googleOAuthConfig,
         swaggerConfig,
         r2Config,
-        tournamentFlagsConfig,
         coinAdminConfig,
       ],
     }),
@@ -139,6 +138,7 @@ import { graphqlConfig } from './core/config';
     HealthModule,
     DailyChallengeModule,
     HomeModule,
+    SupportModule,
     ObservabilityModule,
     AdminModule,
     CoinModule,

@@ -14,6 +14,7 @@ import type { SessionRequestContext } from '../../types/auth-context.types';
 export type AuthCookieInstructions = {
   readonly refreshToken?: string;
   readonly clearRefreshToken?: boolean;
+  readonly rememberMe?: boolean;
 };
 
 /**
@@ -27,7 +28,7 @@ export type AuthCookieInstructions = {
  */
 export type AuthRequestContext = {
   session: SessionRequestContext;
-  setRefreshToken: (token: string) => void;
+  setRefreshToken: (token: string, rememberMe?: boolean) => void;
   clearRefreshToken: () => void;
   getCookieInstructions: () => Readonly<AuthCookieInstructions>;
 };

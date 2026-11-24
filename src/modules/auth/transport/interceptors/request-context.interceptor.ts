@@ -11,6 +11,7 @@ type RequestWithAuthContext = Request & {
 type MutableCookieState = {
   refreshToken?: string;
   clearRefreshToken?: boolean;
+  rememberMe?: boolean;
 };
 
 @Injectable()
@@ -27,8 +28,11 @@ export class RequestContextInterceptor implements NestInterceptor {
       const cookieState: MutableCookieState = {};
       request.authContext = {
         session: this.authRequestContextService.getSessionRequestContext(request),
-        setRefreshToken: (token: string) => {
+        setRefreshToken: (token: string, rememberMe?: boolean) => {
           cookieState.refreshToken = token;
+          if (rememberMe !== undefined) {
+            cookieState.rememberMe = rememberMe;
+          }
         },
         clearRefreshToken: () => {
           cookieState.clearRefreshToken = true;
@@ -38,6 +42,7 @@ export class RequestContextInterceptor implements NestInterceptor {
             ? { refreshToken: cookieState.refreshToken }
             : {}),
           ...(cookieState.clearRefreshToken === true ? { clearRefreshToken: true } : {}),
+          ...(cookieState.rememberMe !== undefined ? { rememberMe: cookieState.rememberMe } : {}),
         }),
       };
     }

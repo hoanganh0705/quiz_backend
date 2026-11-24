@@ -1,4 +1,5 @@
 import { ArgumentsHost, UnauthorizedException, HttpException } from '@nestjs/common';
+import { WsException } from '@nestjs/websockets';
 import { WsExceptionFilter } from './ws-exception.filter';
 import { BaseDomainException } from '@/common/errors/base-domain.exception';
 
@@ -67,6 +68,29 @@ describe('WsExceptionFilter', () => {
       expect(mockClient.emit).toHaveBeenCalledWith('error', {
         code: 'HTTP_422',
         message: 'Validation failed',
+      });
+    });
+  });
+
+    describe('WsException', () => {
+    it('emits WS error code and message from object error', () => {
+      filter.catch(
+        new WsException({ code: 'RATE_LIMITED', message: 'Too many messages — slow down' }),
+        mockHost,
+      );
+
+      expect(mockClient.emit).toHaveBeenCalledWith('error', {
+        code: 'RATE_LIMITED',
+        message: 'Too many messages — slow down',
+      });
+    });
+
+    it('emits WS error with string error', () => {
+      filter.catch(new WsException('Socket rejected'), mockHost);
+
+      expect(mockClient.emit).toHaveBeenCalledWith('error', {
+        code: 'WS_ERROR',
+        message: 'Socket rejected',
       });
     });
   });

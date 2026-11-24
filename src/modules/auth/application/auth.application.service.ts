@@ -257,6 +257,7 @@ export class AuthApplicationService {
       response: this.authResponseMapper.toLoginResponse(result),
       refreshToken: result.refreshToken,
       sessionId: result.sessionId,
+      rememberMe: result.rememberMe,
     };
   }
 
@@ -266,6 +267,7 @@ export class AuthApplicationService {
     return {
       response: this.authResponseMapper.toRefreshTokenResponse(result),
       refreshToken: result.refreshToken,
+      rememberMe: result.rememberMe,
     };
   }
 

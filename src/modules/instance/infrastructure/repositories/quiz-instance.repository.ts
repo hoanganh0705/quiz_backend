@@ -161,6 +161,8 @@ export class QuizInstanceRepository implements QuizInstanceRepositoryPort {
         startedAt: quizInstances.startedAt,
         closedAt: quizInstances.closedAt,
         updatedAt: quizInstances.updatedAt,
+        version: quizInstances.version,
+        countdownStartedAt: quizInstances.countdownStartedAt,
         versionNumber: QUIZ_VERSION_COLUMNS.versionNumber,
         difficulty: QUIZ_VERSION_COLUMNS.difficulty,
         durationMs: QUIZ_VERSION_COLUMNS.durationMs,
@@ -276,16 +278,6 @@ export class QuizInstanceRepository implements QuizInstanceRepositoryPort {
       version: number;
     }>
   > {
-    const activePlayerSubquery = this.db
-      .select({ one: sql`1` })
-      .from(quizInstancePlayers)
-      .where(
-        and(
-          eq(quizInstancePlayers.instanceId, quizInstances.instanceId),
-          eq(quizInstancePlayers.status, 'joined'),
-        ),
-      );
-
     const rows = await this.db
       .select({
         instanceId: quizInstances.instanceId,
@@ -296,7 +288,6 @@ export class QuizInstanceRepository implements QuizInstanceRepositoryPort {
         and(
           inArray(quizInstances.status, ['open', 'countdown', 'running']),
           lte(quizInstances.updatedAt, params.cutoffIso),
-          notExists(activePlayerSubquery),
         ),
       )
       .orderBy(quizInstances.updatedAt)
@@ -430,6 +421,12 @@ export class QuizInstanceRepository implements QuizInstanceRepositoryPort {
               joinedAt: quizInstancePlayers.joinedAt,
               leftAt: quizInstancePlayers.leftAt,
             });
+
+          await db
+            .update(quizInstances)
+            .set({ updatedAt: params.nowIso })
+            .where(eq(quizInstances.instanceId, params.instanceId));
+
           return {
             joined: true,
             player:
@@ -473,6 +470,11 @@ export class QuizInstanceRepository implements QuizInstanceRepositoryPort {
             joinedAt: quizInstancePlayers.joinedAt,
             leftAt: quizInstancePlayers.leftAt,
           });
+
+        await db
+          .update(quizInstances)
+          .set({ updatedAt: params.nowIso })
+          .where(eq(quizInstances.instanceId, params.instanceId));
 
         return {
           joined: true,
@@ -665,11 +667,57 @@ export class QuizInstanceRepository implements QuizInstanceRepositoryPort {
     }
   }
 
+  async disconnectPlayersByInstance(instanceId: string): Promise<void> {
+    const nowIso = new Date().toISOString();
+    await this.db
+      .update(quizInstancePlayers)
+      .set({
+        status: 'disconnected',
+        leftAt: nowIso,
+      })
+      .where(
+        and(
+          eq(quizInstancePlayers.instanceId, instanceId),
+          eq(quizInstancePlayers.status, 'joined'),
+        ),
+      );
+  }
+
   async getPlayerByUserAndInstance(params: {
     instanceId: string;
     userId: string;
   }): Promise<import('@/modules/instance/domain/ports').QuizInstancePlayerRow | null> {
     return this.getPlayer(params.instanceId, params.userId);
+  }
+
+  async getPlayerWithProfile(
+    instanceId: string,
+    userId: string,
+  ): Promise<import('@/modules/instance/domain/ports').InstancePlayerWithProfile | null> {
+    const [row] = await this.db
+      .select({
+        instancePlayerId: quizInstancePlayers.instancePlayerId,
+        instanceId: quizInstancePlayers.instanceId,
+        userId: quizInstancePlayers.userId,
+        username: users.username,
+        displayName: userProfiles.displayName,
+        avatarUrl: userProfiles.avatarUrl,
+        status: quizInstancePlayers.status,
+        attemptId: quizInstancePlayers.attemptId,
+        joinedAt: quizInstancePlayers.joinedAt,
+      })
+      .from(quizInstancePlayers)
+      .innerJoin(users, eq(quizInstancePlayers.userId, users.userId))
+      .leftJoin(userProfiles, eq(users.userId, userProfiles.userId))
+      .where(
+        and(
+          eq(quizInstancePlayers.instanceId, instanceId),
+          eq(quizInstancePlayers.userId, userId),
+        ),
+      )
+      .limit(1);
+
+    return row ?? null;
   }
 
   async listInstances(params: {
@@ -728,6 +776,8 @@ export class QuizInstanceRepository implements QuizInstanceRepositoryPort {
         startedAt: quizInstances.startedAt,
         closedAt: quizInstances.closedAt,
         updatedAt: quizInstances.updatedAt,
+        version: quizInstances.version,
+        countdownStartedAt: quizInstances.countdownStartedAt,
         versionNumber: QUIZ_VERSION_COLUMNS.versionNumber,
         difficulty: QUIZ_VERSION_COLUMNS.difficulty,
         durationMs: QUIZ_VERSION_COLUMNS.durationMs,

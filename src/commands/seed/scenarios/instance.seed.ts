@@ -2,7 +2,7 @@ import { and, eq } from 'drizzle-orm';
 import { db, type SeedContext, recorder } from '../infrastructure';
 import type { InstanceSeed, SeedSummary } from '../infrastructure/types';
 import { SeedLookup } from '../shared/seed-lookup';
-import { quizInstances } from '@/core/database/schema';
+import { quizInstances, quizInstancePlayers } from '@/core/database/schema';
 import { logger } from '../infrastructure/seed-logger';
 
 const INSTANCE_SEEDS: InstanceSeed[] = [
@@ -114,6 +114,27 @@ export const runInstanceSeed = async (): Promise<SeedSummary[]> => {
         });
 
       logger.info(`Created instance for "${instance.quizSlug}" v${instance.versionNumber} (${instance.status}) hosted by ${instance.hostUsername}`);
+
+      if (instance.status === 'open') {
+        const learnerUserId = await lookup.userIdByUsername('learner_user');
+        const powerUserId = await lookup.userIdByUsername('power_user');
+
+        const playersToSeed = [
+          { userId: hostUserId, status: 'joined' as const },
+          { userId: learnerUserId, status: 'joined' as const },
+          { userId: powerUserId, status: 'joined' as const },
+        ];
+
+        for (const p of playersToSeed) {
+          await tx.insert(quizInstancePlayers).values({
+            instanceId: created.instanceId,
+            userId: p.userId,
+            status: p.status,
+            joinedAt: ctx.nowIso,
+          });
+        }
+        logger.info(`Added 3 lobby players to instance "${created.instanceId}"`);
+      }
 
       recorder.record({
         kind: 'Quiz Instances',

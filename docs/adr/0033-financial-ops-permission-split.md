@@ -80,5 +80,4 @@ Additional invariants:
 
 - ADR-0013 (Authorization Model — Three-Layer RBAC + Permissions).
 - ADR-0014 (Event Architecture — Three-Layer Event Bus).
-- `docs/audit/phase8-security-trust-boundary-audit.md`.
-- `docs/audit/phase9-security-remediation-plan.md` § P3.7.
+- `docs/standards/security.md`.

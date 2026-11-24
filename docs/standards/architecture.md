@@ -1,7 +1,6 @@
 # Architecture Standard
 
 > Project-specific structural rules. Every rule is normative and derived from the existing codebase.
-> See `docs/PROJECT_CONSTITUTION.md` for the philosophy; this file is the engineering detail.
 
 ## Purpose
 
@@ -13,7 +12,7 @@ Applies to everything under `src/`. Out of scope for this document: API envelope
 
 ## Source of Truth
 
-- `docs/PROJECT_CONSTITUTION.md` §2 (Architecture Principles), §3.2 (Boundaries that must never move), §3.3 (Rules that apply to changes).
+- [ADR-0010](../adr/0010-layered-architecture.md) (Layered Architecture) and [ADR-0018](../adr/0018-ports-and-adapters.md) (Ports and Adapters).
 - `src/app.module.ts` — global provider wiring.
 - `src/modules/tag/` — reference module; every other module (`quiz/`, `user/`, `category/`, `auth/`, `attempt/`, `bookmark/`, `review/`, `tournament/`, `instance/`, `ranking/`, `achievement/`, `notification/`, `comment/`, `social/`, `search/`, `health/`) mirrors the same shape.
 - `src/core/` — infrastructure layer; the only place that imports `drizzle-orm`, `pg`, `ioredis`, `nestjs-pino`, or owns `core/database/schema/`.
@@ -93,7 +92,7 @@ infrastructure (Drizzle repositories, third-party adapters)
 
 ### What MUST NOT be introduced
 
-These patterns are explicitly out of scope for AI and human contributions. See `docs/PROJECT_CONSTITUTION.md` §8.7 for the full list. Highlights:
+These patterns are strictly out of scope and prohibited across all contributions. Highlights:
 
 - Multiple inheritance or mixins on domain services.
 - A command-bus or CQRS middleware pipeline.

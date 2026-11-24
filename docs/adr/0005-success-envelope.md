@@ -60,4 +60,4 @@ Every HTTP response body must have a consistent shape so clients can parse metad
 - `src/modules/tag/transport/presenters/tag.presenter.ts` — every presenter method calls `ApiResponse.ok()` or `wrapPaginatedDto()`.
 - `src/modules/tag/transport/tag-timestamp.spec.ts` — regression tests asserting the full envelope for every presenter return path.
 - `test/envelope.e2e-spec.ts` — end-to-end regression asserting `{ data, meta }` shape on representative endpoints.
-- `docs/PROJECT_CONSTITUTION.md` §4.2 — explicitly defines the envelope shape with the `kind` discriminator for pagination.
+- `docs/standards/api.md` — explicitly defines the envelope shape with the `kind` discriminator for pagination.

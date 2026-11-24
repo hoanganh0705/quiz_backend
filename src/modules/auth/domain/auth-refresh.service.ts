@@ -151,9 +151,24 @@ export class AuthRefreshService {
     const identity = toAuthIdentity(user);
     const tokens = await this.tokenService.issueTokens(identity, existingSession.sessionId);
 
-    await this.sessionService.rotateSession(existingSession.sessionId, tokens, context, nowIso);
+    const isRememberMe =
+      (new Date(existingSession.expiresAt).getTime() -
+        new Date(existingSession.createdAt ?? existingSession.lastUsedAt).getTime()) >
+      2 * 24 * 60 * 60 * 1000;
 
-    return tokens;
+    await this.sessionService.rotateSession(
+      existingSession.sessionId,
+      tokens,
+      context,
+      nowIso,
+      isRememberMe,
+    );
+
+    return {
+      accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken,
+      rememberMe: isRememberMe,
+    };
   }
 
   async logout(refreshToken: string): Promise<void> {

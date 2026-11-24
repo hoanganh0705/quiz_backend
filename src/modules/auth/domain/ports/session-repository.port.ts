@@ -10,6 +10,7 @@ export type SessionRecord = {
   lastUsedAt: string;
   revokedAt: string | null;
   expiresAt: string;
+  createdAt?: string;
 };
 
 export interface SessionRepositoryPort {

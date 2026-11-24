@@ -52,4 +52,4 @@ The system needs a secure authentication mechanism that supports both browser-ba
 - `src/common/guards/jwt.guard.ts` — `JwtGuard` with cookie and header extraction.
 - `src/modules/auth/infrastructure/repositories/user.repository.ts` — `softDeleteAccount` revokes all sessions atomically.
 - `docs/architecture/authentication-flow.md` — complete token lifecycle diagram.
-- `docs/PROJECT_CONSTITUTION.md` §3.4 (Choices already made) — JWT + refresh token pattern listed as a locked decision.
+- `docs/standards/security.md` — JWT + refresh token pattern listed as a standard decision.

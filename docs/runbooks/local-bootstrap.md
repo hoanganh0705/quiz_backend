@@ -11,7 +11,7 @@ This runbook walks a new developer from a fresh clone to "regenerated SDK exists
 **Related architecture docs** (read alongside this runbook):
 
 - [Architecture overview](../architecture/overview.md) — high-level system structure, request lifecycle, module map.
-- [Project Constitution](../PROJECT_CONSTITUTION.md) — engineering principles and decision hierarchy that every change must follow.
+- [Architecture Standards](../standards/architecture.md) — engineering principles and architectural standards that every change must follow.
 
 ---
 

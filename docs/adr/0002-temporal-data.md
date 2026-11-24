@@ -40,4 +40,4 @@ All timestamps in the system must be stored, transmitted, and compared without t
 - `src/core/database/schema/taxonomy/schema.ts` — every table uses `timestamp({ withTimezone: true })`.
 - `src/modules/tag/transport/swagger/examples/_timestamp.ts` — `EXAMPLE_TIMESTAMP = '2026-06-25T10:30:00.000Z'`.
 - `src/modules/tag/transport/tag-timestamp.spec.ts` — regression test asserting ISO 8601 normalization for all presenter return paths.
-- `docs/PROJECT_CONSTITUTION.md` §5.2 (Timestamps) — ISO 8601 as the canonical wire format.
+- `docs/standards/api.md` — ISO 8601 as the canonical wire format.

@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted
+Superseded by [ADR-0024](./0024-pagination-strategy.md) (Keyset Cursor as Default) for new list endpoints; existing endpoints remain governed by this ADR.
 
 ## Context
 
@@ -54,4 +54,4 @@ All list endpoints in the API need a stable, efficient pagination mechanism. Off
 - `src/modules/tag/mappers/tag-cursor.mapper.ts` — `TagCursorMapper.serialize()` encodes `{ createdAt, tagId }`.
 - `src/modules/tag/transport/presenters/tag.presenter.ts` — `wrapPaginatedDto` places `nextCursor` in `meta.pagination`.
 - `src/modules/tag/transport/swagger/examples/tag.examples.ts` — cursor examples with `kind: 'cursor'`.
-- `docs/PROJECT_CONSTITUTION.md` §4.5 — explicitly locks cursor pagination as the default for large/unbounded lists.
+- `docs/standards/api.md` — locks cursor pagination as the default for large/unbounded lists.

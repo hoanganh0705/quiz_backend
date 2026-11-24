@@ -214,4 +214,4 @@ The architectural decisions are derived from the codebase, not invented:
 5. **Events are typed and scoped** — every domain event is a named class with typed payload; event types are strings for Redis serialization; idempotency keys are deterministic per event shape.
 6. **Fail-fast on misconfiguration** — `validateEnv()` throws at startup; `ProblemCodeMapping` loud-fails on unknown codes; the interceptor's `isFormattedResponse` guard catches response drift immediately.
 
-For the full normative rules governing these decisions, see `docs/PROJECT_CONSTITUTION.md` and `docs/standards/architecture.md`.
+For the full normative rules governing these decisions, see `docs/standards/architecture.md` and related ADRs in `docs/adr/`.

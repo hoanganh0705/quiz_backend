@@ -28,6 +28,10 @@ export class ResponseFormatInterceptor<T> implements NestInterceptor<T, Formatte
   ) {}
 
   intercept(context: ExecutionContext, next: CallHandler<T>): Observable<FormattedResponse<T>> {
+    if (context.getType() !== 'http') {
+      return next.handle() as unknown as Observable<FormattedResponse<T>>;
+    }
+
     return next.handle().pipe(
       map((payload: T) => {
         if (this.shouldBypass(context, payload)) {
