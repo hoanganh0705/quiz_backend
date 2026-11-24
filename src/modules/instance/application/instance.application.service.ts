@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, OnModuleDestroy } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import type { JwtPayload } from '@/common/guards/jwt.guard';
 import { InstanceService } from '../domain/instance.service';
@@ -40,9 +40,19 @@ import {
   StartInstanceResponseDto,
 } from '../dto/response';
 
+export const HOST_DISCONNECT_GRACE_PERIOD_MS = 20_000;
+
 @Injectable()
-export class InstanceApplicationService {
+export class InstanceApplicationService implements OnModuleDestroy {
   private server: Server | null = null;
+  private readonly pendingHostEliminations = new Map<string, NodeJS.Timeout>();
+
+  onModuleDestroy(): void {
+    for (const timer of this.pendingHostEliminations.values()) {
+      clearTimeout(timer);
+    }
+    this.pendingHostEliminations.clear();
+  }
 
   constructor(
     private readonly instanceService: InstanceService,
@@ -60,6 +70,32 @@ export class InstanceApplicationService {
 
   setServer(server: Server): void {
     this.server = server;
+  }
+
+  getActiveRoomSocketCount(instanceId: string): number {
+    if (!this.server) return 0;
+    const nsp =
+      typeof (this.server as any).of === 'function'
+        ? (this.server as any).of('/instances')
+        : this.server;
+    const adapter = nsp?.adapter;
+    if (adapter?.rooms) {
+      const room = adapter.rooms.get(instanceId);
+      return room ? room.size : 0;
+    }
+    return 0;
+  }
+
+  private getNamespace(): Server | import('socket.io').Namespace | null {
+    if (!this.server) return null;
+    return typeof (this.server as any).of === 'function'
+      ? (this.server as any).of('/instances')
+      : this.server;
+  }
+
+  private broadcastToNamespace(event: string, data: Record<string, unknown>): void {
+    const nsp = this.getNamespace();
+    nsp?.emit(event, data);
   }
 
   private subscribeToDomainEvents(): void {
@@ -203,10 +239,40 @@ export class InstanceApplicationService {
   }
 
   async getInstanceByIdForController(instanceId: string): Promise<InstanceDetailResponseDto> {
-    const [row, playersPage] = await Promise.all([
-      this.instanceService.getInstanceById(instanceId),
-      this.instanceService.listInstancePlayers(instanceId, { limit: 100 }),
-    ]);
+    let row = await this.instanceService.getInstanceById(instanceId);
+
+    if (row.status === 'open' || row.status === 'countdown') {
+      const hostPlayer = await this.instanceService.getPlayerByUserAndInstance({
+        instanceId,
+        userId: row.hostUserId,
+      });
+      if (!hostPlayer || hostPlayer.status === 'disconnected') {
+        await this.instanceService.eliminateInstance(instanceId, row.hostUserId);
+        const updated = await this.instanceService.getInstanceById(instanceId);
+        if (updated) {
+          row = updated;
+        }
+      }
+    }
+
+    const isCandidateStatus =
+      row.status === 'open' || row.status === 'countdown' || row.status === 'running';
+    const isPastTtl = new Date(row.updatedAt).getTime() < Date.now() - 5 * 60 * 1000;
+    if (isCandidateStatus && isPastTtl && this.getActiveRoomSocketCount(instanceId) === 0) {
+      await this.instanceService.disconnectPlayersByInstance(instanceId);
+      const abandonResult = await this.instanceService.abandonInstanceByScheduler({
+        instanceId,
+        expectedVersion: row.version,
+      });
+      if (abandonResult.abandoned) {
+        const updated = await this.instanceService.getInstanceById(instanceId);
+        if (updated) {
+          row = updated;
+        }
+      }
+    }
+
+    const playersPage = await this.instanceService.listInstancePlayers(instanceId, { limit: 100 });
     return this.mapper.toInstanceDetailResponse(
       row,
       playersPage.items.map((p) => this.mapper.toInstancePlayerResponse(p)),
@@ -228,13 +294,7 @@ export class InstanceApplicationService {
       items: result.rows.map((row) => {
         let activeCount: number | undefined;
         if (this.server) {
-          const instanceNamespace =
-            typeof this.server.of === 'function' ? this.server.of('/instances') : null;
-          const adapter = instanceNamespace?.adapter ?? this.server.sockets?.adapter;
-          if (adapter?.rooms) {
-            const room = adapter.rooms.get(row.instanceId);
-            activeCount = room ? room.size : 0;
-          }
+          activeCount = this.getActiveRoomSocketCount(row.instanceId);
         }
         return this.mapper.toInstanceListItemResponse(row, activeCount);
       }),
@@ -309,6 +369,17 @@ export class InstanceApplicationService {
       return;
     }
 
+    const pending = this.pendingHostEliminations.get(params.instanceId);
+    if (pending) {
+      clearTimeout(pending);
+      this.pendingHostEliminations.delete(params.instanceId);
+      this.logger.info({
+        event: 'host_elimination_timer_cancelled',
+        instanceId: params.instanceId,
+        userId: params.user.sub,
+      });
+    }
+
     void this.socketConnectionRegistry.record(params.socketId, {
       instanceId: params.instanceId,
       userId: params.user.sub,
@@ -319,6 +390,7 @@ export class InstanceApplicationService {
     socketId: string;
     instanceId: string;
     userId?: string;
+    isExplicitLeave?: boolean;
   }): Promise<void> {
     let meta: { instanceId: string; userId: string } | null = null;
     try {
@@ -335,6 +407,67 @@ export class InstanceApplicationService {
     const effectiveInstanceId = meta?.instanceId || params.instanceId;
     const effectiveUserId = meta?.userId || params.userId;
     if (!effectiveInstanceId || !effectiveUserId) return;
+
+    const instance = await this.instanceService
+      .getInstanceById(effectiveInstanceId)
+      .catch(() => null);
+
+    this.logger.info({
+      event: 'handle_player_left_socket_check',
+      effectiveInstanceId,
+      effectiveUserId,
+      instanceHostUserId: instance?.hostUserId,
+      instanceStatus: instance?.status,
+      isExplicitLeave: params.isExplicitLeave,
+    });
+
+    if (
+      instance &&
+      instance.hostUserId === effectiveUserId &&
+      (instance.status === 'open' || instance.status === 'countdown')
+    ) {
+      const pending = this.pendingHostEliminations.get(effectiveInstanceId);
+      if (pending) {
+        clearTimeout(pending);
+        this.pendingHostEliminations.delete(effectiveInstanceId);
+      }
+
+      if (params.isExplicitLeave !== false) {
+        await this.instanceService.eliminateInstance(effectiveInstanceId, effectiveUserId);
+        return;
+      }
+
+      // Host socket disconnected (e.g. page refresh / temporary connection loss).
+      // Give a 20-second grace period before eliminating the room.
+      const timer = setTimeout(async () => {
+        this.pendingHostEliminations.delete(effectiveInstanceId);
+        try {
+          const currentInstance = await this.instanceService
+            .getInstanceById(effectiveInstanceId)
+            .catch(() => null);
+          if (
+            currentInstance &&
+            currentInstance.hostUserId === effectiveUserId &&
+            (currentInstance.status === 'open' || currentInstance.status === 'countdown')
+          ) {
+            this.logger.info({
+              event: 'host_disconnect_grace_period_expired_eliminating',
+              effectiveInstanceId,
+              effectiveUserId,
+            });
+            await this.instanceService.eliminateInstance(effectiveInstanceId, effectiveUserId);
+          }
+        } catch (err) {
+          this.logger.error({
+            event: 'host_disconnect_elimination_failed',
+            effectiveInstanceId,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
+      }, HOST_DISCONNECT_GRACE_PERIOD_MS);
+      this.pendingHostEliminations.set(effectiveInstanceId, timer);
+      return;
+    }
 
     const nowIso = new Date().toISOString();
 
@@ -478,13 +611,50 @@ export class InstanceApplicationService {
       event: 'socket_instance_created',
       instanceId: event.instanceId,
     });
+    this.broadcastToNamespace('instance_created', {
+      instanceId: event.instanceId,
+      quizVersionId: event.quizVersionId,
+      hostUserId: event.hostUserId,
+      status: 'open',
+    });
   }
 
-  private onPlayerJoined(event: PlayerJoinedEvent): void {
-    this.emitToRoom(event.instanceId, 'player_joined', {
+  private async onPlayerJoined(event: PlayerJoinedEvent): Promise<void> {
+    const at = event.timestamp.toISOString();
+    let playerProfile: import('../domain/ports').InstancePlayerWithProfile | null = null;
+    try {
+      playerProfile = await this.instanceService.getPlayerWithProfile(
+        event.instanceId,
+        event.userId,
+      );
+    } catch {
+      // fallback to defaults
+    }
+
+    const payload = {
+      instanceId: event.instanceId,
       userId: event.userId,
       totalPlayers: event.totalPlayers,
-      timestamp: event.timestamp.toISOString(),
+      timestamp: at,
+      at,
+      eventSequence: Date.now(),
+      player: {
+        id: event.userId,
+        userId: event.userId,
+        username: playerProfile?.username ?? 'Player',
+        displayName: playerProfile?.displayName ?? playerProfile?.username ?? 'Player',
+        avatarUrl: playerProfile?.avatarUrl ?? null,
+        joinedAt: playerProfile?.joinedAt ?? at,
+      },
+    };
+    this.emitToRoom(event.instanceId, 'player_joined', payload);
+    this.emitToRoom(event.instanceId, 'player:joined', payload);
+
+    const activeCount = this.getActiveRoomSocketCount(event.instanceId);
+    this.broadcastToNamespace('instance_player_count_updated', {
+      instanceId: event.instanceId,
+      playerCount: activeCount > 0 ? activeCount : event.totalPlayers,
+      status: 'open',
     });
   }
 
@@ -514,7 +684,7 @@ export class InstanceApplicationService {
 
   private onPlayerDisconnected(event: PlayerDisconnectedEvent): void {
     const at = event.timestamp.toISOString();
-    this.emitToRoom(event.instanceId, 'player_left', {
+    const payload = {
       instanceId: event.instanceId,
       socketId: event.socketId,
       userId: event.userId,
@@ -522,6 +692,14 @@ export class InstanceApplicationService {
       eventSequence: Date.now(),
       timestamp: at,
       at,
+    };
+    this.emitToRoom(event.instanceId, 'player_left', payload);
+    this.emitToRoom(event.instanceId, 'player:left', payload);
+
+    const activeCount = this.getActiveRoomSocketCount(event.instanceId);
+    this.broadcastToNamespace('instance_player_count_updated', {
+      instanceId: event.instanceId,
+      playerCount: activeCount,
     });
   }
 
@@ -561,10 +739,18 @@ export class InstanceApplicationService {
       timestamp: at,
       at,
       status: 'closed',
+      reason: 'host_left',
     };
     this.emitToRoom(event.instanceId, 'game_finished', payload);
     this.emitToRoom(event.instanceId, 'instance:closed', payload);
     this.emitToRoom(event.instanceId, 'instance_closed', payload);
+
+    this.broadcastToNamespace('instance_closed', payload);
+    this.broadcastToNamespace('instance_player_count_updated', {
+      instanceId: event.instanceId,
+      playerCount: 0,
+      status: 'closed',
+    });
   }
 
   private onCountdownStarted(event: CountdownStartedEvent): void {

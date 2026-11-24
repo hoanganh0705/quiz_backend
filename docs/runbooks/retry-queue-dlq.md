@@ -8,9 +8,8 @@
 > to `dead_letter_events`, and re-enqueues it onto the live queue
 > with `attempts: 1` reset.
 >
-> Scope: operational layer for `docs/audit/phase6-event-queue-background-job-audit.md`
-> Finding F4. Depends on Phase 1 (handler-failure visibility) and
-> Phase 2 (cron-job locking).
+> Scope: operational guide for retry queues and dead-letter queue processing,
+> providing handler-failure visibility and automated cron-job recovery.
 
 ---
 
@@ -203,13 +202,5 @@ not block reads.
 
 - `src/common/events/retry-queue-drain.scheduler.ts` — the drain
   scheduler this runbook documents.
-- `src/core/redis/retry-queue.metrics.ts` — the gauge and circuit
-  integration.
-- `src/core/database/migrations/0001-dead-letter-events.ts` — the
-  schema migration that creates `dead_letter_events`.
-- `src/core/database/schema/dead-letter/schema.ts` — Drizzle schema
-  for `dead_letter_events`.
-- `docs/audit/phase6-event-queue-background-job-audit.md` — the
-  audit whose Finding F4 motivates this work.
-- `docs/audit/phase7-event-queue-remediation-plan.md` — the
-  remediation plan (Phase 3 = this runbook).
+- `src/core/redis/retry-queue.metrics.ts` — the gauge and circuit integration.
+- `src/core/database/schema/dead-letter/schema.ts` — Drizzle schema for `dead_letter_events`.

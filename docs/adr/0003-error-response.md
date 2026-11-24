@@ -54,4 +54,4 @@ extensions.timestamp — ISO 8601 UTC timestamp
 - `src/common/swagger/swagger-schemas.ts` — `ProblemDetailDto` schema for OpenAPI.
 - `test/rfc7807.e2e-spec.ts` — regression test asserting all canonical RFC 7807 fields on every error path.
 - Every module has a `*.spec.ts` co-located with its errors asserting that every `code` resolves in `ProblemCodeMapping`.
-- `docs/PROJECT_CONSTITUTION.md` §4.3 — explicitly locks RFC 7807 as the error format.
+- `docs/standards/error-handling.md` — explicitly defines RFC 7807 as the error format.

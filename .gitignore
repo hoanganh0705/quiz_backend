@@ -48,6 +48,14 @@ prod.env
 .temp
 .tmp
 
+# AI agent skills & vendor directories
+.agents/
+.agent/
+.claude/
+.cursor/
+agent/
+!skills-lock.json
+
 # Runtime data
 pids
 *.pid

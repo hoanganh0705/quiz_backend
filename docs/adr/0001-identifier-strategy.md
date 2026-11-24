@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted
+Accepted — Detailed and amended by [ADR-0021](./0021-uuidv7-primary-keys.md)
 
 ## Context
 
@@ -40,4 +40,4 @@ The application MUST NOT use `crypto.randomUUID()` (v4) for business identifiers
 - Every primary key column in `src/core/database/schema/` uses `uuid('id').primaryKey().default(sql\`uuidv7()\`)`.
 - `src/modules/auth/infrastructure/outbox/outbox.adapter.ts` — outbox event IDs generated via `generateUuidV7()` for idempotency keys.
 - `src/modules/quiz/transport/presenters/quiz.presenter.ts` — wire responses emit UUIDs as strings in `tagId`, `quizId`, etc. DTOs.
-- `docs/PROJECT_CONSTITUTION.md` §5.1 (Identifiers) — explicitly locks UUID v7 as the only acceptable strategy.
+- `docs/standards/architecture.md` — locks UUID v7 as the primary identifier strategy.

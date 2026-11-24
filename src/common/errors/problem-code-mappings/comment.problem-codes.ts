@@ -32,6 +32,11 @@ export const CommentProblemCodeMapping = {
     title: 'Forbidden',
     typeUri: 'https://api.quiz.local/problems/comment-self-report',
   },
+  COMMENT_SELF_PARENT: {
+    status: HttpStatus.FORBIDDEN,
+    title: 'Forbidden',
+    typeUri: 'https://api.quiz.local/problems/comment-self-parent',
+  },
   COMMENT_MODERATOR_REQUIRED: {
     status: HttpStatus.FORBIDDEN,
     title: 'Forbidden',

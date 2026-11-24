@@ -18,7 +18,7 @@ Applies to schema migrations under `src/core/database/migrations/`, DTO/endpoint
 - `src/core/database/migrations/0000_*.sql` — existing migration patterns.
 - `src/commands/outbox.ts` — production safety for operational tooling.
 - `src/common/audit/audit-log.service.ts` — auditable change records.
-- `PROJECT_CONSTITUTION.md` §2.3 (Backward compatibility principle).
+- `docs/standards/api.md` (Backward compatibility principle).
 
 ## Rules
 

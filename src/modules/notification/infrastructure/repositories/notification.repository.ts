@@ -199,6 +199,22 @@ export class NotificationRepository implements NotificationRepositoryPort {
     return rows.map((row) => row.notificationId);
   }
 
+  async listAllActiveIds(userId: string, limit = 1000): Promise<string[]> {
+    const rows = await this.db
+      .select({ notificationId: notifications.notificationId })
+      .from(notifications)
+      .where(
+        and(
+          eq(notifications.userId, userId),
+          notDeleted(notifications.deletedAt),
+        ),
+      )
+      .orderBy(desc(notifications.createdAt))
+      .limit(limit);
+
+    return rows.map((row) => row.notificationId);
+  }
+
   async markAsRead(notificationId: string, userId: string): Promise<void> {
     await this.getDb()
       .update(notifications)
@@ -253,6 +269,24 @@ export class NotificationRepository implements NotificationRepositoryPort {
         and(
           eq(notifications.userId, userId),
           eq(notifications.isRead, true),
+          notDeleted(notifications.deletedAt),
+        ),
+      )) as { rowCount?: unknown };
+    const removed = typeof result.rowCount === 'number' ? result.rowCount : 0;
+    if (removed > 0) {
+      await this.invalidateAnalyticsCache();
+    }
+    return removed;
+  }
+
+  async deleteAllNotifications(userId: string): Promise<number> {
+    const deletedAt = new Date().toISOString();
+    const result = (await this.getDb()
+      .update(notifications)
+      .set({ deletedAt })
+      .where(
+        and(
+          eq(notifications.userId, userId),
           notDeleted(notifications.deletedAt),
         ),
       )) as { rowCount?: unknown };

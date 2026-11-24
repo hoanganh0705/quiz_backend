@@ -31,7 +31,7 @@ import { EmailResilienceRunner } from './resilience/email-resilience.runner';
     {
       provide: EMAIL_QUEUE_TOKENS.QUEUE,
       inject: [EMAIL_QUEUE_TOKENS.CONNECTION],
-      useFactory: (connection: ConnectionOptions) => {
+      useFactory: (connection: ConnectionOptions): Queue => {
         return new Queue(EMAIL_QUEUE_NAME, { connection });
       },
     },

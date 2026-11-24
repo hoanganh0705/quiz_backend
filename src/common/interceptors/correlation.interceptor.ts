@@ -20,16 +20,34 @@ export class CorrelationInterceptor implements NestInterceptor {
   constructor(private readonly logger: PinoLogger) {}
 
   intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
+    if (context.getType() !== 'http') {
+      const client = context.getType() === 'ws' ? context.switchToWs().getClient() : undefined;
+      const incoming = client?.handshake?.headers?.[CORRELATION_ID_HEADER] as string | undefined;
+      const correlationId = sanitizeCorrelationId(incoming);
+      return correlationIdStorage.run({ correlationId }, () => next.handle());
+    }
+
     const request = context.switchToHttp().getRequest<Request>();
+    if (!request || !request.headers) {
+      const correlationId = sanitizeCorrelationId(undefined);
+      return correlationIdStorage.run({ correlationId }, () => next.handle());
+    }
+
     const incoming = request.headers[CORRELATION_ID_HEADER] as string | undefined;
     const correlationId = sanitizeCorrelationId(incoming);
 
     const response = context
       .switchToHttp()
       .getResponse<Response & { setHeader(name: string, value: string): void }>();
-    response.setHeader(CORRELATION_ID_HEADER, correlationId);
+    if (response && typeof response.setHeader === 'function') {
+      response.setHeader(CORRELATION_ID_HEADER, correlationId);
+    }
 
-    this.logger.assign({ correlationId });
+    try {
+      this.logger.assign({ correlationId });
+    } catch {
+      // Out of request scope
+    }
 
     return correlationIdStorage.run({ correlationId }, () => next.handle());
   }

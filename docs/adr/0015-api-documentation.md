@@ -47,4 +47,4 @@ The API needs machine-readable documentation for client code generation, interac
 - `src/common/swagger/api-ok.ts` — `ApiOkResource()` custom decorator.
 - `src/common/swagger/swagger.plugin.ts` — `injectCookieParams` plugin.
 - `src/common/responses/paginated-result.ts` — pagination type with OpenAPI decorators.
-- `docs/PROJECT_CONSTITUTION.md` §4.1 (Versioning, prefix, and surface) — OpenAPI as the API documentation standard.
+- `docs/standards/swagger.md` — OpenAPI as the API documentation standard.

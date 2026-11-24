@@ -82,5 +82,4 @@ The WebSocket layer is now a first-class gated surface:
 
 - ADR-0013 (Authorization Model — Three-Layer RBAC + Permissions).
 - ADR-0029 (Per-Cache Fail-Open vs Fail-Closed Failure Policy).
-- `docs/audit/phase8-security-trust-boundary-audit.md`.
-- `docs/audit/phase9-security-remediation-plan.md` § P4.1–P4.4.
+- `docs/standards/security.md`.

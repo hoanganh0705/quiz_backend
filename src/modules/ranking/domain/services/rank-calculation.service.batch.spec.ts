@@ -1,4 +1,9 @@
 import { RankingPeriod, RankingMilestone } from '../../domain/types/ranking.types';
+import { RankCalculationService } from './rank-calculation.service';
+import { RankingCacheVersionService } from './ranking-cache-version.service';
+
+import type { RankingDomainEventBusPort } from '../ports/ranking-event-bus.port';
+import type { RankingRepositoryPort } from '../ports/ranking-repository.port';
 import type { RankCalculationResult } from '../../domain/types/ranking.types';
 
 type CapturedBind = { kind: 'string'; value: string } | { kind: 'other'; value: unknown };
@@ -91,11 +96,6 @@ function makeCacheVersionService() {
     bumpAllPeriods: jest.fn().mockResolvedValue(undefined),
   } as unknown as jest.Mocked<RankingCacheVersionService>;
 }
-
-import { RankCalculationService } from './rank-calculation.service';
-import type { RankingRepositoryPort } from '../ports/ranking-repository.port';
-import type { RankingDomainEventBusPort } from '../ports/ranking-event-bus.port';
-import { RankingCacheVersionService } from './ranking-cache-version.service';
 
 function makeLogger() {
   return {

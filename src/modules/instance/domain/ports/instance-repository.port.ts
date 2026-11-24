@@ -180,6 +180,13 @@ export interface QuizInstanceRepositoryPort {
     }>
   >;
 
+  disconnectPlayersByInstance(instanceId: string): Promise<void>;
+
+  getPlayerWithProfile(
+    instanceId: string,
+    userId: string,
+  ): Promise<InstancePlayerWithProfile | null>;
+
   listPlayersWithProfile(params: {
     instanceId: string;
     limit: number;

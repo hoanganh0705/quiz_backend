@@ -297,10 +297,11 @@ export class AuthController {
     const command: LoginCommand = {
       email: loginDto.email,
       password: loginDto.password,
+      rememberMe: loginDto.rememberMe ?? false,
     };
 
     const loginResult = await this.authApplicationService.login(command, context.session);
-    context.setRefreshToken(loginResult.refreshToken);
+    context.setRefreshToken(loginResult.refreshToken, loginResult.rememberMe);
     return this.presenter.login(loginResult.response);
   }
 
@@ -358,9 +359,9 @@ export class AuthController {
     @RefreshToken({ required: true }) refreshToken: string,
     @RequestContext() context: AuthRequestContext,
   ) {
-    const refreshResult: { response: RefreshTokenResponseDto; refreshToken: string } =
+    const refreshResult: { response: RefreshTokenResponseDto; refreshToken: string; rememberMe?: boolean } =
       await this.authApplicationService.refreshToken(refreshToken, context.session);
-    context.setRefreshToken(refreshResult.refreshToken);
+    context.setRefreshToken(refreshResult.refreshToken, refreshResult.rememberMe);
     return this.presenter.refreshToken(refreshResult.response);
   }
 

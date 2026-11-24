@@ -81,5 +81,4 @@ Privileged booleans live in their own DTO and their own route:
 
 - ADR-0013 (Authorization Model — Three-Layer RBAC + Permissions).
 - ADR-0015 (API Documentation — Code-First OpenAPI with Decorators).
-- `docs/audit/phase8-security-trust-boundary-audit.md`.
-- `docs/audit/phase9-security-remediation-plan.md` § P3.6, § P4.5.
+- `docs/standards/security.md`.

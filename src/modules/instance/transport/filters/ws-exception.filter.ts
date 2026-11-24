@@ -5,6 +5,7 @@ import {
   Injectable,
   HttpException,
 } from '@nestjs/common';
+import { WsException } from '@nestjs/websockets';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { BaseDomainException } from '@/common/errors/base-domain.exception';
 
@@ -57,6 +58,27 @@ export class WsExceptionFilter {
         message,
       });
       client.emit('error', { code: `HTTP_${status}`, message });
+      return;
+    }
+
+    if (exception instanceof WsException) {
+      const err = exception.getError();
+      const code =
+        typeof err === 'object' && err !== null && 'code' in err
+          ? (err as Record<string, unknown>).code
+          : 'WS_ERROR';
+      const message =
+        typeof err === 'object' && err !== null && 'message' in err
+          ? (err as Record<string, unknown>).message
+          : typeof err === 'string'
+            ? err
+            : exception.message;
+      this.logger.warn({
+        event: 'ws_exception',
+        code,
+        message,
+      });
+      client.emit('error', { code, message });
       return;
     }
 

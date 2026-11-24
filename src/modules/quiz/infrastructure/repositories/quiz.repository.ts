@@ -440,10 +440,10 @@ export class QuizRepository implements QuizRepositoryPort {
     const categoryMatchOrder = sql<number>`CASE WHEN ${QUIZ_COLUMNS.categoryId} = ${sourceCategoryId ?? sql`NULL`} THEN 1 ELSE 0 END`;
     const tagMatchOrder = hasSourceTags
       ? sql<number>`(
-          SELECT COUNT(DISTINCT qt.tag_id)::int
-          FROM ${quizTags} qt
-          WHERE qt.quiz_id = ${QUIZ_COLUMNS.quizId}
-            AND qt.tag_id IN ${inArray(quizTags.tagId, sourceTagIds)}
+          SELECT COUNT(DISTINCT ${quizTags.tagId})::int
+          FROM ${quizTags}
+          WHERE ${quizTags.quizId} = ${QUIZ_COLUMNS.quizId}
+            AND ${inArray(quizTags.tagId, sourceTagIds)}
         )`
       : sql<number>`0`;
 

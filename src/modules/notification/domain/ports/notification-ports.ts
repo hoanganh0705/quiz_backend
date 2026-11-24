@@ -54,10 +54,12 @@ export interface NotificationRepositoryPort {
   markAsUnread(notificationId: string, userId: string): Promise<void>;
   markAllAsRead(userId: string): Promise<number>;
   deleteReadNotifications(userId: string): Promise<number>;
+  deleteAllNotifications(userId: string): Promise<number>;
   delete(notificationId: string, userId: string): Promise<void>;
   softDelete(notificationId: string, userId: string): Promise<void>;
   listUnreadIds(userId: string, limit?: number): Promise<string[]>;
   listReadIds(userId: string, limit?: number): Promise<string[]>;
+  listAllActiveIds(userId: string, limit?: number): Promise<string[]>;
 
   deleteExpired(): Promise<number>;
 

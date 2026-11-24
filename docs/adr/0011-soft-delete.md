@@ -50,5 +50,5 @@ The system must support reversible data deletion for entities that are reference
 - `src/modules/quiz/domain/quiz/quiz-command.service.ts` — `softDeleteQuizById` calls repository `softDeleteQuiz`.
 - `src/modules/tag/domain/ports/tag-repository.port.ts` — `softDelete` returns `Promise<boolean>`.
 - `src/modules/tag/domain/tag.service.ts` — `deleteTag` and `restoreTag` flow.
-- `docs/PROJECT_CONSTITUTION.md` §5.3 — soft delete as the mandatory deletion policy.
+- `docs/standards/database.md` — soft delete as the mandatory deletion policy.
 - `docs/architecture/persistence-flow.md` — soft delete strategy with partial unique index diagram.

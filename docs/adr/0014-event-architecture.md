@@ -59,4 +59,4 @@ Example: `QuizCompletedEvent` with quiz results sent to an external analytics sy
 - `src/common/interceptors/correlation.interceptor.ts` — `x-correlation-id` propagated to `AsyncLocalStorage`.
 - `src/modules/quiz/domain/quiz/quiz-event-handler.ts` — example domain event handler.
 - `docs/architecture/event-flow.md` — three-layer event architecture diagram with comparison table.
-- `docs/PROJECT_CONSTITUTION.md` §3.4 (Choices already made) — Redis pub/sub for events listed as a locked decision.
+- `docs/standards/architecture.md` — Redis pub/sub for events listed as a standard decision.

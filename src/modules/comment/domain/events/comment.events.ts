@@ -23,6 +23,8 @@
  * include the minimum required fields for client-side reconciliation.
  */
 
+import type { CommentView } from '../types';
+
 /**
  * Full comment snapshot for realtime application.
  * Included in events so clients can update their local state directly.
@@ -184,7 +186,6 @@ export type CommentDomainEvent =
 
 // Re-export CommentView for use in createCommentSnapshot
 export type { CommentView } from '../types';
-import type { CommentView } from '../types';
 
 /**
  * Create a CommentSnapshot from a CommentView for use in WebSocket events.

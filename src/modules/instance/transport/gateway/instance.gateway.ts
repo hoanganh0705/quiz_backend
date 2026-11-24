@@ -27,7 +27,7 @@ const ERR_FORBIDDEN = { code: 'FORBIDDEN', message: 'You do not have permission 
   namespace: '/instances',
   cors: {
     origin: resolveWsCorsOrigins(),
-    credentials: false,
+    credentials: true,
   },
 })
 @UseFilters(WsExceptionFilter)
@@ -111,6 +111,7 @@ export class InstanceGateway implements OnGatewayConnection, OnGatewayDisconnect
         socketId: client.id,
         instanceId,
         userId,
+        isExplicitLeave: false,
       }),
     ]).then((settled) => {
       const rejected = settled.flatMap((entry) =>
@@ -194,6 +195,7 @@ export class InstanceGateway implements OnGatewayConnection, OnGatewayDisconnect
       socketId: client.id,
       instanceId,
       userId: user.sub,
+      isExplicitLeave: true,
     });
 
     this.logger.info({

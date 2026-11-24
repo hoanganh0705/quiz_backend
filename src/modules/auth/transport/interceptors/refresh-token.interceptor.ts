@@ -34,7 +34,11 @@ export class RefreshTokenInterceptor implements NestInterceptor {
         if (instructions?.clearRefreshToken) {
           this.authCookieService.clearRefreshTokenCookie(response);
         } else if (instructions?.refreshToken) {
-          this.authCookieService.setRefreshTokenCookie(response, instructions.refreshToken);
+          this.authCookieService.setRefreshTokenCookie(
+            response,
+            instructions.refreshToken,
+            instructions.rememberMe,
+          );
         }
       }),
     );

@@ -4,6 +4,8 @@
  * Defines all types used throughout the Ranking Domain implementation.
  */
 
+import { LeaderboardPeriodEnum, RankingPeriodEnum } from '../../dto/request/leaderboard-query.dto';
+
 // ============================================
 // ENUMS
 // ============================================
@@ -255,8 +257,6 @@ export function getPercentileLabel(percentile: number): string {
   if (percentile >= 50) return RANKING_CONSTANTS.PERCENTILE_LABELS[50];
   return RANKING_CONSTANTS.PERCENTILE_LABELS[0];
 }
-
-import { LeaderboardPeriodEnum, RankingPeriodEnum } from '../../dto/request/leaderboard-query.dto';
 
 export function calculatePercentile(rank: number, totalUsers: number): number {
   if (rank <= 0 || totalUsers <= 0) return 0;

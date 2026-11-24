@@ -45,4 +45,4 @@ Every HTTP request passes through a chain of cross-cutting concerns: correlation
 - `src/common/interceptors/response-format.interceptor.ts` — `ResponseFormatInterceptor` with `normalizeTemporalFields()`.
 - `src/app.module.ts` — all three interceptors registered globally via `APP_INTERCEPTOR`.
 - `docs/architecture/request-flow.md` — full lifecycle diagram and step-by-step description.
-- `docs/PROJECT_CONSTITUTION.md` §4.6 (Security and authorization) covers the guard chain; §3.4 covers interceptor registrations in module configuration.
+- `docs/standards/architecture.md` covers interceptor registrations and lifecycle; `docs/standards/security.md` covers the guard chain.

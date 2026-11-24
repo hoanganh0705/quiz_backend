@@ -1,11 +1,12 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional, forwardRef, type OnModuleInit } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { InstanceService } from '../../domain/instance.service';
 import { QUIZ_INSTANCE_REPOSITORY_PORT, type QuizInstanceRepositoryPort } from '../../domain/ports';
+import { InstanceApplicationService } from '../../application/instance.application.service';
 
 @Injectable()
-export class InstanceAbandonmentSchedulerService {
+export class InstanceAbandonmentSchedulerService implements OnModuleInit {
   static readonly BATCH_SIZE = 50;
   static readonly PARALLELISM = 10;
   static readonly ABANDONMENT_TTL_MS = 5 * 60 * 1000; // 5 minutes
@@ -22,7 +23,21 @@ export class InstanceAbandonmentSchedulerService {
     private readonly instanceRepository: QuizInstanceRepositoryPort,
     @InjectPinoLogger(InstanceAbandonmentSchedulerService.name)
     private readonly logger: PinoLogger,
+    @Optional()
+    @Inject(forwardRef(() => InstanceApplicationService))
+    private readonly instanceAppService?: InstanceApplicationService,
   ) {}
+
+  async onModuleInit(): Promise<void> {
+    try {
+      await this.handleAbandonedInstances();
+    } catch (err) {
+      this.logger.warn({
+        event: 'instance_abandonment_on_init_failed',
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
 
   @Cron(InstanceAbandonmentSchedulerService.CRON_EXPRESSION)
   async handleAbandonedInstances(): Promise<void> {
@@ -64,6 +79,13 @@ export class InstanceAbandonmentSchedulerService {
 
   private async runAbandonment(row: { instanceId: string; version: number }): Promise<void> {
     try {
+      if (this.instanceAppService) {
+        const activeSockets = this.instanceAppService.getActiveRoomSocketCount(row.instanceId);
+        if (activeSockets === 0) {
+          await this.instanceRepository.disconnectPlayersByInstance(row.instanceId);
+        }
+      }
+
       const result = await this.instanceService.abandonInstanceByScheduler({
         instanceId: row.instanceId,
         expectedVersion: row.version,

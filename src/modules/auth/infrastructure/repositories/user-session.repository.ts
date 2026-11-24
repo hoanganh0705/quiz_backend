@@ -23,6 +23,7 @@ const SESSION_LOOKUP_COLUMNS = {
   lastUsedAt: userSessions.lastUsedAt,
   revokedAt: userSessions.revokedAt,
   expiresAt: userSessions.expiresAt,
+  createdAt: userSessions.createdAt,
 };
 
 @Injectable()

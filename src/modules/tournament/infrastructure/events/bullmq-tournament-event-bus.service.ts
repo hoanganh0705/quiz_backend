@@ -11,7 +11,6 @@ import {
   TournamentWonEvent,
 } from '../../domain/events';
 import { getCorrelationId } from '@/common/interceptors/correlation-id';
-import { tournamentFlagsConfig, type TournamentFlagsConfig } from '@/core/config';
 import { DEFAULT_BULLMQ_JOB_OPTIONS } from '@/core/queues/bullmq.config';
 
 @Injectable()
@@ -21,8 +20,6 @@ export class BullmqTournamentEventBusService
   constructor(
     @Inject(TOURNAMENT_QUEUE_TOKENS.QUEUE)
     private readonly eventQueue: Queue<TournamentEventJobData>,
-    @Inject(tournamentFlagsConfig.KEY)
-    private readonly flags: TournamentFlagsConfig,
     @InjectPinoLogger(BullmqTournamentEventBusService.name)
     private readonly logger: PinoLogger,
   ) {}
@@ -30,22 +27,13 @@ export class BullmqTournamentEventBusService
   onModuleDestroy(): void {}
 
   subscribe(handler: (event: TournamentDomainEvent) => void | Promise<void>): () => void {
-    if (this.flags.tournamentBullMqDisable) {
-      this.subscribeInProcHandlers.push(handler);
-      return () => {
-        const index = this.subscribeInProcHandlers.indexOf(handler);
-        if (index !== -1) {
-          this.subscribeInProcHandlers.splice(index, 1);
-        }
-      };
-    }
-
-    this.logger.warn({
-      event: 'tournament_event_inproc_subscription_ignored',
-      reason:
-        'BullMQ is enabled for tournament events; in-process subscribers are routed through the BullMQ-side handlers instead.',
-    });
-    return () => {};
+    this.subscribeInProcHandlers.push(handler);
+    return () => {
+      const index = this.subscribeInProcHandlers.indexOf(handler);
+      if (index !== -1) {
+        this.subscribeInProcHandlers.splice(index, 1);
+      }
+    };
   }
 
   private readonly subscribeInProcHandlers: Array<
@@ -53,26 +41,7 @@ export class BullmqTournamentEventBusService
   > = [];
 
   async publish(event: TournamentDomainEvent): Promise<void> {
-    if (this.flags.tournamentBullMqDisable) {
-      await this.dispatchInProc(event);
-      this.logger.debug({
-        event: 'tournament_event_bullmq_publish_skipped',
-        eventType: event.eventType,
-        reason: 'TOURNAMENT_BULLMQ_DISABLE=true',
-      });
-      return;
-    }
-
-    try {
-      const jobData = serializeEvent(event);
-      await this.eventQueue.add(event.eventType, jobData, DEFAULT_BULLMQ_JOB_OPTIONS);
-    } catch (error) {
-      this.logger.error({
-        event: 'tournament_event_enqueue_failed',
-        eventType: event.eventType,
-        error: error instanceof Error ? error.message : 'Unknown error',
-      });
-    }
+    await this.dispatchInProc(event);
   }
 
   private async dispatchInProc(event: TournamentDomainEvent): Promise<void> {

@@ -61,10 +61,12 @@ function makeService(
     markAsUnread: jest.fn(),
     markAllAsRead: jest.fn().mockResolvedValue(0),
     deleteReadNotifications: jest.fn().mockResolvedValue(0),
+    deleteAllNotifications: jest.fn().mockResolvedValue(0),
     delete: jest.fn(),
     softDelete: jest.fn(),
     listUnreadIds: jest.fn().mockResolvedValue([]),
     listReadIds: jest.fn().mockResolvedValue([]),
+    listAllActiveIds: jest.fn().mockResolvedValue([]),
     deleteExpired: jest.fn(),
     getAnalytics: jest.fn(),
     invalidateAnalyticsCache: jest.fn().mockResolvedValue(undefined),
@@ -313,6 +315,35 @@ describe('NotificationApplicationService.deleteReadNotifications', () => {
       },
     });
     await service.deleteReadNotifications(makeJwtPayload('user-1'));
+
+    expect(eventBus.emit).not.toHaveBeenCalled();
+  });
+});
+
+describe('NotificationApplicationService.deleteAllNotifications', () => {
+  it('emits notification.deleted per active id and invalidates analytics cache', async () => {
+    const { service, notificationRepository, eventBus } = makeService({
+      notificationRepository: {
+        listAllActiveIds: jest.fn().mockResolvedValue(['n-1', 'n-2', 'n-3']),
+        deleteAllNotifications: jest.fn().mockResolvedValue(3),
+      },
+    });
+    const count = await service.deleteAllNotifications(makeJwtPayload('user-1'));
+    expect(count).toBe(3);
+
+    expect(eventBus.emit).toHaveBeenCalledTimes(3);
+
+    expect(notificationRepository.invalidateAnalyticsCache).toHaveBeenCalled();
+  });
+
+  it('emits zero events when nothing to delete', async () => {
+    const { service, eventBus } = makeService({
+      notificationRepository: {
+        listAllActiveIds: jest.fn().mockResolvedValue([]),
+        deleteAllNotifications: jest.fn().mockResolvedValue(0),
+      },
+    });
+    await service.deleteAllNotifications(makeJwtPayload('user-1'));
 
     expect(eventBus.emit).not.toHaveBeenCalled();
   });

@@ -51,4 +51,4 @@ The application runs in multiple environments (development, staging, production)
 - `src/modules/auth/transport/strategies/jwt.strategy.ts` — RS256 key loaded from file path from `JWT_PRIVATE_KEY_PATH`.
 - `src/core/config/database.config.ts` — `DATABASE_*` typed config via `ConfigService`.
 - `src/core/config/redis.config.ts` — `REDIS_*` typed config.
-- `docs/PROJECT_CONSTITUTION.md` §3.1 (Where code belongs) — environment variables as the only configuration source; no remote config services.
+- `docs/standards/architecture.md` — environment variables as the only configuration source; no remote config services.

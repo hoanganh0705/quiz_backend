@@ -1,6 +1,7 @@
 export type LoginCommand = {
   email: string;
   password: string;
+  rememberMe?: boolean;
 };
 
 export type RegisterCommand = {

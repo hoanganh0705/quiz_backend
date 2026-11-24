@@ -7,21 +7,32 @@ import { extractRefreshTokenFromCookies } from '../../utils/refresh-token.util';
 export class AuthCookieService {
   constructor(private readonly sessionConfig: SessionConfig) {}
 
-  setRefreshTokenCookie(response: Response, refreshToken: string): void {
-    response.cookie('refreshToken', refreshToken, {
+  setRefreshTokenCookie(
+    response: Response,
+    refreshToken: string,
+    rememberMe: boolean = false,
+  ): void {
+    const isProduction = this.sessionConfig.environment.isProduction;
+    const cookieOptions: {
+      httpOnly: boolean;
+      secure: boolean;
+      sameSite: 'lax';
+      path: string;
+      maxAge?: number;
+    } = {
       httpOnly: true,
-      secure: this.sessionConfig.environment.isProduction,
-      // `Lax` is required to support deep-link verification flows that land on
-      // the frontend after the user clicks a link in their email client.
-      // `Strict` would block those top-level GET navigations and break the
-      // verify-email/reset-password hand-off. CSRF risk for this cookie is
-      // mitigated by (a) `HttpOnly` preventing JS access, (b) `Secure` in
-      // production, and (c) the global SameSite=Lax default preventing
-      // cross-site POSTs from carrying the cookie.
+      secure: isProduction,
       sameSite: 'lax',
-      maxAge: this.sessionConfig.refreshTokenCookieMaxAgeMs,
       path: '/',
-    });
+    };
+
+    if (rememberMe) {
+      // 30 days persistent cookie
+      cookieOptions.maxAge = 30 * 24 * 60 * 60 * 1000;
+    }
+    // When rememberMe is false, omitting maxAge makes Express emit a session cookie (no Expires/Max-Age)
+
+    response.cookie('refreshToken', refreshToken, cookieOptions);
   }
 
   clearRefreshTokenCookie(response: Response): void {

@@ -1,5 +1,9 @@
 import { ApiProperty } from '@nestjs/swagger';
 
+import { CursorPagination } from '@/common/responses/pagination';
+
+import type { SocialFeedActivityType } from '../../domain/types/social.types';
+
 export class SocialFeedUserDto {
   @ApiProperty({
     description: 'User identifier for the activity actor',
@@ -34,8 +38,6 @@ export class PublicAuthorSummaryDto {
   })
   avatarUrl!: string | null;
 }
-import { CursorPagination } from '@/common/responses/pagination';
-import type { SocialFeedActivityType } from '../../domain/types/social.types';
 
 /**
  * Canonical list of valid feed activity types.

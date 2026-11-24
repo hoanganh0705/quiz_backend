@@ -91,5 +91,4 @@ The boot-time configuration is now an enforced contract:
 
 - ADR-0012 (Authentication Model — JWT Access + Refresh Token Rotation).
 - ADR-0016 (Configuration Strategy — Environment Variables with Zod Validation).
-- `docs/audit/phase8-security-trust-boundary-audit.md`.
-- `docs/audit/phase9-security-remediation-plan.md` § P3.1–P3.5, § P6.1.
+- `docs/standards/security.md`.

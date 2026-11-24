@@ -42,5 +42,5 @@ Application services must be decoupled from the database implementation so that 
 - `src/modules/tag/tag.module.ts` — `providers: [TagRepositoryPort, { provide: TAG_REPOSITORY, useClass: TagRepositoryImpl }]`.
 - `src/modules/tag/domain/tag.service.ts` — injects `TagRepositoryPort` (not the implementation).
 - `src/modules/auth/domain/ports/user-repository.port.ts` — `UserRepositoryPort` with `softDeleteAccount` and `revokeAllSessions`.
-- `docs/PROJECT_CONSTITUTION.md` §2 (Architecture Principles) — explicitly defines the port/adapter architecture.
+- `docs/standards/architecture.md` — explicitly defines the port/adapter architecture.
 - `docs/architecture/overview.md` — dependency direction diagram showing `application` → `domain/ports` → `infrastructure`.

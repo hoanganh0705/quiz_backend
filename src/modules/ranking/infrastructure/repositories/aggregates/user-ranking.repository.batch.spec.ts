@@ -1,4 +1,5 @@
 import { RankingPeriod, RankingMilestone } from '../../../domain/types/ranking.types';
+import { UserRankingRepository } from './user-ranking.repository';
 
 type DrizzleLike = { execute: jest.Mock; query?: object };
 
@@ -59,8 +60,6 @@ function makeMockLogger() {
     fatal: jest.fn(),
   };
 }
-
-import { UserRankingRepository } from './user-ranking.repository';
 
 function makeRepo(db: DrizzleLike) {
   return new UserRankingRepository(db as never, makeMockLogger() as never, undefined);

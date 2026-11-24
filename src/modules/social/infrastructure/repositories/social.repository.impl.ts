@@ -629,9 +629,9 @@ export class SocialRepository implements SocialRepositoryPort {
 
   // Cross-domain methods
   async getRelationshipStatus(userId: string, targetId: string): Promise<RelationshipStatus> {
-    const [[friendResult], [pendingResult], [followerResult], [followingResult]] =
+    const [friendRes, pendingRes, followerRes, followingRes] =
       await Promise.all([
-        this.db.execute(sql<{ is_friend: boolean }>`
+        this.db.execute<{ is_friend: boolean }>(sql`
         SELECT EXISTS(
           SELECT 1 FROM friendships f
           WHERE ((f.requester_id = ${userId}::uuid AND f.addressee_id = ${targetId}::uuid)
@@ -640,7 +640,7 @@ export class SocialRepository implements SocialRepositoryPort {
             AND f.deleted_at IS NULL
         ) AS is_friend
       `),
-        this.db.execute(sql<{ has_pending: boolean }>`
+        this.db.execute<{ has_pending: boolean }>(sql`
         SELECT EXISTS(
           SELECT 1 FROM friendships
           WHERE requester_id = ${userId}::uuid
@@ -649,7 +649,7 @@ export class SocialRepository implements SocialRepositoryPort {
             AND deleted_at IS NULL
         ) AS has_pending
       `),
-        this.db.execute(sql<{ is_follower: boolean }>`
+        this.db.execute<{ is_follower: boolean }>(sql`
         SELECT EXISTS(
           SELECT 1 FROM user_follows
           WHERE follower_id = ${targetId}::uuid
@@ -657,7 +657,7 @@ export class SocialRepository implements SocialRepositoryPort {
             AND deleted_at IS NULL
         ) AS is_follower
       `),
-        this.db.execute(sql<{ is_following: boolean }>`
+        this.db.execute<{ is_following: boolean }>(sql`
         SELECT EXISTS(
           SELECT 1 FROM user_follows
           WHERE follower_id = ${userId}::uuid
@@ -671,6 +671,11 @@ export class SocialRepository implements SocialRepositoryPort {
       this.blockRepository.isBlocked(userId, targetId),
       this.blockRepository.isBlocked(targetId, userId),
     ]);
+
+    const friendResult = friendRes.rows[0] as { is_friend: boolean } | undefined;
+    const pendingResult = pendingRes.rows[0] as { has_pending: boolean } | undefined;
+    const followerResult = followerRes.rows[0] as { is_follower: boolean } | undefined;
+    const followingResult = followingRes.rows[0] as { is_following: boolean } | undefined;
 
     return {
       isFriend: friendResult?.is_friend ?? false,

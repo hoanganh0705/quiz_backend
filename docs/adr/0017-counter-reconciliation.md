@@ -2,13 +2,13 @@
 
 ## Status
 
-Accepted
+Accepted — Extended with scheduling operational details by [ADR-0025](./0025-counter-reconciliation.md)
 
 ## Context
 
-The codebase carries 16 distinct denormalized counters and cached aggregates (`docs/plans/denormalized-counters-audit.md` §1). Each one duplicates information that exists verbatim in another table — `quiz_stats.total_attempts` restates `COUNT(quiz_attempts WHERE status='completed')`, `quiz_stats.bookmark_count` restates `COUNT(bookmarked_quizzes)`, `review_helpful_votes.helpful_count` restates a join, and so on.
+The codebase carries 16 distinct denormalized counters and cached aggregates (`docs/standards/denormalization.md`). Each one duplicates information that exists verbatim in another table — `quiz_stats.total_attempts` restates `COUNT(quiz_attempts WHERE status='completed')`, `quiz_stats.bookmark_count` restates `COUNT(bookmarked_quizzes)`, `review_helpful_votes.helpful_count` restates a join, and so on.
 
-The duplication is necessary for read-latency (the summary tables back leaderboards, analytics dashboards, and listing sort keys), but it creates a correctness problem: every denormalized counter is a contract between two places that must stay in sync. The `denormalized-counters-audit.md` review classified seven counters as HIGH-risk because they were either:
+The duplication is necessary for read-latency (the summary tables back leaderboards, analytics dashboards, and listing sort keys), but it creates a correctness problem: every denormalized counter is a contract between two places that must stay in sync. The denormalized counters audit classified seven counters as HIGH-risk because they were either:
 
 - written outside the transaction that mutated the source of truth (race), or
 - never written by application code at all (so the cached column silently grew stale).
@@ -63,8 +63,8 @@ The audit's optional lint rule / pre-commit hook to reject `UPDATE ... SET col =
 
 ## Evidence
 
-- `docs/plans/denormalized-counters-audit.md` — the audit that motivated this ADR, including the 16-counter inventory and per-counter risk classification.
-- `docs/plans/helpful-vote-counter-reconciliation.md` — the original Strategy-A reconciliation pattern (atomic increment + conditional update inside the source transaction), codified after a production drift incident.
+- `docs/standards/denormalization.md` — standard defining the counter inventory and per-counter strategy.
+- `src/modules/review/infrastructure/repositories/review.repository.ts` — canonical Strategy-A reconciliation pattern (atomic increment + conditional update inside the source transaction).
 - `src/modules/review/infrastructure/repositories/review.repository.ts: addHelpfulVote / removeHelpfulVote` — canonical Strategy A implementation: `INSERT ... ON CONFLICT DO NOTHING` on the source `review_helpful_votes` table plus a conditional `UPDATE quiz_reviews SET helpful_count = ...` inside the same transaction.
 - `src/modules/quiz/domain/analytics/quiz-analytics.service.ts: refreshBookmarkMetrics / refreshQuizMetrics` — canonical Strategy B implementation: pure recompute from `bookmarked_quizzes` / `quiz_attempts`, never touches the source table.
 - `src/modules/quiz/scheduler/analytics.scheduler.ts` — defense-in-depth crons (`@Cron('0 5 * * *')` reconcile, `@Cron('0 3 * * 0')` full rebuild) that re-run Strategy B over every active quiz.
